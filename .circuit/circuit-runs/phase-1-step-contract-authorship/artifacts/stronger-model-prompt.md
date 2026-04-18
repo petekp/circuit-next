@@ -50,10 +50,14 @@ encode pain the rewrite is trying to prevent.
 
 ### circuit-next (in-progress, methodology rewrite)
 
-Local project at `~/Code/circuit-next`. Not yet on GitHub (I can push a
-mirror on request, but for now please work from the description and
-file paths below). Three commits so far on `main`, working tree clean
-aside from the Phase 1 slice I just landed (uncommitted).
+GitHub: **https://github.com/petekp/circuit-next**
+
+Four commits on `main`, working tree clean. Public. The run artifacts
+for the just-landed Phase 1 slice are committed under
+`.circuit/circuit-runs/phase-1-step-contract-authorship/` — you can
+read every artifact I've referenced below directly there (brief, plan,
+implementation-handoff, verification, both review artifacts,
+implementer report, result).
 
 Structure:
 
@@ -209,8 +213,6 @@ objections. Property-test seeds and generator sketches are welcome. A
 direct "here's what I'd do differently and why" paragraph is welcome.
 
 If there are things you'd need to see that aren't in the repos — tell
-me what, and I'll get it to you. If pushing `circuit-next` to GitHub
-would make this dramatically easier, say so explicitly and I'll push
-it.
+me what, and I'll get it to you.
 
 Thank you. I'll read your whole response before responding.
