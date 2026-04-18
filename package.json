@@ -1,0 +1,27 @@
+{
+  "name": "circuit-next",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Claude Code plugin that automates common developer workflows with per-step configurability (model, effort, skills), grounded in evidence-based prompting research and contract-first + architecture-first + tiny-step-ratcheting methodology.",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "verify": "npm run check && npm run lint && npm run test"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@types/node": "^22.9.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
+  }
+}
