@@ -1,0 +1,12 @@
+{
+  "current_run": null,
+  "pending_record": {
+    "continuity_kind": "standalone",
+    "created_at": "2026-04-18T15:37:14.587Z",
+    "payload_rel": ".circuit/control-plane/continuity-records/continuity-22b7af85-9fd8-4c98-9bc4-23bbe5eb3efc.json",
+    "record_id": "continuity-22b7af85-9fd8-4c98-9bc4-23bbe5eb3efc",
+    "run_slug": null
+  },
+  "project_root": "/Users/petepetrash/Code/circuit-next",
+  "schema_version": "1"
+}

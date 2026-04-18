@@ -96,18 +96,25 @@ Property-based tests will cover:
   authorship should decide whether to add a workflow-level `spine_policy`
   (adversarial-review MED #11).
 
-## Gate source tightening (Phase 1 open)
+## Gate source tightening
 
-Adversarial-review MED objection #7: `Gate.source` is an opaque string.
-Phase 1 should decide whether to replace it with a typed reference like
-`{ kind: 'artifact'; ref: 'writes.artifact' }`. The current schema accepts
-arbitrary strings; a superRefine at workflow level could validate that
-every `gate.source` resolves to a `writes.*` slot of the same step.
+Adversarial-review MED objection #7 is **closed in step.md v0.1**. Gate
+sources are typed per gate variant: `SchemaSectionsGate.source` is
+`ArtifactSource`, `CheckpointSelectionGate.source` is
+`CheckpointResponseSource`, `ResultVerdictGate.source` is
+`DispatchResultSource`. The `Step` discriminated union validates
+`gate.source.ref` against the step variant's `writes` slots via
+`superRefine`. See `specs/contracts/step.md` invariants STEP-I3 and
+STEP-I4.
 
 ## Evolution
 
 - **v0.1 (this draft)**: initial contract with graph-closure invariants.
-- **v0.2 (Phase 1)**: add ratified property ids; decide gate source
-  tightening (MED #7); decide spine policy (MED #11).
+- **v0.2 (Phase 1)**: add ratified property ids; decide spine policy
+  (MED #11 — still open; belongs in `specs/contracts/phase.md`); fold in
+  any follow-ups from the Phase 1 adversarial property-auditor pass.
+  Gate source tightening (MED #7) **closed in step.md v0.1** — see the
+  "Gate source tightening" section above; no remaining workflow-level
+  work for that objection.
 - **v1.0 (Phase 2)**: ratified invariants + property tests + operator
   documentation.

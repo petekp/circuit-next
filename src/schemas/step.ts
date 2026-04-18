@@ -29,43 +29,73 @@ const StepBase = z.object({
     .optional(),
 });
 
+// `.strict()` rejects surplus keys (no `role` on synthesis/checkpoint, no
+// stray fields on writes); this backs STEP-I6 and LOW #7 tightening.
 export const SynthesisStep = StepBase.extend({
   executor: z.literal('orchestrator'),
   kind: z.literal('synthesis'),
-  writes: z.object({
-    artifact: ArtifactRef,
-  }),
+  writes: z
+    .object({
+      artifact: ArtifactRef,
+    })
+    .strict(),
   gate: SchemaSectionsGate,
-});
+}).strict();
 export type SynthesisStep = z.infer<typeof SynthesisStep>;
 
 export const CheckpointStep = StepBase.extend({
   executor: z.literal('orchestrator'),
   kind: z.literal('checkpoint'),
-  writes: z.object({
-    request: z.string().min(1),
-    response: z.string().min(1),
-    artifact: ArtifactRef.optional(),
-  }),
+  writes: z
+    .object({
+      request: z.string().min(1),
+      response: z.string().min(1),
+      artifact: ArtifactRef.optional(),
+    })
+    .strict(),
   gate: CheckpointSelectionGate,
-});
+}).strict();
 export type CheckpointStep = z.infer<typeof CheckpointStep>;
 
 export const DispatchStep = StepBase.extend({
   executor: z.literal('worker'),
   kind: z.literal('dispatch'),
   role: DispatchRole,
-  writes: z.object({
-    artifact: ArtifactRef.optional(),
-    request: z.string().min(1),
-    receipt: z.string().min(1),
-    result: z.string().min(1),
-  }),
+  writes: z
+    .object({
+      artifact: ArtifactRef.optional(),
+      request: z.string().min(1),
+      receipt: z.string().min(1),
+      result: z.string().min(1),
+    })
+    .strict(),
   gate: ResultVerdictGate,
-});
+}).strict();
 export type DispatchStep = z.infer<typeof DispatchStep>;
 
-export const Step = z.discriminatedUnion('kind', [SynthesisStep, CheckpointStep, DispatchStep]);
+// Step variants must be `ZodObject`-shaped for `discriminatedUnion`; the
+// cross-field `gate.source.ref` closure check lives at the union level so
+// the variant schemas stay ZodObject. See CHARTER.md Seam B and
+// `specs/contracts/step.md` STEP-I3.
+//
+// `Object.hasOwn` closes Codex review HIGH #1 (prototype-chain `in` attack).
+// The `!== undefined` guard closes HIGH #3 (optional slot present-but-
+// undefined). Note: HIGH #1/#2/#3 are already structurally prevented by
+// gate.ts's literal `ref` per source kind; this refinement is defense-in-
+// depth for any future source kind that relaxes the `ref` literal.
+export const Step = z
+  .discriminatedUnion('kind', [SynthesisStep, CheckpointStep, DispatchStep])
+  .superRefine((step, ctx) => {
+    const slot = step.gate.source.ref;
+    const writes = step.writes as Record<string, unknown>;
+    if (!Object.hasOwn(writes, slot) || writes[slot] === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['gate', 'source', 'ref'],
+        message: `gate.source.ref "${slot}" does not resolve to a usable slot in step.writes (available: ${Object.keys(writes).join(', ')})`,
+      });
+    }
+  });
 export type Step = z.infer<typeof Step>;
 
 export const RouteMap = StepBase.shape.routes;

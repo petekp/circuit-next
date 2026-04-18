@@ -88,18 +88,45 @@ describe('Gate', () => {
     expect(
       Gate.safeParse({
         kind: 'schema_sections',
-        source: 'artifacts/brief.md',
+        source: { kind: 'artifact', ref: 'artifact' },
         required: ['Objective'],
       }).success,
     ).toBe(true);
     expect(
       Gate.safeParse({
         kind: 'checkpoint_selection',
-        source: 'checkpoints/frame-1.response.json',
+        source: { kind: 'checkpoint_response', ref: 'response' },
         allow: ['continue', 'revise'],
       }).success,
     ).toBe(true);
-    expect(Gate.safeParse({ kind: 'magical', source: 'x', allow: ['y'] }).success).toBe(false);
+    expect(
+      Gate.safeParse({
+        kind: 'magical',
+        source: { kind: 'artifact', ref: 'x' },
+        allow: ['y'],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects unknown source.kind (MED #7 closed)', () => {
+    const bad = Gate.safeParse({
+      kind: 'schema_sections',
+      source: { kind: 'bogus', ref: 'artifact' },
+      required: ['Objective'],
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('rejects cross-kind source on SchemaSectionsGate (kind-bound source)', () => {
+    // A schema_sections gate must carry an ArtifactSource; a
+    // dispatch_result source would be a type-layer mismatch, proven here
+    // at runtime via safeParse.
+    const bad = Gate.safeParse({
+      kind: 'schema_sections',
+      source: { kind: 'dispatch_result', ref: 'result' },
+      required: ['Objective'],
+    });
+    expect(bad.success).toBe(false);
   });
 });
 
@@ -154,7 +181,7 @@ describe('Step discriminated union', () => {
     writes: { artifact: { path: 'artifacts/brief.md', schema: 'brief@v1' } },
     gate: {
       kind: 'schema_sections' as const,
-      source: 'artifacts/brief.md',
+      source: { kind: 'artifact' as const, ref: 'artifact' },
       required: ['Objective'],
     },
     routes: { pass: '@complete' },
@@ -174,7 +201,11 @@ describe('Step discriminated union', () => {
         receipt: 'c.json',
         result: 's.json',
       },
-      gate: { kind: 'result_verdict', source: 's.json', pass: ['ok'] },
+      gate: {
+        kind: 'result_verdict',
+        source: { kind: 'dispatch_result', ref: 'result' },
+        pass: ['ok'],
+      },
     });
     expect(noRole.success).toBe(false);
 
@@ -188,7 +219,11 @@ describe('Step discriminated union', () => {
         receipt: 'c.json',
         result: 's.json',
       },
-      gate: { kind: 'result_verdict', source: 's.json', pass: ['ok'] },
+      gate: {
+        kind: 'result_verdict',
+        source: { kind: 'dispatch_result', ref: 'result' },
+        pass: ['ok'],
+      },
     });
     expect(ok.success).toBe(true);
   });
@@ -198,7 +233,11 @@ describe('Step discriminated union', () => {
       ...baseSynthesis,
       kind: 'dispatch',
       writes: { request: 'r.json', receipt: 'c.json', result: 's.json' },
-      gate: { kind: 'result_verdict', source: 's.json', pass: ['ok'] },
+      gate: {
+        kind: 'result_verdict',
+        source: { kind: 'dispatch_result', ref: 'result' },
+        pass: ['ok'],
+      },
     });
     expect(bad.success).toBe(false);
   });
@@ -208,7 +247,167 @@ describe('Step discriminated union', () => {
       ...baseSynthesis,
       kind: 'checkpoint',
       writes: { request: 'req.json', response: 'resp.json' },
-      gate: { kind: 'schema_sections', source: 'x', required: ['y'] },
+      gate: {
+        kind: 'schema_sections',
+        source: { kind: 'artifact', ref: 'artifact' },
+        required: ['y'],
+      },
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('SynthesisStep rejects gate.source.ref naming a missing writes slot (STEP-I3, MED #7 closed)', () => {
+    const bad = Step.safeParse({
+      ...baseSynthesis,
+      gate: {
+        kind: 'schema_sections' as const,
+        source: { kind: 'artifact' as const, ref: 'missing-slot' },
+        required: ['Objective'],
+      },
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('CheckpointStep rejects gate.source.ref naming a missing writes slot (STEP-I3)', () => {
+    const bad = Step.safeParse({
+      ...baseSynthesis,
+      kind: 'checkpoint',
+      writes: { request: 'req.json', response: 'resp.json' },
+      gate: {
+        kind: 'checkpoint_selection',
+        source: { kind: 'checkpoint_response', ref: 'nope' },
+        allow: ['continue'],
+      },
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('DispatchStep rejects gate.source.ref naming a missing writes slot (STEP-I3)', () => {
+    const bad = Step.safeParse({
+      ...baseSynthesis,
+      executor: 'worker',
+      kind: 'dispatch',
+      role: 'researcher',
+      writes: {
+        request: 'r.json',
+        receipt: 'c.json',
+        result: 's.json',
+      },
+      gate: {
+        kind: 'result_verdict',
+        source: { kind: 'dispatch_result', ref: 'ghost' },
+        pass: ['ok'],
+      },
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('CheckpointStep accepts ref naming a real writes slot (positive pair for STEP-I3)', () => {
+    const ok = Step.safeParse({
+      ...baseSynthesis,
+      kind: 'checkpoint',
+      writes: { request: 'req.json', response: 'resp.json' },
+      gate: {
+        kind: 'checkpoint_selection',
+        source: { kind: 'checkpoint_response', ref: 'response' },
+        allow: ['continue', 'revise'],
+      },
+    });
+    expect(ok.success).toBe(true);
+  });
+
+  // Codex review HIGH #1: prototype-chain `in` operator attack.
+  // With `ref` as a Zod literal per source kind, these fail at parse.
+  it('rejects artifact source with ref "toString" (prototype-chain attack, STEP-I3)', () => {
+    const bad = Step.safeParse({
+      ...baseSynthesis,
+      gate: {
+        kind: 'schema_sections',
+        source: { kind: 'artifact', ref: 'toString' },
+        required: ['Objective'],
+      },
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('rejects artifact source with ref "__proto__" (prototype-chain attack, STEP-I3)', () => {
+    const bad = Step.safeParse({
+      ...baseSynthesis,
+      gate: {
+        kind: 'schema_sections',
+        source: { kind: 'artifact', ref: '__proto__' },
+        required: ['Objective'],
+      },
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  // Codex review HIGH #2: source.kind must semantically pair with the correct
+  // writes slot, not just any existing slot. `ref` literal enforces this.
+  it('rejects checkpoint_response source with ref "request" (cross-slot drift, STEP-I4)', () => {
+    const bad = Step.safeParse({
+      ...baseSynthesis,
+      kind: 'checkpoint',
+      writes: { request: 'req.json', response: 'resp.json' },
+      gate: {
+        kind: 'checkpoint_selection',
+        source: { kind: 'checkpoint_response', ref: 'request' },
+        allow: ['continue'],
+      },
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('rejects dispatch_result source with ref "receipt" (cross-slot drift, STEP-I4)', () => {
+    const bad = Step.safeParse({
+      ...baseSynthesis,
+      executor: 'worker',
+      kind: 'dispatch',
+      role: 'researcher',
+      writes: {
+        request: 'r.json',
+        receipt: 'c.json',
+        result: 's.json',
+      },
+      gate: {
+        kind: 'result_verdict',
+        source: { kind: 'dispatch_result', ref: 'receipt' },
+        pass: ['ok'],
+      },
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  // Codex review MED #4 / STEP-I6: `.strict()` rejects surplus keys.
+  it('rejects SynthesisStep with surplus top-level key (STEP-I6 strict)', () => {
+    const bad = Step.safeParse({
+      ...baseSynthesis,
+      role: 'implementer',
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('rejects gate source with surplus key (STEP-I6 strict on source objects)', () => {
+    const bad = Step.safeParse({
+      ...baseSynthesis,
+      gate: {
+        kind: 'schema_sections',
+        source: { kind: 'artifact', ref: 'artifact', stray: true },
+        required: ['Objective'],
+      },
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('rejects gate top-level with surplus key (STEP-I6 strict on gate variants)', () => {
+    const bad = Step.safeParse({
+      ...baseSynthesis,
+      gate: {
+        kind: 'schema_sections',
+        source: { kind: 'artifact', ref: 'artifact' },
+        required: ['Objective'],
+        extra: 'field',
+      },
     });
     expect(bad.success).toBe(false);
   });
@@ -225,7 +424,7 @@ describe('Workflow graph closure (adversarial-review fix #1)', () => {
     writes: { artifact: { path: 'artifacts/brief.md', schema: 'brief@v1' } },
     gate: {
       kind: 'schema_sections' as const,
-      source: 'artifacts/brief.md',
+      source: { kind: 'artifact' as const, ref: 'artifact' },
       required: ['Objective'],
     },
     routes: { pass: '@complete' },

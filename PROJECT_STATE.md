@@ -1,7 +1,7 @@
 # PROJECT_STATE — circuit-next
 
-**Last updated:** 2026-04-18 05:xx UTC (overnight autonomous run complete)
-**Phase:** 0 — Evidence Loop **closed**. Ready for Phase 1 contract authorship.
+**Last updated:** 2026-04-18 (Phase 1 slice 1 complete)
+**Phase:** 1 — Contract authorship **in progress**. Phase 0 Evidence Loop closed. First Phase 1 contract (`step.md`) landed + MED #7 (gate source tightening) closed.
 **Tier:** 0 — scaffold complete, validated, committed.
 
 ## One-minute read
@@ -20,7 +20,7 @@ Everything the user asked for overnight is in place:
 - 4-worker parallel evidence pass (Claude + Codex × external + internal)
 - Synthesized `specs/evidence.md` with labeled invariants + seams
 - Architecture-first TypeScript type skeleton under `src/schemas/`
-- Contract-first Zod schemas with 34 parity + negative contract tests
+- Contract-first Zod schemas with 46 contract + 1 smoke = 47 tests (baseline 34 → +13 this session, including step-contract negatives and strict-mode coverage)
 - Validation/verification infrastructure: tsc --strict, biome, vitest, all green
 - Adversarial-review findings (6 HIGH objections) incorporated into the skeleton
 - Phase 1 contract stubs: `specs/domain.md` + `specs/contracts/workflow.md`
@@ -45,7 +45,7 @@ Then in order of importance:
 1. Read `specs/evidence.md` — the Phase 0 closure artifact.
 2. Skim `bootstrap/adversarial-review-codex.md` — the objections Codex raised against the skeleton. 6 HIGH are incorporated; see below for what's deferred.
 3. Read `src/schemas/workflow.ts`, `src/schemas/step.ts`, and `src/schemas/event.ts` — the three most consequential schemas. Verify they match your mental model.
-4. Run `npm run test` — 34 tests should pass. Every test encodes an invariant from the methodology. Skim the test names to see what's enforced.
+4. Run `npm run test` — 47 tests should pass (46 contract + 1 smoke). Every test encodes an invariant from the methodology. Skim the test names to see what's enforced.
 5. Read `specs/contracts/workflow.md` as an example Phase 1 contract. Phase 1 authors the remaining contracts (step, selection, adapter, continuity, skill, run, phase, behavioral tracks) in the same shape.
 6. Decide what Phase 1 batch to start with. Recommended: `specs/contracts/step.md` next (the invariants are the densest).
 
@@ -87,12 +87,18 @@ Then in order of importance:
 ### Deferred to Phase 1 contract authorship
 
 - Remaining contract stubs under `specs/contracts/`:
-  - `step.md`, `phase.md`, `run.md`, `selection.md`, `adapter.md`,
+  - `phase.md`, `run.md`, `selection.md`, `adapter.md`,
     `continuity.md`, `skill.md`
 - Behavioral tracks: `specs/behavioral/session-hygiene.md`,
   `specs/behavioral/prose-yaml-parity.md`, `specs/behavioral/cross-model-challenger.md`
-- Adversarial-review MED #7 (gate `source` as typed reference)
-- Adversarial-review MED #11 (workflow `spine_policy` for phase-omit/rename policy)
+- Adversarial-review MED #11 (workflow `spine_policy` for phase-omit/rename policy) — belongs in `phase.md`
+
+### Closed this session (Phase 1, first contract slice)
+
+- `specs/contracts/step.md` authored (STEP-I1..STEP-I7; v0.1).
+- Adversarial-review MED #7 (gate `source` as typed reference) **closed** — `Gate.source` is a typed discriminated union with literal `ref` per source kind; `.strict()` rejects surplus keys; `superRefine` adds `Object.hasOwn` + undefined defense-in-depth.
+- Codex cross-model adversarial property-auditor pass completed against step.md/gate.ts/step.ts — 3 HIGH + 3 MED + 1 LOW incorporated (prototype-chain attack, cross-slot drift, optional-undefined, strict-mode prose, biome scope, project-state sync, TS exactness prose).
+- `biome.json` ignores `.circuit/` (no more formatter writes against run state).
 
 ### Deferred to Phase 2 implementation
 
@@ -135,8 +141,12 @@ All are re-exported through `src/schemas/index.ts` and `src/index.ts`.
 
 ## Contract tests
 
-`tests/contracts/schema-parity.test.ts` — 34 tests. Each encodes one
-invariant from `specs/evidence.md`. Notable ones:
+`tests/contracts/schema-parity.test.ts` — 46 contract tests (baseline 34
+after overnight, +12 from the Phase 1 step-contract slice covering gate-
+source literals, strict-mode surplus-key rejection, prototype-chain +
+cross-slot drift rejection). Plus 1 smoke test at `tests/unit/smoke.test.ts`.
+Each test encodes one invariant from `specs/evidence.md` or the landed
+contracts. Notable ones:
 
 - Rigor rejects unknown tiers
 - `isConsequentialRigor` includes `autonomous` (adversarial-review fix)
@@ -169,13 +179,16 @@ invariant from `specs/evidence.md`. Notable ones:
 
 This overnight run chains to invocation id `inv_ec9c950f-6044-4799-a293-e514fcb95656` from the `/circuit:run` directive that started the session.
 
-## Open questions for the morning
+## Open questions
 
-1. **Start Phase 1 with `step.md` or `run.md`?** `step.md` is the densest invariants; `run.md` is the most user-visible.
-2. **Keep `agent` as a built-in adapter alias?** Existing Circuit has `agent` = Claude Code Agent tool. Adversarial review notes `codex-isolated` is the real name with `codex` as alias.
-3. **Tighten gate `source` now or during contract authorship?** Adversarial-review MED #7 is real but not HIGH. Decide whether to incorporate into schema before or during `specs/contracts/gate.md` authorship.
-4. **Spine policy?** Whether `Workflow.spine_policy` (which canonical phases are present/omitted/renamed) should be added in Tier 0 or deferred to Phase 1 contract authorship.
-5. **Accept the type skeleton as-is, or rerun adversarial review after these doc additions?** The Codex reviewer didn't see `specs/evidence.md` or `specs/domain.md` or `specs/contracts/workflow.md` yet; a second pass might find new objections.
+1. **Next contract: `run.md` or `phase.md`?** `run.md` exposes the event-log + replay semantics (user-visible); `phase.md` needs the spine_policy decision (MED #11). Either unblocks selection.md/adapter.md/continuity.md/skill.md downstream.
+2. **Keep `agent` as a built-in adapter alias?** Existing Circuit has `agent` = Claude Code Agent tool. Adversarial review notes `codex-isolated` is the real name with `codex` as alias. Decide in adapter.md.
+3. **Spine policy (MED #11)?** Whether `Workflow.spine_policy` (which canonical phases are present/omitted/renamed) belongs in phase.md or workflow.md v0.2. Default: phase.md.
+
+### Resolved this session
+
+- ~~Start Phase 1 with step.md or run.md?~~ → step.md landed first; gate.source tightening (MED #7) folded in.
+- ~~Accept the type skeleton as-is, or rerun adversarial review?~~ → Rerun happened inside the step.md slice (Codex read the tightened schema + new contract + tests); 3 HIGH + 3 MED + 1 LOW incorporated.
 
 ## If something is wrong
 
