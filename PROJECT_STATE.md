@@ -1,7 +1,7 @@
 # PROJECT_STATE — circuit-next
 
-**Last updated:** 2026-04-18 (ADR-0002 bootstrap discipline landed; autonomy arc begun)
-**Phase:** 1 — Contract authorship **in progress**. Phase 0 Evidence Loop closed. First Phase 1 contract (`step.md`) landed + MED #7 (gate source tightening) closed. Bootstrap discipline (ADR-0002) codified; `.circuit/` now gitignored going forward.
+**Last updated:** 2026-04-18 (autonomy arc slices 1-2: ADR-0002 + `npm run audit`)
+**Phase:** 1 — Contract authorship **in progress**. Phase 0 Evidence Loop closed. First Phase 1 contract (`step.md`) landed + MED #7 closed. Bootstrap discipline (ADR-0002) codified; `.circuit/` gitignored; drift-visibility audit (`npm run audit`) now enforces the citation rule + lane/framing discipline across every commit.
 **Tier:** 0 — scaffold complete, validated, committed.
 
 ## One-minute read
@@ -93,8 +93,9 @@ Then in order of importance:
   `specs/behavioral/prose-yaml-parity.md`, `specs/behavioral/cross-model-challenger.md`
 - Adversarial-review MED #11 (workflow `spine_policy` for phase-omit/rename policy) — belongs in `phase.md`
 
-### Closed this session (Phase 1, first contract slice + autonomy arc slice 1)
+### Closed this session (Phase 1, first contract slice + autonomy arc slices 1-2)
 
+- **`npm run audit`** — drift-visibility audit command (`scripts/audit.mjs`). Walks recent commits, checks 8 discipline dimensions (lane, framing triplet, citation rule, Circuit-smell, gitignore compliance, test ratchet, PROJECT_STATE freshness, verify gate). Exits non-zero on red. The enforcement mechanism ADR-0002 promised. First run: 8 green / 0 yellow / 0 red against HEAD.
 - **ADR-0002** — *Bootstrap Discipline*: codifies that `circuit-next` is built via the existing Circuit as harness (classic bootstrap), with four rules against design contamination (citation rule, gitignore rule, harness-vs-template distinction, enforcement via audit). Closes the "Circuit does X" silent-justification risk.
 - `.circuit/` added to `.gitignore` going forward; `phase-1-step-contract-authorship` run preserved via negative rule as historical audit trail of the first Phase 1 slice.
 - `specs/contracts/step.md` authored (STEP-I1..STEP-I7; v0.1).

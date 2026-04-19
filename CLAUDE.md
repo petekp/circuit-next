@@ -87,10 +87,18 @@ npm run check   # tsc --noEmit (architecture check)
 npm run lint    # biome check
 npm run test    # vitest (contract tests)
 npm run verify  # all of the above
+npm run audit   # drift-visibility audit across recent commits
 ```
 
-These gates must all pass before any commit in a Ratchet-Advance or
-Equivalence Refactor lane.
+The first four gates must all pass before any commit in a Ratchet-Advance
+or Equivalence Refactor lane.
+
+`npm run audit` reports on discipline health: lane declaration, framing
+triplet (failure mode / acceptance evidence / alternate framing), citation
+rule (ADR-0002), Circuit-as-justification smell, `.circuit/` gitignore
+compliance, contract test ratchet, PROJECT_STATE.md freshness, and the
+verify gate. It exits non-zero on any red finding. Run it whenever
+confidence needs a cheap sanity check, or when onboarding a fresh session.
 
 ## Where things live
 

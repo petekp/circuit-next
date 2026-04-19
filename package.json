@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "lint": "biome check .",
     "format": "biome format --write .",
-    "verify": "npm run check && npm run lint && npm run test"
+    "verify": "npm run check && npm run lint && npm run test",
+    "audit": "node scripts/audit.mjs"
   },
   "dependencies": {
     "zod": "^3.23.8"
