@@ -216,7 +216,13 @@
       "description": "Config-layer map of custom adapter name -> CustomAdapterDescriptor. Registry-key to descriptor-name parity is enforced; reserved names are disjoint.",
       "contract": "specs/contracts/adapter.md",
       "schema_file": "src/schemas/config.ts",
-      "schema_exports": ["DispatchConfig", "Config", "ConfigLayer", "LayeredConfig"],
+      "schema_exports": [
+        "DispatchConfig",
+        "Config",
+        "ConfigLayer",
+        "LayeredConfig",
+        "AdapterReference"
+      ],
       "writers": ["plugin author (defaults)", "operator (user-global, project, invocation)"],
       "readers": ["circuit-next engine (adapter resolution)"],
       "resolvers": ["adapter.reference", "adapter.resolved"],
@@ -249,7 +255,6 @@
       "schema_file": "src/schemas/adapter.ts",
       "schema_exports": [
         "AdapterRef",
-        "AdapterReference",
         "BuiltInAdapter",
         "BuiltInAdapterRef",
         "NamedAdapterRef",

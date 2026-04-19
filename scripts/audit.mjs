@@ -93,6 +93,22 @@ const ARTIFACT_NON_GREENFIELD_REQUIRED = [
 
 const PATH_SAFE_PRIMITIVES = ['ControlPlaneFileStem'];
 
+/**
+ * Slice 11 — schema_exports existence check. Returns true iff `name` appears
+ * as `export const <name>` in the source (word-boundary exact match on the
+ * identifier). Matches only top-level `export const`, not `export { name }`
+ * re-exports, by design: artifacts.json names the DEFINING module, not
+ * wherever the identifier happens to be re-exported. Extending to cover
+ * `export function <name>` / `export class <name>` / `export type <name>` /
+ * `export { <name> }` is a v0.2 scope item once an artifact actually needs
+ * one of those export forms.
+ */
+export function schemaExportPresent(schemaSrc, name) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`^export const ${escaped}\\b`, 'm');
+  return pattern.test(schemaSrc);
+}
+
 function sh(cmd) {
   return execSync(cmd, { cwd: REPO_ROOT }).toString();
 }
@@ -374,6 +390,22 @@ function checkAuthorityGraph() {
           level: 'red',
           detail: `${artifact.id}: schema_file missing — ${artifact.schema_file}`,
         });
+      } else if (Array.isArray(artifact.schema_exports)) {
+        // Slice 11 — schema_exports existence hardening. For every name the
+        // authority graph claims is exported from the schema file, regex-check
+        // that the name appears in an `export const <name>` position in the
+        // source. Catches the class of drift where the graph names a stale
+        // export (renamed, deleted, never-landed) and the audit would pass
+        // because only array non-emptiness was checked.
+        const schemaSrc = readFileSync(schemaAbs, 'utf-8');
+        for (const exportName of artifact.schema_exports) {
+          if (!schemaExportPresent(schemaSrc, exportName)) {
+            findings.push({
+              level: 'red',
+              detail: `${artifact.id}: schema_exports names "${exportName}" but it is not \`export const ${exportName}\`d from ${artifact.schema_file}`,
+            });
+          }
+        }
       }
     }
   }
@@ -780,4 +812,11 @@ function main() {
   process.exit(exitCode);
 }
 
-main();
+// Only run main() when invoked directly (`node scripts/audit.mjs`), not when
+// imported as a module (e.g. by tests/contracts/artifact-authority.test.ts for
+// the `schemaExportPresent` helper). Without this guard, every import of this
+// file would shell out to `npm run verify`, which itself runs vitest, which
+// re-imports this file — a fork-bomb observed during Slice 11 authoring.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main();
+}

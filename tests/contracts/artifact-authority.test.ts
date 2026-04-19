@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { schemaExportPresent } from '../../scripts/audit.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, '..', '..');
@@ -125,6 +126,68 @@ describe('specs/artifacts.json — authority graph shape', () => {
         expect(artifact.schema_exports.length).toBeGreaterThan(0);
       }
     }
+  });
+
+  // Slice 11 — schema_exports existence hardening.
+  it('every schema_exports name is actually `export const <name>`d from its schema_file', () => {
+    for (const artifact of file.artifacts) {
+      if (!artifact.schema_file) continue;
+      const schemaAbs = join(REPO_ROOT, artifact.schema_file);
+      const src = readFileSync(schemaAbs, 'utf-8');
+      for (const name of artifact.schema_exports) {
+        expect(
+          schemaExportPresent(src, name),
+          `${artifact.id}: schema_exports names "${name}" but it is not export const-d from ${artifact.schema_file}`,
+        ).toBe(true);
+      }
+    }
+  });
+});
+
+describe('schema_exports existence checker — constructed-violation guard (Slice 11)', () => {
+  it('accepts names that appear as `export const <name>`', () => {
+    const src = 'export const Foo = 1;\nexport const Bar = 2;\n';
+    expect(schemaExportPresent(src, 'Foo')).toBe(true);
+    expect(schemaExportPresent(src, 'Bar')).toBe(true);
+  });
+
+  it('rejects names that do not appear at all', () => {
+    const src = 'export const Foo = 1;\n';
+    expect(schemaExportPresent(src, 'Missing')).toBe(false);
+  });
+
+  it('rejects names that appear only as export {name} re-exports (not the defining site)', () => {
+    const src = "export { Foo } from './other.js';\n";
+    expect(schemaExportPresent(src, 'Foo')).toBe(false);
+  });
+
+  it('rejects substring matches (word-boundary enforced)', () => {
+    const src = 'export const FooBar = 1;\n';
+    expect(schemaExportPresent(src, 'Foo')).toBe(false);
+    expect(schemaExportPresent(src, 'Bar')).toBe(false);
+  });
+
+  it('accepts name at end of file (trailing newline not required)', () => {
+    const src = 'export const Foo = 1';
+    expect(schemaExportPresent(src, 'Foo')).toBe(true);
+  });
+
+  it('accepts name on its own line even when other exports surround it', () => {
+    const src = '// header\n\nexport const Alpha = z.string();\nexport const Beta = z.number();\n';
+    expect(schemaExportPresent(src, 'Alpha')).toBe(true);
+    expect(schemaExportPresent(src, 'Beta')).toBe(true);
+  });
+
+  it('rejects `export function <name>` form (defining, but not `export const`)', () => {
+    // Intentional v0.1 scope: only `export const` is matched. Extending to
+    // cover function/class/type forms is a Slice-11 v0.2 scope item.
+    const src = 'export function helper() {}\n';
+    expect(schemaExportPresent(src, 'helper')).toBe(false);
+  });
+
+  it('rejects when `export const` is commented out', () => {
+    const src = '// export const Foo = 1\n';
+    expect(schemaExportPresent(src, 'Foo')).toBe(false);
   });
 });
 
