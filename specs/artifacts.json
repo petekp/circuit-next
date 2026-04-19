@@ -42,7 +42,8 @@
         "CheckpointStep",
         "DispatchStep",
         "DispatchRole",
-        "ArtifactRef"
+        "ArtifactRef",
+        "RouteMap"
       ],
       "writers": ["circuit-next workflow author (offline)"],
       "readers": ["circuit-next engine (step execution, gate evaluation)"],
@@ -191,7 +192,9 @@
         "SelectionResolution",
         "ResolvedSelection",
         "SelectionSource",
-        "SELECTION_PRECEDENCE"
+        "SELECTION_PRECEDENCE",
+        "AppliedEntry",
+        "JsonObject"
       ],
       "writers": ["circuit-next engine (selection resolver)"],
       "readers": [
@@ -229,8 +232,22 @@
         "Config",
         "ConfigLayer",
         "LayeredConfig",
-        "AdapterReference"
+        "AdapterReference",
+        "CircuitOverride"
       ],
+      "pending_rehome": {
+        "target_slice": 26,
+        "target_artifact_prefix": "config.*",
+        "target_objection": "specs/reviews/arc-phase-1-close-codex.md#HIGH-3",
+        "items": [
+          "Config",
+          "ConfigLayer",
+          "LayeredConfig",
+          "DispatchConfig",
+          "AdapterReference",
+          "CircuitOverride"
+        ]
+      },
       "writers": ["plugin author (defaults)", "operator (user-global, project, invocation)"],
       "readers": ["circuit-next engine (adapter resolution)"],
       "resolvers": ["adapter.reference", "adapter.resolved"],

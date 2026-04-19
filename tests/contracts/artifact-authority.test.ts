@@ -1,9 +1,13 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
+  SCHEMA_FILE_ALLOWLIST,
+  collectSchemaExports,
+  contractReciprocatesArtifact,
   planeIsValid,
+  readFrontmatter,
   schemaExportPresent,
   trustBoundaryHasOriginToken,
 } from '../../scripts/audit.mjs';
@@ -51,7 +55,7 @@ type Artifact = {
   compatibility_policy: string;
   plane?: string;
   description: string;
-  contract: string | null;
+  contract: string;
   schema_file: string | null;
   schema_exports: string[];
   writers: string[];
@@ -183,11 +187,23 @@ describe('schema_exports existence checker — constructed-violation guard (Slic
     expect(schemaExportPresent(src, 'Beta')).toBe(true);
   });
 
-  it('rejects `export function <name>` form (defining, but not `export const`)', () => {
-    // Intentional v0.1 scope: only `export const` is matched. Extending to
-    // cover function/class/type forms is a Slice-11 v0.2 scope item.
+  // Slice 23 (Codex HIGH #6 fold-in): regex was broadened from `export const`
+  // only to `export (const|type|function|class)` so that type-only exports
+  // like `AppliedEntry` and `JsonObject` are not silently outside the
+  // ledger. Full TS AST-based coverage remains v0.2 scope.
+  it('accepts `export function <name>` defining form', () => {
     const src = 'export function helper() {}\n';
-    expect(schemaExportPresent(src, 'helper')).toBe(false);
+    expect(schemaExportPresent(src, 'helper')).toBe(true);
+  });
+
+  it('accepts `export type <name>` defining form (type-only alias)', () => {
+    const src = 'export type AppliedEntry = { layer: string };\n';
+    expect(schemaExportPresent(src, 'AppliedEntry')).toBe(true);
+  });
+
+  it('accepts `export class <name>` defining form', () => {
+    const src = 'export class Helper {}\n';
+    expect(schemaExportPresent(src, 'Helper')).toBe(true);
   });
 
   it('rejects when `export const` is commented out', () => {
@@ -576,5 +592,430 @@ describe('specs/artifacts.json — control-plane path-derivation ban (ADR-0004, 
         `${artifact.id} (control-plane): path_derived_fields must be empty; got [${pdf.join(', ')}]`,
       ).toBe(0);
     }
+  });
+});
+
+// Slice 23 — reverse reciprocation check (HIGH #4, arc-phase-1-close-codex.md).
+// An artifact row that names a contract file must be reciprocated: the contract's
+// frontmatter `artifact_ids` list must include the artifact's id. Catches the
+// failure mode where an artifact points at a contract that no longer claims it
+// back (rename drift, copy-paste mistake, or dropped id during reorganization).
+describe('specs/artifacts.json — contract reciprocation (ADR-0003, HIGH #4)', () => {
+  const file = loadArtifacts();
+
+  it('every artifact.contract points to an existing file', () => {
+    for (const artifact of file.artifacts) {
+      if (!artifact.contract) continue;
+      const abs = join(REPO_ROOT, artifact.contract);
+      expect(
+        existsSync(abs),
+        `${artifact.id}: contract "${artifact.contract}" does not exist on disk`,
+      ).toBe(true);
+    }
+  });
+
+  it("every artifact.contract's frontmatter lists the artifact id back in artifact_ids", () => {
+    for (const artifact of file.artifacts) {
+      if (!artifact.contract) continue;
+      const abs = join(REPO_ROOT, artifact.contract);
+      const { ok, frontmatter, error } = readFrontmatter(abs);
+      expect(ok, `${artifact.id}: contract frontmatter unreadable — ${error ?? ''}`).toBe(true);
+      if (!ok) continue;
+      expect(
+        contractReciprocatesArtifact(frontmatter, artifact.id),
+        `${artifact.id}: contract "${artifact.contract}" does not reciprocate — its artifact_ids frontmatter does not contain "${artifact.id}"`,
+      ).toBe(true);
+    }
+  });
+});
+
+describe('contractReciprocatesArtifact — constructed-violation guard (Slice 23)', () => {
+  it('returns true when artifact_ids contains the id', () => {
+    expect(contractReciprocatesArtifact({ artifact_ids: ['foo.bar'] }, 'foo.bar')).toBe(true);
+  });
+
+  it('returns true when artifact_ids lists several ids including the target', () => {
+    expect(
+      contractReciprocatesArtifact({ artifact_ids: ['a.one', 'b.two', 'c.three'] }, 'b.two'),
+    ).toBe(true);
+  });
+
+  it('returns false when artifact_ids omits the id', () => {
+    expect(contractReciprocatesArtifact({ artifact_ids: ['a.one'] }, 'b.two')).toBe(false);
+  });
+
+  it('returns false when artifact_ids is missing', () => {
+    expect(contractReciprocatesArtifact({}, 'foo.bar')).toBe(false);
+  });
+
+  it('returns false when artifact_ids is not an array', () => {
+    expect(contractReciprocatesArtifact({ artifact_ids: 'foo.bar' }, 'foo.bar')).toBe(false);
+  });
+
+  it('returns false when frontmatter is null or undefined', () => {
+    expect(contractReciprocatesArtifact(null, 'foo.bar')).toBe(false);
+    expect(contractReciprocatesArtifact(undefined, 'foo.bar')).toBe(false);
+  });
+});
+
+// Slice 23 — schema-export coverage ledger (HIGH #4, arc-phase-1-close-codex.md).
+// Every non-index file in src/schemas/ must be either bound to an artifact.schema_file
+// OR explicitly allowlisted in SCHEMA_FILE_ALLOWLIST with a category + reason. Every
+// `export const <Name>` in a bound file must appear in the owning artifact's
+// schema_exports. This is the ledger that would have flagged config.ts schemas being
+// absorbed by adapter.registry.schema_exports without a first-class config.* artifact
+// (MED #18, named Knight-Leveson correlated miss tracked to Slice 26).
+describe('src/schemas/ — schema-export coverage ledger (ADR-0003, HIGH #4)', () => {
+  const file = loadArtifacts();
+  const schemasDir = join(REPO_ROOT, 'src', 'schemas');
+  const schemaFiles = readdirSync(schemasDir)
+    .filter((f) => f.endsWith('.ts') && f !== 'index.ts')
+    .map((f) => `src/schemas/${f}`)
+    .sort();
+  const artifactSchemaFiles = new Set(
+    file.artifacts.map((a) => a.schema_file).filter((v): v is string => typeof v === 'string'),
+  );
+
+  it('every non-index schema file is either bound to an artifact or on the allowlist', () => {
+    for (const relPath of schemaFiles) {
+      const bound = artifactSchemaFiles.has(relPath);
+      const allowlisted = Object.hasOwn(SCHEMA_FILE_ALLOWLIST, relPath);
+      expect(
+        bound || allowlisted,
+        `${relPath}: neither bound to an artifact nor in SCHEMA_FILE_ALLOWLIST — add an artifact row or allowlist with a reason`,
+      ).toBe(true);
+    }
+  });
+
+  it('no schema file is both bound to an artifact AND on the allowlist', () => {
+    for (const relPath of schemaFiles) {
+      const bound = artifactSchemaFiles.has(relPath);
+      const allowlisted = Object.hasOwn(SCHEMA_FILE_ALLOWLIST, relPath);
+      expect(
+        bound && allowlisted,
+        `${relPath}: remove from SCHEMA_FILE_ALLOWLIST (artifact binding wins)`,
+      ).toBe(false);
+    }
+  });
+
+  it('every allowlist entry has a recognized category and non-empty reason', () => {
+    for (const [relPath, entry] of Object.entries(SCHEMA_FILE_ALLOWLIST)) {
+      expect(['shared-primitive', 'pending-artifact']).toContain(entry.category);
+      expect(entry.reason.length, `${relPath}: empty allowlist reason`).toBeGreaterThan(0);
+    }
+  });
+
+  // Slice 23 Codex HIGH #4 fold-in: every allowlisted file must carry a
+  // known_exports list, and every runtime export must appear in it. Closes
+  // the "allowlisted file is a black box" gap named by the challenger.
+  it('every allowlist entry has a non-empty known_exports list', () => {
+    for (const [relPath, entry] of Object.entries(SCHEMA_FILE_ALLOWLIST)) {
+      expect(
+        Array.isArray(entry.known_exports) && entry.known_exports.length > 0,
+        `${relPath}: known_exports must be a non-empty array`,
+      ).toBe(true);
+    }
+  });
+
+  it('every allowlisted file defines exactly the exports its entry lists', () => {
+    for (const [relPath, entry] of Object.entries(SCHEMA_FILE_ALLOWLIST)) {
+      const src = readFileSync(join(REPO_ROOT, relPath), 'utf-8');
+      const defined = collectSchemaExports(src);
+      const known = new Set(entry.known_exports);
+      for (const name of defined) {
+        expect(known.has(name), `${relPath}: defines ${name} but it is not in known_exports`).toBe(
+          true,
+        );
+      }
+      for (const name of known) {
+        expect(
+          defined.has(name),
+          `${relPath}: known_exports lists ${name} but file does not define it`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  // Slice 23 Codex MED #9 fold-in: pending-artifact entries require
+  // tracking_slice + tracking_objection fields so the TODO cannot rot.
+  it('every pending-artifact entry has tracking_slice and tracking_objection', () => {
+    for (const [relPath, entry] of Object.entries(SCHEMA_FILE_ALLOWLIST)) {
+      if (entry.category !== 'pending-artifact') continue;
+      expect(
+        typeof entry.tracking_slice === 'number' && entry.tracking_slice > 0,
+        `${relPath}: tracking_slice must be a positive integer`,
+      ).toBe(true);
+      expect(
+        typeof entry.tracking_objection === 'string' && entry.tracking_objection.length > 0,
+        `${relPath}: tracking_objection must be a non-empty citation`,
+      ).toBe(true);
+    }
+  });
+
+  it('every `export const <Name>` in a bound schema file is claimed by some artifact.schema_exports', () => {
+    for (const relPath of schemaFiles) {
+      if (!artifactSchemaFiles.has(relPath)) continue;
+      const src = readFileSync(join(REPO_ROOT, relPath), 'utf-8');
+      const defined = collectSchemaExports(src);
+      const claimed = new Set<string>();
+      for (const artifact of file.artifacts) {
+        if (artifact.schema_file !== relPath) continue;
+        if (!Array.isArray(artifact.schema_exports)) continue;
+        for (const name of artifact.schema_exports) claimed.add(name);
+      }
+      for (const name of defined) {
+        expect(
+          claimed.has(name),
+          `${relPath}: \`export const ${name}\` is not claimed by any artifact.schema_exports — add it to the owning artifact or refactor`,
+        ).toBe(true);
+      }
+    }
+  });
+});
+
+describe('collectSchemaExports — constructed-violation guard (Slice 23)', () => {
+  it('collects top-level `export const <Name>` identifiers', () => {
+    const src = 'export const Foo = 1;\nexport const Bar = 2;\n';
+    const names = collectSchemaExports(src);
+    expect(names.has('Foo')).toBe(true);
+    expect(names.has('Bar')).toBe(true);
+    expect(names.size).toBe(2);
+  });
+
+  // Slice 23 Codex MED #8 fold-in: the `_` filter was tightened from a broad
+  // `!name.startsWith('_')` to a strict match on
+  // `/^_compileTime[A-Z][A-Za-z0-9_]*Parity$/`. A non-guard `_`-prefixed name
+  // is now INCLUDED in the set so the ledger can catch it — otherwise any
+  // `_Foo` export would silently escape classification.
+  it('excludes `_compileTime<Foo>Parity` compile-time parity guards', () => {
+    const src = [
+      'export const Real = 1;',
+      'export const _compileTimeFooParity = 2;',
+      'export const _compileTimeOutcomeStatusParity = 3;',
+    ].join('\n');
+    const names = collectSchemaExports(src);
+    expect(names.has('Real')).toBe(true);
+    expect(names.has('_compileTimeFooParity')).toBe(false);
+    expect(names.has('_compileTimeOutcomeStatusParity')).toBe(false);
+  });
+
+  it('INCLUDES `_`-prefixed names that do not match the guard pattern', () => {
+    const src = [
+      'export const _Foo = 1;',
+      'export const _compileTimeNoParitySuffix = 2;',
+      'export const _internal = 3;',
+    ].join('\n');
+    const names = collectSchemaExports(src);
+    expect(names.has('_Foo')).toBe(true);
+    expect(names.has('_compileTimeNoParitySuffix')).toBe(true);
+    expect(names.has('_internal')).toBe(true);
+  });
+
+  it('does not collect `export { Foo } from` re-exports', () => {
+    const src = "export { Foo } from './other.js';\n";
+    const names = collectSchemaExports(src);
+    expect(names.has('Foo')).toBe(false);
+  });
+
+  it('collects `export type` declarations (Codex HIGH #6 fold-in)', () => {
+    const src = 'export type Foo = number;\n';
+    const names = collectSchemaExports(src);
+    expect(names.has('Foo')).toBe(true);
+  });
+
+  it('does not collect commented-out exports', () => {
+    const src = '// export const Foo = 1;\n';
+    const names = collectSchemaExports(src);
+    expect(names.has('Foo')).toBe(false);
+  });
+
+  it('returns an empty set for source with no defining exports', () => {
+    const src = 'const Local = 1;\n// commented export const C = 2;\n';
+    const names = collectSchemaExports(src);
+    expect(names.size).toBe(0);
+  });
+});
+
+// Slice 23 Codex HIGH #1 + HIGH #2 fold-ins: contract structurally required
+// + exact contract-artifact reciprocation. Every artifact row MUST have a
+// non-empty string `contract` path, and the set of artifact ids listed in a
+// contract's frontmatter MUST equal the set of artifacts pointing at that
+// contract. This closes the "false claim" drift where contract A.md lists
+// an artifact that actually belongs to contract B.md.
+describe('specs/artifacts.json — contract field discipline (Codex HIGH #1, HIGH #2)', () => {
+  const file = loadArtifacts();
+
+  it('every artifact has a non-empty string contract field', () => {
+    for (const artifact of file.artifacts) {
+      expect(
+        Object.hasOwn(artifact, 'contract'),
+        `${artifact.id}: contract field is structurally required`,
+      ).toBe(true);
+      expect(
+        typeof artifact.contract === 'string' && (artifact.contract as string).length > 0,
+        `${artifact.id}: contract must be a non-empty string path`,
+      ).toBe(true);
+    }
+  });
+
+  it('every id in a contract artifact_ids maps back to an artifact whose contract points here', () => {
+    const contractsDir = join(REPO_ROOT, 'specs', 'contracts');
+    const contractFiles = readdirSync(contractsDir).filter((f) => f.endsWith('.md'));
+    const byId = new Map(file.artifacts.map((a) => [a.id, a]));
+    for (const cf of contractFiles) {
+      const result = readFrontmatter(join(contractsDir, cf));
+      expect(result.ok, `${cf}: frontmatter unreadable`).toBe(true);
+      if (!result.ok) continue;
+      const ids = result.frontmatter.artifact_ids;
+      if (!Array.isArray(ids)) continue;
+      const expectedContract = `specs/contracts/${cf}`;
+      for (const id of ids) {
+        const art = byId.get(id as string);
+        expect(art, `${cf}: artifact_ids references ${id} not in graph`).toBeDefined();
+        if (!art) continue;
+        expect(
+          art.contract,
+          `${cf}: claims ${id} but artifact's contract is ${JSON.stringify(art.contract)} (expected ${expectedContract})`,
+        ).toBe(expectedContract);
+      }
+    }
+  });
+
+  it('every artifact whose contract points at a contract file appears in that file artifact_ids', () => {
+    const contractsDir = join(REPO_ROOT, 'specs', 'contracts');
+    for (const artifact of file.artifacts) {
+      const result = readFrontmatter(join(REPO_ROOT, artifact.contract));
+      expect(result.ok, `${artifact.id}: contract frontmatter unreadable`).toBe(true);
+      if (!result.ok) continue;
+      const ids = result.frontmatter.artifact_ids as string[] | undefined;
+      expect(
+        Array.isArray(ids) && ids.includes(artifact.id),
+        `${artifact.id}: contract "${artifact.contract}" does not list ${artifact.id} in artifact_ids`,
+      ).toBe(true);
+      // unused variable — reserved for future additional assertion on
+      // reciprocation symmetry beyond includes().
+      void contractsDir;
+    }
+  });
+});
+
+// Slice 23 Codex HIGH #5 fold-in: pending_rehome metadata. A known
+// misbinding (e.g. Config schemas temporarily claimed by adapter.registry
+// until Slice 26 lands config.* artifact rows) must be machine-visible via
+// a `pending_rehome: { target_slice, target_artifact_prefix, target_objection,
+// items }` block on the hosting artifact. Audit + test assert shape.
+describe('specs/artifacts.json — pending_rehome discipline (Codex HIGH #5)', () => {
+  const file = loadArtifacts();
+
+  it('every pending_rehome entry has target_slice (positive integer)', () => {
+    for (const artifact of file.artifacts) {
+      const pr = (artifact as { pending_rehome?: Record<string, unknown> }).pending_rehome;
+      if (!pr) continue;
+      expect(typeof pr.target_slice === 'number' && (pr.target_slice as number) > 0).toBe(true);
+    }
+  });
+
+  it('every pending_rehome entry has target_artifact_prefix (non-empty string)', () => {
+    for (const artifact of file.artifacts) {
+      const pr = (artifact as { pending_rehome?: Record<string, unknown> }).pending_rehome;
+      if (!pr) continue;
+      expect(
+        typeof pr.target_artifact_prefix === 'string' &&
+          (pr.target_artifact_prefix as string).length > 0,
+      ).toBe(true);
+    }
+  });
+
+  it('every pending_rehome entry has non-empty items list', () => {
+    for (const artifact of file.artifacts) {
+      const pr = (artifact as { pending_rehome?: Record<string, unknown> }).pending_rehome;
+      if (!pr) continue;
+      expect(Array.isArray(pr.items) && (pr.items as unknown[]).length > 0).toBe(true);
+    }
+  });
+
+  it('every pending_rehome entry has target_objection (non-empty citation)', () => {
+    for (const artifact of file.artifacts) {
+      const pr = (artifact as { pending_rehome?: Record<string, unknown> }).pending_rehome;
+      if (!pr) continue;
+      expect(
+        typeof pr.target_objection === 'string' && (pr.target_objection as string).length > 0,
+      ).toBe(true);
+    }
+  });
+
+  // Positive assertion on the known v0.1 instance — adapter.registry carries
+  // the Config schemas pending Slice 26 config.md. Pinned here so a regression
+  // surfaces as a named test failure rather than hiding under generic shape.
+  it('adapter.registry.pending_rehome points at Slice 26 / config.*', () => {
+    const art = file.artifacts.find((a) => a.id === 'adapter.registry') as
+      | { pending_rehome?: { target_slice?: number; target_artifact_prefix?: string } }
+      | undefined;
+    expect(art?.pending_rehome?.target_slice).toBe(26);
+    expect(art?.pending_rehome?.target_artifact_prefix).toBe('config.*');
+  });
+});
+
+// Slice 23 Codex HIGH #3 fold-in: src/schemas/index.ts barrel-export check.
+// Every non-index schema file must be re-exported via `export * from './<n>.js';`.
+// No stale re-exports to deleted files.
+describe('src/schemas/index.ts — barrel export coverage (Codex HIGH #3)', () => {
+  const schemasDir = join(REPO_ROOT, 'src', 'schemas');
+  const indexSrc = readFileSync(join(schemasDir, 'index.ts'), 'utf-8');
+  const schemaFiles = readdirSync(schemasDir)
+    .filter((f) => f.endsWith('.ts') && f !== 'index.ts')
+    .sort();
+
+  it('every non-index schema file is re-exported via `export * from`', () => {
+    for (const file of schemaFiles) {
+      const stem = file.replace(/\.ts$/, '');
+      const pattern = new RegExp(`^export \\* from '\\./${stem}\\.js';?\\s*$`, 'm');
+      expect(
+        pattern.test(indexSrc),
+        `src/schemas/index.ts: missing \`export * from './${stem}.js';\``,
+      ).toBe(true);
+    }
+  });
+
+  it('no barrel re-export points at a non-existent file', () => {
+    const reExportPattern = /^export \* from '\.\/([A-Za-z0-9_-]+)\.js';?\s*$/gm;
+    const referenced = new Set<string>();
+    let m = reExportPattern.exec(indexSrc);
+    while (m !== null) {
+      referenced.add(`${m[1]}.ts`);
+      m = reExportPattern.exec(indexSrc);
+    }
+    for (const file of referenced) {
+      expect(schemaFiles.includes(file), `src/schemas/index.ts: stale re-export for ${file}`).toBe(
+        true,
+      );
+    }
+  });
+});
+
+// Slice 23 Codex MED #8 fold-in: COMPILE_TIME_GUARD_PATTERN is imported so
+// constructed-violation guards can pin the exact shape. Any future guard
+// MUST conform to `_compileTime<Word>Parity`; an underscore-prefixed export
+// that does not match is caught by the coverage ledger.
+describe('COMPILE_TIME_GUARD_PATTERN — constructed-violation guard (Codex MED #8)', () => {
+  it('matches valid compile-time parity guard names', async () => {
+    const { COMPILE_TIME_GUARD_PATTERN } = await import('../../scripts/audit.mjs');
+    expect(COMPILE_TIME_GUARD_PATTERN.test('_compileTimeOutcomeStatusParity')).toBe(true);
+    expect(COMPILE_TIME_GUARD_PATTERN.test('_compileTimeSelectionSourceParity')).toBe(true);
+    expect(COMPILE_TIME_GUARD_PATTERN.test('_compileTimeFooParity')).toBe(true);
+  });
+
+  it('rejects plain underscore-prefixed names', async () => {
+    const { COMPILE_TIME_GUARD_PATTERN } = await import('../../scripts/audit.mjs');
+    expect(COMPILE_TIME_GUARD_PATTERN.test('_Foo')).toBe(false);
+    expect(COMPILE_TIME_GUARD_PATTERN.test('_internal')).toBe(false);
+    expect(COMPILE_TIME_GUARD_PATTERN.test('_compileTimeNoParitySuffix')).toBe(false);
+    expect(COMPILE_TIME_GUARD_PATTERN.test('_helper')).toBe(false);
+  });
+
+  it('rejects names missing the uppercase letter after _compileTime', async () => {
+    const { COMPILE_TIME_GUARD_PATTERN } = await import('../../scripts/audit.mjs');
+    expect(COMPILE_TIME_GUARD_PATTERN.test('_compileTimeParity')).toBe(false);
+    expect(COMPILE_TIME_GUARD_PATTERN.test('_compileTimefooParity')).toBe(false);
   });
 });

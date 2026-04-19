@@ -130,8 +130,8 @@ using the challenger WELL given that reframing.
 
 ## Planned test location
 
-`tests/contracts/cross-model-challenger.test.ts` (Phase 1, future).
-Asserts:
+`tests/contracts/cross-model-challenger.test.ts` (Phase 1 track;
+landed Slice 16 — CHALLENGER-I1..I6 pinned). Asserts:
 
 - Every contract carries EITHER `codex_adversarial_review: <path>` that
   resolves to an existing file OR an explicit

@@ -271,3 +271,128 @@ deferred to the next slice, now unblocked under the gate.
 - `specs/evidence.md` — Phase 0 synthesis.
 - `CLAUDE.md` — methodology pillars (patched in this slice).
 - ADR-0001, ADR-0002.
+
+## Addendum A — Omitted-artifact reopen trigger (Slice 23, 2026-04-19)
+
+### Context
+
+The Phase 1 close retrospective (`specs/reviews/arc-phase-1-close-codex.md`,
+MED #15) found that the original Reopen conditions above miss a class of
+drift: a schema export, backing path, or runtime writer/reader can land in
+`src/schemas/` (or in runtime code) **without** a corresponding artifact id
+in `specs/artifacts.json`, and the gate stays green because every artifact
+that *does* exist is classified. The named instance is `config.ts`: the
+`Config / ConfigLayer / LayeredConfig / CircuitOverride` schemas were
+absorbed into `adapter.registry.schema_exports` during Slice 7, and no
+`config.*` artifact row was ever added. Both Claude and Codex missed this
+during the full-arc review — a Knight-Leveson correlated miss under shared
+training distribution, exactly the failure mode ADR-0003's challenger
+downgrade section warned about.
+
+The forward-only gate (artifact → classified → reference/migration fields →
+schema-export existence) cannot catch this class because it only validates
+artifacts that are present. The omission is invisible until someone reads
+the authority graph and notices a schema file, a backing path, or a
+reader/writer invocation with no artifact attached.
+
+### Addendum
+
+The Reopen conditions of this ADR are extended with one additional
+trigger:
+
+> **An unbound surface appears.** Any of the following, observed in the
+> working tree or in a commit diff:
+> - a file in `src/schemas/` (excluding `index.ts`) that is neither
+>   referenced as some artifact's `schema_file` nor present in the
+>   `SCHEMA_FILE_ALLOWLIST` declared in `scripts/audit.mjs`;
+> - an `export const <Name>` in a schema file bound to an artifact, where
+>   `<Name>` is not claimed by any artifact's `schema_exports`;
+> - an on-disk `backing_paths` entry, a writer, or a reader named by
+>   runtime code or documentation that does not resolve to an existing
+>   artifact id.
+>
+> When any of these surfaces, the authority graph gate reopens: the slice
+> touching the surface MUST classify it (new artifact row, extension of an
+> existing artifact's `schema_exports`/`writers`/`readers`/`backing_paths`,
+> or explicit addition to `SCHEMA_FILE_ALLOWLIST` with a category and
+> reason) before the slice may commit in a Ratchet-Advance lane.
+
+### Enforcement
+
+Machine enforcement lands in Slice 23 and is redundant with the per-test
+local proof already in place (ADR-0003 "Machine enforcement, not markdown
+discipline"):
+
+1. `scripts/audit.mjs` authority-graph dimension now runs:
+   - **Reverse reciprocation check.** For every artifact with a non-null
+     `contract`, the contract file must exist and its frontmatter
+     `artifact_ids` list must include the artifact's id.
+   - **Schema-export coverage ledger.** Every non-`index.ts` file in
+     `src/schemas/` must be either referenced by an artifact's
+     `schema_file` or allowlisted. Every `export const <Name>` in an
+     artifact-bound file must be claimed by that artifact's
+     `schema_exports` (with `_`-prefixed compile-time parity guards
+     excluded, since they are not runtime schema surfaces).
+
+2. `tests/contracts/artifact-authority.test.ts` asserts the same invariants
+   locally so failures surface at `npm run test` before `npm run audit`.
+
+Backing-paths / writers / readers are not yet machine-enforced at Slice 23.
+The addendum reopen trigger still applies to them as a prose rule; a future
+slice may lift them to audit checks once a canonical "runtime surface
+inventory" source of truth lands (tracked: Slice 30, event-writer boundary
+contract — HIGH #7 in the arc review).
+
+### Manual recognition checklist (v0.1, pre-Slice-30)
+
+Until Slice 30 lands a machine-enforced runtime surface inventory, any
+slice that touches runtime writers, readers, or backing paths MUST run
+through this checklist in the commit body or slice review record. The
+checklist is a temporary v0.1 compensating control for the prose-only
+scope of the reopen trigger (Codex MED #10 fold-in, Slice 23):
+
+- [ ] **Backing paths.** For every on-disk path the slice writes, reads,
+      or creates (events.ndjson, state.json, continuity records, config
+      files, etc.), confirm that the path appears in some artifact's
+      `backing_paths` list. New path → new artifact row or extended
+      existing one.
+- [ ] **Writers.** For every function, module, or command introduced
+      that appends, mutates, or emits to a backing path, confirm that
+      the writer is named in some artifact's `writers` list.
+- [ ] **Readers.** For every parser, projector, or consumer that reads
+      a backing path, confirm that the reader is named in some
+      artifact's `readers` list.
+- [ ] **Cross-artifact resolvers.** For every module that derives a
+      resolved form of one artifact from another (e.g. resolving
+      `selection.override` to `selection.resolution`), confirm the
+      source artifact lists the resolver in its `resolvers` array and
+      the target resolver artifact exists.
+- [ ] **Plane consistency.** For every new or extended backing path,
+      confirm the owning artifact's `plane` classification matches the
+      path's origin (control-plane for plugin-authored static content;
+      data-plane for engine-written, operator-written, or
+      model-authored state).
+
+Slice 30's scope (HIGH #7, event-writer boundary contract) includes
+promoting each of the above from manual checklist to audit rule; the
+checklist is explicitly expected to be retired when that slice lands.
+Continued prose-only status after Slice 30 would itself reopen this
+addendum.
+
+### Relationship to the Slice 26 (HIGH #3) fold-in
+
+Addendum A is the general rule; Slice 26 is the specific remediation for
+the named miss. Landing Addendum A in Slice 23 means Slice 26 begins with
+the reopen trigger already active: when Slice 26 adds `config.*` artifact
+row(s) and `specs/contracts/config.md`, the enforcement machinery catches
+any regression (e.g. a future refactor that re-absorbs config schemas
+under a non-config artifact). Removing `src/schemas/config.ts` from
+`SCHEMA_FILE_ALLOWLIST` is an expected byproduct of Slice 26.
+
+### Scope not widened
+
+The addendum does not change the five surface classes, the gate semantics,
+the challenger framing, or the migration posture of any existing artifact.
+It only extends what counts as a reopen event. A full reclassification of
+continuity, adapter, or any other artifact is out of scope; that requires
+a superseding ADR.

@@ -120,8 +120,8 @@ agent) drive the repo across session boundaries**.
 
 ## Planned test location
 
-`tests/contracts/session-hygiene.test.ts` (Phase 1 track, not yet
-authored). Will assert:
+`tests/contracts/session-hygiene.test.ts` (Phase 1 track; landed
+Slice 14 — SESSION-I1..I6 pinned). Asserts:
 
 - CLAUDE.md line count ≤ 300 (SESSION-I1).
 - README.md and PROJECT_STATE.md agree on current phase (SESSION-I2;

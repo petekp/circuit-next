@@ -104,6 +104,7 @@ const ARTIFACT_REQUIRED_BASE_FIELDS = [
   'surface_class',
   'compatibility_policy',
   'description',
+  'contract',
   'schema_file',
   'schema_exports',
   'writers',
@@ -124,18 +125,173 @@ const ARTIFACT_NON_GREENFIELD_REQUIRED = [
 const PATH_SAFE_PRIMITIVES = ['ControlPlaneFileStem'];
 
 /**
+ * Slice 23 — compile-time parity guards. Identifiers matching this exact
+ * pattern are excluded from the schema-export coverage ledger because they
+ * are type-level cross-module parity checks (Codex MED #8 fold-in: the
+ * previous broad `_`-prefix filter let any `_`-prefixed export escape the
+ * ledger). Any future guard MUST conform to this pattern; an `_`-prefixed
+ * export outside it fails the ledger.
+ */
+export const COMPILE_TIME_GUARD_PATTERN = /^_compileTime[A-Z][A-Za-z0-9_]*Parity$/;
+
+/**
+ * Slice 23 — schema-file allowlist for the schema-export coverage ledger
+ * (HIGH #4 fold-in, with Codex fold-ins layered on top). Every file in
+ * `src/schemas/` except `index.ts` must either be referenced as some
+ * artifact's `schema_file` OR appear here with full metadata. Catches the
+ * class of correlated miss where a schema file lands without an artifact
+ * row (config.md is the named case from
+ * `specs/reviews/arc-phase-1-close-codex.md` — MED #18).
+ *
+ * Entry shape:
+ *   category: 'shared-primitive' — building blocks consumed by multiple
+ *                                  artifacts, not a first-class artifact.
+ *             'pending-artifact'  — schema file that SHOULD map to an
+ *                                  artifact row but does not yet. Required
+ *                                  fields below apply.
+ *   reason: non-empty prose.
+ *   known_exports: exhaustive list of the file's runtime exports (Codex
+ *                  HIGH #4 fold-in: symbol-level check catches new exports
+ *                  added to an allowlisted file, which would otherwise be
+ *                  invisible — a one-level-deeper version of the original
+ *                  omitted-artifact class).
+ *   tracking_slice (pending-artifact only, Codex MED #9 fold-in): integer
+ *                  slice id that will convert this entry to an artifact.
+ *   tracking_objection (pending-artifact only, Codex MED #9 fold-in):
+ *                  citation path#id into the originating review record.
+ */
+export const SCHEMA_FILE_ALLOWLIST = {
+  'src/schemas/ids.ts': {
+    category: 'shared-primitive',
+    reason:
+      'branded id primitives (WorkflowId, PhaseId, StepId, RunId, ...) consumed by every artifact',
+    known_exports: [
+      'WorkflowId',
+      'PhaseId',
+      'StepId',
+      'RunId',
+      'InvocationId',
+      'SkillId',
+      'ProtocolId',
+    ],
+  },
+  'src/schemas/primitives.ts': {
+    category: 'shared-primitive',
+    reason: 'path-safe primitives (ControlPlaneFileStem) per ADR-0003',
+    known_exports: ['ControlPlaneFileStem'],
+  },
+  'src/schemas/lane.ts': {
+    category: 'shared-primitive',
+    reason: 'lane enum used by methodology discipline, not a runtime artifact',
+    known_exports: [
+      'Lane',
+      'StandardLane',
+      'MigrationEscrowLane',
+      'BreakGlassLane',
+      'LaneDeclaration',
+    ],
+  },
+  'src/schemas/rigor.ts': {
+    category: 'shared-primitive',
+    reason: 'rigor-level enum used in selection composition',
+    known_exports: ['Rigor', 'CONSEQUENTIAL_RIGORS', 'isConsequentialRigor'],
+  },
+  'src/schemas/role.ts': {
+    category: 'shared-primitive',
+    reason: 'role-name enum used in dispatch + selection',
+    known_exports: ['Role'],
+  },
+  'src/schemas/gate.ts': {
+    category: 'shared-primitive',
+    reason: 'gate shapes embedded in step.definition; step contract governs them',
+    known_exports: [
+      'ArtifactSource',
+      'CheckpointResponseSource',
+      'DispatchResultSource',
+      'GateSource',
+      'SchemaSectionsGate',
+      'CheckpointSelectionGate',
+      'ResultVerdictGate',
+      'Gate',
+    ],
+  },
+  'src/schemas/snapshot.ts': {
+    category: 'shared-primitive',
+    reason: 'snapshot shape embedded in run.projection; run contract governs it',
+    known_exports: ['Snapshot', 'SnapshotStatus', 'StepState', 'StepStatus'],
+  },
+  'src/schemas/event.ts': {
+    category: 'pending-artifact',
+    reason:
+      'event-writer boundary contract pending — HIGH #7 (arc-phase-1-close-codex.md) scheduled Slice 30',
+    tracking_slice: 30,
+    tracking_objection: 'specs/reviews/arc-phase-1-close-codex.md#HIGH-7',
+    known_exports: [
+      'Event',
+      'RunBootstrappedEvent',
+      'StepEnteredEvent',
+      'StepArtifactWrittenEvent',
+      'GateEvaluatedEvent',
+      'CheckpointRequestedEvent',
+      'CheckpointResolvedEvent',
+      'DispatchStartedEvent',
+      'DispatchCompletedEvent',
+      'StepCompletedEvent',
+      'StepAbortedEvent',
+      'RunClosedEvent',
+      'RunClosedOutcome',
+    ],
+  },
+};
+
+/**
+ * Slice 23 — collect top-level runtime identifiers from a schema source.
+ * Matches `export const|type|function|class <Name>` (Codex HIGH #6 fold-in:
+ * the prior `export const`-only regex missed type-only exports like
+ * `AppliedEntry`, `JsonObject`). `_`-prefixed names are excluded only if
+ * they match `COMPILE_TIME_GUARD_PATTERN` — a stricter filter than the
+ * previous broad `_` check (Codex MED #8). Re-exports and `export default`
+ * are out of scope for v0.1; full TS AST coverage is tracked v0.2.
+ */
+export function collectSchemaExports(schemaSrc) {
+  const names = new Set();
+  const pattern = /^export (?:const|type|function|class) ([A-Za-z_][A-Za-z0-9_]*)\b/gm;
+  let match = pattern.exec(schemaSrc);
+  while (match !== null) {
+    const name = match[1];
+    const isKnownGuard = name.startsWith('_') && COMPILE_TIME_GUARD_PATTERN.test(name);
+    if (!isKnownGuard) names.add(name);
+    match = pattern.exec(schemaSrc);
+  }
+  return names;
+}
+
+/**
+ * Slice 23 — check artifact-to-contract reciprocation (HIGH #4 fold-in).
+ * Returns true iff the contract's `artifact_ids` frontmatter list contains
+ * `artifactId`. Used both by audit.mjs and by artifact-authority.test.ts to
+ * assert the reverse direction of the authority graph: an artifact row's
+ * `contract` pointer must be reciprocated by the contract naming it back.
+ */
+export function contractReciprocatesArtifact(contractFrontmatter, artifactId) {
+  const ids = contractFrontmatter?.artifact_ids;
+  if (!Array.isArray(ids)) return false;
+  return ids.includes(artifactId);
+}
+
+/**
  * Slice 11 — schema_exports existence check. Returns true iff `name` appears
- * as `export const <name>` in the source (word-boundary exact match on the
- * identifier). Matches only top-level `export const`, not `export { name }`
- * re-exports, by design: artifacts.json names the DEFINING module, not
- * wherever the identifier happens to be re-exported. Extending to cover
- * `export function <name>` / `export class <name>` / `export type <name>` /
- * `export { <name> }` is a v0.2 scope item once an artifact actually needs
- * one of those export forms.
+ * as a top-level defining export in the source (word-boundary exact match
+ * on the identifier). Matches `export const|type|function|class <name>`
+ * (Codex HIGH #6 fold-in: prior `const`-only regex missed type-only
+ * exports like `AppliedEntry`, `JsonObject`). Does not match
+ * `export { <name> }` re-exports or `export default` — artifacts.json
+ * names the DEFINING module, and defaults have no stable identifier to
+ * pin. Full TypeScript AST-based coverage is tracked v0.2.
  */
 export function schemaExportPresent(schemaSrc, name) {
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const pattern = new RegExp(`^export const ${escaped}\\b`, 'm');
+  const pattern = new RegExp(`^export (?:const|type|function|class) ${escaped}\\b`, 'm');
   return pattern.test(schemaSrc);
 }
 
@@ -267,7 +423,7 @@ function verifyStatus() {
   }
 }
 
-function readFrontmatter(absPath) {
+export function readFrontmatter(absPath) {
   if (!existsSync(absPath)) return { ok: false, error: 'missing' };
   const content = readFileSync(absPath, 'utf-8');
   if (!content.startsWith('---\n')) return { ok: false, error: 'no-frontmatter' };
@@ -275,12 +431,10 @@ function readFrontmatter(absPath) {
   if (end === -1) return { ok: false, error: 'unterminated-frontmatter' };
   const fm = content.slice(4, end);
   const result = {};
-  let _currentKey = null;
   let currentList = null;
   for (const rawLine of fm.split('\n')) {
     const line = rawLine.replace(/\r$/, '');
     if (!line.trim()) {
-      _currentKey = null;
       currentList = null;
       continue;
     }
@@ -295,7 +449,6 @@ function readFrontmatter(absPath) {
     if (value === '') {
       const list = [];
       result[key] = list;
-      _currentKey = key;
       currentList = list;
     } else {
       const bracketList = value.match(/^\[(.*)\]$/);
@@ -308,7 +461,6 @@ function readFrontmatter(absPath) {
       } else {
         result[key] = value.replace(/^['"]|['"]$/g, '');
       }
-      _currentKey = key;
       currentList = null;
     }
   }
@@ -486,6 +638,46 @@ function checkAuthorityGraph() {
         });
       }
     }
+    // Slice 23 — reverse reciprocation check (HIGH #4 fold-in). An artifact
+    // row that names a contract file must be reciprocated: the contract's
+    // frontmatter `artifact_ids` list must include this artifact's id.
+    // Catches cases where a contract is edited to drop an artifact id or
+    // an artifact is re-pointed to a contract that doesn't claim it back.
+    // Codex HIGH #1 fold-in: `contract` is structurally required; a missing
+    // or non-string contract field is a red finding independent of the
+    // reverse check.
+    if (!Object.hasOwn(artifact, 'contract')) {
+      findings.push({
+        level: 'red',
+        detail: `${artifact.id}: missing required field "contract" (must be a non-empty path to specs/contracts/<name>.md)`,
+      });
+    } else if (typeof artifact.contract !== 'string' || artifact.contract.length === 0) {
+      findings.push({
+        level: 'red',
+        detail: `${artifact.id}: contract must be a non-empty string path; got ${JSON.stringify(artifact.contract)}`,
+      });
+    } else {
+      const contractAbs = join(REPO_ROOT, artifact.contract);
+      if (!existsSync(contractAbs)) {
+        findings.push({
+          level: 'red',
+          detail: `${artifact.id}: contract "${artifact.contract}" does not exist on disk`,
+        });
+      } else {
+        const { ok, frontmatter, error } = readFrontmatter(contractAbs);
+        if (!ok) {
+          findings.push({
+            level: 'red',
+            detail: `${artifact.id}: contract "${artifact.contract}" frontmatter ${error ?? 'unreadable'}`,
+          });
+        } else if (!contractReciprocatesArtifact(frontmatter, artifact.id)) {
+          findings.push({
+            level: 'red',
+            detail: `${artifact.id}: contract "${artifact.contract}" does not reciprocate — its artifact_ids frontmatter does not contain "${artifact.id}"`,
+          });
+        }
+      }
+    }
     if (artifact.schema_file) {
       const schemaAbs = join(REPO_ROOT, artifact.schema_file);
       if (!existsSync(schemaAbs)) {
@@ -535,11 +727,221 @@ function checkAuthorityGraph() {
       });
       continue;
     }
+    // Codex HIGH #2 fold-in: every id in artifact_ids must resolve to an
+    // artifact AND that artifact's contract field must point back at this
+    // contract file. Prevents "false claim" drift where a contract lists
+    // an artifact id that actually belongs to a different contract.
+    const contractRelPath = `specs/contracts/${file}`;
     for (const id of artifactIds) {
-      if (!byId.has(id)) {
+      const art = byId.get(id);
+      if (!art) {
         findings.push({
           level: 'red',
           detail: `specs/contracts/${file}: artifact_ids references ${id} not in specs/artifacts.json`,
+        });
+      } else if (art.contract !== contractRelPath) {
+        findings.push({
+          level: 'red',
+          detail: `specs/contracts/${file}: claims ${id} but the artifact's contract field is ${JSON.stringify(art.contract)} (expected "${contractRelPath}")`,
+        });
+      }
+    }
+    // Codex HIGH #2 fold-in (symmetric): every artifact whose contract
+    // points at this file must be listed in this file's artifact_ids.
+    const listedIds = new Set(artifactIds);
+    for (const art of graph.artifacts) {
+      if (art.contract !== contractRelPath) continue;
+      if (!listedIds.has(art.id)) {
+        findings.push({
+          level: 'red',
+          detail: `specs/contracts/${file}: artifact "${art.id}" points at this contract but is missing from artifact_ids`,
+        });
+      }
+    }
+  }
+
+  // Slice 23 — schema-export coverage ledger (HIGH #4 fold-in). Every
+  // non-index schema file in src/schemas/ must either be referenced by some
+  // artifact.schema_file OR be on SCHEMA_FILE_ALLOWLIST. Every exported
+  // `export const <Name>` symbol must either appear in some artifact's
+  // schema_exports OR live in an allowlisted file. This is the ledger that
+  // would have flagged config.ts schemas being absorbed by adapter.registry
+  // without a first-class config artifact row (MED #18, named
+  // Knight-Leveson correlated miss).
+  const schemasDir = join(REPO_ROOT, 'src', 'schemas');
+  if (existsSync(schemasDir)) {
+    const schemaFiles = readdirSync(schemasDir)
+      .filter((f) => f.endsWith('.ts') && f !== 'index.ts')
+      .map((f) => `src/schemas/${f}`)
+      .sort();
+    const artifactSchemaFiles = new Set(graph.artifacts.map((a) => a.schema_file).filter(Boolean));
+    const allExpectedExports = new Set();
+    for (const artifact of graph.artifacts) {
+      if (!Array.isArray(artifact.schema_exports)) continue;
+      for (const name of artifact.schema_exports) {
+        allExpectedExports.add(`${artifact.schema_file}::${name}`);
+      }
+    }
+    for (const relPath of schemaFiles) {
+      const onAllowlist = Object.hasOwn(SCHEMA_FILE_ALLOWLIST, relPath);
+      const isArtifactFile = artifactSchemaFiles.has(relPath);
+      if (!onAllowlist && !isArtifactFile) {
+        findings.push({
+          level: 'red',
+          detail: `${relPath}: schema file is neither referenced by an artifact row nor present in SCHEMA_FILE_ALLOWLIST — add an artifact to specs/artifacts.json or explicitly allowlist with a reason`,
+        });
+        continue;
+      }
+      if (onAllowlist && isArtifactFile) {
+        findings.push({
+          level: 'red',
+          detail: `${relPath}: schema file is both referenced by an artifact row AND on SCHEMA_FILE_ALLOWLIST — remove from the allowlist (artifact wins)`,
+        });
+      }
+      if (isArtifactFile) {
+        const schemaAbs = join(REPO_ROOT, relPath);
+        if (existsSync(schemaAbs)) {
+          const defined = collectSchemaExports(readFileSync(schemaAbs, 'utf-8'));
+          const claimedForThisFile = new Set();
+          for (const artifact of graph.artifacts) {
+            if (artifact.schema_file !== relPath) continue;
+            if (!Array.isArray(artifact.schema_exports)) continue;
+            for (const name of artifact.schema_exports) claimedForThisFile.add(name);
+          }
+          for (const name of defined) {
+            if (!claimedForThisFile.has(name)) {
+              findings.push({
+                level: 'red',
+                detail: `${relPath}: defines \`export ${name}\` but no artifact.schema_exports claims it — add it to the owning artifact or document it as an internal-only helper`,
+              });
+            }
+          }
+        }
+      }
+      // Codex HIGH #4 fold-in: symbol-level allowlist check. For an
+      // allowlisted file, every runtime export must appear in the entry's
+      // known_exports list. A new export added to an allowlisted file fails
+      // audit — closes the "allowlisted file is a black box" blind spot.
+      if (onAllowlist) {
+        const entry = SCHEMA_FILE_ALLOWLIST[relPath];
+        if (!Array.isArray(entry.known_exports)) {
+          findings.push({
+            level: 'red',
+            detail: `${relPath}: SCHEMA_FILE_ALLOWLIST entry missing required known_exports list`,
+          });
+        } else {
+          const schemaAbs = join(REPO_ROOT, relPath);
+          if (existsSync(schemaAbs)) {
+            const defined = collectSchemaExports(readFileSync(schemaAbs, 'utf-8'));
+            const known = new Set(entry.known_exports);
+            for (const name of defined) {
+              if (!known.has(name)) {
+                findings.push({
+                  level: 'red',
+                  detail: `${relPath}: defines \`export ${name}\` but it is not in SCHEMA_FILE_ALLOWLIST.known_exports — add it explicitly or promote the file to an artifact row`,
+                });
+              }
+            }
+            for (const name of known) {
+              if (!defined.has(name)) {
+                findings.push({
+                  level: 'red',
+                  detail: `${relPath}: SCHEMA_FILE_ALLOWLIST.known_exports lists "${name}" but the file does not define it — remove stale entry`,
+                });
+              }
+            }
+          }
+        }
+        // Codex MED #9 fold-in: pending-artifact entries require a tracking
+        // slice + objection citation so they cannot drift indefinitely.
+        if (entry.category === 'pending-artifact') {
+          if (typeof entry.tracking_slice !== 'number' || entry.tracking_slice <= 0) {
+            findings.push({
+              level: 'red',
+              detail: `${relPath}: pending-artifact entry missing tracking_slice (positive integer)`,
+            });
+          }
+          if (
+            typeof entry.tracking_objection !== 'string' ||
+            entry.tracking_objection.length === 0
+          ) {
+            findings.push({
+              level: 'red',
+              detail: `${relPath}: pending-artifact entry missing tracking_objection (citation path#id)`,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // Codex HIGH #5 fold-in: pending_rehome metadata. Catches the
+  // "laundered correlated miss" where a known-misbinding (e.g.
+  // CircuitOverride temporarily on adapter.registry until Slice 26 lands
+  // the config.* artifact) is machine-invisible. Any artifact declaring
+  // pending_rehome must name a target_slice, target_artifact_prefix, and
+  // items; audit flags unresolved pending_rehome as yellow so it remains
+  // visible rather than passing silently.
+  for (const artifact of graph.artifacts) {
+    if (!artifact.pending_rehome) continue;
+    const pr = artifact.pending_rehome;
+    if (typeof pr.target_slice !== 'number' || pr.target_slice <= 0) {
+      findings.push({
+        level: 'red',
+        detail: `${artifact.id}: pending_rehome missing target_slice (positive integer)`,
+      });
+    }
+    if (typeof pr.target_artifact_prefix !== 'string' || pr.target_artifact_prefix.length === 0) {
+      findings.push({
+        level: 'red',
+        detail: `${artifact.id}: pending_rehome missing target_artifact_prefix`,
+      });
+    }
+    if (!Array.isArray(pr.items) || pr.items.length === 0) {
+      findings.push({
+        level: 'red',
+        detail: `${artifact.id}: pending_rehome.items must be a non-empty list of export names awaiting relocation`,
+      });
+    }
+    if (typeof pr.target_objection !== 'string' || pr.target_objection.length === 0) {
+      findings.push({
+        level: 'red',
+        detail: `${artifact.id}: pending_rehome missing target_objection (citation path#id)`,
+      });
+    }
+  }
+
+  // Codex HIGH #3 fold-in: index.ts barrel-export check. The arc review
+  // (HIGH #4) explicitly scoped a "schema-export coverage ledger test for
+  // src/schemas/index.ts". Every non-index schema file (bound or
+  // allowlisted) must be re-exported via `export * from './<file>.js'`.
+  // No stale exports to deleted files.
+  const indexPath = join(REPO_ROOT, 'src', 'schemas', 'index.ts');
+  if (existsSync(indexPath) && existsSync(schemasDir)) {
+    const schemaFiles = readdirSync(schemasDir)
+      .filter((f) => f.endsWith('.ts') && f !== 'index.ts')
+      .sort();
+    const indexSrc = readFileSync(indexPath, 'utf-8');
+    const reExportPattern = /^export \* from '\.\/([A-Za-z0-9_-]+)\.js';?\s*$/gm;
+    const reExported = new Set();
+    let m = reExportPattern.exec(indexSrc);
+    while (m !== null) {
+      reExported.add(`${m[1]}.ts`);
+      m = reExportPattern.exec(indexSrc);
+    }
+    for (const file of schemaFiles) {
+      if (!reExported.has(file)) {
+        findings.push({
+          level: 'red',
+          detail: `src/schemas/index.ts: missing barrel re-export for ${file} — add \`export * from './${file.replace(/\.ts$/, '.js')}';\``,
+        });
+      }
+    }
+    for (const reExportedFile of reExported) {
+      if (!schemaFiles.includes(reExportedFile)) {
+        findings.push({
+          level: 'red',
+          detail: `src/schemas/index.ts: stale re-export for ${reExportedFile} (file does not exist)`,
         });
       }
     }

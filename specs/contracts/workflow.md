@@ -83,7 +83,7 @@ Property-based tests will cover:
   a valid `Lane` literal.
 - **selection-policy**: `Workflow.default_selection` is a
   `SelectionOverride` and obeys selection precedence (see
-  `specs/contracts/selection.md`, future).
+  `specs/contracts/selection.md`).
 
 ## Failure modes (carried from evidence)
 
