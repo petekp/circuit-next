@@ -20,13 +20,13 @@ export const MigrationEscrowLane = LaneBase.extend({
   lane: z.literal('migration-escrow'),
   expires_at: z.string().datetime(),
   restoration_plan: z.string().min(1),
-});
+}).strict();
 export type MigrationEscrowLane = z.infer<typeof MigrationEscrowLane>;
 
 export const BreakGlassLane = LaneBase.extend({
   lane: z.literal('break-glass'),
   post_hoc_adr_deadline_at: z.string().datetime(),
-});
+}).strict();
 export type BreakGlassLane = z.infer<typeof BreakGlassLane>;
 
 export const StandardLane = LaneBase.extend({
@@ -35,10 +35,10 @@ export const StandardLane = LaneBase.extend({
 export type StandardLane = z.infer<typeof StandardLane>;
 
 export const LaneDeclaration = z.discriminatedUnion('lane', [
-  StandardLane.extend({ lane: z.literal('ratchet-advance') }),
-  StandardLane.extend({ lane: z.literal('equivalence-refactor') }),
-  StandardLane.extend({ lane: z.literal('discovery') }),
-  StandardLane.extend({ lane: z.literal('disposable') }),
+  StandardLane.extend({ lane: z.literal('ratchet-advance') }).strict(),
+  StandardLane.extend({ lane: z.literal('equivalence-refactor') }).strict(),
+  StandardLane.extend({ lane: z.literal('discovery') }).strict(),
+  StandardLane.extend({ lane: z.literal('disposable') }).strict(),
   MigrationEscrowLane,
   BreakGlassLane,
 ]);

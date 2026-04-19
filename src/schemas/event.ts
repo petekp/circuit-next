@@ -21,14 +21,14 @@ export const RunBootstrappedEvent = EventBase.extend({
   goal: z.string().min(1),
   lane: LaneDeclaration,
   manifest_hash: z.string().min(1),
-});
+}).strict();
 export type RunBootstrappedEvent = z.infer<typeof RunBootstrappedEvent>;
 
 export const StepEnteredEvent = EventBase.extend({
   kind: z.literal('step.entered'),
   step_id: StepId,
   attempt: z.number().int().positive(),
-});
+}).strict();
 export type StepEnteredEvent = z.infer<typeof StepEnteredEvent>;
 
 export const StepArtifactWrittenEvent = EventBase.extend({
@@ -37,7 +37,7 @@ export const StepArtifactWrittenEvent = EventBase.extend({
   attempt: z.number().int().positive(),
   artifact_path: z.string().min(1),
   artifact_schema: z.string().min(1),
-});
+}).strict();
 export type StepArtifactWrittenEvent = z.infer<typeof StepArtifactWrittenEvent>;
 
 export const GateEvaluatedEvent = EventBase.extend({
@@ -48,7 +48,7 @@ export const GateEvaluatedEvent = EventBase.extend({
   outcome: z.enum(['pass', 'fail']),
   missing_sections: z.array(z.string()).optional(),
   reason: z.string().optional(),
-});
+}).strict();
 export type GateEvaluatedEvent = z.infer<typeof GateEvaluatedEvent>;
 
 export const CheckpointRequestedEvent = EventBase.extend({
@@ -56,7 +56,7 @@ export const CheckpointRequestedEvent = EventBase.extend({
   step_id: StepId,
   attempt: z.number().int().positive(),
   options: z.array(z.string()).min(1),
-});
+}).strict();
 export type CheckpointRequestedEvent = z.infer<typeof CheckpointRequestedEvent>;
 
 export const CheckpointResolvedEvent = EventBase.extend({
@@ -65,7 +65,7 @@ export const CheckpointResolvedEvent = EventBase.extend({
   attempt: z.number().int().positive(),
   selection: z.string().min(1),
   auto_resolved: z.boolean(),
-});
+}).strict();
 export type CheckpointResolvedEvent = z.infer<typeof CheckpointResolvedEvent>;
 
 export const DispatchStartedEvent = EventBase.extend({
@@ -76,7 +76,7 @@ export const DispatchStartedEvent = EventBase.extend({
   role: DispatchRole,
   resolved_selection: ResolvedSelection,
   resolved_from: z.enum(['explicit', 'role', 'circuit', 'default', 'auto']),
-});
+}).strict();
 export type DispatchStartedEvent = z.infer<typeof DispatchStartedEvent>;
 
 export const DispatchCompletedEvent = EventBase.extend({
@@ -87,7 +87,7 @@ export const DispatchCompletedEvent = EventBase.extend({
   duration_ms: z.number().int().nonnegative(),
   result_path: z.string().min(1),
   receipt_path: z.string().min(1),
-});
+}).strict();
 export type DispatchCompletedEvent = z.infer<typeof DispatchCompletedEvent>;
 
 export const StepCompletedEvent = EventBase.extend({
@@ -95,7 +95,7 @@ export const StepCompletedEvent = EventBase.extend({
   step_id: StepId,
   attempt: z.number().int().positive(),
   route_taken: z.string().min(1),
-});
+}).strict();
 export type StepCompletedEvent = z.infer<typeof StepCompletedEvent>;
 
 export const StepAbortedEvent = EventBase.extend({
@@ -103,14 +103,17 @@ export const StepAbortedEvent = EventBase.extend({
   step_id: StepId,
   attempt: z.number().int().positive(),
   reason: z.string().min(1),
-});
+}).strict();
 export type StepAbortedEvent = z.infer<typeof StepAbortedEvent>;
+
+export const RunClosedOutcome = z.enum(['complete', 'aborted', 'handoff', 'stopped', 'escalated']);
+export type RunClosedOutcome = z.infer<typeof RunClosedOutcome>;
 
 export const RunClosedEvent = EventBase.extend({
   kind: z.literal('run.closed'),
-  outcome: z.enum(['complete', 'aborted', 'handoff', 'stopped', 'escalated']),
+  outcome: RunClosedOutcome,
   reason: z.string().optional(),
-});
+}).strict();
 export type RunClosedEvent = z.infer<typeof RunClosedEvent>;
 
 export const Event = z.discriminatedUnion('kind', [

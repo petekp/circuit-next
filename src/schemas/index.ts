@@ -8,6 +8,7 @@ export * from './lane.js';
 export * from './phase.js';
 export * from './rigor.js';
 export * from './role.js';
+export * from './run.js';
 export * from './selection-policy.js';
 export * from './skill.js';
 export * from './snapshot.js';

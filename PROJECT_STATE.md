@@ -1,7 +1,7 @@
 # PROJECT_STATE — circuit-next
 
-**Last updated:** 2026-04-18 (autonomy arc slices 1-2: ADR-0002 + `npm run audit`)
-**Phase:** 1 — Contract authorship **in progress**. Phase 0 Evidence Loop closed. First Phase 1 contract (`step.md`) landed + MED #7 closed. Bootstrap discipline (ADR-0002) codified; `.circuit/` gitignored; drift-visibility audit (`npm run audit`) now enforces the citation rule + lane/framing discipline across every commit.
+**Last updated:** 2026-04-19 (autonomy arc slice 4: specs/contracts/run.md v0.1)
+**Phase:** 1 — Contract authorship **in progress**. Phase 0 Evidence Loop closed. Three Phase 1 contracts landed: `step.md` (MED #7 closed), `phase.md` (MED #11 closed + Codex objections folded in), `run.md` (HIGH #1/#2 + MEDs #3-7 + LOWs #8-10 folded in). Bootstrap discipline (ADR-0002) codified; `.circuit/` gitignored; drift-visibility audit (`npm run audit`) enforces the citation rule + lane/framing discipline across every commit.
 **Tier:** 0 — scaffold complete, validated, committed.
 
 ## One-minute read
@@ -20,7 +20,7 @@ Everything the user asked for overnight is in place:
 - 4-worker parallel evidence pass (Claude + Codex × external + internal)
 - Synthesized `specs/evidence.md` with labeled invariants + seams
 - Architecture-first TypeScript type skeleton under `src/schemas/`
-- Contract-first Zod schemas with 46 contract + 1 smoke = 47 tests (baseline 34 → +13 this session, including step-contract negatives and strict-mode coverage)
+- Contract-first Zod schemas with 134 contract + 1 smoke = 135 tests (baseline 34 → +101 across Phase 1 slices: step-contract + phase/spine + run-contract with transitive strict, prototype-chain defense, and projection binding)
 - Validation/verification infrastructure: tsc --strict, biome, vitest, all green
 - Adversarial-review findings (6 HIGH objections) incorporated into the skeleton
 - Phase 1 contract stubs: `specs/domain.md` + `specs/contracts/workflow.md`
@@ -87,12 +87,13 @@ Then in order of importance:
 ### Deferred to Phase 1 contract authorship
 
 - Remaining contract stubs under `specs/contracts/`:
-  - `run.md`, `selection.md`, `adapter.md`, `continuity.md`, `skill.md`
+  - `selection.md`, `adapter.md`, `continuity.md`, `skill.md`
 - Behavioral tracks: `specs/behavioral/session-hygiene.md`,
   `specs/behavioral/prose-yaml-parity.md`, `specs/behavioral/cross-model-challenger.md`
 
-### Closed this session (Phase 1, first contract slice + autonomy arc slices 1-3)
+### Closed this session (Phase 1, first contract slice + autonomy arc slices 1-4)
 
+- **`specs/contracts/run.md`** (v0.1, slice 4, **Ratchet-Advance lane**) — Run contract with RUN-I1..RUN-I8. New aggregate schema `RunLog` (z.custom own-property guard piped into `z.array(Event).min(1).superRefine`) enforces: first-event-is-bootstrap, 0-based contiguous `sequence`, `run_id` consistency, bootstrap singleton, closure singleton with no-post-closure events. Defense-in-depth own-property guard on `run_id`/`kind`/`sequence` blocks prototype-chain smuggle (Codex MED #3). New aggregate `RunProjection` binds `RunLog` to `Snapshot` with exact `events_consumed === log.length` equality (Codex HIGH #2 closed — prefix snapshots rejected), bootstrap-frozen field parity (`run_id`, `workflow_id`, `manifest_hash`, `rigor`, `lane`, `invocation_id`), and a closure-to-status mapping made total by construction at compile time via `type ClosedSnapshotStatus = Exclude<SnapshotStatus, 'in_progress'>` + `OutcomeStatusEquality` bidirectional guard (Codex MED #6 closed). `.strict()` applied transitively across `LaneDeclaration` (6 variants), `AdapterRef` (3 variants), `CustomAdapterDescriptor`, `ProviderScopedModel`, `SkillOverride` (4 variants), `SelectionOverride`, `ResolvedSelection`, `SelectionResolution.applied[]` entries + all 11 event variants + `Snapshot` + `StepState` (Codex HIGH #1 + LOW #9 closed). `RunClosedOutcome` + `SnapshotStatus` promoted to exported enums. Lane equality reimplemented as structural field-by-field comparator (no JSON.stringify assumptions). +69 contract tests (65 → 134). Codex cross-model adversarial property-auditor pass completed — 2 HIGH + 5 MED + 3 LOW folded in (incorporated or honestly scoped to Phase 2 property ids: `run.prop.recorded_at_sanity`, `run.prop.close_outcome_semantic_adequacy`, `run.prop.boundary_own_property_defense`, `run.prop.projection_is_a_function`). Full record at `specs/reviews/run-md-v0.1-codex.md`.
 - **`specs/contracts/phase.md`** (v0.1, slice 3) — Phase contract with PHASE-I1..I4: non-empty steps, `.strict()` surplus-key rejection, canonical-enum closure, and **spine policy enforcement** (MED #11). `Workflow.spine_policy` is now a required discriminated union: `mode: 'strict'` requires all 7 canonical phases; `mode: 'partial'` requires explicit `omits` + rationale ≥20 chars. Silent skip of `review` or `verify` is rejected at parse time. +14 contract tests (46 → 60).
 - **`npm run audit`** — drift-visibility audit command (`scripts/audit.mjs`). Walks recent commits, checks 8 discipline dimensions (lane, framing triplet, citation rule, Circuit-smell, gitignore compliance, test ratchet, PROJECT_STATE freshness, verify gate). Exits non-zero on red. The enforcement mechanism ADR-0002 promised. First run: 8 green / 0 yellow / 0 red against HEAD.
 - **ADR-0002** — *Bootstrap Discipline*: codifies that `circuit-next` is built via the existing Circuit as harness (classic bootstrap), with four rules against design contamination (citation rule, gitignore rule, harness-vs-template distinction, enforcement via audit). Closes the "Circuit does X" silent-justification risk.
@@ -126,16 +127,17 @@ most are ~30-40.
 | `ids.ts` | `WorkflowId`, `PhaseId`, `StepId`, `RunId`, `InvocationId`, `SkillId`, `ProtocolId` | Branded IDs |
 | `rigor.ts` | `Rigor`, `CONSEQUENTIAL_RIGORS`, `isConsequentialRigor` | 5-tier rigor enum |
 | `role.ts` | `Role` (alias of `DispatchRole`) | Dispatch-only roles |
-| `adapter.ts` | `BuiltInAdapter`, `AdapterName`, `AdapterRef`, `CustomAdapterDescriptor` | Adapter descriptors |
-| `lane.ts` | `Lane`, `LaneDeclaration`, `MigrationEscrowLane`, `BreakGlassLane` | Lane framing |
+| `adapter.ts` | `BuiltInAdapter`, `AdapterName`, `AdapterRef`, `CustomAdapterDescriptor` (all `.strict()` via slice 4) | Adapter descriptors |
+| `lane.ts` | `Lane`, `LaneDeclaration`, `MigrationEscrowLane`, `BreakGlassLane` (all variants `.strict()` via slice 4) | Lane framing |
 | `gate.ts` | `Gate`, `SchemaSectionsGate`, `CheckpointSelectionGate`, `ResultVerdictGate` | Step gates |
 | `skill.ts` | `SkillDescriptor` | Skill registry entry |
-| `selection-policy.ts` | `SelectionOverride`, `ResolvedSelection`, `SelectionResolution`, `SkillOverride`, `ProviderScopedModel`, `Effort`, `SELECTION_PRECEDENCE` | Per-step selection |
+| `selection-policy.ts` | `SelectionOverride`, `ResolvedSelection`, `SelectionResolution`, `SkillOverride`, `ProviderScopedModel`, `Effort`, `SELECTION_PRECEDENCE` (all `.strict()` via slice 4) | Per-step selection |
 | `step.ts` | `Step` (discriminated union), `SynthesisStep`, `CheckpointStep`, `DispatchStep`, `DispatchRole`, `ArtifactRef` | Step variants |
-| `phase.ts` | `Phase`, `CanonicalPhase` | Phase spine |
+| `phase.ts` | `Phase`, `CanonicalPhase`, `SpinePolicy` | Phase spine |
 | `workflow.ts` | `Workflow`, `EntryMode`, `EntrySignals` | Workflow definition + graph closure |
-| `event.ts` | `Event` (discriminated union, 11 kinds) | Append-only event log |
-| `snapshot.ts` | `Snapshot`, `StepState`, `StepStatus` | Derived state |
+| `event.ts` | `Event` (discriminated union, 11 kinds, each `.strict()`), `RunClosedOutcome` | Append-only event log |
+| `snapshot.ts` | `Snapshot`, `StepState`, `StepStatus`, `SnapshotStatus` (all `.strict()`) | Derived state |
+| `run.ts` | `RunLog`, `RunProjection` (slice 4, Phase 1) | Run aggregate + log-to-snapshot projection binding |
 | `config.ts` | `Config`, `DispatchConfig`, `LayeredConfig`, `ConfigLayer`, `CircuitOverride` | User/project/invocation config |
 | `continuity.ts` | `ContinuityRecord` (discriminated union), `StandaloneContinuity`, `RunBackedContinuity`, `GitState`, `ContinuityNarrative` | Cross-session handoff |
 
@@ -183,14 +185,16 @@ This overnight run chains to invocation id `inv_ec9c950f-6044-4799-a293-e514fcb9
 
 ## Open questions
 
-1. **Next contract: `run.md` or `phase.md`?** `run.md` exposes the event-log + replay semantics (user-visible); `phase.md` needs the spine_policy decision (MED #11). Either unblocks selection.md/adapter.md/continuity.md/skill.md downstream.
+1. **Next contract: `selection.md` or `adapter.md`?** `selection.md` unblocks phase-level selection overrides (phase.md Codex MED #7 deferral) and workflow/phase/step layer precedence. `adapter.md` ratifies the `agent` vs `codex-isolated` naming question and the `dispatch.adapters` registry. `continuity.md` and `skill.md` are less densely constrained and can follow. Recommended: `selection.md` next because it unblocks three downstream contracts (phase.md v0.2, step.md v0.2 for selection overrides, adapter.md for adapter-level model defaults).
 2. **Keep `agent` as a built-in adapter alias?** Existing Circuit has `agent` = Claude Code Agent tool. Adversarial review notes `codex-isolated` is the real name with `codex` as alias. Decide in adapter.md.
-3. **Spine policy (MED #11)?** Whether `Workflow.spine_policy` (which canonical phases are present/omitted/renamed) belongs in phase.md or workflow.md v0.2. Default: phase.md.
+3. **Phase 2 property harness location.** The four deferred `run.prop.*` properties (recorded_at_sanity, close_outcome_semantic_adequacy, boundary_own_property_defense, projection_is_a_function) need a landing place: `tests/properties/visible/` per CLAUDE.md §Where things live. Not blocking, but Phase 2 setup cost is visible now.
 
 ### Resolved this session
 
 - ~~Start Phase 1 with step.md or run.md?~~ → step.md landed first; gate.source tightening (MED #7) folded in.
 - ~~Accept the type skeleton as-is, or rerun adversarial review?~~ → Rerun happened inside the step.md slice (Codex read the tightened schema + new contract + tests); 3 HIGH + 3 MED + 1 LOW incorporated.
+- ~~Spine policy (MED #11)?~~ → Closed in phase.md v0.1 via `Workflow.spine_policy` discriminated union.
+- ~~Run contract (run.md)?~~ → Closed in run.md v0.1. All 10 Codex objections either incorporated or converted to Phase 2 property ids with explicit rationale.
 
 ## If something is wrong
 

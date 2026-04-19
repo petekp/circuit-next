@@ -9,6 +9,8 @@ import {
   Phase,
   Rigor,
   Role,
+  RunLog,
+  RunProjection,
   SelectionOverride,
   SkillDescriptor,
   Snapshot,
@@ -943,6 +945,690 @@ describe('Continuity discriminated union (adversarial-review fix #9)', () => {
         requires_explicit_resume: true,
       },
     });
+    expect(bad.success).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Run contract — RUN-I1..I8 from specs/contracts/run.md v0.1
+// ---------------------------------------------------------------------------
+
+const RUN_A = '0191d2f0-aaaa-7fff-8aaa-000000000000';
+const RUN_B = '0191d2f0-bbbb-7fff-8aaa-000000000001';
+
+const lane = {
+  lane: 'discovery' as const,
+  failure_mode: 'evidence gap',
+  acceptance_evidence: 'evidence draft complete',
+  alternate_framing: 'directly author contract',
+};
+
+const bootstrapAt = (
+  sequence: number,
+  runId: string = RUN_A,
+  overrides: Record<string, unknown> = {},
+) => ({
+  schema_version: 1,
+  sequence,
+  recorded_at: '2026-04-18T05:00:00.000Z',
+  run_id: runId,
+  kind: 'run.bootstrapped',
+  workflow_id: 'explore',
+  rigor: 'deep',
+  goal: 'Test',
+  manifest_hash: 'abc',
+  lane,
+  ...overrides,
+});
+
+const stepEntered = (sequence: number, runId: string = RUN_A) => ({
+  schema_version: 1,
+  sequence,
+  recorded_at: '2026-04-18T05:01:00.000Z',
+  run_id: runId,
+  kind: 'step.entered',
+  step_id: 'frame',
+  attempt: 1,
+});
+
+const runClosed = (
+  sequence: number,
+  runId: string = RUN_A,
+  outcome: 'complete' | 'aborted' | 'handoff' | 'stopped' | 'escalated' = 'complete',
+) => ({
+  schema_version: 1,
+  sequence,
+  recorded_at: '2026-04-18T05:02:00.000Z',
+  run_id: runId,
+  kind: 'run.closed',
+  outcome,
+});
+
+describe('RunLog structural invariants (RUN-I1..I5)', () => {
+  it('happy path: well-formed log parses', () => {
+    const ok = RunLog.safeParse([bootstrapAt(0), stepEntered(1), runClosed(2)]);
+    expect(ok.success).toBe(true);
+  });
+
+  it('RUN-I1: empty log is rejected', () => {
+    const bad = RunLog.safeParse([]);
+    expect(bad.success).toBe(false);
+  });
+
+  it('RUN-I1: first event must be run.bootstrapped', () => {
+    const bad = RunLog.safeParse([stepEntered(0), runClosed(1)]);
+    expect(bad.success).toBe(false);
+    if (!bad.success) {
+      expect(bad.error.issues.some((i) => i.message.includes("'run.bootstrapped'"))).toBe(true);
+    }
+  });
+
+  it('RUN-I2: non-contiguous sequence (gap) is rejected', () => {
+    const bad = RunLog.safeParse([bootstrapAt(0), stepEntered(2)]);
+    expect(bad.success).toBe(false);
+    if (!bad.success) {
+      expect(bad.error.issues.some((i) => i.message.includes('sequence'))).toBe(true);
+    }
+  });
+
+  it('RUN-I2: repeated sequence number is rejected', () => {
+    const bad = RunLog.safeParse([bootstrapAt(0), stepEntered(1), stepEntered(1)]);
+    expect(bad.success).toBe(false);
+  });
+
+  it('RUN-I2: sequence not starting at 0 is rejected', () => {
+    const bad = RunLog.safeParse([bootstrapAt(1), stepEntered(2)]);
+    expect(bad.success).toBe(false);
+  });
+
+  it('RUN-I3: mismatched run_id across events is rejected (cross-run smuggle)', () => {
+    const bad = RunLog.safeParse([bootstrapAt(0, RUN_A), stepEntered(1, RUN_B)]);
+    expect(bad.success).toBe(false);
+    if (!bad.success) {
+      expect(bad.error.issues.some((i) => i.message.includes('run_id'))).toBe(true);
+    }
+  });
+
+  it('RUN-I4: multiple run.bootstrapped events rejected', () => {
+    const bad = RunLog.safeParse([bootstrapAt(0), bootstrapAt(1)]);
+    expect(bad.success).toBe(false);
+    if (!bad.success) {
+      expect(bad.error.issues.some((i) => i.message.includes('bootstrap'))).toBe(true);
+    }
+  });
+
+  it('RUN-I5: multiple run.closed events rejected', () => {
+    const bad = RunLog.safeParse([bootstrapAt(0), runClosed(1), runClosed(2)]);
+    expect(bad.success).toBe(false);
+    if (!bad.success) {
+      expect(bad.error.issues.some((i) => i.message.includes('close'))).toBe(true);
+    }
+  });
+
+  it('RUN-I5: event after run.closed rejected', () => {
+    const bad = RunLog.safeParse([bootstrapAt(0), runClosed(1), stepEntered(2)]);
+    expect(bad.success).toBe(false);
+    if (!bad.success) {
+      expect(bad.error.issues.some((i) => i.message.includes('after'))).toBe(true);
+    }
+  });
+
+  it('RUN-I5: log without run.closed is legal (run still in progress)', () => {
+    const ok = RunLog.safeParse([bootstrapAt(0), stepEntered(1)]);
+    expect(ok.success).toBe(true);
+  });
+});
+
+describe('Event + Snapshot strict mode (RUN-I8)', () => {
+  it('bootstrapped event rejects surplus top-level key', () => {
+    const bad = Event.safeParse({ ...bootstrapAt(0), extra_field: 'smuggled' });
+    expect(bad.success).toBe(false);
+  });
+
+  it('step.completed rejects surplus key', () => {
+    const bad = Event.safeParse({
+      schema_version: 1,
+      sequence: 5,
+      recorded_at: '2026-04-18T05:00:00.000Z',
+      run_id: RUN_A,
+      kind: 'step.completed',
+      step_id: 'frame',
+      attempt: 1,
+      route_taken: 'pass',
+      extra: 'surplus',
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('Snapshot rejects surplus top-level key', () => {
+    const bad = Snapshot.safeParse({
+      schema_version: 1,
+      run_id: RUN_A,
+      workflow_id: 'explore',
+      rigor: 'deep',
+      lane,
+      status: 'in_progress',
+      steps: [],
+      events_consumed: 0,
+      manifest_hash: 'abc',
+      updated_at: '2026-04-18T05:00:00.000Z',
+      extra_audit_note: 'smuggled',
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('StepState rejects surplus key', () => {
+    const bad = Snapshot.safeParse({
+      schema_version: 1,
+      run_id: RUN_A,
+      workflow_id: 'explore',
+      rigor: 'deep',
+      lane,
+      status: 'in_progress',
+      steps: [{ step_id: 'frame', status: 'complete', attempts: 1, extra: 'surplus' }],
+      events_consumed: 1,
+      manifest_hash: 'abc',
+      updated_at: '2026-04-18T05:00:00.000Z',
+    });
+    expect(bad.success).toBe(false);
+  });
+});
+
+describe('RunProjection binding (RUN-I6, RUN-I7)', () => {
+  const validLog = [bootstrapAt(0), stepEntered(1)];
+
+  const snapshotBase = {
+    schema_version: 1,
+    run_id: RUN_A,
+    workflow_id: 'explore',
+    rigor: 'deep' as const,
+    lane,
+    status: 'in_progress' as const,
+    steps: [{ step_id: 'frame', status: 'in_progress' as const, attempts: 1 }],
+    events_consumed: 2,
+    manifest_hash: 'abc',
+    updated_at: '2026-04-18T05:02:00.000Z',
+  };
+
+  it('happy path: aligned projection parses', () => {
+    const ok = RunProjection.safeParse({ log: validLog, snapshot: snapshotBase });
+    expect(ok.success).toBe(true);
+  });
+
+  it('RUN-I6: mismatched run_id rejects projection', () => {
+    const bad = RunProjection.safeParse({
+      log: validLog,
+      snapshot: { ...snapshotBase, run_id: RUN_B },
+    });
+    expect(bad.success).toBe(false);
+    if (!bad.success) {
+      expect(bad.error.issues.some((i) => i.message.includes('run_id'))).toBe(true);
+    }
+  });
+
+  it('RUN-I6: mismatched workflow_id rejects projection', () => {
+    const bad = RunProjection.safeParse({
+      log: validLog,
+      snapshot: { ...snapshotBase, workflow_id: 'repair' },
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('RUN-I6: mismatched manifest_hash rejects projection (manifest is immutable per run)', () => {
+    const bad = RunProjection.safeParse({
+      log: validLog,
+      snapshot: { ...snapshotBase, manifest_hash: 'xyz' },
+    });
+    expect(bad.success).toBe(false);
+    if (!bad.success) {
+      expect(bad.error.issues.some((i) => i.message.includes('manifest'))).toBe(true);
+    }
+  });
+
+  it('RUN-I6: mismatched rigor rejects projection', () => {
+    const bad = RunProjection.safeParse({
+      log: validLog,
+      snapshot: { ...snapshotBase, rigor: 'standard' },
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('RUN-I6: mismatched lane rejects projection (lane is frozen at bootstrap)', () => {
+    const bad = RunProjection.safeParse({
+      log: validLog,
+      snapshot: {
+        ...snapshotBase,
+        lane: {
+          lane: 'ratchet-advance',
+          failure_mode: 'different',
+          acceptance_evidence: 'different',
+          alternate_framing: 'different',
+        },
+      },
+    });
+    expect(bad.success).toBe(false);
+    if (!bad.success) {
+      expect(bad.error.issues.some((i) => i.message.includes('lane'))).toBe(true);
+    }
+  });
+
+  it('RUN-I6: mismatched invocation_id rejects projection', () => {
+    const logWithInvocation = [
+      bootstrapAt(0, RUN_A, { invocation_id: 'inv_aaaa' }),
+      stepEntered(1),
+    ];
+    const bad = RunProjection.safeParse({
+      log: logWithInvocation,
+      snapshot: { ...snapshotBase, invocation_id: 'inv_bbbb' },
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('RUN-I6: snapshot claims invocation_id but bootstrap has none', () => {
+    const bad = RunProjection.safeParse({
+      log: validLog,
+      snapshot: { ...snapshotBase, invocation_id: 'inv_cccc' },
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('RUN-I7: events_consumed exceeding log length is rejected', () => {
+    const bad = RunProjection.safeParse({
+      log: validLog,
+      snapshot: { ...snapshotBase, events_consumed: 99 },
+    });
+    expect(bad.success).toBe(false);
+    if (!bad.success) {
+      expect(bad.error.issues.some((i) => i.message.includes('events_consumed'))).toBe(true);
+    }
+  });
+
+  it('RUN-I7: status must be in_progress when log has no run.closed', () => {
+    const bad = RunProjection.safeParse({
+      log: validLog,
+      snapshot: { ...snapshotBase, status: 'complete' },
+    });
+    expect(bad.success).toBe(false);
+    if (!bad.success) {
+      expect(bad.error.issues.some((i) => i.message.includes('in_progress'))).toBe(true);
+    }
+  });
+
+  it('RUN-I7: run.closed.outcome=aborted requires snapshot.status=aborted', () => {
+    const closedLog = [bootstrapAt(0), runClosed(1, RUN_A, 'aborted')];
+    const bad = RunProjection.safeParse({
+      log: closedLog,
+      snapshot: { ...snapshotBase, status: 'complete', events_consumed: 2 },
+    });
+    expect(bad.success).toBe(false);
+    if (!bad.success) {
+      expect(bad.error.issues.some((i) => i.message.includes('aborted'))).toBe(true);
+    }
+  });
+
+  it('RUN-I7: run.closed.outcome=handoff → snapshot.status=handoff accepted', () => {
+    const closedLog = [bootstrapAt(0), runClosed(1, RUN_A, 'handoff')];
+    const ok = RunProjection.safeParse({
+      log: closedLog,
+      snapshot: { ...snapshotBase, status: 'handoff', events_consumed: 2 },
+    });
+    expect(ok.success).toBe(true);
+  });
+
+  it('RUN-I7: run.closed.outcome=escalated → snapshot.status=escalated accepted', () => {
+    const closedLog = [bootstrapAt(0), runClosed(1, RUN_A, 'escalated')];
+    const ok = RunProjection.safeParse({
+      log: closedLog,
+      snapshot: { ...snapshotBase, status: 'escalated', events_consumed: 2 },
+    });
+    expect(ok.success).toBe(true);
+  });
+
+  it('RunProjection itself is strict (rejects surplus key)', () => {
+    const bad = RunProjection.safeParse({
+      log: validLog,
+      snapshot: snapshotBase,
+      extra: 'surplus',
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  // HIGH #2 fold-in — prefix snapshot rejection.
+  it('RUN-I7: events_consumed less than log.length is rejected (prefix snapshot)', () => {
+    const bad = RunProjection.safeParse({
+      log: validLog,
+      snapshot: { ...snapshotBase, events_consumed: 1 },
+    });
+    expect(bad.success).toBe(false);
+    if (!bad.success) {
+      expect(bad.error.issues.some((i) => i.message.includes('prefix'))).toBe(true);
+    }
+  });
+
+  // LOW #8 fold-in — missing-direction invocation_id.
+  it('RUN-I6: bootstrap carries invocation_id but snapshot lacks it', () => {
+    const logWithInvocation = [
+      bootstrapAt(0, RUN_A, { invocation_id: 'inv_aaaa' }),
+      stepEntered(1),
+    ];
+    const bad = RunProjection.safeParse({
+      log: logWithInvocation,
+      // snapshotBase has no invocation_id
+      snapshot: snapshotBase,
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('RUN-I6: both bootstrap and snapshot carry the same invocation_id (positive)', () => {
+    const logWithInvocation = [
+      bootstrapAt(0, RUN_A, { invocation_id: 'inv_aaaa' }),
+      stepEntered(1),
+    ];
+    const ok = RunProjection.safeParse({
+      log: logWithInvocation,
+      snapshot: { ...snapshotBase, invocation_id: 'inv_aaaa' },
+    });
+    expect(ok.success).toBe(true);
+  });
+
+  // MED #6 fold-in — positive coverage for all five run.closed.outcome values.
+  for (const outcome of ['complete', 'aborted', 'handoff', 'stopped', 'escalated'] as const) {
+    it(`RUN-I7: run.closed.outcome=${outcome} → snapshot.status=${outcome} accepted`, () => {
+      const closedLog = [bootstrapAt(0), runClosed(1, RUN_A, outcome)];
+      const ok = RunProjection.safeParse({
+        log: closedLog,
+        snapshot: { ...snapshotBase, status: outcome, events_consumed: 2 },
+      });
+      expect(ok.success).toBe(true);
+    });
+  }
+
+  // LOW #9 fold-in — lane equality is structural, not key-order dependent.
+  it('RUN-I6: lane equality is structural across different field insertion orders', () => {
+    const laneAKeyOrder = {
+      failure_mode: 'evidence gap',
+      alternate_framing: 'directly author contract',
+      acceptance_evidence: 'evidence draft complete',
+      lane: 'discovery' as const,
+    };
+    const laneBKeyOrder = {
+      lane: 'discovery' as const,
+      failure_mode: 'evidence gap',
+      acceptance_evidence: 'evidence draft complete',
+      alternate_framing: 'directly author contract',
+    };
+    const ok = RunProjection.safeParse({
+      log: [bootstrapAt(0, RUN_A, { lane: laneAKeyOrder }), stepEntered(1)],
+      snapshot: { ...snapshotBase, lane: laneBKeyOrder },
+    });
+    expect(ok.success).toBe(true);
+  });
+});
+
+// MED #7 fold-in — table-driven strict-mode coverage across all 11 Event variants.
+describe('Event variants reject top-level surplus keys (RUN-I8 coverage expansion)', () => {
+  const base = {
+    schema_version: 1 as const,
+    recorded_at: '2026-04-18T05:00:00.000Z',
+    run_id: RUN_A,
+  };
+
+  const cases: Array<[string, Record<string, unknown>]> = [
+    [
+      'run.bootstrapped',
+      {
+        ...base,
+        sequence: 0,
+        kind: 'run.bootstrapped',
+        workflow_id: 'explore',
+        rigor: 'deep',
+        goal: 'Test',
+        manifest_hash: 'abc',
+        lane,
+      },
+    ],
+    ['step.entered', { ...base, sequence: 1, kind: 'step.entered', step_id: 'frame', attempt: 1 }],
+    [
+      'step.artifact_written',
+      {
+        ...base,
+        sequence: 2,
+        kind: 'step.artifact_written',
+        step_id: 'frame',
+        attempt: 1,
+        artifact_path: 'brief.md',
+        artifact_schema: 'brief',
+      },
+    ],
+    [
+      'gate.evaluated',
+      {
+        ...base,
+        sequence: 3,
+        kind: 'gate.evaluated',
+        step_id: 'frame',
+        attempt: 1,
+        gate_kind: 'schema_sections',
+        outcome: 'pass',
+      },
+    ],
+    [
+      'checkpoint.requested',
+      {
+        ...base,
+        sequence: 4,
+        kind: 'checkpoint.requested',
+        step_id: 'frame',
+        attempt: 1,
+        options: ['accept', 'revise'],
+      },
+    ],
+    [
+      'checkpoint.resolved',
+      {
+        ...base,
+        sequence: 5,
+        kind: 'checkpoint.resolved',
+        step_id: 'frame',
+        attempt: 1,
+        selection: 'accept',
+        auto_resolved: false,
+      },
+    ],
+    [
+      'dispatch.started',
+      {
+        ...base,
+        sequence: 6,
+        kind: 'dispatch.started',
+        step_id: 'frame',
+        attempt: 1,
+        adapter: { kind: 'builtin', name: 'codex' },
+        role: 'researcher',
+        resolved_selection: { skills: [] },
+        resolved_from: 'explicit',
+      },
+    ],
+    [
+      'dispatch.completed',
+      {
+        ...base,
+        sequence: 7,
+        kind: 'dispatch.completed',
+        step_id: 'frame',
+        attempt: 1,
+        verdict: 'pass',
+        duration_ms: 1000,
+        result_path: 'r.json',
+        receipt_path: 'rc.json',
+      },
+    ],
+    [
+      'step.completed',
+      {
+        ...base,
+        sequence: 8,
+        kind: 'step.completed',
+        step_id: 'frame',
+        attempt: 1,
+        route_taken: 'pass',
+      },
+    ],
+    [
+      'step.aborted',
+      {
+        ...base,
+        sequence: 9,
+        kind: 'step.aborted',
+        step_id: 'frame',
+        attempt: 1,
+        reason: 'timeout',
+      },
+    ],
+    ['run.closed', { ...base, sequence: 10, kind: 'run.closed', outcome: 'complete' }],
+  ];
+
+  for (const [name, event] of cases) {
+    it(`${name} rejects top-level surplus key`, () => {
+      const bad = Event.safeParse({ ...event, extra_smuggled: 'x' });
+      expect(bad.success).toBe(false);
+    });
+    it(`${name} passes without surplus (positive)`, () => {
+      const ok = Event.safeParse(event);
+      expect(ok.success).toBe(true);
+    });
+  }
+});
+
+// HIGH #1 fold-in — nested schemas are transitively strict.
+describe('Nested schemas reject surplus keys transitively (RUN-I8 transitivity)', () => {
+  it('bootstrap lane with surplus key is rejected', () => {
+    const bad = Event.safeParse({
+      ...bootstrapAt(0),
+      lane: { ...lane, smuggled: 'x' },
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('snapshot lane with surplus key is rejected', () => {
+    const bad = Snapshot.safeParse({
+      schema_version: 1,
+      run_id: RUN_A,
+      workflow_id: 'explore',
+      rigor: 'deep',
+      lane: { ...lane, smuggled: 'x' },
+      status: 'in_progress',
+      steps: [],
+      events_consumed: 0,
+      manifest_hash: 'abc',
+      updated_at: '2026-04-18T05:00:00.000Z',
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('dispatch.started adapter with surplus key is rejected', () => {
+    const bad = Event.safeParse({
+      schema_version: 1,
+      sequence: 3,
+      recorded_at: '2026-04-18T05:00:00.000Z',
+      run_id: RUN_A,
+      kind: 'dispatch.started',
+      step_id: 'frame',
+      attempt: 1,
+      adapter: { kind: 'builtin', name: 'codex', surplus: 'x' },
+      role: 'researcher',
+      resolved_selection: { skills: [] },
+      resolved_from: 'explicit',
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('dispatch.started resolved_selection with surplus key is rejected', () => {
+    const bad = Event.safeParse({
+      schema_version: 1,
+      sequence: 3,
+      recorded_at: '2026-04-18T05:00:00.000Z',
+      run_id: RUN_A,
+      kind: 'dispatch.started',
+      step_id: 'frame',
+      attempt: 1,
+      adapter: { kind: 'builtin', name: 'codex' },
+      role: 'researcher',
+      resolved_selection: { skills: [], smuggled: 'x' },
+      resolved_from: 'explicit',
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('dispatch.started resolved_selection.model with surplus key is rejected', () => {
+    const bad = Event.safeParse({
+      schema_version: 1,
+      sequence: 3,
+      recorded_at: '2026-04-18T05:00:00.000Z',
+      run_id: RUN_A,
+      kind: 'dispatch.started',
+      step_id: 'frame',
+      attempt: 1,
+      adapter: { kind: 'builtin', name: 'codex' },
+      role: 'researcher',
+      resolved_selection: {
+        skills: [],
+        model: { provider: 'openai', model: 'gpt-5', smuggled: 'x' },
+      },
+      resolved_from: 'explicit',
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('SelectionOverride rejects surplus top-level key', () => {
+    const bad = SelectionOverride.safeParse({ rigor: 'standard', smuggled: 'x' });
+    expect(bad.success).toBe(false);
+  });
+});
+
+// MED #3 fold-in — own-property guard against prototype-chain identity smuggle.
+describe('RunLog rejects prototype-chain inherited identity keys (RUN-I3 defense-in-depth)', () => {
+  it('rejects event whose run_id is inherited (not own)', () => {
+    // Event parse may coerce (Zod reads inherited), but RunLog's own-property
+    // guard catches the absence of an own `run_id`.
+    const inherited = Object.assign(Object.create({ run_id: RUN_A }), {
+      schema_version: 1,
+      sequence: 1,
+      recorded_at: '2026-04-18T05:01:00.000Z',
+      kind: 'step.entered',
+      step_id: 'frame',
+      attempt: 1,
+    });
+    const bad = RunLog.safeParse([bootstrapAt(0), inherited]);
+    expect(bad.success).toBe(false);
+    if (!bad.success) {
+      expect(bad.error.issues.some((i) => i.message.includes('prototype-chain'))).toBe(true);
+    }
+  });
+
+  it('rejects event whose kind is inherited (not own)', () => {
+    const inherited = Object.assign(Object.create({ kind: 'step.entered' }), {
+      schema_version: 1,
+      sequence: 1,
+      recorded_at: '2026-04-18T05:01:00.000Z',
+      run_id: RUN_A,
+      step_id: 'frame',
+      attempt: 1,
+    });
+    const bad = RunLog.safeParse([bootstrapAt(0), inherited]);
+    expect(bad.success).toBe(false);
+  });
+
+  it('rejects event whose sequence is inherited (not own)', () => {
+    const inherited = Object.assign(Object.create({ sequence: 1 }), {
+      schema_version: 1,
+      recorded_at: '2026-04-18T05:01:00.000Z',
+      run_id: RUN_A,
+      kind: 'step.entered',
+      step_id: 'frame',
+      attempt: 1,
+    });
+    const bad = RunLog.safeParse([bootstrapAt(0), inherited]);
     expect(bad.success).toBe(false);
   });
 });
