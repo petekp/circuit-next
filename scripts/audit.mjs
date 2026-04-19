@@ -71,8 +71,8 @@ const DANGLING_REFERENCE_POLICIES = new Set([
 
 /**
  * Slice 12 — plane classifier (ADR-0004). Closed two-element set.
- * Optional in schema version 1 (this release); promoted to required in
- * version 2 after the sweep slice backfills the remaining artifacts.
+ * Promoted to structurally required in schema version 2 (ADR-0005);
+ * the PLANE_DEFERRED_IDS allowlist no longer exists.
  */
 const PLANES = new Set(['control-plane', 'data-plane']);
 
@@ -82,8 +82,8 @@ const PLANES = new Set(['control-plane', 'data-plane']);
  * kinds. `mixed` was removed from the set during Codex fold-in (HIGH #3):
  * it describes *cardinality* of origins, not an origin itself, so it
  * cannot satisfy "who can lie to this reader?" on its own. Mixed-trust
- * artifacts are named in PLANE_DEFERRED_IDS and revisited in the sweep
- * slice.
+ * artifacts are classified as data-plane at v2 (ADR-0005) under the
+ * worst-case-producer rule.
  */
 const DATA_PLANE_ORIGIN_TOKENS = ['operator-local', 'engine-computed', 'model-authored'];
 
@@ -98,18 +98,6 @@ const DATA_PLANE_ORIGIN_TOKENS = ['operator-local', 'engine-computed', 'model-au
  */
 const NEGATION_MARKERS = ['not ', 'non-', 'no ', 'never '];
 const NEGATION_WINDOW = 8;
-
-/**
- * Slice 12 — artifacts with a known plane-classification ambiguity that
- * the per-artifact scalar `plane` cannot represent. Per ADR-0004 §Why
- * not require plane everywhere now, these three artifacts have
- * plugin-authored and operator-local layers in one id; per-layer plane
- * representation is scoped to v0.2 (either a `plane: 'per-layer'`
- * marker or splitting the artifact ids). Entries here are explicit
- * deferrals, not silent omissions: the audit fails red on any other
- * artifact missing `plane`.
- */
-const PLANE_DEFERRED_IDS = new Set(['selection.override', 'adapter.registry', 'adapter.reference']);
 
 const ARTIFACT_REQUIRED_BASE_FIELDS = [
   'id',
@@ -401,53 +389,41 @@ function checkAuthorityGraph() {
         detail: `${artifact.id}: unknown dangling_reference_policy "${artifact.dangling_reference_policy}"`,
       });
     }
-    // Slice 12 — plane classifier (ADR-0004 + Codex fold-in).
-    // Required-or-deferred: every artifact MUST either declare `plane` OR appear in
-    // PLANE_DEFERRED_IDS. Closes HIGH #1 (optional plane as silent escape hatch).
+    // Slice 12 — plane classifier (ADR-0004). Promoted to structurally required at
+    // v2 (ADR-0005): every artifact MUST declare plane, no deferral allowlist.
     // When plane is declared: value in closed set; data-plane requires trust_boundary
-    // to name an unnegated origin token (HIGH #2, #3); control-plane may not have
-    // path_derived_fields (MED #6 — plugin-authored static content should not derive
-    // identity from filesystem paths).
-    const inDeferredList = PLANE_DEFERRED_IDS.has(artifact.id);
+    // to name an unnegated origin token (Codex HIGH #2, #3); control-plane may not have
+    // path_derived_fields (Codex MED #6 — plugin-authored static content should not
+    // derive identity from filesystem paths).
     if (!Object.hasOwn(artifact, 'plane')) {
-      if (!inDeferredList) {
-        findings.push({
-          level: 'red',
-          detail: `${artifact.id}: missing "plane" and not in PLANE_DEFERRED_IDS; classify as control-plane or data-plane, or add to the deferred allowlist with rationale`,
-        });
-      }
+      findings.push({
+        level: 'red',
+        detail: `${artifact.id}: missing required field "plane"; classify as control-plane or data-plane. If neither is defensible, write a superseding ADR to split the artifact into per-layer ids or widen the plane set (see ADR-0005 §Reopen conditions)`,
+      });
+    } else if (!planeIsValid(artifact.plane)) {
+      findings.push({
+        level: 'red',
+        detail: `${artifact.id}: unknown plane "${artifact.plane}" (expected one of ${[...PLANES].join(', ')})`,
+      });
     } else {
-      if (inDeferredList) {
+      if (
+        artifact.plane === 'data-plane' &&
+        !trustBoundaryHasOriginToken(artifact.trust_boundary)
+      ) {
         findings.push({
           level: 'red',
-          detail: `${artifact.id}: both declares plane="${artifact.plane}" AND appears in PLANE_DEFERRED_IDS; remove from the deferred list or drop the plane field`,
+          detail: `${artifact.id} (data-plane): trust_boundary must name an unnegated origin token (${DATA_PLANE_ORIGIN_TOKENS.join(', ')}); got "${artifact.trust_boundary}"`,
         });
       }
-      if (!planeIsValid(artifact.plane)) {
+      if (
+        artifact.plane === 'control-plane' &&
+        Array.isArray(artifact.path_derived_fields) &&
+        artifact.path_derived_fields.length > 0
+      ) {
         findings.push({
           level: 'red',
-          detail: `${artifact.id}: unknown plane "${artifact.plane}" (expected one of ${[...PLANES].join(', ')})`,
+          detail: `${artifact.id} (control-plane): path_derived_fields is non-empty (${artifact.path_derived_fields.join(', ')}); plugin-authored static artifacts must not derive identity from filesystem paths`,
         });
-      } else {
-        if (
-          artifact.plane === 'data-plane' &&
-          !trustBoundaryHasOriginToken(artifact.trust_boundary)
-        ) {
-          findings.push({
-            level: 'red',
-            detail: `${artifact.id} (data-plane): trust_boundary must name an unnegated origin token (${DATA_PLANE_ORIGIN_TOKENS.join(', ')}); got "${artifact.trust_boundary}"`,
-          });
-        }
-        if (
-          artifact.plane === 'control-plane' &&
-          Array.isArray(artifact.path_derived_fields) &&
-          artifact.path_derived_fields.length > 0
-        ) {
-          findings.push({
-            level: 'red',
-            detail: `${artifact.id} (control-plane): path_derived_fields is non-empty (${artifact.path_derived_fields.join(', ')}); plugin-authored static artifacts must not derive identity from filesystem paths`,
-          });
-        }
       }
     }
     for (const field of ARTIFACT_REQUIRED_BASE_FIELDS) {
@@ -588,18 +564,17 @@ function checkAuthorityGraph() {
   }
 
   const level = findings.some((f) => f.level === 'red') ? 'red' : 'green';
-  // Codex fold-in LOW #10: split summary to distinguish surface_class classification
-  // from plane classification. The prior "all classified" conflated them while `plane`
-  // was partial.
+  // ADR-0005 v2: plane is structurally required; every artifact classifies or the audit
+  // reds. The summary no longer reports a deferral count because the allowlist no longer
+  // exists.
   const planeClassified = graph.artifacts.filter((a) => Object.hasOwn(a, 'plane')).length;
-  const planeDeferred = graph.artifacts.filter((a) => PLANE_DEFERRED_IDS.has(a.id)).length;
   const total = graph.artifacts.length;
   return {
     level,
     findings,
     summary:
       level === 'green'
-        ? `${total} artifacts, all surface_class-classified; ${planeClassified}/${total} plane-classified (${planeDeferred} deferred); ${contractFiles.length} contracts bound`
+        ? `${total} artifacts, all surface_class-classified; ${planeClassified}/${total} plane-classified; ${contractFiles.length} contracts bound`
         : `${findings.length} authority-graph violation${findings.length === 1 ? '' : 's'}`,
   };
 }

@@ -84,7 +84,7 @@ describe('specs/artifacts.json — authority graph shape', () => {
 
   it('parses as JSON', () => {
     expect(file).toBeDefined();
-    expect(file.version).toBe(1);
+    expect(file.version).toBe(2);
     expect(Array.isArray(file.artifacts)).toBe(true);
     expect(file.artifacts.length).toBeGreaterThan(0);
   });
@@ -290,13 +290,22 @@ describe('specs/artifacts.json — continuity is successor-to-live clean-break',
 });
 
 // Slice 12 (ADR-0004) — plane classifier + data-plane trust-boundary-detail rule.
-describe('specs/artifacts.json — plane classifier (ADR-0004)', () => {
+// v2 (ADR-0005): plane is structurally required on every artifact; no deferral allowlist.
+describe('specs/artifacts.json — plane classifier (ADR-0004, v2 per ADR-0005)', () => {
   const file = loadArtifacts();
   const byId = new Map(file.artifacts.map((a) => [a.id, a]));
 
+  it('every artifact declares plane (v2 required)', () => {
+    for (const artifact of file.artifacts) {
+      expect(
+        Object.hasOwn(artifact, 'plane'),
+        `${artifact.id}: must declare plane (v2 structurally required — ADR-0005)`,
+      ).toBe(true);
+    }
+  });
+
   it('every declared plane is in the closed set {control-plane, data-plane}', () => {
     for (const artifact of file.artifacts) {
-      if (!Object.hasOwn(artifact, 'plane')) continue;
       expect(
         planeIsValid(artifact.plane),
         `${artifact.id}: plane "${artifact.plane}" is not in the closed set`,
@@ -314,10 +323,15 @@ describe('specs/artifacts.json — plane classifier (ADR-0004)', () => {
     }
   });
 
-  // Slice 12 exemplar backfills — these four artifacts must carry the declared plane.
-  // The remaining nine artifacts are deferred to a sweep slice (ADR-0004 §Scoping).
+  // Slice 12 + ADR-0005 v2 — pinned classifications. Positive assertions on exemplar
+  // artifacts from each category so a rename or typo fails a named test rather than
+  // hiding inside the generic "plane is valid" assertion.
   it('workflow.definition is classified control-plane', () => {
     expect(byId.get('workflow.definition')?.plane).toBe('control-plane');
+  });
+
+  it('skill.descriptor is classified control-plane', () => {
+    expect(byId.get('skill.descriptor')?.plane).toBe('control-plane');
   });
 
   it('run.log is classified data-plane', () => {
@@ -330,6 +344,21 @@ describe('specs/artifacts.json — plane classifier (ADR-0004)', () => {
 
   it('continuity.index is classified data-plane', () => {
     expect(byId.get('continuity.index')?.plane).toBe('data-plane');
+  });
+
+  // ADR-0005 — the three artifacts deferred at v1 are now classified data-plane under
+  // the worst-case-producer rule. Pinned positively so a future accidental flip back to
+  // missing/deferred surfaces as a named failure.
+  it('selection.override is classified data-plane (ADR-0005)', () => {
+    expect(byId.get('selection.override')?.plane).toBe('data-plane');
+  });
+
+  it('adapter.registry is classified data-plane (ADR-0005)', () => {
+    expect(byId.get('adapter.registry')?.plane).toBe('data-plane');
+  });
+
+  it('adapter.reference is classified data-plane (ADR-0005)', () => {
+    expect(byId.get('adapter.reference')?.plane).toBe('data-plane');
   });
 });
 
@@ -367,10 +396,11 @@ describe('trust-boundary origin-token helper — constructed-violation guard (Sl
     expect(trustBoundaryHasOriginToken('may carry model-authored narrative')).toBe(true);
   });
 
-  // Codex fold-in HIGH #3: `mixed` is a cardinality of origins, not an origin. A
-  // data-plane artifact whose trust_boundary says "mixed" and nothing else fails the
-  // rule. The three genuinely mixed-layer artifacts live in PLANE_DEFERRED_IDS until
-  // the sweep slice decides per-layer plane representation.
+  // Codex fold-in HIGH #3 (ADR-0004): `mixed` is a cardinality of origins, not an
+  // origin. A data-plane artifact whose trust_boundary says "mixed" and nothing else
+  // fails the rule. ADR-0005 v2 classifies the three previously-deferred artifacts
+  // as data-plane under the worst-case-producer rule; their trust_boundary prose no
+  // longer begins with "mixed;".
   it('rejects prose containing only "mixed" (mixed is not an origin)', () => {
     expect(
       trustBoundaryHasOriginToken('mixed; plugin-layer is author-signed, operator layers differ'),
@@ -447,36 +477,88 @@ describe('trust-boundary origin-token helper — constructed-violation guard (Sl
   });
 });
 
-// Codex fold-in HIGH #1 + MED #7: the audit enforces a required-or-deferred rule on every
-// artifact. These tests assert the list of deferred ids matches the ADR-0004 Non-goals list
-// exactly, preventing silent growth of the escape hatch.
-describe('specs/artifacts.json — plane deferral allowlist (ADR-0004, Codex fold-in)', () => {
+// ADR-0005 v2 — the deferral allowlist from Slice 12 is removed. `plane` is structurally
+// required on every artifact. This block replaces the v1 deferral tests with a total-
+// coverage assertion (back-stopped by the positive classifications above) and Codex
+// MED #5 fold-in: a broader guard against reintroducing an escape hatch under any name.
+describe('specs/artifacts.json — plane coverage (ADR-0005 v2)', () => {
   const file = loadArtifacts();
-  const byId = new Map(file.artifacts.map((a) => [a.id, a]));
 
-  const EXPECTED_DEFERRED_IDS = ['selection.override', 'adapter.registry', 'adapter.reference'];
-
-  it('every non-deferred artifact declares plane', () => {
+  it('every artifact has a plane (no deferrals)', () => {
     for (const artifact of file.artifacts) {
-      if (EXPECTED_DEFERRED_IDS.includes(artifact.id)) continue;
       expect(
         Object.hasOwn(artifact, 'plane'),
-        `${artifact.id}: must declare plane (not in deferred allowlist)`,
+        `${artifact.id}: v2 requires plane on every artifact (ADR-0005). No deferral allowlist exists.`,
       ).toBe(true);
     }
   });
 
-  it('every deferred artifact omits plane (cannot both declare and defer)', () => {
-    for (const id of EXPECTED_DEFERRED_IDS) {
-      const artifact = byId.get(id);
-      expect(artifact).toBeDefined();
-      if (!artifact) continue;
-      expect(
-        Object.hasOwn(artifact, 'plane'),
-        `${id} is in the deferred allowlist but also declares plane; remove one`,
-      ).toBe(false);
+  // Codex MED #5 fold-in — the v1 escape hatch was named `plane_deferred` in the draft
+  // and `PLANE_DEFERRED_IDS` in audit.mjs. A future regression might reintroduce the
+  // concept under a different name. This test bans the most plausible aliases on every
+  // artifact row, plus any key matching the pattern `plane_*defer*` case-insensitively.
+  // If a genuine new field is needed, rename it to something that does not match the
+  // pattern or write a superseding ADR.
+  const DEFERRAL_ALIAS_FIELDS = [
+    'plane_deferred',
+    'plane_pending',
+    'plane_status',
+    'plane_rationale',
+    'plane_exception',
+    'plane_exempt',
+  ];
+
+  it('no artifact reintroduces a known deferral-alias field', () => {
+    for (const artifact of file.artifacts) {
+      const rec = artifact as unknown as Record<string, unknown>;
+      for (const alias of DEFERRAL_ALIAS_FIELDS) {
+        expect(
+          Object.hasOwn(rec, alias),
+          `${artifact.id}: ${alias} field is not part of the v2 schema — remove it or write a superseding ADR`,
+        ).toBe(false);
+      }
     }
   });
+
+  it('no artifact has a field matching /plane.*defer|plane.*exempt|plane.*pending/i', () => {
+    const pattern = /plane.*(?:defer|exempt|pending)/i;
+    for (const artifact of file.artifacts) {
+      const rec = artifact as unknown as Record<string, unknown>;
+      for (const key of Object.keys(rec)) {
+        expect(
+          pattern.test(key),
+          `${artifact.id}: field "${key}" matches a deferral-alias pattern; the v2 schema has no deferral escape hatch`,
+        ).toBe(false);
+      }
+    }
+  });
+});
+
+// Codex LOW #9 fold-in — pin the exact v2 trust_boundary strings for the three
+// worst-case-classified artifacts. The token-match helper only asserts *an* origin
+// appears; these tests assert the **specific** strings ADR-0005 committed to, so a
+// silent prose edit that drops an origin or reintroduces "mixed;" would fail a named
+// test rather than hide behind the generic token-match.
+describe('specs/artifacts.json — v2 trust_boundary prose pinned (ADR-0005, Codex LOW #9)', () => {
+  const file = loadArtifacts();
+  const byId = new Map(file.artifacts.map((a) => [a.id, a]));
+
+  const EXPECTED_TRUST_BOUNDARIES: Record<string, string> = {
+    'selection.override':
+      'operator-local at user-global/project/invocation layers; plugin-author-signed at the defaults layer; engine validates .strict() key closure and ghost-provenance rejection at parse time. Composition produces selection.resolution (separate artifact).',
+    'adapter.registry':
+      'operator-local at user-global/project/invocation layers; plugin-author-signed at the defaults layer; engine validates reserved-name disjointness, own-property closure, and registry-key/descriptor-name parity at parse time.',
+    'adapter.reference':
+      'operator-local at user-global/project/invocation layers; plugin-author-signed at the defaults layer; engine validates named-ref registry closure during resolution. MUST NOT appear in run.log (resolved-form-only per ADAPTER-I10).',
+  };
+
+  for (const [id, expected] of Object.entries(EXPECTED_TRUST_BOUNDARIES)) {
+    it(`${id} trust_boundary matches the v2 pinned string`, () => {
+      const artifact = byId.get(id);
+      expect(artifact).toBeDefined();
+      expect(artifact?.trust_boundary).toBe(expected);
+    });
+  }
 });
 
 // Codex fold-in MED #6: control-plane artifacts must not derive identity from filesystem

@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "artifacts": [
     {
       "id": "workflow.definition",
@@ -147,6 +147,7 @@
       "id": "selection.override",
       "surface_class": "greenfield",
       "compatibility_policy": "n/a",
+      "plane": "data-plane",
       "description": "Typed override value (model, effort, skills, rigor, invocation_options) contributed by one config layer. JSON-safe invocation_options; strict unknown-key rejection.",
       "contract": "specs/contracts/selection.md",
       "schema_file": "src/schemas/selection-policy.ts",
@@ -171,7 +172,7 @@
         "skill set composition",
         "invocation_options passthrough to adapter"
       ],
-      "trust_boundary": "mixed; plugin-layer is author-signed, operator layers are operator-local",
+      "trust_boundary": "operator-local at user-global/project/invocation layers; plugin-author-signed at the defaults layer; engine validates .strict() key closure and ghost-provenance rejection at parse time. Composition produces selection.resolution (separate artifact).",
       "reference_surfaces": [],
       "reference_evidence": [],
       "migration_policy": "n/a",
@@ -219,6 +220,7 @@
       "id": "adapter.registry",
       "surface_class": "greenfield",
       "compatibility_policy": "n/a",
+      "plane": "data-plane",
       "description": "Config-layer map of custom adapter name -> CustomAdapterDescriptor. Registry-key to descriptor-name parity is enforced; reserved names are disjoint.",
       "contract": "specs/contracts/adapter.md",
       "schema_file": "src/schemas/config.ts",
@@ -245,7 +247,7 @@
         "own-property closure (prototype-chain defense)",
         "registry-key / descriptor-name parity"
       ],
-      "trust_boundary": "mixed; plugin-layer is author-signed, operator layers are operator-local",
+      "trust_boundary": "operator-local at user-global/project/invocation layers; plugin-author-signed at the defaults layer; engine validates reserved-name disjointness, own-property closure, and registry-key/descriptor-name parity at parse time.",
       "reference_surfaces": [],
       "reference_evidence": [],
       "migration_policy": "n/a",
@@ -256,6 +258,7 @@
       "id": "adapter.reference",
       "surface_class": "greenfield",
       "compatibility_policy": "n/a",
+      "plane": "data-plane",
       "description": "Pre-resolution pointer into the adapter registry or a built-in adapter. Three variants (built-in, named, inline custom). Not valid in the event log.",
       "contract": "specs/contracts/adapter.md",
       "schema_file": "src/schemas/adapter.ts",
@@ -269,12 +272,17 @@
         "RESERVED_ADAPTER_NAMES",
         "DispatchResolutionSource"
       ],
-      "writers": ["plugin author (step.adapter)", "operator (CircuitOverride.adapter)"],
+      "writers": [
+        "plugin author (DispatchConfig.roles / DispatchConfig.circuits defaults)",
+        "operator (user-global, project, invocation)"
+      ],
       "readers": ["circuit-next engine (adapter resolver)"],
       "resolvers": ["adapter.resolved"],
       "backing_paths": [
-        "<plugin>/skills/<workflow-id>/circuit.yaml (step.adapter)",
-        "Config layer overrides (in-memory, per-layer)"
+        "<plugin>/skills/<workflow-id>/circuit.yaml (DispatchConfig.roles[role] / DispatchConfig.circuits[workflow_id])",
+        "~/.config/circuit-next/config.yaml (user-global DispatchConfig)",
+        "<project>/.circuit/config.yaml (project DispatchConfig)",
+        "invocation arguments (ephemeral, in-memory DispatchConfig)"
       ],
       "identity_fields": [],
       "path_derived_fields": [],
@@ -282,7 +290,7 @@
         "adapter resolver input",
         "named-ref vs inline-descriptor discrimination"
       ],
-      "trust_boundary": "mixed; plugin-layer is author-signed, operator layers are operator-local; MUST NOT appear in run.log",
+      "trust_boundary": "operator-local at user-global/project/invocation layers; plugin-author-signed at the defaults layer; engine validates named-ref registry closure during resolution. MUST NOT appear in run.log (resolved-form-only per ADAPTER-I10).",
       "reference_surfaces": [],
       "reference_evidence": [],
       "migration_policy": "n/a",

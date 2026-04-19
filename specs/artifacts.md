@@ -1,7 +1,7 @@
 ---
 doc: artifacts
 status: active
-version: 1
+version: 2
 last_updated: 2026-04-19
 ---
 
@@ -13,7 +13,9 @@ disagree, `artifacts.json` wins; this doc lags until updated.
 
 Read ADR-0003 first. It defines the surface classes, the compatibility
 policies, and the gate itself. Read ADR-0004 for the `plane` dimension
-(control-plane vs data-plane) introduced in Slice 12.
+(control-plane vs data-plane) introduced in Slice 12, and ADR-0005 for
+the v2 promotion of `plane` to a structurally required field with no
+deferral allowlist.
 
 ## Why this exists
 
@@ -60,16 +62,14 @@ values:
   legacy parsing.
 - `unknown` — **blocks** contract authorship (used with `unknown-blocking`).
 
-## Plane (ADR-0004)
+## Plane (ADR-0004, v2 per ADR-0005)
 
 `plane` is a coarse classifier, orthogonal to `surface_class` and
 `compatibility_policy`. It names **who produces the artifact**, not
-where it lives. In schema version 1, `plane` is structurally optional
-in the JSON, but the audit requires every artifact to **either** declare
-`plane` **or** appear in `PLANE_DEFERRED_IDS` (a short allowlist of
-genuinely mixed-layer artifacts whose per-layer plane representation
-is a v0.2 schema evolution). New artifacts cannot silently omit
-`plane`.
+where it lives. At schema version 2, `plane` is structurally required
+on every artifact. The v1 `PLANE_DEFERRED_IDS` allowlist was removed
+when ADR-0005 classified the three mixed-layer artifacts as
+`data-plane` on the worst-case-producer rule.
 
 Values:
 
@@ -82,15 +82,15 @@ Values:
   path-safety primitives on path-derived identity fields — are
   invariants of their **schema files**, enforced by existing contract
   tests under `tests/contracts/` and by the path-safety audit rule.
-  The Slice 12 audit rule itself is narrower; see below.
+  The plane audit rules themselves are narrower; see below.
 
-### Slice 12 audit rule (ADR-0004 + Codex fold-in)
+### Plane audit rules (ADR-0004 + Codex fold-in; ADR-0005 v2)
 
-`scripts/audit.mjs` enforces three class-conditional checks on
-classified artifacts:
+`scripts/audit.mjs` enforces three class-conditional checks:
 
-1. **Required-or-deferred.** Every artifact must either declare `plane`
-   or appear in `PLANE_DEFERRED_IDS`. No silent omissions.
+1. **Required.** Every artifact MUST declare `plane` from the closed
+   set `{control-plane, data-plane}`. No deferral allowlist exists at
+   v2; missing-plane is a red finding.
 2. **Data-plane trust-boundary detail.** If `plane: data-plane`, the
    `trust_boundary` prose must name at least one **unnegated** origin
    token from the closed set: `operator-local`, `engine-computed`,
@@ -105,22 +105,21 @@ classified artifacts:
    static content's identity is plugin-author-determined at build time,
    not derived from filesystem path components.
 
-### What Slice 12 classifies
+### Plane coverage (v2)
 
-- **control-plane**: `workflow.definition`, `step.definition`,
+- **control-plane** (4): `workflow.definition`, `step.definition`,
   `phase.definition`, `skill.descriptor`.
-- **data-plane**: `run.log`, `run.projection`, `selection.resolution`,
-  `adapter.resolved`, `continuity.record`, `continuity.index`.
-- **deferred** (in `PLANE_DEFERRED_IDS`): `selection.override`,
-  `adapter.registry`, `adapter.reference`. These three carry genuinely
-  mixed-layer trust (plugin-authored defaults + operator-local
-  overrides under one artifact id). Per-layer plane representation is
-  scoped to v0.2 — either a `plane: 'per-layer'` marker or splitting
-  the ids.
+- **data-plane** (9): `run.log`, `run.projection`,
+  `selection.override`, `selection.resolution`, `adapter.registry`,
+  `adapter.reference`, `adapter.resolved`, `continuity.record`,
+  `continuity.index`.
 
-Schema version 2 will promote `plane` to structurally required and
-either classify or re-ID the deferred artifacts. See ADR-0004 for the
-full rationale.
+ADR-0005 classified `selection.override`, `adapter.registry`, and
+`adapter.reference` as data-plane under the worst-case-producer rule:
+each has operator-layer writers (user-global, project, invocation)
+whose trust boundary is data-plane, and per-layer classification is not
+required because the Zod `.strict()` boundary parses every layer
+uniformly.
 
 ## Required metadata columns
 
@@ -131,7 +130,7 @@ Every artifact row in `specs/artifacts.json` MUST have these base fields:
 | `id` | Dotted artifact name, e.g. `continuity.record`. Unique across the file. |
 | `surface_class` | One of the six classes above. |
 | `compatibility_policy` | One of the four policies above. |
-| `plane` | *(optional, v1)* One of `control-plane` or `data-plane`; see ADR-0004. Will be promoted to required in schema version 2. |
+| `plane` | *(required, v2)* One of `control-plane` or `data-plane`; see ADR-0004 for the dimension, ADR-0005 for v2 promotion. |
 | `description` | One-paragraph human description. |
 | `contract` | Path to `specs/contracts/*.md`, or `null` if not yet authored. |
 | `schema_file` | Path to the zod schema, or `null` if there is no runtime schema. |
@@ -300,20 +299,32 @@ See `scripts/audit.mjs` for the full list. Summary:
 - **Continuity gate** — `specs/contracts/continuity.md` cannot exist
   until `continuity.record` and `continuity.index` are present in the
   graph with non-unknown compatibility posture.
+- **Plane required (ADR-0004, v2 per ADR-0005)** — every artifact MUST
+  declare `plane` from the closed set `{control-plane, data-plane}`.
+  Missing-plane is a red finding with no deferral allowlist.
 - **Plane trust-boundary detail (ADR-0004)** — if an artifact declares
   `plane: data-plane`, its `trust_boundary` prose must name at least one
-  origin token from `{operator-local, engine-computed, model-authored,
-  mixed}`. Control-plane artifacts have no additional requirement. The
-  rule fires only on artifacts that declare a plane; un-classified
-  artifacts see no new enforcement. Promoted to universal coverage in
-  schema version 2 after the sweep slice lands.
+  unnegated origin token from `{operator-local, engine-computed,
+  model-authored}`. Control-plane artifacts have no additional
+  trust-boundary requirement but cannot declare non-empty
+  `path_derived_fields` (path-derivation ban).
 
 `tests/contracts/artifact-authority.test.ts` asserts the same invariants
 at `npm run test` time so the feedback loop is fast.
 
 ## Evolution
 
-This schema version is 1. Schema-breaking additions (new required
+This schema version is 2. Schema-breaking additions (new required
 columns, new class values, new policy values) bump the version and
 require an ADR. Non-breaking additions (new optional columns, new ids)
 do not.
+
+Version history:
+
+- **v1 (ADR-0003)** — authority graph established; surface classes,
+  compatibility policies, and binding rule introduced.
+- **v1+ slice 12 (ADR-0004)** — `plane` dimension added as optional;
+  10 of 13 artifacts backfilled; three mixed-layer artifacts deferred
+  via `PLANE_DEFERRED_IDS`.
+- **v2 (ADR-0005)** — `plane` promoted to required; the three deferred
+  artifacts classified as `data-plane`; `PLANE_DEFERRED_IDS` removed.
