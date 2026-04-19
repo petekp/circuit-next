@@ -1,10 +1,14 @@
 ---
-review: adr-0005-v2-plane-required
-reviewer: codex (cross-model challenger)
-date: 2026-04-19
+review_target: adr-0005-v2-plane-required
+target_kind: adr
+reviewer_model: gpt-5-codex via codex exec
+review_kind: adversarial design review
+review_date: 2026-04-19
+verdict: NEEDS ADJUSTMENT → incorporated → ACCEPT
 opening_verdict: NEEDS ADJUSTMENT
 closing_verdict: ACCEPT
 status: closed
+authored_by: operator + claude-opus-4-7
 ---
 
 # ADR-0005 v2 — Codex adversarial review

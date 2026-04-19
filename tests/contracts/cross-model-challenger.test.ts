@@ -26,29 +26,43 @@ const CONTRACT_REVIEW_FRONTMATTER_KEYS: string[] = [
   'authored_by',
 ];
 
-// ADR reviews (adr-0004-plane-split-codex.md, adr-0005-v2-plane-required-codex.md)
-// currently carry a looser frontmatter shape with opening_verdict / closing_verdict
-// + reviewer + date. v0.1 of the track codifies the CONTRACT review shape as
-// authoritative; ADR review records are checked against a minimal shape so the
-// test is honest about current state. Harmonization to the contract-review shape
-// is tracked as v0.2 scope in specs/behavioral/cross-model-challenger.md §Evolution
-// and as Slice 20 of the behavioral-arc-slices-14-16-codex.md fold-in schedule.
-const ADR_REVIEW_MINIMAL_KEYS: string[] = ['reviewer', 'date'];
-const ADR_REVIEW_VERDICT_KEYS: string[] = ['opening_verdict', 'closing_verdict'];
-
-// Arc reviews (behavioral-arc-slices-14-16-codex.md, etc.) span multiple commits
-// rather than a single contract or ADR. Minimal shape mirrors the ADR pair with
-// arc-specific target/version fields. Established in Slice 17 alongside
-// specs/reviews/behavioral-arc-slices-14-16-codex.md.
-const ARC_REVIEW_REQUIRED_KEYS: string[] = [
-  'arc_target',
-  'arc_version',
+// Base required keys on every classified review record (contract / ADR / arc)
+// per Slice 20 ADR-review normalization. The earlier ADR "looser shape"
+// (reviewer / date / opening_verdict / closing_verdict, no review_target) was
+// the divergence arc-review MED #8 called out; Slice 20 folded the two ADR
+// review files onto this unified base.
+const REVIEW_BASE_REQUIRED_KEYS: string[] = [
   'reviewer_model',
   'review_kind',
   'review_date',
+  'verdict',
+  'authored_by',
+];
+
+// ADR-specific additional required keys layered on top of the base. ADR reviews
+// document a verdict chain (opening + closing) in addition to the canonical
+// `verdict` so the progression is inspectable; the `review_target` names the
+// ADR being reviewed.
+const ADR_REVIEW_ADDITIONAL_KEYS: string[] = [
+  'review_target',
+  'target_kind',
   'opening_verdict',
   'closing_verdict',
-  'authored_by',
+];
+
+// Arc-review extras layered on top of the unified base. Arc reviews span
+// multiple commits (a methodology-adherence retrospective over an
+// implementation arc), so they carry both the unified base keys (including
+// `verdict` for the canonical single-field form) and opening/closing
+// verdicts for the multi-stage verdict chain. The `review_target` + `target_kind`
+// keys align with the ADR-review shape per Slice 20 normalization.
+const ARC_REVIEW_ADDITIONAL_KEYS: string[] = [
+  'review_target',
+  'target_kind',
+  'arc_target',
+  'arc_version',
+  'opening_verdict',
+  'closing_verdict',
 ];
 
 // Accepted canonical verdicts in contract-review records. Exact set
@@ -318,26 +332,53 @@ describe('cross-model-challenger — CHALLENGER-I3 review records are recorded a
     }
   });
 
-  it('every ADR-review record carries at least reviewer + date + opening + closing verdict', () => {
+  // Slice 20 fold-in of arc-review MED #8 — ADR review frontmatter was
+  // normalized to the unified base shape plus ADR-specific extras
+  // (review_target + target_kind + opening_verdict + closing_verdict).
+  // The earlier per-file divergence (adr-0004 used doc/subject/reviewer/date;
+  // adr-0005 used review/reviewer/date/status) was consolidated in this
+  // slice. Contract reviews retain their contract_target/contract_version
+  // fields because those are dimensionally different (the contract-kind
+  // review does not carry opening/closing verdict chains in the
+  // frontmatter).
+  it('every classified review carries the unified base frontmatter keys', () => {
     for (const path of reviewFiles) {
-      if (classifyReview(path) !== 'adr') continue;
+      const kind = classifyReview(path);
+      if (kind === 'unknown') continue;
       const fm = parseFrontmatter(readFileSync(path, 'utf-8'));
-      for (const key of ADR_REVIEW_MINIMAL_KEYS) {
-        expect(fm.has(key), `${path}: ADR review missing "${key}".`).toBe(true);
-      }
-      for (const key of ADR_REVIEW_VERDICT_KEYS) {
-        expect(fm.has(key), `${path}: ADR review missing "${key}".`).toBe(true);
+      for (const key of REVIEW_BASE_REQUIRED_KEYS) {
+        expect(fm.has(key), `${path}: base review key "${key}" missing (kind=${kind}).`).toBe(true);
       }
     }
   });
 
-  it('every arc-review record carries the eight required frontmatter keys', () => {
+  it('every ADR-review record carries base + ADR-specific keys with target_kind=adr', () => {
+    for (const path of reviewFiles) {
+      if (classifyReview(path) !== 'adr') continue;
+      const fm = parseFrontmatter(readFileSync(path, 'utf-8'));
+      for (const key of ADR_REVIEW_ADDITIONAL_KEYS) {
+        expect(fm.has(key), `${path}: ADR review missing "${key}" (Slice 20 unified shape).`).toBe(
+          true,
+        );
+      }
+      expect(
+        fm.get('target_kind'),
+        `${path}: ADR review target_kind must equal 'adr' (got "${fm.get('target_kind')}").`,
+      ).toBe('adr');
+    }
+  });
+
+  it('every arc-review record carries base + arc-specific keys with target_kind=arc', () => {
     for (const path of reviewFiles) {
       if (classifyReview(path) !== 'arc') continue;
       const fm = parseFrontmatter(readFileSync(path, 'utf-8'));
-      for (const key of ARC_REVIEW_REQUIRED_KEYS) {
+      for (const key of ARC_REVIEW_ADDITIONAL_KEYS) {
         expect(fm.has(key), `${path}: arc review missing "${key}".`).toBe(true);
       }
+      expect(
+        fm.get('target_kind'),
+        `${path}: arc review target_kind must equal 'arc' (got "${fm.get('target_kind')}").`,
+      ).toBe('arc');
     }
   });
 });

@@ -1,10 +1,13 @@
 ---
-doc: review
-subject: ADR-0004 control-plane/data-plane split (Slice 12)
-reviewer: Codex
+review_target: adr-0004-plane-split
+target_kind: adr
+reviewer_model: gpt-5-codex via codex exec
+review_kind: adversarial design review
+review_date: 2026-04-19
+verdict: NEEDS ADJUSTMENT → incorporated → ACCEPT (after fold-in)
 opening_verdict: NEEDS ADJUSTMENT
 closing_verdict: ACCEPT (after fold-in)
-date: 2026-04-19
+authored_by: operator + claude-opus-4-7
 ---
 
 # Codex adversarial review — ADR-0004 (Slice 12)

@@ -136,9 +136,16 @@ Asserts:
 - Every contract with `codex_adversarial_review: <path>` frontmatter
   resolves to an existing file.
 - Every review record at `specs/reviews/*-codex.md` carries the
-  standardized frontmatter (`contract_target`, `contract_version`,
-  `reviewer_model`, `review_kind`, `review_date`, `verdict`,
-  `authored_by`).
+  **unified base frontmatter** (`reviewer_model`, `review_kind`,
+  `review_date`, `verdict`, `authored_by`) plus kind-specific
+  additional keys:
+  - **Contract reviews** (`<target>-md-v<version>-codex.md`):
+    `contract_target`, `contract_version`.
+  - **ADR reviews** (`adr-<slug>-codex.md`): `review_target`,
+    `target_kind: adr`, `opening_verdict`, `closing_verdict`.
+  - **Arc reviews** (`behavioral-arc-<...>-codex.md` or
+    `arc-<...>-codex.md`): `review_target`, `target_kind: arc`,
+    `arc_target`, `arc_version`, `opening_verdict`, `closing_verdict`.
 - Every review record's `verdict` field is one of the permitted
   values (`ACCEPT`, `REJECT → incorporated → ACCEPT`,
   `NEEDS ADJUSTMENT → incorporated → ACCEPT`,

@@ -1,4 +1,6 @@
 ---
+review_target: behavioral-track-tests
+target_kind: arc
 arc_target: behavioral-track-tests
 arc_version: 0.1
 slices_reviewed: slice-14 (a248cb6), slice-15 (69677ed), slice-15-fixup (bf93ef0), slice-16 (b08034a)
@@ -7,6 +9,7 @@ post_arc_state: b08034a (HEAD, 436 tests, audit 10/0/0)
 reviewer_model: gpt-5-codex via codex exec
 review_kind: methodology-adherence retrospective
 review_date: 2026-04-19
+verdict: REJECT pending HIGH fold-ins
 opening_verdict: REJECT pending HIGH fold-ins
 closing_verdict: pending fold-ins across slices 17-22
 authored_by: operator + claude-opus-4-7
