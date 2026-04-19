@@ -1,6 +1,6 @@
 ---
 track: prose-yaml-parity
-status: draft
+status: ratified-v0.1
 version: 0.1
 last_updated: 2026-04-19
 depends_on:
@@ -11,7 +11,7 @@ enforced_by:
   - structural (compilation): catalog compiler emits `SkillDescriptor` + `Workflow` from YAML source; prose body `SKILL.md` is a downstream read of the descriptor, not a parallel authority
   - audit (Circuit-as-justification smell): rejects commits that justify SKILL.md prose by citing `circuit.yaml` content that does not actually support the claim
 planned_tests:
-  - tests/contracts/prose-yaml-parity.test.ts (future, Phase 1 authorship) — round-trip test: regenerate prose regions from YAML source; assert no drift against committed files
+  - tests/contracts/prose-yaml-parity.test.ts (LANDED v0.1 in Slice 15 as reserved cross-reference guard + single-family marker canary + PROSE-YAML invariant-ID presence). v0.2 round-trip test (regenerate prose regions from YAML source; assert no drift) lands with the catalog compiler per §Evolution.
   - named Phase 2 property: workflow.prop.prose_yaml_round_trip (see specs/contracts/workflow.md)
 ---
 

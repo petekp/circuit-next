@@ -1,6 +1,6 @@
 ---
 contract: phase
-status: draft
+status: ratified-v0.1
 version: 0.1
 schema_source: src/schemas/phase.ts
 last_updated: 2026-04-19
@@ -194,15 +194,11 @@ exist in Phase 2:
   Steps.
 - **selection-policy** (`src/schemas/selection-policy.ts`) —
   `domain.md#configuration-vocabulary` lists `phase` as a selection
-  layer, and `SelectionSource` includes `'phase'`. **Phase does not yet
-  carry a `selection: SelectionOverride` field.** This is a deliberate
-  v0.1 deferral: selection.md (not yet authored) is the right place to
-  ratify the full selection-layer design, including whether phase-level
-  overrides are authored via `Phase.selection` or derived from
-  `Workflow.default_selection` conditioned on `Phase.canonical`. Tracked
-  as Codex adversarial-auditor MED #7; deferred to selection.md with
-  rationale. Until then, any `SelectionResolution.applied` entry
-  claiming a `phase` source is suspect.
+  layer, and `SelectionSource` includes `'phase'`. `Phase.selection:
+  SelectionOverride.optional()` landed in `selection.md` v0.1 (SEL-I9),
+  closing phase.md v0.1 Codex MED #7. Any `SelectionResolution.applied`
+  entry claiming a `phase` source now resolves to an explicit
+  `Phase.selection` field on the named phase.
 - **ids** (`src/schemas/ids.ts`) — `PhaseId` and `StepId` branded slugs.
 
 ## Failure modes (carried from evidence)

@@ -1,6 +1,6 @@
 ---
 contract: run
-status: draft
+status: ratified-v0.1
 version: 0.1
 schema_source: src/schemas/run.ts
 last_updated: 2026-04-19

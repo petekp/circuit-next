@@ -1,6 +1,6 @@
 ---
 track: session-hygiene
-status: draft
+status: ratified-v0.1
 version: 0.1
 last_updated: 2026-04-19
 depends_on:
@@ -12,7 +12,7 @@ enforced_by:
   - CLAUDE.md §Hard invariants #10 (CLAUDE.md ≤ 300 lines)
   - CLAUDE.md §Session hygiene (compaction disabled; slice ≤ 30 min)
 planned_tests:
-  - tests/contracts/session-hygiene.test.ts (future — asserts CLAUDE.md wc -l ≤ 300; README/PROJECT_STATE phase alignment; .circuit/ ignored unless allowlisted)
+  - tests/contracts/session-hygiene.test.ts (LANDED v0.1 in Slice 14 — asserts CLAUDE.md wc -l ≤ 300; README/PROJECT_STATE phase alignment; .circuit/ ignored unless allowlisted). v0.2 Tier-2+ promotions owed per §Evolution.
 ---
 
 # Session hygiene

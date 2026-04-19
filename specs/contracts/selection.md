@@ -1,6 +1,6 @@
 ---
 contract: selection
-status: draft
+status: ratified-v0.1
 version: 0.1
 schema_source: src/schemas/selection-policy.ts
 last_updated: 2026-04-19
@@ -377,7 +377,7 @@ in Phase 2.
   removed (it accepted arbitrary non-`SkillId` strings); per-circuit
   skill contribution flows through `CircuitOverride.selection.skills`
   via typed `SkillOverride`. Config reorganization is out of scope for
-  this contract; see `specs/contracts/config.md` (future) for layer
+  this contract; see `specs/contracts/config.md` (pending Phase 1 close Slice 26) for layer
   materialization.
 
 - **event** (`src/schemas/event.ts`) — `DispatchStartedEvent`

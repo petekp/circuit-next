@@ -62,7 +62,7 @@ circuit-next/
 │   ├── properties/visible/      # Visible property tests (Tier 2+)
 │   ├── properties/hidden/       # Hidden pool (Tier 2+)
 │   └── unit/                    # Unit tests
-└── .claude-plugin/              # Plugin manifest (deferred to Phase 1+)
+└── .claude-plugin/              # Plugin manifest (deferred to Phase 2+; implementation lands alongside runtime)
 ```
 
 ## License

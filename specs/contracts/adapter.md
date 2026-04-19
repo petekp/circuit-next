@@ -1,6 +1,6 @@
 ---
 contract: adapter
-status: draft
+status: ratified-v0.1
 version: 0.1
 schema_source: src/schemas/adapter.ts
 last_updated: 2026-04-19
@@ -316,7 +316,7 @@ invariant; tested in `tests/contracts/schema-parity.test.ts`.
   it to `AdapterRef.safeParse`.
 - A `DispatchConfig` is produced by layering config files (default,
   user-global, project, invocation) per `specs/contracts/config.md`
-  (future) and passing the merged record to `DispatchConfig.safeParse`.
+  (pending Phase 1 close Slice 26; tracked as arc-phase-1-close-codex.md §HIGH #3 correlated-miss) and passing the merged record to `DispatchConfig.safeParse`.
 - Every `AdapterName` referenced in a `NamedAdapterRef` or an
   `AdapterReference` (`kind: 'named'`) must exist in the running
   plugin's `dispatch.adapters` registry at load time (ADAPTER-I8 at
@@ -449,7 +449,7 @@ After a `DispatchStartedEvent` is accepted:
   reservation check (ADAPTER-I2) and closure check (ADAPTER-I8) are
   implemented in `DispatchConfig.superRefine`. Config reorganization
   (layer materialization, merge semantics) is out of scope for this
-  contract; see `specs/contracts/config.md` (future).
+  contract; see `specs/contracts/config.md` (pending Phase 1 close Slice 26).
 
 - **workflow** (`src/schemas/workflow.ts`) — `DispatchConfig.circuits`
   is keyed on `WorkflowId`, so workflow existence is a soft

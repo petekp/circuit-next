@@ -1,6 +1,6 @@
 ---
 track: cross-model-challenger
-status: draft
+status: ratified-v0.1
 version: 0.1
 last_updated: 2026-04-19
 depends_on:
@@ -12,8 +12,8 @@ enforced_by:
   - commit discipline: for any slice that should trigger a challenger pass, a `specs/reviews/<contract>-v<version>-codex.md` record is committed in the same slice and linked from the contract frontmatter field `codex_adversarial_review`
   - authority-graph audit (planned — see §Planned test location): every contract whose invariants changed materially between two commits either lands a new codex review record or declares v0.2 scoping explicitly
 planned_tests:
-  - tests/contracts/cross-model-challenger.test.ts (future, Phase 1) — asserts: for every `specs/contracts/*.md` with `codex_adversarial_review: <path>` frontmatter, the referenced file exists and carries the expected review-record frontmatter (contract_target, contract_version, verdict, authored_by)
-  - scripts/audit.mjs dimension: warn (not red) when a contract's `artifact_ids` set changes without an updated `codex_adversarial_review` frontmatter line
+  - tests/contracts/cross-model-challenger.test.ts (LANDED v0.1 in Slice 16; tightened in Slice 18 + 19 + 20 + 21) — asserts unified review-record frontmatter (base + kind-specific extras), contract → review linkage (forward + reverse), per-objection disposition parser, verdict enum, /codex dispatch discipline.
+  - scripts/audit.mjs dimension: warn (not red) when a contract's `artifact_ids` set changes without an updated `codex_adversarial_review` frontmatter line (NOT LANDED — tracked as v0.2 scope).
 ---
 
 # Cross-model challenger

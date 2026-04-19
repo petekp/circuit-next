@@ -77,7 +77,7 @@ Property-based tests will cover:
 - **step**: Workflow embeds `Step[]`. Step variant invariants (WF-depends-
   on-Step) are in `specs/contracts/step.md`.
 - **phase**: Workflow embeds `Phase[]`. Phase invariants in
-  `specs/contracts/phase.md` (future).
+  `specs/contracts/phase.md` (ratified v0.1; PHASE-I1..I5 + spine_policy enforcement).
 - **rigor**: `EntryMode.rigor` must be a valid `Rigor` value.
 - **lane**: `EntryMode.default_lane` is optional; when present, must be
   a valid `Lane` literal.
