@@ -141,8 +141,12 @@ Asserts:
   `authored_by`).
 - Every review record's `verdict` field is one of the permitted
   values (`ACCEPT`, `REJECT → incorporated → ACCEPT`,
+  `NEEDS ADJUSTMENT → incorporated → ACCEPT`,
   `REJECT pending HIGH fold-ins`, `ACCEPT-with-deferrals`).
-  Free-form verdicts fail the test.
+  Free-form verdicts fail the test. An optional trailing
+  parenthetical annotation is permitted after the canonical value
+  (e.g. `REJECT → incorporated → ACCEPT (after fold-in)`); the
+  parenthetical cannot alter the verdict itself, only annotate it.
 
 And a new audit dimension: `scripts/audit.mjs` warns (not red) when a
 contract's `artifact_ids` set changes between HEAD and HEAD~1 without

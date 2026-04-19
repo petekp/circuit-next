@@ -63,11 +63,15 @@ describe('session-hygiene — SESSION-I1 CLAUDE.md line budget', () => {
 });
 
 // SESSION-I2 — PROJECT_STATE.md is the session-to-session live snapshot, and
-// README.md summarizes the current phase. The audit already walks git for
-// staleness; this test gives local fast feedback on the statically-observable
-// parts: both files exist, both mention a phase, and the extracted phase
-// agrees.
-describe('session-hygiene — SESSION-I2 PROJECT_STATE liveness & README agreement', () => {
+// README.md summarizes the current phase. The audit (scripts/audit.mjs,
+// dimensions `PROJECT_STATE.md current` + `Phase consistency`) is the
+// RUNTIME enforcement surface for freshness + cross-file drift. This
+// describe block is a STATIC-DOCUMENTATION ANCHOR per arc-review MED #9:
+// it asserts what can be read from the tree today (both files exist; both
+// carry a Phase string; the strings agree) without claiming the audit's
+// git-walk coverage. Renamed from "PROJECT_STATE liveness & README
+// agreement" to stop the prior title's implied guarantee.
+describe('session-hygiene — SESSION-I2 static-documentation anchor (README ↔ PROJECT_STATE phase string agreement)', () => {
   it('PROJECT_STATE.md exists', () => {
     expect(existsSync(PROJECT_STATE_MD)).toBe(true);
   });
@@ -130,12 +134,14 @@ describe('session-hygiene — SESSION-I4 30-minute slice bound (prose-documented
   });
 });
 
-// SESSION-I5 — Commits cite specs/, CLAUDE.md, bootstrap/, or an ADR. This is
-// already enforced across the git history by scripts/audit.mjs (citation rule
-// check), so the contract test does not re-scan git. Instead it asserts the
-// rule is captured inline in CLAUDE.md and anchored in ADR-0002 — the two
-// places a reader looks to understand why the audit rejects an uncited slice.
-describe('session-hygiene — SESSION-I5 citation rule (prose-documented + ADR-anchored)', () => {
+// SESSION-I5 — Commits cite specs/, CLAUDE.md, bootstrap/, or an ADR. This
+// is RUNTIME-enforced across git history by scripts/audit.mjs (Citation
+// rule dimension); this describe block is a STATIC-DOCUMENTATION ANCHOR
+// per arc-review MED #9: it asserts the rule is visible inline in CLAUDE.md
+// and authoritative in ADR-0002, without claiming commit-coverage. Title
+// clarified from "prose-documented + ADR-anchored" to make the static-anchor
+// nature explicit and stop the prior title's implied commit-walk coverage.
+describe('session-hygiene — SESSION-I5 static-documentation anchor (citation rule named inline + ADR-anchored)', () => {
   it('CLAUDE.md names the citation rule or points at ADR-0002', () => {
     const text = readFileSync(CLAUDE_MD, 'utf-8');
     const citesRuleInline =

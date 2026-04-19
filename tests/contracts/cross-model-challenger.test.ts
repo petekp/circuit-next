@@ -51,17 +51,24 @@ const ARC_REVIEW_REQUIRED_KEYS: string[] = [
   'authored_by',
 ];
 
-// Accepted verdict shapes in contract-review records. Prefix-match plus
-// optional parenthetical suffix (observed examples include
-// "(after fold-in)", "(after fold-in + v0.2 scoping)", "(all objections
-// folded into v0.1)"). Free-form verdicts fail.
-const CONTRACT_VERDICT_PREFIXES: string[] = [
+// Accepted canonical verdicts in contract-review records. Exact set
+// membership with optional parenthetical suffix — the older `startsWith`
+// check (Slice 16) admitted "ACCEPTANCE CERTIFIED" / "ACCEPTED_BY_CODEX"
+// because "ACCEPT" was a prefix. Tightened per arc-review HIGH #3
+// (Slice 18 fold-in). Observed parenthetical suffixes: "(after fold-in)",
+// "(after fold-in + v0.2 scoping)", "(all objections folded into v0.1)".
+const CONTRACT_VERDICT_CANONICALS = new Set<string>([
   'ACCEPT',
   'REJECT → incorporated → ACCEPT',
   'NEEDS ADJUSTMENT → incorporated → ACCEPT',
   'REJECT pending HIGH fold-ins',
   'ACCEPT-with-deferrals',
-];
+]);
+
+// Optional parenthetical-suffix pattern, anchored to end of string after the
+// canonical verdict. The suffix is a flat parenthesized note; nested parens
+// are not permitted.
+const VERDICT_SUFFIX_RE = /\s*\([^()]+\)\s*$/;
 
 // Body-level fold-in-discipline tokens per CHALLENGER-I4. A contract-review body
 // must name at least one disposition verb; silent ignores are rejected by the
@@ -136,10 +143,18 @@ describe('cross-model-challenger — CHALLENGER-I5 /codex dispatch documented', 
     const text = readFileSync(CLAUDE_MD, 'utf-8');
     // Tolerates line-wrapping between the negation and "codex:rescue" since
     // CLAUDE.md's 80-column prose often splits "Never\nuse the codex:rescue".
+    // Broadened per arc-review MED #10: a well-meaning future edit could
+    // rephrase "Never use" as "Do not use", "Avoid", "Must not use",
+    // "is banned", "is forbidden", "is prohibited", "is not allowed". The
+    // check splits on sentence boundaries and requires a sentence containing
+    // both `codex:rescue` AND any explicit negation word.
     const singleLined = text.replace(/\s+/g, ' ');
+    const sentences = singleLined.split(/[.!?]/);
+    const NEGATION_RE = /\b(?:never|not|avoid|banned|forbidden|prohibited)\b/i;
+    const negatedSentence = sentences.some((s) => /codex:rescue/i.test(s) && NEGATION_RE.test(s));
     expect(
-      /never use\b[^.]*codex:rescue/i.test(singleLined),
-      'CLAUDE.md must explicitly tell agents not to use the codex:rescue subagent.',
+      negatedSentence,
+      'CLAUDE.md must explicitly tell agents not to use the codex:rescue subagent. Accepted negation words near `codex:rescue`: never, not, avoid, banned, forbidden, prohibited.',
     ).toBe(true);
   });
 });
@@ -175,6 +190,40 @@ describe('cross-model-challenger — CHALLENGER-I3 review records are recorded a
     }
   });
 
+  // Arc-review LOW #11 fold-in — key presence is not enough; values must be
+  // non-empty and `review_date` must parse as ISO (YYYY-MM-DD). Empty
+  // `authored_by:` or a free-form "sometime in April" date field was
+  // previously admissible; no longer.
+  const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+  it('every review frontmatter key has a non-empty value', () => {
+    for (const path of reviewFiles) {
+      const kind = classifyReview(path);
+      if (kind === 'unknown') continue;
+      const fm = parseFrontmatter(readFileSync(path, 'utf-8'));
+      for (const [key, value] of fm.entries()) {
+        expect(
+          value.length > 0,
+          `${path}: frontmatter key "${key}" is empty. Empty frontmatter values admit degraded reviews.`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('every review_date / date value matches ISO YYYY-MM-DD', () => {
+    for (const path of reviewFiles) {
+      const kind = classifyReview(path);
+      if (kind === 'unknown') continue;
+      const fm = parseFrontmatter(readFileSync(path, 'utf-8'));
+      const dateValue = fm.get('review_date') ?? fm.get('date');
+      if (!dateValue) continue;
+      expect(
+        ISO_DATE_RE.test(dateValue),
+        `${path}: date value "${dateValue}" is not ISO (YYYY-MM-DD).`,
+      ).toBe(true);
+    }
+  });
+
   it('every contract-review frontmatter contract_target matches the filename stem', () => {
     // Filename: <target>-md-v<version>-codex.md. Frontmatter: contract_target.
     for (const path of reviewFiles) {
@@ -194,15 +243,17 @@ describe('cross-model-challenger — CHALLENGER-I3 review records are recorded a
     }
   });
 
-  it('every contract-review verdict begins with one of the canonical prefixes', () => {
+  it('every contract-review verdict is an exact canonical value (plus optional parenthetical suffix)', () => {
     for (const path of reviewFiles) {
       if (classifyReview(path) !== 'contract') continue;
       const fm = parseFrontmatter(readFileSync(path, 'utf-8'));
       const verdict = fm.get('verdict') ?? '';
-      const ok = CONTRACT_VERDICT_PREFIXES.some((prefix) => verdict.startsWith(prefix));
+      const stripped = verdict.replace(VERDICT_SUFFIX_RE, '').trim();
+      const ok = CONTRACT_VERDICT_CANONICALS.has(stripped);
+      const canonicalsList = [...CONTRACT_VERDICT_CANONICALS].join('\n  ');
       expect(
         ok,
-        `${path}: verdict "${verdict}" does not begin with any canonical prefix.\nPermitted prefixes:\n  ${CONTRACT_VERDICT_PREFIXES.join('\n  ')}\nAn optional parenthetical suffix (e.g. "(after fold-in)") is allowed after the prefix.`,
+        `${path}: verdict "${verdict}" is not a canonical value.\nPermitted canonicals (with optional " (suffix)"):\n  ${canonicalsList}\nExact match on the canonical is required; the parenthetical suffix may annotate (e.g. "(after fold-in)") but cannot alter the verdict itself.`,
       ).toBe(true);
     }
   });

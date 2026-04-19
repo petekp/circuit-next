@@ -86,6 +86,21 @@ describe('prose-yaml-parity — track spec frontmatter is well-formed', () => {
     expect(/^track:\s*prose-yaml-parity\s*$/m.test(text)).toBe(true);
   });
 
+  // Arc-review MED #6 fold-in — prior test did not pin the invariant IDs
+  // themselves. A future edit could delete the PROSE-YAML-I1..I4 prose
+  // entirely while leaving the cross-reference strings intact, and the
+  // Slice 15 test would still pass. This assertion locks the invariant IDs
+  // visible in the spec body.
+  it('names the four invariants PROSE-YAML-I1..I4', () => {
+    const text = readFileSync(TRACK_MD, 'utf-8');
+    for (let i = 1; i <= 4; i++) {
+      expect(
+        new RegExp(`PROSE-YAML-I${i}\\b`).test(text),
+        `Track spec missing invariant PROSE-YAML-I${i}`,
+      ).toBe(true);
+    }
+  });
+
   // Every behavioral-track spec in the repo carries the same required
   // frontmatter shape. Extending the guard to all three tracks lets a
   // future fourth track be rejected by the same test rather than an
