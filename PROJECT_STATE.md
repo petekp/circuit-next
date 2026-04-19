@@ -1,7 +1,7 @@
 # PROJECT_STATE — circuit-next
 
-**Last updated:** 2026-04-18 (Phase 1 slice 1 complete)
-**Phase:** 1 — Contract authorship **in progress**. Phase 0 Evidence Loop closed. First Phase 1 contract (`step.md`) landed + MED #7 (gate source tightening) closed.
+**Last updated:** 2026-04-18 (ADR-0002 bootstrap discipline landed; autonomy arc begun)
+**Phase:** 1 — Contract authorship **in progress**. Phase 0 Evidence Loop closed. First Phase 1 contract (`step.md`) landed + MED #7 (gate source tightening) closed. Bootstrap discipline (ADR-0002) codified; `.circuit/` now gitignored going forward.
 **Tier:** 0 — scaffold complete, validated, committed.
 
 ## One-minute read
@@ -93,8 +93,10 @@ Then in order of importance:
   `specs/behavioral/prose-yaml-parity.md`, `specs/behavioral/cross-model-challenger.md`
 - Adversarial-review MED #11 (workflow `spine_policy` for phase-omit/rename policy) — belongs in `phase.md`
 
-### Closed this session (Phase 1, first contract slice)
+### Closed this session (Phase 1, first contract slice + autonomy arc slice 1)
 
+- **ADR-0002** — *Bootstrap Discipline*: codifies that `circuit-next` is built via the existing Circuit as harness (classic bootstrap), with four rules against design contamination (citation rule, gitignore rule, harness-vs-template distinction, enforcement via audit). Closes the "Circuit does X" silent-justification risk.
+- `.circuit/` added to `.gitignore` going forward; `phase-1-step-contract-authorship` run preserved via negative rule as historical audit trail of the first Phase 1 slice.
 - `specs/contracts/step.md` authored (STEP-I1..STEP-I7; v0.1).
 - Adversarial-review MED #7 (gate `source` as typed reference) **closed** — `Gate.source` is a typed discriminated union with literal `ref` per source kind; `.strict()` rejects surplus keys; `superRefine` adds `Object.hasOwn` + undefined defense-in-depth.
 - Codex cross-model adversarial property-auditor pass completed against step.md/gate.ts/step.ts — 3 HIGH + 3 MED + 1 LOW incorporated (prototype-chain attack, cross-slot drift, optional-undefined, strict-mode prose, biome scope, project-state sync, TS exactness prose).
