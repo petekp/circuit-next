@@ -31,9 +31,25 @@ const CONTRACT_REVIEW_FRONTMATTER_KEYS: string[] = [
 // + reviewer + date. v0.1 of the track codifies the CONTRACT review shape as
 // authoritative; ADR review records are checked against a minimal shape so the
 // test is honest about current state. Harmonization to the contract-review shape
-// is tracked as v0.2 scope in specs/behavioral/cross-model-challenger.md §Evolution.
+// is tracked as v0.2 scope in specs/behavioral/cross-model-challenger.md §Evolution
+// and as Slice 20 of the behavioral-arc-slices-14-16-codex.md fold-in schedule.
 const ADR_REVIEW_MINIMAL_KEYS: string[] = ['reviewer', 'date'];
 const ADR_REVIEW_VERDICT_KEYS: string[] = ['opening_verdict', 'closing_verdict'];
+
+// Arc reviews (behavioral-arc-slices-14-16-codex.md, etc.) span multiple commits
+// rather than a single contract or ADR. Minimal shape mirrors the ADR pair with
+// arc-specific target/version fields. Established in Slice 17 alongside
+// specs/reviews/behavioral-arc-slices-14-16-codex.md.
+const ARC_REVIEW_REQUIRED_KEYS: string[] = [
+  'arc_target',
+  'arc_version',
+  'reviewer_model',
+  'review_kind',
+  'review_date',
+  'opening_verdict',
+  'closing_verdict',
+  'authored_by',
+];
 
 // Accepted verdict shapes in contract-review records. Prefix-match plus
 // optional parenthetical suffix (observed examples include
@@ -97,9 +113,10 @@ function listContractFiles(): string[] {
     .map((name) => resolve(CONTRACTS_DIR, name));
 }
 
-function classifyReview(file: string): 'contract' | 'adr' | 'unknown' {
+function classifyReview(file: string): 'contract' | 'adr' | 'arc' | 'unknown' {
   const base = basename(file);
   if (/^adr-/.test(base)) return 'adr';
+  if (/^(?:behavioral-arc|arc)-/.test(base)) return 'arc';
   if (/-v\d+\.\d+-codex\.md$/.test(base)) return 'contract';
   return 'unknown';
 }
@@ -139,11 +156,11 @@ describe('cross-model-challenger — CHALLENGER-I3 review records are recorded a
     expect(reviewFiles.length).toBeGreaterThan(0);
   });
 
-  it('every review file is classifiable as contract-review or ADR-review', () => {
+  it('every review file is classifiable as contract-, ADR-, or arc-review', () => {
     for (const path of reviewFiles) {
       expect(
         classifyReview(path),
-        `${path}: filename does not match contract-review or ADR-review pattern.`,
+        `${path}: filename does not match contract-review, ADR-review, or arc-review pattern.`,
       ).not.toBe('unknown');
     }
   });
@@ -199,6 +216,16 @@ describe('cross-model-challenger — CHALLENGER-I3 review records are recorded a
       }
       for (const key of ADR_REVIEW_VERDICT_KEYS) {
         expect(fm.has(key), `${path}: ADR review missing "${key}".`).toBe(true);
+      }
+    }
+  });
+
+  it('every arc-review record carries the eight required frontmatter keys', () => {
+    for (const path of reviewFiles) {
+      if (classifyReview(path) !== 'arc') continue;
+      const fm = parseFrontmatter(readFileSync(path, 'utf-8'));
+      for (const key of ARC_REVIEW_REQUIRED_KEYS) {
+        expect(fm.has(key), `${path}: arc review missing "${key}".`).toBe(true);
       }
     }
   });
