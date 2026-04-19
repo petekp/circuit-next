@@ -7,6 +7,10 @@ last_updated: 2026-04-19
 depends_on: [ids, step, selection-policy]
 enforces_also_in: [src/schemas/config.ts, src/schemas/event.ts]
 codex_adversarial_review: specs/reviews/adapter-md-v0.1-codex.md
+artifact_ids:
+  - adapter.registry
+  - adapter.reference
+  - adapter.resolved
 ---
 
 # Adapter Contract

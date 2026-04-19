@@ -3,8 +3,10 @@ contract: workflow
 status: draft
 version: 0.1
 schema_source: src/schemas/workflow.ts
-last_updated: 2026-04-18
+last_updated: 2026-04-19
 depends_on: [step, phase, rigor, lane, selection-policy]
+artifact_ids:
+  - workflow.definition
 ---
 
 # Workflow Contract

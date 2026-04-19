@@ -6,6 +6,7 @@ export * from './gate.js';
 export * from './ids.js';
 export * from './lane.js';
 export * from './phase.js';
+export * from './primitives.js';
 export * from './rigor.js';
 export * from './role.js';
 export * from './run.js';

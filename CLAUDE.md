@@ -15,12 +15,20 @@ and a narrow cross-model challenger.
 
 ## Core methodology (do not abbreviate)
 
-The methodology is authoritative at `specs/methodology/decision.md`. Every
+The methodology is authoritative at `specs/methodology/decision.md`, with
+Slice 7 amendments in `specs/adrs/ADR-0003-authority-graph-gate.md`. Every
 agent slice must honor it. Four pillars:
 
-1. **Contract-First core.** Truth lives in executable specs + property tests
-   authored before implementation. Contracts are the external grounding the
-   agent writes against.
+1. **Contract-First core (conditional).** For **greenfield** surfaces,
+   truth lives in executable specs + property tests authored before
+   implementation. For **successor-to-live**, **legacy-compatible**,
+   **migration-source**, or **external-protocol** surfaces, contract
+   authorship is **blocked** until ADR-0003 authority-graph classification
+   is complete. Before drafting any contract, classify every touched
+   artifact in `specs/artifacts.json` and bind the contract frontmatter to
+   `artifact_ids`. Clean break is allowed, but it must be explicit;
+   **clean break does not mean greenfield**. See
+   `specs/artifacts.md` for the graph and ADR-0003 for the full gate.
 2. **Tiny-Step-Ratcheting lane discipline.** Every slice declares one of six
    lanes: Ratchet-Advance, Equivalence Refactor, Migration Escrow, Discovery,
    Disposable, Break-Glass. Slices are bounded to ≤30 min wall-clock.
@@ -30,8 +38,11 @@ agent slice must honor it. Four pillars:
 4. **Narrow cross-model challenger.** A different model (Codex) produces an
    objection list — not an approval — for: ratchet changes, contract-relaxation
    ADRs, migration escrows, discovery-decision promotion, and any request to
-   loosen a gate. This is **one Swiss-cheese layer**, not independent
-   corroboration (Knight & Leveson 1986 correlation applies).
+   loosen a gate. This is **adversarial lint, not independent corroboration**.
+   Claude and Codex share training distribution; Knight & Leveson 1986
+   shows correlated failures, not independent ones. The challenger cannot
+   replace authority mapping, live/reference evidence, fixture parity
+   where compatibility is required, or state-machine/property tests.
 
 ## Phase discipline
 

@@ -1,0 +1,273 @@
+---
+adr: 0003
+title: Authority-Graph Gate and Compatibility Posture
+status: Accepted
+date: 2026-04-19
+author: operator
+supersedes: none
+related: ADR-0001, ADR-0002
+---
+
+# ADR-0003 — Authority-Graph Gate and Compatibility Posture
+
+## Context
+
+The methodology (ADR-0001, `specs/methodology/decision.md`, `CLAUDE.md` pillar
+1) treats **Contract-First** as its core: "truth lives in executable specs +
+property tests authored before implementation." Six Phase 1 contract slices
+consumed this absolutely. They produced 252 passing tests, `tsc --strict`
+clean, biome clean, and an 8-green drift audit. Quality signals looked high.
+
+A pre-authoring adversarial review on the then-upcoming continuity contract
+surfaced a structural failure mode the existing discipline did not catch:
+
+> Contract authorship proceeded from imagined shapes. Several existing
+> schemas (continuity, `record_id`, transitive `.strict()` on aggregates) had
+> structural gaps that would have shipped as normative contracts if the
+> continuity slice had executed on the published plan.
+
+Self-audit identified six recurring themes; a narrow cross-model challenger
+(Codex) collapsed them to three root causes:
+
+1. **Invention-before-extraction** — the agent drafted normative structure
+   without first characterizing the live reference surface or declaring that
+   no such reference existed.
+2. **Ceremony-without-enforcement** — lane declarations, framing triplets,
+   and citation rules are markdown discipline; nothing **fails the build**
+   when they are applied to an artifact that has no grounding in live or
+   reference evidence.
+3. **Control-plane / data-plane confusion** — the existing contracts bind
+   runtime schemas to on-disk artifacts without making the authority
+   relationship between a contract, its schema file, its on-disk path, its
+   writer, its reader, and its resolver explicit or machine-checkable.
+
+The naive fix — "always extract live behavior first" — fails on a rewrite.
+`circuit-next` is from-scratch (CLAUDE.md: "previous-generation Circuit is
+read-only reference"; `specs/risks.md` records the reference-contamination
+risk). Forcing fixture parity with live old Circuit artifacts would re-admit
+accidental shape as normative and violate ADR-0002's citation rule.
+
+The opposite reaction — "mark everything greenfield because the rewrite is
+clean-break" — is exactly what allowed the original failure. Continuity is
+not greenfield. There is a live on-disk surface today at
+`~/Code/circuit/.circuit/control-plane/` that circuit-next will replace.
+Pretending the live surface does not exist re-enables the imagine-and-draft
+pattern.
+
+The correct category is neither. This ADR introduces it.
+
+## Decision
+
+We adopt an **Authority-Graph Gate** as a first-class pre-condition for
+contract authorship in circuit-next. The gate machine-enforces classification
+of every artifact a contract governs **before** the contract can be
+authored.
+
+### Five surface classes + one discovery marker
+
+Every artifact declared in `specs/artifacts.json` MUST carry exactly one
+`surface_class` from the following closed set:
+
+| Class | When to use |
+|---|---|
+| **greenfield** | No existing live or reference runtime surface materially informs this artifact. The artifact is invented by circuit-next. |
+| **successor-to-live** | circuit-next is designing a new surface that replaces or reinterprets a live Circuit surface, but direct runtime compatibility is not required. The live surface must be characterized; the new surface may reject legacy records at runtime. |
+| **legacy-compatible** | circuit-next must directly parse, read, or write existing Circuit artifacts at runtime. Fixture parity and differential tests are required. |
+| **migration-source** | Existing Circuit artifacts are NOT accepted by normal runtime paths, but MAY be consumed by a future explicit migration/import tool. The importer is a separate contract; it does not live inside the runtime schema. |
+| **external-protocol** | Shape is constrained by an external API, file format, or third-party protocol. Characterization is against the external spec, not live Circuit. |
+| **unknown-blocking** | (Discovery marker) The relationship to prior, live, or external reality is unknown. Contracts touching this artifact MAY NOT be drafted until the class is resolved. |
+
+### Clean break is not greenfield
+
+We explicitly reject the false binary "clean break = greenfield".
+
+A **successor-to-live** surface may reject legacy runtime compatibility
+outright, but it must still record:
+
+- which live or reference surface it supersedes,
+- when that surface was characterized,
+- the observed top-level shape of the live surface at that date,
+- the explicit decision that direct runtime compatibility is out of scope,
+- the migration policy (deferred, planned-as-migration-source, or never).
+
+This keeps the discipline honest. It prevents the agent from pretending a
+surface is greenfield in order to skip extraction work.
+
+### Contract-First is conditional
+
+The Contract-First pillar (ADR-0001, CLAUDE.md pillar 1) previously read as
+absolute: truth lives in specs authored before implementation. This slice
+narrows it:
+
+- **Greenfield surfaces.** Contract-First applies as written. Authorship
+  proceeds against the absent prior art.
+- **successor-to-live, legacy-compatible, migration-source,
+  external-protocol surfaces.** Contract authorship is **blocked** until the
+  artifact authority graph is enumerated in `specs/artifacts.json` and any
+  class-specific preconditions are met:
+  - **legacy-compatible:** representative sanitized fixtures committed under
+    `tests/fixtures/reference/legacy-circuit/` AND fixture-parity tests
+    registered.
+  - **successor-to-live:** compatibility posture declared
+    (`compatibility_policy`, `legacy_parse_policy`, `migration_policy`) AND
+    reference characterization committed under
+    `specs/reference/legacy-circuit/`.
+  - **migration-source:** importer/migration contract drafted separately;
+    runtime admission paths MUST NOT accept these artifacts without
+    explicit discrimination.
+  - **external-protocol:** the external spec is cited; observed divergence
+    between the spec and real traffic is recorded before contract
+    authorship.
+
+### Machine enforcement, not markdown discipline
+
+Authority-graph classification is **not** a new piece of prose in each
+contract's frontmatter that a careful reviewer is supposed to notice. It is:
+
+1. A machine-readable `specs/artifacts.json` file defining the artifact
+   authority graph (schema in `specs/artifacts.md`).
+2. An `artifact_ids: []` frontmatter key on every contract in
+   `specs/contracts/` binding the contract to one or more artifacts in the
+   graph.
+3. `scripts/audit.mjs` **fails red** on:
+   - missing or invalid `specs/artifacts.json`,
+   - duplicate artifact ids,
+   - unknown `surface_class` or `compatibility_policy`,
+   - any contract lacking `artifact_ids` frontmatter,
+   - any contract citing an artifact not in the graph,
+   - any referenced artifact missing required base fields,
+   - any `successor-to-live` artifact missing `reference_surfaces`,
+     `reference_evidence`, `migration_policy`, or `legacy_parse_policy`, or
+     having `compatibility_policy=unknown`,
+   - any `legacy-compatible` artifact without committed fixture paths and
+     fixture-parity test registration,
+   - any artifact with `path_derived_fields` where those fields are not
+     documented as using a path-safe primitive,
+   - any disagreement between `README.md` and `PROJECT_STATE.md` on current
+     phase,
+   - any `specs/contracts/continuity.md` appearing before `continuity.record`
+     and `continuity.index` are present in `specs/artifacts.json` with
+     non-unknown compatibility posture.
+
+4. `tests/contracts/artifact-authority.test.ts` asserts the same invariants
+   locally, so a developer sees the failure at `npm run test` rather than at
+   `npm run audit`.
+
+This is intentionally redundant. Tests give local proof; the audit gives
+workflow enforcement at commit boundaries.
+
+### Challenger downgrade
+
+ADR-0001 and CLAUDE.md previously framed the narrow cross-model challenger
+as "one Swiss-cheese layer (Knight & Leveson 1986 correlation applies)".
+That framing quietly implies some diversity-of-failure protection. It
+should not.
+
+Claude and Codex share training distribution, training recipe family, and
+post-training alignment pressure. Knight & Leveson's 1986 result shows that
+independently-developed implementations of the same specification produce
+**correlated** failures — not independent ones. Applying that result to
+two LLMs with shared provenance is a strong *negative* signal, not a Swiss
+cheese layer.
+
+The honest framing is:
+
+> The cross-model challenger is **adversarial lint**, not independent
+> corroboration. It catches a subset of local reasoning errors the primary
+> model would have missed under its default sampling, but it cannot
+> substitute for authority mapping, live or reference evidence, fixture
+> parity where compatibility is required, differential tests, state-machine
+> tests, or migration rehearsal.
+
+CLAUDE.md pillar 4 is updated to match in this slice.
+
+### Continuity is successor-to-live, clean-break
+
+The motivating artifact — continuity — resolves to:
+
+- `continuity.record` → `surface_class: successor-to-live`,
+  `compatibility_policy: clean-break`,
+  `legacy_parse_policy: reject`,
+  `migration_policy: deferred; no transparent runtime parse of old Circuit
+  records`.
+- `continuity.index` → same posture.
+
+circuit-next will **not** directly parse old Circuit continuity records
+through normal runtime paths. Old Circuit continuity is reference evidence
+and a possible future migration-source input, not a runtime compatibility
+requirement. The reference characterization lives at
+`specs/reference/legacy-circuit/continuity-characterization.md`.
+
+This slice does **not** draft `specs/contracts/continuity.md`. That is
+deferred to the next slice, now unblocked under the gate.
+
+## Consequences
+
+### Immediate (this slice)
+
+- `specs/adrs/ADR-0003-authority-graph-gate.md` (this file).
+- `specs/artifacts.json` + `specs/artifacts.md` with 12 artifact ids
+  backfilled for existing contracts and the two continuity surfaces.
+- `src/schemas/primitives.ts` introducing `ControlPlaneFileStem` for
+  path-derived identity fields.
+- `artifact_ids: []` frontmatter on all six existing Phase 1 contracts.
+- `scripts/audit.mjs` authority-graph dimension + README/PROJECT_STATE
+  phase-drift check.
+- `specs/reference/legacy-circuit/` with `continuity-characterization.md`
+  based on live inspection.
+- `tests/contracts/primitives.test.ts` and
+  `tests/contracts/artifact-authority.test.ts`.
+- `CLAUDE.md` methodology patch (Contract-First conditional, challenger as
+  adversarial lint).
+- `README.md` + `PROJECT_STATE.md` phase-consistency fix + 252-test
+  rigor qualification.
+
+### Going forward
+
+- No contract may be drafted for an artifact classified `unknown-blocking`.
+- No `specs/contracts/continuity.md` may be committed until both
+  `continuity.record` and `continuity.index` carry non-unknown
+  `compatibility_policy` in `specs/artifacts.json` (enforced by audit).
+- The Phase 2 property harness, when landed, cites `property_ids` that bind
+  to `artifact_ids` through the authority graph. The graph is the canonical
+  join key between normative prose (contract), executable schema (zod), and
+  runtime artifact (on-disk shape).
+- Future `ObservedContinuityRecord` / `ObservedContinuityIndex` style
+  schemas are **not** authored in this slice. They are only appropriate
+  under `legacy-compatible` or `migration-source`, which are operator
+  decisions, not agent defaults.
+
+### Relationship to prior ADRs
+
+- **ADR-0001** (methodology adoption). This ADR narrows pillar 1
+  (Contract-First) and rewords pillar 4 (challenger). It does not reopen
+  the tournament decision or the stress-test survival record.
+- **ADR-0002** (bootstrap discipline). This ADR is compatible with ADR-0002
+  and reinforces it: the authority-graph gate is the machine-enforced
+  counterpart to ADR-0002's markdown-level citation rule and
+  Circuit-as-justification smell audit. Neither ADR admits live Circuit
+  behavior as a justification for circuit-next design; the gate adds
+  mandatory explicit classification instead.
+
+### Reopen conditions
+
+- A slice executes under `unknown-blocking` and the class resolution
+  reveals an artifact whose authority graph cannot be expressed in the
+  current schema (missing metadata columns).
+- Evidence emerges that two independently-trained models (different
+  training distribution, post-training process, and alignment regime)
+  DO produce usefully diverse failures on circuit-next contracts,
+  requiring the challenger to be re-promoted.
+- A future operator decision reclassifies continuity to `legacy-compatible`
+  or `migration-source`, at which point fixture parity tests and a split
+  Observed/Normalized schema become required.
+
+## Citations
+
+- Knight, J. C., & Leveson, N. G. (1986). An experimental evaluation of the
+  assumption of independence in multiversion programming. IEEE TSE.
+- `specs/methodology/decision.md` — tournament methodology.
+- `specs/risks.md` — reference-contamination risk, pre-recorded.
+- `specs/evidence.md` — Phase 0 synthesis.
+- `CLAUDE.md` — methodology pillars (patched in this slice).
+- ADR-0001, ADR-0002.

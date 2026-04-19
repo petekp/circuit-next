@@ -1,6 +1,7 @@
 # circuit-next
 
-**Status: Tier 0 scaffold, pre-contract-authorship. Not yet functional.**
+**Status: Tier 0 scaffold complete; Phase 1 contract authorship temporarily
+paused for Slice 7 Authority-Graph Gate. Not yet functional.**
 
 Claude Code plugin that automates common developer and creative workflows
 through a configurable, evidence-based methodology.
@@ -26,8 +27,11 @@ stress-test survival, accepted risks, and reopen conditions.
 
 ## Current phase
 
-Phase 0 — Evidence Loop. Artifacts land in [`bootstrap/`](bootstrap/). Closes
-with adversarial auditor review before Phase 1 contract authorship begins.
+**Phase 0.5 / Slice 7 — authority-graph hardening** before further contract
+authorship. Phase 0 Evidence Loop closed; Phase 1 contract authorship paused
+pending machine-enforced classification of artifact authority and
+compatibility posture (see
+[`specs/adrs/ADR-0003-authority-graph-gate.md`](specs/adrs/ADR-0003-authority-graph-gate.md)).
 
 See [`PROJECT_STATE.md`](PROJECT_STATE.md) for a live snapshot of where the
 project is, what was just decided, and what comes next.
@@ -40,10 +44,13 @@ circuit-next/
 ├── PROJECT_STATE.md          # Live project state snapshot
 ├── bootstrap/                 # Phase 0 evidence drafts
 ├── specs/
-│   ├── methodology/           # Tournament artifacts (symlinks)
-│   ├── evidence.md             # Phase 0 synthesized output
+│   ├── methodology/             # Tournament artifacts (symlinks)
+│   ├── evidence.md              # Phase 0 synthesized output
 │   ├── domain.md                # Phase 1: ubiquitous language
-│   ├── contracts/              # Phase 1: per-module contracts
+│   ├── artifacts.json           # Authoritative authority graph (ADR-0003)
+│   ├── artifacts.md             # Authority-graph companion doc
+│   ├── contracts/               # Phase 1: per-module contracts
+│   ├── reference/               # Live-surface characterizations
 │   ├── behavioral/              # Phase 1: behavioral concerns
 │   ├── adrs/                    # Architectural decision records
 │   └── risks.md                 # Accepted + open risks ledger

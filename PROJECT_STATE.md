@@ -1,8 +1,45 @@
 # PROJECT_STATE — circuit-next
 
-**Last updated:** 2026-04-19 (autonomy arc slice 6: specs/contracts/adapter.md v0.1)
-**Phase:** 1 — Contract authorship **in progress**. Phase 0 Evidence Loop closed. Five Phase 1 contracts landed: `step.md` (MED #7 closed), `phase.md` (MED #11 closed + Codex objections folded in — v0.1 MED #7 now closed by selection.md SEL-I9), `run.md` (HIGH #1/#2 + MEDs #3-7 + LOWs #8-10 folded in), `selection.md` (Codex REJECT → ACCEPT: 6 HIGH + 4/5 MED + 1 LOW folded in; MED #9 scoped to v0.2), `adapter.md` (Codex REJECT → ACCEPT: 5 HIGH + 3 MED + 1 LOW all folded in; introduces `ResolvedAdapter` split, registry-key parity, own-property closure, role binding, `AdapterReference` export). Bootstrap discipline (ADR-0002) codified; `.circuit/` gitignored; drift-visibility audit (`npm run audit`) enforces the citation rule + lane/framing discipline across every commit.
-**Tier:** 0 — scaffold complete, validated, committed.
+**Last updated:** 2026-04-19 (Slice 7: authority-graph gate)
+**Phase:** 0.5 — Slice 7 Authority-Graph Gate **in progress**. Phase 1
+contract authorship **paused** pending machine-enforced classification.
+Phase 0 Evidence Loop closed. Six Phase 1 contracts landed pre-pause:
+`step.md` (MED #7 closed), `phase.md` (MED #11 closed + Codex objections
+folded in — v0.1 MED #7 now closed by selection.md SEL-I9), `run.md`
+(HIGH #1/#2 + MEDs #3-7 + LOWs #8-10 folded in), `selection.md` (Codex
+REJECT → ACCEPT: 6 HIGH + 4/5 MED + 1 LOW folded in; MED #9 scoped to
+v0.2), `adapter.md` (Codex REJECT → ACCEPT: 5 HIGH + 3 MED + 1 LOW all
+folded in; `ResolvedAdapter` split, registry-key parity, own-property
+closure, role binding, `AdapterReference` export), plus `workflow.md`
+skeleton. Bootstrap discipline (ADR-0002) codified; `.circuit/`
+gitignored; drift-visibility audit (`npm run audit`) now enforces
+authority-graph classification + compatibility posture + README/PROJECT_STATE
+phase consistency (ADR-0003).
+
+**Slice 7 decision block:**
+- Phase 1 contract authorship is paused until Slice 7 lands.
+- Slice 7 introduces ADR-0003 Authority-Graph Gate, `specs/artifacts.json`
+  (authoritative authority graph, 12 artifact ids enumerated),
+  `specs/artifacts.md` (human companion), contract `artifact_ids`
+  frontmatter binding, `ControlPlaneFileStem` path-safe primitive,
+  README/PROJECT_STATE phase consistency audit, and clean-break
+  successor-to-live classification for continuity.
+- circuit-next will **not** directly parse old Circuit continuity records
+  through normal runtime paths. Old Circuit continuity is reference
+  evidence and possible future migration-source input, not a runtime
+  compatibility requirement. Reference characterization captured at
+  `specs/reference/legacy-circuit/continuity-characterization.md`.
+- `specs/contracts/continuity.md` remains **un**drafted in this slice;
+  non-goal enforced. It unblocks after Slice 7 commits because the gate
+  now guarantees `continuity.record` and `continuity.index` are
+  classified and characterized.
+
+**Tier:** 0 — scaffold complete, validated, committed. Tests: 252 were
+green pre-Slice-7, but pre-Slice-7 they did not enforce authority-graph
+coverage or successor-to-live compatibility posture. Slice 7 adds
+`tests/contracts/primitives.test.ts` (+27) and
+`tests/contracts/artifact-authority.test.ts` (+17) for a post-slice total
+near 296.
 
 ## One-minute read
 

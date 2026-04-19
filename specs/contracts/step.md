@@ -3,8 +3,10 @@ contract: step
 status: draft
 version: 0.1
 schema_source: src/schemas/step.ts
-last_updated: 2026-04-18
+last_updated: 2026-04-19
 depends_on: [ids, gate, selection-policy]
+artifact_ids:
+  - step.definition
 ---
 
 # Step Contract

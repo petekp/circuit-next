@@ -12,7 +12,7 @@
  */
 
 import { execSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const REPO_ROOT = execSync('git rev-parse --show-toplevel').toString().trim();
@@ -49,6 +49,41 @@ const CITATION_PATTERNS = [
   /CLAUDE\.md/i,
   /\bADR-\d{4}/i,
 ];
+
+const SURFACE_CLASSES = new Set([
+  'greenfield',
+  'successor-to-live',
+  'legacy-compatible',
+  'migration-source',
+  'external-protocol',
+  'unknown-blocking',
+]);
+
+const COMPATIBILITY_POLICIES = new Set(['n/a', 'clean-break', 'parse-legacy', 'unknown']);
+
+const ARTIFACT_REQUIRED_BASE_FIELDS = [
+  'id',
+  'surface_class',
+  'compatibility_policy',
+  'description',
+  'schema_file',
+  'schema_exports',
+  'writers',
+  'readers',
+  'backing_paths',
+  'identity_fields',
+  'dangerous_sinks',
+  'trust_boundary',
+];
+
+const ARTIFACT_NON_GREENFIELD_REQUIRED = [
+  'reference_surfaces',
+  'reference_evidence',
+  'migration_policy',
+  'legacy_parse_policy',
+];
+
+const PATH_SAFE_PRIMITIVES = ['ControlPlaneFileStem'];
 
 function sh(cmd) {
   return execSync(cmd, { cwd: REPO_ROOT }).toString();
@@ -140,6 +175,294 @@ function verifyStatus() {
     const tail = (err.stdout?.toString() ?? err.message ?? '').slice(-600);
     return { pass: false, detail: tail };
   }
+}
+
+function readFrontmatter(absPath) {
+  if (!existsSync(absPath)) return { ok: false, error: 'missing' };
+  const content = readFileSync(absPath, 'utf-8');
+  if (!content.startsWith('---\n')) return { ok: false, error: 'no-frontmatter' };
+  const end = content.indexOf('\n---', 4);
+  if (end === -1) return { ok: false, error: 'unterminated-frontmatter' };
+  const fm = content.slice(4, end);
+  const result = {};
+  let _currentKey = null;
+  let currentList = null;
+  for (const rawLine of fm.split('\n')) {
+    const line = rawLine.replace(/\r$/, '');
+    if (!line.trim()) {
+      _currentKey = null;
+      currentList = null;
+      continue;
+    }
+    const listMatch = line.match(/^\s*-\s*(.+?)\s*$/);
+    if (listMatch && currentList !== null) {
+      currentList.push(listMatch[1].replace(/^['"]|['"]$/g, ''));
+      continue;
+    }
+    const kv = line.match(/^([a-zA-Z_][a-zA-Z0-9_-]*)\s*:\s*(.*?)\s*$/);
+    if (!kv) continue;
+    const [, key, value] = kv;
+    if (value === '') {
+      const list = [];
+      result[key] = list;
+      _currentKey = key;
+      currentList = list;
+    } else {
+      const bracketList = value.match(/^\[(.*)\]$/);
+      if (bracketList) {
+        const items = bracketList[1]
+          .split(',')
+          .map((s) => s.trim().replace(/^['"]|['"]$/g, ''))
+          .filter(Boolean);
+        result[key] = items;
+      } else {
+        result[key] = value.replace(/^['"]|['"]$/g, '');
+      }
+      _currentKey = key;
+      currentList = null;
+    }
+  }
+  return { ok: true, frontmatter: result };
+}
+
+function loadArtifactsGraph() {
+  const artifactsJsonPath = join(REPO_ROOT, 'specs', 'artifacts.json');
+  const artifactsMdPath = join(REPO_ROOT, 'specs', 'artifacts.md');
+  const issues = [];
+
+  if (!existsSync(artifactsJsonPath)) {
+    issues.push('specs/artifacts.json missing');
+  }
+  if (!existsSync(artifactsMdPath)) {
+    issues.push('specs/artifacts.md missing');
+  }
+  if (issues.length > 0) return { issues, graph: null };
+
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync(artifactsJsonPath, 'utf-8'));
+  } catch (err) {
+    issues.push(`specs/artifacts.json is invalid JSON: ${err.message}`);
+    return { issues, graph: null };
+  }
+
+  if (!parsed || typeof parsed !== 'object') {
+    issues.push('specs/artifacts.json is not an object');
+    return { issues, graph: null };
+  }
+  if (!Array.isArray(parsed.artifacts)) {
+    issues.push('specs/artifacts.json is missing "artifacts" array');
+    return { issues, graph: null };
+  }
+
+  return { issues, graph: parsed };
+}
+
+function checkAuthorityGraph() {
+  const findings = [];
+  const { issues: loadIssues, graph } = loadArtifactsGraph();
+  for (const iss of loadIssues) findings.push({ level: 'red', detail: iss });
+  if (!graph) {
+    return { level: 'red', findings, summary: 'authority graph absent' };
+  }
+
+  const ids = graph.artifacts.map((a) => a.id);
+  const seen = new Set();
+  for (const id of ids) {
+    if (seen.has(id)) {
+      findings.push({ level: 'red', detail: `duplicate artifact id: ${id}` });
+    }
+    seen.add(id);
+  }
+
+  const byId = new Map(graph.artifacts.map((a) => [a.id, a]));
+
+  for (const artifact of graph.artifacts) {
+    if (!SURFACE_CLASSES.has(artifact.surface_class)) {
+      findings.push({
+        level: 'red',
+        detail: `${artifact.id}: unknown surface_class "${artifact.surface_class}"`,
+      });
+    }
+    if (!COMPATIBILITY_POLICIES.has(artifact.compatibility_policy)) {
+      findings.push({
+        level: 'red',
+        detail: `${artifact.id}: unknown compatibility_policy "${artifact.compatibility_policy}"`,
+      });
+    }
+    for (const field of ARTIFACT_REQUIRED_BASE_FIELDS) {
+      if (!Object.hasOwn(artifact, field)) {
+        findings.push({
+          level: 'red',
+          detail: `${artifact.id}: missing required base field "${field}"`,
+        });
+      }
+    }
+    const nonGreenfieldNonExternal =
+      artifact.surface_class !== 'greenfield' && artifact.surface_class !== 'external-protocol';
+    if (nonGreenfieldNonExternal) {
+      for (const field of ARTIFACT_NON_GREENFIELD_REQUIRED) {
+        if (!Object.hasOwn(artifact, field)) {
+          findings.push({
+            level: 'red',
+            detail: `${artifact.id} (${artifact.surface_class}): missing ${field}`,
+          });
+        }
+      }
+      if (artifact.compatibility_policy === 'unknown') {
+        findings.push({
+          level: 'red',
+          detail: `${artifact.id} (${artifact.surface_class}): compatibility_policy=unknown blocks contract authorship`,
+        });
+      }
+    }
+    if (artifact.surface_class === 'legacy-compatible') {
+      const fixtureDir = join(REPO_ROOT, 'tests', 'fixtures', 'reference', 'legacy-circuit');
+      if (!existsSync(fixtureDir)) {
+        findings.push({
+          level: 'red',
+          detail: `${artifact.id} (legacy-compatible): missing tests/fixtures/reference/legacy-circuit/`,
+        });
+      }
+    }
+    if (Array.isArray(artifact.reference_evidence)) {
+      for (const relPath of artifact.reference_evidence) {
+        const abs = join(REPO_ROOT, relPath);
+        if (!existsSync(abs)) {
+          findings.push({
+            level: 'red',
+            detail: `${artifact.id}: reference_evidence file missing — ${relPath}`,
+          });
+        }
+      }
+    }
+    if (Array.isArray(artifact.path_derived_fields) && artifact.path_derived_fields.length > 0) {
+      const contractPath = artifact.contract ? join(REPO_ROOT, artifact.contract) : null;
+      let primitiveCited = false;
+      if (contractPath && existsSync(contractPath)) {
+        const contractText = readFileSync(contractPath, 'utf-8');
+        primitiveCited = PATH_SAFE_PRIMITIVES.some((p) => contractText.includes(p));
+      }
+      if (!primitiveCited && artifact.contract !== null) {
+        findings.push({
+          level: 'red',
+          detail: `${artifact.id}: path_derived_fields present but no path-safe primitive (${PATH_SAFE_PRIMITIVES.join(', ')}) cited in contract ${artifact.contract ?? '(none)'}`,
+        });
+      }
+    }
+    if (artifact.schema_file) {
+      const schemaAbs = join(REPO_ROOT, artifact.schema_file);
+      if (!existsSync(schemaAbs)) {
+        findings.push({
+          level: 'red',
+          detail: `${artifact.id}: schema_file missing — ${artifact.schema_file}`,
+        });
+      }
+    }
+  }
+
+  const contractsDir = join(REPO_ROOT, 'specs', 'contracts');
+  const contractFiles = existsSync(contractsDir)
+    ? readdirSync(contractsDir).filter((f) => f.endsWith('.md'))
+    : [];
+  for (const file of contractFiles) {
+    const absContract = join(contractsDir, file);
+    const { ok, frontmatter, error } = readFrontmatter(absContract);
+    if (!ok) {
+      findings.push({
+        level: 'red',
+        detail: `specs/contracts/${file}: frontmatter ${error ?? 'unreadable'}`,
+      });
+      continue;
+    }
+    const artifactIds = frontmatter.artifact_ids;
+    if (!Array.isArray(artifactIds) || artifactIds.length === 0) {
+      findings.push({
+        level: 'red',
+        detail: `specs/contracts/${file}: missing or empty artifact_ids frontmatter`,
+      });
+      continue;
+    }
+    for (const id of artifactIds) {
+      if (!byId.has(id)) {
+        findings.push({
+          level: 'red',
+          detail: `specs/contracts/${file}: artifact_ids references ${id} not in specs/artifacts.json`,
+        });
+      }
+    }
+  }
+
+  const continuityContract = join(REPO_ROOT, 'specs', 'contracts', 'continuity.md');
+  if (existsSync(continuityContract)) {
+    for (const requiredId of ['continuity.record', 'continuity.index']) {
+      const art = byId.get(requiredId);
+      if (!art) {
+        findings.push({
+          level: 'red',
+          detail: `specs/contracts/continuity.md exists but ${requiredId} is absent from specs/artifacts.json`,
+        });
+      } else if (art.compatibility_policy === 'unknown') {
+        findings.push({
+          level: 'red',
+          detail: `specs/contracts/continuity.md exists but ${requiredId} has compatibility_policy=unknown`,
+        });
+      }
+    }
+  }
+
+  const level = findings.some((f) => f.level === 'red') ? 'red' : 'green';
+  return {
+    level,
+    findings,
+    summary:
+      level === 'green'
+        ? `${graph.artifacts.length} artifacts, all classified; ${contractFiles.length} contracts bound`
+        : `${findings.length} authority-graph violation${findings.length === 1 ? '' : 's'}`,
+  };
+}
+
+const PHASE_PATTERNS = [
+  /\*\*Phase[:*]+\*\*\s*([0-9]+(?:\.[0-9]+)?)/i,
+  /\*\*Phase\s+([0-9]+(?:\.[0-9]+)?)/i,
+  /Current phase\s*[:\-—]\s*Phase\s*([0-9]+(?:\.[0-9]+)?)/i,
+  /^##\s+Phase\s+([0-9]+(?:\.[0-9]+)?)\s*[—\-]/im,
+  /^\s*Phase\s+([0-9]+(?:\.[0-9]+)?)\s*[—\-]/im,
+];
+
+function extractPhaseMention(text) {
+  for (const pattern of PHASE_PATTERNS) {
+    const m = text.match(pattern);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+function checkPhaseDrift() {
+  const readmePath = join(REPO_ROOT, 'README.md');
+  const projectStatePath = join(REPO_ROOT, 'PROJECT_STATE.md');
+  if (!existsSync(readmePath) || !existsSync(projectStatePath)) {
+    return { level: 'yellow', detail: 'README.md or PROJECT_STATE.md missing' };
+  }
+  const readme = readFileSync(readmePath, 'utf-8');
+  const projectState = readFileSync(projectStatePath, 'utf-8');
+  const readmeStatusSlice = readme.split('\n').slice(0, 50).join('\n');
+  const psStatusSlice = projectState.split('\n').slice(0, 10).join('\n');
+  const readmePhase = extractPhaseMention(readmeStatusSlice);
+  const psPhase = extractPhaseMention(psStatusSlice);
+  if (readmePhase === null || psPhase === null) {
+    return {
+      level: 'yellow',
+      detail: `could not extract phase from README (${readmePhase}) or PROJECT_STATE (${psPhase})`,
+    };
+  }
+  if (readmePhase !== psPhase) {
+    return {
+      level: 'red',
+      detail: `README says Phase ${readmePhase}; PROJECT_STATE says Phase ${psPhase}`,
+    };
+  }
+  return { level: 'green', detail: `README and PROJECT_STATE agree on Phase ${readmePhase}` };
 }
 
 function commitIsSliceShaped(commit) {
@@ -361,7 +684,40 @@ function main() {
     });
   }
 
-  // Check 8: npm run verify currently green.
+  // Check 8: Authority graph (ADR-0003).
+  const authority = checkAuthorityGraph();
+  if (authority.level === 'green') {
+    counters.green++;
+    findings.push({
+      level: 'green',
+      check: 'Authority graph (ADR-0003)',
+      detail: authority.summary,
+    });
+  } else {
+    counters.red++;
+    const bullets = authority.findings
+      .slice(0, 20)
+      .map((f) => `    - ${f.detail}`)
+      .join('\n');
+    const more =
+      authority.findings.length > 20 ? `\n    - (+${authority.findings.length - 20} more)` : '';
+    findings.push({
+      level: 'red',
+      check: 'Authority graph (ADR-0003)',
+      detail: `${authority.summary}:\n${bullets}${more}`,
+    });
+  }
+
+  // Check 9: README / PROJECT_STATE phase consistency.
+  const phaseDrift = checkPhaseDrift();
+  counters[phaseDrift.level]++;
+  findings.push({
+    level: phaseDrift.level,
+    check: 'Phase consistency (README ↔ PROJECT_STATE)',
+    detail: phaseDrift.detail,
+  });
+
+  // Check 10: npm run verify currently green.
   const verify = verifyStatus();
   if (verify.pass) {
     counters.green++;

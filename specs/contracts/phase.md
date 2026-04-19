@@ -3,9 +3,11 @@ contract: phase
 status: draft
 version: 0.1
 schema_source: src/schemas/phase.ts
-last_updated: 2026-04-18
+last_updated: 2026-04-19
 depends_on: [ids, step]
 closes: [adversarial-review-med-11-spine-policy]
+artifact_ids:
+  - phase.definition
 ---
 
 # Phase Contract

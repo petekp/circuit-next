@@ -1,0 +1,359 @@
+{
+  "version": 1,
+  "artifacts": [
+    {
+      "id": "workflow.definition",
+      "surface_class": "greenfield",
+      "compatibility_policy": "n/a",
+      "description": "Typed, versioned definition of a multi-step automation. Compiles to a stable execution graph the runtime can replay from events.",
+      "contract": "specs/contracts/workflow.md",
+      "schema_file": "src/schemas/workflow.ts",
+      "schema_exports": ["Workflow", "EntryMode", "EntrySignals"],
+      "writers": ["circuit-next workflow author (offline)"],
+      "readers": ["circuit-next engine (bootstrap, dispatch, routing)"],
+      "resolvers": [],
+      "backing_paths": ["<plugin>/skills/<workflow-id>/circuit.yaml"],
+      "identity_fields": ["id"],
+      "path_derived_fields": [],
+      "dangerous_sinks": [
+        "step routing resolution",
+        "phase spine enforcement",
+        "entry mode dispatch"
+      ],
+      "trust_boundary": "plugin-authored static definition; loaded read-only at runtime; never model-authored during a run",
+      "reference_surfaces": [],
+      "reference_evidence": [],
+      "migration_policy": "n/a",
+      "legacy_parse_policy": "n/a",
+      "dangling_reference_policy": "n/a"
+    },
+    {
+      "id": "step.definition",
+      "surface_class": "greenfield",
+      "compatibility_policy": "n/a",
+      "description": "Atomic unit of execution inside a Phase. Three variants (synthesis, checkpoint, dispatch) discriminated by kind.",
+      "contract": "specs/contracts/step.md",
+      "schema_file": "src/schemas/step.ts",
+      "schema_exports": [
+        "Step",
+        "SynthesisStep",
+        "CheckpointStep",
+        "DispatchStep",
+        "DispatchRole",
+        "ArtifactRef"
+      ],
+      "writers": ["circuit-next workflow author (offline)"],
+      "readers": ["circuit-next engine (step execution, gate evaluation)"],
+      "resolvers": [],
+      "backing_paths": ["<plugin>/skills/<workflow-id>/circuit.yaml (as Workflow.steps[])"],
+      "identity_fields": ["id"],
+      "path_derived_fields": [],
+      "dangerous_sinks": ["route target resolution", "gate evaluation", "dispatch role binding"],
+      "trust_boundary": "plugin-authored static definition; loaded read-only at runtime",
+      "reference_surfaces": [],
+      "reference_evidence": [],
+      "migration_policy": "n/a",
+      "legacy_parse_policy": "n/a",
+      "dangling_reference_policy": "n/a"
+    },
+    {
+      "id": "phase.definition",
+      "surface_class": "greenfield",
+      "compatibility_policy": "n/a",
+      "description": "Named, ordered grouping of Steps within a Workflow. May align with canonical spine or be workflow-specific.",
+      "contract": "specs/contracts/phase.md",
+      "schema_file": "src/schemas/phase.ts",
+      "schema_exports": ["Phase", "CanonicalPhase", "CANONICAL_PHASES", "SpinePolicy"],
+      "writers": ["circuit-next workflow author (offline)"],
+      "readers": ["circuit-next engine (phase advancement, spine enforcement)"],
+      "resolvers": [],
+      "backing_paths": ["<plugin>/skills/<workflow-id>/circuit.yaml (as Workflow.phases[])"],
+      "identity_fields": ["id"],
+      "path_derived_fields": [],
+      "dangerous_sinks": [
+        "spine policy enforcement",
+        "phase-scoped selection composition",
+        "review/verify skip detection"
+      ],
+      "trust_boundary": "plugin-authored static definition; loaded read-only at runtime",
+      "reference_surfaces": [],
+      "reference_evidence": [],
+      "migration_policy": "n/a",
+      "legacy_parse_policy": "n/a",
+      "dangling_reference_policy": "n/a"
+    },
+    {
+      "id": "run.log",
+      "surface_class": "greenfield",
+      "compatibility_policy": "n/a",
+      "description": "Append-only sequence of events for a single Run. First event is bootstrap; sequence is 0-based contiguous; closure is singleton with no post-closure events.",
+      "contract": "specs/contracts/run.md",
+      "schema_file": "src/schemas/run.ts",
+      "schema_exports": ["RunLog"],
+      "writers": ["circuit-next engine (event append during run execution)"],
+      "readers": [
+        "circuit-next engine (projection reconstruction)",
+        "circuit-next resume (handoff-side)",
+        "operator tooling (audit, replay)"
+      ],
+      "resolvers": ["run.projection"],
+      "backing_paths": ["<circuit-next-run-root>/events.ndjson"],
+      "identity_fields": ["run_id"],
+      "path_derived_fields": [],
+      "dangerous_sinks": [
+        "projection reconstruction",
+        "snapshot status derivation",
+        "closure outcome adjudication"
+      ],
+      "trust_boundary": "operator-local persisted state; append-only; never truncated in normal operation",
+      "reference_surfaces": [],
+      "reference_evidence": [],
+      "migration_policy": "n/a",
+      "legacy_parse_policy": "n/a",
+      "dangling_reference_policy": "n/a"
+    },
+    {
+      "id": "run.projection",
+      "surface_class": "greenfield",
+      "compatibility_policy": "n/a",
+      "description": "RunLog-to-Snapshot binding. events_consumed equals log length; bootstrap-frozen fields match; closure-to-status mapping is total by construction.",
+      "contract": "specs/contracts/run.md",
+      "schema_file": "src/schemas/run.ts",
+      "schema_exports": ["RunProjection"],
+      "writers": ["circuit-next engine (projection computation)"],
+      "readers": [
+        "circuit-next engine (state reads)",
+        "circuit-next resume (handoff-side)",
+        "operator tooling (status, audit)"
+      ],
+      "resolvers": [],
+      "backing_paths": ["<circuit-next-run-root>/state.json (derived snapshot)"],
+      "identity_fields": ["run_id"],
+      "path_derived_fields": [],
+      "dangerous_sinks": ["status determination", "closure detection", "resume eligibility"],
+      "trust_boundary": "operator-local derived state; always recomputable from run.log; never authoritative over the log",
+      "reference_surfaces": [],
+      "reference_evidence": [],
+      "migration_policy": "n/a",
+      "legacy_parse_policy": "n/a",
+      "dangling_reference_policy": "n/a"
+    },
+    {
+      "id": "selection.override",
+      "surface_class": "greenfield",
+      "compatibility_policy": "n/a",
+      "description": "Typed override value (model, effort, skills, rigor, invocation_options) contributed by one config layer. JSON-safe invocation_options; strict unknown-key rejection.",
+      "contract": "specs/contracts/selection.md",
+      "schema_file": "src/schemas/selection-policy.ts",
+      "schema_exports": ["SelectionOverride", "SkillOverride", "ProviderScopedModel", "Effort"],
+      "writers": [
+        "circuit-next engine (config layer composition)",
+        "plugin author (defaults)",
+        "operator (user-global, project, invocation)"
+      ],
+      "readers": ["circuit-next engine (selection resolution)"],
+      "resolvers": ["selection.resolution"],
+      "backing_paths": [
+        "<plugin>/skills/<workflow-id>/circuit.yaml (defaults)",
+        "~/.config/circuit-next/config.yaml (user-global)",
+        "<project>/.circuit/config.yaml (project)",
+        "invocation arguments (ephemeral, in-memory)"
+      ],
+      "identity_fields": [],
+      "path_derived_fields": [],
+      "dangerous_sinks": [
+        "model/effort resolution",
+        "skill set composition",
+        "invocation_options passthrough to adapter"
+      ],
+      "trust_boundary": "mixed; plugin-layer is author-signed, operator layers are operator-local",
+      "reference_surfaces": [],
+      "reference_evidence": [],
+      "migration_policy": "n/a",
+      "legacy_parse_policy": "n/a",
+      "dangling_reference_policy": "n/a"
+    },
+    {
+      "id": "selection.resolution",
+      "surface_class": "greenfield",
+      "compatibility_policy": "n/a",
+      "description": "Result of layering overrides under 7-tuple precedence. Identity-keyed applied chain; category-level precedence; ghost-provenance rejection.",
+      "contract": "specs/contracts/selection.md",
+      "schema_file": "src/schemas/selection-policy.ts",
+      "schema_exports": [
+        "SelectionResolution",
+        "ResolvedSelection",
+        "SelectionSource",
+        "SELECTION_PRECEDENCE"
+      ],
+      "writers": ["circuit-next engine (selection resolver)"],
+      "readers": [
+        "circuit-next engine (dispatch-time selection consumption)",
+        "operator tooling (explain-why)"
+      ],
+      "resolvers": [],
+      "backing_paths": [
+        "<circuit-next-run-root>/events.ndjson (as SelectionResolvedEvent payload)"
+      ],
+      "identity_fields": [],
+      "path_derived_fields": [],
+      "dangerous_sinks": [
+        "dispatch model/effort binding",
+        "skill-set final composition",
+        "audit-trail adjudication"
+      ],
+      "trust_boundary": "engine-computed; always reconstructable from ordered overrides",
+      "reference_surfaces": [],
+      "reference_evidence": [],
+      "migration_policy": "n/a",
+      "legacy_parse_policy": "n/a",
+      "dangling_reference_policy": "n/a"
+    },
+    {
+      "id": "adapter.registry",
+      "surface_class": "greenfield",
+      "compatibility_policy": "n/a",
+      "description": "Config-layer map of custom adapter name -> CustomAdapterDescriptor. Registry-key to descriptor-name parity is enforced; reserved names are disjoint.",
+      "contract": "specs/contracts/adapter.md",
+      "schema_file": "src/schemas/config.ts",
+      "schema_exports": ["DispatchConfig", "Config", "ConfigLayer", "LayeredConfig"],
+      "writers": ["plugin author (defaults)", "operator (user-global, project, invocation)"],
+      "readers": ["circuit-next engine (adapter resolution)"],
+      "resolvers": ["adapter.reference", "adapter.resolved"],
+      "backing_paths": [
+        "<plugin>/skills/<workflow-id>/circuit.yaml (defaults)",
+        "~/.config/circuit-next/config.yaml (user-global)",
+        "<project>/.circuit/config.yaml (project)",
+        "invocation arguments (ephemeral, in-memory)"
+      ],
+      "identity_fields": [],
+      "path_derived_fields": [],
+      "dangerous_sinks": [
+        "reserved-name disjointness",
+        "own-property closure (prototype-chain defense)",
+        "registry-key / descriptor-name parity"
+      ],
+      "trust_boundary": "mixed; plugin-layer is author-signed, operator layers are operator-local",
+      "reference_surfaces": [],
+      "reference_evidence": [],
+      "migration_policy": "n/a",
+      "legacy_parse_policy": "n/a",
+      "dangling_reference_policy": "n/a"
+    },
+    {
+      "id": "adapter.reference",
+      "surface_class": "greenfield",
+      "compatibility_policy": "n/a",
+      "description": "Pre-resolution pointer into the adapter registry or a built-in adapter. Three variants (built-in, named, inline custom). Not valid in the event log.",
+      "contract": "specs/contracts/adapter.md",
+      "schema_file": "src/schemas/adapter.ts",
+      "schema_exports": [
+        "AdapterRef",
+        "AdapterReference",
+        "BuiltInAdapter",
+        "BuiltInAdapterRef",
+        "NamedAdapterRef",
+        "CustomAdapterDescriptor",
+        "AdapterName",
+        "RESERVED_ADAPTER_NAMES",
+        "DispatchResolutionSource"
+      ],
+      "writers": ["plugin author (step.adapter)", "operator (CircuitOverride.adapter)"],
+      "readers": ["circuit-next engine (adapter resolver)"],
+      "resolvers": ["adapter.resolved"],
+      "backing_paths": [
+        "<plugin>/skills/<workflow-id>/circuit.yaml (step.adapter)",
+        "Config layer overrides (in-memory, per-layer)"
+      ],
+      "identity_fields": [],
+      "path_derived_fields": [],
+      "dangerous_sinks": [
+        "adapter resolver input",
+        "named-ref vs inline-descriptor discrimination"
+      ],
+      "trust_boundary": "mixed; plugin-layer is author-signed, operator layers are operator-local; MUST NOT appear in run.log",
+      "reference_surfaces": [],
+      "reference_evidence": [],
+      "migration_policy": "n/a",
+      "legacy_parse_policy": "n/a",
+      "dangling_reference_policy": "n/a"
+    },
+    {
+      "id": "adapter.resolved",
+      "surface_class": "greenfield",
+      "compatibility_policy": "n/a",
+      "description": "Post-resolution adapter: either a built-in enum variant or an inlined CustomAdapterDescriptor. Named references MUST NOT appear here. Shape written to DispatchStartedEvent.adapter.",
+      "contract": "specs/contracts/adapter.md",
+      "schema_file": "src/schemas/adapter.ts",
+      "schema_exports": ["ResolvedAdapter"],
+      "writers": ["circuit-next engine (adapter resolver)"],
+      "readers": [
+        "circuit-next engine (dispatch execution)",
+        "operator tooling (event-log replay, audit)"
+      ],
+      "resolvers": [],
+      "backing_paths": ["<circuit-next-run-root>/events.ndjson (as DispatchStartedEvent.adapter)"],
+      "identity_fields": [],
+      "path_derived_fields": [],
+      "dangerous_sinks": [
+        "dispatch command construction",
+        "sandbox / same-process discrimination",
+        "event-log replay fidelity"
+      ],
+      "trust_boundary": "engine-computed; authoritative for dispatch; replay-stable (named refs forbidden by ADAPTER-I10)",
+      "reference_surfaces": [],
+      "reference_evidence": [],
+      "migration_policy": "n/a",
+      "legacy_parse_policy": "n/a",
+      "dangling_reference_policy": "n/a"
+    },
+    {
+      "id": "continuity.record",
+      "surface_class": "successor-to-live",
+      "compatibility_policy": "clean-break",
+      "description": "circuit-next continuity handoff record. Carries goal, next, state, and debt narrative across session boundaries; identity derived from record_id which is used as a filename stem.",
+      "contract": null,
+      "schema_file": "src/schemas/continuity.ts",
+      "schema_exports": ["ContinuityRecord", "StandaloneContinuity", "RunBackedContinuity"],
+      "writers": ["circuit-next engine (handoff save)"],
+      "readers": ["circuit-next resume (explicit resume flow)"],
+      "resolvers": ["continuity.index"],
+      "backing_paths": ["<circuit-next-control-plane>/continuity/records/${record_id}.json"],
+      "identity_fields": ["record_id"],
+      "path_derived_fields": ["record_id"],
+      "dangerous_sinks": [
+        "filesystem path join",
+        "resume selection",
+        "cross-session narrative authority"
+      ],
+      "trust_boundary": "operator-local persisted state; may contain model-authored narrative and path-derived identity",
+      "reference_surfaces": ["legacy-circuit.continuity.record"],
+      "reference_evidence": ["specs/reference/legacy-circuit/continuity-characterization.md"],
+      "migration_policy": "deferred; no transparent runtime parse of old Circuit records. If imported later, a separate migration-source contract is required.",
+      "legacy_parse_policy": "reject",
+      "dangling_reference_policy": "unknown-blocking"
+    },
+    {
+      "id": "continuity.index",
+      "surface_class": "successor-to-live",
+      "compatibility_policy": "clean-break",
+      "description": "circuit-next continuity resolver/index artifact. Points at the pending record and the current attached run; determines which record is authoritative for resume.",
+      "contract": null,
+      "schema_file": "src/schemas/continuity.ts",
+      "schema_exports": ["ContinuityIndex"],
+      "writers": ["circuit-next engine (handoff save, attachment changes)"],
+      "readers": ["circuit-next resume (explicit resume flow)"],
+      "resolvers": [],
+      "backing_paths": ["<circuit-next-control-plane>/continuity/index.json"],
+      "identity_fields": ["record_id"],
+      "path_derived_fields": ["record_id"],
+      "dangerous_sinks": ["resume selection", "record lookup", "dangling reference resolution"],
+      "trust_boundary": "operator-local persisted state; determines which record is authoritative for resume",
+      "reference_surfaces": ["legacy-circuit.continuity.index"],
+      "reference_evidence": ["specs/reference/legacy-circuit/continuity-characterization.md"],
+      "migration_policy": "deferred; no transparent runtime parse of old Circuit index. If imported later, a separate migration-source contract is required.",
+      "legacy_parse_policy": "reject",
+      "dangling_reference_policy": "unknown-blocking"
+    }
+  ]
+}
