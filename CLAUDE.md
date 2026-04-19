@@ -81,6 +81,13 @@ Before implementing, declare in the slice commit or slice PR:
 the acceptance evidence (what would prove it worked), and an **alternate
 framing** (defense against anchoring — Nguyen 2024).
 
+**Trajectory check (before the framing triplet).** Restate in one line each:
+what arc goal this slice serves, what phase goal that arc serves, and whether
+any earlier-completed slice has made this one smaller, obsolete, or
+mis-sequenced. Alternate framing guards against anchoring within the slice;
+the trajectory check guards against arc-level drift when earlier slices shift
+the terrain. Three sentences at slice open, no new artifact.
+
 ## Session hygiene
 
 - `CLAUDE.md` stays under 300 lines; longer content goes to `specs/` with a
