@@ -9,9 +9,9 @@ post_arc_state: b08034a (HEAD, 436 tests, audit 10/0/0)
 reviewer_model: gpt-5-codex via codex exec
 review_kind: methodology-adherence retrospective
 review_date: 2026-04-19
-verdict: REJECT pending HIGH fold-ins
+verdict: REJECT → incorporated → ACCEPT (after fold-in across slices 17-21; MED #7 scoped to v0.2)
 opening_verdict: REJECT pending HIGH fold-ins
-closing_verdict: pending fold-ins across slices 17-22
+closing_verdict: ACCEPT (after fold-in across slices 17-21; MED #7 scoped to v0.2)
 authored_by: operator + claude-opus-4-7
 ---
 

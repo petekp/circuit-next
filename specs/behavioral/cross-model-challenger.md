@@ -133,8 +133,14 @@ using the challenger WELL given that reframing.
 `tests/contracts/cross-model-challenger.test.ts` (Phase 1, future).
 Asserts:
 
-- Every contract with `codex_adversarial_review: <path>` frontmatter
-  resolves to an existing file.
+- Every contract carries EITHER `codex_adversarial_review: <path>` that
+  resolves to an existing file OR an explicit
+  `codex_adversarial_review_grandfathered: <rationale>` prose
+  declaration (≥ 20 chars) — for contracts authored before the
+  `specs/reviews/` convention (step.md, workflow.md).
+- Every contract-review file's `contract_target` resolves back to an
+  existing `specs/contracts/<target>.md` (reverse linkage — orphan
+  review files fail).
 - Every review record at `specs/reviews/*-codex.md` carries the
   **unified base frontmatter** (`reviewer_model`, `review_kind`,
   `review_date`, `verdict`, `authored_by`) plus kind-specific

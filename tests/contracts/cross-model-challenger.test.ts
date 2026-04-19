@@ -385,9 +385,50 @@ describe('cross-model-challenger — CHALLENGER-I3 review records are recorded a
 
 // CHALLENGER-I3 (contract side) — every contract file that carries a
 // `codex_adversarial_review: <path>` frontmatter resolves to an existing
-// review file, and that review file's contract_target matches.
-describe('cross-model-challenger — CHALLENGER-I3 contract → review linkage', () => {
+// review file, and that review file's contract_target matches. Slice 21
+// fold-in of arc-review HIGH #2 strengthens this: every contract MUST
+// carry EITHER the forward linkage OR an explicit
+// `codex_adversarial_review_grandfathered: <rationale>` declaration.
+// The grandfathered path exists for contracts authored before the
+// specs/reviews/ convention (step.md in Slice 2, workflow.md as skeleton);
+// a bare contract without either field now fails.
+describe('cross-model-challenger — CHALLENGER-I3 contract → review linkage (HIGH #2 fold-in)', () => {
   const contractFiles = listContractFiles();
+  // Contract files the test should skip: domain glossary, artifacts index,
+  // and any non-contract auxiliary file that happens to live here.
+  const CONTRACT_LINKAGE_EXEMPT = new Set<string>([]);
+
+  it('every contract either links a review or declares a grandfathered rationale', () => {
+    const missing: Array<{ contractPath: string }> = [];
+    for (const contractPath of contractFiles) {
+      const base = basename(contractPath);
+      if (CONTRACT_LINKAGE_EXEMPT.has(base)) continue;
+      const fm = parseFrontmatter(readFileSync(contractPath, 'utf-8'));
+      const hasLink = fm.has('codex_adversarial_review');
+      const hasGrandfathered = fm.has('codex_adversarial_review_grandfathered');
+      if (!hasLink && !hasGrandfathered) missing.push({ contractPath });
+    }
+    expect(
+      missing,
+      `Contracts missing both codex_adversarial_review and codex_adversarial_review_grandfathered:\n${missing
+        .map((m) => `  ${m.contractPath}`)
+        .join(
+          '\n',
+        )}\n\nEvery contract must either link a specs/reviews/<target>-v<version>-codex.md file OR declare an explicit grandfathered rationale (for contracts authored before the specs/reviews/ convention).`,
+    ).toEqual([]);
+  });
+
+  it('every grandfathered rationale is a non-empty prose string', () => {
+    for (const contractPath of contractFiles) {
+      const fm = parseFrontmatter(readFileSync(contractPath, 'utf-8'));
+      const rationale = fm.get('codex_adversarial_review_grandfathered');
+      if (rationale === undefined) continue;
+      expect(
+        rationale.trim().length,
+        `${contractPath}: codex_adversarial_review_grandfathered must be a non-empty prose rationale.`,
+      ).toBeGreaterThan(20);
+    }
+  });
 
   it('every codex_adversarial_review path resolves to an existing file', () => {
     for (const contractPath of contractFiles) {
@@ -418,6 +459,25 @@ describe('cross-model-challenger — CHALLENGER-I3 contract → review linkage',
         contractTarget,
         `${contractPath}: codex_adversarial_review contract_target (${contractTarget}) does not match filename stem (${stemMatch[1]}).`,
       ).toBe(stemMatch[1]);
+    }
+  });
+
+  // Reverse linkage per arc-review HIGH #2 — every contract-review file's
+  // `contract_target` must point at an existing specs/contracts/<target>.md
+  // file. Orphan review files (review committed without the companion
+  // contract) now fail.
+  it('every contract-review file resolves back to an existing contract', () => {
+    const reviewFiles = listReviewFiles();
+    for (const reviewPath of reviewFiles) {
+      if (classifyReview(reviewPath) !== 'contract') continue;
+      const fm = parseFrontmatter(readFileSync(reviewPath, 'utf-8'));
+      const target = fm.get('contract_target');
+      if (!target) continue;
+      const expectedContract = resolve(CONTRACTS_DIR, `${target}.md`);
+      expect(
+        existsSync(expectedContract),
+        `${reviewPath}: contract_target "${target}" does not resolve to ${expectedContract}.`,
+      ).toBe(true);
     }
   });
 });

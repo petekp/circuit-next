@@ -6,6 +6,7 @@ schema_source: src/schemas/phase.ts
 last_updated: 2026-04-19
 depends_on: [ids, step]
 closes: [adversarial-review-med-11-spine-policy]
+codex_adversarial_review: specs/reviews/phase-md-v0.1-codex.md
 artifact_ids:
   - phase.definition
 ---

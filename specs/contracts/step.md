@@ -5,6 +5,7 @@ version: 0.1
 schema_source: src/schemas/step.ts
 last_updated: 2026-04-19
 depends_on: [ids, gate, selection-policy]
+codex_adversarial_review_grandfathered: authored in Slice 2 before the specs/reviews/ convention existed; inline review body (MED #7 gate.source as typed reference) lives in commit f5a6241 + PROJECT_STATE.md §Slice 2 "Adversarial-review MED #7 closed" with the Gate.source discriminated union + superRefine landing evidence. Any v0.2 modification to step.md re-opens this slot — land a proper specs/reviews/step-md-v<version>-codex.md at that point.
 artifact_ids:
   - step.definition
 ---

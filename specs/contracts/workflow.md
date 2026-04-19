@@ -5,6 +5,7 @@ version: 0.1
 schema_source: src/schemas/workflow.ts
 last_updated: 2026-04-19
 depends_on: [step, phase, rigor, lane, selection-policy]
+codex_adversarial_review_grandfathered: authored as a Phase 1 kickoff skeleton before the specs/reviews/ convention existed; adversarial findings against the skeleton were recorded in bootstrap/adversarial-review-codex.md (6 HIGH + 3 MED incorporated at tier-0). v0.2 will promote to a proper specs/reviews/workflow-md-v<version>-codex.md when the contract gains non-skeleton invariants.
 artifact_ids:
   - workflow.definition
 ---
