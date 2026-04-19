@@ -81,6 +81,66 @@ const FOLD_IN_DISPOSITION_TOKENS: RegExp[] = [
   /\bdeferred\b/i,
 ];
 
+// Per-objection disposition parser (Slice 19 fold-in of arc-review HIGH #4).
+// Joined regex so we can quickly test whether a body scope contains ANY
+// disposition token; used in the inline path.
+const ANY_DISPOSITION_RE =
+  /\b(Incorporated|Scoped to v0\.2|Deferred to v0\.2|Rejected|FOLD IN|Fold-?in|folded (?:in|into)|deferred|Disposition:)\b/i;
+
+// Dispositions-section heading patterns (observed across the committed review
+// corpus):
+//   `## Fold-in discipline`
+//   `## Operator response (incorporated vs deferred)`
+//   `## Operator response (incorporated / scoped / rejected)`
+//   `## Objections and disposition`
+//   `## Objection list + fold-in outcomes`
+// The section scope is from the heading to the next `## ` heading or EOF.
+const DISPOSITION_SECTION_HEADING_RE =
+  /^##\s+(?:Fold-?in discipline|Operator response\b|Objections? and disposition|Objection list \+ fold-?in outcomes)/im;
+
+// Objection-heading regex, covering both observed styles:
+//   Contract reviews: `**1. HIGH — ...` (number before severity)
+//   ADR reviews:      `**HIGH #1 — ...` (severity before number)
+// Captured groups: [1] = contract number (or undef), [2] = severity (either
+// style), [3] = ADR number (or undef).
+const OBJECTION_HEADING_RE = /^\*\*(?:(\d+)\.\s+(HIGH|MED|LOW)\b|(HIGH|MED|LOW)\s+#(\d+)\b)/gm;
+
+type Objection = { number: number; severity: 'HIGH' | 'MED' | 'LOW'; headingIndex: number };
+
+function parseObjections(text: string): Objection[] {
+  const objections: Objection[] = [];
+  for (const m of text.matchAll(OBJECTION_HEADING_RE)) {
+    const headingIndex = m.index ?? 0;
+    if (m[1] && m[2]) {
+      // Contract-style heading: **N. SEVERITY —
+      objections.push({
+        number: Number(m[1]),
+        severity: m[2] as Objection['severity'],
+        headingIndex,
+      });
+    } else if (m[3] && m[4]) {
+      // ADR-style heading: **SEVERITY #N —
+      objections.push({
+        number: Number(m[4]),
+        severity: m[3] as Objection['severity'],
+        headingIndex,
+      });
+    }
+  }
+  return objections;
+}
+
+function findDispositionSection(text: string): string | null {
+  const match = DISPOSITION_SECTION_HEADING_RE.exec(text);
+  if (!match) return null;
+  const start = match.index ?? 0;
+  // Find the next top-level heading after this one.
+  const rest = text.slice(start + (match[0]?.length ?? 0));
+  const nextHeadingRel = rest.search(/^##\s+/m);
+  const end = nextHeadingRel < 0 ? text.length : start + (match[0]?.length ?? 0) + nextHeadingRel;
+  return text.slice(start, end);
+}
+
 type Frontmatter = Map<string, string>;
 
 function parseFrontmatter(markdown: string): Frontmatter {
@@ -323,9 +383,10 @@ describe('cross-model-challenger — CHALLENGER-I3 contract → review linkage',
 
 // CHALLENGER-I4 — fold-in discipline is explicit. Contract-review bodies must
 // name at least one disposition verb (Incorporated / Scoped to v0.2 / Rejected
-// / folded in / deferred). This is a disciplinary spot-check; full per-objection
-// disposition parsing is tracked as v0.2 scope in the track.
-describe('cross-model-challenger — CHALLENGER-I4 fold-in discipline (spot-check)', () => {
+// / folded in / deferred). Retained from Slice 16 as a file-level coarse
+// guard; Slice 19 fold-in of arc-review HIGH #4 adds a second, per-objection
+// guard below.
+describe('cross-model-challenger — CHALLENGER-I4 fold-in discipline (file-level coarse)', () => {
   const reviewFiles = listReviewFiles();
 
   it('every contract-review body contains at least one fold-in disposition token', () => {
@@ -338,6 +399,54 @@ describe('cross-model-challenger — CHALLENGER-I4 fold-in discipline (spot-chec
         `${path}: body does not carry any fold-in disposition token (expected one of Incorporated / Scoped to v0.2 / Rejected / folded in / deferred). Silent ignores are rejected by CHALLENGER-I4.`,
       ).toBe(true);
     }
+  });
+});
+
+// CHALLENGER-I4 per-objection parser (Slice 19 fold-in of arc-review HIGH #4).
+// The file-level coarse check admitted a review with five HIGH objections and
+// one unrelated "incorporated lessons" line. This block closes that gap by
+// requiring, for every objection heading in a contract / ADR / arc review,
+// a detected disposition either (a) inline in the objection body range or
+// (b) in a dedicated disposition section that references the objection's
+// number. Detection is pragmatic — the corpus is regular enough today that
+// a stricter grammar can land at v0.2 alongside any further refactor of
+// review-record conventions.
+describe('cross-model-challenger — CHALLENGER-I4 per-objection disposition (arc fold-in HIGH #4)', () => {
+  const reviewFiles = listReviewFiles();
+
+  it('every objection in every review has a detected disposition', () => {
+    const missing: Array<{ path: string; severity: string; number: number }> = [];
+    for (const path of reviewFiles) {
+      const kind = classifyReview(path);
+      if (kind === 'unknown') continue;
+      const text = readFileSync(path, 'utf-8');
+      const objections = parseObjections(text);
+      if (objections.length === 0) continue;
+      const dispositionSection = findDispositionSection(text);
+      for (let i = 0; i < objections.length; i++) {
+        const o = objections[i];
+        if (!o) continue;
+        // Scope for inline dispositions: from heading to next heading OR EOF.
+        const next = objections[i + 1];
+        const scopeEnd = next ? next.headingIndex : text.length;
+        const scope = text.slice(o.headingIndex, scopeEnd);
+        const inlineOk = ANY_DISPOSITION_RE.test(scope);
+        if (inlineOk) continue;
+        // Fall back to dispositions-section reference.
+        if (dispositionSection) {
+          const refRe = new RegExp(`(?<![0-9])#${o.number}(?![0-9])`);
+          const sectionHasToken = ANY_DISPOSITION_RE.test(dispositionSection);
+          const sectionMentionsNumber = refRe.test(dispositionSection);
+          if (sectionHasToken && sectionMentionsNumber) continue;
+        }
+        missing.push({ path, severity: o.severity, number: o.number });
+      }
+    }
+    const missingList = missing.map((m) => `  ${m.path}: ${m.severity} #${m.number}`).join('\n');
+    expect(
+      missing,
+      `Objections without a detected disposition (CHALLENGER-I4 silent-ignore guard):\n${missingList}\n\nEach objection must either (a) carry an inline disposition (Incorporated / Scoped to v0.2 / Rejected / FOLD IN / deferred / Disposition:) within its heading-to-next-heading body, OR (b) be referenced by its number (#N) from within a dedicated disposition section (## Fold-in discipline / ## Operator response / ## Objections and disposition / ## Objection list + fold-in outcomes).`,
+    ).toEqual([]);
   });
 });
 
