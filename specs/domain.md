@@ -118,9 +118,19 @@ term, propose it here in a new commit before using it elsewhere.
   (OpenAI 6-tier), `skills` (inherit|replace|append|remove discriminated
   union), `rigor`, `invocation_options`.
 
-- **Resolved selection** `[draft]` — The effective selection after all
-  layers are applied. Records `applied` — the full ordered list of
-  overrides that contributed, by source layer.
+- **Resolved selection** `[draft]` — The effective selection at dispatch
+  time. The schema name is `ResolvedSelection` (`src/schemas/selection-
+  policy.ts`). Carries `{model?, effort?, skills: SkillId[] unique,
+  rigor?, invocation_options: JsonObject}`. It is a *cache*; the
+  authoritative provenance is `SelectionResolution.applied` (see below).
+
+- **Selection resolution** `[draft]` — The pair `{resolved, applied}`
+  emitted by the resolver. The schema name is `SelectionResolution`
+  (`src/schemas/selection-policy.ts`). `resolved` is the effective
+  `ResolvedSelection`; `applied` is the ordered, identity-keyed
+  provenance trace of which layers contributed what. Selection
+  resolution is the audit surface; resolved selection is the
+  adapter-consumption surface.
 
 - **Provider-scoped model** `[draft]` — `{ provider: 'openai' | 'anthropic'
   | 'gemini' | 'custom'; model: string }`. Avoids marketing-name

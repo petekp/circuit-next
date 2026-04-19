@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { SkillId, StepId, WorkflowId } from './ids.js';
+import { StepId, WorkflowId } from './ids.js';
 import { Lane } from './lane.js';
 import { CANONICAL_PHASES, type CanonicalPhase, Phase, SpinePolicy } from './phase.js';
 import { Rigor } from './rigor.js';
@@ -39,7 +39,10 @@ const WorkflowBody = z
     phases: z.array(Phase).min(1),
     steps: z.array(Step).min(1),
     spine_policy: SpinePolicy,
-    default_skills: z.array(SkillId).default([]),
+    // Codex HIGH #5 fold-in — legacy skill channels removed. Seed skill set
+    // is now expressed through `default_selection.skills = {mode: 'replace',
+    // skills: [...]}` so every skill contribution flows through the typed
+    // `SkillOverride` operations (SEL-I3). Closes the untyped-bypass path.
     default_selection: SelectionOverride.optional(),
   })
   .strict();

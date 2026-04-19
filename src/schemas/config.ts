@@ -39,10 +39,15 @@ export const DispatchConfig = DispatchConfigBody.superRefine((cfg, ctx) => {
 });
 export type DispatchConfig = z.infer<typeof DispatchConfig>;
 
-export const CircuitOverride = z.object({
-  skills: z.array(z.string()).default([]),
-  selection: SelectionOverride.optional(),
-});
+// Codex HIGH #5 fold-in — legacy `skills: string[]` channel removed. The
+// previous shape bypassed `SkillOverride` AND accepted arbitrary strings
+// (not `SkillId`-validated). Per-circuit skill contribution flows through
+// `selection.skills` via typed `SkillOverride` operations (SEL-I3).
+export const CircuitOverride = z
+  .object({
+    selection: SelectionOverride.optional(),
+  })
+  .strict();
 export type CircuitOverride = z.infer<typeof CircuitOverride>;
 
 export const Config = z.object({

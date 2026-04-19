@@ -1,0 +1,524 @@
+---
+contract: selection
+status: draft
+version: 0.1
+schema_source: src/schemas/selection-policy.ts
+last_updated: 2026-04-19
+depends_on: [ids, rigor, skill, phase]
+closes: [phase-md-v0.1-med-7-phase-level-selection]
+codex_adversarial_review: specs/reviews/selection-md-v0.1-codex.md
+---
+
+# Selection Contract
+
+The **Selection** contract governs how model, reasoning effort, skill set,
+rigor tier, and invocation options are **layered** across config sources and
+resolved into an effective record at dispatch time. Selection is not a single
+type; it is a triplet of related schemas:
+
+1. **`SelectionOverride`** — a partial record a single layer contributes.
+2. **`ResolvedSelection`** — the effective record after all layers compose.
+3. **`SelectionResolution`** — the pair `{ resolved, applied }`, where
+   `applied` is the provenance trace of which layers contributed what.
+
+The contract answers: what must be true of an override, of a resolved
+record, and of a resolution's provenance chain for the triplet to be
+well-formed and independently auditable?
+
+Individual field shapes (provider-scoped model, effort tier, skill
+operations) already validate themselves at the Zod layer. This contract
+governs the **layer-level** and **resolution-level** invariants that no
+single override can assert alone.
+
+## Ubiquitous language
+
+See `specs/domain.md#configuration-vocabulary` for canonical definitions of
+**Config layer**, **Selection layer**, **Selection override**, **Resolved
+selection**, **Provider-scoped model**, and **Effort**. Do not introduce
+synonyms; new vocabulary must land in `specs/domain.md` before use here.
+
+The distinction to keep straight: a **config layer** is a source of Config
+(default, user-global, project, invocation — 4 sources). A **selection
+layer** is a source of a `SelectionOverride` (default, user-global, project,
+workflow, phase, step, invocation — 7 sources). Selection layers are a
+superset that includes workflow/phase/step-authored defaults alongside
+config-file layers.
+
+## Invariants
+
+The runtime MUST reject any `SelectionOverride`, `ResolvedSelection`, or
+`SelectionResolution` that violates these. All invariants are enforced via
+`src/schemas/selection-policy.ts` and — for the cross-schema invariants —
+the schema files named per invariant (currently SEL-I9 at
+`src/schemas/phase.ts`); tested in `tests/contracts/schema-parity.test.ts`.
+Closes Codex LOW #12 (enforcement-location claim drift).
+
+- **SEL-I1 — Selection precedence is declared, closed, and compile-time
+  pinned to the `SelectionSource` enum.** `SELECTION_PRECEDENCE` is the
+  frozen 7-tuple `['default', 'user-global', 'project', 'workflow', 'phase',
+  'step', 'invocation']`. The declaration is typed as `readonly
+  SelectionSource[]` via `as const satisfies`, so any future drift between
+  the enum and the precedence list (e.g., adding a source to the enum
+  without adding it to the precedence order) fails `tsc --strict`, not
+  just a runtime test. The precedence is strictly ordered across
+  *categories*; within the `phase` and `step` categories multiple entries
+  may appear (disambiguated by id — see SEL-I7). **Config-layer pre-
+  compose.** `Config.defaults.selection` and
+  `Config.circuits[workflow_id].selection` live inside the same config
+  file; they are pre-composed (right-biased by specificity: circuit-
+  specific wins over defaults) BEFORE contributing to the applied chain,
+  so a single config layer emits at most one entry per its source label
+  (`default`, `user-global`, `project`, `invocation`). Intra-layer
+  provenance within a config file is therefore lost at the applied-chain
+  granularity; that loss is the v0.1 tradeoff for keeping SEL-I7 simple
+  (closes Codex HIGH #6). Phase 2 property
+  `selection.prop.config_layer_precompose_is_right_biased` validates the
+  merge semantics at the composition layer. Enforced at
+  `src/schemas/selection-policy.ts`.
+
+- **SEL-I2 — `SelectionOverride` is `.strict()` with every field optional.**
+  A layer that contributes nothing is expressible as `{}` when parsed as a
+  raw override — but a raw empty override MUST NOT appear as an
+  `applied[]` entry; see SEL-I7 (ghost-provenance rejection). A typo
+  (`rigr: 'standard'` instead of `rigor`) is **rejected**, not silently
+  dropped as a surplus key; a silent strip would leave the effective
+  selection at the prior layer's default and the author's intent would
+  never reach the runtime. `invocation_options` is a recursive
+  JSON-safe record (`JsonObject`) — arbitrary nesting of null, boolean,
+  finite number, string, array, and string-keyed record. Functions,
+  Dates, symbols, `undefined`, `NaN`, and `Infinity` are all rejected
+  because they cannot be authored in YAML/TOML/JSON and would not
+  survive event-log serialization (closes Codex MED #10). Merge
+  semantics (right-biased by precedence) are a Phase 2 property. Enforced
+  at `src/schemas/selection-policy.ts`.
+
+- **SEL-I3 — `SkillOverride` is a typed discriminated union; no empty-
+  array ambiguity; skills are unique within a single operation.** The
+  four modes are `inherit`, `replace`, `append`, `remove`. Only
+  `replace`, `append`, and `remove` carry a `skills: SkillId[]` field;
+  `inherit` is a pure sentinel. The default value when no `skills` field
+  is authored on a `SelectionOverride` is `{mode: 'inherit'}`. **Scope
+  caveat — empty arrays are legal under the non-`inherit` modes.**
+  `{mode: 'replace', skills: []}` means "clear the skill set"; `{mode:
+  'append', skills: []}` is a no-op; `{mode: 'remove', skills: []}` is a
+  no-op. **Uniqueness within an operation (closes Codex MED #8).** The
+  `skills` array on `replace`, `append`, and `remove` rejects duplicate
+  `SkillId`s at parse time, because set-algebra composition (union,
+  difference) at the resolver layer expects set-typed inputs; a YAML
+  typo that ships `['tdd', 'tdd']` was indistinguishable from an authored
+  set and would propagate through composition unchanged. Canonical
+  *order* of the composed resolver output is reducer-level and tracked
+  as Phase 2 property
+  `selection.prop.resolved_skills_are_unique_and_order_is_documented`.
+  Legacy untyped skill channels (`Workflow.default_skills`,
+  `CircuitOverride.skills`) are removed in v0.1 so every skill
+  contribution flows through a `SkillOverride` (closes Codex HIGH #5).
+  Enforced at `src/schemas/selection-policy.ts`.
+
+- **SEL-I4 — `ProviderScopedModel` replaces marketing-name enumeration.**
+  A model identifier is `{provider: 'openai' | 'anthropic' | 'gemini' |
+  'custom'; model: string.min(1)}`. The provider enum is closed; the
+  model string is adapter-owned (e.g., `claude-opus-4-7` for Anthropic,
+  `gpt-5.4-reasoning` for OpenAI). Adapter-specific validation of known
+  model strings is a Phase 2 runtime concern, not a schema concern; new
+  model releases do not require a circuit-next schema change. **Effort**
+  is the closed 6-tier enum `none | minimal | low | medium | high |
+  xhigh` (OpenAI vocabulary, chosen for cross-provider portability per
+  `specs/evidence.md`). Enforced at `src/schemas/selection-policy.ts`.
+
+- **SEL-I5 — `ResolvedSelection` is the effective record at dispatch
+  time.** `ResolvedSelection` carries `{model?, effort?, skills:
+  SkillId[] (unique), rigor?, invocation_options: JsonObject}` and is
+  `.strict()`. **Codex HIGH #4 fold-in:** `invocation_options` IS part
+  of the effective record because adapters consume it at dispatch time;
+  the v0.1 drafting that excluded it produced `DispatchStartedEvent`s
+  that were identical under different invocation_options, insufficient
+  for audit or replay. What `ResolvedSelection` still does NOT carry is
+  a `SkillOverride` union — the resolver flattens the override chain
+  into a final unique `SkillId[]`. **Cache-vs-truth scope caveat
+  (closes Codex HIGH #3 at the prose layer).** `ResolvedSelection` is
+  a *cache*; `SelectionResolution.applied` is the *truth*. The v0.1
+  schema does **not** bind `resolved` to `applied` — a resolution whose
+  `resolved.effort: 'high'` contradicts an applied chain whose only
+  override sets `effort: 'low'` parses successfully. Binding is
+  reducer-level and tracked as Phase 2 property
+  `selection.prop.resolved_matches_applied_composition`. Enforced at
+  `src/schemas/selection-policy.ts`.
+
+- **SEL-I6 — `SelectionResolution.applied` is strictly ordered by
+  `SELECTION_PRECEDENCE` at the *category* level.** Entries appear in
+  the order their source categories appear in `SELECTION_PRECEDENCE`
+  (index-increasing). A `workflow` entry cannot precede a `user-global`
+  entry; a `step` entry cannot precede a `phase` entry. Within the
+  `phase` and `step` categories, multiple entries (distinct by
+  `phase_id` / `step_id`) are legal and must appear contiguously — a
+  `phase` entry followed by a `step` entry followed by a second `phase`
+  entry is rejected. Reading `applied` top-down is the audit trail:
+  each subsequent entry overrides or refines the prior. Enforced in
+  `src/schemas/selection-policy.ts` via `SelectionResolution.superRefine`
+  using the frozen `SELECTION_PRECEDENCE` index.
+
+- **SEL-I7 — Each *identity* contributes at most once; no ghost
+  provenance.** `applied[]` is a discriminated union on `source`. The
+  `phase` and `step` variants carry a required disambiguator
+  (`phase_id: PhaseId`, `step_id: StepId`); the five singleton-
+  identified variants (`default`, `user-global`, `project`, `workflow`,
+  `invocation`) do not. Uniqueness is keyed on *identity*: source alone
+  for the singletons, `(source, disambiguator)` for phase/step. Two
+  distinct phase entries with different `phase_id`s are therefore legal
+  (closes Codex HIGH #1 + HIGH #2 — the category-only-provenance
+  attack and the overlapping-phases-cannot-be-represented attack).
+  **Ghost-provenance rejection (closes Codex MED #7).** An applied
+  entry whose override is *empty* (no model/effort/rigor, skills at
+  `{mode: 'inherit'}`, empty `invocation_options`) contributes nothing
+  to the resolved record; admitting it fabricates provenance for a
+  non-contributing layer. v0.1 rejects such entries at the schema layer
+  via `SelectionResolution.superRefine`'s `overrideContributes` check.
+  Enforced at `src/schemas/selection-policy.ts`.
+
+- **SEL-I8 — Transitive strict surplus-key rejection.** `.strict()` is
+  applied on every schema in the selection triplet: `ProviderScopedModel`,
+  `SkillOverride` (all four variants), `SelectionOverride`,
+  `ResolvedSelection`, `SelectionResolution`, and every
+  `SelectionResolution.applied[]` entry object. Already landed
+  transitively under RUN-I8 for the Event/Snapshot surface; restated
+  here as the owning invariant of `src/schemas/selection-policy.ts` so
+  any future schema added to this file inherits the discipline. Surplus
+  keys are **rejected**, not stripped — a silent strip leaves the
+  effective selection at the prior layer's default and the author's
+  intent never reaches the runtime. Enforced at
+  `src/schemas/selection-policy.ts`.
+
+- **SEL-I9 — `Phase.selection` is present and symmetric with
+  `Step.selection` / `Workflow.default_selection` (closes phase.md v0.1
+  Codex MED #7).** `Phase` carries an optional `selection:
+  SelectionOverride` field. When present, it contributes to the applied
+  chain under `source: 'phase'`. **Rationale for this design over the
+  derived-from-canonical alternative.** Two options were weighed:
+  (a) add `Phase.selection: SelectionOverride.optional()` (explicit,
+  symmetric with Step and Workflow); (b) derive phase-level selection
+  from `Workflow.default_selection` conditioned on `Phase.canonical`
+  (indirect, avoids one field but requires a second precedence
+  mechanism to encode the conditioning). Option (a) wins because it
+  (1) is symmetric with `Step.selection` and `Workflow.default_selection`,
+  (2) keeps selection co-located with the Phase in YAML, (3) makes
+  provenance auditability trivial (an `applied` entry with `source:
+  'phase'` points at a single concrete field), and (4) is strictly more
+  general than (b) — a canonical-conditional design can be added as a
+  separate `Workflow.selection_by_canonical?: Record<CanonicalPhase,
+  SelectionOverride>` field in v0.2 without disrupting option (a). Not
+  doing (b) now is not a gap. Enforced at `src/schemas/phase.ts`;
+  `Phase.safeParse({..., selection: {...}})` succeeds; `Phase.safeParse({..., selectoin: {...}})` (typo) fails under PHASE-I2 `.strict()`.
+
+## Pre-conditions
+
+- A `SelectionOverride` is produced by parsing a layer's authored YAML /
+  TOML / JSON into an object and passing it to `SelectionOverride.safeParse`.
+- A `ResolvedSelection` is produced by the resolver (Phase 2) folding an
+  ordered sequence of overrides under the documented resolution semantics
+  (`selection.prop.skill_override_composition_total`,
+  `selection.prop.invocation_options_merge_is_right_biased`).
+- A `SelectionResolution` is produced by pairing a `ResolvedSelection`
+  with the ordered `applied` trace the resolver emitted during folding.
+- Every `SkillId` in a `SkillOverride.skills[]` array or a
+  `ResolvedSelection.skills[]` array must exist in the running plugin's
+  skill registry at load time (validated by the runtime, not the Zod
+  schema).
+
+## Post-conditions
+
+After a `SelectionOverride` is accepted:
+
+- The override shape is one of the 32 combinations of
+  `{model?, effort?, skills?, rigor?, invocation_options?}` × `{4
+  SkillOverride variants}` (SEL-I2, SEL-I3).
+- `invocation_options` is always present as an object (default `{}`),
+  never absent, so downstream merge logic is total.
+- Every value inside `invocation_options` is JSON-safe (SEL-I2 via
+  `JsonObject`).
+
+After a `SelectionResolution` is accepted:
+
+- `applied` is category-ordered by `SELECTION_PRECEDENCE` (SEL-I6).
+- Each identity — singleton source, or `(source, phase_id|step_id)` —
+  appears at most once in `applied` (SEL-I7).
+- Every `applied[i].override` contributes something (SEL-I7 ghost-
+  provenance rule).
+- `resolved.skills` is a unique flat `SkillId[]` (SEL-I3 / SEL-I5).
+- `resolved.invocation_options` is a JSON-safe merged object.
+- **No post-condition binds `resolved` to `applied` at v0.1.** The
+  claim that `resolved`'s fields derive from `applied` is a Phase 2
+  property (`selection.prop.resolved_matches_applied_composition`), not
+  a schema-enforced post-condition. Closes Codex HIGH #3 honestly
+  rather than over-claiming.
+
+## Property ids (reserved for Phase 2 testing)
+
+These are the invariants that govern the *composition semantics* of
+override chains — things the single-pass `SelectionResolution.superRefine`
+cannot enforce without introducing full resolver semantics into the
+schema layer. They land when the property-test harness + resolver exist
+in Phase 2.
+
+- `selection.prop.precedence_const_parity` — For every `SelectionSource`
+  enum value, there is exactly one entry in `SELECTION_PRECEDENCE`, and
+  their relative order is the documented 7-tuple. SEL-I1 gives a
+  compile-time guard; this property provides a runtime guard once the
+  property harness exists (defense in depth; also catches drift between
+  the docs and the code).
+
+- `selection.prop.resolved_matches_applied_composition` — For any valid
+  `SelectionResolution`, re-folding `applied[]` under the documented
+  resolution semantics produces a `ResolvedSelection` bit-equal to
+  `resolved`. This is the "projection is a function" analog of RUN-I7
+  for selection: `resolved` is a cache; `applied` is the truth. A
+  resolver that emits a resolved record inconsistent with its own
+  applied trace is broken, and the property catches it. The
+  schema-level binding (would-be SEL-I8-equivalent) is deferred to
+  Phase 2 because re-running the composition inside a single
+  `superRefine` pass entangles schema with resolver logic in a way
+  circuit-next has elsewhere refused (see run.md's `run.prop.
+  deterministic_replay` scope caveat).
+
+- `selection.prop.skill_override_composition_total` — For any sequence
+  of `SkillOverride` values drawn from `applied[]`, composing them
+  under the documented set algebra (`inherit`: no-op; `replace`: set
+  to skills; `append`: set union; `remove`: set difference) produces
+  a well-defined `SkillId[]` with no undefined intermediate state. The
+  fold is total regardless of input. (Closes the "empty-array-means-
+  inherit" ambiguity at the semantic layer; SEL-I3 closed it at the
+  syntactic layer.)
+
+- `selection.prop.invocation_options_merge_is_right_biased` — Given
+  multiple layers contributing `invocation_options` maps, the merged
+  record is right-biased by precedence: the later (higher-precedence)
+  layer wins on any conflicting key. No accidental deep-merge; no
+  silent key collision. The property fuzzes over adversarial key
+  overlap patterns to catch merge-logic regressions.
+
+- `selection.prop.phase_source_only_when_phase_declared_selection` — An
+  `applied[]` entry with `source: 'phase'` requires the Workflow's
+  named Phase to carry a non-empty `Phase.selection` field. A `phase`
+  source without a corresponding phase-level declaration is either a
+  resolver bug or a smuggled entry. This is a cross-schema semantic
+  check (selection × workflow) and belongs at Phase 2, not the
+  single-schema layer.
+
+- `selection.prop.override_empty_roundtrip` — For any
+  `SelectionOverride` equal to `{skills: {mode: 'inherit'},
+  invocation_options: {}}` (the canonical "contributes nothing"
+  shape), folding it into any prior `ResolvedSelection` yields a
+  bit-equal output. Identity under the resolver fold. (Enforced at
+  SEL-I7 that such overrides never reach `applied[]`; the property
+  guards resolver identity for any fold outside the chain.)
+
+- `selection.prop.overlapping_phase_composition_well_defined` —
+  Added to close Codex HIGH #2 at the composition layer. For any
+  Workflow where a step belongs to multiple phases each carrying
+  `selection`, the composition of those phase overrides is deterministic
+  and independent of applied-chain order permutation within the `phase`
+  category (which SEL-I6 permits). The property fuzzes phase-
+  composition orderings and checks bit-equality of the resulting
+  `ResolvedSelection`.
+
+- `selection.prop.config_layer_precompose_is_right_biased` — Added to
+  close Codex HIGH #6. Within a single config layer,
+  `defaults.selection` and `circuits[workflow_id].selection` pre-compose
+  right-biased by specificity (circuit-specific overrides defaults) to
+  produce the single merged override contributed to the applied chain.
+  The property fuzzes adversarial key-overlap and checks the merge
+  matches the documented rule.
+
+- `selection.prop.resolved_skills_are_unique_and_order_is_documented`
+  — Added to close Codex MED #8. SEL-I3 enforces uniqueness within an
+  individual `SkillOverride`; this property extends the guarantee to
+  the composed `ResolvedSelection.skills` and checks that the resolver
+  emits a documented canonical order (insertion or lexicographic — to
+  be decided in v0.2).
+
+## Cross-contract dependencies
+
+- **phase** (`src/schemas/phase.ts`) — `Phase.selection:
+  SelectionOverride.optional()` (SEL-I9). Cross-references
+  `specs/contracts/phase.md`; the `Phase` schema now imports
+  `SelectionOverride` and extends `PhaseBody` with the optional
+  `selection` field. PHASE-I2 `.strict()` still governs surplus-key
+  rejection; adding `selection` as a declared field expands what's
+  allowed, not what's stripped.
+
+- **step** (`src/schemas/step.ts`) — `StepBase.selection:
+  SelectionOverride.optional()` is already declared (`step.ts:L23`).
+  Step-level contributions enter `applied[]` under `source: 'step'`.
+
+- **workflow** (`src/schemas/workflow.ts`) —
+  `Workflow.default_selection: SelectionOverride.optional()` is declared.
+  Workflow-level contributions enter `applied[]` under `source:
+  'workflow'`. Not renamed to `Workflow.selection` because
+  `default_selection` signals "this is the baseline for all phases/steps
+  unless overridden" more clearly than `selection` would.
+  **Codex HIGH #5 fold-in:** the legacy
+  `Workflow.default_skills: SkillId[]` channel is removed. Seed skill
+  sets now flow through `default_selection.skills = {mode: 'replace',
+  skills: [...]}`.
+
+- **config** (`src/schemas/config.ts`) — `Config.defaults.selection:
+  SelectionOverride.optional()` and `CircuitOverride.selection:
+  SelectionOverride.optional()`. The `Config` file layers (default,
+  user-global, project, invocation) map onto four of
+  `SELECTION_PRECEDENCE`; the middle three (workflow, phase, step) are
+  in the workflow schema. **Intra-layer pre-compose (SEL-I1 scope
+  caveat).** Within one config layer, `defaults.selection` and
+  `circuits[workflow_id].selection` pre-compose right-biased by
+  specificity BEFORE entering the applied chain. **Codex HIGH #5
+  fold-in:** the legacy `CircuitOverride.skills: string[]` channel is
+  removed (it accepted arbitrary non-`SkillId` strings); per-circuit
+  skill contribution flows through `CircuitOverride.selection.skills`
+  via typed `SkillOverride`. Config reorganization is out of scope for
+  this contract; see `specs/contracts/config.md` (future) for layer
+  materialization.
+
+- **event** (`src/schemas/event.ts`) — `DispatchStartedEvent`
+  carries `resolved_selection: ResolvedSelection`, which is the
+  effective record consumers (adapters) see at dispatch time. Codex
+  HIGH #4 fold-in: `resolved_selection.invocation_options` now carries
+  the merged invocation_options so the event is audit-sufficient even
+  when adapters consume those options. The full provenance trace
+  (`applied`) still lives in `SelectionResolution` at resolution time;
+  promoting the event to carry the full `SelectionResolution` is a v0.2
+  consideration driven by real audit needs.
+
+- **skill** (`src/schemas/skill.ts`) — `SkillId` is the id space for
+  `SkillOverride.skills[]` and `ResolvedSelection.skills[]`. Skill
+  existence closure (every emitted `SkillId` is registered) is a
+  runtime concern, not a schema concern.
+
+- **rigor** (`src/schemas/rigor.ts`) — `SelectionOverride.rigor` and
+  `ResolvedSelection.rigor` use the `Rigor` enum (`lite`, `standard`,
+  `deep`, `tournament`, `autonomous`). A `rigor` contribution at the
+  step layer overrides the workflow's entry-mode rigor at dispatch
+  time; the precedence rule is SEL-I1.
+
+- **ids** (`src/schemas/ids.ts`) — `SkillId` branded slug.
+
+## Failure modes (carried from evidence)
+
+- `carry-forward:selection-precedence-implicit` — Prior Circuit
+  conflated config layers (default, user-global, project, invocation)
+  with workflow/phase/step-authored defaults. Precedence was folklore,
+  not a typed constant. Closed by SEL-I1: the 7-tuple is compile-time
+  pinned, and every `applied` record asserts ordering by construction.
+  `specs/evidence.md` hard invariant 8 ("Selection precedence is
+  explicit") is the authoritative ancestor.
+
+- `carry-forward:skill-override-ambiguity` — Prior Circuit used empty
+  array to mean "inherit", ambiguous with "replace-with-nothing". A
+  YAML typo that stripped the skills list and a deliberate author
+  choice to clear the set were indistinguishable. Closed by SEL-I3: the
+  four modes make every operation typed; empty arrays under non-
+  `inherit` modes are legal but mean what they say.
+  `specs/evidence.md` hard invariant 9 ("Skill overrides are typed
+  operations, not empty-array ambiguity") is the ancestor.
+
+- `carry-forward:marketing-name-enum-drift` — Prior Circuit enumerated
+  model names like `claude-opus-4.1`, `gpt-5`, `gpt-5.4`, which rot as
+  providers ship new models, forcing coordinated schema + adapter edits
+  on every release. Closed by SEL-I4: `ProviderScopedModel.model` is an
+  open string; adapter-specific code validates known model strings.
+  Adversarial-review HIGH objection (Codex, Tier 0) is the ancestor.
+
+- `carry-forward:applied-provenance-unaudited` — Prior Circuit resolved
+  selection without emitting a provenance trace; a debugger reading
+  `DispatchStartedEvent` couldn't tell *why* a step ran under a
+  specific model (which config file? which workflow YAML? which CLI
+  flag?). Closed by the triplet `SelectionResolution { resolved,
+  applied }` + SEL-I6/I7: `applied` is totally ordered and
+  non-redundant, and the chain is a read-top-down audit trail.
+
+- `carry-forward:nested-surplus-key-silent-strip` — Prior to the
+  run.md v0.1 slice, `.strict()` was applied only at the top level of
+  `Event`/`Snapshot`. A surplus key inside `ResolvedSelection.model` or
+  `SelectionOverride.skills` was silently stripped, which masked
+  authorial typos. Closed by SEL-I8 (which continues the transitive-
+  strict discipline RUN-I8 landed across the event/snapshot surface).
+
+- `carry-forward:legacy-skill-channels` — Two pre-contract channels
+  (`Workflow.default_skills: SkillId[]` and `CircuitOverride.skills:
+  string[]`) bypassed the typed `SkillOverride` discipline. The config
+  channel was worse — it accepted arbitrary strings, not `SkillId`-
+  validated values. Closed in v0.1 by removing both channels (Codex
+  HIGH #5 fold-in). Seed skill sets flow through
+  `default_selection.skills = {mode: 'replace', skills: [...]}`;
+  per-circuit skills flow through `CircuitOverride.selection.skills`.
+
+- `carry-forward:invocation-options-non-json` — `z.record(z.unknown())`
+  admitted functions, Dates, `undefined`, `NaN`, and `Infinity` — all
+  non-JSON-serializable values that would break event-log replay and
+  YAML/TOML round-trip. Closed by SEL-I2's `JsonObject` refinement
+  (Codex MED #10 fold-in).
+
+- `carry-forward:category-only-provenance` — A `source: 'phase'` or
+  `source: 'step'` entry in the applied chain did not identify WHICH
+  phase/step contributed. Closed by SEL-I7's discriminated-union
+  applied entries with required `phase_id`/`step_id` disambiguators
+  (Codex HIGH #1 fold-in).
+
+- `carry-forward:ghost-provenance` — An applied entry with an empty
+  override fabricated provenance for a non-contributing layer. Closed
+  by SEL-I7's `overrideContributes` check (Codex MED #7 fold-in).
+
+## Evolution
+
+- **v0.1 (this draft)** — SEL-I1..I9 enforced at the schema layer.
+  **Codex adversarial property-auditor pass 2026-04-19** produced
+  opening verdict REJECT with 6 HIGH + 5 MED + 1 LOW. All 6 HIGH and
+  4 of 5 MED folded in directly before commit; MED #9 (scalar
+  tombstone semantics) scoped to v0.2 with rationale. Full fold-in
+  record at `specs/reviews/selection-md-v0.1-codex.md`. Final verdict
+  chain: `REJECT → incorporated → ACCEPT (after fold-in)`.
+
+  Schema-level landings: `SELECTION_PRECEDENCE` 7-tuple + compile-time
+  enum parity (`as const satisfies`); `SelectionOverride.strict()`
+  with every field optional and JSON-safe `invocation_options`;
+  `SkillOverride` 4-variant discriminated union with per-variant
+  `.strict()` and unique-skills refinement; `ProviderScopedModel`
+  4-provider enum × open model string; `ResolvedSelection.strict()`
+  carrying `invocation_options` (the HIGH #4 flip from v0.1 drafting);
+  discriminated-union `applied[]` entries with required
+  `phase_id`/`step_id` on phase/step variants (HIGH #1, #2);
+  `SelectionResolution.superRefine` that enforces category-level
+  precedence (SEL-I6), identity-keyed uniqueness (SEL-I7), and ghost-
+  provenance rejection (MED #7); transitive strict rejection across
+  the entire selection triplet (SEL-I8); `Phase.selection:
+  SelectionOverride.optional()` added to close phase.md v0.1 MED #7
+  (SEL-I9); legacy `Workflow.default_skills` and
+  `CircuitOverride.skills` channels removed (HIGH #5); back-compat
+  `SelectionPolicy` alias removed. Phase 2 property ids added for the
+  honestly-scoped gaps: `resolved_matches_applied_composition` (HIGH
+  #3), `config_layer_precompose_is_right_biased` (HIGH #6),
+  `overlapping_phase_composition_well_defined` (HIGH #2 composition
+  layer), `resolved_skills_are_unique_and_order_is_documented` (MED
+  #8 composition layer).
+
+- **v0.2 (Phase 1)** — Ratify `property_ids` above by landing the
+  corresponding property-test harness at
+  `tests/properties/visible/selection/`. **Decide scalar tombstone
+  semantics (Codex MED #9 deferral).** Currently there is no way for a
+  higher layer to clear a lower layer's `model`/`effort`/`rigor` back
+  to adapter/default behavior (skills have `{mode: 'replace', skills:
+  []}` as the clear operation; scalars do not). Adding a tombstone
+  sentinel (`null`, `{reset: true}`, or an explicit `effort: 'inherit'`
+  literal) is a material design change; v0.2 will decide driven by
+  evidence from real workflows. Decide whether
+  `DispatchStartedEvent.resolved_selection` should be promoted to
+  `DispatchStartedEvent.selection_resolution: SelectionResolution` for
+  full in-event provenance. Consider whether
+  `Workflow.selection_by_canonical?: Record<CanonicalPhase,
+  SelectionOverride>` is warranted (the derive-from-canonical
+  alternative weighed against in SEL-I9); only adopt if real workflows
+  demonstrate the pattern.
+
+- **v1.0 (Phase 2)** — Ratified invariants + property tests + resolver
+  implementation with `selection.prop.*` as acceptance gate +
+  operator-facing error-message catalog. The `selection.prop.*`
+  properties above become the acceptance gate for any resolver
+  implementation.

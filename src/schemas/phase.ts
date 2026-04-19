@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { PhaseId, StepId } from './ids.js';
+import { SelectionOverride } from './selection-policy.js';
 
 export const CanonicalPhase = z.enum([
   'frame',
@@ -12,12 +13,17 @@ export const CanonicalPhase = z.enum([
 ]);
 export type CanonicalPhase = z.infer<typeof CanonicalPhase>;
 
+// SEL-I9 closes phase.md v0.1 Codex MED #7: Phase carries an optional
+// `selection: SelectionOverride`, symmetric with Step.selection and
+// Workflow.default_selection. PHASE-I2 `.strict()` still governs surplus-
+// key rejection at the Phase level.
 export const Phase = z
   .object({
     id: PhaseId,
     title: z.string().min(1),
     canonical: CanonicalPhase.optional(),
     steps: z.array(StepId).min(1),
+    selection: SelectionOverride.optional(),
   })
   .strict();
 export type Phase = z.infer<typeof Phase>;
