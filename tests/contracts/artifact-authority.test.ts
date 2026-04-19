@@ -2,7 +2,11 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { schemaExportPresent } from '../../scripts/audit.mjs';
+import {
+  planeIsValid,
+  schemaExportPresent,
+  trustBoundaryHasOriginToken,
+} from '../../scripts/audit.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, '..', '..');
@@ -45,6 +49,7 @@ type Artifact = {
   id: string;
   surface_class: string;
   compatibility_policy: string;
+  plane?: string;
   description: string;
   contract: string | null;
   schema_file: string | null;
@@ -281,5 +286,213 @@ describe('specs/artifacts.json — continuity is successor-to-live clean-break',
     const record = byId.get('continuity.record');
     expect(record?.path_derived_fields).toContain('record_id');
     expect(record?.identity_fields).toContain('record_id');
+  });
+});
+
+// Slice 12 (ADR-0004) — plane classifier + data-plane trust-boundary-detail rule.
+describe('specs/artifacts.json — plane classifier (ADR-0004)', () => {
+  const file = loadArtifacts();
+  const byId = new Map(file.artifacts.map((a) => [a.id, a]));
+
+  it('every declared plane is in the closed set {control-plane, data-plane}', () => {
+    for (const artifact of file.artifacts) {
+      if (!Object.hasOwn(artifact, 'plane')) continue;
+      expect(
+        planeIsValid(artifact.plane),
+        `${artifact.id}: plane "${artifact.plane}" is not in the closed set`,
+      ).toBe(true);
+    }
+  });
+
+  it('every data-plane artifact declares an origin token in trust_boundary', () => {
+    for (const artifact of file.artifacts) {
+      if (artifact.plane !== 'data-plane') continue;
+      expect(
+        trustBoundaryHasOriginToken(artifact.trust_boundary),
+        `${artifact.id} (data-plane): trust_boundary does not name an origin token — got "${artifact.trust_boundary}"`,
+      ).toBe(true);
+    }
+  });
+
+  // Slice 12 exemplar backfills — these four artifacts must carry the declared plane.
+  // The remaining nine artifacts are deferred to a sweep slice (ADR-0004 §Scoping).
+  it('workflow.definition is classified control-plane', () => {
+    expect(byId.get('workflow.definition')?.plane).toBe('control-plane');
+  });
+
+  it('run.log is classified data-plane', () => {
+    expect(byId.get('run.log')?.plane).toBe('data-plane');
+  });
+
+  it('continuity.record is classified data-plane', () => {
+    expect(byId.get('continuity.record')?.plane).toBe('data-plane');
+  });
+
+  it('continuity.index is classified data-plane', () => {
+    expect(byId.get('continuity.index')?.plane).toBe('data-plane');
+  });
+});
+
+describe('plane classifier helper — constructed-violation guard (Slice 12)', () => {
+  it('planeIsValid accepts control-plane and data-plane', () => {
+    expect(planeIsValid('control-plane')).toBe(true);
+    expect(planeIsValid('data-plane')).toBe(true);
+  });
+
+  it('planeIsValid rejects unknown values', () => {
+    expect(planeIsValid('config-plane')).toBe(false);
+    expect(planeIsValid('mixed')).toBe(false);
+    expect(planeIsValid('')).toBe(false);
+    expect(planeIsValid('CONTROL-PLANE')).toBe(false);
+  });
+
+  it('planeIsValid rejects non-string values', () => {
+    expect(planeIsValid(undefined)).toBe(false);
+    expect(planeIsValid(null)).toBe(false);
+    expect(planeIsValid(0)).toBe(false);
+    expect(planeIsValid({})).toBe(false);
+  });
+});
+
+describe('trust-boundary origin-token helper — constructed-violation guard (Slice 12)', () => {
+  it('accepts prose containing operator-local', () => {
+    expect(trustBoundaryHasOriginToken('operator-local persisted state; append-only')).toBe(true);
+  });
+
+  it('accepts prose containing engine-computed', () => {
+    expect(trustBoundaryHasOriginToken('engine-computed projection of the event log')).toBe(true);
+  });
+
+  it('accepts prose containing model-authored', () => {
+    expect(trustBoundaryHasOriginToken('may carry model-authored narrative')).toBe(true);
+  });
+
+  // Codex fold-in HIGH #3: `mixed` is a cardinality of origins, not an origin. A
+  // data-plane artifact whose trust_boundary says "mixed" and nothing else fails the
+  // rule. The three genuinely mixed-layer artifacts live in PLANE_DEFERRED_IDS until
+  // the sweep slice decides per-layer plane representation.
+  it('rejects prose containing only "mixed" (mixed is not an origin)', () => {
+    expect(
+      trustBoundaryHasOriginToken('mixed; plugin-layer is author-signed, operator layers differ'),
+    ).toBe(false);
+  });
+
+  it('accepts prose with multiple origin tokens', () => {
+    expect(
+      trustBoundaryHasOriginToken(
+        'operator-local persisted state; may contain model-authored narrative',
+      ),
+    ).toBe(true);
+  });
+
+  it('rejects prose with no origin token', () => {
+    expect(trustBoundaryHasOriginToken('plugin-authored static definition; loaded read-only')).toBe(
+      false,
+    );
+    expect(trustBoundaryHasOriginToken('author-signed static catalog projection')).toBe(false);
+  });
+
+  it('rejects empty or non-string inputs', () => {
+    expect(trustBoundaryHasOriginToken('')).toBe(false);
+    expect(trustBoundaryHasOriginToken(undefined)).toBe(false);
+    expect(trustBoundaryHasOriginToken(null)).toBe(false);
+    expect(trustBoundaryHasOriginToken(0)).toBe(false);
+  });
+
+  // Case-insensitive match — origin tokens are lowercased before comparison. Documented here
+  // because the rule is prose-based and a case-bump in trust_boundary should still pass.
+  it('matches case-insensitively', () => {
+    expect(trustBoundaryHasOriginToken('Operator-Local persisted state')).toBe(true);
+    expect(trustBoundaryHasOriginToken('ENGINE-COMPUTED projection')).toBe(true);
+  });
+
+  // Codex fold-in HIGH #2: naive substring matching would accept "never operator-local"
+  // because `operator-local` is a substring. The negation-window check rejects origin-token
+  // matches whose immediate left-context ends in "not ", "non-", "no ", or "never ".
+  it('rejects "not X" — negated single-clause origin', () => {
+    expect(trustBoundaryHasOriginToken('not operator-local; author-signed only')).toBe(false);
+  });
+
+  it('rejects "never X" — negated single-clause origin', () => {
+    expect(trustBoundaryHasOriginToken('never operator-local; author-signed only')).toBe(false);
+  });
+
+  it('rejects "no X" — negated single-clause origin', () => {
+    expect(trustBoundaryHasOriginToken('no operator-local writes; author-signed')).toBe(false);
+  });
+
+  it('rejects "non-X" — negated single-clause origin', () => {
+    expect(trustBoundaryHasOriginToken('non-operator-local content only')).toBe(false);
+  });
+
+  // Positive-after-negative: the first clause negates, but a second clause affirms. The
+  // rule is per-match; as long as ONE unnegated origin token appears, the prose passes.
+  it('accepts prose where a later clause affirms an origin after earlier negation', () => {
+    expect(
+      trustBoundaryHasOriginToken(
+        'never read from remote; operator-local persisted state authoritative',
+      ),
+    ).toBe(true);
+  });
+
+  // Defense-in-depth check: the real-world prose for run.projection says "operator-local
+  // derived state; always recomputable from run.log; never authoritative over the log".
+  // The "never" here refers to authority, not to "operator-local". The rule must pass.
+  it('accepts run.projection-style prose (late-clause "never" does not negate early-clause origin)', () => {
+    expect(
+      trustBoundaryHasOriginToken(
+        'operator-local derived state; always recomputable from run.log; never authoritative over the log',
+      ),
+    ).toBe(true);
+  });
+});
+
+// Codex fold-in HIGH #1 + MED #7: the audit enforces a required-or-deferred rule on every
+// artifact. These tests assert the list of deferred ids matches the ADR-0004 Non-goals list
+// exactly, preventing silent growth of the escape hatch.
+describe('specs/artifacts.json — plane deferral allowlist (ADR-0004, Codex fold-in)', () => {
+  const file = loadArtifacts();
+  const byId = new Map(file.artifacts.map((a) => [a.id, a]));
+
+  const EXPECTED_DEFERRED_IDS = ['selection.override', 'adapter.registry', 'adapter.reference'];
+
+  it('every non-deferred artifact declares plane', () => {
+    for (const artifact of file.artifacts) {
+      if (EXPECTED_DEFERRED_IDS.includes(artifact.id)) continue;
+      expect(
+        Object.hasOwn(artifact, 'plane'),
+        `${artifact.id}: must declare plane (not in deferred allowlist)`,
+      ).toBe(true);
+    }
+  });
+
+  it('every deferred artifact omits plane (cannot both declare and defer)', () => {
+    for (const id of EXPECTED_DEFERRED_IDS) {
+      const artifact = byId.get(id);
+      expect(artifact).toBeDefined();
+      if (!artifact) continue;
+      expect(
+        Object.hasOwn(artifact, 'plane'),
+        `${id} is in the deferred allowlist but also declares plane; remove one`,
+      ).toBe(false);
+    }
+  });
+});
+
+// Codex fold-in MED #6: control-plane artifacts must not derive identity from filesystem
+// paths. Plugin-authored static content's identity is determined by the plugin author at
+// build time, not by filename.
+describe('specs/artifacts.json — control-plane path-derivation ban (ADR-0004, Codex fold-in)', () => {
+  const file = loadArtifacts();
+
+  it('no control-plane artifact declares path_derived_fields', () => {
+    for (const artifact of file.artifacts) {
+      if (artifact.plane !== 'control-plane') continue;
+      const pdf = artifact.path_derived_fields ?? [];
+      expect(
+        pdf.length,
+        `${artifact.id} (control-plane): path_derived_fields must be empty; got [${pdf.join(', ')}]`,
+      ).toBe(0);
+    }
   });
 });

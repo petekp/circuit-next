@@ -12,7 +12,8 @@ circuit-next. This file is the human-readable companion. Where the two
 disagree, `artifacts.json` wins; this doc lags until updated.
 
 Read ADR-0003 first. It defines the surface classes, the compatibility
-policies, and the gate itself.
+policies, and the gate itself. Read ADR-0004 for the `plane` dimension
+(control-plane vs data-plane) introduced in Slice 12.
 
 ## Why this exists
 
@@ -59,6 +60,68 @@ values:
   legacy parsing.
 - `unknown` — **blocks** contract authorship (used with `unknown-blocking`).
 
+## Plane (ADR-0004)
+
+`plane` is a coarse classifier, orthogonal to `surface_class` and
+`compatibility_policy`. It names **who produces the artifact**, not
+where it lives. In schema version 1, `plane` is structurally optional
+in the JSON, but the audit requires every artifact to **either** declare
+`plane` **or** appear in `PLANE_DEFERRED_IDS` (a short allowlist of
+genuinely mixed-layer artifacts whose per-layer plane representation
+is a v0.2 schema evolution). New artifacts cannot silently omit
+`plane`.
+
+Values:
+
+- **`control-plane`** — plugin-authored static definition. Loaded
+  read-only at bootstrap or catalog-compile time. Never model-authored
+  during a run. Never mutated by the engine at runtime.
+- **`data-plane`** — operator-local, runtime-produced, engine-computed,
+  or model-authored. The heavier defenses data-plane aggregates
+  typically need — transitive `.strict()`, own-property closure, and
+  path-safety primitives on path-derived identity fields — are
+  invariants of their **schema files**, enforced by existing contract
+  tests under `tests/contracts/` and by the path-safety audit rule.
+  The Slice 12 audit rule itself is narrower; see below.
+
+### Slice 12 audit rule (ADR-0004 + Codex fold-in)
+
+`scripts/audit.mjs` enforces three class-conditional checks on
+classified artifacts:
+
+1. **Required-or-deferred.** Every artifact must either declare `plane`
+   or appear in `PLANE_DEFERRED_IDS`. No silent omissions.
+2. **Data-plane trust-boundary detail.** If `plane: data-plane`, the
+   `trust_boundary` prose must name at least one **unnegated** origin
+   token from the closed set: `operator-local`, `engine-computed`,
+   `model-authored`. (`mixed` is *not* an origin token; it describes
+   cardinality of origins, which fails the question "who can lie to
+   this reader?" on its own.) The audit rejects origin-token matches
+   whose immediate left-context contains `not `, `non-`, `no `, or
+   `never `, so a prose like "never operator-local; author-signed only"
+   does not pass.
+3. **Control-plane path-derivation ban.** A `control-plane` artifact
+   may not declare non-empty `path_derived_fields`. Plugin-authored
+   static content's identity is plugin-author-determined at build time,
+   not derived from filesystem path components.
+
+### What Slice 12 classifies
+
+- **control-plane**: `workflow.definition`, `step.definition`,
+  `phase.definition`, `skill.descriptor`.
+- **data-plane**: `run.log`, `run.projection`, `selection.resolution`,
+  `adapter.resolved`, `continuity.record`, `continuity.index`.
+- **deferred** (in `PLANE_DEFERRED_IDS`): `selection.override`,
+  `adapter.registry`, `adapter.reference`. These three carry genuinely
+  mixed-layer trust (plugin-authored defaults + operator-local
+  overrides under one artifact id). Per-layer plane representation is
+  scoped to v0.2 — either a `plane: 'per-layer'` marker or splitting
+  the ids.
+
+Schema version 2 will promote `plane` to structurally required and
+either classify or re-ID the deferred artifacts. See ADR-0004 for the
+full rationale.
+
 ## Required metadata columns
 
 Every artifact row in `specs/artifacts.json` MUST have these base fields:
@@ -68,6 +131,7 @@ Every artifact row in `specs/artifacts.json` MUST have these base fields:
 | `id` | Dotted artifact name, e.g. `continuity.record`. Unique across the file. |
 | `surface_class` | One of the six classes above. |
 | `compatibility_policy` | One of the four policies above. |
+| `plane` | *(optional, v1)* One of `control-plane` or `data-plane`; see ADR-0004. Will be promoted to required in schema version 2. |
 | `description` | One-paragraph human description. |
 | `contract` | Path to `specs/contracts/*.md`, or `null` if not yet authored. |
 | `schema_file` | Path to the zod schema, or `null` if there is no runtime schema. |
@@ -236,6 +300,13 @@ See `scripts/audit.mjs` for the full list. Summary:
 - **Continuity gate** — `specs/contracts/continuity.md` cannot exist
   until `continuity.record` and `continuity.index` are present in the
   graph with non-unknown compatibility posture.
+- **Plane trust-boundary detail (ADR-0004)** — if an artifact declares
+  `plane: data-plane`, its `trust_boundary` prose must name at least one
+  origin token from `{operator-local, engine-computed, model-authored,
+  mixed}`. Control-plane artifacts have no additional requirement. The
+  rule fires only on artifacts that declare a plane; un-classified
+  artifacts see no new enforcement. Promoted to universal coverage in
+  schema version 2 after the sweep slice lands.
 
 `tests/contracts/artifact-authority.test.ts` asserts the same invariants
 at `npm run test` time so the feedback loop is fast.
