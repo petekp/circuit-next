@@ -61,6 +61,14 @@ const SURFACE_CLASSES = new Set([
 
 const COMPATIBILITY_POLICIES = new Set(['n/a', 'clean-break', 'parse-legacy', 'unknown']);
 
+const DANGLING_REFERENCE_POLICIES = new Set([
+  'n/a',
+  'unknown-blocking',
+  'error-at-resolve',
+  'warn',
+  'allow',
+]);
+
 const ARTIFACT_REQUIRED_BASE_FIELDS = [
   'id',
   'surface_class',
@@ -288,6 +296,15 @@ function checkAuthorityGraph() {
       findings.push({
         level: 'red',
         detail: `${artifact.id}: unknown compatibility_policy "${artifact.compatibility_policy}"`,
+      });
+    }
+    if (
+      Object.hasOwn(artifact, 'dangling_reference_policy') &&
+      !DANGLING_REFERENCE_POLICIES.has(artifact.dangling_reference_policy)
+    ) {
+      findings.push({
+        level: 'red',
+        detail: `${artifact.id}: unknown dangling_reference_policy "${artifact.dangling_reference_policy}"`,
       });
     }
     for (const field of ARTIFACT_REQUIRED_BASE_FIELDS) {

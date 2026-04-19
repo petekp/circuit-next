@@ -75,8 +75,8 @@ Every artifact row in `specs/artifacts.json` MUST have these base fields:
 | `writers` | Array of components that produce/modify the artifact. |
 | `readers` | Array of components that consume the artifact. |
 | `backing_paths` | Array of on-disk path templates where the artifact lives. |
-| `identity_fields` | Fields that identify a specific instance. |
-| `path_derived_fields` | Subset of `identity_fields` used to construct a filesystem path. |
+| `identity_fields` | Fields that identify a specific instance. Empty array for singleton artifacts (one-per-project files). |
+| `path_derived_fields` | Fields whose value is joined into a filesystem path at parse time. Usually a subset of `identity_fields`, but MAY reference nested paths (e.g. `pending_record.record_id`) when the artifact is a resolver pointing at another artifact's path-derived identity. Dotted notation denotes nested fields. |
 | `dangerous_sinks` | Places this artifact reaches that could mis-route, mis-attribute, or escalate if wrong. |
 | `trust_boundary` | One-line description of who trusts what about this artifact. |
 
@@ -91,7 +91,7 @@ Required for `successor-to-live`, `legacy-compatible`, and
 | `reference_evidence` | Array of paths to characterization docs under `specs/reference/<source>/`. |
 | `migration_policy` | Prose: current plan for handling legacy data (deferred, planned-as-migration-source, never). |
 | `legacy_parse_policy` | `reject`, `parse`, or `parse-quarantined`. |
-| `dangling_reference_policy` | What the runtime does when a referenced record is absent: `unknown-blocking`, `warn`, `allow`. |
+| `dangling_reference_policy` | What the runtime does when a referenced record is absent. Closed enum: `n/a` (artifact has no outgoing references), `unknown-blocking` (discovery marker — blocks authorship), `error-at-resolve` (resolver surfaces mismatch as error), `warn` (resolver logs and continues), `allow` (silently drop the dangling reference). Validated by audit. |
 
 The audit enforces these conditionally on class.
 

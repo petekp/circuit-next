@@ -146,16 +146,54 @@ term, propose it here in a new commit before using it elsewhere.
 
 ## Continuity vocabulary
 
-- **Continuity record** `[draft]` — A cross-session handoff record. Two
+- **Continuity record** `[v0.1]` — A cross-session handoff record. Two
   discriminants: `standalone` (no active run; narrative-only) and
-  `run-backed` (anchored to a specific `RunId`). Stored at
-  `.circuit/control-plane/continuity-records/continuity-<uuid>.json`;
-  indexed at `.circuit/control-plane/continuity-index.json`.
+  `run-backed` (anchored to a specific `RunId` plus **run-attached
+  provenance**). Stored at `<control-plane>/continuity/records/
+  ${record_id}.json`; indexed by the **continuity index**. Identity is
+  `record_id`, a `ControlPlaneFileStem` used directly as the filename
+  stem. Authority: `specs/contracts/continuity.md` v0.1,
+  `specs/artifacts.json` artifact id `continuity.record`.
 
-- **Resume contract** `[draft]` — The explicit contract attached to a
-  continuity record specifying whether resumption is `resume_run` or
-  `resume_standalone`, whether it is `auto_resume`, and whether it
-  `requires_explicit_resume`.
+- **Continuity index** `[v0.1]` — The resolver artifact that determines
+  which continuity record is authoritative for resume and which run (if
+  any) is currently attached. Stored at
+  `<control-plane>/continuity/index.json`. Carries two orthogonal
+  pointers: **pending-record pointer** and **attached-run pointer**.
+  Either may be null; both may be populated. Authority:
+  `specs/contracts/continuity.md` v0.1,
+  `specs/artifacts.json` artifact id `continuity.index`.
+
+- **Resume contract** `[v0.1]` — The posture a continuity record declares
+  for how the next session should pick it up. Carries `mode`
+  (`resume_run` | `resume_standalone`, bound to `continuity_kind` per
+  CONT-I5) and two safety booleans (`auto_resume`,
+  `requires_explicit_resume`) where exactly one MUST be true (CONT-I6).
+  Both-true or both-false forms are rejected at parse time.
+
+- **Run-attached provenance** `[v0.1]` — The snapshot-of-state embedded in
+  a run-backed continuity record: `current_phase`, `current_step`,
+  `runtime_status`, `runtime_updated_at` (plus the `run_id` /
+  `invocation_id` identity pair). Enough to make resume adjudication
+  auditable by comparing "what was true at save time" vs "what is true
+  now." A bare `{run_id}` is rejected (CONT-I7).
+
+- **Pending-record pointer** `[v0.1]` — The index entry that names which
+  continuity record is authoritative for the next resume. Keyed by
+  `record_id` (a `ControlPlaneFileStem`), type-aligned with the record-
+  side identity. Round-trip `<control-plane>/continuity/records/
+  ${record_id}.json` is schema-safe.
+
+- **Attached-run pointer** `[v0.1]` — The index entry that names which
+  run is currently live. Carries `run_id`, `current_phase`,
+  `current_step`, `runtime_status`, `attached_at`, `last_validated_at`.
+  Orthogonal to pending-record pointer.
+
+- **Dangling reference (continuity)** `[v0.1]` — The failure state where
+  `ContinuityIndex.pending_record.record_id` names a file absent from
+  `<control-plane>/continuity/records/`. Runtime policy:
+  error-at-resolve; the resume flow surfaces the mismatch rather than
+  silently falling back.
 
 ---
 

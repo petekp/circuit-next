@@ -312,9 +312,16 @@
       "surface_class": "successor-to-live",
       "compatibility_policy": "clean-break",
       "description": "circuit-next continuity handoff record. Carries goal, next, state, and debt narrative across session boundaries; identity derived from record_id which is used as a filename stem.",
-      "contract": null,
+      "contract": "specs/contracts/continuity.md",
       "schema_file": "src/schemas/continuity.ts",
-      "schema_exports": ["ContinuityRecord", "StandaloneContinuity", "RunBackedContinuity"],
+      "schema_exports": [
+        "ContinuityRecord",
+        "StandaloneContinuity",
+        "RunBackedContinuity",
+        "RunAttachedProvenance",
+        "GitState",
+        "ContinuityNarrative"
+      ],
       "writers": ["circuit-next engine (handoff save)"],
       "readers": ["circuit-next resume (explicit resume flow)"],
       "resolvers": ["continuity.index"],
@@ -331,29 +338,29 @@
       "reference_evidence": ["specs/reference/legacy-circuit/continuity-characterization.md"],
       "migration_policy": "deferred; no transparent runtime parse of old Circuit records. If imported later, a separate migration-source contract is required.",
       "legacy_parse_policy": "reject",
-      "dangling_reference_policy": "unknown-blocking"
+      "dangling_reference_policy": "n/a"
     },
     {
       "id": "continuity.index",
       "surface_class": "successor-to-live",
       "compatibility_policy": "clean-break",
-      "description": "circuit-next continuity resolver/index artifact. Points at the pending record and the current attached run; determines which record is authoritative for resume.",
-      "contract": null,
+      "description": "circuit-next continuity resolver/index artifact. Points at the pending record and the current attached run; determines which record is authoritative for resume. Singleton on disk — no in-body identity.",
+      "contract": "specs/contracts/continuity.md",
       "schema_file": "src/schemas/continuity.ts",
-      "schema_exports": ["ContinuityIndex"],
+      "schema_exports": ["ContinuityIndex", "PendingRecordPointer", "AttachedRunPointer"],
       "writers": ["circuit-next engine (handoff save, attachment changes)"],
       "readers": ["circuit-next resume (explicit resume flow)"],
       "resolvers": [],
       "backing_paths": ["<circuit-next-control-plane>/continuity/index.json"],
-      "identity_fields": ["record_id"],
-      "path_derived_fields": ["record_id"],
+      "identity_fields": [],
+      "path_derived_fields": ["pending_record.record_id"],
       "dangerous_sinks": ["resume selection", "record lookup", "dangling reference resolution"],
       "trust_boundary": "operator-local persisted state; determines which record is authoritative for resume",
       "reference_surfaces": ["legacy-circuit.continuity.index"],
       "reference_evidence": ["specs/reference/legacy-circuit/continuity-characterization.md"],
       "migration_policy": "deferred; no transparent runtime parse of old Circuit index. If imported later, a separate migration-source contract is required.",
       "legacy_parse_policy": "reject",
-      "dangling_reference_policy": "unknown-blocking"
+      "dangling_reference_policy": "error-at-resolve"
     }
   ]
 }
