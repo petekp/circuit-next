@@ -1,6 +1,6 @@
 # PROJECT_STATE — circuit-next
 
-**Last updated:** 2026-04-19 (Slice 8: continuity.md v0.1)
+**Last updated:** 2026-04-19 (Slice 9: skill.md v0.1)
 **Phase:** 0.5 — Slice 8 Continuity Contract **closed**. Authority-graph
 gate (Slice 7) now exercised end-to-end against a successor-to-live
 artifact. Phase 1 contract authorship resumed under the gate.
@@ -124,13 +124,12 @@ Then in order of importance:
 
 ### Deferred to Phase 1 contract authorship
 
-- Remaining contract stubs under `specs/contracts/`:
-  - `skill.md`
 - Behavioral tracks: `specs/behavioral/session-hygiene.md`,
   `specs/behavioral/prose-yaml-parity.md`, `specs/behavioral/cross-model-challenger.md`
 
-### Closed this session (Phase 1, first contract slice + autonomy arc slices 1-8)
+### Closed this session (Phase 1, first contract slice + autonomy arc slices 1-9)
 
+- **`specs/contracts/skill.md`** (v0.1, slice 9, **Ratchet-Advance lane**) — Skill contract with SKILL-I1..I6 covering `skill.descriptor` (greenfield, compiled catalog projection). Closes the selection/adapter/skill dispatch-time triplet on the authoring side. Schema: `SkillDescriptor` wrapped with `descriptorOwnPropertyGuard.pipe(...)` for prototype-chain defense (SKILL-I6, mirrors CONT-I12/RUN MED #3); `.strict()` at descriptor boundary (SKILL-I5); closed `SkillDomain` enum with `domain-general` default (SKILL-I3); `capabilities` optional + non-empty when present (SKILL-I4); structurally-only `SkillId` brand with explicit nominal-not-runtime caveat (SKILL-I1). Codex cross-model adversarial pass: REJECT → ACCEPT after fold-in of 1 HIGH + 5 MED + 2 LOW with no deferrals. HIGH #1 (external-protocol vs greenfield confusion) reframed: `backing_paths` points to compiled catalog projection, not SKILL.md YAML; upstream CC frontmatter deferred to future `skill.frontmatter` (external-protocol) artifact. Full record at `specs/reviews/skill-md-v0.1-codex.md`. +18 contract tests across SKILL-I1..I6.
 - **`specs/contracts/continuity.md`** (v0.1, slice 8, **Ratchet-Advance lane**) — Continuity contract with CONT-I1..I12 covering both `continuity.record` and `continuity.index` aggregates. `record_id` uses `ControlPlaneFileStem` (CONT-I1, path-safe primitive); new `ContinuityIndex` aggregate with `PendingRecordPointer` + `AttachedRunPointer` (CONT-I9..I11, closes index-aggregate HIGH); transitive `.strict()` at every depth (CONT-I8); safety-boolean non-contradiction via per-variant `.refine()` on `resume_contract` (CONT-I6 — closes pre-authoring carryover #7); run-attached provenance with `current_phase`+`current_step`+`runtime_status`+`runtime_updated_at` (CONT-I7 — closes pre-authoring carryover #8); raw-input own-property guards on `ContinuityRecord` + `ContinuityIndex` via `z.custom.pipe(...)` (CONT-I12 — closes Codex HIGH #1, prototype-chain defense mirroring `RunLog`). Authority-graph fix: `continuity.index.identity_fields=[]` (singleton) + `path_derived_fields=["pending_record.record_id"]` (dotted nested); `specs/artifacts.md` relaxation of the subset rule (closes Codex HIGH #2). Audit hardening: `DANGLING_REFERENCE_POLICIES` closed enum `[n/a, unknown-blocking, error-at-resolve, warn, allow]` validated by `scripts/audit.mjs`; `continuity.record=n/a`, `continuity.index=error-at-resolve` (closes Codex MED #5). LOW #6 coverage additions: string `schema_version: "1"` rejection on both record + index, `AttachedRunPointer` surplus-key rejection, pending-pointer path-separator + parent-traversal rejection. +37 contract tests (227 → 264). Full Codex record at `specs/reviews/continuity-md-v0.1-codex.md`. MED #3 (pointer-kind denormalization) + MED #4 (split-brain resolver precedence) scoped to v0.2 as resolver-level concerns with named Phase 2 property ids (`continuity.prop.index_pointer_kind_matches_record`, `continuity.prop.index_pointer_run_id_coherence`).
 - **Slice 7 — Authority-Graph Gate (ADR-0003, Ratchet-Advance lane).** Artifact authority graph + `ControlPlaneFileStem` path-safe primitive + audit authority-graph dimension + contract-frontmatter `artifact_ids` binding + README/PROJECT_STATE phase-consistency audit + clean-break `successor-to-live` classification for continuity + reference characterization at `specs/reference/legacy-circuit/continuity-characterization.md`. Closes the pre-authoring structural failure mode: imagine-and-draft on a live surface without characterization.
 

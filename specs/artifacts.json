@@ -308,6 +308,37 @@
       "dangling_reference_policy": "n/a"
     },
     {
+      "id": "skill.descriptor",
+      "surface_class": "greenfield",
+      "compatibility_policy": "n/a",
+      "description": "circuit-next catalog entry for a plugin skill's L1 frontmatter. Represents the machine-readable descriptor a selection resolver can bind by SkillId and a catalog compiler can enumerate. Prose body (L2) and extra files (L3) are out of scope.",
+      "contract": "specs/contracts/skill.md",
+      "schema_file": "src/schemas/skill.ts",
+      "schema_exports": ["SkillDescriptor", "SkillDomain"],
+      "writers": ["circuit-next catalog compiler (build-time)"],
+      "readers": [
+        "circuit-next engine (selection resolver, skill set composition)",
+        "operator tooling (catalog enumeration)"
+      ],
+      "resolvers": [],
+      "backing_paths": [
+        "<plugin>/catalog/skills.json (compiled catalog projection, one SkillDescriptor per skill)"
+      ],
+      "identity_fields": ["id"],
+      "path_derived_fields": [],
+      "dangerous_sinks": [
+        "skill set composition via SkillOverride",
+        "catalog closure under SkillId references",
+        "operator-facing skill enumeration"
+      ],
+      "trust_boundary": "plugin-authored static descriptor; loaded read-only at catalog-compile time; never model-authored during a run",
+      "reference_surfaces": [],
+      "reference_evidence": [],
+      "migration_policy": "n/a",
+      "legacy_parse_policy": "n/a",
+      "dangling_reference_policy": "n/a"
+    },
+    {
       "id": "continuity.record",
       "surface_class": "successor-to-live",
       "compatibility_policy": "clean-break",

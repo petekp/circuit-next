@@ -199,10 +199,11 @@ term, propose it here in a new commit before using it elsewhere.
 
 ## Skill + plugin vocabulary
 
-- **Skill** `[draft]` — A discoverable capability with a trigger. L1 is
+- **Skill** `[v0.1]` — A discoverable capability with a trigger. L1 is
   YAML frontmatter (~80-100 tokens: id, title, description, trigger);
   L2 is SKILL.md body (<5k tokens, loaded on trigger match); L3 is extra
-  files (loaded on explicit demand).
+  files (loaded on explicit demand). Authority:
+  `specs/contracts/skill.md` v0.1; artifact id `skill.descriptor`.
 
 - **Plugin** `[draft]` — The Claude Code plugin surface that circuit-next
   installs into: commands, agents, hooks, skills, MCP servers, monitors.
