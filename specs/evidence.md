@@ -65,7 +65,7 @@ The following must be preserved or abandoned only via ADR. Every invariant in th
 Where truth must be pinned between layers. These inform `specs/contracts/<module>.md` authorship in Phase 1.
 
 1. **Workflow type ↔ Run instance.** A Workflow is immutable type; a Run is a replayable instance. Contract: Run is a deterministic replay of Workflow + events.
-2. **Step writes ↔ Gate source.** Adversarial review MED objection #7: gate `source` strings are opaque. Phase 1 should tie `gate.source` to a named `writes.*` slot.
+2. **Step writes ↔ Gate source.** Adversarial review MED objection #7: gate `source` strings are opaque. **Closed in Phase 1 slice 1** (`specs/contracts/step.md` v0.1 STEP-I3/I4) — `gate.source` is typed per gate variant and `ref` is a literal constrained to an existing `writes.*` slot.
 3. **Event ↔ Snapshot reducer.** Snapshot is a pure fold over events. Reducer must be total, deterministic, and tested with property-style tests (Tier 2+).
 4. **Selection layer ↔ Effective config.** A pure function takes all layers and returns `ResolvedSelection` with provenance trace.
 5. **Skill descriptor L1 ↔ Runtime loader.** L1 YAML frontmatter loaded at session start; L2 body on trigger match; L3 extra files on explicit request. Cache-cost boundary.
@@ -129,11 +129,11 @@ Adversarial review verdict: `NEEDS ADJUSTMENT`. Summary of incorporation:
 | 4 | HIGH | Selection policy lacks precedence/overrides | Incorporated (`SkillOverride`, `SelectionResolution`) |
 | 5 | HIGH | Adapter config schema doesn't match documented surface | Incorporated (`dispatch.adapters` registry + closure validation) |
 | 6 | MED | Step under-constrained | Incorporated (`Step = discriminatedUnion`) |
-| 7 | MED | Gate source is opaque string | **Deferred** to Phase 1 (requires naming `writes.*` slots) |
+| 7 | MED | Gate source is opaque string | **Closed** in Phase 1 slice 1 (`specs/contracts/step.md` v0.1 — STEP-I3/I4: `gate.source` is a typed discriminated union with literal `ref` per kind) |
 | 8 | MED | Rigor semantics wrong for autonomous | Incorporated (`CONSEQUENTIAL_RIGORS` includes `autonomous`) |
 | 9 | MED | Continuity contradictory resume states | Incorporated (discriminated union on `continuity_kind`) |
 | 10 | MED | Branded IDs don't protect dangerous edges | Partial (route target validation via workflow superRefine; path/source strings remain) |
-| 11 | MED | Phase spine too loose | **Deferred** to Phase 1 (`spine_policy` requires workflow-vocabulary decisions) |
+| 11 | MED | Phase spine too loose | **Closed** in Phase 1 slice 3 (`specs/contracts/phase.md` v0.1 — PHASE-I4: `Workflow.spine_policy` required discriminated union, strict/partial modes; HIGH-level semantic gaps honestly scoped as Phase 2 property_ids after second Codex adversarial pass) |
 | 12 | MED | Model/Effort enums overfit | Incorporated (provider-scoped `ProviderScopedModel`; `Effort` matches OpenAI 6-tier) |
 | 13 | LOW | Parity tests ratify permissiveness | Incorporated (now 34 contract tests including negative cases) |
 

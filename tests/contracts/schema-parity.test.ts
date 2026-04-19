@@ -6,6 +6,7 @@ import {
   Event,
   Gate,
   LaneDeclaration,
+  Phase,
   Rigor,
   Role,
   SelectionOverride,
@@ -430,89 +431,320 @@ describe('Workflow graph closure (adversarial-review fix #1)', () => {
     routes: { pass: '@complete' },
   };
 
+  // Partial spine policy omitting the 6 non-frame canonicals, for fixtures that
+  // only need to isolate one phase. Verbose by design (PHASE-I4): every omission
+  // is named and rationalized.
+  const partialSpineOmittingNonFrame = {
+    mode: 'partial' as const,
+    omits: ['analyze', 'plan', 'act', 'verify', 'review', 'close'] as const,
+    rationale: 'minimal test fixture isolating the frame phase',
+  };
+
+  const okWorkflow = (overrides: Record<string, unknown> = {}) => ({
+    schema_version: '2',
+    id: 'build',
+    version: '2026-04-18',
+    purpose: 'Build features.',
+    entry: {
+      signals: { include: ['feature'], exclude: ['bug'] },
+      intent_prefixes: ['develop:'],
+    },
+    entry_modes: [
+      { name: 'default', start_at: 'frame', rigor: 'standard', description: 'Standard.' },
+    ],
+    phases: [{ id: 'frame-phase', title: 'Frame', canonical: 'frame', steps: ['frame'] }],
+    steps: [okFrameStep],
+    spine_policy: partialSpineOmittingNonFrame,
+    default_skills: [],
+    ...overrides,
+  });
+
   it('happy path parses', () => {
-    const wf = Workflow.safeParse({
-      schema_version: '2',
-      id: 'build',
-      version: '2026-04-18',
-      purpose: 'Build features.',
-      entry: {
-        signals: { include: ['feature'], exclude: ['bug'] },
-        intent_prefixes: ['develop:'],
-      },
-      entry_modes: [
-        { name: 'default', start_at: 'frame', rigor: 'standard', description: 'Standard.' },
-      ],
-      phases: [{ id: 'frame-phase', title: 'Frame', canonical: 'frame', steps: ['frame'] }],
-      steps: [okFrameStep],
-      default_skills: [],
-    });
-    expect(wf.success).toBe(true);
+    expect(Workflow.safeParse(okWorkflow()).success).toBe(true);
   });
 
   it('rejects entry_modes.start_at referencing an unknown step', () => {
-    const wf = Workflow.safeParse({
-      schema_version: '2',
-      id: 'build',
-      version: '2026-04-18',
-      purpose: 'Build features.',
-      entry: { signals: { include: [], exclude: [] }, intent_prefixes: [] },
-      entry_modes: [{ name: 'default', start_at: 'nowhere', rigor: 'standard', description: 'x' }],
-      phases: [{ id: 'frame-phase', title: 'Frame', canonical: 'frame', steps: ['frame'] }],
-      steps: [okFrameStep],
-      default_skills: [],
-    });
-    expect(wf.success).toBe(false);
+    expect(
+      Workflow.safeParse(
+        okWorkflow({
+          entry_modes: [
+            { name: 'default', start_at: 'nowhere', rigor: 'standard', description: 'x' },
+          ],
+        }),
+      ).success,
+    ).toBe(false);
   });
 
   it('rejects phase referencing an unknown step', () => {
-    const wf = Workflow.safeParse({
-      schema_version: '2',
-      id: 'build',
-      version: '2026-04-18',
-      purpose: 'Build features.',
-      entry: { signals: { include: [], exclude: [] }, intent_prefixes: [] },
-      entry_modes: [{ name: 'default', start_at: 'frame', rigor: 'standard', description: 'x' }],
-      phases: [{ id: 'frame-phase', title: 'Frame', canonical: 'frame', steps: ['ghost'] }],
-      steps: [okFrameStep],
-      default_skills: [],
-    });
-    expect(wf.success).toBe(false);
+    expect(
+      Workflow.safeParse(
+        okWorkflow({
+          phases: [{ id: 'frame-phase', title: 'Frame', canonical: 'frame', steps: ['ghost'] }],
+        }),
+      ).success,
+    ).toBe(false);
   });
 
   it('rejects route target that is neither terminal nor a known step', () => {
-    const wf = Workflow.safeParse({
-      schema_version: '2',
-      id: 'build',
-      version: '2026-04-18',
-      purpose: 'Build features.',
-      entry: { signals: { include: [], exclude: [] }, intent_prefixes: [] },
-      entry_modes: [{ name: 'default', start_at: 'frame', rigor: 'standard', description: 'x' }],
-      phases: [{ id: 'frame-phase', title: 'Frame', canonical: 'frame', steps: ['frame'] }],
-      steps: [
-        {
-          ...okFrameStep,
-          routes: { pass: 'missing-target' },
-        },
-      ],
-      default_skills: [],
-    });
-    expect(wf.success).toBe(false);
+    expect(
+      Workflow.safeParse(
+        okWorkflow({
+          steps: [{ ...okFrameStep, routes: { pass: 'missing-target' } }],
+        }),
+      ).success,
+    ).toBe(false);
   });
 
   it('rejects duplicate step ids', () => {
-    const wf = Workflow.safeParse({
-      schema_version: '2',
-      id: 'build',
-      version: '2026-04-18',
-      purpose: 'Build features.',
-      entry: { signals: { include: [], exclude: [] }, intent_prefixes: [] },
-      entry_modes: [{ name: 'default', start_at: 'frame', rigor: 'standard', description: 'x' }],
-      phases: [{ id: 'frame-phase', title: 'Frame', canonical: 'frame', steps: ['frame'] }],
-      steps: [okFrameStep, okFrameStep],
-      default_skills: [],
+    expect(Workflow.safeParse(okWorkflow({ steps: [okFrameStep, okFrameStep] })).success).toBe(
+      false,
+    );
+  });
+});
+
+describe('Phase contract (PHASE-I1..I3)', () => {
+  it('rejects surplus keys (PHASE-I2 strict mode)', () => {
+    // A typo like `conanical` must fail parse, not silently lose the canonical binding.
+    const result = Phase.safeParse({
+      id: 'frame-phase',
+      title: 'Frame',
+      conanical: 'frame', // typo of canonical
+      steps: ['frame'],
     });
-    expect(wf.success).toBe(false);
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects empty steps array (PHASE-I1)', () => {
+    const result = Phase.safeParse({
+      id: 'frame-phase',
+      title: 'Frame',
+      canonical: 'frame',
+      steps: [],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts valid canonical enum values (PHASE-I3)', () => {
+    for (const canonical of ['frame', 'analyze', 'plan', 'act', 'verify', 'review', 'close']) {
+      const result = Phase.safeParse({
+        id: `${canonical}-phase`,
+        title: canonical,
+        canonical,
+        steps: ['s'],
+      });
+      expect(result.success).toBe(true);
+    }
+  });
+
+  it('rejects unknown canonical labels (PHASE-I3)', () => {
+    const result = Phase.safeParse({
+      id: 'x-phase',
+      title: 'X',
+      canonical: 'unknown-phase',
+      steps: ['s'],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('canonical is optional (workflow-specific phases allowed)', () => {
+    const result = Phase.safeParse({ id: 'custom-phase', title: 'Custom', steps: ['s'] });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe('Workflow spine_policy (PHASE-I4, closes adversarial-review MED #11)', () => {
+  const okFrameStep = {
+    id: 'frame',
+    title: 'Frame',
+    executor: 'orchestrator' as const,
+    kind: 'synthesis' as const,
+    protocol: 'build-frame@v1',
+    reads: [],
+    writes: { artifact: { path: 'artifacts/brief.md', schema: 'brief@v1' } },
+    gate: {
+      kind: 'schema_sections' as const,
+      source: { kind: 'artifact' as const, ref: 'artifact' },
+      required: ['Objective'],
+    },
+    routes: { pass: '@complete' },
+  };
+
+  const sevenPhases = [
+    { id: 'p-frame', title: 'Frame', canonical: 'frame', steps: ['frame'] },
+    { id: 'p-analyze', title: 'Analyze', canonical: 'analyze', steps: ['frame'] },
+    { id: 'p-plan', title: 'Plan', canonical: 'plan', steps: ['frame'] },
+    { id: 'p-act', title: 'Act', canonical: 'act', steps: ['frame'] },
+    { id: 'p-verify', title: 'Verify', canonical: 'verify', steps: ['frame'] },
+    { id: 'p-review', title: 'Review', canonical: 'review', steps: ['frame'] },
+    { id: 'p-close', title: 'Close', canonical: 'close', steps: ['frame'] },
+  ];
+
+  const workflowBase = {
+    schema_version: '2',
+    id: 'build',
+    version: '2026-04-18',
+    purpose: 'Build features.',
+    entry: { signals: { include: [], exclude: [] }, intent_prefixes: [] },
+    entry_modes: [
+      { name: 'default', start_at: 'frame', rigor: 'standard', description: 'Standard.' },
+    ],
+    steps: [okFrameStep],
+    default_skills: [],
+  };
+
+  it('rejects workflow without spine_policy (required field)', () => {
+    const result = Workflow.safeParse({
+      ...workflowBase,
+      phases: sevenPhases,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('strict mode accepts workflow with all seven canonical phases', () => {
+    const result = Workflow.safeParse({
+      ...workflowBase,
+      phases: sevenPhases,
+      spine_policy: { mode: 'strict' },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('strict mode rejects workflow missing review (the gate that matters)', () => {
+    const result = Workflow.safeParse({
+      ...workflowBase,
+      phases: sevenPhases.filter((p) => p.canonical !== 'review'),
+      spine_policy: { mode: 'strict' },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('strict mode rejects workflow missing verify', () => {
+    const result = Workflow.safeParse({
+      ...workflowBase,
+      phases: sevenPhases.filter((p) => p.canonical !== 'verify'),
+      spine_policy: { mode: 'strict' },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('partial mode accepts workflow that omits exactly what spine_policy.omits declares', () => {
+    const result = Workflow.safeParse({
+      ...workflowBase,
+      phases: sevenPhases.filter((p) => p.canonical !== 'plan'),
+      spine_policy: {
+        mode: 'partial',
+        omits: ['plan'],
+        rationale: 'repair workflow skips plan — root-cause analysis replaces it',
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('partial mode rejects workflow that omits something NOT declared in omits', () => {
+    const result = Workflow.safeParse({
+      ...workflowBase,
+      phases: sevenPhases.filter((p) => p.canonical !== 'review'),
+      spine_policy: {
+        mode: 'partial',
+        omits: ['plan'],
+        rationale: 'repair workflow skips plan — root-cause analysis replaces it',
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('partial mode requires non-empty omits (the SpinePolicy discriminated union)', () => {
+    const result = Workflow.safeParse({
+      ...workflowBase,
+      phases: sevenPhases,
+      spine_policy: {
+        mode: 'partial',
+        omits: [],
+        rationale: 'this rationale is over twenty characters long for sure',
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('partial mode requires rationale ≥20 characters', () => {
+    const result = Workflow.safeParse({
+      ...workflowBase,
+      phases: sevenPhases.filter((p) => p.canonical !== 'plan'),
+      spine_policy: { mode: 'partial', omits: ['plan'], rationale: 'too short' },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('strict mode rejects unknown spine_policy fields (strict discriminated union)', () => {
+    const result = Workflow.safeParse({
+      ...workflowBase,
+      phases: sevenPhases,
+      spine_policy: { mode: 'strict', extra: 'surplus' },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  // Codex adversarial-auditor pass (2026-04-18): MED #4, MED #6, LOW #8 coverage.
+
+  it('PHASE-I5: rejects duplicate canonical phases (Codex MED #4)', () => {
+    const result = Workflow.safeParse({
+      ...workflowBase,
+      phases: [
+        ...sevenPhases,
+        { id: 'p-review-2', title: 'Second Review', canonical: 'review', steps: ['frame'] },
+      ],
+      spine_policy: { mode: 'strict' },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('PHASE-I5: multiple phases without canonical are permitted (workflow-specific)', () => {
+    const result = Workflow.safeParse({
+      ...workflowBase,
+      phases: [
+        ...sevenPhases,
+        { id: 'p-extra-1', title: 'Helper 1', steps: ['frame'] },
+        { id: 'p-extra-2', title: 'Helper 2', steps: ['frame'] },
+      ],
+      spine_policy: { mode: 'strict' },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('partial-mode omits must be disjoint from declared canonicals (Codex MED #6.a)', () => {
+    const result = Workflow.safeParse({
+      ...workflowBase,
+      phases: sevenPhases, // includes canonical: 'plan'
+      spine_policy: {
+        mode: 'partial',
+        omits: ['plan'], // but plan is declared above — contradiction
+        rationale: 'contradictory — plan is both declared and omitted',
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('partial-mode omits must be pairwise unique (Codex MED #6.b)', () => {
+    const result = Workflow.safeParse({
+      ...workflowBase,
+      phases: sevenPhases.filter((p) => p.canonical !== 'plan'),
+      spine_policy: {
+        mode: 'partial',
+        omits: ['plan', 'plan'], // duplicate
+        rationale: 'duplicate omits — should be rejected by Workflow superRefine',
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('PHASE-I6: Workflow itself rejects top-level surplus keys (Codex LOW #8)', () => {
+    const result = Workflow.safeParse({
+      ...workflowBase,
+      phases: sevenPhases,
+      spine_policy: { mode: 'strict' },
+      audit_notes: 'surplus top-level key should be rejected', // surplus
+    });
+    expect(result.success).toBe(false);
   });
 });
 

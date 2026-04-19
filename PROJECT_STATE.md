@@ -87,14 +87,13 @@ Then in order of importance:
 ### Deferred to Phase 1 contract authorship
 
 - Remaining contract stubs under `specs/contracts/`:
-  - `phase.md`, `run.md`, `selection.md`, `adapter.md`,
-    `continuity.md`, `skill.md`
+  - `run.md`, `selection.md`, `adapter.md`, `continuity.md`, `skill.md`
 - Behavioral tracks: `specs/behavioral/session-hygiene.md`,
   `specs/behavioral/prose-yaml-parity.md`, `specs/behavioral/cross-model-challenger.md`
-- Adversarial-review MED #11 (workflow `spine_policy` for phase-omit/rename policy) — belongs in `phase.md`
 
-### Closed this session (Phase 1, first contract slice + autonomy arc slices 1-2)
+### Closed this session (Phase 1, first contract slice + autonomy arc slices 1-3)
 
+- **`specs/contracts/phase.md`** (v0.1, slice 3) — Phase contract with PHASE-I1..I4: non-empty steps, `.strict()` surplus-key rejection, canonical-enum closure, and **spine policy enforcement** (MED #11). `Workflow.spine_policy` is now a required discriminated union: `mode: 'strict'` requires all 7 canonical phases; `mode: 'partial'` requires explicit `omits` + rationale ≥20 chars. Silent skip of `review` or `verify` is rejected at parse time. +14 contract tests (46 → 60).
 - **`npm run audit`** — drift-visibility audit command (`scripts/audit.mjs`). Walks recent commits, checks 8 discipline dimensions (lane, framing triplet, citation rule, Circuit-smell, gitignore compliance, test ratchet, PROJECT_STATE freshness, verify gate). Exits non-zero on red. The enforcement mechanism ADR-0002 promised. First run: 8 green / 0 yellow / 0 red against HEAD.
 - **ADR-0002** — *Bootstrap Discipline*: codifies that `circuit-next` is built via the existing Circuit as harness (classic bootstrap), with four rules against design contamination (citation rule, gitignore rule, harness-vs-template distinction, enforcement via audit). Closes the "Circuit does X" silent-justification risk.
 - `.circuit/` added to `.gitignore` going forward; `phase-1-step-contract-authorship` run preserved via negative rule as historical audit trail of the first Phase 1 slice.

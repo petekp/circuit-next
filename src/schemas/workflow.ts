@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { SkillId, StepId, WorkflowId } from './ids.js';
 import { Lane } from './lane.js';
-import { Phase } from './phase.js';
+import { CANONICAL_PHASES, type CanonicalPhase, Phase, SpinePolicy } from './phase.js';
 import { Rigor } from './rigor.js';
 import { SelectionOverride } from './selection-policy.js';
 import { Step } from './step.js';
@@ -23,21 +23,26 @@ export const EntryMode = z.object({
 });
 export type EntryMode = z.infer<typeof EntryMode>;
 
-const WorkflowBody = z.object({
-  schema_version: z.literal('2'),
-  id: WorkflowId,
-  version: z.string().min(1),
-  purpose: z.string().min(1),
-  entry: z.object({
-    signals: EntrySignals,
-    intent_prefixes: z.array(z.string()).default([]),
-  }),
-  entry_modes: z.array(EntryMode).min(1),
-  phases: z.array(Phase).min(1),
-  steps: z.array(Step).min(1),
-  default_skills: z.array(SkillId).default([]),
-  default_selection: SelectionOverride.optional(),
-});
+const WorkflowBody = z
+  .object({
+    schema_version: z.literal('2'),
+    id: WorkflowId,
+    version: z.string().min(1),
+    purpose: z.string().min(1),
+    entry: z
+      .object({
+        signals: EntrySignals,
+        intent_prefixes: z.array(z.string()).default([]),
+      })
+      .strict(),
+    entry_modes: z.array(EntryMode).min(1),
+    phases: z.array(Phase).min(1),
+    steps: z.array(Step).min(1),
+    spine_policy: SpinePolicy,
+    default_skills: z.array(SkillId).default([]),
+    default_selection: SelectionOverride.optional(),
+  })
+  .strict();
 
 const issueAt = (ctx: z.RefinementCtx, path: (string | number)[], message: string) => {
   ctx.addIssue({ code: z.ZodIssueCode.custom, path, message });
@@ -103,6 +108,72 @@ export const Workflow = WorkflowBody.superRefine((wf, ctx) => {
           `route target is not @complete/@stop/@escalate/@handoff and not a known step: ${target}`,
         );
       }
+    }
+  }
+
+  // PHASE-I5: canonical uniqueness. Two phases sharing the same defined
+  // canonical label create structural ambiguity about which is "the" canonical
+  // phase; rejecting at parse time avoids a silent-convention bug later.
+  const canonicalSeenAt = new Map<CanonicalPhase, number>();
+  for (let i = 0; i < wf.phases.length; i++) {
+    const phase = wf.phases[i];
+    if (phase === undefined) continue;
+    if (phase.canonical === undefined) continue;
+    const prior = canonicalSeenAt.get(phase.canonical);
+    if (prior !== undefined) {
+      issueAt(
+        ctx,
+        ['phases', i, 'canonical'],
+        `duplicate canonical '${phase.canonical}' — also declared by phase at index ${prior}`,
+      );
+    } else {
+      canonicalSeenAt.set(phase.canonical, i);
+    }
+  }
+
+  // PHASE-I4: spine policy enforcement (declaration layer). Every non-omitted
+  // canonical phase must appear as a Phase.canonical somewhere in wf.phases.
+  const declaredCanonicals = new Set<CanonicalPhase>(canonicalSeenAt.keys());
+  const omits = new Set<CanonicalPhase>();
+  if (wf.spine_policy.mode === 'partial') {
+    // MED #6.b: omits must be pairwise unique. Duplicates imply a typo or
+    // misunderstanding; both deserve a loud parse failure rather than silent
+    // set-collapse semantics.
+    const seenOmits = new Set<CanonicalPhase>();
+    for (let i = 0; i < wf.spine_policy.omits.length; i++) {
+      const o = wf.spine_policy.omits[i];
+      if (o === undefined) continue;
+      if (seenOmits.has(o)) {
+        issueAt(
+          ctx,
+          ['spine_policy', 'omits', i],
+          `duplicate omit: '${o}' is listed more than once`,
+        );
+      } else {
+        seenOmits.add(o);
+      }
+      omits.add(o);
+    }
+  }
+  // MED #6.a: omits must be disjoint from declared canonicals. A canonical
+  // cannot be both declared and omitted; that's self-contradictory bookkeeping.
+  for (const o of omits) {
+    if (declaredCanonicals.has(o)) {
+      issueAt(
+        ctx,
+        ['spine_policy', 'omits'],
+        `canonical '${o}' is both declared as a Phase.canonical AND listed in spine_policy.omits — omits must be disjoint from declared canonicals`,
+      );
+    }
+  }
+  for (const canonical of CANONICAL_PHASES) {
+    if (omits.has(canonical)) continue;
+    if (!declaredCanonicals.has(canonical)) {
+      issueAt(
+        ctx,
+        ['phases'],
+        `spine_policy requires canonical phase '${canonical}' — declare a Phase with canonical: '${canonical}', or move it into spine_policy.omits with a rationale`,
+      );
     }
   }
 });

@@ -91,10 +91,13 @@ Property-based tests will cover:
   silently disagree with `circuit.yaml`. A Phase 1 contract test
   (prose-yaml-parity, see `specs/behavioral/prose-yaml-parity.md` — future)
   must prevent this for circuit-next.
-- `carry-forward:spine-policy-too-loose` — `Phase.canonical` is optional;
-  a malformed workflow can silently skip Review. Phase 1 contract
-  authorship should decide whether to add a workflow-level `spine_policy`
-  (adversarial-review MED #11).
+- `carry-forward:spine-policy-too-loose` — **Closed in phase.md v0.1.**
+  `Workflow.spine_policy` is a required discriminated union with two
+  modes: `strict` (all seven canonical phases required) and `partial`
+  (explicit `omits` + rationale ≥20 chars). Silent skip of `review` or
+  `verify` is now rejected at parse time. See
+  `specs/contracts/phase.md` PHASE-I4. Adversarial-review MED #11 is
+  closed.
 
 ## Gate source tightening
 
@@ -110,11 +113,12 @@ STEP-I4.
 ## Evolution
 
 - **v0.1 (this draft)**: initial contract with graph-closure invariants.
-- **v0.2 (Phase 1)**: add ratified property ids; decide spine policy
-  (MED #11 — still open; belongs in `specs/contracts/phase.md`); fold in
-  any follow-ups from the Phase 1 adversarial property-auditor pass.
-  Gate source tightening (MED #7) **closed in step.md v0.1** — see the
-  "Gate source tightening" section above; no remaining workflow-level
-  work for that objection.
+- **v0.2 (Phase 1)**: add ratified property ids; fold in any follow-ups
+  from the Phase 1 adversarial property-auditor pass. Gate source
+  tightening (MED #7) **closed in step.md v0.1** — see the "Gate source
+  tightening" section above. Spine policy (MED #11) **closed in phase.md
+  v0.1** — `Workflow.spine_policy` is a required discriminated union
+  enforced in the Workflow `superRefine`. See
+  `specs/contracts/phase.md` PHASE-I4.
 - **v1.0 (Phase 2)**: ratified invariants + property tests + operator
   documentation.

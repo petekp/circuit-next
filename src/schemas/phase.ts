@@ -12,10 +12,44 @@ export const CanonicalPhase = z.enum([
 ]);
 export type CanonicalPhase = z.infer<typeof CanonicalPhase>;
 
-export const Phase = z.object({
-  id: PhaseId,
-  title: z.string().min(1),
-  canonical: CanonicalPhase.optional(),
-  steps: z.array(StepId).min(1),
-});
+export const Phase = z
+  .object({
+    id: PhaseId,
+    title: z.string().min(1),
+    canonical: CanonicalPhase.optional(),
+    steps: z.array(StepId).min(1),
+  })
+  .strict();
 export type Phase = z.infer<typeof Phase>;
+
+export const CANONICAL_PHASES = [
+  'frame',
+  'analyze',
+  'plan',
+  'act',
+  'verify',
+  'review',
+  'close',
+] as const satisfies readonly CanonicalPhase[];
+
+// SpinePolicy is a plain discriminated union (no superRefine on the variants)
+// so Zod's discriminated-union machinery can dispatch on the `mode` literal.
+// Structural invariants that span the whole variant — notably, omits must be
+// pairwise unique (Codex MED #6.b) and disjoint from declared canonicals
+// (Codex MED #6.a) — are enforced in the Workflow superRefine where the
+// surrounding wf.phases context is available.
+export const SpinePolicy = z.discriminatedUnion('mode', [
+  z
+    .object({
+      mode: z.literal('strict'),
+    })
+    .strict(),
+  z
+    .object({
+      mode: z.literal('partial'),
+      omits: z.array(CanonicalPhase).min(1),
+      rationale: z.string().min(20),
+    })
+    .strict(),
+]);
+export type SpinePolicy = z.infer<typeof SpinePolicy>;
