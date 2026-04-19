@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AdapterRef } from './adapter.js';
+import { DispatchResolutionSource, ResolvedAdapter } from './adapter.js';
 import { InvocationId, RunId, StepId, WorkflowId } from './ids.js';
 import { LaneDeclaration } from './lane.js';
 import { Rigor } from './rigor.js';
@@ -68,14 +68,29 @@ export const CheckpointResolvedEvent = EventBase.extend({
 }).strict();
 export type CheckpointResolvedEvent = z.infer<typeof CheckpointResolvedEvent>;
 
+// ADAPTER-I7: `resolved_from` is a `DispatchResolutionSource` discriminated
+// union that names the winning precedence category AND carries the
+// disambiguator (`role` on role-match, `workflow_id` on circuit-match).
+// An audit reading this event can reconstruct the exact merged-config entry
+// that chose the adapter — closes the category-only-provenance gap that the
+// flat-enum drafting left open.
+//
+// Codex HIGH #1 fold-in — `adapter: ResolvedAdapter` (2-variant: built-in or
+// custom descriptor). Named references are pre-resolution pointers and MUST
+// NOT appear in the event log; the dispatcher dereferences them against the
+// registry before emitting the event.
+//
+// The role ↔ resolved_from.role binding (Codex HIGH #4) is enforced at the
+// Event-union level, not here, because `z.discriminatedUnion` cannot admit
+// ZodEffects variants (wrapped via superRefine). Mirrors the `Step` pattern.
 export const DispatchStartedEvent = EventBase.extend({
   kind: z.literal('dispatch.started'),
   step_id: StepId,
   attempt: z.number().int().positive(),
-  adapter: AdapterRef,
+  adapter: ResolvedAdapter,
   role: DispatchRole,
   resolved_selection: ResolvedSelection,
-  resolved_from: z.enum(['explicit', 'role', 'circuit', 'default', 'auto']),
+  resolved_from: DispatchResolutionSource,
 }).strict();
 export type DispatchStartedEvent = z.infer<typeof DispatchStartedEvent>;
 
@@ -116,17 +131,33 @@ export const RunClosedEvent = EventBase.extend({
 }).strict();
 export type RunClosedEvent = z.infer<typeof RunClosedEvent>;
 
-export const Event = z.discriminatedUnion('kind', [
-  RunBootstrappedEvent,
-  StepEnteredEvent,
-  StepArtifactWrittenEvent,
-  GateEvaluatedEvent,
-  CheckpointRequestedEvent,
-  CheckpointResolvedEvent,
-  DispatchStartedEvent,
-  DispatchCompletedEvent,
-  StepCompletedEvent,
-  StepAbortedEvent,
-  RunClosedEvent,
-]);
+// Codex HIGH #4 fold-in — cross-variant superRefine enforces the
+// `DispatchStartedEvent.role === resolved_from.role` binding when
+// `resolved_from.source === 'role'`. Mirrors the Step pattern: keep each
+// discriminated-union variant as a plain ZodObject (so discrimination works)
+// and hoist cross-field refinements to the union level.
+export const Event = z
+  .discriminatedUnion('kind', [
+    RunBootstrappedEvent,
+    StepEnteredEvent,
+    StepArtifactWrittenEvent,
+    GateEvaluatedEvent,
+    CheckpointRequestedEvent,
+    CheckpointResolvedEvent,
+    DispatchStartedEvent,
+    DispatchCompletedEvent,
+    StepCompletedEvent,
+    StepAbortedEvent,
+    RunClosedEvent,
+  ])
+  .superRefine((ev, ctx) => {
+    if (ev.kind !== 'dispatch.started') return;
+    if (ev.resolved_from.source === 'role' && ev.resolved_from.role !== ev.role) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['resolved_from', 'role'],
+        message: `resolved_from.role '${ev.resolved_from.role}' does not agree with event role '${ev.role}'`,
+      });
+    }
+  });
 export type Event = z.infer<typeof Event>;
