@@ -6,8 +6,9 @@ schema_source: src/schemas/step.ts
 last_updated: 2026-04-19
 depends_on: [ids, gate, selection-policy]
 codex_adversarial_review_grandfathered: authored in Slice 2 before the specs/reviews/ convention existed; inline review body (MED #7 gate.source as typed reference) lives in commit f5a6241 + PROJECT_STATE.md §Slice 2 "Adversarial-review MED #7 closed" with the Gate.source discriminated union + superRefine landing evidence. Any v0.2 modification to step.md re-opens this slot — land a proper specs/reviews/step-md-v<version>-codex.md at that point.
-grandfathered_source_ref: commit f5a6241 (Slice 2 close); PROJECT_STATE.md §Slice 2 "Adversarial-review MED #7 closed — Gate.source discriminated union + superRefine"
-grandfathered_scope: step.md v0.1 only — the Slice 2 surface comprising the Step discriminated union (SynthesisStep / CheckpointStep / DispatchStep), the Gate.source typed reference, and the gate-superRefine coupling of kind ↔ gate ↔ writes. Any change to schema_source src/schemas/step.ts that adds, removes, or renames a Step variant, or any addition/relaxation of a numbered invariant in this contract, exits the grandfather and requires specs/reviews/step-md-v<version>-codex.md.
+grandfathered_source_ref: commit:4b6688e
+grandfathered_scope: step.md v0.1 only — the Slice 2 surface comprising the Step discriminated union (SynthesisStep / CheckpointStep / DispatchStep) in src/schemas/step.ts, the Gate.source typed reference in src/schemas/gate.ts, and the gate-superRefine coupling of kind ↔ gate ↔ writes. Any change to schema_source src/schemas/step.ts or src/schemas/gate.ts that adds, removes, or renames a Step variant or a Gate variant, or any addition/relaxation of a numbered invariant in this contract, exits the grandfather and requires specs/reviews/step-md-v<version>-codex.md. (Slice 24 Codex MED #8 fold-in — scope now names src/schemas/gate.ts alongside src/schemas/step.ts since STEP-I3/I4 evidence lives primarily in gate.ts.)
+grandfathered_scope_ids: STEP-I1 STEP-I2 STEP-I3 STEP-I4 STEP-I5 STEP-I6 STEP-I7
 expires_on_contract_change: true
 artifact_ids:
   - step.definition

@@ -2,7 +2,7 @@
 track: cross-model-challenger
 status: ratified-v0.1
 version: 0.1
-last_updated: 2026-04-19
+last_updated: 2026-04-20
 depends_on:
   - specs/adrs/ADR-0001-methodology-adoption.md (pillar 4)
   - specs/adrs/ADR-0003-authority-graph-gate.md (challenger downgrade section)
@@ -12,7 +12,7 @@ enforced_by:
   - commit discipline: for any slice that should trigger a challenger pass, a `specs/reviews/<contract>-v<version>-codex.md` record is committed in the same slice and linked from the contract frontmatter field `codex_adversarial_review`
   - authority-graph audit (planned — see §Planned test location): every contract whose invariants changed materially between two commits either lands a new codex review record or declares v0.2 scoping explicitly
 planned_tests:
-  - tests/contracts/cross-model-challenger.test.ts (LANDED v0.1 in Slice 16; tightened in Slice 18 + 19 + 20 + 21) — asserts unified review-record frontmatter (base + kind-specific extras), contract → review linkage (forward + reverse), per-objection disposition parser, verdict enum, /codex dispatch discipline.
+  - tests/contracts/cross-model-challenger.test.ts (LANDED v0.1 in Slice 16; tightened in Slice 18 + 19 + 20 + 21 + 24) — asserts unified review-record frontmatter (base + kind-specific extras), contract → review linkage (forward + reverse), XOR between forward-link and grandfathered-rationale paths, typed grandfathered-contract allowlist (HIGH #9 + Codex HIGH #2 fold-ins: identity binding over contract/version/schema_source, resolvable source_ref tokens, scope_ids exact-set equality with body headings), forward-link canonical-path pattern, per-objection disposition parser, verdict enum, /codex dispatch discipline.
   - scripts/audit.mjs dimension: warn (not red) when a contract's `artifact_ids` set changes without an updated `codex_adversarial_review` frontmatter line (NOT LANDED — tracked as v0.2 scope).
 ---
 
@@ -131,13 +131,36 @@ using the challenger WELL given that reframing.
 ## Planned test location
 
 `tests/contracts/cross-model-challenger.test.ts` (Phase 1 track;
-landed Slice 16 — CHALLENGER-I1..I6 pinned). Asserts:
+landed Slice 16 — CHALLENGER-I1..I6 pinned; Slice 24 tightened the
+grandfathered-review path per arc-phase-1-close-codex.md §HIGH-9 and
+its per-slice Codex challenger fold-in). Asserts:
 
-- Every contract carries EITHER `codex_adversarial_review: <path>` that
-  resolves to an existing file OR an explicit
-  `codex_adversarial_review_grandfathered: <rationale>` prose
-  declaration (≥ 20 chars) — for contracts authored before the
-  `specs/reviews/` convention (step.md, workflow.md).
+- Every contract carries EXACTLY ONE of (a) `codex_adversarial_review:
+  <path>` that matches `^specs/reviews/[a-z0-9-]+-md-v\d+\.\d+-codex\.md$`
+  and resolves to a file carrying the full contract-review frontmatter,
+  OR (b) an explicit `codex_adversarial_review_grandfathered:
+  <rationale>` declaration. Both forms coexisting fails the XOR gate.
+- The grandfathered form is restricted to a typed allowlist — currently
+  `{step.md, workflow.md}`. Each allowlist record binds the contract
+  **identity** (`contract`, `version`, `schema_source`), not just the
+  filename; any change to those fields re-opens the grandfather.
+  Grandfathered contracts additionally carry:
+    - `grandfathered_source_ref` — whitespace-separated tokens of form
+      `commit:<sha>` or `path:<relpath>`; each allowlist-required token
+      must be present and must resolve (`git cat-file -e <sha>^{commit}`
+      or `existsSync` respectively). Supplemental free-form prose
+      (e.g. PROJECT_STATE.md pointers) is permitted but is not counted
+      as resolvable evidence.
+    - `grandfathered_scope` (prose) + `grandfathered_scope_ids`
+      (invariant-id tokens, exact-set equality with the allowlist
+      record, each present as a `- **<id> —` heading in the contract
+      body).
+    - `expires_on_contract_change: true` — literal string; operative
+      via the identity gate above (any version/schema_source mutation
+      re-opens the grandfather).
+  Exit path: land a proper `specs/reviews/<stem>-md-v<version>-codex.md`,
+  add `codex_adversarial_review`, and remove both the grandfathered
+  field AND the allowlist entry in the same slice.
 - Every contract-review file's `contract_target` resolves back to an
   existing `specs/contracts/<target>.md` (reverse linkage — orphan
   review files fail).
