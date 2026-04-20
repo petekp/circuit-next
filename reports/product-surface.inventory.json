@@ -1,0 +1,106 @@
+{
+  "schema_version": "1",
+  "slice": "27b",
+  "baseline": true,
+  "metadata": {
+    "generated_at": "2026-04-20T21:24:32.242Z",
+    "head_commit": "1cc98496f0e32f46400a912171536cce1d7c5734"
+  },
+  "summary": {
+    "total": 10,
+    "present": 1,
+    "absent": 9
+  },
+  "surfaces": [
+    {
+      "id": "runner.cli_script",
+      "category": "package_scripts",
+      "description": "npm run circuit:run entrypoint (`dogfood-run-0` dry-run invocation)",
+      "expected_evidence": "package.json scripts.circuit:run is a non-placeholder shell command (not echo/true/noop)",
+      "planned_slice": "27d",
+      "present": false,
+      "evidence_summary": "scripts.circuit:run absent or empty"
+    },
+    {
+      "id": "plugin.manifest",
+      "category": "plugin_surface",
+      "description": "Claude Code plugin manifest",
+      "expected_evidence": ".claude-plugin/plugin.json exists, parses as object, declares non-empty name and version",
+      "planned_slice": "27d",
+      "present": false,
+      "evidence_summary": ".claude-plugin/plugin.json missing"
+    },
+    {
+      "id": "plugin.dogfood_workflow_fixture",
+      "category": "plugin_surface",
+      "description": "dogfood-run-0 workflow fixture loaded by `npm run circuit:run -- dogfood-run-0`",
+      "expected_evidence": ".claude-plugin/skills/dogfood-run-0/circuit.json parses as a non-empty JSON object",
+      "planned_slice": "27d",
+      "present": false,
+      "evidence_summary": ".claude-plugin/skills/dogfood-run-0/circuit.json missing"
+    },
+    {
+      "id": "runner.entrypoint",
+      "category": "src_runtime",
+      "description": "src/runtime/ module hosting the runner entrypoint(s)",
+      "expected_evidence": "src/runtime/ contains at least one .ts file with an `export` and >=40 non-comment non-whitespace characters",
+      "planned_slice": "27c",
+      "present": false,
+      "evidence_summary": "src/runtime/ missing; no runner entrypoint"
+    },
+    {
+      "id": "runner.event_writer",
+      "category": "src_runtime",
+      "description": "Append-only events.ndjson writer surface",
+      "expected_evidence": "specs/artifacts.json has a row whose id matches /event.?writer/ AND its schema_file or repo-local backing_paths resolve to a non-empty file",
+      "planned_slice": "27c",
+      "present": false,
+      "evidence_summary": "no specs/artifacts.json row matches /event.?writer/ for event writer"
+    },
+    {
+      "id": "runner.snapshot_writer",
+      "category": "src_runtime",
+      "description": "Reducer-derived state.json writer surface",
+      "expected_evidence": "specs/artifacts.json has a row whose id matches /snapshot.?writer/ AND its schema_file or repo-local backing_paths resolve to a non-empty file",
+      "planned_slice": "27c",
+      "present": false,
+      "evidence_summary": "no specs/artifacts.json row matches /snapshot.?writer/ for snapshot writer"
+    },
+    {
+      "id": "runner.manifest_snapshot",
+      "category": "src_runtime",
+      "description": "manifest.snapshot.json byte-match writer surface",
+      "expected_evidence": "specs/artifacts.json has a row whose id matches /manifest.?snapshot/ AND its schema_file resolves to a non-empty file",
+      "planned_slice": "27c",
+      "present": false,
+      "evidence_summary": "no specs/artifacts.json row matches /manifest.?snapshot/ for manifest snapshot"
+    },
+    {
+      "id": "tests.runner_smoke",
+      "category": "tests_runtime",
+      "description": "Runner smoke test exercising at least one dogfood step end-to-end",
+      "expected_evidence": "A tests/ file whose path matches /tests\\/runner\\/.*smoke\\.test\\.ts$/ or /tests\\/.*runner[-_]smoke\\.test\\.ts$/ and contains an it/test/describe block",
+      "planned_slice": "27d",
+      "present": false,
+      "evidence_summary": "no test file matches /(?:^|\\/)tests\\/runner\\/[^/]*smoke\\.test\\.ts$|(?:^|\\/)tests\\/[^/]+\\/runner[-_]smoke\\.test\\.ts$/ (runner smoke)"
+    },
+    {
+      "id": "tests.event_log_round_trip",
+      "category": "tests_runtime",
+      "description": "events.ndjson append → parse → reduce → derive state.json round-trip test",
+      "expected_evidence": "A tests/ file whose filename matches /event[-_]?log[-_]?round[-_]?trip\\.test\\.ts$/ and contains an it/test/describe block",
+      "planned_slice": "27c",
+      "present": false,
+      "evidence_summary": "no test file matches /event[-_]?log[-_]?round[-_]?trip\\.test\\.ts$/ (event-log round-trip)"
+    },
+    {
+      "id": "docs.status_alignment",
+      "category": "status_docs",
+      "description": "README.md / PROJECT_STATE.md / TIER.md current_slice markers present and in agreement",
+      "expected_evidence": "All three files carry a well-formed <!-- current_slice: <id> --> marker in the status-header zone, and the ids agree",
+      "planned_slice": null,
+      "present": true,
+      "evidence_summary": "current_slice=27b across README.md / PROJECT_STATE.md / TIER.md"
+    }
+  ]
+}

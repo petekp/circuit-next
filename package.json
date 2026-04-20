@@ -14,7 +14,8 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "verify": "npm run check && npm run lint && npm run test",
-    "audit": "node scripts/audit.mjs"
+    "audit": "node scripts/audit.mjs",
+    "inventory": "node scripts/inventory.mjs"
   },
   "dependencies": {
     "zod": "^3.23.8"

@@ -5,7 +5,7 @@ type: tier-claim-matrix
 date: 2026-04-20
 ---
 
-<!-- current_slice: 27a -->
+<!-- current_slice: 27b -->
 
 # TIER Claim Matrix
 
@@ -24,6 +24,7 @@ claimed` is honest signal, not failure. Orphan claims are the failure mode.
 | tier_orphan_claim_rejection | enforced | `scripts/audit.mjs`; `TIER.md` |  | Slice 25b audit rejects TIER rows with no file path, planned slice, or explicit not-claimed declaration. |
 | adversarial_yield_ledger | enforced | `specs/reviews/adversarial-yield-ledger.md` |  | D10 immediate evidence source. |
 | human_cold_read_record | enforced | `specs/reviews/phase-1-close-reform-human.md` |  | First exemplar created in Slice 25b; future records remain subject to the review-record discipline. |
+| product_surface_inventory_baseline | enforced | `scripts/inventory.mjs`; `reports/product-surface.inventory.json`; `reports/product-surface.inventory.md`; `tests/contracts/product-surface-inventory.test.ts` |  | Slice 27b product-surface inventory; 10 baseline surfaces with placeholder-rejecting detectors. 27c + 27d rerun `npm run inventory` and assert delta against committed baseline. |
 | runner_smoke | planned |  | 27d | Will become a product ratchet once dogfood-run-0 runs. |
 | workflow_fixture_runs | planned |  | 27d | Dogfood-run-0 fixture execution evidence. |
 | event_log_round_trip | planned |  | 27c | Runtime-boundary append-only event writer/reducer proof. |
