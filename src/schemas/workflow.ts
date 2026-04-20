@@ -112,6 +112,26 @@ export const Workflow = WorkflowBody.superRefine((wf, ctx) => {
         );
       }
     }
+    // WF-I10 (Slice 27 v0.2, Codex challenger HIGH #1 fold-in). Every step's
+    // `routes` must contain a `pass` key. The GateEvaluatedEvent `outcome`
+    // field at `src/schemas/event.ts` is `z.enum(['pass', 'fail'])` — uniform
+    // across all three gate kinds — so the runtime's route pick on a
+    // successful gate outcome looks up `routes['pass']`. A fixture whose
+    // routes use author-friendly aliases like `{ success: '@complete' }`
+    // would pass WF-I8 (terminal reachable via the `success` edge) and
+    // still stall at runtime because `routes['pass']` is undefined on the
+    // actual gate outcome. This invariant is the parse-time version of
+    // that binding; `fail`-route presence is intentionally deferred to
+    // v0.3 / Phase 2 (failure-path handling is not part of the narrow
+    // dogfood-run-0 proof and the runtime abort-vs-stall behaviour on a
+    // missing `fail` route is not yet specified).
+    if (!Object.hasOwn(step.routes, 'pass')) {
+      issueAt(
+        ctx,
+        ['steps', i, 'routes'],
+        `WF-I10: step '${step.id}' is missing a 'pass' route key — gate.evaluated emits outcome ∈ {pass, fail} uniformly, so routes must contain 'pass' to route on a successful gate outcome`,
+      );
+    }
   }
 
   // PHASE-I5: canonical uniqueness. Two phases sharing the same defined
@@ -177,6 +197,116 @@ export const Workflow = WorkflowBody.superRefine((wf, ctx) => {
         ['phases'],
         `spine_policy requires canonical phase '${canonical}' — declare a Phase with canonical: '${canonical}', or move it into spine_policy.omits with a rationale`,
       );
+    }
+  }
+
+  // WF-I8 + WF-I9 (Slice 27, workflow.md v0.2). Graph reachability
+  // checks for dogfood-run-0 structural safety. Both checks require
+  // that earlier closure invariants already hold structurally: step
+  // ids must be unique (otherwise adjacency cannot be keyed), every
+  // route target must be either a terminal label or a known step
+  // (otherwise the reachability traversal would visit nonexistent
+  // nodes), AND every `entry_mode.start_at` must be a known step id
+  // (otherwise WF-I9's BFS would seed from nonexistent nodes, giving
+  // misleading coverage). Each of those preconditions is already
+  // flagged by the WF-I1 / WF-I4 / WF-I2 loops above; when any is
+  // malformed, we skip the reachability pass so a single WF-I2
+  // violation does not cascade into noisy WF-I9 errors (Codex
+  // challenger MED #4 fold-in — WF-I2's test must remain uniquely
+  // provable).
+  const noDuplicateIds = stepIds.size === wf.steps.length;
+  const adjacency = new Map<string, string[]>();
+  let allRouteTargetsKnown = true;
+  for (const step of wf.steps) {
+    if (step === undefined) continue;
+    const targets = Object.values(step.routes);
+    adjacency.set(step.id as unknown as string, targets);
+    for (const t of targets) {
+      if (TERMINAL_ROUTE_TARGETS.has(t)) continue;
+      if (!stepIds.has(t)) {
+        allRouteTargetsKnown = false;
+      }
+    }
+  }
+  let allEntryStartsKnown = true;
+  for (const mode of wf.entry_modes) {
+    if (mode === undefined) continue;
+    if (!stepIds.has(mode.start_at as unknown as string)) {
+      allEntryStartsKnown = false;
+    }
+  }
+
+  if (noDuplicateIds && allRouteTargetsKnown && allEntryStartsKnown) {
+    // WF-I8 terminal reachability: iterative fixpoint from steps that
+    // route directly to a terminal. A step reaches a terminal iff some
+    // outgoing route is either a terminal label or a step already
+    // known to reach a terminal.
+    const terminalReaching = new Set<string>();
+    for (const [sid, targets] of adjacency) {
+      for (const t of targets) {
+        if (TERMINAL_ROUTE_TARGETS.has(t)) {
+          terminalReaching.add(sid);
+          break;
+        }
+      }
+    }
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const [sid, targets] of adjacency) {
+        if (terminalReaching.has(sid)) continue;
+        for (const t of targets) {
+          if (terminalReaching.has(t)) {
+            terminalReaching.add(sid);
+            changed = true;
+            break;
+          }
+        }
+      }
+    }
+    for (let i = 0; i < wf.steps.length; i++) {
+      const step = wf.steps[i];
+      if (step === undefined) continue;
+      if (!terminalReaching.has(step.id as unknown as string)) {
+        issueAt(
+          ctx,
+          ['steps', i],
+          `WF-I8: step '${step.id}' cannot reach any terminal route target (@complete/@stop/@escalate/@handoff) through its routes graph — run bootstrapped from this step (or routed here) could never emit run.closed`,
+        );
+      }
+    }
+
+    // WF-I9 no dead steps: BFS from every entry_mode.start_at, union
+    // reachable set. Any step not reached is a silent declaration
+    // error (author intended it to execute, but no route path leads
+    // there from any entry).
+    const reachableFromEntry = new Set<string>();
+    const queue: string[] = [];
+    for (const mode of wf.entry_modes) {
+      if (mode === undefined) continue;
+      queue.push(mode.start_at as unknown as string);
+    }
+    while (queue.length > 0) {
+      const cur = queue.shift();
+      if (cur === undefined) continue;
+      if (reachableFromEntry.has(cur)) continue;
+      reachableFromEntry.add(cur);
+      const targets = adjacency.get(cur) ?? [];
+      for (const t of targets) {
+        if (TERMINAL_ROUTE_TARGETS.has(t)) continue;
+        if (stepIds.has(t)) queue.push(t);
+      }
+    }
+    for (let i = 0; i < wf.steps.length; i++) {
+      const step = wf.steps[i];
+      if (step === undefined) continue;
+      if (!reachableFromEntry.has(step.id as unknown as string)) {
+        issueAt(
+          ctx,
+          ['steps', i],
+          `WF-I9: step '${step.id}' is not reachable from any entry_mode.start_at via the routes graph — declared but dead`,
+        );
+      }
     }
   }
 });

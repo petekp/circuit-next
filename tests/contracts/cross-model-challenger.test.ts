@@ -66,17 +66,15 @@ const GRANDFATHERED_CONTRACT_ALLOWLIST: readonly GrandfatheredRecord[] = [
     source_ref_tokens: ['commit:4b6688e'],
     scope_ids: ['STEP-I1', 'STEP-I2', 'STEP-I3', 'STEP-I4', 'STEP-I5', 'STEP-I6', 'STEP-I7'],
   },
-  {
-    path: 'specs/contracts/workflow.md',
-    contract: 'workflow',
-    version: '0.1',
-    schema_source: 'src/schemas/workflow.ts',
-    // path:bootstrap/adversarial-review-codex.md is the file that carries
-    // the 6 HIGH + 3 MED tier-0 adversarial findings against the workflow
-    // skeleton — the concrete grandfathered evidence.
-    source_ref_tokens: ['path:bootstrap/adversarial-review-codex.md'],
-    scope_ids: ['WF-I1', 'WF-I2', 'WF-I3', 'WF-I4', 'WF-I5', 'WF-I6', 'WF-I7'],
-  },
+  // workflow.md v0.1 grandfather exited in Slice 27 (workflow.md v0.2).
+  // The v0.2 bump promoted WF-I1..I7 from static-anchor (via this
+  // allowlist) to test-enforced via per-invariant titled negative tests
+  // in tests/contracts/schema-parity.test.ts, added WF-I8 + WF-I9
+  // (terminal reachability + no dead steps) for dogfood-run-0
+  // structural safety, and bound the contract to the proper review
+  // record at specs/reviews/workflow-md-v0.2-codex.md. The XOR test
+  // below enforces that workflow.md now carries `codex_adversarial_review:`
+  // and no longer carries `codex_adversarial_review_grandfathered:`.
 ];
 
 const GRANDFATHERED_ALLOWLIST_BASENAMES = new Set<string>(

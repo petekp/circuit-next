@@ -25,6 +25,7 @@ audit (D10 clause 3, K=2).
 | 2026-04-20 | `specs/artifacts.json` | reversible | 1 | gpt-5-codex | llm-review | 0 | 4 | 3 | ACCEPT-WITH-FOLD-INS → incorporated → ACCEPT | n/a |
 | 2026-04-20 | `scripts/audit.mjs` | reversible | 1 | gpt-5-codex | llm-review | 2 | 5 | 2 | REJECT pending HIGH fold-ins → incorporated → ACCEPT | n/a |
 | 2026-04-20 | `specs/adrs/ADR-0001-methodology-adoption.md` Addendum B | governance | 1 | gpt-5-codex | llm-review | 5 | 7 | 4 | REJECT pending fold-ins → incorporated → ACCEPT-WITH-FOLD-INS | n/a |
+| 2026-04-20 | `specs/contracts/workflow.md` v0.2 | reversible | 1 | gpt-5-codex | llm-review | 3 | 3 | 2 | REJECT → incorporated → ACCEPT | n/a |
 
 **Pass 2 context.** Pass 2 is an L3 non-LLM cold-read, delegated to Claude + Codex as LLM stand-ins under operator authorization while the operator was asleep. The delegation is recorded as reviewer_role `LLM-standin-for-human-cold-read` in `specs/reviews/phase-1-close-reform-human.md`. Counts are 0 HIGH / 8 MED / 8 LOW; all MED and LOW findings were folded back into the plan in this planning pass. Pass 2 did not violate D10 artifact-size signal (pass count 2 < governance cap 3). A genuine operator cold-read on pickup may append a third evaluator section to the review record; that addition does not count as a new adversarial pass unless it raises defects.
 

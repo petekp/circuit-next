@@ -590,19 +590,38 @@ describe('Workflow graph closure (adversarial-review fix #1)', () => {
     expect(Workflow.safeParse(okWorkflow()).success).toBe(true);
   });
 
-  it('rejects entry_modes.start_at referencing an unknown step', () => {
-    expect(
-      Workflow.safeParse(
-        okWorkflow({
-          entry_modes: [
-            { name: 'default', start_at: 'nowhere', rigor: 'standard', description: 'x' },
-          ],
-        }),
-      ).success,
-    ).toBe(false);
+  it('WF-I1: rejects duplicate step ids', () => {
+    expect(Workflow.safeParse(okWorkflow({ steps: [okFrameStep, okFrameStep] })).success).toBe(
+      false,
+    );
   });
 
-  it('rejects phase referencing an unknown step', () => {
+  it('WF-I2: rejects entry_modes.start_at referencing an unknown step', () => {
+    // Codex challenger MED #4 fold-in: include a second, valid entry mode
+    // so that WF-I9 (no dead steps) is satisfied via the valid entry, and
+    // WF-I2 is the unique failure mode the test proves. Without this, a
+    // single unknown start_at would cascade into a WF-I9 violation, and
+    // removing the explicit WF-I2 check in the schema would still fail
+    // the fixture for the wrong reason.
+    const result = Workflow.safeParse(
+      okWorkflow({
+        entry_modes: [
+          { name: 'covers', start_at: 'frame', rigor: 'standard', description: 'valid' },
+          { name: 'broken', start_at: 'nowhere', rigor: 'standard', description: 'bad ref' },
+        ],
+      }),
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const issuePaths = result.error.issues.map((i) => i.path.join('.'));
+      expect(
+        issuePaths.some((p) => p === 'entry_modes.1.start_at'),
+        `WF-I2 isolation: expected an issue at entry_modes[1].start_at, got paths ${JSON.stringify(issuePaths)}`,
+      ).toBe(true);
+    }
+  });
+
+  it('WF-I3: rejects phase referencing an unknown step', () => {
     expect(
       Workflow.safeParse(
         okWorkflow({
@@ -612,7 +631,7 @@ describe('Workflow graph closure (adversarial-review fix #1)', () => {
     ).toBe(false);
   });
 
-  it('rejects route target that is neither terminal nor a known step', () => {
+  it('WF-I4: rejects route target that is neither terminal nor a known step', () => {
     expect(
       Workflow.safeParse(
         okWorkflow({
@@ -622,10 +641,170 @@ describe('Workflow graph closure (adversarial-review fix #1)', () => {
     ).toBe(false);
   });
 
-  it('rejects duplicate step ids', () => {
-    expect(Workflow.safeParse(okWorkflow({ steps: [okFrameStep, okFrameStep] })).success).toBe(
-      false,
+  it('WF-I5: rejects duplicate entry_mode names', () => {
+    expect(
+      Workflow.safeParse(
+        okWorkflow({
+          entry_modes: [
+            { name: 'default', start_at: 'frame', rigor: 'standard', description: 'a' },
+            { name: 'default', start_at: 'frame', rigor: 'standard', description: 'b' },
+          ],
+        }),
+      ).success,
+    ).toBe(false);
+  });
+
+  it('WF-I6: rejects duplicate phase ids', () => {
+    expect(
+      Workflow.safeParse(
+        okWorkflow({
+          phases: [
+            { id: 'frame-phase', title: 'Frame A', canonical: 'frame', steps: ['frame'] },
+            { id: 'frame-phase', title: 'Frame B', steps: ['frame'] },
+          ],
+        }),
+      ).success,
+    ).toBe(false);
+  });
+
+  it('WF-I7: rejects schema_version other than the literal "2"', () => {
+    expect(Workflow.safeParse(okWorkflow({ schema_version: '1' })).success).toBe(false);
+    expect(Workflow.safeParse(okWorkflow({ schema_version: 2 })).success).toBe(false);
+  });
+
+  it('WF-I8 (Slice 27 v0.2): rejects a workflow with a step that cannot reach a terminal route target', () => {
+    // Two steps routing only to each other — cycle with no terminal escape.
+    // Neither step can reach @complete/@stop/@escalate/@handoff.
+    const stepA = {
+      ...okFrameStep,
+      id: 'a',
+      routes: { pass: 'b' },
+    };
+    const stepB = {
+      ...okFrameStep,
+      id: 'b',
+      routes: { pass: 'a' },
+    };
+    const result = Workflow.safeParse(
+      okWorkflow({
+        entry_modes: [{ name: 'default', start_at: 'a', rigor: 'standard', description: 'cycle' }],
+        phases: [{ id: 'frame-phase', title: 'Frame', canonical: 'frame', steps: ['a', 'b'] }],
+        steps: [stepA, stepB],
+      }),
     );
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const msg = JSON.stringify(result.error.issues);
+      expect(msg).toContain('WF-I8');
+    }
+  });
+
+  it('WF-I8 (Slice 27 v0.2): accepts a workflow where every step has a terminal route chain', () => {
+    // Two steps: a → b → @complete. Both reach a terminal.
+    const stepA = {
+      ...okFrameStep,
+      id: 'a',
+      routes: { pass: 'b' },
+    };
+    const stepB = {
+      ...okFrameStep,
+      id: 'b',
+      routes: { pass: '@complete' },
+    };
+    const result = Workflow.safeParse(
+      okWorkflow({
+        entry_modes: [{ name: 'default', start_at: 'a', rigor: 'standard', description: 'chain' }],
+        phases: [{ id: 'frame-phase', title: 'Frame', canonical: 'frame', steps: ['a', 'b'] }],
+        steps: [stepA, stepB],
+      }),
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it('WF-I9 (Slice 27 v0.2): rejects a workflow with a step unreachable from any entry_mode', () => {
+    // Step 'a' goes to @complete. Step 'b' goes to @complete but nothing
+    // routes into 'b' and no entry_mode.start_at is 'b'. 'b' is declared but dead.
+    const stepA = {
+      ...okFrameStep,
+      id: 'a',
+      routes: { pass: '@complete' },
+    };
+    const stepB = {
+      ...okFrameStep,
+      id: 'b',
+      routes: { pass: '@complete' },
+    };
+    const result = Workflow.safeParse(
+      okWorkflow({
+        entry_modes: [{ name: 'default', start_at: 'a', rigor: 'standard', description: 'only a' }],
+        phases: [{ id: 'frame-phase', title: 'Frame', canonical: 'frame', steps: ['a', 'b'] }],
+        steps: [stepA, stepB],
+      }),
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const msg = JSON.stringify(result.error.issues);
+      expect(msg).toContain('WF-I9');
+    }
+  });
+
+  it('WF-I9 (Slice 27 v0.2): accepts when both steps are reached by distinct entry_modes', () => {
+    // Two entry_modes, each pointing at a different step. Both steps are
+    // reached. Both close to @complete.
+    const stepA = {
+      ...okFrameStep,
+      id: 'a',
+      routes: { pass: '@complete' },
+    };
+    const stepB = {
+      ...okFrameStep,
+      id: 'b',
+      routes: { pass: '@complete' },
+    };
+    const result = Workflow.safeParse(
+      okWorkflow({
+        entry_modes: [
+          { name: 'default', start_at: 'a', rigor: 'standard', description: 'entry a' },
+          { name: 'alt', start_at: 'b', rigor: 'standard', description: 'entry b' },
+        ],
+        phases: [{ id: 'frame-phase', title: 'Frame', canonical: 'frame', steps: ['a', 'b'] }],
+        steps: [stepA, stepB],
+      }),
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it('WF-I10 (Slice 27 v0.2): rejects a step whose routes use an author-friendly alias (no `pass` key)', () => {
+    // Codex challenger HIGH #1 fixture: routes use `success` instead of
+    // `pass`. WF-I8 would accept (the `success` edge reaches @complete)
+    // but at runtime the gate.evaluated outcome is `pass`, and
+    // routes['pass'] is undefined — the run stalls. WF-I10 fails this
+    // at parse time.
+    const aliasedStep = {
+      ...okFrameStep,
+      routes: { success: '@complete' },
+    };
+    const result = Workflow.safeParse(
+      okWorkflow({
+        steps: [aliasedStep],
+      }),
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const msg = JSON.stringify(result.error.issues);
+      expect(msg).toContain('WF-I10');
+    }
+  });
+
+  it('WF-I10 (Slice 27 v0.2): accepts a step that contains the `pass` key among its routes', () => {
+    // Minimum legal fixture for WF-I10: routes contains `pass`. Extra
+    // route labels (like `fail`) are allowed but not required at v0.2.
+    const result = Workflow.safeParse(
+      okWorkflow({
+        steps: [{ ...okFrameStep, routes: { pass: '@complete', fail: '@stop' } }],
+      }),
+    );
+    expect(result.success).toBe(true);
   });
 });
 

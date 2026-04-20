@@ -1,18 +1,14 @@
 ---
 contract: workflow
 status: draft
-version: 0.1
+version: 0.2
 schema_source: src/schemas/workflow.ts
-last_updated: 2026-04-19
+last_updated: 2026-04-20
 depends_on: [step, phase, rigor, lane, selection-policy]
-codex_adversarial_review_grandfathered: authored as a Phase 1 kickoff skeleton before the specs/reviews/ convention existed; adversarial findings against the skeleton were recorded in bootstrap/adversarial-review-codex.md (6 HIGH + 3 MED incorporated at tier-0). v0.2 will promote to a proper specs/reviews/workflow-md-v<version>-codex.md when the contract gains non-skeleton invariants.
-grandfathered_source_ref: path:bootstrap/adversarial-review-codex.md
-grandfathered_scope: workflow.md v0.1 skeleton only — WF-I1 through WF-I7 (closed-reference invariants across step ids, entry modes, phase ids, route targets, plus schema_version=2) in src/schemas/workflow.ts. Any addition of non-skeleton invariants, any change to the Workflow structural shape beyond the current v2 schema, or any promotion of the contract past v0.1 exits the grandfather and requires specs/reviews/workflow-md-v0.2-codex.md.
-grandfathered_scope_ids: WF-I1 WF-I2 WF-I3 WF-I4 WF-I5 WF-I6 WF-I7
-expires_on_contract_change: true
+codex_adversarial_review: specs/reviews/workflow-md-v0.2-codex.md
 artifact_ids:
   - workflow.definition
-invariant_ids: [WF-I1, WF-I2, WF-I3, WF-I4, WF-I5, WF-I6, WF-I7]
+invariant_ids: [WF-I1, WF-I2, WF-I3, WF-I4, WF-I5, WF-I6, WF-I7, WF-I8, WF-I9, WF-I10]
 property_ids: [workflow.prop.entry_mode_reachability, workflow.prop.no_dead_steps, workflow.prop.phase_step_closure, workflow.prop.route_target_closure, workflow.prop.terminal_target_coverage]
 ---
 
@@ -27,8 +23,10 @@ See `specs/domain.md#core-types` for canonical term definitions.
 
 ## Invariants
 
-The runtime MUST reject any Workflow that violates these. All invariants are
-enforced via `src/schemas/workflow.ts` `superRefine` and tested in
+The runtime MUST reject any Workflow that violates these. All invariants
+are enforced by the `Workflow` Zod schema — some as literal fields on
+`WorkflowBody` (e.g. WF-I7's `schema_version` literal), the remainder
+inside `Workflow.superRefine` — and tested in
 `tests/contracts/schema-parity.test.ts`.
 
 - **WF-I1 — Unique step ids.** No two steps in `Workflow.steps` share an `id`.
@@ -44,6 +42,34 @@ enforced via `src/schemas/workflow.ts` `superRefine` and tested in
 - **WF-I7 — Schema version is 2.** The literal `schema_version: '2'` is
   required. v1 manifests are not accepted; migration is a future Phase 2
   concern.
+- **WF-I8 — Terminal reachability.** For every step in `Workflow.steps`,
+  at least one chain of `routes` starting at that step eventually reaches
+  a terminal route target (`@complete`, `@stop`, `@escalate`, `@handoff`).
+  A workflow that contains a step unable to reach any terminal is rejected
+  at parse time. In particular, every `EntryMode.start_at` step reaches a
+  terminal, so a bootstrapped Run is always capable of closing. Without
+  this invariant, a plugin-authored workflow fixture could bootstrap a Run
+  but never emit `run.closed`, producing a hung run state.
+- **WF-I9 — No dead steps.** For every step in `Workflow.steps`, there is
+  at least one chain of `routes` from some `EntryMode.start_at` that
+  reaches that step. A workflow that declares a step unreachable from any
+  entry mode is rejected at parse time. Unreachable steps are a silent
+  declaration bug (the author believes the step will execute but it
+  never will), not a feature; WF-I9 fails the fixture fast rather than
+  letting it pass and then puzzling the operator.
+- **WF-I10 — Pass-route presence.** Every step's `routes` map must
+  contain the key `pass`. The `GateEvaluatedEvent.outcome` field in
+  `src/schemas/event.ts` is `z.enum(['pass', 'fail'])` — uniform across
+  all three gate kinds (`schema_sections`, `checkpoint_selection`,
+  `result_verdict`) — so the runtime's route pick on a successful gate
+  outcome looks up `routes['pass']`. A fixture whose routes use
+  author-friendly aliases like `{ success: '@complete' }` would satisfy
+  WF-I8 (the edge labelled `success` reaches a terminal) and still
+  stall at runtime because `routes['pass']` is undefined. WF-I10 is
+  the parse-time version of that binding. `fail`-route presence is
+  **deferred** to v0.3 / Phase 2 — failure-path handling is not part of
+  the narrow dogfood-run-0 proof and the runtime abort-vs-stall
+  behaviour on a missing `fail` route is not yet specified.
 
 ## Pre-conditions
 
@@ -73,7 +99,12 @@ Property-based tests will cover:
   `start_at` step is reachable by at least one sequence of routes leading
   to a terminal target.
 - `workflow.prop.no_dead_steps` — Every step is reachable from at least
-  one entry mode (modulo `disposable`-lane workflows).
+  one entry mode. (Note: now also enforced structurally at parse time
+  as **WF-I9**; this property id remains reserved for Slice 29's
+  property-harness fast-check generation around the same semantics.
+  The earlier "modulo `disposable`-lane workflows" carveout is
+  **removed in v0.2** — WF-I9 is unconditional, and the v0.1
+  disposable-lane exception was never reflected in the schema.)
 - `workflow.prop.terminal_target_coverage` — Every step's routes either
   include a terminal target or every route target is itself a step whose
   routes eventually include one.
@@ -121,13 +152,39 @@ STEP-I4.
 
 ## Evolution
 
-- **v0.1 (this draft)**: initial contract with graph-closure invariants.
-- **v0.2 (Phase 1)**: add ratified property ids; fold in any follow-ups
-  from the Phase 1 adversarial property-auditor pass. Gate source
-  tightening (MED #7) **closed in step.md v0.1** — see the "Gate source
-  tightening" section above. Spine policy (MED #11) **closed in phase.md
-  v0.1** — `Workflow.spine_policy` is a required discriminated union
-  enforced in the Workflow `superRefine`. See
-  `specs/contracts/phase.md` PHASE-I4.
+- **v0.1 (skeleton)**: initial contract with graph-closure invariants
+  WF-I1..I7. Grandfathered via `bootstrap/adversarial-review-codex.md`
+  (6 HIGH + 3 MED incorporated at tier-0) before the
+  `specs/reviews/` convention existed.
+- **v0.2 (Phase 1, this version, Slice 27)**: narrowed to what
+  `dogfood-run-0` (Phase 1.5 Alpha Proof) structurally needs beyond the
+  skeleton. Adds **WF-I8** (terminal reachability) and **WF-I9** (no
+  dead steps) — both promoted from `workflow.prop.*` reserved properties
+  into parse-time invariants enforced by `Workflow.superRefine`. Adds
+  **WF-I10** (pass-route presence) as a Codex challenger HIGH #1
+  fold-in — binds every step's `routes` map to the
+  `GateEvaluatedEvent.outcome` enum at the parse layer so a fixture
+  using author-friendly route aliases like `{ success: '@complete' }`
+  cannot pass WF-I8 and then stall at runtime. Rationale for promoting
+  graph semantics to parse-time invariants rather than property tests:
+  preferring types over tests where the type can express the invariant
+  (CLAUDE.md §Architecture-First types). Exits the skeleton grandfather
+  and binds to a proper review record at
+  `specs/reviews/workflow-md-v0.2-codex.md`. Gate source tightening
+  (v0.1 adversarial MED #7) **closed in step.md v0.1** — see the "Gate
+  source tightening" section above. Spine policy (v0.1 adversarial
+  MED #11) **closed in phase.md v0.1** — `Workflow.spine_policy` is a
+  required discriminated union enforced in `Workflow.superRefine`. See
+  `specs/contracts/phase.md` PHASE-I4. **Deferred to v0.3 / Phase 2:**
+  (a) ratified property-test harness registration for the five reserved
+  `workflow.prop.*` ids (Slice 29 property registry scaffold);
+  (b) `fail`-route presence — not part of the narrow dogfood-run-0
+  proof and runtime failure-path behaviour is not yet specified;
+  (c) exact-one-phase step membership (v0.1 bootstrap adversarial
+  HIGH #1 subfinding, not closed in this slice — `Phase.steps` closure
+  is enforced, but "every `Workflow.steps[]` id appears in exactly one
+  phase" is left for Phase 2 per `specs/contracts/phase.md` §Evolution
+  and will be revisited when manifest compilation starts consuming
+  `Phase.steps` as an ordered execution plan).
 - **v1.0 (Phase 2)**: ratified invariants + property tests + operator
   documentation.

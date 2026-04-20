@@ -1,10 +1,13 @@
-<!-- current_slice: 25d -->
+<!-- current_slice: 27 -->
 
 # circuit-next
 
-**Status: Tier 0 scaffold complete; Phase 1 contract authorship closing,
-Phase 1.5 Alpha Proof semantics authorized by ADR-0001 Addendum B
-(Slice 25d). Not yet functional.**
+**Status: Tier 0 scaffold complete; Phase 1 contract authorship closed at
+Slice 27 (`workflow.md` v0.2); Phase 1.5 Alpha Proof open per ADR-0001
+Addendum B §Phase 1 Close Inventory. Not yet functional — Phase 1.5
+slices 27a (discovery spike mining) → 27b (product-surface inventory
+baseline) → 27c (runtime boundary) → 27d (dogfood-run-0 alpha proof)
+remain before Phase 2 entry.**
 
 Claude Code plugin that automates common developer and creative workflows
 through a configurable, evidence-based methodology.
@@ -30,21 +33,21 @@ stress-test survival, accepted risks, and reopen conditions.
 
 ## Current phase
 
-**Phase 1 — Contract authorship (closing); Phase 1.5 Alpha Proof
-authorized by ADR-0001 Addendum B (Slice 25d).** Phase 0 Evidence Loop
-closed. Phase 1 contracts authored: step, phase, run, selection, adapter,
-skill, workflow-skeleton, continuity, config, plus three behavioral tracks
-(session-hygiene, prose-yaml-parity, cross-model-challenger). Authority-graph
-gate (Slice 7 / ADR-0003), invariant ledger, plane dimension, and
-reverse-authority checks are exercised end-to-end. Slice 25d reopened
-ADR-0001 and installed D3 — Phase 1.5 semantics are now authoritative;
-Phase 1 closes and Phase 1.5 opens on the commit that lands the remaining
-narrowed workflow contract (Slice 27). The remaining close arc is
-sequenced by
+**Phase 1.5 — Alpha Proof (open).** Phase 0 Evidence Loop closed. Phase 1
+closed at Slice 27 with the narrowed `workflow.md` v0.2 contract landing;
+all Phase 1 contracts authored: step, phase, run, selection, adapter,
+skill, workflow (v0.2), continuity, config, plus three behavioral tracks
+(session-hygiene, prose-yaml-parity, cross-model-challenger).
+Authority-graph gate (Slice 7 / ADR-0003), invariant ledger, plane
+dimension, and reverse-authority checks are exercised end-to-end. Phase
+1.5 opened on the Slice 27 commit per ADR-0001 Addendum B §Phase 1 Close
+Inventory. The remaining close arc is sequenced by
 [`specs/plans/phase-1-close-revised.md`](specs/plans/phase-1-close-revised.md):
-Slice 27 (narrowed workflow contract, last Phase 1 slice) → 27a–27c
-(baseline, runtime boundary) → 27d `dogfood-run-0` alpha product proof.
-Phase 2 entry is gated by Phase 1.5 close, not Phase 1 close.
+27a (60-min discovery spike mining) → 27b (product-surface inventory
+baseline) → 27c (runtime boundary — append-only event writer,
+reducer-derived snapshot, SHA-256 manifest byte-match) → 27d
+(`dogfood-run-0` alpha product proof). Phase 2 entry is gated by
+Phase 1.5 close, not Phase 1 close.
 
 See [`PROJECT_STATE.md`](PROJECT_STATE.md) for a live snapshot of where the
 project is, what was just decided, and what comes next.

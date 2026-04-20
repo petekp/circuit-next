@@ -575,78 +575,91 @@
       "id": "WF-I1",
       "contract": "workflow",
       "surface_type": "contract",
-      "enforcement_state": "static-anchor",
+      "enforcement_state": "test-enforced",
       "source_anchor": "specs/contracts/workflow.md#WF-I1",
-      "binding_refs": [
-        { "path": "tests/contracts/cross-model-challenger.test.ts", "kind": "static_regex" }
-      ],
-      "rationale": "Unique step ids enforced by Workflow superRefine in src/schemas/workflow.ts. Scope_ids binding in cross-model-challenger.test.ts (grandfathered-allowlist, Slice 24 MED #5) ensures id cannot disappear silently. Upgrade to test_title binding deferred to Slice 27 (workflow v0.2)."
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }],
+      "rationale": "Unique step ids enforced by Workflow superRefine in src/schemas/workflow.ts. Slice 27 workflow.md v0.2 exits the skeleton grandfather and binds WF-I1 to a per-invariant titled negative test."
     },
     {
       "id": "WF-I2",
       "contract": "workflow",
       "surface_type": "contract",
-      "enforcement_state": "static-anchor",
+      "enforcement_state": "test-enforced",
       "source_anchor": "specs/contracts/workflow.md#WF-I2",
-      "binding_refs": [
-        { "path": "tests/contracts/cross-model-challenger.test.ts", "kind": "static_regex" }
-      ],
-      "rationale": "Closed entry references enforced by Workflow superRefine. Scope_ids binding ensures id cannot disappear silently. Upgrade deferred to Slice 27."
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }],
+      "rationale": "Closed entry_modes.start_at references enforced by Workflow superRefine. Slice 27 upgrade from static-anchor to test-enforced via per-invariant titled negative test."
     },
     {
       "id": "WF-I3",
       "contract": "workflow",
       "surface_type": "contract",
-      "enforcement_state": "static-anchor",
+      "enforcement_state": "test-enforced",
       "source_anchor": "specs/contracts/workflow.md#WF-I3",
-      "binding_refs": [
-        { "path": "tests/contracts/cross-model-challenger.test.ts", "kind": "static_regex" }
-      ],
-      "rationale": "Phase ids closure enforced by Workflow superRefine. Scope_ids binding ensures id cannot disappear silently. Upgrade deferred to Slice 27."
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }],
+      "rationale": "Closed phase step references enforced by Workflow superRefine. Slice 27 upgrade from static-anchor to test-enforced via per-invariant titled negative test."
     },
     {
       "id": "WF-I4",
       "contract": "workflow",
       "surface_type": "contract",
-      "enforcement_state": "static-anchor",
+      "enforcement_state": "test-enforced",
       "source_anchor": "specs/contracts/workflow.md#WF-I4",
-      "binding_refs": [
-        { "path": "tests/contracts/cross-model-challenger.test.ts", "kind": "static_regex" }
-      ],
-      "rationale": "Closed route targets enforced by Workflow superRefine. Scope_ids binding ensures id cannot disappear silently. Upgrade deferred to Slice 27."
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }],
+      "rationale": "Closed route targets enforced by Workflow superRefine. Slice 27 upgrade from static-anchor to test-enforced via per-invariant titled negative test."
     },
     {
       "id": "WF-I5",
       "contract": "workflow",
       "surface_type": "contract",
-      "enforcement_state": "static-anchor",
+      "enforcement_state": "test-enforced",
       "source_anchor": "specs/contracts/workflow.md#WF-I5",
-      "binding_refs": [
-        { "path": "tests/contracts/cross-model-challenger.test.ts", "kind": "static_regex" }
-      ],
-      "rationale": "Unique entry-mode names enforced by Workflow superRefine. Scope_ids binding ensures id cannot disappear silently. Upgrade deferred to Slice 27."
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }],
+      "rationale": "Unique entry-mode names enforced by Workflow superRefine. Slice 27 upgrade adds per-invariant titled negative test."
     },
     {
       "id": "WF-I6",
       "contract": "workflow",
       "surface_type": "contract",
-      "enforcement_state": "static-anchor",
+      "enforcement_state": "test-enforced",
       "source_anchor": "specs/contracts/workflow.md#WF-I6",
-      "binding_refs": [
-        { "path": "tests/contracts/cross-model-challenger.test.ts", "kind": "static_regex" }
-      ],
-      "rationale": "Selection-policy closure enforced by Workflow structural shape. Scope_ids binding ensures id cannot disappear silently. Upgrade deferred to Slice 27."
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }],
+      "rationale": "Unique phase ids enforced by Workflow superRefine. Slice 27 upgrade adds per-invariant titled negative test."
     },
     {
       "id": "WF-I7",
       "contract": "workflow",
       "surface_type": "contract",
-      "enforcement_state": "static-anchor",
+      "enforcement_state": "test-enforced",
       "source_anchor": "specs/contracts/workflow.md#WF-I7",
-      "binding_refs": [
-        { "path": "tests/contracts/cross-model-challenger.test.ts", "kind": "static_regex" }
-      ],
-      "rationale": "schema_version=2 enforced by Workflow literal field. Scope_ids binding ensures id cannot disappear silently. Upgrade deferred to Slice 27."
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }],
+      "rationale": "schema_version=2 enforced by the Workflow literal field on WorkflowBody (before superRefine). Slice 27 upgrade adds per-invariant titled negative test rejecting non-'2' schema_version values (Codex challenger LOW #8 fold-in — prior phrasing said 'surplus unknown literals' which conflated literal-mismatch with strict-key rejection)."
+    },
+    {
+      "id": "WF-I8",
+      "contract": "workflow",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/workflow.md#WF-I8",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }],
+      "rationale": "Terminal reachability enforced by Workflow superRefine via iterative fixpoint over terminal-reaching steps. New in Slice 27 workflow.md v0.2 — structural requirement for dogfood-run-0: a workflow fixture where some step cannot reach @complete/@stop/@escalate/@handoff would bootstrap a Run that could never emit run.closed."
+    },
+    {
+      "id": "WF-I9",
+      "contract": "workflow",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/workflow.md#WF-I9",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }],
+      "rationale": "No dead steps enforced by Workflow superRefine via BFS from every entry_mode.start_at. New in Slice 27 workflow.md v0.2 — a declared step not reachable from any entry is a silent declaration bug for dogfood fixtures. The reachability pass is gated on WF-I1/WF-I4/WF-I2 structural soundness (allEntryStartsKnown precondition) so a single WF-I2 violation does not cascade into WF-I9 noise (Codex challenger MED #4 fold-in)."
+    },
+    {
+      "id": "WF-I10",
+      "contract": "workflow",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/workflow.md#WF-I10",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }],
+      "rationale": "Pass-route presence enforced by Workflow superRefine — every step's routes map must contain key 'pass'. GateEvaluatedEvent.outcome is z.enum(['pass','fail']) uniformly across all three gate kinds (src/schemas/event.ts), so a successful gate outcome routes through routes['pass']. New in Slice 27 workflow.md v0.2 as Codex challenger HIGH #1 fold-in — closes the WF-I8 graph-reachable-but-runtime-unselectable hole (fixture routes like { success: '@complete' } would satisfy WF-I8 and stall at runtime). `fail`-route presence deferred to v0.3 / Phase 2."
     },
 
     {
