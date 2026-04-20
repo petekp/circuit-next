@@ -1,7 +1,7 @@
 # circuit-next
 
-**Status: Tier 0 scaffold complete; Phase 1 contract authorship temporarily
-paused for Slice 7 Authority-Graph Gate. Not yet functional.**
+**Status: Tier 0 scaffold complete; Phase 1 contract authorship in progress,
+pre-Phase-1.5-reopen. Not yet functional.**
 
 Claude Code plugin that automates common developer and creative workflows
 through a configurable, evidence-based methodology.
@@ -27,11 +27,18 @@ stress-test survival, accepted risks, and reopen conditions.
 
 ## Current phase
 
-**Phase 0.5 / Slice 7 — authority-graph hardening** before further contract
-authorship. Phase 0 Evidence Loop closed; Phase 1 contract authorship paused
-pending machine-enforced classification of artifact authority and
-compatibility posture (see
-[`specs/adrs/ADR-0003-authority-graph-gate.md`](specs/adrs/ADR-0003-authority-graph-gate.md)).
+**Phase 1 — Contract authorship, pre-Phase-1.5-reopen.** Phase 0 Evidence
+Loop closed. Six Phase 1 contracts landed (step / phase / run / selection /
+adapter / skill / workflow-skeleton / continuity) plus three behavioral
+tracks (session-hygiene / prose-yaml-parity / cross-model-challenger).
+Authority-graph gate (Slice 7 / ADR-0003), invariant ledger, plane
+dimension, and reverse-authority checks are exercised end-to-end. The
+remaining Phase 1 close arc is shrunk and sequenced by
+[`specs/plans/phase-1-close-revised.md`](specs/plans/phase-1-close-revised.md):
+D1/D4/D9/D10 governance reform (Slice 25b), then runtime-boundary safety
+(Slice 27c), then the first alpha product proof (Slice 27d
+`dogfood-run-0`). `Phase 1.5 Alpha Proof` is planning-prose only and is
+not authoritative until Slice 25d reopens ADR-0001.
 
 See [`PROJECT_STATE.md`](PROJECT_STATE.md) for a live snapshot of where the
 project is, what was just decided, and what comes next.
