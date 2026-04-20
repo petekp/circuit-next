@@ -14,6 +14,8 @@
  *   - `SCHEMA_FILE_ALLOWLIST` (Slice 23, schema-file allowlist with
  *     symbol-level known_exports + pending-artifact tracking per Codex
  *     HIGH #4 + MED #9)
+ *   - `findAbsoluteSymlinks` (Slice 25a, specs portability guard consumed by
+ *     tests/contracts/specs-portability.test.ts)
  */
 export function schemaExportPresent(schemaSrc: string, name: string): boolean;
 export function planeIsValid(plane: unknown): boolean;
@@ -48,3 +50,8 @@ export const SCHEMA_FILE_ALLOWLIST: Record<
   string,
   SchemaAllowlistSharedPrimitive | SchemaAllowlistPendingArtifact
 >;
+
+export function findAbsoluteSymlinks(
+  rootDir: string,
+  containmentRoot?: string,
+): Array<{ path: string; target: string; reason: 'absolute' | 'escapes-repo' }>;

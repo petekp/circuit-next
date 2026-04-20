@@ -12,8 +12,8 @@
  */
 
 import { execSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, lstatSync, readFileSync, readdirSync, readlinkSync } from 'node:fs';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 
 const REPO_ROOT = execSync('git rev-parse --show-toplevel').toString().trim();
 const DELIM = '<<<CIRCUIT-NEXT-AUDIT-END>>>';
@@ -460,6 +460,87 @@ function verifyStatus() {
  * presence at a glance and fails red if the ledger is missing or
  * structurally broken. Per Codex challenger MED 10 fold-in.
  */
+// Slice 25a — Methodology artifact portability (FUP-1, ADR-0001 addendum).
+// Absolute symlinks under specs/ bind the repo's authority surface to the
+// author's host filesystem; on any clone they resolve to broken paths and the
+// methodology artifacts stop being readable. Portability requires that every
+// symlink under specs/ be either (a) absolute → rejected, or (b) relative and
+// resolving to a path still inside the repo containment boundary. A relative
+// link like `../../../../tmp/host-local` is syntactically relative but escapes
+// the repo, so it fails portability the same way an absolute target does.
+//
+// Exported so tests/contracts/specs-portability.test.ts can exercise the guard
+// against a constructed fixture without shelling out to the audit CLI.
+// Each violation carries a `reason` field: 'absolute' or 'escapes-repo'.
+//
+// Scope note (Codex MED #7): the scan walks the working tree, not the git
+// index. `.gitignore`-ed detritus (.DS_Store, build output) is filtered by
+// directory-name so local noise does not red the audit. A future regression
+// where an ignored absolute symlink slips in would still fail at clone time
+// on any machine that does not have the same ignored artifact — acceptable
+// because the audit is host-local signal, not distributed proof.
+const IGNORED_DIRS_FOR_PORTABILITY = new Set(['node_modules', '.git', 'dist', 'coverage']);
+const IGNORED_BASENAMES_FOR_PORTABILITY = new Set(['.DS_Store']);
+
+export function findAbsoluteSymlinks(rootDir, containmentRoot) {
+  const containment = containmentRoot ?? rootDir;
+  const violations = [];
+  if (!existsSync(rootDir)) return violations;
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (IGNORED_DIRS_FOR_PORTABILITY.has(entry.name)) continue;
+      if (IGNORED_BASENAMES_FOR_PORTABILITY.has(entry.name)) continue;
+      const full = join(dir, entry.name);
+      let stat;
+      try {
+        stat = lstatSync(full);
+      } catch {
+        continue;
+      }
+      if (stat.isSymbolicLink()) {
+        const target = readlinkSync(full);
+        if (isAbsolute(target)) {
+          violations.push({ path: full, target, reason: 'absolute' });
+          continue;
+        }
+        // Relative-target containment check (Codex HIGH #2). Resolve the link
+        // against its parent directory and assert the result stays inside the
+        // containment root. `path.relative` returning a `..`-prefixed value
+        // means the resolved path escapes.
+        const resolvedTarget = resolve(dir, target);
+        const rel = relative(containment, resolvedTarget);
+        if (rel === '' || rel === '.' || (!rel.startsWith('..') && !isAbsolute(rel))) {
+          // Target stays within containment — portable.
+        } else {
+          violations.push({ path: full, target, reason: 'escapes-repo' });
+        }
+      } else if (entry.isDirectory()) {
+        walk(full);
+      }
+    }
+  };
+  walk(rootDir);
+  return violations;
+}
+
+function checkSpecsPortability() {
+  const specsDir = join(REPO_ROOT, 'specs');
+  const violations = findAbsoluteSymlinks(specsDir, REPO_ROOT);
+  if (violations.length === 0) {
+    return {
+      level: 'green',
+      detail: 'No absolute or repo-escaping symlinks under specs/ (ADR-0001 portability addendum).',
+    };
+  }
+  const rels = violations.map(
+    (v) => `${v.path.slice(REPO_ROOT.length + 1)} → ${v.target} [${v.reason}]`,
+  );
+  return {
+    level: 'red',
+    detail: `${violations.length} non-portable symlink(s) under specs/: ${rels.join('; ')}`,
+  };
+}
+
 function checkInvariantLedger() {
   const ledgerPath = join(REPO_ROOT, 'specs', 'invariants.json');
   if (!existsSync(ledgerPath)) {
@@ -1373,7 +1454,16 @@ function main() {
     detail: ledger.detail,
   });
 
-  // Check 11: npm run verify currently green.
+  // Check 11: Specs portability (Slice 25a — FUP-1, ADR-0001 addendum).
+  const portability = checkSpecsPortability();
+  counters[portability.level]++;
+  findings.push({
+    level: portability.level,
+    check: 'Specs portability (absolute symlinks)',
+    detail: portability.detail,
+  });
+
+  // Check 12: npm run verify currently green.
   const verify = verifyStatus();
   if (verify.pass) {
     counters.green++;
