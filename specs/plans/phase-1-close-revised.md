@@ -596,6 +596,40 @@ PROJECT_STATE, required lane/framing literals including exact
 commands, product ratchets currently passing/failing, and suggested
 commit-message skeleton.
 
+### Slice P2-MODEL-EFFORT — workflow v0.3: explicit model + effort assignment
+
+**Lane:** Product / Ratchet-Advance (Phase 2).
+
+**Trigger:** Phase 2 open (after Phase 1.5 close ceremony). Scheduled here
+so the concern is not lost; not unblocked by any Phase 1.5 work.
+
+**Motivation:** Operator intent (recorded 2026-04-20 conversation) — workflows
+should let the operator (or a future selector) pick the best model and
+effort level per step. Codex is better at refactors; Opus is better at
+prose; reasoning-capable models support graded effort. Two concerns,
+separate slices:
+
+1. **Explicit assignment (this slice).** Extend
+   `specs/contracts/workflow.md` to v0.3 with per-step
+   `invocation_options.model` (string id; schema-validated against an
+   allowlist) and `invocation_options.effort` (low | medium | high; only
+   honored when the resolved adapter's model supports it). Cascade
+   resolution: user-global default → workflow-level default → step-level
+   override. `resolved_selection.invocation_options` on the
+   `dispatch.started` event carries the resolved values. Backwards-
+   additive — existing fixtures with empty `invocation_options` continue
+   to resolve to the user-global default.
+2. **Intelligent routing (later; explicitly postponed).** A selector that
+   inspects task characteristics (lane, step role, artifact kind,
+   historical success-rate) and picks a model. Requires (a) Phase 2
+   usage data on which models actually work for which tasks, (b) a
+   characterization layer, (c) its own contract + property tests. Land
+   as a separate Phase 2+ slice after the explicit slice is in use.
+
+**Deliverables (explicit slice):** v0.3 workflow contract amendment;
+schema parity tests; migration note for existing v0.2 fixtures; audit
+check that unknown model ids fail at parse time (prevents typo drift).
+
 ### Slice 25g — D8 Rollback Review
 
 **Lane:** Ratchet-Advance.
