@@ -166,3 +166,69 @@ Conditions under which this decision should be re-examined:
 **P10 — A critical published study invalidated a load-bearing citation.** New frontier model makes hidden tests trivially discoverable; or reward-hacking drops an order of magnitude under new training; or N-version errors turn out to be more correlated than Knight-Leveson suggests. → *Mitigation present*: reopen condition #4 triggers explicit re-examination. *Residual*: inherent — any evidence-grounded methodology is vulnerable to evidence revision.
 
 Each pre-mortem failure is mapped to a mitigation already in the methodology or accepted as a known risk. None require methodology change; all require ongoing vigilance. The signal-to-watch column operationalizes the vigilance as observable metrics rather than hopes.
+
+## Methodology Amendments (2026-04-20, Slice 25b)
+
+Slice 25b installs only the minimum governance needed before product work resumes: D1, D4, and D10 in this decision record. D9 installs through repo-root `TIER.md`, not through `decision.md`. D2 waits until the first alpha runner exists; D3 requires an explicit ADR-0001 reopen; D5 waits until after `dogfood-run-0`; D6 waits until executable probes can run; D7 waits for runtime probes plus cooling/emergency-correction discipline; D8 is a Phase 2 close rollback review. Installing those rules before their triggers would be methodology work replacing executable product proof, which D1 is meant to prevent.
+
+### D1. Product Reality Gate
+
+No methodology phase may close solely on authored governance artifacts
+(contracts, ADRs, reviews, ledgers, audit rules, or tests). Each phase must
+produce or preserve one executable product proof.
+
+A product proof is one of:
+
+- a user-facing command that runs against a non-methodology workflow;
+- an end-to-end fixture that creates a run log and derives a snapshot;
+- a design-only claim recorded by ADR, with named next executable proof and
+  expiry date.
+
+A design-only Product Reality Gate proof expires after 2 slices or 14 calendar
+days from the recording ADR, whichever is sooner. Renewal requires a second ADR
+naming a specific hardening event that justifies the extension.
+
+`product_gate_exemptions` is a machine-readable ledger at
+`specs/methodology/product-gate-exemptions.md` with YAML frontmatter (name,
+description, type=ledger) + a markdown table (columns: `phase_id | slice |
+reason | consumed`). Exemptions cannot amend D1 or D3. Slice 25b consumes a
+one-time operator waiver (bootstrap exception) because it changes future
+acceptance terms; it is not evidence that the Gate works.
+
+### D4. Governance Authority Graph Rule
+
+Standing methodology rules (hard caps, cadences, close criteria, convergence
+criteria) may not live only in `specs/plans/`. They must be mirrored or hosted
+in `specs/methodology/decision.md` or an ADR. Plans may operationalize or
+schedule; they may not author durable standing rules by themselves.
+
+### D10. Adversarial Review Discipline
+
+Target: `specs/methodology/decision.md`, with
+`specs/reviews/adversarial-yield-ledger.md` as immediate data source.
+
+1. **Pass-count cap.** Adversarial review on a single artifact is capped at 2
+   passes for reversible work, 3 for governance changes, and 4 for
+   irreversible artifacts such as schema breaks for external consumers,
+   production migrations, or published APIs. Beyond the cap requires operator
+   written justification naming the specific failure class being hunted.
+2. **Compound stopping criterion.** Stop when all are true:
+   - yield halved versus prior pass;
+   - no HIGH severity appeared in the last pass;
+   - the reviewer can name the specific defect class the next pass would hunt
+     that the last pass missed;
+   - a structurally different mode (runtime, human, fuzzer, property test) is
+     available and cheaper than another review pass.
+
+If no structurally different cheaper mode is available at the time of the
+decision, the fourth clause is waived; the artifact must record the waiver
+explicitly in the yield-ledger row for that pass.
+
+3. **Mode-cycle rule.** After K review passes on an artifact, the next
+   defect-discovery effort must come from a structurally different mode before
+   another same-mode review is valid.
+4. **Artifact-size signal.** If an artifact needs more than 3 adversarial
+   passes to converge, treat that as evidence it is too large and decompose it.
+
+The pass-cap values 2/3/4 are opinionated priors, not empirically tuned. Tune
+them after 10-20 reviewed artifacts using the yield ledger.

@@ -636,6 +636,233 @@ export function readFrontmatter(absPath) {
   return { ok: true, frontmatter: result };
 }
 
+function stripCellMarkup(value) {
+  return value.trim().replace(/^`|`$/g, '').trim();
+}
+
+function splitMarkdownTableRow(line) {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith('|') || !trimmed.endsWith('|')) return null;
+  return trimmed.slice(1, -1).split('|').map(stripCellMarkup);
+}
+
+function isMarkdownSeparatorRow(cells) {
+  return cells.every((cell) => /^:?-{3,}:?$/.test(cell.replace(/\s/g, '')));
+}
+
+export function parseMarkdownTable(markdown, requiredColumns) {
+  const lines = markdown.split(/\r?\n/);
+  const lowerRequired = requiredColumns.map((c) => c.toLowerCase());
+  for (let i = 0; i < lines.length - 1; i++) {
+    const header = splitMarkdownTableRow(lines[i]);
+    if (!header) continue;
+    const lowerHeader = header.map((c) => c.toLowerCase());
+    if (!lowerRequired.every((c) => lowerHeader.includes(c))) continue;
+    const separator = splitMarkdownTableRow(lines[i + 1]);
+    if (!separator || !isMarkdownSeparatorRow(separator)) continue;
+    const rows = [];
+    for (let j = i + 2; j < lines.length; j++) {
+      const cells = splitMarkdownTableRow(lines[j]);
+      if (!cells) {
+        if (rows.length > 0) break;
+        continue;
+      }
+      if (cells.every((cell) => cell.length === 0)) continue;
+      const row = {};
+      for (let k = 0; k < header.length; k++) {
+        const key = header[k];
+        if (!key) continue;
+        row[key] = cells[k] ?? '';
+      }
+      rows.push(row);
+    }
+    return { ok: true, columns: header, rows };
+  }
+  return {
+    ok: false,
+    error: `missing markdown table with columns: ${requiredColumns.join(', ')}`,
+    columns: [],
+    rows: [],
+  };
+}
+
+function parseBooleanCell(value) {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'true') return true;
+  if (normalized === 'false') return false;
+  return null;
+}
+
+export function parseProductGateExemptionLedger(ledgerPath) {
+  const issues = [];
+  if (!existsSync(ledgerPath)) {
+    return { ok: false, issues: ['product-gate-exemptions.md missing'], rows: [] };
+  }
+  const fm = readFrontmatter(ledgerPath);
+  if (!fm.ok) {
+    issues.push(`frontmatter ${fm.error ?? 'unreadable'}`);
+  } else {
+    if (fm.frontmatter.type !== 'ledger') issues.push('frontmatter type must be ledger');
+    for (const key of ['name', 'description', 'date']) {
+      if (typeof fm.frontmatter[key] !== 'string' || fm.frontmatter[key].length === 0) {
+        issues.push(`frontmatter missing ${key}`);
+      }
+    }
+  }
+  const content = readFileSync(ledgerPath, 'utf-8');
+  const table = parseMarkdownTable(content, ['phase_id', 'slice', 'reason', 'consumed']);
+  if (!table.ok) {
+    issues.push(table.error);
+    return { ok: false, issues, rows: [] };
+  }
+  const rows = table.rows.map((row, index) => {
+    const consumed = parseBooleanCell(row.consumed ?? '');
+    if (consumed === null) {
+      issues.push(`row ${index + 1}: consumed must be true or false`);
+    }
+    return {
+      phase_id: row.phase_id ?? '',
+      slice: row.slice ?? '',
+      reason: row.reason ?? '',
+      consumed: consumed ?? false,
+    };
+  });
+  return { ok: issues.length === 0, issues, rows };
+}
+
+export function checkProductRealityGateVisibility(rootDir = REPO_ROOT) {
+  const relPath = 'specs/methodology/product-gate-exemptions.md';
+  const ledgerPath = join(rootDir, relPath);
+  const parsed = parseProductGateExemptionLedger(ledgerPath);
+  if (!parsed.ok) {
+    return {
+      level: 'red',
+      detail: `${relPath} malformed: ${parsed.issues.join('; ')}`,
+    };
+  }
+  const seed = parsed.rows.find(
+    (row) =>
+      row.phase_id === 'phase-1-pre-1.5-reopen' && row.slice === '25b' && row.consumed === true,
+  );
+  if (!seed) {
+    return {
+      level: 'red',
+      detail:
+        'specs/methodology/product-gate-exemptions.md missing consumed Slice 25b bootstrap-exception row',
+    };
+  }
+  return {
+    level: 'green',
+    detail: `${parsed.rows.length} exemption row(s); consumed seed row present for phase-1-pre-1.5-reopen / 25b.`,
+  };
+}
+
+function splitFilePathCell(value) {
+  return value
+    .replaceAll('<br>', ';')
+    .replaceAll('<br/>', ';')
+    .replaceAll('<br />', ';')
+    .split(/[;,]/)
+    .map(stripCellMarkup)
+    .filter(Boolean);
+}
+
+export function parseTierClaims(tierPath) {
+  const issues = [];
+  if (!existsSync(tierPath)) return { ok: false, issues: ['TIER.md missing'], rows: [] };
+  const content = readFileSync(tierPath, 'utf-8');
+  const table = parseMarkdownTable(content, [
+    'claim_id',
+    'status',
+    'file_path',
+    'planned_slice',
+    'rationale',
+  ]);
+  if (!table.ok) return { ok: false, issues: [table.error], rows: [] };
+  const rows = table.rows.map((row) => ({
+    claim_id: row.claim_id ?? '',
+    status: (row.status ?? '').toLowerCase(),
+    file_paths: splitFilePathCell(row.file_path ?? ''),
+    planned_slice: row.planned_slice ?? '',
+    rationale: row.rationale ?? '',
+  }));
+  for (const [index, row] of rows.entries()) {
+    if (!row.claim_id) issues.push(`row ${index + 1}: missing claim_id`);
+  }
+  return { ok: issues.length === 0, issues, rows };
+}
+
+export function checkTierOrphanClaims(rootDir = REPO_ROOT) {
+  const parsed = parseTierClaims(join(rootDir, 'TIER.md'));
+  if (!parsed.ok) {
+    return { level: 'red', detail: `TIER.md malformed: ${parsed.issues.join('; ')}` };
+  }
+  const findings = [];
+  let enforced = 0;
+  let planned = 0;
+  let notClaimed = 0;
+  for (const row of parsed.rows) {
+    const hasFilePath = row.file_paths.length > 0;
+    const hasPlannedSlice = row.planned_slice.trim().length > 0;
+    const isNotClaimed = row.status === 'not claimed';
+    const modes = [hasFilePath, hasPlannedSlice, isNotClaimed].filter(Boolean).length;
+    if (modes === 0) {
+      findings.push(`${row.claim_id}: orphan claim (no file_path, planned_slice, or not claimed)`);
+      continue;
+    }
+    if (modes > 1) {
+      findings.push(
+        `${row.claim_id}: multiple claim classifications present; expected exactly one`,
+      );
+      continue;
+    }
+    if (hasFilePath) {
+      enforced++;
+      for (const relPath of row.file_paths) {
+        if (!existsSync(join(rootDir, relPath))) {
+          findings.push(`${row.claim_id}: file_path does not exist — ${relPath}`);
+        }
+      }
+    } else if (hasPlannedSlice) {
+      planned++;
+    } else if (isNotClaimed) {
+      notClaimed++;
+      if (row.rationale.trim().length === 0) {
+        findings.push(`${row.claim_id}: not claimed row missing rationale`);
+      }
+    }
+  }
+  const summary = `${parsed.rows.length} claims - ${enforced} enforced (file_path), ${planned} planned (slice), ${notClaimed} not claimed`;
+  if (findings.length > 0) {
+    return { level: 'red', detail: `${summary}; ${findings.join('; ')}` };
+  }
+  return { level: 'green', detail: summary };
+}
+
+export function checkAdversarialYieldLedger(rootDir = REPO_ROOT) {
+  const relPath = 'specs/reviews/adversarial-yield-ledger.md';
+  const ledgerPath = join(rootDir, relPath);
+  if (!existsSync(ledgerPath)) return { level: 'red', detail: `${relPath} missing` };
+  const content = readFileSync(ledgerPath, 'utf-8');
+  const table = parseMarkdownTable(content, [
+    'pass_date',
+    'artifact_path',
+    'pass_number_for_artifact',
+    'reviewer_id',
+    'mode',
+    'HIGH_count',
+    'MED_count',
+    'LOW_count',
+    'verdict',
+    'operator_justification_if_past_cap',
+  ]);
+  if (!table.ok) return { level: 'red', detail: `${relPath} malformed: ${table.error}` };
+  if (table.rows.length === 0) {
+    return { level: 'red', detail: `${relPath} has no data rows` };
+  }
+  return { level: 'green', detail: `${table.rows.length} yield-ledger row(s) present` };
+}
+
 function loadArtifactsGraph() {
   const artifactsJsonPath = join(REPO_ROOT, 'specs', 'artifacts.json');
   const artifactsMdPath = join(REPO_ROOT, 'specs', 'artifacts.md');
@@ -1463,7 +1690,34 @@ function main() {
     detail: portability.detail,
   });
 
-  // Check 12: npm run verify currently green.
+  // Check 12: Product Reality Gate visibility (Slice 25b — D1 bootstrap ledger).
+  const productGate = checkProductRealityGateVisibility();
+  counters[productGate.level]++;
+  findings.push({
+    level: productGate.level,
+    check: 'Product Reality Gate visibility',
+    detail: productGate.detail,
+  });
+
+  // Check 13: TIER orphan-claim rejection (Slice 25b — D9 honesty guard).
+  const tierClaims = checkTierOrphanClaims();
+  counters[tierClaims.level]++;
+  findings.push({
+    level: tierClaims.level,
+    check: 'TIER orphan-claim rejection',
+    detail: tierClaims.detail,
+  });
+
+  // Check 14: Adversarial yield ledger presence (Slice 25b — D10 evidence source).
+  const yieldLedger = checkAdversarialYieldLedger();
+  counters[yieldLedger.level]++;
+  findings.push({
+    level: yieldLedger.level,
+    check: 'Adversarial yield ledger',
+    detail: yieldLedger.detail,
+  });
+
+  // Check 15: npm run verify currently green.
   const verify = verifyStatus();
   if (verify.pass) {
     counters.green++;

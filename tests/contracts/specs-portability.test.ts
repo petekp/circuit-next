@@ -13,8 +13,9 @@ import { describe, expect, it } from 'vitest';
 // portability invariant across five dimensions per Codex challenger fold-ins:
 //   (HIGH 2) guard rejects BOTH absolute targets and repo-escaping relative
 //            targets (e.g. `../../../host/path`);
-//   (HIGH 4) specs/methodology/ must contain exactly five regular-file blobs
-//            with the expected names — absence fails as hard as symlink mode;
+//   (HIGH 4) specs/methodology/ must contain the expected regular-file blobs
+//            (the five inlined artifacts plus authoritative local ledgers) —
+//            absence fails as hard as symlink mode;
 //   (HIGH 5) wiring-parity between findAbsoluteSymlinks helper and the audit
 //            CLI — main() must invoke checkSpecsPortability and route it into
 //            findings, preventing silent removal while helper tests stay green;
@@ -30,13 +31,18 @@ const REPO_ROOT = resolve(HERE, '..', '..');
 const SPECS_DIR = resolve(REPO_ROOT, 'specs');
 const METHODOLOGY_DIR = resolve(SPECS_DIR, 'methodology');
 
-const EXPECTED_METHODOLOGY_FILES = [
+const EXPECTED_INLINED_METHODOLOGY_FILES = [
   'specs/methodology/analysis.md',
   'specs/methodology/brief.md',
   'specs/methodology/decision.md',
   'specs/methodology/plan.md',
   'specs/methodology/result.md',
 ] as const;
+
+const EXPECTED_METHODOLOGY_FILES = [
+  ...EXPECTED_INLINED_METHODOLOGY_FILES,
+  'specs/methodology/product-gate-exemptions.md',
+].sort();
 
 const REQUIRED_FRONTMATTER_KEYS = [
   'original_artifact_path',
@@ -53,7 +59,7 @@ describe('specs/ portability (absolute and repo-escaping symlinks)', () => {
     expect(violations, `portability violations: ${JSON.stringify(violations)}`).toEqual([]);
   });
 
-  it('tracks exactly five methodology artifacts as regular-file blobs', () => {
+  it('tracks every authoritative methodology artifact as a regular-file blob', () => {
     const lsFiles = execSync('git ls-files -s specs/methodology', { cwd: REPO_ROOT })
       .toString()
       .trim()
@@ -153,7 +159,7 @@ describe('specs/ portability (absolute and repo-escaping symlinks)', () => {
 });
 
 describe('specs/methodology/ frontmatter provenance shape', () => {
-  for (const rel of EXPECTED_METHODOLOGY_FILES) {
+  for (const rel of EXPECTED_INLINED_METHODOLOGY_FILES) {
     const basename = rel.split('/').pop() ?? rel;
     it(`${basename} carries the required provenance frontmatter keys`, () => {
       const content = readFileSync(join(REPO_ROOT, rel), 'utf-8');
@@ -179,7 +185,7 @@ describe('specs/methodology/ frontmatter provenance shape', () => {
     });
   }
 
-  it('matches the exact expected set of five methodology artifacts', () => {
+  it('matches the exact expected set of methodology artifacts', () => {
     const lsFiles = execSync('git ls-files specs/methodology', { cwd: REPO_ROOT })
       .toString()
       .trim()

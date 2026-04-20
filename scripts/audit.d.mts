@@ -16,7 +16,11 @@
  *     HIGH #4 + MED #9)
  *   - `findAbsoluteSymlinks` (Slice 25a, specs portability guard consumed by
  *     tests/contracts/specs-portability.test.ts)
+ *   - governance-reform helpers (Slice 25b) consumed by
+ *     tests/contracts/governance-reform.test.ts
  */
+export type AuditCheckResult = { level: 'green' | 'yellow' | 'red'; detail: string };
+
 export function schemaExportPresent(schemaSrc: string, name: string): boolean;
 export function planeIsValid(plane: unknown): boolean;
 export function trustBoundaryHasOriginToken(boundary: unknown): boolean;
@@ -55,3 +59,40 @@ export function findAbsoluteSymlinks(
   rootDir: string,
   containmentRoot?: string,
 ): Array<{ path: string; target: string; reason: 'absolute' | 'escapes-repo' }>;
+
+export function parseMarkdownTable(
+  markdown: string,
+  requiredColumns: string[],
+):
+  | { ok: true; columns: string[]; rows: Array<Record<string, string>> }
+  | { ok: false; error: string; columns: string[]; rows: [] };
+
+export type ProductGateExemptionRow = {
+  phase_id: string;
+  slice: string;
+  reason: string;
+  consumed: boolean;
+};
+
+export function parseProductGateExemptionLedger(
+  ledgerPath: string,
+):
+  | { ok: true; issues: []; rows: ProductGateExemptionRow[] }
+  | { ok: false; issues: string[]; rows: ProductGateExemptionRow[] };
+export function checkProductRealityGateVisibility(rootDir?: string): AuditCheckResult;
+
+export type TierClaimRow = {
+  claim_id: string;
+  status: string;
+  file_paths: string[];
+  planned_slice: string;
+  rationale: string;
+};
+
+export function parseTierClaims(tierPath: string): {
+  ok: boolean;
+  issues: string[];
+  rows: TierClaimRow[];
+};
+export function checkTierOrphanClaims(rootDir?: string): AuditCheckResult;
+export function checkAdversarialYieldLedger(rootDir?: string): AuditCheckResult;
