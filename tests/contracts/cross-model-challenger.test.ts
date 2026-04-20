@@ -143,6 +143,13 @@ const ADR_REVIEW_ADDITIONAL_KEYS: string[] = [
 // `verdict` for the canonical single-field form) and opening/closing
 // verdicts for the multi-stage verdict chain. The `review_target` + `target_kind`
 // keys align with the ADR-review shape per Slice 20 normalization.
+//
+// Slice 25 AR-M5 fold-in — arc reviews MUST also carry machine-readable
+// scope disclosure: `commands_run` (list of shell commands/tools used),
+// `opened_scope` (list of file paths/globs read end-to-end), and
+// `skipped_scope` (list of paths/globs NOT opened this pass, with rationale
+// or `none`). Frontmatter-level, not prose-only, so a follow-up pass can
+// grep prior reviews for disclosed scope without re-parsing prose.
 const ARC_REVIEW_ADDITIONAL_KEYS: string[] = [
   'review_target',
   'target_kind',
@@ -150,7 +157,38 @@ const ARC_REVIEW_ADDITIONAL_KEYS: string[] = [
   'arc_version',
   'opening_verdict',
   'closing_verdict',
+  'commands_run',
+  'opened_scope',
+  'skipped_scope',
 ];
+
+// Slice 25 Codex challenger HIGH 5 fold-in — placeholder blocklist. A value
+// that matches any of these (case-insensitive, full-string after trim) is
+// rejected as a degraded scope disclosure. `skipped_scope: none` is the
+// exception: it is the canonical "I did open everything I intended to open"
+// signal when an arc review genuinely has zero skipped scope. Enumerated
+// separately (SKIPPED_SCOPE_EMPTY_TOKENS) rather than excluded from the
+// blocklist by string overlap.
+const SCOPE_PLACEHOLDER_BLOCKLIST = new Set<string>([
+  'n/a',
+  'na',
+  'see body',
+  'not recorded',
+  'tbd',
+  'pending',
+]);
+
+const SKIPPED_SCOPE_EMPTY_TOKENS = new Set<string>(['none']);
+
+// Slice 25 Q4 council preload + Codex challenger MED 11 fold-in — optional
+// normalized review-record fields. v0.1 recognizes the fields but does NOT
+// make them required. Slice 32 promotes to required + backfills existing
+// records. AR-L2 reopen-trigger watch is NOT retired by Slice 25; watch
+// remains active until Slice 32 lands (MED 11 disposition).
+const AUTHORSHIP_ROLE_ENUM = new Set<string>(['challenger', 'author', 'auditor', 'operator+agent']);
+// Pattern rather than enum — model ids evolve faster than a committed allowlist
+// can track. Literal ID-shape requirement: non-empty, no whitespace at edges.
+const REVIEWER_MODEL_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._+\-: ]*[A-Za-z0-9]$/;
 
 // Accepted canonical verdicts in contract-review records. Exact set
 // membership with optional parenthetical suffix — the older `startsWith`
@@ -467,6 +505,112 @@ describe('cross-model-challenger — CHALLENGER-I3 review records are recorded a
         `${path}: arc review target_kind must equal 'arc' (got "${fm.get('target_kind')}").`,
       ).toBe('arc');
     }
+  });
+
+  // Slice 25 AR-M5 + Codex challenger HIGH 5 fold-in — scope-disclosure
+  // fields must be non-empty AND must not be placeholder prose. A degraded
+  // `commands_run: see body` defeats the point of promoting scope to
+  // frontmatter.
+  it('arc-review commands_run and opened_scope are non-placeholder, list-shaped', () => {
+    const violations: string[] = [];
+    for (const path of reviewFiles) {
+      if (classifyReview(path) !== 'arc') continue;
+      const fm = parseFrontmatter(readFileSync(path, 'utf-8'));
+      for (const key of ['commands_run', 'opened_scope'] as const) {
+        const raw = (fm.get(key) ?? '').trim();
+        if (!raw) {
+          violations.push(`${path}: ${key} is empty`);
+          continue;
+        }
+        if (SCOPE_PLACEHOLDER_BLOCKLIST.has(raw.toLowerCase())) {
+          violations.push(`${path}: ${key} is placeholder "${raw}"`);
+          continue;
+        }
+        // Require list-shape: parseFrontmatter concatenates YAML list items
+        // into `- item1 - item2`. Require at least one `- ` separator after
+        // a leading dash, OR at minimum that the value begins with `-`.
+        if (!/^-\s+\S/.test(raw)) {
+          violations.push(
+            `${path}: ${key} does not parse as a YAML list (expected \`${key}:\\n  - item\\n  - item\` form, got "${raw.slice(0, 60)}")`,
+          );
+        }
+      }
+    }
+    expect(violations, `AR-M5 scope disclosure violations:\n${violations.join('\n')}`).toEqual([]);
+  });
+
+  // skipped_scope allows the literal "none" sentinel for genuine zero-skip
+  // reviews (accepted exception to the placeholder blocklist). All other
+  // values follow the same list-shape + non-placeholder rule.
+  it('arc-review skipped_scope is list-shaped OR the "none" sentinel', () => {
+    const violations: string[] = [];
+    for (const path of reviewFiles) {
+      if (classifyReview(path) !== 'arc') continue;
+      const fm = parseFrontmatter(readFileSync(path, 'utf-8'));
+      const raw = (fm.get('skipped_scope') ?? '').trim();
+      if (!raw) {
+        violations.push(`${path}: skipped_scope is empty`);
+        continue;
+      }
+      const normalized = raw.toLowerCase();
+      // "none" sentinel accepted in two forms: bare `skipped_scope: none` OR
+      // single-item list `- none`.
+      if (SKIPPED_SCOPE_EMPTY_TOKENS.has(normalized) || /^-\s+none\s*$/i.test(raw)) continue;
+      // List shape required.
+      if (!/^-\s+\S/.test(raw)) {
+        violations.push(
+          `${path}: skipped_scope does not parse as a list or "none" sentinel (got "${raw.slice(0, 60)}")`,
+        );
+      }
+      // Explicit placeholder rejection (defense in depth; the list-shape
+      // check mostly catches these already).
+      if (
+        SCOPE_PLACEHOLDER_BLOCKLIST.has(normalized) ||
+        SCOPE_PLACEHOLDER_BLOCKLIST.has(normalized.replace(/^-\s+/, ''))
+      ) {
+        violations.push(`${path}: skipped_scope is placeholder "${raw}"`);
+      }
+    }
+    expect(violations, `AR-M5 skipped_scope violations:\n${violations.join('\n')}`).toEqual([]);
+  });
+
+  // Slice 25 Q4 council preload + MED 11 fold-in — optional review-record
+  // fields. Presence is NOT required (Slice 32 makes them required); BUT
+  // when present, the values are validated: authorship_role against a closed
+  // enum, reviewer_model_id against a non-empty pattern. AR-L2 reopen-trigger
+  // watch remains active.
+  it('optional reviewer_model_id (when present) matches the pattern', () => {
+    const violations: string[] = [];
+    for (const path of reviewFiles) {
+      const kind = classifyReview(path);
+      if (kind === 'unknown') continue;
+      const fm = parseFrontmatter(readFileSync(path, 'utf-8'));
+      const raw = fm.get('reviewer_model_id');
+      if (raw === undefined) continue;
+      if (!REVIEWER_MODEL_ID_RE.test(raw.trim())) {
+        violations.push(
+          `${path}: reviewer_model_id "${raw}" does not match ${REVIEWER_MODEL_ID_RE}`,
+        );
+      }
+    }
+    expect(violations, `reviewer_model_id violations:\n${violations.join('\n')}`).toEqual([]);
+  });
+
+  it('optional authorship_role (when present) is one of the enum values', () => {
+    const violations: string[] = [];
+    for (const path of reviewFiles) {
+      const kind = classifyReview(path);
+      if (kind === 'unknown') continue;
+      const fm = parseFrontmatter(readFileSync(path, 'utf-8'));
+      const raw = fm.get('authorship_role');
+      if (raw === undefined) continue;
+      if (!AUTHORSHIP_ROLE_ENUM.has(raw.trim())) {
+        violations.push(
+          `${path}: authorship_role "${raw}" is not one of ${[...AUTHORSHIP_ROLE_ENUM].join(' / ')}`,
+        );
+      }
+    }
+    expect(violations, `authorship_role violations:\n${violations.join('\n')}`).toEqual([]);
   });
 });
 

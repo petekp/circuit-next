@@ -13,6 +13,8 @@ enforced_by:
   - CLAUDE.md §Session hygiene (compaction disabled; slice ≤ 30 min)
 planned_tests:
   - tests/contracts/session-hygiene.test.ts (LANDED v0.1 in Slice 14 — asserts CLAUDE.md wc -l ≤ 300; README/PROJECT_STATE phase alignment; .circuit/ ignored unless allowlisted). v0.2 Tier-2+ promotions owed per §Evolution.
+invariant_ids: [SESSION-I1, SESSION-I2, SESSION-I3, SESSION-I4, SESSION-I5, SESSION-I6]
+property_ids: []
 ---
 
 # Session hygiene

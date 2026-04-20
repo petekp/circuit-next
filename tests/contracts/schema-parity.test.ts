@@ -3200,8 +3200,8 @@ describe('DispatchStartedEvent.adapter rejects named references (Codex HIGH #1 v
   });
 });
 
-describe('DispatchConfig registry-key/descriptor-name parity (Codex HIGH #2)', () => {
-  it('rejects a descriptor whose `name` does not equal its registry key', () => {
+describe('DispatchConfig registry-key/descriptor-name parity (ADAPTER-I11, Codex HIGH #2)', () => {
+  it('ADAPTER-I11 — rejects a descriptor whose `name` does not equal its registry key', () => {
     const bad = DispatchConfig.safeParse({
       adapters: {
         gemini: {
@@ -3214,7 +3214,7 @@ describe('DispatchConfig registry-key/descriptor-name parity (Codex HIGH #2)', (
     expect(bad.success).toBe(false);
   });
 
-  it('accepts matching registry key and descriptor name', () => {
+  it('ADAPTER-I11 — accepts matching registry key and descriptor name', () => {
     const ok = DispatchConfig.safeParse({
       adapters: {
         gemini: {
@@ -3228,8 +3228,8 @@ describe('DispatchConfig registry-key/descriptor-name parity (Codex HIGH #2)', (
   });
 });
 
-describe('DispatchConfig closure via own-property check (Codex HIGH #3)', () => {
-  it('rejects a role reference to `constructor` when no own registry entry exists', () => {
+describe('DispatchConfig closure via own-property check (ADAPTER-I8, Codex HIGH #3)', () => {
+  it('ADAPTER-I8 — rejects a role reference to `constructor` when no own registry entry exists', () => {
     const bad = DispatchConfig.safeParse({
       roles: { researcher: { kind: 'named', name: 'constructor' } },
       adapters: {},
@@ -3237,7 +3237,7 @@ describe('DispatchConfig closure via own-property check (Codex HIGH #3)', () => 
     expect(bad.success).toBe(false);
   });
 
-  it('rejects a circuit reference to `toString` when no own registry entry exists', () => {
+  it('ADAPTER-I8 — rejects a circuit reference to `toString` when no own registry entry exists', () => {
     const bad = DispatchConfig.safeParse({
       circuits: { explore: { kind: 'named', name: 'toString' } },
       adapters: {},
@@ -3245,7 +3245,7 @@ describe('DispatchConfig closure via own-property check (Codex HIGH #3)', () => 
     expect(bad.success).toBe(false);
   });
 
-  it('rejects dispatch.default = `hasOwnProperty` when no own registry entry exists', () => {
+  it('ADAPTER-I8 — rejects dispatch.default = `hasOwnProperty` when no own registry entry exists', () => {
     const bad = DispatchConfig.safeParse({
       default: 'hasOwnProperty',
       adapters: {},
@@ -3253,7 +3253,7 @@ describe('DispatchConfig closure via own-property check (Codex HIGH #3)', () => 
     expect(bad.success).toBe(false);
   });
 
-  it('accepts a role reference to a name that IS registered as an own key', () => {
+  it('ADAPTER-I8 — accepts a role reference to a name that IS registered as an own key', () => {
     const ok = DispatchConfig.safeParse({
       roles: { researcher: { kind: 'named', name: 'gemini' } },
       adapters: {

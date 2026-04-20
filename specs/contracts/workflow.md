@@ -12,6 +12,8 @@ grandfathered_scope_ids: WF-I1 WF-I2 WF-I3 WF-I4 WF-I5 WF-I6 WF-I7
 expires_on_contract_change: true
 artifact_ids:
   - workflow.definition
+invariant_ids: [WF-I1, WF-I2, WF-I3, WF-I4, WF-I5, WF-I6, WF-I7]
+property_ids: [workflow.prop.entry_mode_reachability, workflow.prop.no_dead_steps, workflow.prop.phase_step_closure, workflow.prop.route_target_closure, workflow.prop.terminal_target_coverage]
 ---
 
 # Workflow Contract

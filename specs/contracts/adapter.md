@@ -11,6 +11,8 @@ artifact_ids:
   - adapter.registry
   - adapter.reference
   - adapter.resolved
+invariant_ids: [ADAPTER-I1, ADAPTER-I2, ADAPTER-I3, ADAPTER-I4, ADAPTER-I5, ADAPTER-I6, ADAPTER-I7, ADAPTER-I8, ADAPTER-I9, ADAPTER-I10, ADAPTER-I11]
+property_ids: [adapter.prop.custom_command_direct_exec_semantics, adapter.prop.custom_command_environment_isolation, adapter.prop.registry_closure_preserved_under_config_merge, adapter.prop.reserved_name_disjointness_across_layer_merge, adapter.prop.resolution_is_total_and_first_match_wins, adapter.prop.resolved_from_agrees_with_resolution]
 ---
 
 # Adapter Contract

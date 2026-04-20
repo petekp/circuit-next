@@ -13,6 +13,20 @@ authored_by: Codex
 upstream_objection_refs:
   - specs/reviews/arc-phase-1-close-codex.md#HIGH-4
   - specs/reviews/arc-phase-1-close-codex.md#MED-15
+commands_run:
+  - git log --oneline slice-22..HEAD
+  - npm run verify
+  - npm run audit
+  - targeted rg over Slice 23 diff
+opened_scope:
+  - specs/artifacts.json (Slice 23 diff surface)
+  - scripts/audit.mjs (reverse-linkage helper)
+  - tests/contracts/artifact-authority.test.ts
+  - specs/adrs/ADR-0003-authority-graph-gate.md addendum
+  - Slice 23 commit bodies
+skipped_scope:
+  - unrelated contract bodies (targeted pass)
+  - bootstrap/ drafts
 ---
 
 # Slice 23 Codex Challenger Review

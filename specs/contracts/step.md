@@ -12,6 +12,8 @@ grandfathered_scope_ids: STEP-I1 STEP-I2 STEP-I3 STEP-I4 STEP-I5 STEP-I6 STEP-I7
 expires_on_contract_change: true
 artifact_ids:
   - step.definition
+invariant_ids: [STEP-I1, STEP-I2, STEP-I3, STEP-I4, STEP-I5, STEP-I6, STEP-I7]
+property_ids: [step.prop.budget_bounds, step.prop.dispatch_role_presence, step.prop.gate_kind_source_kind_pairing, step.prop.gate_source_ref_closure, step.prop.writes_shape_per_variant]
 ---
 
 # Step Contract

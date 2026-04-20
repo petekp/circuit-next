@@ -12,6 +12,20 @@ closing_verdict: ACCEPT (after fold-in)
 authored_by: Codex
 upstream_objection_refs:
   - specs/reviews/arc-phase-1-close-codex.md#HIGH-9
+commands_run:
+  - git log --oneline slice-23..HEAD
+  - npm run verify
+  - npm run audit
+  - targeted rg over Slice 24 diff
+opened_scope:
+  - tests/contracts/cross-model-challenger.test.ts (Slice 24 diff surface)
+  - specs/contracts/step.md (grandfathered frontmatter)
+  - specs/contracts/workflow.md (grandfathered frontmatter)
+  - specs/reviews/arc-phase-1-close-codex.md#HIGH-9
+  - Slice 24 commit body
+skipped_scope:
+  - unrelated contract bodies (targeted pass)
+  - schema-parity tests beyond the STEP grandfathering surface
 ---
 
 # Slice 24 Codex Challenger Review

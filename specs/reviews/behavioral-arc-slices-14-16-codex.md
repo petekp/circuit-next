@@ -13,6 +13,23 @@ verdict: REJECT → incorporated → ACCEPT (after fold-in across slices 17-21; 
 opening_verdict: REJECT pending HIGH fold-ins
 closing_verdict: ACCEPT (after fold-in across slices 17-21; MED #7 scoped to v0.2)
 authored_by: operator + claude-opus-4-7
+commands_run:
+  - git log --oneline 6fe599a..b08034a
+  - npm run verify
+  - npm run audit
+  - codex exec (methodology-adherence retrospective)
+opened_scope:
+  - specs/behavioral/*.md (all three tracks)
+  - tests/contracts/session-hygiene.test.ts
+  - tests/contracts/prose-yaml-parity.test.ts
+  - tests/contracts/cross-model-challenger.test.ts
+  - scripts/audit.mjs (relevant checks)
+  - Slice 14/15/15-fixup/16 commit bodies
+  - CLAUDE.md (§Cross-model challenger protocol)
+skipped_scope:
+  - contract-surface schemas unrelated to the behavioral-track arc
+  - .circuit/ runtime state
+  - bootstrap/ evidence drafts
 ---
 
 # Behavioral-track arc (slices 14-16) — Codex Methodology-Adherence Retrospective

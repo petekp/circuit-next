@@ -1,0 +1,1175 @@
+{
+  "version": 1,
+  "description": "Contract + behavioral-track invariant/property ledger. Closes AR-M2 from specs/reviews/arc-progress-codex.md. Scope: specs/contracts/*.md + specs/behavioral/*.md. Out of scope: CLAUDE.md hard invariants, specs/evidence.md invariants, ADR-level invariants (documented exclusion per Slice 25 Codex challenger MED #9 fold-in; deferred to v0.2).",
+  "enforcement_state_semantics": {
+    "test-enforced": "Invariant id appears as a token in at least one binding_ref test-file path (describe/it title or assertion message). Eligibility: required default for any contract invariant stated as 'MUST reject', 'MUST enforce', or 'is rejected'.",
+    "audit-only": "Invariant id appears as a token in scripts/audit.mjs. Eligibility: audit-layer or discipline invariants (session hygiene, lane discipline, citation rule).",
+    "static-anchor": "Invariant enforced structurally by schema export or superRefine; binding_refs name the schema file plus at least one test file that parses that schema. Eligibility: structural invariants whose id may not appear as a test title but whose enforcement cannot regress without the schema change firing a named test failure. Grandfathered scope_ids entries in tests/contracts/cross-model-challenger.test.ts count as binding_refs for step.md and workflow.md.",
+    "prose-only": "Policy statement not directly testable (e.g. when the challenger should be invoked; what the challenger cannot replace). Eligibility: behavioral-track meta-invariants only. Requires `rationale` field. A contract 'MUST reject' invariant cannot be prose-only.",
+    "phase2-property": "Reserved for Phase 2 property-test harness; not enforced at Phase 1 verify time. Requires `target_slice` (29 = property registry scaffold) + `reopen_condition`."
+  },
+  "out_of_scope_notes": [
+    "AR-H1 persisted-shape binding for invariants to artifacts is deferred to Slice 26a. Optional `artifact_ids` ledger field may be added in a later slice; absence here is intentional and not a silent omission.",
+    "CLAUDE.md §Hard invariants 1-10, specs/evidence.md Invariant 1-N, and ADR-0001/0002/0003 reopen/authority constraints are out of scope for Slice 25 per Codex challenger MED #9 fold-in disposition; expansion is v0.2 scope."
+  ],
+  "invariants": [
+    {
+      "id": "ADAPTER-I1",
+      "contract": "adapter",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/adapter.md#ADAPTER-I1",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "ADAPTER-I2",
+      "contract": "adapter",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/adapter.md#ADAPTER-I2",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "ADAPTER-I3",
+      "contract": "adapter",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/adapter.md#ADAPTER-I3",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "ADAPTER-I4",
+      "contract": "adapter",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/adapter.md#ADAPTER-I4",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "ADAPTER-I5",
+      "contract": "adapter",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/adapter.md#ADAPTER-I5",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "ADAPTER-I6",
+      "contract": "adapter",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/adapter.md#ADAPTER-I6",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "ADAPTER-I7",
+      "contract": "adapter",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/adapter.md#ADAPTER-I7",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "ADAPTER-I8",
+      "contract": "adapter",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/adapter.md#ADAPTER-I8",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "ADAPTER-I9",
+      "contract": "adapter",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/adapter.md#ADAPTER-I9",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "ADAPTER-I10",
+      "contract": "adapter",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/adapter.md#ADAPTER-I10",
+      "binding_refs": [
+        { "path": "tests/contracts/artifact-authority.test.ts", "kind": "assertion_message" }
+      ]
+    },
+    {
+      "id": "ADAPTER-I11",
+      "contract": "adapter",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/adapter.md#ADAPTER-I11",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+
+    {
+      "id": "CONT-I1",
+      "contract": "continuity",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/continuity.md#CONT-I1",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "CONT-I2",
+      "contract": "continuity",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/continuity.md#CONT-I2",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "CONT-I3",
+      "contract": "continuity",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/continuity.md#CONT-I3",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "CONT-I4",
+      "contract": "continuity",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/continuity.md#CONT-I4",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "CONT-I5",
+      "contract": "continuity",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/continuity.md#CONT-I5",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "CONT-I6",
+      "contract": "continuity",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/continuity.md#CONT-I6",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "CONT-I7",
+      "contract": "continuity",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/continuity.md#CONT-I7",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "CONT-I8",
+      "contract": "continuity",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/continuity.md#CONT-I8",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "CONT-I9",
+      "contract": "continuity",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/continuity.md#CONT-I9",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "CONT-I10",
+      "contract": "continuity",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/continuity.md#CONT-I10",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "CONT-I11",
+      "contract": "continuity",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/continuity.md#CONT-I11",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "CONT-I12",
+      "contract": "continuity",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/continuity.md#CONT-I12",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+
+    {
+      "id": "PHASE-I1",
+      "contract": "phase",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/phase.md#PHASE-I1",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "PHASE-I2",
+      "contract": "phase",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/phase.md#PHASE-I2",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "PHASE-I3",
+      "contract": "phase",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/phase.md#PHASE-I3",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "PHASE-I4",
+      "contract": "phase",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/phase.md#PHASE-I4",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "PHASE-I5",
+      "contract": "phase",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/phase.md#PHASE-I5",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "PHASE-I6",
+      "contract": "phase",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/phase.md#PHASE-I6",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+
+    {
+      "id": "RUN-I1",
+      "contract": "run",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/run.md#RUN-I1",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "RUN-I2",
+      "contract": "run",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/run.md#RUN-I2",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "RUN-I3",
+      "contract": "run",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/run.md#RUN-I3",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "RUN-I4",
+      "contract": "run",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/run.md#RUN-I4",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "RUN-I5",
+      "contract": "run",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/run.md#RUN-I5",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "RUN-I6",
+      "contract": "run",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/run.md#RUN-I6",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "RUN-I7",
+      "contract": "run",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/run.md#RUN-I7",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "RUN-I8",
+      "contract": "run",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/run.md#RUN-I8",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+
+    {
+      "id": "SEL-I1",
+      "contract": "selection",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/selection.md#SEL-I1",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "SEL-I2",
+      "contract": "selection",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/selection.md#SEL-I2",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "SEL-I3",
+      "contract": "selection",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/selection.md#SEL-I3",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "SEL-I4",
+      "contract": "selection",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/selection.md#SEL-I4",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "SEL-I5",
+      "contract": "selection",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/selection.md#SEL-I5",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "SEL-I6",
+      "contract": "selection",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/selection.md#SEL-I6",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "SEL-I7",
+      "contract": "selection",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/selection.md#SEL-I7",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "SEL-I8",
+      "contract": "selection",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/selection.md#SEL-I8",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "SEL-I9",
+      "contract": "selection",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/selection.md#SEL-I9",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+
+    {
+      "id": "SKILL-I1",
+      "contract": "skill",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/skill.md#SKILL-I1",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "SKILL-I2",
+      "contract": "skill",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/skill.md#SKILL-I2",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "SKILL-I3",
+      "contract": "skill",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/skill.md#SKILL-I3",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "SKILL-I4",
+      "contract": "skill",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/skill.md#SKILL-I4",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "SKILL-I5",
+      "contract": "skill",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/skill.md#SKILL-I5",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "SKILL-I6",
+      "contract": "skill",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/skill.md#SKILL-I6",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+
+    {
+      "id": "STEP-I1",
+      "contract": "step",
+      "surface_type": "contract",
+      "enforcement_state": "static-anchor",
+      "source_anchor": "specs/contracts/step.md#STEP-I1",
+      "binding_refs": [
+        { "path": "tests/contracts/cross-model-challenger.test.ts", "kind": "static_regex" }
+      ],
+      "rationale": "Kind-variant binding enforced by Step discriminated union in src/schemas/step.ts. The scope_ids literal in cross-model-challenger.test.ts (grandfathered-allowlist, Slice 24 MED #5) binds the id — dropping STEP-I1 from step.md fires a named test failure. Upgrading to test_title binding is Slice 27 scope (workflow/step v0.2)."
+    },
+    {
+      "id": "STEP-I2",
+      "contract": "step",
+      "surface_type": "contract",
+      "enforcement_state": "static-anchor",
+      "source_anchor": "specs/contracts/step.md#STEP-I2",
+      "binding_refs": [
+        { "path": "tests/contracts/cross-model-challenger.test.ts", "kind": "static_regex" }
+      ],
+      "rationale": "Non-empty routes enforced structurally on Step.routes. Scope_ids binding ensures id cannot disappear silently. Upgrade deferred to Slice 27."
+    },
+    {
+      "id": "STEP-I3",
+      "contract": "step",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/step.md#STEP-I3",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "STEP-I4",
+      "contract": "step",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/step.md#STEP-I4",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "STEP-I5",
+      "contract": "step",
+      "surface_type": "contract",
+      "enforcement_state": "static-anchor",
+      "source_anchor": "specs/contracts/step.md#STEP-I5",
+      "binding_refs": [
+        { "path": "tests/contracts/cross-model-challenger.test.ts", "kind": "static_regex" }
+      ],
+      "rationale": "Budget bounds enforced structurally on Step.budgets. Scope_ids binding ensures id cannot disappear silently. Upgrade deferred to Slice 27."
+    },
+    {
+      "id": "STEP-I6",
+      "contract": "step",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/step.md#STEP-I6",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "STEP-I7",
+      "contract": "step",
+      "surface_type": "contract",
+      "enforcement_state": "static-anchor",
+      "source_anchor": "specs/contracts/step.md#STEP-I7",
+      "binding_refs": [
+        { "path": "tests/contracts/cross-model-challenger.test.ts", "kind": "static_regex" }
+      ],
+      "rationale": "Protocol required enforced structurally on Step.protocol. Scope_ids binding ensures id cannot disappear silently. Upgrade deferred to Slice 27."
+    },
+
+    {
+      "id": "WF-I1",
+      "contract": "workflow",
+      "surface_type": "contract",
+      "enforcement_state": "static-anchor",
+      "source_anchor": "specs/contracts/workflow.md#WF-I1",
+      "binding_refs": [
+        { "path": "tests/contracts/cross-model-challenger.test.ts", "kind": "static_regex" }
+      ],
+      "rationale": "Unique step ids enforced by Workflow superRefine in src/schemas/workflow.ts. Scope_ids binding in cross-model-challenger.test.ts (grandfathered-allowlist, Slice 24 MED #5) ensures id cannot disappear silently. Upgrade to test_title binding deferred to Slice 27 (workflow v0.2)."
+    },
+    {
+      "id": "WF-I2",
+      "contract": "workflow",
+      "surface_type": "contract",
+      "enforcement_state": "static-anchor",
+      "source_anchor": "specs/contracts/workflow.md#WF-I2",
+      "binding_refs": [
+        { "path": "tests/contracts/cross-model-challenger.test.ts", "kind": "static_regex" }
+      ],
+      "rationale": "Closed entry references enforced by Workflow superRefine. Scope_ids binding ensures id cannot disappear silently. Upgrade deferred to Slice 27."
+    },
+    {
+      "id": "WF-I3",
+      "contract": "workflow",
+      "surface_type": "contract",
+      "enforcement_state": "static-anchor",
+      "source_anchor": "specs/contracts/workflow.md#WF-I3",
+      "binding_refs": [
+        { "path": "tests/contracts/cross-model-challenger.test.ts", "kind": "static_regex" }
+      ],
+      "rationale": "Phase ids closure enforced by Workflow superRefine. Scope_ids binding ensures id cannot disappear silently. Upgrade deferred to Slice 27."
+    },
+    {
+      "id": "WF-I4",
+      "contract": "workflow",
+      "surface_type": "contract",
+      "enforcement_state": "static-anchor",
+      "source_anchor": "specs/contracts/workflow.md#WF-I4",
+      "binding_refs": [
+        { "path": "tests/contracts/cross-model-challenger.test.ts", "kind": "static_regex" }
+      ],
+      "rationale": "Closed route targets enforced by Workflow superRefine. Scope_ids binding ensures id cannot disappear silently. Upgrade deferred to Slice 27."
+    },
+    {
+      "id": "WF-I5",
+      "contract": "workflow",
+      "surface_type": "contract",
+      "enforcement_state": "static-anchor",
+      "source_anchor": "specs/contracts/workflow.md#WF-I5",
+      "binding_refs": [
+        { "path": "tests/contracts/cross-model-challenger.test.ts", "kind": "static_regex" }
+      ],
+      "rationale": "Unique entry-mode names enforced by Workflow superRefine. Scope_ids binding ensures id cannot disappear silently. Upgrade deferred to Slice 27."
+    },
+    {
+      "id": "WF-I6",
+      "contract": "workflow",
+      "surface_type": "contract",
+      "enforcement_state": "static-anchor",
+      "source_anchor": "specs/contracts/workflow.md#WF-I6",
+      "binding_refs": [
+        { "path": "tests/contracts/cross-model-challenger.test.ts", "kind": "static_regex" }
+      ],
+      "rationale": "Selection-policy closure enforced by Workflow structural shape. Scope_ids binding ensures id cannot disappear silently. Upgrade deferred to Slice 27."
+    },
+    {
+      "id": "WF-I7",
+      "contract": "workflow",
+      "surface_type": "contract",
+      "enforcement_state": "static-anchor",
+      "source_anchor": "specs/contracts/workflow.md#WF-I7",
+      "binding_refs": [
+        { "path": "tests/contracts/cross-model-challenger.test.ts", "kind": "static_regex" }
+      ],
+      "rationale": "schema_version=2 enforced by Workflow literal field. Scope_ids binding ensures id cannot disappear silently. Upgrade deferred to Slice 27."
+    },
+
+    {
+      "id": "CHALLENGER-I1",
+      "contract": "cross-model-challenger",
+      "surface_type": "behavioral",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/behavioral/cross-model-challenger.md#CHALLENGER-I1",
+      "binding_refs": [
+        { "path": "tests/contracts/cross-model-challenger.test.ts", "kind": "test_title" }
+      ]
+    },
+    {
+      "id": "CHALLENGER-I2",
+      "contract": "cross-model-challenger",
+      "surface_type": "behavioral",
+      "enforcement_state": "prose-only",
+      "source_anchor": "specs/behavioral/cross-model-challenger.md#CHALLENGER-I2",
+      "rationale": "Policy statement about when the challenger is invoked (ratchet-changing surfaces). Judgment call by operator; no machine-enforceable surface. Permitted prose-only per behavioral-track eligibility rule."
+    },
+    {
+      "id": "CHALLENGER-I3",
+      "contract": "cross-model-challenger",
+      "surface_type": "behavioral",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/behavioral/cross-model-challenger.md#CHALLENGER-I3",
+      "binding_refs": [
+        { "path": "tests/contracts/cross-model-challenger.test.ts", "kind": "test_title" }
+      ]
+    },
+    {
+      "id": "CHALLENGER-I4",
+      "contract": "cross-model-challenger",
+      "surface_type": "behavioral",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/behavioral/cross-model-challenger.md#CHALLENGER-I4",
+      "binding_refs": [
+        { "path": "tests/contracts/cross-model-challenger.test.ts", "kind": "test_title" }
+      ]
+    },
+    {
+      "id": "CHALLENGER-I5",
+      "contract": "cross-model-challenger",
+      "surface_type": "behavioral",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/behavioral/cross-model-challenger.md#CHALLENGER-I5",
+      "binding_refs": [
+        { "path": "tests/contracts/cross-model-challenger.test.ts", "kind": "test_title" }
+      ]
+    },
+    {
+      "id": "CHALLENGER-I6",
+      "contract": "cross-model-challenger",
+      "surface_type": "behavioral",
+      "enforcement_state": "prose-only",
+      "source_anchor": "specs/behavioral/cross-model-challenger.md#CHALLENGER-I6",
+      "rationale": "Policy statement about what the challenger MAY NOT replace (authority mapping / reference evidence / fixture parity / differential tests / state-machine tests / migration rehearsal). Enforces through methodology discipline, not a schema surface. Permitted prose-only per behavioral-track eligibility rule."
+    },
+
+    {
+      "id": "PROSE-YAML-I1",
+      "contract": "prose-yaml-parity",
+      "surface_type": "behavioral",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/behavioral/prose-yaml-parity.md#PROSE-YAML-I1",
+      "binding_refs": [
+        { "path": "tests/contracts/prose-yaml-parity.test.ts", "kind": "assertion_message" }
+      ]
+    },
+    {
+      "id": "PROSE-YAML-I2",
+      "contract": "prose-yaml-parity",
+      "surface_type": "behavioral",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/behavioral/prose-yaml-parity.md#PROSE-YAML-I2",
+      "binding_refs": [
+        { "path": "tests/contracts/prose-yaml-parity.test.ts", "kind": "assertion_message" }
+      ]
+    },
+    {
+      "id": "PROSE-YAML-I3",
+      "contract": "prose-yaml-parity",
+      "surface_type": "behavioral",
+      "enforcement_state": "prose-only",
+      "source_anchor": "specs/behavioral/prose-yaml-parity.md#PROSE-YAML-I3",
+      "rationale": "Policy statement about compiler direction authorship (prose → YAML is hand-authored; YAML → prose is compiler-owned). The catalog compiler has not landed at v0.1; no round-trip surface exists yet. The SENTINEL test in tests/contracts/prose-yaml-parity.test.ts fires when compiler markers appear, at which point PROSE-YAML-I3 is re-classified. Permitted prose-only with target-promotion trigger."
+    },
+    {
+      "id": "PROSE-YAML-I4",
+      "contract": "prose-yaml-parity",
+      "surface_type": "behavioral",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/behavioral/prose-yaml-parity.md#PROSE-YAML-I4",
+      "binding_refs": [
+        { "path": "tests/contracts/prose-yaml-parity.test.ts", "kind": "assertion_message" }
+      ]
+    },
+
+    {
+      "id": "SESSION-I1",
+      "contract": "session-hygiene",
+      "surface_type": "behavioral",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/behavioral/session-hygiene.md#SESSION-I1",
+      "binding_refs": [{ "path": "tests/contracts/session-hygiene.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "SESSION-I2",
+      "contract": "session-hygiene",
+      "surface_type": "behavioral",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/behavioral/session-hygiene.md#SESSION-I2",
+      "binding_refs": [{ "path": "tests/contracts/session-hygiene.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "SESSION-I3",
+      "contract": "session-hygiene",
+      "surface_type": "behavioral",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/behavioral/session-hygiene.md#SESSION-I3",
+      "binding_refs": [{ "path": "tests/contracts/session-hygiene.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "SESSION-I4",
+      "contract": "session-hygiene",
+      "surface_type": "behavioral",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/behavioral/session-hygiene.md#SESSION-I4",
+      "binding_refs": [{ "path": "tests/contracts/session-hygiene.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "SESSION-I5",
+      "contract": "session-hygiene",
+      "surface_type": "behavioral",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/behavioral/session-hygiene.md#SESSION-I5",
+      "binding_refs": [{ "path": "tests/contracts/session-hygiene.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "SESSION-I6",
+      "contract": "session-hygiene",
+      "surface_type": "behavioral",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/behavioral/session-hygiene.md#SESSION-I6",
+      "binding_refs": [{ "path": "tests/contracts/session-hygiene.test.ts", "kind": "test_title" }]
+    }
+  ],
+  "properties": [
+    {
+      "id": "adapter.prop.custom_command_direct_exec_semantics",
+      "contract": "adapter",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id under tests/properties/visible/"
+    },
+    {
+      "id": "adapter.prop.custom_command_environment_isolation",
+      "contract": "adapter",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "adapter.prop.registry_closure_preserved_under_config_merge",
+      "contract": "adapter",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "adapter.prop.reserved_name_disjointness_across_layer_merge",
+      "contract": "adapter",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "adapter.prop.resolution_is_total_and_first_match_wins",
+      "contract": "adapter",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "adapter.prop.resolved_from_agrees_with_resolution",
+      "contract": "adapter",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+
+    {
+      "id": "continuity.prop.boundary_own_property_defense",
+      "contract": "continuity",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "continuity.prop.discriminator_field_presence_closure",
+      "contract": "continuity",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "continuity.prop.index_dangling_reference_surfaces",
+      "contract": "continuity",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "continuity.prop.index_pointer_kind_matches_record",
+      "contract": "continuity",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "continuity.prop.index_pointer_roundtrip",
+      "contract": "continuity",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "continuity.prop.index_pointer_run_id_coherence",
+      "contract": "continuity",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "continuity.prop.mode_kind_coherence",
+      "contract": "continuity",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "continuity.prop.record_id_stem_roundtrip",
+      "contract": "continuity",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "continuity.prop.run_ref_matches_log_at_save",
+      "contract": "continuity",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "continuity.prop.safety_boolean_non_contradiction",
+      "contract": "continuity",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+
+    {
+      "id": "phase.prop.canonical_phase_reachability",
+      "contract": "phase",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "phase.prop.canonical_set_is_enum",
+      "contract": "phase",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "phase.prop.every_step_has_a_phase",
+      "contract": "phase",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "phase.prop.omits_disjoint_from_declared",
+      "contract": "phase",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "phase.prop.omits_pairwise_unique",
+      "contract": "phase",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "phase.prop.partial_requires_rationale",
+      "contract": "phase",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "phase.prop.review_semantic_adequacy",
+      "contract": "phase",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "phase.prop.spine_partial_covers_complement",
+      "contract": "phase",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "phase.prop.spine_strict_covers_all_seven",
+      "contract": "phase",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "phase.prop.steps_closure",
+      "contract": "phase",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "phase.prop.unique_canonicals",
+      "contract": "phase",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "phase.prop.unique_ids",
+      "contract": "phase",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "phase.prop.verify_semantic_adequacy",
+      "contract": "phase",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+
+    {
+      "id": "run.prop.artifact_written_before_gate",
+      "contract": "run",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "run.prop.attempt_monotonicity_per_step",
+      "contract": "run",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "run.prop.boundary_own_property_defense",
+      "contract": "run",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "run.prop.checkpoint_event_pairing",
+      "contract": "run",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "run.prop.close_outcome_semantic_adequacy",
+      "contract": "run",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "run.prop.deterministic_replay",
+      "contract": "run",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "run.prop.dispatch_event_pairing",
+      "contract": "run",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "run.prop.projection_is_a_function",
+      "contract": "run",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "run.prop.recorded_at_sanity",
+      "contract": "run",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "run.prop.step_event_causal_ordering",
+      "contract": "run",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+
+    {
+      "id": "selection.prop.config_layer_precompose_is_right_biased",
+      "contract": "selection",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "selection.prop.invocation_options_merge_is_right_biased",
+      "contract": "selection",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "selection.prop.overlapping_phase_composition_well_defined",
+      "contract": "selection",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "selection.prop.override_empty_roundtrip",
+      "contract": "selection",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "selection.prop.phase_source_only_when_phase_declared_selection",
+      "contract": "selection",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "selection.prop.precedence_const_parity",
+      "contract": "selection",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "selection.prop.resolved_matches_applied_composition",
+      "contract": "selection",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "selection.prop.resolved_skills_are_unique_and_order_is_documented",
+      "contract": "selection",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "selection.prop.skill_override_composition_total",
+      "contract": "selection",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+
+    {
+      "id": "skill.prop.descriptor_round_trips_through_json",
+      "contract": "skill",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "skill.prop.id_closure_under_selection",
+      "contract": "skill",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "skill.prop.id_is_unique_within_catalog",
+      "contract": "skill",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "skill.prop.trigger_is_advisory_not_grammar",
+      "contract": "skill",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+
+    {
+      "id": "step.prop.budget_bounds",
+      "contract": "step",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "step.prop.dispatch_role_presence",
+      "contract": "step",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "step.prop.gate_kind_source_kind_pairing",
+      "contract": "step",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "step.prop.gate_source_ref_closure",
+      "contract": "step",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "step.prop.writes_shape_per_variant",
+      "contract": "step",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+
+    {
+      "id": "workflow.prop.entry_mode_reachability",
+      "contract": "workflow",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "workflow.prop.no_dead_steps",
+      "contract": "workflow",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "workflow.prop.phase_step_closure",
+      "contract": "workflow",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "workflow.prop.route_target_closure",
+      "contract": "workflow",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "workflow.prop.terminal_target_coverage",
+      "contract": "workflow",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    }
+  ]
+}

@@ -12,6 +12,8 @@ codex_adversarial_review: specs/reviews/continuity-md-v0.1-codex.md
 artifact_ids:
   - continuity.record
   - continuity.index
+invariant_ids: [CONT-I1, CONT-I2, CONT-I3, CONT-I4, CONT-I5, CONT-I6, CONT-I7, CONT-I8, CONT-I9, CONT-I10, CONT-I11, CONT-I12]
+property_ids: [continuity.prop.boundary_own_property_defense, continuity.prop.discriminator_field_presence_closure, continuity.prop.index_dangling_reference_surfaces, continuity.prop.index_pointer_kind_matches_record, continuity.prop.index_pointer_roundtrip, continuity.prop.index_pointer_run_id_coherence, continuity.prop.mode_kind_coherence, continuity.prop.record_id_stem_roundtrip, continuity.prop.run_ref_matches_log_at_save, continuity.prop.safety_boolean_non_contradiction]
 ---
 
 # Continuity Contract

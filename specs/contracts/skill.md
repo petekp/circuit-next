@@ -10,6 +10,8 @@ legacy_parse_policy: n/a
 codex_adversarial_review: specs/reviews/skill-md-v0.1-codex.md
 artifact_ids:
   - skill.descriptor
+invariant_ids: [SKILL-I1, SKILL-I2, SKILL-I3, SKILL-I4, SKILL-I5, SKILL-I6]
+property_ids: [skill.prop.descriptor_round_trips_through_json, skill.prop.id_closure_under_selection, skill.prop.id_is_unique_within_catalog, skill.prop.trigger_is_advisory_not_grammar]
 ---
 
 # Skill Contract

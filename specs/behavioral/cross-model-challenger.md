@@ -14,6 +14,8 @@ enforced_by:
 planned_tests:
   - tests/contracts/cross-model-challenger.test.ts (LANDED v0.1 in Slice 16; tightened in Slice 18 + 19 + 20 + 21 + 24) — asserts unified review-record frontmatter (base + kind-specific extras), contract → review linkage (forward + reverse), XOR between forward-link and grandfathered-rationale paths, typed grandfathered-contract allowlist (HIGH #9 + Codex HIGH #2 fold-ins: identity binding over contract/version/schema_source, resolvable source_ref tokens, scope_ids exact-set equality with body headings), forward-link canonical-path pattern, per-objection disposition parser, verdict enum, /codex dispatch discipline.
   - scripts/audit.mjs dimension: warn (not red) when a contract's `artifact_ids` set changes without an updated `codex_adversarial_review` frontmatter line (NOT LANDED — tracked as v0.2 scope).
+invariant_ids: [CHALLENGER-I1, CHALLENGER-I2, CHALLENGER-I3, CHALLENGER-I4, CHALLENGER-I5, CHALLENGER-I6]
+property_ids: []
 ---
 
 # Cross-model challenger

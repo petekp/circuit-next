@@ -12,6 +12,29 @@ verdict: REJECT pending HIGH fold-ins
 opening_verdict: REJECT pending HIGH fold-ins
 closing_verdict: REJECT pending HIGH fold-ins
 authored_by: Codex
+commands_run:
+  - git log --format='%h %s' f5a6241..HEAD
+  - npm run audit
+  - npm run test
+  - targeted rg searches across specs/ src/ tests/ scripts/
+opened_scope:
+  - CLAUDE.md
+  - README.md
+  - PROJECT_STATE.md
+  - specs/evidence.md
+  - specs/methodology/decision.md
+  - specs/adrs/*.md
+  - specs/artifacts.json
+  - specs/contracts/*.md
+  - specs/behavioral/*.md
+  - src/schemas/*.ts
+  - scripts/audit.mjs
+  - tests/contracts/*.ts
+  - specs/reviews/*.md (prior review corpus)
+skipped_scope:
+  - bootstrap/ evidence drafts (out of phase-1-close close-gate scope)
+  - .circuit/ runtime state (non-operative provenance)
+  - full line-by-line re-read of every contract body (targeted pass over named risk surfaces)
 ---
 
 # Phase 1 Close Gate - Codex Objection List

@@ -9,6 +9,8 @@ closes: [adversarial-review-med-11-spine-policy]
 codex_adversarial_review: specs/reviews/phase-md-v0.1-codex.md
 artifact_ids:
   - phase.definition
+invariant_ids: [PHASE-I1, PHASE-I2, PHASE-I3, PHASE-I4, PHASE-I5, PHASE-I6]
+property_ids: [phase.prop.canonical_phase_reachability, phase.prop.canonical_set_is_enum, phase.prop.every_step_has_a_phase, phase.prop.omits_disjoint_from_declared, phase.prop.omits_pairwise_unique, phase.prop.partial_requires_rationale, phase.prop.review_semantic_adequacy, phase.prop.spine_partial_covers_complement, phase.prop.spine_strict_covers_all_seven, phase.prop.steps_closure, phase.prop.unique_canonicals, phase.prop.unique_ids, phase.prop.verify_semantic_adequacy]
 ---
 
 # Phase Contract

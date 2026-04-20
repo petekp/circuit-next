@@ -10,6 +10,8 @@ codex_adversarial_review: specs/reviews/selection-md-v0.1-codex.md
 artifact_ids:
   - selection.override
   - selection.resolution
+invariant_ids: [SEL-I1, SEL-I2, SEL-I3, SEL-I4, SEL-I5, SEL-I6, SEL-I7, SEL-I8, SEL-I9]
+property_ids: [selection.prop.config_layer_precompose_is_right_biased, selection.prop.invocation_options_merge_is_right_biased, selection.prop.overlapping_phase_composition_well_defined, selection.prop.override_empty_roundtrip, selection.prop.phase_source_only_when_phase_declared_selection, selection.prop.precedence_const_parity, selection.prop.resolved_matches_applied_composition, selection.prop.resolved_skills_are_unique_and_order_is_documented, selection.prop.skill_override_composition_total]
 ---
 
 # Selection Contract

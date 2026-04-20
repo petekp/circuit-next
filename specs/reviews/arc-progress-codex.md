@@ -11,6 +11,33 @@ verdict: REJECT pending HIGH fold-ins
 opening_verdict: REJECT pending HIGH fold-ins
 closing_verdict: pending operator disposition
 authored_by: Codex
+commands_run:
+  - git status --short
+  - git log --oneline -5
+  - rg --files
+  - npm run verify
+  - npm run audit
+  - targeted rg searches across specs/ src/ tests/ scripts/
+  - js_repl inventory of artifact ids schema files invariant ids test references
+opened_scope:
+  - CLAUDE.md
+  - README.md
+  - PROJECT_STATE.md
+  - specs/evidence.md
+  - specs/methodology/decision.md
+  - specs/adrs/ADR-0002-bootstrap-discipline.md
+  - specs/adrs/ADR-0003-authority-graph-gate.md
+  - specs/artifacts.json
+  - specs/contracts/*.md (frontmatter + targeted bodies)
+  - specs/behavioral/*.md (frontmatter + targeted bodies)
+  - src/schemas/*.ts (export surface)
+  - scripts/audit.mjs (relevant helper sections)
+  - tests/contracts/*.ts (targeted line ranges)
+  - specs/reviews/*.md (12 prior review-record frontmatters + bodies where claims depend on them)
+skipped_scope:
+  - full line-by-line read of every long contract/review record (intentional — this is a targeted adversarial pass over named risk surfaces, not a line-by-line proof)
+  - bootstrap/ draft files beyond adversarial-review-codex.md (out of arc-progress scope)
+  - specs/domain.md appendix sections unrelated to the HIGH surfaces
 ---
 
 # Arc Progress Retrospective - Codex Objection List

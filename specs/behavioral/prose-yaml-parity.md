@@ -13,6 +13,8 @@ enforced_by:
 planned_tests:
   - tests/contracts/prose-yaml-parity.test.ts (LANDED v0.1 in Slice 15 as reserved cross-reference guard + single-family marker canary + PROSE-YAML invariant-ID presence). v0.2 round-trip test (regenerate prose regions from YAML source; assert no drift) lands with the catalog compiler per §Evolution.
   - named Phase 2 property: workflow.prop.prose_yaml_round_trip (see specs/contracts/workflow.md)
+invariant_ids: [PROSE-YAML-I1, PROSE-YAML-I2, PROSE-YAML-I3, PROSE-YAML-I4]
+property_ids: []
 ---
 
 # Prose / YAML parity

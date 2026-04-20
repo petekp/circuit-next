@@ -451,6 +451,66 @@ function verifyStatus() {
   }
 }
 
+/**
+ * Slice 25 — invariant ledger integrity audit dimension. Loads
+ * specs/invariants.json and reports load-ability, duplicate detection,
+ * and enforcement_state distribution. The full set-equality + binding-ref
+ * enforcement lives in tests/contracts/invariant-ledger.test.ts (which
+ * runs as part of `npm run verify`); this audit dimension surfaces ledger
+ * presence at a glance and fails red if the ledger is missing or
+ * structurally broken. Per Codex challenger MED 10 fold-in.
+ */
+function checkInvariantLedger() {
+  const ledgerPath = join(REPO_ROOT, 'specs', 'invariants.json');
+  if (!existsSync(ledgerPath)) {
+    return { level: 'red', detail: 'specs/invariants.json missing' };
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync(ledgerPath, 'utf-8'));
+  } catch (err) {
+    return { level: 'red', detail: `specs/invariants.json invalid JSON: ${err.message}` };
+  }
+  if (typeof parsed !== 'object' || parsed === null) {
+    return { level: 'red', detail: 'specs/invariants.json is not an object' };
+  }
+  if (!Array.isArray(parsed.invariants) || !Array.isArray(parsed.properties)) {
+    return {
+      level: 'red',
+      detail: 'specs/invariants.json missing invariants[] or properties[]',
+    };
+  }
+  const invIds = new Set();
+  const invDupes = [];
+  for (const entry of parsed.invariants) {
+    if (invIds.has(entry.id)) invDupes.push(entry.id);
+    invIds.add(entry.id);
+  }
+  const propIds = new Set();
+  const propDupes = [];
+  for (const entry of parsed.properties) {
+    if (propIds.has(entry.id)) propDupes.push(entry.id);
+    propIds.add(entry.id);
+  }
+  if (invDupes.length || propDupes.length) {
+    return {
+      level: 'red',
+      detail: `duplicate ids — invariants: [${invDupes.join(', ')}], properties: [${propDupes.join(', ')}]`,
+    };
+  }
+  const stateCounts = {};
+  for (const entry of parsed.invariants) {
+    stateCounts[entry.enforcement_state] = (stateCounts[entry.enforcement_state] ?? 0) + 1;
+  }
+  const statePart = Object.entries(stateCounts)
+    .map(([s, n]) => `${s}=${n}`)
+    .join(', ');
+  return {
+    level: 'green',
+    detail: `${parsed.invariants.length} invariants (${statePart}), ${parsed.properties.length} properties. Full binding + set-equality enforced by tests/contracts/invariant-ledger.test.ts.`,
+  };
+}
+
 export function readFrontmatter(absPath) {
   if (!existsSync(absPath)) return { ok: false, error: 'missing' };
   const content = readFileSync(absPath, 'utf-8');
@@ -1304,7 +1364,16 @@ function main() {
     detail: phaseDrift.detail,
   });
 
-  // Check 10: npm run verify currently green.
+  // Check 10: Invariant ledger integrity (Slice 25 — AR-M2 + Codex challenger MED 10).
+  const ledger = checkInvariantLedger();
+  counters[ledger.level]++;
+  findings.push({
+    level: ledger.level,
+    check: 'Invariant ledger (specs/invariants.json)',
+    detail: ledger.detail,
+  });
+
+  // Check 11: npm run verify currently green.
   const verify = verifyStatus();
   if (verify.pass) {
     counters.green++;
