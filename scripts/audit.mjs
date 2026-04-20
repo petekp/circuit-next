@@ -394,16 +394,44 @@ function checkCircuitAdditions() {
   return { staged: filter(staged), untracked: filter(untracked) };
 }
 
+// Static test-declaration count across all test files at a given ref.
+// Counts lines matching /^\s*(it|test)\(/, which is the authored-test shape.
+// This is a STATIC FLOOR, not a runtime total: tests generated dynamically
+// inside `for` loops or `it.each` tables are not counted. At 2026-04-20 the
+// static floor across 8 test files is 433; the vitest runtime total is 482
+// (24 dynamic in schema-parity.test.ts, 23 in primitives.test.ts, 2 in
+// artifact-authority.test.ts). The ratchet uses the same method at both
+// refs, so the static floor is consistent and a regression in authored
+// tests still fires. Runtime count comes from `npm run test` (the verify
+// gate) — the audit displays the static floor to make the ratchet
+// deterministic without shelling into vitest.
 function countTests(ref) {
-  const path = 'tests/contracts/schema-parity.test.ts';
-  const content = ref
-    ? shSafe(`git show ${ref}:${path}`)
-    : existsSync(join(REPO_ROOT, path))
-      ? readFileSync(join(REPO_ROOT, path), 'utf-8')
-      : '';
-  if (!content) return null;
-  const matches = content.match(/^\s*(it|test)\(/gm);
-  return matches ? matches.length : 0;
+  const files = testFileList(ref);
+  if (!files.length) return null;
+  let count = 0;
+  for (const path of files) {
+    const content = ref
+      ? shSafe(`git show ${ref}:${path}`)
+      : existsSync(join(REPO_ROOT, path))
+        ? readFileSync(join(REPO_ROOT, path), 'utf-8')
+        : '';
+    if (!content) continue;
+    const matches = content.match(/^\s*(it|test)\(/gm);
+    if (matches) count += matches.length;
+  }
+  return count;
+}
+
+// Lists test files tracked at a given git ref (HEAD, HEAD~1, ...), or the
+// working tree if ref is null. Uses `git ls-tree` to enumerate tracked
+// files so we get the set that actually existed at that commit.
+function testFileList(ref) {
+  if (ref) {
+    const raw = shSafe(`git ls-tree -r --name-only ${ref}`);
+    return raw.split('\n').filter((p) => /^tests\/.*\.test\.(ts|mts|js|mjs)$/.test(p));
+  }
+  const raw = shSafe('git ls-files -- tests');
+  return raw.split('\n').filter((p) => /^tests\/.*\.test\.(ts|mts|js|mjs)$/.test(p));
 }
 
 function projectStateCurrent(recentCount) {
@@ -1203,7 +1231,7 @@ function main() {
     findings.push({
       level: 'yellow',
       check: 'Contract test ratchet',
-      detail: 'tests/contracts/schema-parity.test.ts not found',
+      detail: 'No tests/**/*.test.{ts,mts,js,mjs} files found',
     });
   } else if (prevCount === null || headCount >= prevCount) {
     counters.green++;
