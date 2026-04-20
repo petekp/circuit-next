@@ -6,6 +6,9 @@ schema_source: src/schemas/workflow.ts
 last_updated: 2026-04-19
 depends_on: [step, phase, rigor, lane, selection-policy]
 codex_adversarial_review_grandfathered: authored as a Phase 1 kickoff skeleton before the specs/reviews/ convention existed; adversarial findings against the skeleton were recorded in bootstrap/adversarial-review-codex.md (6 HIGH + 3 MED incorporated at tier-0). v0.2 will promote to a proper specs/reviews/workflow-md-v<version>-codex.md when the contract gains non-skeleton invariants.
+grandfathered_source_ref: bootstrap/adversarial-review-codex.md (6 HIGH + 3 MED incorporated at tier-0 against the workflow skeleton); PROJECT_STATE.md §"Phase 1 contract authorship" "workflow.md skeleton"
+grandfathered_scope: workflow.md v0.1 skeleton only — WF-I1 through WF-I7 (closed-reference invariants across step ids, entry modes, phase ids, route targets, plus schema_version=2). Any addition of non-skeleton invariants, any change to the Workflow structural shape beyond the current v2 schema, or any promotion of the contract past v0.1 exits the grandfather and requires specs/reviews/workflow-md-v0.2-codex.md.
+expires_on_contract_change: true
 artifact_ids:
   - workflow.definition
 ---

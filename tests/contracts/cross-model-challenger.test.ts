@@ -12,6 +12,38 @@ const TRACK_MD = resolve(REPO_ROOT, 'specs/behavioral/cross-model-challenger.md'
 const CONTRACTS_DIR = resolve(REPO_ROOT, 'specs/contracts');
 const REVIEWS_DIR = resolve(REPO_ROOT, 'specs/reviews');
 
+// Grandfathered-contract allowlist per Slice 24 fold-in of arc-phase-1-close
+// HIGH #9. The `codex_adversarial_review_grandfathered` escape hatch exists
+// for contracts authored before the `specs/reviews/` convention; leaving it
+// generic lets any new contract bypass CHALLENGER-I3 by declaring a rationale.
+// This set pins the two historical cases explicitly — step.md (authored
+// Slice 2) and workflow.md (authored as Phase 1 kickoff skeleton) — and the
+// test below fails if any other contract carries the field. Leaving this
+// allowlist is a v0.2 migration: workflow.md exits when it gains non-skeleton
+// invariants and lands a proper specs/reviews/workflow-md-v0.2-codex.md;
+// step.md exits when its schema_source changes and a corresponding review
+// record lands. See specs/reviews/arc-phase-1-close-codex.md §HIGH-9.
+const GRANDFATHERED_CONTRACT_ALLOWLIST = new Set<string>(['step.md', 'workflow.md']);
+
+// Required frontmatter fields on every grandfathered contract per Slice 24
+// fold-in of arc-phase-1-close HIGH #9. Purpose of each field:
+//   `grandfathered_source_ref` — names the concrete review evidence that
+//     exists outside `specs/reviews/` (a commit hash, a PROJECT_STATE.md
+//     section, a bootstrap/ file). Without this, "grandfathered" drifts
+//     from "documented elsewhere" to "assumed reviewed."
+//   `grandfathered_scope` — describes the contract surface the
+//     grandfathered evidence actually covers. Constrains future edits:
+//     a change outside the stated scope is not covered by the grandfather
+//     and re-opens the review slot.
+//   `expires_on_contract_change: true` — forces renewal. The literal
+//     boolean value serves as a structural reminder that grandfathering
+//     is conditional on the contract not changing materially.
+const GRANDFATHERED_REQUIRED_FIELDS: string[] = [
+  'grandfathered_source_ref',
+  'grandfathered_scope',
+  'expires_on_contract_change',
+];
+
 // Contract-review record shape per specs/behavioral/cross-model-challenger.md
 // §Planned test location + CHALLENGER-I3. The six already-committed contract
 // review records (adapter, continuity, phase, run, selection, skill) carry
@@ -428,6 +460,68 @@ describe('cross-model-challenger — CHALLENGER-I3 contract → review linkage (
         `${contractPath}: codex_adversarial_review_grandfathered must be a non-empty prose rationale.`,
       ).toBeGreaterThan(20);
     }
+  });
+
+  // Slice 24 fold-in of arc-phase-1-close HIGH #9 — allowlist enforcement.
+  // Without this, any new contract could bypass CHALLENGER-I3 by declaring
+  // a 20+-char grandfathered rationale. The allowlist pins the two
+  // historical cases; everyone else goes through the forward-link path.
+  it('only contracts in GRANDFATHERED_CONTRACT_ALLOWLIST may carry codex_adversarial_review_grandfathered', () => {
+    const offenders: Array<{ contractPath: string; base: string }> = [];
+    for (const contractPath of contractFiles) {
+      const fm = parseFrontmatter(readFileSync(contractPath, 'utf-8'));
+      if (!fm.has('codex_adversarial_review_grandfathered')) continue;
+      const base = basename(contractPath);
+      if (!GRANDFATHERED_CONTRACT_ALLOWLIST.has(base)) offenders.push({ contractPath, base });
+    }
+    expect(
+      offenders,
+      `Contracts carrying codex_adversarial_review_grandfathered outside the allowlist:\n${offenders
+        .map((o) => `  ${o.contractPath} (base: ${o.base})`)
+        .join(
+          '\n',
+        )}\n\nAllowlist is exactly {${[...GRANDFATHERED_CONTRACT_ALLOWLIST].join(', ')}}. New contracts must use the codex_adversarial_review forward link to a specs/reviews/<target>-md-v<version>-codex.md file. Per arc-phase-1-close-codex.md §HIGH-9 (Slice 24 fold-in).`,
+    ).toEqual([]);
+  });
+
+  // Slice 24 fold-in of arc-phase-1-close HIGH #9 — required-field enforcement.
+  // Grandfathering without structure = indefinite escape hatch. The three
+  // required fields pin the evidence (source_ref), bound the coverage (scope),
+  // and force renewal on substantive change (expires_on_contract_change: true).
+  // expires_on_contract_change is asserted as the literal string "true" — the
+  // frontmatter parser is line-based and yields string values, and the literal
+  // presence of `true` on the declaration is what makes the invariant legible
+  // to a reader scanning the frontmatter.
+  it('every grandfathered contract declares source_ref + scope + expires_on_contract_change: true', () => {
+    const violations: Array<{ contractPath: string; missingOrWrong: string[] }> = [];
+    for (const contractPath of contractFiles) {
+      const fm = parseFrontmatter(readFileSync(contractPath, 'utf-8'));
+      if (!fm.has('codex_adversarial_review_grandfathered')) continue;
+      const missingOrWrong: string[] = [];
+      for (const field of GRANDFATHERED_REQUIRED_FIELDS) {
+        const value = fm.get(field);
+        if (value === undefined) {
+          missingOrWrong.push(`${field} (missing)`);
+          continue;
+        }
+        if (field === 'expires_on_contract_change' && value.trim() !== 'true') {
+          missingOrWrong.push(`${field} (expected literal "true", got "${value.trim()}")`);
+          continue;
+        }
+        if (field !== 'expires_on_contract_change' && value.trim().length === 0) {
+          missingOrWrong.push(`${field} (empty)`);
+        }
+      }
+      if (missingOrWrong.length > 0) violations.push({ contractPath, missingOrWrong });
+    }
+    expect(
+      violations,
+      `Grandfathered contracts with missing or wrong required fields:\n${violations
+        .map((v) => `  ${v.contractPath}: ${v.missingOrWrong.join('; ')}`)
+        .join(
+          '\n',
+        )}\n\nEvery grandfathered contract MUST declare ${GRANDFATHERED_REQUIRED_FIELDS.join(', ')} (with expires_on_contract_change literally "true"). Per arc-phase-1-close-codex.md §HIGH-9 (Slice 24 fold-in).`,
+    ).toEqual([]);
   });
 
   it('every codex_adversarial_review path resolves to an existing file', () => {
