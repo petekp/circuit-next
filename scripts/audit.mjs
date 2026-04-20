@@ -710,7 +710,13 @@ export function parseProductGateExemptionLedger(ledgerPath) {
     }
   }
   const content = readFileSync(ledgerPath, 'utf-8');
-  const table = parseMarkdownTable(content, ['phase_id', 'slice', 'reason', 'consumed']);
+  const table = parseMarkdownTable(content, [
+    'phase_id',
+    'slice',
+    'reason',
+    'consumed',
+    'authorization_record',
+  ]);
   if (!table.ok) {
     issues.push(table.error);
     return { ok: false, issues, rows: [] };
@@ -725,10 +731,13 @@ export function parseProductGateExemptionLedger(ledgerPath) {
       slice: row.slice ?? '',
       reason: row.reason ?? '',
       consumed: consumed ?? false,
+      authorization_record: stripCellMarkup(row.authorization_record ?? ''),
     };
   });
   return { ok: issues.length === 0, issues, rows };
 }
+
+const AMEND_D1_D3_PATTERN = /\bamend(?:s|ing)?\s+D[13]\b/i;
 
 export function checkProductRealityGateVisibility(rootDir = REPO_ROOT) {
   const relPath = 'specs/methodology/product-gate-exemptions.md';
@@ -751,9 +760,29 @@ export function checkProductRealityGateVisibility(rootDir = REPO_ROOT) {
         'specs/methodology/product-gate-exemptions.md missing consumed Slice 25b bootstrap-exception row',
     };
   }
+  const findings = [];
+  for (const [index, row] of parsed.rows.entries()) {
+    const rowLabel = `row ${index + 1} (${row.phase_id || 'unknown'}/${row.slice || '?'})`;
+    if (!row.authorization_record || row.authorization_record.length === 0) {
+      findings.push(`${rowLabel}: authorization_record is empty`);
+    } else if (!existsSync(join(rootDir, row.authorization_record))) {
+      findings.push(
+        `${rowLabel}: authorization_record does not exist — ${row.authorization_record}`,
+      );
+    }
+    if (AMEND_D1_D3_PATTERN.test(row.reason)) {
+      findings.push(`${rowLabel}: reason attempts to amend D1 or D3 (not waivable)`);
+    }
+  }
+  if (findings.length > 0) {
+    return {
+      level: 'red',
+      detail: `${parsed.rows.length} exemption row(s); ${findings.join('; ')}`,
+    };
+  }
   return {
     level: 'green',
-    detail: `${parsed.rows.length} exemption row(s); consumed seed row present for phase-1-pre-1.5-reopen / 25b.`,
+    detail: `${parsed.rows.length} exemption row(s); consumed seed row present for phase-1-pre-1.5-reopen / 25b; all rows carry an authorization_record.`,
   };
 }
 
@@ -792,6 +821,8 @@ export function parseTierClaims(tierPath) {
   return { ok: issues.length === 0, issues, rows };
 }
 
+const ALLOWED_TIER_STATUSES = new Set(['enforced', 'planned', 'not claimed']);
+
 export function checkTierOrphanClaims(rootDir = REPO_ROOT) {
   const parsed = parseTierClaims(join(rootDir, 'TIER.md'));
   if (!parsed.ok) {
@@ -805,6 +836,12 @@ export function checkTierOrphanClaims(rootDir = REPO_ROOT) {
     const hasFilePath = row.file_paths.length > 0;
     const hasPlannedSlice = row.planned_slice.trim().length > 0;
     const isNotClaimed = row.status === 'not claimed';
+    if (!ALLOWED_TIER_STATUSES.has(row.status)) {
+      findings.push(
+        `${row.claim_id}: status "${row.status}" not in {enforced, planned, not claimed}`,
+      );
+      continue;
+    }
     const modes = [hasFilePath, hasPlannedSlice, isNotClaimed].filter(Boolean).length;
     if (modes === 0) {
       findings.push(`${row.claim_id}: orphan claim (no file_path, planned_slice, or not claimed)`);
@@ -817,6 +854,12 @@ export function checkTierOrphanClaims(rootDir = REPO_ROOT) {
       continue;
     }
     if (hasFilePath) {
+      if (row.status !== 'enforced') {
+        findings.push(
+          `${row.claim_id}: status "${row.status}" disagrees with file_path signal (expected enforced)`,
+        );
+        continue;
+      }
       enforced++;
       for (const relPath of row.file_paths) {
         if (!existsSync(join(rootDir, relPath))) {
@@ -824,6 +867,12 @@ export function checkTierOrphanClaims(rootDir = REPO_ROOT) {
         }
       }
     } else if (hasPlannedSlice) {
+      if (row.status !== 'planned') {
+        findings.push(
+          `${row.claim_id}: status "${row.status}" disagrees with planned_slice signal (expected planned)`,
+        );
+        continue;
+      }
       planned++;
     } else if (isNotClaimed) {
       notClaimed++;
@@ -839,6 +888,15 @@ export function checkTierOrphanClaims(rootDir = REPO_ROOT) {
   return { level: 'green', detail: summary };
 }
 
+const ARTIFACT_CLASS_CAPS = {
+  reversible: 2,
+  governance: 3,
+  irreversible: 4,
+};
+
+const PLACEHOLDER_JUSTIFICATION_PATTERN = /^(n\/a|none|see body|tbd|\.|justified|-|–|—)\s*$/i;
+const MIN_PAST_CAP_JUSTIFICATION_CHARS = 30;
+
 export function checkAdversarialYieldLedger(rootDir = REPO_ROOT) {
   const relPath = 'specs/reviews/adversarial-yield-ledger.md';
   const ledgerPath = join(rootDir, relPath);
@@ -847,6 +905,7 @@ export function checkAdversarialYieldLedger(rootDir = REPO_ROOT) {
   const table = parseMarkdownTable(content, [
     'pass_date',
     'artifact_path',
+    'artifact_class',
     'pass_number_for_artifact',
     'reviewer_id',
     'mode',
@@ -860,7 +919,75 @@ export function checkAdversarialYieldLedger(rootDir = REPO_ROOT) {
   if (table.rows.length === 0) {
     return { level: 'red', detail: `${relPath} has no data rows` };
   }
-  return { level: 'green', detail: `${table.rows.length} yield-ledger row(s) present` };
+
+  const findings = [];
+  const parsedRows = [];
+  for (const [index, raw] of table.rows.entries()) {
+    const rowLabel = `row ${index + 1}`;
+    const artifactPath = stripCellMarkup(raw.artifact_path ?? '');
+    const artifactClass = stripCellMarkup(raw.artifact_class ?? '').toLowerCase();
+    const passNumberText = stripCellMarkup(raw.pass_number_for_artifact ?? '');
+    const passNumber = Number.parseInt(passNumberText, 10);
+    const mode = stripCellMarkup(raw.mode ?? '');
+    const justification = stripCellMarkup(raw.operator_justification_if_past_cap ?? '');
+    if (!artifactPath) {
+      findings.push(`${rowLabel}: artifact_path is empty`);
+    }
+    if (!(artifactClass in ARTIFACT_CLASS_CAPS)) {
+      findings.push(
+        `${rowLabel}: artifact_class "${artifactClass}" not in {reversible, governance, irreversible}`,
+      );
+      continue;
+    }
+    if (!Number.isFinite(passNumber) || passNumber < 1) {
+      findings.push(`${rowLabel}: pass_number_for_artifact must be a positive integer`);
+      continue;
+    }
+    const cap = ARTIFACT_CLASS_CAPS[artifactClass];
+    if (passNumber > cap) {
+      if (
+        justification.length === 0 ||
+        PLACEHOLDER_JUSTIFICATION_PATTERN.test(justification) ||
+        justification.length < MIN_PAST_CAP_JUSTIFICATION_CHARS
+      ) {
+        findings.push(
+          `${rowLabel}: pass ${passNumber} > cap ${cap} for ${artifactClass}; operator_justification_if_past_cap must be substantive (≥ ${MIN_PAST_CAP_JUSTIFICATION_CHARS} chars, not placeholder)`,
+        );
+      }
+    }
+    parsedRows.push({ artifactPath, artifactClass, passNumber, mode });
+  }
+
+  const byArtifact = new Map();
+  for (const row of parsedRows) {
+    if (!byArtifact.has(row.artifactPath)) byArtifact.set(row.artifactPath, []);
+    byArtifact.get(row.artifactPath).push(row);
+  }
+  for (const [artifactPath, rows] of byArtifact) {
+    rows.sort((a, b) => a.passNumber - b.passNumber);
+    for (let i = 2; i < rows.length; i++) {
+      const a = rows[i - 2].mode;
+      const b = rows[i - 1].mode;
+      const c = rows[i].mode;
+      if (a && a === b && b === c) {
+        findings.push(
+          `mode-cycle violation on ${artifactPath}: three consecutive passes in mode "${a}" (passes ${rows[i - 2].passNumber}/${rows[i - 1].passNumber}/${rows[i].passNumber})`,
+        );
+        break;
+      }
+    }
+  }
+
+  if (findings.length > 0) {
+    return {
+      level: 'red',
+      detail: `${table.rows.length} yield-ledger row(s); ${findings.join('; ')}`,
+    };
+  }
+  return {
+    level: 'green',
+    detail: `${table.rows.length} yield-ledger row(s) present; caps + mode-cycle clean`,
+  };
 }
 
 function loadArtifactsGraph() {

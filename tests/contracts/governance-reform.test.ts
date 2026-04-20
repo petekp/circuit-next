@@ -38,9 +38,9 @@ date: 2026-04-20
 
 # Product Gate Exemptions
 
-| phase_id | slice | reason | consumed |
-|---|---|---|---|
-| phase-1-pre-1.5-reopen | 25b | bootstrap exception - the slice that changes future acceptance terms cannot itself be proof those terms work | true |
+| phase_id | slice | reason | consumed | authorization_record |
+|---|---|---|---|---|
+| phase-1-pre-1.5-reopen | 25b | bootstrap exception - the slice that changes future acceptance terms cannot itself be proof those terms work | true | authorization.md |
 `;
 
 const VALID_TIER = `---
@@ -79,11 +79,82 @@ describe('Product Reality Gate visibility audit', () => {
 
   it('passes on a valid consumed Slice 25b seed row', () => {
     withTempRepo((root) => {
+      writeRel(root, 'authorization.md', '# authorization\n');
       writeRel(root, 'specs/methodology/product-gate-exemptions.md', VALID_EXEMPTION_LEDGER);
       const result = checkProductRealityGateVisibility(root);
       expect(result.level).toBe('green');
       expect(result.detail).toMatch(/phase-1-pre-1\.5-reopen/);
       expect(result.detail).toMatch(/25b/);
+    });
+  });
+
+  it('reds when a second consumed row has no authorization_record', () => {
+    withTempRepo((root) => {
+      writeRel(root, 'authorization.md', '# authorization\n');
+      const ledger = `---
+name: product-gate-exemptions
+description: Ledger of consumed Product Reality Gate exemptions.
+type: ledger
+date: 2026-04-20
+---
+
+# Product Gate Exemptions
+
+| phase_id | slice | reason | consumed | authorization_record |
+|---|---|---|---|---|
+| phase-1-pre-1.5-reopen | 25b | bootstrap exception | true | authorization.md |
+| phase-1-pre-1.5-reopen | 29 | second waiver without authorization | true |  |
+`;
+      writeRel(root, 'specs/methodology/product-gate-exemptions.md', ledger);
+      const result = checkProductRealityGateVisibility(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(/authorization_record/);
+    });
+  });
+
+  it('reds when authorization_record points at a missing file', () => {
+    withTempRepo((root) => {
+      const ledger = `---
+name: product-gate-exemptions
+description: Ledger of consumed Product Reality Gate exemptions.
+type: ledger
+date: 2026-04-20
+---
+
+# Product Gate Exemptions
+
+| phase_id | slice | reason | consumed | authorization_record |
+|---|---|---|---|---|
+| phase-1-pre-1.5-reopen | 25b | bootstrap exception | true | missing.md |
+`;
+      writeRel(root, 'specs/methodology/product-gate-exemptions.md', ledger);
+      const result = checkProductRealityGateVisibility(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(/missing\.md/);
+    });
+  });
+
+  it('reds when a row reason attempts to amend D1 or D3', () => {
+    withTempRepo((root) => {
+      writeRel(root, 'authorization.md', '# authorization\n');
+      const ledger = `---
+name: product-gate-exemptions
+description: Ledger of consumed Product Reality Gate exemptions.
+type: ledger
+date: 2026-04-20
+---
+
+# Product Gate Exemptions
+
+| phase_id | slice | reason | consumed | authorization_record |
+|---|---|---|---|---|
+| phase-1-pre-1.5-reopen | 25b | bootstrap exception | true | authorization.md |
+| phase-1-pre-1.5-reopen | 30 | amends D1 to loosen product gate | true | authorization.md |
+`;
+      writeRel(root, 'specs/methodology/product-gate-exemptions.md', ledger);
+      const result = checkProductRealityGateVisibility(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(/amend D1 or D3/);
     });
   });
 });
@@ -134,7 +205,74 @@ describe('TIER orphan-claim audit', () => {
       );
     });
   });
+
+  it('reds when status is not in {enforced, planned, not claimed}', () => {
+    withTempRepo((root) => {
+      writeRel(root, 'existing.md', '# existing\n');
+      writeRel(
+        root,
+        'TIER.md',
+        `| claim_id | status | file_path | planned_slice | rationale |
+|---|---|---|---|---|
+| weird_status | banana | existing.md |  | Banana is not a valid status. |
+`,
+      );
+      const result = checkTierOrphanClaims(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(/banana/);
+    });
+  });
+
+  it('reds when status=planned but only file_path is set', () => {
+    withTempRepo((root) => {
+      writeRel(root, 'existing.md', '# existing\n');
+      writeRel(
+        root,
+        'TIER.md',
+        `| claim_id | status | file_path | planned_slice | rationale |
+|---|---|---|---|---|
+| mismatched | planned | existing.md |  | Status disagrees with signal. |
+`,
+      );
+      const result = checkTierOrphanClaims(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(/disagrees with file_path/);
+    });
+  });
+
+  it('reds when status=enforced but only planned_slice is set', () => {
+    withTempRepo((root) => {
+      writeRel(
+        root,
+        'TIER.md',
+        `| claim_id | status | file_path | planned_slice | rationale |
+|---|---|---|---|---|
+| mismatched | enforced |  | 27d | Status disagrees with signal. |
+`,
+      );
+      const result = checkTierOrphanClaims(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(/disagrees with planned_slice/);
+    });
+  });
 });
+
+const YIELD_LEDGER_HEADER = `---
+name: adversarial-yield-ledger
+description: Test fixture.
+type: ledger
+date: 2026-04-20
+---
+
+# Fixture
+
+`;
+
+function yieldLedgerWithRows(rows: string): string {
+  return `${YIELD_LEDGER_HEADER}| pass_date | artifact_path | artifact_class | pass_number_for_artifact | reviewer_id | mode | HIGH_count | MED_count | LOW_count | verdict | operator_justification_if_past_cap |
+|---|---|---|---:|---|---|---:|---:|---:|---|---|
+${rows}`;
+}
 
 describe('adversarial yield ledger audit', () => {
   it('reds when the yield ledger is missing', () => {
@@ -149,6 +287,74 @@ describe('adversarial yield ledger audit', () => {
     const result = checkAdversarialYieldLedger(REPO_ROOT);
     expect(result.level).toBe('green');
     expect(result.detail).toMatch(/\d+ yield-ledger row/);
+  });
+
+  it('reds when pass_number exceeds governance cap with placeholder justification', () => {
+    withTempRepo((root) => {
+      const rows = `| 2026-04-20 | \`artifact.md\` | governance | 99 | gpt-5-codex | llm-review | 0 | 0 | 0 | ACCEPT | n/a |
+`;
+      writeRel(root, 'specs/reviews/adversarial-yield-ledger.md', yieldLedgerWithRows(rows));
+      const result = checkAdversarialYieldLedger(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(/cap|substantive/);
+    });
+  });
+
+  it('reds when pass_number exceeds cap with too-short justification', () => {
+    withTempRepo((root) => {
+      const rows = `| 2026-04-20 | \`artifact.md\` | reversible | 3 | gpt-5-codex | llm-review | 0 | 0 | 0 | ACCEPT | short reason |
+`;
+      writeRel(root, 'specs/reviews/adversarial-yield-ledger.md', yieldLedgerWithRows(rows));
+      const result = checkAdversarialYieldLedger(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(/substantive/);
+    });
+  });
+
+  it('passes when pass_number exceeds cap with substantive justification', () => {
+    withTempRepo((root) => {
+      const rows = `| 2026-04-20 | \`artifact.md\` | governance | 4 | gpt-5-codex | llm-review | 0 | 0 | 0 | ACCEPT | hunting a specific residual defect class: callback-shape drift in the runtime boundary reducer, not covered by prior passes |
+`;
+      writeRel(root, 'specs/reviews/adversarial-yield-ledger.md', yieldLedgerWithRows(rows));
+      const result = checkAdversarialYieldLedger(root);
+      expect(result.level).toBe('green');
+    });
+  });
+
+  it('reds on three consecutive same-mode passes (mode-cycle violation)', () => {
+    withTempRepo((root) => {
+      const rows = `| 2026-04-20 | \`artifact.md\` | irreversible | 1 | gpt-5-codex | llm-review | 0 | 0 | 0 | ACCEPT | n/a |
+| 2026-04-20 | \`artifact.md\` | irreversible | 2 | gpt-5-codex | llm-review | 0 | 0 | 0 | ACCEPT | n/a |
+| 2026-04-20 | \`artifact.md\` | irreversible | 3 | gpt-5-codex | llm-review | 0 | 0 | 0 | ACCEPT | n/a |
+`;
+      writeRel(root, 'specs/reviews/adversarial-yield-ledger.md', yieldLedgerWithRows(rows));
+      const result = checkAdversarialYieldLedger(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(/mode-cycle/);
+    });
+  });
+
+  it('passes three passes when mode alternates', () => {
+    withTempRepo((root) => {
+      const rows = `| 2026-04-20 | \`artifact.md\` | irreversible | 1 | gpt-5-codex | llm-review | 0 | 0 | 0 | ACCEPT | n/a |
+| 2026-04-20 | \`artifact.md\` | irreversible | 2 | human | human-cold-read | 0 | 0 | 0 | ACCEPT | n/a |
+| 2026-04-20 | \`artifact.md\` | irreversible | 3 | gpt-5-codex | llm-review | 0 | 0 | 0 | ACCEPT | n/a |
+`;
+      writeRel(root, 'specs/reviews/adversarial-yield-ledger.md', yieldLedgerWithRows(rows));
+      const result = checkAdversarialYieldLedger(root);
+      expect(result.level).toBe('green');
+    });
+  });
+
+  it('reds when artifact_class is invalid', () => {
+    withTempRepo((root) => {
+      const rows = `| 2026-04-20 | \`artifact.md\` | banana | 1 | gpt-5-codex | llm-review | 0 | 0 | 0 | ACCEPT | n/a |
+`;
+      writeRel(root, 'specs/reviews/adversarial-yield-ledger.md', yieldLedgerWithRows(rows));
+      const result = checkAdversarialYieldLedger(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(/artifact_class/);
+    });
   });
 });
 

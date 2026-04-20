@@ -191,8 +191,12 @@ naming a specific hardening event that justifies the extension.
 `product_gate_exemptions` is a machine-readable ledger at
 `specs/methodology/product-gate-exemptions.md` with YAML frontmatter (name,
 description, type=ledger) + a markdown table (columns: `phase_id | slice |
-reason | consumed`). Exemptions cannot amend D1 or D3. Slice 25b consumes a
-one-time operator waiver (bootstrap exception) because it changes future
+reason | consumed | authorization_record`). Audit enforces three integrity
+rules: every row must name a non-empty `authorization_record` that exists on
+disk; no row's `reason` may match `amend(s|ing) D1` or `amend(s|ing) D3`
+(D1 is meta-rule, D3 is graph root — neither is waivable); and the ledger
+must contain the Slice 25b bootstrap-exception seed row. Slice 25b consumes
+a one-time operator waiver (bootstrap exception) because it changes future
 acceptance terms; it is not evidence that the Gate works.
 
 ### D4. Governance Authority Graph Rule
@@ -205,13 +209,21 @@ schedule; they may not author durable standing rules by themselves.
 ### D10. Adversarial Review Discipline
 
 Target: `specs/methodology/decision.md`, with
-`specs/reviews/adversarial-yield-ledger.md` as immediate data source.
+`specs/reviews/adversarial-yield-ledger.md` as immediate data source. The
+ledger is a markdown table with columns: `pass_date | artifact_path |
+artifact_class | pass_number_for_artifact | reviewer_id | mode | HIGH_count
+| MED_count | LOW_count | verdict | operator_justification_if_past_cap`.
+`artifact_class` is one of `reversible`, `governance`, `irreversible`.
 
 1. **Pass-count cap.** Adversarial review on a single artifact is capped at 2
    passes for reversible work, 3 for governance changes, and 4 for
    irreversible artifacts such as schema breaks for external consumers,
    production migrations, or published APIs. Beyond the cap requires operator
    written justification naming the specific failure class being hunted.
+   Audit enforces the cap: when `pass_number_for_artifact` exceeds the class
+   cap, `operator_justification_if_past_cap` must be substantive — at least
+   30 characters and not a placeholder (`n/a`, `none`, `see body`, `tbd`,
+   `.`, `justified`, `-`). Placeholder text is red.
 2. **Compound stopping criterion.** Stop when all are true:
    - yield halved versus prior pass;
    - no HIGH severity appeared in the last pass;
@@ -226,7 +238,9 @@ explicitly in the yield-ledger row for that pass.
 
 3. **Mode-cycle rule.** After K review passes on an artifact, the next
    defect-discovery effort must come from a structurally different mode before
-   another same-mode review is valid.
+   another same-mode review is valid. K = 2. Audit rejects any artifact whose
+   yield-ledger rows show three consecutive same-mode passes (by
+   `pass_number_for_artifact` order) without an intervening different mode.
 4. **Artifact-size signal.** If an artifact needs more than 3 adversarial
    passes to converge, treat that as evidence it is too large and decompose it.
 
