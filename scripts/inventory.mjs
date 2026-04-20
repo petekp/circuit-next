@@ -192,15 +192,7 @@ function checkRuntimeEntrypoint() {
   if (tsFiles.length === 0) {
     return { present: false, reason: `${rel}/ has no .ts files` };
   }
-  const substantive = tsFiles.filter((f) => {
-    const body = readText(join(rel, f));
-    // Strip block comments + line comments + whitespace; require >= 40 chars left.
-    const stripped = body
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/^\s*\/\/.*$/gm, '')
-      .replace(/\s+/g, '');
-    return stripped.length >= 40 && /\bexport\b/.test(body);
-  });
+  const substantive = tsFiles.filter((f) => isSubstantiveRuntimeModule(join(rel, f)));
   if (substantive.length === 0) {
     return {
       present: false,
@@ -210,6 +202,38 @@ function checkRuntimeEntrypoint() {
   return {
     present: true,
     reason: `${rel}/ contains ${substantive.length} non-placeholder TS module(s): ${substantive.join(', ')}`,
+  };
+}
+
+// Slice 27c detector helper: a single src/runtime/*.ts module is
+// present iff it exists, has >=40 non-comment non-whitespace characters,
+// and contains an `export` token. Mirrors the substantive-module
+// criterion used by checkRuntimeEntrypoint, so the same placeholder
+// rejection holds: an empty file, a comment-only file, or a file
+// without `export` all resolve to absent.
+function isSubstantiveRuntimeModule(relPath) {
+  if (!fileExists(relPath)) return false;
+  const body = readText(relPath);
+  const stripped = body
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '')
+    .replace(/\s+/g, '');
+  return stripped.length >= 40 && /\bexport\b/.test(body);
+}
+
+function checkRuntimeWriterModule(relPath, label) {
+  if (!fileExists(relPath)) {
+    return { present: false, reason: `${relPath} missing; ${label} module not authored` };
+  }
+  if (!isSubstantiveRuntimeModule(relPath)) {
+    return {
+      present: false,
+      reason: `${relPath} is a placeholder (missing export or <40 non-comment chars) — not accepted as ${label}`,
+    };
+  }
+  return {
+    present: true,
+    reason: `${label} module at ${relPath} (non-placeholder, exports content)`,
   };
 }
 
@@ -363,28 +387,43 @@ export function buildInventory({ pkg, artifacts } = {}) {
       category: 'src_runtime',
       description: 'Append-only events.ndjson writer surface',
       expected_evidence:
-        'specs/artifacts.json has a row whose id matches /event.?writer/ AND its schema_file or repo-local backing_paths resolve to a non-empty file',
+        'src/runtime/event-writer.ts exists with >=40 non-comment non-whitespace characters and an `export` token. The writer surface is runtime code, not a data shape — the event-log DATA artifact is `run.log` at specs/artifacts.json.',
       planned_slice: '27c',
-      detect: () => checkArtifactRow(effectiveArtifacts, /event.?writer/i, 'event writer'),
+      detect: () => checkRuntimeWriterModule('src/runtime/event-writer.ts', 'event writer'),
     },
     {
       id: 'runner.snapshot_writer',
       category: 'src_runtime',
       description: 'Reducer-derived state.json writer surface',
       expected_evidence:
-        'specs/artifacts.json has a row whose id matches /snapshot.?writer/ AND its schema_file or repo-local backing_paths resolve to a non-empty file',
+        'src/runtime/snapshot-writer.ts exists with >=40 non-comment non-whitespace characters and an `export` token. The writer surface is runtime code, not a data shape — the snapshot DATA artifact is `run.snapshot` at specs/artifacts.json.',
       planned_slice: '27c',
-      detect: () => checkArtifactRow(effectiveArtifacts, /snapshot.?writer/i, 'snapshot writer'),
+      detect: () => checkRuntimeWriterModule('src/runtime/snapshot-writer.ts', 'snapshot writer'),
     },
     {
       id: 'runner.manifest_snapshot',
       category: 'src_runtime',
       description: 'manifest.snapshot.json byte-match writer surface',
       expected_evidence:
-        'specs/artifacts.json has a row whose id matches /manifest.?snapshot/ AND its schema_file resolves to a non-empty file',
+        'src/runtime/manifest-snapshot-writer.ts exists (>=40 non-comment chars, exports) AND specs/artifacts.json has a row whose id matches /manifest.?snapshot/ with a non-empty schema_file. Detection requires both the runtime module and the data-artifact row, because the byte-match gate is a runtime/data pair.',
       planned_slice: '27c',
-      detect: () =>
-        checkArtifactRow(effectiveArtifacts, /manifest.?snapshot/i, 'manifest snapshot'),
+      detect: () => {
+        const mod = checkRuntimeWriterModule(
+          'src/runtime/manifest-snapshot-writer.ts',
+          'manifest snapshot writer',
+        );
+        if (!mod.present) return mod;
+        const row = checkArtifactRow(
+          effectiveArtifacts,
+          /manifest.?snapshot/i,
+          'manifest snapshot',
+        );
+        if (!row.present) return row;
+        return {
+          present: true,
+          reason: `${mod.reason}; ${row.reason}`,
+        };
+      },
     },
     {
       id: 'tests.runner_smoke',
@@ -538,6 +577,7 @@ export {
   checkPluginManifest,
   checkDogfoodWorkflowFixture,
   checkRuntimeEntrypoint,
+  checkRuntimeWriterModule,
   checkArtifactRow,
   checkTestByFilename,
   checkStatusAlignment,

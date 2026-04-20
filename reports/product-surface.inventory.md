@@ -3,10 +3,10 @@
 Schema: v1
 Slice: 27b
 Baseline: yes
-Generated: 2026-04-20T21:24:32.242Z
-HEAD: 1cc98496f0e32f46400a912171536cce1d7c5734
+Generated: 2026-04-20T21:55:29.296Z
+HEAD: 7da4670da58aca31d702f308c082adcb9351c5cf
 
-**Summary:** 1 / 10 surfaces present, 9 absent.
+**Summary:** 6 / 10 surfaces present, 4 absent.
 
 ## Surfaces
 
@@ -15,13 +15,13 @@ HEAD: 1cc98496f0e32f46400a912171536cce1d7c5734
 | `runner.cli_script` | package_scripts | no | 27d | scripts.circuit:run absent or empty |
 | `plugin.manifest` | plugin_surface | no | 27d | .claude-plugin/plugin.json missing |
 | `plugin.dogfood_workflow_fixture` | plugin_surface | no | 27d | .claude-plugin/skills/dogfood-run-0/circuit.json missing |
-| `runner.entrypoint` | src_runtime | no | 27c | src/runtime/ missing; no runner entrypoint |
-| `runner.event_writer` | src_runtime | no | 27c | no specs/artifacts.json row matches /event.?writer/ for event writer |
-| `runner.snapshot_writer` | src_runtime | no | 27c | no specs/artifacts.json row matches /snapshot.?writer/ for snapshot writer |
-| `runner.manifest_snapshot` | src_runtime | no | 27c | no specs/artifacts.json row matches /manifest.?snapshot/ for manifest snapshot |
+| `runner.entrypoint` | src_runtime | yes | 27c | src/runtime/ contains 6 non-placeholder TS module(s): event-log-reader.ts, event-writer.ts, manifest-snapshot-writer.ts, reducer.ts, runner.ts, snapshot-writer.ts |
+| `runner.event_writer` | src_runtime | yes | 27c | event writer module at src/runtime/event-writer.ts (non-placeholder, exports content) |
+| `runner.snapshot_writer` | src_runtime | yes | 27c | snapshot writer module at src/runtime/snapshot-writer.ts (non-placeholder, exports content) |
+| `runner.manifest_snapshot` | src_runtime | yes | 27c | manifest snapshot writer module at src/runtime/manifest-snapshot-writer.ts (non-placeholder, exports content); artifact run.manifest_snapshot present; backing file(s): src/schemas/manifest.ts |
 | `tests.runner_smoke` | tests_runtime | no | 27d | no test file matches /(?:^\|\/)tests\/runner\/[^/]*smoke\.test\.ts$\|(?:^\|\/)tests\/[^/]+\/runner[-_]smoke\.test\.ts$/ (runner smoke) |
-| `tests.event_log_round_trip` | tests_runtime | no | 27c | no test file matches /event[-_]?log[-_]?round[-_]?trip\.test\.ts$/ (event-log round-trip) |
-| `docs.status_alignment` | status_docs | yes | — | current_slice=27b across README.md / PROJECT_STATE.md / TIER.md |
+| `tests.event_log_round_trip` | tests_runtime | yes | 27c | 1 test file(s) exercise event-log round-trip: tests/unit/runtime/event-log-round-trip.test.ts |
+| `docs.status_alignment` | status_docs | yes | — | current_slice=27c across README.md / PROJECT_STATE.md / TIER.md |
 
 ## Surface details
 
@@ -58,35 +58,35 @@ HEAD: 1cc98496f0e32f46400a912171536cce1d7c5734
 - **Category:** src_runtime
 - **Planned slice:** 27c
 - **Expected evidence:** src/runtime/ contains at least one .ts file with an `export` and >=40 non-comment non-whitespace characters
-- **Present at HEAD:** no
-- **Evidence summary:** src/runtime/ missing; no runner entrypoint
+- **Present at HEAD:** yes
+- **Evidence summary:** src/runtime/ contains 6 non-placeholder TS module(s): event-log-reader.ts, event-writer.ts, manifest-snapshot-writer.ts, reducer.ts, runner.ts, snapshot-writer.ts
 
 ### `runner.event_writer`
 
 - **Description:** Append-only events.ndjson writer surface
 - **Category:** src_runtime
 - **Planned slice:** 27c
-- **Expected evidence:** specs/artifacts.json has a row whose id matches /event.?writer/ AND its schema_file or repo-local backing_paths resolve to a non-empty file
-- **Present at HEAD:** no
-- **Evidence summary:** no specs/artifacts.json row matches /event.?writer/ for event writer
+- **Expected evidence:** src/runtime/event-writer.ts exists with >=40 non-comment non-whitespace characters and an `export` token. The writer surface is runtime code, not a data shape — the event-log DATA artifact is `run.log` at specs/artifacts.json.
+- **Present at HEAD:** yes
+- **Evidence summary:** event writer module at src/runtime/event-writer.ts (non-placeholder, exports content)
 
 ### `runner.snapshot_writer`
 
 - **Description:** Reducer-derived state.json writer surface
 - **Category:** src_runtime
 - **Planned slice:** 27c
-- **Expected evidence:** specs/artifacts.json has a row whose id matches /snapshot.?writer/ AND its schema_file or repo-local backing_paths resolve to a non-empty file
-- **Present at HEAD:** no
-- **Evidence summary:** no specs/artifacts.json row matches /snapshot.?writer/ for snapshot writer
+- **Expected evidence:** src/runtime/snapshot-writer.ts exists with >=40 non-comment non-whitespace characters and an `export` token. The writer surface is runtime code, not a data shape — the snapshot DATA artifact is `run.snapshot` at specs/artifacts.json.
+- **Present at HEAD:** yes
+- **Evidence summary:** snapshot writer module at src/runtime/snapshot-writer.ts (non-placeholder, exports content)
 
 ### `runner.manifest_snapshot`
 
 - **Description:** manifest.snapshot.json byte-match writer surface
 - **Category:** src_runtime
 - **Planned slice:** 27c
-- **Expected evidence:** specs/artifacts.json has a row whose id matches /manifest.?snapshot/ AND its schema_file resolves to a non-empty file
-- **Present at HEAD:** no
-- **Evidence summary:** no specs/artifacts.json row matches /manifest.?snapshot/ for manifest snapshot
+- **Expected evidence:** src/runtime/manifest-snapshot-writer.ts exists (>=40 non-comment chars, exports) AND specs/artifacts.json has a row whose id matches /manifest.?snapshot/ with a non-empty schema_file. Detection requires both the runtime module and the data-artifact row, because the byte-match gate is a runtime/data pair.
+- **Present at HEAD:** yes
+- **Evidence summary:** manifest snapshot writer module at src/runtime/manifest-snapshot-writer.ts (non-placeholder, exports content); artifact run.manifest_snapshot present; backing file(s): src/schemas/manifest.ts
 
 ### `tests.runner_smoke`
 
@@ -103,8 +103,8 @@ HEAD: 1cc98496f0e32f46400a912171536cce1d7c5734
 - **Category:** tests_runtime
 - **Planned slice:** 27c
 - **Expected evidence:** A tests/ file whose filename matches /event[-_]?log[-_]?round[-_]?trip\.test\.ts$/ and contains an it/test/describe block
-- **Present at HEAD:** no
-- **Evidence summary:** no test file matches /event[-_]?log[-_]?round[-_]?trip\.test\.ts$/ (event-log round-trip)
+- **Present at HEAD:** yes
+- **Evidence summary:** 1 test file(s) exercise event-log round-trip: tests/unit/runtime/event-log-round-trip.test.ts
 
 ### `docs.status_alignment`
 
@@ -113,7 +113,7 @@ HEAD: 1cc98496f0e32f46400a912171536cce1d7c5734
 - **Planned slice:** —
 - **Expected evidence:** All three files carry a well-formed <!-- current_slice: <id> --> marker in the status-header zone, and the ids agree
 - **Present at HEAD:** yes
-- **Evidence summary:** current_slice=27b across README.md / PROJECT_STATE.md / TIER.md
+- **Evidence summary:** current_slice=27c across README.md / PROJECT_STATE.md / TIER.md
 
 ## Delta rule
 

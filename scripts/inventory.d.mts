@@ -58,6 +58,7 @@ export function checkPackageScript(pkg: unknown, name: string): PresenceResult;
 export function checkPluginManifest(): PresenceResult;
 export function checkDogfoodWorkflowFixture(): PresenceResult;
 export function checkRuntimeEntrypoint(): PresenceResult;
+export function checkRuntimeWriterModule(relPath: string, label: string): PresenceResult;
 export function checkArtifactRow(
   artifacts: unknown,
   idPattern: RegExp,

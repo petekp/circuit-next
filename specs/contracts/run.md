@@ -11,6 +11,8 @@ artifact_ids:
   - run.log
   - run.projection
   - run.snapshot
+  - run.manifest_snapshot
+  - run.result
 invariant_ids: [RUN-I1, RUN-I2, RUN-I3, RUN-I4, RUN-I5, RUN-I6, RUN-I7, RUN-I8]
 property_ids: [run.prop.artifact_written_before_gate, run.prop.attempt_monotonicity_per_step, run.prop.boundary_own_property_defense, run.prop.checkpoint_event_pairing, run.prop.close_outcome_semantic_adequacy, run.prop.deterministic_replay, run.prop.dispatch_event_pairing, run.prop.projection_is_a_function, run.prop.recorded_at_sanity, run.prop.step_event_causal_ordering]
 ---
