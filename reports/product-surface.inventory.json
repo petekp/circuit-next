@@ -3,13 +3,13 @@
   "slice": "27b",
   "baseline": true,
   "metadata": {
-    "generated_at": "2026-04-20T21:55:29.296Z",
-    "head_commit": "7da4670da58aca31d702f308c082adcb9351c5cf"
+    "generated_at": "2026-04-20T22:24:58.476Z",
+    "head_commit": "832105acde5a3eef3862a299227ace883c58237b"
   },
   "summary": {
     "total": 10,
-    "present": 6,
-    "absent": 4
+    "present": 10,
+    "absent": 0
   },
   "surfaces": [
     {
@@ -18,8 +18,8 @@
       "description": "npm run circuit:run entrypoint (`dogfood-run-0` dry-run invocation)",
       "expected_evidence": "package.json scripts.circuit:run is a non-placeholder shell command (not echo/true/noop)",
       "planned_slice": "27d",
-      "present": false,
-      "evidence_summary": "scripts.circuit:run absent or empty"
+      "present": true,
+      "evidence_summary": "scripts.circuit:run = \"tsx src/cli/dogfood.ts\""
     },
     {
       "id": "plugin.manifest",
@@ -27,8 +27,8 @@
       "description": "Claude Code plugin manifest",
       "expected_evidence": ".claude-plugin/plugin.json exists, parses as object, declares non-empty name and version",
       "planned_slice": "27d",
-      "present": false,
-      "evidence_summary": ".claude-plugin/plugin.json missing"
+      "present": true,
+      "evidence_summary": ".claude-plugin/plugin.json parses with name=\"circuit-next\" version=\"0.1.0-alpha.0\""
     },
     {
       "id": "plugin.dogfood_workflow_fixture",
@@ -36,8 +36,8 @@
       "description": "dogfood-run-0 workflow fixture loaded by `npm run circuit:run -- dogfood-run-0`",
       "expected_evidence": ".claude-plugin/skills/dogfood-run-0/circuit.json parses as a non-empty JSON object",
       "planned_slice": "27d",
-      "present": false,
-      "evidence_summary": ".claude-plugin/skills/dogfood-run-0/circuit.json missing"
+      "present": true,
+      "evidence_summary": ".claude-plugin/skills/dogfood-run-0/circuit.json parses as non-empty object (9 top-level keys)"
     },
     {
       "id": "runner.entrypoint",
@@ -46,7 +46,7 @@
       "expected_evidence": "src/runtime/ contains at least one .ts file with an `export` and >=40 non-comment non-whitespace characters",
       "planned_slice": "27c",
       "present": true,
-      "evidence_summary": "src/runtime/ contains 6 non-placeholder TS module(s): event-log-reader.ts, event-writer.ts, manifest-snapshot-writer.ts, reducer.ts, runner.ts, snapshot-writer.ts"
+      "evidence_summary": "src/runtime/ contains 7 non-placeholder TS module(s): event-log-reader.ts, event-writer.ts, manifest-snapshot-writer.ts, reducer.ts, result-writer.ts, runner.ts, snapshot-writer.ts"
     },
     {
       "id": "runner.event_writer",
@@ -81,8 +81,8 @@
       "description": "Runner smoke test exercising at least one dogfood step end-to-end",
       "expected_evidence": "A tests/ file whose path matches /tests\\/runner\\/.*smoke\\.test\\.ts$/ or /tests\\/.*runner[-_]smoke\\.test\\.ts$/ and contains an it/test/describe block",
       "planned_slice": "27d",
-      "present": false,
-      "evidence_summary": "no test file matches /(?:^|\\/)tests\\/runner\\/[^/]*smoke\\.test\\.ts$|(?:^|\\/)tests\\/[^/]+\\/runner[-_]smoke\\.test\\.ts$/ (runner smoke)"
+      "present": true,
+      "evidence_summary": "1 test file(s) exercise runner smoke: tests/runner/dogfood-smoke.test.ts"
     },
     {
       "id": "tests.event_log_round_trip",
@@ -100,7 +100,7 @@
       "expected_evidence": "All three files carry a well-formed <!-- current_slice: <id> --> marker in the status-header zone, and the ids agree",
       "planned_slice": null,
       "present": true,
-      "evidence_summary": "current_slice=27c across README.md / PROJECT_STATE.md / TIER.md"
+      "evidence_summary": "current_slice=27d across README.md / PROJECT_STATE.md / TIER.md"
     }
   ]
 }

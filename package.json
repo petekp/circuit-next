@@ -15,7 +15,8 @@
     "format": "biome format --write .",
     "verify": "npm run check && npm run lint && npm run test",
     "audit": "node scripts/audit.mjs",
-    "inventory": "node scripts/inventory.mjs"
+    "inventory": "node scripts/inventory.mjs",
+    "circuit:run": "tsx src/cli/dogfood.ts"
   },
   "dependencies": {
     "zod": "^3.23.8"
@@ -23,6 +24,7 @@
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
     "@types/node": "^22.9.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.6.3",
     "vitest": "^2.1.4"
   }

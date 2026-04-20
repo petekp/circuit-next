@@ -1,0 +1,6 @@
+{
+  "name": "circuit-next",
+  "version": "0.1.0-alpha.0",
+  "description": "Claude Code plugin that automates developer workflows (explore, build, repair, migrate, sweep) with per-step configurability. Alpha Proof phase — dogfood-run-0 is the first executable product surface.",
+  "keywords": ["workflow", "automation", "circuit-next", "alpha-proof"]
+}

@@ -1,0 +1,92 @@
+{
+  "schema_version": "2",
+  "id": "dogfood-run-0",
+  "version": "0.1.0",
+  "purpose": "Phase 1.5 Alpha Proof fixture — exercises one synthesis step and one dispatch step end-to-end so the runtime boundary (event-writer, reducer, snapshot, manifest, result) can be observed closing a real run.",
+  "entry": {
+    "signals": {
+      "include": ["dogfood", "alpha-proof"],
+      "exclude": []
+    },
+    "intent_prefixes": ["dogfood-run-0"]
+  },
+  "entry_modes": [
+    {
+      "name": "dogfood",
+      "start_at": "synthesis-step",
+      "rigor": "standard",
+      "description": "Default dogfood-run-0 entry mode; seeds the run at the synthesis step."
+    }
+  ],
+  "phases": [
+    {
+      "id": "plan-phase",
+      "title": "Plan",
+      "canonical": "plan",
+      "steps": ["synthesis-step"]
+    },
+    {
+      "id": "act-phase",
+      "title": "Act",
+      "canonical": "act",
+      "steps": ["dispatch-step"]
+    }
+  ],
+  "spine_policy": {
+    "mode": "partial",
+    "omits": ["frame", "analyze", "verify", "review", "close"],
+    "rationale": "dogfood-run-0 is a narrow Alpha Proof fixture — only plan+act are needed to exercise synthesis+dispatch through the runtime boundary. Full spine coverage is a Phase 2 scope."
+  },
+  "steps": [
+    {
+      "id": "synthesis-step",
+      "title": "Synthesis — emit dogfood artifact",
+      "protocol": "dogfood-synthesis@v1",
+      "reads": [],
+      "routes": {
+        "pass": "dispatch-step"
+      },
+      "executor": "orchestrator",
+      "kind": "synthesis",
+      "writes": {
+        "artifact": {
+          "path": "artifacts/synthesis.json",
+          "schema": "dogfood-synthesis@v1"
+        }
+      },
+      "gate": {
+        "kind": "schema_sections",
+        "source": {
+          "kind": "artifact",
+          "ref": "artifact"
+        },
+        "required": ["summary"]
+      }
+    },
+    {
+      "id": "dispatch-step",
+      "title": "Dispatch — dry-run agent adapter",
+      "protocol": "dogfood-dispatch@v1",
+      "reads": [],
+      "routes": {
+        "pass": "@complete"
+      },
+      "executor": "worker",
+      "kind": "dispatch",
+      "role": "implementer",
+      "writes": {
+        "request": "artifacts/dispatch.request.json",
+        "receipt": "artifacts/dispatch.receipt.json",
+        "result": "artifacts/dispatch.result.json"
+      },
+      "gate": {
+        "kind": "result_verdict",
+        "source": {
+          "kind": "dispatch_result",
+          "ref": "result"
+        },
+        "pass": ["ok"]
+      }
+    }
+  ]
+}

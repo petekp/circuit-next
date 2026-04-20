@@ -33,13 +33,6 @@ const EXPECTED_27C_FLIPS = [
   'tests.event_log_round_trip',
 ] as const;
 
-const STILL_ABSENT_AT_27C = [
-  'runner.cli_script',
-  'plugin.manifest',
-  'plugin.dogfood_workflow_fixture',
-  'tests.runner_smoke',
-] as const;
-
 describe('Slice 27c — inventory row flips', () => {
   it('flips the five 27c target rows to present:true', () => {
     const { surfaces } = buildInventory();
@@ -52,14 +45,11 @@ describe('Slice 27c — inventory row flips', () => {
     }
   });
 
-  it('leaves the 27d target rows at present:false', () => {
-    const { surfaces } = buildInventory();
-    for (const id of STILL_ABSENT_AT_27C) {
-      const row = surfaces.find((s) => s.id === id);
-      if (!row) throw new Error(`missing surface ${id}`);
-      expect(row.present, `${id} must remain false at 27c (flips at 27d)`).toBe(false);
-    }
-  });
+  // The companion "27d target rows remain present:false" assertion was
+  // valid at 27c HEAD and removed when Slice 27d flipped those rows.
+  // The present:true version of the same claim is now pinned by
+  // `tests/contracts/slice-27d-dogfood-run-0.test.ts` — two mirrored
+  // statements of the same delta on opposite sides of the HEAD boundary.
 });
 
 describe('Slice 27c — authority graph additions', () => {
