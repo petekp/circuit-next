@@ -112,3 +112,29 @@ export type WrapperBindingViolation = {
 };
 export function detectWrapperAggregateBinding(artifact: unknown): WrapperBindingViolation | null;
 export function checkPersistedWrapperBinding(rootDir?: string): AuditCheckResult;
+
+// Slice 26b — status-epoch alignment, status-docs-current, and pinned ratchet floor.
+export const SLICE_ID_PATTERN: RegExp;
+export function isValidSliceId(value: unknown): boolean;
+
+export const CURRENT_SLICE_MARKER_PATTERN: RegExp;
+export function extractCurrentSliceMarker(text: unknown): string | null;
+export function checkStatusEpochAlignment(rootDir?: string): AuditCheckResult;
+
+export const SLICE_COMMIT_SUBJECT_PATTERN: RegExp;
+export function extractSliceIdFromCommitSubject(subject: unknown): string | null;
+export function checkStatusDocsCurrent(rootDir?: string): AuditCheckResult;
+
+export type PinnedRatchetFloorData = {
+  schema_version: number;
+  floors: { contract_test_count: number } & Record<string, number>;
+  last_advanced_at: string;
+  last_advanced_in_slice: string;
+  notes?: string;
+};
+export function readPinnedRatchetFloor(rootDir?: string): PinnedRatchetFloorData | null;
+export function validatePinnedRatchetFloorData(floorData: unknown): string[];
+export function checkPinnedRatchetFloor(
+  rootDir?: string,
+  headCountInput?: number,
+): AuditCheckResult;

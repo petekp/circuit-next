@@ -525,6 +525,17 @@ file existed before 27d landed.
 - Acceptance requires Slice 27b landed first; the post-run inventory diff is
   the delta signal, not a placeholder checklist.
 
+**Close-gate commands (added per Slice 26b Codex META-1 fold-in):**
+
+- `npm run audit` must exit 0 (all checks green, including Check 17 status-epoch
+  alignment, Check 18 status docs current, Check 19 pinned ratchet floor). A
+  red audit rejects `dogfood-run-0`'s own evidence; the close gate depends on
+  the pinned floor at `specs/ratchet-floor.json`, not on the moving-window
+  `HEAD~1` comparison (Check 6). This is the 27d-level encoding of the
+  machine surface Slice 26b installed; do not accept dogfood-run-0 evidence
+  while audit is red.
+- `npm run verify` must exit 0 (tsc --strict + biome + vitest).
+
 **Scope boundaries:** no real Claude/Codex dispatch yet. No isolation substrate
 yet. No hidden tests yet. This milestone proves the spine.
 

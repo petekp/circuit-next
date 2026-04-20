@@ -1,3 +1,5 @@
+<!-- current_slice: 26b -->
+
 # circuit-next
 
 **Status: Tier 0 scaffold complete; Phase 1 contract authorship in progress,

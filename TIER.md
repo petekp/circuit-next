@@ -5,6 +5,8 @@ type: tier-claim-matrix
 date: 2026-04-20
 ---
 
+<!-- current_slice: 26b -->
+
 # TIER Claim Matrix
 
 Every row below has exactly one claim classification: an existing `file_path`,
@@ -27,9 +29,9 @@ claimed` is honest signal, not failure. Orphan claims are the failure mode.
 | event_log_round_trip | planned |  | 27c | Runtime-boundary append-only event writer/reducer proof. |
 | snapshot_derived_from_log | planned |  | 27c | Runtime-boundary reducer-derived snapshot proof. |
 | manifest_snapshot_byte_match | planned |  | 27c | SHA-256 manifest byte-match proof before dogfood. |
-| status_docs_current | planned |  | 26b | Structured status-doc freshness check. |
-| pinned_ratchet_floor | planned |  | 26b | Audit/test ratchet floor pinning. |
-| current_slice_status_epoch | planned |  | 26b | README/PROJECT_STATE/TIER status-epoch alignment. |
+| status_docs_current | enforced | `scripts/audit.mjs`; `README.md`; `PROJECT_STATE.md`; `TIER.md` |  | Slice 26b Check 18 compares the aligned `current_slice` marker against the most recent `slice-<id>:` commit subject in git log; "docs all agree on a stale story" registers as red, not green. |
+| pinned_ratchet_floor | enforced | `scripts/audit.mjs`; `specs/ratchet-floor.json` |  | Slice 26b Check 19 enforces HEAD contract-test count ≥ pinned floor in `specs/ratchet-floor.json`; close gates depend on the floor, not on `HEAD~1`. |
+| current_slice_status_epoch | enforced | `scripts/audit.mjs`; `README.md`; `PROJECT_STATE.md`; `TIER.md` |  | Slice 26b Check 17 verifies all three files carry `<!-- current_slice: <id> -->` markers and agree on `<id>`. |
 | container_isolation | not claimed |  |  | Tier 2+ deferral per ADR-0001. |
 | hidden_property_pool | not claimed |  |  | Tier 2+ deferral per ADR-0001. |
 | mutation_testing_gate | not claimed |  |  | Tier 2+ deferral per ADR-0001. |

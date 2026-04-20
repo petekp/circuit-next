@@ -1595,6 +1595,268 @@ export function checkPersistedWrapperBinding(rootDir = REPO_ROOT) {
   };
 }
 
+// Slice 26b — status-epoch alignment, status-docs-current, and pinned ratchet floor.
+//
+// These three checks close a false-green close-gate hole that Slice 25b explicitly
+// tagged as planned-for-26b in `TIER.md`. The agreement-only `checkPhaseDrift` above
+// cannot detect the case where all three docs (README / PROJECT_STATE / TIER)
+// consistently tell the same stale story. Slice 26b adds:
+//
+//   (1) structured `<!-- current_slice: <id> -->` markers on the three docs,
+//       anchored to the status-header zone (before the first markdown heading
+//       for README/PROJECT_STATE; immediately after frontmatter for TIER). The
+//       marker MUST appear exactly once in that zone; duplicates are rejected
+//       (Codex MED-3 fold-in).
+//   (2) an alignment check that all three carry the marker and agree on <id>,
+//   (3) a freshness check that compares that aligned <id> against the most recent
+//       slice-shaped commit in git. "No slice-shaped commit found" is red, not
+//       yellow (Codex MED-2 fold-in) — in a disciplined repo a missing slice
+//       subject is a broken gate, not an unknown.
+//   (4) a pinned ratchet floor in `specs/ratchet-floor.json` so close gates no
+//       longer depend purely on the `HEAD~1` moving window. Floor metadata
+//       (schema_version, last_advanced_at, last_advanced_in_slice) is audit-
+//       enforced, not prose-only (Codex HIGH-2 + MED-4 fold-in).
+//
+// SLICE_ID_PATTERN pins the canonical slice-id shape at the regex layer: digits
+// followed by an optional lowercase-letter suffix (e.g. `26`, `26a`, `26b`).
+// Draft/provisional/WIP subjects like `slice-26b-wip:` are rejected so a
+// work-in-progress commit cannot become the "current slice" epoch (Codex MED-5
+// fold-in). Widening the pattern requires a separate ADR amendment.
+//
+// Kept exported so the contract tests can exercise constructed fixtures.
+
+export const SLICE_ID_PATTERN = /^[0-9]+[a-z]?$/;
+
+export function isValidSliceId(value) {
+  return typeof value === 'string' && SLICE_ID_PATTERN.test(value);
+}
+
+export const CURRENT_SLICE_MARKER_PATTERN = /<!--\s*current_slice:\s*([0-9a-z-]+)\s*-->/i;
+const CURRENT_SLICE_MARKER_PATTERN_GLOBAL = /<!--\s*current_slice:\s*([0-9a-z-]+)\s*-->/gi;
+
+// The "status-header zone" is the portion of each doc before the first
+// `# ` markdown heading. All three STATUS_EPOCH_FILES carry the marker in
+// that zone by construction: README and PROJECT_STATE put it at the very
+// top; TIER puts it between frontmatter and first heading. Scanning only
+// the zone prevents a historical quote or an embedded-diff block deeper
+// in the file from being read as the current marker (Codex MED-3 fold-in).
+function sliceHeaderZone(text) {
+  if (typeof text !== 'string') return '';
+  const firstHeadingMatch = text.match(/^#\s/m);
+  if (!firstHeadingMatch || firstHeadingMatch.index === undefined) return text;
+  return text.slice(0, firstHeadingMatch.index);
+}
+
+export function extractCurrentSliceMarker(text) {
+  if (typeof text !== 'string') return null;
+  const zone = sliceHeaderZone(text);
+  const all = zone.match(CURRENT_SLICE_MARKER_PATTERN_GLOBAL);
+  if (!all || all.length === 0) return null;
+  if (all.length > 1) return null;
+  const match = zone.match(CURRENT_SLICE_MARKER_PATTERN);
+  if (!match) return null;
+  const captured = match[1];
+  if (!isValidSliceId(captured)) return null;
+  return captured;
+}
+
+const STATUS_EPOCH_FILES = ['README.md', 'PROJECT_STATE.md', 'TIER.md'];
+
+export function checkStatusEpochAlignment(rootDir = REPO_ROOT) {
+  const findings = [];
+  const markers = new Map();
+  for (const relPath of STATUS_EPOCH_FILES) {
+    const absPath = join(rootDir, relPath);
+    if (!existsSync(absPath)) {
+      findings.push(`${relPath}: file missing`);
+      continue;
+    }
+    const text = readFileSync(absPath, 'utf-8');
+    const marker = extractCurrentSliceMarker(text);
+    if (marker === null) {
+      findings.push(
+        `${relPath}: missing / malformed / duplicated \`<!-- current_slice: <id> -->\` marker in status-header zone (must be exactly one, before first markdown heading, with id matching ${SLICE_ID_PATTERN})`,
+      );
+      continue;
+    }
+    markers.set(relPath, marker);
+  }
+  if (findings.length > 0) {
+    return {
+      level: 'red',
+      detail: `status-epoch alignment violations:\n${findings.map((v) => `    - ${v}`).join('\n')}`,
+    };
+  }
+  const values = Array.from(new Set(markers.values()));
+  if (values.length > 1) {
+    const disagreement = Array.from(markers.entries())
+      .map(([file, value]) => `${file}=${value}`)
+      .join(', ');
+    return {
+      level: 'red',
+      detail: `status-epoch markers disagree across files: ${disagreement}`,
+    };
+  }
+  return {
+    level: 'green',
+    detail: `${STATUS_EPOCH_FILES.length} docs aligned on current_slice=${values[0]}`,
+  };
+}
+
+export const SLICE_COMMIT_SUBJECT_PATTERN = /^slice-([0-9a-z-]+?):\s/;
+
+export function extractSliceIdFromCommitSubject(subject) {
+  if (typeof subject !== 'string') return null;
+  const match = subject.match(SLICE_COMMIT_SUBJECT_PATTERN);
+  if (!match) return null;
+  const captured = match[1];
+  if (!isValidSliceId(captured)) return null;
+  return captured;
+}
+
+function findMostRecentSliceCommit(rootDir = REPO_ROOT) {
+  // Scan up to 200 commits for a subject matching `slice-<id>:`. Most recent wins.
+  const subjects = execSync('git log -200 --pretty=format:%s', {
+    cwd: rootDir,
+    encoding: 'utf-8',
+  })
+    .split('\n')
+    .filter(Boolean);
+  for (const subject of subjects) {
+    const sliceId = extractSliceIdFromCommitSubject(subject);
+    if (sliceId) return { subject, sliceId };
+  }
+  return null;
+}
+
+export function checkStatusDocsCurrent(rootDir = REPO_ROOT) {
+  const alignment = checkStatusEpochAlignment(rootDir);
+  if (alignment.level !== 'green') {
+    return {
+      level: 'red',
+      detail: `status-epoch alignment not green (${alignment.level}); freshness cannot be evaluated until alignment is fixed`,
+    };
+  }
+  // Re-extract the aligned slice id (alignment is green so all three agree).
+  const readmeText = readFileSync(join(rootDir, 'README.md'), 'utf-8');
+  const alignedSlice = extractCurrentSliceMarker(readmeText);
+  const mostRecent = findMostRecentSliceCommit(rootDir);
+  if (!mostRecent) {
+    // Codex MED-2 fold-in: "no slice-shaped commit found" is red, not yellow.
+    // A disciplined repo always has at least one `slice-<id>:` commit in the
+    // last 200 subjects; its absence means either the discipline is broken
+    // or the repo is a shallow checkout deeper than 200 commits — either way
+    // the freshness gate cannot be evaluated and blocking is the safe default.
+    return {
+      level: 'red',
+      detail:
+        'no slice-shaped commit found in last 200 commits; cannot verify doc freshness (Slice 26b freshness gate blocks)',
+    };
+  }
+  if (alignedSlice !== mostRecent.sliceId) {
+    return {
+      level: 'red',
+      detail: `docs all agree on current_slice=${alignedSlice}, but most recent slice commit is \`${mostRecent.subject}\` (sliceId=${mostRecent.sliceId}); all three docs are stale in unison`,
+    };
+  }
+  return {
+    level: 'green',
+    detail: `docs current_slice=${alignedSlice} matches most recent slice commit \`${mostRecent.subject}\``,
+  };
+}
+
+export function readPinnedRatchetFloor(rootDir = REPO_ROOT) {
+  const floorPath = join(rootDir, 'specs/ratchet-floor.json');
+  if (!existsSync(floorPath)) return null;
+  try {
+    return JSON.parse(readFileSync(floorPath, 'utf-8'));
+  } catch {
+    return null;
+  }
+}
+
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+// Codex HIGH-2 + MED-4 fold-in: the floor-file metadata fields are audit-
+// enforced, not prose-only. schema_version must be 1, floors.contract_test_count
+// must be a POSITIVE integer (zero floor is meaningless and was previously
+// silently accepted), last_advanced_at must be a YYYY-MM-DD string, and
+// last_advanced_in_slice must match SLICE_ID_PATTERN. Any violation is red.
+export function validatePinnedRatchetFloorData(floorData) {
+  const errors = [];
+  if (!floorData || typeof floorData !== 'object') {
+    errors.push('floor data not an object');
+    return errors;
+  }
+  if (floorData.schema_version !== 1) {
+    errors.push(
+      `schema_version must be literal 1, got ${JSON.stringify(floorData.schema_version)}`,
+    );
+  }
+  const floors = floorData.floors;
+  if (!floors || typeof floors !== 'object') {
+    errors.push('floors must be an object');
+  } else {
+    const count = floors.contract_test_count;
+    if (typeof count !== 'number' || !Number.isInteger(count) || count <= 0) {
+      errors.push(
+        `floors.contract_test_count must be a positive integer (>0), got ${JSON.stringify(count)} (zero or negative floors silently relax the ratchet and are rejected per Codex HIGH-2 fold-in)`,
+      );
+    }
+  }
+  if (
+    typeof floorData.last_advanced_at !== 'string' ||
+    !ISO_DATE_PATTERN.test(floorData.last_advanced_at)
+  ) {
+    errors.push(
+      `last_advanced_at must be a YYYY-MM-DD string, got ${JSON.stringify(floorData.last_advanced_at)}`,
+    );
+  }
+  if (
+    typeof floorData.last_advanced_in_slice !== 'string' ||
+    !isValidSliceId(floorData.last_advanced_in_slice)
+  ) {
+    errors.push(
+      `last_advanced_in_slice must match SLICE_ID_PATTERN (${SLICE_ID_PATTERN}), got ${JSON.stringify(floorData.last_advanced_in_slice)}`,
+    );
+  }
+  return errors;
+}
+
+export function checkPinnedRatchetFloor(rootDir, headCountInput) {
+  const actualRoot = rootDir ?? REPO_ROOT;
+  const floorData = readPinnedRatchetFloor(actualRoot);
+  if (!floorData) {
+    return {
+      level: 'red',
+      detail:
+        'specs/ratchet-floor.json missing or unparseable; close gates depend on it (Slice 26b)',
+    };
+  }
+  const metadataErrors = validatePinnedRatchetFloorData(floorData);
+  if (metadataErrors.length > 0) {
+    return {
+      level: 'red',
+      detail: `specs/ratchet-floor.json invalid:\n${metadataErrors.map((e) => `    - ${e}`).join('\n')}`,
+    };
+  }
+  const floor = floorData.floors.contract_test_count;
+  const headCount = typeof headCountInput === 'number' ? headCountInput : countTests(null);
+  if (headCount === null) {
+    return { level: 'red', detail: 'no tests discovered; cannot compare to pinned floor' };
+  }
+  if (headCount < floor) {
+    return {
+      level: 'red',
+      detail: `contract-test count ${headCount} is below pinned floor ${floor} (last advanced in slice ${floorData.last_advanced_in_slice}); close gate blocked — advance floor only with an explicit ratchet-advance slice`,
+    };
+  }
+  return {
+    level: 'green',
+    detail: `contract-test count ${headCount} ≥ pinned floor ${floor} (last advanced in slice ${floorData.last_advanced_in_slice})`,
+  };
+}
+
 const PHASE_PATTERNS = [
   /\*\*Phase[:*]+\*\*\s*([0-9]+(?:\.[0-9]+)?)/i,
   /\*\*Phase\s+([0-9]+(?:\.[0-9]+)?)/i,
@@ -1944,7 +2206,37 @@ function main() {
     detail: wrapperBinding.detail,
   });
 
-  // Check 15: npm run verify currently green.
+  // Check 17: Status-epoch alignment (Slice 26b — current_slice marker on README/PROJECT_STATE/TIER).
+  const statusAlignment = checkStatusEpochAlignment();
+  counters[statusAlignment.level]++;
+  findings.push({
+    level: statusAlignment.level,
+    check: 'Status-epoch alignment (README/PROJECT_STATE/TIER)',
+    detail: statusAlignment.detail,
+  });
+
+  // Check 18: Status docs current (Slice 26b — aligned marker matches most recent slice commit).
+  const statusCurrent = checkStatusDocsCurrent();
+  counters[statusCurrent.level]++;
+  findings.push({
+    level: statusCurrent.level,
+    check: 'Status docs current (aligned marker matches most recent slice commit)',
+    detail: statusCurrent.detail,
+  });
+
+  // Check 19: Pinned ratchet floor (Slice 26b — close gates no longer depend on HEAD~1 alone).
+  const pinnedFloor = checkPinnedRatchetFloor(REPO_ROOT, headCount);
+  counters[pinnedFloor.level]++;
+  findings.push({
+    level: pinnedFloor.level,
+    check: 'Pinned ratchet floor (specs/ratchet-floor.json)',
+    detail: pinnedFloor.detail,
+  });
+
+  // Check 20: npm run verify currently green. (Runs last so the report's
+  // bottom line is the verify-gate status; numbering bumped from Check 15 →
+  // Check 20 in Slice 26b to keep printed Check-N order monotonic after
+  // Slice 26a and 26b added Checks 16-19. Codex LOW-1 fold-in.)
   const verify = verifyStatus();
   if (verify.pass) {
     counters.green++;

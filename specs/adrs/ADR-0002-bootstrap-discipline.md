@@ -153,6 +153,72 @@ Re-examine this ADR if:
    becomes hostile rather than supportive (suggests building a minimal
    bespoke orchestrator for the remaining slices).
 
+## Addendum A — Pinned Ratchet Floors (Slice 26b, 2026-04-20)
+
+### Context
+
+The original audit (Check 6 in `scripts/audit.mjs`) compared contract-test
+count at HEAD against HEAD~1. That is a moving-window comparison: a
+regression commit followed by a docs-only commit slides the comparison
+window forward, so the audit at HEAD~0 compares the regressed count against
+the regressed count one step back — and passes green. Two different
+pressures converge on this hole: (a) the slice methodology encourages
+tiny docs-only commits between structural commits (PROJECT_STATE updates,
+note fixups), and (b) the close-gate for `dogfood-run-0` (Slice 27d)
+depends on ratchet integrity because a false-green close is worse than
+a failing one. `specs/plans/phase-1-close-revised.md` §Slice 26b lists
+this close-gate requirement: "no close gate may depend only on `HEAD~1`
+comparison."
+
+### Decision
+
+Add a named, version-controlled floor file at `specs/ratchet-floor.json`
+with at least one floor entry (`floors.contract_test_count`). Audit Check
+19 (`checkPinnedRatchetFloor` in `scripts/audit.mjs`) reports red when
+HEAD's static test count is below the pinned floor. The moving-window
+Check 6 stays as secondary signal (HEAD~1 comparison is still useful as
+a change indicator), but close-gate semantics bind to Check 19, not
+Check 6.
+
+Floor advancement is its own explicit action:
+
+- A slice that lands new tests MAY leave the floor unchanged. The slice
+  itself strictly advances (HEAD count rises), but the floor represents
+  the close-gate bar, which does not auto-ratchet.
+- A slice that explicitly raises the floor MUST update
+  `specs/ratchet-floor.json::last_advanced_at` and
+  `specs/ratchet-floor.json::last_advanced_in_slice` in the same commit,
+  and the commit message must name the new floor value.
+- Floor regression (floor decreases) requires its own ADR-0003-style
+  break-glass recording; the schema rejects a negative or non-integer
+  floor outright.
+
+### Consequences
+
+**Constraining.** Close gates for dogfood now depend on a named floor,
+not on a git comparison. A regression commit is red at the next audit
+run, even if followed by docs-only commits.
+
+**Enabling.** Future metrics (schema coverage, invariant coverage,
+plane-classification coverage) can be added under `floors.*` without
+re-architecting the check.
+
+### Reopen conditions
+
+1. If three or more slices in a row advance the floor without adding
+   corresponding tests, suggests the floor is being used as a counter
+   rather than a capability signal.
+2. If the floor file becomes a merge-conflict hotspot, suggests the
+   granularity is wrong (too many small updates; consider a single
+   per-slice floor advance).
+
+### References
+
+- `specs/plans/phase-1-close-revised.md` §Slice 26b.
+- `scripts/audit.mjs::checkPinnedRatchetFloor`.
+- `specs/ratchet-floor.json`.
+- `tests/contracts/status-epoch-ratchet-floor.test.ts`.
+
 ## References
 
 - `CLAUDE.md` — "Reference implementation: previous-generation Circuit at
