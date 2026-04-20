@@ -396,3 +396,136 @@ the challenger framing, or the migration posture of any existing artifact.
 It only extends what counts as a reopen event. A full reclassification of
 continuity, adapter, or any other artifact is out of scope; that requires
 a superseding ADR.
+
+## Addendum B — Persisted-shape binding integrity (Slice 26a, 2026-04-20)
+
+### Context
+
+A rotating arc-progress adversarial pass (`specs/reviews/arc-progress-codex.md`,
+HIGH #1) surfaced a new correlated-miss class that neither the forward-only
+gate nor Addendum A's unbound-surface trigger catches:
+
+> `specs/artifacts.json:run.projection` was correctly classified
+> (`surface_class: greenfield`), reciprocated by `specs/contracts/run.md`,
+> bound to `src/schemas/run.ts` as its schema file, and claimed
+> `RunProjection` in `schema_exports`. It also declared
+> `backing_paths: ["<circuit-next-run-root>/state.json (derived snapshot)"]`.
+> Every authority-graph dimension the gate checks was satisfied. Yet the
+> binding was structurally wrong: `RunProjection = z.object({ log, snapshot })`
+> is an in-memory aggregate; the bytes actually written to `state.json` carry
+> only the `Snapshot` leaf, not the aggregate. `src/schemas/snapshot.ts` was
+> allowlisted as a `shared-primitive` with the reason "snapshot shape
+> embedded in run.projection" — which encoded the incorrect binding into the
+> audit allowlist itself.
+
+This is distinct from Addendum A's failure mode. Addendum A catches the
+case where a schema export, file, backing path, writer, or reader has **no**
+artifact attached. Addendum B catches the case where the artifact **exists
+and is green** but names the wrong persisted shape because the claimed
+`schema_exports` entry is a wrapper aggregate whose leaves live in distinct
+artifacts.
+
+Both Claude and Codex missed this during the Phase 1 close review — a
+second Knight-Leveson correlated miss in the same class the ADR-0003 Decision
+warned about, one step deeper than Addendum A.
+
+### Addendum
+
+The Reopen conditions of this ADR are extended with one additional
+trigger, defined semantically and enforced by a named allowlist.
+
+**Definition.** A **multi-leaf persisted-shape wrapper aggregate** is a
+schema export that (a) has two or more fields that are themselves bound
+to distinct, non-trivial schema exports in `src/schemas/`, AND (b) whose
+fields persist as separate files governed by separate artifact rows in
+`specs/artifacts.json`. The paradigm case is
+`RunProjection = { log: RunLog, snapshot: Snapshot }`: the two fields
+persist to distinct paths (`events.ndjson`, `state.json`) governed by
+distinct artifacts (`run.log`, `run.snapshot`).
+
+Multi-field schemas whose fields are structural parts of a single
+manifest or carrier — e.g. `Workflow` (phases/steps are not independent
+artifact-bound persisted files), `LayeredConfig` (one `Config` leaf plus
+layer metadata; not a multi-leaf aggregate by this definition) — do NOT
+qualify and are out of scope.
+
+**Trigger.** When an artifact row in `specs/artifacts.json` declares a
+non-empty `backing_paths` AND its `schema_exports` list includes a schema
+export that meets the definition above, the binding is structurally
+unsound: the bytes on disk can carry at most one leaf, not the aggregate.
+The authority-graph gate reopens; the slice touching the binding MUST
+split the artifact so that each persisted path binds to the exact schema
+that describes its bytes, leaving the aggregate as an in-memory derivation
+with an empty `backing_paths`.
+
+**Enforcement model.** Slice 26a does NOT ship a structural body/AST
+detector. It ships a **named allowlist** (`WRAPPER_AGGREGATE_EXPORTS` in
+`scripts/audit.mjs`) that enumerates the wrapper aggregates known today
+(currently just `RunProjection`). The audit check flags any artifact that
+claims an allowlisted export while declaring a non-empty `backing_paths`.
+A structural detector is out of scope until a future slice demonstrates
+it is worth the fragility cost (AST parsing of Zod `const Body =
+z.object(...); export const X = Body.superRefine(...)` patterns is
+non-trivial and brittle). Until then, drift is prevented by discipline
+on the allowlist, not by traversal of schema bodies.
+
+### Enforcement
+
+Slice 26a lands the following enforcement surfaces:
+
+1. `scripts/audit.mjs` exports `WRAPPER_AGGREGATE_EXPORTS` (the
+   authoritative allowlist of known multi-leaf persisted-shape wrapper
+   aggregates, currently `{ RunProjection }`),
+   `detectWrapperAggregateBinding(artifact)` (pure per-artifact helper),
+   and `checkPersistedWrapperBinding()` (full-file audit check, wired in
+   as Check 16).
+2. `tests/contracts/artifact-authority.test.ts` asserts (a) the specific
+   split for the named miss — `run.snapshot` exists, binds `Snapshot` to
+   `state.json`, owns `src/schemas/snapshot.ts`, and `run.projection`
+   carries an empty `backing_paths`; (b) `src/schemas/snapshot.ts` is no
+   longer in `SCHEMA_FILE_ALLOWLIST`; (c) `specs/contracts/run.md` binds
+   `run.snapshot` in its `artifact_ids` frontmatter; (d) the general
+   guard accepts/rejects constructed fixtures; (e) the full-file check is
+   green on the current authority graph; and (f) a constructed red-fixture
+   artifacts.json (bad `RunProjection` + persisted path) drives the full-
+   file check to `level === 'red'`, so a regression that inerts the check
+   cannot pass silently.
+
+When a new schema that meets the definition above is introduced in
+`src/schemas/`, the slice that introduces it MUST extend
+`WRAPPER_AGGREGATE_EXPORTS` with a reason that references this addendum.
+Landing a qualifying aggregate with a persisted `backing_paths` and
+without an allowlist entry is itself a reopen event for this addendum.
+
+### `LayeredConfig` candidacy note (recorded, out-of-scope)
+
+`LayeredConfig` wraps one `Config` with layer metadata and declares a
+prose-sentinel `backing_paths` ("in-memory wrapper around config.root (no
+standalone on-disk form)"). A literal reading of the Addendum B trigger
+could be tempted to flag this row, but `LayeredConfig` does NOT meet the
+multi-leaf definition above: its only artifact-bound leaf is `Config`
+(itself the `config.root` artifact's schema); `layer` and `source_path`
+are metadata fields, not independent persisted artifacts. Slice 26a does
+not add `LayeredConfig` to `WRAPPER_AGGREGATE_EXPORTS`. If a future slice
+normalizes the prose-sentinel `backing_paths` to an empty array (aligned
+with the Slice 26a treatment of `run.projection`), the question can be
+revisited then. Recorded here so the absence is an explicit decision, not
+an oversight.
+
+### Relationship to the Slice 27c runtime-boundary slice
+
+Addendum B is the structural rule at the authority-graph layer. Slice 27c
+(Runtime Boundary Before Dogfood, per
+`specs/plans/phase-1-close-revised.md`) lands the complementary runtime
+enforcement: the reducer-derived snapshot writer, the byte-match manifest
+gate, and the acceptance that `state.json` parses as `Snapshot`, not
+`RunProjection`. Together they close the class: Addendum B prevents the
+authority graph from lying about where the bytes live; Slice 27c prevents
+the runtime from writing bytes that disagree with the authority graph.
+
+### Scope not widened
+
+Addendum B does not change the five surface classes, the gate semantics,
+the challenger framing, or the migration posture of any existing artifact.
+It only extends what counts as a reopen event. Full reclassification of
+any other artifact is out of scope and requires a superseding ADR.

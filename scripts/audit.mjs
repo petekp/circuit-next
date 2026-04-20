@@ -215,11 +215,6 @@ export const SCHEMA_FILE_ALLOWLIST = {
       'Gate',
     ],
   },
-  'src/schemas/snapshot.ts': {
-    category: 'shared-primitive',
-    reason: 'snapshot shape embedded in run.projection; run contract governs it',
-    known_exports: ['Snapshot', 'SnapshotStatus', 'StepState', 'StepStatus'],
-  },
   'src/schemas/event.ts': {
     category: 'pending-artifact',
     reason:
@@ -1504,6 +1499,102 @@ function checkAuthorityGraph() {
   };
 }
 
+/**
+ * Slice 26a — multi-leaf persisted-shape wrapper-aggregate binding guard
+ * (ADR-0003 Addendum B).
+ *
+ * Structural defense against the HIGH #1 failure mode in
+ * `specs/reviews/arc-progress-codex.md`: an artifact row can name the right
+ * `surface_class`, classify its `schema_file`, claim `schema_exports`,
+ * reciprocate with a `contract`, AND bind to a persisted backing path — and
+ * still be structurally wrong because the claimed export is an in-memory
+ * aggregate of shapes that persist as SEPARATE files under OTHER artifacts.
+ * The bytes on disk at the backing path carry ONE leaf, not the aggregate.
+ *
+ * Enforcement model per Addendum B: this is a **named allowlist**, not an
+ * AST/body detector. A multi-leaf persisted-shape wrapper aggregate is a
+ * schema export whose fields are themselves artifact-bound schema exports
+ * persisting as separate files. Multi-field schemas whose fields are
+ * structural parts of one manifest/carrier (e.g. Workflow, LayeredConfig)
+ * do not qualify and are out of scope.
+ *
+ * Any artifact that claims one of the allowlisted exports MUST have an
+ * empty `backing_paths` list. When a new schema meeting the definition is
+ * introduced in `src/schemas/`, the introducing slice MUST extend this
+ * allowlist with a reason that references Addendum B.
+ */
+export const WRAPPER_AGGREGATE_EXPORTS = {
+  RunProjection: {
+    reason:
+      'in-memory {log, snapshot} aggregate — log persists at run.log (events.ndjson), snapshot persists at run.snapshot (state.json); state.json never carries the aggregate shape',
+    added_in_slice: '26a',
+    adr_addendum: 'ADR-0003 Addendum B',
+  },
+};
+
+/**
+ * Pure, test-exported helper. Given one artifact row, return a violation
+ * descriptor if any of its `schema_exports` is in `WRAPPER_AGGREGATE_EXPORTS`
+ * while `backing_paths` is non-empty. Returns `null` otherwise. Kept
+ * separate from the full-file check so tests can exercise constructed
+ * fixtures without touching the filesystem.
+ */
+export function detectWrapperAggregateBinding(artifact) {
+  if (!artifact || typeof artifact !== 'object') return null;
+  const exportsClaimed = Array.isArray(artifact.schema_exports) ? artifact.schema_exports : [];
+  const backingPaths = Array.isArray(artifact.backing_paths) ? artifact.backing_paths : [];
+  if (backingPaths.length === 0) return null;
+  for (const name of exportsClaimed) {
+    if (Object.hasOwn(WRAPPER_AGGREGATE_EXPORTS, name)) {
+      return {
+        wrapper_export: name,
+        reason: WRAPPER_AGGREGATE_EXPORTS[name].reason,
+        backing_paths: [...backingPaths],
+      };
+    }
+  }
+  return null;
+}
+
+export function checkPersistedWrapperBinding(rootDir = REPO_ROOT) {
+  const artifactsPath = join(rootDir, 'specs/artifacts.json');
+  if (!existsSync(artifactsPath)) {
+    return { level: 'yellow', detail: 'specs/artifacts.json missing' };
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync(artifactsPath, 'utf-8'));
+  } catch (err) {
+    return { level: 'red', detail: `specs/artifacts.json parse error: ${err.message}` };
+  }
+  const artifacts = Array.isArray(parsed?.artifacts) ? parsed.artifacts : [];
+  const violations = [];
+  for (const artifact of artifacts) {
+    const hit = detectWrapperAggregateBinding(artifact);
+    if (hit) {
+      violations.push(
+        `${artifact.id}: claims wrapper-aggregate export "${hit.wrapper_export}" yet binds persisted path(s) ${JSON.stringify(
+          hit.backing_paths,
+        )} — ${hit.reason}`,
+      );
+    }
+  }
+  const allowlistNames = Object.keys(WRAPPER_AGGREGATE_EXPORTS);
+  const allowlistSummary = allowlistNames.length > 0 ? allowlistNames.join(', ') : 'empty';
+  if (violations.length === 0) {
+    return {
+      level: 'green',
+      detail: `${artifacts.length} artifacts scanned; no wrapper-aggregate export bound to a persisted backing_path (allowlist: ${allowlistSummary})`,
+    };
+  }
+  return {
+    level: 'red',
+    detail: `persisted-wrapper-binding violations (ADR-0003 Addendum B):\n${violations
+      .map((v) => `    - ${v}`)
+      .join('\n')}`,
+  };
+}
+
 const PHASE_PATTERNS = [
   /\*\*Phase[:*]+\*\*\s*([0-9]+(?:\.[0-9]+)?)/i,
   /\*\*Phase\s+([0-9]+(?:\.[0-9]+)?)/i,
@@ -1842,6 +1933,15 @@ function main() {
     level: yieldLedger.level,
     check: 'Adversarial yield ledger',
     detail: yieldLedger.detail,
+  });
+
+  // Check 16: Persisted-wrapper binding (Slice 26a — ADR-0003 Addendum B).
+  const wrapperBinding = checkPersistedWrapperBinding();
+  counters[wrapperBinding.level]++;
+  findings.push({
+    level: wrapperBinding.level,
+    check: 'Persisted-wrapper binding (ADR-0003 Addendum B)',
+    detail: wrapperBinding.detail,
   });
 
   // Check 15: npm run verify currently green.

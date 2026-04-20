@@ -96,3 +96,19 @@ export function parseTierClaims(tierPath: string): {
 };
 export function checkTierOrphanClaims(rootDir?: string): AuditCheckResult;
 export function checkAdversarialYieldLedger(rootDir?: string): AuditCheckResult;
+
+// Slice 26a — ADR-0003 Addendum B persisted-wrapper binding guard.
+export type WrapperAggregateEntry = {
+  reason: string;
+  added_in_slice: string;
+  adr_addendum: string;
+};
+export const WRAPPER_AGGREGATE_EXPORTS: Record<string, WrapperAggregateEntry>;
+
+export type WrapperBindingViolation = {
+  wrapper_export: string;
+  reason: string;
+  backing_paths: string[];
+};
+export function detectWrapperAggregateBinding(artifact: unknown): WrapperBindingViolation | null;
+export function checkPersistedWrapperBinding(rootDir?: string): AuditCheckResult;

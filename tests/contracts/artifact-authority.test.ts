@@ -1064,3 +1064,179 @@ describe('COMPILE_TIME_GUARD_PATTERN — constructed-violation guard (Codex MED 
     expect(COMPILE_TIME_GUARD_PATTERN.test('_compileTimefooParity')).toBe(false);
   });
 });
+
+// Slice 26a — persisted-wrapper binding guard (ADR-0003 Addendum B).
+//
+// The arc-progress Codex pass (specs/reviews/arc-progress-codex.md HIGH #1)
+// surfaced a new correlated-miss class: an artifact row claiming a
+// wrapper-aggregate schema export (e.g. RunProjection = { log, snapshot })
+// while binding a persisted path whose actual on-disk bytes carry only one
+// leaf (Snapshot at state.json). The forward-only authority-graph gate
+// stayed green because every dimension it checked was satisfied. This slice
+// splits the artifact (run.projection stays in-memory, new run.snapshot
+// owns state.json) and installs a structural guard against recurrence.
+describe('run.snapshot + run.projection split (Slice 26a — ADR-0003 Addendum B)', () => {
+  const file = loadArtifacts();
+  const byId = new Map(file.artifacts.map((a) => [a.id, a]));
+
+  it('run.snapshot artifact exists and binds Snapshot to state.json', () => {
+    const snap = byId.get('run.snapshot');
+    expect(snap, 'run.snapshot row missing from specs/artifacts.json').toBeDefined();
+    expect(snap?.schema_file).toBe('src/schemas/snapshot.ts');
+    expect(snap?.schema_exports).toEqual(['Snapshot', 'SnapshotStatus', 'StepState', 'StepStatus']);
+    expect(snap?.backing_paths).toEqual(['<circuit-next-run-root>/state.json']);
+    expect(snap?.contract).toBe('specs/contracts/run.md');
+    expect(snap?.plane).toBe('data-plane');
+    expect(snap?.surface_class).toBe('greenfield');
+  });
+
+  it('run.projection is reframed as in-memory wrapper with no backing path', () => {
+    const proj = byId.get('run.projection');
+    expect(proj).toBeDefined();
+    expect(proj?.schema_file).toBe('src/schemas/run.ts');
+    expect(proj?.schema_exports).toEqual(['RunProjection']);
+    expect(
+      proj?.backing_paths,
+      'run.projection MUST NOT bind any persisted path; state.json now belongs to run.snapshot',
+    ).toEqual([]);
+  });
+
+  it('src/schemas/snapshot.ts is no longer in SCHEMA_FILE_ALLOWLIST', () => {
+    expect(
+      Object.hasOwn(SCHEMA_FILE_ALLOWLIST, 'src/schemas/snapshot.ts'),
+      'snapshot.ts was promoted to first-class artifact binding in Slice 26a — the shared-primitive allowlist entry must be removed',
+    ).toBe(false);
+  });
+
+  it('run.md frontmatter includes run.snapshot in artifact_ids', () => {
+    const contractPath = join(REPO_ROOT, 'specs/contracts/run.md');
+    const fm = readFrontmatter(contractPath);
+    expect(fm.ok, fm.ok ? '' : fm.error).toBe(true);
+    const ids = (fm.ok ? (fm.frontmatter.artifact_ids as string[] | undefined) : undefined) ?? [];
+    expect(ids).toContain('run.snapshot');
+    expect(ids).toContain('run.projection');
+    expect(ids).toContain('run.log');
+  });
+});
+
+describe('detectWrapperAggregateBinding — constructed-violation guard (Slice 26a)', () => {
+  it('flags an artifact that binds a wrapper-aggregate export to a persisted path', async () => {
+    const { detectWrapperAggregateBinding } = await import('../../scripts/audit.mjs');
+    const result = detectWrapperAggregateBinding({
+      id: 'bad.fixture',
+      schema_exports: ['RunProjection'],
+      backing_paths: ['<circuit-next-run-root>/state.json'],
+    });
+    expect(result).not.toBeNull();
+    if (result === null) return;
+    expect(result.wrapper_export).toBe('RunProjection');
+    expect(result.backing_paths).toEqual(['<circuit-next-run-root>/state.json']);
+  });
+
+  it('accepts an artifact that claims the aggregate but persists nothing', async () => {
+    const { detectWrapperAggregateBinding } = await import('../../scripts/audit.mjs');
+    const result = detectWrapperAggregateBinding({
+      id: 'ok.fixture',
+      schema_exports: ['RunProjection'],
+      backing_paths: [],
+    });
+    expect(result).toBeNull();
+  });
+
+  it('accepts an artifact whose exports include no known wrapper aggregate', async () => {
+    const { detectWrapperAggregateBinding } = await import('../../scripts/audit.mjs');
+    const result = detectWrapperAggregateBinding({
+      id: 'leaf.fixture',
+      schema_exports: ['Snapshot', 'SnapshotStatus'],
+      backing_paths: ['<circuit-next-run-root>/state.json'],
+    });
+    expect(result).toBeNull();
+  });
+
+  it('flags a fixture even when the aggregate is not the first claimed export', async () => {
+    const { detectWrapperAggregateBinding } = await import('../../scripts/audit.mjs');
+    const result = detectWrapperAggregateBinding({
+      id: 'mixed.fixture',
+      schema_exports: ['SomeLeaf', 'RunProjection', 'AnotherLeaf'],
+      backing_paths: ['/some/persisted/path'],
+    });
+    expect(result).not.toBeNull();
+    if (result === null) return;
+    expect(result.wrapper_export).toBe('RunProjection');
+  });
+
+  it('returns null for malformed input rather than throwing', async () => {
+    const { detectWrapperAggregateBinding } = await import('../../scripts/audit.mjs');
+    expect(detectWrapperAggregateBinding(null)).toBeNull();
+    expect(detectWrapperAggregateBinding(undefined)).toBeNull();
+    expect(detectWrapperAggregateBinding({})).toBeNull();
+    expect(detectWrapperAggregateBinding({ schema_exports: null, backing_paths: null })).toBeNull();
+  });
+
+  it('allowlist currently enumerates exactly {RunProjection}', async () => {
+    const { WRAPPER_AGGREGATE_EXPORTS } = await import('../../scripts/audit.mjs');
+    expect(Object.keys(WRAPPER_AGGREGATE_EXPORTS).sort()).toEqual(['RunProjection']);
+    const entry = WRAPPER_AGGREGATE_EXPORTS.RunProjection;
+    expect(entry).toBeDefined();
+    expect(entry?.added_in_slice).toBe('26a');
+    expect(entry?.adr_addendum).toBe('ADR-0003 Addendum B');
+  });
+});
+
+describe('checkPersistedWrapperBinding — live check on specs/artifacts.json (Slice 26a)', () => {
+  it('is green on the current authority graph', async () => {
+    const { checkPersistedWrapperBinding } = await import('../../scripts/audit.mjs');
+    const result = checkPersistedWrapperBinding();
+    expect(result.level, result.detail).toBe('green');
+  });
+
+  // Slice 26a Codex MED 4 fold-in: a green-only live test cannot catch a
+  // regression that inerts the check (stops loading artifacts.json, stops
+  // iterating, always returns green). A red-fixture test drives the check
+  // against a constructed artifacts.json carrying a known violation and
+  // asserts it fires.
+  it('returns level=red on a fixture artifacts.json that reintroduces the binding', async () => {
+    const { checkPersistedWrapperBinding } = await import('../../scripts/audit.mjs');
+    const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const tempRoot = mkdtempSync(join(tmpdir(), 'slice-26a-redfixture-'));
+    try {
+      mkdirSync(join(tempRoot, 'specs'), { recursive: true });
+      const badGraph = {
+        version: 2,
+        artifacts: [
+          {
+            id: 'run.projection',
+            surface_class: 'greenfield',
+            compatibility_policy: 'n/a',
+            plane: 'data-plane',
+            description: 'fixture row that re-introduces the HIGH #1 binding',
+            contract: 'specs/contracts/run.md',
+            schema_file: 'src/schemas/run.ts',
+            schema_exports: ['RunProjection'],
+            writers: [],
+            readers: [],
+            resolvers: [],
+            backing_paths: ['<circuit-next-run-root>/state.json'],
+            identity_fields: ['run_id'],
+            path_derived_fields: [],
+            dangerous_sinks: [],
+            trust_boundary: 'fixture',
+            reference_surfaces: [],
+            reference_evidence: [],
+            migration_policy: 'n/a',
+            legacy_parse_policy: 'n/a',
+            dangling_reference_policy: 'n/a',
+          },
+        ],
+      };
+      writeFileSync(join(tempRoot, 'specs', 'artifacts.json'), JSON.stringify(badGraph, null, 2));
+      const result = checkPersistedWrapperBinding(tempRoot);
+      expect(result.level).toBe('red');
+      expect(result.detail).toContain('run.projection');
+      expect(result.detail).toContain('RunProjection');
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+});

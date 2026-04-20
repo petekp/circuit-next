@@ -10,6 +10,7 @@ codex_adversarial_review: specs/reviews/run-md-v0.1-codex.md
 artifact_ids:
   - run.log
   - run.projection
+  - run.snapshot
 invariant_ids: [RUN-I1, RUN-I2, RUN-I3, RUN-I4, RUN-I5, RUN-I6, RUN-I7, RUN-I8]
 property_ids: [run.prop.artifact_written_before_gate, run.prop.attempt_monotonicity_per_step, run.prop.boundary_own_property_defense, run.prop.checkpoint_event_pairing, run.prop.close_outcome_semantic_adequacy, run.prop.deterministic_replay, run.prop.dispatch_event_pairing, run.prop.projection_is_a_function, run.prop.recorded_at_sanity, run.prop.step_event_causal_ordering]
 ---
@@ -184,7 +185,7 @@ After a `RunProjection` is accepted:
 
 - The Snapshot's bootstrap-frozen fields agree with the log's bootstrap
   event (RUN-I6).
-- `Snapshot.events_consumed ≤ log.length` (RUN-I7).
+- `Snapshot.events_consumed === log.length` (RUN-I7).
 - `Snapshot.status` is consistent with the log's closure state under the
   fixed outcome-to-status mapping (RUN-I7).
 

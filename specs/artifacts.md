@@ -107,11 +107,16 @@ Values:
 
 ### Plane coverage (v2)
 
+Authoritative source is `specs/artifacts.json`; this section is a
+human-readable roll-up that MUST track the JSON. Current graph: **17
+artifacts**, all surface_class + plane classified.
+
 - **control-plane** (4): `workflow.definition`, `step.definition`,
   `phase.definition`, `skill.descriptor`.
-- **data-plane** (9): `run.log`, `run.projection`,
+- **data-plane** (13): `run.log`, `run.projection`, `run.snapshot`,
   `selection.override`, `selection.resolution`, `adapter.registry`,
-  `adapter.reference`, `adapter.resolved`, `continuity.record`,
+  `adapter.reference`, `adapter.resolved`, `config.root`,
+  `config.layered`, `config.circuit-override`, `continuity.record`,
   `continuity.index`.
 
 ADR-0005 classified `selection.override`, `adapter.registry`, and
@@ -239,9 +244,18 @@ The row is terse, but it's enough for the audit to enforce:
 - that a path-safe primitive is used for `record_id` (once the contract is
   drafted, the contract frontmatter cites the primitive).
 
-## The 12 initial artifacts
+## Historical — the 12 initial artifacts (Slice 7 backfill)
 
-Slice 7 backfills these 12 ids:
+> **Historical Slice 7 context only.** The live graph is
+> `specs/artifacts.json` (17 artifacts as of Slice 26a). The table below
+> records the state at the Slice 7 close and is preserved for ADR-0003
+> lineage. Later slices have added `config.root`, `config.layered`,
+> `config.circuit-override` (Slice 26), `skill.descriptor` (earlier), and
+> `run.snapshot` (Slice 26a). For current coverage see the plane-coverage
+> section above; for the authoritative row-level detail see
+> `specs/artifacts.json`.
+
+Slice 7 backfilled these 12 ids:
 
 | id | class | contract |
 |---|---|---|
