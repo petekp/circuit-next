@@ -270,8 +270,8 @@ date: 2026-04-20
 `;
 
 function yieldLedgerWithRows(rows: string): string {
-  return `${YIELD_LEDGER_HEADER}| pass_date | artifact_path | artifact_class | pass_number_for_artifact | reviewer_id | mode | HIGH_count | MED_count | LOW_count | verdict | operator_justification_if_past_cap |
-|---|---|---|---:|---|---|---:|---:|---:|---|---|
+  return `${YIELD_LEDGER_HEADER}| pass_date | artifact_path | artifact_class | pass_number_for_artifact | reviewer_id | mode | HIGH_count | MED_count | LOW_count | verdict | operator_justification_if_past_cap | rigor_profile | why_continue_failure_class | prior_execution_commit_sha |
+|---|---|---|---:|---|---|---:|---:|---:|---|---|---|---|---|
 ${rows}`;
 }
 
@@ -292,7 +292,7 @@ describe('adversarial yield ledger audit', () => {
 
   it('reds when pass_number exceeds governance cap with placeholder justification', () => {
     withTempRepo((root) => {
-      const rows = `| 2026-04-20 | \`artifact.md\` | governance | 99 | gpt-5-codex | llm-review | 0 | 0 | 0 | ACCEPT | n/a |
+      const rows = `| 2026-04-20 | \`artifact.md\` | governance | 99 | gpt-5-codex | llm-review | 0 | 0 | 0 | ACCEPT | n/a | pre-dog-1-grandfather | n/a | n/a |
 `;
       writeRel(root, 'specs/reviews/adversarial-yield-ledger.md', yieldLedgerWithRows(rows));
       const result = checkAdversarialYieldLedger(root);
@@ -303,7 +303,7 @@ describe('adversarial yield ledger audit', () => {
 
   it('reds when pass_number exceeds cap with too-short justification', () => {
     withTempRepo((root) => {
-      const rows = `| 2026-04-20 | \`artifact.md\` | reversible | 3 | gpt-5-codex | llm-review | 0 | 0 | 0 | ACCEPT | short reason |
+      const rows = `| 2026-04-20 | \`artifact.md\` | reversible | 3 | gpt-5-codex | llm-review | 0 | 0 | 0 | ACCEPT | short reason | pre-dog-1-grandfather | n/a | n/a |
 `;
       writeRel(root, 'specs/reviews/adversarial-yield-ledger.md', yieldLedgerWithRows(rows));
       const result = checkAdversarialYieldLedger(root);
@@ -314,7 +314,7 @@ describe('adversarial yield ledger audit', () => {
 
   it('passes when pass_number exceeds cap with substantive justification', () => {
     withTempRepo((root) => {
-      const rows = `| 2026-04-20 | \`artifact.md\` | governance | 4 | gpt-5-codex | llm-review | 0 | 0 | 0 | ACCEPT | hunting a specific residual defect class: callback-shape drift in the runtime boundary reducer, not covered by prior passes |
+      const rows = `| 2026-04-20 | \`artifact.md\` | governance | 4 | gpt-5-codex | llm-review | 0 | 0 | 0 | ACCEPT | hunting a specific residual defect class: callback-shape drift in the runtime boundary reducer, not covered by prior passes | pre-dog-1-grandfather | n/a | n/a |
 `;
       writeRel(root, 'specs/reviews/adversarial-yield-ledger.md', yieldLedgerWithRows(rows));
       const result = checkAdversarialYieldLedger(root);
@@ -324,9 +324,9 @@ describe('adversarial yield ledger audit', () => {
 
   it('reds on three consecutive same-mode passes (mode-cycle violation)', () => {
     withTempRepo((root) => {
-      const rows = `| 2026-04-20 | \`artifact.md\` | irreversible | 1 | gpt-5-codex | llm-review | 0 | 0 | 0 | ACCEPT | n/a |
-| 2026-04-20 | \`artifact.md\` | irreversible | 2 | gpt-5-codex | llm-review | 0 | 0 | 0 | ACCEPT | n/a |
-| 2026-04-20 | \`artifact.md\` | irreversible | 3 | gpt-5-codex | llm-review | 0 | 0 | 0 | ACCEPT | n/a |
+      const rows = `| 2026-04-20 | \`artifact.md\` | irreversible | 1 | gpt-5-codex | llm-review | 0 | 0 | 0 | ACCEPT | n/a | pre-dog-1-grandfather | n/a | n/a |
+| 2026-04-20 | \`artifact.md\` | irreversible | 2 | gpt-5-codex | llm-review | 0 | 0 | 0 | ACCEPT | n/a | pre-dog-1-grandfather | n/a | n/a |
+| 2026-04-20 | \`artifact.md\` | irreversible | 3 | gpt-5-codex | llm-review | 0 | 0 | 0 | ACCEPT | n/a | pre-dog-1-grandfather | n/a | n/a |
 `;
       writeRel(root, 'specs/reviews/adversarial-yield-ledger.md', yieldLedgerWithRows(rows));
       const result = checkAdversarialYieldLedger(root);
@@ -337,9 +337,9 @@ describe('adversarial yield ledger audit', () => {
 
   it('passes three passes when mode alternates', () => {
     withTempRepo((root) => {
-      const rows = `| 2026-04-20 | \`artifact.md\` | irreversible | 1 | gpt-5-codex | llm-review | 0 | 0 | 0 | ACCEPT | n/a |
-| 2026-04-20 | \`artifact.md\` | irreversible | 2 | human | human-cold-read | 0 | 0 | 0 | ACCEPT | n/a |
-| 2026-04-20 | \`artifact.md\` | irreversible | 3 | gpt-5-codex | llm-review | 0 | 0 | 0 | ACCEPT | n/a |
+      const rows = `| 2026-04-20 | \`artifact.md\` | irreversible | 1 | gpt-5-codex | llm-review | 0 | 0 | 0 | ACCEPT | n/a | pre-dog-1-grandfather | n/a | n/a |
+| 2026-04-20 | \`artifact.md\` | irreversible | 2 | human | human-cold-read | 0 | 0 | 0 | ACCEPT | n/a | pre-dog-1-grandfather | n/a | n/a |
+| 2026-04-20 | \`artifact.md\` | irreversible | 3 | gpt-5-codex | llm-review | 0 | 0 | 0 | ACCEPT | n/a | pre-dog-1-grandfather | n/a | n/a |
 `;
       writeRel(root, 'specs/reviews/adversarial-yield-ledger.md', yieldLedgerWithRows(rows));
       const result = checkAdversarialYieldLedger(root);
@@ -349,7 +349,7 @@ describe('adversarial yield ledger audit', () => {
 
   it('reds when artifact_class is invalid', () => {
     withTempRepo((root) => {
-      const rows = `| 2026-04-20 | \`artifact.md\` | banana | 1 | gpt-5-codex | llm-review | 0 | 0 | 0 | ACCEPT | n/a |
+      const rows = `| 2026-04-20 | \`artifact.md\` | banana | 1 | gpt-5-codex | llm-review | 0 | 0 | 0 | ACCEPT | n/a | pre-dog-1-grandfather | n/a | n/a |
 `;
       writeRel(root, 'specs/reviews/adversarial-yield-ledger.md', yieldLedgerWithRows(rows));
       const result = checkAdversarialYieldLedger(root);

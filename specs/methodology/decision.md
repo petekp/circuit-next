@@ -247,6 +247,95 @@ explicitly in the yield-ledger row for that pass.
 The pass-cap values 2/3/4 are opinionated priors, not empirically tuned. Tune
 them after 10-20 reviewed artifacts using the yield ledger.
 
+### D10 Extension — Rigor-Profile Budget Binding (2026-04-20, Slice 28 / plan §Slice DOG+1)
+
+Installed by Slice 28 (plan §Slice DOG+1) per
+`specs/plans/phase-1-close-revised.md` §Slice DOG+1 and ADR-0001 Addendum B
+§Phase 1.5 Close Criteria #10 and §D10 Adversarial Review Discipline. The
+plan names the slice "DOG+1"; the canonical numeric slice-id marker at
+the status-epoch layer is `28` (SLICE_ID_PATTERN constrained to
+`^[0-9]+[a-z]?$`). This extension operationalizes D10 by binding the
+adversarial-pass budget to a slice's declared rigor profile and adds a
+"Why continue?" checkpoint between passes.
+
+**Rigor → adversarial-pass budget (hard cap).** Each adversarial pass recorded
+in `specs/reviews/adversarial-yield-ledger.md` carries a `rigor_profile`
+column drawn from the circuit-next rigor set. Budget is the maximum
+`pass_number_for_artifact` allowed under that rigor:
+
+| Rigor profile | Adversarial budget | Notes |
+|---|---:|---|
+| `lite` | 0 | No adversarial pass. A lite slice that logs a pass is red by audit. |
+| `standard` | 1 | One LLM-review pass max. |
+| `deep` | 2 | Up to two passes. Pass 2 requires execution between passes (below). |
+| `tournament` | 3 | Up to three passes. Pass 3 requires a non-LLM mode in a prior row on the same artifact (below). |
+| `autonomous` | inherits | Budget equals the parent workflow's rigor budget. Rows carry the parent's resolved profile, not literal `autonomous`, when evaluated by audit. |
+
+The rigor-profile budget and the artifact-class cap (2/3/4) from §D10 clause 1
+are **both** enforced; the effective cap is the minimum of the two. Exceeding
+either requires the same operator-justification form as §D10 clause 1.
+
+**Non-LLM mode required before pass 3 (Tournament).** A pass with
+`rigor_profile: tournament` and `pass_number_for_artifact: 3` is rejected
+unless at least one prior row for the same `artifact_path` has a `mode` that
+does not begin with `llm-`. This prevents a Tournament slice from running
+three consecutive LLM passes and calling that coverage. The non-LLM mode
+values are the same structurally-different modes named in §D10 clause 2:
+`runtime`, `human`, `fuzzer`, `property-test`, `non-llm-review`, or any
+other mode whose value does not begin with `llm-`.
+
+**Review-execution alternation (Deep and Tournament).** For passes with
+`rigor_profile` in `{deep, tournament}` and `pass_number_for_artifact >= 2`,
+the row must populate `prior_execution_commit_sha` with a git SHA that
+resolves to a commit landing between the prior pass and this one that
+touches at least one path outside `specs/reviews/` (i.e., real execution,
+not more review-authorship). Audit verifies the SHA resolves, the commit is
+an ancestor of the current HEAD, and at least one file in its diff is
+outside `specs/reviews/`. Standard and Lite rigor pass 1 use `n/a`.
+
+**"Why continue?" checkpoint.** For any pass with
+`pass_number_for_artifact >= 2`, the row must populate
+`why_continue_failure_class` with a substantive specific-failure-class
+string — ≥ 30 characters, not a placeholder (`tbd`, `more review`, `n/a`,
+`see body`, `various`, `general`). Vague text is red by audit. The intent
+is the plan's "next-pass hunter names the specific failure class" rule; if
+the operator cannot name it, the correct move is to transition to execution
+mode, not to schedule another pass.
+
+**Autonomous inheritance.** An autonomous slice's rigor is resolved at
+dispatch time to its parent workflow's rigor. Ledger rows written by an
+autonomous adversarial pass carry the resolved value (`standard`, `deep`,
+or `tournament`), not the literal `autonomous`, so audit evaluates a
+concrete budget. A row literally carrying `autonomous` is treated by audit
+as unbound (budget-skipped, but artifact-class cap still applies) and
+flagged yellow — the operator is asked to write the resolved profile for
+future-readability.
+
+**Ledger schema (operationalized).** The three columns added by this
+extension are `rigor_profile`, `why_continue_failure_class`, and
+`prior_execution_commit_sha`. Their audit semantics are above. Pre-DOG+1
+ledger rows are retroactively annotated to the closest-matching rigor
+profile for their originating slice; a `migrated` value is not used —
+rows carry real profile values so the audit exercises the same code path.
+
+**Pre-DOG+1 grandfather value.** Ledger rows landed before DOG+1 was
+installed are annotated with `rigor_profile: pre-dog-1-grandfather`.
+`why_continue_failure_class` and `prior_execution_commit_sha` are set to
+`n/a` for these rows. Audit skips the four extension rules for
+grandfather rows but continues to enforce the §D10 clause-1 artifact-class
+cap (2/3/4), clause-3 mode-cycle (K=2), and clause-1 placeholder-reject on
+`operator_justification_if_past_cap`. The grandfather value is a
+Migration-Escrow marker — its hard expiry is Phase 2 close. New rows
+written after DOG+1 lands must use one of the five concrete rigor values;
+audit rejects any new row whose `pass_date` is later than the DOG+1
+install commit date and whose `rigor_profile` is `pre-dog-1-grandfather`.
+
+**Machine enforcement.** `scripts/audit.mjs` Check 14
+(`checkAdversarialYieldLedger`) extends to parse the three new columns and
+enforce the four rules above (plus the grandfather expiry). A breaking
+change to the ledger schema requires the same coordinated update — ADR +
+audit check + contract test — as any other ratchet floor change.
+
 ## Methodology Amendments (2026-04-20, Slice 25d)
 
 This section **mirrors** `specs/adrs/ADR-0001-methodology-adoption.md`

@@ -1,13 +1,19 @@
-<!-- current_slice: 27d -->
+<!-- current_slice: 28 -->
 
 # circuit-next
 
 **Status: Tier 0 scaffold complete; Phase 1 contract authorship closed at
 Slice 27 (`workflow.md` v0.2); Phase 1.5 Alpha Proof open per ADR-0001
-Addendum B §Phase 1 Close Inventory. Not yet functional — Phase 1.5
-slices 27a (discovery spike mining) → 27b (product-surface inventory
-baseline) → 27c (runtime boundary) → 27d (dogfood-run-0 alpha proof)
-remain before Phase 2 entry.**
+Addendum B §Phase 1 Close Inventory. 27a (discovery spike mining) → 27b
+(product-surface inventory baseline) → 27c (runtime boundary) → 27d
+(dogfood-run-0 alpha proof) landed. Slice 28 (plan names it "DOG+1") operationalizes the `circuit:review`
+D10 adversarial budgets in `scripts/audit.mjs` +
+`specs/reviews/adversarial-yield-ledger.md`.
+Phase 1.5 close ceremony is next: broader adversarial pass with non-LLM
+evidence per ADR-0001 Addendum B §Phase 1.5 Close Criterion #13 and
+`specs/reviews/phase-1-close-reform-human.md` `opened_scope` /
+`skipped_scope` / "I could not understand X" field completion before the
+ceremony commit.**
 
 Claude Code plugin that automates common developer and creative workflows
 through a configurable, evidence-based methodology.

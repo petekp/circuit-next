@@ -892,6 +892,60 @@ const ARTIFACT_CLASS_CAPS = {
 const PLACEHOLDER_JUSTIFICATION_PATTERN = /^(n\/a|none|see body|tbd|\.|justified|-|–|—)\s*$/i;
 const MIN_PAST_CAP_JUSTIFICATION_CHARS = 30;
 
+// Slice DOG+1 — D10 extension (rigor-profile binding).
+const RIGOR_PROFILE_BUDGETS = {
+  lite: 0,
+  standard: 1,
+  deep: 2,
+  tournament: 3,
+};
+const GRANDFATHER_RIGOR = 'pre-dog-1-grandfather';
+const GRANDFATHER_CUTOFF_DATE = '2026-04-20';
+const AUTONOMOUS_RIGOR = 'autonomous';
+const MIN_WHY_CONTINUE_CHARS = 30;
+const PLACEHOLDER_WHY_CONTINUE_PATTERN =
+  /^(n\/a|none|tbd|\.|more review|various|general|see body|-|–|—)\s*$/i;
+const NA_VALUES = new Set(['n/a', 'na', '-', '–', '—', '']);
+const VALID_RIGOR_VALUES = new Set([
+  ...Object.keys(RIGOR_PROFILE_BUDGETS),
+  AUTONOMOUS_RIGOR,
+  GRANDFATHER_RIGOR,
+]);
+
+function isNa(value) {
+  return NA_VALUES.has(value.trim().toLowerCase());
+}
+
+function commitExistsAndTouchesNonReviewPath(sha, rootDir) {
+  try {
+    const trimmed = sha.trim();
+    if (!/^[0-9a-f]{7,40}$/i.test(trimmed)) return { ok: false, reason: 'not a git SHA' };
+    // Verify SHA resolves.
+    execSync(`git -C "${rootDir}" cat-file -e ${trimmed}^{commit}`, { stdio: 'ignore' });
+    // Verify it's an ancestor of HEAD.
+    try {
+      execSync(`git -C "${rootDir}" merge-base --is-ancestor ${trimmed} HEAD`, { stdio: 'ignore' });
+    } catch {
+      return { ok: false, reason: 'not an ancestor of HEAD' };
+    }
+    const diff = execSync(
+      `git -C "${rootDir}" diff-tree --no-commit-id --name-only -r --root ${trimmed}`,
+      { encoding: 'utf-8' },
+    );
+    const files = diff
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+    const nonReview = files.find((f) => !f.startsWith('specs/reviews/'));
+    if (!nonReview) {
+      return { ok: false, reason: 'commit touches only specs/reviews/ (no execution evidence)' };
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, reason: `git lookup failed: ${err.message}` };
+  }
+}
+
 export function checkAdversarialYieldLedger(rootDir = REPO_ROOT) {
   const relPath = 'specs/reviews/adversarial-yield-ledger.md';
   const ledgerPath = join(rootDir, relPath);
@@ -909,6 +963,9 @@ export function checkAdversarialYieldLedger(rootDir = REPO_ROOT) {
     'LOW_count',
     'verdict',
     'operator_justification_if_past_cap',
+    'rigor_profile',
+    'why_continue_failure_class',
+    'prior_execution_commit_sha',
   ]);
   if (!table.ok) return { level: 'red', detail: `${relPath} malformed: ${table.error}` };
   if (table.rows.length === 0) {
@@ -916,15 +973,20 @@ export function checkAdversarialYieldLedger(rootDir = REPO_ROOT) {
   }
 
   const findings = [];
+  const warnings = [];
   const parsedRows = [];
   for (const [index, raw] of table.rows.entries()) {
     const rowLabel = `row ${index + 1}`;
+    const passDate = stripCellMarkup(raw.pass_date ?? '');
     const artifactPath = stripCellMarkup(raw.artifact_path ?? '');
     const artifactClass = stripCellMarkup(raw.artifact_class ?? '').toLowerCase();
     const passNumberText = stripCellMarkup(raw.pass_number_for_artifact ?? '');
     const passNumber = Number.parseInt(passNumberText, 10);
     const mode = stripCellMarkup(raw.mode ?? '');
     const justification = stripCellMarkup(raw.operator_justification_if_past_cap ?? '');
+    const rigorProfile = stripCellMarkup(raw.rigor_profile ?? '').toLowerCase();
+    const whyContinue = stripCellMarkup(raw.why_continue_failure_class ?? '');
+    const priorExecSha = stripCellMarkup(raw.prior_execution_commit_sha ?? '');
     if (!artifactPath) {
       findings.push(`${rowLabel}: artifact_path is empty`);
     }
@@ -936,6 +998,12 @@ export function checkAdversarialYieldLedger(rootDir = REPO_ROOT) {
     }
     if (!Number.isFinite(passNumber) || passNumber < 1) {
       findings.push(`${rowLabel}: pass_number_for_artifact must be a positive integer`);
+      continue;
+    }
+    if (!VALID_RIGOR_VALUES.has(rigorProfile)) {
+      findings.push(
+        `${rowLabel}: rigor_profile "${rigorProfile}" not in {lite, standard, deep, tournament, autonomous, pre-dog-1-grandfather}`,
+      );
       continue;
     }
     const cap = ARTIFACT_CLASS_CAPS[artifactClass];
@@ -950,7 +1018,68 @@ export function checkAdversarialYieldLedger(rootDir = REPO_ROOT) {
         );
       }
     }
-    parsedRows.push({ artifactPath, artifactClass, passNumber, mode });
+
+    // Slice DOG+1 — D10 extension: rigor-profile budget, non-LLM-before-pass-3,
+    // review-execution alternation, why-continue checkpoint.
+    if (rigorProfile === GRANDFATHER_RIGOR) {
+      if (passDate > GRANDFATHER_CUTOFF_DATE) {
+        findings.push(
+          `${rowLabel}: rigor_profile "${GRANDFATHER_RIGOR}" not permitted for pass_date ${passDate} (> cutoff ${GRANDFATHER_CUTOFF_DATE}); new rows must use a concrete rigor value`,
+        );
+      }
+    } else if (rigorProfile === AUTONOMOUS_RIGOR) {
+      warnings.push(
+        `${rowLabel}: rigor_profile "autonomous" is unbound at ledger-time — prefer recording the resolved parent rigor (standard|deep|tournament)`,
+      );
+    } else {
+      const rigorBudget = RIGOR_PROFILE_BUDGETS[rigorProfile];
+      if (passNumber > rigorBudget) {
+        if (
+          justification.length === 0 ||
+          PLACEHOLDER_JUSTIFICATION_PATTERN.test(justification) ||
+          justification.length < MIN_PAST_CAP_JUSTIFICATION_CHARS
+        ) {
+          findings.push(
+            `${rowLabel}: pass ${passNumber} exceeds rigor "${rigorProfile}" budget ${rigorBudget}; operator_justification_if_past_cap must be substantive`,
+          );
+        }
+      }
+      if (passNumber >= 2) {
+        if (
+          whyContinue.length === 0 ||
+          isNa(whyContinue) ||
+          PLACEHOLDER_WHY_CONTINUE_PATTERN.test(whyContinue) ||
+          whyContinue.length < MIN_WHY_CONTINUE_CHARS
+        ) {
+          findings.push(
+            `${rowLabel}: why_continue_failure_class must name a specific failure class on pass ${passNumber} (≥ ${MIN_WHY_CONTINUE_CHARS} chars, not placeholder)`,
+          );
+        }
+      }
+      if ((rigorProfile === 'deep' || rigorProfile === 'tournament') && passNumber >= 2) {
+        if (isNa(priorExecSha)) {
+          findings.push(
+            `${rowLabel}: prior_execution_commit_sha required for rigor "${rigorProfile}" on pass ${passNumber} (review-execution alternation)`,
+          );
+        } else {
+          const resolved = commitExistsAndTouchesNonReviewPath(priorExecSha, rootDir);
+          if (!resolved.ok) {
+            findings.push(
+              `${rowLabel}: prior_execution_commit_sha "${priorExecSha}" invalid — ${resolved.reason}`,
+            );
+          }
+        }
+      }
+    }
+
+    parsedRows.push({
+      artifactPath,
+      artifactClass,
+      passNumber,
+      mode,
+      rigorProfile,
+      rowLabel,
+    });
   }
 
   const byArtifact = new Map();
@@ -971,17 +1100,36 @@ export function checkAdversarialYieldLedger(rootDir = REPO_ROOT) {
         break;
       }
     }
+    // Tournament pass 3 requires a prior row on the same artifact with
+    // mode not beginning with "llm-".
+    const tournamentPass3 = rows.find((r) => r.rigorProfile === 'tournament' && r.passNumber === 3);
+    if (tournamentPass3) {
+      const priorRows = rows.filter((r) => r.passNumber < 3);
+      const anyNonLlm = priorRows.some((r) => r.mode && !r.mode.toLowerCase().startsWith('llm-'));
+      if (!anyNonLlm) {
+        findings.push(
+          `${tournamentPass3.rowLabel}: tournament pass 3 on ${artifactPath} requires a prior row with mode not starting with "llm-" (non-LLM mode required before pass 3)`,
+        );
+      }
+    }
   }
 
+  const summary = `${table.rows.length} yield-ledger row(s)`;
   if (findings.length > 0) {
     return {
       level: 'red',
-      detail: `${table.rows.length} yield-ledger row(s); ${findings.join('; ')}`,
+      detail: `${summary}; ${findings.join('; ')}`,
+    };
+  }
+  if (warnings.length > 0) {
+    return {
+      level: 'yellow',
+      detail: `${summary}; caps + rigor-binding clean; ${warnings.join('; ')}`,
     };
   }
   return {
     level: 'green',
-    detail: `${table.rows.length} yield-ledger row(s) present; caps + mode-cycle clean`,
+    detail: `${summary} present; caps + mode-cycle + rigor-binding clean`,
   };
 }
 

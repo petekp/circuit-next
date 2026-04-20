@@ -16,16 +16,36 @@ Mode-cycle rule: three consecutive passes on the same artifact in the same
 `mode` without an intervening structurally different mode is rejected by
 audit (D10 clause 3, K=2).
 
-| pass_date | artifact_path | artifact_class | pass_number_for_artifact | reviewer_id | mode | HIGH_count | MED_count | LOW_count | verdict | operator_justification_if_past_cap |
-|---|---|---|---:|---|---|---:|---:|---:|---|---|
-| 2026-04-20 | `specs/plans/phase-1-close-revised.md` | governance | 1 | gpt-5-codex | llm-review | 7 | 5 | 3 | ACCEPT-WITH-FOLD-INS | n/a |
-| 2026-04-20 | `specs/plans/phase-1-close-revised.md` | governance | 2 | claude-opus-4-7+gpt-5-codex | llm-cold-read-standin-for-human | 0 | 8 | 8 | ACCEPT-WITH-FOLD-INS | n/a |
-| 2026-04-20 | `specs/reviews/arc-slice-25b-drafted-docs-codex.md` | governance | 1 | gpt-5-codex | llm-review | 2 | 2 | 1 | REJECT pending HIGH fold-ins | n/a |
-| 2026-04-20 | `specs/contracts/config.md` | reversible | 1 | gpt-5-codex | llm-review | 1 | 4 | 1 | REJECT → incorporated → ACCEPT | n/a |
-| 2026-04-20 | `specs/artifacts.json` | reversible | 1 | gpt-5-codex | llm-review | 0 | 4 | 3 | ACCEPT-WITH-FOLD-INS → incorporated → ACCEPT | n/a |
-| 2026-04-20 | `scripts/audit.mjs` | reversible | 1 | gpt-5-codex | llm-review | 2 | 5 | 2 | REJECT pending HIGH fold-ins → incorporated → ACCEPT | n/a |
-| 2026-04-20 | `specs/adrs/ADR-0001-methodology-adoption.md` Addendum B | governance | 1 | gpt-5-codex | llm-review | 5 | 7 | 4 | REJECT pending fold-ins → incorporated → ACCEPT-WITH-FOLD-INS | n/a |
-| 2026-04-20 | `specs/contracts/workflow.md` v0.2 | reversible | 1 | gpt-5-codex | llm-review | 3 | 3 | 2 | REJECT → incorporated → ACCEPT | n/a |
+## Slice 28 (plan §Slice DOG+1) schema extension (2026-04-20)
+
+Three columns added by Slice 28 (plan names it "DOG+1") per
+`specs/methodology/decision.md` §D10 Extension — Rigor-Profile Budget Binding:
+
+- `rigor_profile` — one of `lite` / `standard` / `deep` / `tournament` /
+  `autonomous` / `pre-dog-1-grandfather` (grandfather value for rows
+  landed before DOG+1; hard expiry at Phase 2 close; new rows must use
+  a concrete value).
+- `why_continue_failure_class` — substantive specific-failure-class string
+  (≥ 30 chars, no placeholders) when `pass_number_for_artifact >= 2`;
+  otherwise `n/a`.
+- `prior_execution_commit_sha` — git SHA of an execution commit between
+  the prior pass and this one that touches at least one path outside
+  `specs/reviews/`, when `rigor_profile ∈ {deep, tournament}` and
+  `pass_number_for_artifact >= 2`; otherwise `n/a`.
+
+For Tournament rigor, pass 3 additionally requires a prior row on the same
+artifact whose `mode` does not begin with `llm-`.
+
+| pass_date | artifact_path | artifact_class | pass_number_for_artifact | reviewer_id | mode | HIGH_count | MED_count | LOW_count | verdict | operator_justification_if_past_cap | rigor_profile | why_continue_failure_class | prior_execution_commit_sha |
+|---|---|---|---:|---|---|---:|---:|---:|---|---|---|---|---|
+| 2026-04-20 | `specs/plans/phase-1-close-revised.md` | governance | 1 | gpt-5-codex | llm-review | 7 | 5 | 3 | ACCEPT-WITH-FOLD-INS | n/a | pre-dog-1-grandfather | n/a | n/a |
+| 2026-04-20 | `specs/plans/phase-1-close-revised.md` | governance | 2 | claude-opus-4-7+gpt-5-codex | llm-cold-read-standin-for-human | 0 | 8 | 8 | ACCEPT-WITH-FOLD-INS | n/a | pre-dog-1-grandfather | n/a | n/a |
+| 2026-04-20 | `specs/reviews/arc-slice-25b-drafted-docs-codex.md` | governance | 1 | gpt-5-codex | llm-review | 2 | 2 | 1 | REJECT pending HIGH fold-ins | n/a | pre-dog-1-grandfather | n/a | n/a |
+| 2026-04-20 | `specs/contracts/config.md` | reversible | 1 | gpt-5-codex | llm-review | 1 | 4 | 1 | REJECT → incorporated → ACCEPT | n/a | pre-dog-1-grandfather | n/a | n/a |
+| 2026-04-20 | `specs/artifacts.json` | reversible | 1 | gpt-5-codex | llm-review | 0 | 4 | 3 | ACCEPT-WITH-FOLD-INS → incorporated → ACCEPT | n/a | pre-dog-1-grandfather | n/a | n/a |
+| 2026-04-20 | `scripts/audit.mjs` | reversible | 1 | gpt-5-codex | llm-review | 2 | 5 | 2 | REJECT pending HIGH fold-ins → incorporated → ACCEPT | n/a | pre-dog-1-grandfather | n/a | n/a |
+| 2026-04-20 | `specs/adrs/ADR-0001-methodology-adoption.md` Addendum B | governance | 1 | gpt-5-codex | llm-review | 5 | 7 | 4 | REJECT pending fold-ins → incorporated → ACCEPT-WITH-FOLD-INS | n/a | pre-dog-1-grandfather | n/a | n/a |
+| 2026-04-20 | `specs/contracts/workflow.md` v0.2 | reversible | 1 | gpt-5-codex | llm-review | 3 | 3 | 2 | REJECT → incorporated → ACCEPT | n/a | pre-dog-1-grandfather | n/a | n/a |
 
 **Pass 2 context.** Pass 2 is an L3 non-LLM cold-read, delegated to Claude + Codex as LLM stand-ins under operator authorization while the operator was asleep. The delegation is recorded as reviewer_role `LLM-standin-for-human-cold-read` in `specs/reviews/phase-1-close-reform-human.md`. Counts are 0 HIGH / 8 MED / 8 LOW; all MED and LOW findings were folded back into the plan in this planning pass. Pass 2 did not violate D10 artifact-size signal (pass count 2 < governance cap 3). A genuine operator cold-read on pickup may append a third evaluator section to the review record; that addition does not count as a new adversarial pass unless it raises defects.
 
