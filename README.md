@@ -1,9 +1,10 @@
-<!-- current_slice: 26b -->
+<!-- current_slice: 25d -->
 
 # circuit-next
 
-**Status: Tier 0 scaffold complete; Phase 1 contract authorship in progress,
-pre-Phase-1.5-reopen. Not yet functional.**
+**Status: Tier 0 scaffold complete; Phase 1 contract authorship closing,
+Phase 1.5 Alpha Proof semantics authorized by ADR-0001 Addendum B
+(Slice 25d). Not yet functional.**
 
 Claude Code plugin that automates common developer and creative workflows
 through a configurable, evidence-based methodology.
@@ -29,18 +30,21 @@ stress-test survival, accepted risks, and reopen conditions.
 
 ## Current phase
 
-**Phase 1 — Contract authorship, pre-Phase-1.5-reopen.** Phase 0 Evidence
-Loop closed. Six Phase 1 contracts landed (step / phase / run / selection /
-adapter / skill / workflow-skeleton / continuity) plus three behavioral
-tracks (session-hygiene / prose-yaml-parity / cross-model-challenger).
-Authority-graph gate (Slice 7 / ADR-0003), invariant ledger, plane
-dimension, and reverse-authority checks are exercised end-to-end. The
-remaining Phase 1 close arc is shrunk and sequenced by
+**Phase 1 — Contract authorship (closing); Phase 1.5 Alpha Proof
+authorized by ADR-0001 Addendum B (Slice 25d).** Phase 0 Evidence Loop
+closed. Phase 1 contracts authored: step, phase, run, selection, adapter,
+skill, workflow-skeleton, continuity, config, plus three behavioral tracks
+(session-hygiene, prose-yaml-parity, cross-model-challenger). Authority-graph
+gate (Slice 7 / ADR-0003), invariant ledger, plane dimension, and
+reverse-authority checks are exercised end-to-end. Slice 25d reopened
+ADR-0001 and installed D3 — Phase 1.5 semantics are now authoritative;
+Phase 1 closes and Phase 1.5 opens on the commit that lands the remaining
+narrowed workflow contract (Slice 27). The remaining close arc is
+sequenced by
 [`specs/plans/phase-1-close-revised.md`](specs/plans/phase-1-close-revised.md):
-D1/D4/D9/D10 governance reform (Slice 25b), then runtime-boundary safety
-(Slice 27c), then the first alpha product proof (Slice 27d
-`dogfood-run-0`). `Phase 1.5 Alpha Proof` is planning-prose only and is
-not authoritative until Slice 25d reopens ADR-0001.
+Slice 27 (narrowed workflow contract, last Phase 1 slice) → 27a–27c
+(baseline, runtime boundary) → 27d `dogfood-run-0` alpha product proof.
+Phase 2 entry is gated by Phase 1.5 close, not Phase 1 close.
 
 See [`PROJECT_STATE.md`](PROJECT_STATE.md) for a live snapshot of where the
 project is, what was just decided, and what comes next.
@@ -53,7 +57,7 @@ circuit-next/
 ├── PROJECT_STATE.md          # Live project state snapshot
 ├── bootstrap/                 # Phase 0 evidence drafts
 ├── specs/
-│   ├── methodology/             # Tournament artifacts (symlinks)
+│   ├── methodology/             # Tournament artifacts (inlined Markdown; provenance in frontmatter)
 │   ├── evidence.md              # Phase 0 synthesized output
 │   ├── domain.md                # Phase 1: ubiquitous language
 │   ├── artifacts.json           # Authoritative authority graph (ADR-0003)

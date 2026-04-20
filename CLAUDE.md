@@ -55,9 +55,15 @@ agent slice must honor it. Four pillars:
   `specs/behavioral/<concern>.md`. Adversarial property-auditor (different
   model) emits prose tautology attacks; operator encodes each as a new
   property.
-- **Phase 2 — Implementation.** Lane-disciplined slices. Implementer runs in
-  a container with distinct UID; `specs/`, `tests/properties/visible/`,
-  `tests/mutation/`, `specs/behavioral/`, CI configuration mounted read-only;
+- **Phase 1.5 — Alpha Proof** (inserted by ADR-0001 Addendum B, Slice 25d).
+  Executable product proof between contract authorship and full
+  implementation. Runs `dogfood-run-0` end-to-end under the same lane
+  discipline as Phase 2. Close criteria are authoritative in ADR-0001
+  Addendum B.
+- **Phase 2 — Implementation.** Lane-disciplined slices. Entry gated by
+  Phase 1.5 close, not Phase 1 close. Implementer runs in a container with
+  distinct UID; `specs/`, `tests/properties/visible/`, `tests/mutation/`,
+  `specs/behavioral/`, CI configuration mounted read-only;
   `tests/properties/hidden/` not mounted at all.
 
 Tier 2+ tooling (container isolation, mutation testing, property suites,

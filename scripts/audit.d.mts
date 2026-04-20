@@ -138,3 +138,7 @@ export function checkPinnedRatchetFloor(
   rootDir?: string,
   headCountInput?: number,
 ): AuditCheckResult;
+
+// Slice 25d — ADR-0001 Addendum B phase-graph authority ratchet. Phase 1.5
+// semantics live in the ADR; decision.md / README / PROJECT_STATE mirror.
+export function checkPhaseAuthoritySemantics(rootDir?: string): AuditCheckResult;

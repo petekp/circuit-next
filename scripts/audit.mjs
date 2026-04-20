@@ -746,13 +746,13 @@ export function checkProductRealityGateVisibility(rootDir = REPO_ROOT) {
   }
   const seed = parsed.rows.find(
     (row) =>
-      row.phase_id === 'phase-1-pre-1.5-reopen' && row.slice === '25b' && row.consumed === true,
+      row.phase_id === 'phase-1.5-alpha-proof' && row.slice === '25b' && row.consumed === true,
   );
   if (!seed) {
     return {
       level: 'red',
       detail:
-        'specs/methodology/product-gate-exemptions.md missing consumed Slice 25b bootstrap-exception row',
+        'specs/methodology/product-gate-exemptions.md missing consumed Slice 25b bootstrap-exception row (expected phase_id=phase-1.5-alpha-proof post-Slice-25d)',
     };
   }
   const findings = [];
@@ -777,7 +777,7 @@ export function checkProductRealityGateVisibility(rootDir = REPO_ROOT) {
   }
   return {
     level: 'green',
-    detail: `${parsed.rows.length} exemption row(s); consumed seed row present for phase-1-pre-1.5-reopen / 25b; all rows carry an authorization_record.`,
+    detail: `${parsed.rows.length} exemption row(s); consumed seed row present for phase-1.5-alpha-proof / 25b; all rows carry an authorization_record.`,
   };
 }
 
@@ -1900,6 +1900,84 @@ function checkPhaseDrift() {
   return { level: 'green', detail: `README and PROJECT_STATE agree on Phase ${readmePhase}` };
 }
 
+// Slice 25d (ADR-0001 Addendum B): phase-graph authority ratchet. Phase 1.5
+// semantics live in ADR-0001 Addendum B; decision.md, README, and
+// PROJECT_STATE are mirrors. This check closes the D3 failure mode (silent
+// phase mutation via decision.md alone) that prose-level discipline cannot
+// catch at review time.
+//
+// Rules enforced here:
+// 1. If decision.md mentions "Phase 1.5", it must also cite ADR-0001
+//    (phrase "ADR-0001" is sufficient; the addendum letter is not
+//    re-validated to avoid over-coupling to label renaming).
+// 2. If README or PROJECT_STATE claim "Phase 1.5", ADR-0001 must carry an
+//    "Addendum B" heading (the specific heading the Phase 1.5 semantics
+//    are authored under). Loose matching is intentional — future addenda
+//    won't re-letter B, so the string is stable.
+//
+// Red: either rule violated. Green: both rules hold OR no Phase 1.5 mention
+// anywhere (pre-entry state). Yellow: decision.md or ADR-0001 missing
+// (should be caught by earlier checks but guarded defensively).
+export function checkPhaseAuthoritySemantics(rootDir = REPO_ROOT) {
+  const decisionPath = join(rootDir, 'specs/methodology/decision.md');
+  const adrPath = join(rootDir, 'specs/adrs/ADR-0001-methodology-adoption.md');
+  const readmePath = join(rootDir, 'README.md');
+  const projectStatePath = join(rootDir, 'PROJECT_STATE.md');
+
+  if (!existsSync(adrPath)) {
+    return {
+      level: 'yellow',
+      detail: 'ADR-0001 missing; cannot evaluate phase authority semantics',
+    };
+  }
+  if (!existsSync(decisionPath)) {
+    return { level: 'yellow', detail: 'specs/methodology/decision.md missing' };
+  }
+
+  const adrText = readFileSync(adrPath, 'utf-8');
+  const decisionText = readFileSync(decisionPath, 'utf-8');
+  const readmeText = existsSync(readmePath) ? readFileSync(readmePath, 'utf-8') : '';
+  const projectStateText = existsSync(projectStatePath)
+    ? readFileSync(projectStatePath, 'utf-8')
+    : '';
+
+  // Matches "Phase 1.5", "Phase: 1.5", "**Phase:** 1.5", "Phase — 1.5",
+  // etc. Non-word chars (including colons, asterisks, whitespace, em-dashes,
+  // hyphens) are allowed between the word "Phase" and "1.5".
+  const PHASE_15_PATTERN = /Phase[^A-Za-z0-9]*1\.5/i;
+  const ADDENDUM_B_HEADING_PATTERN = /^##\s+Addendum\s+B\s+—\s+2026-04-20\s+\(Slice\s+25d\)/m;
+  const ADR0001_CITATION_PATTERN = /ADR-0001/;
+
+  const decisionMentions = PHASE_15_PATTERN.test(decisionText);
+  const readmeMentions = PHASE_15_PATTERN.test(readmeText);
+  const projectStateMentions = PHASE_15_PATTERN.test(projectStateText);
+  const adrHasAddendumB = ADDENDUM_B_HEADING_PATTERN.test(adrText);
+  const decisionCitesAdr = ADR0001_CITATION_PATTERN.test(decisionText);
+
+  const errors = [];
+
+  if (decisionMentions && !decisionCitesAdr) {
+    errors.push('decision.md mentions Phase 1.5 but does not cite ADR-0001');
+  }
+  if ((readmeMentions || projectStateMentions) && !adrHasAddendumB) {
+    errors.push(
+      'README or PROJECT_STATE claims Phase 1.5 but ADR-0001 lacks the "Addendum B — 2026-04-20 (Slice 25d)" heading that authors the semantics',
+    );
+  }
+
+  if (errors.length > 0) {
+    return { level: 'red', detail: errors.join('; ') };
+  }
+
+  const mentionsAny = decisionMentions || readmeMentions || projectStateMentions;
+  return {
+    level: 'green',
+    detail: mentionsAny
+      ? 'Phase 1.5 claims in decision.md/README/PROJECT_STATE are backed by ADR-0001 Addendum B'
+      : 'No Phase 1.5 mention present (pre-entry state); authority surface clean',
+  };
+}
+
 function commitIsSliceShaped(commit) {
   // Merge commits, reverts, and plain housekeeping without a Lane don't warrant slice
   // discipline checks. A "slice" is any commit that declares a Lane.
@@ -2233,10 +2311,22 @@ function main() {
     detail: pinnedFloor.detail,
   });
 
-  // Check 20: npm run verify currently green. (Runs last so the report's
-  // bottom line is the verify-gate status; numbering bumped from Check 15 →
-  // Check 20 in Slice 26b to keep printed Check-N order monotonic after
-  // Slice 26a and 26b added Checks 16-19. Codex LOW-1 fold-in.)
+  // Check 20: Phase authority semantics (Slice 25d — ADR-0001 Addendum B).
+  // Phase 1.5 claims must be backed by ADR-0001 Addendum B; decision.md
+  // citing Phase 1.5 must cite ADR-0001. Closes the D3 failure mode
+  // (silent phase mutation via decision.md alone).
+  const phaseAuthority = checkPhaseAuthoritySemantics();
+  counters[phaseAuthority.level]++;
+  findings.push({
+    level: phaseAuthority.level,
+    check: 'Phase authority semantics (ADR-0001 Addendum B)',
+    detail: phaseAuthority.detail,
+  });
+
+  // Check 21: npm run verify currently green. (Runs last so the report's
+  // bottom line is the verify-gate status; numbering bumped from Check 20 →
+  // Check 21 in Slice 25d to keep printed Check-N order monotonic after
+  // Slice 25d added Check 20. Prior bump was Slice 26b 15 → 20.)
   const verify = verifyStatus();
   if (verify.pass) {
     counters.green++;

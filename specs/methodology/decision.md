@@ -246,3 +246,62 @@ explicitly in the yield-ledger row for that pass.
 
 The pass-cap values 2/3/4 are opinionated priors, not empirically tuned. Tune
 them after 10-20 reviewed artifacts using the yield ledger.
+
+## Methodology Amendments (2026-04-20, Slice 25d)
+
+This section **mirrors** `specs/adrs/ADR-0001-methodology-adoption.md`
+Addendum B for operator navigation and planning-prose continuity. Authority
+for phase-graph semantics lives in ADR-0001 Addendum B; this mirror is not
+the authority. If this section and ADR-0001 Addendum B disagree, the ADR
+wins and this section must be corrected. Machine-enforced by
+`scripts/audit.mjs` Check 20 (`checkPhaseAuthoritySemantics`).
+
+### D3. Phase 1.5 Alpha Proof
+
+Slice 25d installs D3 through an explicit ADR-0001 reopen
+(Addendum B). The authored phase graph becomes
+**Phase 0 → Phase 1 → Phase 1.5 → Phase 2**:
+
+- **Phase 0 — Evidence Loop.** Unchanged; operational definition preserved
+  from the original Decision section above.
+- **Phase 1 — Contract authorship.** Unchanged; operational definition
+  preserved. Close inventory is now precise: Phase 1 closes when
+  (a) D1/D3/D4/D9/D10 governance is authoritatively installed AND (b) the
+  remaining Phase 1 contracts are authored, which at HEAD 24b85d2 means
+  the narrowed Slice 27 workflow contract. See ADR-0001 Addendum B §Phase
+  1 Close Inventory for the authoritative list.
+- **Phase 1.5 — Alpha Proof (NEW).** Purpose: prove the runner works
+  end-to-end on a non-methodology workflow before Phase 2 expands
+  implementation. `dogfood-run-0` succeeds here. Opens when Phase 1 close
+  criteria are satisfied (the commit that lands the last Phase 1
+  deliverable — at HEAD 24b85d2, Slice 27). Runs under the same lane
+  discipline and current-tier gates as Phase 2; container isolation
+  remains Tier 2+ deferred. D1 applies at Phase 1.5 close — the phase
+  cannot close on authored governance alone. Closes when all 16 criteria
+  at ADR-0001 Addendum B §Phase 1.5 Close Criteria are satisfied.
+- **Phase 2 — Implementation.** Unchanged; operational definition
+  preserved. Phase 2 entry is gated by Phase 1.5 close instead of Phase 1
+  close. Runtime-substrate work (append-only writer, reducer snapshot,
+  manifest byte-match) that precedes `dogfood-run-0` lands in Phase 1.5,
+  not Phase 2.
+
+**Authority clause (phase-graph semantics only).** Phase 1, Phase 1.5, and
+Phase 2 semantics are authored in ADR-0001 Addendum B. `decision.md` may
+mirror them; it cannot amend them alone. Other standing methodology rules
+(D1–D10 themselves, lane definitions, ratchet rules, audit-gate semantics)
+may still be authored here in `decision.md` per D4.
+
+**Reopen basis — one-time for Slice 25d.** The reopen basis that
+authorized Addendum B is scoped to Slice 25d only. A generic "phase-graph
+amendment by operator directive" standing reopen condition was
+**rejected** during Codex challenger fold-in; the guardrailed condition 7
+in ADR-0001 Addendum B §Reopen basis is the authoritative form. Future
+phase-graph amendments must satisfy all four guardrails there.
+
+### Backwards-compatibility note
+
+Pre-25d references in this file and elsewhere to "Phase 1 close" now
+resolve to "Phase 1 contract-authorship close." Pre-25d references to
+"Phase 2 entry" now resolve to "Phase 2 entry, which requires Phase 1.5
+close." The original Decision section above is preserved verbatim; these
+rewording rules apply at read-time, not by retroactive edit.

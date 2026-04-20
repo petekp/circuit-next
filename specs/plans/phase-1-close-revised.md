@@ -645,9 +645,12 @@ These are forecasts, not acceptance pressure.
 
 ## Phase 1.5 Alpha Proof Close Criteria
 
-*This heading is planning-prose only. Phase 1.5 is not authoritative phase
-semantics until Slice 25d explicitly reopens ADR-0001 and records the amended
-phase definition.*
+*This section is now a **mirror** of
+`specs/adrs/ADR-0001-methodology-adoption.md` §Addendum B §Phase 1.5 Close
+Criteria (authored by Slice 25d). The ADR is authoritative; this list is
+operational reference. If the two disagree, the ADR wins and this section
+must be corrected. Do not amend close criteria here alone — per D4,
+standing rules cannot live only in plans.*
 
 Phase 1.5 Alpha Proof may close when all of the following hold:
 

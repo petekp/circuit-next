@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   checkAdversarialYieldLedger,
+  checkPhaseAuthoritySemantics,
   checkProductRealityGateVisibility,
   checkTierOrphanClaims,
   parseProductGateExemptionLedger,
@@ -40,7 +41,7 @@ date: 2026-04-20
 
 | phase_id | slice | reason | consumed | authorization_record |
 |---|---|---|---|---|
-| phase-1-pre-1.5-reopen | 25b | bootstrap exception - the slice that changes future acceptance terms cannot itself be proof those terms work | true | authorization.md |
+| phase-1.5-alpha-proof | 25b | bootstrap exception - the slice that changes future acceptance terms cannot itself be proof those terms work | true | authorization.md |
 `;
 
 const VALID_TIER = `---
@@ -83,7 +84,7 @@ describe('Product Reality Gate visibility audit', () => {
       writeRel(root, 'specs/methodology/product-gate-exemptions.md', VALID_EXEMPTION_LEDGER);
       const result = checkProductRealityGateVisibility(root);
       expect(result.level).toBe('green');
-      expect(result.detail).toMatch(/phase-1-pre-1\.5-reopen/);
+      expect(result.detail).toMatch(/phase-1\.5-alpha-proof/);
       expect(result.detail).toMatch(/25b/);
     });
   });
@@ -102,8 +103,8 @@ date: 2026-04-20
 
 | phase_id | slice | reason | consumed | authorization_record |
 |---|---|---|---|---|
-| phase-1-pre-1.5-reopen | 25b | bootstrap exception | true | authorization.md |
-| phase-1-pre-1.5-reopen | 29 | second waiver without authorization | true |  |
+| phase-1.5-alpha-proof | 25b | bootstrap exception | true | authorization.md |
+| phase-1.5-alpha-proof | 29 | second waiver without authorization | true |  |
 `;
       writeRel(root, 'specs/methodology/product-gate-exemptions.md', ledger);
       const result = checkProductRealityGateVisibility(root);
@@ -125,7 +126,7 @@ date: 2026-04-20
 
 | phase_id | slice | reason | consumed | authorization_record |
 |---|---|---|---|---|
-| phase-1-pre-1.5-reopen | 25b | bootstrap exception | true | missing.md |
+| phase-1.5-alpha-proof | 25b | bootstrap exception | true | missing.md |
 `;
       writeRel(root, 'specs/methodology/product-gate-exemptions.md', ledger);
       const result = checkProductRealityGateVisibility(root);
@@ -148,8 +149,8 @@ date: 2026-04-20
 
 | phase_id | slice | reason | consumed | authorization_record |
 |---|---|---|---|---|
-| phase-1-pre-1.5-reopen | 25b | bootstrap exception | true | authorization.md |
-| phase-1-pre-1.5-reopen | 30 | amends D1 to loosen product gate | true | authorization.md |
+| phase-1.5-alpha-proof | 25b | bootstrap exception | true | authorization.md |
+| phase-1.5-alpha-proof | 30 | amends D1 to loosen product gate | true | authorization.md |
 `;
       writeRel(root, 'specs/methodology/product-gate-exemptions.md', ledger);
       const result = checkProductRealityGateVisibility(root);
@@ -359,13 +360,18 @@ describe('adversarial yield ledger audit', () => {
 });
 
 describe('methodology amendment parity', () => {
-  it('decision.md contains only the Slice 25b D1, D4, and D10 amendment headings', () => {
+  it('decision.md contains the Slice 25b D1/D4/D10 amendments and the Slice 25d D3 mirror', () => {
     const decision = readFileSync(join(REPO_ROOT, 'specs/methodology/decision.md'), 'utf-8');
     expect(decision).toMatch(/^## Methodology Amendments \(2026-04-20, Slice 25b\)$/m);
     expect(decision).toMatch(/^### D1\. Product Reality Gate$/m);
     expect(decision).toMatch(/^### D4\. Governance Authority Graph Rule$/m);
     expect(decision).toMatch(/^### D10\. Adversarial Review Discipline$/m);
-    for (const delta of ['D2', 'D3', 'D5', 'D6', 'D7', 'D8', 'D9']) {
+    // Slice 25d installs D3 as a mirror of ADR-0001 Addendum B. The heading
+    // appears here in decision.md; the authoritative phase-graph prose lives
+    // in the ADR (per the §Authority clause in that addendum).
+    expect(decision).toMatch(/^## Methodology Amendments \(2026-04-20, Slice 25d\)$/m);
+    expect(decision).toMatch(/^### D3\. Phase 1\.5 Alpha Proof$/m);
+    for (const delta of ['D2', 'D5', 'D6', 'D7', 'D8', 'D9']) {
       expect(decision).not.toMatch(new RegExp(`^### ${delta}\\.`, 'm'));
     }
   });
@@ -380,10 +386,112 @@ describe('Product Gate exemption ledger seed row parity', () => {
     if (!parsed.ok) return;
     expect(parsed.rows).toContainEqual(
       expect.objectContaining({
-        phase_id: 'phase-1-pre-1.5-reopen',
+        phase_id: 'phase-1.5-alpha-proof',
         slice: '25b',
         consumed: true,
       }),
     );
+  });
+});
+
+describe('Phase authority semantics audit (Slice 25d / ADR-0001 Addendum B)', () => {
+  const ADR_WITH_ADDENDUM_B = `# ADR-0001
+
+## Addendum B — 2026-04-20 (Slice 25d): D3 reopen
+
+Phase 1.5 semantics are authored here.
+`;
+
+  const ADR_WITHOUT_ADDENDUM_B = `# ADR-0001
+
+## Addendum A — portability
+
+(no Phase 1.5 semantics authored yet)
+`;
+
+  const DECISION_MENTIONS_1_5_CITES_ADR = `# decision.md
+
+Mirrors ADR-0001 Addendum B for Phase 1.5 semantics.
+`;
+
+  const DECISION_MENTIONS_1_5_NO_CITATION = `# decision.md
+
+Phase 1.5 is the alpha proof phase.
+(no ADR reference here)
+`;
+
+  const DECISION_NO_PHASE_MENTION = `# decision.md
+
+(no phase-specific prose)
+`;
+
+  it('greens when no Phase 1.5 mention exists anywhere (pre-entry state)', () => {
+    withTempRepo((root) => {
+      writeRel(root, 'specs/adrs/ADR-0001-methodology-adoption.md', ADR_WITHOUT_ADDENDUM_B);
+      writeRel(root, 'specs/methodology/decision.md', DECISION_NO_PHASE_MENTION);
+      const result = checkPhaseAuthoritySemantics(root);
+      expect(result.level).toBe('green');
+      expect(result.detail).toMatch(/pre-entry/);
+    });
+  });
+
+  it('greens when Phase 1.5 is claimed in decision.md and ADR-0001 carries Addendum B', () => {
+    withTempRepo((root) => {
+      writeRel(root, 'specs/adrs/ADR-0001-methodology-adoption.md', ADR_WITH_ADDENDUM_B);
+      writeRel(root, 'specs/methodology/decision.md', DECISION_MENTIONS_1_5_CITES_ADR);
+      const result = checkPhaseAuthoritySemantics(root);
+      expect(result.level).toBe('green');
+      expect(result.detail).toMatch(/backed by ADR-0001/);
+    });
+  });
+
+  it('reds when decision.md claims Phase 1.5 without citing ADR-0001', () => {
+    withTempRepo((root) => {
+      writeRel(root, 'specs/adrs/ADR-0001-methodology-adoption.md', ADR_WITH_ADDENDUM_B);
+      writeRel(root, 'specs/methodology/decision.md', DECISION_MENTIONS_1_5_NO_CITATION);
+      const result = checkPhaseAuthoritySemantics(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(/decision\.md mentions Phase 1\.5 but does not cite ADR-0001/);
+    });
+  });
+
+  it('reds when README claims Phase 1.5 but ADR-0001 lacks Addendum B heading', () => {
+    withTempRepo((root) => {
+      writeRel(root, 'specs/adrs/ADR-0001-methodology-adoption.md', ADR_WITHOUT_ADDENDUM_B);
+      writeRel(root, 'specs/methodology/decision.md', DECISION_NO_PHASE_MENTION);
+      writeRel(root, 'README.md', '# circuit-next\n\nCurrent phase: Phase 1.5 — Alpha Proof.\n');
+      const result = checkPhaseAuthoritySemantics(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(/Addendum B/);
+    });
+  });
+
+  it('reds when PROJECT_STATE claims Phase 1.5 but ADR-0001 lacks Addendum B heading', () => {
+    withTempRepo((root) => {
+      writeRel(root, 'specs/adrs/ADR-0001-methodology-adoption.md', ADR_WITHOUT_ADDENDUM_B);
+      writeRel(root, 'specs/methodology/decision.md', DECISION_NO_PHASE_MENTION);
+      writeRel(root, 'PROJECT_STATE.md', '# PROJECT_STATE\n\n**Phase:** 1.5 — Alpha Proof\n');
+      const result = checkPhaseAuthoritySemantics(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(/Addendum B/);
+    });
+  });
+
+  it('yellows when ADR-0001 is missing', () => {
+    withTempRepo((root) => {
+      writeRel(root, 'specs/methodology/decision.md', DECISION_NO_PHASE_MENTION);
+      const result = checkPhaseAuthoritySemantics(root);
+      expect(result.level).toBe('yellow');
+      expect(result.detail).toMatch(/ADR-0001 missing/);
+    });
+  });
+
+  it('yellows when decision.md is missing', () => {
+    withTempRepo((root) => {
+      writeRel(root, 'specs/adrs/ADR-0001-methodology-adoption.md', ADR_WITH_ADDENDUM_B);
+      const result = checkPhaseAuthoritySemantics(root);
+      expect(result.level).toBe('yellow');
+      expect(result.detail).toMatch(/decision\.md missing/);
+    });
   });
 });
