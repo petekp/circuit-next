@@ -105,6 +105,71 @@
     },
 
     {
+      "id": "CONFIG-I1",
+      "contract": "config",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/config.md#CONFIG-I1",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "CONFIG-I2",
+      "contract": "config",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/config.md#CONFIG-I2",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "CONFIG-I3",
+      "contract": "config",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/config.md#CONFIG-I3",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "CONFIG-I4",
+      "contract": "config",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/config.md#CONFIG-I4",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "CONFIG-I5",
+      "contract": "config",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/config.md#CONFIG-I5",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "CONFIG-I6",
+      "contract": "config",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/config.md#CONFIG-I6",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "CONFIG-I7",
+      "contract": "config",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/config.md#CONFIG-I7",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "CONFIG-I8",
+      "contract": "config",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/config.md#CONFIG-I8",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+
+    {
       "id": "CONT-I1",
       "contract": "continuity",
       "surface_type": "contract",
@@ -768,6 +833,28 @@
     {
       "id": "adapter.prop.resolved_from_agrees_with_resolution",
       "contract": "adapter",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+
+    {
+      "id": "config.prop.surplus_keys_rejected_transitively",
+      "contract": "config",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "config.prop.layered_composition_preserves_strictness",
+      "contract": "config",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "config.prop.circuit_override_record_closed_under_workflow_id",
+      "contract": "config",
       "enforcement_state": "phase2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"

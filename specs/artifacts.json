@@ -227,27 +227,7 @@
       "description": "Config-layer map of custom adapter name -> CustomAdapterDescriptor. Registry-key to descriptor-name parity is enforced; reserved names are disjoint.",
       "contract": "specs/contracts/adapter.md",
       "schema_file": "src/schemas/config.ts",
-      "schema_exports": [
-        "DispatchConfig",
-        "Config",
-        "ConfigLayer",
-        "LayeredConfig",
-        "AdapterReference",
-        "CircuitOverride"
-      ],
-      "pending_rehome": {
-        "target_slice": 26,
-        "target_artifact_prefix": "config.*",
-        "target_objection": "specs/reviews/arc-phase-1-close-codex.md#HIGH-3",
-        "items": [
-          "Config",
-          "ConfigLayer",
-          "LayeredConfig",
-          "DispatchConfig",
-          "AdapterReference",
-          "CircuitOverride"
-        ]
-      },
+      "schema_exports": ["DispatchConfig", "AdapterReference"],
       "writers": ["plugin author (defaults)", "operator (user-global, project, invocation)"],
       "readers": ["circuit-next engine (adapter resolution)"],
       "resolvers": ["adapter.reference", "adapter.resolved"],
@@ -338,6 +318,101 @@
         "event-log replay fidelity"
       ],
       "trust_boundary": "engine-computed; authoritative for dispatch; replay-stable (named refs forbidden by ADAPTER-I10)",
+      "reference_surfaces": [],
+      "reference_evidence": [],
+      "migration_policy": "n/a",
+      "legacy_parse_policy": "n/a",
+      "dangling_reference_policy": "n/a"
+    },
+    {
+      "id": "config.root",
+      "surface_class": "greenfield",
+      "compatibility_policy": "n/a",
+      "plane": "data-plane",
+      "description": "Top-level Config record contributed by one config layer. Carries schema_version (literal 1), a DispatchConfig (sub-artifact adapter.registry), a record of per-circuit CircuitOverride (sub-artifact config.circuit-override), and a defaults object carrying a SelectionOverride. Surplus keys rejected transitively via .strict().",
+      "contract": "specs/contracts/config.md",
+      "schema_file": "src/schemas/config.ts",
+      "schema_exports": ["Config"],
+      "writers": [
+        "plugin author (defaults layer)",
+        "operator (user-global, project, invocation layers)"
+      ],
+      "readers": ["circuit-next engine (config layer composition)"],
+      "resolvers": ["selection.override", "adapter.reference"],
+      "backing_paths": [
+        "<plugin>/skills/<workflow-id>/circuit.yaml (defaults layer)",
+        "~/.config/circuit-next/config.yaml (user-global)",
+        "<project>/.circuit/config.yaml (project)",
+        "invocation arguments (ephemeral, in-memory)"
+      ],
+      "identity_fields": [],
+      "path_derived_fields": [],
+      "dangerous_sinks": [
+        "surplus-key rejection at config root and nested defaults",
+        "schema_version pinning (literal 1 at v0.1)",
+        "per-layer selection + dispatch composition input"
+      ],
+      "trust_boundary": "operator-local at user-global/project/invocation layers; plugin-author-signed at the defaults layer; engine validates .strict() key closure + schema_version literal at parse time. Composition of multiple layers is out of v0.1 scope (see specs/contracts/config.md Scope).",
+      "reference_surfaces": [],
+      "reference_evidence": [],
+      "migration_policy": "n/a",
+      "legacy_parse_policy": "n/a",
+      "dangling_reference_policy": "n/a"
+    },
+    {
+      "id": "config.layered",
+      "surface_class": "greenfield",
+      "compatibility_policy": "n/a",
+      "plane": "data-plane",
+      "description": "Layer-identity wrapper around a Config. Carries ConfigLayer (default | user-global | project | invocation), an optional source_path, and a validated Config. Distinct from the merged effective configuration at dispatch time (which is not a LayeredConfig).",
+      "contract": "specs/contracts/config.md",
+      "schema_file": "src/schemas/config.ts",
+      "schema_exports": ["LayeredConfig", "ConfigLayer"],
+      "writers": [
+        "circuit-next engine (config loader)",
+        "circuit-next engine (invocation-layer projection)"
+      ],
+      "readers": ["circuit-next engine (config layer composition)"],
+      "resolvers": [],
+      "backing_paths": ["in-memory wrapper around config.root (no standalone on-disk form)"],
+      "identity_fields": [],
+      "path_derived_fields": [],
+      "dangerous_sinks": [
+        "layer identity attribution during composition",
+        "source_path provenance for operator-facing diagnostics"
+      ],
+      "trust_boundary": "engine-computed wrapper around an already-validated config.root; each layer's inner config is re-validated through config.root before wrapping. source_path is advisory (v0.1 does not constrain filesystem validity).",
+      "reference_surfaces": [],
+      "reference_evidence": [],
+      "migration_policy": "n/a",
+      "legacy_parse_policy": "n/a",
+      "dangling_reference_policy": "n/a"
+    },
+    {
+      "id": "config.circuit-override",
+      "surface_class": "greenfield",
+      "compatibility_policy": "n/a",
+      "plane": "data-plane",
+      "description": "Per-workflow override slot stored in Config.circuits[workflow_id]. Currently carries an optional SelectionOverride; reserved for additional per-circuit override categories in v0.2. Strict-key rejection forbids smuggling new categories without a contract change.",
+      "contract": "specs/contracts/config.md",
+      "schema_file": "src/schemas/config.ts",
+      "schema_exports": ["CircuitOverride"],
+      "writers": ["plugin author (defaults)", "operator (user-global, project, invocation)"],
+      "readers": ["circuit-next engine (per-circuit selection composition)"],
+      "resolvers": ["selection.override"],
+      "backing_paths": [
+        "<plugin>/skills/<workflow-id>/circuit.yaml (defaults)",
+        "~/.config/circuit-next/config.yaml (user-global)",
+        "<project>/.circuit/config.yaml (project)",
+        "invocation arguments (ephemeral, in-memory)"
+      ],
+      "identity_fields": [],
+      "path_derived_fields": [],
+      "dangerous_sinks": [
+        "strict-key rejection (forbids `skills: string[]` v0.0 shortcut reintroduction)",
+        "per-circuit selection override composition"
+      ],
+      "trust_boundary": "operator-local at user-global/project/invocation layers; plugin-author-signed at the defaults layer. Record-key shape (WorkflowId) is validated by ids primitive; catalog-closure of the WorkflowId against installed workflows is NOT enforced at v0.1 (same posture as adapter.registry closure notes).",
       "reference_surfaces": [],
       "reference_evidence": [],
       "migration_policy": "n/a",

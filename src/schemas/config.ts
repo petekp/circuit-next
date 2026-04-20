@@ -112,29 +112,43 @@ export const CircuitOverride = z
   .strict();
 export type CircuitOverride = z.infer<typeof CircuitOverride>;
 
-export const Config = z.object({
-  schema_version: z.literal(1),
-  dispatch: DispatchConfig.default({
-    default: 'auto',
-    roles: {},
-    circuits: {},
-    adapters: {},
-  }),
-  circuits: z.record(WorkflowId, CircuitOverride).default({}),
-  defaults: z
-    .object({
-      selection: SelectionOverride.optional(),
-    })
-    .default({}),
-});
+// CONFIG-I1 + CONFIG-I4 + CONFIG-I6 + CONFIG-I7 — top-level Config and its
+// nested `defaults` object both `.strict()` so authorial typos (e.g.
+// `defuults: {...}` at root or `defaults: {selections: ...}` nested) fail
+// fast at parse time rather than silently stripping to empty defaults.
+// `.default(...)` on every non-version field preserves the ergonomic that
+// a minimal `{schema_version: 1}` parses as a fully-populated Config.
+export const Config = z
+  .object({
+    schema_version: z.literal(1),
+    dispatch: DispatchConfig.default({
+      default: 'auto',
+      roles: {},
+      circuits: {},
+      adapters: {},
+    }),
+    circuits: z.record(WorkflowId, CircuitOverride).default({}),
+    defaults: z
+      .object({
+        selection: SelectionOverride.optional(),
+      })
+      .strict()
+      .default({}),
+  })
+  .strict();
 export type Config = z.infer<typeof Config>;
 
 export const ConfigLayer = z.enum(['default', 'user-global', 'project', 'invocation']);
 export type ConfigLayer = z.infer<typeof ConfigLayer>;
 
-export const LayeredConfig = z.object({
-  layer: ConfigLayer,
-  source_path: z.string().optional(),
-  config: Config,
-});
+// CONFIG-I2 — `.strict()` on the layer wrapper: the three-field shape
+// (`layer`, `source_path?`, `config`) does not silently grow a fourth
+// field. Future ledger additions (checksum, origin, etc.) require an ADR.
+export const LayeredConfig = z
+  .object({
+    layer: ConfigLayer,
+    source_path: z.string().optional(),
+    config: Config,
+  })
+  .strict();
 export type LayeredConfig = z.infer<typeof LayeredConfig>;

@@ -944,15 +944,60 @@ describe('specs/artifacts.json — pending_rehome discipline (Codex HIGH #5)', (
     }
   });
 
-  // Positive assertion on the known v0.1 instance — adapter.registry carries
-  // the Config schemas pending Slice 26 config.md. Pinned here so a regression
-  // surfaces as a named test failure rather than hiding under generic shape.
-  it('adapter.registry.pending_rehome points at Slice 26 / config.*', () => {
+  // Slice 26 landing — the adapter.registry pending_rehome (Slice 26 / config.*)
+  // rehome is complete. adapter.registry no longer carries a pending_rehome
+  // block; the three config.* rows (config.root, config.layered,
+  // config.circuit-override) now home the rehomed schemas. Pinned here so a
+  // regression (accidentally re-adding pending_rehome, or deleting a config.*
+  // row) surfaces as a named test failure.
+  it('adapter.registry pending_rehome rehome is complete (Slice 26 landing)', () => {
     const art = file.artifacts.find((a) => a.id === 'adapter.registry') as
-      | { pending_rehome?: { target_slice?: number; target_artifact_prefix?: string } }
+      | { pending_rehome?: unknown; schema_exports?: string[] }
       | undefined;
-    expect(art?.pending_rehome?.target_slice).toBe(26);
-    expect(art?.pending_rehome?.target_artifact_prefix).toBe('config.*');
+    expect(art, 'adapter.registry must still exist after Slice 26').toBeDefined();
+    expect(
+      art?.pending_rehome,
+      'adapter.registry.pending_rehome must be absent after Slice 26 rehome',
+    ).toBeUndefined();
+    expect(
+      art?.schema_exports,
+      'adapter.registry.schema_exports narrowed to adapter-dispatch primitives only',
+    ).toEqual(['DispatchConfig', 'AdapterReference']);
+  });
+
+  it('config.* rehome targets (config.root / config.layered / config.circuit-override) exist with correct contract binding', () => {
+    for (const id of ['config.root', 'config.layered', 'config.circuit-override']) {
+      const art = file.artifacts.find((a) => a.id === id) as
+        | { contract?: string; schema_file?: string }
+        | undefined;
+      expect(art, `${id} must exist as a Slice 26 config.* rehome target`).toBeDefined();
+      expect(art?.contract, `${id}.contract binds to specs/contracts/config.md`).toBe(
+        'specs/contracts/config.md',
+      );
+      expect(art?.schema_file, `${id}.schema_file points at src/schemas/config.ts`).toBe(
+        'src/schemas/config.ts',
+      );
+    }
+  });
+
+  // Codex MED #2 fold-in — pin exact schema_exports split on the three
+  // config.* rehome targets so the semantic decomposition (which schemas
+  // live under which artifact) cannot drift silently. A reshuffle of
+  // e.g. `CircuitOverride` from `config.circuit-override` into
+  // `config.root` would otherwise pass the existence+contract+schema_file
+  // gate above.
+  it('config.* rehome schema_exports split is exactly as documented in specs/contracts/config.md', () => {
+    const expectedExports: Record<string, string[]> = {
+      'config.root': ['Config'],
+      'config.layered': ['LayeredConfig', 'ConfigLayer'],
+      'config.circuit-override': ['CircuitOverride'],
+    };
+    for (const [id, expected] of Object.entries(expectedExports)) {
+      const art = file.artifacts.find((a) => a.id === id) as
+        | { schema_exports?: string[] }
+        | undefined;
+      expect(art?.schema_exports, `${id}.schema_exports`).toEqual(expected);
+    }
   });
 });
 
