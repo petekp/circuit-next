@@ -106,23 +106,27 @@ the terrain. Three sentences at slice open, no new artifact.
 
 ## After-slice operator summary
 
-After each slice lands (commit + audit green), produce a plain-English
-wrap-up for the operator. Three beats, in order:
+After each slice lands, give the operator a plain-English wrap-up.
+Three short beats, in order:
 
-1. **What got done.** What the slice accomplished in a sentence or two.
-   No commit-body citations, no lane jargon. A friend-over-coffee summary.
-2. **Where we're headed next.** The next concrete candidate slice (or
-   operator-gated decision) and the arc it serves. Name the authoritative
-   plan file and section so the operator can verify.
-3. **Rough work remaining.** Order-of-magnitude signal: how many close
-   criteria are still open, how many slices remain in the current arc,
-   and whether phase-close ceremony is near or far. Approximate is fine;
-   precise-but-stale is worse than honest.
+1. **What got done.** One or two sentences on what the slice actually
+   accomplished.
+2. **What's next.** The next concrete thing to do.
+3. **How much is left.** Roughly — near the end of this phase, middle,
+   or a lot to go.
 
-The post-commit audit numbers (green/yellow/red counts, test delta) stay
-— they are the evidence the summary rests on. The plain-English beats go
-*after* those numbers so the operator gets a one-glance status before
-the narrative.
+**Write it like you'd explain it to someone walking up to your desk.**
+No project-internal shorthand — no lane names, close-criterion numbers
+(`CC#14`, `D10`, `F17`), ADR ids, slice codenames (`DOG+2`, `P2-MODEL-
+EFFORT`), phase-transition terminology (`ceremony commit`), or
+gate/ratchet/audit vocabulary. If a name matters, describe what it *is*
+in plain words. Pointers to plan files are fine when the operator might
+want to verify, but make them optional reading rather than the summary
+itself.
+
+Keep the audit numbers (pass counts, test delta) as a one-liner before
+the summary so the operator gets status at a glance — then the
+plain-English beats carry the meaning.
 
 ## Verification commands (Tier 0)
 
