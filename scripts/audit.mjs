@@ -3489,6 +3489,132 @@ export function checkAdapterBindingCoverage(rootDir = REPO_ROOT) {
   };
 }
 
+// Check 28 (Slice 41 — ADR-0009 §4 binding). Adapter invocation discipline:
+// `package.json` MUST NOT declare any forbidden-SDK dep identifier, because
+// ADR-0009 decides subprocess-per-adapter for v0 built-in adapters. A
+// future slice can relax this list via ADR-0009 reopen (Options A / B2 /
+// C / D in §3); until then any appearance of a forbidden id in
+// `dependencies`, `devDependencies`, `optionalDependencies`, or
+// `peerDependencies` fires red.
+//
+// Why package.json and not import-level scanning: at Slice 41 landing,
+// no adapter code exists yet. A dep-level guardrail catches the decision
+// violation at the point a future slice tries to add the SDK, which is
+// strictly earlier than an import appearing. An import-level check over
+// `src/runtime/adapters/**` is deferred to the adapter-landing slice
+// (P2.4 / Slice 42).
+// Direct vendor SDKs. A future slice adding any of these to package.json
+// must reopen ADR-0009 via the matching §3 option first.
+//
+// Bypass-hardening additions from Codex Slice 41 HIGH 2 fold-in
+// (2026-04-21): wrapper/provider SDKs (Vercel AI SDK `ai` + `@ai-sdk/*`;
+// LangChain `@langchain/*` vendor bindings) also enable in-process
+// direct-SDK-style invocation; these would route built-ins around the
+// subprocess decision without tripping the pre-fold-in eight-identifier
+// list. They are named-out below.
+//
+// Scope limitation (Codex Slice 41 HIGH 2 fold-in, part 2): Check 28 is
+// a root-`package.json`-only guard. Lockfile packages, nested workspace
+// manifests, and arbitrary `require('some-provider-sdk')` imports from
+// transitively-available packages are NOT detected by this check. The
+// import-level scan over `src/runtime/adapters/**` is mandatory at
+// Slice 42 (P2.4 — first adapter-code slice) per the ADR-0009 §4
+// Slice 42 pre-adapter-code binding; until then, adapter code does not
+// exist so import scanning is vacuous.
+export const FORBIDDEN_ADAPTER_SDK_DEPS = Object.freeze([
+  // Direct vendor SDKs (v0 pre-fold-in list).
+  '@anthropic-ai/sdk',
+  '@anthropic-ai/tokenizer',
+  '@anthropic-ai/bedrock-sdk',
+  '@anthropic-ai/vertex-sdk',
+  'openai',
+  '@openai/realtime-api-beta',
+  '@google/genai',
+  '@google/generative-ai',
+  // Wrapper/provider SDKs (Codex Slice 41 HIGH 2 fold-in). These packages
+  // expose direct-SDK-style APIs that would route adapter dispatches
+  // in-process without invoking the vendor CLI, thereby circumventing
+  // ADR-0009 §1 subprocess-per-adapter even though no direct vendor SDK
+  // appears in deps.
+  'ai', // Vercel AI SDK (provides generateText/streamText/etc. in-process)
+  '@ai-sdk/anthropic',
+  '@ai-sdk/openai',
+  '@ai-sdk/google',
+  '@langchain/anthropic',
+  '@langchain/openai',
+  '@langchain/google-genai',
+]);
+
+const PACKAGE_JSON_DEP_FIELDS = Object.freeze([
+  'dependencies',
+  'devDependencies',
+  'optionalDependencies',
+  'peerDependencies',
+]);
+
+export function checkAdapterInvocationDiscipline(rootDir = REPO_ROOT, opts = {}) {
+  const pkgPath = opts.packageJsonPath ?? join(rootDir, 'package.json');
+  if (!existsSync(pkgPath)) {
+    return {
+      level: 'red',
+      detail: `package.json not found at ${pkgPath} — adapter-invocation-discipline check cannot verify dep fields`,
+    };
+  }
+
+  let pkg;
+  try {
+    pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+  } catch (err) {
+    return {
+      level: 'red',
+      detail: `package.json failed to parse: ${err.message}`,
+    };
+  }
+
+  const forbiddenList = Array.isArray(opts.forbiddenDeps)
+    ? opts.forbiddenDeps
+    : FORBIDDEN_ADAPTER_SDK_DEPS;
+
+  if (forbiddenList.length === 0) {
+    // Defensive: an empty list would pass green vacuously; treat as a
+    // misconfiguration at the callsite.
+    return {
+      level: 'red',
+      detail:
+        'FORBIDDEN_ADAPTER_SDK_DEPS is empty — check would pass vacuously; populate the list or remove the check',
+    };
+  }
+
+  const matches = [];
+  for (const field of PACKAGE_JSON_DEP_FIELDS) {
+    const deps = pkg[field];
+    if (deps === undefined || deps === null) continue;
+    if (typeof deps !== 'object' || Array.isArray(deps)) {
+      return {
+        level: 'red',
+        detail: `package.json \`${field}\` must be a plain object; got ${Array.isArray(deps) ? 'array' : typeof deps}`,
+      };
+    }
+    for (const dep of Object.keys(deps)) {
+      if (forbiddenList.includes(dep)) {
+        matches.push(`${field}.${dep}`);
+      }
+    }
+  }
+
+  if (matches.length > 0) {
+    return {
+      level: 'red',
+      detail: `forbidden adapter-SDK dep(s) declared in package.json: ${matches.join(', ')}. ADR-0009 decides subprocess-per-adapter for v0; to add this dep, reopen ADR-0009 via the matching §3 option (A = SDK direct, B2 = runner pause/resume + native Task, C = pooling, D = streaming) with the named forcing function, and update FORBIDDEN_ADAPTER_SDK_DEPS accordingly`,
+    };
+  }
+
+  return {
+    level: 'green',
+    detail: `package.json clean: 0 forbidden dep(s) across ${PACKAGE_JSON_DEP_FIELDS.length} dep-fields (forbidden-list size: ${forbiddenList.length})`,
+  };
+}
+
 const GREEN = '\x1b[32m';
 const YELLOW = '\x1b[33m';
 const RED = '\x1b[31m';
@@ -3930,11 +4056,25 @@ function main() {
     detail: adapterBindingCoverage.detail,
   });
 
-  // Check 28: npm run verify currently green. (Runs last so the report's
-  // bottom line is the verify-gate status; numbering bumped 27 → 28 by
-  // Slice 38 which inserted Check 27 for adapter-binding coverage. Prior
-  // bumps: Slice 35 25 → 27; P2.3 24 → 25; P2.2 23 → 24; P2.1 22 → 23;
-  // Slice 31a 21 → 22; Slice 26b 15 → 20; Slice 25d 20 → 21.)
+  // Check 28: Adapter invocation discipline (Slice 41 — ADR-0009 §4).
+  // Package.json must not declare any forbidden-SDK dep identifier; v0
+  // invocation pattern is subprocess-per-adapter. Vacuous at Slice 41
+  // (no adapter code yet), gains empirical meaning at Slice 42 (P2.4)
+  // when the first adapter module lands.
+  const adapterInvocationDiscipline = checkAdapterInvocationDiscipline();
+  counters[adapterInvocationDiscipline.level]++;
+  findings.push({
+    level: adapterInvocationDiscipline.level,
+    check: 'Adapter invocation discipline (Slice 41 / ADR-0009)',
+    detail: adapterInvocationDiscipline.detail,
+  });
+
+  // Check 29: npm run verify currently green. (Runs last so the report's
+  // bottom line is the verify-gate status; numbering bumped 28 → 29 by
+  // Slice 41 which inserted Check 28 for adapter invocation discipline.
+  // Prior bumps: Slice 38 27 → 28; Slice 35 25 → 27; P2.3 24 → 25;
+  // P2.2 23 → 24; P2.1 22 → 23; Slice 31a 21 → 22; Slice 26b 15 → 20;
+  // Slice 25d 20 → 21.)
   const verify = verifyStatus();
   if (verify.pass) {
     counters.green++;

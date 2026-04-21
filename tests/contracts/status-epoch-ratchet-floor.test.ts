@@ -483,11 +483,21 @@ describe('checkPinnedRatchetFloor (Slice 26b full-file check)', () => {
     // advanced it to 835 (+5 net regression guards: two-prong Check 26
     // tightening +6 and -3 superseded pre-tightening tests; +2 synthetic
     // shape tests addressing the empty-allowlist vacuity hole per
-    // convergent Claude MED 1 + Codex LOW 2 fold-in). This assertion
-    // pins the CURRENT slice id so any future floor advancement that
-    // forgets to update the marker fails the test immediately — the
-    // slice id changes only when the floor changes.
-    expect(data?.last_advanced_in_slice).toBe('40');
+    // convergent Claude MED 1 + Codex LOW 2 fold-in). Slice 41
+    // (ADR-0009 adapter invocation pattern — subprocess-per-adapter
+    // decision + Check 28 binding) advanced it to 844 (+9 static test
+    // declarations in tests/contracts/adapter-invocation-discipline.test.ts:
+    // 6 initial — live-repo regression guard + three forbidden-dep
+    // negative cases + FORBIDDEN_ADAPTER_SDK_DEPS structural invariants
+    // + empty-list vacuity guard; +3 Codex-fold-in — peerDependencies
+    // negative test (MED 2) + `ai` Vercel-AI-SDK bypass-guard red
+    // (HIGH 2) + set-equality pin against the 15-entry expected
+    // forbidden set (MED 2)). This assertion pins the CURRENT slice id
+    // so any
+    // future floor advancement that forgets to update the marker fails
+    // the test immediately — the slice id changes only when the floor
+    // changes.
+    expect(data?.last_advanced_in_slice).toBe('41');
   });
 
   it('readPinnedRatchetFloor returns null when the file is missing', () => {

@@ -244,6 +244,22 @@ export type WorkflowKindDispatchPolicy = {
 export const WORKFLOW_KIND_DISPATCH_POLICY: Readonly<Record<string, WorkflowKindDispatchPolicy>>;
 export function checkAdapterBindingCoverage(rootDir?: string): AuditCheckResult;
 
+// Slice 41 — ADR-0009 adapter invocation discipline. package.json MUST NOT
+// declare any forbidden-SDK dep identifier; v0 invocation pattern is
+// subprocess-per-adapter. The forbidden list is extensible via ADR-0009
+// reopen (Options A / B2 / C / D in §3).
+export const FORBIDDEN_ADAPTER_SDK_DEPS: readonly string[];
+export type CheckAdapterInvocationDisciplineOptions = {
+  /** Optional override of the package.json path for test fixtures. */
+  packageJsonPath?: string;
+  /** Optional override of the forbidden-dep allowlist for test fixtures. */
+  forbiddenDeps?: readonly string[];
+};
+export function checkAdapterInvocationDiscipline(
+  rootDir?: string,
+  opts?: CheckAdapterInvocationDisciplineOptions,
+): AuditCheckResult;
+
 // Slice 30 — DOG+2 slice:doctor reuses the lane and framing literals enforced
 // by the audit so the operator briefing script cannot drift from the gate.
 export const LANES: readonly [

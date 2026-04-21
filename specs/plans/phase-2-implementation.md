@@ -270,13 +270,16 @@ post-P2.4 slice once the capability descriptor surface exists.
 
 **Deliverable:** `src/runtime/adapters/agent.ts` (or similar location
 chosen at slice time) implementing the `ResolvedAdapter`-to-dispatch
-boundary for in-process Anthropic subagent invocation, **with no
-repo-write tool capability** (file-write, directory-create, shell-
-write subset) — the adapter surface at v0 reads but does not write
-under the repo working tree; any artifact materialization flows
-through the engine-owned `result-writer.ts` and the workflow close-
-step path (per RESULT-I1 + ADR-0008 §Decision.3a materialization
-rule). Runner integration: `dispatch.started` event carries
+boundary via a **`claude` CLI subprocess invocation** (per ADR-0009
+§1 invocation-pattern decision), **with no repo-write tool capability**
+(file-write, directory-create, shell-write subset) — the adapter
+surface at v0 reads but does not write under the repo working tree;
+any artifact materialization flows through the engine-owned
+`result-writer.ts` and the workflow close-step path (per RESULT-I1
++ ADR-0008 §Decision.3a materialization rule). The subprocess is
+invoked with bounded stdio (no inherited file handles) and a
+bounded wall-clock timeout; no write-capable tools are passed to
+the subprocess's tool-use surface at v0. Runner integration: `dispatch.started` event carries
 `adapter.name = 'agent'` (via the `ResolvedAdapter` discriminated
 union at `src/schemas/adapter.ts`; corrected from the earlier
 `resolved_adapter.name` prose per ADR-0007 §Amendment Slice 37);
@@ -292,10 +295,48 @@ explicitly (no repo-write tool capability, ADR-0007 trigger #6
 context); Codex challenger review frontmatter names the capability-
 boundary as an inspected review item.
 
+**Additional acceptance evidence — CLI no-write capability proof
+(ADR-0009 §2.v / Codex Slice 41 HIGH 4 fold-in).** P2.4 MUST
+empirically verify that the `claude -p` (or equivalent headless)
+subprocess invocation can enforce the no-repo-write capability
+boundary. The proof must be one of: (a) a documented CLI flag that
+restricts tool-use to a read-only subset, with the adapter
+configured to use it + a test that confirms a write attempt fails;
+or (b) a demonstrable subprocess-level mechanism (stdio-only, no
+inherited filehandles, no shell env that exposes write tools) that
+provably blocks writes + a test that confirms a write attempt
+fails. If neither (a) nor (b) can be demonstrated, ADR-0009 §6
+reopen trigger 5 fires and the subprocess choice is re-opened
+BEFORE P2.4 can land against it. The proof artifact lives in the
+P2.4 Codex challenger review file and is cited in the P2.4 commit
+body.
+
+**Invocation-pattern authority (ADR-0009, Slice 41 amendment).**
+Per `specs/adrs/ADR-0009-adapter-invocation-pattern.md` (ACCEPTED
+at Slice 41 ceremony commit), the `agent` adapter invokes its
+dispatch target as a **subprocess of the Node.js runtime** via a
+headless `claude` CLI call (print mode or equivalent), not via
+direct `@anthropic-ai/sdk` integration. The subprocess decision
+narrows P2.4's deliverable: the adapter reads stdin/stdout from a
+`child_process.spawn`-spawned `claude` subprocess; stdout bytes
+hash into `dispatch.result.result_artifact_hash` per Slice 37
+event schema; the validated artifact materializes at
+`writes.artifact.path` per ADR-0008 §Decision.3a. No new external
+dependency beyond Node stdlib (`node:child_process`). Anthropic
+SDK, runner pause/resume + native Task tool, subprocess pooling,
+and streaming-token integration are all deferred with named reopen
+triggers recorded in ADR-0009 §3.
+
 **Alternate framing:** implement `codex` adapter first since the
 `/codex` skill already has the wrapper script. Rejected because
-`agent` is the simplest same-process path and isolates the adapter-
-boundary question from cross-process subprocess complexity.
+`agent` is the baseline dispatcher that MUST work without optional
+adapters installed (operator product constraint 2026-04-21: "Claude
+Code out-of-box, no Codex required"); learning the subprocess
+pattern on the non-optional adapter first means `codex` (Slice
+~43+) becomes a near-copy against an established pattern rather
+than the pattern-setter. The earlier "same-process simpler than
+cross-process" rationale was SDK-flavored plan prose superseded by
+ADR-0009's subprocess-per-adapter decision.
 
 ### P2.5 — `explore` end-to-end fixture run
 

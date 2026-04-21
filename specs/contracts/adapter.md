@@ -72,14 +72,24 @@ invariant; tested in `tests/contracts/schema-parity.test.ts`.
   declared semantic distinctions; adding a built-in is a breaking
   change.** The enum is the frozen tuple `['agent', 'codex',
   'codex-isolated']`. The three built-ins mean:
-  - `agent` — the Claude Code **Agent tool** (Anthropic-model subagent
-    dispatched via the plugin's adapter bridge). Same-process; inherits
-    the operator session's filesystem + environment.
-  - `codex` — the Codex CLI dispatched via `codex exec` in the operator's
-    current session context. Same-process as `agent`; distinct model
-    vendor.
-  - `codex-isolated` — the Codex CLI dispatched in a git worktree (or a
-    distinct-UID sandbox once Tier 2+ lands). Separate filesystem view;
+  - `agent` — the Claude Code headless CLI (`claude -p` print-mode or
+    equivalent), invoked as a **subprocess** of the Node.js runtime per
+    ADR-0009 §1 (v0 invocation-pattern decision: subprocess-per-adapter).
+    Superseded prior wording described this as "the Claude Code Agent
+    tool (same-process)" — that phrasing was SDK-flavored and is replaced
+    here to match ADR-0009's subprocess-per-adapter decision. The
+    subprocess inherits the operator session's filesystem + environment
+    via the parent process but runs as a child `claude` executable,
+    not in the host Node process. No `@anthropic-ai/sdk` dep at v0;
+    ADR-0009 §4 Check 28 enforces this at package.json level.
+  - `codex` — the Codex CLI dispatched via `codex exec` as a
+    **subprocess** of the Node.js runtime (same invocation pattern as
+    `agent` per ADR-0009 §1) in the operator's current session context.
+    Same host session as `agent`; distinct model vendor; distinct
+    subprocess.
+  - `codex-isolated` — the Codex CLI dispatched as a subprocess in a
+    git worktree (or a distinct-UID sandbox once Tier 2+ lands). Same
+    subprocess invocation pattern as `codex`; separate filesystem view;
     implementer isolation discipline per CLAUDE.md Hard Invariants #1-#3.
   The three are NOT interchangeable: `codex` and `codex-isolated`
   dispatch to the same binary but under different isolation regimes;

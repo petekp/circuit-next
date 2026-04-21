@@ -117,10 +117,18 @@ same artifact shape as the corresponding reference Circuit workflow at
 
 **CC#P2-2 — Real agent dispatch.**
 
-At least one non-dry-run adapter (`agent` in-process Anthropic subagent
-or `codex` cross-process) lands with a concrete request → receipt →
-result round-trip verified by the runtime boundary (event-writer →
-reducer → result-writer) and exercised by a fixture.
+At least one non-dry-run adapter (`agent` as a **headless `claude` CLI
+subprocess** per ADR-0009 §1, or `codex` as a `codex exec` subprocess)
+lands with a concrete request → receipt → result round-trip verified by
+the runtime boundary (event-writer → reducer → result-writer) and
+exercised by a fixture. ADR-0009 (Slice 41) amended this criterion: the
+earlier "`agent` in-process Anthropic subagent or `codex` cross-process"
+wording predated the invocation-pattern decision and described two
+different invocation patterns (same-process for `agent`, subprocess for
+`codex`). ADR-0009 §1 unified both built-ins onto subprocess-per-adapter;
+this clause is updated to match. The earlier phrasing is preserved only
+in historical prose (ADR-0007 §Provenance / commit history); authority
+here is the subprocess wording above.
 
 - **Enforcement binding (executable):**
   - Adapter file: `src/runtime/adapters/agent.ts` (or sibling for
