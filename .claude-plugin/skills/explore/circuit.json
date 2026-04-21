@@ -2,7 +2,7 @@
   "schema_version": "2",
   "id": "explore",
   "version": "0.1.0",
-  "purpose": "Phase 2 first-parity target workflow per ADR-0007 CC#P2-1. Full-spine investigation: frame → analyze → synthesize → review → close. Canonical phase set {frame, analyze, act, review, close} with omits=[plan, verify] per explore contract §Canonical phase set.",
+  "purpose": "Phase 2 first-parity target workflow per ADR-0007 CC#P2-1. Full-spine investigation: frame → analyze → synthesize → review → close. Canonical phase set {frame, analyze, act, review, close} with omits=[plan, verify] per explore contract §Canonical phase set. Synthesize and Review are worker-dispatch steps per ADR-0008 (distinct-adapter Knight-Leveson boundary crossings); Frame, Analyze, and Close remain orchestrator-synthesis (framing, decomposition, aggregation).",
   "entry": {
     "signals": {
       "include": ["explore", "investigate", "research", "understand"],
@@ -53,7 +53,7 @@
   "spine_policy": {
     "mode": "partial",
     "omits": ["plan", "verify"],
-    "rationale": "Explore is an investigation workflow — plan-mode is folded into Frame (investigation scoping); verify is covered by Review (adversarial pass over synthesis replaces mechanical verification for investigation output). See specs/contracts/explore.md §Canonical phase set for the full rationale."
+    "rationale": "Explore is an investigation workflow — plan-mode is folded into Frame (investigation scoping); verify is omitted because explore output is not executable and does not admit mechanical verification. Review is the adversarial pass that IS in scope and, per ADR-0008, is a distinct-adapter review dispatch (not a weaker substitute for verify as previously described at v0.1 authoring). See specs/contracts/explore.md §Canonical phase set for the full rationale."
   },
   "steps": [
     {
@@ -108,52 +108,60 @@
     },
     {
       "id": "synthesize-step",
-      "title": "Synthesize — produce explore.synthesis",
+      "title": "Synthesize — produce explore.synthesis (adapter-bound dispatch per ADR-0008)",
       "protocol": "explore-synthesize@v1",
       "reads": ["artifacts/brief.json", "artifacts/analysis.json"],
       "routes": {
         "pass": "review-step"
       },
-      "executor": "orchestrator",
-      "kind": "synthesis",
+      "executor": "worker",
+      "kind": "dispatch",
+      "role": "implementer",
       "writes": {
         "artifact": {
           "path": "artifacts/synthesis.json",
           "schema": "explore.synthesis@v1"
-        }
+        },
+        "request": "artifacts/dispatch/synthesize.request.json",
+        "receipt": "artifacts/dispatch/synthesize.receipt.txt",
+        "result": "artifacts/dispatch/synthesize.result.json"
       },
       "gate": {
-        "kind": "schema_sections",
+        "kind": "result_verdict",
         "source": {
-          "kind": "artifact",
-          "ref": "artifact"
+          "kind": "dispatch_result",
+          "ref": "result"
         },
-        "required": ["recommendation", "maps_to_success_condition"]
+        "pass": ["accept"]
       }
     },
     {
       "id": "review-step",
-      "title": "Review — adversarial pass over synthesis",
+      "title": "Review — adversarial pass over synthesis (adapter-bound dispatch per ADR-0008)",
       "protocol": "explore-review@v1",
       "reads": ["artifacts/brief.json", "artifacts/analysis.json", "artifacts/synthesis.json"],
       "routes": {
         "pass": "close-step"
       },
-      "executor": "orchestrator",
-      "kind": "synthesis",
+      "executor": "worker",
+      "kind": "dispatch",
+      "role": "reviewer",
       "writes": {
         "artifact": {
           "path": "artifacts/review-verdict.json",
           "schema": "explore.review-verdict@v1"
-        }
+        },
+        "request": "artifacts/dispatch/review.request.json",
+        "receipt": "artifacts/dispatch/review.receipt.txt",
+        "result": "artifacts/dispatch/review.result.json"
       },
       "gate": {
-        "kind": "schema_sections",
+        "kind": "result_verdict",
         "source": {
-          "kind": "artifact",
-          "ref": "artifact"
+          "kind": "dispatch_result",
+          "ref": "result"
         },
-        "required": ["verdict", "objections"]
+        "pass": ["accept", "accept-with-fold-ins"]
       }
     },
     {

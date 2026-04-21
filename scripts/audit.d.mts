@@ -217,6 +217,28 @@ export function checkArtifactBackingPathIntegrity(
 export const PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE: number;
 export function checkArcCloseCompositionReviewPresence(rootDir?: string): AuditCheckResult;
 
+// Slice 38 — adapter-binding coverage gate (ADR-0008 §Decision.4 +
+// §Decision.3a). For every workflow fixture under
+// `.claude-plugin/skills/<kind>/circuit.json` whose `id` is registered in
+// WORKFLOW_KIND_CANONICAL_SETS (scheduled for P2.5+ enforcement under
+// CC#P2-1), enforces three rules:
+//   (1) at least one step with `kind: "dispatch"`;
+//   (2) kind-specific dispatch step-id binding (from
+//       WORKFLOW_KIND_DISPATCH_POLICY) — required step ids MUST exist
+//       and have kind=dispatch;
+//   (3) require_writes_artifact_on_dispatch — every dispatch step
+//       declares writes.artifact alongside writes.result so the
+//       materialization rule at §Decision.3a has a target.
+// Red on any rule violation. Exempt fixtures pass through green; unknown
+// workflow kinds produce yellow findings (Codex Slice 38 MED 2 fold-in).
+export type WorkflowKindDispatchPolicy = {
+  readonly require_dispatch_step_ids: readonly string[];
+  readonly require_writes_artifact_on_dispatch: boolean;
+  readonly authority: string;
+};
+export const WORKFLOW_KIND_DISPATCH_POLICY: Readonly<Record<string, WorkflowKindDispatchPolicy>>;
+export function checkAdapterBindingCoverage(rootDir?: string): AuditCheckResult;
+
 // Slice 30 — DOG+2 slice:doctor reuses the lane and framing literals enforced
 // by the audit so the operator briefing script cannot drift from the gate.
 export const LANES: readonly [

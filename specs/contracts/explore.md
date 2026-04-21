@@ -1,11 +1,14 @@
 ---
 contract: explore
 status: draft
-version: 0.1
-schema_source: .claude-plugin/skills/explore/circuit.json (fixture; no dedicated src/schemas/ file at v0.1 — explore is a workflow-specific contract, not a new domain contract. Artifact schemas authored at P2.10.)
+version: 0.2
+schema_source: .claude-plugin/skills/explore/circuit.json (fixture; no dedicated src/schemas/ file at v0.2 — explore is a workflow-specific contract, not a new domain contract. Artifact schemas authored at P2.10.)
 last_updated: 2026-04-21
-depends_on: [workflow, phase, step, selection, rigor, lane, skill]
+depends_on: [workflow, phase, step, selection, rigor, lane, skill, adapter]
 codex_adversarial_review: specs/reviews/explore-md-v0.1-codex.md
+codex_adversarial_review_v0_2: specs/reviews/arc-slice-38-dispatch-granularity-adr-0008-codex.md
+adr_bindings:
+  - specs/adrs/ADR-0008-dispatch-granularity-modeling.md (v0.2 amendment — Synthesize and Review are dispatch steps; Review weaker-substitute rationale retired)
 artifact_ids:
   - explore.brief
   - explore.analysis
@@ -115,6 +118,52 @@ ADR-0007 §6 Precedent firewall:
 **Canonical set:** `{frame, analyze, act, review, close}`.
 **Omits:** `{plan, verify}` (partial spine).
 
+### Executor and kind per phase (ADR-0008 binding, v0.2 amendment)
+
+ADR-0008 locks the executor + kind for each phase in the v0.2
+amendment. The canonical phase set above is unchanged; what this
+subsection adds is the per-phase dispatch-granularity binding.
+
+| Phase (title / canonical) | executor        | kind        | role           | writes shape                                                                 | gate               |
+|---------------------------|-----------------|-------------|----------------|------------------------------------------------------------------------------|--------------------|
+| Frame / `frame`           | `orchestrator`  | `synthesis` | —              | `{artifact}`                                                                 | `schema_sections`  |
+| Analyze / `analyze`       | `orchestrator`  | `synthesis` | —              | `{artifact}`                                                                 | `schema_sections`  |
+| Synthesize / `act`        | `worker`        | `dispatch`  | `implementer`  | `{artifact, request, receipt, result}`                                       | `result_verdict`   |
+| Review / `review`         | `worker`        | `dispatch`  | `reviewer`     | `{artifact, request, receipt, result}`                                       | `result_verdict`   |
+| Close / `close`           | `orchestrator`  | `synthesis` | —              | `{artifact}`                                                                 | `schema_sections`  |
+
+**Why Synthesize and Review are dispatch steps.** Synthesis IS the
+investigation output (the model doing the work); Review IS the
+adversarial pass (the model doing the checking). If the orchestrator
+model does both, explore produces same-model self-review —
+LLM-on-LLM corroboration the methodology rejects (CLAUDE.md
+§Cross-model challenger protocol; ADR-0001 Addendum B CC#15
+structural-separation grounds).
+
+Flipping these two phases to worker-dispatch makes the
+**dispatch-machinery routing** a contract-visible surface: the
+step schema carries a `role` tag, a request/receipt/result
+transcript, and a `ResultVerdictGate` that every
+orchestrator-synthesis step lacks. **The v0.2 schema layer does
+NOT enforce that the implementer-role adapter and the reviewer-
+role adapter are distinct** (Codex Slice 38 HIGH 1 weaker-evidence
+disclosure per ADR-0007 §6.4): `src/schemas/config.ts`
+`DispatchConfig.roles` permits both roles to bind to the same
+adapter. Distinct-adapter / distinct-model enforcement lands as
+evidential guarantee at P2.4 (real adapter) + P2.5 (end-to-end
+parity test asserting distinct receipt-ids / request-hashes across
+roles). The v0.2 contract widens the *precondition* for that
+enforcement; the enforcement itself is deferred. See ADR-0008
+§Decision.2 (iii) and §Decision.3 for the full four-ground
+analysis and the weaker-evidence disclosure.
+
+**Why Frame, Analyze, Close stay orchestrator-synthesis.** Framing
+(stating the subject and success condition), decomposition
+(producing aspects with evidence), and aggregation (composing prior
+artifacts into a run result) are bookkeeping the orchestrator does.
+They do not benefit from crossing a model boundary; their output is
+deterministic given the inputs.
+
 **Rationale for `Synthesize → act` (Codex HIGH 4 fold-in — rejected
 alternative).** The contentious mapping is `Synthesize`. Two
 candidate canonicals are reasonable:
@@ -141,20 +190,56 @@ workflow. Investigation-planning is folded into the Frame phase
 stated). There is no separate plan-mode producing a plan artifact;
 the explore.brief serves that role.
 
-**Rationale for `verify` omission (Codex MED 9 fold-in — weaker-
-substitute wording).** Explore produces investigation output (not
-executable artifacts), so there is no mechanical verification step
-analogous to `build`'s test-run gate. The Review phase provides an
-adversarial pass over the synthesis that is a **weaker substitute**
-for verify, not a full replacement: the v0.1 Review phase has
-`executor: "orchestrator"` and `kind: "synthesis"` — it is not a
-distinct-adapter review dispatch, does not cross a Knight-Leveson
-model boundary, and does not emit a result-verdict gate distinct
-from the phase gate. A future variant that wants stronger review
-(e.g., dispatching Codex as the reviewer via the P2.4 agent adapter)
-would either strengthen the Review phase semantics in a subsequent
-slice or introduce a `verify` canonical with a mechanical check. v0.1
-is scoped narrower than that.
+**Rationale for `verify` omission (v0.2 amendment — ADR-0008
+widening; retires the v0.1 "weaker substitute" wording; Codex
+Slice 38 HIGH 1 weaker-evidence disclosure folded in).** Explore
+produces investigation output (not executable artifacts), so there
+is no mechanical verification step analogous to `build`'s test-run
+gate. The Review phase is the adversarial pass that IS in scope,
+and per ADR-0008 v0.2 it is now a **worker-dispatch review step
+with `role: "reviewer"`** — a contract-visible routing change
+(from v0.1's orchestrator-synthesis).
+
+**What the widening guarantees at v0.2.** Review has `executor:
+"worker"`, `kind: "dispatch"`, `role: "reviewer"`; it emits a
+`ResultVerdictGate` with `source: dispatch_result` distinct from
+the SchemaSectionsGate used at orchestrator-synthesis phases; it
+emits the five-event dispatch transcript per ADR-0007 CC#P2-2
++ §Amendment (Slice 37).
+
+**What the widening does NOT guarantee at v0.2 (weaker-evidence
+disclosure per ADR-0007 §6.4; Codex Slice 38 HIGH 1 fold-in).**
+The `role: "reviewer"` tag binds to
+`DispatchConfig.roles.reviewer` at runtime. The v0.2 schema layer
+does NOT enforce that the reviewer-role adapter is distinct from
+the implementer-role adapter that wrote the synthesis —
+`src/schemas/config.ts` `DispatchConfig.roles` permits both roles
+to bind to the same adapter, and `ResolvedAdapter` at
+`src/schemas/adapter.ts:59-63` carries no
+"differs-from-prior-dispatch" field. Distinct-adapter /
+Knight-Leveson-boundary enforcement is therefore an **evidential
+guarantee that lands at P2.4 (real adapter implementation) + P2.5
+(end-to-end parity test)**, not a contract-level guarantee at
+v0.2. The widening gives us a contract-visible precondition;
+evidential enforcement comes later.
+
+**The v0.1 "weaker substitute" wording is explicitly retired.** It
+was honest about v0.1 (Review was `executor: "orchestrator"`,
+`kind: "synthesis"`, same model in a loop). The v0.2 dispatch
+flip lifts Review out of same-model synthesis and into the
+dispatch-machinery-routed surface where distinct-adapter
+enforcement BECOMES POSSIBLE at P2.4/P2.5. `verify` remains
+omitted not because Review is a weaker substitute, but because
+explore output is not executable and does not admit mechanical
+verification regardless of adapter dispatch. The omission stands
+for a different reason than before.
+
+**What would reintroduce `verify`.** A future variant of explore
+that emits executable artifacts (e.g., a generated migration
+script) would need `verify` to hold a mechanical check. That would
+be a different workflow kind (e.g., `explore-codegen`) with its
+own canonical set, not an amendment to this contract. This
+contract is stable for investigation output.
 
 ## Invariant (single — EXPLORE-I1)
 
@@ -178,8 +263,9 @@ implementing enforcement that belongs to later slices.
      verify]` (order-independent set equality).
 
   **Scope of EXPLORE-I1 enforcement (Codex HIGH 3 fold-in — narrowed
-  to what is actually enforced).** `checkSpineCoverage` (Check 24)
-  enforces (1) and (2) above. It does **not** currently enforce:
+  to what is actually enforced; v0.2 ADR-0008 amendment adds Check
+  27 coverage).** `checkSpineCoverage` (Check 24) enforces (1) and
+  (2) above. It does **not** currently enforce:
   - Rationale length or rationale-content (the phase.md PHASE-I4
     rationale ≥20 chars is a schema-level check, not an
     explore-specific semantic check).
@@ -197,8 +283,27 @@ implementing enforcement that belongs to later slices.
   of EXPLORE-I1 (parsing the fixture through `Workflow.safeParse`
   + enforcing rationale content) is deferred to P2.5.
 
-  Enforced by `checkSpineCoverage` (Check 24 at P2.3 landing) and
-  `tests/contracts/spine-coverage.test.ts`.
+  **Executor/kind shape is enforced by `Workflow.safeParse`, not by
+  Check 24 or EXPLORE-I1.** After ADR-0008, Synthesize and Review
+  must be `DispatchStep`-shaped (`executor: "worker"`, `kind:
+  "dispatch"`, `role` present, `writes: {artifact?, request,
+  receipt, result}`, `gate: ResultVerdictGate`). This is enforced at
+  the base-schema layer via
+  `src/schemas/step.ts` `DispatchStep` and
+  `src/schemas/gate.ts` `ResultVerdictGate` — a fixture that fails
+  these shape constraints fails `Workflow.safeParse` before Check 24
+  runs.
+
+  **Adapter-binding coverage is enforced by Check 27.** Per ADR-0008
+  §Decision.4 and `scripts/audit.mjs` `checkAdapterBindingCoverage`,
+  any workflow fixture whose `id` is in `WORKFLOW_KIND_CANONICAL_SETS`
+  (today: `explore`) must exercise at least one `kind: "dispatch"`
+  step. A fixture with zero dispatch steps is red.
+
+  Enforced by `checkSpineCoverage` (Check 24 at P2.3 landing),
+  `checkAdapterBindingCoverage` (Check 27 at Slice 38 — ADR-0008
+  landing), and `tests/contracts/spine-coverage.test.ts` +
+  `tests/contracts/adapter-binding-coverage.test.ts`.
 
 ## Deferred properties (enforcement-deferred, ledger-phase2-property)
 
@@ -285,6 +390,44 @@ duplicate input rather than add value. A future slice may widen
 Close to read all prior artifacts if the aggregate result shape
 requires it — that is an explicit amendment trigger.
 
+**ADR-0008 provenance note (v0.2 amendment).** After the Slice 38
+dispatch-kind flip, the `explore.synthesis` and
+`explore.review-verdict` artifacts are **dispatch-step outputs**,
+not orchestrator-synthesis outputs. Their content shape is
+unchanged; their provenance is now model-authored via adapter
+dispatch (implementer-role adapter at Synthesize, reviewer-role
+adapter at Review — distinct-adapter enforcement is evidential at
+P2.4/P2.5 per §verify-omission rationale; see Codex Slice 38
+HIGH 1 disclosure). The five-event dispatch transcript
+(`dispatch.started` → `dispatch.request` → `dispatch.receipt` →
+`dispatch.result` → `dispatch.completed`) is recorded per ADR-0007
+CC#P2-2 + ADR-0007 §Amendment (Slice 37). The dispatch transcript
+write slots (`request`, `receipt`, `result`) live alongside the
+artifact in the step's writes shape.
+
+**Dispatch result-to-artifact materialization (ADR-0008
+§Decision.3a; Codex Slice 38 HIGH 2 fold-in).** The dispatch step's
+`writes.result` path (the raw adapter output) and the
+`writes.artifact.path` (the canonical downstream-read artifact) are
+**distinct on disk but bound by the materialization rule**: at
+dispatch step completion, after the `ResultVerdictGate` passes,
+the runtime MUST write the artifact at `writes.artifact.path` by
+schema-parsing the `result` payload against `writes.artifact.schema`.
+Downstream steps reading the artifact path observe the validated
+artifact, not the raw transcript.
+
+The explore fixture satisfies the fixture-level precondition for
+this rule: both dispatch steps declare `writes.artifact` alongside
+`writes.result`. Check 27 asserts this structurally; the runtime
+invariant binds at P2.4 (adapter implementation) + P2.5
+(end-to-end parity test).
+
+The `specs/artifacts.json` `trust_boundary` + `dangerous_sinks`
+fields for `explore.synthesis` and `explore.review-verdict` were
+updated at Slice 38 to reflect adapter-computed provenance and
+the new dispatch-result-promotion risk surface. This contract
+remains authoritative on the reader/writer graph.
+
 ## `schema_sections` gate placeholder note (Codex MED 10 fold-in)
 
 The fixture's `schema_sections` gates declare required field names
@@ -363,6 +506,14 @@ This contract is reopened if any of:
    current `{summary, verdict_snapshot}` placeholder, reopen to
    author the result schema explicitly and update the artifact
    registry row.
+9. **ADR-0008 reopens** (v0.2 amendment — mirror reopen trigger).
+   If any of ADR-0008's six reopen conditions fires (target
+   retarget, workflow-kind concept lands, dispatch transcript shape
+   changes, role-adapter decoupling, a second workflow-kind picks
+   option (b), or Check 27 misfires on a legitimate zero-dispatch
+   fixture), this contract reopens to re-evaluate the §Canonical
+   phase set executor/kind table and the `verify` omission
+   rationale alongside the ADR.
 
 ## Authority
 
@@ -373,6 +524,11 @@ This contract is reopened if any of:
   {frame, analyze, act, review, close} mapped from workflow-
   specific titles Frame/Analyze/Synthesize/Review/Close; Open
   Question #5 resolved to full-spine Standard rigor)
+- `specs/adrs/ADR-0008-dispatch-granularity-modeling.md` (v0.2
+  amendment — Synthesize and Review are dispatch steps; Check 27
+  adapter-binding-coverage gate)
 - `specs/plans/phase-2-implementation.md §P2.3` (slice framing)
 - `specs/plans/phase-2-implementation.md §Target workflow for first
   parity` (operator decision + Codex rationale preserved verbatim)
+- `specs/plans/phase-2-foundation-foldins.md §Slice 38` (v0.2
+  amendment slice framing)

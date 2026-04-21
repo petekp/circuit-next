@@ -3285,6 +3285,177 @@ export function checkArcCloseCompositionReviewPresence(rootDir = REPO_ROOT) {
   };
 }
 
+// Check 27 (Slice 38 — ADR-0008 §Decision.4 binding). Adapter-binding
+// coverage gate: any workflow fixture under
+// `.claude-plugin/skills/<kind>/circuit.json` whose `id` is registered
+// in `WORKFLOW_KIND_CANONICAL_SETS` (i.e., scheduled for P2.5+
+// enforcement under CC#P2-1) must satisfy three rules per ADR-0008:
+//   (1) minimum-dispatch: at least one step with `kind: "dispatch"`;
+//   (2) kind-specific step-id binding (WORKFLOW_KIND_DISPATCH_POLICY):
+//       for kinds with a policy row, every listed step id must exist
+//       and have `kind: "dispatch"` (Codex Slice 38 MED 2 fold-in —
+//       the initial any-dispatch-step gate was weaker than the
+//       ADR-0008 binding requiring both Synthesize and Review);
+//   (3) dispatch result-to-artifact materialization precondition
+//       (per ADR-0008 §Decision.3a): for kinds with
+//       require_writes_artifact_on_dispatch, every dispatch step
+//       declares `writes.artifact` alongside the required
+//       `writes.result` (Codex Slice 38 HIGH 2 fold-in).
+// Exempt fixtures (`dogfood-run-0`) pass through green. Unknown
+// workflow kinds produce a yellow finding (Codex Slice 38 MED 2
+// fold-in — the previous green pass-through silently accepted new
+// workflow kinds that may have zero dispatch steps).
+//
+// Closes composition review HIGH 1 (explore fixture at v0.1 had zero
+// dispatch steps) plus the Codex Slice 38 fold-in strengthenings.
+export const WORKFLOW_KIND_DISPATCH_POLICY = {
+  explore: {
+    require_dispatch_step_ids: ['synthesize-step', 'review-step'],
+    require_writes_artifact_on_dispatch: true,
+    authority:
+      'ADR-0008 §Decision.1 (executor+kind table) + §Decision.3a (result-to-artifact materialization rule)',
+  },
+};
+
+export function checkAdapterBindingCoverage(rootDir = REPO_ROOT) {
+  const skillsDir = join(rootDir, '.claude-plugin/skills');
+  if (!existsSync(skillsDir)) {
+    return {
+      level: 'green',
+      detail: 'No .claude-plugin/skills/ directory; adapter-binding-coverage check not applicable',
+    };
+  }
+
+  const errors = [];
+  const warnings = [];
+  const findings = [];
+
+  const entries = readdirSync(skillsDir, { withFileTypes: true });
+  for (const e of entries) {
+    if (!e.isDirectory()) continue;
+    const circuitJson = join(skillsDir, e.name, 'circuit.json');
+    if (!existsSync(circuitJson)) continue;
+
+    let fixture;
+    try {
+      fixture = JSON.parse(readFileSync(circuitJson, 'utf-8'));
+    } catch (err) {
+      errors.push(`${e.name}/circuit.json failed to parse: ${err.message}`);
+      continue;
+    }
+
+    const id = fixture?.id;
+    if (typeof id !== 'string') {
+      errors.push(`${e.name}/circuit.json missing top-level \`id\` string field`);
+      continue;
+    }
+
+    if (EXEMPT_WORKFLOW_IDS.has(id)) {
+      findings.push(`${id}: exempt from adapter-binding-coverage (partial-spine, recorded)`);
+      continue;
+    }
+
+    const expected = WORKFLOW_KIND_CANONICAL_SETS[id];
+    if (!expected) {
+      // Codex Slice 38 MED 2 fold-in — unknown workflow kinds now produce a
+      // yellow finding rather than silently passing green. If this fixture
+      // is a P2.5+ enforcement target, it must be registered; if not, the
+      // author must explicitly acknowledge the kind is out-of-scope.
+      warnings.push(
+        `${id}: unregistered workflow kind (no entry in WORKFLOW_KIND_CANONICAL_SETS) — if this fixture is a P2.5+ enforcement target, add it to WORKFLOW_KIND_CANONICAL_SETS and ensure at least one adapter-binding step per ADR-0008 §Decision.4; otherwise add to EXEMPT_WORKFLOW_IDS with rationale`,
+      );
+      continue;
+    }
+
+    const steps = Array.isArray(fixture.steps) ? fixture.steps : [];
+    const dispatchSteps = steps.filter((s) => s?.kind === 'dispatch');
+
+    // Rule (1) — minimum-dispatch coverage.
+    if (dispatchSteps.length === 0) {
+      errors.push(
+        `${id}: workflow targets an adapter (scheduled for P2.5+ enforcement per WORKFLOW_KIND_CANONICAL_SETS) but fixture exercises zero \`kind: "dispatch"\` steps — ADR-0008 §Decision.4 requires at least one adapter-binding step so the P2.5 golden-parity path has a real dispatch to verify. Got steps: ${steps.map((s) => `${s?.id ?? '?'}:${s?.kind ?? '?'}`).join(', ') || '(none)'}`,
+      );
+      continue;
+    }
+
+    const policy = WORKFLOW_KIND_DISPATCH_POLICY[id];
+
+    // Rule (2) — kind-specific dispatch step-id binding.
+    if (policy && Array.isArray(policy.require_dispatch_step_ids)) {
+      const stepById = new Map(steps.filter((s) => s?.id).map((s) => [s.id, s]));
+      const missingStepIds = [];
+      const wrongKindStepIds = [];
+      for (const requiredId of policy.require_dispatch_step_ids) {
+        const step = stepById.get(requiredId);
+        if (!step) {
+          missingStepIds.push(requiredId);
+          continue;
+        }
+        if (step.kind !== 'dispatch') {
+          wrongKindStepIds.push(`${requiredId}:${step.kind}`);
+        }
+      }
+      if (missingStepIds.length > 0 || wrongKindStepIds.length > 0) {
+        const parts = [];
+        if (missingStepIds.length > 0) {
+          parts.push(`missing step id(s): ${missingStepIds.join(', ')}`);
+        }
+        if (wrongKindStepIds.length > 0) {
+          parts.push(`wrong-kind step(s) (expected \`dispatch\`): ${wrongKindStepIds.join(', ')}`);
+        }
+        errors.push(
+          `${id}: ${policy.authority} requires specific dispatch step ids [${policy.require_dispatch_step_ids.join(', ')}] — ${parts.join('; ')}`,
+        );
+        continue;
+      }
+    }
+
+    // Rule (3) — dispatch result-to-artifact materialization precondition.
+    if (policy?.require_writes_artifact_on_dispatch) {
+      const missingArtifact = dispatchSteps.filter((s) => {
+        const writes = s?.writes;
+        return (
+          !writes ||
+          typeof writes !== 'object' ||
+          !writes.artifact ||
+          typeof writes.artifact !== 'object'
+        );
+      });
+      if (missingArtifact.length > 0) {
+        const missingIds = missingArtifact.map((s) => s?.id ?? '?').join(', ');
+        errors.push(
+          `${id}: dispatch step(s) [${missingIds}] missing \`writes.artifact\` — ADR-0008 §Decision.3a (dispatch result-to-artifact materialization rule) requires every adapter-bound dispatch step to declare \`writes.artifact\` alongside the required \`writes.result\`, so the runtime has a canonical materialization target. Without \`writes.artifact\`, downstream steps reading the artifact path would observe an unwritten file.`,
+        );
+        continue;
+      }
+    }
+
+    const dispatchIds = dispatchSteps.map((s) => s.id).filter(Boolean);
+    findings.push(
+      `${id}: ${dispatchSteps.length} dispatch step(s) present (${dispatchIds.join(', ')}); policy satisfied`,
+    );
+  }
+
+  if (errors.length > 0) {
+    return { level: 'red', detail: errors.join('\n') };
+  }
+  if (warnings.length > 0) {
+    const body = [...findings, ...warnings].join('; ');
+    return {
+      level: 'yellow',
+      detail: body,
+    };
+  }
+
+  return {
+    level: 'green',
+    detail:
+      findings.length === 0
+        ? 'No workflow fixtures scanned'
+        : `${findings.length} fixture(s) scanned; ${findings.join('; ')}`,
+  };
+}
+
 const GREEN = '\x1b[32m';
 const YELLOW = '\x1b[33m';
 const RED = '\x1b[31m';
@@ -3712,11 +3883,25 @@ function main() {
     detail: arcCloseReview.detail,
   });
 
-  // Check 27: npm run verify currently green. (Runs last so the report's
-  // bottom line is the verify-gate status; numbering bumped 25 → 27 by
-  // Slice 35 which inserted Check 25 for backing-path integrity + Check 26
-  // for arc-close review presence. Prior bumps: P2.3 24 → 25; P2.2 23 → 24;
-  // P2.1 22 → 23; Slice 31a 21 → 22; Slice 26b 15 → 20; Slice 25d 20 → 21.)
+  // Check 27: Adapter-binding coverage (Slice 38 — ADR-0008 §Decision.4).
+  // Any workflow fixture whose `id` is registered in
+  // WORKFLOW_KIND_CANONICAL_SETS (scheduled for P2.5+ enforcement) must
+  // exercise at least one `kind: "dispatch"` step. Closes composition-
+  // review HIGH 1 ("explore has no step that dispatches") as a structural
+  // gate that recurs on every new workflow-kind landing.
+  const adapterBindingCoverage = checkAdapterBindingCoverage();
+  counters[adapterBindingCoverage.level]++;
+  findings.push({
+    level: adapterBindingCoverage.level,
+    check: 'Adapter-binding coverage (Slice 38 / ADR-0008)',
+    detail: adapterBindingCoverage.detail,
+  });
+
+  // Check 28: npm run verify currently green. (Runs last so the report's
+  // bottom line is the verify-gate status; numbering bumped 27 → 28 by
+  // Slice 38 which inserted Check 27 for adapter-binding coverage. Prior
+  // bumps: Slice 35 25 → 27; P2.3 24 → 25; P2.2 23 → 24; P2.1 22 → 23;
+  // Slice 31a 21 → 22; Slice 26b 15 → 20; Slice 25d 20 → 21.)
   const verify = verifyStatus();
   if (verify.pass) {
     counters.green++;

@@ -471,10 +471,13 @@ describe('checkPinnedRatchetFloor (Slice 26b full-file check)', () => {
     // #3 — HIGH 2 widen event schema) advanced it to 805 (+26 from
     // slice-37-dispatch-transcript.test.ts, binding dispatch.request /
     // dispatch.receipt / dispatch.result variants to ADR-0007 §Amendment
-    // Slice 37). This assertion pins the CURRENT slice id so any future
-    // floor advancement that forgets to update the marker fails the test
-    // immediately — the slice id changes only when the floor changes.
-    expect(data?.last_advanced_in_slice).toBe('37');
+    // Slice 37). Advanced 810 → 825 at Slice 38 (15 new static test
+    // declarations in adapter-binding-coverage.test.ts enforcing
+    // ADR-0008 §Decision.4 + §Decision.3a). This assertion pins the
+    // CURRENT slice id so any future floor advancement that forgets to
+    // update the marker fails the test immediately — the slice id
+    // changes only when the floor changes.
+    expect(data?.last_advanced_in_slice).toBe('38');
   });
 
   it('readPinnedRatchetFloor returns null when the file is missing', () => {
