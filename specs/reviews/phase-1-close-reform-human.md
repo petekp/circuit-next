@@ -1,6 +1,6 @@
 ---
 name: phase-1-close-reform-human
-description: L3 cold-read record for the Phase 1 close reform plan. Operator delegated to Claude + Codex as stand-in readers while asleep. This is a delegation, NOT a replacement for a genuine non-LLM human cold-read; the operator may still add their own section on pickup, and that section takes precedence.
+description: L3 cold-read record for the Phase 1 close reform plan, delegated to Claude + Codex as LLM stand-ins. Phase 1.5 Close Criterion #14 final disposition — the canonical non-LLM operator cold-read was not completed; ADR-0006 accepts a weaker substitute by one-time waiver. No operator cold-read section is expected. See §Delegation acknowledgment and ADR-0006 for full rationale.
 type: review
 review_kind: l3-cold-read
 target_kind: plan
@@ -16,7 +16,7 @@ reviewers:
     reviewer_role: LLM-standin-for-human-cold-read
     mode: cold-read-comprehension
     prior_mode_on_same_artifact: adversarial-llm-review (pass 1, 7H/5M/3L, ACCEPT-WITH-FOLD-INS)
-operator_delegation_note: Operator explicitly authorized Claude + Codex to stand in for the L3 non-LLM cold-read gate while asleep ("have codex and yourself--your combined expertise-- stand in for me here and for any other non-LLM gates"). Under D6 the non-LLM signal is weaker here than a zero-context human drill; on morning pickup the operator may add a third section and the reform's L3 status escalates accordingly.
+operator_delegation_note: 2026-04-20 — Final disposition under ADR-0006 one-time waiver + retarget. Operator initially delegated the L3 non-LLM cold-read to Claude + Codex as LLM stand-ins ("have codex and yourself--your combined expertise-- stand in for me here and for any other non-LLM gates"). On pickup the operator self-assessed that a canonical non-LLM cold-read of this 638-line plan is unobtainable from the operator role without performative compliance. ADR-0006 records this as a one-time waiver and retargets Phase 1.5 Close Criterion #14 to (14a) a product-direction check + (14b) this review as delegated weaker substitute. The LLM stand-in evidence in this file is strictly weaker than a canonical non-LLM zero-context human drill; no authority surface may describe it as equivalent to human review. See §Delegation acknowledgment.
 verdict_overall: ACCEPT-WITH-FOLD-INS
 authored_by: claude-opus-4-7 + gpt-5-codex
 ---
@@ -25,13 +25,18 @@ authored_by: claude-opus-4-7 + gpt-5-codex
 
 **Target artifact:** `specs/plans/phase-1-close-revised.md` (638 lines).
 
-**Why this file exists:** the reform plan's own L3 fold-in requires a non-LLM
-human cold-read recorded here before Slice 25b can land. The operator is
-asleep and authorized two LLM stand-ins. This is a weaker signal than a
-genuine zero-context human drill; the reform acknowledges that. Slice 25b's
-acceptance counts this file as present; Phase 1.5 Alpha Proof close will
-require either an operator-authored section here or an explicit ADR relaxing
-the L3 non-LLM requirement.
+**Why this file exists:** the reform plan's own L3 fold-in required a non-LLM
+human cold-read recorded here before Slice 25b could land. The operator
+initially authorized two LLM stand-ins. On pickup the operator self-assessed
+that a canonical non-LLM cold-read of this 638-line plan is unobtainable from
+the operator role without performative compliance. **ADR-0006 (2026-04-20)
+records this as a one-time waiver** and retargets Phase 1.5 Close Criterion
+#14: (14a) a durable operator product-direction check at
+`specs/reviews/phase-1.5-operator-product-check.md` + (14b) the two LLM
+stand-in sections below as delegated weaker substitute, with the F17 weaker-
+evidence flag carried openly in every authority surface. This file is
+final-disposition under ADR-0006; no additional operator cold-read section is
+expected.
 
 ---
 
@@ -543,12 +548,16 @@ split.
 
 ## Residual items (NOT folded in this pass; recorded for later)
 
-- **Operator delivers a genuine non-LLM L3 cold-read.** Required to
-  fully satisfy L3 as originally scoped. This file's LLM-stand-in
-  sections are delegation-under-absence and do not satisfy the D6
-  "zero-context human drill" structural requirement. Tracked as follow-up
-  until the operator adds their section or an ADR explicitly relaxes the
-  requirement.
+- **Operator delivers a genuine non-LLM L3 cold-read.** **RESOLVED BY
+  WAIVER under ADR-0006 (2026-04-20).** The canonical non-LLM cold-read
+  was determined unobtainable from this operator's role without
+  performative compliance; ADR-0006 records a one-time waiver and
+  retargets Phase 1.5 Close Criterion #14 to operator product-direction
+  check (14a) + delegated LLM stand-in technical comprehension (14b).
+  This is strictly weaker evidence than a canonical non-LLM zero-context
+  human drill. No follow-up pending on this item. See ADR-0006 §Precedent
+  firewall for why this resolution cannot be cited as precedent for
+  future gate retargets.
 - **Full enumeration of D2..D8 "surfaces"** (not just files) — held
   until each delta's install slice lands. At that point the list of
   touched surfaces becomes concrete and can replace F6's placeholder.
@@ -561,10 +570,94 @@ split.
 
 ---
 
-## Operator cold-read section (optional, authored on morning pickup)
+## Operator cold-read section (intentionally empty — see §Delegation acknowledgment)
 
-_Reserved. If the operator performs a genuine non-LLM cold-read after
-pickup and raises additional objections, they go here. Their objections
-take precedence over the LLM stand-in reviewers' objections, and any
-resulting fold-ins get a second commit on top of the docs commit that
-lands this file._
+_This section was reserved for an operator-authored non-LLM cold-read on
+morning pickup. It will not be filled. See §Delegation acknowledgment
+below and `specs/adrs/ADR-0006-cc14-operator-governance-alignment.md`
+for the governance-aligned retarget. In short: on 2026-04-20 the
+operator self-assessed that a canonical cold-read of this plan is
+unattainable without performative compliance; Phase 1.5 Close Criterion
+#14 was retargeted (14a operator product-direction check + 14b LLM
+stand-in technical cold-read with F17 flag carried openly) rather than
+left blocking or faked._
+
+---
+
+## Delegation acknowledgment
+
+**Added 2026-04-20 per ADR-0006** (`specs/adrs/ADR-0006-cc14-operator-governance-alignment.md`).
+
+**The original canonical non-LLM cold-read that Phase 1.5 Close Criterion
+#14 was designed to require is not satisfied by this file.** ADR-0006
+records this as a one-time waiver and accepts the two LLM stand-in
+sections above (Reviewer 1 — Claude Opus 4.7; Reviewer 2 — GPT-5 Codex)
+as a **weaker substitute** closing CC#14's part (b) — the delegated
+technical-comprehension component. This substitute is **strictly weaker
+evidence** than a canonical non-LLM zero-context human drill. The
+weaker-evidence flag (F17 in this file's combined fold-ins) is carried
+explicitly here so any downstream reader auditing Phase 1.5 close sees
+the reduced signal weight in-line, without having to reconstruct it
+from frontmatter.
+
+**No authority surface may describe this file as equivalent to human
+review.** The word "equivalent" is forbidden; the word "substitute"
+with "weaker" attached is the only permitted framing.
+
+Why the waiver + substitute stands as closure of CC#14's 14b component:
+
+- The operator self-assessed on 2026-04-20 that a canonical cold-read
+  of `specs/plans/phase-1-close-revised.md` (638 lines, dense
+  methodology-delta schedule) is unobtainable from this operator's role
+  without performative compliance. Operator role, product-direction vs.
+  methodology-execution boundary: see ADR-0006 §Appendix A (durable
+  record; the earlier auto-memory file is a convenience cache only,
+  not load-bearing).
+- A faked cold-read section would silently advertise false
+  comprehension — worse evidence than honestly recording the gap.
+- The two LLM stand-in passes produced 17 concrete fold-ins (F1–F17
+  above) — real defects the plan author could act on. Evidence weight
+  is lower than a canonical human drill but not zero.
+- Phase 1.5 Close Criterion #14 has been amended by ADR-0006 to
+  explicitly split the check: (14a) durable operator product-direction
+  confirmation at `specs/reviews/phase-1.5-operator-product-check.md`
+  + (14b) this review as delegated weaker substitute. The waiver plus
+  substitution is the close path; it does not preserve the original
+  forcing function.
+- CC#15 preservation (no close criterion depends solely on Claude +
+  Codex agreement) rests on two separable facts: (i) CC#14 also
+  requires 14a (a non-LLM operator signal of different shape); and
+  (ii) CC#13 is closed at Phase 1.5 by a separate, genuinely non-LLM
+  mechanical probe (the property fuzzer landed at Slice 29 under
+  `tests/properties/visible/`). Neither (i) nor (ii) is an LLM
+  stand-in signal; together they keep CC#15 intact under this
+  retarget. See ADR-0006 §3.
+
+**What this waiver is not:**
+
+- **Not a dissolution of non-LLM review discipline in general.**
+  `decision.md` §D10 (adversarial review discipline, including the
+  non-LLM-mode requirement for pass 3 on tournament-class artifacts)
+  stands. ADR-0001 Addendum B CC#13 (non-LLM evidence artifact)
+  stands — and is closed at Phase 1.5 by the Slice 29 property
+  fuzzer, not by this delegation.
+- **Not a precedent for future operator-cold-read waivers on other
+  plans or ADRs.** ADR-0006 §5 (Precedent firewall) requires any
+  future retarget to identify the original evidence mode, prove it
+  is unobtainable, name compensating evidence of a different
+  structural type (not LLM-on-LLM), carry weaker-evidence wording
+  openly, add expiry or reopen triggers, and get a fresh challenger
+  pass. Citing ADR-0006 as precedent is invalid on its face.
+- **Not a claim that Claude + Codex concurrence substitutes for
+  independent human verification.** Claude and Codex share training
+  distribution (Knight & Leveson 1986); concurrence between them is
+  same-distribution advisory context only, not epistemic
+  independence. ADR-0006's justification rests on its §4 Reopen
+  basis (a)–(d) and on the Codex adversarial challenger pass with
+  fold-ins, not on advisory concurrence.
+- **Not a standing retreat of operator-in-the-loop signals.** The
+  14a product-direction check is the concrete preserved operator
+  signal at Phase 1.5 close under this retarget. Future close
+  criteria that produce obtainable operator signals (product
+  direction, simplification judgment, rigor calibration, priority
+  setting) remain in force.
