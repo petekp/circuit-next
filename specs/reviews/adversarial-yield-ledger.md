@@ -46,6 +46,17 @@ artifact whose `mode` does not begin with `llm-`.
 | 2026-04-20 | `scripts/audit.mjs` | reversible | 1 | gpt-5-codex | llm-review | 2 | 5 | 2 | REJECT pending HIGH fold-ins → incorporated → ACCEPT | n/a | pre-dog-1-grandfather | n/a | n/a |
 | 2026-04-20 | `specs/adrs/ADR-0001-methodology-adoption.md` Addendum B | governance | 1 | gpt-5-codex | llm-review | 5 | 7 | 4 | REJECT pending fold-ins → incorporated → ACCEPT-WITH-FOLD-INS | n/a | pre-dog-1-grandfather | n/a | n/a |
 | 2026-04-20 | `specs/contracts/workflow.md` v0.2 | reversible | 1 | gpt-5-codex | llm-review | 3 | 3 | 2 | REJECT → incorporated → ACCEPT | n/a | pre-dog-1-grandfather | n/a | n/a |
+| 2026-04-20 | `scripts/audit.mjs` | reversible | 2 | property-fuzzer | property-fuzzer | 0 | 0 | 0 | ACCEPT | n/a | deep | LLM-review-echo miss on adversarial-audit branch conditions — hunted by RNG coverage of rigor × pass × mode × date boundaries | 7a12329 |
+
+**Slice 29 property-fuzzer pass context.** Pass 2 on `scripts/audit.mjs`
+(commit `7a12329`, slice-28). Non-LLM evidence artifact for Phase 1.5
+Close Criterion #13. Runs 18 vitest property blocks (~600 RNG-generated
+inputs) against `checkAdversarialYieldLedger` covering rigor-budget,
+grandfather cutoff, why-continue, review-execution alternation,
+mode-cycle K=2, tournament-pass-3 non-LLM gate, and structural reds.
+0H / 0M / 0L — invariants held across the randomized input space. Full
+evidence artifact at `specs/reviews/slice-29-d10-property-fuzzer-evidence.md`.
+Duration 8.21 s. Seed `0xc1a51c29`.
 
 **Pass 2 context.** Pass 2 is an L3 non-LLM cold-read, delegated to Claude + Codex as LLM stand-ins under operator authorization while the operator was asleep. The delegation is recorded as reviewer_role `LLM-standin-for-human-cold-read` in `specs/reviews/phase-1-close-reform-human.md`. Counts are 0 HIGH / 8 MED / 8 LOW; all MED and LOW findings were folded back into the plan in this planning pass. Pass 2 did not violate D10 artifact-size signal (pass count 2 < governance cap 3). A genuine operator cold-read on pickup may append a third evaluator section to the review record; that addition does not count as a new adversarial pass unless it raises defects.
 
