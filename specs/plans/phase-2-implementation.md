@@ -251,8 +251,11 @@ workflow can dispatch to.
 **Deliverable:** `src/runtime/adapters/agent.ts` (or similar location
 chosen at slice time) implementing the `ResolvedAdapter`-to-dispatch
 boundary for in-process Anthropic subagent invocation. Runner
-integration: `dispatch.started` event carries `resolved_adapter.name
-= 'agent'`; receipt and result artifacts written with real agent
+integration: `dispatch.started` event carries `adapter.name = 'agent'`
+(via the `ResolvedAdapter` discriminated union at
+`src/schemas/adapter.ts`; corrected from the earlier
+`resolved_adapter.name` prose per ADR-0007 §Amendment Slice 37);
+receipt and result artifacts written with real agent
 output. Dogfood fixture extended with a real-agent smoke test OR a
 separate fixture `agent-smoke-0` gated behind an env var so CI can
 skip it without disabling the contract test ratchet.

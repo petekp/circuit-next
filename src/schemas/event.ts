@@ -105,6 +105,80 @@ export const DispatchCompletedEvent = EventBase.extend({
 }).strict();
 export type DispatchCompletedEvent = z.infer<typeof DispatchCompletedEvent>;
 
+// SHA-256 over raw bytes, 64-char lowercase hex. Mirrors the convention
+// used by `ManifestHash` in src/schemas/manifest.ts so durable dispatch
+// transcript hashes are shape-compatible with manifest hashes at audit
+// time. Per ADR-0007 CC#P2-2 the three intermediate dispatch events must
+// carry concrete request/receipt/result identifiers so a mock adapter
+// returning a fixed byte string cannot satisfy the close criterion even
+// if byte-shape matches.
+const HEX64 = /^[0-9a-f]{64}$/;
+const ContentHash = z.string().regex(HEX64, {
+  message: 'must be a 64-character lowercase hex SHA-256 digest',
+});
+
+// ADR-0007 CC#P2-2 §Amendment (Slice 37) — the durable dispatch
+// transcript the P2.4 adapter round-trip test asserts on is a five-event
+// sequence on a single `(step_id, attempt)` pair:
+//
+//   dispatch.started → dispatch.request → dispatch.receipt →
+//   dispatch.result → dispatch.completed
+//
+// `dispatch.request` carries the SHA-256 of the request payload bytes
+// submitted to the adapter, before the adapter replies. A mock adapter
+// cannot elide this event because the hash is observable independent of
+// adapter output.
+export const DispatchRequestEvent = EventBase.extend({
+  kind: z.literal('dispatch.request'),
+  step_id: StepId,
+  attempt: z.number().int().positive(),
+  request_payload_hash: ContentHash,
+}).strict();
+export type DispatchRequestEvent = z.infer<typeof DispatchRequestEvent>;
+
+// `dispatch.receipt` carries the adapter-returned receipt id — an opaque
+// identifier the adapter assigns to the in-flight dispatch so audit
+// tooling can reconstruct what receipt the adapter handed back. Kept as
+// `z.string().min(1)` (not a hash) because adapters choose their own
+// receipt-id format (UUID, ULID, provider-side run id, etc.).
+//
+// Codex MED #2 (Slice 37) — scoping note. The intra-log correlation
+// between `dispatch.request` and `dispatch.result` is `(step_id,
+// attempt, ordering)`, NOT `receipt_id`. `DispatchResultEvent` does not
+// echo the receipt. The receipt id is identity-of-record for the
+// adapter-side dispatch (so an auditor can ask the adapter "what
+// happened to receipt X"), not a cryptographic binding between the
+// in-log events. Hash-tightening of `receipt_id` is deferred until a
+// real adapter surfaces concrete receipt formats; `z.string().min(1)`
+// + the whitespace-rejection test in
+// `tests/contracts/slice-37-dispatch-transcript.test.ts` is the
+// current boundary. A stricter format constraint authored now would
+// over-specify without provider-shape evidence.
+export const DispatchReceiptEvent = EventBase.extend({
+  kind: z.literal('dispatch.receipt'),
+  step_id: StepId,
+  attempt: z.number().int().positive(),
+  receipt_id: z
+    .string()
+    .min(1)
+    .refine((s) => s.trim().length > 0, {
+      message: 'receipt_id must contain at least one non-whitespace character',
+    }),
+}).strict();
+export type DispatchReceiptEvent = z.infer<typeof DispatchReceiptEvent>;
+
+// `dispatch.result` carries the SHA-256 of the result artifact bytes
+// returned by the adapter, before the reducer projects and the result-
+// writer persists. Hash is required so the close-criterion test can
+// assert on content — not byte-shape — of a real adapter's output.
+export const DispatchResultEvent = EventBase.extend({
+  kind: z.literal('dispatch.result'),
+  step_id: StepId,
+  attempt: z.number().int().positive(),
+  result_artifact_hash: ContentHash,
+}).strict();
+export type DispatchResultEvent = z.infer<typeof DispatchResultEvent>;
+
 export const StepCompletedEvent = EventBase.extend({
   kind: z.literal('step.completed'),
   step_id: StepId,
@@ -145,6 +219,9 @@ export const Event = z
     CheckpointRequestedEvent,
     CheckpointResolvedEvent,
     DispatchStartedEvent,
+    DispatchRequestEvent,
+    DispatchReceiptEvent,
+    DispatchResultEvent,
     DispatchCompletedEvent,
     StepCompletedEvent,
     StepAbortedEvent,

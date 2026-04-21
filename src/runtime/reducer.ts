@@ -135,6 +135,14 @@ function applyEvent(prev: Snapshot, event: Event): Snapshot {
         })),
       };
     }
+    case 'dispatch.request':
+    case 'dispatch.receipt':
+    case 'dispatch.result':
+      // Durable dispatch transcript events (ADR-0007 CC#P2-2 §Amendment
+      // Slice 37). Carry request/receipt/result identifiers for the
+      // P2.4 round-trip close criterion; no snapshot-shape change — the
+      // dispatch outcome still flows into the step via step.completed.
+      return next;
     case 'dispatch.completed':
       // Dispatch outcomes flow into the step via step.completed; no
       // snapshot-shape change here.

@@ -259,6 +259,38 @@ property-test harness + reducer exist in Phase 2.
   event. A `dispatch.started` with no matching `dispatch.completed` is
   a reducer inconsistency.
 
+  **Slice 37 §Amendment (durable dispatch transcript, ADR-0007 CC#P2-2).**
+  The Event discriminated union additionally carries three durable-
+  transcript variants: `dispatch.request` (SHA-256 of the request
+  payload bytes, field `request_payload_hash`), `dispatch.receipt`
+  (adapter-returned receipt id, field `receipt_id`), and
+  `dispatch.result` (SHA-256 of the result artifact bytes, field
+  `result_artifact_hash`). The canonical five-event sequence on a
+  `(step_id, attempt)` pair is:
+
+  ```
+  dispatch.started → dispatch.request → dispatch.receipt →
+  dispatch.result → dispatch.completed
+  ```
+
+  Log-level pairing invariant (this property's scope): whenever any of
+  the three transcript events appears on a pair, each must appear at
+  most once and MUST appear strictly between `dispatch.started` and
+  `dispatch.completed` on that pair (i.e. after started, before
+  completed, and in the order request → receipt → result if more than
+  one is present). Zero transcript events is legal (dry-run adapter
+  path; transcript only required for non-dry-run adapters per CC#P2-2
+  Enforcement binding). An out-of-order transcript event (e.g.
+  `dispatch.receipt` preceding `dispatch.request` on the same pair, or
+  any transcript event on a pair with no matching `dispatch.started`,
+  or a transcript event appearing after `dispatch.completed`) is a
+  reducer inconsistency. The tighter requirement that all three
+  transcript events MUST appear for a non-dry-run adapter lives at the
+  adapter-level close criterion (ADR-0007 CC#P2-2 Enforcement binding,
+  enforced in the P2.4 round-trip test and the CI-skip local-smoke
+  artifact), not here — the contract widens the schema; the adapter
+  contract obligates the writer.
+
 - `run.prop.artifact_written_before_gate` — For any synthesis step, every
   `gate.evaluated` event with `outcome: 'pass'` on that step is preceded by
   at least one `step.artifact_written` event on the same `(step_id,
@@ -361,6 +393,17 @@ property-test harness + reducer exist in Phase 2.
   `run.prop.close_outcome_semantic_adequacy`,
   `run.prop.boundary_own_property_defense`, and
   `run.prop.recorded_at_sanity` — NOT claimed closed by this draft.
+
+- **v0.1-amendment (Slice 37, pre-P2.4 fold-in)** — Event discriminated
+  union at `src/schemas/event.ts` widened with three durable-transcript
+  variants (`dispatch.request`, `dispatch.receipt`, `dispatch.result`)
+  required by ADR-0007 CC#P2-2's Enforcement binding. The log-level
+  pairing invariant `run.prop.dispatch_event_pairing` widened (not
+  renamed) to govern their ordering when present; full five-event
+  ordering is obligated at the adapter level (CC#P2-2), not the
+  contract level. Closes composition-review §HIGH 2
+  (`specs/reviews/p2-foundation-composition-review.md`). Authorized by
+  ADR-0007 §Amendment (Slice 37).
 
 - **v0.2 (Phase 1)** — Absorb Codex adversarial property-auditor pass
   findings. Ratify `property_ids` above by landing the corresponding

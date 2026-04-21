@@ -41,8 +41,12 @@ term, propose it here in a new commit before using it elsewhere.
 - **Event** `[draft]` — An append-only record written during a Run. Kinds:
   `run.bootstrapped`, `step.entered`, `step.artifact_written`,
   `gate.evaluated`, `checkpoint.requested`, `checkpoint.resolved`,
-  `dispatch.started`, `dispatch.completed`, `step.completed`,
+  `dispatch.started`, `dispatch.request`, `dispatch.receipt`,
+  `dispatch.result`, `dispatch.completed`, `step.completed`,
   `step.aborted`, `run.closed`. The event log is the authoritative state.
+  The three intermediate dispatch kinds (`dispatch.request` / `receipt`
+  / `result`) form the durable dispatch transcript required by
+  ADR-0007 CC#P2-2 Enforcement binding for non-dry-run adapters.
 
 - **Snapshot** `[draft]` — A derived projection of the event log. A
   snapshot is a pure function of events + manifest. Snapshots are cache;

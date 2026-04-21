@@ -130,14 +130,17 @@ reducer → result-writer) and exercised by a fixture.
     not byte-shape of a single output).
   - **Durable dispatch transcript requirement (non-substitutable):**
     the test must verify the event log contains, in order, a
-    `dispatch.started` event whose `resolved_adapter.name` is the
-    real adapter id, a `dispatch.request` with a non-empty request
-    payload hash, a `dispatch.receipt` with a receipt id, and a
-    `dispatch.result` with a result artifact hash. The reducer must
-    have consumed that sequence and the result-writer must have
-    produced the result artifact. A mock adapter returning a fixed
-    byte string cannot satisfy this test even if the byte-shape
-    matches.
+    `dispatch.started` event whose `adapter.name` is the real
+    adapter id (field resolves via the `ResolvedAdapter`
+    discriminated union at `src/schemas/adapter.ts`; the earlier
+    prose "resolved_adapter.name" predated the schema and is
+    corrected in §Amendment (Slice 37)), a `dispatch.request` with
+    a non-empty request payload hash, a `dispatch.receipt` with a
+    receipt id, and a `dispatch.result` with a result artifact
+    hash. The reducer must have consumed that sequence and the
+    result-writer must have produced the result artifact. A mock
+    adapter returning a fixed byte string cannot satisfy this test
+    even if the byte-shape matches.
   - **CI skip semantics:** if the agent smoke path is CI-skipped via
     `AGENT_SMOKE=0`, the ADR-0007 close claim requires a local smoke
     artifact at `tests/fixtures/agent-smoke/last-run.json` with:
@@ -149,6 +152,94 @@ reducer → result-writer) and exercised by a fixture.
   ratchets Phase 2 will carry) advances to `active — satisfied` when
   the test above passes on a non-CI-skip invocation and the local
   smoke artifact is on-file.
+
+- **§Amendment (Slice 37, pre-P2.4 fold-in, 2026-04-21) — Event
+  schema binding tightened; governance surface unchanged.**
+
+  The durable dispatch transcript requirement above names four event
+  kinds: `dispatch.started`, `dispatch.request`, `dispatch.receipt`,
+  `dispatch.result`. At the time CC#P2-2 was ratified, only
+  `dispatch.started` and `dispatch.completed` existed in
+  `src/schemas/event.ts`; the other three were named in prose but had
+  no type-level binding. The composition review (`specs/reviews/
+  p2-foundation-composition-review.md` §HIGH 2) found this
+  governance-vs-runtime incoherence: the P2.4 round-trip test could
+  have written an event log that satisfied the CC#P2-2 prose while
+  using a schema union that rejected the very events CC#P2-2 required.
+
+  This Amendment widens the event schema to carry the three missing
+  variants and tightens the CC#P2-2 binding to name them by schema
+  location. **The close criterion itself is not relaxed or narrowed —
+  widen-over-weaken was the operator's chosen resolution path (§HIGH 2
+  alternate framing (a), recorded in `specs/plans/phase-2-foundation-
+  foldins.md` Slice 37).**
+
+  **Schema binding (new, replaces prose-only reference above):** the
+  durable dispatch transcript is the five-event sequence on a single
+  `(step_id, attempt)` pair, each variant defined at:
+  - `dispatch.started` — `src/schemas/event.ts` (`DispatchStartedEvent`,
+    pre-existing).
+  - `dispatch.request` — `src/schemas/event.ts` (`DispatchRequestEvent`,
+    added Slice 37); carries `request_payload_hash` (SHA-256 of
+    request bytes, 64-char lowercase hex via `ContentHash`).
+  - `dispatch.receipt` — `src/schemas/event.ts` (`DispatchReceiptEvent`,
+    added Slice 37); carries `receipt_id` (opaque, adapter-chosen
+    format, `z.string().min(1)`).
+  - `dispatch.result` — `src/schemas/event.ts` (`DispatchResultEvent`,
+    added Slice 37); carries `result_artifact_hash` (SHA-256 of result
+    artifact bytes, 64-char lowercase hex via `ContentHash`).
+  - `dispatch.completed` — `src/schemas/event.ts`
+    (`DispatchCompletedEvent`, pre-existing); carries `result_path`
+    and `receipt_path`.
+
+  All three new variants are `.strict()` and registered in the `Event`
+  discriminated union at the `Event` declaration in
+  `src/schemas/event.ts`. The log-level ordering invariant lives at
+  `run.prop.dispatch_event_pairing` in `specs/contracts/run.md` and
+  governs their canonical ordering when present; the CC#P2-2 test
+  above obligates all three to *be* present for a non-dry-run adapter
+  (the contract widens the schema; this criterion obligates the
+  writer).
+
+  **Why this is an Amendment, not a silent edit.** Per CLAUDE.md §Hard
+  invariants #5, an ADR is required for any relaxation of a contract,
+  ratchet floor, or gate. Widening is the opposite of relaxation but
+  the same governance surface applies (the CC#P2-2 enforcement binding
+  names executable artifacts; changing those artifacts must be
+  recorded). Per §Cross-model challenger protocol this Amendment was
+  dispatched through `/codex` for an objection list before landing;
+  record at `specs/reviews/arc-slice-37-high-2-widen-event-schema-
+  codex.md` (co-commit artifact).
+
+  **What did not change.** The *realness criterion* (non-substitutable
+  evidence of a real adapter round-trip), the `dispatch_realness`
+  ratchet advancement rule, the CI-skip semantics, and the Phase 2
+  close condition are unchanged; the Amendment only tightens the
+  *executable binding* — i.e. "what event kinds does
+  `src/schemas/event.ts` define, and at what field paths are they
+  inspected." Specifically, the Amendment widens the prose-only
+  4-kind reference (`dispatch.started` + the three hash/id bearing
+  events) to a 5-event schema-bound sequence that includes
+  `dispatch.completed` as the terminal event. No relaxation occurs:
+  the test must still assert the presence of all hash/id evidence,
+  and a mock adapter emitting only `dispatch.started` +
+  `dispatch.completed` still fails CC#P2-2 because the intervening
+  transcript events are required (at the adapter-level
+  Enforcement binding above) even though they are optional at the
+  schema level (dry-run path).
+
+  **Adapter-field path correction (Codex HIGH #1 fold-in).** The
+  Enforcement binding above earlier read "`resolved_adapter.name`";
+  no such field exists on `DispatchStartedEvent`. The correct schema
+  path is `adapter.name` via the `ResolvedAdapter` discriminated
+  union (`src/schemas/adapter.ts`). The Enforcement binding text is
+  now corrected in-place; `specs/plans/phase-2-implementation.md`
+  §P2.4 corrected in the same slice. This was a stale prose
+  reference, not a schema change — the schema has always carried
+  `DispatchStartedEvent.adapter: ResolvedAdapter` since ADAPTER-I7
+  (Slice 26). Without this correction P2.4 would have asserted on a
+  field that does not exist, recreating the governance/runtime
+  mismatch HIGH 2 is meant to close.
 
 ---
 
