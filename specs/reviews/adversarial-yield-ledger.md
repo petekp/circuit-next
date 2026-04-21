@@ -50,6 +50,7 @@ artifact whose `mode` does not begin with `llm-`.
 | 2026-04-20 | `specs/adrs/ADR-0006-cc14-operator-governance-alignment.md` | governance | 1 | gpt-5-codex | llm-review | 5 | 5 | 1 | REJECT PENDING FOLD-INS → incorporated → ACCEPT-WITH-FOLD-INS | n/a | standard | n/a | n/a |
 | 2026-04-21 | `specs/adrs/ADR-0007-phase-2-close-criteria.md` | governance | 1 | gpt-5-codex | llm-review | 7 | 5 | 1 | REJECT PENDING FOLD-INS → incorporated → ACCEPT-WITH-FOLD-INS | n/a | standard | n/a | n/a |
 | 2026-04-21 | `slice-33-plugin-surface` | reversible | 1 | gpt-5-codex | llm-review | 3 | 4 | 0 | REJECT PENDING FOLD-INS → incorporated → ACCEPT-WITH-FOLD-INS | n/a | standard | n/a | n/a |
+| 2026-04-21 | `specs/contracts/explore.md` | reversible | 1 | gpt-5-codex | llm-review | 4 | 7 | 2 | REJECT PENDING FOLD-INS → incorporated → ACCEPT-WITH-FOLD-INS | n/a | standard | n/a | n/a |
 
 **Slice 29 property-fuzzer pass context.** Pass 2 on `scripts/audit.mjs`
 (commit `7a12329`, slice-28). Non-LLM evidence artifact for Phase 1.5

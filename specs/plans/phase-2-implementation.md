@@ -223,7 +223,7 @@ one-workflow-parity arc; binds to `explore` per the locked target.
 
 **Deliverable:** `specs/contracts/explore.md` — invariants, property
 ids, artifact ids bound to `specs/artifacts.json`, plus
-`specs/contracts/explore-md-codex.md` (Codex challenger pass required
+`specs/reviews/explore-md-v0.1-codex.md` (Codex challenger pass required
 before land). Fixture at `.claude-plugin/skills/explore/circuit.json`
 with full-spine phases — at minimum Frame → Analyze → Synthesize →
 Review → Close mapped to canonical phase ids. Artifact shapes named

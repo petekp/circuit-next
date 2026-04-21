@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "floors": {
-    "contract_test_count": 727
+    "contract_test_count": 740
   },
   "last_advanced_at": "2026-04-21",
-  "last_advanced_in_slice": "33",
+  "last_advanced_in_slice": "34",
   "notes": "Pinned ratchet floors that must not regress. The contract_test_count metric is the static declaration count produced by scripts/audit.mjs::countTests (matches /^\\s*(it|test)\\(/gm across git-tracked tests/**/*.test.* files), not the vitest runtime total; the audit uses the static count so the ratchet is deterministic without shelling into vitest. Advancement is an explicit commit action; HEAD~1 moving-window comparison is insufficient (docs-only commits between regression and audit would hide the regression). Close gates depend on this file, not on HEAD~1 alone. See specs/plans/phase-1-close-revised.md §Slice 26b and ADR-0002 Addendum A. Initial floor 574 pinned post-Slice-26b (post-Codex-fold-in) HEAD static count — per Codex HIGH-1 fold-in on the Slice 26b diff, pinning below the post-slice count leaves the moving-window hole open (trivial revert of the new test file drops HEAD back to the floor and Check 19 stays green). Slice 33 (P2.2) adds tests/contracts/plugin-surface.test.ts (+26 static test declarations for plugin-command-closure enforcement per ADR-0007 CC#P2-3); floor advanced from 574 → 727 in the same Ratchet-Advance slice, closing the moving-window hole per Codex P2.2 MED 7 fold-in. Metadata fields (schema_version, last_advanced_at, last_advanced_in_slice) are audit-enforced via validatePinnedRatchetFloorData; floor zero or negative is rejected (Codex HIGH-2 fold-in). Future slices raise the floor only as an explicit ratchet-advance act."
 }

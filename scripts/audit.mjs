@@ -2708,6 +2708,155 @@ export function checkPluginCommandClosure(rootDir = REPO_ROOT) {
   };
 }
 
+// Check 24 (ADR-0007 CC#P2-6 enforcement + EXPLORE-I1 enforcement, P2.3).
+// Verifies that workflow fixtures under `.claude-plugin/skills/<kind>/
+// circuit.json` declare the canonical phase set their workflow-kind
+// requires. Kinds recognized at P2.3 landing:
+//   - `explore` → canonical set {frame, analyze, act, review, close},
+//     omits {plan, verify} (per specs/contracts/explore.md §Canonical phase
+//     set and ADR-0007 CC#P2-6; EXPLORE-I1).
+//   - `dogfood-run-0` → partial fixture from Phase 1.5 Alpha Proof;
+//     explicitly exempt from kind-canonical enforcement (its
+//     `spine_policy.omits` intentionally covers 5 of 7 canonicals per
+//     its slice-27d authoring). Kept in audit as a known-exempt row.
+// Workflows whose `id` is not in WORKFLOW_KIND_CANONICAL_SETS are passed
+// through (information-only) — unknown kinds do not fail the check, they
+// just do not contribute an enforcement row. This is deliberate: future
+// workflow-kinds (review, build, repair, migrate, sweep) will each land
+// their own entry in this table under their implementing slice.
+const WORKFLOW_KIND_CANONICAL_SETS = {
+  explore: {
+    canonicals: ['frame', 'analyze', 'act', 'review', 'close'],
+    omits: ['plan', 'verify'],
+    title: 'Frame → Analyze → Synthesize → Review → Close',
+    authority: 'specs/contracts/explore.md §Canonical phase set',
+  },
+};
+
+const EXEMPT_WORKFLOW_IDS = new Set([
+  'dogfood-run-0', // Phase 1.5 Alpha Proof partial-spine fixture
+]);
+
+export function checkSpineCoverage(rootDir = REPO_ROOT) {
+  const skillsDir = join(rootDir, '.claude-plugin/skills');
+  if (!existsSync(skillsDir)) {
+    return {
+      level: 'green',
+      detail: 'No .claude-plugin/skills/ directory; spine-coverage check not applicable',
+    };
+  }
+
+  const errors = [];
+  const findings = [];
+
+  const entries = readdirSync(skillsDir, { withFileTypes: true });
+  for (const e of entries) {
+    if (!e.isDirectory()) continue;
+    const circuitJson = join(skillsDir, e.name, 'circuit.json');
+    if (!existsSync(circuitJson)) continue;
+
+    let fixture;
+    try {
+      fixture = JSON.parse(readFileSync(circuitJson, 'utf-8'));
+    } catch (err) {
+      errors.push(`${e.name}/circuit.json failed to parse: ${err.message}`);
+      continue;
+    }
+
+    const id = fixture?.id;
+    if (typeof id !== 'string') {
+      errors.push(`${e.name}/circuit.json missing top-level \`id\` string field`);
+      continue;
+    }
+
+    if (EXEMPT_WORKFLOW_IDS.has(id)) {
+      findings.push(`${id}: exempt from kind-canonical enforcement (partial-spine, recorded)`);
+      continue;
+    }
+
+    const expected = WORKFLOW_KIND_CANONICAL_SETS[id];
+    if (!expected) {
+      findings.push(`${id}: no canonical-set entry (unknown workflow kind; pass-through)`);
+      continue;
+    }
+
+    // Extract declared canonical set from phases (ignoring undefined canonicals).
+    const declared = new Set();
+    for (const phase of fixture.phases ?? []) {
+      if (typeof phase?.canonical === 'string') declared.add(phase.canonical);
+    }
+    const expectedSet = new Set(expected.canonicals);
+
+    // Symmetric diff: missing + extra.
+    const missing = [...expectedSet].filter((c) => !declared.has(c));
+    const extra = [...declared].filter((c) => !expectedSet.has(c));
+    if (missing.length > 0 || extra.length > 0) {
+      const parts = [];
+      if (missing.length > 0) parts.push(`missing canonical(s): ${missing.join(', ')}`);
+      if (extra.length > 0) parts.push(`unexpected canonical(s): ${extra.join(', ')}`);
+      errors.push(
+        `${id}: declared canonical set does not match expected {${expected.canonicals.join(
+          ', ',
+        )}} per ${expected.authority} — ${parts.join('; ')}`,
+      );
+      continue;
+    }
+
+    // Verify spine_policy.mode='partial' with omits matching expected.
+    const sp = fixture.spine_policy;
+    if (!sp || typeof sp !== 'object') {
+      errors.push(`${id}: missing \`spine_policy\` field`);
+      continue;
+    }
+    if (sp.mode !== 'partial') {
+      errors.push(
+        `${id}: spine_policy.mode must be 'partial' for workflow-kind ${id} (expected omits=${JSON.stringify(
+          expected.omits,
+        )}, got mode=${sp.mode})`,
+      );
+      continue;
+    }
+    const declaredOmits = new Set(Array.isArray(sp.omits) ? sp.omits : []);
+    const expectedOmits = new Set(expected.omits);
+    const missingOmits = [...expectedOmits].filter((c) => !declaredOmits.has(c));
+    const extraOmits = [...declaredOmits].filter((c) => !expectedOmits.has(c));
+    if (missingOmits.length > 0 || extraOmits.length > 0) {
+      const parts = [];
+      if (missingOmits.length > 0) parts.push(`missing omit(s): ${missingOmits.join(', ')}`);
+      if (extraOmits.length > 0) parts.push(`unexpected omit(s): ${extraOmits.join(', ')}`);
+      errors.push(
+        `${id}: spine_policy.omits does not match expected {${expected.omits.join(
+          ', ',
+        )}} — ${parts.join('; ')}`,
+      );
+      continue;
+    }
+
+    findings.push(
+      `${id}: canonical set {${expected.canonicals.join(', ')}} + omits {${expected.omits.join(', ')}} match`,
+    );
+  }
+
+  if (errors.length > 0) {
+    return {
+      level: 'red',
+      detail: `spine-coverage violations:\n      - ${errors.join('\n      - ')}`,
+    };
+  }
+
+  if (findings.length === 0) {
+    return {
+      level: 'green',
+      detail: 'No workflow fixtures present; spine-coverage check not applicable',
+    };
+  }
+
+  return {
+    level: 'green',
+    detail: `${findings.length} fixture(s) scanned; ${findings.join('; ')}`,
+  };
+}
+
 const GREEN = '\x1b[32m';
 const YELLOW = '\x1b[33m';
 const RED = '\x1b[31m';
@@ -3080,8 +3229,7 @@ function main() {
   // non-empty frontmatter and body, no orphan command files exist on disk,
   // and the required anchor commands (`circuit:run`, `circuit:explore`) are
   // present. Advances the `plugin_surface_present` product ratchet to
-  // partial at P2.2 and to green at P2.11. Inserted here shifts the prior
-  // verify-gate check to Check 24.
+  // partial at P2.2 and to green at P2.11.
   const pluginClosure = checkPluginCommandClosure();
   counters[pluginClosure.level]++;
   findings.push({
@@ -3090,11 +3238,26 @@ function main() {
     detail: pluginClosure.detail,
   });
 
-  // Check 24: npm run verify currently green. (Runs last so the report's
-  // bottom line is the verify-gate status; numbering bumped 23 → 24 by P2.2
-  // which inserted Check 23 for plugin command closure. Prior bumps:
-  // P2.1 22 → 23 (Phase 2 isolation citation); Slice 31a 21 → 22 (verify
-  // was previously Check 22 post-31a); Slice 26b 15 → 20; Slice 25d 20 → 21.)
+  // Check 24: Spine coverage (ADR-0007 CC#P2-6 enforcement + EXPLORE-I1,
+  // P2.3). For every workflow fixture under `.claude-plugin/skills/<kind>/
+  // circuit.json` whose `id` matches a registered workflow-kind canonical
+  // set, verify declared phases cover exactly the expected canonical set
+  // and `spine_policy.omits` matches. Unknown kinds pass through
+  // information-only; `dogfood-run-0` is exempt as the Phase 1.5 Alpha
+  // Proof partial fixture. Inserted here shifts the prior verify-gate
+  // check to Check 25.
+  const spineCoverage = checkSpineCoverage();
+  counters[spineCoverage.level]++;
+  findings.push({
+    level: spineCoverage.level,
+    check: 'Spine coverage (ADR-0007 CC#P2-6 / EXPLORE-I1)',
+    detail: spineCoverage.detail,
+  });
+
+  // Check 25: npm run verify currently green. (Runs last so the report's
+  // bottom line is the verify-gate status; numbering bumped 24 → 25 by P2.3
+  // which inserted Check 24 for spine coverage. Prior bumps: P2.2 23 → 24;
+  // P2.1 22 → 23; Slice 31a 21 → 22; Slice 26b 15 → 20; Slice 25d 20 → 21.)
   const verify = verifyStatus();
   if (verify.pass) {
     counters.green++;

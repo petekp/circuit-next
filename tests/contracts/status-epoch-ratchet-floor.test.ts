@@ -469,7 +469,7 @@ describe('checkPinnedRatchetFloor (Slice 26b full-file check)', () => {
     // any future floor advancement that forgets to update the marker fails
     // the test immediately — the slice id changes only when the floor
     // changes.
-    expect(data?.last_advanced_in_slice).toBe('33');
+    expect(data?.last_advanced_in_slice).toBe('34');
   });
 
   it('readPinnedRatchetFloor returns null when the file is missing', () => {

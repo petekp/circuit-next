@@ -805,6 +805,14 @@
       "enforcement_state": "test-enforced",
       "source_anchor": "specs/behavioral/session-hygiene.md#SESSION-I6",
       "binding_refs": [{ "path": "tests/contracts/session-hygiene.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "EXPLORE-I1",
+      "contract": "explore",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/explore.md#EXPLORE-I1",
+      "binding_refs": [{ "path": "tests/contracts/spine-coverage.test.ts", "kind": "test_title" }]
     }
   ],
   "properties": [
@@ -1270,6 +1278,41 @@
       "enforcement_state": "phase2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "explore.prop.canonical_phase_set_is_correct",
+      "contract": "explore",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/explore.md#EXPLORE-I1",
+      "binding_refs": [{ "path": "tests/contracts/spine-coverage.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "explore.prop.artifact_emission_ordered",
+      "contract": "explore",
+      "enforcement_state": "phase2-property",
+      "target_slice": 38,
+      "reopen_condition": "P2.5 end-to-end explore fixture test (projected slice 38+) lands without registering this property id via test-title binding; reopen to re-evaluate deferral"
+    },
+    {
+      "id": "explore.prop.review_after_synthesis",
+      "contract": "explore",
+      "enforcement_state": "phase2-property",
+      "target_slice": 38,
+      "reopen_condition": "P2.5 end-to-end explore fixture test (projected slice 38+) lands without registering this property id via test-title binding; reopen to re-evaluate deferral"
+    },
+    {
+      "id": "explore.prop.no_skip_to_close",
+      "contract": "explore",
+      "enforcement_state": "phase2-property",
+      "target_slice": 38,
+      "reopen_condition": "P2.5 end-to-end explore fixture test (projected slice 38+) lands without registering this property id via test-title binding; reopen to re-evaluate deferral"
+    },
+    {
+      "id": "explore.prop.reachable_close_only_via_review",
+      "contract": "explore",
+      "enforcement_state": "phase2-property",
+      "target_slice": 38,
+      "reopen_condition": "P2.5 end-to-end explore fixture test (projected slice 38+) lands without registering this property id via test-title binding; reopen to re-evaluate deferral"
     }
   ]
 }

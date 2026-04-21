@@ -168,6 +168,13 @@ export function checkPhase2SliceIsolationCitation(
 // (`circuit:run`, `circuit:explore`) presence.
 export function checkPluginCommandClosure(rootDir?: string): AuditCheckResult;
 
+// Slice 34 (P2.3) — Spine coverage (ADR-0007 CC#P2-6 + EXPLORE-I1 enforcement).
+// Verifies every known-kind workflow fixture under
+// .claude-plugin/skills/<kind>/circuit.json declares the expected canonical
+// phase set for its workflow-kind. Known kinds at P2.3 landing: `explore`.
+// Unknown kinds pass through information-only; `dogfood-run-0` is exempt.
+export function checkSpineCoverage(rootDir?: string): AuditCheckResult;
+
 // Slice 30 — DOG+2 slice:doctor reuses the lane and framing literals enforced
 // by the audit so the operator briefing script cannot drift from the gate.
 export const LANES: readonly [
