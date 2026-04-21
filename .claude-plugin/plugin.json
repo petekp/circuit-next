@@ -1,6 +1,18 @@
 {
   "name": "circuit-next",
   "version": "0.1.0-alpha.0",
-  "description": "Claude Code plugin that automates developer workflows (explore, build, repair, migrate, sweep) with per-step configurability. Alpha Proof phase — dogfood-run-0 is the first executable product surface.",
-  "keywords": ["workflow", "automation", "circuit-next", "alpha-proof"]
+  "description": "Claude Code plugin that automates developer workflows (explore, build, repair, migrate, sweep) with per-step configurability. Phase 2 scaffold — plugin command surface scaffolded at slice P2.2; first-parity workflow is `explore` (target of ADR-0007 CC#P2-1).",
+  "keywords": ["workflow", "automation", "circuit-next", "alpha-proof", "phase-2"],
+  "commands": [
+    {
+      "name": "circuit:run",
+      "file": "commands/circuit-run.md",
+      "description": "Classify a task and dispatch to the appropriate circuit-next workflow (explore/build/repair/migrate/sweep). Router not yet implemented — this is a P2.2 scaffold entry that returns a not-implemented notice pointing at plan slice P2.8."
+    },
+    {
+      "name": "circuit:explore",
+      "file": "commands/circuit-explore.md",
+      "description": "Investigate, understand, choose among options, or shape an execution plan. Phase 2 first-parity target (ADR-0007 CC#P2-1); contract to be authored at slice P2.3 under specs/contracts/explore.md. This is a P2.2 scaffold entry — invocation returns a not-implemented notice."
+    }
+  ]
 }

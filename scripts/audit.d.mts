@@ -148,6 +148,26 @@ export function checkPhaseAuthoritySemantics(rootDir?: string): AuditCheckResult
 // Delegation acknowledgment citing ADR-0006 + ADR-0006 file must all exist.
 export function checkCc14RetargetPresence(rootDir?: string): AuditCheckResult;
 
+// Slice 32 (P2.1) — Phase 2 slice isolation citation (ADR-0007 CC#P2-7 interim
+// enforcement). For every Phase 2 slice commit touching isolation-protected
+// paths (specs/, tests/, .github/, .claude-plugin/, .claude/hooks/, src/,
+// scripts/), require explicit isolation posture in the commit body or
+// Break-Glass lane.
+export function checkPhase2SliceIsolationCitation(
+  disciplinedCommits: ReadonlyArray<{
+    hash: string;
+    short: string;
+    subject: string;
+    body: string;
+  }>,
+): AuditCheckResult;
+
+// Slice 33 (P2.2) — Plugin command closure (ADR-0007 CC#P2-3 enforcement).
+// Verifies closure between .claude-plugin/plugin.json `commands` array and
+// .claude-plugin/commands/*.md files, plus required anchor commands
+// (`circuit:run`, `circuit:explore`) presence.
+export function checkPluginCommandClosure(rootDir?: string): AuditCheckResult;
+
 // Slice 30 — DOG+2 slice:doctor reuses the lane and framing literals enforced
 // by the audit so the operator briefing script cannot drift from the gate.
 export const LANES: readonly [

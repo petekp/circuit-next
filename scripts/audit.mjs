@@ -2397,6 +2397,317 @@ export function checkPhase2SliceIsolationCitation(disciplinedCommits) {
   };
 }
 
+// Check 23 (ADR-0007 CC#P2-3 enforcement, P2.2). Verifies closure between the
+// plugin manifest's `commands` array and the markdown files under
+// `.claude-plugin/commands/`. Enforcement (tightened via P2.2 Codex fold-ins):
+//   (a) `.claude-plugin/plugin.json` parses as JSON with a top-level `commands`
+//       array of `{ name, file, description }` entries (all non-empty; names
+//       and files unique).
+//   (b) Every `commands[].file` matches the grammar `commands/<basename>.md`
+//       with no nested directory components and no non-.md extensions
+//       (Codex HIGH 2 fold-in — grammar is flat-only, rejects
+//       `elsewhere/foo.md` and `commands/nested/bar.md`).
+//   (c) No manifest file path is a symlink, and realpath must remain under
+//       `.claude-plugin/commands/` (Codex HIGH 3 fold-in — lexical check
+//       alone is insufficient; lstat/realpath combination rejects symlink
+//       escape).
+//   (d) Each file has YAML frontmatter whose `name` equals the manifest
+//       entry's `name` (Codex HIGH 1 fold-in — prevents silent-rename where
+//       `circuit:run` points at the file for `circuit:explore` and vice
+//       versa); frontmatter `name` + `description` are YAML-non-empty, not
+//       merely regex-non-empty (Codex MED 5 fold-in — `description: ""` and
+//       `name: # comment` are rejected).
+//   (e) Every `.claude-plugin/commands/**/*.md` file (recursively) has a
+//       corresponding entry in `commands[]` (Codex MED 4 fold-in — walk is
+//       recursive so nested files cannot orphan-slip; nested files are also
+//       always grammar-violations at (b), so they will be double-flagged).
+//   (f) The required anchor commands are present AND bound to their
+//       canonical files: `circuit:run` → `commands/circuit-run.md`,
+//       `circuit:explore` → `commands/circuit-explore.md` (Codex HIGH 1
+//       fold-in — anchor names alone are not sufficient).
+// Advances the `plugin_surface_present` product ratchet to partial at P2.2 and
+// to green at P2.11 (plan §Product ratchets Phase 2 will carry).
+export function checkPluginCommandClosure(rootDir = REPO_ROOT) {
+  const pluginDir = join(rootDir, '.claude-plugin');
+  const manifestPath = join(pluginDir, 'plugin.json');
+  const commandsDir = join(pluginDir, 'commands');
+
+  if (!existsSync(manifestPath)) {
+    return {
+      level: 'red',
+      detail: '.claude-plugin/plugin.json missing; required for CC#P2-3',
+    };
+  }
+
+  // Reject a manifest that is itself a symlink (Codex HIGH 3 fold-in).
+  let manifestLstat;
+  try {
+    manifestLstat = lstatSync(manifestPath);
+  } catch {
+    manifestLstat = null;
+  }
+  if (manifestLstat?.isSymbolicLink()) {
+    return {
+      level: 'red',
+      detail: '.claude-plugin/plugin.json is a symlink; rejected per HIGH 3 fold-in',
+    };
+  }
+
+  let manifest;
+  try {
+    manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'));
+  } catch (err) {
+    return {
+      level: 'red',
+      detail: `.claude-plugin/plugin.json failed to parse as JSON: ${err.message}`,
+    };
+  }
+
+  const errors = [];
+
+  const commands = manifest.commands;
+  if (commands === undefined) {
+    return {
+      level: 'red',
+      detail:
+        '.claude-plugin/plugin.json missing `commands` array (required by ADR-0007 CC#P2-3 enforcement; plan slice P2.2 scaffold)',
+    };
+  }
+  if (!Array.isArray(commands)) {
+    return {
+      level: 'red',
+      detail: '.claude-plugin/plugin.json `commands` is not an array',
+    };
+  }
+
+  const manifestFiles = new Set();
+  const manifestNames = new Set();
+  // Track (name → file) so downstream checks can verify anchor-to-file binding
+  // without re-walking commands.
+  const manifestNameToFile = new Map();
+
+  // Grammar regex: commands/<single-path-segment>.md
+  // Rejects nested directories (e.g. commands/nested/foo.md), non-.md files,
+  // empty stems, and backslash separators.
+  const COMMAND_FILE_GRAMMAR = /^commands\/[A-Za-z0-9_-]+\.md$/;
+
+  for (let i = 0; i < commands.length; i++) {
+    const entry = commands[i];
+    const label = `commands[${i}]`;
+    if (typeof entry !== 'object' || entry === null) {
+      errors.push(`${label} is not an object`);
+      continue;
+    }
+
+    // name
+    const rawName = typeof entry.name === 'string' ? entry.name : null;
+    if (rawName === null || rawName.trim() === '') {
+      errors.push(`${label} missing non-empty string \`name\``);
+    } else {
+      if (manifestNames.has(rawName)) {
+        errors.push(`${label} duplicate command name \`${rawName}\` (must be unique)`);
+      }
+      manifestNames.add(rawName);
+    }
+
+    // file
+    const rawFile = typeof entry.file === 'string' ? entry.file : null;
+    if (rawFile === null || rawFile.trim() === '') {
+      errors.push(`${label} missing non-empty string \`file\``);
+      continue;
+    }
+
+    // description
+    const rawDesc = typeof entry.description === 'string' ? entry.description : null;
+    if (rawDesc === null || rawDesc.trim() === '') {
+      errors.push(`${label} (${rawName ?? '<unnamed>'}) missing non-empty string \`description\``);
+    }
+
+    // Grammar: commands/<basename>.md only, no nesting, no alternate dirs.
+    if (!COMMAND_FILE_GRAMMAR.test(rawFile)) {
+      errors.push(
+        `${label} file path \`${rawFile}\` violates grammar: expected \`commands/<basename>.md\` with only [A-Za-z0-9_-] in basename (Codex HIGH 2 fold-in)`,
+      );
+      continue;
+    }
+    if (manifestFiles.has(rawFile)) {
+      errors.push(`${label} duplicate command file \`${rawFile}\` (must be unique)`);
+    }
+    manifestFiles.add(rawFile);
+    if (rawName) manifestNameToFile.set(rawName, rawFile);
+
+    const fileAbs = join(pluginDir, rawFile);
+
+    // Symlink rejection (Codex HIGH 3 fold-in): lstat the entry, reject if
+    // it resolves outside .claude-plugin/commands/ via symlink.
+    let fileLstat;
+    try {
+      fileLstat = lstatSync(fileAbs);
+    } catch {
+      fileLstat = null;
+    }
+    if (!fileLstat) {
+      errors.push(`${label} (${rawName ?? '<unnamed>'}) file ${rawFile} does not exist`);
+      continue;
+    }
+    if (fileLstat.isSymbolicLink()) {
+      errors.push(
+        `${label} (${rawName ?? '<unnamed>'}) file ${rawFile} is a symlink; rejected per Codex HIGH 3 fold-in`,
+      );
+      continue;
+    }
+    if (!fileLstat.isFile()) {
+      errors.push(`${label} (${rawName ?? '<unnamed>'}) file ${rawFile} is not a regular file`);
+      continue;
+    }
+
+    const text = readFileSync(fileAbs, 'utf-8');
+    const frontmatterMatch = text.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+    if (!frontmatterMatch) {
+      errors.push(`${label} file ${rawFile} missing YAML frontmatter (--- ... ---)`);
+      continue;
+    }
+    const frontmatter = frontmatterMatch[1];
+    const body = frontmatterMatch[2];
+
+    // YAML-aware value extraction (Codex MED 5 fold-in). Captures the raw
+    // value text on the same line (no newline-gobbling), then strips
+    // surrounding quotes (single or double) and trailing `#` comments, and
+    // finally trims. A value of `""`, `''`, `# comment`, `>`, `|`, or an
+    // empty folded scalar is treated as empty.
+    const extractYamlScalar = (field) => {
+      const match = frontmatter.match(new RegExp(`^${field}:[ \\t]*(.*)$`, 'm'));
+      if (!match) return null;
+      let raw = match[1];
+      // Strip inline YAML comment. YAML comments start at `#` that is either
+      // at the start of the value (after key-colon-whitespace), or preceded
+      // by a whitespace character. Conservative: handle both.
+      raw = raw.replace(/(?:^|\s)#.*$/, '').trim();
+      // Folded scalar markers with no continuation are empty.
+      if (raw === '>' || raw === '|' || raw === '>-' || raw === '|-') return '';
+      // Strip surrounding matching quotes (single or double).
+      if (
+        (raw.startsWith('"') && raw.endsWith('"') && raw.length >= 2) ||
+        (raw.startsWith("'") && raw.endsWith("'") && raw.length >= 2)
+      ) {
+        raw = raw.slice(1, -1);
+      }
+      return raw;
+    };
+    const nameValue = extractYamlScalar('name');
+    const descValue = extractYamlScalar('description');
+
+    if (nameValue === null || nameValue.trim() === '') {
+      errors.push(
+        `${label} file ${rawFile} frontmatter missing non-empty \`name\` field (after YAML scalar normalization)`,
+      );
+    } else if (rawName && nameValue !== rawName) {
+      // Anchor-to-file binding (Codex HIGH 1 fold-in).
+      errors.push(
+        `${label} file ${rawFile} frontmatter name \`${nameValue}\` does not match manifest entry name \`${rawName}\` (Codex HIGH 1 fold-in — silent-rename loophole)`,
+      );
+    }
+    if (descValue === null || descValue.trim() === '') {
+      errors.push(
+        `${label} file ${rawFile} frontmatter missing non-empty \`description\` field (after YAML scalar normalization)`,
+      );
+    }
+    if (body.trim() === '') {
+      errors.push(`${label} file ${rawFile} body is empty`);
+    }
+  }
+
+  // (e) Recursive orphan + nested-file check (Codex MED 4 fold-in).
+  if (existsSync(commandsDir)) {
+    const walk = (dir, relPrefix) => {
+      const results = [];
+      let entries;
+      try {
+        entries = readdirSync(dir, { withFileTypes: true });
+      } catch {
+        return results;
+      }
+      for (const e of entries) {
+        const rel = relPrefix ? `${relPrefix}/${e.name}` : e.name;
+        const full = join(dir, e.name);
+        let lst;
+        try {
+          lst = lstatSync(full);
+        } catch {
+          continue;
+        }
+        if (lst.isSymbolicLink()) {
+          // Symlinks inside commands/ are flagged regardless of manifest
+          // (Codex HIGH 3 fold-in).
+          errors.push(
+            `commands/${rel} is a symlink inside .claude-plugin/commands/; rejected per Codex HIGH 3 fold-in`,
+          );
+          continue;
+        }
+        if (e.isDirectory()) {
+          // Nested directories under commands/ are rejected flat-only
+          // (Codex MED 4 fold-in — grammar decision).
+          errors.push(
+            `commands/${rel} is a nested directory under .claude-plugin/commands/; flat-only grammar rejects nesting (Codex MED 4 fold-in)`,
+          );
+          // Still walk it so nested orphan .md files are also flagged.
+          results.push(...walk(full, rel));
+        } else if (e.isFile() && e.name.endsWith('.md')) {
+          results.push(rel);
+        } else if (e.isFile()) {
+          errors.push(
+            `commands/${rel} is a non-.md file in .claude-plugin/commands/; flat-grammar rejects non-markdown command files`,
+          );
+        }
+      }
+      return results;
+    };
+    const commandMdFiles = walk(commandsDir, '');
+    for (const rel of commandMdFiles) {
+      const manifestKey = `commands/${rel}`;
+      if (!manifestFiles.has(manifestKey)) {
+        errors.push(
+          `orphan command file ${manifestKey} — present on disk but not listed in .claude-plugin/plugin.json commands array`,
+        );
+      }
+    }
+  }
+
+  // (f) Required anchor commands AND canonical-file binding (Codex HIGH 1
+  // fold-in). Each anchor must appear in the manifest AND its `file` must be
+  // the canonical file for that anchor.
+  const REQUIRED_ANCHORS = [
+    { name: 'circuit:run', canonicalFile: 'commands/circuit-run.md' },
+    { name: 'circuit:explore', canonicalFile: 'commands/circuit-explore.md' },
+  ];
+  for (const anchor of REQUIRED_ANCHORS) {
+    if (!manifestNames.has(anchor.name)) {
+      errors.push(
+        `required anchor command \`${anchor.name}\` missing from manifest (ADR-0007 CC#P2-3 scaffold requirement)`,
+      );
+      continue;
+    }
+    const actualFile = manifestNameToFile.get(anchor.name);
+    if (actualFile !== anchor.canonicalFile) {
+      errors.push(
+        `required anchor command \`${anchor.name}\` points at \`${actualFile}\` instead of canonical \`${anchor.canonicalFile}\` (Codex HIGH 1 fold-in — anchor-to-file binding)`,
+      );
+    }
+  }
+
+  if (errors.length > 0) {
+    return {
+      level: 'red',
+      detail: `plugin command closure violations:\n      - ${errors.join('\n      - ')}`,
+    };
+  }
+
+  return {
+    level: 'green',
+    detail: `${commands.length} plugin command(s) closure-consistent with .claude-plugin/commands/*.md; anchors circuit:run + circuit:explore present`,
+  };
+}
+
 const GREEN = '\x1b[32m';
 const YELLOW = '\x1b[33m';
 const RED = '\x1b[31m';
@@ -2755,7 +3066,6 @@ function main() {
   // src/, scripts/), require explicit isolation posture in the commit body
   // OR a Break-Glass lane. Advances the audit-coverage ratchet independently
   // from the close-criteria-authority ratchet advanced by the P2.1 ceremony.
-  // Check 22 inserted here shifts the prior verify-gate check to Check 23.
   const phase2Isolation = checkPhase2SliceIsolationCitation(disciplinedCommits);
   counters[phase2Isolation.level]++;
   findings.push({
@@ -2764,10 +3074,27 @@ function main() {
     detail: phase2Isolation.detail,
   });
 
-  // Check 23: npm run verify currently green. (Runs last so the report's
-  // bottom line is the verify-gate status; numbering bumped 22 → 23 by P2.1
-  // which inserted Check 22 for Phase 2 isolation citation. Prior bumps:
-  // Slice 31a 21 → 22; Slice 26b 15 → 20; Slice 25d 20 → 21.)
+  // Check 23: Plugin command closure (ADR-0007 CC#P2-3 enforcement, P2.2).
+  // Verifies that `.claude-plugin/plugin.json` carries a `commands` array,
+  // every entry has a corresponding `.claude-plugin/commands/*.md` file with
+  // non-empty frontmatter and body, no orphan command files exist on disk,
+  // and the required anchor commands (`circuit:run`, `circuit:explore`) are
+  // present. Advances the `plugin_surface_present` product ratchet to
+  // partial at P2.2 and to green at P2.11. Inserted here shifts the prior
+  // verify-gate check to Check 24.
+  const pluginClosure = checkPluginCommandClosure();
+  counters[pluginClosure.level]++;
+  findings.push({
+    level: pluginClosure.level,
+    check: 'Plugin command closure (ADR-0007 CC#P2-3)',
+    detail: pluginClosure.detail,
+  });
+
+  // Check 24: npm run verify currently green. (Runs last so the report's
+  // bottom line is the verify-gate status; numbering bumped 23 → 24 by P2.2
+  // which inserted Check 23 for plugin command closure. Prior bumps:
+  // P2.1 22 → 23 (Phase 2 isolation citation); Slice 31a 21 → 22 (verify
+  // was previously Check 22 post-31a); Slice 26b 15 → 20; Slice 25d 20 → 21.)
   const verify = verifyStatus();
   if (verify.pass) {
     counters.green++;
