@@ -4,7 +4,7 @@ description: Phase 2 implementation plan — from Alpha Proof fixture to one-wor
 type: plan
 date: 2026-04-21
 authored_by: claude-opus-4-7
-base_commit: 0223d11162b35458c22c4b8680859f872a83897c0
+base_commit: 0223d1162b35458c22c4b8680859f872a83897c0
 supersedes_scope:
   - (none — first Phase 2 plan authoring; complements specs/plans/phase-1-close-revised.md which owns Phase 1.5 close semantics only)
 does_not_supersede:

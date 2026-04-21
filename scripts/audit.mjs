@@ -2283,7 +2283,7 @@ function commitIsSliceShaped(commit) {
 // Phase 2 open commit — Slice 31a ceremony per ADR-0001 Addendum B as amended
 // by ADR-0006. Used by checkPhase2SliceIsolationCitation to scope the check
 // to Phase-2-only commits.
-const PHASE_2_OPEN_COMMIT = '0223d11162b35458c22c4b8680859f872a83897c';
+const PHASE_2_OPEN_COMMIT = '0223d1162b35458c22c4b8680859f872a83897c0';
 
 // Paths whose modification during a Phase 2 slice triggers the isolation-
 // citation requirement. Ordered roughly from most-invariant (specs, tests) to
