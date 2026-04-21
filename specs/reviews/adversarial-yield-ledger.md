@@ -48,6 +48,7 @@ artifact whose `mode` does not begin with `llm-`.
 | 2026-04-20 | `specs/contracts/workflow.md` v0.2 | reversible | 1 | gpt-5-codex | llm-review | 3 | 3 | 2 | REJECT → incorporated → ACCEPT | n/a | pre-dog-1-grandfather | n/a | n/a |
 | 2026-04-20 | `scripts/audit.mjs` | reversible | 2 | property-fuzzer | property-fuzzer | 0 | 0 | 0 | ACCEPT | n/a | deep | LLM-review-echo miss on adversarial-audit branch conditions — hunted by RNG coverage of rigor × pass × mode × date boundaries | 7a12329 |
 | 2026-04-20 | `specs/adrs/ADR-0006-cc14-operator-governance-alignment.md` | governance | 1 | gpt-5-codex | llm-review | 5 | 5 | 1 | REJECT PENDING FOLD-INS → incorporated → ACCEPT-WITH-FOLD-INS | n/a | standard | n/a | n/a |
+| 2026-04-21 | `specs/adrs/ADR-0007-phase-2-close-criteria.md` | governance | 1 | gpt-5-codex | llm-review | 7 | 5 | 1 | REJECT PENDING FOLD-INS → incorporated → ACCEPT-WITH-FOLD-INS | n/a | standard | n/a | n/a |
 
 **Slice 29 property-fuzzer pass context.** Pass 2 on `scripts/audit.mjs`
 (commit `7a12329`, slice-28). Non-LLM evidence artifact for Phase 1.5

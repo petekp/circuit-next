@@ -2280,6 +2280,123 @@ function commitIsSliceShaped(commit) {
   return checkLane(commit.body) !== null;
 }
 
+// Phase 2 open commit — Slice 31a ceremony per ADR-0001 Addendum B as amended
+// by ADR-0006. Used by checkPhase2SliceIsolationCitation to scope the check
+// to Phase-2-only commits.
+const PHASE_2_OPEN_COMMIT = '0223d11162b35458c22c4b8680859f872a83897c';
+
+// Paths whose modification during a Phase 2 slice triggers the isolation-
+// citation requirement. Ordered roughly from most-invariant (specs, tests) to
+// least (hooks/CI). A commit touching any file whose path starts with one of
+// these prefixes must declare its isolation posture in the commit body (see
+// ADR-0007 §Decision.1 CC#P2-7 interim enforcement).
+const ISOLATION_PROTECTED_PREFIXES = [
+  'specs/',
+  'tests/',
+  '.github/',
+  '.claude-plugin/',
+  '.claude/hooks/',
+  'src/',
+  'scripts/',
+];
+
+function commitIsAtOrAfterPhase2Open(hash) {
+  try {
+    execSync(`git merge-base --is-ancestor ${PHASE_2_OPEN_COMMIT} ${hash}`, {
+      stdio: 'ignore',
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function commitChangedFiles(hash) {
+  const raw = shSafe(`git show --name-only --pretty=format: ${hash}`);
+  return raw
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+}
+
+// Returns true if ADR-0007 exists in the commit's tree. Used to grandfather
+// pre-ADR-0007 Phase 2 commits out of the isolation-citation check (those
+// commits could not have known to carry the posture string since the ADR
+// requiring it did not yet exist at their authoring time).
+function adr0007InCommitTree(hash) {
+  try {
+    execSync(`git cat-file -e ${hash}:specs/adrs/ADR-0007-phase-2-close-criteria.md`, {
+      stdio: 'ignore',
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Check 23 (ADR-0007 CC#P2-7 interim enforcement, P2.1). For every Phase 2
+// slice commit (past the discipline floor AND at or after Phase 2 open) that
+// touches isolation-protected paths, require an explicit isolation posture
+// in the commit body: `Isolation: policy-compliant (no implementer separation
+// required)` OR `Isolation: re-deferred per ADR-0007 CC#P2-7` OR a Break-
+// Glass lane declaration. Purpose: force slice authors to declare isolation
+// posture openly rather than silently normalize unisolated Phase 2 execution.
+// This is NOT a filesystem-capability check; it is an in-commit-body citation
+// audit. Advances the audit-coverage ratchet independently from the close-
+// criteria-authority ratchet advanced by the P2.1 ceremony.
+export function checkPhase2SliceIsolationCitation(disciplinedCommits) {
+  const POSTURES = [
+    'Isolation: policy-compliant (no implementer separation required)',
+    'Isolation: re-deferred per ADR-0007 CC#P2-7',
+  ];
+
+  // Two-stage filter: (1) commit is at or after Phase 2 open; (2) commit's
+  // tree already contains ADR-0007 (grandfathering pre-ADR-0007 Phase 2
+  // commits that could not have known the posture-string requirement).
+  const phase2Commits = disciplinedCommits
+    .filter((c) => commitIsAtOrAfterPhase2Open(c.hash))
+    .filter((c) => adr0007InCommitTree(c.hash));
+
+  if (phase2Commits.length === 0) {
+    return {
+      level: 'green',
+      detail: 'No post-ADR-0007 Phase 2 slice commits in scanned window; check not applicable',
+    };
+  }
+
+  const offenders = [];
+  for (const c of phase2Commits) {
+    const files = commitChangedFiles(c.hash);
+    const touchesProtected = files.some((f) =>
+      ISOLATION_PROTECTED_PREFIXES.some((p) => f.startsWith(p)),
+    );
+    if (!touchesProtected) continue;
+
+    const lane = checkLane(c.body);
+    const hasPosture = POSTURES.some((p) => c.body.includes(p));
+    const isBreakGlass = lane === 'Break-Glass';
+
+    if (!hasPosture && !isBreakGlass) {
+      offenders.push(c);
+    }
+  }
+
+  if (offenders.length > 0) {
+    const lines = offenders.map(
+      (c) => `${c.short} "${c.subject}" — missing isolation posture in commit body`,
+    );
+    return {
+      level: 'red',
+      detail: `Phase 2 slice(s) touch isolation-protected paths without declaring isolation posture (ADR-0007 §Decision.1 CC#P2-7 interim enforcement):\n      ${lines.join('\n      ')}`,
+    };
+  }
+
+  return {
+    level: 'green',
+    detail: `${phase2Commits.length} Phase 2 slice commit(s) scanned; all touching isolation-protected paths declare posture or Break-Glass`,
+  };
+}
+
 const GREEN = '\x1b[32m';
 const YELLOW = '\x1b[33m';
 const RED = '\x1b[31m';
@@ -2632,11 +2749,25 @@ function main() {
     detail: cc14Retarget.detail,
   });
 
-  // Check 22: npm run verify currently green. (Runs last so the report's
-  // bottom line is the verify-gate status; numbering bumped from Check 21 →
-  // Check 22 in Slice 31a to keep printed Check-N order monotonic after
-  // Slice 31a inserted Check 21. Prior bumps: Slice 26b 15 → 20; Slice 25d
-  // 20 → 21.)
+  // Check 22: Phase 2 slice isolation citation (ADR-0007 CC#P2-7 interim
+  // enforcement, P2.1). For every Phase 2 slice commit touching isolation-
+  // protected paths (specs/, tests/, .github/, .claude-plugin/, .claude/hooks/,
+  // src/, scripts/), require explicit isolation posture in the commit body
+  // OR a Break-Glass lane. Advances the audit-coverage ratchet independently
+  // from the close-criteria-authority ratchet advanced by the P2.1 ceremony.
+  // Check 22 inserted here shifts the prior verify-gate check to Check 23.
+  const phase2Isolation = checkPhase2SliceIsolationCitation(disciplinedCommits);
+  counters[phase2Isolation.level]++;
+  findings.push({
+    level: phase2Isolation.level,
+    check: 'Phase 2 slice isolation citation (ADR-0007 CC#P2-7)',
+    detail: phase2Isolation.detail,
+  });
+
+  // Check 23: npm run verify currently green. (Runs last so the report's
+  // bottom line is the verify-gate status; numbering bumped 22 → 23 by P2.1
+  // which inserted Check 22 for Phase 2 isolation citation. Prior bumps:
+  // Slice 31a 21 → 22; Slice 26b 15 → 20; Slice 25d 20 → 21.)
   const verify = verifyStatus();
   if (verify.pass) {
     counters.green++;

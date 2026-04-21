@@ -10,7 +10,7 @@ supersedes_scope:
 does_not_supersede:
   - specs/plans/phase-1-close-revised.md §Slice P2-MODEL-EFFORT (pulled in by reference)
   - specs/plans/phase-1-close-revised.md §Slice 25g (Phase 2 close planning slice — referenced but not rescheduled here)
-status: active — target workflow locked to `explore` (operator decision 2026-04-21; Codex challenger recommendation adopted over the in-session methodology recommendation of `review`)
+status: active — target workflow locked to `explore` (operator decision 2026-04-21; Codex challenger recommendation adopted over the in-session methodology recommendation of `review`); Phase 2 close criteria LOCKED via ADR-0007 (2026-04-21); Open Questions #3 (container isolation) and #5 (explore spine policy) RESOLVED via ADR-0007
 ---
 
 # Phase 2 — Implementation Plan (2026-04-21)
@@ -123,37 +123,43 @@ slice should absorb.
 bind to `explore`. P2.1, P2.2, P2.4 were target-agnostic and remain
 unchanged.
 
-## Phase 2 close criteria (draft — candidate, not locked)
+## Phase 2 close criteria — LOCKED via ADR-0007 (2026-04-21)
 
-These are the candidate gates for calling Phase 2 done. They are
-authored here for ranging purposes and must be locked via an ADR
-before any slice claims one of them. Each is independently trackable
-(no aggregate scoring — CLAUDE.md hard invariant #8).
+**Status: LOCKED via ADR-0007 (2026-04-21).** These are the
+authoritative Phase 2 close criteria with concrete executable
+enforcement bindings. The locked summary table below mirrors
+ADR-0007 §Decision.2 in full (not a pointer); on any conflict,
+ADR-0007 §Decision.1 is authoritative. Any change — retarget,
+weakening, relaxation, introduction of aggregate scoring — must
+clear ADR-0007 §6 Precedent firewall before landing. Each criterion
+is independently trackable with status values `active — satisfied`,
+`active — red`, or `re-deferred` (no aggregate scoring — CLAUDE.md
+hard invariant #8; see ADR-0007 §Decision.3 for the forbidden-
+wording list).
 
-1. **One-workflow parity.** The chosen target workflow (above) runs
-   end-to-end in circuit-next with real agent dispatch and produces
-   the same artifact shape as the reference Circuit workflow.
-2. **Real agent dispatch.** At least one non-dry-run adapter landed
-   (`agent` or `codex`), with a concrete request/receipt/result
-   round-trip verified in the runtime boundary.
-3. **Plugin command registration.** `/circuit:<workflow>` slash
-   commands exposed via `.claude-plugin/` and invokable in Claude
-   Code.
-4. **Session hooks.** SessionStart continuity resume and SessionEnd
-   handoff wired through to circuit-engine — matches the behavior
-   reference Circuit already exhibits.
-5. **P2-MODEL-EFFORT landed.** Workflow contract v0.3 (explicit
-   per-step model + effort assignment) with schema parity tests and
-   unknown-model-id audit check.
-6. **Spine policy coverage.** The target workflow exercises at least
-   the canonical phases required by its kind (explore: frame/analyze/
-   synthesize; build: frame/plan/act/verify/review/close).
-7. **Container isolation** (deferred — Tier 2+). Phase 2 may close
-   without this if an ADR explicitly re-defers; hard invariant #1-4
-   remain load-bearing for any future slice that claims isolation.
-8. **Close review.** Adversarial pass (Codex challenger) on Phase 2
-   close claim, yield-ledger row, operator product-direction
-   confirmation analogous to the 14a artifact.
+| CC# | Title | Status at lock | Enforcement binding (non-substitutable) |
+|---|---|---|---|
+| P2-1 | One-workflow parity (target: `explore`) | active — red | `tests/runner/explore-e2e-parity.test.ts` + `tests/fixtures/golden/explore/` byte-shape golden (sha256 over normalized-JSON); authored at P2.5. |
+| P2-2 | Real agent dispatch | active — red | `src/runtime/adapters/agent.ts` + `tests/runner/agent-dispatch-roundtrip.test.ts` with durable dispatch transcript (adapter id, request/receipt/result hashes, reducer+writer consumption); CI-skip requires `tests/fixtures/agent-smoke/last-run.json` with commit-ancestor audit. |
+| P2-3 | Plugin command registration | active — red | `checkPluginCommandClosure` + `tests/contracts/plugin-surface.test.ts` + P2.11 invoke-evidence file at `specs/reviews/p2-11-invoke-evidence.md`. |
+| P2-4 | Session hooks + continuity lifecycle | active — red | `.claude/hooks/SessionStart.sh` + `.claude/hooks/SessionEnd.sh` + `checkSessionHooksPresent` + `tests/runner/continuity-lifecycle.test.ts` (create → persist → resume → clear). |
+| P2-5 | P2-MODEL-EFFORT landed | active — red | `src/schemas/workflow.ts` v0.3 + `tests/contracts/workflow-model-effort.test.ts` + `checkUnknownModelIds`; slice spec incorporated by reference from `specs/plans/phase-1-close-revised.md §Slice P2-MODEL-EFFORT`. |
+| P2-6 | Spine policy coverage (full-spine `explore`) | active — red | `specs/contracts/explore.md` canonical phase set {Frame, Analyze, Synthesize, Review, Close} + `checkSpineCoverage` + `tests/contracts/spine-coverage.test.ts`. |
+| P2-7 | Container isolation | **re-deferred by ADR-0007** | `checkPhase2SliceIsolationCitation` (interim, added in P2.1 ceremony commit) + CLAUDE.md §Phase discipline §Phase 2 + §Hard invariants #1–#4 (policy-layer, unchanged). Nine named trigger conditions at ADR-0007 §Decision.1 CC#P2-7 re-open the gate. |
+| P2-8 | Close review (final blocking gate) | active — red | `specs/reviews/phase-2-close-matrix.md` + `specs/reviews/phase-2-close-codex.md` + `specs/reviews/phase-2-operator-product-check.md` + `checkPhase2CloseMatrix`; fails closed if any prior CC is red or supported only by LLM stand-in evidence. |
+
+**Close condition (no aggregate):** Phase 2 closes when every
+`active` criterion is `active — satisfied` AND every `re-deferred`
+criterion has valid ADR-covered trigger conditions that have not
+fired. See ADR-0007 §Decision.3 for the full forbidden-wording list
+(rejects "green-by-redeferral", "7/8 complete", "mostly done", etc.).
+
+**Inherited product ratchets must be green at close** (see ADR-0007
+§Decision.4c): the seven Phase-1.5-inherited ratchets plus the three
+Phase-2-added ratchets (`dispatch_realness`, `workflow_parity_fixtures`,
+`plugin_surface_present`) are required-green-at-close in addition to
+the close criteria; a red inherited ratchet blocks Phase 2 close
+independently of CC#P2-N status.
 
 ## Near-term slices — P2.1 through P2.5
 
@@ -370,16 +376,20 @@ it.
    `agent`; if the operator wants `codex` first (Codex is the Knight-
    Leveson challenger voice already in the methodology), flip P2.4 /
    P2.6.
-3. **Phase 2 close criterion #7 — container isolation.** Close with
-   it or re-defer by ADR at P2.1 / ADR-0007 authoring time?
+3. ~~**Phase 2 close criterion #7 — container isolation.**~~
+   **RESOLVED 2026-04-21 via ADR-0007 CC#P2-7:** re-deferred with
+   nine named trigger conditions and interim per-slice citation audit
+   check (`checkPhase2SliceIsolationCitation`) added in P2.1 ceremony
+   commit. CLAUDE.md §Phase discipline §Phase 2 sentence + §Hard
+   invariants #1–#4 remain authoritative at the policy layer;
+   close-criterion-layer weakening is explicitly acknowledged per
+   ADR-0007 §Consequences.Accepted.
 4. **Golden-artifact location and hashing scheme.** Phase 2 should
    lock this before P2.5 lands; candidate: sha256 over
    normalized-JSON result artifacts, stored under
    `tests/fixtures/golden/explore/`.
-5. **Spine policy for `explore`.** Reference Circuit's `explore`
-   workflow covers investigation, architectural exploration, and
-   RFC/PRD review at rigor profiles Lite → Autonomous. Does
-   circuit-next's `explore` fixture target full-spine (Frame →
-   Analyze → Synthesize → Review → Close) at a Standard rigor, or
-   does it start partial-spine (Frame → Analyze only) and grow?
-   Contract-authoring call; addressed in P2.3.
+5. ~~**Spine policy for `explore`.**~~ **RESOLVED 2026-04-21 via
+   ADR-0007 CC#P2-6:** full-spine at Standard rigor — {Frame,
+   Analyze, Synthesize, Review, Close}. P2.3 contract authorship
+   adopts this canonical phase set; `checkSpineCoverage` audit check
+   enforces it at Phase 2 close.
