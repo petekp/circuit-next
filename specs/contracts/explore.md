@@ -7,6 +7,7 @@ last_updated: 2026-04-21
 depends_on: [workflow, phase, step, selection, rigor, lane, skill, adapter]
 codex_adversarial_review: specs/reviews/explore-md-v0.1-codex.md
 codex_adversarial_review_v0_2: specs/reviews/arc-slice-38-dispatch-granularity-adr-0008-codex.md
+codex_adversarial_review_v0_3: specs/reviews/arc-slices-35-to-40-composition-review-codex.md (arc-close composition review; subsumes retroactive Slice 39 Codex pass per Claude MED 2 + Codex LOW 2 convergent fold-in — the arc-close Codex prong explicitly covers the path-split decision, opts.knownCollisions API shape, and vacuous-on-empty regression smell)
 adr_bindings:
   - specs/adrs/ADR-0008-dispatch-granularity-modeling.md (v0.2 amendment — Synthesize and Review are dispatch steps; Review weaker-substitute rationale retired)
   - specs/reviews/p2-foundation-composition-review.md §HIGH 4 (v0.3 amendment — explore.result path-split from run.result)
@@ -303,6 +304,27 @@ were demoted from "MUST reject at runtime" to "property-tracked
 obligations satisfied by later slices" because the v0.1 contract-
 surface-enforced-at-runtime layer cannot express them without
 implementing enforcement that belongs to later slices.
+
+**Runtime rejection delivery window (v0.3 amendment — Slice 40
+arc-close fold-in per convergent Claude HIGH 1 + Codex HIGH 1).**
+The "MUST reject at runtime" prose above names the invariant's
+target. The delivery path has two layers, staged across slices:
+(1) **Fixture-level rejection via `checkSpineCoverage` (Check 24)**
+— landed at Slice 34 / P2.3; rejects fixtures whose top-level
+`id='explore'` violates the canonical-set or spine-policy clause by
+hand-parsing `fixture.phases[].canonical`. Already in force.
+(2) **Runtime-level rejection via `validateWorkflowKindPolicy`**
+— scheduled for P2.5 per `specs/plans/phase-2-implementation.md
+§P2.5` HIGH 5 retargeting. Extracts a helper that runs
+`Workflow.safeParse(workflow)` first and then applies kind-specific
+policy on the parsed value; both `scripts/audit.mjs` Check 24 and
+the runtime fixture loader (`src/cli/dogfood.ts:125` or its P2.5
+equivalent) call the helper. At P2.5 landing, the EXPLORE-I1
+headline fully matches its enforcement path; pre-P2.5, the
+fixture-level delivery is the operative rejection mechanism and
+the §Scope of EXPLORE-I1 enforcement subsection below discloses
+the gap honestly. No enforcement silently regresses at the v0.3
+contract bump — enforcement strictly widens as P2.5 lands.
 
 - **EXPLORE-I1 — Canonical phase set matches kind, spine_policy is
   partial with omits {plan, verify}.** Any workflow fixture whose

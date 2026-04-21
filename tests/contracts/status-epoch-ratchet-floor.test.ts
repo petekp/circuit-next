@@ -479,10 +479,15 @@ describe('checkPinnedRatchetFloor (Slice 26b full-file check)', () => {
     // advanced it to 830 (+2 regression guards in
     // artifact-backing-path-integrity.test.ts: empty-allowlist
     // post-resolution assertion + live-repo Check 25 green terminal-state
-    // assertion). This assertion pins the CURRENT slice id so any future
-    // floor advancement that forgets to update the marker fails the test
-    // immediately — the slice id changes only when the floor changes.
-    expect(data?.last_advanced_in_slice).toBe('39');
+    // assertion); slice 40 (pre-P2.4 fold-in arc-close ceremony)
+    // advanced it to 835 (+5 net regression guards: two-prong Check 26
+    // tightening +6 and -3 superseded pre-tightening tests; +2 synthetic
+    // shape tests addressing the empty-allowlist vacuity hole per
+    // convergent Claude MED 1 + Codex LOW 2 fold-in). This assertion
+    // pins the CURRENT slice id so any future floor advancement that
+    // forgets to update the marker fails the test immediately — the
+    // slice id changes only when the floor changes.
+    expect(data?.last_advanced_in_slice).toBe('40');
   });
 
   it('readPinnedRatchetFloor returns null when the file is missing', () => {

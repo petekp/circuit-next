@@ -473,6 +473,25 @@ This ADR is reopened if any of:
    is re-examined. The current rule — "fires on any canonical-set
    entry with zero dispatch" — is correct for today's one-kind set
    but may need per-kind opt-out at a larger set.
+7. **Forbidden citation detected in a future ADR.** Added at Slice
+   40 arc-close commit per convergent Claude MED 3 fold-in (ADR-0008
+   §6 non-precedent enforcement was prose-only without a reopen
+   trigger). If a future workflow-kind ADR cites ADR-0008 using any
+   of the §6 forbidden forms ("the explore ADR-0008 pattern applies
+   here," "extending ADR-0008's approach," "option (a) per ADR-0008,"
+   or any phrasing that treats ADR-0008's explore-specific
+   conclusion as transferable without a fresh four-ground analysis
+   subsection), this ADR is re-opened at the challenger-pass review
+   time for that future ADR to decide whether the forbidden
+   citation reflects drift in the non-precedent clause itself
+   (clause needs tightening) or a challenger-pass failure (future
+   ADR needs revision). Discovery mechanism: per-ADR Codex
+   challenger pass per CLAUDE.md §Cross-model challenger protocol
+   — the challenger's objection list MUST disclose the ADR-0008
+   citation kind (allowed vs forbidden per §6) when ADR-0008 is
+   cited. A machine-audit guard over new ADRs for forbidden citation
+   phrases is an optional deferred slice once the pattern recurs
+   more than once.
 
 ### 6. Non-precedent clause (Codex Slice 38 MED 3 fold-in — split into allowed vs forbidden)
 

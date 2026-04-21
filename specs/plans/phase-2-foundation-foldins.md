@@ -324,57 +324,173 @@ dispatch wiring can invert.
 **Authority:** composition review §HIGH 4 + `specs/artifacts.json` +
 `src/runtime/result-writer.ts:5`.
 
-### Slice 40 — HIGH 5 fold-in: extract `validateWorkflowKindPolicy` helper
+**Slice 40 arc-close fold-in (MED 4 — plan text amendment).** The
+Slice 40 arc-close composition review found the option-(b) phrasing
+above ("and have the close-step write both files") is superseded by
+the landed resolution. The engine owns `<run-root>/artifacts/result.json`
+per `src/runtime/result-writer.ts` RESULT-I1 single-writer invariant;
+the close-step writes only the workflow-specific sibling
+`<run-root>/artifacts/explore-result.json`. The "both files" wording
+was imprecise at plan authorship time. The `specs/contracts/explore.md`
+v0.3 §Path-split rationale documents the landed resolution
+authoritatively. Superseded wording retained here for audit trail.
 
-**Lane:** Equivalence Refactor (semantics-preserving extraction + one
-new enforcement binding that was claimed but absent).
+### Slice 40 — Arc-close cross-slice composition review (ceremony slice)
 
-**Deliverable:**
-- New helper `validateWorkflowKindPolicy(workflow)` exported from
-  `src/runtime/workflow-policy.ts` (or equivalent location). Helper
-  runs `Workflow.safeParse(workflow)` first, then applies kind-
-  specific policy (canonical phase set, spine-policy omits) on the
-  parsed value.
-- `scripts/audit.mjs` Check 24 (`checkSpineCoverage`) refactored to
-  call the helper instead of hand-parsing JSON.
-- `src/cli/dogfood.ts:125` (runtime fixture loading) extended to call
-  the helper after `Workflow.parse`.
-- The deferred-property test stub that previously only asserted
-  `target_slice` and `reopen_condition` (MED 1 in the review) is
-  **not** in scope for this slice — that's a P2.5 concern.
+**Lane:** Ratchet-Advance (review-authority ratchet + governance-gate
+ratchet + test-ratchet for the synthetic-shape fold-in).
 
-**Acceptance evidence:** the invalid fixture at
-`tests/contracts/spine-coverage.test.ts:34` (`steps: []`) that
-currently passes Check 24 at line 70 now **fails** (red path); live-
-repo fixture still passes green; runtime rejects a hand-crafted
-invalid explore-kind fixture with a clear error.
+**Retargeting note — HIGH 5 scope moved to P2.5 (operator decision,
+2026-04-21).** Originally planned as Slice 40 per §Slice 40 above
+(renamed §Slice 40 — HIGH 5 validator helper extraction — and
+preserved in a §Retargeted scope subsection further below for audit
+trail). Between Slice 39 landing and Slice 40 framing, the operator
+interim-retargeted HIGH 5 (`validateWorkflowKindPolicy` helper
+extraction) to P2.5 where the end-to-end dispatch path and deferred-
+property promotion natively compose with the helper's scope. The
+retargeting is recorded in `specs/plans/phase-2-implementation.md
+§P2.4`/§P2.5 amendment (landed alongside Slice 40 arc-close commit)
+and in `specs/contracts/explore.md §EXPLORE-I1` scope disclosure
+(EXPLORE-I1's "runtime MUST reject" prose is scoped to the P2.5
+delivery window; Check 24 hand-parse + fixture-level rejection
+remains the current audit binding).
 
-**Alternate framing:** weaken EXPLORE-I1's "runtime MUST reject" prose
-to match what Check 24 actually enforces (scope-narrow). Rejected
-because the composition review §HIGH 5 fix hint is explicit: "makes
-EXPLORE-I1 mean what it says" — widening enforcement to match prose
-is the structurally cleaner fix and closes the audit-vs-runtime gap
-the composition view surfaced.
+**Deliverable (arc-close ceremony):**
+- Two prong review files under `specs/reviews/` matching Check 26's
+  naming pattern (`arc-slices-35-to-40-*` / `phase-2-foundation-foldins-arc-close*`
+  / `foldins-arc-close*`):
+  - `specs/reviews/arc-slices-35-to-40-composition-review-claude.md`
+    (fresh-read Claude composition-adversary pass).
+  - `specs/reviews/arc-slices-35-to-40-composition-review-codex.md`
+    (Codex cross-model challenger pass via `/codex`).
+- Both files carry `closing_verdict: ACCEPT-WITH-FOLD-INS` after the
+  inline fold-ins described below land.
+- Inline fold-ins addressing the two convergent HIGH findings both
+  reviewers identified and the MED findings that don't require a
+  second fold-in bundle:
+  - **HIGH 1 (plan-vs-state drift / HIGH 5 retargeting invisible).**
+    This §Slice 40 rewrite. Plus `specs/plans/phase-2-implementation.md
+    §P2.4` amendment to cite the HIGH 3 capability-boundary constraint
+    + a new §P2.5 anchor naming HIGH 5 (validateWorkflowKindPolicy
+    helper) as the P2.5 scope owner.
+  - **HIGH 2 (Check 26 chicken-and-egg + prong gap).** Tighten
+    `scripts/audit.mjs` Check 26 to require BOTH a Claude-prong file
+    AND a Codex-prong file matching the naming pattern with both
+    carrying ACCEPT* closing verdicts (Claude HIGH 2 fix (b) + Codex
+    HIGH 2). Plus CLAUDE.md §Cross-slice composition review cadence
+    amendment documenting the same-commit staging discipline (the
+    two prong review files + the `current_slice` bump + the
+    ceremony-slice advance land in one commit; the slice-ceremony
+    preflight stages everything before audit runs).
+  - **Claude MED 1 + Codex LOW 2 (vacuous-on-empty allowlist).** Add
+    a synthetic shape fixture to `tests/contracts/artifact-backing-
+    path-integrity.test.ts` so the entry-shape invariant is exercised
+    against a synthetic VALID entry even when the live allowlist is
+    empty.
+  - **Claude MED 3 (ADR-0008 §6 non-precedent enforcement prose-only).**
+    Add a reopen trigger to ADR-0008 §5 covering forbidden-citation
+    form in future workflow-kind ADRs.
+  - **Claude MED 2 + Codex LOW 2 (missing Slice 39 Codex / v0.3
+    review link).** The arc-close Codex prong at
+    `specs/reviews/arc-slices-35-to-40-composition-review-codex.md`
+    subsumes a retroactive Slice 39 Codex pass — it explicitly covers
+    the path-split decision, `opts.knownCollisions` API shape, and
+    the vacuous-on-empty regression smell. `specs/contracts/explore.md`
+    frontmatter gains a `codex_adversarial_review_v0_3` key pointing
+    to the arc-close Codex prong.
+  - **MED 4 (plan §Slice 39 option-(b) "both files" prose).**
+    Addressed inline via the amendment note appended to §Slice 39
+    above.
+  - **LOWs.** Claude LOW 2 reviewer_model naming consistency: normalized
+    to `gpt-5.4` across prong files where reviewer was gpt-5.4.
+    Claude LOW 3 terminal-state comment: added as a test-file
+    comment. LOW 1 (`specs/artifacts.md` staleness): deferred to a
+    docs-drift sweep.
+- MED findings explicitly deferred from Slice 40 (scoped to next
+  workflow-kind slice or P2.5):
+  - Codex MED 1 (Check 27 fixture→registry path binding) — scoped to
+    the next workflow-kind landing.
+  - Codex MED 3 (HIGH 3 capability-boundary in P2.4 plan) — landed in
+    `specs/plans/phase-2-implementation.md §P2.4` amendment at Slice
+    40 ceremony commit.
+  - Codex MED 4 (Check 27 unknown-kind severity) — scoped to the next
+    workflow-kind slice; design rule documented here for continuity.
 
-**Codex challenger pass:** **not required** (Equivalence Refactor lane
-with enforcement widening, not weakening; no ratchet floor change
-beyond test-count floor advance from new tests).
+**Acceptance evidence:**
+- Both prong review files present under `specs/reviews/` with naming
+  matching Check 26's regex + both carrying `closing_verdict: ACCEPT-
+  WITH-FOLD-INS`.
+- Check 26 green on live repo post-ceremony (with the two-prong
+  tightening landed, green requires both prongs + both verdicts).
+- Contract tests pass end-to-end; new synthetic shape test exercises
+  entry-level invariants against a valid injected entry.
+- ADR-0008 §5 contains the forbidden-citation reopen trigger.
+- `specs/plans/phase-2-implementation.md §P2.4` cites the HIGH 3
+  capability constraint; §P2.5 anchors the HIGH 5
+  `validateWorkflowKindPolicy` helper.
+- CLAUDE.md §Cross-slice composition review cadence amendment
+  documents same-commit staging + two-prong requirement.
+- `PROJECT_STATE.md` + `README.md` + `TIER.md` advance to
+  `current_slice=40`.
+- `specs/reviews/adversarial-yield-ledger.md` row appended (class =
+  governance; this slice is a governance ratchet per §6 precedent
+  firewall).
 
-**Authority:** composition review §HIGH 5 + `specs/contracts/explore.md
-:161,180` (EXPLORE-I1 prose) + `scripts/audit.mjs:2783-2788` +
-`tests/contracts/spine-coverage.test.ts:34,70`.
+**Alternate framing:** defer the inline fold-ins to a second fold-in
+bundle (Slices 41/42) before P2.4 reopens, land Slice 40 as a
+ceremony-only commit that advances `current_slice` + stages the
+review files. Rejected because both prong reviews explicitly
+disposition every HIGH/MED finding as "fold-in inline in the Slice 40
+arc-close commit" — the fold-ins are small, coherent, and incorporable
+into the same commit that lands the reviews; a second bundle
+introduces an extra ceremony surface without additional gate strength.
 
-### Arc close — cross-slice composition review (mechanism from Slice 35)
+**Codex challenger pass:** the Slice 40 arc-close commit IS the Codex
+challenger pass for the arc at the cross-slice level. Per CLAUDE.md
+§Hard invariants #6, ratchet changes require cross-model challenger
+review — the arc-close Codex prong at
+`specs/reviews/arc-slices-35-to-40-composition-review-codex.md` is
+that pass, scaled to arc-level per the cadence rule's "same two-prong
+protocol" text.
 
-Not a slice in the fold-in count; a cadence checkpoint per Slice 35's
-discipline upgrade. Before P2.4 reopens, commission another
-composition review over Slices 35–40 (this arc). Same two-prong
-protocol: fresh-read Claude composition-adversary pass + Codex cross-
-model challenger via `/codex`. Acceptance gate is the same verdict
-vocabulary (REJECT-PENDING-FOLD-INS / ACCEPT-WITH-FOLD-INS / ACCEPT).
+**Authority:** `specs/reviews/p2-foundation-composition-review.md`
+(triggering review); CLAUDE.md §Cross-slice composition review
+cadence; `scripts/audit.mjs` Check 26; both arc-close prong review
+files under `specs/reviews/arc-slices-35-to-40-*`; operator interim
+decision 2026-04-21 (HIGH 5 → P2.5 retarget).
 
-If the arc-close review is ACCEPT, P2.4 reopens. If REJECT, a second
-fold-in bundle lands before P2.4.
+#### §Retargeted scope — original Slice 40 (HIGH 5) preserved for audit trail
+
+The original plan authorship at plan file commit `e62a5c5` named
+Slice 40 as the HIGH 5 fold-in extracting `validateWorkflowKindPolicy`
+to `src/runtime/workflow-policy.ts`, refactoring `scripts/audit.mjs`
+Check 24 + `src/cli/dogfood.ts:125` to call the helper, and flipping
+the `steps: []` audit-fixture regression to red. That scope moved to
+P2.5 per operator interim retargeting 2026-04-21 (reasoning: P2.5
+natively composes the helper with end-to-end dispatch and deferred-
+property promotion; extracting the helper pre-P2.4 without the
+runtime wiring it enables is premature and risks a second refactor
+at P2.5 landing).
+
+### Arc close — Slice 40 IS the arc-close ceremony (merged per arc-close composition review)
+
+Originally planned as a separate "not a slice" ceremony event. Merged
+into Slice 40 per the arc-close composition review's convergent HIGH
+1 finding (plan/state drift): treating the arc-close review as
+ceremony-not-slice leaves `current_slice` unable to advance to 40 via
+the normal slice-commit flow + leaves Check 26 unable to fire cleanly
+on the ceremony. Slice 40 is now the arc-close ceremony slice that
+stages the two prong review files, lands the inline fold-ins listed
+above, advances `current_slice` to 40, and trips Check 26 green.
+Check 26's two-prong tightening + CLAUDE.md's staging-discipline
+amendment close the chicken-and-egg that HIGH 2 surfaced.
+
+If the Slice 40 arc-close review (inclusive of fold-ins) lands
+`closing_verdict: ACCEPT-WITH-FOLD-INS`, P2.4 reopens at a future
+slice. If either prong had landed `REJECT-PENDING-FOLD-INS` as the
+closing verdict, a second fold-in bundle (Slices 41/42) would have
+preceded P2.4; the actual outcome is ACCEPT-WITH-FOLD-INS on both
+prongs after inline incorporation.
 
 ## P2.4 scope update (not a slice in this arc)
 

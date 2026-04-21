@@ -3270,28 +3270,51 @@ export function checkArcCloseCompositionReviewPresence(rootDir = REPO_ROOT) {
     };
   }
 
-  // Verify at least one candidate carries an ACCEPT verdict in frontmatter
-  // or body.
-  const accepted = [];
-  for (const f of candidates) {
-    const body = readFileSync(join(reviewsDir, f), 'utf-8');
-    if (/closing_verdict:\s*(ACCEPT|ACCEPT-WITH-FOLD-INS)/i.test(body)) {
-      accepted.push(f);
-    } else if (/\b(ACCEPT|ACCEPT-WITH-FOLD-INS)\b/.test(body) && /closing/i.test(body)) {
-      accepted.push(f);
-    }
-  }
+  // Slice 40 arc-close fold-in (convergent HIGH 2): two-prong binding.
+  // CLAUDE.md §Cross-slice composition review cadence promises "same
+  // two-prong protocol: fresh-read Claude composition-adversary pass +
+  // Codex cross-model challenger". Pre-Slice-40 Check 26 accepted either
+  // prong alone, weaker than the cadence rule. Tightened to require
+  // BOTH prongs present, distinguished by filename substring.
+  const claudeProngs = candidates.filter((f) => /claude/i.test(f));
+  const codexProngs = candidates.filter((f) => /codex/i.test(f));
 
-  if (accepted.length === 0) {
+  if (claudeProngs.length === 0 || codexProngs.length === 0) {
+    const missing = [];
+    if (claudeProngs.length === 0) missing.push('Claude prong (name-match *claude*)');
+    if (codexProngs.length === 0) missing.push('Codex prong (name-match *codex*)');
     return {
       level: 'red',
-      detail: `pre-P2.4 fold-in arc closed but arc-close composition review(s) [${candidates.join(', ')}] do not carry ACCEPT / ACCEPT-WITH-FOLD-INS closing verdict`,
+      detail: `pre-P2.4 fold-in arc closed (current_slice=${sliceNum} ≥ ${PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE}) but two-prong arc-close composition review incomplete — missing: ${missing.join(', ')}. CLAUDE.md §Cross-slice composition review cadence requires both prongs: fresh-read Claude composition-adversary pass + Codex cross-model challenger.`,
+    };
+  }
+
+  // Verify BOTH prongs carry an ACCEPT verdict in frontmatter or body.
+  function hasAcceptClosingVerdict(fileName) {
+    const body = readFileSync(join(reviewsDir, fileName), 'utf-8');
+    if (/closing_verdict:\s*(ACCEPT|ACCEPT-WITH-FOLD-INS)/i.test(body)) return true;
+    if (/\b(ACCEPT|ACCEPT-WITH-FOLD-INS)\b/.test(body) && /closing/i.test(body)) return true;
+    return false;
+  }
+
+  const claudeAccepted = claudeProngs.filter(hasAcceptClosingVerdict);
+  const codexAccepted = codexProngs.filter(hasAcceptClosingVerdict);
+
+  if (claudeAccepted.length === 0 || codexAccepted.length === 0) {
+    const failing = [];
+    if (claudeAccepted.length === 0)
+      failing.push(`Claude prong(s) [${claudeProngs.join(', ')}] lack ACCEPT closing verdict`);
+    if (codexAccepted.length === 0)
+      failing.push(`Codex prong(s) [${codexProngs.join(', ')}] lack ACCEPT closing verdict`);
+    return {
+      level: 'red',
+      detail: `pre-P2.4 fold-in arc closed but arc-close composition review two-prong gate failing: ${failing.join('; ')}`,
     };
   }
 
   return {
     level: 'green',
-    detail: `pre-P2.4 fold-in arc closed (current_slice=${sliceNum}); arc-close composition review present: ${accepted.join(', ')}`,
+    detail: `pre-P2.4 fold-in arc closed (current_slice=${sliceNum}); arc-close composition review two-prong gate satisfied — Claude: ${claudeAccepted.join(', ')}; Codex: ${codexAccepted.join(', ')}`,
   };
 }
 

@@ -248,21 +248,49 @@ adapter design without a contract anchor is a D10 gate violation.
 serves one-workflow-parity by being the first adapter the target
 workflow can dispatch to.
 
+**Pre-P2.4 arc dependency.** P2.4 is gated by the pre-P2.4 foundation
+fold-in arc at `specs/plans/phase-2-foundation-foldins.md` (Slices
+35–40). P2.4 reopens at a future slice only after the arc-close
+composition review lands `closing_verdict: ACCEPT-WITH-FOLD-INS` on
+both prong files (Claude + Codex) per `scripts/audit.mjs` Check 26
+two-prong binding.
+
+**HIGH 3 capability-boundary constraint (pre-P2.4 arc scope update,
+landed Slice 40 arc-close commit).** Per composition review §HIGH 3
+fix hint option (a) and operator acceptance (`specs/plans/phase-2-
+foundation-foldins.md §P2.4 scope update`): P2.4 v0 ships with **no
+repo-write tool capability**. The deliverable below is constrained
+accordingly. The P2.4 commit body MUST explicitly cite the capability
+boundary using the Isolation posture string (ADR-0007 trigger #6
+context) plus an explicit "no repo-write tool capability" clause.
+The P2.4 Codex challenger prompt MUST inspect the capability boundary
+as a named review item. Option (b) — a capability-aware audit check
+that inspects what the adapter can actually do — is deferred to a
+post-P2.4 slice once the capability descriptor surface exists.
+
 **Deliverable:** `src/runtime/adapters/agent.ts` (or similar location
 chosen at slice time) implementing the `ResolvedAdapter`-to-dispatch
-boundary for in-process Anthropic subagent invocation. Runner
-integration: `dispatch.started` event carries `adapter.name = 'agent'`
-(via the `ResolvedAdapter` discriminated union at
-`src/schemas/adapter.ts`; corrected from the earlier
+boundary for in-process Anthropic subagent invocation, **with no
+repo-write tool capability** (file-write, directory-create, shell-
+write subset) — the adapter surface at v0 reads but does not write
+under the repo working tree; any artifact materialization flows
+through the engine-owned `result-writer.ts` and the workflow close-
+step path (per RESULT-I1 + ADR-0008 §Decision.3a materialization
+rule). Runner integration: `dispatch.started` event carries
+`adapter.name = 'agent'` (via the `ResolvedAdapter` discriminated
+union at `src/schemas/adapter.ts`; corrected from the earlier
 `resolved_adapter.name` prose per ADR-0007 §Amendment Slice 37);
-receipt and result artifacts written with real agent
-output. Dogfood fixture extended with a real-agent smoke test OR a
-separate fixture `agent-smoke-0` gated behind an env var so CI can
-skip it without disabling the contract test ratchet.
+receipt and result artifacts written with real agent output. Dogfood
+fixture extended with a real-agent smoke test OR a separate fixture
+`agent-smoke-0` gated behind an env var so CI can skip it without
+disabling the contract test ratchet.
 
 **Acceptance evidence:** new adapter file; dispatch round-trip test
-(skippable if `AGENT_SMOKE=0`); contract test ratchet increment; audit
-green.
+(skippable if `AGENT_SMOKE=0`); contract test ratchet increment;
+audit green; commit body cites the capability-boundary constraint
+explicitly (no repo-write tool capability, ADR-0007 trigger #6
+context); Codex challenger review frontmatter names the capability-
+boundary as an inspected review item.
 
 **Alternate framing:** implement `codex` adapter first since the
 `/codex` skill already has the wrapper script. Rejected because
@@ -277,6 +305,18 @@ boundary question from cross-process subprocess complexity.
 closes Phase 2 close criteria #1 and #2 simultaneously; serves the
 one-workflow-parity arc; binds to `explore` per the locked target.
 
+**HIGH 5 retargeting (pre-P2.4 arc scope update, 2026-04-21).** Per
+operator interim retargeting recorded in
+`specs/plans/phase-2-foundation-foldins.md §Slice 40 Retargeting note`,
+HIGH 5 from the Phase 2 foundation composition review
+(`specs/reviews/p2-foundation-composition-review.md §HIGH 5`) —
+extraction of `validateWorkflowKindPolicy` helper + refactor of
+`scripts/audit.mjs` Check 24 and `src/cli/dogfood.ts:125` to call the
+helper — is owned by P2.5 rather than the pre-P2.4 arc. Reasoning:
+P2.5 natively composes the helper with end-to-end dispatch wiring
+and deferred-property promotion. Extracting pre-P2.4 without the
+runtime wiring risks a second refactor at P2.5 landing.
+
 **Deliverable:** a runnable `explore` fixture under
 `.claude-plugin/skills/explore/` (extending P2.3's `circuit.json`)
 that runs the full workflow through the runtime boundary using the
@@ -287,9 +327,29 @@ a golden artifact. Golden artifacts stored under
 `tests/fixtures/golden/explore/` (per open question #4 resolution at
 slice time).
 
+**Additional P2.5 deliverable — HIGH 5 helper extraction:** new
+helper `validateWorkflowKindPolicy(workflow)` exported from
+`src/runtime/workflow-policy.ts` (or equivalent). Helper runs
+`Workflow.safeParse(workflow)` first, then applies kind-specific
+policy (canonical phase set, spine-policy omits) on the parsed
+value. `scripts/audit.mjs` Check 24 (`checkSpineCoverage`)
+refactored to call the helper instead of hand-parsing JSON.
+Runtime fixture loading (`src/cli/dogfood.ts:125` or the P2.5
+equivalent entry) extended to call the helper after
+`Workflow.parse`. Acceptance for this subscope: the currently-passing
+invalid fixture at `tests/contracts/spine-coverage.test.ts:34`
+(`steps: []`) fails red under the helper; live-repo fixture stays
+green; runtime rejects a hand-crafted invalid explore-kind fixture
+with a clear error. `specs/contracts/explore.md §EXPLORE-I1` prose
+reconciles: "runtime MUST reject" is enforced via the helper at
+P2.5 landing (the v0.3 contract disclosed the P2.5 delivery window
+explicitly).
+
 **Acceptance evidence:** passing smoke test; golden artifacts
 committed; operator product-direction check analogous to the 14a
-artifact (per Phase 2 close criterion #8).
+artifact (per Phase 2 close criterion #8); `validateWorkflowKindPolicy`
+helper landed + Check 24 refactored + runtime fixture loading wired
+to the helper.
 
 **Alternate framing:** skip the golden-artifact check and rely on
 result-verdict tests only. Rejected because byte-shape goldens catch

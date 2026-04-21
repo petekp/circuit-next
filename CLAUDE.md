@@ -203,11 +203,23 @@ preceding such a slice is where silent cross-slice drift compounds.
 `specs/plans/phase-2-foundation-foldins.md` (Slices 35–40) carries its
 own arc-close composition review before P2.4 reopens. Enforced by
 `scripts/audit.mjs` Check 26 (`checkArcCloseCompositionReviewPresence`):
-once `PROJECT_STATE.md` `current_slice` advances to 40 or beyond, a
-file under `specs/reviews/` matching the arc-close naming pattern must
-exist with closing verdict ACCEPT or ACCEPT-WITH-FOLD-INS. Check 26 is
-narrow to this first arc; subsequent arcs either extend the check or
-land a generalized arc-ledger gate.
+once `PROJECT_STATE.md` `current_slice` advances to 40 or beyond,
+BOTH prong files (Claude composition-adversary + Codex cross-model
+challenger) must exist under `specs/reviews/` matching the arc-close
+naming pattern, each carrying closing verdict ACCEPT or
+ACCEPT-WITH-FOLD-INS. Two-prong binding tightened at Slice 40
+(convergent arc-close review HIGH 2): Check 26 distinguishes the
+Claude prong (name-match `*claude*`) from the Codex prong
+(name-match `*codex*`); single-prong satisfaction is rejected.
+
+**Same-commit staging discipline.** The arc-close ceremony slice
+stages the two prong review files AND advances `current_slice` in
+`PROJECT_STATE.md` in the same commit, so `npm run audit` running
+against the staged tree sees both review files and the advanced
+slice marker simultaneously. A separate commit advancing only
+`current_slice` without the review files is rejected by Check 26.
+Check 26 is narrow to this first arc; subsequent arcs either extend
+the check or land a generalized arc-ledger gate.
 
 ## Hard invariants
 
