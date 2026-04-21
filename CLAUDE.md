@@ -104,6 +104,26 @@ the terrain. Three sentences at slice open, no new artifact.
   changes, when a decision is recorded, or when a session ends.
 - Slices ≤ 30 min wall-clock. Coordinated edits compose under a single ADR.
 
+## After-slice operator summary
+
+After each slice lands (commit + audit green), produce a plain-English
+wrap-up for the operator. Three beats, in order:
+
+1. **What got done.** What the slice accomplished in a sentence or two.
+   No commit-body citations, no lane jargon. A friend-over-coffee summary.
+2. **Where we're headed next.** The next concrete candidate slice (or
+   operator-gated decision) and the arc it serves. Name the authoritative
+   plan file and section so the operator can verify.
+3. **Rough work remaining.** Order-of-magnitude signal: how many close
+   criteria are still open, how many slices remain in the current arc,
+   and whether phase-close ceremony is near or far. Approximate is fine;
+   precise-but-stale is worse than honest.
+
+The post-commit audit numbers (green/yellow/red counts, test delta) stay
+— they are the evidence the summary rests on. The plain-English beats go
+*after* those numbers so the operator gets a one-glance status before
+the narrative.
+
 ## Verification commands (Tier 0)
 
 ```bash
