@@ -231,20 +231,36 @@ describe('checkArtifactBackingPathIntegrity', () => {
     });
   });
 
+  // Slice 39 HIGH 4 fold-in: the founding allowlist entry for
+  // {explore.result, run.result} at <run-root>/artifacts/result.json was
+  // deleted when the path-split resolved the collision. The check now
+  // accepts `opts.knownCollisions` so tests can inject synthetic tracked
+  // entries to exercise the tracked / stale paths independently of the
+  // (now empty) module-level allowlist.
+  const syntheticTrackedEntry = Object.freeze({
+    normalized: '<run-root>/artifacts/result.json',
+    artifact_ids: Object.freeze(['alpha.result', 'beta.result']),
+    closing_slice: 999,
+    reason:
+      'synthetic tracked-collision entry used by the Slice 39 test suite — exercises the tracked / stale paths after the founding entry was deleted',
+  });
+
   it('returns yellow when a collision matches a known tracked entry', () => {
     withTempRepo((root) => {
       writeRel(
         root,
         'specs/artifacts.json',
         artifactsFile([
-          { id: 'run.result', backing_paths: ['<circuit-next-run-root>/artifacts/result.json'] },
-          { id: 'explore.result', backing_paths: ['<run-root>/artifacts/result.json'] },
+          { id: 'alpha.result', backing_paths: ['<circuit-next-run-root>/artifacts/result.json'] },
+          { id: 'beta.result', backing_paths: ['<run-root>/artifacts/result.json'] },
         ]),
       );
-      const result = checkArtifactBackingPathIntegrity(root);
+      const result = checkArtifactBackingPathIntegrity(root, {
+        knownCollisions: [syntheticTrackedEntry],
+      });
       expect(result.level).toBe('yellow');
       expect(result.detail).toMatch(/tracked collision/);
-      expect(result.detail).toMatch(/closing slice 39/);
+      expect(result.detail).toMatch(/closing slice 999/);
     });
   });
 
@@ -254,41 +270,64 @@ describe('checkArtifactBackingPathIntegrity', () => {
         root,
         'specs/artifacts.json',
         artifactsFile([
-          { id: 'run.result', backing_paths: ['<circuit-next-run-root>/artifacts/result.json'] },
-          { id: 'explore.result', backing_paths: ['<run-root>/artifacts/result.json'] },
+          { id: 'alpha.result', backing_paths: ['<circuit-next-run-root>/artifacts/result.json'] },
+          { id: 'beta.result', backing_paths: ['<run-root>/artifacts/result.json'] },
           // Third artifact re-introduces the collision class with a new id
           // that isn't in the tracked-collision allowlist; should go red.
-          { id: 'build.result', backing_paths: ['<run-root>/artifacts/result.json'] },
+          { id: 'gamma.result', backing_paths: ['<run-root>/artifacts/result.json'] },
         ]),
       );
-      const result = checkArtifactBackingPathIntegrity(root);
+      const result = checkArtifactBackingPathIntegrity(root, {
+        knownCollisions: [syntheticTrackedEntry],
+      });
       expect(result.level).toBe('red');
-      expect(result.detail).toMatch(/build\.result/);
+      expect(result.detail).toMatch(/gamma\.result/);
     });
   });
 
   it('returns red when a known-collision allowlist entry has no matching live collision in strict mode (fold-in Codex HIGH 2)', () => {
-    // An artifact graph with NO collision at <run-root>/artifacts/result.json
-    // but the ARTIFACT_BACKING_PATH_KNOWN_COLLISIONS allowlist still carries
-    // the explore.result + run.result entry. The allowlist was forgotten when
-    // the collision was resolved. Check 25 must surface this as red so the
-    // closing slice is forced to delete the entry. Tests must opt into strict
-    // mode to exercise this (the default for test fixtures is non-strict, so
-    // unrelated fixtures don't spuriously trip on the global allowlist).
+    // An artifact graph with NO collision at the tracked path but the
+    // allowlist still carries an entry pointing at it. The allowlist was
+    // forgotten when the collision was resolved. Check 25 must surface
+    // this as red so the closing slice is forced to delete the entry.
+    // Tests must opt into strict mode to exercise this (the default for
+    // test fixtures is non-strict, so unrelated fixtures don't spuriously
+    // trip on the global allowlist).
     withTempRepo((root) => {
       writeRel(
         root,
         'specs/artifacts.json',
         artifactsFile([
-          { id: 'alpha.result', backing_paths: ['<run-root>/artifacts/alpha.json'] },
-          { id: 'beta.result', backing_paths: ['<run-root>/artifacts/beta.json'] },
+          { id: 'delta.result', backing_paths: ['<run-root>/artifacts/delta.json'] },
+          { id: 'epsilon.result', backing_paths: ['<run-root>/artifacts/epsilon.json'] },
         ]),
       );
-      const result = checkArtifactBackingPathIntegrity(root, { strictAllowlist: true });
+      const result = checkArtifactBackingPathIntegrity(root, {
+        strictAllowlist: true,
+        knownCollisions: [syntheticTrackedEntry],
+      });
       expect(result.level).toBe('red');
       expect(result.detail).toMatch(/stale tracked-collision allowlist entries/);
-      expect(result.detail).toMatch(/closing slice 39/);
+      expect(result.detail).toMatch(/closing slice 999/);
     });
+  });
+
+  it('Slice 39 HIGH 4 fold-in — live module-level allowlist is empty after the founding entry was deleted', () => {
+    // The only tracked entry (Slice 35→39 {explore.result, run.result} at
+    // <run-root>/artifacts/result.json) was deleted when Slice 39 split
+    // explore.result off to <run-root>/artifacts/explore-result.json.
+    // New entries require a Codex challenger pass per CLAUDE.md §Hard
+    // invariants #6 and a closing_slice reference.
+    expect(ARTIFACT_BACKING_PATH_KNOWN_COLLISIONS.length).toBe(0);
+  });
+
+  it('Slice 39 HIGH 4 fold-in — live repo has no backing_path collisions (Check 25 green)', () => {
+    // Regression guard on the live repo. After Slice 39 the allowlist is
+    // empty, so any red or yellow finding means a new collision was
+    // introduced — the slice-gate. This complements the lower-level
+    // regression guard below by asserting the terminal green state.
+    const result = checkArtifactBackingPathIntegrity();
+    expect(result.level).toBe('green');
   });
 
   it('returns red when specs/artifacts.json is present but malformed JSON', () => {
@@ -374,8 +413,10 @@ describe('allowlist structure invariants', () => {
     }
   });
 
-  it('ARTIFACT_BACKING_PATH_KNOWN_COLLISIONS entries each carry closing_slice + reason', () => {
-    expect(ARTIFACT_BACKING_PATH_KNOWN_COLLISIONS.length).toBeGreaterThan(0);
+  it('ARTIFACT_BACKING_PATH_KNOWN_COLLISIONS entries each carry closing_slice + reason (when any are present)', () => {
+    // Post-Slice-39: live allowlist is empty. The shape invariant below is
+    // vacuously satisfied on an empty array, but fires the moment a future
+    // slice adds a new tracked-collision entry without the required shape.
     for (const entry of ARTIFACT_BACKING_PATH_KNOWN_COLLISIONS) {
       expect(typeof entry.normalized).toBe('string');
       expect(Array.isArray(entry.artifact_ids)).toBe(true);

@@ -1,14 +1,15 @@
 ---
 contract: explore
 status: draft
-version: 0.2
-schema_source: .claude-plugin/skills/explore/circuit.json (fixture; no dedicated src/schemas/ file at v0.2 — explore is a workflow-specific contract, not a new domain contract. Artifact schemas authored at P2.10.)
+version: 0.3
+schema_source: .claude-plugin/skills/explore/circuit.json (fixture; no dedicated src/schemas/ file at v0.3 — explore is a workflow-specific contract, not a new domain contract. Artifact schemas authored at P2.10.)
 last_updated: 2026-04-21
 depends_on: [workflow, phase, step, selection, rigor, lane, skill, adapter]
 codex_adversarial_review: specs/reviews/explore-md-v0.1-codex.md
 codex_adversarial_review_v0_2: specs/reviews/arc-slice-38-dispatch-granularity-adr-0008-codex.md
 adr_bindings:
   - specs/adrs/ADR-0008-dispatch-granularity-modeling.md (v0.2 amendment — Synthesize and Review are dispatch steps; Review weaker-substitute rationale retired)
+  - specs/reviews/p2-foundation-composition-review.md §HIGH 4 (v0.3 amendment — explore.result path-split from run.result)
 artifact_ids:
   - explore.brief
   - explore.analysis
@@ -90,7 +91,58 @@ ids:
   reports objections, missed angles, and overall verdict.
 - **Explore result** (`explore.result`): the aggregate artifact
   emitted by the Close phase. A summary + verdict-snapshot plus
-  pointers to the four prior artifacts. The run's final return shape.
+  pointers to the four prior artifacts. The workflow-specific
+  "what the explore run produced." Persisted at
+  `<run-root>/artifacts/explore-result.json`. This is **distinct**
+  from the universal `run.result` artifact (at
+  `<run-root>/artifacts/result.json`, authored by the engine at
+  run.closed) — see §Path-split rationale below.
+
+## Path-split rationale (v0.3 amendment — HIGH 4 fold-in)
+
+At v0.1/v0.2 drafting, `explore.result` and `run.result` both
+registered their `backing_path` at `<run-root>/artifacts/result.json`.
+The composition review at `specs/reviews/p2-foundation-composition-
+review.md §HIGH 4` flagged this as a two-writers-one-file collision
+that Check 25 tracked under `ARTIFACT_BACKING_PATH_KNOWN_COLLISIONS`
+with Slice 39 as the closing slice.
+
+**v0.3 resolution — option (b) path split.** Slice 39 moves
+`explore.result` to `<run-root>/artifacts/explore-result.json`.
+`run.result` retains `<run-root>/artifacts/result.json`. The two
+artifacts now live at distinct paths. Check 25 is green on the live
+repo with zero tracked collisions.
+
+**Why (b) not (a).** The composition review named two candidate fixes:
+- **(a)** make `explore.result` a *payload field* inside `run.result`
+  (envelope). Rejected: `run.result` is engine-authored with a
+  universal strict Zod shape (`RunResult` at `src/schemas/result.ts`);
+  `src/runtime/result-writer.ts` RESULT-I1 declares the engine as the
+  single writer to `result.json`. Collapsing `explore.result` into a
+  payload field would either force the engine writer to depend on a
+  workflow-authored aggregate (reversed dependency direction) or
+  require a schema-envelope ADR widening `RunResult`. Both are
+  architectural decisions that belong in their own slice.
+- **(b)** distinct backing path with a `<kind>-result.json` sibling
+  pattern. Chosen: narrower scope, preserves the single-writer
+  invariant on `result.json`, generalizes cleanly to future
+  workflow-specific aggregates (`build-result.json`,
+  `repair-result.json`, `migrate-result.json`, `sweep-result.json`)
+  with their own divergent close-phase shapes.
+
+**What this does NOT change.** `RunResult` still owns
+`<run-root>/artifacts/result.json`. Dogfood smoke tests that expect
+the four-file run directory (`events.ndjson`, `state.json`,
+`manifest.snapshot.json`, `artifacts/result.json`) still pass —
+`explore-result.json` is an *additional* sibling artifact when the
+explore workflow's close-step runs, not a replacement.
+
+**Reopen trigger for this decision.** A second workflow whose
+close-step aggregate shape is identical to `explore.result`'s
+structure (summary + verdict-snapshot + prior-artifact pointers)
+would re-open the (a)-vs-(b) question: if `<kind>.result` rows
+collapse into a shared envelope, option (a) might win retroactively.
+Captured as Reopen condition #10 below.
 
 ## Canonical phase set (ADR-0007 CC#P2-6 binding) — and the title-to-canonical translation
 
@@ -379,7 +431,7 @@ MUST match this table exactly; any divergence is a ratchet violation.
 | `explore.analysis`       | Analyze / analyze-step | Synthesize / synthesize-step; Review / review-step                                |
 | `explore.synthesis`      | Synthesize / synthesize-step | Review / review-step; Close / close-step                                     |
 | `explore.review-verdict` | Review / review-step | Close / close-step                                                                  |
-| `explore.result`         | Close / close-step  | *(none — terminal artifact; consumed by the run result consumer only)*               |
+| `explore.result`         | Close / close-step  | *(none — terminal artifact at `<run-root>/artifacts/explore-result.json`; consumed by the run result consumer only; distinct from the engine-authored `run.result` at `<run-root>/artifacts/result.json` per v0.3 Path-split rationale)* |
 
 **Close reads synthesis + review-verdict only** (not brief or
 analysis). The rationale: the synthesis artifact encapsulates the
@@ -514,6 +566,16 @@ This contract is reopened if any of:
    fixture), this contract reopens to re-evaluate the §Canonical
    phase set executor/kind table and the `verify` omission
    rationale alongside the ADR.
+10. **`<kind>.result` envelope consolidation** (v0.3 amendment —
+    Slice 39 HIGH 4 fold-in). If a second workflow's close-phase
+    aggregate (e.g., `build.result`, `repair.result`) has a shape
+    structurally identical to `explore.result` (summary +
+    verdict-snapshot + prior-artifact pointers), reopen §Path-split
+    rationale to re-evaluate option (a) envelope-in-run.result
+    against option (b) per-workflow sibling files. The path-split
+    pattern is not precedent for "workflow-specific result shapes
+    are divergent" — it is conditioned on divergence actually
+    holding.
 
 ## Authority
 

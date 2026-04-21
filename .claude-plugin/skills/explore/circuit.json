@@ -176,7 +176,7 @@
       "kind": "synthesis",
       "writes": {
         "artifact": {
-          "path": "artifacts/result.json",
+          "path": "artifacts/explore-result.json",
           "schema": "explore.result@v1"
         }
       },

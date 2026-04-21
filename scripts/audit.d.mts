@@ -203,6 +203,11 @@ export type CheckArtifactBackingPathIntegrityOptions = {
    * live repo root, false for test fixtures (to avoid the global allowlist
    * spuriously tripping on unrelated fixtures). */
   strictAllowlist?: boolean;
+  /** Optional override of the module-level
+   * ARTIFACT_BACKING_PATH_KNOWN_COLLISIONS constant. Added at Slice 39 so
+   * tests can inject synthetic tracked-collision entries after the founding
+   * entry was deleted (HIGH 4 fold-in). Defaults to the module constant. */
+  knownCollisions?: ReadonlyArray<ArtifactBackingPathKnownCollision>;
 };
 export function checkArtifactBackingPathIntegrity(
   rootDir?: string,

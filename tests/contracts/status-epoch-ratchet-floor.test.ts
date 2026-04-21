@@ -468,16 +468,21 @@ describe('checkPinnedRatchetFloor (Slice 26b full-file check)', () => {
     // per Codex MED 7 fold-in; slice 34 (= P2.3) advanced it to 740; slice 35
     // (pre-P2.4 fold-in #1) advanced it to 779 (+39 from
     // artifact-backing-path-integrity.test.ts); slice 37 (pre-P2.4 fold-in
-    // #3 — HIGH 2 widen event schema) advanced it to 805 (+26 from
+    // #3 — HIGH 2 widen event schema) advanced it to 810 (+31 from
     // slice-37-dispatch-transcript.test.ts, binding dispatch.request /
     // dispatch.receipt / dispatch.result variants to ADR-0007 §Amendment
-    // Slice 37). Advanced 810 → 825 at Slice 38 (15 new static test
-    // declarations in adapter-binding-coverage.test.ts enforcing
-    // ADR-0008 §Decision.4 + §Decision.3a). This assertion pins the
-    // CURRENT slice id so any future floor advancement that forgets to
-    // update the marker fails the test immediately — the slice id
-    // changes only when the floor changes.
-    expect(data?.last_advanced_in_slice).toBe('38');
+    // Slice 37); slice 38 (pre-P2.4 fold-in #4 — HIGH 1 dispatch wiring
+    // + ADR-0008) advanced it to 828 (+18 from
+    // adapter-binding-coverage.test.ts enforcing ADR-0008 §Decision.4 +
+    // §Decision.3a, including Codex HIGH 2 / MED 2 fold-in declarations);
+    // slice 39 (pre-P2.4 fold-in #5 — HIGH 4 artifact-path split)
+    // advanced it to 830 (+2 regression guards in
+    // artifact-backing-path-integrity.test.ts: empty-allowlist
+    // post-resolution assertion + live-repo Check 25 green terminal-state
+    // assertion). This assertion pins the CURRENT slice id so any future
+    // floor advancement that forgets to update the marker fails the test
+    // immediately — the slice id changes only when the floor changes.
+    expect(data?.last_advanced_in_slice).toBe('39');
   });
 
   it('readPinnedRatchetFloor returns null when the file is missing', () => {

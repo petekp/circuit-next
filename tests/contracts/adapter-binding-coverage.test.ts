@@ -152,7 +152,9 @@ function exploreFixtureWithDispatch(overrides: Record<string, unknown> = {}): Lo
         routes: { pass: '@complete' },
         executor: 'orchestrator',
         kind: 'synthesis',
-        writes: { artifact: { path: 'artifacts/result.json', schema: 'explore.result@v1' } },
+        writes: {
+          artifact: { path: 'artifacts/explore-result.json', schema: 'explore.result@v1' },
+        },
         gate: {
           kind: 'schema_sections',
           source: { kind: 'artifact', ref: 'artifact' },
@@ -203,10 +205,12 @@ describe('checkAdapterBindingCoverage (Slice 38 — ADR-0008 §Decision.4)', () 
       });
     });
 
-    it('passes on a fixture with exactly one dispatch step', () => {
+    it('reds when review-step is flipped back to orchestrator/synthesis (explore policy requires BOTH synthesize-step AND review-step)', () => {
       withTempRepo((root) => {
-        // Flip only review-step back to orchestrator/synthesis; leave
-        // synthesize-step as the sole dispatch step.
+        // Codex Slice 38 MED 2 fold-in — the explore policy requires both
+        // Synthesize and Review to be dispatch-kind; flipping only one
+        // satisfies the v0.1 any-dispatch rule but violates ADR-0008's
+        // explore-specific binding.
         const fixture = exploreFixtureWithDispatch();
         const reviewStep = fixture.steps[3];
         if (!reviewStep) throw new Error('test-setup invariant: review-step present at index 3');
@@ -224,8 +228,10 @@ describe('checkAdapterBindingCoverage (Slice 38 — ADR-0008 §Decision.4)', () 
         };
         writeRel(root, '.claude-plugin/skills/explore/circuit.json', JSON.stringify(fixture));
         const result = checkAdapterBindingCoverage(root);
-        expect(result.level).toBe('green');
-        expect(result.detail).toMatch(/explore: 1 dispatch step\(s\) present/);
+        expect(result.level).toBe('red');
+        expect(result.detail).toMatch(/wrong-kind step\(s\)/);
+        expect(result.detail).toMatch(/review-step:synthesis/);
+        expect(result.detail).toMatch(/ADR-0008 §Decision\.1/);
       });
     });
 
@@ -240,14 +246,21 @@ describe('checkAdapterBindingCoverage (Slice 38 — ADR-0008 §Decision.4)', () 
       });
     });
 
-    it('passes through unknown workflow kinds (no canonical-set entry)', () => {
+    it('yellow on unknown workflow kinds (not silent green pass-through)', () => {
+      // Codex Slice 38 MED 2 fold-in — unknown kinds used to pass green
+      // silently, which would let a future `build` fixture with zero
+      // dispatch steps hide until someone remembered to register the kind.
+      // Now they produce a yellow finding prompting either registration or
+      // explicit exemption.
       withTempRepo((root) => {
         const fixture = exploreFixtureAllSynthesis();
         fixture.id = 'build';
         writeRel(root, '.claude-plugin/skills/build/circuit.json', JSON.stringify(fixture));
         const result = checkAdapterBindingCoverage(root);
-        expect(result.level).toBe('green');
-        expect(result.detail).toMatch(/build: no canonical-set entry \(unknown workflow kind/);
+        expect(result.level).toBe('yellow');
+        expect(result.detail).toMatch(/build: unregistered workflow kind/);
+        expect(result.detail).toMatch(/WORKFLOW_KIND_CANONICAL_SETS/);
+        expect(result.detail).toMatch(/EXEMPT_WORKFLOW_IDS/);
       });
     });
 
@@ -311,6 +324,49 @@ describe('checkAdapterBindingCoverage (Slice 38 — ADR-0008 §Decision.4)', () 
       });
     });
 
+    it('reds when a required dispatch step id is missing from the fixture', () => {
+      // Codex Slice 38 MED 2 fold-in — the explore policy requires both
+      // synthesize-step and review-step. Removing review-step entirely
+      // must produce a "missing step id" error even if synthesize-step
+      // alone satisfies the any-dispatch rule.
+      withTempRepo((root) => {
+        const fixture = exploreFixtureWithDispatch();
+        fixture.steps = fixture.steps.filter((s) => s.id !== 'review-step');
+        // Retarget synthesize-step.routes.pass so the fixture still has
+        // consistent routing (we only care about Check 27's step-id binding).
+        const syn = fixture.steps.find((s) => s.id === 'synthesize-step');
+        if (syn) syn.routes = { pass: 'close-step' };
+        writeRel(root, '.claude-plugin/skills/explore/circuit.json', JSON.stringify(fixture));
+        const result = checkAdapterBindingCoverage(root);
+        expect(result.level).toBe('red');
+        expect(result.detail).toMatch(/missing step id\(s\): review-step/);
+      });
+    });
+
+    it('reds when a dispatch step omits writes.artifact (ADR-0008 §Decision.3a materialization rule)', () => {
+      // Codex Slice 38 HIGH 2 fold-in — dispatch result-to-artifact
+      // materialization requires every adapter-bound dispatch step in an
+      // explore-policy fixture to declare writes.artifact alongside the
+      // required writes.result. Stripping writes.artifact must red.
+      withTempRepo((root) => {
+        const fixture = exploreFixtureWithDispatch();
+        const syn = fixture.steps.find((s) => s.id === 'synthesize-step');
+        if (!syn) throw new Error('test-setup invariant: synthesize-step present');
+        // Intentionally remove artifact; keep request/receipt/result.
+        syn.writes = {
+          request: 'artifacts/dispatch/synthesize.request.json',
+          receipt: 'artifacts/dispatch/synthesize.receipt.txt',
+          result: 'artifacts/dispatch/synthesize.result.json',
+        };
+        writeRel(root, '.claude-plugin/skills/explore/circuit.json', JSON.stringify(fixture));
+        const result = checkAdapterBindingCoverage(root);
+        expect(result.level).toBe('red');
+        expect(result.detail).toMatch(/missing `writes\.artifact`/);
+        expect(result.detail).toMatch(/ADR-0008 §Decision\.3a/);
+        expect(result.detail).toMatch(/synthesize-step/);
+      });
+    });
+
     it('reds on malformed circuit.json (parse failure is an error, not a silent pass)', () => {
       withTempRepo((root) => {
         writeRel(root, '.claude-plugin/skills/explore/circuit.json', '{ not valid json');
@@ -370,6 +426,26 @@ describe('checkAdapterBindingCoverage (Slice 38 — ADR-0008 §Decision.4)', () 
         const step = raw.steps.find((s: { id: string }) => s.id === id);
         expect(step?.kind, `${id}.kind`).toBe('synthesis');
         expect(step?.executor, `${id}.executor`).toBe('orchestrator');
+      }
+    });
+
+    it('live explore dispatch steps declare writes.artifact (ADR-0008 §Decision.3a fixture-level precondition)', () => {
+      // Codex Slice 38 HIGH 2 fold-in — the materialization rule at
+      // §Decision.3a depends on every adapter-bound dispatch step
+      // declaring writes.artifact alongside writes.result. This test
+      // asserts the fixture-level precondition; runtime materialization
+      // enforcement lands at P2.4.
+      const rawPath = join(REPO_ROOT, '.claude-plugin/skills/explore/circuit.json');
+      const raw = JSON.parse(readFileSync(rawPath, 'utf-8'));
+      const dispatchSteps = raw.steps.filter((s: { kind: string }) => s.kind === 'dispatch');
+      expect(dispatchSteps.length).toBeGreaterThan(0);
+      for (const step of dispatchSteps) {
+        expect(step.writes, `${step.id}.writes`).toBeDefined();
+        expect(step.writes.artifact, `${step.id}.writes.artifact`).toBeDefined();
+        expect(step.writes.result, `${step.id}.writes.result`).toBeDefined();
+        // result and artifact.path are distinct on disk per the materialization
+        // rule (transcript vs validated artifact).
+        expect(step.writes.result).not.toBe(step.writes.artifact.path);
       }
     });
   });

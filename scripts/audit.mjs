@@ -2967,15 +2967,16 @@ export const ARTIFACT_BACKING_PATH_CONTAINER_PATHS = new Map([
   ],
 ]);
 
-export const ARTIFACT_BACKING_PATH_KNOWN_COLLISIONS = Object.freeze([
-  Object.freeze({
-    normalized: '<run-root>/artifacts/result.json',
-    artifact_ids: Object.freeze(['explore.result', 'run.result']),
-    closing_slice: 39,
-    reason:
-      'HIGH 4 in specs/reviews/p2-foundation-composition-review.md — explore.result (specs/artifacts.json:688-699) and run.result (specs/artifacts.json:202-216) share the same normalized backing path. Resolution scheduled for Slice 39 per specs/plans/phase-2-foundation-foldins.md.',
-  }),
-]);
+// ARTIFACT_BACKING_PATH_KNOWN_COLLISIONS — tracked-collision allowlist.
+// Slice 39 closed the Slice 35 founding entry ({explore.result, run.result}
+// at <run-root>/artifacts/result.json) by path-splitting explore.result to
+// <run-root>/artifacts/explore-result.json. The allowlist is intentionally
+// empty now. Future tracked-collision entries must carry a Codex challenger
+// pass per CLAUDE.md §Hard invariants #6 and a `closing_slice` reference.
+// Tests that need to exercise the tracked-collision / stale-entry paths
+// inject a synthetic allowlist via checkArtifactBackingPathIntegrity's
+// `opts.knownCollisions` parameter.
+export const ARTIFACT_BACKING_PATH_KNOWN_COLLISIONS = Object.freeze([]);
 
 export function normalizeArtifactBackingPath(raw) {
   if (typeof raw !== 'string') return null;
@@ -3017,8 +3018,17 @@ export function checkArtifactBackingPathIntegrity(rootDir = REPO_ROOT, opts = {}
   // authoritative for that root), false for test fixtures (fixtures do not
   // exercise the global allowlist; tests that care about stale-detection
   // semantics must opt in explicitly).
+  //
+  // opts.knownCollisions — optional override of the module-level
+  // ARTIFACT_BACKING_PATH_KNOWN_COLLISIONS constant. Added at Slice 39 so
+  // tests can inject synthetic tracked-collision entries after the founding
+  // allowlist entry was deleted (HIGH 4 fold-in). Defaults to the module
+  // constant for the live check.
   const strictAllowlist =
     typeof opts.strictAllowlist === 'boolean' ? opts.strictAllowlist : rootDir === REPO_ROOT;
+  const knownCollisions = Array.isArray(opts.knownCollisions)
+    ? opts.knownCollisions
+    : ARTIFACT_BACKING_PATH_KNOWN_COLLISIONS;
   const path = join(rootDir, 'specs/artifacts.json');
   if (!existsSync(path)) {
     return {
@@ -3115,7 +3125,7 @@ export function checkArtifactBackingPathIntegrity(rootDir = REPO_ROOT, opts = {}
       continue;
     }
 
-    const known = ARTIFACT_BACKING_PATH_KNOWN_COLLISIONS.find((entry) => {
+    const known = knownCollisions.find((entry) => {
       if (entry.normalized !== normalized) return false;
       if (entry.artifact_ids.length !== ids.length) return false;
       const entrySet = new Set(entry.artifact_ids);
@@ -3140,7 +3150,7 @@ export function checkArtifactBackingPathIntegrity(rootDir = REPO_ROOT, opts = {}
   // fires when strictAllowlist is true (live repo or test-explicit).
   const staleEntries = [];
   if (strictAllowlist) {
-    for (const entry of ARTIFACT_BACKING_PATH_KNOWN_COLLISIONS) {
+    for (const entry of knownCollisions) {
       if (!matchedKnownEntries.has(entry)) {
         staleEntries.push(
           `entry for ${entry.normalized} citing closing slice ${entry.closing_slice} has no matching live collision — delete from ARTIFACT_BACKING_PATH_KNOWN_COLLISIONS (the closing slice has presumably resolved it)`,
