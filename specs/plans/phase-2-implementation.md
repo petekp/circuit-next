@@ -10,7 +10,7 @@ supersedes_scope:
 does_not_supersede:
   - specs/plans/phase-1-close-revised.md §Slice P2-MODEL-EFFORT (pulled in by reference)
   - specs/plans/phase-1-close-revised.md §Slice 25g (Phase 2 close planning slice — referenced but not rescheduled here)
-status: draft — blocks on operator decision (§Target workflow for first parity)
+status: active — target workflow locked to `explore` (operator decision 2026-04-21; Codex challenger recommendation adopted over the in-session methodology recommendation of `review`)
 ---
 
 # Phase 2 — Implementation Plan (2026-04-21)
@@ -76,53 +76,52 @@ check:
 - Plugin command registration (no `/circuit:*` slash commands wired).
 - Non-LLM human cold-read evidence (retargeted per ADR-0006).
 
-## Target workflow for first parity — OPEN QUESTION for operator
+## Target workflow for first parity — DECIDED: `explore`
 
-**Decision owner:** operator (product direction — per
+**Decision:** `explore` locked as the first parity target.
+
+**Decided by:** operator (product-direction authority per
 `memory/project_circuit_next_governance.md`).
 
-**Why the operator decides:** "which workflow to pursue first" is a
-product-shape call, not a methodology call. It controls what the first
-real-agent-dispatch slice feels like, which use-case circuit-next
-validates first, and which contract surface gets the earliest stress.
+**Decision date:** 2026-04-21.
 
-**Options and methodology read:**
+**Authority adopted:** Codex challenger recommendation over the
+in-session Claude methodology recommendation of `review`. Codex
+rationale (preserved verbatim, cited above in the operator-facing
+summary):
 
-1. **`review`** — Standalone code review. **Smallest surface.** One
-   dispatch step (a reviewer agent produces a verdict artifact); no
-   branching. D10 operationalization (adversarial budget per rigor,
-   why-continue checkpoint, review-execution alternation) already
-   landed at Slice DOG+1. Showcases real agent dispatch without
-   multi-step routing complexity. Fastest path to "end-to-end real
-   agent call completes a workflow."
-2. **`explore`** — Investigation/research. Full spine (Frame → Analyze
-   → Synthesize → Review). Demonstrates the research use-case and
-   exercises the full phase graph; produces a brief + analysis
-   artifact pair. Medium complexity.
-3. **`build`** — The doing workflow. Full spine (Frame → Plan → Act
-   → Verify → Review → Close). Demonstrates the methodology as
-   practiced in this repo. Highest complexity; highest value if it
-   lands because it lets circuit-next build its own next slices.
-4. **`repair`** — Bug fixing with test-first discipline. Similar
-   complexity to build but more focused.
-5. **`sweep`** — Systematic codebase sweeps. Queue/triage/batch
-   discipline. Complex.
-6. **`migrate`** — Large-scale migrations. Coexistence + cutover
-   discipline. Most complex.
+> `review` is the safest engineering path because it has the smallest
+> step graph and isolates real agent dispatch from routing complexity
+> … But product-wise, `review` mostly proves "can we call an agent
+> and get a verdict artifact back?" It does not exercise much of the
+> workflow system we actually care about.
+>
+> `explore` feels like the better middle path: it exercises a fuller
+> spine, real phase progression, synthesis, artifact production, and
+> review, while staying much less gnarly than `build`.
 
-**Methodology recommendation (not a decision):** `review`. Rationale:
-smallest step graph, already has D10 discipline operationalized, gives
-circuit-next the ability to review its own slices as a self-hosting
-feedback loop earlier than any other workflow, and isolates the
-real-agent-dispatch question from routing/spine complexity. Landing
-`review` first makes `explore` and `build` strictly easier to slice
-afterwards because the adapter, protocol, and artifact-handling
-surfaces will be shaken out.
+**Why product-shape authority, not methodology authority:** "which
+workflow to pursue first" controls what the first real-agent-dispatch
+slice feels like, which use-case circuit-next validates first, and
+which contract surface gets the earliest stress. Per governance split,
+this decision belongs to the operator and was formally recorded on
+2026-04-21.
 
-**What unlocks with the choice:** slices P2.3 through P2.5 can be
-concretely framed only after the target is named. Until the operator
-picks, P2.3+ below are **tentative** and scoped against the `review`
-recommendation.
+**Fallback:** if adapter/routing scope starts ballooning during P2.3
+or P2.4, fall back to `review` as a scope-reducing pivot. Pivoting
+requires amending this plan (not a silent rename) because the commit
+set below binds to `explore` explicitly.
+
+**Non-options for first parity:** `build`, `repair`, `sweep`, and
+`migrate` are deferred to P2.9+ (second-and-onward workflow parity)
+because they either carry more spine complexity (`build`, `repair`)
+or workflow-shape novelty (`sweep` queue/triage, `migrate`
+coexistence/cutover) than the adapter-and-artifact-shake-out first
+slice should absorb.
+
+**What unlocks:** slices P2.3 and P2.5 below are now concrete and
+bind to `explore`. P2.1, P2.2, P2.4 were target-agnostic and remain
+unchanged.
 
 ## Phase 2 close criteria (draft — candidate, not locked)
 
@@ -160,8 +159,8 @@ before any slice claims one of them. Each is independently trackable
 
 These slices are framed here; each still authors its own commit-body
 framing per lane discipline at landing time. P2.1 and P2.2 are
-target-agnostic; P2.3+ are tentative-against-`review` and may be
-renamed/rescoped when the operator picks.
+target-agnostic; P2.3 and P2.5 bind to `explore` per the locked
+target above; P2.4 is adapter-shaping and target-agnostic in scope.
 
 ### P2.1 — Phase 2 close-criteria ADR (ADR-0007)
 
@@ -209,22 +208,26 @@ or a new file; npm run audit green.
 workflow works. Rejected because the scaffold is cheap and the audit
 floor grows strictly better with it in place before P2.3+ lands.
 
-### P2.3 — Target workflow contract (tentative: `review.md`)
+### P2.3 — `explore` workflow contract + fixture
 
 **Lane:** Ratchet-Advance (contract-coverage ratchet).
 
 **Trajectory:** first concrete Phase 2 workflow contract; serves the
-one-workflow-parity arc.
+one-workflow-parity arc; binds to `explore` per the locked target.
 
-**Deliverable:** `specs/contracts/review.md` (or the chosen workflow's
-contract) — invariants, property ids, artifact ids bound to
-`specs/artifacts.json`, and `specs/contracts/<workflow>-md-codex.md`
-(challenger pass). Fixture at
-`.claude-plugin/skills/<workflow>/circuit.json` with full-spine phases
-(not the partial-spine shape dogfood-run-0 uses).
+**Deliverable:** `specs/contracts/explore.md` — invariants, property
+ids, artifact ids bound to `specs/artifacts.json`, plus
+`specs/contracts/explore-md-codex.md` (Codex challenger pass required
+before land). Fixture at `.claude-plugin/skills/explore/circuit.json`
+with full-spine phases — at minimum Frame → Analyze → Synthesize →
+Review → Close mapped to canonical phase ids. Artifact shapes named
+(brief, analysis, synthesis) but schema authoring may defer to P2.10
+if pressure justifies.
 
 **Acceptance evidence:** contract file + challenger review + fixture;
-contract-test increment; audit green.
+contract-test increment; fixture loadable by the existing runner
+(workflow schema validation passes on the new `circuit.json`); audit
+green.
 
 **Alternate framing:** start from the runtime adapter (P2.4) first and
 infer the contract from adapter pressure. Rejected because contract-
@@ -257,20 +260,23 @@ green.
 `agent` is the simplest same-process path and isolates the adapter-
 boundary question from cross-process subprocess complexity.
 
-### P2.5 — Target workflow end-to-end fixture run
+### P2.5 — `explore` end-to-end fixture run
 
 **Lane:** Ratchet-Advance (workflow-end-to-end ratchet).
 
 **Trajectory:** first honest claim of one-workflow parity substrate;
-closes the Phase 2 close criterion #1 and #2 simultaneously; serves
-the one-workflow-parity arc.
+closes Phase 2 close criteria #1 and #2 simultaneously; serves the
+one-workflow-parity arc; binds to `explore` per the locked target.
 
-**Deliverable:** a runnable fixture under `.claude-plugin/skills/<target>/`
-that runs the full target workflow through the runtime boundary using
-the `agent` adapter. Corresponding CLI wiring
-(`npm run circuit:<target>` or a unified `npm run circuit:run
-<fixture>`) and a smoke test in `tests/runner/` that verifies the
-final run result byte-shape against a golden artifact.
+**Deliverable:** a runnable `explore` fixture under
+`.claude-plugin/skills/explore/` (extending P2.3's `circuit.json`)
+that runs the full workflow through the runtime boundary using the
+`agent` adapter. Corresponding CLI wiring (`npm run circuit:explore`
+or a unified `npm run circuit:run <fixture>`) and a smoke test in
+`tests/runner/` that verifies the final run result byte-shape against
+a golden artifact. Golden artifacts stored under
+`tests/fixtures/golden/explore/` (per open question #4 resolution at
+slice time).
 
 **Acceptance evidence:** passing smoke test; golden artifacts
 committed; operator product-direction check analogous to the 14a
@@ -297,8 +303,11 @@ commit time. Expect re-ordering as earlier slices expose surface.
   assignment.** Already reserved at commit `b538979` and specified in
   `specs/plans/phase-1-close-revised.md §Slice P2-MODEL-EFFORT`.
   Triggers once P2.3 and at least one adapter land.
-- **P2.9 — Second target workflow** (whichever wasn't picked as
-  first). Proves the contract/adapter/fixture pattern generalizes.
+- **P2.9 — Second workflow** — likely `review` (Codex's fallback
+  suggestion and the smallest remaining surface) unless Phase 2
+  evidence points elsewhere. Proves the
+  contract/adapter/fixture/protocol pattern generalizes beyond
+  `explore`. Target reselection occurs at P2.9 framing time.
 - **P2.10 — Artifact schema set** — at least the core artifact
   schemas the target workflows emit (brief, analysis, synthesis,
   result, verdict).
@@ -355,8 +364,8 @@ it.
 
 ## Open questions
 
-1. **Target workflow for first parity.** Operator decision (see
-   above). Blocks concrete framing of P2.3+.
+1. ~~**Target workflow for first parity.**~~ **RESOLVED 2026-04-21:**
+   `explore` (see §Target workflow for first parity — DECIDED).
 2. **Adapter precedence — `agent` vs `codex` first?** P2.4 assumes
    `agent`; if the operator wants `codex` first (Codex is the Knight-
    Leveson challenger voice already in the methodology), flip P2.4 /
@@ -366,9 +375,11 @@ it.
 4. **Golden-artifact location and hashing scheme.** Phase 2 should
    lock this before P2.5 lands; candidate: sha256 over
    normalized-JSON result artifacts, stored under
-   `tests/fixtures/golden/<workflow>/`.
-5. **Spine policy for `review`** (if picked first). Reference Circuit
-   treats `review` as single-phase; circuit-next's spine policy allows
-   `mode: partial` (dogfood-run-0 uses it). Does `review` need
-   partial-spine or a canonical full-spine with most phases empty?
+   `tests/fixtures/golden/explore/`.
+5. **Spine policy for `explore`.** Reference Circuit's `explore`
+   workflow covers investigation, architectural exploration, and
+   RFC/PRD review at rigor profiles Lite → Autonomous. Does
+   circuit-next's `explore` fixture target full-spine (Frame →
+   Analyze → Synthesize → Review → Close) at a Standard rigor, or
+   does it start partial-spine (Frame → Analyze only) and grow?
    Contract-authoring call; addressed in P2.3.
