@@ -87,10 +87,20 @@ an earlier slice exposes surface that makes a later slice smaller,
 obsolete, or mis-sequenced (per CLAUDE.md §Lane discipline trajectory
 check).
 
-### Slice 35 — Methodology upgrade (registry-transitive audit + arc-close composition-review cadence)
+### Slice 35 — Methodology upgrade + tracked review opener (merged at slice framing)
 
-**Lane:** Ratchet-Advance (discipline ratchet; authoring the discipline
-the rest of this arc will be graded against).
+**Lane:** Ratchet-Advance (discipline ratchet + audit-coverage ratchet;
+authoring the discipline the rest of this arc will be graded against,
+in the same commit that tracks the review triggering the arc).
+
+**Merge rationale (fold-in Slice 35 Codex HIGH 5).** Originally planned
+as Slices 35 and 36. Codex challenger objected that Slice 35 cites
+authority (`specs/reviews/p2-foundation-composition-review.md`) that is
+not yet tracked; a fresh checkout would contain code + discipline text
+pointing at a missing file. Merge resolves the citation gap while
+preserving the "methodology upgrade before any HIGH-fix slice" operator
+constraint — the review is not a HIGH-fix, it is the evidence authority
+that the methodology upgrade cites.
 
 **Why first.** Per operator constraint (continuity debt-markdown entry
 7): "methodology upgrade should land BEFORE the first foundation fold-in
@@ -101,70 +111,84 @@ the mechanism that triggers such a review at arc boundaries belongs in
 the discipline surface, not in the operator's head.
 
 **Deliverable:**
-- **Registry-transitive audit check** in `scripts/audit.mjs` (new
-  Check 25 or equivalent) that walks the artifact graph in
-  `specs/artifacts.json` and flags any two artifacts registered at the
-  same `backing_path` (HIGH 4's structural form). This is the simplest
-  mechanism that would have caught HIGH 4 at slice-34 authorship time.
-- **Arc-close composition-review cadence** recorded as a discipline
-  rule in `CLAUDE.md §Session hygiene` (or a new §Cross-slice review
-  section): at the close of any arc spanning 3+ slices, commission a
-  composition review before the next privileged runtime slice opens.
-  The rule cites this arc as the first instance.
+- **Backing-path integrity audit check** in `scripts/audit.mjs` (new
+  Check 25 — renamed from "registry-transitive" per Codex LOW 1; that
+  phrase overstated coverage). Walks the artifact graph in
+  `specs/artifacts.json` and flags any two artifacts whose normalized
+  `backing_paths` collide. Normalization collapses template-prefix
+  synonyms (e.g. `<circuit-next-run-root>` → `<run-root>`), path-segment
+  redundancies (`/./`, doubled slashes), and trailing parenthetical
+  comments.
+- **Container-path allowlist** with collision-class-specific entries
+  (fold-in Codex HIGH 3): each container path carries a closed
+  `allowed_artifact_ids` set; sharers outside that set are red even
+  for container paths.
+- **Tracked-collision allowlist** with lifecycle enforcement (fold-in
+  Codex HIGH 2): stale entries (no matching live collision) → red,
+  forcing deletion when the closing slice resolves the collision.
+  Malformed artifact rows → red (fold-in Codex MED 3): fail closed, do
+  not silently skip.
+- **Arc-close composition-review audit binding** (fold-in Codex HIGH 4)
+  in `scripts/audit.mjs` (new Check 26). Narrow to this arc: once
+  `PROJECT_STATE.md` `current_slice` advances to Slice 40 or beyond, an
+  arc-close composition review file must exist under `specs/reviews/`
+  with closing verdict ACCEPT or ACCEPT-WITH-FOLD-INS.
+- **Arc-close composition-review cadence** as a discipline rule in
+  `CLAUDE.md §Cross-slice composition review cadence` (new section):
+  at the close of any arc spanning ≥3 slices, commission a composition
+  review before the next privileged runtime slice opens. Cites this
+  arc as the first instance.
+- **Tracked review opener (merged from originally-planned Slice 36):**
+  `git add specs/reviews/p2-foundation-composition-review.md` +
+  archive `/tmp/codex-composition-review/output.md` (14,895-line
+  challenger transcript) to
+  `specs/reviews/p2-foundation-composition-review-codex-transcript.md`
+  as a tracked sibling. Main review's transcript citation updated to
+  the in-repo archive location.
+- Contract test suite under `tests/contracts/
+  artifact-backing-path-integrity.test.ts` exercising normalize helper,
+  check function (all green/yellow/red paths including stale-allowlist,
+  container-id gating, malformed rows, re-introduction class), check 26
+  arc-close presence gate, and allowlist structure invariants. Also
+  regression guard on live repo artifact graph.
+- Append row to `specs/reviews/adversarial-yield-ledger.md` (per
+  convention established slices 32/33/34).
 
-**Acceptance evidence:** Check 25 (or equivalent) green on live repo;
-at least one negative-fixture test in `tests/contracts/` asserting
-duplicate `backing_path` triggers red; `CLAUDE.md` amendment with
-cadence rule; 23+ green audit checks.
+**Acceptance evidence:**
+- Check 25 may return **yellow** on live repo for the pre-existing
+  tracked HIGH 4 collision ({explore.result, run.result} at
+  `<run-root>/artifacts/result.json`, closing slice 39). Acceptance
+  criterion is **red-free**, not green-only. Arc-close acceptance
+  requires Check 25 **green** (no tracked collisions remaining) — see
+  §Acceptance evidence for arc close. (Plan text amendment fold-in
+  Codex MED 2 / HIGH 1: the original "green on live repo" acceptance
+  bar was stricter than the implementation; this amendment reconciles.)
+- Check 26 green on live repo (arc still in progress, so gate is
+  informational-pass until Slice 40 lands).
+- Contract tests pass end-to-end, including stale-allowlist and
+  unauthorized-container-sharer negative fixtures.
+- CLAUDE.md amendment with cadence rule + Check 26 binding citation.
+- `specs/reviews/p2-foundation-composition-review.md` + transcript
+  sibling tracked.
+- Adversarial-yield-ledger row present.
 
 **Alternate framing:** defer methodology upgrade to arc-close (after
 all five HIGHs fold in), on the theory that a clean signal from the
 fold-in slices is worth more than a discipline upgrade mid-flight.
-Rejected because the constraint is explicit: "otherwise we author the
-fold-ins under the same discipline that let the HIGHs through
-originally." The cheaper discipline upgrade (one audit check + one
-doc amendment) is worth landing first.
+Rejected because the operator constraint is explicit: "otherwise we
+author the fold-ins under the same discipline that let the HIGHs
+through originally." The cheaper discipline upgrade (two audit checks
++ one doc amendment + tracked review ceremony) is worth landing first.
 
 **Codex challenger pass:** **required** per CLAUDE.md §Hard invariants
-#6 (ratchet change).
+#6 (ratchet change). Landed as
+`specs/reviews/arc-slice-35-methodology-upgrade-codex.md`; opening
+verdict REJECT-PENDING-FOLD-INS (5 HIGH / 3 MED / 2 LOW / META);
+closing verdict ACCEPT-WITH-FOLD-INS after all HIGH/MED/LOW folded in.
 
 **Authority:** CLAUDE.md §Hard invariants #6 + #8; composition review
-§META 2 (layer-boundary failures are the recurring mode).
-
-### Slice 36 — Tracked review opener (commit review file + archive Codex transcript)
-
-**Lane:** Ratchet-Advance (audit-coverage ratchet carries the ceremony
-commit for the review; review-evidence ratchet advances with tracked
-archive).
-
-**Deliverable:**
-- `git add specs/reviews/p2-foundation-composition-review.md` + commit
-  (ceremony commit for the review that triggered this arc).
-- Archive `/tmp/codex-composition-review/output.md` to
-  `specs/reviews/p2-foundation-composition-review-codex-transcript.md`
-  as a sibling of the review file. Reason: `/tmp` wipes on reboot; the
-  challenger transcript is audit evidence, not ephemeral.
-- Frontmatter tying the two files: main review already cites the
-  transcript path at line 218; update that line to point to the in-
-  repo archive location.
-- Append row to `specs/reviews/adversarial-yield-ledger.md` (per
-  convention established slices 32/33/34).
-
-**Acceptance evidence:** both files tracked; transcript archive
-parseable as markdown; ledger row present; audit green.
-
-**Alternate framing:** skip the transcript archive; cite the Codex
-session id + prompt and trust the session database. Rejected because
-(a) `/tmp` is volatile, (b) the session-id lookup requires live
-infrastructure not available at slice-review time years out, (c) 14,895
-lines of challenger reasoning are exactly the audit trail that future
-challenger passes on THIS arc will want to cross-reference.
-
-**Codex challenger pass:** not required (evidence-archiving slice,
-no ratchet change beyond audit-coverage on tracked evidence).
-
-**Authority:** composition review (the file being committed) + CLAUDE.md
-§Cross-model challenger protocol (governance for challenger transcripts).
+§META 2 (layer-boundary failures are the recurring mode) + §HIGH 4
+(backing-path collision is the class this check catches).
 
 ### Slice 37 — HIGH 2 fold-in: widen event schema + ADR-0007 CC#P2-2 amendment
 
@@ -371,23 +395,31 @@ requirement as a slice-framing pre-condition.
 ## Dependency graph
 
 ```
-Slice 35 (methodology)                      ← no deps (opens arc)
+Slice 35 (methodology + tracked review opener) ← no deps (opens arc; merged
+                                                  per Codex HIGH 5 fold-in)
    ↓
-Slice 36 (tracked review opener)            ← depends on Slice 35 cadence rule
+(Slice 36 reserved — originally "tracked review opener"; now absorbed into
+Slice 35. Next substantive slice uses the next natural slice number.)
    ↓
-Slice 37 (HIGH 2: event schema + ADR)       ← depends on Slice 36 ceremony
+Slice 37 (HIGH 2: event schema + ADR)       ← depends on Slice 35 ceremony
+                                              (review tracked as authority)
    ↓
-Slice 38 (HIGH 1: dispatch wiring + ADR)    ← depends on Slice 37 (new event variants
-                                               inform the dispatch model decision)
+Slice 38 (HIGH 1: dispatch wiring + ADR)    ← depends on Slice 37 (new event
+                                              variants inform the dispatch
+                                              model decision)
    ↓
-Slice 39 (HIGH 4: artifact split)           ← depends on Slice 35 audit check
-                                               (OR lands the check if Slice 35
-                                               deferred it)
+Slice 39 (HIGH 4: artifact split)           ← depends on Slice 35 Check 25
+                                              (resolves its tracked collision;
+                                              deletes allowlist entry)
    ↓
 Slice 40 (HIGH 5: helper + audit/runtime    ← depends on Slice 38 (dispatch
-           parity)                             model may change kind-policy surface)
+           parity)                            model may change kind-policy
+                                             surface). Closing this slice
+                                             trips Check 26: arc-close
+                                             composition review required.
    ↓
-Arc-close composition review                ← consumes Slices 35–40 as aggregate
+Arc-close composition review                ← consumes Slices 35–40 as
+                                              aggregate; Check 26 gate
    ↓
 P2.4 (reopens with HIGH 3 scope constraint)
 ```

@@ -465,11 +465,13 @@ describe('checkPinnedRatchetFloor (Slice 26b full-file check)', () => {
     expect(typeof data?.floors?.contract_test_count).toBe('number');
     // last_advanced_in_slice tracks the most recent floor advancement. Slice
     // 26b was the initial floor (574); slice 33 (= P2.2) advanced it to 727
-    // per Codex MED 7 fold-in. This assertion pins the CURRENT slice id so
-    // any future floor advancement that forgets to update the marker fails
-    // the test immediately — the slice id changes only when the floor
-    // changes.
-    expect(data?.last_advanced_in_slice).toBe('34');
+    // per Codex MED 7 fold-in; slice 34 (= P2.3) advanced it to 740; slice 35
+    // (pre-P2.4 fold-in #1) advanced it to 779 (+39 from
+    // artifact-backing-path-integrity.test.ts). This assertion pins the
+    // CURRENT slice id so any future floor advancement that forgets to
+    // update the marker fails the test immediately — the slice id changes
+    // only when the floor changes.
+    expect(data?.last_advanced_in_slice).toBe('35');
   });
 
   it('readPinnedRatchetFloor returns null when the file is missing', () => {

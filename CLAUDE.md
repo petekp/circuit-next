@@ -178,6 +178,37 @@ discovery promotion, or gate loosening — dispatch the challenger through
 use the `codex:rescue` subagent. The challenger's job is an **objection
 list**, not approval. Document the response in the originating commit or ADR.
 
+## Cross-slice composition review cadence
+
+Per-slice challenger passes are necessary but not sufficient: each slice
+is locally honest about its own scope, but boundary seams between slices
+only surface in the aggregate. Empirical basis: the Phase 2 foundation
+composition review (`specs/reviews/p2-foundation-composition-review.md`,
+2026-04-21) found five HIGH boundary-seam failures that no individual
+slice owned — after every slice passed its own challenger pass.
+
+**Rule.** At the close of any arc spanning ≥ 3 slices, commission a
+composition review **before** the next privileged runtime slice opens.
+Same two-prong protocol as per-slice review: fresh-read Claude
+composition-adversary pass + Codex cross-model challenger via `/codex`.
+Same verdict vocabulary: REJECT-PENDING-FOLD-INS / ACCEPT-WITH-FOLD-INS /
+ACCEPT. Verdict must land in `specs/reviews/` with authoritative scope.
+
+**Privileged runtime slice** means: any slice that lands or modifies a
+runtime adapter, an event-writing code path, a dispatch boundary, or a
+gate/audit-check that admits or rejects privileged operations. The arc
+preceding such a slice is where silent cross-slice drift compounds.
+
+**First instance.** The pre-P2.4 fold-in arc at
+`specs/plans/phase-2-foundation-foldins.md` (Slices 35–40) carries its
+own arc-close composition review before P2.4 reopens. Enforced by
+`scripts/audit.mjs` Check 26 (`checkArcCloseCompositionReviewPresence`):
+once `PROJECT_STATE.md` `current_slice` advances to 40 or beyond, a
+file under `specs/reviews/` matching the arc-close naming pattern must
+exist with closing verdict ACCEPT or ACCEPT-WITH-FOLD-INS. Check 26 is
+narrow to this first arc; subsequent arcs either extend the check or
+land a generalized arc-ledger gate.
+
 ## Hard invariants
 
 These are non-negotiable without reopening the methodology decision:

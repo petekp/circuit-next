@@ -51,6 +51,8 @@ artifact whose `mode` does not begin with `llm-`.
 | 2026-04-21 | `specs/adrs/ADR-0007-phase-2-close-criteria.md` | governance | 1 | gpt-5-codex | llm-review | 7 | 5 | 1 | REJECT PENDING FOLD-INS → incorporated → ACCEPT-WITH-FOLD-INS | n/a | standard | n/a | n/a |
 | 2026-04-21 | `slice-33-plugin-surface` | reversible | 1 | gpt-5-codex | llm-review | 3 | 4 | 0 | REJECT PENDING FOLD-INS → incorporated → ACCEPT-WITH-FOLD-INS | n/a | standard | n/a | n/a |
 | 2026-04-21 | `specs/contracts/explore.md` | reversible | 1 | gpt-5-codex | llm-review | 4 | 7 | 2 | REJECT PENDING FOLD-INS → incorporated → ACCEPT-WITH-FOLD-INS | n/a | standard | n/a | n/a |
+| 2026-04-21 | `arc-p2-foundation-composition-review` | governance | 1 | gpt-5-codex + claude-opus-4-7 | llm-review-composition | 5 | 5 | 2 | REJECT-PENDING-FOLD-INS (composition review; fold-ins land across Slices 35-40 arc) | n/a | standard | composition-review over three-slice aggregate (P2.1 + P2.2 + P2.3) — surfaced boundary-seam failures no individual slice owned | n/a |
+| 2026-04-21 | `slice-35-methodology-upgrade` | governance | 1 | gpt-5.4 | llm-review | 5 | 3 | 2 | REJECT-PENDING-FOLD-INS → incorporated → ACCEPT-WITH-FOLD-INS | n/a | standard | ratchet change (two new audit checks + allowlist shape) requiring Codex pass per §Hard Invariants #6 | n/a |
 
 **Slice 29 property-fuzzer pass context.** Pass 2 on `scripts/audit.mjs`
 (commit `7a12329`, slice-28). Non-LLM evidence artifact for Phase 1.5

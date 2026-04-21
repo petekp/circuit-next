@@ -175,6 +175,48 @@ export function checkPluginCommandClosure(rootDir?: string): AuditCheckResult;
 // Unknown kinds pass through information-only; `dogfood-run-0` is exempt.
 export function checkSpineCoverage(rootDir?: string): AuditCheckResult;
 
+// Slice 35 (pre-P2.4 fold-in #1) — artifact registry backing-path integrity
+// check. Walks specs/artifacts.json and flags any two distinct artifacts whose
+// normalized backing_paths collide. Template-prefix synonyms (e.g.
+// <circuit-next-run-root> vs <run-root>) are normalized before comparison.
+// Tracked collisions are downgraded to yellow with a closing-slice reference;
+// untracked collisions are red.
+export const ARTIFACT_BACKING_PATH_PREFIX_SYNONYMS: Readonly<Record<string, string>>;
+
+export type ArtifactBackingPathContainerEntry = {
+  readonly rationale: string;
+  readonly allowed_artifact_ids: ReadonlySet<string>;
+};
+
+export const ARTIFACT_BACKING_PATH_CONTAINER_PATHS: Map<string, ArtifactBackingPathContainerEntry>;
+
+export type ArtifactBackingPathKnownCollision = {
+  readonly normalized: string;
+  readonly artifact_ids: readonly string[];
+  readonly closing_slice: number;
+  readonly reason: string;
+};
+export const ARTIFACT_BACKING_PATH_KNOWN_COLLISIONS: ReadonlyArray<ArtifactBackingPathKnownCollision>;
+export function normalizeArtifactBackingPath(raw: unknown): string | null;
+export type CheckArtifactBackingPathIntegrityOptions = {
+  /** Enables stale-allowlist detection. Default: true when rootDir is the
+   * live repo root, false for test fixtures (to avoid the global allowlist
+   * spuriously tripping on unrelated fixtures). */
+  strictAllowlist?: boolean;
+};
+export function checkArtifactBackingPathIntegrity(
+  rootDir?: string,
+  opts?: CheckArtifactBackingPathIntegrityOptions,
+): AuditCheckResult;
+
+// Slice 35 fold-in (Codex challenger HIGH 4) — arc-close composition-review
+// presence gate for the pre-P2.4 fold-in arc specifically. Fires red when
+// current_slice has advanced past the arc's last slice but no arc-close
+// composition review file exists under specs/reviews/ with an ACCEPT or
+// ACCEPT-WITH-FOLD-INS closing verdict.
+export const PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE: number;
+export function checkArcCloseCompositionReviewPresence(rootDir?: string): AuditCheckResult;
+
 // Slice 30 — DOG+2 slice:doctor reuses the lane and framing literals enforced
 // by the audit so the operator briefing script cannot drift from the gate.
 export const LANES: readonly [

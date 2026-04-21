@@ -2857,6 +2857,431 @@ export function checkSpineCoverage(rootDir = REPO_ROOT) {
   };
 }
 
+// Slice 35 — artifact registry backing-path integrity check.
+// Walks specs/artifacts.json and flags any two distinct artifacts whose
+// normalized backing_paths collide. Introduced as the minimum-viable
+// mechanism that would have caught HIGH 4 in
+// specs/reviews/p2-foundation-composition-review.md at slice-34 authorship
+// time: run.result and explore.result both resolve to the same real
+// filesystem location via different template prefixes
+// (<circuit-next-run-root> vs <run-root>).
+//
+// Name: "backing-path integrity" — not "registry-transitive." The mechanism
+// does not walk reader/writer transitive closures or resolver reachability.
+// It only detects duplicate normalized backing_paths with allowlist
+// semantics. Fold-in from Slice 35 Codex challenger LOW 1: do not overstate
+// coverage.
+//
+// Normalization pipeline:
+//   1. Strip trailing parenthetical comment (e.g. " (as Workflow.steps[])").
+//   2. Replace known template-prefix synonyms (<circuit-next-run-root>,
+//      <circuit-run-root> → <run-root>).
+//   3. Collapse path-segment redundancies: `./`, consecutive slashes.
+//   (Fold-in from Slice 35 Codex MED 1: `<run-root>/artifacts/./result.json`
+//   must normalize equivalently to `<run-root>/artifacts/result.json`.)
+//
+// Container-path allowlist: paths legitimately shared among multiple
+// artifacts because they are composite containers. Each entry carries a
+// closed set of allowed artifact ids. A collision sharer outside the
+// allowed set is a red finding even if the path is a container. (Fold-in
+// from Slice 35 Codex HIGH 3: container allowlist must be collision-class-
+// specific, not path-global.)
+//
+// Tracked-collision allowlist: entries match (normalized path, artifact-id
+// set) tuples that are known-accepted with a closing slice reference.
+// Lifecycle enforcement (fold-in from Slice 35 Codex HIGH 2):
+//   - If an allowlist entry has no matching live collision → red (stale).
+//   - Untracked collisions are red.
+//   - Tracked collisions that match an entry → yellow.
+// New known-collision entries MUST carry a challenger pass per CLAUDE.md
+// §Hard invariants #6 (every allowlist-ratchet change is a ratchet change).
+export const ARTIFACT_BACKING_PATH_PREFIX_SYNONYMS = Object.freeze({
+  '<circuit-next-run-root>': '<run-root>',
+  '<circuit-run-root>': '<run-root>',
+});
+
+export const ARTIFACT_BACKING_PATH_CONTAINER_PATHS = new Map([
+  [
+    '<plugin>/skills/<workflow-id>/circuit.yaml',
+    Object.freeze({
+      rationale:
+        'Plugin workflow definition file — composes workflow/phase/step definitions + selection + adapter + config rows at distinct JSON paths.',
+      allowed_artifact_ids: Object.freeze(
+        new Set([
+          'workflow.definition',
+          'step.definition',
+          'phase.definition',
+          'selection.override',
+          'adapter.registry',
+          'adapter.reference',
+          'config.root',
+          'config.circuit-override',
+        ]),
+      ),
+    }),
+  ],
+  [
+    '<run-root>/events.ndjson',
+    Object.freeze({
+      rationale:
+        'Run event log — ndjson stream composing run.log + event payload families within the same file.',
+      allowed_artifact_ids: Object.freeze(
+        new Set(['run.log', 'adapter.resolved', 'selection.resolution']),
+      ),
+    }),
+  ],
+  [
+    '~/.config/circuit-next/config.yaml',
+    Object.freeze({
+      rationale:
+        'User-global config file — composes config + selection + adapter rows as layered configuration sections.',
+      allowed_artifact_ids: Object.freeze(
+        new Set([
+          'config.root',
+          'config.circuit-override',
+          'selection.override',
+          'adapter.registry',
+          'adapter.reference',
+        ]),
+      ),
+    }),
+  ],
+  [
+    '<project>/.circuit/config.yaml',
+    Object.freeze({
+      rationale:
+        'Project-local config file — composes config + selection + adapter rows as layered configuration sections.',
+      allowed_artifact_ids: Object.freeze(
+        new Set([
+          'config.root',
+          'config.circuit-override',
+          'selection.override',
+          'adapter.registry',
+          'adapter.reference',
+        ]),
+      ),
+    }),
+  ],
+]);
+
+export const ARTIFACT_BACKING_PATH_KNOWN_COLLISIONS = Object.freeze([
+  Object.freeze({
+    normalized: '<run-root>/artifacts/result.json',
+    artifact_ids: Object.freeze(['explore.result', 'run.result']),
+    closing_slice: 39,
+    reason:
+      'HIGH 4 in specs/reviews/p2-foundation-composition-review.md — explore.result (specs/artifacts.json:688-699) and run.result (specs/artifacts.json:202-216) share the same normalized backing path. Resolution scheduled for Slice 39 per specs/plans/phase-2-foundation-foldins.md.',
+  }),
+]);
+
+export function normalizeArtifactBackingPath(raw) {
+  if (typeof raw !== 'string') return null;
+  let p = raw.trim();
+  if (p.length === 0) return null;
+  // (1) Strip trailing parenthetical comment (trailing-only regex; fold-in
+  // from Slice 35 Codex LOW 2).
+  p = p.replace(/\s*\([^)]*\)\s*$/, '');
+  p = p.trim();
+  if (p.length === 0) return null;
+  // (2) Replace known synonym prefixes.
+  for (const [from, to] of Object.entries(ARTIFACT_BACKING_PATH_PREFIX_SYNONYMS)) {
+    if (p.startsWith(from)) {
+      p = to + p.slice(from.length);
+      break;
+    }
+  }
+  // (3) Collapse path-segment redundancies (fold-in from Slice 35 Codex MED
+  // 1). The leading template token (e.g. `<run-root>`) may be followed by a
+  // `/` so we only touch the tail after the first `/`.
+  const firstSlash = p.indexOf('/');
+  if (firstSlash !== -1) {
+    const head = p.slice(0, firstSlash);
+    let tail = p.slice(firstSlash);
+    // Collapse consecutive slashes.
+    tail = tail.replace(/\/+/g, '/');
+    // Collapse `/./` segments iteratively.
+    while (tail.includes('/./')) tail = tail.replace('/./', '/');
+    // Strip trailing `/.`.
+    if (tail.endsWith('/.')) tail = tail.slice(0, -2);
+    p = head + tail;
+  }
+  return p;
+}
+
+export function checkArtifactBackingPathIntegrity(rootDir = REPO_ROOT, opts = {}) {
+  // opts.strictAllowlist controls whether stale-allowlist detection fires.
+  // Default: true when rootDir is the live repo (global allowlist is
+  // authoritative for that root), false for test fixtures (fixtures do not
+  // exercise the global allowlist; tests that care about stale-detection
+  // semantics must opt in explicitly).
+  const strictAllowlist =
+    typeof opts.strictAllowlist === 'boolean' ? opts.strictAllowlist : rootDir === REPO_ROOT;
+  const path = join(rootDir, 'specs/artifacts.json');
+  if (!existsSync(path)) {
+    return {
+      level: 'green',
+      detail: 'No specs/artifacts.json present; backing-path integrity check not applicable',
+    };
+  }
+
+  let graph;
+  try {
+    graph = JSON.parse(readFileSync(path, 'utf-8'));
+  } catch (err) {
+    return {
+      level: 'red',
+      detail: `specs/artifacts.json failed to parse: ${err.message}`,
+    };
+  }
+
+  if (!Array.isArray(graph?.artifacts)) {
+    return {
+      level: 'red',
+      detail: 'specs/artifacts.json: `artifacts` field missing or not an array',
+    };
+  }
+
+  const artifacts = graph.artifacts;
+  const malformedRows = [];
+  const pathToIds = new Map();
+  let totalPathEntries = 0;
+
+  for (let i = 0; i < artifacts.length; i++) {
+    const art = artifacts[i];
+    const id = art?.id;
+    if (typeof id !== 'string' || id.length === 0) {
+      malformedRows.push(`row ${i}: missing/invalid \`id\` string`);
+      continue;
+    }
+    if (!('backing_paths' in (art ?? {}))) {
+      malformedRows.push(`${id}: missing \`backing_paths\` field`);
+      continue;
+    }
+    if (!Array.isArray(art.backing_paths)) {
+      malformedRows.push(`${id}: \`backing_paths\` must be an array`);
+      continue;
+    }
+    for (let j = 0; j < art.backing_paths.length; j++) {
+      const raw = art.backing_paths[j];
+      if (typeof raw !== 'string') {
+        malformedRows.push(`${id}.backing_paths[${j}]: must be a string`);
+        continue;
+      }
+      const normalized = normalizeArtifactBackingPath(raw);
+      if (normalized === null) continue;
+      if (!normalized.includes('/')) continue;
+      totalPathEntries++;
+      if (!pathToIds.has(normalized)) pathToIds.set(normalized, new Set());
+      pathToIds.get(normalized).add(id);
+    }
+  }
+
+  if (malformedRows.length > 0) {
+    return {
+      level: 'red',
+      detail: `specs/artifacts.json: ${malformedRows.length} malformed row(s):\n      - ${malformedRows.join('\n      - ')}`,
+    };
+  }
+
+  const untrackedCollisions = [];
+  const trackedCollisions = [];
+  const matchedKnownEntries = new Set();
+  let containerPathCount = 0;
+
+  for (const [normalized, idSet] of pathToIds) {
+    if (idSet.size < 2) continue;
+    const ids = [...idSet].sort();
+
+    // Container paths: must be listed AND every sharing artifact id must be
+    // in the allowed set. Unlisted sharers are real collisions even if the
+    // path is a container. (Fold-in Slice 35 Codex HIGH 3.)
+    const containerEntry = ARTIFACT_BACKING_PATH_CONTAINER_PATHS.get(normalized);
+    if (containerEntry) {
+      const unauthorized = ids.filter((id) => !containerEntry.allowed_artifact_ids.has(id));
+      if (unauthorized.length === 0) {
+        containerPathCount++;
+        continue;
+      }
+      untrackedCollisions.push(
+        `${normalized} shared by {${ids.join(', ')}} — container allowlist permits {${[
+          ...containerEntry.allowed_artifact_ids,
+        ]
+          .sort()
+          .join(', ')}} only; unauthorized sharer(s): {${unauthorized.join(', ')}}`,
+      );
+      continue;
+    }
+
+    const known = ARTIFACT_BACKING_PATH_KNOWN_COLLISIONS.find((entry) => {
+      if (entry.normalized !== normalized) return false;
+      if (entry.artifact_ids.length !== ids.length) return false;
+      const entrySet = new Set(entry.artifact_ids);
+      return ids.every((i) => entrySet.has(i));
+    });
+
+    if (known) {
+      matchedKnownEntries.add(known);
+      trackedCollisions.push(
+        `${normalized} shared by {${ids.join(', ')}} — tracked (closing slice ${known.closing_slice}): ${known.reason}`,
+      );
+    } else {
+      untrackedCollisions.push(
+        `${normalized} shared by {${ids.join(', ')}} — register at distinct paths, extend ARTIFACT_BACKING_PATH_CONTAINER_PATHS with this path + allowed-ids set if legitimately composite, OR add a tracked-collision entry in ARTIFACT_BACKING_PATH_KNOWN_COLLISIONS citing the closing slice (challenger pass required per CLAUDE.md §Hard invariants #6)`,
+      );
+    }
+  }
+
+  // Stale-allowlist check (fold-in Slice 35 Codex HIGH 2): any tracked-
+  // collision entry without a matching live collision is a stale allowlist
+  // entry that must be deleted when the closing slice resolves it. Only
+  // fires when strictAllowlist is true (live repo or test-explicit).
+  const staleEntries = [];
+  if (strictAllowlist) {
+    for (const entry of ARTIFACT_BACKING_PATH_KNOWN_COLLISIONS) {
+      if (!matchedKnownEntries.has(entry)) {
+        staleEntries.push(
+          `entry for ${entry.normalized} citing closing slice ${entry.closing_slice} has no matching live collision — delete from ARTIFACT_BACKING_PATH_KNOWN_COLLISIONS (the closing slice has presumably resolved it)`,
+        );
+      }
+    }
+  }
+
+  if (untrackedCollisions.length > 0 || staleEntries.length > 0) {
+    const parts = [];
+    if (untrackedCollisions.length > 0) {
+      parts.push(
+        `backing_path collision(s) untracked:\n      - ${untrackedCollisions.join('\n      - ')}`,
+      );
+    }
+    if (staleEntries.length > 0) {
+      parts.push(
+        `stale tracked-collision allowlist entries:\n      - ${staleEntries.join('\n      - ')}`,
+      );
+    }
+    return { level: 'red', detail: parts.join('\n      ') };
+  }
+
+  if (trackedCollisions.length > 0) {
+    return {
+      level: 'yellow',
+      detail: `${pathToIds.size} normalized backing_path(s) across ${artifacts.length} artifact(s) / ${totalPathEntries} raw entries; ${containerPathCount} container-path share(s) (legitimate); 0 untracked collisions; ${trackedCollisions.length} tracked collision(s):\n      - ${trackedCollisions.join('\n      - ')}`,
+    };
+  }
+
+  return {
+    level: 'green',
+    detail: `${pathToIds.size} normalized backing_path(s) across ${artifacts.length} artifact(s) / ${totalPathEntries} raw entries; ${containerPathCount} container-path share(s) (legitimate); no collisions`,
+  };
+}
+
+// Slice 35 — arc-close composition-review presence check.
+// Fold-in from Slice 35 Codex HIGH 4: the CLAUDE.md §Cross-slice composition
+// review cadence rule is not a machine-checkable ratchet unless something
+// binds the rule to an audit gate. This check is the first instance:
+// specifically for the pre-P2.4 fold-in arc at
+// specs/plans/phase-2-foundation-foldins.md (Slices 35–40), once the arc's
+// last numbered slice has landed (current_slice ≥ 40, meaning Slice 40 or
+// later is the most recent tracked slice), an arc-close composition review
+// must exist under specs/reviews/ with a close-verdict of ACCEPT or
+// ACCEPT-WITH-FOLD-INS. Until then, the check is informational (green with
+// a note).
+//
+// Narrow on purpose: this is the audit binding for ONE named arc, not a
+// general "composition review for every arc" gate. A broader gate would
+// require a tracked-arcs ledger that does not yet exist. When the next arc
+// opens, either extend this check or land a generalized arc ledger.
+export const PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE = 40;
+
+export function checkArcCloseCompositionReviewPresence(rootDir = REPO_ROOT) {
+  const planPath = join(rootDir, 'specs/plans/phase-2-foundation-foldins.md');
+  if (!existsSync(planPath)) {
+    return {
+      level: 'green',
+      detail:
+        'specs/plans/phase-2-foundation-foldins.md not present; arc-close review check not applicable',
+    };
+  }
+
+  // Read current slice marker from PROJECT_STATE.md (format: `<!-- current_slice: N -->`
+  // on line 1, parsed by extractCurrentSliceMarker exported from Slice 26b).
+  const statePath = join(rootDir, 'PROJECT_STATE.md');
+  if (!existsSync(statePath)) {
+    return {
+      level: 'green',
+      detail: 'PROJECT_STATE.md not present; arc-close review check not applicable',
+    };
+  }
+  const stateText = readFileSync(statePath, 'utf-8');
+  const sliceMarker = extractCurrentSliceMarker(stateText);
+  if (sliceMarker === null) {
+    return {
+      level: 'yellow',
+      detail: 'PROJECT_STATE.md has no current_slice marker; cannot bind arc-close review gate',
+    };
+  }
+
+  const sliceNum = Number.parseInt(sliceMarker.replace(/[^0-9]/g, ''), 10);
+  if (!Number.isFinite(sliceNum)) {
+    return {
+      level: 'yellow',
+      detail: `PROJECT_STATE.md current_slice marker "${sliceMarker}" not numeric; cannot bind arc-close review gate`,
+    };
+  }
+
+  if (sliceNum < PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE) {
+    return {
+      level: 'green',
+      detail: `pre-P2.4 fold-in arc still in progress (current_slice=${sliceNum} < arc-close slice ${PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE}); arc-close composition review not yet required`,
+    };
+  }
+
+  // Arc-close slice has landed (or been exceeded). Arc-close review must
+  // exist.
+  const reviewsDir = join(rootDir, 'specs/reviews');
+  if (!existsSync(reviewsDir)) {
+    return {
+      level: 'red',
+      detail: `pre-P2.4 fold-in arc closed (current_slice=${sliceNum} ≥ ${PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE}) but specs/reviews/ directory not present`,
+    };
+  }
+
+  const files = readdirSync(reviewsDir);
+  const candidates = files.filter((f) =>
+    /(arc.*35.*40|phase-2-foundation-foldins-arc-close|foldins-arc-close)/i.test(f),
+  );
+
+  if (candidates.length === 0) {
+    return {
+      level: 'red',
+      detail: `pre-P2.4 fold-in arc closed (current_slice=${sliceNum} ≥ ${PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE}) but no arc-close composition review file matches pattern (arc-slices-35..40* / phase-2-foundation-foldins-arc-close* / foldins-arc-close*) under specs/reviews/`,
+    };
+  }
+
+  // Verify at least one candidate carries an ACCEPT verdict in frontmatter
+  // or body.
+  const accepted = [];
+  for (const f of candidates) {
+    const body = readFileSync(join(reviewsDir, f), 'utf-8');
+    if (/closing_verdict:\s*(ACCEPT|ACCEPT-WITH-FOLD-INS)/i.test(body)) {
+      accepted.push(f);
+    } else if (/\b(ACCEPT|ACCEPT-WITH-FOLD-INS)\b/.test(body) && /closing/i.test(body)) {
+      accepted.push(f);
+    }
+  }
+
+  if (accepted.length === 0) {
+    return {
+      level: 'red',
+      detail: `pre-P2.4 fold-in arc closed but arc-close composition review(s) [${candidates.join(', ')}] do not carry ACCEPT / ACCEPT-WITH-FOLD-INS closing verdict`,
+    };
+  }
+
+  return {
+    level: 'green',
+    detail: `pre-P2.4 fold-in arc closed (current_slice=${sliceNum}); arc-close composition review present: ${accepted.join(', ')}`,
+  };
+}
+
 const GREEN = '\x1b[32m';
 const YELLOW = '\x1b[33m';
 const RED = '\x1b[31m';
@@ -3254,9 +3679,40 @@ function main() {
     detail: spineCoverage.detail,
   });
 
-  // Check 25: npm run verify currently green. (Runs last so the report's
-  // bottom line is the verify-gate status; numbering bumped 24 → 25 by P2.3
-  // which inserted Check 24 for spine coverage. Prior bumps: P2.2 23 → 24;
+  // Check 25: Artifact registry backing-path integrity (Slice 35,
+  // specs/plans/phase-2-foundation-foldins.md). Walks specs/artifacts.json
+  // and flags any two distinct artifacts whose normalized backing_paths
+  // collide. This is the minimum-viable mechanism that would have caught
+  // HIGH 4 in specs/reviews/p2-foundation-composition-review.md at slice-34
+  // authorship time. Known tracked collisions are downgraded to yellow with
+  // a closing-slice reference; untracked collisions are red. Stale allowlist
+  // entries (no matching live collision) are red.
+  const backingPathIntegrity = checkArtifactBackingPathIntegrity();
+  counters[backingPathIntegrity.level]++;
+  findings.push({
+    level: backingPathIntegrity.level,
+    check: 'Artifact registry backing-path integrity (Slice 35 / pre-P2.4 fold-ins)',
+    detail: backingPathIntegrity.detail,
+  });
+
+  // Check 26: Arc-close composition-review presence (Slice 35 fold-in of
+  // Codex challenger HIGH 4). Binds the CLAUDE.md §Cross-slice composition
+  // review cadence rule to a machine-checkable gate for the pre-P2.4 fold-in
+  // arc. Fires red when the arc's last slice has landed but no arc-close
+  // composition review exists under specs/reviews/ with an ACCEPT or
+  // ACCEPT-WITH-FOLD-INS closing verdict.
+  const arcCloseReview = checkArcCloseCompositionReviewPresence();
+  counters[arcCloseReview.level]++;
+  findings.push({
+    level: arcCloseReview.level,
+    check: 'Arc-close composition review (Slice 35 / pre-P2.4 fold-ins)',
+    detail: arcCloseReview.detail,
+  });
+
+  // Check 27: npm run verify currently green. (Runs last so the report's
+  // bottom line is the verify-gate status; numbering bumped 25 → 27 by
+  // Slice 35 which inserted Check 25 for backing-path integrity + Check 26
+  // for arc-close review presence. Prior bumps: P2.3 24 → 25; P2.2 23 → 24;
   // P2.1 22 → 23; Slice 31a 21 → 22; Slice 26b 15 → 20; Slice 25d 20 → 21.)
   const verify = verifyStatus();
   if (verify.pass) {
