@@ -16,6 +16,7 @@
     "verify": "npm run check && npm run lint && npm run test",
     "audit": "node scripts/audit.mjs",
     "inventory": "node scripts/inventory.mjs",
+    "slice:doctor": "node scripts/doctor.mjs",
     "circuit:run": "tsx src/cli/dogfood.ts"
   },
   "dependencies": {

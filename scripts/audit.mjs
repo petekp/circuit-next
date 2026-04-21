@@ -18,7 +18,7 @@ import { isAbsolute, join, relative, resolve } from 'node:path';
 const REPO_ROOT = execSync('git rev-parse --show-toplevel').toString().trim();
 const DELIM = '<<<CIRCUIT-NEXT-AUDIT-END>>>';
 
-const LANES = [
+export const LANES = [
   'Ratchet-Advance',
   'Equivalence Refactor',
   'Migration Escrow',
@@ -26,6 +26,12 @@ const LANES = [
   'Disposable',
   'Break-Glass',
 ];
+
+export const FRAMING_LITERALS = {
+  failureMode: 'Failure mode:',
+  acceptanceEvidence: 'Acceptance evidence:',
+  alternateFraming: 'Alternate framing:',
+};
 
 const SMELL_PATTERNS = [
   { pattern: /\bbecause circuit (does|works|is)\b/i, label: 'because-circuit-does' },

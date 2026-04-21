@@ -142,3 +142,20 @@ export function checkPinnedRatchetFloor(
 // Slice 25d — ADR-0001 Addendum B phase-graph authority ratchet. Phase 1.5
 // semantics live in the ADR; decision.md / README / PROJECT_STATE mirror.
 export function checkPhaseAuthoritySemantics(rootDir?: string): AuditCheckResult;
+
+// Slice 30 — DOG+2 slice:doctor reuses the lane and framing literals enforced
+// by the audit so the operator briefing script cannot drift from the gate.
+export const LANES: readonly [
+  'Ratchet-Advance',
+  'Equivalence Refactor',
+  'Migration Escrow',
+  'Discovery',
+  'Disposable',
+  'Break-Glass',
+];
+
+export const FRAMING_LITERALS: {
+  readonly failureMode: 'Failure mode:';
+  readonly acceptanceEvidence: 'Acceptance evidence:';
+  readonly alternateFraming: 'Alternate framing:';
+};
