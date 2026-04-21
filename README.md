@@ -1,19 +1,18 @@
-<!-- current_slice: 31 -->
+<!-- current_slice: 31a -->
 
 # circuit-next
 
 **Status: Tier 0 scaffold complete; Phase 1 contract authorship closed at
-Slice 27 (`workflow.md` v0.2); Phase 1.5 Alpha Proof open per ADR-0001
-Addendum B §Phase 1 Close Inventory. 27a (discovery spike mining) → 27b
-(product-surface inventory baseline) → 27c (runtime boundary) → 27d
-(dogfood-run-0 alpha proof) landed. Slice 28 (plan names it "DOG+1") operationalizes the `circuit:review`
-D10 adversarial budgets in `scripts/audit.mjs` +
-`specs/reviews/adversarial-yield-ledger.md`.
-Phase 1.5 close ceremony is next: broader adversarial pass with non-LLM
-evidence per ADR-0001 Addendum B §Phase 1.5 Close Criterion #13 and
-`specs/reviews/phase-1-close-reform-human.md` `opened_scope` /
-`skipped_scope` / "I could not understand X" field completion before the
-ceremony commit.**
+Slice 27 (`workflow.md` v0.2); Phase 1.5 Alpha Proof closed at Slice 31a
+(ceremony commit, 2026-04-21) per ADR-0001 Addendum B as amended by
+ADR-0006; Phase 2 — Implementation is open. CC#14 closure is a one-time
+waiver + retarget per ADR-0006: (14a) operator product-direction check at
+`specs/reviews/phase-1.5-operator-product-check.md`, (14b) existing
+Claude + Codex LLM stand-in sections in
+`specs/reviews/phase-1-close-reform-human.md` with F17 weaker-evidence
+flag. The canonical non-LLM human cold-read is **not** satisfied; weaker
+evidence of different shape is substituted. ADR-0006 §Precedent firewall
+governs any future retarget.**
 
 Claude Code plugin that automates common developer and creative workflows
 through a configurable, evidence-based methodology.
@@ -39,21 +38,21 @@ stress-test survival, accepted risks, and reopen conditions.
 
 ## Current phase
 
-**Phase 1.5 — Alpha Proof (open).** Phase 0 Evidence Loop closed. Phase 1
-closed at Slice 27 with the narrowed `workflow.md` v0.2 contract landing;
-all Phase 1 contracts authored: step, phase, run, selection, adapter,
-skill, workflow (v0.2), continuity, config, plus three behavioral tracks
-(session-hygiene, prose-yaml-parity, cross-model-challenger).
-Authority-graph gate (Slice 7 / ADR-0003), invariant ledger, plane
-dimension, and reverse-authority checks are exercised end-to-end. Phase
-1.5 opened on the Slice 27 commit per ADR-0001 Addendum B §Phase 1 Close
-Inventory. The remaining close arc is sequenced by
-[`specs/plans/phase-1-close-revised.md`](specs/plans/phase-1-close-revised.md):
-27a (60-min discovery spike mining) → 27b (product-surface inventory
-baseline) → 27c (runtime boundary — append-only event writer,
-reducer-derived snapshot, SHA-256 manifest byte-match) → 27d
-(`dogfood-run-0` alpha product proof). Phase 2 entry is gated by
-Phase 1.5 close, not Phase 1 close.
+**Phase 2 — Implementation (open, opened 2026-04-21 at Slice 31a ceremony
+commit).** Phase 0 Evidence Loop closed; Phase 1 contract authorship
+closed at Slice 27; Phase 1.5 Alpha Proof closed at Slice 31a. The alpha
+proof is a 2-step dry-run runner on a fixture (`dogfood-run-0`) — enough
+executable proof to start Phase 2 implementation. Real agent dispatch,
+workflow parity with the previous-generation Circuit, hardening,
+container isolation, hidden test pool, and the 15–25 slices to
+one-workflow parity remain Phase 2+ work. CC#14 was amended by ADR-0006
+as a one-time waiver + retarget (see Status above); the canonical
+non-LLM cold-read is **not** satisfied, and weaker evidence of different
+shape is substituted — carried openly on every authority surface. CC#15
+preservation rests on (i) the 14a operator product-direction check and
+(ii) CC#13 closure by the Slice 29 property fuzzer at
+`tests/properties/visible/`, a structurally-different non-LLM mechanical
+probe.
 
 See [`PROJECT_STATE.md`](PROJECT_STATE.md) for a live snapshot of where the
 project is, what was just decided, and what comes next.

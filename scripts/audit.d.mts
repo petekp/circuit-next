@@ -143,6 +143,11 @@ export function checkPinnedRatchetFloor(
 // semantics live in the ADR; decision.md / README / PROJECT_STATE mirror.
 export function checkPhaseAuthoritySemantics(rootDir?: string): AuditCheckResult;
 
+// Slice 31a — CC#14 retarget presence (ADR-0006). When any authority surface
+// claims Phase 2 open, the 14a operator product-direction check + 14b
+// Delegation acknowledgment citing ADR-0006 + ADR-0006 file must all exist.
+export function checkCc14RetargetPresence(rootDir?: string): AuditCheckResult;
+
 // Slice 30 — DOG+2 slice:doctor reuses the lane and framing literals enforced
 // by the audit so the operator briefing script cannot drift from the gate.
 export const LANES: readonly [

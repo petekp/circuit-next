@@ -2132,6 +2132,148 @@ export function checkPhaseAuthoritySemantics(rootDir = REPO_ROOT) {
   };
 }
 
+// Check 21 (Slice 31a): CC#14 retarget presence under ADR-0006.
+// When any authority surface (PROJECT_STATE.md, README.md) claims Phase 2
+// open, verify the three ADR-0006 retarget artifacts are present and
+// correctly shaped:
+//   (a) specs/reviews/phase-1.5-operator-product-check.md exists with the
+//       required frontmatter fields (name, description, type=review,
+//       review_kind=operator-product-direction-check, target_kind=phase-close,
+//       review_target=phase-1.5-alpha-proof, review_date, operator, scope,
+//       confirmation, not_claimed, authored_by, adr_authority=ADR-0006).
+//   (b) specs/reviews/phase-1-close-reform-human.md contains a
+//       "## Delegation acknowledgment" section citing ADR-0006.
+//   (c) An ADR-0006-*.md file exists under specs/adrs/.
+// Phase-2-open claim detection is tolerant: matches "Phase 2", "Phase: 2",
+// "**Phase:** 2", or "Phase 2 — Implementation (open" style wording.
+export function checkCc14RetargetPresence(rootDir = REPO_ROOT) {
+  const projectStatePath = join(rootDir, 'PROJECT_STATE.md');
+  const readmePath = join(rootDir, 'README.md');
+  const productCheckPath = join(rootDir, 'specs/reviews/phase-1.5-operator-product-check.md');
+  const reviewPath = join(rootDir, 'specs/reviews/phase-1-close-reform-human.md');
+  const adrsDir = join(rootDir, 'specs/adrs');
+
+  const projectStateText = existsSync(projectStatePath)
+    ? readFileSync(projectStatePath, 'utf-8')
+    : '';
+  const readmeText = existsSync(readmePath) ? readFileSync(readmePath, 'utf-8') : '';
+
+  // Matches things like "Phase 2", "Phase: 2", "**Phase:** 2", "Phase — 2",
+  // but NOT "Phase 2+" (deferral shorthand) on its own. We want a phase-open
+  // claim, not a future-work pointer. Guard: require that the match is not
+  // immediately followed by "+".
+  const PHASE_2_OPEN_PATTERN = /Phase[^A-Za-z0-9]*2(?!\+)(?:\b|[^A-Za-z0-9])/;
+
+  const projectStateClaims =
+    PHASE_2_OPEN_PATTERN.test(projectStateText) &&
+    /Phase[^A-Za-z0-9]*2[^A-Za-z0-9]*(?:—|-)?[^A-Za-z0-9]*Implementation|Phase[^A-Za-z0-9]*2[^A-Za-z0-9]*\(open/i.test(
+      projectStateText,
+    );
+  const readmeClaims =
+    PHASE_2_OPEN_PATTERN.test(readmeText) &&
+    /Phase[^A-Za-z0-9]*2[^A-Za-z0-9]*(?:—|-)?[^A-Za-z0-9]*Implementation|Phase[^A-Za-z0-9]*2[^A-Za-z0-9]*\(open/i.test(
+      readmeText,
+    );
+
+  const claimsPhase2Open = projectStateClaims || readmeClaims;
+
+  if (!claimsPhase2Open) {
+    return {
+      level: 'green',
+      detail:
+        'Neither PROJECT_STATE nor README claims Phase 2 open; CC#14 retarget artifacts not required yet',
+    };
+  }
+
+  const errors = [];
+
+  // (a) 14a artifact exists with required frontmatter fields.
+  if (!existsSync(productCheckPath)) {
+    errors.push(
+      'Phase 2 open claimed but specs/reviews/phase-1.5-operator-product-check.md (ADR-0006 §Decision.2.14a) is missing',
+    );
+  } else {
+    const text = readFileSync(productCheckPath, 'utf-8');
+    const requiredFields = [
+      /^name:\s+phase-1\.5-operator-product-check\b/m,
+      /^description:\s*\S/m,
+      /^type:\s+review\b/m,
+      /^review_kind:\s+operator-product-direction-check\b/m,
+      /^target_kind:\s+phase-close\b/m,
+      /^review_target:\s+phase-1\.5-alpha-proof\b/m,
+      /^review_date:\s*\S/m,
+      /^operator:\s*\S/m,
+      /^scope:\s+product-direction-only\b/m,
+      /^confirmation:\s*\S/m,
+      /^not_claimed:/m,
+      /^authored_by:\s*\S/m,
+      /^adr_authority:\s+ADR-0006\b/m,
+    ];
+    const missing = requiredFields
+      .filter((re) => !re.test(text))
+      .map((re) =>
+        re.source
+          .replace(/^\^/, '')
+          .replace(/\\s\+.*$/, '')
+          .replace(/\\b$/, ''),
+      );
+    if (missing.length > 0) {
+      errors.push(
+        `14a artifact present but missing required frontmatter field(s): ${missing.join(', ')}`,
+      );
+    }
+  }
+
+  // (b) phase-1-close-reform-human.md contains ## Delegation acknowledgment citing ADR-0006.
+  if (!existsSync(reviewPath)) {
+    errors.push(
+      'specs/reviews/phase-1-close-reform-human.md missing (required for CC#14 14b delegated comprehension)',
+    );
+  } else {
+    const text = readFileSync(reviewPath, 'utf-8');
+    const hasHeading = /^##\s+Delegation acknowledgment\b/m.test(text);
+    if (!hasHeading) {
+      errors.push(
+        'phase-1-close-reform-human.md lacks required "## Delegation acknowledgment" section (CC#14 14b surface)',
+      );
+    } else {
+      const headingIdx = text.search(/^##\s+Delegation acknowledgment\b/m);
+      const nextHeadingOffset = text.slice(headingIdx + 1).search(/^##\s+/m);
+      const sectionEnd =
+        nextHeadingOffset === -1 ? text.length : headingIdx + 1 + nextHeadingOffset;
+      const section = text.slice(headingIdx, sectionEnd);
+      if (!/ADR-0006/.test(section)) {
+        errors.push(
+          '"## Delegation acknowledgment" section exists but does not cite ADR-0006 (required by CC#14 retarget)',
+        );
+      }
+    }
+  }
+
+  // (c) ADR-0006 file exists.
+  if (!existsSync(adrsDir)) {
+    errors.push('specs/adrs directory missing; cannot verify ADR-0006 presence');
+  } else {
+    const adrFiles = readdirSync(adrsDir);
+    const hasAdr0006 = adrFiles.some((f) => /^ADR-0006-.*\.md$/.test(f));
+    if (!hasAdr0006) {
+      errors.push(
+        'Phase 2 open claimed but no specs/adrs/ADR-0006-*.md file exists (required authority for CC#14 retarget)',
+      );
+    }
+  }
+
+  if (errors.length > 0) {
+    return { level: 'red', detail: errors.join('; ') };
+  }
+
+  return {
+    level: 'green',
+    detail:
+      'Phase 2 open claim backed by ADR-0006 retarget artifacts: 14a product-check + 14b Delegation acknowledgment + ADR-0006 present',
+  };
+}
+
 function commitIsSliceShaped(commit) {
   // Merge commits, reverts, and plain housekeeping without a Lane don't warrant slice
   // discipline checks. A "slice" is any commit that declares a Lane.
@@ -2477,10 +2619,24 @@ function main() {
     detail: phaseAuthority.detail,
   });
 
-  // Check 21: npm run verify currently green. (Runs last so the report's
-  // bottom line is the verify-gate status; numbering bumped from Check 20 →
-  // Check 21 in Slice 25d to keep printed Check-N order monotonic after
-  // Slice 25d added Check 20. Prior bump was Slice 26b 15 → 20.)
+  // Check 21: CC#14 retarget presence under ADR-0006 (Slice 31a). When any
+  // authority surface claims Phase 2 open, the 14a operator product-direction
+  // check + the 14b Delegation acknowledgment section + ADR-0006 must all be
+  // present. Advances the audit-coverage ratchet independently of the
+  // phase-graph authority ratchet (Check 20), per CLAUDE.md hard invariant #8.
+  const cc14Retarget = checkCc14RetargetPresence();
+  counters[cc14Retarget.level]++;
+  findings.push({
+    level: cc14Retarget.level,
+    check: 'CC#14 retarget presence (ADR-0006)',
+    detail: cc14Retarget.detail,
+  });
+
+  // Check 22: npm run verify currently green. (Runs last so the report's
+  // bottom line is the verify-gate status; numbering bumped from Check 21 →
+  // Check 22 in Slice 31a to keep printed Check-N order monotonic after
+  // Slice 31a inserted Check 21. Prior bumps: Slice 26b 15 → 20; Slice 25d
+  // 20 → 21.)
   const verify = verifyStatus();
   if (verify.pass) {
     counters.green++;

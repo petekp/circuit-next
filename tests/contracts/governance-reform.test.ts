@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   checkAdversarialYieldLedger,
+  checkCc14RetargetPresence,
   checkPhaseAuthoritySemantics,
   checkProductRealityGateVisibility,
   checkTierOrphanClaims,
@@ -492,6 +493,151 @@ Phase 1.5 is the alpha proof phase.
       const result = checkPhaseAuthoritySemantics(root);
       expect(result.level).toBe('yellow');
       expect(result.detail).toMatch(/decision\.md missing/);
+    });
+  });
+});
+
+describe('CC#14 retarget presence audit (Slice 31a / ADR-0006)', () => {
+  const VALID_14A = `---
+name: phase-1.5-operator-product-check
+description: Operator product-direction confirmation closing CC#14a per ADR-0006.
+type: review
+review_kind: operator-product-direction-check
+target_kind: phase-close
+review_target: phase-1.5-alpha-proof
+review_date: 2026-04-21
+operator: Pete Petrash
+scope: product-direction-only
+confirmation: "Directionally compatible."
+not_claimed:
+  - parity
+  - real agent dispatch
+authored_by: Pete Petrash
+adr_authority: ADR-0006
+---
+
+Body.
+`;
+
+  const VALID_REVIEW = `# phase-1 close reform human review
+
+## Delegation acknowledgment
+
+Added per ADR-0006. The canonical non-LLM cold-read is not satisfied; this
+file's LLM stand-in sections carry the F17 weaker-evidence flag.
+`;
+
+  const REVIEW_NO_ADR_CITATION = `# phase-1 close reform human review
+
+## Delegation acknowledgment
+
+Some acknowledgment text without the required ADR reference.
+`;
+
+  const ADR_0006 = `# ADR-0006 — CC#14 one-time waiver + retarget
+
+Body.
+`;
+
+  const PROJECT_STATE_PHASE_2_OPEN = `# PROJECT_STATE
+
+**Phase:** 2 — Implementation (open). Phase 1.5 closed at Slice 31a.
+`;
+
+  const PROJECT_STATE_PHASE_1_5 = `# PROJECT_STATE
+
+**Phase:** 1.5 — Alpha Proof (open).
+`;
+
+  it('greens when neither PROJECT_STATE nor README claims Phase 2 open', () => {
+    withTempRepo((root) => {
+      writeRel(root, 'PROJECT_STATE.md', PROJECT_STATE_PHASE_1_5);
+      const result = checkCc14RetargetPresence(root);
+      expect(result.level).toBe('green');
+      expect(result.detail).toMatch(/not required yet/);
+    });
+  });
+
+  it('greens when Phase 2 open + all three artifacts present and shaped correctly', () => {
+    withTempRepo((root) => {
+      writeRel(root, 'PROJECT_STATE.md', PROJECT_STATE_PHASE_2_OPEN);
+      writeRel(root, 'specs/reviews/phase-1.5-operator-product-check.md', VALID_14A);
+      writeRel(root, 'specs/reviews/phase-1-close-reform-human.md', VALID_REVIEW);
+      writeRel(root, 'specs/adrs/ADR-0006-cc14-operator-governance-alignment.md', ADR_0006);
+      const result = checkCc14RetargetPresence(root);
+      expect(result.level).toBe('green');
+      expect(result.detail).toMatch(
+        /14a product-check \+ 14b Delegation acknowledgment \+ ADR-0006/,
+      );
+    });
+  });
+
+  it('reds when Phase 2 open but 14a artifact is missing', () => {
+    withTempRepo((root) => {
+      writeRel(root, 'PROJECT_STATE.md', PROJECT_STATE_PHASE_2_OPEN);
+      writeRel(root, 'specs/reviews/phase-1-close-reform-human.md', VALID_REVIEW);
+      writeRel(root, 'specs/adrs/ADR-0006-cc14-operator-governance-alignment.md', ADR_0006);
+      const result = checkCc14RetargetPresence(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(/phase-1\.5-operator-product-check\.md.*missing/);
+    });
+  });
+
+  it('reds when 14a artifact present but missing required frontmatter field', () => {
+    const missingAdrAuthority = VALID_14A.replace(/^adr_authority:.*$/m, '');
+    withTempRepo((root) => {
+      writeRel(root, 'PROJECT_STATE.md', PROJECT_STATE_PHASE_2_OPEN);
+      writeRel(root, 'specs/reviews/phase-1.5-operator-product-check.md', missingAdrAuthority);
+      writeRel(root, 'specs/reviews/phase-1-close-reform-human.md', VALID_REVIEW);
+      writeRel(root, 'specs/adrs/ADR-0006-cc14-operator-governance-alignment.md', ADR_0006);
+      const result = checkCc14RetargetPresence(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(/missing required frontmatter/);
+    });
+  });
+
+  it('reds when Delegation acknowledgment section is missing from review file', () => {
+    const reviewNoSection = '# review without section\n';
+    withTempRepo((root) => {
+      writeRel(root, 'PROJECT_STATE.md', PROJECT_STATE_PHASE_2_OPEN);
+      writeRel(root, 'specs/reviews/phase-1.5-operator-product-check.md', VALID_14A);
+      writeRel(root, 'specs/reviews/phase-1-close-reform-human.md', reviewNoSection);
+      writeRel(root, 'specs/adrs/ADR-0006-cc14-operator-governance-alignment.md', ADR_0006);
+      const result = checkCc14RetargetPresence(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(/Delegation acknowledgment/);
+    });
+  });
+
+  it('reds when Delegation acknowledgment section exists but does not cite ADR-0006', () => {
+    withTempRepo((root) => {
+      writeRel(root, 'PROJECT_STATE.md', PROJECT_STATE_PHASE_2_OPEN);
+      writeRel(root, 'specs/reviews/phase-1.5-operator-product-check.md', VALID_14A);
+      writeRel(root, 'specs/reviews/phase-1-close-reform-human.md', REVIEW_NO_ADR_CITATION);
+      writeRel(root, 'specs/adrs/ADR-0006-cc14-operator-governance-alignment.md', ADR_0006);
+      const result = checkCc14RetargetPresence(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(/does not cite ADR-0006/);
+    });
+  });
+
+  it('reds when ADR-0006 file is missing', () => {
+    withTempRepo((root) => {
+      writeRel(root, 'PROJECT_STATE.md', PROJECT_STATE_PHASE_2_OPEN);
+      writeRel(root, 'specs/reviews/phase-1.5-operator-product-check.md', VALID_14A);
+      writeRel(root, 'specs/reviews/phase-1-close-reform-human.md', VALID_REVIEW);
+      const result = checkCc14RetargetPresence(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(/ADR-0006/);
+    });
+  });
+
+  it('detects Phase 2 open claimed in README alone', () => {
+    withTempRepo((root) => {
+      writeRel(root, 'README.md', '# circuit-next\n\n**Phase 2 — Implementation (open).**\n');
+      const result = checkCc14RetargetPresence(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(/phase-1\.5-operator-product-check\.md.*missing/);
     });
   });
 });

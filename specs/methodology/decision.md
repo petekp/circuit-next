@@ -368,6 +368,16 @@ Slice 25d installs D3 through an explicit ADR-0001 reopen
   remains Tier 2+ deferred. D1 applies at Phase 1.5 close — the phase
   cannot close on authored governance alone. Closes when all 16 criteria
   at ADR-0001 Addendum B §Phase 1.5 Close Criteria are satisfied.
+  **CC#14 amendment (ADR-0006, Slice 31a, 2026-04-21).** Close
+  Criterion #14 was amended by ADR-0006 as a one-time waiver + retarget:
+  the canonical non-LLM human cold-read is not satisfied; a product-
+  direction operator check at `specs/reviews/phase-1.5-operator-product-check.md`
+  (14a) plus the existing Claude + Codex LLM stand-in sections in
+  `specs/reviews/phase-1-close-reform-human.md` carrying the F17
+  weaker-evidence flag (14b) substitute weaker evidence of different
+  shape. ADR-0006 §Precedent firewall governs future retargets; ADR-0006
+  may not be cited as precedent. Authority: ADR-0001 Addendum B as
+  amended by ADR-0006.
 - **Phase 2 — Implementation.** Unchanged; operational definition
   preserved. Phase 2 entry is gated by Phase 1.5 close instead of Phase 1
   close. Runtime-substrate work (append-only writer, reducer snapshot,

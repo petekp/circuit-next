@@ -490,9 +490,18 @@ the authority.
     is sooner).
 13. A broader adversarial pass includes at least one non-LLM evidence
     artifact.
-14. `specs/reviews/phase-1-close-reform-human.md` exists with
-    `opened_scope`, `skipped_scope`, and at least one "I could not
-    understand X" field.
+14. (Amended by ADR-0006 as a one-time waiver + retarget.) Both
+    (14a) operator product-direction check in durable artifact
+    `specs/reviews/phase-1.5-operator-product-check.md`, and (14b)
+    delegated LLM stand-in technical comprehension in
+    `specs/reviews/phase-1-close-reform-human.md` with F17 weaker-
+    evidence flag carried openly. The original non-LLM cold-read
+    forcing function is **not** satisfied; ADR-0006 records this as
+    a one-time waiver and substitutes weaker evidence of different
+    shape. CC#15 preservation and reopen basis: see ADR-0006. The
+    literal field requirements (`opened_scope`, `skipped_scope`,
+    "I could not understand X") remain in force and are satisfied by
+    the existing LLM stand-in sections.
 15. No Phase 1.5 close criterion depends solely on Claude + Codex
     agreement.
 16. Remaining 28a / 28b / 32 work is tagged Phase 2+ or v0.2 and not
