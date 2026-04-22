@@ -652,34 +652,46 @@ fulfills that enabling prediction. The subprocess pattern itself is
 NOT re-argued — ADR-0009 §1 decided it at Slice 41; P2.6 cites
 §Enabling and applies the pattern. No ADR amendment is required.
 
-**Named follow-up slice 45a (Codex Slice 45 HIGH 3 deferral).** The
-Codex challenger pass on Slice 45 surfaced that the runner's
-`DispatchFn` injection seam at `src/runtime/runner.ts:75` is a bare
-function type, and the materializer call site at
-`src/runtime/runner.ts:302-324` always passes `adapterName: 'agent'`.
-If a test caller injects `dispatchCodex` (or any non-agent
+**Named follow-up slice 45a (Codex Slice 45 HIGH 3 deferral — LANDED
+2026-04-22).** The Codex challenger pass on Slice 45 surfaced that the
+runner's `DispatchFn` injection seam at `src/runtime/runner.ts:75` was
+a bare function type, and the materializer call site at
+`src/runtime/runner.ts:302-324` always passed `adapterName: 'agent'`.
+If a test caller injected `dispatchCodex` (or any non-agent
 dispatcher) through the seam, the resulting `dispatch.started` event
-records `adapter: {kind: 'builtin', name: 'agent'}` — an adapter-
-identity lie at the event-log level. This is a defense-in-depth
-concern not yet load-bearing: at Slice 45 the runner only dispatches
-to `agent` in production (the codex round-trip test calls
+recorded `adapter: {kind: 'builtin', name: 'agent'}` — an adapter-
+identity lie at the event-log level. This was a defense-in-depth
+concern not yet load-bearing at Slice 45: the runner only dispatched
+to `agent` in production (the codex round-trip test called
 `dispatchCodex` → `materializeDispatch` directly, not through
-`runDogfood`), so no on-disk event log carries the false identity
-today. HIGH 3 is deferred to Slice 45a with scope: change
+`runDogfood`), so no on-disk event log carried the false identity
+at Slice 45 HEAD. HIGH 3 was deferred to Slice 45a with scope: change
 `DispatchFn` to a structured `{ adapterName: BuiltInAdapter; dispatch:
 (input) => Promise<DispatchResult> }` descriptor; plumb
 `adapterName` from the descriptor into the materializer call site;
 add a regression test that injecting a codex-shaped dispatcher into
 `runDogfood` lands `adapter.name='codex'` on `dispatch.started`.
-**Reopen trigger.** Slice 45a MUST land before P2.7 (session hooks)
-or any subsequent slice that adds codex routing to `runDogfood`; if a
-slice between P2.6 and P2.7 wires codex into the runner main loop
-without Slice 45a in place, the defense-in-depth concern becomes
-load-bearing and a break-glass lane is required. (Slice 45 does not
-close this; operator tempo chose "land the adapter now, defer the
-dispatcher-identity refactor" per the Codex Slice 42 precedent of
-absorbing some HIGHs inline and deferring others with named follow-
-ups.)
+**Reopen trigger (no longer active).** Slice 45a was required to land
+before P2.7 (session hooks) or any subsequent slice that adds codex
+routing to `runDogfood`; Slice 45a landed ahead of P2.7, satisfying
+the reopen trigger. **Resolution.** Slice 45a landed at commit
+(to-be-assigned) as a Ratchet-Advance slice (+1 static declaration in
+`tests/runner/runner-dispatch-adapter-identity.test.ts`). Scope exactly
+as specified: `DispatchFn` flipped to the structured descriptor;
+`resolveDispatcher` lifts the default `dispatchAgent` into the
+descriptor with `adapterName: 'agent'`; the materializer call site
+reads `dispatcher.adapterName` from the descriptor. The regression
+test injects a codex-shaped descriptor and asserts
+`dispatch.started.adapter = {kind:'builtin', name:'codex'}` — fails on
+`HEAD~1`, passes at 45a. No ADR amendment (pure TypeScript-signature
+refactor; no governance-surface movement); no Codex challenger pass
+per CLAUDE.md §Hard invariants #6 (challenger required only for
+ratchet changes, contract-relaxation ADRs, migration escrows,
+discovery-decision promotion, gate-loosening requests — none apply).
+`src/runtime/runner.ts` now reads `dispatcher.dispatch(input)` at the
+call site and `adapterName: dispatcher.adapterName` at the
+materializer invocation. See PROJECT_STATE.md Slice 45a block for the
+full framing + acceptance-evidence ledger.
 
 ## Mid-term slices — named, framing authored at landing
 

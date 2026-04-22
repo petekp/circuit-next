@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import type { BuiltInAdapter } from '../schemas/adapter.js';
 import type { Event } from '../schemas/event.js';
 import type { InvocationId, RunId, WorkflowId } from '../schemas/ids.js';
 import type { LaneDeclaration } from '../schemas/lane.js';
@@ -8,8 +9,9 @@ import type { RunResult } from '../schemas/result.js';
 import type { Rigor } from '../schemas/rigor.js';
 import type { Snapshot } from '../schemas/snapshot.js';
 import type { Workflow } from '../schemas/workflow.js';
-import type { AgentDispatchInput, AgentDispatchResult } from './adapters/agent.js';
+import type { AgentDispatchInput } from './adapters/agent.js';
 import { materializeDispatch } from './adapters/dispatch-materializer.js';
+import type { DispatchResult } from './adapters/shared.js';
 import { appendEvent, eventLogPath } from './event-writer.js';
 import {
   type ManifestSnapshotInput,
@@ -72,7 +74,22 @@ export function appendAndDerive(runRoot: string, event: Event): AppendResult {
 // Slice 27d — dogfood-run-0 execution loop
 // ---------------------------------------------------------------------
 
-export type DispatchFn = (input: AgentDispatchInput) => Promise<AgentDispatchResult>;
+// Slice 45a (P2.6 HIGH 3 fold-in): structured dispatcher descriptor.
+// Prior to 45a, `DispatchFn` was a bare function type and the runner's
+// materializer call site hardcoded `adapterName: 'agent'`; injecting a
+// non-agent dispatcher (e.g. `dispatchCodex`) through
+// `DogfoodInvocation.dispatcher` would silently lie on the
+// `dispatch.started` event's adapter discriminant. The descriptor binds
+// the dispatcher function to its adapter identity at the injection seam,
+// so the materializer is parameterized from the descriptor instead of
+// from a call-site literal. Codex challenger pass on Slice 45 surfaced
+// this as HIGH 3; deferred to this named follow-up slice (plan-file
+// reference: `specs/plans/phase-2-implementation.md` §P2.6 "Named
+// follow-up slice 45a").
+export interface DispatchFn {
+  readonly adapterName: BuiltInAdapter;
+  readonly dispatch: (input: AgentDispatchInput) => Promise<DispatchResult>;
+}
 
 export interface DogfoodInvocation {
   runRoot: string;
@@ -157,8 +174,13 @@ function composeDispatchPrompt(
 
 async function resolveDispatcher(inv: DogfoodInvocation): Promise<DispatchFn> {
   if (inv.dispatcher !== undefined) return inv.dispatcher;
+  // Default dispatcher: the `agent` adapter's function, lifted into the
+  // structured descriptor shape so the call site at `runDogfood` below
+  // reads `adapterName` uniformly regardless of whether the dispatcher
+  // was injected (tests, future codex routing) or resolved as the
+  // default. See Slice 45a's `DispatchFn` comment above for rationale.
   const { dispatchAgent } = await import('./adapters/agent.js');
-  return dispatchAgent;
+  return { adapterName: 'agent', dispatch: dispatchAgent };
 }
 
 // Slice 43c: orchestrator-synthesis steps land an artifact file at
@@ -299,7 +321,7 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
       if (step.budgets?.wall_clock_ms !== undefined) {
         dispatchInput.timeoutMs = step.budgets.wall_clock_ms;
       }
-      const dispatchResult = await dispatcher(dispatchInput);
+      const dispatchResult = await dispatcher.dispatch(dispatchInput);
       const verdict = dispatchVerdictForStep(step);
       const materialized = materializeDispatch({
         runId,
@@ -314,12 +336,13 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
           result: step.writes.result,
           ...(step.writes.artifact === undefined ? {} : { artifact: step.writes.artifact }),
         },
-        // Slice 45 (P2.6): the runner's `dispatcher` is the `agent`
-        // adapter at v0 (single adapter wired into the runner main
-        // loop). When P2.7+ extends the runner to route to the `codex`
-        // adapter as well, this literal becomes adapter-resolved from
-        // the step's `ResolvedAdapter`.
-        adapterName: 'agent',
+        // Slice 45a (P2.6 HIGH 3 fold-in): adapter identity is pulled
+        // from the structured `DispatchFn` descriptor rather than from
+        // a call-site literal. Future P2.7+ slices that route a second
+        // adapter into `runDogfood` do so by injecting a dispatcher
+        // with the matching `adapterName`; no further edit to this
+        // site is required.
+        adapterName: dispatcher.adapterName,
         dispatchResult,
         verdict,
         now,

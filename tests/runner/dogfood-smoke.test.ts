@@ -12,7 +12,8 @@ import { RunProjection } from '../../src/schemas/run.js';
 import { Snapshot } from '../../src/schemas/snapshot.js';
 import { Workflow } from '../../src/schemas/workflow.js';
 
-import type { AgentDispatchInput, AgentDispatchResult } from '../../src/runtime/adapters/agent.js';
+import type { AgentDispatchInput } from '../../src/runtime/adapters/agent.js';
+import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
 import { readRunLog } from '../../src/runtime/event-log-reader.js';
 import { type DispatchFn, runDogfood } from '../../src/runtime/runner.js';
 
@@ -44,17 +45,27 @@ function deterministicNow(startMs: number): () => Date {
 // Slice 43b: deterministic stub dispatcher so the runner smoke doesn't
 // spawn a real `claude` subprocess. The capability-boundary assertion at
 // parseAgentStdout is a real-subprocess-only concern; the stub satisfies
-// the AgentDispatchResult shape without traversing that path. The
+// the DispatchResult shape without traversing that path. The
 // AGENT_SMOKE-gated explore e2e (Slice 43c) exercises the real adapter
 // end-to-end.
+//
+// Slice 45a (P2.6 HIGH 3 fold-in): lifted into the structured
+// `DispatchFn` descriptor shape. The stub binds `adapterName: 'agent'`
+// so the runner's `dispatch.started` event records the agent identity
+// for this smoke suite; Slice 45a's dedicated codex-routing regression
+// test at `runner-dispatch-adapter-identity.test.ts` exercises the
+// `adapterName: 'codex'` branch.
 function stubDispatcher(): DispatchFn {
-  return async (input: AgentDispatchInput): Promise<AgentDispatchResult> => ({
-    request_payload: input.prompt,
-    receipt_id: 'stub-receipt-dogfood-run-0',
-    result_body: '{"verdict":"ok"}',
-    duration_ms: 1,
-    cli_version: '0.0.0-stub',
-  });
+  return {
+    adapterName: 'agent',
+    dispatch: async (input: AgentDispatchInput): Promise<DispatchResult> => ({
+      request_payload: input.prompt,
+      receipt_id: 'stub-receipt-dogfood-run-0',
+      result_body: '{"verdict":"ok"}',
+      duration_ms: 1,
+      cli_version: '0.0.0-stub',
+    }),
+  };
 }
 
 function lane(): LaneDeclaration {
