@@ -86,7 +86,37 @@ invariant; tested in `tests/contracts/schema-parity.test.ts`.
     **subprocess** of the Node.js runtime (same invocation pattern as
     `agent` per ADR-0009 §1) in the operator's current session context.
     Same host session as `agent`; distinct model vendor; distinct
-    subprocess.
+    subprocess. Capability-boundary mechanism **differs** from `agent`:
+    where `agent` uses declarative tool-list flags (`--tools ""`,
+    `--strict-mcp-config`, `--disable-slash-commands`) with a parse-time
+    assertion over the subprocess's init event, `codex` uses an OS-level
+    sandbox (Seatbelt on macOS, Landlock on Linux) via `codex exec -s
+    read-only` that gates write syscalls at the process level. Codex's
+    `--json` stream does not emit an init event enumerating tool
+    surfaces, so the parse-time `tools=[]` / `mcp_servers=[]` /
+    `slash_commands=[]` assertion shape from `agent` does not transfer;
+    the `codex` boundary is therefore a single mechanism (OS-level
+    sandbox) with two supporting disciplines: (i) argv-constant
+    assertion at spawn time over `CODEX_NO_WRITE_FLAGS` (must include
+    `-s read-only`; must NOT include any token in
+    `CODEX_FORBIDDEN_ARGV_TOKENS` — Codex Slice 45 HIGH 2 fold-in
+    expanded this to cover `--dangerously-bypass-approvals-and-sandbox`,
+    `--full-auto`, `--add-dir`, `-o` / `--output-last-message`, `-c` /
+    `--config`, `-p` / `--profile`) — this is the deny-list for argv
+    surfaces that would silently widen the sandbox or reach a repo-write
+    path outside sandbox scope; and (ii) event-stream **protocol drift
+    detection** (`parseCodexStdout()` rejects top-level events outside
+    `KNOWN_CODEX_EVENT_TYPES`, `item.completed` events whose `item.type`
+    is outside the known-types allowlist, and failure events
+    `turn.failed`/`error` with named error messages) — this is drift
+    detection, NOT the capability boundary itself. The boundary is the
+    OS sandbox + argv enforcement; the item-type discipline is a
+    protocol hygiene layer that catches new Codex capability surfaces
+    (write-tool events, apply-patch events) before they land in the
+    dispatch transcript implicitly. Slice 45 (P2.6) binds the mechanism and lands
+    `src/runtime/adapters/codex.ts`; ADR-0009 §Consequences.Enabling is
+    the governance authority (§Enabling explicitly names `codex` as the
+    next adapter after `agent`).
   - `codex-isolated` — the Codex CLI dispatched as a subprocess in a
     git worktree (or a distinct-UID sandbox once Tier 2+ lands). Same
     subprocess invocation pattern as `codex`; separate filesystem view;

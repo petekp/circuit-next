@@ -12,6 +12,7 @@
  */
 
 import { execSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, readFileSync, readdirSync, readlinkSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import {
@@ -3689,6 +3690,15 @@ export function checkAdapterImportDiscipline(rootDir = REPO_ROOT, opts = {}) {
 // operator may commit new runtime/fixture slices without being
 // required to first produce a local AGENT_SMOKE artifact. Non-JSON,
 // missing fields, or non-ancestor SHA is red.
+//
+// Slice 45 (P2.6) — the Check 32 `checkCodexSmokeFingerprint` export
+// below reuses the same validation shape against the codex-smoke
+// fingerprint path; both checks share identical semantics and differ
+// only in which fingerprint file they bind to. A third adapter would
+// motivate generalizing the two into an iteration (same pattern Slice
+// 44 applied to Check 26 via `ARC_CLOSE_GATES`); two adapters fit
+// plainly-repeated checks per "three similar lines is better than a
+// premature abstraction."
 export function checkAgentSmokeFingerprint(rootDir = REPO_ROOT, opts = {}) {
   const fingerprintPath =
     opts.fingerprintPath ?? join(rootDir, 'tests/fixtures/agent-smoke/last-run.json');
@@ -3763,6 +3773,88 @@ export function checkAgentSmokeFingerprint(rootDir = REPO_ROOT, opts = {}) {
   return {
     level: 'green',
     detail: `${relative(rootDir, fingerprintPath)} commit_sha ${commitSha.slice(0, 12)} is an ancestor of HEAD; result_sha256=${resultSha256.slice(0, 12)}…`,
+  };
+}
+
+// Check 32 (Slice 45 — P2.6 CC#P2-2 second-adapter-evidence binding).
+// CODEX_SMOKE fingerprint audit. Base validation delegates to Check 30
+// `checkAgentSmokeFingerprint` (parse + commit-ancestor-of-HEAD); the
+// Codex Slice 45 HIGH 4 fold-in extension layers **adapter-surface
+// drift detection** on top: when the fingerprint records an
+// `adapter_source_sha256`, the check re-hashes the current adapter-
+// layer source files and flags drift as yellow ("fingerprint exists
+// but the adapter has changed since the last CODEX_SMOKE run —
+// re-promote via `CODEX_SMOKE=1 UPDATE_CODEX_FINGERPRINT=1`"). This
+// closes the ancestor-only staleness gap the challenger pass flagged:
+// once a fingerprint lands, later edits to codex.ts / shared.ts /
+// dispatch-materializer.ts are surfaced by the drift comparison, not
+// hidden by the ancestor-only relationship. (Earlier draft cited
+// CC#P2-4; ADR-0007 CC#P2-4 is session hooks, not second adapter.
+// Corrected per Codex Slice 45 HIGH 1 fold-in.)
+export const CODEX_ADAPTER_SOURCE_PATHS = Object.freeze([
+  'src/runtime/adapters/codex.ts',
+  'src/runtime/adapters/shared.ts',
+  'src/runtime/adapters/dispatch-materializer.ts',
+]);
+
+export function computeCodexAdapterSourceSha256(rootDir = REPO_ROOT) {
+  const h = createHash('sha256');
+  for (const rel of CODEX_ADAPTER_SOURCE_PATHS) {
+    const abs = join(rootDir, rel);
+    h.update(`${abs}\n`);
+    h.update(readFileSync(abs));
+    h.update('\n');
+  }
+  return h.digest('hex');
+}
+
+export function checkCodexSmokeFingerprint(rootDir = REPO_ROOT, opts = {}) {
+  const fingerprintPath =
+    opts.fingerprintPath ?? join(rootDir, 'tests/fixtures/codex-smoke/last-run.json');
+  const base = checkAgentSmokeFingerprint(rootDir, { ...opts, fingerprintPath });
+  if (base.level !== 'green') return base;
+
+  // Base ancestor check is green; layer adapter-surface drift detection.
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync(fingerprintPath, 'utf-8'));
+  } catch {
+    // Base check already validated JSON parse; a regression here is a
+    // race with the file changing between reads. Fall back to the base
+    // verdict in that case.
+    return base;
+  }
+
+  const recorded = parsed.adapter_source_sha256;
+  if (typeof recorded !== 'string' || !/^[0-9a-f]{64}$/.test(recorded)) {
+    return {
+      level: 'yellow',
+      detail: `${relative(rootDir, fingerprintPath)} missing or malformed 'adapter_source_sha256' (Slice 45 HIGH 4: schema_version 2 fingerprints must include this field; re-run CODEX_SMOKE=1 UPDATE_CODEX_FINGERPRINT=1 to promote a fresh fingerprint bound to the current adapter surface)`,
+    };
+  }
+
+  let current;
+  try {
+    current = computeCodexAdapterSourceSha256(rootDir);
+  } catch (err) {
+    return {
+      level: 'red',
+      detail: `failed to hash adapter source files for drift check: ${err.message}`,
+    };
+  }
+  if (recorded !== current) {
+    return {
+      level: 'yellow',
+      detail: `${relative(rootDir, fingerprintPath)} adapter_source_sha256 mismatch (recorded ${recorded.slice(0, 12)}… vs current ${current.slice(0, 12)}…) — codex adapter surface has changed since the last CODEX_SMOKE run; re-promote via CODEX_SMOKE=1 UPDATE_CODEX_FINGERPRINT=1`,
+    };
+  }
+
+  const cliVersion = parsed.cli_version;
+  const cliVersionNote =
+    typeof cliVersion === 'string' && cliVersion.length > 0 ? `; cli_version=${cliVersion}` : '';
+  return {
+    level: 'green',
+    detail: `${base.detail}; adapter_source_sha256=${current.slice(0, 12)}… matches current surface${cliVersionNote}`,
   };
 }
 
@@ -4383,12 +4475,26 @@ function main() {
     detail: agentSmokeFingerprint.detail,
   });
 
+  // Check 32: CODEX_SMOKE fingerprint commit-ancestor audit (Slice 45 —
+  // P2.6 CC#P2-2 second-adapter-evidence binding). Extends Check 30's
+  // parse + ancestor validation with adapter-surface-binding drift
+  // detection per Codex Slice 45 HIGH 4 fold-in.
+  const codexSmokeFingerprint = checkCodexSmokeFingerprint();
+  counters[codexSmokeFingerprint.level]++;
+  findings.push({
+    level: codexSmokeFingerprint.level,
+    check:
+      'CODEX_SMOKE fingerprint commit-ancestor + adapter-surface binding (Slice 45 / ADR-0007 CC#P2-2)',
+    detail: codexSmokeFingerprint.detail,
+  });
+
   // Check 31: npm run verify currently green. (Runs last so the report's
-  // bottom line is the verify-gate status; numbering bumped 30 → 31 by
-  // Slice 43c which inserted Check 30 for AGENT_SMOKE fingerprint audit.
-  // Prior bumps: Slice 42 29 → 30; Slice 41 28 → 29; Slice 38 27 → 28;
-  // Slice 35 25 → 27; P2.3 24 → 25; P2.2 23 → 24; P2.1 22 → 23;
-  // Slice 31a 21 → 22; Slice 26b 15 → 20; Slice 25d 20 → 21.)
+  // bottom line is the verify-gate status; numbering bumped 31 → 32 by
+  // Slice 45 which inserted Check 32 for CODEX_SMOKE fingerprint audit.
+  // Prior bumps: Slice 43c 30 → 31; Slice 42 29 → 30; Slice 41 28 → 29;
+  // Slice 38 27 → 28; Slice 35 25 → 27; P2.3 24 → 25; P2.2 23 → 24;
+  // P2.1 22 → 23; Slice 31a 21 → 22; Slice 26b 15 → 20; Slice 25d
+  // 20 → 21.)
   const verify = verifyStatus();
   if (verify.pass) {
     counters.green++;

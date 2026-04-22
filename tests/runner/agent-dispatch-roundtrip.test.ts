@@ -3,12 +3,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import {
-  type AgentDispatchResult,
-  dispatchAgent,
-  sha256Hex,
-} from '../../src/runtime/adapters/agent.js';
+import { type AgentDispatchResult, dispatchAgent } from '../../src/runtime/adapters/agent.js';
 import { materializeDispatch } from '../../src/runtime/adapters/dispatch-materializer.js';
+import { sha256Hex } from '../../src/runtime/adapters/shared.js';
 import { readRunLog } from '../../src/runtime/event-log-reader.js';
 import { reduce } from '../../src/runtime/reducer.js';
 import { appendAndDerive, bootstrapRun } from '../../src/runtime/runner.js';
@@ -143,7 +140,8 @@ describe('Slice 42 — agent dispatch round-trip (ADR-0007 CC#P2-2)', () => {
           startingSequence: 1,
           runRoot,
           writes,
-          agentResult,
+          adapterName: 'agent',
+          dispatchResult: agentResult,
           verdict: 'accept',
           now,
         });

@@ -299,7 +299,7 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
       if (step.budgets?.wall_clock_ms !== undefined) {
         dispatchInput.timeoutMs = step.budgets.wall_clock_ms;
       }
-      const agentResult = await dispatcher(dispatchInput);
+      const dispatchResult = await dispatcher(dispatchInput);
       const verdict = dispatchVerdictForStep(step);
       const materialized = materializeDispatch({
         runId,
@@ -314,7 +314,13 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
           result: step.writes.result,
           ...(step.writes.artifact === undefined ? {} : { artifact: step.writes.artifact }),
         },
-        agentResult,
+        // Slice 45 (P2.6): the runner's `dispatcher` is the `agent`
+        // adapter at v0 (single adapter wired into the runner main
+        // loop). When P2.7+ extends the runner to route to the `codex`
+        // adapter as well, this literal becomes adapter-resolved from
+        // the step's `ResolvedAdapter`.
+        adapterName: 'agent',
+        dispatchResult,
         verdict,
         now,
       });

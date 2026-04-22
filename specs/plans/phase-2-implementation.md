@@ -161,12 +161,13 @@ Phase-2-added ratchets (`dispatch_realness`, `workflow_parity_fixtures`,
 the close criteria; a red inherited ratchet blocks Phase 2 close
 independently of CC#P2-N status.
 
-## Near-term slices — P2.1 through P2.5
+## Near-term slices — P2.1 through P2.6
 
 These slices are framed here; each still authors its own commit-body
 framing per lane discipline at landing time. P2.1 and P2.2 are
 target-agnostic; P2.3 and P2.5 bind to `explore` per the locked
-target above; P2.4 is adapter-shaping and target-agnostic in scope.
+target above; P2.4 and P2.6 are adapter-shaping and target-agnostic
+in scope.
 
 ### P2.1 — Phase 2 close-criteria ADR (ADR-0007)
 
@@ -464,13 +465,227 @@ and independent Codex HIGHs raised during the arc-close pass:
    See `specs/contracts/explore.md` §Deferred property promotion
    re-defer (post-Slice-44) subsection.
 
+### P2.6 — `codex` adapter — second adapter (`codex exec` subprocess per ADR-0009 §1)
+
+**Lane:** Ratchet-Advance (adapter-coverage ratchet + contract-test
+ratchet + CC#P2-2 real-dispatch additional-evidence strengthening +
+governance-surface Codex challenger required per CLAUDE.md §Hard
+invariants #6).
+
+**Governance correction (Codex Slice 45 HIGH 1 fold-in, 2026-04-22).**
+An earlier draft of this block claimed P2.6 closes "CC#P2-4 (second
+adapter)." ADR-0007 CC#P2-4 is "Session hooks" (`specs/adrs/
+ADR-0007-phase-2-close-criteria.md:326-349`), not "second adapter."
+The "second adapter" surface in ADR-0007 is additional evidence under
+CC#P2-2 real-agent dispatch (ibid. lines 157-170: "At least one non-
+dry-run adapter (`agent` ... or `codex` ...) lands..."). P2.6 does
+NOT close a new Phase 2 close criterion; it strengthens CC#P2-2 by
+landing the second adapter named in that criterion's enumeration. The
+Phase 2 close count remains 2/8 (CC#P2-1 placeholder-parity + CC#P2-2
+real-dispatch, both from Slice 43c; now CC#P2-2 with stronger
+evidence via a second-adapter round-trip). CC#P2-4 (session hooks)
+remains red and is P2.7's deliverable.
+
+**Trajectory.** Arc goal: prove the ADR-0009 subprocess-per-adapter
+pattern generalizes beyond the single `agent` adapter by landing a
+second adapter (`codex`) against the same seam. Phase goal:
+strengthen CC#P2-2 (real-agent dispatch) evidence by landing the
+second adapter named in its enumeration and closing the adapter-
+coverage ratchet from "one adapter dispatched" to "two adapters
+dispatched." Earlier-slice impact:
+Slice 42 (agent adapter) authored the subprocess template; Slice 43c
+proved end-to-end round-trip through materializer / event-writer /
+reducer / result-writer; Slice 44 arc-close generalized Check 26 via
+`ARC_CLOSE_GATES` and ratified both arcs closed-with-both-prongs-
+ACCEPT. P2.6 is neither obsolete nor mis-sequenced by earlier slices —
+it specifically depends on the Slice 42 template and the Slice 43c
+materializer seam existing.
+
+**Failure mode addressed.** The ADR-0009 subprocess-per-adapter claim
+is under-tested until a second adapter actually lands. Without P2.6
+the pattern is a claim derived from one data point — the `agent`
+adapter could be fitted with agent-specific glue that the template
+couldn't accommodate for a second adapter (silent adapter-specific
+drift in the materializer, the event schema, or the fixture shape).
+
+**Capability-boundary mechanism (different from `agent`).** The
+`agent` adapter's no-repo-write capability boundary is enforced via
+`claude -p` declarative tool-list flags (`--tools ""`,
+`--strict-mcp-config`, `--disable-slash-commands`) with a parse-time
+assertion over the subprocess init event's `tools` / `mcp_servers` /
+`slash_commands` arrays. The `codex` adapter's no-repo-write boundary
+is enforced differently: `codex exec -s read-only` uses an **OS-level
+sandbox** (Codex's Seatbelt / Landlock policy) that gates write
+syscalls at the process level, regardless of what tools the Codex
+subprocess believes it has. Codex's `--json` event stream does NOT
+emit an init event enumerating tool surfaces, so the parse-time
+assertion shape from `agent` is not available. The P2.6 adapter's
+boundary proof is therefore two-layered:
+  (a) **Argv-constant assertion at spawn time** — the adapter's
+      `CODEX_NO_WRITE_FLAGS` constant MUST include `-s read-only` and
+      MUST NOT include `--dangerously-bypass-approvals-and-sandbox`;
+      both facts are provable by code inspection and locked by
+      contract tests.
+  (b) **Event-stream capability discipline** — the subprocess's
+      JSONL stream is parsed for the terminal `item.completed` event
+      whose `item.type === 'agent_message'`. The adapter rejects
+      stream-level anomalies (missing `thread.started`, missing
+      `turn.completed`, an `item.completed` whose `item.type` is
+      unknown) fail-closed.
+The mechanism difference is governance-surface — adapter.md
+ADAPTER-I1 codex bullet is amended to name the OS-level-sandbox
+mechanism explicitly, distinguishing it from the agent's declarative
+tool-list mechanism.
+
+**Deliverable.** `src/runtime/adapters/codex.ts` implementing the
+`ResolvedAdapter`-to-dispatch boundary via a **`codex exec` subprocess
+invocation** (per ADR-0009 §1 invocation-pattern decision) with no
+repo-write tool capability (file-write, directory-create, shell-write
+subset all blocked by `-s read-only` OS-level sandbox). Subprocess is
+invoked with bounded stdio (no inherited file handles beyond
+pipe/pipe/pipe), bounded wall-clock timeout, SIGTERM-to-SIGKILL grace
+window on timeout, and stdout/stderr byte caps (all modeled on Slice
+42 `agent.ts`). The materializer at `src/runtime/adapters/dispatch-
+materializer.ts` is parameterized to accept an `adapterName`
+discriminant so the same five-event transcript template serves both
+adapters; no behavioral drift in the transcript shape. CLI version
+captured via a pre-invocation `codex --version` call (Codex does not
+emit version in the JSONL stream, unlike `claude`'s init event). The
+capability-boundary argv-constant assertion binds at module load via
+frozen constants. `dispatch.started` carries `adapter: {kind:
+'builtin', name: 'codex'}`; receipt_id = Codex's `thread_id` from the
+`thread.started` event; result_body = `item.text` of the LAST
+`item.completed` with `item.type === 'agent_message'`; duration_ms =
+`performance.now()` delta.
+
+**Acceptance evidence.**
+  1. New adapter file `src/runtime/adapters/codex.ts` with named
+     exports `dispatchCodex`, `parseCodexStdout`, `CODEX_NO_WRITE_
+     FLAGS`, `CODEX_EXECUTABLE`.
+  2. New smoke test `tests/runner/codex-adapter-smoke.test.ts`
+     (static + CODEX_SMOKE=1-gated e2e) mirroring the Slice 42 agent
+     smoke test shape.
+  3. New round-trip test `tests/runner/codex-dispatch-roundtrip.test.
+     ts` (static + CODEX_SMOKE=1-gated e2e) covering the full
+     materializer / event-writer / reducer / result-writer path,
+     asserting `adapter: {kind: 'builtin', name: 'codex'}` on
+     `dispatch.started`.
+  4. `tests/fixtures/codex-smoke/last-run.json` fingerprint
+     (generated by running the round-trip under CODEX_SMOKE=1 at
+     slice-landing commit; commit_sha must be ancestor-of-HEAD).
+  5. New audit Check 32 `checkCodexSmokeFingerprint` modeled on
+     Check 30, parse + ancestor-of-HEAD validation against the
+     codex-smoke fingerprint path **plus** adapter-surface binding
+     per Codex Slice 45 HIGH 4 fold-in: fingerprint records
+     `adapter_source_sha256` over the concatenation of
+     `src/runtime/adapters/codex.ts`, `src/runtime/adapters/shared.ts`,
+     and `src/runtime/adapters/dispatch-materializer.ts`; Check 32
+     rehashes those files at audit time and flags drift as yellow (so
+     a subsequent codex adapter edit without a fresh CODEX_SMOKE run
+     is surfaced). Missing fingerprint remains yellow until Phase 2
+     close (same semantics as Check 30 AGENT_SMOKE).
+  6. `specs/contracts/adapter.md` ADAPTER-I1 codex bullet amended:
+     name the OS-level-sandbox mechanism explicitly; distinguish
+     from agent's declarative tool-list mechanism; cite ADR-0009
+     §Consequences.Enabling as the governance authority (not a re-
+     argument of subprocess-per-adapter — that's already decided).
+  7. Import-level Check 29 coverage extends to `codex.ts` (empty-
+     match expected; the file must not import any Part A or Part B
+     forbidden SDK).
+  8. Contract-test ratchet floor advances.
+  9. PROJECT_STATE / README / TIER `current_slice` bumped to 45;
+     specs/ratchet-floor.json floor advanced;
+     tests/contracts/status-epoch-ratchet-floor.test.ts live pin
+     bumped.
+ 10. Codex challenger pass via `/codex` skill, recorded at
+     `specs/reviews/arc-slice-45-codex-adapter-codex.md`. Per
+     CLAUDE.md §Hard invariants #6 + Slice 44 plan-file amendment
+     ("Silent skips remain Hard Invariant #6 violations"), this per-
+     slice Codex challenger pass IS required; arc-close subsumption
+     does NOT apply. The challenger prompt MUST inspect:
+       (i) the capability-boundary mechanism difference (OS-level
+           sandbox vs declarative tool-list);
+       (ii) the argv-constant assertion (is it actually fail-closed
+            against a future flag regression?);
+       (iii) the JSONL parser's robustness against missing /
+             reordered / unknown Codex event types;
+       (iv) the materializer parameterization (does adding
+            `adapterName` risk drift elsewhere?);
+       (v) the Check 32 fingerprint-staleness story (same ancestor-
+           only semantics Codex MED 2 flagged at Slice 44).
+ 11. Full commit body citing:
+       - Lane declaration (Ratchet-Advance).
+       - Framing triplet (failure mode / acceptance evidence /
+         alternate framing).
+       - ADR-0009 §Consequences.Enabling citation (§Enabling
+         explicitly names codex as the next adapter — this slice
+         fulfills that enabling prediction, not a re-argument).
+       - Capability-boundary mechanism disclosure (OS-level sandbox
+         via `-s read-only`; argv-constant assertion of no
+         `--dangerously-bypass-approvals-and-sandbox`).
+       - Adversarial yield ledger row.
+
+**Alternate framing (rejected).** Defer to P2.7 (session hooks) or
+P2.5.1 (explore deferred-property promotion) first, then open P2.6
+after one of those lands. Rejected because:
+  (a) The second adapter is named in ADR-0007 CC#P2-2 enumeration
+      ("`agent` ... or `codex` ..."); P2.6 strengthens an already-
+      closed criterion's evidence whereas P2.5.1 refines an already-
+      closed criterion's property coverage. Both are additive to
+      criteria that closed at 43c; neither opens/closes a new
+      criterion. Ordering between them is operator tempo. (Correction
+      per Codex Slice 45 HIGH 1: earlier draft mistakenly framed P2.6
+      as closing CC#P2-4 — CC#P2-4 is session hooks per ADR-0007.)
+  (b) P2.6 has no dependency on P2.5.1 or P2.7, and neither has a
+      dependency on P2.6 — ordering is tempo, not coupling.
+  (c) The Slice 42 template is freshly-landed and freshly-reviewed
+      (Slice 44 arc-close both prongs ACCEPT-WITH-FOLD-INS); re-using
+      it while the template's invariants are still vivid in-context is
+      cheaper than revisiting after P2.5.1 / P2.7 churn.
+
+**Invocation-pattern authority (ADR-0009 §Consequences.Enabling
+citation).** Per `specs/adrs/ADR-0009-adapter-invocation-pattern.md`
+§Consequences.Enabling: "a future `codex` built-in adapter at Slice
+~43+ can structurally mirror the `codex exec` subprocess invocation
+this repo already exercises on every Codex challenger pass." P2.6
+fulfills that enabling prediction. The subprocess pattern itself is
+NOT re-argued — ADR-0009 §1 decided it at Slice 41; P2.6 cites
+§Enabling and applies the pattern. No ADR amendment is required.
+
+**Named follow-up slice 45a (Codex Slice 45 HIGH 3 deferral).** The
+Codex challenger pass on Slice 45 surfaced that the runner's
+`DispatchFn` injection seam at `src/runtime/runner.ts:75` is a bare
+function type, and the materializer call site at
+`src/runtime/runner.ts:302-324` always passes `adapterName: 'agent'`.
+If a test caller injects `dispatchCodex` (or any non-agent
+dispatcher) through the seam, the resulting `dispatch.started` event
+records `adapter: {kind: 'builtin', name: 'agent'}` — an adapter-
+identity lie at the event-log level. This is a defense-in-depth
+concern not yet load-bearing: at Slice 45 the runner only dispatches
+to `agent` in production (the codex round-trip test calls
+`dispatchCodex` → `materializeDispatch` directly, not through
+`runDogfood`), so no on-disk event log carries the false identity
+today. HIGH 3 is deferred to Slice 45a with scope: change
+`DispatchFn` to a structured `{ adapterName: BuiltInAdapter; dispatch:
+(input) => Promise<DispatchResult> }` descriptor; plumb
+`adapterName` from the descriptor into the materializer call site;
+add a regression test that injecting a codex-shaped dispatcher into
+`runDogfood` lands `adapter.name='codex'` on `dispatch.started`.
+**Reopen trigger.** Slice 45a MUST land before P2.7 (session hooks)
+or any subsequent slice that adds codex routing to `runDogfood`; if a
+slice between P2.6 and P2.7 wires codex into the runner main loop
+without Slice 45a in place, the defense-in-depth concern becomes
+load-bearing and a break-glass lane is required. (Slice 45 does not
+close this; operator tempo chose "land the adapter now, defer the
+dispatcher-identity refactor" per the Codex Slice 42 precedent of
+absorbing some HIGHs inline and deferring others with named follow-
+ups.)
+
 ## Mid-term slices — named, framing authored at landing
 
 Order is intent, not commitment. Each slice authors framing at its
 commit time. Expect re-ordering as earlier slices expose surface.
 
-- **P2.6 — `codex` adapter** (second adapter; cross-process; extends
-  `agent` surface).
 - **P2.7 — Session hooks** — SessionStart continuity resume +
   SessionEnd handoff, wired through `.claude/hooks/` to circuit-engine.
 - **P2.8 — Router (`/circuit:run` classifier)** — first-class

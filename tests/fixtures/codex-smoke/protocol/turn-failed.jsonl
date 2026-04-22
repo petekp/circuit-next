@@ -1,0 +1,4 @@
+{"type":"thread.started","thread_id":"019db35e-fail-7000-0000-000000000000"}
+{"type":"turn.started"}
+{"type":"error","message":"stream: no response from model"}
+{"type":"turn.failed","error":"network unreachable"}

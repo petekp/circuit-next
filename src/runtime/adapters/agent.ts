@@ -1,11 +1,14 @@
 import { type ChildProcess, spawn } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
+import { type DispatchResult, sha256Hex } from './shared.js';
+
+export { sha256Hex };
 
 // Slice 42 — P2.4 real agent adapter. Invokes the Claude Code CLI as a
 // subprocess of the Node.js runtime per ADR-0009 §1 (subprocess-per-adapter
-// for v0). No external SDK dependency; `node:child_process` +
-// `node:crypto` + `node:perf_hooks` stdlib only.
+// for v0). No external SDK dependency; Node stdlib only
+// (`node:child_process` + `node:perf_hooks` here; `node:crypto` via
+// `./shared.ts` for the shared `sha256Hex` helper).
 //
 // Capability boundary (Slice 40 HIGH 3 + ADR-0009 §2.v + Slice 41 Codex
 // HIGH 4 + Slice 42 Codex HIGH 2 runtime-binding fold-in). The subprocess
@@ -101,35 +104,18 @@ export interface AgentDispatchInput {
   timeoutMs?: number;
 }
 
-export interface AgentDispatchResult {
-  // The prompt bytes as submitted to the subprocess. Hashed into
-  // `dispatch.request.request_payload_hash` per Slice 37 event schema.
-  request_payload: string;
-  // The Claude-side session_id returned in the subprocess init event.
-  // Carried verbatim into `dispatch.receipt.receipt_id`.
-  receipt_id: string;
-  // The `result` text from the subprocess's terminal result event.
-  // Hashed into `dispatch.result.result_artifact_hash` per Slice 37
-  // event schema; also the raw payload the runtime materializes into
-  // the validated artifact per ADR-0008 §Decision.3a.
-  result_body: string;
-  // Monotonic wall-clock duration of the subprocess invocation, measured
-  // via performance.now() (Codex Slice 42 LOW 2 fold-in). Feeds
-  // `dispatch.completed.duration_ms`.
-  duration_ms: number;
-  // CLI version string as reported in the subprocess init event. Recorded
-  // so transcript evidence is version-pinned per Codex Slice 42 MED 2
-  // fold-in — the empirical capability-boundary proof is specific to a
-  // CLI version, and capturing the version alongside the transcript lets
-  // regression reviewers detect version-drift cases.
-  cli_version: string;
-}
+// The `AgentDispatchResult` name is retained as the adapter-specific
+// alias for call sites that want a name bound to the `agent` adapter's
+// producer contract. Slice 45 (P2.6) extracted the shape to
+// `./shared.ts` `DispatchResult` so the `codex` adapter produces the
+// same shape and the materializer consumes it uniformly.
+export type AgentDispatchResult = DispatchResult;
 
-export async function dispatchAgent(input: AgentDispatchInput): Promise<AgentDispatchResult> {
+export async function dispatchAgent(input: AgentDispatchInput): Promise<DispatchResult> {
   const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const args = [...AGENT_NO_WRITE_FLAGS, input.prompt];
   const start = performance.now();
-  return await new Promise<AgentDispatchResult>((resolve, reject) => {
+  return await new Promise<DispatchResult>((resolve, reject) => {
     let child: ChildProcess;
     try {
       // stdin is `ignore` (connected to /dev/null) not `pipe`: the claude
@@ -278,7 +264,7 @@ export function parseAgentStdout(
   stdout: string,
   prompt: string,
   duration_ms: number,
-): AgentDispatchResult {
+): DispatchResult {
   const lines = stdout.split('\n').filter((line) => line.length > 0);
   if (lines.length === 0) {
     throw new Error('stream-json stdout is empty');
@@ -363,8 +349,4 @@ export function parseAgentStdout(
     duration_ms,
     cli_version,
   };
-}
-
-export function sha256Hex(payload: string): string {
-  return createHash('sha256').update(payload, 'utf8').digest('hex');
 }

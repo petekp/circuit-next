@@ -1,30 +1,34 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import type { BuiltInAdapter } from '../../schemas/adapter.js';
 import type { Event } from '../../schemas/event.js';
 import type { RunId, StepId } from '../../schemas/ids.js';
 import type { DispatchRole } from '../../schemas/step.js';
-import { sha256Hex } from './agent.js';
-import type { AgentDispatchResult } from './agent.js';
+import { type DispatchResult, sha256Hex } from './shared.js';
 
-// Slice 42 (P2.4) — dispatch materialization glue between the agent
-// adapter's raw subprocess output and the five-event dispatch transcript
-// + ADR-0008 §Decision.3a artifact materialization.
+// Slice 42 (P2.4) — dispatch materialization glue between an adapter's
+// raw subprocess output and the five-event dispatch transcript + ADR-
+// 0008 §Decision.3a artifact materialization. Slice 45 (P2.6) generalized
+// the `adapter.name` discriminant on the `dispatch.started` event so a
+// second adapter (`codex`) reuses the same materialization seam without
+// drifting the transcript shape.
 //
 // Per ADR-0007 CC#P2-2 §Amendment (Slice 37), the durable dispatch
 // transcript is the five-event sequence
 //   dispatch.started → dispatch.request → dispatch.receipt →
 //   dispatch.result → dispatch.completed
 // on a single `(step_id, attempt)` pair. This module builds that
-// sequence deterministically from a single `AgentDispatchResult`,
-// writes the four on-disk transcript slots (request payload, receipt,
-// result bytes, materialized artifact), and returns the event array
-// for the caller to append through `event-writer.ts`.
+// sequence deterministically from a single `DispatchResult` (shared
+// shape produced by both the `agent` and `codex` adapters per
+// `./shared.ts`), writes the four on-disk transcript slots (request
+// payload, receipt, result bytes, materialized artifact), and returns
+// the event array for the caller to append through `event-writer.ts`.
 //
 // Why live in `src/runtime/adapters/` and not `src/runtime/` proper.
 // The materializer is the adapter's downstream binding — it knows how
-// to translate `AgentDispatchResult` into the event schema. Check 29's
+// to translate a dispatch result into the event schema. Check 29's
 // scope is `src/runtime/adapters/**`, and this module's only external
-// imports are stdlib + sibling `agent.ts` + sibling schemas. Keeping
+// imports are stdlib + sibling `shared.ts` + sibling schemas. Keeping
 // the glue under the scanned tree ensures a future regression cannot
 // smuggle a forbidden SDK through the materialization path either.
 
@@ -41,7 +45,13 @@ export interface DispatchMaterializeInput {
     readonly result: string;
     readonly artifact?: { readonly path: string; readonly schema: string };
   };
-  readonly agentResult: AgentDispatchResult;
+  // Slice 45 (P2.6): the adapter-name discriminant is required so the
+  // `dispatch.started` event's `adapter: {kind: 'builtin', name}` field
+  // is adapter-accurate rather than agent-hardcoded. Typed against the
+  // `BuiltInAdapter` enum at `src/schemas/adapter.ts` so the discriminant
+  // matches the ADAPTER-I1 closed-enum invariant.
+  readonly adapterName: BuiltInAdapter;
+  readonly dispatchResult: DispatchResult;
   readonly verdict: string;
   readonly now: () => Date;
 }
@@ -80,7 +90,8 @@ export function materializeDispatch(input: DispatchMaterializeInput): DispatchMa
     startingSequence,
     runRoot,
     writes,
-    agentResult,
+    adapterName,
+    dispatchResult,
     verdict,
     now,
   } = input;
@@ -93,16 +104,16 @@ export function materializeDispatch(input: DispatchMaterializeInput): DispatchMa
   for (const p of [requestAbs, receiptAbs, resultAbs]) {
     mkdirSync(dirname(p), { recursive: true });
   }
-  writeFileSync(requestAbs, agentResult.request_payload);
-  writeFileSync(receiptAbs, agentResult.receipt_id);
-  writeFileSync(resultAbs, agentResult.result_body);
+  writeFileSync(requestAbs, dispatchResult.request_payload);
+  writeFileSync(receiptAbs, dispatchResult.receipt_id);
+  writeFileSync(resultAbs, dispatchResult.result_body);
   if (artifactAbs !== undefined) {
     mkdirSync(dirname(artifactAbs), { recursive: true });
-    writeFileSync(artifactAbs, agentResult.result_body);
+    writeFileSync(artifactAbs, dispatchResult.result_body);
   }
 
-  const requestPayloadHash = sha256Hex(agentResult.request_payload);
-  const resultArtifactHash = sha256Hex(agentResult.result_body);
+  const requestPayloadHash = sha256Hex(dispatchResult.request_payload);
+  const resultArtifactHash = sha256Hex(dispatchResult.result_body);
 
   let sequence = startingSequence;
   const ts = () => now().toISOString();
@@ -116,7 +127,7 @@ export function materializeDispatch(input: DispatchMaterializeInput): DispatchMa
     kind: 'dispatch.started',
     step_id: stepId,
     attempt,
-    adapter: { kind: 'builtin', name: 'agent' },
+    adapter: { kind: 'builtin', name: adapterName },
     role,
     resolved_selection: { skills: [], invocation_options: {} },
     resolved_from: { source: 'default' },
@@ -141,7 +152,7 @@ export function materializeDispatch(input: DispatchMaterializeInput): DispatchMa
     kind: 'dispatch.receipt',
     step_id: stepId,
     attempt,
-    receipt_id: agentResult.receipt_id,
+    receipt_id: dispatchResult.receipt_id,
   });
 
   events.push({
@@ -164,7 +175,7 @@ export function materializeDispatch(input: DispatchMaterializeInput): DispatchMa
     step_id: stepId,
     attempt,
     verdict,
-    duration_ms: Math.max(0, Math.round(agentResult.duration_ms)),
+    duration_ms: Math.max(0, Math.round(dispatchResult.duration_ms)),
     result_path: writes.result,
     receipt_path: writes.receipt,
   });

@@ -315,6 +315,25 @@ export function checkAgentSmokeFingerprint(
   opts?: CheckAgentSmokeFingerprintOptions,
 ): AuditCheckResult;
 
+// Slice 45 (P2.6 CC#P2-2 second-adapter evidence) — CODEX_SMOKE
+// fingerprint audit. Base validation delegates to
+// `checkAgentSmokeFingerprint`; layers adapter-surface drift detection
+// per Codex Slice 45 HIGH 4 fold-in. Defaults to
+// `tests/fixtures/codex-smoke/last-run.json`.
+export function checkCodexSmokeFingerprint(
+  rootDir?: string,
+  opts?: CheckAgentSmokeFingerprintOptions,
+): AuditCheckResult;
+
+export const CODEX_ADAPTER_SOURCE_PATHS: readonly string[];
+
+/**
+ * Compute sha256 over the concatenation of the codex adapter-layer
+ * source files. Used by Check 32 to detect adapter surface drift
+ * against a recorded fingerprint's adapter_source_sha256 field.
+ */
+export function computeCodexAdapterSourceSha256(rootDir?: string): string;
+
 // Slice 30 — DOG+2 slice:doctor reuses the lane and framing literals enforced
 // by the audit so the operator briefing script cannot drift from the gate.
 export const LANES: readonly [

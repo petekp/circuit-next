@@ -465,13 +465,17 @@ describe('checkPinnedRatchetFloor (Slice 26b full-file check)', () => {
     expect(typeof data?.floors?.contract_test_count).toBe('number');
     // last_advanced_in_slice tracks the most recent floor advancement.
     // See specs/ratchet-floor.json `notes` for the full per-slice ledger.
-    // Most recent: Slice 44 (arc-close ceremony over Slices 41/42/43a/43b/43c)
-    // advanced the floor 924 → 931 (+7 static declarations in the generalized
-    // Check 26 arc-ledger gate tests). This assertion pins the CURRENT slice
-    // id so any future floor advancement that forgets to update the marker
-    // fails the test immediately — the slice id changes only when the floor
-    // changes.
-    expect(data?.last_advanced_in_slice).toBe('44');
+    // Most recent: Slice 45 (P2.6 real codex adapter — ADR-0009 §1
+    // subprocess-per-adapter pattern applied to `codex exec`; Check 32
+    // `checkCodexSmokeFingerprint` binding ADR-0007 CC#P2-4) advanced
+    // the floor 931 → 952 (+21 static declarations across
+    // tests/contracts/slice-45-codex-adapter.test.ts +
+    // tests/runner/codex-adapter-smoke.test.ts +
+    // tests/runner/codex-dispatch-roundtrip.test.ts). This assertion
+    // pins the CURRENT slice id so any future floor advancement that
+    // forgets to update the marker fails the test immediately — the
+    // slice id changes only when the floor changes.
+    expect(data?.last_advanced_in_slice).toBe('45');
   });
 
   it('readPinnedRatchetFloor returns null when the file is missing', () => {
