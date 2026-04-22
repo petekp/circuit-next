@@ -397,6 +397,73 @@ result-verdict tests only. Rejected because byte-shape goldens catch
 drift that verdict-only tests miss (H5 / dogfood parity lesson from
 Phase 1.5).
 
+**Arc-close Codex-prong subsumption of skipped per-sub-slice Codex
+passes (Slice 44 arc-close fold-in, convergent Claude+Codex HIGH 1).**
+Slices 43a / 43b / 43c landed on 2026-04-21 without per-slice Codex
+challenger passes, despite each touching ratchet surfaces (43a: +15
+static tests + new `validateWorkflowKindPolicy` helper module; 43b:
++0 static tests but qualitative `dispatch_realness` ratchet advance
++ runtime-breaking `runDogfood` async signature change; 43c: +24
+static tests + new Check 30 + new golden/fingerprint fixtures).
+CLAUDE.md §Hard invariants #6 requires a cross-model challenger for
+any ratchet change; the three skips are a governance drift at arc
+scale.
+
+The arc-close Codex prong at
+`specs/reviews/arc-slices-41-to-43-composition-review-codex.md`
+explicitly scopes each sub-slice's ratchet surface (43a dual-helper
+drift, 43b async-signature breaking-contract surface, 43c Check 30
+staleness / schema_version / fingerprint semantics + golden self-
+referentiality). Operator decision recorded at Slice 44 ceremony:
+the arc-close Codex prong subsumes the three skipped per-sub-slice
+passes on the basis that (a) the three sub-slices landed in a
+single day under compressed P2.5 tempo, (b) the arc-close prong's
+scoping is no narrower than three per-slice prongs would have been
+combined, and (c) the prior arc (Slice 39 skipped Codex, flagged
+as the prior composition review's MED 2) set precedent that
+skipped passes do not automatically reject when the arc-close
+subsumes them — this arc formalizes that precedent.
+
+**Policy going forward.** The arc-close-subsumption pattern is
+bounded: arc-close prongs MAY subsume skipped per-sub-slice Codex
+passes only when (i) the arc-close prong explicitly scopes each
+skipped sub-slice's ratchet surface, (ii) the skip was tempo-driven
+rather than an attempt to avoid challenger friction, and (iii) the
+ceremony commit records the subsumption in plan-file authority (as
+this paragraph does). A future slice tempted to skip Codex MUST
+either (a) land an explicit "challenger not required" subsection in
+the plan file with rationale (the prior arc's Slice 39 precedent),
+or (b) commit to an arc-close subsumption at cadence time. Silent
+skips remain Hard Invariant #6 violations.
+
+### P2.5 post-arc-close ratchet touch-ups (Slice 44 ceremony fold-ins)
+
+The arc-close ceremony at Slice 44 lands the following fold-ins
+alongside the two prong review files, to close convergent HIGHs
+and independent Codex HIGHs raised during the arc-close pass:
+
+1. **Check 26 generalization** (Claude HIGH 3 + Codex HIGH 3).
+   `scripts/audit.mjs` refactored from a single-arc hardcode to
+   iteration over `ARC_CLOSE_GATES`. New constant
+   `PHASE_2_P2_4_P2_5_ARC_LAST_SLICE = 44` binds the 41-to-43 arc.
+   Adding a future arc = adding an `ARC_CLOSE_GATES` entry rather
+   than refactoring the check body. Five new tests under
+   `tests/contracts/artifact-backing-path-integrity.test.ts`
+   exercise the generalized gate's per-arc isolation + two-prong
+   binding.
+2. **`--dry-run` fail-closed** (Codex HIGH 4). `src/cli/dogfood.ts`
+   now rejects `--dry-run` with a pointer to this review, instead
+   of silently invoking the real adapter while reporting
+   `dry_run: true` in the JSON envelope. Re-enabling the flag
+   requires landing a deterministic dry dispatcher + event-log
+   marker; tracked post-Slice-44.
+3. **CC#P2-1 placeholder-parity disclosure** (Claude HIGH 2 +
+   Codex HIGH 2). See ADR-0007 §Decision.1 CC#P2-1 amendment +
+   `specs/contracts/explore.md` §Placeholder epoch subsection.
+4. **Explore-contract deferred-property re-defer** (Codex HIGH 5).
+   See `specs/contracts/explore.md` §Deferred property promotion
+   re-defer (post-Slice-44) subsection.
+
 ## Mid-term slices — named, framing authored at landing
 
 Order is intent, not commitment. Each slice authors framing at its

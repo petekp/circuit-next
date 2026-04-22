@@ -3120,33 +3120,42 @@ export function checkArtifactBackingPathIntegrity(rootDir = REPO_ROOT, opts = {}
 // Slice 35 — arc-close composition-review presence check.
 // Fold-in from Slice 35 Codex HIGH 4: the CLAUDE.md §Cross-slice composition
 // review cadence rule is not a machine-checkable ratchet unless something
-// binds the rule to an audit gate. This check is the first instance:
-// specifically for the pre-P2.4 fold-in arc at
-// specs/plans/phase-2-foundation-foldins.md (Slices 35–40), once the arc's
-// last numbered slice has landed (current_slice ≥ 40, meaning Slice 40 or
-// later is the most recent tracked slice), an arc-close composition review
-// must exist under specs/reviews/ with a close-verdict of ACCEPT or
-// ACCEPT-WITH-FOLD-INS. Until then, the check is informational (green with
-// a note).
+// binds the rule to an audit gate.
 //
-// Narrow on purpose: this is the audit binding for ONE named arc, not a
-// general "composition review for every arc" gate. A broader gate would
-// require a tracked-arcs ledger that does not yet exist. When the next arc
-// opens, either extend this check or land a generalized arc ledger.
+// Slice 44 arc-close ceremony (convergent Claude+Codex HIGH 3 fold-in):
+// generalized from the single-arc hardcode to an iteration over
+// ARC_CLOSE_GATES. Each gate names one closed arc + its ceremony slice +
+// its review-file regex + its plan file. Adding a new arc = adding an
+// entry here; no new check function needed. The old arc constant
+// (PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE) is preserved as a
+// backward-compat export consumed by tests/contracts/artifact-backing-
+// path-integrity.test.ts; the new 41-to-43 arc constant
+// (PHASE_2_P2_4_P2_5_ARC_LAST_SLICE) is exported symmetrically. A fully
+// automatic arc-ledger gate (derived from arc metadata in specs/arcs.json
+// or equivalent) remains a candidate further step if maintaining this
+// table becomes costly; at two entries it is still easier than authoring
+// a ledger schema.
 export const PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE = 40;
+export const PHASE_2_P2_4_P2_5_ARC_LAST_SLICE = 44;
+
+export const ARC_CLOSE_GATES = Object.freeze([
+  Object.freeze({
+    arc_id: 'phase-2-foundation-foldins-slices-35-to-40',
+    description: 'pre-P2.4 fold-in arc',
+    ceremony_slice: PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE,
+    plan_path: 'specs/plans/phase-2-foundation-foldins.md',
+    review_file_regex: /(arc.*35.*40|phase-2-foundation-foldins-arc-close|foldins-arc-close)/i,
+  }),
+  Object.freeze({
+    arc_id: 'phase-2-p2.4-p2.5-arc-slices-41-to-43',
+    description: 'P2.4 + P2.5 adapter + e2e arc',
+    ceremony_slice: PHASE_2_P2_4_P2_5_ARC_LAST_SLICE,
+    plan_path: 'specs/plans/phase-2-implementation.md',
+    review_file_regex: /arc.*41.*43/i,
+  }),
+]);
 
 export function checkArcCloseCompositionReviewPresence(rootDir = REPO_ROOT) {
-  const planPath = join(rootDir, 'specs/plans/phase-2-foundation-foldins.md');
-  if (!existsSync(planPath)) {
-    return {
-      level: 'green',
-      detail:
-        'specs/plans/phase-2-foundation-foldins.md not present; arc-close review check not applicable',
-    };
-  }
-
-  // Read current slice marker from PROJECT_STATE.md (format: `<!-- current_slice: N -->`
-  // on line 1, parsed by extractCurrentSliceMarker exported from Slice 26b).
   const statePath = join(rootDir, 'PROJECT_STATE.md');
   if (!existsSync(statePath)) {
     return {
@@ -3154,6 +3163,23 @@ export function checkArcCloseCompositionReviewPresence(rootDir = REPO_ROOT) {
       detail: 'PROJECT_STATE.md not present; arc-close review check not applicable',
     };
   }
+
+  // A gate is only applicable in repos where its plan file exists (the
+  // bootstrap / test-fixture escape — the pre-Slice-44 single-arc check
+  // returned not-applicable when specs/plans/phase-2-foundation-foldins.md
+  // was absent, which mattered for temp-repo tests). Filter first so
+  // repos that only have one of the plan files still work correctly.
+  const applicableGates = ARC_CLOSE_GATES.filter((gate) =>
+    existsSync(join(rootDir, gate.plan_path)),
+  );
+  if (applicableGates.length === 0) {
+    return {
+      level: 'green',
+      detail:
+        'no arc-ledger plan files present (none of ARC_CLOSE_GATES applicable); arc-close review check not applicable',
+    };
+  }
+
   const stateText = readFileSync(statePath, 'utf-8');
   const sliceMarker = extractCurrentSliceMarker(stateText);
   if (sliceMarker === null) {
@@ -3162,7 +3188,6 @@ export function checkArcCloseCompositionReviewPresence(rootDir = REPO_ROOT) {
       detail: 'PROJECT_STATE.md has no current_slice marker; cannot bind arc-close review gate',
     };
   }
-
   const sliceNum = Number.parseInt(sliceMarker.replace(/[^0-9]/g, ''), 10);
   if (!Number.isFinite(sliceNum)) {
     return {
@@ -3171,41 +3196,65 @@ export function checkArcCloseCompositionReviewPresence(rootDir = REPO_ROOT) {
     };
   }
 
-  if (sliceNum < PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE) {
+  const reviewsDir = join(rootDir, 'specs/reviews');
+  const redDetails = [];
+  const greenDetails = [];
+  const progressDetails = [];
+
+  for (const gate of applicableGates) {
+    const gateResult = evaluateArcCloseGate(gate, sliceNum, reviewsDir);
+    if (gateResult.level === 'red') {
+      redDetails.push(`[${gate.arc_id}] ${gateResult.detail}`);
+    } else if (gateResult.status === 'in_progress') {
+      progressDetails.push(`[${gate.arc_id}] ${gateResult.detail}`);
+    } else {
+      greenDetails.push(`[${gate.arc_id}] ${gateResult.detail}`);
+    }
+  }
+
+  if (redDetails.length > 0) {
+    return { level: 'red', detail: redDetails.join(' | ') };
+  }
+  const allParts = [...greenDetails, ...progressDetails];
+  return { level: 'green', detail: allParts.join(' | ') };
+}
+
+// Per-gate evaluator extracted from the original check body. Returns a
+// standard {level, status, detail} triple; `status` distinguishes
+// "in_progress" (green but arc not yet closed) from "satisfied" (green,
+// both prongs present with ACCEPT). Detail substrings are preserved so
+// the pre-Slice-44 single-arc tests still match: "still in progress",
+// "no arc-close composition review file matches", "Codex prong ... lack
+// ACCEPT", "missing Codex prong", "missing Claude prong", "two-prong
+// gate satisfied".
+function evaluateArcCloseGate(gate, sliceNum, reviewsDir) {
+  if (sliceNum < gate.ceremony_slice) {
     return {
       level: 'green',
-      detail: `pre-P2.4 fold-in arc still in progress (current_slice=${sliceNum} < arc-close slice ${PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE}); arc-close composition review not yet required`,
+      status: 'in_progress',
+      detail: `${gate.description} still in progress (current_slice=${sliceNum} < arc-close slice ${gate.ceremony_slice}); arc-close composition review not yet required`,
     };
   }
 
-  // Arc-close slice has landed (or been exceeded). Arc-close review must
-  // exist.
-  const reviewsDir = join(rootDir, 'specs/reviews');
   if (!existsSync(reviewsDir)) {
     return {
       level: 'red',
-      detail: `pre-P2.4 fold-in arc closed (current_slice=${sliceNum} ≥ ${PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE}) but specs/reviews/ directory not present`,
+      status: 'red',
+      detail: `${gate.description} closed (current_slice=${sliceNum} >= ${gate.ceremony_slice}) but specs/reviews/ directory not present`,
     };
   }
 
   const files = readdirSync(reviewsDir);
-  const candidates = files.filter((f) =>
-    /(arc.*35.*40|phase-2-foundation-foldins-arc-close|foldins-arc-close)/i.test(f),
-  );
+  const candidates = files.filter((f) => gate.review_file_regex.test(f));
 
   if (candidates.length === 0) {
     return {
       level: 'red',
-      detail: `pre-P2.4 fold-in arc closed (current_slice=${sliceNum} ≥ ${PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE}) but no arc-close composition review file matches pattern (arc-slices-35..40* / phase-2-foundation-foldins-arc-close* / foldins-arc-close*) under specs/reviews/`,
+      status: 'red',
+      detail: `${gate.description} closed (current_slice=${sliceNum} >= ${gate.ceremony_slice}) but no arc-close composition review file matches pattern ${gate.review_file_regex} under specs/reviews/`,
     };
   }
 
-  // Slice 40 arc-close fold-in (convergent HIGH 2): two-prong binding.
-  // CLAUDE.md §Cross-slice composition review cadence promises "same
-  // two-prong protocol: fresh-read Claude composition-adversary pass +
-  // Codex cross-model challenger". Pre-Slice-40 Check 26 accepted either
-  // prong alone, weaker than the cadence rule. Tightened to require
-  // BOTH prongs present, distinguished by filename substring.
   const claudeProngs = candidates.filter((f) => /claude/i.test(f));
   const codexProngs = candidates.filter((f) => /codex/i.test(f));
 
@@ -3215,11 +3264,11 @@ export function checkArcCloseCompositionReviewPresence(rootDir = REPO_ROOT) {
     if (codexProngs.length === 0) missing.push('Codex prong (name-match *codex*)');
     return {
       level: 'red',
-      detail: `pre-P2.4 fold-in arc closed (current_slice=${sliceNum} ≥ ${PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE}) but two-prong arc-close composition review incomplete — missing: ${missing.join(', ')}. CLAUDE.md §Cross-slice composition review cadence requires both prongs: fresh-read Claude composition-adversary pass + Codex cross-model challenger.`,
+      status: 'red',
+      detail: `${gate.description} closed (current_slice=${sliceNum} >= ${gate.ceremony_slice}) but two-prong arc-close composition review incomplete — missing: ${missing.join(', ')}. CLAUDE.md §Cross-slice composition review cadence requires both prongs: fresh-read Claude composition-adversary pass + Codex cross-model challenger.`,
     };
   }
 
-  // Verify BOTH prongs carry an ACCEPT verdict in frontmatter or body.
   function hasAcceptClosingVerdict(fileName) {
     const body = readFileSync(join(reviewsDir, fileName), 'utf-8');
     if (/closing_verdict:\s*(ACCEPT|ACCEPT-WITH-FOLD-INS)/i.test(body)) return true;
@@ -3238,13 +3287,15 @@ export function checkArcCloseCompositionReviewPresence(rootDir = REPO_ROOT) {
       failing.push(`Codex prong(s) [${codexProngs.join(', ')}] lack ACCEPT closing verdict`);
     return {
       level: 'red',
-      detail: `pre-P2.4 fold-in arc closed but arc-close composition review two-prong gate failing: ${failing.join('; ')}`,
+      status: 'red',
+      detail: `${gate.description} closed but arc-close composition review two-prong gate failing: ${failing.join('; ')}`,
     };
   }
 
   return {
     level: 'green',
-    detail: `pre-P2.4 fold-in arc closed (current_slice=${sliceNum}); arc-close composition review two-prong gate satisfied — Claude: ${claudeAccepted.join(', ')}; Codex: ${codexAccepted.join(', ')}`,
+    status: 'satisfied',
+    detail: `${gate.description} closed (current_slice=${sliceNum}); arc-close composition review two-prong gate satisfied — Claude: ${claudeAccepted.join(', ')}; Codex: ${codexAccepted.join(', ')}`,
   };
 }
 

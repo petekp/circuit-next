@@ -418,6 +418,75 @@ depending on P2.2→P2.4 drift). References to "property harness Slice
 `workflow.prop.*` property ids and are not the right milestone for
 `explore.prop.*` — they were amended at P2.3 landing.
 
+**CC#P2-1 placeholder-parity epoch (Slice 44 arc-close fold-in,
+convergent Claude HIGH 2 + Codex HIGH 2).** At Slice 43c landing,
+the `explore.result` artifact is written as a deterministic
+placeholder body by `src/runtime/runner.ts::writeSynthesisArtifact`
+(body is a function of `step.gate.required` section names; no
+dispatch output is consumed into it). The CC#P2-1 golden at
+`tests/fixtures/golden/explore/result.sha256` therefore pins the
+placeholder shape, not a reference-Circuit artifact composition.
+The placeholder epoch is authoritative per ADR-0007 §Decision.1
+CC#P2-1 Slice 44 amendment; CC#P2-1 is satisfied at placeholder-
+parity until P2.10 replaces the placeholder with real orchestrator
+output and a fresh composition review re-verifies
+orchestrator-parity. A future slice that changes the placeholder
+body without regenerating the golden MUST fail the self-consistency
+test at `tests/runner/explore-e2e-parity.test.ts` (that test's
+title explicitly names the placeholder-parity epoch; see also the
+§Placeholder epoch test rename landed at ceremony commit).
+
+**Deferred property promotion re-defer (post-Slice-44, Codex HIGH 5
+fold-in).** P2.5 (Slices 43a/43b/43c) landed the `explore` end-to-end
+fixture run, but did NOT promote the four deferred properties
+(`artifact_emission_ordered`, `review_after_synthesis`,
+`no_skip_to_close`, `reachable_close_only_via_review`) from
+`phase2-property` to `test-enforced`. The arc-close review
+(`specs/reviews/arc-slices-41-to-43-composition-review-codex.md
+§HIGH 5`) flagged that this fires §Reopen conditions item 5 per the
+contract's own terms.
+
+**Disposition at Slice 44 ceremony (operator decision).** The four
+properties are **re-deferred** to a named post-P2.5 slice
+(**P2.5.1 — explore deferred-property promotion**, not yet
+scheduled), with the following rationale: (a) the Slice 43c run
+exercises the happy path only; negative-path enforcement tests need
+property-id-bearing fixtures that mutate the explore fixture to
+skip synthesis, review before synthesis, or close without review —
+that is a test-authorship slice, not an arc-close ceremony fold-in;
+(b) promoting the properties requires test titles that contain the
+property-id tokens (per prior Codex MED 6 fold-in on
+`canonical_phase_set_is_correct`) and corresponding `binding_refs`
+updates in `specs/invariants.json` — each property carries ~3-5
+property-id-token-bearing test titles, so four properties land
+12-20 new tests with explicit invariant-binding surface; (c) the
+current Slice 44 ceremony commit is already large (two prong
+review files + Check 26 generalization + three HIGH fold-ins +
+plan amendments). Landing the property promotion inline would
+exceed the ≤30-min-wall-clock slice discipline.
+
+**P2.5.1 scope (named, not scheduled).** One slice that promotes
+all four properties: authors negative-path fixtures under
+`tests/contracts/explore-properties/*.test.ts` (or similar), each
+with property-id-token test titles matching
+`specs/invariants.json` `binding_refs`; updates the four
+invariant ledger entries from `phase2-property` to `test-enforced`
+with `binding_refs` arrays; amends this §Deferred properties
+subsection to record the promotion. Estimated: +15-20 static test
+declarations; ratchet-advance lane. Expected Codex challenger pass
+because it's a contract-enforcement-state change.
+
+**Reopen implication.** §Reopen conditions item 5 (above) is now
+satisfied by this re-defer subsection: the contract records the
+P2.5-landing-without-promotion outcome explicitly. Item 5's
+reopen-to-re-evaluate mandate is discharged by this operator
+decision. A future slice that lands P2.5.1 and promotes the
+properties WILL amend this subsection (converting it from "re-
+deferred" to "promoted at Slice N") and flip the ledger entries.
+A future slice that tries to close CC#P2-1 more substantively
+(e.g., P2.10 orchestrator-parity per ADR-0007 Slice 44 amendment)
+without also advancing these four properties re-fires item 5.
+
 ## Pre-conditions
 
 - The fixture file at `.claude-plugin/skills/explore/circuit.json`

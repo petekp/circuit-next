@@ -230,6 +230,11 @@ describe('Slice 27d — dogfood-run-0 runner smoke', () => {
     // `npm run circuit:run` produces — so a future regression that
     // silently breaks the CLI surface is caught here.
     const runRoot = join(runRootBase, 'cli-run');
+    // Slice 44 arc-close fold-in (Codex HIGH 4): `--dry-run` is no longer
+    // accepted at the CLI — the pre-ceremony behavior was a no-op that
+    // silently invoked the real adapter. `dogfood-run-0` has zero dispatch
+    // steps (it is partial-spine per ADR-0008 EXEMPT_WORKFLOW_IDS) so
+    // removing the flag doesn't expose this test to the real subprocess.
     const output = execFileSync(
       'node_modules/.bin/tsx',
       [
@@ -239,7 +244,6 @@ describe('Slice 27d — dogfood-run-0 runner smoke', () => {
         'smoke via CLI',
         '--rigor',
         'standard',
-        '--dry-run',
         '--run-root',
         runRoot,
       ],

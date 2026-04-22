@@ -4,10 +4,12 @@ import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  ARC_CLOSE_GATES,
   ARTIFACT_BACKING_PATH_CONTAINER_PATHS,
   ARTIFACT_BACKING_PATH_KNOWN_COLLISIONS,
   ARTIFACT_BACKING_PATH_PREFIX_SYNONYMS,
   PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE,
+  PHASE_2_P2_4_P2_5_ARC_LAST_SLICE,
   checkArcCloseCompositionReviewPresence,
   checkArtifactBackingPathIntegrity,
   normalizeArtifactBackingPath,
@@ -667,5 +669,187 @@ describe('checkArcCloseCompositionReviewPresence (fold-in Codex HIGH 4)', () => 
   it('passes on the live repo today (arc still in progress or completed with both prongs ACCEPT)', () => {
     const result = checkArcCloseCompositionReviewPresence();
     expect(result.level).not.toBe('red');
+  });
+});
+
+// Slice 44 arc-close fold-in (convergent Claude+Codex HIGH 3): generalized
+// arc-close gate. Parallel to the Slice 35 arc tests above, these exercise
+// the second entry in ARC_CLOSE_GATES — the P2.4 + P2.5 adapter + e2e arc
+// covering Slices 41/42/43a/43b/43c with ceremony Slice 44.
+describe('ARC_CLOSE_GATES + checkArcCloseCompositionReviewPresence (Slice 44 generalized gate)', () => {
+  function writePlanFiles(root: string, plans: readonly string[]) {
+    for (const rel of plans) {
+      writeRel(root, rel, `---\nname: ${rel}\n---\n\n# Plan\n`);
+    }
+  }
+
+  function writeProjectStateWithSlice(root: string, slice: number | string) {
+    writeRel(root, 'PROJECT_STATE.md', `<!-- current_slice: ${slice} -->\n\n# State\n`);
+  }
+
+  it('exports the 41-to-43 arc ceremony slice constant as a positive number', () => {
+    expect(typeof PHASE_2_P2_4_P2_5_ARC_LAST_SLICE).toBe('number');
+    expect(PHASE_2_P2_4_P2_5_ARC_LAST_SLICE).toBeGreaterThan(
+      PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE,
+    );
+  });
+
+  it('ARC_CLOSE_GATES contains both arcs with matching ceremony_slice constants', () => {
+    expect(ARC_CLOSE_GATES).toHaveLength(2);
+    const oldArc = ARC_CLOSE_GATES.find(
+      (g) => g.arc_id === 'phase-2-foundation-foldins-slices-35-to-40',
+    );
+    const newArc = ARC_CLOSE_GATES.find(
+      (g) => g.arc_id === 'phase-2-p2.4-p2.5-arc-slices-41-to-43',
+    );
+    expect(oldArc).toBeDefined();
+    expect(newArc).toBeDefined();
+    expect(oldArc?.ceremony_slice).toBe(PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE);
+    expect(newArc?.ceremony_slice).toBe(PHASE_2_P2_4_P2_5_ARC_LAST_SLICE);
+  });
+
+  it('returns green with "in progress" detail for the 41-to-43 arc when current_slice < 44 and both arcs are applicable', () => {
+    withTempRepo((root) => {
+      writePlanFiles(root, [
+        'specs/plans/phase-2-foundation-foldins.md',
+        'specs/plans/phase-2-implementation.md',
+      ]);
+      writeProjectStateWithSlice(root, PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE);
+      // Stage only 35-to-40 prongs; the 41-to-43 arc is still in progress at
+      // current_slice=40 so it requires nothing.
+      writeRel(
+        root,
+        'specs/reviews/arc-slices-35-to-40-composition-review-claude.md',
+        '---\nclosing_verdict: ACCEPT-WITH-FOLD-INS\n---\n',
+      );
+      writeRel(
+        root,
+        'specs/reviews/arc-slices-35-to-40-composition-review-codex.md',
+        '---\nclosing_verdict: ACCEPT-WITH-FOLD-INS\n---\n',
+      );
+      const result = checkArcCloseCompositionReviewPresence(root);
+      expect(result.level).toBe('green');
+      expect(result.detail).toMatch(/phase-2-p2\.4-p2\.5-arc-slices-41-to-43.*still in progress/);
+      expect(result.detail).toMatch(
+        /phase-2-foundation-foldins-slices-35-to-40.*two-prong gate satisfied/,
+      );
+    });
+  });
+
+  it('returns red when current_slice >= 44 but the 41-to-43 arc has no review files', () => {
+    withTempRepo((root) => {
+      writePlanFiles(root, [
+        'specs/plans/phase-2-foundation-foldins.md',
+        'specs/plans/phase-2-implementation.md',
+      ]);
+      writeProjectStateWithSlice(root, PHASE_2_P2_4_P2_5_ARC_LAST_SLICE);
+      // Old arc is satisfied; new arc has no review files.
+      writeRel(
+        root,
+        'specs/reviews/arc-slices-35-to-40-composition-review-claude.md',
+        '---\nclosing_verdict: ACCEPT\n---\n',
+      );
+      writeRel(
+        root,
+        'specs/reviews/arc-slices-35-to-40-composition-review-codex.md',
+        '---\nclosing_verdict: ACCEPT\n---\n',
+      );
+      const result = checkArcCloseCompositionReviewPresence(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(
+        /phase-2-p2\.4-p2\.5-arc-slices-41-to-43.*no arc-close composition review file matches/,
+      );
+    });
+  });
+
+  it('returns red when current_slice >= 44 and only the Claude prong of the 41-to-43 arc is staged', () => {
+    withTempRepo((root) => {
+      writePlanFiles(root, [
+        'specs/plans/phase-2-foundation-foldins.md',
+        'specs/plans/phase-2-implementation.md',
+      ]);
+      writeProjectStateWithSlice(root, PHASE_2_P2_4_P2_5_ARC_LAST_SLICE);
+      writeRel(
+        root,
+        'specs/reviews/arc-slices-35-to-40-composition-review-claude.md',
+        '---\nclosing_verdict: ACCEPT\n---\n',
+      );
+      writeRel(
+        root,
+        'specs/reviews/arc-slices-35-to-40-composition-review-codex.md',
+        '---\nclosing_verdict: ACCEPT\n---\n',
+      );
+      writeRel(
+        root,
+        'specs/reviews/arc-slices-41-to-43-composition-review-claude.md',
+        '---\nclosing_verdict: ACCEPT-WITH-FOLD-INS\n---\n',
+      );
+      const result = checkArcCloseCompositionReviewPresence(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(
+        /phase-2-p2\.4-p2\.5-arc-slices-41-to-43.*missing.*Codex prong/,
+      );
+    });
+  });
+
+  it('returns green when current_slice >= 44 and BOTH prongs of the 41-to-43 arc carry ACCEPT* closing verdicts', () => {
+    withTempRepo((root) => {
+      writePlanFiles(root, [
+        'specs/plans/phase-2-foundation-foldins.md',
+        'specs/plans/phase-2-implementation.md',
+      ]);
+      writeProjectStateWithSlice(root, PHASE_2_P2_4_P2_5_ARC_LAST_SLICE);
+      writeRel(
+        root,
+        'specs/reviews/arc-slices-35-to-40-composition-review-claude.md',
+        '---\nclosing_verdict: ACCEPT\n---\n',
+      );
+      writeRel(
+        root,
+        'specs/reviews/arc-slices-35-to-40-composition-review-codex.md',
+        '---\nclosing_verdict: ACCEPT\n---\n',
+      );
+      writeRel(
+        root,
+        'specs/reviews/arc-slices-41-to-43-composition-review-claude.md',
+        '---\nclosing_verdict: ACCEPT-WITH-FOLD-INS\n---\n',
+      );
+      writeRel(
+        root,
+        'specs/reviews/arc-slices-41-to-43-composition-review-codex.md',
+        '---\nclosing_verdict: ACCEPT-WITH-FOLD-INS\n---\n',
+      );
+      const result = checkArcCloseCompositionReviewPresence(root);
+      expect(result.level).toBe('green');
+      expect(result.detail).toMatch(
+        /phase-2-p2\.4-p2\.5-arc-slices-41-to-43.*two-prong gate satisfied/,
+      );
+    });
+  });
+
+  it('skips the 41-to-43 arc gate when its plan file (phase-2-implementation.md) is absent (test-fixture escape)', () => {
+    withTempRepo((root) => {
+      writePlanFiles(root, ['specs/plans/phase-2-foundation-foldins.md']);
+      // only the OLD arc plan file is present.
+      writeProjectStateWithSlice(root, PHASE_2_P2_4_P2_5_ARC_LAST_SLICE);
+      writeRel(
+        root,
+        'specs/reviews/arc-slices-35-to-40-composition-review-claude.md',
+        '---\nclosing_verdict: ACCEPT\n---\n',
+      );
+      writeRel(
+        root,
+        'specs/reviews/arc-slices-35-to-40-composition-review-codex.md',
+        '---\nclosing_verdict: ACCEPT\n---\n',
+      );
+      const result = checkArcCloseCompositionReviewPresence(root);
+      expect(result.level).toBe('green');
+      // The new-arc gate is filtered out (plan file absent), so only the
+      // old arc contributes to the detail.
+      expect(result.detail).not.toMatch(/phase-2-p2\.4-p2\.5-arc-slices-41-to-43/);
+      expect(result.detail).toMatch(
+        /phase-2-foundation-foldins-slices-35-to-40.*two-prong gate satisfied/,
+      );
+    });
   });
 });

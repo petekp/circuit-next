@@ -234,6 +234,14 @@ export function checkArtifactBackingPathIntegrity(
 // composition review file exists under specs/reviews/ with an ACCEPT or
 // ACCEPT-WITH-FOLD-INS closing verdict.
 export const PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE: number;
+export const PHASE_2_P2_4_P2_5_ARC_LAST_SLICE: number;
+export const ARC_CLOSE_GATES: ReadonlyArray<{
+  readonly arc_id: string;
+  readonly description: string;
+  readonly ceremony_slice: number;
+  readonly plan_path: string;
+  readonly review_file_regex: RegExp;
+}>;
 export function checkArcCloseCompositionReviewPresence(rootDir?: string): AuditCheckResult;
 
 // Slice 38 — adapter-binding coverage gate (ADR-0008 §Decision.4 +

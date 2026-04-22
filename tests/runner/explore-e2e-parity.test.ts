@@ -193,11 +193,18 @@ describe('Slice 43c — explore fixture static declarations (ratchet-floor contr
     expect(contents).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it('golden sha256 matches the hash of the deterministic placeholder body written by writeSynthesisArtifact', () => {
-    // Re-derive the placeholder body the runner writes for the explore
-    // close-step and assert the checked-in golden matches its hash. This
-    // binds the golden to the runner's deterministic output without
-    // requiring the AGENT_SMOKE-gated e2e path to run in CI.
+  it('golden sha256 is self-consistent with the writeSynthesisArtifact placeholder derivation (v0.3 placeholder-parity epoch; P2.10 re-binds to orchestrator-parity per ADR-0007 §Decision.1 Slice 44 amendment)', () => {
+    // Slice 44 arc-close fold-in (convergent Claude+Codex HIGH 2): the
+    // golden under test here is NOT a parity-vs-reference-Circuit assertion.
+    // It's a self-consistency assertion over writeSynthesisArtifact's
+    // placeholder-body derivation. Re-derive the placeholder body the runner
+    // writes for the explore close-step and confirm the checked-in golden
+    // matches its hash. This binds the golden to the runner's deterministic
+    // output without requiring the AGENT_SMOKE-gated e2e path to run in CI.
+    // P2.10 replaces writeSynthesisArtifact with real orchestrator output;
+    // at that point this test must be regenerated (UPDATE_GOLDEN=1) and
+    // renamed to make the orchestrator-parity claim explicit. Until P2.10,
+    // CC#P2-1 is satisfied at placeholder-parity per ADR-0007 amendment.
     const { workflow } = loadExploreFixture();
     const close = workflow.steps.find((s) => s.id === 'close-step');
     if (close?.kind !== 'synthesis') throw new Error('close-step must be synthesis');

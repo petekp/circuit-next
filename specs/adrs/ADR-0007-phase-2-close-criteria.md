@@ -113,6 +113,45 @@ same artifact shape as the corresponding reference Circuit workflow at
   via the retarget checklist at §Decision.4b. Silent rename in the
   plan is rejected on §6 grounds.
 
+**Amendment — Slice 44 arc-close (placeholder-parity epoch disclosure,
+convergent Claude HIGH 2 + Codex HIGH 2).** CC#P2-1 at Slice 43c
+landing is measured by a sha256 over the `explore` fixture's close-
+step placeholder body. The body is a deterministic function of
+`step.gate.required` section names, written by
+`src/runtime/runner.ts::writeSynthesisArtifact`; no real dispatch
+output is consumed into the hashed artifact. The AGENT_SMOKE-gated
+e2e test at `tests/runner/explore-e2e-parity.test.ts` does run real
+dispatches via the `agent` subprocess adapter, and the
+`dispatch.request` → `dispatch.result` five-event transcript lands
+correctly for both `synthesize-step` and `review-step` — but the
+*hashed* artifact is still the deterministic placeholder, not a
+composition of dispatch outputs.
+
+This makes CC#P2-1 v0.3-era satisfaction a **placeholder-parity**
+claim rather than an **orchestrator-parity** claim. Both are valid
+epochs of the same criterion; the Slice 43c golden catches drift in
+the placeholder shape (which is itself a useful ratchet because a
+future slice cannot silently change the placeholder body without
+updating the golden). But the "reference Circuit `explore` artifact"
+comparison the original non-substitutable-failure-condition names is
+NOT what the v0.3 golden measures.
+
+**Re-bound at P2.10.** When `writeSynthesisArtifact` is replaced by
+real orchestrator output (P2.10 artifact schema set + orchestrator-
+synthesis integration per plan §P2.10 / §Mid-term slices), the
+CC#P2-1 golden MUST be regenerated from the new orchestrator's
+output via `AGENT_SMOKE=1 UPDATE_GOLDEN=1 npx vitest run
+tests/runner/explore-e2e-parity.test.ts`. A fresh composition review
+MUST verify the new golden is substantively orchestrator-parity
+rather than placeholder-parity. Until P2.10 lands, CC#P2-1 is
+**closed at placeholder-parity** with this amendment naming the
+epoch explicitly.
+
+**Reopen trigger.** P2.10 landing without CC#P2-1 golden
+regeneration + a fresh composition review MUST reopen this ADR to
+re-evaluate whether placeholder-parity still satisfies the close
+criterion (it does not; re-bind).
+
 ---
 
 **CC#P2-2 — Real agent dispatch.**

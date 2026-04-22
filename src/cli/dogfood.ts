@@ -17,12 +17,19 @@ import { runDogfood } from '../runtime/runner.js';
 // composes the runtime boundary via `runDogfood`, and prints the
 // <run-root> path on success.
 //
-// Invocation-layer config only (`--goal`, `--rigor`, `--dry-run`,
-// `--run-root`, `--fixture`). No user-global or project config layer yet.
-// `--dry-run` is accepted for forward compatibility but is a no-op at
-// Tier 0 — the real `dispatchAgent` adapter (Slice 42) + five-event
-// materialization (Slice 43b) run regardless; suppressing real dispatch
-// at the CLI layer is a future slice.
+// Invocation-layer config only (`--goal`, `--rigor`, `--run-root`,
+// `--fixture`). No user-global or project config layer yet.
+//
+// Slice 44 arc-close fold-in (Codex HIGH 4): `--dry-run` is no longer
+// silently accepted as a no-op. Pre-Slice-44, the flag was accepted for
+// forward compatibility but did nothing — the real `dispatchAgent`
+// adapter (Slice 42) + five-event materialization (Slice 43b) ran
+// regardless, while the JSON output reported `dry_run: true`. That is a
+// safety + evidence-labeling bug: a user running `--dry-run` would
+// spawn `claude -p` while believing they were in a dry-run mode.
+// Pre-ceremony behavior: flag now fails closed with a clear error
+// pointing at the future slice where dry-run support lands. See
+// specs/reviews/arc-slices-41-to-43-composition-review-codex.md §HIGH 4.
 
 const DEFAULT_RUNS_BASE = '.circuit-next/runs';
 
@@ -30,16 +37,17 @@ interface ParsedArgs {
   workflowName: string;
   goal: string;
   rigor: Rigor;
-  dryRun: boolean;
   runRoot?: string;
   fixturePath?: string;
 }
 
 function usage(): string {
   return [
-    'usage: circuit:run -- <workflow-name> --goal "<goal>" [--rigor <lite|standard|deep|tournament|autonomous>] [--dry-run] [--run-root <path>] [--fixture <path>]',
+    'usage: circuit:run -- <workflow-name> --goal "<goal>" [--rigor <lite|standard|deep|tournament|autonomous>] [--run-root <path>] [--fixture <path>]',
     '',
-    'v0.1 scope: dogfood-run-0 only. Loads .claude-plugin/skills/<name>/circuit.json and composes the runtime boundary.',
+    'v0.1 scope: accepts workflow fixtures under .claude-plugin/skills/<name>/circuit.json (Slice 43c extended beyond dogfood-run-0). Composes the runtime boundary via runDogfood against the real `dispatchAgent`.',
+    '',
+    'Note: `--dry-run` is not implemented. Pre-Slice-44 the flag was accepted as a no-op while the real adapter ran anyway; the arc-close review flagged this as a safety bug and the flag is now rejected until dry-run support lands (tracked in specs/plans/phase-2-implementation.md post-Slice-44 backlog).',
   ].join('\n');
 }
 
@@ -48,7 +56,6 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
   let workflowName: string | undefined;
   let goal: string | undefined;
   let rigor: Rigor | undefined;
-  let dryRun = false;
   let runRoot: string | undefined;
   let fixturePath: string | undefined;
 
@@ -84,8 +91,14 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
       continue;
     }
     if (tok === '--dry-run') {
-      dryRun = true;
-      continue;
+      // Slice 44 arc-close fold-in (Codex HIGH 4): fail-closed. The flag
+      // previously accepted silently while the real adapter still ran;
+      // see specs/reviews/arc-slices-41-to-43-composition-review-codex.md
+      // §HIGH 4. Re-enable once dry-run support actually lands (inject a
+      // deterministic dry dispatcher + event log marker).
+      throw new Error(
+        '--dry-run is not currently implemented. Pre-Slice-44 the flag silently invoked the real adapter while reporting dry_run:true; the arc-close review (specs/reviews/arc-slices-41-to-43-composition-review-codex.md §HIGH 4) flagged this as a safety bug. The flag is rejected until dry-run support lands.',
+      );
     }
     if (tok === '--help' || tok === '-h') {
       process.stdout.write(`${usage()}\n`);
@@ -112,7 +125,6 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
     workflowName,
     goal,
     rigor: rigor ?? Rigor.parse('standard'),
-    dryRun,
   };
   if (runRoot !== undefined) result.runRoot = runRoot;
   if (fixturePath !== undefined) result.fixturePath = fixturePath;
@@ -185,7 +197,6 @@ export async function main(argv: readonly string[]): Promise<number> {
         outcome: outcome.result.outcome,
         events_observed: outcome.result.events_observed,
         result_path: `${outcome.runRoot}/artifacts/result.json`,
-        dry_run: args.dryRun,
       },
       null,
       2,
