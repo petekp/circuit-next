@@ -691,6 +691,16 @@ refactor; no governance-surface movement); no Codex challenger pass
 per CLAUDE.md §Hard invariants #6 (challenger required only for
 ratchet changes, contract-relaxation ADRs, migration escrows,
 discovery-decision promotion, gate-loosening requests — none apply).
+**Supersession note (Slice 47c-2 / Codex HIGH 2 fold-in, 2026-04-22):**
+This "no governance-surface movement → no Codex" rationale was retired
+by the operator's Option A pick at Slice 47c continuation (commit
+66f1934 / "47c-2"); the literal CLAUDE.md §Hard invariant #6 rule is
+now binding (every slice that advances any ratchet — including
+mechanical ratchet advances — requires a Codex challenger pass). Slice
+45a is covered ONLY by the one-time Slice 47d arc-close composition
+review amnesty path per `specs/plans/slice-47-hardening-foldins.md`
+§Slice 47d scope item 1. Future ratchet-advance slices may NOT cite
+this paragraph as precedent for skipping Codex.
 `src/runtime/runner.ts` now reads `dispatcher.dispatch(input)` at the
 call site and `adapterName: dispatcher.adapterName` at the
 materializer invocation. See PROJECT_STATE.md Slice 45a block for the
@@ -758,7 +768,17 @@ commit time. Expect re-ordering as earlier slices expose surface.
     pass (CLAUDE.md §Hard invariants #6 scope does not apply —
     adds new contract suite strictly tightening surface, advances
     ratchet without governance-surface movement). Ratchet floor
-    976 → 988.
+    976 → 988. **Supersession note (Slice 47c-2 / Codex HIGH 2
+    fold-in, 2026-04-22):** The "no governance-surface movement → no
+    Codex" rationale was retired by the operator's Option A pick at
+    Slice 47c continuation (commit 66f1934 / "47c-2"); the literal
+    CLAUDE.md §Hard invariant #6 rule is now binding (every slice that
+    advances any ratchet — including mechanical ratchet advances —
+    requires a Codex challenger pass). Slice 46b is covered ONLY by
+    the one-time Slice 47d arc-close composition review amnesty path
+    per `specs/plans/slice-47-hardening-foldins.md` §Slice 47d scope
+    item 1. Future ratchet-advance slices may NOT cite this paragraph
+    as precedent for skipping Codex.
 - **P2.8 — Router (`/circuit:run` classifier)** — first-class
   workflow classifier: given task text + entry signals, selects among
   registered workflows.

@@ -2,7 +2,7 @@
 track: cross-model-challenger
 status: ratified-v0.1
 version: 0.1
-last_updated: 2026-04-20
+last_updated: 2026-04-22
 depends_on:
   - specs/adrs/ADR-0001-methodology-adoption.md (pillar 4)
   - specs/adrs/ADR-0003-authority-graph-gate.md (challenger downgrade section)
@@ -50,9 +50,26 @@ using the challenger WELL given that reframing.
   surfaces only.** ADR-0001 names five: ratchet changes, contract-
   relaxation ADRs, migration escrows, discovery-decision promotion,
   and any request to loosen a gate. v0.1 adds a sixth by practice:
-  **every `specs/contracts/*.md` v0.1 authorship**. Invoking the
-  challenger on trivia (e.g. a dependency bump, a doc typo fix) is a
-  waste of cross-model diversity and is rejected as a smell.
+  **every `specs/contracts/*.md` v0.1 authorship**. Per Slice 47c-2
+  operator decision (Option A literal, 2026-04-22) closing Codex
+  HIGH 5 from `specs/reviews/phase-2-to-date-comprehensive-codex.md`,
+  **"ratchet change" is enforced literally**: any slice that advances
+  ANY ratchet (contract-test count floor, audit-coverage check
+  addition, product ratchet, governance surface) requires a Codex
+  challenger pass, EVEN WHEN the advance is mechanical and no
+  governance surface moves (e.g. +12 contract-test declarations on
+  a tightening test surface). The "trivia" exemption is preserved
+  but narrowly scoped: it covers only changes that do NOT advance
+  any ratchet (a doc typo fix, a dependency bump that is not itself
+  a ratchet advance). Invoking the challenger on non-ratchet trivia
+  is a waste of cross-model diversity and is rejected as a smell.
+  Failure mode addressed: the practical drift toward "only governance-
+  surface ratchets need Codex" (observed across Slices 43a / 43b /
+  43c / 45a / 46b) was named by Codex as HIGH 5 and explicitly
+  resolved in favor of literal enforcement at Slice 47c-2. Past-slice
+  drift gets one-time amnesty coverage via Slice 47d arc-close
+  composition review's expanded scope; future drift returns through
+  this invariant as the binding rule.
 
 - **CHALLENGER-I3 — A challenger pass is recorded, not just
   conversational.** Every invocation produces a file under

@@ -120,6 +120,27 @@ From `continuity-66d08e55-4d6b-4bce-b9f9-873728ba2f32`:
 
 **Codex challenger:** REQUIRED under either reading of HIGH 5 (governance surface movement is unambiguous).
 
+### Slice 47c-2 — Operator decision ratified: Option A literal challenger policy (Codex HIGH 5 resolved)
+
+**Lane:** Equivalence Refactor (CLAUDE.md text already literal — no semantic edit there; behavioral spec tightens to prevent re-narrowing)
+**Failure mode addressed:** Codex HIGH 5 named the policy-vs-practice drift between CLAUDE.md's literal "any ratchet change requires Codex" (CLAUDE.md:38-41 + 235-237) and recent practice across Slices 43a/43b/43c/45a/46b that advanced ratchets while declaring Codex not-required. Without explicit ratification the rule keeps eroding slice-by-slice. Operator picked Option A (2026-04-22): enforce the literal text. The behavioral spec's CHALLENGER-I2 invariant currently has a "trivia" exemption clause that was historically stretched to cover mechanical ratchet advances; it needs a tightening to make the literal scope unambiguous.
+**Acceptance evidence:** CLAUDE.md unchanged at lines 38-41 and 235-237 (already literal — verified). `specs/behavioral/cross-model-challenger.md` CHALLENGER-I2 amended with explicit "literal scope" clause distinguishing trivia (non-ratchet typo/dep-bump) from mechanical ratchet advances (test-count floor advances, audit-coverage check additions) — only the former is exempt. PROJECT_STATE.md Slice 47c-2 entry records the operator decision with date + rationale + past-slice-drift disposition (folded into Slice 47d arc-close composition review scope as one-time amnesty). `npm run verify` + `npm run audit` both green.
+**Alternate framing:** (a) Add a new audit check that fails RED if a slice's commit advances a ratchet without a corresponding `specs/reviews/arc-slice-NN-codex.md` file. Deferred — substantial new audit machinery; the literal rule is honor-system-enforced for now (same as the rest of the lane discipline) and a mechanical enforcement check can land later if drift recurs. (b) Backfill individual Codex passes on past noncompliant slices (43a/43b/43c/45a/46b). Rejected — those slices are committed and the arc-close composition review at Slice 47d will explicitly include their committed state in its scope, which is the more efficient closure path. The composition review's broader-than-arc scope catches what individual backfills would catch, plus boundary-seam concerns the per-slice passes would miss.
+**Trajectory check:** This slice serves the hardening fold-in arc by closing the second half of Codex HIGH 5 (the policy decision the operator owns; the audit-firewall half closed in 47c). The arc serves restoring audit honesty before P2.8 / P2-MODEL-EFFORT opens. Earlier slice 47c surfaced the operator decision in its PROJECT_STATE entry; 47c-2 is the resolution commit. No earlier slice obsoleted or mis-sequenced.
+
+**Scope:**
+1. Edit `specs/behavioral/cross-model-challenger.md` CHALLENGER-I2 prose: add explicit clause naming Slice 47c-2 operator decision (Option A literal) + clarifying that "trivia" exemption applies only to non-ratchet changes (typo, dep bump that does not advance a ratchet); mechanical ratchet advances (test-count floor, audit-coverage check addition) require Codex.
+2. Add `Slice 47c-2` entry to `PROJECT_STATE.md` recording decision + past-slice-drift disposition; move existing `Slice 47c (partial)` entry below the historical-preservation marker.
+3. Update this plan file (already in this commit) to record the resolution.
+4. CLAUDE.md text NOT edited — literal rule already correct; the operator decision was to keep it that way.
+5. Past-slice drift (43a/43b/43c/45a/46b) folded into Slice 47d arc-close composition review's authoritative scope (see Slice 47d scope item 1 amendment).
+
+**Ratchet:** No floor advance (no new tests; spec text tightening only). Audit-coverage ratchet: not advanced (no new check). Governance-surface movement: yes (CHALLENGER-I2 prose tightening + PROJECT_STATE governance decision).
+
+**Codex challenger:** REQUIRED under Option A literal rule. This slice modifies a behavioral-spec invariant (governance surface) and ratifies a methodology decision. Dispatched via `codex exec` against commit 66f1934; review file at `specs/reviews/arc-slice-47c-2-codex.md`. Codex returned REJECT-PENDING-FOLD-INS with 2 HIGH (audit-red commit body discipline + active plan retired rationale) / 2 MED (amnesty binding prose-only + mechanical enforcement honor system) / 1 LOW (last_updated stale) / 1 META (no objection). All HIGHs + LOW absorbed via amend (HIGH 1: commit body Lane: + Isolation: posture; HIGH 2: phase-2-implementation.md Slice 45a + 46b supersession notes; LOW 1: cross-model-challenger.md last_updated → 2026-04-22). MEDs deferred with hard reopen conditions (not "if drift recurs"):
+- **MED 1 deferred → Slice 47d acceptance-evidence prerequisite:** Both Slice 47d arc-close composition review prong files MUST carry an `amnesty_scope: [43a, 43b, 43c, 45a, 46b]` (or `covered_slices` — naming TBD at 47d authoring) frontmatter field. Missing field rejects 47d Codex challenger pass. Per §Slice 47d scope item 1 + item 5 amendments below.
+- **MED 2 deferred → next-ratchet-advancing-slice co-landing requirement:** A mechanical-enforcement audit check MUST land in or before the next slice that ATTEMPTS to advance specs/ratchet-floor.json, OR adds a tests/**/*.test.* file, OR modifies scripts/audit.mjs — whichever fires first. First-version shape: scan slice commit body for exact `Codex challenger: REQUIRED` declaration AND verify a corresponding specs/reviews/arc-slice-<slice>-codex.md OR an explicit arc-subsumption field naming the future arc-close review that will cover it. Closing verdict: ACCEPT-WITH-FOLD-INS.
+
 ### Slice 47d — Arc-close composition review + ratchet floor advance
 
 **Lane:** Equivalence Refactor (arc close + per-criterion ledger reorganization) + Discovery (composition review)
@@ -128,10 +149,11 @@ From `continuity-66d08e55-4d6b-4bce-b9f9-873728ba2f32`:
 **Alternate framing:** Could split arc-close into separate composition-review slice (47d-1) and floor-advance slice (47d-2). Rejected: same-commit staging discipline (Check 26) requires the prong files + slice marker advance in one commit; splitting breaks that.
 
 **Scope:**
-1. Author Claude composition-adversary prong over Slices 47-prep / 47a / 47b / 47c.
-2. Dispatch Codex cross-model challenger over the same arc via `/codex` skill.
-3. Stage prong files + advance `current_slice` to 47d in single commit.
-4. Advance ratchet floor per accumulated test additions across the arc (subject to 47c policy decision).
+1. Author Claude composition-adversary prong over Slices 47-prep / 47a / 47b / 47c / 47c-2. Per Slice 47c-2 operator decision (Option A literal challenger policy ratified), the composition review's authoritative scope ALSO includes the past-slice ratchet advances at Slices 43a / 43b / 43c / 45a / 46b that landed under the practical-narrowing interpretation now retired. This is the one-time amnesty path for the policy-vs-practice gap: those slices' committed state gets cross-model adversarial coverage at the composition-review boundary rather than via individual backfill commits. The composition-review prompt MUST name the past slices in its scope-disclosure block so the verdict explicitly covers them.
+2. Dispatch Codex cross-model challenger over the same arc + past-slice scope via `/codex` skill.
+3. Stage prong files + advance `current_slice` to 47d in single commit per Check 26.
+4. Advance ratchet floor per accumulated test additions across the arc.
+5. **(Slice 47c-2 / Codex MED 1 fold-in binding)** BOTH prong files MUST carry an `amnesty_scope` (or `covered_slices` — naming TBD at 47d authoring) frontmatter field listing exactly `[43a, 43b, 43c, 45a, 46b]`. Missing field rejects the 47d Codex challenger pass at opening verdict. Audit-check enforcement of the field is deferred to a follow-up after 47d closes (the field's existence is the binding; the check is the enforcement).
 
 **Ratchet:** Floor advance candidate.
 
