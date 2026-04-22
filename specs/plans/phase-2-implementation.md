@@ -718,11 +718,41 @@ commit time. Expect re-ordering as earlier slices expose surface.
     reference + matcher coverage of {startup, resume, clear, compact}
     so a future commit cannot silently delete the hooks or downgrade
     them to placeholders.
-  - **P2.7b (Slice 46b, OPEN)** — `tests/runner/continuity-lifecycle.
-    test.ts` integration test driving the engine through the
-    create→persist→resume→clear lifecycle. Closes the second half
-    of CC#P2-4. Phase 2 close count advances 2/8 → 3/8 at this
-    landing.
+  - **P2.7b (Slice 46b, LANDED 2026-04-22)** — `tests/runner/
+    continuity-lifecycle.test.ts` integration test driving the engine
+    through the create→persist→resume→clear lifecycle. Lane:
+    Ratchet-Advance. +12 static declarations covering (a) status on
+    a fresh empty project root reports `selection: 'none'` with no
+    index file written; (b) save writes the index file with a
+    populated `pending_record` entry; (c) save writes the record file
+    at `payload_rel` with the round-tripped narrative; (d) status
+    after save reports `selection: 'pending_record'` and surfaces the
+    saved narrative; (e) resume after save returns `source:
+    'pending_record'` with the same record_id; (f) resume is
+    non-destructive — status after resume still reports the pending
+    record; (g) resume on an empty project returns `source: 'none'`
+    with a "nothing to resume" message; (h) clear after save deletes
+    the record file from disk + clears the index pending_record +
+    reports `cleared_pending_record: true` with `deleted_record_id`
+    matching; (i) status after clear reports `selection: 'none'`;
+    (j) clear is idempotent on empty projects (`cleared: true`,
+    `deleted_record_id: null`); (k) save twice replaces the index
+    pointer without deleting the prior record file from disk
+    (pinning save-replace-of-pointer semantics — clear is the only
+    command that reaps record files); (l) the engine reports the
+    `selection` (status) and `source` (resume) discriminant fields
+    the SessionStart and SessionEnd hooks read from `--json` output
+    (pinning the field-name surface so a hidden rename breaks loud
+    here). Tests invoke `.circuit/bin/circuit-engine` as real
+    subprocesses against ephemeral mkdtempSync project roots scoped
+    via `--project-root`; macOS `/var/folders` ↔ `/private/var/
+    folders` aliasing collapsed via `realpathSync`. Closes the
+    second half of CC#P2-4. **Phase 2 close count advances 2/8 →
+    3/8 at this landing.** No ADR amendment, no Codex challenger
+    pass (CLAUDE.md §Hard invariants #6 scope does not apply —
+    adds new contract suite strictly tightening surface, advances
+    ratchet without governance-surface movement). Ratchet floor
+    976 → 988.
 - **P2.8 — Router (`/circuit:run` classifier)** — first-class
   workflow classifier: given task text + entry signals, selects among
   registered workflows.

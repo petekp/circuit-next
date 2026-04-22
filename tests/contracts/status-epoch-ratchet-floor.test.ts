@@ -465,19 +465,24 @@ describe('checkPinnedRatchetFloor (Slice 26b full-file check)', () => {
     expect(typeof data?.floors?.contract_test_count).toBe('number');
     // last_advanced_in_slice tracks the most recent floor advancement.
     // See specs/ratchet-floor.json `notes` for the full per-slice ledger.
-    // Most recent: Slice 46 (P2.7a — session-hook scaffolding per
-    // `specs/plans/phase-2-implementation.md` §P2.7 first-half binding
-    // of ADR-0007 CC#P2-4) advanced the floor 961 → 976 (+15 static
-    // declarations in tests/contracts/session-hooks-present.test.ts
-    // covering Check 33 `checkSessionHooksPresent` across green
-    // live-repo + green synthetic-scaffold + 13 red failure paths
-    // — missing scripts, non-executable scripts, scripts that don't
-    // reference circuit-engine continuity, settings.json missing/
-    // malformed/incomplete, and SessionStart matcher coverage gap).
-    // This assertion pins the CURRENT slice id so any future floor
-    // advancement that forgets to update the marker fails the test
-    // immediately — the slice id changes only when the floor changes.
-    expect(data?.last_advanced_in_slice).toBe('46');
+    // Most recent: Slice 46b (P2.7b — continuity-lifecycle integration
+    // test per `specs/plans/phase-2-implementation.md` §P2.7
+    // second-half binding of ADR-0007 CC#P2-4) advanced the floor
+    // 976 → 988 (+12 static declarations in
+    // tests/runner/continuity-lifecycle.test.ts covering the engine's
+    // `continuity {save,status,resume,clear}` CLI surface across
+    // empty-project status, save+pendingrecord+payload writes, status
+    // after save, resume + non-destructive resume, resume-on-empty,
+    // clear-after-save with disk reaping, status after clear,
+    // idempotent clear, save-twice pointer replacement without record
+    // file deletion, and the selection/source discriminant fields the
+    // SessionStart + SessionEnd hooks read). With Slice 46b green,
+    // ADR-0007 CC#P2-4 (session hooks + continuity lifecycle) closes
+    // and Phase 2 close count advances 2/8 → 3/8. This assertion pins
+    // the CURRENT slice id so any future floor advancement that
+    // forgets to update the marker fails the test immediately — the
+    // slice id changes only when the floor changes.
+    expect(data?.last_advanced_in_slice).toBe('46b');
   });
 
   it('readPinnedRatchetFloor returns null when the file is missing', () => {
