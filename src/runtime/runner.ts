@@ -7,7 +7,7 @@ import type { LaneDeclaration } from '../schemas/lane.js';
 import { computeManifestHash } from '../schemas/manifest.js';
 import type { RunResult } from '../schemas/result.js';
 import type { Rigor } from '../schemas/rigor.js';
-import type { ResolvedSelection, SelectionOverride } from '../schemas/selection-policy.js';
+import type { ResolvedSelection, SkillOverride } from '../schemas/selection-policy.js';
 import type { Snapshot } from '../schemas/snapshot.js';
 import type { Workflow } from '../schemas/workflow.js';
 import type { AgentDispatchInput } from './adapters/agent.js';
@@ -113,11 +113,26 @@ export interface DogfoodInvocation {
   dispatcher?: DispatchFn;
 }
 
+// Slice 47a Codex HIGH 2 fold-in — surface per-dispatch metadata
+// (`adapterName`, `cli_version`, `stepId`) so the AGENT_SMOKE
+// fingerprint writer can bind `cli_version` to the actual subprocess
+// init event rather than reading it from a side-channel env var. The
+// runner already has `DispatchResult.cli_version` in scope at the
+// dispatch loop; this exposes it on `DogfoodRunResult` without
+// forcing a schema change to the dispatch event union (the latter
+// would be P2-MODEL-EFFORT scope).
+export interface DispatchResultMetadata {
+  readonly stepId: string;
+  readonly adapterName: BuiltInAdapter;
+  readonly cli_version: string;
+}
+
 export interface DogfoodRunResult {
   runRoot: string;
   result: RunResult;
   snapshot: Snapshot;
   events: Event[];
+  dispatchResults: readonly DispatchResultMetadata[];
 }
 
 // Slice 43b: the runtime dispatch branch now routes through dispatchAgent
@@ -203,26 +218,53 @@ function deriveResolvedFrom(invocation: DogfoodInvocation): DispatchResolutionSo
   return invocation.dispatcher !== undefined ? { source: 'explicit' } : { source: 'default' };
 }
 
-// Slice 47a (CONVERGENT HIGH A fold-in): compose the effective
-// `ResolvedSelection` from `workflow.default_selection` and
-// `step.selection`. v0 is the minimum-honest derivation:
+// Slice 47a (CONVERGENT HIGH A fold-in) + Codex challenger Slice 47a
+// HIGH 1 fold-in: compose the effective `ResolvedSelection` from
+// `workflow.default_selection` and `step.selection` per the SEL-I3
+// `SkillOverride` operations and the SEL precedence chain.
+//
 //   - `workflow.default_selection` is consumed as the base layer.
 //   - `step.selection` overlays right-biased per SEL precedence
 //     (`workflow < step` per
 //     `src/schemas/selection-policy.ts SELECTION_PRECEDENCE`).
-//   - `SkillOverride` operations (`replace`/`append`/`remove`/
-//     `inherit`) collapse here: the base contributes its skills if
-//     present and the overlay contributes its skills if `mode !==
-//     'inherit'`. Real composition (set-algebra union/difference per
-//     SEL-I3) is the P2-MODEL-EFFORT resolver's job; v0 picks the
-//     more-specific layer's skills as a faithful approximation that
-//     never invents skills the layers do not declare.
+//   - `SkillOverride` modes are folded as the contract requires
+//     (`specs/contracts/selection.md §SEL-I3`):
+//       * `inherit` — no-op (base unchanged).
+//       * `replace` — base discarded, overlay's skills become the
+//         new base for downstream layers.
+//       * `append` — set-union of overlay skills with base.
+//       * `remove` — set-difference (overlay skills removed from
+//         base).
+//     The original Slice 47a draft collapsed this to "pick the more-
+//     specific layer's skills" which silently produced wrong sets
+//     for legal `append` / `remove` overrides (Codex Slice 47a HIGH
+//     1).
 //   - `invocation_options` shallow-merges right-biased.
 // Returns the canonical empty selection when neither layer declares
 // anything, which is the same shape the materializer used to fabricate
 // pre-Slice-47a — the difference is that pre-Slice-47a the empty was
 // fabricated regardless of inputs, and post-Slice-47a it is derived
 // from inputs that were genuinely empty.
+function applySkillOp(base: readonly string[], op: SkillOverride | undefined): readonly string[] {
+  if (op === undefined || op.mode === 'inherit') return base;
+  if (op.mode === 'replace') return op.skills as readonly string[];
+  if (op.mode === 'append') {
+    const seen = new Set<string>(base);
+    const out = [...base];
+    for (const s of op.skills) {
+      const key = s as unknown as string;
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(key);
+      }
+    }
+    return out;
+  }
+  // mode === 'remove'
+  const removeSet = new Set<string>(op.skills as ReadonlyArray<string>);
+  return base.filter((s) => !removeSet.has(s));
+}
+
 function deriveResolvedSelection(
   workflow: Workflow,
   step: Workflow['steps'][number] & { kind: 'dispatch' },
@@ -234,14 +276,12 @@ function deriveResolvedSelection(
     return { skills: [], invocation_options: {} };
   }
 
-  const skillsFor = (layer: SelectionOverride | undefined): readonly string[] | undefined => {
-    if (layer === undefined) return undefined;
-    if (layer.skills.mode === 'inherit') return undefined;
-    return layer.skills.skills;
-  };
-  const stSkills = skillsFor(st);
-  const wfSkills = skillsFor(wf);
-  const skills = (stSkills ?? wfSkills ?? []) as ResolvedSelection['skills'];
+  // SEL-I3 fold: base = [] → workflow → step. Each `applySkillOp` is
+  // the closed-form interpretation of the layer's `SkillOverride`
+  // mode against the prior base.
+  const afterWorkflow = applySkillOp([], wf?.skills);
+  const afterStep = applySkillOp(afterWorkflow, st?.skills);
+  const skills = afterStep as ResolvedSelection['skills'];
 
   const model = st?.model ?? wf?.model;
   const effort = st?.effort ?? wf?.effort;
@@ -333,6 +373,10 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
   });
 
   const events: Event[] = [bootstrapEvent];
+  // Slice 47a Codex HIGH 2 fold-in — capture per-dispatch metadata
+  // for AGENT_SMOKE / CODEX_SMOKE fingerprint binding to cli_version
+  // without forcing a dispatch event schema bump.
+  const dispatchResults: DispatchResultMetadata[] = [];
   let sequence = 1;
   const recordedAt = () => now().toISOString();
   const push = (ev: Event): void => {
@@ -399,6 +443,11 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
         dispatchInput.timeoutMs = step.budgets.wall_clock_ms;
       }
       const dispatchResult = await dispatcher.dispatch(dispatchInput);
+      dispatchResults.push({
+        stepId: step.id as unknown as string,
+        adapterName: dispatcher.adapterName,
+        cli_version: dispatchResult.cli_version,
+      });
       const verdict = dispatchVerdictForStep(step);
       const materialized = materializeDispatch({
         runId,
@@ -518,6 +567,7 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
     result,
     snapshot: finalSnapshot,
     events,
+    dispatchResults,
   };
 }
 

@@ -611,10 +611,15 @@ separate slices:
 
 1. **Explicit assignment (this slice).** Extend
    `specs/contracts/workflow.md` to v0.3 with per-step `selection.model`
-   (provider-scoped, schema-validated against an allowlist) and
-   `selection.effort` (`Effort` enum: `none | minimal | low | medium |
-   high | xhigh`; only honored when the resolved adapter's model
-   supports it). The schema already exposes these as first-class
+   (provider enum schema-validated via `ProviderScopedModel`'s
+   `provider: ['openai', 'anthropic', 'gemini', 'custom']`; the
+   provider-scoped `model` string is intentionally open-ended at the
+   schema layer and adapter-validated against the live model list per
+   `src/schemas/selection-policy.ts:5` design comment — Slice 47a
+   Codex challenger LOW 1 fold-in: earlier text overclaimed
+   schema-allowlist validation of the model id) and `selection.effort`
+   (`Effort` enum: `none | minimal | low | medium | high | xhigh`;
+   only honored when the resolved adapter's model supports it). The schema already exposes these as first-class
    `SelectionOverride` fields per `src/schemas/selection-policy.ts:70-79`
    (Slice 47a comprehensive review CONVERGENT HIGH B fold-in — earlier
    plan wording placed `model` / `effort` under `invocation_options`,

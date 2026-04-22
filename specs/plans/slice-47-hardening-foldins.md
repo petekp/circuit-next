@@ -67,7 +67,7 @@ From `continuity-66d08e55-4d6b-4bce-b9f9-873728ba2f32`:
 3. Add tests asserting non-empty `resolved_selection` when override applied; non-default `resolved_from` when explicit.
 4. Promote AGENT_SMOKE fingerprint v1 → v2: add `adapter_source_sha256` (covering `agent.ts`, `shared.ts`, `dispatch-materializer.ts`, `runner.ts`) + `cli_version`.
 5. Update Check 30 (`checkAgentSmokeFingerprint`) to detect adapter-source drift, parallel to Check 32 (`checkCodexSmokeFingerprint`).
-6. Refresh `tests/fixtures/agent-smoke/last-run.json` via `AGENT_SMOKE=1 UPDATE_AGENT_FINGERPRINT=1`.
+6. Refresh `tests/fixtures/agent-smoke/last-run.json` via `AGENT_SMOKE=1 UPDATE_AGENT_FINGERPRINT=1` — **operator-local action**. v2 SUPPORT (writer + audit gate) lands in this slice; the live fixture is intentionally stale (audit reports yellow with explicit remediation) until the operator runs the gated promotion in an environment with the live `claude` CLI available. Slice 47a Codex challenger MED 1 disposition: language amended to acknowledge SUPPORT vs PROMOTED-EVIDENCE distinction.
 7. Amend `specs/plans/phase-1-close-revised.md:612-620` (Convergent HIGH B): replace `invocation_options.model` / `invocation_options.effort` text with first-class `selection.model` / `selection.effort` per current `SelectionOverride` schema.
 
 **Ratchet:** Adds tests + advances AGENT_SMOKE schema. Floor advance candidate; defer to 47c to align with policy decision.

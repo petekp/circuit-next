@@ -252,6 +252,63 @@ describe('Check 30 — AGENT_SMOKE schema_version 2 + drift detection (Slice 47a
     });
   });
 
+  // Slice 47a Codex challenger HIGH 2 fold-in — cli_version is
+  // load-bearing on a v2 fingerprint. Empty / missing / sentinel
+  // values are rejected yellow with a precise remediation message.
+  it('yellow when schema_version 2 fingerprint has missing cli_version', () => {
+    withTempRepo((root) => {
+      scaffoldAdapterSources(root);
+      const headSha = execSync('git rev-parse HEAD', { cwd: root, encoding: 'utf8' }).trim();
+      const currentSha = computeAgentAdapterSourceSha256(root);
+      writeFingerprint(root, {
+        schema_version: 2,
+        commit_sha: headSha,
+        result_sha256: 'a'.repeat(64),
+        adapter_source_sha256: currentSha,
+        // cli_version absent
+      });
+      const result = checkAgentSmokeFingerprint(root);
+      expect(result.level).toBe('yellow');
+      expect(result.detail).toMatch(/missing or empty 'cli_version'/);
+    });
+  });
+
+  it('yellow when schema_version 2 fingerprint has empty cli_version', () => {
+    withTempRepo((root) => {
+      scaffoldAdapterSources(root);
+      const headSha = execSync('git rev-parse HEAD', { cwd: root, encoding: 'utf8' }).trim();
+      const currentSha = computeAgentAdapterSourceSha256(root);
+      writeFingerprint(root, {
+        schema_version: 2,
+        commit_sha: headSha,
+        result_sha256: 'a'.repeat(64),
+        adapter_source_sha256: currentSha,
+        cli_version: '',
+      });
+      const result = checkAgentSmokeFingerprint(root);
+      expect(result.level).toBe('yellow');
+      expect(result.detail).toMatch(/missing or empty 'cli_version'/);
+    });
+  });
+
+  it('yellow when schema_version 2 fingerprint has unknown-sentinel cli_version', () => {
+    withTempRepo((root) => {
+      scaffoldAdapterSources(root);
+      const headSha = execSync('git rev-parse HEAD', { cwd: root, encoding: 'utf8' }).trim();
+      const currentSha = computeAgentAdapterSourceSha256(root);
+      writeFingerprint(root, {
+        schema_version: 2,
+        commit_sha: headSha,
+        result_sha256: 'a'.repeat(64),
+        adapter_source_sha256: currentSha,
+        cli_version: 'claude (unknown)',
+      });
+      const result = checkAgentSmokeFingerprint(root);
+      expect(result.level).toBe('yellow');
+      expect(result.detail).toMatch(/unknown-sentinel pattern/);
+    });
+  });
+
   it('AGENT_ADAPTER_SOURCE_PATHS includes the four adapter-surface files Codex HIGH 4 named', () => {
     expect(AGENT_ADAPTER_SOURCE_PATHS).toEqual([
       'src/runtime/adapters/agent.ts',
@@ -266,5 +323,25 @@ describe('Check 30 — AGENT_SMOKE schema_version 2 + drift detection (Slice 47a
     expect(sha).toMatch(/^[0-9a-f]{64}$/);
     // Idempotent — same inputs, same output.
     expect(computeAgentAdapterSourceSha256()).toBe(sha);
+  });
+
+  // Slice 47a Codex challenger HIGH 3 fold-in — CODEX_ADAPTER_SOURCE_PATHS
+  // is symmetric with AGENT_ADAPTER_SOURCE_PATHS w.r.t. the runner
+  // surface. Slice 47a's runner-side selection/provenance derivation
+  // participates in BOTH adapters' transcripts via the
+  // materializeDispatch call site; excluding `runner.ts` from the
+  // CODEX list would let a runner edit silently invalidate the codex
+  // fingerprint without tripping drift, while the same edit trips the
+  // agent one.
+  it('CODEX_ADAPTER_SOURCE_PATHS includes runner.ts for symmetry with AGENT (HIGH 3 fold-in)', async () => {
+    const mod = await import('../../scripts/audit.mjs');
+    expect(mod.CODEX_ADAPTER_SOURCE_PATHS).toContain('src/runtime/runner.ts');
+    // Pin the full set so a future trim of the path list trips this test.
+    expect(mod.CODEX_ADAPTER_SOURCE_PATHS).toEqual([
+      'src/runtime/adapters/codex.ts',
+      'src/runtime/adapters/shared.ts',
+      'src/runtime/adapters/dispatch-materializer.ts',
+      'src/runtime/runner.ts',
+    ]);
   });
 });

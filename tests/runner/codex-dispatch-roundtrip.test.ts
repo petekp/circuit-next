@@ -61,10 +61,17 @@ const LAST_RUN_FINGERPRINT_PATH = resolve('tests/fixtures/codex-smoke/last-run.j
 // of the current adapter surface. Check 32 re-computes this hash at
 // audit time and flags drift (yellow: fingerprint exists but adapter
 // has changed since the last CODEX_SMOKE run).
+// Slice 47a Codex challenger HIGH 3 fold-in — `runner.ts` added for
+// symmetry with the AGENT writer's source path list. The Slice 47a
+// runner-side selection/provenance derivation participates in the
+// codex dispatch transcript via the materializeDispatch call site;
+// excluding `runner.ts` from this list would let a runner edit
+// silently invalidate the CODEX fingerprint without tripping drift.
 const ADAPTER_SOURCE_PATHS = [
   resolve('src/runtime/adapters/codex.ts'),
   resolve('src/runtime/adapters/shared.ts'),
   resolve('src/runtime/adapters/dispatch-materializer.ts'),
+  resolve('src/runtime/runner.ts'),
 ] as const;
 
 function adapterSourceSha256(): string {

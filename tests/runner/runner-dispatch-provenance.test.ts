@@ -221,6 +221,166 @@ describe("Slice 47a — dispatch.started carries honest 'resolved_selection' fro
   });
 });
 
+// Slice 47a Codex challenger HIGH 1 fold-in — SkillOverride
+// composition pins. Pre-fold-in, `deriveResolvedSelection` collapsed
+// non-`inherit` overlays to their raw skills payload, silently
+// producing wrong sets for legal `append` / `remove` overrides. The
+// post-fold-in helper applies SEL-I3 composition (inherit no-op,
+// replace set, append union, remove difference) over a workflow →
+// step base chain.
+describe("Slice 47a Codex HIGH 1 — SkillOverride 'append' / 'remove' / 'inherit' compose per SEL-I3", () => {
+  it("workflow=replace ['tdd','react-doctor'] + step=remove ['tdd'] → ['react-doctor'] (was: ['tdd'] pre-fold-in)", async () => {
+    const { bytes } = loadFixture();
+    const raw = JSON.parse(bytes.toString('utf8'));
+    raw.default_selection = {
+      skills: { mode: 'replace', skills: ['tdd', 'react-doctor'] },
+    };
+    for (const step of raw.steps) {
+      if (step.kind === 'dispatch') {
+        step.selection = { skills: { mode: 'remove', skills: ['tdd'] } };
+      }
+    }
+    const workflow = Workflow.parse(raw);
+    const runRoot = join(runRootBase, 'remove-after-replace');
+    const outcome = await runDogfood({
+      runRoot,
+      workflow,
+      workflowBytes: bytes,
+      runId: RunId.parse('47a47a47-a47a-47a4-7a47-a47a47a47b01'),
+      goal: 'remove after replace composition',
+      rigor: 'standard',
+      lane: lane(),
+      now: deterministicNow(Date.UTC(2026, 3, 22, 14, 0, 0)),
+      dispatcher: stubDispatcher(),
+    });
+    const dispatchStarted = outcome.events.find((e) => e.kind === 'dispatch.started');
+    if (!dispatchStarted || dispatchStarted.kind !== 'dispatch.started') {
+      throw new Error('expected dispatch.started event');
+    }
+    expect(dispatchStarted.resolved_selection.skills).toEqual(['react-doctor']);
+  });
+
+  it("workflow=replace ['tdd'] + step=append ['react-doctor'] → ['tdd','react-doctor'] (set-union)", async () => {
+    const { bytes } = loadFixture();
+    const raw = JSON.parse(bytes.toString('utf8'));
+    raw.default_selection = { skills: { mode: 'replace', skills: ['tdd'] } };
+    for (const step of raw.steps) {
+      if (step.kind === 'dispatch') {
+        step.selection = { skills: { mode: 'append', skills: ['react-doctor'] } };
+      }
+    }
+    const workflow = Workflow.parse(raw);
+    const runRoot = join(runRootBase, 'append-after-replace');
+    const outcome = await runDogfood({
+      runRoot,
+      workflow,
+      workflowBytes: bytes,
+      runId: RunId.parse('47a47a47-a47a-47a4-7a47-a47a47a47b02'),
+      goal: 'append after replace composition',
+      rigor: 'standard',
+      lane: lane(),
+      now: deterministicNow(Date.UTC(2026, 3, 22, 14, 0, 0)),
+      dispatcher: stubDispatcher(),
+    });
+    const dispatchStarted = outcome.events.find((e) => e.kind === 'dispatch.started');
+    if (!dispatchStarted || dispatchStarted.kind !== 'dispatch.started') {
+      throw new Error('expected dispatch.started event');
+    }
+    expect(dispatchStarted.resolved_selection.skills).toEqual(['tdd', 'react-doctor']);
+  });
+
+  it("workflow=replace ['tdd','react-doctor'] + step=append ['tdd'] → ['tdd','react-doctor'] (set-union dedupes)", async () => {
+    const { bytes } = loadFixture();
+    const raw = JSON.parse(bytes.toString('utf8'));
+    raw.default_selection = {
+      skills: { mode: 'replace', skills: ['tdd', 'react-doctor'] },
+    };
+    for (const step of raw.steps) {
+      if (step.kind === 'dispatch') {
+        step.selection = { skills: { mode: 'append', skills: ['tdd'] } };
+      }
+    }
+    const workflow = Workflow.parse(raw);
+    const runRoot = join(runRootBase, 'append-existing');
+    const outcome = await runDogfood({
+      runRoot,
+      workflow,
+      workflowBytes: bytes,
+      runId: RunId.parse('47a47a47-a47a-47a4-7a47-a47a47a47b03'),
+      goal: 'append existing dedupes',
+      rigor: 'standard',
+      lane: lane(),
+      now: deterministicNow(Date.UTC(2026, 3, 22, 14, 0, 0)),
+      dispatcher: stubDispatcher(),
+    });
+    const dispatchStarted = outcome.events.find((e) => e.kind === 'dispatch.started');
+    if (!dispatchStarted || dispatchStarted.kind !== 'dispatch.started') {
+      throw new Error('expected dispatch.started event');
+    }
+    expect(dispatchStarted.resolved_selection.skills).toEqual(['tdd', 'react-doctor']);
+  });
+
+  it("workflow=replace ['tdd'] + step=inherit → ['tdd'] (no-op preserves base)", async () => {
+    const { bytes } = loadFixture();
+    const raw = JSON.parse(bytes.toString('utf8'));
+    raw.default_selection = { skills: { mode: 'replace', skills: ['tdd'] } };
+    for (const step of raw.steps) {
+      if (step.kind === 'dispatch') {
+        step.selection = { skills: { mode: 'inherit' } };
+      }
+    }
+    const workflow = Workflow.parse(raw);
+    const runRoot = join(runRootBase, 'inherit-noop');
+    const outcome = await runDogfood({
+      runRoot,
+      workflow,
+      workflowBytes: bytes,
+      runId: RunId.parse('47a47a47-a47a-47a4-7a47-a47a47a47b04'),
+      goal: 'inherit no-op preserves workflow base',
+      rigor: 'standard',
+      lane: lane(),
+      now: deterministicNow(Date.UTC(2026, 3, 22, 14, 0, 0)),
+      dispatcher: stubDispatcher(),
+    });
+    const dispatchStarted = outcome.events.find((e) => e.kind === 'dispatch.started');
+    if (!dispatchStarted || dispatchStarted.kind !== 'dispatch.started') {
+      throw new Error('expected dispatch.started event');
+    }
+    expect(dispatchStarted.resolved_selection.skills).toEqual(['tdd']);
+  });
+});
+
+// Slice 47a Codex HIGH 2 fold-in — DogfoodRunResult.dispatchResults
+// surface for AGENT_SMOKE / CODEX_SMOKE fingerprint cli_version
+// binding. The pre-fold-in env-var side-channel let unknown/empty
+// cli_version through; the post-fold-in path reads from the actual
+// adapter return and the audit rejects v2 fingerprints with empty/
+// unknown cli_version.
+describe('Slice 47a Codex HIGH 2 — DogfoodRunResult.dispatchResults surfaces per-dispatch cli_version', () => {
+  it('captures stepId + adapterName + cli_version from each dispatcher invocation', async () => {
+    const { workflow, bytes } = loadFixture();
+    const runRoot = join(runRootBase, 'cli-version-capture');
+    const outcome = await runDogfood({
+      runRoot,
+      workflow,
+      workflowBytes: bytes,
+      runId: RunId.parse('47a47a47-a47a-47a4-7a47-a47a47a47b05'),
+      goal: 'cli_version capture',
+      rigor: 'standard',
+      lane: lane(),
+      now: deterministicNow(Date.UTC(2026, 3, 22, 14, 0, 0)),
+      dispatcher: stubDispatcher(),
+    });
+    expect(outcome.dispatchResults.length).toBeGreaterThan(0);
+    const first = outcome.dispatchResults[0];
+    if (first === undefined) throw new Error('expected dispatchResults[0]');
+    expect(first.adapterName).toBe('agent');
+    expect(first.cli_version).toBe('0.0.0-stub');
+    expect(typeof first.stepId).toBe('string');
+    expect(first.stepId.length).toBeGreaterThan(0);
+  });
+});
+
 describe("Slice 47a — materializer fails closed when resolved_from.role does not match the dispatch step's role", () => {
   it('materializeDispatch throws when resolvedFrom.source="role" carries a role that disagrees with the event role', () => {
     const stub: DispatchResult = {

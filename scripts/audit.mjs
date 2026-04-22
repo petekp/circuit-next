@@ -3850,12 +3850,30 @@ export function checkAgentSmokeFingerprint(rootDir = REPO_ROOT, opts = {}) {
     };
   }
 
+  // Slice 47a Codex challenger HIGH 2 fold-in — `cli_version` is
+  // load-bearing on a v2 fingerprint (the binding name says so),
+  // not a display suffix. Reject empty / missing / sentinel-shaped
+  // values yellow with a precise remediation message. The earlier
+  // implementation treated cli_version as optional, which let an
+  // operator-invented or env-var-defaulted "(unknown)" string land
+  // and pass; that defeats the half of the v2 binding the field name
+  // claims to enforce.
   const cliVersion = parsed.cli_version;
-  const cliVersionNote =
-    typeof cliVersion === 'string' && cliVersion.length > 0 ? `; cli_version=${cliVersion}` : '';
+  if (typeof cliVersion !== 'string' || cliVersion.length === 0) {
+    return {
+      level: 'yellow',
+      detail: `${relative(rootDir, fingerprintPath)} schema_version 2 missing or empty 'cli_version' (Slice 47a Codex HIGH 2: cli_version is load-bearing, not a display suffix); re-promote via AGENT_SMOKE=1 UPDATE_AGENT_FINGERPRINT=1`,
+    };
+  }
+  if (/\(unknown\)/.test(cliVersion)) {
+    return {
+      level: 'yellow',
+      detail: `${relative(rootDir, fingerprintPath)} cli_version "${cliVersion}" carries an unknown-sentinel pattern; promotion path captured a fallback rather than the real subprocess init event — re-promote via AGENT_SMOKE=1 UPDATE_AGENT_FINGERPRINT=1 in an environment with the live claude CLI available`,
+    };
+  }
   return {
     level: 'green',
-    detail: `${baseDetail}; adapter_source_sha256=${current.slice(0, 12)}… matches current surface${cliVersionNote}`,
+    detail: `${baseDetail}; adapter_source_sha256=${current.slice(0, 12)}… matches current surface; cli_version=${cliVersion}`,
   };
 }
 
@@ -3874,10 +3892,20 @@ export function checkAgentSmokeFingerprint(rootDir = REPO_ROOT, opts = {}) {
 // hidden by the ancestor-only relationship. (Earlier draft cited
 // CC#P2-4; ADR-0007 CC#P2-4 is session hooks, not second adapter.
 // Corrected per Codex Slice 45 HIGH 1 fold-in.)
+// Slice 47a Codex challenger HIGH 3 fold-in — `runner.ts` added for
+// symmetry with `AGENT_ADAPTER_SOURCE_PATHS`. Pre-fold-in, Slice 47a
+// moved selection/provenance derivation into `runner.ts` at the
+// `materializeDispatch` call site, but the codex fingerprint path
+// list did not cover it — a future runner edit could falsify codex
+// `dispatch.started` provenance without tripping CODEX_SMOKE drift,
+// while the same class of agent-transcript edit now trips
+// AGENT_SMOKE. The asymmetry is the governance gap Slice 47a was
+// supposed to close.
 export const CODEX_ADAPTER_SOURCE_PATHS = Object.freeze([
   'src/runtime/adapters/codex.ts',
   'src/runtime/adapters/shared.ts',
   'src/runtime/adapters/dispatch-materializer.ts',
+  'src/runtime/runner.ts',
 ]);
 
 export function computeCodexAdapterSourceSha256(rootDir = REPO_ROOT) {

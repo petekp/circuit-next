@@ -328,13 +328,27 @@ describe('Slice 43c — explore fixture static declarations (ratchet-floor contr
         // one whose result_sha256 is recorded (matching prior shape).
         if (UPDATE_AGENT_FINGERPRINT) {
           const commitSha = currentHeadSha();
-          // The adapter writes cli_version into the dispatch result
-          // (init.claude_code_version per agent.ts). The runtime does
-          // not propagate it onto an event yet (P2-MODEL-EFFORT
-          // scope); for v0 we capture it via a side-channel env var.
-          // If a future event extension surfaces cli_version, this
-          // helper can read from the event directly.
-          const cliVersion = process.env.AGENT_CLI_VERSION ?? 'claude (unknown)';
+          // Slice 47a Codex HIGH 2 fold-in — bind cli_version to the
+          // actual subprocess init event via DogfoodRunResult.dispatchResults
+          // (populated by runDogfood; sourced from each dispatcher's
+          // DispatchResult.cli_version, which agent.ts reads from
+          // init.claude_code_version). The earlier env-var side-channel
+          // (process.env.AGENT_CLI_VERSION ?? 'claude (unknown)') let
+          // a missing/unknown cli_version through; the audit now also
+          // rejects fingerprints with empty/unknown cli_version on v2,
+          // so this binding fails closed at promotion time.
+          const firstAgentDispatch = outcome.dispatchResults.find((d) => d.adapterName === 'agent');
+          if (firstAgentDispatch === undefined) {
+            throw new Error(
+              'AGENT_SMOKE fingerprint promotion: no agent-dispatch result captured (DogfoodRunResult.dispatchResults empty for adapter=agent)',
+            );
+          }
+          const cliVersion = firstAgentDispatch.cli_version;
+          if (cliVersion.length === 0 || /\(unknown\)/.test(cliVersion)) {
+            throw new Error(
+              `AGENT_SMOKE fingerprint promotion: cli_version "${cliVersion}" is empty or sentinel; refusing to write a fingerprint that audit Check 30 will reject`,
+            );
+          }
           const fingerprint = {
             schema_version: 2,
             commit_sha: commitSha,
