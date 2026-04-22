@@ -465,20 +465,17 @@ describe('checkPinnedRatchetFloor (Slice 26b full-file check)', () => {
     expect(typeof data?.floors?.contract_test_count).toBe('number');
     // last_advanced_in_slice tracks the most recent floor advancement.
     // See specs/ratchet-floor.json `notes` for the full per-slice ledger.
-    // Most recent: Slice 42 (P2.4 — real agent adapter + Check 29
-    // import-level scan per ADR-0009 §4 Slice 42 binding) advanced the
-    // floor to 873 (+29: +27 slice-42-agent-adapter.test.ts covering
-    // adapter module shape, parseAgentStdout error paths, Check 29
-    // positive+negative import patterns (exact, sub-path, dynamic,
-    // require, re-export, side-effect, .d.ts skip), and capability-
-    // boundary flag binding; +2 agent-adapter-smoke.test.ts static
-    // declarations — the AGENT_SMOKE-gated end-to-end test uses
-    // `(AGENT_SMOKE ? it : it.skip)(...)` which does not match the
-    // /^\s*(it|test)\(/gm static pattern and is not counted).
+    // Most recent: Slice 43a (P2.5 HIGH 5 retargeting —
+    // validateWorkflowKindPolicy helper extraction per plan §Slice 40
+    // Retargeting note / §P2.5 Additional deliverable) advanced the
+    // floor 885 → 900 (+15 static declarations in new
+    // tests/contracts/workflow-kind-policy.test.ts covering the
+    // shared JS canonical-set check and the TS safeParse-first
+    // wrapper exposed via src/runtime/policy/workflow-kind-policy.ts).
     // This assertion pins the CURRENT slice id so any future floor
     // advancement that forgets to update the marker fails the test
     // immediately — the slice id changes only when the floor changes.
-    expect(data?.last_advanced_in_slice).toBe('42');
+    expect(data?.last_advanced_in_slice).toBe('43a');
   });
 
   it('readPinnedRatchetFloor returns null when the file is missing', () => {

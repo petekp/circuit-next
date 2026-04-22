@@ -173,7 +173,21 @@ export function checkPluginCommandClosure(rootDir?: string): AuditCheckResult;
 // .claude-plugin/skills/<kind>/circuit.json declares the expected canonical
 // phase set for its workflow-kind. Known kinds at P2.3 landing: `explore`.
 // Unknown kinds pass through information-only; `dogfood-run-0` is exempt.
+//
+// Slice 43a (HIGH 5 retargeting, P2.5) refactored Check 24 to delegate
+// the canonical-phase-set check to scripts/policy/workflow-kind-policy.mjs;
+// the re-exports here let existing test imports continue to pull these
+// constants through audit.mjs at their original paths.
 export function checkSpineCoverage(rootDir?: string): AuditCheckResult;
+
+export type WorkflowKindCanonicalSetsEntry = {
+  readonly canonicals: readonly string[];
+  readonly omits: readonly string[];
+  readonly title: string;
+  readonly authority: string;
+};
+export const WORKFLOW_KIND_CANONICAL_SETS: Record<string, WorkflowKindCanonicalSetsEntry>;
+export const EXEMPT_WORKFLOW_IDS: ReadonlySet<string>;
 
 // Slice 35 (pre-P2.4 fold-in #1) — artifact registry backing-path integrity
 // check. Walks specs/artifacts.json and flags any two distinct artifacts whose

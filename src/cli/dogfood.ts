@@ -7,6 +7,7 @@ import type { LaneDeclaration } from '../schemas/lane.js';
 import { Rigor } from '../schemas/rigor.js';
 import { Workflow } from '../schemas/workflow.js';
 
+import { validateWorkflowKindPolicy } from '../runtime/policy/workflow-kind-policy.js';
 import { runDogfood } from '../runtime/runner.js';
 
 // Slice 27d CLI entrypoint for `npm run circuit:run -- dogfood-run-0 ...`.
@@ -129,6 +130,14 @@ function loadFixture(fixturePath: string): { workflow: Workflow; bytes: Buffer }
   const bytes = readFileSync(fixturePath);
   const raw: unknown = JSON.parse(bytes.toString('utf8'));
   const workflow = Workflow.parse(raw);
+  // Slice 43a (P2.5 HIGH 5): enforce workflow-kind canonical phase-set
+  // policy at runtime fixture load. Same table used by
+  // scripts/audit.mjs Check 24. See src/runtime/policy/
+  // workflow-kind-policy.ts for the validator.
+  const policy = validateWorkflowKindPolicy(workflow);
+  if (!policy.ok) {
+    throw new Error(`workflow fixture policy violation (${fixturePath}):\n  ${policy.reason}`);
+  }
   return { workflow, bytes };
 }
 

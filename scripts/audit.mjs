@@ -14,6 +14,11 @@
 import { execSync } from 'node:child_process';
 import { existsSync, lstatSync, readFileSync, readdirSync, readlinkSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
+import {
+  EXEMPT_WORKFLOW_IDS,
+  WORKFLOW_KIND_CANONICAL_SETS,
+  checkWorkflowKindCanonicalPolicy,
+} from './policy/workflow-kind-policy.mjs';
 
 const REPO_ROOT = execSync('git rev-parse --show-toplevel').toString().trim();
 const DELIM = '<<<CIRCUIT-NEXT-AUDIT-END>>>';
@@ -2714,31 +2719,22 @@ export function checkPluginCommandClosure(rootDir = REPO_ROOT) {
 // Check 24 (ADR-0007 CC#P2-6 enforcement + EXPLORE-I1 enforcement, P2.3).
 // Verifies that workflow fixtures under `.claude-plugin/skills/<kind>/
 // circuit.json` declare the canonical phase set their workflow-kind
-// requires. Kinds recognized at P2.3 landing:
-//   - `explore` → canonical set {frame, analyze, act, review, close},
-//     omits {plan, verify} (per specs/contracts/explore.md §Canonical phase
-//     set and ADR-0007 CC#P2-6; EXPLORE-I1).
-//   - `dogfood-run-0` → partial fixture from Phase 1.5 Alpha Proof;
-//     explicitly exempt from kind-canonical enforcement (its
-//     `spine_policy.omits` intentionally covers 5 of 7 canonicals per
-//     its slice-27d authoring). Kept in audit as a known-exempt row.
-// Workflows whose `id` is not in WORKFLOW_KIND_CANONICAL_SETS are passed
-// through (information-only) — unknown kinds do not fail the check, they
-// just do not contribute an enforcement row. This is deliberate: future
-// workflow-kinds (review, build, repair, migrate, sweep) will each land
-// their own entry in this table under their implementing slice.
-const WORKFLOW_KIND_CANONICAL_SETS = {
-  explore: {
-    canonicals: ['frame', 'analyze', 'act', 'review', 'close'],
-    omits: ['plan', 'verify'],
-    title: 'Frame → Analyze → Synthesize → Review → Close',
-    authority: 'specs/contracts/explore.md §Canonical phase set',
-  },
-};
-
-const EXEMPT_WORKFLOW_IDS = new Set([
-  'dogfood-run-0', // Phase 1.5 Alpha Proof partial-spine fixture
-]);
+// requires. Kinds recognized (single source of truth):
+//   scripts/policy/workflow-kind-policy.mjs → WORKFLOW_KIND_CANONICAL_SETS
+//
+// Slice 43a (HIGH 5 retargeting, P2.5 landing) extracted the canonical-
+// phase-set table + canonical-policy check into the shared JS module
+// above so this audit-level check and the runtime-level helper at
+// src/runtime/policy/workflow-kind-policy.ts share one authoritative
+// table. Prior to Slice 43a the table was duplicated between audit.mjs
+// and src/cli/dogfood.ts (implicit via hand-parse); drift risk was the
+// HIGH 5 finding the composition review surfaced. Check 24 is now the
+// audit consumer of that shared policy.
+//
+// Re-exports pass through so tests/contracts/spine-coverage.test.ts can
+// continue importing WORKFLOW_KIND_CANONICAL_SETS + EXEMPT_WORKFLOW_IDS
+// from audit.mjs at the same paths they had pre-extraction.
+export { WORKFLOW_KIND_CANONICAL_SETS, EXEMPT_WORKFLOW_IDS };
 
 export function checkSpineCoverage(rootDir = REPO_ROOT) {
   const skillsDir = join(rootDir, '.claude-plugin/skills');
@@ -2766,78 +2762,12 @@ export function checkSpineCoverage(rootDir = REPO_ROOT) {
       continue;
     }
 
-    const id = fixture?.id;
-    if (typeof id !== 'string') {
-      errors.push(`${e.name}/circuit.json missing top-level \`id\` string field`);
-      continue;
+    const result = checkWorkflowKindCanonicalPolicy(fixture);
+    if (result.kind === 'red') {
+      errors.push(result.detail);
+    } else {
+      findings.push(result.detail);
     }
-
-    if (EXEMPT_WORKFLOW_IDS.has(id)) {
-      findings.push(`${id}: exempt from kind-canonical enforcement (partial-spine, recorded)`);
-      continue;
-    }
-
-    const expected = WORKFLOW_KIND_CANONICAL_SETS[id];
-    if (!expected) {
-      findings.push(`${id}: no canonical-set entry (unknown workflow kind; pass-through)`);
-      continue;
-    }
-
-    // Extract declared canonical set from phases (ignoring undefined canonicals).
-    const declared = new Set();
-    for (const phase of fixture.phases ?? []) {
-      if (typeof phase?.canonical === 'string') declared.add(phase.canonical);
-    }
-    const expectedSet = new Set(expected.canonicals);
-
-    // Symmetric diff: missing + extra.
-    const missing = [...expectedSet].filter((c) => !declared.has(c));
-    const extra = [...declared].filter((c) => !expectedSet.has(c));
-    if (missing.length > 0 || extra.length > 0) {
-      const parts = [];
-      if (missing.length > 0) parts.push(`missing canonical(s): ${missing.join(', ')}`);
-      if (extra.length > 0) parts.push(`unexpected canonical(s): ${extra.join(', ')}`);
-      errors.push(
-        `${id}: declared canonical set does not match expected {${expected.canonicals.join(
-          ', ',
-        )}} per ${expected.authority} — ${parts.join('; ')}`,
-      );
-      continue;
-    }
-
-    // Verify spine_policy.mode='partial' with omits matching expected.
-    const sp = fixture.spine_policy;
-    if (!sp || typeof sp !== 'object') {
-      errors.push(`${id}: missing \`spine_policy\` field`);
-      continue;
-    }
-    if (sp.mode !== 'partial') {
-      errors.push(
-        `${id}: spine_policy.mode must be 'partial' for workflow-kind ${id} (expected omits=${JSON.stringify(
-          expected.omits,
-        )}, got mode=${sp.mode})`,
-      );
-      continue;
-    }
-    const declaredOmits = new Set(Array.isArray(sp.omits) ? sp.omits : []);
-    const expectedOmits = new Set(expected.omits);
-    const missingOmits = [...expectedOmits].filter((c) => !declaredOmits.has(c));
-    const extraOmits = [...declaredOmits].filter((c) => !expectedOmits.has(c));
-    if (missingOmits.length > 0 || extraOmits.length > 0) {
-      const parts = [];
-      if (missingOmits.length > 0) parts.push(`missing omit(s): ${missingOmits.join(', ')}`);
-      if (extraOmits.length > 0) parts.push(`unexpected omit(s): ${extraOmits.join(', ')}`);
-      errors.push(
-        `${id}: spine_policy.omits does not match expected {${expected.omits.join(
-          ', ',
-        )}} — ${parts.join('; ')}`,
-      );
-      continue;
-    }
-
-    findings.push(
-      `${id}: canonical set {${expected.canonicals.join(', ')}} + omits {${expected.omits.join(', ')}} match`,
-    );
   }
 
   if (errors.length > 0) {
