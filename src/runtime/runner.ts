@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { Event } from '../schemas/event.js';
 import type { InvocationId, RunId, WorkflowId } from '../schemas/ids.js';
@@ -161,6 +161,31 @@ async function resolveDispatcher(inv: DogfoodInvocation): Promise<DispatchFn> {
   return dispatchAgent;
 }
 
+// Slice 43c: orchestrator-synthesis steps land an artifact file at
+// `runRoot/step.writes.artifact.path` before their `step.artifact_written`
+// event fires. At v0 the body is a minimal deterministic JSON stub with
+// one string placeholder per `step.gate.required` section — sufficient to
+// (a) let downstream steps' `reads[]` find the file (prompt composition +
+// final close-step reads), (b) let the close-step's artifact
+// (`artifacts/explore-result.json` in explore) land deterministically so
+// a byte-shape golden can hash it, and (c) keep the close-step at the end
+// of the run idempotent for repeat invocations against the same fixture.
+// A future slice (P2.10 — artifact schema set + orchestrator-synthesis
+// integration) replaces the stub with real orchestrator output; the seam
+// is this single helper.
+function writeSynthesisArtifact(
+  runRoot: string,
+  step: Workflow['steps'][number] & { kind: 'synthesis' },
+): void {
+  const abs = join(runRoot, step.writes.artifact.path);
+  mkdirSync(dirname(abs), { recursive: true });
+  const body: Record<string, string> = {};
+  for (const section of step.gate.required) {
+    body[section] = `<${step.id as unknown as string}-placeholder-${section}>`;
+  }
+  writeFileSync(abs, `${JSON.stringify(body, null, 2)}\n`);
+}
+
 // Narrow dogfood-run-0 loop. Walks routes from the single entry_mode;
 // for each step, appends the per-kind event trail; emits run.closed
 // after the routes graph reaches @complete; writes result.json last.
@@ -245,6 +270,7 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
     });
 
     if (step.kind === 'synthesis') {
+      writeSynthesisArtifact(runRoot, step);
       push({
         schema_version: 1,
         sequence,

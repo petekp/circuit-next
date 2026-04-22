@@ -10,19 +10,20 @@ import { Workflow } from '../schemas/workflow.js';
 import { validateWorkflowKindPolicy } from '../runtime/policy/workflow-kind-policy.js';
 import { runDogfood } from '../runtime/runner.js';
 
-// Slice 27d CLI entrypoint for `npm run circuit:run -- dogfood-run-0 ...`.
-// Loads the dogfood-run-0 workflow fixture at
-// `.claude-plugin/skills/dogfood-run-0/circuit.json`, parses it through
-// the production `Workflow` schema, composes the runtime boundary via
-// `runDogfood`, and prints the <run-root> path on success.
+// Slice 27d CLI entrypoint (extended at Slice 43c to accept `explore`
+// alongside `dogfood-run-0`). Loads the named workflow fixture at
+// `.claude-plugin/skills/<workflow-name>/circuit.json`, parses it through
+// the production `Workflow` schema, calls `validateWorkflowKindPolicy`,
+// composes the runtime boundary via `runDogfood`, and prints the
+// <run-root> path on success.
 //
-// v0.1 scope: invocation-layer config only (`--goal`, `--rigor`, `--dry-run`,
-// `--run-root`). No user-global or project config layer yet. `--dry-run`
-// is accepted for forward compatibility but is a no-op in v0.1 because the
-// dogfood loop has no real dispatch to suppress; the dry-run agent adapter
-// is structural to the loop.
+// Invocation-layer config only (`--goal`, `--rigor`, `--dry-run`,
+// `--run-root`, `--fixture`). No user-global or project config layer yet.
+// `--dry-run` is accepted for forward compatibility but is a no-op at
+// Tier 0 — the real `dispatchAgent` adapter (Slice 42) + five-event
+// materialization (Slice 43b) run regardless; suppressing real dispatch
+// at the CLI layer is a future slice.
 
-const DEFAULT_FIXTURE_RELATIVE = '.claude-plugin/skills/dogfood-run-0/circuit.json';
 const DEFAULT_RUNS_BASE = '.circuit-next/runs';
 
 interface ParsedArgs {
@@ -151,12 +152,6 @@ export async function main(argv: readonly string[]): Promise<number> {
   }
 
   const fixturePath = resolveFixturePath(args.workflowName, args.fixturePath);
-  if (args.workflowName !== 'dogfood-run-0' && fixturePath.includes(DEFAULT_FIXTURE_RELATIVE)) {
-    process.stderr.write(
-      `warning: v0.1 only exercises 'dogfood-run-0'; '${args.workflowName}' is not yet supported\n`,
-    );
-  }
-
   const { workflow, bytes } = loadFixture(fixturePath);
   const runId = RunId.parse(randomUUID());
   const now = () => new Date();

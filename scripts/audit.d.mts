@@ -292,6 +292,21 @@ export function checkAdapterImportDiscipline(
 ): AuditCheckResult;
 export function extractImportSpecifiers(content: string): string[];
 
+// Slice 43c (P2.5 CC#P2-1 + CC#P2-2) — AGENT_SMOKE fingerprint
+// commit-ancestor audit. When `tests/fixtures/agent-smoke/last-run.json`
+// exists, verifies the fingerprint's `commit_sha` resolves in-repo and
+// is an ancestor of HEAD. Missing file is yellow (ADR-0007 CC#P2-2
+// CI-skip semantics — local AGENT_SMOKE runs are opt-in until Phase 2
+// close); malformed JSON or non-ancestor SHA is red.
+export type CheckAgentSmokeFingerprintOptions = {
+  /** Optional override of the fingerprint file path for test fixtures. */
+  fingerprintPath?: string;
+};
+export function checkAgentSmokeFingerprint(
+  rootDir?: string,
+  opts?: CheckAgentSmokeFingerprintOptions,
+): AuditCheckResult;
+
 // Slice 30 — DOG+2 slice:doctor reuses the lane and framing literals enforced
 // by the audit so the operator briefing script cannot drift from the gate.
 export const LANES: readonly [

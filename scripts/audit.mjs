@@ -3623,6 +3623,98 @@ export function checkAdapterImportDiscipline(rootDir = REPO_ROOT, opts = {}) {
   };
 }
 
+// Check 30 (Slice 43c — P2.5 CC#P2-1 + CC#P2-2 binding). AGENT_SMOKE
+// fingerprint commit-ancestor audit.
+//
+// When `tests/fixtures/agent-smoke/last-run.json` exists, verify the
+// `commit_sha` field names a git commit that is an ancestor of HEAD.
+// This binds the ADR-0007 CC#P2-2 CI-skip semantics: the end-to-end
+// explore smoke run is gated by `AGENT_SMOKE=1` (skipped on CI by
+// default per Slice 42 precedent), but when a local run produces the
+// fingerprint, the ancestor check forever after catches regressions
+// that land a fingerprint pointing at an orphaned or rewritten commit.
+//
+// Missing fingerprint is yellow (not red) until Phase 2 close — the
+// operator may commit new runtime/fixture slices without being
+// required to first produce a local AGENT_SMOKE artifact. Non-JSON,
+// missing fields, or non-ancestor SHA is red.
+export function checkAgentSmokeFingerprint(rootDir = REPO_ROOT, opts = {}) {
+  const fingerprintPath =
+    opts.fingerprintPath ?? join(rootDir, 'tests/fixtures/agent-smoke/last-run.json');
+
+  if (!existsSync(fingerprintPath)) {
+    return {
+      level: 'yellow',
+      detail: `${relative(rootDir, fingerprintPath)} absent — ADR-0007 CC#P2-2 CI-skip semantics: missing fingerprint is acceptable until Phase 2 close. Run the explore e2e with AGENT_SMOKE=1 to produce one.`,
+    };
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync(fingerprintPath, 'utf-8'));
+  } catch (err) {
+    return {
+      level: 'red',
+      detail: `${relative(rootDir, fingerprintPath)} is not valid JSON: ${err.message}`,
+    };
+  }
+
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return {
+      level: 'red',
+      detail: `${relative(rootDir, fingerprintPath)} is not a JSON object`,
+    };
+  }
+
+  const commitSha = parsed.commit_sha;
+  if (typeof commitSha !== 'string' || commitSha.length === 0) {
+    return {
+      level: 'red',
+      detail: `${relative(rootDir, fingerprintPath)} missing required 'commit_sha' string`,
+    };
+  }
+
+  if (!/^[0-9a-f]{7,40}$/i.test(commitSha)) {
+    return {
+      level: 'red',
+      detail: `${relative(rootDir, fingerprintPath)} commit_sha '${commitSha}' is not a valid git SHA`,
+    };
+  }
+
+  const resultSha256 = parsed.result_sha256;
+  if (typeof resultSha256 !== 'string' || !/^[0-9a-f]{64}$/.test(resultSha256)) {
+    return {
+      level: 'red',
+      detail: `${relative(rootDir, fingerprintPath)} missing or malformed 'result_sha256' (must be 64-char lowercase hex)`,
+    };
+  }
+
+  try {
+    execSync(`git -C "${rootDir}" cat-file -e ${commitSha}^{commit}`, { stdio: 'ignore' });
+  } catch {
+    return {
+      level: 'red',
+      detail: `${relative(rootDir, fingerprintPath)} commit_sha '${commitSha}' does not resolve to a git commit in this repository`,
+    };
+  }
+
+  try {
+    execSync(`git -C "${rootDir}" merge-base --is-ancestor ${commitSha} HEAD`, {
+      stdio: 'ignore',
+    });
+  } catch {
+    return {
+      level: 'red',
+      detail: `${relative(rootDir, fingerprintPath)} commit_sha '${commitSha}' is not an ancestor of HEAD (fingerprint produced on an orphaned or rewritten commit)`,
+    };
+  }
+
+  return {
+    level: 'green',
+    detail: `${relative(rootDir, fingerprintPath)} commit_sha ${commitSha.slice(0, 12)} is an ancestor of HEAD; result_sha256=${resultSha256.slice(0, 12)}…`,
+  };
+}
+
 function listAdapterSourceFiles(dir) {
   const out = [];
   const SOURCE_EXT = /\.(?:m?ts|cts|tsx)$/;
@@ -4225,12 +4317,27 @@ function main() {
     detail: adapterImportDiscipline.detail,
   });
 
-  // Check 30: npm run verify currently green. (Runs last so the report's
-  // bottom line is the verify-gate status; numbering bumped 29 → 30 by
-  // Slice 42 which inserted Check 29 for adapter import discipline.
-  // Prior bumps: Slice 41 28 → 29; Slice 38 27 → 28; Slice 35 25 → 27;
-  // P2.3 24 → 25; P2.2 23 → 24; P2.1 22 → 23; Slice 31a 21 → 22;
-  // Slice 26b 15 → 20; Slice 25d 20 → 21.)
+  // Check 30: AGENT_SMOKE fingerprint commit-ancestor audit (Slice 43c —
+  // P2.5 CC#P2-1 + CC#P2-2 binding). When
+  // `tests/fixtures/agent-smoke/last-run.json` exists, the fingerprint's
+  // commit_sha must resolve in-repo and be an ancestor of HEAD so a
+  // future regression cannot land a fingerprint against an orphaned or
+  // rewritten commit. Missing file is yellow (ADR-0007 CC#P2-2 CI-skip
+  // semantics — local AGENT_SMOKE runs are opt-in until Phase 2 close).
+  const agentSmokeFingerprint = checkAgentSmokeFingerprint();
+  counters[agentSmokeFingerprint.level]++;
+  findings.push({
+    level: agentSmokeFingerprint.level,
+    check: 'AGENT_SMOKE fingerprint commit-ancestor (Slice 43c / ADR-0007 CC#P2-2)',
+    detail: agentSmokeFingerprint.detail,
+  });
+
+  // Check 31: npm run verify currently green. (Runs last so the report's
+  // bottom line is the verify-gate status; numbering bumped 30 → 31 by
+  // Slice 43c which inserted Check 30 for AGENT_SMOKE fingerprint audit.
+  // Prior bumps: Slice 42 29 → 30; Slice 41 28 → 29; Slice 38 27 → 28;
+  // Slice 35 25 → 27; P2.3 24 → 25; P2.2 23 → 24; P2.1 22 → 23;
+  // Slice 31a 21 → 22; Slice 26b 15 → 20; Slice 25d 20 → 21.)
   const verify = verifyStatus();
   if (verify.pass) {
     counters.green++;

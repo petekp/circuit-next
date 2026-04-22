@@ -465,17 +465,15 @@ describe('checkPinnedRatchetFloor (Slice 26b full-file check)', () => {
     expect(typeof data?.floors?.contract_test_count).toBe('number');
     // last_advanced_in_slice tracks the most recent floor advancement.
     // See specs/ratchet-floor.json `notes` for the full per-slice ledger.
-    // Most recent: Slice 43a (P2.5 HIGH 5 retargeting —
-    // validateWorkflowKindPolicy helper extraction per plan §Slice 40
-    // Retargeting note / §P2.5 Additional deliverable) advanced the
-    // floor 885 → 900 (+15 static declarations in new
-    // tests/contracts/workflow-kind-policy.test.ts covering the
-    // shared JS canonical-set check and the TS safeParse-first
-    // wrapper exposed via src/runtime/policy/workflow-kind-policy.ts).
-    // This assertion pins the CURRENT slice id so any future floor
-    // advancement that forgets to update the marker fails the test
-    // immediately — the slice id changes only when the floor changes.
-    expect(data?.last_advanced_in_slice).toBe('43a');
+    // Most recent: Slice 43c (P2.5 explore end-to-end fixture run —
+    // closes ADR-0007 CC#P2-1 + CC#P2-2 simultaneously) advanced the
+    // floor 900 → 924 (+24 static declarations: 14 in the explore-e2e
+    // parity test + 10 in the Check 30 AGENT_SMOKE fingerprint
+    // contract test). This assertion pins the CURRENT slice id so any
+    // future floor advancement that forgets to update the marker fails
+    // the test immediately — the slice id changes only when the floor
+    // changes.
+    expect(data?.last_advanced_in_slice).toBe('43c');
   });
 
   it('readPinnedRatchetFloor returns null when the file is missing', () => {

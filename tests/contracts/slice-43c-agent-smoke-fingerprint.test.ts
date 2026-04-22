@@ -1,0 +1,163 @@
+import { execSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
+
+import { checkAgentSmokeFingerprint } from '../../scripts/audit.mjs';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = resolve(HERE, '..', '..');
+
+// Slice 43c (P2.5 CC#P2-1 + CC#P2-2) — contract tests for
+// scripts/audit.mjs Check 30 `checkAgentSmokeFingerprint`. The check
+// binds ADR-0007 CC#P2-2 CI-skip semantics at the audit surface: when
+// tests/fixtures/agent-smoke/last-run.json exists, its commit_sha must
+// resolve in-repo and be an ancestor of HEAD; missing file is yellow
+// (acceptable until Phase 2 close); malformed JSON or non-ancestor SHA
+// is red.
+
+function withTempRepo(fn: (root: string) => void) {
+  const root = mkdtempSync(join(tmpdir(), 'circuit-next-43c-fingerprint-'));
+  try {
+    execSync('git init -q', { cwd: root, stdio: 'ignore' });
+    execSync('git config user.email test@example.com', { cwd: root, stdio: 'ignore' });
+    execSync('git config user.name test', { cwd: root, stdio: 'ignore' });
+    execSync('git commit -q --allow-empty -m "root"', { cwd: root, stdio: 'ignore' });
+    fn(root);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+function writeFingerprint(root: string, body: unknown) {
+  const abs = join(root, 'tests/fixtures/agent-smoke/last-run.json');
+  mkdirSync(dirname(abs), { recursive: true });
+  writeFileSync(abs, typeof body === 'string' ? body : JSON.stringify(body));
+}
+
+describe('Check 30 — AGENT_SMOKE fingerprint commit-ancestor (Slice 43c / ADR-0007 CC#P2-2)', () => {
+  it('yellow when the live-repo fingerprint file is absent OR points to an ancestor (initial landing: yellow → green after AGENT_SMOKE run)', () => {
+    const result = checkAgentSmokeFingerprint(REPO_ROOT);
+    // On the live repo at slice-43c landing, the fingerprint either does
+    // not yet exist (yellow) or was produced in-slice with commit_sha
+    // matching an ancestor of HEAD (green). Both are valid terminal
+    // states; red would be invalid.
+    expect(['yellow', 'green']).toContain(result.level);
+  });
+
+  it('yellow when the fingerprint file is absent (ADR-0007 CC#P2-2 CI-skip semantics)', () => {
+    withTempRepo((root) => {
+      const result = checkAgentSmokeFingerprint(root);
+      expect(result.level).toBe('yellow');
+      expect(result.detail).toMatch(/absent/);
+    });
+  });
+
+  it('red when the fingerprint is malformed JSON', () => {
+    withTempRepo((root) => {
+      writeFingerprint(root, '{ not valid json');
+      const result = checkAgentSmokeFingerprint(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(/not valid JSON/);
+    });
+  });
+
+  it('red when the fingerprint is JSON but not an object (array, string, number, null)', () => {
+    withTempRepo((root) => {
+      writeFingerprint(root, ['not', 'an', 'object']);
+      const result = checkAgentSmokeFingerprint(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(/not a JSON object/);
+    });
+  });
+
+  it('red when commit_sha is missing', () => {
+    withTempRepo((root) => {
+      writeFingerprint(root, {
+        schema_version: 1,
+        result_sha256: 'a'.repeat(64),
+      });
+      const result = checkAgentSmokeFingerprint(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(/commit_sha/);
+    });
+  });
+
+  it('red when commit_sha is not a valid git SHA format', () => {
+    withTempRepo((root) => {
+      writeFingerprint(root, {
+        schema_version: 1,
+        commit_sha: 'not-a-sha',
+        result_sha256: 'a'.repeat(64),
+      });
+      const result = checkAgentSmokeFingerprint(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(/not a valid git SHA/);
+    });
+  });
+
+  it('red when result_sha256 is missing or malformed', () => {
+    withTempRepo((root) => {
+      const headSha = execSync('git rev-parse HEAD', { cwd: root, encoding: 'utf8' }).trim();
+      writeFingerprint(root, {
+        schema_version: 1,
+        commit_sha: headSha,
+        result_sha256: 'not-a-hash',
+      });
+      const result = checkAgentSmokeFingerprint(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(/result_sha256/);
+    });
+  });
+
+  it('red when commit_sha does not resolve in the repository', () => {
+    withTempRepo((root) => {
+      writeFingerprint(root, {
+        schema_version: 1,
+        commit_sha: '0'.repeat(40),
+        result_sha256: 'a'.repeat(64),
+      });
+      const result = checkAgentSmokeFingerprint(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(/does not resolve/);
+    });
+  });
+
+  it('red when commit_sha is a valid commit but not an ancestor of HEAD', () => {
+    withTempRepo((root) => {
+      // Create an orphan commit on a separate branch so it exists as a
+      // resolvable commit but is NOT an ancestor of HEAD.
+      execSync('git checkout -q --orphan orphan', { cwd: root, stdio: 'ignore' });
+      execSync('git commit -q --allow-empty -m "orphan"', { cwd: root, stdio: 'ignore' });
+      const orphanSha = execSync('git rev-parse HEAD', { cwd: root, encoding: 'utf8' }).trim();
+      execSync('git checkout -q master 2>/dev/null || git checkout -q main', {
+        cwd: root,
+        stdio: 'ignore',
+      });
+      writeFingerprint(root, {
+        schema_version: 1,
+        commit_sha: orphanSha,
+        result_sha256: 'a'.repeat(64),
+      });
+      const result = checkAgentSmokeFingerprint(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(/not an ancestor of HEAD/);
+    });
+  });
+
+  it('green when commit_sha resolves and is an ancestor of HEAD + result_sha256 is well-formed', () => {
+    withTempRepo((root) => {
+      const headSha = execSync('git rev-parse HEAD', { cwd: root, encoding: 'utf8' }).trim();
+      writeFingerprint(root, {
+        schema_version: 1,
+        commit_sha: headSha,
+        result_sha256: 'a'.repeat(64),
+      });
+      const result = checkAgentSmokeFingerprint(root);
+      expect(result.level).toBe('green');
+      expect(result.detail).toContain(headSha.slice(0, 12));
+    });
+  });
+});
