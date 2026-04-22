@@ -480,11 +480,14 @@ The "second adapter" surface in ADR-0007 is additional evidence under
 CC#P2-2 real-agent dispatch (ibid. lines 157-170: "At least one non-
 dry-run adapter (`agent` ... or `codex` ...) lands..."). P2.6 does
 NOT close a new Phase 2 close criterion; it strengthens CC#P2-2 by
-landing the second adapter named in that criterion's enumeration. The
-Phase 2 close count remains 2/8 (CC#P2-1 placeholder-parity + CC#P2-2
-real-dispatch, both from Slice 43c; now CC#P2-2 with stronger
-evidence via a second-adapter round-trip). CC#P2-4 (session hooks)
-remains red and is P2.7's deliverable.
+landing the second adapter named in that criterion's enumeration.
+**Per-criterion close status (Slice 47c forbidden-scalar-phrase
+fold-in — ADR-0007 §3 No-aggregate-scoring rule):** CC#P2-1 active —
+satisfied (placeholder-parity epoch, Slice 43c); CC#P2-2 active —
+satisfied (real-dispatch, Slice 43c, strengthened via second-adapter
+round-trip at this slice); all other criteria (CC#P2-3, CC#P2-4,
+CC#P2-5, CC#P2-6, CC#P2-7, CC#P2-8) remain in their prior status.
+CC#P2-4 (session hooks) is active — red and is P2.7's deliverable.
 
 **Trajectory.** Arc goal: prove the ADR-0009 subprocess-per-adapter
 pattern generalizes beyond the single `agent` adapter by landing a
@@ -747,8 +750,11 @@ commit time. Expect re-ordering as earlier slices expose surface.
     subprocesses against ephemeral mkdtempSync project roots scoped
     via `--project-root`; macOS `/var/folders` ↔ `/private/var/
     folders` aliasing collapsed via `realpathSync`. Closes the
-    second half of CC#P2-4. **Phase 2 close count advances 2/8 →
-    3/8 at this landing.** No ADR amendment, no Codex challenger
+    second half of CC#P2-4. **Per-criterion close status update
+    (Slice 47c forbidden-scalar-phrase fold-in — ADR-0007 §3
+    No-aggregate-scoring rule):** CC#P2-4 (session hooks +
+    continuity lifecycle) advances from active — red to active —
+    satisfied at this landing. No ADR amendment, no Codex challenger
     pass (CLAUDE.md §Hard invariants #6 scope does not apply —
     adds new contract suite strictly tightening surface, advances
     ratchet without governance-surface movement). Ratchet floor

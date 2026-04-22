@@ -3691,6 +3691,127 @@ export function checkAdapterImportDiscipline(rootDir = REPO_ROOT, opts = {}) {
 // required to first produce a local AGENT_SMOKE artifact. Non-JSON,
 // missing fields, or non-ancestor SHA is red.
 //
+// Slice 47c (Codex Slice 47a comprehensive review HIGH 6 fold-in) —
+// ADR-0007 §3 forbidden scalar-progress firewall. The ADR explicitly
+// forbids close-progress wording at lines 638-648 ("N-of-8 complete",
+// "N of 8 green", "8/8", "7/8", "substantially complete", "mostly
+// done", "all but one", "complete except for X", "green-by-redeferral",
+// "trivially green", "aggregate green", "composite status", and "any
+// scalar summary of Phase 2 close progress"). Pre-Slice-47c the ADR's
+// prohibition lived only as prose; the most visible operator-facing
+// surfaces (PROJECT_STATE.md, ratchet-floor.json notes,
+// phase-2-implementation.md) had silently normalized "Phase 2 close
+// count advances 2/8 → 3/8" wording. This check makes the ADR
+// operative at the audit gate.
+//
+// Scope:
+//   - PROJECT_STATE.md current entry only (text BEFORE the first
+//     `*(Previous slice` historical-preservation marker; preserved
+//     history is not retroactively flagged because rewriting committed
+//     prose would violate the audit-trail discipline).
+//   - README.md (always live).
+//   - specs/ratchet-floor.json (notes field is live operator surface).
+//   - specs/plans/phase-2-implementation.md (live plan).
+//   - specs/plans/phase-1-close-revised.md (live plan).
+//   - specs/plans/slice-47-hardening-foldins.md (live plan).
+//
+// ADR-0007 itself defines the forbidden patterns and is therefore
+// excluded from scan. Lines containing citation-context tokens
+// ("forbidden", "rejected", "ADR-0007 §3", "No-aggregate-scoring",
+// "Slice 47c") are exempted as legitimate self-references that quote
+// the patterns to forbid them.
+export const ADR_0007_FORBIDDEN_PROGRESS_PATTERNS = Object.freeze([
+  { pattern: /\b\d+\/8\b/, label: 'N/8 progress fraction' },
+  { pattern: /\bN\/8\b/, label: 'literal N/8' },
+  { pattern: /\b\d+-of-8\b/, label: 'N-of-8 progress' },
+  { pattern: /\bN-of-8\b/, label: 'literal N-of-8' },
+  { pattern: /\b\d+ of 8\b/i, label: 'N of 8 phrasing' },
+  { pattern: /\bsubstantially complete\b/i, label: 'substantially complete' },
+  { pattern: /\bmostly done\b/i, label: 'mostly done' },
+  { pattern: /\bnearly done\b/i, label: 'nearly done' },
+  { pattern: /\bclose to done\b/i, label: 'close to done' },
+  { pattern: /\bnear close\b/i, label: 'near close' },
+  { pattern: /\ball but one\b/i, label: 'all but one' },
+  { pattern: /\bonly \d+ remaining\b/i, label: 'only N remaining' },
+  { pattern: /\bcomplete except for\b/i, label: 'complete except for' },
+  { pattern: /\bgreen-by-redeferral\b/i, label: 'green-by-redeferral' },
+  { pattern: /\btrivially green\b/i, label: 'trivially green' },
+  { pattern: /\baggregate green\b/i, label: 'aggregate green' },
+  { pattern: /\bcomposite status\b/i, label: 'composite status' },
+]);
+
+export const FORBIDDEN_PROGRESS_SCAN_FILES = Object.freeze([
+  'PROJECT_STATE.md',
+  'README.md',
+  'specs/ratchet-floor.json',
+  'specs/plans/phase-2-implementation.md',
+  'specs/plans/phase-1-close-revised.md',
+  'specs/plans/slice-47-hardening-foldins.md',
+]);
+
+const FORBIDDEN_PROGRESS_CITATION_GUARDS = [
+  /\bforbidden\b/i,
+  /\breject(?:s|ed|ing|ion)?\b/i,
+  /\bdo not use\b/i,
+  /\bADR-0007/i,
+  /\bNo-aggregate-scoring\b/i,
+  /\bSlice 47c\b/i,
+  /\bfirewall\b/i,
+];
+
+function projectStateScopedText(rootDir = REPO_ROOT) {
+  const path = join(rootDir, 'PROJECT_STATE.md');
+  if (!existsSync(path)) return null;
+  const text = readFileSync(path, 'utf-8');
+  const idx = text.indexOf('*(Previous slice');
+  return idx >= 0 ? text.slice(0, idx) : text;
+}
+
+function lineHasForbiddenProgressCitationGuard(line) {
+  return FORBIDDEN_PROGRESS_CITATION_GUARDS.some((re) => re.test(line));
+}
+
+export function checkForbiddenScalarProgressPhrases(rootDir = REPO_ROOT) {
+  const violations = [];
+
+  for (const rel of FORBIDDEN_PROGRESS_SCAN_FILES) {
+    const path = join(rootDir, rel);
+    if (!existsSync(path)) continue;
+
+    let text;
+    if (rel === 'PROJECT_STATE.md') {
+      text = projectStateScopedText(rootDir) ?? '';
+    } else {
+      text = readFileSync(path, 'utf-8');
+    }
+
+    const lines = text.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (lineHasForbiddenProgressCitationGuard(line)) continue;
+      for (const { pattern, label } of ADR_0007_FORBIDDEN_PROGRESS_PATTERNS) {
+        if (pattern.test(line)) {
+          const trimmed = line.trim();
+          const snippet = trimmed.length > 100 ? `${trimmed.slice(0, 97)}...` : trimmed;
+          violations.push(`${rel}:${i + 1}: ${label} → "${snippet}"`);
+        }
+      }
+    }
+  }
+
+  if (violations.length === 0) {
+    return {
+      level: 'green',
+      detail: `${FORBIDDEN_PROGRESS_SCAN_FILES.length} live state files scanned for ADR-0007 §3 forbidden scalar-progress phrases; clean`,
+    };
+  }
+
+  return {
+    level: 'red',
+    detail: `ADR-0007 §3 forbidden scalar-progress phrases detected (Slice 47c firewall):\n      ${violations.join('\n      ')}\n\nReplace with per-criterion list per ADR-0007 §3 No-aggregate-scoring rule (e.g. "CC#P2-1 active — satisfied", not "1/8 close count").`,
+  };
+}
+
 // Slice 45 (P2.6) — the Check 32 `checkCodexSmokeFingerprint` export
 // below reuses the same validation shape against the codex-smoke
 // fingerprint path; both checks share identical semantics and differ
@@ -4788,6 +4909,26 @@ function main() {
     level: sessionHooksPresent.level,
     check: 'Session hooks present (Slice 46 / ADR-0007 CC#P2-4 first-half)',
     detail: sessionHooksPresent.detail,
+  });
+
+  // Check 34: ADR-0007 §3 forbidden scalar-progress firewall (Slice 47c —
+  // Codex Slice 47a comprehensive review HIGH 6 fold-in). Scans curated
+  // live-state surface files (PROJECT_STATE.md current entry, README.md,
+  // ratchet-floor.json, phase-2-implementation.md, phase-1-close-revised.md,
+  // slice-47-hardening-foldins.md) for the forbidden close-progress
+  // wording the ADR explicitly rejects ("N/8", "N-of-8", "substantially
+  // complete", "mostly done", etc.). Pre-Slice-47c, the ADR forbade these
+  // patterns but no audit gate enforced — multiple slices normalized
+  // them on the most operator-visible surfaces. PROJECT_STATE scope is
+  // bounded to the current entry (above the first
+  // `*(Previous slice` historical-preservation marker) so preserved
+  // history is not retroactively flagged.
+  const forbiddenScalarProgress = checkForbiddenScalarProgressPhrases();
+  counters[forbiddenScalarProgress.level]++;
+  findings.push({
+    level: forbiddenScalarProgress.level,
+    check: 'ADR-0007 §3 forbidden scalar-progress firewall (Slice 47c / Codex HIGH 6)',
+    detail: forbiddenScalarProgress.detail,
   });
 
   // Check 31: npm run verify currently green. (Runs last so the report's

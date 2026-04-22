@@ -349,6 +349,19 @@ export function computeAgentAdapterSourceSha256(rootDir?: string): string;
 // SessionStart matcher covering startup|resume|clear|compact.
 export function checkSessionHooksPresent(rootDir?: string): AuditCheckResult;
 
+// Slice 47c (Codex Slice 47a comprehensive review HIGH 6 fold-in) —
+// ADR-0007 §3 forbidden scalar-progress firewall. Scans curated live-
+// state surface files for the close-progress wording the ADR rejects
+// (e.g. "N/8", "substantially complete", "aggregate green"). Citation
+// contexts (lines mentioning "forbidden", "ADR-0007", "Slice 47c",
+// "firewall") are exempted as legitimate self-references.
+export const ADR_0007_FORBIDDEN_PROGRESS_PATTERNS: readonly {
+  readonly pattern: RegExp;
+  readonly label: string;
+}[];
+export const FORBIDDEN_PROGRESS_SCAN_FILES: readonly string[];
+export function checkForbiddenScalarProgressPhrases(rootDir?: string): AuditCheckResult;
+
 // Slice 30 — DOG+2 slice:doctor reuses the lane and framing literals enforced
 // by the audit so the operator briefing script cannot drift from the gate.
 export const LANES: readonly [
