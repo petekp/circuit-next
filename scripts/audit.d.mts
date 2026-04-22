@@ -260,6 +260,24 @@ export function checkAdapterInvocationDiscipline(
   opts?: CheckAdapterInvocationDisciplineOptions,
 ): AuditCheckResult;
 
+// Slice 42 (P2.4) — ADR-0009 §4 Slice 42 binding + Codex Slice 41 HIGH 2
+// fold-in. Import-level scan over src/runtime/adapters/** that rejects any
+// import/require specifier matching FORBIDDEN_ADAPTER_SDK_DEPS (exact or
+// `<id>/…` subpath). Complements Check 28 (dep-level) by catching
+// transitively-installed SDK imports that the package.json-only check
+// cannot see.
+export type CheckAdapterImportDisciplineOptions = {
+  /** Optional override of the adapters directory for test fixtures. */
+  adaptersDir?: string;
+  /** Optional override of the forbidden-dep allowlist for test fixtures. */
+  forbiddenDeps?: readonly string[];
+};
+export function checkAdapterImportDiscipline(
+  rootDir?: string,
+  opts?: CheckAdapterImportDisciplineOptions,
+): AuditCheckResult;
+export function extractImportSpecifiers(content: string): string[];
+
 // Slice 30 — DOG+2 slice:doctor reuses the lane and framing literals enforced
 // by the audit so the operator briefing script cannot drift from the gate.
 export const LANES: readonly [

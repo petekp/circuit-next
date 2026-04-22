@@ -240,7 +240,7 @@ infer the contract from adapter pressure. Rejected because contract-
 first is the methodology's first pillar (CLAUDE.md §Core methodology);
 adapter design without a contract anchor is a D10 gate violation.
 
-### P2.4 — Real agent adapter — `agent` (in-process Anthropic subagent)
+### P2.4 — Real agent adapter — `agent` (headless `claude` CLI subprocess per ADR-0009 §1)
 
 **Lane:** Ratchet-Advance (dispatch-realness ratchet).
 

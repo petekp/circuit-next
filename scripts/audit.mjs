@@ -3615,6 +3615,218 @@ export function checkAdapterInvocationDiscipline(rootDir = REPO_ROOT, opts = {})
   };
 }
 
+// Check 29 (Slice 42 — ADR-0009 §4 Slice 42 binding). Adapter invocation
+// discipline, import-level scan. Complements Check 28 (dep-level) by
+// rejecting any `from '<forbidden>'` import statement under
+// `src/runtime/adapters/**` for any identifier in
+// FORBIDDEN_ADAPTER_SDK_DEPS. Closes the transitive-install bypass: even
+// if a forbidden SDK reaches the installed package tree via a transitive
+// dep (not declared in root package.json), adapter code cannot import it
+// without this check firing red.
+//
+// Scope at Slice 42 landing: the check walks all `.ts` / `.mts` / `.cts` /
+// `.tsx` files under src/runtime/adapters/**, extracting import/require
+// specifiers via regex and matching against the forbidden list. Sub-path
+// imports (`'@anthropic-ai/sdk/whatever'`) are matched by
+// `startsWith(<id>/)` in addition to exact-match. Declaration files
+// (`.d.ts` / `.d.mts` / `.d.cts`) are skipped — they declare types, not
+// runtime imports.
+//
+// Regex approach is a deliberate v0 trade-off: an AST-based scan is
+// more precise (ignores strings/comments, handles multiline formatting
+// robustly) but adds a TS-parser dependency for a small-codebase guard.
+// The regex is tight (anchored on `from`/`require`/`import(`) and the
+// adapters directory is small; precision can tighten under a dedicated
+// AST slice if false positives/negatives surface.
+export function checkAdapterImportDiscipline(rootDir = REPO_ROOT, opts = {}) {
+  const adaptersDir = opts.adaptersDir ?? join(rootDir, 'src/runtime/adapters');
+  const forbiddenList = Array.isArray(opts.forbiddenDeps)
+    ? opts.forbiddenDeps
+    : FORBIDDEN_ADAPTER_SDK_DEPS;
+
+  if (forbiddenList.length === 0) {
+    return {
+      level: 'red',
+      detail:
+        'FORBIDDEN_ADAPTER_SDK_DEPS is empty — import check would pass vacuously; populate the list or remove the check',
+    };
+  }
+
+  if (!existsSync(adaptersDir)) {
+    return {
+      level: 'green',
+      detail: `${relative(rootDir, adaptersDir)} does not exist — import scan vacuous (pre-adapter-code state)`,
+    };
+  }
+
+  const files = listAdapterSourceFiles(adaptersDir);
+  if (files.length === 0) {
+    return {
+      level: 'green',
+      detail: `${relative(rootDir, adaptersDir)} contains no adapter source files — import scan empty`,
+    };
+  }
+
+  const matches = [];
+  for (const file of files) {
+    const content = readFileSync(file, 'utf-8');
+    const specifiers = extractImportSpecifiers(content);
+    for (const spec of specifiers) {
+      for (const forbidden of forbiddenList) {
+        if (spec === forbidden || spec.startsWith(`${forbidden}/`)) {
+          matches.push(`${relative(rootDir, file)}: '${spec}'`);
+        }
+      }
+    }
+  }
+
+  if (matches.length > 0) {
+    return {
+      level: 'red',
+      detail: `forbidden SDK import(s) under src/runtime/adapters/**: ${matches.join('; ')}. ADR-0009 §4 mandates subprocess-per-adapter — reopen ADR-0009 via the matching §3 option before importing this SDK.`,
+    };
+  }
+
+  return {
+    level: 'green',
+    detail: `${files.length} adapter source file(s) scanned; 0 forbidden imports (forbidden-list size: ${forbiddenList.length})`,
+  };
+}
+
+function listAdapterSourceFiles(dir) {
+  const out = [];
+  const SOURCE_EXT = /\.(?:m?ts|cts|tsx)$/;
+  const DECLARATION_EXT = /\.d\.(?:m?ts|cts)$/;
+  function walk(d) {
+    for (const entry of readdirSync(d, { withFileTypes: true })) {
+      const p = join(d, entry.name);
+      if (entry.isDirectory()) {
+        walk(p);
+      } else if (
+        entry.isFile() &&
+        SOURCE_EXT.test(entry.name) &&
+        !DECLARATION_EXT.test(entry.name)
+      ) {
+        out.push(p);
+      }
+    }
+  }
+  walk(dir);
+  return out;
+}
+
+// Extract ESM + CJS import specifiers. Patterns handled:
+//   import … from '<spec>'      — default/named/namespace
+//   import '<spec>'             — side-effect
+//   export … from '<spec>'      — re-export
+//   await import('<spec>')      — dynamic import
+//   require('<spec>')           — CJS (not used in this codebase but handled
+//                                 for completeness against future addition)
+//
+// Comment stripping (Codex Slice 42 MED 1 fold-in): // line comments and
+// /* block */ comments are removed before regex extraction so a string
+// that only appears inside comments (e.g. an example in a docstring)
+// does not trigger a false positive. Regex-based comment stripping is
+// correct for ordinary code; it may mishandle contrived cases where a
+// `//` appears inside a string literal spanning lines — an AST-based
+// scan handles those cleanly and is the deferred upgrade path.
+export function extractImportSpecifiers(content) {
+  const stripped = stripCommentsAndLiteralBodies(content);
+  const out = [];
+  // `import ... from '...'` / `export ... from '...'` — cross-line tolerant.
+  const fromRe = /\b(?:import|export)\b[^'";]*?\bfrom\s+['"]([^'"]+)['"]/g;
+  // Side-effect `import '...'`.
+  const sideEffectRe = /\bimport\s+['"]([^'"]+)['"]/g;
+  // Dynamic `import('...')`.
+  const dynamicRe = /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+  // CJS `require('...')`.
+  const requireRe = /\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+  // Inline `createRequire(...)(<spec>)` — Codex Slice 42 MED 1 fold-in
+  // bypass pattern. An adversary can synthesize a require function via
+  // `import { createRequire } from 'node:module'; createRequire(import
+  // .meta.url)('openai')`. The inline call form can be matched by regex;
+  // the ALIASED form (`const r = createRequire(...); r('openai')`) is
+  // not detectable without flow analysis — that remains a documented
+  // trade-off of the regex-based scan, captured by the audit.mjs
+  // comment and deferred to an AST-upgrade slice.
+  const createRequireRe = /\bcreateRequire\s*\([^)]*\)\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+  for (const re of [fromRe, sideEffectRe, dynamicRe, requireRe, createRequireRe]) {
+    for (const m of stripped.matchAll(re)) {
+      out.push(m[1]);
+    }
+  }
+  return out;
+}
+
+// Replace string-literal bodies, // line comments, and /* block */
+// comments with whitespace so downstream regex sees only code-level
+// tokens. We replace with same-length whitespace so line/column offsets
+// stay stable for any future audit surface that cares.
+function stripCommentsAndLiteralBodies(source) {
+  const out = [];
+  const len = source.length;
+  let i = 0;
+  while (i < len) {
+    const c = source[i];
+    const n = source[i + 1];
+    // // line comment
+    if (c === '/' && n === '/') {
+      out.push(' ', ' ');
+      i += 2;
+      while (i < len && source[i] !== '\n') {
+        out.push(source[i] === '\t' ? '\t' : ' ');
+        i++;
+      }
+      continue;
+    }
+    // /* block comment */
+    if (c === '/' && n === '*') {
+      out.push(' ', ' ');
+      i += 2;
+      while (i < len && !(source[i] === '*' && source[i + 1] === '/')) {
+        out.push(source[i] === '\n' ? '\n' : source[i] === '\t' ? '\t' : ' ');
+        i++;
+      }
+      if (i < len) {
+        out.push(' ', ' ');
+        i += 2;
+      }
+      continue;
+    }
+    // String literal. We preserve the quote characters + pass the body
+    // through unchanged so the import specifier inside `from 'openai'`
+    // still matches. Only body contents that look like code but live
+    // inside quotes could false-positive here — but since we're looking
+    // specifically for import/require specifier strings, and those are
+    // strings by construction, the body-preserving approach is correct.
+    // We DO consume the literal as a whole to avoid the naive regex
+    // matching `/* from 'x' */` inside a comment — but that case is
+    // already handled by the block-comment branch above.
+    if (c === '"' || c === "'" || c === '`') {
+      const quote = c;
+      out.push(c);
+      i++;
+      while (i < len && source[i] !== quote) {
+        if (source[i] === '\\' && i + 1 < len) {
+          out.push(source[i], source[i + 1]);
+          i += 2;
+          continue;
+        }
+        out.push(source[i]);
+        i++;
+      }
+      if (i < len) {
+        out.push(source[i]);
+        i++;
+      }
+      continue;
+    }
+    out.push(c);
+    i++;
+  }
+  return out.join('');
+}
+
 const GREEN = '\x1b[32m';
 const YELLOW = '\x1b[33m';
 const RED = '\x1b[31m';
@@ -4056,25 +4268,39 @@ function main() {
     detail: adapterBindingCoverage.detail,
   });
 
-  // Check 28: Adapter invocation discipline (Slice 41 — ADR-0009 §4).
-  // Package.json must not declare any forbidden-SDK dep identifier; v0
-  // invocation pattern is subprocess-per-adapter. Vacuous at Slice 41
-  // (no adapter code yet), gains empirical meaning at Slice 42 (P2.4)
-  // when the first adapter module lands.
+  // Check 28: Adapter invocation discipline — dep-level (Slice 41 —
+  // ADR-0009 §4). Package.json must not declare any forbidden-SDK dep
+  // identifier; v0 invocation pattern is subprocess-per-adapter. Paired
+  // with Check 29 (import-level scan) to close the transitive-install
+  // bypass at Slice 42.
   const adapterInvocationDiscipline = checkAdapterInvocationDiscipline();
   counters[adapterInvocationDiscipline.level]++;
   findings.push({
     level: adapterInvocationDiscipline.level,
-    check: 'Adapter invocation discipline (Slice 41 / ADR-0009)',
+    check: 'Adapter invocation discipline — dep-level (Slice 41 / ADR-0009)',
     detail: adapterInvocationDiscipline.detail,
   });
 
-  // Check 29: npm run verify currently green. (Runs last so the report's
-  // bottom line is the verify-gate status; numbering bumped 28 → 29 by
-  // Slice 41 which inserted Check 28 for adapter invocation discipline.
-  // Prior bumps: Slice 38 27 → 28; Slice 35 25 → 27; P2.3 24 → 25;
-  // P2.2 23 → 24; P2.1 22 → 23; Slice 31a 21 → 22; Slice 26b 15 → 20;
-  // Slice 25d 20 → 21.)
+  // Check 29: Adapter invocation discipline — import-level (Slice 42 —
+  // ADR-0009 §4 Slice 42 binding, Codex Slice 41 HIGH 2 fold-in). Scans
+  // src/runtime/adapters/** for any import statement whose specifier
+  // matches FORBIDDEN_ADAPTER_SDK_DEPS. Complement to Check 28: catches
+  // transitively-available SDK imports that would circumvent the
+  // dep-level guard.
+  const adapterImportDiscipline = checkAdapterImportDiscipline();
+  counters[adapterImportDiscipline.level]++;
+  findings.push({
+    level: adapterImportDiscipline.level,
+    check: 'Adapter invocation discipline — import-level (Slice 42 / ADR-0009)',
+    detail: adapterImportDiscipline.detail,
+  });
+
+  // Check 30: npm run verify currently green. (Runs last so the report's
+  // bottom line is the verify-gate status; numbering bumped 29 → 30 by
+  // Slice 42 which inserted Check 29 for adapter import discipline.
+  // Prior bumps: Slice 41 28 → 29; Slice 38 27 → 28; Slice 35 25 → 27;
+  // P2.3 24 → 25; P2.2 23 → 24; P2.1 22 → 23; Slice 31a 21 → 22;
+  // Slice 26b 15 → 20; Slice 25d 20 → 21.)
   const verify = verifyStatus();
   if (verify.pass) {
     counters.green++;

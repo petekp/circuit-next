@@ -463,41 +463,22 @@ describe('checkPinnedRatchetFloor (Slice 26b full-file check)', () => {
     expect(data).not.toBe(null);
     expect(data?.schema_version).toBe(1);
     expect(typeof data?.floors?.contract_test_count).toBe('number');
-    // last_advanced_in_slice tracks the most recent floor advancement. Slice
-    // 26b was the initial floor (574); slice 33 (= P2.2) advanced it to 727
-    // per Codex MED 7 fold-in; slice 34 (= P2.3) advanced it to 740; slice 35
-    // (pre-P2.4 fold-in #1) advanced it to 779 (+39 from
-    // artifact-backing-path-integrity.test.ts); slice 37 (pre-P2.4 fold-in
-    // #3 — HIGH 2 widen event schema) advanced it to 810 (+31 from
-    // slice-37-dispatch-transcript.test.ts, binding dispatch.request /
-    // dispatch.receipt / dispatch.result variants to ADR-0007 §Amendment
-    // Slice 37); slice 38 (pre-P2.4 fold-in #4 — HIGH 1 dispatch wiring
-    // + ADR-0008) advanced it to 828 (+18 from
-    // adapter-binding-coverage.test.ts enforcing ADR-0008 §Decision.4 +
-    // §Decision.3a, including Codex HIGH 2 / MED 2 fold-in declarations);
-    // slice 39 (pre-P2.4 fold-in #5 — HIGH 4 artifact-path split)
-    // advanced it to 830 (+2 regression guards in
-    // artifact-backing-path-integrity.test.ts: empty-allowlist
-    // post-resolution assertion + live-repo Check 25 green terminal-state
-    // assertion); slice 40 (pre-P2.4 fold-in arc-close ceremony)
-    // advanced it to 835 (+5 net regression guards: two-prong Check 26
-    // tightening +6 and -3 superseded pre-tightening tests; +2 synthetic
-    // shape tests addressing the empty-allowlist vacuity hole per
-    // convergent Claude MED 1 + Codex LOW 2 fold-in). Slice 41
-    // (ADR-0009 adapter invocation pattern — subprocess-per-adapter
-    // decision + Check 28 binding) advanced it to 844 (+9 static test
-    // declarations in tests/contracts/adapter-invocation-discipline.test.ts:
-    // 6 initial — live-repo regression guard + three forbidden-dep
-    // negative cases + FORBIDDEN_ADAPTER_SDK_DEPS structural invariants
-    // + empty-list vacuity guard; +3 Codex-fold-in — peerDependencies
-    // negative test (MED 2) + `ai` Vercel-AI-SDK bypass-guard red
-    // (HIGH 2) + set-equality pin against the 15-entry expected
-    // forbidden set (MED 2)). This assertion pins the CURRENT slice id
-    // so any
-    // future floor advancement that forgets to update the marker fails
-    // the test immediately — the slice id changes only when the floor
-    // changes.
-    expect(data?.last_advanced_in_slice).toBe('41');
+    // last_advanced_in_slice tracks the most recent floor advancement.
+    // See specs/ratchet-floor.json `notes` for the full per-slice ledger.
+    // Most recent: Slice 42 (P2.4 — real agent adapter + Check 29
+    // import-level scan per ADR-0009 §4 Slice 42 binding) advanced the
+    // floor to 873 (+29: +27 slice-42-agent-adapter.test.ts covering
+    // adapter module shape, parseAgentStdout error paths, Check 29
+    // positive+negative import patterns (exact, sub-path, dynamic,
+    // require, re-export, side-effect, .d.ts skip), and capability-
+    // boundary flag binding; +2 agent-adapter-smoke.test.ts static
+    // declarations — the AGENT_SMOKE-gated end-to-end test uses
+    // `(AGENT_SMOKE ? it : it.skip)(...)` which does not match the
+    // /^\s*(it|test)\(/gm static pattern and is not counted).
+    // This assertion pins the CURRENT slice id so any future floor
+    // advancement that forgets to update the marker fails the test
+    // immediately — the slice id changes only when the floor changes.
+    expect(data?.last_advanced_in_slice).toBe('42');
   });
 
   it('readPinnedRatchetFloor returns null when the file is missing', () => {
