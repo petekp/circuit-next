@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -246,23 +245,36 @@ describe('Slice 27d — dogfood-run-0 runner smoke', () => {
     expect(runA.result.manifest_hash).toBe(runB.result.manifest_hash);
   });
 
-  it('CLI entrypoint loads the fixture and closes a run end-to-end from a clean run-root', () => {
+  it('CLI entrypoint loads the fixture and closes a run end-to-end from a clean run-root', async () => {
     // ADR-0001 Addendum B Close Criterion "CLI loading of
     // .claude-plugin/skills/dogfood-run-0/circuit.json is tested."
     //
-    // We spawn the CLI directly via tsx — the same invocation
-    // `npm run circuit:run` produces — so a future regression that
-    // silently breaks the CLI surface is caught here.
+    // Slice 47b (Codex Slice 47a comprehensive review HIGH 1 fold-in) —
+    // pre-Slice-47b this test shelled the CLI through `tsx` to
+    // exercise the same invocation `npm run circuit:run` uses, but
+    // tsx's parent-child IPC mechanism allocates `/tmp/tsx-<uid>/*.pipe`
+    // and fails with `listen EPERM` in restricted-filesystem agent
+    // sandboxes (Codex CLI sandbox; potentially CI workers under
+    // hardened mounts). The CLI's exported `main(argv)` function is
+    // the same entrypoint tsx invokes, so importing it directly
+    // exercises every code path the subprocess version exercised
+    // (argv parsing, fixture load, schema parse, runDogfood
+    // composition, JSON serialization to stdout) without depending
+    // on the IPC pipe directory. The npm-script binding (`circuit:run
+    // → tsx src/cli/dogfood.ts`) is separately pinned by the
+    // package.json contract test below so the binary path remains
+    // covered.
     const runRoot = join(runRootBase, 'cli-run');
-    // Slice 44 arc-close fold-in (Codex HIGH 4): `--dry-run` is no longer
-    // accepted at the CLI — the pre-ceremony behavior was a no-op that
-    // silently invoked the real adapter. `dogfood-run-0` has zero dispatch
-    // steps (it is partial-spine per ADR-0008 EXEMPT_WORKFLOW_IDS) so
-    // removing the flag doesn't expose this test to the real subprocess.
-    const output = execFileSync(
-      'node_modules/.bin/tsx',
-      [
-        'src/cli/dogfood.ts',
+    const { main } = await import('../../src/cli/dogfood.js');
+    let captured = '';
+    const origWrite = process.stdout.write;
+    process.stdout.write = ((chunk: string | Uint8Array): boolean => {
+      captured += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+      return true;
+    }) as typeof process.stdout.write;
+    let exit = -1;
+    try {
+      exit = await main([
         'dogfood-run-0',
         '--goal',
         'smoke via CLI',
@@ -270,10 +282,12 @@ describe('Slice 27d — dogfood-run-0 runner smoke', () => {
         'standard',
         '--run-root',
         runRoot,
-      ],
-      { cwd: resolve('.'), encoding: 'utf8' },
-    );
-    const parsed: unknown = JSON.parse(output);
+      ]);
+    } finally {
+      process.stdout.write = origWrite;
+    }
+    expect(exit).toBe(0);
+    const parsed: unknown = JSON.parse(captured);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       throw new Error('CLI output was not a JSON object');
     }
@@ -287,4 +301,19 @@ describe('Slice 27d — dogfood-run-0 runner smoke', () => {
     );
     expect(result.goal).toBe('smoke via CLI');
   }, 15000);
+
+  // Slice 47b — npm-script binding pin. Pre-Slice-47b, the
+  // execFileSync('node_modules/.bin/tsx', ['src/cli/dogfood.ts', ...])
+  // call implicitly verified that `circuit:run` was wired to tsx +
+  // dogfood.ts. Replacing the subprocess invocation with a direct
+  // main() import drops that coverage; this contract test re-pins it
+  // statically without spawning a subprocess. A regression that
+  // renames `circuit:run`, points it at a different file, or stops
+  // using tsx for it now fails here loudly.
+  it("package.json's circuit:run script binds tsx to src/cli/dogfood.ts (Slice 47b npm-binding pin)", () => {
+    const pkg = JSON.parse(readFileSync(resolve('package.json'), 'utf8')) as {
+      scripts?: Record<string, string>;
+    };
+    expect(pkg.scripts?.['circuit:run']).toBe('tsx src/cli/dogfood.ts');
+  });
 });
