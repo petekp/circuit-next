@@ -8,8 +8,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 // second half of ADR-0007 §Decision.1 CC#P2-4 (the first half — the
 // `.claude/hooks/SessionStart.sh` + `.claude/hooks/SessionEnd.sh` +
 // `scripts/audit.mjs` Check 33 `checkSessionHooksPresent` triple — landed
-// at Slice 46). With this test green, CC#P2-4 closes and Phase 2 close
-// count advances 2/8 → 3/8.
+// at Slice 46). With this test green, ADR-0007 CC#P2-4 (session hooks +
+// continuity lifecycle) advances to active — satisfied per the
+// per-criterion ledger convention.
+// (Slice 47d Claude HIGH 1 fold-in: prior comment used a scalar close-
+// count phrasing that ADR-0007 §3 forbids; replaced with per-criterion
+// wording.)
 //
 // Failure mode addressed: the continuity engine has unit-level coverage
 // for the index reader and the record writer, but no integration proof

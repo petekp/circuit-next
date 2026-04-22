@@ -558,6 +558,49 @@ describe('cross-model-challenger — CHALLENGER-I3 review records are recorded a
     }
   });
 
+  // Slice 47d (Codex MED 1 fold-in of Slice 47c-2 MED 1 honor-system gap) —
+  // mechanical enforcement of the `amnesty_scope` frontmatter requirement on
+  // Slice 47 arc-close composition review files. The Slice 47c-2 Codex MED 1
+  // binding mandates both prong files carry `amnesty_scope: [43a, 43b, 43c,
+  // 45a, 46b]`, but prior to this test the requirement was honor-system only
+  // (Check 26 did not parse amnesty_scope; the arc-review schema keys did not
+  // include it). This assertion binds the requirement at the contract-test
+  // layer: any arc-close composition review file under specs/reviews/
+  // matching the slice-47 pattern MUST carry the exact amnesty_scope field
+  // with all five historic slices in the list.
+  const SLICE_47_EXPECTED_AMNESTY = ['43a', '43b', '43c', '45a', '46b'];
+  it('Slice 47 arc-close composition review prong files carry amnesty_scope: [43a, 43b, 43c, 45a, 46b]', () => {
+    const slice47CompositionFiles = reviewFiles.filter((path) =>
+      /arc-slice-47-composition-review/.test(basename(path)),
+    );
+    if (slice47CompositionFiles.length === 0) return; // Pre-47d repo has no such files yet.
+    for (const path of slice47CompositionFiles) {
+      const fm = parseFrontmatter(readFileSync(path, 'utf-8'));
+      const raw = fm.get('amnesty_scope');
+      expect(
+        raw,
+        `${path}: amnesty_scope frontmatter field missing (Slice 47c-2 Codex MED 1 binding — mandatory on Slice 47 arc-close composition review prong files).`,
+      ).toBeDefined();
+      if (!raw) continue;
+      // Permit YAML inline-list style: `[43a, 43b, 43c, 45a, 46b]`.
+      const match = raw.match(/^\[\s*([^\]]*)\]\s*$/);
+      expect(
+        match,
+        `${path}: amnesty_scope "${raw}" is not in YAML inline-list form [s1, s2, ...].`,
+      ).not.toBeNull();
+      if (!match) continue;
+      const inner = match[1] ?? '';
+      const items = inner
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+      expect(
+        items,
+        `${path}: amnesty_scope items ${JSON.stringify(items)} do not match expected ${JSON.stringify(SLICE_47_EXPECTED_AMNESTY)}.`,
+      ).toEqual(SLICE_47_EXPECTED_AMNESTY);
+    }
+  });
+
   // Slice 25 AR-M5 + Codex challenger HIGH 5 fold-in — scope-disclosure
   // fields must be non-empty AND must not be placeholder prose. A degraded
   // `commands_run: see body` defeats the point of promoting scope to

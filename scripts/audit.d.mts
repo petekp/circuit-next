@@ -117,6 +117,11 @@ export function checkPersistedWrapperBinding(rootDir?: string): AuditCheckResult
 export const SLICE_ID_PATTERN: RegExp;
 export function isValidSliceId(value: unknown): boolean;
 
+// Slice 47d (Codex HIGH 5 fold-in) — canonical slice-id comparator over
+// {number, suffix}. Returns negative / zero / positive per sort semantics.
+// Throws if either argument does not match SLICE_ID_PATTERN.
+export function compareSliceId(a: string, b: string): number;
+
 export const CURRENT_SLICE_MARKER_PATTERN: RegExp;
 export function extractCurrentSliceMarker(text: unknown): string | null;
 export function checkStatusEpochAlignment(rootDir?: string): AuditCheckResult;
@@ -235,10 +240,17 @@ export function checkArtifactBackingPathIntegrity(
 // ACCEPT-WITH-FOLD-INS closing verdict.
 export const PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE: number;
 export const PHASE_2_P2_4_P2_5_ARC_LAST_SLICE: number;
+// Slice 47d (Codex HIGH 5 fold-in) — string-form ceremony_slice for the
+// slice-47 hardening fold-in arc. Uses the canonical letter-suffix form
+// so compareSliceId orders 47c < 47d correctly.
+export const SLICE_47_HARDENING_FOLDINS_ARC_CEREMONY_SLICE: string;
 export const ARC_CLOSE_GATES: ReadonlyArray<{
   readonly arc_id: string;
   readonly description: string;
-  readonly ceremony_slice: number;
+  // Slice 47d (Codex HIGH 5 fold-in): ceremony_slice accepts either
+  // numeric (back-compat for slices 40 + 44) or string canonical slice-id
+  // form (e.g. "47d") with letter-suffix ordering.
+  readonly ceremony_slice: number | string;
   readonly plan_path: string;
   readonly review_file_regex: RegExp;
 }>;
@@ -360,7 +372,24 @@ export const ADR_0007_FORBIDDEN_PROGRESS_PATTERNS: readonly {
   readonly label: string;
 }[];
 export const FORBIDDEN_PROGRESS_SCAN_FILES: readonly string[];
+// Slice 47d (Codex HIGH 3 fold-in): glob-matched scan additions for
+// arc-close composition review files. Composed with FORBIDDEN_PROGRESS_SCAN_FILES
+// at enumeration time.
+export const FORBIDDEN_PROGRESS_SCAN_GLOBS: readonly RegExp[];
 export function checkForbiddenScalarProgressPhrases(rootDir?: string): AuditCheckResult;
+
+// Slice 47d (Codex HIGH 2 + Claude HIGH 2 fold-in) — Check 35 mechanical
+// enforcement of CLAUDE.md §Hard invariant #6 literal rule at the
+// commit-body layer. When HEAD declares `Codex challenger: REQUIRED`,
+// requires either a matching per-slice review file OR an
+// `arc-subsumption: <path>` field in the commit body. Retroactive
+// grandfather list covers commits `1c4a5b1` (47b-retro) and `73c729c`
+// (47c-partial-retro) whose co-landed per-slice review records predate
+// this check.
+export const CODEX_CHALLENGER_REQUIRED_DECLARATION_PATTERN: RegExp;
+export const ARC_SUBSUMPTION_FIELD_PATTERN: RegExp;
+export const CODEX_CHALLENGER_DECLARATION_GRANDFATHERED_COMMITS: Readonly<Record<string, string>>;
+export function checkCodexChallengerRequiredDeclaration(rootDir?: string): AuditCheckResult;
 
 // Slice 30 — DOG+2 slice:doctor reuses the lane and framing literals enforced
 // by the audit so the operator briefing script cannot drift from the gate.

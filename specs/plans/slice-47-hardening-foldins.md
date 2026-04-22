@@ -183,11 +183,14 @@ From `continuity-66d08e55-4d6b-4bce-b9f9-873728ba2f32`:
 ## Close criterion
 
 This arc closes when:
-1. `npm run audit` is GREEN in the operator's local environment AND the sandboxed agent environment.
+1. `npm run audit` is **no-red** (zero red findings) in the operator's local environment AND in the sandboxed agent environment. Accepted yellows at arc close are enumerated explicitly (per Slice 47d Codex MED 3 fold-in — prior "GREEN in both environments" language conflated "no red" with "no yellow" and did not match the committed state):
+   - **Framing-triplet carryover.** Pre-existing yellow not originating in this arc; deferred to a future framing-investigation slice.
+   - **AGENT_SMOKE schema_version 1 stale by design.** Operator-local refresh clears the yellow via `AGENT_SMOKE=1 UPDATE_AGENT_FINGERPRINT=1`; refresh requires a live authenticated `claude` CLI and is out of scope for default CI / sandboxed agent runs.
+   - **CODEX_SMOKE adapter_source_sha256 drift by design.** Operator-local refresh clears the yellow via `CODEX_SMOKE=1 UPDATE_CODEX_FINGERPRINT=1`; refresh requires a live `codex` CLI.
 2. The five-event dispatch transcript carries real selection + provenance data (47a).
-3. CC#P2-4 is honestly closed via behavioral coverage of hook scripts (47b).
-4. ADR-0007 firewall is enforced + CLAUDE.md challenger-policy is unambiguous (47c).
-5. Arc-close composition review accepts (47d).
+3. CC#P2-4 is honestly closed via behavioral + lifecycle-integration coverage of hook scripts (47b + 47b-retro). Close posture is "tracked hook scripts + portable stub coverage (default `npm run verify` path)" per Slice 47d Codex MED 2 fold-in; live clean-clone engine coverage requires operator-local `CIRCUIT_HOOK_ENGINE_LIVE=1` after plugin-install populates `.circuit/bin/circuit-engine`.
+4. ADR-0007 firewall is enforced + CLAUDE.md challenger-policy is unambiguous (47c + 47c-2 + 47c-partial-retro). Scan scope extended to the composition-review surface at 47d (Codex HIGH 3 fold-in).
+5. Arc-close composition review accepts (47d), with mechanical-enforcement Check 35 landed + ARC_CLOSE_GATES entry bound via string `ceremony_slice: "47d"` comparator + amnesty_scope assertion in cross-model-challenger.test.ts.
 6. Two convergent HIGHs from the comprehensive review are folded in.
 7. All 6 Codex HIGHs + 3 Claude HIGHs (HIGH 3 deferred per continuity decision) are folded in or explicitly deferred with rationale.
 

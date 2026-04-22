@@ -245,62 +245,81 @@ describe('Slice 27d — dogfood-run-0 runner smoke', () => {
     expect(runA.result.manifest_hash).toBe(runB.result.manifest_hash);
   });
 
-  it('CLI entrypoint loads the fixture and closes a run end-to-end from a clean run-root', async () => {
-    // ADR-0001 Addendum B Close Criterion "CLI loading of
-    // .claude-plugin/skills/dogfood-run-0/circuit.json is tested."
-    //
-    // Slice 47b (Codex Slice 47a comprehensive review HIGH 1 fold-in) —
-    // pre-Slice-47b this test shelled the CLI through `tsx` to
-    // exercise the same invocation `npm run circuit:run` uses, but
-    // tsx's parent-child IPC mechanism allocates `/tmp/tsx-<uid>/*.pipe`
-    // and fails with `listen EPERM` in restricted-filesystem agent
-    // sandboxes (Codex CLI sandbox; potentially CI workers under
-    // hardened mounts). The CLI's exported `main(argv)` function is
-    // the same entrypoint tsx invokes, so importing it directly
-    // exercises every code path the subprocess version exercised
-    // (argv parsing, fixture load, schema parse, runDogfood
-    // composition, JSON serialization to stdout) without depending
-    // on the IPC pipe directory. The npm-script binding (`circuit:run
-    // → tsx src/cli/dogfood.ts`) is separately pinned by the
-    // package.json contract test below so the binary path remains
-    // covered.
-    const runRoot = join(runRootBase, 'cli-run');
-    const { main } = await import('../../src/cli/dogfood.js');
-    let captured = '';
-    const origWrite = process.stdout.write;
-    process.stdout.write = ((chunk: string | Uint8Array): boolean => {
-      captured += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
-      return true;
-    }) as typeof process.stdout.write;
-    let exit = -1;
-    try {
-      exit = await main([
-        'dogfood-run-0',
-        '--goal',
-        'smoke via CLI',
-        '--rigor',
-        'standard',
-        '--run-root',
-        runRoot,
-      ]);
-    } finally {
-      process.stdout.write = origWrite;
-    }
-    expect(exit).toBe(0);
-    const parsed: unknown = JSON.parse(captured);
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      throw new Error('CLI output was not a JSON object');
-    }
-    const obj = parsed as Record<string, unknown>;
-    expect(obj.outcome).toBe('complete');
-    expect(obj.run_root).toBe(runRoot);
-    expect(existsSync(join(runRoot, 'artifacts', 'result.json'))).toBe(true);
+  it.skipIf(process.env.CLI_SMOKE !== '1')(
+    'CLI entrypoint loads the fixture and closes a run end-to-end from a clean run-root (CLI_SMOKE=1)',
+    async () => {
+      // ADR-0001 Addendum B Close Criterion "CLI loading of
+      // .claude-plugin/skills/dogfood-run-0/circuit.json is tested."
+      //
+      // Slice 47b (Codex Slice 47a comprehensive review HIGH 1 fold-in) —
+      // pre-Slice-47b this test shelled the CLI through `tsx` to
+      // exercise the same invocation `npm run circuit:run` uses, but
+      // tsx's parent-child IPC mechanism allocates `/tmp/tsx-<uid>/*.pipe`
+      // and fails with `listen EPERM` in restricted-filesystem agent
+      // sandboxes (Codex CLI sandbox; potentially CI workers under
+      // hardened mounts). The CLI's exported `main(argv)` function is
+      // the same entrypoint tsx invokes, so importing it directly
+      // exercises every code path the subprocess version exercised
+      // (argv parsing, fixture load, schema parse, runDogfood
+      // composition, JSON serialization to stdout) without depending
+      // on the IPC pipe directory. The npm-script binding (`circuit:run
+      // → tsx src/cli/dogfood.ts`) is separately pinned by the
+      // package.json contract test below so the binary path remains
+      // covered.
+      //
+      // Slice 47d (Codex HIGH 1 fold-in + Slice 47b Codex MED 1 deferred
+      // subprocess-boundary contract trigger): `main()` invokes the real
+      // `dispatchAgent` default (which spawns an authenticated `claude`
+      // CLI subprocess). That default fails in sandboxed agent
+      // environments where the `claude` CLI is unauthenticated, making
+      // the test non-portable across operator-local and sandboxed
+      // environments. Env-gated under CLI_SMOKE=1 (same pattern as
+      // AGENT_SMOKE at Slice 43c + CODEX_SMOKE at Slice 45) so the
+      // default `npm run verify` path does not depend on a live CLI.
+      // Operator-local full coverage via `CLI_SMOKE=1 npm run verify`.
+      // The env-gate IS the subprocess-boundary contract the Slice 47b
+      // Codex MED 1 deferred trigger required (env-gated subprocess
+      // smoke form per that MED's "static wrapper-pattern assert OR
+      // env-gated subprocess smoke" disjunction).
+      const runRoot = join(runRootBase, 'cli-run');
+      const { main } = await import('../../src/cli/dogfood.js');
+      let captured = '';
+      const origWrite = process.stdout.write;
+      process.stdout.write = ((chunk: string | Uint8Array): boolean => {
+        captured += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+        return true;
+      }) as typeof process.stdout.write;
+      let exit = -1;
+      try {
+        exit = await main([
+          'dogfood-run-0',
+          '--goal',
+          'smoke via CLI',
+          '--rigor',
+          'standard',
+          '--run-root',
+          runRoot,
+        ]);
+      } finally {
+        process.stdout.write = origWrite;
+      }
+      expect(exit).toBe(0);
+      const parsed: unknown = JSON.parse(captured);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('CLI output was not a JSON object');
+      }
+      const obj = parsed as Record<string, unknown>;
+      expect(obj.outcome).toBe('complete');
+      expect(obj.run_root).toBe(runRoot);
+      expect(existsSync(join(runRoot, 'artifacts', 'result.json'))).toBe(true);
 
-    const result = RunResult.parse(
-      JSON.parse(readFileSync(join(runRoot, 'artifacts', 'result.json'), 'utf8')),
-    );
-    expect(result.goal).toBe('smoke via CLI');
-  }, 15000);
+      const result = RunResult.parse(
+        JSON.parse(readFileSync(join(runRoot, 'artifacts', 'result.json'), 'utf8')),
+      );
+      expect(result.goal).toBe('smoke via CLI');
+    },
+    15000,
+  );
 
   // Slice 47b — npm-script binding pin. Pre-Slice-47b, the
   // execFileSync('node_modules/.bin/tsx', ['src/cli/dogfood.ts', ...])

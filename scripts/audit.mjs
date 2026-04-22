@@ -1794,6 +1794,33 @@ export function isValidSliceId(value) {
   return typeof value === 'string' && SLICE_ID_PATTERN.test(value);
 }
 
+// Slice 47d (Codex HIGH 5 fold-in): canonical slice-id ordering over {number,
+// suffix}. Required because the Slice 47 arc uses letter-suffixed slice ids
+// (47, 47a, 47b, 47c, 47d) under a single numeric parent; the prior
+// strip-non-digits + parseInt comparison collapsed 47c and 47d to the same
+// numeric value, so Check 26 could not distinguish "arc in-progress at 47c"
+// from "arc-close ceremony at 47d". This comparator preserves suffix
+// ordering: 47 < 47a < 47b < ... < 47z < 48. Undefined suffix sorts before
+// any letter suffix (matches the plan convention that "47" with no suffix
+// precedes "47a"). Returns negative / zero / positive per standard
+// Array.prototype.sort semantics.
+export function compareSliceId(a, b) {
+  if (!isValidSliceId(a) || !isValidSliceId(b)) {
+    throw new Error(
+      `compareSliceId: both arguments must match SLICE_ID_PATTERN (${SLICE_ID_PATTERN}); got ${JSON.stringify(a)} and ${JSON.stringify(b)}`,
+    );
+  }
+  const numA = Number.parseInt(a.match(/^[0-9]+/)[0], 10);
+  const numB = Number.parseInt(b.match(/^[0-9]+/)[0], 10);
+  if (numA !== numB) return numA - numB;
+  const sufA = a.slice(String(numA).length);
+  const sufB = b.slice(String(numB).length);
+  if (sufA === sufB) return 0;
+  if (sufA === '') return -1;
+  if (sufB === '') return 1;
+  return sufA < sufB ? -1 : 1;
+}
+
 export const CURRENT_SLICE_MARKER_PATTERN = /<!--\s*current_slice:\s*([0-9a-z-]+)\s*-->/i;
 const CURRENT_SLICE_MARKER_PATTERN_GLOBAL = /<!--\s*current_slice:\s*([0-9a-z-]+)\s*-->/gi;
 
@@ -3138,6 +3165,10 @@ export function checkArtifactBackingPathIntegrity(rootDir = REPO_ROOT, opts = {}
 // a ledger schema.
 export const PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE = 40;
 export const PHASE_2_P2_4_P2_5_ARC_LAST_SLICE = 44;
+// Slice 47d (Codex HIGH 5 fold-in): canonical letter-suffixed ceremony slice.
+// Used by the new slice-47 gate; accompanies numeric ceremony_slice
+// back-compat for the older arcs.
+export const SLICE_47_HARDENING_FOLDINS_ARC_CEREMONY_SLICE = '47d';
 
 export const ARC_CLOSE_GATES = Object.freeze([
   Object.freeze({
@@ -3153,6 +3184,20 @@ export const ARC_CLOSE_GATES = Object.freeze([
     ceremony_slice: PHASE_2_P2_4_P2_5_ARC_LAST_SLICE,
     plan_path: 'specs/plans/phase-2-implementation.md',
     review_file_regex: /arc.*41.*43/i,
+  }),
+  // Slice 47d (Codex HIGH 5 + Claude HIGH 3 fold-ins): slice-47 hardening
+  // fold-in arc. Uses STRING ceremony_slice "47d" per the letter-suffix
+  // comparator above so the gate fires at current_slice=47d but stays green
+  // at current_slice=47c (arc-in-progress). Review-file regex pinned to the
+  // composition-review naming convention so per-slice review records
+  // (arc-slice-47{a,b,c,c-2}-codex.md) do not satisfy the gate; only the
+  // arc-close composition review prong files do.
+  Object.freeze({
+    arc_id: 'slice-47-hardening-foldins',
+    description: 'Slice 47 hardening fold-in arc',
+    ceremony_slice: SLICE_47_HARDENING_FOLDINS_ARC_CEREMONY_SLICE,
+    plan_path: 'specs/plans/slice-47-hardening-foldins.md',
+    review_file_regex: /arc-slice-47-composition-review/i,
   }),
 ]);
 
@@ -3196,6 +3241,11 @@ export function checkArcCloseCompositionReviewPresence(rootDir = REPO_ROOT) {
       detail: `PROJECT_STATE.md current_slice marker "${sliceMarker}" not numeric; cannot bind arc-close review gate`,
     };
   }
+  // Slice 47d (Codex HIGH 5 fold-in): validate the marker is a canonical
+  // slice id (matches SLICE_ID_PATTERN) so the string-ceremony_slice branch
+  // below can use compareSliceId. The older numeric-ceremony_slice branch
+  // only needs sliceNum; the string branch needs sliceMarker itself.
+  const sliceMarkerIsCanonical = isValidSliceId(sliceMarker);
 
   const reviewsDir = join(rootDir, 'specs/reviews');
   const redDetails = [];
@@ -3203,7 +3253,10 @@ export function checkArcCloseCompositionReviewPresence(rootDir = REPO_ROOT) {
   const progressDetails = [];
 
   for (const gate of applicableGates) {
-    const gateResult = evaluateArcCloseGate(gate, sliceNum, reviewsDir);
+    const gateResult = evaluateArcCloseGate(gate, sliceNum, reviewsDir, {
+      sliceMarker,
+      sliceMarkerIsCanonical,
+    });
     if (gateResult.level === 'red') {
       redDetails.push(`[${gate.arc_id}] ${gateResult.detail}`);
     } else if (gateResult.status === 'in_progress') {
@@ -3228,20 +3281,51 @@ export function checkArcCloseCompositionReviewPresence(rootDir = REPO_ROOT) {
 // "no arc-close composition review file matches", "Codex prong ... lack
 // ACCEPT", "missing Codex prong", "missing Claude prong", "two-prong
 // gate satisfied".
-function evaluateArcCloseGate(gate, sliceNum, reviewsDir) {
-  if (sliceNum < gate.ceremony_slice) {
+function evaluateArcCloseGate(gate, sliceNum, reviewsDir, opts = {}) {
+  // Slice 47d (Codex HIGH 5 fold-in): support both numeric and string
+  // ceremony_slice. Numeric form is back-compat for slices 40 + 44 (arcs
+  // that did not use letter suffixes). String form uses compareSliceId so
+  // 47c and 47d order correctly (47c < 47d).
+  const ceremony = gate.ceremony_slice;
+  let gateInProgress;
+  let ceremonyDisplay;
+  if (typeof ceremony === 'number') {
+    gateInProgress = sliceNum < ceremony;
+    ceremonyDisplay = String(ceremony);
+  } else if (typeof ceremony === 'string') {
+    const { sliceMarker, sliceMarkerIsCanonical } = opts;
+    if (!sliceMarkerIsCanonical) {
+      return {
+        level: 'yellow',
+        status: 'yellow',
+        detail: `${gate.description}: current_slice marker "${sliceMarker}" is not canonical (does not match SLICE_ID_PATTERN); cannot bind string-form ceremony_slice "${ceremony}"`,
+      };
+    }
+    gateInProgress = compareSliceId(sliceMarker, ceremony) < 0;
+    ceremonyDisplay = ceremony;
+  } else {
+    return {
+      level: 'yellow',
+      status: 'yellow',
+      detail: `${gate.description}: ceremony_slice must be number or string; got ${JSON.stringify(ceremony)}`,
+    };
+  }
+  if (gateInProgress) {
+    const markerForDisplay = typeof ceremony === 'string' ? opts.sliceMarker : sliceNum;
     return {
       level: 'green',
       status: 'in_progress',
-      detail: `${gate.description} still in progress (current_slice=${sliceNum} < arc-close slice ${gate.ceremony_slice}); arc-close composition review not yet required`,
+      detail: `${gate.description} still in progress (current_slice=${markerForDisplay} < arc-close slice ${ceremonyDisplay}); arc-close composition review not yet required`,
     };
   }
+
+  const currentSliceForDisplay = typeof ceremony === 'string' ? opts.sliceMarker : sliceNum;
 
   if (!existsSync(reviewsDir)) {
     return {
       level: 'red',
       status: 'red',
-      detail: `${gate.description} closed (current_slice=${sliceNum} >= ${gate.ceremony_slice}) but specs/reviews/ directory not present`,
+      detail: `${gate.description} closed (current_slice=${currentSliceForDisplay} >= ${ceremonyDisplay}) but specs/reviews/ directory not present`,
     };
   }
 
@@ -3252,7 +3336,7 @@ function evaluateArcCloseGate(gate, sliceNum, reviewsDir) {
     return {
       level: 'red',
       status: 'red',
-      detail: `${gate.description} closed (current_slice=${sliceNum} >= ${gate.ceremony_slice}) but no arc-close composition review file matches pattern ${gate.review_file_regex} under specs/reviews/`,
+      detail: `${gate.description} closed (current_slice=${currentSliceForDisplay} >= ${ceremonyDisplay}) but no arc-close composition review file matches pattern ${gate.review_file_regex} under specs/reviews/`,
     };
   }
 
@@ -3266,7 +3350,7 @@ function evaluateArcCloseGate(gate, sliceNum, reviewsDir) {
     return {
       level: 'red',
       status: 'red',
-      detail: `${gate.description} closed (current_slice=${sliceNum} >= ${gate.ceremony_slice}) but two-prong arc-close composition review incomplete — missing: ${missing.join(', ')}. CLAUDE.md §Cross-slice composition review cadence requires both prongs: fresh-read Claude composition-adversary pass + Codex cross-model challenger.`,
+      detail: `${gate.description} closed (current_slice=${currentSliceForDisplay} >= ${ceremonyDisplay}) but two-prong arc-close composition review incomplete — missing: ${missing.join(', ')}. CLAUDE.md §Cross-slice composition review cadence requires both prongs: fresh-read Claude composition-adversary pass + Codex cross-model challenger.`,
     };
   }
 
@@ -3296,7 +3380,7 @@ function evaluateArcCloseGate(gate, sliceNum, reviewsDir) {
   return {
     level: 'green',
     status: 'satisfied',
-    detail: `${gate.description} closed (current_slice=${sliceNum}); arc-close composition review two-prong gate satisfied — Claude: ${claudeAccepted.join(', ')}; Codex: ${codexAccepted.join(', ')}`,
+    detail: `${gate.description} closed (current_slice=${currentSliceForDisplay}); arc-close composition review two-prong gate satisfied — Claude: ${claudeAccepted.join(', ')}; Codex: ${codexAccepted.join(', ')}`,
   };
 }
 
@@ -3772,6 +3856,26 @@ export const FORBIDDEN_PROGRESS_SCAN_FILES = Object.freeze([
   'specs/plans/phase-2-implementation.md',
   'specs/plans/phase-1-close-revised.md',
   'specs/plans/slice-47-hardening-foldins.md',
+  // Slice 47d (Codex HIGH 3 + MED 1 trigger fold-in): extend the scan
+  // scope to cover operator-facing surfaces outside the original six-file
+  // pin. CLAUDE.md is the methodology authority surface; TIER.md is the
+  // claim matrix surface.
+  'CLAUDE.md',
+  'TIER.md',
+]);
+
+// Slice 47d (Codex HIGH 3 fold-in): arc-close composition review files
+// carry verdicts, severity counts, and closing-status prose — exactly the
+// wording family ADR-0007 §3 forbids. The existing file-list scan is
+// extended with a regex-matched glob set so new arc-close composition
+// reviews (authored at Slice 44 precedent + the slice-47 ceremony) fall
+// under the firewall without requiring a manual enumeration update on
+// every arc close. The citation-guard logic still applies uniformly —
+// legitimate Codex / Claude findings that quote `7/8 complete` as a
+// bypass example stay green because the rejection verb ("rejects",
+// "forbids", etc.) is on the same line.
+export const FORBIDDEN_PROGRESS_SCAN_GLOBS = Object.freeze([
+  /^specs\/reviews\/arc-slice.*composition-review.*\.(md|mdx)$/,
 ]);
 
 // Slice 47c (Codex challenger HIGH 2 fold-in) — tightened guards:
@@ -3804,10 +3908,40 @@ function lineHasForbiddenProgressCitationGuard(line) {
   return FORBIDDEN_PROGRESS_CITATION_GUARDS.some((re) => re.test(line));
 }
 
+// Slice 47d (Codex HIGH 3 fold-in): enumerate the full scan surface by
+// combining the fixed file list with any tracked files that match a glob
+// regex. Uses `git -C <rootDir> ls-files` so untracked files are never
+// scanned (the firewall is about what lands in history, not working-tree
+// scratch) and so test callers that pass a custom rootDir get their own
+// tracked files listed.
+function enumerateForbiddenProgressScanPaths(rootDir = REPO_ROOT) {
+  const fixed = [...FORBIDDEN_PROGRESS_SCAN_FILES];
+  if (FORBIDDEN_PROGRESS_SCAN_GLOBS.length === 0) return fixed;
+  let tracked;
+  try {
+    tracked = shSafe(`git -C ${rootDir} ls-files`).split('\n').filter(Boolean);
+  } catch {
+    // Non-git dir or git missing; fall back to the fixed list.
+    return fixed;
+  }
+  const globMatched = tracked.filter((p) => FORBIDDEN_PROGRESS_SCAN_GLOBS.some((re) => re.test(p)));
+  // Dedupe (a fixed path could also match a glob; keep deterministic order:
+  // fixed first, then glob-matched additions).
+  const seen = new Set(fixed);
+  for (const p of globMatched) {
+    if (!seen.has(p)) {
+      fixed.push(p);
+      seen.add(p);
+    }
+  }
+  return fixed;
+}
+
 export function checkForbiddenScalarProgressPhrases(rootDir = REPO_ROOT) {
   const violations = [];
+  const scanPaths = enumerateForbiddenProgressScanPaths(rootDir);
 
-  for (const rel of FORBIDDEN_PROGRESS_SCAN_FILES) {
+  for (const rel of scanPaths) {
     const path = join(rootDir, rel);
     if (!existsSync(path)) continue;
 
@@ -3835,13 +3969,143 @@ export function checkForbiddenScalarProgressPhrases(rootDir = REPO_ROOT) {
   if (violations.length === 0) {
     return {
       level: 'green',
-      detail: `${FORBIDDEN_PROGRESS_SCAN_FILES.length} live state files scanned for ADR-0007 §3 forbidden scalar-progress phrases; clean`,
+      detail: `${scanPaths.length} live state files scanned for ADR-0007 §3 forbidden scalar-progress phrases (fixed + glob-matched); clean`,
     };
   }
 
   return {
     level: 'red',
-    detail: `ADR-0007 §3 forbidden scalar-progress phrases detected (Slice 47c firewall):\n      ${violations.join('\n      ')}\n\nReplace with per-criterion list per ADR-0007 §3 No-aggregate-scoring rule (e.g. "CC#P2-1 active — satisfied", not "1/8 close count").`,
+    detail: `ADR-0007 §3 forbidden scalar-progress phrases detected (Slice 47c firewall):\n      ${violations.join('\n      ')}\n\nReplace with per-criterion list per ADR-0007 §3 No-aggregate-scoring rule (e.g. "CC#P2-1 active — satisfied", not per-criterion count aggregation).`,
+  };
+}
+
+// Slice 47d (Codex HIGH 2 + Claude HIGH 2 fold-in): Check 35 — mechanical
+// enforcement of the Slice 47c-2 operator decision (Option A literal
+// challenger policy) at the commit-body layer. Scans the HEAD commit body
+// for the exact declaration `Codex challenger: REQUIRED`. When the phrase
+// is present, the check requires one of:
+//
+//   (a) a matching `specs/reviews/arc-slice-<slice>-codex.md` file under
+//       `specs/reviews/`, where `<slice>` is extracted from the commit
+//       subject's `slice-<id>:` prefix (letter-suffix aware via
+//       SLICE_COMMIT_SUBJECT_PATTERN); or
+//   (b) an explicit `arc-subsumption: <path>` line in the commit body
+//       pointing at an existing arc-close composition review file.
+//
+// The check is scoped to HEAD because older commits are frozen history;
+// any future ratchet-advancing slice that lands as the new HEAD without
+// one of the two evidence paths lands red on its very first audit run.
+//
+// Grandfather list: commits `1c4a5b1` (47b-retro) and `73c729c`
+// (47c-partial-retro) were landed under the Slice 47c-2 MED 2 trigger
+// before Check 35 existed. Both co-landed per-slice review records
+// (`arc-slice-47b-codex.md` and `arc-slice-47c-codex.md` respectively) that
+// satisfy the rule's spirit; the grandfather list makes the historical
+// coverage explicit so the check does not misreport them if an operator
+// rewinds HEAD to either commit for archaeology.
+export const CODEX_CHALLENGER_REQUIRED_DECLARATION_PATTERN = /^Codex challenger:\s*REQUIRED\b/im;
+export const ARC_SUBSUMPTION_FIELD_PATTERN = /^arc-subsumption:\s*(\S.*?)\s*$/im;
+
+export const CODEX_CHALLENGER_DECLARATION_GRANDFATHERED_COMMITS = Object.freeze({
+  '1c4a5b1': 'specs/reviews/arc-slice-47b-codex.md',
+  '73c729c': 'specs/reviews/arc-slice-47c-codex.md',
+});
+
+export function checkCodexChallengerRequiredDeclaration(rootDir = REPO_ROOT) {
+  let headSha;
+  let body;
+  let subject;
+  try {
+    // Use `git -C <rootDir>` so callers that pass a custom rootDir (tests
+    // against temp-dir fixtures) read THAT repo's HEAD metadata rather
+    // than the ambient process.cwd() repo's HEAD.
+    headSha = shSafe(`git -C ${rootDir} rev-parse HEAD`).trim();
+    body = shSafe(`git -C ${rootDir} log -1 --format=%B HEAD`);
+    subject = shSafe(`git -C ${rootDir} log -1 --format=%s HEAD`).trim();
+  } catch (err) {
+    return {
+      level: 'yellow',
+      detail: `checkCodexChallengerRequiredDeclaration: cannot read HEAD commit metadata (${err.message})`,
+    };
+  }
+
+  // Grandfather path: if HEAD is on the grandfather list, verify the named
+  // evidence file exists and accept.
+  for (const [shaPrefix, evidencePath] of Object.entries(
+    CODEX_CHALLENGER_DECLARATION_GRANDFATHERED_COMMITS,
+  )) {
+    if (headSha.startsWith(shaPrefix)) {
+      const abs = join(rootDir, evidencePath);
+      if (existsSync(abs)) {
+        return {
+          level: 'green',
+          detail: `HEAD=${shaPrefix} is grandfathered — retroactive evidence at ${evidencePath} present; Check 35 satisfied (Slice 47c-2 MED 2 retroactive coverage)`,
+        };
+      }
+      return {
+        level: 'red',
+        detail: `HEAD=${shaPrefix} is grandfathered under Slice 47c-2 MED 2 retroactive coverage, but expected evidence file ${evidencePath} is missing`,
+      };
+    }
+  }
+
+  // Not grandfathered: check if the commit body declares `Codex challenger: REQUIRED`.
+  if (!CODEX_CHALLENGER_REQUIRED_DECLARATION_PATTERN.test(body)) {
+    return {
+      level: 'green',
+      detail:
+        'HEAD commit body does not declare "Codex challenger: REQUIRED"; Check 35 not applicable (the check scans only slices that self-declare the Codex requirement)',
+    };
+  }
+
+  // Declaration present: require matching per-slice review OR arc-subsumption field.
+  const arcSubsumptionMatch = body.match(ARC_SUBSUMPTION_FIELD_PATTERN);
+  if (arcSubsumptionMatch) {
+    const subsumptionPath = arcSubsumptionMatch[1];
+    const abs = join(rootDir, subsumptionPath);
+    if (existsSync(abs)) {
+      return {
+        level: 'green',
+        detail: `HEAD commit body declares "Codex challenger: REQUIRED" + arc-subsumption: ${subsumptionPath} (file present); Check 35 satisfied via arc-subsumption path`,
+      };
+    }
+    return {
+      level: 'red',
+      detail: `HEAD commit body declares "Codex challenger: REQUIRED" + arc-subsumption: ${subsumptionPath} but the named file does not exist under rootDir=${rootDir}`,
+    };
+  }
+
+  // No arc-subsumption field: look for per-slice review file matching the subject's slice id.
+  const subjectMatch = subject.match(SLICE_COMMIT_SUBJECT_PATTERN);
+  if (!subjectMatch) {
+    return {
+      level: 'red',
+      detail: `HEAD commit body declares "Codex challenger: REQUIRED" but commit subject "${subject}" does not match SLICE_COMMIT_SUBJECT_PATTERN; cannot extract slice id to look for matching arc-slice-<slice>-codex.md`,
+    };
+  }
+  const sliceId = subjectMatch[1];
+  // Try canonical slice id first; then with any descriptive sub-name
+  // suffixes stripped (e.g., "47c-2" → "47c"). SLICE_ID_PATTERN only
+  // accepts bare numeric-with-optional-letter-suffix, so descriptive
+  // sub-names fail the canonical form; strip-and-retry fallback preserves
+  // the same-slice-id precedent used across 47c-2 + 47b-retro + 47c-partial-retro.
+  const candidates = [`specs/reviews/arc-slice-${sliceId}-codex.md`];
+  const canonicalMatch = sliceId.match(/^[0-9]+[a-z]?/);
+  if (canonicalMatch && canonicalMatch[0] !== sliceId) {
+    candidates.push(`specs/reviews/arc-slice-${canonicalMatch[0]}-codex.md`);
+  }
+  for (const rel of candidates) {
+    const abs = join(rootDir, rel);
+    if (existsSync(abs)) {
+      return {
+        level: 'green',
+        detail: `HEAD commit body declares "Codex challenger: REQUIRED" + per-slice review ${rel} present; Check 35 satisfied via per-slice path`,
+      };
+    }
+  }
+  return {
+    level: 'red',
+    detail: `HEAD commit body declares "Codex challenger: REQUIRED" but none of the candidate per-slice review files exist: ${candidates.join(', ')}. Either add the per-slice review file OR declare "arc-subsumption: <path-to-arc-close-composition-review>" in the commit body.`,
   };
 }
 
@@ -4962,6 +5226,23 @@ function main() {
     level: forbiddenScalarProgress.level,
     check: 'ADR-0007 §3 forbidden scalar-progress firewall (Slice 47c / Codex HIGH 6)',
     detail: forbiddenScalarProgress.detail,
+  });
+
+  // Check 35: Codex challenger REQUIRED declaration (Slice 47d — Codex HIGH
+  // 2 + Claude HIGH 2 fold-in of the Slice 47c-2 MED 2 deferred binding).
+  // Mechanical enforcement of CLAUDE.md §Hard invariant #6 literal rule at
+  // the commit-body layer: any slice commit declaring
+  // `Codex challenger: REQUIRED` must carry either a matching per-slice
+  // review file or an explicit arc-subsumption field pointing at an
+  // arc-close composition review. Grandfathers the retroactive 47b + 47c
+  // fold-in commits whose co-landed per-slice review records predate this
+  // check.
+  const codexChallengerDeclaration = checkCodexChallengerRequiredDeclaration();
+  counters[codexChallengerDeclaration.level]++;
+  findings.push({
+    level: codexChallengerDeclaration.level,
+    check: 'Codex challenger REQUIRED declaration (Slice 47d / Codex HIGH 2 + Claude HIGH 2)',
+    detail: codexChallengerDeclaration.detail,
   });
 
   // Check 31: npm run verify currently green. (Runs last so the report's

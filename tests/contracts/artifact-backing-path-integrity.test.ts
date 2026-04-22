@@ -10,6 +10,7 @@ import {
   ARTIFACT_BACKING_PATH_PREFIX_SYNONYMS,
   PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE,
   PHASE_2_P2_4_P2_5_ARC_LAST_SLICE,
+  SLICE_47_HARDENING_FOLDINS_ARC_CEREMONY_SLICE,
   checkArcCloseCompositionReviewPresence,
   checkArtifactBackingPathIntegrity,
   normalizeArtifactBackingPath,
@@ -694,18 +695,24 @@ describe('ARC_CLOSE_GATES + checkArcCloseCompositionReviewPresence (Slice 44 gen
     );
   });
 
-  it('ARC_CLOSE_GATES contains both arcs with matching ceremony_slice constants', () => {
-    expect(ARC_CLOSE_GATES).toHaveLength(2);
+  it('ARC_CLOSE_GATES contains all three arcs with matching ceremony_slice constants', () => {
+    // Slice 47d (Codex HIGH 5 + Claude HIGH 3 fold-in): length bumped
+    // 2 → 3 with the new slice-47 hardening fold-in arc entry.
+    expect(ARC_CLOSE_GATES).toHaveLength(3);
     const oldArc = ARC_CLOSE_GATES.find(
       (g) => g.arc_id === 'phase-2-foundation-foldins-slices-35-to-40',
     );
-    const newArc = ARC_CLOSE_GATES.find(
+    const p2ArcNew = ARC_CLOSE_GATES.find(
       (g) => g.arc_id === 'phase-2-p2.4-p2.5-arc-slices-41-to-43',
     );
+    const slice47Arc = ARC_CLOSE_GATES.find((g) => g.arc_id === 'slice-47-hardening-foldins');
     expect(oldArc).toBeDefined();
-    expect(newArc).toBeDefined();
+    expect(p2ArcNew).toBeDefined();
+    expect(slice47Arc).toBeDefined();
     expect(oldArc?.ceremony_slice).toBe(PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE);
-    expect(newArc?.ceremony_slice).toBe(PHASE_2_P2_4_P2_5_ARC_LAST_SLICE);
+    expect(p2ArcNew?.ceremony_slice).toBe(PHASE_2_P2_4_P2_5_ARC_LAST_SLICE);
+    expect(slice47Arc?.ceremony_slice).toBe(SLICE_47_HARDENING_FOLDINS_ARC_CEREMONY_SLICE);
+    expect(typeof slice47Arc?.ceremony_slice).toBe('string');
   });
 
   it('returns green with "in progress" detail for the 41-to-43 arc when current_slice < 44 and both arcs are applicable', () => {

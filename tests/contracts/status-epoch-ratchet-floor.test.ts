@@ -465,24 +465,19 @@ describe('checkPinnedRatchetFloor (Slice 26b full-file check)', () => {
     expect(typeof data?.floors?.contract_test_count).toBe('number');
     // last_advanced_in_slice tracks the most recent floor advancement.
     // See specs/ratchet-floor.json `notes` for the full per-slice ledger.
-    // Most recent: Slice 46b (P2.7b — continuity-lifecycle integration
-    // test per `specs/plans/phase-2-implementation.md` §P2.7
-    // second-half binding of ADR-0007 CC#P2-4) advanced the floor
-    // 976 → 988 (+12 static declarations in
-    // tests/runner/continuity-lifecycle.test.ts covering the engine's
-    // `continuity {save,status,resume,clear}` CLI surface across
-    // empty-project status, save+pendingrecord+payload writes, status
-    // after save, resume + non-destructive resume, resume-on-empty,
-    // clear-after-save with disk reaping, status after clear,
-    // idempotent clear, save-twice pointer replacement without record
-    // file deletion, and the selection/source discriminant fields the
-    // SessionStart + SessionEnd hooks read). With Slice 46b green,
-    // ADR-0007 CC#P2-4 (session hooks + continuity lifecycle) closes
-    // and Phase 2 close count advances 2/8 → 3/8. This assertion pins
-    // the CURRENT slice id so any future floor advancement that
-    // forgets to update the marker fails the test immediately — the
-    // slice id changes only when the floor changes.
-    expect(data?.last_advanced_in_slice).toBe('46b');
+    // Most recent: Slice 47d (arc-close ceremony for the Slice 47
+    // hardening fold-in arc, with three ratchets advancing
+    // independently per ADR-0007 §Hard invariants #8 No-aggregate-scoring
+    // rule). The contract_test_count floor advances 988 → 1062
+    // (+74 across the Slice 47 arc; Slice 47d itself contributes +20
+    // in tests/contracts/slice-47d-audit-extensions.test.ts + 1 in
+    // tests/contracts/cross-model-challenger.test.ts — the remaining
+    // +53 came from the earlier arc commits 47 / 47a / 47a-foldins /
+    // 47b / 47c-partial / 47c-2 / 47b-retro / 47c-partial-retro).
+    // This assertion pins the CURRENT slice id so any future floor
+    // advancement that forgets to update the marker fails the test
+    // immediately — the slice id changes only when the floor changes.
+    expect(data?.last_advanced_in_slice).toBe('47d');
   });
 
   it('readPinnedRatchetFloor returns null when the file is missing', () => {
