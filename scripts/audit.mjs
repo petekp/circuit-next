@@ -3699,6 +3699,38 @@ export function checkAdapterImportDiscipline(rootDir = REPO_ROOT, opts = {}) {
 // 44 applied to Check 26 via `ARC_CLOSE_GATES`); two adapters fit
 // plainly-repeated checks per "three similar lines is better than a
 // premature abstraction."
+//
+// Slice 47a (Codex HIGH 4 fold-in) — agent fingerprint promoted to
+// schema_version 2 with adapter_source_sha256 + cli_version binding,
+// symmetric with Codex's Slice 45 HIGH 4 promotion. The recorded
+// `adapter_source_sha256` covers `agent.ts`, `shared.ts`,
+// `dispatch-materializer.ts`, and `runner.ts` — the four files that
+// participate in an agent-adapter dispatch transcript. Source drift
+// surfaces as yellow ("fingerprint exists but adapter surface has
+// changed since the last AGENT_SMOKE run"). The recorded_at /
+// commit_sha / result_sha256 binding continues to hold for
+// backward-compat detection of schema_version 1 fingerprints (which
+// surface as yellow-missing-field rather than red, so an operator who
+// hasn't yet re-run `AGENT_SMOKE=1 UPDATE_AGENT_FINGERPRINT=1` gets a
+// clear remediation message rather than an opaque audit fail).
+export const AGENT_ADAPTER_SOURCE_PATHS = Object.freeze([
+  'src/runtime/adapters/agent.ts',
+  'src/runtime/adapters/shared.ts',
+  'src/runtime/adapters/dispatch-materializer.ts',
+  'src/runtime/runner.ts',
+]);
+
+export function computeAgentAdapterSourceSha256(rootDir = REPO_ROOT) {
+  const h = createHash('sha256');
+  for (const rel of AGENT_ADAPTER_SOURCE_PATHS) {
+    const abs = join(rootDir, rel);
+    h.update(`${abs}\n`);
+    h.update(readFileSync(abs));
+    h.update('\n');
+  }
+  return h.digest('hex');
+}
+
 export function checkAgentSmokeFingerprint(rootDir = REPO_ROOT, opts = {}) {
   const fingerprintPath =
     opts.fingerprintPath ?? join(rootDir, 'tests/fixtures/agent-smoke/last-run.json');
@@ -3770,9 +3802,60 @@ export function checkAgentSmokeFingerprint(rootDir = REPO_ROOT, opts = {}) {
     };
   }
 
+  // Slice 47a (Codex HIGH 4 fold-in) — drift check fires only against
+  // the live agent fingerprint path AND only when the adapter source
+  // files actually exist under `rootDir` (so synthetic test repos that
+  // hand-write a fingerprint without scaffolding adapter sources keep
+  // exercising the base behavior without bringing source-hash
+  // computation into scope). Check 32 (codex) keeps delegating to this
+  // helper for base validation and layers its drift check independently.
+  const baseDetail = `${relative(rootDir, fingerprintPath)} commit_sha ${commitSha.slice(0, 12)} is an ancestor of HEAD; result_sha256=${resultSha256.slice(0, 12)}…`;
+  const isAgentFingerprint = fingerprintPath.endsWith('tests/fixtures/agent-smoke/last-run.json');
+  const adapterSourcesPresent = AGENT_ADAPTER_SOURCE_PATHS.every((rel) =>
+    existsSync(join(rootDir, rel)),
+  );
+  if (!isAgentFingerprint || !adapterSourcesPresent) {
+    return { level: 'green', detail: baseDetail };
+  }
+
+  const schemaVersion = parsed.schema_version;
+  if (schemaVersion !== 2) {
+    return {
+      level: 'yellow',
+      detail: `${relative(rootDir, fingerprintPath)} schema_version ${schemaVersion ?? '<missing>'} is stale (Slice 47a Codex HIGH 4: agent fingerprint promoted to schema_version 2 with adapter_source_sha256 + cli_version); re-run AGENT_SMOKE=1 UPDATE_AGENT_FINGERPRINT=1 to refresh`,
+    };
+  }
+
+  const recorded = parsed.adapter_source_sha256;
+  if (typeof recorded !== 'string' || !/^[0-9a-f]{64}$/.test(recorded)) {
+    return {
+      level: 'yellow',
+      detail: `${relative(rootDir, fingerprintPath)} missing or malformed 'adapter_source_sha256' (Slice 47a Codex HIGH 4: schema_version 2 fingerprints must include this field; re-run AGENT_SMOKE=1 UPDATE_AGENT_FINGERPRINT=1 to promote a fresh fingerprint bound to the current adapter surface)`,
+    };
+  }
+
+  let current;
+  try {
+    current = computeAgentAdapterSourceSha256(rootDir);
+  } catch (err) {
+    return {
+      level: 'red',
+      detail: `failed to hash adapter source files for drift check: ${err.message}`,
+    };
+  }
+  if (recorded !== current) {
+    return {
+      level: 'yellow',
+      detail: `${relative(rootDir, fingerprintPath)} adapter_source_sha256 mismatch (recorded ${recorded.slice(0, 12)}… vs current ${current.slice(0, 12)}…) — agent adapter surface has changed since the last AGENT_SMOKE run; re-promote via AGENT_SMOKE=1 UPDATE_AGENT_FINGERPRINT=1`,
+    };
+  }
+
+  const cliVersion = parsed.cli_version;
+  const cliVersionNote =
+    typeof cliVersion === 'string' && cliVersion.length > 0 ? `; cli_version=${cliVersion}` : '';
   return {
     level: 'green',
-    detail: `${relative(rootDir, fingerprintPath)} commit_sha ${commitSha.slice(0, 12)} is an ancestor of HEAD; result_sha256=${resultSha256.slice(0, 12)}…`,
+    detail: `${baseDetail}; adapter_source_sha256=${current.slice(0, 12)}… matches current surface${cliVersionNote}`,
   };
 }
 

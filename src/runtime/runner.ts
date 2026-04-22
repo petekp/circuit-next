@@ -1,12 +1,13 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { BuiltInAdapter } from '../schemas/adapter.js';
+import type { BuiltInAdapter, DispatchResolutionSource } from '../schemas/adapter.js';
 import type { Event } from '../schemas/event.js';
 import type { InvocationId, RunId, WorkflowId } from '../schemas/ids.js';
 import type { LaneDeclaration } from '../schemas/lane.js';
 import { computeManifestHash } from '../schemas/manifest.js';
 import type { RunResult } from '../schemas/result.js';
 import type { Rigor } from '../schemas/rigor.js';
+import type { ResolvedSelection, SelectionOverride } from '../schemas/selection-policy.js';
 import type { Snapshot } from '../schemas/snapshot.js';
 import type { Workflow } from '../schemas/workflow.js';
 import type { AgentDispatchInput } from './adapters/agent.js';
@@ -183,6 +184,82 @@ async function resolveDispatcher(inv: DogfoodInvocation): Promise<DispatchFn> {
   return { adapterName: 'agent', dispatch: dispatchAgent };
 }
 
+// Slice 47a (CONVERGENT HIGH A fold-in): compute the dispatch-event
+// provenance honestly from the runner's actual decision path, instead
+// of letting the materializer fabricate `{ source: 'default' }` on
+// every event. Two cases at v0:
+//   - The caller injected a dispatcher (tests, future role-keyed
+//     routing) → `source: 'explicit'`. The DogfoodInvocation surface
+//     does not yet name a registry, so we cannot honestly claim
+//     `'role'` or `'circuit'` here — those become reachable when
+//     P2.8 router introduces a workflow-keyed adapter registry.
+//   - The runner picked the default → `source: 'default'`.
+// A future P2-MODEL-EFFORT slice replaces this helper with a real
+// resolver that honors precedence (`default → user-global → project →
+// workflow → phase → step → invocation` per
+// `src/schemas/selection-policy.ts SELECTION_PRECEDENCE`); the
+// type contract at `materializeDispatch` does not change.
+function deriveResolvedFrom(invocation: DogfoodInvocation): DispatchResolutionSource {
+  return invocation.dispatcher !== undefined ? { source: 'explicit' } : { source: 'default' };
+}
+
+// Slice 47a (CONVERGENT HIGH A fold-in): compose the effective
+// `ResolvedSelection` from `workflow.default_selection` and
+// `step.selection`. v0 is the minimum-honest derivation:
+//   - `workflow.default_selection` is consumed as the base layer.
+//   - `step.selection` overlays right-biased per SEL precedence
+//     (`workflow < step` per
+//     `src/schemas/selection-policy.ts SELECTION_PRECEDENCE`).
+//   - `SkillOverride` operations (`replace`/`append`/`remove`/
+//     `inherit`) collapse here: the base contributes its skills if
+//     present and the overlay contributes its skills if `mode !==
+//     'inherit'`. Real composition (set-algebra union/difference per
+//     SEL-I3) is the P2-MODEL-EFFORT resolver's job; v0 picks the
+//     more-specific layer's skills as a faithful approximation that
+//     never invents skills the layers do not declare.
+//   - `invocation_options` shallow-merges right-biased.
+// Returns the canonical empty selection when neither layer declares
+// anything, which is the same shape the materializer used to fabricate
+// pre-Slice-47a — the difference is that pre-Slice-47a the empty was
+// fabricated regardless of inputs, and post-Slice-47a it is derived
+// from inputs that were genuinely empty.
+function deriveResolvedSelection(
+  workflow: Workflow,
+  step: Workflow['steps'][number] & { kind: 'dispatch' },
+): ResolvedSelection {
+  const wf = workflow.default_selection;
+  const st = step.selection;
+
+  if (wf === undefined && st === undefined) {
+    return { skills: [], invocation_options: {} };
+  }
+
+  const skillsFor = (layer: SelectionOverride | undefined): readonly string[] | undefined => {
+    if (layer === undefined) return undefined;
+    if (layer.skills.mode === 'inherit') return undefined;
+    return layer.skills.skills;
+  };
+  const stSkills = skillsFor(st);
+  const wfSkills = skillsFor(wf);
+  const skills = (stSkills ?? wfSkills ?? []) as ResolvedSelection['skills'];
+
+  const model = st?.model ?? wf?.model;
+  const effort = st?.effort ?? wf?.effort;
+  const rigor = st?.rigor ?? wf?.rigor;
+  const invocation_options = {
+    ...(wf?.invocation_options ?? {}),
+    ...(st?.invocation_options ?? {}),
+  };
+
+  return {
+    ...(model !== undefined ? { model } : {}),
+    ...(effort !== undefined ? { effort } : {}),
+    skills,
+    ...(rigor !== undefined ? { rigor } : {}),
+    invocation_options,
+  };
+}
+
 // Slice 43c: orchestrator-synthesis steps land an artifact file at
 // `runRoot/step.writes.artifact.path` before their `step.artifact_written`
 // event fires. At v0 the body is a minimal deterministic JSON stub with
@@ -343,6 +420,15 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
         // with the matching `adapterName`; no further edit to this
         // site is required.
         adapterName: dispatcher.adapterName,
+        // Slice 47a (CONVERGENT HIGH A fold-in): selection + provenance
+        // are now derived from real inputs (workflow.default_selection
+        // + step.selection right-biased; explicit-vs-default dispatcher
+        // provenance) rather than hardcoded by the materializer. The
+        // derivation helpers live above in this module so the runner is
+        // the single owner of resolution at v0; P2-MODEL-EFFORT replaces
+        // them with the full SEL-precedence resolver.
+        resolvedSelection: deriveResolvedSelection(workflow, step),
+        resolvedFrom: deriveResolvedFrom(inv),
         dispatchResult,
         verdict,
         now,

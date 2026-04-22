@@ -610,15 +610,29 @@ prose; reasoning-capable models support graded effort. Two concerns,
 separate slices:
 
 1. **Explicit assignment (this slice).** Extend
-   `specs/contracts/workflow.md` to v0.3 with per-step
-   `invocation_options.model` (string id; schema-validated against an
-   allowlist) and `invocation_options.effort` (low | medium | high; only
-   honored when the resolved adapter's model supports it). Cascade
-   resolution: user-global default → workflow-level default → step-level
-   override. `resolved_selection.invocation_options` on the
-   `dispatch.started` event carries the resolved values. Backwards-
-   additive — existing fixtures with empty `invocation_options` continue
-   to resolve to the user-global default.
+   `specs/contracts/workflow.md` to v0.3 with per-step `selection.model`
+   (provider-scoped, schema-validated against an allowlist) and
+   `selection.effort` (`Effort` enum: `none | minimal | low | medium |
+   high | xhigh`; only honored when the resolved adapter's model
+   supports it). The schema already exposes these as first-class
+   `SelectionOverride` fields per `src/schemas/selection-policy.ts:70-79`
+   (Slice 47a comprehensive review CONVERGENT HIGH B fold-in — earlier
+   plan wording placed `model` / `effort` under `invocation_options`,
+   which mismatched the actual schema; corrected here so this slice
+   wires the existing first-class fields through resolution rather than
+   re-introducing the nested form). Cascade resolution: user-global
+   default → workflow-level default → step-level override (per
+   `SELECTION_PRECEDENCE` in `selection-policy.ts`).
+   `dispatch.started.resolved_selection` carries the resolved
+   `model` + `effort` + `skills` + `rigor` + `invocation_options` (each
+   as separate first-class fields per `ResolvedSelection`). Backwards-
+   additive — existing fixtures without `selection` overrides continue
+   to resolve to the user-global default. Slice 47a landed the runner-
+   side derivation seam (`deriveResolvedSelection` in `runner.ts`)
+   composing workflow + step selections right-biased; this slice
+   replaces that v0 helper with the full SEL-precedence resolver and
+   widens to the user-global / project / phase / invocation layers
+   the helper does not yet honor.
 2. **Intelligent routing (later; explicitly postponed).** A selector that
    inspects task characteristics (lane, step role, artifact kind,
    historical success-rate) and picks a model. Requires (a) Phase 2

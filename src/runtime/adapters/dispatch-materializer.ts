@@ -1,8 +1,9 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { BuiltInAdapter } from '../../schemas/adapter.js';
+import type { BuiltInAdapter, DispatchResolutionSource } from '../../schemas/adapter.js';
 import type { Event } from '../../schemas/event.js';
 import type { RunId, StepId } from '../../schemas/ids.js';
+import type { ResolvedSelection } from '../../schemas/selection-policy.js';
 import type { DispatchRole } from '../../schemas/step.js';
 import { type DispatchResult, sha256Hex } from './shared.js';
 
@@ -51,6 +52,24 @@ export interface DispatchMaterializeInput {
   // `BuiltInAdapter` enum at `src/schemas/adapter.ts` so the discriminant
   // matches the ADAPTER-I1 closed-enum invariant.
   readonly adapterName: BuiltInAdapter;
+  // Slice 47a (CONVERGENT HIGH A fold-in): selection + provenance are
+  // REQUIRED inputs to materialization rather than hardcoded defaults.
+  // Pre-Slice-47a, `materializeDispatch` fabricated
+  // `resolved_selection: { skills: [], invocation_options: {} }` and
+  // `resolved_from: { source: 'default' }` on every dispatch.started
+  // event regardless of the actual selection-resolution path or caller
+  // intent — falsifying the audit trail consumed by P2.8 router and
+  // P2-MODEL-EFFORT cascade work. The materializer is now fail-closed
+  // at the type boundary: callers MUST compute and pass the real
+  // values. The runner derives them in `runDogfood` (see
+  // `deriveResolvedSelection` + `deriveResolvedFrom` helpers) from the
+  // best information available pre-resolver (workflow.default_selection
+  // + step.selection right-biased; explicit-vs-default dispatcher
+  // provenance). A future P2-MODEL-EFFORT slice replaces those helpers
+  // with the full SEL-precedence selection resolver, but the type
+  // contract here does not change.
+  readonly resolvedSelection: ResolvedSelection;
+  readonly resolvedFrom: DispatchResolutionSource;
   readonly dispatchResult: DispatchResult;
   readonly verdict: string;
   readonly now: () => Date;
@@ -91,10 +110,23 @@ export function materializeDispatch(input: DispatchMaterializeInput): DispatchMa
     runRoot,
     writes,
     adapterName,
+    resolvedSelection,
+    resolvedFrom,
     dispatchResult,
     verdict,
     now,
   } = input;
+
+  // Slice 47a — cross-validation of the role binding the Event-union
+  // schema enforces (`resolved_from.source === 'role'` requires
+  // `resolved_from.role === role`). Catching here at the materializer
+  // boundary surfaces the mismatch with a precise error before the
+  // event is constructed and round-tripped through the schema.
+  if (resolvedFrom.source === 'role' && resolvedFrom.role !== role) {
+    throw new Error(
+      `materializeDispatch: resolvedFrom.role '${resolvedFrom.role}' does not match dispatch step role '${role}' — Event schema cross-validation will reject this combination.`,
+    );
+  }
 
   const requestAbs = join(runRoot, writes.request);
   const receiptAbs = join(runRoot, writes.receipt);
@@ -129,8 +161,8 @@ export function materializeDispatch(input: DispatchMaterializeInput): DispatchMa
     attempt,
     adapter: { kind: 'builtin', name: adapterName },
     role,
-    resolved_selection: { skills: [], invocation_options: {} },
-    resolved_from: { source: 'default' },
+    resolved_selection: resolvedSelection,
+    resolved_from: resolvedFrom,
   });
 
   events.push({

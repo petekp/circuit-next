@@ -5,7 +5,11 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-import { checkAgentSmokeFingerprint } from '../../scripts/audit.mjs';
+import {
+  AGENT_ADAPTER_SOURCE_PATHS,
+  checkAgentSmokeFingerprint,
+  computeAgentAdapterSourceSha256,
+} from '../../scripts/audit.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, '..', '..');
@@ -159,5 +163,108 @@ describe('Check 30 — AGENT_SMOKE fingerprint commit-ancestor (Slice 43c / ADR-
       expect(result.level).toBe('green');
       expect(result.detail).toContain(headSha.slice(0, 12));
     });
+  });
+});
+
+// Slice 47a (Codex HIGH 4 fold-in) — schema_version 2 promotion +
+// adapter-surface drift detection. Symmetric with the Check 32
+// (codex) drift check that landed in Slice 45 HIGH 4 fold-in. The
+// drift check fires only when the live agent fingerprint path is
+// being checked AND when the adapter source files actually exist
+// under the root (synthetic temp repos without scaffolded sources
+// keep exercising base behavior).
+function scaffoldAdapterSources(root: string) {
+  for (const rel of AGENT_ADAPTER_SOURCE_PATHS) {
+    const abs = join(root, rel);
+    mkdirSync(dirname(abs), { recursive: true });
+    writeFileSync(abs, `// scaffold: ${rel}\n`);
+  }
+}
+
+describe('Check 30 — AGENT_SMOKE schema_version 2 + drift detection (Slice 47a / Codex HIGH 4)', () => {
+  it('yellow when fingerprint is schema_version 1 but adapter sources are present (stale-schema signal)', () => {
+    withTempRepo((root) => {
+      scaffoldAdapterSources(root);
+      const headSha = execSync('git rev-parse HEAD', { cwd: root, encoding: 'utf8' }).trim();
+      writeFingerprint(root, {
+        schema_version: 1,
+        commit_sha: headSha,
+        result_sha256: 'a'.repeat(64),
+      });
+      const result = checkAgentSmokeFingerprint(root);
+      expect(result.level).toBe('yellow');
+      expect(result.detail).toMatch(/schema_version 1 is stale/);
+      expect(result.detail).toMatch(/AGENT_SMOKE=1 UPDATE_AGENT_FINGERPRINT=1/);
+    });
+  });
+
+  it('yellow when fingerprint is schema_version 2 but adapter_source_sha256 is missing', () => {
+    withTempRepo((root) => {
+      scaffoldAdapterSources(root);
+      const headSha = execSync('git rev-parse HEAD', { cwd: root, encoding: 'utf8' }).trim();
+      writeFingerprint(root, {
+        schema_version: 2,
+        commit_sha: headSha,
+        result_sha256: 'a'.repeat(64),
+        // adapter_source_sha256 absent
+        cli_version: 'claude 2.1.117',
+      });
+      const result = checkAgentSmokeFingerprint(root);
+      expect(result.level).toBe('yellow');
+      expect(result.detail).toMatch(/missing or malformed 'adapter_source_sha256'/);
+    });
+  });
+
+  it('yellow when adapter_source_sha256 mismatches the current adapter surface (drift)', () => {
+    withTempRepo((root) => {
+      scaffoldAdapterSources(root);
+      const headSha = execSync('git rev-parse HEAD', { cwd: root, encoding: 'utf8' }).trim();
+      writeFingerprint(root, {
+        schema_version: 2,
+        commit_sha: headSha,
+        result_sha256: 'a'.repeat(64),
+        adapter_source_sha256: 'b'.repeat(64), // wrong on purpose
+        cli_version: 'claude 2.1.117',
+      });
+      const result = checkAgentSmokeFingerprint(root);
+      expect(result.level).toBe('yellow');
+      expect(result.detail).toMatch(/adapter_source_sha256 mismatch/);
+      expect(result.detail).toMatch(/agent adapter surface has changed/);
+    });
+  });
+
+  it('green when adapter_source_sha256 matches the current adapter surface', () => {
+    withTempRepo((root) => {
+      scaffoldAdapterSources(root);
+      const headSha = execSync('git rev-parse HEAD', { cwd: root, encoding: 'utf8' }).trim();
+      const currentSha = computeAgentAdapterSourceSha256(root);
+      writeFingerprint(root, {
+        schema_version: 2,
+        commit_sha: headSha,
+        result_sha256: 'a'.repeat(64),
+        adapter_source_sha256: currentSha,
+        cli_version: 'claude 2.1.117',
+      });
+      const result = checkAgentSmokeFingerprint(root);
+      expect(result.level).toBe('green');
+      expect(result.detail).toContain('matches current surface');
+      expect(result.detail).toContain('cli_version=claude 2.1.117');
+    });
+  });
+
+  it('AGENT_ADAPTER_SOURCE_PATHS includes the four adapter-surface files Codex HIGH 4 named', () => {
+    expect(AGENT_ADAPTER_SOURCE_PATHS).toEqual([
+      'src/runtime/adapters/agent.ts',
+      'src/runtime/adapters/shared.ts',
+      'src/runtime/adapters/dispatch-materializer.ts',
+      'src/runtime/runner.ts',
+    ]);
+  });
+
+  it('computeAgentAdapterSourceSha256 produces a stable 64-char lowercase hex', () => {
+    const sha = computeAgentAdapterSourceSha256();
+    expect(sha).toMatch(/^[0-9a-f]{64}$/);
+    // Idempotent — same inputs, same output.
+    expect(computeAgentAdapterSourceSha256()).toBe(sha);
   });
 });

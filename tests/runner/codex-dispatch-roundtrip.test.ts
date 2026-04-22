@@ -154,6 +154,10 @@ describe('Slice 45 — codex dispatch round-trip (ADR-0007 CC#P2-2 second-adapte
           timeoutMs: 120_000,
         });
 
+        // Slice 47a — selection + provenance now required at the
+        // materializer boundary; CODEX_SMOKE round-trip mirrors the
+        // AGENT_SMOKE round-trip with `source: 'explicit'` (the test
+        // injects the adapter directly).
         const materialized = materializeDispatch({
           runId,
           stepId,
@@ -163,6 +167,8 @@ describe('Slice 45 — codex dispatch round-trip (ADR-0007 CC#P2-2 second-adapte
           runRoot,
           writes,
           adapterName: 'codex',
+          resolvedSelection: { skills: [], invocation_options: {} },
+          resolvedFrom: { source: 'explicit' },
           dispatchResult: codexResult,
           verdict: 'accept',
           now,

@@ -334,6 +334,14 @@ export const CODEX_ADAPTER_SOURCE_PATHS: readonly string[];
  */
 export function computeCodexAdapterSourceSha256(rootDir?: string): string;
 
+// Slice 47a (Codex HIGH 4 fold-in) — symmetric agent adapter source
+// path constant + hash helper. Used by Check 30 to detect adapter
+// surface drift against a recorded fingerprint's
+// adapter_source_sha256 field once the agent fingerprint is promoted
+// to schema_version 2.
+export const AGENT_ADAPTER_SOURCE_PATHS: readonly string[];
+export function computeAgentAdapterSourceSha256(rootDir?: string): string;
+
 // Slice 46 (P2.7a, ADR-0007 §Decision.1 CC#P2-4 first-half binding) —
 // session-hook surface presence. Verifies project-local SessionStart and
 // SessionEnd hook scripts exist + executable + reference circuit-engine

@@ -188,7 +188,20 @@ describe('Slice 27d — dogfood-run-0 runner smoke', () => {
       throw new Error('expected dispatch.started event');
     }
     expect(dispatchStarted.adapter).toEqual({ kind: 'builtin', name: 'agent' });
-    expect(dispatchStarted.resolved_from).toEqual({ source: 'default' });
+    // Slice 47a — `resolved_from` is now derived from the runner's
+    // actual decision path (see runner.ts `deriveResolvedFrom`):
+    // the test injects a stub dispatcher via `DogfoodInvocation.dispatcher`,
+    // so the honest claim is `source: 'explicit'`. Pre-Slice-47a the
+    // materializer hardcoded `source: 'default'` regardless of caller
+    // (CONVERGENT HIGH A in the Phase 2-to-date comprehensive review).
+    expect(dispatchStarted.resolved_from).toEqual({ source: 'explicit' });
+    // Slice 47a — `resolved_selection` is now derived from
+    // `workflow.default_selection` + `step.selection` (right-biased per
+    // SEL precedence). The dogfood-run-0 fixture and the explore
+    // fixture both use empty default selections at v0, so the canonical
+    // empty selection is the honest claim — but it is now genuinely
+    // empty, not fabricated.
+    expect(dispatchStarted.resolved_selection).toEqual({ skills: [], invocation_options: {} });
 
     // run.closed is single and last.
     const closedEvents = outcome.events.filter((e) => e.kind === 'run.closed');

@@ -131,7 +131,12 @@ describe('Slice 42 — agent dispatch round-trip (ADR-0007 CC#P2-2)', () => {
           timeoutMs: 120_000,
         });
 
-        // (3+4) Materialize and append.
+        // (3+4) Materialize and append. Slice 47a — selection +
+        // provenance are now required at the materializer boundary;
+        // this AGENT_SMOKE round-trip tests the agent adapter's full
+        // five-event transcript with the canonical empty selection
+        // and `source: 'explicit'` provenance (the test injects the
+        // adapter directly, so the honest claim is `'explicit'`).
         const materialized = materializeDispatch({
           runId,
           stepId,
@@ -141,6 +146,8 @@ describe('Slice 42 — agent dispatch round-trip (ADR-0007 CC#P2-2)', () => {
           runRoot,
           writes,
           adapterName: 'agent',
+          resolvedSelection: { skills: [], invocation_options: {} },
+          resolvedFrom: { source: 'explicit' },
           dispatchResult: agentResult,
           verdict: 'accept',
           now,

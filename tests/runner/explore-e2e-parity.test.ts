@@ -35,6 +35,38 @@ const LAST_RUN_FINGERPRINT_PATH = resolve('tests/fixtures/agent-smoke/last-run.j
 
 const AGENT_SMOKE = process.env.AGENT_SMOKE === '1';
 const UPDATE_GOLDEN = process.env.UPDATE_GOLDEN === '1';
+// Slice 47a (Codex HIGH 4 fold-in) — fingerprint promotion is now
+// gated separately from the AGENT_SMOKE invocation, mirroring
+// UPDATE_CODEX_FINGERPRINT (Slice 45 MED 3 fold-in). A bare
+// AGENT_SMOKE=1 run exercises the adapter end-to-end without
+// mutating tests/fixtures/agent-smoke/last-run.json; explicit
+// UPDATE_AGENT_FINGERPRINT=1 opt-in is required to refresh the
+// recorded fingerprint that audit Check 30 binds against.
+const UPDATE_AGENT_FINGERPRINT = process.env.UPDATE_AGENT_FINGERPRINT === '1';
+
+// Slice 47a — adapter source paths the fingerprint binds against.
+// Inlined here (rather than importing from scripts/audit.mjs) to keep
+// the test stdlib-only and consistent with the codex-dispatch-roundtrip
+// inlining; if the test's list ever drifts from the audit's list the
+// drift detection itself surfaces the mismatch as yellow on first
+// repromotion.
+const AGENT_ADAPTER_SOURCE_PATHS = [
+  'src/runtime/adapters/agent.ts',
+  'src/runtime/adapters/shared.ts',
+  'src/runtime/adapters/dispatch-materializer.ts',
+  'src/runtime/runner.ts',
+] as const;
+
+function adapterSourceSha256(): string {
+  const h = createHash('sha256');
+  for (const p of AGENT_ADAPTER_SOURCE_PATHS) {
+    const abs = resolve(p);
+    h.update(`${abs}\n`);
+    h.update(readFileSync(abs));
+    h.update('\n');
+  }
+  return h.digest('hex');
+}
 
 function sha256Hex(payload: string): string {
   return createHash('sha256').update(payload, 'utf8').digest('hex');
@@ -286,19 +318,34 @@ describe('Slice 43c — explore fixture static declarations (ratchet-floor contr
           expect(kindsForStep).toContain('dispatch.completed');
         }
 
-        // Write the fingerprint so the audit check (30) binds the
-        // commit-ancestor relationship. The fingerprint is committed in
-        // the same slice as the runner wiring per plan §P2.5
-        // continuity constraint.
-        const commitSha = currentHeadSha();
-        const fingerprint = {
-          schema_version: 1,
-          commit_sha: commitSha,
-          result_sha256: digest,
-          recorded_at: new Date().toISOString(),
-        };
-        mkdirSync(dirname(LAST_RUN_FINGERPRINT_PATH), { recursive: true });
-        writeFileSync(LAST_RUN_FINGERPRINT_PATH, `${JSON.stringify(fingerprint, null, 2)}\n`);
+        // Slice 47a (Codex HIGH 4 fold-in) — fingerprint promotion
+        // is gated on UPDATE_AGENT_FINGERPRINT=1 and writes the
+        // schema_version 2 shape with adapter_source_sha256 +
+        // cli_version, mirroring the codex-dispatch-roundtrip
+        // promotion path. A bare AGENT_SMOKE=1 run exercises the
+        // adapter end-to-end without mutating tracked state. The
+        // first-run dispatch result on the explore fixture is the
+        // one whose result_sha256 is recorded (matching prior shape).
+        if (UPDATE_AGENT_FINGERPRINT) {
+          const commitSha = currentHeadSha();
+          // The adapter writes cli_version into the dispatch result
+          // (init.claude_code_version per agent.ts). The runtime does
+          // not propagate it onto an event yet (P2-MODEL-EFFORT
+          // scope); for v0 we capture it via a side-channel env var.
+          // If a future event extension surfaces cli_version, this
+          // helper can read from the event directly.
+          const cliVersion = process.env.AGENT_CLI_VERSION ?? 'claude (unknown)';
+          const fingerprint = {
+            schema_version: 2,
+            commit_sha: commitSha,
+            result_sha256: digest,
+            adapter_source_sha256: adapterSourceSha256(),
+            cli_version: cliVersion,
+            recorded_at: new Date().toISOString(),
+          };
+          mkdirSync(dirname(LAST_RUN_FINGERPRINT_PATH), { recursive: true });
+          writeFileSync(LAST_RUN_FINGERPRINT_PATH, `${JSON.stringify(fingerprint, null, 2)}\n`);
+        }
       },
       5 * 60 * 1000,
     );
