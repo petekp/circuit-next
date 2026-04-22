@@ -1,5 +1,5 @@
-import { mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import type { Event } from '../schemas/event.js';
 import type { InvocationId, RunId, WorkflowId } from '../schemas/ids.js';
 import type { LaneDeclaration } from '../schemas/lane.js';
@@ -8,6 +8,8 @@ import type { RunResult } from '../schemas/result.js';
 import type { Rigor } from '../schemas/rigor.js';
 import type { Snapshot } from '../schemas/snapshot.js';
 import type { Workflow } from '../schemas/workflow.js';
+import type { AgentDispatchInput, AgentDispatchResult } from './adapters/agent.js';
+import { materializeDispatch } from './adapters/dispatch-materializer.js';
 import { appendEvent, eventLogPath } from './event-writer.js';
 import {
   type ManifestSnapshotInput,
@@ -70,6 +72,8 @@ export function appendAndDerive(runRoot: string, event: Event): AppendResult {
 // Slice 27d — dogfood-run-0 execution loop
 // ---------------------------------------------------------------------
 
+export type DispatchFn = (input: AgentDispatchInput) => Promise<AgentDispatchResult>;
+
 export interface DogfoodInvocation {
   runRoot: string;
   workflow: Workflow;
@@ -80,6 +84,15 @@ export interface DogfoodInvocation {
   lane: LaneDeclaration;
   now: () => Date;
   invocationId?: InvocationId;
+  // Slice 43b: injection seam for the dispatch adapter. Default is
+  // `dispatchAgent` (lazy-imported so tests that don't exercise dispatch
+  // don't pull the subprocess module into their graph). Tests that want
+  // deterministic transcripts inject a stub returning a pre-baked
+  // AgentDispatchResult; the capability-boundary assertion lives in
+  // parseAgentStdout and is thus a real-subprocess-only concern —
+  // bypassing it at the test layer is a test-surface seam, not a
+  // policy seam.
+  dispatcher?: DispatchFn;
 }
 
 export interface DogfoodRunResult {
@@ -89,14 +102,17 @@ export interface DogfoodRunResult {
   events: Event[];
 }
 
-// Dry-run adapter contract: a dispatch step emits `dispatch.started` +
-// `dispatch.completed` without calling any real agent. The verdict is
-// synthesized from the dispatch step's gate.pass vocabulary so the
-// downstream `gate.evaluated` outcome is deterministic — "ok" when the
-// step declares it as a passing verdict, otherwise the first pass token.
-function synthesizeDispatchVerdict(step: Workflow['steps'][number]): string {
+// Slice 43b: the runtime dispatch branch now routes through dispatchAgent
+// + materializeDispatch (per ADR-0007 §Amendment Slice 37 + ADR-0009 §1).
+// `dispatchVerdictForStep` is a gate-decision helper that returns the
+// verdict emitted on `dispatch.completed` so downstream `gate.evaluated`
+// is deterministic at v0 — raw-byte materialization (ADR-0008
+// §Decision.3a) does not extract a verdict from model output yet; a
+// future slice will swap this out once dispatch artifact schemas become
+// enforceable at runtime.
+function dispatchVerdictForStep(step: Workflow['steps'][number]): string {
   if (step.kind !== 'dispatch') {
-    throw new Error(`synthesizeDispatchVerdict: step ${step.id} is not a dispatch step`);
+    throw new Error(`dispatchVerdictForStep: step ${step.id} is not a dispatch step`);
   }
   const first = step.gate.pass[0];
   if (first === undefined || first.length === 0) {
@@ -107,11 +123,55 @@ function synthesizeDispatchVerdict(step: Workflow['steps'][number]): string {
   return first;
 }
 
+// v0 prompt composition: name the step, enumerate accepted verdicts, and
+// inline every reads-declared artifact (or a clear placeholder if the
+// reads artifact hasn't been written yet — in explore, orchestrator-
+// synthesis artifacts precede dispatch steps so this degrades gracefully
+// at the fixture's current shape).
+function composeDispatchPrompt(
+  step: Workflow['steps'][number] & { kind: 'dispatch' },
+  runRoot: string,
+): string {
+  const readsBody =
+    step.reads.length === 0
+      ? '(no reads)'
+      : step.reads
+          .map((path) => {
+            const abs = join(runRoot, path);
+            if (!existsSync(abs)) return `[reads unavailable: ${path}]`;
+            return `--- ${path} ---\n${readFileSync(abs, 'utf8')}`;
+          })
+          .join('\n\n');
+  return [
+    `Step: ${step.id}`,
+    `Title: ${step.title}`,
+    `Role: ${step.role}`,
+    `Accepted verdicts: ${step.gate.pass.join(', ')}`,
+    '',
+    'Context (from reads):',
+    readsBody,
+    '',
+    'Respond with a JSON object that includes a "verdict" field drawn from the accepted-verdicts list.',
+  ].join('\n');
+}
+
+async function resolveDispatcher(inv: DogfoodInvocation): Promise<DispatchFn> {
+  if (inv.dispatcher !== undefined) return inv.dispatcher;
+  const { dispatchAgent } = await import('./adapters/agent.js');
+  return dispatchAgent;
+}
+
 // Narrow dogfood-run-0 loop. Walks routes from the single entry_mode;
 // for each step, appends the per-kind event trail; emits run.closed
 // after the routes graph reaches @complete; writes result.json last.
-export function runDogfood(inv: DogfoodInvocation): DogfoodRunResult {
+//
+// Slice 43b: async so the dispatch branch can `await` the real adapter
+// (or an injected stub). The signature is a breaking change for external
+// callers — this is internal to Phase 1.5 / Phase 2 only (no external
+// users yet).
+export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResult> {
   const { runRoot, workflow, workflowBytes, runId, goal, rigor, lane, now } = inv;
+  const dispatcher = await resolveDispatcher(inv);
 
   if (workflow.entry_modes.length === 0) {
     throw new Error(`runDogfood: workflow ${workflow.id} declares no entry_modes`);
@@ -208,36 +268,35 @@ export function runDogfood(inv: DogfoodInvocation): DogfoodRunResult {
         outcome: 'pass',
       });
     } else if (step.kind === 'dispatch') {
-      const verdict = synthesizeDispatchVerdict(step);
-      push({
-        schema_version: 1,
-        sequence,
-        recorded_at: recordedAt(),
-        run_id: runId,
-        kind: 'dispatch.started',
-        step_id: step.id,
+      const prompt = composeDispatchPrompt(step, runRoot);
+      const dispatchInput: AgentDispatchInput = { prompt };
+      if (step.budgets?.wall_clock_ms !== undefined) {
+        dispatchInput.timeoutMs = step.budgets.wall_clock_ms;
+      }
+      const agentResult = await dispatcher(dispatchInput);
+      const verdict = dispatchVerdictForStep(step);
+      const materialized = materializeDispatch({
+        runId,
+        stepId: step.id,
         attempt,
-        adapter: { kind: 'builtin', name: 'agent' },
         role: step.role,
-        resolved_selection: {
-          skills: [],
-          invocation_options: {},
+        startingSequence: sequence,
+        runRoot,
+        writes: {
+          request: step.writes.request,
+          receipt: step.writes.receipt,
+          result: step.writes.result,
+          ...(step.writes.artifact === undefined ? {} : { artifact: step.writes.artifact }),
         },
-        resolved_from: { source: 'default' },
-      });
-      push({
-        schema_version: 1,
-        sequence,
-        recorded_at: recordedAt(),
-        run_id: runId,
-        kind: 'dispatch.completed',
-        step_id: step.id,
-        attempt,
+        agentResult,
         verdict,
-        duration_ms: 0,
-        result_path: step.writes.result,
-        receipt_path: step.writes.receipt,
+        now,
       });
+      for (const ev of materialized.events) {
+        events.push(ev);
+        appendAndDerive(runRoot, ev);
+      }
+      sequence = materialized.sequenceAfter;
       push({
         schema_version: 1,
         sequence,

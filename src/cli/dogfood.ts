@@ -141,7 +141,7 @@ function loadFixture(fixturePath: string): { workflow: Workflow; bytes: Buffer }
   return { workflow, bytes };
 }
 
-export function main(argv: readonly string[]): number {
+export async function main(argv: readonly string[]): Promise<number> {
   let args: ParsedArgs;
   try {
     args = parseArgs(argv);
@@ -171,7 +171,7 @@ export function main(argv: readonly string[]): number {
       'defer Alpha Proof to post-Phase-2; not an option because ADR-0001 Addendum B gates Phase 2 on this.',
   };
 
-  const outcome = runDogfood({
+  const outcome = await runDogfood({
     runRoot,
     workflow,
     workflowBytes: bytes,
@@ -205,6 +205,11 @@ const invokedDirectly =
     import.meta.url.endsWith(process.argv[1].split('/').pop() ?? ''));
 
 if (invokedDirectly) {
-  const code = main(process.argv.slice(2));
-  process.exit(code);
+  main(process.argv.slice(2)).then(
+    (code) => process.exit(code),
+    (err: unknown) => {
+      process.stderr.write(`error: ${(err as Error).message}\n`);
+      process.exit(1);
+    },
+  );
 }

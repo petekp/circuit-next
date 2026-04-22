@@ -12,8 +12,9 @@ import { RunProjection } from '../../src/schemas/run.js';
 import { Snapshot } from '../../src/schemas/snapshot.js';
 import { Workflow } from '../../src/schemas/workflow.js';
 
+import type { AgentDispatchInput, AgentDispatchResult } from '../../src/runtime/adapters/agent.js';
 import { readRunLog } from '../../src/runtime/event-log-reader.js';
-import { runDogfood } from '../../src/runtime/runner.js';
+import { type DispatchFn, runDogfood } from '../../src/runtime/runner.js';
 
 // Slice 27d — runner smoke test exercising one synthesis + one dispatch
 // step end-to-end via the dry-run agent adapter (per ADR-0001 Addendum B
@@ -40,6 +41,22 @@ function deterministicNow(startMs: number): () => Date {
   return () => new Date(startMs + n++ * 1000);
 }
 
+// Slice 43b: deterministic stub dispatcher so the runner smoke doesn't
+// spawn a real `claude` subprocess. The capability-boundary assertion at
+// parseAgentStdout is a real-subprocess-only concern; the stub satisfies
+// the AgentDispatchResult shape without traversing that path. The
+// AGENT_SMOKE-gated explore e2e (Slice 43c) exercises the real adapter
+// end-to-end.
+function stubDispatcher(): DispatchFn {
+  return async (input: AgentDispatchInput): Promise<AgentDispatchResult> => ({
+    request_payload: input.prompt,
+    receipt_id: 'stub-receipt-dogfood-run-0',
+    result_body: '{"verdict":"ok"}',
+    duration_ms: 1,
+    cli_version: '0.0.0-stub',
+  });
+}
+
 function lane(): LaneDeclaration {
   return {
     lane: 'ratchet-advance',
@@ -62,10 +79,10 @@ afterEach(() => {
 });
 
 describe('Slice 27d — dogfood-run-0 runner smoke', () => {
-  it('closes one run producing events.ndjson / state.json / manifest.snapshot.json / artifacts/result.json', () => {
+  it('closes one run producing events.ndjson / state.json / manifest.snapshot.json / artifacts/result.json', async () => {
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'run-a');
-    const outcome = runDogfood({
+    const outcome = await runDogfood({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -74,6 +91,7 @@ describe('Slice 27d — dogfood-run-0 runner smoke', () => {
       rigor: 'standard',
       lane: lane(),
       now: deterministicNow(Date.UTC(2026, 3, 20, 12, 0, 0)),
+      dispatcher: stubDispatcher(),
     });
 
     expect(outcome.result.outcome).toBe('complete');
@@ -121,10 +139,10 @@ describe('Slice 27d — dogfood-run-0 runner smoke', () => {
     expect(result.events_observed).toBe(log.length);
   });
 
-  it('exercises synthesis + dispatch + gate event kinds via the dry-run agent adapter', () => {
+  it('exercises synthesis + dispatch + gate event kinds via the injected-stub dispatcher', async () => {
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'run-kinds');
-    const outcome = runDogfood({
+    const outcome = await runDogfood({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -133,19 +151,25 @@ describe('Slice 27d — dogfood-run-0 runner smoke', () => {
       rigor: 'standard',
       lane: lane(),
       now: deterministicNow(Date.UTC(2026, 3, 20, 13, 0, 0)),
+      dispatcher: stubDispatcher(),
     });
 
     const kinds = new Set(outcome.events.map((e) => e.kind));
-    // Closure criterion: more than 27c's 4-kind subset is exercised.
+    // Closure criterion: more than 27c's 4-kind subset is exercised. Slice
+    // 43b widens the dispatch trail to the five-event transcript per
+    // ADR-0007 §Amendment Slice 37; all five kinds must appear.
     expect(kinds.has('run.bootstrapped')).toBe(true);
     expect(kinds.has('step.entered')).toBe(true);
     expect(kinds.has('step.artifact_written')).toBe(true);
     expect(kinds.has('gate.evaluated')).toBe(true);
     expect(kinds.has('dispatch.started')).toBe(true);
+    expect(kinds.has('dispatch.request')).toBe(true);
+    expect(kinds.has('dispatch.receipt')).toBe(true);
+    expect(kinds.has('dispatch.result')).toBe(true);
     expect(kinds.has('dispatch.completed')).toBe(true);
     expect(kinds.has('step.completed')).toBe(true);
     expect(kinds.has('run.closed')).toBe(true);
-    expect(kinds.size).toBeGreaterThanOrEqual(8);
+    expect(kinds.size).toBeGreaterThanOrEqual(11);
 
     // The dispatch.started event carries the dry-run agent adapter.
     const dispatchStarted = outcome.events.find((e) => e.kind === 'dispatch.started');
@@ -161,10 +185,10 @@ describe('Slice 27d — dogfood-run-0 runner smoke', () => {
     expect(outcome.events[outcome.events.length - 1]?.kind).toBe('run.closed');
   });
 
-  it('produces DIFFERING result.json artifacts from two runs with different goals (Close Criterion #4)', () => {
+  it('produces DIFFERING result.json artifacts from two runs with different goals (Close Criterion #4)', async () => {
     const { workflow, bytes } = loadFixture();
 
-    const runA = runDogfood({
+    const runA = await runDogfood({
       runRoot: join(runRootBase, 'run-a'),
       workflow,
       workflowBytes: bytes,
@@ -173,8 +197,9 @@ describe('Slice 27d — dogfood-run-0 runner smoke', () => {
       rigor: 'standard',
       lane: lane(),
       now: deterministicNow(Date.UTC(2026, 3, 20, 12, 0, 0)),
+      dispatcher: stubDispatcher(),
     });
-    const runB = runDogfood({
+    const runB = await runDogfood({
       runRoot: join(runRootBase, 'run-b'),
       workflow,
       workflowBytes: bytes,
@@ -183,6 +208,7 @@ describe('Slice 27d — dogfood-run-0 runner smoke', () => {
       rigor: 'standard',
       lane: lane(),
       now: deterministicNow(Date.UTC(2026, 3, 20, 13, 0, 0)),
+      dispatcher: stubDispatcher(),
     });
 
     const resultA = readFileSync(join(runA.runRoot, 'artifacts', 'result.json'), 'utf8');
