@@ -3858,6 +3858,181 @@ export function checkCodexSmokeFingerprint(rootDir = REPO_ROOT, opts = {}) {
   };
 }
 
+// Check 33 (Slice 46 — P2.7a, ADR-0007 §Decision.1 CC#P2-4 first-half
+// enforcement). Verifies the project owns its session-boundary hook surface:
+//   (a) `.claude/hooks/SessionStart.sh` and `.claude/hooks/SessionEnd.sh`
+//       exist on disk;
+//   (b) both files are executable;
+//   (c) both files reference `circuit-engine continuity` so they actually
+//       wire into the engine surface (a placeholder script that ignores the
+//       engine would technically satisfy presence-only without satisfying
+//       the ADR-0007 binding intent);
+//   (d) `.claude/settings.json` declares both hook events with at least one
+//       command pointing into `.claude/hooks/SessionStart.sh` /
+//       `.claude/hooks/SessionEnd.sh` respectively, AND the SessionStart
+//       entry carries a matcher covering the `startup`, `resume`, `clear`,
+//       and `compact` reasons (so all four entrypoints surface continuity).
+//
+// Rationale for matcher enforcement: a SessionStart hook with matcher
+// "startup" alone would silently miss /clear and /compact — the two
+// entrypoints where continuity-resume is most load-bearing. The `||`
+// alternation in the matcher regex must include all four reasons.
+//
+// CC#P2-4 closes when this check is green AND
+// `tests/runner/continuity-lifecycle.test.ts` (Slice 46b / P2.7b
+// follow-up) lands a passing create→persist→resume→clear lifecycle
+// integration test. This check covers the hook-surface half.
+const SESSION_START_HOOK_REL = '.claude/hooks/SessionStart.sh';
+const SESSION_END_HOOK_REL = '.claude/hooks/SessionEnd.sh';
+const SESSION_HOOK_SETTINGS_REL = '.claude/settings.json';
+const SESSION_START_REQUIRED_MATCHER_REASONS = ['startup', 'resume', 'clear', 'compact'];
+const SESSION_HOOK_REQUIRED_ENGINE_TOKEN = 'circuit-engine continuity';
+
+export function checkSessionHooksPresent(rootDir = REPO_ROOT) {
+  const errors = [];
+  const settingsPath = join(rootDir, SESSION_HOOK_SETTINGS_REL);
+  const startPath = join(rootDir, SESSION_START_HOOK_REL);
+  const endPath = join(rootDir, SESSION_END_HOOK_REL);
+
+  // (a) script files exist
+  if (!existsSync(startPath)) {
+    errors.push(`${SESSION_START_HOOK_REL} missing`);
+  }
+  if (!existsSync(endPath)) {
+    errors.push(`${SESSION_END_HOOK_REL} missing`);
+  }
+
+  // (b) script files executable + (c) reference the engine surface
+  for (const [rel, abs] of [
+    [SESSION_START_HOOK_REL, startPath],
+    [SESSION_END_HOOK_REL, endPath],
+  ]) {
+    if (!existsSync(abs)) continue;
+    let st;
+    try {
+      st = lstatSync(abs);
+    } catch (err) {
+      errors.push(`${rel} stat failed: ${err.message}`);
+      continue;
+    }
+    // Mode bits: any-executable (owner/group/other). 0o111 covers all three.
+    if (!(st.mode & 0o111)) {
+      errors.push(`${rel} is not executable (mode 0o${(st.mode & 0o777).toString(8)})`);
+    }
+    let body;
+    try {
+      body = readFileSync(abs, 'utf-8');
+    } catch (err) {
+      errors.push(`${rel} read failed: ${err.message}`);
+      continue;
+    }
+    if (!body.includes(SESSION_HOOK_REQUIRED_ENGINE_TOKEN)) {
+      errors.push(
+        `${rel} does not reference '${SESSION_HOOK_REQUIRED_ENGINE_TOKEN}' (placeholder hook does not satisfy CC#P2-4 binding intent)`,
+      );
+    }
+  }
+
+  // (d) settings.json declares both hooks with matcher coverage
+  let settings;
+  try {
+    settings = JSON.parse(readFileSync(settingsPath, 'utf-8'));
+  } catch (err) {
+    return {
+      level: 'red',
+      detail: `${SESSION_HOOK_SETTINGS_REL} read/parse failed: ${err.message}`,
+    };
+  }
+
+  const hooksBlock = settings && typeof settings === 'object' ? settings.hooks : null;
+  if (!hooksBlock || typeof hooksBlock !== 'object') {
+    errors.push(`${SESSION_HOOK_SETTINGS_REL} missing 'hooks' object`);
+  } else {
+    // SessionStart entries
+    const sessionStartEntries = Array.isArray(hooksBlock.SessionStart)
+      ? hooksBlock.SessionStart
+      : null;
+    if (!sessionStartEntries || sessionStartEntries.length === 0) {
+      errors.push(`${SESSION_HOOK_SETTINGS_REL} missing 'hooks.SessionStart' entries`);
+    } else {
+      const sessionStartFindings = analyzeSessionHookEntries(
+        sessionStartEntries,
+        SESSION_START_HOOK_REL,
+        { requireMatcherReasons: SESSION_START_REQUIRED_MATCHER_REASONS },
+      );
+      for (const f of sessionStartFindings) {
+        errors.push(`hooks.SessionStart: ${f}`);
+      }
+    }
+
+    // SessionEnd entries
+    const sessionEndEntries = Array.isArray(hooksBlock.SessionEnd) ? hooksBlock.SessionEnd : null;
+    if (!sessionEndEntries || sessionEndEntries.length === 0) {
+      errors.push(`${SESSION_HOOK_SETTINGS_REL} missing 'hooks.SessionEnd' entries`);
+    } else {
+      const sessionEndFindings = analyzeSessionHookEntries(
+        sessionEndEntries,
+        SESSION_END_HOOK_REL,
+        { requireMatcherReasons: null },
+      );
+      for (const f of sessionEndFindings) {
+        errors.push(`hooks.SessionEnd: ${f}`);
+      }
+    }
+  }
+
+  if (errors.length > 0) {
+    return {
+      level: 'red',
+      detail: `session hook surface (CC#P2-4 / Slice 46 P2.7a) incomplete: ${errors.join('; ')}`,
+    };
+  }
+  return {
+    level: 'green',
+    detail: `${SESSION_START_HOOK_REL} + ${SESSION_END_HOOK_REL} present, executable, reference circuit-engine continuity, and declared in ${SESSION_HOOK_SETTINGS_REL} (SessionStart matcher covers ${SESSION_START_REQUIRED_MATCHER_REASONS.join('|')})`,
+  };
+}
+
+// Inspect a settings.json hook-event entry array. Returns a list of
+// human-readable findings (empty array means "valid"). Caller prefixes the
+// findings with the event name. `expectedScriptRel` is the project-relative
+// path that at least one command in some entry must contain.
+function analyzeSessionHookEntries(entries, expectedScriptRel, opts) {
+  const findings = [];
+  let foundCommand = false;
+  let matcherCovered = opts.requireMatcherReasons === null;
+  for (const entry of entries) {
+    if (!entry || typeof entry !== 'object') continue;
+    const innerHooks = Array.isArray(entry.hooks) ? entry.hooks : [];
+    let entryHasMatchingCommand = false;
+    for (const hook of innerHooks) {
+      if (!hook || typeof hook !== 'object') continue;
+      if (hook.type !== 'command') continue;
+      const cmd = typeof hook.command === 'string' ? hook.command : '';
+      if (cmd.includes(expectedScriptRel)) {
+        entryHasMatchingCommand = true;
+        foundCommand = true;
+      }
+    }
+    if (entryHasMatchingCommand && opts.requireMatcherReasons !== null) {
+      const matcher = typeof entry.matcher === 'string' ? entry.matcher : '';
+      const missing = opts.requireMatcherReasons.filter((reason) => !matcher.includes(reason));
+      if (missing.length === 0) {
+        matcherCovered = true;
+      }
+    }
+  }
+  if (!foundCommand) {
+    findings.push(`no entry contains a command pointing into ${expectedScriptRel}`);
+  }
+  if (!matcherCovered && opts.requireMatcherReasons !== null) {
+    findings.push(
+      `matcher does not cover all required reasons {${opts.requireMatcherReasons.join(', ')}} on the entry that points into ${expectedScriptRel}`,
+    );
+  }
+  return findings;
+}
+
 function listAdapterSourceFiles(dir) {
   const out = [];
   const SOURCE_EXT = /\.(?:m?ts|cts|tsx)$/;
@@ -4488,13 +4663,30 @@ function main() {
     detail: codexSmokeFingerprint.detail,
   });
 
+  // Check 33: Session hooks present (Slice 46 — P2.7a, ADR-0007
+  // §Decision.1 CC#P2-4 first-half binding). Verifies
+  // `.claude/hooks/SessionStart.sh` + `.claude/hooks/SessionEnd.sh` exist,
+  // are executable, reference `circuit-engine continuity`, and are
+  // declared in `.claude/settings.json` with a SessionStart matcher
+  // covering startup|resume|clear|compact. CC#P2-4 closes when this check
+  // is green AND `tests/runner/continuity-lifecycle.test.ts` lands a
+  // create→persist→resume→clear lifecycle test (P2.7b follow-up).
+  const sessionHooksPresent = checkSessionHooksPresent();
+  counters[sessionHooksPresent.level]++;
+  findings.push({
+    level: sessionHooksPresent.level,
+    check: 'Session hooks present (Slice 46 / ADR-0007 CC#P2-4 first-half)',
+    detail: sessionHooksPresent.detail,
+  });
+
   // Check 31: npm run verify currently green. (Runs last so the report's
   // bottom line is the verify-gate status; numbering bumped 31 → 32 by
-  // Slice 45 which inserted Check 32 for CODEX_SMOKE fingerprint audit.
-  // Prior bumps: Slice 43c 30 → 31; Slice 42 29 → 30; Slice 41 28 → 29;
-  // Slice 38 27 → 28; Slice 35 25 → 27; P2.3 24 → 25; P2.2 23 → 24;
-  // P2.1 22 → 23; Slice 31a 21 → 22; Slice 26b 15 → 20; Slice 25d
-  // 20 → 21.)
+  // Slice 45 which inserted Check 32 for CODEX_SMOKE fingerprint audit;
+  // Slice 46 inserted Check 33 for session-hook surface presence (still
+  // before Check 31's verify-gate position by construction). Prior bumps:
+  // Slice 43c 30 → 31; Slice 42 29 → 30; Slice 41 28 → 29; Slice 38
+  // 27 → 28; Slice 35 25 → 27; P2.3 24 → 25; P2.2 23 → 24; P2.1 22 → 23;
+  // Slice 31a 21 → 22; Slice 26b 15 → 20; Slice 25d 20 → 21.)
   const verify = verifyStatus();
   if (verify.pass) {
     counters.green++;

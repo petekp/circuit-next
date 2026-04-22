@@ -334,6 +334,13 @@ export const CODEX_ADAPTER_SOURCE_PATHS: readonly string[];
  */
 export function computeCodexAdapterSourceSha256(rootDir?: string): string;
 
+// Slice 46 (P2.7a, ADR-0007 §Decision.1 CC#P2-4 first-half binding) —
+// session-hook surface presence. Verifies project-local SessionStart and
+// SessionEnd hook scripts exist + executable + reference circuit-engine
+// continuity, and `.claude/settings.json` declares both events with the
+// SessionStart matcher covering startup|resume|clear|compact.
+export function checkSessionHooksPresent(rootDir?: string): AuditCheckResult;
+
 // Slice 30 — DOG+2 slice:doctor reuses the lane and framing literals enforced
 // by the audit so the operator briefing script cannot drift from the gate.
 export const LANES: readonly [

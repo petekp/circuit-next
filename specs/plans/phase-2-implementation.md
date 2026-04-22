@@ -699,7 +699,30 @@ Order is intent, not commitment. Each slice authors framing at its
 commit time. Expect re-ordering as earlier slices expose surface.
 
 - **P2.7 — Session hooks** — SessionStart continuity resume +
-  SessionEnd handoff, wired through `.claude/hooks/` to circuit-engine.
+  SessionEnd handoff-summary, wired through `.claude/hooks/` to
+  circuit-engine. Two sub-slices:
+  - **P2.7a (Slice 46, LANDED 2026-04-22)** — hook scripts +
+    `.claude/settings.json` wiring + audit Check 33
+    `checkSessionHooksPresent`. Lane: Ratchet-Advance. Closes the
+    first half of the ADR-0007 §Decision.1 CC#P2-4 enforcement
+    binding (`.claude/hooks/SessionStart.sh + .claude/hooks/
+    SessionEnd.sh + checkSessionHooksPresent`). SessionStart hook
+    mirrors prior-gen `~/Code/circuit/scripts/runtime/engine/src/
+    cli/session-start.ts` banner shape so an operator sees a
+    consistent resume surface across both generations. SessionEnd
+    hook does NOT auto-save a continuity record (`continuity save`
+    requires Claude-authored narrative fields; authoring is the
+    existing Stop hook's job at `.claude/hooks/auto-handoff-guard.sh`);
+    SessionEnd's job is to mark the boundary and surface drift.
+    Audit Check 33 enforces presence + executable bit + engine
+    reference + matcher coverage of {startup, resume, clear, compact}
+    so a future commit cannot silently delete the hooks or downgrade
+    them to placeholders.
+  - **P2.7b (Slice 46b, OPEN)** — `tests/runner/continuity-lifecycle.
+    test.ts` integration test driving the engine through the
+    create→persist→resume→clear lifecycle. Closes the second half
+    of CC#P2-4. Phase 2 close count advances 2/8 → 3/8 at this
+    landing.
 - **P2.8 — Router (`/circuit:run` classifier)** — first-class
   workflow classifier: given task text + entry signals, selects among
   registered workflows.

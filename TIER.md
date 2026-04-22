@@ -5,7 +5,7 @@ type: tier-claim-matrix
 date: 2026-04-20
 ---
 
-<!-- current_slice: 45a -->
+<!-- current_slice: 46 -->
 
 # TIER Claim Matrix
 

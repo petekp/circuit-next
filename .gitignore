@@ -9,6 +9,9 @@ coverage/
 .vitest-cache/
 .turbo/
 .claude/projects/
+# Runtime lock from the Claude Code harness (sessionId/pid/acquiredAt). Not
+# a deliverable; per-machine ephemeral state.
+.claude/scheduled_tasks.lock
 
 # Tool-run state for the Circuit harness used to build circuit-next.
 # Per ADR-0002, orchestration artifacts live in the outer workspace, not in
