@@ -348,6 +348,26 @@ resume on next session → clear on `done`).
   `specs/contracts/continuity.md` remain test-enforced through the new
   lifecycle test (not substituted).
 
+**Close-state history (Slice 47b Codex cross-slice fold-in, 2026-04-22):**
+
+Because CC#P2-4 was claimed-closed once and then reopened-and-reclosed,
+future readers need a ledger that names the transitions explicitly.
+Without it, a reader encountering ratchet-floor history or preserved
+PROJECT_STATE entries can confuse the first claim with the substantive
+close.
+
+| Transition | Slice | Evidence state at that landing |
+|---|---|---|
+| First claim of close | Slice 46b | Presence + settings wiring at `.claude/hooks/SessionStart.sh` + `SessionEnd.sh`; engine-CLI lifecycle at `tests/runner/continuity-lifecycle.test.ts`. Neither surface *executed* the hook scripts; the hook-audit tests only asserted text presence. |
+| Reopened — structurally hollow | Slice 47a Codex comprehensive review HIGH 2 | Reviewer named the close as "a regression that left the hooks invocable but emitted the wrong banner — or no banner — would not surface"; no test ran the hook scripts. |
+| Reclosed — hook behavior | Slice 47b | Added `tests/runner/session-hook-behavior.test.ts` executing both hook scripts against a canned-JSON stub and asserting banner / tombstone content against the hook scripts' documented contract. |
+| Reclosed — full lifecycle integration | Slice 47b Codex challenger HIGH 1 fold-in (this commit) | Added `tests/runner/session-hook-lifecycle.test.ts` driving `save` → `status` → `clear` through a persisting stub engine and asserting the banner reflects saved content + goes silent after clear. Added `tests/runner/hook-engine-contract.test.ts` pinning the argv + JSON-field contract between hooks and the engine CLI so stub drift does not silently mask hook regressions. |
+
+The criterion text (above) did not change across these transitions —
+only the evidence did. A future slice that modifies the CC#P2-4
+binding text MUST amend this table (add a row) rather than rewrite
+history.
+
 ---
 
 **CC#P2-5 — P2-MODEL-EFFORT landed.**
