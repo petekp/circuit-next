@@ -3716,22 +3716,47 @@ export function checkAdapterImportDiscipline(rootDir = REPO_ROOT, opts = {}) {
 //   - specs/plans/slice-47-hardening-foldins.md (live plan).
 //
 // ADR-0007 itself defines the forbidden patterns and is therefore
-// excluded from scan. Lines containing citation-context tokens
-// ("forbidden", "rejected", "ADR-0007 §3", "No-aggregate-scoring",
-// "Slice 47c") are exempted as legitimate self-references that quote
-// the patterns to forbid them.
+// excluded from scan. Lines carrying an explicit rejection verb
+// ("forbid", "reject", "prohibit", "disallow", "do not use",
+// "don't use", "banned") are exempted as legitimate rejection-
+// context citations that quote the patterns to forbid them.
+//
+// Slice 47c (Codex challenger HIGH 2 fold-in): guards were tightened
+// to require an explicit rejection verb. Previously the soft tokens
+// "ADR-0007", "Slice 47c", "firewall", and "No-aggregate-scoring"
+// individually bypassed the firewall — Codex named "Slice 47c status:
+// 7/8 complete" as a bypass example where a forbidden phrase appears
+// alongside a soft token in a non-rejection context. Post-fold-in, a
+// line needs an actual rejection verb (not just a slice name or a doc
+// name) to qualify as a citation context. All six currently-scanned
+// live state files remain CLEAN under the tightened guards (verified
+// pre-commit with the updated guard list + existing forbidden-pattern
+// enumeration).
+//
+// Slice 47c (Codex challenger HIGH 1 fold-in): pattern enumeration
+// expanded to cover every ADR-0007 §3 phrase family Codex named —
+// "N out of 8", percentage-complete variants, "all except X",
+// "progress percentage", "close criteria completion", and spaced-slash
+// variants ("5 / 8"). Previously these phrasings could reintroduce
+// forbidden wording while Check 34 stayed green.
 export const ADR_0007_FORBIDDEN_PROGRESS_PATTERNS = Object.freeze([
   { pattern: /\b\d+\/8\b/, label: 'N/8 progress fraction' },
   { pattern: /\bN\/8\b/, label: 'literal N/8' },
+  { pattern: /\b\d+\s+\/\s+8\b/, label: 'N / 8 spaced-slash' },
   { pattern: /\b\d+-of-8\b/, label: 'N-of-8 progress' },
   { pattern: /\bN-of-8\b/, label: 'literal N-of-8' },
   { pattern: /\b\d+ of 8\b/i, label: 'N of 8 phrasing' },
+  { pattern: /\b\d+\s+out\s+of\s+8\b/i, label: 'N out of 8' },
+  { pattern: /\b\d{1,3}%\s+(?:complete|done|progress)\b/i, label: 'N% complete/done/progress' },
+  { pattern: /\bprogress percentage\b/i, label: 'progress percentage' },
+  { pattern: /\bclose criteria completion\b/i, label: 'close criteria completion' },
   { pattern: /\bsubstantially complete\b/i, label: 'substantially complete' },
   { pattern: /\bmostly done\b/i, label: 'mostly done' },
   { pattern: /\bnearly done\b/i, label: 'nearly done' },
   { pattern: /\bclose to done\b/i, label: 'close to done' },
   { pattern: /\bnear close\b/i, label: 'near close' },
   { pattern: /\ball but one\b/i, label: 'all but one' },
+  { pattern: /\ball except\b/i, label: 'all except' },
   { pattern: /\bonly \d+ remaining\b/i, label: 'only N remaining' },
   { pattern: /\bcomplete except for\b/i, label: 'complete except for' },
   { pattern: /\bgreen-by-redeferral\b/i, label: 'green-by-redeferral' },
@@ -3749,14 +3774,22 @@ export const FORBIDDEN_PROGRESS_SCAN_FILES = Object.freeze([
   'specs/plans/slice-47-hardening-foldins.md',
 ]);
 
+// Slice 47c (Codex challenger HIGH 2 fold-in) — tightened guards:
+// require an explicit rejection verb. Soft context tokens
+// ("ADR-0007", "Slice 47c", "firewall", "No-aggregate-scoring") no
+// longer bypass the firewall on their own — without a rejection verb,
+// a line like "Slice 47c status: 7/8 complete" is NOT a citation
+// context and lands red. A line that both cites the ADR/slice AND
+// carries a rejection verb (e.g., "ADR-0007 §3 rejects '7/8 complete'")
+// still qualifies because the rejection verb is present.
 const FORBIDDEN_PROGRESS_CITATION_GUARDS = [
-  /\bforbidden\b/i,
+  /\bforbid(?:s|den|ding)?\b/i,
   /\breject(?:s|ed|ing|ion)?\b/i,
+  /\bprohibit(?:s|ed|ion)?\b/i,
+  /\bdisallow(?:s|ed|ing)?\b/i,
   /\bdo not use\b/i,
-  /\bADR-0007/i,
-  /\bNo-aggregate-scoring\b/i,
-  /\bSlice 47c\b/i,
-  /\bfirewall\b/i,
+  /\bdon['’]t use\b/i,
+  /\bbanned\b/i,
 ];
 
 function projectStateScopedText(rootDir = REPO_ROOT) {

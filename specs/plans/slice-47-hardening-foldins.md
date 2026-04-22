@@ -96,7 +96,7 @@ From `continuity-66d08e55-4d6b-4bce-b9f9-873728ba2f32`:
 
 **Codex challenger:** REQUIRED. Touches CC close criterion + audit gate; governance surface.
 
-### Slice 47c — ADR-0007 firewall: scrub 'N/8' wording + audit check + CLAUDE.md challenger-policy decision (Codex HIGH 5 + HIGH 6)
+### Slice 47c — ADR-0007 firewall: scrub forbidden 'N/8' wording + audit check + CLAUDE.md challenger-policy decision (Codex HIGH 5 + HIGH 6)
 
 **Lane:** Ratchet-Advance (audit check rejecting forbidden ADR-0007 phrases) + Governance-surface movement (CLAUDE.md amendment)
 **Failure mode addressed:** ADR-0007:621-649 explicitly forbids "N-of-8 complete" / "N/8" / scalar close-progress wording, but PROJECT_STATE.md, phase-2-implementation.md, and ratchet-floor.json all use "Phase 2 close count 2/8 → 3/8" and similar. Direct ADR violation on operator-facing surfaces. Separately, CLAUDE.md says Codex required for "any ratchet change" but multiple recent slices skipped Codex — policy-vs-practice mismatch.
