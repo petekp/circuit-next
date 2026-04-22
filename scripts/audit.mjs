@@ -378,9 +378,21 @@ function checkLane(body) {
   return found ?? null;
 }
 
+// Framing-triplet label detection. The failureMode pattern accepts
+// `Failure mode:` (the original narrow form matching FRAMING_LITERALS
+// above) AND `Failure mode addressed:`, `Failure mode being addressed:`,
+// or any `Failure mode <phrase>:` variant on a single line. Empirical
+// basis (Slice 48): 8 of 9 arc-47 commits use `Failure mode addressed:`
+// — phrasing mirrors CLAUDE.md §Lane discipline "name the failure mode
+// being addressed". The narrow regex was a false-negative on correctly-
+// framed commits. `[^:\n]*` bounds the expansion to a single line and
+// stops at the first colon so prose mid-sentence matches ("...we hit a
+// failure mode: X") remain intentional rather than accidental.
+// acceptanceEvidence and alternateFraming keep their literal matches —
+// empirically both labels are used verbatim across the arc-47 commits.
 function checkFraming(body) {
   return {
-    failureMode: /failure mode:/i.test(body),
+    failureMode: /\bfailure mode[^:\n]*:/i.test(body),
     acceptanceEvidence: /acceptance evidence:/i.test(body),
     alternateFraming: /alternate framing:/i.test(body),
   };
@@ -4765,9 +4777,33 @@ function main() {
   }
 
   // Check 2: Framing triplet on slice-shaped commits.
+  //
+  // Arc-close-ceremony exemption (Slice 48): commits carrying an
+  // `arc-subsumption: <path>` field pointing at an existing file are
+  // exempt from the per-commit triplet. Their framing lives in the
+  // linked arc-close composition review prong files per CLAUDE.md
+  // §Cross-slice composition review cadence, which explicitly makes
+  // those prong files authoritative for arc-close framing.
+  // Check 26 (checkArcCloseCompositionReviewPresence) separately gates
+  // the presence + two-prong completeness + closing verdict of those
+  // review files, so this exemption does not lose discipline signal —
+  // it delegates to the correct check. The pattern is the same
+  // ARC_SUBSUMPTION_FIELD_PATTERN that Slice 47d introduced for Check
+  // 35 (Codex-challenger REQUIRED declaration); reusing it keeps a
+  // single definition of "this commit subsumes its discipline into the
+  // arc-close composition review".
   const framingGaps = [];
+  const framingExempt = [];
   for (const c of disciplinedCommits) {
     if (!commitIsSliceShaped(c)) continue;
+    const arcSubsumptionMatch = c.body.match(ARC_SUBSUMPTION_FIELD_PATTERN);
+    if (arcSubsumptionMatch) {
+      const subsumptionPath = arcSubsumptionMatch[1];
+      if (existsSync(join(REPO_ROOT, subsumptionPath))) {
+        framingExempt.push({ commit: c, path: subsumptionPath });
+        continue;
+      }
+    }
     const f = checkFraming(c.body);
     const missing = [];
     if (!f.failureMode) missing.push('failure mode');
@@ -4777,10 +4813,18 @@ function main() {
   }
   if (framingGaps.length === 0) {
     counters.green++;
+    const exemptSuffix =
+      framingExempt.length > 0
+        ? ` (${framingExempt.length} arc-close ceremony commit${
+            framingExempt.length === 1 ? '' : 's'
+          } exempt via arc-subsumption: ${framingExempt
+            .map((e) => `${e.commit.short}→${e.path}`)
+            .join(', ')})`
+        : '';
     findings.push({
       level: 'green',
       check: 'Framing triplet',
-      detail: 'All slice commits include failure mode + acceptance evidence + alternate framing',
+      detail: `All slice commits include failure mode + acceptance evidence + alternate framing${exemptSuffix}`,
     });
   } else {
     counters.yellow++;
