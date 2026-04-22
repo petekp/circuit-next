@@ -176,7 +176,19 @@ its per-slice Codex challenger fold-in). Asserts:
     `target_kind: adr`, `opening_verdict`, `closing_verdict`.
   - **Arc reviews** (`behavioral-arc-<...>-codex.md` or
     `arc-<...>-codex.md`): `review_target`, `target_kind: arc`,
-    `arc_target`, `arc_version`, `opening_verdict`, `closing_verdict`.
+    `arc_target`, `arc_version`, `opening_verdict`, `closing_verdict`,
+    plus AR-M5 scope-disclosure (`commands_run`, `opened_scope`,
+    `skipped_scope`).
+  - **Phase reviews** (`phase-<...>-codex.md`) — Slice 47-prep
+    addition. Comprehensive review over a phase or phase-to-date
+    sweep; broader than any single arc; commissioned as a fresh-context
+    audit independent of arc-close ceremony (e.g. before a phase-close
+    gate or to verify accumulated state has not drifted between
+    arc closes). Carries `review_target`, `target_kind: phase`,
+    `phase_target`, `phase_version`, `opening_verdict`, `closing_verdict`,
+    plus the same AR-M5 scope-disclosure (`commands_run`,
+    `opened_scope`, `skipped_scope`) — a phase comprehensive review
+    that opens nothing is degraded, so the same discipline applies.
 - Every review record's `verdict` field is one of the permitted
   values (`ACCEPT`, `REJECT → incorporated → ACCEPT`,
   `NEEDS ADJUSTMENT → incorporated → ACCEPT`,

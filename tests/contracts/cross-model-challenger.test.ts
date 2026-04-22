@@ -160,6 +160,35 @@ const ARC_REVIEW_ADDITIONAL_KEYS: string[] = [
   'skipped_scope',
 ];
 
+// Slice 47-prep — phase-review extras. Phase comprehensive reviews are a
+// fourth recognized review kind, distinct from contract / ADR / arc:
+//   - Contract reviews are scoped to a single specs/contracts/<target>.md.
+//   - ADR reviews are scoped to a single specs/adrs/ADR-NNNN-<slug>.md.
+//   - Arc reviews are scoped to a sequence of slices forming an arc (3+ slices).
+//   - Phase reviews are scoped to a phase or phase-to-date sweep (broader than
+//     any arc; commission as a fresh-context audit independent of arc-close
+//     ceremony, e.g. when an operator wants a comprehensive sweep before a
+//     phase-close gate or to verify accumulated state has not drifted).
+//
+// First two phase-review records: phase-2-to-date-comprehensive-{claude,codex}.md
+// landed in Slice 47-prep. Track v0.1 amended in same slice to recognize the
+// new kind in §Planned test location.
+//
+// Carries the same machine-readable scope-disclosure discipline as arc reviews
+// (commands_run / opened_scope / skipped_scope) — the AR-M5 reasoning applies
+// equally: a phase comprehensive review that opens nothing is degraded.
+const PHASE_REVIEW_ADDITIONAL_KEYS: string[] = [
+  'review_target',
+  'target_kind',
+  'phase_target',
+  'phase_version',
+  'opening_verdict',
+  'closing_verdict',
+  'commands_run',
+  'opened_scope',
+  'skipped_scope',
+];
+
 // Slice 25 Codex challenger HIGH 5 fold-in — placeholder blocklist. A value
 // that matches any of these (case-insensitive, full-string after trim) is
 // rejected as a degraded scope disclosure. `skipped_scope: none` is the
@@ -317,11 +346,17 @@ function listContractFiles(): string[] {
     .map((name) => resolve(CONTRACTS_DIR, name));
 }
 
-function classifyReview(file: string): 'contract' | 'adr' | 'arc' | 'unknown' {
+function classifyReview(file: string): 'contract' | 'adr' | 'arc' | 'phase' | 'unknown' {
   const base = basename(file);
   if (/^adr-/.test(base)) return 'adr';
   if (/^(?:behavioral-arc|arc)-/.test(base)) return 'arc';
+  // Contract-review pattern is checked BEFORE the `phase-` prefix so that the
+  // existing `specs/reviews/phase-md-v0.1-codex.md` (the contract review for
+  // `specs/contracts/phase.md`) classifies as 'contract' rather than 'phase'.
+  // Per Slice 47-prep META fold-in: phase comprehensive reviews carry no
+  // `-md-v<X.Y>-codex.md` suffix, so the order is unambiguous.
   if (/-v\d+\.\d+-codex\.md$/.test(base)) return 'contract';
+  if (/^phase-/.test(base)) return 'phase';
   return 'unknown';
 }
 
@@ -505,14 +540,34 @@ describe('cross-model-challenger — CHALLENGER-I3 review records are recorded a
     }
   });
 
+  // Slice 47-prep — phase comprehensive reviews carry the unified base
+  // shape plus phase-specific extras (phase_target / phase_version) and
+  // the same machine-readable scope-disclosure discipline as arc reviews
+  // (commands_run / opened_scope / skipped_scope per AR-M5 reasoning).
+  it('every phase-review record carries base + phase-specific keys with target_kind=phase', () => {
+    for (const path of reviewFiles) {
+      if (classifyReview(path) !== 'phase') continue;
+      const fm = parseFrontmatter(readFileSync(path, 'utf-8'));
+      for (const key of PHASE_REVIEW_ADDITIONAL_KEYS) {
+        expect(fm.has(key), `${path}: phase review missing "${key}".`).toBe(true);
+      }
+      expect(
+        fm.get('target_kind'),
+        `${path}: phase review target_kind must equal 'phase' (got "${fm.get('target_kind')}").`,
+      ).toBe('phase');
+    }
+  });
+
   // Slice 25 AR-M5 + Codex challenger HIGH 5 fold-in — scope-disclosure
   // fields must be non-empty AND must not be placeholder prose. A degraded
   // `commands_run: see body` defeats the point of promoting scope to
-  // frontmatter.
-  it('arc-review commands_run and opened_scope are non-placeholder, list-shaped', () => {
+  // frontmatter. Slice 47-prep extends this discipline to phase reviews —
+  // a phase comprehensive review that opens nothing is equally degraded.
+  it('arc-review and phase-review commands_run and opened_scope are non-placeholder, list-shaped', () => {
     const violations: string[] = [];
     for (const path of reviewFiles) {
-      if (classifyReview(path) !== 'arc') continue;
+      const kind = classifyReview(path);
+      if (kind !== 'arc' && kind !== 'phase') continue;
       const fm = parseFrontmatter(readFileSync(path, 'utf-8'));
       for (const key of ['commands_run', 'opened_scope'] as const) {
         const raw = (fm.get(key) ?? '').trim();
@@ -539,11 +594,13 @@ describe('cross-model-challenger — CHALLENGER-I3 review records are recorded a
 
   // skipped_scope allows the literal "none" sentinel for genuine zero-skip
   // reviews (accepted exception to the placeholder blocklist). All other
-  // values follow the same list-shape + non-placeholder rule.
-  it('arc-review skipped_scope is list-shaped OR the "none" sentinel', () => {
+  // values follow the same list-shape + non-placeholder rule. Slice 47-prep
+  // extends to phase reviews — same scope-disclosure discipline applies.
+  it('arc-review and phase-review skipped_scope is list-shaped OR the "none" sentinel', () => {
     const violations: string[] = [];
     for (const path of reviewFiles) {
-      if (classifyReview(path) !== 'arc') continue;
+      const kind = classifyReview(path);
+      if (kind !== 'arc' && kind !== 'phase') continue;
       const fm = parseFrontmatter(readFileSync(path, 'utf-8'));
       const raw = (fm.get('skipped_scope') ?? '').trim();
       if (!raw) {
