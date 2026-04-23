@@ -34,6 +34,9 @@ artifact and a separate importer contract must be authored.
 
 - `continuity-characterization.md` — observed shape of live continuity
   records and index, captured 2026-04-19.
+- `review-characterization.md` — observed shape of the live `review` skill
+  (phases, artifacts, invariant candidates, CLI, runtime-capability
+  requirements), captured 2026-04-24. Evidence base for P2.9 plan restart.
 
 Future characterizations would go here if circuit-next adds more
 `successor-to-live` or `legacy-compatible` surfaces.
