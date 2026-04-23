@@ -1,4 +1,4 @@
-<!-- current_slice: 57h -->
+<!-- current_slice: 57 -->
 
 # PROJECT_STATE — circuit-next
 

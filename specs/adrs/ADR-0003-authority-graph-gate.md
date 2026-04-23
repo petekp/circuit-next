@@ -529,3 +529,134 @@ Addendum B does not change the five surface classes, the gate semantics,
 the challenger framing, or the migration posture of any existing artifact.
 It only extends what counts as a reopen event. Full reclassification of
 any other artifact is out of scope and requires a superseding ADR.
+
+## Addendum C — Contract-shaped plan payload (Slice 57, 2026-04-23)
+
+### Context
+
+On 2026-04-23, Claude drafted `specs/plans/p2-9-second-workflow.md`
+(700 lines, untracked) under operator direction. The plan's Slice 57-58
+block proposed normative declarations that ADR-0003 §Decision.Contract-
+First-is-conditional would have blocked at `specs/contracts/review.md`
+authorship time: artifact ids (`review.scope`, `review.report`,
+`review.verification`, `review.result`), REVIEW-I1 invariant text,
+4-phase canonical spine, CLI invocation shape (`--scope`), and runtime
+compatibility posture — all declared in the plan payload, none yet in
+a `specs/contracts/*.md` file.
+
+The plan was caught by a Codex challenger pass (13 findings, persisted
+at `specs/reviews/p2-9-plan-draft-content-challenger.md`), but only
+after the operator manually requested the pass. The per-slice
+challenger protocol (CLAUDE.md §Hard-invariants #6) fires at slice
+execution time; the arc-close composition review (CLAUDE.md §Cross-
+slice-composition-review-cadence) fires after arc closes. Neither
+fires at **plan-authoring time** — the moment when operator is asked
+to sign off on a multi-slice scope carrying contract-shaped payload.
+
+ADR-0003 §Decision.Contract-First-is-conditional blocks
+`specs/contracts/*.md` authorship for `successor-to-live`,
+`legacy-compatible`, `migration-source`, or `external-protocol`
+surfaces until classification + characterization land. The P2.9 draft
+evaded this intent by staying in the plan layer — no
+`specs/contracts/review.md` file, but a plan body declaring the exact
+normative payload the contract would carry. The gate's invention-
+before-extraction prohibition did not reach into plan authorship.
+
+### Addendum
+
+The Authority-Graph Gate's §Contract-First-is-conditional scope is
+extended to cover **contract-shaped plan payload**. A plan
+(`specs/plans/*.md`) authoring a multi-slice arc touching a
+`successor-to-live`, `legacy-compatible`, `migration-source`, or
+`external-protocol` surface MAY NOT declare as normative deliverables
+any of the following, until a characterization slice has landed first
+(either in the same arc or in a prior committed state):
+
+- Artifact ids for the target surface's runtime artifacts.
+- Invariant text (`FOO-I1`, `BAR-I2`, etc.) for the target surface.
+- Verdict vocabulary or state machines specific to the target surface.
+- CLI invocation shape (specific flag names, argument positions).
+- Runtime compatibility posture (clean-break vs legacy-compatible
+  claims on the new surface).
+
+Before characterization lands, these details MAY appear in plan
+payload only when:
+
+- marked `hypothesis:` in the plan's YAML frontmatter or body, AND
+- flagged `inferred` or `unknown-blocking` in the plan's §Evidence
+  census (per ADR-0010 §Decision.3).
+
+A plan schedules a characterization slice as the arc's first
+execution slice, producing:
+
+- `specs/reference/<source>/<target>-characterization.md` (the live
+  read of the reference surface).
+- `specs/artifacts.json` rows for the target's artifacts with full
+  surface_class + compatibility_policy + reference_evidence fields.
+
+Only after the characterization slice commits may subsequent slices
+draft normative payload. Prior to that commit, normative payload in
+the plan itself is gate-blocked — the same way
+`specs/contracts/<target>.md` authorship is gate-blocked under the
+main Decision block.
+
+### Enforcement
+
+Machine enforcement is distributed across multiple plan-lint rules,
+each catching a different slice of the contract-shaped-payload
+pattern:
+
+1. **Rule #9 (`plan-lint.contract-shaped-payload-without-
+   characterization`)** — primary gate. Scans plan body for
+   successor-to-live indicators (`successor-to-live` literal,
+   `~/Code/circuit/` references, `specs/reference/` citations)
+   combined with contract-shaped payload indicators (`artifact_ids:`
+   lists, `[A-Z]+-I\d+` invariant definitions, CLI flag invocations).
+   Fires red if both present AND no characterization slice scheduled
+   first. Current rule text focuses on `successor-to-live`; future
+   tightening (per Reopen conditions) may extend to the full
+   surface-class set (`legacy-compatible`, `migration-source`,
+   `external-protocol`).
+2. **Companion rules**:
+   - Rule #18 (`plan-lint.canonical-phase-set-maps-to-schema-vocabulary`)
+     catches phase-set declarations that don't map to schema-valid
+     canonicals.
+   - Rule #14 (`plan-lint.artifact-cardinality-mapped-to-reference`)
+     catches artifact count overreach for successor-to-live surfaces.
+   - Rule #13 (`plan-lint.cli-invocation-shape-matches`) catches CLI
+     flag invention.
+   - Rule #21 (`plan-lint.artifact-materialization-uses-registered-
+     schema`) catches materialization-shape assumptions beyond
+     current schema registry.
+3. If contract-shaped payload is present AND successor-to-live
+   indicator is present AND no §Characterization section /
+   `specs/reference/` output is scheduled as the arc's first slice,
+   rule #9 fires red; companion rules fire on additional facets
+   of the same failure class.
+
+Audit Check 36 (landed at Slice 58) runs plan-lint on all committed
+`specs/plans/*.md` so the gate enforces at commit boundary.
+
+### Reopen conditions
+
+- A plan authored under this Addendum demonstrates a class of
+  contract-shaped payload the rule's scanner misses (e.g., a new
+  form of invariant declaration not matching `[A-Z]+-I\d+`, or a
+  CLI invocation pattern not using `npm run circuit:run`). The
+  reopen is an audit of the rule's patterns against the new form.
+- A plan correctly declares hypothesis-flagged payload and the
+  hypothesis becomes load-bearing (operator signs off on a plan with
+  hypothetical declarations without challenger-clearing the
+  hypothesis). The reopen tightens hypothesis-vs-decided distinction
+  per plan-lint rule #10.
+
+### Scope not widened
+
+Addendum C does not change the five surface classes, the gate's
+classification vocabulary, the challenger framing, or the migration
+posture of any existing artifact. It only extends the gate's scope
+from `specs/contracts/*.md` authorship to include `specs/plans/*.md`
+contract-shaped payload. Legacy plans (those whose first-committed
+SHA is a strict ancestor of `META_ARC_FIRST_COMMIT` per ADR-0010
+§Migration) are fully exempt from all 22 plan-lint rules; normative
+payload already in legacy plans is not retroactively invalidated.

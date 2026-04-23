@@ -1313,3 +1313,117 @@ Fold-in completeness claim: every HIGH, MED, LOW, and META objection
 from `specs/reviews/adr-0007-codex.md` is addressed in this revision
 of ADR-0007 at the location named above. If a reviewer finds an
 objection not addressed, re-open this ADR per §Reopen condition 5.
+
+## Addendum A — Second-workflow generalization vs CC#P2-1 (Slice 57, 2026-04-23)
+
+### Context
+
+On 2026-04-23, Claude drafted `specs/plans/p2-9-second-workflow.md`
+(700 lines, untracked) proposing a `review` workflow as the "second
+workflow" for circuit-next. The plan framed the arc as "does the
+explore-pattern generalize to a second workflow kind?" The framing
+risked conflating two distinct ratchet concerns:
+
+1. **CC#P2-1 — One-workflow parity.** Phase 2 close criterion. The
+   target workflow (`explore` per ADR-0007 §Decision.1 CC#P2-1) runs
+   end-to-end with real agent dispatch and byte-shape golden match.
+   Satisfied at one workflow.
+2. **Second-workflow generalization.** A separate empirical test:
+   does the contract/adapter/fixture/protocol pattern `explore`
+   established actually generalize to a second workflow kind without
+   re-authoring the base plumbing?
+
+The P2.9 plan did not explicitly conflate these — it named the
+second-workflow goal as a generalization test, not as a CC#P2-1
+advance. BUT: a reader encountering "second workflow adds to the
+canonical-phase-set table and lands a contract + fixture + parity
+test" could reasonably infer the work is CC#P2-1-adjacent, and
+future plans drafted without this clarification might unintentionally
+bind generalization work to CC#P2-1 scope.
+
+Codex meta-retrospective recommended that the discipline layer
+prevent this class of conflation by making the scope boundary
+explicit. This Addendum installs the explicit boundary.
+
+### Addendum
+
+**CC#P2-1 scope is exactly one workflow.** The criterion is satisfied
+when the target workflow (`explore`) runs end-to-end under the
+§Decision.1 CC#P2-1 enforcement binding. Landing additional workflows
+(`review`, `repair`, `build`, `sweep`, `migrate`, or any other) does
+NOT advance CC#P2-1. CC#P2-1 is not a "parity-workflows-landed" count
+ratchet; it is a one-workflow-parity-achieved gate.
+
+**Second-workflow generalization is NOT a Phase 2 close criterion.**
+Landing a second workflow proves the pattern generalizes (or exposes
+where it doesn't) empirically, but the proof is not required for
+Phase 2 close. A plan landing a second workflow carries its own arc-
+local ratchets (contract count, fixture count, parity-test count,
+authority-graph coverage) but does not touch the CC#P2-1 status.
+
+**If a future plan proposes "N-workflow parity" as a Phase 2 close
+criterion extension:** that requires an ADR-0007 amendment via the
+§6 Precedent firewall amendment procedure. Specifically: the
+amendment must (a) name the new close criterion (e.g., CC#P2-9),
+(b) define its enforcement binding, (c) state whether N-workflow
+parity replaces CC#P2-1 or composes with it, (d) run Codex
+challenger pass with HIGH + MED fold-ins, (e) record operator
+product-direction acknowledgment. A silent absorption of second-
+workflow work into CC#P2-1's satisfaction claim is rejected on §6
+grounds.
+
+### Relationship to ADR-0003 Addendum C
+
+ADR-0003 Addendum C extends the authority-graph gate to cover
+contract-shaped plan payload for successor-to-live surfaces. The
+second-workflow case (`review` or any other) is a successor-to-live
+surface (reference Circuit has its own `review` / `repair` / etc.
+skills). Addendum C blocks contract-shaped payload declarations in
+the plan until characterization lands. This Addendum-A-to-ADR-0007
+sits on top of that gate: even after characterization lands and a
+second-workflow plan can legitimately author contract-shaped payload,
+the payload does NOT implicitly satisfy or advance CC#P2-1 — it
+advances a separate empirical goal that this Addendum names
+explicitly.
+
+### Enforcement
+
+This Addendum's scope boundary is prose-discipline at the ADR layer.
+Machine enforcement is partial and by proxy:
+
+- Plan-lint rule #9 (`plan-lint.contract-shaped-payload-without-
+  characterization`) catches the first failure mode (invention-
+  before-extraction) directly.
+- Plan-lint rule #5 (`plan-lint.arc-close-claim-without-gate`)
+  catches unsupported close-criterion-satisfaction claims by
+  requiring the claim to name SOME enforcing audit gate. Rule #5
+  does NOT semantically validate that the cited gate matches the
+  criterion's enforcement binding — that validation is ADR-0007
+  scope discipline / operator review.
+
+A plan claiming second-workflow work satisfies CC#P2-1 is REJECTED
+by ADR-0007 scope discipline (the Addendum A boundary prose) and by
+review. Plan-lint rule #5 catches the narrower pattern where a plan
+claims close-criterion satisfaction without naming any gate at all.
+The stronger semantic check (cited gate matches binding) remains
+markdown-discipline enforced by this Addendum, not plan-lint
+enforced.
+
+### Reopen conditions
+
+- A future plan demonstrates a legitimate composition semantics for
+  N-workflow parity that the addendum's "separate ratchet" posture
+  inappropriately blocks. The reopen clarifies whether CC#P2-1 should
+  compose or be replaced.
+- Operator concludes that second-workflow generalization IS part of
+  Phase 2 close (not merely Phase 3 or runtime concern). The reopen
+  amends ADR-0007 to add a new close criterion and migrates the
+  second-workflow arc's ratchet bindings under it.
+
+### Scope not widened
+
+This Addendum does not change §Decision.1 CC#P2-1 enforcement
+binding, the retarget checklist in §Decision.4b, or the precedent
+firewall in §6. It clarifies scope; it does not modify enforcement.
+Existing one-workflow parity work (P2.4 + P2.5 + P2.6 + P2.11 + any
+open CC#P2-1 slice) is not re-scoped by this Addendum.
