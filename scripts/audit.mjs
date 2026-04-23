@@ -4179,6 +4179,42 @@ export function checkCodexChallengerRequiredDeclaration(rootDir = REPO_ROOT) {
 export const OPERATOR_SIGNOFF_BINDING_PATTERN =
   /(?:operator_signoff_predecessor|[Oo]perator signoff predecessor):\s*([a-f0-9]{7,40})/;
 
+// Slice-58a (Codex MED-1 fold-in refinement): legacy plans whose first
+// commit predates the planning-readiness meta-arc are exempt from the
+// operator-signoff predecessor-chain check. They close under their own
+// pre-ADR-0010 discipline; forcing binding on them would red-flag e.g.
+// `clean-clone-reality-tranche.md` (closed 2026-04-22, pre-meta-arc).
+// Matches plan-lint.mjs::isLegacyPlan's ancestry-based definition.
+const META_ARC_FIRST_COMMIT_FOR_AUDIT = 'c91469053a95519645280fd80394a4966ac7948e';
+
+function isLegacyPlanForAudit(rootDir, rel) {
+  let firstCommitSha;
+  try {
+    const out = execSync(
+      `git -C ${rootDir} log --diff-filter=A --follow --format=%H -- ${JSON.stringify(rel)}`,
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+    )
+      .toString()
+      .trim()
+      .split('\n')
+      .filter(Boolean);
+    firstCommitSha = out.length > 0 ? out[out.length - 1] : null;
+  } catch {
+    firstCommitSha = null;
+  }
+  if (!firstCommitSha) return false;
+  if (firstCommitSha === META_ARC_FIRST_COMMIT_FOR_AUDIT) return false;
+  try {
+    execSync(
+      `git -C ${rootDir} merge-base --is-ancestor ${firstCommitSha} ${META_ARC_FIRST_COMMIT_FOR_AUDIT}`,
+      { stdio: 'ignore' },
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function checkPlanLintCommittedPlans(rootDir = REPO_ROOT) {
   let plans;
   try {
@@ -4227,18 +4263,28 @@ export function checkPlanLintCommittedPlans(rootDir = REPO_ROOT) {
       continue;
     }
     const statusMatch = contents.match(/^status:\s*([^\s\n]+)/m);
-    if (!statusMatch || statusMatch[1].trim() !== 'operator-signoff') continue;
+    const currentStatus = statusMatch ? statusMatch[1].trim() : null;
+    // Slice-58a (Codex MED-1 fold-in): apply the predecessor-chain check to
+    // both `operator-signoff` AND `closed` — closed plans inherit the same
+    // chain obligation since closed is a terminal state that passed through
+    // operator-signoff.
+    if (!currentStatus || !['operator-signoff', 'closed'].includes(currentStatus)) continue;
+
+    // Skip legacy plans — they close under pre-ADR-0010 discipline and
+    // carry no operator_signoff_predecessor binding.
+    if (isLegacyPlanForAudit(rootDir, rel)) continue;
 
     // Find the commit that transitioned the plan's FRONTMATTER status to
     // operator-signoff. git -S (pickaxe) is too permissive — it matches any
     // body text containing the literal "status: operator-signoff", including
     // state-machine documentation added before the frontmatter actually
-    // changed. Instead, walk commits newest → oldest and identify the first
-    // commit at which the plan's frontmatter status was NOT operator-signoff;
-    // the commit immediately after it (newer) is the transition commit.
+    // changed. Instead, walk commits newest → oldest (with --follow to track
+    // renames per Codex MED-1 fold-in) and identify the first commit at which
+    // the plan's frontmatter status was NOT operator-signoff; the commit
+    // immediately after it (newer) is the transition commit.
     let transitionCommit;
     try {
-      const log = execSync(`git -C ${rootDir} log --format=%H -- ${JSON.stringify(rel)}`, {
+      const log = execSync(`git -C ${rootDir} log --follow --format=%H -- ${JSON.stringify(rel)}`, {
         encoding: 'utf8',
       });
       const commits = log.trim().split('\n').filter(Boolean);
@@ -4255,13 +4301,17 @@ export function checkPlanLintCommittedPlans(rootDir = REPO_ROOT) {
         }
         const prevStatusMatch = prevContent.match(/^status:\s*([^\s\n]+)/m);
         const prevStatus = prevStatusMatch ? prevStatusMatch[1].trim() : null;
+        // Transition point: prev status was anything but operator-signoff.
+        // For `closed` plans we still walk back to find the operator-signoff
+        // transition (the closed commit itself typically carries signoff via
+        // its own authority chain).
         if (prevStatus !== 'operator-signoff') {
           transitionCommit = commits[i];
           break;
         }
       }
-      // Edge case: every historical version was operator-signoff (impossible
-      // here — evidence-draft came first), but defensively use the oldest.
+      // Edge case: every historical version was operator-signoff; defensively
+      // use the oldest commit touching the path.
       if (!transitionCommit && commits.length > 0) {
         transitionCommit = commits[commits.length - 1];
       }
@@ -4270,7 +4320,7 @@ export function checkPlanLintCommittedPlans(rootDir = REPO_ROOT) {
     }
     if (!transitionCommit) {
       bindingFailures.push(
-        `${rel}: status=operator-signoff but no transition commit found via git -S`,
+        `${rel}: status=${currentStatus} but no transition commit found in history`,
       );
       continue;
     }
@@ -4292,13 +4342,47 @@ export function checkPlanLintCommittedPlans(rootDir = REPO_ROOT) {
       );
       continue;
     }
-    // Verify the named SHA is in branch history.
     const namedSha = bindMatch[1];
+
+    // Slice-58a (Codex CRITICAL-1 fold-in): strengthen predecessor
+    // validation. Verify (a) the named SHA exists; (b) it is an ancestor of
+    // the transition commit (not a random reachable commit); (c) the plan at
+    // the named SHA is at `status: challenger-cleared`. Without these, a
+    // plan could land at operator-signoff with the body pointing at any
+    // extant SHA and pass the check.
     try {
       execSync(`git -C ${rootDir} cat-file -e ${namedSha}`, { stdio: 'ignore' });
     } catch {
       bindingFailures.push(
         `${rel}: operator_signoff_predecessor sha ${namedSha} is not reachable in this repo`,
+      );
+      continue;
+    }
+    try {
+      execSync(`git -C ${rootDir} merge-base --is-ancestor ${namedSha} ${transitionCommit}`, {
+        stdio: 'ignore',
+      });
+    } catch {
+      bindingFailures.push(
+        `${rel}: operator_signoff_predecessor sha ${namedSha} is not an ancestor of transition commit ${transitionCommit.slice(0, 7)}`,
+      );
+      continue;
+    }
+    let predecessorContent = '';
+    try {
+      predecessorContent = execSync(`git -C ${rootDir} show ${namedSha}:${rel}`, {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+    } catch {
+      bindingFailures.push(`${rel}: cannot read plan at predecessor sha ${namedSha.slice(0, 7)}`);
+      continue;
+    }
+    const predStatusMatch = predecessorContent.match(/^status:\s*([^\s\n]+)/m);
+    const predStatus = predStatusMatch ? predStatusMatch[1].trim() : null;
+    if (predStatus !== 'challenger-cleared') {
+      bindingFailures.push(
+        `${rel}: predecessor sha ${namedSha.slice(0, 7)} has plan at status "${predStatus ?? 'missing'}", not challenger-cleared`,
       );
     }
   }

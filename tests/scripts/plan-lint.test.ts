@@ -15,16 +15,18 @@
  *     all rejected.
  */
 
-import { execSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const REPO_ROOT = execSync('git rev-parse --show-toplevel').toString().trim();
 const PLAN_LINT = join(REPO_ROOT, 'scripts', 'plan-lint.mjs');
 
+// Slice-58a (Codex LOW-1 fold-in): use execFileSync so paths containing
+// spaces, quotes, or shell metacharacters in TMPDIR pass through safely.
 function runLint(path: string): { exitCode: number; stdout: string; stderr: string } {
   try {
-    const stdout = execSync(`node ${PLAN_LINT} ${path}`, {
+    const stdout = execFileSync(process.execPath, [PLAN_LINT, path], {
       cwd: REPO_ROOT,
       stdio: ['ignore', 'pipe', 'pipe'],
       encoding: 'utf8',
@@ -155,8 +157,19 @@ describe('plan-lint — section-aware scoping', () => {
 
 describe('plan-lint — usage / invocation errors', () => {
   it('exits 2 with usage message when no path is provided', () => {
-    const result = runLint('');
-    expect(result.exitCode).toBe(2);
+    // Call plan-lint with zero args (execFileSync with empty array arg
+    // would pass an empty-string path, which falls through to the
+    // file-not-found branch instead of the usage branch).
+    try {
+      execFileSync(process.execPath, [PLAN_LINT], {
+        cwd: REPO_ROOT,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      expect.fail('expected non-zero exit');
+    } catch (err) {
+      const e = err as { status?: number };
+      expect(e.status).toBe(2);
+    }
   });
 
   it('exits 2 when the path does not exist', () => {
@@ -165,7 +178,7 @@ describe('plan-lint — usage / invocation errors', () => {
   });
 });
 
-describe('plan-lint — per-rule bad fixtures (Slice 58 baseline — rules #1-#6, #9-#21)', () => {
+describe('plan-lint — per-rule bad fixtures (Slice 58 — 22 rules; Slice-58a Codex HIGH-1 scope promotion)', () => {
   const BAD = 'tests/fixtures/plan-lint/bad';
   const cases: [string, string][] = [
     ['rule-01-missing-evidence-census.md', 'plan-lint.evidence-census-present'],
@@ -174,6 +187,14 @@ describe('plan-lint — per-rule bad fixtures (Slice 58 baseline — rules #1-#6
     ['rule-04-stale-symbol-citation.md', 'plan-lint.stale-symbol-citation'],
     ['rule-05-arc-close-claim-without-gate.md', 'plan-lint.arc-close-claim-without-gate'],
     ['rule-06-signoff-while-pending.md', 'plan-lint.signoff-while-pending'],
+    [
+      'rule-07-invariant-without-enforcement-layer.md',
+      'plan-lint.invariant-without-enforcement-layer',
+    ],
+    [
+      'rule-08-blocked-invariant-without-escrow.md',
+      'plan-lint.blocked-invariant-without-full-escrow',
+    ],
     [
       'rule-09-contract-shaped-payload-without-characterization.md',
       'plan-lint.contract-shaped-payload-without-characterization',
@@ -209,6 +230,10 @@ describe('plan-lint — per-rule bad fixtures (Slice 58 baseline — rules #1-#6
     [
       'rule-21-artifact-materialization-no-schema.md',
       'plan-lint.artifact-materialization-uses-registered-schema',
+    ],
+    [
+      'rule-22-blocked-invariant-must-resolve.md',
+      'plan-lint.blocked-invariant-must-resolve-before-arc-close',
     ],
   ];
   for (const [fixture, expectedRule] of cases) {

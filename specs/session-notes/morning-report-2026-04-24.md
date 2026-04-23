@@ -26,9 +26,52 @@ For every slice I'll write exactly three lines:
 
 ---
 
-## Slice 58 — plan-lint baseline
+## Slice 58 — plan-lint baseline + Check 36 + fixtures
 
-*Pending landing section — will be populated in place after commit.*
+**Done:** 18 per-rule bad fixtures + 1 legacy "backdating doesn't
+work" fixture. New audit Check 36 runs plan-lint on every
+committed plan AND verifies operator-signoff commits point back
+to a real challenger-cleared predecessor. Test file went from 18
+to 42 tests.
+
+**Issues I amended:**
+
+1. Commit body was missing the exact isolation-posture phrase the
+   auditor looks for. Amended the commit once (one SHA, no chain
+   of amends). Root cause: the exact phrase "Isolation: policy-
+   compliant (no implementer separation required)" is only
+   documented inside scripts/audit.mjs; a slice author reading
+   plan headers wouldn't know that. Noted for a later discipline
+   pass — the phrase should live somewhere more findable.
+
+2. Codex challenger pass returned 1 critical + 1 high + 2 medium
+   + 1 low findings (REJECT-PENDING-FOLD-INS). I folded them in a
+   follow-up slice-58a commit — details below. Root cause of the
+   critical was that my first pass at Check 36 only verified the
+   predecessor SHA existed; it didn't verify the SHA was actually
+   an ancestor of the transition commit or that the predecessor
+   plan was at challenger-cleared status. A bad commit pointing
+   at any-extant-SHA would have passed. Fixed.
+
+**Slice 58a fold-ins (same session):**
+- Check 36 now requires predecessor to be ancestor + at status
+  challenger-cleared (fixes the critical).
+- Scope promoted honestly from "19 rules" to "22 rules" since
+  the code was already running all 22 — added 3 missing fixtures
+  for rules #7, #8, #22 (scope-creep fix; HIGH).
+- Check 36 now applies the chain check to both operator-signoff
+  AND closed plans, and uses `--follow` to handle renames (MED).
+- Added a minimal regression test for Check 36 (MED).
+- Switched test runner to execFileSync so weird paths don't
+  shell-inject (LOW).
+
+**Audit after Slice 58 + 58a:** 33 green / 2 yellow / 0 red. Two
+yellows are the fingerprint drift carry-over from Slice 55 (not
+touched this session).
+
+**Next:** Slice 59 — adds the `blocked` enforcement-layer
+vocabulary to `specs/invariants.json` and strengthens/adds tests
+for rules #7, #8, #22.
 
 ---
 
