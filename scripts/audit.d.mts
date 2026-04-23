@@ -249,6 +249,9 @@ export const SLICE_47_HARDENING_FOLDINS_ARC_CEREMONY_SLICE: string;
 // Clean-Clone Reality Tranche. Uses the numeric back-compat branch of
 // evaluateArcCloseGate (same as slices 40 + 44).
 export const CLEAN_CLONE_REALITY_TRANCHE_ARC_CEREMONY_SLICE: number;
+// Slice 62 (Planning-Readiness Meta-Arc arc-close composition review
+// Codex HIGH-1 fold-in) — numeric ceremony_slice for the meta-arc.
+export const PLANNING_READINESS_META_ARC_CEREMONY_SLICE: number;
 export const ARC_CLOSE_GATES: ReadonlyArray<{
   readonly arc_id: string;
   readonly description: string;

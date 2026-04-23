@@ -206,7 +206,52 @@ reviews, one from fresh-read Claude, one from Codex).
 
 ## Slice 62 — arc-close composition review
 
-*Pending.*
+**Done:** The arc is closed. Two composition reviews landed — one
+from me (fresh-read), one from Codex. Both were ACCEPT-WITH-FOLD-INS.
+Folded everything in this same ceremony commit per the repo's
+same-commit-staging rule.
+
+**Findings + what I fixed:**
+- **HIGH (Codex):** audit Check 26's gate table didn't have an
+  entry for this arc at all — so Slice 62 could have been
+  audit-green without actually proving anything. Same bug class
+  that bit Clean-Clone Reality Tranche (Slice 55). Added the
+  entry with ceremony_slice 62 + regex for the composition-review
+  naming convention. Updated the constants file (`scripts/
+  audit.d.mts`) and the test that counts the gate entries
+  (4 → 5).
+- **HIGH (me + Codex, confirming):** the plan's §3 rule-count
+  story said Slice 58 = 19 rules + Slice 59 = +3. But Slice 58a
+  promoted to all 22. The plan narrative never got updated.
+  Fixed in-place with a post-Slice-58a reconciliation note.
+- **MED (both):** rule #16's temp-file test works by accidental
+  correctness of `isGitTracked` for outside-repo paths. I added
+  inline comments in both the function and the test documenting
+  that. Full refactor to a temp-git-repo-based test deferred as
+  a candidate follow-up.
+- **MED (Codex):** Check 36's validation of a `closed` plan
+  doesn't strictly prove the plan transited through
+  `operator-signoff` — a direct `challenger-cleared → closed`
+  with a matching predecessor binding would pass. Captured as a
+  known gap in the morning report; synthetic-history test
+  coverage is a future slice.
+- **LOW (both):** `META_ARC_FIRST_COMMIT` is duplicated in
+  plan-lint.mjs + audit.mjs. Added a reciprocal cross-reference
+  comment in plan-lint.mjs so a future editor sees both sites.
+- **LOW (Codex):** plan §7/§8 still treated H4 and H5 as open
+  after Slices 60/61 resolved them. Marked both resolved with
+  the evidence citations.
+
+**Plan closed:** frontmatter `status: closed`, `closed_at:
+2026-04-23`, `closed_in_slice: 62`.
+
+**Audit after Slice 62:** 33 green / 2 yellow / 0 red. (Check 26
+now reports 5 arcs all green.)
+
+**Next:** The operator decides. P2.9 (second-workflow arc) is
+intentionally deferred. When P2.9 restarts, it starts under the
+new discipline — plan-lint green required, Codex challenger pass
+required, operator signoff chain required.
 
 ---
 

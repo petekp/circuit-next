@@ -45,10 +45,23 @@
  *   #21 artifact-materialization-uses-registered-schema
  *   #22 blocked-invariant-must-resolve-before-arc-close (Slice 59)
  *
- * Slice 58 lands rules #1-#6, #9-#21 (19 structural/shape + state-machine +
- * P2.9 HIGH-coverage rules). Slice 59 lands rules #7, #8, #22 (invariant
- * dimension trio: enforcement-layer required, blocked escrow, blocked-must-
- * resolve-before-close).
+ * Rule-allocation history (per Slice-62 arc-close composition review
+ * Codex HIGH-2 fold-in — honest record):
+ *   - Slice 57a drafted all 22 rule implementations in one preparation
+ *     commit as working-tree evidence for plan-lint's reflexive self-lint.
+ *   - Slice 58 landed plan-lint's per-rule fixtures + tests + audit
+ *     Check 36 for 19 rules (#1-#6, #9-#21). The originally-planned
+ *     split "Slice 58 = 19 baseline; Slice 59 = +3 invariant-dimension"
+ *     was scope-promoted at Slice 58a per Codex HIGH-1 — all 22 rules
+ *     were already live in runAllRules, so Slice 58a added fixtures for
+ *     #7/#8/#22 to match reality.
+ *   - Slice 59 landed the `blocked` key in
+ *     specs/invariants.json::enforcement_state_semantics. Slice 59a
+ *     removed plan-lint's hardcoded fallback + `layer !== 'blocked'`
+ *     special-case so the JSON is mechanically authoritative.
+ *   - Slice 60 strengthened rule #4 (stale-symbol-citation) to require
+ *     symbol-defined-here rather than symbol-appears-anywhere; Slice 60a
+ *     extended definition patterns for TS type/interface/enum.
  *
  * Per-rule severity: all rules are HIGH unless stated otherwise.
  * Findings emit JSON-per-line on stderr (machine-readable) + a
@@ -94,6 +107,14 @@ const ACCEPT_CLASS_VERDICTS = new Set(['ACCEPT', 'ACCEPT-WITH-FOLD-INS']);
 // all subsequent plans are post-effective. This avoids timezone edge
 // cases entirely — the effective date (2026-04-23 per ADR-0010) is
 // codified by commit ancestry rather than by date parsing.
+//
+// Slice-62 (arc-close composition review LOW-1 fold-in — both prongs):
+// this constant is duplicated at `scripts/audit.mjs::
+// META_ARC_FIRST_COMMIT_FOR_AUDIT`. A change here requires a matching
+// change there (or the two will disagree on what counts as a legacy
+// plan, producing plan-lint vs audit Check 36 divergence). Duplication
+// is accepted at this slice; extraction to a shared policy module is
+// a candidate future refactor.
 const META_ARC_FIRST_COMMIT = 'c91469053a95519645280fd80394a4966ac7948e';
 
 /**
@@ -240,6 +261,17 @@ function parseSimpleYaml(raw) {
 
 /**
  * Check if the file at `path` is git-tracked (in HEAD, index, or both).
+ *
+ * Slice-62 (arc-close composition review MED-1 fold-in — both prongs):
+ * absolute-path handling assumes the path is under REPO_ROOT. For
+ * absolute paths OUTSIDE the repo (e.g. files under `tmpdir()` used by
+ * rule #16 test), `path.slice(REPO_ROOT.length + 1)` produces a garbage
+ * relative path, `git ls-files --error-unmatch` fails, and the catch
+ * returns false — which correctly classifies outside-repo files as
+ * untracked. This is accidental correctness: the garbage-path branch
+ * happens to give the right answer. A future refactor (e.g. reject
+ * outside-repo absolute paths explicitly) should preserve the "outside
+ * the repo → untracked" semantics rule #16 relies on.
  */
 function isGitTracked(path) {
   try {

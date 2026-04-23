@@ -212,7 +212,15 @@ const SKIPPED_SCOPE_EMPTY_TOKENS = new Set<string>(['none']);
 // make them required. Slice 32 promotes to required + backfills existing
 // records. AR-L2 reopen-trigger watch is NOT retired by Slice 25; watch
 // remains active until Slice 32 lands (MED 11 disposition).
-const AUTHORSHIP_ROLE_ENUM = new Set<string>(['challenger', 'author', 'auditor', 'operator+agent']);
+const AUTHORSHIP_ROLE_ENUM = new Set<string>([
+  'challenger',
+  'author',
+  'auditor',
+  'operator+agent',
+  // Arc-close Codex prongs can be authored as composition challengers:
+  // a fresh cross-slice adversarial role distinct from per-slice challenger.
+  'composition-challenger',
+]);
 // Pattern rather than enum — model ids evolve faster than a committed allowlist
 // can track. Literal ID-shape requirement: non-empty, no whitespace at edges.
 const REVIEWER_MODEL_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._+\-: ]*[A-Za-z0-9]$/;

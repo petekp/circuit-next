@@ -3210,6 +3210,18 @@ export const SLICE_47_HARDENING_FOLDINS_ARC_CEREMONY_SLICE = '47d';
 // Slice 47 composition review HIGH 3 fold-in pattern.
 export const CLEAN_CLONE_REALITY_TRANCHE_ARC_CEREMONY_SLICE = 55;
 
+// Slice 62 (Planning-Readiness Meta-Arc arc-close composition review
+// Codex HIGH-1 fold-in — Codex caught the same Check 26 binding gap class
+// as Slice 55 convergent HIGH 1 did for clean-clone-reality). Numeric
+// ceremony_slice 62 so the gate fires at current_slice=62. Review-file
+// regex pinned to the arc-close composition-review naming convention so
+// per-slice review records (arc-slice-57/58/.../61-codex.md) do not
+// satisfy the gate; only the two arc-close composition review prong
+// files do. Ceremony commit stages both prong files + this gate entry +
+// the current_slice advance + plan `status: closed` atomically per the
+// same-commit-staging discipline.
+export const PLANNING_READINESS_META_ARC_CEREMONY_SLICE = 62;
+
 export const ARC_CLOSE_GATES = Object.freeze([
   Object.freeze({
     arc_id: 'phase-2-foundation-foldins-slices-35-to-40',
@@ -3257,6 +3269,18 @@ export const ARC_CLOSE_GATES = Object.freeze([
     ceremony_slice: CLEAN_CLONE_REALITY_TRANCHE_ARC_CEREMONY_SLICE,
     plan_path: 'specs/plans/clean-clone-reality-tranche.md',
     review_file_regex: /arc-clean-clone-reality-composition-review/i,
+  }),
+  // Slice 62 (Planning-Readiness Meta-Arc arc-close composition review
+  // Codex HIGH-1 fold-in): the meta-arc itself. Same gate shape as
+  // clean-clone-reality. Ceremony commit must stage the two prong review
+  // files + this gate entry + the current_slice advance + plan frontmatter
+  // `status: closed` transition atomically.
+  Object.freeze({
+    arc_id: 'planning-readiness-meta-arc',
+    description: 'Planning-Readiness Meta-Arc (Slices 57a-62)',
+    ceremony_slice: PLANNING_READINESS_META_ARC_CEREMONY_SLICE,
+    plan_path: 'specs/plans/planning-readiness-meta-arc.md',
+    review_file_regex: /arc-planning-readiness-meta-arc-composition-review/i,
   }),
 ]);
 

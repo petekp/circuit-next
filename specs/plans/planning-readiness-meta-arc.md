@@ -1,6 +1,6 @@
 ---
 plan: planning-readiness-meta-arc
-status: operator-signoff
+status: closed
 revision: 08
 opened_at: 2026-04-23
 revised_at: 2026-04-23
@@ -10,6 +10,9 @@ cleared_in_session: post-codex-challenger-08-accept
 cleared_at: 2026-04-23
 signoff_at: 2026-04-23
 signoff_note: "Inferred from operator's full-autonomy directive ('drive this project forward as far as you can'). Explicit signoff text recorded in Slice 57h commit body (operator_signoff_predecessor: a51946d)."
+closed_at: 2026-04-23
+closed_in_slice: 62
+closed_with: "arc-close composition review (two prongs) + HIGH/MED/LOW fold-ins landed same-commit per Check 26 staging discipline; ARC_CLOSE_GATES entry added (Codex HIGH-1 fold-in)"
 base_commit: defe76e
 target: planning discipline (not a workflow; this is methodology)
 prior_challenger_passes:
@@ -416,18 +419,35 @@ at `specs/invariants.json::enforcement_state_semantics`:
 `{test-enforced, audit-only, static-anchor, prose-only, phase2-property}`.
 Plan-lint rules are `static-anchor`-enforced.
 
-**Rule count reconciliation (revision 04 final — 22 rules total):**
+**Rule count reconciliation (revision 04 historical plan + post-Slice-58a
+reality — 22 rules total):**
+
+Original plan (revision 04):
 - **Slice 58 baseline: 19 rules** (structural/shape #1-#6, #9-#14,
   state-machine #15-#17, new HIGH-coverage #18-#21).
 - **Slice 59 extension: +3 rules** (invariant-enforceability trio:
-  #7, #8, #22 — all three enforce the `blocked` escrow discipline
-  across declaration + escrow completeness + resolution-before-
-  close).
+  #7, #8, #22).
 - **Total post-Slice-59: 22 rules.**
-- This count is used consistently everywhere: §3 rule table, §0.B
-  MIN 4 row, §0.C MIN 4 row, Slice 58/59 ratchet notes, Slice 58
-  acceptance evidence, `scripts/plan-lint.mjs` module header, §6
-  arc-close acceptance evidence.
+
+Post-Slice-58a reality (Codex HIGH-1 scope promotion):
+- Slice 57a drafted all 22 rule implementations as working-tree
+  evidence. plan-lint's runAllRules array already called all 22 at
+  Slice 58 commit time.
+- Slice 58a Codex challenger caught the drift (scope claimed 19
+  rules; code ran 22). Option B chosen: fixtures for #7/#8/#22
+  added in slice-58a to match reality. Slice 58 scope → all 22
+  rules landed + 19 exercised by fixtures at first commit; slice-58a
+  brought fixtures to the remaining 3.
+- Slice 59 deliverable scoped down to the JSON vocabulary addition
+  (`blocked` key) only. Rule implementations were already live.
+- Slice 59a then removed plan-lint's hardcoded fallback + `blocked`
+  special case so the JSON is mechanically authoritative.
+
+Post-arc at close (Slice 62): 22 rules implemented, 22 per-rule
+fixtures, full JSON-vocab-authoritative enforcement path. The
+"baseline 19 / extension 3" narrative below is preserved as the
+plan's original authoring intent; the scope-promoted reality
+landed at slice-58a.
 
 ### §3.A Structural / shape rules (Slice 58 baseline)
 
@@ -826,12 +846,16 @@ Linear. Arc total ~5-7 hrs wall-clock plus challenger turnaround.
 
 ## §7 — Open questions / constraints
 
-1. **H4 — retroactive-run outcome.** Slice 60 HIGH ratio unknown.
-   If <100%, arc extends with rule-set additions. Chief empirical
-   risk.
-2. **H5 — CLAUDE.md line count.** Currently 256; subsection ~30-50
-   lines → likely fits within 300. If not, fallback to
-   `specs/methodology/`.
+1. **H4 — retroactive-run outcome.** RESOLVED at Slice 60. HIGH
+   ratio = 6/6 (100%), combined = 10/13 (77%), thresholds met.
+   Proof artifact at `specs/reviews/p2-9-plan-lint-retroactive-
+   run.md`. No rule-set extension required; rule #4 was strengthened
+   in-slice to cross the combined threshold. Slice-62 LOW-2 fold-in.
+2. **H5 — CLAUDE.md line count.** RESOLVED at Slice 61. Subsection
+   added; `wc -l CLAUDE.md = 279` at Slice 61 commit, 279 at Slice
+   61a commit (unchanged by HIGH-1 prose tightening). Fits within
+   300-line ceiling per CLAUDE.md §Hard invariant #10. Fallback to
+   `specs/methodology/` not required. Slice-62 LOW-2 fold-in.
 3. **CONSTRAINT: P2.9 restart timing.** This arc does not resume
    P2.9. Operator decides after Slice 62.
 4. **DECIDED: `/circuit:run` routing heuristic removed** per Codex
@@ -856,8 +880,10 @@ This plan is authored under the discipline it proposes.
 
 **Structured ledger (per §1):**
 - Verified claims: E1-E10, E11-E15, E16-E22, E23-E26 (26 total).
-- Hypotheses: H1, H2, H3 resolved during preparation; H4, H5 remain
-  open (H4 resolves at Slice 60; H5 resolves at Slice 61).
+- Hypotheses: H1, H2, H3 resolved during preparation; H4 resolved
+  at Slice 60 (retroactive proof 6/6 HIGH + 10/13 combined — both
+  thresholds met); H5 resolved at Slice 61 (CLAUDE.md at 279 lines,
+  under 300 ceiling).
 - Unknown-blocking: none remaining.
 
 **Arc trajectory (per §Entry-state):** explicit section.

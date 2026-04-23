@@ -393,6 +393,17 @@ describe('plan-lint — rule #16 (untracked-plan-cannot-claim-post-draft-status)
     // Rule #16 requires an actually-untracked file to test. We write to a
     // path under the system temp dir and point plan-lint at it. The fixture
     // is never committed; its untracked-ness is the subject of the rule.
+    //
+    // Slice-62 (arc-close composition review MED-1 fold-in — both prongs):
+    // This test passes by the outside-repo-path branch of isGitTracked.
+    // plan-lint.mjs::isGitTracked slices REPO_ROOT off the absolute path;
+    // for tmpdir() paths that slice produces garbage, `git ls-files`
+    // fails, and the catch returns false (→ untracked → rule #16 fires).
+    // That matches the intended semantics, but the dependency is
+    // implicit. See the inline comment in isGitTracked. Candidate
+    // future follow-up: exercise rule #16 via a temporary git repo /
+    // worktree so the "untracked plan under specs/plans" shape is
+    // exercised end-to-end.
     const { mkdtempSync, writeFileSync } = await import('node:fs');
     const { tmpdir } = await import('node:os');
     const dir = mkdtempSync(join(tmpdir(), 'plan-lint-rule-16-'));
