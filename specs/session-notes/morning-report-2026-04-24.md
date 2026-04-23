@@ -77,7 +77,15 @@ for rules #7, #8, #22.
 
 ## Slice 59 — invariant rules + blocked escrow
 
-*Pending.*
+**Done:** Added the `blocked` enforcement-layer key to
+`specs/invariants.json`. This was the only remaining Slice 59
+deliverable — rules #7, #8, #22 had already landed at Slice 57a
+(implementation) and Slice 58a (fixtures + tests).
+
+**Issues:** None so far. The vocab addition is a single JSON key.
+
+**Next:** Codex challenger pass → then Slice 60 retroactive run
+against the P2.9 flawed draft.
 
 ---
 
