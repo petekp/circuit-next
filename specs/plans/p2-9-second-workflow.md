@@ -1,9 +1,11 @@
 ---
 plan: p2-9-second-workflow
 status: challenger-pending
-revision: 01
+revision: 02
 opened_at: 2026-04-24
+revised_at: 2026-04-23
 opened_in_session: post-planning-readiness-meta-arc-close
+revised_in_session: post-codex-challenger-01-foldin
 base_commit: d921528
 target: review
 target_hypothesis_note: |
@@ -12,9 +14,12 @@ target_hypothesis_note: |
   specs/reference/legacy-circuit/review-characterization.md), so ADR-0003 successor-to-live
   path is unblocked for this surface; (ii) `review` is the closest structural twin to
   `explore` among available targets — both are investigation-shaped, both emit a single
-  primary artifact. A successful P2.9 proves "review-family generalization," not "workflow-
-  system generalization." The latter requires additional targets (repair, build, sweep,
-  migrate) — scope claim downgraded from the flawed draft per Codex MED 11.
+  primary artifact. P2.9 narrows further in revision 02 per Codex pass 01 HIGH 2 + MED 3:
+  the P2.9 variant of `review` is a 3-phase AUDIT-ONLY workflow (no Verification Rerun
+  phase). A verification-bearing variant would be a separate future workflow entry, not a
+  placeholder in this one. A successful P2.9 therefore proves "audit-only review-family
+  generalization" — narrower still than revision 01's "review-family generalization"
+  framing. Workflow-system generalization (repair, build, sweep, migrate) is out of scope.
 authority:
   - specs/plans/phase-2-implementation.md §P2.9 (parent plan; this arc occupies that slot)
   - specs/adrs/ADR-0003-authority-graph-gate.md §Decision + Addendum C
@@ -30,48 +35,72 @@ authority:
   - specs/plans/planning-readiness-meta-arc.md (the meta-arc closed 2026-04-23
     at Slice 62; this plan is authored under the new discipline)
   - specs/reviews/p2-9-plan-draft-content-challenger.md (13-finding ledger
-    against the flawed draft; this revision folds all 13 findings per §0 below)
+    against the flawed draft; revision 01 folded most; revision 02 closes
+    the remaining partials per §0.A)
+  - specs/reviews/p2-9-second-workflow-codex-challenger-01.md (pass 01
+    against revision 01; 2 HIGH + 1 MED fold-ins drove revision 02 — see §0.B)
   - scripts/policy/workflow-kind-policy.mjs (single source of truth for
     canonical phase sets; P2.9 adds the `review` entry at Slice 63)
+  - src/schemas/step.ts (DispatchStep.writes.result + ResultVerdictGate contract;
+    authoritative for the analyze-phase dispatch shape per revision 02 §5)
   - tests/fixtures/plan-lint/bad/p2-9-flawed-draft.md (byte-identical
     committed copy of the flawed draft; retained as reproducibility fixture)
   - User decision 2026-04-24 in-session: P2.9 restart under the new discipline
+prior_challenger_passes:
+  - specs/reviews/p2-9-second-workflow-codex-challenger-01.md
+    (verdict REJECT-PENDING-FOLD-INS vs revision 01 — 2 HIGH + 1 MED;
+    all 3 fold-ins applied in revision 02 per §0.B)
 ---
 
-# P2.9 — Second Workflow (`review`) — multi-slice arc (restart revision 01)
+# P2.9 — Second Workflow (`review`) — multi-slice arc (restart revision 02)
 
 Land a second registered workflow in circuit-next whose contract, artifact
 schema, plugin command, and runtime-dispatch path exercise the same pattern
-`explore` proved, with one deliberate variation: a **4-phase spine** (not
-5), mapped explicitly onto the canonical phase set declared at
+`explore` proved, with one deliberate variation: a **3-phase audit-only
+spine** mapped explicitly onto the canonical phase set declared at
 `scripts/policy/workflow-kind-policy.mjs`. This arc answers whether the
-explore-shaped discipline actually generalizes beyond one workflow kind,
-or whether it's single-instance scaffolding dressed in reusable-sounding
-names.
+explore-shaped discipline actually generalizes beyond one workflow kind
+for an audit-only review variant, or whether it's single-instance
+scaffolding dressed in reusable-sounding names.
 
-## §0 — Flawed-draft fold-in map
+## §0 — Fold-in map
 
-Revision 01 (this document) replaces an earlier flawed draft
-(`tests/fixtures/plan-lint/bad/p2-9-flawed-draft.md`) that reached
-operator decision time carrying 13 Codex findings (6 HIGH + 7 MED)
-before the Planning-Readiness Meta-Arc installed the plan-lint gate.
-Each finding's resolution in this revision:
+Two fold-in tranches: §0.A (flawed-draft 13-finding ledger) and §0.B
+(pass 01 against revision 01).
 
-| Codex # | Severity | Flawed-draft failure | Revision-01 fold-in |
+### §0.A — Flawed-draft 13-finding ledger (revisions 01 + 02)
+
+The flawed draft (`tests/fixtures/plan-lint/bad/p2-9-flawed-draft.md`)
+carried 13 Codex findings. Revision 01 folded 11 fully and 2 partially
+(HIGH 5 + MED 11). Revision 02 closes the two partials.
+
+| Codex # | Severity | Flawed-draft failure | Revision-01 status | Revision-02 delta |
+|---|---|---|---|---|
+| HIGH 1 | Canonical phase mapping missing | 4 invented phase titles with no canonical map | Fully folded — §3 declares title→canonical map + spine_policy.omits | (no change; still fully folded, now 3 phases instead of 4) |
+| HIGH 2 | Artifact model contradicts reference | 4 artifact ids for a 1-artifact reference surface | Fully folded — §5 declares 1 artifact; cardinality recorded | (no change; still fully folded) |
+| HIGH 3 | REVIEW-I1 unenforceable as drafted | "adapter identity" claim unenforceable at current runtime | Fully folded — §4 rewrites REVIEW-I1 to structural-ordering form | (no change; still fully folded) |
+| HIGH 4 | Verdict determinism incomplete | "CLEAN iff Critical=0 AND High=0" missing verification clause | Fully folded — §8 rule includes verification-passes | Rewritten per §0.B fold-in 2: rule no longer claims verification-passes because verification is out of P2.9 scope entirely; §8 narrative retains verification word for rule #19 compliance and narrative honesty |
+| HIGH 5 | Verification runtime not implemented | Plan assumed subprocess execution without a substrate-widening slice | Partially folded — §7 Option B conflated "None available" with "runtime incapable" per pass 01 HIGH 2 | Fully folded — P2.9 pivoted to 3-phase audit-only; verification is not attempted at all (not a placeholder). See §0.B fold-in 2 + §7 |
+| HIGH 6 | Markdown artifact materialization unsafe | review.report.md as dispatch-emitted Markdown | Fully folded — §5 artifact is structured JSON | (no change; still fully folded) |
+| MED 7 | Stale audit.mjs target | WORKFLOW_KIND_CANONICAL_SETS cited at stale path | Fully folded — §1 E7 cites `scripts/policy/workflow-kind-policy.mjs` | (no change; still fully folded) |
+| MED 8 | CLI shape mismatch | --scope invented | Fully folded — §6 uses `--goal` | (no change; still fully folded) |
+| MED 9 | /circuit:run heuristic bug farm | verb-match routing heuristic | Fully folded — out of P2.9 scope | (no change; still fully folded) |
+| MED 10 | Check 23 rule-g premise stale | Fictional generalization work | Fully folded — dropped | (no change; still fully folded) |
+| MED 11 | Target=review generalization overclaim | "workflow system generalization" overclaim | Partially folded — revision 01 narrowed to "review-family generalization" but Slice 68/§10 close logic still read as one ACCEPT bucket per pass 01 MED 3 | Fully folded — §Target-hypothesis-note narrowed further to "audit-only review-family generalization"; §10 Close criteria tri-valued (clean / with-declared-follow-ons / re-framed) per §0.B fold-in 3 |
+| MED 12 | Parent-plan conditional collapsed without census | target: review without evidence census | Fully folded — §1 E3 records target reselection | (no change; still fully folded) |
+| MED 13 | Plan authorship outran extraction | Plan invented surface before characterization landed | Fully folded — characterization landed before revision 01 authoring | (no change; still fully folded) |
+
+### §0.B — Pass 01 (revision 01) fold-ins (revision 02)
+
+Pass 01 (`specs/reviews/p2-9-second-workflow-codex-challenger-01.md`)
+emitted REJECT-PENDING-FOLD-INS with 2 HIGH + 1 MED. Revision 02 folds
+all three.
+
+| Pass-01 # | Severity | Objection | Revision-02 fold-in |
 |---|---|---|---|
-| HIGH 1 | Canonical phase mapping missing | 4 invented phase titles with no canonical map | §3 declares explicit title→canonical map + spine_policy.omits |
-| HIGH 2 | Artifact model contradicts reference | 4 artifact ids for a 1-artifact reference surface | §5 declares 1 artifact; §5 records reference cardinality |
-| HIGH 3 | REVIEW-I1 unenforceable as drafted | "adapter identity" claim unenforceable at current runtime | §4 rewrites REVIEW-I1 to structural-ordering form (enforceable at contract parse) |
-| HIGH 4 | Verdict determinism incomplete | "CLEAN iff Critical=0 AND High=0" missing verification clause | §8 verdict rule: CLEAN iff Critical=0 AND High=0 AND verification passes |
-| HIGH 5 | Verification runtime not implemented | Plan assumed subprocess execution without a substrate-widening slice | §7 adopts Option B (no substrate widening); verification phase is synthesis-step placeholder per reference "None available" valid outcome |
-| HIGH 6 | Markdown artifact materialization unsafe | review.report.md as dispatch-emitted Markdown | §5 artifact is structured JSON under src/schemas/; markdown rendering defers to a follow-on slice |
-| MED 7 | Stale audit.mjs target | WORKFLOW_KIND_CANONICAL_SETS cited at stale path | §1 cites `scripts/policy/workflow-kind-policy.mjs` (authoritative per Slice 43a extraction) |
-| MED 8 | CLI shape mismatch | --scope invented | §6 uses `--goal` (actual flag at src/cli/dogfood.ts) |
-| MED 9 | /circuit:run heuristic bug farm | verb-match routing heuristic | Out of scope for P2.9; /circuit:run stays pass-through per Slice 56 |
-| MED 10 | Check 23 rule-g premise stale | Fictional generalization work | Dropped; Check 23 already N-command data-driven per Slice 52 |
-| MED 11 | Target=review generalization overclaim | "workflow system generalization" overclaim | §Target-hypothesis-note downgrades to "review-family generalization" |
-| MED 12 | Parent-plan conditional collapsed without census | target: review without evidence census | §1 Evidence census row E3 records target reselection |
-| MED 13 | Plan authorship outran extraction | Plan invented surface before characterization landed | Characterization landed at specs/reference/legacy-circuit/review-characterization.md 2026-04-24 PRIOR to this plan revision 01 |
+| HIGH 1 | The planned analyze-phase dispatch payload is not bound to the live dispatch contract | Revision 01 §5 / Slice 66 hand-waved "structured findings JSON" without naming the `DispatchStep.writes.result` shape, gate.pass verdict vocabulary, or ResultVerdictGate contract; Slice 66 would have re-invented it | §5 now names the dispatch shape explicitly: writes.result carries `{verdict, findings}`; gate.pass admits `NO_ISSUES_FOUND`, `ISSUES_FOUND`; the reviewer-declared verdict gates the dispatch step but does NOT become the workflow's final verdict (which is computed in the close phase from the findings list). §9 Slice 64 deliverables include this shape; §9 Slice 66 acceptance evidence bound to it. Evidence-census row E12 added |
+| HIGH 2 | §7 Option B conflates runtime incapability with the reference "None available" branch | Revision 01 used the reference skill's "authority exhaustion" clause to justify a runtime-incapability placeholder; these are not the same condition, and the artifact could not distinguish {no command / runtime incapable / intentionally deferred} | §7 rewritten: P2.9 is 3-phase audit-only (Intake → Independent Audit → Verdict). No Verification Rerun phase exists in P2.9's variant. Revision 02 does not claim the reference "None available" clause as cover; the clause is out-of-scope. Verification deferrals are out-of-scope future work, not a degraded run |
+| MED 3 | Slice ordering + close semantics inconsistencies | Revision 01 Slice 63 acceptance claimed Check 24 fixture compliance, but the fixture lands at Slice 65; Slice 68 close semantics collapsed three outcomes into one ACCEPT bucket | §9 Slice 63 acceptance evidence scoped to policy-table edit only (no fixture dependency). §9 Slice 68 acceptance evidence tri-valued: {clean generalization / validated with declared follow-on widening / not-yet-validated}. §10 Close criteria item 4 split to match |
 
 ## §1 — Evidence census
 
@@ -81,17 +110,18 @@ before the arc can proceed).
 
 | # | Claim | Status | Source |
 |---|---|---|---|
-| E1 | Reference Circuit's `review` skill exists and declares a 4-phase spine (Intake → Independent Audit → Verification Rerun → Verdict) | verified | specs/reference/legacy-circuit/review-characterization.md §Observed phases |
+| E1 | Reference Circuit's `review` skill exists and declares a 4-phase spine (Intake → Independent Audit → Verification Rerun → Verdict). P2.9 inherits only 3 of those (audit-only scope; see §7). | verified | specs/reference/legacy-circuit/review-characterization.md §Observed phases |
 | E2 | Reference `review` emits exactly one primary artifact (`review.md`); step-internal intermediates are not registry artifacts | verified | specs/reference/legacy-circuit/review-characterization.md §Observed artifacts |
-| E3 | Target reselection confirmed `review` at P2.9 framing 2026-04-24 (twin-structure argument + ADR-0003 unblocked by characterization) | verified | §Target-hypothesis-note above + ~/Code/circuit/skills/review/SKILL.md readable at cited path |
+| E3 | Target reselection confirmed `review` at P2.9 framing 2026-04-24 (twin-structure argument + ADR-0003 unblocked by characterization). P2.9 narrows to audit-only per revision 02 | verified | §Target-hypothesis-note above + ~/Code/circuit/skills/review/SKILL.md readable at cited path |
 | E4 | circuit-next's DispatchRole enum already admits `reviewer` as a valid role — no schema widening needed to enforce REVIEW-I1 | verified | src/schemas/step.ts line 6 (z.enum(['researcher', 'implementer', 'reviewer'])) |
-| E5 | circuit-next's current runtime does not execute verification commands as subprocesses; step kinds at src/runtime/runner.ts are `synthesis` (writes placeholder JSON) and `dispatch` (launches adapter CLI only) | verified | src/runtime/runner.ts lines 479-503 + writeSynthesisArtifact at line 375 |
-| E6 | Reference `review` skill's "None available" branch is a valid outcome: "Record 'No authoritative verification command available' in review.md. This is a valid outcome, not a failure." | verified | ~/Code/circuit/skills/review/SKILL.md line 106 |
+| E5 | circuit-next's current runtime does not execute verification commands as subprocesses; step kinds at src/runtime/runner.ts are `synthesis` (writes placeholder JSON) and `dispatch` (launches adapter CLI only). P2.9 audit-only scope does not require this capability | verified | src/runtime/runner.ts lines 479-503 + writeSynthesisArtifact at line 375 |
+| E6 | Reference `review` skill's "None available" branch applies to authority-exhaustion cases, not runtime-incapability cases. P2.9 does not invoke this clause (see §7 scope framing) | verified | ~/Code/circuit/skills/review/SKILL.md lines 95-106 + pass-01 HIGH 2 disambiguation |
 | E7 | WORKFLOW_KIND_CANONICAL_SETS authoritative definition lives at scripts/policy/workflow-kind-policy.mjs; scripts/audit.mjs imports it (MED 7 resolution) | verified | scripts/policy/workflow-kind-policy.mjs lines 37-44 |
 | E8 | src/cli/dogfood.ts accepts `--rigor`, `--run-root`, `--fixture`, `--goal`, `--dry-run`, `--help` flags; no `--scope` flag | verified | src/cli/dogfood.ts argv parser |
 | E9 | specs/invariants.json enforcement_state_semantics vocab: {audit-only, blocked, phase2-property, prose-only, static-anchor, test-enforced} — authoritative for any invariant declared in this plan | verified | specs/invariants.json::enforcement_state_semantics |
 | E10 | specs/contracts/explore.md is the template for workflow-specific contracts; workflow-kind-seam pattern enumerates the 5 generalization risk points | verified | specs/contracts/explore.md + P2.9 flawed draft §"generalization seam" cited this pattern correctly |
 | E11 | The flawed P2.9 draft's byte-identical committed copy at tests/fixtures/plan-lint/bad/p2-9-flawed-draft.md is the plan-lint retroactive-proof reproducibility fixture — not to be deleted | verified | Slice 60 committed this fixture; specs/reviews/p2-9-plan-lint-retroactive-run.md §Input |
+| E12 | DispatchStep contract mandates `writes.result` (non-empty string path) and a `ResultVerdictGate` with `gate.source.ref` pointing to that slot; prompts instruct workers to return raw JSON with a top-level string `verdict` field; gate rejects if verdict is missing or not in `gate.pass` | verified | src/schemas/step.ts lines 60-73 + src/schemas/gate.ts ResultVerdictGate shape + src/runtime/runner.ts dispatch step handler lines 503-540 (prompt + parse + gate logic) |
 
 ## §2 — Why this plan exists
 
@@ -101,8 +131,8 @@ that at Slice 43c. One workflow proves the end-to-end protocol **once**. It
 does not prove the protocol **generalizes** — a critical distinction. If
 the second workflow requires re-authoring the adapter registry, the
 dispatch transcript shape, the run-artifact naming rule, the fixture spine
-discipline, or the audit-check kind map, the pattern hasn't actually landed
-as reusable plumbing. It's landed as single-instance scaffolding.
+discipline, or the audit-check kind map, the pattern hasn't actually
+landed as reusable plumbing. It's landed as single-instance scaffolding.
 
 The flawed first draft of this plan (2026-04-23, untracked at the time)
 proposed a runtime-ambitious target: a `review` workflow that executes
@@ -111,36 +141,41 @@ challenger (specs/reviews/p2-9-plan-draft-content-challenger.md) exposed
 6 HIGH and 7 MED findings, none of which were caught automatically at
 the time. The Planning-Readiness Meta-Arc (specs/plans/planning-
 readiness-meta-arc.md, closed 2026-04-23 Slice 62) installed the plan-
-authoring-time gate. This revision 01 is authored under that gate and
-restarts the arc on evidence-driven grounds.
+authoring-time gate. This plan is authored under that gate.
+
+Revision 02 additionally narrows scope per pass 01 (§0.B): P2.9's `review`
+variant is **audit-only** (3 phases, no Verification Rerun). A future
+verification-bearing variant is a separate workflow kind, not a placeholder
+in this one.
 
 ## §3 — Canonical phase set + title→canonical map
 
 Reference Circuit's `review` skill uses workflow-kind-specific phase
-titles (Intake → Independent Audit → Verification Rerun → Verdict). Those
-titles do not match circuit-next's canonical set
-`{frame, analyze, plan, act, verify, review, close}` declared at
-scripts/policy/workflow-kind-policy.mjs. Per HIGH 1 fold-in, P2.9 declares
-an explicit **title→canonical map**:
+titles (Intake → Independent Audit → Verification Rerun → Verdict). P2.9's
+audit-only variant retains only three of those four, mapped onto
+circuit-next's canonical set `{frame, analyze, plan, act, verify, review,
+close}` declared at scripts/policy/workflow-kind-policy.mjs:
 
-| Reference title | Canonical phase | Notes |
-|---|---|---|
-| Intake | frame | Scope resolution via goal text |
-| Independent Audit | analyze | Dispatched reviewer emits findings |
-| Verification Rerun | act | Synthesis-step placeholder under Option B; see §7 |
-| Verdict | close | Aggregates findings, computes verdict, writes artifact |
+| Reference title | P2.9 inherits? | Canonical phase | Notes |
+|---|---|---|---|
+| Intake | yes | frame | Scope resolution via goal text |
+| Independent Audit | yes | analyze | Dispatched reviewer emits findings |
+| Verification Rerun | **no** | — (omitted) | Out of P2.9 scope per §7; future variant only |
+| Verdict | yes | close | Aggregates findings, writes artifact |
 
-**spine_policy.omits:** `{plan, verify, review}`. Rationale: `plan` has
-no counterpart in review's investigation-shaped pattern; `verify` is
-rolled into the close phase's verdict rule rather than split out;
-`review` is subsumed by Independent Audit's dispatched reviewer (the
-adversarial pass IS the review phase for this workflow).
+**spine_policy.omits:** `{plan, act, verify, review}`. Rationale: `plan`
+has no counterpart in review's investigation-shaped pattern; `act` is
+omitted because P2.9 has no active-execution phase (verification deferred
+per §7); `verify` is omitted because P2.9 does not exercise verification
+commands; `review` is omitted because the adversarial pass IS the
+Independent Audit phase (the "review phase" of a review workflow would be
+pointless nesting).
 
 The `review` entry lands at scripts/policy/workflow-kind-policy.mjs
-(Slice 63) with `canonicals: ['frame', 'analyze', 'act', 'close']` and
-`omits: ['plan', 'verify', 'review']`. canonical phase set of
-{frame, analyze, act, close} with title→canonical map above is what
-the policy constant encodes.
+(Slice 63) with `canonicals: ['frame', 'analyze', 'close']` and
+`omits: ['plan', 'act', 'verify', 'review']`. canonical phase set of
+{frame, analyze, close} with title→canonical map above is what the
+policy constant encodes.
 
 ## §4 — Invariants
 
@@ -164,22 +199,23 @@ test stub lands at tests/properties/visible/review-i1.test.ts (Slice 64).
 ### REVIEW-I2 — verdict determinism
 
 **Rule:** The `review` workflow's close-phase artifact carries
-`verdict: "CLEAN"` if and only if
-`critical_count == 0 AND high_count == 0 AND verification_passes == true`.
-If verification is unavailable (see §7), `verification_passes` is `null`
-and the verdict degrades to `ISSUES_FOUND` with a `verification_status:
-"unavailable"` field — matching the reference skill's "None available"
-valid outcome.
+`verdict: "CLEAN"` iff `critical_count == 0` AND `high_count == 0`
+(verification-passes clause omitted per P2.9 3-phase audit-only scope;
+see §7 for scope rationale and §Target-hypothesis-note for why
+verification-bearing variants are future work rather than placeholders in
+this workflow)
 
 enforcement_layer: test-enforced (schema-level pre-check) +
 test-enforced (property test on the aggregation function).
 
-**Rationale:** Codex HIGH 4 flagged that the flawed draft's verdict rule
-omitted the verification-passes clause. This clause is load-bearing —
-without it, a `review` run whose subsumed tests silently failed would
-emit CLEAN. The schema-level pre-check rejects malformed artifacts at
-parse; the property test validates the aggregation function on randomized
-finding-count / verification-status inputs.
+**Rationale:** Revision 02 narrows the verdict rule to a 2-clause form
+matching P2.9's audit-only scope. Adding a verification clause would
+require either (a) a placeholder that always reports "unavailable" and
+therefore makes CLEAN unreachable (rejected per pass-01 HIGH 2), or
+(b) real verification capability (rejected as a pre-requisite substrate
+arc — out of P2.9 scope). A future `review-with-verification` variant
+would be a separate workflow kind carrying the 3-clause rule per
+reference parity.
 
 **Bound to:** src/schemas/artifacts/review.ts (Slice 64) + tests/
 properties/visible/review-i2.test.ts (Slice 64).
@@ -198,17 +234,49 @@ declares 1 artifact. The mapping:
 **Reference cardinality:** reference surface emits 1 artifact. **P2.9
 cardinality:** 1 artifact. One artifact; reference cardinality recorded.
 
-The structured JSON carries fields: `scope` (string), `findings` (array
-of `{severity, id, text, file_refs}`), `verification_status` (enum: `pass`,
-`fail`, `unavailable`), `verdict` (enum: `CLEAN`, `ISSUES_FOUND`). No
-Markdown synthesis in the runtime — that deferral is intentional (see §7).
+The registered artifact's structured JSON carries fields:
+- `scope`: string (goal text resolved at Intake)
+- `findings`: array of `{severity, id, text, file_refs}` (aggregated
+  from the analyze-phase dispatch result file)
+- `verdict`: enum `CLEAN | ISSUES_FOUND` (computed by REVIEW-I2 at close
+  phase; the reviewer's own dispatch-step verdict is a distinct
+  intermediate gate, see below)
 
-The dispatched reviewer (analyze-phase dispatch step) writes its raw
-findings to a step-internal intermediate at
-`${RUN_ROOT}/phases/analyze/review-raw-findings.json` (per step.writes
-shape at src/schemas/step.ts lines 60-73). That file is **not** a
-registered artifact; the close-phase synthesis step reads it and produces
-the registered `review.result` artifact after verdict computation.
+### Analyze-phase dispatch shape (pass-01 HIGH 1 fold-in)
+
+The `review` fixture's analyze-phase dispatch step binds to the live
+`DispatchStep` contract at `src/schemas/step.ts:60-73` (E12):
+
+- `writes.result`: non-empty string path (relative to run root) where
+  the adapter writes its raw JSON output. Per-step choice:
+  `phases/analyze/review-raw-findings.json`.
+- `gate`: `ResultVerdictGate` with `source: {kind: 'result', ref:
+  'result'}`. The reviewer's JSON must carry a top-level string
+  `verdict` field.
+- `gate.pass` admits exactly two values: `NO_ISSUES_FOUND`,
+  `ISSUES_FOUND`. These are **dispatch-step gate verdicts**, not the
+  workflow's final verdict. The reviewer emits a tentative verdict
+  based on what it observed, but the workflow's artifact-level verdict
+  is re-computed by the close-phase synthesis step from the `findings`
+  array using REVIEW-I2's deterministic rule. This two-level
+  distinction is explicit: the dispatch gate is a liveness check (the
+  reviewer finished and declared a posture); the artifact verdict is
+  the authoritative summary.
+
+The adapter's JSON response shape:
+
+```
+{ "verdict": "NO_ISSUES_FOUND" | "ISSUES_FOUND",
+  "findings": [ { "severity": "critical"|"high"|"low",
+                  "id": "...",
+                  "text": "...",
+                  "file_refs": [...] }, ... ] }
+```
+
+The synthesis step reads the file at `writes.result`, parses it, builds
+the findings array of the registered artifact, and computes the final
+`verdict` per REVIEW-I2. No Markdown synthesis in the runtime — that
+deferral is intentional (HIGH 6 fold-in remains in force).
 
 ## §6 — CLI surface
 
@@ -224,52 +292,56 @@ follows the same shape as `/circuit:explore` (which uses
 introduced by P2.9 — the scope-text-as-goal pattern is consistent with
 the reference skill's goal-driven intake.
 
-## §7 — Runtime feasibility (Option B: no substrate widening)
+Reference Circuit's `review` fast-modes (explicit scope paths / current
+diff / recent commit) are out of P2.9 scope: the initial `review` fixture
+accepts goal text only. A future slice can extend the intake to admit
+scope-path arguments if operator usage demands it.
 
-The flawed draft assumed subprocess execution capability that does not
-exist in current circuit-next runtime (per E5 in §1). Two response paths
-were available:
+## §7 — P2.9 scope: 3-phase audit-only
 
-- **Option A (substrate-widening slice first):** Land a substrate-widening
-  slice that adds a new step kind — tentatively `verification-exec` — for
-  external-command execution before P2.9 opens. Introduces pre-requisite
-  work ahead of the second-workflow generalization test; delays the arc
-  and expands scope. **Not chosen.**
-- **Option B (scope-pivot, chosen):** Land `review` without subprocess
-  execution capability entirely. The Verification Rerun phase is a
-  synthesis-step placeholder that writes `{status: "unavailable"}` into
-  the artifact's `verification_status` field. This matches the reference
-  skill's explicit "None available" valid outcome (E6). A follow-on
-  substrate-widening slice (post-P2.9, candidate name `verification-exec
-  step kind landing`) can promote the placeholder to a real verification
-  step without restructuring the phase graph.
+P2.9's `review` variant is **audit-only**: `frame` (Intake) → `analyze`
+(Independent Audit) → `close` (Verdict). There is NO Verification Rerun
+phase in P2.9's variant.
 
-Under Option B, P2.9 requires **zero new step kinds**, **zero new
-adapters**, **zero schema widenings**. Existing `synthesis` and
-`dispatch` step kinds are sufficient. The arc tests generalization —
-does the explore-established pattern fit a second, structurally-similar
-workflow? — without bundling a substrate expansion.
+Reference Circuit's 4-phase `review` skill includes a Verification Rerun
+phase that requires subprocess execution (test / lint / check commands).
+Revision 01 of this plan proposed a placeholder Verification Rerun step
+that would always report "unavailable" under the pretense of the
+reference skill's "None available" branch. Codex pass-01 HIGH 2 rejected
+that framing: the reference branch is about **authority exhaustion** (no
+verification command exists to run), not **runtime incapability** (a
+command might exist but the runtime cannot execute it). Conflating the
+two broke the artifact's ability to distinguish {no command / runtime
+incapable / intentionally deferred}, and left REVIEW-I2's CLEAN path
+unreachable.
 
-Option B preserves honest reporting: when a `review` run produces
-`verdict: "ISSUES_FOUND"` with `verification_status: "unavailable"`, the
-downstream operator sees both the content findings and the honest
-admission that verification was not exercised. A future slice
-(tentatively post-P2.10) can introduce a subprocess-executing step kind
-if the operator decides verification-reruns are worth building.
+Revision 02 drops the placeholder framing. P2.9 has no Verification
+Rerun step at all. The artifact has no `verification_status` field.
+REVIEW-I2 is 2-clause. The workflow makes a narrower claim (audit-only
+generalization) honestly.
+
+Future work: a **separate** workflow kind — tentatively
+`review-with-verification` — would register its own entry in
+WORKFLOW_KIND_CANONICAL_SETS, extend the canonical set with the `act` or
+`verify` phase, add a new step kind with subprocess-execution capability
+(substrate-widening slice), and carry a 3-clause REVIEW-I2 variant that
+includes the `verification_passes` clause. That workflow kind is not
+part of P2.9. Slot ordering among post-P2.9 options (see §11) is an
+operator decision.
 
 ## §8 — Verdict rule
 
 Per REVIEW-I2 (§4), the `review` workflow's verdict is deterministic:
 
-- **CLEAN iff** `critical_count == 0` AND `high_count == 0` AND
-  `verification_passes == true` (all three clauses load-bearing;
-  verification passes is the clause the flawed draft omitted).
-- **ISSUES_FOUND** otherwise, with a required `verification_status`
-  field disambiguating `pass` / `fail` / `unavailable`.
+- **CLEAN iff** `critical_count == 0` AND `high_count == 0`
+  (verification-passes clause omitted per P2.9 3-phase audit-only scope;
+  a future verification-bearing variant workflow would re-introduce the
+  verification clause per reference parity — see §7)
+- **ISSUES_FOUND** otherwise.
 
 The aggregation is orchestrator-authored (close-phase synthesis step).
-No model-in-the-loop verdict synthesis — the rule is pure function of
-the analyze-phase findings file + the verification-status enum.
+No model-in-the-loop verdict synthesis — the rule is a pure function of
+the analyze-phase findings file.
 
 ## §9 — Slices
 
@@ -278,37 +350,41 @@ own lane and framing triplet at landing per CLAUDE.md §Lane discipline.
 Acceptance evidence per slice is normative; lane / slice ids are
 provisional (may re-number with session context, but ordering is fixed).
 
-### Slice 63 — Characterization-to-policy seam
+### Slice 63 — Policy-table seam
 
 **Lane:** Ratchet-Advance (workflow-kind-policy table gains an entry;
-characterization-doc count advances).
+characterization-doc reference gets its second binding site).
 
 **Deliverables:** Add `review` entry to
 `scripts/policy/workflow-kind-policy.mjs::WORKFLOW_KIND_CANONICAL_SETS`
-with the title→canonical map from §3. Add a corresponding
-`tests/policy/workflow-kind-policy.test.ts` row validating the entry.
-Extend audit Check 24 coverage verification so P2.9 registration is
-tested end-to-end.
+with `canonicals: ['frame', 'analyze', 'close']` and
+`omits: ['plan', 'act', 'verify', 'review']` and a title-map matching §3.
+Add a corresponding row to `tests/policy/workflow-kind-policy.test.ts`
+validating the entry. No fixture changes in this slice.
 
-**Acceptance evidence:** `npm run verify` green. `npm run audit` green
-with Check 24 reporting `review` fixture-shape compliance. New policy
-test row passes.
+**Acceptance evidence:** `npm run verify` green (tests/policy row
+passes). `npm run audit` green. No Check 24 fixture-compliance claim in
+this slice; that lands at Slice 65 when the fixture itself lands.
 
-### Slice 64 — Invariants + artifact schema
+### Slice 64 — Invariants + artifact schema + dispatch-shape test
 
 **Lane:** Ratchet-Advance (invariant count advances; schema count
 advances).
 
 **Deliverables:** Land `src/schemas/artifacts/review.ts` with the Zod
-schema described in §5. Land tests/properties/visible/review-i1.test.ts
-(structural-ordering property) and tests/properties/visible/review-i2.test.ts
-(verdict-aggregation property). Update specs/invariants.json with
-REVIEW-I1 and REVIEW-I2 entries carrying the enforcement_layer values
-from §4.
+schema for the registered `review.result` artifact per §5. Land
+tests/properties/visible/review-i1.test.ts (structural-ordering
+property: close-phase synthesis step preceded by analyze-phase dispatch
+step with role=reviewer). Land tests/properties/visible/review-i2.test.ts
+(verdict-aggregation property on randomized finding-count inputs).
+Update specs/invariants.json with REVIEW-I1 and REVIEW-I2 entries
+carrying the enforcement_layer values from §4. Author a schema-level
+test pinning the analyze-phase dispatch shape from §5: `writes.result`
+shape, `gate.pass` vocabulary, adapter JSON response shape.
 
-**Acceptance evidence:** `npm run verify` green with 2 new property
-tests passing. `npm run audit` green. specs/invariants.json carries
-REVIEW-I1 and REVIEW-I2.
+**Acceptance evidence:** `npm run verify` green with 3 new tests passing
+(2 property + 1 dispatch-shape). `npm run audit` green. specs/invariants.json
+carries REVIEW-I1 and REVIEW-I2.
 
 ### Slice 65 — Contract + fixture
 
@@ -318,11 +394,13 @@ advances).
 **Deliverables:** Land `specs/contracts/review.md` following the
 specs/contracts/explore.md template. Land
 `.claude-plugin/skills/review/circuit.json` as the runtime fixture
-exercising the review spine. Bind artifact_ids and invariant_ids
-per §4 / §5.
+exercising the 3-phase review spine. Bind artifact_ids and invariant_ids
+per §4 / §5. The fixture's analyze-phase dispatch step uses the shape
+pinned at Slice 64.
 
 **Acceptance evidence:** `npm run verify` green. `npm run audit` green
-with Check 24 (spine coverage) reporting review fixture as compliant.
+with Check 24 (spine coverage) reporting the review fixture as compliant
+with the 3-phase canonical-phase-set policy entry added in Slice 63.
 Contract test row under tests/contracts/ passes.
 
 ### Slice 66 — Runtime dispatch + adapter wiring
@@ -332,13 +410,15 @@ workflow kind).
 
 **Deliverables:** Wire the `review` fixture through the dogfood run loop.
 Add a test exercising end-to-end execution of the fixture with a stubbed
-dispatch adapter (reviewer stub emits structured findings JSON). Confirm
-the close-phase synthesis step produces a valid review.result artifact
-parsing against src/schemas/artifacts/review.ts.
+dispatch adapter that emits adapter JSON matching §5's shape. Confirm
+the analyze-phase dispatch gate admits `NO_ISSUES_FOUND` /
+`ISSUES_FOUND`, that the synthesis step produces a valid review.result
+artifact parsing against src/schemas/artifacts/review.ts, and that
+REVIEW-I2 computes the artifact-level verdict correctly.
 
 **Acceptance evidence:** `npm run verify` green with new runtime test.
 Event log shows `step.entered` / `step.artifact_written` / `gate.evaluated`
-events in correct order for all 4 phases.
+events in correct order for all 3 phases (frame → analyze → close).
 
 ### Slice 67 — Plugin command + CLI wiring
 
@@ -354,25 +434,34 @@ admit `review` (it already does per E8 inference — verify at Slice open).
 **Acceptance evidence:** `npm run verify` green. `npm run audit` green
 with Check 23 reporting closure for 3 commands. Manual smoke test:
 `/circuit:review` with a scope argument runs through the review pipeline
-to a valid verdict.
+to a valid verdict artifact.
 
 ### Slice 68 — Second-workflow parity proof
 
-**Lane:** Equivalence Refactor (semantics-preserving consolidation if the
-explore-pattern generalized cleanly; otherwise Discovery, lane reframed at
-slice open).
+**Lane:** Equivalence Refactor if the explore-pattern generalized
+cleanly; Discovery if generalization required widening. Lane declared
+at slice open based on observed state from slices 63-67.
 
 **Deliverables:** Walk through the 5 generalization risk points named in
 the flawed draft's §"generalization seam" (canonical phase set uniform,
 invariant shape, artifact-count balance, plugin-command composability,
-audit-rule kind-independence) and record observed generalization state in
-a report at `specs/reviews/p2-9-generalization-proof.md`. Per risk point:
-did the explore-established pattern hold, or did it require widening?
+audit-rule kind-independence). Record observed generalization state in a
+report at `specs/reviews/p2-9-generalization-proof.md`. Per risk point,
+classify observed state into one of three outcomes:
+
+- **clean:** the explore-established pattern held without widening.
+- **validated-with-declared-follow-on:** pattern held after a targeted
+  widening that landed in the same slice (63-67) as the risk discovery,
+  OR pattern did not hold but the gap is narrow and captured as a named
+  follow-on slice.
+- **not-yet-validated:** pattern did not hold and the gap materially
+  changes the generalization claim; P2.9 may still close but the arc's
+  acceptance evidence must narrate the re-framing.
 
 **Acceptance evidence:** Report committed at specs/reviews/p2-9-
-generalization-proof.md with per-risk-point finding. If widening was
-required for any risk point, the widening is declared as a named follow-
-on slice (does not block P2.9 close).
+generalization-proof.md with per-risk-point outcome from the three
+classes above. Aggregate outcome (any `not-yet-validated` ⇒ narrow the
+close claim per §10 item 4).
 
 ### Slice 69 — Arc-close ceremony
 
@@ -384,7 +473,8 @@ via /codex) per CLAUDE.md §Cross-slice composition review cadence. Update
 audit Check 26 staging discipline. Update ARC_CLOSE_GATES table in
 scripts/audit.mjs to add the p2-9-second-workflow entry. Update this plan
 frontmatter `status: closed`, `closed_at`, `closed_in_slice: 69`,
-`closed_with: <summary of what landed>`.
+`closed_with: <summary of what landed, including the Slice 68 aggregate
+outcome class>`.
 
 **Acceptance evidence:** `npm run audit` Check 26 reports p2-9-second-
 workflow arc-close gate satisfied. Both prong files committed under
@@ -399,20 +489,35 @@ The arc closes when:
 2. `npm run audit` reports all existing checks green. (Gate: audit green.)
 3. `npm run verify` green with the new review property tests and runtime
    test included. (Gate: verify green.)
-4. Arc-close claim "P2.9 second workflow landed; review-family
-   generalization empirically validated" is satisfied per the Slice 69
-   composition review. (Gate: audit Check 26 ARC_CLOSE_GATES entry for
-   p2-9-second-workflow passes.)
+4. Slice 68 generalization-proof report classifies each risk point. The
+   arc's close claim adjusts to the Slice 68 aggregate outcome:
+   - **All clean:** close claim is "P2.9 audit-only review-family
+     generalization validated cleanly." (Gate: Slice 68 report shows 5/5
+     clean.)
+   - **Clean or with-declared-follow-on:** close claim is "P2.9 audit-
+     only review-family generalization validated; N targeted follow-on
+     slices declared for <named gaps>." (Gate: Slice 68 report shows
+     clean + with-declared-follow-on only.)
+   - **Any not-yet-validated:** close claim is "P2.9 audit-only review
+     workflow landed; generalization claim narrowed to <re-framed
+     scope>." (Gate: Slice 68 report shows ≥1 not-yet-validated with the
+     re-framing documented.)
+   In all three cases the arc-close ceremony at Slice 69 proceeds; the
+   Check 26 ARC_CLOSE_GATES entry for p2-9-second-workflow passes on the
+   presence of the report + the two prong files, not on aggregate
+   outcome class.
 5. Parent plan `specs/plans/phase-2-implementation.md §P2.9` slot is
-   marked complete; `specs/plans/phase-2-implementation.md §P2-CLOSE-
-   CRITERIA` table is not affected (per ADR-0007 Addendum A, second-
-   workflow generalization is separated from CC#P2-1).
+   marked complete with the appropriate aggregate-outcome class from
+   item 4; `specs/plans/phase-2-implementation.md §P2-CLOSE-CRITERIA`
+   table is not affected (per ADR-0007 Addendum A, second-workflow
+   generalization is separated from CC#P2-1).
 
 ## §11 — Arc trajectory
 
 This arc advances two independent ratchets:
 - Workflow-kind coverage (1 → 2): the first empirical test of whether
-  the explore-established pattern generalizes.
+  the explore-established pattern generalizes for an audit-only
+  review variant.
 - Plugin-command closure (2 → 3): `/circuit:review` joins `/circuit:run`
   and `/circuit:explore`.
 
@@ -421,7 +526,10 @@ Neither obsoletes any earlier slice. The Planning-Readiness Meta-Arc
 authoring; no slice within P2.9 modifies meta-arc artifacts.
 
 Post-P2.9 options include: (a) third-workflow slice to further test
-generalization (repair / build / sweep / migrate); (b) a substrate-widening slice adding real verification subprocess execution (promoting
-the §7 Option B placeholder to a live capability); (c) /circuit:run
-routing heuristic work (deferred from P2.9 per MED 9). Slot-ordering
-among these is an operator-decision at P2.9 close.
+generalization across additional workflow kinds (repair / build / sweep /
+migrate); (b) a substrate-widening slice adding real verification
+subprocess execution alongside a new `review-with-verification` workflow
+kind (per §7 future-variant framing); (c) /circuit:run routing heuristic
+work (deferred from P2.9 per MED 9); (d) review fast-mode intake
+extensions (per §6 scope-path deferral). Slot-ordering among these is an
+operator-decision at P2.9 close.
