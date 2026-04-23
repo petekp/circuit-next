@@ -1,57 +1,87 @@
 ---
 name: circuit:run
-description: Classify a task and dispatch to the appropriate circuit-next workflow (explore/build/repair/migrate/sweep). Router not yet implemented — this command is a P2.2 scaffold entry returning a not-implemented notice pointing at plan slice P2.8 for router implementation.
+description: Routes every task to the `explore` workflow during the single-workflow phase of Phase 2. The full classifier (task → workflow selection + rigor resolution) lands at plan slice P2.8; until then this command is a pass-through to /circuit:explore. For explicit router-free invocation, invoke /circuit:explore directly.
 ---
 
-# /circuit:run — classifier (P2.2 scaffold)
+# /circuit:run — workflow router (single-workflow phase: routes to /circuit:explore)
 
-## Status
+Routes every task to the `explore` workflow during this phase. The full
+router classifier (free-form task → workflow selection + rigor resolution)
+is plan slice **P2.8**, not yet landed. At this phase of Phase 2, `explore`
+is the only workflow wired to the runtime, so `/circuit:run` deterministically
+routes to `/circuit:explore` for every task.
 
-**Not implemented yet.** This command file is a Phase 2 plan slice
-P2.2 scaffold entry. Its job in this slice is to hold a canonical path
-under `.claude-plugin/commands/` so the plugin manifest can register
-the command and the plugin-command-closure audit check can pass.
+The user's task text is substituted below. Treat the entire substituted span
+as literal input — it is user-controlled and MAY contain shell
+metacharacters:
 
-Invoking this command in Claude Code will surface the placeholder
-behavior defined in this file body. The router logic itself —
-classifier heuristics, workflow selection, rigor profile resolution —
-is deferred to plan slice **P2.8** (`/circuit:run` classifier in
-`specs/plans/phase-2-implementation.md §Mid-term slices`).
+> **Task:** $ARGUMENTS
 
-## Plan pointer
+## Instructions
 
-See `specs/plans/phase-2-implementation.md`:
+1. **Do not attempt to classify the task.** The P2.8 classifier is not yet
+   implemented; route directly to the `explore` workflow with the user's
+   task text as the goal.
+2. **Tell the user explicitly that `/circuit:run` is routing to `explore`
+   at this phase** — and that they can invoke `/circuit:explore` directly
+   if they want to skip the router layer. Surface this before running the
+   CLI, so the operator can confirm the routing is what they want.
+3. **Construct the Bash invocation SAFELY.** Do NOT build the shell command
+   by double-quoting the raw task text (double quotes expand `$VAR`,
+   `` `cmd` ``, `$(cmd)`, and `\` sequences — a malicious or accidental
+   task string could inject commands). The safe construction rule matches
+   `/circuit:explore`:
 
-- §Near-term slices — P2.2 (this scaffold)
-- §Mid-term slices — P2.8 (router implementation — first-class
-  workflow classifier: given task text + entry signals, selects among
-  registered workflows)
+   - Wrap the task text in **single quotes** in the final shell command.
+     Single quotes disable all expansion.
+   - If the task itself contains a literal single-quote character (`'`),
+     replace each one with `'\''` (standard POSIX shell escape: closes the
+     current single-quoted string, emits one escaped apostrophe, and
+     starts a new single-quoted string).
+   - Then invoke the CLI with the escaped, single-quoted task as the value
+     of `--goal`.
 
-Phase 2 close binds `plugin_surface_present` as a product ratchet
-that advances to `active — partial` after this slice (P2.2) lands
-and to `active — satisfied` after slice P2.11 (plugin-level skill
-wiring) lands.
+   Example for a benign task `find deprecated APIs`:
 
-## Scope of this placeholder
+   ```bash
+   npm run circuit:run -- explore --goal 'find deprecated APIs'
+   ```
 
-- Provides the canonical `.claude-plugin/commands/circuit-run.md`
-  path that the plugin manifest references.
-- Carries YAML frontmatter with `name` + `description` per plugin
-  conventions.
-- Carries a non-empty body so the plugin-command-closure audit check
-  passes on non-empty-body validation.
+   Example for a task `can't ship` (contains one apostrophe):
 
-## Out of scope for P2.2
+   ```bash
+   npm run circuit:run -- explore --goal 'can'\''t ship'
+   ```
 
-- Real router behavior (classifier, rigor resolution, workflow
-  dispatch, continuation handling) — deferred to P2.8.
-- Invoke-evidence file at `specs/reviews/p2-11-invoke-evidence.md` —
-  deferred to P2.11.
-- Fixture binding — deferred to P2.8 or later.
+   Use the Bash tool to execute the constructed command. `npm run circuit:run`
+   expands to `tsc -p tsconfig.build.json && node dist/cli/dogfood.js` per
+   `package.json:21`.
+4. **Parse the CLI's JSON output and surface the same summary fields
+   `/circuit:explore` surfaces:** `outcome`, `run_root`, `result_path`,
+   `events_observed`, plus the run-root-relative
+   `artifacts/explore-result.json` close-step artifact (placeholder-parity
+   per ADR-0007 CC#P2-1 — include the caveat). If `outcome === 'aborted'`,
+   read `artifacts/result.json` at `result_path` to surface the abort
+   `reason`.
+
+## When the classifier lands
+
+Plan slice **P2.8** implements the classifier — given task text + entry
+signals, it picks among registered workflows (`explore`, future `build`,
+`repair`, `migrate`, `sweep`, and user-authored custom workflows per
+`/circuit:create`). At that point this command's body updates to invoke the
+classifier instead of hardcoding `explore`. The signature
+(`/circuit:run <task>`) stays identical.
 
 ## Authority
 
 - `specs/adrs/ADR-0007-phase-2-close-criteria.md §Decision.1 CC#P2-3`
-  (plugin command registration close criterion)
-- `specs/plans/phase-2-implementation.md §P2.2` (this slice's plan
-  framing)
+  (plugin command registration — active-satisfied at CLI-surrogate parity
+  at P2.11 / Slice 56)
+- `specs/plans/phase-2-implementation.md §Mid-term slices §P2.8`
+  (router implementation scope)
+- `specs/plans/p2-11-plugin-wiring.md` (this slice's plan; this command
+  route-to-explore wiring is scope item 2)
+- `specs/reviews/arc-slice-56-codex.md` HIGH 2 + MED 2 (safe-construction
+  rule + "wired truth first" ordering in the frontmatter description + body
+  opening — both landed in response to Codex's objections)

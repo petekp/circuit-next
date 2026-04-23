@@ -2473,8 +2473,22 @@ export function checkPhase2SliceIsolationCitation(disciplinedCommits) {
 //       canonical files: `circuit:run` → `commands/circuit-run.md`,
 //       `circuit:explore` → `commands/circuit-explore.md` (Codex HIGH 1
 //       fold-in — anchor names alone are not sufficient).
+//   (g) Command bodies do not contain the literal placeholder substring
+//       "Not implemented yet" (Slice 56 / P2.11 plugin-wiring fold-in).
+//       Pre-Slice-56 both command files carried that placeholder by design
+//       because the runtime wasn't reachable from the plugin surface; Slice
+//       56 wired the commands to the CLI and this check prevents regression
+//       of THAT SPECIFIC EXACT-CASE placeholder substring. Scope is narrow
+//       by design — a case-insensitive match, Unicode-lookalike match, or
+//       semantic "references CLI?" probe is NOT this rule. The complementary
+//       positive-assertion test at tests/runner/plugin-command-invocation.test.ts
+//       covers the runtime-binding side. A future slice tightening the
+//       regression surface (e.g., rejecting "Not implemented" bare or
+//       HTML-commented placeholders) can extend this rule; Codex LOW 1
+//       (specs/reviews/arc-slice-56-codex.md) named the narrow coverage
+//       explicitly and it is accepted as scope-appropriate.
 // Advances the `plugin_surface_present` product ratchet to partial at P2.2 and
-// to green at P2.11 (plan §Product ratchets Phase 2 will carry).
+// to green at P2.11 / Slice 56 (plan §Product ratchets Phase 2 will carry).
 export function checkPluginCommandClosure(rootDir = REPO_ROOT) {
   const pluginDir = join(rootDir, '.claude-plugin');
   const manifestPath = join(pluginDir, 'plugin.json');
@@ -2662,6 +2676,13 @@ export function checkPluginCommandClosure(rootDir = REPO_ROOT) {
     }
     if (body.trim() === '') {
       errors.push(`${label} file ${rawFile} body is empty`);
+    }
+    // Slice 56 (P2.11 plugin-wiring) fold-in — rule (g): reject the literal
+    // "Not implemented yet" placeholder substring in command bodies.
+    if (body.includes('Not implemented yet')) {
+      errors.push(
+        `${label} file ${rawFile} body contains the literal "Not implemented yet" placeholder; Slice 56 / P2.11 wired the commands to the runtime and the placeholder must not regress`,
+      );
     }
   }
 

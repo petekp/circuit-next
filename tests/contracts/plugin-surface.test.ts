@@ -686,4 +686,46 @@ describe('checkPluginCommandClosure (ADR-0007 CC#P2-3 enforcement, P2.2)', () =>
     expect(run?.file).toBe('commands/circuit-run.md');
     expect(explore?.file).toBe('commands/circuit-explore.md');
   });
+
+  // ── Slice 56 (P2.11 plugin-wiring) fold-in: rule (g) placeholder rejection.
+  // Pre-Slice-56 both command bodies carried "Not implemented yet" intentionally
+  // because the runtime was unreachable from the plugin surface. Slice 56 wired
+  // the commands to the CLI; the rule prevents regression that would silently
+  // unwire without any structural audit failure.
+
+  it('reds when a command body contains "Not implemented yet" (Slice 56 rule g)', () => {
+    withTempRepo((root) => {
+      writeValidScaffold(root);
+      // Overwrite circuit-explore.md with a body that contains the literal
+      // placeholder substring the rule rejects.
+      writeRel(
+        root,
+        '.claude-plugin/commands/circuit-explore.md',
+        `---
+name: circuit:explore
+description: Explore placeholder description.
+---
+
+# /circuit:explore
+
+Status: Not implemented yet. This file is a pre-Slice-56 scaffold.
+`,
+      );
+      const result = checkPluginCommandClosure(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(/"Not implemented yet" placeholder/);
+      expect(result.detail).toMatch(/Slice 56 \/ P2\.11/);
+    });
+  });
+
+  it('passes when a command body is non-empty and does not contain the placeholder', () => {
+    // Positive control — the valid scaffold body written by VALID_COMMAND_FILE_BODY
+    // already contains neither the empty-body condition nor the placeholder
+    // substring, so a scaffold with that body should still land green.
+    withTempRepo((root) => {
+      writeValidScaffold(root);
+      const result = checkPluginCommandClosure(root);
+      expect(result.level).toBe('green');
+    });
+  });
 });
