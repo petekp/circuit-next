@@ -139,7 +139,12 @@ Additional required content sections (enforced by plan-lint rules):
 - §Evidence census with structured per-claim status (verified /
   inferred / unknown-blocking / hypothesis). Rule #1.
 - §Arc trajectory justification (what arc goal, what phase goal,
-  whether earlier slices have shifted the terrain). Rule #11.
+  whether earlier slices have shifted the terrain). **Authoring
+  convention post-Slice 65 — rule #11 was cut and the check folded
+  into the commit-body framing pair's `Why this not adjacent:`
+  label.** Plans are still expected to carry a "why this plan
+  exists" / entry-state section because plan readers need the
+  trajectory signal; it is no longer mechanically gated.
 - §Acceptance evidence per slice (no TBD / TODO). Rule #2.
 
 ### 4. Invariant enforcement-layer vocabulary
@@ -191,12 +196,18 @@ via a hardcoded special case even when absent from the JSON).
 ### 5. Machine enforcement
 
 **Layer 1: `scripts/plan-lint.mjs`.** Standalone tool. Invoked as
-`npm run plan:lint -- <path>` (positional argument). Implements 22
-rules across two slices: Slice 58 lands 19 structural/shape/state-
-machine/HIGH-coverage rules (#1-#6, #9-#21); Slice 59 lands 3
-invariant-enforceability rules (#7, #8, #22). Total post-Slice-59 =
-22 rules. Returns non-zero exit on any rule violation with
-structured finding output (rule id + location + suggested fix).
+`npm run plan:lint -- <path>` (positional argument). Implements 20
+active rules post-Slice-65. Origin and evolution: Slice 58 landed 19
+structural/shape/state-machine/HIGH-coverage rules (#1-#6, #9-#21);
+Slice 59 landed 3 invariant-enforceability rules (#7, #8, #22);
+Slice 64 added rule #23 prospective-chronology-forbidden; Slice 65
+(methodology-trim-arc) cut #8, #11, and #22 — #8 and #22 were
+self-referential on `enforcement_layer: blocked` declarations that
+no plan makes, and #11 was a prose-only duplicate of commit-body
+framing that folded into the framing-pair. Numbering preserved as
+gaps (precedent: rule ids are never reused). Returns non-zero exit
+on any rule violation with structured finding output (rule id +
+location + suggested fix).
 
 **Layer 2: `scripts/audit.mjs` Check 36 (Slice 58).** Runs plan-lint
 on all `specs/plans/*.md` committed files whose first-committed SHA
@@ -233,7 +244,7 @@ verify` invocation would be non-composable with small-edit iteration
 loops). The audit check ensures integrity at commit boundaries; the
 standalone tool supports on-demand pre-commit lint.
 
-### 6. Enforcement rule table (22 rules; full set)
+### 6. Enforcement rule table (20 active; #8, #11, #22 cut in Slice 65)
 
 | # | Rule id | Layer | Rejects |
 |---|---|---|---|
@@ -244,10 +255,10 @@ standalone tool supports on-demand pre-commit lint.
 | 5 | `plan-lint.arc-close-claim-without-gate` | static-anchor | Arc-close-criterion-satisfied claims without naming the audit gate that enforces satisfaction. |
 | 6 | `plan-lint.signoff-while-pending` | static-anchor | `operator_signoff: ready` while `challenger_status: pending` or missing. |
 | 7 | `plan-lint.invariant-without-enforcement-layer` | static-anchor | Invariant without `enforcement_layer:` from the authoritative set in §4. Section-aware: skips rule-description sections. |
-| 8 | `plan-lint.blocked-invariant-without-full-escrow` | static-anchor | `enforcement_layer: blocked` invariant missing any escrow field: `substrate_slice`, `owner`, `expiry_date`, `reopen_condition`, `acceptance_evidence`. Section-aware. |
+| 8 | — CUT Slice 65 — | | Was `blocked-invariant-without-full-escrow`. Self-referential on `enforcement_layer: blocked` — no current plan declares that layer; numbering preserved as gap. |
 | 9 | `plan-lint.contract-shaped-payload-without-characterization` | static-anchor | Plan declaring artifact ids, invariant text, verdict vocabulary, or CLI shape for a successor-to-live surface without a characterization slice landing first. |
 | 10 | `plan-lint.unverified-hypothesis-presented-as-decided` | static-anchor | `target: X` or `decision: X` where X is not in §Evidence-census verified rows AND not marked `hypothesis:`. |
-| 11 | `plan-lint.arc-trajectory-check-present` | static-anchor | Plan missing arc-level trajectory justification. |
+| 11 | — CUT Slice 65 — | | Was `arc-trajectory-check-present`. Prose-only heuristic; folded into commit-body framing pair (`Why this not adjacent:` carries trajectory role). |
 | 12 | `plan-lint.live-state-evidence-ledger-complete` | static-anchor | Plan citing symbols/files without corresponding §Evidence-census ledger row. |
 | 13 | `plan-lint.cli-invocation-shape-matches` | static-anchor | CLI invocation using `--flag-name` that does not appear in actual CLI argv parser (reads `src/cli/dogfood.ts` at lint time). |
 | 14 | `plan-lint.artifact-cardinality-mapped-to-reference` | static-anchor | Successor-to-live payload declaring artifact count without recording reference-surface cardinality and justifying departure. |
@@ -258,13 +269,8 @@ standalone tool supports on-demand pre-commit lint.
 | 19 | `plan-lint.verdict-determinism-includes-verification-passes-for-successor-to-live` | static-anchor | Successor-to-live verdict rule missing verification-passes clause when reference surface's verdict depends on verification. |
 | 20 | `plan-lint.verification-runtime-capability-assumed-without-substrate-slice` | static-anchor | Plan deliverable assumes runtime capability (subprocess exec, markdown materialization) where current `src/runtime/runner.ts` writes only placeholder JSON for that step kind, AND no substrate-widening slice is scheduled. |
 | 21 | `plan-lint.artifact-materialization-uses-registered-schema` | static-anchor | Plan declaring artifact shape (markdown, binary, specific JSON) not matching a registered schema in `src/schemas/` AND no schema-widening slice is scheduled. |
-| 22 | `plan-lint.blocked-invariant-must-resolve-before-arc-close` | static-anchor | Plan with any `enforcement_layer: blocked` invariant claiming `status: closed` OR `status: operator-signoff` without `acceptance_evidence` proving resolution. |
-
-**Rule 22 is part of §6 enforcement table** but conceptually pairs
-with Rule 8's escrow enforcement — together they guarantee that a
-`blocked` invariant cannot enter the plan without full escrow AND
-cannot exit arc-open status without resolution evidence. Slice 59
-lands rules 7, 8, 22 (invariant-dimension trio).
+| 22 | — CUT Slice 65 — | | Was `blocked-invariant-must-resolve-before-arc-close`. Same self-referential failure mode as cut #8; numbering preserved as gap. |
+| 23 | `plan-lint.prospective-chronology-forbidden` | static-anchor | Plan body under `specs/plans/**` using forward-looking chronology (future-slice references with predictive verbs, if-verdict-then-action syntax, imperative action lists, heading hints, or noun-led chronology). Section-aware (exact-canonical-heading skip list). Slice 64 methodology-trim-arc. |
 
 ### 6.5. Migration — effective-date gate for existing plans
 
@@ -302,11 +308,12 @@ legacy, any plan committed at or after is gated.
 authority; git ancestry is. Plans cannot evade the gate by
 backdating frontmatter or by any other claim.
 
-**Scope of exemption (legacy):** all 22 rules skipped. Plan-lint
-returns zero findings. Audit Check 36 stays green.
+**Scope of exemption (legacy):** all active rules skipped. Plan-lint
+returns zero findings. Audit Check 36 stays green. (Rule count is
+20 post-Slice-65; see §6 for the definitive list.)
 
 **New-plan obligation:** any plan authored after the effective date
-(2026-04-23) MUST pass all 22 rules when committed. Backdated
+(2026-04-23) MUST pass all active rules when committed. Backdated
 `opened_at` is ignored (cannot evade gate via frontmatter claims).
 `opened_at` remains a useful frontmatter field for intent-signaling
 but is NOT the legacy-determination authority — git history is.
@@ -334,7 +341,7 @@ obligations at authorship time.
 - Arc-close ceremony plans (Disposable lane) — ceremony ordering is
   covered by CLAUDE.md §Cross-slice-composition-review-cadence.
 - Legacy plans (strict-ancestor-of-META_ARC_FIRST_COMMIT). These are
-  fully exempt from all 22 rules. New authorship (same-as or
+  fully exempt from all active rules. New authorship (same-as or
   descendant-of META_ARC_FIRST_COMMIT) is fully gated.
 
 ## Consequences

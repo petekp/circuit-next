@@ -36,7 +36,7 @@ export const LANES = [
 export const FRAMING_LITERALS = {
   failureMode: 'Failure mode:',
   acceptanceEvidence: 'Acceptance evidence:',
-  alternateFraming: 'Alternate framing:',
+  whyThisNotAdjacent: 'Why this not adjacent:',
 };
 
 const SMELL_PATTERNS = [
@@ -378,23 +378,38 @@ function checkLane(body) {
   return found ?? null;
 }
 
-// Framing-triplet label detection. The failureMode pattern accepts
-// `Failure mode:` (the original narrow form matching FRAMING_LITERALS
-// above) AND `Failure mode addressed:`, `Failure mode being addressed:`,
-// or any `Failure mode <phrase>:` variant on a single line. Empirical
-// basis (Slice 48): 8 of 9 arc-47 commits use `Failure mode addressed:`
-// — phrasing mirrors CLAUDE.md §Lane discipline "name the failure mode
-// being addressed". The narrow regex was a false-negative on correctly-
-// framed commits. `[^:\n]*` bounds the expansion to a single line and
-// stops at the first colon so prose mid-sentence matches ("...we hit a
-// failure mode: X") remain intentional rather than accidental.
-// acceptanceEvidence and alternateFraming keep their literal matches —
-// empirically both labels are used verbatim across the arc-47 commits.
+// Framing-pair label detection (Slice 65, methodology-trim-arc). The
+// framing quadruplet (failure mode / acceptance evidence / alternate
+// framing / trajectory check) collapsed to three labels: failure mode
+// / acceptance evidence / why-this-not-adjacent. The `Why this not
+// adjacent:` label carries both the anchoring-defense role (previously
+// alternate framing) and the arc-level trajectory role (previously
+// the prose-only trajectory check).
+//
+// The third-element regex accepts either the new canonical literal
+// (`Why this not adjacent:`) OR the historical literal (`Alternate
+// framing:`) because the invariant is "slice names a rejected
+// alternative" and historical commits pre-Slice-65 honored the
+// invariant under the old label. New commits use the canonical
+// literal per .gitmessage; the .gitmessage template and doctor
+// skeleton both emit the canonical form. This is NOT a ratchet
+// relaxation — the invariant (third framing element present) is
+// unchanged; only the label is normalized.
+//
+// The failureMode pattern accepts `Failure mode:` (the narrow form
+// matching FRAMING_LITERALS above) AND `Failure mode addressed:`,
+// `Failure mode being addressed:`, or any `Failure mode <phrase>:`
+// variant on a single line. Empirical basis (Slice 48): 8 of 9 arc-47
+// commits use `Failure mode addressed:` — phrasing mirrors CLAUDE.md
+// §Lane discipline "name the failure mode being addressed". `[^:\n]*`
+// bounds the expansion to a single line and stops at the first colon
+// so prose mid-sentence matches ("...we hit a failure mode: X") remain
+// intentional rather than accidental.
 function checkFraming(body) {
   return {
     failureMode: /\bfailure mode[^:\n]*:/i.test(body),
     acceptanceEvidence: /acceptance evidence:/i.test(body),
-    alternateFraming: /alternate framing:/i.test(body),
+    whyThisNotAdjacent: /(?:why this not adjacent|alternate framing):/i.test(body),
   };
 }
 
@@ -5120,7 +5135,7 @@ function main() {
     const missing = [];
     if (!f.failureMode) missing.push('failure mode');
     if (!f.acceptanceEvidence) missing.push('acceptance evidence');
-    if (!f.alternateFraming) missing.push('alternate framing');
+    if (!f.whyThisNotAdjacent) missing.push('why this not adjacent');
     if (missing.length > 0) framingGaps.push({ commit: c, missing });
   }
   if (framingGaps.length === 0) {
@@ -5135,14 +5150,14 @@ function main() {
         : '';
     findings.push({
       level: 'green',
-      check: 'Framing triplet',
-      detail: `All slice commits include failure mode + acceptance evidence + alternate framing${exemptSuffix}`,
+      check: 'Framing pair',
+      detail: `All slice commits include failure mode + acceptance evidence + why this not adjacent${exemptSuffix}`,
     });
   } else {
     counters.yellow++;
     findings.push({
       level: 'yellow',
-      check: 'Framing triplet',
+      check: 'Framing pair',
       detail: framingGaps
         .map((g) => `${g.commit.short} missing: ${g.missing.join(', ')}`)
         .join('; '),

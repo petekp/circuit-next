@@ -8,7 +8,7 @@ depends_on:
   - PROJECT_STATE.md
   - scripts/audit.mjs
 enforced_by:
-  - scripts/audit.mjs (PROJECT_STATE freshness + phase consistency + framing triplet + lane declaration + citation rule + .circuit/ gitignore)
+  - scripts/audit.mjs (PROJECT_STATE freshness + phase consistency + framing pair + lane declaration + citation rule + .circuit/ gitignore)
   - CLAUDE.md §Hard invariants #10 (CLAUDE.md ≤ 450 lines per ADR-0011; raised from 300 at Slice 64)
   - CLAUDE.md §Session hygiene (compaction disabled; slice ≤ 30 min)
 planned_tests:
@@ -72,10 +72,10 @@ agent) drive the repo across session boundaries**.
   reversibility (each commit is a step you can undo without undoing
   three other unrelated things) and keeps the human-in-the-loop
   feedback cycle short enough that course-correction is cheap. When a
-  commit body names a lane and framing triplet (`Failure mode:`,
-  `Acceptance evidence:`, `Alternate framing:`) it implicitly
+  commit body names a lane and framing pair (`Failure mode:`,
+  `Acceptance evidence:`, `Why this not adjacent:`) it implicitly
   certifies that the slice fit the bound. Enforced by the audit's
-  framing triplet check. Failure mode: a multi-hour "slice" lands
+  framing pair check. Failure mode: a multi-hour "slice" lands
   with coupled changes across four subsystems and nothing is
   individually revertable.
 
@@ -114,7 +114,7 @@ agent) drive the repo across session boundaries**.
   evicting tail lines silently. Mitigated by SESSION-I1 + test.
 - `slice-dilation:unbounded-coupled-changes` — a "slice" actually
   touches four subsystems and cannot be reverted individually.
-  Mitigated by SESSION-I4 + framing triplet requirement.
+  Mitigated by SESSION-I4 + framing pair requirement.
 - `circuit-as-justification` — a commit justifies its decision by
   citing unnamed existing Circuit behavior. Mitigated by SESSION-I5
   + ADR-0002 citation rule + audit smell check.

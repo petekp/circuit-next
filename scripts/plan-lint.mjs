@@ -21,7 +21,8 @@
  * is `specs/invariants.json::enforcement_state_semantics`. This script
  * reads that JSON at lint time.
  *
- * Rules (per ADR-0010 §6) — 23 total:
+ * Rules (per ADR-0010 §6) — 20 active; #8, #11, #22 cut in Slice 65
+ * (methodology-trim-arc); numbering preserved as gaps per precedent:
  *   #1  evidence-census-present
  *   #2  tbd-in-acceptance-evidence
  *   #3  test-path-extension
@@ -29,10 +30,14 @@
  *   #5  arc-close-claim-without-gate
  *   #6  signoff-while-pending
  *   #7  invariant-without-enforcement-layer            (Slice 59)
- *   #8  blocked-invariant-without-full-escrow          (Slice 59)
+ *   #8  — CUT Slice 65 (self-referential: `blocked` escrow rules only
+ *        fire on plans that already opt into `enforcement_layer: blocked`
+ *        — which no current plan does)
  *   #9  contract-shaped-payload-without-characterization
  *   #10 unverified-hypothesis-presented-as-decided
- *   #11 arc-trajectory-check-present
+ *   #11 — CUT Slice 65 (prose-only: folded into the framing-pair on
+ *        commit bodies; `Why this not adjacent:` label captures the
+ *        arc-level trajectory question)
  *   #12 live-state-evidence-ledger-complete
  *   #13 cli-invocation-shape-matches
  *   #14 artifact-cardinality-mapped-to-reference
@@ -43,7 +48,7 @@
  *   #19 verdict-determinism-includes-verification-passes-for-successor-to-live
  *   #20 verification-runtime-capability-assumed-without-substrate-slice
  *   #21 artifact-materialization-uses-registered-schema
- *   #22 blocked-invariant-must-resolve-before-arc-close (Slice 59)
+ *   #22 — CUT Slice 65 (same failure mode as cut #8)
  *   #23 prospective-chronology-forbidden               (Slice 64,
  *                                                      methodology-trim-arc,
  *                                                      P1-P5 detectors +
@@ -67,6 +72,10 @@
  *   - Slice 60 strengthened rule #4 (stale-symbol-citation) to require
  *     symbol-defined-here rather than symbol-appears-anywhere; Slice 60a
  *     extended definition patterns for TS type/interface/enum.
+ *   - Slice 64 added rule #23 (prospective-chronology-forbidden).
+ *   - Slice 65 cut rules #8, #11, #22 per methodology-trim-arc — #8 and
+ *     #22 were both self-referential on `enforcement_layer: blocked`,
+ *     and #11 was a prose-only duplicate of commit-body framing.
  *
  * Per-rule severity: all rules are HIGH unless stated otherwise.
  * Findings emit JSON-per-line on stderr (machine-readable) + a
@@ -681,38 +690,10 @@ export function rule7InvariantWithoutLayer(plan, vocab = undefined) {
   return findings;
 }
 
-/**
- * Rule #8 — blocked-invariant-without-full-escrow (Slice 59).
- * Revision 03: requires full escrow terms (substrate_slice + owner +
- * expiry_date + reopen_condition + acceptance_evidence).
- * Section-aware: skips matches in rule-description / narrative sections.
- */
-function rule8BlockedInvariantWithoutSlice(plan) {
-  const findings = [];
-  const blockedRe = /enforcement_layer:\s*blocked\b/g;
-  for (const match of plan.body.matchAll(blockedRe)) {
-    const kind = sectionKindAtOffset(plan.sections, match.index);
-    if (kind !== 'normative') continue;
-    const chunk = plan.body.slice(match.index, match.index + 1500);
-    const requiredFields = [
-      'substrate_slice:',
-      'owner:',
-      'expiry_date:',
-      'reopen_condition:',
-      'acceptance_evidence:',
-    ];
-    const missing = requiredFields.filter((f) => !chunk.includes(f));
-    if (missing.length > 0) {
-      findings.push({
-        rule: 'plan-lint.blocked-invariant-without-full-escrow',
-        severity: 'red',
-        message: `\`enforcement_layer: blocked\` invariant missing escrow fields: ${missing.join(', ')}`,
-        location: `body offset ~${match.index}`,
-      });
-    }
-  }
-  return findings;
-}
+// Rule #8 — CUT Slice 65 (methodology-trim-arc). Self-referential: only
+// fired on plans that already opted into `enforcement_layer: blocked`,
+// which no current plan does. Function removed; call site removed from
+// runAllRules.
 
 /**
  * Rule #9 — contract-shaped-payload-without-characterization.
@@ -780,28 +761,10 @@ function rule10UnverifiedDecision(plan) {
   return findings;
 }
 
-/**
- * Rule #11 — arc-trajectory-check-present.
- * Plan missing arc-level trajectory justification.
- */
-function rule11ArcTrajectory(plan, planPath) {
-  const hasEntryState = /§Entry state|## §?Entry|Arc trajectory|arc-level trajectory/i.test(
-    plan.body,
-  );
-  const hasWhyExists = /## Why this plan exists|## Why (this|the) (plan|arc)/i.test(plan.body);
-  if (!hasEntryState && !hasWhyExists) {
-    return [
-      {
-        rule: 'plan-lint.arc-trajectory-check-present',
-        severity: isGrandfathered(plan.frontmatter, planPath) ? 'yellow' : 'red',
-        message:
-          'Plan missing arc-level trajectory justification (§Entry state, §Why-this-plan, or equivalent)',
-        location: 'plan body',
-      },
-    ];
-  }
-  return [];
-}
+// Rule #11 — CUT Slice 65 (methodology-trim-arc). Prose-only: folded
+// into the commit-body framing-pair. The `Why this not adjacent:` label
+// now carries both the anchoring-defense and arc-trajectory roles that
+// rule #11 tried to detect by heuristic heading match.
 
 /**
  * Rule #12 — live-state-evidence-ledger-complete.
@@ -1234,35 +1197,9 @@ function rule21ArtifactMaterialization(plan) {
   return findings;
 }
 
-/**
- * Rule #22 — blocked-invariant-must-resolve-before-arc-close.
- * Forbids status: closed or status: operator-signoff with unresolved
- * blocked invariants.
- */
-function rule22BlockedMustResolve(plan) {
-  const status = plan.frontmatter.status;
-  if (!status) return [];
-  if (!['operator-signoff', 'closed'].includes(status.trim())) return [];
-  const findings = [];
-  const blockedRe = /enforcement_layer:\s*blocked\b/g;
-  for (const match of plan.body.matchAll(blockedRe)) {
-    const kind = sectionKindAtOffset(plan.sections, match.index);
-    if (kind !== 'normative') continue;
-    const chunk = plan.body.slice(match.index, match.index + 1500);
-    // Check for acceptance_evidence proving resolution.
-    const hasResolutionEvidence =
-      /acceptance_evidence:\s*[^\n]*(resolved|landed|closed|merged|enforced)/i.test(chunk);
-    if (!hasResolutionEvidence) {
-      findings.push({
-        rule: 'plan-lint.blocked-invariant-must-resolve-before-arc-close',
-        severity: 'red',
-        message: `Plan status "${status}" with unresolved blocked invariant (no acceptance_evidence proving resolution)`,
-        location: `body offset ~${match.index}`,
-      });
-    }
-  }
-  return findings;
-}
+// Rule #22 — CUT Slice 65 (methodology-trim-arc). Same failure mode as
+// cut rule #8: self-referential on `enforcement_layer: blocked`
+// invariants that no current plan declares.
 
 // Rule #23 — prospective-chronology-forbidden (Slice 64, methodology-
 // trim-arc). Plans must describe state + evidence, not forward-looking
@@ -1699,10 +1636,10 @@ function runAllRules(plan, planPath) {
     ...rule5ArcCloseClaim(plan),
     ...rule6SignoffWhilePending(plan),
     ...rule7InvariantWithoutLayer(plan),
-    ...rule8BlockedInvariantWithoutSlice(plan),
+    // #8 cut Slice 65 (methodology-trim-arc)
     ...rule9ContractShapedPayload(plan),
     ...rule10UnverifiedDecision(plan),
-    ...rule11ArcTrajectory(plan, planPath),
+    // #11 cut Slice 65 (methodology-trim-arc)
     ...rule12LiveStateLedger(plan),
     ...rule13CliShape(plan),
     ...rule14ArtifactCardinality(plan),
@@ -1713,7 +1650,7 @@ function runAllRules(plan, planPath) {
     ...rule19VerdictDeterminism(plan),
     ...rule20VerificationRuntime(plan),
     ...rule21ArtifactMaterialization(plan),
-    ...rule22BlockedMustResolve(plan),
+    // #22 cut Slice 65 (methodology-trim-arc)
     ...rule23ProspectiveChronologyForbidden(plan, planPath),
   ];
 }

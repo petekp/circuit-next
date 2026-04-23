@@ -84,15 +84,15 @@ Before implementing, declare in the slice commit or slice PR:
 | **Break-Glass** | Production incident only | Post-hoc ADR + evidence backfill within 48h |
 
 **Every slice framing** must also name: the failure mode being addressed,
-the acceptance evidence (what would prove it worked), and an **alternate
-framing** (defense against anchoring — Nguyen 2024).
-
-**Trajectory check (before the framing triplet).** Restate in one line each:
-what arc goal this slice serves, what phase goal that arc serves, and whether
-any earlier-completed slice has made this one smaller, obsolete, or
-mis-sequenced. Alternate framing guards against anchoring within the slice;
-the trajectory check guards against arc-level drift when earlier slices shift
-the terrain. Three sentences at slice open, no new artifact.
+the acceptance evidence (what would prove it worked), and — as a single
+combined element — **why this not adjacent** (the rejected adjacent
+alternative plus one line on whether an earlier slice has made this one
+smaller, obsolete, or mis-sequenced). The combined element collapses the
+prior alternate-framing + trajectory-check quadruplet per Slice 65
+(methodology-trim-arc): anchoring-defense and arc-drift defense are the
+same judgment call at slice open, and keeping them as separate ceremony
+produced empty ratification. Nguyen 2024 still frames the anchoring
+risk; the trajectory role folds in without a new artifact.
 
 ## Session hygiene
 

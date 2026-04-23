@@ -11,8 +11,8 @@
  *   1. Where you are            (HEAD, branch, current_slice marker)
  *   2. Next slice               (numeric successor + plan pointer)
  *   3. Required lane (pick one) (6 literals imported from audit.mjs)
- *   4. Framing triplet          (trajectory + failure mode + acceptance
- *                                evidence + alternate framing literals)
+ *   4. Framing pair             (failure mode + acceptance evidence +
+ *                                why-this-not-adjacent literals)
  *   5. Verify commands          (the gates that must pass before commit)
  *   6. Product ratchets         (inventory surfaces + audit-based ratchets)
  *   7. Files touched by HEAD    (hint — often the next slice continues here)
@@ -113,15 +113,13 @@ function main() {
   }
   console.log('  (Commit body must contain `Lane: <one of the above>` verbatim.)');
 
-  header('4. Framing triplet (required in commit body)');
-  console.log('  Trajectory check (three sentences at slice open):');
-  console.log('    - What arc goal this slice serves.');
-  console.log('    - What phase goal that arc serves.');
-  console.log('    - Whether earlier slices have made this smaller / obsolete / mis-sequenced.');
+  header('4. Framing pair (required in commit body)');
   console.log('  Framing literals (commit body must contain each line):');
   console.log(`    ${FRAMING_LITERALS.failureMode} <one-line description>`);
   console.log(`    ${FRAMING_LITERALS.acceptanceEvidence} <what proves it worked>`);
-  console.log(`    ${FRAMING_LITERALS.alternateFraming} <adversarial framing of this slice>`);
+  console.log(
+    `    ${FRAMING_LITERALS.whyThisNotAdjacent} <adversarial framing + arc-trajectory check>`,
+  );
 
   header('5. Verification commands (all must pass before commit)');
   console.log('  npm run check    # tsc --noEmit');
@@ -175,10 +173,9 @@ function main() {
   console.log(`  slice-${nextId}: <concise subject>`);
   console.log('');
   console.log('  Lane: <one of the 6 literals above>');
-  console.log('  Trajectory: <arc goal → phase goal → earlier-slice check> (one sentence each)');
   console.log(`  ${FRAMING_LITERALS.failureMode} <what this slice addresses>`);
   console.log(`  ${FRAMING_LITERALS.acceptanceEvidence} <what proves it worked>`);
-  console.log(`  ${FRAMING_LITERALS.alternateFraming} <adversarial framing>`);
+  console.log(`  ${FRAMING_LITERALS.whyThisNotAdjacent} <adversarial + trajectory framing>`);
   console.log(
     `  Authority: <citation — ${PLAN_PATH}, ADR-NNNN, specs/contracts/..., or CLAUDE.md>`,
   );

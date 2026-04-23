@@ -79,13 +79,13 @@ describe('Slice 30 — slice:doctor briefing script', () => {
   });
 
   it('section 4 — prints all three framing literals verbatim', () => {
-    expect(stdout).toMatch(/━━━ 4\. Framing triplet/);
+    expect(stdout).toMatch(/━━━ 4\. Framing pair/);
     expect(stdout).toContain(FRAMING_LITERALS.failureMode);
     expect(stdout).toContain(FRAMING_LITERALS.acceptanceEvidence);
-    expect(stdout).toContain(FRAMING_LITERALS.alternateFraming);
+    expect(stdout).toContain(FRAMING_LITERALS.whyThisNotAdjacent);
     expect(FRAMING_LITERALS.failureMode).toBe('Failure mode:');
     expect(FRAMING_LITERALS.acceptanceEvidence).toBe('Acceptance evidence:');
-    expect(FRAMING_LITERALS.alternateFraming).toBe('Alternate framing:');
+    expect(FRAMING_LITERALS.whyThisNotAdjacent).toBe('Why this not adjacent:');
   });
 
   it('section 5 — lists each gate command', () => {
@@ -118,11 +118,10 @@ describe('Slice 30 — slice:doctor briefing script', () => {
     expect(stdout).toMatch(/━━━ 8\. Commit-message skeleton ━━━/);
     expect(stdout).toContain('slice-');
     expect(stdout).toMatch(/Lane: </);
-    expect(stdout).toContain('Trajectory:');
     expect(stdout).toContain('Authority:');
     expect(stdout).toContain(FRAMING_LITERALS.failureMode);
     expect(stdout).toContain(FRAMING_LITERALS.acceptanceEvidence);
-    expect(stdout).toContain(FRAMING_LITERALS.alternateFraming);
+    expect(stdout).toContain(FRAMING_LITERALS.whyThisNotAdjacent);
   });
 
   it('closes with a read-only-hint disclaimer', () => {

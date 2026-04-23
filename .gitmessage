@@ -3,12 +3,17 @@
 # Body: 1–3 short paragraphs on what changed and why. Avoid narrating
 # the tool path; summarize the decision and its forcing context.
 #
-# If the commit is slice-shaped, include the framing triplet (case-
+# If the commit is slice-shaped, include the framing pair (case-
 # sensitive labels — the audit uses these exact literals):
 #
 #   Failure mode: <the failure this slice addresses>
 #   Acceptance evidence: <what would prove it worked>
-#   Alternate framing: <one rejected alternative and why>
+#   Why this not adjacent: <rejected adjacent alternative + one line on
+#                           whether an earlier slice made this smaller,
+#                           obsolete, or mis-sequenced>
+#
+# (Collapsed from quadruplet to pair in Slice 65 — anchoring-defense
+# and arc-trajectory-check fold into one combined judgment.)
 #
 # Keep body under ~30 lines. Longer rationale goes in an ADR, not the
 # commit message.
@@ -33,7 +38,7 @@ Signoff-Predecessor: <sha or N/A>
 #
 #   operator_signoff_predecessor: <short-sha>
 #
-# Review-only or plan-prep commits MAY skip the framing triplet; the
+# Review-only or plan-prep commits MAY skip the framing pair; the
 # Lane + Isolation + Arc-Ref trailer is still required. Audit will
-# yellow such commits for missing triplet, which is the intended
+# yellow such commits for missing framing, which is the intended
 # signal for pre-arc work.

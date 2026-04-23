@@ -156,10 +156,12 @@ describe('plan-lint — section-aware scoping', () => {
     expect(findings).not.toContain('plan-lint.test-path-extension');
   });
 
-  it('does not fire rule #7/#8 on "enforcement_layer: blocked" in §3 rule descriptions', () => {
+  it('does not fire rule #7 on "enforcement_layer: blocked" in §3 rule descriptions', () => {
+    // Rule #8 (blocked-invariant-without-full-escrow) was cut in Slice 65;
+    // only #7 (invariant-without-enforcement-layer) remains to guard
+    // against spurious firing on rule-description narrative sections.
     const findings = lintFindings('specs/plans/planning-readiness-meta-arc.md');
     expect(findings).not.toContain('plan-lint.invariant-without-enforcement-layer');
-    expect(findings).not.toContain('plan-lint.blocked-invariant-without-full-escrow');
   });
 });
 
@@ -199,10 +201,7 @@ describe('plan-lint — per-rule bad fixtures (Slice 58 — 22 rules; Slice-58a 
       'rule-07-invariant-without-enforcement-layer.md',
       'plan-lint.invariant-without-enforcement-layer',
     ],
-    [
-      'rule-08-blocked-invariant-without-escrow.md',
-      'plan-lint.blocked-invariant-without-full-escrow',
-    ],
+    // rule-08 fixture removed in Slice 65 (rule cut)
     [
       'rule-09-contract-shaped-payload-without-characterization.md',
       'plan-lint.contract-shaped-payload-without-characterization',
@@ -211,7 +210,7 @@ describe('plan-lint — per-rule bad fixtures (Slice 58 — 22 rules; Slice-58a 
       'rule-10-unverified-hypothesis-as-decided.md',
       'plan-lint.unverified-hypothesis-presented-as-decided',
     ],
-    ['rule-11-missing-arc-trajectory.md', 'plan-lint.arc-trajectory-check-present'],
+    // rule-11 fixture removed in Slice 65 (rule cut)
     ['rule-12-live-state-ledger-incomplete.md', 'plan-lint.live-state-evidence-ledger-complete'],
     ['rule-13-cli-shape-mismatch.md', 'plan-lint.cli-invocation-shape-matches'],
     [
@@ -239,10 +238,7 @@ describe('plan-lint — per-rule bad fixtures (Slice 58 — 22 rules; Slice-58a 
       'rule-21-artifact-materialization-no-schema.md',
       'plan-lint.artifact-materialization-uses-registered-schema',
     ],
-    [
-      'rule-22-blocked-invariant-must-resolve.md',
-      'plan-lint.blocked-invariant-must-resolve-before-arc-close',
-    ],
+    // rule-22 fixture removed in Slice 65 (rule cut)
     ['rule-23-chronology-violating.md', 'plan-lint.prospective-chronology-forbidden'],
     ['rule-23-chronology-noun-led.md', 'plan-lint.prospective-chronology-forbidden'],
     ['rule-23-chronology-evidence-backed-suffix.md', 'plan-lint.prospective-chronology-forbidden'],

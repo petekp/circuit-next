@@ -413,5 +413,5 @@ export const LANES: readonly [
 export const FRAMING_LITERALS: {
   readonly failureMode: 'Failure mode:';
   readonly acceptanceEvidence: 'Acceptance evidence:';
-  readonly alternateFraming: 'Alternate framing:';
+  readonly whyThisNotAdjacent: 'Why this not adjacent:';
 };

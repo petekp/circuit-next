@@ -19,10 +19,13 @@ Demonstrates the smallest possible plan that passes all plan-lint rules.
 
 ## Why this plan exists
 
-Fixture for `plan-lint.arc-trajectory-check-present` rule. Every multi-
-slice plan needs a "Why this plan exists" section (or equivalent
-§Entry-state) explaining arc-level trajectory: what arc goal, what
-phase goal, whether earlier slices have shifted terrain.
+Known-good fixture demonstrating the shape of a multi-slice plan that
+explains its arc-level trajectory. The "Why this plan exists" section
+(or equivalent §Entry-state) names the arc goal, the phase goal, and
+whether earlier slices have shifted the terrain. This is now a prose
+convention honored at plan-authoring time, not a mechanically-enforced
+rule — rule #11 arc-trajectory-check-present was cut in Slice 65 and
+the concept folded into the commit-body framing pair.
 
 This fixture's arc goal: produce a known-good lint target. Phase goal:
 bootstrap plan-lint's test suite. Trajectory: no earlier slice has
