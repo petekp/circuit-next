@@ -1,8 +1,32 @@
 ---
 plan: project-holistic-foldins
-status: in-progress
+status: superseded
 opened_at: 2026-04-22
+closed_at: 2026-04-22
 opened_in_session: post-slice-49-continuity-resume
+superseded_by: specs/plans/clean-clone-reality-tranche.md
+supersession_rationale: |
+  At Slice 51 ratification, operator commissioned a first-principles re-analysis
+  through both Claude and Codex. The re-analysis surfaced a finding neither
+  project-holistic review prong caught: `tests/runner/continuity-lifecycle.test.ts:55-107`
+  hardcodes `.circuit/bin/circuit-engine`, which is `.gitignore`d (line 20) and
+  not tracked by git. A clean clone fails 12/12 tests in that file with
+  `spawnSync ENOENT` (verified at Slice 51 by hiding the shim and running the
+  test). The default-verify baseline this plan's ordering debate anchored to
+  (plugin-first vs runtime-correctness-first) is partly operator-machine state.
+  Reproducibility of verification is prerequisite to any downstream correctness
+  claim, which inverts both branches of the prior ordering argument.
+
+  Separately: the 15-execution-slice arc (~8 governance/methodology-tightening)
+  was itself an instance of the ratio critique (Codex Q1, Claude HIGH 1) the
+  review named. A 4-slice tranche with 36 findings disposed at arc-close as
+  defer-with-named-trigger closes the review more honestly than a 15-slice
+  fold-in arc that confirms the critique in its own shape.
+
+  Replacement plan: `specs/plans/clean-clone-reality-tranche.md` (Slice 51
+  authoring + 52 Clean-Clone Reality Gate + 53 dispatch verdict truth +
+  54 materializer schema-parse + 55 arc-close composition review with
+  explicit disposition ledger for the 36 findings not folded in).
 trigger: |
   Project-holistic critical review at HEAD 52bba0a (recorded at Slice 49, HEAD 3f379bb) returned a divergent two-prong verdict:
   - Claude fresh-read prong: ACCEPT-WITH-FOLD-INS (4 HIGH / 7 MED / 4 LOW / 3 META)
