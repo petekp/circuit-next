@@ -121,7 +121,11 @@ describe('Slice 27d — package.json wiring', () => {
     };
     const cmd = pkg.scripts?.['circuit:run'];
     expect(typeof cmd).toBe('string');
-    expect(cmd).toMatch(/src\/cli\/dogfood\.ts/);
+    // Slice 52 (Codex H11 fold-in): binding moved from `tsx src/cli/dogfood.ts`
+    // to `npm run build --silent && node dist/cli/dogfood.js`; regex widened
+    // to accept either shape for legibility while keeping the placeholder
+    // rejection below authoritative.
+    expect(cmd).toMatch(/(src|dist)\/cli\/dogfood\.(ts|js)/);
     // Inventory rejects echo/true/noop; assert directly that we didn't
     // regress to a placeholder here.
     expect(/^(echo|true|:)\b/.test(cmd ?? '')).toBe(false);

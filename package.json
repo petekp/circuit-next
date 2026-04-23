@@ -9,15 +9,16 @@
   },
   "scripts": {
     "check": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "biome check .",
     "format": "biome format --write .",
-    "verify": "npm run check && npm run lint && npm run test",
+    "verify": "npm run check && npm run lint && npm run build && npm run test",
     "audit": "node scripts/audit.mjs",
     "inventory": "node scripts/inventory.mjs",
     "slice:doctor": "node scripts/doctor.mjs",
-    "circuit:run": "tsx src/cli/dogfood.ts"
+    "circuit:run": "npm run build --silent && node dist/cli/dogfood.js"
   },
   "dependencies": {
     "zod": "^3.23.8"

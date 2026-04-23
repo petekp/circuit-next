@@ -263,9 +263,19 @@ describe('Slice 27d — dogfood-run-0 runner smoke', () => {
       // (argv parsing, fixture load, schema parse, runDogfood
       // composition, JSON serialization to stdout) without depending
       // on the IPC pipe directory. The npm-script binding (`circuit:run
-      // → tsx src/cli/dogfood.ts`) is separately pinned by the
-      // package.json contract test below so the binary path remains
-      // covered.
+      // → npm run build --silent && node dist/cli/dogfood.js` post-Slice-52,
+      // `circuit:run → tsx src/cli/dogfood.ts` pre-Slice-52) is separately
+      // pinned by the package.json contract test below so the binary path
+      // remains covered.
+      //
+      // Slice 52 (Codex H11 fold-in — Clean-Clone Reality Gate): the
+      // npm-script binding moved from tsx to compiled JS. tsx's same
+      // `/tmp/tsx-<uid>/*.pipe` EPERM failure class reproduces in
+      // operator-local restricted-filesystem runs (not just sandboxed
+      // agents), so `circuit:run` now builds `dist/` via
+      // `tsconfig.build.json` and spawns `node dist/cli/dogfood.js`. The
+      // direct `main()` import strategy this test uses is unchanged —
+      // `main()` is the same entrypoint both bindings converge on.
       //
       // Slice 47d (Codex HIGH 1 fold-in + Slice 47b Codex MED 1 deferred
       // subprocess-boundary contract trigger): `main()` invokes the real
@@ -326,13 +336,20 @@ describe('Slice 27d — dogfood-run-0 runner smoke', () => {
   // call implicitly verified that `circuit:run` was wired to tsx +
   // dogfood.ts. Replacing the subprocess invocation with a direct
   // main() import drops that coverage; this contract test re-pins it
-  // statically without spawning a subprocess. A regression that
-  // renames `circuit:run`, points it at a different file, or stops
-  // using tsx for it now fails here loudly.
-  it("package.json's circuit:run script binds tsx to src/cli/dogfood.ts (Slice 47b npm-binding pin)", () => {
+  // statically without spawning a subprocess.
+  //
+  // Slice 52 (Codex H11 fold-in — Clean-Clone Reality Gate): the pin
+  // is rebound from `tsx src/cli/dogfood.ts` to the compiled-JS
+  // equivalent `npm run build --silent && node dist/cli/dogfood.js`.
+  // tsx's `/tmp/tsx-<uid>/*.pipe` IPC allocation reproduces the same
+  // `listen EPERM` failure class in operator-local restricted-filesystem
+  // runs that Slice 47b originally documented for sandboxed agents. A
+  // regression that renames `circuit:run`, points it at a different
+  // file, or reverts to tsx now fails here loudly.
+  it("package.json's circuit:run script binds build + node dist/cli/dogfood.js (Slice 52 Codex H11 fold-in)", () => {
     const pkg = JSON.parse(readFileSync(resolve('package.json'), 'utf8')) as {
       scripts?: Record<string, string>;
     };
-    expect(pkg.scripts?.['circuit:run']).toBe('tsx src/cli/dogfood.ts');
+    expect(pkg.scripts?.['circuit:run']).toBe('npm run build --silent && node dist/cli/dogfood.js');
   });
 });

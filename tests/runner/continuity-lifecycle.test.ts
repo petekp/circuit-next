@@ -8,12 +8,40 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 // second half of ADR-0007 §Decision.1 CC#P2-4 (the first half — the
 // `.claude/hooks/SessionStart.sh` + `.claude/hooks/SessionEnd.sh` +
 // `scripts/audit.mjs` Check 33 `checkSessionHooksPresent` triple — landed
-// at Slice 46). With this test green, ADR-0007 CC#P2-4 (session hooks +
-// continuity lifecycle) advances to active — satisfied per the
-// per-criterion ledger convention.
+// at Slice 46). At Slice 46b landing, these 12 integration assertions
+// were considered the second-half evidence advancing ADR-0007 CC#P2-4
+// to active — satisfied per the per-criterion ledger convention —
+// against the assumption that `.circuit/bin/circuit-engine` was
+// present on any machine running `npm run verify`. See Slice 52 note
+// below for the post-Slice-52 semantic: these assertions are opt-in
+// only, and the CC#P2-4 close-state posture is "closed for default
+// verify + audit + CLI baseline" at ADR-0007 §CC#P2-4 ledger.
 // (Slice 47d Claude HIGH 1 fold-in: prior comment used a scalar close-
 // count phrasing that ADR-0007 §3 forbids; replaced with per-criterion
 // wording.)
+//
+// Slice 52 (Clean-Clone Reality Gate — Codex H22 fold-in): pre-Slice-52
+// these 12 tests ran unconditionally against `.circuit/bin/circuit-engine`.
+// That shim is produced by the prior-generation Circuit plugin's
+// session-start hook (populating `.circuit/plugin-root` and installing
+// the shim into `.circuit/bin/`); `.gitignore:20` ignores `.circuit/` so
+// `git ls-files` does not track it. A clean clone of circuit-next does
+// not contain the shim, and these 12 tests therefore failed 12/12 with
+// `spawnSync ENOENT` on any clean clone (verified at Slice 51 by hiding
+// the shim locally). The project's "34 green" audit claim was partly
+// operator-machine state, not portable state.
+//
+// Slice 52 converts this file to the env-gate pattern already used by
+// `tests/runner/hook-engine-contract.test.ts:202-217` for the live-engine
+// drift check: the 12 integration assertions only run when
+// `CIRCUIT_HOOK_ENGINE_LIVE=1` is set. The default `npm run verify` path
+// skips them (portable). Operator-local full coverage via
+// `CIRCUIT_HOOK_ENGINE_LIVE=1 npm run verify`. Unlike the single
+// skipIf-wrapped it() in hook-engine-contract.test.ts, this file wraps
+// the whole describe block because every assertion here exercises the
+// real engine's save/status/resume/clear round-trip — a stub would have
+// to re-implement the engine's record-serialization semantics, which is
+// exactly what the test is meant to pin against regression.
 //
 // Failure mode addressed: the continuity engine has unit-level coverage
 // for the index reader and the record writer, but no integration proof
@@ -129,203 +157,214 @@ function save(
   ]);
 }
 
-describe('Slice 46b — continuity lifecycle (CC#P2-4 second-half binding)', () => {
-  let projectRoot: string;
+// Env-gate (Slice 52 Codex H22 fold-in): the 12 integration assertions
+// below require `.circuit/bin/circuit-engine` to be present + executable.
+// That shim is installed by the prior-gen Circuit plugin's session-start
+// hook and is not tracked by git. Clean clones skip this block; operator-
+// local full coverage via `CIRCUIT_HOOK_ENGINE_LIVE=1 npm run verify`
+// (same env-gate surface hook-engine-contract.test.ts uses).
+const liveGateEnabled = process.env.CIRCUIT_HOOK_ENGINE_LIVE === '1';
 
-  beforeEach(() => {
-    // realpath collapses macOS's `/var/folders/...` vs `/private/var/folders/...`
-    // alias so absolute-path assertions against engine output match — the
-    // engine resolves the symlink before reporting `deleted_record_path`.
-    projectRoot = realpathSync(mkdtempSync(join(tmpdir(), 'circuit-next-46b-')));
-  });
+describe.skipIf(!liveGateEnabled)(
+  'Slice 46b — continuity lifecycle (CC#P2-4 second-half binding)',
+  () => {
+    let projectRoot: string;
 
-  afterEach(() => {
-    rmSync(projectRoot, { recursive: true, force: true });
-  });
-
-  it('status on a fresh empty project root reports selection=none with no record and no index file', () => {
-    const result = engine(projectRoot, ['status']);
-    expect(result.selection).toBe('none');
-    expect(result.record).toBe(null);
-    expect(result.pending_record).toBe(null);
-    expect(result.current_run).toBe(null);
-    expect(result.warnings).toEqual([]);
-    expect(existsSync(join(projectRoot, INDEX_REL))).toBe(false);
-  });
-
-  it('save writes the index file with a populated pending_record entry', () => {
-    const result = save(projectRoot, {
-      goal: 'g',
-      next: 'n',
-      state: '- DONE: x',
-      debt: 'none',
+    beforeEach(() => {
+      // realpath collapses macOS's `/var/folders/...` vs `/private/var/folders/...`
+      // alias so absolute-path assertions against engine output match — the
+      // engine resolves the symlink before reporting `deleted_record_path`.
+      projectRoot = realpathSync(mkdtempSync(join(tmpdir(), 'circuit-next-46b-')));
     });
-    expect(result.pending_record).not.toBe(null);
-    expect(result.pending_record?.continuity_kind).toBe('standalone');
-    expect(result.pending_record?.record_id).toMatch(/^continuity-[0-9a-f-]{36}$/);
-    expect(result.pending_record?.payload_rel.startsWith(RECORDS_DIR_REL)).toBe(true);
-    expect(existsSync(join(projectRoot, INDEX_REL))).toBe(true);
-    const indexRaw = readFileSync(join(projectRoot, INDEX_REL), 'utf8');
-    const index = JSON.parse(indexRaw) as {
-      pending_record: PendingRecordEntry | null;
-      current_run: unknown;
-    };
-    expect(index.pending_record?.record_id).toBe(result.pending_record?.record_id);
-    expect(index.current_run).toBe(null);
-  });
 
-  it('save writes the record file at the payload_rel path with the round-tripped narrative', () => {
-    const result = save(projectRoot, {
-      goal: 'integration-goal',
-      next: 'integration-next',
-      state: '- DONE: integration-state',
-      debt: 'none',
+    afterEach(() => {
+      rmSync(projectRoot, { recursive: true, force: true });
     });
-    const recordRel = result.pending_record?.payload_rel;
-    expect(recordRel).toBeDefined();
-    if (!recordRel) throw new Error('payload_rel missing');
-    const recordAbs = join(projectRoot, recordRel);
-    expect(existsSync(recordAbs)).toBe(true);
-    const recordRaw = readFileSync(recordAbs, 'utf8');
-    const record = JSON.parse(recordRaw) as ContinuityRecord;
-    expect(record.narrative.goal).toBe('integration-goal');
-    expect(record.narrative.next).toBe('integration-next');
-    expect(record.narrative.state_markdown).toBe('- DONE: integration-state');
-    expect(record.record_id).toBe(result.pending_record?.record_id);
-    expect(record.resume_contract.requires_explicit_resume).toBe(true);
-    expect(record.resume_contract.mode).toBe('resume_standalone');
-  });
 
-  it('status after save reports selection=pending_record and surfaces the saved narrative', () => {
-    const saveResult = save(projectRoot, {
-      goal: 'status-goal',
-      next: 'status-next',
-      state: 'status-state',
-      debt: 'none',
+    it('status on a fresh empty project root reports selection=none with no record and no index file', () => {
+      const result = engine(projectRoot, ['status']);
+      expect(result.selection).toBe('none');
+      expect(result.record).toBe(null);
+      expect(result.pending_record).toBe(null);
+      expect(result.current_run).toBe(null);
+      expect(result.warnings).toEqual([]);
+      expect(existsSync(join(projectRoot, INDEX_REL))).toBe(false);
     });
-    const statusResult = engine(projectRoot, ['status']);
-    expect(statusResult.selection).toBe('pending_record');
-    expect(statusResult.record?.record_id).toBe(saveResult.pending_record?.record_id);
-    expect(statusResult.record?.narrative.goal).toBe('status-goal');
-    expect(statusResult.record?.narrative.next).toBe('status-next');
-    expect(statusResult.pending_record?.record_id).toBe(saveResult.pending_record?.record_id);
-  });
 
-  it('resume after save returns source=pending_record with the same record id', () => {
-    const saveResult = save(projectRoot, {
-      goal: 'resume-goal',
-      next: 'resume-next',
-      state: 'resume-state',
-      debt: 'none',
+    it('save writes the index file with a populated pending_record entry', () => {
+      const result = save(projectRoot, {
+        goal: 'g',
+        next: 'n',
+        state: '- DONE: x',
+        debt: 'none',
+      });
+      expect(result.pending_record).not.toBe(null);
+      expect(result.pending_record?.continuity_kind).toBe('standalone');
+      expect(result.pending_record?.record_id).toMatch(/^continuity-[0-9a-f-]{36}$/);
+      expect(result.pending_record?.payload_rel.startsWith(RECORDS_DIR_REL)).toBe(true);
+      expect(existsSync(join(projectRoot, INDEX_REL))).toBe(true);
+      const indexRaw = readFileSync(join(projectRoot, INDEX_REL), 'utf8');
+      const index = JSON.parse(indexRaw) as {
+        pending_record: PendingRecordEntry | null;
+        current_run: unknown;
+      };
+      expect(index.pending_record?.record_id).toBe(result.pending_record?.record_id);
+      expect(index.current_run).toBe(null);
     });
-    const resumeResult = engine(projectRoot, ['resume']);
-    expect(resumeResult.source).toBe('pending_record');
-    expect(resumeResult.record?.record_id).toBe(saveResult.pending_record?.record_id);
-    expect(resumeResult.record?.narrative.goal).toBe('resume-goal');
-  });
 
-  it('resume is non-destructive — status after resume still reports the pending record', () => {
-    save(projectRoot, { goal: 'g', next: 'n', state: 's', debt: 'none' });
-    engine(projectRoot, ['resume']);
-    const statusAfterResume = engine(projectRoot, ['status']);
-    expect(statusAfterResume.selection).toBe('pending_record');
-    expect(statusAfterResume.record).not.toBe(null);
-  });
-
-  it('resume on an empty project root returns source=none with a "nothing to resume" message', () => {
-    const result = engine(projectRoot, ['resume']);
-    expect(result.source).toBe('none');
-    expect(result.record).toBe(null);
-    expect(result.pending_record).toBe(null);
-    expect(result.message ?? '').toMatch(/nothing to resume/i);
-  });
-
-  it('clear after save deletes the record file from disk and clears the index pending_record', () => {
-    const saveResult = save(projectRoot, {
-      goal: 'g',
-      next: 'n',
-      state: 's',
-      debt: 'none',
+    it('save writes the record file at the payload_rel path with the round-tripped narrative', () => {
+      const result = save(projectRoot, {
+        goal: 'integration-goal',
+        next: 'integration-next',
+        state: '- DONE: integration-state',
+        debt: 'none',
+      });
+      const recordRel = result.pending_record?.payload_rel;
+      expect(recordRel).toBeDefined();
+      if (!recordRel) throw new Error('payload_rel missing');
+      const recordAbs = join(projectRoot, recordRel);
+      expect(existsSync(recordAbs)).toBe(true);
+      const recordRaw = readFileSync(recordAbs, 'utf8');
+      const record = JSON.parse(recordRaw) as ContinuityRecord;
+      expect(record.narrative.goal).toBe('integration-goal');
+      expect(record.narrative.next).toBe('integration-next');
+      expect(record.narrative.state_markdown).toBe('- DONE: integration-state');
+      expect(record.record_id).toBe(result.pending_record?.record_id);
+      expect(record.resume_contract.requires_explicit_resume).toBe(true);
+      expect(record.resume_contract.mode).toBe('resume_standalone');
     });
-    const recordRel = saveResult.pending_record?.payload_rel;
-    if (!recordRel) throw new Error('payload_rel missing');
-    const recordAbs = join(projectRoot, recordRel);
-    expect(existsSync(recordAbs)).toBe(true);
 
-    const clearResult = engine(projectRoot, ['clear']);
-    expect(clearResult.cleared_pending_record).toBe(true);
-    expect(clearResult.cleared_current_run).toBe(true);
-    expect(clearResult.deleted_record_id).toBe(saveResult.pending_record?.record_id);
-    expect(clearResult.deleted_record_path).toBe(recordAbs);
+    it('status after save reports selection=pending_record and surfaces the saved narrative', () => {
+      const saveResult = save(projectRoot, {
+        goal: 'status-goal',
+        next: 'status-next',
+        state: 'status-state',
+        debt: 'none',
+      });
+      const statusResult = engine(projectRoot, ['status']);
+      expect(statusResult.selection).toBe('pending_record');
+      expect(statusResult.record?.record_id).toBe(saveResult.pending_record?.record_id);
+      expect(statusResult.record?.narrative.goal).toBe('status-goal');
+      expect(statusResult.record?.narrative.next).toBe('status-next');
+      expect(statusResult.pending_record?.record_id).toBe(saveResult.pending_record?.record_id);
+    });
 
-    expect(existsSync(recordAbs)).toBe(false);
-    const indexRaw = readFileSync(join(projectRoot, INDEX_REL), 'utf8');
-    const index = JSON.parse(indexRaw) as {
-      pending_record: unknown;
-      current_run: unknown;
-    };
-    expect(index.pending_record).toBe(null);
-    expect(index.current_run).toBe(null);
-  });
+    it('resume after save returns source=pending_record with the same record id', () => {
+      const saveResult = save(projectRoot, {
+        goal: 'resume-goal',
+        next: 'resume-next',
+        state: 'resume-state',
+        debt: 'none',
+      });
+      const resumeResult = engine(projectRoot, ['resume']);
+      expect(resumeResult.source).toBe('pending_record');
+      expect(resumeResult.record?.record_id).toBe(saveResult.pending_record?.record_id);
+      expect(resumeResult.record?.narrative.goal).toBe('resume-goal');
+    });
 
-  it('status after clear reports selection=none and an empty record', () => {
-    save(projectRoot, { goal: 'g', next: 'n', state: 's', debt: 'none' });
-    engine(projectRoot, ['clear']);
-    const statusResult = engine(projectRoot, ['status']);
-    expect(statusResult.selection).toBe('none');
-    expect(statusResult.record).toBe(null);
-    expect(statusResult.pending_record).toBe(null);
-  });
+    it('resume is non-destructive — status after resume still reports the pending record', () => {
+      save(projectRoot, { goal: 'g', next: 'n', state: 's', debt: 'none' });
+      engine(projectRoot, ['resume']);
+      const statusAfterResume = engine(projectRoot, ['status']);
+      expect(statusAfterResume.selection).toBe('pending_record');
+      expect(statusAfterResume.record).not.toBe(null);
+    });
 
-  it('clear is idempotent — running clear on a project with no record reports cleared=true with deleted_record_id=null', () => {
-    const result = engine(projectRoot, ['clear']);
-    expect(result.cleared_pending_record).toBe(true);
-    expect(result.cleared_current_run).toBe(true);
-    expect(result.deleted_record_id).toBe(null);
-    expect(result.deleted_record_path).toBe(null);
-  });
+    it('resume on an empty project root returns source=none with a "nothing to resume" message', () => {
+      const result = engine(projectRoot, ['resume']);
+      expect(result.source).toBe('none');
+      expect(result.record).toBe(null);
+      expect(result.pending_record).toBe(null);
+      expect(result.message ?? '').toMatch(/nothing to resume/i);
+    });
 
-  it('save twice replaces the pending_record pointer in the index without deleting the prior record file', () => {
-    // Save-replace semantics: the engine updates the index `pending_record`
-    // pointer to the new record_id, but the prior record file remains on
-    // disk. Pinning this behavior so a refactor that flips to
-    // delete-on-save (or one that fails to update the index pointer) is
-    // caught immediately. The records dir grows monotonically across
-    // saves; clear is the only command that reaps record files.
-    const first = save(projectRoot, { goal: 'g1', next: 'n1', state: 's1', debt: 'none' });
-    const second = save(projectRoot, { goal: 'g2', next: 'n2', state: 's2', debt: 'none' });
-    expect(first.pending_record?.record_id).not.toBe(second.pending_record?.record_id);
+    it('clear after save deletes the record file from disk and clears the index pending_record', () => {
+      const saveResult = save(projectRoot, {
+        goal: 'g',
+        next: 'n',
+        state: 's',
+        debt: 'none',
+      });
+      const recordRel = saveResult.pending_record?.payload_rel;
+      if (!recordRel) throw new Error('payload_rel missing');
+      const recordAbs = join(projectRoot, recordRel);
+      expect(existsSync(recordAbs)).toBe(true);
 
-    const firstAbs = join(projectRoot, first.pending_record?.payload_rel ?? '');
-    const secondAbs = join(projectRoot, second.pending_record?.payload_rel ?? '');
-    expect(existsSync(firstAbs)).toBe(true);
-    expect(existsSync(secondAbs)).toBe(true);
+      const clearResult = engine(projectRoot, ['clear']);
+      expect(clearResult.cleared_pending_record).toBe(true);
+      expect(clearResult.cleared_current_run).toBe(true);
+      expect(clearResult.deleted_record_id).toBe(saveResult.pending_record?.record_id);
+      expect(clearResult.deleted_record_path).toBe(recordAbs);
 
-    const indexRaw = readFileSync(join(projectRoot, INDEX_REL), 'utf8');
-    const index = JSON.parse(indexRaw) as { pending_record: PendingRecordEntry | null };
-    expect(index.pending_record?.record_id).toBe(second.pending_record?.record_id);
+      expect(existsSync(recordAbs)).toBe(false);
+      const indexRaw = readFileSync(join(projectRoot, INDEX_REL), 'utf8');
+      const index = JSON.parse(indexRaw) as {
+        pending_record: unknown;
+        current_run: unknown;
+      };
+      expect(index.pending_record).toBe(null);
+      expect(index.current_run).toBe(null);
+    });
 
-    const statusResult = engine(projectRoot, ['status']);
-    expect(statusResult.selection).toBe('pending_record');
-    expect(statusResult.record?.narrative.goal).toBe('g2');
-  });
+    it('status after clear reports selection=none and an empty record', () => {
+      save(projectRoot, { goal: 'g', next: 'n', state: 's', debt: 'none' });
+      engine(projectRoot, ['clear']);
+      const statusResult = engine(projectRoot, ['status']);
+      expect(statusResult.selection).toBe('none');
+      expect(statusResult.record).toBe(null);
+      expect(statusResult.pending_record).toBe(null);
+    });
 
-  it('the engine reports the selection / source discriminant fields the SessionStart and SessionEnd hooks read', () => {
-    // Slice 46's hook scripts (`.claude/hooks/SessionStart.sh` and
-    // `.claude/hooks/SessionEnd.sh`) read `.selection` from the
-    // `continuity status --json` output to choose between the
-    // pending-record / current-run-attached / nothing branches. This
-    // test pins the discriminant-field name surface so a hidden rename
-    // (selection → state, source → kind, etc.) breaks here loud and
-    // visible instead of silently downgrading the SessionStart banner
-    // to the no-record branch.
-    save(projectRoot, { goal: 'g', next: 'n', state: 's', debt: 'none' });
-    const statusResult = engine(projectRoot, ['status']);
-    expect(Object.keys(statusResult)).toContain('selection');
-    expect(statusResult.selection).toBe('pending_record');
+    it('clear is idempotent — running clear on a project with no record reports cleared=true with deleted_record_id=null', () => {
+      const result = engine(projectRoot, ['clear']);
+      expect(result.cleared_pending_record).toBe(true);
+      expect(result.cleared_current_run).toBe(true);
+      expect(result.deleted_record_id).toBe(null);
+      expect(result.deleted_record_path).toBe(null);
+    });
 
-    const resumeResult = engine(projectRoot, ['resume']);
-    expect(Object.keys(resumeResult)).toContain('source');
-    expect(resumeResult.source).toBe('pending_record');
-  });
-});
+    it('save twice replaces the pending_record pointer in the index without deleting the prior record file', () => {
+      // Save-replace semantics: the engine updates the index `pending_record`
+      // pointer to the new record_id, but the prior record file remains on
+      // disk. Pinning this behavior so a refactor that flips to
+      // delete-on-save (or one that fails to update the index pointer) is
+      // caught immediately. The records dir grows monotonically across
+      // saves; clear is the only command that reaps record files.
+      const first = save(projectRoot, { goal: 'g1', next: 'n1', state: 's1', debt: 'none' });
+      const second = save(projectRoot, { goal: 'g2', next: 'n2', state: 's2', debt: 'none' });
+      expect(first.pending_record?.record_id).not.toBe(second.pending_record?.record_id);
+
+      const firstAbs = join(projectRoot, first.pending_record?.payload_rel ?? '');
+      const secondAbs = join(projectRoot, second.pending_record?.payload_rel ?? '');
+      expect(existsSync(firstAbs)).toBe(true);
+      expect(existsSync(secondAbs)).toBe(true);
+
+      const indexRaw = readFileSync(join(projectRoot, INDEX_REL), 'utf8');
+      const index = JSON.parse(indexRaw) as { pending_record: PendingRecordEntry | null };
+      expect(index.pending_record?.record_id).toBe(second.pending_record?.record_id);
+
+      const statusResult = engine(projectRoot, ['status']);
+      expect(statusResult.selection).toBe('pending_record');
+      expect(statusResult.record?.narrative.goal).toBe('g2');
+    });
+
+    it('the engine reports the selection / source discriminant fields the SessionStart and SessionEnd hooks read', () => {
+      // Slice 46's hook scripts (`.claude/hooks/SessionStart.sh` and
+      // `.claude/hooks/SessionEnd.sh`) read `.selection` from the
+      // `continuity status --json` output to choose between the
+      // pending-record / current-run-attached / nothing branches. This
+      // test pins the discriminant-field name surface so a hidden rename
+      // (selection → state, source → kind, etc.) breaks here loud and
+      // visible instead of silently downgrading the SessionStart banner
+      // to the no-record branch.
+      save(projectRoot, { goal: 'g', next: 'n', state: 's', debt: 'none' });
+      const statusResult = engine(projectRoot, ['status']);
+      expect(Object.keys(statusResult)).toContain('selection');
+      expect(statusResult.selection).toBe('pending_record');
+
+      const resumeResult = engine(projectRoot, ['resume']);
+      expect(Object.keys(resumeResult)).toContain('source');
+      expect(resumeResult.source).toBe('pending_record');
+    });
+  },
+);
