@@ -131,10 +131,15 @@ export const COMMITTED_STATUSES = new Set([
   'operator-signoff',
   'closed',
 ]);
-// Derived: statuses that permit an untracked file. Only evidence-draft
-// (the initial draft-authoring status) is untracked-permissible.
-// challenger-pending (AUTHORING_STATUSES post-draft state) + all
-// COMMITTED_STATUSES require git-tracked state.
+// Separately-maintained subset of AUTHORING_STATUSES: only evidence-draft
+// is untracked-permissible. Slice-66a (Codex MED-1 fold-in): this subset
+// is NOT mechanically derived from AUTHORING_STATUSES — it is a
+// hand-maintained singleton whose coupling to AUTHORING_STATUSES is
+// editorial (editors must keep both sets consistent when lifecycle
+// evolves). challenger-pending (AUTHORING_STATUSES post-draft state)
+// + all COMMITTED_STATUSES require git-tracked state per ADR-0010 §2
+// transitions; this set is the literal enumeration of untracked-permissible
+// lifecycle states.
 export const UNTRACKED_PERMITTED_STATUSES = new Set(['evidence-draft']);
 export const VALID_CONTEXTS = new Set(['authoring', 'committed']);
 export const DEFAULT_CONTEXT = 'authoring';
@@ -933,10 +938,12 @@ export function rule15StatusValid(plan, context = DEFAULT_CONTEXT) {
  * Rule #16 — untracked-plan-cannot-claim-post-draft-status.
  *
  * Slice 66 (methodology-trim-arc): references UNTRACKED_PERMITTED_STATUSES
- * (derived from AUTHORING_STATUSES). evidence-draft is the only
- * authoring status that permits untracked state; challenger-pending
- * and every COMMITTED_STATUSES value require git-tracked state per
- * ADR-0010 §2 transitions.
+ * (a separately-maintained singleton subset of AUTHORING_STATUSES;
+ * Slice-66a Codex MED-1 fold-in clarified the coupling is editorial,
+ * not mechanical). evidence-draft is the only authoring status that
+ * permits untracked state; challenger-pending and every
+ * COMMITTED_STATUSES value require git-tracked state per ADR-0010 §2
+ * transitions.
  */
 export function rule16UntrackedPostDraft(plan, planPath) {
   const status = plan.frontmatter.status;
@@ -948,7 +955,7 @@ export function rule16UntrackedPostDraft(plan, planPath) {
       {
         rule: 'plan-lint.untracked-plan-cannot-claim-post-draft-status',
         severity: 'red',
-        message: `Plan status "${status}" requires git-tracked state. File is untracked. Only evidence-draft (the initial AUTHORING_STATUSES state) permits untracked state.`,
+        message: `Plan status "${status}" requires git-tracked state. File is untracked. Only evidence-draft permits untracked state (UNTRACKED_PERMITTED_STATUSES is a hand-maintained subset of AUTHORING_STATUSES).`,
         location: 'filesystem',
       },
     ];
@@ -1706,9 +1713,20 @@ function main() {
     process.exit(2);
   }
   // Slice 66 (methodology-trim-arc): parse optional --context flag.
+  // Slice-66a (Codex LOW-1 fold-in): explicitly reject the bare
+  // `--context` form (space-separated value), which previously fell
+  // through to positional parsing and surfaced as a confusing "file
+  // not found: .../--context" error. Only the `--context=<value>`
+  // form is accepted.
   let context = DEFAULT_CONTEXT;
   const positional = [];
   for (const arg of args) {
+    if (arg === '--context' || arg.startsWith('--context ')) {
+      console.error(
+        'plan-lint: --context requires an inline value (--context=authoring|committed). Space-separated form is not supported.',
+      );
+      process.exit(2);
+    }
     if (arg.startsWith('--context=')) {
       const value = arg.slice('--context='.length);
       if (!VALID_CONTEXTS.has(value)) {

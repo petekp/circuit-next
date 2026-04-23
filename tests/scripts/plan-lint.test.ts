@@ -158,20 +158,32 @@ describe('plan-lint — P2.9 flawed draft (retroactive proof)', () => {
 });
 
 describe('plan-lint — section-aware scoping', () => {
+  // Slice-66a (Codex MED-2 fold-in): these cases run against the meta-arc
+  // plan, which is at status: closed (COMMITTED_STATUSES). Use
+  // --context=committed so rule #15 is green and the target-rule
+  // assertion exercises what it claims. Under the prior default context,
+  // plan-lint was red on rule #15 and the rule-#3 / rule-#7 assertions
+  // were vacuously true.
   it('does not fire rule #3 on tests/contracts/*.md mentions in §Failure-mode narrative', () => {
     // The meta-arc plan itself mentions `tests/contracts/review.md` in §2
     // Failure-mode ledger as a reference to the P2.9 bad example. Rule #3
     // should skip this narrative reference.
-    const findings = lintFindings('specs/plans/planning-readiness-meta-arc.md');
-    expect(findings).not.toContain('plan-lint.test-path-extension');
+    const result = runLint('specs/plans/planning-readiness-meta-arc.md', 'committed');
+    expect(result.exitCode).toBe(0);
+    expect(lintFindings('specs/plans/planning-readiness-meta-arc.md', 'committed')).not.toContain(
+      'plan-lint.test-path-extension',
+    );
   });
 
   it('does not fire rule #7 on "enforcement_layer: blocked" in §3 rule descriptions', () => {
     // Rule #8 (blocked-invariant-without-full-escrow) was cut in Slice 65;
     // only #7 (invariant-without-enforcement-layer) remains to guard
     // against spurious firing on rule-description narrative sections.
-    const findings = lintFindings('specs/plans/planning-readiness-meta-arc.md');
-    expect(findings).not.toContain('plan-lint.invariant-without-enforcement-layer');
+    const result = runLint('specs/plans/planning-readiness-meta-arc.md', 'committed');
+    expect(result.exitCode).toBe(0);
+    expect(lintFindings('specs/plans/planning-readiness-meta-arc.md', 'committed')).not.toContain(
+      'plan-lint.invariant-without-enforcement-layer',
+    );
   });
 });
 
