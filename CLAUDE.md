@@ -248,6 +248,29 @@ See `specs/risks.md` for the full accepted/open risks ledger.
 See `PROJECT_STATE.md`. Treat that file as authoritative over any recollection
 you have from a prior session.
 
+## Plan-authoring discipline (ADR-0010)
+
+Multi-slice or ratchet-advancing plans pass through a five-state lifecycle
+before slices open:
+
+1. `evidence-draft` — authoring; may be untracked.
+2. `challenger-pending` — committed; awaiting Codex challenger pass.
+3. `challenger-cleared` — ACCEPT-class committed Codex review exists with
+   matching `reviewed_plan:` binding (slug + revision + base_commit +
+   content_sha256).
+4. `operator-signoff` — operator signed off; commit body carries
+   `operator_signoff_predecessor: <sha>` naming the challenger-cleared
+   predecessor.
+5. `closed` — arc landed; `closed_at` + `closed_in_slice` set.
+
+Enforcement: `scripts/plan-lint.mjs` (22 rules) + audit Check 36 (committed
+plans + operator-signoff chain validation). Run `npm run plan:lint --
+specs/plans/<plan>.md` during authoring. Legacy plans (first-commit
+predates the meta-arc) are exempt.
+
+Do not present a plan for operator sign-off until the checklist in memory
+(`feedback_plans_must_be_challenger_cleared_before_signoff.md`) is met.
+
 ## Reference implementation
 
 The previous-generation Circuit is at `~/Code/circuit`. It is **read-only**

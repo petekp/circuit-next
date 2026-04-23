@@ -169,7 +169,20 @@ reference.
 
 ## Slice 61 — memory rule + CLAUDE.md discipline line
 
-*Pending.*
+**Done:**
+- Added a MEMORY.md pointer line for the already-authored memory
+  file `feedback_plans_must_be_challenger_cleared_before_signoff.md`
+  (the file was drafted at Slice 57a; Slice 61 adds the index entry
+  so future sessions actually load it).
+- Added a new `## Plan-authoring discipline (ADR-0010)` subsection
+  to CLAUDE.md. 279 lines total — well under the 300-line ceiling.
+
+**Issues:** None.
+
+**Audit after Slice 61:** 33 green / 2 yellow / 0 red.
+
+**Next:** Slice 62 — the arc-close ceremony (two prong composition
+reviews, one from fresh-read Claude, one from Codex).
 
 ---
 
