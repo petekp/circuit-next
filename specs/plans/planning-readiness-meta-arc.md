@@ -1,12 +1,12 @@
 ---
 plan: planning-readiness-meta-arc
 status: challenger-pending
-revision: 04
+revision: 05
 opened_at: 2026-04-23
 revised_at: 2026-04-23
 opened_in_session: post-p2-9-codex-meta-retrospective
-revised_in_session: post-codex-challenger-03-foldin
-base_commit: c91469053a95519645280fd80394a4966ac7948e
+revised_in_session: post-codex-challenger-04-foldin
+base_commit: fe5503d
 target: planning discipline (not a workflow; this is methodology)
 prior_challenger_passes:
   - specs/reviews/planning-readiness-meta-arc-codex-challenger-01.md
@@ -20,6 +20,10 @@ prior_challenger_passes:
     (verdict ACCEPT-WITH-FOLD-INS, 4 minimum fold-ins + 1 CRITICAL
     + 2 HIGH + 1 MED new findings vs revision 03; all folded in
     revision 04 — see §0.C)
+  - specs/reviews/planning-readiness-meta-arc-codex-challenger-04.md
+    (verdict REJECT-PENDING-FOLD-INS, 3 minimum fold-ins + 1 CRITICAL
+    + 1 HIGH + 1 MED new findings vs revision 04; all folded in
+    revision 05 — see §0.D)
 trigger: |
   P2.9 plan draft (specs/plans/p2-9-second-workflow.md, untracked)
   reached operator decision point carrying multiple material flaws
@@ -121,10 +125,26 @@ are folded in revision 03. Mapping:
 | MIN 1 | CRITICAL | §Self-validation step sequence | Revision 03 commits plan + reviews + plan-lint draft at Slice 57a PRE-challenger commit; pass 03 runs on the committed revision 03. |
 | MIN 2 | CRITICAL | Rule #17 binding; see CRITICAL 1 row above | |
 | MIN 3 | CRITICAL | §Migration + Slice 58 acceptance; see CRITICAL 2 row above | |
-| MIN 4 | HIGH | §3 rule count = 21 everywhere; CLI is positional `npm run plan:lint -- <path>` | Plan-lint CLI: positional only. ADR-0010 + Slice 58 acceptance evidence unified. |
+| MIN 4 | HIGH | §3 rule count = 22 everywhere; CLI is positional `npm run plan:lint -- <path>` | Plan-lint CLI: positional only. ADR-0010 + Slice 58 acceptance evidence unified. |
 | MIN 5 | HIGH | §3 rules #18-#21; see HIGH 4 row | |
 | MIN 6 | HIGH | §Entry state new section + plan-lint section-aware scoping | |
 | MIN 7 | HIGH | §3 rule #8 escrow semantics + new rule #22; see HIGH 5 row | |
+
+### §0.D Revision 05 foldins (from pass 04)
+
+Pass 04 verdict: REJECT-PENDING-FOLD-INS. 3 minimum fold-ins + 1
+CRITICAL + 1 HIGH + 1 MED new findings. The beautiful meta-reflexive
+failure: revision 04's self-lint was VACUOUSLY GREEN because
+`isLegacyPlan` used a sliced-local-date check (`slice(0, 10)`) that
+treated the plan's Pacific-timezone commit (2026-04-22T23:37:40-07:00)
+as pre-effective, skipping all 22 rules. Codex pass 04 caught that
+my gate was bypassing itself. All 3 fold-ins applied in revision 05:
+
+| Pass 04 # | Severity | Fold-in location | Nature |
+|---|---|---|---|
+| CRITICAL 1 | CRITICAL | scripts/plan-lint.mjs isLegacyPlan + §Migration Implementation prose | Replaced sliced-local-date check with `Date.parse(firstCommitIso)` vs `Date.parse('${EFFECTIVE_DATE}T00:00:00Z')`. UTC effective-boundary is now the canonical comparison. The Pacific-timezone-edge-case where a local-date shows pre-effective but UTC is post-effective is closed. |
+| HIGH 2 | HIGH | §0.B MIN 4 row + §5 dependency graph | Both stale references to "21" reconciled to "22". |
+| MED 3 | MED | §8 self-validation | Updated from "revision 03" to "revision 05"; next-steps reference pass-04 fold-ins and pass-05 dispatch. |
 
 ### §0.C Revision 04 foldins (from pass 03)
 
@@ -220,21 +240,30 @@ corpus (which uses statuses like `active`, `in-progress`, `superseded`,
 `draft`, or no status at all — none of which match the new
 vocabulary).
 
-**Implementation:**
+**Implementation (revision 05 per pass-04 HIGH 3 + CRITICAL 1 fold-in):**
 
-- Plan-lint reads `frontmatter.opened_at` (or `frontmatter.date` if
-  `opened_at` absent).
-- If the date is missing OR < `2026-04-23`, plan-lint returns
-  immediately with zero findings (or optionally, a single yellow
-  "legacy plan — rules not enforced" finding for visibility).
+- Plan-lint queries git history for the file's first-committed
+  timestamp via `git log --diff-filter=A --follow --format=%aI`.
+- The full ISO timestamp is compared against start-of-day-UTC on
+  `2026-04-23` using `Date.parse`. This ensures timezone correctness
+  — a plan committed at `2026-04-22T23:37:40-07:00` (i.e.
+  `2026-04-23T06:37:40Z` in UTC) is NOT legacy because it occurred
+  after the UTC effective boundary.
+- If git history shows first-commit < effective-date boundary in
+  UTC → legacy. Otherwise NOT legacy.
+- Untracked plans have no git history → NOT legacy. They go through
+  the full 22-rule gate.
+- Frontmatter `opened_at` / `date` fields are NOT the authority for
+  legacy determination. They are useful for author-intent signaling
+  but git history is the enforcement surface.
 - Rule #15 (status vocabulary) applies only to non-legacy plans.
 
 **Scope of exemption (legacy):** all 22 rules skipped.
 
-**New-plan obligation:** any plan opened on or after 2026-04-23 MUST
-carry `opened_at: YYYY-MM-DD` in frontmatter (on or after effective
-date) AND pass all 22 rules. An `opened_at: <pre-effective>` on a
-new plan is rejected (back-dating forbidden).
+**New-plan obligation:** any plan authored after the effective date
+and committed after the UTC effective boundary MUST pass all 22
+rules. Backdating via `opened_at` is ignored (legacy determination
+uses git history, not frontmatter claims).
 
 **Migration of existing work:** plans active at effective-date
 boundary (e.g., `phase-2-implementation.md`) stay at current status
@@ -734,7 +763,7 @@ Slice 57a (preparation)                — evidence persistence + fixtures
   └─ Slice 57 (ADRs)                   — policy
        └─ Slice 58 (plan-lint baseline 19 rules + state machine + section-aware)
                                        — tooling [needs ADR-0010]
-            └─ Slice 59 (invariant dim + blocked escrow = 21 total)
+            └─ Slice 59 (invariant dim + blocked escrow = 22 total)
                                        — tooling extension
                  └─ Slice 60 (retroactive proof on P2.9)
                                        — empirical validation
@@ -779,19 +808,22 @@ Linear. Arc total ~5-7 hrs wall-clock plus challenger turnaround.
 6. **DECIDED: effective-date migration** per pass 02 CRITICAL 2
    fold-in.
 
-## §8 — Self-validation (reflexive, revision 03)
+## §8 — Self-validation (reflexive, revision 05)
 
 This plan is authored under the discipline it proposes.
 
 **Plan lifecycle status evidence:**
-- Current status: `challenger-pending` (post-Slice-57a commit).
-- Revision: 03 (after Codex pass-01 + pass-02 fold-ins).
-- Revision 03 authoring source: committed at
-  `specs/reviews/planning-readiness-meta-arc-codex-challenger-02.md`.
+- Current status: `challenger-pending` (post-Slice-57b commit, about
+  to stage Slice 57c with revision 05).
+- Revision: 05 (after Codex passes 01, 02, 03, 04 fold-ins).
+- Revision 05 authoring source: committed at
+  `specs/reviews/planning-readiness-meta-arc-codex-challenger-04.md`
+  (will commit with this revision at Slice 57c).
 
 **Structured ledger (per §1):**
 - Verified claims: E1-E10, E11-E15, E16-E22, E23-E26 (26 total).
-- Hypotheses: H1, H2, H3, H4, H5 (H1, H2, H3 resolved this session).
+- Hypotheses: H1, H2, H3 resolved this session; H4, H5 remain open
+  (H4 resolves at Slice 60; H5 resolves at Slice 61).
 - Unknown-blocking: none remaining.
 
 **Arc trajectory (per §Entry-state):** explicit section.
@@ -802,17 +834,23 @@ This plan is authored under the discipline it proposes.
 - No invariant text declared as normative runtime deliverable; §3
   rules are plan-lint ids, not runtime invariants.
 
-**Plan's commitment to its own lint:** post-Slice-58, Slice 60
-reflexive run should show zero findings on this plan OR explicitly
-document any gaps.
+**Plan's commitment to its own lint (revision 05 meta-reflexive proof):**
+Pass 04 caught that revision 04's self-lint was VACUOUSLY green — the
+legacy-exemption was misclassifying the plan because a sliced local-
+timezone date check treated the Pacific-timezone commit as pre-
+effective. Revision 05's isLegacyPlan uses Date.parse against a UTC
+effective boundary, which correctly classifies the post-effective
+plan as non-legacy AND correctly runs all 22 rules against it. The
+green result in revision 05 is substantive: the plan passes its own
+22-rule gate.
 
-**Next steps (revision 03):**
-1. Slice 57a: commit revision 03 + 3 review artifacts + plan-lint
-   draft + fixture.
-2. Dispatch Codex pass 03 against committed revision 03.
-3. If ACCEPT / ACCEPT-WITH-FOLD-INS: pass 03 artifact commits;
-   status transitions `challenger-pending → challenger-cleared`;
-   operator sign-off requested.
-4. If REJECT-PENDING-FOLD-INS: revise to revision 04 + pass 04;
-   iterate. Bound: after pass 04, commit at current revision +
-   await operator review.
+**Next steps (revision 05):**
+1. Commit revision 05 + pass 04 review artifact (slice-57c).
+2. Dispatch Codex pass 05 against committed revision 05.
+3. If ACCEPT: pass 05 artifact commits; status transitions
+   `challenger-pending → challenger-cleared`; operator sign-off
+   inferred from autonomy directive OR deferred to operator morning
+   review.
+4. If REJECT-PENDING-FOLD-INS again: revise to revision 06 + pass 06;
+   iterate. Bound: after pass 06, pause and await explicit operator
+   input.

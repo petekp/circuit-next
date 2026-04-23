@@ -87,7 +87,14 @@ const POST_DRAFT_STATUSES = new Set([
 
 const ACCEPT_CLASS_VERDICTS = new Set(['ACCEPT', 'ACCEPT-WITH-FOLD-INS']);
 
-const EFFECTIVE_DATE = '2026-04-23';
+// Revision 05 (post-pass-04 CRITICAL 1 fold-in): the legacy boundary is
+// the meta-arc's first commit SHA (Slice 57a, committed 2026-04-22
+// evening Pacific / 2026-04-23 UTC). Plans whose first commit is a
+// strict ancestor of this commit are legacy. The meta-arc itself and
+// all subsequent plans are post-effective. This avoids timezone edge
+// cases entirely — the effective date (2026-04-23 per ADR-0010) is
+// codified by commit ancestry rather than by date parsing.
+const META_ARC_FIRST_COMMIT = 'c91469053a95519645280fd80394a4966ac7948e';
 
 /**
  * Parse a plan file's YAML frontmatter + body.
@@ -277,36 +284,50 @@ function loadInvariantLayerVocab() {
  * rule set.
  */
 function isLegacyPlan(_frontmatter, planPath) {
-  // Compute first-commit date for the file.
-  const firstCommitDate = (() => {
-    if (!planPath) return null;
-    try {
-      const relPath = isAbsolute(planPath) ? planPath.slice(REPO_ROOT.length + 1) : planPath;
-      const out = execSync(
-        `git log --diff-filter=A --follow --format=%aI -- ${JSON.stringify(relPath)}`,
-        {
-          cwd: REPO_ROOT,
-          stdio: ['ignore', 'pipe', 'ignore'],
-        },
-      )
-        .toString()
-        .trim()
-        .split('\n')
-        .filter(Boolean);
-      return out.length > 0 ? out[out.length - 1].slice(0, 10) : null;
-    } catch {
-      return null;
-    }
-  })();
-  // A plan is legacy ONLY if git history confirms it existed before the
-  // effective date. Untracked plans and newly-committed plans are NOT
-  // legacy regardless of frontmatter claims.
-  if (firstCommitDate && firstCommitDate < EFFECTIVE_DATE) return true;
-  // If the file has no git history (untracked or newly-committed) AND
-  // claims pre-effective opened_at, REJECT legacy status — this is a
-  // backdating attempt, not a legacy plan. Will fall through to rule
-  // enforcement below.
-  return false;
+  // Revision 05 (pass-04 CRITICAL 1 fold-in): the legacy boundary is
+  // the meta-arc's first commit SHA. A plan is legacy iff its first
+  // commit is a STRICT ANCESTOR of META_ARC_FIRST_COMMIT. Otherwise
+  // (untracked, or same-as / descendant of the meta-arc first commit)
+  // it is post-effective and goes through the full 22-rule gate.
+  //
+  // Why this approach instead of date comparison: timezone edge cases
+  // around the effective-date boundary (pacific-evening commits that
+  // land in UTC early-morning of the effective date) misclassify
+  // plans as post-effective when they predate the meta-arc itself.
+  // Using ancestry gives a principled, commit-local boundary.
+  if (!planPath) return false;
+  let firstCommitSha;
+  try {
+    const relPath = isAbsolute(planPath) ? planPath.slice(REPO_ROOT.length + 1) : planPath;
+    const out = execSync(
+      `git log --diff-filter=A --follow --format=%H -- ${JSON.stringify(relPath)}`,
+      {
+        cwd: REPO_ROOT,
+        stdio: ['ignore', 'pipe', 'ignore'],
+      },
+    )
+      .toString()
+      .trim()
+      .split('\n')
+      .filter(Boolean);
+    firstCommitSha = out.length > 0 ? out[out.length - 1] : null;
+  } catch {
+    firstCommitSha = null;
+  }
+  if (!firstCommitSha) return false; // untracked / no history → NOT legacy
+  // Ask git: is firstCommitSha a strict ancestor of META_ARC_FIRST_COMMIT?
+  // merge-base --is-ancestor X Y exits 0 iff X is ancestor of Y (including equal).
+  // To match "strict ancestor", also check firstCommitSha !== META_ARC_FIRST_COMMIT.
+  if (firstCommitSha === META_ARC_FIRST_COMMIT) return false; // same-as boundary = non-legacy
+  try {
+    execSync(`git merge-base --is-ancestor ${firstCommitSha} ${META_ARC_FIRST_COMMIT}`, {
+      cwd: REPO_ROOT,
+      stdio: 'ignore',
+    });
+    return true; // firstCommitSha is ancestor → legacy
+  } catch {
+    return false; // not an ancestor → post-effective
+  }
 }
 
 /**
