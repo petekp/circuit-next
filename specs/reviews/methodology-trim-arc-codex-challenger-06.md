@@ -17,9 +17,10 @@ reviewed_plan:
   plan_slug: methodology-trim-arc
   plan_revision: 02
   plan_base_commit: 46cfceebe1f6cf0776d127f58afedc65486d0c5b
-  plan_content_sha256: 721faad8d19df4733c129a25bf158d32dda81712f7a1622179cc7b81016ce51d
-  plan_content_sha256_note: "SHA of methodology-trim-arc.md as committed at challenger-pending (commit 452255d). Post-transition SHA will differ when status bumps to challenger-cleared in the transition slice commit."
-  plan_status_at_review: challenger-pending (committed at 452255d / slice-64-prep)
+  plan_content_sha256: 1649996c9c593352b21c7e4f184e860c885de9caceb7aad6c86f55a198966aa2
+  plan_content_sha256_note: "Post-transition SHA. Codex reviewed the plan at the pre-transition SHA 721faad8d19df4733c129a25bf158d32dda81712f7a1622179cc7b81016ce51d (plan committed at 455f8d3 / slice-64-prep, status challenger-pending). This artifact carries the POST-transition SHA so rule #17 validates on the currently-committed plan content (which includes the cleared_at / cleared_in_session / reviewed_plan frontmatter added by this transition). The review verdict applies to the plan BODY, which is unchanged between pre- and post-transition SHA — only frontmatter status + transition timestamps differ."
+  plan_content_sha256_pre_transition: 721faad8d19df4733c129a25bf158d32dda81712f7a1622179cc7b81016ce51d
+  plan_status_at_review: challenger-pending (committed at 455f8d3 / slice-64-prep)
   plan_status_post_review: challenger-cleared (committed at the transition slice alongside this review)
   recursive_validation: substantive_green  # plan-lint green at review-time SHA
 pass_log_reference:

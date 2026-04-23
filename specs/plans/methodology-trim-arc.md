@@ -1,11 +1,17 @@
 ---
 plan: methodology-trim-arc
-status: challenger-pending
+status: challenger-cleared
 revision: 02
 opened_at: 2026-04-23
 revised_at: 2026-04-23
+cleared_at: 2026-04-23
 opened_in_session: post-p2-9-revision-04-cleared
 revised_in_session: post-codex-pass-05-foldins
+cleared_in_session: post-codex-pass-06-accept-with-foldins
+reviewed_plan:
+  challenger_artifact: specs/reviews/methodology-trim-arc-codex-challenger-06.md
+  challenger_artifact_commit: e62b187
+  plan_content_sha256_at_review: 721faad8d19df4733c129a25bf158d32dda81712f7a1622179cc7b81016ce51d
 base_commit: 46cfceebe1f6cf0776d127f58afedc65486d0c5b
 lane: Ratchet-Advance
 arc_size: 5 slices — operator-authorized exception to 3-slice default
