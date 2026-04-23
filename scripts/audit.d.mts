@@ -126,6 +126,15 @@ export const CURRENT_SLICE_MARKER_PATTERN: RegExp;
 export function extractCurrentSliceMarker(text: unknown): string | null;
 export function checkStatusEpochAlignment(rootDir?: string): AuditCheckResult;
 
+// Slice 67 (methodology-trim-arc LIVE-STATE-HELPER) — parses the `## §0 Live
+// state` section added to PROJECT_STATE.md alongside the existing
+// `<!-- current_slice: N -->` HTML-comment marker. Returns the trimmed
+// section content (string, possibly empty). Returns null when the section
+// is absent, malformed, or the file cannot be read. Compat-shim: no
+// existing consumer is rewired in Slice 67 — the helper adds capability
+// for future consumers.
+export function readLiveStateSection(markdownPath: string): string | null;
+
 export const SLICE_COMMIT_SUBJECT_PATTERN: RegExp;
 export function extractSliceIdFromCommitSubject(subject: unknown): string | null;
 export function checkStatusDocsCurrent(rootDir?: string): AuditCheckResult;

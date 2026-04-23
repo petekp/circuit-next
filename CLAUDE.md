@@ -100,8 +100,13 @@ risk; the trajectory role folds in without a new artifact.
   `specs/` with a pointer here.
 - Compaction is **disabled** on this repo. Treat session as long-horizon;
   artifact-based resume is the recovery path.
-- `PROJECT_STATE.md` is the live snapshot. Update it when phase state
-  changes, when a decision is recorded, or when a session ends.
+- `PROJECT_STATE.md` is the live snapshot. `## §0 Live state` at the top
+  carries the current_slice / current_arc / current_phase as explicit
+  fields; the `<!-- current_slice: N -->` HTML-comment marker is preserved
+  unchanged for existing consumers (ADR-0010 compat-shim). Update `§0`
+  when phase state changes or a decision is recorded; per-slice narrative
+  appends to `PROJECT_STATE-chronicle.md` (relocated from PROJECT_STATE.md
+  at Slice 67; non-authoritative history).
 - Slices ≤ 30 min wall-clock. Coordinated edits compose under a single ADR.
 
 ## After-slice operator summary

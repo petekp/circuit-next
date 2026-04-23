@@ -1,4 +1,4 @@
-<!-- current_slice: 66a -->
+<!-- current_slice: 67 -->
 
 # circuit-next
 
@@ -54,15 +54,19 @@ preservation rests on (i) the 14a operator product-direction check and
 `tests/properties/visible/`, a structurally-different non-LLM mechanical
 probe.
 
-See [`PROJECT_STATE.md`](PROJECT_STATE.md) for a live snapshot of where the
-project is, what was just decided, and what comes next.
+See [`PROJECT_STATE.md`](PROJECT_STATE.md) for the live snapshot of where
+the project is. Per-slice narrative history is in
+[`PROJECT_STATE-chronicle.md`](PROJECT_STATE-chronicle.md) (split from
+PROJECT_STATE.md at Slice 67; the chronicle is non-authoritative history,
+live state lives at `## §0` of PROJECT_STATE.md).
 
 ## Layout
 
 ```
 circuit-next/
 ├── CLAUDE.md                # Session hygiene + lane discipline for agents
-├── PROJECT_STATE.md          # Live project state snapshot
+├── PROJECT_STATE.md          # Live project state (§0 Live state section is authoritative)
+├── PROJECT_STATE-chronicle.md # Non-authoritative narrative history (per-slice log)
 ├── bootstrap/                 # Phase 0 evidence drafts
 ├── specs/
 │   ├── methodology/             # Tournament artifacts (inlined Markdown; provenance in frontmatter)

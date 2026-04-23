@@ -1899,6 +1899,56 @@ export function extractCurrentSliceMarker(text) {
   return captured;
 }
 
+// Slice 67 (methodology-trim-arc LIVE-STATE-HELPER) — new helper that parses
+// the `## §0 Live state` section added to PROJECT_STATE.md alongside the
+// existing `<!-- current_slice: N -->` HTML-comment marker. Compat-shim
+// approach: no existing consumer (status-epoch alignment, freshness, arc-
+// close gate, doctor, inventory, contract tests) is rewired to this helper
+// in Slice 67. New consumers introduced in a later slice use the helper.
+//
+// Returns the section content as a string (everything between the `## §0
+// Live state` heading line and the next `## ` heading or end-of-file),
+// trimmed of leading/trailing whitespace. Returns `''` for a section whose
+// content is empty. Returns `null` if the section is absent, malformed
+// (heading typo such as wrong `§` character or missing heading level), or
+// the path cannot be read. When multiple `## §0 Live state` sections
+// appear in the same file (authoring error), returns the first section's
+// content — this matches the `extractCurrentSliceMarker` first-match
+// convention but with looser duplicate handling (the status-epoch marker
+// rejects duplicates; the live-state section has no gate coupling and
+// does not need the same strictness at v0).
+const LIVE_STATE_HEADING_PATTERN = /^## §0 Live state\s*$/;
+const NEXT_SECTION_HEADING_PATTERN = /^## /;
+
+export function readLiveStateSection(markdownPath) {
+  let text;
+  try {
+    text = readFileSync(markdownPath, 'utf-8');
+  } catch {
+    return null;
+  }
+  const lines = text.split('\n');
+  let headingIndex = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (LIVE_STATE_HEADING_PATTERN.test(lines[i])) {
+      headingIndex = i;
+      break;
+    }
+  }
+  if (headingIndex === -1) return null;
+  let endIndex = lines.length;
+  for (let i = headingIndex + 1; i < lines.length; i++) {
+    if (NEXT_SECTION_HEADING_PATTERN.test(lines[i])) {
+      endIndex = i;
+      break;
+    }
+  }
+  return lines
+    .slice(headingIndex + 1, endIndex)
+    .join('\n')
+    .trim();
+}
+
 const STATUS_EPOCH_FILES = ['README.md', 'PROJECT_STATE.md', 'TIER.md'];
 
 export function checkStatusEpochAlignment(rootDir = REPO_ROOT) {
@@ -3982,6 +4032,16 @@ export const FORBIDDEN_PROGRESS_SCAN_FILES = Object.freeze([
   // claim matrix surface.
   'CLAUDE.md',
   'TIER.md',
+  // Slice 67 (methodology-trim-arc LIVE-STATE-HELPER) — chronicle file
+  // relocated from PROJECT_STATE.md narrative body per plan §5.2. The
+  // chronicle top-matter declares it as "non-authoritative history; live
+  // state at §0 of PROJECT_STATE.md", so the firewall treats the entire
+  // file as historical and skips its content (see
+  // projectStateChronicleScopedText below). Listing the chronicle here
+  // keeps it visible to the scan inventory — if a future slice chooses
+  // to scope only part of the chronicle as historical, the enumeration
+  // is already in place.
+  'PROJECT_STATE-chronicle.md',
 ]);
 
 // Slice 47d (Codex HIGH 3 fold-in): arc-close composition review files
@@ -4022,6 +4082,17 @@ function projectStateScopedText(rootDir = REPO_ROOT) {
   const text = readFileSync(path, 'utf-8');
   const idx = text.indexOf('*(Previous slice');
   return idx >= 0 ? text.slice(0, idx) : text;
+}
+
+// Slice 67 (methodology-trim-arc LIVE-STATE-HELPER) — the chronicle file's
+// top-matter declares it as "non-authoritative history; live state at §0
+// of PROJECT_STATE.md" per plan §5.2. The firewall treats the entire
+// chronicle as historical preservation (like PROJECT_STATE.md content
+// after the `*(Previous slice` marker) so relocating narrative history
+// from PROJECT_STATE.md into the chronicle does not retroactively flag
+// content that was previously scoped out of the scan.
+function projectStateChronicleScopedText() {
+  return '';
 }
 
 function lineHasForbiddenProgressCitationGuard(line) {
@@ -4068,6 +4139,8 @@ export function checkForbiddenScalarProgressPhrases(rootDir = REPO_ROOT) {
     let text;
     if (rel === 'PROJECT_STATE.md') {
       text = projectStateScopedText(rootDir) ?? '';
+    } else if (rel === 'PROJECT_STATE-chronicle.md') {
+      text = projectStateChronicleScopedText();
     } else {
       text = readFileSync(path, 'utf-8');
     }
