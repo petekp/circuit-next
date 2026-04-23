@@ -85,11 +85,11 @@ plan-lint rule that catches it.
 | HIGH 6 — Markdown artifact materialization unsafe | HIGH | #21 `artifact-materialization-uses-registered-schema` | CAUGHT | Fires 2× on `report.md` Markdown-shaped dispatch artifacts |
 | MED 7 — Stale audit.mjs target | MED | #4 `stale-symbol-citation` (strengthened this slice) | CAUGHT | Fires 2× — `WORKFLOW_KIND_CANONICAL_SETS` appears only in import/re-export statements in audit.mjs; authoritative definition lives in `scripts/policy/workflow-kind-policy.mjs` |
 | MED 8 — CLI shape mismatch | MED | #13 `cli-invocation-shape-matches` | CAUGHT | Fires 2× — `--scope` + `--` (positional workflow) not in dogfood.ts flags |
-| MED 9 — `/circuit:run` heuristic bug farm | MED | — | NOT CAUGHT | Design-critique finding, not a lint-kind check. Plan's own acceptance of "remove the heuristic; use pass-through" is a decision, not a mechanically-detectable pattern. |
-| MED 10 — Check 23 rule-g premise stale | MED | — | NOT CAUGHT | Cross-surface finding requiring plan-vs-code-reality comparison of audit-rule behavior. Plan-lint operates on plan content only. |
+| MED 9 — `/circuit:run` heuristic bug farm | MED | — | NOT IN SCOPE | Design-critique finding. A specialized rule rejecting natural-language `/circuit:run` routing heuristics absent a classifier substrate could catch it, but is too specific for the durable static-anchor rule set landed at Slice 60. (Codex MED-3 fold-in: phrased as scope choice, not impossibility.) |
+| MED 10 — Check 23 rule-g premise stale | MED | — | NOT IN SCOPE | Cross-surface finding requiring a specialized plan-vs-audit-rule-behavior comparison. Plan-lint already does some repo cross-checks (rule #4, rule #13, schemas, JSON vocab, runtime capability), so this is technically catchable in principle — just not selected for the durable rule set at Slice 60. |
 | MED 11 — Target=review accepted conditionally | MED | #10 `unverified-hypothesis-presented-as-decided` | CAUGHT | Fires on `target: review` frontmatter without matching evidence-census verified row |
 | MED 12 — Parent-plan conditional collapsed without census | MED | #10 (same rule as MED 11) | CAUGHT | Same rule catches both — the symptom (target without census) IS the mechanical form of the "treated parent plan as authority" failure |
-| MED 13 — Plan authorship outran extraction | MED | — | NOT CAUGHT | Meta-finding about process. The entire planning-readiness meta-arc exists to address this. Not mechanically catchable by any single rule. |
+| MED 13 — Plan authorship outran extraction | MED | — | NOT IN SCOPE | Meta-finding about process. The whole planning-readiness meta-arc IS the response. No durable single rule could catch it; the absence of a planning-time gate (the failure being named) is what plan-lint exists to supply. |
 
 ## Ratios
 
@@ -109,15 +109,41 @@ Plan-lint emits 12 additional findings beyond the 10 mapped to Codex items:
 
 These bonus findings show the rule set has coverage beyond just the 13 Codex-enumerated items — it catches generic plan-quality violations not specific to the P2.9 case.
 
-## Gap analysis — what plan-lint does NOT catch
+## Gap analysis — what plan-lint does NOT catch in the Slice 60 rule set
 
-Three of the 13 findings are not mechanically catchable:
+Three of the 13 findings are NOT in the Slice 60 durable static-anchor
+rule set. None of them are literally uncatchable; all are scope choices
+that prioritize generic plan-quality coverage over P2.9-specific
+mechanical detection. Codex slice-60 MED-3 fold-in: the framing is
+"not selected for current durable rule set," not "structurally
+uncatchable."
 
-1. **MED 9 (`/circuit:run` verb-match heuristic):** a design-critique finding. Whether a routing heuristic is "a bug farm" is a judgement call about taste + future maintainability. Mechanical lint cannot encode "this will accumulate bugs" — that requires human or adversarial-model review.
-2. **MED 10 (Check 23 rule-g premise stale):** a cross-surface finding comparing the plan's factual claim about audit-rule behavior to the actual audit-rule code. Detecting this would require plan-lint to interpret plan claims about code state and check them against the code — which is effectively "verify every assertion in the plan against repo reality." Not in scope.
-3. **MED 13 (plan authorship outran extraction):** a meta-finding about process discipline. The entire meta-arc's existence IS the response to this finding; no single rule could catch it, since it's about the ABSENCE of a planning-time gate, which is what plan-lint now supplies.
+1. **MED 9 (`/circuit:run` verb-match heuristic):** a design-critique
+   finding. A specialized rule rejecting natural-language
+   `/circuit:run` routing heuristics absent a classifier substrate
+   COULD catch it, but is too specific to add as a durable rule. Whether
+   a routing heuristic is "a bug farm" is a judgement call that may
+   need adversarial-model review rather than static lint. Re-evaluate
+   in a future slice if similar failures recur.
+2. **MED 10 (Check 23 rule-g premise stale):** a cross-surface finding
+   comparing the plan's factual claim about audit-rule behavior to the
+   actual audit-rule code. Plan-lint already does some repo cross-
+   checks (rule #4 ownership, rule #13 CLI flags, runtime capability
+   in rule #20). A specialized rule could compare audit-rule scope
+   claims to scripts/audit.mjs source. Not selected for Slice 60 —
+   the rule would be brittle (audit.mjs evolves frequently) and the
+   benefit-to-maintenance ratio is unclear at one observed instance.
+3. **MED 13 (plan authorship outran extraction):** a meta-finding about
+   process discipline. The whole planning-readiness meta-arc IS the
+   response — no single rule could catch the absence of a planning-time
+   gate (which IS what plan-lint supplies). The mechanical layer is the
+   process layer for this failure class.
 
-These gaps are accepted by the Slice 60 gate design: the retroactive threshold is `HIGH 100% + combined ≥77%`, specifically because some findings are structurally outside the reach of static plan-lint.
+These gaps are accepted by the Slice 60 gate design: the retroactive
+threshold is `HIGH 100% + combined ≥77%`, recognizing that the
+durable static-anchor rule set covers the operator-signoff-blocking
+tier completely and most of the supporting MEDs without becoming
+brittle.
 
 ## Acceptance
 

@@ -344,6 +344,50 @@ acceptance_evidence: test
   });
 });
 
+describe('plan-lint — rule #4 type/interface/enum support (Slice-60a Codex MED-1 regression test)', () => {
+  // Slice-60a fold-in: Codex MED-1 noted that rule #4's definition
+  // patterns covered only const/let/var/function/class. TypeScript
+  // exports of `type`, `interface`, and `enum` are real definitions
+  // and must satisfy the ownership check. These tests exercise each
+  // form by writing a temporary plan that cites a real type-only
+  // export from the repo.
+  it('does not fire on `export type` citation (e.g. AuditCheckResult in scripts/audit.d.mts)', async () => {
+    const { mkdtempSync, writeFileSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const dir = mkdtempSync(join(tmpdir(), 'rule-4-type-'));
+    const planPath = join(dir, 'plan.md');
+    writeFileSync(
+      planPath,
+      `---
+plan: rule-4-type-test
+status: evidence-draft
+revision: 01
+opened_at: 2026-04-23
+base_commit: a4de1d57230e82fd68e1164f9534f3aed8564943
+target: rule-4-type
+---
+
+# Rule 4 type test
+
+## Why this plan exists
+
+Verify type/interface/enum definitions satisfy rule #4.
+
+## §1 — Evidence census
+
+| # | Claim | Status |
+|---|---|---|
+| E1 | Test fixture | verified |
+
+## §2 — Body
+
+Cite \`scripts/audit.d.mts::AuditCheckResult\` here.
+`,
+    );
+    expect(lintFindings(planPath)).not.toContain('plan-lint.stale-symbol-citation');
+  });
+});
+
 describe('plan-lint — rule #16 (untracked-plan-cannot-claim-post-draft-status)', () => {
   it('fires red when an untracked plan claims status: challenger-pending', async () => {
     // Rule #16 requires an actually-untracked file to test. We write to a

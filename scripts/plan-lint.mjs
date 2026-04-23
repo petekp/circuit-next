@@ -459,6 +459,16 @@ function rule4StaleSymbolCitation(plan) {
       // export const / function definitions — their "definitions" are
       // keys. For a `.json` citation, test for the symbol as a JSON
       // key ("symbol":) rather than as a code-level definition.
+      //
+      // Slice-60a (Codex LOW-1 fold-in): documented as opportunistic
+      // key-presence only. This check accepts ANY `"symbol":` occurrence
+      // in the file, including nested keys inside large JSON/schema
+      // files. Top-level ownership of the key is NOT verified.
+      // Strengthening to require top-level / nested-path syntax is a
+      // potential future hardening; for now plans citing
+      // `file.json::topkey` should match the top-level key by
+      // convention. Citations of nested keys via `file.json::nestedkey`
+      // pass too, which is intentionally permissive at this slice.
       if (relPath.endsWith('.json')) {
         const jsonKeyRe = new RegExp(`"${symbol}"\\s*:`);
         if (!jsonKeyRe.test(contents)) {
@@ -494,6 +504,16 @@ function rule4StaleSymbolCitation(plan) {
         new RegExp(`^\\s*export\\s+function\\s+${symbol}\\b`, 'm'),
         new RegExp(`^\\s*export\\s+async\\s+function\\s+${symbol}\\b`, 'm'),
         new RegExp(`^\\s*export\\s+class\\s+${symbol}\\b`, 'm'),
+        // Slice-60a (Codex MED-1 fold-in): TypeScript type/interface/enum
+        // declarations are real definitions; rule #4 must accept them as
+        // ownership-conferring. Without these, citations like
+        // `scripts/audit.d.mts::AuditCheckResult` falsely fired stale-symbol
+        // even though the file owns the type.
+        new RegExp(`^\\s*export\\s+type\\s+${symbol}\\b`, 'm'),
+        new RegExp(`^\\s*export\\s+interface\\s+${symbol}\\b`, 'm'),
+        new RegExp(`^\\s*export\\s+enum\\s+${symbol}\\b`, 'm'),
+        new RegExp(`^\\s*export\\s+default\\s+function\\s+${symbol}\\b`, 'm'),
+        new RegExp(`^\\s*export\\s+default\\s+class\\s+${symbol}\\b`, 'm'),
         // Note: `export { X }` re-export pattern is INTENTIONALLY OMITTED.
         // Re-exports are pass-through ownership only; the authoritative
         // definition lives at the original declaration site. Per Codex
@@ -505,6 +525,9 @@ function rule4StaleSymbolCitation(plan) {
         new RegExp(`^\\s*function\\s+${symbol}\\b`, 'm'),
         new RegExp(`^\\s*async\\s+function\\s+${symbol}\\b`, 'm'),
         new RegExp(`^\\s*class\\s+${symbol}\\b`, 'm'),
+        new RegExp(`^\\s*type\\s+${symbol}\\b`, 'm'),
+        new RegExp(`^\\s*interface\\s+${symbol}\\b`, 'm'),
+        new RegExp(`^\\s*enum\\s+${symbol}\\b`, 'm'),
       ];
       const definedHere = definitionPatterns.some((re) => re.test(contents));
       if (!definedHere) {

@@ -436,7 +436,7 @@ Plan-lint rules are `static-anchor`-enforced.
 | 1 | `plan-lint.evidence-census-present` | Plan missing §Evidence census (or §1 equivalent) with verified / inferred / unknown-blocking vocabulary | static-anchor |
 | 2 | `plan-lint.tbd-in-acceptance-evidence` | TBD / TODO in any Acceptance-evidence block | static-anchor |
 | 3 | `plan-lint.test-path-extension` | Test deliverable paths ending in `.md` when real tests are `.test.ts` (ONLY in Deliverable / Acceptance sections, NOT in Failure-mode narrative §2 per Slice 58 section-aware scoping) | static-anchor |
-| 4 | `plan-lint.stale-symbol-citation` | `path/file.ext:Name` reference where file doesn't exist OR symbol not present at cited location | static-anchor |
+| 4 | `plan-lint.stale-symbol-citation` | `path/file.ext:Name` reference where file doesn't exist OR symbol not defined/owned at cited location (re-exports + import-only appearances NOT counted; JSON key-presence is opportunistic per Slice-60a strengthening) | static-anchor |
 | 5 | `plan-lint.arc-close-claim-without-gate` | Arc-close-criterion-satisfied claims without naming the audit gate | static-anchor |
 | 6 | `plan-lint.signoff-while-pending` | `operator_signoff: ready` while `challenger_status: pending` or missing | static-anchor |
 | 9 | `plan-lint.contract-shaped-payload-without-characterization` | Plan declaring artifact ids, invariant text, verdict vocabulary, or CLI shape for a successor-to-live surface without a characterization slice landing first in arc ordering | static-anchor |

@@ -148,6 +148,20 @@ reference.
 
 **Audit after Slice 60:** 33 green / 2 yellow / 0 red.
 
+**Slice 60a fold-ins (same session) from Codex ACCEPT-WITH-FOLD-INS:**
+- rule #4 extended to accept `export type / interface / enum`
+  definitions (Codex caught that `scripts/audit.d.mts::AuditCheckResult`
+  would false-positive under my original pattern list).
+- ADR-0010 + meta-arc plan's rule #4 description updated from
+  "symbol not present" to "symbol not defined/owned" to match new
+  semantics.
+- retroactive review gap-analysis language softened from "not
+  mechanically catchable" to "not in current durable scope"
+  (Codex MED-3 — more honest framing).
+- JSON-key check documented as opportunistic / non-ownership-aware
+  (Codex LOW-1).
+- Regression test added for type citation.
+
 **Next:** Slice 61 — add the user-memory rule + CLAUDE.md
 §Plan-authoring-discipline subsection.
 

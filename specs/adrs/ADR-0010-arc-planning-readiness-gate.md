@@ -228,7 +228,7 @@ standalone tool supports on-demand pre-commit lint.
 | 1 | `plan-lint.evidence-census-present` | static-anchor | Plan missing §Evidence census (or §1 equivalent) with verified / inferred / unknown-blocking vocabulary. |
 | 2 | `plan-lint.tbd-in-acceptance-evidence` | static-anchor | TBD / TODO in any Acceptance-evidence block. |
 | 3 | `plan-lint.test-path-extension` | static-anchor | Test deliverable paths ending in `.md` when real tests are `.test.ts`. Section-aware: skips matches in §Failure-mode narrative sections. |
-| 4 | `plan-lint.stale-symbol-citation` | static-anchor | `path/file.ext:Name` reference where file doesn't exist OR symbol not present at cited location. |
+| 4 | `plan-lint.stale-symbol-citation` | static-anchor | `path/file.ext:Name` reference where file doesn't exist OR symbol not defined/owned at cited location. Slice-60a strengthening: re-exports (`export { X };`) and import-only appearances do NOT satisfy the rule — the cited file must be the authoritative declaration site (`export const/let/var/function/class/type/interface/enum`). For `.json` files, key-presence is checked opportunistically (top-level vs nested ownership not yet enforced). |
 | 5 | `plan-lint.arc-close-claim-without-gate` | static-anchor | Arc-close-criterion-satisfied claims without naming the audit gate that enforces satisfaction. |
 | 6 | `plan-lint.signoff-while-pending` | static-anchor | `operator_signoff: ready` while `challenger_status: pending` or missing. |
 | 7 | `plan-lint.invariant-without-enforcement-layer` | static-anchor | Invariant without `enforcement_layer:` from the authoritative set in §4. Section-aware: skips rule-description sections. |
