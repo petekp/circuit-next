@@ -1,11 +1,13 @@
 ---
 plan: planning-readiness-meta-arc
-status: challenger-pending
+status: challenger-cleared
 revision: 08
 opened_at: 2026-04-23
 revised_at: 2026-04-23
 opened_in_session: post-p2-9-codex-meta-retrospective
 revised_in_session: post-codex-challenger-07-foldin-chronology-restructure
+cleared_in_session: post-codex-challenger-08-accept
+cleared_at: 2026-04-23
 base_commit: defe76e
 target: planning discipline (not a workflow; this is methodology)
 prior_challenger_passes:
@@ -38,6 +40,9 @@ prior_challenger_passes:
     chronology-drift class as pass 06 — completed commit-item
     listed as "next step." Revision 08 restructures §8 to state-
     protocol form eliminating the drift pattern entirely.)
+  - specs/reviews/planning-readiness-meta-arc-codex-challenger-08.md
+    (verdict ACCEPT — zero findings; plan may transition to
+    challenger-cleared. Convergence achieved after 8 passes.)
 trigger: |
   P2.9 plan draft (specs/plans/p2-9-second-workflow.md, untracked)
   reached operator decision point carrying multiple material flaws
