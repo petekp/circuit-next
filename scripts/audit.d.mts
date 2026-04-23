@@ -389,6 +389,15 @@ export const ADR_0007_FORBIDDEN_PROGRESS_PATTERNS: readonly {
   readonly label: string;
 }[];
 export const FORBIDDEN_PROGRESS_SCAN_FILES: readonly string[];
+
+// Slice 67a (Codex MED-1 fold-in) — the subset of
+// FORBIDDEN_PROGRESS_SCAN_FILES that are enumerated but whose scoped
+// text helper returns '' by design (content-exempt). Today this set
+// contains only PROJECT_STATE-chronicle.md; the scan inventory still
+// lists the file for drift-visibility, but the firewall's status
+// string explicitly distinguishes content-scanned from content-exempt
+// so "15 scanned" no longer overstates coverage.
+export const FORBIDDEN_PROGRESS_CONTENT_EXEMPT_FILES: ReadonlySet<string>;
 // Slice 47d (Codex HIGH 3 fold-in): glob-matched scan additions for
 // arc-close composition review files. Composed with FORBIDDEN_PROGRESS_SCAN_FILES
 // at enumeration time.

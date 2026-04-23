@@ -1,4 +1,4 @@
-<!-- current_slice: 67 -->
+<!-- current_slice: 67a -->
 
 # PROJECT_STATE — circuit-next
 
@@ -8,7 +8,7 @@ phase block with CC#14 retarget context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 67
+- **current_slice:** 67a
 - **current_arc:** methodology-trim-arc
 - **current_phase:** Phase 2 — Implementation (continuing)
 

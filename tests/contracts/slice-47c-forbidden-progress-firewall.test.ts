@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ADR_0007_FORBIDDEN_PROGRESS_PATTERNS,
+  FORBIDDEN_PROGRESS_CONTENT_EXEMPT_FILES,
   FORBIDDEN_PROGRESS_SCAN_FILES,
   checkForbiddenScalarProgressPhrases,
 } from '../../scripts/audit.mjs';
@@ -282,5 +283,78 @@ describe('Check 34 — ADR-0007 §3 forbidden scalar-progress firewall (Slice 47
     expect(FORBIDDEN_PROGRESS_SCAN_FILES).toContain('specs/ratchet-floor.json');
     expect(FORBIDDEN_PROGRESS_SCAN_FILES).toContain('specs/plans/phase-2-implementation.md');
     expect(FORBIDDEN_PROGRESS_SCAN_FILES).toContain('specs/plans/phase-1-close-revised.md');
+  });
+
+  // Slice 67a (Codex MED-1 fold-in) — the chronicle file is enumerated
+  // in the scan inventory but its content is scoped out by design. These
+  // tests pin (a) the content-exempt set membership, (b) the honest
+  // "enumerated vs content-scanned" split in the green status detail,
+  // and (c) that forbidden phrases living inside the chronicle's
+  // historical narrative do NOT trip the firewall (the whole point of
+  // relocating `*(Previous slice` history into PROJECT_STATE-chronicle.md).
+  it('PROJECT_STATE-chronicle.md is in FORBIDDEN_PROGRESS_SCAN_FILES and in the content-exempt set', () => {
+    expect(FORBIDDEN_PROGRESS_SCAN_FILES).toContain('PROJECT_STATE-chronicle.md');
+    expect(FORBIDDEN_PROGRESS_CONTENT_EXEMPT_FILES.has('PROJECT_STATE-chronicle.md')).toBe(true);
+  });
+
+  it("green status detail distinguishes 'enumerated', 'content-scanned', and 'content-exempt'", () => {
+    withTempRepo((root) => {
+      writeFile(root, 'PROJECT_STATE.md', '# state\nCC#P2-1 active — satisfied.\n');
+      writeFile(root, 'README.md', '# circuit-next\n');
+      writeFile(
+        root,
+        'specs/ratchet-floor.json',
+        JSON.stringify({ floors: { contract_test_count: 1 }, notes: 'clean' }),
+      );
+      writeFile(root, 'specs/plans/phase-2-implementation.md', 'Per-criterion close status only.');
+      writeFile(root, 'specs/plans/phase-1-close-revised.md', 'No forbidden phrases.');
+      writeFile(root, 'specs/plans/slice-47-hardening-foldins.md', 'Plan body.');
+      writeFile(root, 'CLAUDE.md', 'Methodology authority.\n');
+      writeFile(root, 'TIER.md', 'Claim matrix.\n');
+      writeFile(
+        root,
+        'PROJECT_STATE-chronicle.md',
+        'Non-authoritative history. substantially complete appears here but is exempt.\n',
+      );
+      const result = checkForbiddenScalarProgressPhrases(root);
+      expect(result.level).toBe('green');
+      expect(result.detail).toMatch(/\benumerated\b/);
+      expect(result.detail).toMatch(/\bcontent-scanned\b/);
+      expect(result.detail).toMatch(/\bcontent-exempt\b/);
+    });
+  });
+
+  it('forbidden phrases inside PROJECT_STATE-chronicle.md content do NOT trip the firewall (content-exempt by design)', () => {
+    withTempRepo((root) => {
+      writeFile(root, 'PROJECT_STATE.md', '# state\nCC#P2-1 active — satisfied.\n');
+      writeFile(root, 'README.md', '# circuit-next\n');
+      writeFile(
+        root,
+        'specs/ratchet-floor.json',
+        JSON.stringify({ floors: { contract_test_count: 1 }, notes: 'clean' }),
+      );
+      writeFile(root, 'specs/plans/phase-2-implementation.md', 'Per-criterion.');
+      writeFile(root, 'specs/plans/phase-1-close-revised.md', 'Clean.');
+      writeFile(root, 'specs/plans/slice-47-hardening-foldins.md', 'Body.');
+      writeFile(root, 'CLAUDE.md', 'Authority.\n');
+      writeFile(root, 'TIER.md', 'Matrix.\n');
+      // Forbidden phrases in the chronicle's body — they would fire red
+      // if the chronicle were content-scanned. The content-exempt treatment
+      // skips them.
+      writeFile(
+        root,
+        'PROJECT_STATE-chronicle.md',
+        [
+          '# PROJECT_STATE chronicle',
+          '',
+          'Non-authoritative history.',
+          '',
+          'Phase 2 is 7/8 complete — substantially complete; aggregate green.',
+          'Close to done on the 3/8 remaining.',
+        ].join('\n'),
+      );
+      const result = checkForbiddenScalarProgressPhrases(root);
+      expect(result.level).toBe('green');
+    });
   });
 });

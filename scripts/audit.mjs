@@ -4128,9 +4128,23 @@ function enumerateForbiddenProgressScanPaths(rootDir = REPO_ROOT) {
   return fixed;
 }
 
+// Slice 67a (Codex MED-1 fold-in): files in FORBIDDEN_PROGRESS_SCAN_FILES
+// that intentionally contribute zero content to the firewall scan. These
+// files are enumerated (listed in the scan inventory) but their scoped-
+// text helper returns '' by design — chronicle's entire body is declared
+// non-authoritative history in its own top-matter, so the firewall
+// treats it as outside scope. Listing without scanning is honest only
+// if the status line distinguishes enumerated-and-scanned from
+// enumerated-but-content-exempt; this set powers that distinction.
+export const FORBIDDEN_PROGRESS_CONTENT_EXEMPT_FILES = Object.freeze(
+  new Set(['PROJECT_STATE-chronicle.md']),
+);
+
 export function checkForbiddenScalarProgressPhrases(rootDir = REPO_ROOT) {
   const violations = [];
   const scanPaths = enumerateForbiddenProgressScanPaths(rootDir);
+  let contentScannedCount = 0;
+  let contentExemptCount = 0;
 
   for (const rel of scanPaths) {
     const path = join(rootDir, rel);
@@ -4139,10 +4153,13 @@ export function checkForbiddenScalarProgressPhrases(rootDir = REPO_ROOT) {
     let text;
     if (rel === 'PROJECT_STATE.md') {
       text = projectStateScopedText(rootDir) ?? '';
+      contentScannedCount++;
     } else if (rel === 'PROJECT_STATE-chronicle.md') {
       text = projectStateChronicleScopedText();
+      contentExemptCount++;
     } else {
       text = readFileSync(path, 'utf-8');
+      contentScannedCount++;
     }
 
     const lines = text.split('\n');
@@ -4160,9 +4177,14 @@ export function checkForbiddenScalarProgressPhrases(rootDir = REPO_ROOT) {
   }
 
   if (violations.length === 0) {
+    const enumeratedCount = scanPaths.length;
+    const exemptDetail =
+      contentExemptCount > 0
+        ? `; ${contentExemptCount} content-exempt (declared non-authoritative; content-scan skipped by design — see FORBIDDEN_PROGRESS_CONTENT_EXEMPT_FILES)`
+        : '';
     return {
       level: 'green',
-      detail: `${scanPaths.length} live state files scanned for ADR-0007 §3 forbidden scalar-progress phrases (fixed + glob-matched); clean`,
+      detail: `${enumeratedCount} live state files enumerated for ADR-0007 §3 forbidden scalar-progress phrases (fixed + glob-matched): ${contentScannedCount} content-scanned${exemptDetail}; clean`,
     };
   }
 

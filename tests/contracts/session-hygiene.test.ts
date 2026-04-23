@@ -106,6 +106,36 @@ describe('session-hygiene — SESSION-I2 static-documentation anchor (README ↔
       `README Phase=${readmePhase}; PROJECT_STATE Phase=${psPhase}. Both files must agree; update whichever was forgotten in the last slice.`,
     ).toBe(psPhase);
   });
+
+  // Slice 67a (Codex LOW-1 fold-in) — after the Slice 67 PROJECT_STATE
+  // split, PROJECT_STATE.md carries the phase value on TWO live surfaces
+  // simultaneously: the retained `**Phase:** <n>` line (load-bearing
+  // compat surface for checkPhaseDrift + SESSION-I2) and the new
+  // `- **current_phase:** Phase <n> — ...` bullet inside `## §0 Live
+  // state`. Without a binding, they can drift silently. This test binds
+  // them: whatever phase number `**Phase:**` declares must be the same
+  // phase number the `current_phase` bullet declares.
+  it('PROJECT_STATE.md `**Phase:**` line and `§0 current_phase` bullet declare the same phase number (Slice 67a LOW-1 binding)', () => {
+    const text = readFileSync(PROJECT_STATE_MD, 'utf-8');
+    const topPhase = extractPhase(text);
+    // The `current_phase` bullet lives under `## §0 Live state`; match
+    // it directly. Format: `- **current_phase:** Phase 2 — ...`. Accept
+    // case variants to stay robust.
+    const s0Match = text.match(/- \*\*current_phase:\*\*\s*Phase\s+([0-9]+(?:\.[0-9]+)?)/i);
+    const s0Phase = s0Match ? s0Match[1] : null;
+    expect(
+      topPhase,
+      'PROJECT_STATE.md must carry a `**Phase:** <n>` line; it is load-bearing for checkPhaseDrift + SESSION-I2.',
+    ).not.toBeNull();
+    expect(
+      s0Phase,
+      'PROJECT_STATE.md `## §0 Live state` section must declare `- **current_phase:** Phase <n> — ...` (Slice 67 §0 field; Slice 67a LOW-1 binding).',
+    ).not.toBeNull();
+    expect(
+      s0Phase,
+      `\`**Phase:**\` line Phase=${topPhase}; \`§0 current_phase\` bullet Phase=${s0Phase}. Both surfaces must declare the same phase number; update both or neither when phase advances.`,
+    ).toBe(topPhase);
+  });
 });
 
 // SESSION-I3 — Compaction disabled. Prose-documented rather than runtime-
