@@ -9,10 +9,10 @@ depends_on:
   - scripts/audit.mjs
 enforced_by:
   - scripts/audit.mjs (PROJECT_STATE freshness + phase consistency + framing triplet + lane declaration + citation rule + .circuit/ gitignore)
-  - CLAUDE.md §Hard invariants #10 (CLAUDE.md ≤ 300 lines)
+  - CLAUDE.md §Hard invariants #10 (CLAUDE.md ≤ 450 lines per ADR-0011; raised from 300 at Slice 64)
   - CLAUDE.md §Session hygiene (compaction disabled; slice ≤ 30 min)
 planned_tests:
-  - tests/contracts/session-hygiene.test.ts (LANDED v0.1 in Slice 14 — asserts CLAUDE.md wc -l ≤ 300; README/PROJECT_STATE phase alignment; .circuit/ ignored unless allowlisted). v0.2 Tier-2+ promotions owed per §Evolution.
+  - tests/contracts/session-hygiene.test.ts (LANDED v0.1 in Slice 14 — asserts CLAUDE.md wc -l ≤ 450 per ADR-0011; README/PROJECT_STATE phase alignment; .circuit/ ignored unless allowlisted). v0.2 Tier-2+ promotions owed per §Evolution.
 invariant_ids: [SESSION-I1, SESSION-I2, SESSION-I3, SESSION-I4, SESSION-I5, SESSION-I6]
 property_ids: []
 ---
@@ -34,16 +34,17 @@ agent) drive the repo across session boundaries**.
 
 ## Invariants
 
-- **SESSION-I1 — CLAUDE.md stays ≤ 300 lines.** Every line in CLAUDE.md
-  enters the context of every session. Past 300 lines, the primary
-  instruction file starts eating into cache budget the slice actually
-  needs; worse, later revisions accumulate contradictions because
-  nobody can hold the whole file in head at once. Longer content MUST
-  go in `specs/` with a pointer from CLAUDE.md. Enforced today by
-  manual discipline + the hard-invariant line in CLAUDE.md itself
-  (line 10 of §Hard invariants). The planned test formalizes it.
-  Failure mode: "why is this instruction being ignored" — answer is
-  usually "it rolled out of the primary prompt budget."
+- **SESSION-I1 — CLAUDE.md stays ≤ 450 lines (raised from 300 by
+  ADR-0011 at Slice 64 after Slice 61 Codex semantic-loss evidence).**
+  Every line in CLAUDE.md enters the context of every session. Past
+  the cap, the primary instruction file starts eating into cache
+  budget the slice actually needs; worse, later revisions accumulate
+  contradictions because nobody can hold the whole file in head at
+  once. Longer content MUST go in `specs/` with a pointer from
+  CLAUDE.md. Enforced today by the runtime contract test plus the
+  hard-invariant line in CLAUDE.md itself (line 10 of §Hard
+  invariants). Failure mode: "why is this instruction being ignored"
+  — answer is usually "it rolled out of the primary prompt budget."
 
 - **SESSION-I2 — PROJECT_STATE.md is the live session-to-session
   snapshot.** When a slice closes, PROJECT_STATE.md is updated in the
@@ -141,7 +142,8 @@ container work, not a nice-to-have.
 
 ## Cross-references
 
-- `CLAUDE.md` §Hard invariants #10 (CLAUDE.md ≤ 300 lines).
+- `CLAUDE.md` §Hard invariants #10 (CLAUDE.md ≤ 450 lines per
+  ADR-0011; raised from 300 at Slice 64).
 - `CLAUDE.md` §Session hygiene.
 - `specs/adrs/ADR-0001-methodology-adoption.md` §Session hygiene
   protocol.

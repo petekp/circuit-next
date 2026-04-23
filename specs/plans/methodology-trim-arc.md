@@ -143,19 +143,34 @@ Future ADRs (≥ ADR-0011): `## Decision` ≤80 lines; `## Appendix` unlimited. 
 
 ### 2.4 Structured commit trailer
 
-`.gitmessage`:
+`.gitmessage` carries the trailer with EXACT-LITERAL placeholders that
+match `scripts/audit.mjs` `LANES` and the `Isolation:` posture set
+(case-sensitive, verbatim):
+
 ```
 <subject>
 
 <body prose>
 
-Lane: <ratchet-advance|equivalence-refactor|migration-escrow|discovery|disposable|break-glass>
-Isolation: <container|distinct-uid|none-tier-0-deferred>
+Lane: <Ratchet-Advance | Equivalence Refactor | Migration Escrow | Discovery | Disposable | Break-Glass>
+Isolation: <policy-compliant (no implementer separation required) | re-deferred per ADR-0007 CC#P2-7>
 Arc-Ref: <arc-slug or N/A>
 Signoff-Predecessor: <sha or N/A>
 ```
 
-`scripts/audit.mjs` Checks 7+8 prefer trailer; prose fallback yellow for pre-arc commits. Cures two current reds on `e3ecd3b`.
+Plus — operator-signoff transition commits ONLY — the snake_case line
+Check 36 binds:
+
+```
+operator_signoff_predecessor: <short-sha>
+```
+
+The existing Check 1 (Lane declaration) and Check 2 (framing triplet)
+already parse the trailer shape via `Lane:` + `Failure mode:` /
+`Acceptance evidence:` / `Alternate framing:` literals. No audit code
+change lands with this template; template-authored commits inherit
+current behavior. Review-only / plan-prep commits skip the triplet by
+design — Check 2 yellows them, which is the intended pre-arc signal.
 
 ### 2.5 CLAUDE.md cap 300 → 450 (ADR-0011)
 

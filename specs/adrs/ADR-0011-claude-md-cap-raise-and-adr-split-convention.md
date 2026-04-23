@@ -36,13 +36,18 @@ amends:
    the justification.
 
 2. **Adopt a Decision/Appendix split convention for ADRs ≥ 0011.**
-   Every ADR from this one forward uses `## Decision` capped at ≤80
-   lines (the operator-facing surface that must fit in head in one
-   read) and an unlimited `## Appendix` for derivation, evidence,
-   alternatives considered, and long-form context. ADRs 0001–0010 are
-   grandfathered; reshaping them is explicitly out of scope.
-   Enforcement is review-level (no audit check); this ADR is the
-   first worked example of the convention.
+   Every ADR from this one forward uses EXACTLY two top-level (`##`)
+   body sections after the frontmatter: (a) `## Decision` — ≤80 lines,
+   carrying the operator-facing rule that must fit in head in one
+   read; (b) `## Appendix` — unlimited, holding rationale, evidence,
+   consequences, derivation, and alternatives considered. No other
+   top-level `## ` headings are permitted post-frontmatter; what
+   previous ADRs split into separate `## Rationale`, `## Consequences`,
+   `## Context`, etc. moves under `## Appendix` as nested `###`
+   subsections. ADRs 0001–0010 are grandfathered; reshaping them is
+   explicitly out of scope. Enforcement is review-level (no audit
+   check); this ADR is the first worked example of the convention
+   and self-hosts it.
 
 3. **Contract-relaxation declaration.** Per CLAUDE.md Hard Invariant
    #6, raising a ratchet floor or relaxing a contract requires a
@@ -51,7 +56,9 @@ amends:
    challenger pass (artifact under `specs/reviews/`) is the required
    challenger covering this ADR.
 
-## Rationale
+## Appendix
+
+### Rationale
 
 Evidence for the cap raise comes from `specs/reviews/arc-slice-61-codex.md`:
 
@@ -78,18 +85,15 @@ audit a decision) while allowing derivation and evidence to live in
 the same file under a clear boundary. A reader who wants the decision
 reads Decision; a reader who wants the receipts reads Appendix.
 
-## Consequences
+### Consequences
 
 - Hard Invariant #10 in CLAUDE.md now reads "450" where it read "300".
-- Contract test threshold updated; regex accepts either 300 or 450 as
-  the self-named invariant during the transition (defensive; can be
-  tightened post-arc once all authority surfaces settle on 450).
+- Contract test threshold updated; regex now requires the 450 literal.
 - Specs prose that cites the old 300 as a historical fact stays; prose
   that cites it as the current rule is updated.
-- Future ADRs (≥ 0011) use ## Decision ≤80 / ## Appendix convention.
+- Future ADRs (≥ 0011) use the two-section `## Decision` ≤80 +
+  `## Appendix` structure; no other top-level `##` body sections.
 - No authority-graph change; ADR-0001 and ADR-0003 are untouched.
-
-## Appendix
 
 ### Decision-surface line audit for this ADR
 

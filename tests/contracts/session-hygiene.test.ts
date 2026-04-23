@@ -35,10 +35,12 @@ function extractPhase(text: string): string | null {
   return null;
 }
 
-// SESSION-I1 — CLAUDE.md stays ≤ 300 lines. Every line enters the primary
-// instruction budget of every session. Past 300 lines, later revisions
-// accumulate contradictions because nobody holds the whole file in head at
-// once. The CLAUDE.md itself carries this as Hard Invariant #10.
+// SESSION-I1 — CLAUDE.md stays ≤ 450 lines (cap raised 300 → 450 by
+// ADR-0011 at Slice 64 after Slice 61 Codex semantic-loss evidence).
+// Every line enters the primary instruction budget of every session.
+// Past the cap, later revisions accumulate contradictions because
+// nobody holds the whole file in head at once. The CLAUDE.md itself
+// carries this as Hard Invariant #10.
 describe('session-hygiene — SESSION-I1 CLAUDE.md line budget', () => {
   it('CLAUDE.md exists', () => {
     expect(existsSync(CLAUDE_MD)).toBe(true);
