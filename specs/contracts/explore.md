@@ -565,6 +565,103 @@ this rule: both dispatch steps declare `writes.artifact` alongside
 invariant binds at P2.4 (adapter implementation) + P2.5
 (end-to-end parity test).
 
+**Dispatch gate-evaluation semantics (Slice 53 Codex H14 fold-in).**
+The `ResultVerdictGate` declared on each dispatch step is evaluated
+by the runtime against the adapter's `result_body`. The evaluation
+rule at v0:
+
+1. `JSON.parse(dispatchResult.result_body)` — must yield a JSON
+   object (not array, not null, not a primitive).
+2. The parsed object MUST carry a top-level `verdict` field whose
+   value is a non-empty string. The membership check is **exact
+   string equality, no trimming, no case folding** — `"OK"` is not
+   `"ok"`, `" ok "` is not `"ok"`. Adapter prompts (see
+   `composeDispatchPrompt` in `src/runtime/runner.ts`) include the
+   accepted-verdicts list verbatim so the adapter can match against
+   the canonical strings.
+3. The verdict string MUST appear in `step.gate.pass`.
+
+If all three hold, the runtime sets `dispatch.completed.verdict` to
+the parsed verdict, materializes the canonical artifact at
+`writes.artifact.path` (when declared), emits `gate.evaluated` with
+`outcome: 'pass'`, and follows `routes.pass`. If ANY fail, the
+runtime emits `gate.evaluated` with `outcome: 'fail'` and a
+human-readable `reason` naming the cause (parse error, missing /
+non-string verdict field, or verdict-not-in-gate.pass with the
+observed verdict recorded), then emits `step.aborted` with the same
+reason, then emits `run.closed` with `outcome: 'aborted'` and the
+reason carried on the close event. The user-visible
+`<run-root>/artifacts/result.json` mirrors the same outcome and
+reason on `RunResult.outcome` and `RunResult.reason` (RESULT-I4 —
+Slice 53 Codex H1 fold-in). The dispatch step does NOT advance —
+`step.completed` is not emitted for the aborted step, and
+`routes.pass` is not taken.
+
+**Event ordering at v0.** The runtime sequences events in this
+order on EVERY dispatch step (pass or fail):
+
+1. `step.entered`
+2. The five-event dispatch transcript via `materializeDispatch`:
+   `dispatch.started` → `dispatch.request` → `dispatch.receipt` →
+   `dispatch.result` → `dispatch.completed`. The transcript writes
+   the `request`, `receipt`, and `result` files unconditionally
+   (durable evidence).
+3. THEN, on the runner side: `gate.evaluated` (outcome=pass on
+   admission; outcome=fail on rejection).
+4. On pass: `step.completed` with `route_taken='pass'`. On fail:
+   `step.aborted` with the same reason as `gate.evaluated.reason`.
+
+The verdict-evaluation decision happens inside the runner BEFORE
+the materializer is invoked (so `dispatch.completed.verdict`
+carries the parsed verdict on pass and the observed verdict on
+verdict-not-in-pass-set rejection); the on-disk artifact write is
+gated on pass per ADR-0008 §Decision.3a (Slice 53 Codex HIGH 2
+fold-in: the canonical artifact at `writes.artifact.path` is NOT
+written when the gate fails — only the transcript persists).
+
+**Runtime sentinels on `dispatch.completed.verdict`.**
+`DispatchCompletedEvent.verdict` is `z.string().min(1)` so the
+slot must always carry a non-empty string. On gate fail with no
+observable verdict (unparseable JSON or parseable JSON without a
+string `verdict` field), the runtime injects the sentinel literal
+`'<no-verdict>'`. **This sentinel is runtime-injected, not
+adapter-declared.** A consumer that reads
+`dispatch.completed.verdict` SHOULD treat the
+`'<no-verdict>'` literal as "no verdict was observable from
+adapter output." The sentinel is honest at v0 (the alternative —
+omitting the field — would require a schema bump that is out of
+Slice 53 scope); a future schema iteration may distinguish
+adapter-declared vs runtime-injected verdicts via an additional
+`verdict_source` discriminator. This is the Codex MED 1
+disclosure for Slice 53 and is registered as a deferred-with-
+named-trigger item for Slice 55 arc-close (the trigger is the
+first downstream consumer that needs to disambiguate the two
+provenances).
+
+**Pre-Slice-53 dishonesty disclosure (closed by Slice 53 for
+verdict admissibility; artifact-side closes at Slice 54).** Prior
+to Slice 53, `src/runtime/runner.ts::dispatchVerdictForStep`
+returned `step.gate.pass[0]` unconditionally, and the runner
+emitted `gate.evaluated` with `outcome: 'pass'` immediately after
+materialization regardless of what the adapter said. Dispatch
+steps advanced by construction. Slice 53 closes the verdict-
+admissibility half: the explore fixture's two dispatch steps
+(synthesize-step `gate.pass=["accept"]`; review-step
+`gate.pass=["accept", "accept-with-fold-ins"]`) now require the
+agent adapter to declare a verdict in their respective pass set
+to advance. The artifact-side half — schema-parsing the result
+payload against `writes.artifact.schema` before materialization —
+is Slice 54's scope (Codex H15) and is NOT closed by Slice 53.
+This is a behavior-visible change for any AGENT_SMOKE end-to-end
+run (`tests/runner/explore-e2e-parity.test.ts`): the real
+`claude` subprocess MUST emit a single raw JSON object with a
+string `verdict` field drawn from the accepted-verdicts list
+(the `composeDispatchPrompt` instruction in
+`src/runtime/runner.ts` was tightened at Slice 53 — Codex MED 4
+fold-in — to forbid Markdown fences and prose around the JSON
+object so adapter outputs round-trip cleanly through
+`JSON.parse`).
+
 The `specs/artifacts.json` `trust_boundary` + `dangerous_sinks`
 fields for `explore.synthesis` and `explore.review-verdict` were
 updated at Slice 38 to reflect adapter-computed provenance and

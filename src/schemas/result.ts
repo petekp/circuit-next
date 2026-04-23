@@ -18,7 +18,15 @@ import { RunId, WorkflowId } from './ids.js';
 // bootstrap; `summary` is a short model-authored or runtime-authored
 // narrative of what the run produced. Both are user-visible strings;
 // neither is a dispatch sink.
-
+//
+// RESULT-I4 (Slice 53 Codex H1 fold-in) — `reason` mirrors
+// `RunClosedEvent.reason` and is OPTIONAL. When `outcome` is
+// 'aborted' / 'stopped' / 'escalated' / 'handoff', the runtime SHOULD
+// populate `reason` with a human-readable explanation so the
+// user-visible close artifact carries the same explanation the event
+// log carries. When `outcome` is 'complete', `reason` is typically
+// omitted. The runtime asserts `result.reason === run.closed.reason`
+// at write time when it sets either.
 export const RunResult = z
   .object({
     schema_version: z.literal(1),
@@ -30,6 +38,7 @@ export const RunResult = z
     closed_at: z.string().datetime(),
     events_observed: z.number().int().nonnegative(),
     manifest_hash: z.string().min(1),
+    reason: z.string().min(1).optional(),
   })
   .strict();
 export type RunResult = z.infer<typeof RunResult>;

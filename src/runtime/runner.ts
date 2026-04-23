@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { BuiltInAdapter, DispatchResolutionSource } from '../schemas/adapter.js';
-import type { Event } from '../schemas/event.js';
+import type { Event, RunClosedOutcome } from '../schemas/event.js';
 import type { InvocationId, RunId, WorkflowId } from '../schemas/ids.js';
 import type { LaneDeclaration } from '../schemas/lane.js';
 import { computeManifestHash } from '../schemas/manifest.js';
@@ -135,25 +135,78 @@ export interface DogfoodRunResult {
   dispatchResults: readonly DispatchResultMetadata[];
 }
 
-// Slice 43b: the runtime dispatch branch now routes through dispatchAgent
-// + materializeDispatch (per ADR-0007 §Amendment Slice 37 + ADR-0009 §1).
-// `dispatchVerdictForStep` is a gate-decision helper that returns the
-// verdict emitted on `dispatch.completed` so downstream `gate.evaluated`
-// is deterministic at v0 — raw-byte materialization (ADR-0008
-// §Decision.3a) does not extract a verdict from model output yet; a
-// future slice will swap this out once dispatch artifact schemas become
-// enforceable at runtime.
-function dispatchVerdictForStep(step: Workflow['steps'][number]): string {
-  if (step.kind !== 'dispatch') {
-    throw new Error(`dispatchVerdictForStep: step ${step.id} is not a dispatch step`);
+// Slice 53 (Codex H14 fold-in) — parse adapter result_body for the
+// gate verdict and evaluate against `step.gate.pass`. Pre-Slice-53
+// (Slice 43b authoring) `dispatchVerdictForStep` returned
+// `step.gate.pass[0]` unconditionally without consulting adapter
+// output, and the runner emitted `gate.evaluated` with `outcome: 'pass'`
+// regardless of what the model said — so dispatch steps advanced by
+// construction. Slice 43b's own comment block named this slice as the
+// swap-out point ("a future slice will swap this out once dispatch
+// artifact schemas become enforceable at runtime"); Codex H14 in the
+// 2026-04-22 project-holistic critical review surfaced the dishonesty
+// for fold-in.
+//
+// Result shape: a discriminated union the runner consumes downstream.
+// On 'pass' the runner uses the parsed verdict on `dispatch.completed`
+// and emits `gate.evaluated` with `outcome: 'pass'`. On 'fail' the
+// runner emits `gate.evaluated` with `outcome: 'fail'` + the reason,
+// then `step.aborted`, then `run.closed` with `outcome: 'aborted'`.
+// The dispatch-completed verdict on fail carries the observed verdict
+// when one was present (e.g., a parseable body with a verdict not in
+// pass), so the durable transcript reflects what the adapter said even
+// on rejection. When no verdict was observable (unparseable / no
+// verdict field), `dispatch.completed.verdict` carries the
+// `'<no-verdict>'` sentinel — `DispatchCompletedEvent.verdict` is
+// `z.string().min(1)` so the slot must hold a non-empty string.
+//
+// Parsing rule at v0: `JSON.parse(result_body)`, then require a
+// top-level `verdict` field that is a non-empty string. The minimal
+// shape `{ verdict: string }` is the closure of H14 without expanding
+// the contract surface to a typed adapter-output schema (rejected
+// alternate framing: add `gate.schema` to `ResultVerdictGate`); a
+// future slice can widen if a verdict-with-payload pattern emerges.
+type GateEvaluation =
+  | { readonly kind: 'pass'; readonly verdict: string }
+  | { readonly kind: 'fail'; readonly reason: string; readonly observedVerdict?: string };
+
+const NO_VERDICT_SENTINEL = '<no-verdict>';
+
+function evaluateDispatchGate(
+  step: Workflow['steps'][number] & { kind: 'dispatch' },
+  resultBody: string,
+): GateEvaluation {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(resultBody);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      kind: 'fail',
+      reason: `dispatch step '${step.id}': adapter result_body did not parse as JSON (${msg})`,
+    };
   }
-  const first = step.gate.pass[0];
-  if (first === undefined || first.length === 0) {
-    throw new Error(
-      `dispatch step ${step.id}: gate.pass must declare at least one passing verdict`,
-    );
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return {
+      kind: 'fail',
+      reason: `dispatch step '${step.id}': adapter result_body parsed but is not a JSON object (got ${parsed === null ? 'null' : Array.isArray(parsed) ? 'array' : typeof parsed})`,
+    };
   }
-  return first;
+  const verdictRaw = (parsed as Record<string, unknown>).verdict;
+  if (typeof verdictRaw !== 'string' || verdictRaw.length === 0) {
+    return {
+      kind: 'fail',
+      reason: `dispatch step '${step.id}': adapter result_body lacks a non-empty string 'verdict' field (got ${typeof verdictRaw === 'string' ? 'empty string' : typeof verdictRaw})`,
+    };
+  }
+  if (!step.gate.pass.includes(verdictRaw)) {
+    return {
+      kind: 'fail',
+      reason: `dispatch step '${step.id}': adapter declared verdict '${verdictRaw}' which is not in gate.pass [${step.gate.pass.join(', ')}]`,
+      observedVerdict: verdictRaw,
+    };
+  }
+  return { kind: 'pass', verdict: verdictRaw };
 }
 
 // v0 prompt composition: name the step, enumerate accepted verdicts, and
@@ -161,6 +214,12 @@ function dispatchVerdictForStep(step: Workflow['steps'][number]): string {
 // reads artifact hasn't been written yet — in explore, orchestrator-
 // synthesis artifacts precede dispatch steps so this degrades gracefully
 // at the fixture's current shape).
+//
+// Slice 53 (Codex MED 4 fold-in): tighten the response contract so the
+// runner's `JSON.parse(result_body)` evaluator does not abort on real
+// `claude` / `codex` adapter output that wraps the JSON in a Markdown
+// fence or prose. Without this, every AGENT_SMOKE / CODEX_SMOKE run
+// risks aborting at the first dispatch on a parse error — a live trap.
 function composeDispatchPrompt(
   step: Workflow['steps'][number] & { kind: 'dispatch' },
   runRoot: string,
@@ -184,7 +243,7 @@ function composeDispatchPrompt(
     'Context (from reads):',
     readsBody,
     '',
-    'Respond with a JSON object that includes a "verdict" field drawn from the accepted-verdicts list.',
+    'Respond with a single raw JSON object whose top-level shape is exactly { "verdict": "<one-of-accepted-verdicts>" } (additional fields permitted). Do not wrap the JSON in Markdown code fences. Do not include any prose before or after the JSON object. The runtime parses your response with JSON.parse and rejects the run on any parse failure or on a verdict not drawn from the accepted-verdicts list.',
   ].join('\n');
 }
 
@@ -387,10 +446,14 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
 
   // Walk the routes graph from entry.start_at. Terminate when a step's
   // route resolves to @complete (the only terminal dogfood-run-0
-  // exercises; @stop/@escalate/@handoff are Phase 2 scope).
+  // exercises; @stop/@escalate/@handoff are Phase 2 scope) or when a
+  // dispatch gate fails (Slice 53 Codex H14 fold-in — `runOutcome`
+  // mutates to `'aborted'` and the loop breaks before the route is
+  // taken; the close-step still emits `run.closed` carrying the
+  // aborted outcome and a reason that names the failing step).
   const stepsById = new Map(workflow.steps.map((s) => [s.id as unknown as string, s] as const));
   let currentStepId: string | undefined = entry.start_at as unknown as string;
-  const outcome = 'complete' as const;
+  let runOutcome: RunClosedOutcome = 'complete';
   let closeReason: string | undefined;
 
   while (currentStepId !== undefined) {
@@ -448,7 +511,26 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
         adapterName: dispatcher.adapterName,
         cli_version: dispatchResult.cli_version,
       });
-      const verdict = dispatchVerdictForStep(step);
+      // Slice 53 (Codex H14 fold-in): evaluate the gate against the
+      // adapter's actual result_body BEFORE materializing, so the
+      // verdict written into `dispatch.completed` reflects what the
+      // adapter declared (or a sentinel on unparseable / no-verdict
+      // cases). The transcript still materializes either way — the
+      // dispatch happened, and the request/receipt/result bytes are
+      // durable evidence of the call regardless of admission.
+      const evaluation = evaluateDispatchGate(step, dispatchResult.result_body);
+      const dispatchCompletedVerdict =
+        evaluation.kind === 'pass'
+          ? evaluation.verdict
+          : (evaluation.observedVerdict ?? NO_VERDICT_SENTINEL);
+      // Slice 53 (Codex H2 fold-in): gate the canonical artifact write
+      // on `evaluation.kind === 'pass'` per ADR-0008 §Decision.3a — the
+      // canonical downstream-readable artifact at `writes.artifact.path`
+      // is materialized ONLY after the verdict gate passes. The
+      // transcript slots (request / receipt / result) remain durable
+      // evidence on either path. Slice 54 (materializer schema-parse)
+      // adds the symmetric schema-parse condition: artifact write
+      // requires both verdict gate pass AND schema parse success.
       const materialized = materializeDispatch({
         runId,
         stepId: step.id,
@@ -460,7 +542,9 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
           request: step.writes.request,
           receipt: step.writes.receipt,
           result: step.writes.result,
-          ...(step.writes.artifact === undefined ? {} : { artifact: step.writes.artifact }),
+          ...(step.writes.artifact === undefined || evaluation.kind !== 'pass'
+            ? {}
+            : { artifact: step.writes.artifact }),
         },
         // Slice 45a (P2.6 HIGH 3 fold-in): adapter identity is pulled
         // from the structured `DispatchFn` descriptor rather than from
@@ -479,7 +563,7 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
         resolvedSelection: deriveResolvedSelection(workflow, step),
         resolvedFrom: deriveResolvedFrom(inv),
         dispatchResult,
-        verdict,
+        verdict: dispatchCompletedVerdict,
         now,
       });
       for (const ev of materialized.events) {
@@ -487,17 +571,53 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
         appendAndDerive(runRoot, ev);
       }
       sequence = materialized.sequenceAfter;
-      push({
-        schema_version: 1,
-        sequence,
-        recorded_at: recordedAt(),
-        run_id: runId,
-        kind: 'gate.evaluated',
-        step_id: step.id,
-        attempt,
-        gate_kind: 'result_verdict',
-        outcome: 'pass',
-      });
+
+      if (evaluation.kind === 'pass') {
+        push({
+          schema_version: 1,
+          sequence,
+          recorded_at: recordedAt(),
+          run_id: runId,
+          kind: 'gate.evaluated',
+          step_id: step.id,
+          attempt,
+          gate_kind: 'result_verdict',
+          outcome: 'pass',
+        });
+      } else {
+        // Slice 53 (Codex H14 fold-in): gate-fail termination path.
+        // Emit gate.evaluated with outcome=fail + reason, then
+        // step.aborted with the same reason, then break out of the
+        // loop. The post-loop run.closed emission picks up
+        // `runOutcome='aborted'` and `closeReason` to record the
+        // termination cause.
+        push({
+          schema_version: 1,
+          sequence,
+          recorded_at: recordedAt(),
+          run_id: runId,
+          kind: 'gate.evaluated',
+          step_id: step.id,
+          attempt,
+          gate_kind: 'result_verdict',
+          outcome: 'fail',
+          reason: evaluation.reason,
+        });
+        push({
+          schema_version: 1,
+          sequence,
+          recorded_at: recordedAt(),
+          run_id: runId,
+          kind: 'step.aborted',
+          step_id: step.id,
+          attempt,
+          reason: evaluation.reason,
+        });
+        runOutcome = 'aborted';
+        closeReason = evaluation.reason;
+        currentStepId = undefined;
+        break;
+      }
     } else {
       // Checkpoint steps — dogfood-run-0 fixture does not exercise this
       // arm, and narrowing the loop keeps the Phase 1.5 proof focused.
@@ -541,7 +661,7 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
     recorded_at: closedAt,
     run_id: runId,
     kind: 'run.closed',
-    outcome,
+    outcome: runOutcome,
     ...(closeReason === undefined ? {} : { reason: closeReason }),
   };
   push(closed);
@@ -551,11 +671,16 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
     run_id: runId,
     workflow_id: workflow.id,
     goal,
-    outcome,
+    outcome: runOutcome,
     summary: buildSummary({ workflow, goal, events }),
     closed_at: closedAt,
     events_observed: events.length,
     manifest_hash: manifestHash,
+    // Slice 53 (Codex H1 fold-in / RESULT-I4): mirror the close-event
+    // reason onto the user-visible result.json so an aborted run
+    // explains itself without requiring the operator to walk the
+    // event log.
+    ...(closeReason === undefined ? {} : { reason: closeReason }),
   });
 
   // Final snapshot is whatever the last appendAndDerive produced; re-derive
