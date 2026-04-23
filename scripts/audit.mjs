@@ -3182,6 +3182,13 @@ export const PHASE_2_P2_4_P2_5_ARC_LAST_SLICE = 44;
 // back-compat for the older arcs.
 export const SLICE_47_HARDENING_FOLDINS_ARC_CEREMONY_SLICE = '47d';
 
+// Slice 55 (Clean-Clone Reality Tranche arc-close composition review
+// convergent HIGH 1 fold-in — both Claude + Codex prongs surfaced the same
+// gap): numeric ceremony slice for the Clean-Clone Reality Tranche
+// (Slices 52-55). Closes the Check 26 binding gap symmetric to the
+// Slice 47 composition review HIGH 3 fold-in pattern.
+export const CLEAN_CLONE_REALITY_TRANCHE_ARC_CEREMONY_SLICE = 55;
+
 export const ARC_CLOSE_GATES = Object.freeze([
   Object.freeze({
     arc_id: 'phase-2-foundation-foldins-slices-35-to-40',
@@ -3210,6 +3217,25 @@ export const ARC_CLOSE_GATES = Object.freeze([
     ceremony_slice: SLICE_47_HARDENING_FOLDINS_ARC_CEREMONY_SLICE,
     plan_path: 'specs/plans/slice-47-hardening-foldins.md',
     review_file_regex: /arc-slice-47-composition-review/i,
+  }),
+  // Slice 55 (Clean-Clone Reality Tranche arc-close composition review
+  // convergent HIGH 1 fold-in): Clean-Clone Reality Tranche. Numeric
+  // ceremony_slice: 55 matches the numeric marker at current_slice=55 via
+  // the numeric branch of evaluateArcCloseGate (same back-compat branch
+  // slices 40 + 44 use). Review-file regex pinned to the composition-
+  // review naming convention so per-slice review records
+  // (arc-slice-5{2,3,4}-codex.md) do not satisfy the gate; only the
+  // arc-close composition review prong files do. Ceremony commit stages
+  // both prong files + this gate entry + the current_slice advance
+  // atomically so Check 26 sees green at the same post-commit audit run
+  // that first exposes the gate (same-commit-staging discipline from
+  // Slice 47d precedent).
+  Object.freeze({
+    arc_id: 'clean-clone-reality-tranche',
+    description: 'Clean-Clone Reality Tranche (Slices 52-55)',
+    ceremony_slice: CLEAN_CLONE_REALITY_TRANCHE_ARC_CEREMONY_SLICE,
+    plan_path: 'specs/plans/clean-clone-reality-tranche.md',
+    review_file_regex: /arc-clean-clone-reality-composition-review/i,
   }),
 ]);
 

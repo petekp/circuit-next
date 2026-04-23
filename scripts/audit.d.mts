@@ -244,6 +244,11 @@ export const PHASE_2_P2_4_P2_5_ARC_LAST_SLICE: number;
 // slice-47 hardening fold-in arc. Uses the canonical letter-suffix form
 // so compareSliceId orders 47c < 47d correctly.
 export const SLICE_47_HARDENING_FOLDINS_ARC_CEREMONY_SLICE: string;
+// Slice 55 (Clean-Clone Reality Tranche arc-close composition review
+// convergent HIGH 1 fold-in) — numeric ceremony_slice for the
+// Clean-Clone Reality Tranche. Uses the numeric back-compat branch of
+// evaluateArcCloseGate (same as slices 40 + 44).
+export const CLEAN_CLONE_REALITY_TRANCHE_ARC_CEREMONY_SLICE: number;
 export const ARC_CLOSE_GATES: ReadonlyArray<{
   readonly arc_id: string;
   readonly description: string;

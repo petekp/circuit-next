@@ -1,7 +1,9 @@
 ---
 plan: clean-clone-reality-tranche
-status: in-progress
+status: closed
 opened_at: 2026-04-22
+closed_at: 2026-04-23
+closed_in_slice: 55
 opened_in_session: post-slice-50-first-principles-reanalysis
 supersedes: specs/plans/project-holistic-foldins.md
 trigger: |

@@ -8,6 +8,7 @@ import {
   ARTIFACT_BACKING_PATH_CONTAINER_PATHS,
   ARTIFACT_BACKING_PATH_KNOWN_COLLISIONS,
   ARTIFACT_BACKING_PATH_PREFIX_SYNONYMS,
+  CLEAN_CLONE_REALITY_TRANCHE_ARC_CEREMONY_SLICE,
   PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE,
   PHASE_2_P2_4_P2_5_ARC_LAST_SLICE,
   SLICE_47_HARDENING_FOLDINS_ARC_CEREMONY_SLICE,
@@ -695,10 +696,16 @@ describe('ARC_CLOSE_GATES + checkArcCloseCompositionReviewPresence (Slice 44 gen
     );
   });
 
-  it('ARC_CLOSE_GATES contains all three arcs with matching ceremony_slice constants', () => {
+  it('ARC_CLOSE_GATES contains all four arcs with matching ceremony_slice constants', () => {
     // Slice 47d (Codex HIGH 5 + Claude HIGH 3 fold-in): length bumped
     // 2 → 3 with the new slice-47 hardening fold-in arc entry.
-    expect(ARC_CLOSE_GATES).toHaveLength(3);
+    // Slice 55 (Clean-Clone Reality Tranche arc-close composition review
+    // convergent HIGH 1 fold-in — Claude + Codex prongs both surfaced
+    // Check 26 not binding this arc): length bumped 3 → 4 with the new
+    // clean-clone-reality-tranche entry. Numeric ceremony_slice:55 uses
+    // the numeric back-compat branch of evaluateArcCloseGate (same as
+    // slices 40 + 44).
+    expect(ARC_CLOSE_GATES).toHaveLength(4);
     const oldArc = ARC_CLOSE_GATES.find(
       (g) => g.arc_id === 'phase-2-foundation-foldins-slices-35-to-40',
     );
@@ -706,13 +713,25 @@ describe('ARC_CLOSE_GATES + checkArcCloseCompositionReviewPresence (Slice 44 gen
       (g) => g.arc_id === 'phase-2-p2.4-p2.5-arc-slices-41-to-43',
     );
     const slice47Arc = ARC_CLOSE_GATES.find((g) => g.arc_id === 'slice-47-hardening-foldins');
+    const cleanCloneArc = ARC_CLOSE_GATES.find((g) => g.arc_id === 'clean-clone-reality-tranche');
     expect(oldArc).toBeDefined();
     expect(p2ArcNew).toBeDefined();
     expect(slice47Arc).toBeDefined();
+    expect(cleanCloneArc).toBeDefined();
     expect(oldArc?.ceremony_slice).toBe(PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE);
     expect(p2ArcNew?.ceremony_slice).toBe(PHASE_2_P2_4_P2_5_ARC_LAST_SLICE);
     expect(slice47Arc?.ceremony_slice).toBe(SLICE_47_HARDENING_FOLDINS_ARC_CEREMONY_SLICE);
     expect(typeof slice47Arc?.ceremony_slice).toBe('string');
+    expect(cleanCloneArc?.ceremony_slice).toBe(CLEAN_CLONE_REALITY_TRANCHE_ARC_CEREMONY_SLICE);
+    expect(typeof cleanCloneArc?.ceremony_slice).toBe('number');
+    expect(cleanCloneArc?.plan_path).toBe('specs/plans/clean-clone-reality-tranche.md');
+    expect(
+      cleanCloneArc?.review_file_regex.test('arc-clean-clone-reality-composition-review-claude.md'),
+    ).toBe(true);
+    expect(
+      cleanCloneArc?.review_file_regex.test('arc-clean-clone-reality-composition-review-codex.md'),
+    ).toBe(true);
+    expect(cleanCloneArc?.review_file_regex.test('arc-slice-53-codex.md')).toBe(false);
   });
 
   it('returns green with "in progress" detail for the 41-to-43 arc when current_slice < 44 and both arcs are applicable', () => {
