@@ -7,7 +7,10 @@ authored_by: gpt-5-codex
 plan_slug: p2-9-second-workflow
 plan_revision: 04
 plan_base_commit: d921528
-plan_content_sha256: a128d44a1b5afae13ae3810defa1b0cf819eb482d2332b80502e491e4f078eb0
+plan_content_sha256: 17f7cf25f1c0ab67cf918612bfe0f93609c94a7514bcc8c522ad723c0f010bb0
+plan_content_sha256_note: "SHA computed AFTER the challenger-pending → challenger-cleared frontmatter status transition that this pass authorizes. Codex reviewed the plan at the prior SHA (a128d44a1b5afae13ae3810defa1b0cf819eb482d2332b80502e491e4f078eb0) when status was challenger-pending; the post-transition SHA captures the content as of the same commit that makes the status advance. Same pattern as planning-readiness-meta-arc-codex-challenger-08.md at Slice 57g."
+plan_status_at_review: challenger-pending
+plan_status_post_review: challenger-cleared
 verdict: ACCEPT
 ---
 

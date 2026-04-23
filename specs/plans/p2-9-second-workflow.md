@@ -1,11 +1,13 @@
 ---
 plan: p2-9-second-workflow
-status: challenger-pending
+status: challenger-cleared
 revision: 04
 opened_at: 2026-04-24
 revised_at: 2026-04-23
 opened_in_session: post-planning-readiness-meta-arc-close
 revised_in_session: post-codex-challenger-03-med-foldin
+cleared_in_session: post-codex-challenger-04-accept
+cleared_at: 2026-04-23
 base_commit: d921528
 target: review
 target_hypothesis_note: |
