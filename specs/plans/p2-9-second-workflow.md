@@ -1,11 +1,11 @@
 ---
 plan: p2-9-second-workflow
 status: challenger-pending
-revision: 02
+revision: 03
 opened_at: 2026-04-24
 revised_at: 2026-04-23
 opened_in_session: post-planning-readiness-meta-arc-close
-revised_in_session: post-codex-challenger-01-foldin
+revised_in_session: post-codex-challenger-02-foldin
 base_commit: d921528
 target: review
 target_hypothesis_note: |
@@ -50,9 +50,15 @@ prior_challenger_passes:
   - specs/reviews/p2-9-second-workflow-codex-challenger-01.md
     (verdict REJECT-PENDING-FOLD-INS vs revision 01 — 2 HIGH + 1 MED;
     all 3 fold-ins applied in revision 02 per §0.B)
+  - specs/reviews/p2-9-second-workflow-codex-challenger-02.md
+    (verdict REJECT-PENDING-FOLD-INS vs revision 02 — 2 HIGH + 1 MED;
+    revision 02 HIGH 1 dispatch-contract binding remained partial;
+    2 new findings: HIGH 2 close-phase schema seam overreach + MED 1
+    Slice 63 policy-test path drift; all 3 fold-ins applied in
+    revision 03 per §0.C)
 ---
 
-# P2.9 — Second Workflow (`review`) — multi-slice arc (restart revision 02)
+# P2.9 — Second Workflow (`review`) — multi-slice arc (restart revision 03)
 
 Land a second registered workflow in circuit-next whose contract, artifact
 schema, plugin command, and runtime-dispatch path exercise the same pattern
@@ -65,8 +71,8 @@ scaffolding dressed in reusable-sounding names.
 
 ## §0 — Fold-in map
 
-Two fold-in tranches: §0.A (flawed-draft 13-finding ledger) and §0.B
-(pass 01 against revision 01).
+Three fold-in tranches: §0.A (flawed-draft 13-finding ledger), §0.B
+(pass 01 against revision 01), and §0.C (pass 02 against revision 02).
 
 ### §0.A — Flawed-draft 13-finding ledger (revisions 01 + 02)
 
@@ -102,6 +108,18 @@ all three.
 | HIGH 2 | §7 Option B conflates runtime incapability with the reference "None available" branch | Revision 01 used the reference skill's "authority exhaustion" clause to justify a runtime-incapability placeholder; these are not the same condition, and the artifact could not distinguish {no command / runtime incapable / intentionally deferred} | §7 rewritten: P2.9 is 3-phase audit-only (Intake → Independent Audit → Verdict). No Verification Rerun phase exists in P2.9's variant. Revision 02 does not claim the reference "None available" clause as cover; the clause is out-of-scope. Verification deferrals are out-of-scope future work, not a degraded run |
 | MED 3 | Slice ordering + close semantics inconsistencies | Revision 01 Slice 63 acceptance claimed Check 24 fixture compliance, but the fixture lands at Slice 65; Slice 68 close semantics collapsed three outcomes into one ACCEPT bucket | §9 Slice 63 acceptance evidence scoped to policy-table edit only (no fixture dependency). §9 Slice 68 acceptance evidence tri-valued: {clean generalization / validated with declared follow-on widening / not-yet-validated}. §10 Close criteria item 4 split to match |
 
+### §0.C — Pass 02 (revision 02) fold-ins (revision 03)
+
+Pass 02 (`specs/reviews/p2-9-second-workflow-codex-challenger-02.md`)
+emitted REJECT-PENDING-FOLD-INS with 2 HIGH + 1 MED. One HIGH was
+pass-01 HIGH 1 still-partial; two were new. Revision 03 folds all three.
+
+| Pass-02 # | Severity | Objection | Revision-03 fold-in |
+|---|---|---|---|
+| HIGH 1 | §5 still misbinds the live dispatch contract, and Slice 64 does not pin the missing field | Revision 02 §5 declared `source: {kind: 'result', ref: 'result'}` but the live `ResultVerdictGate` contract at src/schemas/gate.ts:32-37,67-73 admits only `source: {kind: 'dispatch_result', ref: 'result'}`. Revision 02 Slice 64 promised to pin `writes.result`, `gate.pass`, and adapter JSON shape, but NOT `gate.source.kind` / `gate.source.ref` | §5 corrected: `source.kind` is `'dispatch_result'` (the live literal), `source.ref` is `'result'`. §9 Slice 64 deliverables extended to pin `gate.source.kind` and `gate.source.ref` literals in the schema-level dispatch-shape test. Evidence-census row E12 rewritten to cite `DispatchResultSource` at gate.ts:32-38 directly |
+| HIGH 2 | Slice 64/66 assume a valid close-phase `review.result` without budgeting the live synthesis seam | Revision 02 Slice 66 acceptance claimed the close-phase synthesis step produces a valid `review.result` artifact parsing against the Zod schema. Current `writeSynthesisArtifact` at src/runtime/runner.ts:363-385 writes one placeholder-string per gate.required entry only; no synthesis-artifact schema-parse path exists in the runtime today (dispatch-result parse only, src/runtime/artifact-schemas.ts:3-17). Slice 66 as written cannot satisfy its acceptance evidence without synthesis-seam widening | §9 Slice 66 narrowed: end-to-end runtime test uses an INJECTED synthesis-writer stub (test-seam only) that reads the analyze-phase result file and produces the schema-valid artifact. The test proves the wiring and schema conformance when synthesis is customizable; it does NOT claim the generic runtime synthesis-writer supports review workflows. §9 adds named follow-on slice note: per-workflow synthesis-writer registration is declared explicit post-P2.9 substrate work. §10 Close criteria item 4 updated to surface this follow-on as a documented narrowing of the generalization claim |
+| MED 1 | Slice 63 policy-test path points to a file that does not exist | Revision 02 Slice 63 cites `tests/policy/workflow-kind-policy.test.ts` but the actual file lives at `tests/contracts/workflow-kind-policy.test.ts` (tests/policy/ does not exist in the repo) | §9 Slice 63 path corrected to `tests/contracts/workflow-kind-policy.test.ts` |
+
 ## §1 — Evidence census
 
 Status values per claim: `verified` (file read and confirmed), `inferred`
@@ -121,7 +139,8 @@ before the arc can proceed).
 | E9 | specs/invariants.json enforcement_state_semantics vocab: {audit-only, blocked, phase2-property, prose-only, static-anchor, test-enforced} — authoritative for any invariant declared in this plan | verified | specs/invariants.json::enforcement_state_semantics |
 | E10 | specs/contracts/explore.md is the template for workflow-specific contracts; workflow-kind-seam pattern enumerates the 5 generalization risk points | verified | specs/contracts/explore.md + P2.9 flawed draft §"generalization seam" cited this pattern correctly |
 | E11 | The flawed P2.9 draft's byte-identical committed copy at tests/fixtures/plan-lint/bad/p2-9-flawed-draft.md is the plan-lint retroactive-proof reproducibility fixture — not to be deleted | verified | Slice 60 committed this fixture; specs/reviews/p2-9-plan-lint-retroactive-run.md §Input |
-| E12 | DispatchStep contract mandates `writes.result` (non-empty string path) and a `ResultVerdictGate` with `gate.source.ref` pointing to that slot; prompts instruct workers to return raw JSON with a top-level string `verdict` field; gate rejects if verdict is missing or not in `gate.pass` | verified | src/schemas/step.ts lines 60-73 + src/schemas/gate.ts ResultVerdictGate shape + src/runtime/runner.ts dispatch step handler lines 503-540 (prompt + parse + gate logic) |
+| E12 | `ResultVerdictGate.source` is the `DispatchResultSource` discriminant with `kind: z.literal('dispatch_result')` and `ref: z.literal('result')` — both literals fixed at the type layer. The gate's `pass` field is a non-empty array of strings; prompts instruct workers to return raw JSON with a top-level string `verdict` field; gate rejects if verdict is missing or not in `gate.pass` | verified | src/schemas/gate.ts lines 32-38 (DispatchResultSource literal kind/ref) + src/schemas/gate.ts lines 67-74 (ResultVerdictGate) + src/schemas/step.ts lines 60-73 (DispatchStep writes.result + gate wiring) + src/runtime/runner.ts dispatch step handler lines 503-540 (prompt + parse + gate logic) |
+| E13 | Current `writeSynthesisArtifact` (src/runtime/runner.ts:363-385) writes a flat JSON object with one placeholder string per `step.gate.required` entry — no synthesis-time schema parse, no per-workflow customization. Dispatch-side artifact-schema registry (`src/runtime/artifact-schemas.ts`) is scoped to dispatch-result bodies only, not synthesis outputs | verified | src/runtime/runner.ts lines 375-386 (writeSynthesisArtifact implementation — placeholder body) + src/runtime/artifact-schemas.ts lines 3-17 + src/runtime/artifact-schemas.ts lines 53-58 (parseArtifact scoped to dispatchResult.result_body) |
 
 ## §2 — Why this plan exists
 
@@ -245,14 +264,16 @@ The registered artifact's structured JSON carries fields:
 ### Analyze-phase dispatch shape (pass-01 HIGH 1 fold-in)
 
 The `review` fixture's analyze-phase dispatch step binds to the live
-`DispatchStep` contract at `src/schemas/step.ts:60-73` (E12):
+`DispatchStep` contract at `src/schemas/step.ts:60-73` + `ResultVerdictGate`
+at `src/schemas/gate.ts:67-74` (E12):
 
 - `writes.result`: non-empty string path (relative to run root) where
   the adapter writes its raw JSON output. Per-step choice:
   `phases/analyze/review-raw-findings.json`.
-- `gate`: `ResultVerdictGate` with `source: {kind: 'result', ref:
-  'result'}`. The reviewer's JSON must carry a top-level string
-  `verdict` field.
+- `gate`: `ResultVerdictGate` with `source: {kind: 'dispatch_result', ref:
+  'result'}` — both literals fixed per the DispatchResultSource
+  discriminant at gate.ts:32-38. The reviewer's JSON must carry a
+  top-level string `verdict` field.
 - `gate.pass` admits exactly two values: `NO_ISSUES_FOUND`,
   `ISSUES_FOUND`. These are **dispatch-step gate verdicts**, not the
   workflow's final verdict. The reviewer emits a tentative verdict
@@ -359,12 +380,14 @@ characterization-doc reference gets its second binding site).
 `scripts/policy/workflow-kind-policy.mjs::WORKFLOW_KIND_CANONICAL_SETS`
 with `canonicals: ['frame', 'analyze', 'close']` and
 `omits: ['plan', 'act', 'verify', 'review']` and a title-map matching §3.
-Add a corresponding row to `tests/policy/workflow-kind-policy.test.ts`
+Add a corresponding row to `tests/contracts/workflow-kind-policy.test.ts`
+(the actual live location; `tests/policy/` does not exist in the repo)
 validating the entry. No fixture changes in this slice.
 
-**Acceptance evidence:** `npm run verify` green (tests/policy row
-passes). `npm run audit` green. No Check 24 fixture-compliance claim in
-this slice; that lands at Slice 65 when the fixture itself lands.
+**Acceptance evidence:** `npm run verify` green (new
+tests/contracts/workflow-kind-policy.test.ts row passes). `npm run audit`
+green. No Check 24 fixture-compliance claim in this slice; that lands at
+Slice 65 when the fixture itself lands.
 
 ### Slice 64 — Invariants + artifact schema + dispatch-shape test
 
@@ -379,8 +402,14 @@ step with role=reviewer). Land tests/properties/visible/review-i2.test.ts
 (verdict-aggregation property on randomized finding-count inputs).
 Update specs/invariants.json with REVIEW-I1 and REVIEW-I2 entries
 carrying the enforcement_layer values from §4. Author a schema-level
-test pinning the analyze-phase dispatch shape from §5: `writes.result`
-shape, `gate.pass` vocabulary, adapter JSON response shape.
+test pinning the analyze-phase dispatch shape from §5 — the test pins
+each of: `writes.result` non-empty string path, `gate.source.kind`
+literal `'dispatch_result'`, `gate.source.ref` literal `'result'`,
+`gate.pass` vocabulary `['NO_ISSUES_FOUND', 'ISSUES_FOUND']`, and the
+adapter JSON response shape carrying `verdict` string + `findings`
+array. All four source/gate/pass/shape literals are explicit in the
+test — not inferred from ResultVerdictGate by parse, but literal-checked
+so a future schema widening that relaxes any of them is caught here.
 
 **Acceptance evidence:** `npm run verify` green with 3 new tests passing
 (2 property + 1 dispatch-shape). `npm run audit` green. specs/invariants.json
@@ -403,22 +432,46 @@ with Check 24 (spine coverage) reporting the review fixture as compliant
 with the 3-phase canonical-phase-set policy entry added in Slice 63.
 Contract test row under tests/contracts/ passes.
 
-### Slice 66 — Runtime dispatch + adapter wiring
+### Slice 66 — Runtime dispatch + adapter wiring (narrowed per pass-02 HIGH 2)
 
 **Lane:** Ratchet-Advance (adapter-dispatch coverage advances to a second
-workflow kind).
+workflow kind). Lane is narrow: the runtime synthesis-writer is NOT
+widened in this slice.
 
-**Deliverables:** Wire the `review` fixture through the dogfood run loop.
-Add a test exercising end-to-end execution of the fixture with a stubbed
-dispatch adapter that emits adapter JSON matching §5's shape. Confirm
+**Scope narrowing.** The current runtime synthesis writer
+(`writeSynthesisArtifact` at src/runtime/runner.ts:375-386, per E13)
+writes placeholder strings per gate.required entry and has no per-
+workflow customization. A review close-phase that reads the analyze-
+phase dispatch result and produces a schema-valid aggregated artifact
+requires either (a) a per-workflow synthesis-writer registration on the
+runtime, or (b) a specialized close-step kind. **P2.9 does NOT land
+either.** Declared named follow-on: `Slice 70 — per-workflow synthesis
+writer registration` (post-P2.9, operator-scheduled).
+
+**Deliverables:** Wire the `review` fixture through the dogfood run
+loop. Add an end-to-end test that: (i) stubs the dispatch adapter to
+emit adapter JSON matching §5's shape, (ii) injects a custom synthesis-
+writer function (test-seam only, not a runtime feature) that reads the
+analyze-phase dispatch result file and produces the schema-valid
+`review.result` artifact per REVIEW-I2's aggregation rule, (iii) asserts
 the analyze-phase dispatch gate admits `NO_ISSUES_FOUND` /
-`ISSUES_FOUND`, that the synthesis step produces a valid review.result
-artifact parsing against src/schemas/artifacts/review.ts, and that
-REVIEW-I2 computes the artifact-level verdict correctly.
+`ISSUES_FOUND` against the stubbed adapter output, (iv) asserts the
+produced artifact parses against src/schemas/artifacts/review.ts, (v)
+asserts REVIEW-I2 computes the artifact-level verdict correctly on the
+stubbed findings input.
+
+**Honesty about the boundary.** The injected synthesis-writer proves the
+review workflow is WIREABLE end-to-end when synthesis is customizable;
+it does NOT prove the generic runtime synthesis writer supports review
+workflows today. Slice 68's generalization proof must surface this as a
+"validated-with-declared-follow-on" outcome on the synthesis-seam risk
+point unless Slice 70 also lands pre-close.
 
 **Acceptance evidence:** `npm run verify` green with new runtime test.
 Event log shows `step.entered` / `step.artifact_written` / `gate.evaluated`
 events in correct order for all 3 phases (frame → analyze → close).
+Test file explicitly comments the injected-synthesis-writer boundary so
+future readers see the narrowed scope.
 
 ### Slice 67 — Plugin command + CLI wiring
 
@@ -496,8 +549,11 @@ The arc closes when:
      clean.)
    - **Clean or with-declared-follow-on:** close claim is "P2.9 audit-
      only review-family generalization validated; N targeted follow-on
-     slices declared for <named gaps>." (Gate: Slice 68 report shows
-     clean + with-declared-follow-on only.)
+     slices declared for <named gaps>." Per §9 Slice 66, the synthesis-
+     writer seam is a known "with-declared-follow-on" outcome absent a
+     pre-close Slice 70 landing — the default aggregate outcome is
+     "with-declared-follow-on" unless Slice 70 lands during P2.9.
+     (Gate: Slice 68 report shows clean + with-declared-follow-on only.)
    - **Any not-yet-validated:** close claim is "P2.9 audit-only review
      workflow landed; generalization claim narrowed to <re-framed
      scope>." (Gate: Slice 68 report shows ≥1 not-yet-validated with the
@@ -531,5 +587,11 @@ migrate); (b) a substrate-widening slice adding real verification
 subprocess execution alongside a new `review-with-verification` workflow
 kind (per §7 future-variant framing); (c) /circuit:run routing heuristic
 work (deferred from P2.9 per MED 9); (d) review fast-mode intake
-extensions (per §6 scope-path deferral). Slot-ordering among these is an
-operator-decision at P2.9 close.
+extensions (per §6 scope-path deferral); (e) **Slice 70 — per-workflow
+synthesis-writer registration** (declared follow-on per §9 Slice 66 HIGH 2
+fold-in; promotes the test-seam-injected synthesis writer to a
+runtime-level per-workflow registration so `review` close-phase synthesis
+is a real runtime capability rather than a test-only wiring). Slot-
+ordering among these is an operator-decision at P2.9 close. If Slice 70
+lands during P2.9 (rather than after), Slice 68's synthesis-seam risk
+point upgrades from "with-declared-follow-on" to "clean."
