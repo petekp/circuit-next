@@ -10,8 +10,9 @@ related:
   - ADR-0003 (authority-graph gate for contract authorship; this ADR extends the gate's scope to contract-shaped plan payload via an addendum filed alongside this ADR)
   - ADR-0007 (Phase 2 close criteria; this ADR's sibling addendum to ADR-0007 tightens CC#P2-1 scoping to exclude second-workflow-generalization from the one-workflow-parity criterion)
 amends:
-  - CLAUDE.md §Plan-authoring discipline (landed Slice 61 of planning-readiness-meta-arc: 20-line onboarding summary pointing back to this ADR as authority; discipline layer is prose-only, machine enforcement stays in plan-lint + audit Check 36)
+  - CLAUDE.md §Plan-authoring discipline (landed Slice 61 of planning-readiness-meta-arc: 20-line onboarding summary pointing back to this ADR as authority; discipline layer is prose-only, machine enforcement stays in plan-lint + audit Check 36; Slice 66 methodology-trim-arc extends with two-context note)
   - specs/invariants.json::enforcement_state_semantics (landed Slice 59 of planning-readiness-meta-arc: adds `blocked` state per §Decision.4 below; six keys now present)
+  - scripts/plan-lint.mjs PLAN_STATUS_SET → AUTHORING_STATUSES + COMMITTED_STATUSES with `--context` CLI flag (Slice 66 methodology-trim-arc: two-set overlay per §Decision.1; rule #15 parameterized; rule #16 references UNTRACKED_PERMITTED_STATUSES derived from AUTHORING_STATUSES; Check 36 wires `--context=committed`)
 ---
 
 # ADR-0010 — Arc Planning Readiness Gate
@@ -92,6 +93,45 @@ closed state machine:
 | `challenger-cleared` | Codex challenger verdict is `ACCEPT` or `ACCEPT-WITH-FOLD-INS`; fold-ins (if any) already applied. | REQUIRED. | REQUIRED — committed file at `specs/reviews/<plan-slug>-codex-challenger-*.md` with verdict field `ACCEPT` or `ACCEPT-WITH-FOLD-INS`. |
 | `operator-signoff` | Operator has reviewed the challenger-cleared plan and signed off; slices may open. | REQUIRED. | REQUIRED (inherited from challenger-cleared predecessor commit). |
 | `closed` | Arc has landed; plan frontmatter carries `closed_at:` + `closed_in_slice:`. | REQUIRED. | Inherited. |
+
+**Two-set overlay (Slice 66 — methodology-trim-arc).** The five lifecycle
+states partition into two context-scoped sets, overlapping at
+`challenger-pending` (the authoring-to-committed gate point):
+
+- **`AUTHORING_STATUSES` = {`evidence-draft`, `challenger-pending`}.**
+  Statuses that authoring-facing tooling (`npm run plan:lint` default)
+  validates as "draft currently being authored toward operator sign-off."
+  `evidence-draft` is the initial state; `challenger-pending` is the
+  final authoring-window state (plan committed, awaiting review).
+- **`COMMITTED_STATUSES` = {`challenger-pending`, `challenger-cleared`,
+  `operator-signoff`, `closed`}.** Statuses valid for a plan that is
+  committed to git — enforced by audit Check 36 and by `plan-lint
+  --context=committed`. `evidence-draft` is NOT committed-valid: a plan
+  committed to git must have advanced to `challenger-pending` at the
+  commit moment. This closes the "committed evidence-draft" discipline
+  hole where a plan could be committed without advancing lifecycle
+  state.
+
+```
+Lifecycle (two-set overlay):
+
+    AUTHORING_STATUSES                    COMMITTED_STATUSES
+    ┌────────────────────────┐            ┌───────────────────────────────────────────┐
+    │                        │            │                                           │
+    │   evidence-draft  ──→  │  challenger-pending  │  ──→  challenger-cleared  ──→  operator-signoff  ──→  closed
+    │                        │  ◇ gate point ◇      │
+    └────────────────────────┘            └───────────────────────────────────────────┘
+                                 ▲
+                                 │
+                    overlap: challenger-pending is valid
+                    in both authoring and committed contexts
+```
+
+The overlap at `challenger-pending` is deliberate: a plan IS being
+authored (it has not yet been challenger-cleared), AND it IS committed
+to git (plan-lint rule #16 rejects untracked `challenger-pending`). The
+same status value legitimately reaches both contexts; the gate point is
+the only overlapping state.
 
 ### 2. Transition rules (enforced by plan-lint)
 
@@ -196,30 +236,38 @@ via a hardcoded special case even when absent from the JSON).
 ### 5. Machine enforcement
 
 **Layer 1: `scripts/plan-lint.mjs`.** Standalone tool. Invoked as
-`npm run plan:lint -- <path>` (positional argument). Implements 20
-active rules post-Slice-65. Origin and evolution: Slice 58 landed 19
-structural/shape/state-machine/HIGH-coverage rules (#1-#6, #9-#21);
-Slice 59 landed 3 invariant-enforceability rules (#7, #8, #22);
-Slice 64 added rule #23 prospective-chronology-forbidden; Slice 65
-(methodology-trim-arc) cut #8, #11, and #22 — #8 and #22 were
-self-referential on `enforcement_layer: blocked` declarations that
-no plan makes, and #11 was a prose-only duplicate of commit-body
-framing that folded into the framing-pair. Numbering preserved as
-gaps (precedent: rule ids are never reused). Returns non-zero exit
-on any rule violation with structured finding output (rule id +
-location + suggested fix).
+`npm run plan:lint -- [--context=authoring|committed] <path>`
+(positional argument; optional `--context` flag, default `authoring`).
+Implements 20 active rules post-Slice-65. Origin and evolution:
+Slice 58 landed 19 structural/shape/state-machine/HIGH-coverage rules
+(#1-#6, #9-#21); Slice 59 landed 3 invariant-enforceability rules
+(#7, #8, #22); Slice 64 added rule #23
+prospective-chronology-forbidden; Slice 65 (methodology-trim-arc) cut
+#8, #11, and #22 — #8 and #22 were self-referential on
+`enforcement_layer: blocked` declarations that no plan makes, and #11
+was a prose-only duplicate of commit-body framing that folded into the
+framing-pair; Slice 66 (methodology-trim-arc) split `PLAN_STATUS_SET`
+into `AUTHORING_STATUSES` and `COMMITTED_STATUSES` per §1 two-set
+overlay, parameterized rule #15 by context, and wired Check 36 to
+`--context=committed`. Numbering preserved as gaps (precedent: rule
+ids are never reused). Returns non-zero exit on any rule violation
+with structured finding output (rule id + location + suggested fix).
 
 **Layer 2: `scripts/audit.mjs` Check 36 (Slice 58).** Runs plan-lint
-on all `specs/plans/*.md` committed files whose first-committed SHA
-is NOT a strict ancestor of `META_ARC_FIRST_COMMIT` (per §Migration;
-legacy plans are fully exempt). Additionally: for any committed plan
-with `status: challenger-cleared`, the check verifies a matching
-committed `specs/reviews/<plan-slug>-codex-challenger-*.md` file
-exists with verdict field in `{ACCEPT, ACCEPT-WITH-FOLD-INS}` AND
-whose `reviewed_plan:` frontmatter block binds `plan_slug`,
-`plan_revision`, `plan_base_commit`, and `plan_content_sha256` all
-matching the current plan. For `status: operator-signoff` or `status:
-closed`, Check 36 validates the commit-body predecessor chain
+with `--context=committed` (Slice 66 methodology-trim-arc wiring) on
+all `specs/plans/*.md` committed files whose first-committed SHA is
+NOT a strict ancestor of `META_ARC_FIRST_COMMIT` (per §Migration;
+legacy plans are fully exempt). The `--context=committed` invocation
+rejects plans committed at `status: evidence-draft` (the
+committed-context-invalid state per §1 two-set overlay).
+Additionally: for any committed plan with `status: challenger-cleared`,
+the check verifies a matching committed
+`specs/reviews/<plan-slug>-codex-challenger-*.md` file exists with
+verdict field in `{ACCEPT, ACCEPT-WITH-FOLD-INS}` AND whose
+`reviewed_plan:` frontmatter block binds `plan_slug`, `plan_revision`,
+`plan_base_commit`, and `plan_content_sha256` all matching the current
+plan. For `status: operator-signoff` or `status: closed`, Check 36
+validates the commit-body predecessor chain
 (`operator_signoff_predecessor: <sha>`) rather than fresh SHA match.
 Stale challenger artifacts (reviewing an earlier revision) are
 rejected even if their verdict is accept-class. This closes both the
@@ -262,8 +310,8 @@ standalone tool supports on-demand pre-commit lint.
 | 12 | `plan-lint.live-state-evidence-ledger-complete` | static-anchor | Plan citing symbols/files without corresponding §Evidence-census ledger row. |
 | 13 | `plan-lint.cli-invocation-shape-matches` | static-anchor | CLI invocation using `--flag-name` that does not appear in actual CLI argv parser (reads `src/cli/dogfood.ts` at lint time). |
 | 14 | `plan-lint.artifact-cardinality-mapped-to-reference` | static-anchor | Successor-to-live payload declaring artifact count without recording reference-surface cardinality and justifying departure. |
-| 15 | `plan-lint.status-field-valid` | static-anchor | `status:` value outside `{evidence-draft, challenger-pending, challenger-cleared, operator-signoff, closed}`. Legacy plans exempt per §Migration. |
-| 16 | `plan-lint.untracked-plan-cannot-claim-post-draft-status` | static-anchor | Untracked file with status beyond `evidence-draft`. |
+| 15 | `plan-lint.status-field-valid` | static-anchor | **Context-parameterized** (Slice 66 methodology-trim-arc). With `--context=authoring` (default): `status:` value outside `AUTHORING_STATUSES` = {`evidence-draft`, `challenger-pending`}. With `--context=committed` (audit Check 36): `status:` value outside `COMMITTED_STATUSES` = {`challenger-pending`, `challenger-cleared`, `operator-signoff`, `closed`}. Legacy plans exempt per §Migration. |
+| 16 | `plan-lint.untracked-plan-cannot-claim-post-draft-status` | static-anchor | Untracked file with status beyond `evidence-draft`. The rule derives `UNTRACKED_PERMITTED_STATUSES` = {`evidence-draft`} from `AUTHORING_STATUSES`: `evidence-draft` is the only authoring status that permits untracked state. `challenger-pending` (the AUTHORING_STATUSES post-draft state) and every `COMMITTED_STATUSES` value require git-tracked state. |
 | 17 | `plan-lint.status-challenger-cleared-requires-fresh-committed-challenger-artifact` | static-anchor | `status: challenger-cleared` ONLY (not beyond — operator-signoff and closed statuses are validated by ancestry/predecessor-chain binding enforced by audit Check 36, not by plan-lint SHA match). For challenger-cleared: matching committed `specs/reviews/<plan-slug>-codex-challenger-*.md` must exist whose `reviewed_plan:` frontmatter binds `plan_slug`, `plan_revision`, `plan_base_commit`, AND `plan_content_sha256` (computed at lint time from current plan file contents) all matching the current plan. Stale artifacts from earlier revisions OR stale-content same-revision edits rejected. The `plan_content_sha256` binding is explicit in the state-machine transition rule — a plan reaching challenger-cleared status MUST have its content hash match the reviewed hash at the moment the transition is performed. |
 | 18 | `plan-lint.canonical-phase-set-maps-to-schema-vocabulary` | static-anchor | Plan declaring workflow phase set with titles not matching `scripts/policy/workflow-kind-policy.mjs::WORKFLOW_KIND_CANONICAL_SETS` canonical ids AND no explicit title→canonical mapping. |
 | 19 | `plan-lint.verdict-determinism-includes-verification-passes-for-successor-to-live` | static-anchor | Successor-to-live verdict rule missing verification-passes clause when reference surface's verdict depends on verification. |

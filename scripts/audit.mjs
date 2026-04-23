@@ -4304,10 +4304,17 @@ export function checkPlanLintCommittedPlans(rootDir = REPO_ROOT) {
   const bindingFailures = [];
   for (const rel of plans) {
     try {
-      execSync(`node ${join(rootDir, 'scripts/plan-lint.mjs')} ${JSON.stringify(rel)}`, {
-        cwd: rootDir,
-        stdio: 'pipe',
-      });
+      // Slice 66 (methodology-trim-arc): pass --context=committed so
+      // rule #15 validates against COMMITTED_STATUSES. This rejects
+      // plans committed at status: evidence-draft, the committed-
+      // context-invalid state per ADR-0010 §1 two-set overlay.
+      execSync(
+        `node ${join(rootDir, 'scripts/plan-lint.mjs')} --context=committed ${JSON.stringify(rel)}`,
+        {
+          cwd: rootDir,
+          stdio: 'pipe',
+        },
+      );
     } catch (err) {
       const status = err.status ?? 1;
       const tail = (err.stdout?.toString() ?? '').split('\n').slice(0, 4).join(' | ');

@@ -9,13 +9,22 @@
  * untracked files — so it can be invoked during draft authoring.
  *
  * Usage:
- *   npm run plan:lint -- <path-to-plan.md>
- *   node scripts/plan-lint.mjs <path-to-plan.md>
+ *   npm run plan:lint -- [--context=authoring|committed] <path-to-plan.md>
+ *   node scripts/plan-lint.mjs [--context=authoring|committed] <path-to-plan.md>
+ *
+ * `--context` selects the lifecycle-state set rule #15 validates
+ * against (Slice 66 methodology-trim-arc two-set overlay per ADR-0010
+ * §1). `authoring` (default) accepts AUTHORING_STATUSES =
+ * {evidence-draft, challenger-pending}. `committed` accepts
+ * COMMITTED_STATUSES = {challenger-pending, challenger-cleared,
+ * operator-signoff, closed}. The sets overlap at `challenger-pending`
+ * (the authoring-to-committed gate point). Audit Check 36 invokes
+ * plan-lint with `--context=committed`.
  *
  * Exit codes:
  *   0 — no findings (plan passes).
  *   1 — one or more findings (plan fails).
- *   2 — invocation error (missing path, unreadable file, etc.).
+ *   2 — invocation error (missing path, unreadable file, bad --context value, etc.).
  *
  * The authoritative source for invariant enforcement-layer vocabulary
  * is `specs/invariants.json::enforcement_state_semantics`. This script
@@ -41,8 +50,18 @@
  *   #12 live-state-evidence-ledger-complete
  *   #13 cli-invocation-shape-matches
  *   #14 artifact-cardinality-mapped-to-reference
- *   #15 status-field-valid
- *   #16 untracked-plan-cannot-claim-post-draft-status
+ *   #15 status-field-valid                              (Slice 66
+ *                                                       methodology-trim-arc:
+ *                                                       parameterized by
+ *                                                       --context flag;
+ *                                                       AUTHORING_STATUSES
+ *                                                       vs COMMITTED_STATUSES)
+ *   #16 untracked-plan-cannot-claim-post-draft-status   (Slice 66
+ *                                                       methodology-trim-arc:
+ *                                                       references
+ *                                                       UNTRACKED_PERMITTED_STATUSES
+ *                                                       derived from
+ *                                                       AUTHORING_STATUSES)
  *   #17 status-challenger-cleared-requires-fresh-committed-challenger-artifact
  *   #18 canonical-phase-set-maps-to-schema-vocabulary
  *   #19 verdict-determinism-includes-verification-passes-for-successor-to-live
@@ -97,20 +116,28 @@ const REPO_ROOT = (() => {
   }
 })();
 
-const PLAN_STATUS_SET = new Set([
-  'evidence-draft',
+// Slice 66 (methodology-trim-arc) — two-set overlay per ADR-0010 §1.
+// `PLAN_STATUS_SET` (the prior flat enum) is replaced by two
+// context-scoped sets that overlap at `challenger-pending` (the
+// authoring-to-committed gate point). Rule #15 validates against the
+// context-appropriate set; rule #16 derives `UNTRACKED_PERMITTED_STATUSES`
+// from AUTHORING_STATUSES. Audit Check 36 invokes plan-lint with
+// `--context=committed`; the default (`authoring`) preserves draft-
+// authoring CLI behavior.
+export const AUTHORING_STATUSES = new Set(['evidence-draft', 'challenger-pending']);
+export const COMMITTED_STATUSES = new Set([
   'challenger-pending',
   'challenger-cleared',
   'operator-signoff',
   'closed',
 ]);
-
-const POST_DRAFT_STATUSES = new Set([
-  'challenger-pending',
-  'challenger-cleared',
-  'operator-signoff',
-  'closed',
-]);
+// Derived: statuses that permit an untracked file. Only evidence-draft
+// (the initial draft-authoring status) is untracked-permissible.
+// challenger-pending (AUTHORING_STATUSES post-draft state) + all
+// COMMITTED_STATUSES require git-tracked state.
+export const UNTRACKED_PERMITTED_STATUSES = new Set(['evidence-draft']);
+export const VALID_CONTEXTS = new Set(['authoring', 'committed']);
+export const DEFAULT_CONTEXT = 'authoring';
 
 const ACCEPT_CLASS_VERDICTS = new Set(['ACCEPT', 'ACCEPT-WITH-FOLD-INS']);
 
@@ -867,8 +894,16 @@ function rule14ArtifactCardinality(plan) {
 
 /**
  * Rule #15 — status-field-valid.
+ *
+ * Slice 66 (methodology-trim-arc): parameterized by `context`. With
+ * `context === 'committed'` (audit Check 36 invocation), accepts
+ * COMMITTED_STATUSES only — evidence-draft is rejected, since
+ * committed plans must have advanced past the draft window. With
+ * `context === 'authoring'` (default — draft-authoring CLI), accepts
+ * AUTHORING_STATUSES only. The sets overlap at `challenger-pending`
+ * (the gate point).
  */
-function rule15StatusValid(plan) {
+export function rule15StatusValid(plan, context = DEFAULT_CONTEXT) {
   const status = plan.frontmatter.status;
   if (!status) {
     return [
@@ -880,12 +915,13 @@ function rule15StatusValid(plan) {
       },
     ];
   }
-  if (!PLAN_STATUS_SET.has(status.trim())) {
+  const accepted = context === 'committed' ? COMMITTED_STATUSES : AUTHORING_STATUSES;
+  if (!accepted.has(status.trim())) {
     return [
       {
         rule: 'plan-lint.status-field-valid',
         severity: 'red',
-        message: `Invalid status "${status}". Valid: ${[...PLAN_STATUS_SET].join(', ')}`,
+        message: `Invalid status "${status}" in ${context} context. Valid statuses: ${[...accepted].join(', ')}`,
         location: 'frontmatter.status',
       },
     ];
@@ -895,16 +931,24 @@ function rule15StatusValid(plan) {
 
 /**
  * Rule #16 — untracked-plan-cannot-claim-post-draft-status.
+ *
+ * Slice 66 (methodology-trim-arc): references UNTRACKED_PERMITTED_STATUSES
+ * (derived from AUTHORING_STATUSES). evidence-draft is the only
+ * authoring status that permits untracked state; challenger-pending
+ * and every COMMITTED_STATUSES value require git-tracked state per
+ * ADR-0010 §2 transitions.
  */
-function rule16UntrackedPostDraft(plan, planPath) {
+export function rule16UntrackedPostDraft(plan, planPath) {
   const status = plan.frontmatter.status;
   if (!status) return [];
-  if (POST_DRAFT_STATUSES.has(status.trim()) && !isGitTracked(planPath)) {
+  const trimmed = status.trim();
+  if (UNTRACKED_PERMITTED_STATUSES.has(trimmed)) return [];
+  if (!isGitTracked(planPath)) {
     return [
       {
         rule: 'plan-lint.untracked-plan-cannot-claim-post-draft-status',
         severity: 'red',
-        message: `Plan status "${status}" requires git-tracked state. File is untracked.`,
+        message: `Plan status "${status}" requires git-tracked state. File is untracked. Only evidence-draft (the initial AUTHORING_STATUSES state) permits untracked state.`,
         location: 'filesystem',
       },
     ];
@@ -1623,7 +1667,7 @@ function rule23ProspectiveChronologyForbidden(plan, planPath) {
 
 // ----- MAIN -----
 
-function runAllRules(plan, planPath) {
+export function runAllRules(plan, planPath, context = DEFAULT_CONTEXT) {
   // Legacy-plan exemption per ADR-0010 §Migration.
   if (isLegacyPlan(plan.frontmatter, planPath)) {
     return [];
@@ -1643,7 +1687,7 @@ function runAllRules(plan, planPath) {
     ...rule12LiveStateLedger(plan),
     ...rule13CliShape(plan),
     ...rule14ArtifactCardinality(plan),
-    ...rule15StatusValid(plan),
+    ...rule15StatusValid(plan, context),
     ...rule16UntrackedPostDraft(plan, planPath),
     ...rule17ClearedRequiresArtifact(plan, planPath),
     ...rule18CanonicalPhaseSet(plan),
@@ -1658,17 +1702,38 @@ function runAllRules(plan, planPath) {
 function main() {
   const args = process.argv.slice(2);
   if (args.length === 0) {
-    console.error('Usage: plan-lint <path-to-plan.md>');
+    console.error('Usage: plan-lint [--context=authoring|committed] <path-to-plan.md>');
     process.exit(2);
   }
-  const planPath = resolve(args[0]);
+  // Slice 66 (methodology-trim-arc): parse optional --context flag.
+  let context = DEFAULT_CONTEXT;
+  const positional = [];
+  for (const arg of args) {
+    if (arg.startsWith('--context=')) {
+      const value = arg.slice('--context='.length);
+      if (!VALID_CONTEXTS.has(value)) {
+        console.error(
+          `plan-lint: invalid --context value "${value}". Expected one of: ${[...VALID_CONTEXTS].join(', ')}`,
+        );
+        process.exit(2);
+      }
+      context = value;
+    } else {
+      positional.push(arg);
+    }
+  }
+  if (positional.length === 0) {
+    console.error('Usage: plan-lint [--context=authoring|committed] <path-to-plan.md>');
+    process.exit(2);
+  }
+  const planPath = resolve(positional[0]);
   if (!existsSync(planPath)) {
     console.error(`plan-lint: file not found: ${planPath}`);
     process.exit(2);
   }
   const contents = readFileSync(planPath, 'utf8');
   const plan = parsePlan(contents);
-  const findings = runAllRules(plan, planPath);
+  const findings = runAllRules(plan, planPath, context);
 
   const reds = findings.filter((f) => f.severity === 'red');
   const yellows = findings.filter((f) => f.severity === 'yellow');

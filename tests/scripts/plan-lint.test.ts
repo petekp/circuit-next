@@ -24,9 +24,15 @@ const PLAN_LINT = join(REPO_ROOT, 'scripts', 'plan-lint.mjs');
 
 // Slice-58a (Codex LOW-1 fold-in): use execFileSync so paths containing
 // spaces, quotes, or shell metacharacters in TMPDIR pass through safely.
-function runLint(path: string): { exitCode: number; stdout: string; stderr: string } {
+// Slice 66 (methodology-trim-arc): optional `context` selects the
+// --context flag value; default matches CLI default (authoring).
+function runLint(
+  path: string,
+  context?: 'authoring' | 'committed',
+): { exitCode: number; stdout: string; stderr: string } {
+  const args = context ? [PLAN_LINT, `--context=${context}`, path] : [PLAN_LINT, path];
   try {
-    const stdout = execFileSync(process.execPath, [PLAN_LINT, path], {
+    const stdout = execFileSync(process.execPath, args, {
       cwd: REPO_ROOT,
       stdio: ['ignore', 'pipe', 'pipe'],
       encoding: 'utf8',
@@ -42,8 +48,8 @@ function runLint(path: string): { exitCode: number; stdout: string; stderr: stri
   }
 }
 
-function lintFindings(path: string): string[] {
-  const result = runLint(path);
+function lintFindings(path: string, context?: 'authoring' | 'committed'): string[] {
+  const result = runLint(path, context);
   const findingLines = result.stderr.split('\n').filter(Boolean);
   return findingLines
     .map((line) => {
@@ -62,8 +68,12 @@ describe('plan-lint — known-good fixture', () => {
     expect(exitCode).toBe(0);
   });
 
-  it('returns GREEN on the meta-arc plan itself (reflexive self-lint)', () => {
-    const { exitCode, stderr } = runLint('specs/plans/planning-readiness-meta-arc.md');
+  it('returns GREEN on the meta-arc plan itself (reflexive self-lint) under --context=committed', () => {
+    // Slice 66 (methodology-trim-arc): the meta-arc plan is at status:
+    // closed, which is a COMMITTED_STATUS. Under default (authoring),
+    // rule #15 fires because closed ∉ AUTHORING_STATUSES. Reflexive
+    // self-lint is an audit-equivalent invocation; pass committed.
+    const { exitCode, stderr } = runLint('specs/plans/planning-readiness-meta-arc.md', 'committed');
     expect(exitCode).toBe(0);
     expect(stderr).toBe('');
   });
@@ -315,10 +325,14 @@ describe('plan-lint — rule #23 prospective-chronology-forbidden (Slice 64, met
   });
 
   it('planning-readiness-meta-arc.md is grandfathered (pre-methodology-trim-arc)', () => {
+    // Slice 66 (methodology-trim-arc): pass --context=committed because
+    // meta-arc plan is at status: closed (COMMITTED_STATUSES), which
+    // rule #15 rejects under default authoring context. The test's
+    // core assertion is about rule #23 grandfathering, not rule #15.
     const path = 'specs/plans/planning-readiness-meta-arc.md';
-    const result = runLint(path);
+    const result = runLint(path, 'committed');
     expect(result.exitCode).toBe(0);
-    expect(lintFindings(path)).not.toContain(RULE_23);
+    expect(lintFindings(path, 'committed')).not.toContain(RULE_23);
   });
 
   it('specs/reviews/** files are out of rule-23 scope', () => {
@@ -530,5 +544,83 @@ Fixture verifying rule #16 fires on untracked files claiming post-draft status.
     expect(lintFindings(planPath)).toContain(
       'plan-lint.untracked-plan-cannot-claim-post-draft-status',
     );
+  });
+});
+
+describe('plan-lint — Slice 66 two-set overlay (--context=authoring|committed)', () => {
+  // Slice 66 (methodology-trim-arc, pass-05 F1 closure): plan-lint CLI
+  // gains a --context flag selecting AUTHORING_STATUSES (default) vs
+  // COMMITTED_STATUSES for rule #15 validation. The sets overlap at
+  // `challenger-pending` (the authoring-to-committed gate point per
+  // ADR-0010 §1 two-set overlay).
+  const AUTHORING_FIXTURE = 'tests/fixtures/plan-lint/good/minimal-compliant-plan.md';
+  const COMMITTED_FIXTURE = 'tests/fixtures/plan-lint/good/minimal-compliant-committed.md';
+
+  describe('authoring-context fixture (status: evidence-draft)', () => {
+    it('passes under default (authoring) context', () => {
+      const { exitCode } = runLint(AUTHORING_FIXTURE);
+      expect(exitCode).toBe(0);
+    });
+
+    it('passes under explicit --context=authoring', () => {
+      const { exitCode } = runLint(AUTHORING_FIXTURE, 'authoring');
+      expect(exitCode).toBe(0);
+    });
+
+    it('fires rule #15 under --context=committed (evidence-draft ∉ COMMITTED_STATUSES)', () => {
+      const { exitCode } = runLint(AUTHORING_FIXTURE, 'committed');
+      expect(exitCode).toBe(1);
+      expect(lintFindings(AUTHORING_FIXTURE, 'committed')).toContain(
+        'plan-lint.status-field-valid',
+      );
+    });
+  });
+
+  describe('committed-context fixture (status: challenger-pending, overlap state)', () => {
+    it('passes under default (authoring) context', () => {
+      const { exitCode } = runLint(COMMITTED_FIXTURE);
+      expect(exitCode).toBe(0);
+    });
+
+    it('passes under explicit --context=authoring', () => {
+      const { exitCode } = runLint(COMMITTED_FIXTURE, 'authoring');
+      expect(exitCode).toBe(0);
+    });
+
+    it('passes under --context=committed (challenger-pending ∈ COMMITTED_STATUSES)', () => {
+      const { exitCode } = runLint(COMMITTED_FIXTURE, 'committed');
+      expect(exitCode).toBe(0);
+    });
+  });
+
+  describe('committed-status plans (status: closed / operator-signoff / challenger-cleared)', () => {
+    it('meta-arc plan (status: closed) passes under --context=committed', () => {
+      const { exitCode } = runLint('specs/plans/planning-readiness-meta-arc.md', 'committed');
+      expect(exitCode).toBe(0);
+    });
+
+    it('meta-arc plan (status: closed) fires rule #15 under --context=authoring', () => {
+      const findings = lintFindings('specs/plans/planning-readiness-meta-arc.md', 'authoring');
+      expect(findings).toContain('plan-lint.status-field-valid');
+    });
+  });
+
+  describe('CLI --context validation', () => {
+    it('rejects invalid --context value with exit 2', () => {
+      const result = runLint('tests/fixtures/plan-lint/good/minimal-compliant-plan.md');
+      expect(result.exitCode).toBe(0);
+      // Direct invocation with bogus context value.
+      try {
+        execFileSync(process.execPath, [PLAN_LINT, '--context=bogus', AUTHORING_FIXTURE], {
+          cwd: REPO_ROOT,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        throw new Error('expected non-zero exit');
+      } catch (err) {
+        const e = err as { status?: number; stderr?: Buffer };
+        expect(e.status).toBe(2);
+        expect(e.stderr?.toString() ?? '').toMatch(/invalid --context value/);
+      }
+    });
   });
 });

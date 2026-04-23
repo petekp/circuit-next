@@ -32,6 +32,15 @@ bootstrap plan-lint's test suite. Trajectory: no earlier slice has
 made this fixture smaller or obsolete; fixture authoring is the first
 step of landing plan-lint.
 
+**Context scope (Slice 66 methodology-trim-arc).** This fixture carries
+`status: evidence-draft`, which is a member of `AUTHORING_STATUSES` per
+ADR-0010 §1 two-set overlay. It is therefore VALID under
+`plan-lint --context=authoring` (the default, draft-authoring CLI use)
+and INVALID under `plan-lint --context=committed` (the audit Check 36
+invocation), because committed plans must have advanced past the draft
+window. See `tests/fixtures/plan-lint/good/minimal-compliant-committed.md`
+for the committed-context happy-path fixture.
+
 ## §1 — Evidence census
 
 ### §1.A Claims

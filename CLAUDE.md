@@ -265,10 +265,19 @@ payload plans pass through a five-state lifecycle before slices open:
    predecessor.
 5. `closed` — arc landed; `closed_at` + `closed_in_slice` set.
 
+**Two-context validation (Slice 66 methodology-trim-arc).** Plan-lint
+rule #15 validates `status:` against a context-scoped subset per
+ADR-0010 §1: `AUTHORING_STATUSES` = {`evidence-draft`,
+`challenger-pending`} for draft-authoring CLI; `COMMITTED_STATUSES` =
+{`challenger-pending`, `challenger-cleared`, `operator-signoff`,
+`closed`} for audit Check 36 invocation. Sets overlap at
+`challenger-pending`. Run `npm run plan:lint -- specs/plans/<plan>.md`
+(default `--context=authoring`) during draft; audit Check 36 invokes
+with `--context=committed` on commit boundaries.
+
 Enforcement: `scripts/plan-lint.mjs` (20 active rules post-Slice-65;
 #8/#11/#22 cut, numbering preserved as gaps) + audit Check 36 (committed
-plans + operator-signoff chain validation). Run `npm run plan:lint --
-specs/plans/<plan>.md` during authoring. Legacy plans (first-commit
+plans + operator-signoff chain validation). Legacy plans (first-commit
 predates the meta-arc) are exempt.
 
 Do not present a plan for operator sign-off until the checklist in memory
