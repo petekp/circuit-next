@@ -4168,6 +4168,154 @@ export function checkCodexChallengerRequiredDeclaration(rootDir = REPO_ROOT) {
   };
 }
 
+// Check 36 (Slice 58 — Planning-Readiness Meta-Arc tooling layer). Runs
+// scripts/plan-lint.mjs against every tracked `specs/plans/*.md`. Legacy
+// plans (first-commit predates META_ARC_FIRST_COMMIT) are skipped by
+// plan-lint's own exemption. For post-effective plans currently at
+// `status: operator-signoff`, also verifies the introducing commit body
+// carries the predecessor-chain binding. plan-lint returns exit 0 for
+// green, 1 for findings, 2 for invocation errors — exit ≥ 1 becomes a
+// red finding on this audit check.
+export const OPERATOR_SIGNOFF_BINDING_PATTERN =
+  /(?:operator_signoff_predecessor|[Oo]perator signoff predecessor):\s*([a-f0-9]{7,40})/;
+
+export function checkPlanLintCommittedPlans(rootDir = REPO_ROOT) {
+  let plans;
+  try {
+    plans = execSync('git ls-files "specs/plans/*.md"', {
+      cwd: rootDir,
+      encoding: 'utf8',
+    })
+      .trim()
+      .split('\n')
+      .filter(Boolean);
+  } catch (err) {
+    return {
+      level: 'yellow',
+      detail: `checkPlanLintCommittedPlans: cannot list specs/plans/*.md (${err.message})`,
+    };
+  }
+
+  if (plans.length === 0) {
+    return {
+      level: 'yellow',
+      detail: 'No committed plans under specs/plans/; Check 36 inapplicable',
+    };
+  }
+
+  const lintFailures = [];
+  const bindingFailures = [];
+  for (const rel of plans) {
+    try {
+      execSync(`node ${join(rootDir, 'scripts/plan-lint.mjs')} ${JSON.stringify(rel)}`, {
+        cwd: rootDir,
+        stdio: 'pipe',
+      });
+    } catch (err) {
+      const status = err.status ?? 1;
+      const tail = (err.stdout?.toString() ?? '').split('\n').slice(0, 4).join(' | ');
+      lintFailures.push(`${rel} (exit ${status}): ${tail}`);
+      continue;
+    }
+
+    // Plan-lint passed. Now check operator-signoff binding if applicable.
+    const absPath = join(rootDir, rel);
+    let contents;
+    try {
+      contents = readFileSync(absPath, 'utf8');
+    } catch {
+      continue;
+    }
+    const statusMatch = contents.match(/^status:\s*([^\s\n]+)/m);
+    if (!statusMatch || statusMatch[1].trim() !== 'operator-signoff') continue;
+
+    // Find the commit that transitioned the plan's FRONTMATTER status to
+    // operator-signoff. git -S (pickaxe) is too permissive — it matches any
+    // body text containing the literal "status: operator-signoff", including
+    // state-machine documentation added before the frontmatter actually
+    // changed. Instead, walk commits newest → oldest and identify the first
+    // commit at which the plan's frontmatter status was NOT operator-signoff;
+    // the commit immediately after it (newer) is the transition commit.
+    let transitionCommit;
+    try {
+      const log = execSync(`git -C ${rootDir} log --format=%H -- ${JSON.stringify(rel)}`, {
+        encoding: 'utf8',
+      });
+      const commits = log.trim().split('\n').filter(Boolean);
+      for (let i = 0; i < commits.length - 1; i++) {
+        const prevSha = commits[i + 1];
+        let prevContent = '';
+        try {
+          prevContent = execSync(`git -C ${rootDir} show ${prevSha}:${rel}`, {
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'ignore'],
+          });
+        } catch {
+          // path did not exist in prevSha — treat as transition at commits[i]
+        }
+        const prevStatusMatch = prevContent.match(/^status:\s*([^\s\n]+)/m);
+        const prevStatus = prevStatusMatch ? prevStatusMatch[1].trim() : null;
+        if (prevStatus !== 'operator-signoff') {
+          transitionCommit = commits[i];
+          break;
+        }
+      }
+      // Edge case: every historical version was operator-signoff (impossible
+      // here — evidence-draft came first), but defensively use the oldest.
+      if (!transitionCommit && commits.length > 0) {
+        transitionCommit = commits[commits.length - 1];
+      }
+    } catch {
+      // swallow — treat as missing
+    }
+    if (!transitionCommit) {
+      bindingFailures.push(
+        `${rel}: status=operator-signoff but no transition commit found via git -S`,
+      );
+      continue;
+    }
+    let body;
+    try {
+      body = execSync(`git -C ${rootDir} log -1 --format=%B ${transitionCommit}`, {
+        encoding: 'utf8',
+      });
+    } catch (err) {
+      bindingFailures.push(
+        `${rel}: cannot read transition commit ${transitionCommit.slice(0, 7)} body (${err.message})`,
+      );
+      continue;
+    }
+    const bindMatch = body.match(OPERATOR_SIGNOFF_BINDING_PATTERN);
+    if (!bindMatch) {
+      bindingFailures.push(
+        `${rel}: transition commit ${transitionCommit.slice(0, 7)} body lacks operator_signoff_predecessor binding`,
+      );
+      continue;
+    }
+    // Verify the named SHA is in branch history.
+    const namedSha = bindMatch[1];
+    try {
+      execSync(`git -C ${rootDir} cat-file -e ${namedSha}`, { stdio: 'ignore' });
+    } catch {
+      bindingFailures.push(
+        `${rel}: operator_signoff_predecessor sha ${namedSha} is not reachable in this repo`,
+      );
+    }
+  }
+
+  const errors = [...lintFailures, ...bindingFailures];
+  if (errors.length > 0) {
+    return {
+      level: 'red',
+      detail: `${plans.length} committed plans scanned — ${lintFailures.length} plan-lint failures, ${bindingFailures.length} operator-signoff binding failures. Details: ${errors.join(' || ')}`,
+    };
+  }
+  return {
+    level: 'green',
+    detail: `All ${plans.length} committed plans pass plan-lint; operator-signoff binding verified where applicable`,
+  };
+}
+
 // Slice 45 (P2.6) — the Check 32 `checkCodexSmokeFingerprint` export
 // below reuses the same validation shape against the codex-smoke
 // fingerprint path; both checks share identical semantics and differ
@@ -5343,6 +5491,25 @@ function main() {
     level: codexChallengerDeclaration.level,
     check: 'Codex challenger REQUIRED declaration (Slice 47d / Codex HIGH 2 + Claude HIGH 2)',
     detail: codexChallengerDeclaration.detail,
+  });
+
+  // Check 36: plan-lint on committed plans + operator-signoff binding (Slice
+  // 58 — Planning-Readiness Meta-Arc). For each tracked specs/plans/*.md,
+  // runs scripts/plan-lint.mjs. Legacy plans (first-commit strict ancestor
+  // of META_ARC_FIRST_COMMIT) pass under plan-lint's own exemption. For
+  // post-effective plans currently at status: operator-signoff, additionally
+  // verifies the commit that introduced operator-signoff for that plan
+  // carries an `operator_signoff_predecessor: <sha>` or
+  // `Operator signoff predecessor: <sha>` binding. The predecessor-chain
+  // enforcement lives here (audit has access to commit bodies and git
+  // ancestry) rather than in plan-lint (which reads plan file content only).
+  const planLintCheck = checkPlanLintCommittedPlans();
+  counters[planLintCheck.level]++;
+  findings.push({
+    level: planLintCheck.level,
+    check:
+      'plan-lint on committed plans + operator-signoff binding (Slice 58 / Planning-Readiness Meta-Arc)',
+    detail: planLintCheck.detail,
   });
 
   // Check 31: npm run verify currently green. (Runs last so the report's

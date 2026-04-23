@@ -164,3 +164,135 @@ describe('plan-lint — usage / invocation errors', () => {
     expect(result.exitCode).toBe(2);
   });
 });
+
+describe('plan-lint — per-rule bad fixtures (Slice 58 baseline — rules #1-#6, #9-#21)', () => {
+  const BAD = 'tests/fixtures/plan-lint/bad';
+  const cases: [string, string][] = [
+    ['rule-01-missing-evidence-census.md', 'plan-lint.evidence-census-present'],
+    ['rule-02-tbd-in-acceptance.md', 'plan-lint.tbd-in-acceptance-evidence'],
+    ['rule-03-test-path-extension.md', 'plan-lint.test-path-extension'],
+    ['rule-04-stale-symbol-citation.md', 'plan-lint.stale-symbol-citation'],
+    ['rule-05-arc-close-claim-without-gate.md', 'plan-lint.arc-close-claim-without-gate'],
+    ['rule-06-signoff-while-pending.md', 'plan-lint.signoff-while-pending'],
+    [
+      'rule-09-contract-shaped-payload-without-characterization.md',
+      'plan-lint.contract-shaped-payload-without-characterization',
+    ],
+    [
+      'rule-10-unverified-hypothesis-as-decided.md',
+      'plan-lint.unverified-hypothesis-presented-as-decided',
+    ],
+    ['rule-11-missing-arc-trajectory.md', 'plan-lint.arc-trajectory-check-present'],
+    ['rule-12-live-state-ledger-incomplete.md', 'plan-lint.live-state-evidence-ledger-complete'],
+    ['rule-13-cli-shape-mismatch.md', 'plan-lint.cli-invocation-shape-matches'],
+    [
+      'rule-14-artifact-cardinality-no-reference.md',
+      'plan-lint.artifact-cardinality-mapped-to-reference',
+    ],
+    ['rule-15-invalid-status.md', 'plan-lint.status-field-valid'],
+    [
+      'rule-17-cleared-without-challenger-artifact.md',
+      'plan-lint.status-challenger-cleared-requires-fresh-committed-challenger-artifact',
+    ],
+    [
+      'rule-18-non-canonical-phase-set.md',
+      'plan-lint.canonical-phase-set-maps-to-schema-vocabulary',
+    ],
+    [
+      'rule-19-verdict-determinism-missing-verification.md',
+      'plan-lint.verdict-determinism-includes-verification-passes-for-successor-to-live',
+    ],
+    [
+      'rule-20-verification-runtime-without-substrate.md',
+      'plan-lint.verification-runtime-capability-assumed-without-substrate-slice',
+    ],
+    [
+      'rule-21-artifact-materialization-no-schema.md',
+      'plan-lint.artifact-materialization-uses-registered-schema',
+    ],
+  ];
+  for (const [fixture, expectedRule] of cases) {
+    it(`${fixture} fires ${expectedRule}`, () => {
+      const path = `${BAD}/${fixture}`;
+      const result = runLint(path);
+      expect(result.exitCode).toBe(1);
+      expect(lintFindings(path)).toContain(expectedRule);
+    });
+  }
+});
+
+describe('plan-lint — legacy/ fixture (backdating does not defeat rules)', () => {
+  it('backdated-claim-does-not-defeat-rules.md still fails rule #15', () => {
+    const path = 'tests/fixtures/plan-lint/legacy/backdated-claim-does-not-defeat-rules.md';
+    const result = runLint(path);
+    expect(result.exitCode).toBe(1);
+    expect(lintFindings(path)).toContain('plan-lint.status-field-valid');
+  });
+});
+
+describe('plan-lint — rule #16 (untracked-plan-cannot-claim-post-draft-status)', () => {
+  it('fires red when an untracked plan claims status: challenger-pending', async () => {
+    // Rule #16 requires an actually-untracked file to test. We write to a
+    // path under the system temp dir and point plan-lint at it. The fixture
+    // is never committed; its untracked-ness is the subject of the rule.
+    const { mkdtempSync, writeFileSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const dir = mkdtempSync(join(tmpdir(), 'plan-lint-rule-16-'));
+    const planPath = join(dir, 'rule-16-untracked-post-draft.md');
+    writeFileSync(
+      planPath,
+      `---
+plan: rule-16-untracked-post-draft
+status: challenger-pending
+revision: 01
+opened_at: 2026-04-23
+base_commit: a4de1d57230e82fd68e1164f9534f3aed8564943
+target: rule-16-proof
+---
+
+# Untracked post-draft fixture
+
+## Why this plan exists
+
+Fixture verifying rule #16 fires on untracked files claiming post-draft status.
+
+## §1 — Evidence census
+
+| # | Claim | Status |
+|---|---|---|
+| E1 | Untracked file with challenger-pending status | verified |
+
+### §1.B Hypotheses
+
+*None.*
+
+### §1.C Unknown-blocking
+
+*None.*
+
+## §2 — The arc
+
+### Slice 1
+
+**Lane:** Discovery.
+
+**Failure mode addressed:** Rule coverage gap.
+
+**Deliverable:** This file.
+
+**Acceptance evidence:** Plan-lint exits non-zero.
+
+**Alternate framing:** *(a) Track it.* Rejected — bad fixture.
+
+**Ratchet:** None.
+
+**Codex challenger:** Not required.
+`,
+    );
+    const result = runLint(planPath);
+    expect(result.exitCode).toBe(1);
+    expect(lintFindings(planPath)).toContain(
+      'plan-lint.untracked-plan-cannot-claim-post-draft-status',
+    );
+  });
+});
