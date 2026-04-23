@@ -1,12 +1,12 @@
 ---
 plan: planning-readiness-meta-arc
 status: challenger-pending
-revision: 07
+revision: 08
 opened_at: 2026-04-23
 revised_at: 2026-04-23
 opened_in_session: post-p2-9-codex-meta-retrospective
-revised_in_session: post-codex-challenger-06-foldin
-base_commit: 04772e7
+revised_in_session: post-codex-challenger-07-foldin-chronology-restructure
+base_commit: defe76e
 target: planning discipline (not a workflow; this is methodology)
 prior_challenger_passes:
   - specs/reviews/planning-readiness-meta-arc-codex-challenger-01.md
@@ -33,6 +33,11 @@ prior_challenger_passes:
     remaining fold-in was §8 chronology drift — future-tense
     "Slice 57d upcoming" when Slice 57d was already HEAD. Folded
     trivially in revision 07.)
+  - specs/reviews/planning-readiness-meta-arc-codex-challenger-07.md
+    (verdict REJECT-PENDING-FOLD-INS with no NEW findings; same
+    chronology-drift class as pass 06 — completed commit-item
+    listed as "next step." Revision 08 restructures §8 to state-
+    protocol form eliminating the drift pattern entirely.)
 trigger: |
   P2.9 plan draft (specs/plans/p2-9-second-workflow.md, untracked)
   reached operator decision point carrying multiple material flaws
@@ -828,19 +833,19 @@ Linear. Arc total ~5-7 hrs wall-clock plus challenger turnaround.
 6. **DECIDED: effective-date migration** per pass 02 CRITICAL 2
    fold-in.
 
-## §8 — Self-validation (reflexive, revision 07)
+## §8 — Self-validation (reflexive, revision 08)
 
 This plan is authored under the discipline it proposes.
 
-**Plan lifecycle status evidence (HEAD reality):**
-- Current status: `challenger-pending`.
-- Revision: 07 (after Codex passes 01, 02, 03, 04, 05, 06 fold-ins).
-- Preparation commits committed: Slice 57a (c914690), Slice 57b
-  (fe5503d), Slice 57c (2aeb351), Slice 57d (04772e7). Slice 57e
-  stages revision 07 + pass 06 review.
-- Revision 07 authoring source:
-  `specs/reviews/planning-readiness-meta-arc-codex-challenger-06.md`
-  (committed at Slice 57e).
+**Plan lifecycle status evidence (state-protocol, not chronology).**
+- Current status: see frontmatter `status:` field (authoritative).
+- Revision: see frontmatter `revision:` field.
+- Preparation commits: enumerate via `git log --oneline` against
+  files under `specs/plans/planning-readiness-meta-arc.md` and
+  `specs/reviews/planning-readiness-meta-arc-codex-challenger-*.md`.
+- Revision authoring source: most recent challenger-pass review
+  artifact referenced in frontmatter `prior_challenger_passes:`
+  list. Revision N+1 is authored in response to pass N's fold-ins.
 
 **Structured ledger (per §1):**
 - Verified claims: E1-E10, E11-E15, E16-E22, E23-E26 (26 total).
@@ -874,12 +879,16 @@ Iteration history:
   commit-ancestry mechanism (no more stale Date.parse references);
   (c) §8 language past-tense reflecting HEAD reality.
 
-**Next steps (revision 07):**
-1. Commit revision 07 + pass 06 review (Slice 57e).
-2. Dispatch Codex pass 07 against committed revision 07.
-3. If ACCEPT: pass 07 artifact commits; status transitions
-   `challenger-pending → challenger-cleared` (Slice 57f); operator
-   sign-off inferred from autonomy directive + explicitly disclosed
-   in the commit body (Slice 57g); Slice 57 proper (ADRs) opens.
-4. If REJECT again: pause and await explicit operator input — 7
-   passes is the hard bound.
+**Next action (state-protocol, not chronology-list).**
+The plan's forward progress is governed by the §Plan-lifecycle state
+machine. From `challenger-pending` status, the next transition is
+`challenger-cleared` upon commit of an accept-class committed Codex
+challenger-pass review file matching the current plan (slug +
+revision + base_commit + plan_content_sha256). From
+`challenger-cleared`, the next transition is `operator-signoff` via
+a commit carrying `operator_signoff_predecessor: <sha>`. This
+section intentionally does NOT enumerate slice-specific commit
+identifiers — they would drift with every commit and trigger the
+chronology-drift false-positive pattern observed across passes
+04-07. The state machine is the authority; specific next-slice IDs
+belong in the commit log, not in the plan's self-validation.
