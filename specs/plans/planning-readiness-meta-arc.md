@@ -1,12 +1,12 @@
 ---
 plan: planning-readiness-meta-arc
 status: challenger-pending
-revision: 06
+revision: 07
 opened_at: 2026-04-23
 revised_at: 2026-04-23
 opened_in_session: post-p2-9-codex-meta-retrospective
-revised_in_session: post-codex-challenger-05-foldin
-base_commit: 2aeb351
+revised_in_session: post-codex-challenger-06-foldin
+base_commit: 04772e7
 target: planning discipline (not a workflow; this is methodology)
 prior_challenger_passes:
   - specs/reviews/planning-readiness-meta-arc-codex-challenger-01.md
@@ -26,8 +26,13 @@ prior_challenger_passes:
     revision 05 — see §0.D)
   - specs/reviews/planning-readiness-meta-arc-codex-challenger-05.md
     (verdict REJECT-PENDING-FOLD-INS, 3 minimum fold-ins — CRITICAL
-    test-reproducibility + HIGH stale-prose + MED §8-drift — all
-    folded in revision 06)
+    test-reproducibility + HIGH stale-prose + MED §8-drift — 2 of
+    3 resolved in revision 06)
+  - specs/reviews/planning-readiness-meta-arc-codex-challenger-06.md
+    (verdict REJECT-PENDING-FOLD-INS with no NEW findings; the only
+    remaining fold-in was §8 chronology drift — future-tense
+    "Slice 57d upcoming" when Slice 57d was already HEAD. Folded
+    trivially in revision 07.)
 trigger: |
   P2.9 plan draft (specs/plans/p2-9-second-workflow.md, untracked)
   reached operator decision point carrying multiple material flaws
@@ -823,19 +828,19 @@ Linear. Arc total ~5-7 hrs wall-clock plus challenger turnaround.
 6. **DECIDED: effective-date migration** per pass 02 CRITICAL 2
    fold-in.
 
-## §8 — Self-validation (reflexive, revision 06)
+## §8 — Self-validation (reflexive, revision 07)
 
 This plan is authored under the discipline it proposes.
 
 **Plan lifecycle status evidence (HEAD reality):**
 - Current status: `challenger-pending`.
-- Revision: 06 (after Codex passes 01, 02, 03, 04, 05 fold-ins).
+- Revision: 07 (after Codex passes 01, 02, 03, 04, 05, 06 fold-ins).
 - Preparation commits committed: Slice 57a (c914690), Slice 57b
-  (fe5503d), Slice 57c (2aeb351). Slice 57d (upcoming) stages
-  revision 06 + pass 05 review + committed P2.9 fixture.
-- Revision 06 authoring source:
-  `specs/reviews/planning-readiness-meta-arc-codex-challenger-05.md`
-  (committed at Slice 57d).
+  (fe5503d), Slice 57c (2aeb351), Slice 57d (04772e7). Slice 57e
+  stages revision 07 + pass 06 review.
+- Revision 07 authoring source:
+  `specs/reviews/planning-readiness-meta-arc-codex-challenger-06.md`
+  (committed at Slice 57e).
 
 **Structured ledger (per §1):**
 - Verified claims: E1-E10, E11-E15, E16-E22, E23-E26 (26 total).
@@ -869,13 +874,12 @@ Iteration history:
   commit-ancestry mechanism (no more stale Date.parse references);
   (c) §8 language past-tense reflecting HEAD reality.
 
-**Next steps (revision 06):**
-1. Commit revision 06 + pass 05 review + committed P2.9 fixture
-   (Slice 57d).
-2. Dispatch Codex pass 06 against committed revision 06.
-3. If ACCEPT: pass 06 artifact commits; status transitions
-   `challenger-pending → challenger-cleared` (Slice 57e); operator
+**Next steps (revision 07):**
+1. Commit revision 07 + pass 06 review (Slice 57e).
+2. Dispatch Codex pass 07 against committed revision 07.
+3. If ACCEPT: pass 07 artifact commits; status transitions
+   `challenger-pending → challenger-cleared` (Slice 57f); operator
    sign-off inferred from autonomy directive + explicitly disclosed
-   in the commit body (Slice 57f); Slice 57 proper (ADRs) opens.
-4. If REJECT again: iterate to revision 07 + pass 07. Hard bound:
-   after pass 07, pause and await explicit operator input.
+   in the commit body (Slice 57g); Slice 57 proper (ADRs) opens.
+4. If REJECT again: pause and await explicit operator input — 7
+   passes is the hard bound.
