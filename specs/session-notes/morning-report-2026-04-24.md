@@ -78,14 +78,44 @@ for rules #7, #8, #22.
 ## Slice 59 — invariant rules + blocked escrow
 
 **Done:** Added the `blocked` enforcement-layer key to
-`specs/invariants.json`. This was the only remaining Slice 59
-deliverable — rules #7, #8, #22 had already landed at Slice 57a
-(implementation) and Slice 58a (fixtures + tests).
+`specs/invariants.json`. Codex then pushed back with a HIGH
+finding — the slice claimed "JSON is authoritative" but
+`scripts/plan-lint.mjs` still had a hardcoded `|| layer === 'blocked'`
+escape plus a silent fallback to a 5-key set if the JSON was
+missing. Folded in as slice-59a: removed the escape, made
+`loadInvariantLayerVocab` fail closed, exported the helpers so
+tests can call them directly, and added a regression test
+proving that removing `blocked` from the vocab makes rule #7
+reject `enforcement_layer: blocked`.
 
-**Issues:** None so far. The vocab addition is a single JSON key.
+**Issues I fixed:**
 
-**Next:** Codex challenger pass → then Slice 60 retroactive run
-against the P2.9 flawed draft.
+1. Same `git add -A` mistake as before — accidentally staged
+   `specs/plans/p2-9-second-workflow.md` (intentionally
+   untracked per plan). Amended slice-59 commit to remove it.
+   **Root cause:** using `git add -A` sweeps up all untracked
+   files. Fix for morning-you to know: I'll switch to explicit
+   path staging for the remaining slices.
+
+2. When I exported helpers from plan-lint.mjs for the
+   regression test, the `main()` call at the bottom of the
+   module triggered on import (process.exit(2) because no
+   args). **Root cause:** no entry-point guard on `main()`.
+   Added `if (import.meta.url === ...)` guard matching the
+   pattern in scripts/audit.mjs.
+
+3. ADR-0010 still said the `blocked` extension was "pending
+   Slice 59" in prose and frontmatter. Updated to "landed
+   Slice 59" + recorded that the fallback cleanup is
+   Slice-59a. This fixes Codex's MED-1 about stale authority
+   prose.
+
+**Audit after Slice 59 + 59a:** 33 green / 2 yellow / 0 red.
+Two yellows still the fingerprint carry-over.
+
+**Next:** Slice 60 — run plan-lint on the flawed P2.9 draft
+and record the hit rate vs the 13-finding ledger that Codex
+originally filed.
 
 ---
 

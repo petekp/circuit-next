@@ -103,7 +103,7 @@ const META_ARC_FIRST_COMMIT = 'c91469053a95519645280fd80394a4966ac7948e';
  * kind is one of: 'narrative', 'rule-description', 'normative'.
  * If no frontmatter found, frontmatter is {} and rawFrontmatter is ''.
  */
-function parsePlan(contents) {
+export function parsePlan(contents) {
   const match = contents.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
   let frontmatter = {};
   let body = contents;
@@ -255,21 +255,29 @@ function isGitTracked(path) {
 }
 
 /**
- * Load the authoritative invariant enforcement-layer vocabulary.
- * Returns Set<string>. Falls back to a hardcoded set if the JSON
- * file is missing (this is a soft fallback for pre-revision-02
- * scenarios; Slice 57 ADR-0010 ensures specs/invariants.json exists).
+ * Load the authoritative invariant enforcement-layer vocabulary from
+ * `specs/invariants.json::enforcement_state_semantics`.
+ *
+ * Slice-59a (Codex HIGH-1 fold-in): fails closed. Prior to 59a this
+ * function silently fell back to a hardcoded 5-key set when the JSON
+ * was missing/malformed, which meant plan-lint accepted
+ * `enforcement_layer: blocked` even when the JSON did not declare
+ * `blocked`. Post-59a, the JSON is mechanically authoritative —
+ * absent/malformed/empty invariants.json crashes plan-lint rather
+ * than falling back to a divergent vocabulary. The exit-2 path in
+ * main() carries the error through cleanly.
  */
-function loadInvariantLayerVocab() {
+export function loadInvariantLayerVocab() {
   const jsonPath = join(REPO_ROOT, 'specs', 'invariants.json');
-  try {
-    const json = JSON.parse(readFileSync(jsonPath, 'utf8'));
-    const keys = Object.keys(json.enforcement_state_semantics ?? {});
-    if (keys.length > 0) return new Set(keys);
-  } catch {
-    // fall through
+  const raw = readFileSync(jsonPath, 'utf8');
+  const json = JSON.parse(raw);
+  const keys = Object.keys(json.enforcement_state_semantics ?? {});
+  if (keys.length === 0) {
+    throw new Error(
+      'specs/invariants.json::enforcement_state_semantics is empty — authoritative vocab cannot be empty',
+    );
   }
-  return new Set(['test-enforced', 'audit-only', 'static-anchor', 'prose-only', 'phase2-property']);
+  return new Set(keys);
 }
 
 /**
@@ -503,10 +511,21 @@ function rule6SignoffWhilePending(plan) {
  * Rule #7 — invariant-without-enforcement-layer (Slice 59).
  * Invariants declared without enforcement_layer from authoritative set.
  * Section-aware: skips matches in rule-description / narrative sections.
+ *
+ * Slice-59a (Codex HIGH-1 fold-in): removed the `layer !== 'blocked'`
+ * hardcoded escape. Vocabulary authority is now strictly
+ * `specs/invariants.json::enforcement_state_semantics` — any layer
+ * name not present in that JSON is rejected. `blocked` is accepted
+ * iff the JSON declares it (it does, as of Slice 59).
+ *
+ * Optional `vocab` parameter exists for tests: callers can pass a
+ * custom vocab Set to simulate a JSON that lacks specific keys
+ * (e.g., verify that removing `blocked` from JSON makes rule #7
+ * reject `enforcement_layer: blocked`).
  */
-function rule7InvariantWithoutLayer(plan) {
+export function rule7InvariantWithoutLayer(plan, vocab = undefined) {
   const findings = [];
-  const vocab = loadInvariantLayerVocab();
+  const activeVocab = vocab ?? loadInvariantLayerVocab();
   const invariantDeclRe = /(?:#{2,4}\s+|\*\*|__)[A-Z]+-I\d+\b/g;
   for (const match of plan.body.matchAll(invariantDeclRe)) {
     const kind = sectionKindAtOffset(plan.sections, match.index);
@@ -523,11 +542,11 @@ function rule7InvariantWithoutLayer(plan) {
       continue;
     }
     const layer = layerMatch[1];
-    if (!vocab.has(layer) && layer !== 'blocked') {
+    if (!activeVocab.has(layer)) {
       findings.push({
         rule: 'plan-lint.invariant-without-enforcement-layer',
         severity: 'red',
-        message: `enforcement_layer "${layer}" not in authoritative set (${[...vocab].join(', ')}) + "blocked" extension`,
+        message: `enforcement_layer "${layer}" not in authoritative set (${[...activeVocab].join(', ')})`,
         location: `body offset ~${match.index}`,
       });
     }
@@ -1189,4 +1208,9 @@ function main() {
   process.exit(reds.length > 0 ? 1 : 0);
 }
 
-main();
+// Slice-59a (Codex HIGH-1 fold-in): gate main() behind entry-point check
+// so test imports (e.g. import { rule7InvariantWithoutLayer }) don't trigger
+// main() which would exit(2) on zero args. Pattern matches scripts/audit.mjs.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main();
+}

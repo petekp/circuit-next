@@ -11,7 +11,7 @@ related:
   - ADR-0007 (Phase 2 close criteria; this ADR's sibling addendum to ADR-0007 tightens CC#P2-1 scoping to exclude second-workflow-generalization from the one-workflow-parity criterion)
 amends:
   - CLAUDE.md §Core-methodology (pending Slice 61 of planning-readiness-meta-arc; adds §Plan-authoring-discipline subsection)
-  - specs/invariants.json::enforcement_state_semantics (pending Slice 59; may add `blocked` state per §Decision.3 below)
+  - specs/invariants.json::enforcement_state_semantics (landed Slice 59 of planning-readiness-meta-arc: adds `blocked` state per §Decision.4 below; six keys now present)
 ---
 
 # ADR-0010 — Arc Planning Readiness Gate
@@ -179,10 +179,14 @@ runtime surface) to be enforceable at all. An invariant can be both
 property harness); in that case `blocked` dominates until the
 substrate-widening slice lands.
 
-**Extension procedure:** specs/invariants.json v2 header adds
-`blocked` to `enforcement_state_semantics` at Slice 59 of the
-planning-readiness-meta-arc (not this slice). This ADR authorizes the
-extension; Slice 59 implements.
+**Extension procedure:** `specs/invariants.json::enforcement_state_semantics`
+landed `blocked` at Slice 59 of the planning-readiness-meta-arc (SHA
+22506c0) per this ADR's authorization. The JSON is now the authoritative
+vocabulary source with six keys: `test-enforced`, `audit-only`,
+`static-anchor`, `prose-only`, `phase2-property`, `blocked`. Slice 59a
+closed the residual fallback in `scripts/plan-lint.mjs` so the JSON is
+mechanically authoritative (prior to 59a, the linter accepted `blocked`
+via a hardcoded special case even when absent from the JSON).
 
 ### 5. Machine enforcement
 

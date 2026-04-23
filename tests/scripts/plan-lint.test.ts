@@ -255,6 +255,87 @@ describe('plan-lint — legacy/ fixture (backdating does not defeat rules)', () 
   });
 });
 
+describe('plan-lint — rule #7 vocabulary authority (Slice-59a Codex HIGH-1 regression test)', () => {
+  // Slice-59a fold-in: prove the JSON is mechanically authoritative.
+  // Prior to Slice-59a plan-lint had a hardcoded `layer !== 'blocked'`
+  // escape that admitted `blocked` even if the JSON vocab excluded it.
+  // These tests import rule #7 directly and exercise both the
+  // rejection path (vocab without `blocked`) and the positive path
+  // (vocab with `blocked`, loaded from the real JSON).
+  const planText = `---
+plan: test-vocab-authority
+status: evidence-draft
+revision: 01
+opened_at: 2026-04-23
+base_commit: a4de1d57230e82fd68e1164f9534f3aed8564943
+target: vocab-authority-proof
+---
+
+# Vocab authority test
+
+## Why this plan exists
+
+Fixture with a blocked invariant declaration.
+
+## §1 — Evidence census
+
+| # | Claim | Status |
+|---|---|---|
+| E1 | Test invariant | verified |
+
+## §2 — Body
+
+### REVIEW-I1
+
+enforcement_layer: blocked
+substrate_slice: Slice 99
+owner: test
+expiry_date: 2026-06-01
+reopen_condition: test
+acceptance_evidence: test
+`;
+
+  it('rejects `blocked` when the authoritative vocab does NOT include `blocked`', async () => {
+    // @ts-ignore — plan-lint.mjs is ESM with no .d.ts
+    const planLint = (await import('../../scripts/plan-lint.mjs')) as {
+      rule7InvariantWithoutLayer: (
+        plan: unknown,
+        vocab: Set<string>,
+      ) => Array<{ rule: string; message: string }>;
+      parsePlan: (text: string) => unknown;
+    };
+    const plan = planLint.parsePlan(planText);
+    const vocabWithoutBlocked = new Set([
+      'test-enforced',
+      'audit-only',
+      'static-anchor',
+      'prose-only',
+      'phase2-property',
+    ]);
+    const findings = planLint.rule7InvariantWithoutLayer(plan, vocabWithoutBlocked);
+    expect(findings).toHaveLength(1);
+    const finding = findings[0];
+    if (!finding) throw new Error('finding[0] missing');
+    expect(finding.rule).toBe('plan-lint.invariant-without-enforcement-layer');
+    expect(finding.message).toContain('not in authoritative set');
+  });
+
+  it('accepts `blocked` when the authoritative vocab includes `blocked` (current state)', async () => {
+    // @ts-ignore — plan-lint.mjs is ESM with no .d.ts
+    const planLint = (await import('../../scripts/plan-lint.mjs')) as {
+      rule7InvariantWithoutLayer: (
+        plan: unknown,
+        vocab: Set<string>,
+      ) => Array<{ rule: string; message: string }>;
+      parsePlan: (text: string) => unknown;
+      loadInvariantLayerVocab: () => Set<string>;
+    };
+    const plan = planLint.parsePlan(planText);
+    const findings = planLint.rule7InvariantWithoutLayer(plan, planLint.loadInvariantLayerVocab());
+    expect(findings).toHaveLength(0);
+  });
+});
+
 describe('plan-lint — rule #16 (untracked-plan-cannot-claim-post-draft-status)', () => {
   it('fires red when an untracked plan claims status: challenger-pending', async () => {
     // Rule #16 requires an actually-untracked file to test. We write to a
