@@ -2,15 +2,61 @@
 
 Written for you while you slept. Short, direct, no jargon soup.
 
-**Start commit:** 6384460 (slice-57i). **Audit entering:** 32 green / 2 yellow / 0 red.
+**Start commit:** 6384460 (slice-57i). **End commit:** a5fd20b (slice-62).
+
+**Audit entering:** 32 green / 2 yellow / 0 red.
+**Audit exiting:** 33 green / 2 yellow / 0 red.
 
 ---
 
-## TL;DR
+## TL;DR (read this if you read nothing else)
 
-I continued the Planning Readiness meta-arc autonomously. Plan at
-`specs/plans/planning-readiness-meta-arc.md`. Slices 58–62 were on
-deck. This report grows as each slice lands.
+**The arc closed cleanly.** Slices 58 through 62 all landed plus
+four continuation commits (58a, 59a, 60a, 61a) that absorbed Codex
+challenger fold-ins same-session. The Planning-Readiness Meta-Arc
+is now at `status: closed`. Every per-slice Codex pass ran
+(5 files committed), both arc-close composition review prongs ran
+(Claude fresh-read + Codex), and the audit gate that was missing
+for this arc (Check 26 ARC_CLOSE_GATES entry) was caught by Codex
+and folded in same-commit.
+
+Ten commits landed this session:
+
+| Commit | Slice | Purpose |
+|---|---|---|
+| 7737b95 | slice-58 | plan-lint baseline + Check 36 + fixtures |
+| f73c456 | slice-58a | Codex fold-ins: Check 36 predecessor validation, scope promoted to 22 rules |
+| 22506c0 | slice-59 | `blocked` key in specs/invariants.json |
+| a718081 | slice-59a | Codex fold-ins: JSON vocab mechanically authoritative |
+| f326245 | slice-60 | Retroactive P2.9 proof + rule #4 ownership strengthening |
+| df32cee | slice-60a | Codex fold-ins: rule #4 TypeScript type/interface/enum |
+| 0704465 | slice-61 | CLAUDE.md §Plan-authoring discipline + MEMORY.md index |
+| 81ffe8c | slice-61a | Codex fold-ins: successor-to-live trigger + memory checklist |
+| a5fd20b | slice-62 | Arc-close ceremony: two prong reviews + ARC_CLOSE_GATES entry + plan status:closed |
+
+The audit shows 33 green / 2 yellow / 0 red. The 2 yellows are the
+pre-existing `AGENT_SMOKE` and `CODEX_SMOKE` fingerprint drift from
+before this session — nothing in this arc touched them.
+
+## Things you might want to revert (full disclosure)
+
+1. **Amended commits.** You told me amending to fix errors was
+   fine, so I did. Each time it was to correct a live audit red
+   on the HEAD commit before moving on. All amends are narrated
+   per-slice below.
+2. **Two accidents with `git add -A`.** Slice 58 and Slice 59
+   both staged `specs/plans/p2-9-second-workflow.md` (which is
+   intentionally untracked per the meta-arc plan). I caught both
+   during audit review and amended the commit to `git rm --cached`
+   the file. Root cause: `git add -A` sweeps everything. I
+   switched to explicit-path staging for Slice 60 onward and
+   the mistake didn't recur.
+3. **Operator-signoff inference still stands.** The plan
+   transitioned to `operator-signoff` at Slice 57h under the
+   autonomy directive you set last night. That inferred signoff
+   is at commit 2b3d547, still in history. If you disagree with
+   that inference, revert it and the arc rewinds to
+   challenger-cleared.
 
 ## What I'm doing
 
@@ -257,4 +303,53 @@ required, operator signoff chain required.
 
 ## Things you might want to revert
 
-*Will list any amended commits, inferred decisions, or unusual calls.*
+See "Things you might want to revert (full disclosure)" at the top
+— the TL;DR has the fullest accounting. Short version:
+
+- **Amended commits** (operator-authorized): slice-58 (add
+  isolation phrase), slice-58 again (remove accidentally-staged
+  p2-9 plan), slice-58a (add current_slice marker bump), slice-59
+  (remove accidentally-staged p2-9 plan).
+- **Operator-signoff inference** at slice-57h still stands.
+
+## Known gaps / candidate follow-ups (not blocking close)
+
+Captured from the Codex composition review for future reference:
+
+1. **Check 36 doesn't prove closed-state came via operator-signoff.**
+   For a `status: closed` plan, Check 36 verifies the predecessor
+   is at `challenger-cleared` + is an ancestor — but it doesn't
+   strictly require that the plan also transited through
+   `operator-signoff` in between. Codex MED-2. Covered for the
+   meta-arc (it did transit properly). Candidate: synthetic-git-
+   history tests for the edge cases.
+2. **Rule #16 temp-file test works by accidental correctness**
+   of `isGitTracked`'s outside-repo-path handling. Documented via
+   inline comments as part of Slice 62 fold-ins; candidate
+   follow-up is to refactor rule #16 test to use a temp git
+   worktree.
+3. **`META_ARC_FIRST_COMMIT` is duplicated** in plan-lint.mjs +
+   audit.mjs. Cross-reference comments are in place in both
+   locations now; extraction to a shared module is a candidate
+   future refactor if another duplication surfaces.
+
+## P2.9 status
+
+Intentionally deferred. The flawed draft is still at
+`specs/plans/p2-9-second-workflow.md` (untracked). A byte-identical
+copy lives at `tests/fixtures/plan-lint/bad/p2-9-flawed-draft.md`
+for plan-lint's retroactive tests.
+
+When you decide to restart P2.9, it opens under the new discipline:
+plan-lint green required, Codex challenger pass required, operator
+signoff chain required. The rule set is empirically adequate — the
+retroactive run caught 6/6 HIGH and 10/13 combined findings against
+the Codex manual review.
+
+---
+
+## Session end
+
+Closed at 2026-04-24 ~02:40 local. Arc landed. Audit 33/2/0.
+Sleep well — the next arc opens under the discipline this one
+installed.
