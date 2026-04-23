@@ -51,21 +51,30 @@ if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
   return 1 2>/dev/null || exit 1
 fi
 
+# SMOKE_DIR is script-global (not `local`) so the EXIT trap's cleanup
+# function can see it after `main` returns. Under `set -u`, a `local`
+# binding here would be out of scope when the trap fires and cleanup
+# would error with "SMOKE_DIR: unbound variable" before `rm -rf` runs,
+# leaking the temp dir and surfacing exit 1 even after the smoke's
+# PASS message printed. Slice 52a fold-in.
+SMOKE_DIR=""
+
+cleanup() {
+  if [[ -n "$SMOKE_DIR" && -d "$SMOKE_DIR" ]]; then
+    rm -rf "$SMOKE_DIR"
+  fi
+}
+trap cleanup EXIT
+
 main() {
   local SCRIPT_DIR
   local REPO_ROOT
-  local SMOKE_DIR
   local CLONE_DIR
 
   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
   SMOKE_DIR="$(mktemp -d -t circuit-next-clean-clone-smoke-XXXXXXXX)"
   CLONE_DIR="$SMOKE_DIR/repo"
-
-  cleanup() {
-    rm -rf "$SMOKE_DIR"
-  }
-  trap cleanup EXIT
 
   echo "==> Cloning into $CLONE_DIR (--no-local --no-hardlinks)"
   git clone --no-local --no-hardlinks --quiet "$REPO_ROOT" "$CLONE_DIR"
