@@ -1,12 +1,12 @@
 ---
 plan: planning-readiness-meta-arc
 status: challenger-pending
-revision: 03
+revision: 04
 opened_at: 2026-04-23
 revised_at: 2026-04-23
 opened_in_session: post-p2-9-codex-meta-retrospective
-revised_in_session: post-codex-challenger-02-foldin
-base_commit: a4de1d57230e82fd68e1164f9534f3aed8564943
+revised_in_session: post-codex-challenger-03-foldin
+base_commit: c91469053a95519645280fd80394a4966ac7948e
 target: planning discipline (not a workflow; this is methodology)
 prior_challenger_passes:
   - specs/reviews/planning-readiness-meta-arc-codex-challenger-01.md
@@ -16,6 +16,10 @@ prior_challenger_passes:
     (verdict REJECT-PENDING-FOLD-INS, 7 minimum fold-ins + 2 CRITICAL
     + 2 HIGH new findings vs revision 02; all folded in revision 03 —
     see §0.B)
+  - specs/reviews/planning-readiness-meta-arc-codex-challenger-03.md
+    (verdict ACCEPT-WITH-FOLD-INS, 4 minimum fold-ins + 1 CRITICAL
+    + 2 HIGH + 1 MED new findings vs revision 03; all folded in
+    revision 04 — see §0.C)
 trigger: |
   P2.9 plan draft (specs/plans/p2-9-second-workflow.md, untracked)
   reached operator decision point carrying multiple material flaws
@@ -69,7 +73,7 @@ Install the machine-enforced pre-operator-signoff gate that P2.9's
 flawed draft exposed as missing. The arc adds: one new ADR (Arc
 Planning Readiness Gate) + two ADR amendments (ADR-0003 scope
 extension, ADR-0007 criterion separation) + one new tool (plan-lint
-with 21 rules) + one new user-memory rule + one CLAUDE.md process-
+with 22 rules) + one new user-memory rule + one CLAUDE.md process-
 sequence update + a **plan-lifecycle state machine** (new in revision
 02) + **challenger-artifact freshness binding** (new in revision 03)
 + **effective-date migration gate** (new in revision 03). Arc closes
@@ -121,6 +125,18 @@ are folded in revision 03. Mapping:
 | MIN 5 | HIGH | §3 rules #18-#21; see HIGH 4 row | |
 | MIN 6 | HIGH | §Entry state new section + plan-lint section-aware scoping | |
 | MIN 7 | HIGH | §3 rule #8 escrow semantics + new rule #22; see HIGH 5 row | |
+
+### §0.C Revision 04 foldins (from pass 03)
+
+Pass 03 verdict: ACCEPT-WITH-FOLD-INS. 4 minimum fold-ins + 1 CRITICAL +
+2 HIGH + 1 MED new findings. All folded:
+
+| Pass 03 # | Severity | Fold-in location | Nature |
+|---|---|---|---|
+| CRITICAL 1 | CRITICAL | scripts/plan-lint.mjs rule #17 + §3.B rule #17 text | Rule #17 now computes SHA-256 of current plan content and requires matching `plan_content_sha256` in challenger review AND requires `plan_base_commit` (no longer optional-prefix). Stale same-revision content edits rejected. |
+| HIGH 2 | HIGH | §3 rule count + §0.B MIN 4 + Slice 58/59 ratchets + plan-lint module header | Rule count reconciled to 22 EVERYWHERE: 19 baseline at Slice 58 (rules #1-6, #9-21), +3 at Slice 59 (rules #7, #8, #22 — invariant dimension trio). |
+| HIGH 3 | HIGH | scripts/plan-lint.mjs isLegacyPlan + §Migration | Effective-date loophole closed. isLegacyPlan now uses git-history first-commit-date check: only plans whose FIRST committed version predates 2026-04-23 qualify as legacy. Untracked plans and newly-committed plans pass through FULL rule set regardless of frontmatter claims. Backdating evasion impossible. |
+| MED 4 | MED | §Plan-lifecycle table + Slice 58 Check 36 deliverable | `operator_signoff_predecessor` enforcement explicitly named as audit Check 36 responsibility (not plan-lint). Plan-lint does not inspect commit bodies; Check 36 does. Added a deliverable bullet in Slice 58. |
 
 ## §Entry state — arc-level trajectory justification
 
@@ -213,11 +229,11 @@ vocabulary).
   "legacy plan — rules not enforced" finding for visibility).
 - Rule #15 (status vocabulary) applies only to non-legacy plans.
 
-**Scope of exemption (legacy):** all 21 rules skipped.
+**Scope of exemption (legacy):** all 22 rules skipped.
 
 **New-plan obligation:** any plan opened on or after 2026-04-23 MUST
 carry `opened_at: YYYY-MM-DD` in frontmatter (on or after effective
-date) AND pass all 21 rules. An `opened_at: <pre-effective>` on a
+date) AND pass all 22 rules. An `opened_at: <pre-effective>` on a
 new plan is rejected (back-dating forbidden).
 
 **Migration of existing work:** plans active at effective-date
@@ -330,7 +346,7 @@ Per `specs/reviews/p2-9-plan-draft-content-challenger.md`:
    protects committed/staged state. Plan-lint tool (new in Slice 58)
    operates on any path.
 
-## §3 — Lint-rule inventory (21 rules total in revision 03)
+## §3 — Lint-rule inventory (22 rules total in revision 04)
 
 Derived from the 7 failure modes + Codex pass-01 4 new dimensions +
 Codex pass-02 4 new explicit-coverage dimensions. Each rule declares
@@ -339,15 +355,18 @@ at `specs/invariants.json::enforcement_state_semantics`:
 `{test-enforced, audit-only, static-anchor, prose-only, phase2-property}`.
 Plan-lint rules are `static-anchor`-enforced.
 
-**Rule count reconciliation (revision 03 final):**
-- Slice 58 baseline: **19 rules** (structural/shape rules #1-#6,
-  #9-#14, state-machine rules #15-#17, new HIGH-coverage rules
-  #18-#21).
-- Slice 59 extension: **+2 rules** (invariant-enforceability rules
-  #7, #8 + close-out rule #22; count note: rule #22 lands with #8
-  at Slice 59 since both enforce the `blocked` escrow).
-- **Total post-Slice-59: 21 rules.** The §0.B mapping and Slice 58/59
-  acceptance evidence consistently reference 21.
+**Rule count reconciliation (revision 04 final — 22 rules total):**
+- **Slice 58 baseline: 19 rules** (structural/shape #1-#6, #9-#14,
+  state-machine #15-#17, new HIGH-coverage #18-#21).
+- **Slice 59 extension: +3 rules** (invariant-enforceability trio:
+  #7, #8, #22 — all three enforce the `blocked` escrow discipline
+  across declaration + escrow completeness + resolution-before-
+  close).
+- **Total post-Slice-59: 22 rules.**
+- This count is used consistently everywhere: §3 rule table, §0.B
+  MIN 4 row, §0.C MIN 4 row, Slice 58/59 ratchet notes, Slice 58
+  acceptance evidence, `scripts/plan-lint.mjs` module header, §6
+  arc-close acceptance evidence.
 
 ### §3.A Structural / shape rules (Slice 58 baseline)
 
@@ -540,10 +559,23 @@ plan-lifecycle, or freshness binding exists. Untracked-draft loophole
    matches `§\d+ — Failure-mode|§\d+ — Lint-rule|narrative`.
 2. `package.json` — adds `"plan:lint": "node scripts/plan-lint.mjs"`.
 3. `scripts/audit.mjs` — new Check 36 runs plan-lint on all
-   `specs/plans/*.md` with `opened_at` ≥ effective-date (2026-04-23).
-   Legacy plans skipped per §Migration. Additionally: for committed
-   plans with `status: operator-signoff`, Check 36 verifies matching
-   committed challenger artifact with full `reviewed_plan:` binding.
+   `specs/plans/*.md` whose first-committed-version post-dates
+   effective-date (2026-04-23). Legacy plans skipped per §Migration.
+   Additionally:
+   - For committed plans with `status: operator-signoff`, Check 36
+     verifies matching committed challenger artifact with full
+     `reviewed_plan:` binding (slug + revision + base_commit +
+     content_sha256).
+   - For commits transitioning `challenger-cleared → operator-
+     signoff` (Slice 58 delivers this check; triggered when a commit's
+     diff shows `status:` advancing to `operator-signoff`), Check 36
+     verifies the commit body carries `operator_signoff_
+     predecessor: <sha>` naming a commit in this branch's history
+     with the predecessor plan at `status: challenger-cleared`. This
+     closes the MED 4 fold-in from pass 03 — the predecessor-chain
+     enforcement lives in audit (Check 36 can inspect commit bodies
+     and git ancestry), NOT in plan-lint (which operates on plan file
+     content only).
 4. `tests/scripts/plan-lint.test.ts` — new test file. Per-rule tests
    + section-aware scoping tests + legacy exemption test + freshness
    binding test.
@@ -561,7 +593,7 @@ plan-lifecycle, or freshness binding exists. Untracked-draft loophole
 - `npm run plan:lint -- tests/fixtures/plan-lint/legacy/<fixture>`
   exits 0 (legacy exemption).
 - `npm run plan:lint -- specs/plans/planning-readiness-meta-arc.md`
-  (revision 03) exits 0 (reflexive self-lint green).
+  (revision 04+) exits 0 (reflexive self-lint green).
 - `npm run plan:lint -- specs/plans/p2-9-second-workflow.md` exits
   non-zero with findings aligned to the 13-finding ledger (retroactive
   preview; full proof at Slice 60).
@@ -609,7 +641,7 @@ invariants.
 **Alternate framing:** *(a) Bundle into Slice 58.* Rejected — keeps
 Slice 58 focused on baseline.
 
-**Ratchet:** Lint-rule count (19 → 21); invariant vocabulary (5 → 6
+**Ratchet:** Lint-rule count (19 → 22); invariant vocabulary (5 → 6
 states).
 
 **Codex challenger:** REQUIRED.
@@ -718,7 +750,7 @@ Linear. Arc total ~5-7 hrs wall-clock plus challenger turnaround.
 1. ADR-0010 + ADR-0003 Addendum C + ADR-0007 Addendum A committed.
 2. `scripts/plan-lint.mjs` + `npm run plan:lint` + new Check 36
    committed.
-3. 21 plan-lint rules implemented + tested.
+3. 22 plan-lint rules implemented + tested.
 4. Plan-lifecycle state machine codified + freshness binding enforced.
 5. `specs/reviews/p2-9-plan-lint-retroactive-run.md` committed with
    HIGH 6/6 + combined ≥10/13.

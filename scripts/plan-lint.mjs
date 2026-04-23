@@ -21,15 +21,15 @@
  * is `specs/invariants.json::enforcement_state_semantics`. This script
  * reads that JSON at lint time.
  *
- * Rules (per ADR-0010 §6):
+ * Rules (per ADR-0010 §6) — 22 total:
  *   #1  evidence-census-present
  *   #2  tbd-in-acceptance-evidence
  *   #3  test-path-extension
  *   #4  stale-symbol-citation
  *   #5  arc-close-claim-without-gate
  *   #6  signoff-while-pending
- *   #7  invariant-without-enforcement-layer       (Slice 59)
- *   #8  blocked-invariant-without-substrate-slice (Slice 59)
+ *   #7  invariant-without-enforcement-layer            (Slice 59)
+ *   #8  blocked-invariant-without-full-escrow          (Slice 59)
  *   #9  contract-shaped-payload-without-characterization
  *   #10 unverified-hypothesis-presented-as-decided
  *   #11 arc-trajectory-check-present
@@ -38,10 +38,17 @@
  *   #14 artifact-cardinality-mapped-to-reference
  *   #15 status-field-valid
  *   #16 untracked-plan-cannot-claim-post-draft-status
- *   #17 status-challenger-cleared-requires-committed-challenger-artifact
+ *   #17 status-challenger-cleared-requires-fresh-committed-challenger-artifact
+ *   #18 canonical-phase-set-maps-to-schema-vocabulary
+ *   #19 verdict-determinism-includes-verification-passes-for-successor-to-live
+ *   #20 verification-runtime-capability-assumed-without-substrate-slice
+ *   #21 artifact-materialization-uses-registered-schema
+ *   #22 blocked-invariant-must-resolve-before-arc-close (Slice 59)
  *
- * Slice 58 lands rules #1-#6, #9-#17 (15 rules = 12 structural/shape +
- * 3 state-machine). Slice 59 lands rules #7, #8 (invariant dimension).
+ * Slice 58 lands rules #1-#6, #9-#21 (19 structural/shape + state-machine +
+ * P2.9 HIGH-coverage rules). Slice 59 lands rules #7, #8, #22 (invariant
+ * dimension trio: enforcement-layer required, blocked escrow, blocked-must-
+ * resolve-before-close).
  *
  * Per-rule severity: all rules are HIGH unless stated otherwise.
  * Findings emit JSON-per-line on stderr (machine-readable) + a
@@ -49,6 +56,7 @@
  */
 
 import { execSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
 
@@ -261,21 +269,43 @@ function loadInvariantLayerVocab() {
  * Determine whether a plan file is "legacy grandfathered" — authored
  * before the planning-readiness-meta-arc landed. Legacy plans are
  * fully exempt from ALL plan-lint rules per ADR-0010 §Migration.
+ *
+ * Revision 04 (pass 03 HIGH 3 fold-in): distinguishes legacy-committed
+ * files from arbitrary new paths. A plan is legacy ONLY if its first
+ * committed version in git predates the effective date. Untracked plans
+ * and new-plan backdating are NOT legacy — they must pass the full
+ * rule set.
  */
-function isLegacyPlan(frontmatter) {
-  const opened = frontmatter.opened_at ?? frontmatter.date ?? '';
-  // No opened_at / date field AND no status field → legacy.
-  if (!opened && !frontmatter.status) return true;
-  // Explicitly pre-effective-date → legacy.
-  if (opened && opened < EFFECTIVE_DATE) return true;
-  // Plans with legacy status values that don't match the new vocabulary
-  // AND have no effective-era opened_at → legacy.
-  if (frontmatter.status && !PLAN_STATUS_SET.has(String(frontmatter.status).trim())) {
-    // Status is in legacy vocabulary ("active — ...", "in-progress",
-    // "superseded", "draft", "closed" — closed IS in new vocab too).
-    // If opened_at is missing or pre-effective, legacy.
-    if (!opened || opened < EFFECTIVE_DATE) return true;
-  }
+function isLegacyPlan(_frontmatter, planPath) {
+  // Compute first-commit date for the file.
+  const firstCommitDate = (() => {
+    if (!planPath) return null;
+    try {
+      const relPath = isAbsolute(planPath) ? planPath.slice(REPO_ROOT.length + 1) : planPath;
+      const out = execSync(
+        `git log --diff-filter=A --follow --format=%aI -- ${JSON.stringify(relPath)}`,
+        {
+          cwd: REPO_ROOT,
+          stdio: ['ignore', 'pipe', 'ignore'],
+        },
+      )
+        .toString()
+        .trim()
+        .split('\n')
+        .filter(Boolean);
+      return out.length > 0 ? out[out.length - 1].slice(0, 10) : null;
+    } catch {
+      return null;
+    }
+  })();
+  // A plan is legacy ONLY if git history confirms it existed before the
+  // effective date. Untracked plans and newly-committed plans are NOT
+  // legacy regardless of frontmatter claims.
+  if (firstCommitDate && firstCommitDate < EFFECTIVE_DATE) return true;
+  // If the file has no git history (untracked or newly-committed) AND
+  // claims pre-effective opened_at, REJECT legacy status — this is a
+  // backdating attempt, not a legacy plan. Will fall through to rule
+  // enforcement below.
   return false;
 }
 
@@ -283,8 +313,8 @@ function isLegacyPlan(frontmatter) {
  * Retained alias for rule #1/#11 yellow-vs-red logic. Rule applies
  * only to post-effective plans anyway (legacy plans skip ALL rules).
  */
-function isGrandfathered(frontmatter) {
-  return isLegacyPlan(frontmatter);
+function isGrandfathered(frontmatter, planPath) {
+  return isLegacyPlan(frontmatter, planPath);
 }
 
 // ----- RULES -----
@@ -294,14 +324,14 @@ function isGrandfathered(frontmatter) {
  * Plan must have a §Evidence census section OR a §1 with verified /
  * inferred / unknown-blocking vocabulary.
  */
-function rule1EvidenceCensus(plan) {
+function rule1EvidenceCensus(plan, planPath) {
   const hasSection = /§Evidence census|## §1.*Evidence census|## §1 —/i.test(plan.body);
   const hasVocabulary = /verified|inferred|unknown-blocking/i.test(plan.body);
   if (!hasSection || !hasVocabulary) {
     return [
       {
         rule: 'plan-lint.evidence-census-present',
-        severity: isGrandfathered(plan.frontmatter) ? 'yellow' : 'red',
+        severity: isGrandfathered(plan.frontmatter, planPath) ? 'yellow' : 'red',
         message:
           'Plan missing §Evidence census section (or equivalent) with verified / inferred / unknown-blocking vocabulary',
         location: 'plan body',
@@ -587,7 +617,7 @@ function rule10UnverifiedDecision(plan) {
  * Rule #11 — arc-trajectory-check-present.
  * Plan missing arc-level trajectory justification.
  */
-function rule11ArcTrajectory(plan) {
+function rule11ArcTrajectory(plan, planPath) {
   const hasEntryState = /§Entry state|## §?Entry|Arc trajectory|arc-level trajectory/i.test(
     plan.body,
   );
@@ -596,7 +626,7 @@ function rule11ArcTrajectory(plan) {
     return [
       {
         rule: 'plan-lint.arc-trajectory-check-present',
-        severity: isGrandfathered(plan.frontmatter) ? 'yellow' : 'red',
+        severity: isGrandfathered(plan.frontmatter, planPath) ? 'yellow' : 'red',
         message:
           'Plan missing arc-level trajectory justification (§Entry state, §Why-this-plan, or equivalent)',
         location: 'plan body',
@@ -754,8 +784,9 @@ function rule16UntrackedPostDraft(plan, planPath) {
 
 /**
  * Rule #17 — status-challenger-cleared-requires-fresh-committed-challenger-artifact.
- * Revision 03: binds challenger review to plan slug + revision +
- * base_commit + content_sha256 via reviewed_plan frontmatter block.
+ * Revision 04 (pass 03 CRITICAL 1 fold-in): binds challenger review to
+ * plan slug + revision + base_commit (required, not optional) + content
+ * SHA-256 hash. Stale ACCEPT paths reject.
  */
 function rule17ClearedRequiresArtifact(plan, planPath) {
   const status = plan.frontmatter.status;
@@ -798,8 +829,26 @@ function rule17ClearedRequiresArtifact(plan, planPath) {
   }
   const planRevision = String(plan.frontmatter.revision ?? '').trim();
   const planBaseCommit = String(plan.frontmatter.base_commit ?? '').trim();
-  // Find at least one challenger file with: ACCEPT-class verdict AND
-  // reviewed_plan.plan_slug matches AND reviewed_plan.plan_revision matches.
+  if (!planBaseCommit) {
+    return [
+      {
+        rule: 'plan-lint.status-challenger-cleared-requires-fresh-committed-challenger-artifact',
+        severity: 'red',
+        message: `Plan claims status "${status}" but frontmatter lacks required base_commit field`,
+        location: 'plan frontmatter',
+      },
+    ];
+  }
+  // Compute current plan content SHA-256 for freshness binding.
+  let currentContentSha256 = null;
+  try {
+    currentContentSha256 = createHash('sha256')
+      .update(readFileSync(planPath, 'utf8'))
+      .digest('hex');
+  } catch {
+    // leave null; will fail through if challenger lacks hash field
+  }
+  // Find at least one challenger file with all freshness fields matching.
   let foundFresh = false;
   const rejections = [];
   for (const m of matches) {
@@ -813,9 +862,10 @@ function rule17ClearedRequiresArtifact(plan, planPath) {
       const slugMatch = contents.match(/plan_slug:\s*([^\n]+)/);
       const revMatch = contents.match(/plan_revision:\s*(\d+)/);
       const baseCommitMatch = contents.match(/plan_base_commit:\s*([a-f0-9]+)/);
-      if (!slugMatch || !revMatch) {
+      const contentHashMatch = contents.match(/plan_content_sha256:\s*([a-f0-9]+)/);
+      if (!slugMatch || !revMatch || !baseCommitMatch) {
         rejections.push(
-          `${m}: missing reviewed_plan freshness binding (plan_slug / plan_revision)`,
+          `${m}: missing reviewed_plan binding (slug / revision / base_commit all required)`,
         );
         continue;
       }
@@ -827,13 +877,19 @@ function rule17ClearedRequiresArtifact(plan, planPath) {
         rejections.push(`${m}: plan_revision "${revMatch[1].trim()}" != current "${planRevision}"`);
         continue;
       }
-      if (
-        planBaseCommit &&
-        baseCommitMatch &&
-        !planBaseCommit.startsWith(baseCommitMatch[1].trim())
-      ) {
+      if (!planBaseCommit.startsWith(baseCommitMatch[1].trim())) {
         rejections.push(`${m}: plan_base_commit mismatch`);
         continue;
+      }
+      if (currentContentSha256) {
+        if (!contentHashMatch) {
+          rejections.push(`${m}: missing plan_content_sha256 (required by rule #17 revision 04)`);
+          continue;
+        }
+        if (contentHashMatch[1].trim() !== currentContentSha256) {
+          rejections.push(`${m}: plan_content_sha256 mismatch (stale content)`);
+          continue;
+        }
       }
       foundFresh = true;
       break;
@@ -1033,11 +1089,11 @@ function rule22BlockedMustResolve(plan) {
 
 function runAllRules(plan, planPath) {
   // Legacy-plan exemption per ADR-0010 §Migration.
-  if (isLegacyPlan(plan.frontmatter)) {
+  if (isLegacyPlan(plan.frontmatter, planPath)) {
     return [];
   }
   return [
-    ...rule1EvidenceCensus(plan),
+    ...rule1EvidenceCensus(plan, planPath),
     ...rule2TbdInAcceptance(plan),
     ...rule3TestPathExtension(plan),
     ...rule4StaleSymbolCitation(plan),
@@ -1047,7 +1103,7 @@ function runAllRules(plan, planPath) {
     ...rule8BlockedInvariantWithoutSlice(plan),
     ...rule9ContractShapedPayload(plan),
     ...rule10UnverifiedDecision(plan),
-    ...rule11ArcTrajectory(plan),
+    ...rule11ArcTrajectory(plan, planPath),
     ...rule12LiveStateLedger(plan),
     ...rule13CliShape(plan),
     ...rule14ArtifactCardinality(plan),

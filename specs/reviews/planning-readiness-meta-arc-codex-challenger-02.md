@@ -18,6 +18,7 @@ reviewed_plan:
   plan_slug: planning-readiness-meta-arc
   plan_revision: 02
   plan_base_commit: a4de1d57230e82fd68e1164f9534f3aed8564943
+  plan_content_sha256: not-captured (pre-revision-04-hash-requirement; revision 02 content was superseded before hash became enforcement-bound)
   plan_status_at_review: evidence-draft (untracked)
   plan_line_count_at_review: 803
 purpose: |
