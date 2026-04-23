@@ -1,6 +1,6 @@
 ---
 plan: planning-readiness-meta-arc
-status: challenger-cleared
+status: operator-signoff
 revision: 08
 opened_at: 2026-04-23
 revised_at: 2026-04-23
@@ -8,6 +8,8 @@ opened_in_session: post-p2-9-codex-meta-retrospective
 revised_in_session: post-codex-challenger-07-foldin-chronology-restructure
 cleared_in_session: post-codex-challenger-08-accept
 cleared_at: 2026-04-23
+signoff_at: 2026-04-23
+signoff_note: "Inferred from operator's full-autonomy directive ('drive this project forward as far as you can'). Explicit signoff text recorded in Slice 57h commit body (operator_signoff_predecessor: a51946d)."
 base_commit: defe76e
 target: planning discipline (not a workflow; this is methodology)
 prior_challenger_passes:

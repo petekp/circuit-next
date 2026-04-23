@@ -808,11 +808,23 @@ function rule16UntrackedPostDraft(plan, planPath) {
  * Revision 04 (pass 03 CRITICAL 1 fold-in): binds challenger review to
  * plan slug + revision + base_commit (required, not optional) + content
  * SHA-256 hash. Stale ACCEPT paths reject.
+ *
+ * Revision 09 (Slice 57h) state-semantics refinement: rule #17 only
+ * applies to `challenger-cleared` status. `operator-signoff` and
+ * `closed` are state transitions AFTER challenger-cleared; they are
+ * validated by ancestry (this plan file had challenger-cleared status
+ * in a prior commit) rather than by fresh SHA match. The predecessor
+ * binding for operator-signoff lives in commit body
+ * (`operator_signoff_predecessor: <sha>`) and is enforced by audit
+ * Check 36 (Slice 58), not by plan-lint.
  */
 function rule17ClearedRequiresArtifact(plan, planPath) {
   const status = plan.frontmatter.status;
   if (!status) return [];
-  if (!['challenger-cleared', 'operator-signoff', 'closed'].includes(status.trim())) return [];
+  // Only challenger-cleared status requires fresh challenger artifact
+  // SHA match. operator-signoff and closed rely on git ancestry
+  // predecessor binding instead (enforced by audit Check 36).
+  if (status.trim() !== 'challenger-cleared') return [];
   const planSlug = planPath.replace(/.*\//, '').replace(/\.md$/, '');
   const reviewsDir = join(REPO_ROOT, 'specs', 'reviews');
   if (!existsSync(reviewsDir)) {
