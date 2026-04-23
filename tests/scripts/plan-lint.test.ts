@@ -85,7 +85,11 @@ describe('plan-lint — legacy plan exemption', () => {
 });
 
 describe('plan-lint — P2.9 flawed draft (retroactive proof)', () => {
-  const P2_9 = 'specs/plans/p2-9-second-workflow.md';
+  // Use the committed fixture copy rather than the original untracked
+  // draft at specs/plans/p2-9-second-workflow.md. This keeps the test
+  // suite reproducible from clean checkouts per pass-05 CRITICAL 1
+  // fold-in.
+  const P2_9 = 'tests/fixtures/plan-lint/bad/p2-9-flawed-draft.md';
 
   it('returns RED with multiple findings (≥15 red)', () => {
     const { exitCode } = runLint(P2_9);

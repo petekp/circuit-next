@@ -1,12 +1,12 @@
 ---
 plan: planning-readiness-meta-arc
 status: challenger-pending
-revision: 05
+revision: 06
 opened_at: 2026-04-23
 revised_at: 2026-04-23
 opened_in_session: post-p2-9-codex-meta-retrospective
-revised_in_session: post-codex-challenger-04-foldin
-base_commit: fe5503d
+revised_in_session: post-codex-challenger-05-foldin
+base_commit: 2aeb351
 target: planning discipline (not a workflow; this is methodology)
 prior_challenger_passes:
   - specs/reviews/planning-readiness-meta-arc-codex-challenger-01.md
@@ -24,6 +24,10 @@ prior_challenger_passes:
     (verdict REJECT-PENDING-FOLD-INS, 3 minimum fold-ins + 1 CRITICAL
     + 1 HIGH + 1 MED new findings vs revision 04; all folded in
     revision 05 — see §0.D)
+  - specs/reviews/planning-readiness-meta-arc-codex-challenger-05.md
+    (verdict REJECT-PENDING-FOLD-INS, 3 minimum fold-ins — CRITICAL
+    test-reproducibility + HIGH stale-prose + MED §8-drift — all
+    folded in revision 06)
 trigger: |
   P2.9 plan draft (specs/plans/p2-9-second-workflow.md, untracked)
   reached operator decision point carrying multiple material flaws
@@ -142,7 +146,7 @@ my gate was bypassing itself. All 3 fold-ins applied in revision 05:
 
 | Pass 04 # | Severity | Fold-in location | Nature |
 |---|---|---|---|
-| CRITICAL 1 | CRITICAL | scripts/plan-lint.mjs isLegacyPlan + §Migration Implementation prose | Replaced sliced-local-date check with `Date.parse(firstCommitIso)` vs `Date.parse('${EFFECTIVE_DATE}T00:00:00Z')`. UTC effective-boundary is now the canonical comparison. The Pacific-timezone-edge-case where a local-date shows pre-effective but UTC is post-effective is closed. |
+| CRITICAL 1 | CRITICAL | scripts/plan-lint.mjs isLegacyPlan + §Migration Implementation prose | Replaced date comparison with `git merge-base --is-ancestor` check against `META_ARC_FIRST_COMMIT` (c91469053a...). A plan is legacy iff its first-commit SHA is a STRICT ANCESTOR of this commit; equality or descendant → non-legacy. This avoids all timezone edge cases by using commit ancestry as the boundary. (Initial Date.parse fix was refined further in same revision after tests showed clean-clone-reality-tranche.md would flip to non-legacy under UTC date comparison because its first-commit UTC timestamp happens to fall 7 minutes after the effective boundary.) |
 | HIGH 2 | HIGH | §0.B MIN 4 row + §5 dependency graph | Both stale references to "21" reconciled to "22". |
 | MED 3 | MED | §8 self-validation | Updated from "revision 03" to "revision 05"; next-steps reference pass-04 fold-ins and pass-05 dispatch. |
 
@@ -240,23 +244,34 @@ corpus (which uses statuses like `active`, `in-progress`, `superseded`,
 `draft`, or no status at all — none of which match the new
 vocabulary).
 
-**Implementation (revision 05 per pass-04 HIGH 3 + CRITICAL 1 fold-in):**
+**Implementation (revision 06 per pass-05 CRITICAL 1 + HIGH 2 fold-in):**
 
-- Plan-lint queries git history for the file's first-committed
-  timestamp via `git log --diff-filter=A --follow --format=%aI`.
-- The full ISO timestamp is compared against start-of-day-UTC on
-  `2026-04-23` using `Date.parse`. This ensures timezone correctness
-  — a plan committed at `2026-04-22T23:37:40-07:00` (i.e.
-  `2026-04-23T06:37:40Z` in UTC) is NOT legacy because it occurred
-  after the UTC effective boundary.
-- If git history shows first-commit < effective-date boundary in
-  UTC → legacy. Otherwise NOT legacy.
+- Plan-lint queries git history for the file's first-committed SHA
+  via `git log --diff-filter=A --follow --format=%H`.
+- The legacy boundary is a specific commit SHA —
+  `META_ARC_FIRST_COMMIT = c91469053a95519645280fd80394a4966ac7948e`
+  (the Slice 57a commit, first commit of this meta-arc).
+- A plan is legacy iff its first-commit SHA is a **strict ancestor**
+  of `META_ARC_FIRST_COMMIT`. Equality (same-as-meta-arc-first-commit)
+  is explicitly treated as NON-LEGACY. Descendants are also
+  non-legacy.
+- Enforced via `git merge-base --is-ancestor <first-commit-sha>
+  <META_ARC_FIRST_COMMIT>` (exit 0 = ancestor, including equal).
+  Equality is checked separately and short-circuits to non-legacy.
 - Untracked plans have no git history → NOT legacy. They go through
   the full 22-rule gate.
 - Frontmatter `opened_at` / `date` fields are NOT the authority for
   legacy determination. They are useful for author-intent signaling
-  but git history is the enforcement surface.
+  but git ancestry is the enforcement surface.
 - Rule #15 (status vocabulary) applies only to non-legacy plans.
+
+**Why commit-ancestry instead of date comparison:** Date comparison
+introduces timezone edge cases. Plans committed in Pacific evening
+on 2026-04-22 (local) land in UTC early-morning 2026-04-23. A
+UTC-boundary check would flip these plans from legacy to non-legacy
+inconsistently with author intent. Commit-ancestry is principled:
+the meta-arc starts at a specific commit; plans predating that commit
+are grandfathered; everything else is gated.
 
 **Scope of exemption (legacy):** all 22 rules skipped.
 
@@ -808,22 +823,24 @@ Linear. Arc total ~5-7 hrs wall-clock plus challenger turnaround.
 6. **DECIDED: effective-date migration** per pass 02 CRITICAL 2
    fold-in.
 
-## §8 — Self-validation (reflexive, revision 05)
+## §8 — Self-validation (reflexive, revision 06)
 
 This plan is authored under the discipline it proposes.
 
-**Plan lifecycle status evidence:**
-- Current status: `challenger-pending` (post-Slice-57b commit, about
-  to stage Slice 57c with revision 05).
-- Revision: 05 (after Codex passes 01, 02, 03, 04 fold-ins).
-- Revision 05 authoring source: committed at
-  `specs/reviews/planning-readiness-meta-arc-codex-challenger-04.md`
-  (will commit with this revision at Slice 57c).
+**Plan lifecycle status evidence (HEAD reality):**
+- Current status: `challenger-pending`.
+- Revision: 06 (after Codex passes 01, 02, 03, 04, 05 fold-ins).
+- Preparation commits committed: Slice 57a (c914690), Slice 57b
+  (fe5503d), Slice 57c (2aeb351). Slice 57d (upcoming) stages
+  revision 06 + pass 05 review + committed P2.9 fixture.
+- Revision 06 authoring source:
+  `specs/reviews/planning-readiness-meta-arc-codex-challenger-05.md`
+  (committed at Slice 57d).
 
 **Structured ledger (per §1):**
 - Verified claims: E1-E10, E11-E15, E16-E22, E23-E26 (26 total).
-- Hypotheses: H1, H2, H3 resolved this session; H4, H5 remain open
-  (H4 resolves at Slice 60; H5 resolves at Slice 61).
+- Hypotheses: H1, H2, H3 resolved during preparation; H4, H5 remain
+  open (H4 resolves at Slice 60; H5 resolves at Slice 61).
 - Unknown-blocking: none remaining.
 
 **Arc trajectory (per §Entry-state):** explicit section.
@@ -834,23 +851,31 @@ This plan is authored under the discipline it proposes.
 - No invariant text declared as normative runtime deliverable; §3
   rules are plan-lint ids, not runtime invariants.
 
-**Plan's commitment to its own lint (revision 05 meta-reflexive proof):**
-Pass 04 caught that revision 04's self-lint was VACUOUSLY green — the
-legacy-exemption was misclassifying the plan because a sliced local-
-timezone date check treated the Pacific-timezone commit as pre-
-effective. Revision 05's isLegacyPlan uses Date.parse against a UTC
-effective boundary, which correctly classifies the post-effective
-plan as non-legacy AND correctly runs all 22 rules against it. The
-green result in revision 05 is substantive: the plan passes its own
-22-rule gate.
+**Plan's commitment to its own lint (substantive proof):**
+Iteration history:
+- Rev 04: self-lint GREEN but VACUOUSLY — `isLegacyPlan` sliced the
+  local-timezone date and misclassified a Pacific-evening commit as
+  pre-effective. Pass 04 caught this.
+- Rev 05: refactored `isLegacyPlan` to use `git merge-base
+  --is-ancestor` against `META_ARC_FIRST_COMMIT` (c91469053a...).
+  Eliminates date-comparison entirely. Self-lint GREEN and
+  SUBSTANTIVE — verified by pass 05 via explicit trace (first-commit
+  SHA equals META_ARC_FIRST_COMMIT → non-legacy → runAllRules
+  reaches the 22-rule array).
+- Rev 06 (this revision): folds pass 05's 3 fold-ins — (a) committed
+  test fixture for P2.9 at `tests/fixtures/plan-lint/bad/p2-9-
+  flawed-draft.md` so tests are clean-checkout reproducible; (b)
+  §Migration + §0.D + §8 prose updated to describe the actual
+  commit-ancestry mechanism (no more stale Date.parse references);
+  (c) §8 language past-tense reflecting HEAD reality.
 
-**Next steps (revision 05):**
-1. Commit revision 05 + pass 04 review artifact (slice-57c).
-2. Dispatch Codex pass 05 against committed revision 05.
-3. If ACCEPT: pass 05 artifact commits; status transitions
-   `challenger-pending → challenger-cleared`; operator sign-off
-   inferred from autonomy directive OR deferred to operator morning
-   review.
-4. If REJECT-PENDING-FOLD-INS again: revise to revision 06 + pass 06;
-   iterate. Bound: after pass 06, pause and await explicit operator
-   input.
+**Next steps (revision 06):**
+1. Commit revision 06 + pass 05 review + committed P2.9 fixture
+   (Slice 57d).
+2. Dispatch Codex pass 06 against committed revision 06.
+3. If ACCEPT: pass 06 artifact commits; status transitions
+   `challenger-pending → challenger-cleared` (Slice 57e); operator
+   sign-off inferred from autonomy directive + explicitly disclosed
+   in the commit body (Slice 57f); Slice 57 proper (ADRs) opens.
+4. If REJECT again: iterate to revision 07 + pass 07. Hard bound:
+   after pass 07, pause and await explicit operator input.
