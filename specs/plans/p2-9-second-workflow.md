@@ -1,11 +1,11 @@
 ---
 plan: p2-9-second-workflow
 status: challenger-pending
-revision: 03
+revision: 04
 opened_at: 2026-04-24
 revised_at: 2026-04-23
 opened_in_session: post-planning-readiness-meta-arc-close
-revised_in_session: post-codex-challenger-02-foldin
+revised_in_session: post-codex-challenger-03-med-foldin
 base_commit: d921528
 target: review
 target_hypothesis_note: |
@@ -56,9 +56,14 @@ prior_challenger_passes:
     2 new findings: HIGH 2 close-phase schema seam overreach + MED 1
     Slice 63 policy-test path drift; all 3 fold-ins applied in
     revision 03 per §0.C)
+  - specs/reviews/p2-9-second-workflow-codex-challenger-03.md
+    (verdict ACCEPT-WITH-FOLD-INS vs revision 03 — all 3 pass-02
+    fold-ins CLOSED; 1 new MED only: E12/E13 citation anchors
+    under-proved two "verified" subclaims; MED applied in revision 04
+    per §0.D)
 ---
 
-# P2.9 — Second Workflow (`review`) — multi-slice arc (restart revision 03)
+# P2.9 — Second Workflow (`review`) — multi-slice arc (restart revision 04)
 
 Land a second registered workflow in circuit-next whose contract, artifact
 schema, plugin command, and runtime-dispatch path exercise the same pattern
@@ -71,8 +76,9 @@ scaffolding dressed in reusable-sounding names.
 
 ## §0 — Fold-in map
 
-Three fold-in tranches: §0.A (flawed-draft 13-finding ledger), §0.B
-(pass 01 against revision 01), and §0.C (pass 02 against revision 02).
+Four fold-in tranches: §0.A (flawed-draft 13-finding ledger), §0.B
+(pass 01 against revision 01), §0.C (pass 02 against revision 02), and
+§0.D (pass 03 against revision 03).
 
 ### §0.A — Flawed-draft 13-finding ledger (revisions 01 + 02)
 
@@ -120,6 +126,17 @@ pass-01 HIGH 1 still-partial; two were new. Revision 03 folds all three.
 | HIGH 2 | Slice 64/66 assume a valid close-phase `review.result` without budgeting the live synthesis seam | Revision 02 Slice 66 acceptance claimed the close-phase synthesis step produces a valid `review.result` artifact parsing against the Zod schema. Current `writeSynthesisArtifact` at src/runtime/runner.ts:363-385 writes one placeholder-string per gate.required entry only; no synthesis-artifact schema-parse path exists in the runtime today (dispatch-result parse only, src/runtime/artifact-schemas.ts:3-17). Slice 66 as written cannot satisfy its acceptance evidence without synthesis-seam widening | §9 Slice 66 narrowed: end-to-end runtime test uses an INJECTED synthesis-writer stub (test-seam only) that reads the analyze-phase result file and produces the schema-valid artifact. The test proves the wiring and schema conformance when synthesis is customizable; it does NOT claim the generic runtime synthesis-writer supports review workflows. §9 adds named follow-on slice note: per-workflow synthesis-writer registration is declared explicit post-P2.9 substrate work. §10 Close criteria item 4 updated to surface this follow-on as a documented narrowing of the generalization claim |
 | MED 1 | Slice 63 policy-test path points to a file that does not exist | Revision 02 Slice 63 cites `tests/policy/workflow-kind-policy.test.ts` but the actual file lives at `tests/contracts/workflow-kind-policy.test.ts` (tests/policy/ does not exist in the repo) | §9 Slice 63 path corrected to `tests/contracts/workflow-kind-policy.test.ts` |
 
+### §0.D — Pass 03 (revision 03) fold-ins (revision 04)
+
+Pass 03 (`specs/reviews/p2-9-second-workflow-codex-challenger-03.md`)
+emitted ACCEPT-WITH-FOLD-INS — the three pass-02 objections all closed.
+One new MED: E12/E13's citation anchors under-proved two "verified"
+subclaims. Revision 04 folds the MED.
+
+| Pass-03 # | Severity | Objection | Revision-04 fold-in |
+|---|---|---|---|
+| MED 1 | E12/E13 citation anchors under-prove two "verified" subclaims | E12 cited `src/runtime/runner.ts:503-540` for the "prompts instruct workers to return raw JSON" and "gate rejects missing/non-member verdicts" claims. Those behaviors are actually proved at `src/runtime/runner.ts:176-210` (`evaluateDispatchGate`) and `:224-247` (`composeDispatchPrompt`). E13's "dispatch-side parse path only" claim cited registry module comments but not the call-site at `src/runtime/runner.ts:537-538` | §1 E12 rewritten with both anchors (`evaluateDispatchGate` at 176-210 + `composeDispatchPrompt` at 224-247) replacing the weaker `:503-540` span; E13 rewritten to include the `parseArtifact` call-site at `:537-538` explicitly |
+
 ## §1 — Evidence census
 
 Status values per claim: `verified` (file read and confirmed), `inferred`
@@ -139,8 +156,8 @@ before the arc can proceed).
 | E9 | specs/invariants.json enforcement_state_semantics vocab: {audit-only, blocked, phase2-property, prose-only, static-anchor, test-enforced} — authoritative for any invariant declared in this plan | verified | specs/invariants.json::enforcement_state_semantics |
 | E10 | specs/contracts/explore.md is the template for workflow-specific contracts; workflow-kind-seam pattern enumerates the 5 generalization risk points | verified | specs/contracts/explore.md + P2.9 flawed draft §"generalization seam" cited this pattern correctly |
 | E11 | The flawed P2.9 draft's byte-identical committed copy at tests/fixtures/plan-lint/bad/p2-9-flawed-draft.md is the plan-lint retroactive-proof reproducibility fixture — not to be deleted | verified | Slice 60 committed this fixture; specs/reviews/p2-9-plan-lint-retroactive-run.md §Input |
-| E12 | `ResultVerdictGate.source` is the `DispatchResultSource` discriminant with `kind: z.literal('dispatch_result')` and `ref: z.literal('result')` — both literals fixed at the type layer. The gate's `pass` field is a non-empty array of strings; prompts instruct workers to return raw JSON with a top-level string `verdict` field; gate rejects if verdict is missing or not in `gate.pass` | verified | src/schemas/gate.ts lines 32-38 (DispatchResultSource literal kind/ref) + src/schemas/gate.ts lines 67-74 (ResultVerdictGate) + src/schemas/step.ts lines 60-73 (DispatchStep writes.result + gate wiring) + src/runtime/runner.ts dispatch step handler lines 503-540 (prompt + parse + gate logic) |
-| E13 | Current `writeSynthesisArtifact` (src/runtime/runner.ts:363-385) writes a flat JSON object with one placeholder string per `step.gate.required` entry — no synthesis-time schema parse, no per-workflow customization. Dispatch-side artifact-schema registry (`src/runtime/artifact-schemas.ts`) is scoped to dispatch-result bodies only, not synthesis outputs | verified | src/runtime/runner.ts lines 375-386 (writeSynthesisArtifact implementation — placeholder body) + src/runtime/artifact-schemas.ts lines 3-17 + src/runtime/artifact-schemas.ts lines 53-58 (parseArtifact scoped to dispatchResult.result_body) |
+| E12 | `ResultVerdictGate.source` is the `DispatchResultSource` discriminant with `kind: z.literal('dispatch_result')` and `ref: z.literal('result')` — both literals fixed at the type layer. The gate's `pass` field is a non-empty array of strings; the dispatch prompt explicitly instructs workers to return raw JSON with a top-level string `verdict` field; the gate evaluator rejects non-object parse, missing `verdict`, non-string `verdict`, or `verdict` not drawn from `gate.pass` | verified | src/schemas/gate.ts lines 32-38 (DispatchResultSource literal kind/ref) + src/schemas/gate.ts lines 67-74 (ResultVerdictGate) + src/schemas/step.ts lines 60-73 (DispatchStep writes.result + gate wiring) + src/runtime/runner.ts lines 176-210 (evaluateDispatchGate — JSON parse / verdict field presence / gate.pass membership rejection paths) + src/runtime/runner.ts lines 224-247 (composeDispatchPrompt — "raw JSON ... verdict ... accepted-verdicts" instruction emitted into the dispatch prompt) |
+| E13 | Current `writeSynthesisArtifact` (src/runtime/runner.ts:363-385) writes a flat JSON object with one placeholder string per `step.gate.required` entry — no synthesis-time schema parse, no per-workflow customization. Dispatch-side artifact-schema registry (`src/runtime/artifact-schemas.ts`) is scoped to dispatch-result bodies only, invoked at the dispatch call site where the adapter's result_body is schema-parsed | verified | src/runtime/runner.ts lines 375-386 (writeSynthesisArtifact implementation — placeholder body) + src/runtime/artifact-schemas.ts lines 3-17 + src/runtime/artifact-schemas.ts lines 53-58 (parseArtifact scoped to dispatchResult.result_body) + src/runtime/runner.ts lines 537-538 (the lone parseArtifact call site — dispatch-path only, no synthesis equivalent) |
 
 ## §2 — Why this plan exists
 
