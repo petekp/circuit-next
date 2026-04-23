@@ -121,7 +121,35 @@ originally filed.
 
 ## Slice 60 — retroactive proof on the P2.9 flawed draft
 
-*Pending.*
+**Done:** Ran plan-lint against the flawed P2.9 draft. It caught
+10 of the 13 findings Codex manually filed against the same draft.
+Cross-reference table lives at
+`specs/reviews/p2-9-plan-lint-retroactive-run.md`.
+
+- HIGH findings caught: 6 / 6 (100%) — meets threshold.
+- Combined caught: 10 / 13 (77%) — meets threshold.
+- Three uncaught findings are not mechanically catchable:
+  - "routing heuristic is a bug farm" (design critique, not lint)
+  - "stale audit-rule premise" (cross-surface comparison)
+  - "plan authorship outran extraction" (the meta-finding the
+    whole arc exists to address).
+
+**Issues I fixed:** The P2.9 draft cites
+`scripts/audit.mjs::WORKFLOW_KIND_CANONICAL_SETS` — symbol was
+moved to `scripts/policy/workflow-kind-policy.mjs` but audit.mjs
+still imports and re-exports it. My original rule #4 accepted any
+appearance of the symbol (including import mentions), missing
+MED 7. Strengthened rule #4 to check for a DEFINITION (not
+re-export or import). That pushed the HIGH-caught rate to 6/6
+and combined to 10/13 — hitting both gate thresholds. **Root
+cause:** rule #4's original design treated "symbol is present"
+as "symbol is authoritative here," conflating ownership and
+reference.
+
+**Audit after Slice 60:** 33 green / 2 yellow / 0 red.
+
+**Next:** Slice 61 — add the user-memory rule + CLAUDE.md
+§Plan-authoring-discipline subsection.
 
 ---
 

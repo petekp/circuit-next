@@ -417,7 +417,18 @@ function rule3TestPathExtension(plan) {
 /**
  * Rule #4 — stale-symbol-citation.
  * path/file.ext:Name references where file doesn't exist OR symbol
- * not present at cited location.
+ * not defined at cited location.
+ *
+ * Slice 60 (Codex P2.9 MED 7 retroactive coverage): the original
+ * check passed any symbol that APPEARED in the cited file, including
+ * symbols that the file only IMPORTS. That accepted stale-ownership
+ * citations: e.g. `scripts/audit.mjs:WORKFLOW_KIND_CANONICAL_SETS`
+ * passed because audit.mjs imports the symbol, even though the
+ * authoritative DEFINITION moved to scripts/policy/workflow-kind-
+ * policy.mjs. Strengthened: a symbol that appears only in an import
+ * line (or only in a destructured import-from clause) is treated as
+ * "imported, not defined here" and flagged with the note that the
+ * definition lives elsewhere.
  */
 function rule4StaleSymbolCitation(plan) {
   const findings = [];
@@ -427,6 +438,11 @@ function rule4StaleSymbolCitation(plan) {
     /`([a-zA-Z0-9_./-]+\.(?:mjs|ts|tsx|js|jsx|mts|cts|json|md))(?:::?)([A-Za-z_][A-Za-z0-9_]*)`/g;
   for (const match of plan.body.matchAll(pathSymbolRe)) {
     const [full, relPath, symbol] = match;
+    // Slice 60 (section-aware scoping for rule #4): citations inside
+    // narrative / rule-description sections are quoting earlier
+    // failure cases, not making normative claims — skip.
+    const kind = sectionKindAtOffset(plan.sections, match.index);
+    if (kind !== 'normative') continue;
     const absPath = isAbsolute(relPath) ? relPath : join(REPO_ROOT, relPath);
     if (!existsSync(absPath)) {
       findings.push({
@@ -439,12 +455,63 @@ function rule4StaleSymbolCitation(plan) {
     }
     try {
       const contents = readFileSync(absPath, 'utf8');
+      // Slice 60 (JSON support for rule #4): JSON files have no
+      // export const / function definitions — their "definitions" are
+      // keys. For a `.json` citation, test for the symbol as a JSON
+      // key ("symbol":) rather than as a code-level definition.
+      if (relPath.endsWith('.json')) {
+        const jsonKeyRe = new RegExp(`"${symbol}"\\s*:`);
+        if (!jsonKeyRe.test(contents)) {
+          findings.push({
+            rule: 'plan-lint.stale-symbol-citation',
+            severity: 'red',
+            message: `JSON key "${symbol}" not found in ${relPath}`,
+            location: full,
+          });
+        }
+        continue;
+      }
       const symbolRe = new RegExp(`\\b${symbol}\\b`);
       if (!symbolRe.test(contents)) {
         findings.push({
           rule: 'plan-lint.stale-symbol-citation',
           severity: 'red',
           message: `Symbol "${symbol}" not found in ${relPath}`,
+          location: full,
+        });
+        continue;
+      }
+      // Slice 60 strengthening (Codex P2.9 MED 7 retroactive coverage):
+      // classify occurrences as definition vs import/comment/usage.
+      // Strategy: look for explicit definition patterns anchored on
+      // their line boundaries. If NO definition pattern matches, the
+      // symbol is present only as import/usage/comment and the
+      // citation is stale on ownership grounds (moved or re-exported).
+      const definitionPatterns = [
+        new RegExp(`^\\s*export\\s+const\\s+${symbol}\\b`, 'm'),
+        new RegExp(`^\\s*export\\s+let\\s+${symbol}\\b`, 'm'),
+        new RegExp(`^\\s*export\\s+var\\s+${symbol}\\b`, 'm'),
+        new RegExp(`^\\s*export\\s+function\\s+${symbol}\\b`, 'm'),
+        new RegExp(`^\\s*export\\s+async\\s+function\\s+${symbol}\\b`, 'm'),
+        new RegExp(`^\\s*export\\s+class\\s+${symbol}\\b`, 'm'),
+        // Note: `export { X }` re-export pattern is INTENTIONALLY OMITTED.
+        // Re-exports are pass-through ownership only; the authoritative
+        // definition lives at the original declaration site. Per Codex
+        // P2.9 MED 7: plan-lint should flag citations that point at
+        // re-exporters as stale on ownership grounds.
+        new RegExp(`^\\s*const\\s+${symbol}\\b`, 'm'),
+        new RegExp(`^\\s*let\\s+${symbol}\\b`, 'm'),
+        new RegExp(`^\\s*var\\s+${symbol}\\b`, 'm'),
+        new RegExp(`^\\s*function\\s+${symbol}\\b`, 'm'),
+        new RegExp(`^\\s*async\\s+function\\s+${symbol}\\b`, 'm'),
+        new RegExp(`^\\s*class\\s+${symbol}\\b`, 'm'),
+      ];
+      const definedHere = definitionPatterns.some((re) => re.test(contents));
+      if (!definedHere) {
+        findings.push({
+          rule: 'plan-lint.stale-symbol-citation',
+          severity: 'red',
+          message: `Symbol "${symbol}" appears only in import statements in ${relPath}; authoritative definition lives elsewhere. Citation is stale on ownership grounds.`,
           location: full,
         });
       }

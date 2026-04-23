@@ -134,6 +134,14 @@ describe('plan-lint — P2.9 flawed draft (retroactive proof)', () => {
     expect(lintFindings(P2_9)).toContain('plan-lint.cli-invocation-shape-matches');
   });
 
+  it('catches MED 7: stale symbol citation via Slice 60 import/re-export detection', () => {
+    // Rule #4 strengthening at Slice 60 (Codex P2.9 MED 7 retroactive
+    // coverage): `scripts/audit.mjs::WORKFLOW_KIND_CANONICAL_SETS`
+    // should fire red because audit.mjs only imports + re-exports the
+    // symbol; the authoritative definition lives in the policy module.
+    expect(lintFindings(P2_9)).toContain('plan-lint.stale-symbol-citation');
+  });
+
   it('catches MED (status vocab): draft is not a valid state', () => {
     expect(lintFindings(P2_9)).toContain('plan-lint.status-field-valid');
   });
