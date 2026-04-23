@@ -250,8 +250,8 @@ you have from a prior session.
 
 ## Plan-authoring discipline (ADR-0010)
 
-Multi-slice or ratchet-advancing plans pass through a five-state lifecycle
-before slices open:
+Multi-slice, ratchet-advancing, or successor-to-live / contract-shaped-
+payload plans pass through a five-state lifecycle before slices open:
 
 1. `evidence-draft` — authoring; may be untracked.
 2. `challenger-pending` — committed; awaiting Codex challenger pass.

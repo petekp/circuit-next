@@ -10,7 +10,7 @@ related:
   - ADR-0003 (authority-graph gate for contract authorship; this ADR extends the gate's scope to contract-shaped plan payload via an addendum filed alongside this ADR)
   - ADR-0007 (Phase 2 close criteria; this ADR's sibling addendum to ADR-0007 tightens CC#P2-1 scoping to exclude second-workflow-generalization from the one-workflow-parity criterion)
 amends:
-  - CLAUDE.md §Core-methodology (pending Slice 61 of planning-readiness-meta-arc; adds §Plan-authoring-discipline subsection)
+  - CLAUDE.md §Plan-authoring discipline (landed Slice 61 of planning-readiness-meta-arc: 20-line onboarding summary pointing back to this ADR as authority; discipline layer is prose-only, machine enforcement stays in plan-lint + audit Check 36)
   - specs/invariants.json::enforcement_state_semantics (landed Slice 59 of planning-readiness-meta-arc: adds `blocked` state per §Decision.4 below; six keys now present)
 ---
 
@@ -215,7 +215,19 @@ rejected even if their verdict is accept-class. This closes both the
 untracked-draft and the stale-challenger loopholes at the audit
 layer.
 
-**Layer 3: `npm run verify` unchanged.** Plan-lint is per-plan not
+**Layer 3 (discipline, not machine): `CLAUDE.md §Plan-authoring discipline`
++ user-memory `feedback_plans_must_be_challenger_cleared_before_signoff.md`.**
+Landed at Slice 61 of planning-readiness-meta-arc. CLAUDE.md carries a
+20-line onboarding summary of the 5-state lifecycle pointing back to
+this ADR as authority. The memory file carries the operational
+checklist for "do not present a plan for operator sign-off until
+every condition is met." This layer does NOT enforce anything
+mechanically — plan-lint (Layer 1) and audit Check 36 (Layer 2)
+remain authoritative. Its purpose is agent-onboarding and human-model
+collaboration prose, so new agents encounter the discipline without
+needing to read this ADR end-to-end.
+
+**Layer 4: `npm run verify` unchanged.** Plan-lint is per-plan not
 per-verify (running plan-lint against every plan on every `npm run
 verify` invocation would be non-composable with small-edit iteration
 loops). The audit check ensures integrity at commit boundaries; the

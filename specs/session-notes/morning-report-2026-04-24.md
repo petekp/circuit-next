@@ -181,6 +181,24 @@ reference.
 
 **Audit after Slice 61:** 33 green / 2 yellow / 0 red.
 
+**Slice 61a fold-ins (Codex REJECT → ACCEPT-WITH-FOLD-INS):**
+- Codex caught that my CLAUDE.md subsection dropped the
+  successor-to-live trigger from ADR-0010's applicability list
+  — a new agent reading only CLAUDE.md would miss that
+  single-slice plans with a successor-to-live payload are also
+  gated. Added the third class to the summary line (HIGH-1).
+- The memory checklist said "all HIGH-severity fold-ins must be
+  applied" — weaker than ADR-0010 (which requires ALL reviewer-
+  designated fold-ins). Replaced with the stronger language +
+  named the four freshness-binding fields plan-lint rule #17
+  enforces (HIGH-2).
+- ADR-0010 frontmatter still said "pending Slice 61" for the
+  CLAUDE.md amendment. Updated to "landed" + added a §5 Layer 3
+  paragraph naming CLAUDE.md + memory as a discipline-only
+  layer distinct from the machine layers (MED-1).
+- Clarified in the session-note that the memory/index lives
+  out-of-repo and isn't reproducible from git HEAD (MED-2).
+
 **Next:** Slice 62 — the arc-close ceremony (two prong composition
 reviews, one from fresh-read Claude, one from Codex).
 
