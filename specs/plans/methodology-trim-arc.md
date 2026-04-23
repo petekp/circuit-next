@@ -1,13 +1,16 @@
 ---
 plan: methodology-trim-arc
-status: challenger-cleared
+status: operator-signoff
 revision: 02
 opened_at: 2026-04-23
 revised_at: 2026-04-23
 cleared_at: 2026-04-23
+signoff_at: 2026-04-23
 opened_in_session: post-p2-9-revision-04-cleared
 revised_in_session: post-codex-pass-05-foldins
 cleared_in_session: post-codex-pass-06-accept-with-foldins
+signoff_in_session: post-pass-06-operator-signoff
+signoff_note: "Operator explicit signoff ('resume. i confirm and sign off on the plan.', 2026-04-23). operator_signoff_predecessor: 0cef8175 (slice-64-prep challenger-cleared transition)."
 reviewed_plan:
   challenger_artifact: specs/reviews/methodology-trim-arc-codex-challenger-06.md
   challenger_artifact_commit: e62b187
