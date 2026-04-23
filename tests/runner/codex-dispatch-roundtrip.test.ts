@@ -72,6 +72,7 @@ const ADAPTER_SOURCE_PATHS = [
   resolve('src/runtime/adapters/shared.ts'),
   resolve('src/runtime/adapters/dispatch-materializer.ts'),
   resolve('src/runtime/runner.ts'),
+  resolve('src/runtime/artifact-schemas.ts'),
 ] as const;
 
 function adapterSourceSha256(): string {

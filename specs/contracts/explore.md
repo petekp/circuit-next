@@ -639,7 +639,7 @@ first downstream consumer that needs to disambiguate the two
 provenances).
 
 **Pre-Slice-53 dishonesty disclosure (closed by Slice 53 for
-verdict admissibility; artifact-side closes at Slice 54).** Prior
+verdict admissibility; artifact-side closed by Slice 54).** Prior
 to Slice 53, `src/runtime/runner.ts::dispatchVerdictForStep`
 returned `step.gate.pass[0]` unconditionally, and the runner
 emitted `gate.evaluated` with `outcome: 'pass'` immediately after
@@ -649,9 +649,17 @@ admissibility half: the explore fixture's two dispatch steps
 (synthesize-step `gate.pass=["accept"]`; review-step
 `gate.pass=["accept", "accept-with-fold-ins"]`) now require the
 agent adapter to declare a verdict in their respective pass set
-to advance. The artifact-side half — schema-parsing the result
-payload against `writes.artifact.schema` before materialization —
-is Slice 54's scope (Codex H15) and is NOT closed by Slice 53.
+to advance. Slice 54 (Codex H15) closes the artifact-side half:
+the canonical artifact at `writes.artifact.path` is materialized
+ONLY when the adapter `result_body` schema-parses successfully
+against `writes.artifact.schema`. Parse failures (including
+unknown schema names — fail-closed default per the §Dispatch
+artifact schema-parse subsection below) are surfaced through the
+same `gate.evaluated outcome=fail` → `step.aborted` →
+`run.closed outcome=aborted` sequence Slice 53 landed for the
+verdict-admissibility half; no separate `dispatch.failed` event
+type was introduced. The failure-path event surface is uniform
+across both halves of the ADR-0008 §Decision.3a gate.
 This is a behavior-visible change for any AGENT_SMOKE end-to-end
 run (`tests/runner/explore-e2e-parity.test.ts`): the real
 `claude` subprocess MUST emit a single raw JSON object with a
@@ -667,6 +675,65 @@ fields for `explore.synthesis` and `explore.review-verdict` were
 updated at Slice 38 to reflect adapter-computed provenance and
 the new dispatch-result-promotion risk surface. This contract
 remains authoritative on the reader/writer graph.
+
+## Dispatch artifact schema-parse (Slice 54 Codex H15 fold-in)
+
+Complement to the gate-evaluation subsection above. Slice 53
+closes the verdict-admissibility half of the ADR-0008 §Decision.3a
+materialization rule (gate-fail leaves `writes.artifact.path`
+absent on disk). Slice 54 closes the symmetric artifact-shape half.
+
+**The parse rule at v0.3.** When a dispatch step declares
+`writes.artifact` and the Slice 53 verdict gate admits the
+adapter's declared verdict, the runtime parses `result_body`
+against a Zod schema looked up by `writes.artifact.schema` from
+the registry at `src/runtime/artifact-schemas.ts`. The canonical
+artifact at `writes.artifact.path` is materialized ONLY when BOTH
+(a) the verdict gate passes and (b) the schema parse succeeds.
+Parse failure leaves `writes.artifact.path` absent and surfaces
+the error through `gate.evaluated outcome=fail` + reason →
+`step.aborted` (same reason) → `run.closed outcome=aborted` (same
+reason), with `RunResult.reason` mirroring the close-event reason
+on the user-visible `result.json` (RESULT-I4, from Slice 53
+Codex HIGH 1). This is the same shape Slice 53 landed for the
+verdict-admissibility half — no separate `dispatch.failed` event
+type was introduced; the failure-path event surface is uniform
+across both halves of the gate.
+
+**Schema absent → fail closed.** If `writes.artifact.schema`
+names a schema that is NOT in the registry, the runtime treats
+the lookup miss as a parse failure (reason: "artifact schema
+'<name>' is not registered in the artifact-schema registry
+(fail-closed default)"). No artifact is written; the step is
+aborted. Fail-closed is mandatory at v0.3 — the contract MUST
+does not admit a "schema unknown → pass" path, and any future
+slice that lands a schema authoring surface (P2.10 artifact
+schema set) MUST preserve fail-closed as the default for unknown
+schema names.
+
+**Registered schemas at v0.3.** The registry at
+`src/runtime/artifact-schemas.ts` carries minimal-shape
+`{ verdict: z.string().min(1) }.passthrough()` schemas for
+`dogfood-canonical@v1`, `explore.synthesis@v1`, and
+`explore.review-verdict@v1`. These match what Slice 53's gate
+evaluator already requires from the same body (Codex MED 4
+fold-in: adapter prompts tightened to emit a raw JSON object
+with a verdict field), so the schema parse is structurally
+redundant with gate-eval at v0.3 — the seam is live so P2.10
+can widen to contract-bound real shapes without another runtime
+amendment. A fourth registered schema (`dogfood-strict@v1`) is
+test-only and used by `tests/runner/materializer-schema-parse.test.ts`
+to exercise the gate-pass + schema-fail independent failure
+path.
+
+**`dispatch.completed.verdict` on schema-fail.** When the gate
+admits the verdict but the artifact body fails schema parse,
+`dispatch.completed.verdict` carries the observed verdict (same
+invariant as Slice 53 verdict-not-in-pass rejection — durable
+transcript reflects what the adapter said). The runtime sentinel
+`'<no-verdict>'` is NOT used on this path because the adapter
+DID declare a parseable verdict; the body shape, not the
+verdict, is what failed.
 
 ## `schema_sections` gate placeholder note (Codex MED 10 fold-in)
 

@@ -91,15 +91,22 @@ export interface DispatchMaterializeOutput {
 // Caller is responsible for appending the events via `appendEvent`
 // (or `appendAndDerive` if snapshot derivation is wanted).
 //
-// ADR-0008 §Decision.3a materialization rule: when `writes.artifact` is
-// declared, after the gate would pass the runtime materializes the
-// artifact at `writes.artifact.path` from the `result` payload. At v0
-// we materialize the raw `result_body` bytes verbatim (no schema
-// parsing); a future slice lands the schema-parse step once the
-// artifact schemas become enforceable at runtime. The key structural
-// property — materialization produces a separate on-disk file at the
-// canonical `writes.artifact.path` distinct from the transcript
-// `writes.result` — is already honored here.
+// ADR-0008 §Decision.3a materialization rule: when `writes.artifact`
+// is declared, after BOTH the Slice 53 verdict gate AND the Slice 54
+// schema parse pass, the runtime materializes the artifact at
+// `writes.artifact.path` from the `result` payload. Verdict-gate
+// evaluation and schema-parse both live in the runner (see
+// `src/runtime/runner.ts::evaluateDispatchGate` + the `parseArtifact`
+// call around the materializer call site); by the time `writes.artifact`
+// reaches this function the caller has already decided that the
+// artifact is safe to write. Schema parsing uses the artifact schema
+// registry at `src/runtime/artifact-schemas.ts`; unknown schema names
+// are fail-closed and never reach this call site with a populated
+// `writes.artifact` slot. The body bytes written here are the same
+// bytes that satisfied the schema parse — the artifact file and the
+// dispatch transcript `result` file are distinct on disk but share a
+// byte-for-byte payload at v0.3 (P2.10 may introduce canonicalization
+// before write).
 export function materializeDispatch(input: DispatchMaterializeInput): DispatchMaterializeOutput {
   const {
     runId,

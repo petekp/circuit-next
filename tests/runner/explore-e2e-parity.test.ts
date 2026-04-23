@@ -55,6 +55,7 @@ const AGENT_ADAPTER_SOURCE_PATHS = [
   'src/runtime/adapters/shared.ts',
   'src/runtime/adapters/dispatch-materializer.ts',
   'src/runtime/runner.ts',
+  'src/runtime/artifact-schemas.ts',
 ] as const;
 
 function adapterSourceSha256(): string {

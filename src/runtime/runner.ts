@@ -13,6 +13,7 @@ import type { Workflow } from '../schemas/workflow.js';
 import type { AgentDispatchInput } from './adapters/agent.js';
 import { materializeDispatch } from './adapters/dispatch-materializer.js';
 import type { DispatchResult } from './adapters/shared.js';
+import { parseArtifact } from './artifact-schemas.js';
 import { appendEvent, eventLogPath } from './event-writer.js';
 import {
   type ManifestSnapshotInput,
@@ -518,7 +519,31 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
       // cases). The transcript still materializes either way — the
       // dispatch happened, and the request/receipt/result bytes are
       // durable evidence of the call regardless of admission.
-      const evaluation = evaluateDispatchGate(step, dispatchResult.result_body);
+      //
+      // Slice 54 (Codex H15 fold-in): when the Slice 53 gate admits
+      // a verdict AND the step declares `writes.artifact`, schema-
+      // parse `dispatchResult.result_body` against
+      // `writes.artifact.schema` via `src/runtime/artifact-schemas.ts`.
+      // A parse failure coerces the evaluation to `kind: 'fail'` with
+      // the parse reason — mirroring the Slice 53 reject-on-bad-
+      // verdict shape so the failure-path event surface is uniform
+      // (no separate `dispatch.failed` event). Artifact write
+      // requires BOTH gate pass (Slice 53) AND schema parse pass
+      // (Slice 54); failure on either path leaves
+      // `writes.artifact.path` absent on disk. Fail-closed on
+      // unknown schema names per contract MUST.
+      const gateEvaluation = evaluateDispatchGate(step, dispatchResult.result_body);
+      let evaluation: GateEvaluation = gateEvaluation;
+      if (gateEvaluation.kind === 'pass' && step.writes.artifact !== undefined) {
+        const parseResult = parseArtifact(step.writes.artifact.schema, dispatchResult.result_body);
+        if (parseResult.kind === 'fail') {
+          evaluation = {
+            kind: 'fail',
+            reason: `dispatch step '${step.id}': ${parseResult.reason}`,
+            observedVerdict: gateEvaluation.verdict,
+          };
+        }
+      }
       const dispatchCompletedVerdict =
         evaluation.kind === 'pass'
           ? evaluation.verdict

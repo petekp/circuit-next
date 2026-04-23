@@ -4143,11 +4143,19 @@ export function checkCodexChallengerRequiredDeclaration(rootDir = REPO_ROOT) {
 // surface as yellow-missing-field rather than red, so an operator who
 // hasn't yet re-run `AGENT_SMOKE=1 UPDATE_AGENT_FINGERPRINT=1` gets a
 // clear remediation message rather than an opaque audit fail).
+// Slice 54 (Codex HIGH 1 fold-in) — `artifact-schemas.ts` added. The
+// artifact-schema registry is a dispatch-outcome source: a registry
+// edit that tightens a schema or registers a new name can flip whether
+// `runDogfood` writes the canonical artifact or aborts. Excluding it
+// from the fingerprint surface would let a registry edit silently
+// invalidate a recorded AGENT_SMOKE fingerprint without tripping drift,
+// the exact asymmetry Slice 47a closed for `runner.ts`.
 export const AGENT_ADAPTER_SOURCE_PATHS = Object.freeze([
   'src/runtime/adapters/agent.ts',
   'src/runtime/adapters/shared.ts',
   'src/runtime/adapters/dispatch-materializer.ts',
   'src/runtime/runner.ts',
+  'src/runtime/artifact-schemas.ts',
 ]);
 
 export function computeAgentAdapterSourceSha256(rootDir = REPO_ROOT) {
@@ -4336,6 +4344,7 @@ export const CODEX_ADAPTER_SOURCE_PATHS = Object.freeze([
   'src/runtime/adapters/shared.ts',
   'src/runtime/adapters/dispatch-materializer.ts',
   'src/runtime/runner.ts',
+  'src/runtime/artifact-schemas.ts',
 ]);
 
 export function computeCodexAdapterSourceSha256(rootDir = REPO_ROOT) {

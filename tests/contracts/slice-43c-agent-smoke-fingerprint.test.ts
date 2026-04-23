@@ -309,12 +309,19 @@ describe('Check 30 — AGENT_SMOKE schema_version 2 + drift detection (Slice 47a
     });
   });
 
-  it('AGENT_ADAPTER_SOURCE_PATHS includes the four adapter-surface files Codex HIGH 4 named', () => {
+  it('AGENT_ADAPTER_SOURCE_PATHS includes the five adapter-surface files (Slice 43c Codex HIGH 4 four + Slice 54 Codex HIGH 1 artifact-schemas)', () => {
+    // Slice 54 Codex HIGH 1 fold-in — `artifact-schemas.ts` is a
+    // dispatch-outcome source. A registry edit that changes a
+    // schema's shape or adds/removes a name can flip whether
+    // runDogfood writes the canonical artifact or aborts; without
+    // it in the fingerprint surface, AGENT_SMOKE drift would not
+    // yellow on a registry-only edit.
     expect(AGENT_ADAPTER_SOURCE_PATHS).toEqual([
       'src/runtime/adapters/agent.ts',
       'src/runtime/adapters/shared.ts',
       'src/runtime/adapters/dispatch-materializer.ts',
       'src/runtime/runner.ts',
+      'src/runtime/artifact-schemas.ts',
     ]);
   });
 
@@ -333,15 +340,17 @@ describe('Check 30 — AGENT_SMOKE schema_version 2 + drift detection (Slice 47a
   // CODEX list would let a runner edit silently invalidate the codex
   // fingerprint without tripping drift, while the same edit trips the
   // agent one.
-  it('CODEX_ADAPTER_SOURCE_PATHS includes runner.ts for symmetry with AGENT (HIGH 3 fold-in)', async () => {
+  it('CODEX_ADAPTER_SOURCE_PATHS includes runner.ts + artifact-schemas.ts for symmetry with AGENT (Slice 47a Codex HIGH 3 + Slice 54 Codex HIGH 1 fold-ins)', async () => {
     const mod = await import('../../scripts/audit.mjs');
     expect(mod.CODEX_ADAPTER_SOURCE_PATHS).toContain('src/runtime/runner.ts');
+    expect(mod.CODEX_ADAPTER_SOURCE_PATHS).toContain('src/runtime/artifact-schemas.ts');
     // Pin the full set so a future trim of the path list trips this test.
     expect(mod.CODEX_ADAPTER_SOURCE_PATHS).toEqual([
       'src/runtime/adapters/codex.ts',
       'src/runtime/adapters/shared.ts',
       'src/runtime/adapters/dispatch-materializer.ts',
       'src/runtime/runner.ts',
+      'src/runtime/artifact-schemas.ts',
     ]);
   });
 });
