@@ -107,9 +107,10 @@ agent) drive the repo across session boundaries**.
 - `session-drift:compacted-summary-loses-decision` — compaction
   erases a load-bearing "we decided X" line. Mitigated by SESSION-I3
   (disabled) + SESSION-I2 (artifact-persisted state).
-- `prompt-bloat:claude-md-overflow` — CLAUDE.md exceeds 300 lines and
-  the primary instruction budget starts evicting tail lines silently.
-  Mitigated by SESSION-I1 + future test.
+- `prompt-bloat:claude-md-overflow` — CLAUDE.md exceeds 450 lines (cap
+  raised 300 → 450 per ADR-0011 on 2026-04-23 after Slice 61 Codex
+  semantic-loss evidence) and the primary instruction budget starts
+  evicting tail lines silently. Mitigated by SESSION-I1 + test.
 - `slice-dilation:unbounded-coupled-changes` — a "slice" actually
   touches four subsystems and cannot be reverted individually.
   Mitigated by SESSION-I4 + framing triplet requirement.
@@ -125,7 +126,8 @@ agent) drive the repo across session boundaries**.
 `tests/contracts/session-hygiene.test.ts` (Phase 1 track; landed
 Slice 14 — SESSION-I1..I6 pinned). Asserts:
 
-- CLAUDE.md line count ≤ 300 (SESSION-I1).
+- CLAUDE.md line count ≤ 450 (SESSION-I1; cap raised 300 → 450 per
+  ADR-0011).
 - README.md and PROJECT_STATE.md agree on current phase (SESSION-I2;
   already covered by audit but the test gives local fast feedback).
 - No `.circuit/` path is tracked in git outside the allowlisted

@@ -44,20 +44,20 @@ describe('session-hygiene — SESSION-I1 CLAUDE.md line budget', () => {
     expect(existsSync(CLAUDE_MD)).toBe(true);
   });
 
-  it('CLAUDE.md is ≤ 300 lines', () => {
+  it('CLAUDE.md is ≤ 450 lines (cap raised 300 → 450 per ADR-0011)', () => {
     const text = readFileSync(CLAUDE_MD, 'utf-8');
     const lineCount = text.split('\n').length;
     expect(
       lineCount,
-      `CLAUDE.md is ${lineCount} lines; hard invariant #10 caps it at 300. Move detail to specs/ with a pointer.`,
-    ).toBeLessThanOrEqual(300);
+      `CLAUDE.md is ${lineCount} lines; hard invariant #10 caps it at 450 per ADR-0011. Move detail to specs/ with a pointer.`,
+    ).toBeLessThanOrEqual(450);
   });
 
-  it('CLAUDE.md names its own 300-line hard invariant', () => {
+  it('CLAUDE.md names its own ≤ 450-line hard invariant', () => {
     const text = readFileSync(CLAUDE_MD, 'utf-8');
     expect(
-      /CLAUDE\.md.*(?:≤|<=|less than or equal to)\s*300\s*lines/i.test(text),
-      'CLAUDE.md must name its own ≤300-line invariant so the rule is visible inline.',
+      /CLAUDE\.md.*(?:≤|<=|less than or equal to)\s*450\s*lines/i.test(text),
+      'CLAUDE.md must name its own ≤450-line invariant (post ADR-0011) so the rule is visible inline.',
     ).toBe(true);
   });
 });

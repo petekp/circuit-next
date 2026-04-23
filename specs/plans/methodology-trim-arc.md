@@ -37,8 +37,8 @@ forcing_function: P2.9 restart -a rate < 15% target after arc lands
 
 | Finding | Severity | Classification | Rev-02 resolution |
 |---|---|---|---|
-| F1 — Slice 66 missing CLI/audit context selector | HIGH | underspec-within-scope | §4.5 (new) adds `--context=authoring\|committed` flag to plan-lint CLI; Check 36 wired to `committed`; CLAUDE.md §Plan-authoring + ADR-0010 §State-set updated; test-suite coverage for both contexts. |
-| F2 — Slice 67 misses live-state consumer surface | HIGH | underspec-within-scope | §5 adopts **compat-shim approach**. Existing markers (`<!-- current_slice: N -->` HTML-comment at PROJECT_STATE.md:1, plus README/TIER markers) preserved. `readLiveStateSection` added as internal helper for NEW consumers only; existing consumers (status-epoch, freshness, audit.mjs Check 26 arc-close gate, doctor, inventory, contract tests) unchanged. Full marker-to-section migration deferred to post-P2.9. "Read-only severity" language removed; standard severity model throughout. |
+| F1 — CLI/audit context selector underspec | HIGH | underspec-within-scope | §4.5 (new): plan-lint CLI carries `--context=authoring\|committed` flag; Check 36 binds to `committed`; CLAUDE.md §Plan-authoring + ADR-0010 §State-set amended; test-suite covers both contexts. |
+| F2 — live-state consumer surface underspec | HIGH | underspec-within-scope | §5 uses **compat-shim approach**. Existing markers (`<!-- current_slice: N -->` HTML-comment at PROJECT_STATE.md:1, plus README/TIER markers) remain verbatim. `readLiveStateSection` is an internal helper for NEW consumers only; existing consumers (status-epoch, freshness, audit.mjs Check 26 arc-close gate, doctor, inventory, contract tests) stay unchanged. Full marker-to-section migration is deferred to post-P2.9. "Read-only severity" language is gone; the standard severity model applies throughout. |
 | F3 — Rule #23 skip regex too permissive | MED | underspec-within-scope | §2.1 skip narrowed to exact canonical headings list (no prefix match). New P5 detector for noun-led chronology (`\b(phase|arc)\s*\w+\b` + predictive verb). New fixture: `chronology-noun-led.md`. New fixture: `chronology-evidence-backed-suffix.md` (demonstrates suffix doesn't dodge the rule). |
 | F4 — §5.4 pre/post audit diff is weak | MED | underspec-within-scope | §5.4 replaced with explicit unit-test coverage for `readLiveStateSection`: missing section, empty section, multiple sections, malformed section, valid section. No reliance on end-to-end audit-output diff. |
 | F5 — §7/§9 burden accounting understates | LOW | underspec-within-scope | §7 "internal complexity" claim neutralized to +0. R13 (plan-lint context divergence at consumer) and R14 (marker-vs-section drift during compat-shim window) added. |
@@ -49,7 +49,7 @@ Arc goal: reduce methodology ceremony (chronology drift, blocked-state rules, tr
 
 Phase goal: carry Phase 2 forward with reduced methodology load so P2.9 restart can measure empirical -a rate under the revised ceremony. P2.9 is the forcing-function test: target -a rate < 15%; reopen trim work if P2.9 restart exceeds 3 slices or -a > 20%.
 
-Arc trajectory. No earlier slice has made this arc smaller. P2.9 implementation has not yet opened under the current methodology, so this arc can land *before* P2.9 implementation does — which is the whole empirical-signal play. Running it after P2.9 starts would confound the measurement.
+Trajectory. No earlier slice has reshaped this arc. P2.9 implementation is not yet under way under the current methodology, so this arc can complete *before* P2.9 implementation does — which is the whole empirical-signal play. Running it after P2.9 starts would confound the measurement.
 
 Operator-authorized exception to 3-slice budget. Prior pass history (5 Codex passes on draft/rev02/rev03/reframe/expanded) demonstrated that §3.2 lifecycle split and §3.4 PROJECT_STATE refactor each require proper dedicated slices with ADR amendment + test/fixture updates + audit-script semantic handling. Operator explicitly authorized 5-slice expansion (2026-04-23). Exception is arc-local.
 
@@ -167,7 +167,7 @@ New ADR-0011 cites E9. Audit cap bumped 300→450. ADR-0011 is contract-relaxati
 - `npm run audit` green/yellow (reds on `e3ecd3b` clear via §2.4 fallback).
 - Rule #23 fires on violating + noun-led + evidence-backed-suffix fixtures; does not fire on compliant + quoted-negative-control fixtures.
 - ADR-0011 whole-slice Codex pass ACCEPT artifact.
-- Slice 64 commit body uses structured trailer.
+- The slice-closing commit body carries the structured trailer.
 
 ## 3. Slice 65 — RULE-CUT
 
@@ -325,7 +325,7 @@ No reliance on end-to-end audit-output diff. Each negative path gets explicit re
 | R4 arc-close missing ARC_CLOSE_GATES | LOW | Check 26 self-protects. |
 | R5 trailer adoption inconsistent | LOW | Prose fallback yellow for pre-arc. |
 | R6 continuation commits | HIGH at base rate, managed | Cap ≤1 per slice, 0 on 68. Exceeded → pause + reopen. |
-| R7 P2.9 measurement confounding | MED | Pre-arc baseline on last 3 non-meta arcs documented before Slice 64 opens. |
+| R7 P2.9 measurement confounding | MED | Pre-arc baseline on last 3 non-meta arcs is documented prior to arc start. |
 | R10 challenger volume unchanged after TUNE-1 drop | MED-accepted | Value prop = authoring friction + stale-doc coupling + audit/plan simplification; tied to P2.9 -a target. |
 | R11 audit.mjs semantic refactor breaks subtly | LOW-MED | Compat-shim approach — no existing consumer changed. Future migration carries this risk only if attempted. |
 | R12 4 more Codex passes cost time | ACCEPTED | Each slice pass is narrow; should converge faster than plan-level passes. |
@@ -336,7 +336,7 @@ No reliance on end-to-end audit-output diff. Each negative path gets explicit re
 
 - Codex pass 06 (pending — this dispatch) ACCEPT-class artifact.
 - Plan committed to `specs/plans/methodology-trim-arc.md` at `challenger-pending` immediately before dispatch.
-- `operator_signoff_predecessor: <challenger-cleared-sha>` in Slice 64 commit body post-ACCEPT.
+- `operator_signoff_predecessor: <challenger-cleared-sha>` in the operator-signoff commit body post-ACCEPT.
 - Each subsequent slice (65, 66, 67) gets its own whole-slice Codex pass at close.
 
 ## 11. §Prior pass log

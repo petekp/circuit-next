@@ -243,6 +243,10 @@ describe('plan-lint — per-rule bad fixtures (Slice 58 — 22 rules; Slice-58a 
       'rule-22-blocked-invariant-must-resolve.md',
       'plan-lint.blocked-invariant-must-resolve-before-arc-close',
     ],
+    ['rule-23-chronology-violating.md', 'plan-lint.prospective-chronology-forbidden'],
+    ['rule-23-chronology-noun-led.md', 'plan-lint.prospective-chronology-forbidden'],
+    ['rule-23-chronology-evidence-backed-suffix.md', 'plan-lint.prospective-chronology-forbidden'],
+    ['rule-23-chronology-advances-case.md', 'plan-lint.prospective-chronology-forbidden'],
   ];
   for (const [fixture, expectedRule] of cases) {
     it(`${fixture} fires ${expectedRule}`, () => {
@@ -260,6 +264,73 @@ describe('plan-lint — legacy/ fixture (backdating does not defeat rules)', () 
     const result = runLint(path);
     expect(result.exitCode).toBe(1);
     expect(lintFindings(path)).toContain('plan-lint.status-field-valid');
+  });
+});
+
+describe('plan-lint — rule #23 prospective-chronology-forbidden (Slice 64, methodology-trim-arc)', () => {
+  const RULE_23 = 'plan-lint.prospective-chronology-forbidden';
+
+  it('chronology-violating.md fires at least P1, P2, and P3', () => {
+    const path = 'tests/fixtures/plan-lint/bad/rule-23-chronology-violating.md';
+    const result = runLint(path);
+    expect(result.exitCode).toBe(1);
+    const findings = lintFindings(path);
+    expect(findings.filter((r) => r === RULE_23).length).toBeGreaterThanOrEqual(3);
+    // Stdout carries the detector label ("P1", "P2", "P3") in the message.
+    expect(result.stdout).toMatch(/P1:/);
+    expect(result.stdout).toMatch(/P2:/);
+    expect(result.stdout).toMatch(/P3:/);
+  });
+
+  it('chronology-noun-led.md fires P5 (and no P1)', () => {
+    const path = 'tests/fixtures/plan-lint/bad/rule-23-chronology-noun-led.md';
+    const result = runLint(path);
+    expect(result.exitCode).toBe(1);
+    expect(lintFindings(path)).toContain(RULE_23);
+    expect(result.stdout).toMatch(/P5:/);
+  });
+
+  it('chronology-evidence-backed-suffix.md fires (heading is not exact canonical skip match)', () => {
+    const path = 'tests/fixtures/plan-lint/bad/rule-23-chronology-evidence-backed-suffix.md';
+    const result = runLint(path);
+    expect(result.exitCode).toBe(1);
+    expect(lintFindings(path)).toContain(RULE_23);
+  });
+
+  it('chronology-advances-case.md fires (pass-06 MED fold-in: advance/advances/advanced)', () => {
+    const path = 'tests/fixtures/plan-lint/bad/rule-23-chronology-advances-case.md';
+    const result = runLint(path);
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toMatch(/advances|advanced/);
+  });
+
+  it('rule-23-state-description.md is GREEN (state-description negative control)', () => {
+    const path = 'tests/fixtures/plan-lint/good/rule-23-state-description.md';
+    const result = runLint(path);
+    expect(result.exitCode).toBe(0);
+    expect(lintFindings(path)).not.toContain(RULE_23);
+  });
+
+  it('rule-23-quoted-negative-control.md is GREEN (fenced code + skip section both honored)', () => {
+    const path = 'tests/fixtures/plan-lint/good/rule-23-quoted-negative-control.md';
+    const result = runLint(path);
+    expect(result.exitCode).toBe(0);
+    expect(lintFindings(path)).not.toContain(RULE_23);
+  });
+
+  it('planning-readiness-meta-arc.md is grandfathered (pre-methodology-trim-arc)', () => {
+    const path = 'specs/plans/planning-readiness-meta-arc.md';
+    const result = runLint(path);
+    expect(result.exitCode).toBe(0);
+    expect(lintFindings(path)).not.toContain(RULE_23);
+  });
+
+  it('specs/reviews/** files are out of rule-23 scope', () => {
+    const path = 'specs/reviews/methodology-trim-arc-codex-challenger-06.md';
+    // Review files are not normally lint-able but rule-23 must bail
+    // out before any scan happens. Rule-23 must not appear in findings
+    // regardless of the overall exit status.
+    expect(lintFindings(path)).not.toContain(RULE_23);
   });
 });
 

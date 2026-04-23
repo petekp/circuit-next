@@ -1,0 +1,31 @@
+# <subject — concise, imperative, ≤72 chars; e.g. "slice-64: methodology-trim-arc CHEAP-TRIM">
+
+# Body: 1–3 short paragraphs on what changed and why. Avoid narrating
+# the tool path; summarize the decision and its forcing context.
+#
+# If the commit is slice-shaped, include the framing triplet:
+#
+#   Failure mode: <the failure this slice addresses>
+#   Acceptance evidence: <what would prove it worked>
+#   Alternate framing: <one rejected alternative and why>
+#
+# Keep body under ~30 lines. Longer rationale goes in an ADR, not the
+# commit message.
+
+# Structured trailer (keys are case-insensitive; values are free-form
+# but validated against the sets below):
+Lane: <ratchet-advance | equivalence-refactor | migration-escrow | discovery | disposable | break-glass>
+Isolation: <container | distinct-uid | none-tier-0-deferred | policy-compliant (no implementer separation required) | re-deferred per ADR-0007 CC#P2-7>
+Arc-Ref: <arc-slug or N/A>
+Signoff-Predecessor: <sha or N/A>
+
+# Operator-signoff transition commits ONLY: repeat the predecessor as
+# a standalone line so Check 36 (which uses the snake_case form) can
+# bind the ancestry chain:
+#
+#   operator_signoff_predecessor: <short-sha>
+#
+# Review-only or plan-prep commits MAY skip the framing triplet; the
+# Lane + Isolation + Arc-Ref trailer is still required. Audit will
+# yellow such commits for missing triplet, which is the intended
+# signal for pre-arc work.

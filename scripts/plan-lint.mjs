@@ -21,7 +21,7 @@
  * is `specs/invariants.json::enforcement_state_semantics`. This script
  * reads that JSON at lint time.
  *
- * Rules (per ADR-0010 §6) — 22 total:
+ * Rules (per ADR-0010 §6) — 23 total:
  *   #1  evidence-census-present
  *   #2  tbd-in-acceptance-evidence
  *   #3  test-path-extension
@@ -44,6 +44,11 @@
  *   #20 verification-runtime-capability-assumed-without-substrate-slice
  *   #21 artifact-materialization-uses-registered-schema
  *   #22 blocked-invariant-must-resolve-before-arc-close (Slice 59)
+ *   #23 prospective-chronology-forbidden               (Slice 64,
+ *                                                      methodology-trim-arc,
+ *                                                      P1-P5 detectors +
+ *                                                      narrow skip + quote
+ *                                                      guard + path scope)
  *
  * Rule-allocation history (per Slice-62 arc-close composition review
  * Codex HIGH-2 fold-in — honest record):
@@ -1259,6 +1264,426 @@ function rule22BlockedMustResolve(plan) {
   return findings;
 }
 
+// Rule #23 — prospective-chronology-forbidden (Slice 64, methodology-
+// trim-arc). Plans must describe state + evidence, not forward-looking
+// chronology. Five detectors:
+//   P1  future-slice reference ("Slice 64") with predictive/preparatory
+//       verb on the same line.
+//   P2  if-verdict-then-action ("If ACCEPT, land the fold-in") — the
+//       conditional clause is followed within 5 lines by an imperative.
+//   P3  imperative action list — bullet or numbered list where ≥50% of
+//       items begin with one of the imperative verbs.
+//   P4  heading hint — "Next steps", "Forthcoming", "§8 chronology",
+//       "Upcoming". Bumps score; yellow alone, red when paired with
+//       another detector in the same section.
+//   P5  noun-led chronology — "Phase 2 lands X", "Arc revision two
+//       advances Y". Sidesteps the "Slice N" anchor but is still
+//       forward-looking under the same verb list. (Pass-05 F3.)
+//
+// Pass-06 MED fold-in: the verb list is enumerated here explicitly so
+// a reader can audit it. Base + present-3rd + past forms are all
+// included; the pass-06 note flagged "advances/advanced/dispatches/
+// dispatched" as the specific gap to close.
+//
+// Scope:
+//   - Only specs/plans/**. Review files (specs/reviews/**) and
+//     session notes (specs/session-notes/**) legitimately describe
+//     what the slice will do and are not gated.
+//   - Skip lines inside Markdown quote blocks (leading `> `).
+//   - Skip lines inside fenced code blocks (``` delimited).
+//   - Skip sections whose top-level heading is exactly one of:
+//     `## §Evidence census`, `## §Prior pass log`, `## §Appendix`,
+//     `## Example sequence`. Exact match, not prefix — so
+//     `## Evidence-backed rollout` is NOT skipped.
+const RULE23_P1_VERBS = [
+  'will',
+  'shall',
+  'open',
+  'opens',
+  'opened',
+  'land',
+  'lands',
+  'landed',
+  'commit',
+  'commits',
+  'committed',
+  'introduce',
+  'introduces',
+  'introduced',
+  'add',
+  'adds',
+  'added',
+  'stage',
+  'stages',
+  'staged',
+  'upcoming',
+  'prepare',
+  'prepares',
+  'prepared',
+  'queue',
+  'queues',
+  'queued',
+  'await',
+  'awaits',
+  'awaited',
+  'dispatch',
+  'dispatches',
+  'dispatched',
+  'transition',
+  'transitions',
+  'transitioned',
+  'bump',
+  'bumps',
+  'bumped',
+  'advance',
+  'advances',
+  'advanced',
+];
+
+const RULE23_P3_IMPERATIVES = [
+  'commit',
+  'revise',
+  'land',
+  'open',
+  'bump',
+  'transition',
+  'dispatch',
+  'stage',
+  'prepare',
+  'queue',
+  'verify',
+  'run',
+];
+
+const RULE23_SKIP_HEADINGS = new Set([
+  '§Evidence census',
+  '§Prior pass log',
+  '§Appendix',
+  'Example sequence',
+]);
+
+// Rule #23 grandfather boundary — plans first-committed strictly
+// before the methodology-trim-arc landed are exempt. Pre-rule plans
+// encoded forward-chronology freely because no rule prohibited it;
+// retroactive rewrite is out of scope. Post-boundary plans (this
+// one included) must pass rule #23.
+const METHODOLOGY_TRIM_ARC_FIRST_COMMIT = '455f8d376f0862de56ee281b002a86926f4ba72c';
+
+function isRule23Grandfathered(planPath) {
+  if (!planPath) return false;
+  let firstCommitSha;
+  try {
+    const relPath = isAbsolute(planPath) ? planPath.slice(REPO_ROOT.length + 1) : planPath;
+    const out = execSync(
+      `git log --diff-filter=A --follow --format=%H -- ${JSON.stringify(relPath)}`,
+      { cwd: REPO_ROOT, stdio: ['ignore', 'pipe', 'ignore'] },
+    )
+      .toString()
+      .trim()
+      .split('\n')
+      .filter(Boolean);
+    firstCommitSha = out.length > 0 ? out[out.length - 1] : null;
+  } catch {
+    firstCommitSha = null;
+  }
+  // Untracked plans are subject to rule #23.
+  if (!firstCommitSha) return false;
+  // Same-commit as arc open = not grandfathered (arc's own plan).
+  if (firstCommitSha === METHODOLOGY_TRIM_ARC_FIRST_COMMIT) return false;
+  try {
+    execSync(
+      `git merge-base --is-ancestor ${firstCommitSha} ${METHODOLOGY_TRIM_ARC_FIRST_COMMIT}`,
+      { cwd: REPO_ROOT, stdio: 'ignore' },
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const RULE23_P4_HEADING_RE = /^#+\s*(?:next\s*steps?|forthcoming|§\s*8\b.*chronology|upcoming)\b/im;
+
+function rule23ProspectiveChronologyForbidden(plan, planPath) {
+  // Path scope: rule applies to any plan file passed to plan-lint,
+  // EXCEPT review files and session notes which legitimately describe
+  // forthcoming action. The explicit deny-list is cheaper than a
+  // frontmatter-based classifier and matches the plan spec literally.
+  const rel = planPath
+    ? isAbsolute(planPath)
+      ? planPath.slice(REPO_ROOT.length + 1)
+      : planPath
+    : '';
+  if (rel.startsWith('specs/reviews/')) return [];
+  if (rel.startsWith('specs/session-notes/')) return [];
+  // Grandfather: plans first-committed before the methodology-trim-arc
+  // first commit are exempt (rule didn't exist at authoring time).
+  if (isRule23Grandfathered(planPath)) return [];
+
+  const body = plan.body;
+  const lines = body.split('\n');
+
+  // Compute line → absolute-offset map for "body offset ~N" locations.
+  const lineOffsets = new Array(lines.length);
+  {
+    let running = 0;
+    for (let i = 0; i < lines.length; i++) {
+      lineOffsets[i] = running;
+      running += lines[i].length + 1; // +1 for the newline
+    }
+  }
+
+  // Build skip masks: fenced code blocks + quote lines.
+  const skipLine = new Array(lines.length).fill(false);
+  let inFence = false;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^```/.test(line)) {
+      skipLine[i] = true;
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) {
+      skipLine[i] = true;
+      continue;
+    }
+    if (/^\s*>\s/.test(line)) skipLine[i] = true;
+  }
+
+  // Build section-skip ranges: exact-match heading skip for the four
+  // canonical sections listed in the plan.
+  const sectionSkipRanges = [];
+  const headerRe = /^## ([^\n]+)$/gm;
+  const headers = [...body.matchAll(headerRe)];
+  for (let i = 0; i < headers.length; i++) {
+    const title = headers[i][1].trim();
+    if (RULE23_SKIP_HEADINGS.has(title)) {
+      const start = headers[i].index;
+      const end = i + 1 < headers.length ? headers[i + 1].index : body.length;
+      sectionSkipRanges.push([start, end]);
+    }
+  }
+  const isInSkipSection = (offset) => sectionSkipRanges.some(([s, e]) => offset >= s && offset < e);
+
+  // Lookbehind + lookahead exclude hyphen-joined compounds so "Ratchet-
+  // Advance" (lane name), "arc-ref", etc. don't false-match the verb
+  // list. This matters for P1/P5 because the word "advance" is both a
+  // forward-chronology verb and part of lane vocabulary.
+  const verbPattern = new RegExp(`(?<![-\\w])(?:${RULE23_P1_VERBS.join('|')})(?![-\\w])`, 'i');
+  const sliceRefPattern = /(?<![-\w])Slice\s*\d+[a-z]?(?![-\w])/i;
+  // Noun-led: "phase 2", "arc revision", "revision three". Scoped
+  // tightly so it doesn't fire on unrelated uses of the nouns.
+  const nounLedPattern = /(?<![-\w])(?:phase|arc|revision)\s+\w+/i;
+  const ifVerdictPattern =
+    /(?<![-\w])if\s+(?:ACCEPT|REJECT|challenger-cleared|operator-signoff|signoff)(?![-\w])/i;
+  // P3 imperative-at-list-head (strict — start of line after list marker).
+  const imperativeRe = new RegExp(
+    `^\\s*(?:[-*+]|\\d+\\.)\\s+(?:${RULE23_P3_IMPERATIVES.join('|')})(?![-\\w])`,
+    'i',
+  );
+  // P2 imperative-anywhere-in-line (broader — the if-verdict clause's
+  // imperative can land after a colon/semicolon on the same line or on
+  // the follow-up list items).
+  const p2ImperativeAnywhereRe = new RegExp(
+    `(?<![-\\w])(?:${RULE23_P3_IMPERATIVES.join('|')})(?![-\\w])`,
+    'i',
+  );
+
+  // Mask inline code (single-backtick ranges) and bold/italic-wrapped
+  // markdown so example strings authored as code literals don't match.
+  // Paired double-quoted literals inside the same line are ALSO masked
+  // — a plan author who writes `"Phase 2 lands X"` as an illustrative
+  // example is describing the rule, not committing to the action.
+  const maskLine = (line) => {
+    let masked = line;
+    // Inline code (backtick-delimited).
+    masked = masked.replace(/`[^`]*`/g, (m) => ' '.repeat(m.length));
+    // Double-quoted illustrative strings — paired quotes only; single
+    // stray quotes (typographic, possessive) left alone.
+    masked = masked.replace(/"[^"\n]*"/g, (m) => ' '.repeat(m.length));
+    return masked;
+  };
+  const listItemRe = /^\s*(?:[-*+]|\d+\.)\s+/;
+
+  const findings = [];
+  const seenLines = new Set();
+
+  const pushOnce = (lineIdx, detector, message) => {
+    const key = `${lineIdx}:${detector}`;
+    if (seenLines.has(key)) return;
+    seenLines.add(key);
+    const offset = lineOffsets[lineIdx];
+    findings.push({
+      rule: 'plan-lint.prospective-chronology-forbidden',
+      severity: detector === 'P4-alone' ? 'yellow' : 'red',
+      message: `${detector}: ${message}`,
+      location: `body offset ~${offset} (line ${lineIdx + 1})`,
+    });
+  };
+
+  // P4 heading scan — identifies headings by regex; bumps severity when
+  // another detector fires in the same section.
+  const p4HeadingLines = new Set();
+  const p4SectionRanges = [];
+  for (let i = 0; i < headers.length; i++) {
+    const headerText = headers[i][0];
+    if (RULE23_P4_HEADING_RE.test(headerText)) {
+      // Find the line index for this heading.
+      const start = headers[i].index;
+      const end = i + 1 < headers.length ? headers[i + 1].index : body.length;
+      p4SectionRanges.push([start, end]);
+      // Line index of header.
+      for (let li = 0; li < lineOffsets.length; li++) {
+        if (lineOffsets[li] >= start) {
+          p4HeadingLines.add(li);
+          break;
+        }
+      }
+    }
+  }
+
+  // Per-line P1, P2, P5 scans. Line-local, which is a deliberate
+  // simplification of "in-sentence" — forward-chronology text almost
+  // always fits on one line, and multi-line cases are still caught by
+  // P3 (imperative list). Every regex runs against the masked line so
+  // inline code + illustrative quoted strings are invisible to
+  // detection.
+  let p2Pending = -1; // lineIdx of an unresolved "If ACCEPT..." conditional
+  for (let i = 0; i < lines.length; i++) {
+    if (skipLine[i]) continue;
+    const offset = lineOffsets[i];
+    if (isInSkipSection(offset)) continue;
+    const rawLine = lines[i];
+    const line = maskLine(rawLine);
+
+    // P2 resolution: check if pending conditional is followed by
+    // imperative within 5 lines. "Within 5 lines" includes the
+    // conditional line itself (an "If ACCEPT: commit X" single-line
+    // form) and list follow-ups.
+    if (p2Pending !== -1) {
+      if (i - p2Pending > 5) {
+        p2Pending = -1;
+      } else if (p2ImperativeAnywhereRe.test(line)) {
+        pushOnce(
+          p2Pending,
+          'P2',
+          `conditional "${lines[p2Pending].trim().slice(0, 120)}" followed by imperative clause within 5 lines`,
+        );
+        p2Pending = -1;
+      }
+    }
+
+    // P1 — Slice-ref + verb same line.
+    if (sliceRefPattern.test(line) && verbPattern.test(line)) {
+      pushOnce(
+        i,
+        'P1',
+        `future-slice reference + predictive verb: "${rawLine.trim().slice(0, 140)}"`,
+      );
+    }
+
+    // P5 — Noun-led chronology + verb same line.
+    // (Avoid double-firing when P1 already caught it.)
+    if (!sliceRefPattern.test(line) && nounLedPattern.test(line) && verbPattern.test(line)) {
+      pushOnce(i, 'P5', `noun-led chronology + verb: "${rawLine.trim().slice(0, 140)}"`);
+    }
+
+    // P2 initiation — and same-line resolution if the imperative
+    // appears on the if-clause line itself (colon/semicolon-separated).
+    const ifMatch = line.match(ifVerdictPattern);
+    if (ifMatch) {
+      const tailStart = ifMatch.index + ifMatch[0].length;
+      const tail = line.slice(tailStart);
+      if (p2ImperativeAnywhereRe.test(tail)) {
+        pushOnce(
+          i,
+          'P2',
+          `if-verdict clause with same-line imperative: "${rawLine.trim().slice(0, 140)}"`,
+        );
+      } else {
+        p2Pending = i;
+      }
+    }
+  }
+
+  // P3 — imperative-heavy list detection. Walk lines looking for
+  // contiguous list blocks; count items that start with an
+  // imperative verb. If ≥50% of items in a block of ≥2 items match,
+  // flag the block.
+  let blockStart = -1;
+  let blockItems = [];
+  const flushBlock = () => {
+    if (blockItems.length >= 2) {
+      const matches = blockItems.filter((idx) => imperativeRe.test(lines[idx])).length;
+      if (matches / blockItems.length >= 0.5) {
+        pushOnce(
+          blockStart,
+          'P3',
+          `imperative action list (${matches}/${blockItems.length} items): "${lines[blockStart].trim().slice(0, 140)}"`,
+        );
+      }
+    }
+    blockStart = -1;
+    blockItems = [];
+  };
+  for (let i = 0; i < lines.length; i++) {
+    if (skipLine[i]) {
+      flushBlock();
+      continue;
+    }
+    const offset = lineOffsets[i];
+    if (isInSkipSection(offset)) {
+      flushBlock();
+      continue;
+    }
+    if (listItemRe.test(lines[i])) {
+      if (blockStart === -1) blockStart = i;
+      blockItems.push(i);
+    } else if (lines[i].trim() === '') {
+      // blank line allowed within list — defer flush
+    } else {
+      flushBlock();
+    }
+  }
+  flushBlock();
+
+  // P4 — heading hint. Flag yellow when the heading matches but no
+  // other detector has already fired in its section. When another
+  // detector has fired in the section, its red severity already
+  // communicates the problem, so suppress the yellow to avoid noise.
+  for (const [start, end] of p4SectionRanges) {
+    const sectionHasRed = findings.some((f) => {
+      const match = f.location.match(/body offset ~(\d+)/);
+      if (!match) return false;
+      const o = Number(match[1]);
+      return o >= start && o < end && f.severity === 'red';
+    });
+    if (sectionHasRed) continue;
+    // Find the heading line and push a yellow.
+    for (let li = 0; li < lineOffsets.length; li++) {
+      if (
+        lineOffsets[li] === start ||
+        (li > 0 && lineOffsets[li] > start && lineOffsets[li - 1] < start)
+      ) {
+        // Adjust: find exact line whose offset equals start.
+        break;
+      }
+    }
+    // Simpler: use offset lookup.
+    let headingLineIdx = 0;
+    for (let li = 0; li < lineOffsets.length; li++) {
+      if (lineOffsets[li] <= start) headingLineIdx = li;
+      else break;
+    }
+    pushOnce(
+      headingLineIdx,
+      'P4-alone',
+      `heading hint "${lines[headingLineIdx].trim().slice(0, 120)}" suggests forward-chronology; verify content`,
+    );
+  }
+
+  return findings;
+}
+
 // ----- MAIN -----
 
 function runAllRules(plan, planPath) {
@@ -1289,6 +1714,7 @@ function runAllRules(plan, planPath) {
     ...rule20VerificationRuntime(plan),
     ...rule21ArtifactMaterialization(plan),
     ...rule22BlockedMustResolve(plan),
+    ...rule23ProspectiveChronologyForbidden(plan, planPath),
   ];
 }
 

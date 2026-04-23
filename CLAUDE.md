@@ -1,6 +1,6 @@
 # Agent Guide — circuit-next
 
-This file is agent-facing guidance for working on `circuit-next`. Keep under **300 lines**; anything longer goes in `specs/` with a pointer here.
+This file is agent-facing guidance for working on `circuit-next`. Keep under **450 lines** (cap raised 300 → 450 per ADR-0011 on 2026-04-23 after Slice 61 Codex evidence of semantic loss under the old cap); anything longer goes in `specs/` with a pointer here.
 
 ## The one-paragraph mental model
 
@@ -96,8 +96,8 @@ the terrain. Three sentences at slice open, no new artifact.
 
 ## Session hygiene
 
-- `CLAUDE.md` stays under 300 lines; longer content goes to `specs/` with a
-  pointer here.
+- `CLAUDE.md` stays under 450 lines (per ADR-0011); longer content goes to
+  `specs/` with a pointer here.
 - Compaction is **disabled** on this repo. Treat session as long-horizon;
   artifact-based resume is the recovery path.
 - `PROJECT_STATE.md` is the live snapshot. Update it when phase state
@@ -239,7 +239,8 @@ These are non-negotiable without reopening the methodology decision:
 8. No aggregate scoring across ratchets; each dimension tracked
    independently.
 9. Versioned ratchet floors with overlap windows on metric replacement.
-10. `CLAUDE.md` ≤ 300 lines.
+10. `CLAUDE.md` ≤ 450 lines (raised from 300 by ADR-0011 per Slice 61
+    Codex semantic-loss evidence).
 
 See `specs/risks.md` for the full accepted/open risks ledger.
 
