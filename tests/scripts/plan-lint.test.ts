@@ -188,7 +188,7 @@ describe('plan-lint — usage / invocation errors', () => {
   });
 });
 
-describe('plan-lint — per-rule bad fixtures (Slice 58 — 22 rules; Slice-58a Codex HIGH-1 scope promotion)', () => {
+describe('plan-lint — per-rule bad fixtures (20 active rules post-Slice-65; Slice 58 baseline 19 + Slice-58a HIGH-1 scope promotion + Slice 64 rule #23 + Slice 65 cuts #8/#11/#22)', () => {
   const BAD = 'tests/fixtures/plan-lint/bad';
   const cases: [string, string][] = [
     ['rule-01-missing-evidence-census.md', 'plan-lint.evidence-census-present'],

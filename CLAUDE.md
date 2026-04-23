@@ -142,11 +142,12 @@ The first four gates must all pass before any commit in a Ratchet-Advance
 or Equivalence Refactor lane.
 
 `npm run audit` reports on discipline health: lane declaration, framing
-triplet (failure mode / acceptance evidence / alternate framing), citation
-rule (ADR-0002), Circuit-as-justification smell, `.circuit/` gitignore
-compliance, contract test ratchet, PROJECT_STATE.md freshness, and the
-verify gate. It exits non-zero on any red finding. Run it whenever
-confidence needs a cheap sanity check, or when onboarding a fresh session.
+pair (failure mode / acceptance evidence / why-this-not-adjacent;
+collapsed from quadruplet in Slice 65), citation rule (ADR-0002),
+Circuit-as-justification smell, `.circuit/` gitignore compliance,
+contract test ratchet, PROJECT_STATE.md freshness, and the verify
+gate. It exits non-zero on any red finding. Run it whenever confidence
+needs a cheap sanity check, or when onboarding a fresh session.
 
 ## Where things live
 
@@ -264,7 +265,8 @@ payload plans pass through a five-state lifecycle before slices open:
    predecessor.
 5. `closed` — arc landed; `closed_at` + `closed_in_slice` set.
 
-Enforcement: `scripts/plan-lint.mjs` (22 rules) + audit Check 36 (committed
+Enforcement: `scripts/plan-lint.mjs` (20 active rules post-Slice-65;
+#8/#11/#22 cut, numbering preserved as gaps) + audit Check 36 (committed
 plans + operator-signoff chain validation). Run `npm run plan:lint --
 specs/plans/<plan>.md` during authoring. Legacy plans (first-commit
 predates the meta-arc) are exempt.

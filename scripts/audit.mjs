@@ -386,15 +386,18 @@ function checkLane(body) {
 // alternate framing) and the arc-level trajectory role (previously
 // the prose-only trajectory check).
 //
-// The third-element regex accepts either the new canonical literal
-// (`Why this not adjacent:`) OR the historical literal (`Alternate
-// framing:`) because the invariant is "slice names a rejected
-// alternative" and historical commits pre-Slice-65 honored the
-// invariant under the old label. New commits use the canonical
-// literal per .gitmessage; the .gitmessage template and doctor
-// skeleton both emit the canonical form. This is NOT a ratchet
-// relaxation — the invariant (third framing element present) is
-// unchanged; only the label is normalized.
+// Sharp ratchet boundary (Slice 65a fold-in of Codex MED-1):
+//   - Commits whose SHA is at-or-after `SLICE_65_FRAMING_BOUNDARY`
+//     (the slice-65 commit itself) MUST use the new canonical literal
+//     `Why this not adjacent:`. The old `Alternate framing:` literal
+//     does not satisfy the check and will yellow.
+//   - Commits strictly before the boundary (pre-Slice-65 legacy) may
+//     use either literal. Retroactive rewrite of historic commit
+//     bodies is out of scope; pre-boundary commits are valid under
+//     the label regime in force at authoring time.
+// Callers pass the commit hash so the ancestor check can run; if the
+// hash is unknown (falsy), fall back to the strict post-Slice-65
+// regime.
 //
 // The failureMode pattern accepts `Failure mode:` (the narrow form
 // matching FRAMING_LITERALS above) AND `Failure mode addressed:`,
@@ -405,11 +408,30 @@ function checkLane(body) {
 // bounds the expansion to a single line and stops at the first colon
 // so prose mid-sentence matches ("...we hit a failure mode: X") remain
 // intentional rather than accidental.
-function checkFraming(body) {
+const SLICE_65_FRAMING_BOUNDARY = '6ef64255d578fbe2a39be282289f715722e43e16';
+
+function commitIsPreSlice65Framing(hash) {
+  if (!hash) return false;
+  if (hash === SLICE_65_FRAMING_BOUNDARY) return false;
+  try {
+    execSync(`git merge-base --is-ancestor ${hash} ${SLICE_65_FRAMING_BOUNDARY}`, {
+      stdio: 'ignore',
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function checkFraming(body, hash) {
+  const preSlice65 = commitIsPreSlice65Framing(hash);
+  const thirdElementPattern = preSlice65
+    ? /(?:why this not adjacent|alternate framing):/i
+    : /why this not adjacent:/i;
   return {
     failureMode: /\bfailure mode[^:\n]*:/i.test(body),
     acceptanceEvidence: /acceptance evidence:/i.test(body),
-    whyThisNotAdjacent: /(?:why this not adjacent|alternate framing):/i.test(body),
+    whyThisNotAdjacent: thirdElementPattern.test(body),
   };
 }
 
@@ -5131,7 +5153,7 @@ function main() {
         continue;
       }
     }
-    const f = checkFraming(c.body);
+    const f = checkFraming(c.body, c.hash);
     const missing = [];
     if (!f.failureMode) missing.push('failure mode');
     if (!f.acceptanceEvidence) missing.push('acceptance evidence');

@@ -121,7 +121,7 @@ Codex review artifact.
 
 | Field | Requirement | Enforcement |
 |---|---|---|
-| `plan:` | String id matching filename stem. | discipline field (not a named lint rule in the current 22-rule set) |
+| `plan:` | String id matching filename stem. | discipline field (not a named lint rule in the active 20-rule set post-Slice-65) |
 | `status:` | One of the state-machine values in §1. | plan-lint rule #15 |
 | `revision:` | Increments on each challenger-pass round (01, 02, …). Required from `challenger-pending` onward. | discipline field; rule #17 consults `revision` at freshness binding check |
 | `base_commit:` | Git SHA of HEAD at plan authoring. Required for rule #17 freshness binding. | plan-lint rule #17 (required for `challenger-cleared` status) |
@@ -277,8 +277,9 @@ standalone tool supports on-demand pre-commit lint.
 **Effective date: 2026-04-23**, codified as the META_ARC_FIRST_COMMIT
 (`c91469053a95519645280fd80394a4966ac7948e` — the Slice 57a commit).
 A plan is legacy iff its first committed version in git is a STRICT
-ANCESTOR of this commit. Legacy plans are fully exempt from ALL 22
-plan-lint rules. This prevents audit Check 36 from red-failing the
+ANCESTOR of this commit. Legacy plans are fully exempt from ALL
+plan-lint rules (20 active post-Slice-65; see §6). This prevents
+audit Check 36 from red-failing the
 existing plan corpus (which uses statuses like `active`, `in-
 progress`, `superseded`, `draft`, or no status at all — none of
 which match the new vocabulary).

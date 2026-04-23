@@ -161,6 +161,6 @@ container work, not a nice-to-have.
 - **v0.2** — land `tests/contracts/session-hygiene.test.ts` when
   Phase 1 test scaffolding admits a non-schema-parity contract test
   file. Reopen conditions: a real incident where the audit missed a
-  hygiene violation because the check was framing-triplet-adjacent
+  hygiene violation because the check was framing-pair-adjacent
   rather than load-bearing; OR Tier 2+ containerization promotes
   these invariants to hard gates.

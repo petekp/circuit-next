@@ -10,9 +10,10 @@ import { suggestNextSliceId } from '../../scripts/doctor.mjs';
 // Anchored in `specs/plans/phase-1-close-revised.md` §Slice DOG+2. The
 // deliverable enumerated there is: `npm run slice:doctor` prints current
 // HEAD, next slice from PROJECT_STATE, required lane/framing literals
-// including exact `Alternate framing:` form, files likely involved,
-// required verification commands, product ratchets currently passing /
-// failing, and a suggested commit-message skeleton.
+// (canonical third-element literal post-Slice-65 is `Why this not
+// adjacent:`; pre-Slice-65 wording was `Alternate framing:`), files
+// likely involved, required verification commands, product ratchets
+// currently passing / failing, and a suggested commit-message skeleton.
 //
 // This test pins each section against drift. Critically, it asserts the
 // lane and framing literals printed by doctor match the values audit.mjs
