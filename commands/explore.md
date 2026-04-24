@@ -1,6 +1,6 @@
 ---
-name: circuit:explore
 description: Investigate, understand, choose among options, or shape an execution plan. Invokes the circuit-next `explore` workflow end-to-end via the project CLI, producing a canonical event log + result artifact under the run root.
+argument-hint: <goal>
 ---
 
 # /circuit:explore — investigation workflow

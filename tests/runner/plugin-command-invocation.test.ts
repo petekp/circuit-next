@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 // Slice 56 (P2.11 plugin-wiring) — plan
 // `specs/plans/p2-11-plugin-wiring.md` scope item 4. These tests assert that
-// the plugin command bodies under `.claude-plugin/commands/` are wired to the runtime
+// the plugin command bodies under root `commands/` are wired to the runtime
 // rather than carrying placeholder "Not implemented yet" text AND that the
 // runtime binding is demonstrated via an executable workflow invocation in a
 // fenced bash block (not merely a prose mention). Structural plugin-manifest
@@ -29,9 +29,9 @@ import { describe, expect, it } from 'vitest';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, '..', '..');
 
-const EXPLORE_COMMAND_PATH = resolve(REPO_ROOT, '.claude-plugin/commands/circuit-explore.md');
-const RUN_COMMAND_PATH = resolve(REPO_ROOT, '.claude-plugin/commands/circuit-run.md');
-const REVIEW_COMMAND_PATH = resolve(REPO_ROOT, '.claude-plugin/commands/circuit-review.md');
+const EXPLORE_COMMAND_PATH = resolve(REPO_ROOT, 'commands/explore.md');
+const RUN_COMMAND_PATH = resolve(REPO_ROOT, 'commands/run.md');
+const REVIEW_COMMAND_PATH = resolve(REPO_ROOT, 'commands/review.md');
 const MANIFEST_PATH = resolve(REPO_ROOT, '.claude-plugin/plugin.json');
 
 const PLACEHOLDER_STRING = 'Not implemented yet';
@@ -97,15 +97,15 @@ describe('plugin command invocation binding (Slice 56 / P2.11)', () => {
     const runBody = readFileSync(RUN_COMMAND_PATH, 'utf-8');
     const reviewBody = readFileSync(REVIEW_COMMAND_PATH, 'utf-8');
 
-    it('circuit-explore.md has an executable explore invocation in a fenced bash block with --goal', () => {
+    it('commands/explore.md has an executable explore invocation in a fenced bash block with --goal', () => {
       expect(hasExecutableExploreInvocation(exploreBody)).toBe(true);
     });
 
-    it('circuit-run.md has an executable classifier invocation in a fenced bash block with --goal', () => {
+    it('commands/run.md has an executable classifier invocation in a fenced bash block with --goal', () => {
       expect(hasExecutableRouterInvocation(runBody)).toBe(true);
     });
 
-    it('circuit-review.md has an executable review invocation in a fenced bash block with --goal', () => {
+    it('commands/review.md has an executable review invocation in a fenced bash block with --goal', () => {
       expect(hasExecutableReviewInvocation(reviewBody)).toBe(true);
     });
 
@@ -115,7 +115,7 @@ describe('plugin command invocation binding (Slice 56 / P2.11)', () => {
       expect(reviewBody).not.toMatch(new RegExp(PLACEHOLDER_STRING));
     });
 
-    it('circuit-run.md documents the current explore/review router surface', () => {
+    it('commands/run.md documents the current explore/review router surface', () => {
       expect(runBody).toMatch(
         /Parse the CLI's JSON output and surface:[\s\S]*`selected_workflow`[\s\S]*`routed_by`[\s\S]*`router_reason`/,
       );
@@ -138,7 +138,7 @@ describe('plugin command invocation binding (Slice 56 / P2.11)', () => {
       expect(reviewBody).not.toMatch(/--goal "\$ARGUMENTS"/);
     });
 
-    it('all fenced bash invocation blocks in circuit-explore.md use single-quoted --goal values', () => {
+    it('all fenced bash invocation blocks in commands/explore.md use single-quoted --goal values', () => {
       const blocks = extractBashBlocks(exploreBody).filter(
         (b) => /explore/.test(b) && /--goal/.test(b),
       );
@@ -151,7 +151,7 @@ describe('plugin command invocation binding (Slice 56 / P2.11)', () => {
       }
     });
 
-    it('all fenced bash invocation blocks in circuit-run.md use single-quoted --goal values', () => {
+    it('all fenced bash invocation blocks in commands/run.md use single-quoted --goal values', () => {
       const blocks = extractBashBlocks(runBody).filter(
         (b) => /(?:npm run circuit:run|node dist\/cli\/dogfood\.js)/.test(b) && /--goal/.test(b),
       );
@@ -162,7 +162,7 @@ describe('plugin command invocation binding (Slice 56 / P2.11)', () => {
       }
     });
 
-    it('all fenced bash invocation blocks in circuit-review.md use single-quoted --goal values', () => {
+    it('all fenced bash invocation blocks in commands/review.md use single-quoted --goal values', () => {
       const blocks = extractBashBlocks(reviewBody).filter(
         (b) => /review/.test(b) && /--goal/.test(b),
       );
@@ -264,8 +264,8 @@ node dist/cli/dogfood.js explore --goal 'find deprecated APIs'
   describe('manifest description consistency (MED 2 + ledger entry [6])', () => {
     const manifestBody = readFileSync(MANIFEST_PATH, 'utf-8');
     const manifest = JSON.parse(manifestBody) as {
+      name: string;
       description: string;
-      commands: Array<{ name: string; description: string }>;
     };
 
     it('manifest does not carry "scaffold" / "not yet implemented" language', () => {
@@ -274,16 +274,9 @@ node dist/cli/dogfood.js explore --goal 'find deprecated APIs'
       expect(manifestBody).not.toMatch(/not yet implemented/i);
     });
 
-    it('circuit:run description leads with classifier behavior', () => {
-      // P2.8 landed the deterministic classifier. The manifest should
-      // now lead with the classifier truth instead of the old "always
-      // explore" route.
-      const circuitRun = manifest.commands.find((c) => c.name === 'circuit:run');
-      if (!circuitRun) throw new Error('circuit:run entry missing from manifest');
-      const desc = circuitRun.description;
-      expect(desc).toMatch(/^Classifies free-form tasks/i);
-      expect(desc).toMatch(/explore/i);
-      expect(desc).toMatch(/review/i);
+    it('manifest name creates the public /circuit:* namespace', () => {
+      expect(manifest.name).toBe('circuit');
+      expect(manifestBody).not.toMatch(/"commands"\s*:/);
     });
 
     it('top-level manifest description mentions the wired `/circuit:explore` invocation path', () => {
@@ -293,9 +286,8 @@ node dist/cli/dogfood.js explore --goal 'find deprecated APIs'
     });
 
     it('manifest includes circuit:review as an explicit workflow command', () => {
-      const circuitReview = manifest.commands.find((c) => c.name === 'circuit:review');
-      expect(circuitReview?.description).toMatch(/review workflow/i);
       expect(manifest.description).toMatch(/\/circuit:review/);
+      expect(readFileSync(REVIEW_COMMAND_PATH, 'utf-8')).toMatch(/review workflow/i);
     });
   });
 });

@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -169,7 +169,8 @@ describe('prose-yaml-parity — no catalog-compiler region markers exist yet (se
     return out
       .split('\n')
       .filter((line) => line.trim().length > 0)
-      .map((rel) => resolve(REPO_ROOT, rel));
+      .map((rel) => resolve(REPO_ROOT, rel))
+      .filter((abs) => existsSync(abs));
   }
 
   const MARKER_PATTERNS: RegExp[] = [

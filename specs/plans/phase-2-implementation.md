@@ -206,16 +206,16 @@ just churn."
 the path for target-workflow slice P2.3+ to attach as a real command
 rather than an orphaned CLI; no earlier slice obsolesces this.
 
-**Deliverable:** `.claude-plugin/plugin.json` expanded with the command
-block (at minimum: `/circuit:run` as classifier shell, and the target
-workflow's command placeholder returning "not implemented yet");
-matching entries under `.claude-plugin/commands/`; audit check that
-plugin.json commands are closure-consistent with
-`.claude-plugin/commands/*.md` filenames.
+**Deliverable:** Originally scaffolded as `.claude-plugin/plugin.json`
+with a command block and matching `.claude-plugin/commands/*.md` files.
+Slice 100 retargets this to Claude Code 2.1.119's real layout:
+`.claude-plugin/plugin.json` is metadata-only, the plugin is named
+`circuit`, and public commands are root `commands/*.md` files.
 
-**Acceptance evidence:** new audit check (Check 22 after Verify
-renumber); tests extending `tests/contracts/governance-reform.test.ts`
-or a new file; npm run audit green.
+**Acceptance evidence:** new audit check (`checkPluginCommandClosure`;
+currently Check 23 after later audit growth); tests extending
+`tests/contracts/governance-reform.test.ts` or a new file; npm run audit
+green.
 
 **Alternate framing:** ship plugin commands only once the target
 workflow works. Rejected because the scaffold is cheap and the audit
@@ -874,8 +874,9 @@ Phase 2 adds (bound to close criteria above):
   and exercised by a fixture (criterion #2).
 - `workflow_parity_fixtures` — count of target workflows with
   full-spine fixtures (criterion #1, #6).
-- `plugin_surface_present` — `.claude-plugin/commands/*.md` closure
-  with `plugin.json` command block (criterion #3).
+- `plugin_surface_present` — Claude-valid root `commands/*.md` command
+  surface with metadata-only `.claude-plugin/plugin.json` naming the
+  `circuit` namespace (criterion #3).
 
 ## Review fold-ins
 

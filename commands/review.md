@@ -1,6 +1,6 @@
 ---
-name: circuit:review
 description: Audit a scoped change or artifact with the review workflow. Invokes the circuit-next `review` workflow via the project CLI, producing a canonical event log and review result artifact under the run root.
+argument-hint: <scope>
 ---
 
 # /circuit:review — audit workflow

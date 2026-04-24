@@ -12,6 +12,21 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 100 LIVE PLUGIN COMMAND PROOF** (this commit, Ratchet-Advance) -
+  retargeted the plugin command surface to Claude Code's real plugin layout:
+  `.claude-plugin/plugin.json` is metadata-only, the plugin name is `circuit`,
+  and root `commands/run.md`, `commands/explore.md`, and `commands/review.md`
+  register `/circuit:run`, `/circuit:explore`, and `/circuit:review`.
+  `claude plugin validate .` passes. A live `claude -p --plugin-dir .`
+  invocation loaded only this inline plugin and proved `/circuit:review`
+  reaches the CLI and completes the review workflow with a schema-valid
+  `review-result.json` (`findings: []`, `verdict: CLEAN`). The first live
+  proof attempt exposed a missing `findings` array in the review dispatch
+  prompt; the runtime prompt now explicitly requires `findings` and tells the
+  reviewer worker to emit an empty array when there are no issues. P2-3 is now
+  counted satisfied in the Phase 2 close matrix; Phase 2 close review and the
+  operator product check remain next.
+
 - **Slice 99 JSON SUCCESSOR DECISION** (this commit,
   Ratchet-Advance) - accepted structured JSON as the canonical Explore
   successor artifact shape for CC#P2-1. This keeps old Circuit's Markdown

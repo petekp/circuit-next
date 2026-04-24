@@ -2994,7 +2994,7 @@ function adr0007InCommitTree(hash) {
   }
 }
 
-// Check 23 (ADR-0007 CC#P2-7 interim enforcement, P2.1). For every Phase 2
+// Check 22 (ADR-0007 CC#P2-7 interim enforcement, P2.1). For every Phase 2
 // slice commit (past the discipline floor AND at or after Phase 2 open) that
 // touches isolation-protected paths, require an explicit isolation posture
 // in the commit body: `Isolation: policy-compliant (no implementer separation
@@ -3057,54 +3057,31 @@ export function checkPhase2SliceIsolationCitation(disciplinedCommits) {
   };
 }
 
-// Check 23 (ADR-0007 CC#P2-3 enforcement, P2.2). Verifies closure between the
-// plugin manifest's `commands` array and the markdown files under
-// `.claude-plugin/commands/`. Enforcement (tightened via P2.2 Codex fold-ins):
-//   (a) `.claude-plugin/plugin.json` parses as JSON with a top-level `commands`
-//       array of `{ name, file, description }` entries (all non-empty; names
-//       and files unique).
-//   (b) Every `commands[].file` matches the grammar `commands/<basename>.md`
-//       with no nested directory components and no non-.md extensions
-//       (Codex HIGH 2 fold-in — grammar is flat-only, rejects
-//       `elsewhere/foo.md` and `commands/nested/bar.md`).
-//   (c) No manifest file path is a symlink, and realpath must remain under
-//       `.claude-plugin/commands/` (Codex HIGH 3 fold-in — lexical check
-//       alone is insufficient; lstat/realpath combination rejects symlink
-//       escape).
-//   (d) Each file has YAML frontmatter whose `name` equals the manifest
-//       entry's `name` (Codex HIGH 1 fold-in — prevents silent-rename where
-//       `circuit:run` points at the file for `circuit:explore` and vice
-//       versa); frontmatter `name` + `description` are YAML-non-empty, not
-//       merely regex-non-empty (Codex MED 5 fold-in — `description: ""` and
-//       `name: # comment` are rejected).
-//   (e) Every `.claude-plugin/commands/**/*.md` file (recursively) has a
-//       corresponding entry in `commands[]` (Codex MED 4 fold-in — walk is
-//       recursive so nested files cannot orphan-slip; nested files are also
-//       always grammar-violations at (b), so they will be double-flagged).
-//   (f) The required anchor commands are present AND bound to their
-//       canonical files: `circuit:run` → `commands/circuit-run.md`,
-//       `circuit:explore` → `commands/circuit-explore.md` (Codex HIGH 1
-//       fold-in — anchor names alone are not sufficient).
-//   (g) Command bodies do not contain the literal placeholder substring
-//       "Not implemented yet" (Slice 56 / P2.11 plugin-wiring fold-in).
-//       Pre-Slice-56 both command files carried that placeholder by design
-//       because the runtime wasn't reachable from the plugin surface; Slice
-//       56 wired the commands to the CLI and this check prevents regression
-//       of THAT SPECIFIC EXACT-CASE placeholder substring. Scope is narrow
-//       by design — a case-insensitive match, Unicode-lookalike match, or
-//       semantic "references CLI?" probe is NOT this rule. The complementary
-//       positive-assertion test at tests/runner/plugin-command-invocation.test.ts
-//       covers the runtime-binding side. A future slice tightening the
-//       regression surface (e.g., rejecting "Not implemented" bare or
-//       HTML-commented placeholders) can extend this rule; Codex LOW 1
-//       (specs/reviews/arc-slice-56-codex.md) named the narrow coverage
-//       explicitly and it is accepted as scope-appropriate.
-// Advances the `plugin_surface_present` product ratchet to partial at P2.2 and
-// to green at P2.11 / Slice 56 (plan §Product ratchets Phase 2 will carry).
+// Check 23 (ADR-0007 CC#P2-3 enforcement, P2.2; real-Claude-layout retarget).
+// Verifies the Claude Code plugin surface that `claude plugin validate .`
+// actually accepts:
+//   (a) `.claude-plugin/plugin.json` parses as JSON, carries metadata only,
+//       names the plugin `circuit` (so command files register as `/circuit:*`),
+//       and does NOT carry the obsolete invented `commands` array.
+//   (b) Public slash-command files live at repo-root `commands/*.md`, matching
+//       Claude Code's plugin layout. The command directory is flat-only; no
+//       nested directories, symlinks, or non-.md files are accepted.
+//   (c) The currently claimed command set is exact: `run.md`, `explore.md`,
+//       and `review.md`. File stems, not frontmatter names, are the command
+//       suffixes, so `commands/run.md` is `/circuit:run`.
+//   (d) Each command file has YAML frontmatter with non-empty `description`
+//       and no `name` field. A `name` field is rejected because Claude ignores
+//       it for plugin command registration, making it false authority.
+//   (e) Command bodies are non-empty and do not contain the literal placeholder
+//       substring "Not implemented yet" (Slice 56 / P2.11 plugin-wiring
+//       fold-in). Complementary positive runtime-binding assertions live in
+//       tests/runner/plugin-command-invocation.test.ts.
+// Advances the `plugin_surface_present` product ratchet to a Claude-valid
+// public command surface while preserving the P2.11 runtime-binding guard.
 export function checkPluginCommandClosure(rootDir = REPO_ROOT) {
   const pluginDir = join(rootDir, '.claude-plugin');
   const manifestPath = join(pluginDir, 'plugin.json');
-  const commandsDir = join(pluginDir, 'commands');
+  const commandsDir = join(rootDir, 'commands');
 
   if (!existsSync(manifestPath)) {
     return {
@@ -3139,174 +3116,54 @@ export function checkPluginCommandClosure(rootDir = REPO_ROOT) {
 
   const errors = [];
 
-  const commands = manifest.commands;
-  if (commands === undefined) {
-    return {
-      level: 'red',
-      detail:
-        '.claude-plugin/plugin.json missing `commands` array (required by ADR-0007 CC#P2-3 enforcement; plan slice P2.2 scaffold)',
-    };
-  }
-  if (!Array.isArray(commands)) {
-    return {
-      level: 'red',
-      detail: '.claude-plugin/plugin.json `commands` is not an array',
-    };
-  }
+  if (typeof manifest !== 'object' || manifest === null || Array.isArray(manifest)) {
+    errors.push('.claude-plugin/plugin.json must parse to a JSON object');
+  } else {
+    const name = typeof manifest.name === 'string' ? manifest.name.trim() : '';
+    const version = typeof manifest.version === 'string' ? manifest.version.trim() : '';
+    const description = typeof manifest.description === 'string' ? manifest.description.trim() : '';
 
-  const manifestFiles = new Set();
-  const manifestNames = new Set();
-  // Track (name → file) so downstream checks can verify anchor-to-file binding
-  // without re-walking commands.
-  const manifestNameToFile = new Map();
-
-  // Grammar regex: commands/<single-path-segment>.md
-  // Rejects nested directories (e.g. commands/nested/foo.md), non-.md files,
-  // empty stems, and backslash separators.
-  const COMMAND_FILE_GRAMMAR = /^commands\/[A-Za-z0-9_-]+\.md$/;
-
-  for (let i = 0; i < commands.length; i++) {
-    const entry = commands[i];
-    const label = `commands[${i}]`;
-    if (typeof entry !== 'object' || entry === null) {
-      errors.push(`${label} is not an object`);
-      continue;
-    }
-
-    // name
-    const rawName = typeof entry.name === 'string' ? entry.name : null;
-    if (rawName === null || rawName.trim() === '') {
-      errors.push(`${label} missing non-empty string \`name\``);
-    } else {
-      if (manifestNames.has(rawName)) {
-        errors.push(`${label} duplicate command name \`${rawName}\` (must be unique)`);
-      }
-      manifestNames.add(rawName);
-    }
-
-    // file
-    const rawFile = typeof entry.file === 'string' ? entry.file : null;
-    if (rawFile === null || rawFile.trim() === '') {
-      errors.push(`${label} missing non-empty string \`file\``);
-      continue;
-    }
-
-    // description
-    const rawDesc = typeof entry.description === 'string' ? entry.description : null;
-    if (rawDesc === null || rawDesc.trim() === '') {
-      errors.push(`${label} (${rawName ?? '<unnamed>'}) missing non-empty string \`description\``);
-    }
-
-    // Grammar: commands/<basename>.md only, no nesting, no alternate dirs.
-    if (!COMMAND_FILE_GRAMMAR.test(rawFile)) {
+    if (!name) errors.push('.claude-plugin/plugin.json missing non-empty string `name`');
+    if (name && name !== 'circuit') {
       errors.push(
-        `${label} file path \`${rawFile}\` violates grammar: expected \`commands/<basename>.md\` with only [A-Za-z0-9_-] in basename (Codex HIGH 2 fold-in)`,
-      );
-      continue;
-    }
-    if (manifestFiles.has(rawFile)) {
-      errors.push(`${label} duplicate command file \`${rawFile}\` (must be unique)`);
-    }
-    manifestFiles.add(rawFile);
-    if (rawName) manifestNameToFile.set(rawName, rawFile);
-
-    const fileAbs = join(pluginDir, rawFile);
-
-    // Symlink rejection (Codex HIGH 3 fold-in): lstat the entry, reject if
-    // it resolves outside .claude-plugin/commands/ via symlink.
-    let fileLstat;
-    try {
-      fileLstat = lstatSync(fileAbs);
-    } catch {
-      fileLstat = null;
-    }
-    if (!fileLstat) {
-      errors.push(`${label} (${rawName ?? '<unnamed>'}) file ${rawFile} does not exist`);
-      continue;
-    }
-    if (fileLstat.isSymbolicLink()) {
-      errors.push(
-        `${label} (${rawName ?? '<unnamed>'}) file ${rawFile} is a symlink; rejected per Codex HIGH 3 fold-in`,
-      );
-      continue;
-    }
-    if (!fileLstat.isFile()) {
-      errors.push(`${label} (${rawName ?? '<unnamed>'}) file ${rawFile} is not a regular file`);
-      continue;
-    }
-
-    const text = readFileSync(fileAbs, 'utf-8');
-    const frontmatterMatch = text.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
-    if (!frontmatterMatch) {
-      errors.push(`${label} file ${rawFile} missing YAML frontmatter (--- ... ---)`);
-      continue;
-    }
-    const frontmatter = frontmatterMatch[1];
-    const body = frontmatterMatch[2];
-
-    // YAML-aware value extraction (Codex MED 5 fold-in). Captures the raw
-    // value text on the same line (no newline-gobbling), then strips
-    // surrounding quotes (single or double) and trailing `#` comments, and
-    // finally trims. A value of `""`, `''`, `# comment`, `>`, `|`, or an
-    // empty folded scalar is treated as empty.
-    const extractYamlScalar = (field) => {
-      const match = frontmatter.match(new RegExp(`^${field}:[ \\t]*(.*)$`, 'm'));
-      if (!match) return null;
-      let raw = match[1];
-      // Strip inline YAML comment. YAML comments start at `#` that is either
-      // at the start of the value (after key-colon-whitespace), or preceded
-      // by a whitespace character. Conservative: handle both.
-      raw = raw.replace(/(?:^|\s)#.*$/, '').trim();
-      // Folded scalar markers with no continuation are empty.
-      if (raw === '>' || raw === '|' || raw === '>-' || raw === '|-') return '';
-      // Strip surrounding matching quotes (single or double).
-      if (
-        (raw.startsWith('"') && raw.endsWith('"') && raw.length >= 2) ||
-        (raw.startsWith("'") && raw.endsWith("'") && raw.length >= 2)
-      ) {
-        raw = raw.slice(1, -1);
-      }
-      return raw;
-    };
-    const nameValue = extractYamlScalar('name');
-    const descValue = extractYamlScalar('description');
-
-    if (nameValue === null || nameValue.trim() === '') {
-      errors.push(
-        `${label} file ${rawFile} frontmatter missing non-empty \`name\` field (after YAML scalar normalization)`,
-      );
-    } else if (rawName && nameValue !== rawName) {
-      // Anchor-to-file binding (Codex HIGH 1 fold-in).
-      errors.push(
-        `${label} file ${rawFile} frontmatter name \`${nameValue}\` does not match manifest entry name \`${rawName}\` (Codex HIGH 1 fold-in — silent-rename loophole)`,
+        `.claude-plugin/plugin.json name is \`${name}\`; expected \`circuit\` so Claude registers /circuit:* commands`,
       );
     }
-    if (descValue === null || descValue.trim() === '') {
-      errors.push(
-        `${label} file ${rawFile} frontmatter missing non-empty \`description\` field (after YAML scalar normalization)`,
-      );
+    if (!version) errors.push('.claude-plugin/plugin.json missing non-empty string `version`');
+    if (!description) {
+      errors.push('.claude-plugin/plugin.json missing non-empty string `description`');
     }
-    if (body.trim() === '') {
-      errors.push(`${label} file ${rawFile} body is empty`);
-    }
-    // Slice 56 (P2.11 plugin-wiring) fold-in — rule (g): reject the literal
-    // "Not implemented yet" placeholder substring in command bodies.
-    if (body.includes('Not implemented yet')) {
+    if (Object.prototype.hasOwnProperty.call(manifest, 'commands')) {
       errors.push(
-        `${label} file ${rawFile} body contains the literal "Not implemented yet" placeholder; Slice 56 / P2.11 wired the commands to the runtime and the placeholder must not regress`,
+        '.claude-plugin/plugin.json declares `commands`; Claude Code derives plugin commands from root `commands/*.md` and `claude plugin validate .` rejects manifest command arrays',
       );
     }
   }
 
-  // (e) Recursive orphan + nested-file check (Codex MED 4 fold-in).
-  if (existsSync(commandsDir)) {
+  let commandsDirLstat = null;
+  try {
+    commandsDirLstat = lstatSync(commandsDir);
+  } catch {
+    commandsDirLstat = null;
+  }
+  if (!commandsDirLstat) {
+    errors.push(
+      'root commands/ directory missing; Claude Code plugin commands live at commands/*.md',
+    );
+  } else if (commandsDirLstat.isSymbolicLink()) {
+    errors.push('root commands/ directory is a symlink; plugin command directory must be real');
+  } else if (!commandsDirLstat.isDirectory()) {
+    errors.push('root commands/ exists but is not a directory');
+  }
+
+  const commandFiles = [];
+  if (commandsDirLstat?.isDirectory() && !commandsDirLstat.isSymbolicLink()) {
     const walk = (dir, relPrefix) => {
-      const results = [];
       let entries;
       try {
         entries = readdirSync(dir, { withFileTypes: true });
       } catch {
-        return results;
+        return;
       }
       for (const e of entries) {
         const rel = relPrefix ? `${relPrefix}/${e.name}` : e.name;
@@ -3318,60 +3175,102 @@ export function checkPluginCommandClosure(rootDir = REPO_ROOT) {
           continue;
         }
         if (lst.isSymbolicLink()) {
-          // Symlinks inside commands/ are flagged regardless of manifest
-          // (Codex HIGH 3 fold-in).
-          errors.push(
-            `commands/${rel} is a symlink inside .claude-plugin/commands/; rejected per Codex HIGH 3 fold-in`,
-          );
+          errors.push(`commands/${rel} is a symlink; plugin command files must be real files`);
           continue;
         }
-        if (e.isDirectory()) {
-          // Nested directories under commands/ are rejected flat-only
-          // (Codex MED 4 fold-in — grammar decision).
-          errors.push(
-            `commands/${rel} is a nested directory under .claude-plugin/commands/; flat-only grammar rejects nesting (Codex MED 4 fold-in)`,
-          );
-          // Still walk it so nested orphan .md files are also flagged.
-          results.push(...walk(full, rel));
-        } else if (e.isFile() && e.name.endsWith('.md')) {
-          results.push(rel);
-        } else if (e.isFile()) {
-          errors.push(
-            `commands/${rel} is a non-.md file in .claude-plugin/commands/; flat-grammar rejects non-markdown command files`,
-          );
+        if (lst.isDirectory()) {
+          errors.push(`commands/${rel} is a nested directory; commands/ is flat-only`);
+          walk(full, rel);
+        } else if (lst.isFile() && e.name.endsWith('.md')) {
+          commandFiles.push(rel);
+        } else if (lst.isFile()) {
+          errors.push(`commands/${rel} is a non-.md file; plugin commands must be markdown files`);
         }
       }
-      return results;
     };
-    const commandMdFiles = walk(commandsDir, '');
-    for (const rel of commandMdFiles) {
-      const manifestKey = `commands/${rel}`;
-      if (!manifestFiles.has(manifestKey)) {
-        errors.push(
-          `orphan command file ${manifestKey} — present on disk but not listed in .claude-plugin/plugin.json commands array`,
-        );
-      }
-    }
+    walk(commandsDir, '');
   }
 
-  // (f) Required anchor commands AND canonical-file binding (Codex HIGH 1
-  // fold-in). Each anchor must appear in the manifest AND its `file` must be
-  // the canonical file for that anchor.
-  const REQUIRED_ANCHORS = [
-    { name: 'circuit:run', canonicalFile: 'commands/circuit-run.md' },
-    { name: 'circuit:explore', canonicalFile: 'commands/circuit-explore.md' },
-  ];
-  for (const anchor of REQUIRED_ANCHORS) {
-    if (!manifestNames.has(anchor.name)) {
+  const COMMAND_FILE_GRAMMAR = /^[A-Za-z0-9_-]+\.md$/;
+  const REQUIRED_COMMAND_FILES = ['run.md', 'explore.md', 'review.md'];
+  const requiredSet = new Set(REQUIRED_COMMAND_FILES);
+  const seen = new Set();
+
+  for (const rel of commandFiles) {
+    if (!COMMAND_FILE_GRAMMAR.test(rel)) {
       errors.push(
-        `required anchor command \`${anchor.name}\` missing from manifest (ADR-0007 CC#P2-3 scaffold requirement)`,
+        `commands/${rel} violates grammar: expected flat \`commands/<basename>.md\` with only [A-Za-z0-9_-] in basename`,
       );
       continue;
     }
-    const actualFile = manifestNameToFile.get(anchor.name);
-    if (actualFile !== anchor.canonicalFile) {
+    if (seen.has(rel)) {
+      errors.push(`duplicate command file commands/${rel}`);
+    }
+    seen.add(rel);
+    if (!requiredSet.has(rel)) {
       errors.push(
-        `required anchor command \`${anchor.name}\` points at \`${actualFile}\` instead of canonical \`${anchor.canonicalFile}\` (Codex HIGH 1 fold-in — anchor-to-file binding)`,
+        `unexpected public command file commands/${rel}; current claimed command set is run, explore, review`,
+      );
+    }
+
+    const fileAbs = join(commandsDir, rel);
+    const text = readFileSync(fileAbs, 'utf-8');
+    const frontmatterMatch = text.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+    if (!frontmatterMatch) {
+      errors.push(`commands/${rel} missing YAML frontmatter (--- ... ---)`);
+      continue;
+    }
+    const frontmatter = frontmatterMatch[1];
+    const body = frontmatterMatch[2];
+
+    const extractYamlScalar = (field) => {
+      const match = frontmatter.match(new RegExp(`^${field}:[ \\t]*(.*)$`, 'm'));
+      if (!match) return null;
+      let raw = match[1];
+      raw = raw.replace(/(?:^|\s)#.*$/, '').trim();
+      if (raw === '>' || raw === '|' || raw === '>-' || raw === '|-') return '';
+      if (
+        (raw.startsWith('"') && raw.endsWith('"') && raw.length >= 2) ||
+        (raw.startsWith("'") && raw.endsWith("'") && raw.length >= 2)
+      ) {
+        raw = raw.slice(1, -1);
+      }
+      return raw;
+    };
+
+    const nameValue = extractYamlScalar('name');
+    const descValue = extractYamlScalar('description');
+    const argumentHintValue = extractYamlScalar('argument-hint');
+
+    if (nameValue !== null) {
+      errors.push(
+        `commands/${rel} frontmatter declares \`name\`; Claude registers plugin command names from plugin name + file stem, so this field is rejected as false authority`,
+      );
+    }
+    if (descValue === null || descValue.trim() === '') {
+      errors.push(
+        `commands/${rel} frontmatter missing non-empty \`description\` field (after YAML scalar normalization)`,
+      );
+    }
+    if (argumentHintValue !== null && argumentHintValue.trim() === '') {
+      errors.push(
+        `commands/${rel} frontmatter has empty \`argument-hint\` field (after YAML scalar normalization)`,
+      );
+    }
+    if (body.trim() === '') {
+      errors.push(`commands/${rel} body is empty`);
+    }
+    if (body.includes('Not implemented yet')) {
+      errors.push(
+        `commands/${rel} body contains the literal "Not implemented yet" placeholder; Slice 56 / P2.11 wired the commands to the runtime and the placeholder must not regress`,
+      );
+    }
+  }
+
+  for (const required of REQUIRED_COMMAND_FILES) {
+    if (!seen.has(required)) {
+      errors.push(
+        `required command file commands/${required} missing; expected /circuit:${required.replace(/\.md$/, '')}`,
       );
     }
   }
@@ -3385,7 +3284,8 @@ export function checkPluginCommandClosure(rootDir = REPO_ROOT) {
 
   return {
     level: 'green',
-    detail: `${commands.length} plugin command(s) closure-consistent with .claude-plugin/commands/*.md; anchors circuit:run + circuit:explore present`,
+    detail:
+      'Claude-valid plugin command surface present: .claude-plugin/plugin.json names plugin `circuit`; commands/{run,explore,review}.md register /circuit:run, /circuit:explore, /circuit:review',
   };
 }
 
@@ -6377,12 +6277,11 @@ function main() {
   });
 
   // Check 23: Plugin command closure (ADR-0007 CC#P2-3 enforcement, P2.2).
-  // Verifies that `.claude-plugin/plugin.json` carries a `commands` array,
-  // every entry has a corresponding `.claude-plugin/commands/*.md` file with
-  // non-empty frontmatter and body, no orphan command files exist on disk,
-  // and the required anchor commands (`circuit:run`, `circuit:explore`) are
-  // present. Advances the `plugin_surface_present` product ratchet to
-  // partial at P2.2 and to green at P2.11.
+  // Verifies the Claude Code layout accepted by `claude plugin validate .`:
+  // `.claude-plugin/plugin.json` is metadata-only and names the plugin
+  // `circuit`, while public slash-command files live at root `commands/*.md`.
+  // The current claimed command set is `/circuit:run`, `/circuit:explore`,
+  // and `/circuit:review`.
   const pluginClosure = checkPluginCommandClosure();
   counters[pluginClosure.level]++;
   findings.push({

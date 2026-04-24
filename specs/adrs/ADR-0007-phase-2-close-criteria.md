@@ -379,31 +379,40 @@ here is the subprocess wording above.
 **CC#P2-3 — Plugin command registration.**
 
 `/circuit:<workflow>` slash commands exposed via `.claude-plugin/`,
-invokable in Claude Code (not merely manifest/markdown closure), with
-the plugin manifest (`.claude-plugin/plugin.json`) carrying a command
-block whose entries are closure-consistent with the markdown files
-under `.claude-plugin/commands/`.
+invokable in Claude Code (not merely manifest/markdown closure). Slice
+100 retargets the executable binding to Claude Code 2.1.119's real plugin
+layout: `.claude-plugin/plugin.json` is metadata-only and names the plugin
+`circuit`, while public slash commands are derived from root
+`commands/*.md` files. Manifest `commands` arrays and
+`.claude-plugin/commands/*.md` command files are the superseded Slice 33
+scaffold shape and are rejected by the current audit check.
 
 - **Enforcement binding (executable):**
   - Audit check: `checkPluginCommandClosure` (function name in
     `scripts/audit.mjs`; number assigned at implementation time using
     the next-available-slot rule at §Decision.7). Verifies:
-    - `plugin.json` `commands` array entries each correspond to an
-      existing `.claude-plugin/commands/*.md` file.
-    - Each `commands/*.md` file has a non-empty `description` and
-      body.
-    - At least one command entry for the target workflow (currently
-      `/circuit:explore`) and one for the router (`/circuit:run`)
-      exists.
+    - `.claude-plugin/plugin.json` parses as metadata-only JSON, names
+      the plugin `circuit`, and does not carry a manifest `commands`
+      array.
+    - Root `commands/*.md` files are flat, real markdown files (no
+      nested command directories, symlinks, or non-markdown command
+      files).
+    - The current command set is exactly `/circuit:run`,
+      `/circuit:explore`, and `/circuit:review`, derived from
+      `commands/run.md`, `commands/explore.md`, and
+      `commands/review.md`.
+    - Each command file has non-empty `description` frontmatter, no
+      frontmatter `name` field, a non-empty body, and no old
+      "Not implemented yet" placeholder.
   - **Claude Code invokability binding (non-substitutable):** a
     contract test under `tests/contracts/plugin-surface.test.ts` (to
-    be authored at P2.2) parses `.claude-plugin/plugin.json` with the
-    plugin-manifest schema and asserts the workflow command is
-    registered; additionally, a manual-invokability check note lives
-    in the P2.11 slice evidence (a recorded invocation of the
-    `/circuit:<workflow>` command inside Claude Code with a transcript
-    or screenshot, committed under `specs/reviews/p2-11-invoke-
-    evidence.md`). Closure alone is insufficient.
+    be authored at P2.2 and retargeted at Slice 100) parses
+    `.claude-plugin/plugin.json` with the plugin-manifest schema and
+    asserts the root command files carry the public `/circuit:*`
+    surface; additionally, live invokability evidence lives in
+    `specs/reviews/p2-3-live-slash-command-evidence.md` (a recorded
+    `claude -p --plugin-dir .` invocation of a `/circuit:<workflow>`
+    command inside Claude Code). Closure alone is insufficient.
 - **Binding:** `plugin_surface_present` product ratchet advances to
   `active — partial` after P2.2 and `active — satisfied` after P2.11.
 

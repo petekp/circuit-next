@@ -19,13 +19,18 @@ evidence_scope: |
 
 # P2.11 Plugin-CLI Wiring — Invoke Evidence
 
+> Slice 100 follow-up: the live Claude Code slash-command path is now
+> recorded separately in `specs/reviews/p2-3-live-slash-command-evidence.md`.
+> This file remains the historical Slice 56 CLI-surrogate evidence record.
+
 This file records the live invocation evidence for ADR-0007 CC#P2-3 at
-active-satisfied-at-CLI-surrogate-parity. Slice 56 (P2.11) rewrote
-`.claude-plugin/commands/circuit-explore.md` + `.claude-plugin/commands/
-circuit-run.md` so a plugin-user invocation of `/circuit:explore` in Claude
-Code runs the explore workflow end-to-end via the project CLI instead of
-returning "Not implemented yet" placeholder text. The invocation below
-exercises the same CLI path the command body instructs Claude to invoke.
+active-satisfied-at-CLI-surrogate-parity. Slice 56 (P2.11) rewrote the
+plugin command bodies so a plugin-user invocation of `/circuit:explore` in
+Claude Code runs the explore workflow end-to-end via the project CLI instead
+of returning "Not implemented yet" placeholder text. Slice 100 retargets
+those command bodies to Claude Code's real root `commands/*.md` plugin
+layout. The invocation below exercises the same CLI path the command body
+instructs Claude to invoke.
 
 **Scope honesty note (Codex HIGH 1 fold-in).** The evidence below is a
 **direct-CLI surrogate** for the plugin-user invocation path. The surrogate
@@ -45,17 +50,17 @@ CLI-surrogate parity is the honest close state at slice commit.
 
 ## Invocation path
 
-The rewritten command body at `.claude-plugin/commands/circuit-explore.md`
+The current command body at `commands/explore.md`
 tells Claude to invoke (via the Bash tool):
 
 ```bash
-npm run circuit:run -- explore --goal "$ARGUMENTS"
+npm run circuit:run -- explore --goal '<single-quoted, apostrophe-escaped goal>'
 ```
 
 `package.json:21` expands that to:
 
 ```bash
-tsc -p tsconfig.build.json && node dist/cli/dogfood.js explore --goal "$ARGUMENTS"
+tsc -p tsconfig.build.json && node dist/cli/dogfood.js explore --goal '<single-quoted, apostrophe-escaped goal>'
 ```
 
 `src/cli/dogfood.ts::main` loads the explore workflow fixture at
@@ -72,6 +77,11 @@ pre-slice-56 baseline; the rewritten command bodies + Check 23 extension are
 staged but not yet committed).
 
 **Command:**
+
+Historical note: this direct shell invocation predates the later command-body
+safe-construction fold-in and is preserved as the Slice 56 transcript. The
+current plugin command bodies use the single-quote / apostrophe-escape rule
+shown above.
 
 ```bash
 npm run circuit:run -- explore --goal "test P2.11 plugin wiring — confirm the slash command reaches the runtime and the explore workflow opens a run" --run-root /tmp/circuit-next-p2-11-evidence/run

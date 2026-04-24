@@ -1,6 +1,6 @@
 ---
-name: circuit:run
 description: Classifies free-form tasks into the current router-supported workflows (`explore` or `review`) and runs the selected workflow through the project CLI.
+argument-hint: <task>
 ---
 
 # /circuit:run — workflow router

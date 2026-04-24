@@ -8,6 +8,7 @@ build/
 coverage/
 .vitest-cache/
 .turbo/
+.circuit-next/
 .claude/projects/
 # Runtime lock from the Claude Code harness (sessionId/pid/acquiredAt). Not
 # a deliverable; per-machine ephemeral state.

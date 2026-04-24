@@ -184,9 +184,10 @@ export function checkPhase2SliceIsolationCitation(
 ): AuditCheckResult;
 
 // Slice 33 (P2.2) — Plugin command closure (ADR-0007 CC#P2-3 enforcement).
-// Verifies closure between .claude-plugin/plugin.json `commands` array and
-// .claude-plugin/commands/*.md files, plus required anchor commands
-// (`circuit:run`, `circuit:explore`) presence.
+// Verifies the Claude-valid plugin command layout: metadata-only
+// .claude-plugin/plugin.json with name `circuit`, root commands/*.md files,
+// and required public commands (`circuit:run`, `circuit:explore`,
+// `circuit:review`) present.
 export function checkPluginCommandClosure(rootDir?: string): AuditCheckResult;
 
 // Slice 34 (P2.3) — Spine coverage (ADR-0007 CC#P2-6 + EXPLORE-I1 enforcement).

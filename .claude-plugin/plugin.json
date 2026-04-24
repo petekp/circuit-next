@@ -1,23 +1,9 @@
 {
-  "name": "circuit-next",
-  "version": "0.1.0-alpha.1",
+  "name": "circuit",
+  "version": "0.1.0-alpha.2",
   "description": "Claude Code plugin that runs configurable developer workflows. Phase 2 wired state: `/circuit:run` classifies free-form tasks into the current router-supported workflows (`explore` or `review`) and invokes the selected workflow through the project CLI; `/circuit:explore` and `/circuit:review` remain explicit workflow commands. Future phases add `build`, `repair`, `migrate`, `sweep`, and user-authored custom workflows with per-step model + reasoning-effort + skills configuration.",
-  "keywords": ["workflow", "automation", "circuit-next", "phase-2"],
-  "commands": [
-    {
-      "name": "circuit:run",
-      "file": "commands/circuit-run.md",
-      "description": "Classifies free-form tasks into the current router-supported workflows (`explore` or `review`) and runs the selected workflow through the project CLI."
-    },
-    {
-      "name": "circuit:explore",
-      "file": "commands/circuit-explore.md",
-      "description": "Investigate, understand, choose among options, or shape an execution plan. Runs the full-spine explore workflow end-to-end via the project CLI, producing a canonical event log + result artifact under the run root."
-    },
-    {
-      "name": "circuit:review",
-      "file": "commands/circuit-review.md",
-      "description": "Audit a scoped change or artifact with the review workflow. Runs the audit-only review fixture via the project CLI and surfaces the run root, event log, and typed review result artifact on completed runs."
-    }
-  ]
+  "author": {
+    "name": "Pete Petrash"
+  },
+  "keywords": ["workflow", "automation", "circuit-next", "phase-2"]
 }

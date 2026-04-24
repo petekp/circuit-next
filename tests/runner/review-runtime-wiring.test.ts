@@ -77,6 +77,11 @@ function dispatcherWithBody(body: string): DispatchFn {
     adapterName: 'agent',
     dispatch: async (input: AgentDispatchInput): Promise<DispatchResult> => {
       expect(input.prompt).toContain('Accepted verdicts: NO_ISSUES_FOUND, ISSUES_FOUND');
+      expect(input.prompt).toContain('"findings"');
+      expect(input.prompt).toContain('"findings": []');
+      expect(input.prompt).toContain('"severity": "<critical|high|low>"');
+      expect(input.prompt).not.toContain('medium');
+      expect(input.prompt).not.toContain('info');
       return {
         request_payload: input.prompt,
         receipt_id: 'stub-receipt-review',

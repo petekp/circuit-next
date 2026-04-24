@@ -1,4 +1,4 @@
-<!-- current_slice: 99 -->
+<!-- current_slice: 100 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -9,11 +9,11 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 99
-- **current_arc:** Phase 2 close-evidence cleanup in progress: Explore uses
-  structured JSON as the accepted successor artifact shape for CC#P2-1; this
-  does not claim old Markdown byte-for-byte compatibility. P2-3 live command
-  proof remains next
+- **current_slice:** 100
+- **current_arc:** Phase 2 close-evidence cleanup in progress: P2-1 uses
+  structured JSON as the accepted successor artifact shape and does not claim old Markdown byte-for-byte compatibility. P2-3 live command proof now exists
+  through a live Claude Code invocation of the inline `circuit` plugin. Phase 2
+  close review and the operator product check remain next.
 - **current_phase:** Phase 2 — Implementation (continuing)
 
 Chronicle (relocated narrative history — non-authoritative; see
