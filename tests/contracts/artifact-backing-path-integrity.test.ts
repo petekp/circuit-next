@@ -13,6 +13,7 @@ import {
   PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE,
   PHASE_2_P2_4_P2_5_ARC_LAST_SLICE,
   PLANNING_READINESS_META_ARC_CEREMONY_SLICE,
+  RUNTIME_SAFETY_FLOOR_ARC_CEREMONY_SLICE,
   SLICE_47_HARDENING_FOLDINS_ARC_CEREMONY_SLICE,
   checkArcCloseCompositionReviewPresence,
   checkArtifactBackingPathIntegrity,
@@ -742,7 +743,7 @@ describe('ARC_CLOSE_GATES + checkArcCloseCompositionReviewPresence (Slice 44 gen
     );
   });
 
-  it('ARC_CLOSE_GATES contains all six arcs with matching ceremony_slice constants', () => {
+  it('ARC_CLOSE_GATES contains all seven arcs with matching ceremony_slice constants', () => {
     // Slice 47d (Codex HIGH 5 + Claude HIGH 3 fold-in): length bumped
     // 2 → 3 with the new slice-47 hardening fold-in arc entry.
     // Slice 55 (Clean-Clone Reality Tranche arc-close composition review
@@ -756,7 +757,10 @@ describe('ARC_CLOSE_GATES + checkArcCloseCompositionReviewPresence (Slice 44 gen
     // Slice 68 (methodology-trim-arc arc-close ceremony — same gate shape
     // as slice-55 + slice-62; numeric ceremony_slice: 68):
     // length bumped 5 → 6 with the new methodology-trim-arc entry.
-    expect(ARC_CLOSE_GATES).toHaveLength(6);
+    // Slice 75 (runtime-safety-floor arc-close ceremony — same gate shape
+    // as slice-55 + slice-62 + slice-68; numeric ceremony_slice: 75):
+    // length bumped 6 -> 7 with the new runtime-safety-floor entry.
+    expect(ARC_CLOSE_GATES).toHaveLength(7);
     const oldArc = ARC_CLOSE_GATES.find(
       (g) => g.arc_id === 'phase-2-foundation-foldins-slices-35-to-40',
     );
@@ -767,12 +771,14 @@ describe('ARC_CLOSE_GATES + checkArcCloseCompositionReviewPresence (Slice 44 gen
     const cleanCloneArc = ARC_CLOSE_GATES.find((g) => g.arc_id === 'clean-clone-reality-tranche');
     const metaArc = ARC_CLOSE_GATES.find((g) => g.arc_id === 'planning-readiness-meta-arc');
     const methodologyTrimArc = ARC_CLOSE_GATES.find((g) => g.arc_id === 'methodology-trim-arc');
+    const runtimeSafetyArc = ARC_CLOSE_GATES.find((g) => g.arc_id === 'runtime-safety-floor');
     expect(oldArc).toBeDefined();
     expect(p2ArcNew).toBeDefined();
     expect(slice47Arc).toBeDefined();
     expect(cleanCloneArc).toBeDefined();
     expect(metaArc).toBeDefined();
     expect(methodologyTrimArc).toBeDefined();
+    expect(runtimeSafetyArc).toBeDefined();
     expect(oldArc?.ceremony_slice).toBe(PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE);
     expect(p2ArcNew?.ceremony_slice).toBe(PHASE_2_P2_4_P2_5_ARC_LAST_SLICE);
     expect(slice47Arc?.ceremony_slice).toBe(SLICE_47_HARDENING_FOLDINS_ARC_CEREMONY_SLICE);
@@ -816,6 +822,21 @@ describe('ARC_CLOSE_GATES + checkArcCloseCompositionReviewPresence (Slice 44 gen
     ).toBe(true);
     expect(methodologyTrimArc?.review_file_regex.test('arc-slice-64-codex.md')).toBe(false);
     expect(methodologyTrimArc?.review_file_regex.test('arc-slice-67-codex.md')).toBe(false);
+    expect(runtimeSafetyArc?.ceremony_slice).toBe(RUNTIME_SAFETY_FLOOR_ARC_CEREMONY_SLICE);
+    expect(typeof runtimeSafetyArc?.ceremony_slice).toBe('number');
+    expect(runtimeSafetyArc?.plan_path).toBe('specs/plans/runtime-safety-floor.md');
+    expect(
+      runtimeSafetyArc?.review_file_regex.test(
+        'arc-runtime-safety-floor-composition-review-claude.md',
+      ),
+    ).toBe(true);
+    expect(
+      runtimeSafetyArc?.review_file_regex.test(
+        'arc-runtime-safety-floor-composition-review-codex.md',
+      ),
+    ).toBe(true);
+    expect(runtimeSafetyArc?.review_file_regex.test('arc-slice-69-codex.md')).toBe(false);
+    expect(runtimeSafetyArc?.review_file_regex.test('arc-slice-73-codex.md')).toBe(false);
   });
 
   it('returns green with "in progress" detail for the 41-to-43 arc when current_slice < 44 and both arcs are applicable', () => {

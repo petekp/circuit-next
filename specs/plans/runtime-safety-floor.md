@@ -1,6 +1,6 @@
 ---
 plan: runtime-safety-floor
-status: operator-signoff
+status: closed
 revision: 03
 opened_at: 2026-04-24
 revised_at: 2026-04-24
@@ -8,6 +8,9 @@ revised_in_session: runtime-safety-floor-codex-challenger-02-med-foldins
 cleared_at: 2026-04-24
 cleared_in_session: runtime-safety-floor-codex-challenger-03-accept
 signoff_at: 2026-04-24
+closed_at: 2026-04-24
+closed_in_slice: 75
+closed_with: "Runtime Safety Floor arc-close ceremony: regression proof, P2.9 freshness overlay, two-prong composition review, and ARC_CLOSE_GATES binding folded same-commit."
 signoff_in_session: runtime-safety-floor-operator-signoff
 signoff_note: "Operator explicit signoff ('Thank you for the plain English. It helps a LOT. Please consider this signed off by me, the orchestrator.', 2026-04-24). operator_signoff_predecessor: 4d36585415858ddcd57d62a3df119da6266e380a."
 base_commit: 3e38c6b

@@ -12,6 +12,14 @@ record.*
 
 ## Runtime-Safety-Floor Arc (opened after Slice 68)
 
+- **Slice 75 ARC-CLOSE-CEREMONY** (this commit, Ratchet-Advance for the
+  audit binding plus Equivalence Refactor for ceremony-only state) - closed
+  the runtime-safety-floor arc. The ceremony added the two arc-close review
+  files, folded Codex's audit-binding finding by adding a
+  `runtime-safety-floor` entry to `ARC_CLOSE_GATES`, closed the plan
+  frontmatter, and moved live state out of the arc. P2.9 was not started;
+  it remains challenger-cleared and awaits its own operator signoff.
+
 - **Slice 74 REGRESSION-PROOF-P2.9-FRESHNESS** (this commit,
   Equivalence Refactor) - recorded the compact proof that all five
   original runtime-safety failures now fail closed or report correct

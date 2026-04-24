@@ -1,4 +1,4 @@
-<!-- current_slice: 74 -->
+<!-- current_slice: 75 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -9,9 +9,9 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 74
-- **current_arc:** runtime-safety-floor (Slice 6 landed: regression proof
-  and P2.9 freshness check; next planned slice is arc-close ceremony)
+- **current_slice:** 75
+- **current_arc:** between arcs (runtime-safety-floor closed; P2.9 remains
+  challenger-cleared and awaits operator signoff before implementation)
 - **current_phase:** Phase 2 — Implementation (continuing)
 
 Chronicle (relocated narrative history — non-authoritative; see
@@ -52,3 +52,7 @@ findings and declares the challenger-cleared P2.9 second-workflow plan
 fresh against the new path, run-root, dispatch-failure, pass-route,
 terminal-outcome, and synthesis-boundary semantics. No P2.9 implementation
 started in this slice.*
+Slice 75 closed the runtime-safety-floor arc with two composition-review
+prong files, folded the Codex MED by binding the arc into
+`ARC_CLOSE_GATES`, advanced the plan to `closed`, and left P2.9 untouched
+pending its separate operator signoff.*

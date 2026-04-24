@@ -3321,6 +3321,14 @@ export const PLANNING_READINESS_META_ARC_CEREMONY_SLICE = 62;
 // the same-commit-staging discipline.
 export const METHODOLOGY_TRIM_ARC_CEREMONY_SLICE = 68;
 
+// Slice 75 (Runtime Safety Floor arc-close ceremony). Numeric
+// ceremony_slice 75 binds the privileged runtime safety arc after Slices
+// 69-74. Review-file regex is pinned to the arc-close composition-review
+// naming convention so per-slice reviews (arc-slice-69/70/.../73-codex.md)
+// do not satisfy the gate; only the two runtime-safety-floor arc-close
+// prong files do.
+export const RUNTIME_SAFETY_FLOOR_ARC_CEREMONY_SLICE = 75;
+
 export const ARC_CLOSE_GATES = Object.freeze([
   Object.freeze({
     arc_id: 'phase-2-foundation-foldins-slices-35-to-40',
@@ -3393,6 +3401,17 @@ export const ARC_CLOSE_GATES = Object.freeze([
     ceremony_slice: METHODOLOGY_TRIM_ARC_CEREMONY_SLICE,
     plan_path: 'specs/plans/methodology-trim-arc.md',
     review_file_regex: /arc-methodology-trim.*composition-review/i,
+  }),
+  // Slice 75 (Runtime Safety Floor arc-close ceremony): same gate shape
+  // as slice-55 + slice-62 + slice-68. Numeric ceremony_slice uses the
+  // back-compat numeric branch of evaluateArcCloseGate. Review-file regex
+  // pins the two arc-close review prongs named in the Slice 75 ceremony.
+  Object.freeze({
+    arc_id: 'runtime-safety-floor',
+    description: 'Runtime Safety Floor Arc (Slices 69-75)',
+    ceremony_slice: RUNTIME_SAFETY_FLOOR_ARC_CEREMONY_SLICE,
+    plan_path: 'specs/plans/runtime-safety-floor.md',
+    review_file_regex: /arc-runtime-safety-floor-composition-review/i,
   }),
 ]);
 
