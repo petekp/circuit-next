@@ -1,11 +1,11 @@
 ---
 plan: build-workflow-parity
 status: challenger-pending
-revision: 06
+revision: 07
 opened_at: 2026-04-24
 revised_at: 2026-04-24
 opened_in_session: post-phase-2-parity-map
-revised_in_session: build-workflow-parity-codex-challenger-05-foldins
+revised_in_session: build-workflow-parity-codex-challenger-06-foldins
 base_commit: eb52089
 target: build
 authority:
@@ -54,6 +54,12 @@ prior_challenger_passes:
     policy and paused-open waiting behavior, requiring selected mode
     rigor to feed dispatch selection plus checkpoint behavior, and
     making the `/circuit:run` Build surface update explicit)
+  - specs/reviews/build-workflow-parity-codex-challenger-06.md
+    (verdict REJECT-PENDING-FOLD-INS vs revision 06 — 2 HIGH;
+    revision 07 folds both by budgeting a real checkpoint confirm/resume
+    path with a fixed waiting envelope and stable checkpoint artifact path,
+    and by declaring resolved execution rigor as the single precedence source
+    for bootstrap, dispatch selection, and checkpoint policy)
 ---
 
 # Build Workflow Parity Plan
@@ -72,7 +78,8 @@ artifact direction.
 Revision 02 folds the first Codex challenger pass. Revision 03 folds the
 second Codex challenger pass. Revision 04 folds the third Codex challenger
 pass. Revision 05 folds the fourth Codex challenger pass. Revision 06 folds
-the fifth Codex challenger pass.
+the fifth Codex challenger pass. Revision 07 folds the sixth Codex challenger
+pass.
 
 | Pass-01 # | Severity | Objection | Revision-02 fold-in |
 |---|---|---|---|
@@ -102,6 +109,11 @@ the fifth Codex challenger pass.
 | 1 | HIGH | Checkpoint and autonomous parity were still under-scoped at the schema and outcome layer. | §8 and Work item 5 now explicitly budget a typed checkpoint policy block, checkpoint event widening for resolution source, and the paused-open waiting representation: no `run.closed`, no `result.json`, snapshot remains `in_progress`, and the CLI returns a checkpoint-waiting envelope. |
 | 2 | HIGH | Default, Lite, and Deep could still close as record-only differences rather than real behavior differences. | §5 and Work item 7 now require selected entry-mode rigor to feed both bootstrap rigor and dispatch selection rigor, and require mode-specific checkpoint behavior: default/lite safe-default continue, deep waits for operator confirmation, autonomous safe auto-resolves. |
 | 3 | MED | `/circuit:run` was still under-budgeted for Build. | Work item 8 now explicitly updates `commands/run.md` and its tests so router-selected Build documents Build routing and `artifacts/build-result.json`. |
+
+| Pass-06 # | Severity | Objection | Revision-07 fold-in |
+|---|---|---|---|
+| 1 | HIGH | Deep Build still was not budgeted as a usable public waiting mode because the plan lacked a real confirm/resume path, a fixed waiting envelope, and one stable checkpoint request path. | §8 and Work items 5/8 now make Deep a real pause-and-continue path: the CLI returns a fixed `checkpoint_waiting` envelope, writes a stable `artifacts/checkpoints/<step-id>-request.json` request artifact, and resumes through `./bin/circuit-next resume --run-root <path> --checkpoint-choice <choice>` after validating the paused checkpoint state. |
+| 2 | HIGH | Mode behavior was ambiguous when explicit invocation rigor conflicts with selected entry mode. | §5 and Work item 7 now declare one precedence rule: selected entry-mode rigor is only the default; explicit invocation rigor wins; the resulting resolved execution rigor drives bootstrap, dispatch selection, and checkpoint policy together. Conflict-case tests are required for Deep-vs-standard and Default-vs-autonomous. |
 
 ## §1 — Evidence census
 
@@ -143,12 +155,15 @@ Target Build surface:
   and `spine_policy.omits: {analyze}`.
 - Build declares and exposes the four reference entry modes: `default`, `lite`,
   `deep`, and `autonomous`; all four use the fixed Build graph, selected modes
-  drive both bootstrap rigor and dispatch-selection rigor by default, and Lite
-  still reaches Review.
+  provide the default execution rigor, explicit invocation rigor overrides that
+  default when supplied, the resolved execution rigor drives bootstrap,
+  dispatch selection, and checkpoint policy together, and Lite still reaches
+  Review.
 - Build Frame is a real checkpoint with a typed checkpoint policy. Default and
-  Lite may continue only through a declared safe default choice, Deep waits for
-  explicit operator confirmation, and Autonomous may auto-resolve only a
-  declared safe auto choice. Missing or unsafe choices fail closed.
+  Lite may continue only through a declared safe default choice, Deep is a real
+  public pause-and-continue path that waits for explicit operator confirmation,
+  and Autonomous may auto-resolve only a declared safe auto choice. Missing or
+  unsafe choices fail closed.
 - Build emits structured JSON successor artifacts for all six reference
   artifact roles. The workflow-specific close artifact is
   `<run-root>/artifacts/build-result.json`, not the engine-authored
@@ -193,25 +208,33 @@ running a separate investigation phase.
 
 Build's entry-mode scope for this arc is the full reference set:
 `default`, `lite`, `deep`, and `autonomous`. The modes differ through runtime
-behavior, not metadata alone. The selected entry mode's `rigor` becomes the
-run bootstrap rigor and an invocation-layer dispatch selection default unless
-an explicit invocation rigor is supplied, in which case the explicit invocation
-value wins and is recorded as such. The modes must not skip the Review phase.
-Lite still reaches Review. This is a product reachability and behavior claim:
-a later slice in this arc must let the product path select a named entry mode
-instead of always executing `entry_modes[0]`, must pass the selected rigor into
-dispatch selection, and must prove non-default modes affect runtime behavior,
-not only recorded state.
+behavior, not metadata alone. The selected entry mode's `rigor` is the default
+execution rigor. If the caller supplies explicit invocation rigor, that
+explicit value wins. The resulting resolved execution rigor is the single
+source for run bootstrap rigor, dispatch selection rigor, and checkpoint policy;
+there is no separate hidden "mode" after resolution.
 
-Mode-specific checkpoint behavior is the first required runtime behavior tied
-to entry-mode rigor:
+The modes must not skip the Review phase. Lite still reaches Review. This is a
+product reachability and behavior claim: a later slice in this arc must let the
+product path select a named entry mode instead of always executing
+`entry_modes[0]`, must pass the resolved execution rigor into dispatch
+selection, and must prove non-default modes affect runtime behavior, not only
+recorded state.
 
-- `default` and `lite` may immediately resolve Frame only through the declared
+Resolved-rigor checkpoint behavior is the first required runtime behavior tied
+to entry-mode selection:
+
+- `lite` and `standard` may immediately resolve Frame only through the declared
   safe default choice.
-- `deep` requests the Frame checkpoint and leaves the run paused-open until
-  the operator confirms; it must not close or write `artifacts/result.json`
-  while waiting.
+- `deep` and `tournament` request the Frame checkpoint and leave the run
+  paused-open until the operator confirms; they must not close or write
+  `artifacts/result.json` while waiting.
 - `autonomous` may auto-resolve Frame only through a declared safe auto choice.
+
+Conflict cases use the same resolved-rigor rule. For example, "Deep Build with
+explicit `standard` rigor" follows the `standard` checkpoint policy, while
+"Default Build with explicit `autonomous` rigor" follows the `autonomous`
+checkpoint policy if the safe auto choice exists.
 
 Autonomous mode is limited to the Build reference shape for this arc. Missing
 or unsafe auto choices fail closed rather than silently continuing.
@@ -289,35 +312,74 @@ product Build fixture. The likely shape is the smallest runner capability that:
   for default/lite/deep/autonomous,
 - parses checkpoint steps through the widened step schema without throwing,
 - records `checkpoint.requested` evidence when a checkpoint is reached,
-- materializes a checkpoint request artifact or state entry with prompt,
-  allowed choices, selected choice when present, and resolution source,
+- materializes a stable checkpoint request artifact at
+  `artifacts/checkpoints/<step-id>-request.json` with prompt, allowed choices,
+  and any safe default/auto metadata the policy declares,
+- materializes a stable checkpoint response artifact at
+  `artifacts/checkpoints/<step-id>-response.json` when a choice is resolved,
+  with selected choice and resolution source,
 - widens checkpoint resolution evidence if needed so the event log can
   distinguish operator confirmation, safe-default resolution, and autonomous
   auto-resolution,
 - accepts only declared allowed choices when a checkpoint is resolved,
-- resolves default/lite Frame only through the declared safe default choice,
-- leaves Deep Frame paused-open until explicit operator confirmation,
-- lets Autonomous mode auto-resolve only a declared safe autonomous choice,
-- fails closed when the selected rigor requires a safe choice but no matching
-  safe choice exists,
-- records enough run-state evidence that default/lite/deep checkpoint behavior
-  can be distinguished from autonomous auto-resolution.
+- resolves `lite`/`standard` Frame only through the declared safe default
+  choice,
+- leaves `deep`/`tournament` Frame paused-open until explicit operator
+  confirmation,
+- lets `autonomous` auto-resolve only a declared safe autonomous choice,
+- fails closed when the resolved execution rigor requires a safe choice but no
+  matching safe choice exists,
+- records enough run-state evidence that safe-default, waiting,
+  operator-confirmed, and autonomous auto-resolution behavior can be
+  distinguished.
 
 Unresolved checkpoint representation for this arc is deliberately
 paused-open, not a new closed-run outcome. A waiting checkpoint writes
 `checkpoint.requested`, leaves the snapshot `status: "in_progress"` with the
 checkpoint step as current, emits no `run.closed`, and writes no
-`artifacts/result.json`. The CLI may return a product envelope such as
-`outcome: "checkpoint_waiting"` with `run_root` and the checkpoint request
-path, but that envelope is not a `RunResult`.
+`artifacts/result.json`. The initial CLI returns a product envelope with this
+fixed shape:
+
+```json
+{
+  "schema_version": 1,
+  "run_id": "<run-id>",
+  "workflow_id": "<workflow-id>",
+  "selected_workflow": "<workflow-id>",
+  "run_root": "<absolute-run-root>",
+  "outcome": "checkpoint_waiting",
+  "checkpoint": {
+    "step_id": "<step-id>",
+    "request_path": "<absolute-run-root>/artifacts/checkpoints/<step-id>-request.json",
+    "allowed_choices": ["<choice>"]
+  },
+  "events_observed": 3
+}
+```
+
+`events_observed` is the actual event count at wait time. That envelope is not
+a `RunResult`, and it does not include `result_path`. Continuing a waiting
+checkpoint is also in this arc. The public continuation surface is:
+
+```bash
+./bin/circuit-next resume --run-root <path> --checkpoint-choice <choice>
+```
+
+The resume path must validate that the run root is an existing paused-open run,
+that the latest checkpoint request is unresolved, that the chosen value is
+declared in the checkpoint policy, and that the manifest snapshot still matches
+before it appends `checkpoint.resolved` and continues from the checkpoint's pass
+route. It must not re-run earlier steps or bypass the fresh-run-root guard for
+any non-resume invocation.
 
 Required tests for this substrate include: parsing and reaching a checkpoint
-step with the typed checkpoint policy; default/lite safe-default resolution;
-deep paused-open waiting with no `run.closed` and no `artifacts/result.json`;
-rejected undeclared checkpoint choice; autonomous safe auto-resolution;
-autonomous fail-closed when no safe auto choice exists; and event/state/result
-agreement for closed outcomes plus explicit absence of close/result surfaces
-for waiting outcomes.
+step with the typed checkpoint policy; `lite`/`standard` safe-default
+resolution; `deep`/`tournament` paused-open waiting with no `run.closed` and no
+`artifacts/result.json`; fixed waiting-envelope shape with no `result_path`;
+resume with an operator-confirmed allowed choice; rejected undeclared
+checkpoint choice; autonomous safe auto-resolution; autonomous fail-closed when
+no safe auto choice exists; and event/state/result agreement for closed
+outcomes plus explicit absence of close/result surfaces for waiting outcomes.
 
 ## §9 — Slices
 
@@ -475,9 +537,17 @@ with a synthesis placeholder while still claiming full entry-mode parity.
   an equivalent control-plane schema.
 - Add the checkpoint event, state, CLI waiting-envelope, and artifact surfaces
   described in §8.
+- Add the stable checkpoint artifact paths
+  `artifacts/checkpoints/<step-id>-request.json` and
+  `artifacts/checkpoints/<step-id>-response.json`.
 - Represent unresolved checkpoints as paused-open runs: no `run.closed`, no
   `artifacts/result.json`, snapshot remains `in_progress`, and the CLI exposes
   a checkpoint-waiting envelope instead of a `RunResult`.
+- Add `./bin/circuit-next resume --run-root <path> --checkpoint-choice <choice>`
+  as the checkpoint continuation path for paused-open runs.
+- Validate resumed runs against the stored manifest snapshot, current event
+  log, unresolved checkpoint state, and declared allowed choices before
+  appending `checkpoint.resolved`.
 - Add fail-closed resolution checks for undeclared checkpoint choices.
 - Add default/lite safe-default resolution, deep operator-wait behavior, and
   Autonomous-mode safe auto-resolution only for declared safe choices.
@@ -491,6 +561,11 @@ with a synthesis placeholder while still claiming full entry-mode parity.
 - Runner tests prove default/lite resolve only through a declared safe default.
 - Runner tests prove deep reaches a paused-open checkpoint state with no
   `run.closed` and no `artifacts/result.json`.
+- CLI tests prove waiting returns the fixed `checkpoint_waiting` envelope with
+  a checkpoint request path and no `result_path`.
+- Runner and CLI tests prove `resume --run-root <path> --checkpoint-choice
+  <choice>` continues a paused-open run after an allowed operator choice and
+  rejects unknown choices or non-paused run roots.
 - Runner tests prove Autonomous resolves a safe declared checkpoint choice and
   fails closed when no safe auto choice exists.
 - Event, state, CLI, and result surfaces agree for resolved and failed
@@ -558,12 +633,14 @@ entry modes without making them reachable through the product path.
   instead of always using `entry_modes[0]`.
 - Bind the selected entry mode's `rigor` into invocation and recorded run
   state when no explicit invocation rigor is supplied.
-- Bind the selected entry mode's `rigor` into dispatch selection resolution as
-  the invocation-layer rigor default, so `dispatch.started.resolved_selection`
-  and adapter dispatch input carry the selected mode rigor.
+- Compute one resolved execution rigor from entry-mode rigor plus explicit
+  invocation rigor. Explicit invocation rigor wins when supplied.
+- Bind that resolved execution rigor into dispatch selection resolution, so
+  `dispatch.started.resolved_selection` and adapter dispatch input carry the
+  same rigor that bootstrap and checkpoint policy use.
 - Preserve explicit invocation rigor precedence when a caller supplies it, and
-  record that the explicit invocation value won for both bootstrap rigor and
-  dispatch selection rigor.
+  record that the explicit invocation value won for bootstrap rigor, dispatch
+  selection rigor, and checkpoint policy.
 - Fail closed when a requested entry mode does not exist for the selected
   workflow.
 - Add tests proving `default`, `lite`, `deep`, and `autonomous` select the
@@ -572,6 +649,10 @@ entry modes without making them reachable through the product path.
 - Add a Lite-mode regression test proving Review still runs.
 - Add checkpoint behavior tests proving default/lite safe-default continue,
   deep paused-open waiting, and autonomous safe auto-resolution.
+- Add conflict-case tests proving Deep Build with explicit `standard` rigor
+  uses the `standard` safe-default checkpoint policy, and Default Build with
+  explicit `autonomous` rigor uses the `autonomous` safe-auto checkpoint policy
+  when a safe auto choice exists.
 
 **Acceptance evidence:**
 
@@ -581,10 +662,10 @@ entry modes without making them reachable through the product path.
   taking `entry_modes[0]`.
 - Runner and CLI tests prove Lite, Deep, and Autonomous affect recorded run
   state when no explicit invocation rigor is supplied.
-- Runner tests prove selected mode rigor reaches dispatch selection and the
-  dispatcher input, not only `run.bootstrapped`.
+- Runner tests prove resolved execution rigor reaches dispatch selection and
+  the dispatcher input, not only `run.bootstrapped`.
 - Tests prove explicit invocation rigor overrides entry-mode rigor when
-  supplied.
+  supplied, including checkpoint policy behavior.
 - Checkpoint tests prove at least one downstream behavior differs by mode:
   default/lite continue through safe default, deep waits, and autonomous
   auto-resolves through the safe auto choice.
@@ -615,6 +696,10 @@ does not recognize build-like tasks.
 - Update `commands/run.md` so router-selected Build is part of the documented
   public router surface and so it tells the operator to read
   `artifacts/build-result.json` when Build completes.
+- Teach `commands/build.md` and `commands/run.md` that Build can return either
+  a closed-run result envelope or a `checkpoint_waiting` envelope. Waiting
+  envelopes must surface the checkpoint request path and the exact resume
+  command; they must not read or claim `result_path`.
 - Update the plugin command-closure audit check so Build is an expected public
   command, not an unexpected extra file.
 - Update plugin-surface tests and command-invocation tests for the four-command
@@ -630,12 +715,17 @@ does not recognize build-like tasks.
   the product path.
 - `/circuit:run` documents Build as a possible selected workflow and documents
   `artifacts/build-result.json` as the Build close artifact.
+- `/circuit:build` and `/circuit:run` document the waiting envelope and the
+  `./bin/circuit-next resume --run-root <path> --checkpoint-choice <choice>`
+  continuation path for Deep Build.
 - Audit accepts the expanded command set without weakening the closure check.
 - Plugin manifest and tests agree that Build is now wired.
 - Router tests prove build-like prompts select Build without regressing Review
   and Explore routing.
 - Command-invocation tests prove `commands/run.md` surfaces Build routing and
   the Build close-artifact path.
+- Command-invocation tests prove both Build command bodies handle
+  `checkpoint_waiting` without requiring `result_path`.
 - `npm run verify` passes.
 - `npm run audit` reports 0 red and no new unaccounted yellows.
 

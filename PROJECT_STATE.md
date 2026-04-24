@@ -1,4 +1,4 @@
-<!-- current_slice: 109 -->
+<!-- current_slice: 110 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -10,15 +10,16 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 109
+- **current_slice:** 110
 - **current_arc:** Build workflow parity plan remains challenger-pending after
-  the fifth Codex challenger pass. Revision 06 folds the pass-05 objections:
-  checkpoint work now explicitly budgets typed safe-choice policy and
-  paused-open waiting behavior, Build modes must feed dispatch selection and
-  checkpoint behavior rather than only recorded state, and `/circuit:run`
-  updates are now an explicit Build command-surface requirement. No Build
-  runtime changes have started yet; the next required step is another Codex
-  challenger review against revision 06. P2-1 uses structured JSON as the accepted successor artifact shape; it does not claim old Markdown byte-for-byte compatibility. P2-3 live command proof is included through a live Claude
+  the sixth Codex challenger pass. Revision 07 folds the pass-06 objections:
+  Deep Build is now planned as a real pause-and-continue public path with a
+  fixed `checkpoint_waiting` CLI envelope, stable checkpoint request/response
+  artifact paths, and a concrete resume command; Build mode behavior now has a
+  single precedence rule where explicit invocation rigor wins and the resolved
+  rigor drives bootstrap, dispatch selection, and checkpoint policy together.
+  No Build runtime changes have started yet; the next required step is another
+  Codex challenger review against revision 07. P2-1 uses structured JSON as the accepted successor artifact shape; it does not claim old Markdown byte-for-byte compatibility. P2-3 live command proof is included through a live Claude
   Code invocation of the inline `circuit` plugin. The Phase 2 close claim
   remains narrow: first working workflow product spine closed, not full
   first-generation Circuit parity. Next work is broader parity expansion

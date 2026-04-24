@@ -12,6 +12,16 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 110 BUILD PLAN SIXTH CHALLENGER FOLD-INS** (this commit,
+  Discovery) - recorded the sixth Codex challenger review for the Build plan
+  and folded in its two objections. The plan now treats Deep Build as a real
+  pause-and-continue path instead of a dead-end wait: the CLI must return a
+  fixed waiting envelope, write stable checkpoint request/response artifacts,
+  and continue through a concrete resume command. It also makes explicit
+  invocation rigor the single override that drives bootstrap, dispatch
+  selection, and checkpoint behavior together. No Build runtime behavior
+  changed.
+
 - **Slice 109 BUILD PLAN FIFTH CHALLENGER FOLD-INS** (this commit,
   Discovery) - recorded the fifth Codex challenger review for the Build plan
   and folded in its three objections. The plan now says checkpoint work must
