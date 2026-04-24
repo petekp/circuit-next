@@ -236,15 +236,15 @@
       "writers": [
         "circuit-next engine (config layer composition)",
         "plugin author (defaults)",
-        "operator (user-global, project, invocation)"
+        "operator (user-global/project live; invocation seam pending public CLI flags)"
       ],
       "readers": ["circuit-next engine (selection resolution)"],
       "resolvers": ["selection.resolution"],
       "backing_paths": [
-        "<plugin>/skills/<workflow-id>/circuit.yaml (defaults)",
+        "<plugin>/skills/<workflow-id>/circuit.yaml (defaults; resolver-supported, product discovery pending)",
         "~/.config/circuit-next/config.yaml (user-global)",
         "<cwd>/.circuit/config.yaml (current-working-directory project)",
-        "invocation arguments (ephemeral, in-memory)"
+        "invocation arguments (ephemeral, in-memory; resolver-supported, public CLI flags pending)"
       ],
       "identity_fields": [],
       "path_derived_fields": [],
@@ -253,7 +253,7 @@
         "skill set composition",
         "invocation_options passthrough to adapter"
       ],
-      "trust_boundary": "operator-local at user-global/project/invocation layers; plugin-author-signed at the defaults layer; engine validates .strict() key closure and ghost-provenance rejection at parse time. Composition produces selection.resolution (separate artifact).",
+      "trust_boundary": "operator-local at user-global/project layers and future invocation-layer projection; plugin-author-signed at the defaults layer; engine validates .strict() key closure and ghost-provenance rejection at parse time. Composition produces selection.resolution (separate artifact).",
       "reference_surfaces": [],
       "reference_evidence": [],
       "migration_policy": "n/a",
@@ -415,15 +415,15 @@
       "schema_exports": ["Config"],
       "writers": [
         "plugin author (defaults layer)",
-        "operator (user-global, project, invocation layers)"
+        "operator (user-global/project live; invocation layer pending public CLI flags)"
       ],
       "readers": ["circuit-next engine (config layer composition)"],
       "resolvers": ["selection.override", "adapter.reference"],
       "backing_paths": [
-        "<plugin>/skills/<workflow-id>/circuit.yaml (defaults layer)",
+        "<plugin>/skills/<workflow-id>/circuit.yaml (defaults layer; product discovery pending)",
         "~/.config/circuit-next/config.yaml (user-global)",
         "<cwd>/.circuit/config.yaml (current-working-directory project)",
-        "invocation arguments (ephemeral, in-memory)"
+        "invocation arguments (ephemeral, in-memory; public CLI flags pending)"
       ],
       "identity_fields": [],
       "path_derived_fields": [],
@@ -444,13 +444,13 @@
       "surface_class": "greenfield",
       "compatibility_policy": "n/a",
       "plane": "data-plane",
-      "description": "Layer-identity wrapper around a Config. Carries ConfigLayer (default | user-global | project | invocation), an optional source_path, and a validated Config. Distinct from the merged effective configuration at dispatch time (which is not a LayeredConfig).",
+      "description": "Layer-identity wrapper around a Config. Carries ConfigLayer (default | user-global | project | invocation), an optional source_path, and a validated Config. Slice 86 product discovery emits user-global/project; default and invocation are resolver-supported injection seams until later product wiring. Distinct from the merged effective configuration at dispatch time (which is not a LayeredConfig).",
       "contract": "specs/contracts/config.md",
       "schema_file": "src/schemas/config.ts",
       "schema_exports": ["LayeredConfig", "ConfigLayer"],
       "writers": [
-        "circuit-next engine (config loader)",
-        "circuit-next engine (invocation-layer projection)"
+        "circuit-next engine (config loader for user-global/project)",
+        "circuit-next engine (default/invocation injection seams)"
       ],
       "readers": ["circuit-next engine (config layer composition)"],
       "resolvers": [],
@@ -477,14 +477,17 @@
       "contract": "specs/contracts/config.md",
       "schema_file": "src/schemas/config.ts",
       "schema_exports": ["CircuitOverride"],
-      "writers": ["plugin author (defaults)", "operator (user-global, project, invocation)"],
+      "writers": [
+        "plugin author (defaults; product discovery pending)",
+        "operator (user-global/project live; invocation seam pending public CLI flags)"
+      ],
       "readers": ["circuit-next engine (per-circuit selection composition)"],
       "resolvers": ["selection.override"],
       "backing_paths": [
-        "<plugin>/skills/<workflow-id>/circuit.yaml (defaults)",
+        "<plugin>/skills/<workflow-id>/circuit.yaml (defaults; product discovery pending)",
         "~/.config/circuit-next/config.yaml (user-global)",
         "<cwd>/.circuit/config.yaml (current-working-directory project)",
-        "invocation arguments (ephemeral, in-memory)"
+        "invocation arguments (ephemeral, in-memory; public CLI flags pending)"
       ],
       "identity_fields": [],
       "path_derived_fields": [],

@@ -385,8 +385,11 @@ provider-shape closure while adapters own provider/model honoring.
     `src/schemas/phase.ts`, and `src/schemas/step.ts` carry selection
     fields at their authored layers.
   - Runtime resolver: `src/runtime/selection-resolver.ts` composes
-    default, user-global, project, workflow, phase, step, and invocation
-    selection layers into `dispatch.started.resolved_selection`.
+    supplied default, user-global, project, workflow, phase, step, and
+    invocation selection layers into `dispatch.started.resolved_selection`.
+    Current product CLI discovery supplies user-global/project config files
+    plus workflow/phase/step fixture selections; default and invocation
+    config layers remain injected seams until later product wiring.
   - Runtime loader: `src/runtime/config-loader.ts` loads canonical
     user-global and current-working-directory project config files into
     the resolver path.

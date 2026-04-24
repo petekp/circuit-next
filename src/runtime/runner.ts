@@ -218,9 +218,10 @@ export interface DogfoodInvocation {
   // review.result implementation plus the existing placeholder fallback.
   synthesisWriter?: SynthesisWriterFn;
   // Parsed config layers are supplied by callers that have already handled
-  // discovery/loading. The CLI still has no config discovery layer; this is
-  // the runtime seam that lets default/user/project/invocation selection
-  // participate in dispatch resolution once discovery lands.
+  // discovery/loading. The product CLI discovers user-global and project
+  // layers at v0; direct runtime callers can still inject already-parsed
+  // layers, including default/invocation seams for tests and future entry
+  // points.
   selectionConfigLayers?: readonly LayeredConfig[];
 }
 
@@ -823,12 +824,11 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
         // site is required.
         adapterName: dispatcher.adapterName,
         // Slice 47a (CONVERGENT HIGH A fold-in): selection + provenance
-        // are now derived from real inputs (workflow.default_selection
-        // + step.selection right-biased; explicit-vs-default dispatcher
-        // provenance) rather than hardcoded by the materializer. The
-        // derivation helpers live above in this module so the runner is
-        // the single owner of resolution at v0; P2-MODEL-EFFORT replaces
-        // them with the full SEL-precedence resolver.
+        // are derived from real inputs rather than hardcoded by the
+        // materializer. Slice 85 replaced the temporary workflow/step
+        // selection helper with the full SEL-precedence resolver; adapter
+        // provenance remains separate because it describes how the
+        // dispatcher itself was chosen.
         resolvedSelection,
         resolvedFrom,
         dispatchResult,

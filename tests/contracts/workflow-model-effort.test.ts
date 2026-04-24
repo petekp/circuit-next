@@ -212,6 +212,53 @@ describe('P2-MODEL-EFFORT — full selection precedence resolver', () => {
     expect(resolution.resolved).toEqual(EXPECTED_SYNTHESIZE_SELECTION);
   });
 
+  it('pre-composes config defaults and per-workflow skill overrides inside one layer', () => {
+    const { raw } = loadRawFixture();
+    const workflow = Workflow.parse(raw);
+    const step = workflow.steps.find((s) => s.id === 'frame-step');
+    if (step === undefined) throw new Error('fixture missing frame-step');
+
+    const resolution = resolveSelectionForDispatch({
+      workflow,
+      step,
+      configLayers: [
+        LayeredConfig.parse({
+          layer: 'project',
+          config: {
+            schema_version: 1,
+            defaults: {
+              selection: {
+                skills: { mode: 'replace', skills: ['tdd'] },
+              },
+            },
+            circuits: {
+              explore: {
+                selection: {
+                  skills: { mode: 'append', skills: ['react-doctor'] },
+                },
+              },
+            },
+          },
+        }),
+      ],
+    });
+
+    expect(resolution.resolved.skills).toEqual([
+      SkillId.parse('tdd'),
+      SkillId.parse('react-doctor'),
+    ]);
+    expect(resolution.applied).toHaveLength(1);
+    expect(resolution.applied[0]).toMatchObject({
+      source: 'project',
+      override: {
+        skills: {
+          mode: 'replace',
+          skills: [SkillId.parse('tdd'), SkillId.parse('react-doctor')],
+        },
+      },
+    });
+  });
+
   it('emits the resolved model and effort on dispatch.started and passes it to injected dispatchers', async () => {
     const { workflow, bytes } = workflowWithModelEffortSelections();
     const dispatchInputs: DispatchInput[] = [];

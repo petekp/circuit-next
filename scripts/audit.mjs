@@ -3336,6 +3336,13 @@ export const RUNTIME_SAFETY_FLOOR_ARC_CEREMONY_SLICE = 75;
 // do not satisfy the gate; only the two P2.9 arc-close prong files do.
 export const P2_9_SECOND_WORKFLOW_ARC_CEREMONY_SLICE = 82;
 
+// Slice 88 (P2-MODEL-EFFORT arc-close ceremony). Numeric ceremony_slice 88
+// binds the model/effort resolver/config-loader/adapter arc after Slices
+// 85-87. Review-file regex is pinned to the arc-close composition-review
+// naming convention so per-slice reviews (arc-slice-85/.../87-codex.md) do
+// not satisfy the gate; only the two P2-MODEL-EFFORT arc-close prong files do.
+export const P2_MODEL_EFFORT_ARC_CEREMONY_SLICE = 88;
+
 export const ARC_CLOSE_GATES = Object.freeze([
   Object.freeze({
     arc_id: 'phase-2-foundation-foldins-slices-35-to-40',
@@ -3430,6 +3437,17 @@ export const ARC_CLOSE_GATES = Object.freeze([
     ceremony_slice: P2_9_SECOND_WORKFLOW_ARC_CEREMONY_SLICE,
     plan_path: 'specs/plans/p2-9-second-workflow.md',
     review_file_regex: /arc-p2-9-second-workflow-composition-review/i,
+  }),
+  // Slice 88 (P2-MODEL-EFFORT arc-close ceremony): same gate shape as
+  // slices 55/62/68/75/82. Numeric ceremony_slice uses the back-compat
+  // numeric branch of evaluateArcCloseGate. Review-file regex pins the two
+  // arc-close review prongs named in the Slice 88 ceremony.
+  Object.freeze({
+    arc_id: 'p2-model-effort',
+    description: 'P2-MODEL-EFFORT Arc (Slices 85-88)',
+    ceremony_slice: P2_MODEL_EFFORT_ARC_CEREMONY_SLICE,
+    plan_path: 'specs/plans/phase-2-implementation.md',
+    review_file_regex: /arc-p2-model-effort-composition-review/i,
   }),
 ]);
 

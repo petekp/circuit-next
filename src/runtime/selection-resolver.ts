@@ -28,20 +28,24 @@ function overrideContributes(o: SelectionOverrideValue): boolean {
   return false;
 }
 
-function skillOverrideContributes(o: SelectionOverrideValue | undefined): boolean {
-  return o !== undefined && o.skills.mode !== 'inherit';
-}
-
 function composeConfigLayerSelection(
   base: SelectionOverrideValue | undefined,
   circuit: SelectionOverrideValue | undefined,
+  current: ResolvedSelection,
 ): SelectionOverrideValue | undefined {
   if (base === undefined && circuit === undefined) return undefined;
-  const skills = skillOverrideContributes(circuit)
-    ? circuit?.skills
-    : skillOverrideContributes(base)
-      ? base?.skills
-      : undefined;
+  const baseSkillOp = base?.skills.mode === 'inherit' ? undefined : base?.skills;
+  const circuitSkillOp = circuit?.skills.mode === 'inherit' ? undefined : circuit?.skills;
+  let skills: SkillOverride | undefined;
+  if (baseSkillOp !== undefined || circuitSkillOp !== undefined) {
+    // One applied entry represents the whole config source, so same-file
+    // default + per-workflow skill ops are normalized to their effective set.
+    const baseSkills =
+      baseSkillOp !== undefined ? applySkillOp(current.skills, baseSkillOp) : current.skills;
+    const composedSkills =
+      circuitSkillOp !== undefined ? applySkillOp(baseSkills, circuitSkillOp) : baseSkills;
+    skills = { mode: 'replace', skills: [...composedSkills] as SkillId[] };
+  }
 
   const raw = {
     ...(base?.model !== undefined || circuit?.model !== undefined
@@ -67,13 +71,14 @@ function composeConfigLayerSelection(
 function configLayerSelection(
   workflowId: string,
   layer: LayeredConfig,
+  current: ResolvedSelection,
 ): SelectionOverrideValue | undefined {
   const circuits = layer.config.circuits as Record<
     string,
     { readonly selection?: SelectionOverrideValue } | undefined
   >;
   const circuit = Object.hasOwn(circuits, workflowId) ? circuits[workflowId] : undefined;
-  return composeConfigLayerSelection(layer.config.defaults.selection, circuit?.selection);
+  return composeConfigLayerSelection(layer.config.defaults.selection, circuit?.selection, current);
 }
 
 function applySkillOp(base: readonly SkillId[], op: SkillOverride): readonly SkillId[] {
@@ -127,19 +132,17 @@ function pushIfContributing(
   return applyOverride(resolved, entry.override);
 }
 
-function configSelectionsBySource(
-  workflowId: string,
+function configLayersBySource(
   layers: readonly LayeredConfig[],
-): Partial<Record<SelectionSource, SelectionOverrideValue>> {
-  const out: Partial<Record<SelectionSource, SelectionOverrideValue>> = {};
+): Partial<Record<SelectionSource, LayeredConfig>> {
+  const out: Partial<Record<SelectionSource, LayeredConfig>> = {};
   const seen = new Set<string>();
   for (const layer of layers) {
     if (seen.has(layer.layer)) {
       throw new Error(`duplicate selection config layer '${layer.layer}'`);
     }
     seen.add(layer.layer);
-    const override = configLayerSelection(workflowId, layer);
-    if (override !== undefined) out[layer.layer] = override;
+    out[layer.layer] = layer;
   }
   return out;
 }
@@ -149,10 +152,12 @@ export function resolveSelectionForDispatch(input: ResolveSelectionInput): Selec
   const stepId = input.step.id as unknown as string;
   const applied: AppliedEntry[] = [];
   let resolved: ResolvedSelection = { skills: [], invocation_options: {} };
-  const configSelections = configSelectionsBySource(workflowId, input.configLayers ?? []);
+  const configLayers = configLayersBySource(input.configLayers ?? []);
 
   for (const source of PRE_WORKFLOW_CONFIG_SOURCES) {
-    const override = configSelections[source];
+    const layer = configLayers[source];
+    if (layer === undefined) continue;
+    const override = configLayerSelection(workflowId, layer, resolved);
     if (override === undefined) continue;
     resolved = pushIfContributing(
       applied,
@@ -191,7 +196,11 @@ export function resolveSelectionForDispatch(input: ResolveSelectionInput): Selec
     );
   }
 
-  const invocationOverride = configSelections.invocation;
+  const invocationLayer = configLayers.invocation;
+  const invocationOverride =
+    invocationLayer === undefined
+      ? undefined
+      : configLayerSelection(workflowId, invocationLayer, resolved);
   if (invocationOverride !== undefined) {
     resolved = pushIfContributing(
       applied,

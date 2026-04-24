@@ -137,6 +137,9 @@ schema_version: 1
 defaults:
   selection:
     effort: high
+    skills:
+      mode: append
+      skills: [api-design-patterns]
     invocation_options:
       shared: project-default
       projectDefault: true
@@ -189,7 +192,11 @@ circuits:
     const expected: ResolvedSelection = {
       model: { provider: 'openai', model: 'gpt-5.4' },
       effort: 'high',
-      skills: [SkillId.parse('tdd'), SkillId.parse('react-doctor')],
+      skills: [
+        SkillId.parse('tdd'),
+        SkillId.parse('api-design-patterns'),
+        SkillId.parse('react-doctor'),
+      ],
       invocation_options: {
         shared: 'project-circuit',
         userOnly: true,

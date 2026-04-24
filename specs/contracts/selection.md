@@ -70,13 +70,16 @@ Closes Codex LOW #12 (enforcement-location claim drift).
   may appear (disambiguated by id — see SEL-I7). **Config-layer pre-
   compose.** `Config.defaults.selection` and
   `Config.circuits[workflow_id].selection` live inside the same config
-  file; they are pre-composed (right-biased by specificity: circuit-
-  specific wins over defaults) BEFORE contributing to the applied chain,
-  so a single config layer emits at most one entry per its source label
-  (`default`, `user-global`, `project`, `invocation`). Intra-layer
-  provenance within a config file is therefore lost at the applied-chain
-  granularity; that loss is the v0.1 tradeoff for keeping SEL-I7 simple
-  (closes Codex HIGH #6). Phase 2 property
+  file; they are pre-composed (defaults first, circuit-specific second)
+  BEFORE contributing to the applied chain, so a single config layer emits
+  at most one entry per its source label (`default`, `user-global`,
+  `project`, `invocation`). Skill operations are normalized to the
+  effective skill set for that config source when needed, so
+  `defaults.selection.skills = replace` plus
+  `circuits[workflow_id].selection.skills = append` preserves both
+  contributions. Intra-layer provenance within a config file is therefore
+  lost at the applied-chain granularity; that loss is the v0.1 tradeoff for
+  keeping SEL-I7 simple (closes Codex HIGH #6). Phase 2 property
   `selection.prop.config_layer_precompose_is_right_biased` validates the
   merge semantics at the composition layer. Enforced at
   `src/schemas/selection-policy.ts`.
@@ -383,8 +386,8 @@ Phase 2 harness task where noted below.
   `SELECTION_PRECEDENCE`; the middle three (workflow, phase, step) are
   in the workflow schema. **Intra-layer pre-compose (SEL-I1 scope
   caveat).** Within one config layer, `defaults.selection` and
-  `circuits[workflow_id].selection` pre-compose right-biased by
-  specificity BEFORE entering the applied chain. **Codex HIGH #5
+  `circuits[workflow_id].selection` pre-compose defaults-first /
+  circuit-specific-second BEFORE entering the applied chain. **Codex HIGH #5
   fold-in:** the legacy `CircuitOverride.skills: string[]` channel is
   removed (it accepted arbitrary non-`SkillId` strings); per-circuit
   skill contribution flows through `CircuitOverride.selection.skills`

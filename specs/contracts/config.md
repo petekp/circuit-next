@@ -174,7 +174,10 @@ The runtime MUST reject any `Config`, `LayeredConfig`, or
 
 - A `Config` is produced by parsing one layer's on-disk YAML (or
   in-memory invocation argv projection) into an object and passing it
-  to `Config.safeParse`.
+  to `Config.safeParse`. Slice 86 product discovery currently loads only
+  the user-global and current-working-directory project files; default and
+  invocation layers are schema/resolver-supported inputs for callers that
+  inject them directly until later product wiring lands.
 - A `LayeredConfig` is produced by wrapping a parsed `Config` with its
   layer identity and (optionally) its source path, then passing the
   wrapper to `LayeredConfig.safeParse`.
@@ -293,8 +296,11 @@ After a `CircuitOverride` is accepted:
   step < invocation`) is sourced from `Config.defaults.selection`
   in the `default` `ConfigLayer`; the `user-global` / `project` /
   `invocation` selection layers are sourced from
-  `Config.defaults.selection` in the matching `ConfigLayer`. This
-  cross-contract mapping between ConfigLayer and SelectionLayer is
+  `Config.defaults.selection` in the matching `ConfigLayer`. The resolver
+  accepts all four config-layer identities when supplied; the current CLI
+  product path discovers only user-global/project YAML and does not yet
+  expose plugin default discovery or per-command invocation selection flags.
+  This cross-contract mapping between ConfigLayer and SelectionLayer is
   documented in `specs/domain.md#configuration-vocabulary`. Slice 85
   adds the runtime selection resolver for already-loaded layers; Slice
   86 wires the product CLI to produce user-global/project layers from

@@ -113,13 +113,18 @@ term, propose it here in a new commit before using it elsewhere.
 - **Config layer** `[draft]` — One of `default`, `user-global` (at
   `~/.config/circuit-next/config.yaml`), `project` (at
   `./.circuit/config.yaml` from the current working directory),
-  `invocation` (per-command
-  overrides).
+  `invocation` (per-command overrides). Slice 86 wires the current
+  product CLI to discover `user-global` and `project`; `default` and
+  `invocation` are schema/resolver-supported seams until a later slice
+  wires plugin default discovery and public per-command selection flags.
 
 - **Selection layer** `[draft]` — The full precedence chain for model /
   effort / skills selection: `default < user-global < project < workflow
   < phase < step < invocation`. Selection layers are a superset of config
-  layers; they include workflow/phase/step-authored defaults.
+  layers; they include workflow/phase/step-authored defaults. The resolver
+  can fold all seven when supplied by a caller; the current CLI product
+  path supplies workflow/phase/step from the workflow fixture plus
+  user-global/project config files.
 
 - **Selection override** `[draft]` — A partial selection record that a
   layer contributes. Fields: `model` (provider-scoped), `effort`

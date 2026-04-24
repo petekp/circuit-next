@@ -12,6 +12,17 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 88 P2-MODEL-EFFORT ARC-CLOSE** (this commit, Ratchet-Advance) -
+  closed the model/effort arc with two composition-review prong files and
+  a new `ARC_CLOSE_GATES` entry. The fold-ins fixed same-config skill
+  composition so `defaults.selection.skills` and
+  `circuits[workflow_id].selection.skills` compose in order inside one
+  config file instead of the circuit operation dropping the default
+  operation. The docs and artifact metadata now state the live CLI only
+  discovers user-global/project config files; default config discovery and
+  public per-command invocation selection flags remain future product
+  wiring.
+
 - **Slice 87 ADAPTER-MODEL-EFFORT** (this commit, Ratchet-Advance) -
   wired resolved model/effort choices into the built-in adapter argv
   builders. The Claude adapter now passes Anthropic model ids with

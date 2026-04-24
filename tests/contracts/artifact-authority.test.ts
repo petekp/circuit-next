@@ -561,7 +561,7 @@ describe('specs/artifacts.json — v2 trust_boundary prose pinned (ADR-0005, Cod
 
   const EXPECTED_TRUST_BOUNDARIES: Record<string, string> = {
     'selection.override':
-      'operator-local at user-global/project/invocation layers; plugin-author-signed at the defaults layer; engine validates .strict() key closure and ghost-provenance rejection at parse time. Composition produces selection.resolution (separate artifact).',
+      'operator-local at user-global/project layers and future invocation-layer projection; plugin-author-signed at the defaults layer; engine validates .strict() key closure and ghost-provenance rejection at parse time. Composition produces selection.resolution (separate artifact).',
     'adapter.registry':
       'operator-local at user-global/project/invocation layers; plugin-author-signed at the defaults layer; engine validates reserved-name disjointness, own-property closure, and registry-key/descriptor-name parity at parse time.',
     'adapter.reference':

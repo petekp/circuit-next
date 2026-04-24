@@ -1,4 +1,4 @@
-<!-- current_slice: 87 -->
+<!-- current_slice: 88 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -9,11 +9,10 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 87
-- **current_arc:** P2-MODEL-EFFORT (Slice 87 wires resolved model/effort
-  into the built-in adapter argv builders with provider/effort fail-closed
-  checks; arc-close composition review is next before new privileged
-  runtime work)
+- **current_slice:** 88
+- **current_arc:** P2-MODEL-EFFORT closed (Slice 88 landed the arc-close
+  composition review, folded the same-config skill composition fix, and
+  narrowed default/invocation config wording to match the live CLI path)
 - **current_phase:** Phase 2 — Implementation (continuing)
 
 Chronicle (relocated narrative history — non-authoritative; see
@@ -129,3 +128,10 @@ spawn-argv boundary check. Provider mismatches and unsupported built-in
 effort tiers fail before subprocess spawn. The remaining next step is an
 arc-close composition review before opening another privileged runtime
 slice.*
+Slice 88 closed the P2-MODEL-EFFORT arc with two composition-review
+prong files. The ceremony fixed one real resolver bug: defaults and
+per-workflow skill operations inside the same config file now compose
+instead of dropping the default contribution. It also narrowed the docs
+and artifact metadata so they say the current CLI discovers user-global
+and project config files; plugin defaults and per-command invocation
+selection remain future product wiring.*

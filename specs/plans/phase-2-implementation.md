@@ -143,7 +143,7 @@ wording list).
 | P2-2 | Real agent dispatch | active — red | `src/runtime/adapters/agent.ts` + `tests/runner/agent-dispatch-roundtrip.test.ts` with durable dispatch transcript (adapter id, request/receipt/result hashes, reducer+writer consumption); CI-skip requires `tests/fixtures/agent-smoke/last-run.json` with commit-ancestor audit. |
 | P2-3 | Plugin command registration | active — red | `checkPluginCommandClosure` + `tests/contracts/plugin-surface.test.ts` + P2.11 invoke-evidence file at `specs/reviews/p2-11-invoke-evidence.md`. |
 | P2-4 | Session hooks + continuity lifecycle | active — red | `.claude/hooks/SessionStart.sh` + `.claude/hooks/SessionEnd.sh` + `checkSessionHooksPresent` + `tests/runner/continuity-lifecycle.test.ts` (create → persist → resume → clear). |
-| P2-5 | P2-MODEL-EFFORT landed | active — satisfied | `src/runtime/selection-resolver.ts` + `tests/contracts/workflow-model-effort.test.ts` landed the runtime resolver/evidence seam at Slice 85. `src/runtime/config-loader.ts` + `tests/runner/config-loader.test.ts` landed canonical user-global plus current-working-directory project YAML loading into the product CLI at Slice 86. `src/runtime/adapters/agent.ts` + `src/runtime/adapters/codex.ts` landed built-in adapter model/effort argv binding at Slice 87. Provider enum parse guard rejects unknown providers while model ids remain open strings per SEL-I4; adapters fail closed on incompatible providers or unsupported built-in effort tiers, and Codex's single `-c` exception is final-argv allowlisted to `model_reasoning_effort`. Slice spec incorporated by reference from `specs/plans/phase-1-close-revised.md §Slice P2-MODEL-EFFORT`. |
+| P2-5 | P2-MODEL-EFFORT landed | active — satisfied | `src/runtime/selection-resolver.ts` + `tests/contracts/workflow-model-effort.test.ts` landed the runtime resolver/evidence seam at Slice 85; Slice 88's composition-review fold-in fixed same-config defaults-plus-circuit skill composition. `src/runtime/config-loader.ts` + `tests/runner/config-loader.test.ts` landed canonical user-global plus current-working-directory project YAML loading into the product CLI at Slice 86; default and invocation config layers are resolver-supported injection seams, not public CLI-discovered layers yet. `src/runtime/adapters/agent.ts` + `src/runtime/adapters/codex.ts` landed built-in adapter model/effort argv binding at Slice 87. Provider enum parse guard rejects unknown providers while model ids remain open strings per SEL-I4; adapters fail closed on incompatible providers or unsupported built-in effort tiers, and Codex's single `-c` exception is final-argv allowlisted to `model_reasoning_effort`. Slice spec incorporated by reference from `specs/plans/phase-1-close-revised.md §Slice P2-MODEL-EFFORT`. |
 | P2-6 | Spine policy coverage (full-spine `explore`) | active — red | `specs/contracts/explore.md` canonical phase set {Frame, Analyze, Synthesize, Review, Close} + `checkSpineCoverage` + `tests/contracts/spine-coverage.test.ts`. |
 | P2-7 | Container isolation | **re-deferred by ADR-0007** | `checkPhase2SliceIsolationCitation` (interim, added in P2.1 ceremony commit) + CLAUDE.md §Phase discipline §Phase 2 + §Hard invariants #1–#4 (policy-layer, unchanged). Nine named trigger conditions at ADR-0007 §Decision.1 CC#P2-7 re-open the gate. |
 | P2-8 | Close review (final blocking gate) | active — red | `specs/reviews/phase-2-close-matrix.md` + `specs/reviews/phase-2-close-codex.md` + `specs/reviews/phase-2-operator-product-check.md` + `checkPhase2CloseMatrix`; fails closed if any prior CC is red or supported only by LLM stand-in evidence. |
@@ -789,21 +789,25 @@ commit time. Expect re-ordering as earlier slices expose surface.
 - **P2-MODEL-EFFORT — explicit model + effort assignment (runtime
   resolver landed at Slice 85; config loading landed at Slice 86;
   adapter handling landed at Slice 87; arc-close composition review
-  next before any new privileged runtime slice).**
+  closed at Slice 88).**
   Reserved at commit `b538979` and specified in
   `specs/plans/phase-1-close-revised.md §Slice P2-MODEL-EFFORT`.
   Slice 85 landed the selection resolver and dispatch evidence proof for
   already-supplied default/user-global/project/workflow/phase/step/
   invocation layers. Slice 86 then wired the live CLI to discover and
   validate canonical user-global plus current-working-directory project
-  YAML config files into those layers. Slice 87 then taught the built-in
+  YAML config files into those layers; plugin default config discovery and
+  public per-command invocation selection flags remain future product
+  wiring. Slice 87 then taught the built-in
   adapters to pass compatible model/effort selections into their CLI argv
   and to fail closed on incompatible providers or unsupported built-in
   effort tiers. Codex's `-c` use is constrained by a final spawn-argv
   boundary check that allows only `model_reasoning_effort`. The stale
   "unknown model id parse failure" wording is
   superseded by SEL-I4: providers are closed at parse time; model ids are
-  open and adapter-owned.
+  open and adapter-owned. Slice 88 closed the arc after folding the
+  same-config skill composition fix and the product-wiring wording
+  correction surfaced by the composition review.
 - **P2.9 — Second workflow (closed 2026-04-24 at Slice 82; follow-on
   closed at Slice 83)** — landed the audit-only `review` workflow as the
   second registered workflow. Slice 83 then closed the named follow-on:
