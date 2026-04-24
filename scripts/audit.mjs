@@ -875,8 +875,15 @@ export function parseTierClaims(tierPath) {
     planned_slice: row.planned_slice ?? '',
     rationale: row.rationale ?? '',
   }));
+  const seenClaimIds = new Set();
   for (const [index, row] of rows.entries()) {
     if (!row.claim_id) issues.push(`row ${index + 1}: missing claim_id`);
+    if (row.claim_id) {
+      if (seenClaimIds.has(row.claim_id)) {
+        issues.push(`row ${index + 1}: duplicate claim_id ${row.claim_id}`);
+      }
+      seenClaimIds.add(row.claim_id);
+    }
   }
   return { ok: issues.length === 0, issues, rows };
 }
@@ -946,6 +953,144 @@ export function checkTierOrphanClaims(rootDir = REPO_ROOT) {
     return { level: 'red', detail: `${summary}; ${findings.join('; ')}` };
   }
   return { level: 'green', detail: summary };
+}
+
+// Slice 95 — ADR-0007 §4c inherited product ratchet bindings.
+// The close matrix is supposed to consume these ratchets as already-bound
+// evidence surfaces, not rediscover stale "planned at Slice 27c/27d" TIER rows during
+// final Phase 2 close. Keep this map intentionally small and explicit: these
+// are the inherited product ratchets whose backing paths already exist.
+export const ADR0007_INHERITED_PRODUCT_RATCHET_IDS = [
+  'runner_smoke_present',
+  'workflow_fixture_runs',
+  'event_log_round_trip',
+  'snapshot_derived_from_log',
+  'manifest_snapshot_byte_match',
+  'status_docs_current',
+  'tier_claims_current',
+];
+
+export const INHERITED_PRODUCT_RATCHET_TIER_BINDINGS = [
+  {
+    ratchet_id: 'runner_smoke_present',
+    tier_claim_id: 'runner_smoke',
+    evidence_paths: ['tests/runner/dogfood-smoke.test.ts'],
+  },
+  {
+    ratchet_id: 'workflow_fixture_runs',
+    tier_claim_id: 'workflow_fixture_runs',
+    evidence_paths: [
+      'tests/contracts/slice-27d-dogfood-run-0.test.ts',
+      'tests/runner/explore-e2e-parity.test.ts',
+    ],
+  },
+  {
+    ratchet_id: 'event_log_round_trip',
+    tier_claim_id: 'event_log_round_trip',
+    evidence_paths: [
+      'tests/contracts/slice-27c-runtime-boundary.test.ts',
+      'tests/unit/runtime/event-log-round-trip.test.ts',
+    ],
+  },
+  {
+    ratchet_id: 'snapshot_derived_from_log',
+    tier_claim_id: 'snapshot_derived_from_log',
+    evidence_paths: ['tests/unit/runtime/event-log-round-trip.test.ts'],
+  },
+  {
+    ratchet_id: 'manifest_snapshot_byte_match',
+    tier_claim_id: 'manifest_snapshot_byte_match',
+    evidence_paths: [
+      'tests/unit/runtime/event-log-round-trip.test.ts',
+      'tests/runner/dogfood-smoke.test.ts',
+    ],
+  },
+  {
+    ratchet_id: 'status_docs_current',
+    tier_claim_id: 'status_docs_current',
+    evidence_paths: [
+      'scripts/audit.mjs',
+      'tests/contracts/status-epoch-ratchet-floor.test.ts',
+      'README.md',
+      'PROJECT_STATE.md',
+      'TIER.md',
+    ],
+  },
+  {
+    ratchet_id: 'tier_claims_current',
+    tier_claim_id: 'tier_orphan_claim_rejection',
+    evidence_paths: ['scripts/audit.mjs', 'tests/contracts/governance-reform.test.ts', 'TIER.md'],
+  },
+];
+
+export function checkInheritedProductRatchetBindings(rootDir = REPO_ROOT) {
+  const parsed = parseTierClaims(join(rootDir, 'TIER.md'));
+  if (!parsed.ok) {
+    return { level: 'red', detail: `TIER.md malformed: ${parsed.issues.join('; ')}` };
+  }
+
+  const rowsById = new Map(parsed.rows.map((row) => [row.claim_id, row]));
+  const findings = [];
+  const expectedRatchets = new Set(ADR0007_INHERITED_PRODUCT_RATCHET_IDS);
+  const actualRatchets = new Set();
+
+  for (const binding of INHERITED_PRODUCT_RATCHET_TIER_BINDINGS) {
+    if (actualRatchets.has(binding.ratchet_id)) {
+      findings.push(`${binding.ratchet_id}: duplicate inherited ratchet binding`);
+    }
+    actualRatchets.add(binding.ratchet_id);
+  }
+  for (const expected of expectedRatchets) {
+    if (!actualRatchets.has(expected)) {
+      findings.push(`${expected}: missing inherited ratchet binding`);
+    }
+  }
+  for (const actual of actualRatchets) {
+    if (!expectedRatchets.has(actual)) {
+      findings.push(`${actual}: unexpected inherited ratchet binding`);
+    }
+  }
+
+  for (const binding of INHERITED_PRODUCT_RATCHET_TIER_BINDINGS) {
+    const row = rowsById.get(binding.tier_claim_id);
+    if (!row) {
+      findings.push(`${binding.ratchet_id}: missing TIER row ${binding.tier_claim_id}`);
+      continue;
+    }
+    if (row.status !== 'enforced') {
+      findings.push(
+        `${binding.ratchet_id}: TIER row ${binding.tier_claim_id} status is "${row.status}", expected enforced`,
+      );
+      continue;
+    }
+    if (row.planned_slice.trim().length > 0) {
+      findings.push(
+        `${binding.ratchet_id}: TIER row ${binding.tier_claim_id} still carries planned_slice ${row.planned_slice}`,
+      );
+    }
+    const actualPaths = new Set(row.file_paths);
+    for (const relPath of binding.evidence_paths) {
+      if (!actualPaths.has(relPath)) {
+        findings.push(
+          `${binding.ratchet_id}: TIER row ${binding.tier_claim_id} missing required evidence path ${relPath}`,
+        );
+      } else if (!existsSync(join(rootDir, relPath))) {
+        findings.push(`${binding.ratchet_id}: required evidence path does not exist — ${relPath}`);
+      }
+    }
+  }
+
+  if (findings.length > 0) {
+    return {
+      level: 'red',
+      detail: `${findings.length} inherited product ratchet binding issue(s): ${findings.join('; ')}`,
+    };
+  }
+
+  return {
+    level: 'green',
+    detail: `${INHERITED_PRODUCT_RATCHET_TIER_BINDINGS.length} inherited Phase 2 product ratchet(s) have enforced TIER bindings and referenced evidence surfaces`,
+  };
 }
 
 const ARTIFACT_CLASS_CAPS = {
@@ -5757,6 +5902,15 @@ function main() {
     level: tierClaims.level,
     check: 'TIER orphan-claim rejection',
     detail: tierClaims.detail,
+  });
+
+  // Check 13a: inherited product ratchet TIER bindings (Slice 95 — ADR-0007 §4c).
+  const inheritedRatchets = checkInheritedProductRatchetBindings();
+  counters[inheritedRatchets.level]++;
+  findings.push({
+    level: inheritedRatchets.level,
+    check: 'Inherited product ratchet bindings (ADR-0007 §4c)',
+    detail: inheritedRatchets.detail,
   });
 
   // Check 14: Adversarial yield ledger presence (Slice 25b — D10 evidence source).

@@ -817,6 +817,25 @@ slices). A red inherited ratchet at close blocks Phase 2 close
 independently of CC#P2-1..8 status; CC#P2-8 close-matrix audit check
 includes a row for each inherited ratchet and fails if any is red.
 
+**Slice 95 binding clarification.** The inherited ratchets below now have
+explicit TIER evidence-surface bindings enforced by
+`checkInheritedProductRatchetBindings` in `scripts/audit.mjs` and
+`tests/contracts/inherited-ratchet-bindings.test.ts`. This is a
+pre-close evidence cleanup: it does not change the close criteria, it makes
+the evidence rows consumable by the CC#P2-8 matrix. The table binds the
+ratchets to their named audit/test surfaces; it does not claim that every
+path in the table is independently sufficient proof.
+
+| inherited ratchet | TIER row | required evidence binding |
+|---|---|---|
+| `runner_smoke_present` | `runner_smoke` | `tests/runner/dogfood-smoke.test.ts` |
+| `workflow_fixture_runs` | `workflow_fixture_runs` | `tests/contracts/slice-27d-dogfood-run-0.test.ts`; `tests/runner/explore-e2e-parity.test.ts` |
+| `event_log_round_trip` | `event_log_round_trip` | `tests/contracts/slice-27c-runtime-boundary.test.ts`; `tests/unit/runtime/event-log-round-trip.test.ts` |
+| `snapshot_derived_from_log` | `snapshot_derived_from_log` | `tests/unit/runtime/event-log-round-trip.test.ts` |
+| `manifest_snapshot_byte_match` | `manifest_snapshot_byte_match` | `tests/unit/runtime/event-log-round-trip.test.ts`; `tests/runner/dogfood-smoke.test.ts` |
+| `status_docs_current` | `status_docs_current` | `scripts/audit.mjs`; `tests/contracts/status-epoch-ratchet-floor.test.ts`; `README.md`; `PROJECT_STATE.md`; `TIER.md` |
+| `tier_claims_current` | `tier_orphan_claim_rejection` | `scripts/audit.mjs`; `tests/contracts/governance-reform.test.ts`; `TIER.md` |
+
 ### 5. Reopen basis — explicit one-time exception (re-authenticated independently)
 
 This ADR does **not** cite ADR-0006 as precedent, pattern, template,

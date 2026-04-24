@@ -12,6 +12,16 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 95 INHERITED RATCHET BINDINGS** (this commit,
+  Ratchet-Advance) - updated the five stale product-ratchet rows in
+  `TIER.md` that still pointed at old planned slices even though the
+  evidence surfaces now exist. Added `checkInheritedProductRatchetBindings`
+  and a contract test so the Phase 2 close review can consume explicit
+  evidence-surface bindings instead of rediscovering this drift at the end;
+  the fold-in also rejects duplicate claim ids. AGENT_SMOKE remains pending
+  fresh explicit operator approval for external Claude disclosure and was not
+  run in this slice.
+
 - **Slice 94 CODEX SMOKE FINGERPRINT REFRESH** (this commit,
   Ratchet-Advance) - refreshed the CODEX_SMOKE fingerprint after the
   Slice 93 runtime surface changed and pinned the live smoke harness to

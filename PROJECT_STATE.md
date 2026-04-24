@@ -1,4 +1,4 @@
-<!-- current_slice: 94 -->
+<!-- current_slice: 95 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -9,10 +9,10 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 94
-- **current_arc:** Phase 2 close-evidence cleanup in progress: CODEX_SMOKE
-  fingerprint refreshed; AGENT_SMOKE promotion remains pending explicit
-  operator approval for external Claude disclosure
+- **current_slice:** 95
+- **current_arc:** Phase 2 close-evidence cleanup in progress: inherited
+  product-ratchet bindings refreshed; AGENT_SMOKE promotion remains pending
+  explicit operator approval for external Claude disclosure
 - **current_phase:** Phase 2 — Implementation (continuing)
 
 Chronicle (relocated narrative history — non-authoritative; see
@@ -170,3 +170,8 @@ model so the evidence path does not inherit an unavailable personal default.
 The AGENT_SMOKE promotion was not run because it would send repository-derived
 runtime context to an external Claude service; it remains pending fresh
 explicit operator approval for that disclosure.*
+Slice 95 bound the inherited product-ratchet rows in `TIER.md` to referenced
+audit/test evidence surfaces, and added an audit guard so those rows cannot
+drift back to stale planned-slice placeholders or duplicate claim rows. This
+is Phase 2 close-evidence cleanup; it does not run AGENT_SMOKE or change
+product runtime behavior.*

@@ -95,6 +95,13 @@ export function parseTierClaims(tierPath: string): {
   rows: TierClaimRow[];
 };
 export function checkTierOrphanClaims(rootDir?: string): AuditCheckResult;
+export const ADR0007_INHERITED_PRODUCT_RATCHET_IDS: string[];
+export const INHERITED_PRODUCT_RATCHET_TIER_BINDINGS: Array<{
+  ratchet_id: string;
+  tier_claim_id: string;
+  evidence_paths: string[];
+}>;
+export function checkInheritedProductRatchetBindings(rootDir?: string): AuditCheckResult;
 export function checkAdversarialYieldLedger(rootDir?: string): AuditCheckResult;
 
 // Slice 26a — ADR-0003 Addendum B persisted-wrapper binding guard.
