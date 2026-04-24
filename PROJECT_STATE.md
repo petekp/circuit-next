@@ -1,4 +1,4 @@
-<!-- current_slice: 80 -->
+<!-- current_slice: 81 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -9,10 +9,10 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 80
-- **current_arc:** P2.9 second workflow (Slice 80 landed: the explicit
-  `/circuit:review` command and manifest entry; next planned slice is the
-  second-workflow generalization proof)
+- **current_slice:** 81
+- **current_arc:** P2.9 second workflow (Slice 81 landed: the
+  second-workflow generalization proof; next planned slice is arc-close
+  composition review and plan close)
 - **current_phase:** Phase 2 — Implementation (continuing)
 
 Chronicle (relocated narrative history — non-authoritative; see
@@ -86,3 +86,8 @@ the plugin manifest, and updated `/circuit:run` wording so it remains the
 default route to explore while review is available as a direct workflow
 command. The review command surfaces the current synthesis-writer caveat
 instead of claiming the default CLI path produces typed review verdicts.*
+Slice 81 recorded the P2.9 generalization proof. Four risk points are
+classified clean, and artifact-count balance is validated with the named
+follow-on for per-workflow synthesis-writer registration; no risk point is
+not-yet-validated. The next step is arc-close composition review and plan
+closure.*

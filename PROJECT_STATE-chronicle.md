@@ -12,6 +12,16 @@ record.*
 
 ## P2.9 Second Workflow Arc (opened after Slice 75)
 
+- **Slice 81 GENERALIZATION-PROOF** (this commit, Discovery) - recorded
+  the second-workflow parity proof at
+  `specs/reviews/p2-9-generalization-proof.md`. The report checks the
+  five plan-named generalization risks: canonical phase set, invariant
+  shape, plugin-command composability, and audit-rule kind-independence
+  are clean; artifact-count balance is validated with the declared
+  follow-on for per-workflow synthesis-writer registration. No risk is
+  not-yet-validated, so P2.9 can close with a bounded follow-on rather
+  than a narrowed claim.
+
 - **Slice 80 REVIEW-COMMAND** (this commit, Ratchet-Advance) - added the
   explicit `/circuit:review` command and registered it in the plugin
   manifest. The command invokes `npm run circuit:run -- review --goal ...`,
