@@ -12,6 +12,15 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 89 P2.10 EXPLORE BRIEF/ANALYSIS SCHEMAS** (this commit,
+  Ratchet-Advance) - started the artifact-schema set by giving
+  `explore.brief@v1` and `explore.analysis@v1` strict Zod schemas and
+  wiring the default runtime synthesis writer to emit those shapes on the
+  normal explore path. Artifact authority rows now bind those two artifacts
+  to `src/schemas/artifacts/explore.ts`. The dispatch-produced
+  `explore.synthesis` / `explore.review-verdict` artifacts and the close
+  aggregate `explore.result` remain P2.10 follow-ons.
+
 - **Slice 88 P2-MODEL-EFFORT ARC-CLOSE** (this commit, Ratchet-Advance) -
   closed the model/effort arc with two composition-review prong files and
   a new `ARC_CLOSE_GATES` entry. The fold-ins fixed same-config skill

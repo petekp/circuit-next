@@ -1,9 +1,9 @@
 ---
 contract: explore
 status: draft
-version: 0.3
-schema_source: .claude-plugin/skills/explore/circuit.json (fixture; no dedicated src/schemas/ file at v0.3 — explore is a workflow-specific contract, not a new domain contract. Artifact schemas authored at P2.10.)
-last_updated: 2026-04-21
+version: 0.4
+schema_source: .claude-plugin/skills/explore/circuit.json (fixture) + src/schemas/artifacts/explore.ts (explore.brief / explore.analysis; remaining explore artifacts still pending P2.10 follow-ons)
+last_updated: 2026-04-24
 depends_on: [workflow, phase, step, selection, rigor, lane, skill, adapter]
 codex_adversarial_review: specs/reviews/explore-md-v0.1-codex.md
 codex_adversarial_review_v0_2: specs/reviews/arc-slice-38-dispatch-granularity-adr-0008-codex.md
@@ -44,14 +44,20 @@ properties that become enforceable at later slices.
 
 ## Scope note (explicit)
 
-This is **not** a runtime-schema contract with its own `src/schemas/`
-file. The `explore` fixture is validated by the base `Workflow`
-schema (`src/schemas/workflow.ts`). This contract is the
-**workflow-specific** discipline layer over that base schema — it
-names one invariant (EXPLORE-I1) that the base schema cannot express
-(because it is workflow-kind-specific, not workflow-general), plus
-five artifact ids the workflow's phases emit, plus four property ids
-tracking deferred semantic guarantees for later-slice enforcement.
+The `explore` fixture is validated by the base `Workflow` schema
+(`src/schemas/workflow.ts`). This contract is the **workflow-specific**
+discipline layer over that base schema — it names one invariant
+(EXPLORE-I1) that the base schema cannot express (because it is
+workflow-kind-specific, not workflow-general), plus five artifact ids
+the workflow's phases emit, plus four property ids tracking deferred
+semantic guarantees for later-slice enforcement.
+
+Slice 89 starts P2.10 by adding runtime schemas for `explore.brief` and
+`explore.analysis` at `src/schemas/artifacts/explore.ts` and wiring the
+default runtime synthesis writer to produce those shapes. The
+dispatch-produced `explore.synthesis` / `explore.review-verdict` and
+close-phase `explore.result` shapes remain on the existing
+minimal/fallback path until their own schema-specific slices land.
 
 If future refactoring introduces a workflow-kind concept at the Zod
 layer (e.g., `kind: 'explore'` field), EXPLORE-I1 and the four

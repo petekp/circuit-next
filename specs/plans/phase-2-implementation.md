@@ -814,9 +814,11 @@ commit time. Expect re-ordering as earlier slices expose surface.
   the default review path now writes typed `review.result` through a
   narrow registered synthesis writer. This does not affect the P2 close-
   criteria table per ADR-0007 Addendum A.
-- **P2.10 — Artifact schema set** — at least the core artifact
-  schemas the target workflows emit (brief, analysis, synthesis,
-  result, verdict).
+- **P2.10 — Artifact schema set** — Slice 89 starts this by landing
+  strict schemas and default runtime writer coverage for `explore.brief`
+  and `explore.analysis`. Remaining target-workflow artifact schemas:
+  dispatch-produced `explore.synthesis`, `explore.review-verdict`, and
+  close-phase `explore.result`.
 - **P2.11 — Plugin-level skill wiring** — user-invocable skills that
   wrap `/circuit:<workflow>` commands so the plugin-user UX matches
   reference Circuit.

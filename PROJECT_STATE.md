@@ -1,4 +1,4 @@
-<!-- current_slice: 88 -->
+<!-- current_slice: 89 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -9,10 +9,10 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 88
-- **current_arc:** P2-MODEL-EFFORT closed (Slice 88 landed the arc-close
-  composition review, folded the same-config skill composition fix, and
-  narrowed default/invocation config wording to match the live CLI path)
+- **current_slice:** 89
+- **current_arc:** P2.10 artifact schema set started (Slice 89 binds
+  `explore.brief` and `explore.analysis` to strict schemas and the default
+  runtime writer; synthesis/review/result remain follow-ons)
 - **current_phase:** Phase 2 — Implementation (continuing)
 
 Chronicle (relocated narrative history — non-authoritative; see
@@ -135,3 +135,9 @@ instead of dropping the default contribution. It also narrowed the docs
 and artifact metadata so they say the current CLI discovers user-global
 and project config files; plugin defaults and per-command invocation
 selection remain future product wiring.*
+Slice 89 started P2.10 artifact schemas with the two deterministic
+orchestrator-produced explore artifacts. `explore.brief@v1` and
+`explore.analysis@v1` now have strict Zod schemas and the default runtime
+writer emits those shapes on the normal explore path. The dispatch-produced
+`explore.synthesis` / `explore.review-verdict` artifacts and the close-phase
+`explore.result` aggregate remain follow-on work.*

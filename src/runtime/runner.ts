@@ -12,6 +12,7 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { BuiltInAdapter, DispatchResolutionSource } from '../schemas/adapter.js';
+import { ExploreAnalysis, ExploreBrief } from '../schemas/artifacts/explore.js';
 import {
   ReviewDispatchResult,
   ReviewResult,
@@ -454,6 +455,8 @@ function isDispatchStep(step: Workflow['steps'][number]): step is DispatchWorkfl
   return step.kind === 'dispatch';
 }
 
+const EXPLORE_BRIEF_ARTIFACT_PATH = 'artifacts/brief.json';
+
 function reviewAnalyzeResultPath(
   workflow: Workflow,
   closeStep: SynthesisWriterInput['step'],
@@ -482,6 +485,45 @@ function reviewAnalyzeResultPath(
 function tryWriteRegisteredSynthesisArtifact(input: SynthesisWriterInput): boolean {
   const { runRoot, workflow, step, goal } = input;
   const schemaName = step.writes.artifact.schema;
+
+  if (schemaName === 'explore.brief@v1') {
+    const artifact = ExploreBrief.parse({
+      subject: goal,
+      task: goal,
+      success_condition: `Produce a useful explore result for: ${goal}`,
+    });
+    writeJsonArtifact(runRoot, step.writes.artifact.path, artifact);
+    return true;
+  }
+
+  if (schemaName === 'explore.analysis@v1') {
+    const briefPath = step.reads.find((path) => path === EXPLORE_BRIEF_ARTIFACT_PATH) as
+      | string
+      | undefined;
+    if (briefPath === undefined) {
+      throw new Error(
+        `explore.analysis@v1 requires step '${step.id}' to read ${EXPLORE_BRIEF_ARTIFACT_PATH}`,
+      );
+    }
+    const brief = ExploreBrief.parse(readJsonArtifact(runRoot, briefPath));
+    const artifact = ExploreAnalysis.parse({
+      subject: brief.subject,
+      aspects: [
+        {
+          name: 'task-framing',
+          summary: `Initial analysis for: ${brief.task}`,
+          evidence: [
+            {
+              source: briefPath,
+              summary: brief.success_condition,
+            },
+          ],
+        },
+      ],
+    });
+    writeJsonArtifact(runRoot, step.writes.artifact.path, artifact);
+    return true;
+  }
 
   if (schemaName === 'review.intake@v1') {
     writeJsonArtifact(runRoot, step.writes.artifact.path, { scope: goal });

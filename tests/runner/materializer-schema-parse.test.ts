@@ -379,4 +379,39 @@ describe('Slice 54 — materializer schema-parse (Codex H15)', () => {
     }
     expect(dispatchCompleted.verdict).toBe('reject');
   });
+
+  it('(e) orchestrator-only explore.analysis is not admitted through the dispatch artifact registry', async () => {
+    const { workflow, bytes } = loadMutatedFixture((raw) => {
+      addCanonicalArtifact(raw, 'explore.analysis@v1', 'artifacts/dispatch-analysis.json');
+    });
+    const runRoot = join(runRootBase, 'e-orchestrator-only-schema');
+    const outcome = await runDogfood({
+      runRoot,
+      workflow,
+      workflowBytes: bytes,
+      runId: RunId.parse('54000000-0000-0000-0000-000000000005'),
+      goal: 'slice 89 fold-in: dispatch cannot materialize orchestrator-only analysis',
+      rigor: 'standard',
+      lane: lane(),
+      now: deterministicNow(Date.UTC(2026, 3, 24, 16, 10, 0)),
+      dispatcher: dispatcherWith('{"verdict":"ok"}'),
+    });
+
+    expect(outcome.result.outcome).toBe('aborted');
+    expect(existsSync(join(runRoot, 'artifacts', 'dispatch-analysis.json'))).toBe(false);
+
+    const ge = outcome.events.find(
+      (e) => e.kind === 'gate.evaluated' && e.gate_kind === 'result_verdict',
+    );
+    if (ge?.kind !== 'gate.evaluated') throw new Error('expected gate.evaluated');
+    expect(ge.outcome).toBe('fail');
+    expect(ge.reason).toMatch(/explore\.analysis@v1/);
+    expect(ge.reason).toMatch(/not registered/);
+
+    const dispatchCompleted = outcome.events.find((e) => e.kind === 'dispatch.completed');
+    if (dispatchCompleted?.kind !== 'dispatch.completed') {
+      throw new Error('expected dispatch.completed');
+    }
+    expect(dispatchCompleted.verdict).toBe('ok');
+  });
 });

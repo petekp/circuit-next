@@ -28,15 +28,14 @@ import { z } from 'zod';
 // This keeps the failure-path event surface uniform across both
 // halves of the ADR-0008 §Decision.3a gate.
 //
-// Schema shape at v0.3. The registered schemas carry the minimal
-// shape `{ verdict: string }.passthrough()` that matches what Slice
-// 53's gate evaluator already requires (Codex MED 4 fold-in —
-// adapter prompts tightened to emit a raw JSON object with a
-// verdict field and no Markdown fences or prose). At v0.3 the
-// schema-parse is redundant with gate-eval for the canonical
-// explore + dogfood fixtures; the seam is live so a future P2.10
-// slice can widen to contract-bound real shapes without another
-// runtime amendment.
+// Schema shape at v0.3. Dispatch-produced explore artifacts still carry the
+// minimal `{ verdict: string }.passthrough()` shape that matches what Slice
+// 53's gate evaluator already requires. Slice 89 starts P2.10 with strict
+// orchestrator-produced explore.brief/explore.analysis schemas, but those
+// schemas intentionally stay OUT of this dispatch-materializer registry: the
+// explore contract binds them to orchestrator synthesis writers only. The
+// remaining explore dispatch and close artifacts stay on the minimal/fallback
+// path until their own schema-specific writers land.
 //
 // `dogfood-strict@v1` is a test-only strict shape used by
 // `tests/runner/materializer-schema-parse.test.ts` case (a)/(b) to
