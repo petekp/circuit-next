@@ -12,6 +12,19 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 102 DIRECT LAUNCHER, ROUTER, AND HOOK CLEANUP** (this commit,
+  Ratchet-Advance) - added `./bin/circuit-next` and `src/cli/circuit.ts` as
+  the first-class launcher path. Claude Code command bodies now tell Claude
+  to run `./bin/circuit-next ...` directly instead of
+  `npm run circuit:run ...` or `node dist/cli/dogfood.js ...`. The router now
+  treats issue-finding prompts like "find an issue in this codebase" as review
+  work instead of sending them to placeholder Explore, and continuity hook
+  guidance now points at `.circuit/bin/circuit-engine continuity ...`
+  commands instead of the unavailable `circuit:handoff` skill. `/circuit:review`
+  and `/circuit:explore` remain the best way to test a specific workflow
+  without the router; the router command still exists for free-form workflow
+  selection.
+
 - **Slice 101 PHASE 2 CLOSE PACKAGE** (this commit, Ratchet-Advance) -
   refreshed both live adapter smoke fingerprints, recorded the required Codex
   phase-close challenger pass, added the delegated operator product-direction

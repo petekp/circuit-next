@@ -19,9 +19,10 @@ metacharacters:
 
 ## Instructions
 
-1. **Confirm working directory.** The CLI is a project-local npm script, not
-   a globally installed binary. If the user invoked this command outside a
-   circuit-next repo checkout, tell them so and ask them to `cd` into one.
+1. **Confirm working directory.** The CLI is a repo-local launcher
+   (`./bin/circuit-next`), not a globally installed binary. If the user
+   invoked this command outside a circuit-next repo checkout, tell them so
+   and ask them to `cd` into one.
 2. **Construct the Bash invocation SAFELY.** Do NOT build the shell command
    by double-quoting the raw goal (double quotes expand `$VAR`, `` `cmd` ``,
    `$(cmd)`, and `\` sequences — a malicious or accidental goal could inject
@@ -46,19 +47,20 @@ metacharacters:
    and the full Bash command becomes:
 
    ```bash
-   npm run circuit:run -- explore --goal 'can'\''t go'
+   ./bin/circuit-next explore --goal 'can'\''t go'
    ```
 
    For a goal with no special characters (e.g., `find deprecated APIs`),
    the straightforward single-quoted form is sufficient:
 
    ```bash
-   npm run circuit:run -- explore --goal 'find deprecated APIs'
+   ./bin/circuit-next explore --goal 'find deprecated APIs'
    ```
 
-   Use the Bash tool to execute the constructed command. `npm run circuit:run`
-   expands to `tsc -p tsconfig.build.json && node dist/cli/dogfood.js` per
-   `package.json:21`.
+   Use the Bash tool to execute the constructed command. `./bin/circuit-next`
+   is the repo-local launcher for the compiled Circuit runtime; when the
+   compiled CLI is absent in a fresh checkout, it builds `dist/` with the
+   local TypeScript compiler before invoking `dist/cli/circuit.js`.
 3. **Parse the JSON output.** On success the CLI prints a JSON object with
    these fields on stdout: `run_id`, `run_root`, `outcome`
    (`complete` | `aborted`), `events_observed`, `result_path`.

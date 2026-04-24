@@ -28,6 +28,11 @@ const REVIEW_SIGNALS: Array<{ label: string; pattern: RegExp }> = [
     pattern: /\bcheck\s+(?:this\s+)?(?:change|diff|patch|commit|pr|pull\s+request)\b/i,
   },
   {
+    label: 'issue-finding request',
+    pattern:
+      /\b(?:find|surface|identify|spot|detect|look\s+for)\s+(?:an?\s+|any\s+)?(?:(?:issue|issues)(?!\s*(?:#|\d))|bug|bugs|defect|defects|problem|problems|regression|regressions|risk|risks)\b/i,
+  },
+  {
     label: 'risk-hunt request',
     pattern: /\blook\s+for\s+(?:bugs|issues|regressions|risks)\b/i,
   },

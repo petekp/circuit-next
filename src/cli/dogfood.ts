@@ -12,11 +12,11 @@ import { validateWorkflowKindPolicy } from '../runtime/policy/workflow-kind-poli
 import { classifyWorkflowTask } from '../runtime/router.js';
 import { type DispatchFn, type DogfoodInvocation, runDogfood } from '../runtime/runner.js';
 
-// Slice 27d CLI entrypoint (extended at Slice 43c to accept `explore`
-// alongside `dogfood-run-0`). Loads the named workflow fixture at
+// Runtime CLI entrypoint (grown from the Slice 27d dogfood proof and now
+// exposed through src/cli/circuit.ts + ./bin/circuit-next). Loads the named workflow fixture at
 // `.claude-plugin/skills/<workflow-name>/circuit.json`, parses it through
 // the production `Workflow` schema, calls `validateWorkflowKindPolicy`,
-// composes the runtime boundary via `runDogfood`, and prints the
+// composes the runtime boundary via the runner, and prints the
 // <run-root> path on success.
 //
 // Invocation-layer config remains narrow (`--goal`, `--rigor`, `--run-root`,
@@ -62,9 +62,9 @@ export interface CliMainOptions {
 
 function usage(): string {
   return [
-    'usage: circuit:run -- [workflow-name] --goal "<goal>" [--rigor <lite|standard|deep|tournament|autonomous>] [--run-root <path>] [--fixture <path>]',
+    'usage: circuit-next [workflow-name] --goal "<goal>" [--rigor <lite|standard|deep|tournament|autonomous>] [--run-root <path>] [--fixture <path>]',
     '',
-    'v0.1 scope: with an explicit workflow name, loads .claude-plugin/skills/<name>/circuit.json. Without one, classifies the free-form goal across the registered explore/review workflows and then composes the runtime boundary via runDogfood against the real `dispatchAgent`.',
+    'With an explicit workflow name, loads .claude-plugin/skills/<name>/circuit.json. Without one, classifies the free-form goal across the registered explore/review workflows and then composes the runtime boundary against the real `dispatchAgent`.',
     '',
     'Config: if present, loads ~/.config/circuit-next/config.yaml and ./.circuit/config.yaml from the current working directory into the selection resolver before dispatch.',
     '',
@@ -215,7 +215,7 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
 
   const lane: LaneDeclaration = {
     lane: 'ratchet-advance',
-    failure_mode: 'dogfood-run-0 invocation has no executable product proof',
+    failure_mode: 'circuit workflow invocation has no executable product proof',
     acceptance_evidence:
       'events.ndjson + state.json + manifest.snapshot.json + artifacts/result.json from clean checkout',
     alternate_framing:
@@ -269,7 +269,7 @@ if (invokedDirectly) {
   main(process.argv.slice(2)).then(
     (code) => process.exit(code),
     (err: unknown) => {
-      process.stderr.write(`error: ${(err as Error).message}\n`);
+      process.stderr.write(`error: ${err instanceof Error ? err.message : String(err)}\n`);
       process.exit(1);
     },
   );

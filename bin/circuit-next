@@ -1,0 +1,39 @@
+#!/usr/bin/env node
+import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const binDir = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(binDir, '..');
+const cliPath = resolve(repoRoot, 'dist/cli/circuit.js');
+
+if (!existsSync(cliPath)) {
+  const tscPath = resolve(repoRoot, 'node_modules/.bin/tsc');
+  if (!existsSync(tscPath)) {
+    process.stderr.write(
+      `error: compiled CLI is missing at ${cliPath}, and TypeScript is not installed at ${tscPath}. Run npm install, then retry.\n`,
+    );
+    process.exit(1);
+  }
+  const result = spawnSync(tscPath, ['-p', resolve(repoRoot, 'tsconfig.build.json')], {
+    cwd: repoRoot,
+    stdio: 'inherit',
+  });
+  if (result.error) {
+    process.stderr.write(`error: failed to build compiled CLI: ${result.error.message}\n`);
+    process.exit(1);
+  }
+  if (result.status !== 0) {
+    process.exit(result.status ?? 1);
+  }
+}
+
+const { main } = await import(pathToFileURL(cliPath).href);
+main(process.argv.slice(2)).then(
+  (code) => process.exit(code),
+  (err) => {
+    process.stderr.write(`error: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.exit(1);
+  },
+);

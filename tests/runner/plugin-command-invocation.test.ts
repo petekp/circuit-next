@@ -51,19 +51,19 @@ function extractBashBlocks(body: string): string[] {
 
 // Does ANY fenced bash block in the body contain an executable workflow
 // invocation with the --goal flag? "Executable" means the workflow appears
-// as the CLI positional token after `npm run circuit:run --` or after
-// `node dist/cli/dogfood.js`, AND the same line has `--goal `. Prose
+// as the CLI positional token after `./bin/circuit-next` or after
+// `node dist/cli/circuit.js`, AND the same line has `--goal `. Prose
 // mentions, goal text, or negated ("do not run …") text DO NOT satisfy.
 function hasExecutableWorkflowInvocation(body: string, workflow: string): boolean {
   const blocks = extractBashBlocks(body);
   const workflowPattern = workflow.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const npmInvocation = new RegExp(`^\\s*npm run circuit:run -- ${workflowPattern}(?:\\s|$)`);
+  const binInvocation = new RegExp(`^\\s*\\.\\/bin\\/circuit-next ${workflowPattern}(?:\\s|$)`);
   const nodeInvocation = new RegExp(
-    `^\\s*node dist\\/cli\\/dogfood\\.js ${workflowPattern}(?:\\s|$)`,
+    `^\\s*node dist\\/cli\\/circuit\\.js ${workflowPattern}(?:\\s|$)`,
   );
   for (const block of blocks) {
     for (const line of block.split('\n')) {
-      const hasCli = npmInvocation.test(line) || nodeInvocation.test(line);
+      const hasCli = binInvocation.test(line) || nodeInvocation.test(line);
       const hasGoal = /--goal\s+/.test(line);
       if (hasCli && hasGoal) return true;
     }
@@ -81,11 +81,11 @@ function hasExecutableReviewInvocation(body: string): boolean {
 
 function hasExecutableRouterInvocation(body: string): boolean {
   const blocks = extractBashBlocks(body);
-  const npmInvocation = /^\s*npm run circuit:run -- --goal(?:\s|$)/;
-  const nodeInvocation = /^\s*node dist\/cli\/dogfood\.js --goal(?:\s|$)/;
+  const binInvocation = /^\s*\.\/bin\/circuit-next --goal(?:\s|$)/;
+  const nodeInvocation = /^\s*node dist\/cli\/circuit\.js --goal(?:\s|$)/;
   for (const block of blocks) {
     for (const line of block.split('\n')) {
-      if (npmInvocation.test(line) || nodeInvocation.test(line)) return true;
+      if (binInvocation.test(line) || nodeInvocation.test(line)) return true;
     }
   }
   return false;
@@ -122,6 +122,14 @@ describe('plugin command invocation binding (Slice 56 / P2.11)', () => {
       expect(runBody).toMatch(/explore/);
       expect(runBody).toMatch(/review/);
     });
+
+    it('command bodies use the direct Circuit launcher, not the npm-script bridge or old dogfood path', () => {
+      for (const body of [exploreBody, runBody, reviewBody]) {
+        expect(body).toMatch(/\.\/bin\/circuit-next/);
+        expect(body).not.toMatch(/npm run circuit:run/);
+        expect(body).not.toMatch(/dist\/cli\/dogfood\.js/);
+      }
+    });
   });
 
   describe('HIGH 2 regression: --goal value is single-quoted (safe construction)', () => {
@@ -153,7 +161,7 @@ describe('plugin command invocation binding (Slice 56 / P2.11)', () => {
 
     it('all fenced bash invocation blocks in commands/run.md use single-quoted --goal values', () => {
       const blocks = extractBashBlocks(runBody).filter(
-        (b) => /(?:npm run circuit:run|node dist\/cli\/dogfood\.js)/.test(b) && /--goal/.test(b),
+        (b) => /(?:\.\/bin\/circuit-next|node dist\/cli\/circuit\.js)/.test(b) && /--goal/.test(b),
       );
       expect(blocks.length).toBeGreaterThan(0);
       for (const block of blocks) {
@@ -190,7 +198,7 @@ name: circuit:explore
 description: stub
 ---
 
-The CLI npm run circuit:run is documented somewhere else; this body does not invoke it.
+The CLI ./bin/circuit-next is documented somewhere else; this body does not invoke it.
 `;
       expect(hasExecutableExploreInvocation(proseOnly)).toBe(false);
     });
@@ -228,7 +236,7 @@ description: stub
 ---
 
 \`\`\`bash
-npm run circuit:run -- explore --goal 'review the latest change'
+./bin/circuit-next explore --goal 'review the latest change'
 \`\`\`
 `;
       expect(hasExecutableReviewInvocation(wrongWorkflow)).toBe(false);
@@ -241,7 +249,7 @@ description: stub
 ---
 
 \`\`\`bash
-npm run circuit:run -- explore --goal 'find deprecated APIs'
+./bin/circuit-next explore --goal 'find deprecated APIs'
 \`\`\`
 `;
       expect(hasExecutableExploreInvocation(goodBody)).toBe(true);
@@ -254,7 +262,7 @@ description: stub
 ---
 
 \`\`\`bash
-node dist/cli/dogfood.js explore --goal 'find deprecated APIs'
+node dist/cli/circuit.js explore --goal 'find deprecated APIs'
 \`\`\`
 `;
       expect(hasExecutableExploreInvocation(compiledJsBody)).toBe(true);

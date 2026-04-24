@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "description": "Claude Code plugin that automates common developer workflows with per-step configurability (model, effort, skills), grounded in evidence-based prompting research and contract-first + architecture-first + tiny-step-ratcheting methodology.",
+  "bin": {
+    "circuit-next": "./bin/circuit-next"
+  },
   "engines": {
     "node": ">=20.0.0"
   },
@@ -19,7 +22,7 @@
     "plan:lint": "node scripts/plan-lint.mjs",
     "inventory": "node scripts/inventory.mjs",
     "slice:doctor": "node scripts/doctor.mjs",
-    "circuit:run": "npm run build --silent && node dist/cli/dogfood.js"
+    "circuit:run": "./bin/circuit-next"
   },
   "dependencies": {
     "yaml": "^2.8.3",

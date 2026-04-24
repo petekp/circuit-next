@@ -1,4 +1,4 @@
-<!-- current_slice: 101 -->
+<!-- current_slice: 102 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -10,16 +10,19 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 101
-- **current_arc:** Phase 2 close package landed. The close claim now has
-  refreshed Claude and Codex live-smoke fingerprints, a real Claude Code
-  command proof, the required Codex challenger review, and a delegated
-  operator product-direction check for retroactive review. P2-1 uses
-  structured JSON as the accepted successor artifact shape; it does not claim old Markdown byte-for-byte compatibility. P2-3 live command proof is included
-  through a live Claude Code invocation of the inline `circuit` plugin. This
-  closes the first working workflow product spine, not full first-generation
-  Circuit parity; the next work is broader parity expansion across build,
-  repair, migrate, sweep, custom workflows, and clearer workflow configuration.
+- **current_slice:** 102
+- **current_arc:** Post-close direct-launcher cleanup landed. Claude Code
+  command bodies now invoke `./bin/circuit-next` directly instead of the
+  `npm run circuit:run` bridge or the old `dist/cli/dogfood.js` path. The
+  router now sends issue-finding prompts like `find an issue in this
+  codebase` to review, and continuity hook guidance names
+  `.circuit/bin/circuit-engine continuity ...` commands instead of the
+  unavailable `circuit:handoff` skill. P2-1 uses structured JSON as the accepted successor artifact shape; it does not claim old Markdown byte-for-byte compatibility. P2-3 live command proof is included
+  through a live Claude Code invocation of the inline `circuit` plugin. The
+  Phase 2 close claim remains narrow: first working workflow product spine
+  closed, not full first-generation Circuit parity. Next work is broader
+  parity expansion across build, repair, migrate, sweep, custom workflows,
+  and clearer workflow configuration.
 - **current_phase:** Phase 2 — Implementation (closed for the first working workflow; broader parity expansion planning next)
 
 Chronicle (relocated narrative history — non-authoritative; see

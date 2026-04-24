@@ -69,10 +69,11 @@ case "$SELECTION" in
     fi
     printf '>\n'
     printf '> **To pick back up:**\n'
-    printf '> - Run `/circuit:handoff resume` to inspect and continue the saved record.\n'
+    printf '> - Run `.circuit/bin/circuit-engine continuity resume` to inspect the saved record.\n'
     printf '> - Or invoke a Circuit workflow with a continuation arg (for example `/circuit:run continue`) -- Circuit auto-resumes from pending continuity.\n'
     printf '> - Or name a concrete new task via `/circuit:run <task>` -- Circuit treats that as override and starts fresh.\n'
-    printf '> - Or run `/circuit:handoff done` to clear pending continuity.\n'
+    printf '> - Or run `.circuit/bin/circuit-engine continuity clear` to clear pending continuity.\n'
+    printf '> - If the engine says the plugin root is not initialized, invoke any `/circuit:*` command once in this project, then retry the engine command.\n'
     printf '> Available: pending continuity\n'
     if [ -n "$WARNINGS" ]; then
       while IFS= read -r warning; do
@@ -85,7 +86,7 @@ case "$SELECTION" in
   current_run)
     printf '> **Circuit active run attached.**\n'
     printf '> No pending continuity record -- the indexed current_run is a fallback attachment, not saved handoff authority.\n'
-    printf '> Name your next task to continue, or use a Circuit handoff command to manage the attachment.\n'
+    printf '> Name your next task to continue, or inspect the attachment with `.circuit/bin/circuit-engine continuity status`.\n'
     printf '> Available: active run\n\n'
     ;;
 

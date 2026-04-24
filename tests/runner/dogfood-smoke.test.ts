@@ -20,7 +20,7 @@ import { type DispatchFn, runDogfood } from '../../src/runtime/runner.js';
 // step end-to-end via the dry-run agent adapter (per ADR-0001 Addendum B
 // §Phase 1.5 Close Criteria #4/#5/#6/#7). The test reads the production
 // dogfood-run-0 workflow fixture — the same JSON a user invocation of
-// `npm run circuit:run -- dogfood-run-0 ...` would load — and composes
+// `./bin/circuit-next dogfood-run-0 ...` would load — and composes
 // the runtime boundary via `runDogfood`.
 //
 // Two-run acceptance: same fixture, two different goals, two different
@@ -253,7 +253,7 @@ describe('Slice 27d — dogfood-run-0 runner smoke', () => {
       //
       // Slice 47b (Codex Slice 47a comprehensive review HIGH 1 fold-in) —
       // pre-Slice-47b this test shelled the CLI through `tsx` to
-      // exercise the same invocation `npm run circuit:run` uses, but
+      // exercise the same invocation `./bin/circuit-next` uses, but
       // tsx's parent-child IPC mechanism allocates `/tmp/tsx-<uid>/*.pipe`
       // and fails with `listen EPERM` in restricted-filesystem agent
       // sandboxes (Codex CLI sandbox; potentially CI workers under
@@ -262,19 +262,16 @@ describe('Slice 27d — dogfood-run-0 runner smoke', () => {
       // exercises every code path the subprocess version exercised
       // (argv parsing, fixture load, schema parse, runDogfood
       // composition, JSON serialization to stdout) without depending
-      // on the IPC pipe directory. The npm-script binding (`circuit:run
-      // → npm run build --silent && node dist/cli/dogfood.js` post-Slice-52,
-      // `circuit:run → tsx src/cli/dogfood.ts` pre-Slice-52) is separately
-      // pinned by the package.json contract test below so the binary path
-      // remains covered.
+      // on the IPC pipe directory. The launcher binding is separately pinned
+      // by the package.json contract test below so the binary path remains
+      // covered.
       //
       // Slice 52 (Codex H11 fold-in — Clean-Clone Reality Gate): the
-      // npm-script binding moved from tsx to compiled JS. tsx's same
+      // launcher binding moved from tsx to compiled JS. tsx's same
       // `/tmp/tsx-<uid>/*.pipe` EPERM failure class reproduces in
       // operator-local restricted-filesystem runs (not just sandboxed
-      // agents), so `circuit:run` now builds `dist/` via
-      // `tsconfig.build.json` and spawns `node dist/cli/dogfood.js`. The
-      // direct `main()` import strategy this test uses is unchanged —
+      // agents), so the real launcher now invokes `dist/cli/circuit.js`.
+      // The direct `main()` import strategy this test uses is unchanged —
       // `main()` is the same entrypoint both bindings converge on.
       //
       // Slice 47d (Codex HIGH 1 fold-in + Slice 47b Codex MED 1 deferred
@@ -337,25 +334,22 @@ describe('Slice 27d — dogfood-run-0 runner smoke', () => {
     15000,
   );
 
-  // Slice 47b — npm-script binding pin. Pre-Slice-47b, the
+  // Slice 47b — CLI binding pin. Pre-Slice-47b, the
   // execFileSync('node_modules/.bin/tsx', ['src/cli/dogfood.ts', ...])
   // call implicitly verified that `circuit:run` was wired to tsx +
   // dogfood.ts. Replacing the subprocess invocation with a direct
   // main() import drops that coverage; this contract test re-pins it
   // statically without spawning a subprocess.
   //
-  // Slice 52 (Codex H11 fold-in — Clean-Clone Reality Gate): the pin
-  // is rebound from `tsx src/cli/dogfood.ts` to the compiled-JS
-  // equivalent `npm run build --silent && node dist/cli/dogfood.js`.
-  // tsx's `/tmp/tsx-<uid>/*.pipe` IPC allocation reproduces the same
-  // `listen EPERM` failure class in operator-local restricted-filesystem
-  // runs that Slice 47b originally documented for sandboxed agents. A
-  // regression that renames `circuit:run`, points it at a different
-  // file, or reverts to tsx now fails here loudly.
-  it("package.json's circuit:run script binds build + node dist/cli/dogfood.js (Slice 52 Codex H11 fold-in)", () => {
+  // Slice 102 direct-launcher cleanup: the public test path now goes through
+  // ./bin/circuit-next, which invokes dist/cli/circuit.js directly instead of
+  // surfacing npm-script or dogfood.js names to plugin users.
+  it("package.json's circuit:run script delegates to the direct Circuit launcher", () => {
     const pkg = JSON.parse(readFileSync(resolve('package.json'), 'utf8')) as {
       scripts?: Record<string, string>;
+      bin?: Record<string, string>;
     };
-    expect(pkg.scripts?.['circuit:run']).toBe('npm run build --silent && node dist/cli/dogfood.js');
+    expect(pkg.scripts?.['circuit:run']).toBe('./bin/circuit-next');
+    expect(pkg.bin?.['circuit-next']).toBe('./bin/circuit-next');
   });
 });

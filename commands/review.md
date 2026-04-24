@@ -18,9 +18,10 @@ metacharacters:
 
 ## Instructions
 
-1. **Confirm working directory.** The CLI is a project-local npm script, not
-   a globally installed binary. If the user invoked this command outside a
-   circuit-next repo checkout, tell them so and ask them to `cd` into one.
+1. **Confirm working directory.** The CLI is a repo-local launcher
+   (`./bin/circuit-next`), not a globally installed binary. If the user
+   invoked this command outside a circuit-next repo checkout, tell them so
+   and ask them to `cd` into one.
 2. **Construct the Bash invocation SAFELY.** Do NOT build the shell command
    by double-quoting the raw scope text. Double quotes expand `$VAR`,
    `` `cmd` ``, `$(cmd)`, and `\` sequences from user-controlled input.
@@ -34,13 +35,13 @@ metacharacters:
    Example:
 
    ```bash
-   npm run circuit:run -- review --goal 'review the latest change'
+   ./bin/circuit-next review --goal 'review the latest change'
    ```
 
    Example with an apostrophe:
 
    ```bash
-   npm run circuit:run -- review --goal 'can'\''t regress runtime safety'
+   ./bin/circuit-next review --goal 'can'\''t regress runtime safety'
    ```
 
 3. **Parse the JSON output.** On success the CLI prints a JSON object with

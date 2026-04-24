@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { main } from '../../src/cli/dogfood.js';
+import { main } from '../../src/cli/circuit.js';
 import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
 import {
   discoverConfigLayers,

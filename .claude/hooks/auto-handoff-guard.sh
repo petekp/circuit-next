@@ -3,8 +3,8 @@
 #
 # Installed via .claude/settings.json. Fires when Claude finishes a turn and,
 # if substantive new work happened that the latest continuity record does
-# not cover, emits a block-decision JSON on stdout telling Claude to invoke
-# /circuit:handoff save before stopping. Otherwise exits silently.
+# not cover, emits a block-decision JSON on stdout telling Claude to save
+# a continuity record before stopping. Otherwise exits silently.
 #
 # Goal: the operator should be able to /clear and say "resume" without
 # having to remember to ask for a handoff first.
@@ -12,7 +12,7 @@
 # Authority on "what continuity state is current" is
 # .circuit/control-plane/continuity-index.json (the engine's source of
 # truth), not ls -t over the records/ directory. Records are deleted on
-# /circuit:handoff done so ls -t alone would return empty and miss the
+# continuity clear so ls -t alone would return empty and miss the
 # "cleared-then-continuing" case. The 2026-04-21 fix reads the index
 # first and only falls back to ls -t for historical context.
 #
@@ -100,7 +100,7 @@ else
 fi
 
 if [ "$NEEDS_HANDOFF" = "true" ]; then
-  REASON="Auto-continuity guard: ${REASON_DETAIL}. Before this turn ends, invoke the \`circuit:handoff\` skill with \`save\` (or run \`.circuit/bin/circuit-engine continuity save\` directly) to persist a continuity record capturing this chunk of work — author --goal, --next, --state-markdown, and --debt-markdown from the session so the next thread can resume cleanly with /circuit:handoff resume. If there is genuinely no work worth persisting, say so in one short sentence and return control; otherwise save before stopping."
+  REASON="Auto-continuity guard: ${REASON_DETAIL}. Before this turn ends, run \`.circuit/bin/circuit-engine continuity save\` with --goal, --next, --state-markdown, and --debt-markdown to persist a continuity record capturing this chunk of work so the next thread can resume cleanly with \`.circuit/bin/circuit-engine continuity resume\`. If the engine says the plugin root is not initialized, invoke any available \`/circuit:*\` command once in this project, then retry the engine command. If there is genuinely no work worth persisting, say so in one short sentence and return control; otherwise save before stopping."
   jq -nc --arg r "$REASON" '{decision:"block", reason:$r}'
 fi
 

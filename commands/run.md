@@ -41,24 +41,25 @@ metacharacters:
    Example for an exploratory task `find deprecated APIs`:
 
    ```bash
-   npm run circuit:run -- --goal 'find deprecated APIs'
+   ./bin/circuit-next --goal 'find deprecated APIs'
    ```
 
    Example for a review task `review this change for safety problems`:
 
    ```bash
-   npm run circuit:run -- --goal 'review this change for safety problems'
+   ./bin/circuit-next --goal 'review this change for safety problems'
    ```
 
    Example for a task `can't ship` (contains one apostrophe):
 
    ```bash
-   npm run circuit:run -- --goal 'can'\''t ship'
+   ./bin/circuit-next --goal 'can'\''t ship'
    ```
 
-   Use the Bash tool to execute the constructed command. `npm run circuit:run`
-   expands to `tsc -p tsconfig.build.json && node dist/cli/dogfood.js` per
-   `package.json:21`.
+   Use the Bash tool to execute the constructed command. `./bin/circuit-next`
+   is the repo-local launcher for the compiled Circuit runtime; when the
+   compiled CLI is absent in a fresh checkout, it builds `dist/` with the
+   local TypeScript compiler before invoking `dist/cli/circuit.js`.
 3. **Parse the CLI's JSON output and surface:** `selected_workflow`,
    `routed_by`, `router_reason`, `outcome`, `run_root`, `result_path`,
    and `events_observed`.

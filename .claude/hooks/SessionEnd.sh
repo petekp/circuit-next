@@ -17,9 +17,9 @@
 #   session-end has no live Claude to generate those fields; auto-saving with
 #   mechanical content would write a low-fidelity record over a high-fidelity
 #   one. Authoring is the Stop hook's job (auto-handoff-guard.sh blocks the
-#   turn and asks Claude to invoke /circuit:handoff save when work is
-#   unsaved). SessionEnd's job is to mark the boundary and surface drift, not
-#   to author content.
+#   turn and asks Claude to run `circuit-engine continuity save` with narrative
+#   fields when work is unsaved). SessionEnd's job is to mark the boundary and
+#   surface drift, not to author content.
 #
 # Behavior:
 #   - Drains stdin (Claude Code may pipe a payload).

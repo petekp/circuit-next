@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -90,6 +90,26 @@ describe('Slice 27d — CLI + runner modules', () => {
     expect(typeof exported.main).toBe('function');
   });
 
+  it('src/cli/circuit.ts exists and exports the first-class main(argv) function', async () => {
+    const cliPath = 'src/cli/circuit.ts';
+    expect(existsSync(cliPath)).toBe(true);
+    const mod: unknown = await import('../../src/cli/circuit.js');
+    if (mod === null || typeof mod !== 'object') {
+      throw new Error('Circuit CLI module did not load as an object');
+    }
+    const exported = mod as Record<string, unknown>;
+    expect(typeof exported.main).toBe('function');
+  });
+
+  it('bin/circuit-next exists as the executable first-class launcher', () => {
+    const launcherPath = 'bin/circuit-next';
+    expect(existsSync(launcherPath)).toBe(true);
+    expect(readFileSync(launcherPath, 'utf8')).toMatch(
+      /^#!\/usr\/bin\/env node\n[\s\S]*dist\/cli\/circuit\.js/,
+    );
+    expect(statSync(launcherPath).mode & 0o111).not.toBe(0);
+  });
+
   it('src/runtime/result-writer.ts exports writeResult and resultPath', async () => {
     const modPath = 'src/runtime/result-writer.ts';
     expect(existsSync(modPath)).toBe(true);
@@ -121,11 +141,7 @@ describe('Slice 27d — package.json wiring', () => {
     };
     const cmd = pkg.scripts?.['circuit:run'];
     expect(typeof cmd).toBe('string');
-    // Slice 52 (Codex H11 fold-in): binding moved from `tsx src/cli/dogfood.ts`
-    // to `npm run build --silent && node dist/cli/dogfood.js`; regex widened
-    // to accept either shape for legibility while keeping the placeholder
-    // rejection below authoritative.
-    expect(cmd).toMatch(/(src|dist)\/cli\/dogfood\.(ts|js)/);
+    expect(cmd).toBe('./bin/circuit-next');
     // Inventory rejects echo/true/noop; assert directly that we didn't
     // regress to a placeholder here.
     expect(/^(echo|true|:)\b/.test(cmd ?? '')).toBe(false);

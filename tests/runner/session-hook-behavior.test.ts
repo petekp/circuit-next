@@ -149,7 +149,7 @@ describe('Slice 47b — SessionStart.sh banner behavior (Codex HIGH 2 fold-in)',
     expect(result.stdout).toContain('> Goal: finish the slice 47 hardening arc');
     expect(result.stdout).toContain('> Next: open slice 47c after this lands');
     expect(result.stdout).toContain('> **To pick back up:**');
-    expect(result.stdout).toContain('/circuit:handoff resume');
+    expect(result.stdout).toContain('.circuit/bin/circuit-engine continuity resume');
     expect(result.stdout).toContain('Available: pending continuity');
   });
 

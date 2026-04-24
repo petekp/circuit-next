@@ -15,6 +15,10 @@ describe('P2.8 workflow router classifier', () => {
       'inspect this diff',
       'check this PR before merge',
       'look for bugs in the runner change',
+      'find an issue in this codebase',
+      'surface any issues or opportunities',
+      'identify bugs in this repo',
+      'look for regressions in the runner',
     ];
 
     for (const task of cases) {
@@ -32,6 +36,8 @@ describe('P2.8 workflow router classifier', () => {
       'map the current project state',
       'review possible approaches for the next workflow',
       'inspect the project structure',
+      'find options for a build workflow',
+      'find issue #123 in the tracker',
     ];
 
     for (const task of cases) {
