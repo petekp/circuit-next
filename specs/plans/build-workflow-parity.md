@@ -1,11 +1,11 @@
 ---
 plan: build-workflow-parity
 status: challenger-pending
-revision: 02
+revision: 03
 opened_at: 2026-04-24
 revised_at: 2026-04-24
 opened_in_session: post-phase-2-parity-map
-revised_in_session: build-workflow-parity-codex-challenger-01-foldins
+revised_in_session: build-workflow-parity-codex-challenger-02-foldins
 base_commit: eb52089
 target: build
 authority:
@@ -33,6 +33,11 @@ prior_challenger_passes:
     commit binding, making Work item 1 policy-only, pinning the
     verification command-execution contract, and budgeting public
     command-surface audit/test/manifest updates)
+  - specs/reviews/build-workflow-parity-codex-challenger-02.md
+    (verdict REJECT-PENDING-FOLD-INS vs revision 02 — 1 HIGH,
+    2 MED; revision 03 folds all three by moving the first product
+    Build fixture to the dispatch slice, declaring entry-mode scope,
+    and requiring a Build-specific two-dispatch policy row)
 ---
 
 # Build Workflow Parity Plan
@@ -48,14 +53,21 @@ artifact direction.
 
 ## §Prior pass log
 
-Revision 02 folds the first Codex challenger pass.
+Revision 02 folds the first Codex challenger pass. Revision 03 folds the
+second Codex challenger pass.
 
 | Pass-01 # | Severity | Objection | Revision-02 fold-in |
 |---|---|---|---|
 | 1 | CRITICAL | Review binding mismatch: revision 01 frontmatter carried `base_commit: 129622e`, while the review was commissioned against `eb520893c3ce80a407f2c761c082b31382ec1d59`. | Frontmatter now carries `base_commit: eb52089`, matching the committed revision-01 plan base used for the folded revision. |
 | 2 | HIGH | Work item 6 under-budgeted the public command surface. | Work item 6 now explicitly includes the audit command-closure check, plugin-surface tests, command-invocation tests, and `.claude-plugin/plugin.json` wired-state description. |
 | 3 | HIGH | Verification command execution substrate lacked a typed non-shell contract. | §7 now defines the substrate-widening slice's verification command contract: argv array, direct exec, no shell wrapping or interpolation, project-root-contained cwd, explicit env, timeout and output limits, and shell-bypass tests. |
-| 4 | MED | Work item 1 claimed a parsing Build fixture before the verification step substrate exists. | Work item 1 is now policy-only. The product fixture lands with Work item 4 after the verification step kind exists. |
+| 4 | MED | Work item 1 claimed a parsing Build fixture before the verification step substrate exists. | Work item 1 is now policy-only. Revision 03 later moves the first product fixture to Work item 5 so it lands with both required dispatch steps. |
+
+| Pass-02 # | Severity | Objection | Revision-03 fold-in |
+|---|---|---|---|
+| 1 | HIGH | Work item 4 added the first product Build fixture before the dispatch steps that the existing audit gate requires. | The product fixture now lands in Work item 5 with both `act` and `review` dispatch steps. Work item 4 keeps verification substrate tests local to the runtime step kind. |
+| 2 | MED | Entry-mode parity was cited as evidence without saying whether this arc lands or defers the old Build modes. | §3 and §5 now declare that this arc lands `default`, `lite`, `deep`, and `autonomous` entry modes, with Lite still reaching Review. |
+| 3 | MED | The plan wanted two Build dispatch steps but did not bind that shape to audit policy. | Work item 5 now requires a Build-specific dispatch-policy row and tests that enforce both `act` and `review`. |
 
 ## §1 — Evidence census
 
@@ -95,6 +107,9 @@ Target Build surface:
 - `/circuit:run develop:` and clear build-like tasks can route to Build.
 - Build has the canonical phase set `{frame, plan, act, verify, review, close}`
   and `spine_policy.omits: {analyze}`.
+- Build declares the four reference entry modes: `default`, `lite`, `deep`,
+  and `autonomous`; all four use the fixed Build graph, and Lite still reaches
+  Review.
 - Build emits structured JSON successor artifacts for all six reference
   artifact roles.
 - Implementation and review dispatches use registered JSON schemas.
@@ -127,9 +142,17 @@ Build's circuit-next fixture should use these phases:
 | Review | review | dispatch | Reviewer inspects the changed work and verification evidence. |
 | Close | close | synthesis | Runtime writes the final Build result artifact. |
 
+The Verify step does not assume a capability the runtime already has. It lands
+only through the §7 runtime widening substrate slice.
+
 The canonical phase set is `{frame, plan, act, verify, review, close}`.
 `spine_policy.omits` is `{analyze}` because Build plans and acts rather than
 running a separate investigation phase.
+
+Build's entry-mode scope for this arc is the full reference set:
+`default`, `lite`, `deep`, and `autonomous`. The modes may differ in rigor or
+selection defaults, but they must not skip the Review phase. Lite still reaches
+Review.
 
 ## §6 — Artifact map
 
@@ -293,15 +316,16 @@ runtime cannot prove commands were run.
 - Add tests for pass, fail, timeout/budget, and command-output capture.
 - Add negative tests for shell-string input, shell-binary bypass, cwd escape,
   missing timeout, and output limit enforcement.
-- Add the first product Build fixture under `.claude-plugin/skills/build/`
-  once the verification step kind can parse honestly.
+- Keep product fixture registration out of this work item. Runtime tests may
+  use local fixtures or direct runner setup to prove the verification step
+  kind, but the registered Build fixture must wait until the dispatch slice can
+  include both required dispatch steps.
 - Keep command execution scoped to the project root and existing run safety
   rules.
 
 **Acceptance evidence:**
 
-- Product Build fixture parses through the workflow schema with the real
-  verification step kind.
+- The verification step kind parses and runs through focused runtime tests.
 - A Build verification step runs a harmless command in test and records pass
   evidence.
 - A failing command aborts or blocks the Build run honestly and cannot close as
@@ -327,7 +351,13 @@ dispatches would be a scripted summary, not the old product's work loop.
 
 - Register dispatch schemas for `build.implementation@v1` and
   `build.review@v1`.
-- Add fixture steps for Act and Review with implementer and reviewer roles.
+- Add the first product Build fixture under `.claude-plugin/skills/build/`
+  with all six phases, including Act and Review dispatch steps with
+  implementer and reviewer roles.
+- Add a Build-specific dispatch-policy row and tests proving audit enforces
+  both required dispatch steps: `act` and `review`.
+- Add entry-mode tests proving the product fixture declares `default`, `lite`,
+  `deep`, and `autonomous`, and that Lite still reaches Review.
 - Add tests proving dispatch result parsing, gate behavior, and review failure
   handling.
 
@@ -335,6 +365,9 @@ dispatches would be a scripted summary, not the old product's work loop.
 
 - Implementer dispatch can pass only with an accepted implementation verdict.
 - Reviewer dispatch can pass only with an accepted review verdict.
+- Audit rejects a registered Build fixture missing either the `act` dispatch or
+  the `review` dispatch.
+- Product Build fixture parses with all four reference entry modes.
 - Failing or malformed dispatch output aborts or blocks honestly.
 - `npm run verify` passes.
 - `npm run audit` reports 0 red and no new unaccounted yellows.
@@ -416,7 +449,10 @@ Build is done for this arc when:
 2. Build writes all six structured JSON successor artifacts.
 3. Verification command evidence is real and can fail the run honestly.
 4. Direct `/circuit:build` and router-selected Build both reach the runtime.
-5. The plan is closed with live command proof and composition review evidence.
+5. Build exposes the four reference entry modes: `default`, `lite`, `deep`,
+   and `autonomous`, with Lite still reaching Review.
+6. Audit enforces both required Build dispatch steps: Act and Review.
+7. The plan is closed with live command proof and composition review evidence.
 
 This close would mean "Build parity path exists" for circuit-next. It would not
 mean full first-generation Circuit parity, because Repair, Migrate, Sweep,

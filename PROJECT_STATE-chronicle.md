@@ -12,6 +12,14 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 106 BUILD PLAN SECOND CHALLENGER FOLD-INS** (this commit,
+  Discovery) - recorded the second Codex challenger review for the Build plan
+  and folded in its three objections. The plan no longer tries to land the
+  first registered Build fixture before the required dispatch steps exist. It
+  also says Build must include the four reference entry modes and adds an audit
+  requirement that Build keeps both implementation and review dispatch steps.
+  No Build runtime behavior changed.
+
 - **Slice 105 BUILD PLAN CHALLENGER FOLD-INS** (this commit, Discovery) -
   recorded the first Codex challenger review for the Build plan and folded in
   its four objections. The plan now says the first Build step is policy-only,
