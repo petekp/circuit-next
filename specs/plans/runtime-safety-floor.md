@@ -1,11 +1,11 @@
 ---
 plan: runtime-safety-floor
 status: challenger-pending
-revision: 02
+revision: 03
 opened_at: 2026-04-24
 revised_at: 2026-04-24
-revised_in_session: runtime-safety-floor-codex-challenger-01-foldins
-base_commit: 942e67b
+revised_in_session: runtime-safety-floor-codex-challenger-02-med-foldins
+base_commit: 3e38c6b
 target: runner-runtime-safety
 trigger: |
   Takeover assessment reproduced five runtime safety failures on current
@@ -36,6 +36,11 @@ prior_challenger_passes:
     revision 02 folds both by preserving dispatch provenance on
     adapter failure and naming the contract/invariant movement for
     run-relative paths + pass-route reachability)
+  - specs/reviews/runtime-safety-floor-codex-challenger-02.md
+    (verdict ACCEPT-WITH-FOLD-INS vs revision 02 — 0 HIGH + 2 MED;
+    revision 03 folds both by making any failure event additive-only
+    unless contracts are explicitly reopened and by binding the snapshot
+    projection surface of adapter-invocation aborts)
 ---
 
 # Runtime Safety Floor
@@ -82,13 +87,14 @@ harder to isolate and easier to normalize.
 | E11 | P2.9 second-workflow plan is `challenger-cleared` but not operator-signed. | verified | `specs/plans/p2-9-second-workflow.md` frontmatter |
 | E12 | The live dispatch provenance surface includes `adapter`, `role`, `resolved_selection`, and `resolved_from`; failure handling must not regress that audit trail. | verified | `src/schemas/event.ts` + `src/runtime/adapters/dispatch-materializer.ts:36-75` |
 | E13 | Current workflow authority defines WF-I8 as broad terminal reachability through any route chain, while no current Step invariant names run-relative path syntax. | verified | `specs/contracts/workflow.md:45-52`, `specs/invariants.json` WF-I8, `specs/contracts/step.md` |
+| E14 | Current dispatch-content failure authority uses the uniform `gate.evaluated` → `step.aborted` → `run.closed` failure surface and explicitly says no separate `dispatch.failed` event exists for that class. | verified | `specs/contracts/explore.md:657-701`, `specs/plans/clean-clone-reality-tranche.md:117` |
 
 ### §1.B Hypotheses
 
 | # | Hypothesis | Resolution point |
 |---|---|---|
 | H1 | A single run-relative path primitive can cover every workflow-controlled read/write path without changing fixture authoring syntax. | Slice 1 tests |
-| H2 | The least misleading durable event shape for adapter invocation exceptions is `dispatch.failed` paired with the existing provenance surface and a pre-await request/prompt hash. | Slice 3 challenger + tests |
+| H2 | Adapter invocation exceptions are most honest as the existing uniform failure closure plus additive typed metadata; non-additive failure-event semantics require an explicit contract reopen. | Slice 3 challenger + tests |
 | H3 | Static pass-route validation plus a runtime visited-step guard is sufficient to prevent pass-route hangs once the workflow contract/invariant ledger names pass-route reachability explicitly. | Slice 4 tests |
 | H4 | P2.9 assumptions remain valid after the safety floor, or can be refreshed with a small plan revision. | Batch close freshness check |
 
@@ -243,9 +249,13 @@ timeouts, or thrown test dispatchers escape the runner after
 
 **Deliverables:**
 
-1. Add a typed `dispatch.failed` event variant, or an equivalently
-   explicit typed failure event if the challenger identifies a better
-   existing event name.
+1. Preserve the existing uniform failure closure as the baseline:
+   `gate.evaluated outcome=fail` → `step.aborted` → `run.closed
+   outcome=aborted` → `artifacts/result.json`. A typed
+   `dispatch.failed` event, or an equivalently explicit typed failure
+   event, is allowed only as additive metadata for adapter invocation
+   exceptions unless the slice explicitly reopens the event/run/explore
+   contracts and names the semantic tradeoff.
 2. Refactor dispatch execution so the runner records enough durable
    dispatch context before awaiting the adapter. This MUST preserve the
    existing dispatch provenance surface: adapter identity, role,
@@ -259,8 +269,8 @@ timeouts, or thrown test dispatchers escape the runner after
 5. If `dispatch.failed` is introduced, it must be additive to the
    current dispatch audit trail rather than a smaller substitute for
    `dispatch.started`-equivalent provenance. Any smaller representation
-   must explicitly reopen the event contract and name the semantic
-   tradeoff before implementation.
+   must explicitly reopen the event, run, and affected workflow contract
+   authorities and name the semantic tradeoff before implementation.
 6. Update event / run / projection tests and contract prose as needed so
    adapter invocation failure is not misrepresented as a model verdict.
 
@@ -269,7 +279,9 @@ timeouts, or thrown test dispatchers escape the runner after
 - Throwing dispatcher test ends with `run.closed outcome=aborted` and
   `artifacts/result.json outcome=aborted`.
 - Event log includes the typed dispatch failure event or accepted
-  equivalent, not merely an escaped exception.
+  equivalent when the slice chooses additive metadata; otherwise the
+  contract-reopen path names why the uniform failure surface alone is
+  sufficient for adapter invocation exceptions.
 - Event log preserves `dispatch.started`-equivalent provenance for the
   failed attempt: adapter, role, resolved selection, resolved-from
   provenance, step id, and attempt. It also records a durable pre-await
@@ -277,6 +289,9 @@ timeouts, or thrown test dispatchers escape the runner after
   invocation payload.
 - No implementation may replace the existing dispatch provenance surface
   with only `{adapter, step_id, attempt, reason}`.
+- `state.json` parses as a `Snapshot` with `status: aborted`, and
+  `RunProjection.safeParse({ log, snapshot })` succeeds for the aborted
+  log/snapshot pair.
 - No `step.completed` appears for the failed dispatch step.
 - Reason is byte-identical across `dispatch.failed`, `gate.evaluated`,
   `step.aborted`, `run.closed`, and `result.json` where those surfaces
