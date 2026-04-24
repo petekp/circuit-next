@@ -12,6 +12,19 @@ record.*
 
 ## Runtime-Safety-Floor Arc (opened after Slice 68)
 
+- **Slice 72 PASS-ROUTE-CYCLE-GUARD** (this commit, Ratchet-Advance) —
+  added WF-I11 to the workflow contract and invariant ledger so every
+  step must reach a terminal by following only `routes.pass`. Workflow
+  parsing now rejects self-cycles and multi-step pass-cycles even when an
+  alternate route reaches `@complete`. The runner also tracks executed
+  step ids and aborts a schema-bypass pass cycle with `step.aborted`,
+  `run.closed outcome=aborted`, aborted `state.json`, and aborted
+  `result.json`; no `step.completed` or `last_route_taken` is recorded
+  for the blocked transition. Codex challenger found the first guard still
+  projected the blocked step as complete; the fold-in moved the cycle
+  check before `step.completed` and pinned the exact event/snapshot shape
+  before the final ACCEPT re-check.
+
 - **Slice 71 DURABLE-ADAPTER-FAILURES** (this commit, Ratchet-Advance) —
   changed dispatch execution so `dispatch.started` and `dispatch.request`
   are durable before awaiting the adapter. If the adapter throws, the run

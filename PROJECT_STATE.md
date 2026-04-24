@@ -1,4 +1,4 @@
-<!-- current_slice: 71 -->
+<!-- current_slice: 72 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -9,10 +9,10 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 71
-- **current_arc:** runtime-safety-floor (Slice 3 landed: durable adapter
-  invocation failure closure; next planned slice is pass-route reachability
-  and runtime cycle guard)
+- **current_slice:** 72
+- **current_arc:** runtime-safety-floor (Slice 4 landed: pass-route
+  reachability and runtime cycle guard; next planned slice is terminal
+  outcome mapping)
 - **current_phase:** Phase 2 — Implementation (continuing)
 
 Chronicle (relocated narrative history — non-authoritative; see
@@ -39,3 +39,8 @@ bootstrap writes can mutate prior run evidence. Slice 71 landed durable
 adapter invocation failure closure: thrown dispatchers now emit
 `dispatch.failed`, close the run as aborted, and write aborted
 `result.json` / `state.json` surfaces.*
+Slice 72 added WF-I11 pass-route terminal reachability and a runtime
+schema-bypass cycle guard: pass-only self-cycles and multi-step cycles now
+fail workflow parsing, and any already-parsed workflow object that revisits
+a step closes the run as aborted with `step.aborted`, aborted state, and
+aborted result instead of hanging or falsely marking the step complete.*

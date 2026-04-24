@@ -1,14 +1,14 @@
 ---
 contract: workflow
 status: draft
-version: 0.2
+version: 0.3
 schema_source: src/schemas/workflow.ts
-last_updated: 2026-04-20
+last_updated: 2026-04-24
 depends_on: [step, phase, rigor, lane, selection-policy]
-codex_adversarial_review: specs/reviews/workflow-md-v0.2-codex.md
+codex_adversarial_review: specs/reviews/workflow-md-v0.3-codex.md
 artifact_ids:
   - workflow.definition
-invariant_ids: [WF-I1, WF-I2, WF-I3, WF-I4, WF-I5, WF-I6, WF-I7, WF-I8, WF-I9, WF-I10]
+invariant_ids: [WF-I1, WF-I2, WF-I3, WF-I4, WF-I5, WF-I6, WF-I7, WF-I8, WF-I9, WF-I10, WF-I11]
 property_ids: [workflow.prop.entry_mode_reachability, workflow.prop.no_dead_steps, workflow.prop.phase_step_closure, workflow.prop.route_target_closure, workflow.prop.terminal_target_coverage]
 ---
 
@@ -70,6 +70,15 @@ inside `Workflow.superRefine` — and tested in
   **deferred** to v0.3 / Phase 2 — failure-path handling is not part of
   the narrow dogfood-run-0 proof and the runtime abort-vs-stall
   behaviour on a missing `fail` route is not yet specified.
+- **WF-I11 — Pass-route terminal reachability.** For every step in
+  `Workflow.steps`, following only `routes.pass` must eventually reach a
+  terminal route target (`@complete`, `@stop`, `@escalate`, `@handoff`).
+  WF-I8 remains the broad graph sanity check: a step must have at least
+  one route chain to a terminal. WF-I11 is the runtime-liveness binding:
+  the current runner follows only successful `pass` routes after gates
+  pass, so a workflow where `routes.pass` cycles while `routes.fail`
+  points to `@complete` is rejected at parse time instead of hanging a
+  run.
 
 ## Pre-conditions
 
@@ -108,6 +117,9 @@ Property-based tests will cover:
 - `workflow.prop.terminal_target_coverage` — Every step's routes either
   include a terminal target or every route target is itself a step whose
   routes eventually include one.
+  **Scope note:** this is the broad WF-I8 property. Pass-route-only
+  terminal reachability is a separate parse-time invariant, WF-I11,
+  because runtime success flow follows only `routes.pass`.
 
 ## Cross-contract dependencies
 
@@ -156,7 +168,7 @@ STEP-I4.
   WF-I1..I7. Grandfathered via `bootstrap/adversarial-review-codex.md`
   (6 HIGH + 3 MED incorporated at tier-0) before the
   `specs/reviews/` convention existed.
-- **v0.2 (Phase 1, this version, Slice 27)**: narrowed to what
+- **v0.2 (Phase 1, Slice 27)**: narrowed to what
   `dogfood-run-0` (Phase 1.5 Alpha Proof) structurally needs beyond the
   skeleton. Adds **WF-I8** (terminal reachability) and **WF-I9** (no
   dead steps) — both promoted from `workflow.prop.*` reserved properties
@@ -170,7 +182,18 @@ STEP-I4.
   preferring types over tests where the type can express the invariant
   (CLAUDE.md §Architecture-First types). Exits the skeleton grandfather
   and binds to a proper review record at
-  `specs/reviews/workflow-md-v0.2-codex.md`. Gate source tightening
+  `specs/reviews/workflow-md-v0.2-codex.md`.
+- **v0.3 (Runtime Safety Floor Slice 4, this version)**: adds
+  **WF-I11** (pass-route terminal reachability) after runtime evidence
+  showed WF-I8's broad
+  graph rule was not enough for liveness. A workflow can satisfy WF-I8 by
+  routing `fail` to `@complete` while `pass` loops forever; because the
+  current runner follows `routes.pass` after successful gates, WF-I11
+  follows only pass edges and rejects self-cycles and multi-step
+  pass-cycles at parse time. Binds to the canonical contract review at
+  `specs/reviews/workflow-md-v0.3-codex.md` and the runtime-safety floor
+  Slice 72 challenger review at `specs/reviews/arc-slice-72-codex.md`.
+  Gate source tightening
   (v0.1 adversarial MED #7) **closed in step.md v0.1** — see the "Gate
   source tightening" section above. Spine policy (v0.1 adversarial
   MED #11) **closed in phase.md v0.1** — `Workflow.spine_policy` is a

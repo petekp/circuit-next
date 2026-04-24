@@ -661,6 +661,18 @@
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }],
       "rationale": "Pass-route presence enforced by Workflow superRefine — every step's routes map must contain key 'pass'. GateEvaluatedEvent.outcome is z.enum(['pass','fail']) uniformly across all three gate kinds (src/schemas/event.ts), so a successful gate outcome routes through routes['pass']. New in Slice 27 workflow.md v0.2 as Codex challenger HIGH #1 fold-in — closes the WF-I8 graph-reachable-but-runtime-unselectable hole (fixture routes like { success: '@complete' } would satisfy WF-I8 and stall at runtime). `fail`-route presence deferred to v0.3 / Phase 2."
     },
+    {
+      "id": "WF-I11",
+      "contract": "workflow",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/workflow.md#WF-I11",
+      "binding_refs": [
+        { "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" },
+        { "path": "tests/runner/pass-route-cycle-guard.test.ts", "kind": "test_title" }
+      ],
+      "rationale": "Pass-route terminal reachability enforced by Workflow superRefine by following only routes.pass. WF-I8 remains the broad terminal-reachability graph sanity check, but the current runner follows pass routes after successful gates; a workflow whose fail route reaches @complete while pass cycles forever is rejected at parse time, with a runtime guard closing schema-bypass cases as aborted runs."
+    },
 
     {
       "id": "CHALLENGER-I1",

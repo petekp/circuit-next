@@ -276,6 +276,36 @@ export const Workflow = WorkflowBody.superRefine((wf, ctx) => {
       }
     }
 
+    // WF-I11 pass-route terminal reachability. WF-I8 remains the broad
+    // "some route can reach a terminal" graph sanity check, but runtime
+    // success flow follows only `routes.pass`. A step whose pass chain cycles
+    // while another edge reaches @complete is still a runtime liveness bug.
+    const stepsById = new Map(wf.steps.map((step) => [step.id as unknown as string, step]));
+    for (let i = 0; i < wf.steps.length; i++) {
+      const step = wf.steps[i];
+      if (step === undefined) continue;
+      const startId = step.id as unknown as string;
+      const seen = new Set<string>();
+      let cur: string | undefined = startId;
+      while (cur !== undefined) {
+        if (seen.has(cur)) {
+          issueAt(
+            ctx,
+            ['steps', i, 'routes', 'pass'],
+            `WF-I11: step '${startId}' cannot reach a terminal by following only routes.pass — pass chain cycles at '${cur}'`,
+          );
+          break;
+        }
+        seen.add(cur);
+        const curStep = stepsById.get(cur);
+        if (curStep === undefined) break;
+        const passTarget = curStep.routes.pass;
+        if (passTarget === undefined) break;
+        if (TERMINAL_ROUTE_TARGETS.has(passTarget)) break;
+        cur = passTarget;
+      }
+    }
+
     // WF-I9 no dead steps: BFS from every entry_mode.start_at, union
     // reachable set. Any step not reached is a silent declaration
     // error (author intended it to execute, but no route path leads

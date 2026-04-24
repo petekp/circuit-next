@@ -540,6 +540,7 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
   // taken; the close-step still emits `run.closed` carrying the
   // aborted outcome and a reason that names the failing step).
   const stepsById = new Map(workflow.steps.map((s) => [s.id as unknown as string, s] as const));
+  const executedStepIds = new Set<string>();
   let currentStepId: string | undefined = entry.start_at as unknown as string;
   let runOutcome: RunClosedOutcome = 'complete';
   let closeReason: string | undefined;
@@ -551,6 +552,13 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
         `runDogfood: route target '${currentStepId}' is not a known step id (fixture/reduction mismatch)`,
       );
     }
+    if (executedStepIds.has(currentStepId)) {
+      runOutcome = 'aborted';
+      closeReason = `pass-route cycle detected at step '${currentStepId}'; aborting run before re-entering an already executed step`;
+      currentStepId = undefined;
+      break;
+    }
+    executedStepIds.add(currentStepId);
     const attempt = 1;
 
     push({
@@ -819,6 +827,30 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
     const passRoute = step.routes.pass;
     if (passRoute === undefined) {
       throw new Error(`runDogfood: step '${step.id}' missing 'pass' route (WF-I10 violation)`);
+    }
+
+    if (
+      passRoute !== '@complete' &&
+      passRoute !== '@stop' &&
+      passRoute !== '@escalate' &&
+      passRoute !== '@handoff' &&
+      executedStepIds.has(passRoute)
+    ) {
+      const reason = `pass-route cycle detected: step '${step.id}' routes to already executed step '${passRoute}'`;
+      push({
+        schema_version: 1,
+        sequence,
+        recorded_at: recordedAt(),
+        run_id: runId,
+        kind: 'step.aborted',
+        step_id: step.id,
+        attempt,
+        reason,
+      });
+      runOutcome = 'aborted';
+      closeReason = reason;
+      currentStepId = undefined;
+      break;
     }
 
     push({

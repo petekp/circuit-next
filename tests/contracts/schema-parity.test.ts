@@ -949,6 +949,76 @@ describe('Workflow graph closure (adversarial-review fix #1)', () => {
     );
     expect(result.success).toBe(true);
   });
+
+  it('WF-I11 (Runtime Safety Floor Slice 4): rejects a self-cycle on routes.pass even when fail reaches @complete', () => {
+    const loopStep = {
+      ...okFrameStep,
+      id: 'loop-step',
+      routes: { pass: 'loop-step', fail: '@complete' },
+    };
+    const result = Workflow.safeParse(
+      okWorkflow({
+        entry_modes: [
+          { name: 'default', start_at: 'loop-step', rigor: 'standard', description: 'loop' },
+        ],
+        phases: [{ id: 'frame-phase', title: 'Frame', canonical: 'frame', steps: ['loop-step'] }],
+        steps: [loopStep],
+      }),
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const msg = JSON.stringify(result.error.issues);
+      expect(msg).toContain('WF-I11');
+      expect(msg).toContain('loop-step');
+    }
+  });
+
+  it('WF-I11 (Runtime Safety Floor Slice 4): rejects a multi-step pass-cycle even when alternate routes reach terminals', () => {
+    const stepA = {
+      ...okFrameStep,
+      id: 'a',
+      routes: { pass: 'b', fail: '@complete' },
+    };
+    const stepB = {
+      ...okFrameStep,
+      id: 'b',
+      routes: { pass: 'a', fail: '@complete' },
+    };
+    const result = Workflow.safeParse(
+      okWorkflow({
+        entry_modes: [{ name: 'default', start_at: 'a', rigor: 'standard', description: 'cycle' }],
+        phases: [{ id: 'frame-phase', title: 'Frame', canonical: 'frame', steps: ['a', 'b'] }],
+        steps: [stepA, stepB],
+      }),
+    );
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const msg = JSON.stringify(result.error.issues);
+      expect(msg).toContain('WF-I11');
+      expect(msg).toContain('routes.pass');
+    }
+  });
+
+  it('WF-I11 (Runtime Safety Floor Slice 4): accepts a pass chain that reaches a terminal', () => {
+    const stepA = {
+      ...okFrameStep,
+      id: 'a',
+      routes: { pass: 'b', fail: '@complete' },
+    };
+    const stepB = {
+      ...okFrameStep,
+      id: 'b',
+      routes: { pass: '@complete' },
+    };
+    const result = Workflow.safeParse(
+      okWorkflow({
+        entry_modes: [{ name: 'default', start_at: 'a', rigor: 'standard', description: 'chain' }],
+        phases: [{ id: 'frame-phase', title: 'Frame', canonical: 'frame', steps: ['a', 'b'] }],
+        steps: [stepA, stepB],
+      }),
+    );
+    expect(result.success).toBe(true);
+  });
 });
 
 describe('Phase contract (PHASE-I1..I3)', () => {
