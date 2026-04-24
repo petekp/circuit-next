@@ -12,6 +12,14 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 93 P2.10 EXPLORE RESULT SCHEMA** (this commit,
+  Ratchet-Advance) - closed the last P2.10 artifact schema by adding a
+  strict `explore.result@v1` aggregate and a registered close-step writer.
+  The writer reads `synthesis.json` and `review-verdict.json`, emits the
+  deterministic summary + verdict snapshot + prior-artifact pointers shape,
+  and updates the explore result golden to the new close artifact. All five
+  explore artifacts now have explicit schema/runtime coverage.
+
 - **Slice 92 P2.10 SCHEMA TRANCHE COMPOSITION REVIEW** (this commit,
   Ratchet-Advance) - closed the first P2.10 artifact-schema tranche with two
   composition-review prongs before the next privileged runtime slice opens.

@@ -1,5 +1,12 @@
 import { z } from 'zod';
 
+const EXPLORE_RESULT_SCHEMA_BY_ARTIFACT_ID = {
+  'explore.brief': 'explore.brief@v1',
+  'explore.analysis': 'explore.analysis@v1',
+  'explore.synthesis': 'explore.synthesis@v1',
+  'explore.review-verdict': 'explore.review-verdict@v1',
+} as const;
+
 export const ExploreBrief = z
   .object({
     subject: z.string().min(1),
@@ -65,3 +72,71 @@ export const ExploreReviewVerdict = z
   })
   .strict();
 export type ExploreReviewVerdict = z.infer<typeof ExploreReviewVerdict>;
+
+export const ExploreResultArtifactId = z.enum([
+  'explore.brief',
+  'explore.analysis',
+  'explore.synthesis',
+  'explore.review-verdict',
+]);
+export type ExploreResultArtifactId = z.infer<typeof ExploreResultArtifactId>;
+
+export const ExploreResultArtifactPointer = z
+  .object({
+    artifact_id: ExploreResultArtifactId,
+    path: z.string().min(1),
+    schema: z.string().min(1),
+  })
+  .strict()
+  .superRefine((pointer, ctx) => {
+    const expectedSchema = EXPLORE_RESULT_SCHEMA_BY_ARTIFACT_ID[pointer.artifact_id];
+    if (pointer.schema !== expectedSchema) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['schema'],
+        message: `schema must be '${expectedSchema}' for artifact_id '${pointer.artifact_id}'`,
+      });
+    }
+  });
+export type ExploreResultArtifactPointer = z.infer<typeof ExploreResultArtifactPointer>;
+
+export const ExploreResultVerdictSnapshot = z
+  .object({
+    synthesis_verdict: z.string().min(1),
+    review_verdict: ExploreReviewVerdictValue,
+    objection_count: z.number().int().nonnegative(),
+    missed_angle_count: z.number().int().nonnegative(),
+  })
+  .strict();
+export type ExploreResultVerdictSnapshot = z.infer<typeof ExploreResultVerdictSnapshot>;
+
+export const ExploreResult = z
+  .object({
+    summary: z.string().min(1),
+    verdict_snapshot: ExploreResultVerdictSnapshot,
+    artifact_pointers: z.array(ExploreResultArtifactPointer).length(4),
+  })
+  .strict()
+  .superRefine((result, ctx) => {
+    const seen = new Set<ExploreResultArtifactId>();
+    for (const [index, pointer] of result.artifact_pointers.entries()) {
+      if (seen.has(pointer.artifact_id)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['artifact_pointers', index, 'artifact_id'],
+          message: `duplicate artifact_id '${pointer.artifact_id}'`,
+        });
+      }
+      seen.add(pointer.artifact_id);
+    }
+    for (const artifactId of ExploreResultArtifactId.options) {
+      if (!seen.has(artifactId)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['artifact_pointers'],
+          message: `missing artifact_id '${artifactId}'`,
+        });
+      }
+    }
+  });
+export type ExploreResult = z.infer<typeof ExploreResult>;

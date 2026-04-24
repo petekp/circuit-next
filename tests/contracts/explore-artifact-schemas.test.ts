@@ -7,6 +7,8 @@ import {
   ExploreAspect,
   ExploreBrief,
   ExploreEvidenceCitation,
+  ExploreResult,
+  ExploreResultArtifactPointer,
   ExploreReviewVerdict,
   ExploreReviewVerdictValue,
   ExploreSynthesis,
@@ -210,5 +212,144 @@ describe('P2.10 — explore artifact schemas', () => {
     if (reviewStep?.kind !== 'dispatch') throw new Error('expected review-step dispatch');
 
     expect(reviewStep.gate.pass).toEqual([...ExploreReviewVerdictValue.options]);
+  });
+
+  it('accepts the typed explore.result aggregate shape', () => {
+    const pointers = [
+      ExploreResultArtifactPointer.parse({
+        artifact_id: 'explore.brief',
+        path: 'artifacts/brief.json',
+        schema: 'explore.brief@v1',
+      }),
+      ExploreResultArtifactPointer.parse({
+        artifact_id: 'explore.analysis',
+        path: 'artifacts/analysis.json',
+        schema: 'explore.analysis@v1',
+      }),
+      ExploreResultArtifactPointer.parse({
+        artifact_id: 'explore.synthesis',
+        path: 'artifacts/synthesis.json',
+        schema: 'explore.synthesis@v1',
+      }),
+      ExploreResultArtifactPointer.parse({
+        artifact_id: 'explore.review-verdict',
+        path: 'artifacts/review-verdict.json',
+        schema: 'explore.review-verdict@v1',
+      }),
+    ];
+
+    expect(
+      ExploreResult.parse({
+        summary: 'Explore recommendation: keep the aggregate deterministic',
+        verdict_snapshot: {
+          synthesis_verdict: 'accept',
+          review_verdict: 'accept-with-fold-ins',
+          objection_count: 1,
+          missed_angle_count: 0,
+        },
+        artifact_pointers: pointers,
+      }),
+    ).toEqual({
+      summary: 'Explore recommendation: keep the aggregate deterministic',
+      verdict_snapshot: {
+        synthesis_verdict: 'accept',
+        review_verdict: 'accept-with-fold-ins',
+        objection_count: 1,
+        missed_angle_count: 0,
+      },
+      artifact_pointers: pointers,
+    });
+  });
+
+  it('rejects explore.result with missing pointers, invalid review verdict, or surplus keys', () => {
+    expect(
+      ExploreResult.safeParse({
+        summary: 'Missing one pointer',
+        verdict_snapshot: {
+          synthesis_verdict: 'accept',
+          review_verdict: 'accept',
+          objection_count: 0,
+          missed_angle_count: 0,
+        },
+        artifact_pointers: [
+          {
+            artifact_id: 'explore.synthesis',
+            path: 'artifacts/synthesis.json',
+            schema: 'explore.synthesis@v1',
+          },
+        ],
+      }).success,
+    ).toBe(false);
+
+    expect(
+      ExploreResult.safeParse({
+        summary: 'Invalid review verdict',
+        verdict_snapshot: {
+          synthesis_verdict: 'accept',
+          review_verdict: 'reject',
+          objection_count: 0,
+          missed_angle_count: 0,
+        },
+        artifact_pointers: [],
+      }).success,
+    ).toBe(false);
+
+    expect(
+      ExploreResult.safeParse({
+        summary: 'Extra field',
+        verdict_snapshot: {
+          synthesis_verdict: 'accept',
+          review_verdict: 'accept',
+          objection_count: 0,
+          missed_angle_count: 0,
+        },
+        artifact_pointers: [],
+        smuggled: true,
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects explore.result pointer duplicates and artifact/schema mismatches', () => {
+    expect(
+      ExploreResultArtifactPointer.safeParse({
+        artifact_id: 'explore.brief',
+        path: 'artifacts/brief.json',
+        schema: 'explore.synthesis@v1',
+      }).success,
+    ).toBe(false);
+
+    expect(
+      ExploreResult.safeParse({
+        summary: 'Duplicate pointer ids',
+        verdict_snapshot: {
+          synthesis_verdict: 'accept',
+          review_verdict: 'accept',
+          objection_count: 0,
+          missed_angle_count: 0,
+        },
+        artifact_pointers: [
+          {
+            artifact_id: 'explore.brief',
+            path: 'artifacts/brief.json',
+            schema: 'explore.brief@v1',
+          },
+          {
+            artifact_id: 'explore.brief',
+            path: 'artifacts/brief-copy.json',
+            schema: 'explore.brief@v1',
+          },
+          {
+            artifact_id: 'explore.synthesis',
+            path: 'artifacts/synthesis.json',
+            schema: 'explore.synthesis@v1',
+          },
+          {
+            artifact_id: 'explore.review-verdict',
+            path: 'artifacts/review-verdict.json',
+            schema: 'explore.review-verdict@v1',
+          },
+        ],
+      }).success,
+    ).toBe(false);
   });
 });

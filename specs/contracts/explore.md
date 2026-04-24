@@ -1,8 +1,8 @@
 ---
 contract: explore
 status: draft
-version: 0.6
-schema_source: .claude-plugin/skills/explore/circuit.json (fixture) + src/schemas/artifacts/explore.ts (explore.brief / explore.analysis / explore.synthesis / explore.review-verdict; remaining explore artifacts still pending P2.10 follow-ons)
+version: 0.7
+schema_source: .claude-plugin/skills/explore/circuit.json (fixture) + src/schemas/artifacts/explore.ts (explore.brief / explore.analysis / explore.synthesis / explore.review-verdict / explore.result)
 last_updated: 2026-04-24
 depends_on: [workflow, phase, step, selection, rigor, lane, skill, adapter]
 codex_adversarial_review: specs/reviews/explore-md-v0.1-codex.md
@@ -56,9 +56,10 @@ Slice 89 starts P2.10 by adding runtime schemas for `explore.brief` and
 `explore.analysis` at `src/schemas/artifacts/explore.ts` and wiring the
 default runtime synthesis writer to produce those shapes. Slice 90 adds
 the strict dispatch-materialized schema for `explore.synthesis`, and
-Slice 91 does the same for `explore.review-verdict`. The close-phase
-`explore.result` shape remains on the existing minimal/fallback path
-until its schema-specific slice lands.
+Slice 91 does the same for `explore.review-verdict`. Slice 92 closes the
+first schema tranche with composition review, and Slice 93 replaces the
+close-phase placeholder with the strict `explore.result` aggregate schema
+and registered close writer.
 
 If future refactoring introduces a workflow-kind concept at the Zod
 layer (e.g., `kind: 'explore'` field), EXPLORE-I1 and the four
@@ -426,22 +427,23 @@ depending on P2.2→P2.4 drift). References to "property harness Slice
 `explore.prop.*` — they were amended at P2.3 landing.
 
 **CC#P2-1 placeholder-parity epoch (Slice 44 arc-close fold-in,
-convergent Claude HIGH 2 + Codex HIGH 2).** At Slice 43c landing,
-the `explore.result` artifact is written as a deterministic
+convergent Claude HIGH 2 + Codex HIGH 2).** From Slice 43c through
+Slice 92, the `explore.result` artifact was written as a deterministic
 placeholder body by `src/runtime/runner.ts::writeSynthesisArtifact`
-(body is a function of `step.gate.required` section names; no
-dispatch output is consumed into it). The CC#P2-1 golden at
-`tests/fixtures/golden/explore/result.sha256` therefore pins the
-placeholder shape, not a reference-Circuit artifact composition.
-The placeholder epoch is authoritative per ADR-0007 §Decision.1
-CC#P2-1 Slice 44 amendment; CC#P2-1 is satisfied at placeholder-
-parity until P2.10 replaces the placeholder with real orchestrator
-output and a fresh composition review re-verifies
-orchestrator-parity. A future slice that changes the placeholder
-body without regenerating the golden MUST fail the self-consistency
-test at `tests/runner/explore-e2e-parity.test.ts` (that test's
-title explicitly names the placeholder-parity epoch; see also the
-§Placeholder epoch test rename landed at ceremony commit).
+(body was a function of `step.gate.required` section names; no dispatch
+output was consumed into it). The placeholder epoch was authoritative
+per ADR-0007 §Decision.1 CC#P2-1 Slice 44 amendment and is preserved here
+as history because it explains the old golden and why Slice 93 must
+replace it deliberately rather than silently changing the close artifact.
+
+**Slice 93 close-result promotion.** Slice 93 replaces the placeholder
+writer for `explore.result@v1` with a registered close writer that parses
+`explore.synthesis` and `explore.review-verdict`, emits a deterministic
+summary, emits a verdict snapshot, and records pointer paths for
+`explore.brief`, `explore.analysis`, `explore.synthesis`, and
+`explore.review-verdict`. This moves P2.10 from placeholder-parity to
+orchestrator-parity for the close artifact while preserving the path split
+from `run.result`.
 
 **Deferred property promotion re-defer (post-Slice-44, Codex HIGH 5
 fold-in).** P2.5 (Slices 43a/43b/43c) landed the `explore` end-to-end
@@ -767,24 +769,23 @@ transcript reflects what the adapter said). The runtime sentinel
 DID declare a parseable verdict; the body shape, not the
 verdict, is what failed.
 
-## `schema_sections` gate placeholder note (Codex MED 10 fold-in)
+## `schema_sections` gate and schema reconciliation
 
-The fixture's `schema_sections` gates declare required field names
-(e.g. `subject`, `success_condition`, `recommendation`) that are
-**provisional field-name guards**, not references to any schema
-source. The artifact schemas these gate names reference do not yet
-exist; they are deferred to P2.10 (artifact schema set, plan
-§Mid-term slices).
+The fixture's `schema_sections` gates declare the top-level field names the
+runtime checks for the orchestrator-synthesis artifacts. At v0.1 those names
+were provisional field-name guards, not references to concrete artifact
+schemas. P2.10 reconciles the gates with concrete schemas:
 
-This means:
+- Slice 89 binds Frame / Analyze to `explore.brief@v1` and
+  `explore.analysis@v1`.
+- Slice 93 binds Close to `explore.result@v1`.
 
-- At v0.1, the gate checks produce a pass/fail on "does the artifact
-  JSON contain the named top-level keys?" — not on "does the
-  artifact validate against a typed schema?".
-- A future P2.10 slice reconciles the gate `required` arrays with
-  the concrete artifact schemas and the `specs/artifacts.json`
-  `schema_exports` fields in one slice. Any drift between the three
-  is a ratchet violation at P2.10 landing.
+The gate remains a lightweight top-level section check, while the registered
+synthesis writers construct and parse the full strict artifact bodies before
+writing them. `tests/contracts/explore-artifact-composition.test.ts` is the
+cross-surface ratchet: fixture schema names, gate `required` arrays,
+`specs/artifacts.json` `schema_exports`, and runtime writer/registry behavior
+must stay aligned.
 
 ## Property ids (reserved; some enforced now, most deferred)
 
@@ -839,12 +840,10 @@ This contract is reopened if any of:
    `schema_sections` `required` arrays with concrete artifact
    schemas and `specs/artifacts.json` `schema_exports`, reopen to
    hold P2.10 accountable.
-8. **`explore.result` needs a dedicated schema** (Codex LOW 12
-   fold-in). If downstream consumers (run-result readers, operator
-   summaries) depend on a richer `explore.result` shape than the
-   current `{summary, verdict_snapshot}` placeholder, reopen to
-   author the result schema explicitly and update the artifact
-   registry row.
+8. **`explore.result` consumer-shape drift** (Codex LOW 12 fold-in,
+   updated at Slice 93). If downstream consumers need fields beyond the
+   Slice 93 `summary` + `verdict_snapshot` + `artifact_pointers` shape,
+   reopen to amend the result schema and artifact registry row together.
 9. **ADR-0008 reopens** (v0.2 amendment — mirror reopen trigger).
    If any of ADR-0008's six reopen conditions fires (target
    retarget, workflow-kind concept lands, dispatch transcript shape

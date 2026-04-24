@@ -8,6 +8,7 @@ import { type DispatchFn, type DispatchInput, runDogfood } from '../../src/runti
 import {
   ExploreAnalysis,
   ExploreBrief,
+  ExploreResult,
   ExploreReviewVerdict,
   ExploreSynthesis,
 } from '../../src/schemas/artifacts/explore.js';
@@ -279,6 +280,23 @@ describe('P2.10a — default explore artifact writer', () => {
     );
     expect(reviewVerdict.verdict).toBe('accept-with-fold-ins');
     expect(reviewVerdict.objections).toHaveLength(1);
+
+    const exploreResult = ExploreResult.parse(
+      JSON.parse(readFileSync(join(runRoot, 'artifacts', 'explore-result.json'), 'utf8')),
+    );
+    expect(exploreResult.summary).toContain('Continue with the next typed artifact boundary');
+    expect(exploreResult.verdict_snapshot).toEqual({
+      synthesis_verdict: 'accept',
+      review_verdict: 'accept-with-fold-ins',
+      objection_count: 1,
+      missed_angle_count: 0,
+    });
+    expect(exploreResult.artifact_pointers.map((pointer) => pointer.path)).toEqual([
+      'artifacts/brief.json',
+      'artifacts/analysis.json',
+      'artifacts/synthesis.json',
+      'artifacts/review-verdict.json',
+    ]);
   });
 
   it('locates the explore.brief dependency by path rather than read position', async () => {
@@ -420,5 +438,67 @@ describe('P2.10a — default explore artifact writer', () => {
     expect(gate.reason).toMatch(/explore\.review-verdict@v1/);
     expect(gate.reason).toMatch(/smuggled|Unrecognized key/);
     expect(() => readFileSync(join(runRoot, 'artifacts', 'review-verdict.json'), 'utf8')).toThrow();
+  });
+
+  it('rejects close-step result aggregation when review-verdict is not an explicit read', async () => {
+    const { workflow, bytes } = loadFixture((raw) => {
+      const close = raw.steps.find((step) => step.id === 'close-step');
+      if (close === undefined) throw new Error('close-step not found');
+      close.reads = ['artifacts/synthesis.json'];
+    });
+    const runRoot = join(runRootBase, 'missing-close-read');
+
+    const outcome = await runDogfood({
+      runRoot,
+      workflow,
+      workflowBytes: bytes,
+      runId: RunId.parse('93000000-0000-0000-0000-000000000000'),
+      goal: 'Require close-step to read the review verdict',
+      rigor: 'standard',
+      lane: lane(),
+      now: deterministicNow(Date.UTC(2026, 3, 24, 19, 0, 0)),
+      dispatcher: stubDispatcher(),
+    });
+
+    expect(outcome.result.outcome).toBe('aborted');
+    const gate = outcome.events.find(
+      (event) => event.kind === 'gate.evaluated' && event.step_id === 'close-step',
+    );
+    if (gate?.kind !== 'gate.evaluated') throw new Error('expected close gate event');
+    expect(gate.outcome).toBe('fail');
+    expect(gate.reason).toMatch(/explore\.result@v1/);
+    expect(gate.reason).toMatch(/artifacts\/review-verdict\.json/);
+    expect(() => readFileSync(join(runRoot, 'artifacts', 'explore-result.json'), 'utf8')).toThrow();
+  });
+
+  it('rejects close-step result aggregation when synthesis is not an explicit read', async () => {
+    const { workflow, bytes } = loadFixture((raw) => {
+      const close = raw.steps.find((step) => step.id === 'close-step');
+      if (close === undefined) throw new Error('close-step not found');
+      close.reads = ['artifacts/review-verdict.json'];
+    });
+    const runRoot = join(runRootBase, 'missing-synthesis-close-read');
+
+    const outcome = await runDogfood({
+      runRoot,
+      workflow,
+      workflowBytes: bytes,
+      runId: RunId.parse('93000000-0000-0000-0000-000000000002'),
+      goal: 'Require close-step to read the synthesis',
+      rigor: 'standard',
+      lane: lane(),
+      now: deterministicNow(Date.UTC(2026, 3, 24, 19, 5, 0)),
+      dispatcher: stubDispatcher(),
+    });
+
+    expect(outcome.result.outcome).toBe('aborted');
+    const gate = outcome.events.find(
+      (event) => event.kind === 'gate.evaluated' && event.step_id === 'close-step',
+    );
+    if (gate?.kind !== 'gate.evaluated') throw new Error('expected close gate event');
+    expect(gate.outcome).toBe('fail');
+    expect(gate.reason).toMatch(/explore\.result@v1/);
+    expect(gate.reason).toMatch(/artifacts\/synthesis\.json/);
+    expect(() => readFileSync(join(runRoot, 'artifacts', 'explore-result.json'), 'utf8')).toThrow();
   });
 });

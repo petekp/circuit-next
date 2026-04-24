@@ -73,6 +73,18 @@ const LANDED_ARTIFACTS = [
       missed_angles: [],
     },
   },
+  {
+    artifactId: 'explore.result',
+    stepId: 'close-step',
+    schemaName: 'explore.result@v1',
+    schemaExports: [
+      'ExploreResult',
+      'ExploreResultArtifactId',
+      'ExploreResultArtifactPointer',
+      'ExploreResultVerdictSnapshot',
+    ],
+    requiredFields: ['summary', 'verdict_snapshot'],
+  },
 ] as const;
 
 function loadArtifacts(): ArtifactRow[] {
@@ -121,18 +133,6 @@ describe('P2.10 artifact-schema composition seam', () => {
       }
     }
 
-    const resultRow = artifactById(artifacts, 'explore.result');
-    expect(resultRow.schema_file).toBe('');
-    expect(resultRow.schema_exports).toEqual([]);
-    expect(resultRow.description).toMatch(/placeholder-parity epoch/);
-    expect(resultRow.description).toMatch(
-      /does not yet consume brief, analysis, synthesis, or review-verdict/,
-    );
-
-    const closeStep = stepById(workflow, 'close-step');
-    expect(closeStep.writes.artifact.schema).toBe('explore.result@v1');
-    expect(closeStep.gate.required).toEqual(['summary', 'verdict_snapshot']);
-    expect(runnerSource).not.toContain("schemaName === 'explore.result@v1'");
     expect(parseArtifact('explore.result@v1', '{"summary":"x","verdict_snapshot":"y"}').kind).toBe(
       'fail',
     );

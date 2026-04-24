@@ -12,7 +12,13 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { BuiltInAdapter, DispatchResolutionSource } from '../schemas/adapter.js';
-import { ExploreAnalysis, ExploreBrief } from '../schemas/artifacts/explore.js';
+import {
+  ExploreAnalysis,
+  ExploreBrief,
+  ExploreResult,
+  ExploreReviewVerdict,
+  ExploreSynthesis,
+} from '../schemas/artifacts/explore.js';
 import {
   ReviewDispatchResult,
   ReviewResult,
@@ -453,16 +459,14 @@ function terminalOutcomeForRoute(route: string): RunClosedOutcome | undefined {
 
 // Slice 43c: orchestrator-synthesis steps land an artifact file at
 // `runRoot/step.writes.artifact.path` before their `step.artifact_written`
-// event fires. At v0 the body is a minimal deterministic JSON stub with
-// one string placeholder per `step.gate.required` section — sufficient to
-// (a) let downstream steps' `reads[]` find the file (prompt composition +
-// final close-step reads), (b) let the close-step's artifact
-// (`artifacts/explore-result.json` in explore) land deterministically so
-// a byte-shape golden can hash it, and (c) keep the close-step at the end
-// of the run idempotent for repeat invocations against the same fixture.
+// event fires. The fallback body is a minimal deterministic JSON stub with
+// one string placeholder per `step.gate.required` section, while registered
+// schema-specific writers replace that fallback for stricter workflow
+// artifacts. The deterministic close artifact is still hashable after test
+// normalization, and repeat invocations against the same fixture remain
+// idempotent.
 // Slice 83 adds the first per-workflow registration for review.intake@v1
-// and review.result@v1; other synthesis schemas keep the placeholder
-// fallback until their own schema-specific writers land.
+// and review.result@v1; Slices 89-93 add the explore-specific writers.
 function writeJsonArtifact(runRoot: string, path: string, body: unknown): void {
   const abs = resolveRunRelative(runRoot, path);
   mkdirSync(dirname(abs), { recursive: true });
@@ -480,6 +484,12 @@ function isDispatchStep(step: Workflow['steps'][number]): step is DispatchWorkfl
 }
 
 const EXPLORE_BRIEF_ARTIFACT_PATH = 'artifacts/brief.json';
+const EXPLORE_ARTIFACT_POINTERS = [
+  { artifact_id: 'explore.brief', schema: 'explore.brief@v1' },
+  { artifact_id: 'explore.analysis', schema: 'explore.analysis@v1' },
+  { artifact_id: 'explore.synthesis', schema: 'explore.synthesis@v1' },
+  { artifact_id: 'explore.review-verdict', schema: 'explore.review-verdict@v1' },
+] as const;
 
 function reviewAnalyzeResultPath(
   workflow: Workflow,
@@ -504,6 +514,40 @@ function reviewAnalyzeResultPath(
     );
   }
   return resultPath;
+}
+
+function artifactPathForSchema(workflow: Workflow, schemaName: string): string {
+  const matches = workflow.steps.filter(
+    (candidate) => candidate.writes.artifact?.schema === schemaName,
+  );
+  if (matches.length !== 1) {
+    throw new Error(
+      `artifact schema '${schemaName}' must be written by exactly one workflow step, found ${matches.length}`,
+    );
+  }
+  const match = matches[0];
+  if (match === undefined) {
+    throw new Error(`artifact schema '${schemaName}' matched no workflow step`);
+  }
+  const artifact = match.writes.artifact;
+  if (artifact === undefined) {
+    throw new Error(`artifact schema '${schemaName}' matched a step without an artifact writer`);
+  }
+  return artifact.path as unknown as string;
+}
+
+function requiredCloseReadForSchema(
+  workflow: Workflow,
+  closeStep: SynthesisWriterInput['step'],
+  schemaName: string,
+): string {
+  const path = artifactPathForSchema(workflow, schemaName);
+  if (!closeStep.reads.includes(path as never)) {
+    throw new Error(
+      `${closeStep.writes.artifact.schema} requires close step '${closeStep.id}' to read ${path}`,
+    );
+  }
+  return path;
 }
 
 function tryWriteRegisteredSynthesisArtifact(input: SynthesisWriterInput): boolean {
@@ -562,6 +606,32 @@ function tryWriteRegisteredSynthesisArtifact(input: SynthesisWriterInput): boole
       scope: goal,
       findings: dispatchResult.findings,
       verdict: computeReviewVerdict(dispatchResult.findings),
+    });
+    writeJsonArtifact(runRoot, step.writes.artifact.path, artifact);
+    return true;
+  }
+
+  if (schemaName === 'explore.result@v1') {
+    const synthesisPath = requiredCloseReadForSchema(workflow, step, 'explore.synthesis@v1');
+    const reviewVerdictPath = requiredCloseReadForSchema(
+      workflow,
+      step,
+      'explore.review-verdict@v1',
+    );
+    const synthesis = ExploreSynthesis.parse(readJsonArtifact(runRoot, synthesisPath));
+    const reviewVerdict = ExploreReviewVerdict.parse(readJsonArtifact(runRoot, reviewVerdictPath));
+    const artifact = ExploreResult.parse({
+      summary: `Explore recommendation: ${synthesis.recommendation}`,
+      verdict_snapshot: {
+        synthesis_verdict: synthesis.verdict,
+        review_verdict: reviewVerdict.verdict,
+        objection_count: reviewVerdict.objections.length,
+        missed_angle_count: reviewVerdict.missed_angles.length,
+      },
+      artifact_pointers: EXPLORE_ARTIFACT_POINTERS.map((pointer) => ({
+        ...pointer,
+        path: artifactPathForSchema(workflow, pointer.schema),
+      })),
     });
     writeJsonArtifact(runRoot, step.writes.artifact.path, artifact);
     return true;

@@ -4,12 +4,13 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
 import { RunId } from '../../src/schemas/ids.js';
 import type { LaneDeclaration } from '../../src/schemas/lane.js';
 import { Workflow } from '../../src/schemas/workflow.js';
 
 import { validateWorkflowKindPolicy } from '../../src/runtime/policy/workflow-kind-policy.js';
-import { runDogfood } from '../../src/runtime/runner.js';
+import { type DispatchFn, type DispatchInput, runDogfood } from '../../src/runtime/runner.js';
 
 // Slice 43c (P2.5) — `explore` end-to-end fixture run. Closes Phase 2
 // close criteria CC#P2-1 (one-workflow parity substrate) and CC#P2-2
@@ -19,7 +20,7 @@ import { runDogfood } from '../../src/runtime/runner.js';
 // Structure mirrors the Slice 42 adapter smoke file: always-running
 // static declarations (ratchet-floor contribution) + AGENT_SMOKE-gated
 // real-subprocess end-to-end. Static tests bind the explore fixture
-// shape, the normalization rule used to hash the final result artifact,
+// shape, the normalization rule used to hash the normalized result artifact,
 // and the `sha256Hex` helper format. The AGENT_SMOKE-gated branch runs
 // the real explore fixture through `runDogfood` with the default
 // `dispatchAgent` (spawns `claude -p` per Slice 42), asserts the
@@ -103,7 +104,13 @@ function canonicalize(input: unknown): unknown {
     const src = input as Record<string, unknown>;
     const sorted: Record<string, unknown> = {};
     for (const k of Object.keys(src).sort()) {
-      if (k === 'receipt_id' || k === 'run_id') {
+      if (k === 'summary') {
+        sorted[k] = '<MODEL_TEXT>';
+      } else if (k === 'synthesis_verdict' || k === 'review_verdict') {
+        sorted[k] = '<VERDICT>';
+      } else if (k === 'objection_count' || k === 'missed_angle_count') {
+        sorted[k] = '<COUNT>';
+      } else if (k === 'receipt_id' || k === 'run_id') {
         sorted[k] = '<ID>';
       } else if (k === 'recorded_at' || k === 'closed_at') {
         sorted[k] = '<ISO_TIMESTAMP>';
@@ -130,6 +137,46 @@ function lane(): LaneDeclaration {
       'runDogfood closes the explore fixture under real dispatchAgent with 2x five-event transcripts and a byte-shape golden on explore-result.json',
     alternate_framing:
       'defer end-to-end explore until P2.9 second-workflow slice; rejected because CC#P2-1 + CC#P2-2 are Phase 2 close criteria that bind on one-workflow-parity substrate, not two.',
+  };
+}
+
+function deterministicDispatcher(): DispatchFn {
+  return {
+    adapterName: 'agent',
+    dispatch: async (input: DispatchInput): Promise<DispatchResult> => {
+      if (input.prompt.includes('Step: synthesize-step')) {
+        return {
+          request_payload: input.prompt,
+          receipt_id: 'golden-synthesis',
+          result_body: JSON.stringify({
+            verdict: 'accept',
+            subject: 'explore: deterministic close-result parity run',
+            recommendation: 'Keep the explore close aggregate deterministic',
+            success_condition_alignment: 'The close result summarizes the typed artifacts',
+            supporting_aspects: [
+              {
+                aspect: 'artifact-shape',
+                contribution: 'The prior artifacts give the close step stable inputs',
+              },
+            ],
+          }),
+          duration_ms: 1,
+          cli_version: '0.0.0-stub',
+        };
+      }
+      return {
+        request_payload: input.prompt,
+        receipt_id: 'golden-review',
+        result_body: JSON.stringify({
+          verdict: 'accept-with-fold-ins',
+          overall_assessment: 'The synthesis is usable with one follow-up',
+          objections: ['Clarify downstream consumer needs'],
+          missed_angles: [],
+        }),
+        duration_ms: 1,
+        cli_version: '0.0.0-stub',
+      };
+    },
   };
 }
 
@@ -210,6 +257,17 @@ describe('Slice 43c — explore fixture static declarations (ratchet-floor contr
     expect(out).toContain('"keep": "kept"');
   });
 
+  it('normalizeExploreResult redacts model-derived close-result fields', () => {
+    const raw =
+      '{"summary":"free prose","verdict_snapshot":{"synthesis_verdict":"accept","review_verdict":"accept-with-fold-ins","objection_count":3,"missed_angle_count":2}}';
+    const out = normalizeExploreResult(raw);
+    expect(out).toContain('"summary": "<MODEL_TEXT>"');
+    expect(out).toContain('"synthesis_verdict": "<VERDICT>"');
+    expect(out).toContain('"review_verdict": "<VERDICT>"');
+    expect(out).toContain('"objection_count": "<COUNT>"');
+    expect(out).toContain('"missed_angle_count": "<COUNT>"');
+  });
+
   it('normalizeExploreResult sorts object keys alphabetically', () => {
     const raw = '{"z":1,"a":2,"m":3}';
     const out = normalizeExploreResult(raw);
@@ -226,37 +284,38 @@ describe('Slice 43c — explore fixture static declarations (ratchet-floor contr
     expect(contents).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it('golden sha256 is self-consistent with the writeSynthesisArtifact placeholder derivation (v0.3 placeholder-parity epoch; P2.10 re-binds to orchestrator-parity per ADR-0007 §Decision.1 Slice 44 amendment)', () => {
-    // Slice 44 arc-close fold-in (convergent Claude+Codex HIGH 2): the
-    // golden under test here is NOT a parity-vs-reference-Circuit assertion.
-    // It's a self-consistency assertion over writeSynthesisArtifact's
-    // placeholder-body derivation. Re-derive the placeholder body the runner
-    // writes for the explore close-step and confirm the checked-in golden
-    // matches its hash. This binds the golden to the runner's deterministic
-    // output without requiring the AGENT_SMOKE-gated e2e path to run in CI.
-    // P2.10 replaces writeSynthesisArtifact with real orchestrator output;
-    // at that point this test must be regenerated (UPDATE_GOLDEN=1) and
-    // renamed to make the orchestrator-parity claim explicit. Until P2.10,
-    // CC#P2-1 is satisfied at placeholder-parity per ADR-0007 amendment.
-    const { workflow } = loadExploreFixture();
-    const close = workflow.steps.find((s) => s.id === 'close-step');
-    if (close?.kind !== 'synthesis') throw new Error('close-step must be synthesis');
-    const body: Record<string, string> = {};
-    for (const section of close.gate.required) {
-      body[section] = `<${close.id as unknown as string}-placeholder-${section}>`;
+  it('golden sha256 is self-consistent with the deterministic explore.result close writer', async () => {
+    const { workflow, bytes } = loadExploreFixture();
+    const runRoot = mkdtempSync(join(tmpdir(), 'circuit-next-explore-golden-'));
+    try {
+      const outcome = await runDogfood({
+        runRoot,
+        workflow,
+        workflowBytes: bytes,
+        runId: RunId.parse('93000000-0000-0000-0000-000000000001'),
+        goal: 'explore: deterministic close-result parity run',
+        rigor: 'standard',
+        lane: lane(),
+        now: () => new Date('2026-04-24T19:30:00.000Z'),
+        dispatcher: deterministicDispatcher(),
+      });
+      expect(outcome.result.outcome).toBe('complete');
+      const normalized = normalizeExploreResult(
+        readFileSync(join(runRoot, 'artifacts', 'explore-result.json'), 'utf8'),
+      );
+      const digest = sha256Hex(normalized);
+      const golden = readFileSync(GOLDEN_RESULT_SHA256_PATH, 'utf8').trim();
+      expect(digest).toBe(golden);
+    } finally {
+      rmSync(runRoot, { recursive: true, force: true });
     }
-    const raw = `${JSON.stringify(body, null, 2)}\n`;
-    const normalized = normalizeExploreResult(raw);
-    const digest = sha256Hex(normalized);
-    const golden = readFileSync(GOLDEN_RESULT_SHA256_PATH, 'utf8').trim();
-    expect(digest).toBe(golden);
   });
 });
 
 // AGENT_SMOKE-gated real-subprocess end-to-end. Runs ONLY when the
 // operator explicitly opts in via AGENT_SMOKE=1 so CI (and developer-
 // local runs without auth) stay green. Test body is written so a rerun
-// against the golden locks byte-shape parity forever after; write-side
+// against the golden locks normalized result-shape parity; write-side
 // effects update `tests/fixtures/agent-smoke/last-run.json` so the
 // commit-ancestor audit (Check 30) can bind the fingerprint to the
 // committing slice.
@@ -274,7 +333,7 @@ describe('Slice 43c — explore fixture static declarations (ratchet-floor contr
     });
 
     it(
-      'closes the explore run end-to-end through the real dispatchAgent + 2x five-event transcript + byte-shape golden parity',
+      'closes the explore run end-to-end through the real dispatchAgent + 2x five-event transcript + normalized golden parity',
       async () => {
         const { workflow, bytes } = loadExploreFixture();
         const runRoot = join(runRootBase, 'explore-e2e');

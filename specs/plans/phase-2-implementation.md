@@ -821,7 +821,8 @@ commit time. Expect re-ordering as earlier slices expose surface.
   `explore.review-verdict`. Slice 92 closes the first schema tranche with
   composition review and binds the four landed artifact schemas across
   fixture, artifact-ledger, schema-export, and runtime-validation surfaces.
-  Remaining target-workflow artifact schema: close-phase `explore.result`.
+  Slice 93 lands the remaining close-phase `explore.result` schema and
+  registered close writer.
 - **P2.11 — Plugin-level skill wiring** — user-invocable skills that
   wrap `/circuit:<workflow>` commands so the plugin-user UX matches
   reference Circuit.

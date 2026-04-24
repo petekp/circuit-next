@@ -1,4 +1,4 @@
-<!-- current_slice: 92 -->
+<!-- current_slice: 93 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -9,11 +9,9 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 92
-- **current_arc:** P2.10 artifact schema set continuing after arc-close
-  review (Slices 89-92 bind `explore.brief`, `explore.analysis`,
-  `explore.synthesis`, and `explore.review-verdict` to strict schemas;
-  close result remains next)
+- **current_slice:** 93
+- **current_arc:** P2.10 artifact schema set closed for all five explore
+  artifacts; next work can move to the next Phase 2 tranche
 - **current_phase:** Phase 2 — Implementation (continuing)
 
 Chronicle (relocated narrative history — non-authoritative; see
@@ -160,3 +158,8 @@ to the honest placeholder-parity state and added a seam-level test tying the
 landed fixture schema names, artifact rows, schema exports, and runtime
 validation together. `explore.result` remains the next privileged runtime
 slice.*
+Slice 93 closed the remaining P2.10 artifact schema by adding the strict
+`explore.result@v1` aggregate, wiring the close-step writer to read
+`synthesis.json` and `review-verdict.json`, and updating the explore golden
+to the deterministic close-result output. The five explore artifacts now all
+have explicit schemas and runtime writers or dispatch materializers.*

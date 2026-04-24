@@ -104,7 +104,7 @@ run/
     ├── analysis.json              (54 bytes)     — analyze-step
     ├── brief.json                 (121 bytes)    — frame-step
     ├── dispatch/                                 — synthesize + review adapter transcripts
-    ├── explore-result.json        (119 bytes)    — close-step (placeholder-parity per ADR-0007 CC#P2-1)
+    ├── explore-result.json        (119 bytes)    — close-step (historical placeholder-parity evidence; Slice 93 later replaces this with typed `explore.result@v1`)
     ├── result.json                (600 bytes)    — canonical RunResult
     ├── review-verdict.json        (20 bytes)     — review-step dispatch output
     └── synthesis.json             (231 bytes)    — synthesize-step dispatch output
@@ -156,7 +156,7 @@ All 30 events in `events.ndjson`, in sequence order:
 | 5–8 | same 4 events | `analyze-step` | orchestrator-synthesis; artifact=`analysis.json`, schema=`explore.analysis@v1` |
 | 9–15 | `step.entered` + 4 dispatch events + `gate.evaluated` + `step.completed` | `synthesize-step` | worker-dispatch via `claude -p` adapter; artifact=`synthesis.json`, gate=result_verdict, verdict=`accept` (in `gate.pass=["accept"]`) |
 | 16–22 | same 7-event pattern | `review-step` | worker-dispatch via `codex exec` adapter; artifact=`review-verdict.json`, gate=result_verdict, verdict=`accept` (in `gate.pass=["accept","accept-with-fold-ins"]`) |
-| 23–28 | frame-phase-shape events | `close-step` | orchestrator-synthesis (placeholder-parity per ADR-0007 CC#P2-1); artifact=`explore-result.json`, schema=`explore.result@v1`, gate pass |
+| 23–28 | frame-phase-shape events | `close-step` | orchestrator-synthesis (recorded during the historical placeholder-parity epoch; Slice 93 later replaces this writer with the typed `explore.result@v1` aggregate); artifact=`explore-result.json`, historical declared schema token=`explore.result@v1`, gate pass |
 | 29 | `run.closed` | — | `outcome: complete` |
 
 ## What this proves (and what it does not)
@@ -213,11 +213,12 @@ All 30 events in `events.ndjson`, in sequence order:
   recorded in this file). Slash-command handler path remains unproven
   pending a plugin-user transcript — see "Does NOT prove" above.
 
-Note: CC#P2-3 at active-satisfied composes with CC#P2-1 at
-placeholder-parity (per ADR-0007 amendment) — the close-step artifact
-`explore-result.json` carries literal `<close-step-placeholder-*>` strings
-because orchestrator-synthesis close-step output is placeholder until
-P2.10. The wiring gap CC#P2-3 closes is separate from the
+Note: this evidence was recorded while CC#P2-1 was still at
+placeholder-parity (per ADR-0007 amendment). Slice 93 later replaced the
+close-step placeholder writer with the typed `explore.result@v1` aggregate,
+so the captured `explore-result.json` fingerprint is historical evidence for
+the Slice 56 CLI-surrogate invocation, not current close-result shape
+evidence. The wiring gap CC#P2-3 closes is separate from the
 orchestrator-parity gap CC#P2-1 tracks.
 
 ## Authority

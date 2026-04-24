@@ -29,16 +29,13 @@ import { ExploreReviewVerdict, ExploreSynthesis } from '../schemas/artifacts/exp
 // This keeps the failure-path event surface uniform across both
 // halves of the ADR-0008 §Decision.3a gate.
 //
-// Schema shape at v0.3. Dispatch-produced explore artifacts still carry the
-// minimal `{ verdict: string }.passthrough()` shape that matches what Slice
-// 53's gate evaluator already requires. Slice 89 starts P2.10 with strict
-// orchestrator-produced explore.brief/explore.analysis schemas, but those
-// schemas intentionally stay OUT of this dispatch-materializer registry: the
-// explore contract binds them to orchestrator synthesis writers only. The
-// Slice 90 promotes the dispatch-produced explore.synthesis artifact to its
-// strict payload schema. Slice 91 does the same for the dispatch-produced
-// explore.review-verdict artifact. The remaining explore close artifact stays
-// on the minimal/fallback path until its own schema-specific writer lands.
+// Schema shape after P2.10. Dispatch-produced explore artifacts are parsed
+// here because they materialize adapter result bodies. The orchestrator-
+// produced explore.brief / analysis / result schemas intentionally stay OUT
+// of this dispatch-materializer registry: the explore contract binds them to
+// registered synthesis writers in runner.ts. Slice 90 promotes
+// explore.synthesis to its strict payload schema; Slice 91 does the same for
+// explore.review-verdict; Slice 93 handles explore.result in the close writer.
 //
 // `dogfood-strict@v1` is a test-only strict shape used by
 // `tests/runner/materializer-schema-parse.test.ts` case (a)/(b) to
