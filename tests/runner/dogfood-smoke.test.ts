@@ -301,15 +301,21 @@ describe('Slice 27d — dogfood-run-0 runner smoke', () => {
       }) as typeof process.stdout.write;
       let exit = -1;
       try {
-        exit = await main([
-          'dogfood-run-0',
-          '--goal',
-          'smoke via CLI',
-          '--rigor',
-          'standard',
-          '--run-root',
-          runRoot,
-        ]);
+        exit = await main(
+          [
+            'dogfood-run-0',
+            '--goal',
+            'smoke via CLI',
+            '--rigor',
+            'standard',
+            '--run-root',
+            runRoot,
+          ],
+          {
+            configHomeDir: join(runRootBase, 'empty-home'),
+            configCwd: join(runRootBase, 'empty-cwd'),
+          },
+        );
       } finally {
         process.stdout.write = origWrite;
       }

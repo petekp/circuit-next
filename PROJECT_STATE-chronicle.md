@@ -12,6 +12,17 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 86 CONFIG-LOADER** (this commit, Ratchet-Advance) - wired the
+  product CLI into the selection resolver's config-layer input. The CLI
+  now discovers and validates the canonical user-global config file at
+  `~/.config/circuit-next/config.yaml` and `./.circuit/config.yaml` from
+  the current working directory, skips them when absent, and fails
+  loudly when the YAML or schema shape is invalid. The focused runtime
+  test proves those loaded layers reach both injected dispatchers and
+  persisted `dispatch.started.resolved_selection` evidence. Built-in
+  adapters still do not act on model/effort values; that remains the next
+  model/effort follow-on.
+
 - **Slice 85 MODEL-EFFORT-RESOLVER** (this commit, Ratchet-Advance) -
   replaced the old workflow-plus-step selection helper with the full
   selection resolver. Dispatch evidence now carries the effective model,

@@ -3029,10 +3029,10 @@ export const ARTIFACT_BACKING_PATH_CONTAINER_PATHS = new Map([
     }),
   ],
   [
-    '<project>/.circuit/config.yaml',
+    '<cwd>/.circuit/config.yaml',
     Object.freeze({
       rationale:
-        'Project-local config file — composes config + selection + adapter rows as layered configuration sections.',
+        'Current-working-directory project config file — composes config + selection + adapter rows as layered configuration sections.',
       allowed_artifact_ids: Object.freeze(
         new Set([
           'config.root',

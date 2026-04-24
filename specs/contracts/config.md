@@ -45,10 +45,12 @@ It does NOT cover:
   owned by `specs/contracts/selection.md` SEL-I5..I8; config-file
   composition for non-selection fields (e.g. merging two layers'
   `dispatch.roles` maps) is reserved for v0.2 with an explicit ADR.
-- **Discovery and load** (path resolution for `~/.config/circuit-next/
-  config.yaml`, project-local `.circuit/config.yaml`, YAML parse).
-  Discovery is a Phase 2 runtime-boundary concern (see
-  `specs/plans/phase-1-close-revised.md` §Slice 27c).
+- **Discovery and load semantics** beyond the canonical runtime path.
+  Slice 86 adds the product loader for `~/.config/circuit-next/
+  config.yaml` and current-working-directory `.circuit/config.yaml`, but this
+  contract still governs the parsed shape after load. Broader discovery
+  policy (alternate filenames, upward project-root search, TOML/JSON
+  variants, and recovery UX) remains outside this static shape contract.
 - **Dispatch resolution** inside `DispatchConfig` (precedence and
   registry closure). Those live in `specs/contracts/adapter.md`
   (ADAPTER-I7/I8).
@@ -294,9 +296,10 @@ After a `CircuitOverride` is accepted:
   `Config.defaults.selection` in the matching `ConfigLayer`. This
   cross-contract mapping between ConfigLayer and SelectionLayer is
   documented in `specs/domain.md#configuration-vocabulary`. Slice 85
-  adds the runtime selection resolver for already-loaded layers; file
-  discovery/loading that produces those layers remains outside this
-  config shape contract.
+  adds the runtime selection resolver for already-loaded layers; Slice
+  86 wires the product CLI to produce user-global/project layers from
+  the canonical YAML paths. Additional discovery policy remains outside
+  this config shape contract.
 
 - **workflow** (`src/schemas/workflow.ts`) — `Config.circuits` is
   keyed on `WorkflowId`, so workflow existence is a soft
@@ -416,8 +419,9 @@ After a `CircuitOverride` is accepted:
   composition (non-selection fields) is a distinct surface — v0.2
   decides whether to split.
 
-- **v1.0 (Phase 2)** — Ratified invariants + property tests +
-  runtime discovery/load layer that produces `LayeredConfig`s from
-  on-disk YAML + in-memory argv. Discovery invariants (file
-  existence, YAML parse failure modes, path-traversal safety) land
-  in a Phase 2 runtime-boundary contract, not this shape contract.
+- **v1.0 (Phase 2)** — Ratified invariants + property tests. Slice 86
+  lands the first runtime discovery/load layer for canonical user-global
+  and current-working-directory project YAML files. Discovery invariants beyond that narrow loader
+  (alternate file locations, upward root search, path-traversal safety,
+  and richer recovery UX) land in a Phase 2 runtime-boundary contract,
+  not this shape contract.

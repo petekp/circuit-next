@@ -1,4 +1,4 @@
-<!-- current_slice: 85 -->
+<!-- current_slice: 86 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -9,12 +9,11 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 85
-- **current_arc:** P2-MODEL-EFFORT (Slice 85 replaces the old workflow +
-  step-only selection helper with the default/user-global/project/
-  workflow/phase/step/invocation resolver for already-supplied layers;
-  product-path config discovery and adapter model/effort handling remain
-  follow-on work)
+- **current_slice:** 86
+- **current_arc:** P2-MODEL-EFFORT (Slice 86 wires canonical user-global
+  and project YAML config discovery into the product CLI so those layers
+  reach dispatch selection evidence; built-in adapter model/effort
+  handling remains follow-on work)
 - **current_phase:** Phase 2 — Implementation (continuing)
 
 Chronicle (relocated narrative history — non-authoritative; see
@@ -114,3 +113,10 @@ phase, step, and invocation layers; CLI config discovery and built-in
 adapter model/effort honoring remain follow-on work. The tests pin the
 provider enum while keeping model ids open-ended for adapter-owned
 handling.*
+Slice 86 landed product-path config discovery for the selection resolver.
+The CLI now loads `~/.config/circuit-next/config.yaml` and
+`./.circuit/config.yaml` from the current working directory when present,
+validates them through the existing config schemas, and supplies them to
+dispatch selection resolution. Missing config files are skipped; malformed
+or schema-invalid ones fail loudly. Built-in adapters still do not honor
+model/effort values yet.*

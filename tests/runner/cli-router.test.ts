@@ -4,9 +4,8 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { main } from '../../src/cli/dogfood.js';
-import type { AgentDispatchInput } from '../../src/runtime/adapters/agent.js';
 import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
-import type { DispatchFn } from '../../src/runtime/runner.js';
+import type { DispatchFn, DispatchInput } from '../../src/runtime/runner.js';
 
 function deterministicNow(startMs: number): () => Date {
   let n = 0;
@@ -16,7 +15,7 @@ function deterministicNow(startMs: number): () => Date {
 function dispatcherWithBody(body: string): DispatchFn {
   return {
     adapterName: 'agent',
-    dispatch: async (input: AgentDispatchInput): Promise<DispatchResult> => ({
+    dispatch: async (input: DispatchInput): Promise<DispatchResult> => ({
       request_payload: input.prompt,
       receipt_id: 'stub-receipt-cli-router',
       result_body: body,
@@ -41,6 +40,8 @@ async function runMainJson(
       dispatcher: dispatcherWithBody(dispatchBody),
       now: deterministicNow(Date.UTC(2026, 3, 24, 15, 0, 0)),
       runId: '84000000-0000-0000-0000-000000000001',
+      configHomeDir: join(runRootBase, 'empty-home'),
+      configCwd: join(runRootBase, 'empty-cwd'),
     });
     expect(exit).toBe(0);
   } finally {
@@ -131,6 +132,8 @@ describe('P2.8 CLI router', () => {
           dispatcher: dispatcherWithBody('{"verdict":"accept"}'),
           now: deterministicNow(Date.UTC(2026, 3, 24, 15, 0, 0)),
           runId: '84000000-0000-0000-0000-000000000004',
+          configHomeDir: join(runRootBase, 'empty-home'),
+          configCwd: join(runRootBase, 'empty-cwd'),
         },
       ),
     ).rejects.toThrow(/workflow fixture id mismatch/i);

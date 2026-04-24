@@ -7,6 +7,7 @@ import type { LaneDeclaration } from '../schemas/lane.js';
 import { Rigor } from '../schemas/rigor.js';
 import { Workflow } from '../schemas/workflow.js';
 
+import { discoverConfigLayers } from '../runtime/config-loader.js';
 import { validateWorkflowKindPolicy } from '../runtime/policy/workflow-kind-policy.js';
 import { classifyWorkflowTask } from '../runtime/router.js';
 import { type DispatchFn, type DogfoodInvocation, runDogfood } from '../runtime/runner.js';
@@ -18,8 +19,10 @@ import { type DispatchFn, type DogfoodInvocation, runDogfood } from '../runtime/
 // composes the runtime boundary via `runDogfood`, and prints the
 // <run-root> path on success.
 //
-// Invocation-layer config only (`--goal`, `--rigor`, `--run-root`,
-// `--fixture`). No user-global or project config layer yet.
+// Invocation-layer config remains narrow (`--goal`, `--rigor`, `--run-root`,
+// `--fixture`), but the product path now discovers user-global and project
+// config files and supplies them as `LayeredConfig`s to the selection
+// resolver.
 //
 // Slice 44 arc-close fold-in (Codex HIGH 4): `--dry-run` is no longer
 // silently accepted as a no-op. Pre-Slice-44, the flag was accepted for
@@ -53,6 +56,8 @@ export interface CliMainOptions {
   dispatcher?: DispatchFn;
   now?: () => Date;
   runId?: string;
+  configHomeDir?: string;
+  configCwd?: string;
 }
 
 function usage(): string {
@@ -60,6 +65,8 @@ function usage(): string {
     'usage: circuit:run -- [workflow-name] --goal "<goal>" [--rigor <lite|standard|deep|tournament|autonomous>] [--run-root <path>] [--fixture <path>]',
     '',
     'v0.1 scope: with an explicit workflow name, loads .claude-plugin/skills/<name>/circuit.json. Without one, classifies the free-form goal across the registered explore/review workflows and then composes the runtime boundary via runDogfood against the real `dispatchAgent`.',
+    '',
+    'Config: if present, loads ~/.config/circuit-next/config.yaml and ./.circuit/config.yaml from the current working directory into the selection resolver before dispatch.',
     '',
     'Note: `--dry-run` is not implemented. Pre-Slice-44 the flag was accepted as a no-op while the real adapter ran anyway; the arc-close review flagged this as a safety bug and the flag is now rejected until dry-run support lands (tracked in specs/plans/phase-2-implementation.md post-Slice-44 backlog).',
   ].join('\n');
@@ -201,6 +208,10 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
   const runId = RunId.parse(options.runId ?? randomUUID());
   const now = options.now ?? (() => new Date());
   const runRoot = resolve(args.runRoot ?? `${DEFAULT_RUNS_BASE}/${runId as unknown as string}`);
+  const selectionConfigLayers = discoverConfigLayers({
+    ...(options.configHomeDir !== undefined ? { homeDir: options.configHomeDir } : {}),
+    ...(options.configCwd !== undefined ? { cwd: options.configCwd } : {}),
+  });
 
   const lane: LaneDeclaration = {
     lane: 'ratchet-advance',
@@ -222,6 +233,9 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
     now,
   };
   if (options.dispatcher !== undefined) invocation.dispatcher = options.dispatcher;
+  if (selectionConfigLayers.length > 0) {
+    invocation.selectionConfigLayers = selectionConfigLayers;
+  }
 
   const outcome = await runDogfood(invocation);
 

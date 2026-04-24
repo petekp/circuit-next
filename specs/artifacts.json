@@ -243,7 +243,7 @@
       "backing_paths": [
         "<plugin>/skills/<workflow-id>/circuit.yaml (defaults)",
         "~/.config/circuit-next/config.yaml (user-global)",
-        "<project>/.circuit/config.yaml (project)",
+        "<cwd>/.circuit/config.yaml (current-working-directory project)",
         "invocation arguments (ephemeral, in-memory)"
       ],
       "identity_fields": [],
@@ -314,7 +314,7 @@
       "backing_paths": [
         "<plugin>/skills/<workflow-id>/circuit.yaml (defaults)",
         "~/.config/circuit-next/config.yaml (user-global)",
-        "<project>/.circuit/config.yaml (project)",
+        "<cwd>/.circuit/config.yaml (current-working-directory project)",
         "invocation arguments (ephemeral, in-memory)"
       ],
       "identity_fields": [],
@@ -358,7 +358,7 @@
       "backing_paths": [
         "<plugin>/skills/<workflow-id>/circuit.yaml (DispatchConfig.roles[role] / DispatchConfig.circuits[workflow_id])",
         "~/.config/circuit-next/config.yaml (user-global DispatchConfig)",
-        "<project>/.circuit/config.yaml (project DispatchConfig)",
+        "<cwd>/.circuit/config.yaml (current-working-directory project DispatchConfig)",
         "invocation arguments (ephemeral, in-memory DispatchConfig)"
       ],
       "identity_fields": [],
@@ -422,7 +422,7 @@
       "backing_paths": [
         "<plugin>/skills/<workflow-id>/circuit.yaml (defaults layer)",
         "~/.config/circuit-next/config.yaml (user-global)",
-        "<project>/.circuit/config.yaml (project)",
+        "<cwd>/.circuit/config.yaml (current-working-directory project)",
         "invocation arguments (ephemeral, in-memory)"
       ],
       "identity_fields": [],
@@ -483,7 +483,7 @@
       "backing_paths": [
         "<plugin>/skills/<workflow-id>/circuit.yaml (defaults)",
         "~/.config/circuit-next/config.yaml (user-global)",
-        "<project>/.circuit/config.yaml (project)",
+        "<cwd>/.circuit/config.yaml (current-working-directory project)",
         "invocation arguments (ephemeral, in-memory)"
       ],
       "identity_fields": [],

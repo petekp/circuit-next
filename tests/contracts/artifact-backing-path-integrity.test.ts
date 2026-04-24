@@ -151,7 +151,7 @@ describe('checkArtifactBackingPathIntegrity', () => {
         artifactsFile([
           {
             id: 'config.root',
-            backing_paths: ['~/.config/circuit-next/config.yaml', '<project>/.circuit/config.yaml'],
+            backing_paths: ['~/.config/circuit-next/config.yaml', '<cwd>/.circuit/config.yaml'],
           },
         ]),
       );

@@ -111,8 +111,10 @@ term, propose it here in a new commit before using it elsewhere.
 ## Configuration vocabulary
 
 - **Config layer** `[draft]` — One of `default`, `user-global` (at
-  `~/.claude/circuit.config.yaml`), `project` (at
-  `./circuit.config.yaml`), `invocation` (per-command overrides).
+  `~/.config/circuit-next/config.yaml`), `project` (at
+  `./.circuit/config.yaml` from the current working directory),
+  `invocation` (per-command
+  overrides).
 
 - **Selection layer** `[draft]` — The full precedence chain for model /
   effort / skills selection: `default < user-global < project < workflow

@@ -648,9 +648,10 @@ separate slices:
 **Deliverables (explicit slice):** selection-resolution runtime wiring;
 schema parity / contract tests; migration note for existing v0.2 fixtures;
 parse-time guard that unknown providers fail while provider-scoped model
-ids remain open strings for adapter-owned handling (SEL-I4). Runtime
-config discovery and adapter model/effort honoring are follow-on work; the
-resolver can compose those layers once supplied.
+ids remain open strings for adapter-owned handling (SEL-I4). Slice 86
+lands runtime discovery for canonical user-global config plus
+current-working-directory project config; adapter model/effort honoring
+remains follow-on work.
 
 ### Slice 25g — D8 Rollback Review
 
