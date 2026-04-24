@@ -179,6 +179,20 @@ const PHASE_REVIEW_ADDITIONAL_KEYS: string[] = [
   'skipped_scope',
 ];
 
+// Phase-close challenger records are narrower than phase comprehensive
+// reviews. The Phase 2 close audit binds the file name and requires
+// target_kind=phase-close, so it cannot use the generic phase-review
+// target_kind=phase shape above.
+const PHASE_CLOSE_REVIEW_ADDITIONAL_KEYS: string[] = [
+  'review_target',
+  'target_kind',
+  'opening_verdict',
+  'closing_verdict',
+  'commands_run',
+  'opened_scope',
+  'skipped_scope',
+];
+
 // Slice 25 Codex challenger HIGH 5 fold-in — placeholder blocklist. A value
 // that matches any of these (case-insensitive, full-string after trim) is
 // rejected as a degraded scope disclosure. `skipped_scope: none` is the
@@ -344,7 +358,9 @@ function listContractFiles(): string[] {
     .map((name) => resolve(CONTRACTS_DIR, name));
 }
 
-function classifyReview(file: string): 'contract' | 'adr' | 'arc' | 'phase' | 'unknown' {
+function classifyReview(
+  file: string,
+): 'contract' | 'adr' | 'arc' | 'phase' | 'phase-close' | 'unknown' {
   const base = basename(file);
   if (/^adr-/.test(base)) return 'adr';
   if (/^(?:behavioral-arc|arc)-/.test(base)) return 'arc';
@@ -354,6 +370,7 @@ function classifyReview(file: string): 'contract' | 'adr' | 'arc' | 'phase' | 'u
   // Per Slice 47-prep META fold-in: phase comprehensive reviews carry no
   // `-md-v<X.Y>-codex.md` suffix, so the order is unambiguous.
   if (/-v\d+\.\d+-codex\.md$/.test(base)) return 'contract';
+  if (/^phase-\d+-close-codex\.md$/.test(base)) return 'phase-close';
   if (/^phase-/.test(base)) return 'phase';
   return 'unknown';
 }
@@ -556,6 +573,20 @@ describe('cross-model-challenger — CHALLENGER-I3 review records are recorded a
     }
   });
 
+  it('every phase-close challenger record carries close-specific keys with target_kind=phase-close', () => {
+    for (const path of reviewFiles) {
+      if (classifyReview(path) !== 'phase-close') continue;
+      const fm = parseFrontmatter(readFileSync(path, 'utf-8'));
+      for (const key of PHASE_CLOSE_REVIEW_ADDITIONAL_KEYS) {
+        expect(fm.has(key), `${path}: phase-close review missing "${key}".`).toBe(true);
+      }
+      expect(
+        fm.get('target_kind'),
+        `${path}: phase-close review target_kind must equal 'phase-close' (got "${fm.get('target_kind')}").`,
+      ).toBe('phase-close');
+    }
+  });
+
   // Slice 47d (Codex MED 1 fold-in of Slice 47c-2 MED 1 honor-system gap) —
   // mechanical enforcement of the `amnesty_scope` frontmatter requirement on
   // Slice 47 arc-close composition review files. The Slice 47c-2 Codex MED 1
@@ -608,7 +639,7 @@ describe('cross-model-challenger — CHALLENGER-I3 review records are recorded a
     const violations: string[] = [];
     for (const path of reviewFiles) {
       const kind = classifyReview(path);
-      if (kind !== 'arc' && kind !== 'phase') continue;
+      if (kind !== 'arc' && kind !== 'phase' && kind !== 'phase-close') continue;
       const fm = parseFrontmatter(readFileSync(path, 'utf-8'));
       for (const key of ['commands_run', 'opened_scope'] as const) {
         const raw = (fm.get(key) ?? '').trim();
@@ -641,7 +672,7 @@ describe('cross-model-challenger — CHALLENGER-I3 review records are recorded a
     const violations: string[] = [];
     for (const path of reviewFiles) {
       const kind = classifyReview(path);
-      if (kind !== 'arc' && kind !== 'phase') continue;
+      if (kind !== 'arc' && kind !== 'phase' && kind !== 'phase-close') continue;
       const fm = parseFrontmatter(readFileSync(path, 'utf-8'));
       const raw = (fm.get('skipped_scope') ?? '').trim();
       if (!raw) {

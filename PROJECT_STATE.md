@@ -1,20 +1,26 @@
-<!-- current_slice: 100 -->
+<!-- current_slice: 101 -->
 
 # PROJECT_STATE — circuit-next
 
-**Phase:** 2 — Implementation (continuing). See
+**Phase:** 2 — Implementation (closed for the first working workflow;
+broader parity expansion planning next). See
 [PROJECT_STATE-chronicle.md](PROJECT_STATE-chronicle.md) for the
 relocated narrative log + the full phase block with CC#14 retarget
 context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 100
-- **current_arc:** Phase 2 close-evidence cleanup in progress: P2-1 uses
-  structured JSON as the accepted successor artifact shape and does not claim old Markdown byte-for-byte compatibility. P2-3 live command proof now exists
-  through a live Claude Code invocation of the inline `circuit` plugin. Phase 2
-  close review and the operator product check remain next.
-- **current_phase:** Phase 2 — Implementation (continuing)
+- **current_slice:** 101
+- **current_arc:** Phase 2 close package landed. The close claim now has
+  refreshed Claude and Codex live-smoke fingerprints, a real Claude Code
+  command proof, the required Codex challenger review, and a delegated
+  operator product-direction check for retroactive review. P2-1 uses
+  structured JSON as the accepted successor artifact shape; it does not claim old Markdown byte-for-byte compatibility. P2-3 live command proof is included
+  through a live Claude Code invocation of the inline `circuit` plugin. This
+  closes the first working workflow product spine, not full first-generation
+  Circuit parity; the next work is broader parity expansion across build,
+  repair, migrate, sweep, custom workflows, and clearer workflow configuration.
+- **current_phase:** Phase 2 — Implementation (closed for the first working workflow; broader parity expansion planning next)
 
 Chronicle (relocated narrative history — non-authoritative; see
 disclaimer at file top) at

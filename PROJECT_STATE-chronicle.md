@@ -12,6 +12,17 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 101 PHASE 2 CLOSE PACKAGE** (this commit, Ratchet-Advance) -
+  refreshed both live adapter smoke fingerprints, recorded the required Codex
+  phase-close challenger pass, added the delegated operator product-direction
+  check, and turned the Phase 2 close matrix into an accepted close claim. The
+  close claim is intentionally narrow: circuit-next has a real Claude Code
+  plugin path, working Explore and Review workflow surfaces, strict JSON
+  artifacts, model/effort config plumbing, and current Claude/Codex adapter
+  proof. It does not claim full first-generation Circuit parity. The next
+  body of work is broader parity expansion: build, repair, migrate, sweep,
+  custom workflows, and workflow-configuration UX.
+
 - **Slice 100 LIVE PLUGIN COMMAND PROOF** (this commit, Ratchet-Advance) -
   retargeted the plugin command surface to Claude Code's real plugin layout:
   `.claude-plugin/plugin.json` is metadata-only, the plugin name is `circuit`,

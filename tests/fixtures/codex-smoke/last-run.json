@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
-  "commit_sha": "7ffc57d1ab255ac83330f32a502b94c7aafcb038",
+  "commit_sha": "4dea8cc381a353f0e9e8cfb364433e42169965db",
   "result_sha256": "22655acc6c5508dc185b492655bc695af0445c3e374e1d75244c7fa348e5b9b2",
-  "adapter_source_sha256": "cd9a991ab625e6ab3ab5c0db8f06948f4d13236e99d9305f14d77537614cce12",
+  "adapter_source_sha256": "8313e46940eb6250f8d4d68aa4aca836c16d1df390445903e7e1f18c5aab47a1",
   "cli_version": "codex-cli 0.123.0",
-  "recorded_at": "2026-04-24T16:15:01.360Z"
+  "recorded_at": "2026-04-24T20:16:18.734Z"
 }
