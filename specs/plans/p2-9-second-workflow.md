@@ -1,6 +1,6 @@
 ---
 plan: p2-9-second-workflow
-status: challenger-cleared
+status: operator-signoff
 revision: 04
 opened_at: 2026-04-24
 revised_at: 2026-04-23
@@ -8,6 +8,9 @@ opened_in_session: post-planning-readiness-meta-arc-close
 revised_in_session: post-codex-challenger-03-med-foldin
 cleared_in_session: post-codex-challenger-04-accept
 cleared_at: 2026-04-23
+signoff_at: 2026-04-24
+signoff_in_session: post-runtime-safety-floor-p2-9-operator-signoff
+signoff_note: "Operator explicit signoff ('I sign off on P2.9', 2026-04-24) after runtime-safety-floor closure. operator_signoff_predecessor: 5590abd13b7c801d99098eb64ab00d3b0669986f."
 base_commit: d921528
 target: review
 target_hypothesis_note: |

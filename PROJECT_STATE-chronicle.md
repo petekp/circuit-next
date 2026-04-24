@@ -12,6 +12,12 @@ record.*
 
 ## Runtime-Safety-Floor Arc (opened after Slice 68)
 
+- **P2.9 OPERATOR SIGNOFF** (this commit, Ratchet-Advance lifecycle
+  transition) - recorded the operator's explicit "I sign off on P2.9"
+  approval after the runtime-safety-floor arc closed. The P2.9 plan moves
+  from challenger-cleared to operator-signoff; implementation can now start
+  with the policy-table seam.
+
 - **Slice 75 ARC-CLOSE-CEREMONY** (this commit, Ratchet-Advance for the
   audit binding plus Equivalence Refactor for ceremony-only state) - closed
   the runtime-safety-floor arc. The ceremony added the two arc-close review

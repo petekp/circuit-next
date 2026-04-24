@@ -10,8 +10,8 @@ context and phase-open provenance.
 ## §0 Live state
 
 - **current_slice:** 75
-- **current_arc:** between arcs (runtime-safety-floor closed; P2.9 remains
-  challenger-cleared and awaits operator signoff before implementation)
+- **current_arc:** P2.9 second workflow (operator-signed; next planned
+  slice is the review workflow policy-table seam)
 - **current_phase:** Phase 2 — Implementation (continuing)
 
 Chronicle (relocated narrative history — non-authoritative; see
@@ -56,3 +56,6 @@ Slice 75 closed the runtime-safety-floor arc with two composition-review
 prong files, folded the Codex MED by binding the arc into
 `ARC_CLOSE_GATES`, advanced the plan to `closed`, and left P2.9 untouched
 pending its separate operator signoff.*
+P2.9 received explicit operator signoff on 2026-04-24 after the safety
+cleanup closed; implementation may now open from
+`specs/plans/p2-9-second-workflow.md` starting with the policy-table seam.*
