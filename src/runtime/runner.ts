@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname } from 'node:path';
 import type { BuiltInAdapter, DispatchResolutionSource } from '../schemas/adapter.js';
 import type { Event, RunClosedOutcome } from '../schemas/event.js';
 import type { InvocationId, RunId, WorkflowId } from '../schemas/ids.js';
@@ -21,6 +21,7 @@ import {
   writeManifestSnapshot,
 } from './manifest-snapshot-writer.js';
 import { writeResult } from './result-writer.js';
+import { resolveRunRelative } from './run-relative-path.js';
 import { writeDerivedSnapshot } from './snapshot-writer.js';
 
 // Slice 27c landed the runtime-boundary writer/reducer/manifest surfaces
@@ -230,7 +231,7 @@ function composeDispatchPrompt(
       ? '(no reads)'
       : step.reads
           .map((path) => {
-            const abs = join(runRoot, path);
+            const abs = resolveRunRelative(runRoot, path);
             if (!existsSync(abs)) return `[reads unavailable: ${path}]`;
             return `--- ${path} ---\n${readFileSync(abs, 'utf8')}`;
           })
@@ -376,7 +377,7 @@ function writeSynthesisArtifact(
   runRoot: string,
   step: Workflow['steps'][number] & { kind: 'synthesis' },
 ): void {
-  const abs = join(runRoot, step.writes.artifact.path);
+  const abs = resolveRunRelative(runRoot, step.writes.artifact.path);
   mkdirSync(dirname(abs), { recursive: true });
   const body: Record<string, string> = {};
   for (const section of step.gate.required) {

@@ -1,13 +1,14 @@
 import { z } from 'zod';
 import { CheckpointSelectionGate, ResultVerdictGate, SchemaSectionsGate } from './gate.js';
 import { ProtocolId, StepId } from './ids.js';
+import { RunRelativePath } from './primitives.js';
 import { SelectionOverride } from './selection-policy.js';
 
 export const DispatchRole = z.enum(['researcher', 'implementer', 'reviewer']);
 export type DispatchRole = z.infer<typeof DispatchRole>;
 
 export const ArtifactRef = z.object({
-  path: z.string().min(1),
+  path: RunRelativePath,
   schema: z.string().min(1),
 });
 export type ArtifactRef = z.infer<typeof ArtifactRef>;
@@ -16,7 +17,7 @@ const StepBase = z.object({
   id: StepId,
   title: z.string().min(1),
   protocol: ProtocolId,
-  reads: z.array(z.string()).default([]),
+  reads: z.array(RunRelativePath).default([]),
   routes: z.record(z.string(), z.string()).refine((m) => Object.keys(m).length > 0, {
     message: 'Step must declare at least one route (including `@complete`).',
   }),
@@ -48,8 +49,8 @@ export const CheckpointStep = StepBase.extend({
   kind: z.literal('checkpoint'),
   writes: z
     .object({
-      request: z.string().min(1),
-      response: z.string().min(1),
+      request: RunRelativePath,
+      response: RunRelativePath,
       artifact: ArtifactRef.optional(),
     })
     .strict(),
@@ -64,9 +65,9 @@ export const DispatchStep = StepBase.extend({
   writes: z
     .object({
       artifact: ArtifactRef.optional(),
-      request: z.string().min(1),
-      receipt: z.string().min(1),
-      result: z.string().min(1),
+      request: RunRelativePath,
+      receipt: RunRelativePath,
+      result: RunRelativePath,
     })
     .strict(),
   gate: ResultVerdictGate,

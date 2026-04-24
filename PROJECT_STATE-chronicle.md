@@ -10,6 +10,20 @@ record.*
 
 ---
 
+## Runtime-Safety-Floor Arc (opened after Slice 68)
+
+- **Slice 69 RUN-RELATIVE-PATHS** (this commit, Ratchet-Advance) — added
+  `RunRelativePath`, bound all workflow-controlled Step read/write paths
+  to it, replaced raw runtime path joins at dispatch prompt, synthesis
+  artifact, and dispatch materialization call sites with
+  `resolveRunRelative`, and hardened that resolver against symlinked
+  existing ancestors. Step contract exits its v0.1 grandfather via
+  `step.md` v0.2 and `specs/reviews/step-md-v0.2-codex.md`. Codex
+  challenger first rejected on symlink containment; follow-up accepted
+  after fold-ins, with LOW traceability cleanups folded before commit.
+
+---
+
 ## Methodology-Trim Arc (Slices 64-68) — compact chronicle backfill
 
 *Slice 68 ARC-CLOSE fold-in (Codex MED-2). Backfilled at arc-close after

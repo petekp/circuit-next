@@ -357,7 +357,7 @@ describe('Step discriminated union', () => {
     expect(ok.success).toBe(true);
   });
 
-  it('orchestrator + dispatch is rejected', () => {
+  it('STEP-I1 — rejects orchestrator + dispatch kind/gate/writes mismatch', () => {
     const bad = Step.safeParse({
       ...baseSynthesis,
       kind: 'dispatch',
@@ -371,7 +371,7 @@ describe('Step discriminated union', () => {
     expect(bad.success).toBe(false);
   });
 
-  it('checkpoint step requires checkpoint_selection gate', () => {
+  it('STEP-I1 — checkpoint step requires checkpoint_selection gate', () => {
     const bad = Step.safeParse({
       ...baseSynthesis,
       kind: 'checkpoint',
@@ -382,6 +382,32 @@ describe('Step discriminated union', () => {
         required: ['y'],
       },
     });
+    expect(bad.success).toBe(false);
+  });
+
+  it('STEP-I2 — rejects empty routes map', () => {
+    const bad = Step.safeParse({
+      ...baseSynthesis,
+      routes: {},
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('STEP-I5 — rejects invalid budget bounds', () => {
+    for (const budgets of [
+      { max_attempts: 0 },
+      { max_attempts: 11 },
+      { max_attempts: 1.5 },
+      { max_attempts: 1, wall_clock_ms: 0 },
+      { max_attempts: 1, wall_clock_ms: 1.5 },
+    ]) {
+      expect(Step.safeParse({ ...baseSynthesis, budgets }).success).toBe(false);
+    }
+  });
+
+  it('STEP-I7 — rejects a step without protocol', () => {
+    const { protocol: _protocol, ...withoutProtocol } = baseSynthesis;
+    const bad = Step.safeParse(withoutProtocol);
     expect(bad.success).toBe(false);
   });
 
@@ -539,6 +565,123 @@ describe('Step discriminated union', () => {
       },
     });
     expect(bad.success).toBe(false);
+  });
+
+  it('STEP-I8 — rejects non-run-relative paths on every workflow-controlled Step path surface', () => {
+    const invalidPaths = [
+      '../escaped.json',
+      'artifacts/../../escaped.json',
+      '/tmp/escaped.json',
+      'C:\\escaped.json',
+      'artifacts\\escaped.json',
+      'artifacts//x.json',
+      './x.json',
+      'artifacts/./x.json',
+      '',
+    ];
+    const invalidCases = [
+      (path: string) => ({
+        ...baseSynthesis,
+        reads: [path],
+      }),
+      (path: string) => ({
+        ...baseSynthesis,
+        writes: { artifact: { path, schema: 'brief@v1' } },
+      }),
+      (path: string) => ({
+        ...baseSynthesis,
+        kind: 'checkpoint' as const,
+        writes: { request: path, response: 'resp.json' },
+        gate: {
+          kind: 'checkpoint_selection' as const,
+          source: { kind: 'checkpoint_response' as const, ref: 'response' as const },
+          allow: ['continue'],
+        },
+      }),
+      (path: string) => ({
+        ...baseSynthesis,
+        kind: 'checkpoint' as const,
+        writes: { request: 'req.json', response: path },
+        gate: {
+          kind: 'checkpoint_selection' as const,
+          source: { kind: 'checkpoint_response' as const, ref: 'response' as const },
+          allow: ['continue'],
+        },
+      }),
+      (path: string) => ({
+        ...baseSynthesis,
+        kind: 'checkpoint' as const,
+        writes: {
+          request: 'req.json',
+          response: 'resp.json',
+          artifact: { path, schema: 'brief@v1' },
+        },
+        gate: {
+          kind: 'checkpoint_selection' as const,
+          source: { kind: 'checkpoint_response' as const, ref: 'response' as const },
+          allow: ['continue'],
+        },
+      }),
+      (path: string) => ({
+        ...baseSynthesis,
+        executor: 'worker' as const,
+        kind: 'dispatch' as const,
+        role: 'researcher' as const,
+        writes: { request: path, receipt: 'receipt.json', result: 'result.json' },
+        gate: {
+          kind: 'result_verdict' as const,
+          source: { kind: 'dispatch_result' as const, ref: 'result' as const },
+          pass: ['ok'],
+        },
+      }),
+      (path: string) => ({
+        ...baseSynthesis,
+        executor: 'worker' as const,
+        kind: 'dispatch' as const,
+        role: 'researcher' as const,
+        writes: { request: 'request.json', receipt: path, result: 'result.json' },
+        gate: {
+          kind: 'result_verdict' as const,
+          source: { kind: 'dispatch_result' as const, ref: 'result' as const },
+          pass: ['ok'],
+        },
+      }),
+      (path: string) => ({
+        ...baseSynthesis,
+        executor: 'worker' as const,
+        kind: 'dispatch' as const,
+        role: 'researcher' as const,
+        writes: { request: 'request.json', receipt: 'receipt.json', result: path },
+        gate: {
+          kind: 'result_verdict' as const,
+          source: { kind: 'dispatch_result' as const, ref: 'result' as const },
+          pass: ['ok'],
+        },
+      }),
+      (path: string) => ({
+        ...baseSynthesis,
+        executor: 'worker' as const,
+        kind: 'dispatch' as const,
+        role: 'researcher' as const,
+        writes: {
+          request: 'request.json',
+          receipt: 'receipt.json',
+          result: 'result.json',
+          artifact: { path, schema: 'brief@v1' },
+        },
+        gate: {
+          kind: 'result_verdict' as const,
+          source: { kind: 'dispatch_result' as const, ref: 'result' as const },
+          pass: ['ok'],
+        },
+      }),
+    ];
+
+    for (const path of invalidPaths) {
+      for (const makeStep of invalidCases) {
+        expect(Step.safeParse(makeStep(path)).success, `path ${JSON.stringify(path)}`).toBe(false);
+      }
+    }
   });
 });
 

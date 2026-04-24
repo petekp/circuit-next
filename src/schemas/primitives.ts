@@ -28,3 +28,34 @@ export const ControlPlaneFileStem = z
   });
 
 export type ControlPlaneFileStem = z.infer<typeof ControlPlaneFileStem>;
+
+/**
+ * Portable POSIX-style path relative to a single run root. This primitive is
+ * for workflow-authored read/write paths that the runtime later resolves into
+ * the run directory.
+ */
+export const RunRelativePath = z
+  .string()
+  .min(1, { message: 'run-relative path must be non-empty' })
+  .refine((value) => !value.startsWith('/'), {
+    message: 'run-relative path must not be absolute',
+  })
+  .refine((value) => !value.includes('\\'), {
+    message: 'run-relative path must use POSIX "/" separators, not backslashes',
+  })
+  .refine((value) => !value.includes(':'), {
+    message: 'run-relative path must not contain drive-letter or colon forms',
+  })
+  .refine(
+    (value) =>
+      value
+        .split('/')
+        .every((segment) => segment.length > 0 && segment !== '.' && segment !== '..'),
+    {
+      message:
+        'run-relative path must not contain empty, current-directory, or parent-directory segments',
+    },
+  )
+  .brand<'RunRelativePath'>();
+
+export type RunRelativePath = z.infer<typeof RunRelativePath>;

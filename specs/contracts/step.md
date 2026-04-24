@@ -1,19 +1,15 @@
 ---
 contract: step
 status: draft
-version: 0.1
+version: 0.2
 schema_source: src/schemas/step.ts
-last_updated: 2026-04-19
-depends_on: [ids, gate, selection-policy]
-codex_adversarial_review_grandfathered: authored in Slice 2 before the specs/reviews/ convention existed; inline review body (MED #7 gate.source as typed reference) lives in commit f5a6241 + PROJECT_STATE.md §Slice 2 "Adversarial-review MED #7 closed" with the Gate.source discriminated union + superRefine landing evidence. Any v0.2 modification to step.md re-opens this slot — land a proper specs/reviews/step-md-v<version>-codex.md at that point.
-grandfathered_source_ref: commit:4b6688e
-grandfathered_scope: step.md v0.1 only — the Slice 2 surface comprising the Step discriminated union (SynthesisStep / CheckpointStep / DispatchStep) in src/schemas/step.ts, the Gate.source typed reference in src/schemas/gate.ts, and the gate-superRefine coupling of kind ↔ gate ↔ writes. Any change to schema_source src/schemas/step.ts or src/schemas/gate.ts that adds, removes, or renames a Step variant or a Gate variant, or any addition/relaxation of a numbered invariant in this contract, exits the grandfather and requires specs/reviews/step-md-v<version>-codex.md. (Slice 24 Codex MED #8 fold-in — scope now names src/schemas/gate.ts alongside src/schemas/step.ts since STEP-I3/I4 evidence lives primarily in gate.ts.)
-grandfathered_scope_ids: STEP-I1 STEP-I2 STEP-I3 STEP-I4 STEP-I5 STEP-I6 STEP-I7
-expires_on_contract_change: true
+last_updated: 2026-04-24
+depends_on: [ids, gate, selection-policy, primitives]
+codex_adversarial_review: specs/reviews/step-md-v0.2-codex.md
 artifact_ids:
   - step.definition
-invariant_ids: [STEP-I1, STEP-I2, STEP-I3, STEP-I4, STEP-I5, STEP-I6, STEP-I7]
-property_ids: [step.prop.budget_bounds, step.prop.dispatch_role_presence, step.prop.gate_kind_source_kind_pairing, step.prop.gate_source_ref_closure, step.prop.writes_shape_per_variant]
+invariant_ids: [STEP-I1, STEP-I2, STEP-I3, STEP-I4, STEP-I5, STEP-I6, STEP-I7, STEP-I8]
+property_ids: [step.prop.budget_bounds, step.prop.dispatch_role_presence, step.prop.gate_kind_source_kind_pairing, step.prop.gate_source_ref_closure, step.prop.run_relative_paths, step.prop.writes_shape_per_variant]
 ---
 
 # Step Contract
@@ -30,7 +26,7 @@ belongs to exactly one of three variants, discriminated by `kind`:
   by `result_verdict` against a `DispatchResultSource`.
 
 The shape of `writes` and `gate` is coupled to `kind` at the Zod
-`discriminatedUnion` layer (`src/schemas/step.ts:L68-L83`), so
+`discriminatedUnion` layer (`src/schemas/step.ts` `Step`), so
 `tsc --strict` rejects any Step literal that pairs a variant with a
 non-matching gate or writes shape.
 
@@ -44,7 +40,8 @@ before use here.
 ## Invariants
 
 The runtime MUST reject any Step that violates these. All invariants are
-enforced via `src/schemas/step.ts` + `src/schemas/gate.ts` and tested in
+enforced via `src/schemas/step.ts`, `src/schemas/gate.ts`, and
+`src/schemas/primitives.ts`, then tested in
 `tests/contracts/schema-parity.test.ts`.
 
 - **STEP-I1 — Kind-variant binding.** `kind`, `executor`, `gate.kind`, and
@@ -54,8 +51,9 @@ enforced via `src/schemas/step.ts` + `src/schemas/gate.ts` and tested in
   `executor: 'orchestrator'`, `gate.kind: 'checkpoint_selection'`, and
   `writes: { request, response, artifact? }`. A `dispatch` step MUST have
   `executor: 'worker'`, `gate.kind: 'result_verdict'`, and
-  `writes: { request, receipt, result, artifact? }`. Enforced at
-  `src/schemas/step.ts:L32-L66`.
+  `writes: { request, receipt, result, artifact? }`. Enforced by
+  `SynthesisStep`, `CheckpointStep`, and `DispatchStep` in
+  `src/schemas/step.ts`.
 
 - **STEP-I2 — Non-empty routes.** Every Step declares at least one route
   target. The `routes` record is refined at `src/schemas/step.ts:L20-L22`
@@ -98,8 +96,8 @@ enforced via `src/schemas/step.ts` + `src/schemas/gate.ts` and tested in
 
 - **STEP-I5 — Budget bounds.** When `budgets` is present,
   `budgets.max_attempts` is an integer in `[1, 10]` and, if set,
-  `budgets.wall_clock_ms` is a positive integer. Enforced at
-  `src/schemas/step.ts:L24-L29`.
+  `budgets.wall_clock_ms` is a positive integer. Enforced by
+  `StepBase.shape.budgets` in `src/schemas/step.ts`.
 
 - **STEP-I6 — Role only on dispatch; surplus keys rejected.** Only
   `DispatchStep` carries a `role` field, and it is a required
@@ -115,9 +113,23 @@ enforced via `src/schemas/step.ts` + `src/schemas/gate.ts` and tested in
   `specs/domain.md#dispatch-vocabulary`.
 
 - **STEP-I7 — Protocol required.** Every Step carries a `ProtocolId`
-  (`protocol:` field) — no default, no optional. Enforced at
-  `src/schemas/step.ts:L18` by `StepBase`. The `ProtocolId` brand is
-  defined in `src/schemas/ids.ts`.
+  (`protocol:` field) — no default, no optional. Enforced by `StepBase`
+  in `src/schemas/step.ts`. The `ProtocolId` brand is defined in
+  `src/schemas/ids.ts`.
+
+- **STEP-I8 — Workflow-controlled paths are run-relative.** Every
+  workflow-controlled read/write path carried by a Step MUST be a portable
+  POSIX-style path relative to the run root. This covers
+  `ArtifactRef.path`, `StepBase.reads[]`, checkpoint `writes.request`,
+  checkpoint `writes.response`, checkpoint `writes.artifact.path`,
+  dispatch `writes.request`, dispatch `writes.receipt`,
+  dispatch `writes.result`, and dispatch `writes.artifact.path`. A valid
+  path is non-empty, not absolute, contains no backslash, contains no
+  colon or drive-letter form, and contains no empty, current-directory, or
+  parent-directory segment. Enforced by `RunRelativePath` in
+  `src/schemas/primitives.ts` and by the Step variant schemas in
+  `src/schemas/step.ts`. Runtime call sites additionally resolve through
+  `src/runtime/run-relative-path.ts` before reading or writing.
 
 ## Pre-conditions
 
@@ -141,6 +153,9 @@ After a Step is accepted:
 - The Step's `gate.kind` uniquely determines the shape of
   `gate.source` — no runtime reconciliation of source-kind vs gate-kind
   is needed after parse.
+- The Step's workflow-authored file paths are safe to resolve within a
+  run root. Runtime writers still call the run-relative resolver as
+  defense-in-depth when typed data is bypassed.
 
 ## Property ids (reserved for Phase 2 testing)
 
@@ -158,6 +173,9 @@ Property-based tests will cover:
 - `step.prop.writes_shape_per_variant` — For any valid `Step`, the
   `writes` object is exhaustively one of the three variant shapes — no
   extra keys, no missing required keys.
+- `step.prop.run_relative_paths` — For any valid `Step`, every
+  workflow-controlled path surface named in STEP-I8 parses as
+  `RunRelativePath` and resolves inside the run root.
 - `step.prop.budget_bounds` — For any valid `Step` with `budgets`
   present, `max_attempts ∈ [1, 10]`.
 
@@ -174,6 +192,9 @@ Property-based tests will cover:
   identity; they are not repeated here.
 - **ids** (`src/schemas/ids.ts`) — `StepId` and `ProtocolId` branded
   slugs.
+- **primitives** (`src/schemas/primitives.ts`) — `RunRelativePath`
+  supplies the portable run-root-relative path grammar consumed by
+  `ArtifactRef`, `reads`, and write slots.
 
 ## Failure modes (carried from evidence)
 
@@ -196,7 +217,7 @@ Property-based tests will cover:
 
 ## Evolution
 
-- **v0.1 (this draft)** — initial contract: STEP-I1..I7, kind-bound
+- **v0.1 (Slice 2)** — initial contract: STEP-I1..I7, kind-bound
   source schemas with **literal `ref` per source kind** (artifact →
   `'artifact'`, checkpoint_response → `'response'`, dispatch_result →
   `'result'`), strict surplus-key rejection via `.strict()` on every
@@ -206,7 +227,12 @@ Property-based tests will cover:
   (prototype-chain `in` attack), HIGH #2 (cross-slot drift), HIGH #3
   (optional undefined slot), MED #4 (strict-mode prose), LOW #7 (TS
   exactness prose) all incorporated.
-- **v0.2 (Phase 1)** — ratify `property_ids` above by landing the
+- **v0.2 (Slice 69, this version)** — exits the old grandfathered
+  contract-review path by linking
+  `specs/reviews/step-md-v0.2-codex.md`; adds STEP-I8 so
+  workflow-controlled Step paths are `RunRelativePath` values and runtime
+  call sites resolve them through a containment-checked helper.
+- **v0.3 (Phase 2)** — ratify `property_ids` above by landing the
   corresponding property-test harness; introduce a disambiguator only
   if a new dispatch step emerges that writes multiple result-like
   slots (current `dispatch_result.ref = 'result'` is the v0.1 answer);

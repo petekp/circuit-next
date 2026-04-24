@@ -52,20 +52,10 @@ type GrandfatheredRecord = {
 };
 
 const GRANDFATHERED_CONTRACT_ALLOWLIST: readonly GrandfatheredRecord[] = [
-  {
-    path: 'specs/contracts/step.md',
-    contract: 'step',
-    version: '0.1',
-    schema_source: 'src/schemas/step.ts',
-    // commit:4b6688e is the Slice 2 commit that added the Gate.source
-    // discriminated union to src/schemas/gate.ts and the STEP-I1..I7
-    // invariants to specs/contracts/step.md. (The earlier Slice 21
-    // frontmatter cited `commit f5a6241` in prose; that commit was
-    // the Phase-0 close, not the MED-#7 closure. Slice 24 fold-in
-    // corrects the anchor.)
-    source_ref_tokens: ['commit:4b6688e'],
-    scope_ids: ['STEP-I1', 'STEP-I2', 'STEP-I3', 'STEP-I4', 'STEP-I5', 'STEP-I6', 'STEP-I7'],
-  },
+  // step.md v0.1 grandfather exited in Slice 69 (step.md v0.2). The v0.2
+  // bump adds STEP-I8 run-relative path syntax, binds the contract to
+  // specs/reviews/step-md-v0.2-codex.md, and removes the old grandfathered
+  // frontmatter per the exit path above.
   // workflow.md v0.1 grandfather exited in Slice 27 (workflow.md v0.2).
   // The v0.2 bump promoted WF-I1..I7 from static-anchor (via this
   // allowlist) to test-enforced via per-invariant titled negative tests

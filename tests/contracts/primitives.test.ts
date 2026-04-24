@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ControlPlaneFileStem } from '../../src/schemas/primitives.js';
+import { ControlPlaneFileStem, RunRelativePath } from '../../src/schemas/primitives.js';
 
 describe('ControlPlaneFileStem', () => {
   describe('rejects', () => {
@@ -67,4 +67,39 @@ describe('ControlPlaneFileStem', () => {
     const result = ControlPlaneFileStem.safeParse('abc/def');
     expect(result.success).toBe(false);
   });
+});
+
+describe('RunRelativePath', () => {
+  const invalid: Array<[string, string]> = [
+    ['empty string', ''],
+    ['parent traversal', '../escaped.json'],
+    ['normalizes above root', 'artifacts/../../escaped.json'],
+    ['absolute path', '/tmp/escaped.json'],
+    ['drive-letter colon form', 'C:\\escaped.json'],
+    ['backslash separator', 'artifacts\\escaped.json'],
+    ['empty segment', 'artifacts//x.json'],
+    ['current-directory segment at root', './x.json'],
+    ['current-directory segment below root', 'artifacts/./x.json'],
+  ];
+
+  for (const [label, value] of invalid) {
+    it(`rejects ${label}`, () => {
+      const result = RunRelativePath.safeParse(value);
+      expect(result.success).toBe(false);
+    });
+  }
+
+  const valid: Array<[string, string]> = [
+    ['single file', 'result.json'],
+    ['nested artifact', 'artifacts/result.json'],
+    ['dash underscore dot characters', 'artifacts/dispatch/request-1_ok.json'],
+  ];
+
+  for (const [label, value] of valid) {
+    it(`accepts ${label}`, () => {
+      const result = RunRelativePath.safeParse(value);
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data).toBe(value);
+    });
+  }
 });

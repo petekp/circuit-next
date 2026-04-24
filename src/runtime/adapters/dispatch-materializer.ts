@@ -1,10 +1,11 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname } from 'node:path';
 import type { BuiltInAdapter, DispatchResolutionSource } from '../../schemas/adapter.js';
 import type { Event } from '../../schemas/event.js';
 import type { RunId, StepId } from '../../schemas/ids.js';
 import type { ResolvedSelection } from '../../schemas/selection-policy.js';
 import type { DispatchRole } from '../../schemas/step.js';
+import { resolveRunRelative } from '../run-relative-path.js';
 import { type DispatchResult, sha256Hex } from './shared.js';
 
 // Slice 42 (P2.4) — dispatch materialization glue between an adapter's
@@ -135,10 +136,11 @@ export function materializeDispatch(input: DispatchMaterializeInput): DispatchMa
     );
   }
 
-  const requestAbs = join(runRoot, writes.request);
-  const receiptAbs = join(runRoot, writes.receipt);
-  const resultAbs = join(runRoot, writes.result);
-  const artifactAbs = writes.artifact ? join(runRoot, writes.artifact.path) : undefined;
+  const requestAbs = resolveRunRelative(runRoot, writes.request);
+  const receiptAbs = resolveRunRelative(runRoot, writes.receipt);
+  const resultAbs = resolveRunRelative(runRoot, writes.result);
+  const artifactAbs =
+    writes.artifact === undefined ? undefined : resolveRunRelative(runRoot, writes.artifact.path);
 
   for (const p of [requestAbs, receiptAbs, resultAbs]) {
     mkdirSync(dirname(p), { recursive: true });

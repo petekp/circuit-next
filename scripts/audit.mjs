@@ -134,7 +134,7 @@ const ARTIFACT_NON_GREENFIELD_REQUIRED = [
   'legacy_parse_policy',
 ];
 
-const PATH_SAFE_PRIMITIVES = ['ControlPlaneFileStem'];
+const PATH_SAFE_PRIMITIVES = ['ControlPlaneFileStem', 'RunRelativePath'];
 
 /**
  * Slice 23 — compile-time parity guards. Identifiers matching this exact
@@ -189,8 +189,8 @@ export const SCHEMA_FILE_ALLOWLIST = {
   },
   'src/schemas/primitives.ts': {
     category: 'shared-primitive',
-    reason: 'path-safe primitives (ControlPlaneFileStem) per ADR-0003',
-    known_exports: ['ControlPlaneFileStem'],
+    reason: 'path-safe primitives (ControlPlaneFileStem, RunRelativePath) per ADR-0003',
+    known_exports: ['ControlPlaneFileStem', 'RunRelativePath'],
   },
   'src/schemas/lane.ts': {
     category: 'shared-primitive',

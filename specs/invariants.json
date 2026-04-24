@@ -507,23 +507,17 @@
       "id": "STEP-I1",
       "contract": "step",
       "surface_type": "contract",
-      "enforcement_state": "static-anchor",
+      "enforcement_state": "test-enforced",
       "source_anchor": "specs/contracts/step.md#STEP-I1",
-      "binding_refs": [
-        { "path": "tests/contracts/cross-model-challenger.test.ts", "kind": "static_regex" }
-      ],
-      "rationale": "Kind-variant binding enforced by Step discriminated union in src/schemas/step.ts. The scope_ids literal in cross-model-challenger.test.ts (grandfathered-allowlist, Slice 24 MED #5) binds the id — dropping STEP-I1 from step.md fires a named test failure. Upgrading to test_title binding is Slice 27 scope (workflow/step v0.2)."
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
       "id": "STEP-I2",
       "contract": "step",
       "surface_type": "contract",
-      "enforcement_state": "static-anchor",
+      "enforcement_state": "test-enforced",
       "source_anchor": "specs/contracts/step.md#STEP-I2",
-      "binding_refs": [
-        { "path": "tests/contracts/cross-model-challenger.test.ts", "kind": "static_regex" }
-      ],
-      "rationale": "Non-empty routes enforced structurally on Step.routes. Scope_ids binding ensures id cannot disappear silently. Upgrade deferred to Slice 27."
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
       "id": "STEP-I3",
@@ -545,12 +539,9 @@
       "id": "STEP-I5",
       "contract": "step",
       "surface_type": "contract",
-      "enforcement_state": "static-anchor",
+      "enforcement_state": "test-enforced",
       "source_anchor": "specs/contracts/step.md#STEP-I5",
-      "binding_refs": [
-        { "path": "tests/contracts/cross-model-challenger.test.ts", "kind": "static_regex" }
-      ],
-      "rationale": "Budget bounds enforced structurally on Step.budgets. Scope_ids binding ensures id cannot disappear silently. Upgrade deferred to Slice 27."
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
       "id": "STEP-I6",
@@ -564,12 +555,20 @@
       "id": "STEP-I7",
       "contract": "step",
       "surface_type": "contract",
-      "enforcement_state": "static-anchor",
+      "enforcement_state": "test-enforced",
       "source_anchor": "specs/contracts/step.md#STEP-I7",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
+    {
+      "id": "STEP-I8",
+      "contract": "step",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/step.md#STEP-I8",
       "binding_refs": [
-        { "path": "tests/contracts/cross-model-challenger.test.ts", "kind": "static_regex" }
-      ],
-      "rationale": "Protocol required enforced structurally on Step.protocol. Scope_ids binding ensures id cannot disappear silently. Upgrade deferred to Slice 27."
+        { "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" },
+        { "path": "tests/runner/run-relative-path.test.ts", "kind": "test_title" }
+      ]
     },
 
     {
@@ -1232,6 +1231,13 @@
     },
     {
       "id": "step.prop.gate_source_ref_closure",
+      "contract": "step",
+      "enforcement_state": "phase2-property",
+      "target_slice": 29,
+      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+    },
+    {
+      "id": "step.prop.run_relative_paths",
       "contract": "step",
       "enforcement_state": "phase2-property",
       "target_slice": 29,
