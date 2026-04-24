@@ -1,4 +1,4 @@
-<!-- current_slice: 102 -->
+<!-- current_slice: 103 -->
 
 # circuit-next
 
@@ -50,8 +50,9 @@ smoke fingerprints, strict JSON artifacts are the accepted successor shape
 for step state, and config can select model and effort. This does **not**
 claim full first-generation Circuit parity. Build, repair, migrate, sweep,
 custom workflow authoring, and a polished workflow-configuration experience
-remain future work. CC#14 was amended by ADR-0006 as a one-time waiver +
-retarget (see Status above); the canonical non-LLM cold-read is **not**
+remain future work. `specs/parity-map.md` records the current gap map and
+recommends opening Build next. CC#14 was amended by ADR-0006 as a one-time
+waiver + retarget (see Status above); the canonical non-LLM cold-read is **not**
 satisfied, and weaker evidence of different shape is substituted — carried
 openly on every authority surface. CC#15 preservation rests on (i) the 14a
 operator product-direction check and (ii) CC#13 closure by the Slice 29

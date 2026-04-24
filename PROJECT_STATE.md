@@ -1,4 +1,4 @@
-<!-- current_slice: 102 -->
+<!-- current_slice: 103 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -10,19 +10,18 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 102
-- **current_arc:** Post-close direct-launcher cleanup landed. Claude Code
-  command bodies now invoke `./bin/circuit-next` directly instead of the
-  `npm run circuit:run` bridge or the old `dist/cli/dogfood.js` path. The
-  router now sends issue-finding prompts like `find an issue in this
-  codebase` to review, and continuity hook guidance names
-  `.circuit/bin/circuit-engine continuity ...` commands instead of the
-  unavailable `circuit:handoff` skill. P2-1 uses structured JSON as the accepted successor artifact shape; it does not claim old Markdown byte-for-byte compatibility. P2-3 live command proof is included
-  through a live Claude Code invocation of the inline `circuit` plugin. The
-  Phase 2 close claim remains narrow: first working workflow product spine
-  closed, not full first-generation Circuit parity. Next work is broader
-  parity expansion across build, repair, migrate, sweep, custom workflows,
-  and clearer workflow configuration.
+- **current_slice:** 103
+- **current_arc:** Parity map landed. `specs/parity-map.md` compares the
+  read-only first-generation Circuit command/workflow surface with
+  circuit-next after the direct-launcher cleanup. It records what already
+  works, what is partial, what is missing, and recommends opening Build next
+  because it is the everyday "do real work" path that Repair, Migrate, and
+  Sweep can build on. No runtime behavior changed. P2-1 uses structured JSON as the accepted successor artifact shape; it does not claim old Markdown byte-for-byte compatibility. P2-3 live command proof is included through a
+  live Claude Code invocation of the inline `circuit` plugin. The Phase 2
+  close claim remains narrow: first working workflow product spine closed,
+  not full first-generation Circuit parity. Next work is broader parity
+  expansion across build, repair, migrate, sweep, custom workflows, and
+  clearer workflow configuration.
 - **current_phase:** Phase 2 — Implementation (closed for the first working workflow; broader parity expansion planning next)
 
 Chronicle (relocated narrative history — non-authoritative; see

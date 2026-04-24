@@ -12,6 +12,13 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 103 PARITY MAP** (this commit, Discovery) - compared the read-only
+  first-generation Circuit command/workflow surface against circuit-next after
+  the direct-launcher cleanup. The map records what already works, what is
+  partial, what is missing, and recommends opening Build next because it
+  exercises the normal plan, implement, verify, and review path users expect
+  most often. No runtime behavior changed.
+
 - **Slice 102 DIRECT LAUNCHER, ROUTER, AND HOOK CLEANUP** (this commit,
   Ratchet-Advance) - added `./bin/circuit-next` and `src/cli/circuit.ts` as
   the first-class launcher path. Claude Code command bodies now tell Claude
