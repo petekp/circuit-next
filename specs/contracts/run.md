@@ -3,7 +3,7 @@ contract: run
 status: ratified-v0.1
 version: 0.1
 schema_source: src/schemas/run.ts
-last_updated: 2026-04-19
+last_updated: 2026-04-24
 depends_on: [event, snapshot, ids, lane, rigor, workflow]
 closes: []
 codex_adversarial_review: specs/reviews/run-md-v0.1-codex.md
@@ -208,14 +208,19 @@ property-test harness + reducer exist in Phase 2.
   discontinuity). Closes Codex MED #4.
 
 - `run.prop.close_outcome_semantic_adequacy` — For any valid `RunLog`
-  with a terminal `run.closed` event, the outcome is semantically
-  consistent with the step-completion pattern in the log: `outcome:
-  'complete'` requires at least one `step.completed` on a step routed to
-  `@complete`; `outcome: 'aborted'` requires at least one `step.aborted`
-  or a `run.bootstrapped`-followed-immediately-by-`run.closed` with an
+  plus its corresponding Workflow manifest, a terminal `run.closed`
+  event's outcome is semantically consistent with the step-completion
+  pattern in the log and the route target in the manifest: `outcome:
+  'complete'` requires a completed step whose pass route targeted
+  `@complete`; `outcome: 'stopped'` requires one targeted to `@stop`;
+  `outcome: 'escalated'` requires one targeted to `@escalate`;
+  `outcome: 'handoff'` requires one targeted to `@handoff`; `outcome:
+  'aborted'` requires at least one `step.aborted` or a
+  `run.bootstrapped`-followed-immediately-by-`run.closed` with an
   explicit early-abort rationale. Closes Codex MED #5. RUN-I7's
-  semantic-adequacy caveat scopes this out of v0.1 because the log-wide
-  reachability check belongs with the reducer, not the schema.
+  semantic-adequacy caveat scopes this out of v0.1 because the
+  manifest-aware log-wide reachability check belongs with the reducer, not
+  the schema.
 
 - `run.prop.boundary_own_property_defense` — For every event in a
   `RunLog`, every required field (not just `run_id`, `kind`, `sequence`)

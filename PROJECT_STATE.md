@@ -1,4 +1,4 @@
-<!-- current_slice: 72 -->
+<!-- current_slice: 73 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -9,10 +9,9 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 72
-- **current_arc:** runtime-safety-floor (Slice 4 landed: pass-route
-  reachability and runtime cycle guard; next planned slice is terminal
-  outcome mapping)
+- **current_slice:** 73
+- **current_arc:** runtime-safety-floor (Slice 5 landed: terminal outcome
+  mapping; next planned slice is regression proof and P2.9 freshness check)
 - **current_phase:** Phase 2 — Implementation (continuing)
 
 Chronicle (relocated narrative history — non-authoritative; see
@@ -44,3 +43,7 @@ schema-bypass cycle guard: pass-only self-cycles and multi-step cycles now
 fail workflow parsing, and any already-parsed workflow object that revisits
 a step closes the run as aborted with `step.aborted`, aborted state, and
 aborted result instead of hanging or falsely marking the step complete.*
+Slice 73 maps terminal route labels to honest run outcomes: `@complete`
+closes complete, `@stop` closes stopped, `@escalate` closes escalated,
+and `@handoff` closes handoff, with `run.closed`, `state.json`,
+`RunProjection`, and `artifacts/result.json` agreeing for each route.*

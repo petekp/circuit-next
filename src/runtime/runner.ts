@@ -447,6 +447,19 @@ function adapterFailureReason(stepId: string, err: unknown): string {
   return `dispatch step '${stepId}': adapter invocation failed (${message})`;
 }
 
+const TERMINAL_ROUTE_OUTCOME = {
+  '@complete': 'complete',
+  '@stop': 'stopped',
+  '@escalate': 'escalated',
+  '@handoff': 'handoff',
+} as const satisfies Record<string, RunClosedOutcome>;
+
+function terminalOutcomeForRoute(route: string): RunClosedOutcome | undefined {
+  return Object.hasOwn(TERMINAL_ROUTE_OUTCOME, route)
+    ? TERMINAL_ROUTE_OUTCOME[route as keyof typeof TERMINAL_ROUTE_OUTCOME]
+    : undefined;
+}
+
 // Slice 43c: orchestrator-synthesis steps land an artifact file at
 // `runRoot/step.writes.artifact.path` before their `step.artifact_written`
 // event fires. At v0 the body is a minimal deterministic JSON stub with
@@ -474,7 +487,7 @@ function writeSynthesisArtifact(
 
 // Narrow dogfood-run-0 loop. Walks routes from the single entry_mode;
 // for each step, appends the per-kind event trail; emits run.closed
-// after the routes graph reaches @complete; writes result.json last.
+// after the pass route reaches a terminal label; writes result.json last.
 //
 // Slice 43b: async so the dispatch branch can `await` the real adapter
 // (or an injected stub). The signature is a breaking change for external
@@ -533,8 +546,7 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
   };
 
   // Walk the routes graph from entry.start_at. Terminate when a step's
-  // route resolves to @complete (the only terminal dogfood-run-0
-  // exercises; @stop/@escalate/@handoff are Phase 2 scope) or when a
+  // pass route resolves to one of the terminal route labels, or when a
   // dispatch gate fails (Slice 53 Codex H14 fold-in — `runOutcome`
   // mutates to `'aborted'` and the loop breaks before the route is
   // taken; the close-step still emits `run.closed` carrying the
@@ -828,14 +840,9 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
     if (passRoute === undefined) {
       throw new Error(`runDogfood: step '${step.id}' missing 'pass' route (WF-I10 violation)`);
     }
+    const terminalOutcome = terminalOutcomeForRoute(passRoute);
 
-    if (
-      passRoute !== '@complete' &&
-      passRoute !== '@stop' &&
-      passRoute !== '@escalate' &&
-      passRoute !== '@handoff' &&
-      executedStepIds.has(passRoute)
-    ) {
+    if (terminalOutcome === undefined && executedStepIds.has(passRoute)) {
       const reason = `pass-route cycle detected: step '${step.id}' routes to already executed step '${passRoute}'`;
       push({
         schema_version: 1,
@@ -864,13 +871,12 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
       route_taken: 'pass',
     });
 
-    if (passRoute === '@complete') {
+    if (terminalOutcome !== undefined) {
+      runOutcome = terminalOutcome;
       currentStepId = undefined;
-    } else if (passRoute === '@stop' || passRoute === '@escalate' || passRoute === '@handoff') {
-      // Non-complete terminals are schema-valid routes but not
-      // exercised by dogfood-run-0 v0.1.
-      currentStepId = undefined;
-      closeReason = `terminal route ${passRoute} not exercised in Alpha Proof; treating as complete`;
+      if (passRoute !== '@complete') {
+        closeReason = `terminal route ${passRoute}`;
+      }
     } else {
       currentStepId = passRoute;
     }

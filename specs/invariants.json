@@ -370,7 +370,10 @@
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
       "source_anchor": "specs/contracts/run.md#RUN-I7",
-      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+      "binding_refs": [
+        { "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" },
+        { "path": "tests/runner/terminal-outcome-mapping.test.ts", "kind": "test_title" }
+      ]
     },
     {
       "id": "RUN-I8",

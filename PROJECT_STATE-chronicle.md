@@ -12,6 +12,18 @@ record.*
 
 ## Runtime-Safety-Floor Arc (opened after Slice 68)
 
+- **Slice 73 TERMINAL-OUTCOME-MAPPING** (this commit, Ratchet-Advance) —
+  mapped terminal route labels to their matching run outcomes in the
+  runner: `@complete -> complete`, `@stop -> stopped`,
+  `@escalate -> escalated`, and `@handoff -> handoff`. A new runtime test
+  covers all four labels and proves `run.closed.outcome`, `state.json`
+  status, `RunProjection`, and `artifacts/result.json` outcome agree.
+  RUN-I7 now names that test as a binding reference, and the deferred
+  close-outcome semantic-adequacy property names the manifest-aware
+  non-complete terminal semantics. Codex challenger returned ACCEPT, and
+  a follow-up re-check over the final prose/comment cleanup also returned
+  ACCEPT.
+
 - **Slice 72 PASS-ROUTE-CYCLE-GUARD** (this commit, Ratchet-Advance) —
   added WF-I11 to the workflow contract and invariant ledger so every
   step must reach a terminal by following only `routes.pass`. Workflow
