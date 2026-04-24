@@ -1,10 +1,12 @@
 ---
 plan: runtime-safety-floor
-status: challenger-pending
+status: challenger-cleared
 revision: 03
 opened_at: 2026-04-24
 revised_at: 2026-04-24
 revised_in_session: runtime-safety-floor-codex-challenger-02-med-foldins
+cleared_at: 2026-04-24
+cleared_in_session: runtime-safety-floor-codex-challenger-03-accept
 base_commit: 3e38c6b
 target: runner-runtime-safety
 trigger: |
@@ -41,6 +43,9 @@ prior_challenger_passes:
     revision 03 folds both by making any failure event additive-only
     unless contracts are explicitly reopened and by binding the snapshot
     projection surface of adapter-invocation aborts)
+  - specs/reviews/runtime-safety-floor-codex-challenger-03.md
+    (verdict ACCEPT vs revision 03 — 0 findings; authorizes
+    challenger-cleared transition)
 ---
 
 # Runtime Safety Floor
