@@ -1,4 +1,4 @@
-<!-- current_slice: 75 -->
+<!-- current_slice: 76 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -9,9 +9,10 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 75
-- **current_arc:** P2.9 second workflow (operator-signed; next planned
-  slice is the review workflow policy-table seam)
+- **current_slice:** 76
+- **current_arc:** P2.9 second workflow (Slice 76 landed: review workflow
+  policy-table seam; next planned slice is invariants + artifact schema +
+  dispatch-shape test)
 - **current_phase:** Phase 2 — Implementation (continuing)
 
 Chronicle (relocated narrative history — non-authoritative; see
@@ -59,3 +60,7 @@ pending its separate operator signoff.*
 P2.9 received explicit operator signoff on 2026-04-24 after the safety
 cleanup closed; implementation may now open from
 `specs/plans/p2-9-second-workflow.md` starting with the policy-table seam.*
+Slice 76 opened P2.9 by registering the audit-only `review` workflow's
+canonical phase set in the shared workflow-kind policy table and adding
+policy-only tests. The real review fixture, artifact schema, and runtime
+wiring have not landed yet.*

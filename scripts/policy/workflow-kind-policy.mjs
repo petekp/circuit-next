@@ -41,6 +41,12 @@ export const WORKFLOW_KIND_CANONICAL_SETS = {
     title: 'Frame → Analyze → Synthesize → Review → Close',
     authority: 'specs/contracts/explore.md §Canonical phase set',
   },
+  review: {
+    canonicals: ['frame', 'analyze', 'close'],
+    omits: ['plan', 'act', 'verify', 'review'],
+    title: 'Intake → Independent Audit → Verdict',
+    authority: 'specs/plans/p2-9-second-workflow.md §3',
+  },
 };
 
 /**

@@ -149,11 +149,38 @@ function validExploreFixture(overrides: Record<string, unknown> = {}): Record<st
   };
 }
 
+function reviewPolicyOnlyPayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    schema_version: '2',
+    id: 'review',
+    // Deliberately policy-only: the real review fixture, artifact schemas,
+    // and runtime synthesis behavior land in later P2.9 slices.
+    phases: [
+      { title: 'Intake', canonical: 'frame' },
+      { title: 'Independent Audit', canonical: 'analyze' },
+      { title: 'Verdict', canonical: 'close' },
+    ],
+    spine_policy: {
+      mode: 'partial',
+      omits: ['plan', 'act', 'verify', 'review'],
+      rationale: 'policy-only review payload for the canonical phase table test.',
+    },
+    ...overrides,
+  };
+}
+
 describe('checkWorkflowKindCanonicalPolicy (audit-level, no Zod)', () => {
   it('returns green on a valid explore fixture', () => {
     const result = checkWorkflowKindCanonicalPolicy(validExploreFixture());
     expect(result.kind).toBe('green');
     expect(result.detail).toMatch(/explore: canonical set/);
+  });
+
+  it('returns green on a policy-only review payload', () => {
+    const result = checkWorkflowKindCanonicalPolicy(reviewPolicyOnlyPayload());
+    expect(result.kind).toBe('green');
+    expect(result.detail).toMatch(/review: canonical set/);
+    expect(result.detail).toMatch(/frame, analyze, close/);
   });
 
   it('returns exempt on dogfood-run-0 fixture', () => {
@@ -206,6 +233,15 @@ describe('checkWorkflowKindCanonicalPolicy (audit-level, no Zod)', () => {
     expect(result.detail).toMatch(/missing omit\(s\): verify/);
   });
 
+  it('returns red when review declares the omitted review canonical', () => {
+    const fixture = reviewPolicyOnlyPayload();
+    const phases = fixture.phases as Array<Record<string, unknown>>;
+    fixture.phases = [...phases, { title: 'Nested Review', canonical: 'review' }];
+    const result = checkWorkflowKindCanonicalPolicy(fixture);
+    expect(result.kind).toBe('red');
+    expect(result.detail).toMatch(/unexpected canonical\(s\): review/);
+  });
+
   it('returns red on non-object fixture input', () => {
     expect(checkWorkflowKindCanonicalPolicy(null).kind).toBe('red');
     expect(checkWorkflowKindCanonicalPolicy('not an object').kind).toBe('red');
@@ -224,6 +260,13 @@ describe('checkWorkflowKindCanonicalPolicy (audit-level, no Zod)', () => {
     if (explore === undefined) throw new Error('unreachable');
     expect(explore.canonicals).toEqual(['frame', 'analyze', 'act', 'review', 'close']);
     expect(explore.omits).toEqual(['plan', 'verify']);
+    const review = WORKFLOW_KIND_CANONICAL_SETS.review;
+    expect(review).toBeDefined();
+    if (review === undefined) throw new Error('unreachable');
+    expect(review.canonicals).toEqual(['frame', 'analyze', 'close']);
+    expect(review.omits).toEqual(['plan', 'act', 'verify', 'review']);
+    expect(review.title).toBe('Intake → Independent Audit → Verdict');
+    expect(review.authority).toBe('specs/plans/p2-9-second-workflow.md §3');
     expect(EXEMPT_WORKFLOW_IDS.has('dogfood-run-0')).toBe(true);
     expect(EXEMPT_WORKFLOW_IDS.has('explore')).toBe(false);
   });

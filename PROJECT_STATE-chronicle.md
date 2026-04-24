@@ -10,6 +10,18 @@ record.*
 
 ---
 
+## P2.9 Second Workflow Arc (opened after Slice 75)
+
+- **Slice 76 POLICY-TABLE-SEAM** (this commit, Ratchet-Advance) - opened
+  P2.9 by adding the `review` workflow kind to the shared canonical phase
+  policy table: Intake maps to `frame`, Independent Audit maps to
+  `analyze`, and Verdict maps to `close`; `plan`, `act`, `verify`, and
+  nested `review` are explicitly omitted. Tests validate the policy row
+  with a policy-only payload so this slice does not claim the real review
+  fixture, artifact schema, or runtime wiring yet. Codex challenger first
+  flagged an over-shaped test payload; the fold-in narrowed it and the
+  re-check returned ACCEPT.
+
 ## Runtime-Safety-Floor Arc (opened after Slice 68)
 
 - **P2.9 OPERATOR SIGNOFF** (this commit, Ratchet-Advance lifecycle
