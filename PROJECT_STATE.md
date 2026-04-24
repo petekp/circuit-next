@@ -1,4 +1,4 @@
-<!-- current_slice: 69 -->
+<!-- current_slice: 70 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -9,9 +9,9 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 69
-- **current_arc:** runtime-safety-floor (Slice 1 landed: run-relative path
-  primitive + runtime containment; next planned slice is fresh run-root guard)
+- **current_slice:** 70
+- **current_arc:** runtime-safety-floor (Slice 2 landed: fresh run-root
+  guard; next planned slice is durable adapter invocation failure closure)
 - **current_phase:** Phase 2 — Implementation (continuing)
 
 Chronicle (relocated narrative history — non-authoritative; see
@@ -32,4 +32,6 @@ history" disclaimer — commits are authoritative, chronicle is narrative
 companion. Runtime Safety Floor plan revision 03 reached challenger-cleared
 on 2026-04-24 via `specs/reviews/runtime-safety-floor-codex-challenger-03.md`
 and received operator signoff on 2026-04-24. Slice 69 landed the
-run-relative path primitive and runtime containment checks.*
+run-relative path primitive and runtime containment checks. Slice 70
+landed the fresh run-root guard so a reused root is rejected before
+bootstrap writes can mutate prior run evidence.*

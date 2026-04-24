@@ -12,6 +12,16 @@ record.*
 
 ## Runtime-Safety-Floor Arc (opened after Slice 68)
 
+- **Slice 70 FRESH-RUN-ROOT-GUARD** (this commit, Ratchet-Advance) —
+  changed bootstrap initialization to claim a fresh run root before writing
+  manifest, event log, state, or result artifacts. Reused roots, canonical
+  artifact markers, files, symlinks, and concurrent claim attempts now fail
+  with the run-root reuse/no-resume message; empty pre-created directories
+  still work. Tests prove a second run cannot change the prior run bytes.
+  Codex challenger found formatter drift, atomic-claim race, stale-empty
+  race, and file/symlink error-normalization gaps; all were folded in
+  before the final ACCEPT pass.
+
 - **Slice 69 RUN-RELATIVE-PATHS** (this commit, Ratchet-Advance) — added
   `RunRelativePath`, bound all workflow-controlled Step read/write paths
   to it, replaced raw runtime path joins at dispatch prompt, synthesis

@@ -1,5 +1,16 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import {
+  closeSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+  writeSync,
+} from 'node:fs';
+import { dirname, join } from 'node:path';
 import type { BuiltInAdapter, DispatchResolutionSource } from '../schemas/adapter.js';
 import type { Event, RunClosedOutcome } from '../schemas/event.js';
 import type { InvocationId, RunId, WorkflowId } from '../schemas/ids.js';
@@ -39,6 +50,71 @@ export function initRunRoot({ runRoot }: RunRootInit): void {
   mkdirSync(dirname(eventLogPath(runRoot)), { recursive: true });
 }
 
+const RUN_ROOT_CLAIM_FILE = '.run-root.claim';
+
+export interface FreshRunRootClaim {
+  readonly runRoot: string;
+  readonly path: string;
+}
+
+function runRootReuseError(runRoot: string, detail: string): Error {
+  return new Error(
+    `run-root reuse rejected for ${runRoot}: ${detail}; resume mode does not exist yet`,
+  );
+}
+
+export function claimFreshRunRoot(runRoot: string): FreshRunRootClaim {
+  const existing = lstatSync(runRoot, { throwIfNoEntry: false });
+  if (existing === undefined) {
+    try {
+      mkdirSync(runRoot, { recursive: true });
+    } catch (err) {
+      if (
+        err &&
+        typeof err === 'object' &&
+        'code' in err &&
+        (err.code === 'EEXIST' || err.code === 'ENOTDIR')
+      ) {
+        throw runRootReuseError(runRoot, 'path already exists and is not an empty directory');
+      }
+      throw err;
+    }
+  }
+  const stat = lstatSync(runRoot);
+  if (!stat.isDirectory() || stat.isSymbolicLink()) {
+    throw runRootReuseError(runRoot, 'path already exists and is not an empty directory');
+  }
+  const claimPath = join(runRoot, RUN_ROOT_CLAIM_FILE);
+  let fd: number | undefined;
+  try {
+    fd = openSync(claimPath, 'wx');
+    writeSync(fd, `${new Date().toISOString()}\n`);
+  } catch (err) {
+    if (err && typeof err === 'object' && 'code' in err && err.code === 'EEXIST') {
+      throw runRootReuseError(runRoot, 'another invocation has already claimed this run root');
+    }
+    throw err;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
+
+  const claim = { runRoot, path: claimPath };
+  try {
+    const entries = readdirSync(runRoot).filter((entry) => entry !== RUN_ROOT_CLAIM_FILE);
+    if (entries.length > 0) {
+      throw runRootReuseError(runRoot, `existing directory is not empty (${entries.join(', ')})`);
+    }
+    return claim;
+  } catch (err) {
+    releaseFreshRunRootClaim(claim);
+    throw err;
+  }
+}
+
+export function releaseFreshRunRootClaim(claim: FreshRunRootClaim): void {
+  rmSync(claim.path, { force: true });
+}
+
 export interface BootstrapInput {
   runRoot: string;
   manifest: ManifestSnapshotInput;
@@ -52,15 +128,20 @@ export interface BootstrapResult {
 }
 
 export function bootstrapRun(input: BootstrapInput): BootstrapResult {
-  initRunRoot({ runRoot: input.runRoot });
-  writeManifestSnapshot(input.runRoot, input.manifest);
-  appendEvent(input.runRoot, input.bootstrapEvent);
-  const snapshot = writeDerivedSnapshot(input.runRoot);
-  return {
-    manifestSnapshotPath: manifestSnapshotPath(input.runRoot),
-    eventLogPath: eventLogPath(input.runRoot),
-    snapshot,
-  };
+  const claim = claimFreshRunRoot(input.runRoot);
+  try {
+    initRunRoot({ runRoot: input.runRoot });
+    writeManifestSnapshot(input.runRoot, input.manifest);
+    appendEvent(input.runRoot, input.bootstrapEvent);
+    const snapshot = writeDerivedSnapshot(input.runRoot);
+    return {
+      manifestSnapshotPath: manifestSnapshotPath(input.runRoot),
+      eventLogPath: eventLogPath(input.runRoot),
+      snapshot,
+    };
+  } finally {
+    releaseFreshRunRootClaim(claim);
+  }
 }
 
 export interface AppendResult {
