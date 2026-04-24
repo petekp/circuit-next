@@ -779,9 +779,13 @@ commit time. Expect re-ordering as earlier slices expose surface.
     per `specs/plans/slice-47-hardening-foldins.md` §Slice 47d scope
     item 1. Future ratchet-advance slices may NOT cite this paragraph
     as precedent for skipping Codex.
-- **P2.8 — Router (`/circuit:run` classifier)** — first-class
-  workflow classifier: given task text + entry signals, selects among
-  registered workflows.
+- **P2.8 — Router (`/circuit:run` classifier) (closed at Slice 84).**
+  First-class workflow classifier: given task text + entry signals,
+  selects among registered workflows. Slice 84 landed the first
+  deterministic classifier: review/audit-style tasks route to `review`;
+  everything else routes to `explore`. This is deliberately not the
+  later intelligent selector; that remains deferred until there is usage
+  data and model/effort support.
 - **P2-MODEL-EFFORT — workflow v0.3: explicit model + effort
   assignment.** Already reserved at commit `b538979` and specified in
   `specs/plans/phase-1-close-revised.md §Slice P2-MODEL-EFFORT`.

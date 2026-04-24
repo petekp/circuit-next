@@ -22,9 +22,9 @@ import { describe, expect, it } from 'vitest';
 //     (not merely in prose). Anti-pattern negative fixtures exercise
 //     prose-only mentions and P2.8-pointer-only bodies so regressions
 //     cannot pass by keyword overlap.
-//   - MED 2: manifest description consistency extended to assert that the
-//     `circuit:run` description leads with routing behavior before any
-//     classifier mention.
+//   - MED 2: manifest description consistency originally asserted the
+//     pre-P2.8 "always explore" route. Slice 84 updates that assertion
+//     to the deterministic classifier truth.
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, '..', '..');
@@ -79,6 +79,18 @@ function hasExecutableReviewInvocation(body: string): boolean {
   return hasExecutableWorkflowInvocation(body, 'review');
 }
 
+function hasExecutableRouterInvocation(body: string): boolean {
+  const blocks = extractBashBlocks(body);
+  const npmInvocation = /^\s*npm run circuit:run -- --goal(?:\s|$)/;
+  const nodeInvocation = /^\s*node dist\/cli\/dogfood\.js --goal(?:\s|$)/;
+  for (const block of blocks) {
+    for (const line of block.split('\n')) {
+      if (npmInvocation.test(line) || nodeInvocation.test(line)) return true;
+    }
+  }
+  return false;
+}
+
 describe('plugin command invocation binding (Slice 56 / P2.11)', () => {
   describe('real command bodies — positive assertions', () => {
     const exploreBody = readFileSync(EXPLORE_COMMAND_PATH, 'utf-8');
@@ -89,8 +101,8 @@ describe('plugin command invocation binding (Slice 56 / P2.11)', () => {
       expect(hasExecutableExploreInvocation(exploreBody)).toBe(true);
     });
 
-    it('circuit-run.md has an executable explore invocation in a fenced bash block with --goal', () => {
-      expect(hasExecutableExploreInvocation(runBody)).toBe(true);
+    it('circuit-run.md has an executable classifier invocation in a fenced bash block with --goal', () => {
+      expect(hasExecutableRouterInvocation(runBody)).toBe(true);
     });
 
     it('circuit-review.md has an executable review invocation in a fenced bash block with --goal', () => {
@@ -103,10 +115,12 @@ describe('plugin command invocation binding (Slice 56 / P2.11)', () => {
       expect(reviewBody).not.toMatch(new RegExp(PLACEHOLDER_STRING));
     });
 
-    it('circuit-run.md references /circuit:explore or the P2.8 pointer', () => {
-      const hasRouteToExplore = /\/circuit:explore/.test(runBody);
-      const hasP28Pointer = /P2\.8/.test(runBody);
-      expect(hasRouteToExplore || hasP28Pointer).toBe(true);
+    it('circuit-run.md documents the current explore/review router surface', () => {
+      expect(runBody).toMatch(
+        /Parse the CLI's JSON output and surface:[\s\S]*`selected_workflow`[\s\S]*`routed_by`[\s\S]*`router_reason`/,
+      );
+      expect(runBody).toMatch(/explore/);
+      expect(runBody).toMatch(/review/);
     });
   });
 
@@ -139,7 +153,7 @@ describe('plugin command invocation binding (Slice 56 / P2.11)', () => {
 
     it('all fenced bash invocation blocks in circuit-run.md use single-quoted --goal values', () => {
       const blocks = extractBashBlocks(runBody).filter(
-        (b) => /explore/.test(b) && /--goal/.test(b),
+        (b) => /(?:npm run circuit:run|node dist\/cli\/dogfood\.js)/.test(b) && /--goal/.test(b),
       );
       expect(blocks.length).toBeGreaterThan(0);
       for (const block of blocks) {
@@ -181,7 +195,7 @@ The CLI npm run circuit:run is documented somewhere else; this body does not inv
       expect(hasExecutableExploreInvocation(proseOnly)).toBe(false);
     });
 
-    it('rejects a body that only carries a P2.8 pointer without an invocation block', () => {
+    it('rejects a body that only carries a classifier pointer without an invocation block', () => {
       const p28Only = `---
 name: circuit:run
 description: stub
@@ -189,9 +203,9 @@ description: stub
 
 # /circuit:run
 
-The router classifier lands at plan slice P2.8. See /circuit:explore once it ships.
+The router classifier chooses explore or review. See /circuit:explore for direct use.
 `;
-      expect(hasExecutableExploreInvocation(p28Only)).toBe(false);
+      expect(hasExecutableRouterInvocation(p28Only)).toBe(false);
     });
 
     it('rejects a body with a bash block that does not include an explore invocation', () => {
@@ -260,22 +274,16 @@ node dist/cli/dogfood.js explore --goal 'find deprecated APIs'
       expect(manifestBody).not.toMatch(/not yet implemented/i);
     });
 
-    it('circuit:run description leads with routing behavior (MED 2 fold-in)', () => {
-      // The description should lead with "Routes every task …" (wired
-      // truth) before any "Classify a task …" or classifier language.
-      // That front-matter phrase is what `/help` and model context
-      // surface first; leading with unlanded behavior is misleading.
+    it('circuit:run description leads with classifier behavior', () => {
+      // P2.8 landed the deterministic classifier. The manifest should
+      // now lead with the classifier truth instead of the old "always
+      // explore" route.
       const circuitRun = manifest.commands.find((c) => c.name === 'circuit:run');
       if (!circuitRun) throw new Error('circuit:run entry missing from manifest');
       const desc = circuitRun.description;
-      const routesIdx = desc.search(/Routes every (?:free-form )?task/i);
-      const classifyIdx = desc.search(/Classify a task/i);
-      // Either "Routes every task" appears before "Classify a task", OR
-      // "Classify a task" is not mentioned at all in the description.
-      expect(routesIdx).toBeGreaterThanOrEqual(0);
-      if (classifyIdx !== -1) {
-        expect(routesIdx).toBeLessThan(classifyIdx);
-      }
+      expect(desc).toMatch(/^Classifies free-form tasks/i);
+      expect(desc).toMatch(/explore/i);
+      expect(desc).toMatch(/review/i);
     });
 
     it('top-level manifest description mentions the wired `/circuit:explore` invocation path', () => {

@@ -1,13 +1,13 @@
 {
   "name": "circuit-next",
   "version": "0.1.0-alpha.1",
-  "description": "Claude Code plugin that runs configurable developer workflows. Phase 2 wired state: `/circuit:explore` invokes the full explore workflow end-to-end via the project CLI; `/circuit:review` invokes the audit-only review workflow explicitly; `/circuit:run` still routes every free-form task to `/circuit:explore` until the full classifier lands at plan slice P2.8. Future phases add `build`, `repair`, `migrate`, `sweep`, and user-authored custom workflows with per-step model + reasoning-effort + skills configuration.",
+  "description": "Claude Code plugin that runs configurable developer workflows. Phase 2 wired state: `/circuit:run` classifies free-form tasks into the current router-supported workflows (`explore` or `review`) and invokes the selected workflow through the project CLI; `/circuit:explore` and `/circuit:review` remain explicit workflow commands. Future phases add `build`, `repair`, `migrate`, `sweep`, and user-authored custom workflows with per-step model + reasoning-effort + skills configuration.",
   "keywords": ["workflow", "automation", "circuit-next", "phase-2"],
   "commands": [
     {
       "name": "circuit:run",
       "file": "commands/circuit-run.md",
-      "description": "Routes every task to the `explore` workflow during the single-workflow phase of Phase 2. Full classifier lands at plan slice P2.8; until then this command is a pass-through to `/circuit:explore`."
+      "description": "Classifies free-form tasks into the current router-supported workflows (`explore` or `review`) and runs the selected workflow through the project CLI."
     },
     {
       "name": "circuit:explore",

@@ -8,7 +8,8 @@ import { Rigor } from '../schemas/rigor.js';
 import { Workflow } from '../schemas/workflow.js';
 
 import { validateWorkflowKindPolicy } from '../runtime/policy/workflow-kind-policy.js';
-import { runDogfood } from '../runtime/runner.js';
+import { classifyWorkflowTask } from '../runtime/router.js';
+import { type DispatchFn, type DogfoodInvocation, runDogfood } from '../runtime/runner.js';
 
 // Slice 27d CLI entrypoint (extended at Slice 43c to accept `explore`
 // alongside `dogfood-run-0`). Loads the named workflow fixture at
@@ -34,18 +35,31 @@ import { runDogfood } from '../runtime/runner.js';
 const DEFAULT_RUNS_BASE = '.circuit-next/runs';
 
 interface ParsedArgs {
-  workflowName: string;
+  workflowName?: string;
   goal: string;
   rigor: Rigor;
   runRoot?: string;
   fixturePath?: string;
 }
 
+interface ResolvedWorkflowRoute {
+  workflowName: string;
+  source: 'explicit' | 'classifier';
+  reason: string;
+  matched_signal?: string;
+}
+
+export interface CliMainOptions {
+  dispatcher?: DispatchFn;
+  now?: () => Date;
+  runId?: string;
+}
+
 function usage(): string {
   return [
-    'usage: circuit:run -- <workflow-name> --goal "<goal>" [--rigor <lite|standard|deep|tournament|autonomous>] [--run-root <path>] [--fixture <path>]',
+    'usage: circuit:run -- [workflow-name] --goal "<goal>" [--rigor <lite|standard|deep|tournament|autonomous>] [--run-root <path>] [--fixture <path>]',
     '',
-    'v0.1 scope: accepts workflow fixtures under .claude-plugin/skills/<name>/circuit.json (Slice 43c extended beyond dogfood-run-0). Composes the runtime boundary via runDogfood against the real `dispatchAgent`.',
+    'v0.1 scope: with an explicit workflow name, loads .claude-plugin/skills/<name>/circuit.json. Without one, classifies the free-form goal across the registered explore/review workflows and then composes the runtime boundary via runDogfood against the real `dispatchAgent`.',
     '',
     'Note: `--dry-run` is not implemented. Pre-Slice-44 the flag was accepted as a no-op while the real adapter ran anyway; the arc-close review flagged this as a safety bug and the flag is now rejected until dry-run support lands (tracked in specs/plans/phase-2-implementation.md post-Slice-44 backlog).',
   ].join('\n');
@@ -114,18 +128,15 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
     throw new Error(`unexpected positional argument: ${tok}`);
   }
 
-  if (workflowName === undefined) {
-    throw new Error(`workflow name is required.\n${usage()}`);
-  }
   if (goal === undefined || goal.length === 0) {
     throw new Error('--goal is required and must be non-empty');
   }
 
   const result: ParsedArgs = {
-    workflowName,
     goal,
     rigor: rigor ?? Rigor.parse('standard'),
   };
+  if (workflowName !== undefined) result.workflowName = workflowName;
   if (runRoot !== undefined) result.runRoot = runRoot;
   if (fixturePath !== undefined) result.fixturePath = fixturePath;
   return result;
@@ -134,6 +145,17 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
 function resolveFixturePath(workflowName: string, override: string | undefined): string {
   if (override !== undefined) return resolve(override);
   return resolve(`.claude-plugin/skills/${workflowName}/circuit.json`);
+}
+
+function resolveWorkflowRoute(args: ParsedArgs): ResolvedWorkflowRoute {
+  if (args.workflowName !== undefined) {
+    return {
+      workflowName: args.workflowName,
+      source: 'explicit',
+      reason: 'explicit workflow positional argument',
+    };
+  }
+  return classifyWorkflowTask(args.goal);
 }
 
 function loadFixture(fixturePath: string): { workflow: Workflow; bytes: Buffer } {
@@ -154,7 +176,16 @@ function loadFixture(fixturePath: string): { workflow: Workflow; bytes: Buffer }
   return { workflow, bytes };
 }
 
-export async function main(argv: readonly string[]): Promise<number> {
+function assertFixtureMatchesRoute(workflow: Workflow, route: ResolvedWorkflowRoute): void {
+  const workflowId = workflow.id as unknown as string;
+  if (workflowId !== route.workflowName) {
+    throw new Error(
+      `workflow fixture id mismatch: selected workflow '${route.workflowName}' but fixture declares '${workflowId}'`,
+    );
+  }
+}
+
+export async function main(argv: readonly string[], options: CliMainOptions = {}): Promise<number> {
   let args: ParsedArgs;
   try {
     args = parseArgs(argv);
@@ -163,10 +194,12 @@ export async function main(argv: readonly string[]): Promise<number> {
     return 2;
   }
 
-  const fixturePath = resolveFixturePath(args.workflowName, args.fixturePath);
+  const route = resolveWorkflowRoute(args);
+  const fixturePath = resolveFixturePath(route.workflowName, args.fixturePath);
   const { workflow, bytes } = loadFixture(fixturePath);
-  const runId = RunId.parse(randomUUID());
-  const now = () => new Date();
+  assertFixtureMatchesRoute(workflow, route);
+  const runId = RunId.parse(options.runId ?? randomUUID());
+  const now = options.now ?? (() => new Date());
   const runRoot = resolve(args.runRoot ?? `${DEFAULT_RUNS_BASE}/${runId as unknown as string}`);
 
   const lane: LaneDeclaration = {
@@ -178,7 +211,7 @@ export async function main(argv: readonly string[]): Promise<number> {
       'defer Alpha Proof to post-Phase-2; not an option because ADR-0001 Addendum B gates Phase 2 on this.',
   };
 
-  const outcome = await runDogfood({
+  const invocation: DogfoodInvocation = {
     runRoot,
     workflow,
     workflowBytes: bytes,
@@ -187,12 +220,20 @@ export async function main(argv: readonly string[]): Promise<number> {
     rigor: args.rigor,
     lane,
     now,
-  });
+  };
+  if (options.dispatcher !== undefined) invocation.dispatcher = options.dispatcher;
+
+  const outcome = await runDogfood(invocation);
 
   process.stdout.write(
     `${JSON.stringify(
       {
         run_id: outcome.result.run_id,
+        workflow_id: outcome.result.workflow_id,
+        selected_workflow: route.workflowName,
+        routed_by: route.source,
+        router_reason: route.reason,
+        ...(route.matched_signal === undefined ? {} : { router_signal: route.matched_signal }),
         run_root: outcome.runRoot,
         outcome: outcome.result.outcome,
         events_observed: outcome.result.events_observed,

@@ -10,7 +10,16 @@ record.*
 
 ---
 
-## P2.9 Second Workflow Arc (opened after Slice 75)
+## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
+
+- **Slice 84 ROUTER-FIRST-PASS** (this commit, Ratchet-Advance) -
+  replaced the `/circuit:run` command's hardcoded explore route with the
+  first CLI-level classifier. The classifier is deliberately simple:
+  review/audit-style task language selects the audit-only `review`
+  workflow, and everything else keeps the conservative `explore`
+  default. The command docs now tell the model to let the CLI choose and
+  then surface `selected_workflow` plus the router reason from the JSON
+  output.
 
 - **Slice 83 REVIEW-WRITER-FOLLOW-ON** (this commit, Ratchet-Advance) -
   closed the follow-on that P2.9 left behind. The normal review path now

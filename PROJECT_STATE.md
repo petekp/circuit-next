@@ -1,4 +1,4 @@
-<!-- current_slice: 83 -->
+<!-- current_slice: 84 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -9,10 +9,12 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 83
-- **current_arc:** Post-P2.9 cleanup (Slice 83 closed the named
-  per-workflow synthesis-writer follow-on for review; next unblocked work
-  can move to routing, model/effort selection, or another workflow)
+- **current_slice:** 84
+- **current_arc:** Post-P2.9 cleanup (Slice 84 landed the first
+  deterministic `/circuit:run` router across the current router-supported
+  workflows: review/audit-style tasks route to `review`, everything else
+  routes to `explore`; next unblocked work can move to model/effort
+  selection or another workflow)
 - **current_phase:** Phase 2 — Implementation (continuing)
 
 Chronicle (relocated narrative history — non-authoritative; see
@@ -101,3 +103,7 @@ default runtime synthesis writer now has a narrow review registration:
 it writes `review.intake@v1` from the user scope and `review.result@v1`
 from the analyze-phase reviewer output, so `/circuit:review` can point at
 a typed review verdict artifact without the old caveat.*
+Slice 84 landed the first `/circuit:run` classifier. Free-form tasks now
+route through the CLI router instead of the slash-command body hardcoding
+`explore`: review/audit-style language selects the audit-only `review`
+workflow, and other tasks keep the conservative `explore` default.*

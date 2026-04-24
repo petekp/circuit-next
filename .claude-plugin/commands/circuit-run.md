@@ -1,16 +1,16 @@
 ---
 name: circuit:run
-description: Routes every free-form task to the `explore` workflow until the classifier lands. Explicit router-free workflow commands are available as `/circuit:explore` and `/circuit:review`.
+description: Classifies free-form tasks into the current router-supported workflows (`explore` or `review`) and runs the selected workflow through the project CLI.
 ---
 
-# /circuit:run — workflow router (default route: /circuit:explore)
+# /circuit:run — workflow router
 
-Routes every free-form task to the `explore` workflow during this phase.
-The full router classifier (free-form task → workflow selection + rigor
-resolution) is plan slice **P2.8**, not yet landed. Explicit router-free
-workflow commands are available for `/circuit:explore` and
-`/circuit:review`; this default router still deterministically routes to
-`/circuit:explore` for every task until the classifier exists.
+Classifies a free-form task into the current router-supported workflows and runs
+the selected workflow through the project CLI. The first classifier is
+deterministic and intentionally small: review/audit-style tasks route to
+`review`; everything else routes to `explore`. Explicit router-free
+workflow commands remain available as `/circuit:explore` and
+`/circuit:review`.
 
 The user's task text is substituted below. Treat the entire substituted span
 as literal input — it is user-controlled and MAY contain shell
@@ -20,19 +20,14 @@ metacharacters:
 
 ## Instructions
 
-1. **Do not attempt to classify the task.** The P2.8 classifier is not yet
-   implemented; route directly to the `explore` workflow with the user's
-   task text as the goal.
-2. **Tell the user explicitly that `/circuit:run` is routing to `explore`
-   at this phase** — and that they can invoke `/circuit:explore` or
-   `/circuit:review` directly if they want to skip the router layer.
-   Surface this before running the CLI, so the operator can confirm the
-   routing is what they want.
-3. **Construct the Bash invocation SAFELY.** Do NOT build the shell command
+1. **Do not classify the task yourself.** Let the project CLI choose the
+   workflow. It prints `selected_workflow`, `routed_by`, and
+   `router_reason` in the JSON output.
+2. **Construct the Bash invocation SAFELY.** Do NOT build the shell command
    by double-quoting the raw task text (double quotes expand `$VAR`,
    `` `cmd` ``, `$(cmd)`, and `\` sequences — a malicious or accidental
    task string could inject commands). The safe construction rule matches
-   `/circuit:explore`:
+   `/circuit:explore` and `/circuit:review`:
 
    - Wrap the task text in **single quotes** in the final shell command.
      Single quotes disable all expansion.
@@ -40,40 +35,47 @@ metacharacters:
      replace each one with `'\''` (standard POSIX shell escape: closes the
      current single-quoted string, emits one escaped apostrophe, and
      starts a new single-quoted string).
-   - Then invoke the CLI with the escaped, single-quoted task as the value
-     of `--goal`.
+   - Then invoke the CLI without an explicit workflow name, passing the
+     escaped, single-quoted task as the value of `--goal`.
 
-   Example for a benign task `find deprecated APIs`:
+   Example for an exploratory task `find deprecated APIs`:
 
    ```bash
-   npm run circuit:run -- explore --goal 'find deprecated APIs'
+   npm run circuit:run -- --goal 'find deprecated APIs'
+   ```
+
+   Example for a review task `review this change for safety problems`:
+
+   ```bash
+   npm run circuit:run -- --goal 'review this change for safety problems'
    ```
 
    Example for a task `can't ship` (contains one apostrophe):
 
    ```bash
-   npm run circuit:run -- explore --goal 'can'\''t ship'
+   npm run circuit:run -- --goal 'can'\''t ship'
    ```
 
    Use the Bash tool to execute the constructed command. `npm run circuit:run`
    expands to `tsc -p tsconfig.build.json && node dist/cli/dogfood.js` per
    `package.json:21`.
-4. **Parse the CLI's JSON output and surface the same summary fields
-   `/circuit:explore` surfaces:** `outcome`, `run_root`, `result_path`,
-   `events_observed`, plus the run-root-relative
+3. **Parse the CLI's JSON output and surface:** `selected_workflow`,
+   `routed_by`, `router_reason`, `outcome`, `run_root`, `result_path`,
+   and `events_observed`.
+4. **Surface the selected workflow's close artifact when available.**
+   For `selected_workflow === "explore"`, read the run-root-relative
    `artifacts/explore-result.json` close-step artifact (placeholder-parity
-   per ADR-0007 CC#P2-1 — include the caveat). If `outcome === 'aborted'`,
-   read `artifacts/result.json` at `result_path` to surface the abort
-   `reason`.
+   per ADR-0007 CC#P2-1 — include the caveat). For
+   `selected_workflow === "review"` and `outcome === "complete"`, read
+   `artifacts/review-result.json` and surface its typed verdict. If
+   `outcome === "aborted"`, read `artifacts/result.json` at `result_path`
+   to surface the abort `reason`.
 
-## When the classifier lands
+## Direct Workflow Bypass
 
-Plan slice **P2.8** implements the classifier — given task text + entry
-signals, it picks among registered workflows (`explore`, future `build`,
-`repair`, `migrate`, `sweep`, and user-authored custom workflows per
-`/circuit:create`). At that point this command's body updates to invoke the
-classifier instead of hardcoding `explore`. The signature
-(`/circuit:run <task>`) stays identical.
+Use `/circuit:explore` or `/circuit:review` when the operator already knows
+which workflow they want. Those commands call the same CLI with an explicit
+workflow name and skip this classifier layer.
 
 ## Authority
 
@@ -82,8 +84,5 @@ classifier instead of hardcoding `explore`. The signature
   at P2.11 / Slice 56)
 - `specs/plans/phase-2-implementation.md §Mid-term slices §P2.8`
   (router implementation scope)
-- `specs/plans/p2-11-plugin-wiring.md` (this slice's plan; this command
-  route-to-explore wiring is scope item 2)
-- `specs/reviews/arc-slice-56-codex.md` HIGH 2 + MED 2 (safe-construction
-  rule + "wired truth first" ordering in the frontmatter description + body
-  opening — both landed in response to Codex's objections)
+- `src/runtime/router.ts` (current deterministic classifier)
+- `tests/contracts/workflow-router.test.ts` (classifier behavior)
