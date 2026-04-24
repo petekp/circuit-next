@@ -1,11 +1,11 @@
 ---
 plan: build-workflow-parity
 status: challenger-pending
-revision: 04
+revision: 05
 opened_at: 2026-04-24
 revised_at: 2026-04-24
 opened_in_session: post-phase-2-parity-map
-revised_in_session: build-workflow-parity-codex-challenger-03-foldins
+revised_in_session: build-workflow-parity-codex-challenger-04-foldins
 base_commit: eb52089
 target: build
 authority:
@@ -43,6 +43,11 @@ prior_challenger_passes:
     revision 04 folds both by binding build.result to
     artifacts/build-result.json and adding a product entry-mode
     selection slice)
+  - specs/reviews/build-workflow-parity-codex-challenger-04.md
+    (verdict REJECT-PENDING-FOLD-INS vs revision 04 — 2 HIGH;
+    revision 05 folds both by requiring selected entry modes to drive
+    run rigor and by adding a checkpoint substrate slice before the
+    first product Build fixture)
 ---
 
 # Build Workflow Parity Plan
@@ -60,25 +65,30 @@ artifact direction.
 
 Revision 02 folds the first Codex challenger pass. Revision 03 folds the
 second Codex challenger pass. Revision 04 folds the third Codex challenger
-pass.
+pass. Revision 05 folds the fourth Codex challenger pass.
 
 | Pass-01 # | Severity | Objection | Revision-02 fold-in |
 |---|---|---|---|
 | 1 | CRITICAL | Review binding mismatch: revision 01 frontmatter carried `base_commit: 129622e`, while the review was commissioned against `eb520893c3ce80a407f2c761c082b31382ec1d59`. | Frontmatter now carries `base_commit: eb52089`, matching the committed revision-01 plan base used for the folded revision. |
-| 2 | HIGH | Work item 6 under-budgeted the public command surface. | Work item 6 now explicitly includes the audit command-closure check, plugin-surface tests, command-invocation tests, and `.claude-plugin/plugin.json` wired-state description. |
+| 2 | HIGH | The public command-surface work was under-budgeted. | The command/router work now explicitly includes the audit command-closure check, plugin-surface tests, command-invocation tests, and `.claude-plugin/plugin.json` wired-state description. |
 | 3 | HIGH | Verification command execution substrate lacked a typed non-shell contract. | §7 now defines the substrate-widening slice's verification command contract: argv array, direct exec, no shell wrapping or interpolation, project-root-contained cwd, explicit env, timeout and output limits, and shell-bypass tests. |
-| 4 | MED | Work item 1 claimed a parsing Build fixture before the verification step substrate exists. | Work item 1 is now policy-only. Revision 03 later moves the first product fixture to Work item 5 so it lands with both required dispatch steps. |
+| 4 | MED | Work item 1 claimed a parsing Build fixture before the verification step substrate exists. | Work item 1 is now policy-only. Later revisions move the first product fixture to the dispatch slice so it lands only after the required substrates and dispatch steps exist. |
 
 | Pass-02 # | Severity | Objection | Revision-03 fold-in |
 |---|---|---|---|
-| 1 | HIGH | Work item 4 added the first product Build fixture before the dispatch steps that the existing audit gate requires. | The product fixture now lands in Work item 5 with both `act` and `review` dispatch steps. Work item 4 keeps verification substrate tests local to the runtime step kind. |
+| 1 | HIGH | The verification substrate slice added the first product Build fixture before the dispatch steps that the existing audit gate requires. | The product fixture now lands in the dispatch slice with both `act` and `review` dispatch steps. The verification substrate keeps tests local to the runtime step kind. |
 | 2 | MED | Entry-mode parity was cited as evidence without saying whether this arc lands or defers the old Build modes. | §3 and §5 now declare that this arc lands `default`, `lite`, `deep`, and `autonomous` entry modes, with Lite still reaching Review. |
-| 3 | MED | The plan wanted two Build dispatch steps but did not bind that shape to audit policy. | Work item 5 now requires a Build-specific dispatch-policy row and tests that enforce both `act` and `review`. |
+| 3 | MED | The plan wanted two Build dispatch steps but did not bind that shape to audit policy. | The dispatch slice now requires a Build-specific dispatch-policy row and tests that enforce both `act` and `review`. |
 
 | Pass-03 # | Severity | Objection | Revision-04 fold-in |
 |---|---|---|---|
 | 1 | HIGH | `build.result` was not bound to a path distinct from the engine-authored `run.result` at `artifacts/result.json`. | §6 now binds `build.result@v1` to `<run-root>/artifacts/build-result.json`, and Work items 2-3 require path-collision tests and a path-distinct close writer. |
-| 2 | HIGH | The plan landed four entry modes but did not make non-default modes reachable through the product path. | New Work item 6 wires entry-mode selection through the runtime/CLI path and proves a non-default mode is reachable. |
+| 2 | HIGH | The plan landed four entry modes but did not make non-default modes reachable through the product path. | The entry-mode selection slice wires entry-mode selection through the runtime/CLI path and proves a non-default mode is reachable. |
+
+| Pass-04 # | Severity | Objection | Revision-05 fold-in |
+|---|---|---|---|
+| 1 | HIGH | Entry-mode selection could still leave Lite, Deep, and Autonomous semantically inert because the plan only required `start_at` selection. | §3, §5, and the entry-mode slice now require the selected mode's `rigor` to become the default run rigor when no explicit invocation rigor is supplied, with runner and CLI tests proving non-default modes affect recorded run state. |
+| 2 | HIGH | The plan weakened legacy Build's checkpointed Frame into "checkpoint or synthesis," even though autonomous parity depends on real checkpoint behavior and the current runner cannot execute checkpoint steps. | §5 now requires Frame to be a checkpoint, §8 adds a checkpoint substrate, and the first product Build fixture waits until both checkpoint and verification substrates exist. |
 
 ## §1 — Evidence census
 
@@ -119,8 +129,12 @@ Target Build surface:
 - Build has the canonical phase set `{frame, plan, act, verify, review, close}`
   and `spine_policy.omits: {analyze}`.
 - Build declares and exposes the four reference entry modes: `default`, `lite`,
-  `deep`, and `autonomous`; all four use the fixed Build graph, and Lite still
-  reaches Review.
+  `deep`, and `autonomous`; all four use the fixed Build graph, selected modes
+  drive run rigor by default, and Lite still reaches Review.
+- Build Frame is a real checkpoint. Non-autonomous runs pause or record an
+  unresolved checkpoint according to the checkpoint substrate; Autonomous may
+  auto-resolve only declared safe checkpoint choices and fails closed when no
+  safe auto choice exists.
 - Build emits structured JSON successor artifacts for all six reference
   artifact roles. The workflow-specific close artifact is
   `<run-root>/artifacts/build-result.json`, not the engine-authored
@@ -140,7 +154,7 @@ the persisted format from Markdown to structured JSON.
 - Do not make custom workflow authoring part of Build.
 - Do not claim full Circuit parity at Build close.
 - Do not add broad autonomous overnight behavior beyond Build's reference entry
-  mode shape.
+  mode shape and narrowly declared checkpoint auto-resolution.
 
 ## §5 — Target Build shape
 
@@ -148,26 +162,35 @@ Build's circuit-next fixture should use these phases:
 
 | Phase title | Canonical phase | Step kind | Role |
 |---|---|---|---|
-| Frame | frame | checkpoint or synthesis | Define objective, scope, success criteria, and verification commands. |
+| Frame | frame | checkpoint | Define objective, scope, success criteria, and verification commands. |
 | Plan | plan | synthesis | Produce concrete implementation slices and verification commands. |
 | Act | act | dispatch | Implementer makes the change and returns structured implementation evidence. |
 | Verify | verify | verification command execution | Runtime runs the planned commands and records pass/fail evidence. |
 | Review | review | dispatch | Reviewer inspects the changed work and verification evidence. |
 | Close | close | synthesis | Runtime writes the final Build result artifact. |
 
-The Verify step does not assume a capability the runtime already has. It lands
-only through the §7 runtime widening substrate slice.
+The Frame and Verify steps do not assume capabilities the runtime already has.
+Frame lands only through the §8 checkpoint substrate slice. Verify lands only
+through the §7 verification runtime widening substrate slice.
 
 The canonical phase set is `{frame, plan, act, verify, review, close}`.
 `spine_policy.omits` is `{analyze}` because Build plans and acts rather than
 running a separate investigation phase.
 
 Build's entry-mode scope for this arc is the full reference set:
-`default`, `lite`, `deep`, and `autonomous`. The modes may differ in rigor or
-selection defaults, but they must not skip the Review phase. Lite still reaches
-Review. This is a product reachability claim, not metadata-only: a later slice
-in this arc must let the product path select a named entry mode instead of
-always executing `entry_modes[0]`.
+`default`, `lite`, `deep`, and `autonomous`. The modes differ through runtime
+behavior, not metadata alone. The selected entry mode's `rigor` becomes the
+run rigor unless an explicit invocation rigor is supplied, in which case the
+explicit invocation value wins and is recorded as such. The modes must not
+skip the Review phase. Lite still reaches Review. This is a product
+reachability and behavior claim: a later slice in this arc must let the
+product path select a named entry mode instead of always executing
+`entry_modes[0]`, and must prove non-default modes affect recorded run state.
+
+Autonomous mode is limited to the Build reference shape for this arc. Its
+checkpoint behavior is narrow: it can auto-resolve a checkpoint only when the
+checkpoint declares an allowed safe default or safe auto choice. Missing or
+unsafe auto choices fail closed rather than silently continuing.
 
 ## §6 — Artifact map
 
@@ -226,7 +249,36 @@ project-root escape through cwd; missing timeout; unbounded output; and a
 metacharacter-bearing argument proving the runtime passes it as a literal argv
 element rather than interpreting it through a shell.
 
-## §8 — Slices
+## §8 — Checkpoint substrate
+
+Build cannot claim its reference mode set honestly while Frame is a synthesis
+stand-in. The old Build workflow begins with a checkpoint, and Autonomous mode
+is meaningful only if that checkpoint can be resolved by declared safe policy
+rather than by user pause.
+
+This arc therefore includes a checkpoint substrate slice before the first
+product Build fixture. The likely shape is the smallest runner capability that:
+
+- parses checkpoint steps through the existing step schema without throwing,
+- records `checkpoint.requested` evidence when a checkpoint is reached,
+- materializes a checkpoint artifact or state entry with prompt, allowed
+  choices, selected choice when present, and resolution source,
+- pauses or closes as waiting/unresolved for non-autonomous runs when no
+  explicit resolution is supplied,
+- accepts only declared allowed choices when a checkpoint is resolved,
+- lets Autonomous mode auto-resolve only a declared safe default or safe auto
+  choice,
+- fails closed when a checkpoint has no safe auto choice in Autonomous mode,
+- records enough run-state evidence that default/lite/deep checkpoint behavior
+  can be distinguished from autonomous auto-resolution.
+
+Required tests for this substrate include: parsing and reaching a checkpoint
+step; non-autonomous unresolved checkpoint behavior; rejected undeclared
+checkpoint choice; autonomous safe auto-resolution; autonomous fail-closed
+when no safe auto choice exists; and event/state/result agreement for each
+terminal outcome.
+
+## §9 — Slices
 
 ### Work item 1 — Build policy only
 
@@ -243,7 +295,7 @@ workflow shape, letting later slices invent phases locally.
   set and omitted Analyze phase.
 - Do not add the product `.claude-plugin/skills/build/circuit.json` fixture in
   this work item. The target Build fixture needs the verification command
-  execution step kind, which does not exist yet.
+  execution and checkpoint substrates, which do not exist yet.
 
 **Acceptance evidence:**
 
@@ -345,8 +397,8 @@ runtime cannot prove commands were run.
   missing timeout, and output limit enforcement.
 - Keep product fixture registration out of this work item. Runtime tests may
   use local fixtures or direct runner setup to prove the verification step
-  kind, but the registered Build fixture must wait until the dispatch slice can
-  include both required dispatch steps.
+  kind, but the registered Build fixture must wait until checkpoint execution
+  also exists and the dispatch slice can include both required dispatch steps.
 - Keep command execution scoped to the project root and existing run safety
   rules.
 
@@ -367,7 +419,43 @@ The implementation dispatch can make changes, but Build is not trustworthy
 until verification can record real pass/fail evidence. This substrate should
 land before a user-facing Build command exists.
 
-### Work item 5 — Build implementation and review dispatch
+### Work item 5 — Checkpoint execution substrate
+
+**Lane:** Ratchet-Advance.
+
+**Failure mode addressed:** Build could replace the reference Frame checkpoint
+with a synthesis placeholder while still claiming full entry-mode parity.
+
+**Deliverables:**
+
+- Add the smallest runner support needed for checkpoint steps to execute
+  without throwing.
+- Add the checkpoint event, state, and artifact surfaces described in §8.
+- Add fail-closed resolution checks for undeclared checkpoint choices.
+- Add Autonomous-mode safe auto-resolution only for declared safe choices.
+- Keep the product Build fixture out of this work item. Local runtime fixtures
+  may prove checkpoint behavior, but the registered Build fixture must wait
+  until both checkpoint and verification substrates exist.
+
+**Acceptance evidence:**
+
+- Runner tests prove a checkpoint step can be reached and recorded.
+- Runner tests prove default/lite/deep non-autonomous runs do not silently
+  auto-resolve the checkpoint.
+- Runner tests prove Autonomous resolves a safe declared checkpoint choice and
+  fails closed when no safe auto choice exists.
+- Event, state, and result surfaces agree for unresolved, resolved, and failed
+  checkpoint outcomes.
+- `npm run verify` passes.
+- `npm run audit` reports 0 red and no new unaccounted yellows.
+
+**Why this not adjacent:**
+
+The Build fixture needs a real Frame checkpoint. Adding the fixture before the
+checkpoint substrate would force a fake first step or a runtime throw, so the
+smallest honest move is to teach the runner checkpoint behavior first.
+
+### Work item 6 — Build implementation and review dispatch
 
 **Lane:** Ratchet-Advance.
 
@@ -379,8 +467,8 @@ dispatches would be a scripted summary, not the old product's work loop.
 - Register dispatch schemas for `build.implementation@v1` and
   `build.review@v1`.
 - Add the first product Build fixture under `.claude-plugin/skills/build/`
-  with all six phases, including Act and Review dispatch steps with
-  implementer and reviewer roles.
+  with all six phases, including a Frame checkpoint plus Act and Review
+  dispatch steps with implementer and reviewer roles.
 - Add a Build-specific dispatch-policy row and tests proving audit enforces
   both required dispatch steps: `act` and `review`.
 - Add entry-mode tests proving the product fixture declares `default`, `lite`,
@@ -395,16 +483,18 @@ dispatches would be a scripted summary, not the old product's work loop.
 - Audit rejects a registered Build fixture missing either the `act` dispatch or
   the `review` dispatch.
 - Product Build fixture parses with all four reference entry modes.
+- Product Build fixture uses a checkpoint Frame step, not a synthesis stand-in.
 - Failing or malformed dispatch output aborts or blocks honestly.
 - `npm run verify` passes.
 - `npm run audit` reports 0 red and no new unaccounted yellows.
 
 **Why this not adjacent:**
 
-Dispatch should land after the schemas and verification substrate so the work
-loop can produce and consume real evidence instead of placeholders.
+Dispatch should land after the schemas, verification substrate, and checkpoint
+substrate so the work loop can produce and consume real evidence instead of
+placeholders.
 
-### Work item 6 — Build entry-mode selection
+### Work item 7 — Build entry-mode selection
 
 **Lane:** Ratchet-Advance.
 
@@ -414,21 +504,31 @@ entry modes without making them reachable through the product path.
 **Deliverables:**
 
 - Add the smallest runtime and CLI entry-mode selector needed for a named
-  workflow entry mode to choose the run start point instead of always using
-  `entry_modes[0]`.
+  workflow entry mode to choose the run start point and default run rigor
+  instead of always using `entry_modes[0]`.
+- Bind the selected entry mode's `rigor` into invocation and recorded run
+  state when no explicit invocation rigor is supplied.
+- Preserve explicit invocation rigor precedence when a caller supplies it, and
+  record that the explicit invocation value won.
 - Fail closed when a requested entry mode does not exist for the selected
   workflow.
 - Add tests proving `default`, `lite`, `deep`, and `autonomous` select the
-  intended entry mode, and that at least one non-default mode reaches the
+  intended entry mode and recorded rigor, and that non-default modes reach the
   runtime through the product CLI path.
 - Add a Lite-mode regression test proving Review still runs.
+- Add an Autonomous-mode checkpoint test proving safe auto-resolution occurs
+  only through the checkpoint substrate's declared safe choice.
 
 **Acceptance evidence:**
 
 - Product CLI tests prove a non-default Build entry mode is reachable.
 - Runner tests prove requested entry modes select the corresponding
-  `entry_modes[*].start_at` instead of unconditionally taking
-  `entry_modes[0]`.
+  `entry_modes[*].start_at` and default rigor instead of unconditionally
+  taking `entry_modes[0]`.
+- Runner and CLI tests prove Lite, Deep, and Autonomous affect recorded run
+  state when no explicit invocation rigor is supplied.
+- Tests prove explicit invocation rigor overrides entry-mode rigor when
+  supplied.
 - Unknown entry-mode names fail before the run starts.
 - `npm run verify` passes.
 - `npm run audit` reports 0 red and no new unaccounted yellows.
@@ -439,7 +539,7 @@ The fixture can declare the four modes before the command is public, but the
 plan should not close with inert mode metadata. Selection wiring belongs before
 the public command proof.
 
-### Work item 7 — Build command and router wiring
+### Work item 8 — Build command and router wiring
 
 **Lane:** Ratchet-Advance.
 
@@ -478,7 +578,7 @@ does not recognize build-like tasks.
 The command should be exposed only after the runtime can execute the Build
 fixture honestly enough for users to try it.
 
-### Work item 8 — Live Build proof and close review
+### Work item 9 — Live Build proof and close review
 
 **Lane:** Ratchet-Advance.
 
@@ -507,7 +607,7 @@ real plugin command path.
 Closing without a live command proof would repeat the old mistake of proving
 only internals. The last slice should prove the user-visible route.
 
-## §9 — Close criteria
+## §10 — Close criteria
 
 Build is done for this arc when:
 
@@ -519,9 +619,13 @@ Build is done for this arc when:
    `artifacts/build-result.json`, distinct from the engine-authored
    `artifacts/result.json`.
 6. Build exposes the four reference entry modes through the product path:
-   `default`, `lite`, `deep`, and `autonomous`, with Lite still reaching Review.
-7. Audit enforces both required Build dispatch steps: Act and Review.
-8. The plan is closed with live command proof and composition review evidence.
+   `default`, `lite`, `deep`, and `autonomous`, with selected mode rigor
+   reflected in recorded run state and Lite still reaching Review.
+7. Build Frame is a real checkpoint. Autonomous mode proves safe checkpoint
+   auto-resolution in a narrow declared case, and non-autonomous modes do not
+   silently auto-resolve checkpoints.
+8. Audit enforces both required Build dispatch steps: Act and Review.
+9. The plan is closed with live command proof and composition review evidence.
 
 This close would mean "Build parity path exists" for circuit-next. It would not
 mean full first-generation Circuit parity, because Repair, Migrate, Sweep,

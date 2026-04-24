@@ -1,4 +1,4 @@
-<!-- current_slice: 107 -->
+<!-- current_slice: 108 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -10,15 +10,15 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 107
+- **current_slice:** 108
 - **current_arc:** Build workflow parity plan remains challenger-pending after
-  the third Codex challenger pass. Revision 04 folds the pass-03 objections:
-  `build.result` is now pinned to `artifacts/build-result.json` so it cannot
-  collide with the engine-authored `artifacts/result.json`, and the plan now
-  includes a product entry-mode selection slice so Lite, Deep, and Autonomous
-  are reachable rather than inert fixture metadata. No Build runtime changes
-  have started yet; the next required step is another Codex challenger review
-  against revision 04. P2-1 uses structured JSON as the accepted successor artifact shape; it does not claim old Markdown byte-for-byte compatibility. P2-3 live command proof is included through a live Claude
+  the fourth Codex challenger pass. Revision 05 folds the pass-04 objections:
+  selected Build entry modes must now affect run rigor and recorded run state
+  instead of merely choosing a start step, and the plan now requires a real
+  checkpoint substrate before the first product Build fixture so Frame cannot
+  be replaced by a synthesis placeholder. No Build runtime changes have
+  started yet; the next required step is another Codex challenger review
+  against revision 05. P2-1 uses structured JSON as the accepted successor artifact shape; it does not claim old Markdown byte-for-byte compatibility. P2-3 live command proof is included through a live Claude
   Code invocation of the inline `circuit` plugin. The Phase 2 close claim
   remains narrow: first working workflow product spine closed, not full
   first-generation Circuit parity. Next work is broader parity expansion

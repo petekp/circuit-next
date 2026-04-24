@@ -12,6 +12,14 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 108 BUILD PLAN FOURTH CHALLENGER FOLD-INS** (this commit,
+  Discovery) - recorded the fourth Codex challenger review for the Build plan
+  and folded in its two objections. The plan now requires Build modes to
+  affect run behavior by setting the default run rigor, and it adds a real
+  checkpoint substrate before the first product Build fixture so the Frame
+  step cannot be downgraded into a placeholder summary. No Build runtime
+  behavior changed.
+
 - **Slice 107 BUILD PLAN THIRD CHALLENGER FOLD-INS** (this commit,
   Discovery) - recorded the third Codex challenger review for the Build plan
   and folded in its two objections. The plan now says Build's workflow-specific
