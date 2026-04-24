@@ -1,9 +1,11 @@
 ---
 plan: runtime-safety-floor
 status: challenger-pending
-revision: 01
+revision: 02
 opened_at: 2026-04-24
-base_commit: 49090cd
+revised_at: 2026-04-24
+revised_in_session: runtime-safety-floor-codex-challenger-01-foldins
+base_commit: 942e67b
 target: runner-runtime-safety
 trigger: |
   Takeover assessment reproduced five runtime safety failures on current
@@ -20,10 +22,20 @@ authority:
   - CLAUDE.md §Plan-authoring discipline (ADR-0010 lifecycle)
   - specs/adrs/ADR-0010-arc-planning-readiness-gate.md §Decision
   - specs/adrs/ADR-0007-phase-2-close-criteria.md §Decision.1 CC#P2-2
+  - specs/contracts/step.md
+  - specs/contracts/workflow.md
+  - specs/invariants.json
+  - src/schemas/event.ts
   - src/runtime/runner.ts
   - src/runtime/adapters/dispatch-materializer.ts
   - src/schemas/step.ts
   - src/schemas/workflow.ts
+prior_challenger_passes:
+  - specs/reviews/runtime-safety-floor-codex-challenger-01.md
+    (verdict REJECT-PENDING-FOLD-INS vs revision 01 — 2 HIGH;
+    revision 02 folds both by preserving dispatch provenance on
+    adapter failure and naming the contract/invariant movement for
+    run-relative paths + pass-route reachability)
 ---
 
 # Runtime Safety Floor
@@ -68,14 +80,16 @@ harder to isolate and easier to normalize.
 | E9 | Current audit baseline is `33 green / 2 yellow / 0 red`; the two yellows are AGENT_SMOKE and CODEX_SMOKE fingerprint drift. | verified | `npm run audit` on 2026-04-24 |
 | E10 | `npm run verify` passes on current HEAD with `1235 passed / 19 skipped`. | verified | `npm run verify` on 2026-04-24 |
 | E11 | P2.9 second-workflow plan is `challenger-cleared` but not operator-signed. | verified | `specs/plans/p2-9-second-workflow.md` frontmatter |
+| E12 | The live dispatch provenance surface includes `adapter`, `role`, `resolved_selection`, and `resolved_from`; failure handling must not regress that audit trail. | verified | `src/schemas/event.ts` + `src/runtime/adapters/dispatch-materializer.ts:36-75` |
+| E13 | Current workflow authority defines WF-I8 as broad terminal reachability through any route chain, while no current Step invariant names run-relative path syntax. | verified | `specs/contracts/workflow.md:45-52`, `specs/invariants.json` WF-I8, `specs/contracts/step.md` |
 
 ### §1.B Hypotheses
 
 | # | Hypothesis | Resolution point |
 |---|---|---|
 | H1 | A single run-relative path primitive can cover every workflow-controlled read/write path without changing fixture authoring syntax. | Slice 1 tests |
-| H2 | `dispatch.failed` is the least misleading durable event shape for adapter invocation exceptions. | Slice 3 challenger + tests |
-| H3 | Static pass-route validation plus a runtime visited-step guard is sufficient to prevent pass-route hangs. | Slice 4 tests |
+| H2 | The least misleading durable event shape for adapter invocation exceptions is `dispatch.failed` paired with the existing provenance surface and a pre-await request/prompt hash. | Slice 3 challenger + tests |
+| H3 | Static pass-route validation plus a runtime visited-step guard is sufficient to prevent pass-route hangs once the workflow contract/invariant ledger names pass-route reachability explicitly. | Slice 4 tests |
 | H4 | P2.9 assumptions remain valid after the safety floor, or can be refreshed with a small plan revision. | Batch close freshness check |
 
 ### §1.C Unknown-blocking
@@ -152,6 +166,10 @@ root with `..` segments or absolute paths.
 5. Replace raw `join(runRoot, path)` at the current call sites:
    `composeDispatchPrompt`, `writeSynthesisArtifact`, and
    `materializeDispatch`.
+6. Add an explicit Step-contract invariant for run-relative path syntax
+   (preferred id: `STEP-I8`) and update `specs/contracts/step.md`,
+   contract frontmatter, `specs/invariants.json`, and contract tests so
+   the parser-tightening is not a silent schema-only semantic change.
 
 **Acceptance evidence:**
 
@@ -166,6 +184,8 @@ root with `..` segments or absolute paths.
   dispatch `artifact.path` cannot escape.
 - Runtime test proves `reads: ['../secret.txt']` cannot escape.
 - Existing `dogfood-run-0` and `explore` fixtures still parse.
+- Step contract / invariant-ledger tests prove the new run-relative path
+  invariant is named, indexed, and test-bound.
 - `npm run verify` passes.
 - `npm run audit` reports `0 red` and no new unaccounted yellow.
 
@@ -227,15 +247,21 @@ timeouts, or thrown test dispatchers escape the runner after
    explicit typed failure event if the challenger identifies a better
    existing event name.
 2. Refactor dispatch execution so the runner records enough durable
-   dispatch context before awaiting the adapter. At minimum, preserve
-   adapter name, step id, attempt, request hash or prompt hash, and
-   failure reason.
+   dispatch context before awaiting the adapter. This MUST preserve the
+   existing dispatch provenance surface: adapter identity, role,
+   resolved selection, resolved-from provenance, step id, attempt, a
+   pre-await request hash or prompt hash, and failure reason.
 3. On adapter exception, emit a durable failure sequence ending in:
    `gate.evaluated outcome=fail`, `step.aborted`, `run.closed
    outcome=aborted`, and `artifacts/result.json`.
 4. Keep reason strings byte-identical across all surfaces that carry the
    terminal reason.
-5. Update event / run / projection tests and contract prose as needed so
+5. If `dispatch.failed` is introduced, it must be additive to the
+   current dispatch audit trail rather than a smaller substitute for
+   `dispatch.started`-equivalent provenance. Any smaller representation
+   must explicitly reopen the event contract and name the semantic
+   tradeoff before implementation.
+6. Update event / run / projection tests and contract prose as needed so
    adapter invocation failure is not misrepresented as a model verdict.
 
 **Acceptance evidence:**
@@ -244,6 +270,13 @@ timeouts, or thrown test dispatchers escape the runner after
   `artifacts/result.json outcome=aborted`.
 - Event log includes the typed dispatch failure event or accepted
   equivalent, not merely an escaped exception.
+- Event log preserves `dispatch.started`-equivalent provenance for the
+  failed attempt: adapter, role, resolved selection, resolved-from
+  provenance, step id, and attempt. It also records a durable pre-await
+  request hash or prompt hash so the failure can be tied to the exact
+  invocation payload.
+- No implementation may replace the existing dispatch provenance surface
+  with only `{adapter, step_id, attempt, reason}`.
 - No `step.completed` appears for the failed dispatch step.
 - Reason is byte-identical across `dispatch.failed`, `gate.evaluated`,
   `step.aborted`, `run.closed`, and `result.json` where those surfaces
@@ -273,13 +306,20 @@ A workflow can parse with `pass` cycling forever and `fail` pointing to
 
 1. Change workflow validation so every step's pass route reaches a
    terminal by following only `routes.pass`.
-2. Keep or separately validate broader graph reachability only if it has
+2. Bind the contract movement explicitly. Preferred shape: keep WF-I8 as
+   broad terminal reachability if it remains useful, and add a new
+   workflow invariant (preferred id: `WF-I11`) for pass-route terminal
+   reachability. If implementation instead replaces WF-I8, revise
+   `specs/contracts/workflow.md`, contract frontmatter, property ids,
+   `specs/invariants.json`, and tests so no authority still describes
+   the broader rule as satisfying runtime liveness.
+3. Keep or separately validate broader graph reachability only if it has
    a named purpose; do not let it satisfy pass-route safety.
-3. Add a runtime guard: revisiting a step id in one run aborts the run
+4. Add a runtime guard: revisiting a step id in one run aborts the run
    with a clear cycle reason. A stricter equivalent such as
    `executedSteps > workflow.steps.length` is acceptable only if the
    test proves the same failure mode.
-4. Runtime guard must close the run with `outcome=aborted` and
+5. Runtime guard must close the run with `outcome=aborted` and
    `artifacts/result.json`, not throw and strand the log.
 
 **Acceptance evidence:**
@@ -288,6 +328,9 @@ A workflow can parse with `pass` cycling forever and `fail` pointing to
   fails parse.
 - Self-cycle and multi-step pass-cycle fixtures fail parse.
 - Existing valid fixtures still parse.
+- Workflow contract / invariant-ledger tests prove pass-route
+  reachability is named, indexed, and test-bound; broad WF-I8 text is
+  either preserved as a separate invariant or revised consistently.
 - Runtime-cycle test bypasses schema if necessary and proves the runner
   aborts cleanly instead of hanging.
 - `npm run verify` passes.
