@@ -1,12 +1,15 @@
 ---
 plan: runtime-safety-floor
-status: challenger-cleared
+status: operator-signoff
 revision: 03
 opened_at: 2026-04-24
 revised_at: 2026-04-24
 revised_in_session: runtime-safety-floor-codex-challenger-02-med-foldins
 cleared_at: 2026-04-24
 cleared_in_session: runtime-safety-floor-codex-challenger-03-accept
+signoff_at: 2026-04-24
+signoff_in_session: runtime-safety-floor-operator-signoff
+signoff_note: "Operator explicit signoff ('Thank you for the plain English. It helps a LOT. Please consider this signed off by me, the orchestrator.', 2026-04-24). operator_signoff_predecessor: 4d36585415858ddcd57d62a3df119da6266e380a."
 base_commit: 3e38c6b
 target: runner-runtime-safety
 trigger: |
@@ -109,11 +112,12 @@ harder to isolate and easier to normalize.
 
 ## §2 — Lifecycle and Governance Envelope
 
-This plan is `challenger-pending`: committed for review, but not cleared
-for implementation. Execution MUST NOT begin from `status:
-challenger-pending`.
+This plan is `operator-signoff`: the operator reviewed the
+challenger-cleared revision and explicitly signed off on 2026-04-24.
+Implementation slices may open from this state, but runtime changes are
+still outside this signoff commit.
 
-Required lifecycle before implementation:
+Lifecycle completed before implementation:
 
 1. Run `npm run plan:lint -- specs/plans/runtime-safety-floor.md` and
    `npm run plan:lint -- --context=committed specs/plans/runtime-safety-floor.md`
@@ -122,7 +126,8 @@ Required lifecycle before implementation:
 3. Fold in challenger findings or revise the plan.
 4. Advance only to `challenger-cleared` after an ACCEPT-class review.
 5. Request operator signoff only after challenger clearance.
-6. Start implementation only from `operator-signoff`.
+6. Start implementation only from `operator-signoff` — now satisfied by
+   this transition.
 
 Because the arc spans more than three slices and touches privileged
 runtime paths, the close ceremony MUST include a two-prong composition
