@@ -13,7 +13,9 @@ import {
 import {
   AGENT_CLAUDE_EXECUTABLE,
   AGENT_NO_WRITE_FLAGS,
+  AGENT_SUPPORTED_EFFORTS,
   type AgentDispatchResult,
+  buildAgentArgs,
   parseAgentStdout,
   sha256Hex,
 } from '../../src/runtime/adapters/agent.js';
@@ -84,6 +86,49 @@ describe('Slice 42 (A) — src/runtime/adapters/agent.ts module shape', () => {
     expect(AGENT_NO_WRITE_FLAGS).toContain('--output-format');
     expect(AGENT_NO_WRITE_FLAGS).toContain('stream-json');
     expect(AGENT_NO_WRITE_FLAGS).toContain('--verbose');
+  });
+
+  it('buildAgentArgs passes anthropic model and supported effort to claude before the prompt', () => {
+    const args = buildAgentArgs({
+      prompt: 'hello',
+      resolvedSelection: {
+        model: { provider: 'anthropic', model: 'claude-opus-4-7' },
+        effort: 'high',
+        skills: [],
+        invocation_options: {},
+      },
+    });
+
+    expect(args.slice(-5)).toEqual(['--model', 'claude-opus-4-7', '--effort', 'high', 'hello']);
+  });
+
+  it('buildAgentArgs rejects non-anthropic model providers instead of silently ignoring them', () => {
+    expect(() =>
+      buildAgentArgs({
+        prompt: 'hello',
+        resolvedSelection: {
+          model: { provider: 'openai', model: 'gpt-5.4' },
+          skills: [],
+          invocation_options: {},
+        },
+      }),
+    ).toThrow(/agent adapter cannot honor model provider 'openai'/);
+  });
+
+  it('buildAgentArgs rejects effort tiers the Claude CLI cannot honor', () => {
+    expect([...AGENT_SUPPORTED_EFFORTS]).toEqual(['low', 'medium', 'high', 'xhigh']);
+    for (const effort of ['none', 'minimal'] as const) {
+      expect(() =>
+        buildAgentArgs({
+          prompt: 'hello',
+          resolvedSelection: {
+            effort,
+            skills: [],
+            invocation_options: {},
+          },
+        }),
+      ).toThrow(new RegExp(`agent adapter cannot honor effort '${effort}'`));
+    }
   });
 
   it('sha256Hex returns a 64-character lowercase hex digest', () => {

@@ -157,9 +157,11 @@ describe('Slice 45 — codex dispatch round-trip (ADR-0007 CC#P2-2 second-adapte
         });
 
         const prompt = 'Respond with exactly the single word: ACCEPT';
+        const resolvedSelection = { effort: 'low' as const, skills: [], invocation_options: {} };
         const codexResult: CodexDispatchResult = await dispatchCodex({
           prompt,
           timeoutMs: 120_000,
+          resolvedSelection,
         });
 
         // Slice 47a — selection + provenance now required at the
@@ -175,7 +177,7 @@ describe('Slice 45 — codex dispatch round-trip (ADR-0007 CC#P2-2 second-adapte
           runRoot,
           writes,
           adapterName: 'codex',
-          resolvedSelection: { skills: [], invocation_options: {} },
+          resolvedSelection,
           resolvedFrom: { source: 'explicit' },
           dispatchResult: codexResult,
           verdict: 'accept',

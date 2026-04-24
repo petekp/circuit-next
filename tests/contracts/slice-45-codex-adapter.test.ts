@@ -6,7 +6,11 @@ import {
   CODEX_EXECUTABLE,
   CODEX_FORBIDDEN_ARGV_TOKENS,
   CODEX_NO_WRITE_FLAGS,
+  CODEX_REASONING_EFFORT_CONFIG_KEY,
+  CODEX_SUPPORTED_EFFORTS,
   type CodexDispatchResult,
+  assertCodexSpawnArgvBoundary,
+  buildCodexArgs,
   parseCodexStdout,
 } from '../../src/runtime/adapters/codex.js';
 
@@ -128,7 +132,124 @@ describe('Slice 45 (A) — src/runtime/adapters/codex.ts module shape', () => {
     expect(forbidden).toContain('--config');
     expect(forbidden).toContain('-p');
     expect(forbidden).toContain('--profile');
-    expect(forbidden.length).toBeGreaterThanOrEqual(9);
+    expect(forbidden).toContain('--sandbox');
+    expect(forbidden.length).toBeGreaterThanOrEqual(10);
+  });
+
+  it('buildCodexArgs passes openai model and reasoning effort through the allowlisted config key', () => {
+    const args = buildCodexArgs({
+      prompt: 'hello',
+      resolvedSelection: {
+        model: { provider: 'openai', model: 'gpt-5.4' },
+        effort: 'xhigh',
+        skills: [],
+        invocation_options: {},
+      },
+    });
+
+    expect(args.slice(-5)).toEqual([
+      '-m',
+      'gpt-5.4',
+      '-c',
+      `${CODEX_REASONING_EFFORT_CONFIG_KEY}="xhigh"`,
+      'hello',
+    ]);
+  });
+
+  it('buildCodexArgs rejects non-openai model providers instead of silently ignoring them', () => {
+    expect(() =>
+      buildCodexArgs({
+        prompt: 'hello',
+        resolvedSelection: {
+          model: { provider: 'anthropic', model: 'claude-opus-4-7' },
+          skills: [],
+          invocation_options: {},
+        },
+      }),
+    ).toThrow(/codex adapter cannot honor model provider 'anthropic'/);
+  });
+
+  it('buildCodexArgs only emits the model_reasoning_effort config override', () => {
+    const args = buildCodexArgs({
+      prompt: 'hello',
+      resolvedSelection: {
+        effort: 'high',
+        skills: [],
+        invocation_options: {},
+      },
+    });
+    const configIndex = args.indexOf('-c');
+    expect(configIndex).toBeGreaterThanOrEqual(0);
+    expect(args[configIndex + 1]).toBe(`${CODEX_REASONING_EFFORT_CONFIG_KEY}="high"`);
+    expect(args[configIndex + 1]).not.toMatch(/sandbox|approval|profile|permissions/);
+  });
+
+  it('buildCodexArgs rejects effort tiers the Codex CLI cannot honor before spawn', () => {
+    expect([...CODEX_SUPPORTED_EFFORTS]).toEqual(['low', 'medium', 'high', 'xhigh']);
+    for (const effort of ['none', 'minimal'] as const) {
+      expect(() =>
+        buildCodexArgs({
+          prompt: 'hello',
+          resolvedSelection: {
+            effort,
+            skills: [],
+            invocation_options: {},
+          },
+        }),
+      ).toThrow(new RegExp(`codex adapter cannot honor effort '${effort}'`));
+    }
+  });
+
+  it('assertCodexSpawnArgvBoundary allows only one model_reasoning_effort -c override', () => {
+    const safeArgs = [
+      ...CODEX_NO_WRITE_FLAGS,
+      '-c',
+      `${CODEX_REASONING_EFFORT_CONFIG_KEY}="high"`,
+      'hello',
+    ];
+    expect(() => assertCodexSpawnArgvBoundary(safeArgs)).not.toThrow();
+    expect(() =>
+      assertCodexSpawnArgvBoundary([
+        ...CODEX_NO_WRITE_FLAGS,
+        '-c',
+        `${CODEX_REASONING_EFFORT_CONFIG_KEY}="high"`,
+        '-c',
+        `${CODEX_REASONING_EFFORT_CONFIG_KEY}="low"`,
+        'hello',
+      ]),
+    ).toThrow(/at most one allowlisted -c override/);
+    expect(() =>
+      assertCodexSpawnArgvBoundary([
+        ...CODEX_NO_WRITE_FLAGS,
+        '-c',
+        'sandbox_mode="workspace-write"',
+        'hello',
+      ]),
+    ).toThrow(/only model_reasoning_effort/);
+  });
+
+  it('assertCodexSpawnArgvBoundary rejects config/profile/sandbox rewidening tokens in final argv', () => {
+    expect(() =>
+      assertCodexSpawnArgvBoundary([
+        ...CODEX_NO_WRITE_FLAGS,
+        '--config=sandbox_mode="workspace-write"',
+        'hello',
+      ]),
+    ).toThrow(/forbidden argv token "--config=sandbox_mode/);
+    expect(() =>
+      assertCodexSpawnArgvBoundary([
+        ...CODEX_NO_WRITE_FLAGS,
+        '--profile',
+        'write-enabled',
+        'hello',
+      ]),
+    ).toThrow(/forbidden argv token "--profile"/);
+    expect(() =>
+      assertCodexSpawnArgvBoundary([...CODEX_NO_WRITE_FLAGS, '--sandbox=workspace-write', 'hello']),
+    ).toThrow(/forbidden argv token "--sandbox=workspace-write"/);
+    expect(() =>
+      assertCodexSpawnArgvBoundary([...CODEX_NO_WRITE_FLAGS, '-s', 'workspace-write', 'hello']),
+    ).toThrow(/exactly one "-s read-only"/);
   });
 });
 

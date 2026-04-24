@@ -1,6 +1,8 @@
 import { type ChildProcess, execFileSync, spawn } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
-import type { DispatchResult } from './shared.js';
+import type { Effort } from '../../schemas/selection-policy.js';
+import type { AdapterDispatchInput, DispatchResult } from './shared.js';
+import { selectedModelForProvider } from './shared.js';
 
 // Slice 45 — P2.6 real codex adapter. Invokes the Codex CLI as a
 // subprocess of the Node.js runtime per ADR-0009 §1 (subprocess-per-
@@ -92,16 +94,26 @@ export const CODEX_EXECUTABLE = 'codex';
 //   -c / --config <key=value>
 //     Can override `sandbox_mode` / `sandbox_permissions` /
 //     `shell_environment_policy` / `approval_policy` and therefore
-//     disable the boundary from inside config rather than argv.
+//     disable the boundary from inside config rather than argv. Slice 87
+//     adds one controlled exception outside CODEX_NO_WRITE_FLAGS:
+//     buildCodexArgs may emit `-c model_reasoning_effort="<effort>"`
+//     from the adapter-owned effort allowlist. assertCodexSpawnArgvBoundary()
+//     validates the final spawn argv so no caller-authored config key is
+//     ever accepted.
 //   -p / --profile <NAME>
 //     Loads a named profile from `~/.codex/config.toml`; profiles can
 //     carry sandbox / approval / MCP-server / shell-env overrides
 //     that re-widen the surface outside the module's visibility.
+//   --sandbox <MODE>
+//     Long-form sandbox override. The one allowed sandbox declaration is
+//     the base `-s read-only` pair in CODEX_NO_WRITE_FLAGS; any later
+//     sandbox flag would let argv order re-widen the boundary.
 //
 // The module-load assertion below rejects any of these as either an
 // exact token match or a prefix (the `<arg>` variants like
 // `--add-dir` take the next argv slot, but a `-c sandbox_mode="..."`
-// reaching this assertion would still fire on the `-c` match).
+// reaching this assertion would still fire on the `-c` match if it were
+// added to CODEX_NO_WRITE_FLAGS).
 //
 // Codex Slice 45 HIGH 2 fold-in (2026-04-22): expanded from a single
 // forbidden flag to the forbidden-token set above after the challenger
@@ -118,7 +130,10 @@ export const CODEX_FORBIDDEN_ARGV_TOKENS = Object.freeze([
   '--config',
   '-p',
   '--profile',
+  '--sandbox',
 ] as const);
+export const CODEX_REASONING_EFFORT_CONFIG_KEY = 'model_reasoning_effort';
+export const CODEX_SUPPORTED_EFFORTS = ['low', 'medium', 'high', 'xhigh'] as const;
 
 // Fail-closed module-load assertion. The `CODEX_NO_WRITE_FLAGS` constant
 // is frozen (see `Object.freeze` above) so this is a static-shape
@@ -170,10 +185,7 @@ const VERSION_CAPTURE_TIMEOUT_MS = 5_000;
 // worktree routing, workflow-scoped directories), the field is added
 // here and threaded into the `spawn` options below. Codex Slice 45
 // MED 2: noted as deferred-by-design, not oversight.
-export interface CodexDispatchInput {
-  prompt: string;
-  timeoutMs?: number;
-}
+export interface CodexDispatchInput extends AdapterDispatchInput {}
 
 // The `CodexDispatchResult` name parallels `AgentDispatchResult` —
 // both alias the shared `DispatchResult` shape and exist for call-site
@@ -231,10 +243,96 @@ export function __resetCachedCodexVersionForTests(): void {
   cachedCodexVersion = undefined;
 }
 
+function assertCodexEffort(
+  effort: Effort,
+): asserts effort is (typeof CODEX_SUPPORTED_EFFORTS)[number] {
+  if (!(CODEX_SUPPORTED_EFFORTS as readonly string[]).includes(effort)) {
+    throw new Error(
+      `codex adapter cannot honor effort '${effort}'; supported efforts: ${CODEX_SUPPORTED_EFFORTS.join(', ')}`,
+    );
+  }
+}
+
+function codexReasoningEffortConfigValue(effort: (typeof CODEX_SUPPORTED_EFFORTS)[number]): string {
+  return `${CODEX_REASONING_EFFORT_CONFIG_KEY}=${JSON.stringify(effort)}`;
+}
+
+function isForbiddenCodexArg(arg: string): boolean {
+  return CODEX_FORBIDDEN_ARGV_TOKENS.some((token) => {
+    if (token === '-c') return false;
+    if (arg === token) return true;
+    return token.startsWith('--') && arg.startsWith(`${token}=`);
+  });
+}
+
+function isAllowedCodexConfigOverride(value: string | undefined): boolean {
+  return (
+    value !== undefined &&
+    CODEX_SUPPORTED_EFFORTS.some((effort) => value === codexReasoningEffortConfigValue(effort))
+  );
+}
+
+export function assertCodexSpawnArgvBoundary(args: readonly string[]): void {
+  const sandboxFlagIndexes = args
+    .map((arg, idx) => (arg === '-s' ? idx : -1))
+    .filter((idx) => idx >= 0);
+  const sandboxFlagIndex = sandboxFlagIndexes[0];
+  if (
+    sandboxFlagIndexes.length !== 1 ||
+    sandboxFlagIndex === undefined ||
+    args[sandboxFlagIndex + 1] !== 'read-only'
+  ) {
+    throw new Error(
+      'codex spawn argv boundary broken: exactly one "-s read-only" pair is required',
+    );
+  }
+
+  let configOverrideCount = 0;
+  for (let idx = 0; idx < args.length; idx += 1) {
+    const arg = args[idx];
+    if (arg === undefined) continue;
+    if (arg === '-c') {
+      configOverrideCount += 1;
+      if (configOverrideCount > 1) {
+        throw new Error(
+          'codex spawn argv boundary broken: at most one allowlisted -c override is allowed',
+        );
+      }
+      const value = args[idx + 1];
+      if (!isAllowedCodexConfigOverride(value)) {
+        throw new Error(
+          `codex spawn argv boundary broken: only ${CODEX_REASONING_EFFORT_CONFIG_KEY}=<supported effort> is allowed after -c`,
+        );
+      }
+      idx += 1;
+      continue;
+    }
+    if (isForbiddenCodexArg(arg)) {
+      throw new Error(`codex spawn argv boundary broken: forbidden argv token "${arg}"`);
+    }
+  }
+}
+
+export function buildCodexArgs(input: CodexDispatchInput): string[] {
+  const args: string[] = [...CODEX_NO_WRITE_FLAGS];
+  const model = selectedModelForProvider('codex', input.resolvedSelection, 'openai');
+  if (model !== undefined) {
+    args.push('-m', model);
+  }
+  const effort = input.resolvedSelection?.effort;
+  if (effort !== undefined) {
+    assertCodexEffort(effort);
+    args.push('-c', codexReasoningEffortConfigValue(effort));
+  }
+  args.push(input.prompt);
+  assertCodexSpawnArgvBoundary(args);
+  return args;
+}
+
 export async function dispatchCodex(input: CodexDispatchInput): Promise<DispatchResult> {
   const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const cli_version = captureCodexVersion();
-  const args = [...CODEX_NO_WRITE_FLAGS, input.prompt];
+  const args = buildCodexArgs(input);
   const start = performance.now();
   return await new Promise<DispatchResult>((resolve, reject) => {
     let child: ChildProcess;

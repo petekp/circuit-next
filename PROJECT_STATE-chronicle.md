@@ -12,6 +12,17 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 87 ADAPTER-MODEL-EFFORT** (this commit, Ratchet-Advance) -
+  wired resolved model/effort choices into the built-in adapter argv
+  builders. The Claude adapter now passes Anthropic model ids with
+  `--model` and supported efforts with `--effort`; the Codex adapter
+  passes OpenAI model ids with `-m` and effort with the allowlisted
+  `model_reasoning_effort` config key with a final spawn-argv boundary
+  check. Provider mismatches and unsupported built-in effort tiers fail
+  before subprocess spawn. The
+  P2-MODEL-EFFORT implementation work is now ready for an arc-close
+  composition review before any new privileged runtime slice opens.
+
 - **Slice 86 CONFIG-LOADER** (this commit, Ratchet-Advance) - wired the
   product CLI into the selection resolver's config-layer input. The CLI
   now discovers and validates the canonical user-global config file at

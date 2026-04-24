@@ -126,11 +126,18 @@ Closes Codex LOW #12 (enforcement-location claim drift).
   model string is adapter-owned (e.g., `claude-opus-4-7` for Anthropic,
   `gpt-5.4-reasoning` for OpenAI). Adapter-specific validation or
   honoring of known model strings is a Phase 2 adapter concern, not a
-  schema concern and not provided by the current built-in adapters; new
-  model releases do not require a circuit-next schema change. **Effort**
-  is the closed 6-tier enum `none | minimal | low | medium | high |
-  xhigh` (OpenAI vocabulary, chosen for cross-provider portability per
-  `specs/evidence.md`). Enforced at `src/schemas/selection-policy.ts`.
+  schema concern; new model releases do not require a circuit-next
+  schema change. Slice 87 gives the current built-in adapters narrow
+  handling: `agent` accepts provider `anthropic` and passes the model to
+  Claude's `--model`; `codex` accepts provider `openai` and passes the
+  model to Codex's `-m`. Provider mismatches fail before subprocess
+  spawn. **Effort** is the closed 6-tier enum `none | minimal | low |
+  medium | high | xhigh` (OpenAI vocabulary, chosen for cross-provider
+  portability per `specs/evidence.md`). The current built-ins honor
+  `low | medium | high | xhigh`; `none` and `minimal` fail before
+  subprocess spawn until an adapter has explicit support for those
+  values. Enforced at `src/schemas/selection-policy.ts` for shape and
+  `src/runtime/adapters/*.ts` for adapter-specific honoring.
 
 - **SEL-I5 — `ResolvedSelection` is the effective record at dispatch
   time.** `ResolvedSelection` carries `{model?, effort?, skills:

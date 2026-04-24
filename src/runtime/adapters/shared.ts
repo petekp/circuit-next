@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { ResolvedSelection } from '../../schemas/selection-policy.js';
 
 // Slice 45 (P2.6) — shared adapter-layer primitives. Extracted from
 // Slice 42 `agent.ts` when the `codex` adapter landed and both adapters
@@ -50,6 +51,27 @@ export interface DispatchResult {
   readonly result_body: string;
   readonly duration_ms: number;
   readonly cli_version: string;
+}
+
+export interface AdapterDispatchInput {
+  prompt: string;
+  timeoutMs?: number;
+  resolvedSelection?: ResolvedSelection;
+}
+
+export function selectedModelForProvider(
+  adapterName: string,
+  selection: ResolvedSelection | undefined,
+  expectedProvider: NonNullable<ResolvedSelection['model']>['provider'],
+): string | undefined {
+  const model = selection?.model;
+  if (model === undefined) return undefined;
+  if (model.provider !== expectedProvider) {
+    throw new Error(
+      `${adapterName} adapter cannot honor model provider '${model.provider}' for model '${model.model}'; expected provider '${expectedProvider}'`,
+    );
+  }
+  return model.model;
 }
 
 export function sha256Hex(payload: string): string {

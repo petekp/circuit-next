@@ -1,4 +1,4 @@
-<!-- current_slice: 86 -->
+<!-- current_slice: 87 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -9,11 +9,11 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 86
-- **current_arc:** P2-MODEL-EFFORT (Slice 86 wires canonical user-global
-  and project YAML config discovery into the product CLI so those layers
-  reach dispatch selection evidence; built-in adapter model/effort
-  handling remains follow-on work)
+- **current_slice:** 87
+- **current_arc:** P2-MODEL-EFFORT (Slice 87 wires resolved model/effort
+  into the built-in adapter argv builders with provider/effort fail-closed
+  checks; arc-close composition review is next before new privileged
+  runtime work)
 - **current_phase:** Phase 2 — Implementation (continuing)
 
 Chronicle (relocated narrative history — non-authoritative; see
@@ -118,5 +118,14 @@ The CLI now loads `~/.config/circuit-next/config.yaml` and
 `./.circuit/config.yaml` from the current working directory when present,
 validates them through the existing config schemas, and supplies them to
 dispatch selection resolution. Missing config files are skipped; malformed
-or schema-invalid ones fail loudly. Built-in adapters still do not honor
-model/effort values yet.*
+or schema-invalid ones fail loudly. Adapter honoring remained for the
+next slice.*
+Slice 87 landed built-in adapter model/effort argument binding. The
+Claude adapter now passes compatible Anthropic model ids through
+`--model` and supported effort tiers through `--effort`; the Codex
+adapter passes compatible OpenAI model ids through `-m` and effort
+through the allowlisted `model_reasoning_effort` config key with a final
+spawn-argv boundary check. Provider mismatches and unsupported built-in
+effort tiers fail before subprocess spawn. The remaining next step is an
+arc-close composition review before opening another privileged runtime
+slice.*

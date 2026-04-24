@@ -27,9 +27,8 @@ import type { Rigor } from '../schemas/rigor.js';
 import type { ResolvedSelection } from '../schemas/selection-policy.js';
 import type { Snapshot } from '../schemas/snapshot.js';
 import type { Workflow } from '../schemas/workflow.js';
-import type { AgentDispatchInput } from './adapters/agent.js';
 import { materializeDispatch } from './adapters/dispatch-materializer.js';
-import { type DispatchResult, sha256Hex } from './adapters/shared.js';
+import { type AdapterDispatchInput, type DispatchResult, sha256Hex } from './adapters/shared.js';
 import { parseArtifact } from './artifact-schemas.js';
 import { appendEvent, eventLogPath } from './event-writer.js';
 import {
@@ -182,7 +181,7 @@ export interface DispatchFn {
   readonly dispatch: (input: DispatchInput) => Promise<DispatchResult>;
 }
 
-export interface DispatchInput extends AgentDispatchInput {
+export interface DispatchInput extends AdapterDispatchInput {
   readonly resolvedSelection?: ResolvedSelection;
 }
 

@@ -374,20 +374,32 @@ history.
 
 **CC#P2-5 — P2-MODEL-EFFORT landed.**
 
-Workflow contract v0.3 — explicit per-step `model` + `effort`
-assignment — landed, with schema-parity tests and a named audit check
-rejecting unknown-model-ids.
+Explicit `model` + `effort` assignment landed as first-class selection
+fields, with dispatch evidence and adapter argv binding. The schema owns
+provider-shape closure while adapters own provider/model honoring.
 
 - **Enforcement binding (executable):**
-  - Schema: `src/schemas/workflow.ts` v0.3 with per-step `model` and
-    `effort` fields.
-  - Test files: `tests/contracts/schema-parity.test.ts` extended for
-    v0.3; plus `tests/contracts/workflow-model-effort.test.ts` (to be
-    authored at P2-MODEL-EFFORT) exercising per-step assignment.
-  - Audit check: `checkUnknownModelIds` verifies that every `model`
-    string in every workflow fixture under `.claude-plugin/skills/*/
-    circuit.json` is a known model id (enumerated in the workflow
-    schema or a sibling registry file). Rejects unknown ids.
+  - Schema: `src/schemas/selection-policy.ts` with
+    `ProviderScopedModel`, `Effort`, `SelectionOverride`, and
+    `ResolvedSelection`; `src/schemas/workflow.ts`,
+    `src/schemas/phase.ts`, and `src/schemas/step.ts` carry selection
+    fields at their authored layers.
+  - Runtime resolver: `src/runtime/selection-resolver.ts` composes
+    default, user-global, project, workflow, phase, step, and invocation
+    selection layers into `dispatch.started.resolved_selection`.
+  - Runtime loader: `src/runtime/config-loader.ts` loads canonical
+    user-global and current-working-directory project config files into
+    the resolver path.
+  - Runtime adapters: `src/runtime/adapters/agent.ts` and
+    `src/runtime/adapters/codex.ts` pass compatible resolved
+    model/effort values into their CLI argv and fail before spawn on
+    incompatible providers or unsupported built-in effort tiers. Codex's
+    single `-c` exception is final-argv allowlisted to
+    `model_reasoning_effort`.
+  - Test files: `tests/contracts/workflow-model-effort.test.ts`,
+    `tests/runner/config-loader.test.ts`,
+    `tests/contracts/slice-42-agent-adapter.test.ts`, and
+    `tests/contracts/slice-45-codex-adapter.test.ts`.
   - Slice spec: `specs/plans/phase-1-close-revised.md §Slice
     P2-MODEL-EFFORT` (incorporated by reference; not redefined here).
 
@@ -1279,7 +1291,7 @@ per CLAUDE.md hard invariant #8):
 | P2-2 | Real agent dispatch | P2.4 (+ P2.6 optional) | `src/runtime/adapters/agent.ts` + `tests/runner/agent-dispatch-roundtrip.test.ts` with durable dispatch transcript assertion (adapter id, request/receipt/result hashes, reducer+writer consumption); CI-skip requires `tests/fixtures/agent-smoke/last-run.json` with commit-ancestor audit |
 | P2-3 | Plugin command registration | P2.2 (scaffold) + P2.11 (invokability) | `checkPluginCommandClosure` + `tests/contracts/plugin-surface.test.ts` + `specs/reviews/p2-11-invoke-evidence.md` |
 | P2-4 | Session hooks + continuity lifecycle | P2.7 | `.claude/hooks/SessionStart.sh` + `.claude/hooks/SessionEnd.sh` + `checkSessionHooksPresent` + `tests/runner/continuity-lifecycle.test.ts` |
-| P2-5 | P2-MODEL-EFFORT landed | P2-MODEL-EFFORT | `src/schemas/workflow.ts` v0.3 + `tests/contracts/workflow-model-effort.test.ts` + `checkUnknownModelIds` |
+| P2-5 | P2-MODEL-EFFORT landed | P2-MODEL-EFFORT | `src/runtime/selection-resolver.ts` + `src/runtime/config-loader.ts` + `src/runtime/adapters/{agent,codex}.ts` with focused tests in `tests/contracts/workflow-model-effort.test.ts`, `tests/runner/config-loader.test.ts`, `tests/contracts/slice-42-agent-adapter.test.ts`, and `tests/contracts/slice-45-codex-adapter.test.ts`; Codex `-c` use is final-argv allowlisted to `model_reasoning_effort` |
 | P2-6 | Spine policy coverage (full-spine) | P2.3 (declare) + P2.5 (run) | `specs/contracts/explore.md` canonical {Frame,Analyze,Synthesize,Review,Close} + `checkSpineCoverage` + `tests/contracts/spine-coverage.test.ts` |
 | P2-7 | Container isolation | RE-DEFERRED (this ADR) | `checkPhase2SliceIsolationCitation` (interim) + CLAUDE.md §Phase discipline §Phase 2 + Hard invariants #1–#4 (policy-layer unchanged) |
 | P2-8 | Close review (final blocking gate) | P2-CLOSE-REVIEW (named in plan) | `specs/reviews/phase-2-close-matrix.md` + `specs/reviews/phase-2-close-codex.md` + `specs/reviews/phase-2-operator-product-check.md` + `checkPhase2CloseMatrix` |

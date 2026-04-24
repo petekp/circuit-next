@@ -34,7 +34,11 @@ describe('Slice 45 (P2.6) — codex adapter smoke (ADR-0009 §1, capability boun
     'end-to-end: dispatchCodex spawns codex exec and returns a result triple (CODEX_SMOKE=1)',
     async () => {
       const prompt = 'Respond with exactly the single word: OK';
-      const result = await dispatchCodex({ prompt, timeoutMs: 120_000 });
+      const result = await dispatchCodex({
+        prompt,
+        timeoutMs: 120_000,
+        resolvedSelection: { effort: 'low', skills: [], invocation_options: {} },
+      });
 
       expect(result.request_payload).toBe(prompt);
       expect(result.receipt_id.length).toBeGreaterThan(0);

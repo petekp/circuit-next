@@ -650,8 +650,11 @@ schema parity / contract tests; migration note for existing v0.2 fixtures;
 parse-time guard that unknown providers fail while provider-scoped model
 ids remain open strings for adapter-owned handling (SEL-I4). Slice 86
 lands runtime discovery for canonical user-global config plus
-current-working-directory project config; adapter model/effort honoring
-remains follow-on work.
+current-working-directory project config. Slice 87 lands built-in
+adapter model/effort honoring for compatible providers, with provider
+mismatches and unsupported adapter effort tiers failing before subprocess
+spawn; Codex's single `-c` exception is final-argv allowlisted to
+`model_reasoning_effort`.
 
 ### Slice 25g — D8 Rollback Review
 

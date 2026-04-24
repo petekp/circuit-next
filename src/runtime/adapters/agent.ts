@@ -1,6 +1,12 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
-import { type DispatchResult, sha256Hex } from './shared.js';
+import type { Effort } from '../../schemas/selection-policy.js';
+import {
+  type AdapterDispatchInput,
+  type DispatchResult,
+  selectedModelForProvider,
+  sha256Hex,
+} from './shared.js';
 
 export { sha256Hex };
 
@@ -78,6 +84,7 @@ export const AGENT_NO_WRITE_FLAGS = [
 ] as const;
 
 export const AGENT_CLAUDE_EXECUTABLE = 'claude';
+export const AGENT_SUPPORTED_EFFORTS = ['low', 'medium', 'high', 'xhigh'] as const;
 
 // Default wall-clock budget for a single dispatch. A step's
 // `budgets.wall_clock_ms` (per src/schemas/step.ts StepBase.budgets)
@@ -99,10 +106,7 @@ const SIGTERM_TO_SIGKILL_GRACE_MS = 2_000;
 const STDOUT_MAX_BYTES = 16 * 1024 * 1024;
 const STDERR_MAX_BYTES = 1024 * 1024;
 
-export interface AgentDispatchInput {
-  prompt: string;
-  timeoutMs?: number;
-}
+export interface AgentDispatchInput extends AdapterDispatchInput {}
 
 // The `AgentDispatchResult` name is retained as the adapter-specific
 // alias for call sites that want a name bound to the `agent` adapter's
@@ -111,9 +115,34 @@ export interface AgentDispatchInput {
 // same shape and the materializer consumes it uniformly.
 export type AgentDispatchResult = DispatchResult;
 
+function assertAgentEffort(
+  effort: Effort,
+): asserts effort is (typeof AGENT_SUPPORTED_EFFORTS)[number] {
+  if (!(AGENT_SUPPORTED_EFFORTS as readonly string[]).includes(effort)) {
+    throw new Error(
+      `agent adapter cannot honor effort '${effort}'; supported efforts: ${AGENT_SUPPORTED_EFFORTS.join(', ')}`,
+    );
+  }
+}
+
+export function buildAgentArgs(input: AgentDispatchInput): string[] {
+  const args: string[] = [...AGENT_NO_WRITE_FLAGS];
+  const model = selectedModelForProvider('agent', input.resolvedSelection, 'anthropic');
+  if (model !== undefined) {
+    args.push('--model', model);
+  }
+  const effort = input.resolvedSelection?.effort;
+  if (effort !== undefined) {
+    assertAgentEffort(effort);
+    args.push('--effort', effort);
+  }
+  args.push(input.prompt);
+  return args;
+}
+
 export async function dispatchAgent(input: AgentDispatchInput): Promise<DispatchResult> {
   const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const args = [...AGENT_NO_WRITE_FLAGS, input.prompt];
+  const args = buildAgentArgs(input);
   const start = performance.now();
   return await new Promise<DispatchResult>((resolve, reject) => {
     let child: ChildProcess;

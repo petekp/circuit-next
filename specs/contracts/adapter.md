@@ -81,7 +81,11 @@ invariant; tested in `tests/contracts/schema-parity.test.ts`.
     subprocess inherits the operator session's filesystem + environment
     via the parent process but runs as a child `claude` executable,
     not in the host Node process. No `@anthropic-ai/sdk` dep at v0;
-    ADR-0009 §4 Check 28 enforces this at package.json level.
+    ADR-0009 §4 Check 28 enforces this at package.json level. Slice 87
+    wires resolved selection into this adapter: compatible Anthropic
+    model ids are passed with `--model`; supported efforts (`low`,
+    `medium`, `high`, `xhigh`) are passed with `--effort`; incompatible
+    providers or unsupported built-in effort tiers fail before spawn.
   - `codex` — the Codex CLI dispatched via `codex exec` as a
     **subprocess** of the Node.js runtime (same invocation pattern as
     `agent` per ADR-0009 §1) in the operator's current session context.
@@ -113,7 +117,13 @@ invariant; tested in `tests/contracts/schema-parity.test.ts`.
     OS sandbox + argv enforcement; the item-type discipline is a
     protocol hygiene layer that catches new Codex capability surfaces
     (write-tool events, apply-patch events) before they land in the
-    dispatch transcript implicitly. Slice 45 (P2.6) binds the mechanism and lands
+    dispatch transcript implicitly. Slice 87 wires resolved selection
+    into this adapter: compatible OpenAI model ids are passed with `-m`;
+    effort is passed through the single allowlisted config override
+    `model_reasoning_effort`; a final spawn-argv boundary check allows
+    only that config override and rejects incompatible providers or
+    unsupported effort tiers before spawn.
+    Slice 45 (P2.6) binds the mechanism and lands
     `src/runtime/adapters/codex.ts`; ADR-0009 §Consequences.Enabling is
     the governance authority (§Enabling explicitly names `codex` as the
     next adapter after `agent`).
