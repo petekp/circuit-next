@@ -697,7 +697,7 @@
       "surface_class": "greenfield",
       "compatibility_policy": "n/a",
       "plane": "data-plane",
-      "description": "Close-phase aggregate artifact — the explore workflow run's terminal result. Composes a summary + verdict snapshot + pointers to the four prior artifacts (brief, analysis, synthesis, review-verdict). The run's final return shape consumed by the run result consumer. Persisted at <run-root>/artifacts/explore-result.json — distinct from the engine-authored universal run.result at <run-root>/artifacts/result.json per Slice 39 HIGH 4 fold-in (option (b) path-split resolution). Per-workflow <kind>-result.json siblings is the canonical pattern for future workflow-specific aggregates (build-result.json, repair-result.json, etc.).",
+      "description": "Close-phase aggregate artifact slot for the explore workflow run. Current implementation is the placeholder-parity epoch: the close-step writes deterministic summary and verdict_snapshot placeholder strings derived from gate.required, and does not yet consume brief, analysis, synthesis, or review-verdict. The next P2.10 privileged runtime slice replaces this with the intended real aggregate shape. Persisted at <run-root>/artifacts/explore-result.json — distinct from the engine-authored universal run.result at <run-root>/artifacts/result.json per Slice 39 HIGH 4 fold-in (option (b) path-split resolution). Per-workflow <kind>-result.json siblings is the canonical pattern for future workflow-specific aggregates (build-result.json, repair-result.json, etc.).",
       "contract": "specs/contracts/explore.md",
       "schema_file": "",
       "schema_exports": [],
@@ -707,8 +707,10 @@
       "backing_paths": ["<run-root>/artifacts/explore-result.json"],
       "identity_fields": [],
       "path_derived_fields": [],
-      "dangerous_sinks": ["run result consumer; operator-facing summary of the explore run"],
-      "trust_boundary": "engine-computed at Close (close-step aggregates prior artifacts deterministically); terminal artifact — no in-run readers; cross-run reader is the run result consumer only; path-distinct from run.result so the engine's result-writer (src/runtime/result-writer.ts RESULT-I1 — single writer to result.json) and the orchestrator's close-step (workflow-semantic aggregate at explore-result.json) do not collide",
+      "dangerous_sinks": [
+        "future run result consumer / operator-facing summary of the explore run once the placeholder epoch is replaced; today this artifact is placeholder-parity evidence only"
+      ],
+      "trust_boundary": "engine-computed deterministic placeholder at Close from close-step gate.required section names; the current writer does not read synthesis.json or review-verdict.json into the aggregate. Terminal artifact — no in-run readers; cross-run reader remains pending until the explore.result schema-specific writer lands. Path-distinct from run.result so the engine's result-writer (src/runtime/result-writer.ts RESULT-I1 — single writer to result.json) and the orchestrator's close-step slot at explore-result.json do not collide",
       "reference_surfaces": [],
       "reference_evidence": [],
       "migration_policy": "n/a",

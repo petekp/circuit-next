@@ -1,4 +1,4 @@
-<!-- current_slice: 91 -->
+<!-- current_slice: 92 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -9,10 +9,11 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 91
-- **current_arc:** P2.10 artifact schema set continuing (Slices 89-91 bind
-  `explore.brief`, `explore.analysis`, `explore.synthesis`, and
-  `explore.review-verdict` to strict schemas; close result remains)
+- **current_slice:** 92
+- **current_arc:** P2.10 artifact schema set continuing after arc-close
+  review (Slices 89-92 bind `explore.brief`, `explore.analysis`,
+  `explore.synthesis`, and `explore.review-verdict` to strict schemas;
+  close result remains next)
 - **current_phase:** Phase 2 — Implementation (continuing)
 
 Chronicle (relocated narrative history — non-authoritative; see
@@ -153,3 +154,9 @@ incomplete review verdict payloads before `artifacts/review-verdict.json`
 is written. `explore.result` remains the last P2.10 artifact schema; the
 three-slice P2.10 arc now needs composition review before the next
 privileged runtime slice opens.*
+Slice 92 closed the first P2.10 artifact-schema tranche with two
+composition-review prongs. The fold-ins narrowed `explore.result` metadata
+to the honest placeholder-parity state and added a seam-level test tying the
+landed fixture schema names, artifact rows, schema exports, and runtime
+validation together. `explore.result` remains the next privileged runtime
+slice.*

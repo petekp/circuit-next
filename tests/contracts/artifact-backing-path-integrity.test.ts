@@ -11,6 +11,7 @@ import {
   CLEAN_CLONE_REALITY_TRANCHE_ARC_CEREMONY_SLICE,
   METHODOLOGY_TRIM_ARC_CEREMONY_SLICE,
   P2_9_SECOND_WORKFLOW_ARC_CEREMONY_SLICE,
+  P2_10_ARTIFACT_SCHEMA_ARC_CEREMONY_SLICE,
   P2_MODEL_EFFORT_ARC_CEREMONY_SLICE,
   PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE,
   PHASE_2_P2_4_P2_5_ARC_LAST_SLICE,
@@ -745,7 +746,7 @@ describe('ARC_CLOSE_GATES + checkArcCloseCompositionReviewPresence (Slice 44 gen
     );
   });
 
-  it('ARC_CLOSE_GATES contains all nine arcs with matching ceremony_slice constants', () => {
+  it('ARC_CLOSE_GATES contains all ten arcs with matching ceremony_slice constants', () => {
     // Slice 47d (Codex HIGH 5 + Claude HIGH 3 fold-in): length bumped
     // 2 → 3 with the new slice-47 hardening fold-in arc entry.
     // Slice 55 (Clean-Clone Reality Tranche arc-close composition review
@@ -768,7 +769,10 @@ describe('ARC_CLOSE_GATES + checkArcCloseCompositionReviewPresence (Slice 44 gen
     // Slice 88 (P2-MODEL-EFFORT arc-close ceremony — same gate shape;
     // numeric ceremony_slice: 88): length bumped 8 -> 9 with the new
     // p2-model-effort entry.
-    expect(ARC_CLOSE_GATES).toHaveLength(9);
+    // Slice 92 (P2.10 artifact-schema tranche arc-close ceremony — same
+    // gate shape; numeric ceremony_slice: 92): length bumped 9 -> 10 with
+    // the new p2-10-artifact-schema-tranche entry.
+    expect(ARC_CLOSE_GATES).toHaveLength(10);
     const oldArc = ARC_CLOSE_GATES.find(
       (g) => g.arc_id === 'phase-2-foundation-foldins-slices-35-to-40',
     );
@@ -782,6 +786,7 @@ describe('ARC_CLOSE_GATES + checkArcCloseCompositionReviewPresence (Slice 44 gen
     const runtimeSafetyArc = ARC_CLOSE_GATES.find((g) => g.arc_id === 'runtime-safety-floor');
     const p29Arc = ARC_CLOSE_GATES.find((g) => g.arc_id === 'p2-9-second-workflow');
     const p2ModelEffortArc = ARC_CLOSE_GATES.find((g) => g.arc_id === 'p2-model-effort');
+    const p210Arc = ARC_CLOSE_GATES.find((g) => g.arc_id === 'p2-10-artifact-schema-tranche');
     expect(oldArc).toBeDefined();
     expect(p2ArcNew).toBeDefined();
     expect(slice47Arc).toBeDefined();
@@ -791,6 +796,7 @@ describe('ARC_CLOSE_GATES + checkArcCloseCompositionReviewPresence (Slice 44 gen
     expect(runtimeSafetyArc).toBeDefined();
     expect(p29Arc).toBeDefined();
     expect(p2ModelEffortArc).toBeDefined();
+    expect(p210Arc).toBeDefined();
     expect(oldArc?.ceremony_slice).toBe(PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE);
     expect(p2ArcNew?.ceremony_slice).toBe(PHASE_2_P2_4_P2_5_ARC_LAST_SLICE);
     expect(slice47Arc?.ceremony_slice).toBe(SLICE_47_HARDENING_FOLDINS_ARC_CEREMONY_SLICE);
@@ -871,6 +877,17 @@ describe('ARC_CLOSE_GATES + checkArcCloseCompositionReviewPresence (Slice 44 gen
     ).toBe(true);
     expect(p2ModelEffortArc?.review_file_regex.test('arc-slice-85-codex.md')).toBe(false);
     expect(p2ModelEffortArc?.review_file_regex.test('arc-slice-87-codex.md')).toBe(false);
+    expect(p210Arc?.ceremony_slice).toBe(P2_10_ARTIFACT_SCHEMA_ARC_CEREMONY_SLICE);
+    expect(typeof p210Arc?.ceremony_slice).toBe('number');
+    expect(p210Arc?.plan_path).toBe('specs/plans/phase-2-implementation.md');
+    expect(
+      p210Arc?.review_file_regex.test('arc-p2-10-artifact-schema-composition-review-claude.md'),
+    ).toBe(true);
+    expect(
+      p210Arc?.review_file_regex.test('arc-p2-10-artifact-schema-composition-review-codex.md'),
+    ).toBe(true);
+    expect(p210Arc?.review_file_regex.test('arc-slice-89-codex.md')).toBe(false);
+    expect(p210Arc?.review_file_regex.test('arc-slice-91-codex.md')).toBe(false);
   });
 
   it('returns green with "in progress" detail for the 41-to-43 arc when current_slice < 44 and both arcs are applicable', () => {

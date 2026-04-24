@@ -818,8 +818,10 @@ commit time. Expect re-ordering as earlier slices expose surface.
   strict schemas and default runtime writer coverage for `explore.brief`
   and `explore.analysis`. Slice 90 adds the strict dispatch-
   materialized schema for `explore.synthesis`; Slice 91 does the same for
-  `explore.review-verdict`. Remaining target-workflow artifact schema:
-  close-phase `explore.result`.
+  `explore.review-verdict`. Slice 92 closes the first schema tranche with
+  composition review and binds the four landed artifact schemas across
+  fixture, artifact-ledger, schema-export, and runtime-validation surfaces.
+  Remaining target-workflow artifact schema: close-phase `explore.result`.
 - **P2.11 — Plugin-level skill wiring** — user-invocable skills that
   wrap `/circuit:<workflow>` commands so the plugin-user UX matches
   reference Circuit.

@@ -3343,6 +3343,12 @@ export const P2_9_SECOND_WORKFLOW_ARC_CEREMONY_SLICE = 82;
 // not satisfy the gate; only the two P2-MODEL-EFFORT arc-close prong files do.
 export const P2_MODEL_EFFORT_ARC_CEREMONY_SLICE = 88;
 
+// Slice 92 (P2.10 artifact-schema tranche arc-close ceremony). Numeric
+// ceremony_slice 92 binds the first P2.10 tranche after Slices 89-91 typed
+// explore.brief / analysis / synthesis / review-verdict. The close-phase
+// explore.result artifact remains the next privileged runtime slice.
+export const P2_10_ARTIFACT_SCHEMA_ARC_CEREMONY_SLICE = 92;
+
 export const ARC_CLOSE_GATES = Object.freeze([
   Object.freeze({
     arc_id: 'phase-2-foundation-foldins-slices-35-to-40',
@@ -3448,6 +3454,18 @@ export const ARC_CLOSE_GATES = Object.freeze([
     ceremony_slice: P2_MODEL_EFFORT_ARC_CEREMONY_SLICE,
     plan_path: 'specs/plans/phase-2-implementation.md',
     review_file_regex: /arc-p2-model-effort-composition-review/i,
+  }),
+  // Slice 92 (P2.10 artifact-schema tranche arc-close ceremony): same
+  // gate shape as slices 55/62/68/75/82/88. Numeric ceremony_slice uses
+  // the back-compat numeric branch of evaluateArcCloseGate. Review-file
+  // regex pins the two arc-close review prongs named in the Slice 92
+  // ceremony.
+  Object.freeze({
+    arc_id: 'p2-10-artifact-schema-tranche',
+    description: 'P2.10 Artifact Schema Tranche (Slices 89-92)',
+    ceremony_slice: P2_10_ARTIFACT_SCHEMA_ARC_CEREMONY_SLICE,
+    plan_path: 'specs/plans/phase-2-implementation.md',
+    review_file_regex: /arc-p2-10-artifact-schema-composition-review/i,
   }),
 ]);
 

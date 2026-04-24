@@ -277,6 +277,10 @@ export const P2_9_SECOND_WORKFLOW_ARC_CEREMONY_SLICE: number;
 // for the model/effort resolver/config-loader/adapter arc. Uses the numeric
 // back-compat branch of evaluateArcCloseGate.
 export const P2_MODEL_EFFORT_ARC_CEREMONY_SLICE: number;
+// Slice 92 (P2.10 artifact-schema tranche arc-close ceremony) — numeric
+// ceremony_slice for the first artifact-schema tranche. Uses the numeric
+// back-compat branch of evaluateArcCloseGate.
+export const P2_10_ARTIFACT_SCHEMA_ARC_CEREMONY_SLICE: number;
 export const ARC_CLOSE_GATES: ReadonlyArray<{
   readonly arc_id: string;
   readonly description: string;
