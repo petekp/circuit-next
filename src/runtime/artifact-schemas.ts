@@ -16,9 +16,11 @@ import { z } from 'zod';
 // lands a schema authoring surface MUST keep fail-closed as the
 // default for unknown schema names.
 //
-// Event-surface uniformity. Slice 54 does NOT introduce a
-// `dispatch.failed` event type. A parse failure is surfaced through
-// the Slice 53 reject-on-bad-verdict sequence:
+// Event-surface uniformity. This content/schema-failure path does
+// NOT emit `dispatch.failed`; that event is reserved for adapter
+// invocation exceptions, where no adapter result exists. A parse
+// failure is surfaced through the Slice 53 reject-on-bad-verdict
+// sequence:
 //   gate.evaluated outcome=fail (reason=the parse error)
 //   → step.aborted (reason byte-identical)
 //   → run.closed outcome=aborted (reason byte-identical)

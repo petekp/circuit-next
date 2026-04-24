@@ -136,6 +136,7 @@ function applyEvent(prev: Snapshot, event: Event): Snapshot {
       };
     }
     case 'dispatch.request':
+    case 'dispatch.failed':
     case 'dispatch.receipt':
     case 'dispatch.result':
       // Durable dispatch transcript events (ADR-0007 CC#P2-2 §Amendment

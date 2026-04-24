@@ -597,8 +597,9 @@ Slice 53 Codex H1 fold-in). The dispatch step does NOT advance —
 `step.completed` is not emitted for the aborted step, and
 `routes.pass` is not taken.
 
-**Event ordering at v0.** The runtime sequences events in this
-order on EVERY dispatch step (pass or fail):
+**Event ordering at v0.** When the adapter invocation returns a result,
+the runtime sequences events in this order on every dispatch step
+(verdict pass or verdict/schema fail):
 
 1. `step.entered`
 2. The five-event dispatch transcript via `materializeDispatch`:
@@ -618,6 +619,27 @@ verdict-not-in-pass-set rejection); the on-disk artifact write is
 gated on pass per ADR-0008 §Decision.3a (Slice 53 Codex HIGH 2
 fold-in: the canonical artifact at `writes.artifact.path` is NOT
 written when the gate fails — only the transcript persists).
+
+**Adapter invocation failure ordering (Runtime Safety Floor Slice 3).**
+If the adapter invocation itself throws or fails before returning a
+receipt/result body, the runtime records the pre-await dispatch context
+instead of stranding the run after `step.entered`:
+
+1. `step.entered`
+2. `dispatch.started`
+3. `dispatch.request` with the SHA-256 of the request payload submitted
+   to the adapter
+4. `dispatch.failed` carrying adapter identity, role, resolved selection,
+   resolved-from provenance, the same request hash, and the failure
+   reason
+5. `gate.evaluated outcome=fail` with the same reason
+6. `step.aborted` with the same reason
+7. `run.closed outcome=aborted` with the same reason
+
+`<run-root>/artifacts/result.json` mirrors the aborted outcome and
+reason. No `dispatch.receipt`, `dispatch.result`, `dispatch.completed`,
+or `step.completed` event is emitted for that failed dispatch attempt,
+because no adapter result exists.
 
 **Runtime sentinels on `dispatch.completed.verdict`.**
 `DispatchCompletedEvent.verdict` is `z.string().min(1)` so the
@@ -657,9 +679,11 @@ unknown schema names — fail-closed default per the §Dispatch
 artifact schema-parse subsection below) are surfaced through the
 same `gate.evaluated outcome=fail` → `step.aborted` →
 `run.closed outcome=aborted` sequence Slice 53 landed for the
-verdict-admissibility half; no separate `dispatch.failed` event
-type was introduced. The failure-path event surface is uniform
-across both halves of the ADR-0008 §Decision.3a gate.
+verdict-admissibility half. This content/schema-failure path does
+not emit `dispatch.failed`; that event is reserved for adapter
+invocation exceptions, where no adapter result exists. The
+content/schema failure-path event surface is uniform across both
+halves of the ADR-0008 §Decision.3a gate.
 This is a behavior-visible change for any AGENT_SMOKE end-to-end
 run (`tests/runner/explore-e2e-parity.test.ts`): the real
 `claude` subprocess MUST emit a single raw JSON object with a
@@ -696,9 +720,10 @@ the error through `gate.evaluated outcome=fail` + reason →
 reason), with `RunResult.reason` mirroring the close-event reason
 on the user-visible `result.json` (RESULT-I4, from Slice 53
 Codex HIGH 1). This is the same shape Slice 53 landed for the
-verdict-admissibility half — no separate `dispatch.failed` event
-type was introduced; the failure-path event surface is uniform
-across both halves of the gate.
+verdict-admissibility half. It does not emit `dispatch.failed`;
+that event is reserved for adapter invocation exceptions, where no
+adapter result exists. The content/schema failure-path event surface
+is uniform across both halves of the gate.
 
 **Schema absent → fail closed.** If `writes.artifact.schema`
 names a schema that is NOT in the registry, the runtime treats

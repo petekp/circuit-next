@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DispatchFailedEvent,
   DispatchReceiptEvent,
   DispatchRequestEvent,
   DispatchResultEvent,
@@ -98,6 +99,22 @@ const dispatchResultEvent = {
   step_id: 'frame',
   attempt: 1,
   result_artifact_hash: HASH_B,
+};
+
+const dispatchFailedEvent = {
+  schema_version: 1 as const,
+  sequence: 4,
+  recorded_at: '2026-04-21T12:04:00.000Z',
+  run_id: RUN_A,
+  kind: 'dispatch.failed' as const,
+  step_id: 'frame',
+  attempt: 1,
+  adapter: { kind: 'builtin' as const, name: 'codex' as const },
+  role: 'researcher' as const,
+  resolved_selection: { skills: [] },
+  resolved_from: { source: 'explicit' as const },
+  request_payload_hash: HASH_A,
+  reason: 'adapter invocation failed (spawn ENOENT)',
 };
 
 const dispatchCompletedEvent = {
@@ -307,6 +324,43 @@ describe('DispatchResultEvent (ADR-0007 §Amendment Slice 37)', () => {
   });
 });
 
+describe('DispatchFailedEvent (Runtime Safety Floor Slice 3)', () => {
+  it('parses a well-formed dispatch.failed event with full dispatch provenance', () => {
+    const parsed = DispatchFailedEvent.safeParse(dispatchFailedEvent);
+    expect(parsed.success).toBe(true);
+  });
+
+  it('rejects dispatch.failed without request_payload_hash', () => {
+    const { request_payload_hash, ...rest } = dispatchFailedEvent;
+    void request_payload_hash;
+    const bad = DispatchFailedEvent.safeParse(rest);
+    expect(bad.success).toBe(false);
+  });
+
+  it('rejects dispatch.failed without reason', () => {
+    const { reason, ...rest } = dispatchFailedEvent;
+    void reason;
+    const bad = DispatchFailedEvent.safeParse(rest);
+    expect(bad.success).toBe(false);
+  });
+
+  it('rejects dispatch.failed with surplus top-level key (RUN-I8 strictness)', () => {
+    const bad = DispatchFailedEvent.safeParse({
+      ...dispatchFailedEvent,
+      smuggled: 'x',
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('Event union rejects role-sourced dispatch.failed when resolved_from.role disagrees', () => {
+    const bad = Event.safeParse({
+      ...dispatchFailedEvent,
+      resolved_from: { source: 'role', role: 'reviewer' },
+    });
+    expect(bad.success).toBe(false);
+  });
+});
+
 describe('Event discriminated union admits the three new dispatch transcript kinds', () => {
   it('parses dispatch.request via the Event union', () => {
     const parsed = Event.safeParse(dispatchRequestEvent);
@@ -329,6 +383,14 @@ describe('Event discriminated union admits the three new dispatch transcript kin
     expect(parsed.success).toBe(true);
     if (parsed.success) {
       expect(parsed.data.kind).toBe('dispatch.result');
+    }
+  });
+
+  it('parses dispatch.failed via the Event union', () => {
+    const parsed = Event.safeParse(dispatchFailedEvent);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.kind).toBe('dispatch.failed');
     }
   });
 
@@ -360,6 +422,62 @@ describe('Five-event durable dispatch transcript sequence (ADR-0007 CC#P2-2)', (
       throw new Error(`RunLog.safeParse failed: ${JSON.stringify(parsed.error.issues)}`);
     }
     expect(parsed.success).toBe(true);
+  });
+
+  it('parses the adapter-invocation failure sequence as a well-formed RunLog', () => {
+    const gateFailed = {
+      schema_version: 1 as const,
+      sequence: 5,
+      recorded_at: '2026-04-21T12:05:00.000Z',
+      run_id: RUN_A,
+      kind: 'gate.evaluated' as const,
+      step_id: 'frame',
+      attempt: 1,
+      gate_kind: 'result_verdict' as const,
+      outcome: 'fail' as const,
+      reason: dispatchFailedEvent.reason,
+    };
+    const stepAborted = {
+      schema_version: 1 as const,
+      sequence: 6,
+      recorded_at: '2026-04-21T12:06:00.000Z',
+      run_id: RUN_A,
+      kind: 'step.aborted' as const,
+      step_id: 'frame',
+      attempt: 1,
+      reason: dispatchFailedEvent.reason,
+    };
+    const runAborted = {
+      schema_version: 1 as const,
+      sequence: 7,
+      recorded_at: '2026-04-21T12:07:00.000Z',
+      run_id: RUN_A,
+      kind: 'run.closed' as const,
+      outcome: 'aborted' as const,
+      reason: dispatchFailedEvent.reason,
+    };
+    const log = [
+      bootstrapEvent,
+      stepEnteredEvent,
+      dispatchStartedEvent,
+      dispatchRequestEvent,
+      dispatchFailedEvent,
+      gateFailed,
+      stepAborted,
+      runAborted,
+    ];
+    const parsed = RunLog.safeParse(log);
+    if (!parsed.success) {
+      throw new Error(`RunLog.safeParse failed: ${JSON.stringify(parsed.error.issues)}`);
+    }
+    const snapshot = reduce(parsed.data);
+    expect(snapshot.status).toBe('aborted');
+    expect(snapshot.events_consumed).toBe(log.length);
+    const projection = RunProjection.safeParse({ log: parsed.data, snapshot });
+    if (!projection.success) {
+      throw new Error(`RunProjection.safeParse failed: ${JSON.stringify(projection.error.issues)}`);
+    }
+    expect(projection.success).toBe(true);
   });
 
   it('parses a dry-run-shaped dispatch log (no transcript events) as a RunLog', () => {

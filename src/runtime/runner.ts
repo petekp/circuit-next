@@ -23,7 +23,7 @@ import type { Snapshot } from '../schemas/snapshot.js';
 import type { Workflow } from '../schemas/workflow.js';
 import type { AgentDispatchInput } from './adapters/agent.js';
 import { materializeDispatch } from './adapters/dispatch-materializer.js';
-import type { DispatchResult } from './adapters/shared.js';
+import { type DispatchResult, sha256Hex } from './adapters/shared.js';
 import { parseArtifact } from './artifact-schemas.js';
 import { appendEvent, eventLogPath } from './event-writer.js';
 import {
@@ -442,6 +442,11 @@ function deriveResolvedSelection(
   };
 }
 
+function adapterFailureReason(stepId: string, err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  return `dispatch step '${stepId}': adapter invocation failed (${message})`;
+}
+
 // Slice 43c: orchestrator-synthesis steps land an artifact file at
 // `runRoot/step.writes.artifact.path` before their `step.artifact_written`
 // event fires. At v0 the body is a minimal deterministic JSON stub with
@@ -588,7 +593,83 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
       if (step.budgets?.wall_clock_ms !== undefined) {
         dispatchInput.timeoutMs = step.budgets.wall_clock_ms;
       }
-      const dispatchResult = await dispatcher.dispatch(dispatchInput);
+      const resolvedSelection = deriveResolvedSelection(workflow, step);
+      const resolvedFrom = deriveResolvedFrom(inv);
+      const requestAbs = resolveRunRelative(runRoot, step.writes.request);
+      mkdirSync(dirname(requestAbs), { recursive: true });
+      writeFileSync(requestAbs, prompt);
+      const requestPayloadHash = sha256Hex(prompt);
+      push({
+        schema_version: 1,
+        sequence,
+        recorded_at: recordedAt(),
+        run_id: runId,
+        kind: 'dispatch.started',
+        step_id: step.id,
+        attempt,
+        adapter: { kind: 'builtin', name: dispatcher.adapterName },
+        role: step.role,
+        resolved_selection: resolvedSelection,
+        resolved_from: resolvedFrom,
+      });
+      push({
+        schema_version: 1,
+        sequence,
+        recorded_at: recordedAt(),
+        run_id: runId,
+        kind: 'dispatch.request',
+        step_id: step.id,
+        attempt,
+        request_payload_hash: requestPayloadHash,
+      });
+
+      let dispatchResult: DispatchResult;
+      try {
+        dispatchResult = await dispatcher.dispatch(dispatchInput);
+      } catch (err) {
+        const reason = adapterFailureReason(step.id as unknown as string, err);
+        push({
+          schema_version: 1,
+          sequence,
+          recorded_at: recordedAt(),
+          run_id: runId,
+          kind: 'dispatch.failed',
+          step_id: step.id,
+          attempt,
+          adapter: { kind: 'builtin', name: dispatcher.adapterName },
+          role: step.role,
+          resolved_selection: resolvedSelection,
+          resolved_from: resolvedFrom,
+          request_payload_hash: requestPayloadHash,
+          reason,
+        });
+        push({
+          schema_version: 1,
+          sequence,
+          recorded_at: recordedAt(),
+          run_id: runId,
+          kind: 'gate.evaluated',
+          step_id: step.id,
+          attempt,
+          gate_kind: 'result_verdict',
+          outcome: 'fail',
+          reason,
+        });
+        push({
+          schema_version: 1,
+          sequence,
+          recorded_at: recordedAt(),
+          run_id: runId,
+          kind: 'step.aborted',
+          step_id: step.id,
+          attempt,
+          reason,
+        });
+        runOutcome = 'aborted';
+        closeReason = reason;
+        currentStepId = undefined;
+        break;
+      }
       dispatchResults.push({
         stepId: step.id as unknown as string,
         adapterName: dispatcher.adapterName,
@@ -608,10 +689,11 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
       // `writes.artifact.schema` via `src/runtime/artifact-schemas.ts`.
       // A parse failure coerces the evaluation to `kind: 'fail'` with
       // the parse reason — mirroring the Slice 53 reject-on-bad-
-      // verdict shape so the failure-path event surface is uniform
-      // (no separate `dispatch.failed` event). Artifact write
-      // requires BOTH gate pass (Slice 53) AND schema parse pass
-      // (Slice 54); failure on either path leaves
+      // verdict shape so the content/schema failure-path event surface
+      // stays uniform. It does not emit `dispatch.failed`; that event is
+      // reserved for adapter invocation exceptions where no adapter
+      // result exists. Artifact write requires BOTH gate pass (Slice 53)
+      // AND schema parse pass (Slice 54); failure on either path leaves
       // `writes.artifact.path` absent on disk. Fail-closed on
       // unknown schema names per contract MUST.
       const gateEvaluation = evaluateDispatchGate(step, dispatchResult.result_body);
@@ -667,11 +749,12 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
         // derivation helpers live above in this module so the runner is
         // the single owner of resolution at v0; P2-MODEL-EFFORT replaces
         // them with the full SEL-precedence resolver.
-        resolvedSelection: deriveResolvedSelection(workflow, step),
-        resolvedFrom: deriveResolvedFrom(inv),
+        resolvedSelection,
+        resolvedFrom,
         dispatchResult,
         verdict: dispatchCompletedVerdict,
         now,
+        priorStart: { requestPayloadHash },
       });
       for (const ev of materialized.events) {
         events.push(ev);

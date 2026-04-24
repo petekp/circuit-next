@@ -2289,7 +2289,7 @@ describe('RunProjection binding (RUN-I6, RUN-I7)', () => {
   });
 });
 
-// MED #7 fold-in — table-driven strict-mode coverage across all 11 Event variants.
+// MED #7 fold-in — table-driven strict-mode coverage across representative Event variants.
 describe('Event variants reject top-level surplus keys (RUN-I8 coverage expansion)', () => {
   const base = {
     schema_version: 1 as const,
@@ -2388,10 +2388,26 @@ describe('Event variants reject top-level surplus keys (RUN-I8 coverage expansio
       },
     ],
     [
-      'step.completed',
+      'dispatch.failed',
       {
         ...base,
         sequence: 8,
+        kind: 'dispatch.failed',
+        step_id: 'frame',
+        attempt: 1,
+        adapter: { kind: 'builtin', name: 'codex' },
+        role: 'researcher',
+        resolved_selection: { skills: [] },
+        resolved_from: { source: 'explicit' },
+        request_payload_hash: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+        reason: 'adapter exited 1',
+      },
+    ],
+    [
+      'step.completed',
+      {
+        ...base,
+        sequence: 9,
         kind: 'step.completed',
         step_id: 'frame',
         attempt: 1,
@@ -2402,14 +2418,14 @@ describe('Event variants reject top-level surplus keys (RUN-I8 coverage expansio
       'step.aborted',
       {
         ...base,
-        sequence: 9,
+        sequence: 10,
         kind: 'step.aborted',
         step_id: 'frame',
         attempt: 1,
         reason: 'timeout',
       },
     ],
-    ['run.closed', { ...base, sequence: 10, kind: 'run.closed', outcome: 'complete' }],
+    ['run.closed', { ...base, sequence: 11, kind: 'run.closed', outcome: 'complete' }],
   ];
 
   for (const [name, event] of cases) {

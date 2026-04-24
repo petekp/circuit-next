@@ -243,6 +243,7 @@ export const SCHEMA_FILE_ALLOWLIST = {
       'CheckpointResolvedEvent',
       'DispatchStartedEvent',
       'DispatchRequestEvent',
+      'DispatchFailedEvent',
       'DispatchReceiptEvent',
       'DispatchResultEvent',
       'DispatchCompletedEvent',

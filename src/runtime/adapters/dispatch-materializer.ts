@@ -74,6 +74,9 @@ export interface DispatchMaterializeInput {
   readonly dispatchResult: DispatchResult;
   readonly verdict: string;
   readonly now: () => Date;
+  readonly priorStart?: {
+    readonly requestPayloadHash: string;
+  };
 }
 
 export interface DispatchMaterializeOutput {
@@ -87,8 +90,12 @@ export interface DispatchMaterializeOutput {
   readonly resultArtifactHash: string;
 }
 
-// Write four on-disk transcript slots + the validated artifact file if
-// `writes.artifact` is declared. Then produce the five-event sequence.
+// Write the returned transcript slots + the validated artifact file if
+// `writes.artifact` is declared. Then produce the dispatch completion
+// sequence. Callers may pre-write the request slot and append
+// `dispatch.started` / `dispatch.request` before awaiting an adapter; in
+// that case `priorStart` carries the already-durable request hash and this
+// materializer emits only receipt/result/completed events.
 // Caller is responsible for appending the events via `appendEvent`
 // (or `appendAndDerive` if snapshot derivation is wanted).
 //
@@ -123,6 +130,7 @@ export function materializeDispatch(input: DispatchMaterializeInput): DispatchMa
     dispatchResult,
     verdict,
     now,
+    priorStart,
   } = input;
 
   // Slice 47a — cross-validation of the role binding the Event-union
@@ -145,7 +153,9 @@ export function materializeDispatch(input: DispatchMaterializeInput): DispatchMa
   for (const p of [requestAbs, receiptAbs, resultAbs]) {
     mkdirSync(dirname(p), { recursive: true });
   }
-  writeFileSync(requestAbs, dispatchResult.request_payload);
+  if (priorStart === undefined) {
+    writeFileSync(requestAbs, dispatchResult.request_payload);
+  }
   writeFileSync(receiptAbs, dispatchResult.receipt_id);
   writeFileSync(resultAbs, dispatchResult.result_body);
   if (artifactAbs !== undefined) {
@@ -153,37 +163,40 @@ export function materializeDispatch(input: DispatchMaterializeInput): DispatchMa
     writeFileSync(artifactAbs, dispatchResult.result_body);
   }
 
-  const requestPayloadHash = sha256Hex(dispatchResult.request_payload);
+  const requestPayloadHash =
+    priorStart?.requestPayloadHash ?? sha256Hex(dispatchResult.request_payload);
   const resultArtifactHash = sha256Hex(dispatchResult.result_body);
 
   let sequence = startingSequence;
   const ts = () => now().toISOString();
   const events: Event[] = [];
 
-  events.push({
-    schema_version: 1,
-    sequence: sequence++,
-    recorded_at: ts(),
-    run_id: runId,
-    kind: 'dispatch.started',
-    step_id: stepId,
-    attempt,
-    adapter: { kind: 'builtin', name: adapterName },
-    role,
-    resolved_selection: resolvedSelection,
-    resolved_from: resolvedFrom,
-  });
+  if (priorStart === undefined) {
+    events.push({
+      schema_version: 1,
+      sequence: sequence++,
+      recorded_at: ts(),
+      run_id: runId,
+      kind: 'dispatch.started',
+      step_id: stepId,
+      attempt,
+      adapter: { kind: 'builtin', name: adapterName },
+      role,
+      resolved_selection: resolvedSelection,
+      resolved_from: resolvedFrom,
+    });
 
-  events.push({
-    schema_version: 1,
-    sequence: sequence++,
-    recorded_at: ts(),
-    run_id: runId,
-    kind: 'dispatch.request',
-    step_id: stepId,
-    attempt,
-    request_payload_hash: requestPayloadHash,
-  });
+    events.push({
+      schema_version: 1,
+      sequence: sequence++,
+      recorded_at: ts(),
+      run_id: runId,
+      kind: 'dispatch.request',
+      step_id: stepId,
+      attempt,
+      request_payload_hash: requestPayloadHash,
+    });
+  }
 
   events.push({
     schema_version: 1,

@@ -254,37 +254,53 @@ property-test harness + reducer exist in Phase 2.
   a `step.completed` represents an impossible state.
 
 - `run.prop.dispatch_event_pairing` — For every `dispatch.started` event on
-  a `(step_id, attempt)` pair, there is exactly one subsequent
-  `dispatch.completed` event on the same pair before any terminal step
-  event. A `dispatch.started` with no matching `dispatch.completed` is
-  a reducer inconsistency.
+  a `(step_id, attempt)` pair, there is exactly one subsequent dispatch
+  terminal event on the same pair before any terminal step event:
+  `dispatch.completed` when the adapter invocation returns a result, or
+  `dispatch.failed` when the adapter invocation itself fails before a
+  result exists. A `dispatch.started` with neither terminal dispatch event
+  is a reducer inconsistency.
 
   **Slice 37 §Amendment (durable dispatch transcript, ADR-0007 CC#P2-2).**
-  The Event discriminated union additionally carries three durable-
-  transcript variants: `dispatch.request` (SHA-256 of the request
+  The Event discriminated union additionally carries durable transcript
+  variants: `dispatch.request` (SHA-256 of the request
   payload bytes, field `request_payload_hash`), `dispatch.receipt`
   (adapter-returned receipt id, field `receipt_id`), and
   `dispatch.result` (SHA-256 of the result artifact bytes, field
-  `result_artifact_hash`). The canonical five-event sequence on a
-  `(step_id, attempt)` pair is:
+  `result_artifact_hash`). The canonical success sequence on a `(step_id,
+  attempt)` pair is:
 
   ```
   dispatch.started → dispatch.request → dispatch.receipt →
   dispatch.result → dispatch.completed
   ```
 
+  Runtime-safety-floor Slice 3 adds the adapter-invocation failure
+  sequence for failures that happen before an adapter receipt/result exists:
+
+  ```
+  dispatch.started → dispatch.request → dispatch.failed
+  ```
+
+  `dispatch.failed` repeats the `dispatch.started` provenance surface
+  (adapter, role, resolved selection, resolved-from provenance) and the
+  `dispatch.request` payload hash, plus the terminal failure reason. This
+  keeps infrastructure failure distinct from model verdict failure while
+  preserving the existing dispatch audit trail.
+
   Log-level pairing invariant (this property's scope): whenever any of
   the three transcript events appears on a pair, each must appear at
   most once and MUST appear strictly between `dispatch.started` and
-  `dispatch.completed` on that pair (i.e. after started, before
-  completed, and in the order request → receipt → result if more than
-  one is present). Zero transcript events is legal (dry-run adapter
-  path; transcript only required for non-dry-run adapters per CC#P2-2
-  Enforcement binding). An out-of-order transcript event (e.g.
-  `dispatch.receipt` preceding `dispatch.request` on the same pair, or
-  any transcript event on a pair with no matching `dispatch.started`,
-  or a transcript event appearing after `dispatch.completed`) is a
-  reducer inconsistency. The tighter requirement that all three
+  the terminal dispatch event on that pair (i.e. after started, before
+  completed/failed, and in the order request → receipt → result if more
+  than one returned-result transcript event is present). Zero transcript
+  events is legal (dry-run adapter path; transcript only required for
+  non-dry-run adapters per CC#P2-2 Enforcement binding). An out-of-order
+  transcript event (e.g. `dispatch.receipt` preceding `dispatch.request`
+  on the same pair, or any transcript event on a pair with no matching
+  `dispatch.started`, or a transcript event appearing after
+  `dispatch.completed` / `dispatch.failed`) is a reducer inconsistency.
+  The tighter requirement that all three returned-result
   transcript events MUST appear for a non-dry-run adapter lives at the
   adapter-level close criterion (ADR-0007 CC#P2-2 Enforcement binding,
   enforced in the P2.4 round-trip test and the CI-skip local-smoke
@@ -397,11 +413,13 @@ property-test harness + reducer exist in Phase 2.
 - **v0.1-amendment (Slice 37, pre-P2.4 fold-in)** — Event discriminated
   union at `src/schemas/event.ts` widened with three durable-transcript
   variants (`dispatch.request`, `dispatch.receipt`, `dispatch.result`)
-  required by ADR-0007 CC#P2-2's Enforcement binding. The log-level
+  required by ADR-0007 CC#P2-2's Enforcement binding. Runtime-safety-floor
+  Slice 3 later widened the same event surface with additive
+  `dispatch.failed` for adapter invocation exceptions. The log-level
   pairing invariant `run.prop.dispatch_event_pairing` widened (not
-  renamed) to govern their ordering when present; full five-event
-  ordering is obligated at the adapter level (CC#P2-2), not the
-  contract level. Closes composition-review §HIGH 2
+  renamed) to govern ordering when transcript/failure events are present;
+  full five-event success ordering is obligated at the adapter level
+  (CC#P2-2), not the contract level. Closes composition-review §HIGH 2
   (`specs/reviews/p2-foundation-composition-review.md`). Authorized by
   ADR-0007 §Amendment (Slice 37).
 

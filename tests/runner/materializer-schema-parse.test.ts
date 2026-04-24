@@ -30,7 +30,9 @@ import { type DispatchFn, runDogfood } from '../../src/runtime/runner.js';
 //   - Failure-path event surface is uniform across both: parse
 //     failure emits `gate.evaluated outcome=fail` + reason, then
 //     `step.aborted` with the same reason, then `run.closed` with
-//     `outcome=aborted`. No separate `dispatch.failed` event type.
+//     `outcome=aborted`. This content/schema-failure path does not
+//     emit `dispatch.failed`; that event is reserved for adapter
+//     invocation exceptions, where no adapter result exists.
 //   - Fail-closed default: unknown schema names produce a parse
 //     failure reason naming the unknown schema; the step is
 //     aborted.

@@ -12,6 +12,20 @@ record.*
 
 ## Runtime-Safety-Floor Arc (opened after Slice 68)
 
+- **Slice 71 DURABLE-ADAPTER-FAILURES** (this commit, Ratchet-Advance) —
+  changed dispatch execution so `dispatch.started` and `dispatch.request`
+  are durable before awaiting the adapter. If the adapter throws, the run
+  now emits `dispatch.failed` with adapter identity, role, resolved
+  selection, resolved-from provenance, request hash, and reason; then it
+  emits `gate.evaluated outcome=fail`, `step.aborted`, `run.closed
+  outcome=aborted`, aborted `result.json`, and aborted `state.json`.
+  Contract and runner tests pin the exact failed-dispatch sequence,
+  projection validity, absent receipt/result/completed events, and
+  byte-identical reason text. Codex challenger found the old
+  content/schema-failure prose contradicted the new adapter-exception
+  event and that sequence proof was under-pinned; both were folded in
+  before the final ACCEPT pass.
+
 - **Slice 70 FRESH-RUN-ROOT-GUARD** (this commit, Ratchet-Advance) —
   changed bootstrap initialization to claim a fresh run root before writing
   manifest, event log, state, or result artifacts. Reused roots, canonical

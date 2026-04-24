@@ -136,6 +136,24 @@ export const DispatchRequestEvent = EventBase.extend({
 }).strict();
 export type DispatchRequestEvent = z.infer<typeof DispatchRequestEvent>;
 
+// Adapter invocation failures are infrastructure failures, not model
+// verdict failures. The event is additive to the existing dispatch audit
+// trail: `dispatch.started` and `dispatch.request` still precede it, and
+// this event repeats the dispatch provenance plus the pre-await request
+// hash so the failed attempt is tied to the exact invocation payload.
+export const DispatchFailedEvent = EventBase.extend({
+  kind: z.literal('dispatch.failed'),
+  step_id: StepId,
+  attempt: z.number().int().positive(),
+  adapter: ResolvedAdapter,
+  role: DispatchRole,
+  resolved_selection: ResolvedSelection,
+  resolved_from: DispatchResolutionSource,
+  request_payload_hash: ContentHash,
+  reason: z.string().min(1),
+}).strict();
+export type DispatchFailedEvent = z.infer<typeof DispatchFailedEvent>;
+
 // `dispatch.receipt` carries the adapter-returned receipt id — an opaque
 // identifier the adapter assigns to the in-flight dispatch so audit
 // tooling can reconstruct what receipt the adapter handed back. Kept as
@@ -220,6 +238,7 @@ export const Event = z
     CheckpointResolvedEvent,
     DispatchStartedEvent,
     DispatchRequestEvent,
+    DispatchFailedEvent,
     DispatchReceiptEvent,
     DispatchResultEvent,
     DispatchCompletedEvent,
@@ -228,7 +247,7 @@ export const Event = z
     RunClosedEvent,
   ])
   .superRefine((ev, ctx) => {
-    if (ev.kind !== 'dispatch.started') return;
+    if (ev.kind !== 'dispatch.started' && ev.kind !== 'dispatch.failed') return;
     if (ev.resolved_from.source === 'role' && ev.resolved_from.role !== ev.role) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
