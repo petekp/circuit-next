@@ -12,12 +12,20 @@ record.*
 
 ## P2.9 Second Workflow Arc (opened after Slice 75)
 
+- **Slice 82 ARC-CLOSE-CEREMONY** (this commit, Ratchet-Advance) -
+  closed P2.9 with two composition-review prong files, added the P2.9
+  row to the shared arc-close audit gate, closed
+  `specs/plans/p2-9-second-workflow.md`, and marked the parent Phase 2
+  plan slot complete. The close claim is validated with one named future
+  follow-on: per-workflow synthesis-writer registration.
+
 - **Slice 81 GENERALIZATION-PROOF** (this commit, Discovery) - recorded
   the second-workflow parity proof at
   `specs/reviews/p2-9-generalization-proof.md`. The report checks the
   five plan-named generalization risks: canonical phase set, invariant
-  shape, plugin-command composability, and audit-rule kind-independence
-  are clean; artifact-count balance is validated with the declared
+  shape, and plugin-command composability are clean; audit-rule
+  kind-independence is validated through an already-landed review-specific
+  policy branch; artifact-count balance is validated with the declared
   follow-on for per-workflow synthesis-writer registration. No risk is
   not-yet-validated, so P2.9 can close with a bounded follow-on rather
   than a narrowed claim.

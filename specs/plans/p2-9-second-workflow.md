@@ -1,6 +1,6 @@
 ---
 plan: p2-9-second-workflow
-status: operator-signoff
+status: closed
 revision: 04
 opened_at: 2026-04-24
 revised_at: 2026-04-23
@@ -9,6 +9,9 @@ revised_in_session: post-codex-challenger-03-med-foldin
 cleared_in_session: post-codex-challenger-04-accept
 cleared_at: 2026-04-23
 signoff_at: 2026-04-24
+closed_at: 2026-04-24
+closed_in_slice: 82
+closed_with: "P2.9 audit-only review-family generalization validated; arc-close composition reviews landed; ARC_CLOSE_GATES binding added; one future follow-on declared for per-workflow synthesis-writer registration."
 signoff_in_session: post-runtime-safety-floor-p2-9-operator-signoff
 signoff_note: "Operator explicit signoff ('I sign off on P2.9', 2026-04-24) after runtime-safety-floor closure. operator_signoff_predecessor: 5590abd13b7c801d99098eb64ab00d3b0669986f."
 base_commit: d921528

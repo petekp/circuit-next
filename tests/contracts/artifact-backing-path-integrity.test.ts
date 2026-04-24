@@ -10,6 +10,7 @@ import {
   ARTIFACT_BACKING_PATH_PREFIX_SYNONYMS,
   CLEAN_CLONE_REALITY_TRANCHE_ARC_CEREMONY_SLICE,
   METHODOLOGY_TRIM_ARC_CEREMONY_SLICE,
+  P2_9_SECOND_WORKFLOW_ARC_CEREMONY_SLICE,
   PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE,
   PHASE_2_P2_4_P2_5_ARC_LAST_SLICE,
   PLANNING_READINESS_META_ARC_CEREMONY_SLICE,
@@ -743,7 +744,7 @@ describe('ARC_CLOSE_GATES + checkArcCloseCompositionReviewPresence (Slice 44 gen
     );
   });
 
-  it('ARC_CLOSE_GATES contains all seven arcs with matching ceremony_slice constants', () => {
+  it('ARC_CLOSE_GATES contains all eight arcs with matching ceremony_slice constants', () => {
     // Slice 47d (Codex HIGH 5 + Claude HIGH 3 fold-in): length bumped
     // 2 → 3 with the new slice-47 hardening fold-in arc entry.
     // Slice 55 (Clean-Clone Reality Tranche arc-close composition review
@@ -760,7 +761,10 @@ describe('ARC_CLOSE_GATES + checkArcCloseCompositionReviewPresence (Slice 44 gen
     // Slice 75 (runtime-safety-floor arc-close ceremony — same gate shape
     // as slice-55 + slice-62 + slice-68; numeric ceremony_slice: 75):
     // length bumped 6 -> 7 with the new runtime-safety-floor entry.
-    expect(ARC_CLOSE_GATES).toHaveLength(7);
+    // Slice 82 (P2.9 second-workflow arc-close ceremony — same gate
+    // shape; numeric ceremony_slice: 82): length bumped 7 -> 8 with the
+    // new p2-9-second-workflow entry.
+    expect(ARC_CLOSE_GATES).toHaveLength(8);
     const oldArc = ARC_CLOSE_GATES.find(
       (g) => g.arc_id === 'phase-2-foundation-foldins-slices-35-to-40',
     );
@@ -772,6 +776,7 @@ describe('ARC_CLOSE_GATES + checkArcCloseCompositionReviewPresence (Slice 44 gen
     const metaArc = ARC_CLOSE_GATES.find((g) => g.arc_id === 'planning-readiness-meta-arc');
     const methodologyTrimArc = ARC_CLOSE_GATES.find((g) => g.arc_id === 'methodology-trim-arc');
     const runtimeSafetyArc = ARC_CLOSE_GATES.find((g) => g.arc_id === 'runtime-safety-floor');
+    const p29Arc = ARC_CLOSE_GATES.find((g) => g.arc_id === 'p2-9-second-workflow');
     expect(oldArc).toBeDefined();
     expect(p2ArcNew).toBeDefined();
     expect(slice47Arc).toBeDefined();
@@ -779,6 +784,7 @@ describe('ARC_CLOSE_GATES + checkArcCloseCompositionReviewPresence (Slice 44 gen
     expect(metaArc).toBeDefined();
     expect(methodologyTrimArc).toBeDefined();
     expect(runtimeSafetyArc).toBeDefined();
+    expect(p29Arc).toBeDefined();
     expect(oldArc?.ceremony_slice).toBe(PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE);
     expect(p2ArcNew?.ceremony_slice).toBe(PHASE_2_P2_4_P2_5_ARC_LAST_SLICE);
     expect(slice47Arc?.ceremony_slice).toBe(SLICE_47_HARDENING_FOLDINS_ARC_CEREMONY_SLICE);
@@ -837,6 +843,17 @@ describe('ARC_CLOSE_GATES + checkArcCloseCompositionReviewPresence (Slice 44 gen
     ).toBe(true);
     expect(runtimeSafetyArc?.review_file_regex.test('arc-slice-69-codex.md')).toBe(false);
     expect(runtimeSafetyArc?.review_file_regex.test('arc-slice-73-codex.md')).toBe(false);
+    expect(p29Arc?.ceremony_slice).toBe(P2_9_SECOND_WORKFLOW_ARC_CEREMONY_SLICE);
+    expect(typeof p29Arc?.ceremony_slice).toBe('number');
+    expect(p29Arc?.plan_path).toBe('specs/plans/p2-9-second-workflow.md');
+    expect(
+      p29Arc?.review_file_regex.test('arc-p2-9-second-workflow-composition-review-claude.md'),
+    ).toBe(true);
+    expect(
+      p29Arc?.review_file_regex.test('arc-p2-9-second-workflow-composition-review-codex.md'),
+    ).toBe(true);
+    expect(p29Arc?.review_file_regex.test('arc-slice-76-codex.md')).toBe(false);
+    expect(p29Arc?.review_file_regex.test('arc-slice-81-codex.md')).toBe(false);
   });
 
   it('returns green with "in progress" detail for the 41-to-43 arc when current_slice < 44 and both arcs are applicable', () => {

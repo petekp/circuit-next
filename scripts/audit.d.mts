@@ -269,6 +269,10 @@ export const METHODOLOGY_TRIM_ARC_CEREMONY_SLICE: number;
 // ceremony_slice for the runtime-safety-floor arc. Uses the numeric
 // back-compat branch of evaluateArcCloseGate.
 export const RUNTIME_SAFETY_FLOOR_ARC_CEREMONY_SLICE: number;
+// Slice 82 (P2.9 Second Workflow arc-close ceremony) — numeric
+// ceremony_slice for the P2.9 second-workflow arc. Uses the numeric
+// back-compat branch of evaluateArcCloseGate.
+export const P2_9_SECOND_WORKFLOW_ARC_CEREMONY_SLICE: number;
 export const ARC_CLOSE_GATES: ReadonlyArray<{
   readonly arc_id: string;
   readonly description: string;

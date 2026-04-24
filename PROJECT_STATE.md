@@ -1,4 +1,4 @@
-<!-- current_slice: 81 -->
+<!-- current_slice: 82 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -9,10 +9,11 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 81
-- **current_arc:** P2.9 second workflow (Slice 81 landed: the
-  second-workflow generalization proof; next planned slice is arc-close
-  composition review and plan close)
+- **current_slice:** 82
+- **current_arc:** P2.9 second workflow (Slice 82 closed the arc:
+  composition reviews, audit-gate binding, and plan closure landed; next
+  concrete follow-on is per-workflow synthesis-writer registration unless
+  the operator chooses a different post-P2.9 slot)
 - **current_phase:** Phase 2 — Implementation (continuing)
 
 Chronicle (relocated narrative history — non-authoritative; see
@@ -86,8 +87,13 @@ the plugin manifest, and updated `/circuit:run` wording so it remains the
 default route to explore while review is available as a direct workflow
 command. The review command surfaces the current synthesis-writer caveat
 instead of claiming the default CLI path produces typed review verdicts.*
-Slice 81 recorded the P2.9 generalization proof. Four risk points are
-classified clean, and artifact-count balance is validated with the named
-follow-on for per-workflow synthesis-writer registration; no risk point is
-not-yet-validated. The next step is arc-close composition review and plan
-closure.*
+Slice 81 recorded the P2.9 generalization proof. Three risk points are
+classified clean, the review-specific audit policy branch is validated by
+an already-landed targeted widening, and artifact-count balance is
+validated with the named follow-on for per-workflow synthesis-writer
+registration; no risk point is not-yet-validated.*
+Slice 82 closed P2.9 with two composition-review prong files, bound the
+arc into `ARC_CLOSE_GATES`, closed the plan, and marked the parent P2.9
+slot with the validated-with-declared-follow-on outcome. The only named
+future follow-on from this arc is per-workflow synthesis-writer
+registration.*

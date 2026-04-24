@@ -786,11 +786,13 @@ commit time. Expect re-ordering as earlier slices expose surface.
   assignment.** Already reserved at commit `b538979` and specified in
   `specs/plans/phase-1-close-revised.md §Slice P2-MODEL-EFFORT`.
   Triggers once P2.3 and at least one adapter land.
-- **P2.9 — Second workflow** — likely `review` (Codex's fallback
-  suggestion and the smallest remaining surface) unless Phase 2
-  evidence points elsewhere. Proves the
-  contract/adapter/fixture/protocol pattern generalizes beyond
-  `explore`. Target reselection occurs at P2.9 framing time.
+- **P2.9 — Second workflow (closed 2026-04-24 at Slice 82)** — landed
+  the audit-only `review` workflow as the second registered workflow.
+  Generalization outcome: validated with one future follow-on,
+  per-workflow synthesis-writer registration, because typed
+  `review.result` is proven through an injected writer while the default
+  writer remains placeholder-only. This does not affect the P2 close-
+  criteria table per ADR-0007 Addendum A.
 - **P2.10 — Artifact schema set** — at least the core artifact
   schemas the target workflows emit (brief, analysis, synthesis,
   result, verdict).

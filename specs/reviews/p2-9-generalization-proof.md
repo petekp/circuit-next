@@ -46,7 +46,10 @@ Per the plan, each point is classified as:
 
 **validated-with-declared-follow-on.**
 
-No risk point is `not-yet-validated`. The P2.9 close claim can say:
+No risk point is `not-yet-validated`. The outcome mix is three `clean`
+risk points, one already-landed targeted widening for the review-specific
+audit policy branch, and one future follow-on for the synthesis writer.
+The P2.9 close claim can say:
 
 > P2.9 audit-only review-family generalization validated; 1 targeted
 > follow-on slice declared for per-workflow synthesis-writer registration.
@@ -65,7 +68,7 @@ substrate work.
 | Invariant shape | `clean` | Review added workflow-kind-specific invariants without changing the base workflow schema. REVIEW-I1 is enforced by the shared policy helper plus `tests/properties/visible/review-i1.test.ts`; REVIEW-I2 is enforced by `src/schemas/artifacts/review.ts` plus `tests/properties/visible/review-i2.test.ts`. The invariant anchors live on `specs/contracts/review.md`, matching the explore contract discipline. |
 | Artifact-count balance | `validated-with-declared-follow-on` | Review has one registered primary artifact, `review.result`, rather than explore's five. That difference did not break the authority-graph pattern: the artifact row is homed on `specs/contracts/review.md`, has its own schema exports, and uses the sibling `<kind>-result.json` path pattern. Runtime proof is deliberately narrower: `tests/runner/review-runtime-wiring.test.ts` proves schema-valid `review.result` through an injected writer and separately proves the default writer remains placeholder-only. Follow-on: per-workflow synthesis-writer registration. |
 | Plugin-command composability | `clean` | `.claude-plugin/plugin.json` now registers `circuit:review`, and `.claude-plugin/commands/circuit-review.md` invokes the positional `review` workflow. `tests/runner/plugin-command-invocation.test.ts` pins the workflow positional token, rejects goal-text false positives, and carries the same single-quote safety checks as the existing command bodies. `tests/contracts/plugin-surface.test.ts` keeps the live plugin surface under Check 23 closure. |
-| Audit-rule kind-independence | `clean` | Audit Check 23 walks manifest command entries and command files as data, so it reports all three commands without a hardcoded two-command ceiling. Audit Check 24 walks every `.claude-plugin/skills/*/circuit.json` fixture and delegates known workflow ids to the shared policy table; the live audit now scans `dogfood-run-0`, `explore`, and `review` fixtures. The P2.9 changes added a new policy row and tests rather than special-casing the audit body for review. |
+| Audit-rule kind-independence | `validated-with-declared-follow-on` | Audit Check 23 walks manifest command entries and command files as data, so it reports all three commands without a hardcoded two-command ceiling. Audit Check 24 still discovers fixtures generically and delegates known workflow ids to the shared policy table; the live audit now scans `dogfood-run-0`, `explore`, and `review` fixtures. The review-specific REVIEW-I1 ordering rule did require an explicit `review` branch in the shared helper, which is acceptable for the audit-only review-family claim but is not proof of fully generic third-workflow invariant registration. No additional future follow-on is required for this point. |
 
 ## Close Claim Boundaries
 
@@ -81,8 +84,9 @@ family now present in the repo:
   follow-on before it can make that guarantee directly.
 - `/circuit:review` is a real command surface that reaches the positional
   review workflow path.
-- The audit checks remained data-driven as the workflow and command counts
-  increased.
+- The audit checks remained data-driven for command and fixture discovery
+  as the counts increased; review's extra invariant branch is a
+  workflow-specific widening, not a generic third-workflow registry.
 
 The claim does not yet include:
 
