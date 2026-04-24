@@ -1,4 +1,4 @@
-<!-- current_slice: 93 -->
+<!-- current_slice: 94 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -9,9 +9,10 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 93
-- **current_arc:** P2.10 artifact schema set closed for all five explore
-  artifacts; next work can move to the next Phase 2 tranche
+- **current_slice:** 94
+- **current_arc:** Phase 2 close-evidence cleanup in progress: CODEX_SMOKE
+  fingerprint refreshed; AGENT_SMOKE promotion remains pending explicit
+  operator approval for external Claude disclosure
 - **current_phase:** Phase 2 — Implementation (continuing)
 
 Chronicle (relocated narrative history — non-authoritative; see
@@ -163,3 +164,9 @@ Slice 93 closed the remaining P2.10 artifact schema by adding the strict
 `synthesis.json` and `review-verdict.json`, and updating the explore golden
 to the deterministic close-result output. The five explore artifacts now all
 have explicit schemas and runtime writers or dispatch materializers.*
+Slice 94 refreshed the CODEX_SMOKE fingerprint after the Slice 93 runtime
+surface changed and pinned the smoke harness to a known-accessible Codex
+model so the evidence path does not inherit an unavailable personal default.
+The AGENT_SMOKE promotion was not run because it would send repository-derived
+runtime context to an external Claude service; it remains pending fresh
+explicit operator approval for that disclosure.*

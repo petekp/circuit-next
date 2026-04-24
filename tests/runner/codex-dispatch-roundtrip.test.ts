@@ -14,6 +14,7 @@ import { appendAndDerive, bootstrapRun } from '../../src/runtime/runner.js';
 import { Event } from '../../src/schemas/event.js';
 import { RunId, StepId, WorkflowId } from '../../src/schemas/ids.js';
 import type { LaneDeclaration } from '../../src/schemas/lane.js';
+import type { ResolvedSelection } from '../../src/schemas/selection-policy.js';
 
 // Slice 45 (P2.6) — codex-dispatch-roundtrip test strengthening
 // ADR-0007 CC#P2-2 (real-agent dispatch) with the second adapter named
@@ -46,6 +47,16 @@ const CODEX_SMOKE = process.env.CODEX_SMOKE === '1';
 // tests/fixtures/codex-smoke/last-run.json alone.
 const UPDATE_CODEX_FINGERPRINT = process.env.UPDATE_CODEX_FINGERPRINT === '1';
 const LAST_RUN_FINGERPRINT_PATH = resolve('tests/fixtures/codex-smoke/last-run.json');
+
+// The live smoke pins a known-accessible model so evidence freshness does not
+// depend on the operator's personal Codex default profile. Product dispatches
+// can still inherit user/project/workflow model selection through the runtime.
+const CODEX_SMOKE_SELECTION = {
+  model: { provider: 'openai', model: 'gpt-5.4' },
+  effort: 'low',
+  skills: [],
+  invocation_options: {},
+} satisfies ResolvedSelection;
 
 // Slice 45 HIGH 4 fold-in: the fingerprint binds to the current adapter
 // surface, not just an ancestor commit. The adapter_source_sha256 field
@@ -157,11 +168,10 @@ describe('Slice 45 — codex dispatch round-trip (ADR-0007 CC#P2-2 second-adapte
         });
 
         const prompt = 'Respond with exactly the single word: ACCEPT';
-        const resolvedSelection = { effort: 'low' as const, skills: [], invocation_options: {} };
         const codexResult: CodexDispatchResult = await dispatchCodex({
           prompt,
           timeoutMs: 120_000,
-          resolvedSelection,
+          resolvedSelection: CODEX_SMOKE_SELECTION,
         });
 
         // Slice 47a — selection + provenance now required at the
@@ -177,7 +187,7 @@ describe('Slice 45 — codex dispatch round-trip (ADR-0007 CC#P2-2 second-adapte
           runRoot,
           writes,
           adapterName: 'codex',
-          resolvedSelection,
+          resolvedSelection: CODEX_SMOKE_SELECTION,
           resolvedFrom: { source: 'explicit' },
           dispatchResult: codexResult,
           verdict: 'accept',

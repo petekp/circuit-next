@@ -12,6 +12,15 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 94 CODEX SMOKE FINGERPRINT REFRESH** (this commit,
+  Ratchet-Advance) - refreshed the CODEX_SMOKE fingerprint after the
+  Slice 93 runtime surface changed and pinned the live smoke harness to
+  `gpt-5.4`, avoiding the operator-local default `gpt-5.5` profile that the
+  Codex CLI reports as unavailable. The AGENT_SMOKE refresh remains pending:
+  running it would disclose repository-derived runtime context to an external
+  Claude service, so it needs fresh explicit operator approval before
+  promotion.
+
 - **Slice 93 P2.10 EXPLORE RESULT SCHEMA** (this commit,
   Ratchet-Advance) - closed the last P2.10 artifact schema by adding a
   strict `explore.result@v1` aggregate and a registered close-step writer.
