@@ -1,4 +1,4 @@
-<!-- current_slice: 78 -->
+<!-- current_slice: 79 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -9,10 +9,12 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 78
-- **current_arc:** P2.9 second workflow (Slice 78 landed: the review
-  contract and three-phase fixture; next planned slice is runtime
-  dispatch/synthesis wiring through a narrow injected writer seam)
+- **current_slice:** 79
+- **current_arc:** P2.9 second workflow (Slice 79 landed: the review
+  fixture now runs through dispatch and schema-valid close artifact
+  materialization with a narrow injected synthesis writer, while the
+  default writer is proven placeholder-only; next planned slice is the
+  `/circuit:review` command and CLI surface)
 - **current_phase:** Phase 2 — Implementation (continuing)
 
 Chronicle (relocated narrative history — non-authoritative; see
@@ -74,3 +76,10 @@ fixture, rehomed the `review.result` authority row to that contract, and
 anchored REVIEW-I1 / REVIEW-I2 on the contract itself. The fixture now
 proves the review shape and reviewer dispatch boundary; runtime wiring for
 schema-valid close synthesis remains the next P2.9 slice.*
+Slice 79 wired the live review fixture through the runtime with a stubbed
+reviewer dispatch and an injected synthesis writer. The test proves both
+accepted review dispatch verdicts can pass the gate and that the final
+`review.result` artifact parses with REVIEW-I2's deterministic verdict
+rule. A companion regression proves the default synthesis writer still
+emits placeholder-only `review.result` bytes; command wiring has not
+landed yet.*

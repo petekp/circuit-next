@@ -175,6 +175,15 @@ export interface DispatchFn {
   readonly dispatch: (input: AgentDispatchInput) => Promise<DispatchResult>;
 }
 
+export interface SynthesisWriterInput {
+  readonly runRoot: string;
+  readonly workflow: Workflow;
+  readonly step: Workflow['steps'][number] & { kind: 'synthesis' };
+  readonly goal: string;
+}
+
+export type SynthesisWriterFn = (input: SynthesisWriterInput) => void;
+
 export interface DogfoodInvocation {
   runRoot: string;
   workflow: Workflow;
@@ -194,6 +203,10 @@ export interface DogfoodInvocation {
   // bypassing it at the test layer is a test-surface seam, not a
   // policy seam.
   dispatcher?: DispatchFn;
+  // P2.9 Slice 66: test-only seam for proving review workflow wiring
+  // without widening the generic runtime synthesis writer. Production
+  // invocations omit this and keep the placeholder writer below.
+  synthesisWriter?: SynthesisWriterFn;
 }
 
 // Slice 47a Codex HIGH 2 fold-in — surface per-dispatch metadata
@@ -472,10 +485,8 @@ function terminalOutcomeForRoute(route: string): RunClosedOutcome | undefined {
 // A future slice (P2.10 — artifact schema set + orchestrator-synthesis
 // integration) replaces the stub with real orchestrator output; the seam
 // is this single helper.
-function writeSynthesisArtifact(
-  runRoot: string,
-  step: Workflow['steps'][number] & { kind: 'synthesis' },
-): void {
+function writeSynthesisArtifact(input: SynthesisWriterInput): void {
+  const { runRoot, step } = input;
   const abs = resolveRunRelative(runRoot, step.writes.artifact.path);
   mkdirSync(dirname(abs), { recursive: true });
   const body: Record<string, string> = {};
@@ -496,6 +507,7 @@ function writeSynthesisArtifact(
 export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResult> {
   const { runRoot, workflow, workflowBytes, runId, goal, rigor, lane, now } = inv;
   const dispatcher = await resolveDispatcher(inv);
+  const synthesisWriter = inv.synthesisWriter ?? writeSynthesisArtifact;
 
   if (workflow.entry_modes.length === 0) {
     throw new Error(`runDogfood: workflow ${workflow.id} declares no entry_modes`);
@@ -584,7 +596,7 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
     });
 
     if (step.kind === 'synthesis') {
-      writeSynthesisArtifact(runRoot, step);
+      synthesisWriter({ runRoot, workflow, step, goal });
       push({
         schema_version: 1,
         sequence,

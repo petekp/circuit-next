@@ -12,6 +12,17 @@ record.*
 
 ## P2.9 Second Workflow Arc (opened after Slice 75)
 
+- **Slice 79 RUNTIME-WIRING-SEAM** (this commit, Ratchet-Advance) -
+  added a narrow injected synthesis-writer seam to the runtime and used
+  it in a review-specific end-to-end test. The live review fixture now
+  runs through Intake, reviewer dispatch, and Verdict; the stubbed
+  reviewer can return either accepted dispatch verdict, and the injected
+  writer turns the analyze result into a schema-valid `review.result`
+  artifact whose verdict follows REVIEW-I2. The generic synthesis writer
+  remains placeholder-only, and this is now covered by a no-injected-writer
+  regression test. Real per-workflow synthesis registration is still a
+  later substrate task.
+
 - **Slice 78 CONTRACT-FIXTURE** (this commit, Ratchet-Advance) - landed
   the review workflow contract and the real three-phase fixture: Intake,
   Independent Audit, and Verdict. The slice rehomed `review.result` from
