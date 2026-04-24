@@ -33,3 +33,22 @@ export const ExploreAnalysis = z
   })
   .strict();
 export type ExploreAnalysis = z.infer<typeof ExploreAnalysis>;
+
+export const ExploreSynthesisAspect = z
+  .object({
+    aspect: z.string().min(1),
+    contribution: z.string().min(1),
+  })
+  .strict();
+export type ExploreSynthesisAspect = z.infer<typeof ExploreSynthesisAspect>;
+
+export const ExploreSynthesis = z
+  .object({
+    verdict: z.string().min(1),
+    subject: z.string().min(1),
+    recommendation: z.string().min(1),
+    success_condition_alignment: z.string().min(1),
+    supporting_aspects: z.array(ExploreSynthesisAspect).min(1),
+  })
+  .strict();
+export type ExploreSynthesis = z.infer<typeof ExploreSynthesis>;

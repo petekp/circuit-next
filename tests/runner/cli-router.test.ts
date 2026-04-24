@@ -7,6 +7,19 @@ import { main } from '../../src/cli/dogfood.js';
 import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
 import type { DispatchFn, DispatchInput } from '../../src/runtime/runner.js';
 
+const EXPLORE_SYNTHESIS_BODY = JSON.stringify({
+  verdict: 'accept',
+  subject: 'CLI-routed explore goal',
+  recommendation: 'Return the requested exploration summary',
+  success_condition_alignment: 'The response satisfies the exploratory goal',
+  supporting_aspects: [
+    {
+      aspect: 'routing',
+      contribution: 'The explore workflow reached the synthesize step',
+    },
+  ],
+});
+
 function deterministicNow(startMs: number): () => Date {
   let n = 0;
   return () => new Date(startMs + n++ * 1000);
@@ -18,7 +31,10 @@ function dispatcherWithBody(body: string): DispatchFn {
     dispatch: async (input: DispatchInput): Promise<DispatchResult> => ({
       request_payload: input.prompt,
       receipt_id: 'stub-receipt-cli-router',
-      result_body: body,
+      result_body:
+        input.prompt.includes('Step: synthesize-step') && body === '{"verdict":"accept"}'
+          ? EXPLORE_SYNTHESIS_BODY
+          : body,
       duration_ms: 1,
       cli_version: '0.0.0-stub',
     }),

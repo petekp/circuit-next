@@ -12,6 +12,15 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 90 P2.10 EXPLORE SYNTHESIS SCHEMA** (this commit,
+  Ratchet-Advance) - continued the artifact-schema set by promoting
+  `explore.synthesis@v1` from the minimal dispatch verdict shape to a
+  strict synthesis payload schema. The synthesize adapter prompt now names
+  the exact JSON shape needed for `artifacts/synthesis.json`, and the
+  runtime rejects incomplete synthesis payloads before materializing the
+  canonical artifact. `explore.review-verdict` and `explore.result` remain
+  P2.10 follow-ons.
+
 - **Slice 89 P2.10 EXPLORE BRIEF/ANALYSIS SCHEMAS** (this commit,
   Ratchet-Advance) - started the artifact-schema set by giving
   `explore.brief@v1` and `explore.analysis@v1` strict Zod schemas and

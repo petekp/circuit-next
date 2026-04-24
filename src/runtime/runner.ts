@@ -356,8 +356,23 @@ function composeDispatchPrompt(
     'Context (from reads):',
     readsBody,
     '',
-    'Respond with a single raw JSON object whose top-level shape is exactly { "verdict": "<one-of-accepted-verdicts>" } (additional fields permitted). Do not wrap the JSON in Markdown code fences. Do not include any prose before or after the JSON object. The runtime parses your response with JSON.parse and rejects the run on any parse failure or on a verdict not drawn from the accepted-verdicts list.',
+    dispatchResponseInstruction(step),
   ].join('\n');
+}
+
+function dispatchResponseInstruction(
+  step: Workflow['steps'][number] & { kind: 'dispatch' },
+): string {
+  if (step.writes.artifact?.schema === 'explore.synthesis@v1') {
+    return [
+      'Respond with a single raw JSON object whose top-level shape is exactly:',
+      '{ "verdict": "<one-of-accepted-verdicts>", "subject": "<subject investigated>", "recommendation": "<primary conclusion or recommendation>", "success_condition_alignment": "<how the recommendation satisfies the brief success condition>", "supporting_aspects": [{ "aspect": "<analysis aspect name>", "contribution": "<how this aspect supports the recommendation>" }] }',
+      'Do not include extra top-level keys. Do not wrap the JSON in Markdown code fences. Do not include any prose before or after the JSON object.',
+      'The runtime parses your response with JSON.parse, rejects any verdict not drawn from the accepted-verdicts list, and validates the full artifact body against explore.synthesis@v1 before writing artifacts/synthesis.json.',
+    ].join(' ');
+  }
+
+  return 'Respond with a single raw JSON object whose top-level shape is exactly { "verdict": "<one-of-accepted-verdicts>" } (additional fields permitted). Do not wrap the JSON in Markdown code fences. Do not include any prose before or after the JSON object. The runtime parses your response with JSON.parse and rejects the run on any parse failure or on a verdict not drawn from the accepted-verdicts list.';
 }
 
 async function resolveDispatcher(inv: DogfoodInvocation): Promise<DispatchFn> {

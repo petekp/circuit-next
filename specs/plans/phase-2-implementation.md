@@ -816,8 +816,9 @@ commit time. Expect re-ordering as earlier slices expose surface.
   criteria table per ADR-0007 Addendum A.
 - **P2.10 — Artifact schema set** — Slice 89 starts this by landing
   strict schemas and default runtime writer coverage for `explore.brief`
-  and `explore.analysis`. Remaining target-workflow artifact schemas:
-  dispatch-produced `explore.synthesis`, `explore.review-verdict`, and
+  and `explore.analysis`. Slice 90 adds the strict dispatch-
+  materialized schema for `explore.synthesis`. Remaining target-workflow
+  artifact schemas: dispatch-produced `explore.review-verdict` and
   close-phase `explore.result`.
 - **P2.11 — Plugin-level skill wiring** — user-invocable skills that
   wrap `/circuit:<workflow>` commands so the plugin-user UX matches

@@ -1,8 +1,8 @@
 ---
 contract: explore
 status: draft
-version: 0.4
-schema_source: .claude-plugin/skills/explore/circuit.json (fixture) + src/schemas/artifacts/explore.ts (explore.brief / explore.analysis; remaining explore artifacts still pending P2.10 follow-ons)
+version: 0.5
+schema_source: .claude-plugin/skills/explore/circuit.json (fixture) + src/schemas/artifacts/explore.ts (explore.brief / explore.analysis / explore.synthesis; remaining explore artifacts still pending P2.10 follow-ons)
 last_updated: 2026-04-24
 depends_on: [workflow, phase, step, selection, rigor, lane, skill, adapter]
 codex_adversarial_review: specs/reviews/explore-md-v0.1-codex.md
@@ -54,10 +54,11 @@ semantic guarantees for later-slice enforcement.
 
 Slice 89 starts P2.10 by adding runtime schemas for `explore.brief` and
 `explore.analysis` at `src/schemas/artifacts/explore.ts` and wiring the
-default runtime synthesis writer to produce those shapes. The
-dispatch-produced `explore.synthesis` / `explore.review-verdict` and
-close-phase `explore.result` shapes remain on the existing
-minimal/fallback path until their own schema-specific slices land.
+default runtime synthesis writer to produce those shapes. Slice 90 adds
+the strict dispatch-materialized schema for `explore.synthesis`. The
+dispatch-produced `explore.review-verdict` and close-phase
+`explore.result` shapes remain on the existing minimal/fallback path
+until their own schema-specific slices land.
 
 If future refactoring introduces a workflow-kind concept at the Zod
 layer (e.g., `kind: 'explore'` field), EXPLORE-I1 and the four
@@ -742,20 +743,18 @@ slice that lands a schema authoring surface (P2.10 artifact
 schema set) MUST preserve fail-closed as the default for unknown
 schema names.
 
-**Registered schemas at v0.3.** The registry at
-`src/runtime/artifact-schemas.ts` carries minimal-shape
+**Registered schemas at v0.4.** The registry at
+`src/runtime/artifact-schemas.ts` carries the strict
+`ExploreSynthesis` schema for `explore.synthesis@v1`, minimal-shape
 `{ verdict: z.string().min(1) }.passthrough()` schemas for
-`dogfood-canonical@v1`, `explore.synthesis@v1`, and
-`explore.review-verdict@v1`. These match what Slice 53's gate
-evaluator already requires from the same body (Codex MED 4
-fold-in: adapter prompts tightened to emit a raw JSON object
-with a verdict field), so the schema parse is structurally
-redundant with gate-eval at v0.3 — the seam is live so P2.10
-can widen to contract-bound real shapes without another runtime
-amendment. A fourth registered schema (`dogfood-strict@v1`) is
-test-only and used by `tests/runner/materializer-schema-parse.test.ts`
-to exercise the gate-pass + schema-fail independent failure
-path.
+`dogfood-canonical@v1` and `explore.review-verdict@v1`, and a
+test-only strict `dogfood-strict@v1` schema used by
+`tests/runner/materializer-schema-parse.test.ts` to exercise the
+gate-pass + schema-fail independent failure path. The
+`explore.synthesis@v1` prompt in `src/runtime/runner.ts` names the
+exact JSON shape the adapter must return; the verdict gate still admits
+only the configured verdict vocabulary before the full artifact body is
+schema-parsed and materialized.
 
 **`dispatch.completed.verdict` on schema-fail.** When the gate
 admits the verdict but the artifact body fails schema parse,

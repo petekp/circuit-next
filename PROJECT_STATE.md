@@ -1,4 +1,4 @@
-<!-- current_slice: 89 -->
+<!-- current_slice: 90 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -9,10 +9,10 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 89
-- **current_arc:** P2.10 artifact schema set started (Slice 89 binds
-  `explore.brief` and `explore.analysis` to strict schemas and the default
-  runtime writer; synthesis/review/result remain follow-ons)
+- **current_slice:** 90
+- **current_arc:** P2.10 artifact schema set continuing (Slices 89-90 bind
+  `explore.brief`, `explore.analysis`, and `explore.synthesis` to strict
+  schemas; review/result remain follow-ons)
 - **current_phase:** Phase 2 — Implementation (continuing)
 
 Chronicle (relocated narrative history — non-authoritative; see
@@ -141,3 +141,8 @@ orchestrator-produced explore artifacts. `explore.brief@v1` and
 writer emits those shapes on the normal explore path. The dispatch-produced
 `explore.synthesis` / `explore.review-verdict` artifacts and the close-phase
 `explore.result` aggregate remain follow-on work.*
+Slice 90 continued P2.10 by making the dispatch-produced
+`explore.synthesis@v1` artifact strict. The synthesize adapter prompt now
+asks for the full synthesis JSON shape, and runtime materialization rejects
+incomplete synthesis payloads before `artifacts/synthesis.json` is written.
+`explore.review-verdict` and `explore.result` remain the P2.10 follow-ons.*

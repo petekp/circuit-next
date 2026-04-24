@@ -5,9 +5,11 @@ import {
   ExploreAspect,
   ExploreBrief,
   ExploreEvidenceCitation,
+  ExploreSynthesis,
+  ExploreSynthesisAspect,
 } from '../../src/schemas/artifacts/explore.js';
 
-describe('P2.10a — explore.brief and explore.analysis artifact schemas', () => {
+describe('P2.10 — explore artifact schemas', () => {
   it('accepts the typed explore.brief shape', () => {
     expect(
       ExploreBrief.parse({
@@ -67,6 +69,89 @@ describe('P2.10a — explore.brief and explore.analysis artifact schemas', () =>
       ExploreAnalysis.safeParse({
         subject: 'Investigate the runtime',
         aspects: [{ name: 'runtime-risk', summary: 'No evidence', evidence: [] }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('accepts the typed explore.synthesis shape', () => {
+    const supportingAspect = ExploreSynthesisAspect.parse({
+      aspect: 'runtime-risk',
+      contribution: 'Identifies the runtime path most likely to affect users',
+    });
+
+    expect(
+      ExploreSynthesis.parse({
+        verdict: 'accept',
+        subject: 'Investigate the runtime',
+        recommendation: 'Harden the artifact writer first',
+        success_condition_alignment: 'The recommendation names the next action',
+        supporting_aspects: [supportingAspect],
+      }),
+    ).toEqual({
+      verdict: 'accept',
+      subject: 'Investigate the runtime',
+      recommendation: 'Harden the artifact writer first',
+      success_condition_alignment: 'The recommendation names the next action',
+      supporting_aspects: [supportingAspect],
+    });
+  });
+
+  it('rejects explore.synthesis without a recommendation and supporting aspect', () => {
+    expect(
+      ExploreSynthesis.safeParse({
+        verdict: 'accept',
+        subject: 'Investigate the runtime',
+        success_condition_alignment: 'The recommendation names the next action',
+        supporting_aspects: [
+          {
+            aspect: 'runtime-risk',
+            contribution: 'Identifies the runtime path most likely to affect users',
+          },
+        ],
+      }).success,
+    ).toBe(false);
+
+    expect(
+      ExploreSynthesis.safeParse({
+        verdict: 'accept',
+        subject: 'Investigate the runtime',
+        recommendation: 'Harden the artifact writer first',
+        success_condition_alignment: 'The recommendation names the next action',
+        supporting_aspects: [],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects surplus keys in explore.synthesis and nested supporting aspects', () => {
+    expect(
+      ExploreSynthesis.safeParse({
+        verdict: 'accept',
+        subject: 'Investigate the runtime',
+        recommendation: 'Harden the artifact writer first',
+        success_condition_alignment: 'The recommendation names the next action',
+        supporting_aspects: [
+          {
+            aspect: 'runtime-risk',
+            contribution: 'Identifies the runtime path most likely to affect users',
+          },
+        ],
+        smuggled: true,
+      }).success,
+    ).toBe(false);
+
+    expect(
+      ExploreSynthesis.safeParse({
+        verdict: 'accept',
+        subject: 'Investigate the runtime',
+        recommendation: 'Harden the artifact writer first',
+        success_condition_alignment: 'The recommendation names the next action',
+        supporting_aspects: [
+          {
+            aspect: 'runtime-risk',
+            contribution: 'Identifies the runtime path most likely to affect users',
+            smuggled: true,
+          },
+        ],
       }).success,
     ).toBe(false);
   });

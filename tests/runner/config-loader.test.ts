@@ -18,6 +18,19 @@ let root: string;
 let homeDir: string;
 let cwdDir: string;
 
+const EXPLORE_SYNTHESIS_BODY = JSON.stringify({
+  verdict: 'accept',
+  subject: 'Config-loaded explore goal',
+  recommendation: 'Use the resolved config while synthesizing the result',
+  success_condition_alignment: 'The run proves config reaches dispatch selection evidence',
+  supporting_aspects: [
+    {
+      aspect: 'config-selection',
+      contribution: 'The synthesize step received the resolved selection inputs',
+    },
+  ],
+});
+
 function writeUserConfig(text: string): void {
   const path = userGlobalConfigPath(homeDir);
   mkdirSync(join(homeDir, '.config', 'circuit-next'), { recursive: true });
@@ -165,7 +178,9 @@ circuits:
         return {
           request_payload: input.prompt,
           receipt_id: 'config-loader-receipt',
-          result_body: '{"verdict":"accept"}',
+          result_body: input.prompt.includes('Step: synthesize-step')
+            ? EXPLORE_SYNTHESIS_BODY
+            : '{"verdict":"accept"}',
           duration_ms: 1,
           cli_version: '0.0.0-stub',
         };
