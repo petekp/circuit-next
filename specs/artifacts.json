@@ -283,7 +283,7 @@
       ],
       "resolvers": [],
       "backing_paths": [
-        "<circuit-next-run-root>/events.ndjson (as SelectionResolvedEvent payload)"
+        "in-memory at dispatch resolution time; <circuit-next-run-root>/events.ndjson persists the DispatchStartedEvent.resolved_selection projection"
       ],
       "identity_fields": [],
       "path_derived_fields": [],

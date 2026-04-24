@@ -645,9 +645,12 @@ separate slices:
    characterization layer, (c) its own contract + property tests. Land
    as a separate Phase 2+ slice after the explicit slice is in use.
 
-**Deliverables (explicit slice):** v0.3 workflow contract amendment;
-schema parity tests; migration note for existing v0.2 fixtures; audit
-check that unknown model ids fail at parse time (prevents typo drift).
+**Deliverables (explicit slice):** selection-resolution runtime wiring;
+schema parity / contract tests; migration note for existing v0.2 fixtures;
+parse-time guard that unknown providers fail while provider-scoped model
+ids remain open strings for adapter-owned handling (SEL-I4). Runtime
+config discovery and adapter model/effort honoring are follow-on work; the
+resolver can compose those layers once supplied.
 
 ### Slice 25g — D8 Rollback Review
 

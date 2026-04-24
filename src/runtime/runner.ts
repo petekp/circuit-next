@@ -17,13 +17,14 @@ import {
   ReviewResult,
   computeReviewVerdict,
 } from '../schemas/artifacts/review.js';
+import type { LayeredConfig } from '../schemas/config.js';
 import type { Event, RunClosedOutcome } from '../schemas/event.js';
 import type { InvocationId, RunId, WorkflowId } from '../schemas/ids.js';
 import type { LaneDeclaration } from '../schemas/lane.js';
 import { computeManifestHash } from '../schemas/manifest.js';
 import type { RunResult } from '../schemas/result.js';
 import type { Rigor } from '../schemas/rigor.js';
-import type { ResolvedSelection, SkillOverride } from '../schemas/selection-policy.js';
+import type { ResolvedSelection } from '../schemas/selection-policy.js';
 import type { Snapshot } from '../schemas/snapshot.js';
 import type { Workflow } from '../schemas/workflow.js';
 import type { AgentDispatchInput } from './adapters/agent.js';
@@ -38,6 +39,7 @@ import {
 } from './manifest-snapshot-writer.js';
 import { writeResult } from './result-writer.js';
 import { resolveRunRelative } from './run-relative-path.js';
+import { resolveSelectionForDispatch } from './selection-resolver.js';
 import { writeDerivedSnapshot } from './snapshot-writer.js';
 
 // Slice 27c landed the runtime-boundary writer/reducer/manifest surfaces
@@ -177,7 +179,11 @@ export function appendAndDerive(runRoot: string, event: Event): AppendResult {
 // follow-up slice 45a").
 export interface DispatchFn {
   readonly adapterName: BuiltInAdapter;
-  readonly dispatch: (input: AgentDispatchInput) => Promise<DispatchResult>;
+  readonly dispatch: (input: DispatchInput) => Promise<DispatchResult>;
+}
+
+export interface DispatchInput extends AgentDispatchInput {
+  readonly resolvedSelection?: ResolvedSelection;
 }
 
 export interface SynthesisWriterInput {
@@ -212,6 +218,11 @@ export interface DogfoodInvocation {
   // omit this and use the registered writer below, which now has a narrow
   // review.result implementation plus the existing placeholder fallback.
   synthesisWriter?: SynthesisWriterFn;
+  // Parsed config layers are supplied by callers that have already handled
+  // discovery/loading. The CLI still has no config discovery layer; this is
+  // the runtime seam that lets default/user/project/invocation selection
+  // participate in dispatch resolution once discovery lands.
+  selectionConfigLayers?: readonly LayeredConfig[];
 }
 
 // Slice 47a Codex HIGH 2 fold-in — surface per-dispatch metadata
@@ -369,95 +380,23 @@ async function resolveDispatcher(inv: DogfoodInvocation): Promise<DispatchFn> {
 //     `'role'` or `'circuit'` here — those become reachable when
 //     P2.8 router introduces a workflow-keyed adapter registry.
 //   - The runner picked the default → `source: 'default'`.
-// A future P2-MODEL-EFFORT slice replaces this helper with a real
-// resolver that honors precedence (`default → user-global → project →
-// workflow → phase → step → invocation` per
-// `src/schemas/selection-policy.ts SELECTION_PRECEDENCE`); the
-// type contract at `materializeDispatch` does not change.
+// Adapter provenance remains separate from model/effort selection: the
+// selection resolver now owns the `resolved_selection` surface, while this
+// helper names only how the adapter itself was chosen.
 function deriveResolvedFrom(invocation: DogfoodInvocation): DispatchResolutionSource {
   return invocation.dispatcher !== undefined ? { source: 'explicit' } : { source: 'default' };
 }
 
-// Slice 47a (CONVERGENT HIGH A fold-in) + Codex challenger Slice 47a
-// HIGH 1 fold-in: compose the effective `ResolvedSelection` from
-// `workflow.default_selection` and `step.selection` per the SEL-I3
-// `SkillOverride` operations and the SEL precedence chain.
-//
-//   - `workflow.default_selection` is consumed as the base layer.
-//   - `step.selection` overlays right-biased per SEL precedence
-//     (`workflow < step` per
-//     `src/schemas/selection-policy.ts SELECTION_PRECEDENCE`).
-//   - `SkillOverride` modes are folded as the contract requires
-//     (`specs/contracts/selection.md §SEL-I3`):
-//       * `inherit` — no-op (base unchanged).
-//       * `replace` — base discarded, overlay's skills become the
-//         new base for downstream layers.
-//       * `append` — set-union of overlay skills with base.
-//       * `remove` — set-difference (overlay skills removed from
-//         base).
-//     The original Slice 47a draft collapsed this to "pick the more-
-//     specific layer's skills" which silently produced wrong sets
-//     for legal `append` / `remove` overrides (Codex Slice 47a HIGH
-//     1).
-//   - `invocation_options` shallow-merges right-biased.
-// Returns the canonical empty selection when neither layer declares
-// anything, which is the same shape the materializer used to fabricate
-// pre-Slice-47a — the difference is that pre-Slice-47a the empty was
-// fabricated regardless of inputs, and post-Slice-47a it is derived
-// from inputs that were genuinely empty.
-function applySkillOp(base: readonly string[], op: SkillOverride | undefined): readonly string[] {
-  if (op === undefined || op.mode === 'inherit') return base;
-  if (op.mode === 'replace') return op.skills as readonly string[];
-  if (op.mode === 'append') {
-    const seen = new Set<string>(base);
-    const out = [...base];
-    for (const s of op.skills) {
-      const key = s as unknown as string;
-      if (!seen.has(key)) {
-        seen.add(key);
-        out.push(key);
-      }
-    }
-    return out;
-  }
-  // mode === 'remove'
-  const removeSet = new Set<string>(op.skills as ReadonlyArray<string>);
-  return base.filter((s) => !removeSet.has(s));
-}
-
 function deriveResolvedSelection(
+  inv: DogfoodInvocation,
   workflow: Workflow,
   step: Workflow['steps'][number] & { kind: 'dispatch' },
 ): ResolvedSelection {
-  const wf = workflow.default_selection;
-  const st = step.selection;
-
-  if (wf === undefined && st === undefined) {
-    return { skills: [], invocation_options: {} };
-  }
-
-  // SEL-I3 fold: base = [] → workflow → step. Each `applySkillOp` is
-  // the closed-form interpretation of the layer's `SkillOverride`
-  // mode against the prior base.
-  const afterWorkflow = applySkillOp([], wf?.skills);
-  const afterStep = applySkillOp(afterWorkflow, st?.skills);
-  const skills = afterStep as ResolvedSelection['skills'];
-
-  const model = st?.model ?? wf?.model;
-  const effort = st?.effort ?? wf?.effort;
-  const rigor = st?.rigor ?? wf?.rigor;
-  const invocation_options = {
-    ...(wf?.invocation_options ?? {}),
-    ...(st?.invocation_options ?? {}),
-  };
-
-  return {
-    ...(model !== undefined ? { model } : {}),
-    ...(effort !== undefined ? { effort } : {}),
-    skills,
-    ...(rigor !== undefined ? { rigor } : {}),
-    invocation_options,
-  };
+  return resolveSelectionForDispatch({
+    workflow,
+    step,
+    ...(inv.selectionConfigLayers !== undefined ? { configLayers: inv.selectionConfigLayers } : {}),
+  }).resolved;
 }
 
 function adapterFailureReason(stepId: string, err: unknown): string {
@@ -731,11 +670,11 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
       });
     } else if (step.kind === 'dispatch') {
       const prompt = composeDispatchPrompt(step, runRoot);
-      const dispatchInput: AgentDispatchInput = { prompt };
+      const resolvedSelection = deriveResolvedSelection(inv, workflow, step);
+      const dispatchInput: DispatchInput = { prompt, resolvedSelection };
       if (step.budgets?.wall_clock_ms !== undefined) {
         dispatchInput.timeoutMs = step.budgets.wall_clock_ms;
       }
-      const resolvedSelection = deriveResolvedSelection(workflow, step);
       const resolvedFrom = deriveResolvedFrom(inv);
       const requestAbs = resolveRunRelative(runRoot, step.writes.request);
       mkdirSync(dirname(requestAbs), { recursive: true });

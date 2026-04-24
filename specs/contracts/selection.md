@@ -3,7 +3,7 @@ contract: selection
 status: ratified-v0.1
 version: 0.1
 schema_source: src/schemas/selection-policy.ts
-last_updated: 2026-04-19
+last_updated: 2026-04-24
 depends_on: [ids, rigor, skill, phase]
 closes: [phase-md-v0.1-med-7-phase-level-selection]
 codex_adversarial_review: specs/reviews/selection-md-v0.1-codex.md
@@ -124,8 +124,9 @@ Closes Codex LOW #12 (enforcement-location claim drift).
   A model identifier is `{provider: 'openai' | 'anthropic' | 'gemini' |
   'custom'; model: string.min(1)}`. The provider enum is closed; the
   model string is adapter-owned (e.g., `claude-opus-4-7` for Anthropic,
-  `gpt-5.4-reasoning` for OpenAI). Adapter-specific validation of known
-  model strings is a Phase 2 runtime concern, not a schema concern; new
+  `gpt-5.4-reasoning` for OpenAI). Adapter-specific validation or
+  honoring of known model strings is a Phase 2 adapter concern, not a
+  schema concern and not provided by the current built-in adapters; new
   model releases do not require a circuit-next schema change. **Effort**
   is the closed 6-tier enum `none | minimal | low | medium | high |
   xhigh` (OpenAI vocabulary, chosen for cross-provider portability per
@@ -219,8 +220,9 @@ Closes Codex LOW #12 (enforcement-location claim drift).
 
 - A `SelectionOverride` is produced by parsing a layer's authored YAML /
   TOML / JSON into an object and passing it to `SelectionOverride.safeParse`.
-- A `ResolvedSelection` is produced by the resolver (Phase 2) folding an
-  ordered sequence of overrides under the documented resolution semantics
+- A `ResolvedSelection` is produced by the runtime resolver
+  (`src/runtime/selection-resolver.ts`, Slice 85) folding an ordered
+  sequence of overrides under the documented resolution semantics
   (`selection.prop.skill_override_composition_total`,
   `selection.prop.invocation_options_merge_is_right_biased`).
 - A `SelectionResolution` is produced by pairing a `ResolvedSelection`
@@ -257,13 +259,14 @@ After a `SelectionResolution` is accepted:
   a schema-enforced post-condition. Closes Codex HIGH #3 honestly
   rather than over-claiming.
 
-## Property ids (reserved for Phase 2 testing)
+## Property ids (Phase 2 runtime/property coverage)
 
 These are the invariants that govern the *composition semantics* of
 override chains — things the single-pass `SelectionResolution.superRefine`
 cannot enforce without introducing full resolver semantics into the
-schema layer. They land when the property-test harness + resolver exist
-in Phase 2.
+schema layer. Slice 85 lands focused contract coverage for the runtime
+resolver used by dispatch; broader generated property coverage remains a
+Phase 2 harness task where noted below.
 
 - `selection.prop.precedence_const_parity` — For every `SelectionSource`
   enum value, there is exactly one entry in `SELECTION_PRECEDENCE`, and
@@ -384,13 +387,15 @@ in Phase 2.
 
 - **event** (`src/schemas/event.ts`) — `DispatchStartedEvent`
   carries `resolved_selection: ResolvedSelection`, which is the
-  effective record consumers (adapters) see at dispatch time. Codex
-  HIGH #4 fold-in: `resolved_selection.invocation_options` now carries
+  effective record the runner records at dispatch time and exposes to
+  injected dispatchers. Codex HIGH #4 fold-in:
+  `resolved_selection.invocation_options` now carries
   the merged invocation_options so the event is audit-sufficient even
   when adapters consume those options. The full provenance trace
   (`applied`) still lives in `SelectionResolution` at resolution time;
-  promoting the event to carry the full `SelectionResolution` is a v0.2
-  consideration driven by real audit needs.
+  Slice 85's resolver feeds the event with the `resolved` projection.
+  Promoting the event to carry the full `SelectionResolution` remains a
+  v0.2 consideration driven by real audit needs.
 
 - **skill** (`src/schemas/skill.ts`) — `SkillId` is the id space for
   `SkillOverride.skills[]` and `ResolvedSelection.skills[]`. Skill
@@ -428,8 +433,9 @@ in Phase 2.
   model names like `claude-opus-4.1`, `gpt-5`, `gpt-5.4`, which rot as
   providers ship new models, forcing coordinated schema + adapter edits
   on every release. Closed by SEL-I4: `ProviderScopedModel.model` is an
-  open string; adapter-specific code validates known model strings.
-  Adversarial-review HIGH objection (Codex, Tier 0) is the ancestor.
+  open string; adapter-specific validation/honoring is owned by adapter
+  runtime work rather than this schema. Adversarial-review HIGH objection
+  (Codex, Tier 0) is the ancestor.
 
 - `carry-forward:applied-provenance-unaudited` — Prior Circuit resolved
   selection without emitting a provenance trace; a debugger reading

@@ -3,8 +3,8 @@ import { PhaseId, SkillId, StepId } from './ids.js';
 import { Rigor } from './rigor.js';
 
 // SEL-I4 — provider-scoped model. The four-provider enum is closed; `model`
-// is an open string because adapter-specific code validates known model
-// strings. New model releases do not force a schema change here.
+// is an open string because adapter-specific code owns provider/model
+// handling. New model releases do not force a schema change here.
 export const ProviderScopedModel = z
   .object({
     provider: z.enum(['openai', 'anthropic', 'gemini', 'custom']),

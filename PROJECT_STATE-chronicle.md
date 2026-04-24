@@ -12,6 +12,16 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 85 MODEL-EFFORT-RESOLVER** (this commit, Ratchet-Advance) -
+  replaced the old workflow-plus-step selection helper with the full
+  selection resolver. Dispatch evidence now carries the effective model,
+  effort, skills, rigor, and invocation options after any supplied
+  default, user-global, project, workflow, phase, step, and invocation
+  layers compose. Product-path config discovery and built-in adapter
+  model/effort honoring remain follow-on work. The new contract test also
+  pins the important model-shape rule: providers are a closed enum, while
+  model ids remain open strings for adapter-owned handling.
+
 - **Slice 84 ROUTER-FIRST-PASS** (this commit, Ratchet-Advance) -
   replaced the `/circuit:run` command's hardcoded explore route with the
   first CLI-level classifier. The classifier is deliberately simple:

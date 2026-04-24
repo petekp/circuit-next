@@ -293,9 +293,10 @@ After a `CircuitOverride` is accepted:
   `invocation` selection layers are sourced from
   `Config.defaults.selection` in the matching `ConfigLayer`. This
   cross-contract mapping between ConfigLayer and SelectionLayer is
-  documented in `specs/domain.md#configuration-vocabulary` and is
-  NOT an executable invariant at v0.1 (no merge resolver exists
-  yet).
+  documented in `specs/domain.md#configuration-vocabulary`. Slice 85
+  adds the runtime selection resolver for already-loaded layers; file
+  discovery/loading that produces those layers remains outside this
+  config shape contract.
 
 - **workflow** (`src/schemas/workflow.ts`) — `Config.circuits` is
   keyed on `WorkflowId`, so workflow existence is a soft

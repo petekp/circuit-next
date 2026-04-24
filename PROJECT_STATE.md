@@ -1,4 +1,4 @@
-<!-- current_slice: 84 -->
+<!-- current_slice: 85 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -9,12 +9,12 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 84
-- **current_arc:** Post-P2.9 cleanup (Slice 84 landed the first
-  deterministic `/circuit:run` router across the current router-supported
-  workflows: review/audit-style tasks route to `review`, everything else
-  routes to `explore`; next unblocked work can move to model/effort
-  selection or another workflow)
+- **current_slice:** 85
+- **current_arc:** P2-MODEL-EFFORT (Slice 85 replaces the old workflow +
+  step-only selection helper with the default/user-global/project/
+  workflow/phase/step/invocation resolver for already-supplied layers;
+  product-path config discovery and adapter model/effort handling remain
+  follow-on work)
 - **current_phase:** Phase 2 — Implementation (continuing)
 
 Chronicle (relocated narrative history — non-authoritative; see
@@ -107,3 +107,10 @@ Slice 84 landed the first `/circuit:run` classifier. Free-form tasks now
 route through the CLI router instead of the slash-command body hardcoding
 `explore`: review/audit-style language selects the audit-only `review`
 workflow, and other tasks keep the conservative `explore` default.*
+Slice 85 landed the model/effort selection resolver seam. Dispatch events
+now record model, effort, skills, rigor, and invocation options after the
+runtime composes any supplied default, user-global, project, workflow,
+phase, step, and invocation layers; CLI config discovery and built-in
+adapter model/effort honoring remain follow-on work. The tests pin the
+provider enum while keeping model ids open-ended for adapter-owned
+handling.*
