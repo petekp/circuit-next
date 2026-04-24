@@ -1,11 +1,11 @@
 ---
 plan: build-workflow-parity
 status: challenger-pending
-revision: 03
+revision: 04
 opened_at: 2026-04-24
 revised_at: 2026-04-24
 opened_in_session: post-phase-2-parity-map
-revised_in_session: build-workflow-parity-codex-challenger-02-foldins
+revised_in_session: build-workflow-parity-codex-challenger-03-foldins
 base_commit: eb52089
 target: build
 authority:
@@ -38,6 +38,11 @@ prior_challenger_passes:
     2 MED; revision 03 folds all three by moving the first product
     Build fixture to the dispatch slice, declaring entry-mode scope,
     and requiring a Build-specific two-dispatch policy row)
+  - specs/reviews/build-workflow-parity-codex-challenger-03.md
+    (verdict REJECT-PENDING-FOLD-INS vs revision 03 — 2 HIGH;
+    revision 04 folds both by binding build.result to
+    artifacts/build-result.json and adding a product entry-mode
+    selection slice)
 ---
 
 # Build Workflow Parity Plan
@@ -54,7 +59,8 @@ artifact direction.
 ## §Prior pass log
 
 Revision 02 folds the first Codex challenger pass. Revision 03 folds the
-second Codex challenger pass.
+second Codex challenger pass. Revision 04 folds the third Codex challenger
+pass.
 
 | Pass-01 # | Severity | Objection | Revision-02 fold-in |
 |---|---|---|---|
@@ -68,6 +74,11 @@ second Codex challenger pass.
 | 1 | HIGH | Work item 4 added the first product Build fixture before the dispatch steps that the existing audit gate requires. | The product fixture now lands in Work item 5 with both `act` and `review` dispatch steps. Work item 4 keeps verification substrate tests local to the runtime step kind. |
 | 2 | MED | Entry-mode parity was cited as evidence without saying whether this arc lands or defers the old Build modes. | §3 and §5 now declare that this arc lands `default`, `lite`, `deep`, and `autonomous` entry modes, with Lite still reaching Review. |
 | 3 | MED | The plan wanted two Build dispatch steps but did not bind that shape to audit policy. | Work item 5 now requires a Build-specific dispatch-policy row and tests that enforce both `act` and `review`. |
+
+| Pass-03 # | Severity | Objection | Revision-04 fold-in |
+|---|---|---|---|
+| 1 | HIGH | `build.result` was not bound to a path distinct from the engine-authored `run.result` at `artifacts/result.json`. | §6 now binds `build.result@v1` to `<run-root>/artifacts/build-result.json`, and Work items 2-3 require path-collision tests and a path-distinct close writer. |
+| 2 | HIGH | The plan landed four entry modes but did not make non-default modes reachable through the product path. | New Work item 6 wires entry-mode selection through the runtime/CLI path and proves a non-default mode is reachable. |
 
 ## §1 — Evidence census
 
@@ -107,11 +118,13 @@ Target Build surface:
 - `/circuit:run develop:` and clear build-like tasks can route to Build.
 - Build has the canonical phase set `{frame, plan, act, verify, review, close}`
   and `spine_policy.omits: {analyze}`.
-- Build declares the four reference entry modes: `default`, `lite`, `deep`,
-  and `autonomous`; all four use the fixed Build graph, and Lite still reaches
-  Review.
+- Build declares and exposes the four reference entry modes: `default`, `lite`,
+  `deep`, and `autonomous`; all four use the fixed Build graph, and Lite still
+  reaches Review.
 - Build emits structured JSON successor artifacts for all six reference
-  artifact roles.
+  artifact roles. The workflow-specific close artifact is
+  `<run-root>/artifacts/build-result.json`, not the engine-authored
+  `<run-root>/artifacts/result.json`.
 - Implementation and review dispatches use registered JSON schemas.
 - Verification runs explicit commands through a runtime-widening slice and
   records pass/fail evidence before review.
@@ -152,23 +165,29 @@ running a separate investigation phase.
 Build's entry-mode scope for this arc is the full reference set:
 `default`, `lite`, `deep`, and `autonomous`. The modes may differ in rigor or
 selection defaults, but they must not skip the Review phase. Lite still reaches
-Review.
+Review. This is a product reachability claim, not metadata-only: a later slice
+in this arc must let the product path select a named entry mode instead of
+always executing `entry_modes[0]`.
 
 ## §6 — Artifact map
 
-| Reference role | circuit-next artifact id | Schema |
-|---|---|---|
-| Brief | `build.brief` | `build.brief@v1` |
-| Plan | `build.plan` | `build.plan@v1` |
-| Implementation handoff/result | `build.implementation` | `build.implementation@v1` |
-| Verification | `build.verification` | `build.verification@v1` |
-| Review | `build.review` | `build.review@v1` |
-| Result | `build.result` | `build.result@v1` |
+| Reference role | circuit-next artifact id | Schema | Backing path |
+|---|---|---|---|
+| Brief | `build.brief` | `build.brief@v1` | `<run-root>/artifacts/brief.json` |
+| Plan | `build.plan` | `build.plan@v1` | `<run-root>/artifacts/plan.json` |
+| Implementation handoff/result | `build.implementation` | `build.implementation@v1` | `<run-root>/artifacts/implementation.json` |
+| Verification | `build.verification` | `build.verification@v1` | `<run-root>/artifacts/verification.json` |
+| Review | `build.review` | `build.review@v1` | `<run-root>/artifacts/review.json` |
+| Result | `build.result` | `build.result@v1` | `<run-root>/artifacts/build-result.json` |
 
 Each artifact is a clean-break structured JSON successor to the reference
 Markdown role. The result artifact should point back to the prior Build
 artifacts so users and tooling can understand what happened without reading
 every intermediate file.
+
+`build.result` must stay path-distinct from `run.result`. The engine-authored
+universal run result remains `<run-root>/artifacts/result.json`; the
+workflow-specific Build close artifact is `<run-root>/artifacts/build-result.json`.
 
 ## §7 — Verification substrate
 
@@ -253,6 +272,9 @@ JSON without a typed successor contract.
 - Add `src/schemas/artifacts/build.ts`.
 - Add authority rows for the six Build artifact ids in `specs/artifacts.json`.
 - Add contract tests for strict parse/reject behavior and reference cardinality.
+- Add backing-path tests proving `build.result` uses
+  `<run-root>/artifacts/build-result.json` and does not collide with
+  `run.result` at `<run-root>/artifacts/result.json`.
 - Add or update a Build contract file if the artifact rows need a contract
   home before runtime wiring.
 
@@ -262,6 +284,8 @@ JSON without a typed successor contract.
   missing required fields or surplus keys.
 - Authority graph tests prove each Build artifact row has a backing path,
   schema file, schema export, writer, reader, and reference evidence.
+- Authority graph or artifact tests prove no workflow-specific Build artifact
+  is registered at `<run-root>/artifacts/result.json`.
 - `npm run verify` passes.
 - `npm run audit` reports 0 red and no new unaccounted yellows.
 
@@ -282,13 +306,16 @@ placeholder JSON that looks like progress but is not a useful Build artifact.
 - Register synthesis writers for `build.brief@v1`, `build.plan@v1`, and
   `build.result@v1`.
 - Add tests proving the Build close writer reads prior Build artifacts and
-  writes a schema-valid result.
+  writes a schema-valid result at `artifacts/build-result.json`.
 - Ensure placeholder fallback cannot satisfy Build result acceptance.
 
 **Acceptance evidence:**
 
 - Runner tests prove frame, plan, and close Build synthesis artifacts are
   schema-valid through the default runtime path.
+- Runner tests prove `build.result@v1` is written to
+  `artifacts/build-result.json`, while `artifacts/result.json` remains the
+  engine-authored run summary.
 - A malformed or missing prior Build artifact aborts close instead of writing a
   false success result.
 - `npm run verify` passes.
@@ -377,7 +404,42 @@ dispatches would be a scripted summary, not the old product's work loop.
 Dispatch should land after the schemas and verification substrate so the work
 loop can produce and consume real evidence instead of placeholders.
 
-### Work item 6 — Build command and router wiring
+### Work item 6 — Build entry-mode selection
+
+**Lane:** Ratchet-Advance.
+
+**Failure mode addressed:** Build could declare Lite, Deep, and Autonomous
+entry modes without making them reachable through the product path.
+
+**Deliverables:**
+
+- Add the smallest runtime and CLI entry-mode selector needed for a named
+  workflow entry mode to choose the run start point instead of always using
+  `entry_modes[0]`.
+- Fail closed when a requested entry mode does not exist for the selected
+  workflow.
+- Add tests proving `default`, `lite`, `deep`, and `autonomous` select the
+  intended entry mode, and that at least one non-default mode reaches the
+  runtime through the product CLI path.
+- Add a Lite-mode regression test proving Review still runs.
+
+**Acceptance evidence:**
+
+- Product CLI tests prove a non-default Build entry mode is reachable.
+- Runner tests prove requested entry modes select the corresponding
+  `entry_modes[*].start_at` instead of unconditionally taking
+  `entry_modes[0]`.
+- Unknown entry-mode names fail before the run starts.
+- `npm run verify` passes.
+- `npm run audit` reports 0 red and no new unaccounted yellows.
+
+**Why this not adjacent:**
+
+The fixture can declare the four modes before the command is public, but the
+plan should not close with inert mode metadata. Selection wiring belongs before
+the public command proof.
+
+### Work item 7 — Build command and router wiring
 
 **Lane:** Ratchet-Advance.
 
@@ -389,6 +451,8 @@ does not recognize build-like tasks.
 - Add `commands/build.md`.
 - Teach the CLI and router to select Build for `/circuit:build` and clear
   build-like `/circuit:run` inputs such as `develop:`.
+- Teach the public command body how to pass through an explicit Build entry
+  mode request when the user asks for Lite, Deep, or Autonomous Build.
 - Update the plugin command-closure audit check so Build is an expected public
   command, not an unexpected extra file.
 - Update plugin-surface tests and command-invocation tests for the four-command
@@ -400,6 +464,8 @@ does not recognize build-like tasks.
 **Acceptance evidence:**
 
 - `/circuit:build` command body invokes `./bin/circuit-next` directly.
+- `/circuit:build` can reach at least one non-default Build entry mode through
+  the product path.
 - Audit accepts the expanded command set without weakening the closure check.
 - Plugin manifest and tests agree that Build is now wired.
 - Router tests prove build-like prompts select Build without regressing Review
@@ -412,7 +478,7 @@ does not recognize build-like tasks.
 The command should be exposed only after the runtime can execute the Build
 fixture honestly enough for users to try it.
 
-### Work item 7 — Live Build proof and close review
+### Work item 8 — Live Build proof and close review
 
 **Lane:** Ratchet-Advance.
 
@@ -449,10 +515,13 @@ Build is done for this arc when:
 2. Build writes all six structured JSON successor artifacts.
 3. Verification command evidence is real and can fail the run honestly.
 4. Direct `/circuit:build` and router-selected Build both reach the runtime.
-5. Build exposes the four reference entry modes: `default`, `lite`, `deep`,
-   and `autonomous`, with Lite still reaching Review.
-6. Audit enforces both required Build dispatch steps: Act and Review.
-7. The plan is closed with live command proof and composition review evidence.
+5. Build writes its workflow-specific close artifact to
+   `artifacts/build-result.json`, distinct from the engine-authored
+   `artifacts/result.json`.
+6. Build exposes the four reference entry modes through the product path:
+   `default`, `lite`, `deep`, and `autonomous`, with Lite still reaching Review.
+7. Audit enforces both required Build dispatch steps: Act and Review.
+8. The plan is closed with live command proof and composition review evidence.
 
 This close would mean "Build parity path exists" for circuit-next. It would not
 mean full first-generation Circuit parity, because Repair, Migrate, Sweep,

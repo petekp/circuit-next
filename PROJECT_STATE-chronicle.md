@@ -12,6 +12,14 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 107 BUILD PLAN THIRD CHALLENGER FOLD-INS** (this commit,
+  Discovery) - recorded the third Codex challenger review for the Build plan
+  and folded in its two objections. The plan now says Build's workflow-specific
+  final artifact must be `artifacts/build-result.json`, separate from the
+  engine's universal `artifacts/result.json`. It also adds a slice to make the
+  non-default Build modes reachable through the product path instead of merely
+  listing them in the fixture.
+
 - **Slice 106 BUILD PLAN SECOND CHALLENGER FOLD-INS** (this commit,
   Discovery) - recorded the second Codex challenger review for the Build plan
   and folded in its three objections. The plan no longer tries to land the
