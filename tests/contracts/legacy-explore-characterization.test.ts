@@ -24,6 +24,12 @@ type ReferenceShape = {
   circuit_next_artifacts: string[];
   authority_mapping: Record<string, string[]>;
   greenfield_without_reference_counterpart: string[];
+  accepted_successor_policy: {
+    effective_slice: number;
+    policy: string;
+    legacy_markdown_parse_policy: string;
+    not_claimed: string[];
+  };
 };
 
 const REPO_ROOT = resolve('.');
@@ -36,6 +42,12 @@ const REFERENCE_SHAPE_PATH = join(
   'tests/fixtures/reference/legacy-circuit/explore/reference-shape.json',
 );
 const MATRIX_PATH = join(REPO_ROOT, 'specs/reviews/phase-2-close-matrix.md');
+const PLAN_PATH = join(REPO_ROOT, 'specs/plans/phase-2-implementation.md');
+const PROJECT_STATE_PATH = join(REPO_ROOT, 'PROJECT_STATE.md');
+const OPERATOR_DECISION_PATH = join(
+  REPO_ROOT,
+  'specs/reviews/p2-1-json-successor-operator-decision.md',
+);
 const ADR_0007_PATH = join(REPO_ROOT, 'specs/adrs/ADR-0007-phase-2-close-criteria.md');
 const ARTIFACTS_PATH = join(REPO_ROOT, 'specs/artifacts.json');
 
@@ -77,13 +89,33 @@ describe('legacy Circuit Explore characterization', () => {
     expect(CHARACTERIZATION).toMatch(/does\s+\*\*not\*\* prove byte-shape parity with old Circuit/);
   });
 
-  it('keeps the Phase 2 close matrix honest about P2-1 remaining red', () => {
+  it('records the JSON-successor substitution in the Phase 2 close matrix', () => {
     const matrix = readFileSync(MATRIX_PATH, 'utf8');
     const row = matrix.split('\n').find((line) => line.startsWith('| P2-1 |'));
     expect(row).toBeDefined();
-    expect(row).toContain('active — red');
+    expect(row).toContain('active — satisfied');
     expect(row).toContain('specs/reference/legacy-circuit/explore-characterization.md');
-    expect(row).toContain('not counted satisfied');
+    expect(row).toContain('specs/reviews/p2-1-json-successor-operator-decision.md');
+    expect(row).toContain('clean-break successor shape');
+    expect(row).toContain('does not claim old Markdown byte-shape compatibility');
+  });
+
+  it('keeps the historical plan table separate from the live Slice 99 status', () => {
+    const plan = readFileSync(PLAN_PATH, 'utf8');
+    const row = plan.split('\n').find((line) => line.startsWith('| P2-1 |'));
+    expect(row).toBeDefined();
+    expect(plan).toContain('| CC# | Title | Status at lock |');
+    expect(row).toContain('active — red');
+    expect(plan).toContain('Current P2-1 status note (Slice 99)');
+    expect(plan).toMatch(/accepts clean-break\s+structured JSON successor parity for P2-1/);
+  });
+
+  it('keeps PROJECT_STATE scoped to JSON successor status without Markdown compatibility', () => {
+    const state = readFileSync(PROJECT_STATE_PATH, 'utf8');
+    const liveState = state.slice(state.indexOf('## §0 Live state'), state.indexOf('Chronicle'));
+    expect(liveState).toContain('structured JSON as the accepted successor artifact shape');
+    expect(liveState).toContain('does not claim old Markdown byte-for-byte compatibility');
+    expect(liveState).toContain('P2-3 live command');
   });
 
   it('pins source checksums and observed legacy shape in a committed fixture', () => {
@@ -103,13 +135,70 @@ describe('legacy Circuit Explore characterization', () => {
       'artifacts/decision.md',
     ]);
     expect(REFERENCE_SHAPE.observed_missing_artifacts).toEqual(['artifacts/result.md']);
+    expect(REFERENCE_SHAPE.accepted_successor_policy).toEqual({
+      effective_slice: 99,
+      policy: 'clean-break structured JSON successor',
+      legacy_markdown_parse_policy: 'reject',
+      not_claimed: ['old Markdown byte-shape parity', 'old Markdown import support'],
+    });
   });
 
-  it('reconciles ADR-0007 with the active-red P2-1 status', () => {
+  it('reconciles ADR-0007 with the accepted JSON-successor P2-1 status', () => {
     const adr = readFileSync(ADR_0007_PATH, 'utf8');
     expect(adr).toContain('Slice 98 reference-characterization correction');
-    expect(adr).toMatch(/Effective\s+Slice 98, CC#P2-1 is \*\*active — red\*\*/);
+    expect(adr).toContain('Slice 99 structured JSON successor substitution');
+    expect(adr).toMatch(
+      /Effective\s+Slice 99, CC#P2-1 is \*\*active — satisfied at clean-break\s+structured JSON successor parity\*\*/,
+    );
     expect(adr).toContain('is superseded for Phase 2 close accounting');
+    expect(adr).toContain('This is weaker than old Markdown');
+  });
+
+  it('keeps ADR-0007 normative P2-1 wording on the JSON successor shape', () => {
+    const adr = readFileSync(ADR_0007_PATH, 'utf8');
+    const retargetSection = adr.slice(
+      adr.indexOf('### 4b. Retarget checklist'),
+      adr.indexOf('### 4c. Non-gating disposition'),
+    );
+    const nonGatingSection = adr.slice(
+      adr.indexOf('### 4c. Non-gating disposition'),
+      adr.indexOf('### 5. Consequences'),
+    );
+    const appendixA = adr.slice(adr.indexOf('## Appendix A'), adr.indexOf('## Appendix B'));
+    const addendumA = adr.slice(adr.indexOf('## Addendum A'), adr.indexOf('### Addendum'));
+
+    expect(retargetSection).toMatch(/accepted successor-shape\s+golden definition/);
+    expect(retargetSection).not.toContain("CC#P2-1's byte-shape golden definition");
+    expect(nonGatingSection).toMatch(/CC#P2-1's accepted\s+successor-shape golden/);
+    expect(nonGatingSection).not.toContain('CC#P2-1 byte-shape golden');
+    expect(appendixA).toContain('accepted structured JSON successor-shape golden');
+    expect(appendixA).not.toContain('byte-shape golden (sha256 over normalized-JSON)');
+    expect(addendumA).toContain('accepted structured');
+    expect(addendumA).not.toContain('byte-shape golden match');
+  });
+
+  it('keeps ADR-0007 close-matrix rules scoped to the P2-1 substitution', () => {
+    const adr = readFileSync(ADR_0007_PATH, 'utf8');
+    const p2EightSection = adr.slice(
+      adr.indexOf('**CC#P2-8 — Close review'),
+      adr.indexOf('### 2. Status labels are strict'),
+    );
+
+    expect(p2EightSection).toMatch(/Slice\s+99 CC#P2-1 structured JSON successor substitution/);
+    expect(p2EightSection).toContain('Non-P2-1');
+    expect(p2EightSection).toContain('must not cite that substitution');
+    expect(p2EightSection).not.toContain(
+      'Each row of the matrix must show\n  executable evidence (commit SHA + test/audit result);',
+    );
+  });
+
+  it('pins the operator decision to use JSON as the canonical artifact shape', () => {
+    const decision = readFileSync(OPERATOR_DECISION_PATH, 'utf8');
+    expect(decision).toContain('decision: accept-clean-break-json-successor');
+    expect(decision).toContain('Use JSON for step inputs and outputs');
+    expect(decision).toContain('not claim that circuit-next emits old-Circuit Markdown');
+    expect(decision).toContain('only the Explore/CC#P2-1 consequence');
+    expect(decision).toContain('does not authorize repo-wide substitutions');
   });
 });
 
@@ -132,6 +221,7 @@ describe('explore artifact authority graph reference bindings', () => {
       expect(artifact?.reference_evidence).toContain(
         'specs/reference/legacy-circuit/explore-characterization.md',
       );
+      expect(artifact?.migration_policy).toContain('accepted for CC#P2-1 by ADR-0007 Slice 99');
       expect(artifact?.legacy_parse_policy).toBe('reject');
     }
   });

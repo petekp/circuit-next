@@ -942,13 +942,34 @@ function validatePhase2CloseCcRows(rootDir, content, issues) {
       );
     }
     if (status === 'active — red') activeRedCount++;
-    validateMatrixEvidencePaths(rootDir, rowLabel, row['evidence path'] ?? '', issues);
+    const evidencePathCell = row['evidence path'] ?? '';
+    validateMatrixEvidencePaths(rootDir, rowLabel, evidencePathCell, issues);
 
     const commitOrAdr = row['passing commit / adr'] ?? '';
     if (status === 'active — satisfied') {
+      const citationText = `${evidencePathCell}; ${commitOrAdr}`;
+      const citesAdr0007Substitution =
+        citationText.includes('ADR-0007') &&
+        citationText.includes('specs/adrs/ADR-0007-phase-2-close-criteria.md');
+      if (rowLabel !== 'P2-1' && citesAdr0007Substitution) {
+        issues.push(
+          `${rowLabel}: active-satisfied row must not cite the accepted ADR-0007 substitution in evidence path or passing commit; only P2-1 may use it`,
+        );
+      }
       const sha = firstCommitSha(commitOrAdr);
       if (sha === null) {
-        issues.push(`${rowLabel}: active-satisfied row must name a passing commit SHA`);
+        if (rowLabel !== 'P2-1' || !citesAdr0007Substitution) {
+          issues.push(
+            `${rowLabel}: active-satisfied row must name a passing commit SHA; only P2-1 may cite the accepted ADR-0007 substitution`,
+          );
+        } else {
+          validateAcceptedAdrCitation(
+            rootDir,
+            rowLabel,
+            'specs/adrs/ADR-0007-phase-2-close-criteria.md',
+            issues,
+          );
+        }
       } else if (!commitResolvesInRepo(rootDir, sha)) {
         issues.push(`${rowLabel}: passing commit SHA does not resolve in this repo: ${sha}`);
       }

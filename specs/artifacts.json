@@ -610,7 +610,7 @@
       "trust_boundary": "engine-authored deterministic v0 writer during Frame phase; read-only thereafter within the run; not cross-run shared. A future model-authored framing writer must reopen this trust-boundary text.",
       "reference_surfaces": ["legacy-circuit explore artifacts/brief.md"],
       "reference_evidence": ["specs/reference/legacy-circuit/explore-characterization.md"],
-      "migration_policy": "Clean-break structured JSON successor to the reference Markdown artifact; no transparent parse of legacy brief.md is attempted.",
+      "migration_policy": "Clean-break structured JSON successor to the reference Markdown artifact, accepted for CC#P2-1 by ADR-0007 Slice 99; no transparent parse of legacy brief.md is attempted.",
       "legacy_parse_policy": "reject",
       "dangling_reference_policy": "n/a"
     },
@@ -635,7 +635,7 @@
       "trust_boundary": "engine-authored deterministic v0 writer during Analyze phase from explore.brief; read-only thereafter within the run. A future model-authored analysis writer must reopen this trust-boundary text.",
       "reference_surfaces": ["legacy-circuit explore artifacts/analysis.md"],
       "reference_evidence": ["specs/reference/legacy-circuit/explore-characterization.md"],
-      "migration_policy": "Clean-break structured JSON successor to the reference Markdown artifact; no transparent parse of legacy analysis.md is attempted.",
+      "migration_policy": "Clean-break structured JSON successor to the reference Markdown artifact, accepted for CC#P2-1 by ADR-0007 Slice 99; no transparent parse of legacy analysis.md is attempted.",
       "legacy_parse_policy": "reject",
       "dangling_reference_policy": "n/a"
     },
@@ -665,7 +665,7 @@
         "legacy-circuit explore artifacts/decision.md"
       ],
       "reference_evidence": ["specs/reference/legacy-circuit/explore-characterization.md"],
-      "migration_policy": "Clean-break structured JSON successor to the reference Markdown decide outputs; no transparent parse of legacy plan.md or decision.md is attempted.",
+      "migration_policy": "Clean-break structured JSON successor to the reference Markdown decide outputs, accepted for CC#P2-1 by ADR-0007 Slice 99; no transparent parse of legacy plan.md or decision.md is attempted.",
       "legacy_parse_policy": "reject",
       "dangling_reference_policy": "n/a"
     },
@@ -719,7 +719,7 @@
       "trust_boundary": "engine-computed at Close by the registered explore.result@v1 synthesis writer from schema-parsed synthesis.json and review-verdict.json plus workflow-declared artifact pointer paths; terminal artifact — no in-run readers; cross-run reader is the run result consumer only; path-distinct from run.result so the engine's result-writer (src/runtime/result-writer.ts RESULT-I1 — single writer to result.json) and the orchestrator's close-step (workflow-semantic aggregate at explore-result.json) do not collide",
       "reference_surfaces": ["legacy-circuit explore artifacts/result.md"],
       "reference_evidence": ["specs/reference/legacy-circuit/explore-characterization.md"],
-      "migration_policy": "Clean-break structured JSON successor to the reference Markdown close artifact; no transparent parse of legacy result.md is attempted.",
+      "migration_policy": "Clean-break structured JSON successor to the reference Markdown close artifact, accepted for CC#P2-1 by ADR-0007 Slice 99; no transparent parse of legacy result.md is attempted.",
       "legacy_parse_policy": "reject",
       "dangling_reference_policy": "n/a"
     },

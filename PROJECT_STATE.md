@@ -1,4 +1,4 @@
-<!-- current_slice: 98 -->
+<!-- current_slice: 99 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -9,11 +9,11 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 98
-- **current_arc:** Phase 2 close-evidence cleanup in progress: legacy Explore
-  reference shape is characterized and CC#P2-1 remains red pending either
-  reference-backed parity proof or an explicit substitute; P2-3 live command
-  proof also remains next
+- **current_slice:** 99
+- **current_arc:** Phase 2 close-evidence cleanup in progress: Explore uses
+  structured JSON as the accepted successor artifact shape for CC#P2-1; this
+  does not claim old Markdown byte-for-byte compatibility. P2-3 live command
+  proof remains next
 - **current_phase:** Phase 2 — Implementation (continuing)
 
 Chronicle (relocated narrative history — non-authoritative; see

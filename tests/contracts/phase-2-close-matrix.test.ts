@@ -188,6 +188,64 @@ describe('Check 37 — Phase 2 close matrix (ADR-0007 CC#P2-8)', () => {
     });
   });
 
+  it('allows an active-satisfied row to cite an accepted ADR substitution instead of a commit SHA', () => {
+    withTempRepo((root, headSha) => {
+      scaffoldEvidence(root);
+      const adrBacked = validMatrix(headSha).replace(
+        `| P2-1 | active — satisfied | \`evidence.txt\` | ${headSha} |`,
+        '| P2-1 | active — satisfied | `evidence.txt`; `specs/adrs/ADR-0007-phase-2-close-criteria.md` | ADR-0007 at `specs/adrs/ADR-0007-phase-2-close-criteria.md` (substitution) |',
+      );
+      writeRel(root, PHASE2_CLOSE_MATRIX_REL, adrBacked);
+      const result = checkPhase2CloseMatrix(root);
+      expect(result.level).toBe('green');
+    });
+  });
+
+  it('reds when a non-P2-1 active-satisfied row cites the ADR substitution without a SHA', () => {
+    withTempRepo((root, headSha) => {
+      scaffoldEvidence(root);
+      const adrBacked = validMatrix(headSha).replace(
+        `| P2-2 | active — satisfied | \`evidence.txt\` | ${headSha} |`,
+        '| P2-2 | active — satisfied | `evidence.txt`; `specs/adrs/ADR-0007-phase-2-close-criteria.md` | ADR-0007 at `specs/adrs/ADR-0007-phase-2-close-criteria.md` (substitution) |',
+      );
+      writeRel(root, PHASE2_CLOSE_MATRIX_REL, adrBacked);
+      const result = checkPhase2CloseMatrix(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(/P2-2: active-satisfied row must name a passing commit SHA/);
+      expect(result.detail).toMatch(/only P2-1 may cite the accepted ADR-0007 substitution/);
+    });
+  });
+
+  it('reds when a non-P2-1 active-satisfied row mixes a SHA with the ADR substitution', () => {
+    withTempRepo((root, headSha) => {
+      scaffoldEvidence(root);
+      const mixedAuthority = validMatrix(headSha).replace(
+        `| P2-2 | active — satisfied | \`evidence.txt\` | ${headSha} |`,
+        `| P2-2 | active — satisfied | \`evidence.txt\`; \`specs/adrs/ADR-0007-phase-2-close-criteria.md\` | ${headSha}; ADR-0007 at \`specs/adrs/ADR-0007-phase-2-close-criteria.md\` (substitution) |`,
+      );
+      writeRel(root, PHASE2_CLOSE_MATRIX_REL, mixedAuthority);
+      const result = checkPhase2CloseMatrix(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(/P2-2: active-satisfied row must not cite/);
+      expect(result.detail).toMatch(/only P2-1 may use it/);
+    });
+  });
+
+  it('reds when a non-P2-1 active-satisfied row cites the ADR substitution only as evidence', () => {
+    withTempRepo((root, headSha) => {
+      scaffoldEvidence(root);
+      const evidenceOnly = validMatrix(headSha).replace(
+        `| P2-2 | active — satisfied | \`evidence.txt\` | ${headSha} |`,
+        `| P2-2 | active — satisfied | \`evidence.txt\`; \`specs/adrs/ADR-0007-phase-2-close-criteria.md\` | ${headSha} |`,
+      );
+      writeRel(root, PHASE2_CLOSE_MATRIX_REL, evidenceOnly);
+      const result = checkPhase2CloseMatrix(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(/P2-2: active-satisfied row must not cite/);
+      expect(result.detail).toMatch(/evidence path or passing commit/);
+    });
+  });
+
   it('reds when phase_close_claim=true lacks the required close artifacts', () => {
     withTempRepo((root, headSha) => {
       scaffoldEvidence(root);

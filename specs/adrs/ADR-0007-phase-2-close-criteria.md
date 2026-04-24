@@ -91,8 +91,11 @@ or review that treats a re-deferred criterion as green is rejected on
 The target workflow locked in `specs/plans/phase-2-implementation.md`
 §Target workflow for first parity (as of this ADR: **`explore`**) runs
 end-to-end in circuit-next with real agent dispatch and produces the
-same artifact shape as the corresponding reference Circuit workflow at
-`~/Code/circuit`.
+accepted successor artifact shape for the corresponding reference
+Circuit workflow at `~/Code/circuit`. The original 2026-04-21 text
+required same-shape parity with the reference artifact; Slice 99
+replaces that with an explicit clean-break structured JSON successor
+substitution below.
 
 - **Enforcement binding (executable):**
   - Test file: `tests/runner/explore-e2e-parity.test.ts` (to be
@@ -105,9 +108,12 @@ same artifact shape as the corresponding reference Circuit workflow at
   - Contract: `specs/contracts/explore.md` (authored at P2.3).
   - Fixture: `.claude-plugin/skills/explore/circuit.json` (authored at
     P2.3, extended at P2.5).
-- **Non-substitutable failure conditions:** byte-shape parity with the
-  reference Circuit `explore` artifact on at least one canonical
-  phase transition; failing the golden assertion must fail CC#P2-1.
+- **Non-substitutable failure conditions:** the accepted successor
+  artifact shape must stay schema-validated, normalized-JSON golden
+  backed, and bound to the legacy reference characterization. Failing
+  the golden assertion must fail CC#P2-1. Claiming old-Circuit
+  Markdown byte-shape compatibility is outside the Slice 99
+  substitution and requires a separate proof.
 - **Retarget rule:** if the target workflow is reselected (plan permits
   `review` as a scope-reducing fallback), this ADR is amended in place
   via the retarget checklist at §Decision.4b. Silent rename in the
@@ -178,6 +184,59 @@ lands:
 
 The Phase 2 close matrix must not count CC#P2-1 as satisfied on the basis of
 the circuit-next JSON golden alone.
+
+**Amendment — Slice 99 structured JSON successor substitution.** On
+2026-04-24 the operator made the product decision that workflow step
+inputs and outputs should be canonical structured JSON, not old-Circuit
+Markdown. The human-facing priority is workflow configuration
+understandability, which remains future product work; step artifacts are
+primarily machine state.
+
+Effective Slice 99, CC#P2-1 is **active — satisfied at clean-break
+structured JSON successor parity**. This is an explicit substitute for
+strict old-Circuit Markdown byte-shape parity, not a claim that
+circuit-next can parse, emit, or compare the old Markdown artifacts
+byte-for-byte. The substitute is accepted because Slice 98 recorded the
+reference shape, the authority graph classifies the affected Explore
+artifacts as `successor-to-live` / `clean-break`, the current runtime
+emits strict `explore.*@v1` JSON artifacts, and the golden fixture proves
+the accepted structured close result stays stable.
+
+§6 precedent-firewall checklist for this substitution:
+
+1. **Original criterion amended.** CC#P2-1's original same-shape reference
+   artifact binding is amended for `explore` only. The enforcement binding
+   remains `tests/runner/explore-e2e-parity.test.ts`,
+   `tests/fixtures/golden/explore/`, `specs/contracts/explore.md`, and
+   `.claude-plugin/skills/explore/circuit.json`, with added reference
+   evidence at `specs/reference/legacy-circuit/explore-characterization.md`.
+2. **Necessity.** Slice 98 showed old Circuit's Explore outputs are
+   Markdown-first, while circuit-next's intended product direction is typed
+   workflow state. Preserving old Markdown as the canonical internal shape
+   would optimize for humans reading step artifacts, which the operator
+   explicitly rejected as the primary product need.
+3. **Compensating evidence.** The substitute is backed by non-LLM
+   mechanical checks: strict Zod artifact schemas, the Explore runtime
+   writer tests, the end-to-end normalized-JSON golden, artifact-composition
+   tests, authority-graph bindings, and the committed legacy reference
+   checksum fixture.
+4. **Weaker-evidence wording.** This is weaker than old Markdown
+   byte-shape compatibility: it does not prove that circuit-next emits the
+   old Markdown files or can import them. That weaker dimension is recorded
+   here, in the Explore contract, in the reference characterization, in the
+   Phase 2 close matrix, and in PROJECT_STATE.
+5. **Reopen triggers.** Reopen this substitution if circuit-next claims old
+   Markdown import/export compatibility; if any `explore.*@v1` JSON shape
+   changes without updating the golden, contract, and authority graph; if a
+   future UI treats generated Markdown as the canonical persisted state; or
+   if another workflow needs lossless migration from old Circuit Markdown.
+6. **Cross-model challenger.** The Slice 99 Codex challenger pass is
+   recorded at `specs/reviews/arc-slice-99-codex.md`, with the yield-ledger
+   row classified as governance.
+7. **Non-precedent.** This substitution is accepted only on the fresh
+   Slice 98 reference evidence and the 2026-04-24 operator product
+   decision. It is not precedent, pattern, template, or analogy for
+   weakening any other Phase 2 close criterion.
 
 ---
 
@@ -597,9 +656,10 @@ blocking gate for Phase 2 close.
     - Status (`active — satisfied` / `active — red` / `re-deferred`)
     - Evidence path (test file, audit function, artifact file —
       non-substitutable per CC#P2-N enforcement binding above)
-    - Passing-commit SHA (for `active — satisfied`) or ADR citation
-      (for `re-deferred`) or red-diagnosis pointer (for `active —
-      red`)
+    - Passing-commit SHA (for `active — satisfied`), except the Slice
+      99 CC#P2-1 structured JSON successor substitution may cite this
+      accepted ADR-0007 amendment instead; ADR citation for
+      `re-deferred`; or red-diagnosis pointer for `active — red`
     - Structural evidence type (non-LLM mechanical / operator /
       cross-model challenger / test-enforced / audit-enforced)
   - Codex challenger pass: `specs/reviews/phase-2-close-codex.md`
@@ -628,9 +688,13 @@ blocking gate for Phase 2 close.
       or its forbidden-wording list is empty.
 - **Non-substitutable failure conditions:** artifact presence alone
   does not satisfy CC#P2-8. Each row of the matrix must show
-  executable evidence (commit SHA + test/audit result); LLM-only
-  stand-in evidence is insufficient; aggregate-style wording in the
-  matrix or review artifacts fails the audit.
+  executable evidence (commit SHA + test/audit result), except the
+  Slice 99 CC#P2-1 row may use the accepted ADR-0007 structured JSON
+  successor substitution alongside test/audit evidence. Non-P2-1
+  `active — satisfied` rows must not cite that substitution, with or
+  without a SHA. LLM-only stand-in evidence is insufficient;
+  aggregate-style wording in the matrix or review artifacts fails the
+  audit.
 - **Circularity check:** CC#P2-8 can only pass *after* CC#P2-1
   through CC#P2-7 are each in a final state (`active — satisfied` or
   `re-deferred` with valid ADR). CC#P2-8 cannot declare itself
@@ -788,8 +852,8 @@ requires this ADR to be amended. The amendment payload must include:
    and any workflow-specific contract tests.
 6. **Artifact-shape contract update.** If the new target produces
    different artifact shapes (review: verdict/objections; explore:
-   brief/analysis/synthesis), CC#P2-1's byte-shape golden definition
-   must be updated inline.
+   brief/analysis/synthesis), CC#P2-1's accepted successor-shape
+   golden definition must be updated inline.
 7. **Affected planned slices.** Which of P2.3, P2.5, P2.9, P2.10,
    P2.11 require re-scoping or re-ordering.
 8. **Disposition of any landed `explore` artifacts.** Are they kept
@@ -821,11 +885,12 @@ binding above requires them:
   a future ADR may add a CC#P2-9 gate. This ADR does not pre-install
   that gate.
 - **P2.10 artifact schema set (brief/analysis/synthesis/result/
-  verdict)** — partially load-bearing via CC#P2-1 byte-shape golden
-  (the golden artifact *is* the schema definition operationally for
-  Phase 2 close). Full Zod schemas for each artifact are non-gating;
-  their absence does not block close. If the P2.5 golden cannot be
-  produced without a Zod schema, CC#P2-1 fails first, not CC#P2-10.
+  verdict)** — partially load-bearing via CC#P2-1's accepted
+  successor-shape golden after Slice 99 (the golden artifact is the
+  operational schema witness for Phase 2 close). Full Zod schemas for
+  each artifact are non-gating; their absence does not block close. If
+  the P2.5 golden cannot be produced without a schema-backed artifact,
+  CC#P2-1 fails first, not CC#P2-10.
 - **Continuity lifecycle beyond CC#P2-4 scope** — the lifecycle test
   at CC#P2-4 covers create/persist/resume/clear. Broader continuity
   lifecycle work (multiple concurrent records, branch-aware resume,
@@ -1336,7 +1401,7 @@ per CLAUDE.md hard invariant #8):
 
 | CC# | Criterion | Enforcement slice | Concrete binding (non-substitutable) |
 |---|---|---|---|
-| P2-1 | One-workflow parity (target: `explore`) | P2.5 | `tests/runner/explore-e2e-parity.test.ts` + `tests/fixtures/golden/explore/` byte-shape golden (sha256 over normalized-JSON) |
+| P2-1 | One-workflow parity (target: `explore`) | P2.5 | `tests/runner/explore-e2e-parity.test.ts` + `tests/fixtures/golden/explore/` accepted structured JSON successor-shape golden (sha256 over normalized-JSON), bound to `specs/reference/legacy-circuit/explore-characterization.md`; old Markdown byte-shape compatibility remains not claimed |
 | P2-2 | Real agent dispatch | P2.4 (+ P2.6 optional) | `src/runtime/adapters/agent.ts` + `tests/runner/agent-dispatch-roundtrip.test.ts` with durable dispatch transcript assertion (adapter id, request/receipt/result hashes, reducer+writer consumption); CI-skip requires `tests/fixtures/agent-smoke/last-run.json` with commit-ancestor audit |
 | P2-3 | Plugin command registration | P2.2 (scaffold) + P2.11 (invokability) | `checkPluginCommandClosure` + `tests/contracts/plugin-surface.test.ts` + `specs/reviews/p2-11-invoke-evidence.md` |
 | P2-4 | Session hooks + continuity lifecycle | P2.7 | `.claude/hooks/SessionStart.sh` + `.claude/hooks/SessionEnd.sh` + `checkSessionHooksPresent` + `tests/runner/continuity-lifecycle.test.ts` |
@@ -1387,7 +1452,8 @@ risked conflating two distinct ratchet concerns:
 
 1. **CC#P2-1 — One-workflow parity.** Phase 2 close criterion. The
    target workflow (`explore` per ADR-0007 §Decision.1 CC#P2-1) runs
-   end-to-end with real agent dispatch and byte-shape golden match.
+   end-to-end with real agent dispatch and the accepted structured
+   JSON successor-shape golden match after the Slice 99 substitution.
    Satisfied at one workflow.
 2. **Second-workflow generalization.** A separate empirical test:
    does the contract/adapter/fixture/protocol pattern `explore`

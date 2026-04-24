@@ -38,5 +38,11 @@
     ],
     "explore.result": ["legacy-circuit explore artifacts/result.md"]
   },
-  "greenfield_without_reference_counterpart": ["explore.review-verdict"]
+  "greenfield_without_reference_counterpart": ["explore.review-verdict"],
+  "accepted_successor_policy": {
+    "effective_slice": 99,
+    "policy": "clean-break structured JSON successor",
+    "legacy_markdown_parse_policy": "reject",
+    "not_claimed": ["old Markdown byte-shape parity", "old Markdown import support"]
+  }
 }

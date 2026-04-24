@@ -165,22 +165,23 @@ circuit-next self-consistency for the structured JSON close artifact. It does
 
 ## Implication for CC#P2-1
 
-CC#P2-1 remains **active - red** after this characterization. The remaining
-decision is explicit:
+Slice 98 left CC#P2-1 **active - red** after this characterization. Slice 99
+then made the product decision explicit: circuit-next uses structured JSON as
+the canonical workflow artifact shape, and old Circuit's Markdown artifacts are
+reference evidence rather than the target persisted format.
 
-1. Produce a real reference-Circuit Explore close artifact and compare it
-   against a documented circuit-next output or transform; or
-2. Amend ADR-0007 to replace strict reference byte-shape parity with a
-   clean-break structured JSON successor claim, using this characterization
-   as the reference evidence.
+Effective Slice 99, ADR-0007 accepts clean-break structured JSON successor
+parity for CC#P2-1. The accepted claim is that circuit-next's typed JSON
+artifacts are the successor shape for Explore. It is not a claim that
+circuit-next emits old-Circuit Markdown byte-for-byte.
 
-Until one of those happens, circuit-next should not claim Phase 2 close on
-the basis of the existing Explore golden alone.
+This characterization is the reference side of that decision: it records what
+old Circuit did, so the clean-break substitution is visible instead of implicit.
 
 ## Non-claims
 
 - This document does not make old Circuit Markdown artifacts parseable by
   circuit-next.
-- This document does not satisfy CC#P2-1 by itself.
+- This document does not prove old Markdown byte-shape parity.
 - This document does not claim the inspected old run reached completion.
 - This document does not change the current circuit-next Explore runtime.

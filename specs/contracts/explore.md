@@ -68,10 +68,10 @@ Explore workflow is Markdown-first (`brief.md`, `analysis.md`, `plan.md`,
 `decision.md`, and declared `result.md`). circuit-next's `brief`,
 `analysis`, `synthesis`, and `result` artifacts are clean-break structured
 JSON successors; `explore.review-verdict` is a new circuit-next artifact
-with no old Explore counterpart. This characterization does not itself
-satisfy CC#P2-1; it prevents the circuit-next JSON golden from being treated
-as reference-Circuit byte-shape parity without an explicit comparison or ADR
-amendment.
+with no old Explore counterpart. Slice 99 records the operator decision to
+make those structured JSON artifacts the canonical successor shape for
+CC#P2-1. This is not old-Circuit Markdown byte-shape parity; it is an
+explicit clean-break substitution accepted by ADR-0007.
 
 If future refactoring introduces a workflow-kind concept at the Zod
 layer (e.g., `kind: 'explore'` field), EXPLORE-I1 and the four

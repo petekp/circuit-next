@@ -12,6 +12,13 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 99 JSON SUCCESSOR DECISION** (this commit,
+  Ratchet-Advance) - accepted structured JSON as the canonical Explore
+  successor artifact shape for CC#P2-1. This keeps old Circuit's Markdown
+  outputs as reference evidence, but no longer treats byte-for-byte Markdown
+  compatibility as the product target for step artifacts. P2-3 live command
+  proof remains the next visible close-evidence gap.
+
 - **Slice 98 LEGACY EXPLORE CHARACTERIZATION** (this commit,
   Ratchet-Advance) - recorded the old Circuit Explore workflow shape at
   `specs/reference/legacy-circuit/explore-characterization.md`, reclassified

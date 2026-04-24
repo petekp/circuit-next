@@ -154,6 +154,12 @@ criterion has valid ADR-covered trigger conditions that have not
 fired. See ADR-0007 §Decision.3 for the full forbidden-wording list
 (rejects "green-by-redeferral", "7/8 complete", "mostly done", etc.).
 
+**Current P2-1 status note (Slice 99).** The table above is the original
+lock-time mirror of ADR-0007 §Decision.2. Slice 99 later accepts clean-break
+structured JSON successor parity for P2-1 through an ADR-0007 substitution;
+the current live status is tracked in `specs/reviews/phase-2-close-matrix.md`
+and `PROJECT_STATE.md`.
+
 **Inherited product ratchets must be green at close** (see ADR-0007
 §Decision.4c): the seven Phase-1.5-inherited ratchets plus the three
 Phase-2-added ratchets (`dispatch_realness`, `workflow_parity_fixtures`,
@@ -482,11 +488,14 @@ dry-run adapter (`agent` ... or `codex` ...) lands..."). P2.6 does
 NOT close a new Phase 2 close criterion; it strengthens CC#P2-2 by
 landing the second adapter named in that criterion's enumeration.
 **Per-criterion close status (Slice 47c forbidden-scalar-phrase
-fold-in — ADR-0007 §3 No-aggregate-scoring rule):** CC#P2-1 active —
-satisfied (placeholder-parity epoch, Slice 43c); CC#P2-2 active —
-satisfied (real-dispatch, Slice 43c, strengthened via second-adapter
-round-trip at this slice); all other criteria (CC#P2-3, CC#P2-4,
-CC#P2-5, CC#P2-6, CC#P2-7, CC#P2-8) remain in their prior status.
+fold-in — ADR-0007 §3 No-aggregate-scoring rule):** historical Slice 43c
+accounting carried CC#P2-1 as satisfied at placeholder-parity; Slice 98
+superseded that accounting after characterizing old Circuit's Markdown
+shape, and Slice 99 accepts clean-break structured JSON successor parity as
+the P2-1 substitute. CC#P2-2 active — satisfied (real-dispatch, Slice 43c,
+strengthened via second-adapter round-trip at this slice); all other
+criteria (CC#P2-3, CC#P2-4, CC#P2-5, CC#P2-6, CC#P2-7, CC#P2-8) remain in
+their prior status for this historical P2.6 note.
 CC#P2-4 (session hooks) is active — red and is P2.7's deliverable.
 
 **Trajectory.** Arc goal: prove the ADR-0009 subprocess-per-adapter
