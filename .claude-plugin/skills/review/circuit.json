@@ -1,0 +1,123 @@
+{
+  "schema_version": "2",
+  "id": "review",
+  "version": "0.1.0",
+  "purpose": "P2.9 audit-only review workflow. Three-phase spine: Intake -> Independent Audit -> Verdict. The reviewer runs as a worker dispatch in the analyze phase; the close phase owns the final review.result artifact.",
+  "entry": {
+    "signals": {
+      "include": ["review", "audit", "check"],
+      "exclude": []
+    },
+    "intent_prefixes": ["review"]
+  },
+  "entry_modes": [
+    {
+      "name": "default",
+      "start_at": "intake-step",
+      "rigor": "standard",
+      "description": "Default review entry mode — resolves the review scope, dispatches an independent audit, then writes the verdict artifact."
+    }
+  ],
+  "phases": [
+    {
+      "id": "intake-phase",
+      "title": "Intake",
+      "canonical": "frame",
+      "steps": ["intake-step"]
+    },
+    {
+      "id": "audit-phase",
+      "title": "Independent Audit",
+      "canonical": "analyze",
+      "steps": ["audit-step"]
+    },
+    {
+      "id": "verdict-phase",
+      "title": "Verdict",
+      "canonical": "close",
+      "steps": ["verdict-step"]
+    }
+  ],
+  "spine_policy": {
+    "mode": "partial",
+    "omits": ["plan", "act", "verify", "review"],
+    "rationale": "Review is an audit-only workflow in P2.9: Intake frames the scope, Independent Audit performs the reviewer dispatch, and Verdict aggregates findings. There is no planning phase, no implementation/action phase, no verification rerun, and no nested review phase in this narrowed variant."
+  },
+  "steps": [
+    {
+      "id": "intake-step",
+      "title": "Intake — resolve review scope",
+      "protocol": "review-intake@v1",
+      "reads": [],
+      "routes": {
+        "pass": "audit-step"
+      },
+      "executor": "orchestrator",
+      "kind": "synthesis",
+      "writes": {
+        "artifact": {
+          "path": "artifacts/review-intake.json",
+          "schema": "review.intake@v1"
+        }
+      },
+      "gate": {
+        "kind": "schema_sections",
+        "source": {
+          "kind": "artifact",
+          "ref": "artifact"
+        },
+        "required": ["scope"]
+      }
+    },
+    {
+      "id": "audit-step",
+      "title": "Independent Audit — reviewer dispatch",
+      "protocol": "review-audit@v1",
+      "reads": ["artifacts/review-intake.json"],
+      "routes": {
+        "pass": "verdict-step"
+      },
+      "executor": "worker",
+      "kind": "dispatch",
+      "role": "reviewer",
+      "writes": {
+        "request": "artifacts/dispatch/review.request.json",
+        "receipt": "artifacts/dispatch/review.receipt.txt",
+        "result": "phases/analyze/review-raw-findings.json"
+      },
+      "gate": {
+        "kind": "result_verdict",
+        "source": {
+          "kind": "dispatch_result",
+          "ref": "result"
+        },
+        "pass": ["NO_ISSUES_FOUND", "ISSUES_FOUND"]
+      }
+    },
+    {
+      "id": "verdict-step",
+      "title": "Verdict — emit review.result",
+      "protocol": "review-verdict@v1",
+      "reads": ["artifacts/review-intake.json", "phases/analyze/review-raw-findings.json"],
+      "routes": {
+        "pass": "@complete"
+      },
+      "executor": "orchestrator",
+      "kind": "synthesis",
+      "writes": {
+        "artifact": {
+          "path": "artifacts/review-result.json",
+          "schema": "review.result@v1"
+        }
+      },
+      "gate": {
+        "kind": "schema_sections",
+        "source": {
+          "kind": "artifact",
+          "ref": "artifact"
+        },
+        "required": ["scope", "findings", "verdict"]
+      }
+    }
+  ]
+}

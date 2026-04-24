@@ -1,4 +1,4 @@
-<!-- current_slice: 77 -->
+<!-- current_slice: 78 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -9,10 +9,10 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 77
-- **current_arc:** P2.9 second workflow (Slice 77 landed: review result
-  schema, authority row, invariants, and dispatch-shape tests; next planned
-  slice is the review contract + fixture)
+- **current_slice:** 78
+- **current_arc:** P2.9 second workflow (Slice 78 landed: the review
+  contract and three-phase fixture; next planned slice is runtime
+  dispatch/synthesis wiring through a narrow injected writer seam)
 - **current_phase:** Phase 2 — Implementation (continuing)
 
 Chronicle (relocated narrative history — non-authoritative; see
@@ -69,3 +69,8 @@ artifact row against the signed P2.9 plan pending the real review contract,
 added REVIEW-I1 / REVIEW-I2 invariant bindings, and pinned the review
 analyze dispatch shape. The real review fixture and runtime wiring have
 not landed yet.*
+Slice 78 landed the real review workflow contract and the three-phase
+fixture, rehomed the `review.result` authority row to that contract, and
+anchored REVIEW-I1 / REVIEW-I2 on the contract itself. The fixture now
+proves the review shape and reviewer dispatch boundary; runtime wiring for
+schema-valid close synthesis remains the next P2.9 slice.*

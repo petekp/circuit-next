@@ -718,7 +718,7 @@
       "compatibility_policy": "clean-break",
       "plane": "data-plane",
       "description": "Close-phase primary artifact for the audit-only review workflow. Structured JSON successor to the reference review.md artifact; aggregates reviewer findings and carries the deterministic final verdict.",
-      "contract": "specs/plans/p2-9-second-workflow.md",
+      "contract": "specs/contracts/review.md",
       "schema_file": "src/schemas/artifacts/review.ts",
       "schema_exports": [
         "ReviewFindingSeverity",
@@ -739,18 +739,12 @@
         "operator-facing audit verdict",
         "close-phase aggregation from model-authored analyze dispatch output"
       ],
-      "trust_boundary": "engine-computed at Close from a model-authored analyze-phase dispatch result; schema-parsed before it becomes the audit-only review workflow's primary artifact; read-only thereafter within the run",
+      "trust_boundary": "engine-computed at Close from a model-authored analyze-phase dispatch result once the P2.9 synthesis seam is wired; at this slice the fixture declares the path/schema and the ReviewResult schema exists, but the generic synthesis writer still emits placeholder section objects and does not schema-parse review.result. Schema-valid close materialization is deferred to the later P2.9 runtime wiring slice; read-only after write.",
       "reference_surfaces": ["legacy-circuit review.md"],
       "reference_evidence": ["specs/reference/legacy-circuit/review-characterization.md"],
       "migration_policy": "Clean-break structured JSON successor to the reference Markdown artifact; no transparent parse of legacy review.md is attempted.",
       "legacy_parse_policy": "reject",
-      "dangling_reference_policy": "n/a",
-      "pending_rehome": {
-        "target_slice": 78,
-        "target_artifact_prefix": "review",
-        "target_objection": "P2.9 Slice 77 registers review.result against the signed P2.9 plan authority; actual Slice 78 (plan Slice 65) moves the contract pointer to specs/contracts/review.md when the workflow-specific contract lands.",
-        "items": ["contract -> specs/contracts/review.md"]
-      }
+      "dangling_reference_policy": "n/a"
     }
   ]
 }

@@ -12,6 +12,16 @@ record.*
 
 ## P2.9 Second Workflow Arc (opened after Slice 75)
 
+- **Slice 78 CONTRACT-FIXTURE** (this commit, Ratchet-Advance) - landed
+  the review workflow contract and the real three-phase fixture: Intake,
+  Independent Audit, and Verdict. The slice rehomed `review.result` from
+  the signed plan to the new contract, anchored REVIEW-I1 / REVIEW-I2 on
+  the contract, and added fixture tests for parse, policy, dispatch shape,
+  close artifact binding, and authority graph ownership. Codex found two
+  honesty gaps: the artifact row overclaimed current runtime synthesis,
+  and the invariant ledger still pointed at the plan. Both were folded in
+  before verification.
+
 - **Slice 77 INVARIANTS-ARTIFACT-SCHEMA** (this commit,
   Ratchet-Advance) - added the structured `review.result` schema,
   registered the artifact row with a next-slice rehome to the real review
