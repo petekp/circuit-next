@@ -739,7 +739,7 @@
         "operator-facing audit verdict",
         "close-phase aggregation from model-authored analyze dispatch output"
       ],
-      "trust_boundary": "engine-computed at Close from a model-authored analyze-phase dispatch result when the runner is given an injected synthesis writer; tests/runner/review-runtime-wiring.test.ts proves schema-valid review.result materialization through that test seam. The generic synthesis writer still emits placeholder section objects and does not schema-parse review.result; per-workflow synthesis-writer registration is a post-P2.9 follow-on. Read-only after write.",
+      "trust_boundary": "engine-computed at Close by the default registered review synthesis writer from a model-authored analyze-phase dispatch result; tests/runner/review-runtime-wiring.test.ts proves schema-valid review.result materialization on the default CLI path. Read-only after write.",
       "reference_surfaces": ["legacy-circuit review.md"],
       "reference_evidence": ["specs/reference/legacy-circuit/review-characterization.md"],
       "migration_policy": "Clean-break structured JSON successor to the reference Markdown artifact; no transparent parse of legacy review.md is attempted.",

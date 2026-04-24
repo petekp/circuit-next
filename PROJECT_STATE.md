@@ -1,4 +1,4 @@
-<!-- current_slice: 82 -->
+<!-- current_slice: 83 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -9,11 +9,10 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 82
-- **current_arc:** P2.9 second workflow (Slice 82 closed the arc:
-  composition reviews, audit-gate binding, and plan closure landed; next
-  concrete follow-on is per-workflow synthesis-writer registration unless
-  the operator chooses a different post-P2.9 slot)
+- **current_slice:** 83
+- **current_arc:** Post-P2.9 cleanup (Slice 83 closed the named
+  per-workflow synthesis-writer follow-on for review; next unblocked work
+  can move to routing, model/effort selection, or another workflow)
 - **current_phase:** Phase 2 — Implementation (continuing)
 
 Chronicle (relocated narrative history — non-authoritative; see
@@ -97,3 +96,8 @@ arc into `ARC_CLOSE_GATES`, closed the plan, and marked the parent P2.9
 slot with the validated-with-declared-follow-on outcome. The only named
 future follow-on from this arc is per-workflow synthesis-writer
 registration.*
+Slice 83 closed that follow-on for the audit-only review path. The
+default runtime synthesis writer now has a narrow review registration:
+it writes `review.intake@v1` from the user scope and `review.result@v1`
+from the analyze-phase reviewer output, so `/circuit:review` can point at
+a typed review verdict artifact without the old caveat.*

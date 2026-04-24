@@ -51,5 +51,15 @@ export const ReviewDispatchResult = z
     verdict: ReviewDispatchVerdict,
     findings: z.array(ReviewFinding),
   })
-  .strict();
+  .strict()
+  .superRefine((artifact, ctx) => {
+    const expected = artifact.findings.length === 0 ? 'NO_ISSUES_FOUND' : 'ISSUES_FOUND';
+    if (artifact.verdict !== expected) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['verdict'],
+        message: `review dispatch verdict must be ${expected} for findings.length=${artifact.findings.length}`,
+      });
+    }
+  });
 export type ReviewDispatchResult = z.infer<typeof ReviewDispatchResult>;

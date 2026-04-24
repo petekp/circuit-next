@@ -37,12 +37,11 @@ same kind of discipline layer as `specs/contracts/explore.md`. The fixture
 is validated by `src/schemas/workflow.ts`; the final artifact shape is
 validated by `src/schemas/artifacts/review.ts`.
 
-At v0.1, the generic runtime synthesis writer still writes placeholder
-objects for synthesis steps. That means the checked-in fixture proves the
-review workflow shape and the reviewer dispatch boundary, not full runtime
-production of a schema-valid `review.result`. The later P2.9 runtime slice
-uses an injected synthesis-writer seam to prove that the final artifact is
-wireable without claiming the generic synthesis writer has been widened.
+At v0.2, the default runtime synthesis writer has a narrow review
+registration: `review.intake@v1` writes the scoped intake object and
+`review.result@v1` reads the analyze-phase dispatch result to produce the
+typed close artifact. Other synthesis schemas keep the placeholder fallback
+until their own schema-specific writers land.
 
 ## Artifact
 
@@ -97,6 +96,9 @@ The analyze dispatch step uses:
 - `writes.result = "phases/analyze/review-raw-findings.json"`
 - `gate.source = {kind: "dispatch_result", ref: "result"}`
 - `gate.pass = ["NO_ISSUES_FOUND", "ISSUES_FOUND"]`
+- its JSON body uses `NO_ISSUES_FOUND` iff `findings.length === 0`;
+  otherwise it uses `ISSUES_FOUND`. The final close-phase `review.result`
+  verdict remains severity-based per REVIEW-I2.
 
 Those literals are pinned in
 `tests/contracts/review-dispatch-shape.test.ts`.
@@ -118,8 +120,8 @@ After the fixture is accepted:
   analyze-phase reviewer dispatch precedes it structurally.
 - The final artifact schema exists and computes the verdict
   deterministically from findings.
-- Runtime wiring remains intentionally narrow until the later P2.9
-  dispatch/synthesis slice.
+- Runtime wiring is intentionally narrow: only the audit-only review
+  intake/result synthesis artifacts have a default registered writer.
 
 ## Reopen Conditions
 
@@ -131,9 +133,10 @@ This contract reopens if any of:
    `artifacts/review-result.json` / `review.result@v1`.
 3. The analyze dispatch gate vocabulary changes away from
    `NO_ISSUES_FOUND` / `ISSUES_FOUND`.
-4. The generic runtime synthesis writer is widened to produce typed
-   workflow-specific artifacts. This contract should then replace the
-   v0.1 scope note with the actual runtime guarantee.
+4. The generic runtime synthesis writer is widened beyond the audit-only
+   review registration to produce typed artifacts for additional workflow
+   kinds. This contract should then name any shared registry contract it
+   starts depending on.
 
 ## Authority
 

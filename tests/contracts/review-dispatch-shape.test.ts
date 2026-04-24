@@ -7,7 +7,7 @@ const REVIEW_ANALYZE_DISPATCH_STEP = {
   id: 'audit-step',
   title: 'Independent Audit',
   protocol: 'review-audit@v1',
-  reads: ['artifacts/review/intake.json'],
+  reads: ['artifacts/review-intake.json'],
   routes: { pass: 'verdict-step' },
   executor: 'worker',
   kind: 'dispatch',
@@ -28,6 +28,7 @@ function assertReviewAnalyzeDispatchShape(step: typeof REVIEW_ANALYZE_DISPATCH_S
   expect(typeof step.writes.result).toBe('string');
   expect(step.writes.result.length).toBeGreaterThan(0);
   expect(step.writes.result).toBe('phases/analyze/review-raw-findings.json');
+  expect(step.reads).toEqual(['artifacts/review-intake.json']);
   expect(step.gate.source.kind).toBe('dispatch_result');
   expect(step.gate.source.ref).toBe('result');
   expect(step.gate.pass).toEqual(['NO_ISSUES_FOUND', 'ISSUES_FOUND']);
@@ -59,6 +60,16 @@ describe('P2.9 review analyze dispatch shape', () => {
     expect(Array.isArray(parsedResult.findings)).toBe(true);
     expect(parsedResult.findings[0]?.severity).toBe('high');
     expect(ReviewDispatchResult.safeParse({ verdict: 'CLEAN', findings: [] }).success).toBe(false);
+    expect(
+      ReviewDispatchResult.safeParse({
+        verdict: 'NO_ISSUES_FOUND',
+        findings: parsedResult.findings,
+      }).success,
+    ).toBe(false);
+    expect(ReviewDispatchResult.parse({ verdict: 'NO_ISSUES_FOUND', findings: [] })).toEqual({
+      verdict: 'NO_ISSUES_FOUND',
+      findings: [],
+    });
   });
 
   it('literal checks reject source/gate/pass drift even if the base DispatchStep schema later widens', () => {

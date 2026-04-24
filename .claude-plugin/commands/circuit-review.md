@@ -50,22 +50,22 @@ metacharacters:
    - `outcome` (e.g., "Run completed" / "Run aborted")
    - `run_root` — the absolute path where the run artifacts live
    - `result_path` — the canonical `artifacts/result.json` RunResult summary
-   - `${run_root}/artifacts/review-result.json` — the review workflow's
-     close-step artifact
+   - if `outcome === 'complete'`,
+     `${run_root}/artifacts/review-result.json` — the review workflow's
+     typed verdict artifact
    - `events_observed` count + a pointer to `events.ndjson` under the run
      root for full event-level audit
 
-   Current caveat: the default CLI path still uses the generic placeholder
-   synthesis writer for close-phase synthesis. The schema-valid
-   `review.result` path is proven by
-   `tests/runner/review-runtime-wiring.test.ts` through an injected
-   synthesis-writer seam; production per-workflow synthesis registration is
-   a later substrate task. If the command completes today, surface the
-   review-result path with that caveat rather than claiming it is the final
-   typed review verdict.
+   The default CLI path now writes a schema-valid
+   `${run_root}/artifacts/review-result.json` for the audit-only review
+   workflow when the run completes. Surface that path as the typed review
+   verdict artifact only for completed runs. The broader explore synthesis
+   artifacts still use their existing placeholder epoch until their own
+   schema-specific writers land.
 
    If `outcome === 'aborted'`, read `artifacts/result.json` at `result_path`
-   to surface the abort `reason`.
+   to surface the abort `reason`; do not claim that
+   `artifacts/review-result.json` exists on aborted runs.
 5. **Do not modify the CLI output before surfacing.** The run root + artifact
    paths are canonical; the user may want to inspect them directly.
 
@@ -81,5 +81,5 @@ omit the flag and accept the default.
 - `specs/plans/p2-9-second-workflow.md §3` (audit-only review spine)
 - `specs/plans/p2-9-second-workflow.md §9 Slice 67` (plugin command scope)
 - `specs/contracts/review.md` (review workflow contract)
-- `tests/runner/review-runtime-wiring.test.ts` (injected synthesis-writer
-  boundary and default-placeholder regression)
+- `tests/runner/review-runtime-wiring.test.ts` (default registered review
+  synthesis writer)

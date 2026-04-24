@@ -12,6 +12,13 @@ record.*
 
 ## P2.9 Second Workflow Arc (opened after Slice 75)
 
+- **Slice 83 REVIEW-WRITER-FOLLOW-ON** (this commit, Ratchet-Advance) -
+  closed the follow-on that P2.9 left behind. The normal review path now
+  writes a typed `review.result` artifact through the default runtime
+  writer, rather than needing the injected test writer. The
+  `/circuit:review` command now tells the user the review-result file is
+  the typed verdict artifact.
+
 - **Slice 82 ARC-CLOSE-CEREMONY** (this commit, Ratchet-Advance) -
   closed P2.9 with two composition-review prong files, added the P2.9
   row to the shared arc-close audit gate, closed

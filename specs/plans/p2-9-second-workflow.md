@@ -521,7 +521,9 @@ surfaces run artifacts plus the current synthesis-writer caveat. It MUST
 NOT claim that the default CLI path produces schema-valid `review.result`
 until the post-P2.9 per-workflow synthesis-writer registration follow-on
 lands. The schema-valid `review.result` proof for P2.9 remains the
-Slice 66 injected-writer test seam.
+Slice 66 injected-writer test seam. Post-close note: the follow-on landed
+at actual Slice 83, so this command-surface caveat is no longer present in
+the live `/circuit:review` command body.
 
 ### Slice 68 — Second-workflow parity proof
 
@@ -625,7 +627,7 @@ extensions (per §6 scope-path deferral); (e) **Slice 70 — per-workflow
 synthesis-writer registration** (declared follow-on per §9 Slice 66 HIGH 2
 fold-in; promotes the test-seam-injected synthesis writer to a
 runtime-level per-workflow registration so `review` close-phase synthesis
-is a real runtime capability rather than a test-only wiring). Slot-
-ordering among these is an operator-decision at P2.9 close. If Slice 70
-lands during P2.9 (rather than after), Slice 68's synthesis-seam risk
-point upgrades from "with-declared-follow-on" to "clean."
+is a real runtime capability rather than a test-only wiring). The
+per-workflow synthesis-writer follow-on closed after P2.9 at actual Slice
+83. Slot-ordering among the remaining options is an operator-decision at
+P2.9 close.

@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
@@ -16,14 +16,38 @@ import { Workflow } from '../../src/schemas/workflow.js';
 
 import type { AgentDispatchInput } from '../../src/runtime/adapters/agent.js';
 import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
-import { resolveRunRelative } from '../../src/runtime/run-relative-path.js';
-import { type DispatchFn, type SynthesisWriterFn, runDogfood } from '../../src/runtime/runner.js';
+import { type DispatchFn, runDogfood } from '../../src/runtime/runner.js';
 
 const FIXTURE_PATH = resolve('.claude-plugin', 'skills', 'review', 'circuit.json');
 
 function loadFixture(): { workflow: Workflow; bytes: Buffer } {
   const bytes = readFileSync(FIXTURE_PATH);
   const raw: unknown = JSON.parse(bytes.toString('utf8'));
+  return { workflow: Workflow.parse(raw), bytes };
+}
+
+function loadFixtureWithRenamedAnalyzeResultPath(resultPath: string): {
+  workflow: Workflow;
+  bytes: Buffer;
+} {
+  const raw = JSON.parse(readFileSync(FIXTURE_PATH, 'utf8')) as {
+    steps: Array<{
+      id: string;
+      writes?: { result?: string };
+      reads?: string[];
+    }>;
+  };
+  for (const step of raw.steps) {
+    if (step.id === 'audit-step' && step.writes !== undefined) {
+      step.writes.result = resultPath;
+    }
+    if (step.id === 'verdict-step' && step.reads !== undefined) {
+      step.reads = step.reads.map((path) =>
+        path === 'phases/analyze/review-raw-findings.json' ? resultPath : path,
+      );
+    }
+  }
+  const bytes = Buffer.from(`${JSON.stringify(raw, null, 2)}\n`);
   return { workflow: Workflow.parse(raw), bytes };
 }
 
@@ -38,64 +62,29 @@ function lane(): LaneDeclaration {
     failure_mode:
       'the review fixture could parse statically but fail to run through dispatch, verdict gating, and close artifact materialization',
     acceptance_evidence:
-      'review-runtime-wiring test runs the live review fixture with a stub dispatcher and an injected synthesis writer, then parses review.result@v1',
+      'review-runtime-wiring test runs the live review fixture with a stub dispatcher and the default registered review synthesis writer, then parses review.result@v1',
     alternate_framing:
-      'widen the generic synthesis writer now — rejected because the signed P2.9 plan only budgets a test seam for this slice and leaves workflow-specific synthesis registration as follow-on work',
+      'keep the injected writer as the only schema-valid path — rejected because P2.9 closed with per-workflow synthesis-writer registration as the named follow-on',
   };
 }
 
 function dispatcherWith(result: ReviewDispatchResult): DispatchFn {
-  const body = JSON.stringify(result);
+  return dispatcherWithBody(JSON.stringify(result));
+}
+
+function dispatcherWithBody(body: string): DispatchFn {
   return {
     adapterName: 'agent',
     dispatch: async (input: AgentDispatchInput): Promise<DispatchResult> => {
       expect(input.prompt).toContain('Accepted verdicts: NO_ISSUES_FOUND, ISSUES_FOUND');
       return {
         request_payload: input.prompt,
-        receipt_id: `stub-receipt-review-${result.verdict}`,
+        receipt_id: 'stub-receipt-review',
         result_body: body,
         duration_ms: 1,
         cli_version: '0.0.0-stub',
       };
     },
-  };
-}
-
-function writeJson(runRoot: string, path: string, body: unknown): void {
-  const abs = resolveRunRelative(runRoot, path);
-  mkdirSync(dirname(abs), { recursive: true });
-  writeFileSync(abs, `${JSON.stringify(body, null, 2)}\n`);
-}
-
-function injectedReviewSynthesisWriter(): SynthesisWriterFn {
-  // Test seam only: this proves the review workflow is wireable once a
-  // workflow-specific synthesis writer exists. It does not change the
-  // production default placeholder writer in src/runtime/runner.ts.
-  return ({ runRoot, step, goal }) => {
-    if (step.id === 'intake-step') {
-      writeJson(runRoot, step.writes.artifact.path, { scope: goal });
-      return;
-    }
-
-    if (step.id !== 'verdict-step') {
-      const body = Object.fromEntries(
-        step.gate.required.map((section) => [section, `<${step.id}-placeholder-${section}>`]),
-      );
-      writeJson(runRoot, step.writes.artifact.path, body);
-      return;
-    }
-
-    const dispatchRaw = readFileSync(
-      resolveRunRelative(runRoot, 'phases/analyze/review-raw-findings.json'),
-      'utf8',
-    );
-    const dispatchResult = ReviewDispatchResult.parse(JSON.parse(dispatchRaw));
-    const artifact = ReviewResult.parse({
-      scope: goal,
-      findings: dispatchResult.findings,
-      verdict: computeReviewVerdict(dispatchResult.findings),
-    });
-    writeJson(runRoot, step.writes.artifact.path, artifact);
   };
 }
 
@@ -143,17 +132,18 @@ afterEach(() => {
   rmSync(runRootBase, { recursive: true, force: true });
 });
 
-describe('P2.9 review runtime wiring - injected synthesis writer boundary', () => {
-  it('leaves the default synthesis writer placeholder-only when no injected writer is provided', async () => {
+describe('P2.9 follow-on - registered review synthesis writer', () => {
+  it('writes schema-valid review.result with the default synthesis writer', async () => {
     const { workflow, bytes } = loadFixture();
-    const runRoot = join(runRootBase, 'default-placeholder');
+    const runRoot = join(runRootBase, 'default-registered-review-writer');
+    const goal = 'Review scope with the default registered synthesis writer';
 
     const outcome = await runDogfood({
       runRoot,
       workflow,
       workflowBytes: bytes,
       runId: RunId.parse('79000000-0000-0000-0000-000000000000'),
-      goal: 'Review scope without the injected synthesis writer',
+      goal,
       rigor: 'standard',
       lane: lane(),
       now: deterministicNow(Date.UTC(2026, 3, 24, 14, 0, 0)),
@@ -164,13 +154,103 @@ describe('P2.9 review runtime wiring - injected synthesis writer boundary', () =
 
     const artifactPath = join(runRoot, 'artifacts', 'review-result.json');
     expect(existsSync(artifactPath)).toBe(true);
-    const artifact = JSON.parse(readFileSync(artifactPath, 'utf8'));
+    const artifact = ReviewResult.parse(JSON.parse(readFileSync(artifactPath, 'utf8')));
     expect(artifact).toEqual({
-      scope: '<verdict-step-placeholder-scope>',
-      findings: '<verdict-step-placeholder-findings>',
-      verdict: '<verdict-step-placeholder-verdict>',
+      scope: goal,
+      findings: [],
+      verdict: 'CLEAN',
     });
-    expect(ReviewResult.safeParse(artifact).success).toBe(false);
+  });
+
+  it('derives the analyze result path from the live workflow graph', async () => {
+    const renamedResultPath = 'phases/analyze/review-findings-renamed.json';
+    const { workflow, bytes } = loadFixtureWithRenamedAnalyzeResultPath(renamedResultPath);
+    const runRoot = join(runRootBase, 'renamed-analyze-result-path');
+    const goal = 'Review scope with renamed analyze result path';
+    const dispatch = {
+      verdict: 'ISSUES_FOUND',
+      findings: [
+        {
+          severity: 'low',
+          id: 'LOW-1',
+          text: 'Low severity issue found by the reviewer.',
+          file_refs: ['src/example.ts:22'],
+        },
+      ],
+    } satisfies ReviewDispatchResult;
+
+    const outcome = await runDogfood({
+      runRoot,
+      workflow,
+      workflowBytes: bytes,
+      runId: RunId.parse('79000000-0000-0000-0000-000000000003'),
+      goal,
+      rigor: 'standard',
+      lane: lane(),
+      now: deterministicNow(Date.UTC(2026, 3, 24, 14, 0, 0)),
+      dispatcher: dispatcherWith(dispatch),
+    });
+
+    expect(outcome.result.outcome).toBe('complete');
+    expect(existsSync(join(runRoot, renamedResultPath))).toBe(true);
+    expect(existsSync(join(runRoot, 'phases', 'analyze', 'review-raw-findings.json'))).toBe(false);
+
+    const artifact = ReviewResult.parse(
+      JSON.parse(readFileSync(join(runRoot, 'artifacts', 'review-result.json'), 'utf8')),
+    );
+    expect(artifact.scope).toBe(goal);
+    expect(artifact.findings).toEqual(dispatch.findings);
+    expect(artifact.verdict).toBe('CLEAN');
+  });
+
+  it('aborts instead of throwing when the admitted dispatch result is not review-shaped', async () => {
+    const { workflow, bytes } = loadFixture();
+    const runRoot = join(runRootBase, 'bad-review-dispatch-shape');
+
+    const outcome = await runDogfood({
+      runRoot,
+      workflow,
+      workflowBytes: bytes,
+      runId: RunId.parse('79000000-0000-0000-0000-000000000004'),
+      goal: 'Review scope with malformed admitted dispatch body',
+      rigor: 'standard',
+      lane: lane(),
+      now: deterministicNow(Date.UTC(2026, 3, 24, 14, 0, 0)),
+      dispatcher: dispatcherWithBody('{"verdict":"NO_ISSUES_FOUND","findings":"not-an-array"}'),
+    });
+
+    expect(outcome.result.outcome).toBe('aborted');
+    expect(outcome.result.reason).toContain(
+      "synthesis step 'verdict-step': artifact writer failed",
+    );
+    expect(existsSync(join(runRoot, 'artifacts', 'review-result.json'))).toBe(false);
+
+    const verdictGate = outcome.events.find(
+      (event) => event.kind === 'gate.evaluated' && event.step_id === 'verdict-step',
+    );
+    if (verdictGate?.kind !== 'gate.evaluated') throw new Error('expected verdict gate event');
+    expect(verdictGate.gate_kind).toBe('schema_sections');
+    expect(verdictGate.outcome).toBe('fail');
+
+    expect(outcome.events.map(eventLabel)).toEqual([
+      'run.bootstrapped',
+      'step.entered:intake-step',
+      'step.artifact_written:intake-step',
+      'gate.evaluated:intake-step',
+      'step.completed:intake-step',
+      'step.entered:audit-step',
+      'dispatch.started:audit-step',
+      'dispatch.request:audit-step',
+      'dispatch.receipt:audit-step',
+      'dispatch.result:audit-step',
+      'dispatch.completed:audit-step',
+      'gate.evaluated:audit-step',
+      'step.completed:audit-step',
+      'step.entered:verdict-step',
+      'gate.evaluated:verdict-step',
+      'step.aborted:verdict-step',
+      'run.closed',
+    ]);
   });
 
   it.each(CASES)(
@@ -190,7 +270,6 @@ describe('P2.9 review runtime wiring - injected synthesis writer boundary', () =
         lane: lane(),
         now: deterministicNow(Date.UTC(2026, 3, 24, 14, 0, 0)),
         dispatcher: dispatcherWith(dispatch),
-        synthesisWriter: injectedReviewSynthesisWriter(),
       });
 
       expect(outcome.result.outcome).toBe('complete');

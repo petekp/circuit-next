@@ -17,7 +17,7 @@
     {
       "name": "circuit:review",
       "file": "commands/circuit-review.md",
-      "description": "Audit a scoped change or artifact with the review workflow. Runs the audit-only review fixture via the project CLI and surfaces the run root, event log, and review result artifact with the current synthesis-writer caveat."
+      "description": "Audit a scoped change or artifact with the review workflow. Runs the audit-only review fixture via the project CLI and surfaces the run root, event log, and typed review result artifact on completed runs."
     }
   ]
 }

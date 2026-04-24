@@ -12,6 +12,11 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { BuiltInAdapter, DispatchResolutionSource } from '../schemas/adapter.js';
+import {
+  ReviewDispatchResult,
+  ReviewResult,
+  computeReviewVerdict,
+} from '../schemas/artifacts/review.js';
 import type { Event, RunClosedOutcome } from '../schemas/event.js';
 import type { InvocationId, RunId, WorkflowId } from '../schemas/ids.js';
 import type { LaneDeclaration } from '../schemas/lane.js';
@@ -203,9 +208,9 @@ export interface DogfoodInvocation {
   // bypassing it at the test layer is a test-surface seam, not a
   // policy seam.
   dispatcher?: DispatchFn;
-  // P2.9 Slice 66: test-only seam for proving review workflow wiring
-  // without widening the generic runtime synthesis writer. Production
-  // invocations omit this and keep the placeholder writer below.
+  // Test seam for deterministic synthesis fixtures. Production invocations
+  // omit this and use the registered writer below, which now has a narrow
+  // review.result implementation plus the existing placeholder fallback.
   synthesisWriter?: SynthesisWriterFn;
 }
 
@@ -460,6 +465,15 @@ function adapterFailureReason(stepId: string, err: unknown): string {
   return `dispatch step '${stepId}': adapter invocation failed (${message})`;
 }
 
+function synthesisFailureReason(stepId: string, err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  return `synthesis step '${stepId}': artifact writer failed (${message})`;
+}
+
+function isRunRelativePathError(err: unknown): boolean {
+  return err instanceof Error && err.message.includes('run-relative path rejected');
+}
+
 const TERMINAL_ROUTE_OUTCOME = {
   '@complete': 'complete',
   '@stop': 'stopped',
@@ -482,18 +496,83 @@ function terminalOutcomeForRoute(route: string): RunClosedOutcome | undefined {
 // (`artifacts/explore-result.json` in explore) land deterministically so
 // a byte-shape golden can hash it, and (c) keep the close-step at the end
 // of the run idempotent for repeat invocations against the same fixture.
-// A future slice (P2.10 — artifact schema set + orchestrator-synthesis
-// integration) replaces the stub with real orchestrator output; the seam
-// is this single helper.
+// Slice 83 adds the first per-workflow registration for review.intake@v1
+// and review.result@v1; other synthesis schemas keep the placeholder
+// fallback until their own schema-specific writers land.
+function writeJsonArtifact(runRoot: string, path: string, body: unknown): void {
+  const abs = resolveRunRelative(runRoot, path);
+  mkdirSync(dirname(abs), { recursive: true });
+  writeFileSync(abs, `${JSON.stringify(body, null, 2)}\n`);
+}
+
+function readJsonArtifact(runRoot: string, path: string): unknown {
+  return JSON.parse(readFileSync(resolveRunRelative(runRoot, path), 'utf8')) as unknown;
+}
+
+type DispatchWorkflowStep = Workflow['steps'][number] & { kind: 'dispatch' };
+
+function isDispatchStep(step: Workflow['steps'][number]): step is DispatchWorkflowStep {
+  return step.kind === 'dispatch';
+}
+
+function reviewAnalyzeResultPath(
+  workflow: Workflow,
+  closeStep: SynthesisWriterInput['step'],
+): string {
+  const closeStepId = closeStep.id as unknown as string;
+  const reviewerDispatches = workflow.steps.filter(
+    (candidate): candidate is DispatchWorkflowStep =>
+      isDispatchStep(candidate) &&
+      candidate.role === 'reviewer' &&
+      (candidate.routes.pass as unknown as string) === closeStepId,
+  );
+  if (reviewerDispatches.length !== 1) {
+    throw new Error(
+      `review.result@v1 requires exactly one reviewer dispatch routing to '${closeStepId}', found ${reviewerDispatches.length}`,
+    );
+  }
+  const resultPath = reviewerDispatches[0]?.writes.result as unknown as string | undefined;
+  if (resultPath === undefined || !closeStep.reads.includes(resultPath as never)) {
+    throw new Error(
+      `review.result@v1 requires close step '${closeStepId}' to read the reviewer dispatch result path '${resultPath ?? '<missing>'}'`,
+    );
+  }
+  return resultPath;
+}
+
+function tryWriteRegisteredSynthesisArtifact(input: SynthesisWriterInput): boolean {
+  const { runRoot, workflow, step, goal } = input;
+  const schemaName = step.writes.artifact.schema;
+
+  if (schemaName === 'review.intake@v1') {
+    writeJsonArtifact(runRoot, step.writes.artifact.path, { scope: goal });
+    return true;
+  }
+
+  if (schemaName === 'review.result@v1') {
+    const dispatchResult = ReviewDispatchResult.parse(
+      readJsonArtifact(runRoot, reviewAnalyzeResultPath(workflow, step)),
+    );
+    const artifact = ReviewResult.parse({
+      scope: goal,
+      findings: dispatchResult.findings,
+      verdict: computeReviewVerdict(dispatchResult.findings),
+    });
+    writeJsonArtifact(runRoot, step.writes.artifact.path, artifact);
+    return true;
+  }
+
+  return false;
+}
+
 function writeSynthesisArtifact(input: SynthesisWriterInput): void {
   const { runRoot, step } = input;
-  const abs = resolveRunRelative(runRoot, step.writes.artifact.path);
-  mkdirSync(dirname(abs), { recursive: true });
+  if (tryWriteRegisteredSynthesisArtifact(input)) return;
   const body: Record<string, string> = {};
   for (const section of step.gate.required) {
     body[section] = `<${step.id as unknown as string}-placeholder-${section}>`;
   }
-  writeFileSync(abs, `${JSON.stringify(body, null, 2)}\n`);
+  writeJsonArtifact(runRoot, step.writes.artifact.path, body);
 }
 
 // Narrow dogfood-run-0 loop. Walks routes from the single entry_mode;
@@ -596,7 +675,38 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
     });
 
     if (step.kind === 'synthesis') {
-      synthesisWriter({ runRoot, workflow, step, goal });
+      try {
+        synthesisWriter({ runRoot, workflow, step, goal });
+      } catch (err) {
+        if (isRunRelativePathError(err)) throw err;
+        const reason = synthesisFailureReason(step.id as unknown as string, err);
+        push({
+          schema_version: 1,
+          sequence,
+          recorded_at: recordedAt(),
+          run_id: runId,
+          kind: 'gate.evaluated',
+          step_id: step.id,
+          attempt,
+          gate_kind: 'schema_sections',
+          outcome: 'fail',
+          reason,
+        });
+        push({
+          schema_version: 1,
+          sequence,
+          recorded_at: recordedAt(),
+          run_id: runId,
+          kind: 'step.aborted',
+          step_id: step.id,
+          attempt,
+          reason,
+        });
+        runOutcome = 'aborted';
+        closeReason = reason;
+        currentStepId = undefined;
+        break;
+      }
       push({
         schema_version: 1,
         sequence,
