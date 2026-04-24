@@ -1,4 +1,5 @@
 export * from './adapter.js';
+export * from './artifacts/review.js';
 export * from './config.js';
 export * from './continuity.js';
 export * from './event.js';

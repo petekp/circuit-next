@@ -57,6 +57,103 @@ export const WORKFLOW_KIND_CANONICAL_SETS = {
  */
 export const EXEMPT_WORKFLOW_IDS = new Set(['dogfood-run-0']);
 
+function objectRecord(value) {
+  return value !== null && typeof value === 'object'
+    ? /** @type {Record<string, unknown>} */ (value)
+    : undefined;
+}
+
+function stringStepIdsForCanonical(phases, canonical) {
+  const ids = [];
+  for (const phase of phases) {
+    const p = objectRecord(phase);
+    if (p === undefined || p.canonical !== canonical || !Array.isArray(p.steps)) continue;
+    for (const id of p.steps) {
+      if (typeof id === 'string') ids.push(id);
+    }
+  }
+  return ids;
+}
+
+function isReviewResultArtifactWriter(step) {
+  const s = objectRecord(step);
+  if (s === undefined || s.kind !== 'synthesis') return false;
+  const writes = objectRecord(s.writes);
+  const artifact = objectRecord(writes?.artifact);
+  return artifact?.schema === 'review.result@v1';
+}
+
+function isReviewerDispatch(step) {
+  const s = objectRecord(step);
+  return s !== undefined && s.kind === 'dispatch' && s.role === 'reviewer';
+}
+
+/**
+ * REVIEW-I1 structural ordering: the close-phase primary review.result
+ * artifact writer must be preceded in steps[] by an analyze-phase dispatch
+ * step with role=reviewer.
+ *
+ * @param {unknown} fixture
+ * @returns {{ ok: true, detail: string } | { ok: false, detail: string }}
+ */
+export function checkReviewIdentitySeparationPolicy(fixture) {
+  const f = objectRecord(fixture);
+  if (f === undefined) {
+    return { ok: false, detail: 'fixture is not an object' };
+  }
+  const phases = Array.isArray(f.phases) ? f.phases : [];
+  const steps = Array.isArray(f.steps) ? f.steps : [];
+  const analyzeStepIds = stringStepIdsForCanonical(phases, 'analyze');
+  const closeStepIds = stringStepIdsForCanonical(phases, 'close');
+
+  const stepsById = new Map();
+  for (let index = 0; index < steps.length; index++) {
+    const step = objectRecord(steps[index]);
+    if (typeof step?.id === 'string') stepsById.set(step.id, { step, index });
+  }
+
+  const reviewerDispatchIndices = analyzeStepIds
+    .map((id) => stepsById.get(id))
+    .filter((entry) => entry !== undefined && isReviewerDispatch(entry.step))
+    .map((entry) => entry.index);
+  if (reviewerDispatchIndices.length === 0) {
+    return {
+      ok: false,
+      detail:
+        'REVIEW-I1: analyze phase must contain a dispatch step with role=reviewer before the close artifact writer',
+    };
+  }
+
+  const closeWriterIndices = closeStepIds
+    .map((id) => stepsById.get(id))
+    .filter((entry) => entry !== undefined && isReviewResultArtifactWriter(entry.step))
+    .map((entry) => entry.index);
+  if (closeWriterIndices.length === 0) {
+    return {
+      ok: false,
+      detail:
+        'REVIEW-I1: close phase must contain a synthesis step that writes the primary review.result artifact',
+    };
+  }
+
+  const everyCloseWriterPreceded = closeWriterIndices.every((closeIndex) =>
+    reviewerDispatchIndices.some((reviewerIndex) => reviewerIndex < closeIndex),
+  );
+  if (!everyCloseWriterPreceded) {
+    return {
+      ok: false,
+      detail:
+        'REVIEW-I1: each close-phase review.result artifact writer must be preceded in steps[] by an analyze-phase reviewer dispatch',
+    };
+  }
+
+  return {
+    ok: true,
+    detail:
+      'REVIEW-I1: close review.result artifact writer is preceded by an analyze-phase reviewer dispatch',
+  };
+}
+
 /**
  * Audit-level canonical-phase-set check. Input is a raw fixture object
  * (already JSON-parsed). Does NOT run Workflow.safeParse — Zod lives on
@@ -158,6 +255,16 @@ export function checkWorkflowKindCanonicalPolicy(fixture) {
       kind: 'red',
       detail: `${id}: spine_policy.omits mismatch — ${parts.join('; ')} (authority: ${expected.authority})`,
     };
+  }
+
+  if (id === 'review') {
+    const identitySeparation = checkReviewIdentitySeparationPolicy(f);
+    if (!identitySeparation.ok) {
+      return {
+        kind: 'red',
+        detail: `${id}: ${identitySeparation.detail} (authority: ${expected.authority})`,
+      };
+    }
   }
 
   return {

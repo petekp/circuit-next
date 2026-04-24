@@ -1,0 +1,61 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  type ReviewFinding,
+  type ReviewFindingSeverity,
+  ReviewResult,
+  computeReviewVerdict,
+} from '../../../src/schemas/artifacts/review.js';
+
+type Counts = {
+  critical: number;
+  high: number;
+  low: number;
+};
+
+function lcg(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state;
+  };
+}
+
+function findingsFor(counts: Counts): ReviewFinding[] {
+  const severities: ReviewFindingSeverity[] = [
+    ...Array.from({ length: counts.critical }, () => 'critical' as const),
+    ...Array.from({ length: counts.high }, () => 'high' as const),
+    ...Array.from({ length: counts.low }, () => 'low' as const),
+  ];
+  return severities.map((severity, index) => ({
+    severity,
+    id: `finding-${index}`,
+    text: `${severity} finding ${index}`,
+    file_refs: [`src/example-${index}.ts`],
+  }));
+}
+
+describe('REVIEW-I2 verdict determinism property', () => {
+  it('computes CLEAN iff critical_count == 0 and high_count == 0 across randomized finding counts', () => {
+    const next = lcg(0x52657677);
+    for (let i = 0; i < 200; i++) {
+      const counts = {
+        critical: next() % 4,
+        high: next() % 4,
+        low: next() % 6,
+      };
+      const findings = findingsFor(counts);
+      const expected = counts.critical === 0 && counts.high === 0 ? 'CLEAN' : 'ISSUES_FOUND';
+
+      expect(computeReviewVerdict(findings)).toBe(expected);
+      expect(
+        ReviewResult.safeParse({ scope: `case ${i}`, findings, verdict: expected }).success,
+      ).toBe(true);
+
+      const wrong = expected === 'CLEAN' ? 'ISSUES_FOUND' : 'CLEAN';
+      expect(ReviewResult.safeParse({ scope: `case ${i}`, findings, verdict: wrong }).success).toBe(
+        false,
+      );
+    }
+  });
+});

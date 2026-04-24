@@ -12,6 +12,17 @@ record.*
 
 ## P2.9 Second Workflow Arc (opened after Slice 75)
 
+- **Slice 77 INVARIANTS-ARTIFACT-SCHEMA** (this commit,
+  Ratchet-Advance) - added the structured `review.result` schema,
+  registered the artifact row with a next-slice rehome to the real review
+  contract, recorded REVIEW-I1 / REVIEW-I2 in the invariant ledger, and
+  added tests for reviewer-before-verdict ordering, deterministic verdict
+  aggregation, and the review analyze dispatch shape. Codex first rejected
+  missing artifact registration, weak dispatch-shape pinning, and a
+  too-broad artifact-writer check; the fold-ins closed those. The final
+  challenger pass asked for the temporary rehome pointer to use the actual
+  next slice number, which was folded in.
+
 - **Slice 76 POLICY-TABLE-SEAM** (this commit, Ratchet-Advance) - opened
   P2.9 by adding the `review` workflow kind to the shared canonical phase
   policy table: Intake maps to `frame`, Independent Audit maps to

@@ -24,4 +24,12 @@ export type WorkflowKindPolicyCheckResult =
   | { kind: 'pass_through'; detail: string }
   | { kind: 'red'; detail: string };
 
+export type ReviewIdentitySeparationPolicyResult =
+  | { ok: true; detail: string }
+  | { ok: false; detail: string };
+
+export function checkReviewIdentitySeparationPolicy(
+  fixture: unknown,
+): ReviewIdentitySeparationPolicyResult;
+
 export function checkWorkflowKindCanonicalPolicy(fixture: unknown): WorkflowKindPolicyCheckResult;

@@ -153,18 +153,29 @@ function reviewPolicyOnlyPayload(overrides: Record<string, unknown> = {}): Recor
   return {
     schema_version: '2',
     id: 'review',
-    // Deliberately policy-only: the real review fixture, artifact schemas,
-    // and runtime synthesis behavior land in later P2.9 slices.
+    // Deliberately policy/invariant-only: the real review fixture and
+    // runtime synthesis behavior land in later P2.9 slices.
     phases: [
-      { title: 'Intake', canonical: 'frame' },
-      { title: 'Independent Audit', canonical: 'analyze' },
-      { title: 'Verdict', canonical: 'close' },
+      { title: 'Intake', canonical: 'frame', steps: ['intake-step'] },
+      { title: 'Independent Audit', canonical: 'analyze', steps: ['audit-step'] },
+      { title: 'Verdict', canonical: 'close', steps: ['verdict-step'] },
     ],
     spine_policy: {
       mode: 'partial',
       omits: ['plan', 'act', 'verify', 'review'],
       rationale: 'policy-only review payload for the canonical phase table test.',
     },
+    steps: [
+      { id: 'intake-step', kind: 'synthesis', writes: { artifact: {} } },
+      { id: 'audit-step', kind: 'dispatch', role: 'reviewer' },
+      {
+        id: 'verdict-step',
+        kind: 'synthesis',
+        writes: {
+          artifact: { path: 'artifacts/review-result.json', schema: 'review.result@v1' },
+        },
+      },
+    ],
     ...overrides,
   };
 }
@@ -176,7 +187,7 @@ describe('checkWorkflowKindCanonicalPolicy (audit-level, no Zod)', () => {
     expect(result.detail).toMatch(/explore: canonical set/);
   });
 
-  it('returns green on a policy-only review payload', () => {
+  it('returns green on a policy-only review payload that satisfies REVIEW-I1', () => {
     const result = checkWorkflowKindCanonicalPolicy(reviewPolicyOnlyPayload());
     expect(result.kind).toBe('green');
     expect(result.detail).toMatch(/review: canonical set/);
@@ -240,6 +251,25 @@ describe('checkWorkflowKindCanonicalPolicy (audit-level, no Zod)', () => {
     const result = checkWorkflowKindCanonicalPolicy(fixture);
     expect(result.kind).toBe('red');
     expect(result.detail).toMatch(/unexpected canonical\(s\): review/);
+  });
+
+  it('returns red when review close writes a non-primary artifact shape', () => {
+    const fixture = reviewPolicyOnlyPayload({
+      steps: [
+        { id: 'intake-step', kind: 'synthesis', writes: { artifact: {} } },
+        { id: 'audit-step', kind: 'dispatch', role: 'reviewer' },
+        {
+          id: 'verdict-step',
+          kind: 'synthesis',
+          writes: {
+            artifact: { path: 'artifacts/not-review-result.json', schema: 'wrong.result@v1' },
+          },
+        },
+      ],
+    });
+    const result = checkWorkflowKindCanonicalPolicy(fixture);
+    expect(result.kind).toBe('red');
+    expect(result.detail).toMatch(/primary review\.result artifact/);
   });
 
   it('returns red on non-object fixture input', () => {

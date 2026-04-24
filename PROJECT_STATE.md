@@ -1,4 +1,4 @@
-<!-- current_slice: 76 -->
+<!-- current_slice: 77 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -9,10 +9,10 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 76
-- **current_arc:** P2.9 second workflow (Slice 76 landed: review workflow
-  policy-table seam; next planned slice is invariants + artifact schema +
-  dispatch-shape test)
+- **current_slice:** 77
+- **current_arc:** P2.9 second workflow (Slice 77 landed: review result
+  schema, authority row, invariants, and dispatch-shape tests; next planned
+  slice is the review contract + fixture)
 - **current_phase:** Phase 2 — Implementation (continuing)
 
 Chronicle (relocated narrative history — non-authoritative; see
@@ -64,3 +64,8 @@ Slice 76 opened P2.9 by registering the audit-only `review` workflow's
 canonical phase set in the shared workflow-kind policy table and adding
 policy-only tests. The real review fixture, artifact schema, and runtime
 wiring have not landed yet.*
+Slice 77 added the structured `review.result` schema, registered the
+artifact row against the signed P2.9 plan pending the real review contract,
+added REVIEW-I1 / REVIEW-I2 invariant bindings, and pinned the review
+analyze dispatch shape. The real review fixture and runtime wiring have
+not landed yet.*

@@ -317,6 +317,29 @@
     },
 
     {
+      "id": "REVIEW-I1",
+      "contract": "review",
+      "surface_type": "contract",
+      "enforcement_state": "static-anchor",
+      "source_anchor": "specs/plans/p2-9-second-workflow.md#REVIEW-I1",
+      "binding_refs": [
+        { "path": "scripts/policy/workflow-kind-policy.mjs", "kind": "static_regex" },
+        { "path": "tests/properties/visible/review-i1.test.ts", "kind": "test_title" }
+      ]
+    },
+    {
+      "id": "REVIEW-I2",
+      "contract": "review",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/plans/p2-9-second-workflow.md#REVIEW-I2",
+      "binding_refs": [
+        { "path": "src/schemas/artifacts/review.ts", "kind": "schema_export" },
+        { "path": "tests/properties/visible/review-i2.test.ts", "kind": "test_title" }
+      ]
+    },
+
+    {
       "id": "RUN-I1",
       "contract": "run",
       "surface_type": "contract",

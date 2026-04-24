@@ -51,6 +51,8 @@ authority:
   - tests/fixtures/plan-lint/bad/p2-9-flawed-draft.md (byte-identical
     committed copy of the flawed draft; retained as reproducibility fixture)
   - User decision 2026-04-24 in-session: P2.9 restart under the new discipline
+artifact_ids:
+  - review.result
 prior_challenger_passes:
   - specs/reviews/p2-9-second-workflow-codex-challenger-01.md
     (verdict REJECT-PENDING-FOLD-INS vs revision 01 — 2 HIGH + 1 MED;
