@@ -466,6 +466,16 @@ export function validateArcSubsumptionEvidence(
 };
 export function checkCodexChallengerRequiredDeclaration(rootDir?: string): AuditCheckResult;
 
+// Slice 97 — Phase 2 close matrix (ADR-0007 CC#P2-8). Validates the close
+// matrix shape and rejects any future phase_close_claim=true without the
+// required Codex close review + operator product-direction note.
+export const PHASE2_CLOSE_MATRIX_REL: string;
+export const PHASE2_CLOSE_CODEX_REL: string;
+export const PHASE2_OPERATOR_PRODUCT_CHECK_REL: string;
+export const PHASE2_CLOSE_MATRIX_REQUIRED_CC_IDS: readonly string[];
+export const PHASE2_CLOSE_MATRIX_REQUIRED_RATCHETS: readonly string[];
+export function checkPhase2CloseMatrix(rootDir?: string): AuditCheckResult;
+
 // Slice 30 — DOG+2 slice:doctor reuses the lane and framing literals enforced
 // by the audit so the operator briefing script cannot drift from the gate.
 export const LANES: readonly [

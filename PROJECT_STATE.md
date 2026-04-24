@@ -1,4 +1,4 @@
-<!-- current_slice: 96 -->
+<!-- current_slice: 97 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -9,10 +9,10 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 96
-- **current_arc:** Phase 2 close-evidence cleanup in progress: Claude and
-  Codex live-smoke fingerprints refreshed; final close-review package remains
-  next
+- **current_slice:** 97
+- **current_arc:** Phase 2 close-evidence cleanup in progress: close matrix
+  draft and audit validator are landing; Codex phase-close review and
+  operator product check remain next
 - **current_phase:** Phase 2 — Implementation (continuing)
 
 Chronicle (relocated narrative history — non-authoritative; see
@@ -180,3 +180,8 @@ approval for external Claude disclosure and the CLI smoke check. The real
 explore workflow ran through the Claude adapter and updated
 `tests/fixtures/agent-smoke/last-run.json`. This did not change product
 runtime behavior.*
+Slice 97 drafted the Phase 2 close matrix and added an audit validator for
+that matrix. The validator checks the per-criterion evidence rows and product
+ratchet rows, and it will reject a future Phase 2 close claim unless the
+required Codex phase-close review and operator product check exist. This is
+not a Phase 2 close claim.*

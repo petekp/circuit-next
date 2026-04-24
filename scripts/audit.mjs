@@ -746,6 +746,364 @@ export function parseMarkdownTable(markdown, requiredColumns) {
   };
 }
 
+export const PHASE2_CLOSE_MATRIX_REL = 'specs/reviews/phase-2-close-matrix.md';
+export const PHASE2_CLOSE_CODEX_REL = 'specs/reviews/phase-2-close-codex.md';
+export const PHASE2_OPERATOR_PRODUCT_CHECK_REL = 'specs/reviews/phase-2-operator-product-check.md';
+
+export const PHASE2_CLOSE_MATRIX_REQUIRED_CC_IDS = Object.freeze([
+  'P2-1',
+  'P2-2',
+  'P2-3',
+  'P2-4',
+  'P2-5',
+  'P2-6',
+  'P2-7',
+]);
+
+export const PHASE2_CLOSE_MATRIX_REQUIRED_RATCHETS = Object.freeze([
+  'runner_smoke_present',
+  'workflow_fixture_runs',
+  'event_log_round_trip',
+  'snapshot_derived_from_log',
+  'manifest_snapshot_byte_match',
+  'status_docs_current',
+  'tier_claims_current',
+  'dispatch_realness',
+  'workflow_parity_fixtures',
+  'plugin_surface_present',
+]);
+
+const PHASE2_CLOSE_ALLOWED_CC_STATUSES = new Set([
+  'active — satisfied',
+  'active — red',
+  're-deferred',
+]);
+
+function commitResolvesInRepo(rootDir, sha) {
+  try {
+    execSync(`git -C "${rootDir}" cat-file -e ${sha}^{commit}`, { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function firstCommitSha(value) {
+  const match = value.match(/\b[0-9a-f]{7,40}\b/i);
+  return match?.[0] ?? null;
+}
+
+function backtickedPaths(value) {
+  const entries = value
+    .split(';')
+    .map((entry) => entry.trim().replace(/^`|`$/g, '').trim())
+    .filter(Boolean);
+  if (entries.length > 0) return entries;
+  return Array.from(value.matchAll(/`([^`]+)`/g), (m) => m[1]).filter(Boolean);
+}
+
+function validateMatrixEvidencePaths(rootDir, rowLabel, value, issues) {
+  const paths = backtickedPaths(value);
+  if (paths.length === 0) {
+    issues.push(`${rowLabel}: evidence path cell must contain at least one path`);
+    return;
+  }
+  for (const raw of paths) {
+    const rel = raw.split('::')[0]?.split(' §')[0]?.trim() ?? raw;
+    if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(rel)) continue;
+    if (!existsSync(join(rootDir, rel))) {
+      issues.push(`${rowLabel}: evidence path does not exist: ${raw}`);
+    }
+  }
+}
+
+function frontmatterString(frontmatter, key) {
+  const value = frontmatter[key];
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function requireFrontmatterString(frontmatter, relPath, key, expected, issues) {
+  const actual = frontmatterString(frontmatter, key);
+  if (actual !== expected) {
+    issues.push(`${relPath} ${key} must be ${expected}`);
+  }
+}
+
+function requireNonEmptyFrontmatterString(frontmatter, relPath, key, issues) {
+  if (frontmatterString(frontmatter, key).length === 0) {
+    issues.push(`${relPath} ${key} must be non-empty`);
+  }
+}
+
+function hasAcceptClassClosingVerdict(frontmatter) {
+  const rawVerdict =
+    frontmatterString(frontmatter, 'closing_verdict') || frontmatterString(frontmatter, 'verdict');
+  return /^ACCEPT(?:-WITH-FOLD-INS)?(?:\s+\(.+\))?$/.test(rawVerdict);
+}
+
+function validatePhase2CloseCodexReview(rootDir, issues) {
+  const relPath = PHASE2_CLOSE_CODEX_REL;
+  const absPath = join(rootDir, relPath);
+  if (!existsSync(absPath)) {
+    issues.push(`${relPath} missing for phase_close_claim=true`);
+    return;
+  }
+  const parsed = readFrontmatter(absPath);
+  if (!parsed.ok) {
+    issues.push(`${relPath} frontmatter ${parsed.error}`);
+    return;
+  }
+  const fm = parsed.frontmatter;
+  requireNonEmptyFrontmatterString(fm, relPath, 'name', issues);
+  requireNonEmptyFrontmatterString(fm, relPath, 'description', issues);
+  requireFrontmatterString(fm, relPath, 'type', 'review', issues);
+  requireFrontmatterString(fm, relPath, 'review_kind', 'challenger-objection-list', issues);
+  requireFrontmatterString(fm, relPath, 'target_kind', 'phase-close', issues);
+  requireFrontmatterString(fm, relPath, 'review_target', 'phase-2', issues);
+  requireNonEmptyFrontmatterString(fm, relPath, 'review_date', issues);
+  requireNonEmptyFrontmatterString(fm, relPath, 'reviewer_model', issues);
+  requireFrontmatterString(fm, relPath, 'reviewer_role', 'cross-model-challenger', issues);
+  requireFrontmatterString(fm, relPath, 'mode', 'adversarial-llm-review', issues);
+  requireNonEmptyFrontmatterString(fm, relPath, 'opening_verdict', issues);
+  requireNonEmptyFrontmatterString(fm, relPath, 'authored_by', issues);
+  requireNonEmptyFrontmatterString(fm, relPath, 'fold_in_disposition', issues);
+  if (!hasAcceptClassClosingVerdict(fm)) {
+    issues.push(`${relPath} must carry ACCEPT-class closing_verdict/verdict`);
+  }
+}
+
+function validatePhase2OperatorProductCheck(rootDir, issues) {
+  const relPath = PHASE2_OPERATOR_PRODUCT_CHECK_REL;
+  const absPath = join(rootDir, relPath);
+  if (!existsSync(absPath)) {
+    issues.push(`${relPath} missing for phase_close_claim=true`);
+    return;
+  }
+  const parsed = readFrontmatter(absPath);
+  if (!parsed.ok) {
+    issues.push(`${relPath} frontmatter ${parsed.error}`);
+    return;
+  }
+  const fm = parsed.frontmatter;
+  requireFrontmatterString(fm, relPath, 'name', 'phase-2-operator-product-check', issues);
+  requireNonEmptyFrontmatterString(fm, relPath, 'description', issues);
+  requireFrontmatterString(fm, relPath, 'type', 'review', issues);
+  requireFrontmatterString(fm, relPath, 'review_kind', 'operator-product-direction-check', issues);
+  requireFrontmatterString(fm, relPath, 'target_kind', 'phase-close', issues);
+  requireFrontmatterString(fm, relPath, 'review_target', 'phase-2', issues);
+  requireNonEmptyFrontmatterString(fm, relPath, 'review_date', issues);
+  requireNonEmptyFrontmatterString(fm, relPath, 'operator', issues);
+  requireFrontmatterString(fm, relPath, 'scope', 'product-direction-only', issues);
+  requireNonEmptyFrontmatterString(fm, relPath, 'confirmation', issues);
+  const notClaimed = fm.not_claimed;
+  if (!Array.isArray(notClaimed) || notClaimed.length === 0) {
+    issues.push(`${relPath} not_claimed list must be non-empty`);
+  }
+  requireNonEmptyFrontmatterString(fm, relPath, 'authored_by', issues);
+  requireFrontmatterString(fm, relPath, 'adr_authority', 'ADR-0007', issues);
+}
+
+function validateAcceptedAdrCitation(rootDir, rowLabel, relPath, issues) {
+  const parsed = readFrontmatter(join(rootDir, relPath));
+  if (!parsed.ok) {
+    issues.push(`${rowLabel}: re-deferred ADR citation frontmatter ${parsed.error}: ${relPath}`);
+    return;
+  }
+  const status = frontmatterString(parsed.frontmatter, 'status');
+  if (!/^Accepted(?:\s+\(.+\))?$/.test(status)) {
+    issues.push(`${rowLabel}: re-deferred ADR citation must have status Accepted: ${relPath}`);
+  }
+}
+
+function validatePhase2CloseCcRows(rootDir, content, issues) {
+  const table = parseMarkdownTable(content, [
+    'criterion',
+    'status',
+    'evidence path',
+    'passing commit / adr',
+    'structural evidence type',
+  ]);
+  if (!table.ok) {
+    issues.push(`criteria table: ${table.error}`);
+    return { activeRedCount: 0 };
+  }
+
+  const seen = new Set();
+  let activeRedCount = 0;
+  for (const [index, row] of table.rows.entries()) {
+    const label = row.criterion ?? '';
+    if (seen.has(label)) issues.push(`criteria table: duplicate row ${label}`);
+    seen.add(label);
+    const rowLabel = label || `criteria row ${index + 1}`;
+    const status = row.status ?? '';
+    if (!PHASE2_CLOSE_ALLOWED_CC_STATUSES.has(status)) {
+      issues.push(
+        `${rowLabel}: status must be one of ${Array.from(PHASE2_CLOSE_ALLOWED_CC_STATUSES).join(', ')}`,
+      );
+    }
+    if (status === 'active — red') activeRedCount++;
+    validateMatrixEvidencePaths(rootDir, rowLabel, row['evidence path'] ?? '', issues);
+
+    const commitOrAdr = row['passing commit / adr'] ?? '';
+    if (status === 'active — satisfied') {
+      const sha = firstCommitSha(commitOrAdr);
+      if (sha === null) {
+        issues.push(`${rowLabel}: active-satisfied row must name a passing commit SHA`);
+      } else if (!commitResolvesInRepo(rootDir, sha)) {
+        issues.push(`${rowLabel}: passing commit SHA does not resolve in this repo: ${sha}`);
+      }
+    }
+    if (status === 're-deferred') {
+      if (!commitOrAdr.includes('ADR-0007')) {
+        issues.push(`${rowLabel}: re-deferred row must cite ADR-0007`);
+      }
+      if (!commitOrAdr.includes('specs/adrs/ADR-0007-phase-2-close-criteria.md')) {
+        issues.push(`${rowLabel}: re-deferred row must cite the ADR-0007 file path`);
+      }
+      validateAcceptedAdrCitation(
+        rootDir,
+        rowLabel,
+        'specs/adrs/ADR-0007-phase-2-close-criteria.md',
+        issues,
+      );
+    }
+
+    const evidenceType = (row['structural evidence type'] ?? '').trim().toLowerCase();
+    if (
+      evidenceType === 'cross-model challenger' ||
+      evidenceType === 'test-enforced via llm stand-in'
+    ) {
+      issues.push(`${rowLabel}: structural evidence type cannot be LLM-only`);
+    }
+  }
+
+  for (const id of PHASE2_CLOSE_MATRIX_REQUIRED_CC_IDS) {
+    if (!seen.has(id)) issues.push(`criteria table: missing row ${id}`);
+  }
+  for (const id of seen) {
+    if (!PHASE2_CLOSE_MATRIX_REQUIRED_CC_IDS.includes(id)) {
+      issues.push(`criteria table: unexpected row ${id}`);
+    }
+  }
+  return { activeRedCount };
+}
+
+function validatePhase2CloseRatchetRows(rootDir, content, issues) {
+  const table = parseMarkdownTable(content, [
+    'ratchet',
+    'status',
+    'evidence path',
+    'passing commit',
+    'structural evidence type',
+  ]);
+  if (!table.ok) {
+    issues.push(`ratchet table: ${table.error}`);
+    return { redRatchetCount: 0 };
+  }
+
+  const seen = new Set();
+  let redRatchetCount = 0;
+  for (const [index, row] of table.rows.entries()) {
+    const label = row.ratchet ?? '';
+    if (seen.has(label)) issues.push(`ratchet table: duplicate row ${label}`);
+    seen.add(label);
+    const rowLabel = label || `ratchet row ${index + 1}`;
+    const status = row.status ?? '';
+    if (status !== 'green') {
+      redRatchetCount++;
+      issues.push(`${rowLabel}: ratchet status must be green at Phase 2 close`);
+    }
+    validateMatrixEvidencePaths(rootDir, rowLabel, row['evidence path'] ?? '', issues);
+    const sha = firstCommitSha(row['passing commit'] ?? '');
+    if (sha === null) {
+      issues.push(`${rowLabel}: ratchet row must name a passing commit SHA`);
+    } else if (!commitResolvesInRepo(rootDir, sha)) {
+      issues.push(`${rowLabel}: passing commit SHA does not resolve in this repo: ${sha}`);
+    }
+  }
+
+  for (const id of PHASE2_CLOSE_MATRIX_REQUIRED_RATCHETS) {
+    if (!seen.has(id)) issues.push(`ratchet table: missing row ${id}`);
+  }
+  for (const id of seen) {
+    if (!PHASE2_CLOSE_MATRIX_REQUIRED_RATCHETS.includes(id)) {
+      issues.push(`ratchet table: unexpected row ${id}`);
+    }
+  }
+  return { redRatchetCount };
+}
+
+export function checkPhase2CloseMatrix(rootDir = REPO_ROOT) {
+  const matrixPath = join(rootDir, PHASE2_CLOSE_MATRIX_REL);
+  if (!existsSync(matrixPath)) {
+    return {
+      level: 'yellow',
+      detail: `${PHASE2_CLOSE_MATRIX_REL} absent — CC#P2-8 close review has not opened yet`,
+    };
+  }
+
+  const issues = [];
+  const parsed = readFrontmatter(matrixPath);
+  if (!parsed.ok) {
+    issues.push(`frontmatter ${parsed.error ?? 'unreadable'}`);
+  } else {
+    const fm = parsed.frontmatter;
+    const required = {
+      review_kind: 'phase-close-matrix',
+      target_kind: 'phase',
+      phase_target: 'phase-2',
+    };
+    for (const [key, expected] of Object.entries(required)) {
+      if (fm[key] !== expected) issues.push(`frontmatter ${key} must be ${expected}`);
+    }
+    if (!['false', 'true'].includes(String(fm.phase_close_claim ?? ''))) {
+      issues.push('frontmatter phase_close_claim must be false or true');
+    }
+    if (!['active — red', 'active — satisfied'].includes(String(fm.cc_p2_8_state ?? ''))) {
+      issues.push('frontmatter cc_p2_8_state must be active — red or active — satisfied');
+    }
+  }
+
+  const content = readFileSync(matrixPath, 'utf-8');
+  const { activeRedCount } = validatePhase2CloseCcRows(rootDir, content, issues);
+  const { redRatchetCount } = validatePhase2CloseRatchetRows(rootDir, content, issues);
+
+  const fm = parsed.ok ? parsed.frontmatter : {};
+  const phaseCloseClaim = String(fm.phase_close_claim ?? '') === 'true';
+  const ccP28State = String(fm.cc_p2_8_state ?? '');
+
+  if (phaseCloseClaim) {
+    if (ccP28State !== 'active — satisfied') {
+      issues.push('phase_close_claim=true requires cc_p2_8_state active — satisfied');
+    }
+    if (activeRedCount > 0) {
+      issues.push('phase_close_claim=true rejects active-red criteria rows');
+    }
+    if (redRatchetCount > 0) {
+      issues.push('phase_close_claim=true rejects non-green ratchet rows');
+    }
+    validatePhase2CloseCodexReview(rootDir, issues);
+    validatePhase2OperatorProductCheck(rootDir, issues);
+  } else if (ccP28State === 'active — satisfied') {
+    issues.push('cc_p2_8_state active — satisfied requires phase_close_claim=true');
+  }
+
+  if (issues.length > 0) {
+    return {
+      level: 'red',
+      detail: `phase-2 close matrix invalid:\n      ${issues.join('\n      ')}`,
+    };
+  }
+
+  const claimDetail = phaseCloseClaim
+    ? 'phase_close_claim=true'
+    : 'phase_close_claim=false; CC#P2-8 not claimed closed';
+  return {
+    level: 'green',
+    detail: `${PHASE2_CLOSE_MATRIX_REL} shape valid (${PHASE2_CLOSE_MATRIX_REQUIRED_CC_IDS.length} criteria rows, ${PHASE2_CLOSE_MATRIX_REQUIRED_RATCHETS.length} ratchet rows); ${claimDetail}`,
+  };
+}
+
 function parseBooleanCell(value) {
   const normalized = value.trim().toLowerCase();
   if (normalized === 'true') return true;
@@ -6197,6 +6555,20 @@ function main() {
     check:
       'plan-lint on committed plans + operator-signoff binding (Slice 58 / Planning-Readiness Meta-Arc)',
     detail: planLintCheck.detail,
+  });
+
+  // Check 37: Phase 2 close matrix (ADR-0007 CC#P2-8). When the close
+  // matrix is absent, report yellow until the close-review package opens.
+  // Once present, validate every CC#P2-1..P2-7 row and every required
+  // product-ratchet row; a future `phase_close_claim=true` must also carry
+  // the Codex close review and operator product-direction note required by
+  // ADR-0007.
+  const phase2CloseMatrix = checkPhase2CloseMatrix();
+  counters[phase2CloseMatrix.level]++;
+  findings.push({
+    level: phase2CloseMatrix.level,
+    check: 'Phase 2 close matrix (ADR-0007 CC#P2-8)',
+    detail: phase2CloseMatrix.detail,
   });
 
   // Check 31: npm run verify currently green. (Runs last so the report's

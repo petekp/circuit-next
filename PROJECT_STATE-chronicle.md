@@ -12,6 +12,12 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 97 PHASE 2 CLOSE MATRIX DRAFT** (this commit,
+  Ratchet-Advance) - drafted `specs/reviews/phase-2-close-matrix.md` and
+  added `checkPhase2CloseMatrix` so the close-review evidence rows are
+  machine-checked. The matrix does not claim Phase 2 is closed; it keeps the
+  Codex phase-close review and operator product check visible as pending.
+
 - **Slice 96 AGENT SMOKE FINGERPRINT REFRESH** (this commit,
   Ratchet-Advance) - ran the real Claude CLI smoke check after explicit
   operator approval for external Claude disclosure, refreshed
