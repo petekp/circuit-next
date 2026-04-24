@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ExploreSynthesis } from '../schemas/artifacts/explore.js';
+import { ExploreReviewVerdict, ExploreSynthesis } from '../schemas/artifacts/explore.js';
 
 // Slice 54 (Codex H15 fold-in) — dispatch-artifact schema registry +
 // parse helper. Closes the artifact-shape half of the ADR-0008
@@ -36,8 +36,9 @@ import { ExploreSynthesis } from '../schemas/artifacts/explore.js';
 // schemas intentionally stay OUT of this dispatch-materializer registry: the
 // explore contract binds them to orchestrator synthesis writers only. The
 // Slice 90 promotes the dispatch-produced explore.synthesis artifact to its
-// strict payload schema. The remaining explore review and close artifacts stay
-// on the minimal/fallback path until their own schema-specific writers land.
+// strict payload schema. Slice 91 does the same for the dispatch-produced
+// explore.review-verdict artifact. The remaining explore close artifact stays
+// on the minimal/fallback path until its own schema-specific writer lands.
 //
 // `dogfood-strict@v1` is a test-only strict shape used by
 // `tests/runner/materializer-schema-parse.test.ts` case (a)/(b) to
@@ -56,7 +57,7 @@ const StrictPayloadShape = z
 const REGISTRY: Readonly<Record<string, z.ZodType<unknown>>> = Object.freeze({
   'dogfood-canonical@v1': MinimalVerdictShape,
   'explore.synthesis@v1': ExploreSynthesis,
-  'explore.review-verdict@v1': MinimalVerdictShape,
+  'explore.review-verdict@v1': ExploreReviewVerdict,
   'dogfood-strict@v1': StrictPayloadShape,
 });
 

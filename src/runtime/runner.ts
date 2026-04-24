@@ -372,6 +372,15 @@ function dispatchResponseInstruction(
     ].join(' ');
   }
 
+  if (step.writes.artifact?.schema === 'explore.review-verdict@v1') {
+    return [
+      'Respond with a single raw JSON object whose top-level shape is exactly:',
+      '{ "verdict": "<one-of-accepted-verdicts>", "overall_assessment": "<review summary>", "objections": ["<blocking or follow-up objection>"], "missed_angles": ["<important angle not covered>"] }',
+      'Use empty arrays when there are no objections or missed angles. Do not include extra top-level keys. Do not wrap the JSON in Markdown code fences. Do not include any prose before or after the JSON object.',
+      'The runtime parses your response with JSON.parse, rejects any verdict not drawn from the accepted-verdicts list, and validates the full artifact body against explore.review-verdict@v1 before writing artifacts/review-verdict.json.',
+    ].join(' ');
+  }
+
   return 'Respond with a single raw JSON object whose top-level shape is exactly { "verdict": "<one-of-accepted-verdicts>" } (additional fields permitted). Do not wrap the JSON in Markdown code fences. Do not include any prose before or after the JSON object. The runtime parses your response with JSON.parse and rejects the run on any parse failure or on a verdict not drawn from the accepted-verdicts list.';
 }
 

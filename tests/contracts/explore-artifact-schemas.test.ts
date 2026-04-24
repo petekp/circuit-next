@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -5,9 +7,18 @@ import {
   ExploreAspect,
   ExploreBrief,
   ExploreEvidenceCitation,
+  ExploreReviewVerdict,
+  ExploreReviewVerdictValue,
   ExploreSynthesis,
   ExploreSynthesisAspect,
 } from '../../src/schemas/artifacts/explore.js';
+import { Workflow } from '../../src/schemas/workflow.js';
+
+const EXPLORE_FIXTURE_PATH = resolve('.claude-plugin/skills/explore/circuit.json');
+
+function loadExploreWorkflow(): Workflow {
+  return Workflow.parse(JSON.parse(readFileSync(EXPLORE_FIXTURE_PATH, 'utf8')));
+}
 
 describe('P2.10 — explore artifact schemas', () => {
   it('accepts the typed explore.brief shape', () => {
@@ -154,5 +165,50 @@ describe('P2.10 — explore artifact schemas', () => {
         ],
       }).success,
     ).toBe(false);
+  });
+
+  it('accepts the typed explore.review-verdict shape with empty objection lists', () => {
+    expect(
+      ExploreReviewVerdict.parse({
+        verdict: 'accept',
+        overall_assessment: 'The synthesis covers the requested scope',
+        objections: [],
+        missed_angles: [],
+      }),
+    ).toEqual({
+      verdict: 'accept',
+      overall_assessment: 'The synthesis covers the requested scope',
+      objections: [],
+      missed_angles: [],
+    });
+  });
+
+  it('rejects invalid explore.review-verdict verdicts and surplus keys', () => {
+    expect(
+      ExploreReviewVerdict.safeParse({
+        verdict: 'reject',
+        overall_assessment: 'The synthesis misses the requested scope',
+        objections: ['Missing evidence'],
+        missed_angles: [],
+      }).success,
+    ).toBe(false);
+
+    expect(
+      ExploreReviewVerdict.safeParse({
+        verdict: 'accept-with-fold-ins',
+        overall_assessment: 'The synthesis is usable with a follow-up',
+        objections: ['Clarify the migration risk'],
+        missed_angles: ['Operational rollout'],
+        smuggled: true,
+      }).success,
+    ).toBe(false);
+  });
+
+  it('keeps explore.review-verdict verdict vocabulary aligned with the fixture gate', () => {
+    const workflow = loadExploreWorkflow();
+    const reviewStep = workflow.steps.find((step) => step.id === 'review-step');
+    if (reviewStep?.kind !== 'dispatch') throw new Error('expected review-step dispatch');
+
+    expect(reviewStep.gate.pass).toEqual([...ExploreReviewVerdictValue.options]);
   });
 });

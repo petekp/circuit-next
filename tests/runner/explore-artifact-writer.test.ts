@@ -8,6 +8,7 @@ import { type DispatchFn, type DispatchInput, runDogfood } from '../../src/runti
 import {
   ExploreAnalysis,
   ExploreBrief,
+  ExploreReviewVerdict,
   ExploreSynthesis,
 } from '../../src/schemas/artifacts/explore.js';
 import { RunId } from '../../src/schemas/ids.js';
@@ -74,6 +75,27 @@ function stubDispatcher(): DispatchFn {
           cli_version: '0.0.0-stub',
         };
       }
+      if (input.prompt.includes('Step: review-step')) {
+        expect(input.prompt).toContain('"overall_assessment"');
+        expect(input.prompt).toContain('objections');
+        expect(input.prompt).toContain('missed_angles');
+        expect(input.prompt).toContain('Do not include extra top-level keys');
+        expect(input.prompt).toContain(
+          'explore.review-verdict@v1 before writing artifacts/review-verdict.json',
+        );
+        return {
+          request_payload: input.prompt,
+          receipt_id: 'stub-review-verdict',
+          result_body: JSON.stringify({
+            verdict: 'accept-with-fold-ins',
+            overall_assessment: 'The synthesis is usable with one follow-up note',
+            objections: ['Clarify the next artifact boundary'],
+            missed_angles: [],
+          }),
+          duration_ms: 1,
+          cli_version: '0.0.0-stub',
+        };
+      }
       const verdict = input.prompt.includes('Step: review-step')
         ? 'accept-with-fold-ins'
         : 'accept';
@@ -81,6 +103,82 @@ function stubDispatcher(): DispatchFn {
         request_payload: input.prompt,
         receipt_id: `stub-${verdict}`,
         result_body: JSON.stringify({ verdict }),
+        duration_ms: 1,
+        cli_version: '0.0.0-stub',
+      };
+    },
+  };
+}
+
+function incompleteReviewDispatcher(): DispatchFn {
+  return {
+    adapterName: 'agent',
+    dispatch: async (input: DispatchInput): Promise<DispatchResult> => {
+      if (input.prompt.includes('Step: synthesize-step')) {
+        return {
+          request_payload: input.prompt,
+          receipt_id: 'stub-synthesis',
+          result_body: JSON.stringify({
+            verdict: 'accept',
+            subject: 'Reject incomplete review payloads',
+            recommendation: 'Keep review verdicts typed',
+            success_condition_alignment: 'The synthesis lets review run',
+            supporting_aspects: [
+              {
+                aspect: 'review-boundary',
+                contribution: 'The review step receives a valid synthesis artifact',
+              },
+            ],
+          }),
+          duration_ms: 1,
+          cli_version: '0.0.0-stub',
+        };
+      }
+      return {
+        request_payload: input.prompt,
+        receipt_id: 'stub-incomplete-review',
+        result_body: JSON.stringify({ verdict: 'accept' }),
+        duration_ms: 1,
+        cli_version: '0.0.0-stub',
+      };
+    },
+  };
+}
+
+function extraKeyReviewDispatcher(): DispatchFn {
+  return {
+    adapterName: 'agent',
+    dispatch: async (input: DispatchInput): Promise<DispatchResult> => {
+      if (input.prompt.includes('Step: synthesize-step')) {
+        return {
+          request_payload: input.prompt,
+          receipt_id: 'stub-synthesis',
+          result_body: JSON.stringify({
+            verdict: 'accept',
+            subject: 'Reject extra review verdict fields',
+            recommendation: 'Keep review verdicts strict',
+            success_condition_alignment: 'The synthesis lets review run',
+            supporting_aspects: [
+              {
+                aspect: 'review-strictness',
+                contribution: 'The review step receives a valid synthesis artifact',
+              },
+            ],
+          }),
+          duration_ms: 1,
+          cli_version: '0.0.0-stub',
+        };
+      }
+      return {
+        request_payload: input.prompt,
+        receipt_id: 'stub-extra-review',
+        result_body: JSON.stringify({
+          verdict: 'accept',
+          overall_assessment: 'The synthesis is acceptable',
+          objections: [],
+          missed_angles: [],
+          smuggled: true,
+        }),
         duration_ms: 1,
         cli_version: '0.0.0-stub',
       };
@@ -175,6 +273,12 @@ describe('P2.10a — default explore artifact writer', () => {
     );
     expect(synthesis.verdict).toBe('accept');
     expect(synthesis.recommendation).toContain('artifact');
+
+    const reviewVerdict = ExploreReviewVerdict.parse(
+      JSON.parse(readFileSync(join(runRoot, 'artifacts', 'review-verdict.json'), 'utf8')),
+    );
+    expect(reviewVerdict.verdict).toBe('accept-with-fold-ins');
+    expect(reviewVerdict.objections).toHaveLength(1);
   });
 
   it('locates the explore.brief dependency by path rather than read position', async () => {
@@ -262,5 +366,59 @@ describe('P2.10a — default explore artifact writer', () => {
     expect(gate.reason).toMatch(/explore\.synthesis@v1/);
     expect(gate.reason).toMatch(/smuggled|Unrecognized key/);
     expect(() => readFileSync(join(runRoot, 'artifacts', 'synthesis.json'), 'utf8')).toThrow();
+  });
+
+  it('rejects an incomplete explore.review-verdict dispatch result before writing the artifact', async () => {
+    const { workflow, bytes } = loadFixture();
+    const runRoot = join(runRootBase, 'incomplete-review-verdict');
+
+    const outcome = await runDogfood({
+      runRoot,
+      workflow,
+      workflowBytes: bytes,
+      runId: RunId.parse('91000000-0000-0000-0000-000000000000'),
+      goal: 'Reject incomplete review verdict payloads',
+      rigor: 'standard',
+      lane: lane(),
+      now: deterministicNow(Date.UTC(2026, 3, 24, 18, 0, 0)),
+      dispatcher: incompleteReviewDispatcher(),
+    });
+
+    expect(outcome.result.outcome).toBe('aborted');
+    const gate = outcome.events.find(
+      (event) => event.kind === 'gate.evaluated' && event.step_id === 'review-step',
+    );
+    if (gate?.kind !== 'gate.evaluated') throw new Error('expected review gate event');
+    expect(gate.outcome).toBe('fail');
+    expect(gate.reason).toMatch(/explore\.review-verdict@v1/);
+    expect(gate.reason).toMatch(/overall_assessment/);
+    expect(() => readFileSync(join(runRoot, 'artifacts', 'review-verdict.json'), 'utf8')).toThrow();
+  });
+
+  it('rejects an otherwise-valid explore.review-verdict dispatch result with an extra key', async () => {
+    const { workflow, bytes } = loadFixture();
+    const runRoot = join(runRootBase, 'extra-key-review-verdict');
+
+    const outcome = await runDogfood({
+      runRoot,
+      workflow,
+      workflowBytes: bytes,
+      runId: RunId.parse('91000000-0000-0000-0000-000000000001'),
+      goal: 'Reject extra review verdict fields',
+      rigor: 'standard',
+      lane: lane(),
+      now: deterministicNow(Date.UTC(2026, 3, 24, 18, 5, 0)),
+      dispatcher: extraKeyReviewDispatcher(),
+    });
+
+    expect(outcome.result.outcome).toBe('aborted');
+    const gate = outcome.events.find(
+      (event) => event.kind === 'gate.evaluated' && event.step_id === 'review-step',
+    );
+    if (gate?.kind !== 'gate.evaluated') throw new Error('expected review gate event');
+    expect(gate.outcome).toBe('fail');
+    expect(gate.reason).toMatch(/explore\.review-verdict@v1/);
+    expect(gate.reason).toMatch(/smuggled|Unrecognized key/);
+    expect(() => readFileSync(join(runRoot, 'artifacts', 'review-verdict.json'), 'utf8')).toThrow();
   });
 });

@@ -20,6 +20,13 @@ const EXPLORE_SYNTHESIS_BODY = JSON.stringify({
   ],
 });
 
+const EXPLORE_REVIEW_VERDICT_BODY = JSON.stringify({
+  verdict: 'accept',
+  overall_assessment: 'The exploratory synthesis is acceptable',
+  objections: [],
+  missed_angles: [],
+});
+
 function deterministicNow(startMs: number): () => Date {
   let n = 0;
   return () => new Date(startMs + n++ * 1000);
@@ -34,7 +41,9 @@ function dispatcherWithBody(body: string): DispatchFn {
       result_body:
         input.prompt.includes('Step: synthesize-step') && body === '{"verdict":"accept"}'
           ? EXPLORE_SYNTHESIS_BODY
-          : body,
+          : input.prompt.includes('Step: review-step') && body === '{"verdict":"accept"}'
+            ? EXPLORE_REVIEW_VERDICT_BODY
+            : body,
       duration_ms: 1,
       cli_version: '0.0.0-stub',
     }),

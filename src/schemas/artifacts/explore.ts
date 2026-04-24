@@ -52,3 +52,16 @@ export const ExploreSynthesis = z
   })
   .strict();
 export type ExploreSynthesis = z.infer<typeof ExploreSynthesis>;
+
+export const ExploreReviewVerdictValue = z.enum(['accept', 'accept-with-fold-ins']);
+export type ExploreReviewVerdictValue = z.infer<typeof ExploreReviewVerdictValue>;
+
+export const ExploreReviewVerdict = z
+  .object({
+    verdict: ExploreReviewVerdictValue,
+    overall_assessment: z.string().min(1),
+    objections: z.array(z.string().min(1)),
+    missed_angles: z.array(z.string().min(1)),
+  })
+  .strict();
+export type ExploreReviewVerdict = z.infer<typeof ExploreReviewVerdict>;

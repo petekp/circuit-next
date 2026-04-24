@@ -1,4 +1,4 @@
-<!-- current_slice: 90 -->
+<!-- current_slice: 91 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -9,10 +9,10 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 90
-- **current_arc:** P2.10 artifact schema set continuing (Slices 89-90 bind
-  `explore.brief`, `explore.analysis`, and `explore.synthesis` to strict
-  schemas; review/result remain follow-ons)
+- **current_slice:** 91
+- **current_arc:** P2.10 artifact schema set continuing (Slices 89-91 bind
+  `explore.brief`, `explore.analysis`, `explore.synthesis`, and
+  `explore.review-verdict` to strict schemas; close result remains)
 - **current_phase:** Phase 2 — Implementation (continuing)
 
 Chronicle (relocated narrative history — non-authoritative; see
@@ -146,3 +146,10 @@ Slice 90 continued P2.10 by making the dispatch-produced
 asks for the full synthesis JSON shape, and runtime materialization rejects
 incomplete synthesis payloads before `artifacts/synthesis.json` is written.
 `explore.review-verdict` and `explore.result` remain the P2.10 follow-ons.*
+Slice 91 continued P2.10 by making the dispatch-produced
+`explore.review-verdict@v1` artifact strict. The review adapter prompt now
+asks for the full verdict JSON shape, and runtime materialization rejects
+incomplete review verdict payloads before `artifacts/review-verdict.json`
+is written. `explore.result` remains the last P2.10 artifact schema; the
+three-slice P2.10 arc now needs composition review before the next
+privileged runtime slice opens.*

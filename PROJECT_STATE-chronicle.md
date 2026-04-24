@@ -12,6 +12,16 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 91 P2.10 EXPLORE REVIEW-VERDICT SCHEMA** (this commit,
+  Ratchet-Advance) - continued the artifact-schema set by promoting
+  `explore.review-verdict@v1` from the minimal dispatch verdict shape to a
+  strict review verdict payload. The review adapter prompt now names the
+  exact JSON shape needed for `artifacts/review-verdict.json`, and the
+  runtime rejects incomplete review verdict payloads before materializing
+  the canonical artifact. `explore.result` remains the last P2.10
+  follow-on; the P2.10 arc now spans three slices and needs composition
+  review before the next privileged runtime slice opens.
+
 - **Slice 90 P2.10 EXPLORE SYNTHESIS SCHEMA** (this commit,
   Ratchet-Advance) - continued the artifact-schema set by promoting
   `explore.synthesis@v1` from the minimal dispatch verdict shape to a

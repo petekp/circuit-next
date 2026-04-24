@@ -31,6 +31,13 @@ const EXPLORE_SYNTHESIS_BODY = JSON.stringify({
   ],
 });
 
+const EXPLORE_REVIEW_VERDICT_BODY = JSON.stringify({
+  verdict: 'accept',
+  overall_assessment: 'The config-loaded synthesis is acceptable',
+  objections: [],
+  missed_angles: [],
+});
+
 function writeUserConfig(text: string): void {
   const path = userGlobalConfigPath(homeDir);
   mkdirSync(join(homeDir, '.config', 'circuit-next'), { recursive: true });
@@ -180,7 +187,9 @@ circuits:
           receipt_id: 'config-loader-receipt',
           result_body: input.prompt.includes('Step: synthesize-step')
             ? EXPLORE_SYNTHESIS_BODY
-            : '{"verdict":"accept"}',
+            : input.prompt.includes('Step: review-step')
+              ? EXPLORE_REVIEW_VERDICT_BODY
+              : '{"verdict":"accept"}',
           duration_ms: 1,
           cli_version: '0.0.0-stub',
         };
