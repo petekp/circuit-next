@@ -1,4 +1,4 @@
-<!-- current_slice: 73 -->
+<!-- current_slice: 74 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -9,9 +9,9 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 73
-- **current_arc:** runtime-safety-floor (Slice 5 landed: terminal outcome
-  mapping; next planned slice is regression proof and P2.9 freshness check)
+- **current_slice:** 74
+- **current_arc:** runtime-safety-floor (Slice 6 landed: regression proof
+  and P2.9 freshness check; next planned slice is arc-close ceremony)
 - **current_phase:** Phase 2 — Implementation (continuing)
 
 Chronicle (relocated narrative history — non-authoritative; see
@@ -47,3 +47,8 @@ Slice 73 maps terminal route labels to honest run outcomes: `@complete`
 closes complete, `@stop` closes stopped, `@escalate` closes escalated,
 and `@handoff` closes handoff, with `run.closed`, `state.json`,
 `RunProjection`, and `artifacts/result.json` agreeing for each route.*
+Slice 74 records the regression proof for the five original runtime-safety
+findings and declares the challenger-cleared P2.9 second-workflow plan
+fresh against the new path, run-root, dispatch-failure, pass-route,
+terminal-outcome, and synthesis-boundary semantics. No P2.9 implementation
+started in this slice.*

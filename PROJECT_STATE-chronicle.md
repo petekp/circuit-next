@@ -12,6 +12,15 @@ record.*
 
 ## Runtime-Safety-Floor Arc (opened after Slice 68)
 
+- **Slice 74 REGRESSION-PROOF-P2.9-FRESHNESS** (this commit,
+  Equivalence Refactor) - recorded the compact proof that all five
+  original runtime-safety failures now fail closed or report correct
+  outcomes, with exact runtime/test/contract anchors. It also checked the
+  already challenger-cleared P2.9 plan against the new safety floor and
+  found it still semantically valid: future P2.9 work must use fresh run
+  roots and portable run-relative paths, but no P2.9 plan revision or
+  re-challenger is required before operator signoff.
+
 - **Slice 73 TERMINAL-OUTCOME-MAPPING** (this commit, Ratchet-Advance) —
   mapped terminal route labels to their matching run outcomes in the
   runner: `@complete -> complete`, `@stop -> stopped`,
