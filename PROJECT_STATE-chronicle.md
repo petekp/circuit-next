@@ -12,6 +12,15 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 109 BUILD PLAN FIFTH CHALLENGER FOLD-INS** (this commit,
+  Discovery) - recorded the fifth Codex challenger review for the Build plan
+  and folded in its three objections. The plan now says checkpoint work must
+  add typed safe-choice metadata and leave Deep-mode checkpoints as paused-open
+  runs instead of pretending they are closed results. It also says Build modes
+  must feed dispatch selection and checkpoint behavior, and that `/circuit:run`
+  must document router-selected Build and `artifacts/build-result.json`. No
+  Build runtime behavior changed.
+
 - **Slice 108 BUILD PLAN FOURTH CHALLENGER FOLD-INS** (this commit,
   Discovery) - recorded the fourth Codex challenger review for the Build plan
   and folded in its two objections. The plan now requires Build modes to
