@@ -12,6 +12,14 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 105 BUILD PLAN CHALLENGER FOLD-INS** (this commit, Discovery) -
+  recorded the first Codex challenger review for the Build plan and folded in
+  its four objections. The plan now says the first Build step is policy-only,
+  because the runnable fixture needs a new verification step kind first. It
+  also makes command execution safer by requiring typed argv commands instead
+  of shell strings, and it explicitly budgets the audit, tests, and plugin
+  manifest updates needed when `/circuit:build` becomes public.
+
 - **Slice 104 BUILD PLAN COMMITTED FOR REVIEW** (this commit, Discovery) -
   characterized the old Build workflow and committed the circuit-next Build
   parity plan as challenger-pending. The plan keeps Build focused on the

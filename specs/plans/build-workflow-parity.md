@@ -1,10 +1,12 @@
 ---
 plan: build-workflow-parity
 status: challenger-pending
-revision: 01
+revision: 02
 opened_at: 2026-04-24
+revised_at: 2026-04-24
 opened_in_session: post-phase-2-parity-map
-base_commit: 129622e
+revised_in_session: build-workflow-parity-codex-challenger-01-foldins
+base_commit: eb52089
 target: build
 authority:
   - specs/parity-map.md
@@ -24,7 +26,13 @@ artifact_ids:
   - build.verification
   - build.review
   - build.result
-prior_challenger_passes: []
+prior_challenger_passes:
+  - specs/reviews/build-workflow-parity-codex-challenger-01.md
+    (verdict REJECT-PENDING-FOLD-INS vs revision 01 — 1 CRITICAL,
+    2 HIGH, 1 MED; revision 02 folds all four by correcting the base
+    commit binding, making Work item 1 policy-only, pinning the
+    verification command-execution contract, and budgeting public
+    command-surface audit/test/manifest updates)
 ---
 
 # Build Workflow Parity Plan
@@ -37,6 +45,17 @@ Build is a successor-to-live surface. The old Circuit Build workflow is pinned
 in `specs/reference/legacy-circuit/build-characterization.md`; this plan uses
 that shape as reference evidence while keeping circuit-next's structured JSON
 artifact direction.
+
+## §Prior pass log
+
+Revision 02 folds the first Codex challenger pass.
+
+| Pass-01 # | Severity | Objection | Revision-02 fold-in |
+|---|---|---|---|
+| 1 | CRITICAL | Review binding mismatch: revision 01 frontmatter carried `base_commit: 129622e`, while the review was commissioned against `eb520893c3ce80a407f2c761c082b31382ec1d59`. | Frontmatter now carries `base_commit: eb52089`, matching the committed revision-01 plan base used for the folded revision. |
+| 2 | HIGH | Work item 6 under-budgeted the public command surface. | Work item 6 now explicitly includes the audit command-closure check, plugin-surface tests, command-invocation tests, and `.claude-plugin/plugin.json` wired-state description. |
+| 3 | HIGH | Verification command execution substrate lacked a typed non-shell contract. | §7 now defines the substrate-widening slice's verification command contract: argv array, direct exec, no shell wrapping or interpolation, project-root-contained cwd, explicit env, timeout and output limits, and shell-bypass tests. |
+| 4 | MED | Work item 1 claimed a parsing Build fixture before the verification step substrate exists. | Work item 1 is now policy-only. The product fixture lands with Work item 4 after the verification step kind exists. |
 
 ## §1 — Evidence census
 
@@ -53,7 +72,9 @@ artifact direction.
 | E9 | Current router only routes to Explore and Review; Build shortcuts are absent. | verified | `src/runtime/router.ts` |
 | E10 | The command surface currently exposes run, explore, and review; there is no `/circuit:build` command yet. | verified | `commands/` |
 | E11 | Build verification requires command execution evidence. circuit-next does not yet have a dedicated runtime step kind for verification commands. | verified | `src/schemas/step.ts`, `src/runtime/runner.ts`, `specs/reference/legacy-circuit/build-characterization.md` |
-| E12 | Unknown-blocking: none. | unknown-blocking | Current gaps are known enough to plan slices. |
+| E12 | Current plugin command closure, plugin-surface tests, command-invocation tests, and `.claude-plugin/plugin.json` describe exactly run/explore/review. Build command wiring must update those surfaces together. | verified | `commands/`, `.claude-plugin/plugin.json`, `tests/contracts/plugin-surface.test.ts`, `tests/runner/plugin-command-invocation.test.ts`, `scripts/audit.mjs` |
+| E13 | Existing adapter subprocess contracts treat direct argv execution and no shell interpolation as a safety boundary. The verification command execution substrate-widening slice must use the same kind of boundary. | verified | `specs/contracts/adapter.md` |
+| E14 | Unknown-blocking: none. | unknown-blocking | Current gaps are known enough to plan slices. |
 
 ## §2 — Why this plan exists
 
@@ -136,7 +157,17 @@ execution. The likely shape is a new step kind, for example
 `verification-exec`, that:
 
 - reads the planned command list from `build.plan@v1`,
-- runs bounded commands from the project root,
+- represents each command as a typed argv object, not a shell string,
+- requires a non-empty argv array of non-empty strings,
+- runs commands with direct exec only; no `/bin/sh -c`, no shell wrapping, no
+  shell interpolation, and no environment-variable expansion by the runtime,
+- rejects known shell executables as the command binary unless a later ADR
+  explicitly reopens the boundary,
+- constrains cwd to the project root or an explicitly declared
+  project-relative subdirectory that cannot escape the project root,
+- uses an explicit environment policy instead of inheriting arbitrary shell
+  state by accident,
+- applies per-command timeout and output-byte limits,
 - captures command, exit code, stdout/stderr summary, and duration,
 - writes `build.verification@v1`,
 - fails closed when any required command fails,
@@ -147,9 +178,15 @@ If the challenger finds a smaller substrate that proves the same behavior, use
 that smaller substrate. The plan must not replace command execution with a
 placeholder synthesis artifact.
 
+Required negative tests for this substrate include: a single shell-style string
+with spaces where an argv vector is required; shell binaries with `-c`;
+project-root escape through cwd; missing timeout; unbounded output; and a
+metacharacter-bearing argument proving the runtime passes it as a literal argv
+element rather than interpreting it through a shell.
+
 ## §8 — Slices
 
-### Work item 1 — Build policy and fixture skeleton
+### Work item 1 — Build policy only
 
 **Lane:** Ratchet-Advance.
 
@@ -160,14 +197,16 @@ workflow shape, letting later slices invent phases locally.
 
 - Add Build to the workflow-kind policy table with canonicals
   `{frame, plan, act, verify, review, close}` and omitted `{analyze}`.
-- Add a minimal Build fixture skeleton under `.claude-plugin/skills/build/`.
-- Add tests that the fixture parses and the policy rejects malformed Build
-  phase sets.
+- Add policy tests using shaped fixture objects that prove the Build canonical
+  set and omitted Analyze phase.
+- Do not add the product `.claude-plugin/skills/build/circuit.json` fixture in
+  this work item. The target Build fixture needs the verification command
+  execution step kind, which does not exist yet.
 
 **Acceptance evidence:**
 
-- Build fixture parses through the current workflow schema.
 - Policy tests prove Build has exactly the intended canonical phase set.
+- Policy tests reject malformed Build phase sets.
 - `npm run verify` passes.
 - `npm run audit` reports 0 red and no new unaccounted yellows.
 
@@ -175,8 +214,9 @@ workflow shape, letting later slices invent phases locally.
 
 Starting with command wiring would expose `/circuit:build` before there is a
 workflow shape behind it. Starting with schemas would let artifact names drift
-without a registered spine. The smallest safe first move is to pin the Build
-shape.
+without a registered spine. A runnable fixture would force a fake Verify step
+before the verification substrate exists, so the smallest safe first move is a
+policy-only Build shape.
 
 ### Work item 2 — Build artifact schemas and authority rows
 
@@ -247,14 +287,21 @@ runtime cannot prove commands were run.
 
 - Add the smallest runtime step kind or equivalent runtime widening needed to
   execute bounded verification commands.
+- Add the typed command representation described in §7.
 - Add the schema and event surfaces needed to materialize
   `build.verification@v1`.
 - Add tests for pass, fail, timeout/budget, and command-output capture.
+- Add negative tests for shell-string input, shell-binary bypass, cwd escape,
+  missing timeout, and output limit enforcement.
+- Add the first product Build fixture under `.claude-plugin/skills/build/`
+  once the verification step kind can parse honestly.
 - Keep command execution scoped to the project root and existing run safety
   rules.
 
 **Acceptance evidence:**
 
+- Product Build fixture parses through the workflow schema with the real
+  verification step kind.
 - A Build verification step runs a harmless command in test and records pass
   evidence.
 - A failing command aborts or blocks the Build run honestly and cannot close as
@@ -309,11 +356,19 @@ does not recognize build-like tasks.
 - Add `commands/build.md`.
 - Teach the CLI and router to select Build for `/circuit:build` and clear
   build-like `/circuit:run` inputs such as `develop:`.
+- Update the plugin command-closure audit check so Build is an expected public
+  command, not an unexpected extra file.
+- Update plugin-surface tests and command-invocation tests for the four-command
+  set: run, explore, review, and build.
+- Update `.claude-plugin/plugin.json` so its description no longer says the
+  wired command state is only run/explore/review.
 - Add plugin command tests and router tests.
 
 **Acceptance evidence:**
 
 - `/circuit:build` command body invokes `./bin/circuit-next` directly.
+- Audit accepts the expanded command set without weakening the closure check.
+- Plugin manifest and tests agree that Build is now wired.
 - Router tests prove build-like prompts select Build without regressing Review
   and Explore routing.
 - `npm run verify` passes.

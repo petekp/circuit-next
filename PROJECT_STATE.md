@@ -1,4 +1,4 @@
-<!-- current_slice: 104 -->
+<!-- current_slice: 105 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -10,15 +10,15 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 104
-- **current_arc:** Build workflow parity plan is committed as
-  challenger-pending. The old Build workflow is now characterized at
-  `specs/reference/legacy-circuit/build-characterization.md`, and
-  `specs/plans/build-workflow-parity.md` defines the planned Build track:
-  six phases, six structured JSON successor artifacts, real verification
-  command evidence, direct `/circuit:build`, and router expansion. No Build
-  runtime changes have started yet; the next required step is Codex
-  challenger review. P2-1 uses structured JSON as the accepted successor artifact shape; it does not claim old Markdown byte-for-byte compatibility. P2-3 live command proof is included through a live Claude
+- **current_slice:** 105
+- **current_arc:** Build workflow parity plan remains challenger-pending after
+  the first Codex challenger pass. Revision 02 folds the pass-01 objections:
+  corrected the review binding base commit, made the first work item
+  policy-only until the verification step kind exists, pinned verification
+  command execution to a typed non-shell contract, and budgeted the audit,
+  test, and plugin-manifest updates needed for `/circuit:build`. No Build
+  runtime changes have started yet; the next required step is a second Codex
+  challenger review against revision 02. P2-1 uses structured JSON as the accepted successor artifact shape; it does not claim old Markdown byte-for-byte compatibility. P2-3 live command proof is included through a live Claude
   Code invocation of the inline `circuit` plugin. The Phase 2 close claim
   remains narrow: first working workflow product spine closed, not full
   first-generation Circuit parity. Next work is broader parity expansion
