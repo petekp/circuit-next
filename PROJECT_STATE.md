@@ -1,4 +1,4 @@
-<!-- current_slice: 95 -->
+<!-- current_slice: 96 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -9,10 +9,10 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 95
-- **current_arc:** Phase 2 close-evidence cleanup in progress: inherited
-  product-ratchet bindings refreshed; AGENT_SMOKE promotion remains pending
-  explicit operator approval for external Claude disclosure
+- **current_slice:** 96
+- **current_arc:** Phase 2 close-evidence cleanup in progress: Claude and
+  Codex live-smoke fingerprints refreshed; final close-review package remains
+  next
 - **current_phase:** Phase 2 — Implementation (continuing)
 
 Chronicle (relocated narrative history — non-authoritative; see
@@ -175,3 +175,8 @@ audit/test evidence surfaces, and added an audit guard so those rows cannot
 drift back to stale planned-slice placeholders or duplicate claim rows. This
 is Phase 2 close-evidence cleanup; it does not run AGENT_SMOKE or change
 product runtime behavior.*
+Slice 96 refreshed the Claude live-smoke fingerprint after explicit operator
+approval for external Claude disclosure and the CLI smoke check. The real
+explore workflow ran through the Claude adapter and updated
+`tests/fixtures/agent-smoke/last-run.json`. This did not change product
+runtime behavior.*

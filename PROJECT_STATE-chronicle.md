@@ -12,6 +12,12 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 96 AGENT SMOKE FINGERPRINT REFRESH** (this commit,
+  Ratchet-Advance) - ran the real Claude CLI smoke check after explicit
+  operator approval for external Claude disclosure, refreshed
+  `tests/fixtures/agent-smoke/last-run.json`, and cleared the stale Claude
+  fingerprint evidence path. No product runtime behavior changed.
+
 - **Slice 95 INHERITED RATCHET BINDINGS** (this commit,
   Ratchet-Advance) - updated the five stale product-ratchet rows in
   `TIER.md` that still pointed at old planned slices even though the
