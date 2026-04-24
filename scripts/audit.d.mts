@@ -261,6 +261,10 @@ export const CLEAN_CLONE_REALITY_TRANCHE_ARC_CEREMONY_SLICE: number;
 // Slice 62 (Planning-Readiness Meta-Arc arc-close composition review
 // Codex HIGH-1 fold-in) — numeric ceremony_slice for the meta-arc.
 export const PLANNING_READINESS_META_ARC_CEREMONY_SLICE: number;
+// Slice 68 (methodology-trim-arc arc-close ceremony) — numeric
+// ceremony_slice for the methodology-trim arc. Uses the numeric
+// back-compat branch of evaluateArcCloseGate (same as slices 55 + 62).
+export const METHODOLOGY_TRIM_ARC_CEREMONY_SLICE: number;
 export const ARC_CLOSE_GATES: ReadonlyArray<{
   readonly arc_id: string;
   readonly description: string;
@@ -415,6 +419,28 @@ export function checkForbiddenScalarProgressPhrases(rootDir?: string): AuditChec
 export const CODEX_CHALLENGER_REQUIRED_DECLARATION_PATTERN: RegExp;
 export const ARC_SUBSUMPTION_FIELD_PATTERN: RegExp;
 export const CODEX_CHALLENGER_DECLARATION_GRANDFATHERED_COMMITS: Readonly<Record<string, string>>;
+// Slice 68 ARC-CLOSE fold-in (Codex HIGH-1) — tightened arc-subsumption
+// validator surface. ARC_CLOSE_COMPOSITION_REVIEW_FILENAME_PATTERN pins
+// shape (i) (ceremony commits; arc-.+-composition-review-{claude,codex}.md).
+// PER_SLICE_REVIEW_FILENAME_PATTERN pins shape (ii) (fold-in continuation
+// commits; arc-slice-<N>-codex.md; capture group [1] is the numeric slice
+// id). ACCEPT_CLOSING_VERDICT_PATTERN matches `closing_verdict:` frontmatter
+// lines carrying ACCEPT or ACCEPT-WITH-FOLD-INS (quoted or bare; REJECT-*
+// verdicts rejected). validateArcSubsumptionEvidence returns an object with
+// `ok` (boolean), `shape` (`'arc-close'|'per-slice'|null`), and `detail`
+// (one-line human summary).
+export const ARC_CLOSE_COMPOSITION_REVIEW_FILENAME_PATTERN: RegExp;
+export const PER_SLICE_REVIEW_FILENAME_PATTERN: RegExp;
+export const ACCEPT_CLOSING_VERDICT_PATTERN: RegExp;
+export function validateArcSubsumptionEvidence(
+  rootDir: string,
+  subsumptionPath: string,
+  subjectSliceId: string,
+): {
+  readonly ok: boolean;
+  readonly shape: 'arc-close' | 'per-slice' | null;
+  readonly detail: string;
+};
 export function checkCodexChallengerRequiredDeclaration(rootDir?: string): AuditCheckResult;
 
 // Slice 30 — DOG+2 slice:doctor reuses the lane and framing literals enforced

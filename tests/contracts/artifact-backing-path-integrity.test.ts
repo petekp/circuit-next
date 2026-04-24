@@ -9,6 +9,7 @@ import {
   ARTIFACT_BACKING_PATH_KNOWN_COLLISIONS,
   ARTIFACT_BACKING_PATH_PREFIX_SYNONYMS,
   CLEAN_CLONE_REALITY_TRANCHE_ARC_CEREMONY_SLICE,
+  METHODOLOGY_TRIM_ARC_CEREMONY_SLICE,
   PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE,
   PHASE_2_P2_4_P2_5_ARC_LAST_SLICE,
   PLANNING_READINESS_META_ARC_CEREMONY_SLICE,
@@ -673,6 +674,50 @@ describe('checkArcCloseCompositionReviewPresence (fold-in Codex HIGH 4)', () => 
     const result = checkArcCloseCompositionReviewPresence();
     expect(result.level).not.toBe('red');
   });
+
+  // Slice 68 ARC-CLOSE fold-in (Codex re-dispatch HIGH-2): frontmatter-only
+  // verdict parsing. The prior implementation's fallback branch
+  // (`/\b(ACCEPT|ACCEPT-WITH-FOLD-INS)\b/.test(body) && /closing/i.test(body)`)
+  // false-greened on reject prongs whose body prose mentioned ACCEPT in
+  // verdict-vocabulary blocks or quoted discussion. The fix restricts
+  // verdict parsing to the YAML frontmatter `closing_verdict:` field only.
+  it('REJECTS a prong whose frontmatter closing_verdict is REJECT even when body prose mentions ACCEPT (Codex re-dispatch HIGH-2)', () => {
+    withTempRepo((root) => {
+      writePlanFile(root);
+      writeProjectStateWithSlice(root, PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE);
+      // Body prose contains "ACCEPT" and "closing" — the old fallback
+      // would have false-greened this. Frontmatter closing_verdict is
+      // REJECT-PENDING-FOLD-INS, which is the authoritative value.
+      const rejectProngWithAcceptProse = [
+        '---',
+        'closing_verdict: REJECT-PENDING-FOLD-INS',
+        '---',
+        '# Review',
+        '',
+        'The verdict vocabulary: ACCEPT means all closed; ACCEPT-WITH-FOLD-INS',
+        'means only LOW findings. The closing verdict below reflects the',
+        'actual state, not the vocabulary.',
+        '',
+        '## Closing verdict',
+        '',
+        'REJECT-PENDING-FOLD-INS.',
+        '',
+      ].join('\n');
+      writeRel(
+        root,
+        'specs/reviews/arc-slices-35-to-40-composition-review-claude.md',
+        rejectProngWithAcceptProse,
+      );
+      writeRel(
+        root,
+        'specs/reviews/arc-slices-35-to-40-composition-review-codex.md',
+        '---\nclosing_verdict: ACCEPT-WITH-FOLD-INS\n---\n# review\n',
+      );
+      const result = checkArcCloseCompositionReviewPresence(root);
+      expect(result.level).toBe('red');
+      expect(result.detail).toMatch(/lack ACCEPT closing verdict/);
+    });
+  });
 });
 
 // Slice 44 arc-close fold-in (convergent Claude+Codex HIGH 3): generalized
@@ -697,7 +742,7 @@ describe('ARC_CLOSE_GATES + checkArcCloseCompositionReviewPresence (Slice 44 gen
     );
   });
 
-  it('ARC_CLOSE_GATES contains all five arcs with matching ceremony_slice constants', () => {
+  it('ARC_CLOSE_GATES contains all six arcs with matching ceremony_slice constants', () => {
     // Slice 47d (Codex HIGH 5 + Claude HIGH 3 fold-in): length bumped
     // 2 → 3 with the new slice-47 hardening fold-in arc entry.
     // Slice 55 (Clean-Clone Reality Tranche arc-close composition review
@@ -708,7 +753,10 @@ describe('ARC_CLOSE_GATES + checkArcCloseCompositionReviewPresence (Slice 44 gen
     // Slice 62 (Planning-Readiness Meta-Arc arc-close composition review
     // Codex HIGH-1 fold-in — same gate-binding gap class as Slice 55):
     // length bumped 4 → 5 with the new planning-readiness-meta-arc entry.
-    expect(ARC_CLOSE_GATES).toHaveLength(5);
+    // Slice 68 (methodology-trim-arc arc-close ceremony — same gate shape
+    // as slice-55 + slice-62; numeric ceremony_slice: 68):
+    // length bumped 5 → 6 with the new methodology-trim-arc entry.
+    expect(ARC_CLOSE_GATES).toHaveLength(6);
     const oldArc = ARC_CLOSE_GATES.find(
       (g) => g.arc_id === 'phase-2-foundation-foldins-slices-35-to-40',
     );
@@ -718,11 +766,13 @@ describe('ARC_CLOSE_GATES + checkArcCloseCompositionReviewPresence (Slice 44 gen
     const slice47Arc = ARC_CLOSE_GATES.find((g) => g.arc_id === 'slice-47-hardening-foldins');
     const cleanCloneArc = ARC_CLOSE_GATES.find((g) => g.arc_id === 'clean-clone-reality-tranche');
     const metaArc = ARC_CLOSE_GATES.find((g) => g.arc_id === 'planning-readiness-meta-arc');
+    const methodologyTrimArc = ARC_CLOSE_GATES.find((g) => g.arc_id === 'methodology-trim-arc');
     expect(oldArc).toBeDefined();
     expect(p2ArcNew).toBeDefined();
     expect(slice47Arc).toBeDefined();
     expect(cleanCloneArc).toBeDefined();
     expect(metaArc).toBeDefined();
+    expect(methodologyTrimArc).toBeDefined();
     expect(oldArc?.ceremony_slice).toBe(PHASE_2_FOUNDATION_FOLDINS_ARC_LAST_SLICE);
     expect(p2ArcNew?.ceremony_slice).toBe(PHASE_2_P2_4_P2_5_ARC_LAST_SLICE);
     expect(slice47Arc?.ceremony_slice).toBe(SLICE_47_HARDENING_FOLDINS_ARC_CEREMONY_SLICE);
@@ -751,6 +801,21 @@ describe('ARC_CLOSE_GATES + checkArcCloseCompositionReviewPresence (Slice 44 gen
       ),
     ).toBe(true);
     expect(metaArc?.review_file_regex.test('arc-slice-58-codex.md')).toBe(false);
+    expect(methodologyTrimArc?.ceremony_slice).toBe(METHODOLOGY_TRIM_ARC_CEREMONY_SLICE);
+    expect(typeof methodologyTrimArc?.ceremony_slice).toBe('number');
+    expect(methodologyTrimArc?.plan_path).toBe('specs/plans/methodology-trim-arc.md');
+    expect(
+      methodologyTrimArc?.review_file_regex.test(
+        'arc-methodology-trim-composition-review-claude.md',
+      ),
+    ).toBe(true);
+    expect(
+      methodologyTrimArc?.review_file_regex.test(
+        'arc-methodology-trim-composition-review-codex.md',
+      ),
+    ).toBe(true);
+    expect(methodologyTrimArc?.review_file_regex.test('arc-slice-64-codex.md')).toBe(false);
+    expect(methodologyTrimArc?.review_file_regex.test('arc-slice-67-codex.md')).toBe(false);
   });
 
   it('returns green with "in progress" detail for the 41-to-43 arc when current_slice < 44 and both arcs are applicable', () => {

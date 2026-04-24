@@ -3,7 +3,96 @@
 *Non-authoritative history. Live state lives at `## §0 Live state` of
 [PROJECT_STATE.md](PROJECT_STATE.md); this file is the relocated narrative
 log of prior slices, preserved for audit trail. Split from PROJECT_STATE.md
-at Slice 67 (methodology-trim-arc LIVE-STATE-HELPER) per plan §5.2.*
+at Slice 67 (methodology-trim-arc LIVE-STATE-HELPER) per plan §5.2.
+Authoritative ceremony evidence lives in commit bodies themselves (see
+`git log`); entries here are narrative companions, not the authority of
+record.*
+
+---
+
+## Methodology-Trim Arc (Slices 64-68) — compact chronicle backfill
+
+*Slice 68 ARC-CLOSE fold-in (Codex MED-2). Backfilled at arc-close after
+Codex composition-review observed that the per-slice narrative for this
+arc was absent from the chronicle. Entries are one-line pointers; the
+authoritative ceremony evidence is the commit body at each listed SHA.*
+
+- **Slice 64 CHEAP-TRIM** (42fdd2f, Ratchet-Advance) — plan-lint rule #23
+  prospective-chronology detector (P1-P5 + narrow exact-heading skip +
+  quote guard + `specs/plans/**` path scope); new morning-report
+  exception template at `specs/session-notes/_template-exception-report.md`;
+  ADR decision/appendix split convention; `.gitmessage` structured trailer
+  (Lane/Isolation/Arc-Ref/Signoff-Predecessor); CLAUDE.md cap raise
+  300 → 450 via new ADR-0011.
+- **Slice 64a fold-ins** (f525a6f, Ratchet-Advance) — Codex HIGH-1
+  (ADR-0011 self-host Decision/Appendix split) + MED-1 (trailer literal
+  alignment with audit LANES/Isolation parsing) + MED-2 (300→450 cap
+  propagation across session-hygiene authority surface). ACCEPT-WITH-FOLD-INS.
+- **Slice 65 RULE-CUT** (6ef6425, Ratchet-Advance) — cut plan-lint rules
+  #8 (blocked-invariant-without-full-escrow, self-referential), #11
+  (arc-trajectory-check-present, prose-only), #22 (blocked-invariant-
+  must-resolve-before-arc-close, same predicate as #8); collapsed CLAUDE.md
+  §Lane-discipline framing quadruplet (failure mode / acceptance evidence
+  / alternate framing / trajectory check) → pair (failure mode /
+  acceptance evidence / why-this-not-adjacent). 22 rules → 20 active
+  (numbering preserved as gaps).
+- **Slice 65a fold-ins** (00f6e66, Ratchet-Advance) — Codex MED-1 sharp
+  ratchet: `SLICE_65_FRAMING_BOUNDARY = 6ef64255` + `commitIsPreSlice65Framing(hash)`
+  helper so post-Slice-65 authors using old `Alternate framing:` literal
+  yellow instead of staying silently green; MED-2 (live-authority text
+  sync to "framing pair / 20 active rules"); LOW-1 (secondary count
+  cleanup). ACCEPT-WITH-FOLD-INS.
+- **Slice 66 LIFECYCLE-SPLIT** (c5ed772, Ratchet-Advance) — ADR-0010
+  amendment: `AUTHORING_STATUSES` = {evidence-draft, challenger-pending}
+  + `COMMITTED_STATUSES` = {challenger-pending, challenger-cleared,
+  operator-signoff, closed} (overlap at challenger-pending). plan-lint
+  CLI gains `--context=authoring|committed` flag; rule #15
+  `status-field-valid` parameterized by context; audit Check 36 invokes
+  `--context=committed` at commit boundaries.
+- **Slice 66a fold-ins** (6003cf6, Ratchet-Advance) — Codex MED-1
+  (`UNTRACKED_PERMITTED_STATUSES` presented-as-derived honesty cleanup);
+  MED-2 (section-aware tests assert green baseline before rule absence);
+  LOW-1 (`--context committed` bare-form CLI parsing rejects explicitly).
+  ACCEPT-WITH-FOLD-INS.
+- **Slice 67 LIVE-STATE-HELPER** (3e9336a, Ratchet-Advance) — new
+  `readLiveStateSection` helper in scripts/audit.mjs + type surface;
+  PROJECT_STATE.md 796 → 24 lines: HTML-comment marker preserved unchanged
+  + **Phase:** line retained (SESSION-I2 load-bearing) + NEW
+  `## §0 Live state` section with current_slice / current_arc /
+  current_phase bullets; PROJECT_STATE-chronicle.md created with
+  relocated narrative history (non-authoritative by design). Zero
+  production callers for the helper (compat-shim per plan §5 F2 fold-in).
+- **Slice 67a fold-ins** (34e79cb, Ratchet-Advance) — Codex MED-1
+  (`FORBIDDEN_PROGRESS_CONTENT_EXEMPT_FILES` exported; Check 34 detail
+  distinguishes enumerated / content-scanned / content-exempt files);
+  LOW-1 (§0 `current_phase` bullet ↔ top-level `**Phase:**` line
+  contract-test binding in `tests/contracts/session-hygiene.test.ts`).
+  ACCEPT-WITH-FOLD-INS.
+- **Slice 68 ARC-CLOSE** (THIS COMMIT, Equivalence Refactor) —
+  two-prong arc-close composition review (Claude fresh-read +
+  Codex cross-model challenger) at
+  `specs/reviews/arc-methodology-trim-composition-review-{claude,codex}.md`;
+  ARC_CLOSE_GATES entry for methodology-trim-arc with
+  `METHODOLOGY_TRIM_ARC_CEREMONY_SLICE = 68`; artifact-backing-path
+  contract-test length pin 5 → 6 + methodology-trim entry assertions;
+  plan `status: operator-signoff → closed` + `closed_at: 2026-04-23` +
+  `closed_in_slice: 68` + flat `prior_challenger_passes:` field
+  (Codex MED-1 fold-in); Check 35 `arc-subsumption:` validator
+  tightening (Codex HIGH-1 fold-in) — no longer a file-exists loophole;
+  now requires shape match (arc-close composition review OR
+  predecessor-per-slice review for fold-in continuation commits) +
+  ACCEPT-class closing_verdict; PROJECT_STATE.md authority wording
+  reconciled with chronicle's "non-authoritative history" disclaimer
+  (Codex MED-2 fold-in) + current_slice markers 67a → 68 in
+  PROJECT_STATE/README/TIER same commit per Check 26 staging
+  discipline. Forcing function: P2.9 restart -a rate < 15% target
+  after arc lands.
+
+**Arc close.** Net burden ledger (plan §7): +6 artifacts/ADRs / -2 rules /
+internal complexity +1 (neutralized). Bounded re-cut with operator-
+authorized 5-slice exception; net-negative covenant applies to *next*
+cycle. Forcing function discharges at P2.9 restart with measured -a rate;
+if P2.9 restart exceeds 3 slices or -a > 20%, reopen trim work.
 
 ---
 

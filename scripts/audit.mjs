@@ -3309,6 +3309,17 @@ export const CLEAN_CLONE_REALITY_TRANCHE_ARC_CEREMONY_SLICE = 55;
 // same-commit-staging discipline.
 export const PLANNING_READINESS_META_ARC_CEREMONY_SLICE = 62;
 
+// Slice 68 (methodology-trim-arc arc-close ceremony). Numeric
+// ceremony_slice 68 so the gate fires at current_slice=68. Review-file
+// regex pinned to /arc-methodology-trim.*composition-review/i so per-slice
+// review records (arc-slice-64/65/66/67-codex.md) do not satisfy the gate;
+// only the two arc-close composition review prong files at
+// `specs/reviews/arc-methodology-trim-composition-review-{claude,codex}.md`
+// do. Ceremony commit stages both prong files + this gate entry + the
+// current_slice advance (67a → 68) + plan `status: closed` atomically per
+// the same-commit-staging discipline.
+export const METHODOLOGY_TRIM_ARC_CEREMONY_SLICE = 68;
+
 export const ARC_CLOSE_GATES = Object.freeze([
   Object.freeze({
     arc_id: 'phase-2-foundation-foldins-slices-35-to-40',
@@ -3368,6 +3379,19 @@ export const ARC_CLOSE_GATES = Object.freeze([
     ceremony_slice: PLANNING_READINESS_META_ARC_CEREMONY_SLICE,
     plan_path: 'specs/plans/planning-readiness-meta-arc.md',
     review_file_regex: /arc-planning-readiness-meta-arc-composition-review/i,
+  }),
+  // Slice 68 (methodology-trim-arc arc-close ceremony): same gate shape
+  // as slice-55 + slice-62. Numeric ceremony_slice uses the back-compat
+  // numeric branch of evaluateArcCloseGate. Review-file regex pinned so
+  // per-slice records (arc-slice-64/65/66/67-codex.md) do not satisfy
+  // the gate; only the two arc-close composition review prong files
+  // (arc-methodology-trim-composition-review-{claude,codex}.md) do.
+  Object.freeze({
+    arc_id: 'methodology-trim-arc',
+    description: 'Methodology-Trim Arc (Slices 64-68)',
+    ceremony_slice: METHODOLOGY_TRIM_ARC_CEREMONY_SLICE,
+    plan_path: 'specs/plans/methodology-trim-arc.md',
+    review_file_regex: /arc-methodology-trim.*composition-review/i,
   }),
 ]);
 
@@ -3525,10 +3549,18 @@ function evaluateArcCloseGate(gate, sliceNum, reviewsDir, opts = {}) {
   }
 
   function hasAcceptClosingVerdict(fileName) {
-    const body = readFileSync(join(reviewsDir, fileName), 'utf-8');
-    if (/closing_verdict:\s*(ACCEPT|ACCEPT-WITH-FOLD-INS)/i.test(body)) return true;
-    if (/\b(ACCEPT|ACCEPT-WITH-FOLD-INS)\b/.test(body) && /closing/i.test(body)) return true;
-    return false;
+    // Slice 68 ARC-CLOSE fold-in (Codex re-dispatch HIGH-2): frontmatter-only
+    // verdict parsing. Previously the fallback branch
+    // `/\b(ACCEPT|ACCEPT-WITH-FOLD-INS)\b/.test(body) && /closing/i.test(body)`
+    // false-greened on reject prongs that mentioned ACCEPT in prose
+    // (e.g., verdict-vocabulary blocks, "if all prior findings close:
+    // ACCEPT", etc.). Use the structured frontmatter parser + strict value
+    // match on the `closing_verdict:` field only.
+    const parsed = readFrontmatter(join(reviewsDir, fileName));
+    if (!parsed.ok) return false;
+    const raw = parsed.frontmatter.closing_verdict;
+    if (typeof raw !== 'string') return false;
+    return /^ACCEPT(?:-WITH-FOLD-INS)?\b/.test(raw.trim());
   }
 
   const claudeAccepted = claudeProngs.filter(hasAcceptClosingVerdict);
@@ -4205,11 +4237,34 @@ export function checkForbiddenScalarProgressPhrases(rootDir = REPO_ROOT) {
 //       subject's `slice-<id>:` prefix (letter-suffix aware via
 //       SLICE_COMMIT_SUBJECT_PATTERN); or
 //   (b) an explicit `arc-subsumption: <path>` line in the commit body
-//       pointing at an existing arc-close composition review file.
+//       pointing at an existing review file whose shape + verdict the
+//       tightened validator accepts (see Slice 68 fold-in note below).
 //
 // The check is scoped to HEAD because older commits are frozen history;
 // any future ratchet-advancing slice that lands as the new HEAD without
 // one of the two evidence paths lands red on its very first audit run.
+//
+// Slice 68 methodology-trim-arc ARC-CLOSE fold-in (Codex HIGH-1): the
+// original arc-subsumption branch accepted any existsSync(path) which
+// made it a file-exists loophole — a commit that self-declared
+// `Codex challenger: REQUIRED` could satisfy the gate with an arbitrary
+// existing file. Tightened validator now requires:
+//   * path matches one of two shapes:
+//     (i)  arc-close composition review:
+//          `specs/reviews/arc-.+-composition-review-(claude|codex).md`
+//     (ii) predecessor-slice per-slice review (for fold-in continuation
+//          commits whose subject slice id has a letter suffix like
+//          "67a", "64a"): `specs/reviews/arc-slice-<predecessor>-codex.md`
+//          where `<predecessor>` is the numeric prefix of the subject's
+//          canonical slice id (e.g., subject "slice-67a:" →
+//          predecessor "67"; subject "slice-47c-2:" → predecessor "47"
+//          via the same strip-and-retry fallback the per-slice path
+//          uses).
+//   * file body carries ACCEPT-class `closing_verdict:` (ACCEPT or
+//     ACCEPT-WITH-FOLD-INS; REJECT-class verdicts rejected).
+// Retains back-compat with all prior uses (slice-55/62 ceremony commits
+// use shape i; 64a/65a/66a/67a fold-ins use shape ii; both verdicts
+// resolve ACCEPT-class).
 //
 // Grandfather list: commits `1c4a5b1` (47b-retro) and `73c729c`
 // (47c-partial-retro) were landed under the Slice 47c-2 MED 2 trigger
@@ -4221,10 +4276,154 @@ export function checkForbiddenScalarProgressPhrases(rootDir = REPO_ROOT) {
 export const CODEX_CHALLENGER_REQUIRED_DECLARATION_PATTERN = /^Codex challenger:\s*REQUIRED\b/im;
 export const ARC_SUBSUMPTION_FIELD_PATTERN = /^arc-subsumption:\s*(\S.*?)\s*$/im;
 
+// Slice 68 ARC-CLOSE fold-in (Codex HIGH-1): exported filename-shape
+// patterns for the tightened arc-subsumption validator. Shape (i) pins
+// the arc-close composition-review naming convention used by ceremony
+// commits (slice-55, slice-62, slice-68). Shape (ii) pins the predecessor-
+// slice per-slice review naming convention used by fold-in continuation
+// commits (slice-64a/65a/66a/67a).
+export const ARC_CLOSE_COMPOSITION_REVIEW_FILENAME_PATTERN =
+  /^arc-.+-composition-review-(?:claude|codex)\.md$/i;
+export const PER_SLICE_REVIEW_FILENAME_PATTERN = /^arc-slice-([0-9]+[a-z]?)-codex\.md$/i;
+
+// Slice 68 ARC-CLOSE fold-in (Codex HIGH-1): ACCEPT-class closing_verdict
+// matcher. Matches both quoted ("ACCEPT-WITH-FOLD-INS (detail)") and
+// unquoted (ACCEPT-WITH-FOLD-INS) forms. Rejects REJECT-PENDING-FOLD-INS
+// and any non-ACCEPT verdict.
+export const ACCEPT_CLOSING_VERDICT_PATTERN =
+  /^closing_verdict:\s*(?:"\s*ACCEPT(?:-WITH-FOLD-INS)?\b|ACCEPT(?:-WITH-FOLD-INS)?\b)/im;
+
 export const CODEX_CHALLENGER_DECLARATION_GRANDFATHERED_COMMITS = Object.freeze({
   '1c4a5b1': 'specs/reviews/arc-slice-47b-codex.md',
   '73c729c': 'specs/reviews/arc-slice-47c-codex.md',
 });
+
+// Slice 68 ARC-CLOSE fold-in (Codex HIGH-1): tightened arc-subsumption
+// validator. Returns { ok: boolean, shape: 'arc-close'|'per-slice'|null,
+// detail: string } where `detail` is a one-line human summary explaining
+// accept or reject.
+//
+// Slice 68 re-dispatch fold-in (Codex HIGH-1 tightening): shape (i) now
+// requires the referenced file to match the ARC_CLOSE_GATES entry whose
+// ceremony_slice matches the HEAD commit's subject slice id. A slice-68
+// ceremony commit cannot satisfy the gate by pointing arc-subsumption at
+// an unrelated arc's composition-review file (e.g., pointing slice-68 at
+// clean-clone-reality-tranche's review). This closes the generic-arc-close
+// false-green Codex re-dispatch HIGH-1 flagged.
+export function validateArcSubsumptionEvidence(rootDir, subsumptionPath, subjectSliceId) {
+  const abs = join(rootDir, subsumptionPath);
+  if (!existsSync(abs)) {
+    return {
+      ok: false,
+      shape: null,
+      detail: `arc-subsumption path does not exist under rootDir=${rootDir}: ${subsumptionPath}`,
+    };
+  }
+
+  const fileName = subsumptionPath.split('/').pop() ?? subsumptionPath;
+  const arcCloseMatch = ARC_CLOSE_COMPOSITION_REVIEW_FILENAME_PATTERN.test(fileName);
+  const perSliceMatch = fileName.match(PER_SLICE_REVIEW_FILENAME_PATTERN);
+
+  let shape = null;
+  if (arcCloseMatch) {
+    // Slice 68 re-dispatch fold-in (Codex HIGH-1 tightening): arc-bound
+    // validation. Find the ARC_CLOSE_GATES entry whose ceremony_slice
+    // matches subject slice id (numeric equality for number-form; string
+    // equality for string-form like '47d'). The referenced filename MUST
+    // match that specific gate's review_file_regex; otherwise the
+    // arc-subsumption is pointing at an unrelated arc's review and must
+    // be rejected even though the filename matches the generic arc-close
+    // composition-review shape.
+    const canonicalSliceId = subjectSliceId.match(/^[0-9]+[a-z]?/)?.[0] ?? subjectSliceId;
+    const matchingGate = ARC_CLOSE_GATES.find((gate) => {
+      if (typeof gate.ceremony_slice === 'number') {
+        return String(gate.ceremony_slice) === canonicalSliceId;
+      }
+      if (typeof gate.ceremony_slice === 'string') {
+        return gate.ceremony_slice === canonicalSliceId;
+      }
+      return false;
+    });
+    if (!matchingGate) {
+      return {
+        ok: false,
+        shape: 'arc-close',
+        detail: `arc-subsumption: ${subsumptionPath} filename matches generic arc-close composition-review shape, but HEAD subject slice id "${subjectSliceId}" (canonical "${canonicalSliceId}") does not correspond to any registered ARC_CLOSE_GATES entry. Ceremony commits must have a matching gate entry whose ceremony_slice equals the subject slice id; add the entry before committing.`,
+      };
+    }
+    if (!matchingGate.review_file_regex.test(fileName)) {
+      return {
+        ok: false,
+        shape: 'arc-close',
+        detail: `arc-subsumption: ${subsumptionPath} filename "${fileName}" does not match the arc-bound review_file_regex ${matchingGate.review_file_regex} for ARC_CLOSE_GATES entry "${matchingGate.arc_id}" (ceremony_slice=${matchingGate.ceremony_slice}). Arc-close ceremony commits may only arc-subsume their OWN arc's composition-review file, not another arc's.`,
+      };
+    }
+    shape = 'arc-close';
+  } else if (perSliceMatch) {
+    // Shape (ii) applies only when the HEAD commit's subject slice id has
+    // a letter suffix (it is a fold-in continuation of a predecessor
+    // slice). Derive the predecessor from the canonical numeric prefix.
+    const canonicalSliceId = subjectSliceId.match(/^[0-9]+[a-z]?/)?.[0] ?? subjectSliceId;
+    const letterSuffixMatch = canonicalSliceId.match(/^([0-9]+)([a-z])$/);
+    if (!letterSuffixMatch) {
+      return {
+        ok: false,
+        shape: null,
+        detail: `arc-subsumption: ${subsumptionPath} matches per-slice review shape (arc-slice-<N>-codex.md) but HEAD subject slice id "${subjectSliceId}" (canonical "${canonicalSliceId}") has no letter suffix — per-slice arc-subsumption is only permitted on fold-in continuation commits (Nx shape). Ceremony commits (slice-<N> with no letter suffix) must reference an arc-close composition-review file matching arc-.+-composition-review-(claude|codex).md.`,
+      };
+    }
+    const expectedPredecessor = letterSuffixMatch[1];
+    const actualPerSliceId = perSliceMatch[1];
+    if (actualPerSliceId !== expectedPredecessor) {
+      return {
+        ok: false,
+        shape: null,
+        detail: `arc-subsumption: ${subsumptionPath} references arc-slice-${actualPerSliceId}-codex.md but HEAD subject slice id "${subjectSliceId}" (canonical "${canonicalSliceId}") expects predecessor slice "${expectedPredecessor}" — fold-in continuation arc-subsumption must cite the matching predecessor slice's per-slice review.`,
+      };
+    }
+    shape = 'per-slice';
+  } else {
+    return {
+      ok: false,
+      shape: null,
+      detail: `arc-subsumption: ${subsumptionPath} filename "${fileName}" matches neither shape (i) arc-close composition review (arc-.+-composition-review-(claude|codex).md) nor shape (ii) predecessor-slice per-slice review (arc-slice-<N>-codex.md).`,
+    };
+  }
+
+  // Verdict check: the referenced review must carry an ACCEPT-class
+  // closing_verdict. REJECT-PENDING-FOLD-INS is not acceptable evidence
+  // for a commit declaring "Codex challenger: REQUIRED".
+  //
+  // Slice 68 re-dispatch HIGH (pass 3): frontmatter-only parsing. The
+  // earlier `ACCEPT_CLOSING_VERDICT_PATTERN.test(body)` branch false-greened
+  // on REJECT frontmatter + later body line containing
+  // `closing_verdict: ACCEPT` (the `m` flag matches any line-start). Switch
+  // to the structured `readFrontmatter()` parser + strict value match on
+  // the `closing_verdict:` frontmatter field only, mirroring the fix
+  // applied to `hasAcceptClosingVerdict` in evaluateArcCloseGate.
+  const parsed = readFrontmatter(abs);
+  if (!parsed.ok) {
+    return {
+      ok: false,
+      shape,
+      detail: `arc-subsumption: ${subsumptionPath} (${shape} shape) exists but frontmatter is ${parsed.error ?? 'unreadable'}; cannot verify closing_verdict.`,
+    };
+  }
+  const rawVerdict = parsed.frontmatter.closing_verdict;
+  if (typeof rawVerdict !== 'string' || !/^ACCEPT(?:-WITH-FOLD-INS)?\b/.test(rawVerdict.trim())) {
+    return {
+      ok: false,
+      shape,
+      detail: `arc-subsumption: ${subsumptionPath} (${shape} shape) exists but frontmatter closing_verdict is "${rawVerdict ?? '<missing>'}"; ACCEPT or ACCEPT-WITH-FOLD-INS required; REJECT-PENDING-FOLD-INS rejected.`,
+    };
+  }
+
+  return {
+    ok: true,
+    shape,
+    detail: `arc-subsumption: ${subsumptionPath} (${shape} shape) + ACCEPT-class frontmatter closing_verdict; Check 35 satisfied via arc-subsumption path`,
+  };
+}
 
 export function checkCodexChallengerRequiredDeclaration(rootDir = REPO_ROOT) {
   let headSha;
@@ -4274,24 +4473,37 @@ export function checkCodexChallengerRequiredDeclaration(rootDir = REPO_ROOT) {
   }
 
   // Declaration present: require matching per-slice review OR arc-subsumption field.
+  // Parse the subject slice id first so the arc-subsumption validator can
+  // distinguish ceremony commits (no letter suffix) from fold-in continuation
+  // commits (letter-suffixed id).
   const arcSubsumptionMatch = body.match(ARC_SUBSUMPTION_FIELD_PATTERN);
+  const subjectMatch = subject.match(SLICE_COMMIT_SUBJECT_PATTERN);
   if (arcSubsumptionMatch) {
     const subsumptionPath = arcSubsumptionMatch[1];
-    const abs = join(rootDir, subsumptionPath);
-    if (existsSync(abs)) {
+    // Slice 68 ARC-CLOSE fold-in (Codex HIGH-1): tightened validator
+    // replaces raw existsSync check. Require path shape + ACCEPT-class
+    // verdict. Subject must be parseable so shape (ii) predecessor
+    // derivation works; if subject does not match SLICE_COMMIT_SUBJECT_PATTERN,
+    // only shape (i) (arc-close composition review) is admissible.
+    const sliceIdForValidation = subjectMatch ? subjectMatch[1] : '';
+    const validation = validateArcSubsumptionEvidence(
+      rootDir,
+      subsumptionPath,
+      sliceIdForValidation,
+    );
+    if (validation.ok) {
       return {
         level: 'green',
-        detail: `HEAD commit body declares "Codex challenger: REQUIRED" + arc-subsumption: ${subsumptionPath} (file present); Check 35 satisfied via arc-subsumption path`,
+        detail: `HEAD commit body declares "Codex challenger: REQUIRED" + ${validation.detail}`,
       };
     }
     return {
       level: 'red',
-      detail: `HEAD commit body declares "Codex challenger: REQUIRED" + arc-subsumption: ${subsumptionPath} but the named file does not exist under rootDir=${rootDir}`,
+      detail: `HEAD commit body declares "Codex challenger: REQUIRED" but ${validation.detail}`,
     };
   }
 
   // No arc-subsumption field: look for per-slice review file matching the subject's slice id.
-  const subjectMatch = subject.match(SLICE_COMMIT_SUBJECT_PATTERN);
   if (!subjectMatch) {
     return {
       level: 'red',

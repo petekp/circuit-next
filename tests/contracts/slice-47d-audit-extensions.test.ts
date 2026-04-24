@@ -5,14 +5,18 @@ import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  ACCEPT_CLOSING_VERDICT_PATTERN,
+  ARC_CLOSE_COMPOSITION_REVIEW_FILENAME_PATTERN,
   CODEX_CHALLENGER_DECLARATION_GRANDFATHERED_COMMITS,
   FORBIDDEN_PROGRESS_SCAN_FILES,
   FORBIDDEN_PROGRESS_SCAN_GLOBS,
+  PER_SLICE_REVIEW_FILENAME_PATTERN,
   SLICE_47_HARDENING_FOLDINS_ARC_CEREMONY_SLICE,
   checkArcCloseCompositionReviewPresence,
   checkCodexChallengerRequiredDeclaration,
   checkForbiddenScalarProgressPhrases,
   compareSliceId,
+  validateArcSubsumptionEvidence,
 } from '../../scripts/audit.mjs';
 
 // Slice 47d — audit-extensions tests covering the three new surfaces the
@@ -299,6 +303,334 @@ describe('Slice 47d — forbidden-progress scan scope extension (Codex HIGH 3 fo
       const result = checkForbiddenScalarProgressPhrases(root);
       expect(result.level).toBe('red');
       expect(result.detail).toContain('TIER.md');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+// Slice 68 ARC-CLOSE fold-in (Codex HIGH-1) — tightened Check 35
+// arc-subsumption validator. Before this slice the branch accepted any
+// existsSync(path); a commit that self-declared `Codex challenger: REQUIRED`
+// could satisfy the gate with an arbitrary existing file. The tightened
+// validator requires shape match + ACCEPT-class closing_verdict.
+describe('Slice 68 ARC-CLOSE — validateArcSubsumptionEvidence (Codex HIGH-1 fold-in)', () => {
+  it('ARC_CLOSE_COMPOSITION_REVIEW_FILENAME_PATTERN matches ceremony prong filenames', () => {
+    expect(
+      ARC_CLOSE_COMPOSITION_REVIEW_FILENAME_PATTERN.test(
+        'arc-clean-clone-reality-composition-review-claude.md',
+      ),
+    ).toBe(true);
+    expect(
+      ARC_CLOSE_COMPOSITION_REVIEW_FILENAME_PATTERN.test(
+        'arc-clean-clone-reality-composition-review-codex.md',
+      ),
+    ).toBe(true);
+    expect(
+      ARC_CLOSE_COMPOSITION_REVIEW_FILENAME_PATTERN.test(
+        'arc-methodology-trim-composition-review-codex.md',
+      ),
+    ).toBe(true);
+    expect(
+      ARC_CLOSE_COMPOSITION_REVIEW_FILENAME_PATTERN.test(
+        'arc-slice-47-composition-review-codex.md',
+      ),
+    ).toBe(true);
+  });
+
+  it('ARC_CLOSE_COMPOSITION_REVIEW_FILENAME_PATTERN rejects per-slice review filenames', () => {
+    expect(ARC_CLOSE_COMPOSITION_REVIEW_FILENAME_PATTERN.test('arc-slice-67-codex.md')).toBe(false);
+    expect(ARC_CLOSE_COMPOSITION_REVIEW_FILENAME_PATTERN.test('arc-slice-47c-codex.md')).toBe(
+      false,
+    );
+  });
+
+  it('PER_SLICE_REVIEW_FILENAME_PATTERN captures the slice id', () => {
+    const match1 = 'arc-slice-67-codex.md'.match(PER_SLICE_REVIEW_FILENAME_PATTERN);
+    expect(match1).not.toBeNull();
+    expect(match1?.[1]).toBe('67');
+    const match2 = 'arc-slice-47c-codex.md'.match(PER_SLICE_REVIEW_FILENAME_PATTERN);
+    expect(match2).not.toBeNull();
+    expect(match2?.[1]).toBe('47c');
+  });
+
+  it('ACCEPT_CLOSING_VERDICT_PATTERN matches bare and quoted ACCEPT verdicts', () => {
+    expect(ACCEPT_CLOSING_VERDICT_PATTERN.test('closing_verdict: ACCEPT\n')).toBe(true);
+    expect(ACCEPT_CLOSING_VERDICT_PATTERN.test('closing_verdict: ACCEPT-WITH-FOLD-INS\n')).toBe(
+      true,
+    );
+    expect(
+      ACCEPT_CLOSING_VERDICT_PATTERN.test(
+        'closing_verdict: "ACCEPT-WITH-FOLD-INS (1 HIGH + 2 MED)"\n',
+      ),
+    ).toBe(true);
+    expect(ACCEPT_CLOSING_VERDICT_PATTERN.test('closing_verdict: "ACCEPT"\n')).toBe(true);
+  });
+
+  it('ACCEPT_CLOSING_VERDICT_PATTERN rejects REJECT-class verdicts', () => {
+    expect(ACCEPT_CLOSING_VERDICT_PATTERN.test('closing_verdict: REJECT-PENDING-FOLD-INS\n')).toBe(
+      false,
+    );
+    expect(
+      ACCEPT_CLOSING_VERDICT_PATTERN.test('closing_verdict: "REJECT-PENDING-FOLD-INS (...)"\n'),
+    ).toBe(false);
+    expect(ACCEPT_CLOSING_VERDICT_PATTERN.test('closing_verdict:\n')).toBe(false);
+  });
+
+  it('validateArcSubsumptionEvidence — shape (i) arc-close: accepts ceremony filename + ACCEPT verdict (arc-bound to subject slice id)', () => {
+    withTempRepo((root) => {
+      writeRel(
+        root,
+        'specs/reviews/arc-methodology-trim-composition-review-codex.md',
+        '---\nclosing_verdict: ACCEPT-WITH-FOLD-INS\n---\n',
+      );
+      // Subject slice id "68" maps to ARC_CLOSE_GATES methodology-trim-arc
+      // entry (ceremony_slice: 68). The referenced filename matches its
+      // review_file_regex. Accept.
+      const result = validateArcSubsumptionEvidence(
+        root,
+        'specs/reviews/arc-methodology-trim-composition-review-codex.md',
+        '68',
+      );
+      expect(result.ok).toBe(true);
+      expect(result.shape).toBe('arc-close');
+    });
+  });
+
+  it('validateArcSubsumptionEvidence — shape (i) arc-close: REJECTS when referenced file is a different arc (Codex re-dispatch HIGH-1)', () => {
+    withTempRepo((root) => {
+      // Simulate Codex's attack: a slice-68 commit tries to arc-subsume
+      // clean-clone-reality-tranche's review file. Filename matches the
+      // GENERIC arc-close composition-review shape but does NOT match
+      // slice-68's arc-bound review_file_regex (methodology-trim-arc).
+      writeRel(
+        root,
+        'specs/reviews/arc-clean-clone-reality-composition-review-codex.md',
+        '---\nclosing_verdict: ACCEPT-WITH-FOLD-INS\n---\n',
+      );
+      const result = validateArcSubsumptionEvidence(
+        root,
+        'specs/reviews/arc-clean-clone-reality-composition-review-codex.md',
+        '68',
+      );
+      expect(result.ok).toBe(false);
+      expect(result.detail).toMatch(/arc-bound review_file_regex/);
+      expect(result.detail).toMatch(/methodology-trim-arc/);
+    });
+  });
+
+  it('validateArcSubsumptionEvidence — shape (i) REJECTS ceremony commit with no matching ARC_CLOSE_GATES entry', () => {
+    withTempRepo((root) => {
+      writeRel(
+        root,
+        'specs/reviews/arc-nonexistent-arc-composition-review-codex.md',
+        '---\nclosing_verdict: ACCEPT-WITH-FOLD-INS\n---\n',
+      );
+      // Subject slice id "999" has no ARC_CLOSE_GATES entry.
+      const result = validateArcSubsumptionEvidence(
+        root,
+        'specs/reviews/arc-nonexistent-arc-composition-review-codex.md',
+        '999',
+      );
+      expect(result.ok).toBe(false);
+      expect(result.detail).toMatch(/does not correspond to any registered ARC_CLOSE_GATES entry/);
+    });
+  });
+
+  it('validateArcSubsumptionEvidence — shape (ii) per-slice: accepts matching predecessor + ACCEPT verdict', () => {
+    withTempRepo((root) => {
+      writeRel(
+        root,
+        'specs/reviews/arc-slice-67-codex.md',
+        '---\nclosing_verdict: ACCEPT-WITH-FOLD-INS\n---\n',
+      );
+      const result = validateArcSubsumptionEvidence(
+        root,
+        'specs/reviews/arc-slice-67-codex.md',
+        '67a',
+      );
+      expect(result.ok).toBe(true);
+      expect(result.shape).toBe('per-slice');
+    });
+  });
+
+  it('validateArcSubsumptionEvidence — shape (ii) rejects mismatched predecessor', () => {
+    withTempRepo((root) => {
+      writeRel(
+        root,
+        'specs/reviews/arc-slice-67-codex.md',
+        '---\nclosing_verdict: ACCEPT-WITH-FOLD-INS\n---\n',
+      );
+      const result = validateArcSubsumptionEvidence(
+        root,
+        'specs/reviews/arc-slice-67-codex.md',
+        '64a',
+      );
+      expect(result.ok).toBe(false);
+      expect(result.detail).toMatch(/expects predecessor slice "64"/);
+    });
+  });
+
+  it('validateArcSubsumptionEvidence — shape (ii) rejects ceremony subject (no letter suffix)', () => {
+    withTempRepo((root) => {
+      writeRel(
+        root,
+        'specs/reviews/arc-slice-67-codex.md',
+        '---\nclosing_verdict: ACCEPT-WITH-FOLD-INS\n---\n',
+      );
+      const result = validateArcSubsumptionEvidence(
+        root,
+        'specs/reviews/arc-slice-67-codex.md',
+        '68',
+      );
+      expect(result.ok).toBe(false);
+      expect(result.detail).toMatch(/has no letter suffix/);
+    });
+  });
+
+  it('validateArcSubsumptionEvidence — REJECT-class verdict rejected under any shape', () => {
+    withTempRepo((root) => {
+      writeRel(
+        root,
+        'specs/reviews/arc-methodology-trim-composition-review-codex.md',
+        '---\nclosing_verdict: REJECT-PENDING-FOLD-INS\n---\n',
+      );
+      const result = validateArcSubsumptionEvidence(
+        root,
+        'specs/reviews/arc-methodology-trim-composition-review-codex.md',
+        '68',
+      );
+      expect(result.ok).toBe(false);
+      expect(result.shape).toBe('arc-close');
+      expect(result.detail).toMatch(/closing_verdict is "REJECT/);
+    });
+  });
+
+  // Slice 68 re-dispatch HIGH (pass 3): frontmatter-only verdict parsing
+  // in validateArcSubsumptionEvidence. Before this fold-in, the validator
+  // used `ACCEPT_CLOSING_VERDICT_PATTERN.test(body)` with the `m` flag,
+  // which matched any line-start. A review file whose frontmatter said
+  // REJECT-PENDING-FOLD-INS but whose body contained a line
+  // `closing_verdict: ACCEPT` would false-green. Fixed by switching to
+  // `readFrontmatter()` + strict field match.
+  it('validateArcSubsumptionEvidence — REJECTS REJECT-class frontmatter even when body prose mentions ACCEPT (re-dispatch HIGH pass 3)', () => {
+    withTempRepo((root) => {
+      const rejectWithAcceptProse = [
+        '---',
+        'closing_verdict: REJECT-PENDING-FOLD-INS',
+        '---',
+        '',
+        '# Review',
+        '',
+        'Verdict vocabulary: closing_verdict: ACCEPT means all closed.',
+        '',
+        'closing_verdict: ACCEPT-WITH-FOLD-INS (this is a body mention, not the verdict)',
+        '',
+      ].join('\n');
+      writeRel(
+        root,
+        'specs/reviews/arc-methodology-trim-composition-review-codex.md',
+        rejectWithAcceptProse,
+      );
+      const result = validateArcSubsumptionEvidence(
+        root,
+        'specs/reviews/arc-methodology-trim-composition-review-codex.md',
+        '68',
+      );
+      expect(result.ok).toBe(false);
+      expect(result.shape).toBe('arc-close');
+      expect(result.detail).toMatch(/closing_verdict is "REJECT-PENDING-FOLD-INS"/);
+    });
+  });
+
+  it('checkCodexChallengerRequiredDeclaration integration — REJECT-class frontmatter with body-ACCEPT prose stays red (re-dispatch HIGH pass 3)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'slice-68-check35-pass3-'));
+    try {
+      execFileSync('git', ['init', '-q'], { cwd: root });
+      execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: root });
+      execFileSync('git', ['config', 'user.name', 'Test'], { cwd: root });
+      const commitBody = [
+        'Lane: Equivalence Refactor',
+        'Codex challenger: REQUIRED',
+        'arc-subsumption: specs/reviews/arc-methodology-trim-composition-review-codex.md',
+      ].join('\n');
+      writeRel(
+        root,
+        'specs/reviews/arc-methodology-trim-composition-review-codex.md',
+        [
+          '---',
+          'closing_verdict: REJECT-PENDING-FOLD-INS',
+          '---',
+          '',
+          '# Review',
+          'closing_verdict: ACCEPT (in body prose, not frontmatter)',
+          '',
+        ].join('\n'),
+      );
+      execFileSync('git', ['add', '.'], { cwd: root });
+      execFileSync('git', ['commit', '-q', '-m', `slice-68: arc-close ceremony\n\n${commitBody}`], {
+        cwd: root,
+      });
+      const origCwd = process.cwd();
+      process.chdir(root);
+      try {
+        const result = checkCodexChallengerRequiredDeclaration(root);
+        expect(result.level).toBe('red');
+        expect(result.detail).toMatch(/closing_verdict is "REJECT-PENDING-FOLD-INS"/);
+      } finally {
+        process.chdir(origCwd);
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('validateArcSubsumptionEvidence — arbitrary existing file with plausible name but wrong shape rejected', () => {
+    withTempRepo((root) => {
+      // Pre-Slice-68 false-green pattern: commit declares REQUIRED + arc-subsumption
+      // pointing at some existing per-slice review whose filename does NOT match
+      // either shape (e.g., a non-canonical name). The file-exists loophole would
+      // have GREENed this; tightened validator REDs.
+      writeRel(root, 'specs/reviews/arbitrary-evidence.md', '---\nclosing_verdict: ACCEPT\n---\n');
+      const result = validateArcSubsumptionEvidence(
+        root,
+        'specs/reviews/arbitrary-evidence.md',
+        '68',
+      );
+      expect(result.ok).toBe(false);
+      expect(result.detail).toMatch(/matches neither shape/);
+    });
+  });
+
+  it('checkCodexChallengerRequiredDeclaration integration — tightened arc-subsumption REDs REJECT-class prong', () => {
+    const root = mkdtempSync(join(tmpdir(), 'slice-68-check35-'));
+    try {
+      execFileSync('git', ['init', '-q'], { cwd: root });
+      execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: root });
+      execFileSync('git', ['config', 'user.name', 'Test'], { cwd: root });
+      const body = [
+        'Lane: Equivalence Refactor',
+        'Codex challenger: REQUIRED',
+        'arc-subsumption: specs/reviews/arc-methodology-trim-composition-review-codex.md',
+      ].join('\n');
+      writeRel(
+        root,
+        'specs/reviews/arc-methodology-trim-composition-review-codex.md',
+        '---\nclosing_verdict: REJECT-PENDING-FOLD-INS\n---\n',
+      );
+      execFileSync('git', ['add', '.'], { cwd: root });
+      execFileSync('git', ['commit', '-q', '-m', `slice-68: arc-close ceremony\n\n${body}`], {
+        cwd: root,
+      });
+      const origCwd = process.cwd();
+      process.chdir(root);
+      try {
+        const result = checkCodexChallengerRequiredDeclaration(root);
+        expect(result.level).toBe('red');
+        expect(result.detail).toMatch(/closing_verdict is "REJECT-PENDING-FOLD-INS"/);
+      } finally {
+        process.chdir(origCwd);
+      }
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

@@ -1,11 +1,14 @@
 ---
 plan: methodology-trim-arc
-status: operator-signoff
+status: closed
 revision: 02
 opened_at: 2026-04-23
 revised_at: 2026-04-23
 cleared_at: 2026-04-23
 signoff_at: 2026-04-23
+closed_at: 2026-04-23
+closed_in_slice: 68
+closed_with: "arc-close composition review (two prongs) + Codex HIGH-1 Check 35 arc-subsumption validator tightening + MED-1 flat prior_challenger_passes field + MED-2 chronicle backfill + authority-wording reconciliation, all folded same-commit per Check 26 staging discipline; ARC_CLOSE_GATES entry added (slice-68)"
 opened_in_session: post-p2-9-revision-04-cleared
 revised_in_session: post-codex-pass-05-foldins
 cleared_in_session: post-codex-pass-06-accept-with-foldins
@@ -15,6 +18,19 @@ reviewed_plan:
   challenger_artifact: specs/reviews/methodology-trim-arc-codex-challenger-06.md
   challenger_artifact_commit: e62b187
   plan_content_sha256_at_review: 721faad8d19df4733c129a25bf158d32dda81712f7a1622179cc7b81016ce51d
+# Slice 68 ARC-CLOSE fold-in (Codex MED-1): flat prior_challenger_passes
+# list per ADR-0010 §169. The reviewed_plan: nested block above is
+# unreadable by parseSimpleYaml (plan-lint.mjs:233 — plan frontmatter is
+# intentionally flat); this flat list is the machine-readable challenger
+# lineage surface Codex-MED-1 required. Only committed challenger-pass
+# files are listed; passes 01-05 were REJECT-class drafts on prior
+# revisions not promoted to committed artifacts (plan §11 prior pass log
+# carries the full draft history).
+prior_challenger_passes:
+  - specs/reviews/methodology-trim-arc-codex-challenger-06.md
+    (verdict ACCEPT-WITH-FOLD-INS on revision 02; fold-in status recorded
+    in §Fold-in log — pass 05 → revision 02 at the top of this file; plan
+    authored under ADR-0010 lifecycle gate)
 base_commit: 46cfceebe1f6cf0776d127f58afedc65486d0c5b
 lane: Ratchet-Advance
 arc_size: 5 slices — operator-authorized exception to 3-slice default
