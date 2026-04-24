@@ -12,6 +12,15 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 98 LEGACY EXPLORE CHARACTERIZATION** (this commit,
+  Ratchet-Advance) - recorded the old Circuit Explore workflow shape at
+  `specs/reference/legacy-circuit/explore-characterization.md`, reclassified
+  the matching circuit-next Explore artifacts as clean-break successors to
+  the old Markdown artifacts, and added a contract test so the Phase 2 close
+  matrix cannot count the current JSON self-golden as old-Circuit parity. P2-1
+  remains red until a reference-backed comparison or explicit ADR substitute
+  lands.
+
 - **Slice 97 PHASE 2 CLOSE MATRIX DRAFT** (this commit,
   Ratchet-Advance) - drafted `specs/reviews/phase-2-close-matrix.md` and
   added `checkPhase2CloseMatrix` so the close-review evidence rows are

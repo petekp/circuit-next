@@ -3,6 +3,7 @@ contract: explore
 status: draft
 version: 0.7
 schema_source: .claude-plugin/skills/explore/circuit.json (fixture) + src/schemas/artifacts/explore.ts (explore.brief / explore.analysis / explore.synthesis / explore.review-verdict / explore.result)
+reference_evidence: specs/reference/legacy-circuit/explore-characterization.md
 last_updated: 2026-04-24
 depends_on: [workflow, phase, step, selection, rigor, lane, skill, adapter]
 codex_adversarial_review: specs/reviews/explore-md-v0.1-codex.md
@@ -60,6 +61,17 @@ Slice 91 does the same for `explore.review-verdict`. Slice 92 closes the
 first schema tranche with composition review, and Slice 93 replaces the
 close-phase placeholder with the strict `explore.result` aggregate schema
 and registered close writer.
+
+Slice 98 records the live reference shape at
+`specs/reference/legacy-circuit/explore-characterization.md`: old Circuit's
+Explore workflow is Markdown-first (`brief.md`, `analysis.md`, `plan.md`,
+`decision.md`, and declared `result.md`). circuit-next's `brief`,
+`analysis`, `synthesis`, and `result` artifacts are clean-break structured
+JSON successors; `explore.review-verdict` is a new circuit-next artifact
+with no old Explore counterpart. This characterization does not itself
+satisfy CC#P2-1; it prevents the circuit-next JSON golden from being treated
+as reference-Circuit byte-shape parity without an explicit comparison or ADR
+amendment.
 
 If future refactoring introduces a workflow-kind concept at the Zod
 layer (e.g., `kind: 'explore'` field), EXPLORE-I1 and the four

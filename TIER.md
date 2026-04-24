@@ -5,7 +5,7 @@ type: tier-claim-matrix
 date: 2026-04-20
 ---
 
-<!-- current_slice: 97 -->
+<!-- current_slice: 98 -->
 
 # TIER Claim Matrix
 
@@ -15,7 +15,7 @@ claimed` is honest signal, not failure. Orphan claims are the failure mode.
 
 | claim_id | status | file_path | planned_slice | rationale |
 |---|---|---|---|---|
-| contract_tests | enforced | `tests/contracts/schema-parity.test.ts`; `tests/contracts/artifact-authority.test.ts`; `tests/contracts/cross-model-challenger.test.ts`; `tests/contracts/governance-reform.test.ts`; `tests/contracts/invariant-ledger.test.ts`; `tests/contracts/legacy-continuity-guard.test.ts`; `tests/contracts/primitives.test.ts`; `tests/contracts/prose-yaml-parity.test.ts`; `tests/contracts/session-hygiene.test.ts`; `tests/contracts/specs-portability.test.ts` |  | Current contract-test suite. |
+| contract_tests | enforced | `tests/contracts/schema-parity.test.ts`; `tests/contracts/artifact-authority.test.ts`; `tests/contracts/cross-model-challenger.test.ts`; `tests/contracts/governance-reform.test.ts`; `tests/contracts/invariant-ledger.test.ts`; `tests/contracts/legacy-continuity-guard.test.ts`; `tests/contracts/legacy-explore-characterization.test.ts`; `tests/contracts/primitives.test.ts`; `tests/contracts/prose-yaml-parity.test.ts`; `tests/contracts/session-hygiene.test.ts`; `tests/contracts/specs-portability.test.ts` |  | Current contract-test suite. |
 | audit_discipline | enforced | `scripts/audit.mjs` |  | Drift-visibility audit implementation. |
 | authority_graph | enforced | `specs/artifacts.json` |  | Authority graph source of truth. |
 | invariant_ledger | enforced | `specs/invariants.json` |  | Invariant and property ledger. |

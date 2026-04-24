@@ -593,8 +593,8 @@
     },
     {
       "id": "explore.brief",
-      "surface_class": "greenfield",
-      "compatibility_policy": "n/a",
+      "surface_class": "successor-to-live",
+      "compatibility_policy": "clean-break",
       "plane": "data-plane",
       "description": "Framing artifact produced by the Frame phase of an explore workflow run. Declares the subject, operator task statement, and success condition for the investigation. Slice 89 starts P2.10 by binding this artifact to a strict schema and default runtime writer.",
       "contract": "specs/contracts/explore.md",
@@ -608,16 +608,16 @@
       "path_derived_fields": [],
       "dangerous_sinks": ["success-condition binding for synthesize + review phases"],
       "trust_boundary": "engine-authored deterministic v0 writer during Frame phase; read-only thereafter within the run; not cross-run shared. A future model-authored framing writer must reopen this trust-boundary text.",
-      "reference_surfaces": [],
-      "reference_evidence": [],
-      "migration_policy": "n/a",
-      "legacy_parse_policy": "n/a",
+      "reference_surfaces": ["legacy-circuit explore artifacts/brief.md"],
+      "reference_evidence": ["specs/reference/legacy-circuit/explore-characterization.md"],
+      "migration_policy": "Clean-break structured JSON successor to the reference Markdown artifact; no transparent parse of legacy brief.md is attempted.",
+      "legacy_parse_policy": "reject",
       "dangling_reference_policy": "n/a"
     },
     {
       "id": "explore.analysis",
-      "surface_class": "greenfield",
-      "compatibility_policy": "n/a",
+      "surface_class": "successor-to-live",
+      "compatibility_policy": "clean-break",
       "plane": "data-plane",
       "description": "Analyze-phase artifact produced by an explore workflow run. Decomposes the subject (from explore.brief) into named aspects with evidence citations. Slice 89 starts P2.10 by binding this artifact to a strict schema and default runtime writer.",
       "contract": "specs/contracts/explore.md",
@@ -633,16 +633,16 @@
         "synthesis input — aspects that don't round-trip cleanly will leak into the synthesis recommendation without trace"
       ],
       "trust_boundary": "engine-authored deterministic v0 writer during Analyze phase from explore.brief; read-only thereafter within the run. A future model-authored analysis writer must reopen this trust-boundary text.",
-      "reference_surfaces": [],
-      "reference_evidence": [],
-      "migration_policy": "n/a",
-      "legacy_parse_policy": "n/a",
+      "reference_surfaces": ["legacy-circuit explore artifacts/analysis.md"],
+      "reference_evidence": ["specs/reference/legacy-circuit/explore-characterization.md"],
+      "migration_policy": "Clean-break structured JSON successor to the reference Markdown artifact; no transparent parse of legacy analysis.md is attempted.",
+      "legacy_parse_policy": "reject",
       "dangling_reference_policy": "n/a"
     },
     {
       "id": "explore.synthesis",
-      "surface_class": "greenfield",
-      "compatibility_policy": "n/a",
+      "surface_class": "successor-to-live",
+      "compatibility_policy": "clean-break",
       "plane": "data-plane",
       "description": "Synthesize-phase artifact — the explore workflow's primary output. A recommendation, decision candidate set, or investigation conclusion with explicit mapping back to the brief's success condition. Slice 90 binds this dispatch-produced artifact to a strict schema.",
       "contract": "specs/contracts/explore.md",
@@ -660,10 +660,13 @@
         "dispatch-result-to-artifact materialization (per ADR-0008 §Decision.3a) — the canonical synthesis.json value is produced by schema-parsing the adapter-authored writes.result payload, so an adversarial or malformed adapter response is the upstream risk surface that downstream readers inherit"
       ],
       "trust_boundary": "model-authored during Synthesize phase via adapter dispatch (worker-dispatch step with role=implementer per ADR-0008); the role tag binds to DispatchConfig.roles.implementer at runtime, recorded in the five-event dispatch transcript with payload + receipt + result hashes per ADR-0007 CC#P2-2 + §Amendment (Slice 37); distinct-adapter / distinct-model enforcement is evidential at P2.4/P2.5 landing (weaker-evidence disclosure per ADR-0007 §6.4; Codex Slice 38 HIGH 1 fold-in — DispatchConfig.roles permits implementer and reviewer to bind to the same adapter at v0.2, and ResolvedAdapter carries no differs-from-prior-dispatch field); canonical artifact materializes from writes.result via ADR-0008 §Decision.3a rule; read-only thereafter within the run; the primary output artifact for explore workflows",
-      "reference_surfaces": [],
-      "reference_evidence": [],
-      "migration_policy": "n/a",
-      "legacy_parse_policy": "n/a",
+      "reference_surfaces": [
+        "legacy-circuit explore artifacts/plan.md",
+        "legacy-circuit explore artifacts/decision.md"
+      ],
+      "reference_evidence": ["specs/reference/legacy-circuit/explore-characterization.md"],
+      "migration_policy": "Clean-break structured JSON successor to the reference Markdown decide outputs; no transparent parse of legacy plan.md or decision.md is attempted.",
+      "legacy_parse_policy": "reject",
       "dangling_reference_policy": "n/a"
     },
     {
@@ -694,8 +697,8 @@
     },
     {
       "id": "explore.result",
-      "surface_class": "greenfield",
-      "compatibility_policy": "n/a",
+      "surface_class": "successor-to-live",
+      "compatibility_policy": "clean-break",
       "plane": "data-plane",
       "description": "Close-phase aggregate artifact for the explore workflow run. Composes a deterministic summary, verdict snapshot, and pointers to the four prior artifacts (brief, analysis, synthesis, review-verdict). Persisted at <run-root>/artifacts/explore-result.json — distinct from the engine-authored universal run.result at <run-root>/artifacts/result.json per Slice 39 HIGH 4 fold-in (option (b) path-split resolution). Per-workflow <kind>-result.json siblings is the canonical pattern for future workflow-specific aggregates (build-result.json, repair-result.json, etc.).",
       "contract": "specs/contracts/explore.md",
@@ -714,10 +717,10 @@
       "path_derived_fields": [],
       "dangerous_sinks": ["run result consumer; operator-facing summary of the explore run"],
       "trust_boundary": "engine-computed at Close by the registered explore.result@v1 synthesis writer from schema-parsed synthesis.json and review-verdict.json plus workflow-declared artifact pointer paths; terminal artifact — no in-run readers; cross-run reader is the run result consumer only; path-distinct from run.result so the engine's result-writer (src/runtime/result-writer.ts RESULT-I1 — single writer to result.json) and the orchestrator's close-step (workflow-semantic aggregate at explore-result.json) do not collide",
-      "reference_surfaces": [],
-      "reference_evidence": [],
-      "migration_policy": "n/a",
-      "legacy_parse_policy": "n/a",
+      "reference_surfaces": ["legacy-circuit explore artifacts/result.md"],
+      "reference_evidence": ["specs/reference/legacy-circuit/explore-characterization.md"],
+      "migration_policy": "Clean-break structured JSON successor to the reference Markdown close artifact; no transparent parse of legacy result.md is attempted.",
+      "legacy_parse_policy": "reject",
       "dangling_reference_policy": "n/a"
     },
     {

@@ -34,6 +34,9 @@ artifact and a separate importer contract must be authored.
 
 - `continuity-characterization.md` — observed shape of live continuity
   records and index, captured 2026-04-19.
+- `explore-characterization.md` — observed shape of the live `explore`
+  workflow (command, steps, Markdown artifacts, and one incomplete run
+  record), captured 2026-04-24. Evidence base for CC#P2-1 close cleanup.
 - `review-characterization.md` — observed shape of the live `review` skill
   (phases, artifacts, invariant candidates, CLI, runtime-capability
   requirements), captured 2026-04-24. Evidence base for P2.9 plan restart.

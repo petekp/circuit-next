@@ -143,14 +143,41 @@ CC#P2-1 golden MUST be regenerated from the new orchestrator's
 output via `AGENT_SMOKE=1 UPDATE_GOLDEN=1 npx vitest run
 tests/runner/explore-e2e-parity.test.ts`. A fresh composition review
 MUST verify the new golden is substantively orchestrator-parity
-rather than placeholder-parity. Until P2.10 lands, CC#P2-1 is
-**closed at placeholder-parity** with this amendment naming the
-epoch explicitly.
+rather than placeholder-parity. At Slice 44, this amendment carried
+CC#P2-1 as **closed at placeholder-parity** until the P2.10 rebind
+could land. That temporary accounting sentence is superseded by the
+Slice 98 reference-characterization correction below.
 
 **Reopen trigger.** P2.10 landing without CC#P2-1 golden
 regeneration + a fresh composition review MUST reopen this ADR to
 re-evaluate whether placeholder-parity still satisfies the close
 criterion (it does not; re-bind).
+
+**Amendment — Slice 98 reference-characterization correction.** Slice 98
+inspected the live first-generation Circuit Explore workflow and recorded the
+reference shape at `specs/reference/legacy-circuit/explore-characterization.md`.
+That characterization shows the reference Explore surface is Markdown-first:
+`artifacts/brief.md`, `artifacts/analysis.md`, `artifacts/plan.md`,
+`artifacts/decision.md`, and declared `artifacts/result.md`. The current
+circuit-next golden at `tests/fixtures/golden/explore/result.sha256` now
+proves circuit-next structured-JSON self-consistency for
+`artifacts/explore-result.json`; it still does **not** prove byte-shape
+parity with the reference Markdown artifact named by the original
+non-substitutable failure condition.
+
+Therefore, the Slice 44 sentence that carried CC#P2-1 as "closed at
+placeholder-parity" is superseded for Phase 2 close accounting. Effective
+Slice 98, CC#P2-1 is **active — red** until one of two explicit resolutions
+lands:
+
+1. A reference-backed comparison proves the old Circuit Explore close shape
+   against a documented circuit-next output or transform; or
+2. This ADR is amended under §6 to accept the clean-break structured JSON
+   successor claim as an authoritative substitute for strict byte-shape
+   parity.
+
+The Phase 2 close matrix must not count CC#P2-1 as satisfied on the basis of
+the circuit-next JSON golden alone.
 
 ---
 
