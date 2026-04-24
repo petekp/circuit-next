@@ -12,6 +12,14 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 104 BUILD PLAN COMMITTED FOR REVIEW** (this commit, Discovery) -
+  characterized the old Build workflow and committed the circuit-next Build
+  parity plan as challenger-pending. The plan keeps Build focused on the
+  everyday work path: plan, implement, verify, review, and close. It also
+  calls out the important missing runtime piece before user-facing Build can
+  be honest: the runtime needs real verification command evidence, not a
+  placeholder note saying commands passed.
+
 - **Slice 103 PARITY MAP** (this commit, Discovery) - compared the read-only
   first-generation Circuit command/workflow surface against circuit-next after
   the direct-launcher cleanup. The map records what already works, what is

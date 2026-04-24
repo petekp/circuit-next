@@ -1,4 +1,4 @@
-<!-- current_slice: 103 -->
+<!-- current_slice: 104 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -10,18 +10,20 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 103
-- **current_arc:** Parity map landed. `specs/parity-map.md` compares the
-  read-only first-generation Circuit command/workflow surface with
-  circuit-next after the direct-launcher cleanup. It records what already
-  works, what is partial, what is missing, and recommends opening Build next
-  because it is the everyday "do real work" path that Repair, Migrate, and
-  Sweep can build on. No runtime behavior changed. P2-1 uses structured JSON as the accepted successor artifact shape; it does not claim old Markdown byte-for-byte compatibility. P2-3 live command proof is included through a
-  live Claude Code invocation of the inline `circuit` plugin. The Phase 2
-  close claim remains narrow: first working workflow product spine closed,
-  not full first-generation Circuit parity. Next work is broader parity
-  expansion across build, repair, migrate, sweep, custom workflows, and
-  clearer workflow configuration.
+- **current_slice:** 104
+- **current_arc:** Build workflow parity plan is committed as
+  challenger-pending. The old Build workflow is now characterized at
+  `specs/reference/legacy-circuit/build-characterization.md`, and
+  `specs/plans/build-workflow-parity.md` defines the planned Build track:
+  six phases, six structured JSON successor artifacts, real verification
+  command evidence, direct `/circuit:build`, and router expansion. No Build
+  runtime changes have started yet; the next required step is Codex
+  challenger review. P2-1 uses structured JSON as the accepted successor artifact shape; it does not claim old Markdown byte-for-byte compatibility. P2-3 live command proof is included through a live Claude
+  Code invocation of the inline `circuit` plugin. The Phase 2 close claim
+  remains narrow: first working workflow product spine closed, not full
+  first-generation Circuit parity. Next work is broader parity expansion
+  across build, repair, migrate, sweep, custom workflows, and clearer workflow
+  configuration.
 - **current_phase:** Phase 2 — Implementation (closed for the first working workflow; broader parity expansion planning next)
 
 Chronicle (relocated narrative history — non-authoritative; see
