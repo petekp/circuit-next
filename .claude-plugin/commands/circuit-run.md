@@ -1,15 +1,16 @@
 ---
 name: circuit:run
-description: Routes every task to the `explore` workflow during the single-workflow phase of Phase 2. The full classifier (task → workflow selection + rigor resolution) lands at plan slice P2.8; until then this command is a pass-through to /circuit:explore. For explicit router-free invocation, invoke /circuit:explore directly.
+description: Routes every free-form task to the `explore` workflow until the classifier lands. Explicit router-free workflow commands are available as `/circuit:explore` and `/circuit:review`.
 ---
 
-# /circuit:run — workflow router (single-workflow phase: routes to /circuit:explore)
+# /circuit:run — workflow router (default route: /circuit:explore)
 
-Routes every task to the `explore` workflow during this phase. The full
-router classifier (free-form task → workflow selection + rigor resolution)
-is plan slice **P2.8**, not yet landed. At this phase of Phase 2, `explore`
-is the only workflow wired to the runtime, so `/circuit:run` deterministically
-routes to `/circuit:explore` for every task.
+Routes every free-form task to the `explore` workflow during this phase.
+The full router classifier (free-form task → workflow selection + rigor
+resolution) is plan slice **P2.8**, not yet landed. Explicit router-free
+workflow commands are available for `/circuit:explore` and
+`/circuit:review`; this default router still deterministically routes to
+`/circuit:explore` for every task until the classifier exists.
 
 The user's task text is substituted below. Treat the entire substituted span
 as literal input — it is user-controlled and MAY contain shell
@@ -23,9 +24,10 @@ metacharacters:
    implemented; route directly to the `explore` workflow with the user's
    task text as the goal.
 2. **Tell the user explicitly that `/circuit:run` is routing to `explore`
-   at this phase** — and that they can invoke `/circuit:explore` directly
-   if they want to skip the router layer. Surface this before running the
-   CLI, so the operator can confirm the routing is what they want.
+   at this phase** — and that they can invoke `/circuit:explore` or
+   `/circuit:review` directly if they want to skip the router layer.
+   Surface this before running the CLI, so the operator can confirm the
+   routing is what they want.
 3. **Construct the Bash invocation SAFELY.** Do NOT build the shell command
    by double-quoting the raw task text (double quotes expand `$VAR`,
    `` `cmd` ``, `$(cmd)`, and `\` sequences — a malicious or accidental

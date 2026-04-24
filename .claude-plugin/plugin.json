@@ -1,7 +1,7 @@
 {
   "name": "circuit-next",
   "version": "0.1.0-alpha.1",
-  "description": "Claude Code plugin that runs configurable developer workflows. Phase 2 wired state: `/circuit:explore` invokes the full explore workflow (Frame → Analyze → Synthesize → Review → Close) end-to-end via the project CLI; `/circuit:run` routes every task to `/circuit:explore` during the single-workflow phase — full classifier lands at plan slice P2.8. Future phases add `build`, `repair`, `migrate`, `sweep`, and user-authored custom workflows with per-step model + reasoning-effort + skills configuration.",
+  "description": "Claude Code plugin that runs configurable developer workflows. Phase 2 wired state: `/circuit:explore` invokes the full explore workflow end-to-end via the project CLI; `/circuit:review` invokes the audit-only review workflow explicitly; `/circuit:run` still routes every free-form task to `/circuit:explore` until the full classifier lands at plan slice P2.8. Future phases add `build`, `repair`, `migrate`, `sweep`, and user-authored custom workflows with per-step model + reasoning-effort + skills configuration.",
   "keywords": ["workflow", "automation", "circuit-next", "phase-2"],
   "commands": [
     {
@@ -13,6 +13,11 @@
       "name": "circuit:explore",
       "file": "commands/circuit-explore.md",
       "description": "Investigate, understand, choose among options, or shape an execution plan. Runs the full-spine explore workflow end-to-end via the project CLI, producing a canonical event log + result artifact under the run root."
+    },
+    {
+      "name": "circuit:review",
+      "file": "commands/circuit-review.md",
+      "description": "Audit a scoped change or artifact with the review workflow. Runs the audit-only review fixture via the project CLI and surfaces the run root, event log, and review result artifact with the current synthesis-writer caveat."
     }
   ]
 }

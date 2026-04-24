@@ -5,10 +5,9 @@ import { describe, expect, it } from 'vitest';
 
 // Slice 56 (P2.11 plugin-wiring) — plan
 // `specs/plans/p2-11-plugin-wiring.md` scope item 4. These tests assert that
-// the two plugin command bodies — `.claude-plugin/commands/circuit-explore.md`
-// and `.claude-plugin/commands/circuit-run.md` — are wired to the runtime
+// the plugin command bodies under `.claude-plugin/commands/` are wired to the runtime
 // rather than carrying placeholder "Not implemented yet" text AND that the
-// runtime binding is demonstrated via an executable explore invocation in a
+// runtime binding is demonstrated via an executable workflow invocation in a
 // fenced bash block (not merely a prose mention). Structural plugin-manifest
 // + frontmatter requirements are covered by Check 23 +
 // `tests/contracts/plugin-surface.test.ts`.
@@ -32,6 +31,7 @@ const REPO_ROOT = resolve(HERE, '..', '..');
 
 const EXPLORE_COMMAND_PATH = resolve(REPO_ROOT, '.claude-plugin/commands/circuit-explore.md');
 const RUN_COMMAND_PATH = resolve(REPO_ROOT, '.claude-plugin/commands/circuit-run.md');
+const REVIEW_COMMAND_PATH = resolve(REPO_ROOT, '.claude-plugin/commands/circuit-review.md');
 const MANIFEST_PATH = resolve(REPO_ROOT, '.claude-plugin/plugin.json');
 
 const PLACEHOLDER_STRING = 'Not implemented yet';
@@ -49,27 +49,41 @@ function extractBashBlocks(body: string): string[] {
   return blocks;
 }
 
-// Does ANY fenced bash block in the body contain an executable explore
-// invocation with the --goal flag? "Executable" means the block has the CLI
-// identifier (npm run circuit:run OR node dist/cli/dogfood.js) followed on
-// the same line by `explore`, AND the block has `--goal `. Prose mentions
-// or negated ("do not run …") text in prose DO NOT satisfy because they are
-// not inside a fenced bash block.
-function hasExecutableExploreInvocation(body: string): boolean {
+// Does ANY fenced bash block in the body contain an executable workflow
+// invocation with the --goal flag? "Executable" means the workflow appears
+// as the CLI positional token after `npm run circuit:run --` or after
+// `node dist/cli/dogfood.js`, AND the same line has `--goal `. Prose
+// mentions, goal text, or negated ("do not run …") text DO NOT satisfy.
+function hasExecutableWorkflowInvocation(body: string, workflow: string): boolean {
   const blocks = extractBashBlocks(body);
+  const workflowPattern = workflow.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const npmInvocation = new RegExp(`^\\s*npm run circuit:run -- ${workflowPattern}(?:\\s|$)`);
+  const nodeInvocation = new RegExp(
+    `^\\s*node dist\\/cli\\/dogfood\\.js ${workflowPattern}(?:\\s|$)`,
+  );
   for (const block of blocks) {
-    const hasCli =
-      /(npm run circuit:run[^\n]*explore|node dist\/cli\/dogfood\.js[^\n]*explore)/.test(block);
-    const hasGoal = /--goal\s+/.test(block);
-    if (hasCli && hasGoal) return true;
+    for (const line of block.split('\n')) {
+      const hasCli = npmInvocation.test(line) || nodeInvocation.test(line);
+      const hasGoal = /--goal\s+/.test(line);
+      if (hasCli && hasGoal) return true;
+    }
   }
   return false;
+}
+
+function hasExecutableExploreInvocation(body: string): boolean {
+  return hasExecutableWorkflowInvocation(body, 'explore');
+}
+
+function hasExecutableReviewInvocation(body: string): boolean {
+  return hasExecutableWorkflowInvocation(body, 'review');
 }
 
 describe('plugin command invocation binding (Slice 56 / P2.11)', () => {
   describe('real command bodies — positive assertions', () => {
     const exploreBody = readFileSync(EXPLORE_COMMAND_PATH, 'utf-8');
     const runBody = readFileSync(RUN_COMMAND_PATH, 'utf-8');
+    const reviewBody = readFileSync(REVIEW_COMMAND_PATH, 'utf-8');
 
     it('circuit-explore.md has an executable explore invocation in a fenced bash block with --goal', () => {
       expect(hasExecutableExploreInvocation(exploreBody)).toBe(true);
@@ -79,9 +93,14 @@ describe('plugin command invocation binding (Slice 56 / P2.11)', () => {
       expect(hasExecutableExploreInvocation(runBody)).toBe(true);
     });
 
-    it('neither body contains "Not implemented yet"', () => {
+    it('circuit-review.md has an executable review invocation in a fenced bash block with --goal', () => {
+      expect(hasExecutableReviewInvocation(reviewBody)).toBe(true);
+    });
+
+    it('no command body contains "Not implemented yet"', () => {
       expect(exploreBody).not.toMatch(new RegExp(PLACEHOLDER_STRING));
       expect(runBody).not.toMatch(new RegExp(PLACEHOLDER_STRING));
+      expect(reviewBody).not.toMatch(new RegExp(PLACEHOLDER_STRING));
     });
 
     it('circuit-run.md references /circuit:explore or the P2.8 pointer', () => {
@@ -94,6 +113,7 @@ describe('plugin command invocation binding (Slice 56 / P2.11)', () => {
   describe('HIGH 2 regression: --goal value is single-quoted (safe construction)', () => {
     const exploreBody = readFileSync(EXPLORE_COMMAND_PATH, 'utf-8');
     const runBody = readFileSync(RUN_COMMAND_PATH, 'utf-8');
+    const reviewBody = readFileSync(REVIEW_COMMAND_PATH, 'utf-8');
 
     it('neither body contains the unsafe --goal "$ARGUMENTS" double-quoted splice', () => {
       // Double-quoting $ARGUMENTS expands $VAR, $(cmd), `cmd`, and \
@@ -101,6 +121,7 @@ describe('plugin command invocation binding (Slice 56 / P2.11)', () => {
       // The Codex HIGH 2 fold-in forbids this literal pattern.
       expect(exploreBody).not.toMatch(/--goal "\$ARGUMENTS"/);
       expect(runBody).not.toMatch(/--goal "\$ARGUMENTS"/);
+      expect(reviewBody).not.toMatch(/--goal "\$ARGUMENTS"/);
     });
 
     it('all fenced bash invocation blocks in circuit-explore.md use single-quoted --goal values', () => {
@@ -127,12 +148,24 @@ describe('plugin command invocation binding (Slice 56 / P2.11)', () => {
       }
     });
 
-    it('both bodies document the single-quote-with-escape rule for apostrophes', () => {
+    it('all fenced bash invocation blocks in circuit-review.md use single-quoted --goal values', () => {
+      const blocks = extractBashBlocks(reviewBody).filter(
+        (b) => /review/.test(b) && /--goal/.test(b),
+      );
+      expect(blocks.length).toBeGreaterThan(0);
+      for (const block of blocks) {
+        expect(block).toMatch(/--goal\s+'/);
+        expect(block).not.toMatch(/--goal\s+"/);
+      }
+    });
+
+    it('all command bodies document the single-quote-with-escape rule for apostrophes', () => {
       // The safe construction documentation MUST mention the POSIX
       // single-quote escape sequence "'\''" so a future author does not
       // hand-reinvent an unsafe shape.
       expect(exploreBody).toMatch(/'\\''/);
       expect(runBody).toMatch(/'\\''/);
+      expect(reviewBody).toMatch(/'\\''/);
     });
   });
 
@@ -172,6 +205,19 @@ echo "no invocation here"
 \`\`\`
 `;
       expect(hasExecutableExploreInvocation(wrongBlock)).toBe(false);
+    });
+
+    it('rejects review appearing only inside the goal text instead of as the workflow token', () => {
+      const wrongWorkflow = `---
+name: circuit:review
+description: stub
+---
+
+\`\`\`bash
+npm run circuit:run -- explore --goal 'review the latest change'
+\`\`\`
+`;
+      expect(hasExecutableReviewInvocation(wrongWorkflow)).toBe(false);
     });
 
     it('accepts a body with a fenced bash block containing an explore invocation with --goal', () => {
@@ -222,7 +268,7 @@ node dist/cli/dogfood.js explore --goal 'find deprecated APIs'
       const circuitRun = manifest.commands.find((c) => c.name === 'circuit:run');
       if (!circuitRun) throw new Error('circuit:run entry missing from manifest');
       const desc = circuitRun.description;
-      const routesIdx = desc.search(/Routes every task/i);
+      const routesIdx = desc.search(/Routes every (?:free-form )?task/i);
       const classifyIdx = desc.search(/Classify a task/i);
       // Either "Routes every task" appears before "Classify a task", OR
       // "Classify a task" is not mentioned at all in the description.
@@ -236,6 +282,12 @@ node dist/cli/dogfood.js explore --goal 'find deprecated APIs'
       // The wired state should be visible in the top-level description
       // (not only in per-command descriptions).
       expect(manifest.description).toMatch(/\/circuit:explore/);
+    });
+
+    it('manifest includes circuit:review as an explicit workflow command', () => {
+      const circuitReview = manifest.commands.find((c) => c.name === 'circuit:review');
+      expect(circuitReview?.description).toMatch(/review workflow/i);
+      expect(manifest.description).toMatch(/\/circuit:review/);
     });
   });
 });

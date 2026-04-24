@@ -503,15 +503,22 @@ future readers see the narrowed scope.
 `/circuit:review`).
 
 **Deliverables:** Add `/circuit:review` plugin command body invoking
-`npm run circuit:run review --goal "<scope>"`. Extend audit Check 23 to
-assert 3-command closure (or confirm it's already N-command per Slice 52).
-Extend src/cli/dogfood.ts if the positional workflow argument needs to
-admit `review` (it already does per E8 inference — verify at Slice open).
+`npm run circuit:run -- review --goal "<scope>"`. Extend audit Check 23
+to assert 3-command closure (or confirm it's already N-command per Slice
+52). Extend src/cli/dogfood.ts if the positional workflow argument needs
+to admit `review` (it already does per E8 inference — verify at Slice
+open).
 
 **Acceptance evidence:** `npm run verify` green. `npm run audit` green
-with Check 23 reporting closure for 3 commands. Manual smoke test:
-`/circuit:review` with a scope argument runs through the review pipeline
-to a valid verdict artifact.
+with Check 23 reporting closure for 3 commands. Command-surface tests
+pin that `/circuit:review` invokes the positional `review` workflow with
+the safe `--goal` construction. Manual smoke expectation is bounded to:
+`/circuit:review` with a scope argument reaches the review fixture and
+surfaces run artifacts plus the current synthesis-writer caveat. It MUST
+NOT claim that the default CLI path produces schema-valid `review.result`
+until the post-P2.9 per-workflow synthesis-writer registration follow-on
+lands. The schema-valid `review.result` proof for P2.9 remains the
+Slice 66 injected-writer test seam.
 
 ### Slice 68 — Second-workflow parity proof
 

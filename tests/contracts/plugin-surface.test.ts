@@ -683,8 +683,10 @@ describe('checkPluginCommandClosure (ADR-0007 CC#P2-3 enforcement, P2.2)', () =>
     // Both anchors must be present and bound to canonical files.
     const run = result.data.commands.find((c) => c.name === 'circuit:run');
     const explore = result.data.commands.find((c) => c.name === 'circuit:explore');
+    const review = result.data.commands.find((c) => c.name === 'circuit:review');
     expect(run?.file).toBe('commands/circuit-run.md');
     expect(explore?.file).toBe('commands/circuit-explore.md');
+    expect(review?.file).toBe('commands/circuit-review.md');
   });
 
   // ── Slice 56 (P2.11 plugin-wiring) fold-in: rule (g) placeholder rejection.

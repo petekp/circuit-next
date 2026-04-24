@@ -12,6 +12,16 @@ record.*
 
 ## P2.9 Second Workflow Arc (opened after Slice 75)
 
+- **Slice 80 REVIEW-COMMAND** (this commit, Ratchet-Advance) - added the
+  explicit `/circuit:review` command and registered it in the plugin
+  manifest. The command invokes `npm run circuit:run -- review --goal ...`,
+  uses the same shell-escaping discipline as the existing commands, and
+  surfaces the current caveat that the default close-step synthesis writer
+  is still placeholder-only. `/circuit:run` remains the default route to
+  explore until the classifier exists, but its docs now acknowledge that
+  `/circuit:review` is available directly. Codex found stale plan smoke
+  wording and a loose command-test matcher; both were folded in.
+
 - **Slice 79 RUNTIME-WIRING-SEAM** (this commit, Ratchet-Advance) -
   added a narrow injected synthesis-writer seam to the runtime and used
   it in a review-specific end-to-end test. The live review fixture now
