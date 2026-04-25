@@ -1,10 +1,13 @@
 ---
 plan: methodology-2tier-revamp-proposal
-status: challenger-cleared
+status: operator-signoff
 revision: 01
 opened_at: 2026-04-25
 cleared_at: 2026-04-25
 cleared_in_session: methodology-2tier-non-external-fallback-challenger-01
+signoff_at: 2026-04-25
+signoff_in_session: operator-proceed-after-fallback-clearance
+signoff_note: "Operator said 'Proceed.' after the non-external fallback path was established and the assistant continued lifecycle clearance. operator_signoff_predecessor: d381a0b."
 base_commit: 34b8f69
 target: methodology-two-mode-hardening
 trigger: |
