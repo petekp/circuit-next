@@ -12,6 +12,15 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 118 BUILD PLAN/RESULT WRITERS** (this commit, Ratchet-Advance) -
+  registered runtime synthesis writers for `build.plan@v1` and
+  `build.result@v1`. Build plans now require a schema-valid Build brief and
+  carry its typed verification command payloads forward. Build close resolves
+  and parses all five prior Build artifacts before writing
+  `artifacts/build-result.json`, instead of falling back to placeholder JSON.
+  Verification command execution, checkpoint execution, and the real Build
+  fixture remain later work.
+
 - **Slice 117 BUILD ARTIFACT CONTRACTS** (this commit, Ratchet-Advance) -
   added the typed JSON schemas and authority rows for the six Build outputs.
   Build role artifacts are registered under `artifacts/build/`, and the Build

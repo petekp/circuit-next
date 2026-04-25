@@ -13,6 +13,14 @@ import {
 import { dirname, join } from 'node:path';
 import type { BuiltInAdapter, DispatchResolutionSource } from '../schemas/adapter.js';
 import {
+  BuildBrief,
+  BuildImplementation,
+  BuildPlan,
+  BuildResult,
+  BuildReview,
+  BuildVerification,
+} from '../schemas/artifacts/build.js';
+import {
   ExploreAnalysis,
   ExploreBrief,
   ExploreResult,
@@ -499,6 +507,19 @@ function isDispatchStep(step: Workflow['steps'][number]): step is DispatchWorkfl
 }
 
 const EXPLORE_BRIEF_ARTIFACT_PATH = 'artifacts/brief.json';
+const BUILD_RESULT_ARTIFACT_POINTERS = [
+  { artifact_id: 'build.brief', schema: 'build.brief@v1' },
+  { artifact_id: 'build.plan', schema: 'build.plan@v1' },
+  {
+    artifact_id: 'build.implementation',
+    schema: 'build.implementation@v1',
+  },
+  {
+    artifact_id: 'build.verification',
+    schema: 'build.verification@v1',
+  },
+  { artifact_id: 'build.review', schema: 'build.review@v1' },
+] as const;
 const EXPLORE_ARTIFACT_POINTERS = [
   { artifact_id: 'explore.brief', schema: 'explore.brief@v1' },
   { artifact_id: 'explore.analysis', schema: 'explore.analysis@v1' },
@@ -556,10 +577,19 @@ function requiredCloseReadForSchema(
   closeStep: SynthesisWriterInput['step'],
   schemaName: string,
 ): string {
+  return requiredReadForSchema(workflow, closeStep, schemaName, 'close step');
+}
+
+function requiredReadForSchema(
+  workflow: Workflow,
+  step: SynthesisWriterInput['step'],
+  schemaName: string,
+  stepLabel = 'step',
+): string {
   const path = artifactPathForSchema(workflow, schemaName);
-  if (!closeStep.reads.includes(path as never)) {
+  if (!step.reads.includes(path as never)) {
     throw new Error(
-      `${closeStep.writes.artifact.schema} requires close step '${closeStep.id}' to read ${path}`,
+      `${step.writes.artifact.schema} requires ${stepLabel} '${step.id}' to read ${path}`,
     );
   }
   return path;
@@ -568,6 +598,53 @@ function requiredCloseReadForSchema(
 function tryWriteRegisteredSynthesisArtifact(input: SynthesisWriterInput): boolean {
   const { runRoot, workflow, step, goal } = input;
   const schemaName = step.writes.artifact.schema;
+
+  if (schemaName === 'build.plan@v1') {
+    const briefPath = requiredReadForSchema(workflow, step, 'build.brief@v1');
+    const brief = BuildBrief.parse(readJsonArtifact(runRoot, briefPath));
+    const artifact = BuildPlan.parse({
+      objective: brief.objective,
+      approach: `Make the smallest safe change inside scope: ${brief.scope}`,
+      slices: brief.success_criteria.map((criterion) => `Satisfy: ${criterion}`),
+      verification: {
+        commands: brief.verification_command_candidates,
+      },
+    });
+    writeJsonArtifact(runRoot, step.writes.artifact.path, artifact);
+    return true;
+  }
+
+  if (schemaName === 'build.result@v1') {
+    const briefPath = requiredCloseReadForSchema(workflow, step, 'build.brief@v1');
+    const planPath = requiredCloseReadForSchema(workflow, step, 'build.plan@v1');
+    const implementationPath = requiredCloseReadForSchema(
+      workflow,
+      step,
+      'build.implementation@v1',
+    );
+    const verificationPath = requiredCloseReadForSchema(workflow, step, 'build.verification@v1');
+    const reviewPath = requiredCloseReadForSchema(workflow, step, 'build.review@v1');
+    const brief = BuildBrief.parse(readJsonArtifact(runRoot, briefPath));
+    BuildPlan.parse(readJsonArtifact(runRoot, planPath));
+    const implementation = BuildImplementation.parse(readJsonArtifact(runRoot, implementationPath));
+    const verification = BuildVerification.parse(readJsonArtifact(runRoot, verificationPath));
+    const review = BuildReview.parse(readJsonArtifact(runRoot, reviewPath));
+    const artifact = BuildResult.parse({
+      summary: `Build result for ${brief.objective}: ${implementation.summary}`,
+      outcome:
+        verification.overall_status === 'passed' && review.verdict !== 'reject'
+          ? 'complete'
+          : 'failed',
+      verification_status: verification.overall_status,
+      review_verdict: review.verdict,
+      artifact_pointers: BUILD_RESULT_ARTIFACT_POINTERS.map((pointer) => ({
+        ...pointer,
+        path: artifactPathForSchema(workflow, pointer.schema),
+      })),
+    });
+    writeJsonArtifact(runRoot, step.writes.artifact.path, artifact);
+    return true;
+  }
 
   if (schemaName === 'explore.brief@v1') {
     const artifact = ExploreBrief.parse({
@@ -655,7 +732,7 @@ function tryWriteRegisteredSynthesisArtifact(input: SynthesisWriterInput): boole
   return false;
 }
 
-function writeSynthesisArtifact(input: SynthesisWriterInput): void {
+export function writeSynthesisArtifact(input: SynthesisWriterInput): void {
   const { runRoot, step } = input;
   if (tryWriteRegisteredSynthesisArtifact(input)) return;
   const body: Record<string, string> = {};

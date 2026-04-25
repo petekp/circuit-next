@@ -1,4 +1,4 @@
-<!-- current_slice: 117 -->
+<!-- current_slice: 118 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -10,13 +10,16 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 117
-- **current_arc:** Build workflow parity implementation has the policy-only
-  Build shape and now has typed Build artifact contracts/schemas registered
-  for the six Build outputs. Build artifacts use structured JSON paths under
-  `artifacts/build/`, with the workflow result at `artifacts/build-result.json`
-  so it does not collide with the universal `artifacts/result.json`. The real
-  Build workflow fixture and runtime writers have not landed yet. P2-1 uses structured JSON as the accepted successor artifact shape; it does not claim old Markdown byte-for-byte compatibility. P2-3 live command proof is included through a live Claude
+- **current_slice:** 118
+- **current_arc:** Build workflow parity implementation now has the policy
+  shape, typed Build artifact contracts/schemas, and registered runtime
+  synthesis writers for `build.plan@v1` and `build.result@v1`. The Build plan
+  writer requires a schema-valid Build brief and carries forward typed
+  direct-argv verification commands from it. The Build result writer resolves
+  and parses all five prior Build artifacts into `artifacts/build-result.json`
+  while leaving universal `artifacts/result.json` to the engine. The real Build
+  workflow fixture, verification command execution, and checkpoint execution
+  have not landed yet. P2-1 uses structured JSON as the accepted successor artifact shape; it does not claim old Markdown byte-for-byte compatibility. P2-3 live command proof is included through a live Claude
   Code invocation of the inline `circuit` plugin. The Phase 2 close claim
   remains narrow: first working workflow product spine closed, not full
   first-generation Circuit parity. Next work is broader parity expansion
