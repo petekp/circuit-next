@@ -1,4 +1,4 @@
-<!-- current_slice: 141 -->
+<!-- current_slice: 142 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -10,7 +10,7 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 141
+- **current_slice:** 142
 - **current_arc:** Build workflow parity is now closed. The implementation has the policy
   shape, typed Build artifact contracts/schemas, registered runtime synthesis
   writers for `build.plan@v1` and `build.result@v1`, and a focused
@@ -76,7 +76,11 @@ context and phase-open provenance.
   evidence, Fix is the first proving recipe, and the old Repair plan is closed
   by supersession rather than left available for one-off implementation. Next
   work should continue strengthening Fix contracts or build Fix behavior through
-  reusable moves.
+  reusable moves. Slice 142 adds a narrow non-external challenger fallback for
+  the case where the default external Codex CLI review path is blocked or
+  unavailable after a recorded attempt and explicit operator authorization.
+  The fallback keeps the same objection-list and review-artifact discipline,
+  but records that it is weaker than a true external pass.
 - **current_phase:** Phase 2 — Implementation (closed for the first working workflow; broader parity expansion planning next)
 
 Chronicle (relocated narrative history — non-authoritative; see

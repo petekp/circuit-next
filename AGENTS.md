@@ -40,16 +40,18 @@ slice must honor it. Four pillars:
 3. **Architecture-First types at module boundaries.** Prefer types over tests
    when types can express the invariant. `tsc --strict` is the first line of
    defense against local-coherence/global-incoherence failures.
-4. **Narrow cross-model challenger.** A different model (Codex) produces an
+4. **Narrow challenger.** A different model (Codex) produces an
    objection list — not an approval — for Heavy-mode work, plan clearance,
    contract-relaxation ADRs, migration escrows, discovery-decision promotion,
    and any request to loosen a gate. Light-mode preparatory work does not need a
-   per-slice challenger unless it discovers Heavy risk. This is
-   **adversarial lint, not independent corroboration**.
-   Codex and Codex share training distribution; Knight & Leveson 1986
-   shows correlated failures, not independent ones. The challenger cannot
-   replace authority mapping, live/reference evidence, fixture parity
-   where compatibility is required, or state-machine/property tests.
+   per-slice challenger unless it discovers Heavy risk. The external Codex CLI
+   is the default challenger path; ADR-0014 allows a non-external fallback only
+   when that path is blocked or unavailable, the operator explicitly authorizes
+   fallback, and the review artifact records the weaker channel. This is
+   **adversarial lint, not independent corroboration**. Correlated failures
+   remain possible. The challenger cannot replace authority mapping,
+   live/reference evidence, fixture parity where compatibility is required, or
+   state-machine/property tests.
 
 ## Phase discipline
 
@@ -215,7 +217,13 @@ contract-relaxation ADRs, migration escrows, discovery promotion, or gate
 loosening — dispatch the challenger through `/codex` skill (pipes to
 `codex exec` via the shared wrapper script). Never use the `codex:rescue`
 subagent. The challenger's job is an **objection list**, not approval.
-Document the response in the originating commit or ADR.
+
+If the external Codex path is blocked or unavailable after a recorded attempt,
+ADR-0014 allows a non-external fallback only with explicit operator
+authorization. The review artifact must say `review_channel:
+non-external-fallback`, record the blocked/unavailable external attempt, name
+the operator authorization, and state that this is weaker than a true external
+pass. Use the same verdict and binding fields as the normal challenger path.
 
 ## Cross-slice composition review cadence
 
@@ -272,7 +280,9 @@ These are non-negotiable without reopening the methodology decision:
 4. No `--no-verify`, `--no-gpg-sign`, or skip-hooks flags without a
    Break-Glass lane declaration.
 5. ADR required for any relaxation of a contract, ratchet floor, or gate.
-6. Cross-model challenger required for Heavy-mode work and any gate loosening.
+6. Challenger required for Heavy-mode work and any gate loosening. External
+   Codex is the default; ADR-0014 fallback is allowed only when the external
+   path is blocked or unavailable and the fallback is recorded explicitly.
 7. Every external-package identifier backed by installed type stubs,
    docstrings, `.d.ts`, or an end-to-end call test.
 8. No aggregate scoring across ratchets; each dimension tracked
@@ -305,7 +315,10 @@ payload plans pass through a five-state lifecycle before slices open:
 2. `challenger-pending` — committed; awaiting Codex challenger pass.
 3. `challenger-cleared` — ACCEPT-class committed Codex review exists with
    matching `reviewed_plan:` binding (slug + revision + base_commit +
-   content_sha256).
+   content_sha256). ADR-0014 permits a non-external fallback review only when
+   the external challenger path is blocked/unavailable and the review artifact
+   records the fallback channel, blocked attempt, operator authorization, and
+   limitations.
 4. `operator-signoff` — operator signed off; commit body carries
    `operator_signoff_predecessor: <sha>` naming the challenger-cleared
    predecessor.

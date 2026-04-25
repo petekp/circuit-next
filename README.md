@@ -1,4 +1,4 @@
-<!-- current_slice: 141 -->
+<!-- current_slice: 142 -->
 
 # circuit-next
 
@@ -44,6 +44,9 @@ runtime, command, adapter, methodology, and close-claim work.
 ADR-0013 now canonicalizes the first-principles reusable-move direction:
 workflows are primitive-backed recipes, and parity remains reference evidence
 rather than the only product goal.
+ADR-0014 adds a narrow non-external challenger fallback for cases where the
+default external Codex CLI challenger is blocked or unavailable after an
+explicit operator authorization.
 
 ## Current phase
 
@@ -75,6 +78,9 @@ step cannot depend on evidence that one of its branches skipped.
 
 Slice 141 makes the primitive-backed recipe direction canonical through
 ADR-0013 and marks the old Repair plan as reframed evidence.
+
+Slice 142 adds the recorded fallback path for challenger reviews when the
+external Codex CLI path is blocked by the environment.
 
 CC#14 was amended by ADR-0006 as a one-time
 waiver + retarget (see Status above); the canonical non-LLM cold-read is **not**

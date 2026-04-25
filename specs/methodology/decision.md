@@ -422,3 +422,20 @@ contracts move, `npm run verify`, post-commit `npm run audit`, and a plain
 operator summary. Audit Check 35a enforces the Work mode declaration and rejects
 Light commits that touch obvious Heavy surfaces or move close/signoff/live-proof
 claims in status docs.
+
+## Methodology Amendments (2026-04-25, Slice 142)
+
+### D12. Non-external challenger fallback
+
+ADR-0014 keeps the external Codex CLI as the default challenger path, but allows
+a non-external fallback when the external path is blocked or unavailable for an
+access/policy reason outside the plan or code under review. The fallback must
+be explicitly operator-authorized and must record its weaker channel in the
+review artifact.
+
+The fallback does not change ADR-0010 plan states, verdict vocabulary, or
+freshness binding. A fallback plan review still binds `plan_slug`,
+`plan_revision`, `plan_base_commit`, and `plan_content_sha256`. A fallback
+per-slice review still lands in the normal review-file shape, but frontmatter
+must identify `review_channel: non-external-fallback`, the blocked or
+unavailable external attempt, the operator authorization, and limitations.
