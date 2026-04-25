@@ -1,4 +1,4 @@
-<!-- current_slice: 138 -->
+<!-- current_slice: 139 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -10,7 +10,7 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 138
+- **current_slice:** 139
 - **current_arc:** Build workflow parity is now closed. The implementation has the policy
   shape, typed Build artifact contracts/schemas, registered runtime synthesis
   writers for `build.plan@v1` and `build.result@v1`, and a focused
@@ -71,7 +71,9 @@ context and phase-open provenance.
   fixture is replaced by `specs/workflow-recipes/fix-candidate.recipe.json`,
   `specs/workflow-direction.md` records the v1 boundaries, and next work should
   strengthen the Fix artifact contracts or build Fix behavior without creating
-  one-off Repair code.
+  one-off Repair code. Slice 139 adds typed Fix artifact schemas, a Fix
+  artifact contract, authority rows, and contract tests so future Fix behavior
+  has stable evidence targets before any executable behavior is wired.
 - **current_phase:** Phase 2 — Implementation (closed for the first working workflow; broader parity expansion planning next)
 
 Chronicle (relocated narrative history — non-authoritative; see

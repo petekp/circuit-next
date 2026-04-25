@@ -1,4 +1,4 @@
-<!-- current_slice: 138 -->
+<!-- current_slice: 139 -->
 
 # circuit-next
 
@@ -70,6 +70,9 @@ Heavy.
 Slice 138 reframes that old Repair evidence toward a clearer Fix recipe over
 reusable moves; see `specs/workflow-direction.md` and
 `specs/workflow-recipes/fix-candidate.recipe.json`.
+
+Slice 139 adds the first typed Fix artifact shapes and authority rows so future
+Fix behavior has stable evidence targets.
 
 CC#14 was amended by ADR-0006 as a one-time
 waiver + retarget (see Status above); the canonical non-LLM cold-read is **not**

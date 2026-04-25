@@ -1,5 +1,6 @@
 export * from './adapter.js';
 export * from './artifacts/explore.js';
+export * from './artifacts/fix.js';
 export * from './artifacts/review.js';
 export * from './config.js';
 export * from './continuity.js';

@@ -55,6 +55,24 @@ describe('workflow recipe schema', () => {
     ]);
   });
 
+  it('keeps Fix act and close inputs aligned with the evidence path', () => {
+    const recipe = parseFixRecipe();
+    const act = recipe.items.find((item) => item.id === 'fix-act');
+    const close = recipe.items.find((item) => item.id === 'fix-close');
+    if (act === undefined) throw new Error('fix-act missing');
+    if (close === undefined) throw new Error('fix-close missing');
+
+    expect(act.input).not.toHaveProperty('decision');
+    expect(close.input).toMatchObject({
+      brief: 'fix.brief@v1',
+      context: 'fix.context@v1',
+      diagnosis: 'fix.diagnosis@v1',
+      change: 'fix.change@v1',
+      verification: 'fix.verification@v1',
+      review: 'fix.review@v1',
+    });
+  });
+
   it('rejects an unknown route target at parse time', () => {
     const raw = readJson(fixRecipePath) as Record<string, unknown>;
     const items = raw.items as Array<Record<string, unknown>>;

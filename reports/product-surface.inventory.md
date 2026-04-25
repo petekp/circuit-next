@@ -4,8 +4,8 @@ Schema: v1
 Slice: 27b
 Baseline: yes
 Note: slice=27b names the original baseline report format; generated_at, head_commit, and evidence summaries reflect the current checkout.
-Generated: 2026-04-25T15:56:48.759Z
-HEAD: 57f406314be8fcaff3136e0d07abc3ba2b250b85
+Generated: 2026-04-25T16:35:34.617Z
+HEAD: 3d4cc0e101782821a8b34088126a6d0647aaff14
 
 **Summary:** 10 / 10 surfaces present, 0 absent.
 
@@ -22,7 +22,7 @@ HEAD: 57f406314be8fcaff3136e0d07abc3ba2b250b85
 | `runner.manifest_snapshot` | src_runtime | yes | 27c | manifest snapshot writer module at src/runtime/manifest-snapshot-writer.ts (non-placeholder, exports content); artifact run.manifest_snapshot present; backing file(s): src/schemas/manifest.ts |
 | `tests.runner_smoke` | tests_runtime | yes | 27d | 3 test file(s) exercise runner smoke: tests/runner/agent-adapter-smoke.test.ts, tests/runner/codex-adapter-smoke.test.ts, tests/runner/dogfood-smoke.test.ts |
 | `tests.event_log_round_trip` | tests_runtime | yes | 27c | 1 test file(s) exercise event-log round-trip: tests/unit/runtime/event-log-round-trip.test.ts |
-| `docs.status_alignment` | status_docs | yes | — | current_slice=138 across README.md / PROJECT_STATE.md / TIER.md |
+| `docs.status_alignment` | status_docs | yes | — | current_slice=139 across README.md / PROJECT_STATE.md / TIER.md |
 
 ## Surface details
 
@@ -114,7 +114,7 @@ HEAD: 57f406314be8fcaff3136e0d07abc3ba2b250b85
 - **Planned slice:** —
 - **Expected evidence:** All three files carry a well-formed <!-- current_slice: <id> --> marker in the status-header zone, and the ids agree
 - **Present at HEAD:** yes
-- **Evidence summary:** current_slice=138 across README.md / PROJECT_STATE.md / TIER.md
+- **Evidence summary:** current_slice=139 across README.md / PROJECT_STATE.md / TIER.md
 
 ## Delta rule
 
