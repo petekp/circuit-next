@@ -180,6 +180,38 @@ function reviewPolicyOnlyPayload(overrides: Record<string, unknown> = {}): Recor
   };
 }
 
+function buildPolicyOnlyPayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    schema_version: '2',
+    id: 'build',
+    // Deliberately policy-only: the real Build fixture waits for the
+    // verification-command and checkpoint substrates in later slices.
+    phases: [
+      { title: 'Frame', canonical: 'frame', steps: ['frame-step'] },
+      { title: 'Plan', canonical: 'plan', steps: ['plan-step'] },
+      { title: 'Act', canonical: 'act', steps: ['act-step'] },
+      { title: 'Verify', canonical: 'verify', steps: ['verify-step'] },
+      { title: 'Review', canonical: 'review', steps: ['review-step'] },
+      { title: 'Close', canonical: 'close', steps: ['close-step'] },
+    ],
+    spine_policy: {
+      mode: 'partial',
+      omits: ['analyze'],
+      rationale:
+        'policy-only build payload: Build omits analyze but keeps plan, act, verify, and review.',
+    },
+    steps: [
+      { id: 'frame-step', kind: 'checkpoint', writes: { artifact: {} } },
+      { id: 'plan-step', kind: 'synthesis', writes: { artifact: {} } },
+      { id: 'act-step', kind: 'dispatch', role: 'implementer' },
+      { id: 'verify-step', kind: 'synthesis', writes: { artifact: {} } },
+      { id: 'review-step', kind: 'dispatch', role: 'reviewer' },
+      { id: 'close-step', kind: 'synthesis', writes: { artifact: {} } },
+    ],
+    ...overrides,
+  };
+}
+
 describe('checkWorkflowKindCanonicalPolicy (audit-level, no Zod)', () => {
   it('returns green on a valid explore fixture', () => {
     const result = checkWorkflowKindCanonicalPolicy(validExploreFixture());
@@ -192,6 +224,14 @@ describe('checkWorkflowKindCanonicalPolicy (audit-level, no Zod)', () => {
     expect(result.kind).toBe('green');
     expect(result.detail).toMatch(/review: canonical set/);
     expect(result.detail).toMatch(/frame, analyze, close/);
+  });
+
+  it('returns green on a policy-only build payload with the Build canonical phase set', () => {
+    const result = checkWorkflowKindCanonicalPolicy(buildPolicyOnlyPayload());
+    expect(result.kind).toBe('green');
+    expect(result.detail).toMatch(/build: canonical set/);
+    expect(result.detail).toMatch(/frame, plan, act, verify, review, close/);
+    expect(result.detail).toMatch(/omits \{analyze\}/);
   });
 
   it('returns exempt on dogfood-run-0 fixture', () => {
@@ -253,6 +293,24 @@ describe('checkWorkflowKindCanonicalPolicy (audit-level, no Zod)', () => {
     expect(result.detail).toMatch(/unexpected canonical\(s\): review/);
   });
 
+  it('returns red when build declares the omitted analyze canonical', () => {
+    const fixture = buildPolicyOnlyPayload();
+    const phases = fixture.phases as Array<Record<string, unknown>>;
+    fixture.phases = [...phases, { title: 'Analyze', canonical: 'analyze' }];
+    const result = checkWorkflowKindCanonicalPolicy(fixture);
+    expect(result.kind).toBe('red');
+    expect(result.detail).toMatch(/unexpected canonical\(s\): analyze/);
+  });
+
+  it('returns red when build omits verify from the canonical set', () => {
+    const fixture = buildPolicyOnlyPayload();
+    const phases = fixture.phases as Array<Record<string, unknown>>;
+    fixture.phases = phases.filter((p) => p.canonical !== 'verify');
+    const result = checkWorkflowKindCanonicalPolicy(fixture);
+    expect(result.kind).toBe('red');
+    expect(result.detail).toMatch(/missing canonical\(s\): verify/);
+  });
+
   it('returns red when review close writes a non-primary artifact shape', () => {
     const fixture = reviewPolicyOnlyPayload({
       steps: [
@@ -297,8 +355,16 @@ describe('checkWorkflowKindCanonicalPolicy (audit-level, no Zod)', () => {
     expect(review.omits).toEqual(['plan', 'act', 'verify', 'review']);
     expect(review.title).toBe('Intake → Independent Audit → Verdict');
     expect(review.authority).toBe('specs/plans/p2-9-second-workflow.md §3');
+    const build = WORKFLOW_KIND_CANONICAL_SETS.build;
+    expect(build).toBeDefined();
+    if (build === undefined) throw new Error('unreachable');
+    expect(build.canonicals).toEqual(['frame', 'plan', 'act', 'verify', 'review', 'close']);
+    expect(build.omits).toEqual(['analyze']);
+    expect(build.title).toBe('Frame → Plan → Act → Verify → Review → Close');
+    expect(build.authority).toBe('specs/plans/build-workflow-parity.md §9 Work item 1');
     expect(EXEMPT_WORKFLOW_IDS.has('dogfood-run-0')).toBe(true);
     expect(EXEMPT_WORKFLOW_IDS.has('explore')).toBe(false);
+    expect(EXEMPT_WORKFLOW_IDS.has('build')).toBe(false);
   });
 });
 

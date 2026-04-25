@@ -248,17 +248,17 @@ describe('checkAdapterBindingCoverage (Slice 38 — ADR-0008 §Decision.4)', () 
 
     it('yellow on unknown workflow kinds (not silent green pass-through)', () => {
       // Codex Slice 38 MED 2 fold-in — unknown kinds used to pass green
-      // silently, which would let a future `build` fixture with zero
+      // silently, which would let a future workflow fixture with zero
       // dispatch steps hide until someone remembered to register the kind.
       // Now they produce a yellow finding prompting either registration or
       // explicit exemption.
       withTempRepo((root) => {
         const fixture = exploreFixtureAllSynthesis();
-        fixture.id = 'build';
-        writeRel(root, '.claude-plugin/skills/build/circuit.json', JSON.stringify(fixture));
+        fixture.id = 'future-build';
+        writeRel(root, '.claude-plugin/skills/future-build/circuit.json', JSON.stringify(fixture));
         const result = checkAdapterBindingCoverage(root);
         expect(result.level).toBe('yellow');
-        expect(result.detail).toMatch(/build: unregistered workflow kind/);
+        expect(result.detail).toMatch(/future-build: unregistered workflow kind/);
         expect(result.detail).toMatch(/WORKFLOW_KIND_CANONICAL_SETS/);
         expect(result.detail).toMatch(/EXEMPT_WORKFLOW_IDS/);
       });

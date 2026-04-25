@@ -1,4 +1,4 @@
-<!-- current_slice: 115 -->
+<!-- current_slice: 116 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -10,11 +10,12 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 115
-- **current_arc:** Build workflow parity plan is operator-signed after the
-  tenth Codex challenger pass returned ACCEPT and the operator's standing
-  proceed-anyway authorization was recorded against the challenger-cleared
-  predecessor commit. Build runtime implementation may now open. P2-1 uses structured JSON as the accepted successor artifact shape; it does not claim old Markdown byte-for-byte compatibility. P2-3 live command proof is included through a live Claude
+- **current_slice:** 116
+- **current_arc:** Build workflow parity implementation has opened with the
+  policy-only Build shape. The shared workflow-kind policy now knows Build as
+  `frame → plan → act → verify → review → close`, with `analyze` omitted, and
+  tests prove that shape without adding the real Build workflow fixture yet.
+  Next up is the Build artifact contract/schema work. P2-1 uses structured JSON as the accepted successor artifact shape; it does not claim old Markdown byte-for-byte compatibility. P2-3 live command proof is included through a live Claude
   Code invocation of the inline `circuit` plugin. The Phase 2 close claim
   remains narrow: first working workflow product spine closed, not full
   first-generation Circuit parity. Next work is broader parity expansion

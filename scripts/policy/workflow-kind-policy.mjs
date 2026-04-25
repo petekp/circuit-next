@@ -47,6 +47,12 @@ export const WORKFLOW_KIND_CANONICAL_SETS = {
     title: 'Intake → Independent Audit → Verdict',
     authority: 'specs/plans/p2-9-second-workflow.md §3',
   },
+  build: {
+    canonicals: ['frame', 'plan', 'act', 'verify', 'review', 'close'],
+    omits: ['analyze'],
+    title: 'Frame → Plan → Act → Verify → Review → Close',
+    authority: 'specs/plans/build-workflow-parity.md §9 Work item 1',
+  },
 };
 
 /**

@@ -12,6 +12,12 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 116 BUILD POLICY SHAPE** (this commit, Ratchet-Advance) - opened
+  Build implementation by adding Build to the shared workflow-kind policy. The
+  policy now says Build has frame, plan, act, verify, review, and close phases,
+  and does not have analyze. Tests use shaped objects only; the real Build
+  workflow fixture has not been added yet.
+
 - **Slice 115 BUILD PLAN OPERATOR SIGNOFF** (this commit, Discovery) -
   recorded operator signoff for the Build workflow parity plan using the
   operator's standing proceed-anyway authorization, bound to the
