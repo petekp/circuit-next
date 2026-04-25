@@ -11,7 +11,7 @@
  *   npm run audit -- 25      # last 25 commits
  */
 
-import { execSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, readFileSync, readdirSync, readlinkSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
@@ -38,6 +38,54 @@ export const FRAMING_LITERALS = {
   acceptanceEvidence: 'Acceptance evidence:',
   whyThisNotAdjacent: 'Why this not adjacent:',
 };
+
+export const TWO_MODE_METHODOLOGY_ADOPTION_SLICE = '132';
+
+export const WORK_MODES = ['Light', 'Heavy'];
+
+export const WORK_MODE_DECLARATION_PATTERN = /^Work mode:\s*(Light|Heavy)\s*$/gim;
+
+export const LIGHT_WORK_MODE_FORBIDDEN_EXACT_PATHS = [
+  'AGENTS.md',
+  'bin/circuit-next',
+  'src/cli/circuit.ts',
+  'src/cli/dogfood.ts',
+  'src/runtime/artifact-schemas.ts',
+  'src/runtime/config-loader.ts',
+  'src/runtime/event-log-reader.ts',
+  'src/runtime/event-writer.ts',
+  'src/runtime/manifest-snapshot-writer.ts',
+  'src/runtime/reducer.ts',
+  'src/runtime/result-writer.ts',
+  'src/runtime/runner.ts',
+  'src/runtime/router.ts',
+  'src/runtime/run-relative-path.ts',
+  'src/runtime/selection-resolver.ts',
+  'src/runtime/snapshot-writer.ts',
+  'scripts/audit.mjs',
+  'scripts/plan-lint.mjs',
+];
+
+export const LIGHT_WORK_MODE_FORBIDDEN_PREFIXES = [
+  'bin/',
+  'src/cli/',
+  'src/runtime/adapters/',
+  'commands/',
+  '.claude-plugin/',
+  'specs/adrs/',
+  'specs/methodology/',
+  'specs/plans/',
+];
+
+export const LIGHT_WORK_MODE_STATUS_DOC_PATHS = [
+  'PROJECT_STATE.md',
+  'PROJECT_STATE-chronicle.md',
+  'README.md',
+  'TIER.md',
+];
+
+export const LIGHT_WORK_MODE_HEAVY_CLAIM_PATTERN =
+  /\b(?:challenger-(?:pending|cleared)|operator[- ]?(?:signoff|signed)|signoff|sign[- ]?off|signed[- ]?off|current_phase|phase[- ]?close|phase\s+\d|parity[- ]?close|workflow[- ]?close|close[- ]?claim|closed_at|closed_in_slice|live[- ]?(?:proof|command proof|smoke)|runnable|operational|runtime behavior|command surface|plugin surface|router|routing|adapter|dispatch|checkpoint\/resume|checkpoint|resume)\b/i;
 
 const SMELL_PATTERNS = [
   { pattern: /\bbecause circuit (does|works|is)\b/i, label: 'because-circuit-does' },
@@ -2971,12 +3019,141 @@ function commitIsAtOrAfterPhase2Open(hash) {
   }
 }
 
-function commitChangedFiles(hash) {
-  const raw = shSafe(`git show --name-only --pretty=format: ${hash}`);
+function commitChangedFiles(hash, rootDir = REPO_ROOT) {
+  let raw = '';
+  try {
+    raw = execSync(`git show --name-only --pretty=format: ${hash}`, { cwd: rootDir }).toString();
+  } catch {
+    raw = '';
+  }
   return raw
     .split('\n')
     .map((l) => l.trim())
     .filter(Boolean);
+}
+
+function commitChangedTextLines(hash, relPath, rootDir = REPO_ROOT) {
+  let raw = '';
+  try {
+    raw = execFileSync(
+      'git',
+      ['show', '--format=', '--unified=0', '--no-ext-diff', hash, '--', relPath],
+      { cwd: rootDir, encoding: 'utf8' },
+    );
+  } catch {
+    raw = '';
+  }
+
+  return raw
+    .split('\n')
+    .filter((line) => {
+      if (line.startsWith('+++') || line.startsWith('---')) return false;
+      return line.startsWith('+') || line.startsWith('-');
+    })
+    .map((line) => line.slice(1).trim())
+    .filter(Boolean);
+}
+
+function workModeDeclarations(body) {
+  return [...body.matchAll(WORK_MODE_DECLARATION_PATTERN)].map((match) => match[1]);
+}
+
+function canonicalSliceIdForCommitSubject(subject) {
+  const subjectMatch =
+    typeof subject === 'string' ? subject.match(SLICE_COMMIT_SUBJECT_PATTERN) : null;
+  const rawSliceId = subjectMatch?.[1];
+  const canonicalMatch = rawSliceId?.match(/^[0-9]+[a-z]?/);
+  return canonicalMatch?.[0] ?? null;
+}
+
+function isAfterTwoModeAdoptionSlice(subject) {
+  const sliceId = canonicalSliceIdForCommitSubject(subject);
+  if (sliceId === null) return false;
+  return compareSliceId(sliceId, TWO_MODE_METHODOLOGY_ADOPTION_SLICE) > 0;
+}
+
+function isLightWorkModeForbiddenPath(relPath) {
+  return (
+    LIGHT_WORK_MODE_FORBIDDEN_EXACT_PATHS.includes(relPath) ||
+    LIGHT_WORK_MODE_FORBIDDEN_PREFIXES.some((prefix) => relPath.startsWith(prefix))
+  );
+}
+
+function isLightStatusDocPath(relPath) {
+  return LIGHT_WORK_MODE_STATUS_DOC_PATHS.includes(relPath);
+}
+
+function lightStatusDocClaimFindings(hash, rootDir) {
+  const statusDocs = commitChangedFiles(hash, rootDir).filter(isLightStatusDocPath);
+  const findings = [];
+  for (const relPath of statusDocs) {
+    const claimLines = commitChangedTextLines(hash, relPath, rootDir)
+      .filter((line) => LIGHT_WORK_MODE_HEAVY_CLAIM_PATTERN.test(line))
+      .slice(0, 3);
+    if (claimLines.length > 0) {
+      findings.push(`${relPath} claim-bearing line(s): ${claimLines.join(' | ')}`);
+    }
+  }
+  return findings;
+}
+
+export function checkWorkModeDiscipline(disciplinedCommits, rootDir = REPO_ROOT) {
+  const futureSliceCommits = disciplinedCommits
+    .filter((c) => commitIsSliceShaped(c))
+    .filter((c) => isAfterTwoModeAdoptionSlice(c.subject));
+
+  if (futureSliceCommits.length === 0) {
+    return {
+      level: 'green',
+      detail: `No post-ADR-0012 slice commits after slice-${TWO_MODE_METHODOLOGY_ADOPTION_SLICE}; check not yet applicable`,
+    };
+  }
+
+  const findings = [];
+  for (const c of futureSliceCommits) {
+    const declarations = workModeDeclarations(c.body);
+    if (declarations.length !== 1) {
+      findings.push(
+        `${c.short} "${c.subject}" — expected exactly one Work mode declaration, found ${declarations.length}`,
+      );
+      continue;
+    }
+
+    const mode = declarations[0];
+    if (mode === 'Heavy' && !CODEX_CHALLENGER_REQUIRED_DECLARATION_PATTERN.test(c.body)) {
+      findings.push(
+        `${c.short} "${c.subject}" — Work mode Heavy requires "Codex challenger: REQUIRED"`,
+      );
+      continue;
+    }
+
+    if (mode === 'Light') {
+      const forbidden = commitChangedFiles(c.hash, rootDir).filter(isLightWorkModeForbiddenPath);
+      if (forbidden.length > 0) {
+        findings.push(
+          `${c.short} "${c.subject}" — Work mode Light touched heavy surface(s): ${forbidden.join(', ')}`,
+        );
+      }
+      const claimFindings = lightStatusDocClaimFindings(c.hash, rootDir);
+      if (claimFindings.length > 0) {
+        findings.push(
+          `${c.short} "${c.subject}" — Work mode Light changed close/signoff/live-proof claim text: ${claimFindings.join('; ')}`,
+        );
+      }
+    }
+  }
+
+  if (findings.length > 0) {
+    return {
+      level: 'red',
+      detail: findings.join('\n      '),
+    };
+  }
+
+  return {
+    level: 'green',
+    detail: `${futureSliceCommits.length} post-ADR-0012 slice commit(s) declare valid Work mode; Light slices avoid heavy surfaces and Heavy slices declare the Codex challenger trigger`,
+  };
 }
 
 // Returns true if ADR-0007 exists in the commit's tree. Used to grandfather
@@ -6479,6 +6656,20 @@ function main() {
     level: codexChallengerDeclaration.level,
     check: 'Codex challenger REQUIRED declaration (Slice 47d / Codex HIGH 2 + Claude HIGH 2)',
     detail: codexChallengerDeclaration.detail,
+  });
+
+  // Check 35a: Work mode discipline (ADR-0012). Future slices after the
+  // methodology-adoption slice declare exactly one Work mode. Light mode is
+  // allowed only for local preparatory work and rejects obvious runtime,
+  // command, methodology, audit, and plan surfaces. Heavy mode must carry the
+  // existing Codex challenger trigger so Check 35 enforces the review record
+  // while that commit is HEAD.
+  const workModeDiscipline = checkWorkModeDiscipline(disciplinedCommits);
+  counters[workModeDiscipline.level]++;
+  findings.push({
+    level: workModeDiscipline.level,
+    check: 'Work mode discipline (ADR-0012)',
+    detail: workModeDiscipline.detail,
   });
 
   // Check 36: plan-lint on committed plans + operator-signoff binding (Slice

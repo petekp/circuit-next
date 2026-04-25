@@ -1524,3 +1524,27 @@ its own phase list.
 
 Verification: focused workflow-policy tests pass. Full verification and audit
 run before commit.
+
+## Slice 132 — Two-mode methodology overlay
+
+Slice 132 adjusts the project methodology so low-risk prep work does not pay the
+same process cost as runtime or public behavior changes. Future commits declare
+either Light or Heavy work. Light is for local prep like schemas, policy tables,
+authority rows, focused tests, and status docs. Heavy is for runtime behavior,
+model adapters, commands, routing, methodology gates, plan lifecycle movement,
+and close claims.
+
+Audit now checks future slices for exactly one work-mode declaration. Light
+commits are rejected if they touch obvious Heavy surfaces such as CLI entrypoints,
+runtime evidence writers/readers, commands, methodology files, plan files, or
+`AGENTS.md`. Light status-doc edits are only for plain status; close, signoff,
+live-proof, phase, or parity claims remain Heavy. Heavy commits must declare the
+existing Codex challenger trigger, so the current challenger-evidence check still
+applies.
+
+Repair uses the split immediately: schema and authority-row work can be Light;
+checkpoint/resume, verification execution, command routing, live proof, and
+final close remain Heavy.
+
+Verification: focused work-mode audit tests pass. Full verification and audit
+run before commit.

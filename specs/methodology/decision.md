@@ -404,3 +404,21 @@ resolve to "Phase 1 contract-authorship close." Pre-25d references to
 "Phase 2 entry" now resolve to "Phase 2 entry, which requires Phase 1.5
 close." The original Decision section above is preserved verbatim; these
 rewording rules apply at read-time, not by retroactive edit.
+
+## Methodology Amendments (2026-04-24, Slice 132)
+
+### D11. Two-mode work overlay
+
+ADR-0012 adds a Work mode declaration on top of the existing lane system.
+`Work mode: Light` covers local preparatory work such as schemas, policy
+tables, authority rows, focused tests, and non-claim status docs. `Work mode:
+Heavy` covers runtime behavior, adapters, dispatch, CLI/binary entrypoints,
+commands, routing, methodology, audit gates, plan lifecycle movement, safety
+relaxations, live-proof claims, signoff movement, and parity-close claims.
+
+Cross-model challenger review is required for Heavy work, not for every
+Light ratchet-advance. Light work still requires focused tests when behavior or
+contracts move, `npm run verify`, post-commit `npm run audit`, and a plain
+operator summary. Audit Check 35a enforces the Work mode declaration and rejects
+Light commits that touch obvious Heavy surfaces or move close/signoff/live-proof
+claims in status docs.

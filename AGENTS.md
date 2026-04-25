@@ -16,8 +16,9 @@ and a narrow cross-model challenger.
 ## Core methodology (do not abbreviate)
 
 The methodology is authoritative at `specs/methodology/decision.md`, with
-Slice 7 amendments in `specs/adrs/ADR-0003-authority-graph-gate.md`. Every
-agent slice must honor it. Four pillars:
+Slice 7 amendments in `specs/adrs/ADR-0003-authority-graph-gate.md` and the
+two-mode overlay in `specs/adrs/ADR-0012-two-mode-methodology.md`. Every agent
+slice must honor it. Four pillars:
 
 1. **Contract-First core (conditional).** For **greenfield** surfaces,
    truth lives in executable specs + property tests authored before
@@ -36,9 +37,11 @@ agent slice must honor it. Four pillars:
    when types can express the invariant. `tsc --strict` is the first line of
    defense against local-coherence/global-incoherence failures.
 4. **Narrow cross-model challenger.** A different model (Codex) produces an
-   objection list — not an approval — for: ratchet changes, contract-relaxation
-   ADRs, migration escrows, discovery-decision promotion, and any request to
-   loosen a gate. This is **adversarial lint, not independent corroboration**.
+   objection list — not an approval — for Heavy-mode work, plan clearance,
+   contract-relaxation ADRs, migration escrows, discovery-decision promotion,
+   and any request to loosen a gate. Light-mode preparatory work does not need a
+   per-slice challenger unless it discovers Heavy risk. This is
+   **adversarial lint, not independent corroboration**.
    Codex and Codex share training distribution; Knight & Leveson 1986
    shows correlated failures, not independent ones. The challenger cannot
    replace authority mapping, live/reference evidence, fixture parity
@@ -93,6 +96,30 @@ prior alternate-framing + trajectory-check quadruplet per Slice 65
 same judgment call at slice open, and keeping them as separate ceremony
 produced empty ratification. Nguyen 2024 still frames the anchoring
 risk; the trajectory role folds in without a new artifact.
+
+## Work modes
+
+Every slice after ADR-0012 declares one work mode in the commit body:
+`Work mode: Light` or `Work mode: Heavy`. Work mode is separate from Lane; a
+Ratchet-Advance slice can be Light when it is local, preparatory, and
+non-executing.
+
+- **Light** is for schemas, policy rows, authority rows, straightforward tests,
+  internal helper extraction with no behavior change, and status docs that do
+  not move phase, signoff, live-proof, workflow-close, or parity-close claims.
+  It needs clear scope, focused tests when behavior or contracts move,
+  `npm run verify`, post-commit `npm run audit`, and the plain operator
+  summary. No per-slice external challenger is required.
+- **Heavy** is for runtime behavior, adapters, dispatch, event/result writing,
+  checkpoint/resume, command/router/plugin surfaces, methodology/audit/plan
+  gates, safety relaxations, and workflow close claims. It needs the Light
+  checks plus `Codex challenger: REQUIRED` and the review record or
+  arc-subsumption evidence required by audit.
+
+If a Light slice starts touching Heavy surfaces — including `AGENTS.md`, CLI or
+binary entrypoints, runtime evidence writers/readers, command/plugin files,
+methodology files, audit gates, or plan files — reclassify it as Heavy before
+commit. The plan lifecycle for multi-slice work remains unchanged.
 
 ## Session hygiene
 
@@ -178,11 +205,12 @@ needs a cheap sanity check, or when onboarding a fresh session.
 
 ## Cross-model challenger protocol
 
-When you need a challenger pass — for any ratchet change, ADR, escrow,
-discovery promotion, or gate loosening — dispatch the challenger through
-`/codex` skill (pipes to `codex exec` via the shared wrapper script). Never
-use the `codex:rescue` subagent. The challenger's job is an **objection
-list**, not approval. Document the response in the originating commit or ADR.
+When you need a challenger pass — for Heavy-mode work, plan clearance,
+contract-relaxation ADRs, migration escrows, discovery promotion, or gate
+loosening — dispatch the challenger through `/codex` skill (pipes to
+`codex exec` via the shared wrapper script). Never use the `codex:rescue`
+subagent. The challenger's job is an **objection list**, not approval.
+Document the response in the originating commit or ADR.
 
 ## Cross-slice composition review cadence
 
@@ -239,7 +267,7 @@ These are non-negotiable without reopening the methodology decision:
 4. No `--no-verify`, `--no-gpg-sign`, or skip-hooks flags without a
    Break-Glass lane declaration.
 5. ADR required for any relaxation of a contract, ratchet floor, or gate.
-6. Cross-model challenger required for any ratchet change.
+6. Cross-model challenger required for Heavy-mode work and any gate loosening.
 7. Every external-package identifier backed by installed type stubs,
    docstrings, `.d.ts`, or an end-to-end call test.
 8. No aggregate scoring across ratchets; each dimension tracked

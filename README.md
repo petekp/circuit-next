@@ -1,4 +1,4 @@
-<!-- current_slice: 131 -->
+<!-- current_slice: 132 -->
 
 # circuit-next
 
@@ -36,7 +36,9 @@ user-global defaults/overrides.
 
 See [`specs/methodology/decision.md`](specs/methodology/decision.md) for the
 tournament decision that defines the four methodological pillars, their
-stress-test survival, accepted risks, and reopen conditions.
+stress-test survival, accepted risks, and reopen conditions. ADR-0012 adds a
+two-mode work overlay: Light for local preparatory changes and Heavy for
+runtime, command, adapter, methodology, and close-claim work.
 
 ## Current phase
 
@@ -56,7 +58,9 @@ a polished workflow-configuration experience remain future work.
 Repair workflow shape, and `specs/plans/repair-workflow-parity.md` is now
 operator-signed for implementation. Repair implementation has started with the
 policy-only workflow shape; the runnable Repair fixture and command are not
-operational yet. CC#14 was amended by ADR-0006 as a one-time
+operational yet. ADR-0012 now lets Repair schema and authority-row work proceed
+in Light mode, while runtime, command, live-proof, and close-claim work remains
+Heavy. CC#14 was amended by ADR-0006 as a one-time
 waiver + retarget (see Status above); the canonical non-LLM cold-read is **not**
 satisfied, and weaker evidence of different shape is substituted — carried
 openly on every authority surface. CC#15 preservation rests on (i) the 14a
