@@ -119,6 +119,7 @@ export type BuildPlan = z.infer<typeof BuildPlan>;
 
 export const BuildImplementation = z
   .object({
+    verdict: z.literal('accept'),
     summary: z.string().min(1),
     changed_files: z.array(z.string().min(1)),
     evidence: NonEmptyStringArray,
@@ -188,7 +189,16 @@ export const BuildReview = z
     summary: z.string().min(1),
     findings: z.array(BuildReviewFinding),
   })
-  .strict();
+  .strict()
+  .superRefine((review, ctx) => {
+    if (review.verdict !== 'accept' && review.findings.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['findings'],
+        message: `findings must be non-empty when verdict is '${review.verdict}'`,
+      });
+    }
+  });
 export type BuildReview = z.infer<typeof BuildReview>;
 
 export const BuildResultArtifactId = z.enum([

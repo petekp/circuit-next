@@ -1,0 +1,292 @@
+{
+  "schema_version": "2",
+  "id": "build",
+  "version": "0.1.0",
+  "purpose": "Build workflow parity fixture. The workflow frames a requested change, plans it, sends implementation to a worker, verifies it, sends review to a separate worker, and closes with a Build result artifact.",
+  "entry": {
+    "signals": {
+      "include": ["build", "implement", "develop", "change", "fix", "add"],
+      "exclude": []
+    },
+    "intent_prefixes": ["build", "implement", "develop"]
+  },
+  "entry_modes": [
+    {
+      "name": "default",
+      "start_at": "frame-step",
+      "rigor": "standard",
+      "description": "Default Build entry mode."
+    },
+    {
+      "name": "lite",
+      "start_at": "frame-step",
+      "rigor": "lite",
+      "description": "Lite Build entry mode."
+    },
+    {
+      "name": "deep",
+      "start_at": "frame-step",
+      "rigor": "deep",
+      "description": "Deep Build entry mode."
+    },
+    {
+      "name": "autonomous",
+      "start_at": "frame-step",
+      "rigor": "autonomous",
+      "description": "Autonomous Build entry mode."
+    }
+  ],
+  "phases": [
+    {
+      "id": "frame-phase",
+      "title": "Frame",
+      "canonical": "frame",
+      "steps": ["frame-step"]
+    },
+    {
+      "id": "plan-phase",
+      "title": "Plan",
+      "canonical": "plan",
+      "steps": ["plan-step"]
+    },
+    {
+      "id": "act-phase",
+      "title": "Act",
+      "canonical": "act",
+      "steps": ["act-step"]
+    },
+    {
+      "id": "verify-phase",
+      "title": "Verify",
+      "canonical": "verify",
+      "steps": ["verify-step"]
+    },
+    {
+      "id": "review-phase",
+      "title": "Review",
+      "canonical": "review",
+      "steps": ["review-step"]
+    },
+    {
+      "id": "close-phase",
+      "title": "Close",
+      "canonical": "close",
+      "steps": ["close-step"]
+    }
+  ],
+  "spine_policy": {
+    "mode": "partial",
+    "omits": ["analyze"],
+    "rationale": "Build follows Frame, Plan, Act, Verify, Review, Close. The Analyze phase is omitted because analysis is folded into Frame and Plan for this workflow."
+  },
+  "steps": [
+    {
+      "id": "frame-step",
+      "title": "Frame - confirm Build brief",
+      "protocol": "build-frame@v1",
+      "reads": [],
+      "routes": {
+        "pass": "plan-step"
+      },
+      "executor": "orchestrator",
+      "kind": "checkpoint",
+      "policy": {
+        "prompt": "Confirm the Build brief before implementation starts.",
+        "choices": [
+          {
+            "id": "continue",
+            "label": "Continue"
+          },
+          {
+            "id": "revise",
+            "label": "Revise"
+          },
+          {
+            "id": "abort",
+            "label": "Abort"
+          }
+        ],
+        "safe_default_choice": "continue",
+        "safe_autonomous_choice": "continue",
+        "build_brief": {
+          "scope": "Make the smallest safe change that satisfies the requested goal.",
+          "success_criteria": [
+            "The requested behavior is implemented",
+            "Verification passes",
+            "Review completes without a blocking issue"
+          ],
+          "verification_command_candidates": [
+            {
+              "id": "npm-check",
+              "cwd": ".",
+              "argv": ["npm", "run", "check"],
+              "timeout_ms": 120000,
+              "max_output_bytes": 200000,
+              "env": {}
+            }
+          ]
+        }
+      },
+      "writes": {
+        "request": "artifacts/checkpoints/frame-step-request.json",
+        "response": "artifacts/checkpoints/frame-step-response.json",
+        "artifact": {
+          "path": "artifacts/build/brief.json",
+          "schema": "build.brief@v1"
+        }
+      },
+      "gate": {
+        "kind": "checkpoint_selection",
+        "source": {
+          "kind": "checkpoint_response",
+          "ref": "response"
+        },
+        "allow": ["continue", "revise", "abort"]
+      }
+    },
+    {
+      "id": "plan-step",
+      "title": "Plan - produce Build plan",
+      "protocol": "build-plan@v1",
+      "reads": ["artifacts/build/brief.json"],
+      "routes": {
+        "pass": "act-step"
+      },
+      "executor": "orchestrator",
+      "kind": "synthesis",
+      "writes": {
+        "artifact": {
+          "path": "artifacts/build/plan.json",
+          "schema": "build.plan@v1"
+        }
+      },
+      "gate": {
+        "kind": "schema_sections",
+        "source": {
+          "kind": "artifact",
+          "ref": "artifact"
+        },
+        "required": ["objective", "verification"]
+      }
+    },
+    {
+      "id": "act-step",
+      "title": "Act - implementation dispatch",
+      "protocol": "build-act@v1",
+      "reads": ["artifacts/build/brief.json", "artifacts/build/plan.json"],
+      "routes": {
+        "pass": "verify-step"
+      },
+      "executor": "worker",
+      "kind": "dispatch",
+      "role": "implementer",
+      "writes": {
+        "artifact": {
+          "path": "artifacts/build/implementation.json",
+          "schema": "build.implementation@v1"
+        },
+        "request": "artifacts/dispatch/build-act.request.json",
+        "receipt": "artifacts/dispatch/build-act.receipt.txt",
+        "result": "artifacts/dispatch/build-act.result.json"
+      },
+      "gate": {
+        "kind": "result_verdict",
+        "source": {
+          "kind": "dispatch_result",
+          "ref": "result"
+        },
+        "pass": ["accept"]
+      }
+    },
+    {
+      "id": "verify-step",
+      "title": "Verify - run Build verification",
+      "protocol": "build-verify@v1",
+      "reads": ["artifacts/build/plan.json", "artifacts/build/implementation.json"],
+      "routes": {
+        "pass": "review-step"
+      },
+      "executor": "orchestrator",
+      "kind": "verification",
+      "writes": {
+        "artifact": {
+          "path": "artifacts/build/verification.json",
+          "schema": "build.verification@v1"
+        }
+      },
+      "gate": {
+        "kind": "schema_sections",
+        "source": {
+          "kind": "artifact",
+          "ref": "artifact"
+        },
+        "required": ["overall_status", "commands"]
+      }
+    },
+    {
+      "id": "review-step",
+      "title": "Review - implementation review dispatch",
+      "protocol": "build-review@v1",
+      "reads": [
+        "artifacts/build/brief.json",
+        "artifacts/build/plan.json",
+        "artifacts/build/implementation.json",
+        "artifacts/build/verification.json"
+      ],
+      "routes": {
+        "pass": "close-step"
+      },
+      "executor": "worker",
+      "kind": "dispatch",
+      "role": "reviewer",
+      "writes": {
+        "artifact": {
+          "path": "artifacts/build/review.json",
+          "schema": "build.review@v1"
+        },
+        "request": "artifacts/dispatch/build-review.request.json",
+        "receipt": "artifacts/dispatch/build-review.receipt.txt",
+        "result": "artifacts/dispatch/build-review.result.json"
+      },
+      "gate": {
+        "kind": "result_verdict",
+        "source": {
+          "kind": "dispatch_result",
+          "ref": "result"
+        },
+        "pass": ["accept", "accept-with-fixes"]
+      }
+    },
+    {
+      "id": "close-step",
+      "title": "Close - emit Build result",
+      "protocol": "build-close@v1",
+      "reads": [
+        "artifacts/build/brief.json",
+        "artifacts/build/plan.json",
+        "artifacts/build/implementation.json",
+        "artifacts/build/verification.json",
+        "artifacts/build/review.json"
+      ],
+      "routes": {
+        "pass": "@complete"
+      },
+      "executor": "orchestrator",
+      "kind": "synthesis",
+      "writes": {
+        "artifact": {
+          "path": "artifacts/build-result.json",
+          "schema": "build.result@v1"
+        }
+      },
+      "gate": {
+        "kind": "schema_sections",
+        "source": {
+          "kind": "artifact",
+          "ref": "artifact"
+        },
+        "required": ["summary", "outcome", "artifact_pointers"]
+      }
+    }
+  ]
+}

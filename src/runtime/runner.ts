@@ -431,6 +431,24 @@ function dispatchResponseInstruction(
     ].join(' ');
   }
 
+  if (step.writes.artifact?.schema === 'build.implementation@v1') {
+    return [
+      'Respond with a single raw JSON object whose top-level shape is exactly:',
+      '{ "verdict": "accept", "summary": "<what changed>", "changed_files": ["<project-relative path>"], "evidence": ["<verification or implementation evidence>"] }',
+      'Use an empty changed_files array only when no file changed. Evidence must contain at least one item. Do not include extra top-level keys. Do not wrap the JSON in Markdown code fences. Do not include any prose before or after the JSON object.',
+      'The runtime parses your response with JSON.parse, rejects any verdict not drawn from the accepted-verdicts list, and validates the full artifact body against build.implementation@v1 before writing artifacts/build/implementation.json.',
+    ].join(' ');
+  }
+
+  if (step.writes.artifact?.schema === 'build.review@v1') {
+    return [
+      'Respond with a single raw JSON object whose top-level shape is exactly:',
+      '{ "verdict": "<accept|accept-with-fixes|reject>", "summary": "<review summary>", "findings": [{ "severity": "<critical|high|medium|low>", "text": "<finding text>", "file_refs": ["<file:line reference>"] }] }',
+      'Use an empty findings array only with verdict "accept". Verdicts "accept-with-fixes" and "reject" must include at least one finding. Use an empty file_refs array when a finding has no file-specific reference. Do not include extra top-level keys. Do not wrap the JSON in Markdown code fences. Do not include any prose before or after the JSON object.',
+      'The runtime parses your response with JSON.parse, rejects any verdict not drawn from the accepted-verdicts list, and validates the full artifact body against build.review@v1 before writing artifacts/build/review.json.',
+    ].join(' ');
+  }
+
   if (
     step.role === 'reviewer' &&
     step.gate.pass.includes('NO_ISSUES_FOUND') &&

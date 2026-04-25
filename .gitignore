@@ -1,6 +1,8 @@
 node_modules/
 dist/
 build/
+!/.claude-plugin/skills/build/
+!/.claude-plugin/skills/build/circuit.json
 .DS_Store
 *.log
 .env

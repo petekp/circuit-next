@@ -12,6 +12,14 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 122 BUILD FIXTURE DISPATCH SPINE** (this commit,
+  Ratchet-Advance) - added the first real Build workflow fixture. Build now
+  has a six-step path: confirm the brief, plan the work, send implementation
+  to a worker, run verification, send review to a worker, and write the final
+  Build result. Focused tests prove the fixture completes with stub workers,
+  rejects malformed implementation output, and stops on a blocking review.
+  Public Build slash-command wiring remains later work.
+
 - **Slice 121 BUILD CHECKPOINT RESUME** (this commit, Ratchet-Advance) -
   added a focused checkpoint resume path. A paused checkpoint run can now read
   its saved manifest and event log, reject unsafe choices, write the operator

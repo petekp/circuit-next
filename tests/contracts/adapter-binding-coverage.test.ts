@@ -188,6 +188,11 @@ function exploreFixtureAllSynthesis(): LooseFixture {
   return { ...base, steps };
 }
 
+function buildFixtureWithDispatch(): LooseFixture {
+  const rawPath = join(REPO_ROOT, '.claude-plugin/skills/build/circuit.json');
+  return JSON.parse(readFileSync(rawPath, 'utf-8')) as LooseFixture;
+}
+
 describe('checkAdapterBindingCoverage (Slice 38 — ADR-0008 §Decision.4)', () => {
   describe('green paths', () => {
     it('passes on explore fixture with Synthesize + Review as dispatch steps', () => {
@@ -343,6 +348,42 @@ describe('checkAdapterBindingCoverage (Slice 38 — ADR-0008 §Decision.4)', () 
       });
     });
 
+    it('reds when Build omits the required review dispatch step', () => {
+      withTempRepo((root) => {
+        const fixture = buildFixtureWithDispatch();
+        fixture.steps = fixture.steps.filter((s) => s.id !== 'review-step');
+        const verify = fixture.steps.find((s) => s.id === 'verify-step');
+        if (verify) verify.routes = { pass: 'close-step' };
+        writeRel(root, '.claude-plugin/skills/build/circuit.json', JSON.stringify(fixture));
+        const result = checkAdapterBindingCoverage(root);
+        expect(result.level).toBe('red');
+        expect(result.detail).toMatch(/build:/);
+        expect(result.detail).toMatch(/missing step id\(s\): review-step/);
+      });
+    });
+
+    it('reds when Build act-step is not a dispatch step', () => {
+      withTempRepo((root) => {
+        const fixture = buildFixtureWithDispatch();
+        const actStep = fixture.steps.find((s) => s.id === 'act-step');
+        if (!actStep) throw new Error('test-setup invariant: act-step present');
+        const writes = actStep.writes as { artifact: unknown };
+        actStep.executor = 'orchestrator';
+        actStep.kind = 'synthesis';
+        actStep.writes = { artifact: writes.artifact };
+        actStep.gate = {
+          kind: 'schema_sections',
+          source: { kind: 'artifact', ref: 'artifact' },
+          required: ['summary'],
+        };
+        writeRel(root, '.claude-plugin/skills/build/circuit.json', JSON.stringify(fixture));
+        const result = checkAdapterBindingCoverage(root);
+        expect(result.level).toBe('red');
+        expect(result.detail).toMatch(/wrong-kind step\(s\)/);
+        expect(result.detail).toMatch(/act-step:synthesis/);
+      });
+    });
+
     it('reds when a dispatch step omits writes.artifact (ADR-0008 §Decision.3a materialization rule)', () => {
       // Codex Slice 38 HIGH 2 fold-in — dispatch result-to-artifact
       // materialization requires every adapter-bound dispatch step in an
@@ -447,6 +488,22 @@ describe('checkAdapterBindingCoverage (Slice 38 — ADR-0008 §Decision.4)', () 
         // rule (transcript vs validated artifact).
         expect(step.writes.result).not.toBe(step.writes.artifact.path);
       }
+    });
+
+    it('live Build fixture parses and declares Act + Review as artifact-writing dispatch steps', () => {
+      const rawPath = join(REPO_ROOT, '.claude-plugin/skills/build/circuit.json');
+      const raw = JSON.parse(readFileSync(rawPath, 'utf-8'));
+      const parsed = Workflow.safeParse(raw);
+      expect(parsed.success).toBe(true);
+
+      const actStep = raw.steps.find((s: { id: string }) => s.id === 'act-step');
+      const reviewStep = raw.steps.find((s: { id: string }) => s.id === 'review-step');
+      expect(actStep?.kind).toBe('dispatch');
+      expect(actStep?.role).toBe('implementer');
+      expect(actStep?.writes?.artifact?.schema).toBe('build.implementation@v1');
+      expect(reviewStep?.kind).toBe('dispatch');
+      expect(reviewStep?.role).toBe('reviewer');
+      expect(reviewStep?.writes?.artifact?.schema).toBe('build.review@v1');
     });
   });
 });

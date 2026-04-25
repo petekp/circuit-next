@@ -330,6 +330,7 @@ function seedBuildRoleArtifact(runRoot: string, schema: string): void {
       runRoot,
       'artifacts/build/implementation.json',
       BuildImplementation.parse({
+        verdict: 'accept',
         summary: 'Implemented the requested change',
         changed_files: ['src/runtime/runner.ts'],
         evidence: ['Focused runtime writer test'],

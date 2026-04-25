@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { BuildImplementation, BuildReview } from '../schemas/artifacts/build.js';
 import { ExploreReviewVerdict, ExploreSynthesis } from '../schemas/artifacts/explore.js';
 
 // Slice 54 (Codex H15 fold-in) — dispatch-artifact schema registry +
@@ -53,6 +54,8 @@ const StrictPayloadShape = z
 
 const REGISTRY: Readonly<Record<string, z.ZodType<unknown>>> = Object.freeze({
   'dogfood-canonical@v1': MinimalVerdictShape,
+  'build.implementation@v1': BuildImplementation,
+  'build.review@v1': BuildReview,
   'explore.synthesis@v1': ExploreSynthesis,
   'explore.review-verdict@v1': ExploreReviewVerdict,
   'dogfood-strict@v1': StrictPayloadShape,

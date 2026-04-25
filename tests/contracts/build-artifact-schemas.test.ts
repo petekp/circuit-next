@@ -126,6 +126,7 @@ describe('Build artifact schemas', () => {
     ).toBeDefined();
     expect(
       BuildImplementation.parse({
+        verdict: 'accept',
         summary: 'Implemented the behavior',
         changed_files: ['src/example.ts'],
         evidence: ['Unit tests cover the change'],
@@ -156,6 +157,19 @@ describe('Build artifact schemas', () => {
       }),
     ).toBeDefined();
     expect(
+      BuildReview.parse({
+        verdict: 'accept-with-fixes',
+        summary: 'Minor follow-up needed',
+        findings: [
+          {
+            severity: 'low',
+            text: 'Document the small follow-up',
+            file_refs: [],
+          },
+        ],
+      }),
+    ).toBeDefined();
+    expect(
       BuildResult.parse({
         summary: 'Feature added and verified',
         outcome: 'complete',
@@ -181,10 +195,20 @@ describe('Build artifact schemas', () => {
 
     expect(
       BuildImplementation.safeParse({
+        verdict: 'accept',
         summary: 'Implemented the behavior',
         changed_files: [],
         evidence: ['Unit tests cover the change'],
         smuggled: true,
+      }).success,
+    ).toBe(false);
+
+    expect(
+      BuildImplementation.safeParse({
+        verdict: 'reject',
+        summary: 'Implemented the behavior',
+        changed_files: ['src/example.ts'],
+        evidence: ['Unit tests cover the change'],
       }).success,
     ).toBe(false);
   });
@@ -293,6 +317,23 @@ describe('Build artifact schemas', () => {
         ],
       }).findings[0]?.severity,
     ).toBe('critical');
+  });
+
+  it('requires actionable findings for non-accept Build review verdicts', () => {
+    expect(
+      BuildReview.safeParse({
+        verdict: 'accept-with-fixes',
+        summary: 'Follow-up needed',
+        findings: [],
+      }).success,
+    ).toBe(false);
+    expect(
+      BuildReview.safeParse({
+        verdict: 'reject',
+        summary: 'Blocking issue found',
+        findings: [],
+      }).success,
+    ).toBe(false);
   });
 
   it('rejects build.result pointer omissions, duplicates, and schema mismatches', () => {

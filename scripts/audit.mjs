@@ -4114,6 +4114,12 @@ export const WORKFLOW_KIND_DISPATCH_POLICY = {
     authority:
       'ADR-0008 §Decision.1 (executor+kind table) + §Decision.3a (result-to-artifact materialization rule)',
   },
+  build: {
+    require_dispatch_step_ids: ['act-step', 'review-step'],
+    require_writes_artifact_on_dispatch: true,
+    authority:
+      'specs/plans/build-workflow-parity.md §9 Work item 6 (Build implementation and review dispatch)',
+  },
 };
 
 export function checkAdapterBindingCoverage(rootDir = REPO_ROOT) {
