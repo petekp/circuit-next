@@ -1,4 +1,4 @@
-<!-- current_slice: 127 -->
+<!-- current_slice: 128 -->
 
 # circuit-next
 
@@ -51,9 +51,10 @@ for step state, and config can select model and effort. This does **not**
 claim full first-generation Circuit parity. Build is now closed as the first
 mutating workflow path; repair, migrate, sweep, custom workflow authoring, and
 a polished workflow-configuration experience remain future work.
-`specs/parity-map.md` records the current gap map and recommends opening
-Repair next; `specs/reference/legacy-circuit/repair-characterization.md`
-captures the old Repair workflow shape for that planning work. CC#14 was amended by ADR-0006 as a one-time
+`specs/parity-map.md` records the current gap map and recommends Repair next.
+`specs/reference/legacy-circuit/repair-characterization.md` captures the old
+Repair workflow shape, and `specs/plans/repair-workflow-parity.md` is now a
+challenger-pending plan for that work. CC#14 was amended by ADR-0006 as a one-time
 waiver + retarget (see Status above); the canonical non-LLM cold-read is **not**
 satisfied, and weaker evidence of different shape is substituted — carried
 openly on every authority surface. CC#15 preservation rests on (i) the 14a

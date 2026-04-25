@@ -1463,3 +1463,19 @@ diagnostic path instead of pretending a test exists.
 
 Verification: documentation/reference slice only; full verification and audit
 run at commit time.
+
+## Slice 128 — Repair plan draft
+
+Slice 128 drafted the Repair workflow parity plan from the fresh Repair
+reference characterization. The plan keeps the next work focused on bug fixing:
+frame the bug, reproduce and isolate it, make the fix, verify it, review it
+when the selected mode requires review, and close with clear evidence.
+
+The draft also records an important constraint: some Build machinery is still
+Build-specific. Repair can reuse the safety shape, but the plan budgets a small
+generalization step for Repair checkpoint briefs and Repair verification
+artifacts before the real Repair fixture lands.
+
+Verification: `npm run plan:lint -- specs/plans/repair-workflow-parity.md`
+passed before the plan was promoted to challenger-pending. The next step is the
+required Codex challenger review and fold-ins before runtime implementation.
