@@ -12,6 +12,15 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 123 BUILD ENTRY-MODE SELECTION** (this commit,
+  Ratchet-Advance) - made Build's named modes reachable through the runner
+  and product CLI. `--entry-mode` now picks the workflow entry mode and its
+  default run rigor, while explicit `--rigor` wins when supplied. Tests prove
+  Lite still reaches Review, Deep pauses at the checkpoint, Autonomous uses
+  the safe autonomous choice, and mixed mode/rigor invocations use one
+  resolved rigor consistently. Public Build slash-command wiring remains later
+  work.
+
 - **Slice 122 BUILD FIXTURE DISPATCH SPINE** (this commit,
   Ratchet-Advance) - added the first real Build workflow fixture. Build now
   has a six-step path: confirm the brief, plan the work, send implementation

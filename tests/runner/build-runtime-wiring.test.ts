@@ -87,6 +87,13 @@ function eventLabel(event: { kind: string; step_id?: unknown }): string {
   return typeof event.step_id === 'string' ? `${event.kind}:${event.step_id}` : event.kind;
 }
 
+function eventByKind<T extends { kind: string }>(
+  events: readonly T[],
+  kind: string,
+): T | undefined {
+  return events.find((event) => event.kind === kind);
+}
+
 let runRootBase: string;
 
 beforeEach(() => {
@@ -270,5 +277,195 @@ describe('Build runtime wiring', () => {
       'review-step',
       'close-step',
     ]);
+  });
+
+  it('uses the selected lite entry mode as the run rigor when no explicit rigor is supplied', async () => {
+    const { workflow, bytes } = loadFixture();
+    const runRoot = join(runRootBase, 'lite-entry-mode');
+    const dispatchInputs: AgentDispatchInput[] = [];
+    const dispatcher = dispatcherWith();
+
+    const outcome = await runDogfood({
+      runRoot,
+      workflow,
+      workflowBytes: bytes,
+      runId: RunId.parse('b2000000-0000-0000-0000-000000000004'),
+      goal: 'Add a tiny Build feature in lite mode',
+      entryModeName: 'lite',
+      lane: lane(),
+      now: deterministicNow(Date.UTC(2026, 3, 25, 8, 40, 0)),
+      dispatcher: {
+        adapterName: dispatcher.adapterName,
+        dispatch: async (input) => {
+          dispatchInputs.push(input);
+          return dispatcher.dispatch(input);
+        },
+      },
+      projectRoot: REPO_ROOT,
+    });
+
+    const bootstrap = eventByKind(outcome.events, 'run.bootstrapped');
+    const checkpoint = outcome.events.find(
+      (event) =>
+        event.kind === 'checkpoint.resolved' &&
+        eventLabel(event) === 'checkpoint.resolved:frame-step',
+    );
+    expect(outcome.result.outcome).toBe('complete');
+    expect(bootstrap).toMatchObject({ rigor: 'lite' });
+    expect(checkpoint).toMatchObject({
+      selection: 'continue',
+      resolution_source: 'safe-default',
+    });
+    expect(dispatchInputs[0]?.resolvedSelection).toMatchObject({ rigor: 'lite' });
+    expect(outcome.events.map(eventLabel)).toContain('dispatch.completed:review-step');
+  });
+
+  it('uses deep entry mode to pause at the operator checkpoint when no explicit rigor is supplied', async () => {
+    const { workflow, bytes } = loadFixture();
+    const runRoot = join(runRootBase, 'deep-entry-mode');
+
+    const outcome = await runDogfood({
+      runRoot,
+      workflow,
+      workflowBytes: bytes,
+      runId: RunId.parse('b2000000-0000-0000-0000-000000000005'),
+      goal: 'Add a tiny Build feature in deep mode',
+      entryModeName: 'deep',
+      lane: lane(),
+      now: deterministicNow(Date.UTC(2026, 3, 25, 8, 50, 0)),
+      dispatcher: dispatcherWith(),
+      projectRoot: REPO_ROOT,
+    });
+
+    const bootstrap = eventByKind(outcome.events, 'run.bootstrapped');
+    expect(outcome.result.outcome).toBe('checkpoint_waiting');
+    expect(bootstrap).toMatchObject({ rigor: 'deep' });
+    expect(outcome.events.map(eventLabel)).not.toContain('run.closed');
+    expect(existsSync(join(runRoot, 'artifacts/result.json'))).toBe(false);
+  });
+
+  it('lets an explicit rigor override the selected entry mode default', async () => {
+    const { workflow, bytes } = loadFixture();
+    const runRoot = join(runRootBase, 'entry-mode-rigor-override');
+    const dispatchInputs: AgentDispatchInput[] = [];
+    const dispatcher = dispatcherWith();
+
+    const outcome = await runDogfood({
+      runRoot,
+      workflow,
+      workflowBytes: bytes,
+      runId: RunId.parse('b2000000-0000-0000-0000-000000000006'),
+      goal: 'Add a tiny Build feature with an explicit standard override',
+      entryModeName: 'deep',
+      rigor: 'standard',
+      lane: lane(),
+      now: deterministicNow(Date.UTC(2026, 3, 25, 9, 0, 0)),
+      dispatcher: {
+        adapterName: dispatcher.adapterName,
+        dispatch: async (input) => {
+          dispatchInputs.push(input);
+          return dispatcher.dispatch(input);
+        },
+      },
+      projectRoot: REPO_ROOT,
+    });
+
+    const bootstrap = eventByKind(outcome.events, 'run.bootstrapped');
+    expect(outcome.result.outcome).toBe('complete');
+    expect(bootstrap).toMatchObject({ rigor: 'standard' });
+    expect(dispatchInputs[0]?.resolvedSelection).toMatchObject({ rigor: 'standard' });
+  });
+
+  it('uses explicit autonomous rigor over the default entry mode for checkpoint policy', async () => {
+    const { workflow, bytes } = loadFixture();
+    const runRoot = join(runRootBase, 'default-entry-autonomous-override');
+    const dispatchInputs: AgentDispatchInput[] = [];
+    const dispatcher = dispatcherWith();
+
+    const outcome = await runDogfood({
+      runRoot,
+      workflow,
+      workflowBytes: bytes,
+      runId: RunId.parse('b2000000-0000-0000-0000-000000000009'),
+      goal: 'Add a tiny Build feature with explicit autonomous rigor',
+      entryModeName: 'default',
+      rigor: 'autonomous',
+      lane: lane(),
+      now: deterministicNow(Date.UTC(2026, 3, 25, 9, 5, 0)),
+      dispatcher: {
+        adapterName: dispatcher.adapterName,
+        dispatch: async (input) => {
+          dispatchInputs.push(input);
+          return dispatcher.dispatch(input);
+        },
+      },
+      projectRoot: REPO_ROOT,
+    });
+
+    const bootstrap = eventByKind(outcome.events, 'run.bootstrapped');
+    const checkpoint = outcome.events.find(
+      (event) =>
+        event.kind === 'checkpoint.resolved' &&
+        eventLabel(event) === 'checkpoint.resolved:frame-step',
+    );
+    expect(outcome.result.outcome).toBe('complete');
+    expect(bootstrap).toMatchObject({ rigor: 'autonomous' });
+    expect(checkpoint).toMatchObject({
+      selection: 'continue',
+      resolution_source: 'safe-autonomous',
+    });
+    expect(dispatchInputs[0]?.resolvedSelection).toMatchObject({ rigor: 'autonomous' });
+  });
+
+  it('uses autonomous entry mode to take the declared safe autonomous checkpoint choice', async () => {
+    const { workflow, bytes } = loadFixture();
+    const runRoot = join(runRootBase, 'autonomous-entry-mode');
+
+    const outcome = await runDogfood({
+      runRoot,
+      workflow,
+      workflowBytes: bytes,
+      runId: RunId.parse('b2000000-0000-0000-0000-000000000007'),
+      goal: 'Add a tiny Build feature in autonomous mode',
+      entryModeName: 'autonomous',
+      lane: lane(),
+      now: deterministicNow(Date.UTC(2026, 3, 25, 9, 10, 0)),
+      dispatcher: dispatcherWith(),
+      projectRoot: REPO_ROOT,
+    });
+
+    const bootstrap = eventByKind(outcome.events, 'run.bootstrapped');
+    const checkpoint = outcome.events.find(
+      (event) =>
+        event.kind === 'checkpoint.resolved' &&
+        eventLabel(event) === 'checkpoint.resolved:frame-step',
+    );
+    expect(outcome.result.outcome).toBe('complete');
+    expect(bootstrap).toMatchObject({ rigor: 'autonomous' });
+    expect(checkpoint).toMatchObject({
+      selection: 'continue',
+      resolution_source: 'safe-autonomous',
+    });
+  });
+
+  it('rejects an unknown entry mode before bootstrapping a run root', async () => {
+    const { workflow, bytes } = loadFixture();
+    const runRoot = join(runRootBase, 'unknown-entry-mode');
+
+    await expect(
+      runDogfood({
+        runRoot,
+        workflow,
+        workflowBytes: bytes,
+        runId: RunId.parse('b2000000-0000-0000-0000-000000000008'),
+        goal: 'Try a missing entry mode',
+        entryModeName: 'missing',
+        lane: lane(),
+        now: deterministicNow(Date.UTC(2026, 3, 25, 9, 20, 0)),
+        dispatcher: dispatcherWith(),
+        projectRoot: REPO_ROOT,
+      }),
+    ).rejects.toThrow(/entry_mode named 'missing'/);
+    expect(existsSync(runRoot)).toBe(false);
   });
 });

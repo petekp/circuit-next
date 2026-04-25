@@ -46,8 +46,9 @@ interface ParsedArgs {
   command?: 'resume';
   workflowName?: string;
   goal?: string;
-  rigor: Rigor;
+  rigor?: Rigor;
   rigorProvided: boolean;
+  entryMode?: string;
   runRoot?: string;
   fixturePath?: string;
   checkpointChoice?: string;
@@ -70,7 +71,7 @@ export interface CliMainOptions {
 
 function usage(): string {
   return [
-    'usage: circuit-next [workflow-name] --goal "<goal>" [--rigor <lite|standard|deep|tournament|autonomous>] [--run-root <path>] [--fixture <path>]',
+    'usage: circuit-next [workflow-name] --goal "<goal>" [--entry-mode <default|lite|deep|autonomous>] [--rigor <lite|standard|deep|tournament|autonomous>] [--run-root <path>] [--fixture <path>]',
     '       circuit-next resume --run-root <path> --checkpoint-choice <choice>',
     '',
     'With an explicit workflow name, loads .claude-plugin/skills/<name>/circuit.json. Without one, classifies the free-form goal across the registered explore/review workflows and then composes the runtime boundary against the real `dispatchAgent`.',
@@ -88,6 +89,7 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
   let goal: string | undefined;
   let rigor: Rigor | undefined;
   let rigorProvided = false;
+  let entryMode: string | undefined;
   let runRoot: string | undefined;
   let fixturePath: string | undefined;
   let checkpointChoice: string | undefined;
@@ -107,6 +109,14 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
       if (next === undefined) throw new Error('--rigor requires a value');
       rigor = Rigor.parse(next);
       rigorProvided = true;
+      i += 1;
+      continue;
+    }
+    if (tok === '--entry-mode') {
+      const next = argv[i + 1];
+      if (next === undefined) throw new Error('--entry-mode requires a value');
+      if (next.length === 0) throw new Error('--entry-mode requires a non-empty value');
+      entryMode = next;
       i += 1;
       continue;
     }
@@ -179,14 +189,18 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
     if (rigorProvided) {
       throw new Error('checkpoint resume reuses the saved run rigor; omit --rigor');
     }
+    if (entryMode !== undefined) {
+      throw new Error('checkpoint resume reuses the saved workflow position; omit --entry-mode');
+    }
   } else if (goal === undefined || goal.length === 0) {
     throw new Error('--goal is required and must be non-empty');
   }
 
   const result: ParsedArgs = {
-    rigor: rigor ?? Rigor.parse('standard'),
     rigorProvided,
   };
+  if (rigor !== undefined) result.rigor = rigor;
+  if (entryMode !== undefined) result.entryMode = entryMode;
   if (command !== undefined) result.command = command;
   if (goal !== undefined) result.goal = goal;
   if (workflowName !== undefined) result.workflowName = workflowName;
@@ -319,10 +333,11 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
     projectRoot: resolve(options.configCwd ?? process.cwd()),
     runId,
     goal: args.goal,
-    rigor: args.rigor,
     lane,
     now,
   };
+  if (args.rigor !== undefined) invocation.rigor = args.rigor;
+  if (args.entryMode !== undefined) invocation.entryModeName = args.entryMode;
   if (options.dispatcher !== undefined) invocation.dispatcher = options.dispatcher;
   if (selectionConfigLayers.length > 0) {
     invocation.selectionConfigLayers = selectionConfigLayers;

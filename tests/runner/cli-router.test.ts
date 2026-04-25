@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -27,6 +27,19 @@ const EXPLORE_REVIEW_VERDICT_BODY = JSON.stringify({
   missed_angles: [],
 });
 
+const BUILD_IMPLEMENTATION_BODY = JSON.stringify({
+  verdict: 'accept',
+  summary: 'Implemented the requested change',
+  changed_files: ['src/example.ts'],
+  evidence: ['Stub implementation dispatch completed'],
+});
+
+const BUILD_REVIEW_BODY = JSON.stringify({
+  verdict: 'accept',
+  summary: 'No blocking issue found',
+  findings: [],
+});
+
 function deterministicNow(startMs: number): () => Date {
   let n = 0;
   return () => new Date(startMs + n++ * 1000);
@@ -39,15 +52,29 @@ function dispatcherWithBody(body: string): DispatchFn {
       request_payload: input.prompt,
       receipt_id: 'stub-receipt-cli-router',
       result_body:
-        input.prompt.includes('Step: synthesize-step') && body === '{"verdict":"accept"}'
-          ? EXPLORE_SYNTHESIS_BODY
-          : input.prompt.includes('Step: review-step') && body === '{"verdict":"accept"}'
-            ? EXPLORE_REVIEW_VERDICT_BODY
-            : body,
+        input.prompt.includes('Step: act-step') && body === '{"verdict":"accept"}'
+          ? BUILD_IMPLEMENTATION_BODY
+          : input.prompt.includes('Step: review-step') &&
+              input.prompt.includes('build.review@v1') &&
+              body === '{"verdict":"accept"}'
+            ? BUILD_REVIEW_BODY
+            : input.prompt.includes('Step: synthesize-step') && body === '{"verdict":"accept"}'
+              ? EXPLORE_SYNTHESIS_BODY
+              : input.prompt.includes('Step: review-step') && body === '{"verdict":"accept"}'
+                ? EXPLORE_REVIEW_VERDICT_BODY
+                : body,
       duration_ms: 1,
       cli_version: '0.0.0-stub',
     }),
   };
+}
+
+function eventLog(runRoot: string): Array<Record<string, unknown>> {
+  return readFileSync(join(runRoot, 'events.ndjson'), 'utf8')
+    .trim()
+    .split('\n')
+    .filter((line) => line.length > 0)
+    .map((line) => JSON.parse(line) as Record<string, unknown>);
 }
 
 async function runMainJson(
@@ -66,7 +93,7 @@ async function runMainJson(
       now: deterministicNow(Date.UTC(2026, 3, 24, 15, 0, 0)),
       runId: '84000000-0000-0000-0000-000000000001',
       configHomeDir: join(runRootBase, 'empty-home'),
-      configCwd: join(runRootBase, 'empty-cwd'),
+      configCwd: process.cwd(),
     });
     expect(exit).toBe(0);
   } finally {
@@ -93,7 +120,7 @@ async function runMainExit(argv: readonly string[]): Promise<{ exit: number; std
       now: deterministicNow(Date.UTC(2026, 3, 24, 15, 0, 0)),
       runId: '84000000-0000-0000-0000-000000000099',
       configHomeDir: join(runRootBase, 'empty-home'),
-      configCwd: join(runRootBase, 'empty-cwd'),
+      configCwd: process.cwd(),
     });
     return { exit, stderr };
   } finally {
@@ -163,6 +190,92 @@ describe('P2.8 CLI router', () => {
     expect(output.router_signal).toBeUndefined();
   });
 
+  it('accepts --entry-mode and uses that mode rigor when --rigor is omitted', async () => {
+    const runRoot = join(runRootBase, 'build-lite-entry-mode');
+    const output = await runMainJson(
+      [
+        'build',
+        '--goal',
+        'Add a tiny Build feature from the CLI',
+        '--entry-mode',
+        'lite',
+        '--run-root',
+        runRoot,
+      ],
+      '{"verdict":"accept"}',
+    );
+
+    const events = eventLog(runRoot);
+    const bootstrap = events.find((event) => event.kind === 'run.bootstrapped');
+    const dispatchStarted = events.find(
+      (event) => event.kind === 'dispatch.started' && event.step_id === 'act-step',
+    );
+    expect(output.workflow_id).toBe('build');
+    expect(output.outcome).toBe('complete');
+    expect(bootstrap).toMatchObject({ rigor: 'lite' });
+    expect(dispatchStarted?.resolved_selection).toMatchObject({ rigor: 'lite' });
+  });
+
+  it('lets --rigor override the selected --entry-mode default', async () => {
+    const runRoot = join(runRootBase, 'build-entry-mode-rigor-override');
+    const output = await runMainJson(
+      [
+        'build',
+        '--goal',
+        'Add a tiny Build feature from the CLI with an override',
+        '--entry-mode',
+        'deep',
+        '--rigor',
+        'standard',
+        '--run-root',
+        runRoot,
+      ],
+      '{"verdict":"accept"}',
+    );
+
+    const events = eventLog(runRoot);
+    const bootstrap = events.find((event) => event.kind === 'run.bootstrapped');
+    const dispatchStarted = events.find(
+      (event) => event.kind === 'dispatch.started' && event.step_id === 'act-step',
+    );
+    expect(output.workflow_id).toBe('build');
+    expect(output.outcome).toBe('complete');
+    expect(bootstrap).toMatchObject({ rigor: 'standard' });
+    expect(dispatchStarted?.resolved_selection).toMatchObject({ rigor: 'standard' });
+  });
+
+  it('lets explicit autonomous --rigor override the default --entry-mode through checkpoint policy', async () => {
+    const runRoot = join(runRootBase, 'build-default-entry-autonomous-override');
+    const output = await runMainJson(
+      [
+        'build',
+        '--goal',
+        'Add a tiny Build feature from the CLI with autonomous override',
+        '--entry-mode',
+        'default',
+        '--rigor',
+        'autonomous',
+        '--run-root',
+        runRoot,
+      ],
+      '{"verdict":"accept"}',
+    );
+
+    const events = eventLog(runRoot);
+    const bootstrap = events.find((event) => event.kind === 'run.bootstrapped');
+    const checkpoint = events.find(
+      (event) => event.kind === 'checkpoint.resolved' && event.step_id === 'frame-step',
+    );
+    const dispatchStarted = events.find(
+      (event) => event.kind === 'dispatch.started' && event.step_id === 'act-step',
+    );
+    expect(output.workflow_id).toBe('build');
+    expect(output.outcome).toBe('complete');
+    expect(bootstrap).toMatchObject({ rigor: 'autonomous' });
+    expect(checkpoint).toMatchObject({ resolution_source: 'safe-autonomous' });
+    expect(dispatchStarted?.resolved_selection).toMatchObject({ rigor: 'autonomous' });
+  });
+
   it('rejects fixture overrides whose workflow id does not match the selected workflow', async () => {
     await expect(
       main(
@@ -183,6 +296,31 @@ describe('P2.8 CLI router', () => {
         },
       ),
     ).rejects.toThrow(/workflow fixture id mismatch/i);
+  });
+
+  it('rejects an unknown --entry-mode before writing a run log', async () => {
+    const runRoot = join(runRootBase, 'unknown-build-entry-mode');
+    await expect(
+      main(
+        [
+          'build',
+          '--goal',
+          'Try a missing Build entry mode',
+          '--entry-mode',
+          'missing',
+          '--run-root',
+          runRoot,
+        ],
+        {
+          dispatcher: dispatcherWithBody('{"verdict":"accept"}'),
+          now: deterministicNow(Date.UTC(2026, 3, 24, 15, 0, 0)),
+          runId: '84000000-0000-0000-0000-000000000005',
+          configHomeDir: join(runRootBase, 'empty-home'),
+          configCwd: join(runRootBase, 'empty-cwd'),
+        },
+      ),
+    ).rejects.toThrow(/entry_mode named 'missing'/);
+    expect(() => eventLog(runRoot)).toThrow();
   });
 
   it('prints a versioned checkpoint_waiting envelope without result_path', async () => {
@@ -413,5 +551,17 @@ describe('P2.8 CLI router', () => {
     ]);
     expect(withFixture.exit).toBe(2);
     expect(withFixture.stderr).toMatch(/omit --fixture/);
+
+    const withEntryMode = await runMainExit([
+      'resume',
+      '--run-root',
+      join(runRootBase, 'not-needed'),
+      '--checkpoint-choice',
+      'continue',
+      '--entry-mode',
+      'lite',
+    ]);
+    expect(withEntryMode.exit).toBe(2);
+    expect(withEntryMode.stderr).toMatch(/omit --entry-mode/);
   });
 });

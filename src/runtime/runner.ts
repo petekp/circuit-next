@@ -224,7 +224,8 @@ export interface DogfoodInvocation {
   projectRoot?: string;
   runId: RunId;
   goal: string;
-  rigor: Rigor;
+  rigor?: Rigor;
+  entryModeName?: string;
   lane: LaneDeclaration;
   now: () => Date;
   invocationId?: InvocationId;
@@ -504,12 +505,75 @@ function deriveResolvedSelection(
   inv: DispatcherInvocationConfig,
   workflow: Workflow,
   step: Workflow['steps'][number] & { kind: 'dispatch' },
+  rigor: Rigor,
 ): ResolvedSelection {
   return resolveSelectionForDispatch({
     workflow,
     step,
-    ...(inv.selectionConfigLayers !== undefined ? { configLayers: inv.selectionConfigLayers } : {}),
+    configLayers: selectionConfigLayersForDispatch(inv, workflow, rigor),
   }).resolved;
+}
+
+function bindsExecutionRigorToDispatchSelection(workflow: Workflow): boolean {
+  return (workflow.id as unknown as string) === 'build';
+}
+
+function selectionConfigLayersForDispatch(
+  inv: DispatcherInvocationConfig,
+  workflow: Workflow,
+  rigor: Rigor,
+): readonly LayeredConfigValue[] {
+  if (!bindsExecutionRigorToDispatchSelection(workflow)) {
+    return inv.selectionConfigLayers ?? [];
+  }
+  return selectionConfigLayersWithExecutionRigor(inv, workflow, rigor);
+}
+
+function selectionConfigLayersWithExecutionRigor(
+  inv: DispatcherInvocationConfig,
+  workflow: Workflow,
+  rigor: Rigor,
+): readonly LayeredConfigValue[] {
+  const layers = [...(inv.selectionConfigLayers ?? [])];
+  const workflowId = workflow.id;
+  const existingIndex = layers.findIndex((layer) => layer.layer === 'invocation');
+  const existing = existingIndex === -1 ? undefined : layers[existingIndex];
+  const baseConfig = existing?.config ?? {
+    schema_version: 1,
+    dispatch: {
+      default: 'auto',
+      roles: {},
+      circuits: {},
+      adapters: {},
+    },
+    circuits: {},
+    defaults: {},
+  };
+  const existingCircuit = baseConfig.circuits[workflowId] ?? {};
+  const selection = {
+    ...(existingCircuit.selection ?? {}),
+    rigor,
+  };
+  const invocationLayer = LayeredConfig.parse({
+    layer: 'invocation',
+    ...(existing?.source_path === undefined ? {} : { source_path: existing.source_path }),
+    config: {
+      ...baseConfig,
+      circuits: {
+        ...baseConfig.circuits,
+        [workflowId]: {
+          ...existingCircuit,
+          selection,
+        },
+      },
+    },
+  });
+  if (existingIndex === -1) {
+    layers.push(invocationLayer);
+  } else {
+    layers[existingIndex] = invocationLayer;
+  }
+  return layers;
 }
 
 function adapterFailureReason(stepId: string, err: unknown): string {
@@ -1164,7 +1228,8 @@ interface DogfoodExecutionContext {
   readonly workflowBytes: Buffer;
   readonly runId: RunId;
   readonly goal: string;
-  readonly rigor: Rigor;
+  readonly rigor?: Rigor;
+  readonly entryModeName?: string;
   readonly lane: LaneDeclaration;
   readonly now: () => Date;
   readonly dispatcher?: DispatchFn;
@@ -1251,7 +1316,30 @@ function findWaitingCheckpoint(input: {
   };
 }
 
-// Narrow dogfood-run-0 loop. Walks routes from the single entry_mode;
+function selectEntryMode(
+  workflow: Workflow,
+  entryModeName: string | undefined,
+): Workflow['entry_modes'][number] {
+  if (workflow.entry_modes.length === 0) {
+    throw new Error(`runDogfood: workflow ${workflow.id} declares no entry_modes`);
+  }
+  if (entryModeName === undefined) {
+    const entry = workflow.entry_modes[0];
+    if (entry === undefined) {
+      throw new Error(`runDogfood: workflow ${workflow.id} entry_modes[0] unreadable`);
+    }
+    return entry;
+  }
+  const entry = workflow.entry_modes.find((mode) => mode.name === entryModeName);
+  if (entry === undefined) {
+    throw new Error(
+      `runDogfood: workflow ${workflow.id} declares no entry_mode named '${entryModeName}'`,
+    );
+  }
+  return entry;
+}
+
+// Narrow dogfood-run-0 loop. Walks routes from the selected entry_mode;
 // for each step, appends the per-kind event trail; emits run.closed
 // after the pass route reaches a terminal label; writes result.json last.
 //
@@ -1260,17 +1348,14 @@ function findWaitingCheckpoint(input: {
 // callers — this is internal to Phase 1.5 / Phase 2 only (no external
 // users yet).
 async function executeDogfood(ctx: DogfoodExecutionContext): Promise<DogfoodRunResult> {
-  const { runRoot, workflow, workflowBytes, runId, goal, rigor, lane, now } = ctx;
+  const { runRoot, workflow, workflowBytes, runId, goal, lane, now } = ctx;
   const dispatcher = await resolveDispatcher(ctx);
   const synthesisWriter = ctx.synthesisWriter ?? writeSynthesisArtifact;
-
-  if (workflow.entry_modes.length === 0) {
-    throw new Error(`runDogfood: workflow ${workflow.id} declares no entry_modes`);
-  }
-  const entry = workflow.entry_modes[0];
-  if (entry === undefined) {
-    throw new Error(`runDogfood: workflow ${workflow.id} entry_modes[0] unreadable`);
-  }
+  const entry = selectEntryMode(workflow, ctx.entryModeName);
+  const rigor = ctx.rigor ?? entry.rigor;
+  const executionSelectionConfigLayers = bindsExecutionRigorToDispatchSelection(workflow)
+    ? selectionConfigLayersWithExecutionRigor(ctx, workflow, rigor)
+    : (ctx.selectionConfigLayers ?? []);
 
   const manifestHash = computeManifestHash(workflowBytes);
   const bootstrapTs = now().toISOString();
@@ -1525,7 +1610,7 @@ async function executeDogfood(ctx: DogfoodExecutionContext): Promise<DogfoodRunR
             checkpointRequestBody({
               step,
               ...(ctx.projectRoot === undefined ? {} : { projectRoot: ctx.projectRoot }),
-              selectionConfigLayers: ctx.selectionConfigLayers ?? [],
+              selectionConfigLayers: executionSelectionConfigLayers,
               ...(buildBriefSha256 === undefined ? {} : { buildBriefSha256 }),
             }),
             null,
@@ -1715,7 +1800,7 @@ async function executeDogfood(ctx: DogfoodExecutionContext): Promise<DogfoodRunR
       }
     } else if (step.kind === 'dispatch') {
       const prompt = composeDispatchPrompt(step, runRoot);
-      const resolvedSelection = deriveResolvedSelection(ctx, workflow, step);
+      const resolvedSelection = deriveResolvedSelection(ctx, workflow, step, rigor);
       const dispatchInput: DispatchInput = { prompt, resolvedSelection };
       if (step.budgets?.wall_clock_ms !== undefined) {
         dispatchInput.timeoutMs = step.budgets.wall_clock_ms;
