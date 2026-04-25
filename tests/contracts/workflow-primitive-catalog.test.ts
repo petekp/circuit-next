@@ -30,7 +30,7 @@ function titleToId(title: string): string {
 
 function canonicalPrimitiveTitlesFromMarkdown(): string[] {
   const markdown = readFileSync(primitivesDocPath, 'utf8');
-  const section = markdown.split('## Canonical Primitive List')[1]?.split('## Repair-Derived')[0];
+  const section = markdown.split('## Canonical Primitive List')[1]?.split('## Fix-Derived')[0];
   if (section === undefined) throw new Error('Canonical Primitive List section not found');
   return section
     .split('\n')
@@ -77,8 +77,10 @@ describe('workflow primitive catalog', () => {
     if (humanDecision === undefined) throw new Error('human-decision missing');
     expect(humanDecision.action_surface).toBe('host');
     expect(humanDecision.human_interaction).toBe('mode-dependent');
-    expect(humanDecision.host_capabilities.claude.join(' ')).toMatch(/user-question/i);
-    expect(humanDecision.host_capabilities.codex.join(' ')).toMatch(/question/i);
+    expect(humanDecision.host_capabilities.claude.join(' ')).toMatch(
+      /AskUserQuestion|user-question/i,
+    );
+    expect(humanDecision.host_capabilities.codex.join(' ')).toMatch(/native.*question/i);
     expect(humanDecision.host_capabilities.non_interactive.join(' ')).toMatch(
       /default|pause|fail/i,
     );

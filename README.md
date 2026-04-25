@@ -1,4 +1,4 @@
-<!-- current_slice: 137 -->
+<!-- current_slice: 138 -->
 
 # circuit-next
 
@@ -27,10 +27,12 @@ methodology — **Contract-First + Tiny-Step-Ratcheting + Architecture-First +
 narrow cross-model challenger** — that was itself designed through a
 tournament-rigor Explore run.
 
-The operator-facing value proposition is unchanged: a small number of
-high-leverage workflow shapes (Explore, Build, Repair, Migrate, Sweep) with
-per-step configurability of model, reasoning effort, skills applied, and
-user-global defaults/overrides.
+The operator-facing value proposition is still a small number of high-leverage
+workflow shapes, but the direction has shifted from cloning the old list toward
+recipes made from reusable moves. Explore, Review, and Build already work;
+the next proving recipe is Fix, informed by the old Repair workflow evidence.
+Per-step configurability of model, reasoning effort, skills applied, and
+user-global defaults/overrides remains part of the product target.
 
 ## Methodology
 
@@ -39,9 +41,9 @@ tournament decision that defines the four methodological pillars, their
 stress-test survival, accepted risks, and reopen conditions. ADR-0012 adds a
 two-mode work overlay: Light for local preparatory changes and Heavy for
 runtime, command, adapter, methodology, and close-claim work.
-`specs/workflow-primitives.md` records the first-principles reusable-move
-direction so parity remains reference evidence rather than the only product
-goal.
+`specs/workflow-direction.md` and `specs/workflow-primitives.md` record the
+first-principles reusable-move direction so parity remains reference evidence
+rather than the only product goal.
 
 ## Current phase
 
@@ -63,7 +65,13 @@ operator-signed for implementation. Repair implementation has started with the
 policy-only workflow shape; the runnable Repair fixture and command are not
 operational yet. ADR-0012 now lets Repair schema and authority-row work proceed
 in Light mode, while runtime, command, live-proof, and close-claim work remains
-Heavy. CC#14 was amended by ADR-0006 as a one-time
+Heavy.
+
+Slice 138 reframes that old Repair evidence toward a clearer Fix recipe over
+reusable moves; see `specs/workflow-direction.md` and
+`specs/workflow-recipes/fix-candidate.recipe.json`.
+
+CC#14 was amended by ADR-0006 as a one-time
 waiver + retarget (see Status above); the canonical non-LLM cold-read is **not**
 satisfied, and weaker evidence of different shape is substituted — carried
 openly on every authority surface. CC#15 preservation rests on (i) the 14a

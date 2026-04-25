@@ -8,7 +8,7 @@ import {
 } from '../../src/schemas/workflow-recipe.js';
 
 const primitiveCatalogPath = 'specs/workflow-primitive-catalog.json';
-const repairRecipePath = 'specs/workflow-recipes/repair-candidate.recipe.json';
+const fixRecipePath = 'specs/workflow-recipes/fix-candidate.recipe.json';
 
 function readJson(path: string): unknown {
   return JSON.parse(readFileSync(path, 'utf8')) as unknown;
@@ -18,28 +18,28 @@ function parsePrimitiveCatalog() {
   return WorkflowPrimitiveCatalog.parse(readJson(primitiveCatalogPath));
 }
 
-function parseRepairRecipe() {
-  return WorkflowRecipe.parse(readJson(repairRecipePath));
+function parseFixRecipe() {
+  return WorkflowRecipe.parse(readJson(fixRecipePath));
 }
 
 describe('workflow recipe schema', () => {
-  it('parses the Repair candidate recipe', () => {
-    const recipe = parseRepairRecipe();
+  it('parses the Fix candidate recipe', () => {
+    const recipe = parseFixRecipe();
     expect(recipe.schema_version).toBe('1');
     expect(recipe.status).toBe('candidate');
-    expect(recipe.starts_at).toBe('repair-intake');
+    expect(recipe.starts_at).toBe('fix-intake');
   });
 
-  it('keeps the Repair candidate recipe compatible with the primitive catalog', () => {
+  it('keeps the Fix candidate recipe compatible with the primitive catalog', () => {
     const issues = validateWorkflowRecipeCatalogCompatibility(
-      parseRepairRecipe(),
+      parseFixRecipe(),
       parsePrimitiveCatalog(),
     );
     expect(issues).toEqual([]);
   });
 
-  it('uses the expected Repair primitive sequence', () => {
-    const recipe = parseRepairRecipe();
+  it('uses the expected Fix primitive sequence', () => {
+    const recipe = parseFixRecipe();
     expect(recipe.items.map((item) => item.uses)).toEqual([
       'intake',
       'route',
@@ -56,7 +56,7 @@ describe('workflow recipe schema', () => {
   });
 
   it('rejects an unknown route target at parse time', () => {
-    const raw = readJson(repairRecipePath) as Record<string, unknown>;
+    const raw = readJson(fixRecipePath) as Record<string, unknown>;
     const items = raw.items as Array<Record<string, unknown>>;
     const first = items[0];
     if (first === undefined) throw new Error('fixture missing first item');
@@ -69,42 +69,42 @@ describe('workflow recipe schema', () => {
   });
 
   it('reports route outcomes that the selected primitive does not allow', () => {
-    const recipe = parseRepairRecipe();
+    const recipe = parseFixRecipe();
     const first = recipe.items[0];
     if (first === undefined) throw new Error('fixture missing first item');
     first.routes = { ...first.routes, complete: '@complete' };
     const issues = validateWorkflowRecipeCatalogCompatibility(recipe, parsePrimitiveCatalog());
     expect(issues).toEqual([
       {
-        item_id: 'repair-intake',
+        item_id: 'fix-intake',
         message: 'route "complete" is not allowed by primitive "intake"',
       },
     ]);
   });
 
   it('reports unavailable input contracts in recipe order', () => {
-    const recipe = parseRepairRecipe();
-    const diagnose = recipe.items.find((item) => item.id === 'repair-diagnose');
-    if (diagnose === undefined) throw new Error('repair-diagnose missing');
+    const recipe = parseFixRecipe();
+    const diagnose = recipe.items.find((item) => item.id === 'fix-diagnose');
+    if (diagnose === undefined) throw new Error('fix-diagnose missing');
     diagnose.input.context = 'missing.context@v1';
     const issues = validateWorkflowRecipeCatalogCompatibility(recipe, parsePrimitiveCatalog());
     expect(issues).toEqual([
       {
-        item_id: 'repair-diagnose',
+        item_id: 'fix-diagnose',
         message: 'input "context" references unavailable contract "missing.context@v1"',
       },
     ]);
   });
 
   it('reports outputs that are not primitive outputs or declared aliases', () => {
-    const recipe = parseRepairRecipe();
-    const close = recipe.items.find((item) => item.id === 'repair-close');
-    if (close === undefined) throw new Error('repair-close missing');
+    const recipe = parseFixRecipe();
+    const close = recipe.items.find((item) => item.id === 'fix-close');
+    if (close === undefined) throw new Error('fix-close missing');
     close.output = 'wrong.result@v1';
     const issues = validateWorkflowRecipeCatalogCompatibility(recipe, parsePrimitiveCatalog());
     expect(issues).toEqual([
       {
-        item_id: 'repair-close',
+        item_id: 'fix-close',
         message:
           'output "wrong.result@v1" is not compatible with primitive output "workflow.result@v1"',
       },

@@ -20,7 +20,8 @@ Deep prior-art research should be evaluated through
 `specs/workflow-research-intake.md` before it changes this inventory.
 The machine-readable companion catalog is
 `specs/workflow-primitive-catalog.json`; the composition model is sketched in
-`specs/workflow-recipe-composition.md`.
+`specs/workflow-recipe-composition.md`. The product direction is summarized in
+`specs/workflow-direction.md`.
 
 ## Core Idea
 
@@ -73,18 +74,18 @@ Example:
 | Close With Evidence | End honestly. | Required artifacts, verification, review when required, residual risks. | Workflow result with outcome, evidence pointers, follow-ups. | Complete, stop, hand off, escalate. |
 | Handoff | Persist enough state to resume later. | Current goal, completed moves, pending evidence, next action, debt. | Continuity record or handoff artifact. | Stop, Resume later. |
 
-## Repair-Derived Reusable Moves
+## Fix-Derived Reusable Moves
 
-Repair is the right place to extract the first new set of primitives after
-Build because it adds bug-fix discipline without requiring a completely new
-runtime story.
+The old Repair workflow is useful reference evidence, but the clearer v1
+product recipe is Fix: understand a concrete problem, make the smallest safe
+change, prove it, and close honestly.
 
-Repair should contribute these reusable moves:
+Fix should contribute these reusable moves:
 
 | Move | Why it is reusable |
 |---|---|
 | Regression Contract | Many change workflows need expected behavior, actual behavior, and proof target. |
-| Diagnose Problem | Repair needs it directly; Migrate and Sweep also need "why this is risky or broken" analysis. |
+| Diagnose Problem | Fix needs it directly; Migrate and Sweep also need "why this is risky or broken" analysis. |
 | No-Repro Decision | Any workflow can hit uncertain evidence and need operator choice. |
 | Optional Review Branch | Lite-style paths can skip review only when mode and evidence allow it. |
 | Conditional Close | Some workflows close as fixed, not reproduced, partially complete, skipped, or handed off. |
@@ -98,7 +99,7 @@ The workflow-level input is structured:
 
 ```json
 {
-  "decision_id": "repair.no_repro_next_step",
+  "decision_id": "fix.no_repro_next_step",
   "question": "The bug did not reproduce. What should Circuit do next?",
   "options": [
     {
@@ -138,7 +139,7 @@ The output is structured:
 
 ```json
 {
-  "decision_id": "repair.no_repro_next_step",
+  "decision_id": "fix.no_repro_next_step",
   "selected": "instrument",
   "answered_by": "operator",
   "source": "host_user_question",
@@ -156,7 +157,7 @@ Future work should start by asking:
 4. Which routes are allowed by mode?
 5. Which primitive is missing and should be built generically?
 
-This means Repair, Migrate, Sweep, and custom workflows are not necessarily
+This means Fix, Migrate, Sweep, and custom workflows are not necessarily
 separate implementation towers. They should be different recipes over a shared
 set of moves.
 

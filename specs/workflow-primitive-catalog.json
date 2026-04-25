@@ -80,8 +80,8 @@
       "allowed_routes": ["continue", "revise", "stop", "handoff", "escalate"],
       "human_interaction": "mode-dependent",
       "host_capabilities": {
-        "claude": ["native user-question tool when available"],
-        "codex": ["host interactive question mechanism when available"],
+        "claude": ["AskUserQuestion or native user-question tool when available"],
+        "codex": ["native interactive question mechanism when available"],
         "non_interactive": ["use declared default", "pause", "fail clearly"]
       }
     },

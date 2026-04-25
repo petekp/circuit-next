@@ -212,12 +212,12 @@ function buildPolicyOnlyPayload(overrides: Record<string, unknown> = {}): Record
   };
 }
 
-function repairPolicyOnlyPayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+function fixPolicyOnlyPayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     schema_version: '2',
-    id: 'repair',
-    // Deliberately policy-only: the real Repair fixture waits for the
-    // Repair artifact schemas and runtime substrate widenings.
+    id: 'fix',
+    // Deliberately policy-only: the real Fix fixture waits for the artifact
+    // schemas and runtime substrate widenings.
     phases: [
       { title: 'Frame', canonical: 'frame', steps: ['frame-step'] },
       { title: 'Analyze', canonical: 'analyze', steps: ['analyze-step'] },
@@ -229,8 +229,7 @@ function repairPolicyOnlyPayload(overrides: Record<string, unknown> = {}): Recor
     spine_policy: {
       mode: 'partial',
       omits: ['plan'],
-      rationale:
-        'policy-only repair payload: Repair omits plan because root-cause analysis replaces it.',
+      rationale: 'policy-only fix payload: Fix omits plan because diagnosis replaces it.',
     },
     steps: [
       { id: 'frame-step', kind: 'checkpoint', writes: { artifact: {} } },
@@ -266,10 +265,10 @@ describe('checkWorkflowKindCanonicalPolicy (audit-level, no Zod)', () => {
     expect(result.detail).toMatch(/omits \{analyze\}/);
   });
 
-  it('returns green on a policy-only repair payload with the Repair canonical phase set', () => {
-    const result = checkWorkflowKindCanonicalPolicy(repairPolicyOnlyPayload());
+  it('returns green on a policy-only fix payload with the Fix canonical phase set', () => {
+    const result = checkWorkflowKindCanonicalPolicy(fixPolicyOnlyPayload());
     expect(result.kind).toBe('green');
-    expect(result.detail).toMatch(/repair: canonical set/);
+    expect(result.detail).toMatch(/fix: canonical set/);
     expect(result.detail).toMatch(/frame, analyze, act, verify, review, close/);
     expect(result.detail).toMatch(/omits \{plan\}/);
   });
@@ -351,8 +350,8 @@ describe('checkWorkflowKindCanonicalPolicy (audit-level, no Zod)', () => {
     expect(result.detail).toMatch(/missing canonical\(s\): verify/);
   });
 
-  it('returns red when repair declares the omitted plan canonical', () => {
-    const fixture = repairPolicyOnlyPayload();
+  it('returns red when fix declares the omitted plan canonical', () => {
+    const fixture = fixPolicyOnlyPayload();
     const phases = fixture.phases as Array<Record<string, unknown>>;
     fixture.phases = [...phases, { title: 'Plan', canonical: 'plan' }];
     const result = checkWorkflowKindCanonicalPolicy(fixture);
@@ -360,12 +359,12 @@ describe('checkWorkflowKindCanonicalPolicy (audit-level, no Zod)', () => {
     expect(result.detail).toMatch(/unexpected canonical\(s\): plan/);
   });
 
-  it('returns red when repair spine_policy.omits does not declare the omitted plan phase', () => {
-    const fixture = repairPolicyOnlyPayload({
+  it('returns red when fix spine_policy.omits does not declare the omitted plan phase', () => {
+    const fixture = fixPolicyOnlyPayload({
       spine_policy: {
         mode: 'partial',
         omits: [],
-        rationale: 'policy-only repair payload with the required plan omit missing.',
+        rationale: 'policy-only fix payload with the required plan omit missing.',
       },
     });
     const result = checkWorkflowKindCanonicalPolicy(fixture);
@@ -373,8 +372,8 @@ describe('checkWorkflowKindCanonicalPolicy (audit-level, no Zod)', () => {
     expect(result.detail).toMatch(/missing omit\(s\): plan/);
   });
 
-  it('returns red when repair omits analyze from the canonical set', () => {
-    const fixture = repairPolicyOnlyPayload();
+  it('returns red when fix omits analyze from the canonical set', () => {
+    const fixture = fixPolicyOnlyPayload();
     const phases = fixture.phases as Array<Record<string, unknown>>;
     fixture.phases = phases.filter((p) => p.canonical !== 'analyze');
     const result = checkWorkflowKindCanonicalPolicy(fixture);
@@ -433,17 +432,17 @@ describe('checkWorkflowKindCanonicalPolicy (audit-level, no Zod)', () => {
     expect(build.omits).toEqual(['analyze']);
     expect(build.title).toBe('Frame → Plan → Act → Verify → Review → Close');
     expect(build.authority).toBe('specs/plans/build-workflow-parity.md §9 Work item 1');
-    const repair = WORKFLOW_KIND_CANONICAL_SETS.repair;
-    expect(repair).toBeDefined();
-    if (repair === undefined) throw new Error('unreachable');
-    expect(repair.canonicals).toEqual(['frame', 'analyze', 'act', 'verify', 'review', 'close']);
-    expect(repair.omits).toEqual(['plan']);
-    expect(repair.title).toBe('Frame → Analyze → Fix → Verify → Review → Close');
-    expect(repair.authority).toBe('specs/plans/repair-workflow-parity.md §8 Work item 1');
+    const fix = WORKFLOW_KIND_CANONICAL_SETS.fix;
+    expect(fix).toBeDefined();
+    if (fix === undefined) throw new Error('unreachable');
+    expect(fix.canonicals).toEqual(['frame', 'analyze', 'act', 'verify', 'review', 'close']);
+    expect(fix.omits).toEqual(['plan']);
+    expect(fix.title).toBe('Frame → Diagnose → Fix → Verify → Review → Close');
+    expect(fix.authority).toBe('specs/workflow-direction.md §First Proving Recipe');
     expect(EXEMPT_WORKFLOW_IDS.has('dogfood-run-0')).toBe(true);
     expect(EXEMPT_WORKFLOW_IDS.has('explore')).toBe(false);
     expect(EXEMPT_WORKFLOW_IDS.has('build')).toBe(false);
-    expect(EXEMPT_WORKFLOW_IDS.has('repair')).toBe(false);
+    expect(EXEMPT_WORKFLOW_IDS.has('fix')).toBe(false);
   });
 });
 

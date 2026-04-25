@@ -16,9 +16,11 @@ The companion machine-readable primitive list lives at
 `specs/workflow-primitive-catalog.json`, with the schema in
 `src/schemas/workflow-primitives.ts`.
 
-A first design-only Repair candidate lives at
-`specs/workflow-recipes/repair-candidate.recipe.json`, with the recipe schema
-in `src/schemas/workflow-recipe.ts`.
+A first design-only Fix candidate lives at
+`specs/workflow-recipes/fix-candidate.recipe.json`, with the recipe schema in
+`src/schemas/workflow-recipe.ts`. The product direction note at
+`specs/workflow-direction.md` reframes old Repair evidence into the clearer Fix
+recipe.
 
 ## The Short Version
 
@@ -75,21 +77,21 @@ Sketch:
 
 ```json
 {
-  "id": "repair-diagnose",
+  "id": "fix-diagnose",
   "uses": "diagnose",
   "input": {
-    "brief": "repair.brief@v1",
+    "brief": "fix.brief@v1",
     "context": "context.packet@v1"
   },
-  "output": "repair.diagnosis@v1",
+  "output": "fix.diagnosis@v1",
   "selection": {
     "provider": "claude",
     "effort": "medium"
   },
   "routes": {
-    "continue": "repair-fix",
-    "retry": "repair-gather-more-context",
-    "ask": "repair-no-repro-decision",
+    "continue": "fix-act",
+    "retry": "fix-gather-more-context",
+    "ask": "fix-no-repro-decision",
     "stop": "@stop"
   }
 }
@@ -177,8 +179,8 @@ hard to run it for this workflow.
 
 Example:
 
-- a Lite Repair recipe might skip independent review after strong verification;
-- a Deep Repair recipe might run a separate Review item with higher effort;
+- a Lite Fix recipe might skip independent review after strong verification;
+- a Deep Fix recipe might run a separate Review item with higher effort;
 - both recipes still use the same Act, Run Verification, and Close primitives.
 
 ## Evidence Shape
@@ -191,10 +193,10 @@ Each item should produce two useful surfaces:
 The typed artifact keeps the workflow reliable. The summary keeps the operator
 from having to read raw step logs.
 
-## What This Means For Repair
+## What This Means For Fix
 
-Repair can continue as the first proving ground, but it should be treated as a
-recipe over primitives:
+The old Repair workflow should be treated as reference evidence. The first
+proving recipe should be Fix because the user-facing job is clearer:
 
 1. Intake
 2. Frame
@@ -210,6 +212,17 @@ recipe over primitives:
 If that shape feels too rigid after the deep research lands, the research should
 tell us exactly which primitive or route policy needs to change.
 
+Do not add more one-off Repair behavior before proving this shape as a recipe
+over reusable moves.
+
+## V1 Custom Workflow Boundary
+
+Custom workflows should compose built-in primitives first.
+
+Users should not be able to define arbitrary new move code in v1. That keeps the
+first custom-workflow surface understandable and lets the built-in catalog
+stabilize before Circuit grows an extension system for new move definitions.
+
 ## Open Design Questions
 
 Keep these open until the research is reviewed:
@@ -219,7 +232,5 @@ Keep these open until the research is reviewed:
 2. Should recipe items use primitive ids directly, or user-facing aliases?
 3. How much type aliasing should be allowed between workflow-specific artifacts
    and generic primitive contracts?
-4. Should custom workflows be allowed to introduce new primitive-like moves, or
-   only compose built-ins at first?
-5. How do we show users the recipe clearly without exposing every raw prompt and
+4. How do we show users the recipe clearly without exposing every raw prompt and
    step artifact?
