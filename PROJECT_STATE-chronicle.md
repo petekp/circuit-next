@@ -1496,3 +1496,16 @@ operator signoff.
 
 Verification: plan lint passed in authoring and committed contexts, and full
 verification ran before commit.
+
+## Slice 130 — Repair plan operator signoff
+
+Slice 130 records operator signoff for the cleared Repair plan. This is the
+small lifecycle step that turns the approved plan into work we are allowed to
+start implementing.
+
+No runtime behavior changed in this slice. The next work is to begin the first
+Repair implementation slice from the signed plan, starting with the typed
+Repair artifact contracts and schemas.
+
+Verification: plan lint and full verification are run after this signoff commit
+so the signoff chain can be checked against committed history.

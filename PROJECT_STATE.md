@@ -1,4 +1,4 @@
-<!-- current_slice: 129 -->
+<!-- current_slice: 130 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -10,7 +10,7 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 129
+- **current_slice:** 130
 - **current_arc:** Build workflow parity is now closed. The implementation has the policy
   shape, typed Build artifact contracts/schemas, registered runtime synthesis
   writers for `build.plan@v1` and `build.result@v1`, and a focused
@@ -44,8 +44,8 @@ context and phase-open provenance.
   so the next Repair plan can start from reference evidence. Slice 128 drafted
   the Repair workflow parity plan and promoted it to challenger-pending after
   plan-lint passed. Slice 129 folded the Codex challenger findings and moved
-  the Repair plan to challenger-cleared. Next work is operator signoff before
-  Repair runtime implementation starts.
+  the Repair plan to challenger-cleared. Slice 130 recorded operator signoff
+  against the cleared plan, so Repair runtime implementation may start next.
 - **current_phase:** Phase 2 — Implementation (closed for the first working workflow; broader parity expansion planning next)
 
 Chronicle (relocated narrative history — non-authoritative; see

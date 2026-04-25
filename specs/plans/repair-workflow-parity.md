@@ -1,6 +1,6 @@
 ---
 plan: repair-workflow-parity
-status: challenger-cleared
+status: operator-signoff
 revision: 03
 opened_at: 2026-04-24
 opened_in_session: post-repair-reference-characterization
@@ -8,6 +8,9 @@ revised_at: 2026-04-24
 revised_in_session: repair-workflow-parity-codex-challenger-02-foldin
 cleared_at: 2026-04-24
 cleared_in_session: repair-workflow-parity-codex-challenger-02
+signoff_at: 2026-04-24
+signoff_in_session: operator-standing-authorization
+signoff_note: "Operator granted standing authorization to proceed autonomously toward parity and later said Proceed; signoff transition is bound in the slice-130 commit body with operator_signoff_predecessor."
 base_commit: 8143851
 target: repair
 authority:
@@ -55,7 +58,8 @@ structured JSON artifact direction.
 ## §0 — Prior pass log
 
 Revision 02 folded the first Codex challenger pass. Revision 03 folds the
-second Codex challenger pass and reaches `challenger-cleared`.
+second Codex challenger pass, reached `challenger-cleared`, and is now
+operator-signed.
 
 | Pass-01 # | Severity | Objection | Revision-02 fold-in |
 |---|---|---|---|
