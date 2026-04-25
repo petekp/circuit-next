@@ -12,6 +12,14 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 112 BUILD PLAN EIGHTH CHALLENGER FOLD-INS** (this commit,
+  Discovery) - recorded the eighth Codex challenger review for the Build plan
+  and folded in its three objections. Build artifacts now use
+  `artifacts/build/*.json` paths so they do not collide with Explore
+  artifacts, the public mode selector is pinned as `--entry-mode`, and the
+  Build plan artifact must carry the typed verification commands before the
+  runtime learns to execute them. No Build runtime behavior changed.
+
 - **Slice 111 BUILD PLAN SEVENTH CHALLENGER FOLD-INS** (this commit,
   Discovery) - recorded the seventh Codex challenger review for the Build plan
   and folded in its two objections. The plan now says the Frame checkpoint,

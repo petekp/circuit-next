@@ -1,11 +1,11 @@
 ---
 plan: build-workflow-parity
 status: challenger-pending
-revision: 08
+revision: 09
 opened_at: 2026-04-24
 revised_at: 2026-04-24
 opened_in_session: post-phase-2-parity-map
-revised_in_session: build-workflow-parity-codex-challenger-07-foldins
+revised_in_session: build-workflow-parity-codex-challenger-08-foldins
 base_commit: eb52089
 target: build
 authority:
@@ -65,6 +65,12 @@ prior_challenger_passes:
     1 MED; revision 08 folds both by assigning `build.brief@v1` to the
     checkpoint-owned Frame path and by preserving router metadata in the
     `checkpoint_waiting` envelope)
+  - specs/reviews/build-workflow-parity-codex-challenger-08.md
+    (verdict REJECT-PENDING-FOLD-INS vs revision 08 — 2 HIGH,
+    1 MED; revision 09 folds all three by moving Build role artifacts onto
+    distinct Build-owned paths, naming `--entry-mode` as the public mode
+    selector, and pinning the `build.plan@v1` verification-command payload
+    before verification execution lands)
 ---
 
 # Build Workflow Parity Plan
@@ -84,7 +90,8 @@ Revision 02 folds the first Codex challenger pass. Revision 03 folds the
 second Codex challenger pass. Revision 04 folds the third Codex challenger
 pass. Revision 05 folds the fourth Codex challenger pass. Revision 06 folds
 the fifth Codex challenger pass. Revision 07 folds the sixth Codex challenger
-pass. Revision 08 folds the seventh Codex challenger pass.
+pass. Revision 08 folds the seventh Codex challenger pass. Revision 09 folds
+the eighth Codex challenger pass.
 
 | Pass-01 # | Severity | Objection | Revision-02 fold-in |
 |---|---|---|---|
@@ -124,6 +131,12 @@ pass. Revision 08 folds the seventh Codex challenger pass.
 |---|---|---|---|
 | 1 | HIGH | `build.brief` had no honest producer after Frame became a real checkpoint: Work item 3 still treated it as a synthesis writer, while Work item 5 did not own `artifacts/brief.json`. | §6 and Work items 2/3/5 now assign `build.brief@v1` to the checkpoint-owned Frame path. Work item 3 handles only Plan and Close synthesis writers; Work item 5 requires `artifacts/brief.json` to exist and parse on waiting and resolved Frame paths. |
 | 2 | MED | The `checkpoint_waiting` envelope omitted `routed_by` and `router_reason`, weakening the existing `/circuit:run` output contract for router-selected Build. | §8 and Work item 8 now include `routed_by`, `router_reason`, and optional `router_signal` in the waiting envelope and require `/circuit:run` waiting tests. |
+
+| Pass-08 # | Severity | Objection | Revision-09 fold-in |
+|---|---|---|---|
+| 1 | HIGH | `build.brief` reused `<run-root>/artifacts/brief.json`, which collides with `explore.brief` under the live artifact backing-path audit. | §6 now puts Build role artifacts under distinct Build-owned paths (`artifacts/build/*.json`) while keeping the close result at `artifacts/build-result.json`; Work item 2 requires path-collision tests for every Build artifact path. |
+| 2 | HIGH | The public entry-mode selector was unnamed, making mode/rigor conflict tests under-specified. | §5 and Work items 7/8 now pin `--entry-mode <default|lite|deep|autonomous>` as the public selector and require command/CLI tests proving `--entry-mode` and `--rigor` can be supplied independently. |
+| 3 | MED | `build.plan@v1` did not explicitly carry the typed verification-command structure before the verification runtime slice. | §6 and Work items 2/3 now require `build.plan@v1` to include a non-empty typed `verification.commands[]` payload using the exact direct-argv command shape consumed by §7. |
 
 ## §1 — Evidence census
 
@@ -246,6 +259,18 @@ explicit `standard` rigor" follows the `standard` checkpoint policy, while
 "Default Build with explicit `autonomous` rigor" follows the `autonomous`
 checkpoint policy if the safe auto choice exists.
 
+The public entry-mode selector for this arc is
+`--entry-mode <default|lite|deep|autonomous>`. It is independent from
+`--rigor`. A command may supply both, for example:
+
+```bash
+./bin/circuit-next build --goal 'make the focused change' --entry-mode deep --rigor standard
+```
+
+That invocation selects the `deep` entry mode's start point, then uses the
+explicit `standard` rigor as the resolved execution rigor for bootstrap,
+dispatch selection, and checkpoint policy.
+
 Autonomous mode is limited to the Build reference shape for this arc. Missing
 or unsafe auto choices fail closed rather than silently continuing.
 
@@ -253,11 +278,11 @@ or unsafe auto choices fail closed rather than silently continuing.
 
 | Reference role | circuit-next artifact id | Schema | Backing path |
 |---|---|---|---|
-| Brief | `build.brief` | `build.brief@v1` | `<run-root>/artifacts/brief.json` |
-| Plan | `build.plan` | `build.plan@v1` | `<run-root>/artifacts/plan.json` |
-| Implementation handoff/result | `build.implementation` | `build.implementation@v1` | `<run-root>/artifacts/implementation.json` |
-| Verification | `build.verification` | `build.verification@v1` | `<run-root>/artifacts/verification.json` |
-| Review | `build.review` | `build.review@v1` | `<run-root>/artifacts/review.json` |
+| Brief | `build.brief` | `build.brief@v1` | `<run-root>/artifacts/build/brief.json` |
+| Plan | `build.plan` | `build.plan@v1` | `<run-root>/artifacts/build/plan.json` |
+| Implementation handoff/result | `build.implementation` | `build.implementation@v1` | `<run-root>/artifacts/build/implementation.json` |
+| Verification | `build.verification` | `build.verification@v1` | `<run-root>/artifacts/build/verification.json` |
+| Review | `build.review` | `build.review@v1` | `<run-root>/artifacts/build/review.json` |
 | Result | `build.result` | `build.result@v1` | `<run-root>/artifacts/build-result.json` |
 
 Each artifact is a clean-break structured JSON successor to the reference
@@ -269,13 +294,42 @@ every intermediate file.
 universal run result remains `<run-root>/artifacts/result.json`; the
 workflow-specific Build close artifact is `<run-root>/artifacts/build-result.json`.
 
+Build role artifacts live under `artifacts/build/` to avoid backing-path
+collisions with existing Explore artifacts such as `explore.brief` at
+`artifacts/brief.json`. This plan does not add an artifact-authority exception
+for workflow-scoped path reuse.
+
 `build.brief` is checkpoint-owned, not synthesis-owned. The Frame checkpoint
-writes `build.brief@v1` to `<run-root>/artifacts/brief.json` when it reaches
-the checkpoint. The brief captures the framed objective, scope, success
+writes `build.brief@v1` to `<run-root>/artifacts/build/brief.json` when it
+reaches the checkpoint. The brief captures the framed objective, scope, success
 criteria, verification command candidates, allowed checkpoint choices, and
 pointers to the stable checkpoint request/response artifacts. A Deep waiting
-run must already have a parseable `artifacts/brief.json`; after resume, the
-response artifact records the selected choice and resolution source.
+run must already have a parseable `artifacts/build/brief.json`; after resume,
+the response artifact records the selected choice and resolution source.
+
+`build.plan@v1` must include the verification command payload that the Verify
+runtime step later executes:
+
+```json
+{
+  "verification": {
+    "commands": [
+      {
+        "id": "<stable-command-id>",
+        "cwd": ".",
+        "argv": ["npm", "run", "verify"],
+        "timeout_ms": 120000,
+        "max_output_bytes": 200000,
+        "env": {}
+      }
+    ]
+  }
+}
+```
+
+`verification.commands` must be non-empty. Each command uses direct argv
+execution only: no shell string, no `/bin/sh -c`, no implicit environment
+expansion, project-root-contained `cwd`, explicit timeout, and bounded output.
 
 ## §7 — Verification substrate
 
@@ -453,9 +507,15 @@ JSON without a typed successor contract.
 - Make `build.brief@v1` a checkpoint-owned Frame artifact: its schema must be
   valid while waiting and after resume, and must include pointers to the
   checkpoint request path and optional response path.
+- Make `build.plan@v1` carry the typed `verification.commands[]` payload
+  shown in §6, including non-empty direct argv, project-root-contained `cwd`,
+  explicit timeout, and bounded output fields.
 - Add backing-path tests proving `build.result` uses
   `<run-root>/artifacts/build-result.json` and does not collide with
   `run.result` at `<run-root>/artifacts/result.json`.
+- Add backing-path tests proving every Build role artifact under
+  `<run-root>/artifacts/build/*.json` is path-distinct from existing Explore
+  and Review artifact backing paths.
 - Add or update a Build contract file if the artifact rows need a contract
   home before runtime wiring.
 
@@ -463,6 +523,8 @@ JSON without a typed successor contract.
 
 - All six Build artifact schemas accept a minimal valid object and reject
   missing required fields or surplus keys.
+- `build.plan@v1` schema tests reject shell-string verification commands,
+  empty argv, missing timeout, missing output bound, and cwd escape.
 - Authority graph tests prove each Build artifact row has a backing path,
   schema file, schema export, writer, reader, and reference evidence.
 - Authority graph or artifact tests prove no workflow-specific Build artifact
@@ -485,6 +547,9 @@ placeholder JSON that looks like progress but is not a useful Build artifact.
 **Deliverables:**
 
 - Register synthesis writers for `build.plan@v1` and `build.result@v1`.
+- Make the `build.plan@v1` writer emit a non-empty `verification.commands[]`
+  list using the exact typed command shape in §6; this is the payload the
+  later Verify runtime step consumes.
 - Add tests proving the Build close writer reads prior Build artifacts and
   writes a schema-valid result at `artifacts/build-result.json`.
 - Ensure placeholder fallback cannot satisfy Build result acceptance.
@@ -493,6 +558,8 @@ placeholder JSON that looks like progress but is not a useful Build artifact.
 
 - Runner tests prove plan and close Build synthesis artifacts are schema-valid
   through the default runtime path.
+- Runner tests prove the Build Plan artifact includes at least one typed
+  verification command and rejects shell-string or unbounded command shapes.
 - Runner tests prove `build.result@v1` is written to
   `artifacts/build-result.json`, while `artifacts/result.json` remains the
   engine-authored run summary.
@@ -563,7 +630,7 @@ with a synthesis placeholder while still claiming full entry-mode parity.
 - Add the checkpoint event, state, CLI waiting-envelope, and artifact surfaces
   described in §8.
 - Make Frame checkpoint execution write `build.brief@v1` to
-  `artifacts/brief.json`; the checkpoint substrate owns this artifact for
+  `artifacts/build/brief.json`; the checkpoint substrate owns this artifact for
   Build instead of the synthesis writer path.
 - Add the stable checkpoint artifact paths
   `artifacts/checkpoints/<step-id>-request.json` and
@@ -587,7 +654,7 @@ with a synthesis placeholder while still claiming full entry-mode parity.
 
 - Runner tests prove a checkpoint step can be reached and recorded.
 - Runner tests prove Frame writes a schema-valid `build.brief@v1` at
-  `artifacts/brief.json` on both waiting and resolved paths.
+  `artifacts/build/brief.json` on both waiting and resolved paths.
 - Runner tests prove default/lite resolve only through a declared safe default.
 - Runner tests prove deep reaches a paused-open checkpoint state with no
   `run.closed` and no `artifacts/result.json`.
@@ -661,6 +728,8 @@ entry modes without making them reachable through the product path.
 - Add the smallest runtime and CLI entry-mode selector needed for a named
   workflow entry mode to choose the run start point and default run rigor
   instead of always using `entry_modes[0]`.
+- Expose that selector as `--entry-mode <default|lite|deep|autonomous>` on the
+  product CLI.
 - Bind the selected entry mode's `rigor` into invocation and recorded run
   state when no explicit invocation rigor is supplied.
 - Compute one resolved execution rigor from entry-mode rigor plus explicit
@@ -683,10 +752,15 @@ entry modes without making them reachable through the product path.
   uses the `standard` safe-default checkpoint policy, and Default Build with
   explicit `autonomous` rigor uses the `autonomous` safe-auto checkpoint policy
   when a safe auto choice exists.
+- Add CLI tests proving `--entry-mode` and `--rigor` can be supplied
+  independently on the same invocation.
 
 **Acceptance evidence:**
 
 - Product CLI tests prove a non-default Build entry mode is reachable.
+- Product CLI tests prove `./bin/circuit-next build --entry-mode deep --rigor
+  standard --goal <goal>` selects the Deep entry-mode start point while using
+  `standard` as resolved execution rigor.
 - Runner tests prove requested entry modes select the corresponding
   `entry_modes[*].start_at` and default rigor instead of unconditionally
   taking `entry_modes[0]`.
@@ -722,7 +796,11 @@ does not recognize build-like tasks.
 - Teach the CLI and router to select Build for `/circuit:build` and clear
   build-like `/circuit:run` inputs such as `develop:`.
 - Teach the public command body how to pass through an explicit Build entry
-  mode request when the user asks for Lite, Deep, or Autonomous Build.
+  mode request with `--entry-mode <default|lite|deep|autonomous>` when the
+  user asks for Lite, Deep, or Autonomous Build.
+- Teach the public command body how to pass explicit rigor requests separately
+  with `--rigor`, so entry mode and execution rigor remain independently
+  expressible.
 - Update `commands/run.md` so router-selected Build is part of the documented
   public router surface and so it tells the operator to read
   `artifacts/build-result.json` when Build completes.
@@ -746,6 +824,8 @@ does not recognize build-like tasks.
 - `/circuit:build` command body invokes `./bin/circuit-next` directly.
 - `/circuit:build` can reach at least one non-default Build entry mode through
   the product path.
+- `/circuit:build` and `/circuit:run` command bodies document `--entry-mode`
+  and show at least one example that also supplies `--rigor`.
 - `/circuit:run` documents Build as a possible selected workflow and documents
   `artifacts/build-result.json` as the Build close artifact.
 - `/circuit:build` and `/circuit:run` document the waiting envelope and the
