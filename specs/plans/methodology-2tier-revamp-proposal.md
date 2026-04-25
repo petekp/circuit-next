@@ -1,8 +1,10 @@
 ---
 plan: methodology-2tier-revamp-proposal
-status: challenger-pending
+status: challenger-cleared
 revision: 01
 opened_at: 2026-04-25
+cleared_at: 2026-04-25
+cleared_in_session: methodology-2tier-non-external-fallback-challenger-01
 base_commit: 34b8f69
 target: methodology-two-mode-hardening
 trigger: |
