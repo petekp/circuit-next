@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { StepId, WorkflowId } from './ids.js';
 import { Rigor } from './rigor.js';
 import { SelectionOverride } from './selection-policy.js';
+import { DispatchRole } from './step.js';
 import {
   WorkflowPrimitiveCatalog,
   type WorkflowPrimitiveCatalog as WorkflowPrimitiveCatalogValue,
@@ -59,6 +60,41 @@ export const WorkflowRecipeEvidenceRequirements = z
   });
 export type WorkflowRecipeEvidenceRequirements = z.infer<typeof WorkflowRecipeEvidenceRequirements>;
 
+export const WorkflowRecipeExecutionKind = z.enum([
+  'synthesis',
+  'dispatch',
+  'verification',
+  'checkpoint',
+]);
+export type WorkflowRecipeExecutionKind = z.infer<typeof WorkflowRecipeExecutionKind>;
+
+export const WorkflowRecipeExecution = z
+  .object({
+    kind: WorkflowRecipeExecutionKind,
+    role: DispatchRole.optional(),
+  })
+  .strict()
+  .superRefine((execution, ctx) => {
+    if (execution.kind === 'dispatch') {
+      if (execution.role === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['role'],
+          message: 'dispatch execution requires a dispatch role',
+        });
+      }
+      return;
+    }
+    if (execution.role !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['role'],
+        message: 'dispatch role is only allowed for dispatch execution',
+      });
+    }
+  });
+export type WorkflowRecipeExecution = z.infer<typeof WorkflowRecipeExecution>;
+
 export const WorkflowRecipeItem = z
   .object({
     id: StepId,
@@ -69,6 +105,7 @@ export const WorkflowRecipeItem = z
       .default({}),
     output: WorkflowPrimitiveContractRef,
     evidence_requirements: WorkflowRecipeEvidenceRequirements,
+    execution: WorkflowRecipeExecution,
     selection: SelectionOverride.optional(),
     routes: z.record(z.string(), WorkflowRecipeRouteTarget).refine((routes) => {
       return Object.keys(routes).length > 0;
@@ -241,6 +278,22 @@ function recipeItemRouteOutcomes(item: WorkflowRecipeItem): string[] {
   return [...new Set([...Object.keys(item.routes), ...Object.keys(item.route_overrides)])];
 }
 
+function acceptedExecutionKinds(
+  primitive: WorkflowPrimitiveValue,
+): readonly WorkflowRecipeExecutionKind[] {
+  if (primitive.id === 'run-verification') return ['verification'];
+  switch (primitive.action_surface) {
+    case 'worker':
+      return ['dispatch'];
+    case 'host':
+      return ['checkpoint'];
+    case 'orchestrator':
+      return ['synthesis'];
+    case 'mixed':
+      return ['synthesis', 'dispatch', 'verification', 'checkpoint'];
+  }
+}
+
 function intersectContracts(
   left: ReadonlySet<WorkflowPrimitiveContractRefValue>,
   right: ReadonlySet<WorkflowPrimitiveContractRefValue>,
@@ -359,6 +412,14 @@ export function validateWorkflowRecipeCatalogCompatibility(
           message: `evidence requirement "${requirement}" from primitive "${item.uses}" is not declared by recipe item`,
         });
       }
+    }
+
+    const executionKinds = acceptedExecutionKinds(primitive);
+    if (!executionKinds.includes(item.execution.kind)) {
+      issues.push({
+        item_id: item.id,
+        message: `execution kind "${item.execution.kind}" is not compatible with primitive "${item.uses}"; expected one of ${executionKinds.join(', ')}`,
+      });
     }
   }
 

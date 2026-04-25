@@ -79,6 +79,24 @@ describe('workflow recipe schema', () => {
     }
   });
 
+  it('keeps Fix execution bindings aligned with the intended compiler shape', () => {
+    const recipe = parseFixRecipe();
+    expect(recipe.items.map((item) => [item.id, item.execution])).toEqual([
+      ['fix-intake', { kind: 'synthesis' }],
+      ['fix-route', { kind: 'synthesis' }],
+      ['fix-frame', { kind: 'synthesis' }],
+      ['fix-gather-context', { kind: 'dispatch', role: 'researcher' }],
+      ['fix-diagnose', { kind: 'dispatch', role: 'researcher' }],
+      ['fix-no-repro-decision', { kind: 'checkpoint' }],
+      ['fix-act', { kind: 'dispatch', role: 'implementer' }],
+      ['fix-verify', { kind: 'verification' }],
+      ['fix-review', { kind: 'dispatch', role: 'reviewer' }],
+      ['fix-close-lite', { kind: 'synthesis' }],
+      ['fix-close', { kind: 'synthesis' }],
+      ['fix-handoff', { kind: 'synthesis' }],
+    ]);
+  });
+
   it('keeps Fix act and close inputs aligned with the evidence path', () => {
     const recipe = parseFixRecipe();
     const act = recipe.items.find((item) => item.id === 'fix-act');
@@ -173,6 +191,34 @@ describe('workflow recipe schema', () => {
     }
   });
 
+  it('rejects dispatch execution without a role at parse time', () => {
+    const raw = readJson(fixRecipePath) as Record<string, unknown>;
+    const items = raw.items as Array<Record<string, unknown>>;
+    const act = items.find((item) => item.id === 'fix-act');
+    if (act === undefined) throw new Error('fixture missing act item');
+    act.execution = { kind: 'dispatch' };
+
+    const result = WorkflowRecipe.safeParse(raw);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.message).toMatch(/dispatch execution requires a dispatch role/);
+    }
+  });
+
+  it('rejects dispatch roles on non-dispatch execution at parse time', () => {
+    const raw = readJson(fixRecipePath) as Record<string, unknown>;
+    const items = raw.items as Array<Record<string, unknown>>;
+    const frame = items.find((item) => item.id === 'fix-frame');
+    if (frame === undefined) throw new Error('fixture missing frame item');
+    frame.execution = { kind: 'synthesis', role: 'researcher' };
+
+    const result = WorkflowRecipe.safeParse(raw);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.message).toMatch(/dispatch role is only allowed for dispatch execution/);
+    }
+  });
+
   it('reports route outcomes that the selected primitive does not allow', () => {
     const recipe = parseFixRecipe();
     const first = recipe.items[0];
@@ -198,6 +244,34 @@ describe('workflow recipe schema', () => {
       item_id: 'fix-diagnose',
       message:
         'evidence requirement "confidence" from primitive "diagnose" is not declared by recipe item',
+    });
+  });
+
+  it('reports execution kinds that do not match the selected primitive surface', () => {
+    const recipe = parseFixRecipe();
+    const act = recipe.items.find((item) => item.id === 'fix-act');
+    if (act === undefined) throw new Error('fix-act missing');
+    act.execution = { kind: 'synthesis' };
+
+    const issues = validateWorkflowRecipeCatalogCompatibility(recipe, parsePrimitiveCatalog());
+    expect(issues).toContainEqual({
+      item_id: 'fix-act',
+      message:
+        'execution kind "synthesis" is not compatible with primitive "act"; expected one of dispatch',
+    });
+  });
+
+  it('reports run-verification items that do not bind to verification execution', () => {
+    const recipe = parseFixRecipe();
+    const verify = recipe.items.find((item) => item.id === 'fix-verify');
+    if (verify === undefined) throw new Error('fix-verify missing');
+    verify.execution = { kind: 'synthesis' };
+
+    const issues = validateWorkflowRecipeCatalogCompatibility(recipe, parsePrimitiveCatalog());
+    expect(issues).toContainEqual({
+      item_id: 'fix-verify',
+      message:
+        'execution kind "synthesis" is not compatible with primitive "run-verification"; expected one of verification',
     });
   });
 

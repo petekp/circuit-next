@@ -101,6 +101,10 @@ Sketch:
     "reproduction status",
     "diagnostic path"
   ],
+  "execution": {
+    "kind": "dispatch",
+    "role": "researcher"
+  },
   "selection": {
     "provider": "claude",
     "effort": "medium"
@@ -126,6 +130,12 @@ the shape before we build it.
 Recipe validation checks those requirements against the primitive catalog so a
 workflow cannot quietly use Diagnose, Verify, Review, or Close while omitting
 the evidence that move is supposed to leave behind.
+
+`execution` names how the recipe item would run when recipes become executable.
+It is still design-time only. For now it keeps the future compiler honest:
+worker moves bind to dispatch roles, Human Decision binds to checkpoint,
+Run Verification binds to verification, and simple orchestrator moves bind to
+synthesis.
 
 `route_overrides` lets a recipe choose a different target for a named outcome
 under a specific rigor. The default route still exists, so the recipe remains

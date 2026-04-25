@@ -61,6 +61,9 @@
       },
       "output": "task.intake@v1",
       "evidence_requirements": ["normalized goal", "requested workflow", "operator constraints"],
+      "execution": {
+        "kind": "synthesis"
+      },
       "routes": {
         "continue": "fix-route",
         "ask": "@stop",
@@ -81,6 +84,9 @@
         "selection reason",
         "fallback reason when conservative"
       ],
+      "execution": {
+        "kind": "synthesis"
+      },
       "routes": {
         "continue": "fix-frame",
         "ask": "@stop",
@@ -97,6 +103,9 @@
       },
       "output": "fix.brief@v1",
       "evidence_requirements": ["scope boundary", "constraints", "proof plan"],
+      "execution": {
+        "kind": "synthesis"
+      },
       "routes": {
         "continue": "fix-gather-context",
         "revise": "fix-frame",
@@ -114,6 +123,10 @@
       },
       "output": "fix.context@v1",
       "evidence_requirements": ["source list", "observations", "confidence notes"],
+      "execution": {
+        "kind": "dispatch",
+        "role": "researcher"
+      },
       "routes": {
         "continue": "fix-diagnose",
         "retry": "fix-gather-context",
@@ -136,6 +149,10 @@
         "reproduction status",
         "diagnostic path"
       ],
+      "execution": {
+        "kind": "dispatch",
+        "role": "researcher"
+      },
       "routes": {
         "continue": "fix-act",
         "retry": "fix-gather-context",
@@ -158,6 +175,9 @@
         "selected option",
         "answer source"
       ],
+      "execution": {
+        "kind": "checkpoint"
+      },
       "routes": {
         "continue": "fix-act",
         "revise": "fix-diagnose",
@@ -176,6 +196,10 @@
       },
       "output": "fix.change@v1",
       "evidence_requirements": ["changed files", "change rationale", "declared follow-up proof"],
+      "execution": {
+        "kind": "dispatch",
+        "role": "implementer"
+      },
       "routes": {
         "continue": "fix-verify",
         "retry": "fix-act",
@@ -194,6 +218,9 @@
       },
       "output": "fix.verification@v1",
       "evidence_requirements": ["command list", "exit status", "bounded output", "pass or fail"],
+      "execution": {
+        "kind": "verification"
+      },
       "routes": {
         "continue": "fix-review",
         "retry": "fix-act",
@@ -217,6 +244,10 @@
       },
       "output": "fix.review@v1",
       "evidence_requirements": ["verdict", "findings", "confidence", "required fixes"],
+      "execution": {
+        "kind": "dispatch",
+        "role": "reviewer"
+      },
       "routes": {
         "continue": "fix-close",
         "retry": "fix-act",
@@ -238,6 +269,9 @@
       },
       "output": "fix.result@v1",
       "evidence_requirements": ["outcome", "evidence pointers", "residual risks", "follow-ups"],
+      "execution": {
+        "kind": "synthesis"
+      },
       "routes": {
         "complete": "@complete",
         "stop": "@stop",
@@ -259,6 +293,9 @@
       },
       "output": "fix.result@v1",
       "evidence_requirements": ["outcome", "evidence pointers", "residual risks", "follow-ups"],
+      "execution": {
+        "kind": "synthesis"
+      },
       "routes": {
         "complete": "@complete",
         "stop": "@stop",
@@ -282,6 +319,9 @@
         "next action",
         "known debt"
       ],
+      "execution": {
+        "kind": "synthesis"
+      },
       "routes": {
         "complete": "@handoff",
         "stop": "@stop"

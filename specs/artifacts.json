@@ -83,6 +83,8 @@
         "WorkflowRecipeContractAlias",
         "WorkflowRecipeEvidenceRequirement",
         "WorkflowRecipeEvidenceRequirements",
+        "WorkflowRecipeExecutionKind",
+        "WorkflowRecipeExecution",
         "WorkflowRecipeItem",
         "WorkflowRecipe",
         "WorkflowRecipeCatalogCompatibilityIssue",
