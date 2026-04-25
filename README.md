@@ -1,4 +1,4 @@
-<!-- current_slice: 145 -->
+<!-- current_slice: 146 -->
 
 # circuit-next
 
@@ -83,6 +83,18 @@ ADR-0013 and marks the old Repair plan as reframed evidence.
 
 Slice 142 adds the recorded fallback path for challenger reviews when the
 external Codex CLI path is blocked by the environment.
+
+Slice 143 hardens the two-mode methodology: routine low-risk work gets a small
+task packet, while riskier work keeps the stronger review path.
+
+Slice 144 makes recipe checks confirm that each step supplies inputs accepted
+by its chosen reusable move.
+
+Slice 145 adds mode-specific recipe routes so Fix can let Lite skip Review
+without making standard and deeper runs skip Review too.
+
+Slice 146 adds explicit evidence requirements to recipe items, so the Fix
+recipe now says what proof each step must leave behind.
 
 CC#14 was amended by ADR-0006 as a one-time
 waiver + retarget (see Status above); the canonical non-LLM cold-read is **not**

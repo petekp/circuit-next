@@ -81,6 +81,8 @@
         "WorkflowRecipeRouteTarget",
         "WorkflowRecipeRouteModeOverrides",
         "WorkflowRecipeContractAlias",
+        "WorkflowRecipeEvidenceRequirement",
+        "WorkflowRecipeEvidenceRequirements",
         "WorkflowRecipeItem",
         "WorkflowRecipe",
         "WorkflowRecipeCatalogCompatibilityIssue",

@@ -12,6 +12,12 @@ record.*
 
 ## Methodology And Recipe Pivot (opened after Slice 132)
 
+- **Slice 146 RECIPE EVIDENCE REQUIREMENTS** (this commit,
+  Ratchet-Advance) - added explicit evidence requirements to recipe items. The
+  Fix candidate now says what proof each step must produce, and recipe
+  compatibility checks reject a step that omits evidence promised by its
+  reusable primitive.
+
 - **Slice 145 MODE-AWARE RECIPE ROUTES** (this commit, Ratchet-Advance) -
   added mode-specific route overrides to the recipe schema. The Fix candidate
   now shows the intended shape: Lite verification can close through a separate

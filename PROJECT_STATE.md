@@ -1,4 +1,4 @@
-<!-- current_slice: 145 -->
+<!-- current_slice: 146 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -10,7 +10,7 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 145
+- **current_slice:** 146
 - **current_arc:** Build workflow parity is now closed. The implementation has the policy
   shape, typed Build artifact contracts/schemas, registered runtime synthesis
   writers for `build.plan@v1` and `build.result@v1`, and a focused
@@ -89,7 +89,9 @@ context and phase-open provenance.
   move, including alternate input sets such as Act from a diagnosis or from a
   plan. Slice 145 adds mode-specific recipe route overrides so Fix can model a
   Lite path that skips Review while standard/deeper paths still route through
-  Review and close with review evidence.
+  Review and close with review evidence. Slice 146 adds explicit evidence
+  requirements to recipe items so the Fix recipe must declare the proof each
+  primitive promises to leave behind.
 - **current_phase:** Phase 2 — Implementation (closed for the first working workflow; broader parity expansion planning next)
 
 Chronicle (relocated narrative history — non-authoritative; see

@@ -65,6 +65,20 @@ describe('workflow recipe schema', () => {
     ]);
   });
 
+  it('keeps Fix items declaring the evidence required by their primitives', () => {
+    const recipe = parseFixRecipe();
+    const catalog = parsePrimitiveCatalog();
+    const primitiveById = new Map(catalog.primitives.map((primitive) => [primitive.id, primitive]));
+
+    for (const item of recipe.items) {
+      const primitive = primitiveById.get(item.uses);
+      if (primitive === undefined) throw new Error(`missing primitive ${item.uses}`);
+      expect(item.evidence_requirements).toEqual(
+        expect.arrayContaining(primitive.produces_evidence),
+      );
+    }
+  });
+
   it('keeps Fix act and close inputs aligned with the evidence path', () => {
     const recipe = parseFixRecipe();
     const act = recipe.items.find((item) => item.id === 'fix-act');
@@ -145,6 +159,20 @@ describe('workflow recipe schema', () => {
     }
   });
 
+  it('rejects duplicate evidence requirements at parse time', () => {
+    const raw = readJson(fixRecipePath) as Record<string, unknown>;
+    const items = raw.items as Array<Record<string, unknown>>;
+    const diagnose = items.find((item) => item.id === 'fix-diagnose');
+    if (diagnose === undefined) throw new Error('fixture missing diagnose item');
+    diagnose.evidence_requirements = ['confidence', 'confidence'];
+
+    const result = WorkflowRecipe.safeParse(raw);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.message).toMatch(/duplicate evidence requirement/);
+    }
+  });
+
   it('reports route outcomes that the selected primitive does not allow', () => {
     const recipe = parseFixRecipe();
     const first = recipe.items[0];
@@ -157,6 +185,20 @@ describe('workflow recipe schema', () => {
         message: 'route "complete" is not allowed by primitive "intake"',
       },
     ]);
+  });
+
+  it('reports recipe items that omit primitive evidence requirements', () => {
+    const recipe = parseFixRecipe();
+    const diagnose = recipe.items.find((item) => item.id === 'fix-diagnose');
+    if (diagnose === undefined) throw new Error('fix-diagnose missing');
+    diagnose.evidence_requirements = ['cause hypothesis'];
+
+    const issues = validateWorkflowRecipeCatalogCompatibility(recipe, parsePrimitiveCatalog());
+    expect(issues).toContainEqual({
+      item_id: 'fix-diagnose',
+      message:
+        'evidence requirement "confidence" from primitive "diagnose" is not declared by recipe item',
+    });
   });
 
   it('reports unavailable input contracts in recipe order', () => {

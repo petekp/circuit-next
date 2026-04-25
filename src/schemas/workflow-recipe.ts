@@ -38,6 +38,27 @@ export const WorkflowRecipeContractAlias = z
   .strict();
 export type WorkflowRecipeContractAlias = z.infer<typeof WorkflowRecipeContractAlias>;
 
+export const WorkflowRecipeEvidenceRequirement = z.string().min(1);
+export type WorkflowRecipeEvidenceRequirement = z.infer<typeof WorkflowRecipeEvidenceRequirement>;
+
+export const WorkflowRecipeEvidenceRequirements = z
+  .array(WorkflowRecipeEvidenceRequirement)
+  .min(1)
+  .superRefine((requirements, ctx) => {
+    const seen = new Set<string>();
+    for (const [index, requirement] of requirements.entries()) {
+      if (seen.has(requirement)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [index],
+          message: `duplicate evidence requirement: ${requirement}`,
+        });
+      }
+      seen.add(requirement);
+    }
+  });
+export type WorkflowRecipeEvidenceRequirements = z.infer<typeof WorkflowRecipeEvidenceRequirements>;
+
 export const WorkflowRecipeItem = z
   .object({
     id: StepId,
@@ -47,6 +68,7 @@ export const WorkflowRecipeItem = z
       .record(z.string().regex(/^[a-z][a-z0-9_]*$/), WorkflowPrimitiveContractRef)
       .default({}),
     output: WorkflowPrimitiveContractRef,
+    evidence_requirements: WorkflowRecipeEvidenceRequirements,
     selection: SelectionOverride.optional(),
     routes: z.record(z.string(), WorkflowRecipeRouteTarget).refine((routes) => {
       return Object.keys(routes).length > 0;
@@ -328,6 +350,15 @@ export function validateWorkflowRecipeCatalogCompatibility(
         item_id: item.id,
         message: `output "${item.output}" is not compatible with primitive output "${primitive.output_contract}"`,
       });
+    }
+
+    for (const requirement of primitive.produces_evidence) {
+      if (!item.evidence_requirements.includes(requirement)) {
+        issues.push({
+          item_id: item.id,
+          message: `evidence requirement "${requirement}" from primitive "${item.uses}" is not declared by recipe item`,
+        });
+      }
     }
   }
 

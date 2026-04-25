@@ -95,6 +95,12 @@ Sketch:
     "context": "context.packet@v1"
   },
   "output": "fix.diagnosis@v1",
+  "evidence_requirements": [
+    "cause hypothesis",
+    "confidence",
+    "reproduction status",
+    "diagnostic path"
+  ],
   "selection": {
     "provider": "claude",
     "effort": "medium"
@@ -115,6 +121,11 @@ Sketch:
 
 This is still only a design sketch. It is here so the deep research can stress
 the shape before we build it.
+
+`evidence_requirements` names the proof a recipe item promises to produce.
+Recipe validation checks those requirements against the primitive catalog so a
+workflow cannot quietly use Diagnose, Verify, Review, or Close while omitting
+the evidence that move is supposed to leave behind.
 
 `route_overrides` lets a recipe choose a different target for a named outcome
 under a specific rigor. The default route still exists, so the recipe remains
