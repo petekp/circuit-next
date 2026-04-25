@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -162,5 +162,105 @@ describe('P2.8 CLI router', () => {
         },
       ),
     ).rejects.toThrow(/workflow fixture id mismatch/i);
+  });
+
+  it('prints a versioned checkpoint_waiting envelope without result_path', async () => {
+    const fixtureDir = join(runRootBase, 'fixture');
+    mkdirSync(fixtureDir, { recursive: true });
+    const fixturePath = join(fixtureDir, 'circuit.json');
+    writeFileSync(
+      fixturePath,
+      JSON.stringify({
+        schema_version: '2',
+        id: 'build-checkpoint-cli-test',
+        version: '0.1.0',
+        purpose: 'test CLI checkpoint waiting envelope',
+        entry: { signals: { include: [], exclude: [] }, intent_prefixes: [] },
+        entry_modes: [
+          {
+            name: 'default',
+            start_at: 'frame-step',
+            rigor: 'standard',
+            description: 'test entry mode',
+          },
+        ],
+        phases: [
+          {
+            id: 'frame-phase',
+            title: 'Frame',
+            canonical: 'frame',
+            steps: ['frame-step'],
+          },
+        ],
+        spine_policy: {
+          mode: 'partial',
+          omits: ['analyze', 'plan', 'act', 'verify', 'review', 'close'],
+          rationale: 'test-only checkpoint waiting envelope.',
+        },
+        steps: [
+          {
+            id: 'frame-step',
+            title: 'Frame',
+            protocol: 'build-frame@v1',
+            reads: [],
+            routes: { pass: '@complete' },
+            executor: 'orchestrator',
+            kind: 'checkpoint',
+            policy: {
+              prompt: 'Frame',
+              choices: [{ id: 'continue' }],
+              safe_default_choice: 'continue',
+              build_brief: {
+                scope: 'CLI envelope test',
+                success_criteria: ['Envelope is shaped'],
+                verification_command_candidates: [
+                  {
+                    id: 'verify',
+                    cwd: '.',
+                    argv: [process.execPath, '-e', "process.stdout.write('ok')"],
+                    timeout_ms: 1_000,
+                    max_output_bytes: 20_000,
+                    env: {},
+                  },
+                ],
+              },
+            },
+            writes: {
+              request: 'artifacts/checkpoints/frame-step-request.json',
+              response: 'artifacts/checkpoints/frame-step-response.json',
+              artifact: { path: 'artifacts/build/brief.json', schema: 'build.brief@v1' },
+            },
+            gate: {
+              kind: 'checkpoint_selection',
+              source: { kind: 'checkpoint_response', ref: 'response' },
+              allow: ['continue'],
+            },
+          },
+        ],
+      }),
+    );
+
+    const output = await runMainJson(
+      [
+        'build-checkpoint-cli-test',
+        '--goal',
+        'Frame via CLI',
+        '--rigor',
+        'deep',
+        '--fixture',
+        fixturePath,
+        '--run-root',
+        join(runRootBase, 'checkpoint-waiting'),
+      ],
+      '{"verdict":"accept"}',
+    );
+
+    expect(output.schema_version).toBe(1);
+    expect(output.outcome).toBe('checkpoint_waiting');
+    expect(output).not.toHaveProperty('result_path');
+    expect(output.checkpoint).toMatchObject({
+      step_id: 'frame-step',
+      allowed_choices: ['continue'],
+    });
   });
 });

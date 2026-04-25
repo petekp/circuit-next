@@ -596,6 +596,14 @@
         { "path": "tests/runner/run-relative-path.test.ts", "kind": "test_title" }
       ]
     },
+    {
+      "id": "STEP-I9",
+      "contract": "step",
+      "surface_type": "contract",
+      "enforcement_state": "test-enforced",
+      "source_anchor": "specs/contracts/step.md#STEP-I9",
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
+    },
 
     {
       "id": "WF-I1",

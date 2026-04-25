@@ -239,10 +239,15 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
   }
 
   const outcome = await runDogfood(invocation);
+  const resultPath =
+    outcome.result.outcome === 'checkpoint_waiting'
+      ? {}
+      : { result_path: `${outcome.runRoot}/artifacts/result.json` };
 
   process.stdout.write(
     `${JSON.stringify(
       {
+        schema_version: 1,
         run_id: outcome.result.run_id,
         workflow_id: outcome.result.workflow_id,
         selected_workflow: route.workflowName,
@@ -252,7 +257,10 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
         run_root: outcome.runRoot,
         outcome: outcome.result.outcome,
         events_observed: outcome.result.events_observed,
-        result_path: `${outcome.runRoot}/artifacts/result.json`,
+        ...resultPath,
+        ...(outcome.result.outcome === 'checkpoint_waiting'
+          ? { checkpoint: outcome.result.checkpoint }
+          : {}),
       },
       null,
       2,

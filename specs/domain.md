@@ -32,8 +32,15 @@ term, propose it here in a new commit before using it elsewhere.
   artifact, schema-sections gate), **VerificationStep** (orchestrator runs
   bounded direct-argv verification commands and writes an artifact,
   schema-sections gate), **CheckpointStep** (orchestrator pauses for human
-  or auto-resolver selection, checkpoint-selection gate), or **DispatchStep**
-  (worker executes remotely, result-verdict gate with a dispatch role).
+  or auto-resolver selection under a typed checkpoint policy,
+  checkpoint-selection gate), or **DispatchStep** (worker executes remotely,
+  result-verdict gate with a dispatch role).
+
+- **CheckpointPolicy** `[draft]` — The declared choices and safe-resolution
+  rules for a checkpoint step. The policy names the allowed choice ids, an
+  optional safe default choice for standard/lite runs, and an optional safe
+  autonomous choice for autonomous runs. The checkpoint gate's `allow` list
+  must match the policy choices exactly.
 
 - **Gate** `[draft]` — A validator at a step boundary. Three kinds:
   `schema_sections`, `checkpoint_selection`, `result_verdict`. A step

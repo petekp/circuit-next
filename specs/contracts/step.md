@@ -8,7 +8,7 @@ depends_on: [ids, gate, selection-policy, primitives]
 codex_adversarial_review: specs/reviews/step-md-v0.2-codex.md
 artifact_ids:
   - step.definition
-invariant_ids: [STEP-I1, STEP-I2, STEP-I3, STEP-I4, STEP-I5, STEP-I6, STEP-I7, STEP-I8]
+invariant_ids: [STEP-I1, STEP-I2, STEP-I3, STEP-I4, STEP-I5, STEP-I6, STEP-I7, STEP-I8, STEP-I9]
 property_ids: [step.prop.budget_bounds, step.prop.dispatch_role_presence, step.prop.gate_kind_source_kind_pairing, step.prop.gate_source_ref_closure, step.prop.run_relative_paths, step.prop.writes_shape_per_variant]
 ---
 
@@ -23,8 +23,8 @@ belongs to exactly one of four variants, discriminated by `kind`:
   commands and writes a single artifact; gated by `schema_sections` against an
   `ArtifactSource`.
 - **CheckpointStep** — orchestrator pauses for selection (human or
-  auto-resolver); gated by `checkpoint_selection` against a
-  `CheckpointResponseSource`.
+  auto-resolver) under a typed `CheckpointPolicy`; gated by
+  `checkpoint_selection` against a `CheckpointResponseSource`.
 - **DispatchStep** — worker executes remotely under a `DispatchRole`; gated
   by `result_verdict` against a `DispatchResultSource`.
 
@@ -53,9 +53,10 @@ enforced via `src/schemas/step.ts`, `src/schemas/gate.ts`, and
   `writes: { artifact: ArtifactRef }`. A `verification` step MUST have
   `executor: 'orchestrator'`, `gate.kind: 'schema_sections'`, and
   `writes: { artifact: ArtifactRef }`. A `checkpoint` step MUST have
-  `executor: 'orchestrator'`, `gate.kind: 'checkpoint_selection'`, and
-  `writes: { request, response, artifact? }`. A `dispatch` step MUST have
-  `executor: 'worker'`, `gate.kind: 'result_verdict'`, and
+  `executor: 'orchestrator'`, `gate.kind: 'checkpoint_selection'`, a
+  `policy: CheckpointPolicy`, and `writes: { request, response, artifact? }`.
+  A `dispatch` step MUST have `executor: 'worker'`, `gate.kind:
+  'result_verdict'`, and
   `writes: { request, receipt, result, artifact? }`. Enforced by
   `SynthesisStep`, `VerificationStep`, `CheckpointStep`, and `DispatchStep` in
   `src/schemas/step.ts`.
@@ -116,6 +117,13 @@ enforced via `src/schemas/step.ts`, `src/schemas/gate.ts`, and
   `.strict()` calls at `src/schemas/step.ts` and `src/schemas/gate.ts`.
   `orchestrator` is an executor, not a role; see
   `specs/domain.md#dispatch-vocabulary`.
+
+- **STEP-I9 — Checkpoint policy and gate agreement.** A `CheckpointStep`
+  declares the choices an operator or auto-resolver may select in
+  `policy.choices`. The checkpoint gate's `allow` list MUST exactly match
+  those choice ids, and any safe default or safe autonomous choice MUST name
+  one of those declared choices. This prevents the request artifact, response
+  gate, and auto-resolution policy from drifting apart.
 
 - **STEP-I7 — Protocol required.** Every Step carries a `ProtocolId`
   (`protocol:` field) — no default, no optional. Enforced by `StepBase`

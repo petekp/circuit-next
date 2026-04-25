@@ -300,6 +300,12 @@ describe('SkillDescriptor — SKILL-I1..I5 from specs/contracts/skill.md v0.1', 
 });
 
 describe('Step discriminated union', () => {
+  const checkpointPolicy = (choices: string[] = ['continue', 'revise']) => ({
+    prompt: 'Frame the work',
+    choices: choices.map((id) => ({ id })),
+    safe_default_choice: choices[0],
+  });
+
   const baseSynthesis = {
     id: 'frame',
     title: 'Frame',
@@ -394,6 +400,7 @@ describe('Step discriminated union', () => {
     const bad = Step.safeParse({
       ...baseSynthesis,
       kind: 'checkpoint',
+      policy: checkpointPolicy(['continue']),
       writes: { request: 'req.json', response: 'resp.json' },
       gate: {
         kind: 'schema_sections',
@@ -474,6 +481,7 @@ describe('Step discriminated union', () => {
     const bad = Step.safeParse({
       ...baseSynthesis,
       kind: 'checkpoint',
+      policy: checkpointPolicy(['continue']),
       writes: { request: 'req.json', response: 'resp.json' },
       gate: {
         kind: 'checkpoint_selection',
@@ -508,6 +516,7 @@ describe('Step discriminated union', () => {
     const ok = Step.safeParse({
       ...baseSynthesis,
       kind: 'checkpoint',
+      policy: checkpointPolicy(),
       writes: { request: 'req.json', response: 'resp.json' },
       gate: {
         kind: 'checkpoint_selection',
@@ -516,6 +525,88 @@ describe('Step discriminated union', () => {
       },
     });
     expect(ok.success).toBe(true);
+  });
+
+  it('STEP-I9 — checkpoint policy safe choices must be declared choices', () => {
+    const bad = Step.safeParse({
+      ...baseSynthesis,
+      kind: 'checkpoint',
+      policy: { ...checkpointPolicy(['continue']), safe_autonomous_choice: 'ghost' },
+      writes: { request: 'req.json', response: 'resp.json' },
+      gate: {
+        kind: 'checkpoint_selection',
+        source: { kind: 'checkpoint_response', ref: 'response' },
+        allow: ['continue'],
+      },
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('STEP-I9 — checkpoint gate allow list must match policy choices', () => {
+    const bad = Step.safeParse({
+      ...baseSynthesis,
+      kind: 'checkpoint',
+      policy: checkpointPolicy(['continue', 'revise']),
+      writes: { request: 'req.json', response: 'resp.json' },
+      gate: {
+        kind: 'checkpoint_selection',
+        source: { kind: 'checkpoint_response', ref: 'response' },
+        allow: ['continue'],
+      },
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('STEP-I9 — checkpoint artifact writing is restricted to typed Build brief policy', () => {
+    const missingTemplate = Step.safeParse({
+      ...baseSynthesis,
+      kind: 'checkpoint',
+      policy: checkpointPolicy(['continue']),
+      writes: {
+        request: 'req.json',
+        response: 'resp.json',
+        artifact: { path: 'artifacts/build/brief.json', schema: 'build.brief@v1' },
+      },
+      gate: {
+        kind: 'checkpoint_selection',
+        source: { kind: 'checkpoint_response', ref: 'response' },
+        allow: ['continue'],
+      },
+    });
+    expect(missingTemplate.success).toBe(false);
+
+    const unsupportedArtifact = Step.safeParse({
+      ...baseSynthesis,
+      kind: 'checkpoint',
+      policy: {
+        ...checkpointPolicy(['continue']),
+        build_brief: {
+          scope: 'x',
+          success_criteria: ['y'],
+          verification_command_candidates: [
+            {
+              id: 'verify',
+              cwd: '.',
+              argv: ['node', '--version'],
+              timeout_ms: 1_000,
+              max_output_bytes: 20_000,
+              env: {},
+            },
+          ],
+        },
+      },
+      writes: {
+        request: 'req.json',
+        response: 'resp.json',
+        artifact: { path: 'artifacts/other.json', schema: 'other@v1' },
+      },
+      gate: {
+        kind: 'checkpoint_selection',
+        source: { kind: 'checkpoint_response', ref: 'response' },
+        allow: ['continue'],
+      },
+    });
+    expect(unsupportedArtifact.success).toBe(false);
   });
 
   // Codex review HIGH #1: prototype-chain `in` operator attack.
@@ -550,6 +641,7 @@ describe('Step discriminated union', () => {
     const bad = Step.safeParse({
       ...baseSynthesis,
       kind: 'checkpoint',
+      policy: checkpointPolicy(['continue']),
       writes: { request: 'req.json', response: 'resp.json' },
       gate: {
         kind: 'checkpoint_selection',
@@ -638,6 +730,7 @@ describe('Step discriminated union', () => {
       (path: string) => ({
         ...baseSynthesis,
         kind: 'checkpoint' as const,
+        policy: checkpointPolicy(['continue']),
         writes: { request: path, response: 'resp.json' },
         gate: {
           kind: 'checkpoint_selection' as const,
@@ -648,6 +741,7 @@ describe('Step discriminated union', () => {
       (path: string) => ({
         ...baseSynthesis,
         kind: 'checkpoint' as const,
+        policy: checkpointPolicy(['continue']),
         writes: { request: 'req.json', response: path },
         gate: {
           kind: 'checkpoint_selection' as const,
@@ -658,6 +752,7 @@ describe('Step discriminated union', () => {
       (path: string) => ({
         ...baseSynthesis,
         kind: 'checkpoint' as const,
+        policy: checkpointPolicy(['continue']),
         writes: {
           request: 'req.json',
           response: 'resp.json',
@@ -2462,6 +2557,7 @@ describe('Event variants reject top-level surplus keys (RUN-I8 coverage expansio
         step_id: 'frame',
         attempt: 1,
         options: ['accept', 'revise'],
+        request_path: 'artifacts/checkpoints/frame-request.json',
       },
     ],
     [
@@ -2474,6 +2570,8 @@ describe('Event variants reject top-level surplus keys (RUN-I8 coverage expansio
         attempt: 1,
         selection: 'accept',
         auto_resolved: false,
+        resolution_source: 'operator',
+        response_path: 'artifacts/checkpoints/frame-response.json',
       },
     ],
     [
@@ -2555,6 +2653,38 @@ describe('Event variants reject top-level surplus keys (RUN-I8 coverage expansio
       expect(ok.success).toBe(true);
     });
   }
+});
+
+describe('Checkpoint event evidence is required', () => {
+  const base = {
+    schema_version: 1 as const,
+    sequence: 0,
+    recorded_at: '2026-04-25T00:00:00.000Z',
+    run_id: RUN_A,
+  };
+
+  it('rejects checkpoint.requested without request_path', () => {
+    const bad = Event.safeParse({
+      ...base,
+      kind: 'checkpoint.requested',
+      step_id: 'frame',
+      attempt: 1,
+      options: ['accept'],
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('rejects checkpoint.resolved without resolution_source and response_path', () => {
+    const bad = Event.safeParse({
+      ...base,
+      kind: 'checkpoint.resolved',
+      step_id: 'frame',
+      attempt: 1,
+      selection: 'accept',
+      auto_resolved: false,
+    });
+    expect(bad.success).toBe(false);
+  });
 });
 
 // HIGH #1 fold-in — nested schemas are transitively strict.

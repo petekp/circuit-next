@@ -1,4 +1,4 @@
-<!-- current_slice: 119 -->
+<!-- current_slice: 120 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -10,15 +10,16 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 119
+- **current_slice:** 120
 - **current_arc:** Build workflow parity implementation now has the policy
   shape, typed Build artifact contracts/schemas, registered runtime synthesis
   writers for `build.plan@v1` and `build.result@v1`, and a focused
-  verification command execution substrate. Build verification steps read
-  typed direct-argv commands from `build.plan@v1`, run them without shell
-  interpolation, and write `build.verification@v1` pass/fail evidence. The
-  real Build workflow fixture and checkpoint execution have not landed yet.
-  P2-1 uses structured JSON as the accepted successor artifact shape; it does not claim old Markdown byte-for-byte compatibility. P2-3 live command proof is included through a live Claude
+  verification command execution substrate. The runner can also execute a
+  focused checkpoint step: standard/lite can continue through a declared safe
+  default choice, deep/tournament can pause open without writing a closed-run
+  result, and autonomous can continue only through a declared safe autonomous
+  choice. The real Build workflow fixture, checkpoint resume command, and
+  public Build command wiring have not landed yet. P2-1 uses structured JSON as the accepted successor artifact shape; it does not claim old Markdown byte-for-byte compatibility. P2-3 live command proof is included through a live Claude
   Code invocation of the inline `circuit` plugin. The Phase 2 close claim
   remains narrow: first working workflow product spine closed, not full
   first-generation Circuit parity. Next work is broader parity expansion

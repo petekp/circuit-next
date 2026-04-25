@@ -56,6 +56,7 @@ export const CheckpointRequestedEvent = EventBase.extend({
   step_id: StepId,
   attempt: z.number().int().positive(),
   options: z.array(z.string()).min(1),
+  request_path: z.string().min(1),
 }).strict();
 export type CheckpointRequestedEvent = z.infer<typeof CheckpointRequestedEvent>;
 
@@ -65,6 +66,8 @@ export const CheckpointResolvedEvent = EventBase.extend({
   attempt: z.number().int().positive(),
   selection: z.string().min(1),
   auto_resolved: z.boolean(),
+  resolution_source: z.enum(['safe-default', 'operator', 'safe-autonomous']),
+  response_path: z.string().min(1),
 }).strict();
 export type CheckpointResolvedEvent = z.infer<typeof CheckpointResolvedEvent>;
 

@@ -261,9 +261,26 @@ export interface DispatchResultMetadata {
   readonly cli_version: string;
 }
 
+export interface CheckpointWaitingResult {
+  readonly schema_version: 1;
+  readonly run_id: RunId;
+  readonly workflow_id: WorkflowId;
+  readonly goal: string;
+  readonly outcome: 'checkpoint_waiting';
+  readonly summary: string;
+  readonly events_observed: number;
+  readonly manifest_hash: string;
+  readonly checkpoint: {
+    readonly step_id: string;
+    readonly request_path: string;
+    readonly allowed_choices: readonly string[];
+  };
+  readonly reason?: string;
+}
+
 export interface DogfoodRunResult {
   runRoot: string;
-  result: RunResult;
+  result: RunResult | CheckpointWaitingResult;
   snapshot: Snapshot;
   events: Event[];
   dispatchResults: readonly DispatchResultMetadata[];
@@ -475,6 +492,11 @@ function verificationFailureReason(stepId: string, err: unknown): string {
   return `verification step '${stepId}': artifact writer failed (${message})`;
 }
 
+function checkpointFailureReason(stepId: string, err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  return `checkpoint step '${stepId}': checkpoint handling failed (${message})`;
+}
+
 function isRunRelativePathError(err: unknown): boolean {
   return err instanceof Error && err.message.includes('run-relative path rejected');
 }
@@ -582,6 +604,82 @@ function summarizeOutput(value: string, maxBytes: number): string {
   const bytes = Buffer.from(value);
   if (bytes.length <= maxBytes) return value;
   return bytes.subarray(0, maxBytes).toString('utf8');
+}
+
+type CheckpointWorkflowStep = Workflow['steps'][number] & { kind: 'checkpoint' };
+
+type CheckpointResolution =
+  | {
+      readonly kind: 'resolved';
+      readonly selection: string;
+      readonly resolutionSource: 'safe-default' | 'safe-autonomous';
+      readonly autoResolved: boolean;
+    }
+  | { readonly kind: 'waiting' }
+  | { readonly kind: 'failed'; readonly reason: string };
+
+function checkpointChoiceIds(step: CheckpointWorkflowStep): string[] {
+  return step.policy.choices.map((choice) => choice.id);
+}
+
+function resolveCheckpoint(step: CheckpointWorkflowStep, rigor: Rigor): CheckpointResolution {
+  if (rigor === 'deep' || rigor === 'tournament') return { kind: 'waiting' };
+  if (rigor === 'autonomous') {
+    const selection = step.policy.safe_autonomous_choice;
+    if (selection === undefined) {
+      return {
+        kind: 'failed',
+        reason: `checkpoint step '${step.id}' cannot auto-resolve autonomous rigor without a declared safe autonomous choice`,
+      };
+    }
+    return {
+      kind: 'resolved',
+      selection,
+      resolutionSource: 'safe-autonomous',
+      autoResolved: true,
+    };
+  }
+  const selection = step.policy.safe_default_choice;
+  if (selection === undefined) {
+    return {
+      kind: 'failed',
+      reason: `checkpoint step '${step.id}' cannot resolve ${rigor} rigor without a declared safe default choice`,
+    };
+  }
+  return {
+    kind: 'resolved',
+    selection,
+    resolutionSource: 'safe-default',
+    autoResolved: true,
+  };
+}
+
+function checkpointRequestBody(step: CheckpointWorkflowStep): unknown {
+  return {
+    schema_version: 1,
+    step_id: step.id,
+    prompt: step.policy.prompt,
+    allowed_choices: checkpointChoiceIds(step),
+    ...(step.policy.safe_default_choice === undefined
+      ? {}
+      : { safe_default_choice: step.policy.safe_default_choice }),
+    ...(step.policy.safe_autonomous_choice === undefined
+      ? {}
+      : { safe_autonomous_choice: step.policy.safe_autonomous_choice }),
+  };
+}
+
+function checkpointResponseBody(input: {
+  readonly step: CheckpointWorkflowStep;
+  readonly selection: string;
+  readonly resolutionSource: 'safe-default' | 'safe-autonomous';
+}): unknown {
+  return {
+    schema_version: 1,
+    step_id: input.step.id,
+    selection: input.selection,
+    resolution_source: input.resolutionSource,
+  };
 }
 
 const EXPLORE_BRIEF_ARTIFACT_PATH = 'artifacts/brief.json';
@@ -865,6 +963,37 @@ function writeVerificationArtifact(input: {
   return artifact;
 }
 
+function writeCheckpointOwnedArtifact(input: {
+  readonly runRoot: string;
+  readonly step: CheckpointWorkflowStep;
+  readonly goal: string;
+  readonly responsePath?: string;
+}): void {
+  const artifact = input.step.writes.artifact;
+  if (artifact === undefined) return;
+  if (artifact.schema !== 'build.brief@v1') {
+    throw new Error(`checkpoint step '${input.step.id}' has unsupported artifact schema`);
+  }
+  const template = input.step.policy.build_brief;
+  if (template === undefined) {
+    throw new Error(
+      `checkpoint step '${input.step.id}' writing build.brief@v1 requires policy.build_brief`,
+    );
+  }
+  const body = BuildBrief.parse({
+    objective: input.goal,
+    scope: template.scope,
+    success_criteria: template.success_criteria,
+    verification_command_candidates: template.verification_command_candidates,
+    checkpoint: {
+      request_path: input.step.writes.request,
+      ...(input.responsePath === undefined ? {} : { response_path: input.responsePath }),
+      allowed_choices: checkpointChoiceIds(input.step),
+    },
+  });
+  writeJsonArtifact(input.runRoot, artifact.path, body);
+}
+
 export function writeSynthesisArtifact(input: SynthesisWriterInput): void {
   const { runRoot, step } = input;
   if (tryWriteRegisteredSynthesisArtifact(input)) return;
@@ -1125,6 +1254,179 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
         currentStepId = undefined;
         break;
       }
+    } else if (step.kind === 'checkpoint') {
+      try {
+        const requestAbs = resolveRunRelative(runRoot, step.writes.request);
+        mkdirSync(dirname(requestAbs), { recursive: true });
+        writeFileSync(requestAbs, `${JSON.stringify(checkpointRequestBody(step), null, 2)}\n`);
+        writeCheckpointOwnedArtifact({ runRoot, step, goal });
+        push({
+          schema_version: 1,
+          sequence,
+          recorded_at: recordedAt(),
+          run_id: runId,
+          kind: 'checkpoint.requested',
+          step_id: step.id,
+          attempt,
+          options: checkpointChoiceIds(step),
+          request_path: step.writes.request,
+        });
+        if (step.writes.artifact !== undefined) {
+          push({
+            schema_version: 1,
+            sequence,
+            recorded_at: recordedAt(),
+            run_id: runId,
+            kind: 'step.artifact_written',
+            step_id: step.id,
+            attempt,
+            artifact_path: step.writes.artifact.path,
+            artifact_schema: step.writes.artifact.schema,
+          });
+        }
+
+        const resolution = resolveCheckpoint(step, rigor);
+        if (resolution.kind === 'waiting') {
+          const snapshot = writeDerivedSnapshot(runRoot);
+          return {
+            runRoot,
+            result: {
+              schema_version: 1,
+              run_id: runId,
+              workflow_id: workflow.id,
+              goal,
+              outcome: 'checkpoint_waiting',
+              summary: `checkpoint '${step.id}' is waiting for an operator choice.`,
+              events_observed: events.length,
+              manifest_hash: manifestHash,
+              checkpoint: {
+                step_id: step.id as unknown as string,
+                request_path: requestAbs,
+                allowed_choices: checkpointChoiceIds(step),
+              },
+            },
+            snapshot,
+            events,
+            dispatchResults,
+          };
+        }
+
+        if (resolution.kind === 'failed') {
+          push({
+            schema_version: 1,
+            sequence,
+            recorded_at: recordedAt(),
+            run_id: runId,
+            kind: 'gate.evaluated',
+            step_id: step.id,
+            attempt,
+            gate_kind: 'checkpoint_selection',
+            outcome: 'fail',
+            reason: resolution.reason,
+          });
+          push({
+            schema_version: 1,
+            sequence,
+            recorded_at: recordedAt(),
+            run_id: runId,
+            kind: 'step.aborted',
+            step_id: step.id,
+            attempt,
+            reason: resolution.reason,
+          });
+          runOutcome = 'aborted';
+          closeReason = resolution.reason;
+          currentStepId = undefined;
+          break;
+        }
+
+        if (!step.gate.allow.includes(resolution.selection)) {
+          throw new Error(
+            `checkpoint step '${step.id}' selected '${resolution.selection}' but gate.allow is [${step.gate.allow.join(', ')}]`,
+          );
+        }
+        writeJsonArtifact(
+          runRoot,
+          step.writes.response,
+          checkpointResponseBody({
+            step,
+            selection: resolution.selection,
+            resolutionSource: resolution.resolutionSource,
+          }),
+        );
+        writeCheckpointOwnedArtifact({
+          runRoot,
+          step,
+          goal,
+          responsePath: step.writes.response,
+        });
+        push({
+          schema_version: 1,
+          sequence,
+          recorded_at: recordedAt(),
+          run_id: runId,
+          kind: 'checkpoint.resolved',
+          step_id: step.id,
+          attempt,
+          selection: resolution.selection,
+          auto_resolved: resolution.autoResolved,
+          resolution_source: resolution.resolutionSource,
+          response_path: step.writes.response,
+        });
+        if (step.writes.artifact !== undefined) {
+          push({
+            schema_version: 1,
+            sequence,
+            recorded_at: recordedAt(),
+            run_id: runId,
+            kind: 'step.artifact_written',
+            step_id: step.id,
+            attempt,
+            artifact_path: step.writes.artifact.path,
+            artifact_schema: step.writes.artifact.schema,
+          });
+        }
+        push({
+          schema_version: 1,
+          sequence,
+          recorded_at: recordedAt(),
+          run_id: runId,
+          kind: 'gate.evaluated',
+          step_id: step.id,
+          attempt,
+          gate_kind: 'checkpoint_selection',
+          outcome: 'pass',
+        });
+      } catch (err) {
+        if (isRunRelativePathError(err)) throw err;
+        const reason = checkpointFailureReason(step.id as unknown as string, err);
+        push({
+          schema_version: 1,
+          sequence,
+          recorded_at: recordedAt(),
+          run_id: runId,
+          kind: 'gate.evaluated',
+          step_id: step.id,
+          attempt,
+          gate_kind: 'checkpoint_selection',
+          outcome: 'fail',
+          reason,
+        });
+        push({
+          schema_version: 1,
+          sequence,
+          recorded_at: recordedAt(),
+          run_id: runId,
+          kind: 'step.aborted',
+          step_id: step.id,
+          attempt,
+          reason,
+        });
+        runOutcome = 'aborted';
+        closeReason = reason;
+        currentStepId = undefined;
+        break;
+      }
     } else if (step.kind === 'dispatch') {
       const prompt = composeDispatchPrompt(step, runRoot);
       const resolvedSelection = deriveResolvedSelection(inv, workflow, step);
@@ -1345,12 +1647,6 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
         currentStepId = undefined;
         break;
       }
-    } else {
-      // Checkpoint steps — dogfood-run-0 fixture does not exercise this
-      // arm, and narrowing the loop keeps the Phase 1.5 proof focused.
-      throw new Error(
-        `runDogfood: step kind '${(step as { kind: string }).kind}' is not exercised by dogfood-run-0 v0.1`,
-      );
     }
 
     const passRoute = step.routes.pass;

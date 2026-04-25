@@ -40,6 +40,7 @@
         "Step",
         "SynthesisStep",
         "VerificationStep",
+        "CheckpointPolicy",
         "CheckpointStep",
         "DispatchStep",
         "DispatchRole",

@@ -12,6 +12,14 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 120 BUILD CHECKPOINT SUBSTRATE** (this commit, Ratchet-Advance) -
+  added a focused checkpoint policy and runner execution path. Checkpoint
+  steps can now write a Build brief and checkpoint request, continue through a
+  declared safe default choice, pause deep/tournament runs open without
+  `run.closed` or `artifacts/result.json`, and auto-resolve autonomous runs
+  only when a safe autonomous choice is declared. The public resume command and
+  registered Build fixture remain later work.
+
 - **Slice 119 BUILD VERIFICATION EXECUTION** (this commit, Ratchet-Advance) -
   added a focused runtime `verification` step kind for Build. Verification
   steps now read typed direct-argv commands from `build.plan@v1`, run them
