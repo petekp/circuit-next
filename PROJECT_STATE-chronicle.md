@@ -12,6 +12,12 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 115 BUILD PLAN OPERATOR SIGNOFF** (this commit, Discovery) -
+  recorded operator signoff for the Build workflow parity plan using the
+  operator's standing proceed-anyway authorization, bound to the
+  challenger-cleared predecessor commit. Build runtime implementation may now
+  open, but no Build runtime behavior changed in this slice.
+
 - **Slice 114 BUILD PLAN CHALLENGER CLEARANCE** (this commit, Discovery) -
   recorded the tenth Codex challenger review for the Build plan. The reviewer
   accepted revision 10 with no blocking findings, so the plan is now cleared
