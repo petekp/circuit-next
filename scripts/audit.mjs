@@ -3067,8 +3067,8 @@ export function checkPhase2SliceIsolationCitation(disciplinedCommits) {
 //       Claude Code's plugin layout. The command directory is flat-only; no
 //       nested directories, symlinks, or non-.md files are accepted.
 //   (c) The currently claimed command set is exact: `run.md`, `explore.md`,
-//       and `review.md`. File stems, not frontmatter names, are the command
-//       suffixes, so `commands/run.md` is `/circuit:run`.
+//       `review.md`, and `build.md`. File stems, not frontmatter names, are
+//       the command suffixes, so `commands/run.md` is `/circuit:run`.
 //   (d) Each command file has YAML frontmatter with non-empty `description`
 //       and no `name` field. A `name` field is rejected because Claude ignores
 //       it for plugin command registration, making it false authority.
@@ -3192,7 +3192,7 @@ export function checkPluginCommandClosure(rootDir = REPO_ROOT) {
   }
 
   const COMMAND_FILE_GRAMMAR = /^[A-Za-z0-9_-]+\.md$/;
-  const REQUIRED_COMMAND_FILES = ['run.md', 'explore.md', 'review.md'];
+  const REQUIRED_COMMAND_FILES = ['run.md', 'explore.md', 'review.md', 'build.md'];
   const requiredSet = new Set(REQUIRED_COMMAND_FILES);
   const seen = new Set();
 
@@ -3209,7 +3209,7 @@ export function checkPluginCommandClosure(rootDir = REPO_ROOT) {
     seen.add(rel);
     if (!requiredSet.has(rel)) {
       errors.push(
-        `unexpected public command file commands/${rel}; current claimed command set is run, explore, review`,
+        `unexpected public command file commands/${rel}; current claimed command set is run, explore, review, build`,
       );
     }
 
@@ -3285,7 +3285,7 @@ export function checkPluginCommandClosure(rootDir = REPO_ROOT) {
   return {
     level: 'green',
     detail:
-      'Claude-valid plugin command surface present: .claude-plugin/plugin.json names plugin `circuit`; commands/{run,explore,review}.md register /circuit:run, /circuit:explore, /circuit:review',
+      'Claude-valid plugin command surface present: .claude-plugin/plugin.json names plugin `circuit`; commands/{run,explore,review,build}.md register /circuit:run, /circuit:explore, /circuit:review, /circuit:build',
   };
 }
 

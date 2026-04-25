@@ -1,7 +1,7 @@
 {
   "name": "circuit",
   "version": "0.1.0-alpha.2",
-  "description": "Claude Code plugin that runs configurable developer workflows. Current wired state: `/circuit:run` classifies free-form tasks into the current router-supported workflows (`explore` or `review`) and invokes the selected workflow through the direct `./bin/circuit-next` launcher; `/circuit:explore` and `/circuit:review` remain explicit workflow commands. Future phases add `build`, `repair`, `migrate`, `sweep`, and user-authored custom workflows with per-step model + reasoning-effort + skills configuration.",
+  "description": "Claude Code plugin that runs configurable developer workflows. Current wired state: `/circuit:run` classifies free-form tasks into the current router-supported workflows (`explore`, `review`, or `build`) and invokes the selected workflow through the direct `./bin/circuit-next` launcher; `/circuit:explore`, `/circuit:review`, and `/circuit:build` remain explicit workflow commands. Future phases add `repair`, `migrate`, `sweep`, and user-authored custom workflows with per-step model + reasoning-effort + skills configuration.",
   "author": {
     "name": "Pete Petrash"
   },

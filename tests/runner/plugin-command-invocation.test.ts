@@ -32,6 +32,7 @@ const REPO_ROOT = resolve(HERE, '..', '..');
 const EXPLORE_COMMAND_PATH = resolve(REPO_ROOT, 'commands/explore.md');
 const RUN_COMMAND_PATH = resolve(REPO_ROOT, 'commands/run.md');
 const REVIEW_COMMAND_PATH = resolve(REPO_ROOT, 'commands/review.md');
+const BUILD_COMMAND_PATH = resolve(REPO_ROOT, 'commands/build.md');
 const MANIFEST_PATH = resolve(REPO_ROOT, '.claude-plugin/plugin.json');
 
 const PLACEHOLDER_STRING = 'Not implemented yet';
@@ -79,6 +80,10 @@ function hasExecutableReviewInvocation(body: string): boolean {
   return hasExecutableWorkflowInvocation(body, 'review');
 }
 
+function hasExecutableBuildInvocation(body: string): boolean {
+  return hasExecutableWorkflowInvocation(body, 'build');
+}
+
 function hasExecutableRouterInvocation(body: string): boolean {
   const blocks = extractBashBlocks(body);
   const binInvocation = /^\s*\.\/bin\/circuit-next --goal(?:\s|$)/;
@@ -91,11 +96,29 @@ function hasExecutableRouterInvocation(body: string): boolean {
   return false;
 }
 
+function hasEntryModeAndRigorInvocation(body: string): boolean {
+  const blocks = extractBashBlocks(body);
+  for (const block of blocks) {
+    for (const line of block.split('\n')) {
+      if (
+        /\.\/bin\/circuit-next/.test(line) &&
+        /--goal\s+'/.test(line) &&
+        /--entry-mode\s+(?:default|lite|deep|autonomous)\b/.test(line) &&
+        /--rigor\s+(?:lite|standard|deep|autonomous)\b/.test(line)
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 describe('plugin command invocation binding (Slice 56 / P2.11)', () => {
   describe('real command bodies — positive assertions', () => {
     const exploreBody = readFileSync(EXPLORE_COMMAND_PATH, 'utf-8');
     const runBody = readFileSync(RUN_COMMAND_PATH, 'utf-8');
     const reviewBody = readFileSync(REVIEW_COMMAND_PATH, 'utf-8');
+    const buildBody = readFileSync(BUILD_COMMAND_PATH, 'utf-8');
 
     it('commands/explore.md has an executable explore invocation in a fenced bash block with --goal', () => {
       expect(hasExecutableExploreInvocation(exploreBody)).toBe(true);
@@ -109,22 +132,52 @@ describe('plugin command invocation binding (Slice 56 / P2.11)', () => {
       expect(hasExecutableReviewInvocation(reviewBody)).toBe(true);
     });
 
+    it('commands/build.md has an executable build invocation in a fenced bash block with --goal', () => {
+      expect(hasExecutableBuildInvocation(buildBody)).toBe(true);
+    });
+
     it('no command body contains "Not implemented yet"', () => {
       expect(exploreBody).not.toMatch(new RegExp(PLACEHOLDER_STRING));
       expect(runBody).not.toMatch(new RegExp(PLACEHOLDER_STRING));
       expect(reviewBody).not.toMatch(new RegExp(PLACEHOLDER_STRING));
+      expect(buildBody).not.toMatch(new RegExp(PLACEHOLDER_STRING));
     });
 
-    it('commands/run.md documents the current explore/review router surface', () => {
+    it('commands/run.md documents the current explore/review/build router surface', () => {
       expect(runBody).toMatch(
         /Parse the CLI's JSON output and surface:[\s\S]*`selected_workflow`[\s\S]*`routed_by`[\s\S]*`router_reason`/,
       );
+      expect(runBody).toMatch(/`result_path` when present/);
       expect(runBody).toMatch(/explore/);
       expect(runBody).toMatch(/review/);
+      expect(runBody).toMatch(/build/);
+      expect(runBody).toMatch(/artifacts\/build-result\.json/);
+    });
+
+    it('Build command docs include same-invocation entry-mode and rigor examples', () => {
+      expect(hasEntryModeAndRigorInvocation(buildBody)).toBe(true);
+      expect(hasEntryModeAndRigorInvocation(runBody)).toBe(true);
+    });
+
+    it('Build waiting docs surface checkpoint details and resume command without treating result_path as available', () => {
+      for (const body of [buildBody, runBody]) {
+        expect(body).toMatch(/checkpoint_waiting/);
+        expect(body).toMatch(/checkpoint\.request_path/);
+        expect(body).toMatch(/checkpoint\.allowed_choices/);
+        expect(body).toMatch(
+          /\.\/bin\/circuit-next resume --run-root '<run_root>' --checkpoint-choice '<choice>'/,
+        );
+      }
+      expect(runBody).not.toMatch(
+        /surface:[\s\S]*`run_root`, `result_path`,\s+and `events_observed`/,
+      );
+      expect(runBody).toMatch(/selected_workflow/);
+      expect(runBody).toMatch(/routed_by/);
+      expect(runBody).toMatch(/router_reason/);
     });
 
     it('command bodies use the direct Circuit launcher, not the npm-script bridge or old dogfood path', () => {
-      for (const body of [exploreBody, runBody, reviewBody]) {
+      for (const body of [exploreBody, runBody, reviewBody, buildBody]) {
         expect(body).toMatch(/\.\/bin\/circuit-next/);
         expect(body).not.toMatch(/npm run circuit:run/);
         expect(body).not.toMatch(/dist\/cli\/dogfood\.js/);
@@ -136,6 +189,7 @@ describe('plugin command invocation binding (Slice 56 / P2.11)', () => {
     const exploreBody = readFileSync(EXPLORE_COMMAND_PATH, 'utf-8');
     const runBody = readFileSync(RUN_COMMAND_PATH, 'utf-8');
     const reviewBody = readFileSync(REVIEW_COMMAND_PATH, 'utf-8');
+    const buildBody = readFileSync(BUILD_COMMAND_PATH, 'utf-8');
 
     it('neither body contains the unsafe --goal "$ARGUMENTS" double-quoted splice', () => {
       // Double-quoting $ARGUMENTS expands $VAR, $(cmd), `cmd`, and \
@@ -144,6 +198,7 @@ describe('plugin command invocation binding (Slice 56 / P2.11)', () => {
       expect(exploreBody).not.toMatch(/--goal "\$ARGUMENTS"/);
       expect(runBody).not.toMatch(/--goal "\$ARGUMENTS"/);
       expect(reviewBody).not.toMatch(/--goal "\$ARGUMENTS"/);
+      expect(buildBody).not.toMatch(/--goal "\$ARGUMENTS"/);
     });
 
     it('all fenced bash invocation blocks in commands/explore.md use single-quoted --goal values', () => {
@@ -181,6 +236,17 @@ describe('plugin command invocation binding (Slice 56 / P2.11)', () => {
       }
     });
 
+    it('all fenced bash invocation blocks in commands/build.md use single-quoted --goal values', () => {
+      const blocks = extractBashBlocks(buildBody).filter(
+        (b) => /build/.test(b) && /--goal/.test(b),
+      );
+      expect(blocks.length).toBeGreaterThan(0);
+      for (const block of blocks) {
+        expect(block).toMatch(/--goal\s+'/);
+        expect(block).not.toMatch(/--goal\s+"/);
+      }
+    });
+
     it('all command bodies document the single-quote-with-escape rule for apostrophes', () => {
       // The safe construction documentation MUST mention the POSIX
       // single-quote escape sequence "'\''" so a future author does not
@@ -188,6 +254,7 @@ describe('plugin command invocation binding (Slice 56 / P2.11)', () => {
       expect(exploreBody).toMatch(/'\\''/);
       expect(runBody).toMatch(/'\\''/);
       expect(reviewBody).toMatch(/'\\''/);
+      expect(buildBody).toMatch(/'\\''/);
     });
   });
 
@@ -296,6 +363,11 @@ node dist/cli/circuit.js explore --goal 'find deprecated APIs'
     it('manifest includes circuit:review as an explicit workflow command', () => {
       expect(manifest.description).toMatch(/\/circuit:review/);
       expect(readFileSync(REVIEW_COMMAND_PATH, 'utf-8')).toMatch(/review workflow/i);
+    });
+
+    it('manifest includes circuit:build as an explicit workflow command', () => {
+      expect(manifest.description).toMatch(/\/circuit:build/);
+      expect(readFileSync(BUILD_COMMAND_PATH, 'utf-8')).toMatch(/Build workflow/);
     });
   });
 });

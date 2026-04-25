@@ -171,6 +171,67 @@ describe('P2.8 CLI router', () => {
     expect(output.outcome).toBe('complete');
   });
 
+  it('omitted workflow positional routes build-like goals through the classifier', async () => {
+    const output = await runMainJson(
+      ['--goal', 'develop: add a focused feature', '--run-root', join(runRootBase, 'build')],
+      '{"verdict":"accept"}',
+    );
+
+    expect(output.workflow_id).toBe('build');
+    expect(output.selected_workflow).toBe('build');
+    expect(output.routed_by).toBe('classifier');
+    expect(output.router_reason).toMatch(/implementation Build workflow/i);
+    expect(output.router_signal).toBeDefined();
+    expect(output.outcome).toBe('complete');
+  });
+
+  it('omitted workflow positional preserves router metadata on Build checkpoint_waiting output', async () => {
+    const runRoot = join(runRootBase, 'build-router-checkpoint-waiting');
+    const output = await runMainJson(
+      [
+        '--goal',
+        'develop: add a focused feature that waits for framing',
+        '--rigor',
+        'deep',
+        '--run-root',
+        runRoot,
+      ],
+      '{"verdict":"accept"}',
+    );
+
+    expect(output.schema_version).toBe(1);
+    expect(output.workflow_id).toBe('build');
+    expect(output.selected_workflow).toBe('build');
+    expect(output.routed_by).toBe('classifier');
+    expect(output.router_reason).toMatch(/implementation Build workflow/i);
+    expect(output.router_signal).toBeDefined();
+    expect(output.outcome).toBe('checkpoint_waiting');
+    expect(output).not.toHaveProperty('result_path');
+    expect(output.checkpoint).toMatchObject({
+      step_id: 'frame-step',
+      request_path: join(runRoot, 'artifacts/checkpoints/frame-step-request.json'),
+      allowed_choices: ['continue', 'revise', 'abort'],
+    });
+  });
+
+  it('omitted workflow positional keeps develop-prefixed planning goals on explore', async () => {
+    const output = await runMainJson(
+      [
+        '--goal',
+        'develop: create a new endpoint RFC',
+        '--run-root',
+        join(runRootBase, 'develop-planning'),
+      ],
+      '{"verdict":"accept"}',
+    );
+
+    expect(output.workflow_id).toBe('explore');
+    expect(output.selected_workflow).toBe('explore');
+    expect(output.routed_by).toBe('classifier');
+    expect(output.router_signal).toBeUndefined();
+    expect(output.outcome).toBe('complete');
+  });
+
   it('explicit workflow positional bypasses the classifier', async () => {
     const output = await runMainJson(
       [
@@ -563,5 +624,11 @@ describe('P2.8 CLI router', () => {
     ]);
     expect(withEntryMode.exit).toBe(2);
     expect(withEntryMode.stderr).toMatch(/omit --entry-mode/);
+  });
+
+  it('keeps CLI help text aligned with the router-supported workflow set', () => {
+    const source = readFileSync(join(process.cwd(), 'src/cli/dogfood.ts'), 'utf-8');
+    expect(source).toContain('registered explore/review/build workflows');
+    expect(source).not.toContain('registered explore/review workflows');
   });
 });

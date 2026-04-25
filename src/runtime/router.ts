@@ -1,4 +1,4 @@
-export const ROUTABLE_WORKFLOWS = ['explore', 'review'] as const;
+export const ROUTABLE_WORKFLOWS = ['explore', 'review', 'build'] as const;
 
 export type RoutableWorkflow = (typeof ROUTABLE_WORKFLOWS)[number];
 
@@ -38,6 +38,22 @@ const REVIEW_SIGNALS: Array<{ label: string; pattern: RegExp }> = [
   },
 ];
 
+const BUILD_SIGNALS: Array<{ label: string; pattern: RegExp }> = [
+  { label: 'develop prefix', pattern: /^\s*develop\s*:/i },
+  {
+    label: 'build implementation request',
+    pattern:
+      /^\s*(?:please\s+)?(?:build|implement|develop|add|create|ship)\s+(?:a\s+|an\s+|the\s+|this\s+|that\s+)?(?:new\s+)?(?:feature|change|fix|implementation|endpoint|component|command|tool|integration)\b/i,
+  },
+  {
+    label: 'make change request',
+    pattern: /^\s*(?:please\s+)?make\s+(?:a\s+|the\s+|this\s+|that\s+)?(?:focused\s+)?change\b/i,
+  },
+];
+
+const PLANNING_ARTIFACT_SIGNAL =
+  /\b(?:proposal|plan|brief|matrix|evaluation\s+matrix|design\s+doc|design\s+document|spec|specification|rfc|memo|document|doc|guide|analysis|evaluation|selection|strategy|outline|report|comparison|recommendation|write-?up|options|approaches)\b/i;
+
 export function classifyWorkflowTask(taskText: string): WorkflowRouteDecision {
   for (const signal of REVIEW_SIGNALS) {
     if (signal.pattern.test(taskText)) {
@@ -46,6 +62,20 @@ export function classifyWorkflowTask(taskText: string): WorkflowRouteDecision {
         source: 'classifier',
         matched_signal: signal.label,
         reason: `matched ${signal.label}; routed to audit-only review workflow`,
+      };
+    }
+  }
+
+  for (const signal of BUILD_SIGNALS) {
+    if (signal.pattern.test(taskText)) {
+      if (PLANNING_ARTIFACT_SIGNAL.test(taskText)) {
+        break;
+      }
+      return {
+        workflowName: 'build',
+        source: 'classifier',
+        matched_signal: signal.label,
+        reason: `matched ${signal.label}; routed to implementation Build workflow`,
       };
     }
   }

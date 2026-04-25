@@ -1398,3 +1398,18 @@ This bootstrap is itself an exercise of the methodology. You can audit it:
 Every lane declaration is still implicit (Tier 0 scaffold work is
 Discovery-lane). Phase 1 contract authorship should begin with an explicit
 Ratchet-Advance lane declaration in the commit for the first contract.
+
+## Slice 124 — Build command and router wiring
+
+Slice 124 made Build reachable from the public command surface. The plugin now
+has `/circuit:build`, `/circuit:run` can route clear implementation requests
+to Build, and command docs describe `--entry-mode` plus `--rigor` together.
+
+The slice also kept the router conservative. Build-like planning or document
+requests, including `develop:` prompts that ask for an RFC, memo, spec, or
+similar artifact, remain Explore requests instead of starting Build. A Codex
+challenger rejected broader router versions until this guard and the CLI-path
+proof were in place.
+
+Verification: focused router/command tests passed, full `npm run verify`
+passed, and the final Codex challenger returned ACCEPT.

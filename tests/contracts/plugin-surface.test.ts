@@ -68,6 +68,7 @@ function writeValidScaffold(root: string) {
   writeRel(root, 'commands/run.md', VALID_COMMAND_FILE_BODY('Router placeholder'));
   writeRel(root, 'commands/explore.md', VALID_COMMAND_FILE_BODY('Explore placeholder'));
   writeRel(root, 'commands/review.md', VALID_COMMAND_FILE_BODY('Review placeholder'));
+  writeRel(root, 'commands/build.md', VALID_COMMAND_FILE_BODY('Build placeholder'));
 }
 
 describe('checkPluginCommandClosure (ADR-0007 CC#P2-3 enforcement)', () => {
@@ -76,7 +77,7 @@ describe('checkPluginCommandClosure (ADR-0007 CC#P2-3 enforcement)', () => {
       writeValidScaffold(root);
       const result = checkPluginCommandClosure(root);
       expect(result.level).toBe('green');
-      expect(result.detail).toMatch(/commands\/\{run,explore,review\}\.md/);
+      expect(result.detail).toMatch(/commands\/\{run,explore,review,build\}\.md/);
     });
   });
 
@@ -402,6 +403,9 @@ Status: Not implemented yet. This file is a pre-Slice-56 scaffold.
     );
     expect(readFileSync(join(REPO_ROOT, 'commands', 'review.md'), 'utf-8')).toContain(
       '/circuit:review',
+    );
+    expect(readFileSync(join(REPO_ROOT, 'commands', 'build.md'), 'utf-8')).toContain(
+      '/circuit:build',
     );
   });
 });
