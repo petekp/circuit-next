@@ -1,4 +1,4 @@
-<!-- current_slice: 112 -->
+<!-- current_slice: 113 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -10,15 +10,14 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 112
+- **current_slice:** 113
 - **current_arc:** Build workflow parity plan remains challenger-pending after
-  the eighth Codex challenger pass. Revision 09 folds the pass-08 objections:
-  Build role artifacts now use distinct `artifacts/build/*.json` paths to avoid
-  collisions with Explore, the public entry-mode selector is pinned as
-  `--entry-mode`, and `build.plan@v1` must carry the exact typed verification
-  command payload before runtime command execution lands. No Build runtime
-  changes have started yet; the next required step is another Codex challenger
-  review against revision 09. P2-1 uses structured JSON as the accepted successor artifact shape; it does not claim old Markdown byte-for-byte compatibility. P2-3 live command proof is included through a live Claude
+  the ninth Codex challenger pass. Revision 10 folds the pass-09 objection by
+  requiring the public Build command docs and command-invocation tests to prove
+  `--entry-mode` and `--rigor` can appear together in both direct Build and
+  router-selected Build examples. No Build runtime changes have started yet;
+  the next required step is another Codex challenger review against revision
+  10. P2-1 uses structured JSON as the accepted successor artifact shape; it does not claim old Markdown byte-for-byte compatibility. P2-3 live command proof is included through a live Claude
   Code invocation of the inline `circuit` plugin. The Phase 2 close claim
   remains narrow: first working workflow product spine closed, not full
   first-generation Circuit parity. Next work is broader parity expansion

@@ -12,6 +12,13 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 113 BUILD PLAN NINTH CHALLENGER FOLD-IN** (this commit,
+  Discovery) - recorded the ninth Codex challenger review for the Build plan
+  and folded in its remaining objection. The plan now requires the public Build
+  command docs and command-invocation tests to prove that `--entry-mode` and
+  `--rigor` can be shown together in both direct Build and router-selected
+  Build examples. No Build runtime behavior changed.
+
 - **Slice 112 BUILD PLAN EIGHTH CHALLENGER FOLD-INS** (this commit,
   Discovery) - recorded the eighth Codex challenger review for the Build plan
   and folded in its three objections. Build artifacts now use

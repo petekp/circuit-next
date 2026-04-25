@@ -1,11 +1,11 @@
 ---
 plan: build-workflow-parity
 status: challenger-pending
-revision: 09
+revision: 10
 opened_at: 2026-04-24
-revised_at: 2026-04-24
+revised_at: 2026-04-25
 opened_in_session: post-phase-2-parity-map
-revised_in_session: build-workflow-parity-codex-challenger-08-foldins
+revised_in_session: build-workflow-parity-codex-challenger-09-foldins
 base_commit: eb52089
 target: build
 authority:
@@ -71,6 +71,11 @@ prior_challenger_passes:
     distinct Build-owned paths, naming `--entry-mode` as the public mode
     selector, and pinning the `build.plan@v1` verification-command payload
     before verification execution lands)
+  - specs/reviews/build-workflow-parity-codex-challenger-09.md
+    (verdict REJECT-PENDING-FOLD-INS vs revision 09 — 1 HIGH;
+    revision 10 folds it by requiring command-invocation tests to prove both
+    `commands/build.md` and `commands/run.md` carry a same-invocation
+    `--entry-mode` plus `--rigor` example)
 ---
 
 # Build Workflow Parity Plan
@@ -91,7 +96,8 @@ second Codex challenger pass. Revision 04 folds the third Codex challenger
 pass. Revision 05 folds the fourth Codex challenger pass. Revision 06 folds
 the fifth Codex challenger pass. Revision 07 folds the sixth Codex challenger
 pass. Revision 08 folds the seventh Codex challenger pass. Revision 09 folds
-the eighth Codex challenger pass.
+the eighth Codex challenger pass. Revision 10 folds the ninth Codex challenger
+pass.
 
 | Pass-01 # | Severity | Objection | Revision-02 fold-in |
 |---|---|---|---|
@@ -137,6 +143,10 @@ the eighth Codex challenger pass.
 | 1 | HIGH | `build.brief` reused `<run-root>/artifacts/brief.json`, which collides with `explore.brief` under the live artifact backing-path audit. | §6 now puts Build role artifacts under distinct Build-owned paths (`artifacts/build/*.json`) while keeping the close result at `artifacts/build-result.json`; Work item 2 requires path-collision tests for every Build artifact path. |
 | 2 | HIGH | The public entry-mode selector was unnamed, making mode/rigor conflict tests under-specified. | §5 and Work items 7/8 now pin `--entry-mode <default|lite|deep|autonomous>` as the public selector and require command/CLI tests proving `--entry-mode` and `--rigor` can be supplied independently. |
 | 3 | MED | `build.plan@v1` did not explicitly carry the typed verification-command structure before the verification runtime slice. | §6 and Work items 2/3 now require `build.plan@v1` to include a non-empty typed `verification.commands[]` payload using the exact direct-argv command shape consumed by §7. |
+
+| Pass-09 # | Severity | Objection | Revision-10 fold-in |
+|---|---|---|---|
+| 1 | HIGH | The CLI-level same-invocation `--entry-mode` + `--rigor` proof was explicit, but plugin-command tests were not explicitly required to prove the same combined public-command example. | Work item 8 now requires both `commands/build.md` and `commands/run.md` to include a same-invocation example carrying `--entry-mode` and `--rigor`, and requires command-invocation tests to prove those examples exist. |
 
 ## §1 — Evidence census
 
@@ -801,6 +811,11 @@ does not recognize build-like tasks.
 - Teach the public command body how to pass explicit rigor requests separately
   with `--rigor`, so entry mode and execution rigor remain independently
   expressible.
+- Include a same-invocation example in both `commands/build.md` and
+  `commands/run.md` that carries both
+  `--entry-mode <default|lite|deep|autonomous>` and `--rigor <...>`, so the
+  public slash-command surface proves the two knobs remain independently
+  expressible.
 - Update `commands/run.md` so router-selected Build is part of the documented
   public router surface and so it tells the operator to read
   `artifacts/build-result.json` when Build completes.
@@ -826,6 +841,9 @@ does not recognize build-like tasks.
   the product path.
 - `/circuit:build` and `/circuit:run` command bodies document `--entry-mode`
   and show at least one example that also supplies `--rigor`.
+- Command-invocation tests prove both `commands/build.md` and
+  `commands/run.md` include a same-invocation example carrying both
+  `--entry-mode` and `--rigor`.
 - `/circuit:run` documents Build as a possible selected workflow and documents
   `artifacts/build-result.json` as the Build close artifact.
 - `/circuit:build` and `/circuit:run` document the waiting envelope and the
