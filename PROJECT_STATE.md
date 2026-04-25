@@ -1,4 +1,4 @@
-<!-- current_slice: 151 -->
+<!-- current_slice: 152 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -10,7 +10,7 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 151
+- **current_slice:** 152
 - **current_arc:** Build workflow parity is now closed. The implementation has the policy
   shape, typed Build artifact contracts/schemas, registered runtime synthesis
   writers for `build.plan@v1` and `build.result@v1`, and a focused
@@ -106,7 +106,12 @@ context and phase-open provenance.
   `specs/workflow-recipes/fix-candidate.projection.json` and adds a parity
   contract test against that fixture, so future projection or recipe changes
   show up as a single fixture diff and can be refreshed with
-  `UPDATE_PROJECTION_FIXTURE=1`.
+  `UPDATE_PROJECTION_FIXTURE=1`. Slice 152 adds a small design-only
+  compiler-boundary helper: given a projection and a rigor,
+  `compileWorkflowRecipeDraft` returns a draft in which each item's outgoing
+  edges are already resolved to one target per outcome, so a future runtime
+  compiler can consume an effective per-rigor shape without re-walking
+  overrides.
 - **current_phase:** Phase 2 — Implementation (closed for the first working workflow; broader parity expansion planning next)
 
 Chronicle (relocated narrative history — non-authoritative; see

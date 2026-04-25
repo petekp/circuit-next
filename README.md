@@ -1,4 +1,4 @@
-<!-- current_slice: 151 -->
+<!-- current_slice: 152 -->
 
 # circuit-next
 
@@ -111,6 +111,10 @@ compiler can walk the effective edges of the recipe without re-deriving them.
 Slice 151 persists the current Fix projection as a snapshot fixture and adds a
 parity contract test, so future projection or recipe changes show up as a
 single fixture diff.
+
+Slice 152 adds a design-only compiler-boundary helper that turns a projection
+plus a rigor into a `WorkflowRecipeDraft` with one resolved target per
+outcome.
 
 CC#14 was amended by ADR-0006 as a one-time
 waiver + retarget (see Status above); the canonical non-LLM cold-read is **not**

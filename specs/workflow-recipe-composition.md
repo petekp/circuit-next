@@ -158,6 +158,15 @@ the projection shape or the Fix recipe surfaces as a single fixture diff. The
 fixture can be refreshed by running the workflow-recipe contract test with the
 `UPDATE_PROJECTION_FIXTURE=1` environment variable.
 
+The schema also exposes a small design-only compiler-boundary helper. Given a
+projection and a rigor, `compileWorkflowRecipeDraft` returns a `WorkflowRecipeDraft`
+in which each item's outgoing edges are already resolved to a single target —
+either the rigor-specific override target or the default target. The draft is
+the smallest shape that still describes the per-rigor effective workflow, and a
+future runtime compiler should consume it instead of re-walking the recipe
+overrides at execution time. The draft is still design-only; nothing in the
+runtime reads it yet.
+
 `route_overrides` lets a recipe choose a different target for a named outcome
 under a specific rigor. The default route still exists, so the recipe remains
 readable; the override only says that one mode takes a different path.

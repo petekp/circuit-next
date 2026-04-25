@@ -284,6 +284,38 @@ export const WorkflowRecipeCompilerProjection = z
   .strict();
 export type WorkflowRecipeCompilerProjection = z.infer<typeof WorkflowRecipeCompilerProjection>;
 
+export const WorkflowRecipeDraftEdge = z
+  .object({
+    outcome: WorkflowPrimitiveRoute,
+    target: WorkflowRecipeRouteTarget,
+  })
+  .strict();
+export type WorkflowRecipeDraftEdge = z.infer<typeof WorkflowRecipeDraftEdge>;
+
+export const WorkflowRecipeDraftItem = z
+  .object({
+    id: StepId,
+    uses: WorkflowPrimitiveId,
+    phase: CanonicalPhase,
+    execution: WorkflowRecipeExecution,
+    output: WorkflowPrimitiveContractRef,
+    edges: z.array(WorkflowRecipeDraftEdge).min(1),
+  })
+  .strict();
+export type WorkflowRecipeDraftItem = z.infer<typeof WorkflowRecipeDraftItem>;
+
+export const WorkflowRecipeDraft = z
+  .object({
+    recipe_id: WorkflowId,
+    rigor: Rigor,
+    starts_at: StepId,
+    phases: z.array(WorkflowRecipeProjectedPhase).min(1),
+    omitted_phases: z.array(CanonicalPhase).default([]),
+    items: z.array(WorkflowRecipeDraftItem).min(1),
+  })
+  .strict();
+export type WorkflowRecipeDraft = z.infer<typeof WorkflowRecipeDraft>;
+
 function contractIsCompatible(
   expected: WorkflowPrimitiveContractRefValue,
   actual: WorkflowPrimitiveContractRefValue,
@@ -583,5 +615,34 @@ export function projectWorkflowRecipeForCompiler(
     phases,
     omitted_phases,
     items: projectedItems,
+  });
+}
+
+export function compileWorkflowRecipeDraft(
+  projection: WorkflowRecipeCompilerProjection,
+  rigor: Rigor,
+): WorkflowRecipeDraft {
+  const items: WorkflowRecipeDraftItem[] = projection.items.map((item) => {
+    const edges: WorkflowRecipeDraftEdge[] = item.routes.map((route) => ({
+      outcome: route.outcome,
+      target: route.mode_targets[rigor] ?? route.default_target,
+    }));
+    return {
+      id: item.id,
+      uses: item.uses,
+      phase: item.phase,
+      execution: item.execution,
+      output: item.output,
+      edges,
+    };
+  });
+
+  return WorkflowRecipeDraft.parse({
+    recipe_id: projection.recipe_id,
+    rigor,
+    starts_at: projection.starts_at,
+    phases: projection.phases,
+    omitted_phases: projection.omitted_phases,
+    items,
   });
 }

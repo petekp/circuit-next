@@ -93,8 +93,12 @@
         "WorkflowRecipeProjectedItem",
         "WorkflowRecipeProjectedPhase",
         "WorkflowRecipeCompilerProjection",
+        "WorkflowRecipeDraftEdge",
+        "WorkflowRecipeDraftItem",
+        "WorkflowRecipeDraft",
         "validateWorkflowRecipeCatalogCompatibility",
-        "projectWorkflowRecipeForCompiler"
+        "projectWorkflowRecipeForCompiler",
+        "compileWorkflowRecipeDraft"
       ],
       "writers": ["circuit-next maintainers (offline product architecture)"],
       "readers": ["workflow recipe authors", "contract tests", "future recipe compiler"],

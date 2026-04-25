@@ -6,6 +6,7 @@ import { StepId } from '../../src/schemas/ids.js';
 import { WorkflowPrimitiveCatalog } from '../../src/schemas/workflow-primitives.js';
 import {
   WorkflowRecipe,
+  compileWorkflowRecipeDraft,
   projectWorkflowRecipeForCompiler,
   validateWorkflowRecipeCatalogCompatibility,
 } from '../../src/schemas/workflow-recipe.js';
@@ -200,6 +201,63 @@ describe('workflow recipe schema', () => {
     }
     const fixture = readJson(fixProjectionFixturePath);
     expect(projection).toEqual(fixture);
+  });
+
+  it('compiles a per-rigor draft that resolves rigor overrides on fix-verify continue', () => {
+    const projection = projectWorkflowRecipeForCompiler(parseFixRecipe());
+    const standardDraft = compileWorkflowRecipeDraft(projection, 'standard');
+    const liteDraft = compileWorkflowRecipeDraft(projection, 'lite');
+
+    const standardVerify = standardDraft.items.find((item) => item.id === 'fix-verify');
+    const liteVerify = liteDraft.items.find((item) => item.id === 'fix-verify');
+    if (standardVerify === undefined) throw new Error('standard fix-verify draft missing');
+    if (liteVerify === undefined) throw new Error('lite fix-verify draft missing');
+
+    const standardContinue = standardVerify.edges.find((edge) => edge.outcome === 'continue');
+    const liteContinue = liteVerify.edges.find((edge) => edge.outcome === 'continue');
+    expect(standardContinue).toEqual({ outcome: 'continue', target: 'fix-review' });
+    expect(liteContinue).toEqual({ outcome: 'continue', target: 'fix-close-lite' });
+  });
+
+  it('preserves terminal targets after rigor resolution', () => {
+    const projection = projectWorkflowRecipeForCompiler(parseFixRecipe());
+    const draft = compileWorkflowRecipeDraft(projection, 'standard');
+
+    const intake = draft.items.find((item) => item.id === 'fix-intake');
+    const closeLite = draft.items.find((item) => item.id === 'fix-close-lite');
+    if (intake === undefined) throw new Error('fix-intake draft missing');
+    if (closeLite === undefined) throw new Error('fix-close-lite draft missing');
+
+    expect(intake.edges).toContainEqual({ outcome: 'stop', target: '@stop' });
+    expect(closeLite.edges).toContainEqual({ outcome: 'complete', target: '@complete' });
+    expect(closeLite.edges).toContainEqual({ outcome: 'escalate', target: '@escalate' });
+  });
+
+  it('keeps rigors without overrides identical to the projection default targets', () => {
+    const projection = projectWorkflowRecipeForCompiler(parseFixRecipe());
+    const deepDraft = compileWorkflowRecipeDraft(projection, 'deep');
+
+    for (const item of deepDraft.items) {
+      const projectedItem = projection.items.find((entry) => entry.id === item.id);
+      if (projectedItem === undefined) throw new Error(`projection item missing: ${item.id}`);
+      const expectedEdges = projectedItem.routes.map((route) => ({
+        outcome: route.outcome,
+        target: route.default_target,
+      }));
+      expect(item.edges).toEqual(expectedEdges);
+    }
+  });
+
+  it('keeps draft top-level shape consistent with the projection input', () => {
+    const projection = projectWorkflowRecipeForCompiler(parseFixRecipe());
+    const draft = compileWorkflowRecipeDraft(projection, 'standard');
+
+    expect(draft.recipe_id).toBe(projection.recipe_id);
+    expect(draft.starts_at).toBe(projection.starts_at);
+    expect(draft.phases).toEqual(projection.phases);
+    expect(draft.omitted_phases).toEqual(projection.omitted_phases);
+    expect(draft.rigor).toBe('standard');
+    expect(draft.items.map((item) => item.id)).toEqual(projection.items.map((item) => item.id));
   });
 
   it('keeps Fix items declaring the evidence required by their primitives', () => {

@@ -12,6 +12,14 @@ record.*
 
 ## Methodology And Recipe Pivot (opened after Slice 132)
 
+- **Slice 152 RECIPE DRAFT COMPILER BOUNDARY** (this commit,
+  Ratchet-Advance) - added a design-only compiler-boundary helper that consumes
+  a projection plus a rigor and returns a `WorkflowRecipeDraft` whose items
+  carry one resolved target per outcome. Lite Fix verify continues to
+  fix-close-lite, standard/deep continues to fix-review, and terminal targets
+  survive resolution unchanged. Still design-only; nothing in the runtime
+  consumes the draft yet.
+
 - **Slice 151 FIX PROJECTION SNAPSHOT FIXTURE** (this commit,
   Ratchet-Advance) - persisted the current Fix projection as a snapshot fixture
   at `specs/workflow-recipes/fix-candidate.projection.json` and added a parity
