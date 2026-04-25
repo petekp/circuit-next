@@ -1,9 +1,11 @@
 ---
 plan: repair-workflow-parity
 status: challenger-pending
-revision: 01
+revision: 02
 opened_at: 2026-04-24
 opened_in_session: post-repair-reference-characterization
+revised_at: 2026-04-24
+revised_in_session: repair-workflow-parity-codex-challenger-01-foldin
 base_commit: 8143851
 target: repair
 authority:
@@ -24,7 +26,12 @@ artifact_ids:
   - repair.verification
   - repair.review
   - repair.result
-prior_challenger_passes: []
+prior_challenger_passes:
+  - specs/reviews/repair-workflow-parity-codex-challenger-01.md
+    (verdict REJECT-PENDING-FOLD-INS vs revision 01 — 2 HIGH,
+    1 MED; revision 02 folds all three by expanding the checkpoint,
+    resume, selection, Lite-route, optional-review close, and command
+    audit-surface budgets)
 ---
 
 # Repair Workflow Parity Plan
@@ -38,6 +45,18 @@ Repair is a successor-to-live surface. The old Circuit Repair workflow is
 pinned in `specs/reference/legacy-circuit/repair-characterization.md`; this
 plan uses that shape as reference evidence while keeping circuit-next's
 structured JSON artifact direction.
+
+## §0 — Prior pass log
+
+Revision 02 folds the first Codex challenger pass. The plan remains
+`challenger-pending` until a fresh accept-class challenger pass reviews the
+folded revision.
+
+| Pass-01 # | Severity | Objection | Revision-02 fold-in |
+|---|---|---|---|
+| 1 | HIGH | The plan understated how deeply Build-specific the checkpoint, resume, and execution-rigor dispatch-selection path still is. | §7 and Work item 3 now explicitly budget checkpoint policy payload widening beyond `policy.build_brief`, artifact-neutral checkpoint request/resume context, Repair brief hash validation, and Repair execution-rigor dispatch-selection binding. |
+| 2 | HIGH | Lite review skip was named as behavior but no slice owned the route and close mechanics. | New Work item 4 owns mode-aware Verify routing, conditional Close consumption when `repair.review` is absent, and `repair.result` pointer/cardinality rules for review-present versus Lite-skipped runs. |
+| 3 | MED | The public-command work omitted the hardcoded plugin command-closure audit update needed to admit `commands/repair.md`. | Work item 7 now explicitly updates `checkPluginCommandClosure`, plugin-surface tests, and the plugin-surface description to the five-command set. |
 
 ## §1 — Evidence census
 
@@ -54,7 +73,8 @@ structured JSON artifact direction.
 | E9 | Current router knows Explore, Review, and Build; `fix:` and `repair:` shortcuts are not full Repair entries. | verified | `src/runtime/router.ts`, `specs/parity-map.md` |
 | E10 | Current plugin command surface exposes run, explore, review, and build; there is no `/circuit:repair` command yet. | verified | `commands/`, `.claude-plugin/plugin.json` |
 | E11 | Build now provides run-root safety, checkpoint/resume, entry-mode selection, dispatch, bounded command running, public command wiring, and typed JSON close artifacts. Repair should reuse these substrates where they are generic enough and explicitly widen the Build-specific parts where needed. | verified | `specs/plans/build-workflow-parity.md`, `PROJECT_STATE.md` |
-| E12 | Unknown-blocking: none. | unknown-blocking | Current gaps are known enough to plan slices. |
+| E12 | The current plugin command-closure audit hardcodes the public command set as run/explore/review/build, so adding `commands/repair.md` requires an audit and test update in the same command-surface slice. | verified | `scripts/audit.mjs`, `tests/contracts/plugin-surface.test.ts` |
+| E13 | Unknown-blocking: none. | unknown-blocking | Current gaps are known enough to plan slices. |
 
 ## §2 — Why this plan exists
 
@@ -193,16 +213,25 @@ and the signal used for root-cause work.
 
 ## §7 — Runtime seams that must widen
 
-Repair should reuse the Build substrates, but two Build-specific boundaries
-must widen before a real Repair fixture can run:
+Repair should reuse the Build substrates, but several Build-specific
+boundaries must widen before a real Repair fixture can run:
 
 - Checkpoint artifact writing currently supports only `build.brief@v1`.
-  Repair needs the same safety shape for `repair.brief@v1`, including stable
-  checkpoint request/response pointers and safe default/autonomous choice
-  policy.
+  Repair needs a typed checkpoint policy payload for `repair.brief@v1`, not
+  only an artifact-schema allowlist. The policy must carry the regression
+  contract fields needed to write the brief honestly: expected behavior, actual
+  behavior, repro status or command, regression-test status, verification
+  command candidates, and checkpoint request/response pointers.
+- Checkpoint request/resume context currently persists `build_brief_sha256`.
+  Repair needs an artifact-neutral or Repair-specific brief hash binding that
+  records the written `repair.brief@v1` bytes and validates those bytes on
+  resume before continuing.
 - Verification execution currently reads Build's planned command payload and
   writes `build.verification@v1`. Repair needs the same direct-argv execution
   safety, but the command source and output artifact are Repair-specific.
+- Execution-rigor-to-dispatch-selection binding currently applies to Build
+  only. Repair needs the same binding so the resolved execution rigor can drive
+  dispatch selection and review-required behavior.
 
 Repair also needs a mode-aware route decision after Verify so Lite can skip
 Review without letting Standard, Deep, or Autonomous skip it.
@@ -264,7 +293,11 @@ path users need.
   no-repro applies.
 - Make `repair.result@v1` point back to the prior Repair artifacts and require
   root cause or diagnostic path, fix summary, regression-test status,
-  verification result, residual risk, and PR summary.
+  verification result, review status, residual risk, and PR summary.
+- Make `repair.result@v1` enforce two pointer shapes: review-present runs carry
+  pointers for brief, analysis, implementation, verification, and review;
+  Lite review-skipped runs carry pointers for brief, analysis, implementation,
+  and verification plus an explicit `review_status: "skipped_by_lite"`.
 - Add backing-path tests proving `repair.result` uses
   `<run-root>/artifacts/repair-result.json` and does not collide with
   `run.result`.
@@ -287,7 +320,7 @@ path users need.
 Runtime writers and command wiring should not land before the artifact
 contracts exist. The schema slice gives later runtime work a stable target.
 
-### Work item 3 — Repair checkpoint and verification substrate widening
+### Work item 3 — Repair checkpoint, selection, and verification substrate widening
 
 **Lane:** Ratchet-Advance.
 
@@ -297,12 +330,26 @@ Build-specific schemas or placeholder artifacts.
 
 **Deliverables:**
 
+- Widen checkpoint policy from the singleton `policy.build_brief` shape to an
+  explicit typed shape that can also carry `policy.repair_brief` for
+  `repair.brief@v1`.
+- Make `policy.repair_brief` carry enough source data to write the regression
+  contract honestly: expected behavior, actual behavior, repro command or
+  no-repro status, regression-test status, verification command candidates,
+  and checkpoint prompt/choice context.
 - Widen checkpoint artifact writing from only `build.brief@v1` to an explicit
-  allowlist that includes `repair.brief@v1`.
+  schema-to-policy allowlist that includes `repair.brief@v1` only when
+  `policy.repair_brief` is present.
+- Replace Build-only `build_brief_sha256` resume coupling with an
+  artifact-neutral or Repair-specific checkpoint context that records the
+  written Repair brief schema and SHA-256, then validates the same bytes on
+  resume before continuing.
 - Preserve checkpoint request/response artifact hashing, safe default choice,
   safe autonomous choice, Deep waiting behavior, and resume validation.
 - Widen verification execution so the runtime can read Repair verification
   commands and write `repair.verification@v1`.
+- Widen execution-rigor-to-dispatch-selection binding so Repair, not only
+  Build, receives the resolved execution rigor in dispatch selection.
 - Preserve direct argv execution, shell-binary rejection, project-root-contained
   cwd, explicit env policy, timeouts, output bounds, and fail-closed behavior.
 - Add focused runner tests for Repair checkpoint waiting/resume and Repair
@@ -312,8 +359,12 @@ Build-specific schemas or placeholder artifacts.
 
 - Schema and runner tests prove a Repair Frame checkpoint writes a valid
   `repair.brief@v1` while waiting and after resume.
+- Resume tests prove tampering with the waiting `repair.brief@v1` bytes or
+  schema binding is rejected before the runner continues.
 - Runner tests prove Repair verification writes `repair.verification@v1` from
   actual command execution.
+- Dispatch-selection tests prove Repair receives the resolved execution rigor,
+  including explicit `--rigor` overriding selected `--entry-mode`.
 - Negative tests prove shell strings, shell `-c`, cwd escape, missing timeout,
   and unbounded output still fail.
 - `npm run verify` passes.
@@ -325,7 +376,50 @@ The Build substrate is close, but still partially Build-specific. Widening it
 before adding the Repair fixture prevents a fake Repair workflow from passing
 through Build-only code paths.
 
-### Work item 4 — Repair synthesis writers
+### Work item 4 — Repair Lite route and optional-review close behavior
+
+**Lane:** Ratchet-Advance.
+
+**Failure mode addressed:** Lite Repair could be recorded as "no independent
+review" while the runtime still has only static pass routes and required close
+reads, forcing fake review artifacts or hidden opportunistic routing.
+
+**Deliverables:**
+
+- Add the smallest mode-aware route mechanism needed for Repair Verify:
+  resolved Lite routes Verify pass directly to Close; Standard, Deep, and
+  Autonomous route Verify pass to Review.
+- Keep route decisions explicit in event evidence so a later audit can see
+  whether Review was completed or skipped by Lite policy.
+- Make the Repair close writer consume `repair.review@v1` conditionally:
+  required for Standard, Deep, and Autonomous; absent and forbidden for Lite
+  review-skipped runs.
+- Make `repair.result@v1` encode `review_status` and enforce pointer
+  cardinality by mode: review-present results include the review pointer;
+  Lite review-skipped results omit it and carry the skip reason.
+- Add runner and schema tests for both result shapes.
+
+**Acceptance evidence:**
+
+- Runner tests prove Lite Verify pass routes directly to Close without writing
+  or reading `repair.review@v1`.
+- Runner tests prove Standard, Deep, and Autonomous cannot close without a
+  valid `repair.review@v1`.
+- Schema tests prove `repair.result@v1` rejects a Lite result that pretends
+  review completed without a review pointer, and rejects a Standard/Deep/
+  Autonomous result that omits the review pointer.
+- Event tests prove the skipped-review route is visible as selected-mode
+  behavior, not a missing step accident.
+- `npm run verify` passes.
+- `npm run audit` reports 0 red and no new unaccounted yellows.
+
+**Why this not adjacent:**
+
+Repair Lite's review skip is a defining behavior of the reference workflow.
+Owning the route and close mechanics before the full fixture lands prevents a
+metadata-only implementation.
+
+### Work item 5 — Repair synthesis writers
 
 **Lane:** Ratchet-Advance.
 
@@ -359,7 +453,7 @@ reproduction, root cause, or repair closeout.
 Dispatch and final command wiring need typed Repair artifacts to read. The
 orchestrator-owned artifacts are the stable base for those later steps.
 
-### Work item 5 — Repair fixture and dispatch path
+### Work item 6 — Repair fixture and dispatch path
 
 **Lane:** Ratchet-Advance.
 
@@ -393,7 +487,7 @@ workflow path that exercises fix and review dispatch.
 The fixture should land only after the Repair-specific schemas and substrate
 widenings exist. Otherwise it would need placeholder steps or dishonest skips.
 
-### Work item 6 — Repair command and router surface
+### Work item 7 — Repair command and router surface
 
 **Lane:** Ratchet-Advance.
 
@@ -404,6 +498,9 @@ users still cannot invoke it through the plugin command surface.
 
 - Add `commands/repair.md` and register `/circuit:repair` in the plugin
   manifest.
+- Update `checkPluginCommandClosure`, plugin-surface tests, and the
+  plugin-surface description so the expected public command set is
+  run/explore/review/build/repair.
 - Update `/circuit:run` command docs to include `fix:` and `repair:` examples.
 - Update the router so `fix:` selects Repair Lite, `repair:` selects Repair
   Deep, and clear bug/regression/flaky/error/incident prompts can select
@@ -416,6 +513,9 @@ users still cannot invoke it through the plugin command surface.
 - `./bin/circuit-next repair --goal '...'` reaches the Repair workflow.
 - `./bin/circuit-next --goal 'fix: ...'` selects Repair Lite.
 - `./bin/circuit-next --goal 'repair: ...'` selects Repair Deep.
+- The plugin command-closure audit accepts `commands/repair.md` as expected
+  and still rejects unexpected command files.
+- Plugin-surface tests and command-invocation tests prove the five-command set.
 - Command docs include same-invocation examples for `--entry-mode` and
   `--rigor`.
 - `npm run verify` passes.
@@ -427,7 +527,7 @@ Public command wiring belongs after the workflow can actually run. That keeps
 the command surface from promising a Repair path that the runtime cannot
 complete.
 
-### Work item 7 — Live Repair proof and arc close
+### Work item 8 — Live Repair proof and arc close
 
 **Lane:** Ratchet-Advance.
 
@@ -475,6 +575,8 @@ Repair is accepted for this arc when:
 - Standard, Deep, and Autonomous include independent Review.
 - Repair writes schema-valid structured JSON artifacts for all six reference
   roles.
+- Repair result schema distinguishes review-present runs from Lite
+  review-skipped runs without requiring fake review artifacts.
 - The Repair close artifact lives at `artifacts/repair-result.json`.
 - Live direct and router Repair proofs complete.
 - `npm run verify` passes.
