@@ -12,6 +12,13 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 121 BUILD CHECKPOINT RESUME** (this commit, Ratchet-Advance) -
+  added a focused checkpoint resume path. A paused checkpoint run can now read
+  its saved manifest and event log, reject unsafe choices, write the operator
+  response artifact, update the Build brief with the response pointer, and
+  continue to a normal run close. The registered Build fixture and public Build
+  command wiring remain later work.
+
 - **Slice 120 BUILD CHECKPOINT SUBSTRATE** (this commit, Ratchet-Advance) -
   added a focused checkpoint policy and runner execution path. Checkpoint
   steps can now write a Build brief and checkpoint request, continue through a

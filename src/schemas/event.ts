@@ -13,6 +13,14 @@ const EventBase = z.object({
   run_id: RunId,
 });
 
+// SHA-256 over raw bytes, 64-char lowercase hex. Mirrors the convention
+// used by `ManifestHash` in src/schemas/manifest.ts so durable transcript
+// hashes are shape-compatible with manifest hashes at audit time.
+const HEX64 = /^[0-9a-f]{64}$/;
+const ContentHash = z.string().regex(HEX64, {
+  message: 'must be a 64-character lowercase hex SHA-256 digest',
+});
+
 export const RunBootstrappedEvent = EventBase.extend({
   kind: z.literal('run.bootstrapped'),
   workflow_id: WorkflowId,
@@ -57,6 +65,7 @@ export const CheckpointRequestedEvent = EventBase.extend({
   attempt: z.number().int().positive(),
   options: z.array(z.string()).min(1),
   request_path: z.string().min(1),
+  request_artifact_hash: ContentHash,
 }).strict();
 export type CheckpointRequestedEvent = z.infer<typeof CheckpointRequestedEvent>;
 
@@ -107,18 +116,6 @@ export const DispatchCompletedEvent = EventBase.extend({
   receipt_path: z.string().min(1),
 }).strict();
 export type DispatchCompletedEvent = z.infer<typeof DispatchCompletedEvent>;
-
-// SHA-256 over raw bytes, 64-char lowercase hex. Mirrors the convention
-// used by `ManifestHash` in src/schemas/manifest.ts so durable dispatch
-// transcript hashes are shape-compatible with manifest hashes at audit
-// time. Per ADR-0007 CC#P2-2 the three intermediate dispatch events must
-// carry concrete request/receipt/result identifiers so a mock adapter
-// returning a fixed byte string cannot satisfy the close criterion even
-// if byte-shape matches.
-const HEX64 = /^[0-9a-f]{64}$/;
-const ContentHash = z.string().regex(HEX64, {
-  message: 'must be a 64-character lowercase hex SHA-256 digest',
-});
 
 // ADR-0007 CC#P2-2 §Amendment (Slice 37) — the durable dispatch
 // transcript the P2.4 adapter round-trip test asserts on is a five-event

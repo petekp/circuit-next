@@ -2558,6 +2558,7 @@ describe('Event variants reject top-level surplus keys (RUN-I8 coverage expansio
         attempt: 1,
         options: ['accept', 'revise'],
         request_path: 'artifacts/checkpoints/frame-request.json',
+        request_artifact_hash: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
       },
     ],
     [
@@ -2670,6 +2671,18 @@ describe('Checkpoint event evidence is required', () => {
       step_id: 'frame',
       attempt: 1,
       options: ['accept'],
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('rejects checkpoint.requested without request_artifact_hash', () => {
+    const bad = Event.safeParse({
+      ...base,
+      kind: 'checkpoint.requested',
+      step_id: 'frame',
+      attempt: 1,
+      options: ['accept'],
+      request_path: 'artifacts/checkpoints/frame-request.json',
     });
     expect(bad.success).toBe(false);
   });

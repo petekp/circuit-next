@@ -115,9 +115,7 @@ describe('runtime-safety-floor fresh run-root guard', () => {
       expect(existsSync(snapshotPath(runRoot))).toBe(false);
       expect(existsSync(resultPath(runRoot))).toBe(false);
 
-      expect(() => claimFreshRunRoot(runRoot)).toThrow(
-        /run-root reuse.*resume mode does not exist/i,
-      );
+      expect(() => claimFreshRunRoot(runRoot)).toThrow(/run-root reuse.*checkpoint resume/i);
 
       expect(existsSync(eventLogPath(runRoot))).toBe(false);
       expect(existsSync(manifestSnapshotPath(runRoot))).toBe(false);
@@ -145,7 +143,7 @@ describe('runtime-safety-floor fresh run-root guard', () => {
         goal: 'second run must not mutate this root',
         startMs: Date.UTC(2026, 3, 24, 15, 0, 0),
       }),
-    ).rejects.toThrow(/run-root reuse.*resume mode does not exist/i);
+    ).rejects.toThrow(/run-root reuse.*checkpoint resume/i);
 
     for (const [path, contents] of before) {
       expect(readFileSync(path, 'utf8')).toBe(contents);
@@ -172,18 +170,14 @@ describe('runtime-safety-floor fresh run-root guard', () => {
   it('rejects an existing file or symlink run-root with the reuse/no-resume message', () => {
     const fileRoot = join(runRootBase, 'file-root');
     writeFileSync(fileRoot, 'not a directory');
-    expect(() => claimFreshRunRoot(fileRoot)).toThrow(
-      /run-root reuse.*resume mode does not exist/i,
-    );
+    expect(() => claimFreshRunRoot(fileRoot)).toThrow(/run-root reuse.*checkpoint resume/i);
     expect(readFileSync(fileRoot, 'utf8')).toBe('not a directory');
 
     const symlinkTarget = join(runRootBase, 'symlink-target');
     const symlinkRoot = join(runRootBase, 'symlink-root');
     mkdirSync(symlinkTarget, { recursive: true });
     symlinkSync(symlinkTarget, symlinkRoot);
-    expect(() => claimFreshRunRoot(symlinkRoot)).toThrow(
-      /run-root reuse.*resume mode does not exist/i,
-    );
+    expect(() => claimFreshRunRoot(symlinkRoot)).toThrow(/run-root reuse.*checkpoint resume/i);
     expect(existsSync(eventLogPath(symlinkTarget))).toBe(false);
   });
 
@@ -208,7 +202,7 @@ describe('runtime-safety-floor fresh run-root guard', () => {
           goal: `marker ${label} must reject reuse`,
           startMs: Date.UTC(2026, 3, 24, 17, 0, 0),
         }),
-      ).rejects.toThrow(/run-root reuse.*resume mode does not exist/i);
+      ).rejects.toThrow(/run-root reuse.*checkpoint resume/i);
 
       expect(readFileSync(markerPath, 'utf8')).toBe(`sentinel-${label}`);
     }

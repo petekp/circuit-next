@@ -34,7 +34,7 @@ import {
   ReviewResult,
   computeReviewVerdict,
 } from '../schemas/artifacts/review.js';
-import type { LayeredConfig } from '../schemas/config.js';
+import { LayeredConfig, type LayeredConfig as LayeredConfigValue } from '../schemas/config.js';
 import type { Event, RunClosedOutcome } from '../schemas/event.js';
 import type { InvocationId, RunId, WorkflowId } from '../schemas/ids.js';
 import type { LaneDeclaration } from '../schemas/lane.js';
@@ -43,14 +43,16 @@ import type { RunResult } from '../schemas/result.js';
 import type { Rigor } from '../schemas/rigor.js';
 import type { ResolvedSelection } from '../schemas/selection-policy.js';
 import type { Snapshot } from '../schemas/snapshot.js';
-import type { Workflow } from '../schemas/workflow.js';
+import { Workflow } from '../schemas/workflow.js';
 import { materializeDispatch } from './adapters/dispatch-materializer.js';
 import { type AdapterDispatchInput, type DispatchResult, sha256Hex } from './adapters/shared.js';
 import { parseArtifact } from './artifact-schemas.js';
+import { readRunLog } from './event-log-reader.js';
 import { appendEvent, eventLogPath } from './event-writer.js';
 import {
   type ManifestSnapshotInput,
   manifestSnapshotPath,
+  verifyManifestSnapshotBytes,
   writeManifestSnapshot,
 } from './manifest-snapshot-writer.js';
 import { writeResult } from './result-writer.js';
@@ -82,7 +84,7 @@ export interface FreshRunRootClaim {
 
 function runRootReuseError(runRoot: string, detail: string): Error {
   return new Error(
-    `run-root reuse rejected for ${runRoot}: ${detail}; resume mode does not exist yet`,
+    `run-root reuse rejected for ${runRoot}: ${detail}; use checkpoint resume for paused checkpoint runs`,
   );
 }
 
@@ -244,7 +246,17 @@ export interface DogfoodInvocation {
   // layers at v0; direct runtime callers can still inject already-parsed
   // layers, including default/invocation seams for tests and future entry
   // points.
-  selectionConfigLayers?: readonly LayeredConfig[];
+  selectionConfigLayers?: readonly LayeredConfigValue[];
+}
+
+export interface CheckpointResumeInvocation {
+  runRoot: string;
+  selection: string;
+  projectRoot?: string;
+  now: () => Date;
+  dispatcher?: DispatchFn;
+  synthesisWriter?: SynthesisWriterFn;
+  selectionConfigLayers?: readonly LayeredConfigValue[];
 }
 
 // Slice 47a Codex HIGH 2 fold-in — surface per-dispatch metadata
@@ -437,7 +449,12 @@ function dispatchResponseInstruction(
   return 'Respond with a single raw JSON object whose top-level shape is exactly { "verdict": "<one-of-accepted-verdicts>" } (additional fields permitted). Do not wrap the JSON in Markdown code fences. Do not include any prose before or after the JSON object. The runtime parses your response with JSON.parse and rejects the run on any parse failure or on a verdict not drawn from the accepted-verdicts list.';
 }
 
-async function resolveDispatcher(inv: DogfoodInvocation): Promise<DispatchFn> {
+type DispatcherInvocationConfig = {
+  readonly dispatcher?: DispatchFn;
+  readonly selectionConfigLayers?: readonly LayeredConfigValue[];
+};
+
+async function resolveDispatcher(inv: DispatcherInvocationConfig): Promise<DispatchFn> {
   if (inv.dispatcher !== undefined) return inv.dispatcher;
   // Default dispatcher: the `agent` adapter's function, lifted into the
   // structured descriptor shape so the call site at `runDogfood` below
@@ -461,12 +478,12 @@ async function resolveDispatcher(inv: DogfoodInvocation): Promise<DispatchFn> {
 // Adapter provenance remains separate from model/effort selection: the
 // selection resolver now owns the `resolved_selection` surface, while this
 // helper names only how the adapter itself was chosen.
-function deriveResolvedFrom(invocation: DogfoodInvocation): DispatchResolutionSource {
+function deriveResolvedFrom(invocation: DispatcherInvocationConfig): DispatchResolutionSource {
   return invocation.dispatcher !== undefined ? { source: 'explicit' } : { source: 'default' };
 }
 
 function deriveResolvedSelection(
-  inv: DogfoodInvocation,
+  inv: DispatcherInvocationConfig,
   workflow: Workflow,
   step: Workflow['steps'][number] & { kind: 'dispatch' },
 ): ResolvedSelection {
@@ -612,7 +629,7 @@ type CheckpointResolution =
   | {
       readonly kind: 'resolved';
       readonly selection: string;
-      readonly resolutionSource: 'safe-default' | 'safe-autonomous';
+      readonly resolutionSource: 'safe-default' | 'safe-autonomous' | 'operator';
       readonly autoResolved: boolean;
     }
   | { readonly kind: 'waiting' }
@@ -654,25 +671,37 @@ function resolveCheckpoint(step: CheckpointWorkflowStep, rigor: Rigor): Checkpoi
   };
 }
 
-function checkpointRequestBody(step: CheckpointWorkflowStep): unknown {
+function checkpointRequestBody(input: {
+  readonly step: CheckpointWorkflowStep;
+  readonly projectRoot?: string;
+  readonly selectionConfigLayers: readonly LayeredConfigValue[];
+  readonly buildBriefSha256?: string;
+}): unknown {
   return {
     schema_version: 1,
-    step_id: step.id,
-    prompt: step.policy.prompt,
-    allowed_choices: checkpointChoiceIds(step),
-    ...(step.policy.safe_default_choice === undefined
+    step_id: input.step.id,
+    prompt: input.step.policy.prompt,
+    allowed_choices: checkpointChoiceIds(input.step),
+    ...(input.step.policy.safe_default_choice === undefined
       ? {}
-      : { safe_default_choice: step.policy.safe_default_choice }),
-    ...(step.policy.safe_autonomous_choice === undefined
+      : { safe_default_choice: input.step.policy.safe_default_choice }),
+    ...(input.step.policy.safe_autonomous_choice === undefined
       ? {}
-      : { safe_autonomous_choice: step.policy.safe_autonomous_choice }),
+      : { safe_autonomous_choice: input.step.policy.safe_autonomous_choice }),
+    execution_context: {
+      ...(input.projectRoot === undefined ? {} : { project_root: input.projectRoot }),
+      selection_config_layers: input.selectionConfigLayers,
+      ...(input.buildBriefSha256 === undefined
+        ? {}
+        : { build_brief_sha256: input.buildBriefSha256 }),
+    },
   };
 }
 
 function checkpointResponseBody(input: {
   readonly step: CheckpointWorkflowStep;
   readonly selection: string;
-  readonly resolutionSource: 'safe-default' | 'safe-autonomous';
+  readonly resolutionSource: 'safe-default' | 'safe-autonomous' | 'operator';
 }): unknown {
   return {
     schema_version: 1,
@@ -680,6 +709,96 @@ function checkpointResponseBody(input: {
     selection: input.selection,
     resolution_source: input.resolutionSource,
   };
+}
+
+function workflowFromManifestBytes(bytes: Buffer): Workflow {
+  return Workflow.parse(JSON.parse(bytes.toString('utf8')));
+}
+
+interface CheckpointRequestContext {
+  readonly projectRoot?: string;
+  readonly selectionConfigLayers: readonly LayeredConfigValue[];
+  readonly buildBriefSha256?: string;
+}
+
+function readCheckpointRequestContext(input: {
+  readonly runRoot: string;
+  readonly step: CheckpointWorkflowStep;
+  readonly expectedRequestArtifactHash: string;
+}): CheckpointRequestContext {
+  const requestAbs = resolveRunRelative(input.runRoot, input.step.writes.request);
+  const requestText = readFileSync(requestAbs, 'utf8');
+  const observedRequestHash = sha256Hex(requestText);
+  if (observedRequestHash !== input.expectedRequestArtifactHash) {
+    throw new Error('checkpoint resume rejected: checkpoint request hash differs from event log');
+  }
+  const raw: unknown = JSON.parse(requestText);
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error(
+      `checkpoint resume rejected: request artifact for '${input.step.id}' is invalid`,
+    );
+  }
+  const record = raw as Record<string, unknown>;
+  if (record.schema_version !== 1 || record.step_id !== input.step.id) {
+    throw new Error(`checkpoint resume rejected: request artifact for '${input.step.id}' is stale`);
+  }
+  const context = record.execution_context;
+  if (context === null || typeof context !== 'object' || Array.isArray(context)) {
+    throw new Error(
+      `checkpoint resume rejected: request artifact for '${input.step.id}' has no execution context`,
+    );
+  }
+  const contextRecord = context as Record<string, unknown>;
+  const projectRoot = contextRecord.project_root;
+  if (projectRoot !== undefined && typeof projectRoot !== 'string') {
+    throw new Error('checkpoint resume rejected: project_root in checkpoint request is invalid');
+  }
+  const selectionConfigLayers = LayeredConfig.array().parse(
+    contextRecord.selection_config_layers ?? [],
+  );
+  const buildBriefSha256 = contextRecord.build_brief_sha256;
+  if (buildBriefSha256 !== undefined && typeof buildBriefSha256 !== 'string') {
+    throw new Error(
+      'checkpoint resume rejected: build_brief_sha256 in checkpoint request is invalid',
+    );
+  }
+  return {
+    ...(projectRoot === undefined ? {} : { projectRoot }),
+    selectionConfigLayers,
+    ...(buildBriefSha256 === undefined ? {} : { buildBriefSha256 }),
+  };
+}
+
+function readCheckpointBuildBrief(input: {
+  readonly runRoot: string;
+  readonly step: CheckpointWorkflowStep;
+  readonly requestContext: CheckpointRequestContext;
+}): BuildBrief | undefined {
+  const artifact = input.step.writes.artifact;
+  if (artifact === undefined) return undefined;
+  if (artifact.schema !== 'build.brief@v1') return undefined;
+  const artifactAbs = resolveRunRelative(input.runRoot, artifact.path);
+  const raw = readFileSync(artifactAbs, 'utf8');
+  if (input.requestContext.buildBriefSha256 === undefined) {
+    throw new Error('checkpoint resume rejected: checkpoint request is missing build_brief_sha256');
+  }
+  const observedHash = sha256Hex(raw);
+  if (observedHash !== input.requestContext.buildBriefSha256) {
+    throw new Error('checkpoint resume rejected: waiting Build brief hash differs from request');
+  }
+  const brief = BuildBrief.parse(JSON.parse(raw));
+  const expectedChoices = checkpointChoiceIds(input.step);
+  if (
+    brief.checkpoint.request_path !== input.step.writes.request ||
+    brief.checkpoint.response_path !== undefined ||
+    brief.checkpoint.allowed_choices.length !== expectedChoices.length ||
+    brief.checkpoint.allowed_choices.some((choice, index) => choice !== expectedChoices[index])
+  ) {
+    throw new Error(
+      `checkpoint resume rejected: waiting Build brief does not belong to checkpoint '${input.step.id}'`,
+    );
+  }
+  return brief;
 }
 
 const EXPLORE_BRIEF_ARTIFACT_PATH = 'artifacts/brief.json';
@@ -968,6 +1087,7 @@ function writeCheckpointOwnedArtifact(input: {
   readonly step: CheckpointWorkflowStep;
   readonly goal: string;
   readonly responsePath?: string;
+  readonly existingBrief?: BuildBrief;
 }): void {
   const artifact = input.step.writes.artifact;
   if (artifact === undefined) return;
@@ -980,17 +1100,26 @@ function writeCheckpointOwnedArtifact(input: {
       `checkpoint step '${input.step.id}' writing build.brief@v1 requires policy.build_brief`,
     );
   }
-  const body = BuildBrief.parse({
-    objective: input.goal,
-    scope: template.scope,
-    success_criteria: template.success_criteria,
-    verification_command_candidates: template.verification_command_candidates,
-    checkpoint: {
-      request_path: input.step.writes.request,
-      ...(input.responsePath === undefined ? {} : { response_path: input.responsePath }),
-      allowed_choices: checkpointChoiceIds(input.step),
-    },
-  });
+  const body =
+    input.existingBrief === undefined
+      ? BuildBrief.parse({
+          objective: input.goal,
+          scope: template.scope,
+          success_criteria: template.success_criteria,
+          verification_command_candidates: template.verification_command_candidates,
+          checkpoint: {
+            request_path: input.step.writes.request,
+            ...(input.responsePath === undefined ? {} : { response_path: input.responsePath }),
+            allowed_choices: checkpointChoiceIds(input.step),
+          },
+        })
+      : BuildBrief.parse({
+          ...input.existingBrief,
+          checkpoint: {
+            ...input.existingBrief.checkpoint,
+            ...(input.responsePath === undefined ? {} : { response_path: input.responsePath }),
+          },
+        });
   writeJsonArtifact(input.runRoot, artifact.path, body);
 }
 
@@ -1004,6 +1133,106 @@ export function writeSynthesisArtifact(input: SynthesisWriterInput): void {
   writeJsonArtifact(runRoot, step.writes.artifact.path, body);
 }
 
+interface ResumeCheckpointState {
+  readonly stepId: string;
+  readonly attempt: number;
+  readonly selection: string;
+  readonly existingBrief?: BuildBrief;
+}
+
+interface DogfoodExecutionContext {
+  readonly runRoot: string;
+  readonly workflow: Workflow;
+  readonly workflowBytes: Buffer;
+  readonly runId: RunId;
+  readonly goal: string;
+  readonly rigor: Rigor;
+  readonly lane: LaneDeclaration;
+  readonly now: () => Date;
+  readonly dispatcher?: DispatchFn;
+  readonly synthesisWriter?: SynthesisWriterFn;
+  readonly selectionConfigLayers?: readonly LayeredConfigValue[];
+  readonly projectRoot?: string;
+  readonly invocationId?: InvocationId;
+  readonly initialEvents?: readonly Event[];
+  readonly startStepId?: string;
+  readonly resumeCheckpoint?: ResumeCheckpointState;
+}
+
+function findWaitingCheckpoint(input: {
+  readonly runRoot: string;
+  readonly workflow: Workflow;
+  readonly selection: string;
+}): {
+  readonly events: readonly Event[];
+  readonly stepId: string;
+  readonly attempt: number;
+  readonly bootstrap: Extract<Event, { kind: 'run.bootstrapped' }>;
+  readonly requestContext: CheckpointRequestContext;
+  readonly existingBrief?: BuildBrief;
+} {
+  const events = readRunLog(input.runRoot);
+  const bootstrap = events[0];
+  if (bootstrap === undefined || bootstrap.kind !== 'run.bootstrapped') {
+    throw new Error('checkpoint resume requires a bootstrapped event log');
+  }
+  if (events.some((event) => event.kind === 'run.closed')) {
+    throw new Error('checkpoint resume rejected: run is already closed');
+  }
+  const snapshot = writeDerivedSnapshot(input.runRoot);
+  if (snapshot.status !== 'in_progress' || snapshot.current_step === undefined) {
+    throw new Error('checkpoint resume rejected: run is not paused at an in-progress step');
+  }
+  const stepId = snapshot.current_step as unknown as string;
+  const step = input.workflow.steps.find(
+    (candidate) => (candidate.id as unknown as string) === stepId,
+  );
+  if (step === undefined || step.kind !== 'checkpoint') {
+    throw new Error(`checkpoint resume rejected: current step '${stepId}' is not a checkpoint`);
+  }
+  const requested = [...events]
+    .reverse()
+    .find(
+      (event): event is Extract<Event, { kind: 'checkpoint.requested' }> =>
+        event.kind === 'checkpoint.requested' && (event.step_id as unknown as string) === stepId,
+    );
+  if (requested === undefined) {
+    throw new Error(`checkpoint resume rejected: checkpoint '${stepId}' has no request event`);
+  }
+  const alreadyResolved = events.some(
+    (event) =>
+      event.kind === 'checkpoint.resolved' &&
+      (event.step_id as unknown as string) === stepId &&
+      event.attempt === requested.attempt,
+  );
+  if (alreadyResolved) {
+    throw new Error(`checkpoint resume rejected: checkpoint '${stepId}' is already resolved`);
+  }
+  if (!step.gate.allow.includes(input.selection)) {
+    throw new Error(
+      `checkpoint resume rejected: selection '${input.selection}' is not allowed for checkpoint '${stepId}'`,
+    );
+  }
+  const requestContext = readCheckpointRequestContext({
+    runRoot: input.runRoot,
+    step,
+    expectedRequestArtifactHash: requested.request_artifact_hash,
+  });
+  const existingBrief = readCheckpointBuildBrief({
+    runRoot: input.runRoot,
+    step,
+    requestContext,
+  });
+  return {
+    events,
+    stepId,
+    attempt: requested.attempt,
+    bootstrap,
+    requestContext,
+    ...(existingBrief === undefined ? {} : { existingBrief }),
+  };
+}
+
 // Narrow dogfood-run-0 loop. Walks routes from the single entry_mode;
 // for each step, appends the per-kind event trail; emits run.closed
 // after the pass route reaches a terminal label; writes result.json last.
@@ -1012,10 +1241,10 @@ export function writeSynthesisArtifact(input: SynthesisWriterInput): void {
 // (or an injected stub). The signature is a breaking change for external
 // callers — this is internal to Phase 1.5 / Phase 2 only (no external
 // users yet).
-export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResult> {
-  const { runRoot, workflow, workflowBytes, runId, goal, rigor, lane, now } = inv;
-  const dispatcher = await resolveDispatcher(inv);
-  const synthesisWriter = inv.synthesisWriter ?? writeSynthesisArtifact;
+async function executeDogfood(ctx: DogfoodExecutionContext): Promise<DogfoodRunResult> {
+  const { runRoot, workflow, workflowBytes, runId, goal, rigor, lane, now } = ctx;
+  const dispatcher = await resolveDispatcher(ctx);
+  const synthesisWriter = ctx.synthesisWriter ?? writeSynthesisArtifact;
 
   if (workflow.entry_modes.length === 0) {
     throw new Error(`runDogfood: workflow ${workflow.id} declares no entry_modes`);
@@ -1034,30 +1263,32 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
     run_id: runId,
     kind: 'run.bootstrapped',
     workflow_id: workflow.id as WorkflowId,
-    ...(inv.invocationId === undefined ? {} : { invocation_id: inv.invocationId }),
+    ...(ctx.invocationId === undefined ? {} : { invocation_id: ctx.invocationId }),
     rigor,
     goal,
     lane,
     manifest_hash: manifestHash,
   };
 
-  bootstrapRun({
-    runRoot,
-    manifest: {
-      run_id: runId,
-      workflow_id: workflow.id as WorkflowId,
-      captured_at: bootstrapTs,
-      bytes: workflowBytes,
-    },
-    bootstrapEvent,
-  });
-
-  const events: Event[] = [bootstrapEvent];
+  const events: Event[] =
+    ctx.initialEvents === undefined ? [bootstrapEvent] : [...ctx.initialEvents];
+  if (ctx.initialEvents === undefined) {
+    bootstrapRun({
+      runRoot,
+      manifest: {
+        run_id: runId,
+        workflow_id: workflow.id as WorkflowId,
+        captured_at: bootstrapTs,
+        bytes: workflowBytes,
+      },
+      bootstrapEvent,
+    });
+  }
   // Slice 47a Codex HIGH 2 fold-in — capture per-dispatch metadata
   // for AGENT_SMOKE / CODEX_SMOKE fingerprint binding to cli_version
   // without forcing a dispatch event schema bump.
   const dispatchResults: DispatchResultMetadata[] = [];
-  let sequence = 1;
+  let sequence = events.length;
   const recordedAt = () => now().toISOString();
   const push = (ev: Event): void => {
     events.push(ev);
@@ -1072,8 +1303,12 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
   // taken; the close-step still emits `run.closed` carrying the
   // aborted outcome and a reason that names the failing step).
   const stepsById = new Map(workflow.steps.map((s) => [s.id as unknown as string, s] as const));
-  const executedStepIds = new Set<string>();
-  let currentStepId: string | undefined = entry.start_at as unknown as string;
+  const executedStepIds = new Set(
+    events
+      .filter((event) => event.kind === 'step.completed')
+      .map((event) => event.step_id as unknown as string),
+  );
+  let currentStepId: string | undefined = ctx.startStepId ?? (entry.start_at as unknown as string);
   let runOutcome: RunClosedOutcome = 'complete';
   let closeReason: string | undefined;
 
@@ -1091,17 +1326,20 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
       break;
     }
     executedStepIds.add(currentStepId);
-    const attempt = 1;
+    const isResumedCheckpoint = ctx.resumeCheckpoint?.stepId === currentStepId;
+    const attempt = isResumedCheckpoint ? ctx.resumeCheckpoint.attempt : 1;
 
-    push({
-      schema_version: 1,
-      sequence,
-      recorded_at: recordedAt(),
-      run_id: runId,
-      kind: 'step.entered',
-      step_id: step.id,
-      attempt,
-    });
+    if (!isResumedCheckpoint) {
+      push({
+        schema_version: 1,
+        sequence,
+        recorded_at: recordedAt(),
+        run_id: runId,
+        kind: 'step.entered',
+        step_id: step.id,
+        attempt,
+      });
+    }
 
     if (step.kind === 'synthesis') {
       try {
@@ -1161,7 +1399,7 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
     } else if (step.kind === 'verification') {
       let verification: BuildVerification;
       try {
-        if (inv.projectRoot === undefined) {
+        if (ctx.projectRoot === undefined) {
           throw new Error(
             `verification step '${step.id}' requires DogfoodInvocation.projectRoot for project-relative cwd resolution`,
           );
@@ -1170,7 +1408,7 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
           runRoot,
           workflow,
           step,
-          projectRoot: inv.projectRoot,
+          projectRoot: ctx.projectRoot,
         });
       } catch (err) {
         if (isRunRelativePathError(err)) throw err;
@@ -1257,35 +1495,62 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
     } else if (step.kind === 'checkpoint') {
       try {
         const requestAbs = resolveRunRelative(runRoot, step.writes.request);
-        mkdirSync(dirname(requestAbs), { recursive: true });
-        writeFileSync(requestAbs, `${JSON.stringify(checkpointRequestBody(step), null, 2)}\n`);
-        writeCheckpointOwnedArtifact({ runRoot, step, goal });
-        push({
-          schema_version: 1,
-          sequence,
-          recorded_at: recordedAt(),
-          run_id: runId,
-          kind: 'checkpoint.requested',
-          step_id: step.id,
-          attempt,
-          options: checkpointChoiceIds(step),
-          request_path: step.writes.request,
-        });
-        if (step.writes.artifact !== undefined) {
+        if (!isResumedCheckpoint) {
+          writeCheckpointOwnedArtifact({ runRoot, step, goal });
+          const buildBriefSha256 =
+            step.writes.artifact?.schema === 'build.brief@v1'
+              ? sha256Hex(
+                  readFileSync(resolveRunRelative(runRoot, step.writes.artifact.path), 'utf8'),
+                )
+              : undefined;
+          const requestText = `${JSON.stringify(
+            checkpointRequestBody({
+              step,
+              ...(ctx.projectRoot === undefined ? {} : { projectRoot: ctx.projectRoot }),
+              selectionConfigLayers: ctx.selectionConfigLayers ?? [],
+              ...(buildBriefSha256 === undefined ? {} : { buildBriefSha256 }),
+            }),
+            null,
+            2,
+          )}\n`;
+          mkdirSync(dirname(requestAbs), { recursive: true });
+          writeFileSync(requestAbs, requestText);
           push({
             schema_version: 1,
             sequence,
             recorded_at: recordedAt(),
             run_id: runId,
-            kind: 'step.artifact_written',
+            kind: 'checkpoint.requested',
             step_id: step.id,
             attempt,
-            artifact_path: step.writes.artifact.path,
-            artifact_schema: step.writes.artifact.schema,
+            options: checkpointChoiceIds(step),
+            request_path: step.writes.request,
+            request_artifact_hash: sha256Hex(requestText),
           });
+          if (step.writes.artifact !== undefined) {
+            push({
+              schema_version: 1,
+              sequence,
+              recorded_at: recordedAt(),
+              run_id: runId,
+              kind: 'step.artifact_written',
+              step_id: step.id,
+              attempt,
+              artifact_path: step.writes.artifact.path,
+              artifact_schema: step.writes.artifact.schema,
+            });
+          }
         }
 
-        const resolution = resolveCheckpoint(step, rigor);
+        const resolution: CheckpointResolution =
+          isResumedCheckpoint && ctx.resumeCheckpoint !== undefined
+            ? {
+                kind: 'resolved',
+                selection: ctx.resumeCheckpoint.selection,
+                resolutionSource: 'operator',
+                autoResolved: false,
+              }
+            : resolveCheckpoint(step, rigor);
         if (resolution.kind === 'waiting') {
           const snapshot = writeDerivedSnapshot(runRoot);
           return {
@@ -1359,6 +1624,9 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
           step,
           goal,
           responsePath: step.writes.response,
+          ...(ctx.resumeCheckpoint?.existingBrief === undefined
+            ? {}
+            : { existingBrief: ctx.resumeCheckpoint.existingBrief }),
         });
         push({
           schema_version: 1,
@@ -1429,12 +1697,12 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
       }
     } else if (step.kind === 'dispatch') {
       const prompt = composeDispatchPrompt(step, runRoot);
-      const resolvedSelection = deriveResolvedSelection(inv, workflow, step);
+      const resolvedSelection = deriveResolvedSelection(ctx, workflow, step);
       const dispatchInput: DispatchInput = { prompt, resolvedSelection };
       if (step.budgets?.wall_clock_ms !== undefined) {
         dispatchInput.timeoutMs = step.budgets.wall_clock_ms;
       }
-      const resolvedFrom = deriveResolvedFrom(inv);
+      const resolvedFrom = deriveResolvedFrom(ctx);
       const requestAbs = resolveRunRelative(runRoot, step.writes.request);
       mkdirSync(dirname(requestAbs), { recursive: true });
       writeFileSync(requestAbs, prompt);
@@ -1735,6 +2003,65 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
     events,
     dispatchResults,
   };
+}
+
+export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResult> {
+  return executeDogfood(inv);
+}
+
+export async function resumeDogfoodCheckpoint(
+  inv: CheckpointResumeInvocation,
+): Promise<DogfoodRunResult> {
+  const manifest = verifyManifestSnapshotBytes(inv.runRoot);
+  const workflowBytes = Buffer.from(manifest.bytes_base64, 'base64');
+  const workflow = workflowFromManifestBytes(workflowBytes);
+  if (workflow.id !== manifest.workflow_id) {
+    throw new Error(
+      `checkpoint resume rejected: manifest workflow_id '${manifest.workflow_id as unknown as string}' does not match workflow bytes '${workflow.id as unknown as string}'`,
+    );
+  }
+  const waiting = findWaitingCheckpoint({
+    runRoot: inv.runRoot,
+    workflow,
+    selection: inv.selection,
+  });
+  if (waiting.bootstrap.run_id !== manifest.run_id) {
+    throw new Error('checkpoint resume rejected: manifest run_id differs from event log');
+  }
+  if (waiting.bootstrap.workflow_id !== manifest.workflow_id) {
+    throw new Error('checkpoint resume rejected: manifest workflow_id differs from event log');
+  }
+  if (waiting.bootstrap.manifest_hash !== manifest.hash) {
+    throw new Error('checkpoint resume rejected: manifest hash differs from event log');
+  }
+
+  return executeDogfood({
+    runRoot: inv.runRoot,
+    workflow,
+    workflowBytes,
+    runId: waiting.bootstrap.run_id,
+    goal: waiting.bootstrap.goal,
+    rigor: waiting.bootstrap.rigor,
+    lane: waiting.bootstrap.lane,
+    now: inv.now,
+    ...(inv.dispatcher === undefined ? {} : { dispatcher: inv.dispatcher }),
+    ...(inv.synthesisWriter === undefined ? {} : { synthesisWriter: inv.synthesisWriter }),
+    selectionConfigLayers: waiting.requestContext.selectionConfigLayers,
+    ...(waiting.requestContext.projectRoot !== undefined
+      ? { projectRoot: waiting.requestContext.projectRoot }
+      : {}),
+    ...(waiting.bootstrap.invocation_id === undefined
+      ? {}
+      : { invocationId: waiting.bootstrap.invocation_id }),
+    initialEvents: waiting.events,
+    startStepId: waiting.stepId,
+    resumeCheckpoint: {
+      stepId: waiting.stepId,
+      attempt: waiting.attempt,
+      selection: inv.selection,
+      ...(waiting.existingBrief === undefined ? {} : { existingBrief: waiting.existingBrief }),
+    },
+  });
 }
 
 function buildSummary(input: {

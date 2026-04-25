@@ -10,7 +10,12 @@ import { Workflow } from '../schemas/workflow.js';
 import { discoverConfigLayers } from '../runtime/config-loader.js';
 import { validateWorkflowKindPolicy } from '../runtime/policy/workflow-kind-policy.js';
 import { classifyWorkflowTask } from '../runtime/router.js';
-import { type DispatchFn, type DogfoodInvocation, runDogfood } from '../runtime/runner.js';
+import {
+  type DispatchFn,
+  type DogfoodInvocation,
+  resumeDogfoodCheckpoint,
+  runDogfood,
+} from '../runtime/runner.js';
 
 // Runtime CLI entrypoint (grown from the Slice 27d dogfood proof and now
 // exposed through src/cli/circuit.ts + ./bin/circuit-next). Loads the named workflow fixture at
@@ -38,11 +43,14 @@ import { type DispatchFn, type DogfoodInvocation, runDogfood } from '../runtime/
 const DEFAULT_RUNS_BASE = '.circuit-next/runs';
 
 interface ParsedArgs {
+  command?: 'resume';
   workflowName?: string;
-  goal: string;
+  goal?: string;
   rigor: Rigor;
+  rigorProvided: boolean;
   runRoot?: string;
   fixturePath?: string;
+  checkpointChoice?: string;
 }
 
 interface ResolvedWorkflowRoute {
@@ -63,6 +71,7 @@ export interface CliMainOptions {
 function usage(): string {
   return [
     'usage: circuit-next [workflow-name] --goal "<goal>" [--rigor <lite|standard|deep|tournament|autonomous>] [--run-root <path>] [--fixture <path>]',
+    '       circuit-next resume --run-root <path> --checkpoint-choice <choice>',
     '',
     'With an explicit workflow name, loads .claude-plugin/skills/<name>/circuit.json. Without one, classifies the free-form goal across the registered explore/review workflows and then composes the runtime boundary against the real `dispatchAgent`.',
     '',
@@ -75,10 +84,13 @@ function usage(): string {
 function parseArgs(argv: readonly string[]): ParsedArgs {
   // Positional: first non-flag token is the workflow name.
   let workflowName: string | undefined;
+  let command: 'resume' | undefined;
   let goal: string | undefined;
   let rigor: Rigor | undefined;
+  let rigorProvided = false;
   let runRoot: string | undefined;
   let fixturePath: string | undefined;
+  let checkpointChoice: string | undefined;
 
   for (let i = 0; i < argv.length; i++) {
     const tok = argv[i];
@@ -94,6 +106,7 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
       const next = argv[i + 1];
       if (next === undefined) throw new Error('--rigor requires a value');
       rigor = Rigor.parse(next);
+      rigorProvided = true;
       i += 1;
       continue;
     }
@@ -108,6 +121,13 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
       const next = argv[i + 1];
       if (next === undefined) throw new Error('--fixture requires a value');
       fixturePath = next;
+      i += 1;
+      continue;
+    }
+    if (tok === '--checkpoint-choice') {
+      const next = argv[i + 1];
+      if (next === undefined) throw new Error('--checkpoint-choice requires a value');
+      checkpointChoice = next;
       i += 1;
       continue;
     }
@@ -128,6 +148,10 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
     if (tok.startsWith('--')) {
       throw new Error(`unknown flag: ${tok}`);
     }
+    if (tok === 'resume' && workflowName === undefined && command === undefined) {
+      command = 'resume';
+      continue;
+    }
     if (workflowName === undefined) {
       workflowName = tok;
       continue;
@@ -135,17 +159,40 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
     throw new Error(`unexpected positional argument: ${tok}`);
   }
 
-  if (goal === undefined || goal.length === 0) {
+  if (command === 'resume' || checkpointChoice !== undefined) {
+    if (command !== 'resume') {
+      throw new Error('checkpoint resume must use the `resume` subcommand');
+    }
+    if (runRoot === undefined) throw new Error('--run-root is required for checkpoint resume');
+    if (checkpointChoice === undefined || checkpointChoice.length === 0) {
+      throw new Error('--checkpoint-choice is required for checkpoint resume');
+    }
+    if (workflowName !== undefined) {
+      throw new Error('checkpoint resume loads the saved workflow manifest; omit workflow-name');
+    }
+    if (goal !== undefined) {
+      throw new Error('checkpoint resume reuses the saved run goal; omit --goal');
+    }
+    if (fixturePath !== undefined) {
+      throw new Error('checkpoint resume loads the saved workflow manifest; omit --fixture');
+    }
+    if (rigorProvided) {
+      throw new Error('checkpoint resume reuses the saved run rigor; omit --rigor');
+    }
+  } else if (goal === undefined || goal.length === 0) {
     throw new Error('--goal is required and must be non-empty');
   }
 
   const result: ParsedArgs = {
-    goal,
     rigor: rigor ?? Rigor.parse('standard'),
+    rigorProvided,
   };
+  if (command !== undefined) result.command = command;
+  if (goal !== undefined) result.goal = goal;
   if (workflowName !== undefined) result.workflowName = workflowName;
   if (runRoot !== undefined) result.runRoot = runRoot;
   if (fixturePath !== undefined) result.fixturePath = fixturePath;
+  if (checkpointChoice !== undefined) result.checkpointChoice = checkpointChoice;
   return result;
 }
 
@@ -161,6 +208,9 @@ function resolveWorkflowRoute(args: ParsedArgs): ResolvedWorkflowRoute {
       source: 'explicit',
       reason: 'explicit workflow positional argument',
     };
+  }
+  if (args.goal === undefined) {
+    throw new Error('--goal is required when not resuming a checkpoint');
   }
   return classifyWorkflowTask(args.goal);
 }
@@ -199,6 +249,46 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
   } catch (err) {
     process.stderr.write(`error: ${(err as Error).message}\n`);
     return 2;
+  }
+
+  if (
+    args.command === 'resume' &&
+    args.runRoot !== undefined &&
+    args.checkpointChoice !== undefined
+  ) {
+    const runRoot = resolve(args.runRoot);
+    const selectionConfigLayers = discoverConfigLayers({
+      ...(options.configHomeDir !== undefined ? { homeDir: options.configHomeDir } : {}),
+      ...(options.configCwd !== undefined ? { cwd: options.configCwd } : {}),
+    });
+    const outcome = await resumeDogfoodCheckpoint({
+      runRoot,
+      selection: args.checkpointChoice,
+      projectRoot: resolve(options.configCwd ?? process.cwd()),
+      now: options.now ?? (() => new Date()),
+      ...(options.dispatcher === undefined ? {} : { dispatcher: options.dispatcher }),
+      ...(selectionConfigLayers.length === 0 ? {} : { selectionConfigLayers }),
+    });
+    process.stdout.write(
+      `${JSON.stringify(
+        {
+          schema_version: 1,
+          run_id: outcome.result.run_id,
+          workflow_id: outcome.result.workflow_id,
+          run_root: outcome.runRoot,
+          outcome: outcome.result.outcome,
+          events_observed: outcome.result.events_observed,
+          result_path: `${outcome.runRoot}/artifacts/result.json`,
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    return 0;
+  }
+
+  if (args.goal === undefined) {
+    throw new Error('internal error: --goal missing outside checkpoint resume mode');
   }
 
   const route = resolveWorkflowRoute(args);

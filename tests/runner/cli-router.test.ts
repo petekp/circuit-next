@@ -80,6 +80,27 @@ async function runMainJson(
   return parsed as Record<string, unknown>;
 }
 
+async function runMainExit(argv: readonly string[]): Promise<{ exit: number; stderr: string }> {
+  let stderr = '';
+  const origWrite = process.stderr.write;
+  process.stderr.write = ((chunk: string | Uint8Array): boolean => {
+    stderr += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+    return true;
+  }) as typeof process.stderr.write;
+  try {
+    const exit = await main(argv, {
+      dispatcher: dispatcherWithBody('{"verdict":"accept"}'),
+      now: deterministicNow(Date.UTC(2026, 3, 24, 15, 0, 0)),
+      runId: '84000000-0000-0000-0000-000000000099',
+      configHomeDir: join(runRootBase, 'empty-home'),
+      configCwd: join(runRootBase, 'empty-cwd'),
+    });
+    return { exit, stderr };
+  } finally {
+    process.stderr.write = origWrite;
+  }
+}
+
 let runRootBase: string;
 
 beforeEach(() => {
@@ -262,5 +283,135 @@ describe('P2.8 CLI router', () => {
       step_id: 'frame-step',
       allowed_choices: ['continue'],
     });
+  });
+
+  it('resumes a checkpoint_waiting run from the saved manifest and operator choice', async () => {
+    const fixtureDir = join(runRootBase, 'resume-fixture');
+    mkdirSync(fixtureDir, { recursive: true });
+    const fixturePath = join(fixtureDir, 'circuit.json');
+    writeFileSync(
+      fixturePath,
+      JSON.stringify({
+        schema_version: '2',
+        id: 'build-checkpoint-cli-resume-test',
+        version: '0.1.0',
+        purpose: 'test CLI checkpoint resume',
+        entry: { signals: { include: [], exclude: [] }, intent_prefixes: [] },
+        entry_modes: [
+          {
+            name: 'default',
+            start_at: 'frame-step',
+            rigor: 'standard',
+            description: 'test entry mode',
+          },
+        ],
+        phases: [
+          {
+            id: 'frame-phase',
+            title: 'Frame',
+            canonical: 'frame',
+            steps: ['frame-step'],
+          },
+        ],
+        spine_policy: {
+          mode: 'partial',
+          omits: ['analyze', 'plan', 'act', 'verify', 'review', 'close'],
+          rationale: 'test-only checkpoint resume.',
+        },
+        steps: [
+          {
+            id: 'frame-step',
+            title: 'Frame',
+            protocol: 'build-frame@v1',
+            reads: [],
+            routes: { pass: '@complete' },
+            executor: 'orchestrator',
+            kind: 'checkpoint',
+            policy: {
+              prompt: 'Frame',
+              choices: [{ id: 'continue' }, { id: 'revise' }],
+              safe_default_choice: 'continue',
+              build_brief: {
+                scope: 'CLI resume test',
+                success_criteria: ['Resume closes the run'],
+                verification_command_candidates: [
+                  {
+                    id: 'verify',
+                    cwd: '.',
+                    argv: [process.execPath, '-e', "process.stdout.write('ok')"],
+                    timeout_ms: 1_000,
+                    max_output_bytes: 20_000,
+                    env: {},
+                  },
+                ],
+              },
+            },
+            writes: {
+              request: 'artifacts/checkpoints/frame-step-request.json',
+              response: 'artifacts/checkpoints/frame-step-response.json',
+              artifact: { path: 'artifacts/build/brief.json', schema: 'build.brief@v1' },
+            },
+            gate: {
+              kind: 'checkpoint_selection',
+              source: { kind: 'checkpoint_response', ref: 'response' },
+              allow: ['continue', 'revise'],
+            },
+          },
+        ],
+      }),
+    );
+    const runRoot = join(runRootBase, 'checkpoint-resume');
+
+    const waiting = await runMainJson(
+      [
+        'build-checkpoint-cli-resume-test',
+        '--goal',
+        'Frame and resume via CLI',
+        '--rigor',
+        'deep',
+        '--fixture',
+        fixturePath,
+        '--run-root',
+        runRoot,
+      ],
+      '{"verdict":"accept"}',
+    );
+    expect(waiting.outcome).toBe('checkpoint_waiting');
+
+    const resumed = await runMainJson(
+      ['resume', '--run-root', runRoot, '--checkpoint-choice', 'continue'],
+      '{"verdict":"accept"}',
+    );
+
+    expect(resumed.schema_version).toBe(1);
+    expect(resumed.outcome).toBe('complete');
+    expect(resumed.run_root).toBe(runRoot);
+    expect(resumed).toHaveProperty('result_path');
+  });
+
+  it('rejects resume-only incompatible flags', async () => {
+    const withRigor = await runMainExit([
+      'resume',
+      '--run-root',
+      join(runRootBase, 'not-needed'),
+      '--checkpoint-choice',
+      'continue',
+      '--rigor',
+      'deep',
+    ]);
+    expect(withRigor.exit).toBe(2);
+    expect(withRigor.stderr).toMatch(/omit --rigor/);
+
+    const withFixture = await runMainExit([
+      'resume',
+      '--run-root',
+      join(runRootBase, 'not-needed'),
+      '--checkpoint-choice',
+      'continue',
+      '--fixture',
+      join(runRootBase, 'fixture.json'),
+    ]);
+    expect(withFixture.exit).toBe(2);
+    expect(withFixture.stderr).toMatch(/omit --fixture/);
   });
 });
