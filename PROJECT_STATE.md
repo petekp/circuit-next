@@ -1,4 +1,4 @@
-<!-- current_slice: 153 -->
+<!-- current_slice: 154 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -10,7 +10,7 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 153
+- **current_slice:** 154
 - **current_arc:** Build workflow parity is now closed. The implementation has the policy
   shape, typed Build artifact contracts/schemas, registered runtime synthesis
   writers for `build.plan@v1` and `build.result@v1`, and a focused
@@ -116,6 +116,12 @@ context and phase-open provenance.
   `mode_override_outcomes` arrays on each projected item. Both were derivable
   from the per-outcome `routes` field added in slice 150, so the projection
   layer no longer carries the same information twice.
+  Slice 154 lands `specs/plans/compiled-recipe-runtime-bridge.md` at
+  challenger-pending, opening a Heavy three-implementation-slice arc that
+  connects `compileWorkflowRecipeDraft` to the runtime `Workflow` shape via a
+  typed materializer, an opt-in compile path through the runner, and a live
+  Fix execution proof; an arc-close composition review covers the privileged
+  runtime change.
 - **current_phase:** Phase 2 — Implementation (closed for the first working workflow; broader parity expansion planning next)
 
 Chronicle (relocated narrative history — non-authoritative; see
