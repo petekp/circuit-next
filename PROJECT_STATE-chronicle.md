@@ -12,6 +12,13 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 117 BUILD ARTIFACT CONTRACTS** (this commit, Ratchet-Advance) -
+  added the typed JSON schemas and authority rows for the six Build outputs.
+  Build role artifacts are registered under `artifacts/build/`, and the Build
+  close artifact is `artifacts/build-result.json` so it does not collide with
+  the universal `artifacts/result.json`. The real Build workflow fixture and
+  runtime writers have not landed yet.
+
 - **Slice 116 BUILD POLICY SHAPE** (this commit, Ratchet-Advance) - opened
   Build implementation by adding Build to the shared workflow-kind policy. The
   policy now says Build has frame, plan, act, verify, review, and close phases,
