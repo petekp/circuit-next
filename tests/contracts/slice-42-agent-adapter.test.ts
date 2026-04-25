@@ -11,6 +11,7 @@ import {
   extractImportSpecifiers,
 } from '../../scripts/audit.mjs';
 import {
+  AGENT_ALLOWED_PASSIVE_TOOLS,
   AGENT_CLAUDE_EXECUTABLE,
   AGENT_NO_WRITE_FLAGS,
   AGENT_SUPPORTED_EFFORTS,
@@ -58,7 +59,7 @@ describe('Slice 42 (A) — src/runtime/adapters/agent.ts module shape', () => {
     // These flags together are the subprocess-level mechanism per
     // ADR-0009 §2.v. If any one is removed, the capability-boundary
     // claim weakens and ADR-0009 §6 reopen trigger 5 potentially fires.
-    //   --tools "" : zeroes built-in tools.
+    //   --tools "" : zeroes built-in write-capable tools.
     //   --strict-mcp-config : no MCP tool paths.
     //   --disable-slash-commands : no skills can re-introduce tools.
     //   --setting-sources "" : no user/project/local settings (no hooks).
@@ -225,10 +226,21 @@ describe('Slice 42 (A) — src/runtime/adapters/agent.ts module shape', () => {
 
   // --- Capability-boundary runtime assertion (HIGH 2 fold-in) -------------
 
-  it('parseAgentStdout fails closed when init.tools is non-empty (HIGH 2 runtime binding)', () => {
+  it('declares the only passive tool currently admitted from Claude init output', () => {
+    expect([...AGENT_ALLOWED_PASSIVE_TOOLS]).toEqual(['PushNotification']);
+  });
+
+  it('parseAgentStdout admits the passive PushNotification tool reported by Claude Code 2.1.119', () => {
+    const stdout = ndjson({ tools: ['PushNotification'], claude_code_version: '2.1.119' }, {});
+    const parsed = parseAgentStdout(stdout, 'p', 0);
+    expect(parsed.result_body).toBe('final response body');
+    expect(parsed.cli_version).toBe('2.1.119');
+  });
+
+  it('parseAgentStdout fails closed when init.tools contains a write-capable tool (HIGH 2 runtime binding)', () => {
     const stdout = ndjson({ tools: ['Write'] }, {});
     expect(() => parseAgentStdout(stdout, 'p', 0)).toThrow(
-      /capability-boundary violation: init\.tools must be \[\]/,
+      /capability-boundary violation: init\.tools contains non-allowlisted tool/,
     );
   });
 

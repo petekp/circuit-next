@@ -1413,3 +1413,22 @@ proof were in place.
 
 Verification: focused router/command tests passed, full `npm run verify`
 passed, and the final Codex challenger returned ACCEPT.
+
+## Slice 125 — Live Build proof and Claude CLI drift fold-in
+
+Slice 125 ran the direct Build command for real:
+`./bin/circuit-next build ... --entry-mode lite`. The first attempt reached
+Build but stopped at the implementation dispatch because Claude Code 2.1.119
+now reports a passive `PushNotification` tool even when normal tools are
+disabled.
+
+The adapter now allows only that passive notification tool and still rejects
+unknown tools, write-capable tools, MCP servers, and slash commands. After that
+fold-in, the live Build run completed, including implementation dispatch,
+verification, review dispatch, and close. It wrote all six Build artifacts and
+`artifacts/build-result.json` parsed through the Build result schema.
+
+Verification: focused adapter tests passed, the live Build proof completed,
+all six Build artifacts schema-validated, full `npm run verify` passed, and
+the Codex challenger returned ACCEPT. The Build arc still needs its close
+composition review and plan-close update before the plan is marked closed.

@@ -21,17 +21,18 @@ export { sha256Hex };
 // ships with NO repo-write tool capability at v0. Enforcement is
 // two-layered:
 //   (a) Flag combo (AGENT_NO_WRITE_FLAGS below) configures the subprocess
-//       to emit an init event reporting empty tool / MCP / slash-command
-//       surfaces.
+//       to emit an init event reporting no write-capable tool surface, plus
+//       empty MCP / slash-command surfaces.
 //   (b) parseAgentStdout() is fail-closed: the subprocess's init event
-//       must report `tools: []`, `mcp_servers: []`, `slash_commands: []`
-//       at every dispatch. A future flag regression that silently widens
-//       any of those three surfaces is caught by the parse-time assertion
-//       before the adapter result reaches any downstream event-writer.
+//       must report only allowlisted passive tools, with
+//       `mcp_servers: []` and `slash_commands: []`, at every dispatch. A
+//       future flag regression that silently widens any of those surfaces is
+//       caught by the parse-time assertion before the adapter result reaches
+//       any downstream event-writer.
 // Each flag in AGENT_NO_WRITE_FLAGS is load-bearing:
-//   --tools ""             — zeroes the built-in tool surface (Write, Edit,
-//                            Bash, MultiEdit, NotebookEdit, Read, Grep, Glob,
-//                            WebFetch, etc. all removed).
+//   --tools ""             — zeroes the built-in write-capable tool surface
+//                            (Write, Edit, Bash, MultiEdit, NotebookEdit,
+//                            Read, Grep, Glob, WebFetch, etc. all removed).
 //   --strict-mcp-config    — empty MCP server list; no remote-write paths
 //                            via MCP (Gmail, Notion, Slack, etc. all removed).
 //   --disable-slash-commands — zero skill/slash surface; no skill can
@@ -82,6 +83,11 @@ export const AGENT_NO_WRITE_FLAGS = [
   '--verbose',
   '--no-session-persistence',
 ] as const;
+
+// Claude Code 2.1.119 reports PushNotification even with `--tools ""`.
+// This is not a repo-write capability, so it is admitted narrowly while every
+// unknown or write-capable tool name remains fail-closed.
+export const AGENT_ALLOWED_PASSIVE_TOOLS = ['PushNotification'] as const;
 
 export const AGENT_CLAUDE_EXECUTABLE = 'claude';
 export const AGENT_SUPPORTED_EFFORTS = ['low', 'medium', 'high', 'xhigh'] as const;
@@ -284,11 +290,12 @@ export async function dispatchAgent(input: AgentDispatchInput): Promise<Dispatch
 //   - the `{type:'system', subtype:'init'}` event (for session_id + the
 //     tool-surface assertion);
 //   - the terminal `{type:'result'}` event (for the text result).
-// Fail-closed contract (Codex Slice 42 HIGH 2 runtime-binding fold-in):
-// the init event MUST report `tools: []`, `mcp_servers: []`,
-// `slash_commands: []`. If any of those three arrays is non-empty at
-// parse time, the dispatch is rejected — the capability-boundary claim
-// is bound at every runtime call, not just at test time.
+// Fail-closed contract (Codex Slice 42 HIGH 2 runtime-binding fold-in, updated
+// by Slice 125 for Claude Code 2.1.119's passive PushNotification surface):
+// the init event MUST report only allowlisted passive tools, and MUST report
+// `mcp_servers: []`, `slash_commands: []`. If a write-capable or unknown tool
+// appears at parse time, the dispatch is rejected — the capability-boundary
+// claim is bound at every runtime call, not just at test time.
 export function parseAgentStdout(
   stdout: string,
   prompt: string,
@@ -336,16 +343,26 @@ export function parseAgentStdout(
 
   // --- Capability-boundary runtime assertion (HIGH 2 fold-in) -----------
   // The init event enumerates every tool/MCP/slash surface available to
-  // the subprocess. If any of these three arrays is non-empty, a
-  // write-capable tool path MIGHT have been available to the dispatch —
-  // the ADR-0009 §2.v capability-boundary claim is violated at runtime,
-  // regardless of whether any tool was actually invoked. Fail closed.
+  // the subprocess. Any unknown tool path MIGHT be write-capable, so the
+  // ADR-0009 §2.v capability-boundary claim is violated at runtime unless
+  // the tool is in the narrow passive allowlist. MCP and slash-command
+  // surfaces must remain empty because they can reintroduce arbitrary
+  // write paths. Fail closed.
   const tools = initEvent.tools;
   const mcpServers = initEvent.mcp_servers;
   const slashCommands = initEvent.slash_commands;
-  if (!Array.isArray(tools) || tools.length !== 0) {
+  if (!Array.isArray(tools)) {
     throw new Error(
-      `capability-boundary violation: init.tools must be []; got ${JSON.stringify(tools)}. ADR-0009 §2.v + Slice 41 Codex HIGH 4 require zero tool surface. Check AGENT_NO_WRITE_FLAGS.`,
+      `capability-boundary violation: init.tools must be an array containing only passive allowlisted tools; got ${JSON.stringify(tools)}. ADR-0009 §2.v + Slice 41 Codex HIGH 4 require no repo-write tool surface. Check AGENT_NO_WRITE_FLAGS.`,
+    );
+  }
+  const allowedTools = new Set<string>(AGENT_ALLOWED_PASSIVE_TOOLS);
+  const disallowedTools = tools.filter(
+    (tool) => typeof tool !== 'string' || !allowedTools.has(tool),
+  );
+  if (disallowedTools.length > 0) {
+    throw new Error(
+      `capability-boundary violation: init.tools contains non-allowlisted tool(s) ${JSON.stringify(disallowedTools)}; full tools=${JSON.stringify(tools)}. ADR-0009 §2.v + Slice 41 Codex HIGH 4 require no repo-write tool surface. Check AGENT_NO_WRITE_FLAGS.`,
     );
   }
   if (!Array.isArray(mcpServers) || mcpServers.length !== 0) {
