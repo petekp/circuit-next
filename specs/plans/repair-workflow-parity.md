@@ -1,11 +1,13 @@
 ---
 plan: repair-workflow-parity
-status: challenger-pending
-revision: 02
+status: challenger-cleared
+revision: 03
 opened_at: 2026-04-24
 opened_in_session: post-repair-reference-characterization
 revised_at: 2026-04-24
-revised_in_session: repair-workflow-parity-codex-challenger-01-foldin
+revised_in_session: repair-workflow-parity-codex-challenger-02-foldin
+cleared_at: 2026-04-24
+cleared_in_session: repair-workflow-parity-codex-challenger-02
 base_commit: 8143851
 target: repair
 authority:
@@ -32,6 +34,10 @@ prior_challenger_passes:
     1 MED; revision 02 folds all three by expanding the checkpoint,
     resume, selection, Lite-route, optional-review close, and command
     audit-surface budgets)
+  - specs/reviews/repair-workflow-parity-codex-challenger-02.md
+    (verdict ACCEPT-WITH-FOLD-INS vs revision 02 — 1 MED wording fix;
+    revision 03 folds it by pointing command registration to
+    `commands/repair.md` rather than the plugin manifest)
 ---
 
 # Repair Workflow Parity Plan
@@ -48,15 +54,18 @@ structured JSON artifact direction.
 
 ## §0 — Prior pass log
 
-Revision 02 folds the first Codex challenger pass. The plan remains
-`challenger-pending` until a fresh accept-class challenger pass reviews the
-folded revision.
+Revision 02 folded the first Codex challenger pass. Revision 03 folds the
+second Codex challenger pass and reaches `challenger-cleared`.
 
 | Pass-01 # | Severity | Objection | Revision-02 fold-in |
 |---|---|---|---|
 | 1 | HIGH | The plan understated how deeply Build-specific the checkpoint, resume, and execution-rigor dispatch-selection path still is. | §7 and Work item 3 now explicitly budget checkpoint policy payload widening beyond `policy.build_brief`, artifact-neutral checkpoint request/resume context, Repair brief hash validation, and Repair execution-rigor dispatch-selection binding. |
 | 2 | HIGH | Lite review skip was named as behavior but no slice owned the route and close mechanics. | New Work item 4 owns mode-aware Verify routing, conditional Close consumption when `repair.review` is absent, and `repair.result` pointer/cardinality rules for review-present versus Lite-skipped runs. |
 | 3 | MED | The public-command work omitted the hardcoded plugin command-closure audit update needed to admit `commands/repair.md`. | Work item 7 now explicitly updates `checkPluginCommandClosure`, plugin-surface tests, and the plugin-surface description to the five-command set. |
+
+| Pass-02 # | Severity | Objection | Revision-03 fold-in |
+|---|---|---|---|
+| 1 | MED | Work item 7 said to register `/circuit:repair` in the plugin manifest, but this repo derives slash commands from `commands/*.md`; the manifest is only descriptive and must not gain a rejected `commands` array. | Work item 7 now says command registration happens by adding `commands/repair.md`; `.claude-plugin/plugin.json` is updated only where descriptive text must stay honest about the wired command set. |
 
 ## §1 — Evidence census
 
@@ -496,8 +505,11 @@ users still cannot invoke it through the plugin command surface.
 
 **Deliverables:**
 
-- Add `commands/repair.md` and register `/circuit:repair` in the plugin
-  manifest.
+- Add `commands/repair.md`; that root command file is the registration surface
+  for `/circuit:repair`.
+- Update `.claude-plugin/plugin.json` only where descriptive text must stay
+  honest about the now-wired command set; do not add a rejected
+  `manifest.commands` array.
 - Update `checkPluginCommandClosure`, plugin-surface tests, and the
   plugin-surface description so the expected public command set is
   run/explore/review/build/repair.

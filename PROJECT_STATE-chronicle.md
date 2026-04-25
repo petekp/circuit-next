@@ -1479,3 +1479,20 @@ artifacts before the real Repair fixture lands.
 Verification: `npm run plan:lint -- specs/plans/repair-workflow-parity.md`
 passed before the plan was promoted to challenger-pending. The next step is the
 required Codex challenger review and fold-ins before runtime implementation.
+
+## Slice 129 — Repair plan challenger clearance
+
+Slice 129 folded the second Repair-plan Codex challenger pass. The first pass
+found real holes in the plan around Build-specific checkpoint wiring, Lite's
+no-review path, and command-surface audit coverage; those were already folded
+into revision 02. The second pass confirmed those were fixed and found one
+remaining wording issue: command registration belongs in `commands/repair.md`,
+not in the plugin manifest.
+
+The plan now says the Repair command file is the registration surface and the
+plugin manifest should only get descriptive text updates. With that correction,
+the Repair plan is challenger-cleared. Runtime implementation still waits for
+operator signoff.
+
+Verification: plan lint passed in authoring and committed contexts, and full
+verification ran before commit.
