@@ -12,6 +12,12 @@ record.*
 
 ## Methodology And Recipe Pivot (opened after Slice 132)
 
+- **Slice 144 RECIPE INPUT SETS** (this commit, Ratchet-Advance) - made recipe
+  assembly checks confirm that each recipe item supplies the inputs accepted by
+  its chosen reusable move. Act now has two valid input shapes: brief plus
+  diagnosis, or brief plus plan, so Fix can skip a separate Plan move without
+  weakening recipe validation.
+
 - **Slice 143 TWO-MODE HARDENING** (this commit, Ratchet-Advance) - kept the
   Light/Heavy methodology instead of adding Green/Yellow/Red. Routine Light
   work now uses a small task packet plus failure-mode and acceptance-evidence

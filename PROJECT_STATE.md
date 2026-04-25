@@ -1,4 +1,4 @@
-<!-- current_slice: 143 -->
+<!-- current_slice: 144 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -10,7 +10,7 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 143
+- **current_slice:** 144
 - **current_arc:** Build workflow parity is now closed. The implementation has the policy
   shape, typed Build artifact contracts/schemas, registered runtime synthesis
   writers for `build.plan@v1` and `build.result@v1`, and a focused
@@ -84,7 +84,10 @@ context and phase-open provenance.
   the two-mode methodology hardening plan: routine Light work now uses a small
   task packet plus failure-mode and acceptance-evidence framing, while Heavy
   work and unclear Light work still carry the extra why-this-path framing and
-  challenger review discipline.
+  challenger review discipline. Slice 144 strengthens recipe assembly checks:
+  each recipe item must now provide inputs accepted by its chosen reusable
+  move, including alternate input sets such as Act from a diagnosis or from a
+  plan.
 - **current_phase:** Phase 2 — Implementation (closed for the first working workflow; broader parity expansion planning next)
 
 Chronicle (relocated narrative history — non-authoritative; see

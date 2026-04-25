@@ -60,6 +60,24 @@ export const WorkflowPrimitiveContractRef = z
   .regex(/^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)+@v[0-9]+$/);
 export type WorkflowPrimitiveContractRef = z.infer<typeof WorkflowPrimitiveContractRef>;
 
+export const WorkflowPrimitiveInputContractSet = z
+  .array(WorkflowPrimitiveContractRef)
+  .min(1)
+  .superRefine((contracts, ctx) => {
+    const seen = new Set<string>();
+    for (const [index, contract] of contracts.entries()) {
+      if (seen.has(contract)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [index],
+          message: `duplicate input contract: ${contract}`,
+        });
+      }
+      seen.add(contract);
+    }
+  });
+export type WorkflowPrimitiveInputContractSet = z.infer<typeof WorkflowPrimitiveInputContractSet>;
+
 const nonEmptyUniqueStrings = z
   .array(z.string().min(1))
   .min(1)
@@ -91,7 +109,8 @@ export const WorkflowPrimitive = z
     id: WorkflowPrimitiveId,
     title: z.string().min(1),
     purpose: z.string().min(1),
-    input_contracts: z.array(WorkflowPrimitiveContractRef).min(1),
+    input_contracts: WorkflowPrimitiveInputContractSet,
+    alternative_input_contracts: z.array(WorkflowPrimitiveInputContractSet).default([]),
     output_contract: WorkflowPrimitiveContractRef,
     action_surface: WorkflowPrimitiveActionSurface,
     produces_evidence: nonEmptyUniqueStrings,

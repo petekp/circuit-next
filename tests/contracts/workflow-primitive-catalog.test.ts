@@ -69,6 +69,34 @@ describe('workflow primitive catalog', () => {
     }
   });
 
+  it('models Act as accepting either diagnosis-based or plan-based input', () => {
+    const act = parseCatalog().primitives.find((primitive) => primitive.id === 'act');
+    expect(act).toBeDefined();
+    if (act === undefined) throw new Error('act primitive missing');
+    expect(act.input_contracts).toEqual(['workflow.brief@v1', 'diagnosis.result@v1']);
+    expect(act.alternative_input_contracts).toEqual([
+      ['workflow.brief@v1', 'plan.strategy@v1'],
+      ['workflow.brief@v1', 'plan.strategy@v1', 'diagnosis.result@v1'],
+    ]);
+  });
+
+  it('rejects duplicate contracts inside a primitive input set', () => {
+    const raw = readCatalog() as {
+      primitives: Array<{
+        id: string;
+        input_contracts?: string[];
+      }>;
+    };
+    const act = raw.primitives.find((primitive) => primitive.id === 'act');
+    if (act === undefined) throw new Error('act primitive missing');
+    act.input_contracts = ['workflow.brief@v1', 'workflow.brief@v1'];
+    const result = WorkflowPrimitiveCatalog.safeParse(raw);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.message).toMatch(/duplicate input contract/);
+    }
+  });
+
   it('pins human decision as a host-mapped, mode-aware primitive', () => {
     const humanDecision = parseCatalog().primitives.find(
       (primitive) => primitive.id === 'human-decision',

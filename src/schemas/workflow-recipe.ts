@@ -10,6 +10,7 @@ import {
   type WorkflowPrimitiveId as WorkflowPrimitiveIdValue,
   WorkflowPrimitiveRoute,
   type WorkflowPrimitiveRoute as WorkflowPrimitiveRouteValue,
+  type WorkflowPrimitive as WorkflowPrimitiveValue,
 } from './workflow-primitives.js';
 
 export const WorkflowRecipeStatus = z.enum(['candidate', 'active', 'deprecated']);
@@ -143,6 +144,27 @@ function contractIsCompatible(
   return aliases.some((alias) => alias.generic === expected && alias.actual === actual);
 }
 
+function primitiveAcceptedInputSets(
+  primitive: WorkflowPrimitiveValue,
+): readonly (readonly WorkflowPrimitiveContractRefValue[])[] {
+  return [primitive.input_contracts, ...primitive.alternative_input_contracts];
+}
+
+function recipeItemSatisfiesInputSet(
+  item: WorkflowRecipeItem,
+  expectedContracts: readonly WorkflowPrimitiveContractRefValue[],
+  aliases: readonly WorkflowRecipeContractAlias[],
+): boolean {
+  const actualContracts = Object.values(item.input);
+  return expectedContracts.every((expected) =>
+    actualContracts.some((actual) => contractIsCompatible(expected, actual, aliases)),
+  );
+}
+
+function formatContractSet(contracts: readonly WorkflowPrimitiveContractRefValue[]): string {
+  return `[${contracts.join(', ')}]`;
+}
+
 function isTerminalTarget(
   target: WorkflowRecipeRouteTarget,
 ): target is WorkflowRecipeTerminalTarget {
@@ -237,6 +259,20 @@ export function validateWorkflowRecipeCatalogCompatibility(
           message: `route "${route}" is not allowed by primitive "${item.uses}"`,
         });
       }
+    }
+
+    const acceptedInputSets = primitiveAcceptedInputSets(primitive);
+    if (
+      !acceptedInputSets.some((expectedContracts) =>
+        recipeItemSatisfiesInputSet(item, expectedContracts, recipe.contract_aliases),
+      )
+    ) {
+      issues.push({
+        item_id: item.id,
+        message: `inputs do not satisfy primitive "${item.uses}"; expected one of ${acceptedInputSets
+          .map(formatContractSet)
+          .join(' or ')}`,
+      });
     }
 
     if (!contractIsCompatible(primitive.output_contract, item.output, recipe.contract_aliases)) {

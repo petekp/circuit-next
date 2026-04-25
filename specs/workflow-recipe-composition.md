@@ -65,6 +65,7 @@ Every primitive should have this shape:
 {
   "id": "diagnose",
   "input_contracts": ["workflow.brief@v1", "context.packet@v1"],
+  "alternative_input_contracts": [],
   "output_contract": "diagnosis.result@v1",
   "allowed_routes": ["continue", "retry", "ask", "stop"]
 }
@@ -72,6 +73,12 @@ Every primitive should have this shape:
 
 The important point is that later steps consume named facts, not whatever text
 happened to come back from a model.
+
+Some primitives can accept more than one input shape. For example, Act can use
+a brief plus a plan, a brief plus a diagnosis, or all three. The catalog should
+model that with `alternative_input_contracts`, and recipe validation should
+accept a recipe item only when its declared inputs satisfy at least one of the
+primitive's input sets.
 
 ## Recipe Item Interface
 

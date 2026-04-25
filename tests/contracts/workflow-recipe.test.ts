@@ -39,6 +39,14 @@ describe('workflow recipe schema', () => {
     expect(issues).toEqual([]);
   });
 
+  it('keeps Fix human-decision evidence bound through a generic evidence alias', () => {
+    const recipe = parseFixRecipe();
+    expect(recipe.contract_aliases).toContainEqual({
+      generic: 'workflow.evidence@v1',
+      actual: 'fix.diagnosis@v1',
+    });
+  });
+
   it('uses the expected Fix primitive sequence', () => {
     const recipe = parseFixRecipe();
     expect(recipe.items.map((item) => item.uses)).toEqual([
@@ -107,13 +115,44 @@ describe('workflow recipe schema', () => {
     if (diagnose === undefined) throw new Error('fix-diagnose missing');
     diagnose.input.context = 'missing.context@v1';
     const issues = validateWorkflowRecipeCatalogCompatibility(recipe, parsePrimitiveCatalog());
-    expect(issues).toEqual([
-      {
-        item_id: 'fix-diagnose',
-        message:
-          'input "context" references unavailable contract "missing.context@v1" on at least one reachable route',
-      },
-    ]);
+    expect(issues).toContainEqual({
+      item_id: 'fix-diagnose',
+      message:
+        'input "context" references unavailable contract "missing.context@v1" on at least one reachable route',
+    });
+    expect(issues).toContainEqual({
+      item_id: 'fix-diagnose',
+      message:
+        'inputs do not satisfy primitive "diagnose"; expected one of [workflow.brief@v1, context.packet@v1]',
+    });
+  });
+
+  it('reports recipe items that omit every accepted primitive input set', () => {
+    const recipe = parseFixRecipe();
+    const act = recipe.items.find((item) => item.id === 'fix-act');
+    if (act === undefined) throw new Error('fix-act missing');
+    act.input = { brief: 'fix.brief@v1' };
+
+    const issues = validateWorkflowRecipeCatalogCompatibility(recipe, parsePrimitiveCatalog());
+    expect(issues).toContainEqual({
+      item_id: 'fix-act',
+      message:
+        'inputs do not satisfy primitive "act"; expected one of [workflow.brief@v1, diagnosis.result@v1] or [workflow.brief@v1, plan.strategy@v1] or [workflow.brief@v1, plan.strategy@v1, diagnosis.result@v1]',
+    });
+  });
+
+  it('allows Act to consume a plan instead of a diagnosis through an alternative input set', () => {
+    const recipe = parseFixRecipe();
+    recipe.initial_contracts.push('plan.strategy@v1');
+    const act = recipe.items.find((item) => item.id === 'fix-act');
+    if (act === undefined) throw new Error('fix-act missing');
+    act.input = {
+      brief: 'fix.brief@v1',
+      plan: 'plan.strategy@v1',
+    };
+
+    const issues = validateWorkflowRecipeCatalogCompatibility(recipe, parsePrimitiveCatalog());
+    expect(issues).toEqual([]);
   });
 
   it('reports inputs that are skipped by a reachable route', () => {

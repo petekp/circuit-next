@@ -58,6 +58,12 @@ Example:
 - a Close move can consume the required evidence for that workflow;
 - a Fix move should not consume only a vague idea list.
 
+Some moves have more than one valid input shape. Act is the first important
+case: it can work from a plan, from a diagnosis, or from both, as long as the
+brief is also present. The machine-readable catalog records those alternatives
+so recipe validation can reject under-specified items without forcing every
+workflow to include a separate Plan move.
+
 ## Canonical Primitive List
 
 | Primitive | Purpose | Typical inputs | Typed output | Common next routes |

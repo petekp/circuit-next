@@ -31,6 +31,10 @@
       "actual": "fix.no-repro-decision@v1"
     },
     {
+      "generic": "workflow.evidence@v1",
+      "actual": "fix.diagnosis@v1"
+    },
+    {
       "generic": "change.evidence@v1",
       "actual": "fix.change@v1"
     },

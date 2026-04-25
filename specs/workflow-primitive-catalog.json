@@ -154,7 +154,11 @@
       "id": "act",
       "title": "Act",
       "purpose": "Make or delegate the change within the declared scope.",
-      "input_contracts": ["workflow.brief@v1", "plan.strategy@v1", "diagnosis.result@v1"],
+      "input_contracts": ["workflow.brief@v1", "diagnosis.result@v1"],
+      "alternative_input_contracts": [
+        ["workflow.brief@v1", "plan.strategy@v1"],
+        ["workflow.brief@v1", "plan.strategy@v1", "diagnosis.result@v1"]
+      ],
       "output_contract": "change.evidence@v1",
       "action_surface": "worker",
       "produces_evidence": ["changed files", "change rationale", "declared follow-up proof"],
