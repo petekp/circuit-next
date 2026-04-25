@@ -1,4 +1,4 @@
-<!-- current_slice: 125 -->
+<!-- current_slice: 126 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -10,12 +10,12 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 125
-- **current_arc:** Build workflow parity implementation now has the policy
+- **current_slice:** 126
+- **current_arc:** Build workflow parity is now closed. The implementation has the policy
   shape, typed Build artifact contracts/schemas, registered runtime synthesis
   writers for `build.plan@v1` and `build.result@v1`, and a focused
   verification command execution substrate. The runner can also execute a
-  focused checkpoint step: standard/lite can continue through a declared safe
+  focused checkpoint step: standard/lite can continue through the declared safe
   default choice, deep/tournament can pause open without writing a closed-run
   result, autonomous can continue only through a declared safe autonomous
   choice, and a paused checkpoint can now resume from the saved run manifest
@@ -31,12 +31,16 @@ context and phase-open provenance.
   `./bin/circuit-next build` now completes, writes all six Build artifacts, and
   records schema-valid `artifacts/build-result.json`; the proof also folded
   Claude Code 2.1.119's passive `PushNotification` init-tool drift without
-  admitting repo-write tools. P2-1 uses structured JSON as the accepted successor artifact shape; it does not claim old Markdown byte-for-byte compatibility. P2-3 live command proof is included through a live Claude
+  admitting repo-write tools. Slice 126 closed the signed Build plan with a
+  two-prong composition review, narrowed the live Frame checkpoint to the only
+  choice the current runner can honor, aligned public command wording with the
+  actual Build result shape, and bound the Build close into the arc-close audit
+  gate. P2-1 uses structured JSON as the accepted successor artifact shape; it
+  does not claim old Markdown byte-for-byte compatibility. P2-3 live command proof is included through a live Claude
   Code invocation of the inline `circuit` plugin. The Phase 2 close claim
   remains narrow: first working workflow product spine closed, not full
-  first-generation Circuit parity. Next work is broader parity expansion
-  across build, repair, migrate, sweep, custom workflows, and clearer workflow
-  configuration.
+  first-generation Circuit parity. Next work is broader parity expansion across
+  repair, migrate, sweep, custom workflows, and clearer workflow configuration.
 - **current_phase:** Phase 2 — Implementation (closed for the first working workflow; broader parity expansion planning next)
 
 Chronicle (relocated narrative history — non-authoritative; see

@@ -210,7 +210,7 @@ describe('P2.8 CLI router', () => {
     expect(output.checkpoint).toMatchObject({
       step_id: 'frame-step',
       request_path: join(runRoot, 'artifacts/checkpoints/frame-step-request.json'),
-      allowed_choices: ['continue', 'revise', 'abort'],
+      allowed_choices: ['continue'],
     });
   });
 

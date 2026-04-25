@@ -1,6 +1,6 @@
 ---
 plan: build-workflow-parity
-status: operator-signoff
+status: closed
 revision: 10
 opened_at: 2026-04-24
 revised_at: 2026-04-25
@@ -11,6 +11,9 @@ cleared_in_session: build-workflow-parity-codex-challenger-10-accept
 signoff_at: 2026-04-25
 signoff_in_session: build-workflow-parity-standing-operator-authorization
 signoff_note: "Operator standing authorization ('Please continue autonomously. If anything needs my sign-off, please proceed anyway and i'll retroactively review. I trust your judgement in how to proceed towards parity with the original circuit feature set.', 2026-04-24), reaffirmed by latest proceed instruction ('Sounds good. Please commit and push our changes, then proceed.', 2026-04-25). operator_signoff_predecessor: b2ab8230ab392cf2079baf8d0dfffcef526e0ae4."
+closed_at: 2026-04-25
+closed_in_slice: 126
+closed_with: "Live Build command proof, two-prong Build composition review, and ARC_CLOSE_GATES binding."
 base_commit: eb52089
 target: build
 authority:

@@ -82,8 +82,9 @@ metacharacters:
    `selected_workflow === "review"` and `outcome === "complete"`, read
    `artifacts/review-result.json` and surface its typed verdict. For
    `selected_workflow === "build"` and `outcome === "complete"`, read
-   `artifacts/build-result.json` and surface its typed verdict, changed
-   files, and evidence.
+   `artifacts/build-result.json` and surface its typed verdict fields; to
+   summarize changed files and evidence, follow its `artifact_pointers` entry
+   for `build.implementation` and read that artifact.
 5. **If `outcome === "checkpoint_waiting"`, do not read or claim
    `result_path`.** Surface the routed metadata (`selected_workflow`,
    `routed_by`, `router_reason`, and optional `router_signal`), then surface

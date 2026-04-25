@@ -3773,6 +3773,12 @@ export const P2_MODEL_EFFORT_ARC_CEREMONY_SLICE = 88;
 // explore.result artifact remains the next privileged runtime slice.
 export const P2_10_ARTIFACT_SCHEMA_ARC_CEREMONY_SLICE = 92;
 
+// Slice 126 (Build Workflow Parity arc-close ceremony). Numeric
+// ceremony_slice 126 binds the Build workflow parity implementation arc after
+// Slices 116-125. Review-file regex pins only the two Build arc-close
+// composition review prongs, not per-slice Build challenger records.
+export const BUILD_WORKFLOW_PARITY_ARC_CEREMONY_SLICE = 126;
+
 export const ARC_CLOSE_GATES = Object.freeze([
   Object.freeze({
     arc_id: 'phase-2-foundation-foldins-slices-35-to-40',
@@ -3890,6 +3896,17 @@ export const ARC_CLOSE_GATES = Object.freeze([
     ceremony_slice: P2_10_ARTIFACT_SCHEMA_ARC_CEREMONY_SLICE,
     plan_path: 'specs/plans/phase-2-implementation.md',
     review_file_regex: /arc-p2-10-artifact-schema-composition-review/i,
+  }),
+  // Slice 126 (Build Workflow Parity arc-close ceremony): same gate shape as
+  // earlier closed arcs. Numeric ceremony_slice uses the back-compat numeric
+  // branch of evaluateArcCloseGate. Review-file regex pins the two Build
+  // arc-close review prongs named in the Slice 126 ceremony.
+  Object.freeze({
+    arc_id: 'build-workflow-parity',
+    description: 'Build Workflow Parity Arc (Slices 116-126)',
+    ceremony_slice: BUILD_WORKFLOW_PARITY_ARC_CEREMONY_SLICE,
+    plan_path: 'specs/plans/build-workflow-parity.md',
+    review_file_regex: /arc-build-workflow-parity-composition-review/i,
   }),
 ]);
 

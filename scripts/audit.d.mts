@@ -289,6 +289,10 @@ export const P2_MODEL_EFFORT_ARC_CEREMONY_SLICE: number;
 // ceremony_slice for the first artifact-schema tranche. Uses the numeric
 // back-compat branch of evaluateArcCloseGate.
 export const P2_10_ARTIFACT_SCHEMA_ARC_CEREMONY_SLICE: number;
+// Slice 126 (Build Workflow Parity arc-close ceremony) — numeric
+// ceremony_slice for the Build workflow parity arc. Uses the numeric
+// back-compat branch of evaluateArcCloseGate.
+export const BUILD_WORKFLOW_PARITY_ARC_CEREMONY_SLICE: number;
 export const ARC_CLOSE_GATES: ReadonlyArray<{
   readonly arc_id: string;
   readonly description: string;

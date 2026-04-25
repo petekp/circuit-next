@@ -84,8 +84,9 @@ metacharacters:
 
 6. **If `outcome === "complete"`, read the Build close artifact.** Surface
    `result_path`, then read the run-root-relative
-   `artifacts/build-result.json` artifact and summarize the verdict, changed
-   files, and evidence.
+   `artifacts/build-result.json` artifact. Surface its typed verdict fields;
+   to summarize changed files and evidence, follow its `artifact_pointers`
+   entry for `build.implementation` and read that artifact.
 7. **If `outcome === "aborted"`, read `artifacts/result.json` at
    `result_path` and surface the abort reason.**
 

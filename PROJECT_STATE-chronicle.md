@@ -1432,3 +1432,19 @@ Verification: focused adapter tests passed, the live Build proof completed,
 all six Build artifacts schema-validated, full `npm run verify` passed, and
 the Codex challenger returned ACCEPT. The Build arc still needs its close
 composition review and plan-close update before the plan is marked closed.
+
+## Slice 126 — Build workflow parity close
+
+Slice 126 closed the signed Build plan. The close review first found three
+real problems: Build offered checkpoint choices it could not yet honor, the
+Build close review was not enforced by audit, and the public command text told
+users to read changed-file evidence from the wrong artifact.
+
+The slice folded those in before closing. The live Build workflow now exposes
+only the supported `continue` checkpoint choice, public command docs follow the
+`build.implementation` pointer before summarizing changed files and evidence,
+and the Build plan is now bound into the arc-close review audit gate. The
+Build plan frontmatter is now `closed` at Slice 126.
+
+Verification: focused Build runtime/router/command tests passed, the
+arc-close gate test passed, and the Codex recheck returned ACCEPT.

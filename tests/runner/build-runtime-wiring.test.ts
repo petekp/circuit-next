@@ -105,6 +105,16 @@ afterEach(() => {
 });
 
 describe('Build runtime wiring', () => {
+  it('exposes only checkpoint choices the current runner can honor', () => {
+    const { workflow } = loadFixture();
+    const frame = workflow.steps.find((step) => step.id === 'frame-step');
+    expect(frame?.kind).toBe('checkpoint');
+    if (frame?.kind !== 'checkpoint') throw new Error('frame-step is not a checkpoint');
+
+    expect(frame.policy.choices.map((choice) => choice.id)).toEqual(['continue']);
+    expect(frame.gate.allow).toEqual(['continue']);
+  });
+
   it('runs the live Build fixture through checkpoint, implementation dispatch, verification, review dispatch, and close', async () => {
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'complete');

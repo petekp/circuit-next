@@ -154,6 +154,14 @@ describe('plugin command invocation binding (Slice 56 / P2.11)', () => {
       expect(runBody).toMatch(/artifacts\/build-result\.json/);
     });
 
+    it('Build command docs follow build.implementation before summarizing changed files and evidence', () => {
+      for (const body of [buildBody, runBody]) {
+        expect(body).toMatch(/artifact_pointers/);
+        expect(body).toMatch(/build\.implementation/);
+        expect(body).toMatch(/changed files and evidence/);
+      }
+    });
+
     it('Build command docs include same-invocation entry-mode and rigor examples', () => {
       expect(hasEntryModeAndRigorInvocation(buildBody)).toBe(true);
       expect(hasEntryModeAndRigorInvocation(runBody)).toBe(true);

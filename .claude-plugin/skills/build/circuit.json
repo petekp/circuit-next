@@ -96,14 +96,6 @@
           {
             "id": "continue",
             "label": "Continue"
-          },
-          {
-            "id": "revise",
-            "label": "Revise"
-          },
-          {
-            "id": "abort",
-            "label": "Abort"
           }
         ],
         "safe_default_choice": "continue",
@@ -141,7 +133,7 @@
           "kind": "checkpoint_response",
           "ref": "response"
         },
-        "allow": ["continue", "revise", "abort"]
+        "allow": ["continue"]
       }
     },
     {
