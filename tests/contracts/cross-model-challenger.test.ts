@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, '..', '..');
 
-const CLAUDE_MD = resolve(REPO_ROOT, 'CLAUDE.md');
+const AGENTS_MD = resolve(REPO_ROOT, 'AGENTS.md');
 const TRACK_MD = resolve(REPO_ROOT, 'specs/behavioral/cross-model-challenger.md');
 const CONTRACTS_DIR = resolve(REPO_ROOT, 'specs/contracts');
 const REVIEWS_DIR = resolve(REPO_ROOT, 'specs/reviews');
@@ -376,20 +376,20 @@ function classifyReview(
 }
 
 // CHALLENGER-I5 — dispatch via /codex skill (pipes to codex exec), not the
-// codex:rescue subagent. CLAUDE.md §Cross-model challenger protocol names
+// codex:rescue subagent. AGENTS.md §Cross-model challenger protocol names
 // the rule; the memory file is the discipline backstop. This test asserts
-// the rule is visible inline in CLAUDE.md so a reader sees it during every
+// the rule is visible inline in AGENTS.md so a reader sees it during every
 // session start.
 describe('cross-model-challenger — CHALLENGER-I5 /codex dispatch documented', () => {
-  it('CLAUDE.md references the /codex skill', () => {
-    const text = readFileSync(CLAUDE_MD, 'utf-8');
-    expect(/`\/codex`/.test(text), 'CLAUDE.md must name the /codex skill explicitly.').toBe(true);
+  it('AGENTS.md references the /codex skill', () => {
+    const text = readFileSync(AGENTS_MD, 'utf-8');
+    expect(/`\/codex`/.test(text), 'AGENTS.md must name the /codex skill explicitly.').toBe(true);
   });
 
-  it('CLAUDE.md explicitly rejects the codex:rescue subagent', () => {
-    const text = readFileSync(CLAUDE_MD, 'utf-8');
+  it('AGENTS.md explicitly rejects the codex:rescue subagent', () => {
+    const text = readFileSync(AGENTS_MD, 'utf-8');
     // Tolerates line-wrapping between the negation and "codex:rescue" since
-    // CLAUDE.md's 80-column prose often splits "Never\nuse the codex:rescue".
+    // AGENTS.md's 80-column prose often splits "Never\nuse the codex:rescue".
     // Broadened per arc-review MED #10: a well-meaning future edit could
     // rephrase "Never use" as "Do not use", "Avoid", "Must not use",
     // "is banned", "is forbidden", "is prohibited", "is not allowed". The
@@ -401,7 +401,7 @@ describe('cross-model-challenger — CHALLENGER-I5 /codex dispatch documented', 
     const negatedSentence = sentences.some((s) => /codex:rescue/i.test(s) && NEGATION_RE.test(s));
     expect(
       negatedSentence,
-      'CLAUDE.md must explicitly tell agents not to use the codex:rescue subagent. Accepted negation words near `codex:rescue`: never, not, avoid, banned, forbidden, prohibited.',
+      'AGENTS.md must explicitly tell agents not to use the codex:rescue subagent. Accepted negation words near `codex:rescue`: never, not, avoid, banned, forbidden, prohibited.',
     ).toBe(true);
   });
 });

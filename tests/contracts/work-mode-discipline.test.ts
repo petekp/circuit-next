@@ -139,6 +139,7 @@ describe('ADR-0012 work mode discipline audit', () => {
         {
           AGENTS: 'This name is intentionally not audited.\n',
           'AGENTS.md': 'methodology guidance change\n',
+          'CLAUDE.md': 'compatibility guidance change\n',
           'bin/circuit-next': '#!/usr/bin/env node\n',
           'src/cli/dogfood.ts': 'cli change\n',
           'src/runtime/runner.ts': 'runtime change\n',
@@ -159,6 +160,7 @@ describe('ADR-0012 work mode discipline audit', () => {
       const result = checkWorkModeDiscipline([commit], root);
       expect(result.level).toBe('red');
       expect(result.detail).toContain('AGENTS.md');
+      expect(result.detail).toContain('CLAUDE.md');
       expect(result.detail).toContain('bin/circuit-next');
       expect(result.detail).toContain('src/cli/dogfood.ts');
       expect(result.detail).toContain('src/runtime/runner.ts');

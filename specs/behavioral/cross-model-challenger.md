@@ -6,9 +6,9 @@ last_updated: 2026-04-22
 depends_on:
   - specs/adrs/ADR-0001-methodology-adoption.md (pillar 4)
   - specs/adrs/ADR-0003-authority-graph-gate.md (challenger downgrade section)
-  - CLAUDE.md (§Cross-model challenger protocol)
+  - AGENTS.md (§Cross-model challenger protocol)
 enforced_by:
-  - CLAUDE.md §Cross-model challenger protocol (dispatch via `/codex`)
+  - AGENTS.md §Cross-model challenger protocol (dispatch via `/codex`)
   - commit discipline: for any slice that should trigger a challenger pass, a `specs/reviews/<contract>-v<version>-codex.md` record is committed in the same slice and linked from the contract frontmatter field `codex_adversarial_review`
   - authority-graph audit (planned — see §Planned test location): every contract whose invariants changed materially between two commits either lands a new codex review record or declares v0.2 scoping explicitly
 planned_tests:
@@ -229,7 +229,7 @@ pass is needed, not a block.
 - `specs/adrs/ADR-0003-authority-graph-gate.md` §Challenger downgrade
   (authoritative reframing: adversarial lint, not independent
   corroboration).
-- `CLAUDE.md` §Cross-model challenger protocol (dispatch + recording
+- `AGENTS.md` §Cross-model challenger protocol (dispatch + recording
   discipline).
 - `specs/reviews/adapter-md-v0.1-codex.md`,
   `specs/reviews/run-md-v0.1-codex.md`,

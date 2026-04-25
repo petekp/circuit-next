@@ -437,7 +437,7 @@ export const FORBIDDEN_PROGRESS_SCAN_GLOBS: readonly RegExp[];
 export function checkForbiddenScalarProgressPhrases(rootDir?: string): AuditCheckResult;
 
 // Slice 47d (Codex HIGH 2 + Claude HIGH 2 fold-in) — Check 35 mechanical
-// enforcement of CLAUDE.md §Hard invariant #6 literal rule at the
+// enforcement of AGENTS.md §Hard invariant #6 literal rule at the
 // commit-body layer. When HEAD declares `Codex challenger: REQUIRED`,
 // requires either a matching per-slice review file OR an
 // `arc-subsumption: <path>` field in the commit body. Retroactive

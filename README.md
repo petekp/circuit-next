@@ -1,4 +1,4 @@
-<!-- current_slice: 136 -->
+<!-- current_slice: 137 -->
 
 # circuit-next
 
@@ -81,7 +81,8 @@ live state lives at `## §0` of PROJECT_STATE.md).
 
 ```
 circuit-next/
-├── CLAUDE.md                # Session hygiene + lane discipline for agents
+├── AGENTS.md                # Session hygiene + lane discipline for agents
+├── CLAUDE.md                # Compatibility pointer to AGENTS.md for older tooling
 ├── PROJECT_STATE.md          # Live project state (§0 Live state section is authoritative)
 ├── PROJECT_STATE-chronicle.md # Non-authoritative narrative history (per-slice log)
 ├── bootstrap/                 # Phase 0 evidence drafts

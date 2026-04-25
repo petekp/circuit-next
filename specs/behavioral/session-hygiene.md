@@ -4,15 +4,15 @@ status: ratified-v0.1
 version: 0.1
 last_updated: 2026-04-19
 depends_on:
-  - CLAUDE.md
+  - AGENTS.md
   - PROJECT_STATE.md
   - scripts/audit.mjs
 enforced_by:
   - scripts/audit.mjs (PROJECT_STATE freshness + phase consistency + framing pair + lane declaration + citation rule + .circuit/ gitignore)
-  - CLAUDE.md §Hard invariants #10 (CLAUDE.md ≤ 450 lines per ADR-0011; raised from 300 at Slice 64)
-  - CLAUDE.md §Session hygiene (compaction disabled; slice ≤ 30 min)
+  - AGENTS.md §Hard invariants #10 (AGENTS.md ≤ 450 lines per ADR-0011; raised from 300 at Slice 64)
+  - AGENTS.md §Session hygiene (compaction disabled; slice ≤ 30 min)
 planned_tests:
-  - tests/contracts/session-hygiene.test.ts (LANDED v0.1 in Slice 14 — asserts CLAUDE.md wc -l ≤ 450 per ADR-0011; README/PROJECT_STATE phase alignment; .circuit/ ignored unless allowlisted). v0.2 Tier-2+ promotions owed per §Evolution.
+  - tests/contracts/session-hygiene.test.ts (LANDED v0.1 in Slice 14 — asserts AGENTS.md wc -l ≤ 450 per ADR-0011; README/PROJECT_STATE phase alignment; .circuit/ ignored unless allowlisted). v0.2 Tier-2+ promotions owed per §Evolution.
 invariant_ids: [SESSION-I1, SESSION-I2, SESSION-I3, SESSION-I4, SESSION-I5, SESSION-I6]
 property_ids: []
 ---
@@ -34,15 +34,15 @@ agent) drive the repo across session boundaries**.
 
 ## Invariants
 
-- **SESSION-I1 — CLAUDE.md stays ≤ 450 lines (raised from 300 by
+- **SESSION-I1 — AGENTS.md stays ≤ 450 lines (raised from 300 by
   ADR-0011 at Slice 64 after Slice 61 Codex semantic-loss evidence).**
-  Every line in CLAUDE.md enters the context of every session. Past
+  Every line in AGENTS.md enters the context of every session. Past
   the cap, the primary instruction file starts eating into cache
   budget the slice actually needs; worse, later revisions accumulate
   contradictions because nobody can hold the whole file in head at
   once. Longer content MUST go in `specs/` with a pointer from
-  CLAUDE.md. Enforced today by the runtime contract test plus the
-  hard-invariant line in CLAUDE.md itself (line 10 of §Hard
+  AGENTS.md. Enforced today by the runtime contract test plus the
+  hard-invariant line in AGENTS.md itself (line 10 of §Hard
   invariants). Failure mode: "why is this instruction being ignored"
   — answer is usually "it rolled out of the primary prompt budget."
 
@@ -79,7 +79,7 @@ agent) drive the repo across session boundaries**.
   with coupled changes across four subsystems and nothing is
   individually revertable.
 
-- **SESSION-I5 — Commits cite specs/, CLAUDE.md, bootstrap/, or an
+- **SESSION-I5 — Commits cite specs/, AGENTS.md, bootstrap/, or an
   ADR.** ADR-0002 citation rule. Every disciplined commit has at
   least one path reference that anchors the change to a documented
   decision. This is enforcement against "because Circuit does X"
@@ -108,7 +108,7 @@ agent) drive the repo across session boundaries**.
 - `session-drift:compacted-summary-loses-decision` — compaction
   erases a load-bearing "we decided X" line. Mitigated by SESSION-I3
   (disabled) + SESSION-I2 (artifact-persisted state).
-- `prompt-bloat:claude-md-overflow` — CLAUDE.md exceeds 450 lines (cap
+- `prompt-bloat:agent-guide-overflow` — AGENTS.md exceeds 450 lines (cap
   raised 300 → 450 per ADR-0011 on 2026-04-23 after Slice 61 Codex
   semantic-loss evidence) and the primary instruction budget starts
   evicting tail lines silently. Mitigated by SESSION-I1 + test.
@@ -127,7 +127,7 @@ agent) drive the repo across session boundaries**.
 `tests/contracts/session-hygiene.test.ts` (Phase 1 track; landed
 Slice 14 — SESSION-I1..I6 pinned). Asserts:
 
-- CLAUDE.md line count ≤ 450 (SESSION-I1; cap raised 300 → 450 per
+- AGENTS.md line count ≤ 450 (SESSION-I1; cap raised 300 → 450 per
   ADR-0011).
 - README.md and PROJECT_STATE.md agree on current phase (SESSION-I2;
   already covered by audit but the test gives local fast feedback).
@@ -142,9 +142,9 @@ container work, not a nice-to-have.
 
 ## Cross-references
 
-- `CLAUDE.md` §Hard invariants #10 (CLAUDE.md ≤ 450 lines per
+- `AGENTS.md` §Hard invariants #10 (AGENTS.md ≤ 450 lines per
   ADR-0011; raised from 300 at Slice 64).
-- `CLAUDE.md` §Session hygiene.
+- `AGENTS.md` §Session hygiene.
 - `specs/adrs/ADR-0001-methodology-adoption.md` §Session hygiene
   protocol.
 - `specs/adrs/ADR-0002-bootstrap-discipline.md` citation rule +

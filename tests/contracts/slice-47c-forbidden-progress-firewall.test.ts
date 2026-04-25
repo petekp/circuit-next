@@ -309,6 +309,7 @@ describe('Check 34 — ADR-0007 §3 forbidden scalar-progress firewall (Slice 47
       writeFile(root, 'specs/plans/phase-2-implementation.md', 'Per-criterion close status only.');
       writeFile(root, 'specs/plans/phase-1-close-revised.md', 'No forbidden phrases.');
       writeFile(root, 'specs/plans/slice-47-hardening-foldins.md', 'Plan body.');
+      writeFile(root, 'AGENTS.md', 'Active methodology authority.\n');
       writeFile(root, 'CLAUDE.md', 'Methodology authority.\n');
       writeFile(root, 'TIER.md', 'Claim matrix.\n');
       writeFile(
@@ -336,6 +337,7 @@ describe('Check 34 — ADR-0007 §3 forbidden scalar-progress firewall (Slice 47
       writeFile(root, 'specs/plans/phase-2-implementation.md', 'Per-criterion.');
       writeFile(root, 'specs/plans/phase-1-close-revised.md', 'Clean.');
       writeFile(root, 'specs/plans/slice-47-hardening-foldins.md', 'Body.');
+      writeFile(root, 'AGENTS.md', 'Active authority.\n');
       writeFile(root, 'CLAUDE.md', 'Authority.\n');
       writeFile(root, 'TIER.md', 'Matrix.\n');
       // Forbidden phrases in the chronicle's body — they would fire red

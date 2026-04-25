@@ -29,6 +29,8 @@ const REPO_ROOT = resolve(SCRIPT_DIR, '..');
 
 const REPORT_SCHEMA_VERSION = '1';
 const REPORT_SLICE = '27b';
+const REPORT_NOTE =
+  'slice=27b names the original baseline report format; generated_at, head_commit, and evidence summaries reflect the current checkout.';
 const STATUS_EPOCH_FILES = ['README.md', 'PROJECT_STATE.md', 'TIER.md'];
 
 // ---------- filesystem helpers ----------
@@ -489,6 +491,7 @@ export function renderReport({ surfaces, summary, metadata }) {
     slice: REPORT_SLICE,
     baseline: true,
     metadata,
+    report_note: REPORT_NOTE,
     summary,
     surfaces,
   };
@@ -501,6 +504,7 @@ function renderMarkdown(report) {
   lines.push(`Schema: v${report.schema_version}`);
   lines.push(`Slice: ${report.slice}`);
   lines.push(`Baseline: ${report.baseline ? 'yes' : 'no'}`);
+  lines.push(`Note: ${report.report_note}`);
   lines.push(`Generated: ${report.metadata.generated_at}`);
   lines.push(`HEAD: ${report.metadata.head_commit ?? '(unknown)'}`);
   lines.push('');
@@ -584,4 +588,5 @@ export {
   renderMarkdown,
   REPORT_SCHEMA_VERSION,
   REPORT_SLICE,
+  REPORT_NOTE,
 };

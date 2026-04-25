@@ -3,9 +3,10 @@
   "slice": "27b",
   "baseline": true,
   "metadata": {
-    "generated_at": "2026-04-20T22:24:58.476Z",
-    "head_commit": "832105acde5a3eef3862a299227ace883c58237b"
+    "generated_at": "2026-04-25T15:29:42.403Z",
+    "head_commit": "b0849cce663c19a57803009fdb98bb53e8e1e2fe"
   },
+  "report_note": "slice=27b names the original baseline report format; generated_at, head_commit, and evidence summaries reflect the current checkout.",
   "summary": {
     "total": 10,
     "present": 10,
@@ -19,7 +20,7 @@
       "expected_evidence": "package.json scripts.circuit:run is a non-placeholder shell command (not echo/true/noop)",
       "planned_slice": "27d",
       "present": true,
-      "evidence_summary": "scripts.circuit:run = \"tsx src/cli/dogfood.ts\""
+      "evidence_summary": "scripts.circuit:run = \"./bin/circuit-next\""
     },
     {
       "id": "plugin.manifest",
@@ -28,7 +29,7 @@
       "expected_evidence": ".claude-plugin/plugin.json exists, parses as object, declares non-empty name and version",
       "planned_slice": "27d",
       "present": true,
-      "evidence_summary": ".claude-plugin/plugin.json parses with name=\"circuit-next\" version=\"0.1.0-alpha.0\""
+      "evidence_summary": ".claude-plugin/plugin.json parses with name=\"circuit\" version=\"0.1.0-alpha.2\""
     },
     {
       "id": "plugin.dogfood_workflow_fixture",
@@ -46,7 +47,7 @@
       "expected_evidence": "src/runtime/ contains at least one .ts file with an `export` and >=40 non-comment non-whitespace characters",
       "planned_slice": "27c",
       "present": true,
-      "evidence_summary": "src/runtime/ contains 7 non-placeholder TS module(s): event-log-reader.ts, event-writer.ts, manifest-snapshot-writer.ts, reducer.ts, result-writer.ts, runner.ts, snapshot-writer.ts"
+      "evidence_summary": "src/runtime/ contains 12 non-placeholder TS module(s): artifact-schemas.ts, config-loader.ts, event-log-reader.ts, event-writer.ts, manifest-snapshot-writer.ts, reducer.ts, result-writer.ts, router.ts, run-relative-path.ts, runner.ts, selection-resolver.ts, snapshot-writer.ts"
     },
     {
       "id": "runner.event_writer",
@@ -82,7 +83,7 @@
       "expected_evidence": "A tests/ file whose path matches /tests\\/runner\\/.*smoke\\.test\\.ts$/ or /tests\\/.*runner[-_]smoke\\.test\\.ts$/ and contains an it/test/describe block",
       "planned_slice": "27d",
       "present": true,
-      "evidence_summary": "1 test file(s) exercise runner smoke: tests/runner/dogfood-smoke.test.ts"
+      "evidence_summary": "3 test file(s) exercise runner smoke: tests/runner/agent-adapter-smoke.test.ts, tests/runner/codex-adapter-smoke.test.ts, tests/runner/dogfood-smoke.test.ts"
     },
     {
       "id": "tests.event_log_round_trip",
@@ -100,7 +101,7 @@
       "expected_evidence": "All three files carry a well-formed <!-- current_slice: <id> --> marker in the status-header zone, and the ids agree",
       "planned_slice": null,
       "present": true,
-      "evidence_summary": "current_slice=27d across README.md / PROJECT_STATE.md / TIER.md"
+      "evidence_summary": "current_slice=137 across README.md / PROJECT_STATE.md / TIER.md"
     }
   ]
 }

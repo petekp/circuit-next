@@ -3,8 +3,9 @@
 Schema: v1
 Slice: 27b
 Baseline: yes
-Generated: 2026-04-20T22:24:58.476Z
-HEAD: 832105acde5a3eef3862a299227ace883c58237b
+Note: slice=27b names the original baseline report format; generated_at, head_commit, and evidence summaries reflect the current checkout.
+Generated: 2026-04-25T15:29:42.403Z
+HEAD: b0849cce663c19a57803009fdb98bb53e8e1e2fe
 
 **Summary:** 10 / 10 surfaces present, 0 absent.
 
@@ -12,16 +13,16 @@ HEAD: 832105acde5a3eef3862a299227ace883c58237b
 
 | id | category | present | planned slice | evidence |
 |---|---|---|---|---|
-| `runner.cli_script` | package_scripts | yes | 27d | scripts.circuit:run = "tsx src/cli/dogfood.ts" |
-| `plugin.manifest` | plugin_surface | yes | 27d | .claude-plugin/plugin.json parses with name="circuit-next" version="0.1.0-alpha.0" |
+| `runner.cli_script` | package_scripts | yes | 27d | scripts.circuit:run = "./bin/circuit-next" |
+| `plugin.manifest` | plugin_surface | yes | 27d | .claude-plugin/plugin.json parses with name="circuit" version="0.1.0-alpha.2" |
 | `plugin.dogfood_workflow_fixture` | plugin_surface | yes | 27d | .claude-plugin/skills/dogfood-run-0/circuit.json parses as non-empty object (9 top-level keys) |
-| `runner.entrypoint` | src_runtime | yes | 27c | src/runtime/ contains 7 non-placeholder TS module(s): event-log-reader.ts, event-writer.ts, manifest-snapshot-writer.ts, reducer.ts, result-writer.ts, runner.ts, snapshot-writer.ts |
+| `runner.entrypoint` | src_runtime | yes | 27c | src/runtime/ contains 12 non-placeholder TS module(s): artifact-schemas.ts, config-loader.ts, event-log-reader.ts, event-writer.ts, manifest-snapshot-writer.ts, reducer.ts, result-writer.ts, router.ts, run-relative-path.ts, runner.ts, selection-resolver.ts, snapshot-writer.ts |
 | `runner.event_writer` | src_runtime | yes | 27c | event writer module at src/runtime/event-writer.ts (non-placeholder, exports content) |
 | `runner.snapshot_writer` | src_runtime | yes | 27c | snapshot writer module at src/runtime/snapshot-writer.ts (non-placeholder, exports content) |
 | `runner.manifest_snapshot` | src_runtime | yes | 27c | manifest snapshot writer module at src/runtime/manifest-snapshot-writer.ts (non-placeholder, exports content); artifact run.manifest_snapshot present; backing file(s): src/schemas/manifest.ts |
-| `tests.runner_smoke` | tests_runtime | yes | 27d | 1 test file(s) exercise runner smoke: tests/runner/dogfood-smoke.test.ts |
+| `tests.runner_smoke` | tests_runtime | yes | 27d | 3 test file(s) exercise runner smoke: tests/runner/agent-adapter-smoke.test.ts, tests/runner/codex-adapter-smoke.test.ts, tests/runner/dogfood-smoke.test.ts |
 | `tests.event_log_round_trip` | tests_runtime | yes | 27c | 1 test file(s) exercise event-log round-trip: tests/unit/runtime/event-log-round-trip.test.ts |
-| `docs.status_alignment` | status_docs | yes | — | current_slice=27d across README.md / PROJECT_STATE.md / TIER.md |
+| `docs.status_alignment` | status_docs | yes | — | current_slice=137 across README.md / PROJECT_STATE.md / TIER.md |
 
 ## Surface details
 
@@ -32,7 +33,7 @@ HEAD: 832105acde5a3eef3862a299227ace883c58237b
 - **Planned slice:** 27d
 - **Expected evidence:** package.json scripts.circuit:run is a non-placeholder shell command (not echo/true/noop)
 - **Present at HEAD:** yes
-- **Evidence summary:** scripts.circuit:run = "tsx src/cli/dogfood.ts"
+- **Evidence summary:** scripts.circuit:run = "./bin/circuit-next"
 
 ### `plugin.manifest`
 
@@ -41,7 +42,7 @@ HEAD: 832105acde5a3eef3862a299227ace883c58237b
 - **Planned slice:** 27d
 - **Expected evidence:** .claude-plugin/plugin.json exists, parses as object, declares non-empty name and version
 - **Present at HEAD:** yes
-- **Evidence summary:** .claude-plugin/plugin.json parses with name="circuit-next" version="0.1.0-alpha.0"
+- **Evidence summary:** .claude-plugin/plugin.json parses with name="circuit" version="0.1.0-alpha.2"
 
 ### `plugin.dogfood_workflow_fixture`
 
@@ -59,7 +60,7 @@ HEAD: 832105acde5a3eef3862a299227ace883c58237b
 - **Planned slice:** 27c
 - **Expected evidence:** src/runtime/ contains at least one .ts file with an `export` and >=40 non-comment non-whitespace characters
 - **Present at HEAD:** yes
-- **Evidence summary:** src/runtime/ contains 7 non-placeholder TS module(s): event-log-reader.ts, event-writer.ts, manifest-snapshot-writer.ts, reducer.ts, result-writer.ts, runner.ts, snapshot-writer.ts
+- **Evidence summary:** src/runtime/ contains 12 non-placeholder TS module(s): artifact-schemas.ts, config-loader.ts, event-log-reader.ts, event-writer.ts, manifest-snapshot-writer.ts, reducer.ts, result-writer.ts, router.ts, run-relative-path.ts, runner.ts, selection-resolver.ts, snapshot-writer.ts
 
 ### `runner.event_writer`
 
@@ -95,7 +96,7 @@ HEAD: 832105acde5a3eef3862a299227ace883c58237b
 - **Planned slice:** 27d
 - **Expected evidence:** A tests/ file whose path matches /tests\/runner\/.*smoke\.test\.ts$/ or /tests\/.*runner[-_]smoke\.test\.ts$/ and contains an it/test/describe block
 - **Present at HEAD:** yes
-- **Evidence summary:** 1 test file(s) exercise runner smoke: tests/runner/dogfood-smoke.test.ts
+- **Evidence summary:** 3 test file(s) exercise runner smoke: tests/runner/agent-adapter-smoke.test.ts, tests/runner/codex-adapter-smoke.test.ts, tests/runner/dogfood-smoke.test.ts
 
 ### `tests.event_log_round_trip`
 
@@ -113,7 +114,7 @@ HEAD: 832105acde5a3eef3862a299227ace883c58237b
 - **Planned slice:** —
 - **Expected evidence:** All three files carry a well-formed <!-- current_slice: <id> --> marker in the status-header zone, and the ids agree
 - **Present at HEAD:** yes
-- **Evidence summary:** current_slice=27d across README.md / PROJECT_STATE.md / TIER.md
+- **Evidence summary:** current_slice=137 across README.md / PROJECT_STATE.md / TIER.md
 
 ## Delta rule
 

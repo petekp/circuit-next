@@ -327,7 +327,7 @@ describe('checkArtifactBackingPathIntegrity', () => {
     // The only tracked entry (Slice 35→39 {explore.result, run.result} at
     // <run-root>/artifacts/result.json) was deleted when Slice 39 split
     // explore.result off to <run-root>/artifacts/explore-result.json.
-    // New entries require a Codex challenger pass per CLAUDE.md §Hard
+    // New entries require a Codex challenger pass per AGENTS.md §Hard
     // invariants #6 and a closing_slice reference.
     expect(ARTIFACT_BACKING_PATH_KNOWN_COLLISIONS.length).toBe(0);
   });
@@ -490,7 +490,7 @@ describe('allowlist structure invariants', () => {
     // allowlist is empty. This documents the positive case for future
     // slices authoring new allowlist entries (Codex challenger pass,
     // ratchet-floor advance, closing-slice citation required per
-    // CLAUDE.md §Hard invariants #6).
+    // AGENTS.md §Hard invariants #6).
     const synthetic = [
       {
         normalized: '<run-root>/artifacts/future.json',

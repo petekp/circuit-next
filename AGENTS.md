@@ -4,14 +4,16 @@ This file is agent-facing guidance for working on `circuit-next`. Keep under **4
 
 ## The one-paragraph mental model
 
-`circuit-next` is a Codex plugin that turns common developer and creative
-workflows (explore, build, repair, migrate, sweep, and user-authored custom
-ones) into configurable automations. Configuration is declarative: per-step
-you can set model, reasoning effort, skills to apply, and invocation options;
-user-global config sets defaults and overrides. The plugin itself is being
-built using the same methodology it exposes — contract-first specs,
-architecture-first types at boundaries, tiny-step lane-disciplined slices,
-and a narrow cross-model challenger.
+`circuit-next` is a Claude Code plugin that turns common developer and
+creative workflows (explore, build, repair, migrate, sweep, and user-authored
+custom ones) into configurable automations. Configuration is declarative:
+per-step you can set model, reasoning effort, skills to apply, and invocation
+options; user-global config sets defaults and overrides. Codex is supported
+through the runtime adapter path, and native Codex plugin support remains a
+future product direction. The plugin itself is being built using the same
+methodology it exposes — contract-first specs, architecture-first types at
+boundaries, tiny-step lane-disciplined slices, and a narrow cross-model
+challenger.
 
 ## Core methodology (do not abbreviate)
 
@@ -116,10 +118,11 @@ non-executing.
   checks plus `Codex challenger: REQUIRED` and the review record or
   arc-subsumption evidence required by audit.
 
-If a Light slice starts touching Heavy surfaces — including `AGENTS.md`, CLI or
-binary entrypoints, runtime evidence writers/readers, command/plugin files,
-methodology files, audit gates, or plan files — reclassify it as Heavy before
-commit. The plan lifecycle for multi-slice work remains unchanged.
+If a Light slice starts touching Heavy surfaces — including `AGENTS.md`,
+`CLAUDE.md`, CLI or binary entrypoints, runtime evidence writers/readers,
+command/plugin files, methodology files, audit gates, or plan files —
+reclassify it as Heavy before commit. The plan lifecycle for multi-slice work
+remains unchanged.
 
 ## Session hygiene
 
@@ -201,7 +204,7 @@ needs a cheap sanity check, or when onboarding a fresh session.
 | Property tests (visible) | `tests/properties/visible/` | Tier 2+ |
 | Property tests (hidden) | `tests/properties/hidden/` | Tier 2+ (not mounted to implementer) |
 | Unit tests | `tests/unit/` | All phases |
-| Plugin manifest | `.Codex-plugin/plugin.json` | Phase 1+ |
+| Plugin manifest | `.claude-plugin/plugin.json` | Phase 1+ |
 
 ## Cross-model challenger protocol
 

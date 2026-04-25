@@ -1,4 +1,4 @@
-<!-- current_slice: 136 -->
+<!-- current_slice: 137 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -10,7 +10,7 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 136
+- **current_slice:** 137
 - **current_arc:** Build workflow parity is now closed. The implementation has the policy
   shape, typed Build artifact contracts/schemas, registered runtime synthesis
   writers for `build.plan@v1` and `build.result@v1`, and a focused
@@ -61,6 +61,13 @@ context and phase-open provenance.
   next design turn has a tested structure to revise.
   Slice 136 adds a design-only Repair recipe fixture and recipe schema so
   primitive compositions can be tested before behavior is added.
+  Slice 137 cleans up agent-legibility surfaces: `AGENTS.md` is the active
+  guide, `CLAUDE.md` is a compatibility pointer, active audit/test references
+  now point at the active guide, unused `tsx` package metadata and redundant
+  `.gitkeep` placeholders are removed, and the product-surface inventory is
+  refreshed with a current-checkout note. Next work is the product-direction
+  pivot from Repair parity toward a clearer Fix recipe over reusable workflow
+  moves.
 - **current_phase:** Phase 2 — Implementation (closed for the first working workflow; broader parity expansion planning next)
 
 Chronicle (relocated narrative history — non-authoritative; see

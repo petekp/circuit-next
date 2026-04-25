@@ -22,6 +22,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   type InventorySurface,
+  REPORT_NOTE,
   REPORT_SCHEMA_VERSION,
   REPORT_SLICE,
   buildInventory,
@@ -65,6 +66,7 @@ describe('Slice 27b — inventory report shape', () => {
   it('declares schema_version=1 and slice=27b', () => {
     expect(REPORT_SCHEMA_VERSION).toBe('1');
     expect(REPORT_SLICE).toBe('27b');
+    expect(REPORT_NOTE).toMatch(/current checkout/);
   });
 
   it('buildInventory returns 10 surfaces with the expected ids in order', () => {
@@ -107,6 +109,7 @@ describe('Slice 27b — inventory report shape', () => {
     expect(report.schema_version).toBe('1');
     expect(report.slice).toBe('27b');
     expect(report.baseline).toBe(true);
+    expect(report.report_note).toBe(REPORT_NOTE);
     expect(report.metadata.generated_at).toBe('2026-04-20T00:00:00.000Z');
     expect(report.metadata.head_commit).toBe('abc123');
     expect(report.surfaces).toBe(inventory.surfaces);
@@ -310,6 +313,7 @@ describe('Slice 27b — committed baseline report parity', () => {
     expect(parsed.schema_version).toBe('1');
     expect(parsed.slice).toBe('27b');
     expect(parsed.baseline).toBe(true);
+    expect(parsed.report_note).toBe(REPORT_NOTE);
     expect(Array.isArray(parsed.surfaces)).toBe(true);
     expect(parsed.surfaces.map((s: { id: string }) => s.id)).toEqual(EXPECTED_IDS);
   });
@@ -320,6 +324,7 @@ describe('Slice 27b — committed baseline report parity', () => {
     expect(body.length).toBeGreaterThan(100);
     expect(body).toMatch(/Product-Surface Inventory/);
     expect(body).toMatch(/Slice: 27b/);
+    expect(body).toContain(REPORT_NOTE);
     for (const id of EXPECTED_IDS) {
       expect(body).toContain(`\`${id}\``);
     }

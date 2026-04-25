@@ -47,6 +47,7 @@ export const WORK_MODE_DECLARATION_PATTERN = /^Work mode:\s*(Light|Heavy)\s*$/gi
 
 export const LIGHT_WORK_MODE_FORBIDDEN_EXACT_PATHS = [
   'AGENTS.md',
+  'CLAUDE.md',
   'bin/circuit-next',
   'src/cli/circuit.ts',
   'src/cli/dogfood.ts',
@@ -106,7 +107,7 @@ const CITATION_PATTERNS = [
   /specs\/behavioral\//i,
   /specs\/risks\.md/i,
   /bootstrap\//i,
-  /CLAUDE\.md/i,
+  /AGENTS\.md/i,
   /\bADR-\d{4}/i,
 ];
 
@@ -452,7 +453,7 @@ function checkLane(body) {
 // matching FRAMING_LITERALS above) AND `Failure mode addressed:`,
 // `Failure mode being addressed:`, or any `Failure mode <phrase>:`
 // variant on a single line. Empirical basis (Slice 48): 8 of 9 arc-47
-// commits use `Failure mode addressed:` — phrasing mirrors CLAUDE.md
+// commits use `Failure mode addressed:` — phrasing mirrors AGENTS.md
 // §Lane discipline "name the failure mode being addressed". `[^:\n]*`
 // bounds the expansion to a single line and stops at the first colon
 // so prose mid-sentence matches ("...we hit a failure mode: X") remain
@@ -3576,7 +3577,7 @@ export function checkSpineCoverage(rootDir = REPO_ROOT) {
 //   - If an allowlist entry has no matching live collision → red (stale).
 //   - Untracked collisions are red.
 //   - Tracked collisions that match an entry → yellow.
-// New known-collision entries MUST carry a challenger pass per CLAUDE.md
+// New known-collision entries MUST carry a challenger pass per AGENTS.md
 // §Hard invariants #6 (every allowlist-ratchet change is a ratchet change).
 export const ARTIFACT_BACKING_PATH_PREFIX_SYNONYMS = Object.freeze({
   '<circuit-next-run-root>': '<run-root>',
@@ -3652,7 +3653,7 @@ export const ARTIFACT_BACKING_PATH_CONTAINER_PATHS = new Map([
 // at <run-root>/artifacts/result.json) by path-splitting explore.result to
 // <run-root>/artifacts/explore-result.json. The allowlist is intentionally
 // empty now. Future tracked-collision entries must carry a Codex challenger
-// pass per CLAUDE.md §Hard invariants #6 and a `closing_slice` reference.
+// pass per AGENTS.md §Hard invariants #6 and a `closing_slice` reference.
 // Tests that need to exercise the tracked-collision / stale-entry paths
 // inject a synthetic allowlist via checkArtifactBackingPathIntegrity's
 // `opts.knownCollisions` parameter.
@@ -3819,7 +3820,7 @@ export function checkArtifactBackingPathIntegrity(rootDir = REPO_ROOT, opts = {}
       );
     } else {
       untrackedCollisions.push(
-        `${normalized} shared by {${ids.join(', ')}} — register at distinct paths, extend ARTIFACT_BACKING_PATH_CONTAINER_PATHS with this path + allowed-ids set if legitimately composite, OR add a tracked-collision entry in ARTIFACT_BACKING_PATH_KNOWN_COLLISIONS citing the closing slice (challenger pass required per CLAUDE.md §Hard invariants #6)`,
+        `${normalized} shared by {${ids.join(', ')}} — register at distinct paths, extend ARTIFACT_BACKING_PATH_CONTAINER_PATHS with this path + allowed-ids set if legitimately composite, OR add a tracked-collision entry in ARTIFACT_BACKING_PATH_KNOWN_COLLISIONS citing the closing slice (challenger pass required per AGENTS.md §Hard invariants #6)`,
       );
     }
   }
@@ -3868,7 +3869,7 @@ export function checkArtifactBackingPathIntegrity(rootDir = REPO_ROOT, opts = {}
 }
 
 // Slice 35 — arc-close composition-review presence check.
-// Fold-in from Slice 35 Codex HIGH 4: the CLAUDE.md §Cross-slice composition
+// Fold-in from Slice 35 Codex HIGH 4: the AGENTS.md §Cross-slice composition
 // review cadence rule is not a machine-checkable ratchet unless something
 // binds the rule to an audit gate.
 //
@@ -4236,7 +4237,7 @@ function evaluateArcCloseGate(gate, sliceNum, reviewsDir, opts = {}) {
     return {
       level: 'red',
       status: 'red',
-      detail: `${gate.description} closed (current_slice=${currentSliceForDisplay} >= ${ceremonyDisplay}) but two-prong arc-close composition review incomplete — missing: ${missing.join(', ')}. CLAUDE.md §Cross-slice composition review cadence requires both prongs: fresh-read Claude composition-adversary pass + Codex cross-model challenger.`,
+      detail: `${gate.description} closed (current_slice=${currentSliceForDisplay} >= ${ceremonyDisplay}) but two-prong arc-close composition review incomplete — missing: ${missing.join(', ')}. AGENTS.md §Cross-slice composition review cadence requires both prongs: fresh-read Claude composition-adversary pass + Codex cross-model challenger.`,
     };
   }
 
@@ -4758,8 +4759,10 @@ export const FORBIDDEN_PROGRESS_SCAN_FILES = Object.freeze([
   'specs/plans/slice-47-hardening-foldins.md',
   // Slice 47d (Codex HIGH 3 + MED 1 trigger fold-in): extend the scan
   // scope to cover operator-facing surfaces outside the original six-file
-  // pin. CLAUDE.md is the methodology authority surface; TIER.md is the
-  // claim matrix surface.
+  // pin. AGENTS.md is the active methodology authority surface; CLAUDE.md
+  // remains a compatibility pointer for older tooling; TIER.md is the claim
+  // matrix surface.
+  'AGENTS.md',
   'CLAUDE.md',
   'TIER.md',
   // Slice 67 (methodology-trim-arc LIVE-STATE-HELPER) — chronicle file
@@ -6142,7 +6145,7 @@ function main() {
   // Arc-close-ceremony exemption (Slice 48): commits carrying an
   // `arc-subsumption: <path>` field pointing at an existing file are
   // exempt from the per-commit triplet. Their framing lives in the
-  // linked arc-close composition review prong files per CLAUDE.md
+  // linked arc-close composition review prong files per AGENTS.md
   // §Cross-slice composition review cadence, which explicitly makes
   // those prong files authoritative for arc-close framing.
   // Check 26 (checkArcCloseCompositionReviewPresence) separately gates
@@ -6207,7 +6210,7 @@ function main() {
     findings.push({
       level: 'green',
       check: 'Citation rule (ADR-0002)',
-      detail: 'All slice commits cite specs/, CLAUDE.md, bootstrap/, or an ADR',
+      detail: 'All slice commits cite specs/, AGENTS.md, bootstrap/, or an ADR',
     });
   } else {
     counters.red++;
@@ -6453,7 +6456,7 @@ function main() {
   // authority surface claims Phase 2 open, the 14a operator product-direction
   // check + the 14b Delegation acknowledgment section + ADR-0006 must all be
   // present. Advances the audit-coverage ratchet independently of the
-  // phase-graph authority ratchet (Check 20), per CLAUDE.md hard invariant #8.
+  // phase-graph authority ratchet (Check 20), per AGENTS.md hard invariant #8.
   const cc14Retarget = checkCc14RetargetPresence();
   counters[cc14Retarget.level]++;
   findings.push({
@@ -6523,7 +6526,7 @@ function main() {
   });
 
   // Check 26: Arc-close composition-review presence (Slice 35 fold-in of
-  // Codex challenger HIGH 4). Binds the CLAUDE.md §Cross-slice composition
+  // Codex challenger HIGH 4). Binds the AGENTS.md §Cross-slice composition
   // review cadence rule to a machine-checkable gate for the pre-P2.4 fold-in
   // arc. Fires red when the arc's last slice has landed but no arc-close
   // composition review exists under specs/reviews/ with an ACCEPT or
@@ -6643,7 +6646,7 @@ function main() {
 
   // Check 35: Codex challenger REQUIRED declaration (Slice 47d — Codex HIGH
   // 2 + Claude HIGH 2 fold-in of the Slice 47c-2 MED 2 deferred binding).
-  // Mechanical enforcement of CLAUDE.md §Hard invariant #6 literal rule at
+  // Mechanical enforcement of AGENTS.md §Hard invariant #6 literal rule at
   // the commit-body layer: any slice commit declaring
   // `Codex challenger: REQUIRED` must carry either a matching per-slice
   // review file or an explicit arc-subsumption field pointing at an

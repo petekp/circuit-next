@@ -33,6 +33,7 @@ export type InventoryReport = {
   schema_version: string;
   slice: string;
   baseline: true;
+  report_note: string;
   metadata: { generated_at: string; head_commit: string | null };
   summary: InventorySummary;
   surfaces: InventorySurface[];
@@ -40,6 +41,7 @@ export type InventoryReport = {
 
 export const REPORT_SCHEMA_VERSION: string;
 export const REPORT_SLICE: string;
+export const REPORT_NOTE: string;
 
 export function buildInventory(options?: {
   pkg?: unknown;

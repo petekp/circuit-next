@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, '..', '..');
 
-const CLAUDE_MD = resolve(REPO_ROOT, 'CLAUDE.md');
+const AGENTS_MD = resolve(REPO_ROOT, 'AGENTS.md');
 const PROJECT_STATE_MD = resolve(REPO_ROOT, 'PROJECT_STATE.md');
 const README_MD = resolve(REPO_ROOT, 'README.md');
 const ADR_0002 = resolve(REPO_ROOT, 'specs/adrs/ADR-0002-bootstrap-discipline.md');
@@ -35,31 +35,31 @@ function extractPhase(text: string): string | null {
   return null;
 }
 
-// SESSION-I1 — CLAUDE.md stays ≤ 450 lines (cap raised 300 → 450 by
+// SESSION-I1 — AGENTS.md stays ≤ 450 lines (cap raised 300 → 450 by
 // ADR-0011 at Slice 64 after Slice 61 Codex semantic-loss evidence).
 // Every line enters the primary instruction budget of every session.
 // Past the cap, later revisions accumulate contradictions because
-// nobody holds the whole file in head at once. The CLAUDE.md itself
+// nobody holds the whole file in head at once. The AGENTS.md itself
 // carries this as Hard Invariant #10.
-describe('session-hygiene — SESSION-I1 CLAUDE.md line budget', () => {
-  it('CLAUDE.md exists', () => {
-    expect(existsSync(CLAUDE_MD)).toBe(true);
+describe('session-hygiene — SESSION-I1 AGENTS.md line budget', () => {
+  it('AGENTS.md exists', () => {
+    expect(existsSync(AGENTS_MD)).toBe(true);
   });
 
-  it('CLAUDE.md is ≤ 450 lines (cap raised 300 → 450 per ADR-0011)', () => {
-    const text = readFileSync(CLAUDE_MD, 'utf-8');
+  it('AGENTS.md is ≤ 450 lines (cap raised 300 → 450 per ADR-0011)', () => {
+    const text = readFileSync(AGENTS_MD, 'utf-8');
     const lineCount = text.split('\n').length;
     expect(
       lineCount,
-      `CLAUDE.md is ${lineCount} lines; hard invariant #10 caps it at 450 per ADR-0011. Move detail to specs/ with a pointer.`,
+      `AGENTS.md is ${lineCount} lines; hard invariant #10 caps it at 450 per ADR-0011. Move detail to specs/ with a pointer.`,
     ).toBeLessThanOrEqual(450);
   });
 
-  it('CLAUDE.md names its own ≤ 450-line hard invariant', () => {
-    const text = readFileSync(CLAUDE_MD, 'utf-8');
+  it('AGENTS.md names its own ≤ 450-line hard invariant', () => {
+    const text = readFileSync(AGENTS_MD, 'utf-8');
     expect(
-      /CLAUDE\.md.*(?:≤|<=|less than or equal to)\s*450\s*lines/i.test(text),
-      'CLAUDE.md must name its own ≤450-line invariant (post ADR-0011) so the rule is visible inline.',
+      /AGENTS\.md.*(?:≤|<=|less than or equal to)\s*450\s*lines/i.test(text),
+      'AGENTS.md must name its own ≤450-line invariant (post ADR-0011) so the rule is visible inline.',
     ).toBe(true);
   });
 });
@@ -141,14 +141,14 @@ describe('session-hygiene — SESSION-I2 static-documentation anchor (README ↔
 // SESSION-I3 — Compaction disabled. Prose-documented rather than runtime-
 // testable, because "compaction" is a harness-level setting that does not
 // leave a filesystem trace. The test asserts the discipline is named inline
-// in CLAUDE.md so a reader sees it as part of session hygiene rather than
+// in AGENTS.md so a reader sees it as part of session hygiene rather than
 // discovering it after a compaction has already eaten a decision.
 describe('session-hygiene — SESSION-I3 compaction disabled (prose-documented)', () => {
-  it('CLAUDE.md §Session hygiene says compaction is disabled', () => {
-    const text = readFileSync(CLAUDE_MD, 'utf-8');
+  it('AGENTS.md §Session hygiene says compaction is disabled', () => {
+    const text = readFileSync(AGENTS_MD, 'utf-8');
     expect(
       /compaction is\s*\*{0,2}\s*disabled/i.test(text),
-      'CLAUDE.md must document that compaction is disabled on this repo.',
+      'AGENTS.md must document that compaction is disabled on this repo.',
     ).toBe(true);
   });
 });
@@ -157,31 +157,31 @@ describe('session-hygiene — SESSION-I3 compaction disabled (prose-documented)'
 // rather than runtime-testable. The audit's framing-triplet check is the
 // closest runtime proxy; this test asserts the rule is named inline.
 describe('session-hygiene — SESSION-I4 30-minute slice bound (prose-documented)', () => {
-  it('CLAUDE.md §Session hygiene names the ≤30-minute slice bound', () => {
-    const text = readFileSync(CLAUDE_MD, 'utf-8');
+  it('AGENTS.md §Session hygiene names the ≤30-minute slice bound', () => {
+    const text = readFileSync(AGENTS_MD, 'utf-8');
     expect(
       /Slices?\s*≤\s*30\s*min/i.test(text) || /Slices?\s*<=\s*30\s*min/i.test(text),
-      'CLAUDE.md must document the ≤30-minute slice wall-clock bound.',
+      'AGENTS.md must document the ≤30-minute slice wall-clock bound.',
     ).toBe(true);
   });
 });
 
-// SESSION-I5 — Commits cite specs/, CLAUDE.md, bootstrap/, or an ADR. This
+// SESSION-I5 — Commits cite specs/, AGENTS.md, bootstrap/, or an ADR. This
 // is RUNTIME-enforced across git history by scripts/audit.mjs (Citation
 // rule dimension); this describe block is a STATIC-DOCUMENTATION ANCHOR
-// per arc-review MED #9: it asserts the rule is visible inline in CLAUDE.md
+// per arc-review MED #9: it asserts the rule is visible inline in AGENTS.md
 // and authoritative in ADR-0002, without claiming commit-coverage. Title
 // clarified from "prose-documented + ADR-anchored" to make the static-anchor
 // nature explicit and stop the prior title's implied commit-walk coverage.
 describe('session-hygiene — SESSION-I5 static-documentation anchor (citation rule named inline + ADR-anchored)', () => {
-  it('CLAUDE.md names the citation rule or points at ADR-0002', () => {
-    const text = readFileSync(CLAUDE_MD, 'utf-8');
+  it('AGENTS.md names the citation rule or points at ADR-0002', () => {
+    const text = readFileSync(AGENTS_MD, 'utf-8');
     const citesRuleInline =
       /specs\//.test(text) && /(citation rule|cite.*specs|cites specs|commit.*cite)/i.test(text);
     const citesAdr0002 = /ADR-0002/.test(text);
     expect(
       citesRuleInline || citesAdr0002,
-      'CLAUDE.md must either describe the citation rule inline or point at ADR-0002.',
+      'AGENTS.md must either describe the citation rule inline or point at ADR-0002.',
     ).toBe(true);
   });
 

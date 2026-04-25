@@ -44,7 +44,7 @@ const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(SCRIPT_DIR, '..');
 
 const PLAN_PATH = 'specs/plans/phase-1-close-revised.md';
-const CLAUDE_MD_PATH = 'CLAUDE.md';
+const AGENTS_MD_PATH = 'AGENTS.md';
 
 function sh(cmd) {
   return execSync(cmd, { cwd: REPO_ROOT, encoding: 'utf8' }).trim();
@@ -103,7 +103,7 @@ function main() {
 
   header('2. Next slice');
   console.log(`  Plan (authoritative):  ${PLAN_PATH}`);
-  console.log(`  Methodology:           ${CLAUDE_MD_PATH}  (lane + trajectory rules)`);
+  console.log(`  Methodology:           ${AGENTS_MD_PATH}  (lane + trajectory rules)`);
   console.log(`  Suggested next id:     ${suggested ?? '(cannot infer from current marker)'}`);
   console.log('  Note: SLICE_ID_PATTERN = ^[0-9]+[a-z]?$ — non-conforming ids need an ADR first.');
 
@@ -177,7 +177,7 @@ function main() {
   console.log(`  ${FRAMING_LITERALS.acceptanceEvidence} <what proves it worked>`);
   console.log(`  ${FRAMING_LITERALS.whyThisNotAdjacent} <adversarial + trajectory framing>`);
   console.log(
-    `  Authority: <citation — ${PLAN_PATH}, ADR-NNNN, specs/contracts/..., or CLAUDE.md>`,
+    `  Authority: <citation — ${PLAN_PATH}, ADR-NNNN, specs/contracts/..., or AGENTS.md>`,
   );
   console.log('');
   console.log('  <body: what changed, why, evidence citations>');

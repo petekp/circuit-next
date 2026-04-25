@@ -267,7 +267,8 @@ describe('Slice 47d — Check 35 checkCodexChallengerRequiredDeclaration (Codex 
 });
 
 describe('Slice 47d — forbidden-progress scan scope extension (Codex HIGH 3 fold-in)', () => {
-  it('FORBIDDEN_PROGRESS_SCAN_FILES includes CLAUDE.md and TIER.md', () => {
+  it('FORBIDDEN_PROGRESS_SCAN_FILES includes AGENTS.md, CLAUDE.md, and TIER.md', () => {
+    expect(FORBIDDEN_PROGRESS_SCAN_FILES).toContain('AGENTS.md');
     expect(FORBIDDEN_PROGRESS_SCAN_FILES).toContain('CLAUDE.md');
     expect(FORBIDDEN_PROGRESS_SCAN_FILES).toContain('TIER.md');
   });
