@@ -37,8 +37,6 @@
         "kind": "synthesis"
       },
       "output": "task.intake@v1",
-      "route_outcomes": ["continue", "ask", "stop"],
-      "mode_override_outcomes": [],
       "routes": [
         {
           "outcome": "continue",
@@ -65,8 +63,6 @@
         "kind": "synthesis"
       },
       "output": "route.decision@v1",
-      "route_outcomes": ["continue", "ask", "stop"],
-      "mode_override_outcomes": [],
       "routes": [
         {
           "outcome": "continue",
@@ -93,8 +89,6 @@
         "kind": "synthesis"
       },
       "output": "fix.brief@v1",
-      "route_outcomes": ["continue", "revise", "ask", "stop"],
-      "mode_override_outcomes": [],
       "routes": [
         {
           "outcome": "continue",
@@ -127,8 +121,6 @@
         "role": "researcher"
       },
       "output": "fix.context@v1",
-      "route_outcomes": ["continue", "retry", "ask", "stop"],
-      "mode_override_outcomes": [],
       "routes": [
         {
           "outcome": "continue",
@@ -161,8 +153,6 @@
         "role": "researcher"
       },
       "output": "fix.diagnosis@v1",
-      "route_outcomes": ["continue", "retry", "ask", "stop"],
-      "mode_override_outcomes": [],
       "routes": [
         {
           "outcome": "continue",
@@ -194,8 +184,6 @@
         "kind": "checkpoint"
       },
       "output": "fix.no-repro-decision@v1",
-      "route_outcomes": ["continue", "revise", "stop", "handoff", "escalate"],
-      "mode_override_outcomes": [],
       "routes": [
         {
           "outcome": "continue",
@@ -233,8 +221,6 @@
         "role": "implementer"
       },
       "output": "fix.change@v1",
-      "route_outcomes": ["continue", "retry", "ask", "stop", "handoff"],
-      "mode_override_outcomes": [],
       "routes": [
         {
           "outcome": "continue",
@@ -271,8 +257,6 @@
         "kind": "verification"
       },
       "output": "fix.verification@v1",
-      "route_outcomes": ["continue", "retry", "ask", "stop"],
-      "mode_override_outcomes": ["continue"],
       "routes": [
         {
           "outcome": "continue",
@@ -307,8 +291,6 @@
         "role": "reviewer"
       },
       "output": "fix.review@v1",
-      "route_outcomes": ["continue", "retry", "revise", "ask", "stop"],
-      "mode_override_outcomes": [],
       "routes": [
         {
           "outcome": "continue",
@@ -345,8 +327,6 @@
         "kind": "synthesis"
       },
       "output": "fix.result@v1",
-      "route_outcomes": ["complete", "stop", "handoff", "escalate"],
-      "mode_override_outcomes": [],
       "routes": [
         {
           "outcome": "complete",
@@ -378,8 +358,6 @@
         "kind": "synthesis"
       },
       "output": "fix.result@v1",
-      "route_outcomes": ["complete", "stop", "handoff", "escalate"],
-      "mode_override_outcomes": [],
       "routes": [
         {
           "outcome": "complete",
@@ -411,8 +389,6 @@
         "kind": "synthesis"
       },
       "output": "continuity.record@v1",
-      "route_outcomes": ["complete", "stop"],
-      "mode_override_outcomes": [],
       "routes": [
         {
           "outcome": "complete",

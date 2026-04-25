@@ -1,4 +1,4 @@
-<!-- current_slice: 152 -->
+<!-- current_slice: 153 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -10,7 +10,7 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 152
+- **current_slice:** 153
 - **current_arc:** Build workflow parity is now closed. The implementation has the policy
   shape, typed Build artifact contracts/schemas, registered runtime synthesis
   writers for `build.plan@v1` and `build.result@v1`, and a focused
@@ -112,6 +112,10 @@ context and phase-open provenance.
   edges are already resolved to one target per outcome, so a future runtime
   compiler can consume an effective per-rigor shape without re-walking
   overrides.
+  Slice 153 collapses the now-redundant `route_outcomes` and
+  `mode_override_outcomes` arrays on each projected item. Both were derivable
+  from the per-outcome `routes` field added in slice 150, so the projection
+  layer no longer carries the same information twice.
 - **current_phase:** Phase 2 — Implementation (closed for the first working workflow; broader parity expansion planning next)
 
 Chronicle (relocated narrative history — non-authoritative; see

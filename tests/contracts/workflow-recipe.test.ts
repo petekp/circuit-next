@@ -121,7 +121,7 @@ describe('workflow recipe schema', () => {
     ]);
   });
 
-  it('projects item execution, output, route outcomes, and mode override outcomes', () => {
+  it('projects item uses, phase, execution, and output through to projected items', () => {
     const projection = projectWorkflowRecipeForCompiler(parseFixRecipe());
     const verify = projection.items.find((item) => item.id === 'fix-verify');
     const act = projection.items.find((item) => item.id === 'fix-act');
@@ -133,16 +133,12 @@ describe('workflow recipe schema', () => {
       phase: 'act',
       execution: { kind: 'dispatch', role: 'implementer' },
       output: 'fix.change@v1',
-      route_outcomes: ['continue', 'retry', 'ask', 'stop', 'handoff'],
-      mode_override_outcomes: [],
     });
     expect(verify).toMatchObject({
       uses: 'run-verification',
       phase: 'verify',
       execution: { kind: 'verification' },
       output: 'fix.verification@v1',
-      route_outcomes: ['continue', 'retry', 'ask', 'stop'],
-      mode_override_outcomes: ['continue'],
     });
   });
 
@@ -180,14 +176,15 @@ describe('workflow recipe schema', () => {
     });
   });
 
-  it('keeps projected route outcomes aligned with their target lists', () => {
-    const projection = projectWorkflowRecipeForCompiler(parseFixRecipe());
+  it('preserves the recipe item route outcome set through projection', () => {
+    const recipe = parseFixRecipe();
+    const projection = projectWorkflowRecipeForCompiler(recipe);
     for (const item of projection.items) {
-      expect(item.routes.map((route) => route.outcome)).toEqual(item.route_outcomes);
-      const overrideOutcomes = item.routes
-        .filter((route) => Object.keys(route.mode_targets).length > 0)
-        .map((route) => route.outcome);
-      expect(overrideOutcomes).toEqual(item.mode_override_outcomes);
+      const sourceItem = recipe.items.find((entry) => entry.id === item.id);
+      if (sourceItem === undefined) throw new Error(`recipe item missing: ${item.id}`);
+      const projectedOutcomes = item.routes.map((route) => route.outcome).sort();
+      const recipeOutcomes = Object.keys(sourceItem.routes).sort();
+      expect(projectedOutcomes).toEqual(recipeOutcomes);
     }
   });
 

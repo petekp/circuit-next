@@ -258,8 +258,6 @@ export const WorkflowRecipeProjectedItem = z
     phase: CanonicalPhase,
     execution: WorkflowRecipeExecution,
     output: WorkflowPrimitiveContractRef,
-    route_outcomes: z.array(WorkflowPrimitiveRoute).min(1),
-    mode_override_outcomes: z.array(WorkflowPrimitiveRoute).default([]),
     routes: z.array(WorkflowRecipeProjectedRoute).min(1),
   })
   .strict();
@@ -592,8 +590,6 @@ export function projectWorkflowRecipeForCompiler(
       phase: item.phase,
       execution: item.execution,
       output: item.output,
-      route_outcomes: Object.keys(item.routes) as WorkflowPrimitiveRouteValue[],
-      mode_override_outcomes: Object.keys(item.route_overrides) as WorkflowPrimitiveRouteValue[],
       routes: projectedRoutes,
     };
   });

@@ -144,12 +144,11 @@ Plan, Act, Verify, Review, and Close phases without guessing from item ids.
 
 The schema also exposes a design-only compiler projection helper. It groups
 recipe items by declared phase, records omitted phases, and carries each item's
-execution label, output contract, route outcomes, and mode-specific route
-overrides. Each projected item also carries a per-outcome route entry with the
-default target and any rigor-specific target overrides, so a future compiler can
-walk the recipe's effective edges without re-deriving them from the authoring
-document. That projection is not executable; it is the small summary future
-compiler work should consume first.
+execution label and output contract. Each projected item also carries a
+per-outcome route entry with the default target and any rigor-specific target
+overrides, so a future compiler can walk the recipe's effective edges without
+re-deriving them from the authoring document. That projection is not executable;
+it is the small summary future compiler work should consume first.
 
 The current Fix projection is also persisted as a snapshot fixture at
 `specs/workflow-recipes/fix-candidate.projection.json`. A contract test compares

@@ -12,6 +12,14 @@ record.*
 
 ## Methodology And Recipe Pivot (opened after Slice 132)
 
+- **Slice 153 PROJECTION DERIVED-FIELD CLEANUP** (this commit,
+  Ratchet-Advance) - removed the `route_outcomes` and
+  `mode_override_outcomes` arrays from each projected recipe item. Both were
+  derivable from the per-outcome `routes` field added in slice 150, so the
+  projection layer no longer carries the same information twice. Snapshot
+  fixture refreshed; the projection-derivability contract test became vacuous
+  and was deleted.
+
 - **Slice 152 RECIPE DRAFT COMPILER BOUNDARY** (this commit,
   Ratchet-Advance) - added a design-only compiler-boundary helper that consumes
   a projection plus a rigor and returns a `WorkflowRecipeDraft` whose items
