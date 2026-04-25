@@ -185,7 +185,7 @@ function buildPolicyOnlyPayload(overrides: Record<string, unknown> = {}): Record
     schema_version: '2',
     id: 'build',
     // Deliberately policy-only: the real Build fixture waits for the
-    // verification-command and checkpoint substrates in later slices.
+    // checkpoint and dispatch slices.
     phases: [
       { title: 'Frame', canonical: 'frame', steps: ['frame-step'] },
       { title: 'Plan', canonical: 'plan', steps: ['plan-step'] },
@@ -204,7 +204,7 @@ function buildPolicyOnlyPayload(overrides: Record<string, unknown> = {}): Record
       { id: 'frame-step', kind: 'checkpoint', writes: { artifact: {} } },
       { id: 'plan-step', kind: 'synthesis', writes: { artifact: {} } },
       { id: 'act-step', kind: 'dispatch', role: 'implementer' },
-      { id: 'verify-step', kind: 'synthesis', writes: { artifact: {} } },
+      { id: 'verify-step', kind: 'verification', writes: { artifact: {} } },
       { id: 'review-step', kind: 'dispatch', role: 'reviewer' },
       { id: 'close-step', kind: 'synthesis', writes: { artifact: {} } },
     ],

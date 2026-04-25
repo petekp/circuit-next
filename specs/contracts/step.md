@@ -3,7 +3,7 @@ contract: step
 status: draft
 version: 0.2
 schema_source: src/schemas/step.ts
-last_updated: 2026-04-24
+last_updated: 2026-04-25
 depends_on: [ids, gate, selection-policy, primitives]
 codex_adversarial_review: specs/reviews/step-md-v0.2-codex.md
 artifact_ids:
@@ -15,10 +15,13 @@ property_ids: [step.prop.budget_bounds, step.prop.dispatch_role_presence, step.p
 # Step Contract
 
 A **Step** is the atomic unit of execution inside a **Phase**. Every Step
-belongs to exactly one of three variants, discriminated by `kind`:
+belongs to exactly one of four variants, discriminated by `kind`:
 
 - **SynthesisStep** — orchestrator writes a single artifact; gated by
   `schema_sections` against an `ArtifactSource`.
+- **VerificationStep** — orchestrator runs bounded direct-argv verification
+  commands and writes a single artifact; gated by `schema_sections` against an
+  `ArtifactSource`.
 - **CheckpointStep** — orchestrator pauses for selection (human or
   auto-resolver); gated by `checkpoint_selection` against a
   `CheckpointResponseSource`.
@@ -33,7 +36,7 @@ non-matching gate or writes shape.
 ## Ubiquitous language
 
 See `specs/domain.md#core-types` for canonical definitions of **Step**,
-**Gate**, **DispatchRole**, **ArtifactRef**, and the three step variants.
+**Gate**, **DispatchRole**, **ArtifactRef**, and the four step variants.
 Do not introduce synonyms; new vocabulary must land in `specs/domain.md`
 before use here.
 
@@ -47,12 +50,14 @@ enforced via `src/schemas/step.ts`, `src/schemas/gate.ts`, and
 - **STEP-I1 — Kind-variant binding.** `kind`, `executor`, `gate.kind`, and
   the shape of `writes` are coupled per variant. A `synthesis` step MUST
   have `executor: 'orchestrator'`, `gate.kind: 'schema_sections'`, and
+  `writes: { artifact: ArtifactRef }`. A `verification` step MUST have
+  `executor: 'orchestrator'`, `gate.kind: 'schema_sections'`, and
   `writes: { artifact: ArtifactRef }`. A `checkpoint` step MUST have
   `executor: 'orchestrator'`, `gate.kind: 'checkpoint_selection'`, and
   `writes: { request, response, artifact? }`. A `dispatch` step MUST have
   `executor: 'worker'`, `gate.kind: 'result_verdict'`, and
   `writes: { request, receipt, result, artifact? }`. Enforced by
-  `SynthesisStep`, `CheckpointStep`, and `DispatchStep` in
+  `SynthesisStep`, `VerificationStep`, `CheckpointStep`, and `DispatchStep` in
   `src/schemas/step.ts`.
 
 - **STEP-I2 — Non-empty routes.** Every Step declares at least one route
@@ -102,9 +107,9 @@ enforced via `src/schemas/step.ts`, `src/schemas/gate.ts`, and
 - **STEP-I6 — Role only on dispatch; surplus keys rejected.** Only
   `DispatchStep` carries a `role` field, and it is a required
   `DispatchRole` (`researcher | implementer | reviewer`).
-  `SynthesisStep` and `CheckpointStep` have no `role` field in their
-  schema, and because every Step variant, every `writes` object, every
-  gate variant, and every gate `source` object is explicitly
+  `SynthesisStep`, `VerificationStep`, and `CheckpointStep` have no `role`
+  field in their schema, and because every Step variant, every `writes`
+  object, every gate variant, and every gate `source` object is explicitly
   `.strict()`, a surplus key (including `role` on a non-dispatch step)
   is **rejected**, not stripped. This closes adversarial-review
   MED #4: the Zod-strict enforcement story is now backed by explicit
@@ -208,7 +213,7 @@ Property-based tests will cover:
 - `carry-forward:role-executor-confusion` — Existing Circuit allowed
   `orchestrator` as both an executor and a dispatch role (see
   adversarial-review MED #1). circuit-next's `DispatchRole` excludes
-  `orchestrator` and STEP-I6 forbids `role` on synthesis/checkpoint
+  `orchestrator` and STEP-I6 forbids `role` on synthesis/verification/checkpoint
   steps. The confusion is structurally eliminated.
 - `carry-forward:gate-source-opacity` — Prior to this contract, gate
   sources were opaque strings (adversarial-review MED #7). Closed by

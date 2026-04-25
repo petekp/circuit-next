@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import {
   closeSync,
   existsSync,
@@ -6,11 +7,12 @@ import {
   openSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   rmSync,
   writeFileSync,
   writeSync,
 } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import type { BuiltInAdapter, DispatchResolutionSource } from '../schemas/adapter.js';
 import {
   BuildBrief,
@@ -207,12 +209,17 @@ export interface SynthesisWriterInput {
   readonly goal: string;
 }
 
+type ArtifactWritingStep = Workflow['steps'][number] & {
+  readonly writes: { readonly artifact: { readonly schema: string; readonly path: string } };
+};
+
 export type SynthesisWriterFn = (input: SynthesisWriterInput) => void;
 
 export interface DogfoodInvocation {
   runRoot: string;
   workflow: Workflow;
   workflowBytes: Buffer;
+  projectRoot?: string;
   runId: RunId;
   goal: string;
   rigor: Rigor;
@@ -463,6 +470,11 @@ function synthesisFailureReason(stepId: string, err: unknown): string {
   return `synthesis step '${stepId}': artifact writer failed (${message})`;
 }
 
+function verificationFailureReason(stepId: string, err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  return `verification step '${stepId}': artifact writer failed (${message})`;
+}
+
 function isRunRelativePathError(err: unknown): boolean {
   return err instanceof Error && err.message.includes('run-relative path rejected');
 }
@@ -504,6 +516,72 @@ type DispatchWorkflowStep = Workflow['steps'][number] & { kind: 'dispatch' };
 
 function isDispatchStep(step: Workflow['steps'][number]): step is DispatchWorkflowStep {
   return step.kind === 'dispatch';
+}
+
+function isInsideOrSame(root: string, target: string): boolean {
+  const fromRoot = relative(root, target);
+  return fromRoot === '' || (!fromRoot.startsWith('..') && !isAbsolute(fromRoot));
+}
+
+function resolveProjectRelativeCwd(projectRoot: string, cwd: string): string {
+  const rootAbs = resolve(projectRoot);
+  const targetAbs = resolve(rootAbs, cwd);
+  if (!isInsideOrSame(rootAbs, targetAbs)) {
+    throw new Error(`verification cwd rejected: ${JSON.stringify(cwd)} escapes project root`);
+  }
+  if (!existsSync(rootAbs)) {
+    throw new Error(`verification project root rejected: ${rootAbs} does not exist`);
+  }
+  const rootReal = realpathSync.native(rootAbs);
+  let cursor = rootAbs;
+  for (const segment of cwd.split('/')) {
+    if (segment === '.') continue;
+    cursor = resolve(cursor, segment);
+    if (!existsSync(cursor)) {
+      throw new Error(`verification cwd rejected: ${JSON.stringify(cwd)} does not exist`);
+    }
+    const stat = lstatSync(cursor);
+    if (stat.isSymbolicLink()) {
+      throw new Error(
+        `verification cwd rejected: ${JSON.stringify(cwd)} crosses symlink ${JSON.stringify(cursor)}`,
+      );
+    }
+    const cursorReal = realpathSync.native(cursor);
+    if (!isInsideOrSame(rootReal, cursorReal)) {
+      throw new Error(
+        `verification cwd rejected: ${JSON.stringify(cwd)} escapes real project root through ${JSON.stringify(cursor)}`,
+      );
+    }
+  }
+  const targetReal = realpathSync.native(targetAbs);
+  if (!isInsideOrSame(rootReal, targetReal)) {
+    throw new Error(`verification cwd rejected: ${JSON.stringify(cwd)} escapes real project root`);
+  }
+  return targetReal;
+}
+
+const VERIFICATION_ENV_INHERIT_ALLOWLIST = [
+  'PATH',
+  'SystemRoot',
+  'TEMP',
+  'TMP',
+  'TMPDIR',
+  'WINDIR',
+] as const;
+
+function verificationEnvironment(commandEnv: Readonly<Record<string, string>>): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {};
+  for (const key of VERIFICATION_ENV_INHERIT_ALLOWLIST) {
+    const value = process.env[key];
+    if (value !== undefined) env[key] = value;
+  }
+  return { ...env, ...commandEnv };
+}
+
+function summarizeOutput(value: string, maxBytes: number): string {
+  const bytes = Buffer.from(value);
+  if (bytes.length <= maxBytes) return value;
+  return bytes.subarray(0, maxBytes).toString('utf8');
 }
 
 const EXPLORE_BRIEF_ARTIFACT_PATH = 'artifacts/brief.json';
@@ -574,7 +652,7 @@ function artifactPathForSchema(workflow: Workflow, schemaName: string): string {
 
 function requiredCloseReadForSchema(
   workflow: Workflow,
-  closeStep: SynthesisWriterInput['step'],
+  closeStep: ArtifactWritingStep,
   schemaName: string,
 ): string {
   return requiredReadForSchema(workflow, closeStep, schemaName, 'close step');
@@ -582,7 +660,7 @@ function requiredCloseReadForSchema(
 
 function requiredReadForSchema(
   workflow: Workflow,
-  step: SynthesisWriterInput['step'],
+  step: ArtifactWritingStep,
   schemaName: string,
   stepLabel = 'step',
 ): string {
@@ -730,6 +808,61 @@ function tryWriteRegisteredSynthesisArtifact(input: SynthesisWriterInput): boole
   }
 
   return false;
+}
+
+function writeVerificationArtifact(input: {
+  readonly runRoot: string;
+  readonly workflow: Workflow;
+  readonly step: Workflow['steps'][number] & { kind: 'verification' };
+  readonly projectRoot: string;
+}): BuildVerification {
+  const { runRoot, workflow, step, projectRoot } = input;
+  if (step.writes.artifact.schema !== 'build.verification@v1') {
+    throw new Error(`verification step '${step.id}' has unsupported artifact schema`);
+  }
+  const planPath = requiredReadForSchema(workflow, step, 'build.plan@v1');
+  const plan = BuildPlan.parse(readJsonArtifact(runRoot, planPath));
+  const commandResults = plan.verification.commands.map((command) => {
+    const started = Date.now();
+    const result = spawnSync(command.argv[0] as string, command.argv.slice(1), {
+      cwd: resolveProjectRelativeCwd(projectRoot, command.cwd),
+      env: verificationEnvironment(command.env),
+      encoding: 'utf8',
+      maxBuffer: command.max_output_bytes,
+      shell: false,
+      timeout: command.timeout_ms,
+    });
+    const durationMs = Math.max(0, Date.now() - started);
+    const exitCode =
+      typeof result.status === 'number' && result.error === undefined ? result.status : 1;
+    const status = exitCode === 0 ? 'passed' : 'failed';
+    const stderrParts = [
+      typeof result.stderr === 'string' ? result.stderr : '',
+      result.error === undefined ? '' : result.error.message,
+      result.signal === null ? '' : `signal: ${result.signal}`,
+    ].filter((part) => part.length > 0);
+    return {
+      command_id: command.id,
+      argv: command.argv,
+      cwd: command.cwd,
+      exit_code: exitCode,
+      status,
+      duration_ms: durationMs,
+      stdout_summary: summarizeOutput(
+        typeof result.stdout === 'string' ? result.stdout : '',
+        command.max_output_bytes,
+      ),
+      stderr_summary: summarizeOutput(stderrParts.join('\n'), command.max_output_bytes),
+    };
+  });
+  const artifact = BuildVerification.parse({
+    overall_status: commandResults.some((command) => command.status === 'failed')
+      ? 'failed'
+      : 'passed',
+    commands: commandResults,
+  });
+  writeJsonArtifact(runRoot, step.writes.artifact.path, artifact);
+  return artifact;
 }
 
 export function writeSynthesisArtifact(input: SynthesisWriterInput): void {
@@ -896,6 +1029,102 @@ export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResu
         gate_kind: 'schema_sections',
         outcome: 'pass',
       });
+    } else if (step.kind === 'verification') {
+      let verification: BuildVerification;
+      try {
+        if (inv.projectRoot === undefined) {
+          throw new Error(
+            `verification step '${step.id}' requires DogfoodInvocation.projectRoot for project-relative cwd resolution`,
+          );
+        }
+        verification = writeVerificationArtifact({
+          runRoot,
+          workflow,
+          step,
+          projectRoot: inv.projectRoot,
+        });
+      } catch (err) {
+        if (isRunRelativePathError(err)) throw err;
+        const reason = verificationFailureReason(step.id as unknown as string, err);
+        push({
+          schema_version: 1,
+          sequence,
+          recorded_at: recordedAt(),
+          run_id: runId,
+          kind: 'gate.evaluated',
+          step_id: step.id,
+          attempt,
+          gate_kind: 'schema_sections',
+          outcome: 'fail',
+          reason,
+        });
+        push({
+          schema_version: 1,
+          sequence,
+          recorded_at: recordedAt(),
+          run_id: runId,
+          kind: 'step.aborted',
+          step_id: step.id,
+          attempt,
+          reason,
+        });
+        runOutcome = 'aborted';
+        closeReason = reason;
+        currentStepId = undefined;
+        break;
+      }
+      push({
+        schema_version: 1,
+        sequence,
+        recorded_at: recordedAt(),
+        run_id: runId,
+        kind: 'step.artifact_written',
+        step_id: step.id,
+        attempt,
+        artifact_path: step.writes.artifact.path,
+        artifact_schema: step.writes.artifact.schema,
+      });
+      if (verification.overall_status === 'passed') {
+        push({
+          schema_version: 1,
+          sequence,
+          recorded_at: recordedAt(),
+          run_id: runId,
+          kind: 'gate.evaluated',
+          step_id: step.id,
+          attempt,
+          gate_kind: 'schema_sections',
+          outcome: 'pass',
+        });
+      } else {
+        const reason = `verification step '${step.id}' failed one or more commands`;
+        push({
+          schema_version: 1,
+          sequence,
+          recorded_at: recordedAt(),
+          run_id: runId,
+          kind: 'gate.evaluated',
+          step_id: step.id,
+          attempt,
+          gate_kind: 'schema_sections',
+          outcome: 'fail',
+          reason,
+        });
+        push({
+          schema_version: 1,
+          sequence,
+          recorded_at: recordedAt(),
+          run_id: runId,
+          kind: 'step.aborted',
+          step_id: step.id,
+          attempt,
+          reason,
+        });
+        runOutcome = 'aborted';
+        closeReason = reason;
+        currentStepId = undefined;
+        break;
+      }
     } else if (step.kind === 'dispatch') {
       const prompt = composeDispatchPrompt(step, runRoot);
       const resolvedSelection = deriveResolvedSelection(inv, workflow, step);

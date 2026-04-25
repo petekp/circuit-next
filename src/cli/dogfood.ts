@@ -226,6 +226,7 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
     runRoot,
     workflow,
     workflowBytes: bytes,
+    projectRoot: resolve(options.configCwd ?? process.cwd()),
     runId,
     goal: args.goal,
     rigor: args.rigor,

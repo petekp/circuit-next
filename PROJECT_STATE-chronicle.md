@@ -12,6 +12,13 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 119 BUILD VERIFICATION EXECUTION** (this commit, Ratchet-Advance) -
+  added a focused runtime `verification` step kind for Build. Verification
+  steps now read typed direct-argv commands from `build.plan@v1`, run them
+  without shell wrapping, honor timeout/output bounds, and write
+  `build.verification@v1` pass/fail evidence. The real Build fixture and
+  checkpoint execution remain later work.
+
 - **Slice 118 BUILD PLAN/RESULT WRITERS** (this commit, Ratchet-Advance) -
   registered runtime synthesis writers for `build.plan@v1` and
   `build.result@v1`. Build plans now require a schema-valid Build brief and

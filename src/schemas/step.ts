@@ -44,6 +44,18 @@ export const SynthesisStep = StepBase.extend({
 }).strict();
 export type SynthesisStep = z.infer<typeof SynthesisStep>;
 
+export const VerificationStep = StepBase.extend({
+  executor: z.literal('orchestrator'),
+  kind: z.literal('verification'),
+  writes: z
+    .object({
+      artifact: ArtifactRef,
+    })
+    .strict(),
+  gate: SchemaSectionsGate,
+}).strict();
+export type VerificationStep = z.infer<typeof VerificationStep>;
+
 export const CheckpointStep = StepBase.extend({
   executor: z.literal('orchestrator'),
   kind: z.literal('checkpoint'),
@@ -85,7 +97,7 @@ export type DispatchStep = z.infer<typeof DispatchStep>;
 // gate.ts's literal `ref` per source kind; this refinement is defense-in-
 // depth for any future source kind that relaxes the `ref` literal.
 export const Step = z
-  .discriminatedUnion('kind', [SynthesisStep, CheckpointStep, DispatchStep])
+  .discriminatedUnion('kind', [SynthesisStep, VerificationStep, CheckpointStep, DispatchStep])
   .superRefine((step, ctx) => {
     const slot = step.gate.source.ref;
     const writes = step.writes as Record<string, unknown>;

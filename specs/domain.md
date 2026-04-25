@@ -28,11 +28,12 @@ term, propose it here in a new commit before using it elsewhere.
   Close) or be workflow-specific. Phases are ordered groupings of Steps.
 
 - **Step** `[draft]` — The atomic unit of execution inside a Phase. A Step
-  is one of three variants: **SynthesisStep** (orchestrator writes an
-  artifact, schema-sections gate), **CheckpointStep** (orchestrator pauses
-  for human or auto-resolver selection, checkpoint-selection gate), or
-  **DispatchStep** (worker executes remotely, result-verdict gate with a
-  dispatch role).
+  is one of four variants: **SynthesisStep** (orchestrator writes an
+  artifact, schema-sections gate), **VerificationStep** (orchestrator runs
+  bounded direct-argv verification commands and writes an artifact,
+  schema-sections gate), **CheckpointStep** (orchestrator pauses for human
+  or auto-resolver selection, checkpoint-selection gate), or **DispatchStep**
+  (worker executes remotely, result-verdict gate with a dispatch role).
 
 - **Gate** `[draft]` — A validator at a step boundary. Three kinds:
   `schema_sections`, `checkpoint_selection`, `result_verdict`. A step

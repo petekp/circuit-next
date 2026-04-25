@@ -320,6 +320,25 @@ describe('Step discriminated union', () => {
     expect(Step.safeParse(baseSynthesis).success).toBe(true);
   });
 
+  it('verification step is legal and uses schema_sections artifact gating', () => {
+    const ok = Step.safeParse({
+      ...baseSynthesis,
+      id: 'verify',
+      title: 'Verify',
+      kind: 'verification',
+      protocol: 'build-verify@v1',
+      writes: {
+        artifact: { path: 'artifacts/build/verification.json', schema: 'build.verification@v1' },
+      },
+      gate: {
+        kind: 'schema_sections',
+        source: { kind: 'artifact', ref: 'artifact' },
+        required: ['overall_status', 'commands'],
+      },
+    });
+    expect(ok.success).toBe(true);
+  });
+
   it('worker + dispatch requires a dispatch role', () => {
     const noRole = Step.safeParse({
       ...baseSynthesis,
@@ -381,6 +400,34 @@ describe('Step discriminated union', () => {
         source: { kind: 'artifact', ref: 'artifact' },
         required: ['y'],
       },
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('STEP-I1 — verification step requires schema_sections gate', () => {
+    const bad = Step.safeParse({
+      ...baseSynthesis,
+      kind: 'verification',
+      writes: {
+        artifact: { path: 'artifacts/build/verification.json', schema: 'build.verification@v1' },
+      },
+      gate: {
+        kind: 'checkpoint_selection',
+        source: { kind: 'checkpoint_response', ref: 'response' },
+        allow: ['continue'],
+      },
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('STEP-I6 — verification step rejects dispatch role', () => {
+    const bad = Step.safeParse({
+      ...baseSynthesis,
+      kind: 'verification',
+      writes: {
+        artifact: { path: 'artifacts/build/verification.json', schema: 'build.verification@v1' },
+      },
+      role: 'implementer',
     });
     expect(bad.success).toBe(false);
   });
