@@ -1,0 +1,320 @@
+{
+  "schema_version": "1",
+  "primitives": [
+    {
+      "id": "intake",
+      "title": "Intake",
+      "purpose": "Capture the user's goal, requested mode, explicit workflow choice, and immediate constraints.",
+      "input_contracts": ["user.goal@v1"],
+      "output_contract": "task.intake@v1",
+      "action_surface": "orchestrator",
+      "produces_evidence": ["normalized goal", "requested workflow", "operator constraints"],
+      "gate": {
+        "kind": "schema",
+        "description": "The normalized task must preserve the user's goal and expose any explicit workflow or mode choice."
+      },
+      "allowed_routes": ["continue", "ask", "stop"],
+      "human_interaction": "optional",
+      "host_capabilities": {
+        "claude": [],
+        "codex": [],
+        "non_interactive": []
+      }
+    },
+    {
+      "id": "route",
+      "title": "Route",
+      "purpose": "Choose the workflow or recipe path from the normalized task.",
+      "input_contracts": ["task.intake@v1", "workflow.catalog@v1"],
+      "output_contract": "route.decision@v1",
+      "action_surface": "orchestrator",
+      "produces_evidence": [
+        "selected workflow",
+        "selection reason",
+        "fallback reason when conservative"
+      ],
+      "gate": {
+        "kind": "schema",
+        "description": "The route decision must name one known workflow or stop with an explicit reason."
+      },
+      "allowed_routes": ["continue", "ask", "stop"],
+      "human_interaction": "optional",
+      "host_capabilities": {
+        "claude": [],
+        "codex": [],
+        "non_interactive": []
+      }
+    },
+    {
+      "id": "frame",
+      "title": "Frame",
+      "purpose": "Define the work boundary, constraints, and proof needed for the selected path.",
+      "input_contracts": ["task.intake@v1", "route.decision@v1"],
+      "output_contract": "workflow.brief@v1",
+      "action_surface": "orchestrator",
+      "produces_evidence": ["scope boundary", "constraints", "proof plan"],
+      "gate": {
+        "kind": "schema",
+        "description": "The brief must state what is in scope, what is out of scope, and how success will be proved."
+      },
+      "allowed_routes": ["continue", "revise", "ask", "stop"],
+      "human_interaction": "optional",
+      "host_capabilities": {
+        "claude": [],
+        "codex": [],
+        "non_interactive": []
+      }
+    },
+    {
+      "id": "human-decision",
+      "title": "Human Decision",
+      "purpose": "Ask the operator a bounded question and record the answer as workflow evidence.",
+      "input_contracts": ["workflow.question@v1", "workflow.evidence@v1"],
+      "output_contract": "decision.answer@v1",
+      "action_surface": "host",
+      "produces_evidence": ["question", "available options", "selected option", "answer source"],
+      "gate": {
+        "kind": "decision",
+        "description": "The selected option must be one of the declared options or the run must pause, stop, or fail clearly."
+      },
+      "allowed_routes": ["continue", "revise", "stop", "handoff", "escalate"],
+      "human_interaction": "mode-dependent",
+      "host_capabilities": {
+        "claude": ["native user-question tool when available"],
+        "codex": ["host interactive question mechanism when available"],
+        "non_interactive": ["use declared default", "pause", "fail clearly"]
+      }
+    },
+    {
+      "id": "gather-context",
+      "title": "Gather Context",
+      "purpose": "Collect relevant facts, files, commands, or references before deciding or acting.",
+      "input_contracts": ["workflow.brief@v1", "context.request@v1"],
+      "output_contract": "context.packet@v1",
+      "action_surface": "worker",
+      "produces_evidence": ["source list", "observations", "confidence notes"],
+      "gate": {
+        "kind": "schema",
+        "description": "The context packet must cite its sources and separate observed facts from interpretation."
+      },
+      "allowed_routes": ["continue", "retry", "ask", "stop"],
+      "human_interaction": "optional",
+      "host_capabilities": {
+        "claude": [],
+        "codex": [],
+        "non_interactive": []
+      }
+    },
+    {
+      "id": "diagnose",
+      "title": "Diagnose",
+      "purpose": "Explain what is broken, unknown, risky, or likely causing the observed behavior.",
+      "input_contracts": ["workflow.brief@v1", "context.packet@v1"],
+      "output_contract": "diagnosis.result@v1",
+      "action_surface": "worker",
+      "produces_evidence": [
+        "cause hypothesis",
+        "confidence",
+        "reproduction status",
+        "diagnostic path"
+      ],
+      "gate": {
+        "kind": "schema",
+        "description": "The diagnosis must distinguish known facts, hypotheses, and unresolved questions."
+      },
+      "allowed_routes": ["continue", "retry", "ask", "stop"],
+      "human_interaction": "optional",
+      "host_capabilities": {
+        "claude": [],
+        "codex": [],
+        "non_interactive": []
+      }
+    },
+    {
+      "id": "plan",
+      "title": "Plan",
+      "purpose": "Choose a bounded implementation, investigation, or migration path.",
+      "input_contracts": ["workflow.brief@v1", "context.packet@v1", "diagnosis.result@v1"],
+      "output_contract": "plan.strategy@v1",
+      "action_surface": "worker",
+      "produces_evidence": ["ordered steps", "risk notes", "proof strategy"],
+      "gate": {
+        "kind": "schema",
+        "description": "The plan must name concrete steps, expected proof, and known risks."
+      },
+      "allowed_routes": ["continue", "revise", "ask", "stop"],
+      "human_interaction": "optional",
+      "host_capabilities": {
+        "claude": [],
+        "codex": [],
+        "non_interactive": []
+      }
+    },
+    {
+      "id": "act",
+      "title": "Act",
+      "purpose": "Make or delegate the change within the declared scope.",
+      "input_contracts": ["workflow.brief@v1", "plan.strategy@v1", "diagnosis.result@v1"],
+      "output_contract": "change.evidence@v1",
+      "action_surface": "worker",
+      "produces_evidence": ["changed files", "change rationale", "declared follow-up proof"],
+      "gate": {
+        "kind": "schema",
+        "description": "The action evidence must name what changed and why it stays inside scope."
+      },
+      "allowed_routes": ["continue", "retry", "ask", "stop", "handoff"],
+      "human_interaction": "optional",
+      "host_capabilities": {
+        "claude": [],
+        "codex": [],
+        "non_interactive": []
+      }
+    },
+    {
+      "id": "run-verification",
+      "title": "Run Verification",
+      "purpose": "Run declared proof commands or checks and capture their result.",
+      "input_contracts": ["verification.plan@v1", "change.evidence@v1"],
+      "output_contract": "verification.result@v1",
+      "action_surface": "orchestrator",
+      "produces_evidence": ["command list", "exit status", "bounded output", "pass or fail"],
+      "gate": {
+        "kind": "command",
+        "description": "Each verification command must have a captured exit status and bounded output."
+      },
+      "allowed_routes": ["continue", "retry", "ask", "stop"],
+      "human_interaction": "optional",
+      "host_capabilities": {
+        "claude": [],
+        "codex": [],
+        "non_interactive": []
+      }
+    },
+    {
+      "id": "review",
+      "title": "Review",
+      "purpose": "Judge whether the result satisfies the brief and whether any fixes are required.",
+      "input_contracts": ["workflow.brief@v1", "change.evidence@v1", "verification.result@v1"],
+      "output_contract": "review.verdict@v1",
+      "action_surface": "worker",
+      "produces_evidence": ["verdict", "findings", "confidence", "required fixes"],
+      "gate": {
+        "kind": "review",
+        "description": "The verdict must be one of the declared review outcomes and must include findings when it blocks."
+      },
+      "allowed_routes": ["continue", "retry", "revise", "ask", "stop"],
+      "human_interaction": "optional",
+      "host_capabilities": {
+        "claude": [],
+        "codex": [],
+        "non_interactive": []
+      }
+    },
+    {
+      "id": "queue",
+      "title": "Queue",
+      "purpose": "Turn broad work into ordered items with state and risk class.",
+      "input_contracts": ["workflow.brief@v1", "context.packet@v1"],
+      "output_contract": "work.queue@v1",
+      "action_surface": "orchestrator",
+      "produces_evidence": ["ordered items", "item state", "risk class", "selection rule"],
+      "gate": {
+        "kind": "queue",
+        "description": "Each queue item must have an identifier, state, and reason it belongs in the queue."
+      },
+      "allowed_routes": ["continue", "ask", "stop"],
+      "human_interaction": "optional",
+      "host_capabilities": {
+        "claude": [],
+        "codex": [],
+        "non_interactive": []
+      }
+    },
+    {
+      "id": "batch",
+      "title": "Batch",
+      "purpose": "Process a bounded set of queue items and record what completed, skipped, blocked, or failed.",
+      "input_contracts": ["work.queue@v1", "workflow.brief@v1"],
+      "output_contract": "batch.result@v1",
+      "action_surface": "mixed",
+      "produces_evidence": ["completed items", "skipped items", "blocked items", "failed items"],
+      "gate": {
+        "kind": "schema",
+        "description": "The batch result must account for every selected item exactly once."
+      },
+      "allowed_routes": ["continue", "retry", "ask", "stop", "handoff"],
+      "human_interaction": "optional",
+      "host_capabilities": {
+        "claude": [],
+        "codex": [],
+        "non_interactive": []
+      }
+    },
+    {
+      "id": "risk-rollback-check",
+      "title": "Risk/Rollback Check",
+      "purpose": "Decide whether continuing is safe and what recovery path exists if it is not.",
+      "input_contracts": ["change.evidence@v1", "verification.result@v1", "workflow.brief@v1"],
+      "output_contract": "risk.decision@v1",
+      "action_surface": "orchestrator",
+      "produces_evidence": ["risk class", "allowed next action", "recovery option"],
+      "gate": {
+        "kind": "risk",
+        "description": "The decision must explicitly allow, split, stop, hand off, or escalate the next action."
+      },
+      "allowed_routes": ["continue", "split", "ask", "stop", "handoff", "escalate"],
+      "human_interaction": "optional",
+      "host_capabilities": {
+        "claude": [],
+        "codex": [],
+        "non_interactive": []
+      }
+    },
+    {
+      "id": "close-with-evidence",
+      "title": "Close With Evidence",
+      "purpose": "End the run honestly with outcome, evidence pointers, and residual risks.",
+      "input_contracts": ["workflow.brief@v1", "verification.result@v1", "review.verdict@v1"],
+      "output_contract": "workflow.result@v1",
+      "action_surface": "orchestrator",
+      "produces_evidence": ["outcome", "evidence pointers", "residual risks", "follow-ups"],
+      "gate": {
+        "kind": "schema",
+        "description": "The final result must align with the evidence and cannot report completion when a stop, handoff, or escalation route was selected."
+      },
+      "allowed_routes": ["complete", "stop", "handoff", "escalate"],
+      "human_interaction": "never",
+      "host_capabilities": {
+        "claude": [],
+        "codex": [],
+        "non_interactive": []
+      }
+    },
+    {
+      "id": "handoff",
+      "title": "Handoff",
+      "purpose": "Persist enough state for a later session to resume with context and next action.",
+      "input_contracts": ["workflow.state@v1", "workflow.brief@v1"],
+      "output_contract": "continuity.record@v1",
+      "action_surface": "orchestrator",
+      "produces_evidence": [
+        "goal",
+        "completed moves",
+        "pending evidence",
+        "next action",
+        "known debt"
+      ],
+      "gate": {
+        "kind": "schema",
+        "description": "The handoff record must contain enough state for a later run to continue without relying on chat memory."
+      },
+      "allowed_routes": ["complete", "stop"],
+      "human_interaction": "never",
+      "host_capabilities": {
+        "claude": [],
+        "codex": [],
+        "non_interactive": []
+      }
+    }
+  ]
+}

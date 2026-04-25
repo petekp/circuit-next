@@ -29,6 +29,44 @@
       "dangling_reference_policy": "n/a"
     },
     {
+      "id": "workflow.primitive_catalog",
+      "surface_class": "greenfield",
+      "compatibility_policy": "n/a",
+      "plane": "control-plane",
+      "description": "Machine-readable catalog of reusable workflow primitives. Names each move, its input and output contracts, evidence, gate, allowed outcomes, and host-specific human-decision handling.",
+      "contract": "specs/contracts/workflow.md",
+      "schema_file": "src/schemas/workflow-primitives.ts",
+      "schema_exports": [
+        "WORKFLOW_PRIMITIVE_IDS",
+        "WorkflowPrimitiveId",
+        "WorkflowPrimitiveRoute",
+        "WorkflowPrimitiveActionSurface",
+        "WorkflowPrimitiveGateKind",
+        "WorkflowPrimitiveHumanInteraction",
+        "WorkflowPrimitiveContractRef",
+        "HostCapabilities",
+        "WorkflowPrimitive",
+        "WorkflowPrimitiveCatalog"
+      ],
+      "writers": ["circuit-next maintainers (offline product architecture)"],
+      "readers": ["workflow recipe authors", "contract tests", "future recipe compiler"],
+      "resolvers": [],
+      "backing_paths": ["specs/workflow-primitive-catalog.json"],
+      "identity_fields": ["id"],
+      "path_derived_fields": [],
+      "dangerous_sinks": [
+        "recipe assembly compatibility",
+        "user-authored workflow validation",
+        "host decision mapping"
+      ],
+      "trust_boundary": "repo-authored static catalog; guidance-only until a recipe compiler consumes it. Shape is validated by src/schemas/workflow-primitives.ts and tests/contracts/workflow-primitive-catalog.test.ts.",
+      "reference_surfaces": [],
+      "reference_evidence": [],
+      "migration_policy": "n/a",
+      "legacy_parse_policy": "n/a",
+      "dangling_reference_policy": "n/a"
+    },
+    {
       "id": "step.definition",
       "surface_class": "greenfield",
       "compatibility_policy": "n/a",

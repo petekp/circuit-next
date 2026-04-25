@@ -1576,3 +1576,18 @@ made from memory or vibes.
 
 Verification: documentation slice; full verification and audit run before
 commit.
+
+## Slice 135 — Typed primitive catalog
+
+Slice 135 turns the primitive list into a tested catalog. The new
+`specs/workflow-primitive-catalog.json` file names each reusable move, its
+inputs, output, evidence, gate, and allowed next outcomes. The schema lives in
+`src/schemas/workflow-primitives.ts`.
+
+The new `specs/workflow-recipe-composition.md` note explains how recipes should
+use those moves without becoming a generic box-and-arrow builder. Tests now keep
+the catalog aligned with the Markdown primitive inventory and pin the
+host-mapped Human Decision shape.
+
+Verification: focused catalog tests pass. Full verification and audit run
+before commit.

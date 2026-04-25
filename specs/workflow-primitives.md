@@ -18,6 +18,9 @@ one by one if a smaller set of reusable primitives gives users a better system.
 
 Deep prior-art research should be evaluated through
 `specs/workflow-research-intake.md` before it changes this inventory.
+The machine-readable companion catalog is
+`specs/workflow-primitive-catalog.json`; the composition model is sketched in
+`specs/workflow-recipe-composition.md`.
 
 ## Core Idea
 

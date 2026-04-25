@@ -1,4 +1,4 @@
-<!-- current_slice: 134 -->
+<!-- current_slice: 135 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -10,7 +10,7 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 134
+- **current_slice:** 135
 - **current_arc:** Build workflow parity is now closed. The implementation has the policy
   shape, typed Build artifact contracts/schemas, registered runtime synthesis
   writers for `build.plan@v1` and `build.result@v1`, and a focused
@@ -57,6 +57,8 @@ context and phase-open provenance.
   workflow work can compose shared moves instead of cloning old shapes.
   Slice 134 adds a research intake packet so the deep prior-art findings can be
   turned into concrete workflow-design choices instead of a loose source list.
+  Slice 135 adds a typed primitive catalog and a recipe-composition note so the
+  next design turn has a tested structure to revise.
 - **current_phase:** Phase 2 — Implementation (closed for the first working workflow; broader parity expansion planning next)
 
 Chronicle (relocated narrative history — non-authoritative; see
