@@ -1,4 +1,4 @@
-<!-- current_slice: 126 -->
+<!-- current_slice: 127 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -10,7 +10,7 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 126
+- **current_slice:** 127
 - **current_arc:** Build workflow parity is now closed. The implementation has the policy
   shape, typed Build artifact contracts/schemas, registered runtime synthesis
   writers for `build.plan@v1` and `build.result@v1`, and a focused
@@ -39,8 +39,11 @@ context and phase-open provenance.
   does not claim old Markdown byte-for-byte compatibility. P2-3 live command proof is included through a live Claude
   Code invocation of the inline `circuit` plugin. The Phase 2 close claim
   remains narrow: first working workflow product spine closed, not full
-  first-generation Circuit parity. Next work is broader parity expansion across
-  repair, migrate, sweep, custom workflows, and clearer workflow configuration.
+  first-generation Circuit parity. Slice 127 refreshed the parity map after
+  Build close and added a read-only characterization of the old Repair workflow
+  so the next Repair plan can start from reference evidence. Next work is
+  broader parity expansion across repair, migrate, sweep, custom workflows, and
+  clearer workflow configuration.
 - **current_phase:** Phase 2 — Implementation (closed for the first working workflow; broader parity expansion planning next)
 
 Chronicle (relocated narrative history — non-authoritative; see

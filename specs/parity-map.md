@@ -1,6 +1,6 @@
 ---
 name: parity-map
-description: Plain-English map of first-generation Circuit parity gaps after Slice 102.
+description: Plain-English map of first-generation Circuit parity gaps after Slice 127.
 type: inventory
 date: 2026-04-24
 reference_repo: /Users/petepetrash/Code/circuit
@@ -16,13 +16,14 @@ map was written.
 
 ## Plain-English Status
 
-`circuit-next` now has a real command path and working routes for Explore and
-Review. It does not yet match the full first-generation Circuit product.
+`circuit-next` now has a real command path and working routes for Explore,
+Review, and Build. It does not yet match the full first-generation Circuit
+product.
 
 The biggest remaining gap is not one single missing feature. It is the set of
-normal work workflows people expect to run every day: Build, Repair, Migrate,
-and Sweep. Custom workflow creation and the polished user-facing
-configuration experience are also still missing.
+normal work workflows people expect to run every day: Repair, Migrate, and
+Sweep. Custom workflow creation and the polished user-facing configuration
+experience are also still missing.
 
 ## First-Generation Circuit Baseline
 
@@ -56,16 +57,18 @@ specialized files such as `decision.md`, `queue.md`, and `inventory.md`.
 
 | Surface | Current status |
 |---|---|
-| `/circuit:run` | Operational, but it only routes to Explore or Review. |
+| `/circuit:run` | Operational. It routes Explore, Review, and clear Build prompts; Repair, Migrate, Sweep, and overnight shortcuts are still missing. |
 | `/circuit:explore` | Operational as the first working workflow path. |
 | `/circuit:review` | Operational as an audit-only review workflow. |
+| `/circuit:build` | Operational as the first mutating workflow path. |
 | Direct launcher | Operational through `./bin/circuit-next`. |
 | Model and effort config | Runtime plumbing exists for defaults, workflow/phase/step overrides, and adapter argument binding. The user-facing docs and workflow authoring experience are not yet at old Circuit's level. |
 | Artifacts | Structured JSON is the accepted successor for step artifacts. This intentionally does not claim byte-for-byte compatibility with old Markdown outputs. |
 
-The current router only knows `explore` and `review`, so phrases like
-`develop:`, `fix:`, `migrate:`, `cleanup:`, and `overnight:` are not yet full
-workflow entries.
+The current router knows Explore, Review, and Build. Clear implementation
+prompts can route to Build, while planning/document prompts stay on Explore.
+Phrases like `fix:`, `repair:`, `migrate:`, `cleanup:`, and `overnight:` are
+not yet full workflow entries.
 
 ## Gap Table
 
@@ -73,8 +76,8 @@ workflow entries.
 |---|---|---|
 | Explore | Partial | The workflow runs and emits strict JSON artifacts. Old Markdown compatibility is intentionally not the target for step artifacts. |
 | Review | Partial | The audit-only review path is real. It is narrower than old Circuit's broader review utility and does not replace verification-bearing workflows. |
-| Run router | Partial | It reaches the product runtime, but it routes only Explore and Review today. |
-| Build | Missing | This is the main everyday implementation workflow from old Circuit. |
+| Run router | Partial | It reaches the product runtime and routes clear Build prompts, but Repair, Migrate, Sweep, and overnight shortcuts are still missing. |
+| Build | Partial | The direct command, router path, entry modes, checkpoint substrate, verification command execution, implementation/review dispatch, and typed JSON artifacts are operational. It is a clean-break JSON successor, not old Markdown byte compatibility. |
 | Repair | Missing | This should build on Build, with bug reproduction and regression-proof behavior. |
 | Migrate | Missing | This needs inventory, coexistence, batch execution, verification, and rollback-aware closeout. |
 | Sweep | Missing | This needs survey, queue/triage, batch execution, deferred review, and broad cleanup behavior. |
@@ -84,23 +87,22 @@ workflow entries.
 
 ## Recommended Order
 
-1. Build
-2. Repair
-3. Router expansion for Build and Repair shortcuts
-4. Migrate
-5. Sweep
-6. Custom workflow creation
-7. User-facing workflow configuration polish
-8. Handoff command parity, if the plugin should expose continuity directly
+1. Repair
+2. Router expansion for Repair shortcuts
+3. Migrate
+4. Sweep
+5. Custom workflow creation
+6. User-facing workflow configuration polish
+7. Handoff command parity, if the plugin should expose continuity directly
 
-Build should come next because it is the most common "do real work" path. It
-also exercises the basic shape that Repair, Migrate, and Sweep will reuse:
-understand the task, plan the work, make changes, verify them, review them,
-and close with a result.
+Build is now closed as the first mutating workflow path. Repair should come
+next because it reuses Build's checkpoint, dispatch, verification, review, and
+close substrate while adding the bug-fix discipline users expect: reproduce the
+problem, isolate the cause, make the smallest fix, and prove the bug stays
+fixed.
 
-Repair should follow because it is Build with tighter bug-fix discipline:
-reproduce the problem, isolate the cause, make the smallest fix, and prove the
-bug stays fixed.
+The old Repair surface has now been characterized in
+`specs/reference/legacy-circuit/repair-characterization.md`.
 
 Migrate and Sweep should come later because they need more orchestration:
 inventories, queues, batches, deferred work, and rollback or skip decisions.
@@ -111,15 +113,15 @@ target.
 
 ## Next Slice Recommendation
 
-Open the Build workflow track next.
+Open the Repair workflow track next.
 
-The first Build slice should stay small: register Build as a known workflow
-shape, add its fixture skeleton, and prove the runtime can recognize the
-Build phases without changing the router yet. Later slices can add artifact
-schemas, synthesis writers, command wiring, router shortcuts, and live proof.
+The first Repair slice should stay small: draft and promote a Repair workflow
+parity plan that reuses Build's runtime substrate and scopes the new
+Repair-specific pieces: regression contract, reproduction/root-cause analysis,
+test-first fix evidence, verification, review, and close.
 
 ## Non-Goals For This Map
 
-This map does not implement Build, Repair, Migrate, Sweep, Create, or Handoff.
-It also does not decide the final human-readable configuration UX. It only
-records the current gap and recommends the next place to work.
+This map does not implement Repair, Migrate, Sweep, Create, or Handoff. It also
+does not decide the final human-readable configuration UX. It only records the
+current gap and recommends the next place to work.

@@ -1448,3 +1448,18 @@ Build plan frontmatter is now `closed` at Slice 126.
 
 Verification: focused Build runtime/router/command tests passed, the
 arc-close gate test passed, and the Codex recheck returned ACCEPT.
+
+## Slice 127 — Repair reference and parity map refresh
+
+Slice 127 updated the parity map now that Build is closed. Build is no longer
+listed as missing; Repair is now the recommended next workflow track.
+
+The slice also added a Repair characterization from the old Circuit repo. The
+old Repair workflow is a bug-fix path: Frame, Analyze, Fix, Verify, Review,
+Close. Its key rule is a regression contract: expected behavior, actual
+behavior, repro steps, and a regression test when the bug is reproducible.
+When the bug is flaky or not reproducible yet, the old workflow uses a
+diagnostic path instead of pretending a test exists.
+
+Verification: documentation/reference slice only; full verification and audit
+run at commit time.
