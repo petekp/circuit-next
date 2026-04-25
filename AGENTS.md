@@ -92,18 +92,23 @@ Before implementing, declare in the slice commit or slice PR:
 | **Disposable** | One-off script, demo, throwaway | No contract or property requirements; never deployed |
 | **Break-Glass** | Production incident only | Post-hoc ADR + evidence backfill within 48h |
 
-**Every slice framing** must also name: the failure mode being addressed,
-the acceptance evidence (what would prove it worked), and — as a single
-combined element — **why this not adjacent** (the rejected adjacent
-alternative plus one line on whether an earlier slice has made this one
-smaller, obsolete, or mis-sequenced). The combined element collapses the
-prior alternate-framing + trajectory-check quadruplet per Slice 65
-(methodology-trim-arc): anchoring-defense and arc-drift defense are the
-same judgment call at slice open, and keeping them as separate ceremony
-produced empty ratification. Nguyen 2024 still frames the anchoring
+**Every slice framing** must name: the failure mode being addressed and the
+acceptance evidence (what would prove it worked). Heavy work and ambiguous
+Light work must also name — as a single combined element — **why this not
+adjacent** (the rejected adjacent alternative plus one line on whether an
+earlier slice has made this one smaller, obsolete, or mis-sequenced). Routine
+Light work may omit that third element once the scope is clear. The combined
+element collapses the prior alternate-framing + trajectory-check quadruplet
+per Slice 65 (methodology-trim-arc): anchoring-defense and arc-drift defense
+are the same judgment call at slice open, and keeping them as separate
+ceremony produced empty ratification. Nguyen 2024 still frames the anchoring
 risk; the trajectory role folds in without a new artifact.
 
 ## Work modes
+
+Process should scale with the danger of a false green. If a false green would
+make Circuit lose work, run or route work incorrectly, claim completion
+incorrectly, or weaken a safety/process gate, use Heavy. Otherwise use Light.
 
 Every slice after ADR-0012 declares one work mode in the commit body:
 `Work mode: Light` or `Work mode: Heavy`. Work mode is separate from Lane; a
@@ -113,9 +118,9 @@ non-executing.
 - **Light** is for schemas, policy rows, authority rows, straightforward tests,
   internal helper extraction with no behavior change, and status docs that do
   not move phase, signoff, live-proof, workflow-close, or parity-close claims.
-  It needs clear scope, focused tests when behavior or contracts move,
-  `npm run verify`, post-commit `npm run audit`, and the plain operator
-  summary. No per-slice external challenger is required.
+  It needs a small task packet, clear scope, focused tests when behavior or
+  contracts move, `npm run verify`, post-commit `npm run audit`, and the plain
+  operator summary. No per-slice external challenger is required.
 - **Heavy** is for runtime behavior, adapters, dispatch, event/result writing,
   checkpoint/resume, command/router/plugin surfaces, methodology/audit/plan
   gates, safety relaxations, and workflow close claims. It needs the Light
@@ -127,6 +132,10 @@ If a Light slice starts touching Heavy surfaces — including `AGENTS.md`,
 command/plugin files, methodology files, audit gates, or plan files —
 reclassify it as Heavy before commit. The plan lifecycle for multi-slice work
 remains unchanged.
+
+Use `specs/methodology/task-packet-template.md` for implementation handoffs.
+The packet is the everyday shape for work: goal, why now, allowed/forbidden
+scope, evidence, known risks, stop conditions, and output summary.
 
 ## Session hygiene
 

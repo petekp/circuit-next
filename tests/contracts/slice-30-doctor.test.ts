@@ -79,8 +79,10 @@ describe('Slice 30 — slice:doctor briefing script', () => {
     ]);
   });
 
-  it('section 4 — prints all three framing literals verbatim', () => {
+  it('section 4 — prints framing literals with the Light/Heavy nuance', () => {
     expect(stdout).toMatch(/━━━ 4\. Framing pair/);
+    expect(stdout).toContain('Required for every slice');
+    expect(stdout).toContain('Also required for Heavy work and ambiguous Light work');
     expect(stdout).toContain(FRAMING_LITERALS.failureMode);
     expect(stdout).toContain(FRAMING_LITERALS.acceptanceEvidence);
     expect(stdout).toContain(FRAMING_LITERALS.whyThisNotAdjacent);

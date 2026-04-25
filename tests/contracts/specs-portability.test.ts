@@ -42,6 +42,7 @@ const EXPECTED_INLINED_METHODOLOGY_FILES = [
 const EXPECTED_METHODOLOGY_FILES = [
   ...EXPECTED_INLINED_METHODOLOGY_FILES,
   'specs/methodology/product-gate-exemptions.md',
+  'specs/methodology/task-packet-template.md',
 ].sort();
 
 const REQUIRED_FRONTMATTER_KEYS = [

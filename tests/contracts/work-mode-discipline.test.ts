@@ -5,8 +5,10 @@ import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  TWO_MODE_HARDENING_SLICE,
   TWO_MODE_METHODOLOGY_ADOPTION_SLICE,
   checkCodexChallengerRequiredDeclaration,
+  checkFramingDiscipline,
   checkWorkModeDiscipline,
 } from '../../scripts/audit.mjs';
 
@@ -143,6 +145,7 @@ describe('ADR-0012 work mode discipline audit', () => {
           'bin/circuit-next': '#!/usr/bin/env node\n',
           'src/cli/dogfood.ts': 'cli change\n',
           'src/runtime/runner.ts': 'runtime change\n',
+          'src/runtime/router.ts': 'router change\n',
           'src/runtime/event-log-reader.ts': 'reader change\n',
           'src/runtime/event-writer.ts': 'writer change\n',
           'src/runtime/result-writer.ts': 'result change\n',
@@ -164,6 +167,7 @@ describe('ADR-0012 work mode discipline audit', () => {
       expect(result.detail).toContain('bin/circuit-next');
       expect(result.detail).toContain('src/cli/dogfood.ts');
       expect(result.detail).toContain('src/runtime/runner.ts');
+      expect(result.detail).toContain('src/runtime/router.ts');
       expect(result.detail).toContain('src/runtime/event-log-reader.ts');
       expect(result.detail).toContain('src/runtime/event-writer.ts');
       expect(result.detail).toContain('src/runtime/result-writer.ts');
@@ -212,6 +216,83 @@ describe('ADR-0012 work mode discipline audit', () => {
       const challengerResult = checkCodexChallengerRequiredDeclaration(root);
       expect(challengerResult.level).toBe('green');
       expect(challengerResult.detail).toContain('per-slice review');
+    });
+  });
+
+  it('accepts pair-only Light framing after the hardening slice', () => {
+    withTempRepo((root) => {
+      const commit = commitFiles(
+        root,
+        `slice-${TWO_MODE_HARDENING_SLICE}: light pair framing`,
+        [
+          'Lane: Ratchet-Advance',
+          'Work mode: Light',
+          'Failure mode: Small schema prep lacked a typed contract target.',
+          'Acceptance evidence: focused schema tests pass.',
+        ].join('\n'),
+        { 'src/schemas/fix.ts': 'export const marker = true;\n' },
+      );
+      const result = checkFramingDiscipline([commit], root);
+      expect(result.level).toBe('green');
+      expect(result.detail).toContain('ambiguous Light');
+    });
+  });
+
+  it('still rejects Heavy framing that omits why-this-not-adjacent after hardening', () => {
+    withTempRepo((root) => {
+      const commit = commitFiles(
+        root,
+        `slice-${TWO_MODE_HARDENING_SLICE}: heavy pair framing`,
+        [
+          'Lane: Ratchet-Advance',
+          'Work mode: Heavy',
+          'Failure mode: Runtime routing could falsely report completion.',
+          'Acceptance evidence: verify and audit pass.',
+        ].join('\n'),
+        { 'src/runtime/router.ts': 'router change\n' },
+      );
+      const result = checkFramingDiscipline([commit], root);
+      expect(result.level).toBe('yellow');
+      expect(result.detail).toContain('missing: why this not adjacent');
+    });
+  });
+
+  it('still rejects pre-hardening Light framing that omits why-this-not-adjacent', () => {
+    withTempRepo((root) => {
+      const commit = commitFiles(
+        root,
+        'slice-142: pre-hardening light pair framing',
+        [
+          'Lane: Ratchet-Advance',
+          'Work mode: Light',
+          'Failure mode: Prep work lacked a small framing pair.',
+          'Acceptance evidence: focused tests pass.',
+        ].join('\n'),
+        { 'src/schemas/pre-hardening.ts': 'export const marker = true;\n' },
+      );
+      const result = checkFramingDiscipline([commit], root);
+      expect(result.level).toBe('yellow');
+      expect(result.detail).toContain('missing: why this not adjacent');
+    });
+  });
+
+  it('treats duplicate Work mode declarations as ambiguous framing', () => {
+    withTempRepo((root) => {
+      const commit = commitFiles(
+        root,
+        `slice-${TWO_MODE_HARDENING_SLICE}: ambiguous pair framing`,
+        [
+          'Lane: Ratchet-Advance',
+          'Work mode: Light',
+          'Work mode: Heavy',
+          'Failure mode: Conflicting work-mode labels hide the risk class.',
+          'Acceptance evidence: audit reports the duplicate.',
+        ].join('\n'),
+        { 'src/schemas/ambiguous.ts': 'export const marker = true;\n' },
+      );
+      const result = checkFramingDiscipline([commit], root);
+      expect(result.level).toBe('yellow');
+      expect(result.detail).toContain('missing: why this not adjacent');
     });
   });
 });

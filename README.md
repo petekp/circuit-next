@@ -1,4 +1,4 @@
-<!-- current_slice: 142 -->
+<!-- current_slice: 143 -->
 
 # circuit-next
 
@@ -46,7 +46,9 @@ workflows are primitive-backed recipes, and parity remains reference evidence
 rather than the only product goal.
 ADR-0014 adds a narrow non-external challenger fallback for cases where the
 default external Codex CLI challenger is blocked or unavailable after an
-explicit operator authorization.
+explicit operator authorization. The two-mode methodology now also uses a
+small task packet for everyday implementation work and reserves the extra
+"why this path" framing for Heavy or unclear Light slices.
 
 ## Current phase
 

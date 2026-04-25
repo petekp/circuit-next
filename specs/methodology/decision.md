@@ -416,12 +416,22 @@ Heavy` covers runtime behavior, adapters, dispatch, CLI/binary entrypoints,
 commands, routing, methodology, audit gates, plan lifecycle movement, safety
 relaxations, live-proof claims, signoff movement, and parity-close claims.
 
+The boundary is the false-green rule: if a false green would make Circuit lose
+work, run or route work incorrectly, claim completion incorrectly, or weaken a
+safety/process gate, the slice is Heavy. Otherwise, Light remains the default
+for local, preparatory, non-executing work with clear scope.
+
 Cross-model challenger review is required for Heavy work, not for every
 Light ratchet-advance. Light work still requires focused tests when behavior or
 contracts move, `npm run verify`, post-commit `npm run audit`, and a plain
 operator summary. Audit Check 35a enforces the Work mode declaration and rejects
 Light commits that touch obvious Heavy surfaces or move close/signoff/live-proof
 claims in status docs.
+
+Implementation handoffs should use the task-packet template at
+`specs/methodology/task-packet-template.md`. Routine Light slices require the
+failure mode and acceptance evidence framing pair; Heavy and ambiguous Light
+slices still require `Why this not adjacent:` as the third framing element.
 
 ## Methodology Amendments (2026-04-25, Slice 142)
 

@@ -114,9 +114,10 @@ function main() {
   console.log('  (Commit body must contain `Lane: <one of the above>` verbatim.)');
 
   header('4. Framing pair (required in commit body)');
-  console.log('  Framing literals (commit body must contain each line):');
+  console.log('  Required for every slice:');
   console.log(`    ${FRAMING_LITERALS.failureMode} <one-line description>`);
   console.log(`    ${FRAMING_LITERALS.acceptanceEvidence} <what proves it worked>`);
+  console.log('  Also required for Heavy work and ambiguous Light work:');
   console.log(
     `    ${FRAMING_LITERALS.whyThisNotAdjacent} <adversarial framing + arc-trajectory check>`,
   );

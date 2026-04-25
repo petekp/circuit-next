@@ -40,6 +40,7 @@ export const FRAMING_LITERALS = {
 };
 
 export const TWO_MODE_METHODOLOGY_ADOPTION_SLICE = '132';
+export const TWO_MODE_HARDENING_SLICE = '143';
 
 export const WORK_MODES = ['Light', 'Heavy'];
 
@@ -3071,6 +3072,60 @@ function isAfterTwoModeAdoptionSlice(subject) {
   const sliceId = canonicalSliceIdForCommitSubject(subject);
   if (sliceId === null) return false;
   return compareSliceId(sliceId, TWO_MODE_METHODOLOGY_ADOPTION_SLICE) > 0;
+}
+
+function isAtOrAfterTwoModeHardeningSlice(subject) {
+  const sliceId = canonicalSliceIdForCommitSubject(subject);
+  if (sliceId === null) return false;
+  return compareSliceId(sliceId, TWO_MODE_HARDENING_SLICE) >= 0;
+}
+
+function commitRequiresWhyThisNotAdjacent(commit) {
+  if (!isAtOrAfterTwoModeHardeningSlice(commit.subject)) return true;
+  const declarations = workModeDeclarations(commit.body);
+  return declarations.length !== 1 || declarations[0] !== 'Light';
+}
+
+export function checkFramingDiscipline(disciplinedCommits, rootDir = REPO_ROOT) {
+  const framingGaps = [];
+  const framingExempt = [];
+  for (const c of disciplinedCommits) {
+    if (!commitIsSliceShaped(c)) continue;
+    const arcSubsumptionMatch = c.body.match(ARC_SUBSUMPTION_FIELD_PATTERN);
+    if (arcSubsumptionMatch) {
+      const subsumptionPath = arcSubsumptionMatch[1];
+      if (existsSync(join(rootDir, subsumptionPath))) {
+        framingExempt.push({ commit: c, path: subsumptionPath });
+        continue;
+      }
+    }
+    const f = checkFraming(c.body, c.hash);
+    const missing = [];
+    if (!f.failureMode) missing.push('failure mode');
+    if (!f.acceptanceEvidence) missing.push('acceptance evidence');
+    if (commitRequiresWhyThisNotAdjacent(c) && !f.whyThisNotAdjacent) {
+      missing.push('why this not adjacent');
+    }
+    if (missing.length > 0) framingGaps.push({ commit: c, missing });
+  }
+  if (framingGaps.length === 0) {
+    const exemptSuffix =
+      framingExempt.length > 0
+        ? ` (${framingExempt.length} arc-close ceremony commit${
+            framingExempt.length === 1 ? '' : 's'
+          } exempt via arc-subsumption: ${framingExempt
+            .map((e) => `${e.commit.short}→${e.path}`)
+            .join(', ')})`
+        : '';
+    return {
+      level: 'green',
+      detail: `All slice commits include required framing; why-this-not-adjacent is required for Heavy, ambiguous Light, and pre-slice-${TWO_MODE_HARDENING_SLICE} slices${exemptSuffix}`,
+    };
+  }
+  return {
+    level: 'yellow',
+    detail: framingGaps.map((g) => `${g.commit.short} missing: ${g.missing.join(', ')}`).join('; '),
+  };
 }
 
 function isLightWorkModeForbiddenPath(relPath) {
@@ -6156,50 +6211,13 @@ function main() {
   // 35 (Codex-challenger REQUIRED declaration); reusing it keeps a
   // single definition of "this commit subsumes its discipline into the
   // arc-close composition review".
-  const framingGaps = [];
-  const framingExempt = [];
-  for (const c of disciplinedCommits) {
-    if (!commitIsSliceShaped(c)) continue;
-    const arcSubsumptionMatch = c.body.match(ARC_SUBSUMPTION_FIELD_PATTERN);
-    if (arcSubsumptionMatch) {
-      const subsumptionPath = arcSubsumptionMatch[1];
-      if (existsSync(join(REPO_ROOT, subsumptionPath))) {
-        framingExempt.push({ commit: c, path: subsumptionPath });
-        continue;
-      }
-    }
-    const f = checkFraming(c.body, c.hash);
-    const missing = [];
-    if (!f.failureMode) missing.push('failure mode');
-    if (!f.acceptanceEvidence) missing.push('acceptance evidence');
-    if (!f.whyThisNotAdjacent) missing.push('why this not adjacent');
-    if (missing.length > 0) framingGaps.push({ commit: c, missing });
-  }
-  if (framingGaps.length === 0) {
-    counters.green++;
-    const exemptSuffix =
-      framingExempt.length > 0
-        ? ` (${framingExempt.length} arc-close ceremony commit${
-            framingExempt.length === 1 ? '' : 's'
-          } exempt via arc-subsumption: ${framingExempt
-            .map((e) => `${e.commit.short}→${e.path}`)
-            .join(', ')})`
-        : '';
-    findings.push({
-      level: 'green',
-      check: 'Framing pair',
-      detail: `All slice commits include failure mode + acceptance evidence + why this not adjacent${exemptSuffix}`,
-    });
-  } else {
-    counters.yellow++;
-    findings.push({
-      level: 'yellow',
-      check: 'Framing pair',
-      detail: framingGaps
-        .map((g) => `${g.commit.short} missing: ${g.missing.join(', ')}`)
-        .join('; '),
-    });
-  }
+  const framingDiscipline = checkFramingDiscipline(disciplinedCommits);
+  counters[framingDiscipline.level]++;
+  findings.push({
+    level: framingDiscipline.level,
+    check: 'Framing pair',
+    detail: framingDiscipline.detail,
+  });
 
   // Check 3: Citation rule (ADR-0002).
   const citationGaps = disciplinedCommits.filter(

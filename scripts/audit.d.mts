@@ -499,12 +499,23 @@ export const FRAMING_LITERALS: {
 };
 
 export const TWO_MODE_METHODOLOGY_ADOPTION_SLICE: string;
+export const TWO_MODE_HARDENING_SLICE: string;
 export const WORK_MODES: readonly ['Light', 'Heavy'];
 export const WORK_MODE_DECLARATION_PATTERN: RegExp;
 export const LIGHT_WORK_MODE_FORBIDDEN_EXACT_PATHS: readonly string[];
 export const LIGHT_WORK_MODE_FORBIDDEN_PREFIXES: readonly string[];
 export const LIGHT_WORK_MODE_STATUS_DOC_PATHS: readonly string[];
 export const LIGHT_WORK_MODE_HEAVY_CLAIM_PATTERN: RegExp;
+
+export function checkFramingDiscipline(
+  disciplinedCommits: ReadonlyArray<{
+    hash: string;
+    short: string;
+    subject: string;
+    body: string;
+  }>,
+  rootDir?: string,
+): AuditCheckResult;
 
 export function checkWorkModeDiscipline(
   disciplinedCommits: ReadonlyArray<{

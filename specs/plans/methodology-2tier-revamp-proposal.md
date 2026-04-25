@@ -1,6 +1,6 @@
 ---
 plan: methodology-2tier-revamp-proposal
-status: operator-signoff
+status: closed
 revision: 01
 opened_at: 2026-04-25
 cleared_at: 2026-04-25
@@ -8,6 +8,9 @@ cleared_in_session: methodology-2tier-non-external-fallback-challenger-01
 signoff_at: 2026-04-25
 signoff_in_session: operator-proceed-after-fallback-clearance
 signoff_note: "Operator said 'Proceed.' after the non-external fallback path was established and the assistant continued lifecycle clearance. operator_signoff_predecessor: d381a0b."
+closed_at: 2026-04-25
+closed_in_slice: 143
+closed_with: "Task packet template, sharpened Light/Heavy framing, focused audit/test hardening, and non-external fallback slice review."
 base_commit: 34b8f69
 target: methodology-two-mode-hardening
 trigger: |

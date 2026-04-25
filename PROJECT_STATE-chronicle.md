@@ -10,6 +10,15 @@ record.*
 
 ---
 
+## Methodology And Recipe Pivot (opened after Slice 132)
+
+- **Slice 143 TWO-MODE HARDENING** (this commit, Ratchet-Advance) - kept the
+  Light/Heavy methodology instead of adding Green/Yellow/Red. Routine Light
+  work now uses a small task packet plus failure-mode and acceptance-evidence
+  framing; Heavy work and unclear Light work still require the extra
+  why-this-path framing and challenger review evidence. The plan lifecycle
+  remains unchanged.
+
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
 - **Slice 123 BUILD ENTRY-MODE SELECTION** (this commit,
