@@ -1562,3 +1562,17 @@ over reusable moves where that makes the product simpler and stronger.
 
 Verification: documentation slice; full verification and audit run before
 commit.
+
+## Slice 134 — Workflow research intake
+
+Slice 134 adds a research intake packet for the deep prior-art pass. The new
+`specs/workflow-research-intake.md` file gives tomorrow's research result a
+clear place to land: what to capture, how to compare sources, and which product
+questions should be answered before we build many more built-in recipes.
+
+It also links the existing primitive inventory to that intake packet, so future
+changes to the primitive list can be judged against the research instead of
+made from memory or vibes.
+
+Verification: documentation slice; full verification and audit run before
+commit.

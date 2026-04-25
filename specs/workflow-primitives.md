@@ -16,6 +16,9 @@ Old Circuit remains useful reference evidence: it shows real operator needs and
 good workflow instincts. But circuit-next should not recreate every old workflow
 one by one if a smaller set of reusable primitives gives users a better system.
 
+Deep prior-art research should be evaluated through
+`specs/workflow-research-intake.md` before it changes this inventory.
+
 ## Core Idea
 
 A workflow should be assembled from moves.
