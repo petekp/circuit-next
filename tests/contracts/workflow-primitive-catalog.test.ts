@@ -119,6 +119,14 @@ describe('workflow primitive catalog', () => {
     const close = parsed.primitives.find((primitive) => primitive.id === 'close-with-evidence');
     const handoff = parsed.primitives.find((primitive) => primitive.id === 'handoff');
     expect(close?.allowed_routes).toEqual(['complete', 'stop', 'handoff', 'escalate']);
+    expect(close?.input_contracts).toEqual([
+      'workflow.brief@v1',
+      'verification.result@v1',
+      'review.verdict@v1',
+    ]);
+    expect(close?.alternative_input_contracts).toEqual([
+      ['workflow.brief@v1', 'verification.result@v1'],
+    ]);
     expect(close?.human_interaction).toBe('never');
     expect(handoff?.allowed_routes).toEqual(['complete', 'stop']);
     expect(handoff?.output_contract).toBe('continuity.record@v1');

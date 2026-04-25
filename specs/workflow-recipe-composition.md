@@ -104,12 +104,21 @@ Sketch:
     "retry": "fix-gather-more-context",
     "ask": "fix-no-repro-decision",
     "stop": "@stop"
+  },
+  "route_overrides": {
+    "continue": {
+      "lite": "fix-close-lite"
+    }
   }
 }
 ```
 
 This is still only a design sketch. It is here so the deep research can stress
 the shape before we build it.
+
+`route_overrides` lets a recipe choose a different target for a named outcome
+under a specific rigor. The default route still exists, so the recipe remains
+readable; the override only says that one mode takes a different path.
 
 ## Compatibility
 
@@ -133,6 +142,11 @@ Examples:
 - Review can consume the brief, change evidence, and verification result.
 - Close With Evidence can consume the final evidence bundle.
 - Act should not consume only an idea list.
+
+Mode-specific routes are part of compatibility. If Lite skips Review, it
+should route to a separate close item whose inputs do not require a Review
+artifact. That keeps the reviewed and unreviewed close paths honest instead of
+pretending one close item has evidence that only some routes produce.
 
 This lets custom workflows be flexible without letting impossible combinations
 parse.
@@ -223,7 +237,7 @@ proving recipe should be Fix because the user-facing job is clearer:
 6. Act
 7. Run Verification
 8. Review when mode requires it
-9. Close With Evidence
+9. Close With Evidence, with a separate Lite close path when Review is skipped
 10. Handoff when work is paused
 
 If that shape feels too rigid after the deep research lands, the research should

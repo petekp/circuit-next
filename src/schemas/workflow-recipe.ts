@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { StepId, WorkflowId } from './ids.js';
+import { Rigor } from './rigor.js';
 import { SelectionOverride } from './selection-policy.js';
 import {
   WorkflowPrimitiveCatalog,
@@ -22,6 +23,13 @@ export type WorkflowRecipeTerminalTarget = z.infer<typeof WorkflowRecipeTerminal
 export const WorkflowRecipeRouteTarget = z.union([StepId, WorkflowRecipeTerminalTarget]);
 export type WorkflowRecipeRouteTarget = z.infer<typeof WorkflowRecipeRouteTarget>;
 
+export const WorkflowRecipeRouteModeOverrides = z
+  .record(Rigor, WorkflowRecipeRouteTarget)
+  .refine((overrides) => Object.keys(overrides).length > 0, {
+    message: 'route override must declare at least one rigor',
+  });
+export type WorkflowRecipeRouteModeOverrides = z.infer<typeof WorkflowRecipeRouteModeOverrides>;
+
 export const WorkflowRecipeContractAlias = z
   .object({
     generic: WorkflowPrimitiveContractRef,
@@ -43,6 +51,7 @@ export const WorkflowRecipeItem = z
     routes: z.record(z.string(), WorkflowRecipeRouteTarget).refine((routes) => {
       return Object.keys(routes).length > 0;
     }, 'recipe item must declare at least one route'),
+    route_overrides: z.record(z.string(), WorkflowRecipeRouteModeOverrides).default({}),
   })
   .strict()
   .superRefine((item, ctx) => {
@@ -63,6 +72,22 @@ export const WorkflowRecipeItem = z
         });
       }
       seenRoutes.add(route);
+    }
+    for (const route of Object.keys(item.route_overrides)) {
+      if (!WorkflowPrimitiveRoute.safeParse(route).success) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['route_overrides', route],
+          message: `unknown recipe route outcome: ${route}`,
+        });
+      }
+      if (!Object.hasOwn(item.routes, route)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['route_overrides', route],
+          message: `route override must target a declared route outcome: ${route}`,
+        });
+      }
     }
   });
 export type WorkflowRecipeItem = z.infer<typeof WorkflowRecipeItem>;
@@ -111,6 +136,18 @@ export const WorkflowRecipe = z
             path: ['items', index, 'routes', route],
             message: `route target references unknown recipe item id: ${target}`,
           });
+        }
+      }
+      for (const [route, overrides] of Object.entries(item.route_overrides)) {
+        for (const [rigor, target] of Object.entries(overrides)) {
+          if (WorkflowRecipeTerminalTarget.safeParse(target).success) continue;
+          if (!itemIds.has(target)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ['items', index, 'route_overrides', route, rigor],
+              message: `route override target references unknown recipe item id: ${target}`,
+            });
+          }
         }
       }
     }
@@ -171,6 +208,17 @@ function isTerminalTarget(
   return WorkflowRecipeTerminalTarget.safeParse(target).success;
 }
 
+function recipeItemRouteTargets(item: WorkflowRecipeItem): WorkflowRecipeRouteTarget[] {
+  return [
+    ...Object.values(item.routes),
+    ...Object.values(item.route_overrides).flatMap((overrides) => Object.values(overrides)),
+  ];
+}
+
+function recipeItemRouteOutcomes(item: WorkflowRecipeItem): string[] {
+  return [...new Set([...Object.keys(item.routes), ...Object.keys(item.route_overrides)])];
+}
+
 function intersectContracts(
   left: ReadonlySet<WorkflowPrimitiveContractRefValue>,
   right: ReadonlySet<WorkflowPrimitiveContractRefValue>,
@@ -211,7 +259,7 @@ function collectRouteAwareAvailability(
     const afterItem = new Set(current);
     afterItem.add(item.output);
 
-    for (const target of Object.values(item.routes)) {
+    for (const target of recipeItemRouteTargets(item)) {
       if (isTerminalTarget(target)) continue;
       const prior = availableAt.get(target);
       if (prior === undefined) {
@@ -252,7 +300,7 @@ export function validateWorkflowRecipeCatalogCompatibility(
       continue;
     }
 
-    for (const route of Object.keys(item.routes) as WorkflowPrimitiveRouteValue[]) {
+    for (const route of recipeItemRouteOutcomes(item) as WorkflowPrimitiveRouteValue[]) {
       if (!primitive.allowed_routes.includes(route)) {
         issues.push({
           item_id: item.id,

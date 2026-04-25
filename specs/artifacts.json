@@ -79,6 +79,7 @@
         "WorkflowRecipeStatus",
         "WorkflowRecipeTerminalTarget",
         "WorkflowRecipeRouteTarget",
+        "WorkflowRecipeRouteModeOverrides",
         "WorkflowRecipeContractAlias",
         "WorkflowRecipeItem",
         "WorkflowRecipe",

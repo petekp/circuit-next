@@ -12,6 +12,12 @@ record.*
 
 ## Methodology And Recipe Pivot (opened after Slice 132)
 
+- **Slice 145 MODE-AWARE RECIPE ROUTES** (this commit, Ratchet-Advance) -
+  added mode-specific route overrides to the recipe schema. The Fix candidate
+  now shows the intended shape: Lite verification can close through a separate
+  no-review close item, while standard and deeper runs still go through Review
+  before closing.
+
 - **Slice 144 RECIPE INPUT SETS** (this commit, Ratchet-Advance) - made recipe
   assembly checks confirm that each recipe item supplies the inputs accepted by
   its chosen reusable move. Act now has two valid input shapes: brief plus

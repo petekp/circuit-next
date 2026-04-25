@@ -60,6 +60,7 @@ describe('workflow recipe schema', () => {
       'run-verification',
       'review',
       'close-with-evidence',
+      'close-with-evidence',
       'handoff',
     ]);
   });
@@ -67,11 +68,21 @@ describe('workflow recipe schema', () => {
   it('keeps Fix act and close inputs aligned with the evidence path', () => {
     const recipe = parseFixRecipe();
     const act = recipe.items.find((item) => item.id === 'fix-act');
+    const closeLite = recipe.items.find((item) => item.id === 'fix-close-lite');
     const close = recipe.items.find((item) => item.id === 'fix-close');
     if (act === undefined) throw new Error('fix-act missing');
+    if (closeLite === undefined) throw new Error('fix-close-lite missing');
     if (close === undefined) throw new Error('fix-close missing');
 
     expect(act.input).not.toHaveProperty('decision');
+    expect(closeLite.input).toMatchObject({
+      brief: 'fix.brief@v1',
+      context: 'fix.context@v1',
+      diagnosis: 'fix.diagnosis@v1',
+      change: 'fix.change@v1',
+      verification: 'fix.verification@v1',
+    });
+    expect(closeLite.input).not.toHaveProperty('review');
     expect(close.input).toMatchObject({
       brief: 'fix.brief@v1',
       context: 'fix.context@v1',
@@ -79,6 +90,19 @@ describe('workflow recipe schema', () => {
       change: 'fix.change@v1',
       verification: 'fix.verification@v1',
       review: 'fix.review@v1',
+    });
+  });
+
+  it('routes Lite verification directly to a no-review close item', () => {
+    const recipe = parseFixRecipe();
+    const verify = recipe.items.find((item) => item.id === 'fix-verify');
+    if (verify === undefined) throw new Error('fix-verify missing');
+
+    expect(verify.routes.continue).toBe('fix-review');
+    expect(verify.route_overrides).toEqual({
+      continue: {
+        lite: 'fix-close-lite',
+      },
     });
   });
 
@@ -92,6 +116,32 @@ describe('workflow recipe schema', () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.message).toMatch(/unknown recipe item id/);
+    }
+  });
+
+  it('rejects an unknown route override target at parse time', () => {
+    const raw = readJson(fixRecipePath) as Record<string, unknown>;
+    const items = raw.items as Array<Record<string, unknown>>;
+    const verify = items.find((item) => item.id === 'fix-verify');
+    if (verify === undefined) throw new Error('fixture missing verify item');
+    verify.route_overrides = { continue: { lite: 'missing-item' } };
+    const result = WorkflowRecipe.safeParse(raw);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.message).toMatch(/route override target references unknown recipe item/);
+    }
+  });
+
+  it('rejects route overrides for undeclared route outcomes', () => {
+    const raw = readJson(fixRecipePath) as Record<string, unknown>;
+    const items = raw.items as Array<Record<string, unknown>>;
+    const verify = items.find((item) => item.id === 'fix-verify');
+    if (verify === undefined) throw new Error('fixture missing verify item');
+    verify.route_overrides = { split: { lite: 'fix-close-lite' } };
+    const result = WorkflowRecipe.safeParse(raw);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.message).toMatch(/route override must target a declared route outcome/);
     }
   });
 

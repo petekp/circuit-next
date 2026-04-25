@@ -64,6 +64,11 @@ brief is also present. The machine-readable catalog records those alternatives
 so recipe validation can reject under-specified items without forcing every
 workflow to include a separate Plan move.
 
+Close With Evidence also has more than one valid input shape. A reviewed close
+should consume review evidence. A Lite close that intentionally skips Review
+can consume the brief and verification result, but it should be a separate
+recipe item so the skipped-review path stays visible.
+
 ## Canonical Primitive List
 
 | Primitive | Purpose | Typical inputs | Typed output | Common next routes |
