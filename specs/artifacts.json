@@ -88,6 +88,8 @@
         "WorkflowRecipeItem",
         "WorkflowRecipe",
         "WorkflowRecipeCatalogCompatibilityIssue",
+        "WorkflowRecipeProjectedRouteModeTargets",
+        "WorkflowRecipeProjectedRoute",
         "WorkflowRecipeProjectedItem",
         "WorkflowRecipeProjectedPhase",
         "WorkflowRecipeCompilerProjection",

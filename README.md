@@ -1,4 +1,4 @@
-<!-- current_slice: 149 -->
+<!-- current_slice: 150 -->
 
 # circuit-next
 
@@ -104,6 +104,9 @@ into the existing workflow phases without guessing from item ids.
 
 Slice 149 adds a design-only recipe projection helper that summarizes the Fix
 recipe for future compiler work.
+
+Slice 150 extends that projection with per-outcome route targets so a future
+compiler can walk the effective edges of the recipe without re-deriving them.
 
 CC#14 was amended by ADR-0006 as a one-time
 waiver + retarget (see Status above); the canonical non-LLM cold-read is **not**

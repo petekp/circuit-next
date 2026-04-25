@@ -237,6 +237,20 @@ export type WorkflowRecipeCatalogCompatibilityIssue = {
   message: string;
 };
 
+export const WorkflowRecipeProjectedRouteModeTargets = z.record(Rigor, WorkflowRecipeRouteTarget);
+export type WorkflowRecipeProjectedRouteModeTargets = z.infer<
+  typeof WorkflowRecipeProjectedRouteModeTargets
+>;
+
+export const WorkflowRecipeProjectedRoute = z
+  .object({
+    outcome: WorkflowPrimitiveRoute,
+    default_target: WorkflowRecipeRouteTarget,
+    mode_targets: WorkflowRecipeProjectedRouteModeTargets.default({}),
+  })
+  .strict();
+export type WorkflowRecipeProjectedRoute = z.infer<typeof WorkflowRecipeProjectedRoute>;
+
 export const WorkflowRecipeProjectedItem = z
   .object({
     id: StepId,
@@ -246,6 +260,7 @@ export const WorkflowRecipeProjectedItem = z
     output: WorkflowPrimitiveContractRef,
     route_outcomes: z.array(WorkflowPrimitiveRoute).min(1),
     mode_override_outcomes: z.array(WorkflowPrimitiveRoute).default([]),
+    routes: z.array(WorkflowRecipeProjectedRoute).min(1),
   })
   .strict();
 export type WorkflowRecipeProjectedItem = z.infer<typeof WorkflowRecipeProjectedItem>;
@@ -529,6 +544,16 @@ export function projectWorkflowRecipeForCompiler(
     const items = phaseItems.get(item.phase) ?? [];
     items.push(item.id);
     phaseItems.set(item.phase, items);
+    const projectedRoutes: WorkflowRecipeProjectedRoute[] = (
+      Object.keys(item.routes) as WorkflowPrimitiveRouteValue[]
+    ).map((outcome) => {
+      const overrides = item.route_overrides[outcome];
+      return {
+        outcome,
+        default_target: item.routes[outcome] as WorkflowRecipeRouteTarget,
+        mode_targets: (overrides ?? {}) as WorkflowRecipeProjectedRouteModeTargets,
+      };
+    });
     return {
       id: item.id,
       uses: item.uses,
@@ -537,6 +562,7 @@ export function projectWorkflowRecipeForCompiler(
       output: item.output,
       route_outcomes: Object.keys(item.routes) as WorkflowPrimitiveRouteValue[],
       mode_override_outcomes: Object.keys(item.route_overrides) as WorkflowPrimitiveRouteValue[],
+      routes: projectedRoutes,
     };
   });
 

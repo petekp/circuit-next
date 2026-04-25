@@ -12,6 +12,13 @@ record.*
 
 ## Methodology And Recipe Pivot (opened after Slice 132)
 
+- **Slice 150 RECIPE PROJECTION ROUTE TARGETS** (this commit,
+  Ratchet-Advance) - extended the design-only recipe projection helper with
+  per-outcome route targets. Each projected item now records the default next
+  step plus any rigor-specific override targets, so future compiler work can
+  walk the recipe's effective edges without re-deriving them from the
+  authoring document.
+
 - **Slice 149 RECIPE PROJECTION HELPER** (this commit,
   Ratchet-Advance) - added a design-only recipe projection helper. It
   summarizes phase groups, omitted phases, item outputs, route outcomes, and

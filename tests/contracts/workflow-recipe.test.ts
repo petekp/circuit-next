@@ -142,6 +142,51 @@ describe('workflow recipe schema', () => {
     });
   });
 
+  it('projects per-outcome route targets including terminals and rigor overrides', () => {
+    const projection = projectWorkflowRecipeForCompiler(parseFixRecipe());
+    const verify = projection.items.find((item) => item.id === 'fix-verify');
+    const intake = projection.items.find((item) => item.id === 'fix-intake');
+    const closeLite = projection.items.find((item) => item.id === 'fix-close-lite');
+    if (verify === undefined) throw new Error('fix-verify projection missing');
+    if (intake === undefined) throw new Error('fix-intake projection missing');
+    if (closeLite === undefined) throw new Error('fix-close-lite projection missing');
+
+    expect(verify.routes).toEqual([
+      {
+        outcome: 'continue',
+        default_target: 'fix-review',
+        mode_targets: { lite: 'fix-close-lite' },
+      },
+      { outcome: 'retry', default_target: 'fix-act', mode_targets: {} },
+      { outcome: 'ask', default_target: 'fix-no-repro-decision', mode_targets: {} },
+      { outcome: 'stop', default_target: '@stop', mode_targets: {} },
+    ]);
+
+    expect(intake.routes).toEqual([
+      { outcome: 'continue', default_target: 'fix-route', mode_targets: {} },
+      { outcome: 'ask', default_target: '@stop', mode_targets: {} },
+      { outcome: 'stop', default_target: '@stop', mode_targets: {} },
+    ]);
+
+    const closeLiteComplete = closeLite.routes.find((route) => route.outcome === 'complete');
+    expect(closeLiteComplete).toEqual({
+      outcome: 'complete',
+      default_target: '@complete',
+      mode_targets: {},
+    });
+  });
+
+  it('keeps projected route outcomes aligned with their target lists', () => {
+    const projection = projectWorkflowRecipeForCompiler(parseFixRecipe());
+    for (const item of projection.items) {
+      expect(item.routes.map((route) => route.outcome)).toEqual(item.route_outcomes);
+      const overrideOutcomes = item.routes
+        .filter((route) => Object.keys(route.mode_targets).length > 0)
+        .map((route) => route.outcome);
+      expect(overrideOutcomes).toEqual(item.mode_override_outcomes);
+    }
+  });
+
   it('keeps Fix items declaring the evidence required by their primitives', () => {
     const recipe = parseFixRecipe();
     const catalog = parsePrimitiveCatalog();

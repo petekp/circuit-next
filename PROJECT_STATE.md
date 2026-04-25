@@ -1,4 +1,4 @@
-<!-- current_slice: 149 -->
+<!-- current_slice: 150 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -10,7 +10,7 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 149
+- **current_slice:** 150
 - **current_arc:** Build workflow parity is now closed. The implementation has the policy
   shape, typed Build artifact contracts/schemas, registered runtime synthesis
   writers for `build.plan@v1` and `build.result@v1`, and a focused
@@ -98,7 +98,10 @@ context and phase-open provenance.
   Review, and Close without guessing from item ids. Slice 149 adds a
   design-only recipe projection helper that summarizes those phase groups,
   omitted phases, item outputs, route outcomes, and execution labels for future
-  compiler work.
+  compiler work. Slice 150 extends that projection with per-outcome route
+  targets so each item now records the default next step plus any
+  rigor-specific override targets, giving a future compiler the effective edge
+  set without re-deriving it from the recipe.
 - **current_phase:** Phase 2 — Implementation (closed for the first working workflow; broader parity expansion planning next)
 
 Chronicle (relocated narrative history — non-authoritative; see
