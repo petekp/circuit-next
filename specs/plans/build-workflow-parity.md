@@ -1,11 +1,11 @@
 ---
 plan: build-workflow-parity
-status: challenger-pending
+status: challenger-cleared
 revision: 10
 opened_at: 2026-04-24
 revised_at: 2026-04-25
 opened_in_session: post-phase-2-parity-map
-revised_in_session: build-workflow-parity-codex-challenger-09-foldins
+revised_in_session: build-workflow-parity-codex-challenger-10-clearance
 base_commit: eb52089
 target: build
 authority:
@@ -76,6 +76,9 @@ prior_challenger_passes:
     revision 10 folds it by requiring command-invocation tests to prove both
     `commands/build.md` and `commands/run.md` carry a same-invocation
     `--entry-mode` plus `--rigor` example)
+  - specs/reviews/build-workflow-parity-codex-challenger-10.md
+    (verdict ACCEPT vs revision 10 — no findings; this pass clears the plan
+    for operator signoff)
 ---
 
 # Build Workflow Parity Plan
@@ -97,7 +100,7 @@ pass. Revision 05 folds the fourth Codex challenger pass. Revision 06 folds
 the fifth Codex challenger pass. Revision 07 folds the sixth Codex challenger
 pass. Revision 08 folds the seventh Codex challenger pass. Revision 09 folds
 the eighth Codex challenger pass. Revision 10 folds the ninth Codex challenger
-pass.
+pass and received ACCEPT in the tenth Codex challenger pass.
 
 | Pass-01 # | Severity | Objection | Revision-02 fold-in |
 |---|---|---|---|

@@ -12,6 +12,11 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 114 BUILD PLAN CHALLENGER CLEARANCE** (this commit, Discovery) -
+  recorded the tenth Codex challenger review for the Build plan. The reviewer
+  accepted revision 10 with no blocking findings, so the plan is now cleared
+  for operator signoff. No Build runtime behavior changed.
+
 - **Slice 113 BUILD PLAN NINTH CHALLENGER FOLD-IN** (this commit,
   Discovery) - recorded the ninth Codex challenger review for the Build plan
   and folded in its remaining objection. The plan now requires the public Build
