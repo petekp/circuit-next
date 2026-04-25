@@ -1,4 +1,4 @@
-<!-- current_slice: 130 -->
+<!-- current_slice: 131 -->
 
 # circuit-next
 
@@ -54,7 +54,9 @@ a polished workflow-configuration experience remain future work.
 `specs/parity-map.md` records the current gap map and recommends Repair next.
 `specs/reference/legacy-circuit/repair-characterization.md` captures the old
 Repair workflow shape, and `specs/plans/repair-workflow-parity.md` is now
-operator-signed for implementation. CC#14 was amended by ADR-0006 as a one-time
+operator-signed for implementation. Repair implementation has started with the
+policy-only workflow shape; the runnable Repair fixture and command are not
+operational yet. CC#14 was amended by ADR-0006 as a one-time
 waiver + retarget (see Status above); the canonical non-LLM cold-read is **not**
 satisfied, and weaker evidence of different shape is substituted — carried
 openly on every authority surface. CC#15 preservation rests on (i) the 14a

@@ -53,6 +53,12 @@ export const WORKFLOW_KIND_CANONICAL_SETS = {
     title: 'Frame → Plan → Act → Verify → Review → Close',
     authority: 'specs/plans/build-workflow-parity.md §9 Work item 1',
   },
+  repair: {
+    canonicals: ['frame', 'analyze', 'act', 'verify', 'review', 'close'],
+    omits: ['plan'],
+    title: 'Frame → Analyze → Fix → Verify → Review → Close',
+    authority: 'specs/plans/repair-workflow-parity.md §8 Work item 1',
+  },
 };
 
 /**

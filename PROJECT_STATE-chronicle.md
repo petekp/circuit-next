@@ -1509,3 +1509,18 @@ Repair artifact contracts and schemas.
 
 Verification: plan lint and full verification are run after this signoff commit
 so the signoff chain can be checked against committed history.
+
+## Slice 131 — Repair workflow policy shape
+
+Slice 131 starts Repair implementation without making Repair runnable yet. It
+teaches the shared workflow policy that Repair has six phases: Frame, Analyze,
+Fix, Verify, Review, and Close. Repair intentionally skips Plan because
+root-cause analysis is the planning step for bug fixes.
+
+The tests now prove that Repair accepts exactly that shape, rejects a Repair
+workflow that adds Plan, and rejects one that omits Analyze. This gives later
+Repair runtime work one shared definition instead of letting each slice invent
+its own phase list.
+
+Verification: focused workflow-policy tests pass. Full verification and audit
+run before commit.
