@@ -142,6 +142,12 @@ synthesis.
 future compiler enough information to group recipe items into Frame, Analyze,
 Plan, Act, Verify, Review, and Close phases without guessing from item ids.
 
+The schema also exposes a design-only compiler projection helper. It groups
+recipe items by declared phase, records omitted phases, and carries each item's
+execution label, output contract, route outcomes, and mode-specific route
+overrides. That projection is not executable; it is the small summary future
+compiler work should consume first.
+
 `route_overrides` lets a recipe choose a different target for a named outcome
 under a specific rigor. The default route still exists, so the recipe remains
 readable; the override only says that one mode takes a different path.

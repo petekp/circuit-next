@@ -1,4 +1,4 @@
-<!-- current_slice: 148 -->
+<!-- current_slice: 149 -->
 
 # circuit-next
 
@@ -101,6 +101,9 @@ the intended future runner shape without changing the runtime.
 
 Slice 148 adds design-time phase labels to recipe items, so Fix can be grouped
 into the existing workflow phases without guessing from item ids.
+
+Slice 149 adds a design-only recipe projection helper that summarizes the Fix
+recipe for future compiler work.
 
 CC#14 was amended by ADR-0006 as a one-time
 waiver + retarget (see Status above); the canonical non-LLM cold-read is **not**

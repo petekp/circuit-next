@@ -88,7 +88,11 @@
         "WorkflowRecipeItem",
         "WorkflowRecipe",
         "WorkflowRecipeCatalogCompatibilityIssue",
-        "validateWorkflowRecipeCatalogCompatibility"
+        "WorkflowRecipeProjectedItem",
+        "WorkflowRecipeProjectedPhase",
+        "WorkflowRecipeCompilerProjection",
+        "validateWorkflowRecipeCatalogCompatibility",
+        "projectWorkflowRecipeForCompiler"
       ],
       "writers": ["circuit-next maintainers (offline product architecture)"],
       "readers": ["workflow recipe authors", "contract tests", "future recipe compiler"],

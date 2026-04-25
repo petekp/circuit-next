@@ -12,6 +12,12 @@ record.*
 
 ## Methodology And Recipe Pivot (opened after Slice 132)
 
+- **Slice 149 RECIPE PROJECTION HELPER** (this commit,
+  Ratchet-Advance) - added a design-only recipe projection helper. It
+  summarizes phase groups, omitted phases, item outputs, route outcomes, and
+  execution labels so future compiler work has a small typed input surface
+  before implementation code is added.
+
 - **Slice 148 RECIPE PHASE BINDINGS** (this commit, Ratchet-Advance) - added
   design-time phase labels to recipe items. The Fix candidate can now be
   grouped into the existing workflow phases without guessing from item ids,

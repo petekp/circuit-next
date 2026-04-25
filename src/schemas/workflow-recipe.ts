@@ -237,6 +237,38 @@ export type WorkflowRecipeCatalogCompatibilityIssue = {
   message: string;
 };
 
+export const WorkflowRecipeProjectedItem = z
+  .object({
+    id: StepId,
+    uses: WorkflowPrimitiveId,
+    phase: CanonicalPhase,
+    execution: WorkflowRecipeExecution,
+    output: WorkflowPrimitiveContractRef,
+    route_outcomes: z.array(WorkflowPrimitiveRoute).min(1),
+    mode_override_outcomes: z.array(WorkflowPrimitiveRoute).default([]),
+  })
+  .strict();
+export type WorkflowRecipeProjectedItem = z.infer<typeof WorkflowRecipeProjectedItem>;
+
+export const WorkflowRecipeProjectedPhase = z
+  .object({
+    phase: CanonicalPhase,
+    items: z.array(StepId).min(1),
+  })
+  .strict();
+export type WorkflowRecipeProjectedPhase = z.infer<typeof WorkflowRecipeProjectedPhase>;
+
+export const WorkflowRecipeCompilerProjection = z
+  .object({
+    recipe_id: WorkflowId,
+    starts_at: StepId,
+    phases: z.array(WorkflowRecipeProjectedPhase).min(1),
+    omitted_phases: z.array(CanonicalPhase).default([]),
+    items: z.array(WorkflowRecipeProjectedItem).min(1),
+  })
+  .strict();
+export type WorkflowRecipeCompilerProjection = z.infer<typeof WorkflowRecipeCompilerProjection>;
+
 function contractIsCompatible(
   expected: WorkflowPrimitiveContractRefValue,
   actual: WorkflowPrimitiveContractRefValue,
@@ -487,4 +519,43 @@ export function validateWorkflowRecipeCatalogCompatibility(
   }
 
   return issues;
+}
+
+export function projectWorkflowRecipeForCompiler(
+  recipe: WorkflowRecipe,
+): WorkflowRecipeCompilerProjection {
+  const phaseItems = new Map<CanonicalPhaseValue, StepId[]>();
+  const projectedItems: WorkflowRecipeProjectedItem[] = recipe.items.map((item) => {
+    const items = phaseItems.get(item.phase) ?? [];
+    items.push(item.id);
+    phaseItems.set(item.phase, items);
+    return {
+      id: item.id,
+      uses: item.uses,
+      phase: item.phase,
+      execution: item.execution,
+      output: item.output,
+      route_outcomes: Object.keys(item.routes) as WorkflowPrimitiveRouteValue[],
+      mode_override_outcomes: Object.keys(item.route_overrides) as WorkflowPrimitiveRouteValue[],
+    };
+  });
+
+  const phases: WorkflowRecipeProjectedPhase[] = [];
+  const omitted_phases: CanonicalPhaseValue[] = [];
+  for (const phase of CANONICAL_PHASES) {
+    const items = phaseItems.get(phase);
+    if (items === undefined) {
+      omitted_phases.push(phase);
+      continue;
+    }
+    phases.push({ phase, items });
+  }
+
+  return WorkflowRecipeCompilerProjection.parse({
+    recipe_id: recipe.id,
+    starts_at: recipe.starts_at,
+    phases,
+    omitted_phases,
+    items: projectedItems,
+  });
 }

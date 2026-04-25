@@ -1,4 +1,4 @@
-<!-- current_slice: 148 -->
+<!-- current_slice: 149 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -10,7 +10,7 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 148
+- **current_slice:** 149
 - **current_arc:** Build workflow parity is now closed. The implementation has the policy
   shape, typed Build artifact contracts/schemas, registered runtime synthesis
   writers for `build.plan@v1` and `build.result@v1`, and a focused
@@ -95,7 +95,10 @@ context and phase-open provenance.
   labels to recipe items, so Fix now records the intended future runner shape
   without changing the runtime. Slice 148 adds design-time phase labels to
   recipe items, so Fix can be grouped into Frame, Analyze, Act, Verify,
-  Review, and Close without guessing from item ids.
+  Review, and Close without guessing from item ids. Slice 149 adds a
+  design-only recipe projection helper that summarizes those phase groups,
+  omitted phases, item outputs, route outcomes, and execution labels for future
+  compiler work.
 - **current_phase:** Phase 2 — Implementation (closed for the first working workflow; broader parity expansion planning next)
 
 Chronicle (relocated narrative history — non-authoritative; see

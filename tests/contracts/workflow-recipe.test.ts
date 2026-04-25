@@ -5,6 +5,7 @@ import { StepId } from '../../src/schemas/ids.js';
 import { WorkflowPrimitiveCatalog } from '../../src/schemas/workflow-primitives.js';
 import {
   WorkflowRecipe,
+  projectWorkflowRecipeForCompiler,
   validateWorkflowRecipeCatalogCompatibility,
 } from '../../src/schemas/workflow-recipe.js';
 
@@ -81,6 +82,64 @@ describe('workflow recipe schema', () => {
       ['fix-close', 'close'],
       ['fix-handoff', 'close'],
     ]);
+  });
+
+  it('projects Fix into compiler-facing phase groups without using item names as phase hints', () => {
+    const projection = projectWorkflowRecipeForCompiler(parseFixRecipe());
+    expect(projection.recipe_id).toBe('fix-candidate');
+    expect(projection.starts_at).toBe('fix-intake');
+    expect(projection.omitted_phases).toEqual(['plan']);
+    expect(projection.phases).toEqual([
+      {
+        phase: 'frame',
+        items: ['fix-intake', 'fix-route', 'fix-frame'],
+      },
+      {
+        phase: 'analyze',
+        items: ['fix-gather-context', 'fix-diagnose', 'fix-no-repro-decision'],
+      },
+      {
+        phase: 'act',
+        items: ['fix-act'],
+      },
+      {
+        phase: 'verify',
+        items: ['fix-verify'],
+      },
+      {
+        phase: 'review',
+        items: ['fix-review'],
+      },
+      {
+        phase: 'close',
+        items: ['fix-close-lite', 'fix-close', 'fix-handoff'],
+      },
+    ]);
+  });
+
+  it('projects item execution, output, route outcomes, and mode override outcomes', () => {
+    const projection = projectWorkflowRecipeForCompiler(parseFixRecipe());
+    const verify = projection.items.find((item) => item.id === 'fix-verify');
+    const act = projection.items.find((item) => item.id === 'fix-act');
+    if (verify === undefined) throw new Error('fix-verify projection missing');
+    if (act === undefined) throw new Error('fix-act projection missing');
+
+    expect(act).toMatchObject({
+      uses: 'act',
+      phase: 'act',
+      execution: { kind: 'dispatch', role: 'implementer' },
+      output: 'fix.change@v1',
+      route_outcomes: ['continue', 'retry', 'ask', 'stop', 'handoff'],
+      mode_override_outcomes: [],
+    });
+    expect(verify).toMatchObject({
+      uses: 'run-verification',
+      phase: 'verify',
+      execution: { kind: 'verification' },
+      output: 'fix.verification@v1',
+      route_outcomes: ['continue', 'retry', 'ask', 'stop'],
+      mode_override_outcomes: ['continue'],
+    });
   });
 
   it('keeps Fix items declaring the evidence required by their primitives', () => {
