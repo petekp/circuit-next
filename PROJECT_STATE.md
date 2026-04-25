@@ -1,4 +1,4 @@
-<!-- current_slice: 132 -->
+<!-- current_slice: 133 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -10,7 +10,7 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 132
+- **current_slice:** 133
 - **current_arc:** Build workflow parity is now closed. The implementation has the policy
   shape, typed Build artifact contracts/schemas, registered runtime synthesis
   writers for `build.plan@v1` and `build.result@v1`, and a focused
@@ -53,6 +53,8 @@ context and phase-open provenance.
   challenger review. Next work is the Repair artifact schema and authority rows,
   which can proceed in Light mode unless it touches runtime, command, or
   close/signoff/live-proof claim surfaces.
+  Slice 133 adds a first-principles workflow primitives inventory so future
+  workflow work can compose shared moves instead of cloning old shapes.
 - **current_phase:** Phase 2 — Implementation (closed for the first working workflow; broader parity expansion planning next)
 
 Chronicle (relocated narrative history — non-authoritative; see

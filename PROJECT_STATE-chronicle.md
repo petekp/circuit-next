@@ -1548,3 +1548,17 @@ final close remain Heavy.
 
 Verification: focused work-mode audit tests pass. Full verification and audit
 run before commit.
+
+## Slice 133 — Workflow primitives inventory
+
+Slice 133 pauses the Repair track long enough to name the reusable moves we want
+Circuit workflows to share. The new `specs/workflow-primitives.md` inventory
+describes moves such as Intake, Frame, Human Decision, Diagnose, Act, Verify,
+Review, Queue, Batch, Risk/Rollback Check, Close With Evidence, and Handoff.
+
+The key product choice is that feature parity is reference evidence, not the
+only goal. Future built-in and user-authored workflows should become recipes
+over reusable moves where that makes the product simpler and stronger.
+
+Verification: documentation slice; full verification and audit run before
+commit.

@@ -14,6 +14,11 @@ Circuit feature set. It is an inventory, not an implementation plan. The
 reference repo at `/Users/petepetrash/Code/circuit` was read only while this
 map was written.
 
+Feature parity is reference evidence, not the only product goal. The
+first-principles workflow direction now lives in
+`specs/workflow-primitives.md`: built-in workflows should increasingly be
+recipes over reusable moves rather than one-off clones of old Circuit shapes.
+
 ## Plain-English Status
 
 `circuit-next` now has a real command path and working routes for Explore,
@@ -107,9 +112,8 @@ The old Repair surface has now been characterized in
 Migrate and Sweep should come later because they need more orchestration:
 inventories, queues, batches, deferred work, and rollback or skip decisions.
 
-Custom workflow creation should wait until the built-in workflow shape feels
-stable enough that user-authored workflows are not learning against a moving
-target.
+Custom workflow creation should wait until the primitive catalog feels stable
+enough that user-authored workflows are not learning against a moving target.
 
 ## Next Slice Recommendation
 

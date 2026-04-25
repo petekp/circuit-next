@@ -1,4 +1,4 @@
-<!-- current_slice: 132 -->
+<!-- current_slice: 133 -->
 
 # circuit-next
 
@@ -39,6 +39,9 @@ tournament decision that defines the four methodological pillars, their
 stress-test survival, accepted risks, and reopen conditions. ADR-0012 adds a
 two-mode work overlay: Light for local preparatory changes and Heavy for
 runtime, command, adapter, methodology, and close-claim work.
+`specs/workflow-primitives.md` records the first-principles reusable-move
+direction so parity remains reference evidence rather than the only product
+goal.
 
 ## Current phase
 
