@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { StepId } from '../../src/schemas/ids.js';
@@ -11,6 +12,8 @@ import {
 
 const primitiveCatalogPath = 'specs/workflow-primitive-catalog.json';
 const fixRecipePath = 'specs/workflow-recipes/fix-candidate.recipe.json';
+const fixProjectionFixturePath = 'specs/workflow-recipes/fix-candidate.projection.json';
+const updateProjectionFixture = process.env.UPDATE_PROJECTION_FIXTURE === '1';
 
 function readJson(path: string): unknown {
   return JSON.parse(readFileSync(path, 'utf8')) as unknown;
@@ -185,6 +188,18 @@ describe('workflow recipe schema', () => {
         .map((route) => route.outcome);
       expect(overrideOutcomes).toEqual(item.mode_override_outcomes);
     }
+  });
+
+  it('matches the canonical Fix projection snapshot fixture', () => {
+    const projection = projectWorkflowRecipeForCompiler(parseFixRecipe());
+    if (updateProjectionFixture) {
+      writeFileSync(fixProjectionFixturePath, `${JSON.stringify(projection, null, 2)}\n`);
+      execFileSync('npx', ['biome', 'format', '--write', fixProjectionFixturePath], {
+        stdio: 'inherit',
+      });
+    }
+    const fixture = readJson(fixProjectionFixturePath);
+    expect(projection).toEqual(fixture);
   });
 
   it('keeps Fix items declaring the evidence required by their primitives', () => {

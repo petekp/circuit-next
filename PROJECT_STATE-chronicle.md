@@ -12,6 +12,13 @@ record.*
 
 ## Methodology And Recipe Pivot (opened after Slice 132)
 
+- **Slice 151 FIX PROJECTION SNAPSHOT FIXTURE** (this commit,
+  Ratchet-Advance) - persisted the current Fix projection as a snapshot fixture
+  at `specs/workflow-recipes/fix-candidate.projection.json` and added a parity
+  contract test that compares the live projection helper output against the
+  fixture. Future projection or recipe changes now surface as a single fixture
+  diff, refreshable with `UPDATE_PROJECTION_FIXTURE=1`.
+
 - **Slice 150 RECIPE PROJECTION ROUTE TARGETS** (this commit,
   Ratchet-Advance) - extended the design-only recipe projection helper with
   per-outcome route targets. Each projected item now records the default next

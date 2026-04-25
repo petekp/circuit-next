@@ -1,4 +1,4 @@
-<!-- current_slice: 150 -->
+<!-- current_slice: 151 -->
 
 # circuit-next
 
@@ -107,6 +107,10 @@ recipe for future compiler work.
 
 Slice 150 extends that projection with per-outcome route targets so a future
 compiler can walk the effective edges of the recipe without re-deriving them.
+
+Slice 151 persists the current Fix projection as a snapshot fixture and adds a
+parity contract test, so future projection or recipe changes show up as a
+single fixture diff.
 
 CC#14 was amended by ADR-0006 as a one-time
 waiver + retarget (see Status above); the canonical non-LLM cold-read is **not**

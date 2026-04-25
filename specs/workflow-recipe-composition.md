@@ -151,6 +151,13 @@ walk the recipe's effective edges without re-deriving them from the authoring
 document. That projection is not executable; it is the small summary future
 compiler work should consume first.
 
+The current Fix projection is also persisted as a snapshot fixture at
+`specs/workflow-recipes/fix-candidate.projection.json`. A contract test compares
+that fixture against the live projection helper output, so any future change to
+the projection shape or the Fix recipe surfaces as a single fixture diff. The
+fixture can be refreshed by running the workflow-recipe contract test with the
+`UPDATE_PROJECTION_FIXTURE=1` environment variable.
+
 `route_overrides` lets a recipe choose a different target for a named outcome
 under a specific rigor. The default route still exists, so the recipe remains
 readable; the override only says that one mode takes a different path.
