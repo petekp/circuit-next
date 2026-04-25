@@ -1591,3 +1591,19 @@ host-mapped Human Decision shape.
 
 Verification: focused catalog tests pass. Full verification and audit run
 before commit.
+
+## Slice 136 — Repair recipe draft
+
+Slice 136 adds a design-only recipe shape and a Repair candidate recipe. The new
+`src/schemas/workflow-recipe.ts` file checks recipe items, known primitive use,
+typed evidence names, and named next outcomes. The new
+`specs/workflow-recipes/repair-candidate.recipe.json` file shows Repair as a
+composition of Intake, Route, Frame, Gather Context, Diagnose, Human Decision,
+Act, Run Verification, Review, Close With Evidence, and Handoff.
+
+Tests prove the Repair candidate parses, stays compatible with the primitive
+catalog, rejects unknown item targets, rejects invalid outcome names, and catches
+missing evidence names.
+
+Verification: focused recipe and authority tests pass. Full verification and
+audit run before commit.

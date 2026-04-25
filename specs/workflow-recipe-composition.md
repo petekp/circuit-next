@@ -16,6 +16,10 @@ The companion machine-readable primitive list lives at
 `specs/workflow-primitive-catalog.json`, with the schema in
 `src/schemas/workflow-primitives.ts`.
 
+A first design-only Repair candidate lives at
+`specs/workflow-recipes/repair-candidate.recipe.json`, with the recipe schema
+in `src/schemas/workflow-recipe.ts`.
+
 ## The Short Version
 
 A recipe is an ordered, named use of primitives.

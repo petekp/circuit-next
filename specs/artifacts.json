@@ -67,6 +67,42 @@
       "dangling_reference_policy": "n/a"
     },
     {
+      "id": "workflow.recipe_definition",
+      "surface_class": "greenfield",
+      "compatibility_policy": "n/a",
+      "plane": "control-plane",
+      "description": "Design-time recipe shape for assembling reusable workflow primitives. Captures recipe items, typed evidence contracts, contract aliases, and named outcome targets before any recipe runner exists.",
+      "contract": "specs/contracts/workflow.md",
+      "schema_file": "src/schemas/workflow-recipe.ts",
+      "schema_exports": [
+        "WorkflowRecipeStatus",
+        "WorkflowRecipeTerminalTarget",
+        "WorkflowRecipeRouteTarget",
+        "WorkflowRecipeContractAlias",
+        "WorkflowRecipeItem",
+        "WorkflowRecipe",
+        "WorkflowRecipeCatalogCompatibilityIssue",
+        "validateWorkflowRecipeCatalogCompatibility"
+      ],
+      "writers": ["circuit-next maintainers (offline product architecture)"],
+      "readers": ["workflow recipe authors", "contract tests", "future recipe compiler"],
+      "resolvers": [],
+      "backing_paths": ["specs/workflow-recipes/*.recipe.json"],
+      "identity_fields": ["id"],
+      "path_derived_fields": [],
+      "dangerous_sinks": [
+        "recipe item ordering",
+        "recipe outcome target closure",
+        "primitive-to-recipe compatibility"
+      ],
+      "trust_boundary": "repo-authored static recipe draft; guidance-only until a recipe compiler consumes it. Shape is validated by src/schemas/workflow-recipe.ts and tests/contracts/workflow-recipe.test.ts.",
+      "reference_surfaces": [],
+      "reference_evidence": [],
+      "migration_policy": "n/a",
+      "legacy_parse_policy": "n/a",
+      "dangling_reference_policy": "n/a"
+    },
+    {
       "id": "step.definition",
       "surface_class": "greenfield",
       "compatibility_policy": "n/a",
