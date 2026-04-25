@@ -1,6 +1,6 @@
 ---
 plan: repair-workflow-parity
-status: operator-signoff
+status: closed
 revision: 03
 opened_at: 2026-04-24
 opened_in_session: post-repair-reference-characterization
@@ -11,8 +11,12 @@ cleared_in_session: repair-workflow-parity-codex-challenger-02
 signoff_at: 2026-04-24
 signoff_in_session: operator-standing-authorization
 signoff_note: "Operator granted standing authorization to proceed autonomously toward parity and later said Proceed; signoff transition is bound in the slice-130 commit body with operator_signoff_predecessor."
+closed_at: 2026-04-25
+closed_in_slice: 141
+close_reason: "Superseded by ADR-0013 before implementation; closed as historical reference evidence, not as implemented Repair parity."
 base_commit: 8143851
 target: repair
+superseded_by: specs/adrs/ADR-0013-primitive-backed-workflow-recipes.md
 authority:
   - specs/parity-map.md
   - specs/reference/legacy-circuit/repair-characterization.md
@@ -45,6 +49,13 @@ prior_challenger_passes:
 
 # Repair Workflow Parity Plan
 
+> **Closed by supersession, not implementation.** This signed plan is retained
+> as reference evidence and historical context. ADR-0013 replaces the active
+> path with a clearer Fix recipe over reusable workflow primitives. Do not open
+> new one-off `repair.*`, `/circuit:repair`, or Repair-only runtime slices from
+> this plan unless a later ADR explicitly reopens Repair as a first-class
+> product recipe.
+
 Repair workflow parity targets the everyday bug-fix path after Build close:
 frame the bug, reproduce and isolate it, make the smallest fix, verify the
 regression stays fixed, review the fix when rigor requires it, and close with
@@ -75,7 +86,7 @@ operator-signed.
 
 | # | Claim | Status | Source |
 |---|---|---|---|
-| E1 | Target selection confirmed: the parity map recommends Repair next after Build close. | verified | `specs/parity-map.md` |
+| E1 | Historical target selection: before ADR-0013, the parity map recommended Repair next after Build close. Current direction supersedes that with Fix over reusable primitives. | superseded | `specs/parity-map.md`, `specs/adrs/ADR-0013-primitive-backed-workflow-recipes.md` |
 | E2 | Reference Repair declares six steps: frame, analyze, fix, verify, review, close. | verified | `specs/reference/legacy-circuit/repair-characterization.md` |
 | E3 | Reference Repair emits six workflow artifact roles: brief, analysis, implementation handoff, verification, review, and result. | verified | `specs/reference/legacy-circuit/repair-characterization.md` |
 | E4 | Reference Repair has four entry modes: default, lite, deep, and autonomous. Lite skips independent review. | verified | `specs/reference/legacy-circuit/repair-characterization.md` |

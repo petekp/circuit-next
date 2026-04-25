@@ -1,4 +1,4 @@
-<!-- current_slice: 140 -->
+<!-- current_slice: 141 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -10,7 +10,7 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 140
+- **current_slice:** 141
 - **current_arc:** Build workflow parity is now closed. The implementation has the policy
   shape, typed Build artifact contracts/schemas, registered runtime synthesis
   writers for `build.plan@v1` and `build.result@v1`, and a focused
@@ -40,19 +40,13 @@ context and phase-open provenance.
   Code invocation of the inline `circuit` plugin. The Phase 2 close claim
   remains narrow: first working workflow product spine closed, not full
   first-generation Circuit parity. Slice 127 refreshed the parity map after
-  Build close and added a read-only characterization of the old Repair workflow
-  so the next Repair plan can start from reference evidence. Slice 128 drafted
-  the Repair workflow parity plan and promoted it to challenger-pending after
-  plan-lint passed. Slice 129 folded the Codex challenger findings and moved
-  the Repair plan to challenger-cleared. Slice 130 recorded operator signoff
-  against the cleared plan. Slice 131 opened Repair implementation with the
-  policy-only workflow shape: Repair is now known to the canonical workflow
-  policy as Frame, Analyze, Fix, Verify, Review, and Close, with Plan omitted.
-  Slice 132 adds the ADR-0012 two-mode methodology overlay: Light work is now
-  available for low-risk preparatory slices, while Heavy work keeps external
-  challenger review. Next work is the Repair artifact schema and authority rows,
-  which can proceed in Light mode unless it touches runtime, command, or
-  close/signoff/live-proof claim surfaces.
+  Build close and added a read-only characterization of the old Repair workflow.
+  Slices 128 through 131 drafted, cleared, signed off, and briefly opened a
+  Repair path, but that path is now historical: ADR-0013 closes the old Repair
+  plan by supersession and makes Fix over reusable primitives the only current
+  bug-fix direction. Slice 132 adds the ADR-0012 two-mode methodology overlay:
+  Light work is now available for low-risk preparatory slices, while Heavy work
+  keeps external challenger review.
   Slice 133 adds a first-principles workflow primitives inventory so future
   workflow work can compose shared moves instead of cloning old shapes.
   Slice 134 adds a research intake packet so the deep prior-art findings can be
@@ -77,6 +71,12 @@ context and phase-open provenance.
   Slice 140 makes recipe compatibility checks route-aware: a recipe item now
   needs its inputs on every path that can reach it, and unreachable recipe
   items are reported instead of being accepted by file order.
+  Slice 141 canonicalizes the workflow-architecture pivot in ADR-0013:
+  workflows are primitive-backed recipes, old Circuit remains reference
+  evidence, Fix is the first proving recipe, and the old Repair plan is closed
+  by supersession rather than left available for one-off implementation. Next
+  work should continue strengthening Fix contracts or build Fix behavior through
+  reusable moves.
 - **current_phase:** Phase 2 — Implementation (closed for the first working workflow; broader parity expansion planning next)
 
 Chronicle (relocated narrative history — non-authoritative; see

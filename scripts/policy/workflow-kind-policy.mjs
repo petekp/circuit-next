@@ -57,7 +57,7 @@ export const WORKFLOW_KIND_CANONICAL_SETS = {
     canonicals: ['frame', 'analyze', 'act', 'verify', 'review', 'close'],
     omits: ['plan'],
     title: 'Frame → Diagnose → Fix → Verify → Review → Close',
-    authority: 'specs/workflow-direction.md §First Proving Recipe',
+    authority: 'specs/adrs/ADR-0013-primitive-backed-workflow-recipes.md §Decision',
   },
 };
 

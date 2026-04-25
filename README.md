@@ -1,4 +1,4 @@
-<!-- current_slice: 140 -->
+<!-- current_slice: 141 -->
 
 # circuit-next
 
@@ -41,8 +41,8 @@ tournament decision that defines the four methodological pillars, their
 stress-test survival, accepted risks, and reopen conditions. ADR-0012 adds a
 two-mode work overlay: Light for local preparatory changes and Heavy for
 runtime, command, adapter, methodology, and close-claim work.
-`specs/workflow-direction.md` and `specs/workflow-primitives.md` record the
-first-principles reusable-move direction so parity remains reference evidence
+ADR-0013 now canonicalizes the first-principles reusable-move direction:
+workflows are primitive-backed recipes, and parity remains reference evidence
 rather than the only product goal.
 
 ## Current phase
@@ -56,16 +56,12 @@ workflow shape, Claude and Codex subprocess dispatch both have current live
 smoke fingerprints, strict JSON artifacts are the accepted successor shape
 for step state, and config can select model and effort. This does **not**
 claim full first-generation Circuit parity. Build is now closed as the first
-mutating workflow path; repair, migrate, sweep, custom workflow authoring, and
+mutating workflow path; Fix, Migrate, Sweep, custom workflow authoring, and
 a polished workflow-configuration experience remain future work.
-`specs/parity-map.md` records the current gap map and recommends Repair next.
-`specs/reference/legacy-circuit/repair-characterization.md` captures the old
-Repair workflow shape, and `specs/plans/repair-workflow-parity.md` is now
-operator-signed for implementation. Repair implementation has started with the
-policy-only workflow shape; the runnable Repair fixture and command are not
-operational yet. ADR-0012 now lets Repair schema and authority-row work proceed
-in Light mode, while runtime, command, live-proof, and close-claim work remains
-Heavy.
+`specs/parity-map.md` records the current gap map. The old Repair evidence and
+signed Repair plan are retained as reference, but ADR-0013 supersedes them as
+active implementation direction: the next proving workflow is Fix over reusable
+primitives, not one-off Repair.
 
 Slice 138 reframes that old Repair evidence toward a clearer Fix recipe over
 reusable moves; see `specs/workflow-direction.md` and
@@ -76,6 +72,9 @@ Fix behavior has stable evidence targets.
 
 Slice 140 makes recipe checks follow the actual paths through a recipe, so a
 step cannot depend on evidence that one of its branches skipped.
+
+Slice 141 makes the primitive-backed recipe direction canonical through
+ADR-0013 and marks the old Repair plan as reframed evidence.
 
 CC#14 was amended by ADR-0006 as a one-time
 waiver + retarget (see Status above); the canonical non-LLM cold-read is **not**

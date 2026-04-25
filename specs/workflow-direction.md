@@ -4,10 +4,14 @@ description: Product direction for Circuit workflows after the primitive/recipe 
 type: product-architecture
 date: 2026-04-25
 status: active
-authority: guidance
+authority: specs/adrs/ADR-0013-primitive-backed-workflow-recipes.md
 ---
 
 # Workflow Direction
+
+This note is subordinate to
+`specs/adrs/ADR-0013-primitive-backed-workflow-recipes.md`, which is the
+canonical workflow architecture decision.
 
 Circuit should not rebuild every first-generation workflow one by one.
 
@@ -92,8 +96,10 @@ which host asked the question.
 
 ## Immediate Consequence
 
-Do not open more one-off Repair implementation work until it has been reframed
-as Fix over reusable primitives.
+Do not open more one-off Repair implementation work from the old signed plan.
+Repair-only artifacts, `/circuit:repair`, and Repair-only runtime code stay out
+of scope unless a later ADR explicitly reopens Repair as a first-class product
+recipe.
 
 The next implementation work should either:
 

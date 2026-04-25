@@ -15,9 +15,10 @@ reference repo at `/Users/petepetrash/Code/circuit` was read only while this
 map was written.
 
 Feature parity is reference evidence, not the only product goal. The
-first-principles workflow direction now lives in
-`specs/workflow-primitives.md`: built-in workflows should increasingly be
-recipes over reusable moves rather than one-off clones of old Circuit shapes.
+first-principles workflow direction is canonicalized by
+`specs/adrs/ADR-0013-primitive-backed-workflow-recipes.md`: built-in workflows
+should be recipes over reusable moves rather than one-off clones of old Circuit
+shapes.
 
 ## Plain-English Status
 

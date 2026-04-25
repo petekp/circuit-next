@@ -4,10 +4,14 @@ description: Plain-English composition model for building workflow recipes from 
 type: product-architecture
 date: 2026-04-25
 status: active
-authority: guidance
+authority: specs/adrs/ADR-0013-primitive-backed-workflow-recipes.md
 ---
 
 # Workflow Recipe Composition
+
+This composition model is governed by
+`specs/adrs/ADR-0013-primitive-backed-workflow-recipes.md`. The ADR is the
+canonical decision; this file explains the working shape.
 
 This note describes how Circuit should compose reusable workflow primitives into
 recipes. It does not define runtime behavior yet.
@@ -218,8 +222,9 @@ proving recipe should be Fix because the user-facing job is clearer:
 If that shape feels too rigid after the deep research lands, the research should
 tell us exactly which primitive or route policy needs to change.
 
-Do not add more one-off Repair behavior before proving this shape as a recipe
-over reusable moves.
+Do not add more one-off Repair behavior from the old signed plan. Repair-only
+artifacts, `/circuit:repair`, and Repair-only runtime code stay out of scope
+unless a later ADR explicitly reopens Repair as a first-class product recipe.
 
 ## V1 Custom Workflow Boundary
 

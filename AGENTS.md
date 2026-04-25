@@ -4,16 +4,18 @@ This file is agent-facing guidance for working on `circuit-next`. Keep under **4
 
 ## The one-paragraph mental model
 
-`circuit-next` is a Claude Code plugin that turns common developer and
-creative workflows (explore, build, repair, migrate, sweep, and user-authored
-custom ones) into configurable automations. Configuration is declarative:
-per-step you can set model, reasoning effort, skills to apply, and invocation
-options; user-global config sets defaults and overrides. Codex is supported
-through the runtime adapter path, and native Codex plugin support remains a
-future product direction. The plugin itself is being built using the same
-methodology it exposes — contract-first specs, architecture-first types at
-boundaries, tiny-step lane-disciplined slices, and a narrow cross-model
-challenger.
+`circuit-next` is a Claude Code plugin that turns common developer and creative
+workflows into primitive-backed recipes: ordered uses of reusable moves that
+consume typed evidence, do one clear job, write typed evidence, and return named
+outcomes. Configuration is declarative: per-step you can set model, reasoning
+effort, skills to apply, and invocation options; user-global config sets
+defaults and overrides. The old Circuit implementation is reference evidence,
+not the destination; ADR-0013 makes Fix, not one-off Repair, the first proving
+recipe for the reusable-move architecture. Codex is supported through the
+runtime adapter path, and native Codex plugin support remains a future product
+direction. The plugin itself is being built using the same methodology it
+exposes — contract-first specs, architecture-first types at boundaries,
+tiny-step lane-disciplined slices, and a narrow cross-model challenger.
 
 ## Core methodology (do not abbreviate)
 
@@ -280,6 +282,14 @@ These are non-negotiable without reopening the methodology decision:
     Codex semantic-loss evidence).
 
 See `specs/risks.md` for the full accepted/open risks ledger.
+
+## Workflow architecture north star
+
+ADR-0013 is the canonical workflow architecture decision. Future workflow work
+must build primitive-backed recipes over reusable moves. Do not open new
+one-off Repair implementation work from the old signed Repair plan; mine that
+plan and the old Circuit reference as evidence for Fix unless a later ADR
+explicitly reopens Repair as a first-class product recipe.
 
 ## Current status
 

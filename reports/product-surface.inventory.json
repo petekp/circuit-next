@@ -3,8 +3,8 @@
   "slice": "27b",
   "baseline": true,
   "metadata": {
-    "generated_at": "2026-04-25T16:48:39.329Z",
-    "head_commit": "a722ec802cc61e52d9680fbed2eb784335b8fede"
+    "generated_at": "2026-04-25T17:25:11.016Z",
+    "head_commit": "5a6a5f651582e925df2e3ec655aa9d074def317a"
   },
   "report_note": "slice=27b names the original baseline report format; generated_at, head_commit, and evidence summaries reflect the current checkout.",
   "summary": {
@@ -101,7 +101,7 @@
       "expected_evidence": "All three files carry a well-formed <!-- current_slice: <id> --> marker in the status-header zone, and the ids agree",
       "planned_slice": null,
       "present": true,
-      "evidence_summary": "current_slice=140 across README.md / PROJECT_STATE.md / TIER.md"
+      "evidence_summary": "current_slice=141 across README.md / PROJECT_STATE.md / TIER.md"
     }
   ]
 }

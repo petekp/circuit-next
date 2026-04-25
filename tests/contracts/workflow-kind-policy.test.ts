@@ -438,7 +438,9 @@ describe('checkWorkflowKindCanonicalPolicy (audit-level, no Zod)', () => {
     expect(fix.canonicals).toEqual(['frame', 'analyze', 'act', 'verify', 'review', 'close']);
     expect(fix.omits).toEqual(['plan']);
     expect(fix.title).toBe('Frame → Diagnose → Fix → Verify → Review → Close');
-    expect(fix.authority).toBe('specs/workflow-direction.md §First Proving Recipe');
+    expect(fix.authority).toBe(
+      'specs/adrs/ADR-0013-primitive-backed-workflow-recipes.md §Decision',
+    );
     expect(EXEMPT_WORKFLOW_IDS.has('dogfood-run-0')).toBe(true);
     expect(EXEMPT_WORKFLOW_IDS.has('explore')).toBe(false);
     expect(EXEMPT_WORKFLOW_IDS.has('build')).toBe(false);
