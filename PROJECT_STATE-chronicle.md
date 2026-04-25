@@ -12,6 +12,15 @@ record.*
 
 ## P2.9 Second Workflow And Post-P2.9 Cleanup (opened after Slice 75)
 
+- **Slice 111 BUILD PLAN SEVENTH CHALLENGER FOLD-INS** (this commit,
+  Discovery) - recorded the seventh Codex challenger review for the Build plan
+  and folded in its two objections. The plan now says the Frame checkpoint,
+  not a synthesis writer, owns the Build brief at `artifacts/brief.json`, and
+  it requires that file to exist both while a Deep Build is waiting and after
+  the checkpoint is resolved. The waiting CLI output also keeps the router
+  fields that `/circuit:run` already promises. No Build runtime behavior
+  changed.
+
 - **Slice 110 BUILD PLAN SIXTH CHALLENGER FOLD-INS** (this commit,
   Discovery) - recorded the sixth Codex challenger review for the Build plan
   and folded in its two objections. The plan now treats Deep Build as a real

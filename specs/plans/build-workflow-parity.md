@@ -1,11 +1,11 @@
 ---
 plan: build-workflow-parity
 status: challenger-pending
-revision: 07
+revision: 08
 opened_at: 2026-04-24
 revised_at: 2026-04-24
 opened_in_session: post-phase-2-parity-map
-revised_in_session: build-workflow-parity-codex-challenger-06-foldins
+revised_in_session: build-workflow-parity-codex-challenger-07-foldins
 base_commit: eb52089
 target: build
 authority:
@@ -60,6 +60,11 @@ prior_challenger_passes:
     path with a fixed waiting envelope and stable checkpoint artifact path,
     and by declaring resolved execution rigor as the single precedence source
     for bootstrap, dispatch selection, and checkpoint policy)
+  - specs/reviews/build-workflow-parity-codex-challenger-07.md
+    (verdict REJECT-PENDING-FOLD-INS vs revision 07 — 1 HIGH,
+    1 MED; revision 08 folds both by assigning `build.brief@v1` to the
+    checkpoint-owned Frame path and by preserving router metadata in the
+    `checkpoint_waiting` envelope)
 ---
 
 # Build Workflow Parity Plan
@@ -79,7 +84,7 @@ Revision 02 folds the first Codex challenger pass. Revision 03 folds the
 second Codex challenger pass. Revision 04 folds the third Codex challenger
 pass. Revision 05 folds the fourth Codex challenger pass. Revision 06 folds
 the fifth Codex challenger pass. Revision 07 folds the sixth Codex challenger
-pass.
+pass. Revision 08 folds the seventh Codex challenger pass.
 
 | Pass-01 # | Severity | Objection | Revision-02 fold-in |
 |---|---|---|---|
@@ -114,6 +119,11 @@ pass.
 |---|---|---|---|
 | 1 | HIGH | Deep Build still was not budgeted as a usable public waiting mode because the plan lacked a real confirm/resume path, a fixed waiting envelope, and one stable checkpoint request path. | §8 and Work items 5/8 now make Deep a real pause-and-continue path: the CLI returns a fixed `checkpoint_waiting` envelope, writes a stable `artifacts/checkpoints/<step-id>-request.json` request artifact, and resumes through `./bin/circuit-next resume --run-root <path> --checkpoint-choice <choice>` after validating the paused checkpoint state. |
 | 2 | HIGH | Mode behavior was ambiguous when explicit invocation rigor conflicts with selected entry mode. | §5 and Work item 7 now declare one precedence rule: selected entry-mode rigor is only the default; explicit invocation rigor wins; the resulting resolved execution rigor drives bootstrap, dispatch selection, and checkpoint policy together. Conflict-case tests are required for Deep-vs-standard and Default-vs-autonomous. |
+
+| Pass-07 # | Severity | Objection | Revision-08 fold-in |
+|---|---|---|---|
+| 1 | HIGH | `build.brief` had no honest producer after Frame became a real checkpoint: Work item 3 still treated it as a synthesis writer, while Work item 5 did not own `artifacts/brief.json`. | §6 and Work items 2/3/5 now assign `build.brief@v1` to the checkpoint-owned Frame path. Work item 3 handles only Plan and Close synthesis writers; Work item 5 requires `artifacts/brief.json` to exist and parse on waiting and resolved Frame paths. |
+| 2 | MED | The `checkpoint_waiting` envelope omitted `routed_by` and `router_reason`, weakening the existing `/circuit:run` output contract for router-selected Build. | §8 and Work item 8 now include `routed_by`, `router_reason`, and optional `router_signal` in the waiting envelope and require `/circuit:run` waiting tests. |
 
 ## §1 — Evidence census
 
@@ -259,6 +269,14 @@ every intermediate file.
 universal run result remains `<run-root>/artifacts/result.json`; the
 workflow-specific Build close artifact is `<run-root>/artifacts/build-result.json`.
 
+`build.brief` is checkpoint-owned, not synthesis-owned. The Frame checkpoint
+writes `build.brief@v1` to `<run-root>/artifacts/brief.json` when it reaches
+the checkpoint. The brief captures the framed objective, scope, success
+criteria, verification command candidates, allowed checkpoint choices, and
+pointers to the stable checkpoint request/response artifacts. A Deep waiting
+run must already have a parseable `artifacts/brief.json`; after resume, the
+response artifact records the selected choice and resolution source.
+
 ## §7 — Verification substrate
 
 Build cannot honestly close without verification evidence. A synthesis step
@@ -346,6 +364,9 @@ fixed shape:
   "run_id": "<run-id>",
   "workflow_id": "<workflow-id>",
   "selected_workflow": "<workflow-id>",
+  "routed_by": "classifier",
+  "router_reason": "<router decision reason>",
+  "router_signal": "<matched signal, when present>",
   "run_root": "<absolute-run-root>",
   "outcome": "checkpoint_waiting",
   "checkpoint": {
@@ -357,6 +378,8 @@ fixed shape:
 }
 ```
 
+`routed_by` is `explicit` for `/circuit:build` and `classifier` for
+`/circuit:run`; `router_signal` is omitted when no signal matched.
 `events_observed` is the actual event count at wait time. That envelope is not
 a `RunResult`, and it does not include `result_path`. Continuing a waiting
 checkpoint is also in this arc. The public continuation surface is:
@@ -427,6 +450,9 @@ JSON without a typed successor contract.
 - Add `src/schemas/artifacts/build.ts`.
 - Add authority rows for the six Build artifact ids in `specs/artifacts.json`.
 - Add contract tests for strict parse/reject behavior and reference cardinality.
+- Make `build.brief@v1` a checkpoint-owned Frame artifact: its schema must be
+  valid while waiting and after resume, and must include pointers to the
+  checkpoint request path and optional response path.
 - Add backing-path tests proving `build.result` uses
   `<run-root>/artifacts/build-result.json` and does not collide with
   `run.result` at `<run-root>/artifacts/result.json`.
@@ -458,16 +484,15 @@ placeholder JSON that looks like progress but is not a useful Build artifact.
 
 **Deliverables:**
 
-- Register synthesis writers for `build.brief@v1`, `build.plan@v1`, and
-  `build.result@v1`.
+- Register synthesis writers for `build.plan@v1` and `build.result@v1`.
 - Add tests proving the Build close writer reads prior Build artifacts and
   writes a schema-valid result at `artifacts/build-result.json`.
 - Ensure placeholder fallback cannot satisfy Build result acceptance.
 
 **Acceptance evidence:**
 
-- Runner tests prove frame, plan, and close Build synthesis artifacts are
-  schema-valid through the default runtime path.
+- Runner tests prove plan and close Build synthesis artifacts are schema-valid
+  through the default runtime path.
 - Runner tests prove `build.result@v1` is written to
   `artifacts/build-result.json`, while `artifacts/result.json` remains the
   engine-authored run summary.
@@ -537,6 +562,9 @@ with a synthesis placeholder while still claiming full entry-mode parity.
   an equivalent control-plane schema.
 - Add the checkpoint event, state, CLI waiting-envelope, and artifact surfaces
   described in §8.
+- Make Frame checkpoint execution write `build.brief@v1` to
+  `artifacts/brief.json`; the checkpoint substrate owns this artifact for
+  Build instead of the synthesis writer path.
 - Add the stable checkpoint artifact paths
   `artifacts/checkpoints/<step-id>-request.json` and
   `artifacts/checkpoints/<step-id>-response.json`.
@@ -558,6 +586,8 @@ with a synthesis placeholder while still claiming full entry-mode parity.
 **Acceptance evidence:**
 
 - Runner tests prove a checkpoint step can be reached and recorded.
+- Runner tests prove Frame writes a schema-valid `build.brief@v1` at
+  `artifacts/brief.json` on both waiting and resolved paths.
 - Runner tests prove default/lite resolve only through a declared safe default.
 - Runner tests prove deep reaches a paused-open checkpoint state with no
   `run.closed` and no `artifacts/result.json`.
@@ -700,6 +730,9 @@ does not recognize build-like tasks.
   a closed-run result envelope or a `checkpoint_waiting` envelope. Waiting
   envelopes must surface the checkpoint request path and the exact resume
   command; they must not read or claim `result_path`.
+- Preserve routed output metadata on waiting Build runs:
+  `selected_workflow`, `routed_by`, `router_reason`, and optional
+  `router_signal`.
 - Update the plugin command-closure audit check so Build is an expected public
   command, not an unexpected extra file.
 - Update plugin-surface tests and command-invocation tests for the four-command
@@ -726,6 +759,8 @@ does not recognize build-like tasks.
   the Build close-artifact path.
 - Command-invocation tests prove both Build command bodies handle
   `checkpoint_waiting` without requiring `result_path`.
+- Command-invocation tests prove `/circuit:run` waiting output preserves
+  `routed_by`, `router_reason`, and optional `router_signal`.
 - `npm run verify` passes.
 - `npm run audit` reports 0 red and no new unaccounted yellows.
 
