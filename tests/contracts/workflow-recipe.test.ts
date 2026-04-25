@@ -65,6 +65,24 @@ describe('workflow recipe schema', () => {
     ]);
   });
 
+  it('keeps Fix phase bindings aligned with the intended workflow shape', () => {
+    const recipe = parseFixRecipe();
+    expect(recipe.items.map((item) => [item.id, item.phase])).toEqual([
+      ['fix-intake', 'frame'],
+      ['fix-route', 'frame'],
+      ['fix-frame', 'frame'],
+      ['fix-gather-context', 'analyze'],
+      ['fix-diagnose', 'analyze'],
+      ['fix-no-repro-decision', 'analyze'],
+      ['fix-act', 'act'],
+      ['fix-verify', 'verify'],
+      ['fix-review', 'review'],
+      ['fix-close-lite', 'close'],
+      ['fix-close', 'close'],
+      ['fix-handoff', 'close'],
+    ]);
+  });
+
   it('keeps Fix items declaring the evidence required by their primitives', () => {
     const recipe = parseFixRecipe();
     const catalog = parsePrimitiveCatalog();
@@ -258,6 +276,19 @@ describe('workflow recipe schema', () => {
       item_id: 'fix-act',
       message:
         'execution kind "synthesis" is not compatible with primitive "act"; expected one of dispatch',
+    });
+  });
+
+  it('reports phase bindings that do not match the selected primitive', () => {
+    const recipe = parseFixRecipe();
+    const act = recipe.items.find((item) => item.id === 'fix-act');
+    if (act === undefined) throw new Error('fix-act missing');
+    act.phase = 'analyze';
+
+    const issues = validateWorkflowRecipeCatalogCompatibility(recipe, parsePrimitiveCatalog());
+    expect(issues).toContainEqual({
+      item_id: 'fix-act',
+      message: 'phase "analyze" is not compatible with primitive "act"; expected one of act',
     });
   });
 

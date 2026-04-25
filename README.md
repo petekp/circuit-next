@@ -1,4 +1,4 @@
-<!-- current_slice: 147 -->
+<!-- current_slice: 148 -->
 
 # circuit-next
 
@@ -98,6 +98,9 @@ recipe now says what proof each step must leave behind.
 
 Slice 147 adds design-time execution labels to recipe items, so Fix now records
 the intended future runner shape without changing the runtime.
+
+Slice 148 adds design-time phase labels to recipe items, so Fix can be grouped
+into the existing workflow phases without guessing from item ids.
 
 CC#14 was amended by ADR-0006 as a one-time
 waiver + retarget (see Status above); the canonical non-LLM cold-read is **not**

@@ -72,7 +72,7 @@
       "surface_class": "greenfield",
       "compatibility_policy": "n/a",
       "plane": "control-plane",
-      "description": "Design-time recipe shape for assembling reusable workflow primitives. Captures recipe items, typed evidence contracts, contract aliases, and named outcome targets before any recipe runner exists.",
+      "description": "Design-time recipe shape for assembling reusable workflow primitives. Captures recipe items, phase bindings, execution labels, typed evidence contracts, contract aliases, and named outcome targets before any recipe runner exists.",
       "contract": "specs/contracts/workflow.md",
       "schema_file": "src/schemas/workflow-recipe.ts",
       "schema_exports": [

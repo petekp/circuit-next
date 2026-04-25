@@ -12,6 +12,12 @@ record.*
 
 ## Methodology And Recipe Pivot (opened after Slice 132)
 
+- **Slice 148 RECIPE PHASE BINDINGS** (this commit, Ratchet-Advance) - added
+  design-time phase labels to recipe items. The Fix candidate can now be
+  grouped into the existing workflow phases without guessing from item ids,
+  and compatibility checks reject phase labels that do not fit the selected
+  primitive.
+
 - **Slice 147 RECIPE EXECUTION BINDINGS** (this commit,
   Ratchet-Advance) - added design-time execution bindings to recipe items. The
   Fix candidate now records the intended future runner shape for each item,

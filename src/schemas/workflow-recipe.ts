@@ -1,5 +1,10 @@
 import { z } from 'zod';
 import { StepId, WorkflowId } from './ids.js';
+import {
+  CANONICAL_PHASES,
+  CanonicalPhase,
+  type CanonicalPhase as CanonicalPhaseValue,
+} from './phase.js';
 import { Rigor } from './rigor.js';
 import { SelectionOverride } from './selection-policy.js';
 import { DispatchRole } from './step.js';
@@ -100,6 +105,7 @@ export const WorkflowRecipeItem = z
     id: StepId,
     uses: WorkflowPrimitiveId,
     title: z.string().min(1),
+    phase: CanonicalPhase,
     input: z
       .record(z.string().regex(/^[a-z][a-z0-9_]*$/), WorkflowPrimitiveContractRef)
       .default({}),
@@ -294,6 +300,35 @@ function acceptedExecutionKinds(
   }
 }
 
+function acceptedPhases(primitive: WorkflowPrimitiveValue): readonly CanonicalPhaseValue[] {
+  switch (primitive.id) {
+    case 'intake':
+    case 'route':
+    case 'frame':
+      return ['frame'];
+    case 'gather-context':
+    case 'diagnose':
+      return ['analyze'];
+    case 'plan':
+    case 'queue':
+      return ['plan'];
+    case 'act':
+    case 'batch':
+      return ['act'];
+    case 'run-verification':
+      return ['verify'];
+    case 'review':
+      return ['review'];
+    case 'risk-rollback-check':
+      return ['verify', 'close'];
+    case 'close-with-evidence':
+    case 'handoff':
+      return ['close'];
+    case 'human-decision':
+      return CANONICAL_PHASES;
+  }
+}
+
 function intersectContracts(
   left: ReadonlySet<WorkflowPrimitiveContractRefValue>,
   right: ReadonlySet<WorkflowPrimitiveContractRefValue>,
@@ -419,6 +454,14 @@ export function validateWorkflowRecipeCatalogCompatibility(
       issues.push({
         item_id: item.id,
         message: `execution kind "${item.execution.kind}" is not compatible with primitive "${item.uses}"; expected one of ${executionKinds.join(', ')}`,
+      });
+    }
+
+    const phases = acceptedPhases(primitive);
+    if (!phases.includes(item.phase)) {
+      issues.push({
+        item_id: item.id,
+        message: `phase "${item.phase}" is not compatible with primitive "${item.uses}"; expected one of ${phases.join(', ')}`,
       });
     }
   }

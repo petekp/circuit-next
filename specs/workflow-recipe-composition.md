@@ -90,6 +90,7 @@ Sketch:
 {
   "id": "fix-diagnose",
   "uses": "diagnose",
+  "phase": "analyze",
   "input": {
     "brief": "fix.brief@v1",
     "context": "context.packet@v1"
@@ -136,6 +137,10 @@ It is still design-time only. For now it keeps the future compiler honest:
 worker moves bind to dispatch roles, Human Decision binds to checkpoint,
 Run Verification binds to verification, and simple orchestrator moves bind to
 synthesis.
+
+`phase` names where the item fits in the existing workflow shape. It gives a
+future compiler enough information to group recipe items into Frame, Analyze,
+Plan, Act, Verify, Review, and Close phases without guessing from item ids.
 
 `route_overrides` lets a recipe choose a different target for a named outcome
 under a specific rigor. The default route still exists, so the recipe remains
