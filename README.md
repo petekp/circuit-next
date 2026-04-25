@@ -1,4 +1,4 @@
-<!-- current_slice: 139 -->
+<!-- current_slice: 140 -->
 
 # circuit-next
 
@@ -73,6 +73,9 @@ reusable moves; see `specs/workflow-direction.md` and
 
 Slice 139 adds the first typed Fix artifact shapes and authority rows so future
 Fix behavior has stable evidence targets.
+
+Slice 140 makes recipe checks follow the actual paths through a recipe, so a
+step cannot depend on evidence that one of its branches skipped.
 
 CC#14 was amended by ADR-0006 as a one-time
 waiver + retarget (see Status above); the canonical non-LLM cold-read is **not**

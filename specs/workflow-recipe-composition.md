@@ -109,6 +109,12 @@ Basic rule:
 
 > A recipe item can run only when its required input contracts are available.
 
+Availability is route-aware. A later recipe item does not make its output
+magically available to an earlier branch just because it appears earlier in the
+JSON file. If one branch can reach Close without passing through Review, Close
+cannot require a Review artifact unless the recipe has a separate close path
+for the skipped-review case.
+
 Examples:
 
 - Act can consume a plan or diagnosis.

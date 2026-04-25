@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
+import { StepId } from '../../src/schemas/ids.js';
 import { WorkflowPrimitiveCatalog } from '../../src/schemas/workflow-primitives.js';
 import {
   WorkflowRecipe,
@@ -109,9 +110,37 @@ describe('workflow recipe schema', () => {
     expect(issues).toEqual([
       {
         item_id: 'fix-diagnose',
-        message: 'input "context" references unavailable contract "missing.context@v1"',
+        message:
+          'input "context" references unavailable contract "missing.context@v1" on at least one reachable route',
       },
     ]);
+  });
+
+  it('reports inputs that are skipped by a reachable route', () => {
+    const recipe = parseFixRecipe();
+    const verify = recipe.items.find((item) => item.id === 'fix-verify');
+    if (verify === undefined) throw new Error('fix-verify missing');
+    verify.routes.continue = StepId.parse('fix-close');
+
+    const issues = validateWorkflowRecipeCatalogCompatibility(recipe, parsePrimitiveCatalog());
+    expect(issues).toContainEqual({
+      item_id: 'fix-close',
+      message:
+        'input "review" references unavailable contract "fix.review@v1" on at least one reachable route',
+    });
+  });
+
+  it('reports recipe items that cannot be reached from starts_at', () => {
+    const recipe = parseFixRecipe();
+    const intake = recipe.items.find((item) => item.id === 'fix-intake');
+    if (intake === undefined) throw new Error('fix-intake missing');
+    intake.routes = { stop: '@stop' };
+
+    const issues = validateWorkflowRecipeCatalogCompatibility(recipe, parsePrimitiveCatalog());
+    expect(issues).toContainEqual({
+      item_id: 'fix-route',
+      message: 'recipe item is unreachable from starts_at',
+    });
   });
 
   it('reports outputs that are not primitive outputs or declared aliases', () => {

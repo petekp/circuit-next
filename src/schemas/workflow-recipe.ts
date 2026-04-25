@@ -143,6 +143,71 @@ function contractIsCompatible(
   return aliases.some((alias) => alias.generic === expected && alias.actual === actual);
 }
 
+function isTerminalTarget(
+  target: WorkflowRecipeRouteTarget,
+): target is WorkflowRecipeTerminalTarget {
+  return WorkflowRecipeTerminalTarget.safeParse(target).success;
+}
+
+function intersectContracts(
+  left: ReadonlySet<WorkflowPrimitiveContractRefValue>,
+  right: ReadonlySet<WorkflowPrimitiveContractRefValue>,
+): Set<WorkflowPrimitiveContractRefValue> {
+  const intersection = new Set<WorkflowPrimitiveContractRefValue>();
+  for (const value of left) {
+    if (right.has(value)) intersection.add(value);
+  }
+  return intersection;
+}
+
+function contractSetsEqual(
+  left: ReadonlySet<WorkflowPrimitiveContractRefValue>,
+  right: ReadonlySet<WorkflowPrimitiveContractRefValue>,
+): boolean {
+  if (left.size !== right.size) return false;
+  for (const value of left) {
+    if (!right.has(value)) return false;
+  }
+  return true;
+}
+
+function collectRouteAwareAvailability(
+  recipe: WorkflowRecipe,
+): Map<string, Set<WorkflowPrimitiveContractRefValue>> {
+  const itemById = new Map(recipe.items.map((item) => [item.id as unknown as string, item]));
+  const availableAt = new Map<string, Set<WorkflowPrimitiveContractRefValue>>();
+  const worklist: string[] = [recipe.starts_at];
+  availableAt.set(recipe.starts_at, new Set(recipe.initial_contracts));
+
+  while (worklist.length > 0) {
+    const itemId = worklist.shift();
+    if (itemId === undefined) continue;
+    const item = itemById.get(itemId);
+    const current = availableAt.get(itemId);
+    if (item === undefined || current === undefined) continue;
+
+    const afterItem = new Set(current);
+    afterItem.add(item.output);
+
+    for (const target of Object.values(item.routes)) {
+      if (isTerminalTarget(target)) continue;
+      const prior = availableAt.get(target);
+      if (prior === undefined) {
+        availableAt.set(target, new Set(afterItem));
+        worklist.push(target);
+        continue;
+      }
+      const narrowed = intersectContracts(prior, afterItem);
+      if (!contractSetsEqual(prior, narrowed)) {
+        availableAt.set(target, narrowed);
+        worklist.push(target);
+      }
+    }
+  }
+
+  return availableAt;
+}
+
 export function validateWorkflowRecipeCatalogCompatibility(
   recipe: WorkflowRecipe,
   catalog: WorkflowPrimitiveCatalogValue,
@@ -154,7 +219,6 @@ export function validateWorkflowRecipeCatalogCompatibility(
 
   const primitiveById = new Map(parsedCatalog.data.primitives.map((p) => [p.id, p]));
   const issues: WorkflowRecipeCatalogCompatibilityIssue[] = [];
-  const availableContracts = new Set<WorkflowPrimitiveContractRefValue>(recipe.initial_contracts);
 
   for (const item of recipe.items) {
     const primitive = primitiveById.get(item.uses as WorkflowPrimitiveIdValue);
@@ -181,17 +245,26 @@ export function validateWorkflowRecipeCatalogCompatibility(
         message: `output "${item.output}" is not compatible with primitive output "${primitive.output_contract}"`,
       });
     }
+  }
 
+  const availableAt = collectRouteAwareAvailability(recipe);
+  for (const item of recipe.items) {
+    const availableContracts = availableAt.get(item.id);
+    if (availableContracts === undefined) {
+      issues.push({
+        item_id: item.id,
+        message: 'recipe item is unreachable from starts_at',
+      });
+      continue;
+    }
     for (const [name, contract] of Object.entries(item.input)) {
       if (!availableContracts.has(contract)) {
         issues.push({
           item_id: item.id,
-          message: `input "${name}" references unavailable contract "${contract}"`,
+          message: `input "${name}" references unavailable contract "${contract}" on at least one reachable route`,
         });
       }
     }
-
-    availableContracts.add(item.output);
   }
 
   return issues;
