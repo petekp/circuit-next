@@ -16,9 +16,6 @@ coverage/
 # a deliverable; per-machine ephemeral state.
 .claude/scheduled_tasks.lock
 
-# Tool-run state for the Circuit harness used to build circuit-next.
-# Per ADR-0002, orchestration artifacts live in the outer workspace, not in
-# the circuit-next repo. The one pre-discipline run already tracked
-# (phase-1-step-contract-authorship) is preserved as historical audit trail.
+# Tool-run state for the Circuit harness used by this project. Ephemeral
+# per-machine state; nothing here is a deliverable.
 .circuit/
-!.circuit/circuit-runs/phase-1-step-contract-authorship/

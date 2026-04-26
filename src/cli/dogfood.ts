@@ -29,16 +29,9 @@ import {
 // config files and supplies them as `LayeredConfig`s to the selection
 // resolver.
 //
-// Slice 44 arc-close fold-in (Codex HIGH 4): `--dry-run` is no longer
-// silently accepted as a no-op. Pre-Slice-44, the flag was accepted for
-// forward compatibility but did nothing — the real `dispatchAgent`
-// adapter (Slice 42) + five-event materialization (Slice 43b) ran
-// regardless, while the JSON output reported `dry_run: true`. That is a
-// safety + evidence-labeling bug: a user running `--dry-run` would
-// spawn `claude -p` while believing they were in a dry-run mode.
-// Pre-ceremony behavior: flag now fails closed with a clear error
-// pointing at the future slice where dry-run support lands. See
-// specs/reviews/arc-slices-41-to-43-composition-review-codex.md §HIGH 4.
+// `--dry-run` fails closed. An earlier version accepted the flag as a
+// no-op while still spawning the real adapter — a safety bug. The flag
+// stays rejected until real dry-run support lands.
 
 const DEFAULT_RUNS_BASE = '.circuit-next/runs';
 
@@ -78,7 +71,7 @@ function usage(): string {
     '',
     'Config: if present, loads ~/.config/circuit-next/config.yaml and ./.circuit/config.yaml from the current working directory into the selection resolver before dispatch.',
     '',
-    'Note: `--dry-run` is not implemented. Pre-Slice-44 the flag was accepted as a no-op while the real adapter ran anyway; the arc-close review flagged this as a safety bug and the flag is now rejected until dry-run support lands (tracked in specs/plans/phase-2-implementation.md post-Slice-44 backlog).',
+    'Note: `--dry-run` is not implemented and is rejected. An earlier version silently invoked the real adapter while reporting dry_run:true, which is a safety bug; the flag stays rejected until real dry-run support lands.',
   ].join('\n');
 }
 
@@ -142,13 +135,11 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
       continue;
     }
     if (tok === '--dry-run') {
-      // Slice 44 arc-close fold-in (Codex HIGH 4): fail-closed. The flag
-      // previously accepted silently while the real adapter still ran;
-      // see specs/reviews/arc-slices-41-to-43-composition-review-codex.md
-      // §HIGH 4. Re-enable once dry-run support actually lands (inject a
-      // deterministic dry dispatcher + event log marker).
+      // Fail closed. An earlier version accepted the flag silently while
+      // the real adapter still ran. Re-enable once real dry-run support
+      // lands (deterministic dry dispatcher + event log marker).
       throw new Error(
-        '--dry-run is not currently implemented. Pre-Slice-44 the flag silently invoked the real adapter while reporting dry_run:true; the arc-close review (specs/reviews/arc-slices-41-to-43-composition-review-codex.md §HIGH 4) flagged this as a safety bug. The flag is rejected until dry-run support lands.',
+        '--dry-run is not currently implemented and is rejected. An earlier version silently invoked the real adapter while reporting dry_run:true, which is a safety bug. The flag stays rejected until real dry-run support lands.',
       );
     }
     if (tok === '--help' || tok === '-h') {

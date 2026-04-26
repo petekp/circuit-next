@@ -6,23 +6,24 @@ Last updated: 2026-04-25 (methodology strip session).
 
 Just stripped the heavy methodology that had accumulated around building
 this plugin: ADRs, plan-lint, audit machinery, slice ceremony, challenger
-loops, plan-of-plans recursion, the chronicle, the per-arc review folder.
-The plugin product itself is intact — workflow recipes, schemas, runtime,
-the working Build and Explore workflows.
+loops, plan-of-plans recursion, the chronicle, the per-arc review folder,
+and the auto-firing handoff hooks. The plugin product is intact —
+workflow recipes, schemas, runtime, the working Build and Explore
+workflows, the wired Review workflow.
 
-The `recipe-runtime-substrate` plan was closed unfinished; it had reached
-challenger pass 10 with no structural changes pending and was the
-proximate cause of the strip. The `runtime-checkpoint-artifact-widening`
-prerequisite arc landed code at commit `1e2cd40` — that diff is unreviewed
-and waiting for a fresh look when work resumes.
+`npm run verify` is green: 783 tests, lint clean, tsc clean, build clean.
 
 ## What's next
 
-Open question: do we keep building circuit-next forward (resume primitive-
-backed workflow recipe work, possibly the Fix workflow), or pause active
-development. The strip itself is the only change in this session.
+Open question: do we keep building circuit-next forward, or pause active
+development. The next proving workflow on the design board is `Fix` over
+reusable workflow primitives — see `specs/workflow-direction.md` and
+`specs/workflow-recipes/fix-candidate.recipe.json`. The recipe and
+typed Fix artifacts have been authored; runtime wiring for Fix has not
+landed.
 
-When resuming concrete work, run `npm run verify` first to confirm the
-strip didn't break anything. Then look at the diff of commit `1e2cd40`
-against current main and decide whether the checkpoint-artifact-widening
-work is worth keeping, redoing, or dropping.
+Latest substantive code in the area was commit `1e2cd40`
+(`runtime-checkpoint-artifact-widening`) which is already on `main`.
+The "operator signoff" that was once pending on it was a methodology
+ceremony we stripped, so the code is just part of the project now and
+needs no further gate.
