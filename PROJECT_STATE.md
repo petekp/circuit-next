@@ -1,4 +1,4 @@
-<!-- current_slice: 154 -->
+<!-- current_slice: 155 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -10,7 +10,7 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 154
+- **current_slice:** 155
 - **current_arc:** Build workflow parity is now closed. The implementation has the policy
   shape, typed Build artifact contracts/schemas, registered runtime synthesis
   writers for `build.plan@v1` and `build.result@v1`, and a focused
