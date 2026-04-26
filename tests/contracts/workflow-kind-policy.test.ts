@@ -381,6 +381,59 @@ describe('checkWorkflowKindCanonicalPolicy (audit-level, no Zod)', () => {
     expect(result.detail).toMatch(/missing canonical\(s\): analyze/);
   });
 
+  it('returns green on a fix variant that omits the optional review canonical', () => {
+    const fixture = fixPolicyOnlyPayload({
+      phases: [
+        { title: 'Frame', canonical: 'frame', steps: ['frame-step'] },
+        { title: 'Analyze', canonical: 'analyze', steps: ['analyze-step'] },
+        { title: 'Fix', canonical: 'act', steps: ['fix-step'] },
+        { title: 'Verify', canonical: 'verify', steps: ['verify-step'] },
+        { title: 'Close', canonical: 'close', steps: ['close-step'] },
+      ],
+      spine_policy: {
+        mode: 'partial',
+        omits: ['plan', 'review'],
+        rationale: 'lite-mode fix variant: review skipped via route_overrides.continue.lite.',
+      },
+    });
+    const result = checkWorkflowKindCanonicalPolicy(fixture);
+    expect(result.kind).toBe('green');
+    expect(result.detail).toMatch(/fix: canonical set/);
+  });
+
+  it('returns red when a fix variant omits review from canonicals but does not put review in omits', () => {
+    const fixture = fixPolicyOnlyPayload({
+      phases: [
+        { title: 'Frame', canonical: 'frame', steps: ['frame-step'] },
+        { title: 'Analyze', canonical: 'analyze', steps: ['analyze-step'] },
+        { title: 'Fix', canonical: 'act', steps: ['fix-step'] },
+        { title: 'Verify', canonical: 'verify', steps: ['verify-step'] },
+        { title: 'Close', canonical: 'close', steps: ['close-step'] },
+      ],
+      spine_policy: {
+        mode: 'partial',
+        omits: ['plan'],
+        rationale: 'lite-mode fix variant missing the required review-omit pairing.',
+      },
+    });
+    const result = checkWorkflowKindCanonicalPolicy(fixture);
+    expect(result.kind).toBe('red');
+    expect(result.detail).toMatch(/missing omit\(s\): review/);
+  });
+
+  it('returns red when a fix variant declares review AND lists review in omits', () => {
+    const fixture = fixPolicyOnlyPayload({
+      spine_policy: {
+        mode: 'partial',
+        omits: ['plan', 'review'],
+        rationale: 'fix variant cannot both declare review and omit it.',
+      },
+    });
+    const result = checkWorkflowKindCanonicalPolicy(fixture);
+    expect(result.kind).toBe('red');
+    expect(result.detail).toMatch(/unexpected omit\(s\): review/);
+  });
+
   it('returns red when review close writes a non-primary artifact shape', () => {
     const fixture = reviewPolicyOnlyPayload({
       steps: [
@@ -418,11 +471,13 @@ describe('checkWorkflowKindCanonicalPolicy (audit-level, no Zod)', () => {
     if (explore === undefined) throw new Error('unreachable');
     expect(explore.canonicals).toEqual(['frame', 'analyze', 'act', 'review', 'close']);
     expect(explore.omits).toEqual(['plan', 'verify']);
+    expect(explore.optional_canonicals).toEqual([]);
     const review = WORKFLOW_KIND_CANONICAL_SETS.review;
     expect(review).toBeDefined();
     if (review === undefined) throw new Error('unreachable');
     expect(review.canonicals).toEqual(['frame', 'analyze', 'close']);
     expect(review.omits).toEqual(['plan', 'act', 'verify', 'review']);
+    expect(review.optional_canonicals).toEqual([]);
     expect(review.title).toBe('Intake → Independent Audit → Verdict');
     expect(review.authority).toBe('specs/plans/p2-9-second-workflow.md §3');
     const build = WORKFLOW_KIND_CANONICAL_SETS.build;
@@ -430,6 +485,7 @@ describe('checkWorkflowKindCanonicalPolicy (audit-level, no Zod)', () => {
     if (build === undefined) throw new Error('unreachable');
     expect(build.canonicals).toEqual(['frame', 'plan', 'act', 'verify', 'review', 'close']);
     expect(build.omits).toEqual(['analyze']);
+    expect(build.optional_canonicals).toEqual([]);
     expect(build.title).toBe('Frame → Plan → Act → Verify → Review → Close');
     expect(build.authority).toBe('specs/plans/build-workflow-parity.md §9 Work item 1');
     const fix = WORKFLOW_KIND_CANONICAL_SETS.fix;
@@ -437,6 +493,7 @@ describe('checkWorkflowKindCanonicalPolicy (audit-level, no Zod)', () => {
     if (fix === undefined) throw new Error('unreachable');
     expect(fix.canonicals).toEqual(['frame', 'analyze', 'act', 'verify', 'review', 'close']);
     expect(fix.omits).toEqual(['plan']);
+    expect(fix.optional_canonicals).toEqual(['review']);
     expect(fix.title).toBe('Frame → Diagnose → Fix → Verify → Review → Close');
     expect(fix.authority).toBe(
       'specs/adrs/ADR-0013-primitive-backed-workflow-recipes.md §Decision',

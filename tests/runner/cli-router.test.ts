@@ -628,7 +628,8 @@ describe('P2.8 CLI router', () => {
 
   it('keeps CLI help text aligned with the router-supported workflow set', () => {
     const source = readFileSync(join(process.cwd(), 'src/cli/dogfood.ts'), 'utf-8');
-    expect(source).toContain('registered explore/review/build workflows');
+    expect(source).toContain('registered explore/review/fix/build workflows');
+    expect(source).not.toContain('registered explore/review/build workflows');
     expect(source).not.toContain('registered explore/review workflows');
   });
 });

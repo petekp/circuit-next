@@ -1,4 +1,4 @@
-export const ROUTABLE_WORKFLOWS = ['explore', 'review', 'build'] as const;
+export const ROUTABLE_WORKFLOWS = ['explore', 'review', 'fix', 'build'] as const;
 
 export type RoutableWorkflow = (typeof ROUTABLE_WORKFLOWS)[number];
 
@@ -38,6 +38,16 @@ const REVIEW_SIGNALS: Array<{ label: string; pattern: RegExp }> = [
   },
 ];
 
+const FIX_SIGNALS: Array<{ label: string; pattern: RegExp }> = [
+  { label: 'fix prefix', pattern: /^\s*fix\s*:/i },
+  { label: 'repair prefix', pattern: /^\s*repair\s*:/i },
+  {
+    label: 'fix request',
+    pattern:
+      /^\s*(?:please\s+)?(?:fix|repair|patch|debug|diagnose|reproduce)\s+(?:a\s+|an\s+|the\s+|this\s+|that\s+|my\s+|some\s+)?\S+/i,
+  },
+];
+
 const BUILD_SIGNALS: Array<{ label: string; pattern: RegExp }> = [
   { label: 'develop prefix', pattern: /^\s*develop\s*:/i },
   {
@@ -62,6 +72,20 @@ export function classifyWorkflowTask(taskText: string): WorkflowRouteDecision {
         source: 'classifier',
         matched_signal: signal.label,
         reason: `matched ${signal.label}; routed to audit-only review workflow`,
+      };
+    }
+  }
+
+  for (const signal of FIX_SIGNALS) {
+    if (signal.pattern.test(taskText)) {
+      if (PLANNING_ARTIFACT_SIGNAL.test(taskText)) {
+        break;
+      }
+      return {
+        workflowName: 'fix',
+        source: 'classifier',
+        matched_signal: signal.label,
+        reason: `matched ${signal.label}; routed to Fix workflow`,
       };
     }
   }

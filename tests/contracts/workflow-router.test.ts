@@ -4,7 +4,7 @@ import { ROUTABLE_WORKFLOWS, classifyWorkflowTask } from '../../src/runtime/rout
 
 describe('P2.8 workflow router classifier', () => {
   it('declares the current routable workflow set explicitly', () => {
-    expect(ROUTABLE_WORKFLOWS).toEqual(['explore', 'review', 'build']);
+    expect(ROUTABLE_WORKFLOWS).toEqual(['explore', 'review', 'fix', 'build']);
   });
 
   it('routes review/audit-style tasks to the review workflow', () => {
@@ -26,6 +26,58 @@ describe('P2.8 workflow router classifier', () => {
       expect(decision.workflowName, task).toBe('review');
       expect(decision.source).toBe('classifier');
       expect(decision.matched_signal).toBeDefined();
+    }
+  });
+
+  it('routes fix-like tasks to the fix workflow', () => {
+    const cases = [
+      'fix the foo bug',
+      'fix: handle the missing token edge case',
+      'repair: restore the failing pipeline',
+      'please fix the auth regression',
+      'repair the broken adapter',
+      'patch the leaking handler',
+      'debug the flaky integration test',
+      'diagnose the failing build',
+      'reproduce the missing-token crash',
+    ];
+
+    for (const task of cases) {
+      const decision = classifyWorkflowTask(task);
+      expect(decision.workflowName, task).toBe('fix');
+      expect(decision.source).toBe('classifier');
+      expect(decision.matched_signal).toBeDefined();
+    }
+  });
+
+  it('keeps review-style fix-mention goals on review, not fix', () => {
+    const cases = [
+      'audit this bug fix before merge',
+      'find any regressions in the patch',
+      'critique the regression repro plan',
+    ];
+
+    for (const task of cases) {
+      const decision = classifyWorkflowTask(task);
+      expect(decision.workflowName, task).toBe('review');
+    }
+  });
+
+  it('keeps build-style fix-mention goals on build, not fix', () => {
+    const cases = ['build a fix for the auth bug', 'implement the fix for the regression'];
+
+    for (const task of cases) {
+      const decision = classifyWorkflowTask(task);
+      expect(decision.workflowName, task).toBe('build');
+    }
+  });
+
+  it('keeps fix-prefixed planning goals on explore via planning-artifact suppression', () => {
+    const cases = ['fix: write a postmortem report', 'diagnose the outage and produce an analysis'];
+
+    for (const task of cases) {
+      const decision = classifyWorkflowTask(task);
+      expect(decision.workflowName, task).toBe('explore');
     }
   });
 

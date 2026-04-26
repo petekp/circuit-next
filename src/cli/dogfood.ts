@@ -67,7 +67,7 @@ function usage(): string {
     'usage: circuit-next [workflow-name] --goal "<goal>" [--entry-mode <default|lite|deep|autonomous>] [--rigor <lite|standard|deep|tournament|autonomous>] [--run-root <path>] [--fixture <path>]',
     '       circuit-next resume --run-root <path> --checkpoint-choice <choice>',
     '',
-    'With an explicit workflow name, loads .claude-plugin/skills/<name>/circuit.json. Without one, classifies the free-form goal across the registered explore/review/build workflows and then composes the runtime boundary against the real `dispatchAgent`.',
+    'With an explicit workflow name, loads .claude-plugin/skills/<name>/circuit.json. Without one, classifies the free-form goal across the registered explore/review/fix/build workflows and then composes the runtime boundary against the real `dispatchAgent`.',
     '',
     'Config: if present, loads ~/.config/circuit-next/config.yaml and ./.circuit/config.yaml from the current working directory into the selection resolver before dispatch.',
     '',

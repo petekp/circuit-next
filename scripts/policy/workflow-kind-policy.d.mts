@@ -10,6 +10,13 @@
 export type WorkflowKindPolicyEntry = {
   readonly canonicals: readonly string[];
   readonly omits: readonly string[];
+  /**
+   * Canonicals that may be either declared or omitted by per-mode variants.
+   * When declared, they must NOT appear in spine_policy.omits. When absent
+   * from declared phases, they MUST appear in spine_policy.omits.
+   * Empty array for workflow ids whose every canonical is mandatory.
+   */
+  readonly optional_canonicals: readonly string[];
   readonly title: string;
   readonly authority: string;
 };

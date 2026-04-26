@@ -29,6 +29,11 @@
  * @typedef {Object} WorkflowKindPolicyEntry
  * @property {string[]} canonicals
  * @property {string[]} omits
+ * @property {string[]} optional_canonicals
+ *   Canonicals that may be either declared or omitted by per-mode variants.
+ *   When declared, they must NOT appear in spine_policy.omits. When absent
+ *   from declared phases, they MUST appear in spine_policy.omits.
+ *   Empty array for workflow ids whose every canonical is mandatory.
  * @property {string} title
  * @property {string} authority
  */
@@ -38,24 +43,28 @@ export const WORKFLOW_KIND_CANONICAL_SETS = {
   explore: {
     canonicals: ['frame', 'analyze', 'act', 'review', 'close'],
     omits: ['plan', 'verify'],
+    optional_canonicals: [],
     title: 'Frame → Analyze → Synthesize → Review → Close',
     authority: 'specs/contracts/explore.md §Canonical phase set',
   },
   review: {
     canonicals: ['frame', 'analyze', 'close'],
     omits: ['plan', 'act', 'verify', 'review'],
+    optional_canonicals: [],
     title: 'Intake → Independent Audit → Verdict',
     authority: 'specs/plans/p2-9-second-workflow.md §3',
   },
   build: {
     canonicals: ['frame', 'plan', 'act', 'verify', 'review', 'close'],
     omits: ['analyze'],
+    optional_canonicals: [],
     title: 'Frame → Plan → Act → Verify → Review → Close',
     authority: 'specs/plans/build-workflow-parity.md §9 Work item 1',
   },
   fix: {
     canonicals: ['frame', 'analyze', 'act', 'verify', 'review', 'close'],
     omits: ['plan'],
+    optional_canonicals: ['review'],
     title: 'Frame → Diagnose → Fix → Verify → Review → Close',
     authority: 'specs/adrs/ADR-0013-primitive-backed-workflow-recipes.md §Decision',
   },
@@ -226,10 +235,12 @@ export function checkWorkflowKindCanonicalPolicy(fixture) {
       declared.add(phase.canonical);
     }
   }
-  const expectedSet = new Set(expected.canonicals);
+  const optionalCanonicals = new Set(expected.optional_canonicals);
+  const requiredCanonicals = new Set(expected.canonicals.filter((c) => !optionalCanonicals.has(c)));
+  const acceptedDeclared = new Set([...requiredCanonicals, ...optionalCanonicals]);
 
-  const missing = [...expectedSet].filter((c) => !declared.has(c));
-  const extra = [...declared].filter((c) => !expectedSet.has(c));
+  const missing = [...requiredCanonicals].filter((c) => !declared.has(c));
+  const extra = [...declared].filter((c) => !acceptedDeclared.has(c));
   if (missing.length > 0 || extra.length > 0) {
     const parts = [];
     if (missing.length > 0) parts.push(`missing canonical(s): ${missing.join(', ')}`);
@@ -256,7 +267,11 @@ export function checkWorkflowKindCanonicalPolicy(fixture) {
     };
   }
   const omits = Array.isArray(spObj.omits) ? spObj.omits.filter((s) => typeof s === 'string') : [];
-  const expectedOmits = new Set(expected.omits);
+  // Required omits always belong in the omit list. Optional canonicals that the
+  // variant chose NOT to declare also belong in the omit list (PHASE-I4 forces
+  // every canonical to be either declared or omitted; the policy mirrors that).
+  const optionalOmitted = [...optionalCanonicals].filter((c) => !declared.has(c));
+  const expectedOmits = new Set([...expected.omits, ...optionalOmitted]);
   const missingOmits = [...expectedOmits].filter((o) => !omits.includes(o));
   const extraOmits = omits.filter((o) => !expectedOmits.has(o));
   if (missingOmits.length > 0 || extraOmits.length > 0) {
