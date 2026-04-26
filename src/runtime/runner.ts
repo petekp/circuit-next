@@ -15,13 +15,7 @@ import {
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import type { BuiltInAdapter, DispatchResolutionSource } from '../schemas/adapter.js';
 import { BuildBrief, BuildPlan, BuildVerification } from '../schemas/artifacts/build.js';
-import { ExploreAnalysis, ExploreBrief } from '../schemas/artifacts/explore.js';
 import { FixBrief, FixVerification } from '../schemas/artifacts/fix.js';
-import {
-  ReviewDispatchResult,
-  ReviewResult,
-  computeReviewVerdict,
-} from '../schemas/artifacts/review.js';
 import { LayeredConfig, type LayeredConfig as LayeredConfigValue } from '../schemas/config.js';
 import type { Event, RunClosedOutcome } from '../schemas/event.js';
 import type { InvocationId, RunId, WorkflowId } from '../schemas/ids.js';
@@ -48,6 +42,7 @@ import { writeResult } from './result-writer.js';
 import { resolveRunRelative } from './run-relative-path.js';
 import { resolveSelectionForDispatch } from './selection-resolver.js';
 import { writeDerivedSnapshot } from './snapshot-writer.js';
+import { findSynthesisBuilder, resolveSynthesisReadPaths } from './synthesis-writers/registry.js';
 
 // Slice 27c landed the runtime-boundary writer/reducer/manifest surfaces
 // below bootstrapRun/appendAndDerive. Slice 27d composes them into the
@@ -622,12 +617,6 @@ function readJsonArtifact(runRoot: string, path: string): unknown {
   return JSON.parse(readFileSync(resolveRunRelative(runRoot, path), 'utf8')) as unknown;
 }
 
-type DispatchWorkflowStep = Workflow['steps'][number] & { kind: 'dispatch' };
-
-function isDispatchStep(step: Workflow['steps'][number]): step is DispatchWorkflowStep {
-  return step.kind === 'dispatch';
-}
-
 function isInsideOrSame(root: string, target: string): boolean {
   const fromRoot = relative(root, target);
   return fromRoot === '' || (!fromRoot.startsWith('..') && !isAbsolute(fromRoot));
@@ -872,41 +861,6 @@ function readCheckpointBuildBrief(input: {
   return brief;
 }
 
-const EXPLORE_BRIEF_ARTIFACT_PATH = 'artifacts/brief.json';
-const DEFAULT_FIX_VERIFICATION_COMMAND = {
-  id: 'fix-proof',
-  cwd: '.',
-  argv: ['npm', 'run', 'verify'],
-  timeout_ms: 600_000,
-  max_output_bytes: 200_000,
-  env: {},
-} as const;
-
-function reviewAnalyzeResultPath(
-  workflow: Workflow,
-  closeStep: SynthesisWriterInput['step'],
-): string {
-  const closeStepId = closeStep.id as unknown as string;
-  const reviewerDispatches = workflow.steps.filter(
-    (candidate): candidate is DispatchWorkflowStep =>
-      isDispatchStep(candidate) &&
-      candidate.role === 'reviewer' &&
-      (candidate.routes.pass as unknown as string) === closeStepId,
-  );
-  if (reviewerDispatches.length !== 1) {
-    throw new Error(
-      `review.result@v1 requires exactly one reviewer dispatch routing to '${closeStepId}', found ${reviewerDispatches.length}`,
-    );
-  }
-  const resultPath = reviewerDispatches[0]?.writes.result as unknown as string | undefined;
-  if (resultPath === undefined || !closeStep.reads.includes(resultPath as never)) {
-    throw new Error(
-      `review.result@v1 requires close step '${closeStepId}' to read the reviewer dispatch result path '${resultPath ?? '<missing>'}'`,
-    );
-  }
-  return resultPath;
-}
-
 function artifactPathForSchema(workflow: Workflow, schemaName: string): string {
   const matches = workflow.steps.filter(
     (candidate) => candidate.writes.artifact?.schema === schemaName,
@@ -946,115 +900,26 @@ function tryWriteRegisteredSynthesisArtifact(input: SynthesisWriterInput): boole
   const { runRoot, workflow, step, goal } = input;
   const schemaName = step.writes.artifact.schema;
 
-  if (schemaName === 'build.plan@v1') {
-    const briefPath = requiredReadForSchema(workflow, step, 'build.brief@v1');
-    const brief = BuildBrief.parse(readJsonArtifact(runRoot, briefPath));
-    const artifact = BuildPlan.parse({
-      objective: brief.objective,
-      approach: `Make the smallest safe change inside scope: ${brief.scope}`,
-      slices: brief.success_criteria.map((criterion) => `Satisfy: ${criterion}`),
-      verification: {
-        commands: brief.verification_command_candidates,
-      },
-    });
-    writeJsonArtifact(runRoot, step.writes.artifact.path, artifact);
-    return true;
-  }
-
-  if (schemaName === 'explore.brief@v1') {
-    const artifact = ExploreBrief.parse({
-      subject: goal,
-      task: goal,
-      success_condition: `Produce a useful explore result for: ${goal}`,
-    });
-    writeJsonArtifact(runRoot, step.writes.artifact.path, artifact);
-    return true;
-  }
-
-  if (schemaName === 'explore.analysis@v1') {
-    const briefPath = step.reads.find((path) => path === EXPLORE_BRIEF_ARTIFACT_PATH) as
-      | string
-      | undefined;
-    if (briefPath === undefined) {
-      throw new Error(
-        `explore.analysis@v1 requires step '${step.id}' to read ${EXPLORE_BRIEF_ARTIFACT_PATH}`,
-      );
+  // Synthesis writer dispatch. Workflow-specific synthesis logic lives
+  // under src/runtime/synthesis-writers/ and is registered by output
+  // schema name. The runner stays workflow-agnostic — adding a new
+  // synthesis step means adding a SynthesisBuilder file + registry
+  // entry, no edits here.
+  const synthesisBuilder = findSynthesisBuilder(schemaName);
+  if (synthesisBuilder !== undefined) {
+    const readPaths = resolveSynthesisReadPaths(synthesisBuilder, workflow, step);
+    const inputs: Record<string, unknown | undefined> = {};
+    for (const [name, path] of Object.entries(readPaths)) {
+      inputs[name] = path === undefined ? undefined : readJsonArtifact(runRoot, path);
     }
-    const brief = ExploreBrief.parse(readJsonArtifact(runRoot, briefPath));
-    const artifact = ExploreAnalysis.parse({
-      subject: brief.subject,
-      aspects: [
-        {
-          name: 'task-framing',
-          summary: `Initial analysis for: ${brief.task}`,
-          evidence: [
-            {
-              source: briefPath,
-              summary: brief.success_condition,
-            },
-          ],
-        },
-      ],
-    });
+    const artifact = synthesisBuilder.build({ runRoot, workflow, step, goal, inputs });
     writeJsonArtifact(runRoot, step.writes.artifact.path, artifact);
     return true;
   }
 
-  if (schemaName === 'review.intake@v1') {
-    writeJsonArtifact(runRoot, step.writes.artifact.path, { scope: goal });
-    return true;
-  }
-
-  if (schemaName === 'review.result@v1') {
-    const dispatchResult = ReviewDispatchResult.parse(
-      readJsonArtifact(runRoot, reviewAnalyzeResultPath(workflow, step)),
-    );
-    const artifact = ReviewResult.parse({
-      scope: goal,
-      findings: dispatchResult.findings,
-      verdict: computeReviewVerdict(dispatchResult.findings),
-    });
-    writeJsonArtifact(runRoot, step.writes.artifact.path, artifact);
-    return true;
-  }
-
-  if (schemaName === 'fix.brief@v1') {
-    // Fabricated default brief from the run goal. A real Fix run would expect
-    // an interactive frame step (host checkpoint) to enrich the regression
-    // contract; the inline-synthesis path here keeps recipe execution honest
-    // when no operator input is available, defaulting to deferred repro and
-    // an `npm run verify` candidate. Schema-validated so any downstream step
-    // sees a well-formed FixBrief.
-    const artifact = FixBrief.parse({
-      problem_statement: goal,
-      expected_behavior: `Resolve: ${goal}`,
-      observed_behavior: `Currently: ${goal}`,
-      scope: goal,
-      regression_contract: {
-        expected_behavior: `After fix: ${goal}`,
-        actual_behavior: `Before fix: ${goal}`,
-        repro: {
-          kind: 'not-reproducible',
-          deferred_reason:
-            'Default Fix brief — operator-supplied repro evidence not available at frame time',
-        },
-        regression_test: {
-          status: 'deferred',
-          deferred_reason:
-            'Default Fix brief — regression-test authoring deferred until repro evidence is supplied',
-        },
-      },
-      success_criteria: [`Demonstrate the fix addresses: ${goal}`],
-      verification_command_candidates: [DEFAULT_FIX_VERIFICATION_COMMAND],
-    });
-    writeJsonArtifact(runRoot, step.writes.artifact.path, artifact);
-    return true;
-  }
-
-  // Close-with-evidence dispatch. Workflow-specific close logic lives in
-  // src/runtime/close-writers/<workflow>.ts and is registered by result
-  // schema name. The runner stays workflow-agnostic — adding a new close
-  // means adding a CloseBuilder file + registry entry, no edits here.
+  // Close-with-evidence dispatch. Same pattern as synthesis — workflow-
+  // specific close logic lives in src/runtime/close-writers/ and is
+  // registered by result schema name.
   const closeBuilder = findCloseBuilder(schemaName);
   if (closeBuilder !== undefined && step.kind === 'synthesis') {
     const readPaths = resolveCloseReadPaths(closeBuilder, workflow, step);
