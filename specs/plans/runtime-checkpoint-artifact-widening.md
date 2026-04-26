@@ -1,10 +1,10 @@
 ---
 plan: runtime-checkpoint-artifact-widening
 status: challenger-pending
-revision: 03
+revision: 04
 opened_at: 2026-04-25
 opened_in_session: runtime-checkpoint-artifact-widening-arc-open
-base_commit: 0307150b9503fbb8d3170f433fa788ff2306e18f
+base_commit: 190122d00ba47a0fe34caef2a2a1d28128b585e5
 target: runtime-checkpoint-artifact-write
 authority:
   - specs/methodology/decision.md
@@ -24,6 +24,7 @@ artifact_ids:
 prior_challenger_passes:
   - specs/reviews/runtime-checkpoint-artifact-widening-codex-challenger-01.md
   - specs/reviews/runtime-checkpoint-artifact-widening-codex-challenger-02.md
+  - specs/reviews/runtime-checkpoint-artifact-widening-codex-challenger-03.md
 ---
 
 # Runtime Checkpoint Artifact Widening Plan
@@ -67,7 +68,7 @@ Authoritative artifacts touched, in their current shape:
 | E11 | `step.definition` is row at `specs/artifacts.json:124-150` with `surface_class: greenfield`, `compatibility_policy: n/a`, `plane: control-plane`, `schema_file: src/schemas/step.ts`, and `schema_exports` covering `Step, SynthesisStep, VerificationStep, CheckpointPolicy, CheckpointStep, DispatchStep, DispatchRole, ArtifactRef, RouteMap`. Greenfield class permits widening the schema's runtime acceptance without successor-to-live characterization, since there is no prior live consumer to characterize against. | verified | `specs/artifacts.json:124-150` |
 | E12 | The substrate plan's pass-03 record commit (slice-156c, HEAD `a364454a`) parks the substrate plan at revision 03 challenger-pending pending this prerequisite arc. The substrate plan's revision 04 close-criterion of `'F2 demonstrably resolves'` requires this arc to land first. | verified | git log HEAD; `specs/reviews/recipe-runtime-substrate-codex-challenger-03.md` |
 | E13 | `ARC_CLOSE_GATES` in `scripts/audit.mjs` is the frozen array enforcing arc-close composition reviews; entries are `{arc_id, description, ceremony_slice, plan_path, review_file_regex}`. Slice 40 fold-in requires the two-prong gate to distinguish a Claude-prong file (name-match `*Claude*` / `*claude*`) from a Codex-prong file (name-match `*Codex*` / `*codex*`); a single-prong satisfaction is rejected. | verified | `scripts/audit.mjs` (ARC_CLOSE_GATES array; Slice 40 prong-distinction block) |
-| E14 | Unknown-blocking: none. The widening shape (drop the `build.brief@v1` equality check; keep the `build.brief@v1 → policy.build_brief` precondition coupling; allow other registered schemas without precondition) is concrete and fits the existing `Step` superRefine block at `src/schemas/step.ts:154-193` with a small targeted edit. The acceptance test surface (the existing test at `tests/contracts/schema-parity.test.ts:560-610`) already exercises both the precondition-missing case and the unsupported-schema case; the second assertion changes from rejection-to-acceptance for `'fix.no-repro-decision@v1'`, while the precondition gate stays for `'build.brief@v1'`. | unknown-blocking | §5 design decisions are revision-01-final |
+| E14 | Unknown-blocking: none. The widening shape (drop the `build.brief@v1` equality check; keep the `build.brief@v1 → policy.build_brief` precondition coupling; allow ANY non-`build.brief@v1` schema string accepted by `ArtifactRef.schema` — `src/schemas/step.ts:11-14` defines the schema slot as a non-empty string with no allowlist, so the parse-layer widening admits arbitrary schema strings, not only "registered" ones) is concrete and fits the existing `Step` superRefine block at `src/schemas/step.ts:154-193` with a small targeted edit. The contract test surface for the widening lands across two `it(...)` declarations per §3 in-scope: (a) the renamed Step-level test at `tests/contracts/schema-parity.test.ts:560-610` keeps assertion 1 (`'build.brief@v1'` without `policy.build_brief` fails parse) and updates assertion 2 (`'other@v1'` plus populated `policy.build_brief` now PARSES — this proves the allowlist gate is removed for any non-`build.brief` string); (b) a NEW Workflow-level `it(...)` lands immediately after, exercising `Workflow.safeParse(...)` against a minimal `okWorkflow({steps: [...]})` shape with `'fix.no-repro-decision@v1'` and no `policy.build_brief` — this is the proof surface §11 close criterion 5 binds to (Workflow-layer parse acceptance, the substrate F2 close-criterion sink). The precondition gate stays for `'build.brief@v1'`. | unknown-blocking | §5 design decisions are revision-03-final |
 
 ## §2 — Why this plan exists
 
@@ -502,8 +503,15 @@ non-Build checkpoint artifact.
   `last_advanced_in_slice` and `last_advanced_at` accordingly per the
   ratchet-floor advancement discipline). All other contract tests
   remain green.
-- `npm run plan:lint -- specs/plans/runtime-checkpoint-artifact-widening.md`
-  GREEN both modes (default + `--context=committed`).
+- `npm run plan:lint -- --context=committed specs/plans/runtime-checkpoint-artifact-widening.md`
+  GREEN. (The default authoring-context plan-lint accepts only
+  `evidence-draft` / `challenger-pending`; once this plan reaches
+  `operator-signoff` to open Slice A, default-context lint by
+  design rejects the post-signoff status. The committed-context lint
+  is the one that holds across the lifecycle. Default-context lint
+  is a draft-time / challenger-pending-time tool only — it ran
+  GREEN at slice-157a / slice-157b / slice-157c fold-in commits
+  while the plan was still in those statuses.)
 - `npm run verify` GREEN: `npm run check` (tsc), `npm run lint`
   (biome), `npm run test` (vitest) all pass with the widened
   refinement and updated test.
@@ -637,8 +645,12 @@ not free operation.
 This arc closes when ALL of the following hold:
 
 1. Slice A landed: `src/schemas/step.ts` widened per §5; contract
-   tests updated per §3; `npm run verify` GREEN; `npm run plan:lint`
-   GREEN both modes; `npm run audit` GREEN.
+   tests updated per §3; `npm run verify` GREEN;
+   `npm run plan:lint -- --context=committed specs/plans/runtime-checkpoint-artifact-widening.md`
+   GREEN (the committed-context lint, the one that holds across the
+   plan lifecycle including post-`operator-signoff` slice-open
+   statuses; default-context lint is a draft-time tool only and
+   does not gate slice-open closure); `npm run audit` GREEN.
 
 2. Slice D landed: two prong composition reviews under `specs/reviews/`;
    `ARC_CLOSE_GATES` wired in `scripts/audit.mjs`; matching audit-test
