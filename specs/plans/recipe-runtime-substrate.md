@@ -1,10 +1,10 @@
 ---
 plan: recipe-runtime-substrate
 status: challenger-pending
-revision: 08
+revision: 09
 opened_at: 2026-04-26
 opened_in_session: recipe-runtime-substrate-arc-open
-base_commit: 3888d8dd8519e66621c4754974aba7db17c93fd1
+base_commit: a7ecb2f85a9a9b0ff502acfc227d5863ac442798
 target: recipe-substrate
 authority:
   - specs/methodology/decision.md
@@ -38,6 +38,7 @@ prior_challenger_passes:
   - specs/reviews/recipe-runtime-substrate-codex-challenger-05.md
   - specs/reviews/recipe-runtime-substrate-codex-challenger-06.md
   - specs/reviews/recipe-runtime-substrate-codex-challenger-07.md
+  - specs/reviews/recipe-runtime-substrate-codex-challenger-08.md
 ---
 
 # Recipe Runtime Substrate Plan
@@ -623,8 +624,10 @@ enforcement chosen for Fix-table parity in §5 Rule 2.)
 
 (Fix-table parity is enforced at the test layer per F1 fold-in
 Rule 2, not at the parser layer; see §5 anti-drift binding rules
-for the Fix-table parity definition. The "Failure modes the
-parsers reject" list above is parser-only by definition.)
+for the Fix-table parity definition. The list above is mostly
+parser-enforced, with the two WorkflowKind drift bullets below
+being explicitly contract-test assertions per §8.1, mirroring the
+test-side enforcement chosen for Fix-table parity.)
 - `CheckpointPolicyTemplate.safe_default_choice` or
   `safe_autonomous_choice` not a member of the declared `choices.id`
   set (mirrors runtime `CheckpointPolicy` superRefine).
@@ -720,14 +723,20 @@ the primitive layer fully generic.
   new required field `runtime_step: RuntimeStep` per §5. Type exports
   `ProtocolRoleSlug`, `RuntimeGateTemplate`,
   `CheckpointPolicyTemplate`, `WriteTarget`, `RuntimeStep` exist.
-  `WorkflowRecipeItem` superRefine enforces:
-  (i) `execution.kind === 'checkpoint'` ↔
-      `runtime_step.checkpoint_policy` present;
-  (ii) `runtime_step.gate_template.kind` matches `execution.kind` per
-       the binding rule in §5;
-  (iii) `CheckpointPolicyTemplate` choice-id uniqueness +
-       safe-choice-id membership (mirrors runtime
-       `CheckpointPolicy` superRefine).
+  Refinement ownership split between item-level and template-level
+  schemas (mirroring the runtime split between `Step` superRefine
+  and `CheckpointPolicy` superRefine):
+  - `WorkflowRecipeItem` superRefine enforces ITEM-LEVEL bindings:
+    (i) `execution.kind === 'checkpoint'` ↔
+        `runtime_step.checkpoint_policy` present;
+    (ii) `runtime_step.gate_template.kind` matches `execution.kind`
+         per the binding rule in §5.
+  - `CheckpointPolicyTemplate` superRefine (template-local) enforces
+    TEMPLATE-LOCAL invariants, mirroring runtime `CheckpointPolicy`
+    superRefine at `src/schemas/step.ts:60-110`:
+    (iii) choice-id uniqueness + `safe_default_choice` /
+          `safe_autonomous_choice` membership in the declared
+          `choices.id` set.
 - `specs/workflow-primitive-catalog.json` has all 15 entries
   populated with `protocol_version: 1`. Catalog passes
   `WorkflowPrimitiveCatalog.parse` on the staged commit. **No
