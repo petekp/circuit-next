@@ -191,6 +191,12 @@ export {
   type RecipeDispatcherInput,
   type RecipeDispatcherResult,
 } from './dispatch.js';
+export {
+  persistRecipeRun,
+  recipeRunArtifact,
+  type PersistedRecipeRunArtifact,
+  type PersistedTraceEntry,
+} from './persistence.js';
 
 export function mergeHandlerRegistries(
   ...registries: readonly PrimitiveHandlerRegistry[]
