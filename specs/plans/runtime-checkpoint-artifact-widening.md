@@ -1,10 +1,10 @@
 ---
 plan: runtime-checkpoint-artifact-widening
 status: challenger-pending
-revision: 01
+revision: 02
 opened_at: 2026-04-25
 opened_in_session: runtime-checkpoint-artifact-widening-arc-open
-base_commit: a364454a3b8f396c91ad0bc257a2f2b6b908d34e
+base_commit: 91da48165b9050ae2928d55bdb1ede219751417d
 target: runtime-checkpoint-artifact-write
 authority:
   - specs/methodology/decision.md
@@ -16,9 +16,12 @@ authority:
   - src/schemas/artifacts/build.ts
   - src/schemas/artifacts/fix.ts
   - tests/contracts/schema-parity.test.ts
+  - scripts/audit.mjs
+  - specs/ratchet-floor.json
 artifact_ids:
   - step.definition
-prior_challenger_passes: []
+prior_challenger_passes:
+  - specs/reviews/runtime-checkpoint-artifact-widening-codex-challenger-01.md
 ---
 
 # Runtime Checkpoint Artifact Widening Plan
@@ -143,22 +146,33 @@ In scope:
 - **Contract test update** (Slice A). Update
   `tests/contracts/schema-parity.test.ts:560-610` (the existing
   `'STEP-I9 — checkpoint artifact writing is restricted to typed Build
-  brief policy'` test) to reflect the widened semantics:
-  - Rename the test (since STEP-I9 is actually the gate.allow
-    invariant, not the artifact-schema rule, per E7) to
+  brief policy'` test) to reflect the widened semantics, AND add a new
+  `it(...)` declaration so the repo's static contract-test count
+  (`scripts/audit.mjs::countTests`, matching `/^\s*(it|test)\(/gm`)
+  rises by exactly 1 — supporting the §9 Ratchet-Advance claim against
+  the actual measurement surface, not assertion counts:
+  - Rename the existing test (since STEP-I9 is actually the
+    `gate.allow === policy.choices.id` invariant per
+    `specs/contracts/step.md:121-126`, not the artifact-schema rule
+    per E7) to
     `'CheckpointStep — build.brief@v1 artifact write requires policy.build_brief'`.
-  - Keep the first assertion: a checkpoint with
+  - Keep the first assertion in the renamed test: a checkpoint with
     `writes.artifact = {schema: 'build.brief@v1'}` and no
     `policy.build_brief` still fails parse (the precondition gate
     holds for `build.brief@v1`).
-  - Replace the second assertion: a checkpoint with
-    `writes.artifact = {schema: 'other@v1'}` plus a populated
+  - Replace the second assertion in the renamed test: a checkpoint
+    with `writes.artifact = {schema: 'other@v1'}` plus a populated
     `policy.build_brief` now PARSES (was rejected; the unsupported-
     schema gate is removed for non-`build.brief` schemas).
-  - Add a third assertion: a checkpoint with
-    `writes.artifact = {schema: 'fix.no-repro-decision@v1'}` and NO
-    `policy.build_brief` parses (the live consumer pattern from E5,
-    E8).
+  - Add a NEW `it(...)` declaration immediately after the renamed
+    test, titled
+    `'CheckpointStep — fix.no-repro-decision@v1 artifact write parses without policy.build_brief'`,
+    asserting that a checkpoint with
+    `writes.artifact = {schema: 'fix.no-repro-decision@v1', path: 'artifacts/fix/no-repro-decision.json'}`
+    and NO `policy.build_brief` parses successfully (the live consumer
+    pattern from E5, E8). Splitting this into its own `it(...)` rather
+    than a third assertion in the renamed test is the mechanism that
+    makes the static-count ratchet rise by 1.
 
 - **Atomic schema + test landing** (Slice A). The refinement update
   and the contract test update land in the same commit. The repository
@@ -168,9 +182,14 @@ In scope:
   leave the refinement uncovered (audit ratchet regression).
 
 - **Arc-close composition review** (Slice D). Two prong reviews under
-  `specs/reviews/`, one Claude-labeled and one Codex-labeled per the
-  Slice-40 fold-in convention, plus `ARC_CLOSE_GATES` wiring in
-  `scripts/audit.mjs` and matching audit-test assertions.
+  `specs/reviews/` named per the audit's arc-close composition-review
+  filename convention (`arc-.+-composition-review-(claude|codex).md`,
+  per `scripts/audit.mjs:5041-5042`
+  `ARC_CLOSE_COMPOSITION_REVIEW_FILENAME_PATTERN`): one Claude-labeled
+  and one Codex-labeled, satisfying both the Slice-40 fold-in two-prong
+  convention and audit Check 35's arc-subsumption shape (i). Plus
+  `ARC_CLOSE_GATES` wiring in `scripts/audit.mjs` and matching
+  audit-test assertions.
 
 Out of scope:
 
@@ -212,6 +231,22 @@ Out of scope:
   `fix.no-repro-decision@v1` already exists in
   `src/schemas/artifacts/fix.ts:8` (E5). Other future schemas will be
   added by their owning arcs.
+
+- **Naming the surviving `build.brief@v1` ↔ `policy.build_brief`
+  precondition coupling as a contract-surface invariant.** Per E7,
+  the existing artifact-schema rule at `src/schemas/step.ts:176-191`
+  is not represented by any named invariant in
+  `specs/contracts/step.md` or `specs/invariants.json`. After this
+  arc's widening, the surviving rule (the `build.brief@v1` precondition
+  coupling) is still split-authority: it lives only in the runtime
+  schema and an unbound test title. The plan explicitly preserves
+  this drift rather than dispose it — promoting the coupling to a
+  named Step invariant (e.g., a STEP-I-something entry in
+  `specs/contracts/step.md` plus a matching row in
+  `specs/invariants.json`) is deferred to a future contract-authority
+  bookkeeping arc. This arc closes the runtime parse sink only; it
+  does NOT close the contract-authority surface around checkpoint
+  artifact preconditions.
 
 ## §4 — Non-goals
 
@@ -358,14 +393,22 @@ This arc uses the existing verification surface unchanged:
 - **Tier-0 gates** (npm run check, lint, test, verify) all run at
   every commit on the slice. The contract test update lives in
   `tests/contracts/schema-parity.test.ts`, an existing file already
-  in the test suite.
+  in the test suite. The new `it(...)` for the
+  `fix.no-repro-decision@v1` positive case lands in the same file.
 - **Plan-lint** runs at draft and challenger-pending lifecycle steps.
 - **Audit** (`npm run audit`) runs after the slice lands, verifying
   the slice ceremony (lane declaration, framing pair, citation rule,
-  etc.) per AGENTS.md §Verification commands.
+  etc.) per AGENTS.md §Verification commands. Slice A's
+  `specs/ratchet-floor.json` `floors.contract_test_count` advance
+  (1062 → 1063) is co-landed with the test-declaration addition per
+  the Slice 47c-2 Codex MED 2 deferred binding (Check 35 enforces
+  ratchet-floor advance ↔ test addition co-landing, per
+  `specs/ratchet-floor.json:8` notes).
 - **This arc requires no new verification capability.** The schema
   refinement edit covers all behavioral changes; existing test
-  infrastructure suffices.
+  infrastructure suffices. Both `countTests` (Check 26 / ratchet-floor
+  surface) and `ARC_CLOSE_COMPOSITION_REVIEW_FILENAME_PATTERN`
+  (Check 35 arc-subsumption shape (i)) are existing audit machinery.
 
 ## §8 — Slices
 
@@ -386,17 +429,26 @@ non-Build checkpoint artifact.
   drop the `schema !== 'build.brief@v1'` rejection while preserving
   the `build.brief@v1 → policy.build_brief` precondition coupling.
 - `tests/contracts/schema-parity.test.ts` is updated:
-  - The test at line 560 is renamed to
+  - The existing test at line 560 is renamed to
     `'CheckpointStep — build.brief@v1 artifact write requires policy.build_brief'`.
-  - Assertion 1 (build.brief@v1 with no policy.build_brief → fails)
-    is preserved.
-  - Assertion 2 changes shape: `'other@v1'` schema with populated
-    `policy.build_brief` now PARSES (was rejected by the dropped
-    allowlist gate).
-  - A new third assertion: `'fix.no-repro-decision@v1'` with NO
-    `policy.build_brief` PARSES.
-- Test count delta: still 1 test (renamed and updated), now
-  exercising three internal assertions. All other contract tests
+  - Assertion 1 in the renamed test (build.brief@v1 with no
+    policy.build_brief → fails) is preserved.
+  - Assertion 2 in the renamed test changes shape: `'other@v1'`
+    schema with populated `policy.build_brief` now PARSES (was
+    rejected by the dropped allowlist gate).
+  - A NEW `it(...)` declaration lands immediately after the renamed
+    test, titled
+    `'CheckpointStep — fix.no-repro-decision@v1 artifact write parses without policy.build_brief'`,
+    asserting `'fix.no-repro-decision@v1'` with NO `policy.build_brief`
+    parses (the live consumer pattern from E5, E8).
+- Test count delta: 2 tests after change in the affected block
+  (1 renamed existing + 1 new `it(...)` for the
+  `fix.no-repro-decision@v1` positive case). Net +1 static
+  declaration counted by `scripts/audit.mjs::countTests`, advancing
+  `specs/ratchet-floor.json` `floors.contract_test_count` from
+  current 1062 to 1063 in the same commit (Slice A advances
+  `last_advanced_in_slice` and `last_advanced_at` accordingly per the
+  ratchet-floor advancement discipline). All other contract tests
   remain green.
 - `npm run plan:lint -- specs/plans/runtime-checkpoint-artifact-widening.md`
   GREEN both modes (default + `--context=committed`).
@@ -412,10 +464,12 @@ test update would either leave the suite asserting the old behavior
 (audit ratchet regression — every behavioral change requires a
 covering test). Atomic landing keeps Tier-0 green at every commit.
 
-**Lane.** Ratchet-Advance: the contract-test ratchet advances by one
-fresh assertion (the third assertion for `'fix.no-repro-decision@v1'`).
-The other two assertions are renames / shape-adjustments of existing
-coverage.
+**Lane.** Ratchet-Advance: the static contract-test declaration count
+(`scripts/audit.mjs::countTests`, pinned at `specs/ratchet-floor.json`
+`floors.contract_test_count`) advances by one via the new `it(...)`
+declaration for the `fix.no-repro-decision@v1` positive case. The
+renamed existing test is a rename, not a count change; the ratchet
+floor moves 1062 → 1063 in the same commit.
 
 **Work mode.** Heavy: this slice modifies a runtime contract surface
 (`src/schemas/step.ts` Step superRefine), which AGENTS.md §Work modes
@@ -425,7 +479,8 @@ claims"). External Codex challenger required.
 
 **Authority.** ADR-0003; ADR-0010; specs/contracts/step.md;
 specs/invariants.json; src/schemas/step.ts; src/schemas/artifacts/build.ts;
-src/schemas/artifacts/fix.ts; tests/contracts/schema-parity.test.ts.
+src/schemas/artifacts/fix.ts; tests/contracts/schema-parity.test.ts;
+specs/ratchet-floor.json.
 
 ### 8.2 Slice D — Arc-close composition review (Heavy, Ratchet-Advance, ceremony + gate wiring)
 
@@ -440,19 +495,26 @@ would leave that downstream claim under-evidenced.
 **Acceptance evidence.**
 
 - Two prong reviews land in `specs/reviews/` per the Slice-40 fold-in
-  two-prong convention (E13):
-  - `specs/reviews/runtime-checkpoint-artifact-widening-claude-composition.md`
+  two-prong convention (E13) AND the audit's
+  `ARC_CLOSE_COMPOSITION_REVIEW_FILENAME_PATTERN`
+  (`scripts/audit.mjs:5041-5042`,
+  `/^arc-.+-composition-review-(?:claude|codex)\.md$/i`):
+  - `specs/reviews/arc-runtime-checkpoint-artifact-widening-composition-review-claude.md`
     (Claude-prong; surveys the widened refinement against the Step
     superRefine surface area, the runner-side build.brief paths, and
     the substrate plan's seam diagram).
-  - `specs/reviews/runtime-checkpoint-artifact-widening-codex-composition.md`
+  - `specs/reviews/arc-runtime-checkpoint-artifact-widening-composition-review-codex.md`
     (Codex-prong; independent external review of the same surface).
 - `ARC_CLOSE_GATES` in `scripts/audit.mjs` gains a new entry:
   - `arc_id: 'runtime-checkpoint-artifact-widening'`
   - `description: 'Runtime CheckpointStep artifact-schema widening — arc-close composition review'`
   - `ceremony_slice: <Slice D's slice number>`
   - `plan_path: 'specs/plans/runtime-checkpoint-artifact-widening.md'`
-  - `review_file_regex: <regex matching both prong files in specs/reviews/>`
+  - `review_file_regex: /^arc-runtime-checkpoint-artifact-widening-composition-review-(?:claude|codex)\.md$/i`
+    (arc-bound subset of `ARC_CLOSE_COMPOSITION_REVIEW_FILENAME_PATTERN`,
+    matching both prong files; conforms to Check 35's arc-subsumption
+    shape (i) so ceremony commits can satisfy both Check 26 and Check 35
+    via the same review pair, no separate per-slice review file needed).
 - Audit-test assertions in `tests/scripts/audit-arc-close-gates.test.ts`
   (or equivalent file binding `ARC_CLOSE_GATES`) gain matching cases
   exercising the new arc id.
@@ -479,9 +541,9 @@ specs/plans/runtime-checkpoint-artifact-widening.md.
 
 | Ratchet | Direction | Slice |
 |---|---|---|
-| `tests/contracts/schema-parity.test.ts` test count covering CheckpointStep refinement | Strictly advance: 1 test (renamed) carrying 3 internal assertions; net +1 assertion vs prior 2. | Slice A |
+| `specs/ratchet-floor.json` `floors.contract_test_count` (the static `/^\s*(it|test)\(/gm` count produced by `scripts/audit.mjs::countTests`, currently 1062 per `specs/ratchet-floor.json:4`) | Strictly advance: +1 declaration via the new `it(...)` for `fix.no-repro-decision@v1`; floor moves 1062 → 1063, with `last_advanced_in_slice` and `last_advanced_at` updated in the same Slice A commit. The renamed existing test is a rename, not a count change; only the new `it(...)` advances the count. | Slice A |
 | `ARC_CLOSE_GATES` entries in `scripts/audit.mjs` | Strictly advance: +1 entry for `runtime-checkpoint-artifact-widening`. | Slice D |
-| Arc-close composition review prong count under `specs/reviews/` matching `runtime-checkpoint-artifact-widening-*` | Strictly advance: +2 prong files (Claude + Codex). | Slice D |
+| Arc-close composition review prong count under `specs/reviews/` matching `arc-runtime-checkpoint-artifact-widening-composition-review-(claude|codex).md` | Strictly advance: +2 prong files (Claude + Codex). | Slice D |
 
 Each ratchet is tracked independently per AGENTS.md hard invariant 8.
 No aggregate scoring is introduced.
@@ -495,12 +557,17 @@ matrix). Rollback to the pre-arc state requires:
    pre-Slice-A shape (re-introducing the `schema !== 'build.brief@v1'`
    rejection).
 2. Revert the `tests/contracts/schema-parity.test.ts:560-610` block
-   to the pre-Slice-A test shape (renaming back; restoring the
-   `'other@v1'` rejection assertion; removing the
-   `'fix.no-repro-decision@v1'` assertion).
-3. Revert the `scripts/audit.mjs` `ARC_CLOSE_GATES` array to remove
-   the new arc entry; revert the matching audit-test assertions.
-4. Set plan frontmatter `status` back from `closed` to whatever
+   to the pre-Slice-A test shape: rename the existing test back;
+   restore the `'other@v1'` rejection assertion; delete the new
+   `it(...)` for the `fix.no-repro-decision@v1` positive case.
+3. Revert `specs/ratchet-floor.json` `floors.contract_test_count`
+   from 1063 back to 1062, and revert `last_advanced_in_slice` /
+   `last_advanced_at` to their pre-Slice-A values.
+4. Revert the `scripts/audit.mjs` `ARC_CLOSE_GATES` array to remove
+   the new arc entry; revert the matching audit-test assertions;
+   delete the two arc-close composition-review prong files at
+   `specs/reviews/arc-runtime-checkpoint-artifact-widening-composition-review-{claude,codex}.md`.
+5. Set plan frontmatter `status` back from `closed` to whatever
    pre-close state is appropriate.
 
 After rollback, the substrate plan's revision-04 fold-in is again
@@ -529,12 +596,36 @@ This arc closes when ALL of the following hold:
 4. Plan frontmatter `status: closed`, `closed_at`, `closed_in_slice`,
    `closed_with` populated.
 
-5. **Downstream readiness check.** The substrate plan revision 04
-   precondition gate clears: a freshly drafted `Workflow.parse()`
-   call against a hand-authored `CheckpointStep` shape with
+5. **Downstream readiness check — runtime parse sink only.** The
+   substrate plan revision 04 precondition gate clears at the runtime
+   parse sink: a freshly drafted `Workflow.parse()` call against a
+   hand-authored `CheckpointStep` shape with
    `writes.artifact = {path: 'artifacts/fix/no-repro-decision.json',
    schema: 'fix.no-repro-decision@v1'}` and no `policy.build_brief`
    parses successfully. This proves substrate pass 03 finding F2 is
-   resolvable upstream of substrate revision 04. (The check itself is
-   in-process via the contract-test third assertion landed in Slice A;
-   this close criterion is documentary.)
+   resolvable at the runtime parse layer upstream of substrate
+   revision 04. (The check itself is in-process via the new
+   `it(...)` for the `fix.no-repro-decision@v1` positive case landed
+   in Slice A; this close criterion is documentary.)
+
+   This criterion is explicitly bounded to the **runtime parse
+   layer**. Two surfaces remain UNCLOSED at arc close and are
+   intentionally deferred to follow-up arcs:
+   - The runner-side artifact materializer at
+     `src/runtime/runner.ts:861,888,980,995,1166-1206,1604` still
+     hardcodes `'build.brief@v1'` paths. Live Fix execution end-to-end
+     does not work after this arc; the substrate plan §3 explicitly
+     declares Live Fix execution out of scope, so substrate
+     revision 04's close criteria do not depend on the runner being
+     widened — only on `Workflow.parse` accepting the bridged Fix
+     shape, which this arc delivers.
+   - The contract-authority surface for the surviving
+     `build.brief@v1` ↔ `policy.build_brief` coupling (E7 split-
+     authority drift) is not promoted to a named invariant in
+     `specs/contracts/step.md` or `specs/invariants.json`. This is
+     deferred to a future contract-authority bookkeeping arc per §3
+     out-of-scope. Substrate revision 04's F2 close-criterion is
+     about the runtime sink existing for non-`build.brief` schemas,
+     not about the surviving build-brief coupling having an explicit
+     contract-surface name; this arc satisfies the former and
+     explicitly defers the latter.
