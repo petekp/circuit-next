@@ -1,10 +1,10 @@
 ---
 plan: recipe-runtime-substrate
 status: challenger-pending
-revision: 09
+revision: 10
 opened_at: 2026-04-26
 opened_in_session: recipe-runtime-substrate-arc-open
-base_commit: a7ecb2f85a9a9b0ff502acfc227d5863ac442798
+base_commit: 60fe76e6dce52d0f7fddaf611f4c2cf19ee499af
 target: recipe-substrate
 authority:
   - specs/methodology/decision.md
@@ -39,6 +39,7 @@ prior_challenger_passes:
   - specs/reviews/recipe-runtime-substrate-codex-challenger-06.md
   - specs/reviews/recipe-runtime-substrate-codex-challenger-07.md
   - specs/reviews/recipe-runtime-substrate-codex-challenger-08.md
+  - specs/reviews/recipe-runtime-substrate-codex-challenger-09.md
 ---
 
 # Recipe Runtime Substrate Plan
@@ -1046,24 +1047,31 @@ The arc is closed when:
    prong files.
 5. The plan's `status:` is updated to `closed` with `closed_at` and
    `closed_in_slice` set.
-6. **Prerequisite arc parse-layer widening live in code.** The
-   prerequisite arc plan
+6. **Prerequisite arc parse-layer widening must be live in code at
+   close time.** The prerequisite arc plan
    (`specs/plans/runtime-checkpoint-artifact-widening.md`, status
    challenger-cleared, revision 04, base_commit
-   `190122d00ba47a0fe34caef2a2a1d28128b585e5`) has had its Slice A
-   landed in code: the `Step` superRefine block at
-   `src/schemas/step.ts:176-191` reflects the widened shape per
-   the prerequisite arc's §5 (the `'build.brief@v1'` allowlist gate
-   is dropped while the precondition coupling is preserved), AND the
-   prerequisite arc's Workflow-level `it(...)` proof in
-   `tests/contracts/schema-parity.test.ts` is on disk and green
-   (asserting that `Workflow.safeParse(...)` succeeds for a
-   minimal Workflow whose checkpoint step carries
+   `190122d00ba47a0fe34caef2a2a1d28128b585e5`) prescribes a Slice A
+   widening that this arc's close gate requires to be in effect on
+   disk before substrate close. At substrate close time, verify on
+   disk that: (a) the `Step` superRefine block at
+   `src/schemas/step.ts:176-191` reflects the widened shape per the
+   prerequisite arc's §5 (the `'build.brief@v1'` allowlist gate is
+   dropped while the precondition coupling is preserved), AND
+   (b) the prerequisite arc's Workflow-level `it(...)` proof in
+   `tests/contracts/schema-parity.test.ts` is committed and green
+   under `npm run verify` (asserting that `Workflow.safeParse(...)`
+   succeeds for a minimal Workflow whose checkpoint step carries
    `writes.artifact = {schema: 'fix.no-repro-decision@v1', path: 'artifacts/fix/no-repro-decision.json'}`
-   with no `policy.build_brief`). Without this precondition, the
-   §5 binding rule "Write-target concretes" parse-acceptance claim
-   for checkpoint items is false and substrate F2 cannot be
-   honestly closed. This arc cannot be honestly closed until
+   with no `policy.build_brief`). At the time of substrate revision
+   09 authoring (slice-156i HEAD), neither (a) nor (b) is yet live
+   in code: `src/schemas/step.ts:176-191` still rejects any non-
+   `build.brief@v1` checkpoint artifact schema, and
+   `tests/contracts/schema-parity.test.ts:560-610` still contains
+   only the pre-widening Step-level negative test. Without this
+   precondition holding at close time, the §5 binding rule
+   "Write-target concretes" parse-acceptance claim for checkpoint
+   items is false and substrate F2 cannot be honestly closed. This arc cannot be honestly closed until
    criterion 6 holds; the bridge-unblock claim (criterion 7)
    remains deferred until criterion 6 holds. (Plan frontmatter
    `status:` lifecycle values are unaffected — `status:` follows
