@@ -40,14 +40,16 @@ describe('compileRecipeToWorkflow — byte-equivalence with committed fixtures',
   ] as const;
 
   for (const c of cases) {
-    it(`compiles ${c.label} recipe to a Workflow that matches the committed fixture`, () => {
+    it(`compiles ${c.label} recipe to a single Workflow that matches the committed fixture`, () => {
       const recipe = loadRecipe(c.recipePath);
       const compiled = compileRecipeToWorkflow(recipe);
+      expect(compiled.kind).toBe('single');
+      if (compiled.kind !== 'single') return;
       const committed = loadWorkflow(c.committedPath);
-      // toEqual on parsed objects ignores key order. The drift check in
-      // Phase 4 will compare canonical-stringified bytes; for unit
-      // assertions, structural equality is the right shape check.
-      expect(compiled).toEqual(committed);
+      // toEqual on parsed objects ignores key order. The drift check
+      // compares canonical-stringified bytes; for unit assertions,
+      // structural equality is the right shape check.
+      expect(compiled.workflow).toEqual(committed);
     });
   }
 });
