@@ -1,10 +1,10 @@
 ---
 plan: recipe-runtime-substrate
 status: challenger-pending
-revision: 03
+revision: 04
 opened_at: 2026-04-26
 opened_in_session: recipe-runtime-substrate-arc-open
-base_commit: b98c5457b89ae1569c178061fb0805f11166cbfa
+base_commit: 1e2cd40be580979f1a56f6bd4777128d4881c786
 target: recipe-substrate
 authority:
   - specs/methodology/decision.md
@@ -14,6 +14,7 @@ authority:
   - specs/contracts/workflow.md
   - specs/workflow-primitives.md
   - specs/workflow-recipe-composition.md
+  - specs/plans/runtime-checkpoint-artifact-widening.md
   - src/schemas/ids.ts
   - src/schemas/workflow-primitives.ts
   - src/schemas/workflow-recipe.ts
@@ -25,12 +26,14 @@ authority:
   - specs/workflow-recipes/fix-candidate.recipe.json
   - specs/artifacts.json
   - scripts/audit.mjs
+  - tests/contracts/workflow-recipe.test.ts
 artifact_ids:
   - workflow.primitive_catalog
   - workflow.recipe_definition
 prior_challenger_passes:
   - specs/reviews/recipe-runtime-substrate-codex-challenger-01.md
   - specs/reviews/recipe-runtime-substrate-codex-challenger-02.md
+  - specs/reviews/recipe-runtime-substrate-codex-challenger-03.md
 ---
 
 # Recipe Runtime Substrate Plan
@@ -127,6 +130,7 @@ Authoritative artifacts touched, in their current shape:
 | E23 | The shared primitive `frame` generically outputs `workflow.brief@v1`. Explore materializes that as `artifacts/brief.json` + `explore.brief@v1`; Build as `artifacts/build/brief.json` + `build.brief@v1`; Fix aliases it to `fix.brief@v1` with Fix-specific tables at `artifacts/fix/brief.json`. `WorkflowRecipe.contract_aliases` translates generic contract refs only, not artifact paths. A primitive-scoped `write_slots['workflow.brief@v1'] = {path, schema}` would force one concrete workflow's artifact location into the shared catalog. The concrete `{path, schema}` pair belongs at the recipe-item layer, after alias resolution. Pass 02 finding F2. | verified | `src/schemas/workflow-recipe.ts:39-44`, `specs/workflow-primitive-catalog.json:49-53`, `specs/workflow-recipes/fix-candidate.recipe.json:16-20`, `src/schemas/artifacts/fix.ts:4-22`, `.claude-plugin/skills/explore/circuit.json:60-73`, `.claude-plugin/skills/build/circuit.json:122-128` |
 | E24 | The shared primitive `batch` declares `action_surface: 'mixed'` (`specs/workflow-primitive-catalog.json:243`), which `acceptedExecutionKinds` legally admits as `synthesis \| dispatch \| verification \| checkpoint`. A singular per-primitive `runtime_gate_template.kind` chosen from how recipes currently use `batch` cannot honestly model that generic capability — the first later recipe that uses `batch` in a different execution kind would look like a schema contradiction instead of normal reuse. The gate kind belongs at the recipe-item layer, paired with that item's own `execution.kind`. Pass 02 finding F3. | verified | `specs/workflow-primitive-catalog.json:238-255`, `src/schemas/workflow-recipe.ts:364-377` |
 | E25 | `WORKFLOW_KIND_CANONICAL_SETS` lives in plain `.mjs` object keys, not a regex-validated type. A future key with an underscore, uppercase letter, or other non-slug character would satisfy a Zod-enum equality test against `Object.keys(...)` and still break the composed `${workflow_kind}-${protocol_role}@v${version}` against `ProtocolId`'s regex. Slice A's contract test must (a) assert every key satisfies `/^[a-z][a-z0-9-]*$/` and (b) for every `WorkflowKind` value AND every `recipe_item.runtime_step.protocol_role` value in registered recipes, assert the composed string parses against `ProtocolId`. Pass 02 finding F4. | verified | `scripts/policy/workflow-kind-policy.mjs:36-62`, `src/schemas/ids.ts:26-29` |
+| E26 | The substrate carries THREE parallel surfaces for artifact-schema authority on a recipe item: (a) `WorkflowRecipeItem.output` at `src/schemas/workflow-recipe.ts:112-120` (recipe-domain ref, possibly aliased per `recipe.contract_aliases` at `src/schemas/workflow-recipe.ts:39-44,169,221`); (b) `runtime_step.write_target.schema` (this arc's new field at the recipe-item layer, post-alias concrete); and (c) the retained Fix-only tables `FIX_RESULT_SCHEMA_BY_ARTIFACT_ID` + `FIX_RESULT_PATH_BY_ARTIFACT_ID` at `src/schemas/artifacts/fix.ts:4-22` (Fix-protocol view kept per §3 out-of-scope). Without explicit cross-surface invariants, these three sources can drift: a recipe item could parse with `write_target.schema = 'x@v1'` while `item.output` (alias-resolved) = `'y@v1'`, handing the bridge contradictory write bindings. The bridge would then either fail at compile time (best case) or write to the wrong location (worst case). Pass 03 finding F1. F1 fold-in encodes two anti-drift invariants in §5 binding rules + corresponding contract tests in Slice A acceptance evidence. | verified | `src/schemas/workflow-recipe.ts:39-44,112-120,169,221,446-447,513-517`, `src/schemas/artifacts/fix.ts:4-22`, `specs/plans/recipe-runtime-substrate.md:226-235,341-342,453-460,656-662` (the surfaces themselves and pass-03 F1's pointer set) |
 
 ## §2 — Why this plan exists
 
@@ -232,7 +236,17 @@ In scope:
       `fix.brief@v1`) inhabit the item's `output` field through
       `recipe.contract_aliases`; the bridge does not need to translate
       paths or schemas at compile time, because they are already
-      concrete on the item.
+      concrete on the item. **Schema authority is single-source by
+      construction** (F1 fold-in, E26): a §5 binding rule plus
+      Slice A contract tests assert that
+      `runtime_step.write_target.schema` equals
+      `recipe.contract_aliases.resolve(item.output)` (anti-drift
+      across `item.output` ↔ `write_target.schema`); for Fix items
+      whose alias-resolved output maps to a Fix-table key,
+      additional parity asserts
+      `runtime_step.write_target.{path, schema}` equals
+      `FIX_RESULT_*[fix_artifact_id]` (anti-drift across
+      `write_target.{path, schema}` ↔ retained Fix-only tables).
 
 - **Per-recipe workflow-kind binding** (Slice A). Add one required
   field to `WorkflowRecipe`:
@@ -302,10 +316,28 @@ Out of scope:
 ## §4 — Non-goals
 
 - The runtime `Gate`, `CheckpointPolicy`, `Step`, and `Workflow`
-  schemas in `src/schemas/{gate,step,workflow,phase}.ts` are
-  unchanged. This arc widens the recipe-domain authorities that feed
-  those runtime shapes; the runtime shapes themselves are already
-  capable of carrying what the bridge will produce.
+  schemas in `src/schemas/{gate,step,workflow,phase}.ts` are not
+  touched by this arc's slices. The runtime `Gate`,
+  `CheckpointPolicy`, and `Workflow` shapes are already capable of
+  carrying what the bridge produces. The runtime `Step` shape is
+  capable for synthesis, verification, and dispatch step kinds; for
+  the **checkpoint** kind, `Step.writes.artifact` is restricted by
+  the refinement at `src/schemas/step.ts:176-191` to schema
+  `'build.brief@v1'` only — a restriction that rejects any non-Build
+  checkpoint artifact (e.g., the Fix `fix-no-repro-decision` item
+  materializing `fix.no-repro-decision@v1`). The parse-layer
+  widening of that restriction is the scope of a separate
+  **prerequisite arc** with its own plan at
+  `specs/plans/runtime-checkpoint-artifact-widening.md` (status
+  challenger-cleared, revision 04, base_commit `1e2cd40`),
+  explicitly budgeted as a planning-readiness predecessor per
+  ADR-0010. Substrate revision 04's F2-closure depends on the
+  prerequisite arc's Slice A widening being live in code; the
+  prerequisite arc's plan covers parse-layer scope only (the
+  runner-side execution materializer at
+  `src/runtime/runner.ts:861,888,980,995,1166-1206,1604` is Build-
+  only and is fenced off in the prerequisite arc's §3 out-of-scope,
+  owned by a future Fix-runtime arc).
 - Aggregate ratchet scoring or single-knob composition is not
   introduced. AGENTS.md hard invariant 8 is preserved: each ratchet
   in §9 is tracked independently.
@@ -339,7 +371,10 @@ WorkflowRecipeItem.runtime_step.checkpoint_policy (full mirror of runtime Checkp
    └─► Step.policy  (E19)
 
 WorkflowRecipeItem.runtime_step.write_target (concrete {path, schema} on the item)
-   └─► Step.writes.artifact  (E23: per-recipe-item, no alias resolution required)
+   └─► Step.writes.artifact  (E23: per-recipe-item, no alias resolution required AT the recipe-domain authoring layer;
+                             for CHECKPOINT items, parse-acceptance by runtime CheckpointStep refinement requires
+                             the prerequisite arc `specs/plans/runtime-checkpoint-artifact-widening.md`
+                             challenger-cleared revision 04 to land — see §4 prerequisite-arc dependency note)
 ```
 
 ### Primitive widening
@@ -450,6 +485,49 @@ RuntimeStep = z.object({
   at compile time. The runtime `step.ts:166-175` superRefine requires
   `gate.allow === policy.choices.id`; deriving from a single
   authority means the invariant holds by construction (E18).
+- **Write-target schema single-source-of-truth (anti-drift
+  invariants).** The substrate has THREE surfaces that carry
+  artifact-schema authority (E26): (a) `WorkflowRecipeItem.output`
+  (recipe-domain ref, possibly recipe-aliased per
+  `recipe.contract_aliases`); (b) `runtime_step.write_target.schema`
+  (post-alias concrete on the recipe item, this arc's new field);
+  and (c) the retained Fix-only tables
+  `FIX_RESULT_SCHEMA_BY_ARTIFACT_ID` and
+  `FIX_RESULT_PATH_BY_ARTIFACT_ID` at
+  `src/schemas/artifacts/fix.ts:4-22` (kept as a Fix-protocol view
+  per §3 out-of-scope). Without explicit cross-surface invariants,
+  these three sources can drift and the bridge would receive
+  contradictory write bindings. This arc defines two binding rules
+  enforced at parse time:
+  - **Schema parity (recipe-item level).**
+    `runtime_step.write_target.schema` MUST equal
+    `recipe.contract_aliases.resolve(item.output)` — i.e., the
+    schema string after alias resolution. For an item whose
+    `output` is a generic primitive contract ref (e.g.,
+    `workflow.brief@v1`), `write_target.schema` is the recipe's
+    aliased concrete (e.g., `fix.brief@v1` for the Fix recipe via
+    `contract_aliases`). For an item whose `output` is already a
+    workflow-specific concrete (e.g., `fix.no-repro-decision@v1`
+    with no alias entry), `write_target.schema` equals `output`
+    verbatim. The invariant is enforced by a `WorkflowRecipeItem`
+    superRefine in Slice A (catalog-aware: the refinement consumes
+    the recipe's `contract_aliases` map; for that to work, the
+    refinement runs at `WorkflowRecipe` level, not standalone
+    `WorkflowRecipeItem` level — Slice A places the refinement in
+    `src/schemas/workflow-recipe.ts` `WorkflowRecipe` superRefine).
+  - **Fix-table parity (Fix-recipe level).** For every Fix recipe
+    item whose `output` (after alias resolution) corresponds to a
+    Fix artifact id present in `FIX_RESULT_SCHEMA_BY_ARTIFACT_ID`,
+    BOTH `runtime_step.write_target.schema` MUST equal
+    `FIX_RESULT_SCHEMA_BY_ARTIFACT_ID[fix_artifact_id]` AND
+    `runtime_step.write_target.path` MUST equal
+    `FIX_RESULT_PATH_BY_ARTIFACT_ID[fix_artifact_id]`. The
+    invariant is enforced by a Fix-recipe-specific contract test
+    in Slice A (asserting the on-disk Fix recipe satisfies the
+    parity). Future workflow recipes that add similar
+    workflow-protocol tables would add their own parity test;
+    this arc only encodes the Fix case because Fix is the only
+    recipe with such tables today.
 - **Write-target concretes (per recipe item).** Each recipe item
   carries its own concrete `{path, schema}` in
   `runtime_step.write_target`. Two recipe items that `use` the same
@@ -457,7 +535,21 @@ RuntimeStep = z.object({
   distinct write targets, which is exactly the case for `frame`
   across Explore, Build, and Fix (E23). The bridge reads
   `runtime_step.write_target` directly into `Step.writes.artifact`
-  with no alias resolution required.
+  with no alias resolution required AT the recipe-domain authoring
+  layer — the recipe item's `write_target` is already post-alias-
+  resolved (`{path, schema}` are concrete, not aliased refs). For
+  non-checkpoint items (synthesis / verification / dispatch), the
+  bridged shape is parse-acceptable today via the existing
+  `ArtifactRef` slot at `src/schemas/step.ts:11-15`. For checkpoint
+  items, the resulting `Step.writes.artifact` value is parse-
+  acceptable by the runtime `CheckpointStep` refinement only when
+  the prerequisite arc
+  (`specs/plans/runtime-checkpoint-artifact-widening.md`, status
+  challenger-cleared, revision 04) is live in code via its Slice A
+  widening of `src/schemas/step.ts:176-191`. This arc's F2-closure
+  claim is conditional on the prerequisite arc's Slice A being
+  live in code; substrate plan §11 close criteria cite that
+  precondition explicitly.
 - **Protocol id composition.** The bridge composes
   `Step.protocol = '${recipe.workflow_kind}-${recipe_item.runtime_step.protocol_role}@v${primitive.protocol_version}'`.
   All three halves are typed in this arc; the composition itself is
@@ -496,6 +588,18 @@ RuntimeStep = z.object({
   `ProtocolRoleSlug` regex.
 - Recipe item `runtime_step.write_target.path` or
   `runtime_step.write_target.schema` empty.
+- Recipe item `runtime_step.write_target.schema` not equal to
+  `recipe.contract_aliases.resolve(item.output)` (schema parity
+  violation, F1 fold-in invariant, enforced by `WorkflowRecipe`
+  superRefine).
+- Fix recipe item whose `output` (after alias resolution) maps to a
+  `FIX_RESULT_SCHEMA_BY_ARTIFACT_ID` key but whose
+  `runtime_step.write_target.schema` ≠
+  `FIX_RESULT_SCHEMA_BY_ARTIFACT_ID[fix_artifact_id]` OR whose
+  `runtime_step.write_target.path` ≠
+  `FIX_RESULT_PATH_BY_ARTIFACT_ID[fix_artifact_id]` (Fix-table
+  parity violation, F1 fold-in invariant, enforced by
+  Fix-recipe-specific contract test in Slice A).
 - `CheckpointPolicyTemplate.safe_default_choice` or
   `safe_autonomous_choice` not a member of the declared `choices.id`
   set (mirrors runtime `CheckpointPolicy` superRefine).
@@ -633,9 +737,21 @@ the primitive layer fully generic.
     `execution.kind !== 'checkpoint'` does NOT.
   - **Gate-template kind ↔ execution kind binding.** Every recipe
     item's `runtime_step.gate_template.kind` matches its
-    `execution.kind` per the §5 binding rule. The same primitive
-    (`human-decision`, `batch`) used across distinct items with
-    distinct gate kinds passes (E22, E24).
+    `execution.kind` per the §5 binding rule (synthesis|verification
+    ↔ schema_sections; dispatch ↔ result_verdict; checkpoint ↔
+    checkpoint_selection). The Fix backfill exercises this binding
+    across all 12 Fix recipe items (4 synthesis, 4 verification, 3
+    dispatch, 1 checkpoint). The structural invariant that the SAME
+    PRIMITIVE (`human-decision`, `batch`) can back distinct items
+    with distinct gate kinds is grounded in E22 / E24 (the primitive
+    layer is fully generic; gate kind lives at recipe-item layer)
+    but is NOT exercised by the on-disk Fix backfill alone (Fix has
+    1 `human-decision` item and 0 `batch` items; cross-recipe
+    reuse cases land in future workflow recipes). Slice A's
+    contract test asserts the per-item binding via the Fix backfill;
+    cross-recipe distinct-gate-kind reuse is a structural
+    consequence of the schema shape, not a property the Fix-only
+    join can directly demonstrate.
   - **CheckpointPolicyTemplate refinements.** Every
     `runtime_step.checkpoint_policy` has unique `choices.id`, and
     `safe_default_choice` / `safe_autonomous_choice` (when present)
@@ -659,7 +775,34 @@ the primitive layer fully generic.
   `runtime_step.write_target` data on Fix recipe items is the
   recipe-resident parallel surface keyed by recipe item id; the
   Fix-result tables stay as the Fix-protocol view keyed by Fix
-  artifact ids.
+  artifact ids. **Cross-surface parity is enforced by Slice A**
+  (F1 fold-in): `WorkflowRecipe` superRefine asserts schema parity
+  (`runtime_step.write_target.schema === recipe.contract_aliases.resolve(item.output)`)
+  for every recipe item, AND a Fix-specific contract test in
+  `tests/contracts/workflow-recipe.test.ts` (or equivalent file
+  binding `WorkflowRecipe` parsing) asserts Fix-table parity
+  (`runtime_step.write_target.{schema,path}` ===
+  `FIX_RESULT_*[fix_artifact_id]`) for every Fix recipe item whose
+  output maps to a Fix table key. Both invariants prevent the
+  three-surface drift Codex challenger pass-03 finding F1 named
+  (E26).
+- **Schema-authority parity contract tests** (F1 fold-in,
+  Slice A): two new `it(...)` declarations in
+  `tests/contracts/workflow-recipe.test.ts`:
+  - `'WorkflowRecipe — runtime_step.write_target.schema must equal alias-resolved item.output for every recipe item'`
+    (positive Fix backfill assertion + negative synthetic case
+    where `write_target.schema` is set to a non-aliased mismatched
+    value and parse fails).
+  - `'WorkflowRecipe (fix) — runtime_step.write_target.{path,schema} must equal FIX_RESULT_*[fix_artifact_id] for every Fix item with a Fix-table-mapped output'`
+    (positive Fix backfill assertion + negative synthetic case
+    where a Fix recipe item declares a `write_target.path` that
+    diverges from `FIX_RESULT_PATH_BY_ARTIFACT_ID` and parse fails
+    via the contract test, OR — if the parity is enforced at
+    superRefine level rather than test level — parse fails at
+    `WorkflowRecipe.parse` time). Slice A picks the enforcement
+    surface (parser superRefine vs contract test); this acceptance
+    bullet captures both options as equivalent for F1-closure
+    purposes.
 - `npm run verify` green on the slice commit.
 
 **Why this not adjacent.** Splitting the schema additions and the
