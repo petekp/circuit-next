@@ -1,0 +1,49 @@
+{
+  "schema_version": "1",
+  "id": "demo-substrate",
+  "title": "Substrate Demo",
+  "purpose": "Smallest recipe that exercises the recipe runtime substrate end-to-end through three orchestrator primitives.",
+  "status": "active",
+  "starts_at": "demo-intake",
+  "initial_contracts": ["user.goal@v1", "workflow.catalog@v1"],
+  "contract_aliases": [],
+  "items": [
+    {
+      "id": "demo-intake",
+      "uses": "intake",
+      "title": "Capture demo goal",
+      "phase": "frame",
+      "input": { "goal": "user.goal@v1" },
+      "output": "task.intake@v1",
+      "evidence_requirements": ["normalized goal", "requested workflow", "operator constraints"],
+      "execution": { "kind": "synthesis" },
+      "routes": { "continue": "demo-route", "stop": "@stop" }
+    },
+    {
+      "id": "demo-route",
+      "uses": "route",
+      "title": "Pick demo workflow",
+      "phase": "frame",
+      "input": { "task": "task.intake@v1", "catalog": "workflow.catalog@v1" },
+      "output": "route.decision@v1",
+      "evidence_requirements": [
+        "selected workflow",
+        "selection reason",
+        "fallback reason when conservative"
+      ],
+      "execution": { "kind": "synthesis" },
+      "routes": { "continue": "demo-frame", "stop": "@stop" }
+    },
+    {
+      "id": "demo-frame",
+      "uses": "frame",
+      "title": "Frame demo work",
+      "phase": "frame",
+      "input": { "task": "task.intake@v1", "route": "route.decision@v1" },
+      "output": "workflow.brief@v1",
+      "evidence_requirements": ["scope boundary", "constraints", "proof plan"],
+      "execution": { "kind": "synthesis" },
+      "routes": { "continue": "@complete", "stop": "@stop" }
+    }
+  ]
+}

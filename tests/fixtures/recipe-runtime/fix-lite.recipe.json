@@ -1,0 +1,117 @@
+{
+  "schema_version": "1",
+  "id": "fix-lite-demo",
+  "title": "Fix Lite Demo Recipe",
+  "purpose": "End-to-end Fix-shaped recipe used to prove the recipe runtime substrate dispatches eight primitives across three phases.",
+  "status": "active",
+  "starts_at": "lite-intake",
+  "initial_contracts": [
+    "user.goal@v1",
+    "workflow.catalog@v1",
+    "context.request@v1",
+    "verification.plan@v1"
+  ],
+  "contract_aliases": [],
+  "items": [
+    {
+      "id": "lite-intake",
+      "uses": "intake",
+      "title": "Capture fix request",
+      "phase": "frame",
+      "input": { "goal": "user.goal@v1" },
+      "output": "task.intake@v1",
+      "evidence_requirements": ["normalized goal", "requested workflow", "operator constraints"],
+      "execution": { "kind": "synthesis" },
+      "routes": { "continue": "lite-route", "stop": "@stop" }
+    },
+    {
+      "id": "lite-route",
+      "uses": "route",
+      "title": "Pick fix path",
+      "phase": "frame",
+      "input": { "task": "task.intake@v1", "catalog": "workflow.catalog@v1" },
+      "output": "route.decision@v1",
+      "evidence_requirements": [
+        "selected workflow",
+        "selection reason",
+        "fallback reason when conservative"
+      ],
+      "execution": { "kind": "synthesis" },
+      "routes": { "continue": "lite-frame", "stop": "@stop" }
+    },
+    {
+      "id": "lite-frame",
+      "uses": "frame",
+      "title": "Frame the fix",
+      "phase": "frame",
+      "input": { "task": "task.intake@v1", "route": "route.decision@v1" },
+      "output": "workflow.brief@v1",
+      "evidence_requirements": ["scope boundary", "constraints", "proof plan"],
+      "execution": { "kind": "synthesis" },
+      "routes": { "continue": "lite-gather", "stop": "@stop" }
+    },
+    {
+      "id": "lite-gather",
+      "uses": "gather-context",
+      "title": "Gather problem context",
+      "phase": "analyze",
+      "input": { "brief": "workflow.brief@v1", "request": "context.request@v1" },
+      "output": "context.packet@v1",
+      "evidence_requirements": ["source list", "observations", "confidence notes"],
+      "execution": { "kind": "dispatch", "role": "researcher" },
+      "routes": { "continue": "lite-diagnose", "stop": "@stop" }
+    },
+    {
+      "id": "lite-diagnose",
+      "uses": "diagnose",
+      "title": "Diagnose the cause",
+      "phase": "analyze",
+      "input": { "brief": "workflow.brief@v1", "context": "context.packet@v1" },
+      "output": "diagnosis.result@v1",
+      "evidence_requirements": [
+        "cause hypothesis",
+        "confidence",
+        "reproduction status",
+        "diagnostic path"
+      ],
+      "execution": { "kind": "dispatch", "role": "researcher" },
+      "routes": { "continue": "lite-act", "stop": "@stop" }
+    },
+    {
+      "id": "lite-act",
+      "uses": "act",
+      "title": "Apply the fix",
+      "phase": "act",
+      "input": { "brief": "workflow.brief@v1", "diagnosis": "diagnosis.result@v1" },
+      "output": "change.evidence@v1",
+      "evidence_requirements": ["changed files", "change rationale", "declared follow-up proof"],
+      "execution": { "kind": "dispatch", "role": "implementer" },
+      "routes": { "continue": "lite-verify", "stop": "@stop" }
+    },
+    {
+      "id": "lite-verify",
+      "uses": "run-verification",
+      "title": "Run proof commands",
+      "phase": "verify",
+      "input": { "proof": "verification.plan@v1", "change": "change.evidence@v1" },
+      "output": "verification.result@v1",
+      "evidence_requirements": ["command list", "exit status", "bounded output", "pass or fail"],
+      "execution": { "kind": "verification" },
+      "routes": { "continue": "lite-close", "stop": "@stop" }
+    },
+    {
+      "id": "lite-close",
+      "uses": "close-with-evidence",
+      "title": "Close with evidence",
+      "phase": "close",
+      "input": {
+        "brief": "workflow.brief@v1",
+        "verification": "verification.result@v1"
+      },
+      "output": "workflow.result@v1",
+      "evidence_requirements": ["outcome", "evidence pointers", "residual risks", "follow-ups"],
+      "execution": { "kind": "synthesis" },
+      "routes": { "complete": "@complete", "stop": "@stop" }
+    }
+  ]
+}

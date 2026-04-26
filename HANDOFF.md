@@ -1,39 +1,67 @@
 # HANDOFF
 
-Last updated: 2026-04-25 (post-strip cleanup session).
+Last updated: 2026-04-25 (recipe runtime substrate v0 session).
 
 ## Where we are
 
-Heavy methodology stripped: ADRs, plan-lint, audit machinery, slice
-ceremony, challenger loops, plan-of-plans recursion, the chronicle, the
-per-arc review folder, and the auto-firing handoff hooks. Plugin product
-intact — workflow recipes, schemas, runtime, the working Build and
-Explore workflows, the wired Review workflow.
+The recipe runtime substrate v0 is in place at
+`src/runtime/recipe-runtime/`. It runs a `WorkflowRecipe` plus a per-rigor
+`WorkflowRecipeDraft` end-to-end: it walks items from `starts_at`,
+consults the draft's resolved edges per outcome, looks up a registered
+primitive handler, threads typed evidence between items via a contract-
+keyed ledger, and stops cleanly on the four terminal targets
+(`@complete`, `@stop`, `@handoff`, `@escalate`).
 
-`npm run verify` is green: 783 tests, lint clean, tsc clean, build clean.
+A demo Fix-Lite recipe at `tests/fixtures/recipe-runtime/fix-lite.recipe.json`
+composes eight primitives end-to-end through the substrate: `intake →
+route → frame → gather-context → diagnose → act → run-verification →
+close-with-evidence → @complete`. Default orchestrator and worker
+handler registries cover those eight primitives with deterministic
+synthesis-grade outputs (the worker handlers are stubs — they do not
+spawn a real adapter yet). The substrate contract test exercises both
+the smaller demo recipe and the fix-lite recipe and asserts trace order,
+evidence propagation, missing-input rejection, unknown-outcome
+rejection, and recipe/draft id mismatch rejection.
 
-The workflow primitive layer is built on paper but not wired into the
-runtime. The primitive catalog, the recipe schema with route-aware
-availability and per-rigor draft compilation, and a design-only Fix
-recipe are all in place. The runner does not yet consume
-`WorkflowRecipe` — `src/runtime/runner.ts` still hardcodes
-Build/Explore/Review.
+The substrate is intentionally parallel to `src/runtime/runner.ts`, not
+inside it. The existing `executeDogfood` loop still owns the
+event-log/manifest/dispatch-adapter machinery for Build, Explore, and
+Review. The substrate has no event log, no manifest snapshot, and no
+real dispatch — that's deliberate so we can iterate on the substrate's
+shape before paying integration costs.
 
-A short cleanup pass is in flight to remove dead ADR/review pointers
-from spec frontmatter and a couple of legacy lines in
-`specs/artifacts.json` and `specs/domain.md`. Runtime files keep their
-slice-numbered comments for now; that's a separate, more invasive sweep.
+`npm run verify` is green: 790 tests, lint clean, tsc clean, build
+clean.
 
 ## What's next
 
-The decided next slice is the recipe runtime substrate: teach the
-runner to consume a `WorkflowRecipeDraft` and dispatch its primitive
-items. Build, Explore, and Review become first consumers of that
-substrate by being expressed as recipes; Fix becomes the first new
-workflow that ships through it. That work pays off for every later
-recipe and is the productive use of the primitive design that's already
-authored.
+The substrate is at its useful minimum. The next round of work has a
+few independent directions; pick based on what the operator wants to
+prove.
 
-Codex usage is now AGENTS.md rule #7: pull Codex in for impactful,
-hard-to-revert decisions and for genuine stuck-after-real-attempts
-diagnosis; default off otherwise. No challenger passes on plans.
+1. **Wire a real dispatcher into worker handlers.** Right now `gather-
+   context`, `diagnose`, `act` synthesize their outputs in process.
+   Add a `DispatchWorker` injection seam so a recipe item with
+   `execution.kind === 'dispatch'` can call the existing `dispatch-
+   materializer` / `agent` adapter and parse the typed result through
+   the substrate's evidence ledger.
+2. **Express Build/Explore/Review as recipes.** Each is currently
+   hardcoded in `runner.ts`. Authoring them as `WorkflowRecipe`
+   fixtures and routing the runner's entry points through the
+   substrate is the larger win — it retires the per-workflow code
+   paths in `executeDogfood`. This should land after #1 so the dispatch
+   path is real.
+3. **Promote `fix-lite` to a real Fix recipe.** Today's fix-lite is a
+   demo over stub handlers. The real Fix recipe lives at
+   `specs/workflow-recipes/fix-candidate.recipe.json` and includes the
+   human-decision and handoff branches. Wiring it through the substrate
+   needs a checkpoint adapter (host primitive) and a handoff writer.
+4. **Persistence.** The substrate keeps the evidence ledger and trace
+   in memory only. For real workflow runs, both should land on disk in
+   the run-root so the result is durable across processes. The simplest
+   first cut is to write each item's typed output as
+   `<run-root>/recipe/<item-id>.json` and a final `recipe-trace.json`.
+
+Codex usage is AGENTS.md rule #7: pull Codex in for impactful, hard-to-
+revert decisions and for genuine stuck-after-real-attempts diagnosis;
+default off otherwise. No challenger passes on plans.
