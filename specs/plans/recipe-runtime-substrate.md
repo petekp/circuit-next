@@ -1,10 +1,10 @@
 ---
 plan: recipe-runtime-substrate
 status: challenger-pending
-revision: 04
+revision: 05
 opened_at: 2026-04-26
 opened_in_session: recipe-runtime-substrate-arc-open
-base_commit: 1e2cd40be580979f1a56f6bd4777128d4881c786
+base_commit: 04ddb2f88b7408cd1f01ac663cf739083ad2f65c
 target: recipe-substrate
 authority:
   - specs/methodology/decision.md
@@ -34,6 +34,7 @@ prior_challenger_passes:
   - specs/reviews/recipe-runtime-substrate-codex-challenger-01.md
   - specs/reviews/recipe-runtime-substrate-codex-challenger-02.md
   - specs/reviews/recipe-runtime-substrate-codex-challenger-03.md
+  - specs/reviews/recipe-runtime-substrate-codex-challenger-04.md
 ---
 
 # Recipe Runtime Substrate Plan
@@ -329,7 +330,7 @@ Out of scope:
   widening of that restriction is the scope of a separate
   **prerequisite arc** with its own plan at
   `specs/plans/runtime-checkpoint-artifact-widening.md` (status
-  challenger-cleared, revision 04, base_commit `1e2cd40`),
+  challenger-cleared, revision 04, base_commit `190122d00ba47a0fe34caef2a2a1d28128b585e5`),
   explicitly budgeted as a planning-readiness predecessor per
   ADR-0010. Substrate revision 04's F2-closure depends on the
   prerequisite arc's Slice A widening being live in code; the
@@ -524,10 +525,21 @@ RuntimeStep = z.object({
     `FIX_RESULT_PATH_BY_ARTIFACT_ID[fix_artifact_id]`. The
     invariant is enforced by a Fix-recipe-specific contract test
     in Slice A (asserting the on-disk Fix recipe satisfies the
-    parity). Future workflow recipes that add similar
-    workflow-protocol tables would add their own parity test;
-    this arc only encodes the Fix case because Fix is the only
-    recipe with such tables today.
+    parity). To bind the contract test to source-of-truth, Slice A
+    promotes `FIX_RESULT_SCHEMA_BY_ARTIFACT_ID` and
+    `FIX_RESULT_PATH_BY_ARTIFACT_ID` from file-local `const`s at
+    `src/schemas/artifacts/fix.ts:4-22` to **exported** read-only
+    tables (named exports `FIX_RESULT_SCHEMA_BY_ARTIFACT_ID` and
+    `FIX_RESULT_PATH_BY_ARTIFACT_ID`). The contract test imports
+    the exports directly; the test is the SOLE enforcement
+    surface for Fix-table parity (no parser-side superRefine for
+    Fix-table parity — the schema-parity rule above is enough at
+    the parse layer; Fix-table parity is a workflow-protocol
+    correctness check that lives in tests). Future workflow
+    recipes that add similar workflow-protocol tables would
+    follow the same export + contract test pattern; this arc
+    only encodes the Fix case because Fix is the only recipe with
+    such tables today.
 - **Write-target concretes (per recipe item).** Each recipe item
   carries its own concrete `{path, schema}` in
   `runtime_step.write_target`. Two recipe items that `use` the same
@@ -786,23 +798,39 @@ the primitive layer fully generic.
   output maps to a Fix table key. Both invariants prevent the
   three-surface drift Codex challenger pass-03 finding F1 named
   (E26).
-- **Schema-authority parity contract tests** (F1 fold-in,
-  Slice A): two new `it(...)` declarations in
-  `tests/contracts/workflow-recipe.test.ts`:
-  - `'WorkflowRecipe — runtime_step.write_target.schema must equal alias-resolved item.output for every recipe item'`
-    (positive Fix backfill assertion + negative synthetic case
-    where `write_target.schema` is set to a non-aliased mismatched
-    value and parse fails).
-  - `'WorkflowRecipe (fix) — runtime_step.write_target.{path,schema} must equal FIX_RESULT_*[fix_artifact_id] for every Fix item with a Fix-table-mapped output'`
-    (positive Fix backfill assertion + negative synthetic case
-    where a Fix recipe item declares a `write_target.path` that
-    diverges from `FIX_RESULT_PATH_BY_ARTIFACT_ID` and parse fails
-    via the contract test, OR — if the parity is enforced at
-    superRefine level rather than test level — parse fails at
-    `WorkflowRecipe.parse` time). Slice A picks the enforcement
-    surface (parser superRefine vs contract test); this acceptance
-    bullet captures both options as equivalent for F1-closure
-    purposes.
+- **Schema-authority parity enforcement** (F1 fold-in, Slice A):
+  the two anti-drift rules use TWO DIFFERENT enforcement surfaces,
+  named definitively here (no escape hatch):
+  - **Rule 1 (schema parity, parse-time enforcement).** A new
+    `WorkflowRecipe` superRefine block in `src/schemas/workflow-recipe.ts`
+    enforces
+    `runtime_step.write_target.schema === recipe.contract_aliases.resolve(item.output)`
+    for every recipe item. The refinement runs at recipe level
+    (not item level) so it can consult `contract_aliases`. A
+    Slice A contract test in `tests/contracts/workflow-recipe.test.ts`
+    titled
+    `'WorkflowRecipe — runtime_step.write_target.schema must equal alias-resolved item.output for every recipe item'`
+    asserts BOTH a positive case (the on-disk Fix recipe parses)
+    AND a negative synthetic case (a hand-authored recipe with a
+    mismatched `write_target.schema` fails `WorkflowRecipe.parse`).
+  - **Rule 2 (Fix-table parity, test-time enforcement).** A
+    Slice A contract test in `tests/contracts/workflow-recipe.test.ts`
+    titled
+    `'WorkflowRecipe (fix) — runtime_step.write_target.{path,schema} must equal FIX_RESULT_*[fix_artifact_id] for every Fix item with a Fix-table-mapped output'`
+    asserts the Fix-recipe-specific table parity. The test imports
+    `FIX_RESULT_SCHEMA_BY_ARTIFACT_ID` and
+    `FIX_RESULT_PATH_BY_ARTIFACT_ID` directly from the
+    Slice-A-promoted exports in `src/schemas/artifacts/fix.ts`
+    (Slice A turns the file-local `const`s into named exports as
+    part of the F1 fold-in implementation). The test asserts
+    BOTH a positive case (every Fix recipe item with a Fix-table-
+    mapped output satisfies the parity) AND a negative synthetic
+    case (a hand-authored Fix recipe item with a `write_target.path`
+    diverging from `FIX_RESULT_PATH_BY_ARTIFACT_ID` is rejected by
+    the contract test). No parser-side superRefine is added for
+    Fix-table parity — the schema-parity superRefine (Rule 1)
+    holds at parse layer; Fix-table parity is a workflow-protocol
+    correctness check that lives in the contract test surface.
 - `npm run verify` green on the slice commit.
 
 **Why this not adjacent.** Splitting the schema additions and the
@@ -970,7 +998,30 @@ The arc is closed when:
    prong files.
 5. The plan's `status:` is updated to `closed` with `closed_at` and
    `closed_in_slice` set.
-6. The compiled-recipe-runtime-bridge plan is unblocked: revision 03
+6. **Prerequisite arc parse-layer widening live in code.** The
+   prerequisite arc plan
+   (`specs/plans/runtime-checkpoint-artifact-widening.md`, status
+   challenger-cleared, revision 04, base_commit
+   `190122d00ba47a0fe34caef2a2a1d28128b585e5`) has had its Slice A
+   landed in code: the `Step` superRefine block at
+   `src/schemas/step.ts:176-191` reflects the widened shape per
+   the prerequisite arc's §5 (the `'build.brief@v1'` allowlist gate
+   is dropped while the precondition coupling is preserved), AND the
+   prerequisite arc's Workflow-level `it(...)` proof in
+   `tests/contracts/schema-parity.test.ts` is on disk and green
+   (asserting that `Workflow.safeParse(...)` succeeds for a
+   minimal Workflow whose checkpoint step carries
+   `writes.artifact = {schema: 'fix.no-repro-decision@v1', path: 'artifacts/fix/no-repro-decision.json'}`
+   with no `policy.build_brief`). Without this precondition, the
+   §5 binding rule "Write-target concretes" parse-acceptance claim
+   for checkpoint items is false and substrate F2 cannot be
+   honestly closed. This arc is `blocked pending prerequisite
+   close` until criterion 6 holds.
+7. The compiled-recipe-runtime-bridge plan is unblocked: revision 03
    takes this arc's closing commit as its `base_commit`. The bridge
    plan retains its `prior_challenger_passes` chain and re-dispatches
-   Codex challenger against revision 03.
+   Codex challenger against revision 03. Per criterion 6, the
+   bridge unblock is contingent on the prerequisite arc Slice A
+   being live in code; while the prerequisite arc Slice A is not
+   yet live, this arc's status is `blocked pending prerequisite
+   close` and the bridge-unblock claim is not asserted.
