@@ -5,7 +5,6 @@ version: 0.1
 schema_source: .claude-plugin/skills/review/circuit.json + src/schemas/artifacts/review.ts
 last_updated: 2026-04-24
 depends_on: [workflow, phase, step, adapter]
-codex_adversarial_review: specs/reviews/review-md-v0.1-codex.md
 artifact_ids:
   - review.result
 invariant_ids:

@@ -8,7 +8,6 @@ depends_on: [ids, primitives, snapshot]
 compatibility_policy: clean-break
 legacy_parse_policy: reject
 reference_evidence: specs/reference/legacy-circuit/continuity-characterization.md
-codex_adversarial_review: specs/reviews/continuity-md-v0.1-codex.md
 artifact_ids:
   - continuity.record
   - continuity.index

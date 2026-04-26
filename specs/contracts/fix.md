@@ -6,7 +6,6 @@ schema_source: src/schemas/artifacts/fix.ts
 reference_evidence: specs/reference/legacy-circuit/repair-characterization.md
 last_updated: 2026-04-25
 depends_on: [workflow, workflow-primitives, workflow-recipe, step, adapter]
-codex_adversarial_review: specs/reviews/fix-md-v0.1-codex.md
 artifact_ids:
   - fix.brief
   - fix.context

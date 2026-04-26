@@ -6,7 +6,6 @@ schema_source: src/schemas/selection-policy.ts
 last_updated: 2026-04-24
 depends_on: [ids, rigor, skill, phase]
 closes: [phase-md-v0.1-med-7-phase-level-selection]
-codex_adversarial_review: specs/reviews/selection-md-v0.1-codex.md
 artifact_ids:
   - selection.override
   - selection.resolution

@@ -5,7 +5,6 @@ version: 0.2
 schema_source: src/schemas/step.ts
 last_updated: 2026-04-25
 depends_on: [ids, gate, selection-policy, primitives]
-codex_adversarial_review: specs/reviews/step-md-v0.2-codex.md
 artifact_ids:
   - step.definition
 invariant_ids: [STEP-I1, STEP-I2, STEP-I3, STEP-I4, STEP-I5, STEP-I6, STEP-I7, STEP-I8, STEP-I9]

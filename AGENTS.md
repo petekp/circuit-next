@@ -28,6 +28,12 @@ isn't here, it isn't a rule.
    for the day, write or update `HANDOFF.md` at the repo root: where we
    are, what's blocked, what's next, in plain English. Two short
    paragraphs. The next session reads it as the first action.
+7. **Codex for impactful, hard-to-revert decisions.** Default off. Pull
+   Codex in when a choice is hard to re-work later (architecture,
+   contracts, migration paths), I'm stuck after a couple of real
+   attempts, or you ask. Use `/codex` explicitly so the handoff is
+   visible. Don't use Codex for cleanup, mechanical refactors, or
+   anything `npm run verify` proves. No challenger passes on plans.
 
 ## Verification
 

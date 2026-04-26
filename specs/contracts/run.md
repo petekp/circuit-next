@@ -6,7 +6,6 @@ schema_source: src/schemas/run.ts
 last_updated: 2026-04-24
 depends_on: [event, snapshot, ids, lane, rigor, workflow]
 closes: []
-codex_adversarial_review: specs/reviews/run-md-v0.1-codex.md
 artifact_ids:
   - run.log
   - run.projection

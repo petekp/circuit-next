@@ -4,14 +4,9 @@ description: Canonical first-principles inventory of reusable workflow moves for
 type: product-architecture
 date: 2026-04-24
 status: active
-authority: specs/adrs/ADR-0013-primitive-backed-workflow-recipes.md
 ---
 
 # Workflow Primitives
-
-This inventory is governed by
-`specs/adrs/ADR-0013-primitive-backed-workflow-recipes.md`. The ADR is the
-north-star decision; this file is the working catalog of reusable moves.
 
 This document names the reusable workflow moves circuit-next should build
 toward. It is intentionally not a list of old Circuit workflows to clone.

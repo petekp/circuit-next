@@ -5,7 +5,6 @@ version: 0.1
 schema_source: src/schemas/config.ts
 last_updated: 2026-04-20
 depends_on: [ids, selection-policy, adapter, step]
-codex_adversarial_review: specs/reviews/config-md-v0.1-codex.md
 artifact_ids:
   - config.root
   - config.layered

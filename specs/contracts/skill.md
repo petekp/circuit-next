@@ -7,7 +7,6 @@ last_updated: 2026-04-19
 depends_on: [ids]
 compatibility_policy: n/a
 legacy_parse_policy: n/a
-codex_adversarial_review: specs/reviews/skill-md-v0.1-codex.md
 artifact_ids:
   - skill.descriptor
 invariant_ids: [SKILL-I1, SKILL-I2, SKILL-I3, SKILL-I4, SKILL-I5, SKILL-I6]

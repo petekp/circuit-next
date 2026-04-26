@@ -6,12 +6,6 @@ schema_source: .claude-plugin/skills/explore/circuit.json (fixture) + src/schema
 reference_evidence: specs/reference/legacy-circuit/explore-characterization.md
 last_updated: 2026-04-24
 depends_on: [workflow, phase, step, selection, rigor, lane, skill, adapter]
-codex_adversarial_review: specs/reviews/explore-md-v0.1-codex.md
-codex_adversarial_review_v0_2: specs/reviews/arc-slice-38-dispatch-granularity-adr-0008-codex.md
-codex_adversarial_review_v0_3: specs/reviews/arc-slices-35-to-40-composition-review-codex.md (arc-close composition review; subsumes retroactive Slice 39 Codex pass per Claude MED 2 + Codex LOW 2 convergent fold-in — the arc-close Codex prong explicitly covers the path-split decision, opts.knownCollisions API shape, and vacuous-on-empty regression smell)
-adr_bindings:
-  - specs/adrs/ADR-0008-dispatch-granularity-modeling.md (v0.2 amendment — Synthesize and Review are dispatch steps; Review weaker-substitute rationale retired)
-  - specs/reviews/p2-foundation-composition-review.md §HIGH 4 (v0.3 amendment — explore.result path-split from run.result)
 artifact_ids:
   - explore.brief
   - explore.analysis

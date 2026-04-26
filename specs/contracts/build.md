@@ -6,7 +6,6 @@ schema_source: src/schemas/artifacts/build.ts
 reference_evidence: specs/reference/legacy-circuit/build-characterization.md
 last_updated: 2026-04-25
 depends_on: [workflow, phase, step, adapter]
-codex_adversarial_review: specs/reviews/build-md-v0.1-codex.md
 artifact_ids:
   - build.brief
   - build.plan

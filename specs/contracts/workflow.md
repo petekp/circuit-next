@@ -5,7 +5,6 @@ version: 0.3
 schema_source: src/schemas/workflow.ts
 last_updated: 2026-04-24
 depends_on: [step, phase, rigor, lane, selection-policy]
-codex_adversarial_review: specs/reviews/workflow-md-v0.3-codex.md
 artifact_ids:
   - workflow.definition
   - workflow.primitive_catalog

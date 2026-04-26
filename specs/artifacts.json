@@ -795,7 +795,7 @@
       "surface_class": "successor-to-live",
       "compatibility_policy": "clean-break",
       "plane": "data-plane",
-      "description": "Close-phase aggregate artifact for the explore workflow run. Composes a deterministic summary, verdict snapshot, and pointers to the four prior artifacts (brief, analysis, synthesis, review-verdict). Persisted at <run-root>/artifacts/explore-result.json — distinct from the engine-authored universal run.result at <run-root>/artifacts/result.json per Slice 39 HIGH 4 fold-in (option (b) path-split resolution). Per-workflow <kind>-result.json siblings is the canonical pattern for future workflow-specific aggregates (build-result.json, repair-result.json, etc.).",
+      "description": "Close-phase aggregate artifact for the explore workflow run. Composes a deterministic summary, verdict snapshot, and pointers to the four prior artifacts (brief, analysis, synthesis, review-verdict). Persisted at <run-root>/artifacts/explore-result.json — distinct from the engine-authored universal run.result at <run-root>/artifacts/result.json (per-workflow path split). Per-workflow <kind>-result.json siblings is the canonical pattern for future workflow-specific aggregates (build-result.json, fix-result.json, etc.).",
       "contract": "specs/contracts/explore.md",
       "schema_file": "src/schemas/artifacts/explore.ts",
       "schema_exports": [
