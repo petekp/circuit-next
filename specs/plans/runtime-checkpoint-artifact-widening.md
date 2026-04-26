@@ -1,10 +1,10 @@
 ---
 plan: runtime-checkpoint-artifact-widening
 status: challenger-pending
-revision: 02
+revision: 03
 opened_at: 2026-04-25
 opened_in_session: runtime-checkpoint-artifact-widening-arc-open
-base_commit: 91da48165b9050ae2928d55bdb1ede219751417d
+base_commit: 0307150b9503fbb8d3170f433fa788ff2306e18f
 target: runtime-checkpoint-artifact-write
 authority:
   - specs/methodology/decision.md
@@ -13,6 +13,7 @@ authority:
   - specs/contracts/step.md
   - specs/invariants.json
   - src/schemas/step.ts
+  - src/schemas/workflow.ts
   - src/schemas/artifacts/build.ts
   - src/schemas/artifacts/fix.ts
   - tests/contracts/schema-parity.test.ts
@@ -22,6 +23,7 @@ artifact_ids:
   - step.definition
 prior_challenger_passes:
   - specs/reviews/runtime-checkpoint-artifact-widening-codex-challenger-01.md
+  - specs/reviews/runtime-checkpoint-artifact-widening-codex-challenger-02.md
 ---
 
 # Runtime Checkpoint Artifact Widening Plan
@@ -166,13 +168,20 @@ In scope:
     schema gate is removed for non-`build.brief` schemas).
   - Add a NEW `it(...)` declaration immediately after the renamed
     test, titled
-    `'CheckpointStep — fix.no-repro-decision@v1 artifact write parses without policy.build_brief'`,
-    asserting that a checkpoint with
+    `'CheckpointStep — fix.no-repro-decision@v1 artifact write parses without policy.build_brief at the Workflow layer'`.
+    The assertion MUST exercise `Workflow.safeParse(...)` (NOT
+    `Step.safeParse(...)`) on a minimal Workflow whose `steps[]`
+    contains a checkpoint step with
     `writes.artifact = {schema: 'fix.no-repro-decision@v1', path: 'artifacts/fix/no-repro-decision.json'}`
-    and NO `policy.build_brief` parses successfully (the live consumer
-    pattern from E5, E8). Splitting this into its own `it(...)` rather
-    than a third assertion in the renamed test is the mechanism that
-    makes the static-count ratchet rise by 1.
+    and NO `policy.build_brief`. This makes the §11 close criterion 5
+    proof surface (Workflow-level parse acceptance, the actual gate
+    substrate revision 04 needs to clear F2) directly executable
+    rather than only claimed in prose. Use the existing `okWorkflow()`
+    helper pattern already used by Workflow-level tests in this file
+    (e.g. `tests/contracts/schema-parity.test.ts:875,891,911,921` and
+    surrounding) to keep the harness minimal. Splitting this into its
+    own `it(...)` rather than a third assertion in the renamed test
+    is the mechanism that makes the static-count ratchet rise by 1.
 
 - **Atomic schema + test landing** (Slice A). The refinement update
   and the contract test update land in the same commit. The repository
@@ -371,24 +380,47 @@ contract authorship begins. The single touched row is `step.definition`
 | `step.definition` | `src/schemas/step.ts` | greenfield | n/a | not required (greenfield class permits widening without prior-shape characterization) |
 
 The `step.definition` row is `surface_class: greenfield` — it has no
-prior live consumer requiring characterization preservation. The
-widening relaxes the runtime's acceptance set; it does not narrow any
-existing-passing input. Behavioral matrix in §5 confirms every
-previously-passing input still passes.
+prior live consumer at the **parse layer** requiring characterization
+preservation. The widening relaxes the runtime's parse-time
+acceptance set; it does not narrow any existing-passing parse input.
+Behavioral matrix in §5 confirms every previously-passing parse input
+still passes.
 
-The behavioral promotion is a **strict relaxation** of acceptance:
-- Every previously-passing input still passes.
-- One previously-failing class of inputs (non-`build.brief@v1`
-  artifact schemas at checkpoint) now passes.
+The behavioral promotion is a **parse-layer strict relaxation** of
+acceptance, NOT an end-to-end runtime relaxation:
+- At `Step` / `Workflow.parse` time: every previously-passing input
+  still passes; one previously-failing class of inputs
+  (non-`build.brief@v1` artifact schemas at checkpoint) now passes.
+- At runner execution time: the runner's artifact materializer at
+  `src/runtime/runner.ts:861,888,980,995,1166-1206,1604` still
+  hardcodes `'build.brief@v1'` paths and throws on any other
+  checkpoint artifact schema. The newly admitted parse shapes
+  (`fix.no-repro-decision@v1`, etc.) parse but do not yet execute
+  end-to-end; that gap is fenced off in §3 out-of-scope and §11
+  close criterion 5 as a deferred Fix-runtime concern.
 
-There is no successor-to-live characterization slice required because
-no live consumer relied on the rejection of non-`build.brief@v1`
-schemas — by definition, no such input could exist in a passing run
-before the widening. The Build flow's behavior is preserved verbatim.
+The "no live consumer relied on the rejection" claim is bounded to
+the parse layer: no live consumer code path successfully passed a
+non-`build.brief@v1` checkpoint artifact through `Workflow.parse`
+before this arc, so widening parse acceptance does not break any
+prior parse-passing input. The runner-side rejection at execution
+time is unchanged — it remains as a downstream gate that future
+Fix-runtime arcs will widen separately. The Build flow's parse-time
+AND execution-time behavior is preserved verbatim by this arc; only
+non-Build parse acceptance changes.
+
+There is no successor-to-live characterization slice required at the
+parse layer because no live consumer relied on parse-time rejection
+of non-`build.brief@v1` schemas. Successor-to-live characterization
+at the runner execution layer is out of scope here (§3) and is the
+concern of the future Fix-runtime arc whose bounded surface that
+work would touch.
 
 ## §7 — Verification substrate
 
-This arc uses the existing verification surface unchanged:
+This arc uses the existing verification surface unchanged. Three
+distinct audit mechanisms apply across Slices A and D, and they are
+separate concerns:
 
 - **Tier-0 gates** (npm run check, lint, test, verify) all run at
   every commit on the slice. The contract test update lives in
@@ -396,19 +428,34 @@ This arc uses the existing verification surface unchanged:
   in the test suite. The new `it(...)` for the
   `fix.no-repro-decision@v1` positive case lands in the same file.
 - **Plan-lint** runs at draft and challenger-pending lifecycle steps.
-- **Audit** (`npm run audit`) runs after the slice lands, verifying
-  the slice ceremony (lane declaration, framing pair, citation rule,
-  etc.) per AGENTS.md §Verification commands. Slice A's
-  `specs/ratchet-floor.json` `floors.contract_test_count` advance
-  (1062 → 1063) is co-landed with the test-declaration addition per
-  the Slice 47c-2 Codex MED 2 deferred binding (Check 35 enforces
-  ratchet-floor advance ↔ test addition co-landing, per
-  `specs/ratchet-floor.json:8` notes).
+- **Audit** (`npm run audit`) runs after the slice lands. Three
+  named checks bear on this arc:
+  - `Contract test ratchet` (`scripts/audit.mjs:6297-6315`,
+    backed by `countTests` at `scripts/audit.mjs:507-518` matching
+    `/^\s*(it|test)\(/gm`): the HEAD-vs-HEAD~1 static
+    test-declaration delta. Slice A advances this by +1 via the new
+    `it(...)` declaration.
+  - `Pinned ratchet floor (specs/ratchet-floor.json)`
+    (`checkPinnedRatchetFloor` at `scripts/audit.mjs:6457`): the
+    pinned floor `floors.contract_test_count` must not regress.
+    Slice A advances the floor explicitly: 1062 → 1063, with
+    `last_advanced_in_slice` and `last_advanced_at` updated in the
+    same commit so the audit pinned-floor check stays green and the
+    floor reflects the new authored count. (Floor advancement is an
+    explicit commit action; the floor is not auto-derived from
+    HEAD~1.)
+  - `Arc-close composition review` (`scripts/audit.mjs:6556`,
+    iterates `ARC_CLOSE_GATES`): Slice D's two prong review files
+    plus the new `ARC_CLOSE_GATES` entry satisfy this check for the
+    `runtime-checkpoint-artifact-widening` arc id.
+  These are three independent checks; they are not a single
+  composite gate. None of them requires the others to fire.
 - **This arc requires no new verification capability.** The schema
   refinement edit covers all behavioral changes; existing test
-  infrastructure suffices. Both `countTests` (Check 26 / ratchet-floor
-  surface) and `ARC_CLOSE_COMPOSITION_REVIEW_FILENAME_PATTERN`
-  (Check 35 arc-subsumption shape (i)) are existing audit machinery.
+  infrastructure (`countTests`, `checkPinnedRatchetFloor`, the
+  `ARC_CLOSE_GATES` iterator, and
+  `ARC_CLOSE_COMPOSITION_REVIEW_FILENAME_PATTERN` at
+  `scripts/audit.mjs:5041-5042`) suffices.
 
 ## §8 — Slices
 
@@ -438,9 +485,14 @@ non-Build checkpoint artifact.
     rejected by the dropped allowlist gate).
   - A NEW `it(...)` declaration lands immediately after the renamed
     test, titled
-    `'CheckpointStep — fix.no-repro-decision@v1 artifact write parses without policy.build_brief'`,
-    asserting `'fix.no-repro-decision@v1'` with NO `policy.build_brief`
-    parses (the live consumer pattern from E5, E8).
+    `'CheckpointStep — fix.no-repro-decision@v1 artifact write parses without policy.build_brief at the Workflow layer'`,
+    asserting via `Workflow.safeParse(...)` (NOT `Step.safeParse(...)`)
+    against a minimal `okWorkflow({steps: [...]})` shape that
+    `'fix.no-repro-decision@v1'` with NO `policy.build_brief` parses
+    at the Workflow level (the live consumer pattern from E5, E8).
+    Workflow-level acceptance is the surface substrate revision 04's
+    F2 close-criterion needs to clear, so this proof matches §11
+    close criterion 5 directly.
 - Test count delta: 2 tests after change in the affected block
   (1 renamed existing + 1 new `it(...)` for the
   `fix.no-repro-decision@v1` positive case). Net +1 static
@@ -478,9 +530,10 @@ event/result writing, gates, safety relaxations, and workflow close
 claims"). External Codex challenger required.
 
 **Authority.** ADR-0003; ADR-0010; specs/contracts/step.md;
-specs/invariants.json; src/schemas/step.ts; src/schemas/artifacts/build.ts;
-src/schemas/artifacts/fix.ts; tests/contracts/schema-parity.test.ts;
-specs/ratchet-floor.json.
+specs/invariants.json; src/schemas/step.ts; src/schemas/workflow.ts
+(the new it(...) exercises `Workflow.safeParse(...)` per §3 in-scope
+F3 fold-in); src/schemas/artifacts/build.ts; src/schemas/artifacts/fix.ts;
+tests/contracts/schema-parity.test.ts; specs/ratchet-floor.json.
 
 ### 8.2 Slice D — Arc-close composition review (Heavy, Ratchet-Advance, ceremony + gate wiring)
 
@@ -515,9 +568,13 @@ would leave that downstream claim under-evidenced.
     matching both prong files; conforms to Check 35's arc-subsumption
     shape (i) so ceremony commits can satisfy both Check 26 and Check 35
     via the same review pair, no separate per-slice review file needed).
-- Audit-test assertions in `tests/scripts/audit-arc-close-gates.test.ts`
-  (or equivalent file binding `ARC_CLOSE_GATES`) gain matching cases
-  exercising the new arc id.
+- Audit-test assertions in the contract tests that bind
+  `ARC_CLOSE_GATES` (currently
+  `tests/contracts/artifact-backing-path-integrity.test.ts` for
+  per-gate isolation behavior and
+  `tests/contracts/slice-47d-audit-extensions.test.ts` for
+  arc-close gate iteration / Check 35 arc-subsumption shape) gain
+  matching cases exercising the new arc id.
 - Plan frontmatter advances: `status: closed`, `closed_at: <YYYY-MM-DD>`,
   `closed_in_slice: <Slice D's slice number>`, `closed_with: <one-line summary>`.
 - `npm run audit` GREEN against the closed arc.
@@ -534,8 +591,9 @@ new entry; arc-close test ratchet advances by matching test cases.
 **Work mode.** Heavy: arc-close ceremony with external prong review.
 
 **Authority.** ADR-0010; specs/methodology/decision.md;
-scripts/audit.mjs; tests/scripts/audit-arc-close-gates.test.ts;
-specs/plans/runtime-checkpoint-artifact-widening.md.
+scripts/audit.mjs; tests/contracts/artifact-backing-path-integrity.test.ts
+(current `ARC_CLOSE_GATES` coverage); tests/contracts/slice-47d-audit-extensions.test.ts
+(arc-close gate behavior); specs/plans/runtime-checkpoint-artifact-widening.md.
 
 ## §9 — Ratchets
 
@@ -596,17 +654,20 @@ This arc closes when ALL of the following hold:
 4. Plan frontmatter `status: closed`, `closed_at`, `closed_in_slice`,
    `closed_with` populated.
 
-5. **Downstream readiness check — runtime parse sink only.** The
-   substrate plan revision 04 precondition gate clears at the runtime
-   parse sink: a freshly drafted `Workflow.parse()` call against a
-   hand-authored `CheckpointStep` shape with
+5. **Downstream readiness check — Workflow-layer parse sink only.**
+   The substrate plan revision 04 precondition gate clears at the
+   Workflow-layer parse sink: a freshly drafted
+   `Workflow.safeParse(...)` call against a minimal Workflow whose
+   `steps[]` contains a checkpoint step with
    `writes.artifact = {path: 'artifacts/fix/no-repro-decision.json',
    schema: 'fix.no-repro-decision@v1'}` and no `policy.build_brief`
-   parses successfully. This proves substrate pass 03 finding F2 is
-   resolvable at the runtime parse layer upstream of substrate
+   succeeds. This proves substrate pass 03 finding F2 is resolvable
+   at the runtime Workflow-parse layer upstream of substrate
    revision 04. (The check itself is in-process via the new
    `it(...)` for the `fix.no-repro-decision@v1` positive case landed
-   in Slice A; this close criterion is documentary.)
+   in Slice A, which exercises `Workflow.safeParse(...)` directly
+   per §3 in-scope contract test bullet; this close criterion is
+   documentary.)
 
    This criterion is explicitly bounded to the **runtime parse
    layer**. Two surfaces remain UNCLOSED at arc close and are
