@@ -13,6 +13,8 @@ import { exploreBriefSynthesisBuilder } from './explore-brief.js';
 import { fixBriefSynthesisBuilder } from './fix-brief.js';
 import { reviewIntakeSynthesisBuilder } from './review-intake.js';
 import { reviewResultSynthesisBuilder } from './review-result.js';
+import { sweepBriefSynthesisBuilder } from './sweep-brief.js';
+import { sweepQueueSynthesisBuilder } from './sweep-queue.js';
 import type { SynthesisBuilder, SynthesisStep } from './types.js';
 
 const REGISTRY = new Map<string, SynthesisBuilder>([
@@ -22,6 +24,8 @@ const REGISTRY = new Map<string, SynthesisBuilder>([
   [reviewIntakeSynthesisBuilder.resultSchemaName, reviewIntakeSynthesisBuilder],
   [reviewResultSynthesisBuilder.resultSchemaName, reviewResultSynthesisBuilder],
   [fixBriefSynthesisBuilder.resultSchemaName, fixBriefSynthesisBuilder],
+  [sweepBriefSynthesisBuilder.resultSchemaName, sweepBriefSynthesisBuilder],
+  [sweepQueueSynthesisBuilder.resultSchemaName, sweepQueueSynthesisBuilder],
 ]);
 
 export function findSynthesisBuilder(resultSchemaName: string): SynthesisBuilder | undefined {

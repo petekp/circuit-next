@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { BuildImplementation, BuildReview } from '../schemas/artifacts/build.js';
 import { ExploreReviewVerdict, ExploreSynthesis } from '../schemas/artifacts/explore.js';
 import { FixChange, FixContext, FixDiagnosis, FixReview } from '../schemas/artifacts/fix.js';
+import { SweepAnalysis, SweepBatch, SweepReview } from '../schemas/artifacts/sweep.js';
 
 // Slice 54 (Codex H15 fold-in) — dispatch-artifact schema registry +
 // parse helper. Closes the artifact-shape half of the ADR-0008
@@ -63,6 +64,9 @@ const REGISTRY: Readonly<Record<string, z.ZodType<unknown>>> = Object.freeze({
   'fix.diagnosis@v1': FixDiagnosis,
   'fix.change@v1': FixChange,
   'fix.review@v1': FixReview,
+  'sweep.analysis@v1': SweepAnalysis,
+  'sweep.batch@v1': SweepBatch,
+  'sweep.review@v1': SweepReview,
   'dogfood-strict@v1': StrictPayloadShape,
 });
 

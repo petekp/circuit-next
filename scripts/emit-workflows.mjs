@@ -63,6 +63,10 @@ const RECIPES = [
     id: 'fix',
     recipePath: 'specs/workflow-recipes/fix.recipe.json',
   },
+  {
+    id: 'sweep',
+    recipePath: 'specs/workflow-recipes/sweep.recipe.json',
+  },
 ];
 
 async function loadCompilerModule() {

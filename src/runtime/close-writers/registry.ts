@@ -10,12 +10,14 @@ import { buildCloseBuilder } from './build.js';
 import { exploreCloseBuilder } from './explore.js';
 import { fixCloseBuilder } from './fix.js';
 import { artifactPathForSchemaInWorkflow, workflowHasArtifactSchemaInWorkflow } from './shared.js';
+import { sweepCloseBuilder } from './sweep.js';
 import type { CloseBuildContext, CloseBuilder } from './types.js';
 
 const REGISTRY = new Map<string, CloseBuilder>([
   [buildCloseBuilder.resultSchemaName, buildCloseBuilder],
   [exploreCloseBuilder.resultSchemaName, exploreCloseBuilder],
   [fixCloseBuilder.resultSchemaName, fixCloseBuilder],
+  [sweepCloseBuilder.resultSchemaName, sweepCloseBuilder],
 ]);
 
 export function findCloseBuilder(resultSchemaName: string): CloseBuilder | undefined {

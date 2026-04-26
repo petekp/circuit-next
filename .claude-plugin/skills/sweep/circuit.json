@@ -1,0 +1,286 @@
+{
+  "schema_version": "2",
+  "id": "sweep",
+  "version": "0.1.0",
+  "purpose": "Systematic codebase sweeps: cleanup, quality passes, coverage improvements, docs-sync. Frame the sweep, survey for candidates, triage by confidence x risk, execute a batch of acted items, verify no regression, review for injections, close with evidence. The minimal-but-honest single-batch composition: full seven-canonical-phase spine, only existing step kinds (synthesis / dispatch / verification / close-with-evidence). Empirical proof of the workflow-agnostic substrate after the runner.ts decomposition into per-workflow registries.",
+  "entry": {
+    "signals": {
+      "include": ["sweep", "cleanup", "dead-code", "lint-fix", "docs-sync", "coverage"],
+      "exclude": []
+    },
+    "intent_prefixes": ["sweep", "cleanup"]
+  },
+  "entry_modes": [
+    {
+      "name": "default",
+      "start_at": "frame-step",
+      "rigor": "standard",
+      "description": "Default Sweep entry mode."
+    },
+    {
+      "name": "lite",
+      "start_at": "frame-step",
+      "rigor": "lite",
+      "description": "Lite Sweep entry mode."
+    },
+    {
+      "name": "deep",
+      "start_at": "frame-step",
+      "rigor": "deep",
+      "description": "Deep Sweep entry mode."
+    },
+    {
+      "name": "autonomous",
+      "start_at": "frame-step",
+      "rigor": "autonomous",
+      "description": "Autonomous Sweep entry mode."
+    }
+  ],
+  "phases": [
+    {
+      "id": "frame-phase",
+      "title": "Frame",
+      "canonical": "frame",
+      "steps": ["frame-step"]
+    },
+    {
+      "id": "survey-phase",
+      "title": "Survey",
+      "canonical": "analyze",
+      "steps": ["survey-step"]
+    },
+    {
+      "id": "triage-phase",
+      "title": "Triage",
+      "canonical": "plan",
+      "steps": ["triage-step"]
+    },
+    {
+      "id": "execute-phase",
+      "title": "Execute",
+      "canonical": "act",
+      "steps": ["execute-step"]
+    },
+    {
+      "id": "verify-phase",
+      "title": "Verify",
+      "canonical": "verify",
+      "steps": ["verify-step"]
+    },
+    {
+      "id": "review-phase",
+      "title": "Review",
+      "canonical": "review",
+      "steps": ["review-step"]
+    },
+    {
+      "id": "close-phase",
+      "title": "Close",
+      "canonical": "close",
+      "steps": ["close-step"]
+    }
+  ],
+  "spine_policy": {
+    "mode": "strict"
+  },
+  "steps": [
+    {
+      "id": "frame-step",
+      "title": "Frame - produce Sweep brief",
+      "protocol": "sweep-frame@v1",
+      "reads": [],
+      "routes": {
+        "pass": "survey-step"
+      },
+      "executor": "orchestrator",
+      "kind": "synthesis",
+      "writes": {
+        "artifact": {
+          "path": "artifacts/sweep/brief.json",
+          "schema": "sweep.brief@v1"
+        }
+      },
+      "gate": {
+        "kind": "schema_sections",
+        "source": {
+          "kind": "artifact",
+          "ref": "artifact"
+        },
+        "required": ["objective", "scope"]
+      }
+    },
+    {
+      "id": "survey-step",
+      "title": "Survey - enumerate candidate sweep targets",
+      "protocol": "sweep-survey@v1",
+      "reads": ["artifacts/sweep/brief.json"],
+      "routes": {
+        "pass": "triage-step"
+      },
+      "executor": "worker",
+      "kind": "dispatch",
+      "role": "implementer",
+      "writes": {
+        "artifact": {
+          "path": "artifacts/sweep/analysis.json",
+          "schema": "sweep.analysis@v1"
+        },
+        "request": "artifacts/dispatch/sweep-survey.request.json",
+        "receipt": "artifacts/dispatch/sweep-survey.receipt.txt",
+        "result": "artifacts/dispatch/sweep-survey.result.json"
+      },
+      "gate": {
+        "kind": "result_verdict",
+        "source": {
+          "kind": "dispatch_result",
+          "ref": "result"
+        },
+        "pass": ["accept"]
+      }
+    },
+    {
+      "id": "triage-step",
+      "title": "Triage - classify candidates by confidence x risk",
+      "protocol": "sweep-triage@v1",
+      "reads": ["artifacts/sweep/brief.json", "artifacts/sweep/analysis.json"],
+      "routes": {
+        "pass": "execute-step"
+      },
+      "executor": "orchestrator",
+      "kind": "synthesis",
+      "writes": {
+        "artifact": {
+          "path": "artifacts/sweep/queue.json",
+          "schema": "sweep.queue@v1"
+        }
+      },
+      "gate": {
+        "kind": "schema_sections",
+        "source": {
+          "kind": "artifact",
+          "ref": "artifact"
+        },
+        "required": ["classified", "to_execute"]
+      }
+    },
+    {
+      "id": "execute-step",
+      "title": "Execute - act on triaged batch",
+      "protocol": "sweep-execute@v1",
+      "reads": ["artifacts/sweep/brief.json", "artifacts/sweep/queue.json"],
+      "routes": {
+        "pass": "verify-step"
+      },
+      "executor": "worker",
+      "kind": "dispatch",
+      "role": "implementer",
+      "writes": {
+        "artifact": {
+          "path": "artifacts/sweep/batch.json",
+          "schema": "sweep.batch@v1"
+        },
+        "request": "artifacts/dispatch/sweep-execute.request.json",
+        "receipt": "artifacts/dispatch/sweep-execute.receipt.txt",
+        "result": "artifacts/dispatch/sweep-execute.result.json"
+      },
+      "gate": {
+        "kind": "result_verdict",
+        "source": {
+          "kind": "dispatch_result",
+          "ref": "result"
+        },
+        "pass": ["accept"]
+      }
+    },
+    {
+      "id": "verify-step",
+      "title": "Verify - run Sweep verification",
+      "protocol": "sweep-verify@v1",
+      "reads": ["artifacts/sweep/brief.json", "artifacts/sweep/batch.json"],
+      "routes": {
+        "pass": "review-step"
+      },
+      "executor": "orchestrator",
+      "kind": "verification",
+      "writes": {
+        "artifact": {
+          "path": "artifacts/sweep/verification.json",
+          "schema": "sweep.verification@v1"
+        }
+      },
+      "gate": {
+        "kind": "schema_sections",
+        "source": {
+          "kind": "artifact",
+          "ref": "artifact"
+        },
+        "required": ["overall_status", "commands"]
+      }
+    },
+    {
+      "id": "review-step",
+      "title": "Review - independent audit of Sweep changes",
+      "protocol": "sweep-review@v1",
+      "reads": [
+        "artifacts/sweep/brief.json",
+        "artifacts/sweep/batch.json",
+        "artifacts/sweep/verification.json"
+      ],
+      "routes": {
+        "pass": "close-step"
+      },
+      "executor": "worker",
+      "kind": "dispatch",
+      "role": "reviewer",
+      "writes": {
+        "artifact": {
+          "path": "artifacts/sweep/review.json",
+          "schema": "sweep.review@v1"
+        },
+        "request": "artifacts/dispatch/sweep-review.request.json",
+        "receipt": "artifacts/dispatch/sweep-review.receipt.txt",
+        "result": "artifacts/dispatch/sweep-review.result.json"
+      },
+      "gate": {
+        "kind": "result_verdict",
+        "source": {
+          "kind": "dispatch_result",
+          "ref": "result"
+        },
+        "pass": ["clean", "minor-injections"]
+      }
+    },
+    {
+      "id": "close-step",
+      "title": "Close - emit Sweep result",
+      "protocol": "sweep-close@v1",
+      "reads": [
+        "artifacts/sweep/brief.json",
+        "artifacts/sweep/analysis.json",
+        "artifacts/sweep/queue.json",
+        "artifacts/sweep/batch.json",
+        "artifacts/sweep/verification.json",
+        "artifacts/sweep/review.json"
+      ],
+      "routes": {
+        "pass": "@complete"
+      },
+      "executor": "orchestrator",
+      "kind": "synthesis",
+      "writes": {
+        "artifact": {
+          "path": "artifacts/sweep-result.json",
+          "schema": "sweep.result@v1"
+        }
+      },
+      "gate": {
+        "kind": "schema_sections",
+        "source": {
+          "kind": "artifact",
+          "ref": "artifact"
+        },
+        "required": ["summary", "outcome", "artifact_pointers"]
+      }
+    }
+  ]
+}

@@ -86,7 +86,7 @@ describe('compileRecipeToWorkflow — failure modes', () => {
     );
     const broken = { ...recipe, items: itemsCopy } as unknown as typeof recipe;
     expect(() => compileRecipeToWorkflow(broken)).toThrow(
-      /runner supports verification writing build\.verification@v1 or fix\.verification@v1/,
+      /no verification writer is registered for that schema/,
     );
   });
 

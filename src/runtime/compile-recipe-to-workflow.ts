@@ -37,6 +37,7 @@ import type {
 } from '../schemas/workflow-recipe.js';
 import type { Workflow as WorkflowValue } from '../schemas/workflow.js';
 import { Workflow } from '../schemas/workflow.js';
+import { findVerificationWriter } from './verification-writers/registry.js';
 
 export class WorkflowRecipeCompileError extends Error {
   constructor(message: string) {
@@ -71,25 +72,19 @@ const RECIPE_ROUTES_DROPPED_AT_COMPILE = new Set([
   'escalate',
 ]);
 
-// (step kind, artifact schema) pairs the runner's hardcoded synthesis/
-// verification/checkpoint writers actually understand. Anything else is
-// rejected at compile so the recipe author finds out before runtime.
-//
-//   - verification kind: build.verification@v1 (Build's plan-derived command
-//     list) and fix.verification@v1 (Fix's brief-derived command list). Both
-//     write structurally identical artifacts via writeVerificationArtifact
-//     in runner.ts. Adding a new label here requires runner.ts to know how
-//     to source the verification commands for that label.
-//   - checkpoint kind with a typed artifact: only build.brief@v1
-//     (CheckpointStep superRefine already enforces this at the Workflow
-//     parse layer; we mirror it here so the compile error is local).
-const SUPPORTED_VERIFICATION_OUTPUTS = new Set(['build.verification@v1', 'fix.verification@v1']);
-
+// (step kind, artifact schema) pairs the runner's writers actually
+// understand. Verification kinds consult the verification-writers registry
+// (the single source of truth — adding a writer there auto-permits the
+// schema here). Checkpoint kinds with typed artifacts are still pinned to
+// build.brief@v1 because CheckpointPolicy carries the build_brief template
+// directly (see src/schemas/step.ts); generalizing that policy is the next
+// step toward a checkpoint-writers registry that the compiler can also
+// consult.
 function ensureSupportedKindArtifactPair(item: WorkflowRecipeItem): void {
   if (item.execution.kind === 'verification') {
-    if (!SUPPORTED_VERIFICATION_OUTPUTS.has(item.output as unknown as string)) {
+    if (findVerificationWriter(item.output as unknown as string) === undefined) {
       fail(
-        `recipe item '${item.id}' has verification kind but writes '${item.output}'; runner supports verification writing build.verification@v1 or fix.verification@v1`,
+        `recipe item '${item.id}' has verification kind but writes '${item.output}'; no verification writer is registered for that schema (see src/runtime/verification-writers/registry.ts)`,
       );
     }
   }
