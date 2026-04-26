@@ -1,6 +1,6 @@
 # HANDOFF
 
-Last updated: 2026-04-26 (drift trust gaps closed, Fix close primitives shipped).
+Last updated: 2026-04-26 (drift trust gaps closed, Fix close primitives shipped, lite Fix runs end-to-end).
 
 ## Where we are
 
@@ -59,21 +59,28 @@ artifact registry didn't know `fix.context`/`fix.diagnosis`/`fix.change`/
    `optionalCloseReadForSchema` let close writers conditionally consume
    schemas that may not be wired in every mode (lite skips review).
 
-`npm run verify` passes: 809 tests (6 skipped), tsc clean, biome clean,
-build clean, drift check clean across all 5 emitted Workflows.
+### Fix end-to-end runtime proof (commit `368e901`)
+
+`FixContext`, `FixDiagnosis`, and `FixChange` schemas now require
+`verdict: literal('accept')`, matching the `BuildImplementation`
+pattern. The Fix dispatch steps' `result_verdict` gate parses verdict
+from the result body, and the artifact-schema registry validates the
+same body strictly — having both contracts share the verdict field is
+what lets dispatch outputs flow through both gates without splitting
+the body or loosening the artifact schema. With the schemas aligned,
+`tests/runner/fix-runtime-wiring.test.ts` runs the lite Fix Workflow
+end-to-end via `runDogfood`: stubbed dispatchers feed
+context/diagnose/act, the `fix-frame` synthesisWriter is overridden
+in the test to produce a brief with a no-op verification command,
+`fix-verify` executes that command, and `fix-close-lite` emits a real
+FixResult with `review_status='skipped'`.
+
+`npm run verify` passes: 810 tests (6 skipped), tsc clean, biome
+clean, build clean, drift check clean across all 5 emitted Workflows.
 
 ## What's next
 
-1. **Full lite Fix runtime e2e test**. Focused unit tests cover the new
-   writers (`tests/runner/fix-artifact-writer.test.ts`), but no test
-   yet exercises the lite Fix workflow via `runDogfood` end-to-end with
-   stubbed dispatchers. The blocker is `fix.brief`'s default
-   verification command (`npm run verify`) — running real verify inside
-   a vitest is too slow. Either: (a) thread an optional
-   verification-command override through the brief writer for tests, or
-   (b) construct a custom Fix workflow with seed-brief synthesisWriter
-   injection (the Build verification-exec test pattern).
-2. **Compose Sweep and Migrate next**. The strict primitives
+1. **Compose Sweep and Migrate next**. The strict primitives
    (`queue`, `batch`, `risk-rollback-check`, `close-with-evidence`,
    `handoff`) all exist in the catalog. The pattern for adding a new
    workflow is now established by Fix:
@@ -91,14 +98,14 @@ build clean, drift check clean across all 5 emitted Workflows.
    - Run `npm run emit-workflows` to produce the compiled
      `circuit.json` (and `<mode>.json` siblings if the recipe uses
      `route_overrides`).
-3. **Generic close-with-evidence writer** would be a meaningful
+2. **Generic close-with-evidence writer** would be a meaningful
    refactor: instead of a per-workflow close writer in runner.ts, drive
    close artifact assembly from a recipe-supplied template (list of
    source schemas + output template). Not blocking — the per-workflow
    writer pattern works for now — but worth considering before Sweep
    and Migrate land their own close writers, otherwise we'll be writing
    the same shape three times.
-4. **Verification-plan contract** is currently an initial-contract
+3. **Verification-plan contract** is currently an initial-contract
    placeholder. The Fix recipe declares
    `proof: verification.plan@v1` to satisfy the run-verification
    primitive contract, but the runtime sources commands from
