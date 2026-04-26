@@ -110,7 +110,7 @@ describe('workflow recipe schema — active Fix recipe', () => {
       context: 'fix.context@v1',
       diagnosis: 'fix.diagnosis@v1',
       change: 'fix.change@v1',
-      verification: 'build.verification@v1',
+      verification: 'fix.verification@v1',
     });
     expect(closeLite.input).not.toHaveProperty('review');
     expect(close.input).toMatchObject({
@@ -118,7 +118,7 @@ describe('workflow recipe schema — active Fix recipe', () => {
       context: 'fix.context@v1',
       diagnosis: 'fix.diagnosis@v1',
       change: 'fix.change@v1',
-      verification: 'build.verification@v1',
+      verification: 'fix.verification@v1',
       review: 'fix.review@v1',
     });
   });

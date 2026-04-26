@@ -28,9 +28,18 @@
 // emit output differ from committed bytes makes the check fail.
 
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -159,6 +168,21 @@ function planRecipeFiles(id, result) {
   return plan;
 }
 
+// Returns the set of unexpected `*.json` files in a recipe's skill directory:
+// anything on disk under `.claude-plugin/skills/<id>/` that ends in `.json`
+// but isn't in the emit plan. These are stale per-mode siblings from a
+// renamed/collapsed entry mode — the CLI loader at src/cli/dogfood.ts
+// prefers `<mode>.json` over `circuit.json`, so a stale sibling can drive
+// runtime behavior even though `npm run verify` stays green.
+function findStaleSiblings(id, plan) {
+  const skillDirAbs = resolve(projectRoot, `.claude-plugin/skills/${id}`);
+  if (!existsSync(skillDirAbs)) return [];
+  const expected = new Set(plan.map((p) => basename(p.outRel)));
+  return readdirSync(skillDirAbs)
+    .filter((name) => name.endsWith('.json') && !expected.has(name))
+    .map((name) => `.claude-plugin/skills/${id}/${name}`);
+}
+
 async function emitMode() {
   for (const entry of RECIPES) {
     const result = await compileOne(entry.recipePath);
@@ -169,6 +193,13 @@ async function emitMode() {
       writeFileSync(outAbs, stringifyWorkflow(workflow));
       biomeFormatInPlace(outAbs);
       console.log(`emitted ${outRel}`);
+    }
+    // Stale `<mode>.json` siblings would otherwise survive emit and silently
+    // drive runtime behavior via the CLI loader. Treat them as stale outputs
+    // of this build step and remove them.
+    for (const stale of findStaleSiblings(entry.id, plan)) {
+      unlinkSync(resolve(projectRoot, stale));
+      console.log(`removed stale ${stale}`);
     }
   }
 }
@@ -203,6 +234,16 @@ async function checkMode() {
           console.error('  Run `npm run emit-workflows` to regenerate, then commit the diff.');
           drifted = true;
         }
+      }
+      // Stale `<mode>.json` siblings in this skill dir would silently drive
+      // runtime behavior via the CLI loader, while the byte-by-byte check
+      // above only ranges over files in the current emit plan.
+      const stale = findStaleSiblings(entry.id, plan);
+      for (const rel of stale) {
+        console.error(
+          `✗ ${rel} is not in the emit plan for ${entry.recipePath}. Run \`npm run emit-workflows\` to clean up stale siblings, then commit the deletion.`,
+        );
+        drifted = true;
       }
     }
   } finally {

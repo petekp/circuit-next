@@ -444,7 +444,7 @@ describe('P2.10a — default explore artifact writer', () => {
     const { workflow, bytes } = loadFixture((raw) => {
       const close = raw.steps.find((step) => step.id === 'close-step');
       if (close === undefined) throw new Error('close-step not found');
-      close.reads = ['artifacts/synthesis.json'];
+      close.reads = ['artifacts/brief.json', 'artifacts/synthesis.json'];
     });
     const runRoot = join(runRootBase, 'missing-close-read');
 
@@ -475,7 +475,7 @@ describe('P2.10a — default explore artifact writer', () => {
     const { workflow, bytes } = loadFixture((raw) => {
       const close = raw.steps.find((step) => step.id === 'close-step');
       if (close === undefined) throw new Error('close-step not found');
-      close.reads = ['artifacts/review-verdict.json'];
+      close.reads = ['artifacts/brief.json', 'artifacts/review-verdict.json'];
     });
     const runRoot = join(runRootBase, 'missing-synthesis-close-read');
 
@@ -499,6 +499,37 @@ describe('P2.10a — default explore artifact writer', () => {
     expect(gate.outcome).toBe('fail');
     expect(gate.reason).toMatch(/explore\.result@v1/);
     expect(gate.reason).toMatch(/artifacts\/synthesis\.json/);
+    expect(() => readFileSync(join(runRoot, 'artifacts', 'explore-result.json'), 'utf8')).toThrow();
+  });
+
+  it('rejects close-step result aggregation when brief is not an explicit read', async () => {
+    const { workflow, bytes } = loadFixture((raw) => {
+      const close = raw.steps.find((step) => step.id === 'close-step');
+      if (close === undefined) throw new Error('close-step not found');
+      close.reads = ['artifacts/synthesis.json', 'artifacts/review-verdict.json'];
+    });
+    const runRoot = join(runRootBase, 'missing-brief-close-read');
+
+    const outcome = await runDogfood({
+      runRoot,
+      workflow,
+      workflowBytes: bytes,
+      runId: RunId.parse('93000000-0000-0000-0000-000000000004'),
+      goal: 'Require close-step to read the brief',
+      rigor: 'standard',
+      lane: lane(),
+      now: deterministicNow(Date.UTC(2026, 3, 24, 19, 10, 0)),
+      dispatcher: stubDispatcher(),
+    });
+
+    expect(outcome.result.outcome).toBe('aborted');
+    const gate = outcome.events.find(
+      (event) => event.kind === 'gate.evaluated' && event.step_id === 'close-step',
+    );
+    if (gate?.kind !== 'gate.evaluated') throw new Error('expected close gate event');
+    expect(gate.outcome).toBe('fail');
+    expect(gate.reason).toMatch(/explore\.result@v1/);
+    expect(gate.reason).toMatch(/artifacts\/brief\.json/);
     expect(() => readFileSync(join(runRoot, 'artifacts', 'explore-result.json'), 'utf8')).toThrow();
   });
 });

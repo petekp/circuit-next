@@ -77,7 +77,7 @@ describe('compileRecipeToWorkflow — failure modes', () => {
     expect(() => compileRecipeToWorkflow(broken)).toThrow(/missing.*protocol/);
   });
 
-  it('throws if a verification step writes a schema other than build.verification@v1', () => {
+  it('throws if a verification step writes a schema the runner does not support', () => {
     const recipe = loadBuildRecipe();
     const itemsCopy = recipe.items.map((item) =>
       item.id === ('verify-step' as unknown as typeof item.id)
@@ -86,8 +86,15 @@ describe('compileRecipeToWorkflow — failure modes', () => {
     );
     const broken = { ...recipe, items: itemsCopy } as unknown as typeof recipe;
     expect(() => compileRecipeToWorkflow(broken)).toThrow(
-      /runner only supports verification writing build\.verification@v1/,
+      /runner supports verification writing build\.verification@v1 or fix\.verification@v1/,
     );
+  });
+
+  it('accepts the active Fix recipe (verify-step writes fix.verification@v1)', () => {
+    const fixRecipe = WorkflowRecipe.parse(
+      JSON.parse(readFileSync('specs/workflow-recipes/fix.recipe.json', 'utf8')),
+    );
+    expect(() => compileRecipeToWorkflow(fixRecipe)).not.toThrow();
   });
 
   it('throws if a checkpoint step writes a non-build.brief artifact', () => {

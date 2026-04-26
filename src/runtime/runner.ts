@@ -29,6 +29,7 @@ import {
   ExploreReviewVerdict,
   ExploreSynthesis,
 } from '../schemas/artifacts/explore.js';
+import { FixBrief } from '../schemas/artifacts/fix.js';
 import {
   ReviewDispatchResult,
   ReviewResult,
@@ -1081,16 +1082,26 @@ function tryWriteRegisteredSynthesisArtifact(input: SynthesisWriterInput): boole
   }
 
   if (schemaName === 'explore.result@v1') {
+    // Reading brief here is what makes the close-with-evidence primitive's
+    // contract honest: the primitive claims brief is needed to honestly close
+    // (alternative_input_contracts include workflow.brief@v1 in every set), the
+    // recipe declares brief in close-step input, and the compiler emits it in
+    // reads. The summary references brief.subject so the explore.result is
+    // self-contained — a downstream consumer can read this artifact and
+    // immediately know what was investigated, the recommendation, and the
+    // verdict snapshot without needing to open brief.json.
+    const briefPath = requiredCloseReadForSchema(workflow, step, 'explore.brief@v1');
     const synthesisPath = requiredCloseReadForSchema(workflow, step, 'explore.synthesis@v1');
     const reviewVerdictPath = requiredCloseReadForSchema(
       workflow,
       step,
       'explore.review-verdict@v1',
     );
+    const brief = ExploreBrief.parse(readJsonArtifact(runRoot, briefPath));
     const synthesis = ExploreSynthesis.parse(readJsonArtifact(runRoot, synthesisPath));
     const reviewVerdict = ExploreReviewVerdict.parse(readJsonArtifact(runRoot, reviewVerdictPath));
     const artifact = ExploreResult.parse({
-      summary: `Explore recommendation: ${synthesis.recommendation}`,
+      summary: `Explore '${brief.subject}': ${synthesis.recommendation}`,
       verdict_snapshot: {
         synthesis_verdict: synthesis.verdict,
         review_verdict: reviewVerdict.verdict,
@@ -1109,6 +1120,31 @@ function tryWriteRegisteredSynthesisArtifact(input: SynthesisWriterInput): boole
   return false;
 }
 
+// Resolves the verification command list for a verification step. Build
+// runs verification off `build.plan@v1` because the plan step lifts brief
+// candidates into a deliberate, gate-able command list. Fix has no plan
+// step — the brief itself carries the verification commands directly.
+// Both artifacts converge on the same shape (FixVerificationCommand
+// === BuildVerificationCommand), so the writer body downstream stays
+// identical.
+function loadVerificationCommands(
+  runRoot: string,
+  workflow: Workflow,
+  step: Workflow['steps'][number] & { kind: 'verification' },
+): BuildPlan['verification']['commands'] {
+  if (step.writes.artifact.schema === 'build.verification@v1') {
+    const planPath = requiredReadForSchema(workflow, step, 'build.plan@v1');
+    const plan = BuildPlan.parse(readJsonArtifact(runRoot, planPath));
+    return plan.verification.commands;
+  }
+  if (step.writes.artifact.schema === 'fix.verification@v1') {
+    const briefPath = requiredReadForSchema(workflow, step, 'fix.brief@v1');
+    const brief = FixBrief.parse(readJsonArtifact(runRoot, briefPath));
+    return brief.verification_command_candidates;
+  }
+  throw new Error(`verification step '${step.id}' has unsupported artifact schema`);
+}
+
 function writeVerificationArtifact(input: {
   readonly runRoot: string;
   readonly workflow: Workflow;
@@ -1116,12 +1152,8 @@ function writeVerificationArtifact(input: {
   readonly projectRoot: string;
 }): BuildVerification {
   const { runRoot, workflow, step, projectRoot } = input;
-  if (step.writes.artifact.schema !== 'build.verification@v1') {
-    throw new Error(`verification step '${step.id}' has unsupported artifact schema`);
-  }
-  const planPath = requiredReadForSchema(workflow, step, 'build.plan@v1');
-  const plan = BuildPlan.parse(readJsonArtifact(runRoot, planPath));
-  const commandResults = plan.verification.commands.map((command) => {
+  const commands = loadVerificationCommands(runRoot, workflow, step);
+  const commandResults = commands.map((command) => {
     const started = Date.now();
     const result = spawnSync(command.argv[0] as string, command.argv.slice(1), {
       cwd: resolveProjectRelativeCwd(projectRoot, command.cwd),

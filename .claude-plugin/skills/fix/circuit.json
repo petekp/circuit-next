@@ -190,7 +190,7 @@
       "id": "fix-verify",
       "title": "Verify — run Fix proof",
       "protocol": "fix-verify@v1",
-      "reads": ["artifacts/fix/change.json"],
+      "reads": ["artifacts/fix/brief.json", "artifacts/fix/change.json"],
       "routes": {
         "pass": "fix-review"
       },
@@ -199,7 +199,7 @@
       "writes": {
         "artifact": {
           "path": "artifacts/fix/verification.json",
-          "schema": "build.verification@v1"
+          "schema": "fix.verification@v1"
         }
       },
       "gate": {
