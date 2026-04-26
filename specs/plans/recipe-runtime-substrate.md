@@ -1,10 +1,10 @@
 ---
 plan: recipe-runtime-substrate
 status: challenger-pending
-revision: 06
+revision: 07
 opened_at: 2026-04-26
 opened_in_session: recipe-runtime-substrate-arc-open
-base_commit: c099739b1cf85b20b96738ef08ec214e4fca5648
+base_commit: e741a6709f704d518c343a9f71be9b1a17ffed32
 target: recipe-substrate
 authority:
   - specs/methodology/decision.md
@@ -36,6 +36,7 @@ prior_challenger_passes:
   - specs/reviews/recipe-runtime-substrate-codex-challenger-03.md
   - specs/reviews/recipe-runtime-substrate-codex-challenger-04.md
   - specs/reviews/recipe-runtime-substrate-codex-challenger-05.md
+  - specs/reviews/recipe-runtime-substrate-codex-challenger-06.md
 ---
 
 # Recipe Runtime Substrate Plan
@@ -756,8 +757,9 @@ the primitive layer fully generic.
     `execution.kind` per the §5 binding rule (synthesis|verification
     ↔ schema_sections; dispatch ↔ result_verdict; checkpoint ↔
     checkpoint_selection). The Fix backfill exercises this binding
-    across all 12 Fix recipe items (4 synthesis, 4 verification, 3
-    dispatch, 1 checkpoint). The structural invariant that the SAME
+    across all 12 Fix recipe items (6 synthesis, 4 dispatch, 1
+    verification, 1 checkpoint per
+    `specs/workflow-recipes/fix-candidate.recipe.json:54-336`). The structural invariant that the SAME
     PRIMITIVE (`human-decision`, `batch`) can back distinct items
     with distinct gate kinds is grounded in E22 / E24 (the primitive
     layer is fully generic; gate kind lives at recipe-item layer)
@@ -876,12 +878,27 @@ exactly where boundary drift would surface.
 
 **Acceptance evidence.**
 
-- Two prong reviews land under `specs/reviews/`:
-  - `recipe-runtime-substrate-arc-close-claude-composition-adversary.md`
-  - `recipe-runtime-substrate-arc-close-codex-cross-model-challenger.md`
+- Two prong reviews land under `specs/reviews/` named per the
+  audit's arc-close composition-review filename convention
+  (`scripts/audit.mjs:5041-5042`
+  `ARC_CLOSE_COMPOSITION_REVIEW_FILENAME_PATTERN` =
+  `/^arc-.+-composition-review-(?:claude|codex)\.md$/i`):
+  - `arc-recipe-runtime-substrate-composition-review-claude.md`
+    (Claude-prong; surveys the substrate widening against the
+    primitive catalog × Fix recipe join, the prerequisite-arc
+    parse-acceptance dependency, and the F1/F2/F3 anti-drift
+    invariants).
+  - `arc-recipe-runtime-substrate-composition-review-codex.md`
+    (Codex-prong; independent external review of the same surface).
 
-  The two filenames satisfy the Slice-40 fold-in convention: one
-  filename matches `*claude*`, the other matches `*codex*`.
+  The two filenames satisfy BOTH the Slice-40 fold-in two-prong
+  convention (one `*claude*`, one `*codex*`) AND audit Check 35's
+  arc-subsumption shape (i) (per
+  `ARC_CLOSE_COMPOSITION_REVIEW_FILENAME_PATTERN` at
+  `scripts/audit.mjs:5041-5042` plus `validateArcSubsumptionEvidence`
+  at `scripts/audit.mjs:5124-5145`), so ceremony commits can satisfy
+  both Check 26 and Check 35 via the same review pair without a
+  separate per-slice Codex review record.
 - Both prongs return ACCEPT or ACCEPT-WITH-FOLD-INS, with any
   fold-ins merged before close.
 - A new exported constant in `scripts/audit.mjs` named
@@ -894,11 +911,15 @@ exactly where boundary drift would surface.
   - `description: 'Recipe Runtime Substrate Arc (Slices A, D)'`,
   - `ceremony_slice: RECIPE_RUNTIME_SUBSTRATE_ARC_CEREMONY_SLICE`,
   - `plan_path: 'specs/plans/recipe-runtime-substrate.md'`,
-  - `review_file_regex: /recipe-runtime-substrate-arc-close-(claude-composition-adversary|codex-cross-model-challenger)/i`.
+  - `review_file_regex: /^arc-recipe-runtime-substrate-composition-review-(?:claude|codex)\.md$/i`
+    (arc-bound subset of `ARC_CLOSE_COMPOSITION_REVIEW_FILENAME_PATTERN`,
+    matching exactly the two prong files).
 - The audit-test surface that covers `ARC_CLOSE_GATES` gains
   assertions for the new entry: gate fires at the ceremony slice
   marker; regex matches both prong files; regex does not match
-  per-slice review records.
+  per-slice review records. Slice D's audit-test updates cover BOTH
+  `ARC_CLOSE_GATES` entry behavior (Check 26) AND Check 35
+  arc-subsumption-shape acceptance for the new prong filenames.
 - Same-commit staging discipline holds: the ceremony commit stages
   both prong files, the new constant, the new gate entry, the
   audit-test updates, AND advances `current_slice` in
