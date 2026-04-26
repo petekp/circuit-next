@@ -14,8 +14,7 @@ import {
 } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import type { BuiltInAdapter, DispatchResolutionSource } from '../schemas/adapter.js';
-import { BuildBrief, BuildPlan, BuildVerification } from '../schemas/artifacts/build.js';
-import { FixBrief, FixVerification } from '../schemas/artifacts/fix.js';
+import { BuildBrief } from '../schemas/artifacts/build.js';
 import { LayeredConfig, type LayeredConfig as LayeredConfigValue } from '../schemas/config.js';
 import type { Event, RunClosedOutcome } from '../schemas/event.js';
 import type { InvocationId, RunId, WorkflowId } from '../schemas/ids.js';
@@ -29,6 +28,7 @@ import { Workflow } from '../schemas/workflow.js';
 import { materializeDispatch } from './adapters/dispatch-materializer.js';
 import { type AdapterDispatchInput, type DispatchResult, sha256Hex } from './adapters/shared.js';
 import { parseArtifact } from './artifact-schemas.js';
+import { findCheckpointBriefBuilder } from './checkpoint-writers/registry.js';
 import { findCloseBuilder, resolveCloseReadPaths } from './close-writers/registry.js';
 import { readRunLog } from './event-log-reader.js';
 import { appendEvent, eventLogPath } from './event-writer.js';
@@ -43,6 +43,7 @@ import { resolveRunRelative } from './run-relative-path.js';
 import { resolveSelectionForDispatch } from './selection-resolver.js';
 import { writeDerivedSnapshot } from './snapshot-writer.js';
 import { findSynthesisBuilder, resolveSynthesisReadPaths } from './synthesis-writers/registry.js';
+import { findVerificationWriter } from './verification-writers/registry.js';
 
 // Slice 27c landed the runtime-boundary writer/reducer/manifest surfaces
 // below bootstrapRun/appendAndDerive. Slice 27d composes them into the
@@ -194,10 +195,6 @@ export interface SynthesisWriterInput {
   readonly step: Workflow['steps'][number] & { kind: 'synthesis' };
   readonly goal: string;
 }
-
-type ArtifactWritingStep = Workflow['steps'][number] & {
-  readonly writes: { readonly artifact: { readonly schema: string; readonly path: string } };
-};
 
 export type SynthesisWriterFn = (input: SynthesisWriterInput) => void;
 
@@ -861,41 +858,6 @@ function readCheckpointBuildBrief(input: {
   return brief;
 }
 
-function artifactPathForSchema(workflow: Workflow, schemaName: string): string {
-  const matches = workflow.steps.filter(
-    (candidate) => candidate.writes.artifact?.schema === schemaName,
-  );
-  if (matches.length !== 1) {
-    throw new Error(
-      `artifact schema '${schemaName}' must be written by exactly one workflow step, found ${matches.length}`,
-    );
-  }
-  const match = matches[0];
-  if (match === undefined) {
-    throw new Error(`artifact schema '${schemaName}' matched no workflow step`);
-  }
-  const artifact = match.writes.artifact;
-  if (artifact === undefined) {
-    throw new Error(`artifact schema '${schemaName}' matched a step without an artifact writer`);
-  }
-  return artifact.path as unknown as string;
-}
-
-function requiredReadForSchema(
-  workflow: Workflow,
-  step: ArtifactWritingStep,
-  schemaName: string,
-  stepLabel = 'step',
-): string {
-  const path = artifactPathForSchema(workflow, schemaName);
-  if (!step.reads.includes(path as never)) {
-    throw new Error(
-      `${step.writes.artifact.schema} requires ${stepLabel} '${step.id}' to read ${path}`,
-    );
-  }
-  return path;
-}
-
 function tryWriteRegisteredSynthesisArtifact(input: SynthesisWriterInput): boolean {
   const { runRoot, workflow, step, goal } = input;
   const schemaName = step.writes.artifact.schema;
@@ -941,41 +903,26 @@ function tryWriteRegisteredSynthesisArtifact(input: SynthesisWriterInput): boole
   return false;
 }
 
-// Resolves the verification command list for a verification step. Build
-// runs verification off `build.plan@v1` because the plan step lifts brief
-// candidates into a deliberate, gate-able command list. Fix has no plan
-// step — the brief itself carries the verification commands directly.
-// Both artifacts converge on the same shape (FixVerificationCommand
-// === BuildVerificationCommand), so the writer body downstream stays
-// identical.
-function loadVerificationCommands(
-  runRoot: string,
-  workflow: Workflow,
-  step: Workflow['steps'][number] & { kind: 'verification' },
-): BuildPlan['verification']['commands'] {
-  if (step.writes.artifact.schema === 'build.verification@v1') {
-    const planPath = requiredReadForSchema(workflow, step, 'build.plan@v1');
-    const plan = BuildPlan.parse(readJsonArtifact(runRoot, planPath));
-    return plan.verification.commands;
-  }
-  if (step.writes.artifact.schema === 'fix.verification@v1') {
-    const briefPath = requiredReadForSchema(workflow, step, 'fix.brief@v1');
-    const brief = FixBrief.parse(readJsonArtifact(runRoot, briefPath));
-    return brief.verification_command_candidates;
-  }
-  throw new Error(`verification step '${step.id}' has unsupported artifact schema`);
-}
-
+// Verification step driver. Sources commands from the registered
+// VerificationBuilder, executes them via spawnSync, and asks the same
+// builder to assemble the result artifact. The builder owns all
+// workflow-specific logic; the runner owns subprocess execution and
+// summarization. Adding a new workflow's verification step means
+// adding a builder file under src/runtime/verification-writers/, no
+// edits here.
 function writeVerificationArtifact(input: {
   readonly runRoot: string;
   readonly workflow: Workflow;
   readonly step: Workflow['steps'][number] & { kind: 'verification' };
   readonly projectRoot: string;
-}): BuildVerification | FixVerification {
+}): { readonly overall_status: 'passed' | 'failed' } {
   const { runRoot, workflow, step, projectRoot } = input;
-  const commands = loadVerificationCommands(runRoot, workflow, step);
-  const isFix = step.writes.artifact.schema === 'fix.verification@v1';
-  const commandResults = commands.map((command) => {
+  const builder = findVerificationWriter(step.writes.artifact.schema);
+  if (builder === undefined) {
+    throw new Error(`verification step '${step.id}' has unsupported artifact schema`);
+  }
+  const commands = builder.loadCommands({ runRoot, workflow, step });
+  const observations = commands.map((command) => {
     const started = Date.now();
     const result = spawnSync(command.argv[0] as string, command.argv.slice(1), {
       cwd: resolveProjectRelativeCwd(projectRoot, command.cwd),
@@ -988,16 +935,14 @@ function writeVerificationArtifact(input: {
     const durationMs = Math.max(0, Date.now() - started);
     const exitCode =
       typeof result.status === 'number' && result.error === undefined ? result.status : 1;
-    const status = exitCode === 0 ? 'passed' : 'failed';
+    const status: 'passed' | 'failed' = exitCode === 0 ? 'passed' : 'failed';
     const stderrParts = [
       typeof result.stderr === 'string' ? result.stderr : '',
       result.error === undefined ? '' : result.error.message,
       result.signal === null ? '' : `signal: ${result.signal}`,
     ].filter((part) => part.length > 0);
-    const baseResult = {
-      command_id: command.id,
-      argv: command.argv,
-      cwd: command.cwd,
+    return {
+      command,
       exit_code: exitCode,
       status,
       duration_ms: durationMs,
@@ -1007,38 +952,23 @@ function writeVerificationArtifact(input: {
       ),
       stderr_summary: summarizeOutput(stderrParts.join('\n'), command.max_output_bytes),
     };
-    // Fix's verification result schema is wider: it carries timeout_ms,
-    // max_output_bytes, env so the result is self-contained as repro
-    // evidence even if the brief is later edited. Build's verification
-    // result is intentionally narrower.
-    return isFix
-      ? {
-          ...baseResult,
-          timeout_ms: command.timeout_ms,
-          max_output_bytes: command.max_output_bytes,
-          env: command.env,
-        }
-      : baseResult;
   });
-  const overallStatus = commandResults.some((command) => command.status === 'failed')
-    ? 'failed'
-    : 'passed';
-  if (isFix) {
-    const artifact = FixVerification.parse({
-      overall_status: overallStatus,
-      commands: commandResults,
-    });
-    writeJsonArtifact(runRoot, step.writes.artifact.path, artifact);
-    return artifact;
-  }
-  const artifact = BuildVerification.parse({
-    overall_status: overallStatus,
-    commands: commandResults,
-  });
+  // Each VerificationBuilder validates with its own Zod schema and
+  // returns the parsed artifact. The runner only needs overall_status
+  // for gate evaluation, so the return is narrowed to that shape.
+  const artifact = builder.buildResult(observations) as {
+    readonly overall_status: 'passed' | 'failed';
+  };
   writeJsonArtifact(runRoot, step.writes.artifact.path, artifact);
   return artifact;
 }
 
+// Checkpoint artifact writer. Most checkpoints don't write artifacts;
+// when they do, a registered CheckpointBriefBuilder owns the workflow-
+// specific assembly. Adding a new workflow's checkpoint-with-artifact
+// means adding a builder under src/runtime/checkpoint-writers/, no
+// edits here. The policy schema in src/schemas/step.ts may also need
+// to grow a new template field for that workflow.
 function writeCheckpointOwnedArtifact(input: {
   readonly runRoot: string;
   readonly step: CheckpointWorkflowStep;
@@ -1048,35 +978,17 @@ function writeCheckpointOwnedArtifact(input: {
 }): void {
   const artifact = input.step.writes.artifact;
   if (artifact === undefined) return;
-  if (artifact.schema !== 'build.brief@v1') {
+  const builder = findCheckpointBriefBuilder(artifact.schema);
+  if (builder === undefined) {
     throw new Error(`checkpoint step '${input.step.id}' has unsupported artifact schema`);
   }
-  const template = input.step.policy.build_brief;
-  if (template === undefined) {
-    throw new Error(
-      `checkpoint step '${input.step.id}' writing build.brief@v1 requires policy.build_brief`,
-    );
-  }
-  const body =
-    input.existingBrief === undefined
-      ? BuildBrief.parse({
-          objective: input.goal,
-          scope: template.scope,
-          success_criteria: template.success_criteria,
-          verification_command_candidates: template.verification_command_candidates,
-          checkpoint: {
-            request_path: input.step.writes.request,
-            ...(input.responsePath === undefined ? {} : { response_path: input.responsePath }),
-            allowed_choices: checkpointChoiceIds(input.step),
-          },
-        })
-      : BuildBrief.parse({
-          ...input.existingBrief,
-          checkpoint: {
-            ...input.existingBrief.checkpoint,
-            ...(input.responsePath === undefined ? {} : { response_path: input.responsePath }),
-          },
-        });
+  const body = builder.build({
+    runRoot: input.runRoot,
+    step: input.step,
+    goal: input.goal,
+    ...(input.responsePath === undefined ? {} : { responsePath: input.responsePath }),
+    ...(input.existingBrief === undefined ? {} : { existingArtifact: input.existingBrief }),
+  });
   writeJsonArtifact(input.runRoot, artifact.path, body);
 }
 
@@ -1375,7 +1287,12 @@ async function executeDogfood(ctx: DogfoodExecutionContext): Promise<DogfoodRunR
         outcome: 'pass',
       });
     } else if (step.kind === 'verification') {
-      let verification: BuildVerification;
+      // VerificationBuilders return workflow-specific shapes
+      // (BuildVerification, FixVerification, etc.). The runner only
+      // needs `overall_status` to drive gate evaluation; both shapes
+      // have it. The narrow type captures exactly what the runner
+      // accesses, keeping the dispatch path workflow-agnostic.
+      let verification: { readonly overall_status: 'passed' | 'failed' };
       try {
         if (ctx.projectRoot === undefined) {
           throw new Error(
