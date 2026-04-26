@@ -1,22 +1,22 @@
 # HANDOFF
 
-Last updated: 2026-04-26 (orphan primitives exercised, close-with-evidence refactored to a workflow-agnostic registry, schema layer story documented).
+Last updated: 2026-04-26 (synthesis writers also extracted to a workflow-agnostic registry — runner.ts is now fully workflow-agnostic).
 
 ## Architectural state of play
 
-After today's session, runner.ts contains zero workflow-specific
-knowledge in the close path. Close-with-evidence is the most-repeated
-pattern in the substrate — the refactor proves "primitives compose":
-adding a new workflow's close means adding a CloseBuilder file and a
-registry entry. No edits to runner.ts.
+**runner.ts has zero workflow-specific knowledge in any synthesis path
+— close OR upstream.** Adding a new workflow means writing per-workflow
+schemas, builders, and a recipe. No runner.ts edits. The two registries
+under `src/runtime/close-writers/` and `src/runtime/synthesis-writers/`
+own all workflow-specific assembly logic.
 
 The orphan-primitive exercisers proved the substrate is permissive:
 all five unexercised primitives (queue, batch, risk-rollback-check,
 human-decision, handoff) compose without runtime code via the
 placeholder synthesis fallback. New workflows can compose with
-placeholder writers, then upgrade to real CloseBuilders when needed.
+placeholder writers, then upgrade to real builders when needed.
 
-The schema layer decision is now codified in
+The schema layer decision is codified in
 `specs/workflow-recipe-composition.md`: primitive contracts are
 nominal, per-workflow schemas are structural, recipe `contract_aliases`
 bridge them. Both layers are load-bearing.
@@ -119,7 +119,7 @@ entry — no edits to runner.ts.
 `tests/runner/close-builder-registry.test.ts` proves the contract
 with a synthetic builder.
 
-### Schema layer documented (this commit)
+### Schema layer documented (commit `000ed1a`)
 
 Two layers are load-bearing: nominal primitive contracts in the
 catalog, structural per-workflow schemas in
@@ -128,7 +128,19 @@ in `specs/workflow-recipe-composition.md`. The close-writer refactor
 confirmed the design: each builder uses workflow-specific schemas and
 benefits from their type safety.
 
-`npm run verify` passes: 833 tests (6 skipped), tsc clean, biome
+### Synthesis writer registry (commit `cea8f7d`)
+
+Six inline synthesis writers (build.plan, explore.brief,
+explore.analysis, review.intake, review.result, fix.brief) extracted
+to `src/runtime/synthesis-writers/<schema>.ts` modules and registered
+by output schema name. runner.ts dispatches via findSynthesisBuilder.
+The runner now has zero workflow-specific knowledge in any synthesis
+path — close OR upstream.
+`tests/runner/synthesis-builder-registry.test.ts` proves the contract
+with a synthetic builder running end-to-end through runDogfood with
+no runner.ts edits.
+
+`npm run verify` passes: 836 tests (6 skipped), tsc clean, biome
 clean, build clean, drift check clean across all 5 emitted Workflows.
 
 ## What's next
@@ -141,23 +153,14 @@ clean, build clean, drift check clean across all 5 emitted Workflows.
      `src/schemas/artifacts/<workflow>.ts`.
    - Register dispatch-materialized schemas in
      `src/runtime/artifact-schemas.ts` REGISTRY.
-   - Add a CloseBuilder in `src/runtime/close-writers/<workflow>.ts`
-     and register it in `close-writers/registry.ts`. (No more
-     runner.ts edits for close.)
-   - For brief/intermediate synthesis writers, still inline in
-     runner.ts. Future work: generalize those to the same registry
-     pattern as close.
+   - Add SynthesisBuilders in `src/runtime/synthesis-writers/` and a
+     CloseBuilder in `src/runtime/close-writers/`, registered in each
+     directory's registry.ts. **No runner.ts edits.**
    - Author `<workflow>.recipe.json` in `specs/workflow-recipes/`,
      declare contract aliases.
    - Add the recipe to `RECIPES` in `scripts/emit-workflows.mjs`.
    - `npm run emit-workflows`.
-2. **Generalize the synthesis writer registry** beyond just close.
-   The pattern works for close because every workflow has exactly one
-   close artifact. For brief/plan/intermediate synthesis writers, the
-   same registry approach would let workflows compose without runner.ts
-   edits at all. Some scaffolding is needed: a CommonInputContext
-   beyond just the close-step.
-3. **Dispatch envelope split** — verdict-in-artifact stays for now.
+2. **Dispatch envelope split** — verdict-in-artifact stays for now.
    Evaluated and deferred: dispatch steps have a `result_verdict` gate
    by Workflow contract, so the artifact necessarily carries verdict.
    Splitting envelope from body would require introducing a new
@@ -167,7 +170,7 @@ clean, build clean, drift check clean across all 5 emitted Workflows.
    `FixReview.verdict` for outcome rules,
    `ExploreReviewVerdict.verdict` for verdict_snapshot). Reconsider if
    we hit a real friction point.
-4. **Verification-plan contract** is currently an initial-contract
+3. **Verification-plan contract** is currently an initial-contract
    placeholder. The Fix recipe declares
    `proof: verification.plan@v1` to satisfy the run-verification
    primitive contract, but the runtime sources commands from
