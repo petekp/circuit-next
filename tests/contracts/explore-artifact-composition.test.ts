@@ -9,6 +9,7 @@ const REPO_ROOT = resolve('.');
 const EXPLORE_FIXTURE_PATH = join(REPO_ROOT, '.claude-plugin/skills/explore/circuit.json');
 const ARTIFACTS_PATH = join(REPO_ROOT, 'specs/artifacts.json');
 const RUNNER_PATH = join(REPO_ROOT, 'src/runtime/runner.ts');
+const EXPLORE_CLOSE_BUILDER_PATH = join(REPO_ROOT, 'src/runtime/close-writers/explore.ts');
 
 type ArtifactRow = {
   id: string;
@@ -123,7 +124,18 @@ describe('P2.10 artifact-schema composition seam', () => {
 
       if ('requiredFields' in spec) {
         expect(step.gate.required).toEqual([...spec.requiredFields]);
-        expect(runnerSource).toContain(`schemaName === '${spec.schemaName}'`);
+        // Synthesis writer support — synthesized artifacts are produced
+        // either by an inline writer in runner.ts or by a close-with-
+        // evidence builder registered under src/runtime/close-writers/.
+        // For the explore.result@v1 close, the support lives in the
+        // close-writer module; for the rest of explore's synthesized
+        // schemas, runner.ts still owns the writer inline.
+        if (spec.schemaName === 'explore.result@v1') {
+          const closeSource = readFileSync(EXPLORE_CLOSE_BUILDER_PATH, 'utf8');
+          expect(closeSource).toContain(`'${spec.schemaName}'`);
+        } else {
+          expect(runnerSource).toContain(`schemaName === '${spec.schemaName}'`);
+        }
         expect(parseArtifact(spec.schemaName, '{}').kind).toBe('fail');
       }
 

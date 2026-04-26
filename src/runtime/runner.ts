@@ -14,31 +14,9 @@ import {
 } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import type { BuiltInAdapter, DispatchResolutionSource } from '../schemas/adapter.js';
-import {
-  BuildBrief,
-  BuildImplementation,
-  BuildPlan,
-  BuildResult,
-  BuildReview,
-  BuildVerification,
-} from '../schemas/artifacts/build.js';
-import {
-  ExploreAnalysis,
-  ExploreBrief,
-  ExploreResult,
-  ExploreReviewVerdict,
-  ExploreSynthesis,
-} from '../schemas/artifacts/explore.js';
-import {
-  FixBrief,
-  FixChange,
-  FixContext,
-  FixDiagnosis,
-  FixResult,
-  type FixResultArtifactPointer,
-  FixReview,
-  FixVerification,
-} from '../schemas/artifacts/fix.js';
+import { BuildBrief, BuildPlan, BuildVerification } from '../schemas/artifacts/build.js';
+import { ExploreAnalysis, ExploreBrief } from '../schemas/artifacts/explore.js';
+import { FixBrief, FixVerification } from '../schemas/artifacts/fix.js';
 import {
   ReviewDispatchResult,
   ReviewResult,
@@ -57,6 +35,7 @@ import { Workflow } from '../schemas/workflow.js';
 import { materializeDispatch } from './adapters/dispatch-materializer.js';
 import { type AdapterDispatchInput, type DispatchResult, sha256Hex } from './adapters/shared.js';
 import { parseArtifact } from './artifact-schemas.js';
+import { findCloseBuilder, resolveCloseReadPaths } from './close-writers/registry.js';
 import { readRunLog } from './event-log-reader.js';
 import { appendEvent, eventLogPath } from './event-writer.js';
 import {
@@ -894,36 +873,6 @@ function readCheckpointBuildBrief(input: {
 }
 
 const EXPLORE_BRIEF_ARTIFACT_PATH = 'artifacts/brief.json';
-const BUILD_RESULT_ARTIFACT_POINTERS = [
-  { artifact_id: 'build.brief', schema: 'build.brief@v1' },
-  { artifact_id: 'build.plan', schema: 'build.plan@v1' },
-  {
-    artifact_id: 'build.implementation',
-    schema: 'build.implementation@v1',
-  },
-  {
-    artifact_id: 'build.verification',
-    schema: 'build.verification@v1',
-  },
-  { artifact_id: 'build.review', schema: 'build.review@v1' },
-] as const;
-const EXPLORE_ARTIFACT_POINTERS = [
-  { artifact_id: 'explore.brief', schema: 'explore.brief@v1' },
-  { artifact_id: 'explore.analysis', schema: 'explore.analysis@v1' },
-  { artifact_id: 'explore.synthesis', schema: 'explore.synthesis@v1' },
-  { artifact_id: 'explore.review-verdict', schema: 'explore.review-verdict@v1' },
-] as const;
-const FIX_REQUIRED_ARTIFACT_POINTERS = [
-  { artifact_id: 'fix.brief', schema: 'fix.brief@v1' },
-  { artifact_id: 'fix.context', schema: 'fix.context@v1' },
-  { artifact_id: 'fix.diagnosis', schema: 'fix.diagnosis@v1' },
-  { artifact_id: 'fix.change', schema: 'fix.change@v1' },
-  { artifact_id: 'fix.verification', schema: 'fix.verification@v1' },
-] as const;
-const FIX_OPTIONAL_REVIEW_POINTER = {
-  artifact_id: 'fix.review',
-  schema: 'fix.review@v1',
-} as const;
 const DEFAULT_FIX_VERIFICATION_COMMAND = {
   id: 'fix-proof',
   cwd: '.',
@@ -978,33 +927,6 @@ function artifactPathForSchema(workflow: Workflow, schemaName: string): string {
   return artifact.path as unknown as string;
 }
 
-function requiredCloseReadForSchema(
-  workflow: Workflow,
-  closeStep: ArtifactWritingStep,
-  schemaName: string,
-): string {
-  return requiredReadForSchema(workflow, closeStep, schemaName, 'close step');
-}
-
-function workflowHasArtifactSchema(workflow: Workflow, schemaName: string): boolean {
-  return workflow.steps.some((candidate) => candidate.writes.artifact?.schema === schemaName);
-}
-
-// Returns the read path for `schemaName` if (a) the workflow has a step that
-// writes that schema and (b) the close step lists the path in its reads.
-// Used by close writers that handle a schema only when it's wired into the
-// current Workflow (e.g., Fix lite mode skips review entirely).
-function optionalCloseReadForSchema(
-  workflow: Workflow,
-  closeStep: ArtifactWritingStep,
-  schemaName: string,
-): string | undefined {
-  if (!workflowHasArtifactSchema(workflow, schemaName)) return undefined;
-  const path = artifactPathForSchema(workflow, schemaName);
-  if (!closeStep.reads.includes(path as never)) return undefined;
-  return path;
-}
-
 function requiredReadForSchema(
   workflow: Workflow,
   step: ArtifactWritingStep,
@@ -1034,38 +956,6 @@ function tryWriteRegisteredSynthesisArtifact(input: SynthesisWriterInput): boole
       verification: {
         commands: brief.verification_command_candidates,
       },
-    });
-    writeJsonArtifact(runRoot, step.writes.artifact.path, artifact);
-    return true;
-  }
-
-  if (schemaName === 'build.result@v1') {
-    const briefPath = requiredCloseReadForSchema(workflow, step, 'build.brief@v1');
-    const planPath = requiredCloseReadForSchema(workflow, step, 'build.plan@v1');
-    const implementationPath = requiredCloseReadForSchema(
-      workflow,
-      step,
-      'build.implementation@v1',
-    );
-    const verificationPath = requiredCloseReadForSchema(workflow, step, 'build.verification@v1');
-    const reviewPath = requiredCloseReadForSchema(workflow, step, 'build.review@v1');
-    const brief = BuildBrief.parse(readJsonArtifact(runRoot, briefPath));
-    BuildPlan.parse(readJsonArtifact(runRoot, planPath));
-    const implementation = BuildImplementation.parse(readJsonArtifact(runRoot, implementationPath));
-    const verification = BuildVerification.parse(readJsonArtifact(runRoot, verificationPath));
-    const review = BuildReview.parse(readJsonArtifact(runRoot, reviewPath));
-    const artifact = BuildResult.parse({
-      summary: `Build result for ${brief.objective}: ${implementation.summary}`,
-      outcome:
-        verification.overall_status === 'passed' && review.verdict !== 'reject'
-          ? 'complete'
-          : 'failed',
-      verification_status: verification.overall_status,
-      review_verdict: review.verdict,
-      artifact_pointers: BUILD_RESULT_ARTIFACT_POINTERS.map((pointer) => ({
-        ...pointer,
-        path: artifactPathForSchema(workflow, pointer.schema),
-      })),
     });
     writeJsonArtifact(runRoot, step.writes.artifact.path, artifact);
     return true;
@@ -1161,111 +1051,23 @@ function tryWriteRegisteredSynthesisArtifact(input: SynthesisWriterInput): boole
     return true;
   }
 
-  if (schemaName === 'fix.result@v1') {
-    // Close-with-evidence for Fix. Reads the typed evidence chain and
-    // synthesizes a deterministic FixResult. Review is optional: lite mode
-    // skips review via route_overrides, so the writer infers review status
-    // from whether fix.review@v1 is in step.reads. Outcome is pinned to
-    // verification + review state per FixResult superRefine constraints.
-    const briefPath = requiredCloseReadForSchema(workflow, step, 'fix.brief@v1');
-    const contextPath = requiredCloseReadForSchema(workflow, step, 'fix.context@v1');
-    const diagnosisPath = requiredCloseReadForSchema(workflow, step, 'fix.diagnosis@v1');
-    const changePath = requiredCloseReadForSchema(workflow, step, 'fix.change@v1');
-    const verificationPath = requiredCloseReadForSchema(workflow, step, 'fix.verification@v1');
-    const brief = FixBrief.parse(readJsonArtifact(runRoot, briefPath));
-    FixContext.parse(readJsonArtifact(runRoot, contextPath));
-    const diagnosis = FixDiagnosis.parse(readJsonArtifact(runRoot, diagnosisPath));
-    const change = FixChange.parse(readJsonArtifact(runRoot, changePath));
-    const verification = FixVerification.parse(readJsonArtifact(runRoot, verificationPath));
-
-    const reviewPath = workflowHasArtifactSchema(workflow, 'fix.review@v1')
-      ? optionalCloseReadForSchema(workflow, step, 'fix.review@v1')
-      : undefined;
-    const review =
-      reviewPath === undefined ? undefined : FixReview.parse(readJsonArtifact(runRoot, reviewPath));
-
-    const verificationStatus = verification.overall_status === 'passed' ? 'passed' : 'failed';
-    const regressionStatus =
-      brief.regression_contract.regression_test.status === 'failing-before-fix'
-        ? 'proved'
-        : 'deferred';
-    const reviewStatus = review === undefined ? 'skipped' : 'completed';
-
-    const outcome: FixResult['outcome'] =
-      diagnosis.reproduction_status === 'not-reproduced'
-        ? 'not-reproduced'
-        : verificationStatus === 'passed' &&
-            regressionStatus === 'proved' &&
-            (review === undefined || review.verdict !== 'reject')
-          ? 'fixed'
-          : verificationStatus === 'passed' && regressionStatus !== 'proved'
-            ? 'partial'
-            : 'failed';
-
-    const pointers: FixResultArtifactPointer[] = FIX_REQUIRED_ARTIFACT_POINTERS.map((pointer) => ({
-      artifact_id: pointer.artifact_id,
-      schema: pointer.schema,
-      path: artifactPathForSchema(workflow, pointer.schema),
-    }));
-    if (review !== undefined) {
-      pointers.push({
-        artifact_id: FIX_OPTIONAL_REVIEW_POINTER.artifact_id,
-        schema: FIX_OPTIONAL_REVIEW_POINTER.schema,
-        path: artifactPathForSchema(workflow, FIX_OPTIONAL_REVIEW_POINTER.schema),
-      });
+  // Close-with-evidence dispatch. Workflow-specific close logic lives in
+  // src/runtime/close-writers/<workflow>.ts and is registered by result
+  // schema name. The runner stays workflow-agnostic — adding a new close
+  // means adding a CloseBuilder file + registry entry, no edits here.
+  const closeBuilder = findCloseBuilder(schemaName);
+  if (closeBuilder !== undefined && step.kind === 'synthesis') {
+    const readPaths = resolveCloseReadPaths(closeBuilder, workflow, step);
+    const inputs: Record<string, unknown | undefined> = {};
+    for (const [name, path] of Object.entries(readPaths)) {
+      inputs[name] = path === undefined ? undefined : readJsonArtifact(runRoot, path);
     }
-
-    const summary = `Fix '${brief.problem_statement}': ${change.summary}`;
-    const residualRisks: string[] = [...diagnosis.residual_uncertainty];
-    const result: FixResult = {
-      summary,
-      outcome,
-      verification_status: verificationStatus,
-      regression_status: regressionStatus,
-      review_status: reviewStatus,
-      ...(review === undefined ? {} : { review_verdict: review.verdict }),
-      ...(review === undefined
-        ? { review_skip_reason: 'Lite mode skipped review per route_overrides.' }
-        : {}),
-      residual_risks: residualRisks,
-      artifact_pointers: pointers,
-    };
-    const artifact = FixResult.parse(result);
-    writeJsonArtifact(runRoot, step.writes.artifact.path, artifact);
-    return true;
-  }
-
-  if (schemaName === 'explore.result@v1') {
-    // Reading brief here is what makes the close-with-evidence primitive's
-    // contract honest: the primitive claims brief is needed to honestly close
-    // (alternative_input_contracts include workflow.brief@v1 in every set), the
-    // recipe declares brief in close-step input, and the compiler emits it in
-    // reads. The summary references brief.subject so the explore.result is
-    // self-contained — a downstream consumer can read this artifact and
-    // immediately know what was investigated, the recommendation, and the
-    // verdict snapshot without needing to open brief.json.
-    const briefPath = requiredCloseReadForSchema(workflow, step, 'explore.brief@v1');
-    const synthesisPath = requiredCloseReadForSchema(workflow, step, 'explore.synthesis@v1');
-    const reviewVerdictPath = requiredCloseReadForSchema(
+    const artifact = closeBuilder.build({
+      runRoot,
       workflow,
-      step,
-      'explore.review-verdict@v1',
-    );
-    const brief = ExploreBrief.parse(readJsonArtifact(runRoot, briefPath));
-    const synthesis = ExploreSynthesis.parse(readJsonArtifact(runRoot, synthesisPath));
-    const reviewVerdict = ExploreReviewVerdict.parse(readJsonArtifact(runRoot, reviewVerdictPath));
-    const artifact = ExploreResult.parse({
-      summary: `Explore '${brief.subject}': ${synthesis.recommendation}`,
-      verdict_snapshot: {
-        synthesis_verdict: synthesis.verdict,
-        review_verdict: reviewVerdict.verdict,
-        objection_count: reviewVerdict.objections.length,
-        missed_angle_count: reviewVerdict.missed_angles.length,
-      },
-      artifact_pointers: EXPLORE_ARTIFACT_POINTERS.map((pointer) => ({
-        ...pointer,
-        path: artifactPathForSchema(workflow, pointer.schema),
-      })),
+      closeStep: step,
+      goal,
+      inputs,
     });
     writeJsonArtifact(runRoot, step.writes.artifact.path, artifact);
     return true;
