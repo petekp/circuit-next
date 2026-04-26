@@ -284,6 +284,49 @@ Users should not be able to define arbitrary new move code in v1. That keeps the
 first custom-workflow surface understandable and lets the built-in catalog
 stabilize before Circuit grows an extension system for new move definitions.
 
+## Schema Layers
+
+Two layers, both load-bearing:
+
+**Primitive contracts** are nominal. They live in
+`specs/workflow-primitive-catalog.json` as named identifiers
+(`workflow.brief@v1`, `verification.result@v1`, `change.evidence@v1`,
+etc.). Primitives declare them as inputs and outputs. They express the
+abstract claim "this primitive needs a brief" without binding to a
+specific shape.
+
+**Per-workflow schemas** are structural. They live in
+`src/schemas/artifacts/<workflow>.ts` as concrete Zod types with
+workflow-specific fields. `BuildBrief.objective` is not the same field
+as `FixBrief.problem_statement`, even though both satisfy the
+`workflow.brief@v1` primitive contract.
+
+**Contract aliases bridge the two.** Each recipe declares an
+`contract_aliases` array, e.g.
+`{ generic: 'workflow.brief@v1', actual: 'fix.brief@v1' }`. The recipe
+compiler uses aliases to validate that a recipe item satisfies its
+primitive's input contract via the workflow-specific schema the recipe
+chose. The runtime uses the workflow-specific schema for actual parsing
+and field access.
+
+Why both layers exist together:
+
+- Primitives compose without binding to specific schemas (a `frame`
+  primitive can be used by any workflow that has a brief).
+- Per-workflow schemas give type safety on workflow-specific fields
+  (Fix's `regression_contract`, Explore's `verdict_snapshot`).
+- Aliases let recipe authors declare exactly what shape they expect.
+
+Adding a new workflow:
+
+1. Define per-workflow schemas in `src/schemas/artifacts/<wf>.ts`.
+2. Declare aliases in the recipe's `contract_aliases`.
+3. Wire recipe items to the schemas via `output` and `input` fields.
+
+The runtime trusts the recipe's alias declarations — there is no
+runtime registry of "which generic ↔ which actual" beyond what each
+recipe says.
+
 ## Open Design Questions
 
 Keep these open until the research is reviewed:
@@ -291,7 +334,5 @@ Keep these open until the research is reviewed:
 1. Should recipes be authored directly as JSON, YAML, or a friendlier format
    that compiles to JSON?
 2. Should recipe items use primitive ids directly, or user-facing aliases?
-3. How much type aliasing should be allowed between workflow-specific artifacts
-   and generic primitive contracts?
-4. How do we show users the recipe clearly without exposing every raw prompt and
+3. How do we show users the recipe clearly without exposing every raw prompt and
    step artifact?

@@ -1,6 +1,27 @@
 # HANDOFF
 
-Last updated: 2026-04-26 (drift trust gaps closed, Fix close primitives shipped, lite Fix runs end-to-end).
+Last updated: 2026-04-26 (orphan primitives exercised, close-with-evidence refactored to a workflow-agnostic registry, schema layer story documented).
+
+## Architectural state of play
+
+After today's session, runner.ts contains zero workflow-specific
+knowledge in the close path. Close-with-evidence is the most-repeated
+pattern in the substrate — the refactor proves "primitives compose":
+adding a new workflow's close means adding a CloseBuilder file and a
+registry entry. No edits to runner.ts.
+
+The orphan-primitive exercisers proved the substrate is permissive:
+all five unexercised primitives (queue, batch, risk-rollback-check,
+human-decision, handoff) compose without runtime code via the
+placeholder synthesis fallback. New workflows can compose with
+placeholder writers, then upgrade to real CloseBuilders when needed.
+
+The schema layer decision is now codified in
+`specs/workflow-recipe-composition.md`: primitive contracts are
+nominal, per-workflow schemas are structural, recipe `contract_aliases`
+bridge them. Both layers are load-bearing.
+
+
 
 ## Where we are
 
@@ -75,37 +96,78 @@ in the test to produce a brief with a no-op verification command,
 `fix-verify` executes that command, and `fix-close-lite` emits a real
 FixResult with `review_status='skipped'`.
 
-`npm run verify` passes: 810 tests (6 skipped), tsc clean, biome
+### Orphan-primitive exercisers (commit `115e28a`)
+
+Exerciser recipes for `queue`, `batch`, `risk-rollback-check`,
+`human-decision`, `handoff` — five primitives in the catalog with no
+active recipe using them. Each exerciser parses through the recipe
+schema, passes catalog-compatibility validation, compiles to a
+Workflow, and runs end-to-end through the runtime. All five succeed
+via the placeholder synthesis fallback (and `safe_autonomous_choice`
+for the human-decision checkpoint). Surfaces a meaningful property of
+the substrate: synthesis-kind orphan primitives compose without
+runtime code.
+
+### Close-with-evidence refactor (commit `78fbaaa`)
+
+Three close writers (build.result, explore.result, fix.result) lived
+inline in runner.ts as if-chains. Now each builder lives in
+`src/runtime/close-writers/<wf>.ts` and is registered by result schema
+name. runner.ts's close path is workflow-agnostic. Adding a new
+workflow's close means adding a CloseBuilder file and a registry
+entry — no edits to runner.ts.
+`tests/runner/close-builder-registry.test.ts` proves the contract
+with a synthetic builder.
+
+### Schema layer documented (this commit)
+
+Two layers are load-bearing: nominal primitive contracts in the
+catalog, structural per-workflow schemas in
+`src/schemas/artifacts/`, recipe `contract_aliases` bridges. Codified
+in `specs/workflow-recipe-composition.md`. The close-writer refactor
+confirmed the design: each builder uses workflow-specific schemas and
+benefits from their type safety.
+
+`npm run verify` passes: 833 tests (6 skipped), tsc clean, biome
 clean, build clean, drift check clean across all 5 emitted Workflows.
 
 ## What's next
 
 1. **Compose Sweep and Migrate next**. The strict primitives
    (`queue`, `batch`, `risk-rollback-check`, `close-with-evidence`,
-   `handoff`) all exist in the catalog. The pattern for adding a new
-   workflow is now established by Fix:
+   `handoff`) all exist in the catalog and are exercised.
+   The pattern for adding a new workflow:
    - Author per-workflow artifact schemas in
      `src/schemas/artifacts/<workflow>.ts`.
    - Register dispatch-materialized schemas in
      `src/runtime/artifact-schemas.ts` REGISTRY.
-   - Add a synthesis writer for the workflow's brief + result schemas
-     in `tryWriteRegisteredSynthesisArtifact` (runner.ts).
-   - Author `<workflow>.recipe.json` in `specs/workflow-recipes/` per
-     the recipe schema; declare contract aliases so generic primitive
-     contracts (`workflow.brief@v1`, `verification.result@v1`, etc.)
-     resolve to per-workflow schema names.
+   - Add a CloseBuilder in `src/runtime/close-writers/<workflow>.ts`
+     and register it in `close-writers/registry.ts`. (No more
+     runner.ts edits for close.)
+   - For brief/intermediate synthesis writers, still inline in
+     runner.ts. Future work: generalize those to the same registry
+     pattern as close.
+   - Author `<workflow>.recipe.json` in `specs/workflow-recipes/`,
+     declare contract aliases.
    - Add the recipe to `RECIPES` in `scripts/emit-workflows.mjs`.
-   - Run `npm run emit-workflows` to produce the compiled
-     `circuit.json` (and `<mode>.json` siblings if the recipe uses
-     `route_overrides`).
-2. **Generic close-with-evidence writer** would be a meaningful
-   refactor: instead of a per-workflow close writer in runner.ts, drive
-   close artifact assembly from a recipe-supplied template (list of
-   source schemas + output template). Not blocking — the per-workflow
-   writer pattern works for now — but worth considering before Sweep
-   and Migrate land their own close writers, otherwise we'll be writing
-   the same shape three times.
-3. **Verification-plan contract** is currently an initial-contract
+   - `npm run emit-workflows`.
+2. **Generalize the synthesis writer registry** beyond just close.
+   The pattern works for close because every workflow has exactly one
+   close artifact. For brief/plan/intermediate synthesis writers, the
+   same registry approach would let workflows compose without runner.ts
+   edits at all. Some scaffolding is needed: a CommonInputContext
+   beyond just the close-step.
+3. **Dispatch envelope split** — verdict-in-artifact stays for now.
+   Evaluated and deferred: dispatch steps have a `result_verdict` gate
+   by Workflow contract, so the artifact necessarily carries verdict.
+   Splitting envelope from body would require introducing a new
+   dispatch kind with non-verdict gates — a larger runtime change. The
+   current pattern is coherent: verdict on a dispatch artifact is the
+   worker's domain answer, used legitimately by close writers (e.g.,
+   `FixReview.verdict` for outcome rules,
+   `ExploreReviewVerdict.verdict` for verdict_snapshot). Reconsider if
+   we hit a real friction point.
+4. **Verification-plan contract** is currently an initial-contract
    placeholder. The Fix recipe declares
    `proof: verification.plan@v1` to satisfy the run-verification
    primitive contract, but the runtime sources commands from
