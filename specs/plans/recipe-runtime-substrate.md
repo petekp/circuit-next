@@ -1,10 +1,10 @@
 ---
 plan: recipe-runtime-substrate
 status: challenger-pending
-revision: 07
+revision: 08
 opened_at: 2026-04-26
 opened_in_session: recipe-runtime-substrate-arc-open
-base_commit: e741a6709f704d518c343a9f71be9b1a17ffed32
+base_commit: 3888d8dd8519e66621c4754974aba7db17c93fd1
 target: recipe-substrate
 authority:
   - specs/methodology/decision.md
@@ -37,6 +37,7 @@ prior_challenger_passes:
   - specs/reviews/recipe-runtime-substrate-codex-challenger-04.md
   - specs/reviews/recipe-runtime-substrate-codex-challenger-05.md
   - specs/reviews/recipe-runtime-substrate-codex-challenger-06.md
+  - specs/reviews/recipe-runtime-substrate-codex-challenger-07.md
 ---
 
 # Recipe Runtime Substrate Plan
@@ -594,7 +595,14 @@ RuntimeStep = z.object({
   protocol id. There is no per-item workflow-kind override; the
   recipe is the workflow-kind authority.
 
-### Failure modes the parsers reject
+### Failure modes the schema or contract surface catches
+
+(Most failures below are rejected at parse time by Zod refinements.
+Two are contract-test drift assertions, not parser rejections, and
+are flagged inline: the WorkflowKind enum-vs-policy equality check
+and the WorkflowKind slug-shape drift check both live in the
+Slice A contract test surface per §8.1, mirroring the test-side
+enforcement chosen for Fix-table parity in §5 Rule 2.)
 
 - Recipe item missing `runtime_step` (required field).
 - Recipe item with `execution.kind === 'checkpoint'` whose
@@ -788,9 +796,13 @@ the primitive layer fully generic.
     is no longer `'fix'`-only; it iterates all four
     `WorkflowKind` values (E25 fold-in).
 - `FIX_RESULT_PATH_BY_ARTIFACT_ID` and
-  `FIX_RESULT_SCHEMA_BY_ARTIFACT_ID` remain in
-  `src/schemas/artifacts/fix.ts` unchanged. The new
-  `runtime_step.write_target` data on Fix recipe items is the
+  `FIX_RESULT_SCHEMA_BY_ARTIFACT_ID` keep their content unchanged
+  (same artifact-id → path/schema mappings, same Fix-only authority
+  scope) but their module surface changes in Slice A: file-local
+  `const`s at `src/schemas/artifacts/fix.ts:4-22` become **named
+  read-only exports** so the Fix-table parity contract test can
+  import them as source-of-truth (per F1 fold-in Rule 2 below). The
+  new `runtime_step.write_target` data on Fix recipe items is the
   recipe-resident parallel surface keyed by recipe item id; the
   Fix-result tables stay as the Fix-protocol view keyed by Fix
   artifact ids. **Cross-surface parity is enforced by Slice A**
@@ -895,8 +907,10 @@ exactly where boundary drift would surface.
   convention (one `*claude*`, one `*codex*`) AND audit Check 35's
   arc-subsumption shape (i) (per
   `ARC_CLOSE_COMPOSITION_REVIEW_FILENAME_PATTERN` at
-  `scripts/audit.mjs:5041-5042` plus `validateArcSubsumptionEvidence`
-  at `scripts/audit.mjs:5124-5145`), so ceremony commits can satisfy
+  `scripts/audit.mjs:5041-5042`, the arc-close validation branch at
+  `scripts/audit.mjs:5080-5117`, and the Check 35 call site that
+  consumes the commit-body `arc-subsumption:` field at
+  `scripts/audit.mjs:5235-5259`), so ceremony commits can satisfy
   both Check 26 and Check 35 via the same review pair without a
   separate per-slice Codex review record.
 - Both prongs return ACCEPT or ACCEPT-WITH-FOLD-INS, with any
@@ -1040,13 +1054,19 @@ The arc is closed when:
    with no `policy.build_brief`). Without this precondition, the
    §5 binding rule "Write-target concretes" parse-acceptance claim
    for checkpoint items is false and substrate F2 cannot be
-   honestly closed. This arc is `blocked pending prerequisite
-   close` until criterion 6 holds.
+   honestly closed. This arc cannot be honestly closed until
+   criterion 6 holds; the bridge-unblock claim (criterion 7)
+   remains deferred until criterion 6 holds. (Plan frontmatter
+   `status:` lifecycle values are unaffected — `status:` follows
+   the ADR-0010 lifecycle: `challenger-pending` →
+   `challenger-cleared` → `operator-signoff` → `closed`. The
+   prerequisite-arc-Slice-A-live gate is an execution-state
+   precondition checked at close time, not a plan-lifecycle status
+   value.)
 7. The compiled-recipe-runtime-bridge plan is unblocked: revision 03
    takes this arc's closing commit as its `base_commit`. The bridge
    plan retains its `prior_challenger_passes` chain and re-dispatches
    Codex challenger against revision 03. Per criterion 6, the
    bridge unblock is contingent on the prerequisite arc Slice A
-   being live in code; while the prerequisite arc Slice A is not
-   yet live, this arc's status is `blocked pending prerequisite
-   close` and the bridge-unblock claim is not asserted.
+   being live in code; the bridge-unblock claim remains deferred
+   until criterion 6 holds.
