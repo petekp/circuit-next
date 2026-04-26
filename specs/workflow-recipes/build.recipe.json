@@ -1,0 +1,135 @@
+{
+  "schema_version": "1",
+  "id": "build",
+  "title": "Build Recipe",
+  "purpose": "Express the Build workflow as a primitive composition. Frame the change brief, plan the implementation, dispatch the implementation, run verification, dispatch the review, and close with the build result. Mirrors .claude-plugin/skills/build/circuit.json (frame -> plan -> act -> verify -> review -> close) using canonical recipe primitives so the substrate can drive Build through runRecipe. The legacy frame-step's checkpoint ask-and-confirm is modeled here as a single frame primitive; an explicit human-decision item is deferred until the host checkpoint adapter lands.",
+  "status": "active",
+  "starts_at": "build-frame",
+  "initial_contracts": ["task.intake@v1", "route.decision@v1", "verification.plan@v1"],
+  "contract_aliases": [],
+  "items": [
+    {
+      "id": "build-frame",
+      "uses": "frame",
+      "title": "Frame the build brief",
+      "phase": "frame",
+      "input": {
+        "task": "task.intake@v1",
+        "route": "route.decision@v1"
+      },
+      "output": "workflow.brief@v1",
+      "evidence_requirements": ["scope boundary", "constraints", "proof plan"],
+      "execution": {
+        "kind": "synthesis"
+      },
+      "routes": {
+        "continue": "build-plan",
+        "stop": "@stop"
+      }
+    },
+    {
+      "id": "build-plan",
+      "uses": "plan",
+      "title": "Produce the build plan",
+      "phase": "plan",
+      "input": {
+        "brief": "workflow.brief@v1"
+      },
+      "output": "plan.strategy@v1",
+      "evidence_requirements": ["ordered steps", "risk notes", "proof strategy"],
+      "execution": {
+        "kind": "dispatch",
+        "role": "implementer"
+      },
+      "routes": {
+        "continue": "build-act",
+        "revise": "build-plan",
+        "stop": "@stop"
+      }
+    },
+    {
+      "id": "build-act",
+      "uses": "act",
+      "title": "Implement the build",
+      "phase": "act",
+      "input": {
+        "brief": "workflow.brief@v1",
+        "plan": "plan.strategy@v1"
+      },
+      "output": "change.evidence@v1",
+      "evidence_requirements": ["changed files", "change rationale", "declared follow-up proof"],
+      "execution": {
+        "kind": "dispatch",
+        "role": "implementer"
+      },
+      "routes": {
+        "continue": "build-verify",
+        "retry": "build-act",
+        "stop": "@stop"
+      }
+    },
+    {
+      "id": "build-verify",
+      "uses": "run-verification",
+      "title": "Run build verification",
+      "phase": "verify",
+      "input": {
+        "proof": "verification.plan@v1",
+        "change": "change.evidence@v1"
+      },
+      "output": "verification.result@v1",
+      "evidence_requirements": ["command list", "exit status", "bounded output", "pass or fail"],
+      "execution": {
+        "kind": "verification"
+      },
+      "routes": {
+        "continue": "build-review",
+        "retry": "build-act",
+        "stop": "@stop"
+      }
+    },
+    {
+      "id": "build-review",
+      "uses": "review",
+      "title": "Review the implementation",
+      "phase": "review",
+      "input": {
+        "brief": "workflow.brief@v1",
+        "change": "change.evidence@v1",
+        "verification": "verification.result@v1"
+      },
+      "output": "review.verdict@v1",
+      "evidence_requirements": ["verdict", "findings", "confidence", "required fixes"],
+      "execution": {
+        "kind": "dispatch",
+        "role": "reviewer"
+      },
+      "routes": {
+        "continue": "build-close",
+        "retry": "build-act",
+        "revise": "build-act",
+        "stop": "@stop"
+      }
+    },
+    {
+      "id": "build-close",
+      "uses": "close-with-evidence",
+      "title": "Close with build result",
+      "phase": "close",
+      "input": {
+        "brief": "workflow.brief@v1",
+        "verification": "verification.result@v1",
+        "review": "review.verdict@v1"
+      },
+      "output": "workflow.result@v1",
+      "evidence_requirements": ["outcome", "evidence pointers", "residual risks", "follow-ups"],
+      "execution": {
+        "kind": "synthesis"
+      },
+      "routes": {
+        "complete": "@complete",
+        "stop": "@stop"
+      }
+    }
+  ]
+}

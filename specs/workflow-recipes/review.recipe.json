@@ -1,0 +1,70 @@
+{
+  "schema_version": "1",
+  "id": "review",
+  "title": "Review Recipe",
+  "purpose": "Express the audit-only Review workflow as a primitive composition. Frame the audit scope, dispatch an independent reviewer, and close with a verdict. Mirrors .claude-plugin/skills/review/circuit.json (intake -> audit -> verdict) using canonical recipe primitives so the substrate can drive Review through runRecipe.",
+  "status": "active",
+  "starts_at": "review-frame",
+  "initial_contracts": ["task.intake@v1", "route.decision@v1"],
+  "contract_aliases": [],
+  "items": [
+    {
+      "id": "review-frame",
+      "uses": "frame",
+      "title": "Frame the audit scope",
+      "phase": "frame",
+      "input": {
+        "task": "task.intake@v1",
+        "route": "route.decision@v1"
+      },
+      "output": "workflow.brief@v1",
+      "evidence_requirements": ["scope boundary", "constraints", "proof plan"],
+      "execution": {
+        "kind": "synthesis"
+      },
+      "routes": {
+        "continue": "review-audit",
+        "stop": "@stop"
+      }
+    },
+    {
+      "id": "review-audit",
+      "uses": "review",
+      "title": "Independent audit pass",
+      "phase": "review",
+      "input": {
+        "brief": "workflow.brief@v1"
+      },
+      "output": "review.verdict@v1",
+      "evidence_requirements": ["verdict", "findings", "confidence", "required fixes"],
+      "execution": {
+        "kind": "dispatch",
+        "role": "reviewer"
+      },
+      "routes": {
+        "continue": "review-close",
+        "retry": "review-audit",
+        "stop": "@stop"
+      }
+    },
+    {
+      "id": "review-close",
+      "uses": "close-with-evidence",
+      "title": "Close with audit verdict",
+      "phase": "close",
+      "input": {
+        "brief": "workflow.brief@v1",
+        "review": "review.verdict@v1"
+      },
+      "output": "workflow.result@v1",
+      "evidence_requirements": ["outcome", "evidence pointers", "residual risks", "follow-ups"],
+      "execution": {
+        "kind": "synthesis"
+      },
+      "routes": {
+        "complete": "@complete",
+        "stop": "@stop"
+      }
+    }
+  ]
+}

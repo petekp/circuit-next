@@ -1,0 +1,119 @@
+{
+  "schema_version": "1",
+  "id": "explore",
+  "title": "Explore Recipe",
+  "purpose": "Express the Explore workflow as a primitive composition. Frame the investigation, diagnose to decompose into aspects, dispatch the synthesis, run an adversarial review, and close with the explore result. Mirrors .claude-plugin/skills/explore/circuit.json (frame -> analyze -> synthesize -> review -> close) using canonical recipe primitives so the substrate can drive Explore through runRecipe.",
+  "status": "active",
+  "starts_at": "explore-frame",
+  "initial_contracts": ["task.intake@v1", "route.decision@v1", "context.packet@v1"],
+  "contract_aliases": [],
+  "items": [
+    {
+      "id": "explore-frame",
+      "uses": "frame",
+      "title": "Frame the investigation",
+      "phase": "frame",
+      "input": {
+        "task": "task.intake@v1",
+        "route": "route.decision@v1"
+      },
+      "output": "workflow.brief@v1",
+      "evidence_requirements": ["scope boundary", "constraints", "proof plan"],
+      "execution": {
+        "kind": "synthesis"
+      },
+      "routes": {
+        "continue": "explore-analyze",
+        "stop": "@stop"
+      }
+    },
+    {
+      "id": "explore-analyze",
+      "uses": "diagnose",
+      "title": "Decompose investigation into aspects",
+      "phase": "analyze",
+      "input": {
+        "brief": "workflow.brief@v1",
+        "context": "context.packet@v1"
+      },
+      "output": "diagnosis.result@v1",
+      "evidence_requirements": [
+        "cause hypothesis",
+        "confidence",
+        "reproduction status",
+        "diagnostic path"
+      ],
+      "execution": {
+        "kind": "dispatch",
+        "role": "researcher"
+      },
+      "routes": {
+        "continue": "explore-synthesize",
+        "retry": "explore-analyze",
+        "stop": "@stop"
+      }
+    },
+    {
+      "id": "explore-synthesize",
+      "uses": "act",
+      "title": "Synthesize investigation result",
+      "phase": "act",
+      "input": {
+        "brief": "workflow.brief@v1",
+        "diagnosis": "diagnosis.result@v1"
+      },
+      "output": "change.evidence@v1",
+      "evidence_requirements": ["changed files", "change rationale", "declared follow-up proof"],
+      "execution": {
+        "kind": "dispatch",
+        "role": "implementer"
+      },
+      "routes": {
+        "continue": "explore-review",
+        "retry": "explore-synthesize",
+        "stop": "@stop"
+      }
+    },
+    {
+      "id": "explore-review",
+      "uses": "review",
+      "title": "Adversarial pass over synthesis",
+      "phase": "review",
+      "input": {
+        "brief": "workflow.brief@v1",
+        "change": "change.evidence@v1"
+      },
+      "output": "review.verdict@v1",
+      "evidence_requirements": ["verdict", "findings", "confidence", "required fixes"],
+      "execution": {
+        "kind": "dispatch",
+        "role": "reviewer"
+      },
+      "routes": {
+        "continue": "explore-close",
+        "retry": "explore-synthesize",
+        "revise": "explore-synthesize",
+        "stop": "@stop"
+      }
+    },
+    {
+      "id": "explore-close",
+      "uses": "close-with-evidence",
+      "title": "Close with explore result",
+      "phase": "close",
+      "input": {
+        "brief": "workflow.brief@v1",
+        "review": "review.verdict@v1"
+      },
+      "output": "workflow.result@v1",
+      "evidence_requirements": ["outcome", "evidence pointers", "residual risks", "follow-ups"],
+      "execution": {
+        "kind": "synthesis"
+      },
+      "routes": {
+        "complete": "@complete",
+        "stop": "@stop"
+      }
+    }
+  ]
+}

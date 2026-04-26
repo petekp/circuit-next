@@ -28,7 +28,13 @@ export type RecipeDispatcher = (
   input: RecipeDispatcherInput,
 ) => Promise<RecipeDispatcherResult> | RecipeDispatcherResult;
 
-const DISPATCH_PRIMITIVES = new Set<WorkflowPrimitiveId>(['gather-context', 'diagnose', 'act']);
+const DISPATCH_PRIMITIVES = new Set<WorkflowPrimitiveId>([
+  'gather-context',
+  'diagnose',
+  'plan',
+  'act',
+  'review',
+]);
 
 function dispatchRoleForItem(item: WorkflowRecipeItem): DispatchRole {
   if (item.execution.kind !== 'dispatch' || item.execution.role === undefined) {

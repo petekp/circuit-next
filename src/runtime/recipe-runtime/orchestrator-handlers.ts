@@ -73,17 +73,28 @@ const frameHandler: PrimitiveHandler = (ctx): PrimitiveDispatchResult => {
 
 const closeWithEvidenceHandler: PrimitiveHandler = (ctx): PrimitiveDispatchResult => {
   const brief = readBinding<{ scope_boundary: string }>(ctx, 'brief');
-  const verification = readBinding<{ pass_or_fail: 'pass' | 'fail' }>(ctx, 'verification');
+  const verificationMaybe = ctx.inputs.byBinding.has('verification')
+    ? (ctx.inputs.byBinding.get('verification') as { pass_or_fail: 'pass' | 'fail' } | undefined)
+    : undefined;
   const reviewMaybe = ctx.inputs.byBinding.has('review')
     ? (ctx.inputs.byBinding.get('review') as { verdict: string } | undefined)
     : undefined;
-  const passed = verification.pass_or_fail === 'pass';
+  const verificationPassed =
+    verificationMaybe === undefined ? true : verificationMaybe.pass_or_fail === 'pass';
+  const reviewBlocked = reviewMaybe?.verdict === 'request-fixes';
+  const passed = verificationPassed && !reviewBlocked;
+  const evidencePointers: string[] = ['brief'];
+  if (verificationMaybe !== undefined) evidencePointers.push('verification');
+  if (reviewMaybe !== undefined) evidencePointers.push('review');
+  const residualRisks: string[] = [];
+  if (!verificationPassed) residualRisks.push('Verification failed; revisit before reuse');
+  if (reviewBlocked) residualRisks.push('Reviewer requested fixes; revisit before reuse');
   return {
     output: {
       schema_version: 1,
       outcome: passed ? 'completed' : 'blocked',
-      evidence_pointers: ['brief', 'verification', ...(reviewMaybe ? ['review'] : [])],
-      residual_risks: passed ? [] : ['Verification failed; revisit before reuse'],
+      evidence_pointers: evidencePointers,
+      residual_risks: residualRisks,
       follow_ups: [],
       brief_scope: brief.scope_boundary,
       review_verdict: reviewMaybe?.verdict ?? null,

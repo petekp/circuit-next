@@ -197,6 +197,14 @@ export {
   type PersistedRecipeRunArtifact,
   type PersistedTraceEntry,
 } from './persistence.js';
+export {
+  isKnownRecipeWorkflowId,
+  loadWorkflowRecipe,
+  runWorkflowAsRecipe,
+  type KnownRecipeWorkflowId,
+  type RunWorkflowRecipeInvocation,
+  type RunWorkflowRecipeResult,
+} from './run-workflow-recipe.js';
 
 export function mergeHandlerRegistries(
   ...registries: readonly PrimitiveHandlerRegistry[]
