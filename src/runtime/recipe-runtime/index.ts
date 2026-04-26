@@ -184,6 +184,13 @@ export async function runRecipe(input: RunRecipeInput): Promise<RecipeRunResult>
 
 export { defaultOrchestratorHandlers } from './orchestrator-handlers.js';
 export { defaultWorkerHandlers } from './worker-handlers.js';
+export {
+  dispatchHandler,
+  dispatchedWorkerHandlers,
+  type RecipeDispatcher,
+  type RecipeDispatcherInput,
+  type RecipeDispatcherResult,
+} from './dispatch.js';
 
 export function mergeHandlerRegistries(
   ...registries: readonly PrimitiveHandlerRegistry[]
