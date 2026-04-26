@@ -1,66 +1,72 @@
 # HANDOFF
 
-Last updated: 2026-04-25 (recipe runtime substrate v0 session).
+Last updated: 2026-04-25 (overnight recipe runtime substrate session).
 
 ## Where we are
 
-The recipe runtime substrate v0 is in place at
-`src/runtime/recipe-runtime/`. It runs a `WorkflowRecipe` plus a per-rigor
-`WorkflowRecipeDraft` end-to-end: it walks items from `starts_at`,
-consults the draft's resolved edges per outcome, looks up a registered
-primitive handler, threads typed evidence between items via a contract-
-keyed ledger, and stops cleanly on the four terminal targets
-(`@complete`, `@stop`, `@handoff`, `@escalate`).
+The recipe runtime substrate landed in three commits this session:
 
-A demo Fix-Lite recipe at `tests/fixtures/recipe-runtime/fix-lite.recipe.json`
-composes eight primitives end-to-end through the substrate: `intake →
-route → frame → gather-context → diagnose → act → run-verification →
-close-with-evidence → @complete`. Default orchestrator and worker
-handler registries cover those eight primitives with deterministic
-synthesis-grade outputs (the worker handlers are stubs — they do not
-spawn a real adapter yet). The substrate contract test exercises both
-the smaller demo recipe and the fix-lite recipe and asserts trace order,
-evidence propagation, missing-input rejection, unknown-outcome
-rejection, and recipe/draft id mismatch rejection.
+1. `feat: recipe runtime substrate v0 + fix-lite end-to-end demo`
+   (`src/runtime/recipe-runtime/`). The substrate runs a `WorkflowRecipe`
+   plus a per-rigor `WorkflowRecipeDraft` end-to-end: walk items from
+   `starts_at`, look up a registered primitive handler, thread typed
+   evidence between items via a contract-keyed ledger, follow the
+   draft's resolved per-outcome edges, and stop on the four terminal
+   targets (`@complete`, `@stop`, `@handoff`, `@escalate`). Default
+   handlers cover all eight Fix-shape primitives. A demo Fix-Lite
+   recipe at `tests/fixtures/recipe-runtime/fix-lite.recipe.json` runs
+   eight primitives end-to-end (`intake → route → frame → gather-context
+   → diagnose → act → run-verification → close-with-evidence →
+   @complete`).
+2. `feat: recipe runtime dispatcher injection seam`. Adds
+   `RecipeDispatcher`, `dispatchHandler`, and `dispatchedWorkerHandlers`
+   so dispatch-kind primitive items can be routed through a pluggable
+   worker (the next consumer is the existing agent / codex adapter).
+3. `feat: persist recipe runs as recipe-run.json under run root`. Adds
+   `persistRecipeRun(runRoot, recipeId, result)` and the
+   `recipeRunArtifact` serializer. The substrate stays pure / in-memory;
+   persistence is a separate helper.
 
 The substrate is intentionally parallel to `src/runtime/runner.ts`, not
-inside it. The existing `executeDogfood` loop still owns the
-event-log/manifest/dispatch-adapter machinery for Build, Explore, and
-Review. The substrate has no event log, no manifest snapshot, and no
-real dispatch — that's deliberate so we can iterate on the substrate's
-shape before paying integration costs.
+inside it. The existing `executeDogfood` loop still owns the event-log,
+manifest-snapshot, and real-dispatch machinery for the hardcoded Build,
+Explore, and Review paths. The substrate has no event log and no real
+dispatch yet — that's deliberate so we can iterate on its shape before
+paying integration costs.
 
-`npm run verify` is green: 790 tests, lint clean, tsc clean, build
-clean.
+`npm run verify` is green: 794 tests (11 new in `tests/unit/recipe-
+runtime/`), lint clean, tsc clean, build clean.
 
 ## What's next
 
-The substrate is at its useful minimum. The next round of work has a
-few independent directions; pick based on what the operator wants to
-prove.
+The substrate now has enough surface area for a real review. The next
+choice is architectural — pick one direction and commit to it.
 
-1. **Wire a real dispatcher into worker handlers.** Right now `gather-
-   context`, `diagnose`, `act` synthesize their outputs in process.
-   Add a `DispatchWorker` injection seam so a recipe item with
-   `execution.kind === 'dispatch'` can call the existing `dispatch-
-   materializer` / `agent` adapter and parse the typed result through
-   the substrate's evidence ledger.
-2. **Express Build/Explore/Review as recipes.** Each is currently
+1. **Bridge the dispatcher seam to the existing agent / codex adapter.**
+   The `RecipeDispatcher` interface is in place; what's missing is a
+   small adapter that takes a `RecipeDispatcherInput`, composes a
+   prompt from the recipe item's input bindings, calls the existing
+   `DispatchFn`, parses the response body as the typed output, and
+   maps the verdict to a `WorkflowPrimitiveRoute`. After this,
+   `gather-context`, `diagnose`, and `act` can run real LLM dispatches
+   inside a recipe.
+2. **Express Build, Explore, Review as recipes.** Each is currently
    hardcoded in `runner.ts`. Authoring them as `WorkflowRecipe`
    fixtures and routing the runner's entry points through the
-   substrate is the larger win — it retires the per-workflow code
-   paths in `executeDogfood`. This should land after #1 so the dispatch
-   path is real.
-3. **Promote `fix-lite` to a real Fix recipe.** Today's fix-lite is a
-   demo over stub handlers. The real Fix recipe lives at
-   `specs/workflow-recipes/fix-candidate.recipe.json` and includes the
-   human-decision and handoff branches. Wiring it through the substrate
-   needs a checkpoint adapter (host primitive) and a handoff writer.
-4. **Persistence.** The substrate keeps the evidence ledger and trace
-   in memory only. For real workflow runs, both should land on disk in
-   the run-root so the result is durable across processes. The simplest
-   first cut is to write each item's typed output as
-   `<run-root>/recipe/<item-id>.json` and a final `recipe-trace.json`.
+   substrate retires the per-workflow code paths in `executeDogfood`.
+   This is the larger architectural win and should land after #1 so
+   the dispatch path is real.
+3. **Promote `fix-lite` to the full Fix recipe.** The real Fix lives
+   at `specs/workflow-recipes/fix-candidate.recipe.json` and includes
+   the human-decision branch and the handoff branch. Wiring it through
+   the substrate needs a checkpoint adapter (host primitive) and a
+   handoff writer.
+4. **Bind substrate runs into the run-root event log.** Persistence
+   today writes a single `recipe-run.json`; the existing `runner.ts`
+   pipeline writes a typed event log. If recipes graduate to first-
+   class runs, the substrate should emit `step.entered`, `dispatch.*`,
+   `gate.evaluated`, `run.closed` events the same way `executeDogfood`
+   does, so the same reducer / snapshot tooling applies.
 
 Codex usage is AGENTS.md rule #7: pull Codex in for impactful, hard-to-
 revert decisions and for genuine stuck-after-real-attempts diagnosis;
