@@ -1,9 +1,11 @@
 ---
 plan: runtime-checkpoint-artifact-widening
-status: challenger-pending
+status: challenger-cleared
 revision: 04
 opened_at: 2026-04-25
 opened_in_session: runtime-checkpoint-artifact-widening-arc-open
+cleared_at: 2026-04-25
+cleared_in_session: post-codex-challenger-04-accept
 base_commit: 190122d00ba47a0fe34caef2a2a1d28128b585e5
 target: runtime-checkpoint-artifact-write
 authority:
@@ -25,6 +27,7 @@ prior_challenger_passes:
   - specs/reviews/runtime-checkpoint-artifact-widening-codex-challenger-01.md
   - specs/reviews/runtime-checkpoint-artifact-widening-codex-challenger-02.md
   - specs/reviews/runtime-checkpoint-artifact-widening-codex-challenger-03.md
+  - specs/reviews/runtime-checkpoint-artifact-widening-codex-challenger-04.md
 ---
 
 # Runtime Checkpoint Artifact Widening Plan
