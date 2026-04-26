@@ -1,164 +1,59 @@
-<!-- current_slice: 156 -->
-
 # circuit-next
 
-**Status: Tier 0 scaffold complete; Phase 1 contract authorship closed at
-Slice 27 (`workflow.md` v0.2); Phase 1.5 Alpha Proof closed at Slice 31a
-(ceremony commit, 2026-04-21) per ADR-0001 Addendum B as amended by
-ADR-0006; Phase 2 — Implementation closed at Slice 101 (2026-04-24) for the
-first working workflow product spine. Full first-generation Circuit parity
-remains future work. CC#14 closure is a one-time waiver + retarget per
-ADR-0006: (14a) operator product-direction check at
-`specs/reviews/phase-1.5-operator-product-check.md`, (14b) existing
-Claude + Codex LLM stand-in sections in
-`specs/reviews/phase-1-close-reform-human.md` with F17 weaker-evidence
-flag. The canonical non-LLM human cold-read is **not** satisfied; weaker
-evidence of different shape is substituted. ADR-0006 §Precedent firewall
-governs any future retarget.**
+Claude Code plugin that runs configurable developer workflows.
+Successor to the first-generation [Circuit](../circuit) plugin.
 
-Claude Code plugin that automates common developer and creative workflows
-through a configurable, evidence-based methodology.
+## What's wired today
 
-## Why this exists
+- `/circuit:run` — classifies a free-form task and routes it to the right workflow.
+- `/circuit:explore` — investigation and planning workflow.
+- `/circuit:review` — audit-only review workflow.
+- `/circuit:build` — implementation workflow with checkpoint, dispatch, verification, review, and close.
 
-The first-generation [Circuit](../circuit) evolved organically and accreted
-complexity. `circuit-next` is a from-scratch rewrite driven by a deliberate
-methodology — **Contract-First + Tiny-Step-Ratcheting + Architecture-First +
-narrow cross-model challenger** — that was itself designed through a
-tournament-rigor Explore run.
+Per-step configurability of model, reasoning effort, and skills is wired
+through the runtime selection resolver. User-global config at
+`~/.config/circuit-next/config.yaml` and per-project config at
+`./.circuit/config.yaml` are both honored.
 
-The operator-facing value proposition is still a small number of high-leverage
-workflow shapes, but the direction has shifted from cloning the old list toward
-recipes made from reusable moves. Explore, Review, and Build already work;
-the next proving recipe is Fix, informed by the old Repair workflow evidence.
-Per-step configurability of model, reasoning effort, skills applied, and
-user-global defaults/overrides remains part of the product target.
-
-## Methodology
-
-See [`specs/methodology/decision.md`](specs/methodology/decision.md) for the
-tournament decision that defines the four methodological pillars, their
-stress-test survival, accepted risks, and reopen conditions. ADR-0012 adds a
-two-mode work overlay: Light for local preparatory changes and Heavy for
-runtime, command, adapter, methodology, and close-claim work.
-ADR-0013 now canonicalizes the first-principles reusable-move direction:
-workflows are primitive-backed recipes, and parity remains reference evidence
-rather than the only product goal.
-ADR-0014 adds a narrow non-external challenger fallback for cases where the
-default external Codex CLI challenger is blocked or unavailable after an
-explicit operator authorization. The two-mode methodology now also uses a
-small task packet for everyday implementation work and reserves the extra
-"why this path" framing for Heavy or unclear Light slices.
-
-## Current phase
-
-**Phase 2 — Implementation (closed for the first working workflow, 2026-04-24
-at Slice 101).** Phase 0 Evidence Loop closed; Phase 1 contract authorship
-closed at Slice 27; Phase 1.5 Alpha Proof closed at Slice 31a. Phase 2
-proved the product spine: Claude Code plugin commands reach the runtime,
-Explore runs through the canonical workflow, Review is wired as a second
-workflow shape, Claude and Codex subprocess dispatch both have current live
-smoke fingerprints, strict JSON artifacts are the accepted successor shape
-for step state, and config can select model and effort. This does **not**
-claim full first-generation Circuit parity. Build is now closed as the first
-mutating workflow path; Fix, Migrate, Sweep, custom workflow authoring, and
-a polished workflow-configuration experience remain future work.
-`specs/parity-map.md` records the current gap map. The old Repair evidence and
-signed Repair plan are retained as reference, but ADR-0013 supersedes them as
-active implementation direction: the next proving workflow is Fix over reusable
-primitives, not one-off Repair.
-
-Slice 138 reframes that old Repair evidence toward a clearer Fix recipe over
-reusable moves; see `specs/workflow-direction.md` and
+The next proving workflow is `Fix`, built over reusable workflow primitives
+described in `specs/workflow-direction.md` and
 `specs/workflow-recipes/fix-candidate.recipe.json`.
 
-Slice 139 adds the first typed Fix artifact shapes and authority rows so future
-Fix behavior has stable evidence targets.
+## Verification
 
-Slice 140 makes recipe checks follow the actual paths through a recipe, so a
-step cannot depend on evidence that one of its branches skipped.
-
-Slice 141 makes the primitive-backed recipe direction canonical through
-ADR-0013 and marks the old Repair plan as reframed evidence.
-
-Slice 142 adds the recorded fallback path for challenger reviews when the
-external Codex CLI path is blocked by the environment.
-
-Slice 143 hardens the two-mode methodology: routine low-risk work gets a small
-task packet, while riskier work keeps the stronger review path.
-
-Slice 144 makes recipe checks confirm that each step supplies inputs accepted
-by its chosen reusable move.
-
-Slice 145 adds mode-specific recipe routes so Fix can let Lite skip Review
-without making standard and deeper runs skip Review too.
-
-Slice 146 adds explicit evidence requirements to recipe items, so the Fix
-recipe now says what proof each step must leave behind.
-
-Slice 147 adds design-time execution labels to recipe items, so Fix now records
-the intended future runner shape without changing the runtime.
-
-Slice 148 adds design-time phase labels to recipe items, so Fix can be grouped
-into the existing workflow phases without guessing from item ids.
-
-Slice 149 adds a design-only recipe projection helper that summarizes the Fix
-recipe for future compiler work.
-
-Slice 150 extends that projection with per-outcome route targets so a future
-compiler can walk the effective edges of the recipe without re-deriving them.
-
-Slice 151 persists the current Fix projection as a snapshot fixture and adds a
-parity contract test, so future projection or recipe changes show up as a
-single fixture diff.
-
-Slice 152 adds a design-only compiler-boundary helper that turns a projection
-plus a rigor into a `WorkflowRecipeDraft` with one resolved target per
-outcome.
-
-CC#14 was amended by ADR-0006 as a one-time
-waiver + retarget (see Status above); the canonical non-LLM cold-read is **not**
-satisfied, and weaker evidence of different shape is substituted — carried
-openly on every authority surface. CC#15 preservation rests on (i) the 14a
-operator product-direction check and (ii) CC#13 closure by the Slice 29
-property fuzzer at `tests/properties/visible/`, a structurally-different
-non-LLM mechanical probe.
-
-See [`PROJECT_STATE.md`](PROJECT_STATE.md) for the live snapshot of where
-the project is. Per-slice narrative history is in
-[`PROJECT_STATE-chronicle.md`](PROJECT_STATE-chronicle.md) (split from
-PROJECT_STATE.md at Slice 67; the chronicle is non-authoritative history,
-live state lives at `## §0` of PROJECT_STATE.md).
+```bash
+npm run check    # tsc --noEmit
+npm run lint     # biome check
+npm run test     # vitest
+npm run build    # tsc -p tsconfig.build.json
+npm run verify   # all of the above
+```
 
 ## Layout
 
 ```
 circuit-next/
-├── AGENTS.md                # Session hygiene + lane discipline for agents
-├── CLAUDE.md                # Compatibility pointer to AGENTS.md for older tooling
-├── PROJECT_STATE.md          # Live project state (§0 Live state section is authoritative)
-├── PROJECT_STATE-chronicle.md # Non-authoritative narrative history (per-slice log)
-├── bootstrap/                 # Phase 0 evidence drafts
+├── AGENTS.md                  # Agent operating doc
+├── CLAUDE.md                  # Compatibility pointer to AGENTS.md
+├── HANDOFF.md                 # Cross-session handoff (where we are, what's next)
+├── bin/circuit-next           # CLI entrypoint
+├── commands/                  # Slash command definitions
+├── .claude-plugin/            # Plugin manifest
 ├── specs/
-│   ├── methodology/             # Tournament artifacts (inlined Markdown; provenance in frontmatter)
-│   ├── evidence.md              # Phase 0 synthesized output
-│   ├── domain.md                # Phase 1: ubiquitous language
-│   ├── artifacts.json           # Authoritative authority graph (ADR-0003)
-│   ├── artifacts.md             # Authority-graph companion doc
-│   ├── contracts/               # Phase 1: per-module contracts
-│   ├── reference/               # Live-surface characterizations
-│   ├── behavioral/              # Phase 1: behavioral concerns
-│   ├── adrs/                    # Architectural decision records
-│   └── risks.md                 # Accepted + open risks ledger
-├── src/
-│   ├── types/                   # Architecture-First types at boundaries
-│   └── schemas/                 # Zod contracts matching types
-├── tests/
-│   ├── contracts/               # Contract tests
-│   ├── properties/visible/      # Visible property tests (Tier 2+)
-│   ├── properties/hidden/       # Hidden pool (Tier 2+)
-│   └── unit/                    # Unit tests
-└── .claude-plugin/              # Plugin manifest (deferred to Phase 2+; implementation lands alongside runtime)
+│   ├── domain.md              # Ubiquitous language
+│   ├── artifacts.json         # Typed-artifact authority graph
+│   ├── invariants.json        # Invariant ledger
+│   ├── contracts/             # Per-module contracts
+│   ├── behavioral/            # Behavioral concerns
+│   ├── reference/             # Legacy-surface characterizations
+│   ├── workflow-direction.md  # First-principles workflow direction
+│   ├── workflow-primitives.md # Reusable workflow moves
+│   ├── workflow-primitive-catalog.json
+│   ├── workflow-recipe-composition.md
+│   ├── workflow-research-intake.md
+│   └── workflow-recipes/      # Recipe fixtures
+├── src/                       # Source
+└── tests/                     # Tests
 ```
 
 ## License

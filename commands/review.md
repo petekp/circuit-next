@@ -79,8 +79,6 @@ omit the flag and accept the default.
 
 ## Authority
 
-- `specs/plans/p2-9-second-workflow.md §3` (audit-only review spine)
-- `specs/plans/p2-9-second-workflow.md §9 Slice 67` (plugin command scope)
 - `specs/contracts/review.md` (review workflow contract)
 - `tests/runner/review-runtime-wiring.test.ts` (default registered review
   synthesis writer)

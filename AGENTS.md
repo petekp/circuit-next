@@ -1,359 +1,66 @@
 # Agent Guide — circuit-next
 
-This file is agent-facing guidance for working on `circuit-next`. Keep under **450 lines** (cap raised 300 → 450 per ADR-0011 on 2026-04-23 after Slice 61 Codex evidence of semantic loss under the old cap); anything longer goes in `specs/` with a pointer here.
+## What this project is
 
-## The one-paragraph mental model
+`circuit-next` is a Claude Code plugin that runs configurable developer
+workflows. The product surface is `src/` (TypeScript), `tests/`,
+`commands/`, `.claude-plugin/plugin.json`, the workflow recipes and
+primitive catalog under `specs/workflow-*`, and the typed contracts under
+`specs/contracts/` and `specs/behavioral/`.
 
-`circuit-next` is a Claude Code plugin that turns common developer and creative
-workflows into primitive-backed recipes: ordered uses of reusable moves that
-consume typed evidence, do one clear job, write typed evidence, and return named
-outcomes. Configuration is declarative: per-step you can set model, reasoning
-effort, skills to apply, and invocation options; user-global config sets
-defaults and overrides. The old Circuit implementation is reference evidence,
-not the destination; ADR-0013 makes Fix, not one-off Repair, the first proving
-recipe for the reusable-move architecture. Codex is supported through the
-runtime adapter path, and native Codex plugin support remains a future product
-direction. The plugin itself is being built using the same methodology it
-exposes — contract-first specs, architecture-first types at boundaries,
-tiny-step lane-disciplined slices, and a narrow cross-model challenger.
+This file is the agent-facing operating doc. Keep it short. If something
+isn't here, it isn't a rule.
 
-## Core methodology (do not abbreviate)
+## Rules that earned their place
 
-The methodology is authoritative at `specs/methodology/decision.md`, with
-Slice 7 amendments in `specs/adrs/ADR-0003-authority-graph-gate.md` and the
-two-mode overlay in `specs/adrs/ADR-0012-two-mode-methodology.md`. Every agent
-slice must honor it. Four pillars:
+1. **Read before Write.** Always read existing files before overwriting
+   them.
+2. **Tests for behavior we care about.** When fixing a bug, write a
+   failing test first. When changing behavior, the test changes with it.
+3. **Plain English with the operator.** Short sentences, one idea each.
+   No project-internal jargon — no slice codenames, no ADR ids, no
+   verdict-class language. If a name matters, describe what it is.
+4. **Task list for multi-step work.** Three or more steps → use the
+   task tools.
+5. **Root-cause discipline.** Enumerate two or three hypotheses before
+   acting on one.
+6. **Cross-session handoffs.** When approaching ~200k tokens or wrapping
+   for the day, write or update `HANDOFF.md` at the repo root: where we
+   are, what's blocked, what's next, in plain English. Two short
+   paragraphs. The next session reads it as the first action.
 
-1. **Contract-First core (conditional).** For **greenfield** surfaces,
-   truth lives in executable specs + property tests authored before
-   implementation. For **successor-to-live**, **legacy-compatible**,
-   **migration-source**, or **external-protocol** surfaces, contract
-   authorship is **blocked** until ADR-0003 authority-graph classification
-   is complete. Before drafting any contract, classify every touched
-   artifact in `specs/artifacts.json` and bind the contract frontmatter to
-   `artifact_ids`. Clean break is allowed, but it must be explicit;
-   **clean break does not mean greenfield**. See
-   `specs/artifacts.md` for the graph and ADR-0003 for the full gate.
-2. **Tiny-Step-Ratcheting lane discipline.** Every slice declares one of six
-   lanes: Ratchet-Advance, Equivalence Refactor, Migration Escrow, Discovery,
-   Disposable, Break-Glass. Slices are bounded to ≤30 min wall-clock.
-3. **Architecture-First types at module boundaries.** Prefer types over tests
-   when types can express the invariant. `tsc --strict` is the first line of
-   defense against local-coherence/global-incoherence failures.
-4. **Narrow challenger.** A different model (Codex) produces an
-   objection list — not an approval — for Heavy-mode work, plan clearance,
-   contract-relaxation ADRs, migration escrows, discovery-decision promotion,
-   and any request to loosen a gate. Light-mode preparatory work does not need a
-   per-slice challenger unless it discovers Heavy risk. The external Codex CLI
-   is the default challenger path; ADR-0014 allows a non-external fallback only
-   when that path is blocked or unavailable, the operator explicitly authorizes
-   fallback, and the review artifact records the weaker channel. This is
-   **adversarial lint, not independent corroboration**. Correlated failures
-   remain possible. The challenger cannot replace authority mapping,
-   live/reference evidence, fixture parity where compatibility is required, or
-   state-machine/property tests.
-
-## Phase discipline
-
-- **Phase 0 — Evidence Loop** (current). Prototype in `bootstrap/` under
-  minimal constraints. Output: `specs/evidence.md`. Close with adversarial
-  auditor review before entering Phase 1.
-- **Phase 1 — Contract authorship.** Draft `specs/domain.md`, then
-  `specs/contracts/<module>.md` with YAML frontmatter enumerating invariants,
-  pre/postconditions, and `property_ids`. Behavioral concerns go in
-  `specs/behavioral/<concern>.md`. Adversarial property-auditor (different
-  model) emits prose tautology attacks; operator encodes each as a new
-  property.
-- **Phase 1.5 — Alpha Proof** (inserted by ADR-0001 Addendum B, Slice 25d).
-  Executable product proof between contract authorship and full
-  implementation. Runs `dogfood-run-0` end-to-end under the same lane
-  discipline as Phase 2. Close criteria are authoritative in ADR-0001
-  Addendum B.
-- **Phase 2 — Implementation.** Lane-disciplined slices. Entry gated by
-  Phase 1.5 close, not Phase 1 close. Implementer runs in a container with
-  distinct UID; `specs/`, `tests/properties/visible/`, `tests/mutation/`,
-  `specs/behavioral/`, CI configuration mounted read-only;
-  `tests/properties/hidden/` not mounted at all.
-
-Tier 2+ tooling (container isolation, mutation testing, property suites,
-anti-Goodhart ratchet machinery, hidden test pool) is **explicitly deferred**
-from Tier 0 scaffold.
-
-## Lane discipline — framing gate
-
-Before implementing, declare in the slice commit or slice PR:
-
-| Lane | When | Merge semantics |
-|---|---|---|
-| **Ratchet-Advance** | New capability that advances a ratchet | All ratchets must not regress; this one must strictly advance |
-| **Equivalence Refactor** | Pure restructuring, semantics preserved | Behavioral invariants preserved; characterization tests hold |
-| **Migration Escrow** | Known-incomplete transition | Temporary floor reduction; hard expiry; renewal requires solo-approval protocol |
-| **Discovery** | Research spike, answer unknown up front | Throwaway or promotion; no ratchet enforcement during slice |
-| **Disposable** | One-off script, demo, throwaway | No contract or property requirements; never deployed |
-| **Break-Glass** | Production incident only | Post-hoc ADR + evidence backfill within 48h |
-
-**Every slice framing** must name: the failure mode being addressed and the
-acceptance evidence (what would prove it worked). Heavy work and ambiguous
-Light work must also name — as a single combined element — **why this not
-adjacent** (the rejected adjacent alternative plus one line on whether an
-earlier slice has made this one smaller, obsolete, or mis-sequenced). Routine
-Light work may omit that third element once the scope is clear. The combined
-element collapses the prior alternate-framing + trajectory-check quadruplet
-per Slice 65 (methodology-trim-arc): anchoring-defense and arc-drift defense
-are the same judgment call at slice open, and keeping them as separate
-ceremony produced empty ratification. Nguyen 2024 still frames the anchoring
-risk; the trajectory role folds in without a new artifact.
-
-## Work modes
-
-Process should scale with the danger of a false green. If a false green would
-make Circuit lose work, run or route work incorrectly, claim completion
-incorrectly, or weaken a safety/process gate, use Heavy. Otherwise use Light.
-
-Every slice after ADR-0012 declares one work mode in the commit body:
-`Work mode: Light` or `Work mode: Heavy`. Work mode is separate from Lane; a
-Ratchet-Advance slice can be Light when it is local, preparatory, and
-non-executing.
-
-- **Light** is for schemas, policy rows, authority rows, straightforward tests,
-  internal helper extraction with no behavior change, and status docs that do
-  not move phase, signoff, live-proof, workflow-close, or parity-close claims.
-  It needs a small task packet, clear scope, focused tests when behavior or
-  contracts move, `npm run verify`, post-commit `npm run audit`, and the plain
-  operator summary. No per-slice external challenger is required.
-- **Heavy** is for runtime behavior, adapters, dispatch, event/result writing,
-  checkpoint/resume, command/router/plugin surfaces, methodology/audit/plan
-  gates, safety relaxations, and workflow close claims. It needs the Light
-  checks plus `Codex challenger: REQUIRED` and the review record or
-  arc-subsumption evidence required by audit.
-
-If a Light slice starts touching Heavy surfaces — including `AGENTS.md`,
-`CLAUDE.md`, CLI or binary entrypoints, runtime evidence writers/readers,
-command/plugin files, methodology files, audit gates, or plan files —
-reclassify it as Heavy before commit. The plan lifecycle for multi-slice work
-remains unchanged.
-
-Use `specs/methodology/task-packet-template.md` for implementation handoffs.
-The packet is the everyday shape for work: goal, why now, allowed/forbidden
-scope, evidence, known risks, stop conditions, and output summary.
-
-## Session hygiene
-
-- `AGENTS.md` stays under 450 lines (per ADR-0011); longer content goes to
-  `specs/` with a pointer here.
-- Compaction is **disabled** on this repo. Treat session as long-horizon;
-  artifact-based resume is the recovery path.
-- `PROJECT_STATE.md` is the live snapshot. `## §0 Live state` at the top
-  carries the current_slice / current_arc / current_phase as explicit
-  fields; the `<!-- current_slice: N -->` HTML-comment marker is preserved
-  unchanged for existing consumers (ADR-0010 compat-shim). Update `§0`
-  when phase state changes or a decision is recorded; per-slice narrative
-  appends to `PROJECT_STATE-chronicle.md` (relocated from PROJECT_STATE.md
-  at Slice 67; non-authoritative history).
-- Slices ≤ 30 min wall-clock. Coordinated edits compose under a single ADR.
-
-## After-slice operator summary
-
-After each slice lands, give the operator a plain-English wrap-up.
-Three short beats, in order:
-
-1. **What got done.** One or two sentences on what the slice actually
-   accomplished.
-2. **What's next.** The next concrete thing to do.
-3. **How much is left.** Roughly — near the end of this phase, middle,
-   or a lot to go.
-
-**Write it like you'd explain it to someone walking up to your desk.**
-No project-internal shorthand — no lane names, close-criterion numbers
-(`CC#14`, `D10`, `F17`), ADR ids, slice codenames (`DOG+2`, `P2-MODEL-
-EFFORT`), phase-transition terminology (`ceremony commit`), or
-gate/ratchet/audit vocabulary. If a name matters, describe what it *is*
-in plain words. Pointers to plan files are fine when the operator might
-want to verify, but make them optional reading rather than the summary
-itself.
-
-Keep the audit numbers (pass counts, test delta) as a one-liner before
-the summary so the operator gets status at a glance — then the
-plain-English beats carry the meaning.
-
-## Verification commands (Tier 0)
+## Verification
 
 ```bash
-npm run check   # tsc --noEmit (architecture check)
+npm run check   # tsc --noEmit
 npm run lint    # biome check
-npm run test    # vitest (contract tests)
+npm run test    # vitest
+npm run build   # tsc -p tsconfig.build.json
 npm run verify  # all of the above
-npm run audit   # drift-visibility audit across recent commits
 ```
 
-The first four gates must all pass before any commit in a Ratchet-Advance
-or Equivalence Refactor lane.
-
-`npm run audit` reports on discipline health: lane declaration, framing
-pair (failure mode / acceptance evidence / why-this-not-adjacent;
-collapsed from quadruplet in Slice 65), citation rule (ADR-0002),
-Circuit-as-justification smell, `.circuit/` gitignore compliance,
-contract test ratchet, PROJECT_STATE.md freshness, and the verify
-gate. It exits non-zero on any red finding. Run it whenever confidence
-needs a cheap sanity check, or when onboarding a fresh session.
+These must pass before commit on changes to `src/`, `tests/`, or
+`commands/`.
 
 ## Where things live
 
-| Artifact | Path | Phase |
-|---|---|---|
-| Tournament methodology artifacts | `specs/methodology/` (symlinks) | Pre-Phase-0 |
-| Phase 0 evidence drafts | `bootstrap/evidence-draft-*.md` | Phase 0 |
-| Prior-art audit of in-repo docs | `bootstrap/prior-art-audit.md` | Phase 0 |
-| External prior-art synthesis | `bootstrap/external-evidence-synthesis.md` | Phase 0 |
-| Phase 0 final synthesis | `specs/evidence.md` | Phase 0 close |
-| Ubiquitous-language glossary | `specs/domain.md` | Phase 1 |
-| Module contracts | `specs/contracts/<module>.md` | Phase 1 |
-| Behavioral concerns | `specs/behavioral/<concern>.md` | Phase 1 |
-| Risks ledger | `specs/risks.md` | All phases |
-| ADRs | `specs/adrs/ADR-<nnnn>-<slug>.md` | All phases |
-| Type skeleton | `src/types/` | Architecture-First |
-| Zod schemas | `src/schemas/` | Contract-First runtime |
-| Contract tests | `tests/contracts/` | Phase 1+ |
-| Property tests (visible) | `tests/properties/visible/` | Tier 2+ |
-| Property tests (hidden) | `tests/properties/hidden/` | Tier 2+ (not mounted to implementer) |
-| Unit tests | `tests/unit/` | All phases |
-| Plugin manifest | `.claude-plugin/plugin.json` | Phase 1+ |
+| Artifact | Path |
+|---|---|
+| Plugin manifest | `.claude-plugin/plugin.json` |
+| Slash commands | `commands/` |
+| CLI entrypoint | `bin/circuit-next` |
+| Source | `src/` |
+| Tests | `tests/` |
+| Module contracts | `specs/contracts/` |
+| Behavioral concerns | `specs/behavioral/` |
+| Ubiquitous language | `specs/domain.md` |
+| Workflow design | `specs/workflow-direction.md`, `specs/workflow-primitives.md`, `specs/workflow-recipe-composition.md`, `specs/workflow-research-intake.md` |
+| Workflow recipes | `specs/workflow-recipes/` |
+| Primitive catalog | `specs/workflow-primitive-catalog.json` |
+| Cross-session handoff | `HANDOFF.md` (repo root) |
+| Reference plugin | `~/Code/circuit` (read-only) |
 
-## Cross-model challenger protocol
+## Reference plugin
 
-When you need a challenger pass — for Heavy-mode work, plan clearance,
-contract-relaxation ADRs, migration escrows, discovery promotion, or gate
-loosening — dispatch the challenger through `/codex` skill (pipes to
-`codex exec` via the shared wrapper script). Never use the `codex:rescue`
-subagent. The challenger's job is an **objection list**, not approval.
-
-If the external Codex path is blocked or unavailable after a recorded attempt,
-ADR-0014 allows a non-external fallback only with explicit operator
-authorization. The review artifact must say `review_channel:
-non-external-fallback`, record the blocked/unavailable external attempt, name
-the operator authorization, and state that this is weaker than a true external
-pass. Use the same verdict and binding fields as the normal challenger path.
-
-## Cross-slice composition review cadence
-
-Per-slice challenger passes are necessary but not sufficient: each slice
-is locally honest about its own scope, but boundary seams between slices
-only surface in the aggregate. Empirical basis: the Phase 2 foundation
-composition review (`specs/reviews/p2-foundation-composition-review.md`,
-2026-04-21) found five HIGH boundary-seam failures that no individual
-slice owned — after every slice passed its own challenger pass.
-
-**Rule.** At the close of any arc spanning ≥ 3 slices, commission a
-composition review **before** the next privileged runtime slice opens.
-Same two-prong protocol as per-slice review: fresh-read Codex
-composition-adversary pass + Codex cross-model challenger via `/codex`.
-Same verdict vocabulary: REJECT-PENDING-FOLD-INS / ACCEPT-WITH-FOLD-INS /
-ACCEPT. Verdict must land in `specs/reviews/` with authoritative scope.
-
-**Privileged runtime slice** means: any slice that lands or modifies a
-runtime adapter, an event-writing code path, a dispatch boundary, or a
-gate/audit-check that admits or rejects privileged operations. The arc
-preceding such a slice is where silent cross-slice drift compounds.
-
-**First instance.** The pre-P2.4 fold-in arc at
-`specs/plans/phase-2-foundation-foldins.md` (Slices 35–40) carries its
-own arc-close composition review before P2.4 reopens. Enforced by
-`scripts/audit.mjs` Check 26 (`checkArcCloseCompositionReviewPresence`):
-once `PROJECT_STATE.md` `current_slice` advances to 40 or beyond,
-BOTH prong files (Codex composition-adversary + Codex cross-model
-challenger) must exist under `specs/reviews/` matching the arc-close
-naming pattern, each carrying closing verdict ACCEPT or
-ACCEPT-WITH-FOLD-INS. Two-prong binding tightened at Slice 40
-(convergent arc-close review HIGH 2): Check 26 distinguishes the
-Codex prong (name-match `*Codex*`) from the Codex prong
-(name-match `*codex*`); single-prong satisfaction is rejected.
-
-**Same-commit staging discipline.** The arc-close ceremony slice
-stages the two prong review files AND advances `current_slice` in
-`PROJECT_STATE.md` in the same commit, so `npm run audit` running
-against the staged tree sees both review files and the advanced
-slice marker simultaneously. A separate commit advancing only
-`current_slice` without the review files is rejected by Check 26.
-Check 26 is narrow to this first arc; subsequent arcs either extend
-the check or land a generalized arc-ledger gate.
-
-## Hard invariants
-
-These are non-negotiable without reopening the methodology decision:
-
-1. Container isolation or distinct-UID sandboxing for implementer (deferred
-   Tier 2; when landed, enforced).
-2. `specs/` and `tests/properties/visible/` read-only to implementer
-   container.
-3. `tests/properties/hidden/` never mounted to implementer container.
-4. No `--no-verify`, `--no-gpg-sign`, or skip-hooks flags without a
-   Break-Glass lane declaration.
-5. ADR required for any relaxation of a contract, ratchet floor, or gate.
-6. Challenger required for Heavy-mode work and any gate loosening. External
-   Codex is the default; ADR-0014 fallback is allowed only when the external
-   path is blocked or unavailable and the fallback is recorded explicitly.
-7. Every external-package identifier backed by installed type stubs,
-   docstrings, `.d.ts`, or an end-to-end call test.
-8. No aggregate scoring across ratchets; each dimension tracked
-   independently.
-9. Versioned ratchet floors with overlap windows on metric replacement.
-10. `AGENTS.md` ≤ 450 lines (raised from 300 by ADR-0011 per Slice 61
-    Codex semantic-loss evidence).
-
-See `specs/risks.md` for the full accepted/open risks ledger.
-
-## Workflow architecture north star
-
-ADR-0013 is the canonical workflow architecture decision. Future workflow work
-must build primitive-backed recipes over reusable moves. Do not open new
-one-off Repair implementation work from the old signed Repair plan; mine that
-plan and the old Circuit reference as evidence for Fix unless a later ADR
-explicitly reopens Repair as a first-class product recipe.
-
-## Current status
-
-See `PROJECT_STATE.md`. Treat that file as authoritative over any recollection
-you have from a prior session.
-
-## Plan-authoring discipline (ADR-0010)
-
-Multi-slice, ratchet-advancing, or successor-to-live / contract-shaped-
-payload plans pass through a five-state lifecycle before slices open:
-
-1. `evidence-draft` — authoring; may be untracked.
-2. `challenger-pending` — committed; awaiting Codex challenger pass.
-3. `challenger-cleared` — ACCEPT-class committed Codex review exists with
-   matching `reviewed_plan:` binding (slug + revision + base_commit +
-   content_sha256). ADR-0014 permits a non-external fallback review only when
-   the external challenger path is blocked/unavailable and the review artifact
-   records the fallback channel, blocked attempt, operator authorization, and
-   limitations.
-4. `operator-signoff` — operator signed off; commit body carries
-   `operator_signoff_predecessor: <sha>` naming the challenger-cleared
-   predecessor.
-5. `closed` — arc landed; `closed_at` + `closed_in_slice` set.
-
-**Two-context validation (Slice 66 methodology-trim-arc).** Plan-lint
-rule #15 validates `status:` against a context-scoped subset per
-ADR-0010 §1: `AUTHORING_STATUSES` = {`evidence-draft`,
-`challenger-pending`} for draft-authoring CLI; `COMMITTED_STATUSES` =
-{`challenger-pending`, `challenger-cleared`, `operator-signoff`,
-`closed`} for audit Check 36 invocation. Sets overlap at
-`challenger-pending`. Run `npm run plan:lint -- specs/plans/<plan>.md`
-(default `--context=authoring`) during draft; audit Check 36 invokes
-with `--context=committed` on commit boundaries.
-
-Enforcement: `scripts/plan-lint.mjs` (20 active rules post-Slice-65;
-#8/#11/#22 cut, numbering preserved as gaps) + audit Check 36 (committed
-plans + operator-signoff chain validation). Legacy plans (first-commit
-predates the meta-arc) are exempt.
-
-Do not present a plan for operator sign-off until the checklist in memory
-(`feedback_plans_must_be_challenger_cleared_before_signoff.md`) is met.
-
-## Reference implementation
-
-The previous-generation Circuit is at `~/Code/circuit`. It is **read-only**
-reference during circuit-next development. Do not modify it. If an insight
-requires modifying Circuit itself, defer to a post-circuit-next migration
-plan.
+The previous-generation Circuit lives at `~/Code/circuit`. Read-only
+reference. Don't modify it.

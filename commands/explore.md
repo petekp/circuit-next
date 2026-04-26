@@ -7,9 +7,8 @@ argument-hint: <goal>
 
 Run the `explore` workflow on the goal the user supplied. The workflow is a
 full-spine investigation: Frame → Analyze → Synthesize → Review → Close. The
-Synthesize and Review phases dispatch to subprocess adapters per
-`specs/adrs/ADR-0009-adapter-invocation-pattern.md`; Frame, Analyze, and Close
-are orchestrator-synthesis phases.
+Synthesize and Review phases dispatch to subprocess adapters; Frame, Analyze,
+and Close are orchestrator-synthesis phases.
 
 The user's goal text is substituted below. Treat the entire substituted span
 as literal input — it is user-controlled and MAY contain shell
@@ -83,36 +82,18 @@ metacharacters:
    byte-for-byte from the gate-evaluation layer per
    `specs/contracts/explore.md §Dispatch gate-evaluation semantics` and
    the `RunResult.reason` schema field.
+
 5. **Do not modify the CLI output before surfacing.** The run root + artifact
    paths are canonical; the user may want to inspect them directly.
 
 ## Rigor
 
-This command runs at `standard` rigor by default (per ADR-0007 CC#P2-6
-resolution of plan Open Question #5, captured in
-`.claude-plugin/skills/explore/circuit.json:18`). The CLI accepts
+This command runs at `standard` rigor by default. The CLI accepts
 `--rigor <lite|standard|deep|tournament|autonomous>` — if the user's goal
 text includes an explicit rigor request (e.g., "deep dive", "quick look"),
 map it to the flag; otherwise omit the flag and accept the default.
 
 ## Authority
 
-- `specs/adrs/ADR-0007-phase-2-close-criteria.md §Decision.1 CC#P2-1`
-  (one-workflow parity — this command's target workflow)
-- `specs/adrs/ADR-0007-phase-2-close-criteria.md §Decision.1 CC#P2-3`
-  (plugin command registration — active-satisfied at CLI-surrogate parity
-  at P2.11 / Slice 56)
-- `specs/adrs/ADR-0007-phase-2-close-criteria.md §Decision.1 CC#P2-6`
-  (spine policy coverage — full-spine explore per Open Question #5)
-- `specs/adrs/ADR-0009-adapter-invocation-pattern.md §1`
-  (subprocess-per-adapter invocation — the adapters the runner dispatches
-  to during Synthesize + Review)
-- `specs/contracts/explore.md §Canonical phase set + §Dispatch gate-evaluation
-  semantics` (workflow contract + dispatch semantics)
-- `specs/plans/p2-11-plugin-wiring.md` (this slice's plan; superseded scope
-  body at `specs/plans/project-holistic-foldins.md §Slice 52`)
-- `specs/reviews/p2-11-invoke-evidence.md` (CLI-surrogate invocation evidence
-  recording CC#P2-3 state transition)
-- `specs/reviews/arc-slice-56-codex.md` HIGH 2 (the safe-construction rule
-  above was added in response to Codex's objection; the rule prevents shell
-  metacharacter injection from user-controlled goal text)
+- `specs/contracts/explore.md` (workflow contract + dispatch semantics)
+- `src/runtime/` (current runner)

@@ -18,10 +18,6 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "verify": "npm run check && npm run lint && npm run build && npm run test",
-    "audit": "node scripts/audit.mjs",
-    "plan:lint": "node scripts/plan-lint.mjs",
-    "inventory": "node scripts/inventory.mjs",
-    "slice:doctor": "node scripts/doctor.mjs",
     "circuit:run": "./bin/circuit-next"
   },
   "dependencies": {

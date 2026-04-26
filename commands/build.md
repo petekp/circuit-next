@@ -92,7 +92,6 @@ metacharacters:
 
 ## Authority
 
-- `specs/plans/build-workflow-parity.md §Work item 8`
 - `specs/contracts/workflow.md` (workflow fixture and runtime result shape)
 - `src/cli/circuit.ts` (current CLI flags)
 - `src/runtime/router.ts` (router bypass behavior for explicit workflow names)

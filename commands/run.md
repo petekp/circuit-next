@@ -106,10 +106,5 @@ CLI with an explicit workflow name and skip this classifier layer.
 
 ## Authority
 
-- `specs/adrs/ADR-0007-phase-2-close-criteria.md §Decision.1 CC#P2-3`
-  (plugin command registration — active-satisfied at CLI-surrogate parity
-  at P2.11 / Slice 56)
-- `specs/plans/phase-2-implementation.md §Mid-term slices §P2.8`
-  (router implementation scope)
 - `src/runtime/router.ts` (current deterministic classifier)
 - `tests/contracts/workflow-router.test.ts` (classifier behavior)
