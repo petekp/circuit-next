@@ -443,13 +443,15 @@ describe('workflow recipe schema', () => {
     const recipe = parseFixRecipe();
     const act = recipe.items.find((item) => item.id === 'fix-act');
     if (act === undefined) throw new Error('fix-act missing');
-    act.execution = { kind: 'synthesis' };
+    // worker primitives (act) accept dispatch or synthesis. Checkpoint is
+    // still incompatible — host primitives are checkpoints, workers are not.
+    act.execution = { kind: 'checkpoint' };
 
     const issues = validateWorkflowRecipeCatalogCompatibility(recipe, parsePrimitiveCatalog());
     expect(issues).toContainEqual({
       item_id: 'fix-act',
       message:
-        'execution kind "synthesis" is not compatible with primitive "act"; expected one of dispatch',
+        'execution kind "checkpoint" is not compatible with primitive "act"; expected one of dispatch, synthesis',
     });
   });
 
@@ -566,5 +568,253 @@ describe('workflow recipe schema', () => {
           'output "wrong.result@v1" is not compatible with primitive output "workflow.result@v1"',
       },
     ]);
+  });
+});
+
+// Compiler-required metadata. These fields are optional at parse time to
+// avoid breaking candidate recipes mid-upgrade, but their cross-field
+// shape (kind ↔ writes, kind ↔ gate, checkpoint_policy ↔ checkpoint kind)
+// is enforced when present so authors get clear feedback.
+describe('workflow recipe compiler-required metadata', () => {
+  function frameItemWithExtras(extras: Record<string, unknown>): Record<string, unknown> {
+    return {
+      id: 'a-frame',
+      uses: 'frame',
+      title: 'Frame',
+      phase: 'frame',
+      input: {},
+      output: 'workflow.brief@v1',
+      evidence_requirements: ['scope boundary', 'constraints', 'proof plan'],
+      execution: { kind: 'synthesis' },
+      routes: { continue: '@complete' },
+      ...extras,
+    };
+  }
+
+  function actItemWithExtras(extras: Record<string, unknown>): Record<string, unknown> {
+    return {
+      id: 'a-act',
+      uses: 'act',
+      title: 'Act',
+      phase: 'act',
+      input: { brief: 'workflow.brief@v1', plan: 'plan.strategy@v1' },
+      output: 'change.evidence@v1',
+      evidence_requirements: ['changed files', 'change rationale', 'declared follow-up proof'],
+      execution: { kind: 'dispatch', role: 'implementer' },
+      routes: { continue: '@complete' },
+      ...extras,
+    };
+  }
+
+  function baseRecipe(items: Array<Record<string, unknown>>): Record<string, unknown> {
+    return {
+      schema_version: '1',
+      id: 'demo',
+      title: 'Demo',
+      purpose: 'demo',
+      status: 'candidate',
+      starts_at: items[0]?.id,
+      initial_contracts: [],
+      contract_aliases: [],
+      items,
+    };
+  }
+
+  it('accepts a synthesis item with required gate, schema-sections writes, and protocol', () => {
+    const recipe = baseRecipe([
+      frameItemWithExtras({
+        protocol: 'demo-frame@v1',
+        writes: { artifact_path: 'artifacts/brief.json' },
+        gate: { required: ['scope', 'constraints'] },
+      }),
+    ]);
+    const result = WorkflowRecipe.safeParse(recipe);
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects synthesis item missing writes.artifact_path', () => {
+    const recipe = baseRecipe([
+      frameItemWithExtras({
+        writes: {},
+        gate: { required: ['scope'] },
+      }),
+    ]);
+    const result = WorkflowRecipe.safeParse(recipe);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.message).toMatch(/synthesis execution requires writes\.artifact_path/);
+    }
+  });
+
+  it('rejects synthesis item with gate.allow (checkpoint-only field)', () => {
+    const recipe = baseRecipe([
+      frameItemWithExtras({
+        writes: { artifact_path: 'artifacts/brief.json' },
+        gate: { required: ['scope'], allow: ['continue'] },
+      }),
+    ]);
+    const result = WorkflowRecipe.safeParse(recipe);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.message).toMatch(/gate\.allow is only allowed for checkpoint execution/);
+    }
+  });
+
+  it('accepts a dispatch item with full path slots and gate.pass', () => {
+    const recipe = baseRecipe([
+      actItemWithExtras({
+        protocol: 'demo-act@v1',
+        writes: {
+          artifact_path: 'artifacts/change.json',
+          request_path: 'artifacts/dispatch/act.request.json',
+          receipt_path: 'artifacts/dispatch/act.receipt.txt',
+          result_path: 'artifacts/dispatch/act.result.json',
+        },
+        gate: { pass: ['accept'] },
+      }),
+    ]);
+    const result = WorkflowRecipe.safeParse(recipe);
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects dispatch item missing receipt_path', () => {
+    const recipe = baseRecipe([
+      actItemWithExtras({
+        writes: {
+          request_path: 'artifacts/dispatch/act.request.json',
+          result_path: 'artifacts/dispatch/act.result.json',
+        },
+        gate: { pass: ['accept'] },
+      }),
+    ]);
+    const result = WorkflowRecipe.safeParse(recipe);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.message).toMatch(/dispatch execution requires writes\.receipt_path/);
+    }
+  });
+
+  it('rejects dispatch item with gate.required (synthesis-only field)', () => {
+    const recipe = baseRecipe([
+      actItemWithExtras({
+        writes: {
+          request_path: 'artifacts/dispatch/act.request.json',
+          receipt_path: 'artifacts/dispatch/act.receipt.txt',
+          result_path: 'artifacts/dispatch/act.result.json',
+        },
+        gate: { pass: ['accept'], required: ['summary'] },
+      }),
+    ]);
+    const result = WorkflowRecipe.safeParse(recipe);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.message).toMatch(
+        /gate\.required is only allowed for synthesis\|verification execution/,
+      );
+    }
+  });
+
+  it('rejects checkpoint_policy on non-checkpoint execution', () => {
+    const recipe = baseRecipe([
+      frameItemWithExtras({
+        writes: { artifact_path: 'artifacts/brief.json' },
+        gate: { required: ['scope'] },
+        checkpoint_policy: {
+          prompt: 'go?',
+          choices: [{ id: 'continue' }],
+        },
+      }),
+    ]);
+    const result = WorkflowRecipe.safeParse(recipe);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.message).toMatch(
+        /checkpoint_policy is only allowed for checkpoint execution/,
+      );
+    }
+  });
+
+  it('accepts recipe-level entry, entry_modes, spine_policy, phases', () => {
+    const recipe = {
+      ...baseRecipe([
+        frameItemWithExtras({
+          writes: { artifact_path: 'artifacts/brief.json' },
+          gate: { required: ['scope'] },
+        }),
+      ]),
+      version: '0.1.0',
+      entry: { signals: { include: ['demo'], exclude: [] }, intent_prefixes: ['demo'] },
+      entry_modes: [{ name: 'default', rigor: 'standard', description: 'default mode' }],
+      spine_policy: {
+        mode: 'partial',
+        omits: ['analyze', 'plan', 'act', 'verify', 'review', 'close'],
+        rationale: 'demo recipe with only a frame phase for testing',
+      },
+      phases: [{ canonical: 'frame', id: 'frame-phase', title: 'Frame' }],
+    };
+    const result = WorkflowRecipe.safeParse(recipe);
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects duplicate entry mode names', () => {
+    const recipe = {
+      ...baseRecipe([
+        frameItemWithExtras({
+          writes: { artifact_path: 'artifacts/brief.json' },
+          gate: { required: ['scope'] },
+        }),
+      ]),
+      entry_modes: [
+        { name: 'default', rigor: 'standard', description: 'a' },
+        { name: 'default', rigor: 'lite', description: 'b' },
+      ],
+    };
+    const result = WorkflowRecipe.safeParse(recipe);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.message).toMatch(/duplicate entry mode name: default/);
+    }
+  });
+
+  it('rejects phases entry mismatch with item phase usage', () => {
+    const recipe = {
+      ...baseRecipe([
+        frameItemWithExtras({
+          writes: { artifact_path: 'artifacts/brief.json' },
+          gate: { required: ['scope'] },
+        }),
+      ]),
+      phases: [{ canonical: 'analyze', id: 'analyze-phase', title: 'Analyze' }],
+    };
+    const result = WorkflowRecipe.safeParse(recipe);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.message).toMatch(
+        /phases is missing an entry for canonical phase 'frame'/,
+      );
+    }
+  });
+
+  it('rejects spine_policy.omits that includes a used canonical phase', () => {
+    const recipe = {
+      ...baseRecipe([
+        frameItemWithExtras({
+          writes: { artifact_path: 'artifacts/brief.json' },
+          gate: { required: ['scope'] },
+        }),
+      ]),
+      spine_policy: {
+        mode: 'partial',
+        omits: ['frame'],
+        rationale: 'invalid omit because frame is used by an item',
+      },
+    };
+    const result = WorkflowRecipe.safeParse(recipe);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.message).toMatch(
+        /canonical phase 'frame' is omitted but used by at least one item/,
+      );
+    }
   });
 });

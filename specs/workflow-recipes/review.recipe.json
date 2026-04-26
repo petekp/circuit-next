@@ -2,65 +2,104 @@
   "schema_version": "1",
   "id": "review",
   "title": "Review Recipe",
-  "purpose": "Express the audit-only Review workflow as a primitive composition. Frame the audit scope, dispatch an independent reviewer, and close with a verdict. Mirrors .claude-plugin/skills/review/circuit.json (intake -> audit -> verdict) using canonical recipe primitives so the substrate can drive Review through runRecipe.",
+  "purpose": "P2.9 audit-only review workflow. Three-phase spine: Intake -> Independent Audit -> Verdict. The reviewer runs as a worker dispatch in the analyze phase; the close phase owns the final review.result artifact.",
   "status": "active",
-  "starts_at": "review-frame",
+  "version": "0.1.0",
+  "starts_at": "intake-step",
   "initial_contracts": ["task.intake@v1", "route.decision@v1"],
-  "contract_aliases": [],
+  "contract_aliases": [
+    { "generic": "workflow.brief@v1", "actual": "review.intake@v1" },
+    { "generic": "review.verdict@v1", "actual": "review.verdict@v1" },
+    { "generic": "workflow.result@v1", "actual": "review.result@v1" }
+  ],
+  "entry": {
+    "signals": {
+      "include": ["review", "audit", "check"],
+      "exclude": []
+    },
+    "intent_prefixes": ["review"]
+  },
+  "entry_modes": [
+    {
+      "name": "default",
+      "rigor": "standard",
+      "description": "Default review entry mode — resolves the review scope, dispatches an independent audit, then writes the verdict artifact."
+    }
+  ],
+  "spine_policy": {
+    "mode": "partial",
+    "omits": ["plan", "act", "verify", "review"],
+    "rationale": "Review is an audit-only workflow in P2.9: Intake frames the scope, Independent Audit performs the reviewer dispatch, and Verdict aggregates findings. There is no planning phase, no implementation/action phase, no verification rerun, and no nested review phase in this narrowed variant."
+  },
+  "phases": [
+    { "canonical": "frame", "id": "intake-phase", "title": "Intake" },
+    { "canonical": "analyze", "id": "audit-phase", "title": "Independent Audit" },
+    { "canonical": "close", "id": "verdict-phase", "title": "Verdict" }
+  ],
   "items": [
     {
-      "id": "review-frame",
+      "id": "intake-step",
       "uses": "frame",
-      "title": "Frame the audit scope",
+      "title": "Intake — resolve review scope",
       "phase": "frame",
       "input": {
         "task": "task.intake@v1",
         "route": "route.decision@v1"
       },
-      "output": "workflow.brief@v1",
+      "output": "review.intake@v1",
       "evidence_requirements": ["scope boundary", "constraints", "proof plan"],
-      "execution": {
-        "kind": "synthesis"
+      "execution": { "kind": "synthesis" },
+      "protocol": "review-intake@v1",
+      "writes": {
+        "artifact_path": "artifacts/review-intake.json"
       },
+      "gate": { "required": ["scope"] },
       "routes": {
-        "continue": "review-audit",
+        "continue": "audit-step",
         "stop": "@stop"
       }
     },
     {
-      "id": "review-audit",
+      "id": "audit-step",
       "uses": "review",
-      "title": "Independent audit pass",
-      "phase": "review",
+      "title": "Independent Audit — reviewer dispatch",
+      "phase": "analyze",
       "input": {
-        "brief": "workflow.brief@v1"
+        "brief": "review.intake@v1"
       },
       "output": "review.verdict@v1",
       "evidence_requirements": ["verdict", "findings", "confidence", "required fixes"],
-      "execution": {
-        "kind": "dispatch",
-        "role": "reviewer"
+      "execution": { "kind": "dispatch", "role": "reviewer" },
+      "protocol": "review-audit@v1",
+      "writes": {
+        "request_path": "artifacts/dispatch/review.request.json",
+        "receipt_path": "artifacts/dispatch/review.receipt.txt",
+        "result_path": "phases/analyze/review-raw-findings.json"
       },
+      "gate": { "pass": ["NO_ISSUES_FOUND", "ISSUES_FOUND"] },
       "routes": {
-        "continue": "review-close",
-        "retry": "review-audit",
+        "continue": "verdict-step",
+        "retry": "audit-step",
         "stop": "@stop"
       }
     },
     {
-      "id": "review-close",
+      "id": "verdict-step",
       "uses": "close-with-evidence",
-      "title": "Close with audit verdict",
+      "title": "Verdict — emit review.result",
       "phase": "close",
       "input": {
-        "brief": "workflow.brief@v1",
+        "brief": "review.intake@v1",
         "review": "review.verdict@v1"
       },
-      "output": "workflow.result@v1",
+      "output": "review.result@v1",
       "evidence_requirements": ["outcome", "evidence pointers", "residual risks", "follow-ups"],
-      "execution": {
-        "kind": "synthesis"
+      "execution": { "kind": "synthesis" },
+      "protocol": "review-verdict@v1",
+      "writes": {
+        "artifact_path": "artifacts/review-result.json"
       },
+      "gate": { "required": ["scope", "findings", "verdict"] },
       "routes": {
         "complete": "@complete",
         "stop": "@stop"

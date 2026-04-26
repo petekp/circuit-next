@@ -37,8 +37,8 @@ const WorkflowBody = z
       .strict(),
     entry_modes: z.array(EntryMode).min(1),
     phases: z.array(Phase).min(1),
-    steps: z.array(Step).min(1),
     spine_policy: SpinePolicy,
+    steps: z.array(Step).min(1),
     // Codex HIGH #5 fold-in — legacy skill channels removed. Seed skill set
     // is now expressed through `default_selection.skills = {mode: 'replace',
     // skills: [...]}` so every skill contribution flows through the typed

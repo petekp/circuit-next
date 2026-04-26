@@ -1,13 +1,16 @@
 import { z } from 'zod';
-import { StepId, WorkflowId } from './ids.js';
+import { PhaseId, ProtocolId, StepId, WorkflowId } from './ids.js';
+import { Lane } from './lane.js';
 import {
   CANONICAL_PHASES,
   CanonicalPhase,
   type CanonicalPhase as CanonicalPhaseValue,
+  SpinePolicy,
 } from './phase.js';
+import { RunRelativePath } from './primitives.js';
 import { Rigor } from './rigor.js';
 import { SelectionOverride } from './selection-policy.js';
-import { DispatchRole } from './step.js';
+import { CheckpointPolicy, DispatchRole } from './step.js';
 import {
   WorkflowPrimitiveCatalog,
   type WorkflowPrimitiveCatalog as WorkflowPrimitiveCatalogValue,
@@ -100,6 +103,40 @@ export const WorkflowRecipeExecution = z
   });
 export type WorkflowRecipeExecution = z.infer<typeof WorkflowRecipeExecution>;
 
+// Per-item write paths. Conditional on execution.kind:
+//   synthesis | verification           → artifact_path required (single-artifact write)
+//   dispatch                           → request_path, receipt_path, result_path required;
+//                                        artifact_path optional (worker-emitted typed artifact)
+//   checkpoint                         → checkpoint_request_path, checkpoint_response_path required;
+//                                        artifact_path optional (only for build_brief checkpoints)
+// Cross-field shape is enforced at the WorkflowRecipeItem superRefine where
+// execution.kind is in scope.
+export const WorkflowRecipeWrites = z
+  .object({
+    artifact_path: RunRelativePath.optional(),
+    request_path: RunRelativePath.optional(),
+    receipt_path: RunRelativePath.optional(),
+    result_path: RunRelativePath.optional(),
+    checkpoint_request_path: RunRelativePath.optional(),
+    checkpoint_response_path: RunRelativePath.optional(),
+  })
+  .strict();
+export type WorkflowRecipeWrites = z.infer<typeof WorkflowRecipeWrites>;
+
+// Per-item gate metadata. Conditional on execution.kind:
+//   synthesis | verification           → required: SchemaSectionsGate.required
+//   checkpoint                         → allow: CheckpointSelectionGate.allow
+//   dispatch                           → pass: ResultVerdictGate.pass
+// Cross-field shape is enforced at the WorkflowRecipeItem superRefine.
+export const WorkflowRecipeGate = z
+  .object({
+    required: z.array(z.string().min(1)).min(1).optional(),
+    allow: z.array(z.string().min(1)).min(1).optional(),
+    pass: z.array(z.string().min(1)).min(1).optional(),
+  })
+  .strict();
+export type WorkflowRecipeGate = z.infer<typeof WorkflowRecipeGate>;
+
 export const WorkflowRecipeItem = z
   .object({
     id: StepId,
@@ -117,6 +154,15 @@ export const WorkflowRecipeItem = z
       return Object.keys(routes).length > 0;
     }, 'recipe item must declare at least one route'),
     route_overrides: z.record(z.string(), WorkflowRecipeRouteModeOverrides).default({}),
+    // The fields below are required by the recipe → Workflow compiler. They
+    // are optional at parse time so existing candidate recipes remain
+    // parseable while the active recipes (build/explore/review) are
+    // populated incrementally. The compiler enforces presence and
+    // (kind, gate, writes) shape.
+    protocol: ProtocolId.optional(),
+    writes: WorkflowRecipeWrites.optional(),
+    gate: WorkflowRecipeGate.optional(),
+    checkpoint_policy: CheckpointPolicy.optional(),
   })
   .strict()
   .superRefine((item, ctx) => {
@@ -154,8 +200,180 @@ export const WorkflowRecipeItem = z
         });
       }
     }
+    validateExecutionShape(item, ctx);
   });
 export type WorkflowRecipeItem = z.infer<typeof WorkflowRecipeItem>;
+
+// Cross-field check for the optional executor metadata. When `writes` or
+// `gate` is supplied, its shape must match `execution.kind`. When
+// `checkpoint_policy` is supplied, `execution.kind` must be 'checkpoint'.
+// Absence is allowed (these fields are populated per-recipe over time and
+// the compiler raises a separate "missing" diagnostic).
+function validateExecutionShape(
+  item: {
+    execution: WorkflowRecipeExecution;
+    writes?: WorkflowRecipeWrites | undefined;
+    gate?: WorkflowRecipeGate | undefined;
+    checkpoint_policy?: CheckpointPolicy | undefined;
+  },
+  ctx: z.RefinementCtx,
+): void {
+  const kind = item.execution.kind;
+
+  if (item.writes !== undefined) {
+    const w = item.writes;
+    const has = (key: keyof WorkflowRecipeWrites) => w[key] !== undefined;
+    const expectArtifact = () => {
+      if (!has('artifact_path')) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['writes', 'artifact_path'],
+          message: `${kind} execution requires writes.artifact_path`,
+        });
+      }
+    };
+    const expectDispatchSlots = () => {
+      for (const key of ['request_path', 'receipt_path', 'result_path'] as const) {
+        if (!has(key)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['writes', key],
+            message: `dispatch execution requires writes.${key}`,
+          });
+        }
+      }
+    };
+    const expectCheckpointSlots = () => {
+      for (const key of ['checkpoint_request_path', 'checkpoint_response_path'] as const) {
+        if (!has(key)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['writes', key],
+            message: `checkpoint execution requires writes.${key}`,
+          });
+        }
+      }
+    };
+    const forbid = (key: keyof WorkflowRecipeWrites, allowedKinds: string) => {
+      if (has(key)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['writes', key],
+          message: `writes.${key} is only allowed for ${allowedKinds} execution`,
+        });
+      }
+    };
+    switch (kind) {
+      case 'synthesis':
+      case 'verification':
+        expectArtifact();
+        forbid('request_path', 'dispatch');
+        forbid('receipt_path', 'dispatch');
+        forbid('result_path', 'dispatch');
+        forbid('checkpoint_request_path', 'checkpoint');
+        forbid('checkpoint_response_path', 'checkpoint');
+        break;
+      case 'dispatch':
+        expectDispatchSlots();
+        forbid('checkpoint_request_path', 'checkpoint');
+        forbid('checkpoint_response_path', 'checkpoint');
+        break;
+      case 'checkpoint':
+        expectCheckpointSlots();
+        forbid('request_path', 'dispatch');
+        forbid('receipt_path', 'dispatch');
+        forbid('result_path', 'dispatch');
+        break;
+    }
+  }
+
+  if (item.gate !== undefined) {
+    const g = item.gate;
+    const expectField = (field: 'required' | 'allow' | 'pass', forKinds: string) => {
+      if (g[field] === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['gate', field],
+          message: `${forKinds} execution requires gate.${field}`,
+        });
+      }
+    };
+    const forbidField = (field: 'required' | 'allow' | 'pass', allowedKinds: string) => {
+      if (g[field] !== undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['gate', field],
+          message: `gate.${field} is only allowed for ${allowedKinds} execution`,
+        });
+      }
+    };
+    switch (kind) {
+      case 'synthesis':
+      case 'verification':
+        expectField('required', `${kind}`);
+        forbidField('allow', 'checkpoint');
+        forbidField('pass', 'dispatch');
+        break;
+      case 'checkpoint':
+        expectField('allow', 'checkpoint');
+        forbidField('required', 'synthesis|verification');
+        forbidField('pass', 'dispatch');
+        break;
+      case 'dispatch':
+        expectField('pass', 'dispatch');
+        forbidField('required', 'synthesis|verification');
+        forbidField('allow', 'checkpoint');
+        break;
+    }
+  }
+
+  if (item.checkpoint_policy !== undefined && kind !== 'checkpoint') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['checkpoint_policy'],
+      message: 'checkpoint_policy is only allowed for checkpoint execution',
+    });
+  }
+}
+
+// Recipe-level entry mode. Each emitted Workflow inherits these as
+// Workflow.entry_modes[i] with start_at = recipe.starts_at.
+export const WorkflowRecipeEntryMode = z
+  .object({
+    name: z.string().regex(/^[a-z][a-z0-9-]*$/),
+    rigor: Rigor,
+    description: z.string().min(1),
+    default_lane: Lane.optional(),
+  })
+  .strict();
+export type WorkflowRecipeEntryMode = z.infer<typeof WorkflowRecipeEntryMode>;
+
+// Per-canonical-phase metadata. Lets a recipe map its canonical phases
+// to author-friendly phase ids and titles ("Synthesize" for explore's
+// canonical=act phase, "Independent Audit" for review's canonical=analyze).
+export const WorkflowRecipePhase = z
+  .object({
+    canonical: CanonicalPhase,
+    id: PhaseId,
+    title: z.string().min(1),
+  })
+  .strict();
+export type WorkflowRecipePhase = z.infer<typeof WorkflowRecipePhase>;
+
+// Recipe-level entry classification — matches Workflow.entry shape so the
+// compiler can pass it through directly.
+export const WorkflowRecipeEntry = z
+  .object({
+    signals: z
+      .object({
+        include: z.array(z.string()).default([]),
+        exclude: z.array(z.string()).default([]),
+      })
+      .strict(),
+    intent_prefixes: z.array(z.string()).default([]),
+  })
+  .strict();
+export type WorkflowRecipeEntry = z.infer<typeof WorkflowRecipeEntry>;
 
 export const WorkflowRecipe = z
   .object({
@@ -168,6 +386,15 @@ export const WorkflowRecipe = z
     initial_contracts: z.array(WorkflowPrimitiveContractRef).default([]),
     contract_aliases: z.array(WorkflowRecipeContractAlias).default([]),
     items: z.array(WorkflowRecipeItem).min(1),
+    // Compiler-required metadata. Optional at parse time so candidate recipes
+    // (and recipes still being upgraded) keep parsing. The compiler enforces
+    // presence and consistency at emit time.
+    version: z.string().min(1).optional(),
+    entry: WorkflowRecipeEntry.optional(),
+    entry_modes: z.array(WorkflowRecipeEntryMode).min(1).optional(),
+    spine_policy: SpinePolicy.optional(),
+    phases: z.array(WorkflowRecipePhase).optional(),
+    default_selection: SelectionOverride.optional(),
   })
   .strict()
   .superRefine((recipe, ctx) => {
@@ -228,6 +455,95 @@ export const WorkflowRecipe = z
         });
       }
       aliases.add(key);
+    }
+
+    if (recipe.entry_modes !== undefined) {
+      const seenNames = new Set<string>();
+      for (const [index, mode] of recipe.entry_modes.entries()) {
+        if (seenNames.has(mode.name)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['entry_modes', index, 'name'],
+            message: `duplicate entry mode name: ${mode.name}`,
+          });
+        }
+        seenNames.add(mode.name);
+      }
+    }
+
+    if (recipe.phases !== undefined) {
+      const seenCanonicals = new Set<CanonicalPhaseValue>();
+      const seenIds = new Set<string>();
+      for (const [index, phase] of recipe.phases.entries()) {
+        if (seenCanonicals.has(phase.canonical)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['phases', index, 'canonical'],
+            message: `duplicate canonical phase mapping: ${phase.canonical}`,
+          });
+        }
+        seenCanonicals.add(phase.canonical);
+        if (seenIds.has(phase.id as unknown as string)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['phases', index, 'id'],
+            message: `duplicate phase id: ${phase.id}`,
+          });
+        }
+        seenIds.add(phase.id as unknown as string);
+      }
+      // Every canonical phase touched by any item must have a phases entry.
+      const itemCanonicals = new Set<CanonicalPhaseValue>(recipe.items.map((item) => item.phase));
+      for (const canonical of itemCanonicals) {
+        if (!seenCanonicals.has(canonical)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['phases'],
+            message: `phases is missing an entry for canonical phase '${canonical}' which is used by at least one item`,
+          });
+        }
+      }
+      // The reverse — phases entries that no item references — is allowed
+      // for now; the compiler may still want to declare empty phases for
+      // spine completeness. spine_policy carries the omit story.
+    }
+
+    if (recipe.spine_policy !== undefined && recipe.spine_policy.mode === 'partial') {
+      const seenOmits = new Set<CanonicalPhaseValue>();
+      for (const [index, omitted] of recipe.spine_policy.omits.entries()) {
+        if (seenOmits.has(omitted)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['spine_policy', 'omits', index],
+            message: `duplicate omitted phase: ${omitted}`,
+          });
+        }
+        seenOmits.add(omitted);
+      }
+      // omits must be disjoint from phases.canonical when both are present.
+      if (recipe.phases !== undefined) {
+        const declared = new Set(recipe.phases.map((phase) => phase.canonical));
+        for (const omitted of seenOmits) {
+          if (declared.has(omitted)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ['spine_policy', 'omits'],
+              message: `canonical phase '${omitted}' is both declared in phases and listed in spine_policy.omits`,
+            });
+          }
+        }
+      }
+      // omits must not include a phase that any item uses.
+      const itemCanonicals = new Set<CanonicalPhaseValue>(recipe.items.map((item) => item.phase));
+      for (const omitted of seenOmits) {
+        if (itemCanonicals.has(omitted)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['spine_policy', 'omits'],
+            message: `canonical phase '${omitted}' is omitted but used by at least one item`,
+          });
+        }
+      }
     }
   });
 export type WorkflowRecipe = z.infer<typeof WorkflowRecipe>;
@@ -361,17 +677,26 @@ function recipeItemRouteOutcomes(item: WorkflowRecipeItem): string[] {
   return [...new Set([...Object.keys(item.routes), ...Object.keys(item.route_overrides)])];
 }
 
+// Recipe-author-selectable execution kinds for a primitive. The catalog's
+// `action_surface` describes the primitive's *typical* role, but the actual
+// committed Workflows show that primitives are flexibly used: Build's plan
+// is inline synthesis though the catalog calls plan a "worker" primitive;
+// Build's frame is a checkpoint though frame is "orchestrator". Treat
+// action_surface as a recommendation: a worker primitive can be dispatched
+// OR done inline as synthesis; an orchestrator primitive can write a brief
+// (synthesis) OR pause for confirmation (checkpoint). The runtime decides
+// based on rigor and architecture.
 function acceptedExecutionKinds(
   primitive: WorkflowPrimitiveValue,
 ): readonly WorkflowRecipeExecutionKind[] {
   if (primitive.id === 'run-verification') return ['verification'];
   switch (primitive.action_surface) {
     case 'worker':
-      return ['dispatch'];
+      return ['dispatch', 'synthesis'];
     case 'host':
       return ['checkpoint'];
     case 'orchestrator':
-      return ['synthesis'];
+      return ['synthesis', 'checkpoint'];
     case 'mixed':
       return ['synthesis', 'dispatch', 'verification', 'checkpoint'];
   }
@@ -395,7 +720,11 @@ function acceptedPhases(primitive: WorkflowPrimitiveValue): readonly CanonicalPh
     case 'run-verification':
       return ['verify'];
     case 'review':
-      return ['review'];
+      // Review primitive runs in the canonical 'review' phase by default,
+      // but the audit-only Review workflow places its reviewer dispatch in
+      // the canonical 'analyze' phase (the audit IS the analysis there;
+      // there is no separate "act + review" structure to gate against).
+      return ['review', 'analyze'];
     case 'risk-rollback-check':
       return ['verify', 'close'];
     case 'close-with-evidence':

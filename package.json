@@ -17,7 +17,9 @@
     "test:watch": "vitest",
     "lint": "biome check .",
     "format": "biome format --write .",
-    "verify": "npm run check && npm run lint && npm run build && npm run test",
+    "emit-workflows": "npm run build && node scripts/emit-workflows.mjs",
+    "check-workflow-drift": "npm run build && node scripts/emit-workflows.mjs --check",
+    "verify": "npm run check && npm run lint && npm run build && npm run test && node scripts/emit-workflows.mjs --check",
     "circuit:run": "./bin/circuit-next"
   },
   "dependencies": {

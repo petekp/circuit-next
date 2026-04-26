@@ -168,7 +168,11 @@
       "id": "close-step",
       "title": "Close — emit final result artifact",
       "protocol": "explore-close@v1",
-      "reads": ["artifacts/synthesis.json", "artifacts/review-verdict.json"],
+      "reads": [
+        "artifacts/brief.json",
+        "artifacts/synthesis.json",
+        "artifacts/review-verdict.json"
+      ],
       "routes": {
         "pass": "@complete"
       },
