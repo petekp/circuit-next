@@ -1,10 +1,10 @@
 ---
 plan: recipe-runtime-substrate
 status: challenger-pending
-revision: 02
+revision: 03
 opened_at: 2026-04-26
 opened_in_session: recipe-runtime-substrate-arc-open
-base_commit: dcfeb517ee2e7d2ae44efc66d96b27e5fee2f0f2
+base_commit: b98c5457b89ae1569c178061fb0805f11166cbfa
 target: recipe-substrate
 authority:
   - specs/methodology/decision.md
@@ -30,57 +30,67 @@ artifact_ids:
   - workflow.recipe_definition
 prior_challenger_passes:
   - specs/reviews/recipe-runtime-substrate-codex-challenger-01.md
+  - specs/reviews/recipe-runtime-substrate-codex-challenger-02.md
 ---
 
 # Recipe Runtime Substrate Plan
 
 A prerequisite arc for the compiled-recipe-runtime-bridge. The bridge as
 revised in revision 02 (challenger pass 02, REJECT) cannot resolve runtime
-fields out of authorities that do not encode them: there is no `protocol_id`
-authority that satisfies the runtime `ProtocolId` regex (`name@v1`-shaped),
-the primitive-catalog `gate` field is a description string instead of a
-structured runtime payload, primitives carry no checkpoint prompt / choices
-/ safe-default-choice data, and per-item `writes.artifact.{path, schema}`
-sources do not exist outside the workflow-specific `FIX_RESULT_*` tables.
-This arc widens the recipe-domain authorities so the bridge has real
-sources to compile against. Two slices land it: a Heavy slice that adds
-five runtime-payload fields across `WorkflowPrimitive` and `WorkflowRecipe`
-and atomically backfills the catalog plus the Fix recipe, and an
-arc-close composition review wired into `ARC_CLOSE_GATES`.
+fields out of authorities that do not encode them. This arc widens the
+recipe-domain authorities so the bridge has real sources to compile
+against. Two slices land it: a Heavy slice that adds workflow-specific
+runtime payload at the **recipe-item** layer (and a single typed
+`workflow_kind` at the recipe layer) and atomically backfills the catalog
+plus the Fix recipe, and an arc-close composition review wired into
+`ARC_CLOSE_GATES`.
 
-Revision 02 fold-ins from challenger pass 01 (REJECT-PENDING-FOLD-INS,
-3C / 1H / 1M):
+Revision 03 is a structural reframe driven by challenger pass 02
+(REJECT-PENDING-FOLD-INS, 2C / 1H / 1M). Pass 02 verified that the
+revision-02 layering — workflow-specific runtime payload bound to
+`WorkflowPrimitive` — was wrong: the same primitive (`human-decision`,
+`frame`, `batch`) is intentionally reused across multiple recipes with
+distinct concrete payloads, so binding one `protocol_role`, one
+`runtime_gate_template.kind`, one `checkpoint_template`, and one
+concrete `write_slot` `{path, schema}` to the primitive forces a single
+recipe's concretes into the shared catalog and turns ordinary reuse into
+a schema contradiction. Revision 03 keeps the revision-02 shape
+decisions (decompose `protocol_id`, drop Slice B, derive runtime
+`gate.allow` from `checkpoint_policy.choices`, mirror runtime
+`CheckpointPolicy`) and **moves the workflow-specific payload from the
+primitive layer to the recipe-item layer**:
 
-- F1 (CRITICAL): `protocol_id` reshaped from a coarse five-value enum
-  into two orthogonal authorities — `WorkflowRecipe.workflow_kind`
-  (existing `WORKFLOW_KIND_CANONICAL_SETS` keys) plus
-  `WorkflowPrimitive.protocol_role` (slug-shaped). The bridge composes
-  `Step.protocol = '${workflow_kind}-${protocol_role}@v${protocol_version}'`,
-  which is structurally guaranteed to satisfy the runtime `ProtocolId`
-  regex `/^[a-z][a-z0-9-]*@v\d+$/`.
-- F2 (CRITICAL): Slice B dropped entirely. The premise — Fix calls
-  `human-decision` twice with distinct prompts — was factually wrong;
-  the Fix recipe has exactly one checkpoint item. The per-item override
-  slot is forward-looking infrastructure not needed by any current
-  recipe; it can be added by a future recipe that genuinely needs it,
-  without blocking the bridge.
-- F3 (CRITICAL): `write_slots` re-keyed against the primitive's GENERIC
-  output contract refs only (e.g., `workflow.brief@v1`), not against
-  recipe-specific aliases (e.g., `fix.brief@v1`). The bridge applies
-  `recipe.contract_aliases` resolution at compile time to pick the
-  concrete artifact slot. Shared primitives stay free of recipe-specific
-  alias keys, preserving ADR-0013 separation.
-- F4 (HIGH): `runtime_gate_template` for the `checkpoint_selection`
-  variant carries no `allow` field. The runtime `gate.allow` is derived
-  at bridge time from the effective `checkpoint_template.choices.id`
-  list, so the runtime `gate.allow === policy.choices.id` invariant is
-  satisfied by construction with one source of truth.
-- F5 (MED): `checkpoint_template` widened to fully mirror the runtime
-  `CheckpointPolicy` surface — structured `{id, label?, description?}`
-  choices, optional `safe_default_choice` and `safe_autonomous_choice`
-  (each must reference a declared choice id), optional `build_brief`
-  block. No checkpoint widening is forced; primitives that do not need
-  a slot omit it.
+- F1 (CRITICAL fold-in): `protocol_role`, `runtime_gate_template`, and
+  `checkpoint_policy` move from `WorkflowPrimitive` to a new
+  `WorkflowRecipeItem.runtime_step` block. The same primitive can now
+  back distinct recipe items with distinct concretes (E22). Primitive
+  keeps only the truly invariant `protocol_version` integer (default 1
+  in the catalog). Bridge composes
+  `Step.protocol = '${recipe.workflow_kind}-${recipe_item.runtime_step.protocol_role}@v${primitive.protocol_version}'`.
+- F2 (CRITICAL fold-in): `write_target` `{path, schema}` moves from
+  `WorkflowPrimitive.write_slots` to
+  `WorkflowRecipeItem.runtime_step.write_target`. The `frame` primitive
+  no longer binds one concrete artifact path; each recipe item carries
+  its own concrete target (E23). Primitive surface is fully generic
+  again — no `write_slots` map.
+- F3 (HIGH fold-in): `gate_template.kind` is per recipe-item, paired
+  with the item's own `execution.kind`. The `batch` primitive (mixed
+  `action_surface`, legally usable as `synthesis | dispatch |
+  verification | checkpoint` per `acceptedExecutionKinds`) can now be
+  reused across recipe items with different gate kinds without schema
+  contradiction (E24).
+- F4 (MED fold-in): the `WorkflowKind` slug-shape drift check is
+  strengthened. Slice A's contract test now (a) asserts every key in
+  `WORKFLOW_KIND_CANONICAL_SETS` satisfies
+  `/^[a-z][a-z0-9-]*$/`, and (b) for every `WorkflowKind` value AND
+  every `WorkflowRecipeItem.runtime_step.protocol_role` value in the
+  Fix recipe, asserts the composed string
+  `'${workflow_kind}-${protocol_role}@v${primitive.protocol_version}'`
+  parses against `ProtocolId` (E25). The smoke test is no longer
+  `'fix'`-only.
+- Frontmatter `base_commit` advances from `dcfeb517…` (slice-156, the
+  plan draft) to `b98c5457…` (slice-156a, the actual base of the
+  fold-in revision). Pass 02 caught the stale ref.
 
 The bridge plan (`specs/plans/compiled-recipe-runtime-bridge.md`) stays
 at challenger-pending revision 02 until this arc closes; revision 03 of
@@ -95,24 +105,28 @@ Authoritative artifacts touched, in their current shape:
 | E1 | `WorkflowPrimitive` is `{id, title, purpose, input_contracts, alternative_input_contracts, output_contract, action_surface, produces_evidence, gate: {kind, description}, allowed_routes, human_interaction, host_capabilities, notes?}`. The `gate` field is a `{kind, description}` pair where `kind` ∈ `schema|decision|command|review|risk|queue` and `description` is free-form prose. There is no structured runtime gate payload (`required[]`, `pass[]`, `allow[]`), no `protocol_id`, no checkpoint template, and no per-output write-slot table. | verified | `src/schemas/workflow-primitives.ts:107-128` |
 | E2 | The runtime `Gate` discriminated union in `src/schemas/gate.ts` has three variants: `SchemaSectionsGate` (kind `schema_sections`, source `artifact`, `required: string[].min(1)`), `CheckpointSelectionGate` (kind `checkpoint_selection`, source `checkpoint_response`, `allow: string[].min(1)`), `ResultVerdictGate` (kind `result_verdict`, source `dispatch_result`, `pass: string[].min(1)`). Each variant's `source.kind` is structurally bound to its gate kind by Zod literals. | verified | `src/schemas/gate.ts:49-81` |
 | E3 | `Step` is a discriminated union over `SynthesisStep`, `VerificationStep`, `CheckpointStep`, `DispatchStep` in `src/schemas/step.ts`. Synthesis and verification require `SchemaSectionsGate`. Checkpoint requires `CheckpointSelectionGate` and `policy: CheckpointPolicy` carrying `prompt`, `choices`, `safe_default_choice`. Dispatch requires `ResultVerdictGate` and `role: DispatchRole`. Each step's `writes` carries concrete artifact paths and schema refs. | verified | `src/schemas/step.ts` |
-| E4 | `WorkflowRecipeItem` exposes `{id, uses, title, phase, input?, evidence_requirements?, execution: {kind: synthesis\|dispatch\|verification\|checkpoint, ...}, output, edges, selection?}`. There is no `prompt`, `choices`, `safe_default_choice`, or other checkpoint-customization slot on the item. Recipe items inherit data from the primitive they reference via `uses`. | verified | `src/schemas/workflow-recipe.ts` |
+| E4 | `WorkflowRecipeItem` exposes `{id, uses, title, phase, input?, evidence_requirements?, execution: {kind: synthesis\|dispatch\|verification\|checkpoint, ...}, output, edges, selection?}`. There is no `runtime_step`, `gate_template`, `checkpoint_policy`, or `write_target` slot on the item today. Recipe items inherit data from the primitive they reference via `uses`. | verified | `src/schemas/workflow-recipe.ts:103-158` |
 | E5 | The Fix recipe fixture (`specs/workflow-recipes/fix-candidate.recipe.json`) declares 12 items across `frame`, `analyze`, `act`, `verify`, `review`, `close`, with the canonical `plan` phase omitted by ADR-0013. Items reference primitives via `uses` and declare `output` as a contract ref string. | verified | `specs/workflow-recipes/fix-candidate.recipe.json`, `specs/workflow-recipes/fix-candidate.projection.json` |
 | E6 | `FIX_RESULT_PATH_BY_ARTIFACT_ID` and `FIX_RESULT_SCHEMA_BY_ARTIFACT_ID` are file-local `const` declarations (no `export`) in `src/schemas/artifacts/fix.ts:4,14`. They cover `fix.brief`, `fix.context`, `fix.diagnosis`, `fix.no-repro-decision`, `fix.change`, `fix.verification`, `fix.review`. They are workflow-specific (Fix-only) and not reusable by other recipes today. | verified | `src/schemas/artifacts/fix.ts:4,14` |
 | E7 | The primitive catalog (`specs/workflow-primitive-catalog.json`) carries 15 primitive entries matching `WORKFLOW_PRIMITIVE_IDS` in `src/schemas/workflow-primitives.ts:3-19`. Each entry has the same `gate: {kind, description}` shape as the schema. No catalog entry carries runtime gate payloads, protocol ids, checkpoint templates, or write slots today. | verified | `specs/workflow-primitive-catalog.json:1-80`, `src/schemas/workflow-primitives.ts:3-19` |
 | E8 | `workflow.primitive_catalog` is row 32 in `specs/artifacts.json` with `surface_class: greenfield`. `workflow.recipe_definition` is row 71 with `surface_class: greenfield`. Both rows are the materialization targets of this arc. | verified | `specs/artifacts.json:32`, `specs/artifacts.json:71` |
 | E9 | Codex challenger pass 02 against the bridge plan (`specs/reviews/compiled-recipe-runtime-bridge-codex-challenger-02.md`) returned REJECT-PENDING-FOLD-INS with two CRITICAL findings; finding 1 is the upstream-data shortfall this arc resolves. Pass 02's revision-03 path (a-3) names this prerequisite arc explicitly. | verified | `specs/reviews/compiled-recipe-runtime-bridge-codex-challenger-02.md:52-75,210-223` |
 | E10 | `ARC_CLOSE_GATES` in `scripts/audit.mjs` is the frozen array enforcing arc-close composition reviews; entries are `{arc_id, description, ceremony_slice, plan_path, review_file_regex}`. Slice 40 fold-in requires the two-prong gate to distinguish a Claude-prong file (name-match `*Claude*` / `*claude*`) from a Codex-prong file (name-match `*Codex*` / `*codex*`); a single-prong satisfaction is rejected. | verified | `scripts/audit.mjs` (ARC_CLOSE_GATES array; Slice 40 prong-distinction block) |
-| E11 | `PROJECT_STATE.md` `current_slice: 155` after the bridge revision-02 commit (`25359fd`). This arc opens at slice 156 or later, depending on operator dispatch. | verified | `PROJECT_STATE.md`, recent git log |
+| E11 | `PROJECT_STATE.md` `current_slice: 156` after the bridge revision-02 commit (`25359fd`) and the slice-156 plan-draft + slice-156a fold-in commits. This arc's slice-A implementation opens at 157 or later, depending on operator dispatch. | verified | `PROJECT_STATE.md`, recent git log |
 | E12 | `WorkflowPrimitiveRoute` in `src/schemas/workflow-primitives.ts:24-34` enumerates `continue, retry, revise, ask, split, stop, handoff, escalate, complete`. The runner outcome enum in `src/schemas/event.ts:56` is `{pass, fail}`. The recipe-outcome → runner-outcome lowering rule is a bridge-plan concern (revision 03 §5), not this arc's concern; this arc preserves the recipe-outcome vocabulary unchanged. | verified | `src/schemas/workflow-primitives.ts:24-34`, `src/schemas/event.ts:56` |
-| E13 | `tests/contracts/workflow-primitive-catalog.test.ts` and `tests/contracts/workflow-recipe.test.ts` are the existing contract tests that will gain assertions when the schemas widen. The existing `validateWorkflowRecipeCatalogCompatibility` lookup in `src/schemas/workflow-recipe.ts` joins recipes to primitives. | verified | `tests/contracts/workflow-primitive-catalog.test.ts`, `tests/contracts/workflow-recipe.test.ts`, `src/schemas/workflow-recipe.ts` |
-| E14 | The catalog widening cannot land schema and backfill in separate slices without breaking the parser between them: adding a required field to `WorkflowPrimitive` rejects the un-backfilled catalog. Atomic schema + backfill in one slice is the only ordering that keeps Tier-0 green at every commit. | inferred | derived from E1, E7 + Zod strict-mode parser semantics |
-| E15 | The Fix recipe (`specs/workflow-recipes/fix-candidate.recipe.json`) has exactly **one** checkpoint item (`fix-no-repro-decision`, in the `analyze` phase, using primitive `human-decision`). Multiple recipe items reach this checkpoint via `ask` route targets, but the checkpoint node itself is single. Per-item checkpoint customization is therefore not required by any current recipe; the existing checkpoint can be served entirely by the primitive-level `checkpoint_template` introduced in §5. Pass 01 finding F2. | verified | `specs/workflow-recipes/fix-candidate.recipe.json:184-185` (only `"kind": "checkpoint"` occurrence) |
+| E13 | `tests/contracts/workflow-primitive-catalog.test.ts` and `tests/contracts/workflow-recipe.test.ts` are the existing contract tests that will gain assertions when the schemas widen. The existing `validateWorkflowRecipeCatalogCompatibility` lookup in `src/schemas/workflow-recipe.ts` joins recipes to primitives. | verified | `tests/contracts/workflow-primitive-catalog.test.ts`, `tests/contracts/workflow-recipe.test.ts`, `src/schemas/workflow-recipe.ts:468-567` |
+| E14 | The catalog widening cannot land schema and backfill in separate slices without breaking the parser between them: adding a required field to `WorkflowPrimitive` rejects the un-backfilled catalog. Atomic schema + backfill in one slice is the only ordering that keeps Tier-0 green at every commit. The same logic applies to `WorkflowRecipeItem.runtime_step` and the Fix recipe backfill. | inferred | derived from E1, E4, E7 + Zod strict-mode parser semantics |
+| E15 | The Fix recipe (`specs/workflow-recipes/fix-candidate.recipe.json`) has exactly **one** checkpoint item (`fix-no-repro-decision`, in the `analyze` phase, using primitive `human-decision`). Multiple recipe items reach this checkpoint via `ask` route targets, but the checkpoint node itself is single. Per-item checkpoint customization at THIS recipe's scale is therefore not required for multi-checkpoint Fix flows; the structural justification for keying checkpoint policy at recipe-item level is cross-recipe reuse of `human-decision` (E22), not within-recipe multiplicity. | verified | `specs/workflow-recipes/fix-candidate.recipe.json:184-185` (only `"kind": "checkpoint"` occurrence) |
 | E16 | The runtime `ProtocolId` is a Zod string with regex `/^[a-z][a-z0-9-]*@v\d+$/` and brand `'ProtocolId'`. Live workflow fixtures use values like `build-frame@v1`, `build-act@v1`, `build-plan@v1`, `build-verify@v1`, confirming the structural pattern `{workflow-kind}-{protocol-role}@v{N}`. A coarse family enum (`fix`, `build`, ...) cannot satisfy this regex. Pass 01 finding F1. | verified | `src/schemas/ids.ts:26-30`, `tests/runner/build-checkpoint-exec.test.ts:76,150,188,240,278,293` |
-| E17 | `WorkflowRecipe` declares `contract_aliases: WorkflowRecipeContractAlias[]` mapping generic primitive output contracts (e.g., `workflow.brief@v1`) to recipe-specific concretes (e.g., `fix.brief@v1`). The Fix recipe declares 7 such aliases. The runtime helper `contractIsCompatible` already consults this map when joining recipe items to primitive output contracts. Storing recipe-specific keys in primitive-level `write_slots` would duplicate or fight this seam. Pass 01 finding F3. | verified | `src/schemas/workflow-recipe.ts:169,221,502,513`, `specs/workflow-recipes/fix-candidate.recipe.json:16-44` |
-| E18 | The runtime `Step` superRefine at `src/schemas/step.ts:166-175` requires `gate.allow === policy.choices.id` exactly (joined-by-NUL string equality). `CheckpointSelectionGate.allow` and `CheckpointPolicy.choices.id` are bound to a single source of truth at bridge time. A primitive-template carrying both authorities independently would invite drift. Pass 01 finding F4. | verified | `src/schemas/step.ts:166-175`, `src/schemas/gate.ts:58-65`, `src/schemas/step.ts:60-110` |
+| E17 | `WorkflowRecipe` declares `contract_aliases: WorkflowRecipeContractAlias[]` mapping generic primitive output contracts (e.g., `workflow.brief@v1`) to recipe-specific concretes (e.g., `fix.brief@v1`). The Fix recipe declares 9 such aliases. The runtime helper `contractIsCompatible` already consults this map when joining recipe items to primitive output contracts. The aliases translate contract refs only, not artifact paths or schemas — pass 02 finding F2 caught that revision 02's "generic-keyed `write_slots`" still bound concrete `{path, schema}` payloads at the primitive layer. Revision 03 moves the payload to the recipe item. | verified | `src/schemas/workflow-recipe.ts:39-44,169,221`, `specs/workflow-recipes/fix-candidate.recipe.json:16-53` |
+| E18 | The runtime `Step` superRefine at `src/schemas/step.ts:166-175` requires `gate.allow === policy.choices.id` exactly (joined-by-NUL string equality). `CheckpointSelectionGate.allow` and `CheckpointPolicy.choices.id` are bound to a single source of truth at bridge time. The bridge derives `gate.allow` from `recipe_item.runtime_step.checkpoint_policy.choices.map(c => c.id)` so the invariant holds by construction. | verified | `src/schemas/step.ts:166-175`, `src/schemas/gate.ts:58-65`, `src/schemas/step.ts:60-110` |
 | E19 | The runtime `CheckpointPolicy` (`src/schemas/step.ts:60-110`) exposes structured `choices: Array<{id, label?, description?}>`, optional `safe_default_choice`, optional `safe_autonomous_choice` (each must reference a declared choice id), and optional `build_brief: {scope, success_criteria, verification_command_candidates}`. A bare-string template surface is strictly narrower than what the runtime supports today. Pass 01 finding F5. | verified | `src/schemas/step.ts:60-110` |
 | E20 | `WORKFLOW_KIND_CANONICAL_SETS` at `scripts/policy/workflow-kind-policy.mjs:37-62` enumerates `{explore, review, build, fix}` as the canonical workflow kinds, each with its own canonical phase set. Fix's canonicals are `[frame, analyze, act, verify, review, close]` with `omits: [plan]`. A `WorkflowKind` Zod enum mirroring these keys gives the bridge a typed source for the workflow-kind half of the protocol id. | verified | `scripts/policy/workflow-kind-policy.mjs:37-62` |
-| E21 | Unknown-blocking: none. The five target fields and their placement (primitive-level vs recipe-level) are concrete in §5; the bridge composes `Step.protocol` from `recipe.workflow_kind` + `primitive.protocol_role` at compile time. The lowering of recipe outcomes to runner outcomes remains explicitly out of scope and bound to the bridge plan revision 03. | unknown-blocking | §5 design decisions are revision-02-final |
+| E21 | Unknown-blocking: none. The five target fields and their placement (recipe-level for `workflow_kind`, recipe-item-level for the `runtime_step` block, primitive-level for the `protocol_version` integer) are concrete in §5; the bridge composes `Step.protocol` from `recipe.workflow_kind` + `recipe_item.runtime_step.protocol_role` + `primitive.protocol_version` at compile time. The lowering of recipe outcomes to runner outcomes remains explicitly out of scope and bound to the bridge plan revision 03. | unknown-blocking | §5 design decisions are revision-03-final |
+| E22 | The shared primitive `human-decision` is intentionally reusable as a checkpoint in any canonical phase. `acceptedPhases` in `src/schemas/workflow-recipe.ts:404-405` admits `human-decision` in all `CANONICAL_PHASES`, and `acceptedExecutionKinds` admits any `host`-surface primitive as a `checkpoint` execution. The live Build workflow already uses a checkpoint with protocol `build-frame@v1` and a Build-brief-specific checkpoint policy; the Fix recipe uses the same primitive at `fix-no-repro-decision` (analyze phase) with a different prompt and choice set. One primitive-scoped `protocol_role` and one primitive-scoped `checkpoint_template` cannot represent both — workflow-specific concretes belong at the recipe-item layer, keyed by use-site. Pass 02 finding F1. | verified | `src/schemas/workflow-recipe.ts:364-377,380-406`, `specs/workflow-recipes/fix-candidate.recipe.json:169-186`, `.claude-plugin/skills/build/circuit.json:84-137`, `specs/workflow-primitives.md:113-150`, `tests/runner/build-checkpoint-exec.test.ts:76,150,188,240` |
+| E23 | The shared primitive `frame` generically outputs `workflow.brief@v1`. Explore materializes that as `artifacts/brief.json` + `explore.brief@v1`; Build as `artifacts/build/brief.json` + `build.brief@v1`; Fix aliases it to `fix.brief@v1` with Fix-specific tables at `artifacts/fix/brief.json`. `WorkflowRecipe.contract_aliases` translates generic contract refs only, not artifact paths. A primitive-scoped `write_slots['workflow.brief@v1'] = {path, schema}` would force one concrete workflow's artifact location into the shared catalog. The concrete `{path, schema}` pair belongs at the recipe-item layer, after alias resolution. Pass 02 finding F2. | verified | `src/schemas/workflow-recipe.ts:39-44`, `specs/workflow-primitive-catalog.json:49-53`, `specs/workflow-recipes/fix-candidate.recipe.json:16-20`, `src/schemas/artifacts/fix.ts:4-22`, `.claude-plugin/skills/explore/circuit.json:60-73`, `.claude-plugin/skills/build/circuit.json:122-128` |
+| E24 | The shared primitive `batch` declares `action_surface: 'mixed'` (`specs/workflow-primitive-catalog.json:243`), which `acceptedExecutionKinds` legally admits as `synthesis \| dispatch \| verification \| checkpoint`. A singular per-primitive `runtime_gate_template.kind` chosen from how recipes currently use `batch` cannot honestly model that generic capability — the first later recipe that uses `batch` in a different execution kind would look like a schema contradiction instead of normal reuse. The gate kind belongs at the recipe-item layer, paired with that item's own `execution.kind`. Pass 02 finding F3. | verified | `specs/workflow-primitive-catalog.json:238-255`, `src/schemas/workflow-recipe.ts:364-377` |
+| E25 | `WORKFLOW_KIND_CANONICAL_SETS` lives in plain `.mjs` object keys, not a regex-validated type. A future key with an underscore, uppercase letter, or other non-slug character would satisfy a Zod-enum equality test against `Object.keys(...)` and still break the composed `${workflow_kind}-${protocol_role}@v${version}` against `ProtocolId`'s regex. Slice A's contract test must (a) assert every key satisfies `/^[a-z][a-z0-9-]*$/` and (b) for every `WorkflowKind` value AND every `recipe_item.runtime_step.protocol_role` value in registered recipes, assert the composed string parses against `ProtocolId`. Pass 02 finding F4. | verified | `scripts/policy/workflow-kind-policy.mjs:36-62`, `src/schemas/ids.ts:26-29` |
 
 ## §2 — Why this plan exists
 
@@ -130,18 +144,20 @@ even exported. No amount of compiler widening produces these fields
 out of nothing.
 
 This arc widens the upstream substrate so the bridge has real sources
-to read. The data lives in two places in the recipe domain:
-per-primitive fields that template the primitive's runtime contribution
-(`protocol_role`, `protocol_version`, structured `runtime_gate_template`,
-optional structured `checkpoint_template`, `write_slots` keyed by
-GENERIC contract refs), and a per-recipe `workflow_kind` field that
-the bridge composes with `protocol_role` to form the runtime
-`Step.protocol` id (`/^[a-z][a-z0-9-]*@v\d+$/`). Per-item override
-slots are explicitly NOT introduced — the Fix recipe has one checkpoint
-that the primitive-level template serves fully (E15), and forward-looking
-infrastructure with no current consumer is the corner-cut pattern this
-arc avoids. Once the substrate carries the data, the bridge becomes a
-mechanical join.
+to read. Revision 03 places the data at the layer that already owns
+workflow-specific concretes — the recipe-item — and keeps the primitive
+layer fully generic so cross-recipe reuse stays sound. The data lives
+in three places in the recipe domain: a per-primitive `protocol_version`
+integer (the only field that is genuinely invariant across recipes), a
+per-recipe `workflow_kind` enum value, and a per-recipe-item
+`runtime_step` block that carries the workflow-specific runtime payload
+(`protocol_role`, `gate_template` with kind chosen at the item, optional
+`checkpoint_policy` mirroring the runtime `CheckpointPolicy` surface,
+`write_target` as a concrete `{path, schema}` pair). The bridge composes
+`Step.protocol` from `recipe.workflow_kind` + `recipe_item.runtime_step.protocol_role`
++ `primitive.protocol_version`, structurally satisfying the runtime
+`ProtocolId` regex (E16) while letting one primitive back many recipe
+items with distinct concretes (E22, E23, E24).
 
 This is a planning-readiness arc by ADR-0010: a Heavy implementation
 arc requires its substrate to encode the structural fields its
@@ -153,66 +169,88 @@ challenger-pending revision 02 until this arc closes; bridge revision
 
 In scope:
 
-- **Per-primitive runtime payload widening** (Slice A). Add four fields
-  to `WorkflowPrimitive`:
-  - `protocol_role: ProtocolRoleSlug` — a slug-shaped identifier
-    (`/^[a-z][a-z0-9-]*$/`) naming the primitive's role inside the
-    `Step.protocol` id (e.g., `frame`, `gather-context`,
-    `human-decision`). The bridge composes the runtime
-    `Step.protocol` as `'${recipe.workflow_kind}-${primitive.protocol_role}@v${primitive.protocol_version}'`,
+- **Per-primitive minimal addition** (Slice A). Add one field to
+  `WorkflowPrimitive`:
+  - `protocol_version: z.number().int().min(1)` — defaults to 1 in the
+    catalog backfill. The only genuinely invariant runtime datum the
+    primitive owns: it names the catalog entry's protocol-version
+    contract and lets the catalog evolve a primitive's protocol surface
+    independently of recipes. The bridge composes the runtime
+    `Step.protocol` as
+    `'${recipe.workflow_kind}-${recipe_item.runtime_step.protocol_role}@v${primitive.protocol_version}'`,
     which structurally satisfies the runtime `ProtocolId` regex
-    `/^[a-z][a-z0-9-]*@v\d+$/` (E16). The slug stays free of the
-    workflow-kind half so a primitive remains generic across recipes.
-  - `protocol_version: number.int.min(1)` — defaults to 1 in the
-    catalog backfill; allows future per-primitive evolution without
-    moving every recipe forward in lockstep.
-  - `runtime_gate_template` — a discriminated-union template that
-    mirrors the runtime `Gate` kind minus the `source` field (which
-    is structurally bound to the gate kind by `gate.ts`). Variants:
-    `{kind: 'schema_sections', required: string[].min(1)}`,
-    `{kind: 'result_verdict', pass: string[].min(1)}`,
-    `{kind: 'checkpoint_selection'}` (no `allow` payload — see binding
-    rule in §5; the runtime `gate.allow` is derived from the effective
-    `checkpoint_template.choices.id` list at bridge time so the
-    runtime `gate.allow === policy.choices.id` invariant holds by
-    construction).
-  - `checkpoint_template` — optional, present only on checkpoint-runtime
-    primitives. Mirrors the runtime `CheckpointPolicy` surface
-    (`src/schemas/step.ts:60-110`, E19): `{prompt_template:
-    string.min(1), choices: Array<{id: string.min(1), label?:
-    string.min(1), description?: string.min(1)}>.min(1) (id-unique),
-    safe_default_choice?: string.min(1), safe_autonomous_choice?:
-    string.min(1), build_brief?: {scope: string.min(1),
-    success_criteria: string[].min(1), verification_command_candidates:
-    BuildVerificationCommand[].min(1)}}`. Refinement requires
-    `safe_default_choice` and `safe_autonomous_choice` (when supplied)
-    each to reference a declared choice id, mirroring runtime
-    `CheckpointPolicy` superRefine.
-  - `write_slots` — a `Record<GenericContractRef, {path: string.min(1),
-    schema: string.min(1)}>` mapping each of the primitive's GENERIC
-    output contract refs (the values of `output_contract` and any
-    alternative output paths) to a concrete artifact path and schema
-    reference. Recipe-specific outputs (e.g., `fix.brief@v1`) are NOT
-    keys in this map; the bridge resolves them via
-    `recipe.contract_aliases` (E17) at compile time. Provides the
-    catalog-resident parallel to the workflow-specific `FIX_RESULT_*`
-    tables.
+    `/^[a-z][a-z0-9-]*@v\d+$/` (E16). No other workflow-specific
+    payload lives at the primitive layer; the primitive's existing
+    surface (`input_contracts`, `output_contract`, `action_surface`,
+    `produces_evidence`, `gate.description`, `allowed_routes`,
+    `human_interaction`, `host_capabilities`) stays generic and
+    unchanged.
 
-- **Per-recipe workflow-kind binding** (Slice A). Add one field to
-  `WorkflowRecipe`:
+- **Per-recipe-item runtime payload widening** (Slice A). Add one
+  required field to `WorkflowRecipeItem`:
+  - `runtime_step: RuntimeStep` — a strict object carrying the
+    workflow-specific runtime payload that this recipe item contributes
+    to the compiled `Step`. Shape:
+    - `protocol_role: ProtocolRoleSlug` — slug-shaped identifier
+      (`/^[a-z][a-z0-9-]*$/`) naming this item's role inside the
+      composed `Step.protocol` id. Two recipe items that `use` the
+      same primitive can declare distinct `protocol_role` values when
+      the primitive is reused with different runtime semantics (the
+      `human-decision` case in E22; the `batch` case in E24).
+    - `gate_template: RuntimeGateTemplate` — a discriminated-union
+      template that mirrors the runtime `Gate` kind minus the
+      `source` field (which is structurally bound to gate kind by
+      `gate.ts`). Variants: `{kind: 'schema_sections', required:
+      string[].min(1)}`, `{kind: 'result_verdict', pass:
+      string[].min(1)}`, `{kind: 'checkpoint_selection'}` (no `allow`
+      payload — bridge derives it from `checkpoint_policy.choices.id`
+      at compile time so the runtime
+      `gate.allow === policy.choices.id` invariant holds by
+      construction; E18). The kind binds to this item's
+      `execution.kind`, not to the primitive — that is what permits a
+      mixed-surface primitive like `batch` to participate in different
+      gate kinds across recipe items (E24).
+    - `checkpoint_policy?: CheckpointPolicyTemplate` — present iff
+      `execution.kind === 'checkpoint'`. Mirrors the runtime
+      `CheckpointPolicy` surface (`src/schemas/step.ts:60-110`, E19):
+      `{prompt_template: string.min(1), choices: Array<{id:
+      string.min(1), label?: string.min(1), description?:
+      string.min(1)}>.min(1) (id-unique), safe_default_choice?:
+      string.min(1), safe_autonomous_choice?: string.min(1),
+      build_brief?: {scope: string.min(1), success_criteria:
+      string[].min(1), verification_command_candidates:
+      BuildVerificationCommand[].min(1)}}`. Refinement requires
+      `safe_default_choice` and `safe_autonomous_choice` (when
+      supplied) each to reference a declared choice id, mirroring
+      runtime `CheckpointPolicy` superRefine.
+    - `write_target: {path: string.min(1), schema: string.min(1)}` —
+      the concrete artifact path and schema reference this recipe
+      item materializes its `output` to. Each recipe item carries its
+      own concrete target; the same primitive can back items in
+      different recipes with different concrete targets (the `frame`
+      case in E23). Recipe-specific contract refs (e.g.,
+      `fix.brief@v1`) inhabit the item's `output` field through
+      `recipe.contract_aliases`; the bridge does not need to translate
+      paths or schemas at compile time, because they are already
+      concrete on the item.
+
+- **Per-recipe workflow-kind binding** (Slice A). Add one required
+  field to `WorkflowRecipe`:
   - `workflow_kind: WorkflowKind` — `z.enum(['explore', 'review',
     'build', 'fix'])` mirroring the keys of
-    `WORKFLOW_KIND_CANONICAL_SETS` (E20). Used by the bridge to compose
-    `Step.protocol`. A future primitive that legitimately spans
-    workflow kinds can stay neutral; the recipe carries the
-    workflow-kind dimension.
+    `WORKFLOW_KIND_CANONICAL_SETS` (E20). Used by the bridge to
+    compose `Step.protocol`. A future primitive that legitimately
+    spans workflow kinds stays neutral; the recipe carries the
+    workflow-kind dimension. A recipe whose items reference primitives
+    with mixed `protocol_role` values is well-formed; the recipe's
+    single `workflow_kind` field still feeds every step's protocol id.
 
-- **Atomic catalog and Fix-recipe backfill** (Slice A). Populate the
-  four new primitive fields for all 15 entries in
-  `specs/workflow-primitive-catalog.json` AND the new
-  `workflow_kind: 'fix'` field on
-  `specs/workflow-recipes/fix-candidate.recipe.json`, in the same
-  commit that lands the schema additions. The catalog passes
+- **Atomic catalog and Fix-recipe backfill** (Slice A). Populate
+  `protocol_version: 1` for all 15 entries in
+  `specs/workflow-primitive-catalog.json` AND populate
+  `workflow_kind: 'fix'` plus a complete `runtime_step` block on all
+  12 items in `specs/workflow-recipes/fix-candidate.recipe.json`, in
+  the same commit that lands the schema additions. The catalog passes
   `WorkflowPrimitiveCatalog.parse` and the Fix recipe passes
   `WorkflowRecipe.parse` at every commit on the slice.
 
@@ -227,15 +265,20 @@ Out of scope:
   `Workflow` is the bridge plan's revision 03 work, not this arc's.
   This arc only widens the substrate. Bridge revision 03 owns the
   `protocol_id` composition (`${workflow_kind}-${protocol_role}@v${protocol_version}`),
-  the `gate.allow` derivation from `checkpoint_template.choices.id`,
-  and the `contract_aliases` resolution that picks recipe-specific
-  artifact slots.
-- **Per-item checkpoint customization.** The Fix recipe has one
-  checkpoint item (E15); the primitive-level `checkpoint_template`
-  serves it fully. A future recipe that genuinely calls the same
-  checkpoint primitive with distinct prompts can introduce a
-  per-item override slot then; building it now is forward-looking
-  infrastructure with no current consumer (revision 02 fold-in F2).
+  the `gate.allow` derivation from `runtime_step.checkpoint_policy.choices.id`,
+  and the read of `runtime_step.write_target` into `Step.writes.artifact`.
+- **Per-primitive runtime payload.** Workflow-specific concretes
+  (`protocol_role`, `gate_template`, `checkpoint_policy`,
+  `write_target`) do NOT live on `WorkflowPrimitive`. The primitive
+  layer carries only the genuinely invariant `protocol_version`
+  integer plus its existing generic surface. This is the central
+  reframe of revision 03 (E22, E23, E24).
+- **Per-item override slot for forward-looking customization beyond
+  `runtime_step`.** No additional override slot. The `runtime_step`
+  block IS the per-item customization layer; everything a recipe item
+  needs to contribute to the runtime `Step` lives there. A future
+  recipe that needs further variation can add fields to `runtime_step`
+  in a future arc when a real consumer exists.
 - **The recipe-outcome → runner-outcome lowering rule.** That belongs
   in the bridge plan revision 03 §5 (it's a compiler-side concern).
   This arc preserves `WorkflowPrimitiveRoute` and recipe-edge outcomes
@@ -245,17 +288,16 @@ Out of scope:
 - **Removal of `FIX_RESULT_PATH_BY_ARTIFACT_ID` /
   `FIX_RESULT_SCHEMA_BY_ARTIFACT_ID`.** Those tables stay as a
   Fix-protocol surface for callers that want a typed Fix-only view.
-  Slice A's `write_slots` provides the catalog-resident equivalent
-  keyed by generic contracts. The bridge plan revision 03 chooses
+  Slice A's per-item `runtime_step.write_target` provides the
+  recipe-resident equivalent. The bridge plan revision 03 chooses
   which surface its assertions bind through.
 - **New primitive ids or new recipe shapes.** The 15 catalog
   primitive identifiers and the Fix recipe identity are unchanged;
   this arc widens their schemas, not the set of primitives or
   recipes.
 - **`WorkflowPrimitive.gate.description` removal.** The free-form
-  description stays as a human-facing rationale field alongside the
-  new `runtime_gate_template`. Mechanical removal is a follow-up
-  cleanup, not this arc's work.
+  description stays as a human-facing rationale field. Mechanical
+  removal is a follow-up cleanup, not this arc's work.
 
 ## §4 — Non-goals
 
@@ -267,16 +309,12 @@ Out of scope:
 - Aggregate ratchet scoring or single-knob composition is not
   introduced. AGENTS.md hard invariant 8 is preserved: each ratchet
   in §9 is tracked independently.
-- Per-item write-slot overrides are not introduced. If a recipe item
-  needs a non-default write slot, that is a primitive-design problem
-  (the primitive should expose the slot in its `write_slots` map),
-  not a per-item override slot.
-- No per-item checkpoint customization — the
-  `checkpoint_overrides` slot on recipe items stays out of scope per
-  revision 02 fold-in F2. The Fix recipe has one checkpoint and the
-  primitive-level template serves it fully (E15). A future recipe
-  that genuinely calls the same checkpoint primitive with distinct
-  prompts can introduce the override slot then.
+- No `write_slots` map on `WorkflowPrimitive`. Concrete `{path,
+  schema}` data lives only on recipe items (E23). The primitive's
+  generic `output_contract` field is unchanged.
+- No primitive-scoped `runtime_gate_template` or `checkpoint_template`.
+  Workflow-specific gate kinds and checkpoint payloads live on recipe
+  items (E22, E24).
 - Multi-rigor templating on primitives is not introduced. Rigor
   remains an entry-mode concern, not a primitive-template concern.
 
@@ -287,33 +325,58 @@ Out of scope:
 The new fields and their downstream runtime consumers:
 
 ```
-WorkflowRecipe.workflow_kind ─────────┐
-                                       ├─► bridge composes
-WorkflowPrimitive.protocol_role ──────┤   `${workflow_kind}-${protocol_role}@v${protocol_version}` ─► Step.protocol  [ProtocolId regex /^[a-z][a-z0-9-]*@v\d+$/]
-WorkflowPrimitive.protocol_version ───┘                                                                (E16)
+WorkflowRecipe.workflow_kind ─────────────────────────┐
+                                                       │
+WorkflowRecipeItem.runtime_step.protocol_role ────────┤   bridge composes
+                                                       ├─► '${workflow_kind}-${protocol_role}@v${protocol_version}' ─► Step.protocol  [ProtocolId regex /^[a-z][a-z0-9-]*@v\d+$/]
+WorkflowPrimitive.protocol_version ───────────────────┘                                                                   (E16)
 
-WorkflowRecipeItem.output (recipe-aliased)
-   └─► WorkflowRecipe.contract_aliases (existing) ─► generic ref ─► WorkflowPrimitive.write_slots[generic] ─► Step.writes.artifact
-                                                                     (E17)
-
-WorkflowPrimitive.runtime_gate_template (kind ∈ {schema_sections, result_verdict, checkpoint_selection})
-   └─► Step.gate    [for checkpoint kind, gate.allow is DERIVED from checkpoint_template.choices.id at bridge time, not stored on the template]
+WorkflowRecipeItem.runtime_step.gate_template
+   └─► Step.gate    [for checkpoint kind, gate.allow is DERIVED from runtime_step.checkpoint_policy.choices.id at bridge time, not stored on the template]
                     (E18: runtime enforces gate.allow === policy.choices.id by superRefine)
 
-WorkflowPrimitive.checkpoint_template (full mirror of runtime CheckpointPolicy)
+WorkflowRecipeItem.runtime_step.checkpoint_policy (full mirror of runtime CheckpointPolicy)
    └─► Step.policy  (E19)
+
+WorkflowRecipeItem.runtime_step.write_target (concrete {path, schema} on the item)
+   └─► Step.writes.artifact  (E23: per-recipe-item, no alias resolution required)
 ```
 
 ### Primitive widening
 
-`WorkflowPrimitive` gains four fields:
+`WorkflowPrimitive` gains exactly one field:
 
 ```
-protocol_role:        ProtocolRoleSlug
-protocol_version:     z.number().int().min(1)
-runtime_gate_template: RuntimeGateTemplate
-checkpoint_template?: CheckpointTemplate
-write_slots:          WriteSlotMap
+protocol_version: z.number().int().min(1)
+```
+
+No other field is added or moved. The primitive's existing surface
+(`input_contracts`, `alternative_input_contracts`, `output_contract`,
+`action_surface`, `produces_evidence`, `gate: {kind, description}`,
+`allowed_routes`, `human_interaction`, `host_capabilities`, `notes?`)
+is preserved verbatim. Catalog backfill sets `protocol_version: 1` on
+all 15 entries.
+
+### Recipe widening
+
+`WorkflowRecipe` gains one required field:
+
+```
+workflow_kind: WorkflowKind
+```
+
+Type definition:
+
+```
+WorkflowKind = z.enum(['explore', 'review', 'build', 'fix'])  // mirrors WORKFLOW_KIND_CANONICAL_SETS keys (E20)
+```
+
+### Recipe-item widening
+
+`WorkflowRecipeItem` gains one required field:
+
+```
+runtime_step: RuntimeStep
 ```
 
 Type definitions (final field set authored in Slice A):
@@ -327,10 +390,10 @@ ProtocolRoleSlug = z
 RuntimeGateTemplate = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('schema_sections'),     required: z.array(z.string().min(1)).min(1) }).strict(),
   z.object({ kind: z.literal('result_verdict'),      pass:     z.array(z.string().min(1)).min(1) }).strict(),
-  z.object({ kind: z.literal('checkpoint_selection') }).strict(),    // no `allow` payload — bridge derives from checkpoint_template.choices
+  z.object({ kind: z.literal('checkpoint_selection') }).strict(),    // no `allow` payload — bridge derives from checkpoint_policy.choices
 ])
 
-CheckpointTemplate = z.object({
+CheckpointPolicyTemplate = z.object({
   prompt_template:        z.string().min(1),
   choices:                z.array(
     z.object({
@@ -352,101 +415,101 @@ CheckpointTemplate = z.object({
   //  - safe_default_choice / safe_autonomous_choice not ∈ choice ids → issue
 })
 
-WriteSlotMap = z.record(
-  WorkflowPrimitiveContractRef,                                       // GENERIC contract refs only (recipe-aliased refs forbidden)
-  z.object({
-    path:   z.string().min(1),
-    schema: z.string().min(1),
-  }).strict(),
-).refine(map => Object.keys(map).length >= 1)
-```
+WriteTarget = z.object({
+  path:   z.string().min(1),
+  schema: z.string().min(1),
+}).strict()
 
-### Recipe widening
-
-`WorkflowRecipe` gains one field:
-
-```
-workflow_kind: WorkflowKind
-```
-
-Type definition:
-
-```
-WorkflowKind = z.enum(['explore', 'review', 'build', 'fix'])  // mirrors WORKFLOW_KIND_CANONICAL_SETS keys (E20)
+RuntimeStep = z.object({
+  protocol_role:     ProtocolRoleSlug,
+  gate_template:     RuntimeGateTemplate,
+  checkpoint_policy: CheckpointPolicyTemplate.optional(),
+  write_target:      WriteTarget,
+}).strict()
 ```
 
 ### Binding rules (final shapes confirmed in Slice A)
 
-- **Gate-template kind binding.** A primitive whose runtime usage is
-  `synthesis` or `verification` carries `runtime_gate_template.kind ===
-  'schema_sections'`. A `dispatch`-runtime primitive carries `kind ===
-  'result_verdict'`. A `checkpoint`-runtime primitive carries `kind ===
-  'checkpoint_selection'`. Runtime usage is determined by the set of
-  `WorkflowRecipeExecutionKind` values that appear in items using this
-  primitive (per-primitive invariant enforced by Slice A's contract
-  test, joining catalog × recipe).
-- **Checkpoint template presence.** `checkpoint_template` is required
-  if and only if the primitive's runtime usage is `checkpoint`.
-  Refinement enforces both directions.
-- **Checkpoint single-source-of-truth (F4 fold-in).** The runtime
-  `gate.allow` value is NOT stored on `runtime_gate_template`; the
-  bridge derives it from
-  `effective_checkpoint_template.choices.map(c => c.id)` at compile
-  time. The runtime `step.ts:166-175` superRefine requires
-  `gate.allow === policy.choices.id`; deriving from a single authority
-  means the invariant holds by construction (E18).
-- **Write-slot key surface (F3 fold-in).** `write_slots` keys are the
-  primitive's GENERIC output contract refs only — that is, the values
-  appearing in `WorkflowPrimitive.output_contract` and in
-  `alternative_input_contracts`. Recipe-specific contract refs (e.g.,
-  `fix.brief@v1` from `contract_aliases.actual`) are NEVER keys in
-  `write_slots`. The bridge applies `recipe.contract_aliases`
-  resolution to translate between recipe-aliased refs and generic
-  primitive keys when picking the concrete artifact slot for a step
-  (E17).
-- **Write-slot coverage.** `write_slots` contains an entry for the
-  primitive's `output_contract` value at minimum. If
-  `alternative_input_contracts` introduces alternative output paths in
-  future schema work, those are added then.
-- **Protocol id composition (F1 fold-in).** The bridge composes
-  `Step.protocol = '${recipe.workflow_kind}-${primitive.protocol_role}@v${primitive.protocol_version}'`.
-  Both halves are typed in this arc; the composition itself is the
-  bridge plan revision 03's responsibility. The composed string is
-  structurally guaranteed to satisfy the runtime `ProtocolId` regex
-  `/^[a-z][a-z0-9-]*@v\d+$/` because: `workflow_kind` ∈
-  `{explore, review, build, fix}` (lowercase slugs), `protocol_role`
-  is `ProtocolRoleSlug`-shaped (`/^[a-z][a-z0-9-]*$/`), and
+- **Gate-template kind binding (per recipe item).** A recipe item
+  with `execution.kind ∈ {synthesis, verification}` carries
+  `runtime_step.gate_template.kind === 'schema_sections'`. A recipe
+  item with `execution.kind === 'dispatch'` carries `kind ===
+  'result_verdict'`. A recipe item with `execution.kind ===
+  'checkpoint'` carries `kind === 'checkpoint_selection'`. The
+  binding is per-item, not per-primitive; the same primitive may back
+  items with different gate kinds when its `action_surface` permits
+  (E24).
+- **Checkpoint policy presence (per recipe item).**
+  `runtime_step.checkpoint_policy` is required if and only if the
+  item's `execution.kind === 'checkpoint'`. Refinement enforces both
+  directions on `WorkflowRecipeItem`.
+- **Checkpoint single-source-of-truth.** The runtime `gate.allow`
+  value is NOT stored on `runtime_step.gate_template`; the bridge
+  derives it from
+  `recipe_item.runtime_step.checkpoint_policy.choices.map(c => c.id)`
+  at compile time. The runtime `step.ts:166-175` superRefine requires
+  `gate.allow === policy.choices.id`; deriving from a single
+  authority means the invariant holds by construction (E18).
+- **Write-target concretes (per recipe item).** Each recipe item
+  carries its own concrete `{path, schema}` in
+  `runtime_step.write_target`. Two recipe items that `use` the same
+  primitive (same generic `output_contract` value) can declare
+  distinct write targets, which is exactly the case for `frame`
+  across Explore, Build, and Fix (E23). The bridge reads
+  `runtime_step.write_target` directly into `Step.writes.artifact`
+  with no alias resolution required.
+- **Protocol id composition.** The bridge composes
+  `Step.protocol = '${recipe.workflow_kind}-${recipe_item.runtime_step.protocol_role}@v${primitive.protocol_version}'`.
+  All three halves are typed in this arc; the composition itself is
+  the bridge plan revision 03's responsibility. The composed string
+  is structurally guaranteed to satisfy the runtime `ProtocolId`
+  regex `/^[a-z][a-z0-9-]*@v\d+$/` because: `workflow_kind` ∈
+  `{explore, review, build, fix}` (lowercase slugs, asserted by the
+  drift contract test in Slice A), `protocol_role` is
+  `ProtocolRoleSlug`-shaped (`/^[a-z][a-z0-9-]*$/`), and
   `protocol_version` is a positive integer (E16).
-- **Cross-protocol recipes.** A recipe whose items reference primitives
-  with mixed `protocol_role` values is well-formed; the recipe's single
-  `workflow_kind` field still feeds every step's protocol id. There is
-  no per-item workflow-kind override; if a primitive ever needs to
-  vary by workflow kind, that's a primitive-design problem, not a
-  recipe-item problem.
+- **Shared-primitive reuse with distinct concretes.** A recipe item
+  using `human-decision` declares its own
+  `runtime_step.protocol_role` (e.g., `no-repro-decision` for the
+  Fix recipe) and its own `runtime_step.checkpoint_policy`. A future
+  Build recipe item using `human-decision` declares its own
+  `runtime_step.protocol_role` (e.g., `frame`) and its own
+  `runtime_step.checkpoint_policy` (the Build-brief variant). The
+  primitive layer is fully generic and shared (E22).
+- **Cross-protocol recipes.** A recipe whose items reference
+  primitives with mixed `protocol_role` values is well-formed; the
+  recipe's single `workflow_kind` field still feeds every step's
+  protocol id. There is no per-item workflow-kind override; the
+  recipe is the workflow-kind authority.
 
 ### Failure modes the parsers reject
 
-- Primitive with `runtime_gate_template.kind` mismatched against the
-  set of execution kinds items use (Slice A test, joining catalog ×
-  recipe via `validateWorkflowRecipeCatalogCompatibility`).
-- Primitive missing `checkpoint_template` while at least one recipe
-  item using it has `execution.kind === 'checkpoint'`.
-- Primitive carrying `checkpoint_template` while no recipe item using
-  it has `execution.kind === 'checkpoint'`.
-- Primitive `write_slots` missing a key for the primitive's
-  `output_contract`.
-- Primitive `write_slots` containing a recipe-aliased contract ref
-  (e.g., a key matching any `recipe.contract_aliases.actual` in any
-  registered recipe but not appearing as a generic primitive output
-  contract anywhere in the catalog). Slice A test surfaces this if it
-  occurs.
-- `CheckpointTemplate.safe_default_choice` or
+- Recipe item missing `runtime_step` (required field).
+- Recipe item with `execution.kind === 'checkpoint'` whose
+  `runtime_step.checkpoint_policy` is missing.
+- Recipe item with `execution.kind !== 'checkpoint'` whose
+  `runtime_step.checkpoint_policy` is present.
+- Recipe item with `runtime_step.gate_template.kind` mismatched
+  against `execution.kind` (synthesis|verification ↔ schema_sections;
+  dispatch ↔ result_verdict; checkpoint ↔ checkpoint_selection).
+- Recipe item `runtime_step.protocol_role` not matching
+  `ProtocolRoleSlug` regex.
+- Recipe item `runtime_step.write_target.path` or
+  `runtime_step.write_target.schema` empty.
+- `CheckpointPolicyTemplate.safe_default_choice` or
   `safe_autonomous_choice` not a member of the declared `choices.id`
   set (mirrors runtime `CheckpointPolicy` superRefine).
-- Duplicate `choices.id` within a `CheckpointTemplate` (mirrors
+- Duplicate `choices.id` within a `CheckpointPolicyTemplate` (mirrors
   runtime).
-- Recipe declaring `workflow_kind` outside the
-  `WORKFLOW_KIND_CANONICAL_SETS` key set.
+- Recipe missing `workflow_kind` or declaring a value outside
+  `WORKFLOW_KIND_CANONICAL_SETS` keys.
+- `WorkflowKind` enum members not exactly equal to
+  `Object.keys(WORKFLOW_KIND_CANONICAL_SETS)` (drift caught by Slice
+  A's contract test).
+- Any `WORKFLOW_KIND_CANONICAL_SETS` key not satisfying
+  `/^[a-z][a-z0-9-]*$/` (slug-shape drift caught by Slice A's
+  contract test, even when membership is correct; E25).
+- Catalog entry `protocol_version` not a positive integer.
 
 ## §6 — Authority graph classification (ADR-0003)
 
@@ -456,31 +519,36 @@ contract authorship begins. Both rows are greenfield in
 slice is required:
 
 - `workflow.primitive_catalog` — greenfield
-  (`specs/artifacts.json:32`). Slice 135 originated it. Slice A widens
-  the schema and atomically backfills the catalog so the row stays
+  (`specs/artifacts.json:32`). Originated by an earlier slice. Slice A
+  widens `WorkflowPrimitive` with the required `protocol_version`
+  field and atomically backfills the catalog so the row stays
   parseable at every commit.
 - `workflow.recipe_definition` — greenfield
   (`specs/artifacts.json:71`). Slice A adds the required
-  `workflow_kind` field on `WorkflowRecipe`; the Fix recipe is
-  backfilled in the same commit (`workflow_kind: 'fix'`). The Repair
-  recipe is closed by supersession per ADR-0013 and not affected.
+  `workflow_kind` field on `WorkflowRecipe` and the required
+  `runtime_step` field on `WorkflowRecipeItem`; the Fix recipe is
+  backfilled in the same commit (`workflow_kind: 'fix'` plus a
+  `runtime_step` block on each of the 12 items). The Repair recipe is
+  closed by supersession per ADR-0013 and not affected.
 
 Clean break is not invoked. Existing parsers reject only inputs that
 were not previously valid (e.g., catalogs missing the new required
-fields after Slice A lands, or recipes missing `workflow_kind`). The
-runtime `Gate`, `Step`, `Workflow`, `Phase`, and `EntryMode` schemas
-are unchanged.
+field after Slice A lands, or recipes/items missing `workflow_kind` /
+`runtime_step`). The runtime `Gate`, `Step`, `Workflow`, `Phase`, and
+`EntryMode` schemas are unchanged.
 
 ## §7 — Verification substrate
 
 The arc rides existing Tier-0 verification commands. No new substrate
 slice is required:
 
-- `npm run check` — `tsc --noEmit` enforces the new `WorkflowPrimitive`
-  shape, `ProtocolRoleSlug` brand, `RuntimeGateTemplate` discriminated
-  union, `CheckpointTemplate` and `WriteSlotMap` types, and the new
-  required `WorkflowRecipe.workflow_kind` field (typed `WorkflowKind`)
-  at the boundary.
+- `npm run check` — `tsc --noEmit` enforces the new
+  `WorkflowPrimitive.protocol_version` shape, the new
+  `WorkflowRecipeItem.runtime_step` shape (`ProtocolRoleSlug` brand,
+  `RuntimeGateTemplate` discriminated union, `CheckpointPolicyTemplate`
+  and `WriteTarget` types), and the new required
+  `WorkflowRecipe.workflow_kind` field (typed `WorkflowKind`) at the
+  boundary.
 - `npm run lint` — `biome check`.
 - `npm run test` — `vitest`. Slice A's contract tests join
   `tests/contracts/`.
@@ -494,92 +562,128 @@ arc honors that gate.
 
 ## §8 — Slices
 
-### 8.1 Slice A — Primitive widening + recipe widening + atomic catalog and Fix-recipe backfill (Heavy, Ratchet-Advance)
+### 8.1 Slice A — Primitive minimal addition + recipe widening + recipe-item runtime_step + atomic catalog and Fix-recipe backfill (Heavy, Ratchet-Advance)
 
 **Failure mode addressed.** `WorkflowPrimitive.gate.description` is
-free-form prose, not a runtime payload. There is no `protocol_role`
-or `protocol_version` authority on any primitive, no
-`checkpoint_template`, and no `write_slots` on any catalog entry.
-`WorkflowRecipe` carries no `workflow_kind` typed value either.
-The bridge cannot resolve runtime gate shapes, runtime `Step.protocol`
-ids (which must satisfy the `ProtocolId` regex per E16), checkpoint
-shapes, or per-output write paths from authorities that do not
-encode them — Codex challenger pass 02 CRITICAL #1, refined by pass
-01 findings F1 / F3 / F4 / F5.
+free-form prose, not a runtime payload. There is no `protocol_version`
+authority on any primitive, no `workflow_kind` on `WorkflowRecipe`,
+and no `runtime_step` block on `WorkflowRecipeItem`. The bridge cannot
+resolve runtime gate shapes, runtime `Step.protocol` ids (which must
+satisfy the `ProtocolId` regex per E16), checkpoint shapes, or
+per-output write paths from authorities that do not encode them. Pass
+02 verified that binding workflow-specific runtime payload to the
+primitive layer is the wrong layering: the same primitive is reused
+across recipes with distinct concretes (E22, E23, E24). Revision 03
+moves the workflow-specific payload to the recipe-item layer, leaving
+the primitive layer fully generic.
 
 **Acceptance evidence.**
 
-- `WorkflowPrimitive` in `src/schemas/workflow-primitives.ts` exports
-  the four new fields per §5 with the exact shapes named there. Type
-  exports `ProtocolRoleSlug`, `RuntimeGateTemplate`,
-  `CheckpointTemplate`, `WriteSlotMap` exist.
-- `WorkflowRecipe` in `src/schemas/workflow-recipe.ts` exports the
-  new required `workflow_kind: WorkflowKind` field. Type export
+- `WorkflowPrimitive` in `src/schemas/workflow-primitives.ts` adds
+  one new required field, `protocol_version: z.number().int().min(1)`,
+  per §5. No other primitive-level fields are added.
+- `WorkflowRecipe` in `src/schemas/workflow-recipe.ts` adds the new
+  required field `workflow_kind: WorkflowKind`. Type export
   `WorkflowKind` exists with members exactly matching the keys of
   `WORKFLOW_KIND_CANONICAL_SETS` in
   `scripts/policy/workflow-kind-policy.mjs`.
+- `WorkflowRecipeItem` in `src/schemas/workflow-recipe.ts` adds the
+  new required field `runtime_step: RuntimeStep` per §5. Type exports
+  `ProtocolRoleSlug`, `RuntimeGateTemplate`,
+  `CheckpointPolicyTemplate`, `WriteTarget`, `RuntimeStep` exist.
+  `WorkflowRecipeItem` superRefine enforces:
+  (i) `execution.kind === 'checkpoint'` ↔
+      `runtime_step.checkpoint_policy` present;
+  (ii) `runtime_step.gate_template.kind` matches `execution.kind` per
+       the binding rule in §5;
+  (iii) `CheckpointPolicyTemplate` choice-id uniqueness +
+       safe-choice-id membership (mirrors runtime
+       `CheckpointPolicy` superRefine).
 - `specs/workflow-primitive-catalog.json` has all 15 entries
-  populated with the four new fields. Catalog passes
-  `WorkflowPrimitiveCatalog.parse` on the staged commit.
+  populated with `protocol_version: 1`. Catalog passes
+  `WorkflowPrimitiveCatalog.parse` on the staged commit. **No
+  workflow-specific concretes appear at the catalog (primitive)
+  layer.**
 - `specs/workflow-recipes/fix-candidate.recipe.json` carries
-  `"workflow_kind": "fix"` and passes `WorkflowRecipe.parse` on the
-  staged commit.
+  `"workflow_kind": "fix"` at the top level AND a complete
+  `runtime_step` block on each of its 12 items. Recipe passes
+  `WorkflowRecipe.parse` on the staged commit, and
+  `validateWorkflowRecipeCatalogCompatibility` returns no issues.
 - A new contract test under `tests/contracts/` (or extending
-  `tests/contracts/workflow-primitive-catalog.test.ts`) asserts:
-  - Every catalog entry carries non-empty `protocol_role`
-    (`ProtocolRoleSlug` regex), positive integer `protocol_version`,
-    `runtime_gate_template`, and `write_slots`.
-  - Every checkpoint-runtime primitive carries
-    `checkpoint_template`; every non-checkpoint primitive does not.
-  - `runtime_gate_template.kind` matches the primitive's runtime
-    usage as derived from items in
-    `specs/workflow-recipes/fix-candidate.recipe.json` (joined via
-    `validateWorkflowRecipeCatalogCompatibility`).
-  - `write_slots` contains at least an entry for the primitive's
-    `output_contract` field, and the `path` / `schema` strings are
-    non-empty.
-  - `write_slots` keys are GENERIC contract refs only — no key
-    matches any registered `recipe.contract_aliases.actual` value
-    (rejecting recipe-aliased keys like `fix.brief@v1` per F3 fold-in).
-  - `CheckpointTemplate.choices.id` are unique within a template,
-    and `safe_default_choice` / `safe_autonomous_choice` (when
-    present) each ∈ `choices.id` (mirroring runtime
-    `CheckpointPolicy` superRefine, E19).
-  - The `WorkflowKind` enum members exactly equal
-    `Object.keys(WORKFLOW_KIND_CANONICAL_SETS)` — drift between the
-    Zod enum and the policy table is rejected.
-  - Bridge-time protocol-id composition smoke test: for each catalog
-    primitive, `'fix-' + primitive.protocol_role + '@v' + primitive.protocol_version`
-    parses successfully against `ProtocolId` (E16). This proves the
-    composed string structurally satisfies the runtime regex without
-    waiting for the bridge plan to land.
+  `tests/contracts/workflow-recipe.test.ts`) joins recipe items ×
+  primitives and asserts:
+  - **Layering invariant.** No `WorkflowPrimitive` in the catalog
+    carries any of the keys `protocol_role`, `gate_template`,
+    `checkpoint_policy`, `runtime_gate_template`,
+    `checkpoint_template`, `write_slots`, `write_target` (asserted by
+    parse-only-strict semantics; the test reads the JSON file with
+    extra-keys-fail and verifies no such key appears). The primitive
+    layer is fully generic.
+  - **Per-primitive `protocol_version` coverage.** Every catalog
+    entry carries a positive-integer `protocol_version`.
+  - **Recipe-level `workflow_kind` coverage.** The Fix recipe
+    declares `workflow_kind: 'fix'`. (The single registered recipe
+    today; ratchet defines the surface for future recipes.)
+  - **Per-item `runtime_step` coverage.** Every recipe item in the
+    Fix recipe carries `runtime_step` with non-empty
+    `protocol_role` (matching `ProtocolRoleSlug` regex),
+    `gate_template`, and `write_target` with non-empty `path` and
+    `schema`. Every recipe item with `execution.kind === 'checkpoint'`
+    carries `runtime_step.checkpoint_policy`; every recipe item with
+    `execution.kind !== 'checkpoint'` does NOT.
+  - **Gate-template kind ↔ execution kind binding.** Every recipe
+    item's `runtime_step.gate_template.kind` matches its
+    `execution.kind` per the §5 binding rule. The same primitive
+    (`human-decision`, `batch`) used across distinct items with
+    distinct gate kinds passes (E22, E24).
+  - **CheckpointPolicyTemplate refinements.** Every
+    `runtime_step.checkpoint_policy` has unique `choices.id`, and
+    `safe_default_choice` / `safe_autonomous_choice` (when present)
+    each ∈ `choices.id` (mirroring runtime `CheckpointPolicy`
+    superRefine, E19).
+  - **WorkflowKind enum-vs-policy parity.** The `WorkflowKind` enum
+    members exactly equal `Object.keys(WORKFLOW_KIND_CANONICAL_SETS)`.
+  - **WorkflowKind slug-shape drift.** Every key in
+    `WORKFLOW_KIND_CANONICAL_SETS` satisfies `/^[a-z][a-z0-9-]*$/`
+    (E25 fold-in).
+  - **Bridge-time protocol-id composition (full Cartesian).** For
+    every `WorkflowKind` value AND every distinct
+    `runtime_step.protocol_role` value declared by a recipe item in
+    the Fix recipe, the composed string `'${workflow_kind}-${protocol_role}@v${primitive.protocol_version}'`
+    parses successfully against `ProtocolId` (E16). The smoke test
+    is no longer `'fix'`-only; it iterates all four
+    `WorkflowKind` values (E25 fold-in).
 - `FIX_RESULT_PATH_BY_ARTIFACT_ID` and
   `FIX_RESULT_SCHEMA_BY_ARTIFACT_ID` remain in
-  `src/schemas/artifacts/fix.ts` unchanged. The new `write_slots`
-  data on catalog primitives is the catalog-resident parallel
-  surface keyed by generic contract refs; the Fix-result tables
-  stay as the Fix-protocol view keyed by Fix artifact ids.
+  `src/schemas/artifacts/fix.ts` unchanged. The new
+  `runtime_step.write_target` data on Fix recipe items is the
+  recipe-resident parallel surface keyed by recipe item id; the
+  Fix-result tables stay as the Fix-protocol view keyed by Fix
+  artifact ids.
 - `npm run verify` green on the slice commit.
 
-**Why this not adjacent.** Splitting schema additions and catalog +
-recipe backfill across multiple slices breaks Tier-0 between them:
-adding required fields to `WorkflowPrimitive` and `WorkflowRecipe`
-rejects un-backfilled catalog and recipe respectively (E14 plus its
-analog for `workflow_kind`). Splitting primitive widening from recipe
-widening into separate slices is also unsound because the catalog ×
-recipe join (`validateWorkflowRecipeCatalogCompatibility`) is what
-verifies `runtime_gate_template.kind` against actual runtime usage —
-neither half tested alone proves the seam. Atomic schema + catalog +
-recipe in one slice is the only ordering that keeps Tier-0 green at
-every commit and gives the contract test a complete join surface to
-assert against.
+**Why this not adjacent.** Splitting the schema additions and the
+catalog + recipe backfill across multiple slices breaks Tier-0 between
+them: adding required fields to `WorkflowPrimitive`, `WorkflowRecipe`,
+or `WorkflowRecipeItem` rejects un-backfilled catalog and recipe
+respectively (E14). Splitting primitive widening from recipe-item
+widening into separate slices is also unsound because the layering
+invariant (no workflow-specific concretes at primitive layer) and the
+gate-template kind ↔ execution kind binding both require the catalog
+× recipe join to verify — neither half tested alone proves the seam.
+Atomic schema + catalog + recipe in one slice is the only ordering
+that keeps Tier-0 green at every commit and gives the contract test a
+complete join surface to assert against.
 
 **Lane.** Ratchet-Advance. Schema / test / type-export ratchets
-strictly advance by four new exported primitive-side types
-(`ProtocolRoleSlug`, `RuntimeGateTemplate`, `CheckpointTemplate`,
-`WriteSlotMap`), one new exported recipe-side type (`WorkflowKind`),
-five new fields total across `WorkflowPrimitive` and `WorkflowRecipe`,
-and one new contract-test surface. No ratchet regresses.
+strictly advance by five new exported recipe-side types
+(`ProtocolRoleSlug`, `RuntimeGateTemplate`, `CheckpointPolicyTemplate`,
+`WriteTarget`, `RuntimeStep`), one new exported recipe-level type
+(`WorkflowKind`), one new field on `WorkflowPrimitive`
+(`protocol_version`), one new field on `WorkflowRecipe`
+(`workflow_kind`), one new field on `WorkflowRecipeItem`
+(`runtime_step`), and one new contract-test surface. No ratchet
+regresses.
 
 ### 8.2 Slice D — Arc-close composition review (Heavy, Ratchet-Advance, ceremony + gate wiring)
 
@@ -642,29 +746,41 @@ Both ratchets strictly advance.
 
 ## §9 — Ratchets
 
-- **`WorkflowPrimitive` field count.** Strictly advances by 4 in
-  Slice A (`protocol_role`, `protocol_version`,
-  `runtime_gate_template`, `write_slots`; `checkpoint_template` is
-  optional and counted as part of the field surface advance). No
-  regression.
+- **`WorkflowPrimitive` field count.** Strictly advances by 1 in
+  Slice A (`protocol_version`). No regression.
 - **`WorkflowRecipe` field count.** Strictly advances by 1 in
   Slice A (`workflow_kind`). No regression.
-- **Catalog runtime-payload coverage.** Strictly advances from 0
-  catalog entries carrying `runtime_gate_template` + `protocol_role`
-  + `protocol_version` + `write_slots` to all 15 entries carrying
-  them, in Slice A.
-- **Catalog `checkpoint_template` coverage on checkpoint-runtime
-  primitives.** Strictly advances from 0 to all such primitives in
-  Slice A. (Currently one such primitive: `human-decision`.)
+- **`WorkflowRecipeItem` field count.** Strictly advances by 1 in
+  Slice A (`runtime_step`). No regression.
+- **Catalog `protocol_version` coverage.** Strictly advances from 0
+  catalog entries carrying `protocol_version` to all 15 entries
+  carrying it, in Slice A.
 - **Recipe `workflow_kind` coverage.** Strictly advances from 0
   recipes carrying typed `workflow_kind` to all registered recipes
   carrying it (currently one: `fix-candidate`).
-- **Bridge-time protocol-id composition smoke.** Strictly advances
-  from 0 to ≥1 contract-test asserting that the composed string
-  `'fix-' + protocol_role + '@v' + protocol_version` parses against
-  the runtime `ProtocolId` brand for every catalog primitive
-  (proves the regex compatibility seam without waiting for the
-  bridge plan to land).
+- **Recipe-item `runtime_step` coverage.** Strictly advances from 0
+  recipe items carrying `runtime_step` to all 12 items in the Fix
+  recipe carrying it, in Slice A.
+- **Recipe-item `runtime_step.checkpoint_policy` coverage on
+  checkpoint-execution items.** Strictly advances from 0 to all such
+  items in Slice A. (Currently one such item:
+  `fix-no-repro-decision`.)
+- **Layering invariant assertion.** Strictly advances from 0 to ≥1
+  contract-test asserting that no `WorkflowPrimitive` carries
+  workflow-specific runtime concretes (`protocol_role`,
+  `gate_template`, `checkpoint_policy`, `write_target` and the
+  legacy revision-02 names `runtime_gate_template`,
+  `checkpoint_template`, `write_slots`).
+- **Bridge-time protocol-id composition smoke (full Cartesian).**
+  Strictly advances from 0 to ≥1 contract-test asserting that for
+  every `WorkflowKind` value AND every recipe-item
+  `runtime_step.protocol_role` value, the composed string
+  `'${workflow_kind}-${protocol_role}@v${primitive.protocol_version}'`
+  parses against the runtime `ProtocolId` brand.
+- **WorkflowKind slug-shape drift assertion.** Strictly advances
+  from 0 to ≥1 contract-test asserting every key in
+  `WORKFLOW_KIND_CANONICAL_SETS` satisfies `/^[a-z][a-z0-9-]*$/`
+  (E25 fold-in).
 - **Contract test count.** Strictly advances by ≥1 new test file or
   test suite in Slice A.
 - **`ARC_CLOSE_GATES` length.** Strictly advances by 1 in Slice D.
