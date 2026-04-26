@@ -1,4 +1,4 @@
-<!-- current_slice: 155 -->
+<!-- current_slice: 156 -->
 
 # PROJECT_STATE — circuit-next
 
@@ -10,7 +10,7 @@ context and phase-open provenance.
 
 ## §0 Live state
 
-- **current_slice:** 155
+- **current_slice:** 156
 - **current_arc:** Build workflow parity is now closed. The implementation has the policy
   shape, typed Build artifact contracts/schemas, registered runtime synthesis
   writers for `build.plan@v1` and `build.result@v1`, and a focused
@@ -122,6 +122,19 @@ context and phase-open provenance.
   typed materializer, an opt-in compile path through the runner, and a live
   Fix execution proof; an arc-close composition review covers the privileged
   runtime change.
+  Slice 156 lands `specs/plans/recipe-runtime-substrate.md` at
+  challenger-pending, opening a Heavy three-slice prerequisite arc to the
+  bridge plan: Slice A widens `WorkflowPrimitive` with four runtime-payload
+  fields (typed `protocol_id`, structured `runtime_gate_template` discriminated
+  union, optional `checkpoint_template`, per-output `write_slots` map) and
+  atomically backfills the 15-entry catalog in the same commit; Slice B adds
+  an optional `checkpoint_overrides` slot to `WorkflowRecipeItem` so one
+  checkpoint-runtime primitive can serve multiple distinct decisions in a
+  single recipe; Slice D closes with a two-prong composition review wired into
+  `ARC_CLOSE_GATES`. The bridge plan
+  (`specs/plans/compiled-recipe-runtime-bridge.md`) stays at challenger-pending
+  revision 02 until this arc closes; bridge revision 03 takes this arc's
+  closing commit as its base.
 - **current_phase:** Phase 2 — Implementation (closed for the first working workflow; broader parity expansion planning next)
 
 Chronicle (relocated narrative history — non-authoritative; see
