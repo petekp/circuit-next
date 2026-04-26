@@ -151,6 +151,7 @@ describe('Fix artifact schemas', () => {
     ).toBeDefined();
     expect(
       FixContext.parse({
+        verdict: 'accept',
         sources: [{ kind: 'file', ref: 'src/example.ts', summary: 'Contains the failing branch' }],
         observations: ['The guard returns before the expected state update'],
         open_questions: [],
@@ -158,6 +159,7 @@ describe('Fix artifact schemas', () => {
     ).toBeDefined();
     expect(
       FixDiagnosis.parse({
+        verdict: 'accept',
         reproduction_status: 'reproduced',
         cause_summary: 'The guard rejects a valid empty-list case',
         confidence: 'high',
@@ -175,6 +177,7 @@ describe('Fix artifact schemas', () => {
     ).toBeDefined();
     expect(
       FixChange.parse({
+        verdict: 'accept',
         summary: 'Adjusted the guard and added a focused regression test',
         diagnosis_ref: 'fix.diagnosis@v1',
         changed_files: ['src/example.ts', 'tests/contracts/example.test.ts'],
@@ -225,6 +228,7 @@ describe('Fix artifact schemas', () => {
   it('requires uncertainty when the problem is not cleanly reproduced', () => {
     expect(
       FixDiagnosis.safeParse({
+        verdict: 'accept',
         reproduction_status: 'not-reproduced',
         cause_summary: 'No local reproduction was observed',
         confidence: 'low',

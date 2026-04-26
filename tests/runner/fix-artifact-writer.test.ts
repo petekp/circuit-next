@@ -328,11 +328,13 @@ describe('fix.result close writer (lite path, review absent)', () => {
       ],
     });
     writeJson(runRoot, 'artifacts/fix/context.json', {
+      verdict: 'accept',
       sources: [{ kind: 'file', ref: 'src/pagination.ts:42', summary: 'offset uses page*size' }],
       observations: ['off-by-one at boundary between pages'],
       open_questions: [],
     });
     writeJson(runRoot, 'artifacts/fix/diagnosis.json', {
+      verdict: 'accept',
       reproduction_status: 'reproduced',
       cause_summary: 'offset starts at 1 instead of 0',
       confidence: 'high',
@@ -340,6 +342,7 @@ describe('fix.result close writer (lite path, review absent)', () => {
       residual_uncertainty: [],
     });
     writeJson(runRoot, 'artifacts/fix/change.json', {
+      verdict: 'accept',
       summary: 'Subtract one from page-derived offset',
       diagnosis_ref: 'fix.diagnosis@v1',
       changed_files: ['src/pagination.ts'],
@@ -433,11 +436,13 @@ describe('fix.result close writer (standard path, review present)', () => {
       ],
     });
     writeJson(runRoot, 'artifacts/fix/context.json', {
+      verdict: 'accept',
       sources: [{ kind: 'file', ref: 'src/auth/login.ts:88', summary: 'rate-limit guard' }],
       observations: ['Guard never reached on retry'],
       open_questions: [],
     });
     writeJson(runRoot, 'artifacts/fix/diagnosis.json', {
+      verdict: 'accept',
       reproduction_status: 'reproduced',
       cause_summary: 'rate-limit cache key incorrect',
       confidence: 'high',
@@ -445,6 +450,7 @@ describe('fix.result close writer (standard path, review present)', () => {
       residual_uncertainty: [],
     });
     writeJson(runRoot, 'artifacts/fix/change.json', {
+      verdict: 'accept',
       summary: 'Use IP+user-agent as the rate-limit key',
       diagnosis_ref: 'fix.diagnosis@v1',
       changed_files: ['src/auth/login.ts'],

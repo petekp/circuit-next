@@ -112,6 +112,7 @@ export type FixContextSource = z.infer<typeof FixContextSource>;
 
 export const FixContext = z
   .object({
+    verdict: z.literal('accept'),
     sources: z.array(FixContextSource).min(1),
     observations: NonEmptyStringArray,
     open_questions: z.array(z.string().min(1)),
@@ -129,6 +130,7 @@ export type FixReproductionStatus = z.infer<typeof FixReproductionStatus>;
 
 export const FixDiagnosis = z
   .object({
+    verdict: z.literal('accept'),
     reproduction_status: FixReproductionStatus,
     cause_summary: z.string().min(1),
     confidence: z.enum(['low', 'medium', 'high']),
@@ -193,6 +195,7 @@ export type FixNoReproDecision = z.infer<typeof FixNoReproDecision>;
 
 export const FixChange = z
   .object({
+    verdict: z.literal('accept'),
     summary: z.string().min(1),
     diagnosis_ref: z.string().min(1),
     changed_files: NonEmptyStringArray,
