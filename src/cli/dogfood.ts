@@ -201,8 +201,20 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
   return result;
 }
 
-function resolveFixturePath(workflowName: string, override: string | undefined): string {
+function resolveFixturePath(
+  workflowName: string,
+  modeName: string | undefined,
+  override: string | undefined,
+): string {
   if (override !== undefined) return resolve(override);
+  // When a mode is explicitly requested, prefer the per-mode file if the
+  // recipe author emitted one (recipes with route_overrides produce
+  // <mode>.json siblings of circuit.json — see scripts/emit-workflows.mjs).
+  // Falls back to the canonical circuit.json otherwise.
+  if (modeName !== undefined) {
+    const perMode = resolve(`.claude-plugin/skills/${workflowName}/${modeName}.json`);
+    if (existsSync(perMode)) return perMode;
+  }
   return resolve(`.claude-plugin/skills/${workflowName}/circuit.json`);
 }
 
@@ -297,7 +309,7 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
   }
 
   const route = resolveWorkflowRoute(args);
-  const fixturePath = resolveFixturePath(route.workflowName, args.fixturePath);
+  const fixturePath = resolveFixturePath(route.workflowName, args.entryMode, args.fixturePath);
   const { workflow, bytes } = loadFixture(fixturePath);
   assertFixtureMatchesRoute(workflow, route);
   const runId = RunId.parse(options.runId ?? randomUUID());

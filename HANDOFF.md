@@ -1,71 +1,82 @@
 # HANDOFF
 
-Last updated: 2026-04-26 (Path #2 complete: build-time recipe compile + runtime substrate retired).
+Last updated: 2026-04-26 (Fix recipe shipped, route_overrides honored at compile).
 
 ## Where we are
 
-Recipes are now an authoring layer that compiles at build time to the
-committed `.claude-plugin/skills/<id>/circuit.json` fixtures. The runner at
-`src/runtime/runner.ts` is the single engine end-to-end. The parallel
-`src/runtime/recipe-runtime/` substrate that the previous session bridged
-in is gone.
+The recipe → Workflow compiler now honors `route_overrides`, and the Fix
+recipe is active. Concretely:
 
-Concretely:
+1. `src/runtime/compile-recipe-to-workflow.ts` returns a discriminated
+   `CompileResult`:
+   - `kind: 'single'` when no item declares `route_overrides` (all entry
+     modes share one graph; emitted to one `circuit.json`). build, explore,
+     and review all hit this branch and produce the same byte-equivalent
+     output as before.
+   - `kind: 'per-mode'` when at least one item declares `route_overrides`
+     (one Workflow per entry mode, with reachability + dead-step
+     elimination + auto-omitted canonicals applied). Fix hits this branch.
+2. `scripts/emit-workflows.mjs` groups per-mode Workflows by graph identity
+   (everything except `entry_modes`). The largest group goes to
+   `circuit.json` with merged entry_modes; remaining modes get their own
+   `<mode-name>.json`. For Fix: default/deep/autonomous share the standard
+   graph and live in `circuit.json`; lite skips review and lives in
+   `lite.json`.
+3. `src/cli/dogfood.ts` `resolveFixturePath` is mode-aware: when the CLI
+   is invoked with `--entry-mode <X>` and `<id>/<X>.json` exists, the
+   loader prefers it over `<id>/circuit.json`. Single-file workflows
+   (build/explore/review) are unaffected.
+4. `specs/workflow-recipes/fix.recipe.json` is the active Fix recipe
+   (status: active). It takes `task.intake@v1` and `route.decision@v1` as
+   initial contracts (matching build/explore), starts at `fix-frame`, and
+   declares `route_overrides.continue.lite = fix-close-lite` on
+   `fix-verify`. `fix-no-repro-decision` and `fix-handoff` remain in the
+   recipe as authoring intent for future ask/handoff routing in the
+   runtime; they are unreachable at compile and do not appear in the
+   emitted Workflows.
+5. The legacy projection helpers (`projectWorkflowRecipeForCompiler`,
+   `compileWorkflowRecipeDraft`, and the `WorkflowRecipeProjected*` /
+   `WorkflowRecipeDraft*` types) and the fix-candidate snapshot fixture
+   are deleted. The contract test for the Fix recipe at
+   `tests/contracts/workflow-recipe.test.ts` exercises the schema
+   directly.
+6. `tests/contracts/compile-recipe-to-workflow.test.ts` covers the
+   single-mode byte-equivalence for build/explore/review.
+   `tests/unit/compile-recipe-per-mode.test.ts` covers per-mode
+   reachability, override application, auto-omit, and the
+   handoff/escalate dropped-outcome handling against synthetic recipes.
 
-1. `src/schemas/workflow-recipe.ts` carries everything the compiler needs:
-   per-item `protocol` (ProtocolId), `writes` (typed-artifact path plus
-   dispatch slots or checkpoint slots), `gate` (required/allow/pass), and
-   optional `checkpoint_policy`. Recipe-level fields cover `version`,
-   `entry`, `entry_modes`, `spine_policy`, and per-canonical-phase
-   metadata (`phases`). Cross-field shape rules — kind ↔ writes, kind ↔
-   gate, checkpoint_policy only on checkpoint kind — are enforced in the
-   item superRefine.
-2. The catalog's `action_surface` widened from a hard constraint to a
-   recommendation: worker primitives can be done inline as synthesis,
-   orchestrator primitives can be checkpoints. This matched what the live
-   committed Workflows already did. Review primitive can also be in the
-   `analyze` phase (audit-only Review pattern).
-3. `src/runtime/compile-recipe-to-workflow.ts` is the pure compiler.
-   Failure modes are loud: missing required fields, kind/artifact pairs
-   the runner can't handle (e.g., verification step writing anything
-   other than build.verification@v1), or items with no `pass` route.
-4. `scripts/emit-workflows.mjs` regenerates the committed fixtures from
-   the recipes (`npm run emit-workflows`) and `--check` mode runs the
-   drift check (also wired into `npm run verify`).
-5. The recipes for Build, Explore, and Review now compile to byte-equal
-   output with the committed `circuit.json` fixtures. The CLI was already
-   loading those committed files and handing them to `executeDogfood`, so
-   the cutover was a no-op.
-6. `src/runtime/recipe-runtime/`, `tests/unit/recipe-runtime/`, and
-   `tests/fixtures/recipe-runtime/` are deleted entirely.
-
-`npm run verify` passes: 802 tests (6 skipped), tsc clean, biome clean,
-build clean, drift check clean.
+`npm run verify` passes: 795 tests (6 skipped), tsc clean, biome clean,
+build clean, drift check clean across all 5 emitted files
+(build/explore/review/fix circuit.json + fix lite.json).
 
 ## What's next
 
-Open follow-ups, by priority:
+1. **Hook up `/circuit:fix` in the slash-command router and skill index.**
+   The recipe and committed Workflows exist; the CLI loader handles per-
+   mode files. The router/skill registration that exposes `/circuit:fix`
+   to users still needs a pass — confirm the workflow shows up under
+   `/circuit:run` classification and that `/circuit:fix --entry-mode lite`
+   resolves to `lite.json`.
+2. **Verification artifact label mismatch.** `fix-verify` writes
+   `build.verification@v1` (the only schema the runner's verification
+   writer supports), but `fix.result.artifact_pointers` labels it as
+   `fix.verification@v1` per `FIX_RESULT_SCHEMA_BY_ARTIFACT_ID`. Both
+   point at the same physical file with structurally identical contents,
+   but the labels disagree. Either generalize the runner's verification
+   writer to handle `fix.verification@v1` directly, or drop the
+   `fix.verification` entry from the result schema and standardize on the
+   build label.
+3. **Recipe authoring docs refresh** at
+   `specs/workflow-recipe-composition.md` got a partial pass (removed the
+   projection-helper paragraphs, updated the Fix shape, pointed at the
+   real recipe and compiler). The "What This Means For Fix" list should
+   probably be promoted into a fuller "Authoring an active recipe"
+   walkthrough now that Fix exists as a worked example.
+4. **Other workflows that might want `route_overrides`.** Build-lite
+   could plausibly skip its review step; same call as Fix. If/when other
+   workflows want this pattern, just add the override to the recipe — the
+   compiler and emit pipeline now handle it generically.
 
-1. **Fix recipe (status: candidate)** still uses `route_overrides` to
-   send Lite-rigor verifications straight to a no-review close. The
-   compiler currently has no support for per-rigor route overrides. When
-   we want Fix to ship, decide whether to split it into two recipes
-   (fix-lite + fix-standard, no overrides) or teach the compiler to emit
-   one Workflow per entry mode for any recipe that uses route_overrides.
-   The schema retains `route_overrides` as documentation either way.
-2. **Recipe authoring docs.** `specs/workflow-recipe-composition.md`
-   predates the new schema. Update to describe the new fields
-   (writes/gate/protocol/checkpoint_policy, plus recipe-level entry/
-   entry_modes/spine_policy/phases) and the build-time compile flow.
-3. **Drift check coverage.** The CI drift check today only covers
-   build/explore/review. If new recipes (fix, sweep, migrate, etc.) get
-   compiled, add them to `RECIPES` in `scripts/emit-workflows.mjs`.
-4. **`projectWorkflowRecipeForCompiler` and `compileWorkflowRecipeDraft`
-   helpers** in `src/schemas/workflow-recipe.ts` are now only consumed
-   by their own contract tests (the Fix-candidate projection snapshot).
-   Decide whether to keep them as recipe-introspection helpers or retire
-   them when Fix moves off `route_overrides`.
-
-No Codex pass was needed this session — the work was largely mechanical
-once the schema design was settled, and `npm run verify` provided strong
-evidence at every step.
+No Codex pass was needed this session — the change was self-contained and
+`npm run verify` gave strong evidence at every step.

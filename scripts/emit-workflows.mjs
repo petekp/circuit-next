@@ -50,6 +50,10 @@ const RECIPES = [
     id: 'review',
     recipePath: 'specs/workflow-recipes/review.recipe.json',
   },
+  {
+    id: 'fix',
+    recipePath: 'specs/workflow-recipes/fix.recipe.json',
+  },
 ];
 
 async function loadCompilerModule() {

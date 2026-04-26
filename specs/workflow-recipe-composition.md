@@ -15,11 +15,13 @@ The companion machine-readable primitive list lives at
 `specs/workflow-primitive-catalog.json`, with the schema in
 `src/schemas/workflow-primitives.ts`.
 
-A first design-only Fix candidate lives at
-`specs/workflow-recipes/fix-candidate.recipe.json`, with the recipe schema in
-`src/schemas/workflow-recipe.ts`. The product direction note at
-`specs/workflow-direction.md` reframes old Repair evidence into the clearer Fix
-recipe.
+The active Fix recipe lives at `specs/workflow-recipes/fix.recipe.json`, with
+the recipe schema in `src/schemas/workflow-recipe.ts` and the recipe → Workflow
+compiler at `src/runtime/compile-recipe-to-workflow.ts`. Compiled fixtures are
+emitted to `.claude-plugin/skills/fix/circuit.json` and (because Fix uses
+`route_overrides`) `.claude-plugin/skills/fix/lite.json`. The product direction
+note at `specs/workflow-direction.md` reframes old Repair evidence into the
+clearer Fix recipe.
 
 ## The Short Version
 
@@ -137,33 +139,13 @@ synthesis.
 future compiler enough information to group recipe items into Frame, Analyze,
 Plan, Act, Verify, Review, and Close phases without guessing from item ids.
 
-The schema also exposes a design-only compiler projection helper. It groups
-recipe items by declared phase, records omitted phases, and carries each item's
-execution label and output contract. Each projected item also carries a
-per-outcome route entry with the default target and any rigor-specific target
-overrides, so a future compiler can walk the recipe's effective edges without
-re-deriving them from the authoring document. That projection is not executable;
-it is the small summary future compiler work should consume first.
-
-The current Fix projection is also persisted as a snapshot fixture at
-`specs/workflow-recipes/fix-candidate.projection.json`. A contract test compares
-that fixture against the live projection helper output, so any future change to
-the projection shape or the Fix recipe surfaces as a single fixture diff. The
-fixture can be refreshed by running the workflow-recipe contract test with the
-`UPDATE_PROJECTION_FIXTURE=1` environment variable.
-
-The schema also exposes a small design-only compiler-boundary helper. Given a
-projection and a rigor, `compileWorkflowRecipeDraft` returns a `WorkflowRecipeDraft`
-in which each item's outgoing edges are already resolved to a single target —
-either the rigor-specific override target or the default target. The draft is
-the smallest shape that still describes the per-rigor effective workflow, and a
-future runtime compiler should consume it instead of re-walking the recipe
-overrides at execution time. The draft is still design-only; nothing in the
-runtime reads it yet.
-
 `route_overrides` lets a recipe choose a different target for a named outcome
 under a specific rigor. The default route still exists, so the recipe remains
-readable; the override only says that one mode takes a different path.
+readable; the override only says that one mode takes a different path. The
+recipe → Workflow compiler honors `route_overrides` by emitting one Workflow
+per entry mode (with reachability + dead-step elimination per mode); the
+emit script groups modes by graph identity so modes that share a graph share
+a single `circuit.json` file.
 
 ## Compatibility
 
@@ -271,19 +253,20 @@ from having to read raw step logs.
 
 ## What This Means For Fix
 
-The old Repair workflow should be treated as reference evidence. The first
-proving recipe should be Fix because the user-facing job is clearer:
+The old Repair workflow should be treated as reference evidence. The active
+Fix recipe takes intake and route as initial contracts (the runner produces
+them before the workflow starts) and follows this shape:
 
-1. Intake
-2. Frame
-3. Gather Context
-4. Diagnose
-5. Human Decision when reproduction is uncertain
-6. Act
-7. Run Verification
-8. Review when mode requires it
-9. Close With Evidence, with a separate Lite close path when Review is skipped
-10. Handoff when work is paused
+1. Frame — confirm Fix brief
+2. Gather Context (dispatched to a researcher)
+3. Diagnose (dispatched to a researcher)
+4. Human Decision — when reproduction is uncertain (authoring intent today;
+   unreachable at compile until the runtime grows the corresponding outcome)
+5. Act (dispatched to an implementer)
+6. Run Verification
+7. Review — dispatched to a reviewer when mode requires it; lite mode skips it
+8. Close With Evidence, with a separate Lite close path when Review is skipped
+9. Handoff — when work is paused (also authoring intent; unreachable at compile)
 
 If that shape feels too rigid after the deep research lands, the research should
 tell us exactly which primitive or route policy needs to change.

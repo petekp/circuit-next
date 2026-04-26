@@ -9,15 +9,19 @@ Successor to the first-generation [Circuit](../circuit) plugin.
 - `/circuit:explore` — investigation and planning workflow.
 - `/circuit:review` — audit-only review workflow.
 - `/circuit:build` — implementation workflow with checkpoint, dispatch, verification, review, and close.
+- `/circuit:fix` — fix workflow with full standard-mode review pass and a `lite` entry mode that skips review (per-mode emit driven by `route_overrides` in `specs/workflow-recipes/fix.recipe.json`).
 
 Per-step configurability of model, reasoning effort, and skills is wired
 through the runtime selection resolver. User-global config at
 `~/.config/circuit-next/config.yaml` and per-project config at
 `./.circuit/config.yaml` are both honored.
 
-The next proving workflow is `Fix`, built over reusable workflow primitives
-described in `specs/workflow-direction.md` and
-`specs/workflow-recipes/fix-candidate.recipe.json`.
+Workflow recipes live under `specs/workflow-recipes/` and are compiled to
+`.claude-plugin/skills/<id>/circuit.json` (and per-mode `<mode>.json` siblings
+when `route_overrides` is non-empty) by `npm run emit-workflows`. The drift
+check (`npm run check-workflow-drift`, also wired into `npm run verify`)
+enforces the committed fixtures stay byte-equivalent with what the recipes
+compile to.
 
 ## Verification
 

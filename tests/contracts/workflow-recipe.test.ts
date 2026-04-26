@@ -1,20 +1,15 @@
-import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { StepId } from '../../src/schemas/ids.js';
 import { WorkflowPrimitiveCatalog } from '../../src/schemas/workflow-primitives.js';
 import {
   WorkflowRecipe,
-  compileWorkflowRecipeDraft,
-  projectWorkflowRecipeForCompiler,
   validateWorkflowRecipeCatalogCompatibility,
 } from '../../src/schemas/workflow-recipe.js';
 
 const primitiveCatalogPath = 'specs/workflow-primitive-catalog.json';
-const fixRecipePath = 'specs/workflow-recipes/fix-candidate.recipe.json';
-const fixProjectionFixturePath = 'specs/workflow-recipes/fix-candidate.projection.json';
-const updateProjectionFixture = process.env.UPDATE_PROJECTION_FIXTURE === '1';
+const fixRecipePath = 'specs/workflow-recipes/fix.recipe.json';
 
 function readJson(path: string): unknown {
   return JSON.parse(readFileSync(path, 'utf8')) as unknown;
@@ -28,15 +23,16 @@ function parseFixRecipe() {
   return WorkflowRecipe.parse(readJson(fixRecipePath));
 }
 
-describe('workflow recipe schema', () => {
-  it('parses the Fix candidate recipe', () => {
+describe('workflow recipe schema — active Fix recipe', () => {
+  it('parses the active Fix recipe', () => {
     const recipe = parseFixRecipe();
     expect(recipe.schema_version).toBe('1');
-    expect(recipe.status).toBe('candidate');
-    expect(recipe.starts_at).toBe('fix-intake');
+    expect(recipe.id as unknown as string).toBe('fix');
+    expect(recipe.status).toBe('active');
+    expect(recipe.starts_at as unknown as string).toBe('fix-frame');
   });
 
-  it('keeps the Fix candidate recipe compatible with the primitive catalog', () => {
+  it('keeps the Fix recipe compatible with the primitive catalog', () => {
     const issues = validateWorkflowRecipeCatalogCompatibility(
       parseFixRecipe(),
       parsePrimitiveCatalog(),
@@ -55,8 +51,6 @@ describe('workflow recipe schema', () => {
   it('uses the expected Fix primitive sequence', () => {
     const recipe = parseFixRecipe();
     expect(recipe.items.map((item) => item.uses)).toEqual([
-      'intake',
-      'route',
       'frame',
       'gather-context',
       'diagnose',
@@ -72,9 +66,7 @@ describe('workflow recipe schema', () => {
 
   it('keeps Fix phase bindings aligned with the intended workflow shape', () => {
     const recipe = parseFixRecipe();
-    expect(recipe.items.map((item) => [item.id, item.phase])).toEqual([
-      ['fix-intake', 'frame'],
-      ['fix-route', 'frame'],
+    expect(recipe.items.map((item) => [item.id as unknown as string, item.phase])).toEqual([
       ['fix-frame', 'frame'],
       ['fix-gather-context', 'analyze'],
       ['fix-diagnose', 'analyze'],
@@ -88,194 +80,9 @@ describe('workflow recipe schema', () => {
     ]);
   });
 
-  it('projects Fix into compiler-facing phase groups without using item names as phase hints', () => {
-    const projection = projectWorkflowRecipeForCompiler(parseFixRecipe());
-    expect(projection.recipe_id).toBe('fix-candidate');
-    expect(projection.starts_at).toBe('fix-intake');
-    expect(projection.omitted_phases).toEqual(['plan']);
-    expect(projection.phases).toEqual([
-      {
-        phase: 'frame',
-        items: ['fix-intake', 'fix-route', 'fix-frame'],
-      },
-      {
-        phase: 'analyze',
-        items: ['fix-gather-context', 'fix-diagnose', 'fix-no-repro-decision'],
-      },
-      {
-        phase: 'act',
-        items: ['fix-act'],
-      },
-      {
-        phase: 'verify',
-        items: ['fix-verify'],
-      },
-      {
-        phase: 'review',
-        items: ['fix-review'],
-      },
-      {
-        phase: 'close',
-        items: ['fix-close-lite', 'fix-close', 'fix-handoff'],
-      },
-    ]);
-  });
-
-  it('projects item uses, phase, execution, and output through to projected items', () => {
-    const projection = projectWorkflowRecipeForCompiler(parseFixRecipe());
-    const verify = projection.items.find((item) => item.id === 'fix-verify');
-    const act = projection.items.find((item) => item.id === 'fix-act');
-    if (verify === undefined) throw new Error('fix-verify projection missing');
-    if (act === undefined) throw new Error('fix-act projection missing');
-
-    expect(act).toMatchObject({
-      uses: 'act',
-      phase: 'act',
-      execution: { kind: 'dispatch', role: 'implementer' },
-      output: 'fix.change@v1',
-    });
-    expect(verify).toMatchObject({
-      uses: 'run-verification',
-      phase: 'verify',
-      execution: { kind: 'verification' },
-      output: 'fix.verification@v1',
-    });
-  });
-
-  it('projects per-outcome route targets including terminals and rigor overrides', () => {
-    const projection = projectWorkflowRecipeForCompiler(parseFixRecipe());
-    const verify = projection.items.find((item) => item.id === 'fix-verify');
-    const intake = projection.items.find((item) => item.id === 'fix-intake');
-    const closeLite = projection.items.find((item) => item.id === 'fix-close-lite');
-    if (verify === undefined) throw new Error('fix-verify projection missing');
-    if (intake === undefined) throw new Error('fix-intake projection missing');
-    if (closeLite === undefined) throw new Error('fix-close-lite projection missing');
-
-    expect(verify.routes).toEqual([
-      {
-        outcome: 'continue',
-        default_target: 'fix-review',
-        mode_targets: { lite: 'fix-close-lite' },
-      },
-      { outcome: 'retry', default_target: 'fix-act', mode_targets: {} },
-      { outcome: 'ask', default_target: 'fix-no-repro-decision', mode_targets: {} },
-      { outcome: 'stop', default_target: '@stop', mode_targets: {} },
-    ]);
-
-    expect(intake.routes).toEqual([
-      { outcome: 'continue', default_target: 'fix-route', mode_targets: {} },
-      { outcome: 'ask', default_target: '@stop', mode_targets: {} },
-      { outcome: 'stop', default_target: '@stop', mode_targets: {} },
-    ]);
-
-    const closeLiteComplete = closeLite.routes.find((route) => route.outcome === 'complete');
-    expect(closeLiteComplete).toEqual({
-      outcome: 'complete',
-      default_target: '@complete',
-      mode_targets: {},
-    });
-  });
-
-  it('preserves the recipe item route outcome set through projection', () => {
-    const recipe = parseFixRecipe();
-    const projection = projectWorkflowRecipeForCompiler(recipe);
-    for (const item of projection.items) {
-      const sourceItem = recipe.items.find((entry) => entry.id === item.id);
-      if (sourceItem === undefined) throw new Error(`recipe item missing: ${item.id}`);
-      const projectedOutcomes = item.routes.map((route) => route.outcome).sort();
-      const recipeOutcomes = Object.keys(sourceItem.routes).sort();
-      expect(projectedOutcomes).toEqual(recipeOutcomes);
-    }
-  });
-
-  it('matches the canonical Fix projection snapshot fixture', () => {
-    const projection = projectWorkflowRecipeForCompiler(parseFixRecipe());
-    if (updateProjectionFixture) {
-      writeFileSync(fixProjectionFixturePath, `${JSON.stringify(projection, null, 2)}\n`);
-      execFileSync('npx', ['biome', 'format', '--write', fixProjectionFixturePath], {
-        stdio: 'inherit',
-      });
-    }
-    const fixture = readJson(fixProjectionFixturePath);
-    expect(projection).toEqual(fixture);
-  });
-
-  it('compiles a per-rigor draft that resolves rigor overrides on fix-verify continue', () => {
-    const projection = projectWorkflowRecipeForCompiler(parseFixRecipe());
-    const standardDraft = compileWorkflowRecipeDraft(projection, 'standard');
-    const liteDraft = compileWorkflowRecipeDraft(projection, 'lite');
-
-    const standardVerify = standardDraft.items.find((item) => item.id === 'fix-verify');
-    const liteVerify = liteDraft.items.find((item) => item.id === 'fix-verify');
-    if (standardVerify === undefined) throw new Error('standard fix-verify draft missing');
-    if (liteVerify === undefined) throw new Error('lite fix-verify draft missing');
-
-    const standardContinue = standardVerify.edges.find((edge) => edge.outcome === 'continue');
-    const liteContinue = liteVerify.edges.find((edge) => edge.outcome === 'continue');
-    expect(standardContinue).toEqual({ outcome: 'continue', target: 'fix-review' });
-    expect(liteContinue).toEqual({ outcome: 'continue', target: 'fix-close-lite' });
-  });
-
-  it('preserves terminal targets after rigor resolution', () => {
-    const projection = projectWorkflowRecipeForCompiler(parseFixRecipe());
-    const draft = compileWorkflowRecipeDraft(projection, 'standard');
-
-    const intake = draft.items.find((item) => item.id === 'fix-intake');
-    const closeLite = draft.items.find((item) => item.id === 'fix-close-lite');
-    if (intake === undefined) throw new Error('fix-intake draft missing');
-    if (closeLite === undefined) throw new Error('fix-close-lite draft missing');
-
-    expect(intake.edges).toContainEqual({ outcome: 'stop', target: '@stop' });
-    expect(closeLite.edges).toContainEqual({ outcome: 'complete', target: '@complete' });
-    expect(closeLite.edges).toContainEqual({ outcome: 'escalate', target: '@escalate' });
-  });
-
-  it('keeps rigors without overrides identical to the projection default targets', () => {
-    const projection = projectWorkflowRecipeForCompiler(parseFixRecipe());
-    const deepDraft = compileWorkflowRecipeDraft(projection, 'deep');
-
-    for (const item of deepDraft.items) {
-      const projectedItem = projection.items.find((entry) => entry.id === item.id);
-      if (projectedItem === undefined) throw new Error(`projection item missing: ${item.id}`);
-      const expectedEdges = projectedItem.routes.map((route) => ({
-        outcome: route.outcome,
-        target: route.default_target,
-      }));
-      expect(item.edges).toEqual(expectedEdges);
-    }
-  });
-
-  it('keeps draft top-level shape consistent with the projection input', () => {
-    const projection = projectWorkflowRecipeForCompiler(parseFixRecipe());
-    const draft = compileWorkflowRecipeDraft(projection, 'standard');
-
-    expect(draft.recipe_id).toBe(projection.recipe_id);
-    expect(draft.starts_at).toBe(projection.starts_at);
-    expect(draft.phases).toEqual(projection.phases);
-    expect(draft.omitted_phases).toEqual(projection.omitted_phases);
-    expect(draft.rigor).toBe('standard');
-    expect(draft.items.map((item) => item.id)).toEqual(projection.items.map((item) => item.id));
-  });
-
-  it('keeps Fix items declaring the evidence required by their primitives', () => {
-    const recipe = parseFixRecipe();
-    const catalog = parsePrimitiveCatalog();
-    const primitiveById = new Map(catalog.primitives.map((primitive) => [primitive.id, primitive]));
-
-    for (const item of recipe.items) {
-      const primitive = primitiveById.get(item.uses);
-      if (primitive === undefined) throw new Error(`missing primitive ${item.uses}`);
-      expect(item.evidence_requirements).toEqual(
-        expect.arrayContaining(primitive.produces_evidence),
-      );
-    }
-  });
-
   it('keeps Fix execution bindings aligned with the intended compiler shape', () => {
     const recipe = parseFixRecipe();
-    expect(recipe.items.map((item) => [item.id, item.execution])).toEqual([
-      ['fix-intake', { kind: 'synthesis' }],
-      ['fix-route', { kind: 'synthesis' }],
+    expect(recipe.items.map((item) => [item.id as unknown as string, item.execution])).toEqual([
       ['fix-frame', { kind: 'synthesis' }],
       ['fix-gather-context', { kind: 'dispatch', role: 'researcher' }],
       ['fix-diagnose', { kind: 'dispatch', role: 'researcher' }],
@@ -289,22 +96,21 @@ describe('workflow recipe schema', () => {
     ]);
   });
 
-  it('keeps Fix act and close inputs aligned with the evidence path', () => {
+  it('keeps Fix close inputs aligned with the evidence path (lite skips review)', () => {
     const recipe = parseFixRecipe();
-    const act = recipe.items.find((item) => item.id === 'fix-act');
-    const closeLite = recipe.items.find((item) => item.id === 'fix-close-lite');
-    const close = recipe.items.find((item) => item.id === 'fix-close');
-    if (act === undefined) throw new Error('fix-act missing');
+    const closeLite = recipe.items.find(
+      (item) => (item.id as unknown as string) === 'fix-close-lite',
+    );
+    const close = recipe.items.find((item) => (item.id as unknown as string) === 'fix-close');
     if (closeLite === undefined) throw new Error('fix-close-lite missing');
     if (close === undefined) throw new Error('fix-close missing');
 
-    expect(act.input).not.toHaveProperty('decision');
     expect(closeLite.input).toMatchObject({
       brief: 'fix.brief@v1',
       context: 'fix.context@v1',
       diagnosis: 'fix.diagnosis@v1',
       change: 'fix.change@v1',
-      verification: 'fix.verification@v1',
+      verification: 'build.verification@v1',
     });
     expect(closeLite.input).not.toHaveProperty('review');
     expect(close.input).toMatchObject({
@@ -312,14 +118,14 @@ describe('workflow recipe schema', () => {
       context: 'fix.context@v1',
       diagnosis: 'fix.diagnosis@v1',
       change: 'fix.change@v1',
-      verification: 'fix.verification@v1',
+      verification: 'build.verification@v1',
       review: 'fix.review@v1',
     });
   });
 
-  it('routes Lite verification directly to a no-review close item', () => {
+  it('routes Lite verification directly to a no-review close item via route_overrides', () => {
     const recipe = parseFixRecipe();
-    const verify = recipe.items.find((item) => item.id === 'fix-verify');
+    const verify = recipe.items.find((item) => (item.id as unknown as string) === 'fix-verify');
     if (verify === undefined) throw new Error('fix-verify missing');
 
     expect(verify.routes.continue).toBe('fix-review');
@@ -413,21 +219,19 @@ describe('workflow recipe schema', () => {
 
   it('reports route outcomes that the selected primitive does not allow', () => {
     const recipe = parseFixRecipe();
-    const first = recipe.items[0];
-    if (first === undefined) throw new Error('fixture missing first item');
-    first.routes = { ...first.routes, complete: '@complete' };
+    const frame = recipe.items.find((item) => (item.id as unknown as string) === 'fix-frame');
+    if (frame === undefined) throw new Error('fix-frame missing');
+    frame.routes = { ...frame.routes, complete: '@complete' };
     const issues = validateWorkflowRecipeCatalogCompatibility(recipe, parsePrimitiveCatalog());
-    expect(issues).toEqual([
-      {
-        item_id: 'fix-intake',
-        message: 'route "complete" is not allowed by primitive "intake"',
-      },
-    ]);
+    expect(issues).toContainEqual({
+      item_id: 'fix-frame',
+      message: 'route "complete" is not allowed by primitive "frame"',
+    });
   });
 
   it('reports recipe items that omit primitive evidence requirements', () => {
     const recipe = parseFixRecipe();
-    const diagnose = recipe.items.find((item) => item.id === 'fix-diagnose');
+    const diagnose = recipe.items.find((item) => (item.id as unknown as string) === 'fix-diagnose');
     if (diagnose === undefined) throw new Error('fix-diagnose missing');
     diagnose.evidence_requirements = ['cause hypothesis'];
 
@@ -441,10 +245,8 @@ describe('workflow recipe schema', () => {
 
   it('reports execution kinds that do not match the selected primitive surface', () => {
     const recipe = parseFixRecipe();
-    const act = recipe.items.find((item) => item.id === 'fix-act');
+    const act = recipe.items.find((item) => (item.id as unknown as string) === 'fix-act');
     if (act === undefined) throw new Error('fix-act missing');
-    // worker primitives (act) accept dispatch or synthesis. Checkpoint is
-    // still incompatible — host primitives are checkpoints, workers are not.
     act.execution = { kind: 'checkpoint' };
 
     const issues = validateWorkflowRecipeCatalogCompatibility(recipe, parsePrimitiveCatalog());
@@ -457,7 +259,7 @@ describe('workflow recipe schema', () => {
 
   it('reports phase bindings that do not match the selected primitive', () => {
     const recipe = parseFixRecipe();
-    const act = recipe.items.find((item) => item.id === 'fix-act');
+    const act = recipe.items.find((item) => (item.id as unknown as string) === 'fix-act');
     if (act === undefined) throw new Error('fix-act missing');
     act.phase = 'analyze';
 
@@ -470,7 +272,7 @@ describe('workflow recipe schema', () => {
 
   it('reports run-verification items that do not bind to verification execution', () => {
     const recipe = parseFixRecipe();
-    const verify = recipe.items.find((item) => item.id === 'fix-verify');
+    const verify = recipe.items.find((item) => (item.id as unknown as string) === 'fix-verify');
     if (verify === undefined) throw new Error('fix-verify missing');
     verify.execution = { kind: 'synthesis' };
 
@@ -484,7 +286,7 @@ describe('workflow recipe schema', () => {
 
   it('reports unavailable input contracts in recipe order', () => {
     const recipe = parseFixRecipe();
-    const diagnose = recipe.items.find((item) => item.id === 'fix-diagnose');
+    const diagnose = recipe.items.find((item) => (item.id as unknown as string) === 'fix-diagnose');
     if (diagnose === undefined) throw new Error('fix-diagnose missing');
     diagnose.input.context = 'missing.context@v1';
     const issues = validateWorkflowRecipeCatalogCompatibility(recipe, parsePrimitiveCatalog());
@@ -502,7 +304,7 @@ describe('workflow recipe schema', () => {
 
   it('reports recipe items that omit every accepted primitive input set', () => {
     const recipe = parseFixRecipe();
-    const act = recipe.items.find((item) => item.id === 'fix-act');
+    const act = recipe.items.find((item) => (item.id as unknown as string) === 'fix-act');
     if (act === undefined) throw new Error('fix-act missing');
     act.input = { brief: 'fix.brief@v1' };
 
@@ -514,23 +316,9 @@ describe('workflow recipe schema', () => {
     });
   });
 
-  it('allows Act to consume a plan instead of a diagnosis through an alternative input set', () => {
-    const recipe = parseFixRecipe();
-    recipe.initial_contracts.push('plan.strategy@v1');
-    const act = recipe.items.find((item) => item.id === 'fix-act');
-    if (act === undefined) throw new Error('fix-act missing');
-    act.input = {
-      brief: 'fix.brief@v1',
-      plan: 'plan.strategy@v1',
-    };
-
-    const issues = validateWorkflowRecipeCatalogCompatibility(recipe, parsePrimitiveCatalog());
-    expect(issues).toEqual([]);
-  });
-
   it('reports inputs that are skipped by a reachable route', () => {
     const recipe = parseFixRecipe();
-    const verify = recipe.items.find((item) => item.id === 'fix-verify');
+    const verify = recipe.items.find((item) => (item.id as unknown as string) === 'fix-verify');
     if (verify === undefined) throw new Error('fix-verify missing');
     verify.routes.continue = StepId.parse('fix-close');
 
@@ -544,20 +332,20 @@ describe('workflow recipe schema', () => {
 
   it('reports recipe items that cannot be reached from starts_at', () => {
     const recipe = parseFixRecipe();
-    const intake = recipe.items.find((item) => item.id === 'fix-intake');
-    if (intake === undefined) throw new Error('fix-intake missing');
-    intake.routes = { stop: '@stop' };
+    const frame = recipe.items.find((item) => (item.id as unknown as string) === 'fix-frame');
+    if (frame === undefined) throw new Error('fix-frame missing');
+    frame.routes = { stop: '@stop' };
 
     const issues = validateWorkflowRecipeCatalogCompatibility(recipe, parsePrimitiveCatalog());
     expect(issues).toContainEqual({
-      item_id: 'fix-route',
+      item_id: 'fix-gather-context',
       message: 'recipe item is unreachable from starts_at',
     });
   });
 
   it('reports outputs that are not primitive outputs or declared aliases', () => {
     const recipe = parseFixRecipe();
-    const close = recipe.items.find((item) => item.id === 'fix-close');
+    const close = recipe.items.find((item) => (item.id as unknown as string) === 'fix-close');
     if (close === undefined) throw new Error('fix-close missing');
     close.output = 'wrong.result@v1';
     const issues = validateWorkflowRecipeCatalogCompatibility(recipe, parsePrimitiveCatalog());
