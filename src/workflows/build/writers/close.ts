@@ -5,6 +5,8 @@
 // the canonical pointer set. Outcome is 'complete' iff verification
 // passed AND review did not reject.
 
+import { artifactPathForSchemaInWorkflow } from '../../../runtime/close-writers/shared.js';
+import type { CloseBuildContext, CloseBuilder } from '../../../runtime/close-writers/types.js';
 import {
   BuildBrief,
   BuildImplementation,
@@ -12,9 +14,7 @@ import {
   BuildResult,
   BuildReview,
   BuildVerification,
-} from '../../schemas/artifacts/build.js';
-import { artifactPathForSchemaInWorkflow } from './shared.js';
-import type { CloseBuildContext, CloseBuilder } from './types.js';
+} from '../../../schemas/artifacts/build.js';
 
 const POINTERS = [
   { artifact_id: 'build.brief', schema: 'build.brief@v1' },

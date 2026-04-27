@@ -5,12 +5,12 @@
 // (after the operator selects a choice): preserves the prior brief
 // and updates only the checkpoint.response_path.
 
-import { BuildBrief } from '../../schemas/artifacts/build.js';
 import {
   type CheckpointBriefBuilder,
   type CheckpointBuildContext,
   checkpointChoiceIds,
-} from './types.js';
+} from '../../../runtime/checkpoint-writers/types.js';
+import { BuildBrief } from '../../../schemas/artifacts/build.js';
 
 export const buildBriefCheckpointBuilder: CheckpointBriefBuilder = {
   resultSchemaName: 'build.brief@v1',

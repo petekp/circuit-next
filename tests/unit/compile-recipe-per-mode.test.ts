@@ -15,7 +15,7 @@ function readJson(path: string): unknown {
 }
 
 function loadBuildRecipe() {
-  return WorkflowRecipe.parse(readJson('specs/workflow-recipes/build.recipe.json'));
+  return WorkflowRecipe.parse(readJson('src/workflows/build/recipe.json'));
 }
 
 describe('compileRecipeToWorkflow — per-mode emission', () => {

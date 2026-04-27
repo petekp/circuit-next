@@ -24,7 +24,7 @@ describe('compileRecipeToWorkflow — byte-equivalence with committed fixtures',
   const cases = [
     {
       label: 'build',
-      recipePath: 'specs/workflow-recipes/build.recipe.json',
+      recipePath: 'src/workflows/build/recipe.json',
       committedPath: '.claude-plugin/skills/build/circuit.json',
     },
     {
@@ -56,7 +56,7 @@ describe('compileRecipeToWorkflow — byte-equivalence with committed fixtures',
 
 describe('compileRecipeToWorkflow — failure modes', () => {
   function loadBuildRecipe() {
-    return WorkflowRecipe.parse(readJson('specs/workflow-recipes/build.recipe.json'));
+    return WorkflowRecipe.parse(readJson('src/workflows/build/recipe.json'));
   }
 
   it('throws if a required recipe-level field is missing', () => {

@@ -375,7 +375,7 @@ describe('Build artifact authority rows', () => {
     for (const id of BUILD_ARTIFACT_IDS) {
       const artifact = byId.get(id);
       expect(artifact, `${id} row`).toBeDefined();
-      expect(artifact?.contract).toBe('specs/contracts/build.md');
+      expect(artifact?.contract).toBe('src/workflows/build/contract.md');
       expect(artifact?.schema_file).toBe('src/schemas/artifacts/build.ts');
       expect(artifact?.schema_exports?.length, `${id}.schema_exports`).toBeGreaterThan(0);
       expect(artifact?.writers?.length, `${id}.writers`).toBeGreaterThan(0);

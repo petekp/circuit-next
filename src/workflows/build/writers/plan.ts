@@ -4,8 +4,11 @@
 // into a deliberate, gate-able plan. The plan is the artifact that
 // build's verification step consumes (via build.plan@v1 → commands).
 
-import { BuildBrief, BuildPlan } from '../../schemas/artifacts/build.js';
-import type { SynthesisBuildContext, SynthesisBuilder } from './types.js';
+import type {
+  SynthesisBuildContext,
+  SynthesisBuilder,
+} from '../../../runtime/synthesis-writers/types.js';
+import { BuildBrief, BuildPlan } from '../../../schemas/artifacts/build.js';
 
 export const buildPlanSynthesisBuilder: SynthesisBuilder = {
   resultSchemaName: 'build.plan@v1',
