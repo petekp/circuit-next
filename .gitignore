@@ -1,8 +1,9 @@
 node_modules/
 dist/
-build/
-!/.claude-plugin/skills/build/
-!/.claude-plugin/skills/build/circuit.json
+# Anchored: only matches <repo>/build/, not any nested path containing
+# 'build/'. Without the leading slash this would shadow legitimate
+# directories like src/workflows/build/.
+/build/
 .DS_Store
 *.log
 .env
