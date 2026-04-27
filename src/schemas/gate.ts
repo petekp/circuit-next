@@ -37,12 +37,38 @@ export const DispatchResultSource = z
   .strict();
 export type DispatchResultSource = z.infer<typeof DispatchResultSource>;
 
+// Sub-run and dispatch both emit a result.json with a `.verdict` field, so
+// the verdict-admission logic is identical. The source kind is distinct so
+// audit events record which execution shape produced the result; both pin
+// `ref: 'result'` because the writes slot name is the same.
+export const SubRunResultSource = z
+  .object({
+    kind: z.literal('sub_run_result'),
+    ref: z.literal('result'),
+  })
+  .strict();
+export type SubRunResultSource = z.infer<typeof SubRunResultSource>;
+
+// Fanout emits N child results plus an aggregate artifact built by the
+// runtime at join time. The gate consults the aggregate slot, never the
+// individual branch result.json files (those are read evidence, not the
+// gated artifact).
+export const FanoutResultsSource = z
+  .object({
+    kind: z.literal('fanout_results'),
+    ref: z.literal('aggregate'),
+  })
+  .strict();
+export type FanoutResultsSource = z.infer<typeof FanoutResultsSource>;
+
 // Convenience alias for callers that want the full source space; individual
 // gate variants below constrain to a single kind at the type boundary.
 export const GateSource = z.discriminatedUnion('kind', [
   ArtifactSource,
   CheckpointResponseSource,
   DispatchResultSource,
+  SubRunResultSource,
+  FanoutResultsSource,
 ]);
 export type GateSource = z.infer<typeof GateSource>;
 
@@ -64,18 +90,86 @@ export const CheckpointSelectionGate = z
   .strict();
 export type CheckpointSelectionGate = z.infer<typeof CheckpointSelectionGate>;
 
+// `result_verdict` admits a result body produced by either a dispatch worker
+// or a sub-run child workflow — both materialise a `.verdict` field with the
+// same semantics. The source kind disambiguates the producer at audit time;
+// the gate's admission logic is identical across both.
 export const ResultVerdictGate = z
   .object({
     kind: z.literal('result_verdict'),
-    source: DispatchResultSource,
+    source: z.discriminatedUnion('kind', [DispatchResultSource, SubRunResultSource]),
     pass: z.array(z.string().min(1)).min(1),
   })
   .strict();
 export type ResultVerdictGate = z.infer<typeof ResultVerdictGate>;
 
+// Fanout join policies — how N child results collapse to a single gate
+// outcome. The policy is part of the gate (not a sibling field on the step)
+// because the gate's pass/fail decision is meaningless without the policy
+// that defines it.
+//
+// pick-winner: tournament shape. Children compete; the runtime selects the
+//   first child whose closed outcome is 'complete' AND whose verdict appears
+//   first in `verdicts.admit` (admit order = preference order). Winning
+//   child's worktree merges into parent's tree; siblings are discarded.
+// disjoint-merge: Migrate shape. ALL children must close 'complete' with an
+//   admitted verdict. Runtime validates per-child worktree changes are
+//   pairwise file-disjoint, then merges all into the parent tree.
+// aggregate-only: Crucible shape. No worktree merge. Children's result
+//   bodies are gathered into the parent's `aggregate` artifact for
+//   downstream consumption. Gate passes iff every child reached a closed
+//   outcome (any outcome) and produced a parseable result body.
+export const PickWinnerJoin = z
+  .object({
+    policy: z.literal('pick-winner'),
+  })
+  .strict();
+export type PickWinnerJoin = z.infer<typeof PickWinnerJoin>;
+
+export const DisjointMergeJoin = z
+  .object({
+    policy: z.literal('disjoint-merge'),
+  })
+  .strict();
+export type DisjointMergeJoin = z.infer<typeof DisjointMergeJoin>;
+
+export const AggregateOnlyJoin = z
+  .object({
+    policy: z.literal('aggregate-only'),
+  })
+  .strict();
+export type AggregateOnlyJoin = z.infer<typeof AggregateOnlyJoin>;
+
+export const FanoutJoinPolicy = z.discriminatedUnion('policy', [
+  PickWinnerJoin,
+  DisjointMergeJoin,
+  AggregateOnlyJoin,
+]);
+export type FanoutJoinPolicy = z.infer<typeof FanoutJoinPolicy>;
+
+export const FanoutAggregateGate = z
+  .object({
+    kind: z.literal('fanout_aggregate'),
+    source: FanoutResultsSource,
+    join: FanoutJoinPolicy,
+    // verdicts.admit is the per-child verdict allowlist consulted by
+    // pick-winner (preference-ordered) and disjoint-merge (membership-only).
+    // aggregate-only ignores the field but still requires it for surface
+    // uniformity — recipe authors who later switch policies don't have to
+    // reauthor the verdict surface.
+    verdicts: z
+      .object({
+        admit: z.array(z.string().min(1)).min(1),
+      })
+      .strict(),
+  })
+  .strict();
+export type FanoutAggregateGate = z.infer<typeof FanoutAggregateGate>;
+
 export const Gate = z.discriminatedUnion('kind', [
   SchemaSectionsGate,
   CheckpointSelectionGate,
   ResultVerdictGate,
+  FanoutAggregateGate,
 ]);
 export type Gate = z.infer<typeof Gate>;

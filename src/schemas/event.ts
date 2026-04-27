@@ -4,7 +4,7 @@ import { InvocationId, RunId, StepId, WorkflowId } from './ids.js';
 import { LaneDeclaration } from './lane.js';
 import { Rigor } from './rigor.js';
 import { ResolvedSelection } from './selection-policy.js';
-import { DispatchRole } from './step.js';
+import { DispatchRole, FanoutFailurePolicy } from './step.js';
 
 const EventBase = z.object({
   schema_version: z.literal(1),
@@ -52,7 +52,12 @@ export const GateEvaluatedEvent = EventBase.extend({
   kind: z.literal('gate.evaluated'),
   step_id: StepId,
   attempt: z.number().int().positive(),
-  gate_kind: z.enum(['schema_sections', 'checkpoint_selection', 'result_verdict']),
+  gate_kind: z.enum([
+    'schema_sections',
+    'checkpoint_selection',
+    'result_verdict',
+    'fanout_aggregate',
+  ]),
   outcome: z.enum(['pass', 'fail']),
   missing_sections: z.array(z.string()).optional(),
   reason: z.string().optional(),
@@ -216,6 +221,102 @@ export type StepAbortedEvent = z.infer<typeof StepAbortedEvent>;
 export const RunClosedOutcome = z.enum(['complete', 'aborted', 'handoff', 'stopped', 'escalated']);
 export type RunClosedOutcome = z.infer<typeof RunClosedOutcome>;
 
+// Sub-run / fanout linkage events. The substrate gives every run (parent
+// and child) its own RunId; RUN-I3 forbids cross-run event smuggling. So
+// audit linkage flows through dedicated events at the parent step boundary
+// — never by nesting child events inside the parent log.
+//
+// `child_run_id` is the canonical handle. An auditor reading the parent
+// log can locate the child's separate run directory, replay the child's
+// events.ndjson, and reconstruct the full execution graph.
+export const SubRunStartedEvent = EventBase.extend({
+  kind: z.literal('sub_run.started'),
+  step_id: StepId,
+  attempt: z.number().int().positive(),
+  child_run_id: RunId,
+  child_workflow_id: WorkflowId,
+  child_entry_mode: z.string().regex(/^[a-z][a-z0-9-]*$/),
+  child_rigor: Rigor,
+}).strict();
+export type SubRunStartedEvent = z.infer<typeof SubRunStartedEvent>;
+
+export const SubRunCompletedEvent = EventBase.extend({
+  kind: z.literal('sub_run.completed'),
+  step_id: StepId,
+  attempt: z.number().int().positive(),
+  child_run_id: RunId,
+  child_outcome: RunClosedOutcome,
+  // Verdict admitted from the child's terminal result body. NO_VERDICT_SENTINEL
+  // when the child closed without a parseable result body — mirrors the
+  // existing dispatch.completed sentinel pattern.
+  verdict: z.string().min(1),
+  duration_ms: z.number().int().nonnegative(),
+  // Where the child's result.json was copied into the parent run-root.
+  result_path: z.string().min(1),
+}).strict();
+export type SubRunCompletedEvent = z.infer<typeof SubRunCompletedEvent>;
+
+// Fanout has a richer event surface because the parent must record per-
+// branch lifecycle. The shape mirrors sub_run.* but with a branch_id added
+// so the parent log captures which branch produced each outcome.
+export const FanoutStartedEvent = EventBase.extend({
+  kind: z.literal('fanout.started'),
+  step_id: StepId,
+  attempt: z.number().int().positive(),
+  // Resolved branch list AT EXPANSION TIME. For static branches this
+  // mirrors the recipe's authored list. For dynamic branches this is the
+  // result of template expansion against the source artifact, so an
+  // auditor can see exactly which N branches were spawned without
+  // reconstructing the expansion themselves.
+  branch_ids: z.array(z.string().min(1)).min(1),
+  on_child_failure: FanoutFailurePolicy,
+}).strict();
+export type FanoutStartedEvent = z.infer<typeof FanoutStartedEvent>;
+
+export const FanoutBranchStartedEvent = EventBase.extend({
+  kind: z.literal('fanout.branch_started'),
+  step_id: StepId,
+  attempt: z.number().int().positive(),
+  branch_id: z.string().min(1),
+  child_run_id: RunId,
+  // Worktree path provisioned for this branch (relative to project root).
+  // Records where the per-branch isolation lived for postmortem auditing.
+  worktree_path: z.string().min(1),
+}).strict();
+export type FanoutBranchStartedEvent = z.infer<typeof FanoutBranchStartedEvent>;
+
+export const FanoutBranchCompletedEvent = EventBase.extend({
+  kind: z.literal('fanout.branch_completed'),
+  step_id: StepId,
+  attempt: z.number().int().positive(),
+  branch_id: z.string().min(1),
+  child_run_id: RunId,
+  child_outcome: RunClosedOutcome,
+  verdict: z.string().min(1),
+  duration_ms: z.number().int().nonnegative(),
+  result_path: z.string().min(1),
+}).strict();
+export type FanoutBranchCompletedEvent = z.infer<typeof FanoutBranchCompletedEvent>;
+
+export const FanoutJoinedEvent = EventBase.extend({
+  kind: z.literal('fanout.joined'),
+  step_id: StepId,
+  attempt: z.number().int().positive(),
+  // The join policy that ran; mirrors the FanoutAggregateGate.join.policy
+  // field but echoed into the event so the audit log is self-contained
+  // (no need to cross-reference the recipe to interpret outcomes).
+  policy: z.enum(['pick-winner', 'disjoint-merge', 'aggregate-only']),
+  // For pick-winner: the selected branch_id. Absent for the other policies.
+  selected_branch_id: z.string().min(1).optional(),
+  // Path to the runtime-built aggregate artifact.
+  aggregate_path: z.string().min(1),
+  // Count of branches that closed 'complete' vs other outcomes — quick
+  // health summary readable without reconstructing per-branch events.
+  branches_completed: z.number().int().nonnegative(),
+  branches_failed: z.number().int().nonnegative(),
+}).strict();
+export type FanoutJoinedEvent = z.infer<typeof FanoutJoinedEvent>;
+
 export const RunClosedEvent = EventBase.extend({
   kind: z.literal('run.closed'),
   outcome: RunClosedOutcome,
@@ -242,6 +343,12 @@ export const Event = z
     DispatchReceiptEvent,
     DispatchResultEvent,
     DispatchCompletedEvent,
+    SubRunStartedEvent,
+    SubRunCompletedEvent,
+    FanoutStartedEvent,
+    FanoutBranchStartedEvent,
+    FanoutBranchCompletedEvent,
+    FanoutJoinedEvent,
     StepCompletedEvent,
     StepAbortedEvent,
     RunClosedEvent,

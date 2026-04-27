@@ -148,6 +148,18 @@ function applyEvent(prev: Snapshot, event: Event): Snapshot {
       // Dispatch outcomes flow into the step via step.completed; no
       // snapshot-shape change here.
       return next;
+    case 'sub_run.started':
+    case 'sub_run.completed':
+    case 'fanout.started':
+    case 'fanout.branch_started':
+    case 'fanout.branch_completed':
+    case 'fanout.joined':
+      // Sub-run / fanout linkage events are audit-only at this slice;
+      // the parent step's status flows through step.entered / step.completed
+      // / step.aborted just like other orchestrator-executed steps. The
+      // child run's own snapshot lives in the child run-root and is not
+      // merged into the parent (RUN-I3 scoping).
+      return next;
     case 'step.completed': {
       const stepId = event.step_id as unknown as string;
       return {
