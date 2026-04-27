@@ -2,7 +2,7 @@ import { type ChildProcess, execFileSync, spawn } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
 import type { Effort } from '../../schemas/selection-policy.js';
 import type { AdapterDispatchInput, DispatchResult } from './shared.js';
-import { selectedModelForProvider } from './shared.js';
+import { extractJsonObject, selectedModelForProvider } from './shared.js';
 
 // Slice 45 — P2.6 real codex adapter. Invokes the Codex CLI as a
 // subprocess of the Node.js runtime per ADR-0009 §1 (subprocess-per-
@@ -606,10 +606,14 @@ export function parseCodexStdout(
     throw new Error('no item.completed/agent_message event found in codex --json stdout');
   }
   const item = terminalMessage.item as Record<string, unknown>;
-  const result_body = item.text;
-  if (typeof result_body !== 'string') {
+  const result_body_raw = item.text;
+  if (typeof result_body_raw !== 'string') {
     throw new Error('terminal agent_message item.text missing or not a string');
   }
+  // Tolerant extraction: workers preamble status sentences before their
+  // JSON response despite the shape-hint instruction. Symmetric with
+  // `parseAgentStdout`. Non-JSON output flows through unchanged.
+  const result_body = extractJsonObject(result_body_raw);
 
   return {
     request_payload: prompt,

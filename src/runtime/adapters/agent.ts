@@ -4,6 +4,7 @@ import type { Effort } from '../../schemas/selection-policy.js';
 import {
   type AdapterDispatchInput,
   type DispatchResult,
+  extractJsonObject,
   selectedModelForProvider,
   sha256Hex,
 } from './shared.js';
@@ -345,17 +346,23 @@ export function parseAgentStdout(
   }
 
   const receipt_id = initEvent.session_id;
-  const result_body = resultEvent.result;
+  const result_body_raw = resultEvent.result;
   const cli_version = initEvent.claude_code_version;
   if (typeof receipt_id !== 'string' || receipt_id.length === 0) {
     throw new Error('init.session_id missing or empty');
   }
-  if (typeof result_body !== 'string') {
+  if (typeof result_body_raw !== 'string') {
     throw new Error('result.result missing or not a string');
   }
   if (typeof cli_version !== 'string' || cli_version.length === 0) {
     throw new Error('init.claude_code_version missing or empty');
   }
+  // Tolerant extraction: workers preamble status sentences before their
+  // JSON response despite the shape-hint instruction. Strip any prose
+  // wrapping the JSON object so downstream gate evaluation and artifact
+  // schema parsing see clean JSON. Non-JSON output (rare) flows through
+  // unchanged.
+  const result_body = extractJsonObject(result_body_raw);
   return {
     request_payload: prompt,
     receipt_id,
