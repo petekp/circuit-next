@@ -1,8 +1,10 @@
-node_modules/
-dist/
-# Anchored: only matches <repo>/build/, not any nested path containing
-# 'build/'. Without the leading slash this would shadow legitimate
-# directories like src/workflows/build/.
+# Anchored to repo root with a leading slash. Without it, gitignore
+# patterns match any directory of that name at any depth — so an
+# unanchored `build/` would silently shadow src/workflows/build/, an
+# unanchored `dist/` would shadow any future src/.../dist/ fixture, etc.
+# Same trap as the prior `build/` shadowing bug; keep all three anchored.
+/node_modules/
+/dist/
 /build/
 .DS_Store
 *.log
