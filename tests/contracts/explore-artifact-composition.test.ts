@@ -1,27 +1,25 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { parseArtifact } from '../../src/runtime/artifact-schemas.js';
+import { findCloseBuilder } from '../../src/runtime/close-writers/registry.js';
+import { findSynthesisBuilder } from '../../src/runtime/synthesis-writers/registry.js';
 import { Workflow } from '../../src/schemas/workflow.js';
 
 const REPO_ROOT = resolve('.');
 const EXPLORE_FIXTURE_PATH = join(REPO_ROOT, '.claude-plugin/skills/explore/circuit.json');
 const ARTIFACTS_PATH = join(REPO_ROOT, 'specs/artifacts.json');
-const RUNNER_PATH = join(REPO_ROOT, 'src/runtime/runner.ts');
-const SYNTHESIS_WRITERS_DIR = join(REPO_ROOT, 'src/runtime/synthesis-writers');
-const EXPLORE_CLOSE_BUILDER_PATH = join(REPO_ROOT, 'src/runtime/close-writers/explore.ts');
 
-// Schemas that have a registered writer somewhere under
-// src/runtime/synthesis-writers/ — i.e., a SynthesisBuilder is the
-// runtime support, not an inline runner.ts branch.
+// Schemas whose runtime writer is a SynthesisBuilder (rather than a
+// CloseBuilder or an inline runner branch). After the catalog refactor
+// the writer's location is implementation detail; the registry is the
+// authoritative source of "schema → writer" bindings.
 const SCHEMAS_IN_SYNTHESIS_REGISTRY: readonly string[] = [
   'explore.brief@v1',
   'explore.analysis@v1',
 ];
-const CLOSE_BUILDERS_BY_SCHEMA: Readonly<Record<string, string>> = {
-  'explore.result@v1': EXPLORE_CLOSE_BUILDER_PATH,
-};
+const SCHEMAS_IN_CLOSE_REGISTRY: readonly string[] = ['explore.result@v1'];
 
 type ArtifactRow = {
   id: string;
@@ -124,7 +122,6 @@ describe('P2.10 artifact-schema composition seam', () => {
   it('binds landed explore artifact schemas across fixture, ledger, and runtime validation', () => {
     const artifacts = loadArtifacts();
     const workflow = loadExploreWorkflow();
-    const runnerSource = readFileSync(RUNNER_PATH, 'utf8');
 
     for (const spec of LANDED_ARTIFACTS) {
       const row = artifactById(artifacts, spec.artifactId);
@@ -136,32 +133,24 @@ describe('P2.10 artifact-schema composition seam', () => {
 
       if ('requiredFields' in spec) {
         expect(step.gate.required).toEqual([...spec.requiredFields]);
-        // Synthesis writer support lives in one of three places:
-        //   - src/runtime/synthesis-writers/ — workflow-agnostic brief,
-        //     plan, analysis, intake, etc.
-        //   - src/runtime/close-writers/ — close-with-evidence
-        //     builders.
-        //   - inline if-chain in runner.ts — legacy path, increasingly
-        //     empty as builders graduate to one of the registries.
-        // The assertion checks whichever location applies to this
-        // schema; if the runtime ever drops the writer entirely, the
-        // assertion fails with a clear "missing in all three places"
-        // message.
-        const closeBuilderPath = CLOSE_BUILDERS_BY_SCHEMA[spec.schemaName];
-        if (closeBuilderPath !== undefined) {
-          const closeSource = readFileSync(closeBuilderPath, 'utf8');
-          expect(closeSource).toContain(`'${spec.schemaName}'`);
+        // Each writer registers under exactly one registry. Look it up
+        // by schema and require a builder is registered there. If the
+        // runtime ever drops the writer, this assertion fails with the
+        // schema name it couldn't find.
+        if (SCHEMAS_IN_CLOSE_REGISTRY.includes(spec.schemaName)) {
+          expect(
+            findCloseBuilder(spec.schemaName),
+            `expected a registered close builder for ${spec.schemaName}`,
+          ).toBeDefined();
         } else if (SCHEMAS_IN_SYNTHESIS_REGISTRY.includes(spec.schemaName)) {
-          // The synthesis-writers directory is small enough to scan
-          // directly. Each builder names its own schema in a
-          // resultSchemaName: '<schema>' line.
-          const synthesisSources = readdirSync(SYNTHESIS_WRITERS_DIR)
-            .filter((f) => f.endsWith('.ts'))
-            .map((f) => readFileSync(join(SYNTHESIS_WRITERS_DIR, f), 'utf8'))
-            .join('\n');
-          expect(synthesisSources).toContain(`'${spec.schemaName}'`);
+          expect(
+            findSynthesisBuilder(spec.schemaName),
+            `expected a registered synthesis builder for ${spec.schemaName}`,
+          ).toBeDefined();
         } else {
-          expect(runnerSource).toContain(`schemaName === '${spec.schemaName}'`);
+          throw new Error(
+            `test wiring missing: schema ${spec.schemaName} is not classified in SCHEMAS_IN_{CLOSE,SYNTHESIS}_REGISTRY`,
+          );
         }
         expect(parseArtifact(spec.schemaName, '{}').kind).toBe('fail');
       }

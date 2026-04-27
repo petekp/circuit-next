@@ -1,21 +1,18 @@
 // Explore workflow package — also the conservative default for routing.
 
-import { exploreCloseBuilder } from '../../runtime/close-writers/explore.js';
-import {
-  exploreReviewVerdictShapeHint,
-  exploreSynthesisShapeHint,
-} from '../../runtime/shape-hints/explore.js';
-import { exploreAnalysisSynthesisBuilder } from '../../runtime/synthesis-writers/explore-analysis.js';
-import { exploreBriefSynthesisBuilder } from '../../runtime/synthesis-writers/explore-brief.js';
 import { ExploreReviewVerdict, ExploreSynthesis } from '../../schemas/artifacts/explore.js';
 import type { WorkflowPackage } from '../types.js';
+import { exploreReviewVerdictShapeHint, exploreSynthesisShapeHint } from './dispatch-hints.js';
+import { exploreAnalysisSynthesisBuilder } from './writers/analysis.js';
+import { exploreBriefSynthesisBuilder } from './writers/brief.js';
+import { exploreCloseBuilder } from './writers/close.js';
 
 export const exploreWorkflowPackage: WorkflowPackage = {
   id: 'explore',
   paths: {
-    recipe: 'specs/workflow-recipes/explore.recipe.json',
-    command: 'commands/explore.md',
-    contract: 'specs/contracts/explore.md',
+    recipe: 'src/workflows/explore/recipe.json',
+    command: 'src/workflows/explore/command.md',
+    contract: 'src/workflows/explore/contract.md',
   },
   routing: {
     order: Number.MAX_SAFE_INTEGER,

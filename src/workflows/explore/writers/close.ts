@@ -6,14 +6,14 @@
 // part of `reads` per the close-with-evidence primitive contract — the
 // summary references brief.subject so the result is self-contained.
 
+import { artifactPathForSchemaInWorkflow } from '../../../runtime/close-writers/shared.js';
+import type { CloseBuildContext, CloseBuilder } from '../../../runtime/close-writers/types.js';
 import {
   ExploreBrief,
   ExploreResult,
   ExploreReviewVerdict,
   ExploreSynthesis,
-} from '../../schemas/artifacts/explore.js';
-import { artifactPathForSchemaInWorkflow } from './shared.js';
-import type { CloseBuildContext, CloseBuilder } from './types.js';
+} from '../../../schemas/artifacts/explore.js';
 
 const POINTERS = [
   { artifact_id: 'explore.brief', schema: 'explore.brief@v1' },

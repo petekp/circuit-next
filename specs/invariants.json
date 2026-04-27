@@ -857,7 +857,7 @@
       "contract": "explore",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/explore.md#EXPLORE-I1",
+      "source_anchor": "src/workflows/explore/contract.md#EXPLORE-I1",
       "binding_refs": [{ "path": "tests/contracts/spine-coverage.test.ts", "kind": "test_title" }]
     }
   ],
@@ -1336,7 +1336,7 @@
       "id": "explore.prop.canonical_phase_set_is_correct",
       "contract": "explore",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/explore.md#EXPLORE-I1",
+      "source_anchor": "src/workflows/explore/contract.md#EXPLORE-I1",
       "binding_refs": [{ "path": "tests/contracts/spine-coverage.test.ts", "kind": "test_title" }]
     },
     {

@@ -29,7 +29,7 @@ describe('compileRecipeToWorkflow — byte-equivalence with committed fixtures',
     },
     {
       label: 'explore',
-      recipePath: 'specs/workflow-recipes/explore.recipe.json',
+      recipePath: 'src/workflows/explore/recipe.json',
       committedPath: '.claude-plugin/skills/explore/circuit.json',
     },
     {

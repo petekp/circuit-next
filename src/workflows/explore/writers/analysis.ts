@@ -4,8 +4,11 @@
 // The analysis is the input to the synthesize-step's worker dispatch;
 // real runs would have a worker fill out aspects/evidence in detail.
 
-import { ExploreAnalysis, ExploreBrief } from '../../schemas/artifacts/explore.js';
-import type { SynthesisBuildContext, SynthesisBuilder } from './types.js';
+import type {
+  SynthesisBuildContext,
+  SynthesisBuilder,
+} from '../../../runtime/synthesis-writers/types.js';
+import { ExploreAnalysis, ExploreBrief } from '../../../schemas/artifacts/explore.js';
 
 export const exploreAnalysisSynthesisBuilder: SynthesisBuilder = {
   resultSchemaName: 'explore.analysis@v1',

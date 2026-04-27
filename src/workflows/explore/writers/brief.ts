@@ -5,8 +5,11 @@
 // time; the inline-synthesis fallback here keeps recipe execution
 // honest when no operator input is available.
 
-import { ExploreBrief } from '../../schemas/artifacts/explore.js';
-import type { SynthesisBuildContext, SynthesisBuilder } from './types.js';
+import type {
+  SynthesisBuildContext,
+  SynthesisBuilder,
+} from '../../../runtime/synthesis-writers/types.js';
+import { ExploreBrief } from '../../../schemas/artifacts/explore.js';
 
 export const exploreBriefSynthesisBuilder: SynthesisBuilder = {
   resultSchemaName: 'explore.brief@v1',
