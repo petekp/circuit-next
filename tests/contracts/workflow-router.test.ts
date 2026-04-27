@@ -33,9 +33,7 @@ describe('P2.8 workflow router classifier', () => {
     const cases = [
       'fix the foo bug',
       'fix: handle the missing token edge case',
-      'repair: restore the failing pipeline',
       'please fix the auth regression',
-      'repair the broken adapter',
       'patch the leaking handler',
       'debug the flaky integration test',
       'diagnose the failing build',

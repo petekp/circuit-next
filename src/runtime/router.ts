@@ -40,11 +40,10 @@ const REVIEW_SIGNALS: Array<{ label: string; pattern: RegExp }> = [
 
 const FIX_SIGNALS: Array<{ label: string; pattern: RegExp }> = [
   { label: 'fix prefix', pattern: /^\s*fix\s*:/i },
-  { label: 'repair prefix', pattern: /^\s*repair\s*:/i },
   {
     label: 'fix request',
     pattern:
-      /^\s*(?:please\s+)?(?:fix|repair|patch|debug|diagnose|reproduce)\s+(?:a\s+|an\s+|the\s+|this\s+|that\s+|my\s+|some\s+)?\S+/i,
+      /^\s*(?:please\s+)?(?:fix|patch|debug|diagnose|reproduce)\s+(?:a\s+|an\s+|the\s+|this\s+|that\s+|my\s+|some\s+)?\S+/i,
   },
 ];
 
