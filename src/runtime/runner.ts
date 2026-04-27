@@ -1,19 +1,15 @@
-import { spawnSync } from 'node:child_process';
 import {
   closeSync,
-  existsSync,
   lstatSync,
   mkdirSync,
   openSync,
   readFileSync,
   readdirSync,
-  realpathSync,
   rmSync,
-  writeFileSync,
   writeSync,
 } from 'node:fs';
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
-import type { BuiltInAdapter, DispatchResolutionSource } from '../schemas/adapter.js';
+import { dirname, join } from 'node:path';
+
 import { BuildBrief } from '../schemas/artifacts/build.js';
 import { LayeredConfig, type LayeredConfig as LayeredConfigValue } from '../schemas/config.js';
 import type { Event, RunClosedOutcome } from '../schemas/event.js';
@@ -22,15 +18,15 @@ import type { LaneDeclaration } from '../schemas/lane.js';
 import { computeManifestHash } from '../schemas/manifest.js';
 import type { RunResult } from '../schemas/result.js';
 import type { Rigor } from '../schemas/rigor.js';
-import type { ResolvedSelection } from '../schemas/selection-policy.js';
 import type { Snapshot } from '../schemas/snapshot.js';
 import { Workflow } from '../schemas/workflow.js';
-import { materializeDispatch } from './adapters/dispatch-materializer.js';
-import { type AdapterDispatchInput, type DispatchResult, sha256Hex } from './adapters/shared.js';
-import { parseArtifact } from './artifact-schemas.js';
-import { runCrossArtifactValidator } from './cross-artifact-validators.js';
-import { findCheckpointBriefBuilder } from './checkpoint-writers/registry.js';
+import { sha256Hex } from './adapters/shared.js';
+import { appendAndDerive } from './append-and-derive.js';
 import { findCloseBuilder, resolveCloseReadPaths } from './close-writers/registry.js';
+import {
+  bindsExecutionRigorToDispatchSelection,
+  selectionConfigLayersWithExecutionRigor,
+} from './dispatch-selection.js';
 import { readRunLog } from './event-log-reader.js';
 import { appendEvent, eventLogPath } from './event-writer.js';
 import {
@@ -41,17 +37,34 @@ import {
 } from './manifest-snapshot-writer.js';
 import { writeResult } from './result-writer.js';
 import { resolveRunRelative } from './run-relative-path.js';
-import { resolveSelectionForDispatch } from './selection-resolver.js';
-import { findDispatchShapeHint } from './shape-hints/registry.js';
+import type {
+  DispatchFn,
+  DispatchResultMetadata,
+  SynthesisWriterFn,
+  SynthesisWriterInput,
+} from './runner-types.js';
 import { writeDerivedSnapshot } from './snapshot-writer.js';
+import { checkpointChoiceIds } from './step-handlers/checkpoint.js';
+import {
+  type ResumeCheckpointState,
+  type RunState,
+  runStepHandler,
+} from './step-handlers/index.js';
+import { writeJsonArtifact } from './step-handlers/shared.js';
 import { findSynthesisBuilder, resolveSynthesisReadPaths } from './synthesis-writers/registry.js';
-import { findVerificationWriter } from './verification-writers/registry.js';
 
-// Slice 27c landed the runtime-boundary writer/reducer/manifest surfaces
-// below bootstrapRun/appendAndDerive. Slice 27d composes them into the
-// dogfood-run-0 execution loop via `runWorkflow` — the first executable
-// product proof per ADR-0001 Addendum B §Phase 1.5 Close Criteria
-// #4/#5/#6/#7/#13.
+// Public API surface from runner.ts. Implementations have moved to
+// dedicated modules during the handler-extraction split; the surface
+// stays stable so existing callers (CLI, tests) keep their imports.
+export type {
+  DispatchFn,
+  DispatchInput,
+  DispatchResultMetadata,
+  SynthesisWriterFn,
+  SynthesisWriterInput,
+} from './runner-types.js';
+export { appendAndDerive } from './append-and-derive.js';
+export type { AppendResult } from './append-and-derive.js';
 
 interface RunRootInit {
   runRoot: string;
@@ -156,50 +169,6 @@ export function bootstrapRun(input: BootstrapInput): BootstrapResult {
   }
 }
 
-interface AppendResult {
-  snapshot: Snapshot;
-}
-
-export function appendAndDerive(runRoot: string, event: Event): AppendResult {
-  appendEvent(runRoot, event);
-  const snapshot = writeDerivedSnapshot(runRoot);
-  return { snapshot };
-}
-
-// ---------------------------------------------------------------------
-// Slice 27d — dogfood-run-0 execution loop
-// ---------------------------------------------------------------------
-
-// Slice 45a (P2.6 HIGH 3 fold-in): structured dispatcher descriptor.
-// Prior to 45a, `DispatchFn` was a bare function type and the runner's
-// materializer call site hardcoded `adapterName: 'agent'`; injecting a
-// non-agent dispatcher (e.g. `dispatchCodex`) through
-// `WorkflowInvocation.dispatcher` would silently lie on the
-// `dispatch.started` event's adapter discriminant. The descriptor binds
-// the dispatcher function to its adapter identity at the injection seam,
-// so the materializer is parameterized from the descriptor instead of
-// from a call-site literal. Codex challenger pass on Slice 45 surfaced
-// this as HIGH 3; deferred to this named follow-up slice (plan-file
-// reference: `specs/plans/phase-2-implementation.md` §P2.6 "Named
-// follow-up slice 45a").
-export interface DispatchFn {
-  readonly adapterName: BuiltInAdapter;
-  readonly dispatch: (input: DispatchInput) => Promise<DispatchResult>;
-}
-
-export interface DispatchInput extends AdapterDispatchInput {
-  readonly resolvedSelection?: ResolvedSelection;
-}
-
-export interface SynthesisWriterInput {
-  readonly runRoot: string;
-  readonly workflow: Workflow;
-  readonly step: Workflow['steps'][number] & { kind: 'synthesis' };
-  readonly goal: string;
-}
-
-export type SynthesisWriterFn = (input: SynthesisWriterInput) => void;
-
 export interface WorkflowInvocation {
   runRoot: string;
   workflow: Workflow;
@@ -214,21 +183,15 @@ export interface WorkflowInvocation {
   invocationId?: InvocationId;
   // Slice 43b: injection seam for the dispatch adapter. Default is
   // `dispatchAgent` (lazy-imported so tests that don't exercise dispatch
-  // don't pull the subprocess module into their graph). Tests that want
-  // deterministic transcripts inject a stub returning a pre-baked
-  // AgentDispatchResult; parse-time assertions on init.mcp_servers /
-  // init.slash_commands live in parseAgentStdout and are thus a real-
-  // subprocess-only concern.
+  // don't pull the subprocess module into their graph).
   dispatcher?: DispatchFn;
   // Test seam for deterministic synthesis fixtures. Production invocations
-  // omit this and use the registered writer below, which now has a narrow
-  // review.result implementation plus the existing placeholder fallback.
+  // omit this and use the registered writer below, which composes the
+  // schema-specific synthesis builder with a placeholder fallback.
   synthesisWriter?: SynthesisWriterFn;
   // Parsed config layers are supplied by callers that have already handled
   // discovery/loading. The product CLI discovers user-global and project
-  // layers at v0; direct runtime callers can still inject already-parsed
-  // layers, including default/invocation seams for tests and future entry
-  // points.
+  // layers; direct runtime callers can still inject already-parsed layers.
   selectionConfigLayers?: readonly LayeredConfigValue[];
 }
 
@@ -240,20 +203,6 @@ export interface CheckpointResumeInvocation {
   dispatcher?: DispatchFn;
   synthesisWriter?: SynthesisWriterFn;
   selectionConfigLayers?: readonly LayeredConfigValue[];
-}
-
-// Slice 47a Codex HIGH 2 fold-in — surface per-dispatch metadata
-// (`adapterName`, `cli_version`, `stepId`) so the AGENT_SMOKE
-// fingerprint writer can bind `cli_version` to the actual subprocess
-// init event rather than reading it from a side-channel env var. The
-// runner already has `DispatchResult.cli_version` in scope at the
-// dispatch loop; this exposes it on `WorkflowRunResult` without
-// forcing a schema change to the dispatch event union (the latter
-// would be P2-MODEL-EFFORT scope).
-export interface DispatchResultMetadata {
-  readonly stepId: string;
-  readonly adapterName: BuiltInAdapter;
-  readonly cli_version: string;
 }
 
 export interface CheckpointWaitingResult {
@@ -281,259 +230,6 @@ export interface WorkflowRunResult {
   dispatchResults: readonly DispatchResultMetadata[];
 }
 
-// Slice 53 (Codex H14 fold-in) — parse adapter result_body for the
-// gate verdict and evaluate against `step.gate.pass`. Pre-Slice-53
-// (Slice 43b authoring) `dispatchVerdictForStep` returned
-// `step.gate.pass[0]` unconditionally without consulting adapter
-// output, and the runner emitted `gate.evaluated` with `outcome: 'pass'`
-// regardless of what the model said — so dispatch steps advanced by
-// construction. Slice 43b's own comment block named this slice as the
-// swap-out point ("a future slice will swap this out once dispatch
-// artifact schemas become enforceable at runtime"); Codex H14 in the
-// 2026-04-22 project-holistic critical review surfaced the dishonesty
-// for fold-in.
-//
-// Result shape: a discriminated union the runner consumes downstream.
-// On 'pass' the runner uses the parsed verdict on `dispatch.completed`
-// and emits `gate.evaluated` with `outcome: 'pass'`. On 'fail' the
-// runner emits `gate.evaluated` with `outcome: 'fail'` + the reason,
-// then `step.aborted`, then `run.closed` with `outcome: 'aborted'`.
-// The dispatch-completed verdict on fail carries the observed verdict
-// when one was present (e.g., a parseable body with a verdict not in
-// pass), so the durable transcript reflects what the adapter said even
-// on rejection. When no verdict was observable (unparseable / no
-// verdict field), `dispatch.completed.verdict` carries the
-// `'<no-verdict>'` sentinel — `DispatchCompletedEvent.verdict` is
-// `z.string().min(1)` so the slot must hold a non-empty string.
-//
-// Parsing rule at v0: `JSON.parse(result_body)`, then require a
-// top-level `verdict` field that is a non-empty string. The minimal
-// shape `{ verdict: string }` is the closure of H14 without expanding
-// the contract surface to a typed adapter-output schema (rejected
-// alternate framing: add `gate.schema` to `ResultVerdictGate`); a
-// future slice can widen if a verdict-with-payload pattern emerges.
-type GateEvaluation =
-  | { readonly kind: 'pass'; readonly verdict: string }
-  | { readonly kind: 'fail'; readonly reason: string; readonly observedVerdict?: string };
-
-const NO_VERDICT_SENTINEL = '<no-verdict>';
-
-function evaluateDispatchGate(
-  step: Workflow['steps'][number] & { kind: 'dispatch' },
-  resultBody: string,
-): GateEvaluation {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(resultBody);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return {
-      kind: 'fail',
-      reason: `dispatch step '${step.id}': adapter result_body did not parse as JSON (${msg})`,
-    };
-  }
-  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    return {
-      kind: 'fail',
-      reason: `dispatch step '${step.id}': adapter result_body parsed but is not a JSON object (got ${parsed === null ? 'null' : Array.isArray(parsed) ? 'array' : typeof parsed})`,
-    };
-  }
-  const verdictRaw = (parsed as Record<string, unknown>).verdict;
-  if (typeof verdictRaw !== 'string' || verdictRaw.length === 0) {
-    return {
-      kind: 'fail',
-      reason: `dispatch step '${step.id}': adapter result_body lacks a non-empty string 'verdict' field (got ${typeof verdictRaw === 'string' ? 'empty string' : typeof verdictRaw})`,
-    };
-  }
-  if (!step.gate.pass.includes(verdictRaw)) {
-    return {
-      kind: 'fail',
-      reason: `dispatch step '${step.id}': adapter declared verdict '${verdictRaw}' which is not in gate.pass [${step.gate.pass.join(', ')}]`,
-      observedVerdict: verdictRaw,
-    };
-  }
-  return { kind: 'pass', verdict: verdictRaw };
-}
-
-// v0 prompt composition: name the step, enumerate accepted verdicts, and
-// inline every reads-declared artifact (or a clear placeholder if the
-// reads artifact hasn't been written yet — in explore, orchestrator-
-// synthesis artifacts precede dispatch steps so this degrades gracefully
-// at the fixture's current shape).
-//
-// Slice 53 (Codex MED 4 fold-in): tighten the response contract so the
-// runner's `JSON.parse(result_body)` evaluator does not abort on real
-// `claude` / `codex` adapter output that wraps the JSON in a Markdown
-// fence or prose. Without this, every AGENT_SMOKE / CODEX_SMOKE run
-// risks aborting at the first dispatch on a parse error — a live trap.
-function composeDispatchPrompt(
-  step: Workflow['steps'][number] & { kind: 'dispatch' },
-  runRoot: string,
-): string {
-  const readsBody =
-    step.reads.length === 0
-      ? '(no reads)'
-      : step.reads
-          .map((path) => {
-            const abs = resolveRunRelative(runRoot, path);
-            if (!existsSync(abs)) return `[reads unavailable: ${path}]`;
-            return `--- ${path} ---\n${readFileSync(abs, 'utf8')}`;
-          })
-          .join('\n\n');
-  return [
-    `Step: ${step.id}`,
-    `Title: ${step.title}`,
-    `Role: ${step.role}`,
-    `Accepted verdicts: ${step.gate.pass.join(', ')}`,
-    '',
-    'Context (from reads):',
-    readsBody,
-    '',
-    dispatchResponseInstruction(step),
-  ].join('\n');
-}
-
-function dispatchResponseInstruction(
-  step: Workflow['steps'][number] & { kind: 'dispatch' },
-): string {
-  return findDispatchShapeHint(step) ?? GENERIC_DISPATCH_SHAPE_HINT;
-}
-
-const GENERIC_DISPATCH_SHAPE_HINT =
-  'Respond with a single raw JSON object whose top-level shape is exactly { "verdict": "<one-of-accepted-verdicts>" } (additional fields permitted). Do not wrap the JSON in Markdown code fences. Do not include any prose before or after the JSON object. The runtime parses your response with JSON.parse and rejects the run on any parse failure or on a verdict not drawn from the accepted-verdicts list.';
-
-type DispatcherInvocationConfig = {
-  readonly dispatcher?: DispatchFn;
-  readonly selectionConfigLayers?: readonly LayeredConfigValue[];
-};
-
-async function resolveDispatcher(inv: DispatcherInvocationConfig): Promise<DispatchFn> {
-  if (inv.dispatcher !== undefined) return inv.dispatcher;
-  // Default dispatcher: the `agent` adapter's function, lifted into the
-  // structured descriptor shape so the call site at `runWorkflow` below
-  // reads `adapterName` uniformly regardless of whether the dispatcher
-  // was injected (tests, future codex routing) or resolved as the
-  // default. See Slice 45a's `DispatchFn` comment above for rationale.
-  const { dispatchAgent } = await import('./adapters/agent.js');
-  return { adapterName: 'agent', dispatch: dispatchAgent };
-}
-
-// Slice 47a (CONVERGENT HIGH A fold-in): compute the dispatch-event
-// provenance honestly from the runner's actual decision path, instead
-// of letting the materializer fabricate `{ source: 'default' }` on
-// every event. Two cases at v0:
-//   - The caller injected a dispatcher (tests, future role-keyed
-//     routing) → `source: 'explicit'`. The WorkflowInvocation surface
-//     does not yet name a registry, so we cannot honestly claim
-//     `'role'` or `'circuit'` here — those become reachable when
-//     P2.8 router introduces a workflow-keyed adapter registry.
-//   - The runner picked the default → `source: 'default'`.
-// Adapter provenance remains separate from model/effort selection: the
-// selection resolver now owns the `resolved_selection` surface, while this
-// helper names only how the adapter itself was chosen.
-function deriveResolvedFrom(invocation: DispatcherInvocationConfig): DispatchResolutionSource {
-  return invocation.dispatcher !== undefined ? { source: 'explicit' } : { source: 'default' };
-}
-
-function deriveResolvedSelection(
-  inv: DispatcherInvocationConfig,
-  workflow: Workflow,
-  step: Workflow['steps'][number] & { kind: 'dispatch' },
-  rigor: Rigor,
-): ResolvedSelection {
-  return resolveSelectionForDispatch({
-    workflow,
-    step,
-    configLayers: selectionConfigLayersForDispatch(inv, workflow, rigor),
-  }).resolved;
-}
-
-function bindsExecutionRigorToDispatchSelection(workflow: Workflow): boolean {
-  return (workflow.id as unknown as string) === 'build';
-}
-
-function selectionConfigLayersForDispatch(
-  inv: DispatcherInvocationConfig,
-  workflow: Workflow,
-  rigor: Rigor,
-): readonly LayeredConfigValue[] {
-  if (!bindsExecutionRigorToDispatchSelection(workflow)) {
-    return inv.selectionConfigLayers ?? [];
-  }
-  return selectionConfigLayersWithExecutionRigor(inv, workflow, rigor);
-}
-
-function selectionConfigLayersWithExecutionRigor(
-  inv: DispatcherInvocationConfig,
-  workflow: Workflow,
-  rigor: Rigor,
-): readonly LayeredConfigValue[] {
-  const layers = [...(inv.selectionConfigLayers ?? [])];
-  const workflowId = workflow.id;
-  const existingIndex = layers.findIndex((layer) => layer.layer === 'invocation');
-  const existing = existingIndex === -1 ? undefined : layers[existingIndex];
-  const baseConfig = existing?.config ?? {
-    schema_version: 1,
-    dispatch: {
-      default: 'auto',
-      roles: {},
-      circuits: {},
-      adapters: {},
-    },
-    circuits: {},
-    defaults: {},
-  };
-  const existingCircuit = baseConfig.circuits[workflowId] ?? {};
-  const selection = {
-    ...(existingCircuit.selection ?? {}),
-    rigor,
-  };
-  const invocationLayer = LayeredConfig.parse({
-    layer: 'invocation',
-    ...(existing?.source_path === undefined ? {} : { source_path: existing.source_path }),
-    config: {
-      ...baseConfig,
-      circuits: {
-        ...baseConfig.circuits,
-        [workflowId]: {
-          ...existingCircuit,
-          selection,
-        },
-      },
-    },
-  });
-  if (existingIndex === -1) {
-    layers.push(invocationLayer);
-  } else {
-    layers[existingIndex] = invocationLayer;
-  }
-  return layers;
-}
-
-function adapterFailureReason(stepId: string, err: unknown): string {
-  const message = err instanceof Error ? err.message : String(err);
-  return `dispatch step '${stepId}': adapter invocation failed (${message})`;
-}
-
-function synthesisFailureReason(stepId: string, err: unknown): string {
-  const message = err instanceof Error ? err.message : String(err);
-  return `synthesis step '${stepId}': artifact writer failed (${message})`;
-}
-
-function verificationFailureReason(stepId: string, err: unknown): string {
-  const message = err instanceof Error ? err.message : String(err);
-  return `verification step '${stepId}': artifact writer failed (${message})`;
-}
-
-function checkpointFailureReason(stepId: string, err: unknown): string {
-  const message = err instanceof Error ? err.message : String(err);
-  return `checkpoint step '${stepId}': checkpoint handling failed (${message})`;
-}
-
-function isRunRelativePathError(err: unknown): boolean {
-  return err instanceof Error && err.message.includes('run-relative path rejected');
-}
-
 const TERMINAL_ROUTE_OUTCOME = {
   '@complete': 'complete',
   '@stop': 'stopped',
@@ -547,178 +243,110 @@ function terminalOutcomeForRoute(route: string): RunClosedOutcome | undefined {
     : undefined;
 }
 
-// Slice 43c: orchestrator-synthesis steps land an artifact file at
-// `runRoot/step.writes.artifact.path` before their `step.artifact_written`
-// event fires. The fallback body is a minimal deterministic JSON stub with
-// one string placeholder per `step.gate.required` section, while registered
-// schema-specific writers replace that fallback for stricter workflow
-// artifacts. The deterministic close artifact is still hashable after test
-// normalization, and repeat invocations against the same fixture remain
-// idempotent.
-// Slice 83 adds the first per-workflow registration for review.intake@v1
-// and review.result@v1; Slices 89-93 add the explore-specific writers.
-function writeJsonArtifact(runRoot: string, path: string, body: unknown): void {
-  const abs = resolveRunRelative(runRoot, path);
-  mkdirSync(dirname(abs), { recursive: true });
-  writeFileSync(abs, `${JSON.stringify(body, null, 2)}\n`);
-}
-
 function readJsonArtifact(runRoot: string, path: string): unknown {
   return JSON.parse(readFileSync(resolveRunRelative(runRoot, path), 'utf8')) as unknown;
 }
 
-function isInsideOrSame(root: string, target: string): boolean {
-  const fromRoot = relative(root, target);
-  return fromRoot === '' || (!fromRoot.startsWith('..') && !isAbsolute(fromRoot));
-}
+// Slice 43c synthesis writer fallback. Workflow-specific synthesis logic
+// lives under src/runtime/synthesis-writers/ and is registered by output
+// schema name; close-with-evidence dispatch lives in
+// src/runtime/close-writers/. The runner stays workflow-agnostic — adding
+// a new synthesis step means adding a SynthesisBuilder file + registry
+// entry.
+function tryWriteRegisteredSynthesisArtifact(input: SynthesisWriterInput): boolean {
+  const { runRoot, workflow, step, goal } = input;
+  const schemaName = step.writes.artifact.schema;
 
-function resolveProjectRelativeCwd(projectRoot: string, cwd: string): string {
-  const rootAbs = resolve(projectRoot);
-  const targetAbs = resolve(rootAbs, cwd);
-  if (!isInsideOrSame(rootAbs, targetAbs)) {
-    throw new Error(`verification cwd rejected: ${JSON.stringify(cwd)} escapes project root`);
-  }
-  if (!existsSync(rootAbs)) {
-    throw new Error(`verification project root rejected: ${rootAbs} does not exist`);
-  }
-  const rootReal = realpathSync.native(rootAbs);
-  let cursor = rootAbs;
-  for (const segment of cwd.split('/')) {
-    if (segment === '.') continue;
-    cursor = resolve(cursor, segment);
-    if (!existsSync(cursor)) {
-      throw new Error(`verification cwd rejected: ${JSON.stringify(cwd)} does not exist`);
+  const synthesisBuilder = findSynthesisBuilder(schemaName);
+  if (synthesisBuilder !== undefined) {
+    const readPaths = resolveSynthesisReadPaths(synthesisBuilder, workflow, step);
+    const inputs: Record<string, unknown | undefined> = {};
+    for (const [name, path] of Object.entries(readPaths)) {
+      inputs[name] = path === undefined ? undefined : readJsonArtifact(runRoot, path);
     }
-    const stat = lstatSync(cursor);
-    if (stat.isSymbolicLink()) {
-      throw new Error(
-        `verification cwd rejected: ${JSON.stringify(cwd)} crosses symlink ${JSON.stringify(cursor)}`,
-      );
+    const artifact = synthesisBuilder.build({ runRoot, workflow, step, goal, inputs });
+    writeJsonArtifact(runRoot, step.writes.artifact.path, artifact);
+    return true;
+  }
+
+  const closeBuilder = findCloseBuilder(schemaName);
+  if (closeBuilder !== undefined && step.kind === 'synthesis') {
+    const readPaths = resolveCloseReadPaths(closeBuilder, workflow, step);
+    const inputs: Record<string, unknown | undefined> = {};
+    for (const [name, path] of Object.entries(readPaths)) {
+      inputs[name] = path === undefined ? undefined : readJsonArtifact(runRoot, path);
     }
-    const cursorReal = realpathSync.native(cursor);
-    if (!isInsideOrSame(rootReal, cursorReal)) {
-      throw new Error(
-        `verification cwd rejected: ${JSON.stringify(cwd)} escapes real project root through ${JSON.stringify(cursor)}`,
-      );
-    }
+    const artifact = closeBuilder.build({
+      runRoot,
+      workflow,
+      closeStep: step,
+      goal,
+      inputs,
+    });
+    writeJsonArtifact(runRoot, step.writes.artifact.path, artifact);
+    return true;
   }
-  const targetReal = realpathSync.native(targetAbs);
-  if (!isInsideOrSame(rootReal, targetReal)) {
-    throw new Error(`verification cwd rejected: ${JSON.stringify(cwd)} escapes real project root`);
-  }
-  return targetReal;
+
+  return false;
 }
 
-const VERIFICATION_ENV_INHERIT_ALLOWLIST = [
-  'PATH',
-  'SystemRoot',
-  'TEMP',
-  'TMP',
-  'TMPDIR',
-  'WINDIR',
-] as const;
-
-function verificationEnvironment(commandEnv: Readonly<Record<string, string>>): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = {};
-  for (const key of VERIFICATION_ENV_INHERIT_ALLOWLIST) {
-    const value = process.env[key];
-    if (value !== undefined) env[key] = value;
+export function writeSynthesisArtifact(input: SynthesisWriterInput): void {
+  const { runRoot, step } = input;
+  if (tryWriteRegisteredSynthesisArtifact(input)) return;
+  const body: Record<string, string> = {};
+  for (const section of step.gate.required) {
+    body[section] = `<${step.id as unknown as string}-placeholder-${section}>`;
   }
-  return { ...env, ...commandEnv };
+  writeJsonArtifact(runRoot, step.writes.artifact.path, body);
 }
 
-function summarizeOutput(value: string, maxBytes: number): string {
-  const bytes = Buffer.from(value);
-  if (bytes.length <= maxBytes) return value;
-  return bytes.subarray(0, maxBytes).toString('utf8');
-}
-
-type CheckpointWorkflowStep = Workflow['steps'][number] & { kind: 'checkpoint' };
-
-type CheckpointResolution =
-  | {
-      readonly kind: 'resolved';
-      readonly selection: string;
-      readonly resolutionSource: 'safe-default' | 'safe-autonomous' | 'operator';
-      readonly autoResolved: boolean;
-    }
-  | { readonly kind: 'waiting' }
-  | { readonly kind: 'failed'; readonly reason: string };
-
-function checkpointChoiceIds(step: CheckpointWorkflowStep): string[] {
-  return step.policy.choices.map((choice) => choice.id);
-}
-
-function resolveCheckpoint(step: CheckpointWorkflowStep, rigor: Rigor): CheckpointResolution {
-  if (rigor === 'deep' || rigor === 'tournament') return { kind: 'waiting' };
-  if (rigor === 'autonomous') {
-    const selection = step.policy.safe_autonomous_choice;
-    if (selection === undefined) {
-      return {
-        kind: 'failed',
-        reason: `checkpoint step '${step.id}' cannot auto-resolve autonomous rigor without a declared safe autonomous choice`,
-      };
-    }
-    return {
-      kind: 'resolved',
-      selection,
-      resolutionSource: 'safe-autonomous',
-      autoResolved: true,
-    };
-  }
-  const selection = step.policy.safe_default_choice;
-  if (selection === undefined) {
-    return {
-      kind: 'failed',
-      reason: `checkpoint step '${step.id}' cannot resolve ${rigor} rigor without a declared safe default choice`,
-    };
-  }
-  return {
-    kind: 'resolved',
-    selection,
-    resolutionSource: 'safe-default',
-    autoResolved: true,
-  };
-}
-
-function checkpointRequestBody(input: {
-  readonly step: CheckpointWorkflowStep;
+interface WorkflowExecutionContext {
+  readonly runRoot: string;
+  readonly workflow: Workflow;
+  readonly workflowBytes: Buffer;
+  readonly runId: RunId;
+  readonly goal: string;
+  readonly rigor?: Rigor;
+  readonly entryModeName?: string;
+  readonly lane: LaneDeclaration;
+  readonly now: () => Date;
+  readonly dispatcher?: DispatchFn;
+  readonly synthesisWriter?: SynthesisWriterFn;
+  readonly selectionConfigLayers?: readonly LayeredConfigValue[];
   readonly projectRoot?: string;
-  readonly selectionConfigLayers: readonly LayeredConfigValue[];
-  readonly buildBriefSha256?: string;
-}): unknown {
-  return {
-    schema_version: 1,
-    step_id: input.step.id,
-    prompt: input.step.policy.prompt,
-    allowed_choices: checkpointChoiceIds(input.step),
-    ...(input.step.policy.safe_default_choice === undefined
-      ? {}
-      : { safe_default_choice: input.step.policy.safe_default_choice }),
-    ...(input.step.policy.safe_autonomous_choice === undefined
-      ? {}
-      : { safe_autonomous_choice: input.step.policy.safe_autonomous_choice }),
-    execution_context: {
-      ...(input.projectRoot === undefined ? {} : { project_root: input.projectRoot }),
-      selection_config_layers: input.selectionConfigLayers,
-      ...(input.buildBriefSha256 === undefined
-        ? {}
-        : { build_brief_sha256: input.buildBriefSha256 }),
-    },
-  };
+  readonly invocationId?: InvocationId;
+  readonly initialEvents?: readonly Event[];
+  readonly startStepId?: string;
+  readonly resumeCheckpoint?: ResumeCheckpointState;
 }
 
-function checkpointResponseBody(input: {
-  readonly step: CheckpointWorkflowStep;
-  readonly selection: string;
-  readonly resolutionSource: 'safe-default' | 'safe-autonomous' | 'operator';
-}): unknown {
-  return {
-    schema_version: 1,
-    step_id: input.step.id,
-    selection: input.selection,
-    resolution_source: input.resolutionSource,
-  };
+async function resolveDispatcher(inv: { dispatcher?: DispatchFn }): Promise<DispatchFn> {
+  if (inv.dispatcher !== undefined) return inv.dispatcher;
+  const { dispatchAgent } = await import('./adapters/agent.js');
+  return { adapterName: 'agent', dispatch: dispatchAgent };
+}
+
+function selectEntryMode(
+  workflow: Workflow,
+  entryModeName: string | undefined,
+): Workflow['entry_modes'][number] {
+  if (workflow.entry_modes.length === 0) {
+    throw new Error(`runWorkflow: workflow ${workflow.id} declares no entry_modes`);
+  }
+  if (entryModeName === undefined) {
+    const entry = workflow.entry_modes[0];
+    if (entry === undefined) {
+      throw new Error(`runWorkflow: workflow ${workflow.id} entry_modes[0] unreadable`);
+    }
+    return entry;
+  }
+  const entry = workflow.entry_modes.find((mode) => mode.name === entryModeName);
+  if (entry === undefined) {
+    throw new Error(
+      `runWorkflow: workflow ${workflow.id} declares no entry_mode named '${entryModeName}'`,
+    );
+  }
+  return entry;
 }
 
 function workflowFromManifestBytes(bytes: Buffer): Workflow {
@@ -730,6 +358,8 @@ interface CheckpointRequestContext {
   readonly selectionConfigLayers: readonly LayeredConfigValue[];
   readonly buildBriefSha256?: string;
 }
+
+type CheckpointWorkflowStep = Workflow['steps'][number] & { kind: 'checkpoint' };
 
 function readCheckpointRequestContext(input: {
   readonly runRoot: string;
@@ -811,177 +441,6 @@ function readCheckpointBuildBrief(input: {
   return brief;
 }
 
-function tryWriteRegisteredSynthesisArtifact(input: SynthesisWriterInput): boolean {
-  const { runRoot, workflow, step, goal } = input;
-  const schemaName = step.writes.artifact.schema;
-
-  // Synthesis writer dispatch. Workflow-specific synthesis logic lives
-  // under src/runtime/synthesis-writers/ and is registered by output
-  // schema name. The runner stays workflow-agnostic — adding a new
-  // synthesis step means adding a SynthesisBuilder file + registry
-  // entry, no edits here.
-  const synthesisBuilder = findSynthesisBuilder(schemaName);
-  if (synthesisBuilder !== undefined) {
-    const readPaths = resolveSynthesisReadPaths(synthesisBuilder, workflow, step);
-    const inputs: Record<string, unknown | undefined> = {};
-    for (const [name, path] of Object.entries(readPaths)) {
-      inputs[name] = path === undefined ? undefined : readJsonArtifact(runRoot, path);
-    }
-    const artifact = synthesisBuilder.build({ runRoot, workflow, step, goal, inputs });
-    writeJsonArtifact(runRoot, step.writes.artifact.path, artifact);
-    return true;
-  }
-
-  // Close-with-evidence dispatch. Same pattern as synthesis — workflow-
-  // specific close logic lives in src/runtime/close-writers/ and is
-  // registered by result schema name.
-  const closeBuilder = findCloseBuilder(schemaName);
-  if (closeBuilder !== undefined && step.kind === 'synthesis') {
-    const readPaths = resolveCloseReadPaths(closeBuilder, workflow, step);
-    const inputs: Record<string, unknown | undefined> = {};
-    for (const [name, path] of Object.entries(readPaths)) {
-      inputs[name] = path === undefined ? undefined : readJsonArtifact(runRoot, path);
-    }
-    const artifact = closeBuilder.build({
-      runRoot,
-      workflow,
-      closeStep: step,
-      goal,
-      inputs,
-    });
-    writeJsonArtifact(runRoot, step.writes.artifact.path, artifact);
-    return true;
-  }
-
-  return false;
-}
-
-// Verification step driver. Sources commands from the registered
-// VerificationBuilder, executes them via spawnSync, and asks the same
-// builder to assemble the result artifact. The builder owns all
-// workflow-specific logic; the runner owns subprocess execution and
-// summarization. Adding a new workflow's verification step means
-// adding a builder file under src/runtime/verification-writers/, no
-// edits here.
-function writeVerificationArtifact(input: {
-  readonly runRoot: string;
-  readonly workflow: Workflow;
-  readonly step: Workflow['steps'][number] & { kind: 'verification' };
-  readonly projectRoot: string;
-}): { readonly overall_status: 'passed' | 'failed' } {
-  const { runRoot, workflow, step, projectRoot } = input;
-  const builder = findVerificationWriter(step.writes.artifact.schema);
-  if (builder === undefined) {
-    throw new Error(`verification step '${step.id}' has unsupported artifact schema`);
-  }
-  const commands = builder.loadCommands({ runRoot, workflow, step });
-  const observations = commands.map((command) => {
-    const started = Date.now();
-    const result = spawnSync(command.argv[0] as string, command.argv.slice(1), {
-      cwd: resolveProjectRelativeCwd(projectRoot, command.cwd),
-      env: verificationEnvironment(command.env),
-      encoding: 'utf8',
-      maxBuffer: command.max_output_bytes,
-      shell: false,
-      timeout: command.timeout_ms,
-    });
-    const durationMs = Math.max(0, Date.now() - started);
-    const exitCode =
-      typeof result.status === 'number' && result.error === undefined ? result.status : 1;
-    const status: 'passed' | 'failed' = exitCode === 0 ? 'passed' : 'failed';
-    const stderrParts = [
-      typeof result.stderr === 'string' ? result.stderr : '',
-      result.error === undefined ? '' : result.error.message,
-      result.signal === null ? '' : `signal: ${result.signal}`,
-    ].filter((part) => part.length > 0);
-    return {
-      command,
-      exit_code: exitCode,
-      status,
-      duration_ms: durationMs,
-      stdout_summary: summarizeOutput(
-        typeof result.stdout === 'string' ? result.stdout : '',
-        command.max_output_bytes,
-      ),
-      stderr_summary: summarizeOutput(stderrParts.join('\n'), command.max_output_bytes),
-    };
-  });
-  // Each VerificationBuilder validates with its own Zod schema and
-  // returns the parsed artifact. The runner only needs overall_status
-  // for gate evaluation, so the return is narrowed to that shape.
-  const artifact = builder.buildResult(observations) as {
-    readonly overall_status: 'passed' | 'failed';
-  };
-  writeJsonArtifact(runRoot, step.writes.artifact.path, artifact);
-  return artifact;
-}
-
-// Checkpoint artifact writer. Most checkpoints don't write artifacts;
-// when they do, a registered CheckpointBriefBuilder owns the workflow-
-// specific assembly. Adding a new workflow's checkpoint-with-artifact
-// means adding a builder under src/runtime/checkpoint-writers/, no
-// edits here. The policy schema in src/schemas/step.ts may also need
-// to grow a new template field for that workflow.
-function writeCheckpointOwnedArtifact(input: {
-  readonly runRoot: string;
-  readonly step: CheckpointWorkflowStep;
-  readonly goal: string;
-  readonly responsePath?: string;
-  readonly existingBrief?: BuildBrief;
-}): void {
-  const artifact = input.step.writes.artifact;
-  if (artifact === undefined) return;
-  const builder = findCheckpointBriefBuilder(artifact.schema);
-  if (builder === undefined) {
-    throw new Error(`checkpoint step '${input.step.id}' has unsupported artifact schema`);
-  }
-  const body = builder.build({
-    runRoot: input.runRoot,
-    step: input.step,
-    goal: input.goal,
-    ...(input.responsePath === undefined ? {} : { responsePath: input.responsePath }),
-    ...(input.existingBrief === undefined ? {} : { existingArtifact: input.existingBrief }),
-  });
-  writeJsonArtifact(input.runRoot, artifact.path, body);
-}
-
-export function writeSynthesisArtifact(input: SynthesisWriterInput): void {
-  const { runRoot, step } = input;
-  if (tryWriteRegisteredSynthesisArtifact(input)) return;
-  const body: Record<string, string> = {};
-  for (const section of step.gate.required) {
-    body[section] = `<${step.id as unknown as string}-placeholder-${section}>`;
-  }
-  writeJsonArtifact(runRoot, step.writes.artifact.path, body);
-}
-
-interface ResumeCheckpointState {
-  readonly stepId: string;
-  readonly attempt: number;
-  readonly selection: string;
-  readonly existingBrief?: BuildBrief;
-}
-
-interface WorkflowExecutionContext {
-  readonly runRoot: string;
-  readonly workflow: Workflow;
-  readonly workflowBytes: Buffer;
-  readonly runId: RunId;
-  readonly goal: string;
-  readonly rigor?: Rigor;
-  readonly entryModeName?: string;
-  readonly lane: LaneDeclaration;
-  readonly now: () => Date;
-  readonly dispatcher?: DispatchFn;
-  readonly synthesisWriter?: SynthesisWriterFn;
-  readonly selectionConfigLayers?: readonly LayeredConfigValue[];
-  readonly projectRoot?: string;
-  readonly invocationId?: InvocationId;
-  readonly initialEvents?: readonly Event[];
-  readonly startStepId?: string;
-  readonly resumeCheckpoint?: ResumeCheckpointState;
-}
-
 function findWaitingCheckpoint(input: {
   readonly runRoot: string;
   readonly workflow: Workflow;
@@ -1056,37 +515,11 @@ function findWaitingCheckpoint(input: {
   };
 }
 
-function selectEntryMode(
-  workflow: Workflow,
-  entryModeName: string | undefined,
-): Workflow['entry_modes'][number] {
-  if (workflow.entry_modes.length === 0) {
-    throw new Error(`runWorkflow: workflow ${workflow.id} declares no entry_modes`);
-  }
-  if (entryModeName === undefined) {
-    const entry = workflow.entry_modes[0];
-    if (entry === undefined) {
-      throw new Error(`runWorkflow: workflow ${workflow.id} entry_modes[0] unreadable`);
-    }
-    return entry;
-  }
-  const entry = workflow.entry_modes.find((mode) => mode.name === entryModeName);
-  if (entry === undefined) {
-    throw new Error(
-      `runWorkflow: workflow ${workflow.id} declares no entry_mode named '${entryModeName}'`,
-    );
-  }
-  return entry;
-}
-
-// Narrow dogfood-run-0 loop. Walks routes from the selected entry_mode;
-// for each step, appends the per-kind event trail; emits run.closed
-// after the pass route reaches a terminal label; writes result.json last.
-//
-// Slice 43b: async so the dispatch branch can `await` the real adapter
-// (or an injected stub). The signature is a breaking change for external
-// callers — this is internal to Phase 1.5 / Phase 2 only (no external
-// users yet).
+// Slice 27d execution loop. Bootstrap, walk routes from entry.start_at,
+// delegate per-step work to the kind→handler dispatcher, advance pass
+// route, emit run.closed, write result.json. The loop stays narrow: it
+// owns the route walk and run-level events; per-kind logic lives in
+// src/runtime/step-handlers/.
 async function executeWorkflow(ctx: WorkflowExecutionContext): Promise<WorkflowRunResult> {
   const { runRoot, workflow, workflowBytes, runId, goal, lane, now } = ctx;
   const dispatcher = await resolveDispatcher(ctx);
@@ -1131,20 +564,17 @@ async function executeWorkflow(ctx: WorkflowExecutionContext): Promise<WorkflowR
   // for AGENT_SMOKE / CODEX_SMOKE fingerprint binding to cli_version
   // without forcing a dispatch event schema bump.
   const dispatchResults: DispatchResultMetadata[] = [];
-  let sequence = events.length;
-  const recordedAt = () => now().toISOString();
+  const state: RunState = { events, sequence: events.length, dispatchResults };
+  const recordedAt = (): string => now().toISOString();
   const push = (ev: Event): void => {
     events.push(ev);
     appendAndDerive(runRoot, ev);
-    sequence += 1;
+    state.sequence += 1;
   };
 
   // Walk the routes graph from entry.start_at. Terminate when a step's
   // pass route resolves to one of the terminal route labels, or when a
-  // dispatch gate fails (Slice 53 Codex H14 fold-in — `runOutcome`
-  // mutates to `'aborted'` and the loop breaks before the route is
-  // taken; the close-step still emits `run.closed` carrying the
-  // aborted outcome and a reason that names the failing step).
+  // step handler reports an aborted outcome.
   const stepsById = new Map(workflow.steps.map((s) => [s.id as unknown as string, s] as const));
   const executedStepIds = new Set(
     events
@@ -1175,7 +605,7 @@ async function executeWorkflow(ctx: WorkflowExecutionContext): Promise<WorkflowR
     if (!isResumedCheckpoint) {
       push({
         schema_version: 1,
-        sequence,
+        sequence: state.sequence,
         recorded_at: recordedAt(),
         run_id: runId,
         kind: 'step.entered',
@@ -1184,603 +614,58 @@ async function executeWorkflow(ctx: WorkflowExecutionContext): Promise<WorkflowR
       });
     }
 
-    if (step.kind === 'synthesis') {
-      try {
-        synthesisWriter({ runRoot, workflow, step, goal });
-      } catch (err) {
-        if (isRunRelativePathError(err)) throw err;
-        const reason = synthesisFailureReason(step.id as unknown as string, err);
-        push({
-          schema_version: 1,
-          sequence,
-          recorded_at: recordedAt(),
-          run_id: runId,
-          kind: 'gate.evaluated',
-          step_id: step.id,
-          attempt,
-          gate_kind: 'schema_sections',
-          outcome: 'fail',
-          reason,
-        });
-        push({
-          schema_version: 1,
-          sequence,
-          recorded_at: recordedAt(),
-          run_id: runId,
-          kind: 'step.aborted',
-          step_id: step.id,
-          attempt,
-          reason,
-        });
-        runOutcome = 'aborted';
-        closeReason = reason;
-        currentStepId = undefined;
-        break;
-      }
-      push({
-        schema_version: 1,
-        sequence,
-        recorded_at: recordedAt(),
-        run_id: runId,
-        kind: 'step.artifact_written',
-        step_id: step.id,
-        attempt,
-        artifact_path: step.writes.artifact.path,
-        artifact_schema: step.writes.artifact.schema,
-      });
-      push({
-        schema_version: 1,
-        sequence,
-        recorded_at: recordedAt(),
-        run_id: runId,
-        kind: 'gate.evaluated',
-        step_id: step.id,
-        attempt,
-        gate_kind: 'schema_sections',
-        outcome: 'pass',
-      });
-    } else if (step.kind === 'verification') {
-      // VerificationBuilders return workflow-specific shapes
-      // (BuildVerification, FixVerification, etc.). The runner only
-      // needs `overall_status` to drive gate evaluation; both shapes
-      // have it. The narrow type captures exactly what the runner
-      // accesses, keeping the dispatch path workflow-agnostic.
-      let verification: { readonly overall_status: 'passed' | 'failed' };
-      try {
-        if (ctx.projectRoot === undefined) {
-          throw new Error(
-            `verification step '${step.id}' requires WorkflowInvocation.projectRoot for project-relative cwd resolution`,
-          );
-        }
-        verification = writeVerificationArtifact({
-          runRoot,
-          workflow,
-          step,
-          projectRoot: ctx.projectRoot,
-        });
-      } catch (err) {
-        if (isRunRelativePathError(err)) throw err;
-        const reason = verificationFailureReason(step.id as unknown as string, err);
-        push({
-          schema_version: 1,
-          sequence,
-          recorded_at: recordedAt(),
-          run_id: runId,
-          kind: 'gate.evaluated',
-          step_id: step.id,
-          attempt,
-          gate_kind: 'schema_sections',
-          outcome: 'fail',
-          reason,
-        });
-        push({
-          schema_version: 1,
-          sequence,
-          recorded_at: recordedAt(),
-          run_id: runId,
-          kind: 'step.aborted',
-          step_id: step.id,
-          attempt,
-          reason,
-        });
-        runOutcome = 'aborted';
-        closeReason = reason;
-        currentStepId = undefined;
-        break;
-      }
-      push({
-        schema_version: 1,
-        sequence,
-        recorded_at: recordedAt(),
-        run_id: runId,
-        kind: 'step.artifact_written',
-        step_id: step.id,
-        attempt,
-        artifact_path: step.writes.artifact.path,
-        artifact_schema: step.writes.artifact.schema,
-      });
-      if (verification.overall_status === 'passed') {
-        push({
-          schema_version: 1,
-          sequence,
-          recorded_at: recordedAt(),
-          run_id: runId,
-          kind: 'gate.evaluated',
-          step_id: step.id,
-          attempt,
-          gate_kind: 'schema_sections',
-          outcome: 'pass',
-        });
-      } else {
-        const reason = `verification step '${step.id}' failed one or more commands`;
-        push({
-          schema_version: 1,
-          sequence,
-          recorded_at: recordedAt(),
-          run_id: runId,
-          kind: 'gate.evaluated',
-          step_id: step.id,
-          attempt,
-          gate_kind: 'schema_sections',
-          outcome: 'fail',
-          reason,
-        });
-        push({
-          schema_version: 1,
-          sequence,
-          recorded_at: recordedAt(),
-          run_id: runId,
-          kind: 'step.aborted',
-          step_id: step.id,
-          attempt,
-          reason,
-        });
-        runOutcome = 'aborted';
-        closeReason = reason;
-        currentStepId = undefined;
-        break;
-      }
-    } else if (step.kind === 'checkpoint') {
-      try {
-        const requestAbs = resolveRunRelative(runRoot, step.writes.request);
-        if (!isResumedCheckpoint) {
-          writeCheckpointOwnedArtifact({ runRoot, step, goal });
-          const buildBriefSha256 =
-            step.writes.artifact?.schema === 'build.brief@v1'
-              ? sha256Hex(
-                  readFileSync(resolveRunRelative(runRoot, step.writes.artifact.path), 'utf8'),
-                )
-              : undefined;
-          const requestText = `${JSON.stringify(
-            checkpointRequestBody({
-              step,
-              ...(ctx.projectRoot === undefined ? {} : { projectRoot: ctx.projectRoot }),
-              selectionConfigLayers: executionSelectionConfigLayers,
-              ...(buildBriefSha256 === undefined ? {} : { buildBriefSha256 }),
-            }),
-            null,
-            2,
-          )}\n`;
-          mkdirSync(dirname(requestAbs), { recursive: true });
-          writeFileSync(requestAbs, requestText);
-          push({
-            schema_version: 1,
-            sequence,
-            recorded_at: recordedAt(),
-            run_id: runId,
-            kind: 'checkpoint.requested',
-            step_id: step.id,
-            attempt,
-            options: checkpointChoiceIds(step),
-            request_path: step.writes.request,
-            request_artifact_hash: sha256Hex(requestText),
-          });
-          if (step.writes.artifact !== undefined) {
-            push({
-              schema_version: 1,
-              sequence,
-              recorded_at: recordedAt(),
-              run_id: runId,
-              kind: 'step.artifact_written',
-              step_id: step.id,
-              attempt,
-              artifact_path: step.writes.artifact.path,
-              artifact_schema: step.writes.artifact.schema,
-            });
-          }
-        }
+    const result = await runStepHandler({
+      runRoot,
+      workflow,
+      runId,
+      goal,
+      lane,
+      rigor,
+      executionSelectionConfigLayers,
+      ...(ctx.projectRoot === undefined ? {} : { projectRoot: ctx.projectRoot }),
+      ...(ctx.invocationId === undefined ? {} : { invocationId: ctx.invocationId }),
+      dispatcher,
+      synthesisWriter,
+      now,
+      recordedAt,
+      state,
+      push,
+      step,
+      attempt,
+      isResumedCheckpoint,
+      ...(ctx.resumeCheckpoint === undefined ? {} : { resumeCheckpoint: ctx.resumeCheckpoint }),
+    });
 
-        const resolution: CheckpointResolution =
-          isResumedCheckpoint && ctx.resumeCheckpoint !== undefined
-            ? {
-                kind: 'resolved',
-                selection: ctx.resumeCheckpoint.selection,
-                resolutionSource: 'operator',
-                autoResolved: false,
-              }
-            : resolveCheckpoint(step, rigor);
-        if (resolution.kind === 'waiting') {
-          const snapshot = writeDerivedSnapshot(runRoot);
-          return {
-            runRoot,
-            result: {
-              schema_version: 1,
-              run_id: runId,
-              workflow_id: workflow.id,
-              goal,
-              outcome: 'checkpoint_waiting',
-              summary: `checkpoint '${step.id}' is waiting for an operator choice.`,
-              events_observed: events.length,
-              manifest_hash: manifestHash,
-              checkpoint: {
-                step_id: step.id as unknown as string,
-                request_path: requestAbs,
-                allowed_choices: checkpointChoiceIds(step),
-              },
-            },
-            snapshot,
-            events,
-            dispatchResults,
-          };
-        }
-
-        if (resolution.kind === 'failed') {
-          push({
-            schema_version: 1,
-            sequence,
-            recorded_at: recordedAt(),
-            run_id: runId,
-            kind: 'gate.evaluated',
-            step_id: step.id,
-            attempt,
-            gate_kind: 'checkpoint_selection',
-            outcome: 'fail',
-            reason: resolution.reason,
-          });
-          push({
-            schema_version: 1,
-            sequence,
-            recorded_at: recordedAt(),
-            run_id: runId,
-            kind: 'step.aborted',
-            step_id: step.id,
-            attempt,
-            reason: resolution.reason,
-          });
-          runOutcome = 'aborted';
-          closeReason = resolution.reason;
-          currentStepId = undefined;
-          break;
-        }
-
-        if (!step.gate.allow.includes(resolution.selection)) {
-          throw new Error(
-            `checkpoint step '${step.id}' selected '${resolution.selection}' but gate.allow is [${step.gate.allow.join(', ')}]`,
-          );
-        }
-        writeJsonArtifact(
-          runRoot,
-          step.writes.response,
-          checkpointResponseBody({
-            step,
-            selection: resolution.selection,
-            resolutionSource: resolution.resolutionSource,
-          }),
-        );
-        writeCheckpointOwnedArtifact({
-          runRoot,
-          step,
-          goal,
-          responsePath: step.writes.response,
-          ...(ctx.resumeCheckpoint?.existingBrief === undefined
-            ? {}
-            : { existingBrief: ctx.resumeCheckpoint.existingBrief }),
-        });
-        push({
-          schema_version: 1,
-          sequence,
-          recorded_at: recordedAt(),
-          run_id: runId,
-          kind: 'checkpoint.resolved',
-          step_id: step.id,
-          attempt,
-          selection: resolution.selection,
-          auto_resolved: resolution.autoResolved,
-          resolution_source: resolution.resolutionSource,
-          response_path: step.writes.response,
-        });
-        if (step.writes.artifact !== undefined) {
-          push({
-            schema_version: 1,
-            sequence,
-            recorded_at: recordedAt(),
-            run_id: runId,
-            kind: 'step.artifact_written',
-            step_id: step.id,
-            attempt,
-            artifact_path: step.writes.artifact.path,
-            artifact_schema: step.writes.artifact.schema,
-          });
-        }
-        push({
-          schema_version: 1,
-          sequence,
-          recorded_at: recordedAt(),
-          run_id: runId,
-          kind: 'gate.evaluated',
-          step_id: step.id,
-          attempt,
-          gate_kind: 'checkpoint_selection',
-          outcome: 'pass',
-        });
-      } catch (err) {
-        if (isRunRelativePathError(err)) throw err;
-        const reason = checkpointFailureReason(step.id as unknown as string, err);
-        push({
-          schema_version: 1,
-          sequence,
-          recorded_at: recordedAt(),
-          run_id: runId,
-          kind: 'gate.evaluated',
-          step_id: step.id,
-          attempt,
-          gate_kind: 'checkpoint_selection',
-          outcome: 'fail',
-          reason,
-        });
-        push({
-          schema_version: 1,
-          sequence,
-          recorded_at: recordedAt(),
-          run_id: runId,
-          kind: 'step.aborted',
-          step_id: step.id,
-          attempt,
-          reason,
-        });
-        runOutcome = 'aborted';
-        closeReason = reason;
-        currentStepId = undefined;
-        break;
-      }
-    } else if (step.kind === 'dispatch') {
-      const prompt = composeDispatchPrompt(step, runRoot);
-      const resolvedSelection = deriveResolvedSelection(ctx, workflow, step, rigor);
-      const dispatchInput: DispatchInput = { prompt, resolvedSelection };
-      if (step.budgets?.wall_clock_ms !== undefined) {
-        dispatchInput.timeoutMs = step.budgets.wall_clock_ms;
-      }
-      const resolvedFrom = deriveResolvedFrom(ctx);
-      const requestAbs = resolveRunRelative(runRoot, step.writes.request);
-      mkdirSync(dirname(requestAbs), { recursive: true });
-      writeFileSync(requestAbs, prompt);
-      const requestPayloadHash = sha256Hex(prompt);
-      push({
-        schema_version: 1,
-        sequence,
-        recorded_at: recordedAt(),
-        run_id: runId,
-        kind: 'dispatch.started',
-        step_id: step.id,
-        attempt,
-        adapter: { kind: 'builtin', name: dispatcher.adapterName },
-        role: step.role,
-        resolved_selection: resolvedSelection,
-        resolved_from: resolvedFrom,
-      });
-      push({
-        schema_version: 1,
-        sequence,
-        recorded_at: recordedAt(),
-        run_id: runId,
-        kind: 'dispatch.request',
-        step_id: step.id,
-        attempt,
-        request_payload_hash: requestPayloadHash,
-      });
-
-      let dispatchResult: DispatchResult;
-      try {
-        dispatchResult = await dispatcher.dispatch(dispatchInput);
-      } catch (err) {
-        const reason = adapterFailureReason(step.id as unknown as string, err);
-        push({
-          schema_version: 1,
-          sequence,
-          recorded_at: recordedAt(),
-          run_id: runId,
-          kind: 'dispatch.failed',
-          step_id: step.id,
-          attempt,
-          adapter: { kind: 'builtin', name: dispatcher.adapterName },
-          role: step.role,
-          resolved_selection: resolvedSelection,
-          resolved_from: resolvedFrom,
-          request_payload_hash: requestPayloadHash,
-          reason,
-        });
-        push({
-          schema_version: 1,
-          sequence,
-          recorded_at: recordedAt(),
-          run_id: runId,
-          kind: 'gate.evaluated',
-          step_id: step.id,
-          attempt,
-          gate_kind: 'result_verdict',
-          outcome: 'fail',
-          reason,
-        });
-        push({
-          schema_version: 1,
-          sequence,
-          recorded_at: recordedAt(),
-          run_id: runId,
-          kind: 'step.aborted',
-          step_id: step.id,
-          attempt,
-          reason,
-        });
-        runOutcome = 'aborted';
-        closeReason = reason;
-        currentStepId = undefined;
-        break;
-      }
-      dispatchResults.push({
-        stepId: step.id as unknown as string,
-        adapterName: dispatcher.adapterName,
-        cli_version: dispatchResult.cli_version,
-      });
-      // Slice 53 (Codex H14 fold-in): evaluate the gate against the
-      // adapter's actual result_body BEFORE materializing, so the
-      // verdict written into `dispatch.completed` reflects what the
-      // adapter declared (or a sentinel on unparseable / no-verdict
-      // cases). The transcript still materializes either way — the
-      // dispatch happened, and the request/receipt/result bytes are
-      // durable evidence of the call regardless of admission.
-      //
-      // Slice 54 (Codex H15 fold-in): when the Slice 53 gate admits
-      // a verdict AND the step declares `writes.artifact`, schema-
-      // parse `dispatchResult.result_body` against
-      // `writes.artifact.schema` via `src/runtime/artifact-schemas.ts`.
-      // A parse failure coerces the evaluation to `kind: 'fail'` with
-      // the parse reason — mirroring the Slice 53 reject-on-bad-
-      // verdict shape so the content/schema failure-path event surface
-      // stays uniform. It does not emit `dispatch.failed`; that event is
-      // reserved for adapter invocation exceptions where no adapter
-      // result exists. Artifact write requires BOTH gate pass (Slice 53)
-      // AND schema parse pass (Slice 54); failure on either path leaves
-      // `writes.artifact.path` absent on disk. Fail-closed on
-      // unknown schema names per contract MUST.
-      const gateEvaluation = evaluateDispatchGate(step, dispatchResult.result_body);
-      let evaluation: GateEvaluation = gateEvaluation;
-      if (gateEvaluation.kind === 'pass' && step.writes.artifact !== undefined) {
-        const parseResult = parseArtifact(step.writes.artifact.schema, dispatchResult.result_body);
-        if (parseResult.kind === 'fail') {
-          evaluation = {
-            kind: 'fail',
-            reason: `dispatch step '${step.id}': ${parseResult.reason}`,
-            observedVerdict: gateEvaluation.verdict,
-          };
-        } else {
-          // Cross-artifact validation: enforces constraints that span
-          // more than one artifact (e.g., sweep.batch.items[].candidate_id
-          // ⊆ sweep.queue.to_execute). Returns ok for schemas with no
-          // registered cross-artifact rule.
-          const crossResult = runCrossArtifactValidator(
-            step.writes.artifact.schema,
-            workflow,
-            runRoot,
-            dispatchResult.result_body,
-          );
-          if (crossResult.kind === 'fail') {
-            evaluation = {
-              kind: 'fail',
-              reason: `dispatch step '${step.id}': ${crossResult.reason}`,
-              observedVerdict: gateEvaluation.verdict,
-            };
-          }
-        }
-      }
-      const dispatchCompletedVerdict =
-        evaluation.kind === 'pass'
-          ? evaluation.verdict
-          : (evaluation.observedVerdict ?? NO_VERDICT_SENTINEL);
-      // Slice 53 (Codex H2 fold-in): gate the canonical artifact write
-      // on `evaluation.kind === 'pass'` per ADR-0008 §Decision.3a — the
-      // canonical downstream-readable artifact at `writes.artifact.path`
-      // is materialized ONLY after the verdict gate passes. The
-      // transcript slots (request / receipt / result) remain durable
-      // evidence on either path. Slice 54 (materializer schema-parse)
-      // adds the symmetric schema-parse condition: artifact write
-      // requires both verdict gate pass AND schema parse success.
-      const materialized = materializeDispatch({
-        runId,
-        stepId: step.id,
-        attempt,
-        role: step.role,
-        startingSequence: sequence,
+    if (result.kind === 'waiting_checkpoint') {
+      const snapshot = writeDerivedSnapshot(runRoot);
+      return {
         runRoot,
-        writes: {
-          request: step.writes.request,
-          receipt: step.writes.receipt,
-          result: step.writes.result,
-          ...(step.writes.artifact === undefined || evaluation.kind !== 'pass'
-            ? {}
-            : { artifact: step.writes.artifact }),
+        result: {
+          schema_version: 1,
+          run_id: runId,
+          workflow_id: workflow.id,
+          goal,
+          outcome: 'checkpoint_waiting',
+          summary: `checkpoint '${result.checkpoint.stepId}' is waiting for an operator choice.`,
+          events_observed: events.length,
+          manifest_hash: manifestHash,
+          checkpoint: {
+            step_id: result.checkpoint.stepId,
+            request_path: result.checkpoint.requestPath,
+            allowed_choices: result.checkpoint.allowedChoices,
+          },
         },
-        // Slice 45a (P2.6 HIGH 3 fold-in): adapter identity is pulled
-        // from the structured `DispatchFn` descriptor rather than from
-        // a call-site literal. Future P2.7+ slices that route a second
-        // adapter into `runWorkflow` do so by injecting a dispatcher
-        // with the matching `adapterName`; no further edit to this
-        // site is required.
-        adapterName: dispatcher.adapterName,
-        // Slice 47a (CONVERGENT HIGH A fold-in): selection + provenance
-        // are derived from real inputs rather than hardcoded by the
-        // materializer. Slice 85 replaced the temporary workflow/step
-        // selection helper with the full SEL-precedence resolver; adapter
-        // provenance remains separate because it describes how the
-        // dispatcher itself was chosen.
-        resolvedSelection,
-        resolvedFrom,
-        dispatchResult,
-        verdict: dispatchCompletedVerdict,
-        now,
-        priorStart: { requestPayloadHash },
-      });
-      for (const ev of materialized.events) {
-        events.push(ev);
-        appendAndDerive(runRoot, ev);
-      }
-      sequence = materialized.sequenceAfter;
+        snapshot,
+        events,
+        dispatchResults,
+      };
+    }
 
-      if (evaluation.kind === 'pass') {
-        push({
-          schema_version: 1,
-          sequence,
-          recorded_at: recordedAt(),
-          run_id: runId,
-          kind: 'gate.evaluated',
-          step_id: step.id,
-          attempt,
-          gate_kind: 'result_verdict',
-          outcome: 'pass',
-        });
-      } else {
-        // Slice 53 (Codex H14 fold-in): gate-fail termination path.
-        // Emit gate.evaluated with outcome=fail + reason, then
-        // step.aborted with the same reason, then break out of the
-        // loop. The post-loop run.closed emission picks up
-        // `runOutcome='aborted'` and `closeReason` to record the
-        // termination cause.
-        push({
-          schema_version: 1,
-          sequence,
-          recorded_at: recordedAt(),
-          run_id: runId,
-          kind: 'gate.evaluated',
-          step_id: step.id,
-          attempt,
-          gate_kind: 'result_verdict',
-          outcome: 'fail',
-          reason: evaluation.reason,
-        });
-        push({
-          schema_version: 1,
-          sequence,
-          recorded_at: recordedAt(),
-          run_id: runId,
-          kind: 'step.aborted',
-          step_id: step.id,
-          attempt,
-          reason: evaluation.reason,
-        });
-        runOutcome = 'aborted';
-        closeReason = evaluation.reason;
-        currentStepId = undefined;
-        break;
-      }
+    if (result.kind === 'aborted') {
+      runOutcome = 'aborted';
+      closeReason = result.reason;
+      currentStepId = undefined;
+      break;
     }
 
     const passRoute = step.routes.pass;
@@ -1793,7 +678,7 @@ async function executeWorkflow(ctx: WorkflowExecutionContext): Promise<WorkflowR
       const reason = `pass-route cycle detected: step '${step.id}' routes to already executed step '${passRoute}'`;
       push({
         schema_version: 1,
-        sequence,
+        sequence: state.sequence,
         recorded_at: recordedAt(),
         run_id: runId,
         kind: 'step.aborted',
@@ -1809,7 +694,7 @@ async function executeWorkflow(ctx: WorkflowExecutionContext): Promise<WorkflowR
 
     push({
       schema_version: 1,
-      sequence,
+      sequence: state.sequence,
       recorded_at: recordedAt(),
       run_id: runId,
       kind: 'step.completed',
@@ -1832,7 +717,7 @@ async function executeWorkflow(ctx: WorkflowExecutionContext): Promise<WorkflowR
   const closedAt = recordedAt();
   const closed: Event = {
     schema_version: 1,
-    sequence,
+    sequence: state.sequence,
     recorded_at: closedAt,
     run_id: runId,
     kind: 'run.closed',
@@ -1930,11 +815,7 @@ export async function resumeWorkflowCheckpoint(
   });
 }
 
-function buildSummary(input: {
-  workflow: Workflow;
-  goal: string;
-  events: Event[];
-}): string {
+function buildSummary(input: { workflow: Workflow; goal: string; events: Event[] }): string {
   const stepCount = input.events.filter((e) => e.kind === 'step.completed').length;
   return `${input.workflow.id} v${input.workflow.version} closed ${stepCount} step(s) for goal "${input.goal}".`;
 }
