@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { ReviewDispatchResult } from '../../src/workflows/review/artifacts.js';
 import { DispatchStep } from '../../src/schemas/step.js';
+import { ReviewDispatchResult } from '../../src/workflows/review/artifacts.js';
 
 const REVIEW_ANALYZE_DISPATCH_STEP = {
   id: 'audit-step',

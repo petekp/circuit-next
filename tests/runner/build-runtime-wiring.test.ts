@@ -6,15 +6,15 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { AgentDispatchInput } from '../../src/runtime/adapters/agent.js';
 import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
 import { type DispatchFn, runWorkflow } from '../../src/runtime/runner.js';
+import { RunId } from '../../src/schemas/ids.js';
+import type { LaneDeclaration } from '../../src/schemas/lane.js';
+import { Workflow } from '../../src/schemas/workflow.js';
 import {
   BuildImplementation,
   BuildResult,
   BuildReview,
   BuildVerification,
 } from '../../src/workflows/build/artifacts.js';
-import { RunId } from '../../src/schemas/ids.js';
-import type { LaneDeclaration } from '../../src/schemas/lane.js';
-import { Workflow } from '../../src/schemas/workflow.js';
 
 const FIXTURE_PATH = resolve('.claude-plugin', 'skills', 'build', 'circuit.json');
 const REPO_ROOT = resolve('.');

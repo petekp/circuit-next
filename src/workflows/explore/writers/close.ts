@@ -7,7 +7,10 @@
 // summary references brief.subject so the result is self-contained.
 
 import { artifactPathForSchemaInWorkflow } from '../../../runtime/registries/close-writers/shared.js';
-import type { CloseBuildContext, CloseBuilder } from '../../../runtime/registries/close-writers/types.js';
+import type {
+  CloseBuildContext,
+  CloseBuilder,
+} from '../../../runtime/registries/close-writers/types.js';
 import {
   ExploreBrief,
   ExploreResult,

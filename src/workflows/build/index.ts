@@ -1,7 +1,7 @@
 // Build workflow package.
 
-import { BuildImplementation, BuildReview } from './artifacts.js';
 import type { WorkflowPackage, WorkflowSignal } from '../types.js';
+import { BuildImplementation, BuildReview } from './artifacts.js';
 import { buildImplementationShapeHint, buildReviewShapeHint } from './dispatch-hints.js';
 import { buildBriefCheckpointBuilder } from './writers/checkpoint-brief.js';
 import { buildCloseBuilder } from './writers/close.js';

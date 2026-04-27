@@ -10,11 +10,7 @@ import type {
   SynthesisBuildContext,
   SynthesisBuilder,
 } from '../../../runtime/registries/synthesis-writers/types.js';
-import {
-  MigrateBrief,
-  MigrateCoexistence,
-  MigrateInventory,
-} from '../artifacts.js';
+import { MigrateBrief, MigrateCoexistence, MigrateInventory } from '../artifacts.js';
 
 export const migrateCoexistenceSynthesisBuilder: SynthesisBuilder = {
   resultSchemaName: 'migrate.coexistence@v1',

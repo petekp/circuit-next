@@ -3,6 +3,9 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { RunId } from '../../src/schemas/ids.js';
+import type { LaneDeclaration } from '../../src/schemas/lane.js';
+import { Workflow } from '../../src/schemas/workflow.js';
 import {
   ReviewDispatchResult,
   type ReviewFinding,
@@ -10,9 +13,6 @@ import {
   type ReviewResultVerdict,
   computeReviewVerdict,
 } from '../../src/workflows/review/artifacts.js';
-import { RunId } from '../../src/schemas/ids.js';
-import type { LaneDeclaration } from '../../src/schemas/lane.js';
-import { Workflow } from '../../src/schemas/workflow.js';
 
 import type { AgentDispatchInput } from '../../src/runtime/adapters/agent.js';
 import type { DispatchResult } from '../../src/runtime/adapters/shared.js';

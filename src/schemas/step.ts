@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { VerificationCommand } from './verification.js';
 import {
   CheckpointSelectionGate,
   FanoutAggregateGate,
@@ -10,6 +9,7 @@ import { ProtocolId, StepId, WorkflowId } from './ids.js';
 import { RunRelativePath } from './primitives.js';
 import { Rigor } from './rigor.js';
 import { SelectionOverride } from './selection-policy.js';
+import { VerificationCommand } from './verification.js';
 
 export const DispatchRole = z.enum(['researcher', 'implementer', 'reviewer']);
 export type DispatchRole = z.infer<typeof DispatchRole>;

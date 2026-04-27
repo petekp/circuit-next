@@ -12,11 +12,11 @@ import {
   resumeWorkflowCheckpoint,
   runWorkflow,
 } from '../../src/runtime/runner.js';
-import { BuildBrief, BuildVerification } from '../../src/workflows/build/artifacts.js';
 import { RunId } from '../../src/schemas/ids.js';
 import { SkillId } from '../../src/schemas/ids.js';
 import type { LaneDeclaration } from '../../src/schemas/lane.js';
 import { Workflow } from '../../src/schemas/workflow.js';
+import { BuildBrief, BuildVerification } from '../../src/workflows/build/artifacts.js';
 
 function deterministicNow(startMs: number): () => Date {
   let n = 0;

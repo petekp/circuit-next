@@ -10,13 +10,13 @@
 
 import { readFileSync } from 'node:fs';
 import { artifactPathForSchemaInWorkflow } from '../../../runtime/registries/close-writers/shared.js';
-import { resolveRunRelative } from '../../../runtime/run-relative-path.js';
 import type {
   VerificationBuildContext,
   VerificationBuilder,
   VerificationCommand,
   VerificationCommandObservation,
 } from '../../../runtime/registries/verification-writers/types.js';
+import { resolveRunRelative } from '../../../runtime/run-relative-path.js';
 import { MigrateBrief, MigrateVerification } from '../artifacts.js';
 
 export const migrateVerificationWriter: VerificationBuilder = {

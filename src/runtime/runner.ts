@@ -20,8 +20,6 @@ import type { Snapshot } from '../schemas/snapshot.js';
 import { Workflow } from '../schemas/workflow.js';
 import { sha256Hex } from './adapters/shared.js';
 import { appendAndDerive } from './append-and-derive.js';
-import { findCheckpointBriefBuilder } from './registries/checkpoint-writers/registry.js';
-import { findCloseBuilder, resolveCloseReadPaths } from './registries/close-writers/registry.js';
 import {
   bindsExecutionRigorToDispatchSelection,
   selectionConfigLayersWithExecutionRigor,
@@ -34,6 +32,12 @@ import {
   verifyManifestSnapshotBytes,
   writeManifestSnapshot,
 } from './manifest-snapshot-writer.js';
+import { findCheckpointBriefBuilder } from './registries/checkpoint-writers/registry.js';
+import { findCloseBuilder, resolveCloseReadPaths } from './registries/close-writers/registry.js';
+import {
+  findSynthesisBuilder,
+  resolveSynthesisReadPaths,
+} from './registries/synthesis-writers/registry.js';
 import { writeResult } from './result-writer.js';
 import { resolveRunRelative } from './run-relative-path.js';
 import type {
@@ -56,7 +60,6 @@ import {
   runStepHandler,
 } from './step-handlers/index.js';
 import { isRunRelativePathError, writeJsonArtifact } from './step-handlers/shared.js';
-import { findSynthesisBuilder, resolveSynthesisReadPaths } from './registries/synthesis-writers/registry.js';
 
 // Public API surface from runner.ts. Implementations have moved to
 // dedicated modules during the handler-extraction split; the surface

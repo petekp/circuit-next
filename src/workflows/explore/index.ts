@@ -1,7 +1,7 @@
 // Explore workflow package — also the conservative default for routing.
 
-import { ExploreReviewVerdict, ExploreSynthesis } from './artifacts.js';
 import type { WorkflowPackage } from '../types.js';
+import { ExploreReviewVerdict, ExploreSynthesis } from './artifacts.js';
 import { exploreReviewVerdictShapeHint, exploreSynthesisShapeHint } from './dispatch-hints.js';
 import { exploreAnalysisSynthesisBuilder } from './writers/analysis.js';
 import { exploreBriefSynthesisBuilder } from './writers/brief.js';

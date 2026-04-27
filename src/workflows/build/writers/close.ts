@@ -6,7 +6,10 @@
 // passed AND review did not reject.
 
 import { artifactPathForSchemaInWorkflow } from '../../../runtime/registries/close-writers/shared.js';
-import type { CloseBuildContext, CloseBuilder } from '../../../runtime/registries/close-writers/types.js';
+import type {
+  CloseBuildContext,
+  CloseBuilder,
+} from '../../../runtime/registries/close-writers/types.js';
 import {
   BuildBrief,
   BuildImplementation,

@@ -21,10 +21,10 @@ import {
   runWorkflow,
   writeSynthesisArtifact,
 } from '../../src/runtime/runner.js';
-import { FixBrief, FixResult } from '../../src/workflows/fix/artifacts.js';
 import { RunId } from '../../src/schemas/ids.js';
 import type { LaneDeclaration } from '../../src/schemas/lane.js';
 import { Workflow } from '../../src/schemas/workflow.js';
+import { FixBrief, FixResult } from '../../src/workflows/fix/artifacts.js';
 
 const FIX_LITE_FIXTURE_PATH = resolve('.claude-plugin', 'skills', 'fix', 'lite.json');
 

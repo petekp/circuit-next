@@ -47,14 +47,12 @@ function listPackageDirectories(): readonly string[] {
     // catalog" if a tool drops one in.
     if (entry.startsWith('.')) continue;
     const path = join(WORKFLOWS_ROOT, entry);
-    let stat;
     try {
-      stat = statSync(path);
+      if (statSync(path).isDirectory()) {
+        entries.push(entry);
+      }
     } catch {
-      continue;
-    }
-    if (stat.isDirectory()) {
-      entries.push(entry);
+      // Skip entries that can't be stat'd (race / permission).
     }
   }
   return entries;
@@ -68,7 +66,7 @@ describe('workflow catalog completeness', () => {
     const extra = [...inCatalog].filter((id) => !onDisk.has(id));
     expect(
       { missing, extra },
-      `catalog drift — missing means a package directory exists without a catalog entry; extra means catalog references a directory that does not exist`,
+      'catalog drift — missing means a package directory exists without a catalog entry; extra means catalog references a directory that does not exist',
     ).toEqual({ missing: [], extra: [] });
   });
 
@@ -83,7 +81,7 @@ describe('workflow catalog completeness', () => {
     }
     expect(
       offenders,
-      `unexpected file at the workflows root: only catalog.ts/types.ts plus package directories belong here`,
+      'unexpected file at the workflows root: only catalog.ts/types.ts plus package directories belong here',
     ).toEqual([]);
   });
 
@@ -94,7 +92,10 @@ describe('workflow catalog completeness', () => {
         offenders.push(pkg.id);
       }
     }
-    expect(offenders, `missing or non-file index.ts — workflow packages must export their package via index.ts`).toEqual([]);
+    expect(
+      offenders,
+      'missing or non-file index.ts — workflow packages must export their package via index.ts',
+    ).toEqual([]);
   });
 
   it('every workflow package declares a recipe path that points to a real file', () => {
@@ -126,7 +127,7 @@ describe('workflow catalog completeness', () => {
     }
     expect(
       offenders,
-      `optional path declared on package but file is missing or not a regular file on disk`,
+      'optional path declared on package but file is missing or not a regular file on disk',
     ).toEqual([]);
   });
 
@@ -145,7 +146,7 @@ describe('workflow catalog completeness', () => {
     }
     expect(
       offenders,
-      `package declares dispatchArtifacts but has no <id>/artifacts.ts — schemas must live in the package`,
+      'package declares dispatchArtifacts but has no <id>/artifacts.ts — schemas must live in the package',
     ).toEqual([]);
   });
 
@@ -157,7 +158,11 @@ describe('workflow catalog completeness', () => {
     // exist, but the schema would be owned by a different workflow —
     // exactly the cross-workflow coupling the schema relocation
     // refactor was meant to eliminate.
-    const offenders: { readonly id: string; readonly schemaName: string; readonly reason: string }[] = [];
+    const offenders: {
+      readonly id: string;
+      readonly schemaName: string;
+      readonly reason: string;
+    }[] = [];
     for (const pkg of workflowPackages) {
       if (pkg.dispatchArtifacts.length === 0) continue;
       const moduleUrl = new URL(`../../src/workflows/${pkg.id}/artifacts.js`, import.meta.url);
@@ -175,7 +180,7 @@ describe('workflow catalog completeness', () => {
     }
     expect(
       offenders,
-      `dispatch artifact schema came from outside the package — the package must own its dispatch schemas`,
+      'dispatch artifact schema came from outside the package — the package must own its dispatch schemas',
     ).toEqual([]);
   });
 
@@ -198,7 +203,7 @@ describe('workflow catalog completeness', () => {
     }
     expect(
       offenders,
-      `package present at runtime but not imported by the static catalog source — catalog.ts must mirror the workflowPackages array via a real import statement`,
+      'package present at runtime but not imported by the static catalog source — catalog.ts must mirror the workflowPackages array via a real import statement',
     ).toEqual([]);
   });
 
@@ -218,7 +223,7 @@ describe('workflow catalog completeness', () => {
       }
     }
     const duplicates = [...seen.entries()].filter(([, owners]) => owners.length > 1);
-    expect(duplicates, `duplicate dispatch artifact schemaName across packages`).toEqual([]);
+    expect(duplicates, 'duplicate dispatch artifact schemaName across packages').toEqual([]);
   });
 
   // The previous "validator schemaName matches a dispatchArtifact"
@@ -251,7 +256,7 @@ describe('workflow catalog completeness', () => {
     const collisions = [...seen.entries()].filter(([, owners]) => owners.length > 1);
     expect(
       collisions,
-      `writer resultSchemaName collides across packages or slots — registry order silently picks the winner`,
+      'writer resultSchemaName collides across packages or slots — registry order silently picks the winner',
     ).toEqual([]);
   });
 });

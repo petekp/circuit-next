@@ -14,6 +14,11 @@ import {
   type WorkflowRunner,
   runWorkflow,
 } from '../../src/runtime/runner.js';
+import { RunId } from '../../src/schemas/ids.js';
+import type { LaneDeclaration } from '../../src/schemas/lane.js';
+import { RunResult } from '../../src/schemas/result.js';
+import { Snapshot } from '../../src/schemas/snapshot.js';
+import { Workflow } from '../../src/schemas/workflow.js';
 import {
   MigrateBatch,
   MigrateBrief,
@@ -23,11 +28,6 @@ import {
   MigrateReview,
   MigrateVerification,
 } from '../../src/workflows/migrate/artifacts.js';
-import { RunId } from '../../src/schemas/ids.js';
-import type { LaneDeclaration } from '../../src/schemas/lane.js';
-import { RunResult } from '../../src/schemas/result.js';
-import { Snapshot } from '../../src/schemas/snapshot.js';
-import { Workflow } from '../../src/schemas/workflow.js';
 
 // Migrate runtime wiring test. Loads the live Migrate fixture compiled
 // from src/workflows/migrate/recipe.json, runs it end-to-end

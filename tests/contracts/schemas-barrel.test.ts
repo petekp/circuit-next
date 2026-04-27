@@ -44,7 +44,7 @@ describe('schemas barrel completeness', () => {
     }
     expect(
       offenders,
-      `src/schemas/<name>.ts present on disk but not re-exported by src/schemas/index.ts — barrel consumers will silently miss this module`,
+      'src/schemas/<name>.ts present on disk but not re-exported by src/schemas/index.ts — barrel consumers will silently miss this module',
     ).toEqual([]);
   });
 });

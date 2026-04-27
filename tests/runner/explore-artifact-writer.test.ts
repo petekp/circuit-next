@@ -5,6 +5,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
 import { type DispatchFn, type DispatchInput, runWorkflow } from '../../src/runtime/runner.js';
+import { RunId } from '../../src/schemas/ids.js';
+import type { LaneDeclaration } from '../../src/schemas/lane.js';
+import { Workflow } from '../../src/schemas/workflow.js';
 import {
   ExploreAnalysis,
   ExploreBrief,
@@ -12,9 +15,6 @@ import {
   ExploreReviewVerdict,
   ExploreSynthesis,
 } from '../../src/workflows/explore/artifacts.js';
-import { RunId } from '../../src/schemas/ids.js';
-import type { LaneDeclaration } from '../../src/schemas/lane.js';
-import { Workflow } from '../../src/schemas/workflow.js';
 
 const FIXTURE_PATH = resolve('.claude-plugin/skills/explore/circuit.json');
 

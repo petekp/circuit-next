@@ -459,7 +459,9 @@ describe('catalog-derivations: real catalog invariants', () => {
     const { findSynthesisBuilder } = await import(
       '../../src/runtime/registries/synthesis-writers/registry.js'
     );
-    const { findCloseBuilder } = await import('../../src/runtime/registries/close-writers/registry.js');
+    const { findCloseBuilder } = await import(
+      '../../src/runtime/registries/close-writers/registry.js'
+    );
     const { findVerificationWriter } = await import(
       '../../src/runtime/registries/verification-writers/registry.js'
     );

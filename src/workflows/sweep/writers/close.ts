@@ -9,7 +9,10 @@
 // otherwise 'failed'.
 
 import { artifactPathForSchemaInWorkflow } from '../../../runtime/registries/close-writers/shared.js';
-import type { CloseBuildContext, CloseBuilder } from '../../../runtime/registries/close-writers/types.js';
+import type {
+  CloseBuildContext,
+  CloseBuilder,
+} from '../../../runtime/registries/close-writers/types.js';
 import {
   SweepAnalysis,
   SweepBatch,
