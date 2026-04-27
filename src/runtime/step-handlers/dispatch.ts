@@ -3,7 +3,6 @@ import { dirname } from 'node:path';
 import type { Workflow } from '../../schemas/workflow.js';
 import { materializeDispatch } from '../adapters/dispatch-materializer.js';
 import { type DispatchResult, sha256Hex } from '../adapters/shared.js';
-import { appendAndDerive } from '../append-and-derive.js';
 import { parseArtifact } from '../artifact-schemas.js';
 import { runCrossArtifactValidator } from '../cross-artifact-validators.js';
 import { deriveResolvedFrom, deriveResolvedSelection } from '../dispatch-selection.js';
@@ -295,11 +294,16 @@ export async function runDispatchStep(
     now,
     priorStart: { requestPayloadHash },
   });
+  // Adversarial-review fix #12: emit through push() rather than
+  // mutating state.events directly. push() overwrites each event's
+  // sequence atomically, so the materializer's pre-assigned sequences
+  // (and `sequenceAfter`) become advisory — they remain on the return
+  // shape because tests call materializeDispatch directly and assert
+  // on its event array. The state.sequence advance previously done
+  // manually here is now handled by push() per emission.
   for (const ev of materialized.events) {
-    state.events.push(ev);
-    appendAndDerive(runRoot, ev);
+    push(ev);
   }
-  state.sequence = materialized.sequenceAfter;
 
   if (evaluation.kind === 'pass') {
     push({

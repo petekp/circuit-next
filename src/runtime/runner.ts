@@ -523,9 +523,22 @@ async function executeWorkflow(ctx: WorkflowExecutionContext): Promise<WorkflowR
   const dispatchResults: DispatchResultMetadata[] = [];
   const state: RunState = { events, sequence: events.length, dispatchResults };
   const recordedAt = (): string => now().toISOString();
+  // push() is the single sequence-assignment authority: it overwrites
+  // the caller-supplied `sequence` field on the event with the current
+  // state.sequence and increments. JS is single-threaded and push() is
+  // fully synchronous (appendAndDerive uses sync fs writes), so today
+  // concurrent callers cannot interleave at the event-loop level. The
+  // overwrite locks that property in by construction and guards
+  // against (a) future async refactors that would expose the
+  // read-then-increment as a real race, and (b) callers reading a
+  // stale `state.sequence` snapshot into an event literal across an
+  // await boundary. Adversarial-review fix #3 + #12: handlers can no
+  // longer corrupt the sequence stream by passing wrong values, and
+  // the only path to emit an event is push().
   const push = (ev: Event): void => {
-    events.push(ev);
-    appendAndDerive(runRoot, ev);
+    const sequenced: Event = { ...ev, sequence: state.sequence };
+    events.push(sequenced);
+    appendAndDerive(runRoot, sequenced);
     state.sequence += 1;
   };
 
