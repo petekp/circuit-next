@@ -7,8 +7,11 @@
 // a short-window coexistence appetite and an `npm run check`
 // verification candidate.
 
-import { MigrateBrief } from '../../schemas/artifacts/migrate.js';
-import type { SynthesisBuildContext, SynthesisBuilder } from './types.js';
+import type {
+  SynthesisBuildContext,
+  SynthesisBuilder,
+} from '../../../runtime/synthesis-writers/types.js';
+import { MigrateBrief } from '../../../schemas/artifacts/migrate.js';
 
 const DEFAULT_MIGRATE_VERIFICATION_COMMAND = {
   id: 'migrate-proof',

@@ -3,13 +3,13 @@
 // Routable via /circuit:run but has no slash command — operators reach
 // it through intent classification, not /circuit:migrate.
 
-import { migrateCloseBuilder } from '../../runtime/close-writers/migrate.js';
-import { migrateBriefSynthesisBuilder } from '../../runtime/synthesis-writers/migrate-brief.js';
-import { migrateCoexistenceSynthesisBuilder } from '../../runtime/synthesis-writers/migrate-coexistence.js';
-import { migrateInventorySynthesisBuilder } from '../../runtime/synthesis-writers/migrate-inventory.js';
-import { migrateVerificationWriter } from '../../runtime/verification-writers/migrate-verification.js';
 import { MigrateReview } from '../../schemas/artifacts/migrate.js';
 import type { WorkflowPackage, WorkflowSignal } from '../types.js';
+import { migrateBriefSynthesisBuilder } from './writers/brief.js';
+import { migrateCloseBuilder } from './writers/close.js';
+import { migrateCoexistenceSynthesisBuilder } from './writers/coexistence.js';
+import { migrateInventorySynthesisBuilder } from './writers/inventory.js';
+import { migrateVerificationWriter } from './writers/verification.js';
 
 const MIGRATE_SIGNALS: readonly WorkflowSignal[] = [
   { label: 'migrate prefix', pattern: /^\s*migrate\s*:/i },
@@ -27,7 +27,7 @@ const MIGRATE_SIGNALS: readonly WorkflowSignal[] = [
 export const migrateWorkflowPackage: WorkflowPackage = {
   id: 'migrate',
   paths: {
-    recipe: 'specs/workflow-recipes/migrate.recipe.json',
+    recipe: 'src/workflows/migrate/recipe.json',
   },
   routing: {
     order: 10,

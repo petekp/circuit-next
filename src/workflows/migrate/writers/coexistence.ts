@@ -6,12 +6,15 @@
 // operator decision; the inline-synthesis fallback keeps the recipe
 // executable in autonomous mode.
 
+import type {
+  SynthesisBuildContext,
+  SynthesisBuilder,
+} from '../../../runtime/synthesis-writers/types.js';
 import {
   MigrateBrief,
   MigrateCoexistence,
   MigrateInventory,
-} from '../../schemas/artifacts/migrate.js';
-import type { SynthesisBuildContext, SynthesisBuilder } from './types.js';
+} from '../../../schemas/artifacts/migrate.js';
 
 export const migrateCoexistenceSynthesisBuilder: SynthesisBuilder = {
   resultSchemaName: 'migrate.coexistence@v1',

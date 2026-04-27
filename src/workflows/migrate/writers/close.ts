@@ -11,6 +11,8 @@
 // Build's RunResult copied verbatim by the sub-run handler — its
 // `outcome` field tells us whether the underlying Build succeeded.
 
+import { artifactPathForSchemaInWorkflow } from '../../../runtime/close-writers/shared.js';
+import type { CloseBuildContext, CloseBuilder } from '../../../runtime/close-writers/types.js';
 import {
   MigrateBatch,
   MigrateBrief,
@@ -19,9 +21,7 @@ import {
   MigrateResult,
   MigrateReview,
   MigrateVerification,
-} from '../../schemas/artifacts/migrate.js';
-import { artifactPathForSchemaInWorkflow } from './shared.js';
-import type { CloseBuildContext, CloseBuilder } from './types.js';
+} from '../../../schemas/artifacts/migrate.js';
 
 const POINTERS = [
   { artifact_id: 'migrate.brief', schema: 'migrate.brief@v1' },

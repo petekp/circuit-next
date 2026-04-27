@@ -8,8 +8,11 @@
 // end-to-end execution honest while leaving the DAG shape stable for
 // when the real surveyor lands.
 
-import { MigrateBrief, MigrateInventory } from '../../schemas/artifacts/migrate.js';
-import type { SynthesisBuildContext, SynthesisBuilder } from './types.js';
+import type {
+  SynthesisBuildContext,
+  SynthesisBuilder,
+} from '../../../runtime/synthesis-writers/types.js';
+import { MigrateBrief, MigrateInventory } from '../../../schemas/artifacts/migrate.js';
 
 export const migrateInventorySynthesisBuilder: SynthesisBuilder = {
   resultSchemaName: 'migrate.inventory@v1',

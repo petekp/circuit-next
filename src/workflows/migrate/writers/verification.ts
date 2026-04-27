@@ -9,15 +9,15 @@
 // introduced by the batch sub-run.
 
 import { readFileSync } from 'node:fs';
-import { MigrateBrief, MigrateVerification } from '../../schemas/artifacts/migrate.js';
-import { artifactPathForSchemaInWorkflow } from '../close-writers/shared.js';
-import { resolveRunRelative } from '../run-relative-path.js';
+import { artifactPathForSchemaInWorkflow } from '../../../runtime/close-writers/shared.js';
+import { resolveRunRelative } from '../../../runtime/run-relative-path.js';
 import type {
   VerificationBuildContext,
   VerificationBuilder,
   VerificationCommand,
   VerificationCommandObservation,
-} from './types.js';
+} from '../../../runtime/verification-writers/types.js';
+import { MigrateBrief, MigrateVerification } from '../../../schemas/artifacts/migrate.js';
 
 export const migrateVerificationWriter: VerificationBuilder = {
   resultSchemaName: 'migrate.verification@v1',

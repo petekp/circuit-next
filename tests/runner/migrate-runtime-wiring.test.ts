@@ -30,7 +30,7 @@ import { Snapshot } from '../../src/schemas/snapshot.js';
 import { Workflow } from '../../src/schemas/workflow.js';
 
 // Migrate runtime wiring test. Loads the live Migrate fixture compiled
-// from specs/workflow-recipes/migrate.recipe.json, runs it end-to-end
+// from src/workflows/migrate/recipe.json, runs it end-to-end
 // with a stub childRunner (so the batch sub-run does not descend into a
 // real Build child) and a stub reviewer dispatcher, and asserts that
 // every typed Migrate artifact is materialised correctly. Verification
