@@ -31,7 +31,7 @@
   "spine_policy": {
     "mode": "partial",
     "omits": ["plan", "verify"],
-    "rationale": "Explore is an investigation workflow — plan-mode is folded into Frame (investigation scoping); verify is omitted because explore output is not executable and does not admit mechanical verification. Review is the adversarial pass that IS in scope and, per ADR-0008, is a distinct-adapter review dispatch (not a weaker substitute for verify as previously described at v0.1 authoring). See specs/contracts/explore.md §Canonical phase set for the full rationale."
+    "rationale": "Explore is an investigation workflow — plan-mode is folded into Frame (investigation scoping); verify is omitted because explore output is not executable and does not admit mechanical verification. Review is the adversarial pass that IS in scope and, per ADR-0008, is a distinct-adapter review dispatch (not a weaker substitute for verify as previously described at v0.1 authoring). See src/workflows/explore/contract.md §Canonical phase set for the full rationale."
   },
   "phases": [
     { "canonical": "frame", "id": "frame-phase", "title": "Frame" },

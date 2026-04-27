@@ -32,7 +32,7 @@ workflow kind.
 ## Scope Note
 
 This is a workflow-specific contract over the base `Workflow` schema, the
-same kind of discipline layer as `specs/contracts/explore.md`. The fixture
+same kind of discipline layer as `src/workflows/explore/contract.md`. The fixture
 is validated by `src/schemas/workflow.ts`; the final artifact shape is
 validated by `src/schemas/artifacts/review.ts`.
 

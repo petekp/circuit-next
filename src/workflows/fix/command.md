@@ -98,7 +98,7 @@ metacharacters:
 
 ## Authority
 
-- `specs/contracts/fix.md` (Fix artifact contract)
-- `specs/contracts/workflow.md` (workflow fixture and runtime result shape)
+- `src/workflows/fix/contract.md` (Fix artifact contract)
+- `docs/contracts/workflow.md` (workflow fixture and runtime result shape)
 - `src/cli/dogfood.ts` (current CLI flags + per-mode fixture resolution)
 - `src/runtime/router.ts` (router bypass behavior for explicit workflow names)

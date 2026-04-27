@@ -4,7 +4,7 @@ import { ControlPlaneFileStem } from './primitives.js';
 import { SnapshotStatus } from './snapshot.js';
 
 /**
- * Continuity surfaces — specs/contracts/continuity.md v0.1.
+ * Continuity surfaces — docs/contracts/continuity.md v0.1.
  *
  * Authority: artifact_ids [`continuity.record`, `continuity.index`] in
  * `specs/artifacts.json`, both classified `successor-to-live` /

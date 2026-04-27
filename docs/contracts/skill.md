@@ -103,7 +103,7 @@ invariants are enforced via `src/schemas/skill.ts` and tested in
   parse time.
 
   **Semantic asymmetry note.** `SelectionOverride.skills` (see
-  `specs/contracts/selection.md` SEL-I3) uses `[]` meaningfully (an
+  `docs/contracts/selection.md` SEL-I3) uses `[]` meaningfully (an
   `override` mode with empty list is a "clear to none" operation).
   `SkillDescriptor.capabilities` does not, because the descriptor is a
   static catalog entry — there is no "clear to none" semantic.
@@ -178,7 +178,7 @@ After a `SkillDescriptor` is accepted:
 
 - **ids**: `SkillId` — descriptor identity.
 - **selection-policy**: `SkillOverride.skills` (see
-  `specs/contracts/selection.md` SEL-I3) references `SkillId` values
+  `docs/contracts/selection.md` SEL-I3) references `SkillId` values
   that MUST resolve to a descriptor in the compiled catalog. The
   resolver is catalog-compiler work; the contract-level guarantee is
   that `SkillOverride` and `SkillDescriptor` agree on the id shape

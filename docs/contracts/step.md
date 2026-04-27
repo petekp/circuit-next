@@ -63,7 +63,7 @@ enforced via `src/schemas/step.ts`, `src/schemas/gate.ts`, and
 - **STEP-I2 — Non-empty routes.** Every Step declares at least one route
   target. The `routes` record is refined at `src/schemas/step.ts:L20-L22`
   (`Object.keys(m).length > 0`). Route target closure is enforced at the
-  Workflow level (see `specs/contracts/workflow.md` WF-I4), not in the
+  Workflow level (see `docs/contracts/workflow.md` WF-I4), not in the
   Step contract.
 
 - **STEP-I3 — Gate source closure (adversarial-review MED #7 closed).**
@@ -224,7 +224,7 @@ Property-based tests will cover:
   steps. The confusion is structurally eliminated.
 - `carry-forward:gate-source-opacity` — Prior to this contract, gate
   sources were opaque strings (adversarial-review MED #7). Closed by
-  STEP-I3 + STEP-I4; see `specs/contracts/workflow.md` "Gate source
+  STEP-I3 + STEP-I4; see `docs/contracts/workflow.md` "Gate source
   tightening" for the transition record.
 
 ## Evolution

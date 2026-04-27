@@ -80,7 +80,7 @@ metacharacters:
    If `outcome === 'aborted'`, read `artifacts/result.json` at `result_path`
    to surface the abort `reason` — the runtime mirrors that reason
    byte-for-byte from the gate-evaluation layer per
-   `specs/contracts/explore.md §Dispatch gate-evaluation semantics` and
+   `src/workflows/explore/contract.md §Dispatch gate-evaluation semantics` and
    the `RunResult.reason` schema field.
 
 5. **Do not modify the CLI output before surfacing.** The run root + artifact
@@ -95,5 +95,5 @@ map it to the flag; otherwise omit the flag and accept the default.
 
 ## Authority
 
-- `specs/contracts/explore.md` (workflow contract + dispatch semantics)
+- `src/workflows/explore/contract.md` (workflow contract + dispatch semantics)
 - `src/runtime/` (current runner)

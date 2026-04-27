@@ -92,6 +92,6 @@ metacharacters:
 
 ## Authority
 
-- `specs/contracts/workflow.md` (workflow fixture and runtime result shape)
+- `docs/contracts/workflow.md` (workflow fixture and runtime result shape)
 - `src/cli/circuit.ts` (current CLI flags)
 - `src/runtime/router.ts` (router bypass behavior for explicit workflow names)

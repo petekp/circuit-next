@@ -79,6 +79,6 @@ omit the flag and accept the default.
 
 ## Authority
 
-- `specs/contracts/review.md` (review workflow contract)
+- `src/workflows/review/contract.md` (review workflow contract)
 - `tests/runner/review-runtime-wiring.test.ts` (default registered review
   synthesis writer)

@@ -178,7 +178,7 @@ const VERSION_CAPTURE_TIMEOUT_MS = 5_000;
 
 // `CodexDispatchInput` does NOT carry a cwd field at v0. The codex
 // subprocess inherits the parent Node process's cwd via `spawn`'s
-// default behavior. This is intentional: `specs/contracts/adapter.md`
+// default behavior. This is intentional: `docs/contracts/adapter.md`
 // ADAPTER-I1 codex bullet says the adapter runs "in the operator's
 // current session context," which at v0 is the parent cwd. If a future
 // slice needs per-dispatch cwd override (distinct-UID sandbox, git

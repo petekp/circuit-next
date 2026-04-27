@@ -183,7 +183,7 @@ error (observed behavior: the resume flow surfaces the mismatch).
 `continuity.index` is `unknown-blocking` in `specs/artifacts.json` — we
 have not yet decided whether circuit-next should refuse to resume, warn,
 or silently drop when the index points at an absent record. That
-decision belongs in the forthcoming `specs/contracts/continuity.md`,
+decision belongs in the forthcoming `docs/contracts/continuity.md`,
 not in this characterization.
 
 ## Explicit clean-break decision
@@ -212,7 +212,7 @@ continuity, the path is:
 If old Circuit continuity is ever imported:
 
 - The importer is a **separate contract** from
-  `specs/contracts/continuity.md`.
+  `docs/contracts/continuity.md`.
 - The runtime `ContinuityRecord` schema MUST NOT accept old Circuit shape
   directly. An importer normalizes or rejects; the runtime schema stays
   strict.

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Contract + behavioral-track invariant/property ledger. Closes AR-M2 from specs/reviews/arc-progress-codex.md. Scope: specs/contracts/*.md + specs/behavioral/*.md. Out of scope: CLAUDE.md hard invariants, specs/evidence.md invariants, ADR-level invariants (documented exclusion per Slice 25 Codex challenger MED #9 fold-in; deferred to v0.2).",
+  "description": "Contract + behavioral-track invariant/property ledger. Scope: docs/contracts/*.md (generic engine contracts) + src/workflows/*/contract.md (per-workflow contracts) + specs/behavioral/*.md. Out of scope: CLAUDE.md hard invariants, specs/evidence.md invariants, ADR-level invariants.",
   "enforcement_state_semantics": {
     "test-enforced": "Invariant id appears as a token in at least one binding_ref test-file path (describe/it title or assertion message). Eligibility: required default for any contract invariant stated as 'MUST reject', 'MUST enforce', or 'is rejected'.",
     "audit-only": "Invariant id appears as a token in scripts/audit.mjs. Eligibility: audit-layer or discipline invariants (session hygiene, lane discipline, citation rule).",
@@ -19,7 +19,7 @@
       "contract": "adapter",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/adapter.md#ADAPTER-I1",
+      "source_anchor": "docs/contracts/adapter.md#ADAPTER-I1",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -27,7 +27,7 @@
       "contract": "adapter",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/adapter.md#ADAPTER-I2",
+      "source_anchor": "docs/contracts/adapter.md#ADAPTER-I2",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -35,7 +35,7 @@
       "contract": "adapter",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/adapter.md#ADAPTER-I3",
+      "source_anchor": "docs/contracts/adapter.md#ADAPTER-I3",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -43,7 +43,7 @@
       "contract": "adapter",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/adapter.md#ADAPTER-I4",
+      "source_anchor": "docs/contracts/adapter.md#ADAPTER-I4",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -51,7 +51,7 @@
       "contract": "adapter",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/adapter.md#ADAPTER-I5",
+      "source_anchor": "docs/contracts/adapter.md#ADAPTER-I5",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -59,7 +59,7 @@
       "contract": "adapter",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/adapter.md#ADAPTER-I6",
+      "source_anchor": "docs/contracts/adapter.md#ADAPTER-I6",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -67,7 +67,7 @@
       "contract": "adapter",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/adapter.md#ADAPTER-I7",
+      "source_anchor": "docs/contracts/adapter.md#ADAPTER-I7",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -75,7 +75,7 @@
       "contract": "adapter",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/adapter.md#ADAPTER-I8",
+      "source_anchor": "docs/contracts/adapter.md#ADAPTER-I8",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -83,7 +83,7 @@
       "contract": "adapter",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/adapter.md#ADAPTER-I9",
+      "source_anchor": "docs/contracts/adapter.md#ADAPTER-I9",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -91,7 +91,7 @@
       "contract": "adapter",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/adapter.md#ADAPTER-I10",
+      "source_anchor": "docs/contracts/adapter.md#ADAPTER-I10",
       "binding_refs": [
         { "path": "tests/contracts/artifact-authority.test.ts", "kind": "assertion_message" }
       ]
@@ -101,7 +101,7 @@
       "contract": "adapter",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/adapter.md#ADAPTER-I11",
+      "source_anchor": "docs/contracts/adapter.md#ADAPTER-I11",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
 
@@ -110,7 +110,7 @@
       "contract": "config",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/config.md#CONFIG-I1",
+      "source_anchor": "docs/contracts/config.md#CONFIG-I1",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -118,7 +118,7 @@
       "contract": "config",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/config.md#CONFIG-I2",
+      "source_anchor": "docs/contracts/config.md#CONFIG-I2",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -126,7 +126,7 @@
       "contract": "config",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/config.md#CONFIG-I3",
+      "source_anchor": "docs/contracts/config.md#CONFIG-I3",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -134,7 +134,7 @@
       "contract": "config",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/config.md#CONFIG-I4",
+      "source_anchor": "docs/contracts/config.md#CONFIG-I4",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -142,7 +142,7 @@
       "contract": "config",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/config.md#CONFIG-I5",
+      "source_anchor": "docs/contracts/config.md#CONFIG-I5",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -150,7 +150,7 @@
       "contract": "config",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/config.md#CONFIG-I6",
+      "source_anchor": "docs/contracts/config.md#CONFIG-I6",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -158,7 +158,7 @@
       "contract": "config",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/config.md#CONFIG-I7",
+      "source_anchor": "docs/contracts/config.md#CONFIG-I7",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -166,7 +166,7 @@
       "contract": "config",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/config.md#CONFIG-I8",
+      "source_anchor": "docs/contracts/config.md#CONFIG-I8",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
 
@@ -175,7 +175,7 @@
       "contract": "continuity",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/continuity.md#CONT-I1",
+      "source_anchor": "docs/contracts/continuity.md#CONT-I1",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -183,7 +183,7 @@
       "contract": "continuity",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/continuity.md#CONT-I2",
+      "source_anchor": "docs/contracts/continuity.md#CONT-I2",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -191,7 +191,7 @@
       "contract": "continuity",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/continuity.md#CONT-I3",
+      "source_anchor": "docs/contracts/continuity.md#CONT-I3",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -199,7 +199,7 @@
       "contract": "continuity",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/continuity.md#CONT-I4",
+      "source_anchor": "docs/contracts/continuity.md#CONT-I4",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -207,7 +207,7 @@
       "contract": "continuity",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/continuity.md#CONT-I5",
+      "source_anchor": "docs/contracts/continuity.md#CONT-I5",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -215,7 +215,7 @@
       "contract": "continuity",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/continuity.md#CONT-I6",
+      "source_anchor": "docs/contracts/continuity.md#CONT-I6",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -223,7 +223,7 @@
       "contract": "continuity",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/continuity.md#CONT-I7",
+      "source_anchor": "docs/contracts/continuity.md#CONT-I7",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -231,7 +231,7 @@
       "contract": "continuity",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/continuity.md#CONT-I8",
+      "source_anchor": "docs/contracts/continuity.md#CONT-I8",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -239,7 +239,7 @@
       "contract": "continuity",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/continuity.md#CONT-I9",
+      "source_anchor": "docs/contracts/continuity.md#CONT-I9",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -247,7 +247,7 @@
       "contract": "continuity",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/continuity.md#CONT-I10",
+      "source_anchor": "docs/contracts/continuity.md#CONT-I10",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -255,7 +255,7 @@
       "contract": "continuity",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/continuity.md#CONT-I11",
+      "source_anchor": "docs/contracts/continuity.md#CONT-I11",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -263,7 +263,7 @@
       "contract": "continuity",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/continuity.md#CONT-I12",
+      "source_anchor": "docs/contracts/continuity.md#CONT-I12",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
 
@@ -272,7 +272,7 @@
       "contract": "phase",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/phase.md#PHASE-I1",
+      "source_anchor": "docs/contracts/phase.md#PHASE-I1",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -280,7 +280,7 @@
       "contract": "phase",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/phase.md#PHASE-I2",
+      "source_anchor": "docs/contracts/phase.md#PHASE-I2",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -288,7 +288,7 @@
       "contract": "phase",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/phase.md#PHASE-I3",
+      "source_anchor": "docs/contracts/phase.md#PHASE-I3",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -296,7 +296,7 @@
       "contract": "phase",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/phase.md#PHASE-I4",
+      "source_anchor": "docs/contracts/phase.md#PHASE-I4",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -304,7 +304,7 @@
       "contract": "phase",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/phase.md#PHASE-I5",
+      "source_anchor": "docs/contracts/phase.md#PHASE-I5",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -312,7 +312,7 @@
       "contract": "phase",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/phase.md#PHASE-I6",
+      "source_anchor": "docs/contracts/phase.md#PHASE-I6",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
 
@@ -344,7 +344,7 @@
       "contract": "run",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/run.md#RUN-I1",
+      "source_anchor": "docs/contracts/run.md#RUN-I1",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -352,7 +352,7 @@
       "contract": "run",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/run.md#RUN-I2",
+      "source_anchor": "docs/contracts/run.md#RUN-I2",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -360,7 +360,7 @@
       "contract": "run",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/run.md#RUN-I3",
+      "source_anchor": "docs/contracts/run.md#RUN-I3",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -368,7 +368,7 @@
       "contract": "run",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/run.md#RUN-I4",
+      "source_anchor": "docs/contracts/run.md#RUN-I4",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -376,7 +376,7 @@
       "contract": "run",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/run.md#RUN-I5",
+      "source_anchor": "docs/contracts/run.md#RUN-I5",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -384,7 +384,7 @@
       "contract": "run",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/run.md#RUN-I6",
+      "source_anchor": "docs/contracts/run.md#RUN-I6",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -392,7 +392,7 @@
       "contract": "run",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/run.md#RUN-I7",
+      "source_anchor": "docs/contracts/run.md#RUN-I7",
       "binding_refs": [
         { "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" },
         { "path": "tests/runner/terminal-outcome-mapping.test.ts", "kind": "test_title" }
@@ -403,7 +403,7 @@
       "contract": "run",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/run.md#RUN-I8",
+      "source_anchor": "docs/contracts/run.md#RUN-I8",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
 
@@ -412,7 +412,7 @@
       "contract": "selection",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/selection.md#SEL-I1",
+      "source_anchor": "docs/contracts/selection.md#SEL-I1",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -420,7 +420,7 @@
       "contract": "selection",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/selection.md#SEL-I2",
+      "source_anchor": "docs/contracts/selection.md#SEL-I2",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -428,7 +428,7 @@
       "contract": "selection",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/selection.md#SEL-I3",
+      "source_anchor": "docs/contracts/selection.md#SEL-I3",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -436,7 +436,7 @@
       "contract": "selection",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/selection.md#SEL-I4",
+      "source_anchor": "docs/contracts/selection.md#SEL-I4",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -444,7 +444,7 @@
       "contract": "selection",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/selection.md#SEL-I5",
+      "source_anchor": "docs/contracts/selection.md#SEL-I5",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -452,7 +452,7 @@
       "contract": "selection",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/selection.md#SEL-I6",
+      "source_anchor": "docs/contracts/selection.md#SEL-I6",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -460,7 +460,7 @@
       "contract": "selection",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/selection.md#SEL-I7",
+      "source_anchor": "docs/contracts/selection.md#SEL-I7",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -468,7 +468,7 @@
       "contract": "selection",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/selection.md#SEL-I8",
+      "source_anchor": "docs/contracts/selection.md#SEL-I8",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -476,7 +476,7 @@
       "contract": "selection",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/selection.md#SEL-I9",
+      "source_anchor": "docs/contracts/selection.md#SEL-I9",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
 
@@ -485,7 +485,7 @@
       "contract": "skill",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/skill.md#SKILL-I1",
+      "source_anchor": "docs/contracts/skill.md#SKILL-I1",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -493,7 +493,7 @@
       "contract": "skill",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/skill.md#SKILL-I2",
+      "source_anchor": "docs/contracts/skill.md#SKILL-I2",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -501,7 +501,7 @@
       "contract": "skill",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/skill.md#SKILL-I3",
+      "source_anchor": "docs/contracts/skill.md#SKILL-I3",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -509,7 +509,7 @@
       "contract": "skill",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/skill.md#SKILL-I4",
+      "source_anchor": "docs/contracts/skill.md#SKILL-I4",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -517,7 +517,7 @@
       "contract": "skill",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/skill.md#SKILL-I5",
+      "source_anchor": "docs/contracts/skill.md#SKILL-I5",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -525,7 +525,7 @@
       "contract": "skill",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/skill.md#SKILL-I6",
+      "source_anchor": "docs/contracts/skill.md#SKILL-I6",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
 
@@ -534,7 +534,7 @@
       "contract": "step",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/step.md#STEP-I1",
+      "source_anchor": "docs/contracts/step.md#STEP-I1",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -542,7 +542,7 @@
       "contract": "step",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/step.md#STEP-I2",
+      "source_anchor": "docs/contracts/step.md#STEP-I2",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -550,7 +550,7 @@
       "contract": "step",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/step.md#STEP-I3",
+      "source_anchor": "docs/contracts/step.md#STEP-I3",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -558,7 +558,7 @@
       "contract": "step",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/step.md#STEP-I4",
+      "source_anchor": "docs/contracts/step.md#STEP-I4",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -566,7 +566,7 @@
       "contract": "step",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/step.md#STEP-I5",
+      "source_anchor": "docs/contracts/step.md#STEP-I5",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -574,7 +574,7 @@
       "contract": "step",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/step.md#STEP-I6",
+      "source_anchor": "docs/contracts/step.md#STEP-I6",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -582,7 +582,7 @@
       "contract": "step",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/step.md#STEP-I7",
+      "source_anchor": "docs/contracts/step.md#STEP-I7",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
@@ -590,7 +590,7 @@
       "contract": "step",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/step.md#STEP-I8",
+      "source_anchor": "docs/contracts/step.md#STEP-I8",
       "binding_refs": [
         { "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" },
         { "path": "tests/runner/run-relative-path.test.ts", "kind": "test_title" }
@@ -601,7 +601,7 @@
       "contract": "step",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/step.md#STEP-I9",
+      "source_anchor": "docs/contracts/step.md#STEP-I9",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
 
@@ -610,7 +610,7 @@
       "contract": "workflow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/workflow.md#WF-I1",
+      "source_anchor": "docs/contracts/workflow.md#WF-I1",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }],
       "rationale": "Unique step ids enforced by Workflow superRefine in src/schemas/workflow.ts. Slice 27 workflow.md v0.2 exits the skeleton grandfather and binds WF-I1 to a per-invariant titled negative test."
     },
@@ -619,7 +619,7 @@
       "contract": "workflow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/workflow.md#WF-I2",
+      "source_anchor": "docs/contracts/workflow.md#WF-I2",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }],
       "rationale": "Closed entry_modes.start_at references enforced by Workflow superRefine. Slice 27 upgrade from static-anchor to test-enforced via per-invariant titled negative test."
     },
@@ -628,7 +628,7 @@
       "contract": "workflow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/workflow.md#WF-I3",
+      "source_anchor": "docs/contracts/workflow.md#WF-I3",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }],
       "rationale": "Closed phase step references enforced by Workflow superRefine. Slice 27 upgrade from static-anchor to test-enforced via per-invariant titled negative test."
     },
@@ -637,7 +637,7 @@
       "contract": "workflow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/workflow.md#WF-I4",
+      "source_anchor": "docs/contracts/workflow.md#WF-I4",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }],
       "rationale": "Closed route targets enforced by Workflow superRefine. Slice 27 upgrade from static-anchor to test-enforced via per-invariant titled negative test."
     },
@@ -646,7 +646,7 @@
       "contract": "workflow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/workflow.md#WF-I5",
+      "source_anchor": "docs/contracts/workflow.md#WF-I5",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }],
       "rationale": "Unique entry-mode names enforced by Workflow superRefine. Slice 27 upgrade adds per-invariant titled negative test."
     },
@@ -655,7 +655,7 @@
       "contract": "workflow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/workflow.md#WF-I6",
+      "source_anchor": "docs/contracts/workflow.md#WF-I6",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }],
       "rationale": "Unique phase ids enforced by Workflow superRefine. Slice 27 upgrade adds per-invariant titled negative test."
     },
@@ -664,7 +664,7 @@
       "contract": "workflow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/workflow.md#WF-I7",
+      "source_anchor": "docs/contracts/workflow.md#WF-I7",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }],
       "rationale": "schema_version=2 enforced by the Workflow literal field on WorkflowBody (before superRefine). Slice 27 upgrade adds per-invariant titled negative test rejecting non-'2' schema_version values (Codex challenger LOW #8 fold-in — prior phrasing said 'surplus unknown literals' which conflated literal-mismatch with strict-key rejection)."
     },
@@ -673,7 +673,7 @@
       "contract": "workflow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/workflow.md#WF-I8",
+      "source_anchor": "docs/contracts/workflow.md#WF-I8",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }],
       "rationale": "Terminal reachability enforced by Workflow superRefine via iterative fixpoint over terminal-reaching steps. New in Slice 27 workflow.md v0.2 — structural requirement for dogfood-run-0: a workflow fixture where some step cannot reach @complete/@stop/@escalate/@handoff would bootstrap a Run that could never emit run.closed."
     },
@@ -682,7 +682,7 @@
       "contract": "workflow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/workflow.md#WF-I9",
+      "source_anchor": "docs/contracts/workflow.md#WF-I9",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }],
       "rationale": "No dead steps enforced by Workflow superRefine via BFS from every entry_mode.start_at. New in Slice 27 workflow.md v0.2 — a declared step not reachable from any entry is a silent declaration bug for dogfood fixtures. The reachability pass is gated on WF-I1/WF-I4/WF-I2 structural soundness (allEntryStartsKnown precondition) so a single WF-I2 violation does not cascade into WF-I9 noise (Codex challenger MED #4 fold-in)."
     },
@@ -691,7 +691,7 @@
       "contract": "workflow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/workflow.md#WF-I10",
+      "source_anchor": "docs/contracts/workflow.md#WF-I10",
       "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }],
       "rationale": "Pass-route presence enforced by Workflow superRefine — every step's routes map must contain key 'pass'. GateEvaluatedEvent.outcome is z.enum(['pass','fail']) uniformly across all three gate kinds (src/schemas/event.ts), so a successful gate outcome routes through routes['pass']. New in Slice 27 workflow.md v0.2 as Codex challenger HIGH #1 fold-in — closes the WF-I8 graph-reachable-but-runtime-unselectable hole (fixture routes like { success: '@complete' } would satisfy WF-I8 and stall at runtime). `fail`-route presence deferred to v0.3 / Phase 2."
     },
@@ -700,7 +700,7 @@
       "contract": "workflow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "specs/contracts/workflow.md#WF-I11",
+      "source_anchor": "docs/contracts/workflow.md#WF-I11",
       "binding_refs": [
         { "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" },
         { "path": "tests/runner/pass-route-cycle-guard.test.ts", "kind": "test_title" }

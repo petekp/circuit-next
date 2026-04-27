@@ -335,7 +335,7 @@ export type FanoutStep = z.infer<typeof FanoutStep>;
 // Step variants must be `ZodObject`-shaped for `discriminatedUnion`; the
 // cross-field `gate.source.ref` closure check lives at the union level so
 // the variant schemas stay ZodObject. See CHARTER.md Seam B and
-// `specs/contracts/step.md` STEP-I3.
+// `docs/contracts/step.md` STEP-I3.
 //
 // `Object.hasOwn` closes Codex review HIGH #1 (prototype-chain `in` attack).
 // The `!== undefined` guard closes HIGH #3 (optional slot present-but-

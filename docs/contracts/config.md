@@ -21,9 +21,9 @@ three related surfaces:
 
 1. **`Config`** — the top-level shape a single layer contributes, combining
    `schema_version`, a `DispatchConfig` (see
-   `specs/contracts/adapter.md`), a map of per-circuit overrides
+   `docs/contracts/adapter.md`), a map of per-circuit overrides
    (`CircuitOverride`), and a `defaults` object carrying a
-   `SelectionOverride` (see `specs/contracts/selection.md`).
+   `SelectionOverride` (see `docs/contracts/selection.md`).
 2. **`LayeredConfig`** — the layer-identity wrapper around a `Config`:
    which `ConfigLayer` produced it and (optionally) the source path that
    backs it.
@@ -41,7 +41,7 @@ It does NOT cover:
 
 - Layer **composition semantics** (right-biased merge order; default <
   user-global < project < invocation). Selection-level composition is
-  owned by `specs/contracts/selection.md` SEL-I5..I8; config-file
+  owned by `docs/contracts/selection.md` SEL-I5..I8; config-file
   composition for non-selection fields (e.g. merging two layers'
   `dispatch.roles` maps) is reserved for v0.2 with an explicit ADR.
 - **Discovery and load semantics** beyond the canonical runtime path.
@@ -51,11 +51,11 @@ It does NOT cover:
   policy (alternate filenames, upward project-root search, TOML/JSON
   variants, and recovery UX) remains outside this static shape contract.
 - **Dispatch resolution** inside `DispatchConfig` (precedence and
-  registry closure). Those live in `specs/contracts/adapter.md`
+  registry closure). Those live in `docs/contracts/adapter.md`
   (ADAPTER-I7/I8).
 - **Selection override shape** inside `Config.defaults.selection` and
   `CircuitOverride.selection`. That shape is owned by
-  `specs/contracts/selection.md` (SEL-I1..I4).
+  `docs/contracts/selection.md` (SEL-I1..I4).
 
 ## Ubiquitous language
 
@@ -192,11 +192,11 @@ After a `Config` is accepted:
 
 - `schema_version === 1` (CONFIG-I6).
 - `dispatch` satisfies `DispatchConfig` invariants
-  (`specs/contracts/adapter.md` ADAPTER-I1..ADAPTER-I11).
+  (`docs/contracts/adapter.md` ADAPTER-I1..ADAPTER-I11).
 - `circuits` is a record whose keys are `WorkflowId`s and whose values
   are `CircuitOverride`s.
 - `defaults.selection` (when present) is a `SelectionOverride` per
-  `specs/contracts/selection.md` SEL-I1..SEL-I4.
+  `docs/contracts/selection.md` SEL-I1..SEL-I4.
 - No surplus keys in any **declared object shape** under this
   contract's ownership (CONFIG-I1 + CONFIG-I4) or under delegated
   contracts' ownership (ADAPTER-I9 transitivity + SEL-I8 nested
@@ -254,7 +254,7 @@ After a `CircuitOverride` is accepted:
   taints the composed view. The property is deliberately named
   **composition** rather than **right-biased merge** because
   selection-layer projection IS right-biased (per
-  `specs/contracts/selection.md` SEL-I5..I8) but non-selection
+  `docs/contracts/selection.md` SEL-I5..I8) but non-selection
   config-file composition (merging two layers' `dispatch.roles`
   maps, for instance) is still ADR-pending at v0.2. The strictness
   claim holds under any composition semantics that preserves
@@ -264,7 +264,7 @@ After a `CircuitOverride` is accepted:
 
 - `config.prop.circuit_override_record_closed_under_workflow_id` —
   Every key in `Config.circuits` is a valid `WorkflowId` per
-  `specs/contracts/ids.ts`. A record key that matches the `WorkflowId`
+  `src/schemas/ids.ts`. A record key that matches the `WorkflowId`
   regex but references a workflow not installed in the catalog at
   dispatch time is LEGAL (per-circuit overrides for
   not-yet-installed workflows are allowed — same posture as
@@ -276,7 +276,7 @@ After a `CircuitOverride` is accepted:
 
 ## Cross-contract dependencies
 
-- **adapter** (`src/schemas/adapter.ts`, `specs/contracts/adapter.md`) —
+- **adapter** (`src/schemas/adapter.ts`, `docs/contracts/adapter.md`) —
   `Config.dispatch` is a `DispatchConfig`, which owns
   ADAPTER-I1..ADAPTER-I11. The adapter contract's strictness-
   transitivity (ADAPTER-I9) composes with CONFIG-I1 at parse time:
@@ -287,7 +287,7 @@ After a `CircuitOverride` is accepted:
   compose without gap.
 
 - **selection-policy** (`src/schemas/selection-policy.ts`,
-  `specs/contracts/selection.md`) — `Config.defaults.selection`
+  `docs/contracts/selection.md`) — `Config.defaults.selection`
   (when present) and `CircuitOverride.selection` (when present) are
   `SelectionOverride`s. Selection-layer invariants (SEL-I1..SEL-I4)
   apply. The `default` selection layer in the 7-tuple
@@ -417,7 +417,7 @@ After a `CircuitOverride` is accepted:
   `tests/properties/visible/config/`. Decide whether layer
   composition semantics (the merge resolver across multiple
   `LayeredConfig`s) belongs to this contract or to a new
-  `specs/contracts/config-composition.md`. Precedent suggests
+  `docs/contracts/config-composition.md`. Precedent suggests
   separate: adapter composition lives in adapter.md only through
   `DispatchConfig.superRefine`; selection composition lives in
   `selection.md` through `SelectionResolution`. Config-file

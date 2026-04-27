@@ -17,7 +17,7 @@ import { type DispatchFn, runWorkflow } from '../../src/runtime/runner.js';
 // wrote the canonical artifact at `writes.artifact.path` as the raw
 // `result_body` bytes without any schema parse — flagged in the
 // materializer's own header block as "v0 no schema parsing." The
-// contract MUST at `specs/contracts/explore.md` and ADR-0008
+// contract MUST at `src/workflows/explore/contract.md` and ADR-0008
 // §Decision.3a both require schema-parsing the result payload
 // against `writes.artifact.schema` BEFORE the canonical artifact is
 // materialized. Slice 54 closes that gap.
@@ -89,7 +89,7 @@ function lane(): LaneDeclaration {
   return {
     lane: 'ratchet-advance',
     failure_mode:
-      'materializer wrote the canonical artifact as raw result_body bytes without schema parse; explore contract MUST at specs/contracts/explore.md + ADR-0008 §Decision.3a both require schema-parsing result_body against writes.artifact.schema before materialization (Codex H15)',
+      'materializer wrote the canonical artifact as raw result_body bytes without schema parse; explore contract MUST at src/workflows/explore/contract.md + ADR-0008 §Decision.3a both require schema-parsing result_body against writes.artifact.schema before materialization (Codex H15)',
     acceptance_evidence:
       'artifact write requires both the Slice 53 verdict gate pass AND a new schema-parse pass against writes.artifact.schema; unknown schemas fail-closed by default; failure emits gate.evaluated outcome=fail + step.aborted + run.closed outcome=aborted with the reason byte-identical across the three events and on the user-visible result.json',
     alternate_framing:

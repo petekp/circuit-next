@@ -357,7 +357,7 @@ Phase 2 harness task where noted below.
 
 - **phase** (`src/schemas/phase.ts`) — `Phase.selection:
   SelectionOverride.optional()` (SEL-I9). Cross-references
-  `specs/contracts/phase.md`; the `Phase` schema now imports
+  `docs/contracts/phase.md`; the `Phase` schema now imports
   `SelectionOverride` and extends `PhaseBody` with the optional
   `selection` field. PHASE-I2 `.strict()` still governs surplus-key
   rejection; adding `selection` as a declared field expands what's
@@ -391,7 +391,7 @@ Phase 2 harness task where noted below.
   removed (it accepted arbitrary non-`SkillId` strings); per-circuit
   skill contribution flows through `CircuitOverride.selection.skills`
   via typed `SkillOverride`. Config reorganization is out of scope for
-  this contract; see `specs/contracts/config.md` (pending Phase 1 close Slice 26) for layer
+  this contract; see `docs/contracts/config.md` (pending Phase 1 close Slice 26) for layer
   materialization.
 
 - **event** (`src/schemas/event.ts`) — `DispatchStartedEvent`

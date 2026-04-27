@@ -180,7 +180,7 @@ describe('SelectionOverride', () => {
   });
 });
 
-describe('SkillDescriptor — SKILL-I1..I5 from specs/contracts/skill.md v0.1', () => {
+describe('SkillDescriptor — SKILL-I1..I5 from docs/contracts/skill.md v0.1', () => {
   const base = {
     id: 'tdd',
     title: 'Test-Driven Development',
@@ -1544,7 +1544,7 @@ describe('Config + adapter registry (adversarial-review fix #5)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Continuity contract — CONT-I1..I11 from specs/contracts/continuity.md v0.1
+// Continuity contract — CONT-I1..I11 from docs/contracts/continuity.md v0.1
 // ---------------------------------------------------------------------------
 
 const CONT_RUN = '0191d2f0-cccc-7fff-8aaa-000000000030' as const;
@@ -2086,7 +2086,7 @@ describe('Continuity LOW #6 coverage additions', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Run contract — RUN-I1..I8 from specs/contracts/run.md v0.1
+// Run contract — RUN-I1..I8 from docs/contracts/run.md v0.1
 // ---------------------------------------------------------------------------
 
 const RUN_A = '0191d2f0-aaaa-7fff-8aaa-000000000000';
@@ -2833,7 +2833,7 @@ describe('RunLog rejects prototype-chain inherited identity keys (RUN-I3 defense
   });
 });
 
-// Selection contract — SEL-I1..I9 from specs/contracts/selection.md v0.1.
+// Selection contract — SEL-I1..I9 from docs/contracts/selection.md v0.1.
 // Each invariant gets positive + negative coverage; SEL-I6/I7 get adversarial
 // permutations of the applied chain to guard against accidental ordering or
 // uniqueness regressions in future resolver changes.

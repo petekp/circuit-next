@@ -125,15 +125,15 @@ Property-based tests will cover:
 ## Cross-contract dependencies
 
 - **step**: Workflow embeds `Step[]`. Step variant invariants (WF-depends-
-  on-Step) are in `specs/contracts/step.md`.
+  on-Step) are in `docs/contracts/step.md`.
 - **phase**: Workflow embeds `Phase[]`. Phase invariants in
-  `specs/contracts/phase.md` (ratified v0.1; PHASE-I1..I5 + spine_policy enforcement).
+  `docs/contracts/phase.md` (ratified v0.1; PHASE-I1..I5 + spine_policy enforcement).
 - **rigor**: `EntryMode.rigor` must be a valid `Rigor` value.
 - **lane**: `EntryMode.default_lane` is optional; when present, must be
   a valid `Lane` literal.
 - **selection-policy**: `Workflow.default_selection` is a
   `SelectionOverride` and obeys selection precedence (see
-  `specs/contracts/selection.md`).
+  `docs/contracts/selection.md`).
 
 ## Failure modes (carried from evidence)
 
@@ -149,7 +149,7 @@ Property-based tests will cover:
   modes: `strict` (all seven canonical phases required) and `partial`
   (explicit `omits` + rationale ≥20 chars). Silent skip of `review` or
   `verify` is now rejected at parse time. See
-  `specs/contracts/phase.md` PHASE-I4. Adversarial-review MED #11 is
+  `docs/contracts/phase.md` PHASE-I4. Adversarial-review MED #11 is
   closed.
 
 ## Gate source tightening
@@ -160,7 +160,7 @@ sources are typed per gate variant: `SchemaSectionsGate.source` is
 `CheckpointResponseSource`, `ResultVerdictGate.source` is
 `DispatchResultSource`. The `Step` discriminated union validates
 `gate.source.ref` against the step variant's `writes` slots via
-`superRefine`. See `specs/contracts/step.md` invariants STEP-I3 and
+`superRefine`. See `docs/contracts/step.md` invariants STEP-I3 and
 STEP-I4.
 
 ## Evolution
@@ -199,7 +199,7 @@ STEP-I4.
   source tightening" section above. Spine policy (v0.1 adversarial
   MED #11) **closed in phase.md v0.1** — `Workflow.spine_policy` is a
   required discriminated union enforced in `Workflow.superRefine`. See
-  `specs/contracts/phase.md` PHASE-I4. **Deferred to v0.3 / Phase 2:**
+  `docs/contracts/phase.md` PHASE-I4. **Deferred to v0.3 / Phase 2:**
   (a) ratified property-test harness registration for the five reserved
   `workflow.prop.*` ids (Slice 29 property registry scaffold);
   (b) `fail`-route presence — not part of the narrow dogfood-run-0
@@ -207,7 +207,7 @@ STEP-I4.
   (c) exact-one-phase step membership (v0.1 bootstrap adversarial
   HIGH #1 subfinding, not closed in this slice — `Phase.steps` closure
   is enforced, but "every `Workflow.steps[]` id appears in exactly one
-  phase" is left for Phase 2 per `specs/contracts/phase.md` §Evolution
+  phase" is left for Phase 2 per `docs/contracts/phase.md` §Evolution
   and will be revisited when manifest compilation starts consuming
   `Phase.steps` as an ordered execution plan).
 - **v1.0 (Phase 2)**: ratified invariants + property tests + operator

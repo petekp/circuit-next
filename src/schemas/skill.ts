@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { SkillId } from './ids.js';
 
 /**
- * SkillDescriptor — specs/contracts/skill.md v0.1.
+ * SkillDescriptor — docs/contracts/skill.md v0.1.
  *
  * Authority: artifact id `skill.descriptor` in specs/artifacts.json
  * (greenfield surface). Represents the compiled catalog entry for a

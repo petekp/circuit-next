@@ -172,7 +172,7 @@ term, propose it here in a new commit before using it elsewhere.
   provenance**). Stored at `<control-plane>/continuity/records/
   ${record_id}.json`; indexed by the **continuity index**. Identity is
   `record_id`, a `ControlPlaneFileStem` used directly as the filename
-  stem. Authority: `specs/contracts/continuity.md` v0.1,
+  stem. Authority: `docs/contracts/continuity.md` v0.1,
   `specs/artifacts.json` artifact id `continuity.record`.
 
 - **Continuity index** `[v0.1]` — The resolver artifact that determines
@@ -181,7 +181,7 @@ term, propose it here in a new commit before using it elsewhere.
   `<control-plane>/continuity/index.json`. Carries two orthogonal
   pointers: **pending-record pointer** and **attached-run pointer**.
   Either may be null; both may be populated. Authority:
-  `specs/contracts/continuity.md` v0.1,
+  `docs/contracts/continuity.md` v0.1,
   `specs/artifacts.json` artifact id `continuity.index`.
 
 - **Resume contract** `[v0.1]` — The posture a continuity record declares
@@ -223,7 +223,7 @@ term, propose it here in a new commit before using it elsewhere.
   YAML frontmatter (~80-100 tokens: id, title, description, trigger);
   L2 is SKILL.md body (<5k tokens, loaded on trigger match); L3 is extra
   files (loaded on explicit demand). Authority:
-  `specs/contracts/skill.md` v0.1; artifact id `skill.descriptor`.
+  `docs/contracts/skill.md` v0.1; artifact id `skill.descriptor`.
 
 - **Plugin** `[draft]` — The Claude Code plugin surface that circuit-next
   installs into: commands, agents, hooks, skills, MCP servers, monitors.

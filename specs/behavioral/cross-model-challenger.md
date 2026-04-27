@@ -50,7 +50,7 @@ using the challenger WELL given that reframing.
   surfaces only.** ADR-0001 names five: ratchet changes, contract-
   relaxation ADRs, migration escrows, discovery-decision promotion,
   and any request to loosen a gate. v0.1 adds a sixth by practice:
-  **every `specs/contracts/*.md` v0.1 authorship**. Per Slice 47c-2
+  **every `docs/contracts/*.md` (engine) and `src/workflows/*/contract.md` (workflow) v0.1 authorship**. Per Slice 47c-2
   operator decision (Option A literal, 2026-04-22) closing Codex
   HIGH 5 from `specs/reviews/phase-2-to-date-comprehensive-codex.md`,
   **"ratchet change" is enforced literally**: any slice that advances
@@ -181,7 +181,7 @@ its per-slice Codex challenger fold-in). Asserts:
   add `codex_adversarial_review`, and remove both the grandfathered
   field AND the allowlist entry in the same slice.
 - Every contract-review file's `contract_target` resolves back to an
-  existing `specs/contracts/<target>.md` (reverse linkage — orphan
+  existing `docs/contracts/<target>.md` or `src/workflows/<target>/contract.md` (reverse linkage — orphan
   review files fail).
 - Every review record at `specs/reviews/*-codex.md` carries the
   **unified base frontmatter** (`reviewer_model`, `review_kind`,

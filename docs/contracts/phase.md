@@ -19,7 +19,7 @@ Phases may optionally align with the **canonical spine** —
 `frame → analyze → plan → act → verify → review → close` — or be workflow-
 specific. A Phase is an organizational layer over Steps; it does not own
 execution semantics. Step invariants (routing, gating, writes) live in
-`specs/contracts/step.md`.
+`docs/contracts/step.md`.
 
 ## Ubiquitous language
 
@@ -208,7 +208,7 @@ exist in Phase 2:
   `Phase.canonical` was optional with no cross-workflow check that
   required canonical labels were present. A malformed workflow could
   silently skip `review`, short-circuiting the cross-model-challenger
-  gate. `specs/contracts/workflow.md` v0.1 flagged this as
+  gate. `docs/contracts/workflow.md` v0.1 flagged this as
   `carry-forward:spine-policy-too-loose`, and `specs/evidence.md`
   §Adversarial MED #11 lists it among the open Tier 0 ratchets. Closed
   by PHASE-I4.

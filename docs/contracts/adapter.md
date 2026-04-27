@@ -366,7 +366,7 @@ invariant; tested in `tests/contracts/schema-parity.test.ts`.
   (CLI flag, config lookup, or auto-detect) into an object and passing
   it to `AdapterRef.safeParse`.
 - A `DispatchConfig` is produced by layering config files (default,
-  user-global, project, invocation) per `specs/contracts/config.md`
+  user-global, project, invocation) per `docs/contracts/config.md`
   (pending Phase 1 close Slice 26; tracked as arc-phase-1-close-codex.md §HIGH #3 correlated-miss) and passing the merged record to `DispatchConfig.safeParse`.
 - Every `AdapterName` referenced in a `NamedAdapterRef` or an
   `AdapterReference` (`kind: 'named'`) must exist in the running
@@ -476,7 +476,7 @@ After a `DispatchStartedEvent` is accepted:
   by `DispatchConfig.roles` and `DispatchStartedEvent.role`. The
   adapter contract constrains how roles are consumed; the step
   contract owns role's existence. Cross-reference
-  `specs/contracts/step.md` STEP-I1 for the executor/role distinction.
+  `docs/contracts/step.md` STEP-I1 for the executor/role distinction.
 
 - **selection-policy** (`src/schemas/selection-policy.ts`) — A step's
   resolved adapter and resolved selection are orthogonal dimensions
@@ -500,7 +500,7 @@ After a `DispatchStartedEvent` is accepted:
   reservation check (ADAPTER-I2) and closure check (ADAPTER-I8) are
   implemented in `DispatchConfig.superRefine`. Config reorganization
   (layer materialization, merge semantics) is out of scope for this
-  contract; see `specs/contracts/config.md` (pending Phase 1 close Slice 26).
+  contract; see `docs/contracts/config.md` (pending Phase 1 close Slice 26).
 
 - **workflow** (`src/schemas/workflow.ts`) — `DispatchConfig.circuits`
   is keyed on `WorkflowId`, so workflow existence is a soft

@@ -6,7 +6,7 @@
 // Fail-closed default. When `writes.artifact.schema` names a schema
 // that is NOT present in the registry below, `parseArtifact` returns
 // a fail result and the runner aborts the step. The contract MUST at
-// specs/contracts/explore.md does not admit a "schema unknown → pass"
+// src/workflows/explore/contract.md does not admit a "schema unknown → pass"
 // path; a future slice that lands a schema authoring surface MUST keep
 // fail-closed as the default for unknown schema names.
 //
