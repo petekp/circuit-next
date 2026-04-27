@@ -28,6 +28,7 @@ import { Workflow } from '../schemas/workflow.js';
 import { materializeDispatch } from './adapters/dispatch-materializer.js';
 import { type AdapterDispatchInput, type DispatchResult, sha256Hex } from './adapters/shared.js';
 import { parseArtifact } from './artifact-schemas.js';
+import { runCrossArtifactValidator } from './cross-artifact-validators.js';
 import { findCheckpointBriefBuilder } from './checkpoint-writers/registry.js';
 import { findCloseBuilder, resolveCloseReadPaths } from './close-writers/registry.js';
 import { readRunLog } from './event-log-reader.js';
@@ -1661,6 +1662,24 @@ async function executeDogfood(ctx: DogfoodExecutionContext): Promise<DogfoodRunR
             reason: `dispatch step '${step.id}': ${parseResult.reason}`,
             observedVerdict: gateEvaluation.verdict,
           };
+        } else {
+          // Cross-artifact validation: enforces constraints that span
+          // more than one artifact (e.g., sweep.batch.items[].candidate_id
+          // ⊆ sweep.queue.to_execute). Returns ok for schemas with no
+          // registered cross-artifact rule.
+          const crossResult = runCrossArtifactValidator(
+            step.writes.artifact.schema,
+            workflow,
+            runRoot,
+            dispatchResult.result_body,
+          );
+          if (crossResult.kind === 'fail') {
+            evaluation = {
+              kind: 'fail',
+              reason: `dispatch step '${step.id}': ${crossResult.reason}`,
+              observedVerdict: gateEvaluation.verdict,
+            };
+          }
         }
       }
       const dispatchCompletedVerdict =
