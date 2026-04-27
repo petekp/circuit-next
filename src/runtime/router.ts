@@ -1,4 +1,5 @@
-// Workflow router — derives routing from src/workflows/catalog.ts.
+// Workflow router — derives routing from src/workflows/catalog.ts via
+// buildRoutablePackages + findDefaultRoutablePackage.
 //
 // Each WorkflowPackage may declare routing metadata (signals, order,
 // optional skipOnPlanningArtifact guard, default-fallback flag). The
@@ -9,21 +10,15 @@
 // The package marked `isDefault` is selected when nothing matches.
 
 import { workflowPackages } from '../workflows/catalog.js';
-import type { WorkflowPackage, WorkflowRoutingMetadata } from '../workflows/types.js';
+import type { WorkflowPackage } from '../workflows/types.js';
+import {
+  type RoutablePackage,
+  buildRoutablePackages,
+  findDefaultRoutablePackage,
+} from './catalog-derivations.js';
 
-interface RoutablePackage {
-  readonly pkg: WorkflowPackage;
-  readonly routing: WorkflowRoutingMetadata;
-}
-
-const ROUTABLE_PACKAGES: readonly RoutablePackage[] = (() => {
-  const out: RoutablePackage[] = [];
-  for (const pkg of workflowPackages) {
-    if (pkg.routing === undefined) continue;
-    out.push({ pkg, routing: pkg.routing });
-  }
-  return out.sort((a, b) => a.routing.order - b.routing.order);
-})();
+const ROUTABLE_PACKAGES = buildRoutablePackages(workflowPackages);
+const DEFAULT_PACKAGE = findDefaultRoutablePackage(ROUTABLE_PACKAGES);
 
 export const ROUTABLE_WORKFLOWS: readonly string[] = Object.freeze(
   ROUTABLE_PACKAGES.map((entry) => entry.pkg.id),
@@ -39,23 +34,18 @@ interface WorkflowRouteDecision {
 const PLANNING_ARTIFACT_SIGNAL =
   /\b(?:proposal|plan|brief|matrix|evaluation\s+matrix|design\s+doc|design\s+document|spec|specification|rfc|memo|document|doc|guide|analysis|evaluation|selection|strategy|outline|report|comparison|recommendation|write-?up|options|approaches)\b/i;
 
-const DEFAULT_PACKAGE: RoutablePackage = (() => {
-  const defaults = ROUTABLE_PACKAGES.filter((entry) => entry.routing.isDefault === true);
-  const [first, ...rest] = defaults;
-  if (first === undefined) {
-    throw new Error('no workflow package marked isDefault — router has no fallback');
-  }
-  if (rest.length > 0) {
-    throw new Error(
-      `more than one default workflow package: ${defaults.map((entry) => entry.pkg.id).join(', ')}`,
-    );
-  }
-  return first;
-})();
-
-export function classifyWorkflowTask(taskText: string): WorkflowRouteDecision {
+// Pure classifier: takes pre-derived routables and a default package.
+// The exported classifyWorkflowTask is a thin wrapper that binds the
+// live catalog. Pulling the logic out lets tests exercise routing
+// invariants (order precedence, isDefault selection, planning-artifact
+// suppression) against synthetic mini-catalogs without vi.mock churn.
+export function classifyTaskAgainstRoutables(
+  taskText: string,
+  routables: readonly RoutablePackage[],
+  defaultPackage: RoutablePackage,
+): WorkflowRouteDecision {
   const hasPlanningArtifact = PLANNING_ARTIFACT_SIGNAL.test(taskText);
-  for (const { pkg, routing } of ROUTABLE_PACKAGES) {
+  for (const { pkg, routing } of routables) {
     if (routing.isDefault) continue;
     for (const signal of routing.signals) {
       if (!signal.pattern.test(taskText)) continue;
@@ -74,10 +64,26 @@ export function classifyWorkflowTask(taskText: string): WorkflowRouteDecision {
     }
   }
   return {
-    workflowName: DEFAULT_PACKAGE.pkg.id,
+    workflowName: defaultPackage.pkg.id,
     source: 'classifier',
     reason:
-      DEFAULT_PACKAGE.routing.defaultReason ??
-      `no signal matched; routed to ${DEFAULT_PACKAGE.pkg.id} as the conservative default`,
+      defaultPackage.routing.defaultReason ??
+      `no signal matched; routed to ${defaultPackage.pkg.id} as the conservative default`,
   };
+}
+
+export function classifyWorkflowTask(taskText: string): WorkflowRouteDecision {
+  return classifyTaskAgainstRoutables(taskText, ROUTABLE_PACKAGES, DEFAULT_PACKAGE);
+}
+
+// Test seam: build the routable + default pair from a synthetic
+// package set so behavioral tests can exercise the classifier
+// independent of the live catalog.
+export function deriveRoutingForTesting(packages: readonly WorkflowPackage[]): {
+  readonly routables: readonly RoutablePackage[];
+  readonly defaultPackage: RoutablePackage;
+} {
+  const routables = buildRoutablePackages(packages);
+  const defaultPackage = findDefaultRoutablePackage(routables);
+  return { routables, defaultPackage };
 }

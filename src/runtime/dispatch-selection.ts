@@ -3,6 +3,7 @@ import { LayeredConfig, type LayeredConfig as LayeredConfigValue } from '../sche
 import type { Rigor } from '../schemas/rigor.js';
 import type { ResolvedSelection } from '../schemas/selection-policy.js';
 import type { Workflow } from '../schemas/workflow.js';
+import { findWorkflowPackageById } from '../workflows/catalog.js';
 import type { DispatchFn } from './runner-types.js';
 import { resolveSelectionForDispatch } from './selection-resolver.js';
 
@@ -12,7 +13,8 @@ export type DispatcherInvocationConfig = {
 };
 
 export function bindsExecutionRigorToDispatchSelection(workflow: Workflow): boolean {
-  return (workflow.id as unknown as string) === 'build';
+  const pkg = findWorkflowPackageById(workflow.id as unknown as string);
+  return pkg?.engineFlags?.bindsExecutionRigorToDispatchSelection === true;
 }
 
 export function selectionConfigLayersWithExecutionRigor(

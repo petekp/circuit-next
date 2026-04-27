@@ -80,6 +80,17 @@ export interface WorkflowPaths {
   readonly contract?: string;
 }
 
+// Engine-visible flags a workflow can opt into. Kept narrow on purpose:
+// only flags that the engine currently branches on belong here. New
+// flags should describe a behavior, not a workflow name.
+export interface WorkflowEngineFlags {
+  // When true, the dispatch-selection layer threads the run's effective
+  // rigor into the per-workflow circuit selection so a worker is
+  // chosen based on rigor (Build's pattern). Other workflows resolve
+  // selection without an injected rigor layer.
+  readonly bindsExecutionRigorToDispatchSelection?: boolean;
+}
+
 export interface WorkflowPackage {
   readonly id: string;
   readonly paths: WorkflowPaths;
@@ -94,4 +105,6 @@ export interface WorkflowPackage {
   // Structural hints for dispatch steps that don't write a typed
   // artifact (review's standalone audit step is the canonical case).
   readonly structuralHints?: readonly StructuralShapeHint[];
+  // Optional engine-visible behavior flags. Absent = all defaults.
+  readonly engineFlags?: WorkflowEngineFlags;
 }

@@ -1,19 +1,17 @@
 // Dispatch-artifact schema registry + parse helper.
 //
-// REGISTRY is derived from src/workflows/catalog.ts: each
-// WorkflowPackage contributes its dispatchArtifacts. Test-only
-// fixtures (`dogfood-canonical@v1`, `dogfood-strict@v1`) are added
-// inline because they are not real workflows.
+// The REGISTRY is built from src/workflows/catalog.ts via
+// buildArtifactSchemaRegistry, plus the test-only fixtures below.
 //
 // Fail-closed default. When `writes.artifact.schema` names a schema
 // that is NOT present in the registry below, `parseArtifact` returns
-// a fail result and the runner aborts the step. The contract MUST
-// at specs/contracts/explore.md does not admit a "schema unknown →
-// pass" path; a future slice that lands a schema authoring surface
-// MUST keep fail-closed as the default for unknown schema names.
+// a fail result and the runner aborts the step. The contract MUST at
+// specs/contracts/explore.md does not admit a "schema unknown → pass"
+// path; a future slice that lands a schema authoring surface MUST keep
+// fail-closed as the default for unknown schema names.
 //
-// Event-surface uniformity. This content/schema-failure path does
-// NOT emit `dispatch.failed`; that event is reserved for adapter
+// Event-surface uniformity. This content/schema-failure path does NOT
+// emit `dispatch.failed`; that event is reserved for adapter
 // invocation exceptions, where no adapter result exists. A parse
 // failure is surfaced through the reject-on-bad-verdict sequence:
 //   gate.evaluated outcome=fail (reason=the parse error)
@@ -23,6 +21,7 @@
 
 import { z } from 'zod';
 import { workflowPackages } from '../workflows/catalog.js';
+import { buildArtifactSchemaRegistry } from './catalog-derivations.js';
 
 const MinimalVerdictShape = z.object({ verdict: z.string().min(1) }).passthrough();
 
@@ -42,20 +41,7 @@ const TEST_FIXTURE_SCHEMAS: Readonly<Record<string, z.ZodType<unknown>>> = Objec
   'dogfood-strict@v1': StrictPayloadShape,
 });
 
-const REGISTRY: Readonly<Record<string, z.ZodType<unknown>>> = (() => {
-  const out: Record<string, z.ZodType<unknown>> = { ...TEST_FIXTURE_SCHEMAS };
-  for (const pkg of workflowPackages) {
-    for (const artifact of pkg.dispatchArtifacts) {
-      if (Object.hasOwn(out, artifact.schemaName)) {
-        throw new Error(
-          `duplicate dispatch artifact schema '${artifact.schemaName}' registered (workflow ${pkg.id})`,
-        );
-      }
-      out[artifact.schemaName] = artifact.schema;
-    }
-  }
-  return Object.freeze(out);
-})();
+const REGISTRY = buildArtifactSchemaRegistry(workflowPackages, TEST_FIXTURE_SCHEMAS);
 
 export type ArtifactParseResult =
   | { readonly kind: 'ok' }

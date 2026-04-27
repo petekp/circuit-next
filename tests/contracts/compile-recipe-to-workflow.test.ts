@@ -97,7 +97,7 @@ describe('compileRecipeToWorkflow — failure modes', () => {
     expect(() => compileRecipeToWorkflow(fixRecipe)).not.toThrow();
   });
 
-  it('throws if a checkpoint step writes a non-build.brief artifact', () => {
+  it('throws if a checkpoint step writes an artifact whose schema has no registered checkpoint writer', () => {
     const recipe = loadBuildRecipe();
     const itemsCopy = recipe.items.map((item) =>
       item.id === ('frame-step' as unknown as typeof item.id)
@@ -106,7 +106,7 @@ describe('compileRecipeToWorkflow — failure modes', () => {
     );
     const broken = { ...recipe, items: itemsCopy } as unknown as typeof recipe;
     expect(() => compileRecipeToWorkflow(broken)).toThrow(
-      /runner only supports checkpoint artifact writing for build\.brief@v1/,
+      /no checkpoint writer is registered for that schema/,
     );
   });
 

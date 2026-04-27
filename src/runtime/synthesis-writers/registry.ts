@@ -1,29 +1,14 @@
 // Registry of synthesis writers, keyed by output schema name.
 //
-// Builders come from src/workflows/catalog.ts — each WorkflowPackage
-// contributes its writers.synthesis array. The runner consults this
-// registry in tryWriteRegisteredSynthesisArtifact and never sees
-// workflow names directly.
+// Builders come from src/workflows/catalog.ts via buildSynthesisRegistry.
 
 import type { Workflow } from '../../schemas/workflow.js';
 import { workflowPackages } from '../../workflows/catalog.js';
+import { buildSynthesisRegistry } from '../catalog-derivations.js';
 import { artifactPathForSchemaInWorkflow } from '../close-writers/shared.js';
 import type { SynthesisBuilder, SynthesisStep } from './types.js';
 
-const REGISTRY: ReadonlyMap<string, SynthesisBuilder> = (() => {
-  const map = new Map<string, SynthesisBuilder>();
-  for (const pkg of workflowPackages) {
-    for (const builder of pkg.writers.synthesis) {
-      if (map.has(builder.resultSchemaName)) {
-        throw new Error(
-          `duplicate synthesis builder registered for schema '${builder.resultSchemaName}' (workflow ${pkg.id})`,
-        );
-      }
-      map.set(builder.resultSchemaName, builder);
-    }
-  }
-  return map;
-})();
+const REGISTRY = buildSynthesisRegistry(workflowPackages);
 
 export function findSynthesisBuilder(resultSchemaName: string): SynthesisBuilder | undefined {
   return REGISTRY.get(resultSchemaName);

@@ -22,4 +22,22 @@ export const workflowPackages: readonly WorkflowPackage[] = [
   sweepWorkflowPackage,
 ];
 
+const PACKAGES_BY_ID: ReadonlyMap<string, WorkflowPackage> = (() => {
+  const map = new Map<string, WorkflowPackage>();
+  for (const pkg of workflowPackages) {
+    if (map.has(pkg.id)) {
+      throw new Error(`duplicate workflow package id '${pkg.id}'`);
+    }
+    map.set(pkg.id, pkg);
+  }
+  return map;
+})();
+
+// Look up a workflow package by id. Used by engine layers that hold
+// only a Workflow value and need package-level metadata (e.g. engine
+// flags). Returns undefined when no package is registered for the id.
+export function findWorkflowPackageById(id: string): WorkflowPackage | undefined {
+  return PACKAGES_BY_ID.get(id);
+}
+
 export type { WorkflowPackage } from './types.js';

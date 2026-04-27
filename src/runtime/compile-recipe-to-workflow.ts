@@ -37,6 +37,7 @@ import type {
 } from '../schemas/workflow-recipe.js';
 import type { Workflow as WorkflowValue } from '../schemas/workflow.js';
 import { Workflow } from '../schemas/workflow.js';
+import { findCheckpointBriefBuilder } from './checkpoint-writers/registry.js';
 import { findVerificationWriter } from './verification-writers/registry.js';
 
 export class WorkflowRecipeCompileError extends Error {
@@ -73,13 +74,9 @@ const RECIPE_ROUTES_DROPPED_AT_COMPILE = new Set([
 ]);
 
 // (step kind, artifact schema) pairs the runner's writers actually
-// understand. Verification kinds consult the verification-writers registry
-// (the single source of truth — adding a writer there auto-permits the
-// schema here). Checkpoint kinds with typed artifacts are still pinned to
-// build.brief@v1 because CheckpointPolicy carries the build_brief template
-// directly (see src/schemas/step.ts); generalizing that policy is the next
-// step toward a checkpoint-writers registry that the compiler can also
-// consult.
+// understand. Both verification and checkpoint kinds consult their
+// per-kind writer registries (the single source of truth — adding a
+// writer there auto-permits the schema here).
 function ensureSupportedKindArtifactPair(item: WorkflowRecipeItem): void {
   if (item.execution.kind === 'verification') {
     if (findVerificationWriter(item.output as unknown as string) === undefined) {
@@ -89,9 +86,9 @@ function ensureSupportedKindArtifactPair(item: WorkflowRecipeItem): void {
     }
   }
   if (item.execution.kind === 'checkpoint' && item.writes?.artifact_path !== undefined) {
-    if (item.output !== 'build.brief@v1') {
+    if (findCheckpointBriefBuilder(item.output as unknown as string) === undefined) {
       fail(
-        `recipe item '${item.id}' has checkpoint kind writing artifact '${item.output}'; runner only supports checkpoint artifact writing for build.brief@v1`,
+        `recipe item '${item.id}' has checkpoint kind writing artifact '${item.output}'; no checkpoint writer is registered for that schema (see src/runtime/checkpoint-writers/registry.ts)`,
       );
     }
   }

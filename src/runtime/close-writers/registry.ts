@@ -1,28 +1,14 @@
 // Registry of close-with-evidence builders, keyed by result schema name.
 //
-// Builders come from src/workflows/catalog.ts — each WorkflowPackage
-// contributes its writers.close array. The runner consults this
-// registry and never sees workflow names directly.
+// Builders come from src/workflows/catalog.ts via buildCloseRegistry.
 
 import type { Workflow } from '../../schemas/workflow.js';
 import { workflowPackages } from '../../workflows/catalog.js';
+import { buildCloseRegistry } from '../catalog-derivations.js';
 import { artifactPathForSchemaInWorkflow, workflowHasArtifactSchemaInWorkflow } from './shared.js';
 import type { CloseBuildContext, CloseBuilder } from './types.js';
 
-const REGISTRY: ReadonlyMap<string, CloseBuilder> = (() => {
-  const map = new Map<string, CloseBuilder>();
-  for (const pkg of workflowPackages) {
-    for (const builder of pkg.writers.close) {
-      if (map.has(builder.resultSchemaName)) {
-        throw new Error(
-          `duplicate close builder registered for schema '${builder.resultSchemaName}' (workflow ${pkg.id})`,
-        );
-      }
-      map.set(builder.resultSchemaName, builder);
-    }
-  }
-  return map;
-})();
+const REGISTRY = buildCloseRegistry(workflowPackages);
 
 export function findCloseBuilder(resultSchemaName: string): CloseBuilder | undefined {
   return REGISTRY.get(resultSchemaName);
