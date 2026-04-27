@@ -53,9 +53,10 @@ import { checkpointChoiceIds } from './step-handlers/checkpoint.js';
 import {
   type ResumeCheckpointState,
   type RunState,
+  type StepHandlerResult,
   runStepHandler,
 } from './step-handlers/index.js';
-import { writeJsonArtifact } from './step-handlers/shared.js';
+import { isRunRelativePathError, writeJsonArtifact } from './step-handlers/shared.js';
 import { findSynthesisBuilder, resolveSynthesisReadPaths } from './synthesis-writers/registry.js';
 
 // Public API surface from runner.ts. Implementations have moved to
@@ -570,32 +571,61 @@ async function executeWorkflow(ctx: WorkflowExecutionContext): Promise<WorkflowR
       });
     }
 
-    const result = await runStepHandler({
-      runRoot,
-      workflow,
-      runId,
-      goal,
-      lane,
-      rigor,
-      executionSelectionConfigLayers,
-      ...(ctx.projectRoot === undefined ? {} : { projectRoot: ctx.projectRoot }),
-      ...(ctx.invocationId === undefined ? {} : { invocationId: ctx.invocationId }),
-      dispatcher,
-      synthesisWriter,
-      now,
-      recordedAt,
-      state,
-      push,
-      step,
-      attempt,
-      isResumedCheckpoint,
-      ...(ctx.resumeCheckpoint === undefined ? {} : { resumeCheckpoint: ctx.resumeCheckpoint }),
-      childRunner: ctx.childRunner ?? runWorkflow,
-      ...(ctx.childWorkflowResolver === undefined
-        ? {}
-        : { childWorkflowResolver: ctx.childWorkflowResolver }),
-      ...(ctx.worktreeRunner === undefined ? {} : { worktreeRunner: ctx.worktreeRunner }),
-    });
+    // Handler exceptions must not corrupt the run-root: a thrown error
+    // that escapes executeWorkflow leaves step.entered on disk with no
+    // matching step.aborted, no run.closed, and no result.json — the
+    // run-root is then half-bootstrapped and claimFreshRunRoot rejects
+    // every retry. Wrap so unexpected throws emit step.aborted and fall
+    // through to the standard close path. Path-escape errors are a
+    // security boundary (callers must see no partial output is trusted)
+    // and continue to propagate.
+    let result: StepHandlerResult;
+    try {
+      result = await runStepHandler({
+        runRoot,
+        workflow,
+        runId,
+        goal,
+        lane,
+        rigor,
+        executionSelectionConfigLayers,
+        ...(ctx.projectRoot === undefined ? {} : { projectRoot: ctx.projectRoot }),
+        ...(ctx.invocationId === undefined ? {} : { invocationId: ctx.invocationId }),
+        dispatcher,
+        synthesisWriter,
+        now,
+        recordedAt,
+        state,
+        push,
+        step,
+        attempt,
+        isResumedCheckpoint,
+        ...(ctx.resumeCheckpoint === undefined ? {} : { resumeCheckpoint: ctx.resumeCheckpoint }),
+        childRunner: ctx.childRunner ?? runWorkflow,
+        ...(ctx.childWorkflowResolver === undefined
+          ? {}
+          : { childWorkflowResolver: ctx.childWorkflowResolver }),
+        ...(ctx.worktreeRunner === undefined ? {} : { worktreeRunner: ctx.worktreeRunner }),
+      });
+    } catch (err) {
+      if (isRunRelativePathError(err)) throw err;
+      const message = err instanceof Error ? err.message : String(err);
+      const reason = `step '${step.id as unknown as string}' (kind '${step.kind}') handler threw: ${message}`;
+      push({
+        schema_version: 1,
+        sequence: state.sequence,
+        recorded_at: recordedAt(),
+        run_id: runId,
+        kind: 'step.aborted',
+        step_id: step.id,
+        attempt,
+        reason,
+      });
+      runOutcome = 'aborted';
+      closeReason = reason;
+      currentStepId = undefined;
+      break;
+    }
 
     if (result.kind === 'waiting_checkpoint') {
       const snapshot = writeDerivedSnapshot(runRoot);
