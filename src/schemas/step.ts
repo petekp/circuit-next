@@ -207,6 +207,12 @@ export type SubRunStep = z.infer<typeof SubRunStep>;
 // per-branch dispatch / synthesis is non-breaking; restricting now keeps
 // the surface narrow until a real consumer demands the variation.
 
+// FanoutBranchId regex: kebab-case slug used for static branches and
+// post-substitution validation of dynamic templates. Worktree paths and
+// per-branch artifact directories derive from this id, so it must be
+// filesystem-safe.
+const FANOUT_BRANCH_ID_REGEX = /^[a-z0-9][a-z0-9-]*$/;
+
 export const FanoutBranch = z
   .object({
     // Branch identifier; unique across the fanout's branches. Used to
@@ -216,7 +222,7 @@ export const FanoutBranch = z
       .string()
       .min(1)
       .max(64)
-      .regex(/^[a-z0-9][a-z0-9-]*$/, { message: 'branch_id must be a kebab-case slug' }),
+      .regex(FANOUT_BRANCH_ID_REGEX, { message: 'branch_id must be a kebab-case slug' }),
     workflow_ref: WorkflowRef,
     goal: z.string().min(1),
     rigor: Rigor,
@@ -226,6 +232,23 @@ export const FanoutBranch = z
   })
   .strict();
 export type FanoutBranch = z.infer<typeof FanoutBranch>;
+
+// FanoutBranchTemplate is the dynamic-fanout authoring shape: same
+// fields as FanoutBranch, but `branch_id` and `goal` accept `$item` /
+// `$item.<key>` placeholders that the runtime substitutes per item.
+// Post-substitution the runtime parses each expanded branch through
+// FanoutBranch (strict regex), so authoring placeholders that resolve
+// to invalid kebab-case ids fail loudly at runtime, not at parse time.
+export const FanoutBranchTemplate = z
+  .object({
+    branch_id: z.string().min(1).max(64),
+    workflow_ref: WorkflowRef,
+    goal: z.string().min(1),
+    rigor: Rigor,
+    selection: SelectionOverride.optional(),
+  })
+  .strict();
+export type FanoutBranchTemplate = z.infer<typeof FanoutBranchTemplate>;
 
 // Note: cross-field refinements (static branch_id uniqueness, dynamic
 // template `$item` requirement) are hoisted to the Step union refinement
@@ -248,12 +271,13 @@ export const FanoutBranchesDynamic = z
     // Branches computed at runtime from an upstream artifact. Authors
     // declare the source artifact + a JSONPath-like dotted path to the
     // iterable + a template branch with `$item.<field>` placeholders.
-    // Runtime expands the template per item at fanout.start time.
+    // Runtime expands the template per item at fanout.start time and
+    // re-parses each expansion through FanoutBranch (strict regex).
     //
     // Used by Migrate where batch count is determined by inventory.
     source_artifact: RunRelativePath,
     items_path: z.string().min(1),
-    template: FanoutBranch,
+    template: FanoutBranchTemplate,
     // Hard cap to prevent runaway fanouts when the source artifact is
     // unexpectedly large.
     max_branches: z.number().int().positive().max(256).default(16),

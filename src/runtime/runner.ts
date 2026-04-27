@@ -46,6 +46,7 @@ import type {
   WorkflowInvocation,
   WorkflowRunResult,
   WorkflowRunner,
+  WorktreeRunner,
 } from './runner-types.js';
 import { writeDerivedSnapshot } from './snapshot-writer.js';
 import { checkpointChoiceIds } from './step-handlers/checkpoint.js';
@@ -73,6 +74,8 @@ export type {
   WorkflowInvocation,
   WorkflowRunResult,
   WorkflowRunner,
+  WorktreeRunner,
+  WorktreeProvisionInput,
 } from './runner-types.js';
 export { appendAndDerive } from './append-and-derive.js';
 export type { AppendResult } from './append-and-derive.js';
@@ -270,6 +273,7 @@ interface WorkflowExecutionContext {
   readonly resumeCheckpoint?: ResumeCheckpointState;
   readonly childWorkflowResolver?: ChildWorkflowResolver;
   readonly childRunner?: WorkflowRunner;
+  readonly worktreeRunner?: WorktreeRunner;
 }
 
 async function resolveDispatcher(inv: { dispatcher?: DispatchFn }): Promise<DispatchFn> {
@@ -590,6 +594,7 @@ async function executeWorkflow(ctx: WorkflowExecutionContext): Promise<WorkflowR
       ...(ctx.childWorkflowResolver === undefined
         ? {}
         : { childWorkflowResolver: ctx.childWorkflowResolver }),
+      ...(ctx.worktreeRunner === undefined ? {} : { worktreeRunner: ctx.worktreeRunner }),
     });
 
     if (result.kind === 'waiting_checkpoint') {
@@ -762,6 +767,7 @@ export async function resumeWorkflowCheckpoint(
       ? {}
       : { childWorkflowResolver: inv.childWorkflowResolver }),
     ...(inv.childRunner === undefined ? {} : { childRunner: inv.childRunner }),
+    ...(inv.worktreeRunner === undefined ? {} : { worktreeRunner: inv.worktreeRunner }),
     selectionConfigLayers: waiting.requestContext.selectionConfigLayers,
     ...(waiting.requestContext.projectRoot !== undefined
       ? { projectRoot: waiting.requestContext.projectRoot }

@@ -11,6 +11,7 @@ import type {
   DispatchResultMetadata,
   SynthesisWriterFn,
   WorkflowRunner,
+  WorktreeRunner,
 } from '../runner-types.js';
 
 export interface RunState {
@@ -57,6 +58,10 @@ export interface StepHandlerContext {
   // stubs. Undefined when the parent invocation didn't supply one — the
   // sub-run handler errors loudly in that case.
   readonly childWorkflowResolver?: ChildWorkflowResolver;
+  // Fanout slice: provisions / releases per-branch git worktrees.
+  // Default (wired by the coordinator) shells out to `git worktree`.
+  // Tests inject in-memory stubs.
+  readonly worktreeRunner?: WorktreeRunner;
 }
 
 export type StepHandlerResult =

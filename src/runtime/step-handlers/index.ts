@@ -1,5 +1,6 @@
 import { runCheckpointStep } from './checkpoint.js';
 import { runDispatchStep } from './dispatch.js';
+import { runFanoutStep } from './fanout.js';
 import { runSubRunStep } from './sub-run.js';
 import { runSynthesisStep } from './synthesis.js';
 import type { StepHandlerContext, StepHandlerResult } from './types.js';
@@ -21,11 +22,9 @@ export async function runStepHandler(ctx: StepHandlerContext): Promise<StepHandl
       return runDispatchStep({ ...ctx, step: ctx.step });
     case 'sub-run':
       return runSubRunStep({ ...ctx, step: ctx.step });
+    case 'fanout':
+      return runFanoutStep({ ...ctx, step: ctx.step });
     default: {
-      // fanout step kind reaches this branch until the fanout slice
-      // lands. Schemas were committed (a5a80ee) ahead of runtime so
-      // Migrate authoring can type-compile against them; runtime
-      // support for fanout arrives in the fanout slice.
       const stepKind = (ctx.step as { readonly kind: string }).kind;
       const stepId = (ctx.step as { readonly id: string | { toString(): string } }).id;
       const idStr =

@@ -60,6 +60,26 @@ export interface ResolvedChildWorkflow {
 
 export type ChildWorkflowResolver = (ref: WorkflowRef) => ResolvedChildWorkflow;
 
+// Fanout-runtime worktree provisioning seam. Default implementation
+// shells out to `git worktree add` / `git worktree remove`. The seam
+// keeps tests fast and side-effect-free (no real git repo required)
+// while the production CLI wires the git-backed default.
+export interface WorktreeProvisionInput {
+  readonly worktreePath: string;
+  readonly baseRef: string;
+  readonly branchName: string;
+}
+
+export interface WorktreeRunner {
+  add(input: WorktreeProvisionInput): void | Promise<void>;
+  remove(worktreePath: string): void | Promise<void>;
+  // Returns files changed in the worktree relative to baseRef, used by
+  // the disjoint-merge join policy to validate per-branch changes are
+  // pairwise disjoint. Default implementation runs `git diff --name-only
+  // <baseRef>..HEAD` inside the worktree.
+  changedFiles?(worktreePath: string, baseRef: string): readonly string[] | Promise<readonly string[]>;
+}
+
 export interface WorkflowInvocation {
   runRoot: string;
   workflow: Workflow;
@@ -92,6 +112,10 @@ export interface WorkflowInvocation {
   // can exercise sub-run handler logic without a full executeWorkflow
   // descent on the inner side.
   childRunner?: WorkflowRunner;
+  // Fanout worktree provisioning seam. Default shells out to
+  // `git worktree add/remove`. Tests inject in-memory stubs so they
+  // don't require a real git repo at projectRoot.
+  worktreeRunner?: WorktreeRunner;
 }
 
 export interface CheckpointResumeInvocation {
@@ -104,6 +128,7 @@ export interface CheckpointResumeInvocation {
   selectionConfigLayers?: readonly LayeredConfigValue[];
   childWorkflowResolver?: ChildWorkflowResolver;
   childRunner?: WorkflowRunner;
+  worktreeRunner?: WorktreeRunner;
 }
 
 export interface CheckpointWaitingResult {
