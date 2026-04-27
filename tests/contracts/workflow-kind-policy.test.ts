@@ -244,7 +244,7 @@ function fixPolicyOnlyPayload(overrides: Record<string, unknown> = {}): Record<s
 }
 
 describe('checkWorkflowKindCanonicalPolicy (audit-level, no Zod)', () => {
-  it('returns green on a valid explore fixture', () => {
+  it('EXPLORE-I1 — returns green on a valid explore fixture (canonical set + spine_policy.partial)', () => {
     const result = checkWorkflowKindCanonicalPolicy(validExploreFixture());
     expect(result.kind).toBe('green');
     expect(result.detail).toMatch(/explore: canonical set/);

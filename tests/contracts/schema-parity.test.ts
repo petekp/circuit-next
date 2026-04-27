@@ -3737,7 +3737,7 @@ describe('DispatchStartedEvent.resolved_from consumes DispatchResolutionSource (
 // Codex cross-model adversarial pass fold-ins (2026-04-19)
 // ─────────────────────────────────────────────────────────────────────────
 
-describe('ResolvedAdapter — named references are not a resolved form (Codex HIGH #1)', () => {
+describe('ADAPTER-I10 — ResolvedAdapter rejects pre-resolution named references (Codex HIGH #1)', () => {
   it('accepts built-in variant', () => {
     expect(ResolvedAdapter.safeParse({ kind: 'builtin', name: 'codex-isolated' }).success).toBe(
       true,
@@ -3759,7 +3759,7 @@ describe('ResolvedAdapter — named references are not a resolved form (Codex HI
   });
 });
 
-describe('DispatchStartedEvent.adapter rejects named references (Codex HIGH #1 via event)', () => {
+describe('ADAPTER-I10 — DispatchStartedEvent.adapter rejects named references (Codex HIGH #1 via event)', () => {
   const baseEv = {
     schema_version: 1 as const,
     sequence: 0,

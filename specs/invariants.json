@@ -92,9 +92,7 @@
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
       "source_anchor": "docs/contracts/adapter.md#ADAPTER-I10",
-      "binding_refs": [
-        { "path": "tests/contracts/artifact-authority.test.ts", "kind": "assertion_message" }
-      ]
+      "binding_refs": [{ "path": "tests/contracts/schema-parity.test.ts", "kind": "test_title" }]
     },
     {
       "id": "ADAPTER-I11",
@@ -712,11 +710,9 @@
       "id": "CHALLENGER-I1",
       "contract": "cross-model-challenger",
       "surface_type": "behavioral",
-      "enforcement_state": "test-enforced",
+      "enforcement_state": "prose-only",
       "source_anchor": "specs/behavioral/cross-model-challenger.md#CHALLENGER-I1",
-      "binding_refs": [
-        { "path": "tests/contracts/cross-model-challenger.test.ts", "kind": "test_title" }
-      ]
+      "rationale": "Test enforcement removed in the methodology strip (commit 60b1263, 2026-04-25). The cross-model challenger discipline was demoted to optional per AGENTS.md rule #7 — no longer mandatory, no longer a machine-enforceable surface. Behavioral discipline preserved as documentation."
     },
     {
       "id": "CHALLENGER-I2",
@@ -730,31 +726,25 @@
       "id": "CHALLENGER-I3",
       "contract": "cross-model-challenger",
       "surface_type": "behavioral",
-      "enforcement_state": "test-enforced",
+      "enforcement_state": "prose-only",
       "source_anchor": "specs/behavioral/cross-model-challenger.md#CHALLENGER-I3",
-      "binding_refs": [
-        { "path": "tests/contracts/cross-model-challenger.test.ts", "kind": "test_title" }
-      ]
+      "rationale": "Test enforcement removed in the methodology strip (commit 60b1263, 2026-04-25). Specs/reviews/ recording machinery was stripped alongside; the challenger-pass recording discipline survives as guidance in specs/behavioral/cross-model-challenger.md but has no machine-enforceable surface today."
     },
     {
       "id": "CHALLENGER-I4",
       "contract": "cross-model-challenger",
       "surface_type": "behavioral",
-      "enforcement_state": "test-enforced",
+      "enforcement_state": "prose-only",
       "source_anchor": "specs/behavioral/cross-model-challenger.md#CHALLENGER-I4",
-      "binding_refs": [
-        { "path": "tests/contracts/cross-model-challenger.test.ts", "kind": "test_title" }
-      ]
+      "rationale": "Test enforcement removed in the methodology strip (commit 60b1263, 2026-04-25). Fold-in disposition discipline (Incorporated / Scoped / Rejected with rationale) was tied to the specs/reviews/ recording surface that was stripped. Discipline preserved as documentation; no machine-enforceable surface remains."
     },
     {
       "id": "CHALLENGER-I5",
       "contract": "cross-model-challenger",
       "surface_type": "behavioral",
-      "enforcement_state": "test-enforced",
+      "enforcement_state": "prose-only",
       "source_anchor": "specs/behavioral/cross-model-challenger.md#CHALLENGER-I5",
-      "binding_refs": [
-        { "path": "tests/contracts/cross-model-challenger.test.ts", "kind": "test_title" }
-      ]
+      "rationale": "Test enforcement removed in the methodology strip (commit 60b1263, 2026-04-25). Dispatch-via-/codex-skill discipline is a runtime invocation choice with no testable artifact in the codebase; preserved as documentation in user memory + specs/behavioral/cross-model-challenger.md."
     },
     {
       "id": "CHALLENGER-I6",
@@ -769,21 +759,17 @@
       "id": "PROSE-YAML-I1",
       "contract": "prose-yaml-parity",
       "surface_type": "behavioral",
-      "enforcement_state": "test-enforced",
+      "enforcement_state": "prose-only",
       "source_anchor": "specs/behavioral/prose-yaml-parity.md#PROSE-YAML-I1",
-      "binding_refs": [
-        { "path": "tests/contracts/prose-yaml-parity.test.ts", "kind": "assertion_message" }
-      ]
+      "rationale": "Test enforcement removed in the methodology strip (commit 60b1263, 2026-04-25). The catalog-compiler architecture this invariant targeted was not adopted; circuit-next solved prose/YAML drift through the recipe → command.md emit pattern enforced by `npm run check-workflow-drift`. Original invariant preserved as documentation of the source-of-truth principle."
     },
     {
       "id": "PROSE-YAML-I2",
       "contract": "prose-yaml-parity",
       "surface_type": "behavioral",
-      "enforcement_state": "test-enforced",
+      "enforcement_state": "prose-only",
       "source_anchor": "specs/behavioral/prose-yaml-parity.md#PROSE-YAML-I2",
-      "binding_refs": [
-        { "path": "tests/contracts/prose-yaml-parity.test.ts", "kind": "assertion_message" }
-      ]
+      "rationale": "Test enforcement removed in the methodology strip (commit 60b1263, 2026-04-25). The catalog-compiler round-trip surface this invariant targeted was not adopted; circuit-next's emit/drift-check pipeline serves the equivalent role for command.md. Original invariant preserved as documentation."
     },
     {
       "id": "PROSE-YAML-I3",
@@ -797,60 +783,58 @@
       "id": "PROSE-YAML-I4",
       "contract": "prose-yaml-parity",
       "surface_type": "behavioral",
-      "enforcement_state": "test-enforced",
+      "enforcement_state": "prose-only",
       "source_anchor": "specs/behavioral/prose-yaml-parity.md#PROSE-YAML-I4",
-      "binding_refs": [
-        { "path": "tests/contracts/prose-yaml-parity.test.ts", "kind": "assertion_message" }
-      ]
+      "rationale": "Test enforcement removed in the methodology strip (commit 60b1263, 2026-04-25). The single-family marker / Circuit-as-justification anti-pattern this invariant guarded against was specific to the pre-strip architecture; no equivalent surface exists in circuit-next today. Preserved as documentation."
     },
 
     {
       "id": "SESSION-I1",
       "contract": "session-hygiene",
       "surface_type": "behavioral",
-      "enforcement_state": "test-enforced",
+      "enforcement_state": "prose-only",
       "source_anchor": "specs/behavioral/session-hygiene.md#SESSION-I1",
-      "binding_refs": [{ "path": "tests/contracts/session-hygiene.test.ts", "kind": "test_title" }]
+      "rationale": "Test enforcement removed in the methodology strip (commit 60b1263, 2026-04-25). The session-lifecycle hook ceremony (SessionStart/SessionEnd/Stop) was deliberately stripped from the harness; this invariant has no machine-enforceable surface in circuit-next. Preserved as documentation."
     },
     {
       "id": "SESSION-I2",
       "contract": "session-hygiene",
       "surface_type": "behavioral",
-      "enforcement_state": "test-enforced",
+      "enforcement_state": "prose-only",
       "source_anchor": "specs/behavioral/session-hygiene.md#SESSION-I2",
-      "binding_refs": [{ "path": "tests/contracts/session-hygiene.test.ts", "kind": "test_title" }]
+      "rationale": "Test enforcement removed in the methodology strip (commit 60b1263, 2026-04-25). Session-hook ceremony was stripped; no machine-enforceable surface remains. Preserved as documentation."
     },
     {
       "id": "SESSION-I3",
       "contract": "session-hygiene",
       "surface_type": "behavioral",
-      "enforcement_state": "test-enforced",
+      "enforcement_state": "prose-only",
       "source_anchor": "specs/behavioral/session-hygiene.md#SESSION-I3",
-      "binding_refs": [{ "path": "tests/contracts/session-hygiene.test.ts", "kind": "test_title" }]
+      "rationale": "Test enforcement removed in the methodology strip (commit 60b1263, 2026-04-25). Session-hook ceremony was stripped; no machine-enforceable surface remains. Preserved as documentation."
     },
     {
       "id": "SESSION-I4",
       "contract": "session-hygiene",
       "surface_type": "behavioral",
-      "enforcement_state": "test-enforced",
+      "enforcement_state": "prose-only",
       "source_anchor": "specs/behavioral/session-hygiene.md#SESSION-I4",
-      "binding_refs": [{ "path": "tests/contracts/session-hygiene.test.ts", "kind": "test_title" }]
+      "rationale": "Test enforcement removed in the methodology strip (commit 60b1263, 2026-04-25). Session-hook ceremony was stripped; no machine-enforceable surface remains. Preserved as documentation."
     },
     {
       "id": "SESSION-I5",
       "contract": "session-hygiene",
       "surface_type": "behavioral",
-      "enforcement_state": "test-enforced",
+      "enforcement_state": "prose-only",
       "source_anchor": "specs/behavioral/session-hygiene.md#SESSION-I5",
-      "binding_refs": [{ "path": "tests/contracts/session-hygiene.test.ts", "kind": "test_title" }]
+      "rationale": "Test enforcement removed in the methodology strip (commit 60b1263, 2026-04-25). Session-hook ceremony was stripped; no machine-enforceable surface remains. Preserved as documentation."
     },
     {
       "id": "SESSION-I6",
       "contract": "session-hygiene",
       "surface_type": "behavioral",
-      "enforcement_state": "test-enforced",
+      "enforcement_state": "prose-only",
       "source_anchor": "specs/behavioral/session-hygiene.md#SESSION-I6",
-      "binding_refs": [{ "path": "tests/contracts/session-hygiene.test.ts", "kind": "test_title" }]
+      "rationale": "Test enforcement removed in the methodology strip (commit 60b1263, 2026-04-25). Session-hook ceremony was stripped; no machine-enforceable surface remains. Preserved as documentation."
     },
     {
       "id": "EXPLORE-I1",
@@ -858,7 +842,9 @@
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
       "source_anchor": "src/workflows/explore/contract.md#EXPLORE-I1",
-      "binding_refs": [{ "path": "tests/contracts/spine-coverage.test.ts", "kind": "test_title" }]
+      "binding_refs": [
+        { "path": "tests/contracts/workflow-kind-policy.test.ts", "kind": "test_title" }
+      ]
     }
   ],
   "properties": [

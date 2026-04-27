@@ -7,18 +7,7 @@
 // that test must actually exist. A binding ref pointing at a
 // non-existent file is silent drift — the ledger lies about
 // enforcement, and downstream agents (or operators) believe coverage
-// exists where it does not. Reviewer #2 caught 15 such broken
-// bindings spread across 5 missing test files in 2026-04-27; this
-// test is the mechanical guard that prevents that class of drift
-// from ever recurring silently.
-//
-// This is FU-T02a from HANDOFF.md — the mechanical half of FU-T02.
-// FU-T02b is the per-binding triage (each broken ref is either
-// aspirational and should be removed, or genuinely needed and should
-// have its test written) and is deferred to a future session pending
-// operator input on aspirational-vs-real per binding. When that
-// triage completes, remove the `it.skip` marker below — the test
-// body is already complete and will assert correctly.
+// exists where it does not.
 
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
@@ -40,8 +29,7 @@ interface InvariantLedger {
 }
 
 describe('invariant ledger binding-reference completeness', () => {
-  // Skipped pending FU-T02b — see header comment.
-  it.skip('every binding_refs[].path resolves to a file on disk', () => {
+  it('every binding_refs[].path resolves to a file on disk', () => {
     const ledger = JSON.parse(readFileSync(INVARIANTS_PATH, 'utf8')) as InvariantLedger;
 
     const allRefs = ledger.invariants.flatMap((inv) =>
