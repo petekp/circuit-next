@@ -100,17 +100,17 @@ export function extractJsonObject(text: string): string {
     if (start === -1) break;
     let depth = 0;
     let inString = false;
-    let escape = false;
+    let escaped = false;
     let end = -1;
     for (let i = start; i < text.length; i++) {
       const ch = text[i];
-      if (escape) {
-        escape = false;
+      if (escaped) {
+        escaped = false;
         continue;
       }
       if (inString) {
         if (ch === '\\') {
-          escape = true;
+          escaped = true;
           continue;
         }
         if (ch === '"') inString = false;

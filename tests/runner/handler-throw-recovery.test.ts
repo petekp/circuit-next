@@ -55,7 +55,8 @@ function lane(): LaneDeclaration {
       'pre-fix, an uncaught handler throw left the run-root half-bootstrapped and blocked retries',
     acceptance_evidence:
       'runWorkflow resolves with outcome=aborted, step.aborted + run.closed events, and a parseable result.json',
-    alternate_framing: 'allow handler exceptions to propagate raw — rejected; corrupts the run-root',
+    alternate_framing:
+      'allow handler exceptions to propagate raw — rejected; corrupts the run-root',
   };
 }
 

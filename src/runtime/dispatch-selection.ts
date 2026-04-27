@@ -1,8 +1,8 @@
 import type { DispatchResolutionSource } from '../schemas/adapter.js';
 import { LayeredConfig, type LayeredConfig as LayeredConfigValue } from '../schemas/config.js';
 import type { Rigor } from '../schemas/rigor.js';
-import type { Workflow } from '../schemas/workflow.js';
 import type { ResolvedSelection } from '../schemas/selection-policy.js';
+import type { Workflow } from '../schemas/workflow.js';
 import type { DispatchFn } from './runner-types.js';
 import { resolveSelectionForDispatch } from './selection-resolver.js';
 

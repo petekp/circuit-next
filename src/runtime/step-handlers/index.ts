@@ -29,9 +29,7 @@ export async function runStepHandler(ctx: StepHandlerContext): Promise<StepHandl
       const stepId = (ctx.step as { readonly id: string | { toString(): string } }).id;
       const idStr =
         typeof stepId === 'string' ? stepId : (stepId as { toString(): string }).toString();
-      throw new Error(
-        `step '${idStr}' has unsupported kind '${stepKind}'; no handler registered`,
-      );
+      throw new Error(`step '${idStr}' has unsupported kind '${stepKind}'; no handler registered`);
     }
   }
 }

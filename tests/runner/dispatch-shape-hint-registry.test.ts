@@ -72,17 +72,23 @@ describe('dispatch shape-hint registry', () => {
   });
 
   it('Sweep hints describe each Sweep dispatch artifact shape', () => {
-    const analysis = findDispatchShapeHint(dispatchStepWithSchema('sweep.analysis@v1'))!;
+    function requireHint(schema: string): string {
+      const hint = findDispatchShapeHint(dispatchStepWithSchema(schema));
+      if (hint === undefined) throw new Error(`expected dispatch shape hint for ${schema}`);
+      return hint;
+    }
+
+    const analysis = requireHint('sweep.analysis@v1');
     expect(analysis).toContain('"candidates"');
     expect(analysis).toContain('"confidence"');
     expect(analysis).toContain('"risk"');
 
-    const batch = findDispatchShapeHint(dispatchStepWithSchema('sweep.batch@v1'))!;
+    const batch = requireHint('sweep.batch@v1');
     expect(batch).toContain('"items"');
     expect(batch).toContain('"candidate_id"');
     expect(batch).toContain('to_execute');
 
-    const review = findDispatchShapeHint(dispatchStepWithSchema('sweep.review@v1'))!;
+    const review = requireHint('sweep.review@v1');
     expect(review).toContain('"findings"');
     expect(review).toContain('clean');
     expect(review).toContain('critical-injections');

@@ -6,8 +6,8 @@ import { type DispatchResult, sha256Hex } from '../adapters/shared.js';
 import { parseArtifact } from '../artifact-schemas.js';
 import { runCrossArtifactValidator } from '../cross-artifact-validators.js';
 import { deriveResolvedFrom, deriveResolvedSelection } from '../dispatch-selection.js';
-import type { DispatchInput } from '../runner-types.js';
 import { resolveRunRelative } from '../run-relative-path.js';
+import type { DispatchInput } from '../runner-types.js';
 import { findDispatchShapeHint } from '../shape-hints/registry.js';
 import type { StepHandlerContext, StepHandlerResult } from './types.js';
 

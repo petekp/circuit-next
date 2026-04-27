@@ -1,44 +1,28 @@
 // Registry of dispatch shape hints, keyed by output schema name.
 //
-// Adding a new workflow's dispatch step means: write the hint module
-// in this directory, then register it here. The runner consults this
-// registry in dispatchResponseInstruction — it does not need to know
-// which workflows or schemas exist.
-//
-// Schema-keyed hints are looked up first via a Map<schema, instruction>.
-// Structural hints (e.g. the standalone review audit step which writes
-// no typed artifact) are tried in registration order only when the
-// schema lookup misses.
+// Hints come from src/workflows/catalog.ts:
+//   - Schema hints: each WorkflowPackage's dispatchArtifacts entries
+//     with a `dispatchHint` string contribute one schema-keyed hint.
+//   - Structural hints: each WorkflowPackage's `structuralHints` array
+//     (currently only review's standalone audit step) contributes
+//     step-shape-matched hints tried in registration order when the
+//     schema lookup misses.
 
-import { buildImplementationShapeHint, buildReviewShapeHint } from './build.js';
-import { exploreReviewVerdictShapeHint, exploreSynthesisShapeHint } from './explore.js';
-import { reviewDispatchShapeHint } from './review.js';
-import {
-  sweepAnalysisShapeHint,
-  sweepBatchShapeHint,
-  sweepReviewShapeHint,
-} from './sweep.js';
-import type { DispatchStep, SchemaShapeHint, ShapeHint, StructuralShapeHint } from './types.js';
-
-const HINTS: readonly ShapeHint[] = [
-  exploreSynthesisShapeHint,
-  exploreReviewVerdictShapeHint,
-  buildImplementationShapeHint,
-  buildReviewShapeHint,
-  sweepAnalysisShapeHint,
-  sweepBatchShapeHint,
-  sweepReviewShapeHint,
-  reviewDispatchShapeHint,
-];
+import { workflowPackages } from '../../workflows/catalog.js';
+import type { DispatchStep, SchemaShapeHint, StructuralShapeHint } from './types.js';
 
 const SCHEMA_HINTS: ReadonlyMap<string, string> = (() => {
   const map = new Map<string, string>();
-  for (const hint of HINTS) {
-    if (hint.kind !== 'schema') continue;
-    if (map.has(hint.schema)) {
-      throw new Error(`duplicate shape hint registered for schema '${hint.schema}'`);
+  for (const pkg of workflowPackages) {
+    for (const artifact of pkg.dispatchArtifacts) {
+      if (artifact.dispatchHint === undefined) continue;
+      if (map.has(artifact.schemaName)) {
+        throw new Error(
+          `duplicate shape hint registered for schema '${artifact.schemaName}' (workflow ${pkg.id})`,
+        );
+      }
+      map.set(artifact.schemaName, artifact.dispatchHint);
     }
-    map.set(hint.schema, hint.instruction);
   }
   return map;
 })();
@@ -46,13 +30,15 @@ const SCHEMA_HINTS: ReadonlyMap<string, string> = (() => {
 const STRUCTURAL_HINTS: readonly StructuralShapeHint[] = (() => {
   const list: StructuralShapeHint[] = [];
   const seen = new Set<string>();
-  for (const hint of HINTS) {
-    if (hint.kind !== 'structural') continue;
-    if (seen.has(hint.id)) {
-      throw new Error(`duplicate structural shape hint id '${hint.id}'`);
+  for (const pkg of workflowPackages) {
+    if (pkg.structuralHints === undefined) continue;
+    for (const hint of pkg.structuralHints) {
+      if (seen.has(hint.id)) {
+        throw new Error(`duplicate structural shape hint id '${hint.id}' (workflow ${pkg.id})`);
+      }
+      seen.add(hint.id);
+      list.push(hint);
     }
-    seen.add(hint.id);
-    list.push(hint);
   }
   return list;
 })();
@@ -70,7 +56,11 @@ export function findDispatchShapeHint(step: DispatchStep): string | undefined {
 }
 
 export function listRegisteredSchemaHints(): readonly SchemaShapeHint[] {
-  return HINTS.filter((hint): hint is SchemaShapeHint => hint.kind === 'schema');
+  const out: SchemaShapeHint[] = [];
+  for (const [schema, instruction] of SCHEMA_HINTS) {
+    out.push({ kind: 'schema', schema, instruction });
+  }
+  return out;
 }
 
 export function listRegisteredStructuralHints(): readonly StructuralShapeHint[] {

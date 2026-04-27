@@ -77,7 +77,10 @@ export interface WorktreeRunner {
   // the disjoint-merge join policy to validate per-branch changes are
   // pairwise disjoint. Default implementation runs `git diff --name-only
   // <baseRef>..HEAD` inside the worktree.
-  changedFiles?(worktreePath: string, baseRef: string): readonly string[] | Promise<readonly string[]>;
+  changedFiles?(
+    worktreePath: string,
+    baseRef: string,
+  ): readonly string[] | Promise<readonly string[]>;
 }
 
 export interface WorkflowInvocation {

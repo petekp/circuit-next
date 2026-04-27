@@ -1,138 +1,83 @@
-export const ROUTABLE_WORKFLOWS = ['explore', 'review', 'fix', 'build', 'migrate'] as const;
+// Workflow router — derives routing from src/workflows/catalog.ts.
+//
+// Each WorkflowPackage may declare routing metadata (signals, order,
+// optional skipOnPlanningArtifact guard, default-fallback flag). The
+// router walks packages in `order` ascending; positive signal matches
+// route directly to that package. When `skipOnPlanningArtifact` is set
+// AND the request mentions a planning artifact, the match is treated
+// as a non-match and routing falls through to subsequent packages.
+// The package marked `isDefault` is selected when nothing matches.
 
-type RoutableWorkflow = (typeof ROUTABLE_WORKFLOWS)[number];
+import { workflowPackages } from '../workflows/catalog.js';
+import type { WorkflowPackage, WorkflowRoutingMetadata } from '../workflows/types.js';
+
+interface RoutablePackage {
+  readonly pkg: WorkflowPackage;
+  readonly routing: WorkflowRoutingMetadata;
+}
+
+const ROUTABLE_PACKAGES: readonly RoutablePackage[] = (() => {
+  const out: RoutablePackage[] = [];
+  for (const pkg of workflowPackages) {
+    if (pkg.routing === undefined) continue;
+    out.push({ pkg, routing: pkg.routing });
+  }
+  return out.sort((a, b) => a.routing.order - b.routing.order);
+})();
+
+export const ROUTABLE_WORKFLOWS: readonly string[] = Object.freeze(
+  ROUTABLE_PACKAGES.map((entry) => entry.pkg.id),
+);
 
 interface WorkflowRouteDecision {
-  workflowName: RoutableWorkflow;
+  workflowName: string;
   source: 'classifier';
   reason: string;
   matched_signal?: string;
 }
 
-const REVIEW_SIGNALS: Array<{ label: string; pattern: RegExp }> = [
-  { label: 'code review', pattern: /\bcode\s+review\b/i },
-  {
-    label: 'change review request',
-    pattern:
-      /\breview\s+(?:this\s+|the\s+|my\s+|a\s+)?(?:change|diff|patch|commit|pr|pull\s+request|code|artifact|file)\b/i,
-  },
-  { label: 'audit request', pattern: /\baudit\b/i },
-  { label: 'critique request', pattern: /\bcritique\b/i },
-  {
-    label: 'change inspection request',
-    pattern:
-      /\binspect\s+(?:this\s+|the\s+|my\s+|a\s+)?(?:change|diff|patch|commit|pr|pull\s+request|code|artifact|file)\b/i,
-  },
-  {
-    label: 'change-check request',
-    pattern: /\bcheck\s+(?:this\s+)?(?:change|diff|patch|commit|pr|pull\s+request)\b/i,
-  },
-  {
-    label: 'issue-finding request',
-    pattern:
-      /\b(?:find|surface|identify|spot|detect|look\s+for)\s+(?:an?\s+|any\s+)?(?:(?:issue|issues)(?!\s*(?:#|\d))|bug|bugs|defect|defects|problem|problems|regression|regressions|risk|risks)\b/i,
-  },
-  {
-    label: 'risk-hunt request',
-    pattern: /\blook\s+for\s+(?:bugs|issues|regressions|risks)\b/i,
-  },
-];
-
-const FIX_SIGNALS: Array<{ label: string; pattern: RegExp }> = [
-  { label: 'fix prefix', pattern: /^\s*fix\s*:/i },
-  {
-    label: 'fix request',
-    pattern:
-      /^\s*(?:please\s+)?(?:fix|patch|debug|diagnose|reproduce)\s+(?:a\s+|an\s+|the\s+|this\s+|that\s+|my\s+|some\s+)?\S+/i,
-  },
-];
-
-const MIGRATE_SIGNALS: Array<{ label: string; pattern: RegExp }> = [
-  { label: 'migrate prefix', pattern: /^\s*migrate\s*:/i },
-  {
-    label: 'migrate request',
-    pattern:
-      /^\s*(?:please\s+)?(?:migrate|port|swap|replace|rewrite|transition)\s+(?:a\s+|an\s+|the\s+|this\s+|that\s+|my\s+|all\s+|our\s+)?\S+/i,
-  },
-  {
-    label: 'framework swap signal',
-    pattern: /\b(?:framework|library|dependency|stack)\s+(?:swap|replacement|migration)\b/i,
-  },
-];
-
-const BUILD_SIGNALS: Array<{ label: string; pattern: RegExp }> = [
-  { label: 'develop prefix', pattern: /^\s*develop\s*:/i },
-  {
-    label: 'build implementation request',
-    pattern:
-      /^\s*(?:please\s+)?(?:build|implement|develop|add|create|ship)\s+(?:a\s+|an\s+|the\s+|this\s+|that\s+)?(?:new\s+)?(?:feature|change|fix|implementation|endpoint|component|command|tool|integration)\b/i,
-  },
-  {
-    label: 'make change request',
-    pattern: /^\s*(?:please\s+)?make\s+(?:a\s+|the\s+|this\s+|that\s+)?(?:focused\s+)?change\b/i,
-  },
-];
-
 const PLANNING_ARTIFACT_SIGNAL =
   /\b(?:proposal|plan|brief|matrix|evaluation\s+matrix|design\s+doc|design\s+document|spec|specification|rfc|memo|document|doc|guide|analysis|evaluation|selection|strategy|outline|report|comparison|recommendation|write-?up|options|approaches)\b/i;
 
+const DEFAULT_PACKAGE: RoutablePackage = (() => {
+  const defaults = ROUTABLE_PACKAGES.filter((entry) => entry.routing.isDefault === true);
+  const [first, ...rest] = defaults;
+  if (first === undefined) {
+    throw new Error('no workflow package marked isDefault — router has no fallback');
+  }
+  if (rest.length > 0) {
+    throw new Error(
+      `more than one default workflow package: ${defaults.map((entry) => entry.pkg.id).join(', ')}`,
+    );
+  }
+  return first;
+})();
+
 export function classifyWorkflowTask(taskText: string): WorkflowRouteDecision {
-  for (const signal of REVIEW_SIGNALS) {
-    if (signal.pattern.test(taskText)) {
-      return {
-        workflowName: 'review',
-        source: 'classifier',
-        matched_signal: signal.label,
-        reason: `matched ${signal.label}; routed to audit-only review workflow`,
-      };
-    }
-  }
-
-  for (const signal of MIGRATE_SIGNALS) {
-    if (signal.pattern.test(taskText)) {
-      if (PLANNING_ARTIFACT_SIGNAL.test(taskText)) {
+  const hasPlanningArtifact = PLANNING_ARTIFACT_SIGNAL.test(taskText);
+  for (const { pkg, routing } of ROUTABLE_PACKAGES) {
+    if (routing.isDefault) continue;
+    for (const signal of routing.signals) {
+      if (!signal.pattern.test(taskText)) continue;
+      if (routing.skipOnPlanningArtifact === true && hasPlanningArtifact) {
+        // Match is suppressed by the planning-artifact guard. Fall
+        // through to the next package's signals — preserves the
+        // pre-catalog router's break-then-fall-through behavior.
         break;
       }
       return {
-        workflowName: 'migrate',
+        workflowName: pkg.id,
         source: 'classifier',
         matched_signal: signal.label,
-        reason: `matched ${signal.label}; routed to Migrate workflow`,
+        reason: routing.reasonForMatch(signal),
       };
     }
   }
-
-  for (const signal of FIX_SIGNALS) {
-    if (signal.pattern.test(taskText)) {
-      if (PLANNING_ARTIFACT_SIGNAL.test(taskText)) {
-        break;
-      }
-      return {
-        workflowName: 'fix',
-        source: 'classifier',
-        matched_signal: signal.label,
-        reason: `matched ${signal.label}; routed to Fix workflow`,
-      };
-    }
-  }
-
-  for (const signal of BUILD_SIGNALS) {
-    if (signal.pattern.test(taskText)) {
-      if (PLANNING_ARTIFACT_SIGNAL.test(taskText)) {
-        break;
-      }
-      return {
-        workflowName: 'build',
-        source: 'classifier',
-        matched_signal: signal.label,
-        reason: `matched ${signal.label}; routed to implementation Build workflow`,
-      };
-    }
-  }
-
   return {
-    workflowName: 'explore',
+    workflowName: DEFAULT_PACKAGE.pkg.id,
     source: 'classifier',
-    reason: 'no review/audit signal matched; routed to explore as the conservative default',
+    reason:
+      DEFAULT_PACKAGE.routing.defaultReason ??
+      `no signal matched; routed to ${DEFAULT_PACKAGE.pkg.id} as the conservative default`,
   };
 }

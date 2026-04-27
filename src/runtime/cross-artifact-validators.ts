@@ -114,7 +114,8 @@ function validateSweepBatchAgainstQueue(
   if (!batchParse.success) {
     return {
       kind: 'fail',
-      reason: 'sweep.batch body did not validate against SweepBatch schema (cross-artifact validator)',
+      reason:
+        'sweep.batch body did not validate against SweepBatch schema (cross-artifact validator)',
     };
   }
   const batch = batchParse.data;

@@ -3,7 +3,12 @@ import { randomUUID } from 'node:crypto';
 import { copyFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { RunId } from '../../schemas/ids.js';
-import { FanoutBranch as FanoutBranchSchema, type FanoutBranch, type FanoutStep, type WorkflowRef } from '../../schemas/step.js';
+import {
+  type FanoutBranch,
+  FanoutBranch as FanoutBranchSchema,
+  type FanoutStep,
+  type WorkflowRef,
+} from '../../schemas/step.js';
 import type { Workflow } from '../../schemas/workflow.js';
 import { resultPath } from '../result-writer.js';
 import { resolveRunRelative } from '../run-relative-path.js';
@@ -39,11 +44,9 @@ const NO_VERDICT_SENTINEL = '<no-verdict>';
 // inject a stub via WorkflowInvocation.worktreeRunner.
 const DEFAULT_WORKTREE_RUNNER: WorktreeRunner = {
   add: ({ worktreePath, baseRef, branchName }): void => {
-    const result = spawnSync(
-      'git',
-      ['worktree', 'add', '-b', branchName, worktreePath, baseRef],
-      { encoding: 'utf8' },
-    );
+    const result = spawnSync('git', ['worktree', 'add', '-b', branchName, worktreePath, baseRef], {
+      encoding: 'utf8',
+    });
     if (result.status !== 0) {
       throw new Error(
         `git worktree add failed (exit ${result.status ?? 'null'}): ${result.stderr ?? ''}`.trim(),
@@ -160,9 +163,7 @@ function resolveBranches(step: FanoutStepNarrow, runRoot: string): readonly Reso
   }
   const cap = step.branches.max_branches;
   if (items.length > cap) {
-    throw new Error(
-      `dynamic fanout expanded to ${items.length} items but max_branches is ${cap}`,
-    );
+    throw new Error(`dynamic fanout expanded to ${items.length} items but max_branches is ${cap}`);
   }
   const expanded: ResolvedBranch[] = [];
   const seen = new Set<string>();
@@ -715,7 +716,8 @@ export async function runFanoutStep(
     return { kind: 'advance' };
   }
 
-  const reason = joinFailureReason ?? `fanout step '${step.id}': join policy '${policy}' did not pass`;
+  const reason =
+    joinFailureReason ?? `fanout step '${step.id}': join policy '${policy}' did not pass`;
   push({
     schema_version: 1,
     sequence: state.sequence,

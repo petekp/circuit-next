@@ -1,22 +1,25 @@
 // Registry of verification writers, keyed by output schema name.
 //
-// Adding a new workflow's verification step means: implement a
-// VerificationBuilder in this directory, then register it here. The
-// runner consults this registry in writeVerificationArtifact — it
-// does not need to know which schemas exist.
+// Builders come from src/workflows/catalog.ts — each WorkflowPackage
+// contributes its writers.verification array.
 
-import { buildVerificationWriter } from './build-verification.js';
-import { fixVerificationWriter } from './fix-verification.js';
-import { migrateVerificationWriter } from './migrate-verification.js';
-import { sweepVerificationWriter } from './sweep-verification.js';
+import { workflowPackages } from '../../workflows/catalog.js';
 import type { VerificationBuilder } from './types.js';
 
-const REGISTRY = new Map<string, VerificationBuilder>([
-  [buildVerificationWriter.resultSchemaName, buildVerificationWriter],
-  [fixVerificationWriter.resultSchemaName, fixVerificationWriter],
-  [migrateVerificationWriter.resultSchemaName, migrateVerificationWriter],
-  [sweepVerificationWriter.resultSchemaName, sweepVerificationWriter],
-]);
+const REGISTRY: ReadonlyMap<string, VerificationBuilder> = (() => {
+  const map = new Map<string, VerificationBuilder>();
+  for (const pkg of workflowPackages) {
+    for (const builder of pkg.writers.verification) {
+      if (map.has(builder.resultSchemaName)) {
+        throw new Error(
+          `duplicate verification builder registered for schema '${builder.resultSchemaName}' (workflow ${pkg.id})`,
+        );
+      }
+      map.set(builder.resultSchemaName, builder);
+    }
+  }
+  return map;
+})();
 
 export function findVerificationWriter(resultSchemaName: string): VerificationBuilder | undefined {
   return REGISTRY.get(resultSchemaName);

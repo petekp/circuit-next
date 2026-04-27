@@ -1,50 +1,28 @@
-import { z } from 'zod';
-import { BuildImplementation, BuildReview } from '../schemas/artifacts/build.js';
-import { ExploreReviewVerdict, ExploreSynthesis } from '../schemas/artifacts/explore.js';
-import { FixChange, FixContext, FixDiagnosis, FixReview } from '../schemas/artifacts/fix.js';
-import { MigrateReview } from '../schemas/artifacts/migrate.js';
-import { SweepAnalysis, SweepBatch, SweepReview } from '../schemas/artifacts/sweep.js';
-
-// Slice 54 (Codex H15 fold-in) — dispatch-artifact schema registry +
-// parse helper. Closes the artifact-shape half of the ADR-0008
-// §Decision.3a materialization rule. The contract MUST at
-// specs/contracts/explore.md names schema parsing as a prerequisite
-// for writing the canonical artifact at `writes.artifact.path`:
-// Slice 53 closed the verdict-admissibility half (gate.pass
-// membership); this module closes the symmetric artifact-shape
-// half.
+// Dispatch-artifact schema registry + parse helper.
+//
+// REGISTRY is derived from src/workflows/catalog.ts: each
+// WorkflowPackage contributes its dispatchArtifacts. Test-only
+// fixtures (`dogfood-canonical@v1`, `dogfood-strict@v1`) are added
+// inline because they are not real workflows.
 //
 // Fail-closed default. When `writes.artifact.schema` names a schema
 // that is NOT present in the registry below, `parseArtifact` returns
 // a fail result and the runner aborts the step. The contract MUST
-// does not admit a "schema unknown → pass" path; a future slice that
-// lands a schema authoring surface MUST keep fail-closed as the
-// default for unknown schema names.
+// at specs/contracts/explore.md does not admit a "schema unknown →
+// pass" path; a future slice that lands a schema authoring surface
+// MUST keep fail-closed as the default for unknown schema names.
 //
 // Event-surface uniformity. This content/schema-failure path does
 // NOT emit `dispatch.failed`; that event is reserved for adapter
 // invocation exceptions, where no adapter result exists. A parse
-// failure is surfaced through the Slice 53 reject-on-bad-verdict
-// sequence:
+// failure is surfaced through the reject-on-bad-verdict sequence:
 //   gate.evaluated outcome=fail (reason=the parse error)
 //   → step.aborted (reason byte-identical)
 //   → run.closed outcome=aborted (reason byte-identical)
 //   → RunResult.reason mirrors the close reason.
-// This keeps the failure-path event surface uniform across both
-// halves of the ADR-0008 §Decision.3a gate.
-//
-// Schema shape after P2.10. Dispatch-produced explore artifacts are parsed
-// here because they materialize adapter result bodies. The orchestrator-
-// produced explore.brief / analysis / result schemas intentionally stay OUT
-// of this dispatch-materializer registry: the explore contract binds them to
-// registered synthesis writers in runner.ts. Slice 90 promotes
-// explore.synthesis to its strict payload schema; Slice 91 does the same for
-// explore.review-verdict; Slice 93 handles explore.result in the close writer.
-//
-// `dogfood-strict@v1` is a test-only strict shape used by
-// `tests/runner/materializer-schema-parse.test.ts` case (a)/(b) to
-// exercise the gate-pass + schema-fail independent failure mode
-// (a shape Slice 53's gate does not reject).
+
+import { z } from 'zod';
+import { workflowPackages } from '../workflows/catalog.js';
 
 const MinimalVerdictShape = z.object({ verdict: z.string().min(1) }).passthrough();
 
@@ -55,22 +33,29 @@ const StrictPayloadShape = z
   })
   .strict();
 
-const REGISTRY: Readonly<Record<string, z.ZodType<unknown>>> = Object.freeze({
+// Test-only fixtures live inline because they are not part of any
+// real workflow. `dogfood-canonical@v1` is the minimal-shape positive
+// case; `dogfood-strict@v1` is used by tests/runner/materializer-
+// schema-parse.test.ts to exercise the gate-pass + schema-fail mode.
+const TEST_FIXTURE_SCHEMAS: Readonly<Record<string, z.ZodType<unknown>>> = Object.freeze({
   'dogfood-canonical@v1': MinimalVerdictShape,
-  'build.implementation@v1': BuildImplementation,
-  'build.review@v1': BuildReview,
-  'explore.synthesis@v1': ExploreSynthesis,
-  'explore.review-verdict@v1': ExploreReviewVerdict,
-  'fix.context@v1': FixContext,
-  'fix.diagnosis@v1': FixDiagnosis,
-  'fix.change@v1': FixChange,
-  'fix.review@v1': FixReview,
-  'migrate.review@v1': MigrateReview,
-  'sweep.analysis@v1': SweepAnalysis,
-  'sweep.batch@v1': SweepBatch,
-  'sweep.review@v1': SweepReview,
   'dogfood-strict@v1': StrictPayloadShape,
 });
+
+const REGISTRY: Readonly<Record<string, z.ZodType<unknown>>> = (() => {
+  const out: Record<string, z.ZodType<unknown>> = { ...TEST_FIXTURE_SCHEMAS };
+  for (const pkg of workflowPackages) {
+    for (const artifact of pkg.dispatchArtifacts) {
+      if (Object.hasOwn(out, artifact.schemaName)) {
+        throw new Error(
+          `duplicate dispatch artifact schema '${artifact.schemaName}' registered (workflow ${pkg.id})`,
+        );
+      }
+      out[artifact.schemaName] = artifact.schema;
+    }
+  }
+  return Object.freeze(out);
+})();
 
 export type ArtifactParseResult =
   | { readonly kind: 'ok' }

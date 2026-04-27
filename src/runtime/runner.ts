@@ -877,7 +877,10 @@ function buildSummary(input: { workflow: Workflow; goal: string; events: Event[]
 // wrote result.json — so deriveTerminalVerdict itself had no direct
 // regression coverage. Tests in tests/runner/terminal-verdict-
 // derivation.test.ts now pin the contract end-to-end.
-function deriveTerminalVerdict(events: readonly Event[], runOutcome: RunClosedOutcome): string | undefined {
+function deriveTerminalVerdict(
+  events: readonly Event[],
+  runOutcome: RunClosedOutcome,
+): string | undefined {
   if (runOutcome !== 'complete') return undefined;
   for (let i = events.length - 1; i >= 0; i -= 1) {
     const ev = events[i];

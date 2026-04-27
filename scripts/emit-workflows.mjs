@@ -46,32 +46,27 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const projectRoot = resolve(__dirname, '..');
 
-const RECIPES = [
-  {
-    id: 'build',
-    recipePath: 'specs/workflow-recipes/build.recipe.json',
-  },
-  {
-    id: 'explore',
-    recipePath: 'specs/workflow-recipes/explore.recipe.json',
-  },
-  {
-    id: 'review',
-    recipePath: 'specs/workflow-recipes/review.recipe.json',
-  },
-  {
-    id: 'fix',
-    recipePath: 'specs/workflow-recipes/fix.recipe.json',
-  },
-  {
-    id: 'migrate',
-    recipePath: 'specs/workflow-recipes/migrate.recipe.json',
-  },
-  {
-    id: 'sweep',
-    recipePath: 'specs/workflow-recipes/sweep.recipe.json',
-  },
-];
+// RECIPES is loaded from src/workflows/catalog.ts (compiled to dist/) so
+// adding a workflow doesn't require touching this script. The compiled
+// catalog is read once at startup and snapshotted into the constant
+// below for the rest of the script.
+async function loadRecipesFromCatalog() {
+  const catalogPath = resolve(projectRoot, 'dist/workflows/catalog.js');
+  try {
+    const { workflowPackages } = await import(catalogPath);
+    return workflowPackages.map((pkg) => ({
+      id: pkg.id,
+      recipePath: pkg.paths.recipe,
+    }));
+  } catch (err) {
+    console.error(
+      `\nCould not import workflow catalog from dist/. Run \`npm run build\` first, then re-run this script.\n${err.message}\n`,
+    );
+    process.exit(1);
+  }
+}
+
+const RECIPES = await loadRecipesFromCatalog();
 
 async function loadCompilerModule() {
   // dist/runtime/compile-recipe-to-workflow.js is produced by `npm run build`.

@@ -181,7 +181,10 @@ export async function runSubRunStep(
     return { kind: 'aborted', reason };
   }
 
-  if ((resolved.workflow.id as unknown as string) !== (step.workflow_ref.workflow_id as unknown as string)) {
+  if (
+    (resolved.workflow.id as unknown as string) !==
+    (step.workflow_ref.workflow_id as unknown as string)
+  ) {
     const reason = `sub-run step '${step.id}': resolver returned workflow id '${resolved.workflow.id as unknown as string}' but workflow_ref names '${step.workflow_ref.workflow_id as unknown as string}'`;
     push({
       schema_version: 1,

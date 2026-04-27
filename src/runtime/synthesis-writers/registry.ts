@@ -1,38 +1,29 @@
 // Registry of synthesis writers, keyed by output schema name.
 //
-// Adding a new workflow's synthesis step means: implement a
-// SynthesisBuilder in this directory, then register it here. The
-// runner consults this registry in tryWriteRegisteredSynthesisArtifact
-// — it does not need to know which schemas exist.
+// Builders come from src/workflows/catalog.ts — each WorkflowPackage
+// contributes its writers.synthesis array. The runner consults this
+// registry in tryWriteRegisteredSynthesisArtifact and never sees
+// workflow names directly.
 
 import type { Workflow } from '../../schemas/workflow.js';
+import { workflowPackages } from '../../workflows/catalog.js';
 import { artifactPathForSchemaInWorkflow } from '../close-writers/shared.js';
-import { buildPlanSynthesisBuilder } from './build-plan.js';
-import { exploreAnalysisSynthesisBuilder } from './explore-analysis.js';
-import { exploreBriefSynthesisBuilder } from './explore-brief.js';
-import { fixBriefSynthesisBuilder } from './fix-brief.js';
-import { migrateBriefSynthesisBuilder } from './migrate-brief.js';
-import { migrateCoexistenceSynthesisBuilder } from './migrate-coexistence.js';
-import { migrateInventorySynthesisBuilder } from './migrate-inventory.js';
-import { reviewIntakeSynthesisBuilder } from './review-intake.js';
-import { reviewResultSynthesisBuilder } from './review-result.js';
-import { sweepBriefSynthesisBuilder } from './sweep-brief.js';
-import { sweepQueueSynthesisBuilder } from './sweep-queue.js';
 import type { SynthesisBuilder, SynthesisStep } from './types.js';
 
-const REGISTRY = new Map<string, SynthesisBuilder>([
-  [buildPlanSynthesisBuilder.resultSchemaName, buildPlanSynthesisBuilder],
-  [exploreBriefSynthesisBuilder.resultSchemaName, exploreBriefSynthesisBuilder],
-  [exploreAnalysisSynthesisBuilder.resultSchemaName, exploreAnalysisSynthesisBuilder],
-  [reviewIntakeSynthesisBuilder.resultSchemaName, reviewIntakeSynthesisBuilder],
-  [reviewResultSynthesisBuilder.resultSchemaName, reviewResultSynthesisBuilder],
-  [fixBriefSynthesisBuilder.resultSchemaName, fixBriefSynthesisBuilder],
-  [migrateBriefSynthesisBuilder.resultSchemaName, migrateBriefSynthesisBuilder],
-  [migrateInventorySynthesisBuilder.resultSchemaName, migrateInventorySynthesisBuilder],
-  [migrateCoexistenceSynthesisBuilder.resultSchemaName, migrateCoexistenceSynthesisBuilder],
-  [sweepBriefSynthesisBuilder.resultSchemaName, sweepBriefSynthesisBuilder],
-  [sweepQueueSynthesisBuilder.resultSchemaName, sweepQueueSynthesisBuilder],
-]);
+const REGISTRY: ReadonlyMap<string, SynthesisBuilder> = (() => {
+  const map = new Map<string, SynthesisBuilder>();
+  for (const pkg of workflowPackages) {
+    for (const builder of pkg.writers.synthesis) {
+      if (map.has(builder.resultSchemaName)) {
+        throw new Error(
+          `duplicate synthesis builder registered for schema '${builder.resultSchemaName}' (workflow ${pkg.id})`,
+        );
+      }
+      map.set(builder.resultSchemaName, builder);
+    }
+  }
+  return map;
+})();
 
 export function findSynthesisBuilder(resultSchemaName: string): SynthesisBuilder | undefined {
   return REGISTRY.get(resultSchemaName);

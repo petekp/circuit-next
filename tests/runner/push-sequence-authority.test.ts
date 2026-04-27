@@ -54,7 +54,8 @@ function lane(): LaneDeclaration {
     lane: 'ratchet-advance',
     failure_mode: 'pre-fix, the dispatch path bypassed push() and could desync sequence numbers',
     acceptance_evidence: 'on-disk event sequences are 0..N-1 contiguous monotonic',
-    alternate_framing: 'lean only on RUN-I2 schema parsing — rejected; want a focused regression pin',
+    alternate_framing:
+      'lean only on RUN-I2 schema parsing — rejected; want a focused regression pin',
   };
 }
 

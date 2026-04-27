@@ -1,10 +1,10 @@
 import type { BuildBrief } from '../../schemas/artifacts/build.js';
+import type { LayeredConfig as LayeredConfigValue } from '../../schemas/config.js';
 import type { Event } from '../../schemas/event.js';
 import type { InvocationId, RunId } from '../../schemas/ids.js';
 import type { LaneDeclaration } from '../../schemas/lane.js';
 import type { Rigor } from '../../schemas/rigor.js';
 import type { Workflow } from '../../schemas/workflow.js';
-import type { LayeredConfig as LayeredConfigValue } from '../../schemas/config.js';
 import type {
   ChildWorkflowResolver,
   DispatchFn,

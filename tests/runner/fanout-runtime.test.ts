@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { resultPath } from '../../src/runtime/result-writer.js';
 import {
   type ChildWorkflowResolver,
   type DispatchFn,
@@ -12,8 +13,7 @@ import {
   type WorktreeRunner,
   runWorkflow,
 } from '../../src/runtime/runner.js';
-import { resultPath } from '../../src/runtime/result-writer.js';
-import { RunId, WorkflowId } from '../../src/schemas/ids.js';
+import { RunId, type WorkflowId } from '../../src/schemas/ids.js';
 import type { LaneDeclaration } from '../../src/schemas/lane.js';
 import { RunResult } from '../../src/schemas/result.js';
 import { Snapshot } from '../../src/schemas/snapshot.js';
@@ -76,13 +76,19 @@ function buildParentWorkflow(opts: ParentWorkflowOpts): Workflow {
           branches: [
             {
               branch_id: 'a',
-              workflow_ref: { workflow_id: CHILD_WORKFLOW_ID as unknown as string, entry_mode: 'default' },
+              workflow_ref: {
+                workflow_id: CHILD_WORKFLOW_ID as unknown as string,
+                entry_mode: 'default',
+              },
               goal: 'branch-a goal',
               rigor: 'standard',
             },
             {
               branch_id: 'b',
-              workflow_ref: { workflow_id: CHILD_WORKFLOW_ID as unknown as string, entry_mode: 'default' },
+              workflow_ref: {
+                workflow_id: CHILD_WORKFLOW_ID as unknown as string,
+                entry_mode: 'default',
+              },
               goal: 'branch-b goal',
               rigor: 'standard',
             },
@@ -94,7 +100,10 @@ function buildParentWorkflow(opts: ParentWorkflowOpts): Workflow {
           items_path: 'items',
           template: {
             branch_id: '$item.id',
-            workflow_ref: { workflow_id: CHILD_WORKFLOW_ID as unknown as string, entry_mode: 'default' },
+            workflow_ref: {
+              workflow_id: CHILD_WORKFLOW_ID as unknown as string,
+              entry_mode: 'default',
+            },
             goal: '$item.goal',
             rigor: 'standard',
           },
@@ -109,7 +118,12 @@ function buildParentWorkflow(opts: ParentWorkflowOpts): Workflow {
       intent_prefixes: ['fanout-test'],
     },
     entry_modes: [
-      { name: 'fanout-test', start_at: 'fanout-step', rigor: 'standard', description: 'Default fanout entry.' },
+      {
+        name: 'fanout-test',
+        start_at: 'fanout-step',
+        rigor: 'standard',
+        description: 'Default fanout entry.',
+      },
     ],
     phases: [{ id: 'act-phase', title: 'Act', canonical: 'act', steps: ['fanout-step'] }],
     spine_policy: {
@@ -152,7 +166,9 @@ function buildChildWorkflow(): Workflow {
     version: '0.1.0',
     purpose: 'fanout test child',
     entry: { signals: { include: ['child'], exclude: [] }, intent_prefixes: ['child'] },
-    entry_modes: [{ name: 'default', start_at: 'child-step', rigor: 'standard', description: 'Child entry.' }],
+    entry_modes: [
+      { name: 'default', start_at: 'child-step', rigor: 'standard', description: 'Child entry.' },
+    ],
     phases: [{ id: 'act-phase', title: 'Act', canonical: 'act', steps: ['child-step'] }],
     spine_policy: {
       mode: 'partial',
@@ -168,7 +184,9 @@ function buildChildWorkflow(): Workflow {
         routes: { pass: '@complete' },
         executor: 'orchestrator',
         kind: 'synthesis',
-        writes: { artifact: { path: 'artifacts/child-synthesis.json', schema: 'child-synthesis@v1' } },
+        writes: {
+          artifact: { path: 'artifacts/child-synthesis.json', schema: 'child-synthesis@v1' },
+        },
         gate: {
           kind: 'schema_sections',
           source: { kind: 'artifact', ref: 'artifact' },
@@ -191,8 +209,8 @@ function makeStubChildRunner(plan: BranchVerdictPlan): WorkflowRunner {
     // Map by goal — branches differ by goal. For static fixtures we use
     // unique goals per branch; for dynamic fixtures the goal includes
     // the substituted $item.goal.
-    const planEntry = Object.entries(plan.verdicts).find(([branchId]) =>
-      inv.goal.includes(branchId) || inv.runRoot.includes(branchId),
+    const planEntry = Object.entries(plan.verdicts).find(
+      ([branchId]) => inv.goal.includes(branchId) || inv.runRoot.includes(branchId),
     );
     const verdict: string | 'aborted' = planEntry?.[1] ?? 'ok';
     const outcome: 'complete' | 'aborted' = verdict === 'aborted' ? 'aborted' : 'complete';
@@ -275,12 +293,18 @@ afterEach(() => {
 
 describe('fanout runtime', () => {
   it('fans out to two static branches, picks the winner under pick-winner, and cleans up worktrees', async () => {
-    const parent = buildParentWorkflow({ branches: 'static-two', policy: 'pick-winner', admit: ['ok'] });
+    const parent = buildParentWorkflow({
+      branches: 'static-two',
+      policy: 'pick-winner',
+      admit: ['ok'],
+    });
     const parentBytes = Buffer.from(JSON.stringify(parent));
     const child = buildChildWorkflow();
     const childBytes = Buffer.from(JSON.stringify(child));
 
-    const stubChildRunner = makeStubChildRunner({ verdicts: { 'branch-a': 'ok', 'branch-b': 'ok' } });
+    const stubChildRunner = makeStubChildRunner({
+      verdicts: { 'branch-a': 'ok', 'branch-b': 'ok' },
+    });
     const worktree = makeStubWorktreeRunner();
     const childResolver = makeChildResolver({ workflow: child, bytes: childBytes });
 
@@ -337,7 +361,11 @@ describe('fanout runtime', () => {
   });
 
   it('aggregate-only join admits all-complete + parseable branches', async () => {
-    const parent = buildParentWorkflow({ branches: 'static-two', policy: 'aggregate-only', admit: ['ok'] });
+    const parent = buildParentWorkflow({
+      branches: 'static-two',
+      policy: 'aggregate-only',
+      admit: ['ok'],
+    });
     const parentBytes = Buffer.from(JSON.stringify(parent));
     const child = buildChildWorkflow();
     const childBytes = Buffer.from(JSON.stringify(child));
@@ -376,12 +404,18 @@ describe('fanout runtime', () => {
   });
 
   it('disjoint-merge fails when two branches modify the same file', async () => {
-    const parent = buildParentWorkflow({ branches: 'static-two', policy: 'disjoint-merge', admit: ['ok'] });
+    const parent = buildParentWorkflow({
+      branches: 'static-two',
+      policy: 'disjoint-merge',
+      admit: ['ok'],
+    });
     const parentBytes = Buffer.from(JSON.stringify(parent));
     const child = buildChildWorkflow();
     const childBytes = Buffer.from(JSON.stringify(child));
 
-    const stubChildRunner = makeStubChildRunner({ verdicts: { 'branch-a': 'ok', 'branch-b': 'ok' } });
+    const stubChildRunner = makeStubChildRunner({
+      verdicts: { 'branch-a': 'ok', 'branch-b': 'ok' },
+    });
     // Pre-set changedFiles to overlap between the two branches.
     const initialChangedFiles = new Map<string, readonly string[]>();
     const worktree = makeStubWorktreeRunner(initialChangedFiles);
@@ -475,7 +509,10 @@ describe('fanout runtime', () => {
             items_path: 'items',
             template: {
               branch_id: '$item.id',
-              workflow_ref: { workflow_id: CHILD_WORKFLOW_ID as unknown as string, entry_mode: 'default' },
+              workflow_ref: {
+                workflow_id: CHILD_WORKFLOW_ID as unknown as string,
+                entry_mode: 'default',
+              },
               goal: '$item.goal',
               rigor: 'standard',
             },
@@ -497,7 +534,10 @@ describe('fanout runtime', () => {
     });
     const dynamicParentBytes = Buffer.from(JSON.stringify(dynamicParent));
 
-    const seedSourceArtifact = (input: { runRoot: string; step: { writes: { artifact: { path: string } } } }): void => {
+    const seedSourceArtifact = (input: {
+      runRoot: string;
+      step: { writes: { artifact: { path: string } } };
+    }): void => {
       const dest = join(input.runRoot, input.step.writes.artifact.path);
       mkdirSync(dirname(dest), { recursive: true });
       writeFileSync(

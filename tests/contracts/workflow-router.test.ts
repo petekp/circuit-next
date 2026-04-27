@@ -4,7 +4,12 @@ import { ROUTABLE_WORKFLOWS, classifyWorkflowTask } from '../../src/runtime/rout
 
 describe('P2.8 workflow router classifier', () => {
   it('declares the current routable workflow set explicitly', () => {
-    expect(ROUTABLE_WORKFLOWS).toEqual(['explore', 'review', 'fix', 'build', 'migrate']);
+    // Order is incidental — the router's evaluation order comes from
+    // each package's routing.order, not from this array. Asserting set
+    // membership keeps the test stable across catalog reordering.
+    expect([...ROUTABLE_WORKFLOWS].sort()).toEqual(
+      ['build', 'explore', 'fix', 'migrate', 'review'].sort(),
+    );
   });
 
   it('routes review/audit-style tasks to the review workflow', () => {

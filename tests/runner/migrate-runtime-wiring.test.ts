@@ -9,13 +9,11 @@ import { resultPath } from '../../src/runtime/result-writer.js';
 import {
   type ChildWorkflowResolver,
   type DispatchFn,
-  runWorkflow,
   type WorkflowInvocation,
-  type WorkflowRunner,
   type WorkflowRunResult,
+  type WorkflowRunner,
+  runWorkflow,
 } from '../../src/runtime/runner.js';
-import { RunId } from '../../src/schemas/ids.js';
-import type { LaneDeclaration } from '../../src/schemas/lane.js';
 import {
   MigrateBatch,
   MigrateBrief,
@@ -25,6 +23,8 @@ import {
   MigrateReview,
   MigrateVerification,
 } from '../../src/schemas/artifacts/migrate.js';
+import { RunId } from '../../src/schemas/ids.js';
+import type { LaneDeclaration } from '../../src/schemas/lane.js';
 import { RunResult } from '../../src/schemas/result.js';
 import { Snapshot } from '../../src/schemas/snapshot.js';
 import { Workflow } from '../../src/schemas/workflow.js';
@@ -265,9 +265,7 @@ describe('Migrate runtime wiring', () => {
     const brief = MigrateBrief.parse(
       JSON.parse(readFileSync(join(runRoot, 'artifacts/migrate/brief.json'), 'utf8')),
     );
-    expect(brief.objective).toBe(
-      'Migrate the legacy auth middleware to the new identity stack',
-    );
+    expect(brief.objective).toBe('Migrate the legacy auth middleware to the new identity stack');
     expect(brief.coexistence_appetite).toBe('short-window');
 
     const inventory = MigrateInventory.parse(

@@ -81,7 +81,8 @@ function lane(): LaneDeclaration {
     lane: 'ratchet-advance',
     failure_mode:
       'pre-fix, deriveTerminalVerdict had no end-to-end coverage and could regress silently',
-    acceptance_evidence: 'walk-backward picks the latest admitted verdict on the route to @complete',
+    acceptance_evidence:
+      'walk-backward picks the latest admitted verdict on the route to @complete',
     alternate_framing: 'lean only on stubbed sub-run tests — rejected; they bypass derivation',
   };
 }
@@ -138,7 +139,12 @@ describe('deriveTerminalVerdict — fix #2 coverage', () => {
         },
       ],
       phases: [
-        { id: 'act-phase', title: 'Act', canonical: 'act', steps: ['first-dispatch', 'second-dispatch'] },
+        {
+          id: 'act-phase',
+          title: 'Act',
+          canonical: 'act',
+          steps: ['first-dispatch', 'second-dispatch'],
+        },
       ],
       spine_policy: {
         mode: 'partial',
@@ -256,9 +262,7 @@ describe('deriveTerminalVerdict — fix #2 coverage', () => {
           description: 'one synthesis step',
         },
       ],
-      phases: [
-        { id: 'plan-phase', title: 'Plan', canonical: 'plan', steps: ['only-synthesis'] },
-      ],
+      phases: [{ id: 'plan-phase', title: 'Plan', canonical: 'plan', steps: ['only-synthesis'] }],
       spine_policy: {
         mode: 'partial',
         omits: ['frame', 'analyze', 'act', 'verify', 'review', 'close'],

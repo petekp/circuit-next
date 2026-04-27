@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { runCrossArtifactValidator } from '../../src/runtime/cross-artifact-validators.js';
 import { artifactPathForSchemaInWorkflow } from '../../src/runtime/close-writers/shared.js';
+import { runCrossArtifactValidator } from '../../src/runtime/cross-artifact-validators.js';
 import { Workflow } from '../../src/schemas/workflow.js';
 
 // Cross-artifact validators close gaps that single-artifact Zod schemas
@@ -52,12 +52,7 @@ describe('runCrossArtifactValidator — sweep.batch ⊆ sweep.queue.to_execute',
   }
 
   it('returns ok for unregistered schemas', () => {
-    const result = runCrossArtifactValidator(
-      'unregistered.schema@v1',
-      workflow,
-      runRoot,
-      '{}',
-    );
+    const result = runCrossArtifactValidator('unregistered.schema@v1', workflow, runRoot, '{}');
     expect(result.kind).toBe('ok');
   });
 

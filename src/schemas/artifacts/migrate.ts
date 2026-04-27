@@ -167,12 +167,7 @@ export const MigrateReview = z
   });
 export type MigrateReview = z.infer<typeof MigrateReview>;
 
-export const MigrateResultOutcome = z.enum([
-  'complete',
-  'cutover-deferred',
-  'reverted',
-  'failed',
-]);
+export const MigrateResultOutcome = z.enum(['complete', 'cutover-deferred', 'reverted', 'failed']);
 export type MigrateResultOutcome = z.infer<typeof MigrateResultOutcome>;
 
 export const MigrateResultArtifactId = z.enum([

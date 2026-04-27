@@ -3,20 +3,20 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { resultPath } from '../../src/runtime/result-writer.js';
 import {
-  type DispatchFn,
-  runWorkflow,
   type ChildWorkflowResolver,
-  type WorkflowRunner,
+  type DispatchFn,
   type WorkflowInvocation,
   type WorkflowRunResult,
+  type WorkflowRunner,
+  runWorkflow,
 } from '../../src/runtime/runner.js';
-import { resultPath } from '../../src/runtime/result-writer.js';
-import { RunId, WorkflowId } from '../../src/schemas/ids.js';
+import { RunId, type WorkflowId } from '../../src/schemas/ids.js';
 import type { LaneDeclaration } from '../../src/schemas/lane.js';
 import { RunResult } from '../../src/schemas/result.js';
-import { Workflow } from '../../src/schemas/workflow.js';
 import { Snapshot } from '../../src/schemas/snapshot.js';
+import { Workflow } from '../../src/schemas/workflow.js';
 
 // Sub-run runtime test. Verifies that a parent workflow declaring a
 // `sub-run` step:
@@ -63,7 +63,10 @@ function buildParentWorkflow(parentGatePass: readonly string[]): Workflow {
     id: PARENT_WORKFLOW_ID as unknown as string,
     version: '0.1.0',
     purpose: 'sub-run runtime test parent — exercises one sub-run step end-to-end',
-    entry: { signals: { include: ['sub-run-test'], exclude: [] }, intent_prefixes: ['sub-run-test'] },
+    entry: {
+      signals: { include: ['sub-run-test'], exclude: [] },
+      intent_prefixes: ['sub-run-test'],
+    },
     entry_modes: [
       {
         name: 'sub-run-test',
@@ -94,7 +97,10 @@ function buildParentWorkflow(parentGatePass: readonly string[]): Workflow {
         routes: { pass: '@complete' },
         executor: 'orchestrator',
         kind: 'sub-run',
-        workflow_ref: { workflow_id: CHILD_WORKFLOW_ID as unknown as string, entry_mode: 'default' },
+        workflow_ref: {
+          workflow_id: CHILD_WORKFLOW_ID as unknown as string,
+          entry_mode: 'default',
+        },
         goal: 'child run goal',
         rigor: 'standard',
         writes: { result: 'artifacts/child-result.json' },
@@ -121,7 +127,12 @@ function buildChildWorkflow(): Workflow {
     purpose: 'sub-run runtime test child — single synthesis step.',
     entry: { signals: { include: ['child-test'], exclude: [] }, intent_prefixes: ['child-test'] },
     entry_modes: [
-      { name: 'default', start_at: 'child-step', rigor: 'standard', description: 'Default child entry mode.' },
+      {
+        name: 'default',
+        start_at: 'child-step',
+        rigor: 'standard',
+        description: 'Default child entry mode.',
+      },
     ],
     phases: [{ id: 'act-phase', title: 'Act', canonical: 'act', steps: ['child-step'] }],
     spine_policy: {
@@ -138,7 +149,9 @@ function buildChildWorkflow(): Workflow {
         routes: { pass: '@complete' },
         executor: 'orchestrator',
         kind: 'synthesis',
-        writes: { artifact: { path: 'artifacts/child-synthesis.json', schema: 'child-synthesis@v1' } },
+        writes: {
+          artifact: { path: 'artifacts/child-synthesis.json', schema: 'child-synthesis@v1' },
+        },
         gate: {
           kind: 'schema_sections',
           source: { kind: 'artifact', ref: 'artifact' },
@@ -220,7 +233,11 @@ describe('sub-run runtime', () => {
     const childWorkflow = buildChildWorkflow();
     const childBytes = Buffer.from(JSON.stringify(childWorkflow));
 
-    const observed = { verdict: 'ok', outcome: 'complete' as const, capturedRunIds: { value: undefined as RunId | undefined } };
+    const observed = {
+      verdict: 'ok',
+      outcome: 'complete' as const,
+      capturedRunIds: { value: undefined as RunId | undefined },
+    };
     const stubChildRunner = makeStubChildRunner(observed);
     const childResolver = makeChildResolver({ workflow: childWorkflow, bytes: childBytes });
 
@@ -253,7 +270,8 @@ describe('sub-run runtime', () => {
     const subRunStarted = outcome.events.find((e) => e.kind === 'sub_run.started');
     const subRunCompleted = outcome.events.find((e) => e.kind === 'sub_run.completed');
     if (subRunStarted?.kind !== 'sub_run.started') throw new Error('expected sub_run.started');
-    if (subRunCompleted?.kind !== 'sub_run.completed') throw new Error('expected sub_run.completed');
+    if (subRunCompleted?.kind !== 'sub_run.completed')
+      throw new Error('expected sub_run.completed');
     expect(subRunStarted.child_run_id).toBe(childRunId);
     expect(subRunCompleted.child_run_id).toBe(childRunId);
     expect(subRunCompleted.verdict).toBe('ok');
@@ -291,7 +309,11 @@ describe('sub-run runtime', () => {
     const childWorkflow = buildChildWorkflow();
     const childBytes = Buffer.from(JSON.stringify(childWorkflow));
 
-    const observed = { verdict: 'reject', outcome: 'complete' as const, capturedRunIds: { value: undefined as RunId | undefined } };
+    const observed = {
+      verdict: 'reject',
+      outcome: 'complete' as const,
+      capturedRunIds: { value: undefined as RunId | undefined },
+    };
     const stubChildRunner = makeStubChildRunner(observed);
     const childResolver = makeChildResolver({ workflow: childWorkflow, bytes: childBytes });
 
@@ -318,11 +340,13 @@ describe('sub-run runtime', () => {
     // sub_run.completed still fired with the observed verdict before
     // the gate rejected — durable transcript of what the child said.
     const subRunCompleted = outcome.events.find((e) => e.kind === 'sub_run.completed');
-    if (subRunCompleted?.kind !== 'sub_run.completed') throw new Error('expected sub_run.completed');
+    if (subRunCompleted?.kind !== 'sub_run.completed')
+      throw new Error('expected sub_run.completed');
     expect(subRunCompleted.verdict).toBe('reject');
 
     const failGate = outcome.events.find(
-      (e) => e.kind === 'gate.evaluated' && e.gate_kind === 'result_verdict' && e.outcome === 'fail',
+      (e) =>
+        e.kind === 'gate.evaluated' && e.gate_kind === 'result_verdict' && e.outcome === 'fail',
     );
     expect(failGate).toBeDefined();
   });
