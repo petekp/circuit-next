@@ -3,10 +3,10 @@
 ## What this project is
 
 `circuit-next` is a Claude Code plugin that runs configurable developer
-workflows. The product surface is `src/` (TypeScript), `tests/`,
-`commands/`, `.claude-plugin/plugin.json`, the workflow recipes and
-primitive catalog under `specs/workflow-*`, and the typed contracts under
-`specs/contracts/` and `specs/behavioral/`.
+workflows. The product surface is `src/` (TypeScript), `tests/`, the
+generated `commands/` and `.claude-plugin/`, the workflow packages
+under `src/workflows/`, the engine contracts under `docs/contracts/`,
+and the behavioral notes under `specs/behavioral/`.
 
 This file is the agent-facing operating doc. Keep it short. If something
 isn't here, it isn't a rule.
@@ -53,18 +53,34 @@ These must pass before commit on changes to `src/`, `tests/`, or
 | Artifact | Path |
 |---|---|
 | Plugin manifest | `.claude-plugin/plugin.json` |
-| Slash commands | `commands/` |
+| Slash commands (generated) | `commands/<id>.md` (generated from `src/workflows/<id>/command.md`; `commands/run.md` is the CLI router entry and is hand-authored) |
+| Compiled plugin output (generated) | `.claude-plugin/skills/<id>/circuit.json` |
 | CLI entrypoint | `bin/circuit-next` |
-| Source | `src/` |
+| Engine source | `src/runtime/`, `src/cli/`, `src/schemas/` |
+| Workflow packages | `src/workflows/<id>/` (recipe, command, contract, writers, dispatch hints) |
+| Workflow catalog | `src/workflows/catalog.ts` (single source of truth the engine derives from) |
 | Tests | `tests/` |
-| Module contracts | `specs/contracts/` |
+| Engine contracts | `docs/contracts/` |
 | Behavioral concerns | `specs/behavioral/` |
 | Ubiquitous language | `specs/domain.md` |
-| Workflow design | `specs/workflow-direction.md`, `specs/workflow-primitives.md`, `specs/workflow-recipe-composition.md`, `specs/workflow-research-intake.md` |
-| Workflow recipes | `specs/workflow-recipes/` |
+| Workflow design notes | `specs/workflow-direction.md`, `specs/workflow-primitives.md`, `specs/workflow-recipe-composition.md`, `specs/workflow-research-intake.md` |
 | Primitive catalog | `specs/workflow-primitive-catalog.json` |
 | Cross-session handoff | `HANDOFF.md` (repo root) |
 | Reference plugin | `~/Code/circuit` (read-only) |
+
+## Adding a workflow
+
+1. Create `src/workflows/<id>/` with `recipe.json`, optional `command.md`
+   and `contract.md`, `index.ts` (the WorkflowPackage), `dispatch-hints.ts`
+   (if any dispatch artifacts have shape hints), and `writers/`.
+2. Add the package to `src/workflows/catalog.ts`.
+3. `npm run build && node scripts/emit-workflows.mjs` to regenerate
+   `commands/<id>.md` and `.claude-plugin/skills/<id>/`.
+4. `npm run verify`.
+
+The engine (`src/runtime/`) does not need any edits — registries derive
+from the catalog. If you find yourself editing engine files to add a
+workflow, the boundary is being violated.
 
 ## Reference plugin
 
