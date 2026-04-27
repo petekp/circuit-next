@@ -6,8 +6,11 @@
 // keeps recipe execution honest when no operator input is available,
 // defaulting to deferred repro and an `npm run verify` candidate.
 
-import { FixBrief } from '../../schemas/artifacts/fix.js';
-import type { SynthesisBuildContext, SynthesisBuilder } from './types.js';
+import type {
+  SynthesisBuildContext,
+  SynthesisBuilder,
+} from '../../../runtime/synthesis-writers/types.js';
+import { FixBrief } from '../../../schemas/artifacts/fix.js';
 
 const DEFAULT_FIX_VERIFICATION_COMMAND = {
   id: 'fix-proof',

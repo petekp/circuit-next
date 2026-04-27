@@ -92,7 +92,7 @@ describe('compileRecipeToWorkflow — failure modes', () => {
 
   it('accepts the active Fix recipe (verify-step writes fix.verification@v1)', () => {
     const fixRecipe = WorkflowRecipe.parse(
-      JSON.parse(readFileSync('specs/workflow-recipes/fix.recipe.json', 'utf8')),
+      JSON.parse(readFileSync('src/workflows/fix/recipe.json', 'utf8')),
     );
     expect(() => compileRecipeToWorkflow(fixRecipe)).not.toThrow();
   });

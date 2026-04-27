@@ -8,15 +8,15 @@
 // later edited.
 
 import { readFileSync } from 'node:fs';
-import { FixBrief, FixVerification } from '../../schemas/artifacts/fix.js';
-import { artifactPathForSchemaInWorkflow } from '../close-writers/shared.js';
-import { resolveRunRelative } from '../run-relative-path.js';
+import { artifactPathForSchemaInWorkflow } from '../../../runtime/close-writers/shared.js';
+import { resolveRunRelative } from '../../../runtime/run-relative-path.js';
 import type {
   VerificationBuildContext,
   VerificationBuilder,
   VerificationCommand,
   VerificationCommandObservation,
-} from './types.js';
+} from '../../../runtime/verification-writers/types.js';
+import { FixBrief, FixVerification } from '../../../schemas/artifacts/fix.js';
 
 export const fixVerificationWriter: VerificationBuilder = {
   resultSchemaName: 'fix.verification@v1',

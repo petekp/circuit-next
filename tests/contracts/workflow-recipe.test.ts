@@ -9,7 +9,7 @@ import {
 } from '../../src/schemas/workflow-recipe.js';
 
 const primitiveCatalogPath = 'specs/workflow-primitive-catalog.json';
-const fixRecipePath = 'specs/workflow-recipes/fix.recipe.json';
+const fixRecipePath = 'src/workflows/fix/recipe.json';
 
 function readJson(path: string): unknown {
   return JSON.parse(readFileSync(path, 'utf8')) as unknown;

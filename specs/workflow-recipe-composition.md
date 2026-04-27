@@ -15,7 +15,7 @@ The companion machine-readable primitive list lives at
 `specs/workflow-primitive-catalog.json`, with the schema in
 `src/schemas/workflow-primitives.ts`.
 
-The active Fix recipe lives at `specs/workflow-recipes/fix.recipe.json`, with
+The active Fix recipe lives at `src/workflows/fix/recipe.json`, with
 the recipe schema in `src/schemas/workflow-recipe.ts` and the recipe → Workflow
 compiler at `src/runtime/compile-recipe-to-workflow.ts`. Compiled fixtures are
 emitted to `.claude-plugin/skills/fix/circuit.json` and (because Fix uses

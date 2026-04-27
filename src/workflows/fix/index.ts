@@ -1,10 +1,10 @@
 // Fix workflow package.
 
-import { fixCloseBuilder } from '../../runtime/close-writers/fix.js';
-import { fixBriefSynthesisBuilder } from '../../runtime/synthesis-writers/fix-brief.js';
-import { fixVerificationWriter } from '../../runtime/verification-writers/fix-verification.js';
 import { FixChange, FixContext, FixDiagnosis, FixReview } from '../../schemas/artifacts/fix.js';
 import type { WorkflowPackage, WorkflowSignal } from '../types.js';
+import { fixBriefSynthesisBuilder } from './writers/brief.js';
+import { fixCloseBuilder } from './writers/close.js';
+import { fixVerificationWriter } from './writers/verification.js';
 
 const FIX_SIGNALS: readonly WorkflowSignal[] = [
   { label: 'fix prefix', pattern: /^\s*fix\s*:/i },
@@ -18,9 +18,9 @@ const FIX_SIGNALS: readonly WorkflowSignal[] = [
 export const fixWorkflowPackage: WorkflowPackage = {
   id: 'fix',
   paths: {
-    recipe: 'specs/workflow-recipes/fix.recipe.json',
-    command: 'commands/fix.md',
-    contract: 'specs/contracts/fix.md',
+    recipe: 'src/workflows/fix/recipe.json',
+    command: 'src/workflows/fix/command.md',
+    contract: 'src/workflows/fix/contract.md',
   },
   routing: {
     order: 20,
