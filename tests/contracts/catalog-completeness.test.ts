@@ -221,32 +221,14 @@ describe('workflow catalog completeness', () => {
     expect(duplicates, `duplicate dispatch artifact schemaName across packages`).toEqual([]);
   });
 
-  it('every cross-artifact validator schemaName matches a registered dispatchArtifact', () => {
-    // crossArtifactValidators are keyed by the schema they run AGAINST
-    // (e.g. sweep.batch@v1). If the schemaName has a typo or names a
-    // schema that has been removed, the validator silently never fires
-    // — losing the cross-artifact protection without any signal. The
-    // derivation registry doesn't catch this because validator
-    // registration is unaware of the artifact registry.
-    const knownSchemas = new Set<string>();
-    for (const pkg of workflowPackages) {
-      for (const artifact of pkg.dispatchArtifacts) {
-        knownSchemas.add(artifact.schemaName);
-      }
-    }
-    const offenders: { readonly pkg: string; readonly schemaName: string }[] = [];
-    for (const pkg of workflowPackages) {
-      for (const entry of pkg.crossArtifactValidators ?? []) {
-        if (!knownSchemas.has(entry.schemaName)) {
-          offenders.push({ pkg: pkg.id, schemaName: entry.schemaName });
-        }
-      }
-    }
-    expect(
-      offenders,
-      `cross-artifact validator targets a schema not present in any package's dispatchArtifacts — would silently never fire`,
-    ).toEqual([]);
-  });
+  // The previous "validator schemaName matches a dispatchArtifact"
+  // test became structurally vestigial after co-locating
+  // `crossArtifactValidate` on `WorkflowDispatchArtifact` itself —
+  // the schemaName is now read off the artifact that owns the
+  // validator, so the cross-reference cannot drift. Runtime regressions
+  // (validator stops firing for sweep.batch@v1) are caught by
+  // `tests/runner/cross-artifact-validators.test.ts` via the registry's
+  // lookup-keyed-by-schemaName behavior.
 
   it('writer resultSchemaName values are unique across all packages and writer slots', () => {
     // Each writer is registered into a per-slot map keyed by

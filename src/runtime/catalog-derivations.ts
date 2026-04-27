@@ -104,14 +104,14 @@ export function buildCrossArtifactValidatorRegistry(
 ): ReadonlyMap<string, CrossArtifactValidator> {
   const map = new Map<string, CrossArtifactValidator>();
   for (const pkg of packages) {
-    if (pkg.crossArtifactValidators === undefined) continue;
-    for (const entry of pkg.crossArtifactValidators) {
-      if (map.has(entry.schemaName)) {
+    for (const artifact of pkg.dispatchArtifacts) {
+      if (artifact.crossArtifactValidate === undefined) continue;
+      if (map.has(artifact.schemaName)) {
         throw new Error(
-          `duplicate cross-artifact validator registered for schema '${entry.schemaName}' (workflow ${pkg.id})`,
+          `duplicate cross-artifact validator registered for schema '${artifact.schemaName}' (workflow ${pkg.id})`,
         );
       }
-      map.set(entry.schemaName, entry.validate);
+      map.set(artifact.schemaName, artifact.crossArtifactValidate);
     }
   }
   return map;

@@ -13,7 +13,7 @@
 import type { z } from 'zod';
 import type { CheckpointBriefBuilder } from '../runtime/registries/checkpoint-writers/types.js';
 import type { CloseBuilder } from '../runtime/registries/close-writers/types.js';
-import type { CrossArtifactValidatorEntry } from '../runtime/registries/cross-artifact-validators.js';
+import type { CrossArtifactValidator } from '../runtime/registries/cross-artifact-validators.js';
 import type { StructuralShapeHint } from '../runtime/registries/shape-hints/types.js';
 import type { SynthesisBuilder } from '../runtime/registries/synthesis-writers/types.js';
 import type { VerificationBuilder } from '../runtime/registries/verification-writers/types.js';
@@ -68,6 +68,16 @@ export interface WorkflowDispatchArtifact {
   // dispatch artifacts also lack a hint and rely on the generic
   // dispatch shape instruction.
   readonly dispatchHint?: string;
+
+  // Cross-artifact validator runs after `parseArtifact` succeeds for
+  // this schema in the dispatch step-handler. Enforces constraints
+  // that span more than one artifact (e.g. sweep.batch.items[]
+  // .candidate_id must be a subset of sweep.queue.to_execute) and
+  // therefore cannot be expressed in the single-artifact Zod schema.
+  // Co-located here so the invariant "validators only fire on
+  // dispatch-produced artifacts" is structurally enforced — there is
+  // no other place to attach one.
+  readonly crossArtifactValidate?: CrossArtifactValidator;
 }
 
 export interface WorkflowPaths {
@@ -106,13 +116,6 @@ export interface WorkflowPackage {
   // Structural hints for dispatch steps that don't write a typed
   // artifact (review's standalone audit step is the canonical case).
   readonly structuralHints?: readonly StructuralShapeHint[];
-  // Cross-artifact validators run after `parseArtifact` succeeds for
-  // a given schema. They enforce constraints that span more than one
-  // artifact (e.g. sweep.batch.items[].candidate_id must be a subset
-  // of sweep.queue.to_execute) and therefore cannot be expressed in
-  // the single-artifact Zod schema. Empty / absent = no cross-
-  // artifact constraints for this workflow.
-  readonly crossArtifactValidators?: readonly CrossArtifactValidatorEntry[];
   // Optional engine-visible behavior flags. Absent = all defaults.
   readonly engineFlags?: WorkflowEngineFlags;
 }

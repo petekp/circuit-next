@@ -6,7 +6,7 @@
 
 import type { WorkflowPackage } from '../types.js';
 import { SweepAnalysis, SweepBatch, SweepReview } from './artifacts.js';
-import { sweepCrossArtifactValidators } from './cross-artifact-validators.js';
+import { validateSweepBatchAgainstQueue } from './cross-artifact-validators.js';
 import {
   sweepAnalysisShapeHint,
   sweepBatchShapeHint,
@@ -32,6 +32,7 @@ export const sweepWorkflowPackage: WorkflowPackage = {
       schemaName: 'sweep.batch@v1',
       schema: SweepBatch,
       dispatchHint: sweepBatchShapeHint.instruction,
+      crossArtifactValidate: validateSweepBatchAgainstQueue,
     },
     {
       schemaName: 'sweep.review@v1',
@@ -45,5 +46,4 @@ export const sweepWorkflowPackage: WorkflowPackage = {
     verification: [sweepVerificationWriter],
     checkpoint: [],
   },
-  crossArtifactValidators: sweepCrossArtifactValidators,
 };

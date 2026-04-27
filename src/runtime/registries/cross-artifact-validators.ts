@@ -15,10 +15,11 @@
 // upstream artifact is missing or malformed — silent omission would
 // re-open the gap each validator exists to close.
 //
-// Workflow ownership: each workflow package declares its own validators
-// via `WorkflowPackage.crossArtifactValidators`. The runtime composes
-// them into a single keyed registry through the catalog. The engine
-// stays workflow-agnostic.
+// Co-located on the dispatch artifact: each `WorkflowDispatchArtifact`
+// optionally carries its own `crossArtifactValidate`. This makes the
+// invariant "validators only fire on dispatch-produced artifacts"
+// structural — there is no other place to attach one. The runtime
+// composes them into a single keyed registry through the catalog.
 
 import type { Workflow } from '../../schemas/workflow.js';
 import { workflowPackages } from '../../workflows/catalog.js';
@@ -33,13 +34,6 @@ export type CrossArtifactValidator = (
   runRoot: string,
   resultBody: string,
 ) => CrossArtifactResult;
-
-// One cross-artifact validator entry on a workflow package. Keyed by
-// the schema name the validator runs against (e.g. 'sweep.batch@v1').
-export interface CrossArtifactValidatorEntry {
-  readonly schemaName: string;
-  readonly validate: CrossArtifactValidator;
-}
 
 const REGISTRY = buildCrossArtifactValidatorRegistry(workflowPackages);
 

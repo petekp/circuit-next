@@ -1,4 +1,4 @@
-// Sweep's cross-artifact validators.
+// Sweep's cross-artifact validator.
 //
 // `sweep.batch@v1` carries a list of items to migrate; the upstream
 // `sweep.queue@v1` carries the prescribed `to_execute` set. This
@@ -8,23 +8,20 @@
 //
 // Why this lives in the workflow package: it's specific to sweep's
 // artifact pair and depends on sweep's Zod schemas. Generic engine
-// code stays free of workflow-specific knowledge; the catalog wires
-// this entry into the runtime registry.
+// code stays free of workflow-specific knowledge; the validator is
+// attached to the `sweep.batch@v1` dispatch artifact in `index.ts`.
 
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type {
-  CrossArtifactResult,
-  CrossArtifactValidatorEntry,
-} from '../../runtime/registries/cross-artifact-validators.js';
 import {
   artifactPathForSchemaInWorkflow,
   workflowHasArtifactSchemaInWorkflow,
 } from '../../runtime/registries/close-writers/shared.js';
+import type { CrossArtifactResult } from '../../runtime/registries/cross-artifact-validators.js';
 import type { Workflow } from '../../schemas/workflow.js';
 import { SweepBatch, SweepQueue } from './artifacts.js';
 
-function validateSweepBatchAgainstQueue(
+export function validateSweepBatchAgainstQueue(
   workflow: Workflow,
   runRoot: string,
   resultBody: string,
@@ -109,7 +106,3 @@ function validateSweepBatchAgainstQueue(
 
   return { kind: 'ok' };
 }
-
-export const sweepCrossArtifactValidators: readonly CrossArtifactValidatorEntry[] = [
-  { schemaName: 'sweep.batch@v1', validate: validateSweepBatchAgainstQueue },
-];
