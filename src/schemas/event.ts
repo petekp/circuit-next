@@ -174,7 +174,7 @@ export type DispatchFailedEvent = z.infer<typeof DispatchFailedEvent>;
 // in-log events. Hash-tightening of `receipt_id` is deferred until a
 // real adapter surfaces concrete receipt formats; `z.string().min(1)`
 // + the whitespace-rejection test in
-// `tests/contracts/slice-37-dispatch-transcript.test.ts` is the
+// `tests/contracts/dispatch-transcript-schema.test.ts` is the
 // current boundary. A stricter format constraint authored now would
 // over-specify without provider-shape evidence.
 export const DispatchReceiptEvent = EventBase.extend({

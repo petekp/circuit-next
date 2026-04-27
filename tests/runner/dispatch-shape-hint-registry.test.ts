@@ -3,9 +3,12 @@
 // Mirrors tests/runner/synthesis-builder-registry.test.ts but for the
 // dispatch shape-hint path. Verifies every registered schema returns
 // its hint, unknown schemas miss the schema lookup, and the structural
-// reviewer-role match fires when no schema match is available. If the
-// runner ever regrows workflow-specific shape-hint knowledge, the
-// registry asserts in this file are the safety net.
+// reviewer-role match fires when no schema match is available.
+//
+// Expected sets are DERIVED from src/workflows/catalog.ts so adding a
+// new workflow's hint doesn't require this test to know about it. The
+// invariant being checked is the round-trip: every hint declared in
+// the catalog ends up in the registry, and vice versa.
 
 import { describe, expect, it } from 'vitest';
 
@@ -15,6 +18,15 @@ import {
   listRegisteredStructuralHints,
 } from '../../src/runtime/shape-hints/registry.js';
 import type { DispatchStep } from '../../src/runtime/shape-hints/types.js';
+import { workflowPackages } from '../../src/workflows/catalog.js';
+
+const EXPECTED_SCHEMA_HINTS: readonly string[] = workflowPackages.flatMap((pkg) =>
+  pkg.dispatchArtifacts.filter((a) => a.dispatchHint !== undefined).map((a) => a.schemaName),
+);
+
+const EXPECTED_STRUCTURAL_HINT_IDS: readonly string[] = workflowPackages.flatMap(
+  (pkg) => pkg.structuralHints?.map((hint) => hint.id) ?? [],
+);
 
 function dispatchStepWithSchema(schema: string): DispatchStep {
   return {
@@ -51,19 +63,14 @@ function reviewerStructuralStep(): DispatchStep {
 }
 
 describe('dispatch shape-hint registry', () => {
-  it('exposes a hint for every schema named in the registry', () => {
-    const expected = [
-      'explore.synthesis@v1',
-      'explore.review-verdict@v1',
-      'build.implementation@v1',
-      'build.review@v1',
-      'sweep.analysis@v1',
-      'sweep.batch@v1',
-      'sweep.review@v1',
-    ];
+  it('round-trips every catalog-declared schema hint through the registry', () => {
     const registered = listRegisteredSchemaHints().map((hint) => hint.schema);
-    expect(registered.sort()).toEqual(expected.sort());
-    for (const schema of expected) {
+    expect(
+      [...registered].sort(),
+      'registered schema hints must match the catalog set exactly (drift = a workflow added a hint without registering, or vice versa)',
+    ).toEqual([...EXPECTED_SCHEMA_HINTS].sort());
+
+    for (const schema of EXPECTED_SCHEMA_HINTS) {
       const instruction = findDispatchShapeHint(dispatchStepWithSchema(schema));
       expect(instruction, `expected hint for ${schema}`).toBeDefined();
       expect(instruction).toContain('Respond with a single raw JSON object');
@@ -105,9 +112,11 @@ describe('dispatch shape-hint registry', () => {
     expect(hint).toContain('"findings"');
   });
 
-  it('lists exactly one structural hint (the standalone review audit shape)', () => {
-    const structural = listRegisteredStructuralHints();
-    expect(structural).toHaveLength(1);
-    expect(structural[0]?.id).toBe('review.dispatch-result@structural');
+  it('round-trips every catalog-declared structural hint id through the registry', () => {
+    const registered = listRegisteredStructuralHints().map((hint) => hint.id);
+    expect(
+      [...registered].sort(),
+      'registered structural hints must match the catalog set exactly',
+    ).toEqual([...EXPECTED_STRUCTURAL_HINT_IDS].sort());
   });
 });

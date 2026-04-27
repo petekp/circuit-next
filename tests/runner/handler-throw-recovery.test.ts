@@ -142,4 +142,65 @@ describe('handler-throw recovery — fix #4', () => {
     );
     expect(stepCompletedForBad).toBe(false);
   });
+
+  it('graceful-aborts when a registered handler throws mid-execution (e.g. synthesisWriter throws)', async () => {
+    // Phase 4 audit gap: the existing test only triggers via an
+    // unsupported `kind`, which means the wrap is exercised at the
+    // dispatch-by-kind boundary. The wrap is also supposed to catch
+    // throws from inside a registered handler — e.g. a synthesis
+    // writer that crashes after the runner already committed
+    // step.entered to disk. Inject a throwing synthesisWriter to
+    // simulate this and assert the same recovery shape:
+    // step.aborted + run.closed + result.json.
+    const { workflow, bytes } = loadFixture();
+    const runRoot = join(runRootBase, 'run-mid-throw');
+
+    const outcome = await runWorkflow({
+      runRoot,
+      workflow,
+      workflowBytes: bytes,
+      runId: RunId.parse('11111111-2222-3333-4444-555555555556'),
+      goal: 'prove handler throws mid-execution recover gracefully',
+      rigor: 'standard',
+      lane: lane(),
+      now: deterministicNow(Date.UTC(2026, 3, 26, 13, 0, 0)),
+      dispatcher: stubDispatcher(),
+      synthesisWriter: () => {
+        throw new Error('synthesisWriter exploded after step.entered');
+      },
+    });
+
+    // Run still produced a parseable result and never propagated the
+    // raw throw out of runWorkflow. The synthesis handler has its OWN
+    // try/catch around the writer invocation that maps the failure to
+    // an "artifact writer failed" abort, so the wrapper around
+    // runStepHandler does not need to catch this one — both layers
+    // deliver a clean abort and the test pins the writer-failure shape.
+    expect(outcome.result.outcome).toBe('aborted');
+    expect(outcome.result.reason).toBeDefined();
+    expect(outcome.result.reason).toMatch(/artifact writer failed/);
+    expect(outcome.result.reason).toMatch(/synthesisWriter exploded/);
+
+    // Run-root is in the closed state. This is the load-bearing
+    // guarantee from commit 20ca1dd: a mid-handler throw cannot leave
+    // the run-root half-bootstrapped, even when the handler had
+    // already started doing work.
+    expect(existsSync(join(runRoot, 'events.ndjson'))).toBe(true);
+    expect(existsSync(join(runRoot, 'state.json'))).toBe(true);
+    expect(existsSync(join(runRoot, 'manifest.snapshot.json'))).toBe(true);
+    expect(existsSync(join(runRoot, 'artifacts', 'result.json'))).toBe(true);
+
+    const result = RunResult.parse(
+      JSON.parse(readFileSync(join(runRoot, 'artifacts', 'result.json'), 'utf8')),
+    );
+    expect(result.outcome).toBe('aborted');
+    expect(result.reason).toMatch(/artifact writer failed/);
+
+    // Event log is well-formed: no half-state, ends in run.closed.
+    const log = readRunLog(runRoot);
+    const lastEvent = log[log.length - 1];
+    expect(lastEvent?.kind).toBe('run.closed');
+    if (lastEvent?.kind !== 'run.closed') throw new Error('expected run.closed last');
+    expect(lastEvent.outcome).toBe('aborted');
+  });
 });

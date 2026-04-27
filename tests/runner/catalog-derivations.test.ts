@@ -431,4 +431,52 @@ describe('catalog-derivations: real catalog invariants', () => {
     // shape.
     expect(() => buildArtifactSchemaRegistry(workflowPackages, {})).not.toThrow();
   });
+
+  it('every catalog writer resolves through its registry by resultSchemaName', async () => {
+    // Phase 4 audit gap: the architecture-boundary test is purely
+    // static. This is the runtime parity check — for every writer
+    // declared on a WorkflowPackage, the live registry's find function
+    // returns exactly that builder. Catches: a writer accidentally
+    // dropped from a registry-build path; a registry that returns a
+    // different instance (identity matters because the runner uses
+    // builder methods directly).
+    const { workflowPackages } = await import('../../src/workflows/catalog.js');
+    const { findSynthesisBuilder } = await import(
+      '../../src/runtime/synthesis-writers/registry.js'
+    );
+    const { findCloseBuilder } = await import('../../src/runtime/close-writers/registry.js');
+    const { findVerificationWriter } = await import(
+      '../../src/runtime/verification-writers/registry.js'
+    );
+    const { findCheckpointBriefBuilder } = await import(
+      '../../src/runtime/checkpoint-writers/registry.js'
+    );
+
+    for (const pkg of workflowPackages) {
+      for (const builder of pkg.writers.synthesis) {
+        expect(
+          findSynthesisBuilder(builder.resultSchemaName),
+          `synthesis builder for ${builder.resultSchemaName} (workflow ${pkg.id}) does not resolve`,
+        ).toBe(builder);
+      }
+      for (const builder of pkg.writers.close) {
+        expect(
+          findCloseBuilder(builder.resultSchemaName),
+          `close builder for ${builder.resultSchemaName} (workflow ${pkg.id}) does not resolve`,
+        ).toBe(builder);
+      }
+      for (const builder of pkg.writers.verification) {
+        expect(
+          findVerificationWriter(builder.resultSchemaName),
+          `verification builder for ${builder.resultSchemaName} (workflow ${pkg.id}) does not resolve`,
+        ).toBe(builder);
+      }
+      for (const builder of pkg.writers.checkpoint) {
+        expect(
+          findCheckpointBriefBuilder(builder.resultSchemaName),
+          `checkpoint builder for ${builder.resultSchemaName} (workflow ${pkg.id}) does not resolve`,
+        ).toBe(builder);
+      }
+    }
+  });
 });

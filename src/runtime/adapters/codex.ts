@@ -27,7 +27,7 @@ import { extractJsonObject, selectedModelForProvider } from './shared.js';
 //       `--dangerously-bypass-approvals-and-sandbox`. Both facts are
 //       provable at module-load time (the assertions fire in a
 //       frozen constant) and bound by contract tests at
-//       `tests/contracts/slice-45-codex-adapter.test.ts`.
+//       `tests/contracts/codex-adapter-schema.test.ts`.
 //   (b) Event-stream capability discipline — `parseCodexStdout()` is
 //       fail-closed against missing `thread.started` events (no session
 //       identifier available), missing / malformed terminal

@@ -592,4 +592,116 @@ describe('fanout runtime', () => {
     expect(fanoutJoined.policy).toBe('aggregate-only');
     expect(fanoutJoined.branches_completed).toBe(2);
   });
+
+  it('continue-others lets the parent join after one branch aborts (the other still completes)', async () => {
+    // Coverage gap from the Phase 4 audit: continue-others was only
+    // exercised in the dynamic fixture where every branch succeeded.
+    // This case proves the parent does NOT propagate a single child
+    // abort when on_child_failure='continue-others' is set.
+    const parent = buildParentWorkflow({
+      branches: 'static-two',
+      policy: 'aggregate-only',
+      on_child_failure: 'continue-others',
+    });
+    const parentBytes = Buffer.from(JSON.stringify(parent));
+    const child = buildChildWorkflow();
+    const childBytes = Buffer.from(JSON.stringify(child));
+
+    const stubChildRunner = makeStubChildRunner({
+      verdicts: { 'branch-a': 'aborted', 'branch-b': 'ok' },
+    });
+    const worktree = makeStubWorktreeRunner();
+    const childResolver = makeChildResolver({ workflow: child, bytes: childBytes });
+
+    const parentRunId = RunId.parse('22222222-2222-2222-2222-22222222222a');
+    const parentRunRoot = join(runRootBase, parentRunId as unknown as string);
+
+    const outcome = await runWorkflow({
+      runRoot: parentRunRoot,
+      workflow: parent,
+      workflowBytes: parentBytes,
+      runId: parentRunId,
+      goal: 'fanout continue-others test',
+      rigor: 'standard',
+      lane: lane(),
+      now: deterministicNow(Date.UTC(2026, 3, 27, 15, 0, 0)),
+      dispatcher: unusedDispatcher(),
+      projectRoot,
+      childWorkflowResolver: childResolver,
+      childRunner: stubChildRunner,
+      worktreeRunner: worktree.runner,
+    });
+
+    // Parent should NOT abort — continue-others tolerates the failed
+    // branch. aggregate-only join requires all-completed-and-parseable,
+    // so the join itself fails (branches_completed=1, branches_failed=1)
+    // and the gate fails — but the abort happens in the gate, not in
+    // the fanout-step itself, and the events should show the failure
+    // shape clearly.
+    const fanoutStarted = outcome.events.find((e) => e.kind === 'fanout.started');
+    if (fanoutStarted?.kind !== 'fanout.started') throw new Error('expected fanout.started');
+    expect(fanoutStarted.on_child_failure).toBe('continue-others');
+
+    const fanoutJoined = outcome.events.find((e) => e.kind === 'fanout.joined');
+    if (fanoutJoined?.kind !== 'fanout.joined') throw new Error('expected fanout.joined');
+    expect(fanoutJoined.branches_completed).toBe(1);
+    expect(fanoutJoined.branches_failed).toBe(1);
+
+    // Both worktrees were still released — even on the failed branch.
+    expect(worktree.released.size).toBe(2);
+    for (const path of worktree.provisioned) {
+      expect(worktree.released.has(path)).toBe(true);
+    }
+  });
+
+  it('abort-all aborts the parent on first branch failure (default failure policy)', async () => {
+    // Inverse of the continue-others case. abort-all is the default,
+    // and a single child abort must cascade to a parent abort.
+    const parent = buildParentWorkflow({
+      branches: 'static-two',
+      policy: 'aggregate-only',
+      on_child_failure: 'abort-all',
+    });
+    const parentBytes = Buffer.from(JSON.stringify(parent));
+    const child = buildChildWorkflow();
+    const childBytes = Buffer.from(JSON.stringify(child));
+
+    const stubChildRunner = makeStubChildRunner({
+      verdicts: { 'branch-a': 'aborted', 'branch-b': 'ok' },
+    });
+    const worktree = makeStubWorktreeRunner();
+    const childResolver = makeChildResolver({ workflow: child, bytes: childBytes });
+
+    const parentRunId = RunId.parse('22222222-2222-2222-2222-22222222222b');
+    const parentRunRoot = join(runRootBase, parentRunId as unknown as string);
+
+    const outcome = await runWorkflow({
+      runRoot: parentRunRoot,
+      workflow: parent,
+      workflowBytes: parentBytes,
+      runId: parentRunId,
+      goal: 'fanout abort-all test',
+      rigor: 'standard',
+      lane: lane(),
+      now: deterministicNow(Date.UTC(2026, 3, 27, 15, 30, 0)),
+      dispatcher: unusedDispatcher(),
+      projectRoot,
+      childWorkflowResolver: childResolver,
+      childRunner: stubChildRunner,
+      worktreeRunner: worktree.runner,
+    });
+
+    expect(outcome.result.outcome).toBe('aborted');
+
+    // Worktrees still cleaned up even on the abort path — the audit
+    // gap from the Phase 4 review was that disjoint-merge cleanup on
+    // failure wasn't asserted; this case generalizes the assertion to
+    // any abort-all-driven abort.
+    expect(worktree.provisioned.size).toBeGreaterThan(0);
+    for (const path of worktree.provisioned) {
+      expect(worktree.released.has(path), `worktree at ${path} was not released after abort`).toBe(
+        true,
+      );
+    }
+  });
 });
