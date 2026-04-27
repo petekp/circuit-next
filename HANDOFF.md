@@ -1,6 +1,6 @@
 # HANDOFF
 
-Last updated: 2026-04-27 — Session 1 of the test-quality backlog complete: lint cleared, invariant-ledger meta-test landed (skipped pending FU-T02b), CI workflow live. Three commits: `116dafc`, `e9cf64e`, `1c0f0f0`.
+Last updated: 2026-04-27 — Sessions 1 + 2 of the test-quality backlog complete. Session 1: lint cleared, invariant-ledger meta-test landed, CI workflow live. Session 2: ledger triage done (15 stale bindings cleared — meta-test now active and green), coverage tooling added, fast/slow split added.
 
 ## Where we are
 
@@ -30,11 +30,14 @@ at the top of the file noting that.
 
 ## Tests
 
-929 tests pass, 7 skipped (the 7th is the FU-T02a meta-test, skipped
-pending FU-T02b's data triage). tsc clean, biome clean, drift clean.
+930 tests pass, 6 skipped. tsc clean, biome clean, drift clean.
 `npm run verify` is green on origin. CI workflow at
 `.github/workflows/verify.yml` mirrors the gate on every push and PR
-to `main`.
+to `main`. `npm run verify:fast` is the tight-loop alternative
+(~40% wall time off; excludes subprocess-heavy `tests/runner/**`).
+`npm run test:coverage` produces a baseline report at
+`coverage/`; current sources stand at 84.7% lines / 82% branches /
+94.6% functions (informational, no thresholds enforced).
 
 New tests added during the session:
 - `tests/runner/catalog-derivations.test.ts` — 21 tests covering every
@@ -108,28 +111,27 @@ estimates assume an LLM-paced session.
 - State: **done** in `e9cf64e` (2026-04-27). Test at
   `tests/contracts/invariant-ledger-bindings.test.ts` walks every
   `binding_refs[].path` in `specs/invariants.json` and asserts each
-  resolves on disk. Anti-vacuity floor on total ref count. Verified
-  by temporary unskip: surfaces exactly 15 offenders across the 5
-  named missing test files.
-- Landed `it.skip`'d pending FU-T02b — unskipping is the mechanical
-  success gate for FU-T02b.
+  resolves on disk. Anti-vacuity floor on total ref count. Now
+  un-skipped and active (FU-T02b cleared the data).
 
 **FU-T02b. Triage the 15 stale invariant bindings.**
-- State: open. `specs/invariants.json` still claims 15
-  `test-enforced` bindings pointing at non-existent test files
-  spread across 5 missing files: `cross-model-challenger.test.ts`,
-  `session-hygiene.test.ts`, `prose-yaml-parity.test.ts`,
-  `artifact-authority.test.ts`, `spine-coverage.test.ts`.
-- Fix: per-binding triage — for each of the 15, decide whether the
-  invariant was aspirational (remove the binding ref / downgrade
-  enforcement state) or genuinely needed (write the missing test).
-  Each call is operator judgment, not engineering judgment. When
-  done, flip `it.skip` → `it` in the meta-test from FU-T02a.
-- Why it matters: the ledger is supposed to be agent truth.
-  Lying-by-omission about test-enforcement is the worst class of
-  spec drift in an agent-driven codebase.
-- Effort: ~1-2 hours (depends on how many turn out to need real
-  tests written vs. simple removals).
+- State: **done** in `3abf0ad` (2026-04-27). Root cause: the
+  methodology strip (commit `60b1263`, 2026-04-25) deleted 5 test
+  files without cleaning the corresponding ledger entries. Triage
+  by class:
+  - **Class A (2 invariants)** — real contract claims with dead
+    binding paths. ADAPTER-I10 → repointed to
+    `tests/contracts/schema-parity.test.ts`. EXPLORE-I1 →
+    repointed to `tests/contracts/workflow-kind-policy.test.ts`.
+    Anchor tokens added to the relevant describe/it titles so
+    the `test_title` binding semantic is honest.
+  - **Class B (13 invariants)** — behavioral disciplines whose
+    underlying methodology was deliberately stripped. Downgraded
+    `enforcement_state` from `test-enforced` → `prose-only` and
+    added a `rationale` field naming commit `60b1263` and the
+    specific reason no machine-enforceable surface remains.
+    Pattern matches the existing CHALLENGER-I2/I6 + PROSE-YAML-I3
+    prose-only entries in the same file.
 
 **FU-T03. CI workflow.**
 - State: **done** in `1c0f0f0` (2026-04-27).
@@ -143,26 +145,22 @@ estimates assume an LLM-paced session.
 ### P1 — observability + agent feedback loop
 
 **FU-T04. Coverage tooling.**
-- State: open. `@vitest/coverage-v8` is not in package.json. Running
-  `npx vitest run --coverage` fails out of the box.
-- Fix: install the provider, commit a `vitest.config.ts` coverage
-  config (sources `src/**/*.ts`, exclude `dist/`), add a
-  `test:coverage` script. Run baseline. **Do not set thresholds** —
-  per the methodology-strip rule, ratchets stay cut until concrete
-  pain justifies them. Coverage as info, not enforcement.
-- Effort: ~30 min.
+- State: **done** in `64d20ea` (2026-04-27). `@vitest/coverage-v8`
+  pinned to vitest's version. `vitest.config.ts` configures the v8
+  provider for `src/**/*.ts` with text + html + json-summary
+  reporters. New `test:coverage` script. NO thresholds (coverage
+  as info, not enforcement). Baseline: 84.7% lines / 82% branches /
+  94.6% functions.
 
 **FU-T05. Fast/slow test split.**
-- State: open. Runner suite is ~237s serial. `build-runtime-wiring`
-  alone is 72-85s; `cli-router` ~40s; `sweep-runtime-wiring` ~44s.
-  Most of the time is real subprocess spawning.
-- Fix: add `verify:fast` (tsc + biome + contracts + unit + properties
-  + drift) and `verify:full` (everything including runner). Agents
-  default to fast; use full before claiming completion.
-- Why it matters: a slow suite changes agent behavior — they run
-  fewer checks or only the ones they think are relevant. That
-  increases risk.
-- Effort: ~30 min (script-level; no test rewrites required).
+- State: **done** in `f29a6dd` (2026-04-27). New scripts:
+  - `test:fast` — vitest excluding `tests/runner/**` (subprocess-
+    heavy). 666 of 936 tests; ~5s wall vs ~13s for full.
+  - `verify:fast` — check + lint + build + test:fast + drift.
+    ~12s wall vs ~20s for full (~40% off).
+  Convention documented in AGENTS.md: use `verify:fast` during
+  iteration, full `verify` before claiming completion. CI runs
+  full `verify`.
 
 **FU-T06. Real recursion integration test (sub-run / fanout).**
 - State: open, flagged by both reviewers and prior HANDOFF. Every
@@ -260,14 +258,17 @@ doc-shape pins.**
 
 ### Recommended order across sessions
 
-Session 1 closed: FU-T01, FU-T02a, FU-T03 — the execute-ready P0
-trio. Verify gate is green on origin and CI mirrors it. Session 2
-starts with FU-T02b (per-binding triage of the 15 stale ledger refs;
-needs operator input per binding) and can fold in FU-T04 (coverage
-tooling) and FU-T05 (fast/slow split) since both are mechanical
-~30-min items. The remaining design-heavy items (FU-T06 recursion
-test, FU-T07 helper API, FU-T09 mega-file splits, FU-T11 step-handler
-tests, FU-T12 property tests) pace across Session 3+.
+Sessions 1 + 2 closed. The full P0 trio (FU-T01, FU-T02a, FU-T03) +
+FU-T02b's triage + the two mechanical P1 items (FU-T04, FU-T05) all
+landed. The verify gate is green, CI mirrors it, the invariant
+ledger is honest, coverage is observable, and the inner loop has a
+fast-path. Session 3+ moves into the design-heavy items: FU-T06
+(real recursion integration test), FU-T07 (failure-message helpers
+naming the invariant), FU-T09 (mega-file splits — verify current
+sizes first), FU-T11 (direct step-handler tests), FU-T12 (property-
+test expansion). FU-T08 (anti-vacuity sweep), FU-T10 (collapse
+plugin-command-invocation prose pins), and FU-T13 (slice-vocabulary
+residue) are smaller fold-ins.
 
 ## Notes
 
