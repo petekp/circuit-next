@@ -14,14 +14,10 @@ import { describe, expect, it } from 'vitest';
 const RUNTIME_ROOT = 'src/runtime';
 const WORKFLOWS_ROOT = 'src/workflows';
 
-// Allow-list: imports the engine IS permitted to take from
-// src/workflows/. If any other path appears, the test fails.
-const ALLOWED_WORKFLOW_IMPORTS = [
-  '../workflows/catalog.js',
-  '../../workflows/catalog.js',
-  '../workflows/types.js',
-  '../../workflows/types.js',
-];
+// Allow-list: match by suffix so engine files at any directory depth
+// get the same exemption. The catalog and the shared types are the
+// only legitimate workflow surfaces the engine consumes.
+const ALLOWED_WORKFLOW_IMPORT_SUFFIXES = ['/workflows/catalog.js', '/workflows/types.js'];
 
 function walk(dir: string): readonly string[] {
   const out: string[] = [];
@@ -36,28 +32,46 @@ function walk(dir: string): readonly string[] {
   return out;
 }
 
-// Match `from '...workflows/...'` — both single and double quotes,
-// covers any depth of relative import. Excludes paths that contain
-// 'test' or end in '.test.ts' since the runtime tree shouldn't have
-// those, but we also exclude tests/ and dist/ from the walk anyway.
-const WORKFLOW_IMPORT_PATTERN = /from\s+['"]([^'"\n]*workflows\/[^'"\n]+)['"]/g;
+// Patterns covering every form a workflow path can sneak in through:
+//   - `import x from '...'` and `import type x from '...'`
+//   - `import '...'` (side-effect)
+//   - `export ... from '...'` (re-export)
+//   - `await import('...')` (dynamic import)
+// Each pattern uses a single capture group for the import path.
+const STATIC_IMPORT_PATTERN = /\bimport\s+(?:type\s+)?(?:[^'"\n;]+\s+from\s+)?['"]([^'"\n]+)['"]/g;
+const REEXPORT_PATTERN = /\bexport\s+(?:type\s+)?(?:\*\s+|\{[^}]*\}\s+)?from\s+['"]([^'"\n]+)['"]/g;
+const DYNAMIC_IMPORT_PATTERN = /\bimport\(\s*['"]([^'"\n]+)['"]\s*\)/g;
 
-function workflowImports(file: string): readonly string[] {
+function importPathsFrom(file: string): readonly string[] {
   const text = readFileSync(file, 'utf8');
-  const matches: string[] = [];
-  for (const match of text.matchAll(WORKFLOW_IMPORT_PATTERN)) {
-    const importPath = match[1];
-    if (importPath !== undefined) matches.push(importPath);
+  const out: string[] = [];
+  for (const pattern of [STATIC_IMPORT_PATTERN, REEXPORT_PATTERN, DYNAMIC_IMPORT_PATTERN]) {
+    for (const match of text.matchAll(pattern)) {
+      const importPath = match[1];
+      if (importPath !== undefined) out.push(importPath);
+    }
   }
-  return matches;
+  return out;
+}
+
+function isWorkflowImport(importPath: string): boolean {
+  // Match the literal '/workflows/' segment so paths that merely
+  // contain the word 'workflows' as a substring (e.g. comments,
+  // hypothetical 'foo-workflows-bar.ts') don't trigger.
+  return /\/workflows\//.test(importPath) || importPath.endsWith('/workflows');
+}
+
+function isAllowedEngineImport(importPath: string): boolean {
+  return ALLOWED_WORKFLOW_IMPORT_SUFFIXES.some((suffix) => importPath.endsWith(suffix));
 }
 
 describe('engine ↔ workflow boundary', () => {
   it('no file under src/runtime/ imports a workflow source other than the catalog or types', () => {
     const offenders: { readonly file: string; readonly importPath: string }[] = [];
     for (const file of walk(RUNTIME_ROOT)) {
-      for (const importPath of workflowImports(file)) {
-        if (ALLOWED_WORKFLOW_IMPORTS.includes(importPath)) continue;
+      for (const importPath of importPathsFrom(file)) {
+        if (!isWorkflowImport(importPath)) continue;
+        if (isAllowedEngineImport(importPath)) continue;
         offenders.push({ file, importPath });
       }
     }
@@ -65,14 +79,13 @@ describe('engine ↔ workflow boundary', () => {
       offenders,
       `engine files imported per-workflow modules outside the catalog allowlist:\n${offenders
         .map((o) => `  ${o.file} → ${o.importPath}`)
-        .join('\n')}\nAllowed engine→workflow imports: ${ALLOWED_WORKFLOW_IMPORTS.join(', ')}`,
+        .join(
+          '\n',
+        )}\nAllowed engine→workflow import suffixes: ${ALLOWED_WORKFLOW_IMPORT_SUFFIXES.join(', ')}`,
     ).toEqual([]);
   });
 
   it('no file under src/workflows/<id>/ imports another workflow', () => {
-    // Workflow packages are independent: build/index.ts must not
-    // import explore/. Cross-workflow coupling defeats the vertical
-    // shape — surface it as a contract violation.
     const offenders: {
       readonly file: string;
       readonly fromWorkflow: string;
@@ -82,20 +95,18 @@ describe('engine ↔ workflow boundary', () => {
       const workflowDir = join(WORKFLOWS_ROOT, entry);
       if (!statSync(workflowDir).isDirectory()) continue;
       for (const file of walk(workflowDir)) {
-        const text = readFileSync(file, 'utf8');
-        for (const match of text.matchAll(WORKFLOW_IMPORT_PATTERN)) {
-          const importPath = match[1];
-          if (importPath === undefined) continue;
-          // Allowed: same-workflow imports (./ or ../same-id/) and
-          // imports of types.js / catalog.js at the workflows/ root.
+        for (const importPath of importPathsFrom(file)) {
+          if (!isWorkflowImport(importPath)) continue;
+          // Allowed: same-workflow imports starting with ./
           if (importPath.startsWith('./')) continue;
-          if (importPath.endsWith('/types.js') && /workflows\/types\.js$/.test(importPath))
+          // Allowed: imports of catalog.js or types.js at workflows/ root
+          if (
+            importPath.endsWith('/workflows/types.js') ||
+            importPath.endsWith('/workflows/catalog.js')
+          ) {
             continue;
-          if (importPath.endsWith('/catalog.js') && /workflows\/catalog\.js$/.test(importPath))
-            continue;
-          // Detect cross-workflow imports like '../explore/...' from
-          // inside src/workflows/build/.
-          const otherWorkflowMatch = importPath.match(/workflows\/([^/]+)\//);
+          }
+          const otherWorkflowMatch = importPath.match(/\/workflows\/([^/]+)\//);
           if (otherWorkflowMatch === null) continue;
           const importedWorkflow = otherWorkflowMatch[1];
           if (importedWorkflow !== undefined && importedWorkflow !== entry) {
@@ -117,22 +128,18 @@ describe('engine ↔ workflow boundary', () => {
   it('catalog.ts is the only file that imports each workflow package index', () => {
     // Anyone who needs workflow data should go through the catalog
     // rather than reach into a specific workflow package directly.
-    // Allowed importers: src/workflows/catalog.ts itself, and tests.
+    // Tests are exempt because they may legitimately exercise a
+    // single workflow in isolation.
     const offenders: { readonly file: string; readonly importPath: string }[] = [];
     for (const file of walk('src')) {
       if (file === join(WORKFLOWS_ROOT, 'catalog.ts')) continue;
-      const text = readFileSync(file, 'utf8');
-      for (const match of text.matchAll(WORKFLOW_IMPORT_PATTERN)) {
-        const importPath = match[1];
-        if (importPath === undefined) continue;
-        // Match imports of an explicit per-workflow index.js — the
-        // surface a workflow package exposes externally.
-        const indexMatch = importPath.match(/workflows\/([^/]+)\/index\.js$/);
+      for (const importPath of importPathsFrom(file)) {
+        if (!isWorkflowImport(importPath)) continue;
+        const indexMatch = importPath.match(/\/workflows\/([^/]+)\/index\.js$/);
         if (indexMatch === null) continue;
         const importedWorkflow = indexMatch[1];
-        // A workflow's own folder may import its own index? Should not
-        // need to — but if it does, leave it alone. Just look for
-        // imports from outside the workflow's directory.
+        if (importedWorkflow === undefined) continue;
+        // A workflow's own folder may import its own index — leave alone.
         if (file.includes(`/workflows/${importedWorkflow}/`)) continue;
         offenders.push({ file, importPath });
       }
@@ -142,6 +149,31 @@ describe('engine ↔ workflow boundary', () => {
       `non-catalog files imported a workflow package directly:\n${offenders
         .map((o) => `  ${o.file} → ${o.importPath}`)
         .join('\n')}\nUse src/workflows/catalog.ts → workflowPackages instead.`,
+    ).toEqual([]);
+  });
+
+  it('test files do not bypass the engine→workflow boundary via direct package imports', () => {
+    // Tests CAN import a workflow package's index for unit-testing
+    // the package in isolation. What they MUST NOT do is import a
+    // workflow's writer / dispatch-hint internals — that would
+    // entangle the test surface with the workflow's internal layout.
+    const offenders: { readonly file: string; readonly importPath: string }[] = [];
+    for (const file of walk('tests')) {
+      for (const importPath of importPathsFrom(file)) {
+        if (!isWorkflowImport(importPath)) continue;
+        // index.js / catalog.js / types.js are the supported public
+        // surfaces.
+        if (importPath.endsWith('/index.js')) continue;
+        if (importPath.endsWith('/workflows/catalog.js')) continue;
+        if (importPath.endsWith('/workflows/types.js')) continue;
+        offenders.push({ file, importPath });
+      }
+    }
+    expect(
+      offenders,
+      `tests reached into workflow internals:\n${offenders
+        .map((o) => `  ${o.file} → ${o.importPath}`)
+        .join('\n')}\nImport the workflow's index.js or go through the catalog.`,
     ).toEqual([]);
   });
 });

@@ -185,7 +185,7 @@ When looking at AI coding tools, ask:
 When the research comes back, do this in order:
 
 1. Extract the ten strongest lessons into the intake template above.
-2. Compare those lessons against `specs/workflow-primitives.md`.
+2. Compare those lessons against `docs/workflows/primitives.md`.
 3. Mark each current primitive as keep, rename, split, merge, or remove.
 4. Name any missing primitive.
 5. Decide the first recipe shape worth implementing.

@@ -61,10 +61,10 @@ These must pass before commit on changes to `src/`, `tests/`, or
 | Workflow catalog | `src/workflows/catalog.ts` (single source of truth the engine derives from) |
 | Tests | `tests/` |
 | Engine contracts | `docs/contracts/` |
+| Workflow design notes | `docs/workflows/` |
 | Behavioral concerns | `specs/behavioral/` |
 | Ubiquitous language | `specs/domain.md` |
-| Workflow design notes | `specs/workflow-direction.md`, `specs/workflow-primitives.md`, `specs/workflow-recipe-composition.md`, `specs/workflow-research-intake.md` |
-| Primitive catalog | `specs/workflow-primitive-catalog.json` |
+| Primitive catalog | `docs/workflows/primitive-catalog.json` |
 | Cross-session handoff | `HANDOFF.md` (repo root) |
 | Reference plugin | `~/Code/circuit` (read-only) |
 
@@ -72,7 +72,9 @@ These must pass before commit on changes to `src/`, `tests/`, or
 
 1. Create `src/workflows/<id>/` with `recipe.json`, optional `command.md`
    and `contract.md`, `index.ts` (the WorkflowPackage), `dispatch-hints.ts`
-   (if any dispatch artifacts have shape hints), and `writers/`.
+   (if any dispatch artifacts have shape hints), and `writers/` (one file
+   per writer kind your workflow uses: synthesis / close / verification /
+   checkpoint).
 2. Add the package to `src/workflows/catalog.ts`.
 3. `npm run build && node scripts/emit-workflows.mjs` to regenerate
    `commands/<id>.md` and `.claude-plugin/skills/<id>/`.
@@ -81,6 +83,12 @@ These must pass before commit on changes to `src/`, `tests/`, or
 The engine (`src/runtime/`) does not need any edits — registries derive
 from the catalog. If you find yourself editing engine files to add a
 workflow, the boundary is being violated.
+
+`WorkflowPackage.engineFlags` carries opt-in switches the engine
+branches on (currently only `bindsExecutionRigorToDispatchSelection`,
+which Build sets). Add a flag entry there if your workflow needs
+special engine behavior — never put workflow-specific code into the
+engine itself.
 
 ## Reference plugin
 

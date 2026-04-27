@@ -12,7 +12,7 @@ This note describes how Circuit should compose reusable workflow primitives into
 recipes. It does not define runtime behavior yet.
 
 The companion machine-readable primitive list lives at
-`specs/workflow-primitive-catalog.json`, with the schema in
+`docs/workflows/primitive-catalog.json`, with the schema in
 `src/schemas/workflow-primitives.ts`.
 
 The active Fix recipe lives at `src/workflows/fix/recipe.json`, with
@@ -20,7 +20,7 @@ the recipe schema in `src/schemas/workflow-recipe.ts` and the recipe → Workflo
 compiler at `src/runtime/compile-recipe-to-workflow.ts`. Compiled fixtures are
 emitted to `.claude-plugin/skills/fix/circuit.json` and (because Fix uses
 `route_overrides`) `.claude-plugin/skills/fix/lite.json`. The product direction
-note at `specs/workflow-direction.md` reframes old Repair evidence into the
+note at `docs/workflows/direction.md` reframes old Repair evidence into the
 clearer Fix recipe.
 
 ## The Short Version
@@ -289,7 +289,7 @@ stabilize before Circuit grows an extension system for new move definitions.
 Two layers, both load-bearing:
 
 **Primitive contracts** are nominal. They live in
-`specs/workflow-primitive-catalog.json` as named identifiers
+`docs/workflows/primitive-catalog.json` as named identifiers
 (`workflow.brief@v1`, `verification.result@v1`, `change.evidence@v1`,
 etc.). Primitives declare them as inputs and outputs. They express the
 abstract claim "this primitive needs a brief" without binding to a

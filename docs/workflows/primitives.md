@@ -16,11 +16,11 @@ good workflow instincts. But circuit-next should not recreate every old workflow
 one by one if a smaller set of reusable primitives gives users a better system.
 
 Deep prior-art research should be evaluated through
-`specs/workflow-research-intake.md` before it changes this inventory.
+`docs/workflows/research-intake.md` before it changes this inventory.
 The machine-readable companion catalog is
-`specs/workflow-primitive-catalog.json`; the composition model is sketched in
-`specs/workflow-recipe-composition.md`. The product direction is summarized in
-`specs/workflow-direction.md`.
+`docs/workflows/primitive-catalog.json`; the composition model is sketched in
+`docs/workflows/recipe-composition.md`. The product direction is summarized in
+`docs/workflows/direction.md`.
 
 ## Core Idea
 

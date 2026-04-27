@@ -52,7 +52,7 @@
       "writers": ["circuit-next maintainers (offline product architecture)"],
       "readers": ["workflow recipe authors", "contract tests", "future recipe compiler"],
       "resolvers": [],
-      "backing_paths": ["specs/workflow-primitive-catalog.json"],
+      "backing_paths": ["docs/workflows/primitive-catalog.json"],
       "identity_fields": ["id"],
       "path_derived_fields": [],
       "dangerous_sinks": [

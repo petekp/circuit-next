@@ -6,9 +6,9 @@ import {
   WorkflowPrimitiveCatalog,
 } from '../../src/schemas/workflow-primitives.js';
 
-const catalogPath = 'specs/workflow-primitive-catalog.json';
-const primitivesDocPath = 'specs/workflow-primitives.md';
-const compositionDocPath = 'specs/workflow-recipe-composition.md';
+const catalogPath = 'docs/workflows/primitive-catalog.json';
+const primitivesDocPath = 'docs/workflows/primitives.md';
+const compositionDocPath = 'docs/workflows/recipe-composition.md';
 
 function readCatalog() {
   return JSON.parse(readFileSync(catalogPath, 'utf8')) as unknown;
@@ -136,7 +136,7 @@ describe('workflow primitive catalog', () => {
 
   it('has a composition note that points recipes at the catalog, not freeform graphs', () => {
     const note = readFileSync(compositionDocPath, 'utf8');
-    expect(note).toContain('specs/workflow-primitive-catalog.json');
+    expect(note).toContain('docs/workflows/primitive-catalog.json');
     expect(note).toMatch(/recipe/i);
     expect(note).toMatch(/freeform graph/i);
     expect(note).toMatch(/named outcomes/i);

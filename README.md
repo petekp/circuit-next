@@ -50,22 +50,18 @@ circuit-next/
 ├── commands/                  # Generated slash commands (run.md is the CLI router entry)
 ├── .claude-plugin/            # Plugin manifest + generated skill outputs
 ├── docs/
-│   └── contracts/             # Engine contracts (adapter, config, run, step, workflow, …)
+│   ├── contracts/             # Engine contracts (adapter, config, run, step, workflow, …)
+│   └── workflows/             # Workflow design notes + primitive catalog
 ├── specs/
 │   ├── domain.md              # Ubiquitous language
 │   ├── artifacts.json         # Typed-artifact authority graph
 │   ├── invariants.json        # Invariant ledger
 │   ├── behavioral/            # Behavioral concerns
-│   ├── reference/             # Legacy-surface characterizations
-│   ├── workflow-direction.md  # First-principles workflow direction
-│   ├── workflow-primitives.md # Reusable workflow moves
-│   ├── workflow-primitive-catalog.json
-│   ├── workflow-recipe-composition.md
-│   └── workflow-research-intake.md
+│   └── reference/             # Legacy-surface characterizations
 ├── src/
 │   ├── runtime/               # Engine: registries, runner, step handlers, adapters
 │   ├── schemas/               # Zod schemas for all typed surfaces
-│   ├── cli/                   # CLI commands (run, dogfood)
+│   ├── cli/circuit.ts         # CLI entry (router + workflow launcher)
 │   └── workflows/             # Workflow packages (one folder per workflow)
 │       ├── catalog.ts         # Single source of truth the engine derives from
 │       ├── types.ts
@@ -78,8 +74,18 @@ circuit-next/
 └── tests/                     # Tests
 ```
 
-Adding a workflow means creating a folder under `src/workflows/` and
-registering it in `catalog.ts`; the engine needs no edits.
+Adding a workflow:
+
+1. Create `src/workflows/<id>/` with `recipe.json`, optional `command.md`
+   and `contract.md`, `index.ts` (the WorkflowPackage), `dispatch-hints.ts`
+   (if any dispatch artifacts have shape hints), and `writers/`.
+2. Add the package to `src/workflows/catalog.ts`.
+3. `npm run build && node scripts/emit-workflows.mjs` to regenerate
+   `commands/<id>.md` and `.claude-plugin/skills/<id>/`.
+4. `npm run verify`.
+
+The engine (`src/runtime/`) needs no edits — registries derive from the
+catalog. See `AGENTS.md` for the full operating doc.
 
 ## License
 

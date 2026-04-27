@@ -3,6 +3,13 @@ description: Classifies free-form tasks into the current router-supported workfl
 argument-hint: <task>
 ---
 
+<!--
+  This file is HAND-AUTHORED. Unlike commands/<workflow>.md (which are
+  generated from src/workflows/<id>/command.md by scripts/emit-workflows.mjs),
+  /circuit:run is the CLI router entry, not a workflow, so its source of
+  truth lives directly here.
+-->
+
 # /circuit:run — workflow router
 
 Classifies a free-form task into the current router-supported workflows and runs

@@ -8,7 +8,7 @@ import {
   validateWorkflowRecipeCatalogCompatibility,
 } from '../../src/schemas/workflow-recipe.js';
 
-const primitiveCatalogPath = 'specs/workflow-primitive-catalog.json';
+const primitiveCatalogPath = 'docs/workflows/primitive-catalog.json';
 const fixRecipePath = 'src/workflows/fix/recipe.json';
 
 function readJson(path: string): unknown {

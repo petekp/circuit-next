@@ -55,7 +55,7 @@ function singleWorkflow(result: CompileResult): Workflow {
 }
 
 function loadCatalog() {
-  const raw = JSON.parse(readFileSync('specs/workflow-primitive-catalog.json', 'utf8')) as unknown;
+  const raw = JSON.parse(readFileSync('docs/workflows/primitive-catalog.json', 'utf8')) as unknown;
   return WorkflowPrimitiveCatalog.parse(raw);
 }
 
