@@ -41,6 +41,7 @@ import {
 import { writeResult } from './result-writer.js';
 import { resolveRunRelative } from './run-relative-path.js';
 import { resolveSelectionForDispatch } from './selection-resolver.js';
+import { findDispatchShapeHint } from './shape-hints/registry.js';
 import { writeDerivedSnapshot } from './snapshot-writer.js';
 import { findSynthesisBuilder, resolveSynthesisReadPaths } from './synthesis-writers/registry.js';
 import { findVerificationWriter } from './verification-writers/registry.js';
@@ -395,59 +396,11 @@ function composeDispatchPrompt(
 function dispatchResponseInstruction(
   step: Workflow['steps'][number] & { kind: 'dispatch' },
 ): string {
-  if (step.writes.artifact?.schema === 'explore.synthesis@v1') {
-    return [
-      'Respond with a single raw JSON object whose top-level shape is exactly:',
-      '{ "verdict": "<one-of-accepted-verdicts>", "subject": "<subject investigated>", "recommendation": "<primary conclusion or recommendation>", "success_condition_alignment": "<how the recommendation satisfies the brief success condition>", "supporting_aspects": [{ "aspect": "<analysis aspect name>", "contribution": "<how this aspect supports the recommendation>" }] }',
-      'Do not include extra top-level keys. Do not wrap the JSON in Markdown code fences. Do not include any prose before or after the JSON object.',
-      'The runtime parses your response with JSON.parse, rejects any verdict not drawn from the accepted-verdicts list, and validates the full artifact body against explore.synthesis@v1 before writing artifacts/synthesis.json.',
-    ].join(' ');
-  }
-
-  if (step.writes.artifact?.schema === 'explore.review-verdict@v1') {
-    return [
-      'Respond with a single raw JSON object whose top-level shape is exactly:',
-      '{ "verdict": "<one-of-accepted-verdicts>", "overall_assessment": "<review summary>", "objections": ["<blocking or follow-up objection>"], "missed_angles": ["<important angle not covered>"] }',
-      'Use empty arrays when there are no objections or missed angles. Do not include extra top-level keys. Do not wrap the JSON in Markdown code fences. Do not include any prose before or after the JSON object.',
-      'The runtime parses your response with JSON.parse, rejects any verdict not drawn from the accepted-verdicts list, and validates the full artifact body against explore.review-verdict@v1 before writing artifacts/review-verdict.json.',
-    ].join(' ');
-  }
-
-  if (step.writes.artifact?.schema === 'build.implementation@v1') {
-    return [
-      'Respond with a single raw JSON object whose top-level shape is exactly:',
-      '{ "verdict": "accept", "summary": "<what changed>", "changed_files": ["<project-relative path>"], "evidence": ["<verification or implementation evidence>"] }',
-      'Use an empty changed_files array only when no file changed. Evidence must contain at least one item. Do not include extra top-level keys. Do not wrap the JSON in Markdown code fences. Do not include any prose before or after the JSON object.',
-      'The runtime parses your response with JSON.parse, rejects any verdict not drawn from the accepted-verdicts list, and validates the full artifact body against build.implementation@v1 before writing artifacts/build/implementation.json.',
-    ].join(' ');
-  }
-
-  if (step.writes.artifact?.schema === 'build.review@v1') {
-    return [
-      'Respond with a single raw JSON object whose top-level shape is exactly:',
-      '{ "verdict": "<accept|accept-with-fixes|reject>", "summary": "<review summary>", "findings": [{ "severity": "<critical|high|medium|low>", "text": "<finding text>", "file_refs": ["<file:line reference>"] }] }',
-      'Use an empty findings array only with verdict "accept". Verdicts "accept-with-fixes" and "reject" must include at least one finding. Use an empty file_refs array when a finding has no file-specific reference. Do not include extra top-level keys. Do not wrap the JSON in Markdown code fences. Do not include any prose before or after the JSON object.',
-      'The runtime parses your response with JSON.parse, rejects any verdict not drawn from the accepted-verdicts list, and validates the full artifact body against build.review@v1 before writing artifacts/build/review.json.',
-    ].join(' ');
-  }
-
-  if (
-    step.role === 'reviewer' &&
-    step.gate.pass.includes('NO_ISSUES_FOUND') &&
-    step.gate.pass.includes('ISSUES_FOUND')
-  ) {
-    return [
-      'Respond with a single raw JSON object whose top-level shape is exactly:',
-      '{ "verdict": "<one-of-accepted-verdicts>", "findings": [{ "severity": "<critical|high|low>", "id": "<stable finding id>", "text": "<finding text>", "file_refs": ["<file:line reference>"] }] }',
-      'Use an empty findings array when there are no issues: { "verdict": "NO_ISSUES_FOUND", "findings": [] }.',
-      'Use an empty file_refs array when a finding has no file-specific reference.',
-      'Do not include extra top-level keys. Do not wrap the JSON in Markdown code fences. Do not include any prose before or after the JSON object.',
-      'The runtime parses your response with JSON.parse, rejects any verdict not drawn from the accepted-verdicts list, and the close step validates findings before writing artifacts/review-result.json.',
-    ].join(' ');
-  }
-
-  return 'Respond with a single raw JSON object whose top-level shape is exactly { "verdict": "<one-of-accepted-verdicts>" } (additional fields permitted). Do not wrap the JSON in Markdown code fences. Do not include any prose before or after the JSON object. The runtime parses your response with JSON.parse and rejects the run on any parse failure or on a verdict not drawn from the accepted-verdicts list.';
+  return findDispatchShapeHint(step) ?? GENERIC_DISPATCH_SHAPE_HINT;
 }
+
+const GENERIC_DISPATCH_SHAPE_HINT =
+  'Respond with a single raw JSON object whose top-level shape is exactly { "verdict": "<one-of-accepted-verdicts>" } (additional fields permitted). Do not wrap the JSON in Markdown code fences. Do not include any prose before or after the JSON object. The runtime parses your response with JSON.parse and rejects the run on any parse failure or on a verdict not drawn from the accepted-verdicts list.';
 
 type DispatcherInvocationConfig = {
   readonly dispatcher?: DispatchFn;
