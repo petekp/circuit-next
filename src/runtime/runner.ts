@@ -215,10 +215,9 @@ export interface DogfoodInvocation {
   // `dispatchAgent` (lazy-imported so tests that don't exercise dispatch
   // don't pull the subprocess module into their graph). Tests that want
   // deterministic transcripts inject a stub returning a pre-baked
-  // AgentDispatchResult; the capability-boundary assertion lives in
-  // parseAgentStdout and is thus a real-subprocess-only concern —
-  // bypassing it at the test layer is a test-surface seam, not a
-  // policy seam.
+  // AgentDispatchResult; parse-time assertions on init.mcp_servers /
+  // init.slash_commands live in parseAgentStdout and are thus a real-
+  // subprocess-only concern.
   dispatcher?: DispatchFn;
   // Test seam for deterministic synthesis fixtures. Production invocations
   // omit this and use the registered writer below, which now has a narrow

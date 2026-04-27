@@ -10,68 +10,59 @@ import {
 
 export { sha256Hex };
 
-// Slice 42 — P2.4 real agent adapter. Invokes the Claude Code CLI as a
-// subprocess of the Node.js runtime per ADR-0009 §1 (subprocess-per-adapter
-// for v0). No external SDK dependency; Node stdlib only
-// (`node:child_process` + `node:perf_hooks` here; `node:crypto` via
-// `./shared.ts` for the shared `sha256Hex` helper).
+// Real agent adapter. Invokes the Claude Code CLI as a subprocess of the
+// Node.js runtime (subprocess-per-adapter at v0). No external SDK
+// dependency; Node stdlib only (`node:child_process` + `node:perf_hooks`
+// here; `node:crypto` via `./shared.ts` for the shared `sha256Hex` helper).
 //
-// Capability boundary (Slice 40 HIGH 3 + ADR-0009 §2.v + Slice 41 Codex
-// HIGH 4 + Slice 42 Codex HIGH 2 runtime-binding fold-in). The subprocess
-// ships with NO repo-write tool capability at v0. Enforcement is
-// two-layered:
-//   (a) Flag combo (AGENT_NO_WRITE_FLAGS below) configures the subprocess
-//       to emit an init event reporting no write-capable tool surface, plus
-//       empty MCP / slash-command surfaces.
-//   (b) parseAgentStdout() is fail-closed: the subprocess's init event
-//       must report only allowlisted passive tools, with
-//       `mcp_servers: []` and `slash_commands: []`, at every dispatch. A
-//       future flag regression that silently widens any of those surfaces is
-//       caught by the parse-time assertion before the adapter result reaches
-//       any downstream event-writer.
-// Each flag in AGENT_NO_WRITE_FLAGS is load-bearing:
-//   --tools ""             — zeroes the built-in write-capable tool surface
-//                            (Write, Edit, Bash, MultiEdit, NotebookEdit,
-//                            Read, Grep, Glob, WebFetch, etc. all removed).
-//   --strict-mcp-config    — empty MCP server list; no remote-write paths
-//                            via MCP (Gmail, Notion, Slack, etc. all removed).
-//   --disable-slash-commands — zero skill/slash surface; no skill can
-//                            re-introduce a write-tool path.
-//   --setting-sources ''   — skip user, project, and local settings files.
-//                            Prevents operator-configured hooks from firing
-//                            inside the adapter subprocess (e.g. the
-//                            project's Stop hook that runs
-//                            `.claude/hooks/auto-handoff-guard.sh`, which
-//                            would otherwise deadlock the subprocess via
-//                            hook-feedback retry loops when spawned from
-//                            within circuit-next). Capability-relevant:
-//                            user hooks can carry arbitrary shell commands,
-//                            so inheriting them would re-import a write
-//                            surface below the --tools "" gate.
-//   --settings '{}'        — explicit empty inline settings override so
-//                            nothing (including keychain reads for stray
-//                            settings) reintroduces a hook registration.
-//   --output-format stream-json — NDJSON event stream (one object per line).
-//                            Codex Slice 42 HIGH 1 fold-in: the documented
-//                            `json` format is labelled "single result" in
-//                            the CLI help, while observed behaviour returns
-//                            an array; `stream-json` is the explicitly
-//                            documented streaming protocol and is robust
-//                            against future format-shape drift.
-//                            `stream-json` requires `--verbose`.
-//   --verbose              — required by `--output-format stream-json`.
+// Tool surface: the subprocess receives Claude Code's default tool surface
+// — Read, Write, Edit, Bash, Glob, Grep, etc. The runtime gate (Zod
+// artifact validation + accepted-verdict allowlist) is the only safety
+// net for what the worker produces. MCP servers and slash commands stay
+// closed because they can re-introduce arbitrary surfaces the gate cannot
+// reason about; every other tool is on by default and the worker decides
+// what it needs.
+//
+// Each flag in AGENT_DISPATCH_FLAGS is load-bearing:
+//   -p                       — print mode (non-interactive single dispatch).
+//   --permission-mode        — bypassPermissions: the worker can invoke
+//   bypassPermissions          its tools without an interactive approval
+//                              prompt. The default permission gate exists
+//                              to checkpoint a human in the loop; in
+//                              autonomous dispatch there is no human to
+//                              approve, so the gate just deadlocks Edit/
+//                              Write/Bash. The runtime gate (Zod artifact
+//                              validation + accepted-verdict allowlist) is
+//                              the substituted safety net for what the
+//                              worker produces.
+//   --strict-mcp-config      — empty MCP server list; no remote-write paths
+//                              via MCP (Gmail, Notion, Slack, etc.).
+//   --disable-slash-commands — zero skill/slash surface; the worker's
+//                              behaviour is bounded by its prompt + tools,
+//                              not by user-defined skills.
+//   --setting-sources ''     — skip user, project, and local settings files.
+//                              Prevents operator-configured hooks from
+//                              firing inside the adapter subprocess (e.g.
+//                              this project's Stop hook), which would
+//                              otherwise deadlock the subprocess via
+//                              hook-feedback retry loops when spawned from
+//                              within circuit-next.
+//   --settings '{}'          — explicit empty inline settings override so
+//                              nothing (including keychain reads for stray
+//                              settings) reintroduces a hook registration.
+//   --output-format stream-json — NDJSON event stream (one object per
+//                              line). The documented `json` format returns
+//                              an array in observed behaviour; `stream-json`
+//                              is the explicitly documented streaming
+//                              protocol and is robust against future
+//                              format-shape drift. Requires `--verbose`.
+//   --verbose                — required by `--output-format stream-json`.
 //   --no-session-persistence — ephemeral session; no resumable session file
-//                            written under ~/.claude/projects/** per run.
-// Auto-memory writes under ~/.claude/projects/<cwd>/memory/ happen outside
-// the repo working tree and do not violate the no-repo-write boundary.
-// If any of these assumptions change upstream (Claude CLI version bump
-// changes flag semantics, new write-capable tool added to the default
-// surface, or capability boundary slips for any reason), ADR-0009 §6
-// reopen trigger 5 fires.
-export const AGENT_NO_WRITE_FLAGS = [
+//                              written under ~/.claude/projects/** per run.
+export const AGENT_DISPATCH_FLAGS = [
   '-p',
-  '--tools',
-  '',
+  '--permission-mode',
+  'bypassPermissions',
   '--strict-mcp-config',
   '--disable-slash-commands',
   '--setting-sources',
@@ -84,18 +75,15 @@ export const AGENT_NO_WRITE_FLAGS = [
   '--no-session-persistence',
 ] as const;
 
-// Claude Code 2.1.119 reports PushNotification even with `--tools ""`.
-// This is not a repo-write capability, so it is admitted narrowly while every
-// unknown or write-capable tool name remains fail-closed.
-export const AGENT_ALLOWED_PASSIVE_TOOLS = ['PushNotification'] as const;
-
 export const AGENT_CLAUDE_EXECUTABLE = 'claude';
 export const AGENT_SUPPORTED_EFFORTS = ['low', 'medium', 'high', 'xhigh'] as const;
 
-// Default wall-clock budget for a single dispatch. A step's
+// Default wall-clock budget for a single dispatch. With the open tool
+// surface, workers do real file inspection / edits / verification before
+// responding, so the default has headroom for that. A step's
 // `budgets.wall_clock_ms` (per src/schemas/step.ts StepBase.budgets)
 // overrides this when present.
-const DEFAULT_TIMEOUT_MS = 120_000;
+const DEFAULT_TIMEOUT_MS = 600_000;
 
 // Grace period between SIGTERM and SIGKILL per Codex Slice 42 HIGH 4
 // subprocess-kill hygiene fold-in. SIGTERM gives the subprocess a chance
@@ -132,7 +120,7 @@ function assertAgentEffort(
 }
 
 export function buildAgentArgs(input: AgentDispatchInput): string[] {
-  const args: string[] = [...AGENT_NO_WRITE_FLAGS];
+  const args: string[] = [...AGENT_DISPATCH_FLAGS];
   const model = selectedModelForProvider('agent', input.resolvedSelection, 'anthropic');
   if (model !== undefined) {
     args.push('--model', model);
@@ -287,15 +275,13 @@ export async function dispatchAgent(input: AgentDispatchInput): Promise<Dispatch
 // without spawning a real subprocess. The claude CLI emits one JSON
 // object per line (NDJSON) under `--output-format stream-json --verbose`.
 // We need:
-//   - the `{type:'system', subtype:'init'}` event (for session_id + the
-//     tool-surface assertion);
+//   - the `{type:'system', subtype:'init'}` event (for session_id);
 //   - the terminal `{type:'result'}` event (for the text result).
-// Fail-closed contract (Codex Slice 42 HIGH 2 runtime-binding fold-in, updated
-// by Slice 125 for Claude Code 2.1.119's passive PushNotification surface):
-// the init event MUST report only allowlisted passive tools, and MUST report
-// `mcp_servers: []`, `slash_commands: []`. If a write-capable or unknown tool
-// appears at parse time, the dispatch is rejected — the capability-boundary
-// claim is bound at every runtime call, not just at test time.
+// MCP servers and slash commands stay closed at the flag layer and are
+// re-asserted here at parse time so a future flag regression that
+// silently widens either surface is caught before the adapter result
+// reaches any downstream event-writer. Tools are unconstrained by design
+// — the runtime gate is the safety net for what workers produce.
 export function parseAgentStdout(
   stdout: string,
   prompt: string,
@@ -341,38 +327,20 @@ export function parseAgentStdout(
     throw new Error(`subprocess reported is_error: ${message}`);
   }
 
-  // --- Capability-boundary runtime assertion (HIGH 2 fold-in) -----------
-  // The init event enumerates every tool/MCP/slash surface available to
-  // the subprocess. Any unknown tool path MIGHT be write-capable, so the
-  // ADR-0009 §2.v capability-boundary claim is violated at runtime unless
-  // the tool is in the narrow passive allowlist. MCP and slash-command
-  // surfaces must remain empty because they can reintroduce arbitrary
-  // write paths. Fail closed.
-  const tools = initEvent.tools;
+  // MCP and slash-command surfaces are closed at the flag layer and
+  // re-asserted here so a flag regression cannot silently widen them.
+  // Tools are unrestricted by design — the runtime gate validates worker
+  // output before it becomes workflow state.
   const mcpServers = initEvent.mcp_servers;
   const slashCommands = initEvent.slash_commands;
-  if (!Array.isArray(tools)) {
-    throw new Error(
-      `capability-boundary violation: init.tools must be an array containing only passive allowlisted tools; got ${JSON.stringify(tools)}. ADR-0009 §2.v + Slice 41 Codex HIGH 4 require no repo-write tool surface. Check AGENT_NO_WRITE_FLAGS.`,
-    );
-  }
-  const allowedTools = new Set<string>(AGENT_ALLOWED_PASSIVE_TOOLS);
-  const disallowedTools = tools.filter(
-    (tool) => typeof tool !== 'string' || !allowedTools.has(tool),
-  );
-  if (disallowedTools.length > 0) {
-    throw new Error(
-      `capability-boundary violation: init.tools contains non-allowlisted tool(s) ${JSON.stringify(disallowedTools)}; full tools=${JSON.stringify(tools)}. ADR-0009 §2.v + Slice 41 Codex HIGH 4 require no repo-write tool surface. Check AGENT_NO_WRITE_FLAGS.`,
-    );
-  }
   if (!Array.isArray(mcpServers) || mcpServers.length !== 0) {
     throw new Error(
-      `capability-boundary violation: init.mcp_servers must be []; got ${JSON.stringify(mcpServers)}. ADR-0009 §2.v + Slice 41 Codex HIGH 4 require zero MCP surface.`,
+      `init.mcp_servers must be []; got ${JSON.stringify(mcpServers)}. AGENT_DISPATCH_FLAGS includes --strict-mcp-config to keep this surface closed.`,
     );
   }
   if (!Array.isArray(slashCommands) || slashCommands.length !== 0) {
     throw new Error(
-      `capability-boundary violation: init.slash_commands must be []; got ${JSON.stringify(slashCommands)}. ADR-0009 §2.v + Slice 41 Codex HIGH 4 require zero slash-command surface.`,
+      `init.slash_commands must be []; got ${JSON.stringify(slashCommands)}. AGENT_DISPATCH_FLAGS includes --disable-slash-commands to keep this surface closed.`,
     );
   }
 
