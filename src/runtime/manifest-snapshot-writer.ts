@@ -25,7 +25,7 @@ export interface ManifestSnapshotInput {
   bytes: Uint8Array | Buffer;
 }
 
-export function buildManifestSnapshot(input: ManifestSnapshotInput): ManifestSnapshot {
+function buildManifestSnapshot(input: ManifestSnapshotInput): ManifestSnapshot {
   const bytes = Buffer.isBuffer(input.bytes) ? input.bytes : Buffer.from(input.bytes);
   const hash = computeManifestHash(bytes);
   const candidate = {

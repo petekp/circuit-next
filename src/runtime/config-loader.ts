@@ -4,10 +4,10 @@ import { join, resolve } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { Config, type Config as ConfigValue, LayeredConfig } from '../schemas/config.js';
 
-export const USER_GLOBAL_CONFIG_RELATIVE_PATH = ['.config', 'circuit-next', 'config.yaml'] as const;
-export const PROJECT_CONFIG_RELATIVE_PATH = ['.circuit', 'config.yaml'] as const;
+const USER_GLOBAL_CONFIG_RELATIVE_PATH = ['.config', 'circuit-next', 'config.yaml'] as const;
+const PROJECT_CONFIG_RELATIVE_PATH = ['.circuit', 'config.yaml'] as const;
 
-export interface DiscoverConfigLayersOptions {
+interface DiscoverConfigLayersOptions {
   readonly homeDir?: string;
   readonly cwd?: string;
   readonly invocationConfig?: ConfigValue;
@@ -29,7 +29,7 @@ function parseConfigYaml(text: string, sourcePath: string): unknown {
   }
 }
 
-export function loadConfigLayerFromPath(
+function loadConfigLayerFromPath(
   layer: 'user-global' | 'project',
   sourcePath: string,
 ): LayeredConfig | undefined {

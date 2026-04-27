@@ -1,8 +1,8 @@
 export const ROUTABLE_WORKFLOWS = ['explore', 'review', 'fix', 'build'] as const;
 
-export type RoutableWorkflow = (typeof ROUTABLE_WORKFLOWS)[number];
+type RoutableWorkflow = (typeof ROUTABLE_WORKFLOWS)[number];
 
-export interface WorkflowRouteDecision {
+interface WorkflowRouteDecision {
   workflowName: RoutableWorkflow;
   source: 'classifier';
   reason: string;

@@ -53,7 +53,7 @@ import { findVerificationWriter } from './verification-writers/registry.js';
 // product proof per ADR-0001 Addendum B §Phase 1.5 Close Criteria
 // #4/#5/#6/#7/#13.
 
-export interface RunRootInit {
+interface RunRootInit {
   runRoot: string;
 }
 
@@ -127,13 +127,13 @@ export function releaseFreshRunRootClaim(claim: FreshRunRootClaim): void {
   rmSync(claim.path, { force: true });
 }
 
-export interface BootstrapInput {
+interface BootstrapInput {
   runRoot: string;
   manifest: ManifestSnapshotInput;
   bootstrapEvent: Event;
 }
 
-export interface BootstrapResult {
+interface BootstrapResult {
   manifestSnapshotPath: string;
   eventLogPath: string;
   snapshot: Snapshot;
@@ -156,7 +156,7 @@ export function bootstrapRun(input: BootstrapInput): BootstrapResult {
   }
 }
 
-export interface AppendResult {
+interface AppendResult {
   snapshot: Snapshot;
 }
 
