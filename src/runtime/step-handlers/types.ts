@@ -23,10 +23,6 @@ export interface ResumeCheckpointState {
   readonly stepId: string;
   readonly attempt: number;
   readonly selection: string;
-  // Validated checkpoint-owned artifact body returned by the
-  // builder's validateResumeContext. Opaque to the engine; the same
-  // workflow's builder consumes it on re-stamp.
-  readonly existingArtifact?: unknown;
 }
 
 export interface StepHandlerContext {

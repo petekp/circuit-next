@@ -386,7 +386,10 @@ describe('Build checkpoint execution substrate', () => {
     expect(existsSync(join(runRoot, 'artifacts/checkpoints/frame-step-response.json'))).toBe(false);
     const brief = BuildBrief.parse(readJson(runRoot, 'artifacts/build/brief.json'));
     expect(brief.objective).toBe('Frame a deep Build run');
-    expect(brief.checkpoint.response_path).toBeUndefined();
+    // Brief is fully populated at first write — response_path always
+    // resolves to step.writes.response, even before operator selection.
+    // The response file itself is created only at resolution.
+    expect(brief.checkpoint.response_path).toBe('artifacts/checkpoints/frame-step-response.json');
   });
 
   it('resumes a paused-open checkpoint through an operator selection', async () => {
@@ -425,6 +428,21 @@ describe('Build checkpoint execution substrate', () => {
     expect(brief.objective).toBe('Resume a deep Build run');
     expect(brief.checkpoint.response_path).toBe('artifacts/checkpoints/frame-step-response.json');
     expect(readJson(runRoot, 'artifacts/result.json')).toMatchObject({ outcome: 'complete' });
+
+    // Resume-crash recoverability invariant: the brief is written
+    // exactly once for the frame-step checkpoint — at request creation —
+    // and is never re-stamped during resolution. This eliminates the
+    // crash window between a stamped-brief write and the
+    // checkpoint.resolved event. A second step.artifact_written would
+    // mean the brief is being mutated post-request, re-opening that
+    // window.
+    const briefArtifactWrites = resumed.events.filter(
+      (event) =>
+        event.kind === 'step.artifact_written' &&
+        (event.step_id as unknown as string) === 'frame-step' &&
+        event.artifact_path === 'artifacts/build/brief.json',
+    );
+    expect(briefArtifactWrites).toHaveLength(1);
   });
 
   it('rejects checkpoint resume choices outside the declared allow list', async () => {

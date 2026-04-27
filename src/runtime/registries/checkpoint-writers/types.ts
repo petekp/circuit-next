@@ -30,13 +30,11 @@ export interface CheckpointBuildContext {
   readonly runRoot: string;
   readonly step: CheckpointStep;
   readonly goal: string;
-  readonly responsePath?: string;
-  // First-invocation flag: when undefined, the builder constructs a
-  // fresh artifact from goal + policy template; when defined, the
-  // builder re-stamps the existing artifact with the resolved
-  // response_path. Build uses this to keep the first-write request_path
-  // and the post-resolve response_path consistent on the same brief.
-  readonly existingArtifact?: unknown;
+  // The brief is fully populated at first write — response_path always
+  // resolves to step.writes.response. There is no separate first-write
+  // / re-stamp path; the artifact is written exactly once per
+  // checkpoint instance, before the operator selection.
+  readonly responsePath: string;
 }
 
 // Resume-context input the runner passes to the builder when it finds

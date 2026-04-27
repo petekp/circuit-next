@@ -107,12 +107,17 @@ function checkpointFailureReason(stepId: string, err: unknown): string {
 // when they do, a registered CheckpointBriefBuilder owns the workflow-
 // specific assembly. Adding a new workflow's checkpoint-with-artifact
 // means adding a builder under src/runtime/registries/checkpoint-writers/.
+//
+// The brief is written exactly once per checkpoint instance, with the
+// brief.checkpoint.response_path already pointing at step.writes.response.
+// No re-stamp happens after operator resolution, so the on-disk hash
+// captured in the request stays valid through the entire resolution
+// path — eliminating the crash window between a stamped-brief write and
+// the checkpoint.resolved event.
 function writeCheckpointOwnedArtifact(input: {
   readonly runRoot: string;
   readonly step: CheckpointStep;
   readonly goal: string;
-  readonly responsePath?: string;
-  readonly existingArtifact?: unknown;
 }): void {
   const artifact = input.step.writes.artifact;
   if (artifact === undefined) return;
@@ -124,8 +129,7 @@ function writeCheckpointOwnedArtifact(input: {
     runRoot: input.runRoot,
     step: input.step,
     goal: input.goal,
-    ...(input.responsePath === undefined ? {} : { responsePath: input.responsePath }),
-    ...(input.existingArtifact === undefined ? {} : { existingArtifact: input.existingArtifact }),
+    responsePath: input.step.writes.response,
   });
   writeJsonArtifact(input.runRoot, artifact.path, body);
 }
@@ -262,15 +266,6 @@ export function runCheckpointStep(
         resolutionSource: resolution.resolutionSource,
       }),
     );
-    writeCheckpointOwnedArtifact({
-      runRoot,
-      step,
-      goal,
-      responsePath: step.writes.response,
-      ...(resumeCheckpoint?.existingArtifact === undefined
-        ? {}
-        : { existingArtifact: resumeCheckpoint.existingArtifact }),
-    });
     push({
       schema_version: 1,
       sequence: state.sequence,
@@ -284,19 +279,6 @@ export function runCheckpointStep(
       resolution_source: resolution.resolutionSource,
       response_path: step.writes.response,
     });
-    if (step.writes.artifact !== undefined) {
-      push({
-        schema_version: 1,
-        sequence: state.sequence,
-        recorded_at: recordedAt(),
-        run_id: runId,
-        kind: 'step.artifact_written',
-        step_id: step.id,
-        attempt,
-        artifact_path: step.writes.artifact.path,
-        artifact_schema: step.writes.artifact.schema,
-      });
-    }
     push({
       schema_version: 1,
       sequence: state.sequence,

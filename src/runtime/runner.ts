@@ -419,7 +419,6 @@ function findWaitingCheckpoint(input: {
   readonly attempt: number;
   readonly bootstrap: Extract<Event, { kind: 'run.bootstrapped' }>;
   readonly requestContext: CheckpointRequestContext;
-  readonly existingArtifact?: unknown;
 } {
   const events = readRunLog(input.runRoot);
   const bootstrap = events[0];
@@ -468,7 +467,11 @@ function findWaitingCheckpoint(input: {
     step,
     expectedRequestArtifactHash: requested.request_artifact_hash,
   });
-  const existingArtifact = readCheckpointResumeArtifact({
+  // Run validateResumeContext for tamper detection + shape verification.
+  // Return value is unused — the brief is no longer re-stamped post-
+  // resolution, so the runtime doesn't need an `existingArtifact`
+  // handle to thread through.
+  readCheckpointResumeArtifact({
     runRoot: input.runRoot,
     step,
     requestContext,
@@ -479,7 +482,6 @@ function findWaitingCheckpoint(input: {
     attempt: requested.attempt,
     bootstrap,
     requestContext,
-    ...(existingArtifact === undefined ? {} : { existingArtifact }),
   };
 }
 
@@ -835,9 +837,6 @@ export async function resumeWorkflowCheckpoint(
       stepId: waiting.stepId,
       attempt: waiting.attempt,
       selection: inv.selection,
-      ...(waiting.existingArtifact === undefined
-        ? {}
-        : { existingArtifact: waiting.existingArtifact }),
     },
   });
 }

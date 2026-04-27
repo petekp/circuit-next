@@ -92,8 +92,24 @@ function loadArtifacts() {
 }
 
 describe('Build artifact schemas', () => {
-  it('accepts build.brief while waiting at the Frame checkpoint and after resume', () => {
-    const waiting = BuildBrief.parse({
+  it('accepts build.brief at the Frame checkpoint with response_path set from first write', () => {
+    // Production code always writes the brief with response_path set —
+    // this eliminates the resume-crash window where a stamped brief on
+    // disk diverges from the request hash. The schema still accepts a
+    // brief without response_path for tooling/fixtures that synthesize
+    // briefs offline.
+    const stamped = BuildBrief.parse({
+      objective: 'Add a small feature',
+      scope: 'Touch the CLI and tests only',
+      success_criteria: ['The requested behavior works', 'Verification passes'],
+      verification_command_candidates: [verificationCommand()],
+      checkpoint: {
+        request_path: 'artifacts/checkpoints/frame-request.json',
+        response_path: 'artifacts/checkpoints/frame-response.json',
+        allowed_choices: ['proceed', 'revise', 'abort'],
+      },
+    });
+    const unstamped = BuildBrief.parse({
       objective: 'Add a small feature',
       scope: 'Touch the CLI and tests only',
       success_criteria: ['The requested behavior works', 'Verification passes'],
@@ -103,16 +119,9 @@ describe('Build artifact schemas', () => {
         allowed_choices: ['proceed', 'revise', 'abort'],
       },
     });
-    const resumed = BuildBrief.parse({
-      ...waiting,
-      checkpoint: {
-        ...waiting.checkpoint,
-        response_path: 'artifacts/checkpoints/frame-response.json',
-      },
-    });
 
-    expect(waiting.checkpoint.response_path).toBeUndefined();
-    expect(resumed.checkpoint.response_path).toBe('artifacts/checkpoints/frame-response.json');
+    expect(stamped.checkpoint.response_path).toBe('artifacts/checkpoints/frame-response.json');
+    expect(unstamped.checkpoint.response_path).toBeUndefined();
   });
 
   it('accepts minimal valid objects for all six Build artifacts', () => {

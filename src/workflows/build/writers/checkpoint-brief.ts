@@ -1,14 +1,16 @@
 // Build brief checkpoint writer.
 //
-// On first invocation: assembles a fresh BuildBrief from the run goal
-// plus the policy.build_brief template. On re-stamp invocations
-// (after the operator selects a choice): preserves the prior brief
-// and updates only the checkpoint.response_path.
+// Assembles a fresh BuildBrief from the run goal plus the
+// policy.build_brief template. The brief is fully populated at first
+// write — checkpoint.response_path always points at step.writes.response
+// — so no re-stamp happens after operator resolution. This eliminates
+// the crash window between a stamped-brief write and the
+// checkpoint.resolved event.
 //
 // Resume-time validator: reads the on-disk brief, verifies its hash
 // against the value the checkpoint request stored, parses it through
 // the BuildBrief schema, and asserts the brief.checkpoint.* shape
-// belongs to the waiting step (request_path + allowed_choices).
+// belongs to the waiting step.
 
 import { readFileSync } from 'node:fs';
 import { sha256Hex } from '../../../runtime/adapters/shared.js';
@@ -30,25 +32,15 @@ export const buildBriefCheckpointBuilder: CheckpointBriefBuilder = {
         `checkpoint step '${context.step.id}' writing build.brief@v1 requires policy.build_brief`,
       );
     }
-    if (context.existingArtifact === undefined) {
-      return BuildBrief.parse({
-        objective: context.goal,
-        scope: template.scope,
-        success_criteria: template.success_criteria,
-        verification_command_candidates: template.verification_command_candidates,
-        checkpoint: {
-          request_path: context.step.writes.request,
-          ...(context.responsePath === undefined ? {} : { response_path: context.responsePath }),
-          allowed_choices: checkpointChoiceIds(context.step),
-        },
-      });
-    }
-    const existing = BuildBrief.parse(context.existingArtifact);
     return BuildBrief.parse({
-      ...existing,
+      objective: context.goal,
+      scope: template.scope,
+      success_criteria: template.success_criteria,
+      verification_command_candidates: template.verification_command_candidates,
       checkpoint: {
-        ...existing.checkpoint,
-        ...(context.responsePath === undefined ? {} : { response_path: context.responsePath }),
+        request_path: context.step.writes.request,
+        response_path: context.responsePath,
+        allowed_choices: checkpointChoiceIds(context.step),
       },
     });
   },
@@ -68,7 +60,7 @@ export const buildBriefCheckpointBuilder: CheckpointBriefBuilder = {
     const expectedChoices = checkpointChoiceIds(context.step);
     if (
       brief.checkpoint.request_path !== context.step.writes.request ||
-      brief.checkpoint.response_path !== undefined ||
+      brief.checkpoint.response_path !== context.step.writes.response ||
       brief.checkpoint.allowed_choices.length !== expectedChoices.length ||
       brief.checkpoint.allowed_choices.some((choice, index) => choice !== expectedChoices[index])
     ) {
