@@ -1,5 +1,13 @@
 import type { BuiltInAdapter } from '../schemas/adapter.js';
+import type { LayeredConfig as LayeredConfigValue } from '../schemas/config.js';
+import type { Event } from '../schemas/event.js';
+import type { InvocationId, RunId, WorkflowId } from '../schemas/ids.js';
+import type { LaneDeclaration } from '../schemas/lane.js';
+import type { RunResult } from '../schemas/result.js';
+import type { Rigor } from '../schemas/rigor.js';
 import type { ResolvedSelection } from '../schemas/selection-policy.js';
+import type { Snapshot } from '../schemas/snapshot.js';
+import type { WorkflowRef } from '../schemas/step.js';
 import type { Workflow } from '../schemas/workflow.js';
 import type { AdapterDispatchInput, DispatchResult } from './adapters/shared.js';
 
@@ -39,3 +47,88 @@ export interface DispatchResultMetadata {
   readonly adapterName: BuiltInAdapter;
   readonly cli_version: string;
 }
+
+// Sub-run / fanout child workflow lookup. The runtime stays workflow-
+// agnostic by accepting a resolver from the caller (CLI / tests) instead
+// of baking in a manifest-layout convention. The CLI's resolver reads
+// `.claude-plugin/skills/<workflow_id>/<entry_mode|circuit>.json`; tests
+// inject deterministic stubs.
+export interface ResolvedChildWorkflow {
+  readonly workflow: Workflow;
+  readonly bytes: Buffer;
+}
+
+export type ChildWorkflowResolver = (ref: WorkflowRef) => ResolvedChildWorkflow;
+
+export interface WorkflowInvocation {
+  runRoot: string;
+  workflow: Workflow;
+  workflowBytes: Buffer;
+  projectRoot?: string;
+  runId: RunId;
+  goal: string;
+  rigor?: Rigor;
+  entryModeName?: string;
+  lane: LaneDeclaration;
+  now: () => Date;
+  invocationId?: InvocationId;
+  // Slice 43b: injection seam for the dispatch adapter. Default is
+  // `dispatchAgent` (lazy-imported so tests that don't exercise dispatch
+  // don't pull the subprocess module into their graph).
+  dispatcher?: DispatchFn;
+  // Test seam for deterministic synthesis fixtures. Production invocations
+  // omit this and use the registered writer below, which composes the
+  // schema-specific synthesis builder with a placeholder fallback.
+  synthesisWriter?: SynthesisWriterFn;
+  // Parsed config layers are supplied by callers that have already handled
+  // discovery/loading. The product CLI discovers user-global and project
+  // layers; direct runtime callers can still inject already-parsed layers.
+  selectionConfigLayers?: readonly LayeredConfigValue[];
+  // Sub-run / fanout child workflow lookup. When omitted, sub-run and
+  // fanout steps abort with a clear "no resolver provided" error.
+  childWorkflowResolver?: ChildWorkflowResolver;
+  // Sub-run / fanout child runner injection seam. Default is the runner's
+  // own `runWorkflow`. Tests inject deterministic child-run stubs so they
+  // can exercise sub-run handler logic without a full executeWorkflow
+  // descent on the inner side.
+  childRunner?: WorkflowRunner;
+}
+
+export interface CheckpointResumeInvocation {
+  runRoot: string;
+  selection: string;
+  projectRoot?: string;
+  now: () => Date;
+  dispatcher?: DispatchFn;
+  synthesisWriter?: SynthesisWriterFn;
+  selectionConfigLayers?: readonly LayeredConfigValue[];
+  childWorkflowResolver?: ChildWorkflowResolver;
+  childRunner?: WorkflowRunner;
+}
+
+export interface CheckpointWaitingResult {
+  readonly schema_version: 1;
+  readonly run_id: RunId;
+  readonly workflow_id: WorkflowId;
+  readonly goal: string;
+  readonly outcome: 'checkpoint_waiting';
+  readonly summary: string;
+  readonly events_observed: number;
+  readonly manifest_hash: string;
+  readonly checkpoint: {
+    readonly step_id: string;
+    readonly request_path: string;
+    readonly allowed_choices: readonly string[];
+  };
+  readonly reason?: string;
+}
+
+export interface WorkflowRunResult {
+  runRoot: string;
+  result: RunResult | CheckpointWaitingResult;
+  snapshot: Snapshot;
+  events: Event[];
+  dispatchResults: readonly DispatchResultMetadata[];
+}
+
+export type WorkflowRunner = (inv: WorkflowInvocation) => Promise<WorkflowRunResult>;

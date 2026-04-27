@@ -27,6 +27,15 @@ import { RunId, WorkflowId } from './ids.js';
 // log carries. When `outcome` is 'complete', `reason` is typically
 // omitted. The runtime asserts `result.reason === run.closed.reason`
 // at write time when it sets either.
+//
+// RESULT-I5 (sub-run runtime slice) — `verdict` is the run's terminal
+// admitted verdict, mirrored from the last `dispatch.completed.verdict`
+// (or `sub_run.completed.verdict`) whose corresponding gate.evaluated
+// had `outcome: 'pass'`. The field is OPTIONAL: workflows that close on
+// a synthesis step (close-with-evidence pattern) lack a terminal
+// admitted-verdict event and the runtime omits `verdict` accordingly.
+// Sub-run parents read this field from the child's result.json to
+// admit or reject the child against the parent step's gate.pass.
 export const RunResult = z
   .object({
     schema_version: z.literal(1),
@@ -39,6 +48,7 @@ export const RunResult = z
     events_observed: z.number().int().nonnegative(),
     manifest_hash: z.string().min(1),
     reason: z.string().min(1).optional(),
+    verdict: z.string().min(1).optional(),
   })
   .strict();
 export type RunResult = z.infer<typeof RunResult>;

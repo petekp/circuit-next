@@ -5,7 +5,13 @@ import type { LaneDeclaration } from '../../schemas/lane.js';
 import type { Rigor } from '../../schemas/rigor.js';
 import type { Workflow } from '../../schemas/workflow.js';
 import type { LayeredConfig as LayeredConfigValue } from '../../schemas/config.js';
-import type { DispatchFn, DispatchResultMetadata, SynthesisWriterFn } from '../runner-types.js';
+import type {
+  ChildWorkflowResolver,
+  DispatchFn,
+  DispatchResultMetadata,
+  SynthesisWriterFn,
+  WorkflowRunner,
+} from '../runner-types.js';
 
 export interface RunState {
   readonly events: Event[];
@@ -40,6 +46,17 @@ export interface StepHandlerContext {
   readonly attempt: number;
   readonly isResumedCheckpoint: boolean;
   readonly resumeCheckpoint?: ResumeCheckpointState;
+  // Sub-run / fanout slices: invoke a child workflow run sequentially
+  // (sub-run) or in parallel (fanout). Wired by the coordinator to
+  // `runWorkflow`. Tests injecting a stub childRunner can avoid the full
+  // executeWorkflow stack.
+  readonly childRunner: WorkflowRunner;
+  // Sub-run / fanout slices: resolve a `WorkflowRef` (workflow_id +
+  // entry_mode + version) to the child workflow's manifest. Production
+  // CLI provides a fixture-loader resolver; tests inject deterministic
+  // stubs. Undefined when the parent invocation didn't supply one — the
+  // sub-run handler errors loudly in that case.
+  readonly childWorkflowResolver?: ChildWorkflowResolver;
 }
 
 export type StepHandlerResult =

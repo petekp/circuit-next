@@ -16,7 +16,6 @@ import type { Event, RunClosedOutcome } from '../schemas/event.js';
 import type { InvocationId, RunId, WorkflowId } from '../schemas/ids.js';
 import type { LaneDeclaration } from '../schemas/lane.js';
 import { computeManifestHash } from '../schemas/manifest.js';
-import type { RunResult } from '../schemas/result.js';
 import type { Rigor } from '../schemas/rigor.js';
 import type { Snapshot } from '../schemas/snapshot.js';
 import { Workflow } from '../schemas/workflow.js';
@@ -38,10 +37,15 @@ import {
 import { writeResult } from './result-writer.js';
 import { resolveRunRelative } from './run-relative-path.js';
 import type {
+  CheckpointResumeInvocation,
+  ChildWorkflowResolver,
   DispatchFn,
   DispatchResultMetadata,
   SynthesisWriterFn,
   SynthesisWriterInput,
+  WorkflowInvocation,
+  WorkflowRunResult,
+  WorkflowRunner,
 } from './runner-types.js';
 import { writeDerivedSnapshot } from './snapshot-writer.js';
 import { checkpointChoiceIds } from './step-handlers/checkpoint.js';
@@ -57,11 +61,18 @@ import { findSynthesisBuilder, resolveSynthesisReadPaths } from './synthesis-wri
 // dedicated modules during the handler-extraction split; the surface
 // stays stable so existing callers (CLI, tests) keep their imports.
 export type {
+  CheckpointResumeInvocation,
+  CheckpointWaitingResult,
+  ChildWorkflowResolver,
   DispatchFn,
   DispatchInput,
   DispatchResultMetadata,
+  ResolvedChildWorkflow,
   SynthesisWriterFn,
   SynthesisWriterInput,
+  WorkflowInvocation,
+  WorkflowRunResult,
+  WorkflowRunner,
 } from './runner-types.js';
 export { appendAndDerive } from './append-and-derive.js';
 export type { AppendResult } from './append-and-derive.js';
@@ -169,67 +180,6 @@ export function bootstrapRun(input: BootstrapInput): BootstrapResult {
   }
 }
 
-export interface WorkflowInvocation {
-  runRoot: string;
-  workflow: Workflow;
-  workflowBytes: Buffer;
-  projectRoot?: string;
-  runId: RunId;
-  goal: string;
-  rigor?: Rigor;
-  entryModeName?: string;
-  lane: LaneDeclaration;
-  now: () => Date;
-  invocationId?: InvocationId;
-  // Slice 43b: injection seam for the dispatch adapter. Default is
-  // `dispatchAgent` (lazy-imported so tests that don't exercise dispatch
-  // don't pull the subprocess module into their graph).
-  dispatcher?: DispatchFn;
-  // Test seam for deterministic synthesis fixtures. Production invocations
-  // omit this and use the registered writer below, which composes the
-  // schema-specific synthesis builder with a placeholder fallback.
-  synthesisWriter?: SynthesisWriterFn;
-  // Parsed config layers are supplied by callers that have already handled
-  // discovery/loading. The product CLI discovers user-global and project
-  // layers; direct runtime callers can still inject already-parsed layers.
-  selectionConfigLayers?: readonly LayeredConfigValue[];
-}
-
-export interface CheckpointResumeInvocation {
-  runRoot: string;
-  selection: string;
-  projectRoot?: string;
-  now: () => Date;
-  dispatcher?: DispatchFn;
-  synthesisWriter?: SynthesisWriterFn;
-  selectionConfigLayers?: readonly LayeredConfigValue[];
-}
-
-export interface CheckpointWaitingResult {
-  readonly schema_version: 1;
-  readonly run_id: RunId;
-  readonly workflow_id: WorkflowId;
-  readonly goal: string;
-  readonly outcome: 'checkpoint_waiting';
-  readonly summary: string;
-  readonly events_observed: number;
-  readonly manifest_hash: string;
-  readonly checkpoint: {
-    readonly step_id: string;
-    readonly request_path: string;
-    readonly allowed_choices: readonly string[];
-  };
-  readonly reason?: string;
-}
-
-export interface WorkflowRunResult {
-  runRoot: string;
-  result: RunResult | CheckpointWaitingResult;
-  snapshot: Snapshot;
-  events: Event[];
-  dispatchResults: readonly DispatchResultMetadata[];
-}
-
 const TERMINAL_ROUTE_OUTCOME = {
   '@complete': 'complete',
   '@stop': 'stopped',
@@ -318,6 +268,8 @@ interface WorkflowExecutionContext {
   readonly initialEvents?: readonly Event[];
   readonly startStepId?: string;
   readonly resumeCheckpoint?: ResumeCheckpointState;
+  readonly childWorkflowResolver?: ChildWorkflowResolver;
+  readonly childRunner?: WorkflowRunner;
 }
 
 async function resolveDispatcher(inv: { dispatcher?: DispatchFn }): Promise<DispatchFn> {
@@ -634,6 +586,10 @@ async function executeWorkflow(ctx: WorkflowExecutionContext): Promise<WorkflowR
       attempt,
       isResumedCheckpoint,
       ...(ctx.resumeCheckpoint === undefined ? {} : { resumeCheckpoint: ctx.resumeCheckpoint }),
+      childRunner: ctx.childRunner ?? runWorkflow,
+      ...(ctx.childWorkflowResolver === undefined
+        ? {}
+        : { childWorkflowResolver: ctx.childWorkflowResolver }),
     });
 
     if (result.kind === 'waiting_checkpoint') {
@@ -726,6 +682,7 @@ async function executeWorkflow(ctx: WorkflowExecutionContext): Promise<WorkflowR
   };
   push(closed);
 
+  const terminalVerdict = deriveTerminalVerdict(events, runOutcome);
   const result = writeResult(runRoot, {
     schema_version: 1,
     run_id: runId,
@@ -741,6 +698,10 @@ async function executeWorkflow(ctx: WorkflowExecutionContext): Promise<WorkflowR
     // explains itself without requiring the operator to walk the
     // event log.
     ...(closeReason === undefined ? {} : { reason: closeReason }),
+    // Sub-run runtime slice (RESULT-I5): expose the run's terminal
+    // admitted verdict so a parent sub-run can admit/reject the child
+    // against its own gate.pass.
+    ...(terminalVerdict === undefined ? {} : { verdict: terminalVerdict }),
   });
 
   // Final snapshot is whatever the last appendAndDerive produced; re-derive
@@ -797,6 +758,10 @@ export async function resumeWorkflowCheckpoint(
     now: inv.now,
     ...(inv.dispatcher === undefined ? {} : { dispatcher: inv.dispatcher }),
     ...(inv.synthesisWriter === undefined ? {} : { synthesisWriter: inv.synthesisWriter }),
+    ...(inv.childWorkflowResolver === undefined
+      ? {}
+      : { childWorkflowResolver: inv.childWorkflowResolver }),
+    ...(inv.childRunner === undefined ? {} : { childRunner: inv.childRunner }),
     selectionConfigLayers: waiting.requestContext.selectionConfigLayers,
     ...(waiting.requestContext.projectRoot !== undefined
       ? { projectRoot: waiting.requestContext.projectRoot }
@@ -818,6 +783,31 @@ export async function resumeWorkflowCheckpoint(
 function buildSummary(input: { workflow: Workflow; goal: string; events: Event[] }): string {
   const stepCount = input.events.filter((e) => e.kind === 'step.completed').length;
   return `${input.workflow.id} v${input.workflow.version} closed ${stepCount} step(s) for goal "${input.goal}".`;
+}
+
+// RESULT-I5: derive the run's terminal admitted verdict for the user-
+// visible result.json. Walks events backward, finds the last
+// dispatch.completed (or sub_run.completed) whose corresponding step
+// gate.evaluated event had outcome=pass. Returns undefined for runs
+// that didn't reach 'complete' or didn't admit any verdict-bearing step
+// (synthesis-only / close-with-evidence terminations).
+function deriveTerminalVerdict(events: readonly Event[], runOutcome: RunClosedOutcome): string | undefined {
+  if (runOutcome !== 'complete') return undefined;
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    const ev = events[i];
+    if (ev === undefined) continue;
+    if (ev.kind !== 'dispatch.completed' && ev.kind !== 'sub_run.completed') continue;
+    const matchingGatePass = events.some(
+      (g) =>
+        g.kind === 'gate.evaluated' &&
+        g.gate_kind === 'result_verdict' &&
+        g.outcome === 'pass' &&
+        (g.step_id as unknown as string) === (ev.step_id as unknown as string) &&
+        g.attempt === ev.attempt,
+    );
+    if (matchingGatePass) return ev.verdict;
+  }
+  return undefined;
 }
 
 export type { RunId, WorkflowId };

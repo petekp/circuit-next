@@ -1,5 +1,6 @@
 import { runCheckpointStep } from './checkpoint.js';
 import { runDispatchStep } from './dispatch.js';
+import { runSubRunStep } from './sub-run.js';
 import { runSynthesisStep } from './synthesis.js';
 import type { StepHandlerContext, StepHandlerResult } from './types.js';
 import { runVerificationStep } from './verification.js';
@@ -18,12 +19,13 @@ export async function runStepHandler(ctx: StepHandlerContext): Promise<StepHandl
       return runCheckpointStep({ ...ctx, step: ctx.step });
     case 'dispatch':
       return runDispatchStep({ ...ctx, step: ctx.step });
+    case 'sub-run':
+      return runSubRunStep({ ...ctx, step: ctx.step });
     default: {
-      // sub-run and fanout step kinds reach this branch until the
-      // matching slices land. Compose + parallelism schemas were
-      // committed (a5a80ee) ahead of runtime so Migrate authoring can
-      // type-compile against them; runtime support arrives in the
-      // sub-run and fanout slices that follow this extraction.
+      // fanout step kind reaches this branch until the fanout slice
+      // lands. Schemas were committed (a5a80ee) ahead of runtime so
+      // Migrate authoring can type-compile against them; runtime
+      // support for fanout arrives in the fanout slice.
       const stepKind = (ctx.step as { readonly kind: string }).kind;
       const stepId = (ctx.step as { readonly id: string | { toString(): string } }).id;
       const idStr =
