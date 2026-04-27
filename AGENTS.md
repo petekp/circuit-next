@@ -38,14 +38,19 @@ isn't here, it isn't a rule.
 ## Verification
 
 ```bash
-npm run check   # tsc --noEmit
-npm run lint    # biome check
-npm run test    # vitest
-npm run build   # tsc -p tsconfig.build.json
-npm run verify  # all of the above
+npm run check        # tsc --noEmit
+npm run lint         # biome check
+npm run test         # vitest (full suite)
+npm run test:fast    # vitest excluding tests/runner/** (subprocess-heavy)
+npm run test:coverage # vitest run --coverage (info, no thresholds)
+npm run build        # tsc -p tsconfig.build.json
+npm run verify       # full canonical gate; CI runs this
+npm run verify:fast  # check + lint + build + test:fast + drift (~40% faster)
 ```
 
-These must pass before commit on changes to `src/`, `tests/`, or
+`verify` is the canonical gate and what CI enforces. Use `verify:fast`
+during iterative loops; run full `verify` before claiming a change is
+done. Both must pass before commit on changes to `src/`, `tests/`, or
 `commands/`.
 
 ## Where things live
