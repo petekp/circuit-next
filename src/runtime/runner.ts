@@ -835,11 +835,48 @@ function buildSummary(input: { workflow: Workflow; goal: string; events: Event[]
 }
 
 // RESULT-I5: derive the run's terminal admitted verdict for the user-
-// visible result.json. Walks events backward, finds the last
-// dispatch.completed (or sub_run.completed) whose corresponding step
-// gate.evaluated event had outcome=pass. Returns undefined for runs
-// that didn't reach 'complete' or didn't admit any verdict-bearing step
-// (synthesis-only / close-with-evidence terminations).
+// visible result.json. The contract:
+//
+// - Returns the verdict from the LATEST (chronologically last)
+//   dispatch.completed | sub_run.completed event whose corresponding
+//   gate.evaluated for the same (step_id, attempt) had
+//   gate_kind='result_verdict' and outcome='pass'.
+// - Returns undefined for any run that did not reach outcome=complete.
+// - Returns undefined for runs that completed with no verdict-bearing
+//   admitted step (synthesis-only routes, close-with-evidence
+//   terminations, fanout-only steps).
+//
+// Why walk-backward instead of "the closing step's verdict":
+//   Every workflow we ship has a non-verdict-bearing close step
+//   (synthesis that materializes the canonical close artifact). A
+//   "closing step's verdict" semantic would therefore return undefined
+//   for every Build / Migrate / Sweep / Review / Fix run, defeating
+//   the purpose of the field. Authors place the verdict-bearing step
+//   ahead of the close synthesis (Build's review step, Migrate's
+//   cutover-review step) and expect the latest such admission to
+//   surface. Walk-backward picks that exact event.
+//
+// Why filter to gate_kind='result_verdict':
+//   Synthesis steps emit gate.evaluated with kind='schema_sections'
+//   (artifact admission), verification steps with kind='verification',
+//   fanout with kind='fanout_aggregate'. None of those carry a
+//   verdict — only result_verdict gates do, and only dispatch /
+//   sub-run steps emit them. Including any other kind would conflate
+//   schema admission with verdict admission.
+//
+// Why this is safe across re-routes / retries:
+//   The runner emits gate.evaluated outcome='pass' only on the route
+//   actually taken to @complete (dispatch.ts emits outcome='fail'
+//   then step.aborted on a failed gate; failed gates don't advance to
+//   a fail-route). So every (step_id, attempt) with a matching pass
+//   gate is a step whose verdict was admitted on the path to
+//   @complete.
+//
+// Adversarial-review fix #2: the implementation was correct already,
+// but the only sub-run test exercised a stub childRunner that hand-
+// wrote result.json — so deriveTerminalVerdict itself had no direct
+// regression coverage. Tests in tests/runner/terminal-verdict-
+// derivation.test.ts now pin the contract end-to-end.
 function deriveTerminalVerdict(events: readonly Event[], runOutcome: RunClosedOutcome): string | undefined {
   if (runOutcome !== 'complete') return undefined;
   for (let i = events.length - 1; i >= 0; i -= 1) {
