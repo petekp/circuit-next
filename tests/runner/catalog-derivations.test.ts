@@ -441,6 +441,21 @@ describe('catalog-derivations: real catalog invariants', () => {
     // different instance (identity matters because the runner uses
     // builder methods directly).
     const { workflowPackages } = await import('../../src/workflows/catalog.js');
+
+    // Floor: at least 6 packages and at least one writer overall, so
+    // the for-loop body must execute. Without this the test would
+    // pass vacuously against an emptied catalog or empty writer arrays.
+    expect(workflowPackages.length).toBeGreaterThanOrEqual(6);
+    const totalWriters = workflowPackages.reduce(
+      (n, pkg) =>
+        n +
+        pkg.writers.synthesis.length +
+        pkg.writers.close.length +
+        pkg.writers.verification.length +
+        pkg.writers.checkpoint.length,
+      0,
+    );
+    expect(totalWriters).toBeGreaterThan(0);
     const { findSynthesisBuilder } = await import(
       '../../src/runtime/synthesis-writers/registry.js'
     );

@@ -632,12 +632,17 @@ describe('fanout runtime', () => {
       worktreeRunner: worktree.runner,
     });
 
-    // Parent should NOT abort — continue-others tolerates the failed
-    // branch. aggregate-only join requires all-completed-and-parseable,
-    // so the join itself fails (branches_completed=1, branches_failed=1)
-    // and the gate fails — but the abort happens in the gate, not in
-    // the fanout-step itself, and the events should show the failure
-    // shape clearly.
+    // continue-others lets the fanout STEP complete (one branch
+    // succeeded, one failed, the loop did not propagate the failure).
+    // The aggregate-only join then evaluates: it requires every
+    // branch to close cleanly with a parseable body, so it fails —
+    // and the parent run aborts at the gate. The behavioral
+    // distinction continue-others draws is "the loop continues vs.
+    // the loop aborts the moment one branch fails," which the
+    // events surface and we pin here. The parent outcome is
+    // intentionally pinned too so a future regression that
+    // accidentally skipped the gate fail (or accidentally aborted
+    // mid-loop) flips this test red.
     const fanoutStarted = outcome.events.find((e) => e.kind === 'fanout.started');
     if (fanoutStarted?.kind !== 'fanout.started') throw new Error('expected fanout.started');
     expect(fanoutStarted.on_child_failure).toBe('continue-others');
@@ -647,7 +652,12 @@ describe('fanout runtime', () => {
     expect(fanoutJoined.branches_completed).toBe(1);
     expect(fanoutJoined.branches_failed).toBe(1);
 
+    // The parent ultimately aborts because the join policy
+    // (aggregate-only) requires every branch to complete cleanly.
+    expect(outcome.result.outcome).toBe('aborted');
+
     // Both worktrees were still released — even on the failed branch.
+    expect(worktree.provisioned.size).toBe(2);
     expect(worktree.released.size).toBe(2);
     for (const path of worktree.provisioned) {
       expect(worktree.released.has(path)).toBe(true);
@@ -693,11 +703,13 @@ describe('fanout runtime', () => {
 
     expect(outcome.result.outcome).toBe('aborted');
 
-    // Worktrees still cleaned up even on the abort path — the audit
-    // gap from the Phase 4 review was that disjoint-merge cleanup on
-    // failure wasn't asserted; this case generalizes the assertion to
-    // any abort-all-driven abort.
-    expect(worktree.provisioned.size).toBeGreaterThan(0);
+    // Worktrees still cleaned up even on the abort path. Pin the
+    // exact provisioned count (not >0) so a future refactor that
+    // serializes the bounded loop and short-circuits provisioning of
+    // later branches doesn't silently regress the multi-branch
+    // cleanup invariant.
+    expect(worktree.provisioned.size).toBe(2);
+    expect(worktree.released.size).toBe(2);
     for (const path of worktree.provisioned) {
       expect(worktree.released.has(path), `worktree at ${path} was not released after abort`).toBe(
         true,

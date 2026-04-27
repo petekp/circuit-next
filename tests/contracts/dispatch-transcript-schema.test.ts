@@ -10,14 +10,14 @@ import {
 } from '../../src/index.js';
 import { reduce } from '../../src/runtime/reducer.js';
 
-// Slice 37 — pre-P2.4 fold-in #3 (HIGH 2): ADR-0007 CC#P2-2 names
+// ADR-0007 CC#P2-2 names
 // `dispatch.request` / `dispatch.receipt` / `dispatch.result` as
 // non-substitutable close-criterion evidence. Before this slice the
 // three event kinds were prose-only; the Event discriminated union
 // rejected them. This test file binds the schema-level widening to the
 // ADR §Amendment so the governance surface and the runtime surface
 // agree. Authority: composition review §HIGH 2 + ADR-0007 §Amendment
-// (Slice 37) + `src/schemas/event.ts`.
+// + `src/schemas/event.ts`.
 
 const RUN_A = '0191d2f0-aaaa-7fff-8aaa-000000000000';
 
@@ -39,7 +39,7 @@ const bootstrapEvent = {
   kind: 'run.bootstrapped' as const,
   workflow_id: 'explore',
   rigor: 'deep',
-  goal: 'Slice 37 transcript fixture',
+  goal: 'dispatch-transcript fixture',
   manifest_hash: 'abc',
   lane,
 };
@@ -151,7 +151,7 @@ const runClosedEvent = {
   outcome: 'complete' as const,
 };
 
-describe('DispatchRequestEvent (ADR-0007 §Amendment Slice 37)', () => {
+describe('DispatchRequestEvent', () => {
   it('parses a well-formed dispatch.request event', () => {
     const parsed = DispatchRequestEvent.safeParse(dispatchRequestEvent);
     expect(parsed.success).toBe(true);
@@ -213,7 +213,7 @@ describe('DispatchRequestEvent (ADR-0007 §Amendment Slice 37)', () => {
   });
 });
 
-describe('DispatchReceiptEvent (ADR-0007 §Amendment Slice 37)', () => {
+describe('DispatchReceiptEvent', () => {
   it('parses a well-formed dispatch.receipt event', () => {
     const parsed = DispatchReceiptEvent.safeParse(dispatchReceiptEvent);
     expect(parsed.success).toBe(true);
@@ -257,7 +257,7 @@ describe('DispatchReceiptEvent (ADR-0007 §Amendment Slice 37)', () => {
     expect(bad.success).toBe(false);
   });
 
-  // Codex MED #2 fold-in (Slice 37) — receipt_id must contain at least
+  // Codex MED #2 fold-in — receipt_id must contain at least
   // one non-whitespace character. A spaces-only string has length > 0
   // and would have passed the naive `z.string().min(1)` constraint,
   // but such a value is useless as audit evidence.
@@ -278,7 +278,7 @@ describe('DispatchReceiptEvent (ADR-0007 §Amendment Slice 37)', () => {
   });
 });
 
-describe('DispatchResultEvent (ADR-0007 §Amendment Slice 37)', () => {
+describe('DispatchResultEvent', () => {
   it('parses a well-formed dispatch.result event', () => {
     const parsed = DispatchResultEvent.safeParse(dispatchResultEvent);
     expect(parsed.success).toBe(true);
@@ -324,7 +324,7 @@ describe('DispatchResultEvent (ADR-0007 §Amendment Slice 37)', () => {
   });
 });
 
-describe('DispatchFailedEvent (Runtime Safety Floor Slice 3)', () => {
+describe('DispatchFailedEvent', () => {
   it('parses a well-formed dispatch.failed event with full dispatch provenance', () => {
     const parsed = DispatchFailedEvent.safeParse(dispatchFailedEvent);
     expect(parsed.success).toBe(true);
@@ -497,9 +497,9 @@ describe('Five-event durable dispatch transcript sequence (ADR-0007 CC#P2-2)', (
   });
 });
 
-// Codex MED #3 fold-in (Slice 37) — ADR-0007 CC#P2-2 Enforcement
+// Codex MED #3 fold-in — ADR-0007 CC#P2-2 Enforcement
 // binding requires that "the reducer must have consumed that
-// sequence" (adr-0007 §CC#P2-2:136). Slice 37 proves the
+// sequence" (adr-0007 §CC#P2-2:136). This file proves the
 // schema/reducer half of that obligation here; the P2.4 adapter test
 // proves the full real-adapter round-trip. Without this test the
 // reducer-consumption claim is only implicit (via `noImplicitReturns`

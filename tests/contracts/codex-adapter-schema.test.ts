@@ -17,7 +17,7 @@ import {
 const HAPPY_PATH_FIXTURE = resolve('tests/fixtures/codex-smoke/protocol/happy-path-ok.jsonl');
 const TURN_FAILED_FIXTURE = resolve('tests/fixtures/codex-smoke/protocol/turn-failed.jsonl');
 
-// Slice 45 (P2.6 — real codex adapter). Mirrors the Slice 42 agent-adapter
+// P2.6 real codex adapter. Mirrors the agent-adapter agent-adapter
 // contract test shape for the adapter shape + parser branches. Three
 // concerns:
 //   (A) `src/runtime/adapters/codex.ts` module shape + capability-
@@ -31,13 +31,13 @@ const TURN_FAILED_FIXTURE = resolve('tests/fixtures/codex-smoke/protocol/turn-fa
 //       shape).
 //
 // Check 29 (import-level adapter discipline) coverage for `codex.ts` is
-// exercised by the live-repo regression guard in the Slice 42 (B) suite;
+// exercised by the live-repo regression guard in the agent-adapter suite;
 // adding a new adapter file cannot smuggle a forbidden SDK because the
 // scan pattern walks the tree recursively.
 
 // ---- (A) module shape + capability-boundary argv-constant invariants ---
 
-describe('Slice 45 (A) — src/runtime/adapters/codex.ts module shape', () => {
+describe('Codex adapter — src/runtime/adapters/codex.ts module shape', () => {
   it('exports CODEX_EXECUTABLE as "codex"', () => {
     expect(CODEX_EXECUTABLE).toBe('codex');
   });
@@ -62,7 +62,7 @@ describe('Slice 45 (A) — src/runtime/adapters/codex.ts module shape', () => {
   });
 
   it('CODEX_NO_WRITE_FLAGS contains exactly 6 tokens (pinned surface — additions require contract-test update)', () => {
-    // Codex Slice 45 HIGH 2 fold-in: an exact-length pin so that
+    // Authoring note: an exact-length pin so that
     // adding ANY new token to CODEX_NO_WRITE_FLAGS — even an ostensibly
     // harmless one — forces a contract-test update alongside, which
     // forces reviewer attention on whether the new token widens the
@@ -87,7 +87,7 @@ describe('Slice 45 (A) — src/runtime/adapters/codex.ts module shape', () => {
   });
 
   it('CODEX_NO_WRITE_FLAGS does NOT contain -o / --output-last-message (CLI-side write path)', () => {
-    // Codex Slice 45 HIGH 2 fold-in: Codex's `-o <FILE>` writes the
+    // Authoring note: Codex's `-o <FILE>` writes the
     // final message to a caller-chosen path. Unlike shell writes from
     // inside the model, `-o` is a CLI wrapper write that bypasses the
     // `-s read-only` model sandbox because it runs in the Codex CLI
@@ -98,7 +98,7 @@ describe('Slice 45 (A) — src/runtime/adapters/codex.ts module shape', () => {
   });
 
   it('CODEX_NO_WRITE_FLAGS does NOT contain -c / --config / -p / --profile (config-layer bypass)', () => {
-    // Codex Slice 45 HIGH 2 fold-in: `-c sandbox_mode="workspace-write"`
+    // Authoring note: `-c sandbox_mode="workspace-write"`
     // or a profile loaded via `-p name` can reintroduce write
     // capability at the config layer while `-s read-only` still appears
     // in argv. The forbidden-token set covers both surfaces.
@@ -117,7 +117,7 @@ describe('Slice 45 (A) — src/runtime/adapters/codex.ts module shape', () => {
   });
 
   it('CODEX_FORBIDDEN_ARGV_TOKENS enumerates the argv surfaces that bypass -s read-only', () => {
-    // Codex Slice 45 HIGH 2 fold-in: the exported forbidden-token set
+    // Authoring note: the exported forbidden-token set
     // is the module-load runtime assertion's deny-list. Every surface
     // listed here has been empirically (or documentary) shown to widen
     // the sandbox. A future regression that tries to smuggle one of
@@ -255,7 +255,7 @@ describe('Slice 45 (A) — src/runtime/adapters/codex.ts module shape', () => {
 
 // ---- (B) parseCodexStdout parser branches -------------------------------
 
-describe('Slice 45 (B) — parseCodexStdout NDJSON parser branches', () => {
+describe('Codex adapter — parseCodexStdout NDJSON parser branches', () => {
   // Helper: build a well-formed codex `--json` stdout capturing a
   // single-turn dispatch. Caller can override any top-level field set.
   const ndjson = (overrides?: {
@@ -401,13 +401,13 @@ describe('Slice 45 (B) — parseCodexStdout NDJSON parser branches', () => {
 
 // ---- (B2) real Codex 0.118 JSONL fixtures (HIGH 5 fold-in) -------------
 
-describe('Slice 45 (B2) — parseCodexStdout against real Codex 0.118 JSONL fixtures', () => {
+describe('Codex adapter — parseCodexStdout against real Codex 0.118 JSONL fixtures', () => {
   it('parses the real happy-path-ok.jsonl fixture from codex CLI 0.118.0', () => {
     // Fixture source: captured via `codex exec --json -s read-only
     // --ephemeral --skip-git-repo-check "Respond with exactly the
     // single word: OK"` at codex-cli 0.118.0, commit e693441. The
     // fixture is the exact stdout bytes the real subprocess produced
-    // — no synthesis, no normalization. Slice 45 HIGH 5 fold-in.
+    // — no synthesis, no normalization. Authoring note.
     const stdout = readFileSync(HAPPY_PATH_FIXTURE, 'utf-8');
     const parsed = parseCodexStdout(stdout, 'any prompt', 1234, 'codex-cli 0.118.0');
     expect(parsed.receipt_id).toMatch(/^[0-9a-f-]{30,}$/); // uuid-like thread id
@@ -417,7 +417,7 @@ describe('Slice 45 (B2) — parseCodexStdout against real Codex 0.118 JSONL fixt
 
   it('rejects the turn-failed.jsonl fixture with a named "codex reported turn.failed" error', () => {
     // Failure-shape fixture modeled on the challenger's observed
-    // no-network probe output (Codex Slice 45 HIGH 5): top-level
+    // no-network probe output (no-network probe shape): top-level
     // `error` and `turn.failed` events. Rejected with a named message
     // so dispatch callers see a legible cause rather than "missing
     // turn.completed" and guessing.
@@ -452,7 +452,7 @@ describe('Slice 45 (B2) — parseCodexStdout against real Codex 0.118 JSONL fixt
 
 // ---- (C) cross-adapter shape parity ------------------------------------
 
-describe('Slice 45 (C) — cross-adapter shape parity (DispatchResult uniformity)', () => {
+describe('Codex adapter — cross-adapter shape parity (DispatchResult uniformity)', () => {
   it('CodexDispatchResult has the same field set as the shared DispatchResult', async () => {
     // Structural assertion: both adapters' result types alias the shared
     // `DispatchResult` from `./shared.js`, so the materializer at

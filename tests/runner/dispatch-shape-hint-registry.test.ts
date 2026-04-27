@@ -64,6 +64,12 @@ function reviewerStructuralStep(): DispatchStep {
 
 describe('dispatch shape-hint registry', () => {
   it('round-trips every catalog-declared schema hint through the registry', () => {
+    // Floor: at least the seven hints landed before this refactor must
+    // still be present. Prevents the derived-set test from passing
+    // vacuously if some future catalog change were to drop every
+    // dispatchHint.
+    expect(EXPECTED_SCHEMA_HINTS.length).toBeGreaterThanOrEqual(7);
+
     const registered = listRegisteredSchemaHints().map((hint) => hint.schema);
     expect(
       [...registered].sort(),
@@ -113,6 +119,11 @@ describe('dispatch shape-hint registry', () => {
   });
 
   it('round-trips every catalog-declared structural hint id through the registry', () => {
+    // Floor: at least one structural hint exists today (review's
+    // standalone audit step). Prevents vacuous pass if all structural
+    // hints were dropped from the catalog.
+    expect(EXPECTED_STRUCTURAL_HINT_IDS.length).toBeGreaterThanOrEqual(1);
+
     const registered = listRegisteredStructuralHints().map((hint) => hint.id);
     expect(
       [...registered].sort(),

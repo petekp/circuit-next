@@ -143,15 +143,20 @@ describe('handler-throw recovery — fix #4', () => {
     expect(stepCompletedForBad).toBe(false);
   });
 
-  it('graceful-aborts when a registered handler throws mid-execution (e.g. synthesisWriter throws)', async () => {
-    // Phase 4 audit gap: the existing test only triggers via an
-    // unsupported `kind`, which means the wrap is exercised at the
-    // dispatch-by-kind boundary. The wrap is also supposed to catch
-    // throws from inside a registered handler — e.g. a synthesis
-    // writer that crashes after the runner already committed
-    // step.entered to disk. Inject a throwing synthesisWriter to
-    // simulate this and assert the same recovery shape:
-    // step.aborted + run.closed + result.json.
+  it("graceful-aborts when a synthesis writer throws (the synthesis handler's local try/catch covers this)", async () => {
+    // Note: this test proves the SYNTHESIS-HANDLER-LOCAL try/catch
+    // around the writer invocation, not the runStepHandler wrapper.
+    // The synthesis handler catches the writer throw itself and
+    // returns `{ kind: 'aborted', reason }` — control never reaches
+    // the wrap. Pinning the "artifact writer failed" message here is
+    // intentional: it's the local handler's contract.
+    //
+    // The runStepHandler wrap (commit 20ca1dd) is exercised by the
+    // first test in this file (the unsupported-kind case), which
+    // throws BEFORE any handler runs. Genuine mid-handler throws
+    // that bypass a handler's local catch are hard to construct
+    // without further injection seams; the wrap stays as the safety
+    // net for those.
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'run-mid-throw');
 
