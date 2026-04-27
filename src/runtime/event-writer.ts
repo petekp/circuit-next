@@ -1,4 +1,4 @@
-import { closeSync, existsSync, fstatSync, openSync, writeSync } from 'node:fs';
+import { closeSync, openSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
 import { Event } from '../schemas/event.js';
 
@@ -26,17 +26,6 @@ export function appendEvent(runRoot: string, event: Event): void {
   const fd = openSync(path, 'a');
   try {
     writeSync(fd, line);
-  } finally {
-    closeSync(fd);
-  }
-}
-
-export function eventLogSize(runRoot: string): number {
-  const path = eventLogPath(runRoot);
-  if (!existsSync(path)) return 0;
-  const fd = openSync(path, 'r');
-  try {
-    return fstatSync(fd).size;
   } finally {
     closeSync(fd);
   }

@@ -236,13 +236,6 @@ function captureCodexVersion(): string {
   return version;
 }
 
-// Test-only export — reset the memoized Codex CLI version so contract
-// tests can exercise the capture path without relying on cross-test
-// ordering. Not part of the public runtime contract.
-export function __resetCachedCodexVersionForTests(): void {
-  cachedCodexVersion = undefined;
-}
-
 function assertCodexEffort(
   effort: Effort,
 ): asserts effort is (typeof CODEX_SUPPORTED_EFFORTS)[number] {
