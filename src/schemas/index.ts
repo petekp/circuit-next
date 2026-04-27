@@ -16,6 +16,7 @@ export * from './selection-policy.js';
 export * from './skill.js';
 export * from './snapshot.js';
 export * from './step.js';
+export * from './verification.js';
 export * from './workflow.js';
 export * from './workflow-primitives.js';
 export * from './workflow-recipe.js';
