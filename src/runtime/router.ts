@@ -1,4 +1,4 @@
-export const ROUTABLE_WORKFLOWS = ['explore', 'review', 'fix', 'build'] as const;
+export const ROUTABLE_WORKFLOWS = ['explore', 'review', 'fix', 'build', 'migrate'] as const;
 
 type RoutableWorkflow = (typeof ROUTABLE_WORKFLOWS)[number];
 
@@ -47,6 +47,19 @@ const FIX_SIGNALS: Array<{ label: string; pattern: RegExp }> = [
   },
 ];
 
+const MIGRATE_SIGNALS: Array<{ label: string; pattern: RegExp }> = [
+  { label: 'migrate prefix', pattern: /^\s*migrate\s*:/i },
+  {
+    label: 'migrate request',
+    pattern:
+      /^\s*(?:please\s+)?(?:migrate|port|swap|replace|rewrite|transition)\s+(?:a\s+|an\s+|the\s+|this\s+|that\s+|my\s+|all\s+|our\s+)?\S+/i,
+  },
+  {
+    label: 'framework swap signal',
+    pattern: /\b(?:framework|library|dependency|stack)\s+(?:swap|replacement|migration)\b/i,
+  },
+];
+
 const BUILD_SIGNALS: Array<{ label: string; pattern: RegExp }> = [
   { label: 'develop prefix', pattern: /^\s*develop\s*:/i },
   {
@@ -71,6 +84,20 @@ export function classifyWorkflowTask(taskText: string): WorkflowRouteDecision {
         source: 'classifier',
         matched_signal: signal.label,
         reason: `matched ${signal.label}; routed to audit-only review workflow`,
+      };
+    }
+  }
+
+  for (const signal of MIGRATE_SIGNALS) {
+    if (signal.pattern.test(taskText)) {
+      if (PLANNING_ARTIFACT_SIGNAL.test(taskText)) {
+        break;
+      }
+      return {
+        workflowName: 'migrate',
+        source: 'classifier',
+        matched_signal: signal.label,
+        reason: `matched ${signal.label}; routed to Migrate workflow`,
       };
     }
   }

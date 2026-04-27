@@ -9,6 +9,7 @@ import type { Workflow } from '../../schemas/workflow.js';
 import { buildCloseBuilder } from './build.js';
 import { exploreCloseBuilder } from './explore.js';
 import { fixCloseBuilder } from './fix.js';
+import { migrateCloseBuilder } from './migrate.js';
 import { artifactPathForSchemaInWorkflow, workflowHasArtifactSchemaInWorkflow } from './shared.js';
 import { sweepCloseBuilder } from './sweep.js';
 import type { CloseBuildContext, CloseBuilder } from './types.js';
@@ -17,6 +18,7 @@ const REGISTRY = new Map<string, CloseBuilder>([
   [buildCloseBuilder.resultSchemaName, buildCloseBuilder],
   [exploreCloseBuilder.resultSchemaName, exploreCloseBuilder],
   [fixCloseBuilder.resultSchemaName, fixCloseBuilder],
+  [migrateCloseBuilder.resultSchemaName, migrateCloseBuilder],
   [sweepCloseBuilder.resultSchemaName, sweepCloseBuilder],
 ]);
 

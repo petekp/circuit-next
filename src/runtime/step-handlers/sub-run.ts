@@ -76,14 +76,18 @@ export async function runSubRunStep(
     lane,
   } = ctx;
 
-  if (step.writes.artifact !== undefined) {
+  if (step.writes.artifact !== undefined && step.writes.artifact.path !== step.writes.result) {
     // v0 narrows scope: writes.artifact materialization (republishing the
-    // child's primary artifact into a parent slot) is not yet wired —
-    // semantics depend on what "republish verbatim" means for each child
-    // workflow, and there's no consumer driving the choice yet. A future
-    // slice can decide. Authors who declare it today get a loud abort
-    // rather than silent omission.
-    const reason = `sub-run step '${step.id}': writes.artifact materialization is not yet supported; declare only writes.result for v0`;
+    // child's primary artifact into a parent slot at a DIFFERENT path)
+    // is not yet wired — semantics depend on what "republish verbatim"
+    // means for each child workflow, and there's no consumer driving the
+    // choice yet. The schema-annotation case (artifact.path equals
+    // result path) is allowed: the result.json IS the typed artifact,
+    // and downstream lookups via artifactPathForSchemaInWorkflow can
+    // find this sub-run step by its declared schema. Authors who
+    // declare a divergent artifact path today get a loud abort rather
+    // than silent omission.
+    const reason = `sub-run step '${step.id}': writes.artifact materialization at a path different from writes.result is not yet supported; either omit writes.artifact or declare it with the same path as writes.result (schema-annotation form)`;
     push({
       schema_version: 1,
       sequence: state.sequence,

@@ -392,6 +392,45 @@ function compileItem(
         },
       } as Step;
     }
+    case 'sub-run': {
+      const workflowRef = item.execution.workflow_ref;
+      const goal = item.execution.goal;
+      const rigor = item.execution.rigor;
+      if (workflowRef === undefined) {
+        fail(`recipe item '${item.id}' has sub-run kind but no execution.workflow_ref`);
+      }
+      if (goal === undefined) {
+        fail(`recipe item '${item.id}' has sub-run kind but no execution.goal`);
+      }
+      if (rigor === undefined) {
+        fail(`recipe item '${item.id}' has sub-run kind but no execution.rigor`);
+      }
+      const resultPath = requireWritesField(writes, 'result_path', item.id, 'sub-run');
+      // Emit writes.artifact as a schema annotation pointing at the same
+      // path as writes.result. The child's result.json IS the typed
+      // artifact for downstream consumers — no separate materialization
+      // is needed (the sub-run handler short-circuits the v0 abort when
+      // artifact.path equals result path). This lets close-writers
+      // resolve `migrate.batch@v1` (or any sub-run output schema) via
+      // artifactPathForSchemaInWorkflow without special-casing sub-run.
+      return {
+        ...stepBase,
+        executor: 'orchestrator',
+        kind: 'sub-run',
+        workflow_ref: workflowRef,
+        goal,
+        rigor,
+        writes: {
+          result: resultPath,
+          artifact: { path: resultPath, schema: item.output },
+        },
+        gate: {
+          kind: 'result_verdict',
+          source: { kind: 'sub_run_result', ref: 'result' },
+          pass: requireGateField(gate.pass, 'pass', item.id, 'sub-run'),
+        },
+      } as Step;
+    }
   }
 }
 

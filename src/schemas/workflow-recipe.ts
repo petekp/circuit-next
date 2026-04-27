@@ -10,7 +10,7 @@ import {
 import { RunRelativePath } from './primitives.js';
 import { Rigor } from './rigor.js';
 import { SelectionOverride } from './selection-policy.js';
-import { CheckpointPolicy, DispatchRole } from './step.js';
+import { CheckpointPolicy, DispatchRole, WorkflowRef } from './step.js';
 import {
   WorkflowPrimitiveCatalog,
   type WorkflowPrimitiveCatalog as WorkflowPrimitiveCatalogValue,
@@ -73,13 +73,22 @@ export const WorkflowRecipeExecutionKind = z.enum([
   'dispatch',
   'verification',
   'checkpoint',
+  'sub-run',
 ]);
 export type WorkflowRecipeExecutionKind = z.infer<typeof WorkflowRecipeExecutionKind>;
 
+// Recipe-level shape for a sub-run step's child workflow handoff. Mirrors
+// the runtime SubRunStep fields (workflow_ref + goal + rigor) but kept as
+// recipe-level optional fields so existing dispatch/synthesis/etc.
+// executions stay parseable. The cross-field rule lives in the
+// superRefine below.
 export const WorkflowRecipeExecution = z
   .object({
     kind: WorkflowRecipeExecutionKind,
     role: DispatchRole.optional(),
+    workflow_ref: WorkflowRef.optional(),
+    goal: z.string().min(1).optional(),
+    rigor: Rigor.optional(),
   })
   .strict()
   .superRefine((execution, ctx) => {
@@ -91,14 +100,57 @@ export const WorkflowRecipeExecution = z
           message: 'dispatch execution requires a dispatch role',
         });
       }
-      return;
-    }
-    if (execution.role !== undefined) {
+    } else if (execution.role !== undefined) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['role'],
         message: 'dispatch role is only allowed for dispatch execution',
       });
+    }
+    if (execution.kind === 'sub-run') {
+      if (execution.workflow_ref === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['workflow_ref'],
+          message: 'sub-run execution requires workflow_ref',
+        });
+      }
+      if (execution.goal === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['goal'],
+          message: 'sub-run execution requires goal',
+        });
+      }
+      if (execution.rigor === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['rigor'],
+          message: 'sub-run execution requires rigor',
+        });
+      }
+    } else {
+      if (execution.workflow_ref !== undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['workflow_ref'],
+          message: 'workflow_ref is only allowed for sub-run execution',
+        });
+      }
+      if (execution.goal !== undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['goal'],
+          message: 'goal is only allowed for sub-run execution',
+        });
+      }
+      if (execution.rigor !== undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['rigor'],
+          message: 'rigor is only allowed for sub-run execution',
+        });
+      }
     }
   });
 export type WorkflowRecipeExecution = z.infer<typeof WorkflowRecipeExecution>;
@@ -109,6 +161,8 @@ export type WorkflowRecipeExecution = z.infer<typeof WorkflowRecipeExecution>;
 //                                        artifact_path optional (worker-emitted typed artifact)
 //   checkpoint                         → checkpoint_request_path, checkpoint_response_path required;
 //                                        artifact_path optional (only for build_brief checkpoints)
+//   sub-run                            → result_path required (child run's result.json copied
+//                                        into parent's writes.result slot — RunResult shape)
 // Cross-field shape is enforced at the WorkflowRecipeItem superRefine where
 // execution.kind is in scope.
 export const WorkflowRecipeWrites = z
@@ -126,7 +180,7 @@ export type WorkflowRecipeWrites = z.infer<typeof WorkflowRecipeWrites>;
 // Per-item gate metadata. Conditional on execution.kind:
 //   synthesis | verification           → required: SchemaSectionsGate.required
 //   checkpoint                         → allow: CheckpointSelectionGate.allow
-//   dispatch                           → pass: ResultVerdictGate.pass
+//   dispatch | sub-run                 → pass: ResultVerdictGate.pass
 // Cross-field shape is enforced at the WorkflowRecipeItem superRefine.
 export const WorkflowRecipeGate = z
   .object({
@@ -254,6 +308,15 @@ function validateExecutionShape(
         }
       }
     };
+    const expectSubRunSlots = () => {
+      if (!has('result_path')) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['writes', 'result_path'],
+          message: 'sub-run execution requires writes.result_path',
+        });
+      }
+    };
     const forbid = (key: keyof WorkflowRecipeWrites, allowedKinds: string) => {
       if (has(key)) {
         ctx.addIssue({
@@ -269,7 +332,7 @@ function validateExecutionShape(
         expectArtifact();
         forbid('request_path', 'dispatch');
         forbid('receipt_path', 'dispatch');
-        forbid('result_path', 'dispatch');
+        forbid('result_path', 'dispatch|sub-run');
         forbid('checkpoint_request_path', 'checkpoint');
         forbid('checkpoint_response_path', 'checkpoint');
         break;
@@ -282,7 +345,15 @@ function validateExecutionShape(
         expectCheckpointSlots();
         forbid('request_path', 'dispatch');
         forbid('receipt_path', 'dispatch');
-        forbid('result_path', 'dispatch');
+        forbid('result_path', 'dispatch|sub-run');
+        break;
+      case 'sub-run':
+        expectSubRunSlots();
+        forbid('artifact_path', 'synthesis|verification');
+        forbid('request_path', 'dispatch');
+        forbid('receipt_path', 'dispatch');
+        forbid('checkpoint_request_path', 'checkpoint');
+        forbid('checkpoint_response_path', 'checkpoint');
         break;
     }
   }
@@ -312,15 +383,16 @@ function validateExecutionShape(
       case 'verification':
         expectField('required', `${kind}`);
         forbidField('allow', 'checkpoint');
-        forbidField('pass', 'dispatch');
+        forbidField('pass', 'dispatch|sub-run');
         break;
       case 'checkpoint':
         expectField('allow', 'checkpoint');
         forbidField('required', 'synthesis|verification');
-        forbidField('pass', 'dispatch');
+        forbidField('pass', 'dispatch|sub-run');
         break;
       case 'dispatch':
-        expectField('pass', 'dispatch');
+      case 'sub-run':
+        expectField('pass', `${kind}`);
         forbidField('required', 'synthesis|verification');
         forbidField('allow', 'checkpoint');
         break;
@@ -613,15 +685,21 @@ function acceptedExecutionKinds(
   primitive: WorkflowPrimitiveValue,
 ): readonly WorkflowRecipeExecutionKind[] {
   if (primitive.id === 'run-verification') return ['verification'];
+  // sub-run is an orchestration pattern (parent invokes a child workflow,
+  // gate admits the child's terminal verdict). The 'batch' primitive is
+  // its first consumer (Migrate's batch step delegates to a Build child),
+  // so sub-run is allowed wherever 'batch'-shaped work fits — i.e., for
+  // 'mixed' surfaces. 'orchestrator' surfaces also accept sub-run because
+  // the parent step authoring the sub-run IS an orchestrator action.
   switch (primitive.action_surface) {
     case 'worker':
       return ['dispatch', 'synthesis'];
     case 'host':
       return ['checkpoint'];
     case 'orchestrator':
-      return ['synthesis', 'checkpoint'];
+      return ['synthesis', 'checkpoint', 'sub-run'];
     case 'mixed':
-      return ['synthesis', 'dispatch', 'verification', 'checkpoint'];
+      return ['synthesis', 'dispatch', 'verification', 'checkpoint', 'sub-run'];
   }
 }
 

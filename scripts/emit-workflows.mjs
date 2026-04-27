@@ -64,6 +64,10 @@ const RECIPES = [
     recipePath: 'specs/workflow-recipes/fix.recipe.json',
   },
   {
+    id: 'migrate',
+    recipePath: 'specs/workflow-recipes/migrate.recipe.json',
+  },
+  {
     id: 'sweep',
     recipePath: 'specs/workflow-recipes/sweep.recipe.json',
   },

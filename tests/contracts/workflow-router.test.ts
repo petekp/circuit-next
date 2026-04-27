@@ -4,7 +4,7 @@ import { ROUTABLE_WORKFLOWS, classifyWorkflowTask } from '../../src/runtime/rout
 
 describe('P2.8 workflow router classifier', () => {
   it('declares the current routable workflow set explicitly', () => {
-    expect(ROUTABLE_WORKFLOWS).toEqual(['explore', 'review', 'fix', 'build']);
+    expect(ROUTABLE_WORKFLOWS).toEqual(['explore', 'review', 'fix', 'build', 'migrate']);
   });
 
   it('routes review/audit-style tasks to the review workflow', () => {
@@ -26,6 +26,38 @@ describe('P2.8 workflow router classifier', () => {
       expect(decision.workflowName, task).toBe('review');
       expect(decision.source).toBe('classifier');
       expect(decision.matched_signal).toBeDefined();
+    }
+  });
+
+  it('routes migration-style tasks to the migrate workflow', () => {
+    const cases = [
+      'migrate the auth middleware to the new identity stack',
+      'migrate: swap the legacy storage adapter',
+      'rewrite the search adapter on top of the new SDK',
+      'port the legacy ingester to the streaming pipeline',
+      'replace the deprecated provider with the new one',
+      'transition the build pipeline to turbo',
+      'framework swap from express to fastify',
+      'dependency replacement across the monorepo',
+    ];
+
+    for (const task of cases) {
+      const decision = classifyWorkflowTask(task);
+      expect(decision.workflowName, task).toBe('migrate');
+      expect(decision.source).toBe('classifier');
+      expect(decision.matched_signal).toBeDefined();
+    }
+  });
+
+  it('keeps migrate-prefixed planning goals on explore via planning-artifact suppression', () => {
+    const cases = [
+      'migrate: produce a migration plan',
+      'migrate the auth middleware — write a design doc first',
+    ];
+
+    for (const task of cases) {
+      const decision = classifyWorkflowTask(task);
+      expect(decision.workflowName, task).toBe('explore');
     }
   });
 

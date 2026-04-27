@@ -11,6 +11,9 @@ import { buildPlanSynthesisBuilder } from './build-plan.js';
 import { exploreAnalysisSynthesisBuilder } from './explore-analysis.js';
 import { exploreBriefSynthesisBuilder } from './explore-brief.js';
 import { fixBriefSynthesisBuilder } from './fix-brief.js';
+import { migrateBriefSynthesisBuilder } from './migrate-brief.js';
+import { migrateCoexistenceSynthesisBuilder } from './migrate-coexistence.js';
+import { migrateInventorySynthesisBuilder } from './migrate-inventory.js';
 import { reviewIntakeSynthesisBuilder } from './review-intake.js';
 import { reviewResultSynthesisBuilder } from './review-result.js';
 import { sweepBriefSynthesisBuilder } from './sweep-brief.js';
@@ -24,6 +27,9 @@ const REGISTRY = new Map<string, SynthesisBuilder>([
   [reviewIntakeSynthesisBuilder.resultSchemaName, reviewIntakeSynthesisBuilder],
   [reviewResultSynthesisBuilder.resultSchemaName, reviewResultSynthesisBuilder],
   [fixBriefSynthesisBuilder.resultSchemaName, fixBriefSynthesisBuilder],
+  [migrateBriefSynthesisBuilder.resultSchemaName, migrateBriefSynthesisBuilder],
+  [migrateInventorySynthesisBuilder.resultSchemaName, migrateInventorySynthesisBuilder],
+  [migrateCoexistenceSynthesisBuilder.resultSchemaName, migrateCoexistenceSynthesisBuilder],
   [sweepBriefSynthesisBuilder.resultSchemaName, sweepBriefSynthesisBuilder],
   [sweepQueueSynthesisBuilder.resultSchemaName, sweepQueueSynthesisBuilder],
 ]);

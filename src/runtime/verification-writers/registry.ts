@@ -7,12 +7,14 @@
 
 import { buildVerificationWriter } from './build-verification.js';
 import { fixVerificationWriter } from './fix-verification.js';
+import { migrateVerificationWriter } from './migrate-verification.js';
 import { sweepVerificationWriter } from './sweep-verification.js';
 import type { VerificationBuilder } from './types.js';
 
 const REGISTRY = new Map<string, VerificationBuilder>([
   [buildVerificationWriter.resultSchemaName, buildVerificationWriter],
   [fixVerificationWriter.resultSchemaName, fixVerificationWriter],
+  [migrateVerificationWriter.resultSchemaName, migrateVerificationWriter],
   [sweepVerificationWriter.resultSchemaName, sweepVerificationWriter],
 ]);
 
