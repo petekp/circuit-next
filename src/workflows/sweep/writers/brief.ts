@@ -6,8 +6,11 @@
 // no operator input is available, defaulting to a cleanup sweep over
 // the goal's described scope and an `npm run verify` candidate.
 
-import { SweepBrief } from '../../schemas/artifacts/sweep.js';
-import type { SynthesisBuildContext, SynthesisBuilder } from './types.js';
+import type {
+  SynthesisBuildContext,
+  SynthesisBuilder,
+} from '../../../runtime/synthesis-writers/types.js';
+import { SweepBrief } from '../../../schemas/artifacts/sweep.js';
 
 const DEFAULT_SWEEP_VERIFICATION_COMMAND = {
   id: 'sweep-proof',

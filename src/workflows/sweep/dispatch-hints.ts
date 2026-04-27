@@ -1,6 +1,6 @@
 // Sweep workflow dispatch shape hints.
 
-import type { SchemaShapeHint } from './types.js';
+import type { SchemaShapeHint } from '../../runtime/shape-hints/types.js';
 
 export const sweepAnalysisShapeHint: SchemaShapeHint = {
   kind: 'schema',

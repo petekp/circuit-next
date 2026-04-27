@@ -6,8 +6,11 @@
 // to_execute list in low-risk-first order; defers high-risk + low-
 // confidence items for human review.
 
-import { SweepAnalysis, SweepQueue } from '../../schemas/artifacts/sweep.js';
-import type { SynthesisBuildContext, SynthesisBuilder } from './types.js';
+import type {
+  SynthesisBuildContext,
+  SynthesisBuilder,
+} from '../../../runtime/synthesis-writers/types.js';
+import { SweepAnalysis, SweepQueue } from '../../../schemas/artifacts/sweep.js';
 
 type TriageAction = 'act' | 'prove-then-act' | 'prove' | 'defer';
 

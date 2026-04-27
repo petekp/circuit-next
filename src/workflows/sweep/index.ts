@@ -4,22 +4,22 @@
 // as a child of Migrate (and potentially other future parent
 // workflows). Routing is intentionally undefined.
 
-import { sweepCloseBuilder } from '../../runtime/close-writers/sweep.js';
+import { SweepAnalysis, SweepBatch, SweepReview } from '../../schemas/artifacts/sweep.js';
+import type { WorkflowPackage } from '../types.js';
 import {
   sweepAnalysisShapeHint,
   sweepBatchShapeHint,
   sweepReviewShapeHint,
-} from '../../runtime/shape-hints/sweep.js';
-import { sweepBriefSynthesisBuilder } from '../../runtime/synthesis-writers/sweep-brief.js';
-import { sweepQueueSynthesisBuilder } from '../../runtime/synthesis-writers/sweep-queue.js';
-import { sweepVerificationWriter } from '../../runtime/verification-writers/sweep-verification.js';
-import { SweepAnalysis, SweepBatch, SweepReview } from '../../schemas/artifacts/sweep.js';
-import type { WorkflowPackage } from '../types.js';
+} from './dispatch-hints.js';
+import { sweepBriefSynthesisBuilder } from './writers/brief.js';
+import { sweepCloseBuilder } from './writers/close.js';
+import { sweepQueueSynthesisBuilder } from './writers/queue.js';
+import { sweepVerificationWriter } from './writers/verification.js';
 
 export const sweepWorkflowPackage: WorkflowPackage = {
   id: 'sweep',
   paths: {
-    recipe: 'specs/workflow-recipes/sweep.recipe.json',
+    recipe: 'src/workflows/sweep/recipe.json',
   },
   dispatchArtifacts: [
     {
