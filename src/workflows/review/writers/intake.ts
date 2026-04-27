@@ -8,7 +8,7 @@
 import type {
   SynthesisBuildContext,
   SynthesisBuilder,
-} from '../../../runtime/synthesis-writers/types.js';
+} from '../../../runtime/registries/synthesis-writers/types.js';
 
 export const reviewIntakeSynthesisBuilder: SynthesisBuilder = {
   resultSchemaName: 'review.intake@v1',

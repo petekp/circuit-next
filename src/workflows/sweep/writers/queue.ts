@@ -9,8 +9,8 @@
 import type {
   SynthesisBuildContext,
   SynthesisBuilder,
-} from '../../../runtime/synthesis-writers/types.js';
-import { SweepAnalysis, SweepQueue } from '../../../schemas/artifacts/sweep.js';
+} from '../../../runtime/registries/synthesis-writers/types.js';
+import { SweepAnalysis, SweepQueue } from '../artifacts.js';
 
 type TriageAction = 'act' | 'prove-then-act' | 'prove' | 'defer';
 

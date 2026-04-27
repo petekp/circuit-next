@@ -2,7 +2,7 @@
 contract: review
 status: draft
 version: 0.1
-schema_source: .claude-plugin/skills/review/circuit.json + src/schemas/artifacts/review.ts
+schema_source: .claude-plugin/skills/review/circuit.json + src/workflows/review/artifacts.ts
 last_updated: 2026-04-24
 depends_on: [workflow, phase, step, adapter]
 artifact_ids:
@@ -34,7 +34,7 @@ workflow kind.
 This is a workflow-specific contract over the base `Workflow` schema, the
 same kind of discipline layer as `src/workflows/explore/contract.md`. The fixture
 is validated by `src/schemas/workflow.ts`; the final artifact shape is
-validated by `src/schemas/artifacts/review.ts`.
+validated by `src/workflows/review/artifacts.ts`.
 
 At v0.2, the default runtime synthesis writer has a narrow review
 registration: `review.intake@v1` writes the scoped intake object and
@@ -76,7 +76,7 @@ files, not authority-graph artifacts.
   `critical` findings and zero `high` findings. Any critical or high
   finding makes the verdict `ISSUES_FOUND`.
 
-  Enforced by `src/schemas/artifacts/review.ts` and
+  Enforced by `src/workflows/review/artifacts.ts` and
   `tests/properties/visible/review-i2.test.ts`.
 
 ## Fixture Binding
@@ -143,5 +143,5 @@ This contract reopens if any of:
 - `specs/plans/p2-9-second-workflow.md §4` (REVIEW-I1 / REVIEW-I2)
 - `specs/plans/p2-9-second-workflow.md §5` (artifact model and dispatch
   shape)
-- `src/schemas/artifacts/review.ts` (artifact schemas)
+- `src/workflows/review/artifacts.ts` (artifact schemas)
 - `.claude-plugin/skills/review/circuit.json` (runtime fixture)

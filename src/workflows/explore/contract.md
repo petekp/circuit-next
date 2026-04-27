@@ -2,7 +2,7 @@
 contract: explore
 status: draft
 version: 0.7
-schema_source: .claude-plugin/skills/explore/circuit.json (fixture) + src/schemas/artifacts/explore.ts (explore.brief / explore.analysis / explore.synthesis / explore.review-verdict / explore.result)
+schema_source: .claude-plugin/skills/explore/circuit.json (fixture) + src/workflows/explore/artifacts.ts (explore.brief / explore.analysis / explore.synthesis / explore.review-verdict / explore.result)
 reference_evidence: specs/reference/legacy-circuit/explore-characterization.md
 last_updated: 2026-04-24
 depends_on: [workflow, phase, step, selection, rigor, lane, skill, adapter]
@@ -48,7 +48,7 @@ the workflow's phases emit, plus four property ids tracking deferred
 semantic guarantees for later-slice enforcement.
 
 Slice 89 starts P2.10 by adding runtime schemas for `explore.brief` and
-`explore.analysis` at `src/schemas/artifacts/explore.ts` and wiring the
+`explore.analysis` at `src/workflows/explore/artifacts.ts` and wiring the
 default runtime synthesis writer to produce those shapes. Slice 90 adds
 the strict dispatch-materialized schema for `explore.synthesis`, and
 Slice 91 does the same for `explore.review-verdict`. Slice 92 closes the

@@ -2,7 +2,7 @@
 contract: fix
 status: draft
 version: 0.1
-schema_source: src/schemas/artifacts/fix.ts
+schema_source: src/workflows/fix/artifacts.ts
 reference_evidence: specs/reference/legacy-circuit/repair-characterization.md
 last_updated: 2026-04-25
 depends_on: [workflow, workflow-primitives, workflow-recipe, step, adapter]

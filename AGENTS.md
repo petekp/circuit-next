@@ -57,7 +57,7 @@ These must pass before commit on changes to `src/`, `tests/`, or
 | Compiled plugin output (generated) | `.claude-plugin/skills/<id>/circuit.json` |
 | CLI entrypoint | `bin/circuit-next` |
 | Engine source | `src/runtime/`, `src/cli/`, `src/schemas/` |
-| Workflow packages | `src/workflows/<id>/` (recipe, command, contract, writers, dispatch hints) |
+| Workflow packages | `src/workflows/<id>/` (recipe, artifacts, command, contract, writers, dispatch hints) |
 | Workflow catalog | `src/workflows/catalog.ts` (single source of truth the engine derives from) |
 | Tests | `tests/` |
 | Engine contracts | `docs/contracts/` |
@@ -70,8 +70,9 @@ These must pass before commit on changes to `src/`, `tests/`, or
 
 ## Adding a workflow
 
-1. Create `src/workflows/<id>/` with `recipe.json`, optional `command.md`
-   and `contract.md`, `index.ts` (the WorkflowPackage), `dispatch-hints.ts`
+1. Create `src/workflows/<id>/` with `recipe.json`, `artifacts.ts` (the
+   workflow's Zod artifact schemas), optional `command.md` and
+   `contract.md`, `index.ts` (the WorkflowPackage), `dispatch-hints.ts`
    (if any dispatch artifacts have shape hints), and `writers/` (one file
    per writer kind your workflow uses: synthesis / close / verification /
    checkpoint).

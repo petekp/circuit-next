@@ -13,7 +13,7 @@ import {
   FixReview,
   FixVerification,
   FixVerificationCommand,
-} from '../../src/schemas/artifacts/fix.js';
+} from '../../src/workflows/fix/artifacts.js';
 
 const REPO_ROOT = resolve('.');
 const ARTIFACTS_PATH = join(REPO_ROOT, 'specs', 'artifacts.json');
@@ -395,7 +395,7 @@ describe('Fix artifact authority rows', () => {
       const artifact = byId.get(id);
       expect(artifact, `${id} row`).toBeDefined();
       expect(artifact?.contract).toBe('src/workflows/fix/contract.md');
-      expect(artifact?.schema_file).toBe('src/schemas/artifacts/fix.ts');
+      expect(artifact?.schema_file).toBe('src/workflows/fix/artifacts.ts');
       expect(artifact?.schema_exports?.length, `${id}.schema_exports`).toBeGreaterThan(0);
       expect(artifact?.writers?.length, `${id}.writers`).toBeGreaterThan(0);
       expect(artifact?.readers?.length, `${id}.readers`).toBeGreaterThan(0);

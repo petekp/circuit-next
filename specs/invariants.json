@@ -334,7 +334,7 @@
       "enforcement_state": "test-enforced",
       "source_anchor": "src/workflows/review/contract.md#REVIEW-I2",
       "binding_refs": [
-        { "path": "src/schemas/artifacts/review.ts", "kind": "schema_export" },
+        { "path": "src/workflows/review/artifacts.ts", "kind": "schema_export" },
         { "path": "tests/properties/visible/review-i2.test.ts", "kind": "test_title" }
       ]
     },

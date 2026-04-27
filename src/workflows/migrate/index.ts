@@ -3,7 +3,7 @@
 // Routable via /circuit:run but has no slash command — operators reach
 // it through intent classification, not /circuit:migrate.
 
-import { MigrateReview } from '../../schemas/artifacts/migrate.js';
+import { MigrateReview } from './artifacts.js';
 import type { WorkflowPackage, WorkflowSignal } from '../types.js';
 import { migrateBriefSynthesisBuilder } from './writers/brief.js';
 import { migrateCloseBuilder } from './writers/close.js';

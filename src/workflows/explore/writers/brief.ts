@@ -8,8 +8,8 @@
 import type {
   SynthesisBuildContext,
   SynthesisBuilder,
-} from '../../../runtime/synthesis-writers/types.js';
-import { ExploreBrief } from '../../../schemas/artifacts/explore.js';
+} from '../../../runtime/registries/synthesis-writers/types.js';
+import { ExploreBrief } from '../artifacts.js';
 
 export const exploreBriefSynthesisBuilder: SynthesisBuilder = {
   resultSchemaName: 'explore.brief@v1',

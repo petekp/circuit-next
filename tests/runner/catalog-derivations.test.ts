@@ -17,11 +17,11 @@ import {
   buildVerificationRegistry,
   findDefaultRoutablePackage,
 } from '../../src/runtime/catalog-derivations.js';
-import type { CheckpointBriefBuilder } from '../../src/runtime/checkpoint-writers/types.js';
-import type { CloseBuilder } from '../../src/runtime/close-writers/types.js';
-import type { StructuralShapeHint } from '../../src/runtime/shape-hints/types.js';
-import type { SynthesisBuilder } from '../../src/runtime/synthesis-writers/types.js';
-import type { VerificationBuilder } from '../../src/runtime/verification-writers/types.js';
+import type { CheckpointBriefBuilder } from '../../src/runtime/registries/checkpoint-writers/types.js';
+import type { CloseBuilder } from '../../src/runtime/registries/close-writers/types.js';
+import type { StructuralShapeHint } from '../../src/runtime/registries/shape-hints/types.js';
+import type { SynthesisBuilder } from '../../src/runtime/registries/synthesis-writers/types.js';
+import type { VerificationBuilder } from '../../src/runtime/registries/verification-writers/types.js';
 import type { WorkflowPackage } from '../../src/workflows/types.js';
 
 function fakePackage(opts: Partial<WorkflowPackage> & { readonly id: string }): WorkflowPackage {
@@ -457,14 +457,14 @@ describe('catalog-derivations: real catalog invariants', () => {
     );
     expect(totalWriters).toBeGreaterThan(0);
     const { findSynthesisBuilder } = await import(
-      '../../src/runtime/synthesis-writers/registry.js'
+      '../../src/runtime/registries/synthesis-writers/registry.js'
     );
-    const { findCloseBuilder } = await import('../../src/runtime/close-writers/registry.js');
+    const { findCloseBuilder } = await import('../../src/runtime/registries/close-writers/registry.js');
     const { findVerificationWriter } = await import(
-      '../../src/runtime/verification-writers/registry.js'
+      '../../src/runtime/registries/verification-writers/registry.js'
     );
     const { findCheckpointBriefBuilder } = await import(
-      '../../src/runtime/checkpoint-writers/registry.js'
+      '../../src/runtime/registries/checkpoint-writers/registry.js'
     );
 
     for (const pkg of workflowPackages) {

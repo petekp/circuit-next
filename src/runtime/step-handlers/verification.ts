@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, lstatSync, realpathSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
 import type { Workflow } from '../../schemas/workflow.js';
-import { findVerificationWriter } from '../verification-writers/registry.js';
+import { findVerificationWriter } from '../registries/verification-writers/registry.js';
 import { isRunRelativePathError, writeJsonArtifact } from './shared.js';
 import type { StepHandlerContext, StepHandlerResult } from './types.js';
 

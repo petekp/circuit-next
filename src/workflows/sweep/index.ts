@@ -4,8 +4,9 @@
 // as a child of Migrate (and potentially other future parent
 // workflows). Routing is intentionally undefined.
 
-import { SweepAnalysis, SweepBatch, SweepReview } from '../../schemas/artifacts/sweep.js';
 import type { WorkflowPackage } from '../types.js';
+import { SweepAnalysis, SweepBatch, SweepReview } from './artifacts.js';
+import { sweepCrossArtifactValidators } from './cross-artifact-validators.js';
 import {
   sweepAnalysisShapeHint,
   sweepBatchShapeHint,
@@ -44,4 +45,5 @@ export const sweepWorkflowPackage: WorkflowPackage = {
     verification: [sweepVerificationWriter],
     checkpoint: [],
   },
+  crossArtifactValidators: sweepCrossArtifactValidators,
 };

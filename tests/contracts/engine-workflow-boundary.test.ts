@@ -154,16 +154,19 @@ describe('engine ↔ workflow boundary', () => {
 
   it('test files do not bypass the engine→workflow boundary via direct package imports', () => {
     // Tests CAN import a workflow package's index for unit-testing
-    // the package in isolation. What they MUST NOT do is import a
+    // the package in isolation. They MAY also import a package's
+    // artifacts.ts module (the package's typed Zod schemas — public
+    // surface, not internals). What they MUST NOT do is import a
     // workflow's writer / dispatch-hint internals — that would
     // entangle the test surface with the workflow's internal layout.
     const offenders: { readonly file: string; readonly importPath: string }[] = [];
     for (const file of walk('tests')) {
       for (const importPath of importPathsFrom(file)) {
         if (!isWorkflowImport(importPath)) continue;
-        // index.js / catalog.js / types.js are the supported public
-        // surfaces.
+        // index.js / catalog.js / types.js / artifacts.js are the
+        // supported public surfaces.
         if (importPath.endsWith('/index.js')) continue;
+        if (importPath.endsWith('/artifacts.js')) continue;
         if (importPath.endsWith('/workflows/catalog.js')) continue;
         if (importPath.endsWith('/workflows/types.js')) continue;
         offenders.push({ file, importPath });

@@ -7,15 +7,15 @@
 // plan, not the result).
 
 import { readFileSync } from 'node:fs';
-import { artifactPathForSchemaInWorkflow } from '../../../runtime/close-writers/shared.js';
+import { artifactPathForSchemaInWorkflow } from '../../../runtime/registries/close-writers/shared.js';
 import { resolveRunRelative } from '../../../runtime/run-relative-path.js';
 import type {
   VerificationBuildContext,
   VerificationBuilder,
   VerificationCommand,
   VerificationCommandObservation,
-} from '../../../runtime/verification-writers/types.js';
-import { BuildPlan, BuildVerification } from '../../../schemas/artifacts/build.js';
+} from '../../../runtime/registries/verification-writers/types.js';
+import { BuildPlan, BuildVerification } from '../artifacts.js';
 
 export const buildVerificationWriter: VerificationBuilder = {
   resultSchemaName: 'build.verification@v1',

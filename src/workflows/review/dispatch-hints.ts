@@ -7,7 +7,7 @@
 // plus the NO_ISSUES_FOUND/ISSUES_FOUND gate verdicts that mirror the
 // review.dispatch-result body shape.
 
-import type { StructuralShapeHint } from '../../runtime/shape-hints/types.js';
+import type { StructuralShapeHint } from '../../runtime/registries/shape-hints/types.js';
 
 export const reviewDispatchShapeHint: StructuralShapeHint = {
   kind: 'structural',

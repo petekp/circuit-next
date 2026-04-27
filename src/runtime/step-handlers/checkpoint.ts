@@ -1,11 +1,10 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { BuildBrief } from '../../schemas/artifacts/build.js';
 import type { LayeredConfig as LayeredConfigValue } from '../../schemas/config.js';
 import type { Rigor } from '../../schemas/rigor.js';
 import type { Workflow } from '../../schemas/workflow.js';
 import { sha256Hex } from '../adapters/shared.js';
-import { findCheckpointBriefBuilder } from '../checkpoint-writers/registry.js';
+import { findCheckpointBriefBuilder } from '../registries/checkpoint-writers/registry.js';
 import { resolveRunRelative } from '../run-relative-path.js';
 import { writeDerivedSnapshot } from '../snapshot-writer.js';
 import { isRunRelativePathError, writeJsonArtifact } from './shared.js';
@@ -63,7 +62,7 @@ export function checkpointRequestBody(input: {
   readonly step: CheckpointStep;
   readonly projectRoot?: string;
   readonly selectionConfigLayers: readonly LayeredConfigValue[];
-  readonly buildBriefSha256?: string;
+  readonly checkpointArtifactSha256?: string;
 }): unknown {
   return {
     schema_version: 1,
@@ -79,9 +78,9 @@ export function checkpointRequestBody(input: {
     execution_context: {
       ...(input.projectRoot === undefined ? {} : { project_root: input.projectRoot }),
       selection_config_layers: input.selectionConfigLayers,
-      ...(input.buildBriefSha256 === undefined
+      ...(input.checkpointArtifactSha256 === undefined
         ? {}
-        : { build_brief_sha256: input.buildBriefSha256 }),
+        : { checkpoint_artifact_sha256: input.checkpointArtifactSha256 }),
     },
   };
 }
@@ -107,13 +106,13 @@ function checkpointFailureReason(stepId: string, err: unknown): string {
 // Checkpoint artifact writer. Most checkpoints don't write artifacts;
 // when they do, a registered CheckpointBriefBuilder owns the workflow-
 // specific assembly. Adding a new workflow's checkpoint-with-artifact
-// means adding a builder under src/runtime/checkpoint-writers/.
+// means adding a builder under src/runtime/registries/checkpoint-writers/.
 function writeCheckpointOwnedArtifact(input: {
   readonly runRoot: string;
   readonly step: CheckpointStep;
   readonly goal: string;
   readonly responsePath?: string;
-  readonly existingBrief?: BuildBrief;
+  readonly existingArtifact?: unknown;
 }): void {
   const artifact = input.step.writes.artifact;
   if (artifact === undefined) return;
@@ -126,7 +125,7 @@ function writeCheckpointOwnedArtifact(input: {
     step: input.step,
     goal: input.goal,
     ...(input.responsePath === undefined ? {} : { responsePath: input.responsePath }),
-    ...(input.existingBrief === undefined ? {} : { existingArtifact: input.existingBrief }),
+    ...(input.existingArtifact === undefined ? {} : { existingArtifact: input.existingArtifact }),
   });
   writeJsonArtifact(input.runRoot, artifact.path, body);
 }
@@ -154,8 +153,9 @@ export function runCheckpointStep(
     const requestAbs = resolveRunRelative(runRoot, step.writes.request);
     if (!isResumedCheckpoint) {
       writeCheckpointOwnedArtifact({ runRoot, step, goal });
-      const buildBriefSha256 =
-        step.writes.artifact?.schema === 'build.brief@v1'
+      const checkpointArtifactSha256 =
+        step.writes.artifact !== undefined &&
+        findCheckpointBriefBuilder(step.writes.artifact.schema) !== undefined
           ? sha256Hex(readFileSync(resolveRunRelative(runRoot, step.writes.artifact.path), 'utf8'))
           : undefined;
       const requestText = `${JSON.stringify(
@@ -163,7 +163,7 @@ export function runCheckpointStep(
           step,
           ...(projectRoot === undefined ? {} : { projectRoot }),
           selectionConfigLayers: executionSelectionConfigLayers,
-          ...(buildBriefSha256 === undefined ? {} : { buildBriefSha256 }),
+          ...(checkpointArtifactSha256 === undefined ? {} : { checkpointArtifactSha256 }),
         }),
         null,
         2,
@@ -267,9 +267,9 @@ export function runCheckpointStep(
       step,
       goal,
       responsePath: step.writes.response,
-      ...(resumeCheckpoint?.existingBrief === undefined
+      ...(resumeCheckpoint?.existingArtifact === undefined
         ? {}
-        : { existingBrief: resumeCheckpoint.existingBrief }),
+        : { existingArtifact: resumeCheckpoint.existingArtifact }),
     });
     push({
       schema_version: 1,

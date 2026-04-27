@@ -9,8 +9,8 @@
 import type {
   SynthesisBuildContext,
   SynthesisBuilder,
-} from '../../../runtime/synthesis-writers/types.js';
-import { SweepBrief } from '../../../schemas/artifacts/sweep.js';
+} from '../../../runtime/registries/synthesis-writers/types.js';
+import { SweepBrief } from '../artifacts.js';
 
 const DEFAULT_SWEEP_VERIFICATION_COMMAND = {
   id: 'sweep-proof',

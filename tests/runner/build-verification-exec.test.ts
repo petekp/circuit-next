@@ -13,7 +13,7 @@ import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { type SynthesisWriterFn, runWorkflow } from '../../src/runtime/runner.js';
-import { BuildPlan, BuildVerification } from '../../src/schemas/artifacts/build.js';
+import { BuildPlan, BuildVerification } from '../../src/workflows/build/artifacts.js';
 import { RunId } from '../../src/schemas/ids.js';
 import type { LaneDeclaration } from '../../src/schemas/lane.js';
 import { Workflow } from '../../src/schemas/workflow.js';

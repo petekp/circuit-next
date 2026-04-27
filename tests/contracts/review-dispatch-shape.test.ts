@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ReviewDispatchResult } from '../../src/schemas/artifacts/review.js';
+import { ReviewDispatchResult } from '../../src/workflows/review/artifacts.js';
 import { DispatchStep } from '../../src/schemas/step.js';
 
 const REVIEW_ANALYZE_DISPATCH_STEP = {

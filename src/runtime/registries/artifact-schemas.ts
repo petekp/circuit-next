@@ -20,8 +20,8 @@
 //   → RunResult.reason mirrors the close reason.
 
 import { z } from 'zod';
-import { workflowPackages } from '../workflows/catalog.js';
-import { buildArtifactSchemaRegistry } from './catalog-derivations.js';
+import { workflowPackages } from '../../workflows/catalog.js';
+import { buildArtifactSchemaRegistry } from '../catalog-derivations.js';
 
 const MinimalVerdictShape = z.object({ verdict: z.string().min(1) }).passthrough();
 

@@ -65,7 +65,7 @@ circuit-next/
 │   └── workflows/             # Workflow packages (one folder per workflow)
 │       ├── catalog.ts         # Single source of truth the engine derives from
 │       ├── types.ts
-│       ├── build/             # recipe.json, command.md, contract.md, writers/, dispatch-hints.ts
+│       ├── build/             # recipe.json, artifacts.ts, command.md, contract.md, writers/, dispatch-hints.ts
 │       ├── explore/
 │       ├── fix/
 │       ├── migrate/
@@ -76,9 +76,10 @@ circuit-next/
 
 Adding a workflow:
 
-1. Create `src/workflows/<id>/` with `recipe.json`, optional `command.md`
-   and `contract.md`, `index.ts` (the WorkflowPackage), `dispatch-hints.ts`
-   (if any dispatch artifacts have shape hints), and `writers/`.
+1. Create `src/workflows/<id>/` with `recipe.json`, `artifacts.ts` (the
+   workflow's Zod schemas), optional `command.md` and `contract.md`,
+   `index.ts` (the WorkflowPackage), `dispatch-hints.ts` (if any dispatch
+   artifacts have shape hints), and `writers/`.
 2. Add the package to `src/workflows/catalog.ts`.
 3. `npm run build && node scripts/emit-workflows.mjs` to regenerate
    `commands/<id>.md` and `.claude-plugin/skills/<id>/`.

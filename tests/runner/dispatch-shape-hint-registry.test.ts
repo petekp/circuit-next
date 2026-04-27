@@ -16,8 +16,8 @@ import {
   findDispatchShapeHint,
   listRegisteredSchemaHints,
   listRegisteredStructuralHints,
-} from '../../src/runtime/shape-hints/registry.js';
-import type { DispatchStep } from '../../src/runtime/shape-hints/types.js';
+} from '../../src/runtime/registries/shape-hints/registry.js';
+import type { DispatchStep } from '../../src/runtime/registries/shape-hints/types.js';
 import { workflowPackages } from '../../src/workflows/catalog.js';
 
 const EXPECTED_SCHEMA_HINTS: readonly string[] = workflowPackages.flatMap((pkg) =>

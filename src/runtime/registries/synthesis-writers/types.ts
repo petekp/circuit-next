@@ -8,9 +8,9 @@
 // does not need to know which schemas exist.
 //
 // To add a new workflow's synthesis step, an author writes:
-//   1. The schema for the output artifact in src/schemas/artifacts/
-//   2. A SynthesisBuilder in src/runtime/synthesis-writers/<schema>.ts
-//   3. A registry entry in src/runtime/synthesis-writers/registry.ts
+//   1. The schema for the output artifact in src/workflows/<wf>/artifacts.ts
+//   2. A SynthesisBuilder in src/workflows/<wf>/writers/<schema>.ts
+//   3. Register it on the package's `writers.synthesis`
 //
 // Close-with-evidence has its own registry under
 // src/runtime/close-writers/. The two registries are intentionally
@@ -18,7 +18,7 @@
 // (artifact_pointers, optional reads for mode-conditional inputs)
 // that don't apply to upstream synthesis steps.
 
-import type { Workflow } from '../../schemas/workflow.js';
+import type { Workflow } from '../../../schemas/workflow.js';
 
 export type SynthesisStep = Workflow['steps'][number] & {
   readonly kind: 'synthesis';

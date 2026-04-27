@@ -13,8 +13,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import { runWorkflow, writeSynthesisArtifact } from '../../src/runtime/runner.js';
-import { findSynthesisBuilder } from '../../src/runtime/synthesis-writers/registry.js';
-import type { SynthesisBuilder } from '../../src/runtime/synthesis-writers/types.js';
+import { findSynthesisBuilder } from '../../src/runtime/registries/synthesis-writers/registry.js';
+import type { SynthesisBuilder } from '../../src/runtime/registries/synthesis-writers/types.js';
 import { RunId } from '../../src/schemas/ids.js';
 import type { LaneDeclaration } from '../../src/schemas/lane.js';
 import { Workflow } from '../../src/schemas/workflow.js';

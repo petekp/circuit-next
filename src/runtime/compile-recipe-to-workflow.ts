@@ -37,8 +37,8 @@ import type {
 } from '../schemas/workflow-recipe.js';
 import type { Workflow as WorkflowValue } from '../schemas/workflow.js';
 import { Workflow } from '../schemas/workflow.js';
-import { findCheckpointBriefBuilder } from './checkpoint-writers/registry.js';
-import { findVerificationWriter } from './verification-writers/registry.js';
+import { findCheckpointBriefBuilder } from './registries/checkpoint-writers/registry.js';
+import { findVerificationWriter } from './registries/verification-writers/registry.js';
 
 export class WorkflowRecipeCompileError extends Error {
   constructor(message: string) {
@@ -81,14 +81,14 @@ function ensureSupportedKindArtifactPair(item: WorkflowRecipeItem): void {
   if (item.execution.kind === 'verification') {
     if (findVerificationWriter(item.output as unknown as string) === undefined) {
       fail(
-        `recipe item '${item.id}' has verification kind but writes '${item.output}'; no verification writer is registered for that schema (see src/runtime/verification-writers/registry.ts)`,
+        `recipe item '${item.id}' has verification kind but writes '${item.output}'; no verification writer is registered for that schema (see src/runtime/registries/verification-writers/registry.ts)`,
       );
     }
   }
   if (item.execution.kind === 'checkpoint' && item.writes?.artifact_path !== undefined) {
     if (findCheckpointBriefBuilder(item.output as unknown as string) === undefined) {
       fail(
-        `recipe item '${item.id}' has checkpoint kind writing artifact '${item.output}'; no checkpoint writer is registered for that schema (see src/runtime/checkpoint-writers/registry.ts)`,
+        `recipe item '${item.id}' has checkpoint kind writing artifact '${item.output}'; no checkpoint writer is registered for that schema (see src/runtime/registries/checkpoint-writers/registry.ts)`,
       );
     }
   }

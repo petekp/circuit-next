@@ -1,52 +1,28 @@
+// Sweep's cross-artifact validators.
+//
+// `sweep.batch@v1` carries a list of items to migrate; the upstream
+// `sweep.queue@v1` carries the prescribed `to_execute` set. This
+// validator ensures the batch only contains candidate ids the queue
+// authorized — without it, the batch could go off-prescription
+// silently.
+//
+// Why this lives in the workflow package: it's specific to sweep's
+// artifact pair and depends on sweep's Zod schemas. Generic engine
+// code stays free of workflow-specific knowledge; the catalog wires
+// this entry into the runtime registry.
+
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { SweepBatch, SweepQueue } from '../schemas/artifacts/sweep.js';
-import type { Workflow } from '../schemas/workflow.js';
+import type {
+  CrossArtifactResult,
+  CrossArtifactValidatorEntry,
+} from '../../runtime/registries/cross-artifact-validators.js';
 import {
   artifactPathForSchemaInWorkflow,
   workflowHasArtifactSchemaInWorkflow,
-} from './close-writers/shared.js';
-
-// Cross-artifact validators run after `parseArtifact` succeeds for a
-// given schema. They enforce constraints that span more than one
-// artifact and therefore cannot be expressed in the single-artifact Zod
-// schema — e.g., `sweep.batch.items[].candidate_id` must be a subset of
-// the upstream `sweep.queue.to_execute`.
-//
-// Why a separate registry rather than a Zod superRefine: superRefine
-// only sees the artifact under validation, not other artifacts on disk.
-// The validator gets `workflow` (to resolve canonical artifact paths)
-// and `runRoot` (to read previously-written artifacts).
-//
-// Fail-closed default: an unregistered schema returns `ok` (the schema
-// has no cross-artifact constraints to check). A registered validator
-// that cannot find its required upstream artifact returns `fail` —
-// silent omission would re-open the gap the validator exists to close.
-
-export type CrossArtifactResult =
-  | { readonly kind: 'ok' }
-  | { readonly kind: 'fail'; readonly reason: string };
-
-export type CrossArtifactValidator = (
-  workflow: Workflow,
-  runRoot: string,
-  resultBody: string,
-) => CrossArtifactResult;
-
-const REGISTRY: Readonly<Record<string, CrossArtifactValidator>> = Object.freeze({
-  'sweep.batch@v1': validateSweepBatchAgainstQueue,
-});
-
-export function runCrossArtifactValidator(
-  schemaName: string,
-  workflow: Workflow,
-  runRoot: string,
-  resultBody: string,
-): CrossArtifactResult {
-  const validator = REGISTRY[schemaName];
-  if (validator === undefined) return { kind: 'ok' };
-  return validator(workflow, runRoot, resultBody);
-}
+} from '../../runtime/registries/close-writers/shared.js';
+import type { Workflow } from '../../schemas/workflow.js';
+import { SweepBatch, SweepQueue } from './artifacts.js';
 
 function validateSweepBatchAgainstQueue(
   workflow: Workflow,
@@ -133,3 +109,7 @@ function validateSweepBatchAgainstQueue(
 
   return { kind: 'ok' };
 }
+
+export const sweepCrossArtifactValidators: readonly CrossArtifactValidatorEntry[] = [
+  { schemaName: 'sweep.batch@v1', validate: validateSweepBatchAgainstQueue },
+];

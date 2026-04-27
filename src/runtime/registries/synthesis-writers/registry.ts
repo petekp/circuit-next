@@ -2,9 +2,9 @@
 //
 // Builders come from src/workflows/catalog.ts via buildSynthesisRegistry.
 
-import type { Workflow } from '../../schemas/workflow.js';
-import { workflowPackages } from '../../workflows/catalog.js';
-import { buildSynthesisRegistry } from '../catalog-derivations.js';
+import type { Workflow } from '../../../schemas/workflow.js';
+import { workflowPackages } from '../../../workflows/catalog.js';
+import { buildSynthesisRegistry } from '../../catalog-derivations.js';
 import { artifactPathForSchemaInWorkflow } from '../close-writers/shared.js';
 import type { SynthesisBuilder, SynthesisStep } from './types.js';
 

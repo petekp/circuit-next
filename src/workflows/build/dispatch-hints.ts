@@ -1,6 +1,6 @@
 // Build workflow dispatch shape hints.
 
-import type { SchemaShapeHint } from '../../runtime/shape-hints/types.js';
+import type { SchemaShapeHint } from '../../runtime/registries/shape-hints/types.js';
 
 export const buildImplementationShapeHint: SchemaShapeHint = {
   kind: 'schema',

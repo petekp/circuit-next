@@ -4,8 +4,8 @@
 // Most checkpoints don't write artifacts and skip this registry entirely;
 // the runner only invokes a builder when step.writes.artifact is defined.
 
-import { workflowPackages } from '../../workflows/catalog.js';
-import { buildCheckpointRegistry } from '../catalog-derivations.js';
+import { workflowPackages } from '../../../workflows/catalog.js';
+import { buildCheckpointRegistry } from '../../catalog-derivations.js';
 import type { CheckpointBriefBuilder } from './types.js';
 
 const REGISTRY = buildCheckpointRegistry(workflowPackages);

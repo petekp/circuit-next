@@ -11,8 +11,8 @@
 import type {
   SynthesisBuildContext,
   SynthesisBuilder,
-} from '../../../runtime/synthesis-writers/types.js';
-import { MigrateBrief, MigrateInventory } from '../../../schemas/artifacts/migrate.js';
+} from '../../../runtime/registries/synthesis-writers/types.js';
+import { MigrateBrief, MigrateInventory } from '../artifacts.js';
 
 export const migrateInventorySynthesisBuilder: SynthesisBuilder = {
   resultSchemaName: 'migrate.inventory@v1',

@@ -8,7 +8,7 @@
 // recipe shape errors surface here instead of producing ambiguous
 // pointers in the result artifact.
 
-import type { Workflow } from '../../schemas/workflow.js';
+import type { Workflow } from '../../../schemas/workflow.js';
 
 // Sub-run / fanout step kinds widened the Step union — fanout's writes
 // holds {branches_dir, aggregate} with no `artifact` slot. The `'artifact'

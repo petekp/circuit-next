@@ -296,7 +296,7 @@ abstract claim "this primitive needs a brief" without binding to a
 specific shape.
 
 **Per-workflow schemas** are structural. They live in
-`src/schemas/artifacts/<workflow>.ts` as concrete Zod types with
+`src/workflows/<workflow>/artifacts.ts` as concrete Zod types with
 workflow-specific fields. `BuildBrief.objective` is not the same field
 as `FixBrief.problem_statement`, even though both satisfy the
 `workflow.brief@v1` primitive contract.
@@ -319,7 +319,7 @@ Why both layers exist together:
 
 Adding a new workflow:
 
-1. Define per-workflow schemas in `src/schemas/artifacts/<wf>.ts`.
+1. Define per-workflow schemas in `src/workflows/<wf>/artifacts.ts`.
 2. Declare aliases in the recipe's `contract_aliases`.
 3. Wire recipe items to the schemas via `output` and `input` fields.
 

@@ -9,14 +9,14 @@
 // to that workflow's schemas, not in the runner.
 //
 // To add a new workflow's close, an author:
-//   1. Defines the result schema (Zod) in src/schemas/artifacts/<wf>.ts
-//   2. Implements a CloseBuilder in src/runtime/close-writers/<wf>.ts
-//   3. Registers it in src/runtime/close-writers/registry.ts
+//   1. Defines the result schema (Zod) in src/workflows/<wf>/artifacts.ts
+//   2. Implements a CloseBuilder in src/workflows/<wf>/writers/close.ts
+//   3. Registers it on the package's `writers.close`
 //
 // The runner.ts close path stays workflow-agnostic — it dispatches by
 // schema name to the registered builder.
 
-import type { Workflow } from '../../schemas/workflow.js';
+import type { Workflow } from '../../../schemas/workflow.js';
 
 // Each builder declares which artifact schemas it reads. The reader
 // translates these into run-relative paths via the workflow's step

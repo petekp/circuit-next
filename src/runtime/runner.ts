@@ -10,7 +10,6 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-import { BuildBrief } from '../schemas/artifacts/build.js';
 import { LayeredConfig, type LayeredConfig as LayeredConfigValue } from '../schemas/config.js';
 import type { Event, RunClosedOutcome } from '../schemas/event.js';
 import type { InvocationId, RunId, WorkflowId } from '../schemas/ids.js';
@@ -21,7 +20,8 @@ import type { Snapshot } from '../schemas/snapshot.js';
 import { Workflow } from '../schemas/workflow.js';
 import { sha256Hex } from './adapters/shared.js';
 import { appendAndDerive } from './append-and-derive.js';
-import { findCloseBuilder, resolveCloseReadPaths } from './close-writers/registry.js';
+import { findCheckpointBriefBuilder } from './registries/checkpoint-writers/registry.js';
+import { findCloseBuilder, resolveCloseReadPaths } from './registries/close-writers/registry.js';
 import {
   bindsExecutionRigorToDispatchSelection,
   selectionConfigLayersWithExecutionRigor,
@@ -49,7 +49,6 @@ import type {
   WorktreeRunner,
 } from './runner-types.js';
 import { writeDerivedSnapshot } from './snapshot-writer.js';
-import { checkpointChoiceIds } from './step-handlers/checkpoint.js';
 import {
   type ResumeCheckpointState,
   type RunState,
@@ -57,7 +56,7 @@ import {
   runStepHandler,
 } from './step-handlers/index.js';
 import { isRunRelativePathError, writeJsonArtifact } from './step-handlers/shared.js';
-import { findSynthesisBuilder, resolveSynthesisReadPaths } from './synthesis-writers/registry.js';
+import { findSynthesisBuilder, resolveSynthesisReadPaths } from './registries/synthesis-writers/registry.js';
 
 // Public API surface from runner.ts. Implementations have moved to
 // dedicated modules during the handler-extraction split; the surface
@@ -202,9 +201,9 @@ function readJsonArtifact(runRoot: string, path: string): unknown {
 }
 
 // Slice 43c synthesis writer fallback. Workflow-specific synthesis logic
-// lives under src/runtime/synthesis-writers/ and is registered by output
+// lives under src/runtime/registries/synthesis-writers/ and is registered by output
 // schema name; close-with-evidence dispatch lives in
-// src/runtime/close-writers/. The runner stays workflow-agnostic — adding
+// src/runtime/registries/close-writers/. The runner stays workflow-agnostic — adding
 // a new synthesis step means adding a SynthesisBuilder file + registry
 // entry.
 function tryWriteRegisteredSynthesisArtifact(input: SynthesisWriterInput): boolean {
@@ -313,7 +312,7 @@ function workflowFromManifestBytes(bytes: Buffer): Workflow {
 interface CheckpointRequestContext {
   readonly projectRoot?: string;
   readonly selectionConfigLayers: readonly LayeredConfigValue[];
-  readonly buildBriefSha256?: string;
+  readonly checkpointArtifactSha256?: string;
 }
 
 type CheckpointWorkflowStep = Workflow['steps'][number] & { kind: 'checkpoint' };
@@ -353,49 +352,37 @@ function readCheckpointRequestContext(input: {
   const selectionConfigLayers = LayeredConfig.array().parse(
     contextRecord.selection_config_layers ?? [],
   );
-  const buildBriefSha256 = contextRecord.build_brief_sha256;
-  if (buildBriefSha256 !== undefined && typeof buildBriefSha256 !== 'string') {
+  const checkpointArtifactSha256 = contextRecord.checkpoint_artifact_sha256;
+  if (checkpointArtifactSha256 !== undefined && typeof checkpointArtifactSha256 !== 'string') {
     throw new Error(
-      'checkpoint resume rejected: build_brief_sha256 in checkpoint request is invalid',
+      'checkpoint resume rejected: checkpoint_artifact_sha256 in checkpoint request is invalid',
     );
   }
   return {
     ...(projectRoot === undefined ? {} : { projectRoot }),
     selectionConfigLayers,
-    ...(buildBriefSha256 === undefined ? {} : { buildBriefSha256 }),
+    ...(checkpointArtifactSha256 === undefined ? {} : { checkpointArtifactSha256 }),
   };
 }
 
-function readCheckpointBuildBrief(input: {
+function readCheckpointResumeArtifact(input: {
   readonly runRoot: string;
   readonly step: CheckpointWorkflowStep;
   readonly requestContext: CheckpointRequestContext;
-}): BuildBrief | undefined {
+}): unknown {
   const artifact = input.step.writes.artifact;
   if (artifact === undefined) return undefined;
-  if (artifact.schema !== 'build.brief@v1') return undefined;
-  const artifactAbs = resolveRunRelative(input.runRoot, artifact.path);
-  const raw = readFileSync(artifactAbs, 'utf8');
-  if (input.requestContext.buildBriefSha256 === undefined) {
-    throw new Error('checkpoint resume rejected: checkpoint request is missing build_brief_sha256');
-  }
-  const observedHash = sha256Hex(raw);
-  if (observedHash !== input.requestContext.buildBriefSha256) {
-    throw new Error('checkpoint resume rejected: waiting Build brief hash differs from request');
-  }
-  const brief = BuildBrief.parse(JSON.parse(raw));
-  const expectedChoices = checkpointChoiceIds(input.step);
-  if (
-    brief.checkpoint.request_path !== input.step.writes.request ||
-    brief.checkpoint.response_path !== undefined ||
-    brief.checkpoint.allowed_choices.length !== expectedChoices.length ||
-    brief.checkpoint.allowed_choices.some((choice, index) => choice !== expectedChoices[index])
-  ) {
-    throw new Error(
-      `checkpoint resume rejected: waiting Build brief does not belong to checkpoint '${input.step.id}'`,
-    );
-  }
-  return brief;
+  const builder = findCheckpointBriefBuilder(artifact.schema);
+  if (builder === undefined) return undefined;
+  if (builder.validateResumeContext === undefined) return undefined;
+  return builder.validateResumeContext({
+    runRoot: input.runRoot,
+    step: input.step,
+    artifactPath: artifact.path,
+    ...(input.requestContext.checkpointArtifactSha256 === undefined
+      ? {}
+      : { artifactSha256: input.requestContext.checkpointArtifactSha256 }),
+  });
 }
 
 function findWaitingCheckpoint(input: {
@@ -408,7 +395,7 @@ function findWaitingCheckpoint(input: {
   readonly attempt: number;
   readonly bootstrap: Extract<Event, { kind: 'run.bootstrapped' }>;
   readonly requestContext: CheckpointRequestContext;
-  readonly existingBrief?: BuildBrief;
+  readonly existingArtifact?: unknown;
 } {
   const events = readRunLog(input.runRoot);
   const bootstrap = events[0];
@@ -457,7 +444,7 @@ function findWaitingCheckpoint(input: {
     step,
     expectedRequestArtifactHash: requested.request_artifact_hash,
   });
-  const existingBrief = readCheckpointBuildBrief({
+  const existingArtifact = readCheckpointResumeArtifact({
     runRoot: input.runRoot,
     step,
     requestContext,
@@ -468,7 +455,7 @@ function findWaitingCheckpoint(input: {
     attempt: requested.attempt,
     bootstrap,
     requestContext,
-    ...(existingBrief === undefined ? {} : { existingBrief }),
+    ...(existingArtifact === undefined ? {} : { existingArtifact }),
   };
 }
 
@@ -824,7 +811,9 @@ export async function resumeWorkflowCheckpoint(
       stepId: waiting.stepId,
       attempt: waiting.attempt,
       selection: inv.selection,
-      ...(waiting.existingBrief === undefined ? {} : { existingBrief: waiting.existingBrief }),
+      ...(waiting.existingArtifact === undefined
+        ? {}
+        : { existingArtifact: waiting.existingArtifact }),
     },
   });
 }

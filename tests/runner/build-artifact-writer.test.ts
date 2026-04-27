@@ -16,7 +16,7 @@ import {
   BuildResult,
   BuildReview,
   BuildVerification,
-} from '../../src/schemas/artifacts/build.js';
+} from '../../src/workflows/build/artifacts.js';
 import { RunId } from '../../src/schemas/ids.js';
 import type { LaneDeclaration } from '../../src/schemas/lane.js';
 import { Workflow } from '../../src/schemas/workflow.js';

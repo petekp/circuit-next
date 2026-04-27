@@ -1,0 +1,13 @@
+# Generated plugin surface — keep linguist out of the repo language stats
+# and signal "this is generated" to GitHub diff views. The source of
+# truth for these files lives under src/workflows/<id>/; the emit
+# script (`npm run emit-workflows`) writes the generated outputs.
+
+commands/build.md     linguist-generated=true
+commands/explore.md   linguist-generated=true
+commands/fix.md       linguist-generated=true
+commands/review.md    linguist-generated=true
+
+# commands/run.md is hand-authored (the CLI router entry).
+
+.claude-plugin/skills/**/*.json linguist-generated=true

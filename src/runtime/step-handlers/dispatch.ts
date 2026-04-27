@@ -3,12 +3,12 @@ import { dirname } from 'node:path';
 import type { Workflow } from '../../schemas/workflow.js';
 import { materializeDispatch } from '../adapters/dispatch-materializer.js';
 import { type DispatchResult, sha256Hex } from '../adapters/shared.js';
-import { parseArtifact } from '../artifact-schemas.js';
-import { runCrossArtifactValidator } from '../cross-artifact-validators.js';
+import { parseArtifact } from '../registries/artifact-schemas.js';
+import { runCrossArtifactValidator } from '../registries/cross-artifact-validators.js';
 import { deriveResolvedFrom, deriveResolvedSelection } from '../dispatch-selection.js';
 import { resolveRunRelative } from '../run-relative-path.js';
 import type { DispatchInput } from '../runner-types.js';
-import { findDispatchShapeHint } from '../shape-hints/registry.js';
+import { findDispatchShapeHint } from '../registries/shape-hints/registry.js';
 import type { StepHandlerContext, StepHandlerResult } from './types.js';
 
 type DispatchStep = Workflow['steps'][number] & { kind: 'dispatch' };

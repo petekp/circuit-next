@@ -1,4 +1,9 @@
 import { z } from 'zod';
+import {
+  VerificationCommand,
+  VerificationCommandResult,
+  VerificationResult,
+} from '../../schemas/verification.js';
 
 const BUILD_RESULT_SCHEMA_BY_ARTIFACT_ID = {
   'build.brief': 'build.brief@v1',
@@ -7,80 +12,6 @@ const BUILD_RESULT_SCHEMA_BY_ARTIFACT_ID = {
   'build.verification': 'build.verification@v1',
   'build.review': 'build.review@v1',
 } as const;
-
-const SHELL_BINARIES = new Set([
-  'sh',
-  'bash',
-  'zsh',
-  'fish',
-  'dash',
-  'cmd',
-  'cmd.exe',
-  'powershell',
-  'powershell.exe',
-  'pwsh',
-  'pwsh.exe',
-]);
-
-function commandBinaryName(argv0: string): string {
-  const normalized = argv0.replaceAll('\\', '/');
-  return normalized.slice(normalized.lastIndexOf('/') + 1).toLowerCase();
-}
-
-const ProjectRelativeCwd = z
-  .string()
-  .min(1)
-  .superRefine((cwd, ctx) => {
-    if (cwd.startsWith('/') || cwd.startsWith('~') || /^[A-Za-z]:[\\/]/.test(cwd)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'cwd must be project-relative and cannot use absolute or home paths',
-      });
-    }
-    if (cwd.startsWith('\\\\') || cwd.startsWith('//')) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'cwd must not use UNC or network absolute paths',
-      });
-    }
-    const parts = cwd.split('/');
-    if (parts.some((part) => part === '..')) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'cwd must not escape the project root',
-      });
-    }
-    if (cwd !== '.' && parts.some((part) => part.length === 0 || part === '.')) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'cwd must be "." or a normalized project-relative path',
-      });
-    }
-  });
-
-export const BuildVerificationCommand = z
-  .object({
-    id: z.string().min(1),
-    cwd: ProjectRelativeCwd,
-    argv: z.array(z.string().min(1)).min(1),
-    timeout_ms: z.number().int().positive(),
-    max_output_bytes: z.number().int().positive(),
-    env: z.record(z.string(), z.string()),
-  })
-  .strict()
-  .superRefine((command, ctx) => {
-    const firstArg = command.argv[0];
-    if (firstArg === undefined) return;
-    const binary = commandBinaryName(firstArg);
-    if (SHELL_BINARIES.has(binary)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['argv'],
-        message: 'verification commands must use direct argv execution, not a shell executable',
-      });
-    }
-  });
-export type BuildVerificationCommand = z.infer<typeof BuildVerificationCommand>;
 
 const NonEmptyStringArray = z.array(z.string().min(1)).min(1);
 
@@ -97,7 +28,7 @@ export const BuildBrief = z
     objective: z.string().min(1),
     scope: z.string().min(1),
     success_criteria: NonEmptyStringArray,
-    verification_command_candidates: z.array(BuildVerificationCommand).min(1),
+    verification_command_candidates: z.array(VerificationCommand).min(1),
     checkpoint: BuildCheckpointPointer,
   })
   .strict();
@@ -110,7 +41,7 @@ export const BuildPlan = z
     slices: NonEmptyStringArray,
     verification: z
       .object({
-        commands: z.array(BuildVerificationCommand).min(1),
+        commands: z.array(VerificationCommand).min(1),
       })
       .strict(),
   })
@@ -127,49 +58,14 @@ export const BuildImplementation = z
   .strict();
 export type BuildImplementation = z.infer<typeof BuildImplementation>;
 
-export const BuildVerificationCommandResult = z
-  .object({
-    command_id: z.string().min(1),
-    argv: z.array(z.string().min(1)).min(1),
-    cwd: ProjectRelativeCwd,
-    exit_code: z.number().int().nonnegative(),
-    status: z.enum(['passed', 'failed']),
-    duration_ms: z.number().int().nonnegative(),
-    stdout_summary: z.string(),
-    stderr_summary: z.string(),
-  })
-  .strict()
-  .superRefine((result, ctx) => {
-    const expected = result.exit_code === 0 ? 'passed' : 'failed';
-    if (result.status !== expected) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['status'],
-        message: `status must be '${expected}' when exit_code is ${result.exit_code}`,
-      });
-    }
-  });
-export type BuildVerificationCommandResult = z.infer<typeof BuildVerificationCommandResult>;
+export const BuildVerificationCommand = VerificationCommand;
+export type BuildVerificationCommand = z.infer<typeof BuildVerificationCommand>;
 
-export const BuildVerification = z
-  .object({
-    overall_status: z.enum(['passed', 'failed']),
-    commands: z.array(BuildVerificationCommandResult).min(1),
-  })
-  .strict()
-  .superRefine((verification, ctx) => {
-    const expected = verification.commands.some((command) => command.status === 'failed')
-      ? 'failed'
-      : 'passed';
-    if (verification.overall_status !== expected) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['overall_status'],
-        message: `overall_status must be '${expected}' for command results`,
-      });
-    }
-  });
+export const BuildVerification = VerificationResult;
 export type BuildVerification = z.infer<typeof BuildVerification>;
+
+export const BuildVerificationCommandResult = VerificationCommandResult;
+export type BuildVerificationCommandResult = z.infer<typeof BuildVerificationCommandResult>;
 
 export const BuildReviewVerdict = z.enum(['accept', 'accept-with-fixes', 'reject']);
 export type BuildReviewVerdict = z.infer<typeof BuildReviewVerdict>;

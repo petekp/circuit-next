@@ -10,8 +10,8 @@
 import type {
   SynthesisBuildContext,
   SynthesisBuilder,
-} from '../../../runtime/synthesis-writers/types.js';
-import { MigrateBrief } from '../../../schemas/artifacts/migrate.js';
+} from '../../../runtime/registries/synthesis-writers/types.js';
+import { MigrateBrief } from '../artifacts.js';
 
 const DEFAULT_MIGRATE_VERIFICATION_COMMAND = {
   id: 'migrate-proof',

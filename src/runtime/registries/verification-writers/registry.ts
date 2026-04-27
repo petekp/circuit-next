@@ -2,8 +2,8 @@
 //
 // Builders come from src/workflows/catalog.ts via buildVerificationRegistry.
 
-import { workflowPackages } from '../../workflows/catalog.js';
-import { buildVerificationRegistry } from '../catalog-derivations.js';
+import { workflowPackages } from '../../../workflows/catalog.js';
+import { buildVerificationRegistry } from '../../catalog-derivations.js';
 import type { VerificationBuilder } from './types.js';
 
 const REGISTRY = buildVerificationRegistry(workflowPackages);

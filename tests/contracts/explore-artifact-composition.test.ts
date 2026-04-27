@@ -2,9 +2,9 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { parseArtifact } from '../../src/runtime/artifact-schemas.js';
-import { findCloseBuilder } from '../../src/runtime/close-writers/registry.js';
-import { findSynthesisBuilder } from '../../src/runtime/synthesis-writers/registry.js';
+import { parseArtifact } from '../../src/runtime/registries/artifact-schemas.js';
+import { findCloseBuilder } from '../../src/runtime/registries/close-writers/registry.js';
+import { findSynthesisBuilder } from '../../src/runtime/registries/synthesis-writers/registry.js';
 import { Workflow } from '../../src/schemas/workflow.js';
 
 const REPO_ROOT = resolve('.');
@@ -125,7 +125,7 @@ describe('P2.10 artifact-schema composition seam', () => {
 
     for (const spec of LANDED_ARTIFACTS) {
       const row = artifactById(artifacts, spec.artifactId);
-      expect(row.schema_file).toBe('src/schemas/artifacts/explore.ts');
+      expect(row.schema_file).toBe('src/workflows/explore/artifacts.ts');
       expect(row.schema_exports).toEqual([...spec.schemaExports]);
 
       const step = stepById(workflow, spec.stepId);

@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { RunResult } from '../result.js';
-import { BuildVerification, BuildVerificationCommand } from './build.js';
+import { RunResult } from '../../schemas/result.js';
+import { VerificationCommand, VerificationResult } from '../../schemas/verification.js';
 
 const MIGRATE_RESULT_SCHEMA_BY_ARTIFACT_ID = {
   'migrate.brief': 'migrate.brief@v1',
@@ -25,7 +25,7 @@ export const MigrateBrief = z
     success_criteria: NonEmptyStringArray,
     coexistence_appetite: z.enum(['none', 'short-window', 'open-ended']),
     rollback_plan: z.string().min(1),
-    verification_command_candidates: z.array(BuildVerificationCommand).min(1),
+    verification_command_candidates: z.array(VerificationCommand).min(1),
   })
   .strict();
 export type MigrateBrief = z.infer<typeof MigrateBrief>;
@@ -125,11 +125,11 @@ export type MigrateCoexistence = z.infer<typeof MigrateCoexistence>;
 export const MigrateBatch = RunResult;
 export type MigrateBatch = z.infer<typeof MigrateBatch>;
 
-// MigrateVerification — same shape as BuildVerification (command list,
+// MigrateVerification — same shape as the shared VerificationResult (command list,
 // pass/fail per command, overall_status). Re-exported so the migrate
 // recipe's verify step can read against a migrate-namespaced contract
 // without forcing every workflow to re-author the verification shape.
-export const MigrateVerification = BuildVerification;
+export const MigrateVerification = VerificationResult;
 export type MigrateVerification = z.infer<typeof MigrateVerification>;
 
 export const MigrateReviewVerdict = z.enum([

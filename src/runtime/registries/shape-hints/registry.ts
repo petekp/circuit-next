@@ -4,8 +4,8 @@
 // buildStructuralHintList. Schema lookup runs first; structural hints
 // are tried in registration order only when the schema lookup misses.
 
-import { workflowPackages } from '../../workflows/catalog.js';
-import { buildSchemaHintMap, buildStructuralHintList } from '../catalog-derivations.js';
+import { workflowPackages } from '../../../workflows/catalog.js';
+import { buildSchemaHintMap, buildStructuralHintList } from '../../catalog-derivations.js';
 import type { DispatchStep, SchemaShapeHint, StructuralShapeHint } from './types.js';
 
 const SCHEMA_HINTS = buildSchemaHintMap(workflowPackages);

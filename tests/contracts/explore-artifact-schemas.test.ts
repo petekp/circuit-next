@@ -13,7 +13,7 @@ import {
   ExploreReviewVerdictValue,
   ExploreSynthesis,
   ExploreSynthesisAspect,
-} from '../../src/schemas/artifacts/explore.js';
+} from '../../src/workflows/explore/artifacts.js';
 import { Workflow } from '../../src/schemas/workflow.js';
 
 const EXPLORE_FIXTURE_PATH = resolve('.claude-plugin/skills/explore/circuit.json');

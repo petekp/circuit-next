@@ -12,12 +12,12 @@ import { resolveRunRelative } from '../../../runtime/run-relative-path.js';
 import type {
   SynthesisBuildContext,
   SynthesisBuilder,
-} from '../../../runtime/synthesis-writers/types.js';
+} from '../../../runtime/registries/synthesis-writers/types.js';
 import {
   ReviewDispatchResult,
   ReviewResult,
   computeReviewVerdict,
-} from '../../../schemas/artifacts/review.js';
+} from '../artifacts.js';
 import type { Workflow } from '../../../schemas/workflow.js';
 
 type DispatchStep = Workflow['steps'][number] & { kind: 'dispatch' };

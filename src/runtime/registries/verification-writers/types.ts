@@ -14,12 +14,12 @@
 // holes.
 //
 // To add a new workflow's verification step:
-//   1. Define the result schema in src/schemas/artifacts/<wf>.ts
+//   1. Define the result schema in src/workflows/<wf>/artifacts.ts
 //   2. Implement a VerificationBuilder in
 //      src/runtime/verification-writers/<schema>.ts
 //   3. Register it in src/runtime/verification-writers/registry.ts
 
-import type { Workflow } from '../../schemas/workflow.js';
+import type { Workflow } from '../../../schemas/workflow.js';
 
 export type VerificationStep = Workflow['steps'][number] & {
   readonly kind: 'verification';

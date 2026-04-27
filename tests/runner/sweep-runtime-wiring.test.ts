@@ -14,7 +14,7 @@ import {
   SweepResult,
   SweepReview,
   SweepVerification,
-} from '../../src/schemas/artifacts/sweep.js';
+} from '../../src/workflows/sweep/artifacts.js';
 import { RunId } from '../../src/schemas/ids.js';
 import type { LaneDeclaration } from '../../src/schemas/lane.js';
 import { Workflow } from '../../src/schemas/workflow.js';

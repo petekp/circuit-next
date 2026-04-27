@@ -1,4 +1,3 @@
-import type { BuildBrief } from '../../schemas/artifacts/build.js';
 import type { LayeredConfig as LayeredConfigValue } from '../../schemas/config.js';
 import type { Event } from '../../schemas/event.js';
 import type { InvocationId, RunId } from '../../schemas/ids.js';
@@ -24,7 +23,10 @@ export interface ResumeCheckpointState {
   readonly stepId: string;
   readonly attempt: number;
   readonly selection: string;
-  readonly existingBrief?: BuildBrief;
+  // Validated checkpoint-owned artifact body returned by the
+  // builder's validateResumeContext. Opaque to the engine; the same
+  // workflow's builder consumes it on re-stamp.
+  readonly existingArtifact?: unknown;
 }
 
 export interface StepHandlerContext {

@@ -5,7 +5,7 @@ import {
   type ReviewFindingSeverity,
   ReviewResult,
   computeReviewVerdict,
-} from '../../../src/schemas/artifacts/review.js';
+} from '../../../src/workflows/review/artifacts.js';
 
 type Counts = {
   critical: number;

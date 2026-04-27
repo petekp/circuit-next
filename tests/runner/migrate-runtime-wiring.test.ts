@@ -22,7 +22,7 @@ import {
   MigrateResult,
   MigrateReview,
   MigrateVerification,
-} from '../../src/schemas/artifacts/migrate.js';
+} from '../../src/workflows/migrate/artifacts.js';
 import { RunId } from '../../src/schemas/ids.js';
 import type { LaneDeclaration } from '../../src/schemas/lane.js';
 import { RunResult } from '../../src/schemas/result.js';

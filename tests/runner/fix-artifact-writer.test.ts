@@ -19,7 +19,7 @@ import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { writeSynthesisArtifact } from '../../src/runtime/runner.js';
-import { type FixBrief, FixResult } from '../../src/schemas/artifacts/fix.js';
+import { type FixBrief, FixResult } from '../../src/workflows/fix/artifacts.js';
 import { Workflow } from '../../src/schemas/workflow.js';
 
 function writeJson(root: string, rel: string, body: unknown): void {

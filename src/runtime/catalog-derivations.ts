@@ -5,11 +5,12 @@
 
 import type { z } from 'zod';
 import type { WorkflowPackage, WorkflowRoutingMetadata } from '../workflows/types.js';
-import type { CheckpointBriefBuilder } from './checkpoint-writers/types.js';
-import type { CloseBuilder } from './close-writers/types.js';
-import type { StructuralShapeHint } from './shape-hints/types.js';
-import type { SynthesisBuilder } from './synthesis-writers/types.js';
-import type { VerificationBuilder } from './verification-writers/types.js';
+import type { CheckpointBriefBuilder } from './registries/checkpoint-writers/types.js';
+import type { CloseBuilder } from './registries/close-writers/types.js';
+import type { CrossArtifactValidator } from './registries/cross-artifact-validators.js';
+import type { StructuralShapeHint } from './registries/shape-hints/types.js';
+import type { SynthesisBuilder } from './registries/synthesis-writers/types.js';
+import type { VerificationBuilder } from './registries/verification-writers/types.js';
 
 // Build a Map keyed by builder.resultSchemaName from one writer slot
 // across all packages. Throws on duplicate keys with a message that
@@ -93,6 +94,24 @@ export function buildSchemaHintMap(
         );
       }
       map.set(artifact.schemaName, artifact.dispatchHint);
+    }
+  }
+  return map;
+}
+
+export function buildCrossArtifactValidatorRegistry(
+  packages: readonly WorkflowPackage[],
+): ReadonlyMap<string, CrossArtifactValidator> {
+  const map = new Map<string, CrossArtifactValidator>();
+  for (const pkg of packages) {
+    if (pkg.crossArtifactValidators === undefined) continue;
+    for (const entry of pkg.crossArtifactValidators) {
+      if (map.has(entry.schemaName)) {
+        throw new Error(
+          `duplicate cross-artifact validator registered for schema '${entry.schemaName}' (workflow ${pkg.id})`,
+        );
+      }
+      map.set(entry.schemaName, entry.validate);
     }
   }
   return map;

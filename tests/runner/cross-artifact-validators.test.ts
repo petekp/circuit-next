@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { artifactPathForSchemaInWorkflow } from '../../src/runtime/close-writers/shared.js';
-import { runCrossArtifactValidator } from '../../src/runtime/cross-artifact-validators.js';
+import { artifactPathForSchemaInWorkflow } from '../../src/runtime/registries/close-writers/shared.js';
+import { runCrossArtifactValidator } from '../../src/runtime/registries/cross-artifact-validators.js';
 import { Workflow } from '../../src/schemas/workflow.js';
 
 // Cross-artifact validators close gaps that single-artifact Zod schemas

@@ -11,11 +11,12 @@
 // WorkflowPackage, append it to catalog.ts. No edits to the engine.
 
 import type { z } from 'zod';
-import type { CheckpointBriefBuilder } from '../runtime/checkpoint-writers/types.js';
-import type { CloseBuilder } from '../runtime/close-writers/types.js';
-import type { StructuralShapeHint } from '../runtime/shape-hints/types.js';
-import type { SynthesisBuilder } from '../runtime/synthesis-writers/types.js';
-import type { VerificationBuilder } from '../runtime/verification-writers/types.js';
+import type { CheckpointBriefBuilder } from '../runtime/registries/checkpoint-writers/types.js';
+import type { CloseBuilder } from '../runtime/registries/close-writers/types.js';
+import type { CrossArtifactValidatorEntry } from '../runtime/registries/cross-artifact-validators.js';
+import type { StructuralShapeHint } from '../runtime/registries/shape-hints/types.js';
+import type { SynthesisBuilder } from '../runtime/registries/synthesis-writers/types.js';
+import type { VerificationBuilder } from '../runtime/registries/verification-writers/types.js';
 
 export interface WorkflowSignal {
   readonly label: string;
@@ -105,6 +106,13 @@ export interface WorkflowPackage {
   // Structural hints for dispatch steps that don't write a typed
   // artifact (review's standalone audit step is the canonical case).
   readonly structuralHints?: readonly StructuralShapeHint[];
+  // Cross-artifact validators run after `parseArtifact` succeeds for
+  // a given schema. They enforce constraints that span more than one
+  // artifact (e.g. sweep.batch.items[].candidate_id must be a subset
+  // of sweep.queue.to_execute) and therefore cannot be expressed in
+  // the single-artifact Zod schema. Empty / absent = no cross-
+  // artifact constraints for this workflow.
+  readonly crossArtifactValidators?: readonly CrossArtifactValidatorEntry[];
   // Optional engine-visible behavior flags. Absent = all defaults.
   readonly engineFlags?: WorkflowEngineFlags;
 }

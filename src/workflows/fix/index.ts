@@ -1,6 +1,6 @@
 // Fix workflow package.
 
-import { FixChange, FixContext, FixDiagnosis, FixReview } from '../../schemas/artifacts/fix.js';
+import { FixChange, FixContext, FixDiagnosis, FixReview } from './artifacts.js';
 import type { WorkflowPackage, WorkflowSignal } from '../types.js';
 import { fixBriefSynthesisBuilder } from './writers/brief.js';
 import { fixCloseBuilder } from './writers/close.js';

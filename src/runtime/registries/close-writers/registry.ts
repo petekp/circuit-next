@@ -2,9 +2,9 @@
 //
 // Builders come from src/workflows/catalog.ts via buildCloseRegistry.
 
-import type { Workflow } from '../../schemas/workflow.js';
-import { workflowPackages } from '../../workflows/catalog.js';
-import { buildCloseRegistry } from '../catalog-derivations.js';
+import type { Workflow } from '../../../schemas/workflow.js';
+import { workflowPackages } from '../../../workflows/catalog.js';
+import { buildCloseRegistry } from '../../catalog-derivations.js';
 import { artifactPathForSchemaInWorkflow, workflowHasArtifactSchemaInWorkflow } from './shared.js';
 import type { CloseBuildContext, CloseBuilder } from './types.js';
 

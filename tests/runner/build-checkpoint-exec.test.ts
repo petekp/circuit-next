@@ -12,7 +12,7 @@ import {
   resumeWorkflowCheckpoint,
   runWorkflow,
 } from '../../src/runtime/runner.js';
-import { BuildBrief, BuildVerification } from '../../src/schemas/artifacts/build.js';
+import { BuildBrief, BuildVerification } from '../../src/workflows/build/artifacts.js';
 import { RunId } from '../../src/schemas/ids.js';
 import { SkillId } from '../../src/schemas/ids.js';
 import type { LaneDeclaration } from '../../src/schemas/lane.js';
@@ -586,7 +586,7 @@ describe('Build checkpoint execution substrate', () => {
           execution_context: {
             project_root: process.cwd(),
             selection_config_layers: [],
-            build_brief_sha256: sha256Hex(tamperedBrief),
+            checkpoint_artifact_sha256: sha256Hex(tamperedBrief),
           },
         },
         null,

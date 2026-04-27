@@ -11,7 +11,7 @@ import {
   ExploreResult,
   ExploreReviewVerdict,
   ExploreSynthesis,
-} from '../../src/schemas/artifacts/explore.js';
+} from '../../src/workflows/explore/artifacts.js';
 import { RunId } from '../../src/schemas/ids.js';
 import type { LaneDeclaration } from '../../src/schemas/lane.js';
 import { Workflow } from '../../src/schemas/workflow.js';

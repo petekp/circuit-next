@@ -8,8 +8,8 @@
 // review reports minor injections; 'reverted' iff batch is 'reverted';
 // otherwise 'failed'.
 
-import { artifactPathForSchemaInWorkflow } from '../../../runtime/close-writers/shared.js';
-import type { CloseBuildContext, CloseBuilder } from '../../../runtime/close-writers/types.js';
+import { artifactPathForSchemaInWorkflow } from '../../../runtime/registries/close-writers/shared.js';
+import type { CloseBuildContext, CloseBuilder } from '../../../runtime/registries/close-writers/types.js';
 import {
   SweepAnalysis,
   SweepBatch,
@@ -18,7 +18,7 @@ import {
   SweepResult,
   SweepReview,
   SweepVerification,
-} from '../../../schemas/artifacts/sweep.js';
+} from '../artifacts.js';
 
 const POINTERS = [
   { artifact_id: 'sweep.brief', schema: 'sweep.brief@v1' },

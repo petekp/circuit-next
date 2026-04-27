@@ -18,8 +18,8 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import { findCloseBuilder } from '../../src/runtime/close-writers/registry.js';
-import type { CloseBuilder } from '../../src/runtime/close-writers/types.js';
+import { findCloseBuilder } from '../../src/runtime/registries/close-writers/registry.js';
+import type { CloseBuilder } from '../../src/runtime/registries/close-writers/types.js';
 import { runWorkflow } from '../../src/runtime/runner.js';
 import { RunId } from '../../src/schemas/ids.js';
 import type { LaneDeclaration } from '../../src/schemas/lane.js';

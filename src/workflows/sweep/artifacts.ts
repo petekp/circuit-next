@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { BuildVerification, BuildVerificationCommand } from './build.js';
+import { VerificationCommand, VerificationResult } from '../../schemas/verification.js';
 
 const SWEEP_RESULT_SCHEMA_BY_ARTIFACT_ID = {
   'sweep.brief': 'sweep.brief@v1',
@@ -30,7 +30,7 @@ export const SweepBrief = z
     scope_exclusions: z.array(z.string().min(1)),
     out_of_scope: z.array(z.string().min(1)),
     high_risk_boundaries: z.array(z.string().min(1)),
-    verification_command_candidates: z.array(BuildVerificationCommand).min(1),
+    verification_command_candidates: z.array(VerificationCommand).min(1),
   })
   .strict();
 export type SweepBrief = z.infer<typeof SweepBrief>;
@@ -187,7 +187,7 @@ export const SweepBatch = z
   });
 export type SweepBatch = z.infer<typeof SweepBatch>;
 
-export const SweepVerification = BuildVerification;
+export const SweepVerification = VerificationResult;
 export type SweepVerification = z.infer<typeof SweepVerification>;
 
 export const SweepReviewVerdict = z.enum([

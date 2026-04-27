@@ -2,7 +2,7 @@
 contract: build
 status: draft
 version: 0.1
-schema_source: src/schemas/artifacts/build.ts
+schema_source: src/workflows/build/artifacts.ts
 reference_evidence: specs/reference/legacy-circuit/build-characterization.md
 last_updated: 2026-04-25
 depends_on: [workflow, phase, step, adapter]

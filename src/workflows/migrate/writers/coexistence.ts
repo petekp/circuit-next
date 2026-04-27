@@ -9,12 +9,12 @@
 import type {
   SynthesisBuildContext,
   SynthesisBuilder,
-} from '../../../runtime/synthesis-writers/types.js';
+} from '../../../runtime/registries/synthesis-writers/types.js';
 import {
   MigrateBrief,
   MigrateCoexistence,
   MigrateInventory,
-} from '../../../schemas/artifacts/migrate.js';
+} from '../artifacts.js';
 
 export const migrateCoexistenceSynthesisBuilder: SynthesisBuilder = {
   resultSchemaName: 'migrate.coexistence@v1',

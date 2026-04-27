@@ -10,8 +10,8 @@
 // review_status is 'completed' when the review input is present (and
 // review_verdict is set), 'skipped' otherwise (with a default skip reason).
 
-import { artifactPathForSchemaInWorkflow } from '../../../runtime/close-writers/shared.js';
-import type { CloseBuildContext, CloseBuilder } from '../../../runtime/close-writers/types.js';
+import { artifactPathForSchemaInWorkflow } from '../../../runtime/registries/close-writers/shared.js';
+import type { CloseBuildContext, CloseBuilder } from '../../../runtime/registries/close-writers/types.js';
 import {
   FixBrief,
   FixChange,
@@ -21,7 +21,7 @@ import {
   type FixResultArtifactPointer,
   FixReview,
   FixVerification,
-} from '../../../schemas/artifacts/fix.js';
+} from '../artifacts.js';
 
 const REQUIRED_POINTERS = [
   { artifact_id: 'fix.brief', schema: 'fix.brief@v1' },

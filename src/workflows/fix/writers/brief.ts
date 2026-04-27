@@ -9,8 +9,8 @@
 import type {
   SynthesisBuildContext,
   SynthesisBuilder,
-} from '../../../runtime/synthesis-writers/types.js';
-import { FixBrief } from '../../../schemas/artifacts/fix.js';
+} from '../../../runtime/registries/synthesis-writers/types.js';
+import { FixBrief } from '../artifacts.js';
 
 const DEFAULT_FIX_VERIFICATION_COMMAND = {
   id: 'fix-proof',

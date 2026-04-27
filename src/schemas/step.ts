@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { BuildVerificationCommand } from './artifacts/build.js';
+import { VerificationCommand } from './verification.js';
 import {
   CheckpointSelectionGate,
   FanoutAggregateGate,
@@ -83,7 +83,7 @@ export const CheckpointPolicy = z
       .object({
         scope: z.string().min(1),
         success_criteria: z.array(z.string().min(1)).min(1),
-        verification_command_candidates: z.array(BuildVerificationCommand).min(1),
+        verification_command_candidates: z.array(VerificationCommand).min(1),
       })
       .strict()
       .optional(),

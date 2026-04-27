@@ -18,11 +18,11 @@
 //                    workflow's audit step).
 //
 // To add a new workflow's dispatch shape hint, an author writes:
-//   1. The schema for the artifact body in src/schemas/artifacts/
-//   2. A ShapeHint export in src/runtime/shape-hints/<workflow>.ts
-//   3. A registry entry in src/runtime/shape-hints/registry.ts
+//   1. The schema for the artifact body in src/workflows/<wf>/artifacts.ts
+//   2. A ShapeHint export in src/workflows/<wf>/dispatch-hints.ts
+//   3. Register it on the package's `dispatchArtifacts[].dispatchHint`
 
-import type { Workflow } from '../../schemas/workflow.js';
+import type { Workflow } from '../../../schemas/workflow.js';
 
 export type DispatchStep = Workflow['steps'][number] & { readonly kind: 'dispatch' };
 

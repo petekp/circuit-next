@@ -7,8 +7,8 @@
 import type {
   SynthesisBuildContext,
   SynthesisBuilder,
-} from '../../../runtime/synthesis-writers/types.js';
-import { BuildBrief, BuildPlan } from '../../../schemas/artifacts/build.js';
+} from '../../../runtime/registries/synthesis-writers/types.js';
+import { BuildBrief, BuildPlan } from '../artifacts.js';
 
 export const buildPlanSynthesisBuilder: SynthesisBuilder = {
   resultSchemaName: 'build.plan@v1',

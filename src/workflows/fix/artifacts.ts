@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { BuildVerificationCommand } from './build.js';
+import { VerificationCommand } from '../../schemas/verification.js';
 
 const FIX_RESULT_SCHEMA_BY_ARTIFACT_ID = {
   'fix.brief': 'fix.brief@v1',
@@ -31,7 +31,7 @@ const REQUIRED_FIX_RESULT_ARTIFACT_IDS = [
 
 const NonEmptyStringArray = z.array(z.string().min(1)).min(1);
 
-export const FixVerificationCommand = BuildVerificationCommand;
+export const FixVerificationCommand = VerificationCommand;
 export type FixVerificationCommand = z.infer<typeof FixVerificationCommand>;
 
 export const FixRegressionContract = z
