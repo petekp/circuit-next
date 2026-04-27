@@ -57,6 +57,7 @@ async function loadRecipesFromCatalog() {
     return workflowPackages.map((pkg) => ({
       id: pkg.id,
       recipePath: pkg.paths.recipe,
+      commandSourcePath: pkg.paths.command,
     }));
   } catch (err) {
     console.error(
@@ -67,6 +68,55 @@ async function loadRecipesFromCatalog() {
 }
 
 const RECIPES = await loadRecipesFromCatalog();
+
+// Slash command source files live next to their workflow under
+// src/workflows/<id>/command.md. The plugin loader reads commands/<id>.md
+// at the repo root, so this script copies the source to the plugin
+// location. commands/run.md is owned by the CLI router (not a workflow)
+// and is not generated.
+function emitCommandFile(entry) {
+  if (entry.commandSourcePath === undefined) return;
+  const sourceAbs = resolve(projectRoot, entry.commandSourcePath);
+  const destRel = `commands/${entry.id}.md`;
+  const destAbs = resolve(projectRoot, destRel);
+  const sourceContent = readFileSync(sourceAbs, 'utf8');
+  mkdirSync(dirname(destAbs), { recursive: true });
+  writeFileSync(destAbs, sourceContent);
+  console.log(`emitted ${destRel} (from ${entry.commandSourcePath})`);
+}
+
+function checkCommandFile(entry) {
+  if (entry.commandSourcePath === undefined) return false;
+  const sourceAbs = resolve(projectRoot, entry.commandSourcePath);
+  const destRel = `commands/${entry.id}.md`;
+  const destAbs = resolve(projectRoot, destRel);
+  let sourceContent;
+  try {
+    sourceContent = readFileSync(sourceAbs, 'utf8');
+  } catch (_err) {
+    console.error(
+      `✗ ${entry.commandSourcePath} is missing on disk but the catalog references it as ${entry.id}'s command source.`,
+    );
+    return true;
+  }
+  let destContent;
+  try {
+    destContent = readFileSync(destAbs, 'utf8');
+  } catch (_err) {
+    console.error(
+      `✗ ${destRel} is missing on disk; run \`npm run emit-workflows\` to regenerate, then commit.`,
+    );
+    return true;
+  }
+  if (sourceContent === destContent) {
+    console.log(`✓ ${destRel} is in sync with ${entry.commandSourcePath}`);
+    return false;
+  }
+  console.error(
+    `✗ ${destRel} drifted from ${entry.commandSourcePath}; run \`npm run emit-workflows\` to regenerate, then commit the diff.`,
+  );
+  return true;
+}
 
 async function loadCompilerModule() {
   // dist/runtime/compile-recipe-to-workflow.js is produced by `npm run build`.
@@ -204,6 +254,7 @@ async function emitMode() {
       unlinkSync(resolve(projectRoot, stale));
       console.log(`removed stale ${stale}`);
     }
+    emitCommandFile(entry);
   }
 }
 
@@ -246,6 +297,9 @@ async function checkMode() {
         console.error(
           `✗ ${rel} is not in the emit plan for ${entry.recipePath}. Run \`npm run emit-workflows\` to clean up stale siblings, then commit the deletion.`,
         );
+        drifted = true;
+      }
+      if (checkCommandFile(entry)) {
         drifted = true;
       }
     }

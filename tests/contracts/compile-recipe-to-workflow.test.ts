@@ -34,7 +34,7 @@ describe('compileRecipeToWorkflow — byte-equivalence with committed fixtures',
     },
     {
       label: 'review',
-      recipePath: 'specs/workflow-recipes/review.recipe.json',
+      recipePath: 'src/workflows/review/recipe.json',
       committedPath: '.claude-plugin/skills/review/circuit.json',
     },
   ] as const;

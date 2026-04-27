@@ -5,7 +5,10 @@
 // composition; real runs may expand this once Review grows operator-
 // supplied scope inputs.
 
-import type { SynthesisBuildContext, SynthesisBuilder } from './types.js';
+import type {
+  SynthesisBuildContext,
+  SynthesisBuilder,
+} from '../../../runtime/synthesis-writers/types.js';
 
 export const reviewIntakeSynthesisBuilder: SynthesisBuilder = {
   resultSchemaName: 'review.intake@v1',

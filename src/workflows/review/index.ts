@@ -1,15 +1,9 @@
 // Review workflow package.
-//
-// Source files (recipe, command, contract) currently live at the
-// pre-reorg paths; they will move into this directory in Phase 2.
-// Writers also still live in src/runtime/*-writers/ — they will move
-// alongside in Phase 2. The catalog refactor decouples the engine from
-// these locations so the moves are mechanical.
 
-import { reviewDispatchShapeHint } from '../../runtime/shape-hints/review.js';
-import { reviewIntakeSynthesisBuilder } from '../../runtime/synthesis-writers/review-intake.js';
-import { reviewResultSynthesisBuilder } from '../../runtime/synthesis-writers/review-result.js';
 import type { WorkflowPackage, WorkflowSignal } from '../types.js';
+import { reviewDispatchShapeHint } from './dispatch-hints.js';
+import { reviewIntakeSynthesisBuilder } from './writers/intake.js';
+import { reviewResultSynthesisBuilder } from './writers/result.js';
 
 const REVIEW_SIGNALS: readonly WorkflowSignal[] = [
   { label: 'code review', pattern: /\bcode\s+review\b/i },
@@ -43,9 +37,9 @@ const REVIEW_SIGNALS: readonly WorkflowSignal[] = [
 export const reviewWorkflowPackage: WorkflowPackage = {
   id: 'review',
   paths: {
-    recipe: 'specs/workflow-recipes/review.recipe.json',
-    command: 'commands/review.md',
-    contract: 'specs/contracts/review.md',
+    recipe: 'src/workflows/review/recipe.json',
+    command: 'src/workflows/review/command.md',
+    contract: 'src/workflows/review/contract.md',
   },
   routing: {
     order: 0,

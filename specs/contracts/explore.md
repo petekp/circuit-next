@@ -812,7 +812,7 @@ This contract is reopened if any of:
 1. **Target retarget.** Per ADR-0007 §4b retarget checklist, if the
    operator reselects `review` as the first-parity target, this
    contract is deprecated in place (status → `retargeted`) and a new
-   `specs/contracts/review.md` replaces it as CC#P2-1's binding.
+   `src/workflows/review/contract.md` replaces it as CC#P2-1's binding.
 2. **Canonical phase set change.** If a future slice amends the
    canonical phase set for `explore` (e.g., adds `plan` back in, or
    maps Synthesize to `plan` instead of `act`), this contract must

@@ -57,13 +57,13 @@ describe('review workflow contract fixture', () => {
     expect(writes?.artifact?.schema).toBe('review.result@v1');
   });
 
-  it('homes review.result on specs/contracts/review.md in the authority graph', () => {
+  it('homes review.result on src/workflows/review/contract.md in the authority graph', () => {
     const graph = JSON.parse(readFileSync(ARTIFACTS_PATH, 'utf-8')) as {
       artifacts: Array<{ id: string; contract?: string; pending_rehome?: unknown }>;
     };
     const row = graph.artifacts.find((artifact) => artifact.id === 'review.result');
     expect(row, 'review.result artifact row must exist').toBeDefined();
-    expect(row?.contract).toBe('specs/contracts/review.md');
+    expect(row?.contract).toBe('src/workflows/review/contract.md');
     expect(row?.pending_rehome).toBeUndefined();
   });
 });

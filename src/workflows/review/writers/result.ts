@@ -8,14 +8,17 @@
 // dispatch result, so the path resolver is custom.
 
 import { readFileSync } from 'node:fs';
+import { resolveRunRelative } from '../../../runtime/run-relative-path.js';
+import type {
+  SynthesisBuildContext,
+  SynthesisBuilder,
+} from '../../../runtime/synthesis-writers/types.js';
 import {
   ReviewDispatchResult,
   ReviewResult,
   computeReviewVerdict,
-} from '../../schemas/artifacts/review.js';
-import type { Workflow } from '../../schemas/workflow.js';
-import { resolveRunRelative } from '../run-relative-path.js';
-import type { SynthesisBuildContext, SynthesisBuilder } from './types.js';
+} from '../../../schemas/artifacts/review.js';
+import type { Workflow } from '../../../schemas/workflow.js';
 
 type DispatchStep = Workflow['steps'][number] & { kind: 'dispatch' };
 

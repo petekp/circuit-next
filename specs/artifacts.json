@@ -1149,7 +1149,7 @@
       "compatibility_policy": "clean-break",
       "plane": "data-plane",
       "description": "Close-phase primary artifact for the audit-only review workflow. Structured JSON successor to the reference review.md artifact; aggregates reviewer findings and carries the deterministic final verdict.",
-      "contract": "specs/contracts/review.md",
+      "contract": "src/workflows/review/contract.md",
       "schema_file": "src/schemas/artifacts/review.ts",
       "schema_exports": [
         "ReviewFindingSeverity",
