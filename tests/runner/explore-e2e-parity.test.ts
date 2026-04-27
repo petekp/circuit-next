@@ -10,7 +10,7 @@ import type { LaneDeclaration } from '../../src/schemas/lane.js';
 import { Workflow } from '../../src/schemas/workflow.js';
 
 import { validateWorkflowKindPolicy } from '../../src/runtime/policy/workflow-kind-policy.js';
-import { type DispatchFn, type DispatchInput, runDogfood } from '../../src/runtime/runner.js';
+import { type DispatchFn, type DispatchInput, runWorkflow } from '../../src/runtime/runner.js';
 
 // Slice 43c (P2.5) — `explore` end-to-end fixture run. Closes Phase 2
 // close criteria CC#P2-1 (one-workflow parity substrate) and CC#P2-2
@@ -22,7 +22,7 @@ import { type DispatchFn, type DispatchInput, runDogfood } from '../../src/runti
 // real-subprocess end-to-end. Static tests bind the explore fixture
 // shape, the normalization rule used to hash the normalized result artifact,
 // and the `sha256Hex` helper format. The AGENT_SMOKE-gated branch runs
-// the real explore fixture through `runDogfood` with the default
+// the real explore fixture through `runWorkflow` with the default
 // `dispatchAgent` (spawns `claude -p` per Slice 42), asserts the
 // five-event dispatch transcript lands twice (synthesize + review),
 // normalizes + hashes `artifacts/explore-result.json` against the
@@ -134,7 +134,7 @@ function lane(): LaneDeclaration {
     lane: 'ratchet-advance',
     failure_mode: 'explore workflow lacks end-to-end real-adapter proof of parity',
     acceptance_evidence:
-      'runDogfood closes the explore fixture under real dispatchAgent with 2x five-event transcripts and a byte-shape golden on explore-result.json',
+      'runWorkflow closes the explore fixture under real dispatchAgent with 2x five-event transcripts and a byte-shape golden on explore-result.json',
     alternate_framing:
       'defer end-to-end explore until P2.9 second-workflow slice; rejected because CC#P2-1 + CC#P2-2 are Phase 2 close criteria that bind on one-workflow-parity substrate, not two.',
   };
@@ -288,7 +288,7 @@ describe('Slice 43c — explore fixture static declarations (ratchet-floor contr
     const { workflow, bytes } = loadExploreFixture();
     const runRoot = mkdtempSync(join(tmpdir(), 'circuit-next-explore-golden-'));
     try {
-      const outcome = await runDogfood({
+      const outcome = await runWorkflow({
         runRoot,
         workflow,
         workflowBytes: bytes,
@@ -337,7 +337,7 @@ describe('Slice 43c — explore fixture static declarations (ratchet-floor contr
       async () => {
         const { workflow, bytes } = loadExploreFixture();
         const runRoot = join(runRootBase, 'explore-e2e');
-        const outcome = await runDogfood({
+        const outcome = await runWorkflow({
           runRoot,
           workflow,
           workflowBytes: bytes,
@@ -389,8 +389,8 @@ describe('Slice 43c — explore fixture static declarations (ratchet-floor contr
         if (UPDATE_AGENT_FINGERPRINT) {
           const commitSha = currentHeadSha();
           // Slice 47a Codex HIGH 2 fold-in — bind cli_version to the
-          // actual subprocess init event via DogfoodRunResult.dispatchResults
-          // (populated by runDogfood; sourced from each dispatcher's
+          // actual subprocess init event via WorkflowRunResult.dispatchResults
+          // (populated by runWorkflow; sourced from each dispatcher's
           // DispatchResult.cli_version, which agent.ts reads from
           // init.claude_code_version). The earlier env-var side-channel
           // (process.env.AGENT_CLI_VERSION ?? 'claude (unknown)') let
@@ -400,7 +400,7 @@ describe('Slice 43c — explore fixture static declarations (ratchet-floor contr
           const firstAgentDispatch = outcome.dispatchResults.find((d) => d.adapterName === 'agent');
           if (firstAgentDispatch === undefined) {
             throw new Error(
-              'AGENT_SMOKE fingerprint promotion: no agent-dispatch result captured (DogfoodRunResult.dispatchResults empty for adapter=agent)',
+              'AGENT_SMOKE fingerprint promotion: no agent-dispatch result captured (WorkflowRunResult.dispatchResults empty for adapter=agent)',
             );
           }
           const cliVersion = firstAgentDispatch.cli_version;

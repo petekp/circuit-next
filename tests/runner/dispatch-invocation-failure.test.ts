@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { AgentDispatchInput } from '../../src/runtime/adapters/agent.js';
 import { readRunLog } from '../../src/runtime/event-log-reader.js';
-import { type DispatchFn, runDogfood } from '../../src/runtime/runner.js';
+import { type DispatchFn, runWorkflow } from '../../src/runtime/runner.js';
 import { RunId } from '../../src/schemas/ids.js';
 import type { LaneDeclaration } from '../../src/schemas/lane.js';
 import { RunResult } from '../../src/schemas/result.js';
@@ -61,7 +61,7 @@ describe('runtime-safety-floor adapter invocation failure closure', () => {
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'throwing-dispatcher');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,

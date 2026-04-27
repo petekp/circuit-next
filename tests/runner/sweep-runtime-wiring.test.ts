@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { AgentDispatchInput } from '../../src/runtime/adapters/agent.js';
 import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
-import { type DispatchFn, runDogfood } from '../../src/runtime/runner.js';
+import { type DispatchFn, runWorkflow } from '../../src/runtime/runner.js';
 import {
   SweepAnalysis,
   SweepBatch,
@@ -182,7 +182,7 @@ describe('Sweep runtime wiring', () => {
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'complete');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -292,7 +292,7 @@ describe('Sweep runtime wiring', () => {
       ],
     });
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -326,7 +326,7 @@ describe('Sweep runtime wiring', () => {
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'bad-analysis');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -354,7 +354,7 @@ describe('Sweep runtime wiring', () => {
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'review-critical');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,

@@ -16,7 +16,7 @@ import { Workflow } from '../../src/schemas/workflow.js';
 
 import type { AgentDispatchInput } from '../../src/runtime/adapters/agent.js';
 import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
-import { type DispatchFn, runDogfood } from '../../src/runtime/runner.js';
+import { type DispatchFn, runWorkflow } from '../../src/runtime/runner.js';
 
 const FIXTURE_PATH = resolve('.claude-plugin', 'skills', 'review', 'circuit.json');
 
@@ -143,7 +143,7 @@ describe('P2.9 follow-on - registered review synthesis writer', () => {
     const runRoot = join(runRootBase, 'default-registered-review-writer');
     const goal = 'Review scope with the default registered synthesis writer';
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -184,7 +184,7 @@ describe('P2.9 follow-on - registered review synthesis writer', () => {
       ],
     } satisfies ReviewDispatchResult;
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -212,7 +212,7 @@ describe('P2.9 follow-on - registered review synthesis writer', () => {
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'bad-review-dispatch-shape');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -265,7 +265,7 @@ describe('P2.9 follow-on - registered review synthesis writer', () => {
       const runRoot = join(runRootBase, name.replaceAll(' ', '-'));
       const goal = `Review scope for ${name}`;
 
-      const outcome = await runDogfood({
+      const outcome = await runWorkflow({
         runRoot,
         workflow,
         workflowBytes: bytes,

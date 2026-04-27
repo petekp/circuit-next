@@ -62,7 +62,7 @@ export interface DispatchMaterializeInput {
   // intent — falsifying the audit trail consumed by P2.8 router and
   // P2-MODEL-EFFORT cascade work. The materializer is now fail-closed
   // at the type boundary: callers MUST compute and pass the real
-  // values. The runner derives them in `runDogfood`: adapter provenance is
+  // values. The runner derives them in `runWorkflow`: adapter provenance is
   // explicit-vs-default, while selection now flows through the full
   // default/user-global/project/workflow/phase/step/invocation resolver.
   // The materializer's type contract did not need to change when that

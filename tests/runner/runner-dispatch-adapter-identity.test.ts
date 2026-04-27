@@ -5,15 +5,15 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { AgentDispatchInput } from '../../src/runtime/adapters/agent.js';
 import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
-import { type DispatchFn, runDogfood } from '../../src/runtime/runner.js';
+import { type DispatchFn, runWorkflow } from '../../src/runtime/runner.js';
 import { RunId, WorkflowId } from '../../src/schemas/ids.js';
 import type { LaneDeclaration } from '../../src/schemas/lane.js';
 import { Workflow } from '../../src/schemas/workflow.js';
 
 // Slice 45a (P2.6 HIGH 3 fold-in) — adapter-identity plumbing through
-// `runDogfood`. Prior to 45a the runner's materializer call site
+// `runWorkflow`. Prior to 45a the runner's materializer call site
 // hardcoded `adapterName: 'agent'`; injecting a non-agent dispatcher via
-// `DogfoodInvocation.dispatcher` would produce `dispatch.started` with
+// `WorkflowInvocation.dispatcher` would produce `dispatch.started` with
 // `adapter: {kind:'builtin', name:'agent'}` regardless of which
 // dispatcher actually ran — an adapter-identity lie at the event-log
 // level. The refactor changed `DispatchFn` to a structured descriptor
@@ -23,14 +23,14 @@ import { Workflow } from '../../src/schemas/workflow.js';
 // (no real codex subprocess; stub `dispatch` function returning a
 // deterministic `DispatchResult`) and asserts the event-log records
 // `adapter.name='codex'` — proving the descriptor-to-event plumbing
-// carries adapter identity end-to-end through `runDogfood`.
+// carries adapter identity end-to-end through `runWorkflow`.
 //
 // The companion second-adapter round-trip at
 // `tests/runner/codex-dispatch-roundtrip.test.ts` exercises the real
 // `dispatchCodex → materializeDispatch` path directly (CODEX_SMOKE=1).
-// This test exercises the `runDogfood` seam on top of that — the
+// This test exercises the `runWorkflow` seam on top of that — the
 // regression the round-trip alone cannot catch, since the round-trip
-// calls `materializeDispatch` directly and bypasses `runDogfood`.
+// calls `materializeDispatch` directly and bypasses `runWorkflow`.
 
 const FIXTURE_PATH = resolve('.claude-plugin/skills/dogfood-run-0/circuit.json');
 
@@ -80,10 +80,10 @@ afterEach(() => {
 });
 
 describe('Slice 45a — DispatchFn descriptor carries adapter identity into dispatch.started', () => {
-  it('injecting a codex-shaped descriptor through DogfoodInvocation.dispatcher lands adapter.name="codex"', async () => {
+  it('injecting a codex-shaped descriptor through WorkflowInvocation.dispatcher lands adapter.name="codex"', async () => {
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'codex-identity');
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,

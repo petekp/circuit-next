@@ -9,8 +9,8 @@ import { sha256Hex } from '../../src/runtime/adapters/shared.js';
 import {
   type DispatchFn,
   type DispatchInput,
-  resumeDogfoodCheckpoint,
-  runDogfood,
+  resumeWorkflowCheckpoint,
+  runWorkflow,
 } from '../../src/runtime/runner.js';
 import { BuildBrief, BuildVerification } from '../../src/schemas/artifacts/build.js';
 import { RunId } from '../../src/schemas/ids.js';
@@ -326,7 +326,7 @@ describe('Build checkpoint execution substrate', () => {
     const { workflow, bytes } = checkpointWorkflow({ safeDefault: 'continue' });
     const runRoot = join(runRootBase, 'safe-default');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -358,7 +358,7 @@ describe('Build checkpoint execution substrate', () => {
     const { workflow, bytes } = checkpointWorkflow({ safeDefault: 'continue' });
     const runRoot = join(runRootBase, 'waiting');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -393,7 +393,7 @@ describe('Build checkpoint execution substrate', () => {
     const { workflow, bytes } = checkpointWorkflow({ safeDefault: 'continue' });
     const runRoot = join(runRootBase, 'resume-waiting');
 
-    await runDogfood({
+    await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -405,7 +405,7 @@ describe('Build checkpoint execution substrate', () => {
       now: deterministicNow(Date.UTC(2026, 3, 25, 3, 20, 0)),
     });
 
-    const resumed = await resumeDogfoodCheckpoint({
+    const resumed = await resumeWorkflowCheckpoint({
       runRoot,
       selection: 'continue',
       projectRoot: process.cwd(),
@@ -431,7 +431,7 @@ describe('Build checkpoint execution substrate', () => {
     const { workflow, bytes } = checkpointWorkflow({ safeDefault: 'continue' });
     const runRoot = join(runRootBase, 'resume-reject');
 
-    await runDogfood({
+    await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -444,7 +444,7 @@ describe('Build checkpoint execution substrate', () => {
     });
 
     await expect(
-      resumeDogfoodCheckpoint({
+      resumeWorkflowCheckpoint({
         runRoot,
         selection: 'ship-it-anyway',
         projectRoot: process.cwd(),
@@ -458,7 +458,7 @@ describe('Build checkpoint execution substrate', () => {
     const { workflow, bytes } = checkpointWorkflow({ safeDefault: 'continue' });
     const runRoot = join(runRootBase, 'resume-missing-brief');
 
-    await runDogfood({
+    await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -472,7 +472,7 @@ describe('Build checkpoint execution substrate', () => {
     rmSync(join(runRoot, 'artifacts/build/brief.json'));
 
     await expect(
-      resumeDogfoodCheckpoint({
+      resumeWorkflowCheckpoint({
         runRoot,
         selection: 'continue',
         projectRoot: process.cwd(),
@@ -486,7 +486,7 @@ describe('Build checkpoint execution substrate', () => {
     const { workflow, bytes } = checkpointWorkflow({ safeDefault: 'continue' });
     const runRoot = join(runRootBase, 'resume-tampered-brief');
 
-    await runDogfood({
+    await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -525,7 +525,7 @@ describe('Build checkpoint execution substrate', () => {
     );
 
     await expect(
-      resumeDogfoodCheckpoint({
+      resumeWorkflowCheckpoint({
         runRoot,
         selection: 'continue',
         projectRoot: process.cwd(),
@@ -539,7 +539,7 @@ describe('Build checkpoint execution substrate', () => {
     const { workflow, bytes } = checkpointWorkflow({ safeDefault: 'continue' });
     const runRoot = join(runRootBase, 'resume-tampered-request-and-brief');
 
-    await runDogfood({
+    await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -595,7 +595,7 @@ describe('Build checkpoint execution substrate', () => {
     );
 
     await expect(
-      resumeDogfoodCheckpoint({
+      resumeWorkflowCheckpoint({
         runRoot,
         selection: 'continue',
         projectRoot: process.cwd(),
@@ -623,7 +623,7 @@ describe('Build checkpoint execution substrate', () => {
       },
     };
 
-    await runDogfood({
+    await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -653,7 +653,7 @@ describe('Build checkpoint execution substrate', () => {
       ],
     });
 
-    const resumed = await resumeDogfoodCheckpoint({
+    const resumed = await resumeWorkflowCheckpoint({
       runRoot,
       selection: 'continue',
       projectRoot: process.cwd(),
@@ -706,7 +706,7 @@ describe('Build checkpoint execution substrate', () => {
       },
     };
 
-    await runDogfood({
+    await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -718,7 +718,7 @@ describe('Build checkpoint execution substrate', () => {
       now: deterministicNow(Date.UTC(2026, 3, 25, 4, 20, 0)),
     });
 
-    const resumed = await resumeDogfoodCheckpoint({
+    const resumed = await resumeWorkflowCheckpoint({
       runRoot,
       selection: 'continue',
       projectRoot: process.cwd(),
@@ -760,7 +760,7 @@ describe('Build checkpoint execution substrate', () => {
     const { workflow, bytes } = checkpointToVerificationWorkflow();
     const runRoot = join(runRootBase, 'resume-verification-context');
 
-    await runDogfood({
+    await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -772,7 +772,7 @@ describe('Build checkpoint execution substrate', () => {
       now: deterministicNow(Date.UTC(2026, 3, 25, 4, 0, 0)),
     });
 
-    const resumed = await resumeDogfoodCheckpoint({
+    const resumed = await resumeWorkflowCheckpoint({
       runRoot,
       selection: 'continue',
       projectRoot: wrongProjectRoot,
@@ -793,7 +793,7 @@ describe('Build checkpoint execution substrate', () => {
     const { workflow, bytes } = checkpointToVerificationWorkflow();
     const runRoot = join(runRootBase, 'resume-no-project-root');
 
-    await runDogfood({
+    await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -804,7 +804,7 @@ describe('Build checkpoint execution substrate', () => {
       now: deterministicNow(Date.UTC(2026, 3, 25, 4, 30, 0)),
     });
 
-    const resumed = await resumeDogfoodCheckpoint({
+    const resumed = await resumeWorkflowCheckpoint({
       runRoot,
       selection: 'continue',
       projectRoot: resumeProjectRoot,
@@ -812,7 +812,7 @@ describe('Build checkpoint execution substrate', () => {
     });
 
     expect(resumed.result.outcome).toBe('aborted');
-    expect(resumed.result.reason).toMatch(/requires DogfoodInvocation\.projectRoot/);
+    expect(resumed.result.reason).toMatch(/requires WorkflowInvocation\.projectRoot/);
   });
 
   it('resolves autonomous rigor only through a declared safe autonomous choice', async () => {
@@ -822,7 +822,7 @@ describe('Build checkpoint execution substrate', () => {
     });
     const runRoot = join(runRootBase, 'autonomous');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -847,7 +847,7 @@ describe('Build checkpoint execution substrate', () => {
     const { workflow, bytes } = checkpointWorkflow({ safeDefault: 'continue' });
     const runRoot = join(runRootBase, 'autonomous-missing');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,

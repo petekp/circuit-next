@@ -1,6 +1,6 @@
 // Tests for the stale-sibling guard in scripts/emit-workflows.mjs.
 //
-// The CLI loader at src/cli/dogfood.ts prefers `<mode>.json` over
+// The CLI loader at src/cli/circuit.ts prefers `<mode>.json` over
 // `circuit.json` when an entry mode is requested, so a stale per-mode
 // sibling (left behind from a renamed/collapsed entry mode) can silently
 // drive runtime behavior even after `npm run verify` reports clean.

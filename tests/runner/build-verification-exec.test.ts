@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { type SynthesisWriterFn, runDogfood } from '../../src/runtime/runner.js';
+import { type SynthesisWriterFn, runWorkflow } from '../../src/runtime/runner.js';
 import { BuildPlan, BuildVerification } from '../../src/schemas/artifacts/build.js';
 import { RunId } from '../../src/schemas/ids.js';
 import type { LaneDeclaration } from '../../src/schemas/lane.js';
@@ -162,7 +162,7 @@ describe('Build verification command execution', () => {
     const { workflow, bytes } = verificationWorkflow();
     const runRoot = join(runRootBase, 'pass');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -202,7 +202,7 @@ describe('Build verification command execution', () => {
     const { workflow, bytes } = verificationWorkflow();
     const runRoot = join(runRootBase, 'fail');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -236,7 +236,7 @@ describe('Build verification command execution', () => {
     const { workflow, bytes } = verificationWorkflow();
     const runRoot = join(runRootBase, 'timeout');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -266,7 +266,7 @@ describe('Build verification command execution', () => {
     const { workflow, bytes } = verificationWorkflow();
     const runRoot = join(runRootBase, 'unsafe');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -310,7 +310,7 @@ describe('Build verification command execution', () => {
     const marker = join(outside, 'marker.txt');
 
     const lexicalRunRoot = join(runRootBase, 'cwd-lexical');
-    const lexical = await runDogfood({
+    const lexical = await runWorkflow({
       runRoot: lexicalRunRoot,
       workflow,
       workflowBytes: bytes,
@@ -346,7 +346,7 @@ describe('Build verification command execution', () => {
     expect(lexical.result.reason).toMatch(/cwd must not escape|cwd/);
 
     const symlinkRunRoot = join(runRootBase, 'cwd-symlink');
-    const symlinked = await runDogfood({
+    const symlinked = await runWorkflow({
       runRoot: symlinkRunRoot,
       workflow,
       workflowBytes: bytes,
@@ -380,7 +380,7 @@ describe('Build verification command execution', () => {
     const originalCwd = process.cwd();
     process.chdir(ambient);
     try {
-      const outcome = await runDogfood({
+      const outcome = await runWorkflow({
         runRoot,
         workflow,
         workflowBytes: bytes,
@@ -413,7 +413,7 @@ describe('Build verification command execution', () => {
     const priorParent = process.env.CIRCUIT_NEXT_PARENT_ONLY_SECRET;
     process.env.CIRCUIT_NEXT_PARENT_ONLY_SECRET = 'leaked';
     try {
-      const outcome = await runDogfood({
+      const outcome = await runWorkflow({
         runRoot,
         workflow,
         workflowBytes: bytes,
@@ -453,7 +453,7 @@ describe('Build verification command execution', () => {
     const { workflow, bytes } = verificationWorkflow();
     const runRoot = join(runRootBase, 'output-limit');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,

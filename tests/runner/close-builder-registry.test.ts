@@ -4,7 +4,7 @@
 // file plus a registry entry — no edits to runner.ts. This test
 // register a synthetic builder for a new schema, builds a synthetic
 // Workflow whose close-step writes that schema, runs it through
-// runDogfood, and asserts the new builder fires. If the runner ever
+// runWorkflow, and asserts the new builder fires. If the runner ever
 // regrows workflow-specific knowledge in its close path, this test
 // breaks.
 //
@@ -20,7 +20,7 @@ import { z } from 'zod';
 
 import { findCloseBuilder } from '../../src/runtime/close-writers/registry.js';
 import type { CloseBuilder } from '../../src/runtime/close-writers/types.js';
-import { runDogfood } from '../../src/runtime/runner.js';
+import { runWorkflow } from '../../src/runtime/runner.js';
 import { RunId } from '../../src/schemas/ids.js';
 import type { LaneDeclaration } from '../../src/schemas/lane.js';
 import { Workflow } from '../../src/schemas/workflow.js';
@@ -165,7 +165,7 @@ describe('close-with-evidence registry', () => {
     // without mutating the global registry. The same code path runs for the
     // real registered builders, so the contract is exercised end-to-end.
     const workflow = syntheticCloseWorkflow();
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: Buffer.from(JSON.stringify(workflow)),

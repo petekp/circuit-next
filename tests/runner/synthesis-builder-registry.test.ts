@@ -2,7 +2,7 @@
 //
 // Mirrors tests/runner/close-builder-registry.test.ts but for the
 // upstream synthesis path. A synthetic SynthesisBuilder produces a
-// fresh schema's artifact end-to-end via runDogfood — no runner.ts
+// fresh schema's artifact end-to-end via runWorkflow — no runner.ts
 // edits required. If any synthesis step in the runner ever regrows
 // workflow-specific knowledge, this test breaks.
 
@@ -12,7 +12,7 @@ import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import { runDogfood, writeSynthesisArtifact } from '../../src/runtime/runner.js';
+import { runWorkflow, writeSynthesisArtifact } from '../../src/runtime/runner.js';
 import { findSynthesisBuilder } from '../../src/runtime/synthesis-writers/registry.js';
 import type { SynthesisBuilder } from '../../src/runtime/synthesis-writers/types.js';
 import { RunId } from '../../src/schemas/ids.js';
@@ -127,7 +127,7 @@ describe('synthesis writer registry', () => {
     // shape every registered builder uses — proving the contract works
     // for arbitrary new schemas with zero runner.ts changes.
     const workflow = syntheticSynthesisWorkflow();
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: Buffer.from(JSON.stringify(workflow)),

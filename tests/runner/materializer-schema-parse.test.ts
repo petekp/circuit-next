@@ -9,7 +9,7 @@ import { Workflow } from '../../src/schemas/workflow.js';
 
 import type { AgentDispatchInput } from '../../src/runtime/adapters/agent.js';
 import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
-import { type DispatchFn, runDogfood } from '../../src/runtime/runner.js';
+import { type DispatchFn, runWorkflow } from '../../src/runtime/runner.js';
 
 // Slice 54 — materializer schema-parse (Codex H15 fold-in).
 //
@@ -42,7 +42,7 @@ import { type DispatchFn, runDogfood } from '../../src/runtime/runner.js';
 // a partial-spine scaffold). Tests below mutate the fixture
 // in-memory to add `writes.artifact` — the same pattern Slice 53
 // used for the HIGH 2 fold-in test. Four cases exercise through
-// the full `runDogfood` loop so the integration with the Slice
+// the full `runWorkflow` loop so the integration with the Slice
 // 53 gate-evaluation path is part of the assertion surface.
 
 const FIXTURE_PATH = resolve('.claude-plugin/skills/dogfood-run-0/circuit.json');
@@ -129,7 +129,7 @@ describe('Slice 54 — materializer schema-parse (Codex H15)', () => {
     });
     const runRoot = join(runRootBase, 'a-valid');
     const resultBody = '{"verdict":"ok","rationale":"schema accepts this"}';
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -171,7 +171,7 @@ describe('Slice 54 — materializer schema-parse (Codex H15)', () => {
       addCanonicalArtifact(raw, 'dogfood-strict@v1');
     });
     const runRoot = join(runRootBase, 'b-invalid');
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -248,7 +248,7 @@ describe('Slice 54 — materializer schema-parse (Codex H15)', () => {
       addCanonicalArtifact(raw, 'not-registered-anywhere@v1');
     });
     const runRoot = join(runRootBase, 'c-missing');
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -334,7 +334,7 @@ describe('Slice 54 — materializer schema-parse (Codex H15)', () => {
       addCanonicalArtifact(raw, 'dogfood-strict@v1');
     });
     const runRoot = join(runRootBase, 'd-gate-fail-schema-valid');
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -385,7 +385,7 @@ describe('Slice 54 — materializer schema-parse (Codex H15)', () => {
       addCanonicalArtifact(raw, 'explore.analysis@v1', 'artifacts/dispatch-analysis.json');
     });
     const runRoot = join(runRootBase, 'e-orchestrator-only-schema');
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,

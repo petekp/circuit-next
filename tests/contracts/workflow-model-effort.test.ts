@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
-import { type DispatchFn, type DispatchInput, runDogfood } from '../../src/runtime/runner.js';
+import { type DispatchFn, type DispatchInput, runWorkflow } from '../../src/runtime/runner.js';
 import { resolveSelectionForDispatch } from '../../src/runtime/selection-resolver.js';
 import { LayeredConfig } from '../../src/schemas/config.js';
 import { RunId, SkillId } from '../../src/schemas/ids.js';
@@ -276,7 +276,7 @@ describe('P2-MODEL-EFFORT — full selection precedence resolver', () => {
       },
     };
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot: join(runRootBase, 'runtime-evidence'),
       workflow,
       workflowBytes: bytes,

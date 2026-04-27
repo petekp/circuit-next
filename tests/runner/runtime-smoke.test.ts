@@ -14,14 +14,14 @@ import { Workflow } from '../../src/schemas/workflow.js';
 import type { AgentDispatchInput } from '../../src/runtime/adapters/agent.js';
 import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
 import { readRunLog } from '../../src/runtime/event-log-reader.js';
-import { type DispatchFn, runDogfood } from '../../src/runtime/runner.js';
+import { type DispatchFn, runWorkflow } from '../../src/runtime/runner.js';
 
 // Slice 27d — runner smoke test exercising one synthesis + one dispatch
 // step end-to-end via the dry-run agent adapter (per ADR-0001 Addendum B
 // §Phase 1.5 Close Criteria #4/#5/#6/#7). The test reads the production
 // dogfood-run-0 workflow fixture — the same JSON a user invocation of
 // `./bin/circuit-next dogfood-run-0 ...` would load — and composes
-// the runtime boundary via `runDogfood`.
+// the runtime boundary via `runWorkflow`.
 //
 // Two-run acceptance: same fixture, two different goals, two different
 // result.json files with differing `goal` and `run_id` fields satisfy
@@ -92,7 +92,7 @@ describe('Slice 27d — dogfood-run-0 runner smoke', () => {
   it('closes one run producing events.ndjson / state.json / manifest.snapshot.json / artifacts/result.json', async () => {
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'run-a');
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -152,7 +152,7 @@ describe('Slice 27d — dogfood-run-0 runner smoke', () => {
   it('exercises synthesis + dispatch + gate event kinds via the injected-stub dispatcher', async () => {
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'run-kinds');
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -189,7 +189,7 @@ describe('Slice 27d — dogfood-run-0 runner smoke', () => {
     expect(dispatchStarted.adapter).toEqual({ kind: 'builtin', name: 'agent' });
     // Slice 47a — `resolved_from` is now derived from the runner's
     // actual decision path (see runner.ts `deriveResolvedFrom`):
-    // the test injects a stub dispatcher via `DogfoodInvocation.dispatcher`,
+    // the test injects a stub dispatcher via `WorkflowInvocation.dispatcher`,
     // so the honest claim is `source: 'explicit'`. Pre-Slice-47a the
     // materializer hardcoded `source: 'default'` regardless of caller
     // (CONVERGENT HIGH A in the Phase 2-to-date comprehensive review).
@@ -211,7 +211,7 @@ describe('Slice 27d — dogfood-run-0 runner smoke', () => {
   it('produces DIFFERING result.json artifacts from two runs with different goals (Close Criterion #4)', async () => {
     const { workflow, bytes } = loadFixture();
 
-    const runA = await runDogfood({
+    const runA = await runWorkflow({
       runRoot: join(runRootBase, 'run-a'),
       workflow,
       workflowBytes: bytes,
@@ -222,7 +222,7 @@ describe('Slice 27d — dogfood-run-0 runner smoke', () => {
       now: deterministicNow(Date.UTC(2026, 3, 20, 12, 0, 0)),
       dispatcher: stubDispatcher(),
     });
-    const runB = await runDogfood({
+    const runB = await runWorkflow({
       runRoot: join(runRootBase, 'run-b'),
       workflow,
       workflowBytes: bytes,
@@ -260,7 +260,7 @@ describe('Slice 27d — dogfood-run-0 runner smoke', () => {
       // hardened mounts). The CLI's exported `main(argv)` function is
       // the same entrypoint tsx invokes, so importing it directly
       // exercises every code path the subprocess version exercised
-      // (argv parsing, fixture load, schema parse, runDogfood
+      // (argv parsing, fixture load, schema parse, runWorkflow
       // composition, JSON serialization to stdout) without depending
       // on the IPC pipe directory. The launcher binding is separately pinned
       // by the package.json contract test below so the binary path remains
@@ -289,7 +289,7 @@ describe('Slice 27d — dogfood-run-0 runner smoke', () => {
       // smoke form per that MED's "static wrapper-pattern assert OR
       // env-gated subprocess smoke" disjunction).
       const runRoot = join(runRootBase, 'cli-run');
-      const { main } = await import('../../src/cli/dogfood.js');
+      const { main } = await import('../../src/cli/circuit.js');
       let captured = '';
       const origWrite = process.stdout.write;
       process.stdout.write = ((chunk: string | Uint8Array): boolean => {
@@ -335,9 +335,9 @@ describe('Slice 27d — dogfood-run-0 runner smoke', () => {
   );
 
   // Slice 47b — CLI binding pin. Pre-Slice-47b, the
-  // execFileSync('node_modules/.bin/tsx', ['src/cli/dogfood.ts', ...])
+  // execFileSync('node_modules/.bin/tsx', ['src/cli/circuit.ts', ...])
   // call implicitly verified that `circuit:run` was wired to tsx +
-  // dogfood.ts. Replacing the subprocess invocation with a direct
+  // the CLI entry. Replacing the subprocess invocation with a direct
   // main() import drops that coverage; this contract test re-pins it
   // statically without spawning a subprocess.
   //

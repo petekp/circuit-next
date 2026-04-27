@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { AgentDispatchInput } from '../../src/runtime/adapters/agent.js';
 import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
 import { readRunLog } from '../../src/runtime/event-log-reader.js';
-import { type DispatchFn, runDogfood } from '../../src/runtime/runner.js';
+import { type DispatchFn, runWorkflow } from '../../src/runtime/runner.js';
 import type { RunClosedOutcome } from '../../src/schemas/event.js';
 import { RunId } from '../../src/schemas/ids.js';
 import type { LaneDeclaration } from '../../src/schemas/lane.js';
@@ -150,7 +150,7 @@ describe('RUN-I7 terminal route outcome mapping', () => {
     it(`${c.route} closes with outcome=${c.outcome} across run.closed, state.json, RunProjection, and result.json`, async () => {
       const { workflow, bytes } = terminalWorkflow(c.route);
       const runRoot = join(runRootBase, c.outcome);
-      const outcome = await runDogfood({
+      const outcome = await runWorkflow({
         runRoot,
         workflow,
         workflowBytes: bytes,

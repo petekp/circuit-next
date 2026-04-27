@@ -14,7 +14,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { AgentDispatchInput } from '../../src/runtime/adapters/agent.js';
 import { materializeDispatch } from '../../src/runtime/adapters/dispatch-materializer.js';
 import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
-import { type DispatchFn, runDogfood } from '../../src/runtime/runner.js';
+import { type DispatchFn, runWorkflow } from '../../src/runtime/runner.js';
 import { RunId, StepId } from '../../src/schemas/ids.js';
 import type { LaneDeclaration } from '../../src/schemas/lane.js';
 import type { Workflow } from '../../src/schemas/workflow.js';
@@ -88,7 +88,7 @@ describe('STEP-I8 runtime run-relative path containment', () => {
       first.writes.artifact.path = path as never;
 
       await expect(
-        runDogfood({
+        runWorkflow({
           runRoot,
           workflow: badWorkflow,
           workflowBytes: bytes,
@@ -117,7 +117,7 @@ describe('STEP-I8 runtime run-relative path containment', () => {
     dispatch.reads = ['../secret.txt' as never];
 
     await expect(
-      runDogfood({
+      runWorkflow({
         runRoot,
         workflow: badWorkflow,
         workflowBytes: bytes,
@@ -200,7 +200,7 @@ describe('STEP-I8 runtime run-relative path containment', () => {
     first.writes.artifact.path = 'artifacts/escaped.json' as never;
 
     await expect(
-      runDogfood({
+      runWorkflow({
         runRoot: synthesisRunRoot,
         workflow: synthesisWorkflow,
         workflowBytes: bytes,
@@ -227,7 +227,7 @@ describe('STEP-I8 runtime run-relative path containment', () => {
     dispatch.reads = ['links/secret.txt' as never];
 
     await expect(
-      runDogfood({
+      runWorkflow({
         runRoot: readRunRoot,
         workflow: readWorkflow,
         workflowBytes: bytes,

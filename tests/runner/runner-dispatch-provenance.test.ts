@@ -6,13 +6,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { AgentDispatchInput } from '../../src/runtime/adapters/agent.js';
 import { materializeDispatch } from '../../src/runtime/adapters/dispatch-materializer.js';
 import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
-import { type DispatchFn, runDogfood } from '../../src/runtime/runner.js';
+import { type DispatchFn, runWorkflow } from '../../src/runtime/runner.js';
 import { RunId, StepId } from '../../src/schemas/ids.js';
 import type { LaneDeclaration } from '../../src/schemas/lane.js';
 import { Workflow } from '../../src/schemas/workflow.js';
 
 // Slice 47a (CONVERGENT HIGH A from the Phase 2-to-date comprehensive
-// review) — dispatch-event provenance plumbing through `runDogfood`.
+// review) — dispatch-event provenance plumbing through `runWorkflow`.
 //
 // Pre-Slice-47a, `materializeDispatch` hardcoded
 // `resolved_selection: { skills: [], invocation_options: {} }` and
@@ -74,10 +74,10 @@ afterEach(() => {
 });
 
 describe("Slice 47a — dispatch.started carries honest 'resolved_from' from the runner's decision path", () => {
-  it('injecting a dispatcher via DogfoodInvocation.dispatcher lands resolved_from.source="explicit"', async () => {
+  it('injecting a dispatcher via WorkflowInvocation.dispatcher lands resolved_from.source="explicit"', async () => {
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'explicit-provenance');
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -110,7 +110,7 @@ describe("Slice 47a — dispatch.started carries honest 'resolved_selection' fro
     expect(dispatchStep.selection).toBeUndefined();
 
     const runRoot = join(runRootBase, 'empty-selection');
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -146,7 +146,7 @@ describe("Slice 47a — dispatch.started carries honest 'resolved_selection' fro
     expect(baseWorkflow).toBeDefined();
 
     const runRoot = join(runRootBase, 'workflow-selection');
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -193,7 +193,7 @@ describe("Slice 47a — dispatch.started carries honest 'resolved_selection' fro
     const workflow = Workflow.parse(raw);
 
     const runRoot = join(runRootBase, 'step-overrides-workflow');
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -242,7 +242,7 @@ describe("Slice 47a Codex HIGH 1 — SkillOverride 'append' / 'remove' / 'inheri
     }
     const workflow = Workflow.parse(raw);
     const runRoot = join(runRootBase, 'remove-after-replace');
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -271,7 +271,7 @@ describe("Slice 47a Codex HIGH 1 — SkillOverride 'append' / 'remove' / 'inheri
     }
     const workflow = Workflow.parse(raw);
     const runRoot = join(runRootBase, 'append-after-replace');
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -302,7 +302,7 @@ describe("Slice 47a Codex HIGH 1 — SkillOverride 'append' / 'remove' / 'inheri
     }
     const workflow = Workflow.parse(raw);
     const runRoot = join(runRootBase, 'append-existing');
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -331,7 +331,7 @@ describe("Slice 47a Codex HIGH 1 — SkillOverride 'append' / 'remove' / 'inheri
     }
     const workflow = Workflow.parse(raw);
     const runRoot = join(runRootBase, 'inherit-noop');
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -350,17 +350,17 @@ describe("Slice 47a Codex HIGH 1 — SkillOverride 'append' / 'remove' / 'inheri
   });
 });
 
-// Slice 47a Codex HIGH 2 fold-in — DogfoodRunResult.dispatchResults
+// Slice 47a Codex HIGH 2 fold-in — WorkflowRunResult.dispatchResults
 // surface for AGENT_SMOKE / CODEX_SMOKE fingerprint cli_version
 // binding. The pre-fold-in env-var side-channel let unknown/empty
 // cli_version through; the post-fold-in path reads from the actual
 // adapter return and the audit rejects v2 fingerprints with empty/
 // unknown cli_version.
-describe('Slice 47a Codex HIGH 2 — DogfoodRunResult.dispatchResults surfaces per-dispatch cli_version', () => {
+describe('Slice 47a Codex HIGH 2 — WorkflowRunResult.dispatchResults surfaces per-dispatch cli_version', () => {
   it('captures stepId + adapterName + cli_version from each dispatcher invocation', async () => {
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'cli-version-capture');
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,

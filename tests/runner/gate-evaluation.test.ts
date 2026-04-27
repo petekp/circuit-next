@@ -9,7 +9,7 @@ import { Workflow } from '../../src/schemas/workflow.js';
 
 import type { AgentDispatchInput } from '../../src/runtime/adapters/agent.js';
 import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
-import { type DispatchFn, runDogfood } from '../../src/runtime/runner.js';
+import { type DispatchFn, runWorkflow } from '../../src/runtime/runner.js';
 
 // Slice 53 — dispatch verdict truth (Codex H14 fold-in).
 //
@@ -29,9 +29,9 @@ import { type DispatchFn, runDogfood } from '../../src/runtime/runner.js';
 // human-readable `reason` is emitted, followed by `step.aborted` with
 // the same reason, then `run.closed` with `outcome: 'aborted'`.
 //
-// Tests below exercise the four cases through `runDogfood` end-to-end
+// Tests below exercise the four cases through `runWorkflow` end-to-end
 // against the dogfood-run-0 fixture (`gate.pass = ["ok"]`) so the
-// integration against the runDogfood loop's flow control is part of
+// integration against the runWorkflow loop's flow control is part of
 // the assertion surface, not just the in-isolation verdict parser.
 
 const FIXTURE_PATH = resolve('.claude-plugin/skills/dogfood-run-0/circuit.json');
@@ -86,7 +86,7 @@ describe('Slice 53 — dispatch verdict truth (Codex H14)', () => {
   it('PASS: adapter result_body parses with verdict in step.gate.pass → gate.evaluated outcome=pass; dispatch step advances; run closes complete', async () => {
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'pass-case');
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -124,7 +124,7 @@ describe('Slice 53 — dispatch verdict truth (Codex H14)', () => {
   it('REJECT (verdict not in step.gate.pass): adapter declares "reject" but gate.pass=["ok"] → gate.evaluated outcome=fail with reason naming the verdict; step.aborted; step does NOT advance; run.closed outcome=aborted', async () => {
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'reject-case');
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -191,7 +191,7 @@ describe('Slice 53 — dispatch verdict truth (Codex H14)', () => {
   it('UNPARSEABLE: adapter result_body is not valid JSON → gate.evaluated outcome=fail with reason naming parse failure; dispatch.completed.verdict carries the runtime sentinel (no observed verdict); step.aborted; step does NOT advance; run.closed outcome=aborted; result.json carries the same reason', async () => {
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'unparseable-case');
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -253,7 +253,7 @@ describe('Slice 53 — dispatch verdict truth (Codex H14)', () => {
     const workflow = Workflow.parse(raw);
 
     const runRoot = join(runRootBase, 'parsed-not-first');
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: mutatedBytes,
@@ -285,7 +285,7 @@ describe('Slice 53 — dispatch verdict truth (Codex H14)', () => {
   it('NO VERDICT FIELD: adapter result_body parses but lacks a string verdict field → gate.evaluated outcome=fail with reason naming the missing field; step.aborted; step does NOT advance; run.closed outcome=aborted', async () => {
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'no-verdict-case');
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -373,7 +373,7 @@ describe('Slice 53 — dispatch verdict truth: edge-case parser coverage (Codex 
     it(`rejects: ${c.label}`, async () => {
       const { workflow, bytes } = loadFixture();
       const runRoot = join(runRootBase, `edge-${c.label.replace(/\W+/g, '-')}`);
-      const outcome = await runDogfood({
+      const outcome = await runWorkflow({
         runRoot,
         workflow,
         workflowBytes: bytes,
@@ -419,7 +419,7 @@ describe('Slice 53 — gate fail does not materialize the canonical artifact (Co
     const workflow = Workflow.parse(raw);
 
     const runRoot = join(runRootBase, 'artifact-not-written-on-fail');
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: mutatedBytes,
@@ -456,7 +456,7 @@ describe('Slice 53 — gate fail does not materialize the canonical artifact (Co
     const workflow = Workflow.parse(raw);
 
     const runRoot = join(runRootBase, 'artifact-written-on-pass');
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: mutatedBytes,

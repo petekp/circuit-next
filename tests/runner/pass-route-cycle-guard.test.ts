@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { AgentDispatchInput } from '../../src/runtime/adapters/agent.js';
 import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
 import { readRunLog } from '../../src/runtime/event-log-reader.js';
-import { type DispatchFn, runDogfood } from '../../src/runtime/runner.js';
+import { type DispatchFn, runWorkflow } from '../../src/runtime/runner.js';
 import { RunId } from '../../src/schemas/ids.js';
 import type { LaneDeclaration } from '../../src/schemas/lane.js';
 import { RunResult } from '../../src/schemas/result.js';
@@ -71,7 +71,7 @@ describe('WF-I11 runtime-safety-floor pass-route cycle guard', () => {
     const unsafeWorkflowBytes = Buffer.from(JSON.stringify(unsafeWorkflow));
 
     const runRoot = join(runRootBase, 'schema-bypass-cycle');
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow: unsafeWorkflow,
       workflowBytes: unsafeWorkflowBytes,

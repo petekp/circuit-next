@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { AgentDispatchInput } from '../../src/runtime/adapters/agent.js';
 import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
-import { type DispatchFn, runDogfood } from '../../src/runtime/runner.js';
+import { type DispatchFn, runWorkflow } from '../../src/runtime/runner.js';
 import {
   BuildImplementation,
   BuildResult,
@@ -119,7 +119,7 @@ describe('Build runtime wiring', () => {
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'complete');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -164,7 +164,7 @@ describe('Build runtime wiring', () => {
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'bad-implementation');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -194,7 +194,7 @@ describe('Build runtime wiring', () => {
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'review-reject');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -229,7 +229,7 @@ describe('Build runtime wiring', () => {
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'review-empty-fixes');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -295,7 +295,7 @@ describe('Build runtime wiring', () => {
     const dispatchInputs: AgentDispatchInput[] = [];
     const dispatcher = dispatcherWith();
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -334,7 +334,7 @@ describe('Build runtime wiring', () => {
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'deep-entry-mode');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -360,7 +360,7 @@ describe('Build runtime wiring', () => {
     const dispatchInputs: AgentDispatchInput[] = [];
     const dispatcher = dispatcherWith();
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -392,7 +392,7 @@ describe('Build runtime wiring', () => {
     const dispatchInputs: AgentDispatchInput[] = [];
     const dispatcher = dispatcherWith();
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -431,7 +431,7 @@ describe('Build runtime wiring', () => {
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'autonomous-entry-mode');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -463,7 +463,7 @@ describe('Build runtime wiring', () => {
     const runRoot = join(runRootBase, 'unknown-entry-mode');
 
     await expect(
-      runDogfood({
+      runWorkflow({
         runRoot,
         workflow,
         workflowBytes: bytes,

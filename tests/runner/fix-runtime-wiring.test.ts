@@ -1,7 +1,7 @@
 // End-to-end runtime wiring for the lite Fix workflow.
 //
 // Loads `.claude-plugin/skills/fix/lite.json` (the compiled lite-mode
-// Workflow) and runs it through `runDogfood` with stubbed dispatchers
+// Workflow) and runs it through `runWorkflow` with stubbed dispatchers
 // for context/diagnose/act and a custom synthesisWriter that overrides
 // fix-frame to produce a brief with a fast no-op verification command.
 // Other synthesis steps fall through to the registered writer, so this
@@ -18,7 +18,7 @@ import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
 import {
   type DispatchFn,
   type SynthesisWriterInput,
-  runDogfood,
+  runWorkflow,
   writeSynthesisArtifact,
 } from '../../src/runtime/runner.js';
 import { FixBrief, FixResult } from '../../src/schemas/artifacts/fix.js';
@@ -44,7 +44,7 @@ function lane(): LaneDeclaration {
     lane: 'ratchet-advance',
     failure_mode: 'lite Fix had no end-to-end runtime proof through close',
     acceptance_evidence:
-      'runDogfood closes the lite Fix workflow via real Workflow with stubbed dispatchers and a fast verification command',
+      'runWorkflow closes the lite Fix workflow via real Workflow with stubbed dispatchers and a fast verification command',
     alternate_framing:
       'defer until full Fix is wired — rejected because lite is the proving substrate per workflow-direction.md',
   };
@@ -156,7 +156,7 @@ describe('Lite Fix runtime wiring', () => {
     const { workflow, bytes } = loadLiteFixture();
     const runRoot = join(runRootBase, 'lite-complete');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,

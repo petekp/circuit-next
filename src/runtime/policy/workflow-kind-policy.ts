@@ -10,13 +10,15 @@ import { Workflow } from '../../schemas/workflow.js';
 // retargeting per Slice 40 → P2.5). Wraps the shared JS canonical-set
 // check at scripts/policy/workflow-kind-policy.mjs with a Zod-driven
 // Workflow.safeParse pre-check, so CLI fixture loading (src/cli/
-// dogfood.ts:loadFixture) can reject structurally-invalid OR
+// circuit.ts:loadFixture) can reject structurally-invalid OR
 // policy-invalid fixtures with a single call.
 //
 // Design note: the canonical-set table lives in JS (shared source of
 // truth with audit.mjs Check 24) to prevent drift. This TS layer adds
 // the structural gate via Workflow.safeParse — audit.mjs has no Zod
 // path, so it runs the table check only; runtime has both gates.
+//
+// CLI fixture loading lives at src/cli/circuit.ts:loadFixture.
 
 export { WORKFLOW_KIND_CANONICAL_SETS, EXEMPT_WORKFLOW_IDS };
 export type { WorkflowKindPolicyCheckResult };
@@ -30,7 +32,7 @@ export type ValidateWorkflowKindPolicyResult =
  * Workflow (Zod safeParse) AND that its declared workflow kind satisfies
  * the canonical phase-set policy.
  *
- * Called by src/cli/dogfood.ts after Workflow.parse() succeeds (already
+ * Called by src/cli/circuit.ts after Workflow.parse() succeeds (already
  * structurally valid at that point); the safeParse here is belt-and-
  * braces for direct callers that haven't run the schema yet. Returns
  * ok:false with a human-readable reason string — callers throw.

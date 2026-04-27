@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   type SynthesisWriterFn,
-  runDogfood,
+  runWorkflow,
   writeSynthesisArtifact,
 } from '../../src/runtime/runner.js';
 import {
@@ -32,7 +32,7 @@ function lane(): LaneDeclaration {
     failure_mode:
       'Build artifacts have schemas but the runtime fallback writer can still emit placeholders',
     acceptance_evidence:
-      'default runDogfood path writes build.plan@v1 and build.result@v1 artifacts that parse through their schemas',
+      'default runWorkflow path writes build.plan@v1 and build.result@v1 artifacts that parse through their schemas',
     alternate_framing:
       'add the full Build fixture now — rejected because verification execution and checkpoint execution are not landed yet',
   };
@@ -416,7 +416,7 @@ describe('Build synthesis writers', () => {
     const { workflow, bytes } = planWorkflow();
     const runRoot = join(runRootBase, 'plan');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -448,7 +448,7 @@ describe('Build synthesis writers', () => {
     const { workflow, bytes } = planWorkflow({ omitBriefRead: true });
     const runRoot = join(runRootBase, 'plan-missing-brief-read');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -469,7 +469,7 @@ describe('Build synthesis writers', () => {
     const { workflow, bytes } = planWorkflow();
     const runRoot = join(runRootBase, 'plan-malformed-brief');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -490,7 +490,7 @@ describe('Build synthesis writers', () => {
     const { workflow, bytes } = closeWorkflow();
     const runRoot = join(runRootBase, 'close');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -521,7 +521,7 @@ describe('Build synthesis writers', () => {
     const { workflow, bytes } = closeWorkflow();
     const runRoot = join(runRootBase, 'missing-prior');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -542,7 +542,7 @@ describe('Build synthesis writers', () => {
     const { workflow, bytes } = closeWorkflow();
     const runRoot = join(runRootBase, 'malformed-brief-close');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -563,7 +563,7 @@ describe('Build synthesis writers', () => {
     const { workflow, bytes } = closeWorkflow();
     const runRoot = join(runRootBase, 'malformed-plan-close');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -584,7 +584,7 @@ describe('Build synthesis writers', () => {
     const { workflow, bytes } = closeWorkflow({ omitProducerSchema: 'build.plan@v1' });
     const runRoot = join(runRootBase, 'missing-plan-producer');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,

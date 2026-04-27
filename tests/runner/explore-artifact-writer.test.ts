@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
-import { type DispatchFn, type DispatchInput, runDogfood } from '../../src/runtime/runner.js';
+import { type DispatchFn, type DispatchInput, runWorkflow } from '../../src/runtime/runner.js';
 import {
   ExploreAnalysis,
   ExploreBrief,
@@ -39,7 +39,7 @@ function lane(): LaneDeclaration {
     lane: 'ratchet-advance',
     failure_mode: 'explore frame/analyze artifacts have authority rows but no typed runtime output',
     acceptance_evidence:
-      'default runDogfood explore path writes explore.brief@v1 and explore.analysis@v1 artifacts that parse through their schemas',
+      'default runWorkflow explore path writes explore.brief@v1 and explore.analysis@v1 artifacts that parse through their schemas',
     alternate_framing:
       'jump straight to all five explore artifact schemas — rejected because dispatch-produced synthesis/review and close aggregation need separate payload design',
   };
@@ -241,7 +241,7 @@ describe('P2.10a — default explore artifact writer', () => {
     const runRoot = join(runRootBase, 'typed-explore-artifacts');
     const goal = 'Map the next typed explore artifact slice';
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -308,7 +308,7 @@ describe('P2.10a — default explore artifact writer', () => {
     const runRoot = join(runRootBase, 'reordered-analysis-reads');
     const goal = 'Keep analysis coupled to the brief dependency';
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -333,7 +333,7 @@ describe('P2.10a — default explore artifact writer', () => {
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'incomplete-synthesis');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -363,7 +363,7 @@ describe('P2.10a — default explore artifact writer', () => {
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'extra-key-synthesis');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -390,7 +390,7 @@ describe('P2.10a — default explore artifact writer', () => {
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'incomplete-review-verdict');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -417,7 +417,7 @@ describe('P2.10a — default explore artifact writer', () => {
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'extra-key-review-verdict');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -448,7 +448,7 @@ describe('P2.10a — default explore artifact writer', () => {
     });
     const runRoot = join(runRootBase, 'missing-close-read');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -479,7 +479,7 @@ describe('P2.10a — default explore artifact writer', () => {
     });
     const runRoot = join(runRootBase, 'missing-synthesis-close-read');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,
@@ -510,7 +510,7 @@ describe('P2.10a — default explore artifact writer', () => {
     });
     const runRoot = join(runRootBase, 'missing-brief-close-read');
 
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot,
       workflow,
       workflowBytes: bytes,

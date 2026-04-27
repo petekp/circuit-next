@@ -49,7 +49,7 @@ import { findVerificationWriter } from './verification-writers/registry.js';
 
 // Slice 27c landed the runtime-boundary writer/reducer/manifest surfaces
 // below bootstrapRun/appendAndDerive. Slice 27d composes them into the
-// dogfood-run-0 execution loop via `runDogfood` — the first executable
+// dogfood-run-0 execution loop via `runWorkflow` — the first executable
 // product proof per ADR-0001 Addendum B §Phase 1.5 Close Criteria
 // #4/#5/#6/#7/#13.
 
@@ -174,7 +174,7 @@ export function appendAndDerive(runRoot: string, event: Event): AppendResult {
 // Prior to 45a, `DispatchFn` was a bare function type and the runner's
 // materializer call site hardcoded `adapterName: 'agent'`; injecting a
 // non-agent dispatcher (e.g. `dispatchCodex`) through
-// `DogfoodInvocation.dispatcher` would silently lie on the
+// `WorkflowInvocation.dispatcher` would silently lie on the
 // `dispatch.started` event's adapter discriminant. The descriptor binds
 // the dispatcher function to its adapter identity at the injection seam,
 // so the materializer is parameterized from the descriptor instead of
@@ -200,7 +200,7 @@ export interface SynthesisWriterInput {
 
 export type SynthesisWriterFn = (input: SynthesisWriterInput) => void;
 
-export interface DogfoodInvocation {
+export interface WorkflowInvocation {
   runRoot: string;
   workflow: Workflow;
   workflowBytes: Buffer;
@@ -247,7 +247,7 @@ export interface CheckpointResumeInvocation {
 // fingerprint writer can bind `cli_version` to the actual subprocess
 // init event rather than reading it from a side-channel env var. The
 // runner already has `DispatchResult.cli_version` in scope at the
-// dispatch loop; this exposes it on `DogfoodRunResult` without
+// dispatch loop; this exposes it on `WorkflowRunResult` without
 // forcing a schema change to the dispatch event union (the latter
 // would be P2-MODEL-EFFORT scope).
 export interface DispatchResultMetadata {
@@ -273,7 +273,7 @@ export interface CheckpointWaitingResult {
   readonly reason?: string;
 }
 
-export interface DogfoodRunResult {
+export interface WorkflowRunResult {
   runRoot: string;
   result: RunResult | CheckpointWaitingResult;
   snapshot: Snapshot;
@@ -410,7 +410,7 @@ type DispatcherInvocationConfig = {
 async function resolveDispatcher(inv: DispatcherInvocationConfig): Promise<DispatchFn> {
   if (inv.dispatcher !== undefined) return inv.dispatcher;
   // Default dispatcher: the `agent` adapter's function, lifted into the
-  // structured descriptor shape so the call site at `runDogfood` below
+  // structured descriptor shape so the call site at `runWorkflow` below
   // reads `adapterName` uniformly regardless of whether the dispatcher
   // was injected (tests, future codex routing) or resolved as the
   // default. See Slice 45a's `DispatchFn` comment above for rationale.
@@ -423,7 +423,7 @@ async function resolveDispatcher(inv: DispatcherInvocationConfig): Promise<Dispa
 // of letting the materializer fabricate `{ source: 'default' }` on
 // every event. Two cases at v0:
 //   - The caller injected a dispatcher (tests, future role-keyed
-//     routing) → `source: 'explicit'`. The DogfoodInvocation surface
+//     routing) → `source: 'explicit'`. The WorkflowInvocation surface
 //     does not yet name a registry, so we cannot honestly claim
 //     `'role'` or `'circuit'` here — those become reachable when
 //     P2.8 router introduces a workflow-keyed adapter registry.
@@ -962,7 +962,7 @@ interface ResumeCheckpointState {
   readonly existingBrief?: BuildBrief;
 }
 
-interface DogfoodExecutionContext {
+interface WorkflowExecutionContext {
   readonly runRoot: string;
   readonly workflow: Workflow;
   readonly workflowBytes: Buffer;
@@ -1061,19 +1061,19 @@ function selectEntryMode(
   entryModeName: string | undefined,
 ): Workflow['entry_modes'][number] {
   if (workflow.entry_modes.length === 0) {
-    throw new Error(`runDogfood: workflow ${workflow.id} declares no entry_modes`);
+    throw new Error(`runWorkflow: workflow ${workflow.id} declares no entry_modes`);
   }
   if (entryModeName === undefined) {
     const entry = workflow.entry_modes[0];
     if (entry === undefined) {
-      throw new Error(`runDogfood: workflow ${workflow.id} entry_modes[0] unreadable`);
+      throw new Error(`runWorkflow: workflow ${workflow.id} entry_modes[0] unreadable`);
     }
     return entry;
   }
   const entry = workflow.entry_modes.find((mode) => mode.name === entryModeName);
   if (entry === undefined) {
     throw new Error(
-      `runDogfood: workflow ${workflow.id} declares no entry_mode named '${entryModeName}'`,
+      `runWorkflow: workflow ${workflow.id} declares no entry_mode named '${entryModeName}'`,
     );
   }
   return entry;
@@ -1087,7 +1087,7 @@ function selectEntryMode(
 // (or an injected stub). The signature is a breaking change for external
 // callers — this is internal to Phase 1.5 / Phase 2 only (no external
 // users yet).
-async function executeDogfood(ctx: DogfoodExecutionContext): Promise<DogfoodRunResult> {
+async function executeWorkflow(ctx: WorkflowExecutionContext): Promise<WorkflowRunResult> {
   const { runRoot, workflow, workflowBytes, runId, goal, lane, now } = ctx;
   const dispatcher = await resolveDispatcher(ctx);
   const synthesisWriter = ctx.synthesisWriter ?? writeSynthesisArtifact;
@@ -1159,7 +1159,7 @@ async function executeDogfood(ctx: DogfoodExecutionContext): Promise<DogfoodRunR
     const step = stepsById.get(currentStepId);
     if (step === undefined) {
       throw new Error(
-        `runDogfood: route target '${currentStepId}' is not a known step id (fixture/reduction mismatch)`,
+        `runWorkflow: route target '${currentStepId}' is not a known step id (fixture/reduction mismatch)`,
       );
     }
     if (executedStepIds.has(currentStepId)) {
@@ -1249,7 +1249,7 @@ async function executeDogfood(ctx: DogfoodExecutionContext): Promise<DogfoodRunR
       try {
         if (ctx.projectRoot === undefined) {
           throw new Error(
-            `verification step '${step.id}' requires DogfoodInvocation.projectRoot for project-relative cwd resolution`,
+            `verification step '${step.id}' requires WorkflowInvocation.projectRoot for project-relative cwd resolution`,
           );
         }
         verification = writeVerificationArtifact({
@@ -1712,7 +1712,7 @@ async function executeDogfood(ctx: DogfoodExecutionContext): Promise<DogfoodRunR
         // Slice 45a (P2.6 HIGH 3 fold-in): adapter identity is pulled
         // from the structured `DispatchFn` descriptor rather than from
         // a call-site literal. Future P2.7+ slices that route a second
-        // adapter into `runDogfood` do so by injecting a dispatcher
+        // adapter into `runWorkflow` do so by injecting a dispatcher
         // with the matching `adapterName`; no further edit to this
         // site is required.
         adapterName: dispatcher.adapterName,
@@ -1785,7 +1785,7 @@ async function executeDogfood(ctx: DogfoodExecutionContext): Promise<DogfoodRunR
 
     const passRoute = step.routes.pass;
     if (passRoute === undefined) {
-      throw new Error(`runDogfood: step '${step.id}' missing 'pass' route (WF-I10 violation)`);
+      throw new Error(`runWorkflow: step '${step.id}' missing 'pass' route (WF-I10 violation)`);
     }
     const terminalOutcome = terminalOutcomeForRoute(passRoute);
 
@@ -1871,13 +1871,13 @@ async function executeDogfood(ctx: DogfoodExecutionContext): Promise<DogfoodRunR
   };
 }
 
-export async function runDogfood(inv: DogfoodInvocation): Promise<DogfoodRunResult> {
-  return executeDogfood(inv);
+export async function runWorkflow(inv: WorkflowInvocation): Promise<WorkflowRunResult> {
+  return executeWorkflow(inv);
 }
 
-export async function resumeDogfoodCheckpoint(
+export async function resumeWorkflowCheckpoint(
   inv: CheckpointResumeInvocation,
-): Promise<DogfoodRunResult> {
+): Promise<WorkflowRunResult> {
   const manifest = verifyManifestSnapshotBytes(inv.runRoot);
   const workflowBytes = Buffer.from(manifest.bytes_base64, 'base64');
   const workflow = workflowFromManifestBytes(workflowBytes);
@@ -1901,7 +1901,7 @@ export async function resumeDogfoodCheckpoint(
     throw new Error('checkpoint resume rejected: manifest hash differs from event log');
   }
 
-  return executeDogfood({
+  return executeWorkflow({
     runRoot: inv.runRoot,
     workflow,
     workflowBytes,
@@ -1936,7 +1936,7 @@ function buildSummary(input: {
   events: Event[];
 }): string {
   const stepCount = input.events.filter((e) => e.kind === 'step.completed').length;
-  return `dogfood-run-0: ${input.workflow.id} v${input.workflow.version} closed ${stepCount} step(s) for goal "${input.goal}".`;
+  return `${input.workflow.id} v${input.workflow.version} closed ${stepCount} step(s) for goal "${input.goal}".`;
 }
 
 export type { RunId, WorkflowId };

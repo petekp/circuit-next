@@ -22,7 +22,7 @@ import {
   type CompileResult,
   compileRecipeToWorkflow,
 } from '../../src/runtime/compile-recipe-to-workflow.js';
-import { runDogfood } from '../../src/runtime/runner.js';
+import { runWorkflow } from '../../src/runtime/runner.js';
 import { RunId } from '../../src/schemas/ids.js';
 import type { LaneDeclaration } from '../../src/schemas/lane.js';
 import { WorkflowPrimitiveCatalog } from '../../src/schemas/workflow-primitives.js';
@@ -184,7 +184,7 @@ describe('orphan primitive: handoff', () => {
   it('runs end-to-end via the placeholder synthesis fallback', async () => {
     const recipe = WorkflowRecipe.parse(recipeRaw);
     const workflow = singleWorkflow(compileRecipeToWorkflow(recipe));
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot: join(runRoot, 'handoff-run'),
       workflow,
       workflowBytes: Buffer.from(JSON.stringify(workflow)),
@@ -297,7 +297,7 @@ describe('orphan primitive: human-decision', () => {
     // primitive is wireable end-to-end.
     const recipe = WorkflowRecipe.parse(recipeRaw);
     const workflow = singleWorkflow(compileRecipeToWorkflow(recipe));
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot: join(runRoot, 'human-decision-run'),
       workflow,
       workflowBytes: Buffer.from(JSON.stringify(workflow)),
@@ -376,7 +376,7 @@ describe('orphan primitive: queue', () => {
   it('runs end-to-end via the placeholder synthesis fallback', async () => {
     const recipe = WorkflowRecipe.parse(recipeRaw);
     const workflow = singleWorkflow(compileRecipeToWorkflow(recipe));
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot: join(runRoot, 'queue-run'),
       workflow,
       workflowBytes: Buffer.from(JSON.stringify(workflow)),
@@ -460,7 +460,7 @@ describe('orphan primitive: batch', () => {
   it('runs end-to-end via the placeholder synthesis fallback', async () => {
     const recipe = WorkflowRecipe.parse(recipeRaw);
     const workflow = singleWorkflow(compileRecipeToWorkflow(recipe));
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot: join(runRoot, 'batch-run'),
       workflow,
       workflowBytes: Buffer.from(JSON.stringify(workflow)),
@@ -549,7 +549,7 @@ describe('orphan primitive: risk-rollback-check', () => {
   it('runs end-to-end via the placeholder synthesis fallback', async () => {
     const recipe = WorkflowRecipe.parse(recipeRaw);
     const workflow = singleWorkflow(compileRecipeToWorkflow(recipe));
-    const outcome = await runDogfood({
+    const outcome = await runWorkflow({
       runRoot: join(runRoot, 'risk-run'),
       workflow,
       workflowBytes: Buffer.from(JSON.stringify(workflow)),

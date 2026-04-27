@@ -20,7 +20,7 @@ import {
   type DispatchFn,
   claimFreshRunRoot,
   releaseFreshRunRootClaim,
-  runDogfood,
+  runWorkflow,
 } from '../../src/runtime/runner.js';
 import { snapshotPath } from '../../src/runtime/snapshot-writer.js';
 import { RunId } from '../../src/schemas/ids.js';
@@ -71,7 +71,7 @@ async function closeFixtureRun(input: {
   startMs: number;
 }): Promise<void> {
   const { workflow, bytes } = loadFixture();
-  await runDogfood({
+  await runWorkflow({
     runRoot: input.runRoot,
     workflow,
     workflowBytes: bytes,
