@@ -1,194 +1,113 @@
 # HANDOFF
 
-Last updated: 2026-04-26 (synthesis writers also extracted to a workflow-agnostic registry — runner.ts is now fully workflow-agnostic).
-
-## Architectural state of play
-
-**runner.ts has zero workflow-specific knowledge in any synthesis path
-— close OR upstream.** Adding a new workflow means writing per-workflow
-schemas, builders, and a recipe. No runner.ts edits. The two registries
-under `src/runtime/close-writers/` and `src/runtime/synthesis-writers/`
-own all workflow-specific assembly logic.
-
-The orphan-primitive exercisers proved the substrate is permissive:
-all five unexercised primitives (queue, batch, risk-rollback-check,
-human-decision, handoff) compose without runtime code via the
-placeholder synthesis fallback. New workflows can compose with
-placeholder writers, then upgrade to real builders when needed.
-
-The schema layer decision is codified in
-`specs/workflow-recipe-composition.md`: primitive contracts are
-nominal, per-workflow schemas are structural, recipe `contract_aliases`
-bridge them. Both layers are load-bearing.
-
-
+Last updated: 2026-04-27 — workflow catalog reorganization complete (13 commits this session).
 
 ## Where we are
 
-Three Codex post-migration findings closed, and Fix can now actually close
-end-to-end (the runtime had been able to load and route lite Fix but had no
-synthesis writers for `fix.brief@v1` or `fix.result@v1`, and the dispatch
-artifact registry didn't know `fix.context`/`fix.diagnosis`/`fix.change`/
-`fix.review`). Concretely:
+Each workflow now lives in its own folder under `src/workflows/<id>/`,
+and the engine has no per-workflow code. Adding a workflow means
+creating a folder and adding it to one catalog file — the runtime
+discovers everything through that catalog.
 
-### Hardening (commit `ef65a9a`)
+Before this session, the same Build workflow had pieces in seven
+places: a recipe under `specs/workflow-recipes/`, a slash command in
+`commands/`, a contract in `specs/contracts/`, four writer files
+spread across `src/runtime/{synthesis,close,verification,checkpoint}-writers/`,
+a dispatch shape hint in `src/runtime/shape-hints/`, plus router and
+artifact-schema entries hardcoded inside the runtime. After this
+session, all of that lives in `src/workflows/build/`, and the runtime
+loads it generically through `src/workflows/catalog.ts`. The same is
+true for Explore, Fix, Migrate, Review, and Sweep.
 
-1. **Drift-check stale-sibling guard** in `scripts/emit-workflows.mjs`:
-   `--check` now fails on unexpected `*.json` siblings under
-   `.claude-plugin/skills/<id>/`, and emit removes them. Closes the gap
-   where a stale `<old-mode>.json` from a renamed/collapsed entry mode
-   could silently drive runtime via the CLI loader while
-   `npm run verify` stayed green. Test:
-   `tests/unit/emit-workflows-drift.test.ts`.
-2. **Explore close-step read alignment**: the runtime explore close
-   writer now consumes `brief` in addition to `synthesis` and
-   `review-verdict`, matching the close-with-evidence primitive
-   contract that already mandates brief in every alternative input set.
-   The summary references `brief.subject` so `explore.result` is
-   self-contained. The compiled reads now match what the writer
-   actually reads — no more "intended vs. accidental" trust gap there.
-3. **fix-verify schema label reconciled**: the runner's verification
-   writer now supports both `build.verification@v1` (commands sourced
-   from `build.plan@v1`) and `fix.verification@v1` (commands sourced
-   from `fix.brief@v1`'s `verification_command_candidates`). The Fix
-   recipe declares `fix.verification@v1` as the canonical Fix
-   verification artifact, matching `FIX_RESULT_SCHEMA_BY_ARTIFACT_ID`
-   in `src/schemas/artifacts/fix.ts`. Same physical file, consistent
-   label.
+The cleanup also moved the engine-wide contract docs from
+`specs/contracts/` to `docs/contracts/` and the workflow design notes
+from `specs/workflow-*.md` to `docs/workflows/`. `commands/build.md`,
+`explore.md`, `fix.md`, and `review.md` are now generated copies of
+the source files in each workflow folder; the emit script drift-checks
+them on every `npm run verify`. `commands/run.md` stays hand-authored
+because it's the CLI router entry, not a workflow — there's a comment
+at the top of the file noting that.
 
-### Fix close primitives (commit `0277531`)
+## Tests
 
-1. **fix.brief synthesis writer** in `runner.ts`: fabricates a
-   schema-valid `FixBrief` from the run goal alone. Conservative
-   defaults — `repro: not-reproducible (deferred)` and
-   `regression_test: deferred` — so future operator-supplied evidence
-   can override without schema conflicts. Default verification command
-   is `npm run verify`.
-2. **fix.result close writer** in `runner.ts`: aggregates the typed
-   evidence chain (brief + context + diagnosis + change + verification +
-   optional review) into a `FixResult`. Detects review presence by
-   checking `workflow.steps` for `fix.review@v1` AND verifying the
-   close-step lists the review path in its reads. Lite mode skips
-   review via `route_overrides`; the writer emits
-   `review_status: 'skipped'` with a default skip reason. Outcome is
-   pinned to verification + regression + review state per the FixResult
-   superRefine constraints.
-3. **Dispatch artifact registry** in `src/runtime/artifact-schemas.ts`
-   now includes `fix.context@v1`, `fix.diagnosis@v1`, `fix.change@v1`,
-   `fix.review@v1` so dispatch-result materialization succeeds.
-4. **Helpers** `workflowHasArtifactSchema` and
-   `optionalCloseReadForSchema` let close writers conditionally consume
-   schemas that may not be wired in every mode (lite skips review).
+918 tests pass (up from 884 at session start), 6 skipped. Verify is
+green: tsc clean, biome clean, drift check byte-identical for every
+generated file.
 
-### Fix end-to-end runtime proof (commit `368e901`)
+New tests added during the session:
+- `tests/runner/catalog-derivations.test.ts` — 21 tests covering every
+  catalog throw path plus a runtime-parity check that walks every
+  WorkflowPackage's writers and confirms each resolves through the
+  live registry.
+- `tests/runner/router-routing-invariants.test.ts` — 6 tests
+  isolating routing.order precedence, isDefault selection, and
+  skipOnPlanningArtifact suppression against synthetic mini-catalogs.
+- `tests/contracts/engine-workflow-boundary.test.ts` — 4 tests
+  enforcing that nothing under `src/runtime/` imports a per-workflow
+  module other than the catalog or shared types. Catches dynamic
+  imports, side-effect imports, and re-exports — a direct future
+  workflow-coupling regression flips this red.
+- `tests/runner/handler-throw-recovery.test.ts` — added a second case
+  for synthesis-handler-local error recovery (alongside the existing
+  unsupported-kind case for the runStepHandler wrap).
+- `tests/runner/fanout-runtime.test.ts` — added two cases for the
+  fanout `continue-others` and `abort-all` failure paths, including
+  multi-branch worktree cleanup pinning.
 
-`FixContext`, `FixDiagnosis`, and `FixChange` schemas now require
-`verdict: literal('accept')`, matching the `BuildImplementation`
-pattern. The Fix dispatch steps' `result_verdict` gate parses verdict
-from the result body, and the artifact-schema registry validates the
-same body strictly — having both contracts share the verdict field is
-what lets dispatch outputs flow through both gates without splitting
-the body or loosening the artifact schema. With the schemas aligned,
-`tests/runner/fix-runtime-wiring.test.ts` runs the lite Fix Workflow
-end-to-end via `runDogfood`: stubbed dispatchers feed
-context/diagnose/act, the `fix-frame` synthesisWriter is overridden
-in the test to produce a brief with a no-op verification command,
-`fix-verify` executes that command, and `fix-close-lite` emits a real
-FixResult with `review_status='skipped'`.
-
-### Orphan-primitive exercisers (commit `115e28a`)
-
-Exerciser recipes for `queue`, `batch`, `risk-rollback-check`,
-`human-decision`, `handoff` — five primitives in the catalog with no
-active recipe using them. Each exerciser parses through the recipe
-schema, passes catalog-compatibility validation, compiles to a
-Workflow, and runs end-to-end through the runtime. All five succeed
-via the placeholder synthesis fallback (and `safe_autonomous_choice`
-for the human-decision checkpoint). Surfaces a meaningful property of
-the substrate: synthesis-kind orphan primitives compose without
-runtime code.
-
-### Close-with-evidence refactor (commit `78fbaaa`)
-
-Three close writers (build.result, explore.result, fix.result) lived
-inline in runner.ts as if-chains. Now each builder lives in
-`src/runtime/close-writers/<wf>.ts` and is registered by result schema
-name. runner.ts's close path is workflow-agnostic. Adding a new
-workflow's close means adding a CloseBuilder file and a registry
-entry — no edits to runner.ts.
-`tests/runner/close-builder-registry.test.ts` proves the contract
-with a synthetic builder.
-
-### Schema layer documented (commit `000ed1a`)
-
-Two layers are load-bearing: nominal primitive contracts in the
-catalog, structural per-workflow schemas in
-`src/schemas/artifacts/`, recipe `contract_aliases` bridges. Codified
-in `specs/workflow-recipe-composition.md`. The close-writer refactor
-confirmed the design: each builder uses workflow-specific schemas and
-benefits from their type safety.
-
-### Synthesis writer registry (commit `cea8f7d`)
-
-Six inline synthesis writers (build.plan, explore.brief,
-explore.analysis, review.intake, review.result, fix.brief) extracted
-to `src/runtime/synthesis-writers/<schema>.ts` modules and registered
-by output schema name. runner.ts dispatches via findSynthesisBuilder.
-The runner now has zero workflow-specific knowledge in any synthesis
-path — close OR upstream.
-`tests/runner/synthesis-builder-registry.test.ts` proves the contract
-with a synthetic builder running end-to-end through runDogfood with
-no runner.ts edits.
-
-`npm run verify` passes: 836 tests (6 skipped), tsc clean, biome
-clean, build clean, drift check clean across all 5 emitted Workflows.
+Test sharpening:
+- `tests/runner/dispatch-shape-hint-registry.test.ts` — expected hint
+  set is now derived from the catalog (with a non-zero floor so it
+  can't pass vacuously).
+- `tests/contracts/workflow-router.test.ts` — set-membership
+  comparison instead of brittle insertion order.
+- 4 pre-existing biome lint errors fixed so `npm run verify` is
+  cleanly green.
 
 ## What's next
 
-1. **Compose Sweep and Migrate next**. The strict primitives
-   (`queue`, `batch`, `risk-rollback-check`, `close-with-evidence`,
-   `handoff`) all exist in the catalog and are exercised.
-   The pattern for adding a new workflow:
-   - Author per-workflow artifact schemas in
-     `src/schemas/artifacts/<workflow>.ts`.
-   - Register dispatch-materialized schemas in
-     `src/runtime/artifact-schemas.ts` REGISTRY.
-   - Add SynthesisBuilders in `src/runtime/synthesis-writers/` and a
-     CloseBuilder in `src/runtime/close-writers/`, registered in each
-     directory's registry.ts. **No runner.ts edits.**
-   - Author `<workflow>.recipe.json` in `specs/workflow-recipes/`,
-     declare contract aliases.
-   - Add the recipe to `RECIPES` in `scripts/emit-workflows.mjs`.
-   - `npm run emit-workflows`.
-2. **Dispatch envelope split** — verdict-in-artifact stays for now.
-   Evaluated and deferred: dispatch steps have a `result_verdict` gate
-   by Workflow contract, so the artifact necessarily carries verdict.
-   Splitting envelope from body would require introducing a new
-   dispatch kind with non-verdict gates — a larger runtime change. The
-   current pattern is coherent: verdict on a dispatch artifact is the
-   worker's domain answer, used legitimately by close writers (e.g.,
-   `FixReview.verdict` for outcome rules,
-   `ExploreReviewVerdict.verdict` for verdict_snapshot). Reconsider if
-   we hit a real friction point.
-3. **Verification-plan contract** is currently an initial-contract
-   placeholder. The Fix recipe declares
-   `proof: verification.plan@v1` to satisfy the run-verification
-   primitive contract, but the runtime sources commands from
-   `fix.brief@v1` directly. If Migrate or Sweep want their own
-   verification, decide whether each gets its own brief-derived path
-   (Fix pattern) or whether `verification.plan@v1` becomes a real
-   typed artifact produced by an upstream plan step (Build pattern).
-   Both work; consistency matters more than which.
+Picking from this menu (operator choice):
+
+1. **Continue substrate work**. The pre-session continuity menu listed
+   four substrate slices — push (done), WorktreeRunner CLI wiring,
+   real Inventory dispatcher, nested checkpoint sub-run resume. These
+   are now cheaper to land on the catalog-clean ground.
+
+2. **Deferred-but-flagged test work** that didn't fit overnight scope:
+   - `plugin-command-invocation.test.ts` collapse (19 doc-shape pins
+     down to 1 shell-injection safety pin + a smoke). Deferred because
+     dropping assertions is the kind of decision that benefits from
+     explicit operator approval.
+   - Build test consolidation — 4 files, ~2435 lines for one workflow.
+   - `contracts/schema-parity.test.ts` split — 4159 lines in one file
+     is a maintenance liability.
+   - Real-recursion sub-run/fanout test — every parent test stubs the
+     `childRunner`. Replacing one stub with the actual `runWorkflow`
+     would prove the recursion path; this is substrate-shaped work,
+     not test-audit work.
+
+3. **Generalize BuildBrief-specific resume validation**. The runner
+   still has a hardcoded `'build.brief@v1'` check inside
+   `readCheckpointBuildBrief` because the resume-context validator is
+   BuildBrief-specific. Generalizing would extend `CheckpointBriefBuilder`
+   with a `validateResumeContext?` method. Tracked because the catalog
+   refactor closed every other engine→workflow leak; this one is the
+   last residue.
 
 ## Notes
 
-- The drift check now treats unexpected JSON siblings under any
-  recipe-managed `<id>/` dir as drift. `dogfood-run-0/` is its own
-  skill (not in `RECIPES`) and remains untouched.
-- `optional_canonicals` in workflow-kind-policy is the pattern that
-  let Fix declare `[review]` as optional so lite mode satisfies the
-  policy without review. Future workflows that want similar mode-
-  specific phase skipping should follow this pattern.
-- No Codex pass was needed for the harden + primitive-fill work; each
-  change was self-contained and `npm run verify` gave strong evidence
-  at every step.
+- Six adversarial subagent reviews ran during the session (one per
+  phase). Findings were triaged inline; CRITICAL/HIGH always addressed
+  before the next phase. The Phase-4 review caught two CRITICAL test-
+  framing issues (a "wrap" test that didn't exercise the wrap; a
+  fanout test that never asserted the parent outcome) and three HIGH
+  vacuous-pass risks — all fixed in the f43b93b follow-up commit.
+- The methodology-strip alignment (slice vocabulary off the test
+  surface) is partial: the two filename renames are done, the
+  vocabulary is gone from those two files, but adjacent test files
+  (codex-dispatch-roundtrip, agent-dispatch-roundtrip,
+  runtime-smoke, runner-dispatch-adapter-identity, etc.) still carry
+  some "Slice N" references. Easy follow-up sweep.
+- specs/ is now mostly the engine-wide ledgers (artifacts.json,
+  invariants.json, domain.md), behavioral notes, and legacy-circuit
+  reference. Workflow-specific material, generic engine contracts,
+  and workflow design notes all moved out.
