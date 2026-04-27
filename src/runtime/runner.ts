@@ -374,15 +374,39 @@ function readCheckpointResumeArtifact(input: {
   if (artifact === undefined) return undefined;
   const builder = findCheckpointBriefBuilder(artifact.schema);
   if (builder === undefined) return undefined;
-  if (builder.validateResumeContext === undefined) return undefined;
-  return builder.validateResumeContext({
-    runRoot: input.runRoot,
-    step: input.step,
-    artifactPath: artifact.path,
-    ...(input.requestContext.checkpointArtifactSha256 === undefined
-      ? {}
-      : { artifactSha256: input.requestContext.checkpointArtifactSha256 }),
-  });
+  // step-handlers/checkpoint.ts stores checkpoint_artifact_sha256 in the
+  // request iff a builder exists for the artifact schema. So on resume,
+  // if the request carries a hash, the builder MUST own resume
+  // validation. A builder that writes artifacts but skips
+  // validateResumeContext would silently lose hash protection.
+  if (builder.validateResumeContext === undefined) {
+    if (input.requestContext.checkpointArtifactSha256 !== undefined) {
+      throw new Error(
+        `checkpoint resume rejected: builder for schema '${artifact.schema}' is missing validateResumeContext but the checkpoint request carries an artifact hash`,
+      );
+    }
+    return undefined;
+  }
+  // Defense-in-depth: builders are expected to throw `checkpoint resume
+  // rejected: ...` errors, but raw Node throws (ENOENT, SyntaxError,
+  // ZodError) would surface without resume framing and confuse the
+  // operator. Wrap so every error from this seam carries the prefix.
+  try {
+    return builder.validateResumeContext({
+      runRoot: input.runRoot,
+      step: input.step,
+      artifactPath: artifact.path,
+      ...(input.requestContext.checkpointArtifactSha256 === undefined
+        ? {}
+        : { artifactSha256: input.requestContext.checkpointArtifactSha256 }),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.startsWith('checkpoint resume rejected:')) throw err;
+    throw new Error(
+      `checkpoint resume rejected: builder for schema '${artifact.schema}' validateResumeContext threw: ${message}`,
+    );
+  }
 }
 
 function findWaitingCheckpoint(input: {

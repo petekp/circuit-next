@@ -3,9 +3,10 @@
 // A synthesis writer turns a recipe's synthesis step into a
 // schema-validated artifact. It generalizes the close-writer pattern:
 // every workflow's brief, plan, intake, analysis, etc., gets its own
-// builder file under src/runtime/synthesis-writers/ and is registered
-// by output schema name. The runner dispatches via the registry — it
-// does not need to know which schemas exist.
+// builder file under src/workflows/<wf>/writers/ and is registered
+// by output schema name on the workflow package. The runner dispatches
+// via the catalog-derived registry — it does not need to know which
+// schemas exist.
 //
 // To add a new workflow's synthesis step, an author writes:
 //   1. The schema for the output artifact in src/workflows/<wf>/artifacts.ts
@@ -13,7 +14,7 @@
 //   3. Register it on the package's `writers.synthesis`
 //
 // Close-with-evidence has its own registry under
-// src/runtime/close-writers/. The two registries are intentionally
+// src/runtime/registries/close-writers/. The two registries are intentionally
 // kept separate because close steps have additional contract concerns
 // (artifact_pointers, optional reads for mode-conditional inputs)
 // that don't apply to upstream synthesis steps.

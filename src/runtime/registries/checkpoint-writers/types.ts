@@ -64,9 +64,12 @@ export interface CheckpointBriefBuilder {
   // artifact from disk, verifies the request hash matches what the
   // checkpoint request stored, and runs workflow-specific shape
   // checks. Returns the validated artifact body so the runner can
-  // thread it back through the re-stamp path. Builders that don't
-  // need resume validation may omit this method (the runner treats
-  // a missing validator as 'no resume context to validate').
+  // thread it back through the re-stamp path. Builders may omit this
+  // for checkpoint schemas they never use as `step.writes.artifact`,
+  // but the runner fails loud at resume time if the request stored
+  // a hash and no validator exists (see runner.ts
+  // readCheckpointResumeArtifact). Real production builders should
+  // always implement this.
   validateResumeContext?(context: CheckpointResumeContext): unknown;
 }
 

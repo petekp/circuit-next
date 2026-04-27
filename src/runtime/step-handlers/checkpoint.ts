@@ -2,15 +2,19 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { LayeredConfig as LayeredConfigValue } from '../../schemas/config.js';
 import type { Rigor } from '../../schemas/rigor.js';
-import type { Workflow } from '../../schemas/workflow.js';
 import { sha256Hex } from '../adapters/shared.js';
 import { findCheckpointBriefBuilder } from '../registries/checkpoint-writers/registry.js';
+import {
+  type CheckpointStep,
+  checkpointChoiceIds,
+} from '../registries/checkpoint-writers/types.js';
 import { resolveRunRelative } from '../run-relative-path.js';
 import { writeDerivedSnapshot } from '../snapshot-writer.js';
 import { isRunRelativePathError, writeJsonArtifact } from './shared.js';
 import type { StepHandlerContext, StepHandlerResult } from './types.js';
 
-export type CheckpointStep = Workflow['steps'][number] & { kind: 'checkpoint' };
+export type { CheckpointStep };
+export { checkpointChoiceIds };
 
 type CheckpointResolution =
   | {
@@ -21,10 +25,6 @@ type CheckpointResolution =
     }
   | { readonly kind: 'waiting' }
   | { readonly kind: 'failed'; readonly reason: string };
-
-export function checkpointChoiceIds(step: CheckpointStep): string[] {
-  return step.policy.choices.map((choice) => choice.id);
-}
 
 function resolveCheckpoint(step: CheckpointStep, rigor: Rigor): CheckpointResolution {
   if (rigor === 'deep' || rigor === 'tournament') return { kind: 'waiting' };

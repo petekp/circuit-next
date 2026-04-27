@@ -106,7 +106,7 @@ export interface DispatchMaterializeOutput {
 // call around the materializer call site); by the time `writes.artifact`
 // reaches this function the caller has already decided that the
 // artifact is safe to write. Schema parsing uses the artifact schema
-// registry at `src/runtime/artifact-schemas.ts`; unknown schema names
+// registry at `src/runtime/registries/artifact-schemas.ts`; unknown schema names
 // are fail-closed and never reach this call site with a populated
 // `writes.artifact` slot. The body bytes written here are the same
 // bytes that satisfied the schema parse — the artifact file and the

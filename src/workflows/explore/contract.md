@@ -726,7 +726,7 @@ absent on disk). Slice 54 closes the symmetric artifact-shape half.
 `writes.artifact` and the Slice 53 verdict gate admits the
 adapter's declared verdict, the runtime parses `result_body`
 against a Zod schema looked up by `writes.artifact.schema` from
-the registry at `src/runtime/artifact-schemas.ts`. The canonical
+the registry at `src/runtime/registries/artifact-schemas.ts`. The canonical
 artifact at `writes.artifact.path` is materialized ONLY when BOTH
 (a) the verdict gate passes and (b) the schema parse succeeds.
 Parse failure leaves `writes.artifact.path` absent and surfaces
@@ -752,7 +752,7 @@ schema set) MUST preserve fail-closed as the default for unknown
 schema names.
 
 **Registered schemas at v0.5.** The registry at
-`src/runtime/artifact-schemas.ts` carries the strict
+`src/runtime/registries/artifact-schemas.ts` carries the strict
 `ExploreSynthesis` schema for `explore.synthesis@v1`, the strict
 `ExploreReviewVerdict` schema for `explore.review-verdict@v1`,
 the minimal-shape `{ verdict: z.string().min(1) }.passthrough()`

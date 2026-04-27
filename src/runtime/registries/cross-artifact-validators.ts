@@ -9,10 +9,11 @@
 // The validator gets `workflow` (to resolve canonical artifact paths)
 // and `runRoot` (to read previously-written artifacts).
 //
-// Fail-closed default: an unregistered schema returns `ok` (the schema
-// has no cross-artifact constraints to check). A registered validator
-// that cannot find its required upstream artifact returns `fail` —
-// silent omission would re-open the gap the validator exists to close.
+// No-rule = pass: an unregistered schema returns `ok` because the
+// catalog has no cross-artifact constraints declared for it. Registered
+// validators are themselves expected to fail-closed when their required
+// upstream artifact is missing or malformed — silent omission would
+// re-open the gap each validator exists to close.
 //
 // Workflow ownership: each workflow package declares its own validators
 // via `WorkflowPackage.crossArtifactValidators`. The runtime composes

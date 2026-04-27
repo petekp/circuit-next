@@ -12,8 +12,8 @@ discovers everything through that catalog.
 Before this session, the same Build workflow had pieces in seven
 places: a recipe under `specs/workflow-recipes/`, a slash command in
 `commands/`, a contract in `specs/contracts/`, four writer files
-spread across `src/runtime/{synthesis,close,verification,checkpoint}-writers/`,
-a dispatch shape hint in `src/runtime/shape-hints/`, plus router and
+spread across `src/runtime/registries/{synthesis,close,verification,checkpoint}-writers/`,
+a dispatch shape hint in `src/runtime/registries/shape-hints/`, plus router and
 artifact-schema entries hardcoded inside the runtime. After this
 session, all of that lives in `src/workflows/build/`, and the runtime
 loads it generically through `src/workflows/catalog.ts`. The same is

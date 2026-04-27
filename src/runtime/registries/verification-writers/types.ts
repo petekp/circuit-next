@@ -16,8 +16,8 @@
 // To add a new workflow's verification step:
 //   1. Define the result schema in src/workflows/<wf>/artifacts.ts
 //   2. Implement a VerificationBuilder in
-//      src/runtime/verification-writers/<schema>.ts
-//   3. Register it in src/runtime/verification-writers/registry.ts
+//      src/workflows/<wf>/writers/<schema>.ts
+//   3. Register it on the workflow package's `writers.verification`
 
 import type { Workflow } from '../../../schemas/workflow.js';
 
