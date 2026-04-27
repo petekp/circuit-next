@@ -1,6 +1,6 @@
 # HANDOFF
 
-Last updated: 2026-04-27 — workflow catalog reorganization complete (13 commits prior session) + workflow-package boundary cleanup (4 commits, latest `bf36335`).
+Last updated: 2026-04-27 — Session 1 of the test-quality backlog complete: lint cleared, invariant-ledger meta-test landed (skipped pending FU-T02b), CI workflow live. Three commits: `116dafc`, `e9cf64e`, `1c0f0f0`.
 
 ## Where we are
 
@@ -30,13 +30,11 @@ at the top of the file noting that.
 
 ## Tests
 
-929 tests pass, 6 skipped (was 918 at end of catalog-reorg session;
-the four boundary-cleanup commits added 11 net tests minus the one
-tautological catalog-completeness assertion deleted in `bf36335`).
-tsc clean, drift clean. **Lint is red** — 47 pre-existing biome
-errors on origin/main (mostly formatting/import-organization). Treat
-`npm run verify` as red until that's tackled. See "Test quality
-follow-ups" below for the prioritized work.
+929 tests pass, 7 skipped (the 7th is the FU-T02a meta-test, skipped
+pending FU-T02b's data triage). tsc clean, biome clean, drift clean.
+`npm run verify` is green on origin. CI workflow at
+`.github/workflows/verify.yml` mirrors the gate on every push and PR
+to `main`.
 
 New tests added during the session:
 - `tests/runner/catalog-derivations.test.ts` — 21 tests covering every
@@ -100,42 +98,47 @@ estimates assume an LLM-paced session.
 ### P0 — quality-signal-blocking
 
 **FU-T01. Lint cleanup — restore `npm run verify` to green.**
-- State: open. 47 biome errors on origin/main, mostly formatting +
-  import-organization. None introduced by recent work; pre-existing
-  baseline.
-- Fix: `npx biome check --write` (auto-fix) for the safe class, then
-  manual pass on residual. Single commit.
-- Why it matters: a red canonical gate trains agents to ignore the
-  signal. This is the single highest-leverage move for agent
-  effectiveness.
-- Effort: ~30 min.
+- State: **done** in `116dafc` (2026-04-27). 46 biome errors cleared:
+  33 fixed by `biome check --write`, 10 cosmetics applied via
+  `--unsafe` (prose-only `noUnusedTemplateLiteral` — backtick →
+  quote, zero behavior change), 1 `noImplicitAnyLet` cleared by
+  restructuring a try/catch in `catalog-completeness.test.ts`.
 
-**FU-T02. Stale invariant ledger bindings.**
-- State: open. `specs/invariants.json` has 15 `test-enforced`
-  bindings pointing at non-existent test files (per Reviewer #2's run
-  of the suite). Named offenders include
-  `tests/contracts/cross-model-challenger.test.ts`,
-  `tests/contracts/session-hygiene.test.ts`,
-  `tests/contracts/prose-yaml-parity.test.ts`,
-  `tests/contracts/artifact-authority.test.ts`,
-  `tests/contracts/spine-coverage.test.ts`. Verify the count before
-  acting — claim was made against a slightly older snapshot.
-- Fix: (a) Add a meta-test that fails when any
-  `binding_refs[].path` doesn't exist on disk. (b) For each broken
-  binding, either create the missing test or downgrade the invariant
-  to the correct enforcement state.
+**FU-T02a. Meta-test for invariant-ledger binding completeness.**
+- State: **done** in `e9cf64e` (2026-04-27). Test at
+  `tests/contracts/invariant-ledger-bindings.test.ts` walks every
+  `binding_refs[].path` in `specs/invariants.json` and asserts each
+  resolves on disk. Anti-vacuity floor on total ref count. Verified
+  by temporary unskip: surfaces exactly 15 offenders across the 5
+  named missing test files.
+- Landed `it.skip`'d pending FU-T02b — unskipping is the mechanical
+  success gate for FU-T02b.
+
+**FU-T02b. Triage the 15 stale invariant bindings.**
+- State: open. `specs/invariants.json` still claims 15
+  `test-enforced` bindings pointing at non-existent test files
+  spread across 5 missing files: `cross-model-challenger.test.ts`,
+  `session-hygiene.test.ts`, `prose-yaml-parity.test.ts`,
+  `artifact-authority.test.ts`, `spine-coverage.test.ts`.
+- Fix: per-binding triage — for each of the 15, decide whether the
+  invariant was aspirational (remove the binding ref / downgrade
+  enforcement state) or genuinely needed (write the missing test).
+  Each call is operator judgment, not engineering judgment. When
+  done, flip `it.skip` → `it` in the meta-test from FU-T02a.
 - Why it matters: the ledger is supposed to be agent truth.
   Lying-by-omission about test-enforcement is the worst class of
   spec drift in an agent-driven codebase.
-- Effort: ~1-2 hours (mostly the meta-test + spec edits; new tests
-  may stretch this).
+- Effort: ~1-2 hours (depends on how many turn out to need real
+  tests written vs. simple removals).
 
-**FU-T03. Add CI workflow.**
-- State: open. No `.github/workflows/` exists today.
-- Fix: minimal `verify.yml` running `npm ci && npm run verify` on
-  push and PR. Make required before merge once green.
-- Dependency: FU-T01 must land first or CI is permanently red.
-- Effort: ~30 min.
+**FU-T03. CI workflow.**
+- State: **done** in `1c0f0f0` (2026-04-27).
+  `.github/workflows/verify.yml` runs `npm ci && npm run verify` on
+  every push and PR to `main`. Node 22, npm cache enabled. No matrix
+  — minimal mirror of the canonical gate. Lands green because
+  FU-T01 cleared the baseline and FU-T02a is `it.skip`'d.
+- Operator follow-up: flip required-before-merge in branch
+  protection after the first run lands green.
 
 ### P1 — observability + agent feedback loop
 
@@ -257,9 +260,14 @@ doc-shape pins.**
 
 ### Recommended order across sessions
 
-The first three (FU-T01, FU-T02, FU-T03) are ~3 hours total and
-address the actual quality-signal problems both reviewers flagged.
-Land them first. The rest can pace.
+Session 1 closed: FU-T01, FU-T02a, FU-T03 — the execute-ready P0
+trio. Verify gate is green on origin and CI mirrors it. Session 2
+starts with FU-T02b (per-binding triage of the 15 stale ledger refs;
+needs operator input per binding) and can fold in FU-T04 (coverage
+tooling) and FU-T05 (fast/slow split) since both are mechanical
+~30-min items. The remaining design-heavy items (FU-T06 recursion
+test, FU-T07 helper API, FU-T09 mega-file splits, FU-T11 step-handler
+tests, FU-T12 property tests) pace across Session 3+.
 
 ## Notes
 
