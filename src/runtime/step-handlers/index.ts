@@ -1,8 +1,8 @@
 import { runCheckpointStep } from './checkpoint.js';
-import { runDispatchStep } from './dispatch.js';
+import { runComposeStep } from './compose.js';
 import { runFanoutStep } from './fanout.js';
+import { runRelayStep } from './relay.js';
 import { runSubRunStep } from './sub-run.js';
-import { runSynthesisStep } from './synthesis.js';
 import type { StepHandlerContext, StepHandlerResult } from './types.js';
 import { runVerificationStep } from './verification.js';
 
@@ -12,14 +12,14 @@ export { checkpointChoiceIds, checkpointRequestBody } from './checkpoint.js';
 
 export async function runStepHandler(ctx: StepHandlerContext): Promise<StepHandlerResult> {
   switch (ctx.step.kind) {
-    case 'synthesis':
-      return runSynthesisStep({ ...ctx, step: ctx.step });
+    case 'compose':
+      return runComposeStep({ ...ctx, step: ctx.step });
     case 'verification':
       return runVerificationStep({ ...ctx, step: ctx.step });
     case 'checkpoint':
       return runCheckpointStep({ ...ctx, step: ctx.step });
-    case 'dispatch':
-      return runDispatchStep({ ...ctx, step: ctx.step });
+    case 'relay':
+      return runRelayStep({ ...ctx, step: ctx.step });
     case 'sub-run':
       return runSubRunStep({ ...ctx, step: ctx.step });
     case 'fanout':

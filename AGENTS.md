@@ -5,7 +5,7 @@
 `circuit-next` is a Claude Code plugin that runs configurable developer
 flows. The product surface is `src/` (TypeScript), `tests/`, the
 generated `commands/` and `.claude-plugin/`, the flow packages
-under `src/workflows/`, the engine contracts under `docs/contracts/`,
+under `src/flows/`, the engine contracts under `docs/contracts/`,
 and the behavioral notes under `specs/behavioral/`.
 
 This file is the agent-facing operating doc. Keep it short. If something
@@ -48,11 +48,11 @@ npm run test         # vitest (full suite)
 npm run test:fast    # vitest excluding tests/runner/** (subprocess-heavy)
 npm run test:coverage # vitest run --coverage (info, no thresholds)
 npm run build        # tsc -p tsconfig.build.json
-npm run verify       # full canonical gate; CI runs this
+npm run verify       # full canonical check; CI runs this
 npm run verify:fast  # check + lint + build + test:fast + drift (~40% faster)
 ```
 
-`verify` is the canonical gate and what CI enforces. Use `verify:fast`
+`verify` is the canonical check and what CI enforces. Use `verify:fast`
 during iterative loops; run full `verify` before claiming a change is
 done. Both must pass before commit on changes to `src/`, `tests/`, or
 `commands/`.
@@ -62,36 +62,36 @@ done. Both must pass before commit on changes to `src/`, `tests/`, or
 | File or output | Path |
 |---|---|
 | Plugin manifest | `.claude-plugin/plugin.json` |
-| Slash commands (generated) | `commands/<id>.md` (generated from `src/workflows/<id>/command.md`; `commands/run.md` is the CLI router entry and is hand-authored) |
+| Slash commands (generated) | `commands/<id>.md` (generated from `src/flows/<id>/command.md`; `commands/run.md` is the CLI router entry and is hand-authored) |
 | Compiled plugin output (generated) | `.claude-plugin/skills/<id>/circuit.json` |
 | CLI entrypoint | `bin/circuit-next` |
 | Engine source | `src/runtime/`, `src/cli/`, `src/schemas/` |
-| Flow packages | `src/workflows/<id>/` (schematic, output schemas, command, contract, writers, relay hints) |
-| Flow catalog | `src/workflows/catalog.ts` (single source of truth the engine derives from) |
+| Flow packages | `src/flows/<id>/` (schematic, output schemas, command, contract, writers, relay hints) |
+| Flow catalog | `src/flows/catalog.ts` (single source of truth the engine derives from) |
 | Tests | `tests/` |
 | Engine contracts | `docs/contracts/` |
-| Flow design notes | `docs/workflows/` |
+| Flow design notes | `docs/flows/` |
 | Behavioral concerns | `specs/behavioral/` |
 | Ubiquitous language | `specs/domain.md` |
-| Block catalog | `docs/workflows/block-catalog.json` |
+| Block catalog | `docs/flows/block-catalog.json` |
 | Cross-session handoff | `HANDOFF.md` (repo root) |
 | Reference plugin | `~/Code/circuit` (read-only) |
 
-(Internal file names like `dispatch-hints.ts` are still on their
-pre-migration names; the eventual rename to `relay-hints.ts` is part of
-the deferred deep `dispatch → relay` rename — see
-`todos/terminology-migration.md` Phase 8.)
+(Internal file names like `relay-hints.ts` are still on their
+pre-migration names; the trace_entryual rename to `relay-hints.ts` is part of
+the deferred deep `relay → relay` rename — see
+`todos/terminology-migration.md` Stage 8.)
 
 ## Adding a flow
 
-1. Create `src/workflows/<id>/` with `schematic.json`,
-   `artifacts.ts` (the flow's Zod report schemas), optional `command.md`
+1. Create `src/flows/<id>/` with `schematic.json`,
+   `reports.ts` (the flow's Zod report schemas), optional `command.md`
    and `contract.md`, `index.ts` (the package descriptor),
-   `dispatch-hints.ts` (if any relay steps have shape hints), and
-   `writers/` (one file per writer kind your flow uses: `synthesis` /
+   `relay-hints.ts` (if any relay steps have shape hints), and
+   `writers/` (one file per writer kind your flow uses: `compose` /
    `close` / `verification` / `checkpoint`).
-2. Add the package to `src/workflows/catalog.ts`.
-3. `npm run build && node scripts/emit-workflows.mjs` to regenerate
+2. Add the package to `src/flows/catalog.ts`.
+3. `npm run build && node scripts/emit-flows.mjs` to regenerate
    `commands/<id>.md` and `.claude-plugin/skills/<id>/`.
 4. `npm run verify`.
 
@@ -99,8 +99,8 @@ The engine (`src/runtime/`) does not need any edits — registries derive
 from the catalog. If you find yourself editing engine files to add a
 flow, the boundary is being violated.
 
-`WorkflowPackage.engineFlags` carries opt-in switches the engine
-branches on (currently only `bindsExecutionRigorToDispatchSelection`,
+`CompiledFlowPackage.engineFlags` carries opt-in switches the engine
+branches on (currently only `bindsExecutionDepthToRelaySelection`,
 which Build sets). Add a flag entry there if your flow needs special
 engine behavior — never put flow-specific code into the engine itself.
 

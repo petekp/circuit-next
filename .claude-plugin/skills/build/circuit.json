@@ -14,70 +14,70 @@
     {
       "name": "default",
       "start_at": "frame-step",
-      "rigor": "standard",
+      "depth": "standard",
       "description": "Default Build entry mode."
     },
     {
       "name": "lite",
       "start_at": "frame-step",
-      "rigor": "lite",
+      "depth": "lite",
       "description": "Lite Build entry mode."
     },
     {
       "name": "deep",
       "start_at": "frame-step",
-      "rigor": "deep",
+      "depth": "deep",
       "description": "Deep Build entry mode."
     },
     {
       "name": "autonomous",
       "start_at": "frame-step",
-      "rigor": "autonomous",
+      "depth": "autonomous",
       "description": "Autonomous Build entry mode."
     }
   ],
-  "phases": [
+  "stages": [
     {
-      "id": "frame-phase",
+      "id": "frame-stage",
       "title": "Frame",
       "canonical": "frame",
       "steps": ["frame-step"]
     },
     {
-      "id": "plan-phase",
+      "id": "plan-stage",
       "title": "Plan",
       "canonical": "plan",
       "steps": ["plan-step"]
     },
     {
-      "id": "act-phase",
+      "id": "act-stage",
       "title": "Act",
       "canonical": "act",
       "steps": ["act-step"]
     },
     {
-      "id": "verify-phase",
+      "id": "verify-stage",
       "title": "Verify",
       "canonical": "verify",
       "steps": ["verify-step"]
     },
     {
-      "id": "review-phase",
+      "id": "review-stage",
       "title": "Review",
       "canonical": "review",
       "steps": ["review-step"]
     },
     {
-      "id": "close-phase",
+      "id": "close-stage",
       "title": "Close",
       "canonical": "close",
       "steps": ["close-step"]
     }
   ],
-  "spine_policy": {
+  "stage_path_policy": {
     "mode": "partial",
     "omits": ["analyze"],
-    "rationale": "Build follows Frame, Plan, Act, Verify, Review, Close. The Analyze phase is omitted because analysis is folded into Frame and Plan for this workflow."
+    "rationale": "Build follows Frame, Plan, Act, Verify, Review, Close. The Analyze stage is omitted because analysis is folded into Frame and Plan for this flow."
   },
   "steps": [
     {
@@ -120,14 +120,14 @@
         }
       },
       "writes": {
-        "request": "artifacts/checkpoints/frame-step-request.json",
-        "response": "artifacts/checkpoints/frame-step-response.json",
-        "artifact": {
-          "path": "artifacts/build/brief.json",
+        "request": "reports/checkpoints/frame-step-request.json",
+        "response": "reports/checkpoints/frame-step-response.json",
+        "report": {
+          "path": "reports/build/brief.json",
           "schema": "build.brief@v1"
         }
       },
-      "gate": {
+      "check": {
         "kind": "checkpoint_selection",
         "source": {
           "kind": "checkpoint_response",
@@ -140,51 +140,51 @@
       "id": "plan-step",
       "title": "Plan - produce Build plan",
       "protocol": "build-plan@v1",
-      "reads": ["artifacts/build/brief.json"],
+      "reads": ["reports/build/brief.json"],
       "routes": {
         "pass": "act-step"
       },
       "executor": "orchestrator",
-      "kind": "synthesis",
+      "kind": "compose",
       "writes": {
-        "artifact": {
-          "path": "artifacts/build/plan.json",
+        "report": {
+          "path": "reports/build/plan.json",
           "schema": "build.plan@v1"
         }
       },
-      "gate": {
+      "check": {
         "kind": "schema_sections",
         "source": {
-          "kind": "artifact",
-          "ref": "artifact"
+          "kind": "report",
+          "ref": "report"
         },
         "required": ["objective", "verification"]
       }
     },
     {
       "id": "act-step",
-      "title": "Act - implementation dispatch",
+      "title": "Act - implementation relay",
       "protocol": "build-act@v1",
-      "reads": ["artifacts/build/brief.json", "artifacts/build/plan.json"],
+      "reads": ["reports/build/brief.json", "reports/build/plan.json"],
       "routes": {
         "pass": "verify-step"
       },
       "executor": "worker",
-      "kind": "dispatch",
+      "kind": "relay",
       "role": "implementer",
       "writes": {
-        "artifact": {
-          "path": "artifacts/build/implementation.json",
+        "report": {
+          "path": "reports/build/implementation.json",
           "schema": "build.implementation@v1"
         },
-        "request": "artifacts/dispatch/build-act.request.json",
-        "receipt": "artifacts/dispatch/build-act.receipt.txt",
-        "result": "artifacts/dispatch/build-act.result.json"
+        "request": "reports/relay/build-act.request.json",
+        "receipt": "reports/relay/build-act.receipt.txt",
+        "result": "reports/relay/build-act.result.json"
       },
-      "gate": {
+      "check": {
         "kind": "result_verdict",
         "source": {
-          "kind": "dispatch_result",
+          "kind": "relay_result",
           "ref": "result"
         },
         "pass": ["accept"]
@@ -194,56 +194,56 @@
       "id": "verify-step",
       "title": "Verify - run Build verification",
       "protocol": "build-verify@v1",
-      "reads": ["artifacts/build/plan.json", "artifacts/build/implementation.json"],
+      "reads": ["reports/build/plan.json", "reports/build/implementation.json"],
       "routes": {
         "pass": "review-step"
       },
       "executor": "orchestrator",
       "kind": "verification",
       "writes": {
-        "artifact": {
-          "path": "artifacts/build/verification.json",
+        "report": {
+          "path": "reports/build/verification.json",
           "schema": "build.verification@v1"
         }
       },
-      "gate": {
+      "check": {
         "kind": "schema_sections",
         "source": {
-          "kind": "artifact",
-          "ref": "artifact"
+          "kind": "report",
+          "ref": "report"
         },
         "required": ["overall_status", "commands"]
       }
     },
     {
       "id": "review-step",
-      "title": "Review - implementation review dispatch",
+      "title": "Review - implementation review relay",
       "protocol": "build-review@v1",
       "reads": [
-        "artifacts/build/brief.json",
-        "artifacts/build/plan.json",
-        "artifacts/build/implementation.json",
-        "artifacts/build/verification.json"
+        "reports/build/brief.json",
+        "reports/build/plan.json",
+        "reports/build/implementation.json",
+        "reports/build/verification.json"
       ],
       "routes": {
         "pass": "close-step"
       },
       "executor": "worker",
-      "kind": "dispatch",
+      "kind": "relay",
       "role": "reviewer",
       "writes": {
-        "artifact": {
-          "path": "artifacts/build/review.json",
+        "report": {
+          "path": "reports/build/review.json",
           "schema": "build.review@v1"
         },
-        "request": "artifacts/dispatch/build-review.request.json",
-        "receipt": "artifacts/dispatch/build-review.receipt.txt",
-        "result": "artifacts/dispatch/build-review.result.json"
+        "request": "reports/relay/build-review.request.json",
+        "receipt": "reports/relay/build-review.receipt.txt",
+        "result": "reports/relay/build-review.result.json"
       },
-      "gate": {
+      "check": {
         "kind": "result_verdict",
         "source": {
-          "kind": "dispatch_result",
+          "kind": "relay_result",
           "ref": "result"
         },
         "pass": ["accept", "accept-with-fixes"]
@@ -254,30 +254,30 @@
       "title": "Close - emit Build result",
       "protocol": "build-close@v1",
       "reads": [
-        "artifacts/build/brief.json",
-        "artifacts/build/plan.json",
-        "artifacts/build/implementation.json",
-        "artifacts/build/verification.json",
-        "artifacts/build/review.json"
+        "reports/build/brief.json",
+        "reports/build/plan.json",
+        "reports/build/implementation.json",
+        "reports/build/verification.json",
+        "reports/build/review.json"
       ],
       "routes": {
         "pass": "@complete"
       },
       "executor": "orchestrator",
-      "kind": "synthesis",
+      "kind": "compose",
       "writes": {
-        "artifact": {
-          "path": "artifacts/build-result.json",
+        "report": {
+          "path": "reports/build-result.json",
           "schema": "build.result@v1"
         }
       },
-      "gate": {
+      "check": {
         "kind": "schema_sections",
         "source": {
-          "kind": "artifact",
-          "ref": "artifact"
+          "kind": "report",
+          "ref": "report"
         },
-        "required": ["summary", "outcome", "artifact_pointers"]
+        "required": ["summary", "outcome", "evidence_links"]
       }
     }
   ]

@@ -1,0 +1,214 @@
+---
+contract: flow
+status: draft
+version: 0.3
+schema_source: src/schemas/compiled-flow.ts
+last_updated: 2026-04-24
+depends_on: [step, stage, depth, change_kind, selection-policy]
+report_ids:
+  - flow.definition
+  - flow.scalar_catalog
+  - flow.schematic_definition
+invariant_ids: [WF-I1, WF-I2, WF-I3, WF-I4, WF-I5, WF-I6, WF-I7, WF-I8, WF-I9, WF-I10, WF-I11]
+property_ids: [flow.prop.entry_mode_reachability, flow.prop.no_dead_steps, flow.prop.stage_step_closure, flow.prop.route_target_closure, flow.prop.terminal_target_coverage]
+---
+
+# CompiledFlow Contract
+
+A **CompiledFlow** is a typed, versioned definition of a multi-step automation.
+It compiles to a stable execution graph the runtime can replay from trace_entrys.
+
+## Ubiquitous language
+
+See `specs/domain.md#core-types` for canonical term definitions.
+
+## Invariants
+
+The runtime MUST reject any CompiledFlow that violates these. All invariants
+are enforced by the `CompiledFlow` Zod schema — some as literal fields on
+`CompiledFlowBody` (e.g. WF-I7's `schema_version` literal), the remainder
+inside `CompiledFlow.superRefine` — and tested in
+`tests/contracts/schema-parity.test.ts`.
+
+- **WF-I1 — Unique step ids.** No two steps in `CompiledFlow.steps` share an `id`.
+- **WF-I2 — Closed entry references.** Every `EntryMode.start_at` must be the
+  `id` of an existing step.
+- **WF-I3 — Closed stage references.** Every `StepId` in `Stage.steps` must
+  be the `id` of an existing step.
+- **WF-I4 — Closed route targets.** Every route target in `Step.routes`
+  must be either a terminal label (`@complete`, `@stop`, `@escalate`,
+  `@handoff`) or the `id` of an existing step.
+- **WF-I5 — Unique entry mode names.** No two `EntryMode`s share a `name`.
+- **WF-I6 — Unique stage ids.** No two `Stage`s share an `id`.
+- **WF-I7 — Schema version is 2.** The literal `schema_version: '2'` is
+  required. v1 manifests are not accepted; migration is a future Stage 2
+  concern.
+- **WF-I8 — Terminal reachability.** For every step in `CompiledFlow.steps`,
+  at least one chain of `routes` starting at that step trace_entryually reaches
+  a terminal route target (`@complete`, `@stop`, `@escalate`, `@handoff`).
+  A flow that contains a step unable to reach any terminal is rejected
+  at parse time. In particular, every `EntryMode.start_at` step reaches a
+  terminal, so a bootstrapped Run is always capable of closing. Without
+  this invariant, a plugin-authored flow fixture could bootstrap a Run
+  but never emit `run.closed`, producing a hung run state.
+- **WF-I9 — No dead steps.** For every step in `CompiledFlow.steps`, there is
+  at least one chain of `routes` from some `EntryMode.start_at` that
+  reaches that step. A flow that declares a step unreachable from any
+  entry mode is rejected at parse time. Unreachable steps are a silent
+  declaration bug (the author believes the step will execute but it
+  never will), not a feature; WF-I9 fails the fixture fast rather than
+  letting it pass and then puzzling the operator.
+- **WF-I10 — Pass-route presence.** Every step's `routes` map must
+  contain the key `pass`. The `CheckEvaluatedTraceEntry.outcome` field in
+  `src/schemas/trace-entry.ts` is `z.enum(['pass', 'fail'])` — uniform across
+  all three check kinds (`schema_sections`, `checkpoint_selection`,
+  `result_verdict`) — so the runtime's route pick on a successful check
+  outcome looks up `routes['pass']`. A fixture whose routes use
+  author-friendly aliases like `{ success: '@complete' }` would satisfy
+  WF-I8 (the edge labelled `success` reaches a terminal) and still
+  stall at runtime because `routes['pass']` is undefined. WF-I10 is
+  the parse-time version of that binding. `fail`-route presence is
+  **deferred** to v0.3 / Stage 2 — failure-path handling is not part of
+  the narrow runtime-proof proof and the runtime abort-vs-stall
+  behaviour on a missing `fail` route is not yet specified.
+- **WF-I11 — Pass-route terminal reachability.** For every step in
+  `CompiledFlow.steps`, following only `routes.pass` must trace_entryually reach a
+  terminal route target (`@complete`, `@stop`, `@escalate`, `@handoff`).
+  WF-I8 remains the broad graph sanity check: a step must have at least
+  one route chain to a terminal. WF-I11 is the runtime-liveness binding:
+  the current runner follows only successful `pass` routes after checks
+  pass, so a flow where `routes.pass` cycles while `routes.fail`
+  points to `@complete` is rejected at parse time instead of hanging a
+  run.
+
+## Pre-conditions
+
+- CompiledFlow YAML (or equivalent JSON) must parse under `CompiledFlow.safeParse`.
+- The CompiledFlow's declared `default_skills` must exist in the skill
+  registry at load time (validated by the runtime, not the schema).
+
+## Post-conditions
+
+After a CompiledFlow is accepted:
+
+- The CompiledFlow's `id` is globally unique within the plugin's catalog.
+- The CompiledFlow's `version` is monotonically increasing within its `id`
+  (enforced by catalog compiler, not by schema).
+- The CompiledFlow's step graph is closed under `WF-I1..4`.
+- The CompiledFlow is referentially serializable to `circuit.manifest.yaml`.
+
+## Property ids (reserved for Stage 2 testing)
+
+Property-based tests will cover:
+
+- `flow.prop.route_target_closure` — For any valid CompiledFlow, all route
+  targets resolve.
+- `flow.prop.stage_step_closure` — For any valid CompiledFlow, all stage
+  step references resolve.
+- `flow.prop.entry_mode_reachability` — For every entry mode, the
+  `start_at` step is reachable by at least one sequence of routes leading
+  to a terminal target.
+- `flow.prop.no_dead_steps` — Every step is reachable from at least
+  one entry mode. (Note: now also enforced structurally at parse time
+  as **WF-I9**; this property id remains reserved for Slice 29's
+  property-harness fast-check generation around the same semantics.
+  The earlier "modulo `disposable`-change_kind flows" carveout is
+  **removed in v0.2** — WF-I9 is unconditional, and the v0.1
+  disposable-change_kind exception was never reflected in the schema.)
+- `flow.prop.terminal_target_coverage` — Every step's routes either
+  include a terminal target or every route target is itself a step whose
+  routes trace_entryually include one.
+  **Scope note:** this is the broad WF-I8 property. Pass-route-only
+  terminal reachability is a separate parse-time invariant, WF-I11,
+  because runtime success flow follows only `routes.pass`.
+
+## Cross-contract dependencies
+
+- **step**: CompiledFlow embeds `Step[]`. Step variant invariants (WF-depends-
+  on-Step) are in `docs/contracts/step.md`.
+- **stage**: CompiledFlow embeds `Stage[]`. Stage invariants in
+  `docs/contracts/stage.md` (ratified v0.1; stage-I1..I5 + stage_path_policy enforcement).
+- **depth**: `EntryMode.depth` must be a valid `Depth` value.
+- **change_kind**: `EntryMode.default_change_kind` is optional; when present, must be
+  a valid `ChangeKind` literal.
+- **selection-policy**: `CompiledFlow.default_selection` is a
+  `SelectionOverride` and obeys selection precedence (see
+  `docs/contracts/selection.md`).
+
+## Failure modes (carried from evidence)
+
+- `carry-forward:verdict-enum-bloat` — Existing Circuit uses per-protocol
+  verdict conditionals. circuit-next's Step discriminated union constrains
+  verdicts per step kind, not per protocol.
+- `carry-forward:prose-yaml-drift` — Existing Circuit's SKILL.md can
+  silently disagree with `circuit.yaml`. A Stage 1 contract test
+  (prose-yaml-parity, see `specs/behavioral/prose-yaml-parity.md` — future)
+  must prtrace_entry this for circuit-next.
+- `carry-forward:stage path-policy-too-loose` — **Closed in stage.md v0.1.**
+  `CompiledFlow.stage_path_policy` is a required discriminated union with two
+  modes: `strict` (all seven canonical stages required) and `partial`
+  (explicit `omits` + rationale ≥20 chars). Silent skip of `review` or
+  `verify` is now rejected at parse time. See
+  `docs/contracts/stage.md` stage-I4. Adversarial-review MED #11 is
+  closed.
+
+## Check source tightening
+
+Adversarial-review MED objection #7 is **closed in step.md v0.1**. Check
+sources are typed per check variant: `SchemaSectionsCheck.source` is
+`ReportSource`, `CheckpointSelectionCheck.source` is
+`CheckpointResponseSource`, `ResultVerdictCheck.source` is
+`RelayResultSource`. The `Step` discriminated union validates
+`check.source.ref` against the step variant's `writes` slots via
+`superRefine`. See `docs/contracts/step.md` invariants STEP-I3 and
+STEP-I4.
+
+## Evolution
+
+- **v0.1 (skeleton)**: initial contract with graph-closure invariants
+  WF-I1..I7. Grandfathered via `bootstrap/adversarial-review-codex.md`
+  (6 HIGH + 3 MED incorporated at tier-0) before the
+  `specs/reviews/` convention existed.
+- **v0.2 (Stage 1, Slice 27)**: narrowed to what
+  `runtime-proof` (Stage 1.5 Alpha Proof) structurally needs beyond the
+  skeleton. Adds **WF-I8** (terminal reachability) and **WF-I9** (no
+  dead steps) — both promoted from `flow.prop.*` reserved properties
+  into parse-time invariants enforced by `CompiledFlow.superRefine`. Adds
+  **WF-I10** (pass-route presence) as a Codex challenger HIGH #1
+  fold-in — binds every step's `routes` map to the
+  `CheckEvaluatedTraceEntry.outcome` enum at the parse layer so a fixture
+  using author-friendly route aliases like `{ success: '@complete' }`
+  cannot pass WF-I8 and then stall at runtime. Rationale for promoting
+  graph semantics to parse-time invariants rather than property tests:
+  preferring types over tests where the type can express the invariant
+  (CLAUDE.md §Architecture-First types). Exits the skeleton grandfather
+  and binds to a proper review record at
+  `specs/reviews/flow-md-v0.2-codex.md`.
+- **v0.3 (Runtime Safety Floor Slice 4, this version)**: adds
+  **WF-I11** (pass-route terminal reachability) after runtime evidence
+  showed WF-I8's broad
+  graph rule was not enough for liveness. A flow can satisfy WF-I8 by
+  routing `fail` to `@complete` while `pass` loops forever; because the
+  current runner follows `routes.pass` after successful checks, WF-I11
+  follows only pass edges and rejects self-cycles and multi-step
+  pass-cycles at parse time. Binds to the canonical contract review at
+  `specs/reviews/flow-md-v0.3-codex.md` and the runtime-safety floor
+  Slice 72 challenger review at `specs/reviews/arc-slice-72-codex.md`.
+  Check source tightening
+  (v0.1 adversarial MED #7) **closed in step.md v0.1** — see the "Check
+  source tightening" section above. stage path policy (v0.1 adversarial
+  MED #11) **closed in stage.md v0.1** — `CompiledFlow.stage_path_policy` is a
+  required discriminated union enforced in `CompiledFlow.superRefine`. See
+  `docs/contracts/stage.md` stage-I4. **Deferred to v0.3 / Stage 2:**
+  (a) ratified property-test harness registration for the five reserved
+  `flow.prop.*` ids (Slice 29 property registry scaffold);
+  (b) `fail`-route presence — not part of the narrow runtime-proof
+  proof and runtime failure-path behaviour is not yet specified;
+  (c) exact-one-stage step membership (v0.1 bootstrap adversarial
+  HIGH #1 subfinding, not closed in this slice — `Stage.steps` closure
+  is enforced, but "every `CompiledFlow.steps[]` id appears in exactly one
+  stage" is left for Stage 2 per `docs/contracts/stage.md` §Evolution
+  and will be revisited when manifest compilation starts consuming
+  `Stage.steps` as an ordered execution plan).
+- **v1.0 (Stage 2)**: ratified invariants + property tests + operator
+  documentation.

@@ -1,16 +1,16 @@
 // Direct unit tests for the sub-run step handler.
 //
 // `tests/runner/sub-run-runtime.test.ts` exercises the handler
-// transitively (3 cases — happy path, out-of-gate verdict, missing
+// transitively (3 cases — happy path, out-of-check verdict, missing
 // resolver) and `tests/runner/sub-run-real-recursion.test.ts` proves
 // real recursion works end-to-end. Neither covers the handler-local
 // early-abort branches that fire BEFORE child execution: divergent
-// writes.artifact path, resolver throw, resolver-returns-wrong-id,
+// writes.report path, resolver throw, resolver-returns-wrong-id,
 // child invocation throw, child-returned-checkpoint-waiting, and
 // the full evaluateChildVerdict shape lattice (parse fail, non-
 // object, missing verdict). This file invokes `runSubRunStep`
 // directly against a minimal in-memory `StepHandlerContext` to pin
-// each branch's reason string + event sequence.
+// each branch's reason string + trace_entry sequence.
 //
 // FU-T11 priority target #4 (per HANDOFF.md).
 
@@ -21,32 +21,32 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { resultPath } from '../../src/runtime/result-writer.js';
 import type {
-  ChildWorkflowResolver,
-  WorkflowInvocation,
-  WorkflowRunResult,
-  WorkflowRunner,
+  ChildCompiledFlowResolver,
+  CompiledFlowInvocation,
+  CompiledFlowRunResult,
+  CompiledFlowRunner,
 } from '../../src/runtime/runner.js';
 import { runSubRunStep } from '../../src/runtime/step-handlers/sub-run.js';
 import type { RunState, StepHandlerContext } from '../../src/runtime/step-handlers/types.js';
-import type { Event } from '../../src/schemas/event.js';
-import { RunId, type WorkflowId } from '../../src/schemas/ids.js';
-import type { LaneDeclaration } from '../../src/schemas/lane.js';
+import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
+import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
+import { type CompiledFlowId, RunId } from '../../src/schemas/ids.js';
 import { RunResult } from '../../src/schemas/result.js';
 import { Snapshot } from '../../src/schemas/snapshot.js';
-import { Workflow } from '../../src/schemas/workflow.js';
+import type { TraceEntry } from '../../src/schemas/trace-entry.js';
 import { expectStepAborted } from '../helpers/failure-message.js';
 
-const PARENT_WORKFLOW_ID = 'sub-run-direct-parent' as unknown as WorkflowId;
-const CHILD_WORKFLOW_ID = 'sub-run-direct-child' as unknown as WorkflowId;
+const PARENT_WORKFLOW_ID = 'sub-run-direct-parent' as unknown as CompiledFlowId;
+const CHILD_WORKFLOW_ID = 'sub-run-direct-child' as unknown as CompiledFlowId;
 const PARENT_RUN_ID = RunId.parse('55555555-5555-5555-5555-555555555555');
 
-function lane(): LaneDeclaration {
+function change_kind(): ChangeKindDeclaration {
   return {
-    lane: 'ratchet-advance',
+    change_kind: 'ratchet-advance',
     failure_mode:
-      'sub-run handler emits the wrong event sequence on a known early-abort or verdict-shape path',
+      'sub-run handler emits the wrong trace_entry sequence on a known early-abort or verdict-shape path',
     acceptance_evidence:
-      'each handler-local error path emits the expected gate.evaluated/fail + step.aborted pair with the right reason',
+      'each handler-local error path emits the expected check.evaluated/fail + step.aborted pair with the right reason',
     alternate_framing: 'unit test of the sub-run step handler in isolation',
   };
 }
@@ -56,18 +56,18 @@ function deterministicNow(startMs: number): () => Date {
   return () => new Date(startMs + n++ * 1000);
 }
 
-function buildParentWorkflow(opts: {
+function buildParentCompiledFlow(opts: {
   passVerdicts: readonly string[];
-  divergentArtifactPath?: string;
-}): Workflow {
-  const writes: Record<string, unknown> = { result: 'artifacts/child-result.json' };
-  if (opts.divergentArtifactPath !== undefined) {
-    writes.artifact = {
-      path: opts.divergentArtifactPath,
+  divergentReportPath?: string;
+}): CompiledFlow {
+  const writes: Record<string, unknown> = { result: 'reports/child-result.json' };
+  if (opts.divergentReportPath !== undefined) {
+    writes.report = {
+      path: opts.divergentReportPath,
       schema: 'sub-run-direct-result@v1',
     };
   }
-  return Workflow.parse({
+  return CompiledFlow.parse({
     schema_version: '2',
     id: PARENT_WORKFLOW_ID as unknown as string,
     version: '0.1.0',
@@ -77,12 +77,12 @@ function buildParentWorkflow(opts: {
       {
         name: 'default',
         start_at: 'sub-run-step',
-        rigor: 'standard',
+        depth: 'standard',
         description: 'parent fixture',
       },
     ],
-    phases: [{ id: 'act-phase', title: 'Act', canonical: 'act', steps: ['sub-run-step'] }],
-    spine_policy: {
+    stages: [{ id: 'act-stage', title: 'Act', canonical: 'act', steps: ['sub-run-step'] }],
+    stage_path_policy: {
       mode: 'partial',
       omits: ['frame', 'analyze', 'plan', 'verify', 'review', 'close'],
       rationale: 'narrow direct sub-run handler test fixture',
@@ -96,14 +96,14 @@ function buildParentWorkflow(opts: {
         routes: { pass: '@complete' },
         executor: 'orchestrator',
         kind: 'sub-run',
-        workflow_ref: {
-          workflow_id: CHILD_WORKFLOW_ID as unknown as string,
+        flow_ref: {
+          flow_id: CHILD_WORKFLOW_ID as unknown as string,
           entry_mode: 'default',
         },
         goal: 'direct handler child goal',
-        rigor: 'standard',
+        depth: 'standard',
         writes,
-        gate: {
+        check: {
           kind: 'result_verdict',
           source: { kind: 'sub_run_result', ref: 'result' },
           pass: opts.passVerdicts,
@@ -113,8 +113,8 @@ function buildParentWorkflow(opts: {
   });
 }
 
-function buildChildWorkflow(): Workflow {
-  return Workflow.parse({
+function buildChildCompiledFlow(): CompiledFlow {
+  return CompiledFlow.parse({
     schema_version: '2',
     id: CHILD_WORKFLOW_ID as unknown as string,
     version: '0.1.0',
@@ -124,12 +124,12 @@ function buildChildWorkflow(): Workflow {
       {
         name: 'default',
         start_at: 'child-step',
-        rigor: 'standard',
+        depth: 'standard',
         description: 'child fixture',
       },
     ],
-    phases: [{ id: 'act-phase', title: 'Act', canonical: 'act', steps: ['child-step'] }],
-    spine_policy: {
+    stages: [{ id: 'act-stage', title: 'Act', canonical: 'act', steps: ['child-step'] }],
+    stage_path_policy: {
       mode: 'partial',
       omits: ['frame', 'analyze', 'plan', 'verify', 'review', 'close'],
       rationale: 'narrow direct sub-run handler test child',
@@ -137,18 +137,18 @@ function buildChildWorkflow(): Workflow {
     steps: [
       {
         id: 'child-step',
-        title: 'Child synthesis stub',
+        title: 'Child compose stub',
         protocol: 'sub-run-direct-child@v1',
         reads: [],
         routes: { pass: '@complete' },
         executor: 'orchestrator',
-        kind: 'synthesis',
+        kind: 'compose',
         writes: {
-          artifact: { path: 'artifacts/child-synthesis.json', schema: 'child-synthesis@v1' },
+          report: { path: 'reports/child-compose.json', schema: 'child-compose@v1' },
         },
-        gate: {
+        check: {
           kind: 'schema_sections',
-          source: { kind: 'artifact', ref: 'artifact' },
+          source: { kind: 'report', ref: 'report' },
           required: ['summary'],
         },
       },
@@ -166,48 +166,48 @@ interface ChildRunnerSpec {
   readonly resultBody?: string;
 }
 
-function makeStubChildRunner(spec: ChildRunnerSpec): WorkflowRunner {
-  return async (inv: WorkflowInvocation): Promise<WorkflowRunResult> => {
+function makeStubChildRunner(spec: ChildRunnerSpec): CompiledFlowRunner {
+  return async (inv: CompiledFlowInvocation): Promise<CompiledFlowRunResult> => {
     if (spec.throwError !== undefined) throw spec.throwError;
     const childRunId = inv.runId;
     if (spec.checkpointStepId !== undefined) {
       // Per result-writer semantics, a checkpoint_waiting result is
-      // not written to disk — the runner returns it on the WorkflowRunResult.
+      // not written to disk — the runner returns it on the CompiledFlowRunResult.
       return {
-        runRoot: inv.runRoot,
+        runFolder: inv.runFolder,
         result: {
           schema_version: 1,
           run_id: childRunId,
-          workflow_id: inv.workflow.id,
+          flow_id: inv.flow.id,
           goal: inv.goal,
           outcome: 'checkpoint_waiting',
           summary: 'stub child waiting at checkpoint',
-          events_observed: 1,
+          trace_entries_observed: 1,
           manifest_hash: 'stub-manifest-hash',
           checkpoint: {
             step_id: spec.checkpointStepId,
-            request_path: 'artifacts/checkpoint.request.json',
+            request_path: 'reports/checkpoint.request.json',
             allowed_choices: ['proceed', 'abort'],
           },
         },
         snapshot: Snapshot.parse({
           schema_version: 1,
           run_id: childRunId as unknown as string,
-          workflow_id: inv.workflow.id as unknown as string,
-          rigor: inv.rigor ?? 'standard',
-          lane: inv.lane,
+          flow_id: inv.flow.id as unknown as string,
+          depth: inv.depth ?? 'standard',
+          change_kind: inv.change_kind,
           status: 'in_progress',
           steps: [],
-          events_consumed: 1,
+          trace_entries_consumed: 1,
           manifest_hash: 'stub-manifest-hash',
           updated_at: new Date(0).toISOString(),
         }),
-        events: [],
-        dispatchResults: [],
+        trace_entrys: [],
+        relayResults: [],
       };
     }
     // Default path: write the requested body into the child's result.json.
-    const childResultAbs = resultPath(inv.runRoot);
+    const childResultAbs = resultPath(inv.runFolder);
     mkdirSync(dirname(childResultAbs), { recursive: true });
     const body = spec.resultBody ?? '';
     writeFileSync(childResultAbs, body);
@@ -224,39 +224,39 @@ function makeStubChildRunner(spec: ChildRunnerSpec): WorkflowRunner {
       runResult = RunResult.parse({
         schema_version: 1,
         run_id: childRunId as unknown as string,
-        workflow_id: inv.workflow.id as unknown as string,
+        flow_id: inv.flow.id as unknown as string,
         goal: inv.goal,
         outcome: 'complete',
         summary: 'stub for direct test',
         closed_at: new Date(0).toISOString(),
-        events_observed: 1,
+        trace_entries_observed: 1,
         manifest_hash: 'stub-manifest-hash',
       });
     }
     return {
-      runRoot: inv.runRoot,
-      result: runResult as WorkflowRunResult['result'],
+      runFolder: inv.runFolder,
+      result: runResult as CompiledFlowRunResult['result'],
       snapshot: Snapshot.parse({
         schema_version: 1,
         run_id: childRunId as unknown as string,
-        workflow_id: inv.workflow.id as unknown as string,
-        rigor: inv.rigor ?? 'standard',
-        lane: inv.lane,
+        flow_id: inv.flow.id as unknown as string,
+        depth: inv.depth ?? 'standard',
+        change_kind: inv.change_kind,
         status: 'complete',
         steps: [],
-        events_consumed: 1,
+        trace_entries_consumed: 1,
         manifest_hash: 'stub-manifest-hash',
         updated_at: new Date(0).toISOString(),
       }),
-      events: [],
-      dispatchResults: [],
+      trace_entrys: [],
+      relayResults: [],
     };
   };
 }
 
 interface BuildHarnessOpts {
   readonly passVerdicts: readonly string[];
-  readonly divergentArtifactPath?: string;
+  readonly divergentReportPath?: string;
   readonly skipResolver?: boolean;
   readonly resolverThrow?: Error;
   readonly resolverReturnsWrongId?: boolean;
@@ -264,27 +264,27 @@ interface BuildHarnessOpts {
 }
 
 interface Harness {
-  readonly events: Event[];
+  readonly trace_entrys: TraceEntry[];
   readonly state: RunState;
   readonly ctx: StepHandlerContext & {
-    readonly step: Workflow['steps'][number] & { kind: 'sub-run' };
+    readonly step: CompiledFlow['steps'][number] & { kind: 'sub-run' };
   };
 }
 
-function buildHarness(opts: BuildHarnessOpts, parentRunRoot: string): Harness {
-  const parentWorkflow = buildParentWorkflow({
+function buildHarness(opts: BuildHarnessOpts, parentRunFolder: string): Harness {
+  const parentCompiledFlow = buildParentCompiledFlow({
     passVerdicts: opts.passVerdicts,
-    ...(opts.divergentArtifactPath === undefined
+    ...(opts.divergentReportPath === undefined
       ? {}
-      : { divergentArtifactPath: opts.divergentArtifactPath }),
+      : { divergentReportPath: opts.divergentReportPath }),
   });
-  const childWorkflow = buildChildWorkflow();
-  const step = parentWorkflow.steps[0];
+  const childCompiledFlow = buildChildCompiledFlow();
+  const step = parentCompiledFlow.steps[0];
   if (step === undefined || step.kind !== 'sub-run') {
     throw new Error('test fixture invariant: step[0] must be a sub-run step');
   }
 
-  let resolver: ChildWorkflowResolver | undefined;
+  let resolver: ChildCompiledFlowResolver | undefined;
   if (opts.skipResolver === true) {
     resolver = undefined;
   } else if (opts.resolverThrow !== undefined) {
@@ -292,113 +292,113 @@ function buildHarness(opts: BuildHarnessOpts, parentRunRoot: string): Harness {
       throw opts.resolverThrow;
     };
   } else if (opts.resolverReturnsWrongId === true) {
-    const altWorkflow = Workflow.parse({
-      ...JSON.parse(JSON.stringify(childWorkflow)),
-      id: 'wrong-workflow-id',
+    const altCompiledFlow = CompiledFlow.parse({
+      ...JSON.parse(JSON.stringify(childCompiledFlow)),
+      id: 'wrong-flow-id',
     });
     resolver = () => ({
-      workflow: altWorkflow,
-      bytes: Buffer.from(JSON.stringify(altWorkflow)),
+      flow: altCompiledFlow,
+      bytes: Buffer.from(JSON.stringify(altCompiledFlow)),
     });
   } else {
     resolver = () => ({
-      workflow: childWorkflow,
-      bytes: Buffer.from(JSON.stringify(childWorkflow)),
+      flow: childCompiledFlow,
+      bytes: Buffer.from(JSON.stringify(childCompiledFlow)),
     });
   }
 
-  const events: Event[] = [];
-  const state: RunState = { events, sequence: 0, dispatchResults: [] };
+  const trace_entrys: TraceEntry[] = [];
+  const state: RunState = { trace_entrys, sequence: 0, relayResults: [] };
   const now = deterministicNow(Date.UTC(2026, 3, 27, 0, 0, 0));
   const recordedAt = (): string => now().toISOString();
   const childRunnerSpec = opts.childRunner ?? { resultBody: JSON.stringify({ verdict: 'accept' }) };
   const childRunner = makeStubChildRunner(childRunnerSpec);
   const ctx: StepHandlerContext & {
-    readonly step: Workflow['steps'][number] & { kind: 'sub-run' };
+    readonly step: CompiledFlow['steps'][number] & { kind: 'sub-run' };
   } = {
-    runRoot: parentRunRoot,
-    workflow: parentWorkflow,
+    runFolder: parentRunFolder,
+    flow: parentCompiledFlow,
     runId: PARENT_RUN_ID,
     goal: 'direct sub-run handler test goal',
-    lane: lane(),
-    rigor: 'standard',
+    change_kind: change_kind(),
+    depth: 'standard',
     executionSelectionConfigLayers: [],
-    dispatcher: {
-      adapterName: 'agent',
-      dispatch: async () => {
-        throw new Error('dispatcher should not be invoked by these tests');
+    relayer: {
+      connectorName: 'agent',
+      relay: async () => {
+        throw new Error('relayer should not be invoked by these tests');
       },
     },
-    synthesisWriter: () => {
-      throw new Error('synthesisWriter should not be invoked by these tests');
+    composeWriter: () => {
+      throw new Error('composeWriter should not be invoked by these tests');
     },
     now,
     recordedAt,
     state,
-    push: (ev: Event) => {
-      events.push({ ...ev, sequence: state.sequence });
+    push: (ev: TraceEntry) => {
+      trace_entrys.push({ ...ev, sequence: state.sequence });
       state.sequence += 1;
     },
     step,
     attempt: 1,
     isResumedCheckpoint: false,
     childRunner,
-    ...(resolver === undefined ? {} : { childWorkflowResolver: resolver }),
+    ...(resolver === undefined ? {} : { childCompiledFlowResolver: resolver }),
   };
-  return { events, state, ctx };
+  return { trace_entrys, state, ctx };
 }
 
-let runRootBase: string;
-let parentRunRoot: string;
+let runFolderBase: string;
+let parentRunFolder: string;
 
 beforeEach(() => {
-  runRootBase = mkdtempSync(join(tmpdir(), 'sub-run-handler-direct-'));
-  parentRunRoot = join(runRootBase, 'parent');
-  mkdirSync(parentRunRoot, { recursive: true });
+  runFolderBase = mkdtempSync(join(tmpdir(), 'sub-run-handler-direct-'));
+  parentRunFolder = join(runFolderBase, 'parent');
+  mkdirSync(parentRunFolder, { recursive: true });
 });
 
 afterEach(() => {
-  rmSync(runRootBase, { recursive: true, force: true });
+  rmSync(runFolderBase, { recursive: true, force: true });
 });
 
 describe('runSubRunStep direct — early aborts (before child execution)', () => {
-  it('aborts when writes.artifact.path is divergent from writes.result', async () => {
+  it('aborts when writes.report.path is divergent from writes.result', async () => {
     const harness = buildHarness(
       {
         passVerdicts: ['accept'],
-        divergentArtifactPath: 'artifacts/divergent.json',
+        divergentReportPath: 'reports/divergent.json',
       },
-      parentRunRoot,
+      parentRunFolder,
     );
 
     const result = await runSubRunStep(harness.ctx);
 
     if (result.kind !== 'aborted') throw new Error('expected aborted');
-    expect(result.reason).toMatch(/writes\.artifact materialization at a path different/);
-    expect(harness.events.find((e) => e.kind === 'sub_run.started')).toBeUndefined();
-    const gate = harness.events.find((e) => e.kind === 'gate.evaluated');
-    if (gate?.kind !== 'gate.evaluated') throw new Error('expected gate.evaluated');
-    expect(gate.outcome).toBe('fail');
-    expect(harness.events.some((e) => e.kind === 'step.aborted')).toBe(true);
+    expect(result.reason).toMatch(/writes\.report materialization at a path different/);
+    expect(harness.trace_entrys.find((e) => e.kind === 'sub_run.started')).toBeUndefined();
+    const check = harness.trace_entrys.find((e) => e.kind === 'check.evaluated');
+    if (check?.kind !== 'check.evaluated') throw new Error('expected check.evaluated');
+    expect(check.outcome).toBe('fail');
+    expect(harness.trace_entrys.some((e) => e.kind === 'step.aborted')).toBe(true);
   });
 
-  it('aborts when childWorkflowResolver is undefined', async () => {
+  it('aborts when childCompiledFlowResolver is undefined', async () => {
     const harness = buildHarness(
       {
         passVerdicts: ['accept'],
         skipResolver: true,
       },
-      parentRunRoot,
+      parentRunFolder,
     );
 
     const result = await runSubRunStep(harness.ctx);
 
     expectStepAborted(
       result,
-      'sub-run handler: a sub-run step requires a childWorkflowResolver in context; missing resolver aborts before sub_run.started fires',
-      { reason: /childWorkflowResolver is required/ },
+      'sub-run handler: a sub-run step requires a childCompiledFlowResolver in context; missing resolver aborts before sub_run.started fires',
+      { reason: /childCompiledFlowResolver is required/ },
     );
-    expect(harness.events.find((e) => e.kind === 'sub_run.started')).toBeUndefined();
+    expect(harness.trace_entrys.find((e) => e.kind === 'sub_run.started')).toBeUndefined();
   });
 
   it('aborts with resolution-failed reason when the resolver throws', async () => {
@@ -407,30 +407,30 @@ describe('runSubRunStep direct — early aborts (before child execution)', () =>
         passVerdicts: ['accept'],
         resolverThrow: new Error('resolver blew up'),
       },
-      parentRunRoot,
+      parentRunFolder,
     );
 
     const result = await runSubRunStep(harness.ctx);
 
     if (result.kind !== 'aborted') throw new Error('expected aborted');
-    expect(result.reason).toMatch(/child workflow resolution failed.*resolver blew up/);
-    expect(harness.events.find((e) => e.kind === 'sub_run.started')).toBeUndefined();
+    expect(result.reason).toMatch(/child flow resolution failed.*resolver blew up/);
+    expect(harness.trace_entrys.find((e) => e.kind === 'sub_run.started')).toBeUndefined();
   });
 
-  it('aborts when the resolver returns a workflow with a different id than workflow_ref names', async () => {
+  it('aborts when the resolver returns a flow with a different id than flow_ref names', async () => {
     const harness = buildHarness(
       {
         passVerdicts: ['accept'],
         resolverReturnsWrongId: true,
       },
-      parentRunRoot,
+      parentRunFolder,
     );
 
     const result = await runSubRunStep(harness.ctx);
 
     if (result.kind !== 'aborted') throw new Error('expected aborted');
-    expect(result.reason).toMatch(/resolver returned workflow id 'wrong-workflow-id'/);
-    expect(harness.events.find((e) => e.kind === 'sub_run.started')).toBeUndefined();
+    expect(result.reason).toMatch(/resolver returned flow id 'wrong-flow-id'/);
+    expect(harness.trace_entrys.find((e) => e.kind === 'sub_run.started')).toBeUndefined();
   });
 });
 
@@ -441,19 +441,19 @@ describe('runSubRunStep direct — child execution failures', () => {
         passVerdicts: ['accept'],
         childRunner: { throwError: new Error('child blew up') },
       },
-      parentRunRoot,
+      parentRunFolder,
     );
 
     const result = await runSubRunStep(harness.ctx);
 
     if (result.kind !== 'aborted') throw new Error('expected aborted');
-    expect(result.reason).toMatch(/child workflow invocation failed.*child blew up/);
+    expect(result.reason).toMatch(/child flow invocation failed.*child blew up/);
     // sub_run.started fires BEFORE the child runner is called, so it
     // should be present even on child throw.
-    expect(harness.events.some((e) => e.kind === 'sub_run.started')).toBe(true);
+    expect(harness.trace_entrys.some((e) => e.kind === 'sub_run.started')).toBe(true);
     // sub_run.completed should NOT fire — the child invocation
     // failed.
-    expect(harness.events.find((e) => e.kind === 'sub_run.completed')).toBeUndefined();
+    expect(harness.trace_entrys.find((e) => e.kind === 'sub_run.completed')).toBeUndefined();
   });
 
   it('aborts with checkpoint-resume-not-supported reason when the child returns checkpoint_waiting', async () => {
@@ -462,14 +462,14 @@ describe('runSubRunStep direct — child execution failures', () => {
         passVerdicts: ['accept'],
         childRunner: { checkpointStepId: 'frame-checkpoint' },
       },
-      parentRunRoot,
+      parentRunFolder,
     );
 
     const result = await runSubRunStep(harness.ctx);
 
     if (result.kind !== 'aborted') throw new Error('expected aborted');
     expect(result.reason).toMatch(
-      /child workflow waited at checkpoint 'frame-checkpoint'.*nested checkpoint resume is not yet supported/,
+      /child flow waited at checkpoint 'frame-checkpoint'.*nested checkpoint resume is not yet supported/,
     );
   });
 });
@@ -481,7 +481,7 @@ describe('runSubRunStep direct — child verdict evaluation', () => {
         passVerdicts: ['accept'],
         childRunner: { resultBody: 'not-json{{{' },
       },
-      parentRunRoot,
+      parentRunFolder,
     );
 
     const result = await runSubRunStep(harness.ctx);
@@ -490,7 +490,7 @@ describe('runSubRunStep direct — child verdict evaluation', () => {
     expect(result.reason).toMatch(/child result body did not parse as JSON/);
     // sub_run.completed fires before verdict evaluation finalizes —
     // verdict slot carries the no-verdict sentinel.
-    const completed = harness.events.find((e) => e.kind === 'sub_run.completed');
+    const completed = harness.trace_entrys.find((e) => e.kind === 'sub_run.completed');
     if (completed?.kind !== 'sub_run.completed') throw new Error('expected sub_run.completed');
     expect(completed.verdict).toBe('<no-verdict>');
   });
@@ -501,7 +501,7 @@ describe('runSubRunStep direct — child verdict evaluation', () => {
         passVerdicts: ['accept'],
         childRunner: { resultBody: JSON.stringify(['accept']) },
       },
-      parentRunRoot,
+      parentRunFolder,
     );
 
     const result = await runSubRunStep(harness.ctx);
@@ -518,29 +518,29 @@ describe('runSubRunStep direct — child verdict evaluation', () => {
           resultBody: JSON.stringify({
             schema_version: 1,
             run_id: '11111111-1111-1111-1111-111111111111',
-            workflow_id: CHILD_WORKFLOW_ID as unknown as string,
+            flow_id: CHILD_WORKFLOW_ID as unknown as string,
             goal: 'no-verdict goal',
             outcome: 'complete',
             summary: 'no verdict here',
             closed_at: '1970-01-01T00:00:00.000Z',
-            events_observed: 1,
+            trace_entries_observed: 1,
             manifest_hash: 'stub',
           }),
         },
       },
-      parentRunRoot,
+      parentRunFolder,
     );
 
     const result = await runSubRunStep(harness.ctx);
 
     if (result.kind !== 'aborted') throw new Error('expected aborted');
     expect(result.reason).toMatch(/lacks a non-empty string 'verdict' field/);
-    const completed = harness.events.find((e) => e.kind === 'sub_run.completed');
+    const completed = harness.trace_entrys.find((e) => e.kind === 'sub_run.completed');
     if (completed?.kind !== 'sub_run.completed') throw new Error('expected sub_run.completed');
     expect(completed.verdict).toBe('<no-verdict>');
   });
 
-  it('aborts and surfaces the observed verdict when not in gate.pass', async () => {
+  it('aborts and surfaces the observed verdict when not in check.pass', async () => {
     const harness = buildHarness(
       {
         passVerdicts: ['accept'],
@@ -548,25 +548,25 @@ describe('runSubRunStep direct — child verdict evaluation', () => {
           resultBody: JSON.stringify({
             schema_version: 1,
             run_id: '11111111-1111-1111-1111-111111111111',
-            workflow_id: CHILD_WORKFLOW_ID as unknown as string,
+            flow_id: CHILD_WORKFLOW_ID as unknown as string,
             goal: 'reject goal',
             outcome: 'complete',
             summary: 'rejected',
             closed_at: '1970-01-01T00:00:00.000Z',
-            events_observed: 1,
+            trace_entries_observed: 1,
             manifest_hash: 'stub',
             verdict: 'reject',
           }),
         },
       },
-      parentRunRoot,
+      parentRunFolder,
     );
 
     const result = await runSubRunStep(harness.ctx);
 
     if (result.kind !== 'aborted') throw new Error('expected aborted');
-    expect(result.reason).toMatch(/child verdict 'reject' is not in gate\.pass \[accept\]/);
-    const completed = harness.events.find((e) => e.kind === 'sub_run.completed');
+    expect(result.reason).toMatch(/child verdict 'reject' is not in check\.pass \[accept\]/);
+    const completed = harness.trace_entrys.find((e) => e.kind === 'sub_run.completed');
     if (completed?.kind !== 'sub_run.completed') throw new Error('expected sub_run.completed');
     expect(completed.verdict).toBe('reject');
   });

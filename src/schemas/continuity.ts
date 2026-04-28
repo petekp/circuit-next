@@ -1,16 +1,16 @@
 import { z } from 'zod';
-import { InvocationId, PhaseId, RunId, StepId } from './ids.js';
-import { ControlPlaneFileStem } from './primitives.js';
+import { InvocationId, RunId, StageId, StepId } from './ids.js';
+import { ControlPchange_kindFileStem } from './scalars.js';
 import { SnapshotStatus } from './snapshot.js';
 
 /**
  * Continuity surfaces — docs/contracts/continuity.md v0.1.
  *
- * Authority: artifact_ids [`continuity.record`, `continuity.index`] in
- * `specs/artifacts.json`, both classified `successor-to-live` /
+ * Authority: report_ids [`continuity.record`, `continuity.index`] in
+ * `specs/reports.json`, both classified `successor-to-live` /
  * `compatibility_policy: clean-break` / `legacy_parse_policy: reject`.
- * `record_id` is a `path_derived_field`; the path-safe primitive is
- * `ControlPlaneFileStem` (see `src/schemas/primitives.ts`).
+ * `record_id` is a `path_derived_field`; the path-safe scalar is
+ * `ControlPchange_kindFileStem` (see `src/schemas/scalars.ts`).
  *
  * Live reference surface characterization:
  * `specs/reference/legacy-circuit/continuity-characterization.md`.
@@ -54,7 +54,7 @@ export const RunAttachedProvenance = z
   .object({
     run_id: RunId,
     invocation_id: InvocationId.optional(),
-    current_phase: PhaseId,
+    current_stage: StageId,
     current_step: StepId,
     runtime_status: SnapshotStatus,
     runtime_updated_at: z.string().datetime(),
@@ -100,7 +100,7 @@ const RunBackedResumeContract = z
 
 const ContinuityBase = z.object({
   schema_version: z.literal(1),
-  record_id: ControlPlaneFileStem,
+  record_id: ControlPchange_kindFileStem,
   project_root: z.string().min(1),
   created_at: z.string().datetime(),
   git: GitState,
@@ -126,7 +126,7 @@ export type RunBackedContinuity = z.infer<typeof RunBackedContinuity>;
  * inherited properties during parse, so `Object.create({record_id: 'evil'})`
  * would satisfy a `record_id` requirement through the prototype. The
  * guards run on the raw input BEFORE Zod's property access, so required
- * identity fields MUST be own. Mirrors the run.ts RunLog defense (RUN MED
+ * identity fields MUST be own. Mirrors the run.ts RunTrace defense (RUN MED
  * #3).
  */
 const recordOwnPropertyGuard = z.custom<unknown>((raw) => {
@@ -150,12 +150,12 @@ export const ContinuityRecord = recordOwnPropertyGuard.pipe(
 export type ContinuityRecord = z.infer<typeof ContinuityRecord>;
 
 /**
- * CONT-I9/I10/I11 — ContinuityIndex aggregate. The index is the resolver
+ * CONT-I9/I10/I11 — ContinuityIndex aggrecheck. The index is the resolver
  * that determines which continuity record is authoritative for resume.
  * Two orthogonal pointers:
- *   - `pending_record`: by `record_id` (a `ControlPlaneFileStem`); null
+ *   - `pending_record`: by `record_id` (a `ControlPchange_kindFileStem`); null
  *     when no record is pending.
- *   - `current_run`: by `run_id` plus the at-attach phase/step snapshot;
+ *   - `current_run`: by `run_id` plus the at-attach stage/step snapshot;
  *     null when no run is attached.
  *
  * Both pointers MAY be simultaneously populated, simultaneously null, or
@@ -165,7 +165,7 @@ export type ContinuityRecord = z.infer<typeof ContinuityRecord>;
  */
 export const PendingRecordPointer = z
   .object({
-    record_id: ControlPlaneFileStem,
+    record_id: ControlPchange_kindFileStem,
     continuity_kind: z.union([z.literal('standalone'), z.literal('run-backed')]),
     created_at: z.string().datetime(),
   })
@@ -175,7 +175,7 @@ export type PendingRecordPointer = z.infer<typeof PendingRecordPointer>;
 export const AttachedRunPointer = z
   .object({
     run_id: RunId,
-    current_phase: PhaseId,
+    current_stage: StageId,
     current_step: StepId,
     runtime_status: SnapshotStatus,
     attached_at: z.string().datetime(),
@@ -195,7 +195,7 @@ const ContinuityIndexBody = z
 
 /**
  * CONT-I12 (continued) — same own-property guard applied to the index
- * aggregate. Required fields MUST be own-properties on the raw input.
+ * aggrecheck. Required fields MUST be own-properties on the raw input.
  * Nullable fields still require the KEY to be own (value may be null).
  */
 const indexOwnPropertyGuard = z.custom<unknown>((raw) => {

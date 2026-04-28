@@ -1,21 +1,21 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractJsonObject } from '../../src/runtime/adapters/shared.js';
+import { extractJsonObject } from '../../src/runtime/connectors/shared.js';
 
 // Tolerant JSON extraction guard. Workers occasionally narrate status
 // before or after their JSON response despite the shape-hint
-// instruction telling them not to. The runtime gate evaluator and the
-// artifact schema parser both call JSON.parse on the adapter
+// instruction telling them not to. The runtime check evaluator and the
+// report schema parser both call JSON.parse on the connector
 // result_body; without tolerance, a single prose sentence aborts a
-// dispatch that otherwise produced valid output.
+// relay that otherwise produced valid output.
 //
-// Observed prose patterns from real dogfood runs:
+// Observed prose patterns from real runtime-proof runs:
 //   "Type check passes.\n\n{...}"
 //   "I have been unable to ...\n{...}"
 // The helper extracts the first balanced JSON object so downstream
 // JSON.parse sees clean input.
 
-describe('extractJsonObject — tolerant adapter result_body extraction', () => {
+describe('extractJsonObject — tolerant connector result_body extraction', () => {
   it('returns clean JSON unchanged (idempotent)', () => {
     const input = '{"verdict":"ok"}';
     expect(extractJsonObject(input)).toBe(input);

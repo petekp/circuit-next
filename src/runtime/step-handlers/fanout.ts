@@ -2,27 +2,27 @@ import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { copyFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import type { CompiledFlow } from '../../schemas/compiled-flow.js';
 import { RunId } from '../../schemas/ids.js';
 import {
+  type CompiledFlowRef,
   type FanoutBranch,
   FanoutBranch as FanoutBranchSchema,
   type FanoutStep,
-  type WorkflowRef,
 } from '../../schemas/step.js';
-import type { Workflow } from '../../schemas/workflow.js';
 import { resultPath } from '../result-writer.js';
 import { resolveRunRelative } from '../run-relative-path.js';
-import type { WorkflowInvocation, WorktreeRunner } from '../runner-types.js';
-import { isRunRelativePathError, writeJsonArtifact } from './shared.js';
+import type { CompiledFlowInvocation, WorktreeRunner } from '../runner-types.js';
+import { isRunRelativePathError, writeJsonReport } from './shared.js';
 import type { StepHandlerContext, StepHandlerResult } from './types.js';
 
-type FanoutStepNarrow = Workflow['steps'][number] & { kind: 'fanout' };
+type FanoutStepNarrow = CompiledFlow['steps'][number] & { kind: 'fanout' };
 
 interface ResolvedBranch {
   readonly branch_id: string;
-  readonly workflow_ref: WorkflowRef;
+  readonly flow_ref: CompiledFlowRef;
   readonly goal: string;
-  readonly rigor: FanoutBranch['rigor'];
+  readonly depth: FanoutBranch['depth'];
   readonly selection?: FanoutBranch['selection'];
 }
 
@@ -39,7 +39,7 @@ interface BranchOutcome {
 }
 
 // Pure-function inputs for the join policy decision. Every field
-// listed here is either a literal from the workflow (policy,
+// listed here is either a literal from the flow (policy,
 // admitOrder, stepId), a per-branch summary derived from
 // already-completed child runs (outcomes), or a precomputed pair of
 // changed-file lists / file-discovery-error string for the
@@ -52,13 +52,13 @@ export interface FanoutJoinOutcome {
   readonly verdict: string;
   readonly admitted: boolean;
   // Present iff `child_outcome === 'complete'` and the child's
-  // `result.json` parsed to an object. aggregate-only treats
+  // `result.json` parsed to an object. aggrecheck-only treats
   // `undefined` as "non-parseable".
   readonly result_body?: unknown;
 }
 
 export interface FanoutJoinInput {
-  readonly policy: FanoutStep['gate']['join']['policy'];
+  readonly policy: FanoutStep['check']['join']['policy'];
   readonly stepId: string;
   readonly admitOrder: readonly string[];
   readonly outcomes: readonly FanoutJoinOutcome[];
@@ -133,7 +133,7 @@ export function evaluateFanoutJoinPolicy(input: FanoutJoinInput): FanoutJoinResu
     return { joinedSuccessfully: true };
   }
 
-  // aggregate-only.
+  // aggrecheck-only.
   const allClosed = outcomes.every(
     (o) =>
       o.child_outcome === 'complete' ||
@@ -148,13 +148,13 @@ export function evaluateFanoutJoinPolicy(input: FanoutJoinInput): FanoutJoinResu
   if (!allClosed) {
     return {
       joinedSuccessfully: false,
-      failureReason: `fanout step '${stepId}' aggregate-only: at least one branch did not close cleanly`,
+      failureReason: `fanout step '${stepId}' aggrecheck-only: at least one branch did not close cleanly`,
     };
   }
   if (!allParseable) {
     return {
       joinedSuccessfully: false,
-      failureReason: `fanout step '${stepId}' aggregate-only: at least one branch did not produce a parseable result body`,
+      failureReason: `fanout step '${stepId}' aggrecheck-only: at least one branch did not produce a parseable result body`,
     };
   }
   return { joinedSuccessfully: true };
@@ -163,7 +163,7 @@ export function evaluateFanoutJoinPolicy(input: FanoutJoinInput): FanoutJoinResu
 const NO_VERDICT_SENTINEL = '<no-verdict>';
 
 // Default worktree provisioner — shells out to `git worktree`. Tests
-// inject a stub via WorkflowInvocation.worktreeRunner.
+// inject a stub via CompiledFlowInvocation.worktreeRunner.
 const DEFAULT_WORKTREE_RUNNER: WorktreeRunner = {
   add: ({ worktreePath, baseRef, branchName }): void => {
     const result = spawnSync('git', ['worktree', 'add', '-b', branchName, worktreePath, baseRef], {
@@ -264,18 +264,18 @@ function expandTemplate<T>(template: T, item: unknown): T {
   return out as T;
 }
 
-function resolveBranches(step: FanoutStepNarrow, runRoot: string): readonly ResolvedBranch[] {
+function resolveBranches(step: FanoutStepNarrow, runFolder: string): readonly ResolvedBranch[] {
   if (step.branches.kind === 'static') {
     return step.branches.branches.map((b) => ({
       branch_id: b.branch_id,
-      workflow_ref: b.workflow_ref,
+      flow_ref: b.flow_ref,
       goal: b.goal,
-      rigor: b.rigor,
+      depth: b.depth,
       ...(b.selection === undefined ? {} : { selection: b.selection }),
     }));
   }
-  // dynamic — load source artifact, traverse items_path, expand template per item.
-  const sourceAbs = resolveRunRelative(runRoot, step.branches.source_artifact);
+  // dynamic — load source report, traverse items_path, expand template per item.
+  const sourceAbs = resolveRunRelative(runFolder, step.branches.source_report);
   const sourceRaw: unknown = JSON.parse(readFileSync(sourceAbs, 'utf8'));
   const items = resolveDottedPath(sourceRaw, step.branches.items_path);
   if (!Array.isArray(items)) {
@@ -304,9 +304,9 @@ function resolveBranches(step: FanoutStepNarrow, runRoot: string): readonly Reso
     seen.add(branch.branch_id);
     expanded.push({
       branch_id: branch.branch_id,
-      workflow_ref: branch.workflow_ref,
+      flow_ref: branch.flow_ref,
       goal: branch.goal,
-      rigor: branch.rigor,
+      depth: branch.depth,
       ...(branch.selection === undefined ? {} : { selection: branch.selection }),
     });
   }
@@ -327,9 +327,9 @@ function evaluateChildVerdict(
   return { verdict: verdictRaw, admitted: admitList.includes(verdictRaw) };
 }
 
-interface FanoutAggregateBody {
+interface FanoutAggrecheckBody {
   readonly schema_version: 1;
-  readonly join_policy: FanoutStep['gate']['join']['policy'];
+  readonly join_policy: FanoutStep['check']['join']['policy'];
   readonly branch_count: number;
   readonly winner_branch_id?: string;
   readonly branches: ReadonlyArray<{
@@ -343,11 +343,11 @@ interface FanoutAggregateBody {
   }>;
 }
 
-function buildAggregate(
-  policy: FanoutStep['gate']['join']['policy'],
+function buildAggrecheck(
+  policy: FanoutStep['check']['join']['policy'],
   outcomes: readonly BranchOutcome[],
   winnerBranchId: string | undefined,
-): FanoutAggregateBody {
+): FanoutAggrecheckBody {
   return {
     schema_version: 1,
     join_policy: policy,
@@ -403,7 +403,7 @@ export async function runFanoutStep(
   ctx: StepHandlerContext & { readonly step: FanoutStepNarrow },
 ): Promise<StepHandlerResult> {
   const {
-    runRoot,
+    runFolder,
     step,
     runId,
     attempt,
@@ -412,13 +412,13 @@ export async function runFanoutStep(
     state,
     now,
     childRunner,
-    childWorkflowResolver,
+    childCompiledFlowResolver,
     worktreeRunner: ctxWorktreeRunner,
-    dispatcher,
-    synthesisWriter,
+    relayer,
+    composeWriter,
     executionSelectionConfigLayers,
     projectRoot,
-    lane,
+    change_kind,
   } = ctx;
 
   const abortReason = (reason: string): StepHandlerResult => {
@@ -427,10 +427,10 @@ export async function runFanoutStep(
       sequence: state.sequence,
       recorded_at: recordedAt(),
       run_id: runId,
-      kind: 'gate.evaluated',
+      kind: 'check.evaluated',
       step_id: step.id,
       attempt,
-      gate_kind: 'fanout_aggregate',
+      check_kind: 'fanout_aggrecheck',
       outcome: 'fail',
       reason,
     });
@@ -447,14 +447,14 @@ export async function runFanoutStep(
     return { kind: 'aborted', reason };
   };
 
-  if (childWorkflowResolver === undefined) {
+  if (childCompiledFlowResolver === undefined) {
     return abortReason(
-      `fanout step '${step.id}': WorkflowInvocation.childWorkflowResolver is required to resolve branch workflows`,
+      `fanout step '${step.id}': CompiledFlowInvocation.childCompiledFlowResolver is required to resolve branch flows`,
     );
   }
   if (projectRoot === undefined) {
     return abortReason(
-      `fanout step '${step.id}': WorkflowInvocation.projectRoot is required to anchor per-branch worktrees`,
+      `fanout step '${step.id}': CompiledFlowInvocation.projectRoot is required to anchor per-branch worktrees`,
     );
   }
 
@@ -462,7 +462,7 @@ export async function runFanoutStep(
 
   let resolvedBranches: readonly ResolvedBranch[];
   try {
-    resolvedBranches = resolveBranches(step, runRoot);
+    resolvedBranches = resolveBranches(step, runFolder);
   } catch (err) {
     if (isRunRelativePathError(err)) throw err;
     const message = err instanceof Error ? err.message : String(err);
@@ -488,7 +488,7 @@ export async function runFanoutStep(
 
   const concurrencyLimit: number | 'unbounded' =
     step.concurrency.kind === 'unbounded' ? 'unbounded' : step.concurrency.max;
-  const runsBase = dirname(runRoot);
+  const runsBase = dirname(runFolder);
   const baseRef = 'HEAD';
   const provisioned: Array<{ branch_id: string; worktree_path: string }> = [];
   const outcomes: BranchOutcome[] = [];
@@ -497,7 +497,7 @@ export async function runFanoutStep(
     await runWithConcurrency(resolvedBranches, concurrencyLimit, async (branch, abortSignal) => {
       if (abortSignal.value) return;
       const childRunIdValue: RunId = RunId.parse(randomUUID());
-      const childRunRoot = join(runsBase, childRunIdValue as unknown as string);
+      const childRunFolder = join(runsBase, childRunIdValue as unknown as string);
       const worktreePath = join(
         projectRoot,
         '.circuit-next',
@@ -558,7 +558,7 @@ export async function runFanoutStep(
           result_path: '',
         });
         // worktree provisioning failure is recorded on the
-        // branch_completed event with verdict=NO_VERDICT; the abort
+        // branch_completed trace_entry with verdict=NO_VERDICT; the abort
         // signal short-circuits remaining work when policy says so.
         void message;
         return;
@@ -578,9 +578,9 @@ export async function runFanoutStep(
         worktree_path: worktreePath,
       });
 
-      let resolved: { workflow: Workflow; bytes: Buffer };
+      let resolved: { flow: CompiledFlow; bytes: Buffer };
       try {
-        resolved = childWorkflowResolver(branch.workflow_ref);
+        resolved = childCompiledFlowResolver(branch.flow_ref);
       } catch (err) {
         if (step.on_child_failure === 'abort-all') abortSignal.value = true;
         const message = err instanceof Error ? err.message : String(err);
@@ -610,27 +610,27 @@ export async function runFanoutStep(
           duration_ms: 0,
           result_path: '',
         });
-        // child workflow resolver failure is recorded on the
-        // branch_completed event with verdict=NO_VERDICT.
+        // child flow resolver failure is recorded on the
+        // branch_completed trace_entry with verdict=NO_VERDICT.
         void message;
         return;
       }
 
       const startMs = Date.now();
-      const childInvocation: WorkflowInvocation = {
-        runRoot: childRunRoot,
-        workflow: resolved.workflow,
-        workflowBytes: resolved.bytes,
+      const childInvocation: CompiledFlowInvocation = {
+        runFolder: childRunFolder,
+        flow: resolved.flow,
+        flowBytes: resolved.bytes,
         runId: childRunIdValue,
         goal: branch.goal,
-        rigor: branch.rigor,
-        entryModeName: branch.workflow_ref.entry_mode,
-        lane,
+        depth: branch.depth,
+        entryModeName: branch.flow_ref.entry_mode,
+        change_kind,
         now,
-        dispatcher,
-        synthesisWriter,
+        relayer,
+        composeWriter,
         selectionConfigLayers: executionSelectionConfigLayers,
-        childWorkflowResolver,
+        childCompiledFlowResolver,
         ...(ctxWorktreeRunner === undefined ? {} : { worktreeRunner: ctxWorktreeRunner }),
         projectRoot: worktreePath,
       };
@@ -646,13 +646,13 @@ export async function runFanoutStep(
           childOutcome = 'aborted';
         } else {
           childOutcome = childResult.result.outcome;
-          const childResultAbs = resultPath(childRunRoot);
+          const childResultAbs = resultPath(childRunFolder);
           const bodyText = readFileSync(childResultAbs, 'utf8');
           childResultBody = JSON.parse(bodyText);
           // Materialise child result.json into parent's
           // <branches_dir>/<branch_id>/result.json slot.
           childResultPathRel = `${step.writes.branches_dir}/${branch.branch_id}/result.json`;
-          const dest = resolveRunRelative(runRoot, childResultPathRel);
+          const dest = resolveRunRelative(runFolder, childResultPathRel);
           mkdirSync(dirname(dest), { recursive: true });
           copyFileSync(childResultAbs, dest);
         }
@@ -662,7 +662,7 @@ export async function runFanoutStep(
         childOutcome = 'aborted';
       }
 
-      const verdictEval = evaluateChildVerdict(childResultBody, step.gate.verdicts.admit);
+      const verdictEval = evaluateChildVerdict(childResultBody, step.check.verdicts.admit);
       const branchAdmitted = childOutcome === 'complete' && verdictEval.admitted;
       outcomes.push({
         branch_id: branch.branch_id,
@@ -712,8 +712,8 @@ export async function runFanoutStep(
   // (pure); the only impure dimension — disjoint-merge's per-branch
   // changed-file discovery — is hoisted ahead of the call so the join
   // decision itself is table-testable.
-  const policy = step.gate.join.policy;
-  const admitOrder = step.gate.verdicts.admit;
+  const policy = step.check.join.policy;
+  const admitOrder = step.check.verdicts.admit;
   let branchFiles: ReadonlyMap<string, readonly string[]> | undefined;
   let branchFilesError: string | undefined;
   if (policy === 'disjoint-merge' && outcomes.every((o) => o.admitted)) {
@@ -749,25 +749,25 @@ export async function runFanoutStep(
   const winnerBranchId = joinDecision.winnerBranchId;
   const joinFailureReason = joinDecision.failureReason;
   // v0 limitation: disjoint-merge file-disjoint validation runs but
-  // the actual merge into the parent tree is not yet wired. Aggregate
-  // artifact still records the per-branch outcomes for operators to
+  // the actual merge into the parent tree is not yet wired. Aggrecheck
+  // report still records the per-branch outcomes for operators to
   // merge manually until the merge slice lands.
 
-  // Always materialise the aggregate artifact — the durable record of
+  // Always materialise the aggrecheck report — the durable record of
   // what happened, regardless of join outcome.
-  const aggregateBody = buildAggregate(policy, outcomes, winnerBranchId);
-  writeJsonArtifact(runRoot, step.writes.aggregate.path, aggregateBody);
+  const aggrecheckBody = buildAggrecheck(policy, outcomes, winnerBranchId);
+  writeJsonReport(runFolder, step.writes.aggrecheck.path, aggrecheckBody);
 
   push({
     schema_version: 1,
     sequence: state.sequence,
     recorded_at: recordedAt(),
     run_id: runId,
-    kind: 'step.artifact_written',
+    kind: 'step.report_written',
     step_id: step.id,
     attempt,
-    artifact_path: step.writes.aggregate.path,
-    artifact_schema: step.writes.aggregate.schema,
+    report_path: step.writes.aggrecheck.path,
+    report_schema: step.writes.aggrecheck.schema,
   });
 
   const branchesCompleted = outcomes.filter((o) => o.child_outcome === 'complete').length;
@@ -782,7 +782,7 @@ export async function runFanoutStep(
     attempt,
     policy,
     ...(winnerBranchId === undefined ? {} : { selected_branch_id: winnerBranchId }),
-    aggregate_path: step.writes.aggregate.path,
+    aggrecheck_path: step.writes.aggrecheck.path,
     branches_completed: branchesCompleted,
     branches_failed: branchesFailed,
   });
@@ -793,10 +793,10 @@ export async function runFanoutStep(
       sequence: state.sequence,
       recorded_at: recordedAt(),
       run_id: runId,
-      kind: 'gate.evaluated',
+      kind: 'check.evaluated',
       step_id: step.id,
       attempt,
-      gate_kind: 'fanout_aggregate',
+      check_kind: 'fanout_aggrecheck',
       outcome: 'pass',
     });
     return { kind: 'advance' };
@@ -809,10 +809,10 @@ export async function runFanoutStep(
     sequence: state.sequence,
     recorded_at: recordedAt(),
     run_id: runId,
-    kind: 'gate.evaluated',
+    kind: 'check.evaluated',
     step_id: step.id,
     attempt,
-    gate_kind: 'fanout_aggregate',
+    check_kind: 'fanout_aggrecheck',
     outcome: 'fail',
     reason,
   });

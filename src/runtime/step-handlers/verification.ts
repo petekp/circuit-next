@@ -1,16 +1,16 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, lstatSync, realpathSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
-import type { Workflow } from '../../schemas/workflow.js';
+import type { CompiledFlow } from '../../schemas/compiled-flow.js';
 import { findVerificationWriter } from '../registries/verification-writers/registry.js';
-import { isRunRelativePathError, writeJsonArtifact } from './shared.js';
+import { isRunRelativePathError, writeJsonReport } from './shared.js';
 import type { StepHandlerContext, StepHandlerResult } from './types.js';
 
-type VerificationStep = Workflow['steps'][number] & { kind: 'verification' };
+type VerificationStep = CompiledFlow['steps'][number] & { kind: 'verification' };
 
 function verificationFailureReason(stepId: string, err: unknown): string {
   const message = err instanceof Error ? err.message : String(err);
-  return `verification step '${stepId}': artifact writer failed (${message})`;
+  return `verification step '${stepId}': report writer failed (${message})`;
 }
 
 function isInsideOrSame(root: string, target: string): boolean {
@@ -81,21 +81,21 @@ function summarizeOutput(value: string, maxBytes: number): string {
 
 // Verification step driver. Sources commands from the registered
 // VerificationBuilder, executes them via spawnSync, and asks the same
-// builder to assemble the result artifact. The builder owns all
-// workflow-specific logic; the handler owns subprocess execution and
+// builder to assemble the result report. The builder owns all
+// flow-specific logic; the handler owns subprocess execution and
 // summarization.
-function writeVerificationArtifact(input: {
-  readonly runRoot: string;
-  readonly workflow: Workflow;
+function writeVerificationReport(input: {
+  readonly runFolder: string;
+  readonly flow: CompiledFlow;
   readonly step: VerificationStep;
   readonly projectRoot: string;
 }): { readonly overall_status: 'passed' | 'failed' } {
-  const { runRoot, workflow, step, projectRoot } = input;
-  const builder = findVerificationWriter(step.writes.artifact.schema);
+  const { runFolder, flow, step, projectRoot } = input;
+  const builder = findVerificationWriter(step.writes.report.schema);
   if (builder === undefined) {
-    throw new Error(`verification step '${step.id}' has unsupported artifact schema`);
+    throw new Error(`verification step '${step.id}' has unsupported report schema`);
   }
-  const commands = builder.loadCommands({ runRoot, workflow, step });
+  const commands = builder.loadCommands({ runFolder, flow, step });
   const observations = commands.map((command) => {
     const started = Date.now();
     const result = spawnSync(command.argv[0] as string, command.argv.slice(1), {
@@ -127,28 +127,28 @@ function writeVerificationArtifact(input: {
       stderr_summary: summarizeOutput(stderrParts.join('\n'), command.max_output_bytes),
     };
   });
-  const artifact = builder.buildResult(observations) as {
+  const report = builder.buildResult(observations) as {
     readonly overall_status: 'passed' | 'failed';
   };
-  writeJsonArtifact(runRoot, step.writes.artifact.path, artifact);
-  return artifact;
+  writeJsonReport(runFolder, step.writes.report.path, report);
+  return report;
 }
 
 export function runVerificationStep(
   ctx: StepHandlerContext & { readonly step: VerificationStep },
 ): StepHandlerResult {
-  const { runRoot, workflow, step, runId, attempt, recordedAt, push, state, projectRoot } = ctx;
-  // VerificationBuilders return workflow-specific shapes (BuildVerification,
+  const { runFolder, flow, step, runId, attempt, recordedAt, push, state, projectRoot } = ctx;
+  // VerificationBuilders return flow-specific shapes (BuildVerification,
   // FixVerification, etc.). The handler only needs `overall_status` to
-  // drive gate evaluation; both shapes have it.
+  // drive check evaluation; both shapes have it.
   let verification: { readonly overall_status: 'passed' | 'failed' };
   try {
     if (projectRoot === undefined) {
       throw new Error(
-        `verification step '${step.id}' requires WorkflowInvocation.projectRoot for project-relative cwd resolution`,
+        `verification step '${step.id}' requires CompiledFlowInvocation.projectRoot for project-relative cwd resolution`,
       );
     }
-    verification = writeVerificationArtifact({ runRoot, workflow, step, projectRoot });
+    verification = writeVerificationReport({ runFolder, flow, step, projectRoot });
   } catch (err) {
     if (isRunRelativePathError(err)) throw err;
     const reason = verificationFailureReason(step.id as unknown as string, err);
@@ -157,10 +157,10 @@ export function runVerificationStep(
       sequence: state.sequence,
       recorded_at: recordedAt(),
       run_id: runId,
-      kind: 'gate.evaluated',
+      kind: 'check.evaluated',
       step_id: step.id,
       attempt,
-      gate_kind: 'schema_sections',
+      check_kind: 'schema_sections',
       outcome: 'fail',
       reason,
     });
@@ -182,11 +182,11 @@ export function runVerificationStep(
     sequence: state.sequence,
     recorded_at: recordedAt(),
     run_id: runId,
-    kind: 'step.artifact_written',
+    kind: 'step.report_written',
     step_id: step.id,
     attempt,
-    artifact_path: step.writes.artifact.path,
-    artifact_schema: step.writes.artifact.schema,
+    report_path: step.writes.report.path,
+    report_schema: step.writes.report.schema,
   });
 
   if (verification.overall_status === 'passed') {
@@ -195,10 +195,10 @@ export function runVerificationStep(
       sequence: state.sequence,
       recorded_at: recordedAt(),
       run_id: runId,
-      kind: 'gate.evaluated',
+      kind: 'check.evaluated',
       step_id: step.id,
       attempt,
-      gate_kind: 'schema_sections',
+      check_kind: 'schema_sections',
       outcome: 'pass',
     });
     return { kind: 'advance' };
@@ -210,10 +210,10 @@ export function runVerificationStep(
     sequence: state.sequence,
     recorded_at: recordedAt(),
     run_id: runId,
-    kind: 'gate.evaluated',
+    kind: 'check.evaluated',
     step_id: step.id,
     attempt,
-    gate_kind: 'schema_sections',
+    check_kind: 'schema_sections',
     outcome: 'fail',
     reason,
   });

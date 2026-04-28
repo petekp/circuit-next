@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import { RunId, WorkflowId } from './ids.js';
+import { CompiledFlowId, RunId } from './ids.js';
 
 // MANIFEST-I1 — A ManifestSnapshot is the byte-for-byte copy of the
-// workflow manifest taken at run bootstrap. `bytes_base64` carries the
+// flow manifest taken at run bootstrap. `bytes_base64` carries the
 // exact persisted manifest bytes (base64 for JSON transport); `hash` is
 // SHA-256 over those raw persisted bytes, as a 64-char lowercase hex
 // string. SHA-256-over-raw-bytes is the default; any canonicalization
@@ -14,8 +14,8 @@ import { RunId, WorkflowId } from './ids.js';
 // declared bytes is structurally invalid: the reader cannot tell which
 // side is corrupt, so parsing fails rather than silently accepting.
 //
-// MANIFEST-I3 — `run_id`/`workflow_id` must match the run.bootstrapped
-// event at re-entry. Enforced at run-projection level, not here.
+// MANIFEST-I3 — `run_id`/`flow_id` must match the run.bootstrapped
+// trace_entry at re-entry. Enforced at run-projection level, not here.
 
 const HEX64 = /^[0-9a-f]{64}$/;
 
@@ -30,7 +30,7 @@ export const ManifestSnapshot = z
   .object({
     schema_version: z.literal(1),
     run_id: RunId,
-    workflow_id: WorkflowId,
+    flow_id: CompiledFlowId,
     captured_at: z.string().datetime(),
     algorithm: z.literal('sha256-raw'),
     hash: ManifestHash,

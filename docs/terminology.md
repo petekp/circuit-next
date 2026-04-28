@@ -38,32 +38,32 @@ and evidence.
 These may remain in low-level runtime code when they describe precise
 implementation details:
 
-- Workflow: compiled runtime object.
-- Adapter: low-level connector implementation.
-- Artifact: typed runtime file.
-- Gate: schema/runtime check primitive, if not yet migrated.
-- Dispatch: serialized runtime step kind, if not yet migrated.
-- Synthesis: legacy/internal compose step kind, if not yet migrated.
+- CompiledFlow: compiled runtime object.
+- Connector: low-level connector implementation.
+- Report: typed runtime file.
+- Check: schema/runtime check scalar, if not yet migrated.
+- Relay: serialized runtime step kind, if not yet migrated.
+- Compose: legacy/internal compose step kind, if not yet migrated.
 
 ## Avoid in product surfaces
 
 Avoid these in README intros, slash command prose, generated command files,
-workflow command sources, and agent-facing instructions:
+flow command sources, and agent-facing instructions:
 
 - recipe
-- primitive, when referring to flow composition
-- dispatch
-- synthesis
-- orchestrator-synthesis
-- artifact pointer
-- canonical event log
-- run root
-- rigor
-- lane
-- spine
+- scalar, when referring to flow composition
+- relay
+- compose
+- orchestrator-compose
+- evidence link
+- canonical trace
+- run folder
+- depth
+- change_kind
+- stage path
 - fixture
 - ADR ids
 - Slice ids
 - P2 labels
 - placeholder-parity
-- dogfood
+- runtime-proof

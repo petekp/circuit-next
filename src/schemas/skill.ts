@@ -4,7 +4,7 @@ import { SkillId } from './ids.js';
 /**
  * SkillDescriptor — docs/contracts/skill.md v0.1.
  *
- * Authority: artifact id `skill.descriptor` in specs/artifacts.json
+ * Authority: report id `skill.descriptor` in specs/reports.json
  * (greenfield surface). Represents the compiled catalog entry for a
  * circuit-next plugin skill — the part a selection resolver can bind by
  * `SkillId` and a catalog compiler can enumerate. This is NOT the

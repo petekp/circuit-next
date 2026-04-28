@@ -3,36 +3,36 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { RunId, WorkflowId } from '../../src/schemas/ids.js';
-import type { LaneDeclaration } from '../../src/schemas/lane.js';
+import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
+import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
+import { CompiledFlowId, RunId } from '../../src/schemas/ids.js';
 import { ManifestSnapshot } from '../../src/schemas/manifest.js';
 import { RunResult } from '../../src/schemas/result.js';
 import { RunProjection } from '../../src/schemas/run.js';
 import { Snapshot } from '../../src/schemas/snapshot.js';
-import { Workflow } from '../../src/schemas/workflow.js';
 
-import type { AgentDispatchInput } from '../../src/runtime/adapters/agent.js';
-import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
-import { readRunLog } from '../../src/runtime/event-log-reader.js';
-import { type DispatchFn, runWorkflow } from '../../src/runtime/runner.js';
+import type { AgentRelayInput } from '../../src/runtime/connectors/agent.js';
+import type { RelayResult } from '../../src/runtime/connectors/shared.js';
+import { type RelayFn, runCompiledFlow } from '../../src/runtime/runner.js';
+import { readRunTrace } from '../../src/runtime/trace-reader.js';
 
-// Runner smoke test exercising one synthesis + one dispatch step
-// end-to-end via the dry-run agent adapter. The test reads the
-// production dogfood-run-0 workflow fixture — the same JSON a user
-// invocation of `./bin/circuit-next dogfood-run-0 ...` would load — and
-// composes the runtime boundary via `runWorkflow`.
+// Runner smoke test exercising one compose + one relay step
+// end-to-end via the dry-run agent connector. The test reads the
+// production runtime-proof flow fixture — the same JSON a user
+// invocation of `./bin/circuit-next runtime-proof ...` would load — and
+// composes the runtime boundary via `runCompiledFlow`.
 //
 // Two-run acceptance: same fixture, two different goals, two different
 // result.json files with differing `goal` and `run_id` fields satisfy
 // Close Criterion #4 "two different fixtures or goals ... differing
-// result artifacts". The byte-match gate is also exercised end-to-end.
+// result reports". The byte-match check is also exercised end-to-end.
 
-const FIXTURE_PATH = resolve('.claude-plugin/skills/dogfood-run-0/circuit.json');
+const FIXTURE_PATH = resolve('.claude-plugin/skills/runtime-proof/circuit.json');
 
-function loadFixture(): { workflow: Workflow; bytes: Buffer } {
+function loadFixture(): { flow: CompiledFlow; bytes: Buffer } {
   const bytes = readFileSync(FIXTURE_PATH);
   const raw: unknown = JSON.parse(bytes.toString('utf8'));
-  return { workflow: Workflow.parse(raw), bytes };
+  return { flow: CompiledFlow.parse(raw), bytes };
 }
 
 function deterministicNow(startMs: number): () => Date {
@@ -40,24 +40,24 @@ function deterministicNow(startMs: number): () => Date {
   return () => new Date(startMs + n++ * 1000);
 }
 
-// Deterministic stub dispatcher so the runner smoke doesn't spawn a
+// Deterministic stub relayer so the runner smoke doesn't spawn a
 // real `claude` subprocess. The capability-boundary assertion at
 // parseAgentStdout is a real-subprocess-only concern; the stub satisfies
-// the DispatchResult shape without traversing that path. The
-// AGENT_SMOKE-gated explore e2e exercises the real adapter end-to-end.
+// the RelayResult shape without traversing that path. The
+// AGENT_SMOKE-checkd explore e2e exercises the real connector end-to-end.
 //
-// The stub uses the structured `DispatchFn` descriptor shape and binds
-// `adapterName: 'agent'` so the runner's `dispatch.started` event
+// The stub uses the structured `RelayFn` descriptor shape and binds
+// `connectorName: 'agent'` so the runner's `relay.started` trace_entry
 // records the agent identity for this smoke suite; the dedicated
 // codex-routing regression test at
-// `runner-dispatch-adapter-identity.test.ts` exercises the
-// `adapterName: 'codex'` branch.
-function stubDispatcher(): DispatchFn {
+// `runner-relay-connector-identity.test.ts` exercises the
+// `connectorName: 'codex'` branch.
+function stubRelayer(): RelayFn {
   return {
-    adapterName: 'agent',
-    dispatch: async (input: AgentDispatchInput): Promise<DispatchResult> => ({
+    connectorName: 'agent',
+    relay: async (input: AgentRelayInput): Promise<RelayResult> => ({
       request_payload: input.prompt,
-      receipt_id: 'stub-receipt-dogfood-run-0',
+      receipt_id: 'stub-receipt-runtime-proof',
       result_body: '{"verdict":"ok"}',
       duration_ms: 1,
       cli_version: '0.0.0-stub',
@@ -65,58 +65,58 @@ function stubDispatcher(): DispatchFn {
   };
 }
 
-function lane(): LaneDeclaration {
+function change_kind(): ChangeKindDeclaration {
   return {
-    lane: 'ratchet-advance',
-    failure_mode: 'dogfood-run-0 smoke needs end-to-end product proof',
+    change_kind: 'ratchet-advance',
+    failure_mode: 'runtime-proof smoke needs end-to-end product proof',
     acceptance_evidence:
-      'runner smoke test closes a run with events/state/manifest/result artifacts',
+      'runner smoke test closes a run with trace_entrys/state/manifest/result reports',
     alternate_framing:
       'skip the runner smoke entirely — not viable because Close Criterion #5 requires reducer-derived state.json and result.json evidence.',
   };
 }
 
-let runRootBase: string;
+let runFolderBase: string;
 
 beforeEach(() => {
-  runRootBase = mkdtempSync(join(tmpdir(), 'circuit-next-runtime-smoke-'));
+  runFolderBase = mkdtempSync(join(tmpdir(), 'circuit-next-runtime-smoke-'));
 });
 
 afterEach(() => {
-  rmSync(runRootBase, { recursive: true, force: true });
+  rmSync(runFolderBase, { recursive: true, force: true });
 });
 
-describe('dogfood-run-0 runner smoke', () => {
-  it('closes one run producing events.ndjson / state.json / manifest.snapshot.json / artifacts/result.json', async () => {
-    const { workflow, bytes } = loadFixture();
-    const runRoot = join(runRootBase, 'run-a');
-    const outcome = await runWorkflow({
-      runRoot,
-      workflow,
-      workflowBytes: bytes,
+describe('runtime-proof runner smoke', () => {
+  it('closes one run producing trace.ndjson / state.json / manifest.snapshot.json / reports/result.json', async () => {
+    const { flow, bytes } = loadFixture();
+    const runFolder = join(runFolderBase, 'run-a');
+    const outcome = await runCompiledFlow({
+      runFolder,
+      flow,
+      flowBytes: bytes,
       runId: RunId.parse('11111111-1111-1111-1111-111111111111'),
       goal: 'prove circuit-next can close one run',
-      rigor: 'standard',
-      lane: lane(),
+      depth: 'standard',
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 20, 12, 0, 0)),
-      dispatcher: stubDispatcher(),
+      relayer: stubRelayer(),
     });
 
     expect(outcome.result.outcome).toBe('complete');
-    expect(existsSync(join(runRoot, 'events.ndjson'))).toBe(true);
-    expect(existsSync(join(runRoot, 'state.json'))).toBe(true);
-    expect(existsSync(join(runRoot, 'manifest.snapshot.json'))).toBe(true);
-    expect(existsSync(join(runRoot, 'artifacts', 'result.json'))).toBe(true);
+    expect(existsSync(join(runFolder, 'trace.ndjson'))).toBe(true);
+    expect(existsSync(join(runFolder, 'state.json'))).toBe(true);
+    expect(existsSync(join(runFolder, 'manifest.snapshot.json'))).toBe(true);
+    expect(existsSync(join(runFolder, 'reports', 'result.json'))).toBe(true);
 
     // Snapshot parses cleanly and advances to status=complete.
-    const snap = Snapshot.parse(JSON.parse(readFileSync(join(runRoot, 'state.json'), 'utf8')));
+    const snap = Snapshot.parse(JSON.parse(readFileSync(join(runFolder, 'state.json'), 'utf8')));
     expect(snap.status).toBe('complete');
-    expect(snap.events_consumed).toBe(outcome.events.length);
+    expect(snap.trace_entries_consumed).toBe(outcome.trace_entrys.length);
 
-    // RunLog reconstructed from NDJSON parses cleanly; last event is
+    // RunTrace reconstructed from NDJSON parses cleanly; last trace_entry is
     // run.closed; bootstrap is first.
-    const log = readRunLog(runRoot);
-    expect(log).toHaveLength(outcome.events.length);
+    const log = readRunTrace(runFolder);
+    expect(log).toHaveLength(outcome.trace_entrys.length);
     const first = log[0];
     const last = log[log.length - 1];
     if (first === undefined || first.kind !== 'run.bootstrapped') {
@@ -132,124 +132,124 @@ describe('dogfood-run-0 runner smoke', () => {
 
     // ManifestSnapshot parses and its hash equals the run's manifest_hash.
     const manifest = ManifestSnapshot.parse(
-      JSON.parse(readFileSync(join(runRoot, 'manifest.snapshot.json'), 'utf8')),
+      JSON.parse(readFileSync(join(runFolder, 'manifest.snapshot.json'), 'utf8')),
     );
     expect(manifest.hash).toBe(outcome.result.manifest_hash);
     expect(manifest.algorithm).toBe('sha256-raw');
 
     // result.json parses as RunResult with the expected bindings.
     const result = RunResult.parse(
-      JSON.parse(readFileSync(join(runRoot, 'artifacts', 'result.json'), 'utf8')),
+      JSON.parse(readFileSync(join(runFolder, 'reports', 'result.json'), 'utf8')),
     );
-    expect(result.workflow_id).toBe(WorkflowId.parse('dogfood-run-0'));
+    expect(result.flow_id).toBe(CompiledFlowId.parse('runtime-proof'));
     expect(result.goal).toBe('prove circuit-next can close one run');
     expect(result.outcome).toBe('complete');
-    expect(result.events_observed).toBe(log.length);
+    expect(result.trace_entries_observed).toBe(log.length);
   });
 
-  it('exercises synthesis + dispatch + gate event kinds via the injected-stub dispatcher', async () => {
-    const { workflow, bytes } = loadFixture();
-    const runRoot = join(runRootBase, 'run-kinds');
-    const outcome = await runWorkflow({
-      runRoot,
-      workflow,
-      workflowBytes: bytes,
+  it('exercises compose + relay + check trace_entry kinds via the injected-stub relayer', async () => {
+    const { flow, bytes } = loadFixture();
+    const runFolder = join(runFolderBase, 'run-kinds');
+    const outcome = await runCompiledFlow({
+      runFolder,
+      flow,
+      flowBytes: bytes,
       runId: RunId.parse('22222222-2222-2222-2222-222222222222'),
-      goal: 'exercise the broader event-kind subset',
-      rigor: 'standard',
-      lane: lane(),
+      goal: 'exercise the broader trace_entry-kind subset',
+      depth: 'standard',
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 20, 13, 0, 0)),
-      dispatcher: stubDispatcher(),
+      relayer: stubRelayer(),
     });
 
-    const kinds = new Set(outcome.events.map((e) => e.kind));
-    // Closure criterion: a broader event-kind subset is exercised. The
-    // dispatch trail is the five-event transcript; all five kinds must
+    const kinds = new Set(outcome.trace_entrys.map((e) => e.kind));
+    // Closure criterion: a broader trace_entry-kind subset is exercised. The
+    // relay trail is the five-trace_entry transcript; all five kinds must
     // appear.
     expect(kinds.has('run.bootstrapped')).toBe(true);
     expect(kinds.has('step.entered')).toBe(true);
-    expect(kinds.has('step.artifact_written')).toBe(true);
-    expect(kinds.has('gate.evaluated')).toBe(true);
-    expect(kinds.has('dispatch.started')).toBe(true);
-    expect(kinds.has('dispatch.request')).toBe(true);
-    expect(kinds.has('dispatch.receipt')).toBe(true);
-    expect(kinds.has('dispatch.result')).toBe(true);
-    expect(kinds.has('dispatch.completed')).toBe(true);
+    expect(kinds.has('step.report_written')).toBe(true);
+    expect(kinds.has('check.evaluated')).toBe(true);
+    expect(kinds.has('relay.started')).toBe(true);
+    expect(kinds.has('relay.request')).toBe(true);
+    expect(kinds.has('relay.receipt')).toBe(true);
+    expect(kinds.has('relay.result')).toBe(true);
+    expect(kinds.has('relay.completed')).toBe(true);
     expect(kinds.has('step.completed')).toBe(true);
     expect(kinds.has('run.closed')).toBe(true);
     expect(kinds.size).toBeGreaterThanOrEqual(11);
 
-    // The dispatch.started event carries the dry-run agent adapter.
-    const dispatchStarted = outcome.events.find((e) => e.kind === 'dispatch.started');
-    if (!dispatchStarted || dispatchStarted.kind !== 'dispatch.started') {
-      throw new Error('expected dispatch.started event');
+    // The relay.started trace_entry carries the dry-run agent connector.
+    const relayStarted = outcome.trace_entrys.find((e) => e.kind === 'relay.started');
+    if (!relayStarted || relayStarted.kind !== 'relay.started') {
+      throw new Error('expected relay.started trace_entry');
     }
-    expect(dispatchStarted.adapter).toEqual({ kind: 'builtin', name: 'agent' });
+    expect(relayStarted.connector).toEqual({ kind: 'builtin', name: 'agent' });
     // `resolved_from` is derived from the runner's actual decision path
     // (see runner.ts `deriveResolvedFrom`): the test injects a stub
-    // dispatcher via `WorkflowInvocation.dispatcher`, so the honest
+    // relayer via `CompiledFlowInvocation.relayer`, so the honest
     // claim is `source: 'explicit'`.
-    expect(dispatchStarted.resolved_from).toEqual({ source: 'explicit' });
-    // `resolved_selection` is derived from `workflow.default_selection`
+    expect(relayStarted.resolved_from).toEqual({ source: 'explicit' });
+    // `resolved_selection` is derived from `flow.default_selection`
     // + `step.selection` (right-biased per SEL precedence). The
-    // dogfood-run-0 fixture and the explore fixture both use empty
+    // runtime-proof fixture and the explore fixture both use empty
     // default selections at v0, so the canonical empty selection is
     // the honest claim — and it is genuinely empty, not fabricated.
-    expect(dispatchStarted.resolved_selection).toEqual({ skills: [], invocation_options: {} });
+    expect(relayStarted.resolved_selection).toEqual({ skills: [], invocation_options: {} });
 
     // run.closed is single and last.
-    const closedEvents = outcome.events.filter((e) => e.kind === 'run.closed');
-    expect(closedEvents).toHaveLength(1);
-    expect(outcome.events[outcome.events.length - 1]?.kind).toBe('run.closed');
+    const closedTraceEntrys = outcome.trace_entrys.filter((e) => e.kind === 'run.closed');
+    expect(closedTraceEntrys).toHaveLength(1);
+    expect(outcome.trace_entrys[outcome.trace_entrys.length - 1]?.kind).toBe('run.closed');
   });
 
-  it('produces DIFFERING result.json artifacts from two runs with different goals (Close Criterion #4)', async () => {
-    const { workflow, bytes } = loadFixture();
+  it('produces DIFFERING result.json reports from two runs with different goals (Close Criterion #4)', async () => {
+    const { flow, bytes } = loadFixture();
 
-    const runA = await runWorkflow({
-      runRoot: join(runRootBase, 'run-a'),
-      workflow,
-      workflowBytes: bytes,
+    const runA = await runCompiledFlow({
+      runFolder: join(runFolderBase, 'run-a'),
+      flow,
+      flowBytes: bytes,
       runId: RunId.parse('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
       goal: 'prove circuit-next can close one run',
-      rigor: 'standard',
-      lane: lane(),
+      depth: 'standard',
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 20, 12, 0, 0)),
-      dispatcher: stubDispatcher(),
+      relayer: stubRelayer(),
     });
-    const runB = await runWorkflow({
-      runRoot: join(runRootBase, 'run-b'),
-      workflow,
-      workflowBytes: bytes,
+    const runB = await runCompiledFlow({
+      runFolder: join(runFolderBase, 'run-b'),
+      flow,
+      flowBytes: bytes,
       runId: RunId.parse('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'),
       goal: 'prove circuit-next can close a SECOND run with a different goal',
-      rigor: 'standard',
-      lane: lane(),
+      depth: 'standard',
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 20, 13, 0, 0)),
-      dispatcher: stubDispatcher(),
+      relayer: stubRelayer(),
     });
 
-    const resultA = readFileSync(join(runA.runRoot, 'artifacts', 'result.json'), 'utf8');
-    const resultB = readFileSync(join(runB.runRoot, 'artifacts', 'result.json'), 'utf8');
+    const resultA = readFileSync(join(runA.runFolder, 'reports', 'result.json'), 'utf8');
+    const resultB = readFileSync(join(runB.runFolder, 'reports', 'result.json'), 'utf8');
     expect(resultA).not.toBe(resultB);
     expect(runA.result.run_id).not.toBe(runB.result.run_id);
     expect(runA.result.goal).not.toBe(runB.result.goal);
     expect(runA.result.summary).not.toBe(runB.result.summary);
-    // Same workflow fixture ⇒ same manifest hash; this is the byte-match
+    // Same flow fixture ⇒ same manifest hash; this is the byte-match
     // property, not a freshness failure.
     expect(runA.result.manifest_hash).toBe(runB.result.manifest_hash);
   });
 
   it.skipIf(process.env.CLI_SMOKE !== '1')(
-    'CLI entrypoint loads the fixture and closes a run end-to-end from a clean run-root (CLI_SMOKE=1)',
+    'CLI entrypoint loads the fixture and closes a run end-to-end from a clean run-folder (CLI_SMOKE=1)',
     async () => {
       // ADR-0001 Addendum B Close Criterion "CLI loading of
-      // .claude-plugin/skills/dogfood-run-0/circuit.json is tested."
+      // .claude-plugin/skills/runtime-proof/circuit.json is tested."
       //
       // The CLI's exported `main(argv)` function is the same entrypoint
       // the launcher invokes, so importing it directly exercises every
       // code path the subprocess version would (argv parsing, fixture
-      // load, schema parse, runWorkflow composition, JSON serialization
+      // load, schema parse, runCompiledFlow composition, JSON serialization
       // to stdout) without depending on the IPC pipe directory. The
       // launcher binding is separately pinned by the package.json
       // contract test below so the binary path remains covered.
@@ -258,16 +258,16 @@ describe('dogfood-run-0 runner smoke', () => {
       // direct `main()` import strategy this test uses is unchanged —
       // `main()` is the same entrypoint the binding converges on.
       //
-      // `main()` invokes the real `dispatchAgent` default (which spawns
+      // `main()` invokes the real `relayAgent` default (which spawns
       // an authenticated `claude` CLI subprocess). That default fails
       // in sandboxed agent environments where the `claude` CLI is
       // unauthenticated, making the test non-portable across
-      // operator-local and sandboxed environments. Env-gated under
+      // operator-local and sandboxed environments. Env-checkd under
       // CLI_SMOKE=1 (same pattern as AGENT_SMOKE / CODEX_SMOKE) so the
       // default `npm run verify` path does not depend on a live CLI.
       // Operator-local full coverage via `CLI_SMOKE=1 npm run verify`.
-      // The env-gate IS the subprocess-boundary contract.
-      const runRoot = join(runRootBase, 'cli-run');
+      // The env-check IS the subprocess-boundary contract.
+      const runFolder = join(runFolderBase, 'cli-run');
       const { main } = await import('../../src/cli/circuit.js');
       let captured = '';
       const origWrite = process.stdout.write;
@@ -279,17 +279,17 @@ describe('dogfood-run-0 runner smoke', () => {
       try {
         exit = await main(
           [
-            'dogfood-run-0',
+            'runtime-proof',
             '--goal',
             'smoke via CLI',
-            '--rigor',
+            '--depth',
             'standard',
-            '--run-root',
-            runRoot,
+            '--run-folder',
+            runFolder,
           ],
           {
-            configHomeDir: join(runRootBase, 'empty-home'),
-            configCwd: join(runRootBase, 'empty-cwd'),
+            configHomeDir: join(runFolderBase, 'empty-home'),
+            configCwd: join(runFolderBase, 'empty-cwd'),
           },
         );
       } finally {
@@ -302,11 +302,11 @@ describe('dogfood-run-0 runner smoke', () => {
       }
       const obj = parsed as Record<string, unknown>;
       expect(obj.outcome).toBe('complete');
-      expect(obj.run_root).toBe(runRoot);
-      expect(existsSync(join(runRoot, 'artifacts', 'result.json'))).toBe(true);
+      expect(obj.run_folder).toBe(runFolder);
+      expect(existsSync(join(runFolder, 'reports', 'result.json'))).toBe(true);
 
       const result = RunResult.parse(
-        JSON.parse(readFileSync(join(runRoot, 'artifacts', 'result.json'), 'utf8')),
+        JSON.parse(readFileSync(join(runFolder, 'reports', 'result.json'), 'utf8')),
       );
       expect(result.goal).toBe('smoke via CLI');
     },
@@ -318,8 +318,8 @@ describe('dogfood-run-0 runner smoke', () => {
   //
   // Direct-launcher cleanup: the public test path now goes through
   // ./bin/circuit-next, which invokes dist/cli/circuit.js directly
-  // instead of surfacing npm-script or dogfood.js names to plugin users.
-  it("package.json's circuit:run script delegates to the direct Circuit launcher", () => {
+  // instead of surfacing npm-script or runtime-proof.js names to plugin users.
+  it("package.json's circuit:run script delechecks to the direct Circuit launcher", () => {
     const pkg = JSON.parse(readFileSync(resolve('package.json'), 'utf8')) as {
       scripts?: Record<string, string>;
       bin?: Record<string, string>;

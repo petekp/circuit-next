@@ -1,30 +1,30 @@
 // Shape-hint registry types.
 //
-// A shape hint tells a worker what JSON shape its dispatch response
+// A shape hint tells a worker what JSON shape its relay response
 // must produce so the runner can parse + validate the result against
-// the step's typed artifact schema. Without a hint, workers receive
+// the step's typed report schema. Without a hint, workers receive
 // only a generic "respond with a verdict" instruction and produce
 // acknowledgment-style responses that fail schema validation at the
-// step gate.
+// step check.
 //
 // Two hint kinds live in the registry:
-//   - 'schema'     — keyed by `step.writes.artifact.schema`. The
-//                    common case: each per-workflow dispatch step
-//                    that writes a typed artifact contributes one.
-//   - 'structural' — keyed by a step-shape predicate (role + gate).
-//                    For dispatch steps that emit a structured result
-//                    body but do not register a typed artifact under
-//                    `writes.artifact` (e.g. the standalone review
-//                    workflow's audit step).
+//   - 'schema'     — keyed by `step.writes.report.schema`. The
+//                    common case: each per-flow relay step
+//                    that writes a typed report contributes one.
+//   - 'structural' — keyed by a step-shape predicate (role + check).
+//                    For relay steps that emit a structured result
+//                    body but do not register a typed report under
+//                    `writes.report` (e.g. the standalone review
+//                    flow's audit step).
 //
-// To add a new workflow's dispatch shape hint, an author writes:
-//   1. The schema for the artifact body in src/workflows/<wf>/artifacts.ts
-//   2. A ShapeHint export in src/workflows/<wf>/dispatch-hints.ts
-//   3. Register it on the package's `dispatchArtifacts[].dispatchHint`
+// To add a new flow's relay shape hint, an author writes:
+//   1. The schema for the report body in src/flows/<wf>/reports.ts
+//   2. A ShapeHint export in src/flows/<wf>/relay-hints.ts
+//   3. Register it on the package's `relayReports[].relayHint`
 
-import type { Workflow } from '../../../schemas/workflow.js';
+import type { CompiledFlow } from '../../../schemas/compiled-flow.js';
 
-export type DispatchStep = Workflow['steps'][number] & { readonly kind: 'dispatch' };
+export type RelayStep = CompiledFlow['steps'][number] & { readonly kind: 'relay' };
 
 export interface SchemaShapeHint {
   readonly kind: 'schema';
@@ -35,7 +35,7 @@ export interface SchemaShapeHint {
 export interface StructuralShapeHint {
   readonly kind: 'structural';
   readonly id: string;
-  match(step: DispatchStep): boolean;
+  match(step: RelayStep): boolean;
   readonly instruction: string;
 }
 

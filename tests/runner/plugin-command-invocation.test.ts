@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 // These tests assert that the plugin command bodies under root
 // `commands/` are wired to the runtime rather than carrying placeholder
 // "Not implemented yet" text AND that the runtime binding is
-// demonstrated via an executable workflow invocation in a fenced bash
+// demonstrated via an executable flow invocation in a fenced bash
 // block (not merely a prose mention). Structural plugin-manifest +
 // frontmatter requirements are covered by Check 23 +
 // `tests/contracts/plugin-surface.test.ts`.
@@ -43,18 +43,16 @@ function extractBashBlocks(body: string): string[] {
   return blocks;
 }
 
-// Does ANY fenced bash block in the body contain an executable workflow
-// invocation with the --goal flag? "Executable" means the workflow appears
+// Does ANY fenced bash block in the body contain an executable flow
+// invocation with the --goal flag? "Executable" means the flow appears
 // as the CLI positional token after `./bin/circuit-next` or after
 // `node dist/cli/circuit.js`, AND the same line has `--goal `. Prose
-// mentions, goal text, or negated ("do not run …") text DO NOT satisfy.
-function hasExecutableWorkflowInvocation(body: string, workflow: string): boolean {
+// mentions, goal text, or necheckd ("do not run …") text DO NOT satisfy.
+function hasExecutableCompiledFlowInvocation(body: string, flow: string): boolean {
   const blocks = extractBashBlocks(body);
-  const workflowPattern = workflow.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const binInvocation = new RegExp(`^\\s*\\.\\/bin\\/circuit-next ${workflowPattern}(?:\\s|$)`);
-  const nodeInvocation = new RegExp(
-    `^\\s*node dist\\/cli\\/circuit\\.js ${workflowPattern}(?:\\s|$)`,
-  );
+  const flowPattern = flow.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const binInvocation = new RegExp(`^\\s*\\.\\/bin\\/circuit-next ${flowPattern}(?:\\s|$)`);
+  const nodeInvocation = new RegExp(`^\\s*node dist\\/cli\\/circuit\\.js ${flowPattern}(?:\\s|$)`);
   for (const block of blocks) {
     for (const line of block.split('\n')) {
       const hasCli = binInvocation.test(line) || nodeInvocation.test(line);
@@ -66,15 +64,15 @@ function hasExecutableWorkflowInvocation(body: string, workflow: string): boolea
 }
 
 function hasExecutableExploreInvocation(body: string): boolean {
-  return hasExecutableWorkflowInvocation(body, 'explore');
+  return hasExecutableCompiledFlowInvocation(body, 'explore');
 }
 
 function hasExecutableReviewInvocation(body: string): boolean {
-  return hasExecutableWorkflowInvocation(body, 'review');
+  return hasExecutableCompiledFlowInvocation(body, 'review');
 }
 
 function hasExecutableBuildInvocation(body: string): boolean {
-  return hasExecutableWorkflowInvocation(body, 'build');
+  return hasExecutableCompiledFlowInvocation(body, 'build');
 }
 
 function hasExecutableRouterInvocation(body: string): boolean {
@@ -112,11 +110,11 @@ describe('plugin command invocation binding', () => {
       expect(hasExecutableBuildInvocation(buildBody)).toBe(true);
     });
 
-    it('command bodies use the direct Circuit launcher, not the npm-script bridge or old dogfood path', () => {
+    it('command bodies use the direct Circuit launcher, not the npm-script bridge or old runtime-proof path', () => {
       for (const body of [exploreBody, runBody, reviewBody, buildBody]) {
         expect(body).toMatch(/\.\/bin\/circuit-next/);
         expect(body).not.toMatch(/npm run circuit:run/);
-        expect(body).not.toMatch(/dist\/cli\/dogfood\.js/);
+        expect(body).not.toMatch(/dist\/cli\/runtime-proof\.js/);
       }
     });
   });
@@ -194,7 +192,7 @@ describe('plugin command invocation binding', () => {
     });
   });
 
-  describe('MED 1 negative fixtures: prose-only / P2.8-only / negated bodies', () => {
+  describe('MED 1 negative fixtures: prose-only / P2.8-only / necheckd bodies', () => {
     it('rejects a body that mentions the CLI only in prose (not a bash block)', () => {
       const proseOnly = `---
 name: circuit:explore
@@ -232,8 +230,8 @@ echo "no invocation here"
       expect(hasExecutableExploreInvocation(wrongBlock)).toBe(false);
     });
 
-    it('rejects review appearing only inside the goal text instead of as the workflow token', () => {
-      const wrongWorkflow = `---
+    it('rejects review appearing only inside the goal text instead of as the flow token', () => {
+      const wrongCompiledFlow = `---
 name: circuit:review
 description: stub
 ---
@@ -242,7 +240,7 @@ description: stub
 ./bin/circuit-next explore --goal 'review the latest change'
 \`\`\`
 `;
-      expect(hasExecutableReviewInvocation(wrongWorkflow)).toBe(false);
+      expect(hasExecutableReviewInvocation(wrongCompiledFlow)).toBe(false);
     });
 
     it('accepts a body with a fenced bash block containing an explore invocation with --goal', () => {

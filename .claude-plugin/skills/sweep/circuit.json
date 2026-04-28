@@ -2,7 +2,7 @@
   "schema_version": "2",
   "id": "sweep",
   "version": "0.1.0",
-  "purpose": "Systematic codebase sweeps: cleanup, quality passes, coverage improvements, docs-sync. Frame the sweep, survey for candidates, triage by confidence x risk, execute a batch of acted items, verify no regression, review for injections, close with evidence. The minimal-but-honest single-batch composition: full seven-canonical-phase spine, only existing step kinds (synthesis / dispatch / verification / close-with-evidence). Empirical proof of the workflow-agnostic substrate after the runner.ts decomposition into per-workflow registries.",
+  "purpose": "Sweep flow: frame the sweep, survey for candidates, triage by confidence and risk, execute a batch of acted items, verify no regression, review for scope creep or regressions, and close with evidence. The first version runs one honest batch while keeping the stage path ready for broader batch orchestration.",
   "entry": {
     "signals": {
       "include": ["sweep", "cleanup", "dead-code", "lint-fix", "docs-sync", "coverage"],
@@ -14,73 +14,73 @@
     {
       "name": "default",
       "start_at": "frame-step",
-      "rigor": "standard",
+      "depth": "standard",
       "description": "Default Sweep entry mode."
     },
     {
       "name": "lite",
       "start_at": "frame-step",
-      "rigor": "lite",
+      "depth": "lite",
       "description": "Lite Sweep entry mode."
     },
     {
       "name": "deep",
       "start_at": "frame-step",
-      "rigor": "deep",
+      "depth": "deep",
       "description": "Deep Sweep entry mode."
     },
     {
       "name": "autonomous",
       "start_at": "frame-step",
-      "rigor": "autonomous",
+      "depth": "autonomous",
       "description": "Autonomous Sweep entry mode."
     }
   ],
-  "phases": [
+  "stages": [
     {
-      "id": "frame-phase",
+      "id": "frame-stage",
       "title": "Frame",
       "canonical": "frame",
       "steps": ["frame-step"]
     },
     {
-      "id": "survey-phase",
+      "id": "survey-stage",
       "title": "Survey",
       "canonical": "analyze",
       "steps": ["survey-step"]
     },
     {
-      "id": "triage-phase",
+      "id": "triage-stage",
       "title": "Triage",
       "canonical": "plan",
       "steps": ["triage-step"]
     },
     {
-      "id": "execute-phase",
+      "id": "execute-stage",
       "title": "Execute",
       "canonical": "act",
       "steps": ["execute-step"]
     },
     {
-      "id": "verify-phase",
+      "id": "verify-stage",
       "title": "Verify",
       "canonical": "verify",
       "steps": ["verify-step"]
     },
     {
-      "id": "review-phase",
+      "id": "review-stage",
       "title": "Review",
       "canonical": "review",
       "steps": ["review-step"]
     },
     {
-      "id": "close-phase",
+      "id": "close-stage",
       "title": "Close",
       "canonical": "close",
       "steps": ["close-step"]
     }
   ],
-  "spine_policy": {
+  "stage_path_policy": {
     "mode": "strict"
   },
   "steps": [
@@ -93,18 +93,18 @@
         "pass": "survey-step"
       },
       "executor": "orchestrator",
-      "kind": "synthesis",
+      "kind": "compose",
       "writes": {
-        "artifact": {
-          "path": "artifacts/sweep/brief.json",
+        "report": {
+          "path": "reports/sweep/brief.json",
           "schema": "sweep.brief@v1"
         }
       },
-      "gate": {
+      "check": {
         "kind": "schema_sections",
         "source": {
-          "kind": "artifact",
-          "ref": "artifact"
+          "kind": "report",
+          "ref": "report"
         },
         "required": ["objective", "scope"]
       }
@@ -113,26 +113,26 @@
       "id": "survey-step",
       "title": "Survey - enumerate candidate sweep targets",
       "protocol": "sweep-survey@v1",
-      "reads": ["artifacts/sweep/brief.json"],
+      "reads": ["reports/sweep/brief.json"],
       "routes": {
         "pass": "triage-step"
       },
       "executor": "worker",
-      "kind": "dispatch",
+      "kind": "relay",
       "role": "implementer",
       "writes": {
-        "artifact": {
-          "path": "artifacts/sweep/analysis.json",
+        "report": {
+          "path": "reports/sweep/analysis.json",
           "schema": "sweep.analysis@v1"
         },
-        "request": "artifacts/dispatch/sweep-survey.request.json",
-        "receipt": "artifacts/dispatch/sweep-survey.receipt.txt",
-        "result": "artifacts/dispatch/sweep-survey.result.json"
+        "request": "reports/relay/sweep-survey.request.json",
+        "receipt": "reports/relay/sweep-survey.receipt.txt",
+        "result": "reports/relay/sweep-survey.result.json"
       },
-      "gate": {
+      "check": {
         "kind": "result_verdict",
         "source": {
-          "kind": "dispatch_result",
+          "kind": "relay_result",
           "ref": "result"
         },
         "pass": ["accept"]
@@ -142,23 +142,23 @@
       "id": "triage-step",
       "title": "Triage - classify candidates by confidence x risk",
       "protocol": "sweep-triage@v1",
-      "reads": ["artifacts/sweep/brief.json", "artifacts/sweep/analysis.json"],
+      "reads": ["reports/sweep/brief.json", "reports/sweep/analysis.json"],
       "routes": {
         "pass": "execute-step"
       },
       "executor": "orchestrator",
-      "kind": "synthesis",
+      "kind": "compose",
       "writes": {
-        "artifact": {
-          "path": "artifacts/sweep/queue.json",
+        "report": {
+          "path": "reports/sweep/queue.json",
           "schema": "sweep.queue@v1"
         }
       },
-      "gate": {
+      "check": {
         "kind": "schema_sections",
         "source": {
-          "kind": "artifact",
-          "ref": "artifact"
+          "kind": "report",
+          "ref": "report"
         },
         "required": ["classified", "to_execute"]
       }
@@ -167,26 +167,26 @@
       "id": "execute-step",
       "title": "Execute - act on triaged batch",
       "protocol": "sweep-execute@v1",
-      "reads": ["artifacts/sweep/brief.json", "artifacts/sweep/queue.json"],
+      "reads": ["reports/sweep/brief.json", "reports/sweep/queue.json"],
       "routes": {
         "pass": "verify-step"
       },
       "executor": "worker",
-      "kind": "dispatch",
+      "kind": "relay",
       "role": "implementer",
       "writes": {
-        "artifact": {
-          "path": "artifacts/sweep/batch.json",
+        "report": {
+          "path": "reports/sweep/batch.json",
           "schema": "sweep.batch@v1"
         },
-        "request": "artifacts/dispatch/sweep-execute.request.json",
-        "receipt": "artifacts/dispatch/sweep-execute.receipt.txt",
-        "result": "artifacts/dispatch/sweep-execute.result.json"
+        "request": "reports/relay/sweep-execute.request.json",
+        "receipt": "reports/relay/sweep-execute.receipt.txt",
+        "result": "reports/relay/sweep-execute.result.json"
       },
-      "gate": {
+      "check": {
         "kind": "result_verdict",
         "source": {
-          "kind": "dispatch_result",
+          "kind": "relay_result",
           "ref": "result"
         },
         "pass": ["accept"]
@@ -196,23 +196,23 @@
       "id": "verify-step",
       "title": "Verify - run Sweep verification",
       "protocol": "sweep-verify@v1",
-      "reads": ["artifacts/sweep/brief.json", "artifacts/sweep/batch.json"],
+      "reads": ["reports/sweep/brief.json", "reports/sweep/batch.json"],
       "routes": {
         "pass": "review-step"
       },
       "executor": "orchestrator",
       "kind": "verification",
       "writes": {
-        "artifact": {
-          "path": "artifacts/sweep/verification.json",
+        "report": {
+          "path": "reports/sweep/verification.json",
           "schema": "sweep.verification@v1"
         }
       },
-      "gate": {
+      "check": {
         "kind": "schema_sections",
         "source": {
-          "kind": "artifact",
-          "ref": "artifact"
+          "kind": "report",
+          "ref": "report"
         },
         "required": ["overall_status", "commands"]
       }
@@ -222,29 +222,29 @@
       "title": "Review - independent audit of Sweep changes",
       "protocol": "sweep-review@v1",
       "reads": [
-        "artifacts/sweep/brief.json",
-        "artifacts/sweep/batch.json",
-        "artifacts/sweep/verification.json"
+        "reports/sweep/brief.json",
+        "reports/sweep/batch.json",
+        "reports/sweep/verification.json"
       ],
       "routes": {
         "pass": "close-step"
       },
       "executor": "worker",
-      "kind": "dispatch",
+      "kind": "relay",
       "role": "reviewer",
       "writes": {
-        "artifact": {
-          "path": "artifacts/sweep/review.json",
+        "report": {
+          "path": "reports/sweep/review.json",
           "schema": "sweep.review@v1"
         },
-        "request": "artifacts/dispatch/sweep-review.request.json",
-        "receipt": "artifacts/dispatch/sweep-review.receipt.txt",
-        "result": "artifacts/dispatch/sweep-review.result.json"
+        "request": "reports/relay/sweep-review.request.json",
+        "receipt": "reports/relay/sweep-review.receipt.txt",
+        "result": "reports/relay/sweep-review.result.json"
       },
-      "gate": {
+      "check": {
         "kind": "result_verdict",
         "source": {
-          "kind": "dispatch_result",
+          "kind": "relay_result",
           "ref": "result"
         },
         "pass": ["clean", "minor-injections"]
@@ -255,31 +255,31 @@
       "title": "Close - emit Sweep result",
       "protocol": "sweep-close@v1",
       "reads": [
-        "artifacts/sweep/brief.json",
-        "artifacts/sweep/analysis.json",
-        "artifacts/sweep/queue.json",
-        "artifacts/sweep/batch.json",
-        "artifacts/sweep/verification.json",
-        "artifacts/sweep/review.json"
+        "reports/sweep/brief.json",
+        "reports/sweep/analysis.json",
+        "reports/sweep/queue.json",
+        "reports/sweep/batch.json",
+        "reports/sweep/verification.json",
+        "reports/sweep/review.json"
       ],
       "routes": {
         "pass": "@complete"
       },
       "executor": "orchestrator",
-      "kind": "synthesis",
+      "kind": "compose",
       "writes": {
-        "artifact": {
-          "path": "artifacts/sweep-result.json",
+        "report": {
+          "path": "reports/sweep-result.json",
           "schema": "sweep.result@v1"
         }
       },
-      "gate": {
+      "check": {
         "kind": "schema_sections",
         "source": {
-          "kind": "artifact",
-          "ref": "artifact"
+          "kind": "report",
+          "ref": "report"
         },
-        "required": ["summary", "outcome", "artifact_pointers"]
+        "required": ["summary", "outcome", "evidence_links"]
       }
     }
   ]

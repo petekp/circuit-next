@@ -4,25 +4,25 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
+import type { RelayResult } from '../../src/runtime/connectors/shared.js';
+import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
+import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { RunId } from '../../src/schemas/ids.js';
-import type { LaneDeclaration } from '../../src/schemas/lane.js';
-import { Workflow } from '../../src/schemas/workflow.js';
 
-import { validateWorkflowKindPolicy } from '../../src/runtime/policy/workflow-kind-policy.js';
-import { type DispatchFn, type DispatchInput, runWorkflow } from '../../src/runtime/runner.js';
+import { validateCompiledFlowKindPolicy } from '../../src/runtime/policy/flow-kind-policy.js';
+import { type RelayFn, type RelayInput, runCompiledFlow } from '../../src/runtime/runner.js';
 
 // `explore` end-to-end fixture run.
 //
-// Structure mirrors the agent adapter smoke file: always-running static
-// declarations (ratchet-floor contribution) + AGENT_SMOKE-gated
+// Structure mirrors the agent connector smoke file: always-running static
+// declarations (ratchet-floor contribution) + AGENT_SMOKE-checkd
 // real-subprocess end-to-end. Static tests bind the explore fixture
 // shape, the normalization rule used to hash the normalized result
-// artifact, and the `sha256Hex` helper format. The AGENT_SMOKE-gated
-// branch runs the real explore fixture through `runWorkflow` with the
-// default `dispatchAgent` (spawns `claude -p`), asserts the five-event
-// dispatch transcript lands twice (synthesize + review), normalizes +
-// hashes `artifacts/explore-result.json` against the checked-in golden,
+// report, and the `sha256Hex` helper format. The AGENT_SMOKE-checkd
+// branch runs the real explore fixture through `runCompiledFlow` with the
+// default `relayAgent` (spawns `claude -p`), asserts the five-trace_entry
+// relay transcript lands twice (synthesize + review), normalizes +
+// hashes `reports/explore-result.json` against the checked-in golden,
 // and writes the `tests/fixtures/agent-smoke/last-run.json` fingerprint
 // that audit Check 30 verifies at every run.
 
@@ -32,29 +32,29 @@ const LAST_RUN_FINGERPRINT_PATH = resolve('tests/fixtures/agent-smoke/last-run.j
 
 const AGENT_SMOKE = process.env.AGENT_SMOKE === '1';
 const UPDATE_GOLDEN = process.env.UPDATE_GOLDEN === '1';
-// Fingerprint promotion is gated separately from the AGENT_SMOKE
+// Fingerprint promotion is checkd separately from the AGENT_SMOKE
 // invocation, mirroring UPDATE_CODEX_FINGERPRINT. A bare AGENT_SMOKE=1
-// run exercises the adapter end-to-end without mutating
+// run exercises the connector end-to-end without mutating
 // tests/fixtures/agent-smoke/last-run.json; explicit
 // UPDATE_AGENT_FINGERPRINT=1 opt-in is required to refresh the
 // recorded fingerprint that audit Check 30 binds against.
 const UPDATE_AGENT_FINGERPRINT = process.env.UPDATE_AGENT_FINGERPRINT === '1';
 
-// Adapter source paths the fingerprint binds against. Inlined here
+// Connector source paths the fingerprint binds against. Inlined here
 // (rather than importing from scripts/audit.mjs) to keep the test
-// stdlib-only and consistent with the codex-dispatch-roundtrip
+// stdlib-only and consistent with the codex-relay-roundtrip
 // inlining; if the test's list ever drifts from the audit's list the
 // drift detection itself surfaces the mismatch as yellow on first
 // repromotion.
 const AGENT_ADAPTER_SOURCE_PATHS = [
-  'src/runtime/adapters/agent.ts',
-  'src/runtime/adapters/shared.ts',
-  'src/runtime/adapters/dispatch-materializer.ts',
+  'src/runtime/connectors/agent.ts',
+  'src/runtime/connectors/shared.ts',
+  'src/runtime/connectors/relay-materializer.ts',
   'src/runtime/runner.ts',
-  'src/runtime/registries/artifact-schemas.ts',
+  'src/runtime/registries/report-schemas.ts',
 ] as const;
 
-function adapterSourceSha256(): string {
+function connectorSourceSha256(): string {
   const h = createHash('sha256');
   for (const p of AGENT_ADAPTER_SOURCE_PATHS) {
     const abs = resolve(p);
@@ -70,12 +70,12 @@ function sha256Hex(payload: string): string {
 }
 
 // Normalize before hashing so deterministic sections stay stable across
-// runs even when the run root changes. At v0 the close-step's artifact
-// is a static JSON object (see src/runtime/runner.ts writeSynthesisArtifact)
+// runs even when the run folder changes. At v0 the close-step's report
+// is a static JSON object (see src/runtime/runner.ts writeComposeReport)
 // with no timestamps, receipt ids, run ids, or absolute paths — so the
 // normalization is effectively a canonical JSON pretty-print with sorted
 // keys. The three sentinel replacements stay in place so a future
-// synthesis-writer that DOES emit timestamps / ids / paths doesn't
+// compose-writer that DOES emit timestamps / ids / paths doesn't
 // silently drift the golden.
 function normalizeExploreResult(raw: string): string {
   const parsed: unknown = JSON.parse(raw);
@@ -101,7 +101,7 @@ function canonicalize(input: unknown): unknown {
     for (const k of Object.keys(src).sort()) {
       if (k === 'summary') {
         sorted[k] = '<MODEL_TEXT>';
-      } else if (k === 'synthesis_verdict' || k === 'review_verdict') {
+      } else if (k === 'compose_verdict' || k === 'review_verdict') {
         sorted[k] = '<VERDICT>';
       } else if (k === 'objection_count' || k === 'missed_angle_count') {
         sorted[k] = '<COUNT>';
@@ -118,40 +118,40 @@ function canonicalize(input: unknown): unknown {
   return input;
 }
 
-function loadExploreFixture(): { workflow: Workflow; bytes: Buffer } {
+function loadExploreFixture(): { flow: CompiledFlow; bytes: Buffer } {
   const bytes = readFileSync(EXPLORE_FIXTURE_PATH);
   const raw: unknown = JSON.parse(bytes.toString('utf8'));
-  return { workflow: Workflow.parse(raw), bytes };
+  return { flow: CompiledFlow.parse(raw), bytes };
 }
 
-function lane(): LaneDeclaration {
+function change_kind(): ChangeKindDeclaration {
   return {
-    lane: 'ratchet-advance',
-    failure_mode: 'explore workflow lacks end-to-end real-adapter proof of parity',
+    change_kind: 'ratchet-advance',
+    failure_mode: 'explore flow lacks end-to-end real-connector proof of parity',
     acceptance_evidence:
-      'runWorkflow closes the explore fixture under real dispatchAgent with 2x five-event transcripts and a byte-shape golden on explore-result.json',
+      'runCompiledFlow closes the explore fixture under real relayAgent with 2x five-trace_entry transcripts and a byte-shape golden on explore-result.json',
     alternate_framing:
-      'defer end-to-end explore until P2.9 second-workflow slice; rejected because CC#P2-1 + CC#P2-2 are Phase 2 close criteria that bind on one-workflow-parity substrate, not two.',
+      'defer end-to-end explore until P2.9 second-flow slice; rejected because CC#P2-1 + CC#P2-2 are Stage 2 close criteria that bind on one-flow-parity substrate, not two.',
   };
 }
 
-function deterministicDispatcher(): DispatchFn {
+function deterministicRelayer(): RelayFn {
   return {
-    adapterName: 'agent',
-    dispatch: async (input: DispatchInput): Promise<DispatchResult> => {
+    connectorName: 'agent',
+    relay: async (input: RelayInput): Promise<RelayResult> => {
       if (input.prompt.includes('Step: synthesize-step')) {
         return {
           request_payload: input.prompt,
-          receipt_id: 'golden-synthesis',
+          receipt_id: 'golden-compose',
           result_body: JSON.stringify({
             verdict: 'accept',
             subject: 'explore: deterministic close-result parity run',
-            recommendation: 'Keep the explore close aggregate deterministic',
-            success_condition_alignment: 'The close result summarizes the typed artifacts',
+            recommendation: 'Keep the explore close aggrecheck deterministic',
+            success_condition_alignment: 'The close result summarizes the typed reports',
             supporting_aspects: [
               {
-                aspect: 'artifact-shape',
-                contribution: 'The prior artifacts give the close step stable inputs',
+                aspect: 'report-shape',
+                contribution: 'The prior reports give the close step stable inputs',
               },
             ],
           }),
@@ -164,7 +164,7 @@ function deterministicDispatcher(): DispatchFn {
         receipt_id: 'golden-review',
         result_body: JSON.stringify({
           verdict: 'accept-with-fold-ins',
-          overall_assessment: 'The synthesis is usable with one follow-up',
+          overall_assessment: 'The compose is usable with one follow-up',
           objections: ['Clarify downstream consumer needs'],
           missed_angles: [],
         }),
@@ -176,45 +176,45 @@ function deterministicDispatcher(): DispatchFn {
 }
 
 describe('explore fixture static declarations (ratchet-floor contribution)', () => {
-  it('explore fixture parses through the production Workflow schema', () => {
-    const { workflow } = loadExploreFixture();
-    expect(workflow.id).toBe('explore');
+  it('explore fixture parses through the production CompiledFlow schema', () => {
+    const { flow } = loadExploreFixture();
+    expect(flow.id).toBe('explore');
   });
 
-  it('explore fixture satisfies validateWorkflowKindPolicy (canonical phases + omits)', () => {
-    const { workflow } = loadExploreFixture();
-    const policy = validateWorkflowKindPolicy(workflow);
+  it('explore fixture satisfies validateCompiledFlowKindPolicy (canonical stages + omits)', () => {
+    const { flow } = loadExploreFixture();
+    const policy = validateCompiledFlowKindPolicy(flow);
     expect(policy.ok).toBe(true);
   });
 
   it('explore fixture declares 5 steps with the expected kind distribution', () => {
-    const { workflow } = loadExploreFixture();
-    expect(workflow.steps).toHaveLength(5);
-    const synthesis = workflow.steps.filter((s) => s.kind === 'synthesis');
-    const dispatch = workflow.steps.filter((s) => s.kind === 'dispatch');
-    expect(synthesis).toHaveLength(3); // frame + analyze + close
-    expect(dispatch).toHaveLength(2); // synthesize + review
+    const { flow } = loadExploreFixture();
+    expect(flow.steps).toHaveLength(5);
+    const compose = flow.steps.filter((s) => s.kind === 'compose');
+    const relay = flow.steps.filter((s) => s.kind === 'relay');
+    expect(compose).toHaveLength(3); // frame + analyze + close
+    expect(relay).toHaveLength(2); // synthesize + review
   });
 
-  it('explore close-step writes.artifact.path targets artifacts/explore-result.json', () => {
-    const { workflow } = loadExploreFixture();
-    const close = workflow.steps.find((s) => s.id === 'close-step');
+  it('explore close-step writes.report.path targets reports/explore-result.json', () => {
+    const { flow } = loadExploreFixture();
+    const close = flow.steps.find((s) => s.id === 'close-step');
     expect(close).toBeDefined();
-    if (close?.kind !== 'synthesis') throw new Error('close-step must be synthesis');
-    expect(close.writes.artifact.path).toBe('artifacts/explore-result.json');
+    if (close?.kind !== 'compose') throw new Error('close-step must be compose');
+    expect(close.writes.report.path).toBe('reports/explore-result.json');
   });
 
-  it('explore synthesize-step + review-step declare role + gate.pass vocabulary', () => {
-    const { workflow } = loadExploreFixture();
-    const synthesize = workflow.steps.find((s) => s.id === 'synthesize-step');
-    const review = workflow.steps.find((s) => s.id === 'review-step');
-    if (synthesize?.kind !== 'dispatch' || review?.kind !== 'dispatch') {
-      throw new Error('dispatch steps not found');
+  it('explore synthesize-step + review-step declare role + check.pass vocabulary', () => {
+    const { flow } = loadExploreFixture();
+    const synthesize = flow.steps.find((s) => s.id === 'synthesize-step');
+    const review = flow.steps.find((s) => s.id === 'review-step');
+    if (synthesize?.kind !== 'relay' || review?.kind !== 'relay') {
+      throw new Error('relay steps not found');
     }
     expect(synthesize.role).toBe('implementer');
     expect(review.role).toBe('reviewer');
-    expect(synthesize.gate.pass).toEqual(['accept']);
-    expect(review.gate.pass).toEqual(['accept', 'accept-with-fold-ins']);
+    expect(synthesize.check.pass).toEqual(['accept']);
+    expect(review.check.pass).toEqual(['accept', 'accept-with-fold-ins']);
   });
 
   it('sha256Hex over a known input is canonical 64-char lowercase hex', () => {
@@ -254,10 +254,10 @@ describe('explore fixture static declarations (ratchet-floor contribution)', () 
 
   it('normalizeExploreResult redacts model-derived close-result fields', () => {
     const raw =
-      '{"summary":"free prose","verdict_snapshot":{"synthesis_verdict":"accept","review_verdict":"accept-with-fold-ins","objection_count":3,"missed_angle_count":2}}';
+      '{"summary":"free prose","verdict_snapshot":{"compose_verdict":"accept","review_verdict":"accept-with-fold-ins","objection_count":3,"missed_angle_count":2}}';
     const out = normalizeExploreResult(raw);
     expect(out).toContain('"summary": "<MODEL_TEXT>"');
-    expect(out).toContain('"synthesis_verdict": "<VERDICT>"');
+    expect(out).toContain('"compose_verdict": "<VERDICT>"');
     expect(out).toContain('"review_verdict": "<VERDICT>"');
     expect(out).toContain('"objection_count": "<COUNT>"');
     expect(out).toContain('"missed_angle_count": "<COUNT>"');
@@ -280,34 +280,34 @@ describe('explore fixture static declarations (ratchet-floor contribution)', () 
   });
 
   it('golden sha256 is self-consistent with the deterministic explore.result close writer', async () => {
-    const { workflow, bytes } = loadExploreFixture();
-    const runRoot = mkdtempSync(join(tmpdir(), 'circuit-next-explore-golden-'));
+    const { flow, bytes } = loadExploreFixture();
+    const runFolder = mkdtempSync(join(tmpdir(), 'circuit-next-explore-golden-'));
     try {
-      const outcome = await runWorkflow({
-        runRoot,
-        workflow,
-        workflowBytes: bytes,
+      const outcome = await runCompiledFlow({
+        runFolder,
+        flow,
+        flowBytes: bytes,
         runId: RunId.parse('93000000-0000-0000-0000-000000000001'),
         goal: 'explore: deterministic close-result parity run',
-        rigor: 'standard',
-        lane: lane(),
+        depth: 'standard',
+        change_kind: change_kind(),
         now: () => new Date('2026-04-24T19:30:00.000Z'),
-        dispatcher: deterministicDispatcher(),
+        relayer: deterministicRelayer(),
       });
       expect(outcome.result.outcome).toBe('complete');
       const normalized = normalizeExploreResult(
-        readFileSync(join(runRoot, 'artifacts', 'explore-result.json'), 'utf8'),
+        readFileSync(join(runFolder, 'reports', 'explore-result.json'), 'utf8'),
       );
       const digest = sha256Hex(normalized);
       const golden = readFileSync(GOLDEN_RESULT_SHA256_PATH, 'utf8').trim();
       expect(digest).toBe(golden);
     } finally {
-      rmSync(runRoot, { recursive: true, force: true });
+      rmSync(runFolder, { recursive: true, force: true });
     }
   });
 });
 
-// AGENT_SMOKE-gated real-subprocess end-to-end. Runs ONLY when the
+// AGENT_SMOKE-checkd real-subprocess end-to-end. Runs ONLY when the
 // operator explicitly opts in via AGENT_SMOKE=1 so CI (and developer-
 // local runs without auth) stay green. Test body is written so a rerun
 // against the golden locks normalized result-shape parity; write-side
@@ -315,39 +315,39 @@ describe('explore fixture static declarations (ratchet-floor contribution)', () 
 // commit-ancestor audit (Check 30) can bind the fingerprint to the
 // committing slice.
 (AGENT_SMOKE ? describe : describe.skip)('explore fixture AGENT_SMOKE end-to-end', () => {
-  let runRootBase: string;
+  let runFolderBase: string;
 
   beforeEach(() => {
-    runRootBase = mkdtempSync(join(tmpdir(), 'circuit-next-explore-e2e-'));
+    runFolderBase = mkdtempSync(join(tmpdir(), 'circuit-next-explore-e2e-'));
   });
 
   afterEach(() => {
-    rmSync(runRootBase, { recursive: true, force: true });
+    rmSync(runFolderBase, { recursive: true, force: true });
   });
 
   it(
-    'closes the explore run end-to-end through the real dispatchAgent + 2x five-event transcript + normalized golden parity',
+    'closes the explore run end-to-end through the real relayAgent + 2x five-trace_entry transcript + normalized golden parity',
     async () => {
-      const { workflow, bytes } = loadExploreFixture();
-      const runRoot = join(runRootBase, 'explore-e2e');
-      const outcome = await runWorkflow({
-        runRoot,
-        workflow,
-        workflowBytes: bytes,
+      const { flow, bytes } = loadExploreFixture();
+      const runFolder = join(runFolderBase, 'explore-e2e');
+      const outcome = await runCompiledFlow({
+        runFolder,
+        flow,
+        flowBytes: bytes,
         runId: RunId.parse('33333333-3333-3333-3333-333333333333'),
         goal: 'explore: AGENT_SMOKE end-to-end parity run',
-        rigor: 'standard',
-        lane: lane(),
+        depth: 'standard',
+        change_kind: change_kind(),
         now: () => new Date(),
       });
 
       expect(outcome.result.outcome).toBe('complete');
 
       // Close-step's explore-result.json landed at the expected path.
-      const exploreResultPath = join(runRoot, 'artifacts', 'explore-result.json');
+      const exploreResultPath = join(runFolder, 'reports', 'explore-result.json');
       expect(existsSync(exploreResultPath)).toBe(true);
 
-      // Hash the normalized close-step artifact against the golden.
+      // Hash the normalized close-step report against the golden.
       const normalized = normalizeExploreResult(readFileSync(exploreResultPath, 'utf8'));
       const digest = sha256Hex(normalized);
       if (UPDATE_GOLDEN) {
@@ -357,42 +357,42 @@ describe('explore fixture static declarations (ratchet-floor contribution)', () 
       const golden = readFileSync(GOLDEN_RESULT_SHA256_PATH, 'utf8').trim();
       expect(digest).toBe(golden);
 
-      // Two dispatch transcripts landed; each carries the five-event
+      // Two relay transcripts landed; each carries the five-trace_entry
       // sequence on its own (step_id, attempt) pair.
-      const dispatchSteps = ['synthesize-step', 'review-step'];
-      for (const stepId of dispatchSteps) {
-        const kindsForStep = outcome.events
+      const relaySteps = ['synthesize-step', 'review-step'];
+      for (const stepId of relaySteps) {
+        const kindsForStep = outcome.trace_entrys
           .filter((e) => 'step_id' in e && e.step_id === stepId)
           .map((e) => e.kind);
-        expect(kindsForStep).toContain('dispatch.started');
-        expect(kindsForStep).toContain('dispatch.request');
-        expect(kindsForStep).toContain('dispatch.receipt');
-        expect(kindsForStep).toContain('dispatch.result');
-        expect(kindsForStep).toContain('dispatch.completed');
+        expect(kindsForStep).toContain('relay.started');
+        expect(kindsForStep).toContain('relay.request');
+        expect(kindsForStep).toContain('relay.receipt');
+        expect(kindsForStep).toContain('relay.result');
+        expect(kindsForStep).toContain('relay.completed');
       }
 
-      // Fingerprint promotion is gated on UPDATE_AGENT_FINGERPRINT=1
+      // Fingerprint promotion is checkd on UPDATE_AGENT_FINGERPRINT=1
       // and writes the schema_version 2 shape with
-      // adapter_source_sha256 + cli_version, mirroring the
-      // codex-dispatch-roundtrip promotion path. A bare AGENT_SMOKE=1
-      // run exercises the adapter end-to-end without mutating
-      // tracked state. The first-run dispatch result on the explore
+      // connector_source_sha256 + cli_version, mirroring the
+      // codex-relay-roundtrip promotion path. A bare AGENT_SMOKE=1
+      // run exercises the connector end-to-end without mutating
+      // tracked state. The first-run relay result on the explore
       // fixture is the one whose result_sha256 is recorded.
       if (UPDATE_AGENT_FINGERPRINT) {
         const commitSha = currentHeadSha();
-        // Bind cli_version to the actual subprocess init event via
-        // WorkflowRunResult.dispatchResults (populated by runWorkflow;
-        // sourced from each dispatcher's DispatchResult.cli_version,
+        // Bind cli_version to the actual subprocess init trace_entry via
+        // CompiledFlowRunResult.relayResults (populated by runCompiledFlow;
+        // sourced from each relayer's RelayResult.cli_version,
         // which agent.ts reads from init.claude_code_version). The
         // audit rejects fingerprints with empty/unknown cli_version
         // on v2, so this binding fails closed at promotion time.
-        const firstAgentDispatch = outcome.dispatchResults.find((d) => d.adapterName === 'agent');
-        if (firstAgentDispatch === undefined) {
+        const firstAgentRelay = outcome.relayResults.find((d) => d.connectorName === 'agent');
+        if (firstAgentRelay === undefined) {
           throw new Error(
-            'AGENT_SMOKE fingerprint promotion: no agent-dispatch result captured (WorkflowRunResult.dispatchResults empty for adapter=agent)',
+            'AGENT_SMOKE fingerprint promotion: no agent-relay result captured (CompiledFlowRunResult.relayResults empty for connector=agent)',
           );
         }
-        const cliVersion = firstAgentDispatch.cli_version;
+        const cliVersion = firstAgentRelay.cli_version;
         if (cliVersion.length === 0 || /\(unknown\)/.test(cliVersion)) {
           throw new Error(
             `AGENT_SMOKE fingerprint promotion: cli_version "${cliVersion}" is empty or sentinel; refusing to write a fingerprint that audit Check 30 will reject`,
@@ -402,7 +402,7 @@ describe('explore fixture static declarations (ratchet-floor contribution)', () 
           schema_version: 2,
           commit_sha: commitSha,
           result_sha256: digest,
-          adapter_source_sha256: adapterSourceSha256(),
+          connector_source_sha256: connectorSourceSha256(),
           cli_version: cliVersion,
           recorded_at: new Date().toISOString(),
         };
@@ -417,7 +417,7 @@ describe('explore fixture static declarations (ratchet-floor contribution)', () 
 function currentHeadSha(): string {
   // Shelling to git keeps the test stdlib-only w.r.t. npm deps; the
   // fingerprint writer runs only under AGENT_SMOKE=1 so the child-process
-  // dep is gated behind the opt-in.
+  // dep is checkd behind the opt-in.
   const { execSync } = require('node:child_process') as typeof import('node:child_process');
   return execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
 }

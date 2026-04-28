@@ -1,0 +1,229 @@
+{
+  "schema_version": "1",
+  "id": "explore",
+  "title": "Explore Schematic",
+  "purpose": "Explore flow: frame the investigation, analyze the subject, relay findings composition to a worker, relay review to a separate worker, and close with findings plus evidence. The schematic uses the Frame, Analyze, Act, Review, and Close stages; Plan and Verify are intentionally omitted because Explore produces an investigation report rather than an executable change.",
+  "status": "active",
+  "version": "0.1.0",
+  "starts_at": "frame-step",
+  "initial_contracts": ["task.intake@v1", "route.decision@v1", "context.packet@v1"],
+  "contract_aliases": [
+    {
+      "generic": "flow.brief@v1",
+      "actual": "explore.brief@v1"
+    },
+    {
+      "generic": "diagnosis.result@v1",
+      "actual": "explore.analysis@v1"
+    },
+    {
+      "generic": "change.evidence@v1",
+      "actual": "explore.compose@v1"
+    },
+    {
+      "generic": "review.verdict@v1",
+      "actual": "explore.review-verdict@v1"
+    },
+    {
+      "generic": "flow.result@v1",
+      "actual": "explore.result@v1"
+    }
+  ],
+  "entry": {
+    "signals": {
+      "include": ["explore", "investicheck", "research", "understand"],
+      "exclude": []
+    },
+    "intent_prefixes": ["explore", "investicheck"]
+  },
+  "entry_modes": [
+    {
+      "name": "default",
+      "depth": "standard",
+      "description": "Default explore entry mode \u2014 seeds the run at Frame. Standard depth per ADR-0007 CC#P2-6 resolution of plan Open Question #5."
+    }
+  ],
+  "stage_path_policy": {
+    "mode": "partial",
+    "omits": ["plan", "verify"],
+    "rationale": "Explore is an investigation flow \u2014 plan-mode is folded into Frame (investigation scoping); verify is omitted because explore output is not executable and does not admit mechanical verification. Review is the adversarial pass that IS in scope and, per ADR-0008, is a distinct-connector review relay (not a weaker substitute for verify as previously described at v0.1 authoring). See src/flows/explore/contract.md \u00a7Canonical stage set for the full rationale."
+  },
+  "stages": [
+    {
+      "canonical": "frame",
+      "id": "frame-stage",
+      "title": "Frame"
+    },
+    {
+      "canonical": "analyze",
+      "id": "analyze-stage",
+      "title": "Analyze"
+    },
+    {
+      "canonical": "act",
+      "id": "synthesize-stage",
+      "title": "Synthesize"
+    },
+    {
+      "canonical": "review",
+      "id": "review-stage",
+      "title": "Review"
+    },
+    {
+      "canonical": "close",
+      "id": "close-stage",
+      "title": "Close"
+    }
+  ],
+  "items": [
+    {
+      "id": "frame-step",
+      "title": "Frame \u2014 produce explore.brief",
+      "stage": "frame",
+      "input": {
+        "task": "task.intake@v1",
+        "route": "route.decision@v1"
+      },
+      "output": "explore.brief@v1",
+      "evidence_requirements": ["scope boundary", "constraints", "proof plan"],
+      "execution": {
+        "kind": "compose"
+      },
+      "protocol": "explore-frame@v1",
+      "writes": {
+        "report_path": "reports/brief.json"
+      },
+      "check": {
+        "required": ["subject", "success_condition"]
+      },
+      "routes": {
+        "continue": "analyze-step",
+        "stop": "@stop"
+      },
+      "block": "frame"
+    },
+    {
+      "id": "analyze-step",
+      "title": "Analyze \u2014 produce explore.analysis",
+      "stage": "analyze",
+      "input": {
+        "brief": "explore.brief@v1",
+        "context": "context.packet@v1"
+      },
+      "output": "explore.analysis@v1",
+      "evidence_requirements": [
+        "cause hypothesis",
+        "confidence",
+        "reproduction status",
+        "diagnostic path"
+      ],
+      "execution": {
+        "kind": "compose"
+      },
+      "protocol": "explore-analyze@v1",
+      "writes": {
+        "report_path": "reports/analysis.json"
+      },
+      "check": {
+        "required": ["aspects"]
+      },
+      "routes": {
+        "continue": "synthesize-step",
+        "retry": "analyze-step",
+        "stop": "@stop"
+      },
+      "block": "diagnose"
+    },
+    {
+      "id": "synthesize-step",
+      "title": "Synthesize \u2014 produce explore.compose (connector-bound relay per ADR-0008)",
+      "stage": "act",
+      "input": {
+        "brief": "explore.brief@v1",
+        "diagnosis": "explore.analysis@v1"
+      },
+      "output": "explore.compose@v1",
+      "evidence_requirements": ["changed files", "change rationale", "declared follow-up proof"],
+      "execution": {
+        "kind": "relay",
+        "role": "implementer"
+      },
+      "protocol": "explore-synthesize@v1",
+      "writes": {
+        "report_path": "reports/compose.json",
+        "request_path": "reports/relay/synthesize.request.json",
+        "receipt_path": "reports/relay/synthesize.receipt.txt",
+        "result_path": "reports/relay/synthesize.result.json"
+      },
+      "check": {
+        "pass": ["accept"]
+      },
+      "routes": {
+        "continue": "review-step",
+        "retry": "synthesize-step",
+        "stop": "@stop"
+      },
+      "block": "act"
+    },
+    {
+      "id": "review-step",
+      "title": "Review \u2014 adversarial pass over compose (connector-bound relay per ADR-0008)",
+      "stage": "review",
+      "input": {
+        "brief": "explore.brief@v1",
+        "diagnosis": "explore.analysis@v1",
+        "change": "explore.compose@v1"
+      },
+      "output": "explore.review-verdict@v1",
+      "evidence_requirements": ["verdict", "findings", "confidence", "required fixes"],
+      "execution": {
+        "kind": "relay",
+        "role": "reviewer"
+      },
+      "protocol": "explore-review@v1",
+      "writes": {
+        "report_path": "reports/review-verdict.json",
+        "request_path": "reports/relay/review.request.json",
+        "receipt_path": "reports/relay/review.receipt.txt",
+        "result_path": "reports/relay/review.result.json"
+      },
+      "check": {
+        "pass": ["accept", "accept-with-fold-ins"]
+      },
+      "routes": {
+        "continue": "close-step",
+        "retry": "synthesize-step",
+        "revise": "synthesize-step",
+        "stop": "@stop"
+      },
+      "block": "review"
+    },
+    {
+      "id": "close-step",
+      "title": "Close \u2014 emit final result file",
+      "stage": "close",
+      "input": {
+        "brief": "explore.brief@v1",
+        "compose": "explore.compose@v1",
+        "review": "explore.review-verdict@v1"
+      },
+      "output": "explore.result@v1",
+      "evidence_requirements": ["outcome", "evidence pointers", "residual risks", "follow-ups"],
+      "execution": {
+        "kind": "compose"
+      },
+      "protocol": "explore-close@v1",
+      "writes": {
+        "report_path": "reports/explore-result.json"
+      },
+      "check": {
+        "required": ["summary", "verdict_snapshot"]
+      },
+      "routes": {
+        "complete": "@complete",
+        "stop": "@stop"
+      },
+      "block": "close-with-evidence"
+    }
+  ]
+}

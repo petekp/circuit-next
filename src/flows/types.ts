@@ -1,0 +1,121 @@
+// CompiledFlow package — the per-flow unit the engine consumes.
+//
+// Each flow lives in src/flows/<id>/ and exports a
+// CompiledFlowPackage describing its source files, routing metadata,
+// relay reports, writers, and structural shape hints. The engine
+// (router, registries, report-schemas, emit script) derives everything
+// from the flowPackages aggregation in src/flows/catalog.ts —
+// it never imports a flow module directly.
+//
+// Adding a flow = create src/flows/<id>/, export a
+// CompiledFlowPackage, append it to catalog.ts. No edits to the engine.
+
+import type { z } from 'zod';
+import type { CheckpointBriefBuilder } from '../runtime/registries/checkpoint-writers/types.js';
+import type { CloseBuilder } from '../runtime/registries/close-writers/types.js';
+import type { ComposeBuilder } from '../runtime/registries/compose-writers/types.js';
+import type { CrossReportValidator } from '../runtime/registries/cross-report-validators.js';
+import type { StructuralShapeHint } from '../runtime/registries/shape-hints/types.js';
+import type { VerificationBuilder } from '../runtime/registries/verification-writers/types.js';
+
+export interface CompiledFlowSignal {
+  readonly label: string;
+  readonly pattern: RegExp;
+}
+
+export interface CompiledFlowRoutingMetadata {
+  // Lower order = earlier consideration. Review goes first because
+  // its signals are unambiguous; build goes last because its signals
+  // collide with planning-report phrasing. Default flow uses a
+  // sentinel (Number.MAX_SAFE_INTEGER) and is selected only when no
+  // other package matches.
+  readonly order: number;
+
+  // Positive signals that route a request to this flow.
+  readonly signals: readonly CompiledFlowSignal[];
+
+  // When true, a positive signal that ALSO mentions a planning
+  // report (proposal/plan/brief/etc.) is treated as a non-match,
+  // letting routing fall through to subsequent packages and ultimately
+  // the default. Used by build/fix/migrate. Review skips this.
+  readonly skipOnPlanningReport?: boolean;
+
+  // Reason string for matched routes. Receives the matched signal so
+  // packages can preserve their existing phrasing.
+  reasonForMatch(signal: CompiledFlowSignal): string;
+
+  // When true, this package is the catch-all when no signal matches.
+  // Exactly one package may set this.
+  readonly isDefault?: boolean;
+
+  // Reason string when this package is selected as the default.
+  readonly defaultReason?: string;
+}
+
+export interface CompiledFlowRelayReport {
+  // Schema string (e.g. 'build.implementation@v1'). The engine uses
+  // this both to look up the Zod validator (report-schemas.ts) and
+  // to look up the relay shape hint (shape-hints/registry.ts).
+  readonly schemaName: string;
+
+  // Zod validator the relay handler runs against the connector's
+  // result_body before materializing the report.
+  readonly schema: z.ZodTypeAny;
+
+  // Optional prompt instruction the worker receives describing the
+  // exact JSON shape it must emit. Compose-only reports (written
+  // by the orchestrator, not by connector relay) skip this; a few
+  // relay reports also lack a hint and rely on the generic
+  // relay shape instruction.
+  readonly relayHint?: string;
+
+  // Cross-report validator runs after `parseReport` succeeds for
+  // this schema in the relay step-handler. Enforces constraints
+  // that span more than one report (e.g. sweep.batch.items[]
+  // .candidate_id must be a subset of sweep.queue.to_execute) and
+  // therefore cannot be expressed in the single-report Zod schema.
+  // Co-located here so the invariant "validators only fire on
+  // relay-produced reports" is structurally enforced — there is
+  // no other place to attach one.
+  readonly crossReportValidate?: CrossReportValidator;
+}
+
+export interface CompiledFlowPaths {
+  // Schematic path is required — every flow has a schematic.
+  readonly schematic: string;
+  // Optional: not every flow ships a slash command (sweep is
+  // sub-run only; migrate is /circuit:run only).
+  readonly command?: string;
+  // Optional: flow-specific contract narrative. Not every
+  // flow has one yet.
+  readonly contract?: string;
+}
+
+// Engine-visible flags a flow can opt into. Kept narrow on purpose:
+// only flags that the engine currently branches on belong here. New
+// flags should describe a behavior, not a flow name.
+export interface CompiledFlowEngineFlags {
+  // When true, the relay-selection layer threads the run's effective
+  // depth into the per-flow circuit selection so a worker is
+  // chosen based on depth (Build's pattern). Other flows resolve
+  // selection without an injected depth layer.
+  readonly bindsExecutionDepthToRelaySelection?: boolean;
+}
+
+export interface CompiledFlowPackage {
+  readonly id: string;
+  readonly paths: CompiledFlowPaths;
+  readonly routing?: CompiledFlowRoutingMetadata;
+  readonly relayReports: readonly CompiledFlowRelayReport[];
+  readonly writers: {
+    readonly compose: readonly ComposeBuilder[];
+    readonly close: readonly CloseBuilder[];
+    readonly verification: readonly VerificationBuilder[];
+    readonly checkpoint: readonly CheckpointBriefBuilder[];
+  };
+  // Structural hints for relay steps that don't write a typed
+  // report (review's standalone audit step is the canonical case).
+  readonly structuralHints?: readonly StructuralShapeHint[];
+  // Optional engine-visible behavior flags. Absent = all defaults.
+  readonly engineFlags?: CompiledFlowEngineFlags;
+}

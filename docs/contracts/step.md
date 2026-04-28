@@ -4,93 +4,93 @@ status: draft
 version: 0.2
 schema_source: src/schemas/step.ts
 last_updated: 2026-04-25
-depends_on: [ids, gate, selection-policy, primitives]
-artifact_ids:
+depends_on: [ids, check, selection-policy, scalars]
+report_ids:
   - step.definition
 invariant_ids: [STEP-I1, STEP-I2, STEP-I3, STEP-I4, STEP-I5, STEP-I6, STEP-I7, STEP-I8, STEP-I9]
-property_ids: [step.prop.budget_bounds, step.prop.dispatch_role_presence, step.prop.gate_kind_source_kind_pairing, step.prop.gate_source_ref_closure, step.prop.run_relative_paths, step.prop.writes_shape_per_variant]
+property_ids: [step.prop.budget_bounds, step.prop.relay_role_presence, step.prop.check_kind_source_kind_pairing, step.prop.check_source_ref_closure, step.prop.run_relative_paths, step.prop.writes_shape_per_variant]
 ---
 
 # Step Contract
 
-A **Step** is the atomic unit of execution inside a **Phase**. Every Step
+A **Step** is the atomic unit of execution inside a **Stage**. Every Step
 belongs to exactly one of four variants, discriminated by `kind`:
 
-- **SynthesisStep** — orchestrator writes a single artifact; gated by
-  `schema_sections` against an `ArtifactSource`.
+- **ComposeStep** — orchestrator writes a single report; checkd by
+  `schema_sections` against an `ReportSource`.
 - **VerificationStep** — orchestrator runs bounded direct-argv verification
-  commands and writes a single artifact; gated by `schema_sections` against an
-  `ArtifactSource`.
+  commands and writes a single report; checkd by `schema_sections` against an
+  `ReportSource`.
 - **CheckpointStep** — orchestrator pauses for selection (human or
-  auto-resolver) under a typed `CheckpointPolicy`; gated by
+  auto-resolver) under a typed `CheckpointPolicy`; checkd by
   `checkpoint_selection` against a `CheckpointResponseSource`.
-- **DispatchStep** — worker executes remotely under a `DispatchRole`; gated
-  by `result_verdict` against a `DispatchResultSource`.
+- **RelayStep** — worker executes remotely under a `RelayRole`; checkd
+  by `result_verdict` against a `RelayResultSource`.
 
-The shape of `writes` and `gate` is coupled to `kind` at the Zod
+The shape of `writes` and `check` is coupled to `kind` at the Zod
 `discriminatedUnion` layer (`src/schemas/step.ts` `Step`), so
 `tsc --strict` rejects any Step literal that pairs a variant with a
-non-matching gate or writes shape.
+non-matching check or writes shape.
 
 ## Ubiquitous language
 
 See `specs/domain.md#core-types` for canonical definitions of **Step**,
-**Gate**, **DispatchRole**, **ArtifactRef**, and the four step variants.
+**Check**, **RelayRole**, **ReportRef**, and the four step variants.
 Do not introduce synonyms; new vocabulary must land in `specs/domain.md`
 before use here.
 
 ## Invariants
 
 The runtime MUST reject any Step that violates these. All invariants are
-enforced via `src/schemas/step.ts`, `src/schemas/gate.ts`, and
-`src/schemas/primitives.ts`, then tested in
+enforced via `src/schemas/step.ts`, `src/schemas/check.ts`, and
+`src/schemas/scalars.ts`, then tested in
 `tests/contracts/schema-parity.test.ts`.
 
-- **STEP-I1 — Kind-variant binding.** `kind`, `executor`, `gate.kind`, and
-  the shape of `writes` are coupled per variant. A `synthesis` step MUST
-  have `executor: 'orchestrator'`, `gate.kind: 'schema_sections'`, and
-  `writes: { artifact: ArtifactRef }`. A `verification` step MUST have
-  `executor: 'orchestrator'`, `gate.kind: 'schema_sections'`, and
-  `writes: { artifact: ArtifactRef }`. A `checkpoint` step MUST have
-  `executor: 'orchestrator'`, `gate.kind: 'checkpoint_selection'`, a
-  `policy: CheckpointPolicy`, and `writes: { request, response, artifact? }`.
-  A `dispatch` step MUST have `executor: 'worker'`, `gate.kind:
+- **STEP-I1 — Kind-variant binding.** `kind`, `executor`, `check.kind`, and
+  the shape of `writes` are coupled per variant. A `compose` step MUST
+  have `executor: 'orchestrator'`, `check.kind: 'schema_sections'`, and
+  `writes: { report: ReportRef }`. A `verification` step MUST have
+  `executor: 'orchestrator'`, `check.kind: 'schema_sections'`, and
+  `writes: { report: ReportRef }`. A `checkpoint` step MUST have
+  `executor: 'orchestrator'`, `check.kind: 'checkpoint_selection'`, a
+  `policy: CheckpointPolicy`, and `writes: { request, response, report? }`.
+  A `relay` step MUST have `executor: 'worker'`, `check.kind:
   'result_verdict'`, and
-  `writes: { request, receipt, result, artifact? }`. Enforced by
-  `SynthesisStep`, `VerificationStep`, `CheckpointStep`, and `DispatchStep` in
+  `writes: { request, receipt, result, report? }`. Enforced by
+  `ComposeStep`, `VerificationStep`, `CheckpointStep`, and `RelayStep` in
   `src/schemas/step.ts`.
 
 - **STEP-I2 — Non-empty routes.** Every Step declares at least one route
   target. The `routes` record is refined at `src/schemas/step.ts:L20-L22`
   (`Object.keys(m).length > 0`). Route target closure is enforced at the
-  Workflow level (see `docs/contracts/workflow.md` WF-I4), not in the
+  CompiledFlow level (see `docs/contracts/flow.md` WF-I4), not in the
   Step contract.
 
-- **STEP-I3 — Gate source closure (adversarial-review MED #7 closed).**
-  `gate.source.ref` MUST name a usable slot in the step's `writes`
+- **STEP-I3 — Check source closure (adversarial-review MED #7 closed).**
+  `check.source.ref` MUST name a usable slot in the step's `writes`
   object. Enforced *primarily* at the Zod schema layer: `ref` is a
-  literal per source kind (`ArtifactSource.ref = z.literal('artifact')`,
+  literal per source kind (`ReportSource.ref = z.literal('report')`,
   `CheckpointResponseSource.ref = z.literal('response')`,
-  `DispatchResultSource.ref = z.literal('result')` — see
-  `src/schemas/gate.ts`). Combined with STEP-I1's per-variant `writes`
+  `RelayResultSource.ref = z.literal('result')` — see
+  `src/schemas/check.ts`). Combined with STEP-I1's per-variant `writes`
   shape, the ref necessarily names a required slot. Defense-in-depth:
   the `Step = z.discriminatedUnion(...).superRefine(...)` at
-  `src/schemas/step.ts` rejects any step whose `gate.source.ref`
+  `src/schemas/step.ts` rejects any step whose `check.source.ref`
   (a) fails `Object.hasOwn(step.writes, ref)` — forbids prototype-chain
   keys like `toString`, `__proto__` — or (b) resolves to `undefined`
-  even though the key is present (guards the CheckpointStep/DispatchStep
-  optional-`artifact` corner). Negative coverage in
+  even though the key is present (guards the CheckpointStep/RelayStep
+  optional-`report` corner). Negative coverage in
   `tests/contracts/schema-parity.test.ts`: prototype-chain refs,
   cross-slot refs (`checkpoint_response` pointing at `request`;
-  `dispatch_result` pointing at `receipt`), and the historical
+  `relay_result` pointing at `receipt`), and the historical
   missing-slot rejections.
 
-- **STEP-I4 — Gate kind, source kind, and ref slot are all structurally
-  bound per variant.** Each gate variant constrains exactly one source
-  schema: `SchemaSectionsGate.source` is `ArtifactSource`,
-  `CheckpointSelectionGate.source` is `CheckpointResponseSource`,
-  `ResultVerdictGate.source` is `DispatchResultSource`
-  (`src/schemas/gate.ts`). Within each source, `kind` is a `z.literal`
+- **STEP-I4 — Check kind, source kind, and ref slot are all structurally
+  bound per variant.** Each check variant constrains exactly one source
+  schema: `SchemaSectionsCheck.source` is `ReportSource`,
+  `CheckpointSelectionCheck.source` is `CheckpointResponseSource`,
+  `ResultVerdictCheck.source` is `RelayResultSource`
+  (`src/schemas/check.ts`). Within each source, `kind` is a `z.literal`
   and `ref` is a `z.literal` — so the TypeScript-inferred `source.kind`
   literal is constrained, and a cross-kind source fails Zod's
   discriminated-union parse at runtime. (TypeScript structural typing
@@ -104,42 +104,42 @@ enforced via `src/schemas/step.ts`, `src/schemas/gate.ts`, and
   `budgets.wall_clock_ms` is a positive integer. Enforced by
   `StepBase.shape.budgets` in `src/schemas/step.ts`.
 
-- **STEP-I6 — Role only on dispatch; surplus keys rejected.** Only
-  `DispatchStep` carries a `role` field, and it is a required
-  `DispatchRole` (`researcher | implementer | reviewer`).
-  `SynthesisStep`, `VerificationStep`, and `CheckpointStep` have no `role`
+- **STEP-I6 — Role only on relay; surplus keys rejected.** Only
+  `RelayStep` carries a `role` field, and it is a required
+  `RelayRole` (`researcher | implementer | reviewer`).
+  `ComposeStep`, `VerificationStep`, and `CheckpointStep` have no `role`
   field in their schema, and because every Step variant, every `writes`
-  object, every gate variant, and every gate `source` object is explicitly
-  `.strict()`, a surplus key (including `role` on a non-dispatch step)
+  object, every check variant, and every check `source` object is explicitly
+  `.strict()`, a surplus key (including `role` on a non-relay step)
   is **rejected**, not stripped. This closes adversarial-review
   MED #4: the Zod-strict enforcement story is now backed by explicit
-  `.strict()` calls at `src/schemas/step.ts` and `src/schemas/gate.ts`.
+  `.strict()` calls at `src/schemas/step.ts` and `src/schemas/check.ts`.
   `orchestrator` is an executor, not a role; see
-  `specs/domain.md#dispatch-vocabulary`.
+  `specs/domain.md#relay-vocabulary`.
 
-- **STEP-I9 — Checkpoint policy and gate agreement.** A `CheckpointStep`
+- **STEP-I9 — Checkpoint policy and check agreement.** A `CheckpointStep`
   declares the choices an operator or auto-resolver may select in
-  `policy.choices`. The checkpoint gate's `allow` list MUST exactly match
+  `policy.choices`. The checkpoint check's `allow` list MUST exactly match
   those choice ids, and any safe default or safe autonomous choice MUST name
-  one of those declared choices. This prevents the request artifact, response
-  gate, and auto-resolution policy from drifting apart.
+  one of those declared choices. This prtrace_entrys the request report, response
+  check, and auto-resolution policy from drifting apart.
 
 - **STEP-I7 — Protocol required.** Every Step carries a `ProtocolId`
   (`protocol:` field) — no default, no optional. Enforced by `StepBase`
   in `src/schemas/step.ts`. The `ProtocolId` brand is defined in
   `src/schemas/ids.ts`.
 
-- **STEP-I8 — Workflow-controlled paths are run-relative.** Every
-  workflow-controlled read/write path carried by a Step MUST be a portable
-  POSIX-style path relative to the run root. This covers
-  `ArtifactRef.path`, `StepBase.reads[]`, checkpoint `writes.request`,
-  checkpoint `writes.response`, checkpoint `writes.artifact.path`,
-  dispatch `writes.request`, dispatch `writes.receipt`,
-  dispatch `writes.result`, and dispatch `writes.artifact.path`. A valid
+- **STEP-I8 — CompiledFlow-controlled paths are run-relative.** Every
+  flow-controlled read/write path carried by a Step MUST be a portable
+  POSIX-style path relative to the run folder. This covers
+  `ReportRef.path`, `StepBase.reads[]`, checkpoint `writes.request`,
+  checkpoint `writes.response`, checkpoint `writes.report.path`,
+  relay `writes.request`, relay `writes.receipt`,
+  relay `writes.result`, and relay `writes.report.path`. A valid
   path is non-empty, not absolute, contains no backslash, contains no
   colon or drive-letter form, and contains no empty, current-directory, or
   parent-directory segment. Enforced by `RunRelativePath` in
-  `src/schemas/primitives.ts` and by the Step variant schemas in
+  `src/schemas/scalars.ts` and by the Step variant schemas in
   `src/schemas/step.ts`. Runtime call sites additionally resolve through
   `src/runtime/run-relative-path.ts` before reading or writing.
 
@@ -148,90 +148,90 @@ enforced via `src/schemas/step.ts`, `src/schemas/gate.ts`, and
 - Step objects must parse under `Step.safeParse`.
 - The referenced `ProtocolId` must exist in the running plugin's protocol
   registry at load time (validated by the runtime, not by the Zod schema).
-- The `gate.source.ref` slot must be writable by the step's kind —
+- The `check.source.ref` slot must be writable by the step's kind —
   enforced structurally by STEP-I1 (writes shape) + STEP-I3 (ref closure).
 
 ## Post-conditions
 
 After a Step is accepted:
 
-- The Step's `id` is unique within its Workflow (enforced at the Workflow
+- The Step's `id` is unique within its CompiledFlow (enforced at the CompiledFlow
   level; see WF-I1).
 - The Step's `routes` record contains only terminal labels
   (`@complete | @stop | @escalate | @handoff`) or ids of sibling Steps
-  (enforced at the Workflow level; see WF-I4).
-- The Step's `writes` slot named by `gate.source.ref` is guaranteed to
-  exist — the runtime may resolve `gate.source` without a nil check.
-- The Step's `gate.kind` uniquely determines the shape of
-  `gate.source` — no runtime reconciliation of source-kind vs gate-kind
+  (enforced at the CompiledFlow level; see WF-I4).
+- The Step's `writes` slot named by `check.source.ref` is guaranteed to
+  exist — the runtime may resolve `check.source` without a nil check.
+- The Step's `check.kind` uniquely determines the shape of
+  `check.source` — no runtime reconciliation of source-kind vs check-kind
   is needed after parse.
-- The Step's workflow-authored file paths are safe to resolve within a
-  run root. Runtime writers still call the run-relative resolver as
+- The Step's flow-authored file paths are safe to resolve within a
+  run folder. Runtime writers still call the run-relative resolver as
   defense-in-depth when typed data is bypassed.
 
-## Property ids (reserved for Phase 2 testing)
+## Property ids (reserved for Stage 2 testing)
 
 Property-based tests will cover:
 
-- `step.prop.gate_source_ref_closure` — For any valid `Step`, the
-  `gate.source.ref` names a key in `step.writes`. (Generator should
+- `step.prop.check_source_ref_closure` — For any valid `Step`, the
+  `check.source.ref` names a key in `step.writes`. (Generator should
   include adversarial refs sampled from non-writes strings.)
-- `step.prop.gate_kind_source_kind_pairing` — For any valid `Step`, the
-  `gate.kind → source.kind` map is the fixed pairing in STEP-I4, with no
+- `step.prop.check_kind_source_kind_pairing` — For any valid `Step`, the
+  `check.kind → source.kind` map is the fixed pairing in STEP-I4, with no
   exceptions across the full variant space.
-- `step.prop.dispatch_role_presence` — For any valid `Step` where
-  `kind === 'dispatch'`, `role` is present and is a valid `DispatchRole`;
+- `step.prop.relay_role_presence` — For any valid `Step` where
+  `kind === 'relay'`, `role` is present and is a valid `RelayRole`;
   for any other variant, `role` is absent.
 - `step.prop.writes_shape_per_variant` — For any valid `Step`, the
   `writes` object is exhaustively one of the three variant shapes — no
   extra keys, no missing required keys.
 - `step.prop.run_relative_paths` — For any valid `Step`, every
-  workflow-controlled path surface named in STEP-I8 parses as
-  `RunRelativePath` and resolves inside the run root.
+  flow-controlled path surface named in STEP-I8 parses as
+  `RunRelativePath` and resolves inside the run folder.
 - `step.prop.budget_bounds` — For any valid `Step` with `budgets`
   present, `max_attempts ∈ [1, 10]`.
 
 ## Cross-contract dependencies
 
-- **gate** (`src/schemas/gate.ts`) — Step embeds one gate per variant;
-  the gate's kind-bound source schema is what makes STEP-I4 a
+- **check** (`src/schemas/check.ts`) — Step embeds one check per variant;
+  the check's kind-bound source schema is what makes STEP-I4 a
   type-layer invariant rather than a runtime refinement.
 - **selection-policy** (`src/schemas/selection-policy.ts`) — Step's
   optional `selection: SelectionOverride` participates in the selection
   layer stack defined in `specs/domain.md#configuration-vocabulary`.
-- **workflow** (`src/schemas/workflow.ts`) — Workflow-level invariants
+- **flow** (`src/schemas/compiled-flow.ts`) — CompiledFlow-level invariants
   (WF-I1 unique step ids, WF-I4 closed route targets) reference Step
   identity; they are not repeated here.
 - **ids** (`src/schemas/ids.ts`) — `StepId` and `ProtocolId` branded
   slugs.
-- **primitives** (`src/schemas/primitives.ts`) — `RunRelativePath`
-  supplies the portable run-root-relative path grammar consumed by
-  `ArtifactRef`, `reads`, and write slots.
+- **scalars** (`src/schemas/scalars.ts`) — `RunRelativePath`
+  supplies the portable run-folder-relative path grammar consumed by
+  `ReportRef`, `reads`, and write slots.
 
 ## Failure modes (carried from evidence)
 
 - `carry-forward:verdict-enum-bloat` — Existing Circuit uses a global
   verdict enum + per-protocol conditionals (see
   `bootstrap/adversarial-review-codex.md`). circuit-next constrains the
-  verdict vocabulary **per step kind** through the gate variant
-  (`ResultVerdictGate.pass`, `CheckpointSelectionGate.allow`,
-  `SchemaSectionsGate.required`). Adding a new protocol does not expand
+  verdict vocabulary **per step kind** through the check variant
+  (`ResultVerdictCheck.pass`, `CheckpointSelectionCheck.allow`,
+  `SchemaSectionsCheck.required`). Adding a new protocol does not expand
   the verdict enum.
 - `carry-forward:role-executor-confusion` — Existing Circuit allowed
-  `orchestrator` as both an executor and a dispatch role (see
-  adversarial-review MED #1). circuit-next's `DispatchRole` excludes
-  `orchestrator` and STEP-I6 forbids `role` on synthesis/verification/checkpoint
+  `orchestrator` as both an executor and a relay role (see
+  adversarial-review MED #1). circuit-next's `RelayRole` excludes
+  `orchestrator` and STEP-I6 forbids `role` on compose/verification/checkpoint
   steps. The confusion is structurally eliminated.
-- `carry-forward:gate-source-opacity` — Prior to this contract, gate
+- `carry-forward:check-source-opacity` — Prior to this contract, check
   sources were opaque strings (adversarial-review MED #7). Closed by
-  STEP-I3 + STEP-I4; see `docs/contracts/workflow.md` "Gate source
+  STEP-I3 + STEP-I4; see `docs/contracts/flow.md` "Check source
   tightening" for the transition record.
 
 ## Evolution
 
 - **v0.1 (Slice 2)** — initial contract: STEP-I1..I7, kind-bound
-  source schemas with **literal `ref` per source kind** (artifact →
-  `'artifact'`, checkpoint_response → `'response'`, dispatch_result →
+  source schemas with **literal `ref` per source kind** (report →
+  `'report'`, checkpoint_response → `'response'`, relay_result →
   `'result'`), strict surplus-key rejection via `.strict()` on every
   variant, writes-slot closure via Step-union `superRefine` with
   `Object.hasOwn` + undefined guard as defense-in-depth. MED #7 closed.
@@ -242,12 +242,12 @@ Property-based tests will cover:
 - **v0.2 (Slice 69, this version)** — exits the old grandfathered
   contract-review path by linking
   `specs/reviews/step-md-v0.2-codex.md`; adds STEP-I8 so
-  workflow-controlled Step paths are `RunRelativePath` values and runtime
+  flow-controlled Step paths are `RunRelativePath` values and runtime
   call sites resolve them through a containment-checked helper.
-- **v0.3 (Phase 2)** — ratify `property_ids` above by landing the
+- **v0.3 (Stage 2)** — ratify `property_ids` above by landing the
   corresponding property-test harness; introduce a disambiguator only
-  if a new dispatch step emerges that writes multiple result-like
-  slots (current `dispatch_result.ref = 'result'` is the v0.1 answer);
+  if a new relay step emerges that writes multiple result-like
+  slots (current `relay_result.ref = 'result'` is the v0.1 answer);
   absorb any future Codex challenger findings.
-- **v1.0 (Phase 2)** — ratified invariants + property tests + mutation
+- **v1.0 (Stage 2)** — ratified invariants + property tests + mutation
   score floor + operator-facing error-message catalog.

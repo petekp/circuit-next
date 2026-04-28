@@ -8,11 +8,11 @@ depends_on:
   - PROJECT_STATE.md
   - scripts/audit.mjs
 enforced_by:
-  - scripts/audit.mjs (PROJECT_STATE freshness + phase consistency + framing pair + lane declaration + citation rule + .circuit/ gitignore)
+  - scripts/audit.mjs (PROJECT_STATE freshness + stage consistency + framing pair + change_kind declaration + citation rule + .circuit/ gitignore)
   - AGENTS.md §Hard invariants #10 (AGENTS.md ≤ 450 lines per ADR-0011; raised from 300 at Slice 64)
   - AGENTS.md §Session hygiene (compaction disabled; slice ≤ 30 min)
 planned_tests:
-  - tests/contracts/session-hygiene.test.ts (LANDED v0.1 in Slice 14 — asserts AGENTS.md wc -l ≤ 450 per ADR-0011; README/PROJECT_STATE phase alignment; .circuit/ ignored unless allowlisted). v0.2 Tier-2+ promotions owed per §Evolution.
+  - tests/contracts/session-hygiene.test.ts (LANDED v0.1 in Slice 14 — asserts AGENTS.md wc -l ≤ 450 per ADR-0011; README/PROJECT_STATE stage alignment; .circuit/ ignored unless allowlisted). v0.2 Tier-2+ promotions owed per §Evolution.
 invariant_ids: [SESSION-I1, SESSION-I2, SESSION-I3, SESSION-I4, SESSION-I5, SESSION-I6]
 property_ids: []
 ---
@@ -48,20 +48,20 @@ agent) drive the repo across session boundaries**.
 
 - **SESSION-I2 — PROJECT_STATE.md is the live session-to-session
   snapshot.** When a slice closes, PROJECT_STATE.md is updated in the
-  same commit. When a phase changes, PROJECT_STATE.md reflects it
+  same commit. When a stage changes, PROJECT_STATE.md reflects it
   before the next session starts. The audit already checks freshness
   via `projectStateCurrent()` (warns if no update within recent
-  disciplined commits) and phase agreement with README.md. Failure
-  mode: a later session discovers the repo is two phases ahead of
+  disciplined commits) and stage agreement with README.md. Failure
+  mode: a later session discovers the repo is two stages ahead of
   what PROJECT_STATE says, and acts on the stale mental model.
 
 - **SESSION-I3 — Compaction is disabled on this repo.** Anthropic's
   automatic compaction collapses old messages into summaries when the
   context fills. Compaction is excellent for general chat; it is
   actively dangerous here because load-bearing state (decisions,
-  invariants, failure-mode names, lane declarations) is precisely the
+  invariants, failure-mode names, change_kind declarations) is precisely the
   material that gets "summarized away" first. Treat sessions as
-  long-horizon; artifact-based resume (PROJECT_STATE + continuity
+  long-horizon; report-based resume (PROJECT_STATE + continuity
   record) is the recovery path, not compacted summary. Failure mode:
   a compacted session silently loses the "we decided X but haven't
   written it down yet" line, and the next turn proposes not-X.
@@ -72,7 +72,7 @@ agent) drive the repo across session boundaries**.
   reversibility (each commit is a step you can undo without undoing
   three other unrelated things) and keeps the human-in-the-loop
   feedback cycle short enough that course-correction is cheap. When a
-  commit body names a lane and framing pair (`Failure mode:`,
+  commit body names a change_kind and framing pair (`Failure mode:`,
   `Acceptance evidence:`, `Why this not adjacent:`) it implicitly
   certifies that the slice fit the bound. Enforced by the audit's
   framing pair check. Failure mode: a multi-hour "slice" lands
@@ -89,12 +89,12 @@ agent) drive the repo across session boundaries**.
   reasonable but has no documented motivation, and the next slice
   depends on that motivation without realizing it was never committed.
 
-- **SESSION-I6 — `.circuit/` run artifacts are gitignored except for
+- **SESSION-I6 — `.circuit/` run reports are gitignored except for
   the explicitly allowlisted historical trail.** ADR-0002's gitignore
   rule. The operator's Circuit harness writes per-run state into
-  `.circuit/`; those artifacts are development-time scaffolding, not
-  product. The one exception (`phase-1-step-contract-authorship/`) is
-  preserved as a historical audit trail of the first Phase 1 slice.
+  `.circuit/`; those reports are development-time scaffolding, not
+  product. The one exception (`stage-1-step-contract-authorship/`) is
+  preserved as a historical audit trail of the first Stage 1 slice.
   Audit fails on any new staged/untracked `.circuit/` path outside
   the allowlisted prefix. Failure mode: run-state bleeds into git
   history and becomes load-bearing state that the repo implicitly
@@ -104,35 +104,35 @@ agent) drive the repo across session boundaries**.
 
 - `session-drift:stale-project-state` — a session starts with an
   out-of-date PROJECT_STATE mental model and the first commit acts on
-  wrong assumptions. Mitigated by SESSION-I2 + audit freshness check.
+  wrong assumptions. Miticheckd by SESSION-I2 + audit freshness check.
 - `session-drift:compacted-summary-loses-decision` — compaction
-  erases a load-bearing "we decided X" line. Mitigated by SESSION-I3
-  (disabled) + SESSION-I2 (artifact-persisted state).
+  erases a load-bearing "we decided X" line. Miticheckd by SESSION-I3
+  (disabled) + SESSION-I2 (report-persisted state).
 - `prompt-bloat:agent-guide-overflow` — AGENTS.md exceeds 450 lines (cap
   raised 300 → 450 per ADR-0011 on 2026-04-23 after Slice 61 Codex
   semantic-loss evidence) and the primary instruction budget starts
-  evicting tail lines silently. Mitigated by SESSION-I1 + test.
+  evicting tail lines silently. Miticheckd by SESSION-I1 + test.
 - `slice-dilation:unbounded-coupled-changes` — a "slice" actually
   touches four subsystems and cannot be reverted individually.
-  Mitigated by SESSION-I4 + framing pair requirement.
+  Miticheckd by SESSION-I4 + framing pair requirement.
 - `circuit-as-justification` — a commit justifies its decision by
-  citing unnamed existing Circuit behavior. Mitigated by SESSION-I5
+  citing unnamed existing Circuit behavior. Miticheckd by SESSION-I5
   + ADR-0002 citation rule + audit smell check.
-- `orchestration-artifact-bleed` — `.circuit/` run state lands in git
-  and becomes implicit dependency. Mitigated by SESSION-I6 + audit
+- `orchestration-report-bleed` — `.circuit/` run state lands in git
+  and becomes implicit dependency. Miticheckd by SESSION-I6 + audit
   gitignore check.
 
 ## Planned test location
 
-`tests/contracts/session-hygiene.test.ts` (Phase 1 track; landed
+`tests/contracts/session-hygiene.test.ts` (Stage 1 track; landed
 Slice 14 — SESSION-I1..I6 pinned). Asserts:
 
 - AGENTS.md line count ≤ 450 (SESSION-I1; cap raised 300 → 450 per
   ADR-0011).
-- README.md and PROJECT_STATE.md agree on current phase (SESSION-I2;
+- README.md and PROJECT_STATE.md agree on current stage (SESSION-I2;
   already covered by audit but the test gives local fast feedback).
 - No `.circuit/` path is tracked in git outside the allowlisted
-  prefix `.circuit/circuit-runs/phase-1-step-contract-authorship/`
+  prefix `.circuit/circuit-runs/stage-1-step-contract-authorship/`
   (SESSION-I6).
 
 Slices 1–9 rely on `npm run audit` for all six invariants. Promoting
@@ -149,7 +149,7 @@ container work, not a nice-to-have.
   protocol.
 - `specs/adrs/ADR-0002-bootstrap-discipline.md` citation rule +
   gitignore rule.
-- `specs/adrs/ADR-0003-authority-graph-gate.md` §Machine enforcement.
+- `specs/adrs/ADR-0003-authority-graph-check.md` §Machine enforcement.
 - `scripts/audit.mjs` — 8 of the 10 green checks this track relies on.
 
 ## Evolution
@@ -159,8 +159,8 @@ container work, not a nice-to-have.
   prose contracts that bind to the audit + the hard-invariant list
   rather than to a zod schema.
 - **v0.2** — land `tests/contracts/session-hygiene.test.ts` when
-  Phase 1 test scaffolding admits a non-schema-parity contract test
+  Stage 1 test scaffolding admits a non-schema-parity contract test
   file. Reopen conditions: a real incident where the audit missed a
   hygiene violation because the check was framing-pair-adjacent
   rather than load-bearing; OR Tier 2+ containerization promotes
-  these invariants to hard gates.
+  these invariants to hard checks.

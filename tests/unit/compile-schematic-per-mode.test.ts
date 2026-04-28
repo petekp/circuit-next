@@ -1,14 +1,14 @@
-// Unit tests for the per-mode behavior of compileSchematicToWorkflow:
+// Unit tests for the per-mode behavior of compileSchematicToCompiledFlow:
 // reachability with route_overrides, dead-step elimination per mode,
-// auto-omitted canonicals in spine_policy, and the dropped-outcomes
+// auto-omitted canonicals in stage_path_policy, and the dropped-outcomes
 // (handoff/escalate) handling. Byte-equivalence against committed
 // compiled flows is covered separately by
-// tests/contracts/compile-schematic-to-workflow.test.ts.
+// tests/contracts/compile-schematic-to-flow.test.ts.
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-import { compileSchematicToWorkflow } from '../../src/runtime/compile-schematic-to-workflow.js';
+import { compileSchematicToCompiledFlow } from '../../src/runtime/compile-schematic-to-flow.js';
 import { FlowSchematic } from '../../src/schemas/flow-schematic.js';
 
 function readJson(path: string): unknown {
@@ -16,16 +16,16 @@ function readJson(path: string): unknown {
 }
 
 function loadBuildSchematic() {
-  return FlowSchematic.parse(readJson('src/workflows/build/schematic.json'));
+  return FlowSchematic.parse(readJson('src/flows/build/schematic.json'));
 }
 
-describe('compileSchematicToWorkflow — per-mode emission', () => {
+describe('compileSchematicToCompiledFlow — per-mode emission', () => {
   it('returns kind:single when no item declares route_overrides', () => {
     const schematic = loadBuildSchematic();
-    const result = compileSchematicToWorkflow(schematic);
+    const result = compileSchematicToCompiledFlow(schematic);
     expect(result.kind).toBe('single');
     if (result.kind !== 'single') return;
-    expect(result.workflow.entry_modes.map((m) => m.name)).toEqual([
+    expect(result.flow.entry_modes.map((m) => m.name)).toEqual([
       'default',
       'lite',
       'deep',
@@ -42,12 +42,12 @@ describe('compileSchematicToWorkflow — per-mode emission', () => {
     );
     const mutated = { ...schematic, items } as typeof schematic;
 
-    const result = compileSchematicToWorkflow(mutated);
+    const result = compileSchematicToCompiledFlow(mutated);
     expect(result.kind).toBe('per-mode');
     if (result.kind !== 'per-mode') return;
 
-    const lite = result.workflows.get('lite');
-    const def = result.workflows.get('default');
+    const lite = result.flows.get('lite');
+    const def = result.flows.get('default');
     expect(lite).toBeDefined();
     expect(def).toBeDefined();
     if (lite === undefined || def === undefined) return;
@@ -79,20 +79,20 @@ describe('compileSchematicToWorkflow — per-mode emission', () => {
     );
     const mutated = { ...schematic, items } as typeof schematic;
 
-    const result = compileSchematicToWorkflow(mutated);
+    const result = compileSchematicToCompiledFlow(mutated);
     if (result.kind !== 'per-mode') {
       throw new Error('expected per-mode result');
     }
-    const lite = result.workflows.get('lite');
+    const lite = result.flows.get('lite');
     if (lite === undefined) throw new Error('expected lite compiled flow');
 
-    // close-step's canonical phase is 'close'. Lite drops it; the compiled
-    // spine_policy must auto-omit 'close' so the Workflow validator's
-    // spine completeness rule still passes.
-    expect(lite.spine_policy.mode).toBe('partial');
-    if (lite.spine_policy.mode !== 'partial') return;
-    expect(lite.spine_policy.omits).toContain('close');
-    expect(lite.spine_policy.rationale).toMatch(/lite/);
+    // close-step's canonical stage is 'close'. Lite drops it; the compiled
+    // stage_path_policy must auto-omit 'close' so the CompiledFlow validator's
+    // stage path completeness rule still passes.
+    expect(lite.stage_path_policy.mode).toBe('partial');
+    if (lite.stage_path_policy.mode !== 'partial') return;
+    expect(lite.stage_path_policy.omits).toContain('close');
+    expect(lite.stage_path_policy.rationale).toMatch(/lite/);
   });
 
   it('drops handoff and escalate outcomes at compile without erroring', () => {
@@ -111,10 +111,10 @@ describe('compileSchematicToWorkflow — per-mode emission', () => {
     );
     const mutated = { ...schematic, items } as typeof schematic;
 
-    const result = compileSchematicToWorkflow(mutated);
+    const result = compileSchematicToCompiledFlow(mutated);
     expect(result.kind).toBe('single');
     if (result.kind !== 'single') return;
-    const close = result.workflow.steps.find((s) => (s.id as unknown as string) === 'close-step');
+    const close = result.flow.steps.find((s) => (s.id as unknown as string) === 'close-step');
     expect(close).toBeDefined();
     // The compiled close-step should only carry the pass edge; handoff /
     // escalate outcomes are author-intent and live only in the schematic.

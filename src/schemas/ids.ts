@@ -2,11 +2,11 @@ import { z } from 'zod';
 
 const slugPattern = /^[a-z][a-z0-9-]*$/;
 
-export const WorkflowId = z.string().regex(slugPattern).brand<'WorkflowId'>();
-export type WorkflowId = z.infer<typeof WorkflowId>;
+export const CompiledFlowId = z.string().regex(slugPattern).brand<'CompiledFlowId'>();
+export type CompiledFlowId = z.infer<typeof CompiledFlowId>;
 
-export const PhaseId = z.string().regex(slugPattern).brand<'PhaseId'>();
-export type PhaseId = z.infer<typeof PhaseId>;
+export const StageId = z.string().regex(slugPattern).brand<'StageId'>();
+export type StageId = z.infer<typeof StageId>;
 
 export const StepId = z.string().regex(slugPattern).brand<'StepId'>();
 export type StepId = z.infer<typeof StepId>;

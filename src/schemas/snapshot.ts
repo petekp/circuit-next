@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { InvocationId, RunId, StepId, WorkflowId } from './ids.js';
-import { LaneDeclaration } from './lane.js';
-import { Rigor } from './rigor.js';
+import { ChangeKindDeclaration } from './change-kind.js';
+import { Depth } from './depth.js';
+import { CompiledFlowId, InvocationId, RunId, StepId } from './ids.js';
 
-export const StepStatus = z.enum(['pending', 'in_progress', 'gate_failed', 'complete', 'aborted']);
+export const StepStatus = z.enum(['pending', 'in_progress', 'check_failed', 'complete', 'aborted']);
 export type StepStatus = z.infer<typeof StepStatus>;
 
 export const StepState = z
@@ -11,7 +11,7 @@ export const StepState = z
     step_id: StepId,
     status: StepStatus,
     attempts: z.number().int().nonnegative(),
-    last_artifact_path: z.string().optional(),
+    last_report_path: z.string().optional(),
     last_checkpoint_selection: z.string().optional(),
     last_route_taken: z.string().optional(),
   })
@@ -32,14 +32,14 @@ export const Snapshot = z
   .object({
     schema_version: z.literal(1),
     run_id: RunId,
-    workflow_id: WorkflowId,
+    flow_id: CompiledFlowId,
     invocation_id: InvocationId.optional(),
-    rigor: Rigor,
-    lane: LaneDeclaration,
+    depth: Depth,
+    change_kind: ChangeKindDeclaration,
     current_step: StepId.optional(),
     status: SnapshotStatus,
     steps: z.array(StepState),
-    events_consumed: z.number().int().nonnegative(),
+    trace_entries_consumed: z.number().int().nonnegative(),
     manifest_hash: z.string().min(1),
     updated_at: z.string().datetime(),
   })

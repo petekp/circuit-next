@@ -10,7 +10,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   Effort,
-  Phase,
   ProviderScopedModel,
   ResolvedSelection,
   SELECTION_PRECEDENCE,
@@ -18,6 +17,7 @@ import {
   SelectionResolution,
   SelectionSource,
   SkillOverride,
+  Stage,
 } from '../../src/index.js';
 
 describe('SelectionOverride', () => {
@@ -51,8 +51,8 @@ describe('SelectionSource enum is closed (SEL-I1 declaration layer)', () => {
       'default',
       'user-global',
       'project',
-      'workflow',
-      'phase',
+      'flow',
+      'stage',
       'step',
       'invocation',
     ] as const) {
@@ -73,8 +73,8 @@ describe('SELECTION_PRECEDENCE (SEL-I1)', () => {
       'default',
       'user-global',
       'project',
-      'workflow',
-      'phase',
+      'flow',
+      'stage',
       'step',
       'invocation',
     ]);
@@ -105,7 +105,7 @@ describe('SelectionOverride (SEL-I2)', () => {
 
   it('rejects surplus key alongside valid fields', () => {
     const bad = SelectionOverride.safeParse({
-      rigor: 'standard',
+      depth: 'standard',
       effort: 'high',
       smuggled: true,
     });
@@ -219,7 +219,7 @@ describe('ResolvedSelection (SEL-I5)', () => {
     expect(parsed.success).toBe(true);
   });
 
-  it('accepts invocation_options (effective state at dispatch time)', () => {
+  it('accepts invocation_options (effective state at relay time)', () => {
     const ok = ResolvedSelection.safeParse({
       skills: [],
       invocation_options: { temperature: 0 },
@@ -281,7 +281,7 @@ describe('SelectionResolution ordering and uniqueness (SEL-I6, SEL-I7)', () => {
   // Applied entries require non-empty overrides
   // (ghost-provenance rejection). Each helper below sets exactly one field
   // so the override legitimately contributes to the chain.
-  const contributes = { rigor: 'standard' as const };
+  const contributes = { depth: 'standard' as const };
 
   it('accepts in-order applied chain with unique sources', () => {
     const ok = SelectionResolution.safeParse({
@@ -290,8 +290,8 @@ describe('SelectionResolution ordering and uniqueness (SEL-I6, SEL-I7)', () => {
         { source: 'default', override: contributes },
         { source: 'user-global', override: contributes },
         { source: 'project', override: contributes },
-        { source: 'workflow', override: contributes },
-        { source: 'phase', phase_id: 'review', override: contributes },
+        { source: 'flow', override: contributes },
+        { source: 'stage', stage_id: 'review', override: contributes },
         { source: 'step', step_id: 'review-step', override: contributes },
         { source: 'invocation', override: contributes },
       ],
@@ -318,11 +318,11 @@ describe('SelectionResolution ordering and uniqueness (SEL-I6, SEL-I7)', () => {
     expect(ok.success).toBe(true);
   });
 
-  it('SEL-I6 rejects out-of-order: workflow before user-global', () => {
+  it('SEL-I6 rejects out-of-order: flow before user-global', () => {
     const bad = SelectionResolution.safeParse({
       resolved: { skills: [] },
       applied: [
-        { source: 'workflow', override: contributes },
+        { source: 'flow', override: contributes },
         { source: 'user-global', override: contributes },
       ],
     });
@@ -345,23 +345,23 @@ describe('SelectionResolution ordering and uniqueness (SEL-I6, SEL-I7)', () => {
     expect(bad.success).toBe(false);
   });
 
-  it('SEL-I6 rejects phase before workflow (the cross-layer case)', () => {
+  it('SEL-I6 rejects stage before flow (the cross-layer case)', () => {
     const bad = SelectionResolution.safeParse({
       resolved: { skills: [] },
       applied: [
-        { source: 'phase', phase_id: 'review', override: contributes },
-        { source: 'workflow', override: contributes },
+        { source: 'stage', stage_id: 'review', override: contributes },
+        { source: 'flow', override: contributes },
       ],
     });
     expect(bad.success).toBe(false);
   });
 
-  it('SEL-I7 rejects duplicate singleton source: two workflow entries', () => {
+  it('SEL-I7 rejects duplicate singleton source: two flow entries', () => {
     const bad = SelectionResolution.safeParse({
       resolved: { skills: [] },
       applied: [
-        { source: 'workflow', override: contributes },
-        { source: 'workflow', override: contributes },
+        { source: 'flow', override: contributes },
+        { source: 'flow', override: contributes },
       ],
     });
     expect(bad.success).toBe(false);
@@ -377,7 +377,7 @@ describe('SelectionResolution ordering and uniqueness (SEL-I6, SEL-I7)', () => {
       resolved: { skills: [] },
       applied: [
         { source: 'user-global', override: contributes },
-        { source: 'workflow', override: contributes },
+        { source: 'flow', override: contributes },
         { source: 'step', step_id: 'review-step', override: contributes },
         { source: 'user-global', override: contributes },
       ],
@@ -386,19 +386,19 @@ describe('SelectionResolution ordering and uniqueness (SEL-I6, SEL-I7)', () => {
   });
 });
 
-// Phase/step applied entries are
-// disambiguated by id, so two distinct phases or steps can legally appear
+// Stage/step applied entries are
+// disambiguated by id, so two distinct stages or steps can legally appear
 // in the same applied chain. SEL-I7's uniqueness is now keyed on identity
 // (source + disambiguator), not bare source.
-describe('SelectionResolution phase/step disambiguators', () => {
-  const contributes = { rigor: 'standard' as const };
+describe('SelectionResolution stage/step disambiguators', () => {
+  const contributes = { depth: 'standard' as const };
 
-  it('accepts two phase entries with distinct phase_ids (overlapping phases)', () => {
+  it('accepts two stage entries with distinct stage_ids (overlapping stages)', () => {
     const ok = SelectionResolution.safeParse({
       resolved: { skills: [] },
       applied: [
-        { source: 'phase', phase_id: 'review', override: contributes },
-        { source: 'phase', phase_id: 'verify', override: contributes },
+        { source: 'stage', stage_id: 'review', override: contributes },
+        { source: 'stage', stage_id: 'verify', override: contributes },
       ],
     });
     expect(ok.success).toBe(true);
@@ -415,12 +415,12 @@ describe('SelectionResolution phase/step disambiguators', () => {
     expect(ok.success).toBe(true);
   });
 
-  it('SEL-I7 rejects two phase entries with the same phase_id', () => {
+  it('SEL-I7 rejects two stage entries with the same stage_id', () => {
     const bad = SelectionResolution.safeParse({
       resolved: { skills: [] },
       applied: [
-        { source: 'phase', phase_id: 'review', override: contributes },
-        { source: 'phase', phase_id: 'review', override: contributes },
+        { source: 'stage', stage_id: 'review', override: contributes },
+        { source: 'stage', stage_id: 'review', override: contributes },
       ],
     });
     expect(bad.success).toBe(false);
@@ -442,10 +442,10 @@ describe('SelectionResolution phase/step disambiguators', () => {
     expect(bad.success).toBe(false);
   });
 
-  it('rejects phase applied entry missing the phase_id disambiguator', () => {
+  it('rejects stage applied entry missing the stage_id disambiguator', () => {
     const bad = SelectionResolution.safeParse({
       resolved: { skills: [] },
-      applied: [{ source: 'phase', override: contributes }],
+      applied: [{ source: 'stage', override: contributes }],
     });
     expect(bad.success).toBe(false);
   });
@@ -458,12 +458,12 @@ describe('SelectionResolution phase/step disambiguators', () => {
     expect(bad.success).toBe(false);
   });
 
-  it('SEL-I6 rejects step-then-phase: category order still holds when disambiguator is present', () => {
+  it('SEL-I6 rejects step-then-stage: category order still holds when disambiguator is present', () => {
     const bad = SelectionResolution.safeParse({
       resolved: { skills: [] },
       applied: [
         { source: 'step', step_id: 'compose-brief', override: contributes },
-        { source: 'phase', phase_id: 'review', override: contributes },
+        { source: 'stage', stage_id: 'review', override: contributes },
       ],
     });
     expect(bad.success).toBe(false);
@@ -471,14 +471,14 @@ describe('SelectionResolution phase/step disambiguators', () => {
 });
 
 // Ghost provenance rejection. An applied entry
-// whose override is empty (no model/effort/rigor, skills at inherit,
+// whose override is empty (no model/effort/depth, skills at inherit,
 // empty invocation_options) fabricates provenance for a non-contributing
 // layer. v0.1 rejects at the schema layer.
 describe('SelectionResolution ghost provenance', () => {
   it('rejects applied entry with fully empty override', () => {
     const bad = SelectionResolution.safeParse({
       resolved: { skills: [] },
-      applied: [{ source: 'workflow', override: {} }],
+      applied: [{ source: 'flow', override: {} }],
     });
     expect(bad.success).toBe(false);
     if (!bad.success) {
@@ -491,7 +491,7 @@ describe('SelectionResolution ghost provenance', () => {
       resolved: { skills: [] },
       applied: [
         {
-          source: 'workflow',
+          source: 'flow',
           override: { skills: { mode: 'inherit' }, invocation_options: {} },
         },
       ],
@@ -499,10 +499,10 @@ describe('SelectionResolution ghost provenance', () => {
     expect(bad.success).toBe(false);
   });
 
-  it('accepts applied entry contributing only rigor', () => {
+  it('accepts applied entry contributing only depth', () => {
     const ok = SelectionResolution.safeParse({
       resolved: { skills: [] },
-      applied: [{ source: 'workflow', override: { rigor: 'deep' } }],
+      applied: [{ source: 'flow', override: { depth: 'deep' } }],
     });
     expect(ok.success).toBe(true);
   });
@@ -512,7 +512,7 @@ describe('SelectionResolution ghost provenance', () => {
       resolved: { skills: [] },
       applied: [
         {
-          source: 'workflow',
+          source: 'flow',
           override: { skills: { mode: 'append', skills: ['tdd'] } },
         },
       ],
@@ -523,14 +523,14 @@ describe('SelectionResolution ghost provenance', () => {
   it('accepts applied entry contributing only invocation_options', () => {
     const ok = SelectionResolution.safeParse({
       resolved: { skills: [] },
-      applied: [{ source: 'workflow', override: { invocation_options: { verbose: true } } }],
+      applied: [{ source: 'flow', override: { invocation_options: { verbose: true } } }],
     });
     expect(ok.success).toBe(true);
   });
 });
 
 describe('SelectionResolution transitive strict (SEL-I8)', () => {
-  const contributes = { rigor: 'standard' as const };
+  const contributes = { depth: 'standard' as const };
 
   it('rejects surplus key on the top-level SelectionResolution', () => {
     const bad = SelectionResolution.safeParse({
@@ -544,7 +544,7 @@ describe('SelectionResolution transitive strict (SEL-I8)', () => {
   it('rejects surplus key on an applied[] entry', () => {
     const bad = SelectionResolution.safeParse({
       resolved: { skills: [] },
-      applied: [{ source: 'workflow', override: contributes, smuggled: 'x' }],
+      applied: [{ source: 'flow', override: contributes, smuggled: 'x' }],
     });
     expect(bad.success).toBe(false);
   });
@@ -552,7 +552,7 @@ describe('SelectionResolution transitive strict (SEL-I8)', () => {
   it('rejects surplus key inside applied[].override', () => {
     const bad = SelectionResolution.safeParse({
       resolved: { skills: [] },
-      applied: [{ source: 'workflow', override: { rigor: 'standard', smuggled: 'x' } }],
+      applied: [{ source: 'flow', override: { depth: 'standard', smuggled: 'x' } }],
     });
     expect(bad.success).toBe(false);
   });
@@ -562,7 +562,7 @@ describe('SelectionResolution transitive strict (SEL-I8)', () => {
       resolved: { skills: [] },
       applied: [
         {
-          source: 'workflow',
+          source: 'flow',
           override: { model: { provider: 'openai', model: 'gpt-5.4', smuggled: 'x' } },
         },
       ],
@@ -575,7 +575,7 @@ describe('SelectionResolution transitive strict (SEL-I8)', () => {
       resolved: { skills: [] },
       applied: [
         {
-          source: 'workflow',
+          source: 'flow',
           override: { skills: { mode: 'replace', skills: [], smuggled: 'x' } },
         },
       ],
@@ -584,9 +584,9 @@ describe('SelectionResolution transitive strict (SEL-I8)', () => {
   });
 });
 
-describe('Phase.selection (SEL-I9)', () => {
-  it('accepts a Phase with no selection (backward compatibility with existing phase.md)', () => {
-    const ok = Phase.safeParse({
+describe('Stage.selection (SEL-I9)', () => {
+  it('accepts a Stage with no selection (backward compatibility with existing stage.md)', () => {
+    const ok = Stage.safeParse({
       id: 'frame',
       title: 'Frame',
       canonical: 'frame',
@@ -595,8 +595,8 @@ describe('Phase.selection (SEL-I9)', () => {
     expect(ok.success).toBe(true);
   });
 
-  it('accepts a Phase with a selection override', () => {
-    const ok = Phase.safeParse({
+  it('accepts a Stage with a selection override', () => {
+    const ok = Stage.safeParse({
       id: 'review',
       title: 'Review',
       canonical: 'review',
@@ -609,8 +609,8 @@ describe('Phase.selection (SEL-I9)', () => {
     expect(ok.success).toBe(true);
   });
 
-  it('rejects a Phase with a misspelled selection field (PHASE-I2 still governs)', () => {
-    const bad = Phase.safeParse({
+  it('rejects a Stage with a misspelled selection field (stage-I2 still governs)', () => {
+    const bad = Stage.safeParse({
       id: 'review',
       title: 'Review',
       steps: ['review-step'],
@@ -619,8 +619,8 @@ describe('Phase.selection (SEL-I9)', () => {
     expect(bad.success).toBe(false);
   });
 
-  it('rejects a Phase whose selection override has a typo inside it (SEL-I2 transitive)', () => {
-    const bad = Phase.safeParse({
+  it('rejects a Stage whose selection override has a typo inside it (SEL-I2 transitive)', () => {
+    const bad = Stage.safeParse({
       id: 'review',
       title: 'Review',
       steps: ['review-step'],

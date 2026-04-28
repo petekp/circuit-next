@@ -5,40 +5,40 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { resultPath } from '../../src/runtime/result-writer.js';
 import {
-  type ChildWorkflowResolver,
-  type DispatchFn,
-  type WorkflowInvocation,
-  type WorkflowRunResult,
-  type WorkflowRunner,
-  runWorkflow,
+  type ChildCompiledFlowResolver,
+  type CompiledFlowInvocation,
+  type CompiledFlowRunResult,
+  type CompiledFlowRunner,
+  type RelayFn,
+  runCompiledFlow,
 } from '../../src/runtime/runner.js';
-import { RunId, type WorkflowId } from '../../src/schemas/ids.js';
-import type { LaneDeclaration } from '../../src/schemas/lane.js';
+import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
+import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
+import { type CompiledFlowId, RunId } from '../../src/schemas/ids.js';
 import { RunResult } from '../../src/schemas/result.js';
 import { Snapshot } from '../../src/schemas/snapshot.js';
-import { Workflow } from '../../src/schemas/workflow.js';
 
-// Sub-run runtime test. Verifies that a parent workflow declaring a
+// Sub-run runtime test. Verifies that a parent flow declaring a
 // `sub-run` step:
-//   - Resolves the child workflow through the injected resolver.
+//   - Resolves the child flow through the injected resolver.
 //   - Mints a fresh RunId for the child (RUN-I3 cross-run smuggling
 //     stays forbidden — no shared run_id).
-//   - Provisions a sibling child run-root under the parent's runs base.
-//   - Emits sub_run.{started,completed} on the parent's event log
+//   - Provisions a sibling child run-folder under the parent's runs base.
+//   - Emits sub_run.{started,completed} on the parent's trace
 //     carrying the child_run_id linkage and the observed verdict.
 //   - Copies the child's result.json bytes into the parent's
 //     `step.writes.result` slot for downstream consumers.
-//   - Admits or rejects the child against `step.gate.pass`.
+//   - Admits or rejects the child against `step.check.pass`.
 
-const PARENT_WORKFLOW_ID = 'parent-test' as unknown as WorkflowId;
-const CHILD_WORKFLOW_ID = 'child-test' as unknown as WorkflowId;
+const PARENT_WORKFLOW_ID = 'parent-test' as unknown as CompiledFlowId;
+const CHILD_WORKFLOW_ID = 'child-test' as unknown as CompiledFlowId;
 
-function lane(): LaneDeclaration {
+function change_kind(): ChangeKindDeclaration {
   return {
-    lane: 'ratchet-advance',
+    change_kind: 'ratchet-advance',
     failure_mode: 'sub-run handler omits child audit linkage or shares parent run id',
     acceptance_evidence:
-      'parent log carries sub_run.started + sub_run.completed with distinct child_run_id, child run-root sibling to parent, child result.json copied verbatim into parent writes.result slot',
+      'parent log carries sub_run.started + sub_run.completed with distinct child_run_id, child run-folder sibling to parent, child result.json copied verbatim into parent writes.result slot',
     alternate_framing: 'unit test of the sub-run handler in isolation',
   };
 }
@@ -48,16 +48,16 @@ function deterministicNow(startMs: number): () => Date {
   return () => new Date(startMs + n++ * 1000);
 }
 
-function unusedDispatcher(): DispatchFn {
+function unusedRelayer(): RelayFn {
   return {
-    adapterName: 'agent',
-    dispatch: async () => {
-      throw new Error('dispatcher should not run during sub-run-only parent execution');
+    connectorName: 'agent',
+    relay: async () => {
+      throw new Error('relayer should not run during sub-run-only parent execution');
     },
   };
 }
 
-function buildParentWorkflow(parentGatePass: readonly string[]): Workflow {
+function buildParentCompiledFlow(parentCheckPass: readonly string[]): CompiledFlow {
   const raw = {
     schema_version: '2',
     id: PARENT_WORKFLOW_ID as unknown as string,
@@ -71,71 +71,71 @@ function buildParentWorkflow(parentGatePass: readonly string[]): Workflow {
       {
         name: 'sub-run-test',
         start_at: 'sub-run-step',
-        rigor: 'standard',
+        depth: 'standard',
         description: 'Default sub-run-test entry mode.',
       },
     ],
-    phases: [
+    stages: [
       {
-        id: 'act-phase',
+        id: 'act-stage',
         title: 'Act',
         canonical: 'act',
         steps: ['sub-run-step'],
       },
     ],
-    spine_policy: {
+    stage_path_policy: {
       mode: 'partial',
       omits: ['frame', 'analyze', 'plan', 'verify', 'review', 'close'],
-      rationale: 'narrow sub-run runtime test — only act phase carries the sub-run step.',
+      rationale: 'narrow sub-run runtime test — only act stage carries the sub-run step.',
     },
     steps: [
       {
         id: 'sub-run-step',
-        title: 'Sub-run — invoke child workflow',
+        title: 'Sub-run — invoke child flow',
         protocol: 'sub-run-protocol@v1',
         reads: [],
         routes: { pass: '@complete' },
         executor: 'orchestrator',
         kind: 'sub-run',
-        workflow_ref: {
-          workflow_id: CHILD_WORKFLOW_ID as unknown as string,
+        flow_ref: {
+          flow_id: CHILD_WORKFLOW_ID as unknown as string,
           entry_mode: 'default',
         },
         goal: 'child run goal',
-        rigor: 'standard',
-        writes: { result: 'artifacts/child-result.json' },
-        gate: {
+        depth: 'standard',
+        writes: { result: 'reports/child-result.json' },
+        check: {
           kind: 'result_verdict',
           source: { kind: 'sub_run_result', ref: 'result' },
-          pass: parentGatePass,
+          pass: parentCheckPass,
         },
       },
     ],
   };
-  return Workflow.parse(raw);
+  return CompiledFlow.parse(raw);
 }
 
-function buildChildWorkflow(): Workflow {
-  // The child has a single synthesis step. The child runner is stubbed
-  // anyway (it never runs the child's loop), so the child workflow
-  // shape only has to type-check through Workflow.parse — the stub
+function buildChildCompiledFlow(): CompiledFlow {
+  // The child has a single compose step. The child runner is stubbed
+  // anyway (it never runs the child's loop), so the child flow
+  // shape only has to type-check through CompiledFlow.parse — the stub
   // childRunner produces a synthetic result.json.
   const raw = {
     schema_version: '2',
     id: CHILD_WORKFLOW_ID as unknown as string,
     version: '0.1.0',
-    purpose: 'sub-run runtime test child — single synthesis step.',
+    purpose: 'sub-run runtime test child — single compose step.',
     entry: { signals: { include: ['child-test'], exclude: [] }, intent_prefixes: ['child-test'] },
     entry_modes: [
       {
         name: 'default',
         start_at: 'child-step',
-        rigor: 'standard',
+        depth: 'standard',
         description: 'Default child entry mode.',
       },
     ],
-    phases: [{ id: 'act-phase', title: 'Act', canonical: 'act', steps: ['child-step'] }],
-    spine_policy: {
+    stages: [{ id: 'act-stage', title: 'Act', canonical: 'act', steps: ['child-step'] }],
+    stage_path_policy: {
       mode: 'partial',
       omits: ['frame', 'analyze', 'plan', 'verify', 'review', 'close'],
       rationale: 'narrow stub child for sub-run test.',
@@ -143,95 +143,98 @@ function buildChildWorkflow(): Workflow {
     steps: [
       {
         id: 'child-step',
-        title: 'Child synthesis',
-        protocol: 'child-synthesis@v1',
+        title: 'Child compose',
+        protocol: 'child-compose@v1',
         reads: [],
         routes: { pass: '@complete' },
         executor: 'orchestrator',
-        kind: 'synthesis',
+        kind: 'compose',
         writes: {
-          artifact: { path: 'artifacts/child-synthesis.json', schema: 'child-synthesis@v1' },
+          report: { path: 'reports/child-compose.json', schema: 'child-compose@v1' },
         },
-        gate: {
+        check: {
           kind: 'schema_sections',
-          source: { kind: 'artifact', ref: 'artifact' },
+          source: { kind: 'report', ref: 'report' },
           required: ['summary'],
         },
       },
     ],
   };
-  return Workflow.parse(raw);
+  return CompiledFlow.parse(raw);
 }
 
-function makeChildResolver(child: { workflow: Workflow; bytes: Buffer }): ChildWorkflowResolver {
+function makeChildResolver(child: {
+  flow: CompiledFlow;
+  bytes: Buffer;
+}): ChildCompiledFlowResolver {
   return () => child;
 }
 
 // Stub childRunner that bypasses real child execution. Writes a
 // synthetic child result.json (with a verdict field) into the child's
-// runRoot/artifacts and returns a minimal WorkflowRunResult. This
+// runFolder/reports and returns a minimal CompiledFlowRunResult. This
 // isolates the parent's sub-run handler logic from the child's full
 // loop while still exercising the path-derivation, file-copy, and
-// audit-event surface the handler is responsible for.
+// audit-trace_entry surface the handler is responsible for.
 function makeStubChildRunner(observed: {
   verdict: string;
   outcome: 'complete' | 'aborted';
   capturedRunIds: { value: RunId | undefined };
-}): WorkflowRunner {
-  return async (inv: WorkflowInvocation): Promise<WorkflowRunResult> => {
+}): CompiledFlowRunner {
+  return async (inv: CompiledFlowInvocation): Promise<CompiledFlowRunResult> => {
     observed.capturedRunIds.value = inv.runId;
-    const childResultAbs = resultPath(inv.runRoot);
+    const childResultAbs = resultPath(inv.runFolder);
     mkdirSync(dirname(childResultAbs), { recursive: true });
     const body = RunResult.parse({
       schema_version: 1,
       run_id: inv.runId as unknown as string,
-      workflow_id: inv.workflow.id as unknown as string,
+      flow_id: inv.flow.id as unknown as string,
       goal: inv.goal,
       outcome: observed.outcome,
       summary: 'stub child result',
       closed_at: new Date(0).toISOString(),
-      events_observed: 1,
+      trace_entries_observed: 1,
       manifest_hash: 'stub-manifest-hash',
       verdict: observed.verdict,
     });
     writeFileSync(childResultAbs, `${JSON.stringify(body, null, 2)}\n`);
     return {
-      runRoot: inv.runRoot,
+      runFolder: inv.runFolder,
       result: body,
       snapshot: Snapshot.parse({
         schema_version: 1,
         run_id: body.run_id,
-        workflow_id: body.workflow_id,
-        rigor: 'standard',
-        lane: inv.lane,
+        flow_id: body.flow_id,
+        depth: 'standard',
+        change_kind: inv.change_kind,
         status: observed.outcome === 'complete' ? 'complete' : 'aborted',
         steps: [],
-        events_consumed: 1,
+        trace_entries_consumed: 1,
         manifest_hash: 'stub-manifest-hash',
         updated_at: new Date(0).toISOString(),
       }),
-      events: [],
-      dispatchResults: [],
+      trace_entrys: [],
+      relayResults: [],
     };
   };
 }
 
-let runRootBase: string;
+let runFolderBase: string;
 
 beforeEach(() => {
-  runRootBase = mkdtempSync(join(tmpdir(), 'circuit-next-sub-run-'));
+  runFolderBase = mkdtempSync(join(tmpdir(), 'circuit-next-sub-run-'));
 });
 
 afterEach(() => {
-  rmSync(runRootBase, { recursive: true, force: true });
+  rmSync(runFolderBase, { recursive: true, force: true });
 });
 
 describe('sub-run runtime', () => {
-  it('runs the child, copies result.json into parent writes.result, and admits an in-gate verdict', async () => {
-    const parentWorkflow = buildParentWorkflow(['ok']);
-    const parentBytes = Buffer.from(JSON.stringify(parentWorkflow));
-    const childWorkflow = buildChildWorkflow();
-    const childBytes = Buffer.from(JSON.stringify(childWorkflow));
+  it('runs the child, copies result.json into parent writes.result, and admits an in-check verdict', async () => {
+    const parentCompiledFlow = buildParentCompiledFlow(['ok']);
+    const parentBytes = Buffer.from(JSON.stringify(parentCompiledFlow));
+    const childCompiledFlow = buildChildCompiledFlow();
+    const childBytes = Buffer.from(JSON.stringify(childCompiledFlow));
 
     const observed = {
       verdict: 'ok',
@@ -239,22 +242,22 @@ describe('sub-run runtime', () => {
       capturedRunIds: { value: undefined as RunId | undefined },
     };
     const stubChildRunner = makeStubChildRunner(observed);
-    const childResolver = makeChildResolver({ workflow: childWorkflow, bytes: childBytes });
+    const childResolver = makeChildResolver({ flow: childCompiledFlow, bytes: childBytes });
 
     const parentRunId = RunId.parse('11111111-1111-1111-1111-111111111111');
-    const parentRunRoot = join(runRootBase, parentRunId as unknown as string);
+    const parentRunFolder = join(runFolderBase, parentRunId as unknown as string);
 
-    const outcome = await runWorkflow({
-      runRoot: parentRunRoot,
-      workflow: parentWorkflow,
-      workflowBytes: parentBytes,
+    const outcome = await runCompiledFlow({
+      runFolder: parentRunFolder,
+      flow: parentCompiledFlow,
+      flowBytes: parentBytes,
       runId: parentRunId,
       goal: 'parent run goal',
-      rigor: 'standard',
-      lane: lane(),
+      depth: 'standard',
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 27, 0, 0, 0)),
-      dispatcher: unusedDispatcher(),
-      childWorkflowResolver: childResolver,
+      relayer: unusedRelayer(),
+      childCompiledFlowResolver: childResolver,
       childRunner: stubChildRunner,
     });
 
@@ -266,9 +269,9 @@ describe('sub-run runtime', () => {
     expect(childRunId).not.toBe(parentRunId);
 
     // sub_run.started + sub_run.completed both fired with matching
-    // child_run_id. (The parent's events log is the audit trail.)
-    const subRunStarted = outcome.events.find((e) => e.kind === 'sub_run.started');
-    const subRunCompleted = outcome.events.find((e) => e.kind === 'sub_run.completed');
+    // child_run_id. (The parent's trace_entrys log is the audit trail.)
+    const subRunStarted = outcome.trace_entrys.find((e) => e.kind === 'sub_run.started');
+    const subRunCompleted = outcome.trace_entrys.find((e) => e.kind === 'sub_run.completed');
     if (subRunStarted?.kind !== 'sub_run.started') throw new Error('expected sub_run.started');
     if (subRunCompleted?.kind !== 'sub_run.completed')
       throw new Error('expected sub_run.completed');
@@ -277,37 +280,37 @@ describe('sub-run runtime', () => {
     expect(subRunCompleted.verdict).toBe('ok');
     expect(subRunCompleted.child_outcome).toBe('complete');
 
-    // Parent's gate admitted the child verdict.
-    const passGate = outcome.events.find(
+    // Parent's check admitted the child verdict.
+    const passCheck = outcome.trace_entrys.find(
       (e) =>
-        e.kind === 'gate.evaluated' &&
-        e.gate_kind === 'result_verdict' &&
+        e.kind === 'check.evaluated' &&
+        e.check_kind === 'result_verdict' &&
         e.step_id === ('sub-run-step' as unknown as typeof e.step_id),
     );
-    if (passGate?.kind !== 'gate.evaluated') throw new Error('expected gate.evaluated');
-    expect(passGate.outcome).toBe('pass');
+    if (passCheck?.kind !== 'check.evaluated') throw new Error('expected check.evaluated');
+    expect(passCheck.outcome).toBe('pass');
 
     // Parent's writes.result slot received the child's result.json bytes.
-    const parentResultPath = join(parentRunRoot, 'artifacts', 'child-result.json');
+    const parentResultPath = join(parentRunFolder, 'reports', 'child-result.json');
     const parentBody = JSON.parse(readFileSync(parentResultPath, 'utf8')) as { verdict: string };
     expect(parentBody.verdict).toBe('ok');
 
-    // Child run-root is a sibling of parent's run-root under the same
-    // runs-base directory, NOT nested under parent's run-root.
-    const expectedChildRunRoot = join(runRootBase, childRunId as unknown as string);
+    // Child run-folder is a sibling of parent's run-folder under the same
+    // runs-base directory, NOT nested under parent's run-folder.
+    const expectedChildRunFolder = join(runFolderBase, childRunId as unknown as string);
     expect(observed.capturedRunIds.value).toBeDefined();
     const childResultJsonExists = readFileSync(
-      join(expectedChildRunRoot, 'artifacts', 'result.json'),
+      join(expectedChildRunFolder, 'reports', 'result.json'),
       'utf8',
     );
     expect(childResultJsonExists).toContain('"verdict": "ok"');
   });
 
-  it('rejects an out-of-gate child verdict and aborts the parent step', async () => {
-    const parentWorkflow = buildParentWorkflow(['ok']);
-    const parentBytes = Buffer.from(JSON.stringify(parentWorkflow));
-    const childWorkflow = buildChildWorkflow();
-    const childBytes = Buffer.from(JSON.stringify(childWorkflow));
+  it('rejects an out-of-check child verdict and aborts the parent step', async () => {
+    const parentCompiledFlow = buildParentCompiledFlow(['ok']);
+    const parentBytes = Buffer.from(JSON.stringify(parentCompiledFlow));
+    const childCompiledFlow = buildChildCompiledFlow();
+    const childBytes = Buffer.from(JSON.stringify(childCompiledFlow));
 
     const observed = {
       verdict: 'reject',
@@ -315,22 +318,22 @@ describe('sub-run runtime', () => {
       capturedRunIds: { value: undefined as RunId | undefined },
     };
     const stubChildRunner = makeStubChildRunner(observed);
-    const childResolver = makeChildResolver({ workflow: childWorkflow, bytes: childBytes });
+    const childResolver = makeChildResolver({ flow: childCompiledFlow, bytes: childBytes });
 
     const parentRunId = RunId.parse('11111111-1111-1111-1111-111111111112');
-    const parentRunRoot = join(runRootBase, parentRunId as unknown as string);
+    const parentRunFolder = join(runFolderBase, parentRunId as unknown as string);
 
-    const outcome = await runWorkflow({
-      runRoot: parentRunRoot,
-      workflow: parentWorkflow,
-      workflowBytes: parentBytes,
+    const outcome = await runCompiledFlow({
+      runFolder: parentRunFolder,
+      flow: parentCompiledFlow,
+      flowBytes: parentBytes,
       runId: parentRunId,
-      goal: 'parent gate-rejection test',
-      rigor: 'standard',
-      lane: lane(),
+      goal: 'parent check-rejection test',
+      depth: 'standard',
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 27, 0, 30, 0)),
-      dispatcher: unusedDispatcher(),
-      childWorkflowResolver: childResolver,
+      relayer: unusedRelayer(),
+      childCompiledFlowResolver: childResolver,
       childRunner: stubChildRunner,
     });
 
@@ -338,39 +341,39 @@ describe('sub-run runtime', () => {
     expect(outcome.result.reason).toContain('reject');
 
     // sub_run.completed still fired with the observed verdict before
-    // the gate rejected — durable transcript of what the child said.
-    const subRunCompleted = outcome.events.find((e) => e.kind === 'sub_run.completed');
+    // the check rejected — durable transcript of what the child said.
+    const subRunCompleted = outcome.trace_entrys.find((e) => e.kind === 'sub_run.completed');
     if (subRunCompleted?.kind !== 'sub_run.completed')
       throw new Error('expected sub_run.completed');
     expect(subRunCompleted.verdict).toBe('reject');
 
-    const failGate = outcome.events.find(
+    const failCheck = outcome.trace_entrys.find(
       (e) =>
-        e.kind === 'gate.evaluated' && e.gate_kind === 'result_verdict' && e.outcome === 'fail',
+        e.kind === 'check.evaluated' && e.check_kind === 'result_verdict' && e.outcome === 'fail',
     );
-    expect(failGate).toBeDefined();
+    expect(failCheck).toBeDefined();
   });
 
   it('aborts cleanly when the resolver is missing', async () => {
-    const parentWorkflow = buildParentWorkflow(['ok']);
-    const parentBytes = Buffer.from(JSON.stringify(parentWorkflow));
+    const parentCompiledFlow = buildParentCompiledFlow(['ok']);
+    const parentBytes = Buffer.from(JSON.stringify(parentCompiledFlow));
 
     const parentRunId = RunId.parse('11111111-1111-1111-1111-111111111113');
-    const parentRunRoot = join(runRootBase, parentRunId as unknown as string);
+    const parentRunFolder = join(runFolderBase, parentRunId as unknown as string);
 
-    const outcome = await runWorkflow({
-      runRoot: parentRunRoot,
-      workflow: parentWorkflow,
-      workflowBytes: parentBytes,
+    const outcome = await runCompiledFlow({
+      runFolder: parentRunFolder,
+      flow: parentCompiledFlow,
+      flowBytes: parentBytes,
       runId: parentRunId,
       goal: 'missing-resolver test',
-      rigor: 'standard',
-      lane: lane(),
+      depth: 'standard',
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 27, 1, 0, 0)),
-      dispatcher: unusedDispatcher(),
+      relayer: unusedRelayer(),
     });
 
     expect(outcome.result.outcome).toBe('aborted');
-    expect(outcome.result.reason).toContain('childWorkflowResolver');
+    expect(outcome.result.reason).toContain('childCompiledFlowResolver');
   });
 });

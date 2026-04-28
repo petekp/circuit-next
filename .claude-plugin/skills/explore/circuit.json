@@ -2,58 +2,58 @@
   "schema_version": "2",
   "id": "explore",
   "version": "0.1.0",
-  "purpose": "Phase 2 first-parity target workflow per ADR-0007 CC#P2-1. Full-spine investigation: frame → analyze → synthesize → review → close. Canonical phase set {frame, analyze, act, review, close} with omits=[plan, verify] per explore contract §Canonical phase set. Synthesize and Review are worker-dispatch steps per ADR-0008 (distinct-adapter Knight-Leveson boundary crossings); Frame, Analyze, and Close remain orchestrator-synthesis (framing, decomposition, aggregation).",
+  "purpose": "Explore flow: frame the investigation, analyze the subject, relay findings composition to a worker, relay review to a separate worker, and close with findings plus evidence. The schematic uses the Frame, Analyze, Act, Review, and Close stages; Plan and Verify are intentionally omitted because Explore produces an investigation report rather than an executable change.",
   "entry": {
     "signals": {
-      "include": ["explore", "investigate", "research", "understand"],
+      "include": ["explore", "investicheck", "research", "understand"],
       "exclude": []
     },
-    "intent_prefixes": ["explore", "investigate"]
+    "intent_prefixes": ["explore", "investicheck"]
   },
   "entry_modes": [
     {
       "name": "default",
       "start_at": "frame-step",
-      "rigor": "standard",
-      "description": "Default explore entry mode — seeds the run at Frame. Standard rigor per ADR-0007 CC#P2-6 resolution of plan Open Question #5."
+      "depth": "standard",
+      "description": "Default explore entry mode — seeds the run at Frame. Standard depth per ADR-0007 CC#P2-6 resolution of plan Open Question #5."
     }
   ],
-  "phases": [
+  "stages": [
     {
-      "id": "frame-phase",
+      "id": "frame-stage",
       "title": "Frame",
       "canonical": "frame",
       "steps": ["frame-step"]
     },
     {
-      "id": "analyze-phase",
+      "id": "analyze-stage",
       "title": "Analyze",
       "canonical": "analyze",
       "steps": ["analyze-step"]
     },
     {
-      "id": "synthesize-phase",
+      "id": "synthesize-stage",
       "title": "Synthesize",
       "canonical": "act",
       "steps": ["synthesize-step"]
     },
     {
-      "id": "review-phase",
+      "id": "review-stage",
       "title": "Review",
       "canonical": "review",
       "steps": ["review-step"]
     },
     {
-      "id": "close-phase",
+      "id": "close-stage",
       "title": "Close",
       "canonical": "close",
       "steps": ["close-step"]
     }
   ],
-  "spine_policy": {
+  "stage_path_policy": {
     "mode": "partial",
     "omits": ["plan", "verify"],
-    "rationale": "Explore is an investigation workflow — plan-mode is folded into Frame (investigation scoping); verify is omitted because explore output is not executable and does not admit mechanical verification. Review is the adversarial pass that IS in scope and, per ADR-0008, is a distinct-adapter review dispatch (not a weaker substitute for verify as previously described at v0.1 authoring). See src/workflows/explore/contract.md §Canonical phase set for the full rationale."
+    "rationale": "Explore is an investigation flow — plan-mode is folded into Frame (investigation scoping); verify is omitted because explore output is not executable and does not admit mechanical verification. Review is the adversarial pass that IS in scope and, per ADR-0008, is a distinct-connector review relay (not a weaker substitute for verify as previously described at v0.1 authoring). See src/flows/explore/contract.md §Canonical stage set for the full rationale."
   },
   "steps": [
     {
@@ -65,18 +65,18 @@
         "pass": "analyze-step"
       },
       "executor": "orchestrator",
-      "kind": "synthesis",
+      "kind": "compose",
       "writes": {
-        "artifact": {
-          "path": "artifacts/brief.json",
+        "report": {
+          "path": "reports/brief.json",
           "schema": "explore.brief@v1"
         }
       },
-      "gate": {
+      "check": {
         "kind": "schema_sections",
         "source": {
-          "kind": "artifact",
-          "ref": "artifact"
+          "kind": "report",
+          "ref": "report"
         },
         "required": ["subject", "success_condition"]
       }
@@ -85,51 +85,51 @@
       "id": "analyze-step",
       "title": "Analyze — produce explore.analysis",
       "protocol": "explore-analyze@v1",
-      "reads": ["artifacts/brief.json"],
+      "reads": ["reports/brief.json"],
       "routes": {
         "pass": "synthesize-step"
       },
       "executor": "orchestrator",
-      "kind": "synthesis",
+      "kind": "compose",
       "writes": {
-        "artifact": {
-          "path": "artifacts/analysis.json",
+        "report": {
+          "path": "reports/analysis.json",
           "schema": "explore.analysis@v1"
         }
       },
-      "gate": {
+      "check": {
         "kind": "schema_sections",
         "source": {
-          "kind": "artifact",
-          "ref": "artifact"
+          "kind": "report",
+          "ref": "report"
         },
         "required": ["aspects"]
       }
     },
     {
       "id": "synthesize-step",
-      "title": "Synthesize — produce explore.synthesis (adapter-bound dispatch per ADR-0008)",
+      "title": "Synthesize — produce explore.compose (connector-bound relay per ADR-0008)",
       "protocol": "explore-synthesize@v1",
-      "reads": ["artifacts/brief.json", "artifacts/analysis.json"],
+      "reads": ["reports/brief.json", "reports/analysis.json"],
       "routes": {
         "pass": "review-step"
       },
       "executor": "worker",
-      "kind": "dispatch",
+      "kind": "relay",
       "role": "implementer",
       "writes": {
-        "artifact": {
-          "path": "artifacts/synthesis.json",
-          "schema": "explore.synthesis@v1"
+        "report": {
+          "path": "reports/compose.json",
+          "schema": "explore.compose@v1"
         },
-        "request": "artifacts/dispatch/synthesize.request.json",
-        "receipt": "artifacts/dispatch/synthesize.receipt.txt",
-        "result": "artifacts/dispatch/synthesize.result.json"
+        "request": "reports/relay/synthesize.request.json",
+        "receipt": "reports/relay/synthesize.receipt.txt",
+        "result": "reports/relay/synthesize.result.json"
       },
-      "gate": {
+      "check": {
         "kind": "result_verdict",
         "source": {
-          "kind": "dispatch_result",
+          "kind": "relay_result",
           "ref": "result"
         },
         "pass": ["accept"]
@@ -137,28 +137,28 @@
     },
     {
       "id": "review-step",
-      "title": "Review — adversarial pass over synthesis (adapter-bound dispatch per ADR-0008)",
+      "title": "Review — adversarial pass over compose (connector-bound relay per ADR-0008)",
       "protocol": "explore-review@v1",
-      "reads": ["artifacts/brief.json", "artifacts/analysis.json", "artifacts/synthesis.json"],
+      "reads": ["reports/brief.json", "reports/analysis.json", "reports/compose.json"],
       "routes": {
         "pass": "close-step"
       },
       "executor": "worker",
-      "kind": "dispatch",
+      "kind": "relay",
       "role": "reviewer",
       "writes": {
-        "artifact": {
-          "path": "artifacts/review-verdict.json",
+        "report": {
+          "path": "reports/review-verdict.json",
           "schema": "explore.review-verdict@v1"
         },
-        "request": "artifacts/dispatch/review.request.json",
-        "receipt": "artifacts/dispatch/review.receipt.txt",
-        "result": "artifacts/dispatch/review.result.json"
+        "request": "reports/relay/review.request.json",
+        "receipt": "reports/relay/review.receipt.txt",
+        "result": "reports/relay/review.result.json"
       },
-      "gate": {
+      "check": {
         "kind": "result_verdict",
         "source": {
-          "kind": "dispatch_result",
+          "kind": "relay_result",
           "ref": "result"
         },
         "pass": ["accept", "accept-with-fold-ins"]
@@ -168,27 +168,23 @@
       "id": "close-step",
       "title": "Close — emit final result file",
       "protocol": "explore-close@v1",
-      "reads": [
-        "artifacts/brief.json",
-        "artifacts/synthesis.json",
-        "artifacts/review-verdict.json"
-      ],
+      "reads": ["reports/brief.json", "reports/compose.json", "reports/review-verdict.json"],
       "routes": {
         "pass": "@complete"
       },
       "executor": "orchestrator",
-      "kind": "synthesis",
+      "kind": "compose",
       "writes": {
-        "artifact": {
-          "path": "artifacts/explore-result.json",
+        "report": {
+          "path": "reports/explore-result.json",
           "schema": "explore.result@v1"
         }
       },
-      "gate": {
+      "check": {
         "kind": "schema_sections",
         "source": {
-          "kind": "artifact",
-          "ref": "artifact"
+          "kind": "report",
+          "ref": "report"
         },
         "required": ["summary", "verdict_snapshot"]
       }

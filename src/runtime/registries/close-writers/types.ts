@@ -1,35 +1,35 @@
 // Close-writer registry types.
 //
-// A close writer turns a recipe's close-with-evidence step into a
-// schema-validated final artifact. The pattern is the same across
-// every workflow: read upstream artifacts, assemble pointers, derive
-// summary + outcome, validate against the workflow's result schema,
-// write to disk. Per-workflow logic (summary template, outcome
+// A close writer turns a schematic's close-with-evidence step into a
+// schema-validated final report. The pattern is the same across
+// every flow: read upstream reports, assemble pointers, derive
+// summary + outcome, validate against the flow's result schema,
+// write to disk. Per-flow logic (summary template, outcome
 // rules, optional-pointer detection) lives in a `CloseBuilder` next
-// to that workflow's schemas, not in the runner.
+// to that flow's schemas, not in the runner.
 //
-// To add a new workflow's close, an author:
-//   1. Defines the result schema (Zod) in src/workflows/<wf>/artifacts.ts
-//   2. Implements a CloseBuilder in src/workflows/<wf>/writers/close.ts
+// To add a new flow's close, an author:
+//   1. Defines the result schema (Zod) in src/flows/<wf>/reports.ts
+//   2. Implements a CloseBuilder in src/flows/<wf>/writers/close.ts
 //   3. Registers it on the package's `writers.close`
 //
-// The runner.ts close path stays workflow-agnostic — it dispatches by
+// The runner.ts close path stays flow-agnostic — it relays by
 // schema name to the registered builder.
 
-import type { Workflow } from '../../../schemas/workflow.js';
+import type { CompiledFlow } from '../../../schemas/compiled-flow.js';
 
-// Each builder declares which artifact schemas it reads. The reader
-// translates these into run-relative paths via the workflow's step
+// Each builder declares which report schemas it reads. The reader
+// translates these into run-relative paths via the flow's step
 // declarations. Required reads must be in the close step's reads list;
-// optional reads are looked up only when the workflow declares a step
+// optional reads are looked up only when the flow declares a step
 // that writes them and the close step lists the path.
 export interface CloseReadDescriptor {
   // Stable name the builder uses to address this input (e.g. 'brief',
   // 'change', 'review'). Lets the builder pull typed inputs from a
   // record rather than relying on read-order.
   readonly name: string;
-  // Artifact schema string (e.g. 'fix.brief@v1'). The runner translates
-  // this into a path via artifactPathForSchema(workflow, schema).
+  // Report schema string (e.g. 'fix.brief@v1'). The runner translates
+  // this into a path via reportPathForSchema(flow, schema).
   readonly schema: string;
   // When true, the read must be present; absence aborts the run.
   // When false, absence is silent — the builder receives `undefined`
@@ -40,11 +40,11 @@ export interface CloseReadDescriptor {
 
 // Context the builder receives when it runs.
 export interface CloseBuildContext {
-  readonly runRoot: string;
-  readonly workflow: Workflow;
-  readonly closeStep: Workflow['steps'][number] & {
-    kind: 'synthesis';
-    writes: { artifact: { schema: string; path: string } };
+  readonly runFolder: string;
+  readonly flow: CompiledFlow;
+  readonly closeStep: CompiledFlow['steps'][number] & {
+    kind: 'compose';
+    writes: { report: { schema: string; path: string } };
   };
   readonly goal: string;
   // Map of declared name → parsed JSON object (or undefined for absent
@@ -53,17 +53,17 @@ export interface CloseBuildContext {
 }
 
 // A CloseBuilder is everything the runner needs to know to produce
-// one workflow's close artifact. The runner registers these by
-// resultSchemaName so a recipe can wire a generic close-with-evidence
-// item to the right builder via the recipe item's output contract.
+// one flow's close report. The runner registers these by
+// resultSchemaName so a schematic can wire a generic close-with-evidence
+// item to the right builder via the schematic item's output contract.
 export interface CloseBuilder {
-  // Schema name of the artifact this builder produces (e.g.
+  // Schema name of the report this builder produces (e.g.
   // 'build.result@v1'). Acts as the registry key.
   readonly resultSchemaName: string;
-  // Inputs the builder needs from upstream artifacts.
+  // Inputs the builder needs from upstream reports.
   readonly reads: readonly CloseReadDescriptor[];
-  // Per-workflow logic: turn typed inputs into the result body.
-  // Returns the unvalidated artifact — the caller validates against
+  // Per-flow logic: turn typed inputs into the result body.
+  // Returns the unvalidated report — the caller validates against
   // the registered Zod schema.
   build(context: CloseBuildContext): unknown;
 }

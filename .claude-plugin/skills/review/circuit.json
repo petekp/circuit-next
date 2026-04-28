@@ -2,7 +2,7 @@
   "schema_version": "2",
   "id": "review",
   "version": "0.1.0",
-  "purpose": "P2.9 audit-only review workflow. Three-phase spine: Intake -> Independent Audit -> Verdict. The reviewer runs as a worker dispatch in the analyze phase; the close phase owns the final review.result artifact.",
+  "purpose": "Review flow: frame the audit scope, relay independent review to a reviewer, and close with a verdict report. The schematic uses a compact Intake, Independent Audit, and Verdict shape because Review is audit-only and does not implement or verify a change.",
   "entry": {
     "signals": {
       "include": ["review", "audit", "check"],
@@ -14,34 +14,34 @@
     {
       "name": "default",
       "start_at": "intake-step",
-      "rigor": "standard",
-      "description": "Default review entry mode — resolves the review scope, dispatches an independent audit, then writes the verdict artifact."
+      "depth": "standard",
+      "description": "Default review entry mode — resolves the review scope, relays an independent audit, then writes the verdict report."
     }
   ],
-  "phases": [
+  "stages": [
     {
-      "id": "intake-phase",
+      "id": "intake-stage",
       "title": "Intake",
       "canonical": "frame",
       "steps": ["intake-step"]
     },
     {
-      "id": "audit-phase",
+      "id": "audit-stage",
       "title": "Independent Audit",
       "canonical": "analyze",
       "steps": ["audit-step"]
     },
     {
-      "id": "verdict-phase",
+      "id": "verdict-stage",
       "title": "Verdict",
       "canonical": "close",
       "steps": ["verdict-step"]
     }
   ],
-  "spine_policy": {
+  "stage_path_policy": {
     "mode": "partial",
     "omits": ["plan", "act", "verify", "review"],
-    "rationale": "Review is an audit-only workflow in P2.9: Intake frames the scope, Independent Audit performs the reviewer dispatch, and Verdict aggregates findings. There is no planning phase, no implementation/action phase, no verification rerun, and no nested review phase in this narrowed variant."
+    "rationale": "Review is an audit-only flow in P2.9: Intake frames the scope, Independent Audit performs the reviewer relay, and Verdict aggrechecks findings. There is no planning stage, no implementation/action stage, no verification rerun, and no nested review stage in this narrowed variant."
   },
   "steps": [
     {
@@ -53,42 +53,42 @@
         "pass": "audit-step"
       },
       "executor": "orchestrator",
-      "kind": "synthesis",
+      "kind": "compose",
       "writes": {
-        "artifact": {
-          "path": "artifacts/review-intake.json",
+        "report": {
+          "path": "reports/review-intake.json",
           "schema": "review.intake@v1"
         }
       },
-      "gate": {
+      "check": {
         "kind": "schema_sections",
         "source": {
-          "kind": "artifact",
-          "ref": "artifact"
+          "kind": "report",
+          "ref": "report"
         },
         "required": ["scope"]
       }
     },
     {
       "id": "audit-step",
-      "title": "Independent Audit — reviewer dispatch",
+      "title": "Independent Audit — reviewer relay",
       "protocol": "review-audit@v1",
-      "reads": ["artifacts/review-intake.json"],
+      "reads": ["reports/review-intake.json"],
       "routes": {
         "pass": "verdict-step"
       },
       "executor": "worker",
-      "kind": "dispatch",
+      "kind": "relay",
       "role": "reviewer",
       "writes": {
-        "request": "artifacts/dispatch/review.request.json",
-        "receipt": "artifacts/dispatch/review.receipt.txt",
-        "result": "phases/analyze/review-raw-findings.json"
+        "request": "reports/relay/review.request.json",
+        "receipt": "reports/relay/review.receipt.txt",
+        "result": "stages/analyze/review-raw-findings.json"
       },
-      "gate": {
+      "check": {
         "kind": "result_verdict",
         "source": {
-          "kind": "dispatch_result",
+          "kind": "relay_result",
           "ref": "result"
         },
         "pass": ["NO_ISSUES_FOUND", "ISSUES_FOUND"]
@@ -98,23 +98,23 @@
       "id": "verdict-step",
       "title": "Verdict — emit review.result",
       "protocol": "review-verdict@v1",
-      "reads": ["artifacts/review-intake.json", "phases/analyze/review-raw-findings.json"],
+      "reads": ["reports/review-intake.json", "stages/analyze/review-raw-findings.json"],
       "routes": {
         "pass": "@complete"
       },
       "executor": "orchestrator",
-      "kind": "synthesis",
+      "kind": "compose",
       "writes": {
-        "artifact": {
-          "path": "artifacts/review-result.json",
+        "report": {
+          "path": "reports/review-result.json",
           "schema": "review.result@v1"
         }
       },
-      "gate": {
+      "check": {
         "kind": "schema_sections",
         "source": {
-          "kind": "artifact",
-          "ref": "artifact"
+          "kind": "report",
+          "ref": "report"
         },
         "required": ["scope", "findings", "verdict"]
       }

@@ -1,3 +1,4 @@
+import type { CompiledFlow } from '../schemas/compiled-flow.js';
 import type { LayeredConfig } from '../schemas/config.js';
 import type { SkillId } from '../schemas/ids.js';
 import {
@@ -9,20 +10,19 @@ import {
   type SelectionSource,
   type SkillOverride,
 } from '../schemas/selection-policy.js';
-import type { Workflow } from '../schemas/workflow.js';
 
 const PRE_WORKFLOW_CONFIG_SOURCES = ['default', 'user-global', 'project'] as const;
 
 export interface ResolveSelectionInput {
-  readonly workflow: Workflow;
-  readonly step: Workflow['steps'][number];
+  readonly flow: CompiledFlow;
+  readonly step: CompiledFlow['steps'][number];
   readonly configLayers?: readonly LayeredConfig[];
 }
 
 function overrideContributes(o: SelectionOverrideValue): boolean {
   if (o.model !== undefined) return true;
   if (o.effort !== undefined) return true;
-  if (o.rigor !== undefined) return true;
+  if (o.depth !== undefined) return true;
   if (o.skills.mode !== 'inherit') return true;
   if (Object.keys(o.invocation_options).length > 0) return true;
   return false;
@@ -39,7 +39,7 @@ function composeConfigLayerSelection(
   let skills: SkillOverride | undefined;
   if (baseSkillOp !== undefined || circuitSkillOp !== undefined) {
     // One applied entry represents the whole config source, so same-file
-    // default + per-workflow skill ops are normalized to their effective set.
+    // default + per-flow skill ops are normalized to their effective set.
     const baseSkills =
       baseSkillOp !== undefined ? applySkillOp(current.skills, baseSkillOp) : current.skills;
     const composedSkills =
@@ -55,8 +55,8 @@ function composeConfigLayerSelection(
       ? { effort: circuit?.effort ?? base?.effort }
       : {}),
     ...(skills !== undefined ? { skills } : {}),
-    ...(base?.rigor !== undefined || circuit?.rigor !== undefined
-      ? { rigor: circuit?.rigor ?? base?.rigor }
+    ...(base?.depth !== undefined || circuit?.depth !== undefined
+      ? { depth: circuit?.depth ?? base?.depth }
       : {}),
     invocation_options: {
       ...(base?.invocation_options ?? {}),
@@ -69,7 +69,7 @@ function composeConfigLayerSelection(
 }
 
 function configLayerSelection(
-  workflowId: string,
+  flowId: string,
   layer: LayeredConfig,
   current: ResolvedSelection,
 ): SelectionOverrideValue | undefined {
@@ -77,7 +77,7 @@ function configLayerSelection(
     string,
     { readonly selection?: SelectionOverrideValue } | undefined
   >;
-  const circuit = Object.hasOwn(circuits, workflowId) ? circuits[workflowId] : undefined;
+  const circuit = Object.hasOwn(circuits, flowId) ? circuits[flowId] : undefined;
   return composeConfigLayerSelection(layer.config.defaults.selection, circuit?.selection, current);
 }
 
@@ -106,7 +106,7 @@ function applyOverride(
 ): ResolvedSelection {
   const model = override.model ?? current.model;
   const effort = override.effort ?? current.effort;
-  const rigor = override.rigor ?? current.rigor;
+  const depth = override.depth ?? current.depth;
   const skills = applySkillOp(current.skills, override.skills) as ResolvedSelection['skills'];
   const invocation_options = {
     ...current.invocation_options,
@@ -117,7 +117,7 @@ function applyOverride(
     ...(model !== undefined ? { model } : {}),
     ...(effort !== undefined ? { effort } : {}),
     skills,
-    ...(rigor !== undefined ? { rigor } : {}),
+    ...(depth !== undefined ? { depth } : {}),
     invocation_options,
   };
 }
@@ -147,8 +147,8 @@ function configLayersBySource(
   return out;
 }
 
-export function resolveSelectionForDispatch(input: ResolveSelectionInput): SelectionResolution {
-  const workflowId = input.workflow.id as unknown as string;
+export function resolveSelectionForRelay(input: ResolveSelectionInput): SelectionResolution {
+  const flowId = input.flow.id as unknown as string;
   const stepId = input.step.id as unknown as string;
   const applied: AppliedEntry[] = [];
   let resolved: ResolvedSelection = { skills: [], invocation_options: {} };
@@ -157,7 +157,7 @@ export function resolveSelectionForDispatch(input: ResolveSelectionInput): Selec
   for (const source of PRE_WORKFLOW_CONFIG_SOURCES) {
     const layer = configLayers[source];
     if (layer === undefined) continue;
-    const override = configLayerSelection(workflowId, layer, resolved);
+    const override = configLayerSelection(flowId, layer, resolved);
     if (override === undefined) continue;
     resolved = pushIfContributing(
       applied,
@@ -169,21 +169,21 @@ export function resolveSelectionForDispatch(input: ResolveSelectionInput): Selec
     );
   }
 
-  if (input.workflow.default_selection !== undefined) {
+  if (input.flow.default_selection !== undefined) {
     resolved = pushIfContributing(
       applied,
-      { source: 'workflow', override: input.workflow.default_selection },
+      { source: 'flow', override: input.flow.default_selection },
       resolved,
     );
   }
 
-  for (const phase of input.workflow.phases) {
-    const phaseSteps = phase.steps as ReadonlyArray<string>;
-    if (!phaseSteps.includes(stepId)) continue;
-    if (phase.selection === undefined) continue;
+  for (const stage of input.flow.stages) {
+    const stageSteps = stage.steps as ReadonlyArray<string>;
+    if (!stageSteps.includes(stepId)) continue;
+    if (stage.selection === undefined) continue;
     resolved = pushIfContributing(
       applied,
-      { source: 'phase', phase_id: phase.id, override: phase.selection },
+      { source: 'stage', stage_id: stage.id, override: stage.selection },
       resolved,
     );
   }
@@ -200,7 +200,7 @@ export function resolveSelectionForDispatch(input: ResolveSelectionInput): Selec
   const invocationOverride =
     invocationLayer === undefined
       ? undefined
-      : configLayerSelection(workflowId, invocationLayer, resolved);
+      : configLayerSelection(flowId, invocationLayer, resolved);
   if (invocationOverride !== undefined) {
     resolved = pushIfContributing(
       applied,

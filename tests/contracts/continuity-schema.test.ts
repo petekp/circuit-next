@@ -127,7 +127,7 @@ describe('Continuity discriminated union (CONT-I3..I5)', () => {
   });
 });
 
-describe('Continuity record_id — CONT-I1 (ControlPlaneFileStem)', () => {
+describe('Continuity record_id — CONT-I1 (ControlPchange_kindFileStem)', () => {
   const baseStandalone = {
     schema_version: 1,
     project_root: '/Users/x/Code',
@@ -236,7 +236,7 @@ describe('Continuity resume_contract — CONT-I6 (safety-boolean non-contradicti
 });
 
 describe('RunAttachedProvenance — CONT-I7', () => {
-  it('CONT-I7 — requires run_id + current_phase + current_step + runtime_status + runtime_updated_at', () => {
+  it('CONT-I7 — requires run_id + current_stage + current_step + runtime_status + runtime_updated_at', () => {
     expect(RunAttachedProvenance.safeParse(CONT_RUN_PROVENANCE).success).toBe(true);
   });
 
@@ -322,7 +322,7 @@ describe('Continuity transitive strict — CONT-I8', () => {
   });
 });
 
-describe('ContinuityIndex aggregate — CONT-I9..I11', () => {
+describe('ContinuityIndex aggrecheck — CONT-I9..I11', () => {
   it('CONT-I9 — parses fully null (idle index)', () => {
     const ok = ContinuityIndex.safeParse({
       schema_version: 1,
@@ -344,7 +344,7 @@ describe('ContinuityIndex aggregate — CONT-I9..I11', () => {
       },
       current_run: {
         run_id: CONT_RUN,
-        current_phase: 'frame',
+        current_stage: 'frame',
         current_step: 'frame-goal',
         runtime_status: 'in_progress',
         attached_at: '2026-04-19T00:00:00.000Z',
@@ -354,7 +354,7 @@ describe('ContinuityIndex aggregate — CONT-I9..I11', () => {
     expect(ok.success).toBe(true);
   });
 
-  it('CONT-I10 — pending_record.record_id uses ControlPlaneFileStem (rejects uppercase)', () => {
+  it('CONT-I10 — pending_record.record_id uses ControlPchange_kindFileStem (rejects uppercase)', () => {
     const bad = PendingRecordPointer.safeParse({
       record_id: 'CONTINUITY-ABC',
       continuity_kind: 'standalone',
@@ -372,10 +372,10 @@ describe('ContinuityIndex aggregate — CONT-I9..I11', () => {
     expect(bad.success).toBe(false);
   });
 
-  it('CONT-I11 — current_run requires run_id + phase/step + status + timestamps', () => {
+  it('CONT-I11 — current_run requires run_id + stage/step + status + timestamps', () => {
     const bad = AttachedRunPointer.safeParse({
       run_id: CONT_RUN,
-      current_phase: 'frame',
+      current_stage: 'frame',
       current_step: 'frame-goal',
       runtime_status: 'in_progress',
     });
@@ -398,7 +398,7 @@ describe('ContinuityIndex aggregate — CONT-I9..I11', () => {
       record_id: 'continuity-abc',
       continuity_kind: 'run-backed',
       created_at: '2026-04-19T00:00:00.000Z',
-      run_slug: 'dispatch-adapter-fallback-i5',
+      run_slug: 'relay-connector-fallback-i5',
     });
     expect(bad.success).toBe(false);
   });
@@ -508,7 +508,7 @@ describe('Continuity coverage additions', () => {
   it('CONT-I8 — AttachedRunPointer rejects surplus key (legacy "manifest_present")', () => {
     const bad = AttachedRunPointer.safeParse({
       run_id: CONT_RUN,
-      current_phase: 'frame',
+      current_stage: 'frame',
       current_step: 'frame-goal',
       runtime_status: 'in_progress',
       attached_at: '2026-04-19T00:00:00.000Z',

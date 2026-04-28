@@ -3,26 +3,26 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { AgentDispatchInput } from '../../src/runtime/adapters/agent.js';
-import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
-import { type DispatchFn, runWorkflow } from '../../src/runtime/runner.js';
-import { RunId } from '../../src/schemas/ids.js';
-import type { LaneDeclaration } from '../../src/schemas/lane.js';
-import { Workflow } from '../../src/schemas/workflow.js';
 import {
   BuildImplementation,
   BuildResult,
   BuildReview,
   BuildVerification,
-} from '../../src/workflows/build/artifacts.js';
+} from '../../src/flows/build/reports.js';
+import type { AgentRelayInput } from '../../src/runtime/connectors/agent.js';
+import type { RelayResult } from '../../src/runtime/connectors/shared.js';
+import { type RelayFn, runCompiledFlow } from '../../src/runtime/runner.js';
+import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
+import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
+import { RunId } from '../../src/schemas/ids.js';
 
 const FIXTURE_PATH = resolve('.claude-plugin', 'skills', 'build', 'circuit.json');
 const REPO_ROOT = resolve('.');
 
-function loadFixture(): { workflow: Workflow; bytes: Buffer } {
+function loadFixture(): { flow: CompiledFlow; bytes: Buffer } {
   const bytes = readFileSync(FIXTURE_PATH);
   const raw: unknown = JSON.parse(bytes.toString('utf8'));
-  return { workflow: Workflow.parse(raw), bytes };
+  return { flow: CompiledFlow.parse(raw), bytes };
 }
 
 function deterministicNow(startMs: number): () => Date {
@@ -30,31 +30,31 @@ function deterministicNow(startMs: number): () => Date {
   return () => new Date(startMs + n++ * 1000);
 }
 
-function lane(): LaneDeclaration {
+function change_kind(): ChangeKindDeclaration {
   return {
-    lane: 'ratchet-advance',
+    change_kind: 'ratchet-advance',
     failure_mode:
-      'Build had typed artifacts but no live fixture proving implementation and review dispatch through the runtime',
+      'Build had typed reports but no live fixture proving implementation and review relay through the runtime',
     acceptance_evidence:
-      'build-runtime-wiring runs the live Build fixture with stubbed worker dispatch and parses implementation, verification, review, and close artifacts',
+      'build-runtime-wiring runs the live Build fixture with stubbed worker relay and parses implementation, verification, review, and close reports',
     alternate_framing:
-      'add entry-mode routing first — rejected because the dispatch path is the smaller blocker for a real Build spine',
+      'add entry-mode routing first — rejected because the relay path is the smaller blocker for a real Build stage path',
   };
 }
 
-function dispatcherWith(
+function relayerWith(
   options: {
     implementationBody?: string;
     reviewBody?: string;
   } = {},
-): DispatchFn {
+): RelayFn {
   const implementationBody =
     options.implementationBody ??
     JSON.stringify({
       verdict: 'accept',
       summary: 'Implemented the requested change',
       changed_files: ['src/example.ts'],
-      evidence: ['Stub implementation dispatch completed'],
+      evidence: ['Stub implementation relay completed'],
     });
   const reviewBody =
     options.reviewBody ??
@@ -65,8 +65,8 @@ function dispatcherWith(
     });
 
   return {
-    adapterName: 'agent',
-    dispatch: async (input: AgentDispatchInput): Promise<DispatchResult> => {
+    connectorName: 'agent',
+    relay: async (input: AgentRelayInput): Promise<RelayResult> => {
       const isAct = input.prompt.includes('Step: act-step');
       const isReview = input.prompt.includes('Step: review-step');
       expect(isAct || isReview).toBe(true);
@@ -83,97 +83,99 @@ function dispatcherWith(
   };
 }
 
-function eventLabel(event: { kind: string; step_id?: unknown }): string {
-  return typeof event.step_id === 'string' ? `${event.kind}:${event.step_id}` : event.kind;
+function trace_entryLabel(trace_entry: { kind: string; step_id?: unknown }): string {
+  return typeof trace_entry.step_id === 'string'
+    ? `${trace_entry.kind}:${trace_entry.step_id}`
+    : trace_entry.kind;
 }
 
-function eventByKind<T extends { kind: string }>(
-  events: readonly T[],
+function trace_entryByKind<T extends { kind: string }>(
+  trace_entrys: readonly T[],
   kind: string,
 ): T | undefined {
-  return events.find((event) => event.kind === kind);
+  return trace_entrys.find((trace_entry) => trace_entry.kind === kind);
 }
 
-let runRootBase: string;
+let runFolderBase: string;
 
 beforeEach(() => {
-  runRootBase = mkdtempSync(join(tmpdir(), 'circuit-next-build-runtime-'));
+  runFolderBase = mkdtempSync(join(tmpdir(), 'circuit-next-build-runtime-'));
 });
 
 afterEach(() => {
-  rmSync(runRootBase, { recursive: true, force: true });
+  rmSync(runFolderBase, { recursive: true, force: true });
 });
 
 describe('Build runtime wiring', () => {
   it('exposes only checkpoint choices the current runner can honor', () => {
-    const { workflow } = loadFixture();
-    const frame = workflow.steps.find((step) => step.id === 'frame-step');
+    const { flow } = loadFixture();
+    const frame = flow.steps.find((step) => step.id === 'frame-step');
     expect(frame?.kind).toBe('checkpoint');
     if (frame?.kind !== 'checkpoint') throw new Error('frame-step is not a checkpoint');
 
     expect(frame.policy.choices.map((choice) => choice.id)).toEqual(['continue']);
-    expect(frame.gate.allow).toEqual(['continue']);
+    expect(frame.check.allow).toEqual(['continue']);
   });
 
-  it('runs the live Build fixture through checkpoint, implementation dispatch, verification, review dispatch, and close', async () => {
-    const { workflow, bytes } = loadFixture();
-    const runRoot = join(runRootBase, 'complete');
+  it('runs the live Build fixture through checkpoint, implementation relay, verification, review relay, and close', async () => {
+    const { flow, bytes } = loadFixture();
+    const runFolder = join(runFolderBase, 'complete');
 
-    const outcome = await runWorkflow({
-      runRoot,
-      workflow,
-      workflowBytes: bytes,
+    const outcome = await runCompiledFlow({
+      runFolder,
+      flow,
+      flowBytes: bytes,
       runId: RunId.parse('b2000000-0000-0000-0000-000000000000'),
       goal: 'Add a tiny Build feature',
-      rigor: 'standard',
-      lane: lane(),
+      depth: 'standard',
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 25, 8, 0, 0)),
-      dispatcher: dispatcherWith(),
+      relayer: relayerWith(),
       projectRoot: REPO_ROOT,
     });
 
     expect(outcome.result.outcome).toBe('complete');
-    expect(outcome.events.map(eventLabel)).toContain('checkpoint.resolved:frame-step');
-    expect(outcome.events.map(eventLabel)).toContain('dispatch.completed:act-step');
-    expect(outcome.events.map(eventLabel)).toContain('dispatch.completed:review-step');
+    expect(outcome.trace_entrys.map(trace_entryLabel)).toContain('checkpoint.resolved:frame-step');
+    expect(outcome.trace_entrys.map(trace_entryLabel)).toContain('relay.completed:act-step');
+    expect(outcome.trace_entrys.map(trace_entryLabel)).toContain('relay.completed:review-step');
 
     const implementation = BuildImplementation.parse(
-      JSON.parse(readFileSync(join(runRoot, 'artifacts/build/implementation.json'), 'utf8')),
+      JSON.parse(readFileSync(join(runFolder, 'reports/build/implementation.json'), 'utf8')),
     );
     expect(implementation.verdict).toBe('accept');
 
     const verification = BuildVerification.parse(
-      JSON.parse(readFileSync(join(runRoot, 'artifacts/build/verification.json'), 'utf8')),
+      JSON.parse(readFileSync(join(runFolder, 'reports/build/verification.json'), 'utf8')),
     );
     expect(verification.overall_status).toBe('passed');
     expect(verification.commands[0]?.argv).toEqual(['npm', 'run', 'check']);
 
     const review = BuildReview.parse(
-      JSON.parse(readFileSync(join(runRoot, 'artifacts/build/review.json'), 'utf8')),
+      JSON.parse(readFileSync(join(runFolder, 'reports/build/review.json'), 'utf8')),
     );
     expect(review.verdict).toBe('accept');
 
     const result = BuildResult.parse(
-      JSON.parse(readFileSync(join(runRoot, 'artifacts/build-result.json'), 'utf8')),
+      JSON.parse(readFileSync(join(runFolder, 'reports/build-result.json'), 'utf8')),
     );
     expect(result.outcome).toBe('complete');
     expect(result.review_verdict).toBe('accept');
   });
 
-  it('aborts when implementation dispatch passes the verdict gate but fails build.implementation@v1 parsing', async () => {
-    const { workflow, bytes } = loadFixture();
-    const runRoot = join(runRootBase, 'bad-implementation');
+  it('aborts when implementation relay passes the verdict check but fails build.implementation@v1 parsing', async () => {
+    const { flow, bytes } = loadFixture();
+    const runFolder = join(runFolderBase, 'bad-implementation');
 
-    const outcome = await runWorkflow({
-      runRoot,
-      workflow,
-      workflowBytes: bytes,
+    const outcome = await runCompiledFlow({
+      runFolder,
+      flow,
+      flowBytes: bytes,
       runId: RunId.parse('b2000000-0000-0000-0000-000000000001'),
-      goal: 'Reject malformed implementation artifact',
-      rigor: 'standard',
-      lane: lane(),
+      goal: 'Reject malformed implementation report',
+      depth: 'standard',
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 25, 8, 10, 0)),
-      dispatcher: dispatcherWith({
+      relayer: relayerWith({
         implementationBody: JSON.stringify({
           verdict: 'accept',
           summary: 'Missing evidence',
@@ -186,24 +188,24 @@ describe('Build runtime wiring', () => {
     expect(outcome.result.outcome).toBe('aborted');
     expect(outcome.result.reason).toMatch(/build\.implementation@v1/);
     expect(outcome.result.reason).toMatch(/evidence/);
-    expect(existsSync(join(runRoot, 'artifacts/build/implementation.json'))).toBe(false);
-    expect(existsSync(join(runRoot, 'artifacts/dispatch/build-act.result.json'))).toBe(true);
+    expect(existsSync(join(runFolder, 'reports/build/implementation.json'))).toBe(false);
+    expect(existsSync(join(runFolder, 'reports/relay/build-act.result.json'))).toBe(true);
   });
 
-  it('aborts review rejection before writing the canonical Build review artifact', async () => {
-    const { workflow, bytes } = loadFixture();
-    const runRoot = join(runRootBase, 'review-reject');
+  it('aborts review rejection before writing the canonical Build review report', async () => {
+    const { flow, bytes } = loadFixture();
+    const runFolder = join(runFolderBase, 'review-reject');
 
-    const outcome = await runWorkflow({
-      runRoot,
-      workflow,
-      workflowBytes: bytes,
+    const outcome = await runCompiledFlow({
+      runFolder,
+      flow,
+      flowBytes: bytes,
       runId: RunId.parse('b2000000-0000-0000-0000-000000000002'),
       goal: 'Reject a blocking Build review',
-      rigor: 'standard',
-      lane: lane(),
+      depth: 'standard',
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 25, 8, 20, 0)),
-      dispatcher: dispatcherWith({
+      relayer: relayerWith({
         reviewBody: JSON.stringify({
           verdict: 'reject',
           summary: 'Blocking issue found',
@@ -220,25 +222,25 @@ describe('Build runtime wiring', () => {
     });
 
     expect(outcome.result.outcome).toBe('aborted');
-    expect(outcome.result.reason).toMatch(/adapter declared verdict 'reject'/);
-    expect(existsSync(join(runRoot, 'artifacts/build/review.json'))).toBe(false);
-    expect(existsSync(join(runRoot, 'artifacts/dispatch/build-review.result.json'))).toBe(true);
+    expect(outcome.result.reason).toMatch(/connector declared verdict 'reject'/);
+    expect(existsSync(join(runFolder, 'reports/build/review.json'))).toBe(false);
+    expect(existsSync(join(runFolder, 'reports/relay/build-review.result.json'))).toBe(true);
   });
 
-  it('aborts accept-with-fixes without findings before writing the canonical Build review artifact', async () => {
-    const { workflow, bytes } = loadFixture();
-    const runRoot = join(runRootBase, 'review-empty-fixes');
+  it('aborts accept-with-fixes without findings before writing the canonical Build review report', async () => {
+    const { flow, bytes } = loadFixture();
+    const runFolder = join(runFolderBase, 'review-empty-fixes');
 
-    const outcome = await runWorkflow({
-      runRoot,
-      workflow,
-      workflowBytes: bytes,
+    const outcome = await runCompiledFlow({
+      runFolder,
+      flow,
+      flowBytes: bytes,
       runId: RunId.parse('b2000000-0000-0000-0000-000000000003'),
       goal: 'Reject a non-actionable Build review',
-      rigor: 'standard',
-      lane: lane(),
+      depth: 'standard',
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 25, 8, 30, 0)),
-      dispatcher: dispatcherWith({
+      relayer: relayerWith({
         reviewBody: JSON.stringify({
           verdict: 'accept-with-fixes',
           summary: 'Fixes needed but omitted',
@@ -251,28 +253,28 @@ describe('Build runtime wiring', () => {
     expect(outcome.result.outcome).toBe('aborted');
     expect(outcome.result.reason).toMatch(/build\.review@v1/);
     expect(outcome.result.reason).toMatch(/findings/);
-    expect(existsSync(join(runRoot, 'artifacts/build/review.json'))).toBe(false);
-    expect(existsSync(join(runRoot, 'artifacts/dispatch/build-review.result.json'))).toBe(true);
+    expect(existsSync(join(runFolder, 'reports/build/review.json'))).toBe(false);
+    expect(existsSync(join(runFolder, 'reports/relay/build-review.result.json'))).toBe(true);
   });
 
   it('declares default, lite, deep, and autonomous entry modes, and lite reaches Review by the pass route', () => {
-    const { workflow } = loadFixture();
-    expect(workflow.entry_modes.map((mode) => mode.name)).toEqual([
+    const { flow } = loadFixture();
+    expect(flow.entry_modes.map((mode) => mode.name)).toEqual([
       'default',
       'lite',
       'deep',
       'autonomous',
     ]);
-    expect(workflow.entry_modes.map((mode) => mode.rigor)).toEqual([
+    expect(flow.entry_modes.map((mode) => mode.depth)).toEqual([
       'standard',
       'lite',
       'deep',
       'autonomous',
     ]);
 
-    const lite = workflow.entry_modes.find((mode) => mode.name === 'lite');
+    const lite = flow.entry_modes.find((mode) => mode.name === 'lite');
     if (lite === undefined) throw new Error('expected lite entry mode');
-    const stepsById = new Map(workflow.steps.map((step) => [step.id as unknown as string, step]));
+    const stepsById = new Map(flow.steps.map((step) => [step.id as unknown as string, step]));
     const visited: string[] = [];
     let current: string | undefined = lite.start_at as unknown as string;
     while (current !== undefined && !current.startsWith('@')) {
@@ -289,193 +291,193 @@ describe('Build runtime wiring', () => {
     ]);
   });
 
-  it('uses the selected lite entry mode as the run rigor when no explicit rigor is supplied', async () => {
-    const { workflow, bytes } = loadFixture();
-    const runRoot = join(runRootBase, 'lite-entry-mode');
-    const dispatchInputs: AgentDispatchInput[] = [];
-    const dispatcher = dispatcherWith();
+  it('uses the selected lite entry mode as the run depth when no explicit depth is supplied', async () => {
+    const { flow, bytes } = loadFixture();
+    const runFolder = join(runFolderBase, 'lite-entry-mode');
+    const relayInputs: AgentRelayInput[] = [];
+    const relayer = relayerWith();
 
-    const outcome = await runWorkflow({
-      runRoot,
-      workflow,
-      workflowBytes: bytes,
+    const outcome = await runCompiledFlow({
+      runFolder,
+      flow,
+      flowBytes: bytes,
       runId: RunId.parse('b2000000-0000-0000-0000-000000000004'),
       goal: 'Add a tiny Build feature in lite mode',
       entryModeName: 'lite',
-      lane: lane(),
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 25, 8, 40, 0)),
-      dispatcher: {
-        adapterName: dispatcher.adapterName,
-        dispatch: async (input) => {
-          dispatchInputs.push(input);
-          return dispatcher.dispatch(input);
+      relayer: {
+        connectorName: relayer.connectorName,
+        relay: async (input) => {
+          relayInputs.push(input);
+          return relayer.relay(input);
         },
       },
       projectRoot: REPO_ROOT,
     });
 
-    const bootstrap = eventByKind(outcome.events, 'run.bootstrapped');
-    const checkpoint = outcome.events.find(
-      (event) =>
-        event.kind === 'checkpoint.resolved' &&
-        eventLabel(event) === 'checkpoint.resolved:frame-step',
+    const bootstrap = trace_entryByKind(outcome.trace_entrys, 'run.bootstrapped');
+    const checkpoint = outcome.trace_entrys.find(
+      (trace_entry) =>
+        trace_entry.kind === 'checkpoint.resolved' &&
+        trace_entryLabel(trace_entry) === 'checkpoint.resolved:frame-step',
     );
     expect(outcome.result.outcome).toBe('complete');
-    expect(bootstrap).toMatchObject({ rigor: 'lite' });
+    expect(bootstrap).toMatchObject({ depth: 'lite' });
     expect(checkpoint).toMatchObject({
       selection: 'continue',
       resolution_source: 'safe-default',
     });
-    expect(dispatchInputs[0]?.resolvedSelection).toMatchObject({ rigor: 'lite' });
-    expect(outcome.events.map(eventLabel)).toContain('dispatch.completed:review-step');
+    expect(relayInputs[0]?.resolvedSelection).toMatchObject({ depth: 'lite' });
+    expect(outcome.trace_entrys.map(trace_entryLabel)).toContain('relay.completed:review-step');
   });
 
-  it('uses deep entry mode to pause at the operator checkpoint when no explicit rigor is supplied', async () => {
-    const { workflow, bytes } = loadFixture();
-    const runRoot = join(runRootBase, 'deep-entry-mode');
+  it('uses deep entry mode to pause at the operator checkpoint when no explicit depth is supplied', async () => {
+    const { flow, bytes } = loadFixture();
+    const runFolder = join(runFolderBase, 'deep-entry-mode');
 
-    const outcome = await runWorkflow({
-      runRoot,
-      workflow,
-      workflowBytes: bytes,
+    const outcome = await runCompiledFlow({
+      runFolder,
+      flow,
+      flowBytes: bytes,
       runId: RunId.parse('b2000000-0000-0000-0000-000000000005'),
       goal: 'Add a tiny Build feature in deep mode',
       entryModeName: 'deep',
-      lane: lane(),
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 25, 8, 50, 0)),
-      dispatcher: dispatcherWith(),
+      relayer: relayerWith(),
       projectRoot: REPO_ROOT,
     });
 
-    const bootstrap = eventByKind(outcome.events, 'run.bootstrapped');
+    const bootstrap = trace_entryByKind(outcome.trace_entrys, 'run.bootstrapped');
     expect(outcome.result.outcome).toBe('checkpoint_waiting');
-    expect(bootstrap).toMatchObject({ rigor: 'deep' });
-    expect(outcome.events.map(eventLabel)).not.toContain('run.closed');
-    expect(existsSync(join(runRoot, 'artifacts/result.json'))).toBe(false);
+    expect(bootstrap).toMatchObject({ depth: 'deep' });
+    expect(outcome.trace_entrys.map(trace_entryLabel)).not.toContain('run.closed');
+    expect(existsSync(join(runFolder, 'reports/result.json'))).toBe(false);
   });
 
-  it('lets an explicit rigor override the selected entry mode default', async () => {
-    const { workflow, bytes } = loadFixture();
-    const runRoot = join(runRootBase, 'entry-mode-rigor-override');
-    const dispatchInputs: AgentDispatchInput[] = [];
-    const dispatcher = dispatcherWith();
+  it('lets an explicit depth override the selected entry mode default', async () => {
+    const { flow, bytes } = loadFixture();
+    const runFolder = join(runFolderBase, 'entry-mode-depth-override');
+    const relayInputs: AgentRelayInput[] = [];
+    const relayer = relayerWith();
 
-    const outcome = await runWorkflow({
-      runRoot,
-      workflow,
-      workflowBytes: bytes,
+    const outcome = await runCompiledFlow({
+      runFolder,
+      flow,
+      flowBytes: bytes,
       runId: RunId.parse('b2000000-0000-0000-0000-000000000006'),
       goal: 'Add a tiny Build feature with an explicit standard override',
       entryModeName: 'deep',
-      rigor: 'standard',
-      lane: lane(),
+      depth: 'standard',
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 25, 9, 0, 0)),
-      dispatcher: {
-        adapterName: dispatcher.adapterName,
-        dispatch: async (input) => {
-          dispatchInputs.push(input);
-          return dispatcher.dispatch(input);
+      relayer: {
+        connectorName: relayer.connectorName,
+        relay: async (input) => {
+          relayInputs.push(input);
+          return relayer.relay(input);
         },
       },
       projectRoot: REPO_ROOT,
     });
 
-    const bootstrap = eventByKind(outcome.events, 'run.bootstrapped');
+    const bootstrap = trace_entryByKind(outcome.trace_entrys, 'run.bootstrapped');
     expect(outcome.result.outcome).toBe('complete');
-    expect(bootstrap).toMatchObject({ rigor: 'standard' });
-    expect(dispatchInputs[0]?.resolvedSelection).toMatchObject({ rigor: 'standard' });
+    expect(bootstrap).toMatchObject({ depth: 'standard' });
+    expect(relayInputs[0]?.resolvedSelection).toMatchObject({ depth: 'standard' });
   });
 
-  it('uses explicit autonomous rigor over the default entry mode for checkpoint policy', async () => {
-    const { workflow, bytes } = loadFixture();
-    const runRoot = join(runRootBase, 'default-entry-autonomous-override');
-    const dispatchInputs: AgentDispatchInput[] = [];
-    const dispatcher = dispatcherWith();
+  it('uses explicit autonomous depth over the default entry mode for checkpoint policy', async () => {
+    const { flow, bytes } = loadFixture();
+    const runFolder = join(runFolderBase, 'default-entry-autonomous-override');
+    const relayInputs: AgentRelayInput[] = [];
+    const relayer = relayerWith();
 
-    const outcome = await runWorkflow({
-      runRoot,
-      workflow,
-      workflowBytes: bytes,
+    const outcome = await runCompiledFlow({
+      runFolder,
+      flow,
+      flowBytes: bytes,
       runId: RunId.parse('b2000000-0000-0000-0000-000000000009'),
-      goal: 'Add a tiny Build feature with explicit autonomous rigor',
+      goal: 'Add a tiny Build feature with explicit autonomous depth',
       entryModeName: 'default',
-      rigor: 'autonomous',
-      lane: lane(),
+      depth: 'autonomous',
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 25, 9, 5, 0)),
-      dispatcher: {
-        adapterName: dispatcher.adapterName,
-        dispatch: async (input) => {
-          dispatchInputs.push(input);
-          return dispatcher.dispatch(input);
+      relayer: {
+        connectorName: relayer.connectorName,
+        relay: async (input) => {
+          relayInputs.push(input);
+          return relayer.relay(input);
         },
       },
       projectRoot: REPO_ROOT,
     });
 
-    const bootstrap = eventByKind(outcome.events, 'run.bootstrapped');
-    const checkpoint = outcome.events.find(
-      (event) =>
-        event.kind === 'checkpoint.resolved' &&
-        eventLabel(event) === 'checkpoint.resolved:frame-step',
+    const bootstrap = trace_entryByKind(outcome.trace_entrys, 'run.bootstrapped');
+    const checkpoint = outcome.trace_entrys.find(
+      (trace_entry) =>
+        trace_entry.kind === 'checkpoint.resolved' &&
+        trace_entryLabel(trace_entry) === 'checkpoint.resolved:frame-step',
     );
     expect(outcome.result.outcome).toBe('complete');
-    expect(bootstrap).toMatchObject({ rigor: 'autonomous' });
+    expect(bootstrap).toMatchObject({ depth: 'autonomous' });
     expect(checkpoint).toMatchObject({
       selection: 'continue',
       resolution_source: 'safe-autonomous',
     });
-    expect(dispatchInputs[0]?.resolvedSelection).toMatchObject({ rigor: 'autonomous' });
+    expect(relayInputs[0]?.resolvedSelection).toMatchObject({ depth: 'autonomous' });
   });
 
   it('uses autonomous entry mode to take the declared safe autonomous checkpoint choice', async () => {
-    const { workflow, bytes } = loadFixture();
-    const runRoot = join(runRootBase, 'autonomous-entry-mode');
+    const { flow, bytes } = loadFixture();
+    const runFolder = join(runFolderBase, 'autonomous-entry-mode');
 
-    const outcome = await runWorkflow({
-      runRoot,
-      workflow,
-      workflowBytes: bytes,
+    const outcome = await runCompiledFlow({
+      runFolder,
+      flow,
+      flowBytes: bytes,
       runId: RunId.parse('b2000000-0000-0000-0000-000000000007'),
       goal: 'Add a tiny Build feature in autonomous mode',
       entryModeName: 'autonomous',
-      lane: lane(),
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 25, 9, 10, 0)),
-      dispatcher: dispatcherWith(),
+      relayer: relayerWith(),
       projectRoot: REPO_ROOT,
     });
 
-    const bootstrap = eventByKind(outcome.events, 'run.bootstrapped');
-    const checkpoint = outcome.events.find(
-      (event) =>
-        event.kind === 'checkpoint.resolved' &&
-        eventLabel(event) === 'checkpoint.resolved:frame-step',
+    const bootstrap = trace_entryByKind(outcome.trace_entrys, 'run.bootstrapped');
+    const checkpoint = outcome.trace_entrys.find(
+      (trace_entry) =>
+        trace_entry.kind === 'checkpoint.resolved' &&
+        trace_entryLabel(trace_entry) === 'checkpoint.resolved:frame-step',
     );
     expect(outcome.result.outcome).toBe('complete');
-    expect(bootstrap).toMatchObject({ rigor: 'autonomous' });
+    expect(bootstrap).toMatchObject({ depth: 'autonomous' });
     expect(checkpoint).toMatchObject({
       selection: 'continue',
       resolution_source: 'safe-autonomous',
     });
   });
 
-  it('rejects an unknown entry mode before bootstrapping a run root', async () => {
-    const { workflow, bytes } = loadFixture();
-    const runRoot = join(runRootBase, 'unknown-entry-mode');
+  it('rejects an unknown entry mode before bootstrapping a run folder', async () => {
+    const { flow, bytes } = loadFixture();
+    const runFolder = join(runFolderBase, 'unknown-entry-mode');
 
     await expect(
-      runWorkflow({
-        runRoot,
-        workflow,
-        workflowBytes: bytes,
+      runCompiledFlow({
+        runFolder,
+        flow,
+        flowBytes: bytes,
         runId: RunId.parse('b2000000-0000-0000-0000-000000000008'),
         goal: 'Try a missing entry mode',
         entryModeName: 'missing',
-        lane: lane(),
+        change_kind: change_kind(),
         now: deterministicNow(Date.UTC(2026, 3, 25, 9, 20, 0)),
-        dispatcher: dispatcherWith(),
+        relayer: relayerWith(),
         projectRoot: REPO_ROOT,
       }),
     ).rejects.toThrow(/entry_mode named 'missing'/);
-    expect(existsSync(runRoot)).toBe(false);
+    expect(existsSync(runFolder)).toBe(false);
   });
 });

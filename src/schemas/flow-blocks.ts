@@ -112,7 +112,7 @@ export const FlowBlock = z
     output_contract: FlowContractRef,
     action_surface: FlowBlockActionSurface,
     produces_evidence: nonEmptyUniqueStrings,
-    gate: z
+    check: z
       .object({
         kind: FlowBlockCheckKind,
         description: z.string().min(1),

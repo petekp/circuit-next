@@ -5,10 +5,10 @@
 // callers (via `src/index.ts`) and by the cross-package contract
 // tests. A new schema file that isn't re-exported is a silent gap:
 // barrel consumers won't see the schema even though the deep import
-// works. This test prevents that drift mechanically.
+// works. This test prtrace_entrys that drift mechanically.
 //
 // Sister test to `catalog-completeness.test.ts`. Catalog-completeness
-// enforces structural invariants for the workflow catalog; this one
+// enforces structural invariants for the flow catalog; this one
 // enforces the same class of invariant for the schemas package.
 
 import { readFileSync, readdirSync } from 'node:fs';

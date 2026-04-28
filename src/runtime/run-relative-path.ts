@@ -1,23 +1,23 @@
 import { existsSync, lstatSync, realpathSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
-import { RunRelativePath } from '../schemas/primitives.js';
+import { RunRelativePath } from '../schemas/scalars.js';
 
 function isInside(root: string, target: string): boolean {
   const fromRoot = relative(root, target);
   return fromRoot !== '' && !fromRoot.startsWith('..') && !isAbsolute(fromRoot);
 }
 
-export function resolveRunRelative(runRoot: string, relPath: string): string {
+export function resolveRunRelative(runFolder: string, relPath: string): string {
   const parsed = RunRelativePath.safeParse(relPath);
   if (!parsed.success) {
     const detail = parsed.error.issues.map((issue) => issue.message).join('; ');
     throw new Error(`run-relative path rejected: ${JSON.stringify(relPath)} (${detail})`);
   }
 
-  const rootAbs = resolve(runRoot);
+  const rootAbs = resolve(runFolder);
   const targetAbs = resolve(rootAbs, parsed.data);
   if (!isInside(rootAbs, targetAbs)) {
-    throw new Error(`run-relative path rejected: ${JSON.stringify(relPath)} escapes run root`);
+    throw new Error(`run-relative path rejected: ${JSON.stringify(relPath)} escapes run folder`);
   }
   if (!existsSync(rootAbs)) return targetAbs;
 
@@ -37,7 +37,7 @@ export function resolveRunRelative(runRoot: string, relPath: string): string {
     const cursorReal = realpathSync.native(cursor);
     if (!isInside(rootReal, cursorReal)) {
       throw new Error(
-        `run-relative path rejected: ${JSON.stringify(relPath)} escapes real run root through ${JSON.stringify(cursor)}`,
+        `run-relative path rejected: ${JSON.stringify(relPath)} escapes real run folder through ${JSON.stringify(cursor)}`,
       );
     }
   }

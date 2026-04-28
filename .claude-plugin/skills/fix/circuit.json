@@ -2,7 +2,7 @@
   "schema_version": "2",
   "id": "fix",
   "version": "0.1.0",
-  "purpose": "Fix workflow: capture problem boundary, gather context, diagnose, apply a focused change, verify, review (in standard rigor), and close with evidence. Lite mode skips the review dispatch and closes immediately after verification via the fix-verify route_overrides.continue.lite override. fix-no-repro-decision and fix-handoff remain in the recipe as authoring intent for future ask/handoff routing in the runtime; they are unreachable at compile and do not appear in the emitted Workflows.",
+  "purpose": "Fix flow: capture problem boundary, gather context, diagnose, apply a focused change, verify, review (in standard depth), and close with evidence. Lite mode skips the review relay and closes immediately after verification via the fix-verify route_overrides.continue.lite override. fix-no-repro-decision and fix-handoff remain in the schematic as authoring intent for future ask/handoff routing in the runtime; they are unreachable at compile and do not appear in the emitted compiled flows.",
   "entry": {
     "signals": {
       "include": ["fix", "bug", "broken", "regression", "incident", "outage", "diagnose"],
@@ -14,64 +14,64 @@
     {
       "name": "default",
       "start_at": "fix-frame",
-      "rigor": "standard",
-      "description": "Default Fix entry mode — standard rigor with full review pass."
+      "depth": "standard",
+      "description": "Default Fix entry mode — standard depth with full review pass."
     },
     {
       "name": "deep",
       "start_at": "fix-frame",
-      "rigor": "deep",
-      "description": "Deep Fix entry mode — standard graph at deep rigor (more thorough analysis and review)."
+      "depth": "deep",
+      "description": "Deep Fix entry mode — standard graph at deep depth (more thorough analysis and review)."
     },
     {
       "name": "autonomous",
       "start_at": "fix-frame",
-      "rigor": "autonomous",
-      "description": "Autonomous Fix entry mode — standard graph at autonomous rigor; safe-default checkpoint choices apply."
+      "depth": "autonomous",
+      "description": "Autonomous Fix entry mode — standard graph at autonomous depth; safe-default checkpoint choices apply."
     }
   ],
-  "phases": [
+  "stages": [
     {
-      "id": "frame-phase",
+      "id": "frame-stage",
       "title": "Frame",
       "canonical": "frame",
       "steps": ["fix-frame"]
     },
     {
-      "id": "analyze-phase",
+      "id": "analyze-stage",
       "title": "Analyze",
       "canonical": "analyze",
       "steps": ["fix-gather-context", "fix-diagnose"]
     },
     {
-      "id": "act-phase",
+      "id": "act-stage",
       "title": "Act",
       "canonical": "act",
       "steps": ["fix-act"]
     },
     {
-      "id": "verify-phase",
+      "id": "verify-stage",
       "title": "Verify",
       "canonical": "verify",
       "steps": ["fix-verify"]
     },
     {
-      "id": "review-phase",
+      "id": "review-stage",
       "title": "Review",
       "canonical": "review",
       "steps": ["fix-review"]
     },
     {
-      "id": "close-phase",
+      "id": "close-stage",
       "title": "Close",
       "canonical": "close",
       "steps": ["fix-close"]
     }
   ],
-  "spine_policy": {
+  "stage_path_policy": {
     "mode": "partial",
     "omits": ["plan"],
-    "rationale": "Fix follows Frame, Analyze, Act, Verify, Review, Close. The Plan phase is omitted because Fix's planning is folded into Diagnose during the Analyze phase — there is no separate plan-of-attack artifact distinct from the diagnosis."
+    "rationale": "Fix follows Frame, Analyze, Act, Verify, Review, Close. The Plan stage is omitted because Fix's planning is folded into Diagnose during the Analyze stage — there is no separate plan-of-attack report distinct from the diagnosis."
   },
   "steps": [
     {
@@ -83,18 +83,18 @@
         "pass": "fix-gather-context"
       },
       "executor": "orchestrator",
-      "kind": "synthesis",
+      "kind": "compose",
       "writes": {
-        "artifact": {
-          "path": "artifacts/fix/brief.json",
+        "report": {
+          "path": "reports/fix/brief.json",
           "schema": "fix.brief@v1"
         }
       },
-      "gate": {
+      "check": {
         "kind": "schema_sections",
         "source": {
-          "kind": "artifact",
-          "ref": "artifact"
+          "kind": "report",
+          "ref": "report"
         },
         "required": ["problem_statement", "scope", "regression_contract", "success_criteria"]
       }
@@ -103,26 +103,26 @@
       "id": "fix-gather-context",
       "title": "Analyze — gather problem context",
       "protocol": "fix-gather-context@v1",
-      "reads": ["artifacts/fix/brief.json"],
+      "reads": ["reports/fix/brief.json"],
       "routes": {
         "pass": "fix-diagnose"
       },
       "executor": "worker",
-      "kind": "dispatch",
+      "kind": "relay",
       "role": "researcher",
       "writes": {
-        "artifact": {
-          "path": "artifacts/fix/context.json",
+        "report": {
+          "path": "reports/fix/context.json",
           "schema": "fix.context@v1"
         },
-        "request": "artifacts/dispatch/fix-gather-context.request.json",
-        "receipt": "artifacts/dispatch/fix-gather-context.receipt.txt",
-        "result": "artifacts/dispatch/fix-gather-context.result.json"
+        "request": "reports/relay/fix-gather-context.request.json",
+        "receipt": "reports/relay/fix-gather-context.receipt.txt",
+        "result": "reports/relay/fix-gather-context.result.json"
       },
-      "gate": {
+      "check": {
         "kind": "result_verdict",
         "source": {
-          "kind": "dispatch_result",
+          "kind": "relay_result",
           "ref": "result"
         },
         "pass": ["accept"]
@@ -132,26 +132,26 @@
       "id": "fix-diagnose",
       "title": "Analyze — diagnose problem",
       "protocol": "fix-diagnose@v1",
-      "reads": ["artifacts/fix/brief.json", "artifacts/fix/context.json"],
+      "reads": ["reports/fix/brief.json", "reports/fix/context.json"],
       "routes": {
         "pass": "fix-act"
       },
       "executor": "worker",
-      "kind": "dispatch",
+      "kind": "relay",
       "role": "researcher",
       "writes": {
-        "artifact": {
-          "path": "artifacts/fix/diagnosis.json",
+        "report": {
+          "path": "reports/fix/diagnosis.json",
           "schema": "fix.diagnosis@v1"
         },
-        "request": "artifacts/dispatch/fix-diagnose.request.json",
-        "receipt": "artifacts/dispatch/fix-diagnose.receipt.txt",
-        "result": "artifacts/dispatch/fix-diagnose.result.json"
+        "request": "reports/relay/fix-diagnose.request.json",
+        "receipt": "reports/relay/fix-diagnose.receipt.txt",
+        "result": "reports/relay/fix-diagnose.result.json"
       },
-      "gate": {
+      "check": {
         "kind": "result_verdict",
         "source": {
-          "kind": "dispatch_result",
+          "kind": "relay_result",
           "ref": "result"
         },
         "pass": ["accept"]
@@ -161,26 +161,26 @@
       "id": "fix-act",
       "title": "Act — apply focused fix",
       "protocol": "fix-act@v1",
-      "reads": ["artifacts/fix/brief.json", "artifacts/fix/diagnosis.json"],
+      "reads": ["reports/fix/brief.json", "reports/fix/diagnosis.json"],
       "routes": {
         "pass": "fix-verify"
       },
       "executor": "worker",
-      "kind": "dispatch",
+      "kind": "relay",
       "role": "implementer",
       "writes": {
-        "artifact": {
-          "path": "artifacts/fix/change.json",
+        "report": {
+          "path": "reports/fix/change.json",
           "schema": "fix.change@v1"
         },
-        "request": "artifacts/dispatch/fix-act.request.json",
-        "receipt": "artifacts/dispatch/fix-act.receipt.txt",
-        "result": "artifacts/dispatch/fix-act.result.json"
+        "request": "reports/relay/fix-act.request.json",
+        "receipt": "reports/relay/fix-act.receipt.txt",
+        "result": "reports/relay/fix-act.result.json"
       },
-      "gate": {
+      "check": {
         "kind": "result_verdict",
         "source": {
-          "kind": "dispatch_result",
+          "kind": "relay_result",
           "ref": "result"
         },
         "pass": ["accept"]
@@ -190,23 +190,23 @@
       "id": "fix-verify",
       "title": "Verify — run Fix proof",
       "protocol": "fix-verify@v1",
-      "reads": ["artifacts/fix/brief.json", "artifacts/fix/change.json"],
+      "reads": ["reports/fix/brief.json", "reports/fix/change.json"],
       "routes": {
         "pass": "fix-review"
       },
       "executor": "orchestrator",
       "kind": "verification",
       "writes": {
-        "artifact": {
-          "path": "artifacts/fix/verification.json",
+        "report": {
+          "path": "reports/fix/verification.json",
           "schema": "fix.verification@v1"
         }
       },
-      "gate": {
+      "check": {
         "kind": "schema_sections",
         "source": {
-          "kind": "artifact",
-          "ref": "artifact"
+          "kind": "report",
+          "ref": "report"
         },
         "required": ["overall_status", "commands"]
       }
@@ -216,29 +216,29 @@
       "title": "Review — independent audit of Fix change",
       "protocol": "fix-review@v1",
       "reads": [
-        "artifacts/fix/brief.json",
-        "artifacts/fix/change.json",
-        "artifacts/fix/verification.json"
+        "reports/fix/brief.json",
+        "reports/fix/change.json",
+        "reports/fix/verification.json"
       ],
       "routes": {
         "pass": "fix-close"
       },
       "executor": "worker",
-      "kind": "dispatch",
+      "kind": "relay",
       "role": "reviewer",
       "writes": {
-        "artifact": {
-          "path": "artifacts/fix/review.json",
+        "report": {
+          "path": "reports/fix/review.json",
           "schema": "fix.review@v1"
         },
-        "request": "artifacts/dispatch/fix-review.request.json",
-        "receipt": "artifacts/dispatch/fix-review.receipt.txt",
-        "result": "artifacts/dispatch/fix-review.result.json"
+        "request": "reports/relay/fix-review.request.json",
+        "receipt": "reports/relay/fix-review.receipt.txt",
+        "result": "reports/relay/fix-review.result.json"
       },
-      "gate": {
+      "check": {
         "kind": "result_verdict",
         "source": {
-          "kind": "dispatch_result",
+          "kind": "relay_result",
           "ref": "result"
         },
         "pass": ["accept", "accept-with-fixes"]
@@ -249,29 +249,29 @@
       "title": "Close — emit Fix result",
       "protocol": "fix-close@v1",
       "reads": [
-        "artifacts/fix/brief.json",
-        "artifacts/fix/context.json",
-        "artifacts/fix/diagnosis.json",
-        "artifacts/fix/change.json",
-        "artifacts/fix/verification.json",
-        "artifacts/fix/review.json"
+        "reports/fix/brief.json",
+        "reports/fix/context.json",
+        "reports/fix/diagnosis.json",
+        "reports/fix/change.json",
+        "reports/fix/verification.json",
+        "reports/fix/review.json"
       ],
       "routes": {
         "pass": "@complete"
       },
       "executor": "orchestrator",
-      "kind": "synthesis",
+      "kind": "compose",
       "writes": {
-        "artifact": {
-          "path": "artifacts/fix-result.json",
+        "report": {
+          "path": "reports/fix-result.json",
           "schema": "fix.result@v1"
         }
       },
-      "gate": {
+      "check": {
         "kind": "schema_sections",
         "source": {
-          "kind": "artifact",
-          "ref": "artifact"
+          "kind": "report",
+          "ref": "report"
         },
         "required": [
           "summary",
@@ -280,7 +280,7 @@
           "regression_status",
           "review_status",
           "review_verdict",
-          "artifact_pointers"
+          "evidence_links"
         ]
       }
     }

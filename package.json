@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "description": "Claude Code plugin that automates common developer workflows with per-step configurability (model, effort, skills), grounded in evidence-based prompting research and contract-first + architecture-first + tiny-step-ratcheting methodology.",
+  "description": "Claude Code plugin that automates common developer flows with per-step configurability (model, effort, skills), grounded in evidence-based prompting research and contract-first + architecture-first + tiny-step-ratcheting methodology.",
   "bin": {
     "circuit-next": "./bin/circuit-next"
   },
@@ -19,10 +19,10 @@
     "test:coverage": "vitest run --coverage",
     "lint": "biome check .",
     "format": "biome format --write .",
-    "emit-workflows": "npm run build && node scripts/emit-workflows.mjs",
-    "check-workflow-drift": "npm run build && node scripts/emit-workflows.mjs --check",
-    "verify": "npm run check && npm run lint && npm run build && npm run test && node scripts/emit-workflows.mjs --check",
-    "verify:fast": "npm run check && npm run lint && npm run build && npm run test:fast && node scripts/emit-workflows.mjs --check",
+    "emit-flows": "npm run build && node scripts/emit-flows.mjs",
+    "check-flow-drift": "npm run build && node scripts/emit-flows.mjs --check",
+    "verify": "npm run check && npm run lint && npm run build && npm run test && node scripts/emit-flows.mjs --check",
+    "verify:fast": "npm run check && npm run lint && npm run build && npm run test:fast && node scripts/emit-flows.mjs --check",
     "circuit:run": "./bin/circuit-next"
   },
   "dependencies": {

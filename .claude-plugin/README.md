@@ -18,10 +18,9 @@ This directory is the plugin surface the Claude Code loader reads.
 
 - `plugin.json` — edit by hand.
 - `skills/<flow>/*.json` — **do not edit by hand**. Edit the
-  flow's schematic (`src/workflows/<id>/recipe.json`, renamed to
-  `schematic.json` in Phase 4 of the terminology migration) and run
-  `npm run emit-workflows`. The drift check
-  (`npm run emit-workflows -- --check`) fails CI if a generated file
+  flow's schematic (`src/flows/<id>/schematic.json`) and run
+  `npm run emit-flows`. The drift check
+  (`npm run emit-flows -- --check`) fails CI if a generated file
   diverges from the source.
 
 ## Why generated

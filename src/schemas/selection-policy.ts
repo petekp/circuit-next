@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { PhaseId, SkillId, StepId } from './ids.js';
-import { Rigor } from './rigor.js';
+import { Depth } from './depth.js';
+import { SkillId, StageId, StepId } from './ids.js';
 
 // SEL-I4 — provider-scoped model. The four-provider enum is closed; `model`
-// is an open string because adapter-specific code owns provider/model
+// is an open string because connector-specific code owns provider/model
 // handling. New model releases do not force a schema change here.
 export const ProviderScopedModel = z
   .object({
@@ -21,7 +21,7 @@ export type Effort = z.infer<typeof Effort>;
 // Invocation_options must be JSON-safe. A
 // z.record(z.unknown()) boundary admits functions, Dates, symbols, and
 // `undefined` — none of which can be authored in YAML/TOML/JSON or survive
-// event-log serialization. `JsonValue` is the recursive predicate; the
+// trace_entry-log serialization. `JsonValue` is the recursive predicate; the
 // refinement rejects anything else. The extra `Number.isFinite` check
 // rejects NaN/Infinity, which JSON.stringify silently turns into null.
 type JsonValue = null | boolean | number | string | JsonValue[] | { [k: string]: JsonValue };
@@ -43,7 +43,7 @@ export type JsonObject = z.infer<typeof JsonObject>;
 // composition (union, difference) at the resolver layer expects the inputs
 // to be sets; accepting duplicates at parse time let a typo in an author's
 // YAML silently produce `['tdd', 'tdd']` and masked the intent. Canonical
-// *order* of the composed resolver output is a Phase 2 property.
+// *order* of the composed resolver output is a Stage 2 property.
 const UniqueSkillArray = z.array(SkillId).refine(
   (arr) => new Set(arr).size === arr.length,
   (arr) => ({
@@ -66,22 +66,22 @@ export type SkillOverride = z.infer<typeof SkillOverride>;
 // SEL-I2 — every field optional; `.strict()` rejects surplus keys (typos
 // that would otherwise silently leave the effective selection at the prior
 // layer's default). `invocation_options` is JSON-safe; its
-// merge semantics (right-biased by precedence) are a Phase 2 property.
+// merge semantics (right-biased by precedence) are a Stage 2 property.
 export const SelectionOverride = z
   .object({
     model: ProviderScopedModel.optional(),
     effort: Effort.optional(),
     skills: SkillOverride.default({ mode: 'inherit' }),
-    rigor: Rigor.optional(),
+    depth: Depth.optional(),
     invocation_options: JsonObject.default({}),
   })
   .strict();
 export type SelectionOverride = z.infer<typeof SelectionOverride>;
 
-// SEL-I5 — resolved is the effective record at dispatch time.
+// SEL-I5 — resolved is the effective record at relay time.
 // `invocation_options` is included because it IS effective-state
-// data — adapters consume it, and omitting it from the resolved surface
-// makes `DispatchStartedEvent.resolved_selection` insufficient for audit or
+// data — connectors consume it, and omitting it from the resolved surface
+// makes `RelayStartedTraceEntry.resolved_selection` insufficient for audit or
 // replay. The resolver flattens `applied[].override.invocation_options` via
 // right-biased merge by precedence. What ResolvedSelection still does NOT
 // carry is `SkillOverride` — the resolver flattens the override chain into
@@ -91,7 +91,7 @@ export const ResolvedSelection = z
     model: ProviderScopedModel.optional(),
     effort: Effort.optional(),
     skills: UniqueSkillArray,
-    rigor: Rigor.optional(),
+    depth: Depth.optional(),
     invocation_options: JsonObject.default({}),
   })
   .strict();
@@ -101,8 +101,8 @@ export const SelectionSource = z.enum([
   'default',
   'user-global',
   'project',
-  'workflow',
-  'phase',
+  'flow',
+  'stage',
   'step',
   'invocation',
 ]);
@@ -117,8 +117,8 @@ export const SELECTION_PRECEDENCE = [
   'default',
   'user-global',
   'project',
-  'workflow',
-  'phase',
+  'flow',
+  'stage',
   'step',
   'invocation',
 ] as const satisfies readonly SelectionSource[];
@@ -127,7 +127,7 @@ export const SELECTION_PRECEDENCE = [
 // tuple-derived element type must be the same string-literal set. If one
 // drifts, `_SelectionSourcePrecedenceParity` collapses to `never` and the
 // build fails. This is the static form of SEL-I1; the runtime
-// `selection.prop.precedence_const_parity` property is Phase 2
+// `selection.prop.precedence_const_parity` property is Stage 2
 // defense-in-depth.
 type _IsExact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 type _PrecedenceSource = (typeof SELECTION_PRECEDENCE)[number];
@@ -141,27 +141,27 @@ const PRECEDENCE_INDEX: Record<SelectionSource, number> = Object.fromEntries(
   SELECTION_PRECEDENCE.map((s, i) => [s, i]),
 ) as Record<SelectionSource, number>;
 
-// Applied[] entries are a discriminated union on `source`. The `phase` and
-// `step` variants carry a required disambiguator (`phase_id`, `step_id`).
+// Applied[] entries are a discriminated union on `source`. The `stage` and
+// `step` variants carry a required disambiguator (`stage_id`, `step_id`).
 // The five singleton-identified variants (default, user-global, project,
-// workflow, invocation) do not, because a Run has at most one contribution
+// flow, invocation) do not, because a Run has at most one contribution
 // from each.
 //
 // The disambiguators ensure provenance is independently auditable: reading
-// an `applied` entry with `source: 'phase'` now names the exact phase. Two
-// `phase` entries are permitted when a step legally belongs to multiple
-// phases (the `every_step_has_a_phase` property is deferred to Phase 2 at
-// phase.md, so overlapping phases is permitted at v0.1 and the trace must
+// an `applied` entry with `source: 'stage'` now names the exact stage. Two
+// `stage` entries are permitted when a step legally belongs to multiple
+// stages (the `every_step_has_a_stage` property is deferred to Stage 2 at
+// stage.md, so overlapping stages is permitted at v0.1 and the trace must
 // be able to represent them).
 const AppliedEntry = z.discriminatedUnion('source', [
   z.object({ source: z.literal('default'), override: SelectionOverride }).strict(),
   z.object({ source: z.literal('user-global'), override: SelectionOverride }).strict(),
   z.object({ source: z.literal('project'), override: SelectionOverride }).strict(),
-  z.object({ source: z.literal('workflow'), override: SelectionOverride }).strict(),
+  z.object({ source: z.literal('flow'), override: SelectionOverride }).strict(),
   z
     .object({
-      source: z.literal('phase'),
-      phase_id: PhaseId,
+      source: z.literal('stage'),
+      stage_id: StageId,
       override: SelectionOverride,
     })
     .strict(),
@@ -172,15 +172,15 @@ export type AppliedEntry = z.infer<typeof AppliedEntry>;
 
 // Ghost provenance rejection. An override is
 // "empty" iff every field is at its schema default: no model, no effort,
-// no rigor, skills in `inherit` mode, invocation_options empty. Applied
+// no depth, skills in `inherit` mode, invocation_options empty. Applied
 // entries whose override is empty fabricate provenance for a non-
 // contributing layer and are rejected. This is the v0.1 schema-level
-// complement to the reducer-level binding check (Phase 2
+// complement to the reducer-level binding check (Stage 2
 // property `selection.prop.resolved_matches_applied_composition`).
 function overrideContributes(o: SelectionOverride): boolean {
   if (o.model !== undefined) return true;
   if (o.effort !== undefined) return true;
-  if (o.rigor !== undefined) return true;
+  if (o.depth !== undefined) return true;
   if (o.skills.mode !== 'inherit') return true;
   if (Object.keys(o.invocation_options).length > 0) return true;
   return false;
@@ -201,18 +201,18 @@ const issueAt = (ctx: z.RefinementCtx, path: (string | number)[], message: strin
 // once:
 //   - SEL-I6: each source must have a precedence index > the previous for
 //     category changes. Equal index is tolerated when disambiguator
-//     distinguishes the entries (two phase entries are legal).
+//     distinguishes the entries (two stage entries are legal).
 //   - SEL-I7: no identity (source + disambiguator) appears twice. For
-//     singleton sources (default, user-global, project, workflow,
+//     singleton sources (default, user-global, project, flow,
 //     invocation), identity is the source alone. For plural sources
-//     (phase, step), identity is `{source, phase_id}` / `{source,
+//     (stage, step), identity is `{source, stage_id}` / `{source,
 //     step_id}`.
 //   - Ghost-provenance: every entry's override must contribute — no entry
 //     that re-asserts the prior chain's resolved value.
 function identityKey(entry: AppliedEntry): string {
   switch (entry.source) {
-    case 'phase':
-      return `phase:${entry.phase_id as unknown as string}`;
+    case 'stage':
+      return `stage:${entry.stage_id as unknown as string}`;
     case 'step':
       return `step:${entry.step_id as unknown as string}`;
     default:
@@ -231,7 +231,7 @@ export const SelectionResolution = SelectionResolutionBody.superRefine((res, ctx
       issueAt(
         ctx,
         ['applied', i, 'source'],
-        `duplicate applied identity '${key}' at index ${i}; each identity may contribute at most once (phase/step are disambiguated by their id)`,
+        `duplicate applied identity '${key}' at index ${i}; each identity may contribute at most once (stage/step are disambiguated by their id)`,
       );
       continue;
     }
@@ -241,7 +241,7 @@ export const SelectionResolution = SelectionResolutionBody.superRefine((res, ctx
       issueAt(
         ctx,
         ['applied', i, 'source'],
-        `applied entry '${entry.source}' at index ${i} is out of precedence order; entries must appear in SELECTION_PRECEDENCE order (default < user-global < project < workflow < phase < step < invocation). Two entries with equal precedence (two phases, two steps) are legal and must appear contiguously; a later category cannot precede an earlier one.`,
+        `applied entry '${entry.source}' at index ${i} is out of precedence order; entries must appear in SELECTION_PRECEDENCE order (default < user-global < project < flow < stage < step < invocation). Two entries with equal precedence (two stages, two steps) are legal and must appear contiguously; a later category cannot precede an earlier one.`,
       );
     } else {
       lastIndex = idx;
@@ -250,7 +250,7 @@ export const SelectionResolution = SelectionResolutionBody.superRefine((res, ctx
       issueAt(
         ctx,
         ['applied', i, 'override'],
-        `applied entry at index ${i} has an empty override (no model, effort, rigor, skills operation, or invocation_options); a layer that contributes nothing must NOT appear in the applied chain (ghost provenance)`,
+        `applied entry at index ${i} has an empty override (no model, effort, depth, skills operation, or invocation_options); a layer that contributes nothing must NOT appear in the applied chain (ghost provenance)`,
       );
     }
   }

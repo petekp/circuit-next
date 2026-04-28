@@ -5,7 +5,7 @@ argument-hint: <task>
 
 <!--
   This file is HAND-AUTHORED. Unlike commands/<flow>.md (which are
-  generated from src/workflows/<id>/command.md by scripts/emit-workflows.mjs),
+  generated from src/flows/<id>/command.md by scripts/emit-flows.mjs),
   /circuit:run is the CLI router entry, not a flow, so its source of
   truth lives directly here.
 -->
@@ -29,8 +29,8 @@ metacharacters:
 ## Instructions
 
 1. **Do not classify the task yourself.** Let the project CLI choose the
-   flow. It prints `selected_workflow`, `routed_by`, and
-   `router_reason` in the JSON output. (`selected_workflow` is the schema
+   flow. It prints `selected_flow`, `routed_by`, and
+   `router_reason` in the JSON output. (`selected_flow` is the schema
    field name; in prose we call it the selected flow.)
 2. **Construct the Bash invocation SAFELY.** Do NOT build the shell command
    by double-quoting the raw task text (double quotes expand `$VAR`,
@@ -66,10 +66,10 @@ metacharacters:
    ```
 
    Example for a Build task using both an entry mode and an explicit
-   `--rigor` flag:
+   `--depth` flag:
 
    ```bash
-   ./bin/circuit-next --goal 'develop: make the focused change' --entry-mode deep --rigor standard
+   ./bin/circuit-next --goal 'develop: make the focused change' --entry-mode deep --depth standard
    ```
 
    Example for a Fix task `fix the foo bug`:
@@ -94,36 +94,36 @@ metacharacters:
    is the repo-local launcher for the compiled Circuit runtime; when the
    compiled CLI is absent in a fresh checkout, it builds `dist/` with the
    local TypeScript compiler before invoking `dist/cli/circuit.js`.
-3. **Parse the CLI's JSON output and surface:** `selected_workflow`,
-   `routed_by`, `router_reason`, `outcome`, `run_root`, `events_observed`,
+3. **Parse the CLI's JSON output and surface:** `selected_flow`,
+   `routed_by`, `router_reason`, `outcome`, `run_folder`, `trace_entries_observed`,
    and `result_path` when present. If present, also surface `router_signal`.
 4. **Surface the selected flow's final report when available.**
-   For `selected_workflow === "explore"`, read the run-folder-relative
-   `artifacts/explore-result.json` close-step report (this is a baseline
+   For `selected_flow === "explore"`, read the run-folder-relative
+   `reports/explore-result.json` close-step report (this is a baseline
    placeholder report; surface that caveat when present). For
-   `selected_workflow === "review"` and `outcome === "complete"`, read
-   `artifacts/review-result.json` and surface its review result. For
-   `selected_workflow === "build"` and `outcome === "complete"`, read
-   `artifacts/build-result.json` and surface its review result fields; to
-   summarize changed files and evidence, follow its `artifact_pointers`
-   entry (the JSON field is named `artifact_pointers`; in prose call them
+   `selected_flow === "review"` and `outcome === "complete"`, read
+   `reports/review-result.json` and surface its review result. For
+   `selected_flow === "build"` and `outcome === "complete"`, read
+   `reports/build-result.json` and surface its review result fields; to
+   summarize changed files and evidence, follow its `evidence_links`
+   entry (the JSON field is named `evidence_links`; in prose call them
    evidence links) for `build.implementation` and read that report. For
-   `selected_workflow === "fix"` and `outcome === "complete"`, read
-   `artifacts/fix-result.json` and surface its review result fields; to
+   `selected_flow === "fix"` and `outcome === "complete"`, read
+   `reports/fix-result.json` and surface its review result fields; to
    summarize the change and verification evidence, follow its
-   `artifact_pointers` entries (for example `fix.change` and the
+   `evidence_links` entries (for example `fix.change` and the
    verification report) and read those reports.
 5. **If `outcome === "checkpoint_waiting"`, do not read or claim
-   `result_path`.** Surface the routed metadata (`selected_workflow`,
+   `result_path`.** Surface the routed metadata (`selected_flow`,
    `routed_by`, `router_reason`, and optional `router_signal`), then surface
    `checkpoint.step_id`, `checkpoint.request_path`,
    `checkpoint.allowed_choices`, and the exact resume command:
 
    ```bash
-   ./bin/circuit-next resume --run-root '<run_root>' --checkpoint-choice '<choice>'
+   ./bin/circuit-next resume --run-folder '<run_folder>' --checkpoint-choice '<choice>'
    ```
 
-6. **If `outcome === "aborted"`, read `artifacts/result.json` at
+6. **If `outcome === "aborted"`, read `reports/result.json` at
    `result_path` to surface the abort `reason`.**
 
 ## Direct Flow Bypass
@@ -135,4 +135,4 @@ the same CLI with an explicit flow name and skip this classifier layer.
 ## Authority
 
 - `src/runtime/router.ts` (current deterministic classifier)
-- `tests/contracts/workflow-router.test.ts` (classifier behavior)
+- `tests/contracts/flow-router.test.ts` (classifier behavior)

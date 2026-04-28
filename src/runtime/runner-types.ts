@@ -1,63 +1,63 @@
-import type { BuiltInAdapter } from '../schemas/adapter.js';
+import type { ChangeKindDeclaration } from '../schemas/change-kind.js';
+import type { CompiledFlow } from '../schemas/compiled-flow.js';
 import type { LayeredConfig as LayeredConfigValue } from '../schemas/config.js';
-import type { Event } from '../schemas/event.js';
-import type { InvocationId, RunId, WorkflowId } from '../schemas/ids.js';
-import type { LaneDeclaration } from '../schemas/lane.js';
+import type { EnabledConnector } from '../schemas/connector.js';
+import type { Depth } from '../schemas/depth.js';
+import type { CompiledFlowId, InvocationId, RunId } from '../schemas/ids.js';
 import type { RunResult } from '../schemas/result.js';
-import type { Rigor } from '../schemas/rigor.js';
 import type { ResolvedSelection } from '../schemas/selection-policy.js';
 import type { Snapshot } from '../schemas/snapshot.js';
-import type { WorkflowRef } from '../schemas/step.js';
-import type { Workflow } from '../schemas/workflow.js';
-import type { AdapterDispatchInput, DispatchResult } from './adapters/shared.js';
+import type { CompiledFlowRef } from '../schemas/step.js';
+import type { TraceEntry } from '../schemas/trace-entry.js';
+import type { ConnectorRelayInput, RelayResult } from './connectors/shared.js';
 
-// Structured dispatcher descriptor. Without it, `DispatchFn` would be a
+// Structured relayer descriptor. Without it, `RelayFn` would be a
 // bare function type and the runner's materializer call site would
-// hardcode `adapterName: 'agent'`; injecting a non-agent dispatcher
-// (e.g. `dispatchCodex`) through `WorkflowInvocation.dispatcher` would
-// silently lie on the `dispatch.started` event's adapter discriminant.
-// The descriptor binds the dispatcher function to its adapter identity
+// hardcode `connectorName: 'agent'`; injecting a non-agent relayer
+// (e.g. `relayCodex`) through `CompiledFlowInvocation.relayer` would
+// silently lie on the `relay.started` trace_entry's connector discriminant.
+// The descriptor binds the relayer function to its connector identity
 // at the injection seam, so the materializer is parameterized from the
 // descriptor instead of from a call-site literal.
-export interface DispatchFn {
-  readonly adapterName: BuiltInAdapter;
-  readonly dispatch: (input: DispatchInput) => Promise<DispatchResult>;
+export interface RelayFn {
+  readonly connectorName: EnabledConnector;
+  readonly relay: (input: RelayInput) => Promise<RelayResult>;
 }
 
-export interface DispatchInput extends AdapterDispatchInput {
+export interface RelayInput extends ConnectorRelayInput {
   readonly resolvedSelection?: ResolvedSelection;
 }
 
-export interface SynthesisWriterInput {
-  readonly runRoot: string;
-  readonly workflow: Workflow;
-  readonly step: Workflow['steps'][number] & { kind: 'synthesis' };
+export interface ComposeWriterInput {
+  readonly runFolder: string;
+  readonly flow: CompiledFlow;
+  readonly step: CompiledFlow['steps'][number] & { kind: 'compose' };
   readonly goal: string;
 }
 
-export type SynthesisWriterFn = (input: SynthesisWriterInput) => void;
+export type ComposeWriterFn = (input: ComposeWriterInput) => void;
 
-// Surface per-dispatch metadata (`adapterName`, `cli_version`, `stepId`)
+// Surface per-relay metadata (`connectorName`, `cli_version`, `stepId`)
 // so the AGENT_SMOKE fingerprint writer can bind `cli_version` to the
-// actual subprocess init event rather than reading it from a
+// actual subprocess init trace_entry rather than reading it from a
 // side-channel env var.
-export interface DispatchResultMetadata {
+export interface RelayResultMetadata {
   readonly stepId: string;
-  readonly adapterName: BuiltInAdapter;
+  readonly connectorName: EnabledConnector;
   readonly cli_version: string;
 }
 
-// Sub-run / fanout child workflow lookup. The runtime stays workflow-
+// Sub-run / fanout child flow lookup. The runtime stays flow-
 // agnostic by accepting a resolver from the caller (CLI / tests) instead
 // of baking in a manifest-layout convention. The CLI's resolver reads
-// `.claude-plugin/skills/<workflow_id>/<entry_mode|circuit>.json`; tests
+// `.claude-plugin/skills/<flow_id>/<entry_mode|circuit>.json`; tests
 // inject deterministic stubs.
-export interface ResolvedChildWorkflow {
-  readonly workflow: Workflow;
+export interface ResolvedChildCompiledFlow {
+  readonly flow: CompiledFlow;
   readonly bytes: Buffer;
 }
 
-export type ChildWorkflowResolver = (ref: WorkflowRef) => ResolvedChildWorkflow;
+export type ChildCompiledFlowResolver = (ref: CompiledFlowRef) => ResolvedChildCompiledFlow;
 
 // Fanout-runtime worktree provisioning seam. Default implementation
 // shells out to `git worktree add` / `git worktree remove`. The seam
@@ -82,38 +82,38 @@ export interface WorktreeRunner {
   ): readonly string[] | Promise<readonly string[]>;
 }
 
-export interface WorkflowInvocation {
-  runRoot: string;
-  workflow: Workflow;
-  workflowBytes: Buffer;
+export interface CompiledFlowInvocation {
+  runFolder: string;
+  flow: CompiledFlow;
+  flowBytes: Buffer;
   projectRoot?: string;
   runId: RunId;
   goal: string;
-  rigor?: Rigor;
+  depth?: Depth;
   entryModeName?: string;
-  lane: LaneDeclaration;
+  change_kind: ChangeKindDeclaration;
   now: () => Date;
   invocationId?: InvocationId;
-  // Injection seam for the dispatch adapter. Default is `dispatchAgent`
-  // (lazy-imported so tests that don't exercise dispatch don't pull the
+  // Injection seam for the relay connector. Default is `relayAgent`
+  // (lazy-imported so tests that don't exercise relay don't pull the
   // subprocess module into their graph).
-  dispatcher?: DispatchFn;
-  // Test seam for deterministic synthesis fixtures. Production invocations
+  relayer?: RelayFn;
+  // Test seam for deterministic compose fixtures. Production invocations
   // omit this and use the registered writer below, which composes the
-  // schema-specific synthesis builder with a placeholder fallback.
-  synthesisWriter?: SynthesisWriterFn;
+  // schema-specific compose builder with a placeholder fallback.
+  composeWriter?: ComposeWriterFn;
   // Parsed config layers are supplied by callers that have already handled
   // discovery/loading. The product CLI discovers user-global and project
   // layers; direct runtime callers can still inject already-parsed layers.
   selectionConfigLayers?: readonly LayeredConfigValue[];
-  // Sub-run / fanout child workflow lookup. When omitted, sub-run and
+  // Sub-run / fanout child flow lookup. When omitted, sub-run and
   // fanout steps abort with a clear "no resolver provided" error.
-  childWorkflowResolver?: ChildWorkflowResolver;
+  childCompiledFlowResolver?: ChildCompiledFlowResolver;
   // Sub-run / fanout child runner injection seam. Default is the runner's
-  // own `runWorkflow`. Tests inject deterministic child-run stubs so they
-  // can exercise sub-run handler logic without a full executeWorkflow
+  // own `runCompiledFlow`. Tests inject deterministic child-run stubs so they
+  // can exercise sub-run handler logic without a full executeCompiledFlow
   // descent on the inner side.
-  childRunner?: WorkflowRunner;
+  childRunner?: CompiledFlowRunner;
   // Fanout worktree provisioning seam. Default shells out to
   // `git worktree add/remove`. Tests inject in-memory stubs so they
   // don't require a real git repo at projectRoot.
@@ -121,26 +121,26 @@ export interface WorkflowInvocation {
 }
 
 export interface CheckpointResumeInvocation {
-  runRoot: string;
+  runFolder: string;
   selection: string;
   projectRoot?: string;
   now: () => Date;
-  dispatcher?: DispatchFn;
-  synthesisWriter?: SynthesisWriterFn;
+  relayer?: RelayFn;
+  composeWriter?: ComposeWriterFn;
   selectionConfigLayers?: readonly LayeredConfigValue[];
-  childWorkflowResolver?: ChildWorkflowResolver;
-  childRunner?: WorkflowRunner;
+  childCompiledFlowResolver?: ChildCompiledFlowResolver;
+  childRunner?: CompiledFlowRunner;
   worktreeRunner?: WorktreeRunner;
 }
 
 export interface CheckpointWaitingResult {
   readonly schema_version: 1;
   readonly run_id: RunId;
-  readonly workflow_id: WorkflowId;
+  readonly flow_id: CompiledFlowId;
   readonly goal: string;
   readonly outcome: 'checkpoint_waiting';
   readonly summary: string;
-  readonly events_observed: number;
+  readonly trace_entries_observed: number;
   readonly manifest_hash: string;
   readonly checkpoint: {
     readonly step_id: string;
@@ -150,12 +150,12 @@ export interface CheckpointWaitingResult {
   readonly reason?: string;
 }
 
-export interface WorkflowRunResult {
-  runRoot: string;
+export interface CompiledFlowRunResult {
+  runFolder: string;
   result: RunResult | CheckpointWaitingResult;
   snapshot: Snapshot;
-  events: Event[];
-  dispatchResults: readonly DispatchResultMetadata[];
+  trace_entrys: TraceEntry[];
+  relayResults: readonly RelayResultMetadata[];
 }
 
-export type WorkflowRunner = (inv: WorkflowInvocation) => Promise<WorkflowRunResult>;
+export type CompiledFlowRunner = (inv: CompiledFlowInvocation) => Promise<CompiledFlowRunResult>;

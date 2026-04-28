@@ -4,8 +4,8 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { main } from '../../src/cli/circuit.js';
-import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
-import type { DispatchFn, DispatchInput } from '../../src/runtime/runner.js';
+import type { RelayResult } from '../../src/runtime/connectors/shared.js';
+import type { RelayFn, RelayInput } from '../../src/runtime/runner.js';
 
 const EXPLORE_SYNTHESIS_BODY = JSON.stringify({
   verdict: 'accept',
@@ -15,14 +15,14 @@ const EXPLORE_SYNTHESIS_BODY = JSON.stringify({
   supporting_aspects: [
     {
       aspect: 'routing',
-      contribution: 'The explore workflow reached the synthesize step',
+      contribution: 'The explore flow reached the synthesize step',
     },
   ],
 });
 
 const EXPLORE_REVIEW_VERDICT_BODY = JSON.stringify({
   verdict: 'accept',
-  overall_assessment: 'The exploratory synthesis is acceptable',
+  overall_assessment: 'The exploratory compose is acceptable',
   objections: [],
   missed_angles: [],
 });
@@ -31,7 +31,7 @@ const BUILD_IMPLEMENTATION_BODY = JSON.stringify({
   verdict: 'accept',
   summary: 'Implemented the requested change',
   changed_files: ['src/example.ts'],
-  evidence: ['Stub implementation dispatch completed'],
+  evidence: ['Stub implementation relay completed'],
 });
 
 const BUILD_REVIEW_BODY = JSON.stringify({
@@ -45,10 +45,10 @@ function deterministicNow(startMs: number): () => Date {
   return () => new Date(startMs + n++ * 1000);
 }
 
-function dispatcherWithBody(body: string): DispatchFn {
+function relayerWithBody(body: string): RelayFn {
   return {
-    adapterName: 'agent',
-    dispatch: async (input: DispatchInput): Promise<DispatchResult> => ({
+    connectorName: 'agent',
+    relay: async (input: RelayInput): Promise<RelayResult> => ({
       request_payload: input.prompt,
       receipt_id: 'stub-receipt-cli-router',
       result_body:
@@ -69,8 +69,8 @@ function dispatcherWithBody(body: string): DispatchFn {
   };
 }
 
-function eventLog(runRoot: string): Array<Record<string, unknown>> {
-  return readFileSync(join(runRoot, 'events.ndjson'), 'utf8')
+function trace_entryLog(runFolder: string): Array<Record<string, unknown>> {
+  return readFileSync(join(runFolder, 'trace.ndjson'), 'utf8')
     .trim()
     .split('\n')
     .filter((line) => line.length > 0)
@@ -79,7 +79,7 @@ function eventLog(runRoot: string): Array<Record<string, unknown>> {
 
 async function runMainJson(
   argv: readonly string[],
-  dispatchBody: string,
+  relayBody: string,
 ): Promise<Record<string, unknown>> {
   let captured = '';
   const origWrite = process.stdout.write;
@@ -89,10 +89,10 @@ async function runMainJson(
   }) as typeof process.stdout.write;
   try {
     const exit = await main(argv, {
-      dispatcher: dispatcherWithBody(dispatchBody),
+      relayer: relayerWithBody(relayBody),
       now: deterministicNow(Date.UTC(2026, 3, 24, 15, 0, 0)),
       runId: '84000000-0000-0000-0000-000000000001',
-      configHomeDir: join(runRootBase, 'empty-home'),
+      configHomeDir: join(runFolderBase, 'empty-home'),
       configCwd: process.cwd(),
     });
     expect(exit).toBe(0);
@@ -116,10 +116,10 @@ async function runMainExit(argv: readonly string[]): Promise<{ exit: number; std
   }) as typeof process.stderr.write;
   try {
     const exit = await main(argv, {
-      dispatcher: dispatcherWithBody('{"verdict":"accept"}'),
+      relayer: relayerWithBody('{"verdict":"accept"}'),
       now: deterministicNow(Date.UTC(2026, 3, 24, 15, 0, 0)),
       runId: '84000000-0000-0000-0000-000000000099',
-      configHomeDir: join(runRootBase, 'empty-home'),
+      configHomeDir: join(runFolderBase, 'empty-home'),
       configCwd: process.cwd(),
     });
     return { exit, stderr };
@@ -128,131 +128,131 @@ async function runMainExit(argv: readonly string[]): Promise<{ exit: number; std
   }
 }
 
-let runRootBase: string;
+let runFolderBase: string;
 
 beforeEach(() => {
-  runRootBase = mkdtempSync(join(tmpdir(), 'circuit-next-cli-router-'));
+  runFolderBase = mkdtempSync(join(tmpdir(), 'circuit-next-cli-router-'));
 });
 
 afterEach(() => {
-  rmSync(runRootBase, { recursive: true, force: true });
+  rmSync(runFolderBase, { recursive: true, force: true });
 });
 
 describe('P2.8 CLI router', () => {
-  it('omitted workflow positional routes review-like goals through the classifier', async () => {
+  it('omitted flow positional routes review-like goals through the classifier', async () => {
     const output = await runMainJson(
       [
         '--goal',
         'review this patch for safety problems',
-        '--run-root',
-        join(runRootBase, 'review'),
+        '--run-folder',
+        join(runFolderBase, 'review'),
       ],
       '{"verdict":"NO_ISSUES_FOUND","findings":[]}',
     );
 
-    expect(output.workflow_id).toBe('review');
-    expect(output.selected_workflow).toBe('review');
+    expect(output.flow_id).toBe('review');
+    expect(output.selected_flow).toBe('review');
     expect(output.routed_by).toBe('classifier');
     expect(output.router_reason).toMatch(/review/i);
     expect(output.router_signal).toBeDefined();
     expect(output.outcome).toBe('complete');
   });
 
-  it('omitted workflow positional keeps exploratory goals on explore', async () => {
+  it('omitted flow positional keeps exploratory goals on explore', async () => {
     const output = await runMainJson(
-      ['--goal', 'map the current project state', '--run-root', join(runRootBase, 'explore')],
+      ['--goal', 'map the current project state', '--run-folder', join(runFolderBase, 'explore')],
       '{"verdict":"accept"}',
     );
 
-    expect(output.workflow_id).toBe('explore');
-    expect(output.selected_workflow).toBe('explore');
+    expect(output.flow_id).toBe('explore');
+    expect(output.selected_flow).toBe('explore');
     expect(output.routed_by).toBe('classifier');
     expect(output.router_signal).toBeUndefined();
     expect(output.outcome).toBe('complete');
   });
 
-  it('omitted workflow positional routes build-like goals through the classifier', async () => {
+  it('omitted flow positional routes build-like goals through the classifier', async () => {
     const output = await runMainJson(
-      ['--goal', 'develop: add a focused feature', '--run-root', join(runRootBase, 'build')],
+      ['--goal', 'develop: add a focused feature', '--run-folder', join(runFolderBase, 'build')],
       '{"verdict":"accept"}',
     );
 
-    expect(output.workflow_id).toBe('build');
-    expect(output.selected_workflow).toBe('build');
+    expect(output.flow_id).toBe('build');
+    expect(output.selected_flow).toBe('build');
     expect(output.routed_by).toBe('classifier');
-    expect(output.router_reason).toMatch(/implementation Build workflow/i);
+    expect(output.router_reason).toMatch(/implementation Build flow/i);
     expect(output.router_signal).toBeDefined();
     expect(output.outcome).toBe('complete');
   });
 
-  it('omitted workflow positional preserves router metadata on Build checkpoint_waiting output', async () => {
-    const runRoot = join(runRootBase, 'build-router-checkpoint-waiting');
+  it('omitted flow positional preserves router metadata on Build checkpoint_waiting output', async () => {
+    const runFolder = join(runFolderBase, 'build-router-checkpoint-waiting');
     const output = await runMainJson(
       [
         '--goal',
         'develop: add a focused feature that waits for framing',
-        '--rigor',
+        '--depth',
         'deep',
-        '--run-root',
-        runRoot,
+        '--run-folder',
+        runFolder,
       ],
       '{"verdict":"accept"}',
     );
 
     expect(output.schema_version).toBe(1);
-    expect(output.workflow_id).toBe('build');
-    expect(output.selected_workflow).toBe('build');
+    expect(output.flow_id).toBe('build');
+    expect(output.selected_flow).toBe('build');
     expect(output.routed_by).toBe('classifier');
-    expect(output.router_reason).toMatch(/implementation Build workflow/i);
+    expect(output.router_reason).toMatch(/implementation Build flow/i);
     expect(output.router_signal).toBeDefined();
     expect(output.outcome).toBe('checkpoint_waiting');
     expect(output).not.toHaveProperty('result_path');
     expect(output.checkpoint).toMatchObject({
       step_id: 'frame-step',
-      request_path: join(runRoot, 'artifacts/checkpoints/frame-step-request.json'),
+      request_path: join(runFolder, 'reports/checkpoints/frame-step-request.json'),
       allowed_choices: ['continue'],
     });
   });
 
-  it('omitted workflow positional keeps develop-prefixed planning goals on explore', async () => {
+  it('omitted flow positional keeps develop-prefixed planning goals on explore', async () => {
     const output = await runMainJson(
       [
         '--goal',
         'develop: create a new endpoint RFC',
-        '--run-root',
-        join(runRootBase, 'develop-planning'),
+        '--run-folder',
+        join(runFolderBase, 'develop-planning'),
       ],
       '{"verdict":"accept"}',
     );
 
-    expect(output.workflow_id).toBe('explore');
-    expect(output.selected_workflow).toBe('explore');
+    expect(output.flow_id).toBe('explore');
+    expect(output.selected_flow).toBe('explore');
     expect(output.routed_by).toBe('classifier');
     expect(output.router_signal).toBeUndefined();
     expect(output.outcome).toBe('complete');
   });
 
-  it('explicit workflow positional bypasses the classifier', async () => {
+  it('explicit flow positional bypasses the classifier', async () => {
     const output = await runMainJson(
       [
         'explore',
         '--goal',
         'review this patch for safety problems',
-        '--run-root',
-        join(runRootBase, 'explicit-explore'),
+        '--run-folder',
+        join(runFolderBase, 'explicit-explore'),
       ],
       '{"verdict":"accept"}',
     );
 
-    expect(output.workflow_id).toBe('explore');
-    expect(output.selected_workflow).toBe('explore');
+    expect(output.flow_id).toBe('explore');
+    expect(output.selected_flow).toBe('explore');
     expect(output.routed_by).toBe('explicit');
-    expect(output.router_reason).toMatch(/explicit workflow/i);
+    expect(output.router_reason).toMatch(/explicit flow/i);
     expect(output.router_signal).toBeUndefined();
   });
 
-  it('accepts --entry-mode and uses that mode rigor when --rigor is omitted', async () => {
-    const runRoot = join(runRootBase, 'build-lite-entry-mode');
+  it('accepts --entry-mode and uses that mode depth when --depth is omitted', async () => {
+    const runFolder = join(runFolderBase, 'build-lite-entry-mode');
     const output = await runMainJson(
       [
         'build',
@@ -260,25 +260,25 @@ describe('P2.8 CLI router', () => {
         'Add a tiny Build feature from the CLI',
         '--entry-mode',
         'lite',
-        '--run-root',
-        runRoot,
+        '--run-folder',
+        runFolder,
       ],
       '{"verdict":"accept"}',
     );
 
-    const events = eventLog(runRoot);
-    const bootstrap = events.find((event) => event.kind === 'run.bootstrapped');
-    const dispatchStarted = events.find(
-      (event) => event.kind === 'dispatch.started' && event.step_id === 'act-step',
+    const trace_entrys = trace_entryLog(runFolder);
+    const bootstrap = trace_entrys.find((trace_entry) => trace_entry.kind === 'run.bootstrapped');
+    const relayStarted = trace_entrys.find(
+      (trace_entry) => trace_entry.kind === 'relay.started' && trace_entry.step_id === 'act-step',
     );
-    expect(output.workflow_id).toBe('build');
+    expect(output.flow_id).toBe('build');
     expect(output.outcome).toBe('complete');
-    expect(bootstrap).toMatchObject({ rigor: 'lite' });
-    expect(dispatchStarted?.resolved_selection).toMatchObject({ rigor: 'lite' });
+    expect(bootstrap).toMatchObject({ depth: 'lite' });
+    expect(relayStarted?.resolved_selection).toMatchObject({ depth: 'lite' });
   });
 
-  it('lets --rigor override the selected --entry-mode default', async () => {
-    const runRoot = join(runRootBase, 'build-entry-mode-rigor-override');
+  it('lets --depth override the selected --entry-mode default', async () => {
+    const runFolder = join(runFolderBase, 'build-entry-mode-depth-override');
     const output = await runMainJson(
       [
         'build',
@@ -286,27 +286,27 @@ describe('P2.8 CLI router', () => {
         'Add a tiny Build feature from the CLI with an override',
         '--entry-mode',
         'deep',
-        '--rigor',
+        '--depth',
         'standard',
-        '--run-root',
-        runRoot,
+        '--run-folder',
+        runFolder,
       ],
       '{"verdict":"accept"}',
     );
 
-    const events = eventLog(runRoot);
-    const bootstrap = events.find((event) => event.kind === 'run.bootstrapped');
-    const dispatchStarted = events.find(
-      (event) => event.kind === 'dispatch.started' && event.step_id === 'act-step',
+    const trace_entrys = trace_entryLog(runFolder);
+    const bootstrap = trace_entrys.find((trace_entry) => trace_entry.kind === 'run.bootstrapped');
+    const relayStarted = trace_entrys.find(
+      (trace_entry) => trace_entry.kind === 'relay.started' && trace_entry.step_id === 'act-step',
     );
-    expect(output.workflow_id).toBe('build');
+    expect(output.flow_id).toBe('build');
     expect(output.outcome).toBe('complete');
-    expect(bootstrap).toMatchObject({ rigor: 'standard' });
-    expect(dispatchStarted?.resolved_selection).toMatchObject({ rigor: 'standard' });
+    expect(bootstrap).toMatchObject({ depth: 'standard' });
+    expect(relayStarted?.resolved_selection).toMatchObject({ depth: 'standard' });
   });
 
-  it('lets explicit autonomous --rigor override the default --entry-mode through checkpoint policy', async () => {
-    const runRoot = join(runRootBase, 'build-default-entry-autonomous-override');
+  it('lets explicit autonomous --depth override the default --entry-mode through checkpoint policy', async () => {
+    const runFolder = join(runFolderBase, 'build-default-entry-autonomous-override');
     const output = await runMainJson(
       [
         'build',
@@ -314,30 +314,31 @@ describe('P2.8 CLI router', () => {
         'Add a tiny Build feature from the CLI with autonomous override',
         '--entry-mode',
         'default',
-        '--rigor',
+        '--depth',
         'autonomous',
-        '--run-root',
-        runRoot,
+        '--run-folder',
+        runFolder,
       ],
       '{"verdict":"accept"}',
     );
 
-    const events = eventLog(runRoot);
-    const bootstrap = events.find((event) => event.kind === 'run.bootstrapped');
-    const checkpoint = events.find(
-      (event) => event.kind === 'checkpoint.resolved' && event.step_id === 'frame-step',
+    const trace_entrys = trace_entryLog(runFolder);
+    const bootstrap = trace_entrys.find((trace_entry) => trace_entry.kind === 'run.bootstrapped');
+    const checkpoint = trace_entrys.find(
+      (trace_entry) =>
+        trace_entry.kind === 'checkpoint.resolved' && trace_entry.step_id === 'frame-step',
     );
-    const dispatchStarted = events.find(
-      (event) => event.kind === 'dispatch.started' && event.step_id === 'act-step',
+    const relayStarted = trace_entrys.find(
+      (trace_entry) => trace_entry.kind === 'relay.started' && trace_entry.step_id === 'act-step',
     );
-    expect(output.workflow_id).toBe('build');
+    expect(output.flow_id).toBe('build');
     expect(output.outcome).toBe('complete');
-    expect(bootstrap).toMatchObject({ rigor: 'autonomous' });
+    expect(bootstrap).toMatchObject({ depth: 'autonomous' });
     expect(checkpoint).toMatchObject({ resolution_source: 'safe-autonomous' });
-    expect(dispatchStarted?.resolved_selection).toMatchObject({ rigor: 'autonomous' });
+    expect(relayStarted?.resolved_selection).toMatchObject({ depth: 'autonomous' });
   });
 
-  it('rejects fixture overrides whose workflow id does not match the selected workflow', async () => {
+  it('rejects fixture overrides whose flow id does not match the selected flow', async () => {
     await expect(
       main(
         [
@@ -345,22 +346,22 @@ describe('P2.8 CLI router', () => {
           'review this patch for safety problems',
           '--fixture',
           '.claude-plugin/skills/explore/circuit.json',
-          '--run-root',
-          join(runRootBase, 'mismatch'),
+          '--run-folder',
+          join(runFolderBase, 'mismatch'),
         ],
         {
-          dispatcher: dispatcherWithBody('{"verdict":"accept"}'),
+          relayer: relayerWithBody('{"verdict":"accept"}'),
           now: deterministicNow(Date.UTC(2026, 3, 24, 15, 0, 0)),
           runId: '84000000-0000-0000-0000-000000000004',
-          configHomeDir: join(runRootBase, 'empty-home'),
-          configCwd: join(runRootBase, 'empty-cwd'),
+          configHomeDir: join(runFolderBase, 'empty-home'),
+          configCwd: join(runFolderBase, 'empty-cwd'),
         },
       ),
-    ).rejects.toThrow(/workflow fixture id mismatch/i);
+    ).rejects.toThrow(/flow fixture id mismatch/i);
   });
 
-  it('rejects an unknown --entry-mode before writing a run log', async () => {
-    const runRoot = join(runRootBase, 'unknown-build-entry-mode');
+  it('rejects an unknown --entry-mode before writing a run trace', async () => {
+    const runFolder = join(runFolderBase, 'unknown-build-entry-mode');
     await expect(
       main(
         [
@@ -369,23 +370,23 @@ describe('P2.8 CLI router', () => {
           'Try a missing Build entry mode',
           '--entry-mode',
           'missing',
-          '--run-root',
-          runRoot,
+          '--run-folder',
+          runFolder,
         ],
         {
-          dispatcher: dispatcherWithBody('{"verdict":"accept"}'),
+          relayer: relayerWithBody('{"verdict":"accept"}'),
           now: deterministicNow(Date.UTC(2026, 3, 24, 15, 0, 0)),
           runId: '84000000-0000-0000-0000-000000000005',
-          configHomeDir: join(runRootBase, 'empty-home'),
-          configCwd: join(runRootBase, 'empty-cwd'),
+          configHomeDir: join(runFolderBase, 'empty-home'),
+          configCwd: join(runFolderBase, 'empty-cwd'),
         },
       ),
     ).rejects.toThrow(/entry_mode named 'missing'/);
-    expect(() => eventLog(runRoot)).toThrow();
+    expect(() => trace_entryLog(runFolder)).toThrow();
   });
 
   it('prints a versioned checkpoint_waiting envelope without result_path', async () => {
-    const fixtureDir = join(runRootBase, 'fixture');
+    const fixtureDir = join(runFolderBase, 'fixture');
     mkdirSync(fixtureDir, { recursive: true });
     const fixturePath = join(fixtureDir, 'circuit.json');
     writeFileSync(
@@ -400,19 +401,19 @@ describe('P2.8 CLI router', () => {
           {
             name: 'default',
             start_at: 'frame-step',
-            rigor: 'standard',
+            depth: 'standard',
             description: 'test entry mode',
           },
         ],
-        phases: [
+        stages: [
           {
-            id: 'frame-phase',
+            id: 'frame-stage',
             title: 'Frame',
             canonical: 'frame',
             steps: ['frame-step'],
           },
         ],
-        spine_policy: {
+        stage_path_policy: {
           mode: 'partial',
           omits: ['analyze', 'plan', 'act', 'verify', 'review', 'close'],
           rationale: 'test-only checkpoint waiting envelope.',
@@ -446,11 +447,11 @@ describe('P2.8 CLI router', () => {
               },
             },
             writes: {
-              request: 'artifacts/checkpoints/frame-step-request.json',
-              response: 'artifacts/checkpoints/frame-step-response.json',
-              artifact: { path: 'artifacts/build/brief.json', schema: 'build.brief@v1' },
+              request: 'reports/checkpoints/frame-step-request.json',
+              response: 'reports/checkpoints/frame-step-response.json',
+              report: { path: 'reports/build/brief.json', schema: 'build.brief@v1' },
             },
-            gate: {
+            check: {
               kind: 'checkpoint_selection',
               source: { kind: 'checkpoint_response', ref: 'response' },
               allow: ['continue'],
@@ -465,12 +466,12 @@ describe('P2.8 CLI router', () => {
         'build-checkpoint-cli-test',
         '--goal',
         'Frame via CLI',
-        '--rigor',
+        '--depth',
         'deep',
         '--fixture',
         fixturePath,
-        '--run-root',
-        join(runRootBase, 'checkpoint-waiting'),
+        '--run-folder',
+        join(runFolderBase, 'checkpoint-waiting'),
       ],
       '{"verdict":"accept"}',
     );
@@ -485,7 +486,7 @@ describe('P2.8 CLI router', () => {
   });
 
   it('resumes a checkpoint_waiting run from the saved manifest and operator choice', async () => {
-    const fixtureDir = join(runRootBase, 'resume-fixture');
+    const fixtureDir = join(runFolderBase, 'resume-fixture');
     mkdirSync(fixtureDir, { recursive: true });
     const fixturePath = join(fixtureDir, 'circuit.json');
     writeFileSync(
@@ -500,19 +501,19 @@ describe('P2.8 CLI router', () => {
           {
             name: 'default',
             start_at: 'frame-step',
-            rigor: 'standard',
+            depth: 'standard',
             description: 'test entry mode',
           },
         ],
-        phases: [
+        stages: [
           {
-            id: 'frame-phase',
+            id: 'frame-stage',
             title: 'Frame',
             canonical: 'frame',
             steps: ['frame-step'],
           },
         ],
-        spine_policy: {
+        stage_path_policy: {
           mode: 'partial',
           omits: ['analyze', 'plan', 'act', 'verify', 'review', 'close'],
           rationale: 'test-only checkpoint resume.',
@@ -546,11 +547,11 @@ describe('P2.8 CLI router', () => {
               },
             },
             writes: {
-              request: 'artifacts/checkpoints/frame-step-request.json',
-              response: 'artifacts/checkpoints/frame-step-response.json',
-              artifact: { path: 'artifacts/build/brief.json', schema: 'build.brief@v1' },
+              request: 'reports/checkpoints/frame-step-request.json',
+              response: 'reports/checkpoints/frame-step-response.json',
+              report: { path: 'reports/build/brief.json', schema: 'build.brief@v1' },
             },
-            gate: {
+            check: {
               kind: 'checkpoint_selection',
               source: { kind: 'checkpoint_response', ref: 'response' },
               allow: ['continue', 'revise'],
@@ -559,64 +560,64 @@ describe('P2.8 CLI router', () => {
         ],
       }),
     );
-    const runRoot = join(runRootBase, 'checkpoint-resume');
+    const runFolder = join(runFolderBase, 'checkpoint-resume');
 
     const waiting = await runMainJson(
       [
         'build-checkpoint-cli-resume-test',
         '--goal',
         'Frame and resume via CLI',
-        '--rigor',
+        '--depth',
         'deep',
         '--fixture',
         fixturePath,
-        '--run-root',
-        runRoot,
+        '--run-folder',
+        runFolder,
       ],
       '{"verdict":"accept"}',
     );
     expect(waiting.outcome).toBe('checkpoint_waiting');
 
     const resumed = await runMainJson(
-      ['resume', '--run-root', runRoot, '--checkpoint-choice', 'continue'],
+      ['resume', '--run-folder', runFolder, '--checkpoint-choice', 'continue'],
       '{"verdict":"accept"}',
     );
 
     expect(resumed.schema_version).toBe(1);
     expect(resumed.outcome).toBe('complete');
-    expect(resumed.run_root).toBe(runRoot);
+    expect(resumed.run_folder).toBe(runFolder);
     expect(resumed).toHaveProperty('result_path');
   });
 
   it('rejects resume-only incompatible flags', async () => {
-    const withRigor = await runMainExit([
+    const withDepth = await runMainExit([
       'resume',
-      '--run-root',
-      join(runRootBase, 'not-needed'),
+      '--run-folder',
+      join(runFolderBase, 'not-needed'),
       '--checkpoint-choice',
       'continue',
-      '--rigor',
+      '--depth',
       'deep',
     ]);
-    expect(withRigor.exit).toBe(2);
-    expect(withRigor.stderr).toMatch(/omit --depth\/--rigor/);
+    expect(withDepth.exit).toBe(2);
+    expect(withDepth.stderr).toMatch(/omit --depth\/--depth/);
 
     const withFixture = await runMainExit([
       'resume',
-      '--run-root',
-      join(runRootBase, 'not-needed'),
+      '--run-folder',
+      join(runFolderBase, 'not-needed'),
       '--checkpoint-choice',
       'continue',
       '--fixture',
-      join(runRootBase, 'fixture.json'),
+      join(runFolderBase, 'fixture.json'),
     ]);
     expect(withFixture.exit).toBe(2);
     expect(withFixture.stderr).toMatch(/omit --fixture/);
 
     const withEntryMode = await runMainExit([
       'resume',
-      '--run-root',
-      join(runRootBase, 'not-needed'),
+      '--run-folder',
+      join(runFolderBase, 'not-needed'),
       '--checkpoint-choice',
       'continue',
       '--entry-mode',
@@ -626,25 +627,25 @@ describe('P2.8 CLI router', () => {
     expect(withEntryMode.stderr).toMatch(/omit --mode\/--entry-mode/);
   });
 
-  it('accepts --depth as a synonym for --rigor', async () => {
+  it('accepts --depth as a synonym for --depth', async () => {
     const withDepth = await runMainExit([
       'resume',
-      '--run-root',
-      join(runRootBase, 'not-needed'),
+      '--run-folder',
+      join(runFolderBase, 'not-needed'),
       '--checkpoint-choice',
       'continue',
       '--depth',
       'deep',
     ]);
     expect(withDepth.exit).toBe(2);
-    expect(withDepth.stderr).toMatch(/omit --depth\/--rigor/);
+    expect(withDepth.stderr).toMatch(/omit --depth\/--depth/);
   });
 
   it('accepts --mode as a synonym for --entry-mode', async () => {
     const withMode = await runMainExit([
       'resume',
-      '--run-root',
-      join(runRootBase, 'not-needed'),
+      '--run-folder',
+      join(runFolderBase, 'not-needed'),
       '--checkpoint-choice',
       'continue',
       '--mode',
@@ -654,45 +655,45 @@ describe('P2.8 CLI router', () => {
     expect(withMode.stderr).toMatch(/omit --mode\/--entry-mode/);
   });
 
-  it('accepts --run-folder as a synonym for --run-root (parses cleanly)', async () => {
+  it('accepts --run-folder as a synonym for --run-folder (parses cleanly)', async () => {
     // Resume validates other flags after argv parsing; pairing --run-folder
-    // with --rigor exercises the same downstream "omit --depth/--rigor"
-    // branch the --run-root variant does. The branch firing proves
+    // with --depth exercises the same downstream "omit --depth/--depth"
+    // branch the --run-folder variant does. The branch firing proves
     // --run-folder parsed and populated the same internal slot.
     const result = await runMainExit([
       'resume',
       '--run-folder',
-      join(runRootBase, 'not-needed'),
+      join(runFolderBase, 'not-needed'),
       '--checkpoint-choice',
       'continue',
-      '--rigor',
+      '--depth',
       'deep',
     ]);
     expect(result.exit).toBe(2);
-    expect(result.stderr).toMatch(/omit --depth\/--rigor/);
+    expect(result.stderr).toMatch(/omit --depth\/--depth/);
   });
 
-  it('rejects supplying both --depth and --rigor', async () => {
+  it('rejects supplying both --depth and --depth', async () => {
     const conflict = await runMainExit([
       'resume',
-      '--run-root',
-      join(runRootBase, 'not-needed'),
+      '--run-folder',
+      join(runFolderBase, 'not-needed'),
       '--checkpoint-choice',
       'continue',
       '--depth',
       'standard',
-      '--rigor',
+      '--depth',
       'deep',
     ]);
     expect(conflict.exit).toBe(2);
-    expect(conflict.stderr).toMatch(/use either --depth or --rigor, not both/);
+    expect(conflict.stderr).toMatch(/use either --depth or --depth, not both/);
   });
 
   it('rejects supplying both --mode and --entry-mode', async () => {
     const conflict = await runMainExit([
       'resume',
-      '--run-root',
-      join(runRootBase, 'not-needed'),
+      '--run-folder',
+      join(runFolderBase, 'not-needed'),
       '--checkpoint-choice',
       'continue',
       '--mode',
@@ -704,24 +705,24 @@ describe('P2.8 CLI router', () => {
     expect(conflict.stderr).toMatch(/use either --mode or --entry-mode, not both/);
   });
 
-  it('rejects supplying both --run-folder and --run-root', async () => {
+  it('rejects supplying both --run-folder and --run-folder', async () => {
     const conflict = await runMainExit([
       'resume',
       '--run-folder',
-      join(runRootBase, 'a'),
-      '--run-root',
-      join(runRootBase, 'b'),
+      join(runFolderBase, 'a'),
+      '--run-folder',
+      join(runFolderBase, 'b'),
       '--checkpoint-choice',
       'continue',
     ]);
     expect(conflict.exit).toBe(2);
-    expect(conflict.stderr).toMatch(/use either --run-folder or --run-root, not both/);
+    expect(conflict.stderr).toMatch(/use either --run-folder or --run-folder, not both/);
   });
 
-  it('keeps CLI help text aligned with the router-supported workflow set', () => {
+  it('keeps CLI help text aligned with the router-supported flow set', () => {
     const source = readFileSync(join(process.cwd(), 'src/cli/circuit.ts'), 'utf-8');
-    expect(source).toContain('registered explore/review/fix/build workflows');
-    expect(source).not.toContain('registered explore/review/build workflows');
-    expect(source).not.toContain('registered explore/review workflows');
+    expect(source).toContain('registered explore/review/fix/build flows');
+    expect(source).not.toContain('registered explore/review/build flows');
+    expect(source).not.toContain('registered explore/review flows');
   });
 });

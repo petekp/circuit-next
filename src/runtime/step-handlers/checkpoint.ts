@@ -1,8 +1,8 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { LayeredConfig as LayeredConfigValue } from '../../schemas/config.js';
-import type { Rigor } from '../../schemas/rigor.js';
-import { sha256Hex } from '../adapters/shared.js';
+import type { Depth } from '../../schemas/depth.js';
+import { sha256Hex } from '../connectors/shared.js';
 import { findCheckpointBriefBuilder } from '../registries/checkpoint-writers/registry.js';
 import {
   type CheckpointStep,
@@ -10,7 +10,7 @@ import {
 } from '../registries/checkpoint-writers/types.js';
 import { resolveRunRelative } from '../run-relative-path.js';
 import { writeDerivedSnapshot } from '../snapshot-writer.js';
-import { isRunRelativePathError, writeJsonArtifact } from './shared.js';
+import { isRunRelativePathError, writeJsonReport } from './shared.js';
 import type { StepHandlerContext, StepHandlerResult } from './types.js';
 
 export type { CheckpointStep };
@@ -26,14 +26,14 @@ type CheckpointResolution =
   | { readonly kind: 'waiting' }
   | { readonly kind: 'failed'; readonly reason: string };
 
-function resolveCheckpoint(step: CheckpointStep, rigor: Rigor): CheckpointResolution {
-  if (rigor === 'deep' || rigor === 'tournament') return { kind: 'waiting' };
-  if (rigor === 'autonomous') {
+function resolveCheckpoint(step: CheckpointStep, depth: Depth): CheckpointResolution {
+  if (depth === 'deep' || depth === 'tournament') return { kind: 'waiting' };
+  if (depth === 'autonomous') {
     const selection = step.policy.safe_autonomous_choice;
     if (selection === undefined) {
       return {
         kind: 'failed',
-        reason: `checkpoint step '${step.id}' cannot auto-resolve autonomous rigor without a declared safe autonomous choice`,
+        reason: `checkpoint step '${step.id}' cannot auto-resolve autonomous depth without a declared safe autonomous choice`,
       };
     }
     return {
@@ -47,7 +47,7 @@ function resolveCheckpoint(step: CheckpointStep, rigor: Rigor): CheckpointResolu
   if (selection === undefined) {
     return {
       kind: 'failed',
-      reason: `checkpoint step '${step.id}' cannot resolve ${rigor} rigor without a declared safe default choice`,
+      reason: `checkpoint step '${step.id}' cannot resolve ${depth} depth without a declared safe default choice`,
     };
   }
   return {
@@ -62,7 +62,7 @@ export function checkpointRequestBody(input: {
   readonly step: CheckpointStep;
   readonly projectRoot?: string;
   readonly selectionConfigLayers: readonly LayeredConfigValue[];
-  readonly checkpointArtifactSha256?: string;
+  readonly checkpointReportSha256?: string;
 }): unknown {
   return {
     schema_version: 1,
@@ -78,9 +78,9 @@ export function checkpointRequestBody(input: {
     execution_context: {
       ...(input.projectRoot === undefined ? {} : { project_root: input.projectRoot }),
       selection_config_layers: input.selectionConfigLayers,
-      ...(input.checkpointArtifactSha256 === undefined
+      ...(input.checkpointReportSha256 === undefined
         ? {}
-        : { checkpoint_artifact_sha256: input.checkpointArtifactSha256 }),
+        : { checkpoint_report_sha256: input.checkpointReportSha256 }),
     },
   };
 }
@@ -103,9 +103,9 @@ function checkpointFailureReason(stepId: string, err: unknown): string {
   return `checkpoint step '${stepId}': checkpoint handling failed (${message})`;
 }
 
-// Checkpoint artifact writer. Most checkpoints don't write artifacts;
-// when they do, a registered CheckpointBriefBuilder owns the workflow-
-// specific assembly. Adding a new workflow's checkpoint-with-artifact
+// Checkpoint report writer. Most checkpoints don't write reports;
+// when they do, a registered CheckpointBriefBuilder owns the flow-
+// specific assembly. Adding a new flow's checkpoint-with-report
 // means adding a builder under src/runtime/registries/checkpoint-writers/.
 //
 // The brief is written exactly once per checkpoint instance, with the
@@ -113,36 +113,36 @@ function checkpointFailureReason(stepId: string, err: unknown): string {
 // No re-stamp happens after operator resolution, so the on-disk hash
 // captured in the request stays valid through the entire resolution
 // path — eliminating the crash window between a stamped-brief write and
-// the checkpoint.resolved event.
-function writeCheckpointOwnedArtifact(input: {
-  readonly runRoot: string;
+// the checkpoint.resolved trace_entry.
+function writeCheckpointOwnedReport(input: {
+  readonly runFolder: string;
   readonly step: CheckpointStep;
   readonly goal: string;
 }): void {
-  const artifact = input.step.writes.artifact;
-  if (artifact === undefined) return;
-  const builder = findCheckpointBriefBuilder(artifact.schema);
+  const report = input.step.writes.report;
+  if (report === undefined) return;
+  const builder = findCheckpointBriefBuilder(report.schema);
   if (builder === undefined) {
-    throw new Error(`checkpoint step '${input.step.id}' has unsupported artifact schema`);
+    throw new Error(`checkpoint step '${input.step.id}' has unsupported report schema`);
   }
   const body = builder.build({
-    runRoot: input.runRoot,
+    runFolder: input.runFolder,
     step: input.step,
     goal: input.goal,
     responsePath: input.step.writes.response,
   });
-  writeJsonArtifact(input.runRoot, artifact.path, body);
+  writeJsonReport(input.runFolder, report.path, body);
 }
 
 export function runCheckpointStep(
   ctx: StepHandlerContext & { readonly step: CheckpointStep },
 ): StepHandlerResult {
   const {
-    runRoot,
+    runFolder,
     step,
     goal,
     runId,
-    rigor,
+    depth,
     attempt,
     recordedAt,
     push,
@@ -154,20 +154,20 @@ export function runCheckpointStep(
   } = ctx;
 
   try {
-    const requestAbs = resolveRunRelative(runRoot, step.writes.request);
+    const requestAbs = resolveRunRelative(runFolder, step.writes.request);
     if (!isResumedCheckpoint) {
-      writeCheckpointOwnedArtifact({ runRoot, step, goal });
-      const checkpointArtifactSha256 =
-        step.writes.artifact !== undefined &&
-        findCheckpointBriefBuilder(step.writes.artifact.schema) !== undefined
-          ? sha256Hex(readFileSync(resolveRunRelative(runRoot, step.writes.artifact.path), 'utf8'))
+      writeCheckpointOwnedReport({ runFolder, step, goal });
+      const checkpointReportSha256 =
+        step.writes.report !== undefined &&
+        findCheckpointBriefBuilder(step.writes.report.schema) !== undefined
+          ? sha256Hex(readFileSync(resolveRunRelative(runFolder, step.writes.report.path), 'utf8'))
           : undefined;
       const requestText = `${JSON.stringify(
         checkpointRequestBody({
           step,
           ...(projectRoot === undefined ? {} : { projectRoot }),
           selectionConfigLayers: executionSelectionConfigLayers,
-          ...(checkpointArtifactSha256 === undefined ? {} : { checkpointArtifactSha256 }),
+          ...(checkpointReportSha256 === undefined ? {} : { checkpointReportSha256 }),
         }),
         null,
         2,
@@ -184,19 +184,19 @@ export function runCheckpointStep(
         attempt,
         options: checkpointChoiceIds(step),
         request_path: step.writes.request,
-        request_artifact_hash: sha256Hex(requestText),
+        request_report_hash: sha256Hex(requestText),
       });
-      if (step.writes.artifact !== undefined) {
+      if (step.writes.report !== undefined) {
         push({
           schema_version: 1,
           sequence: state.sequence,
           recorded_at: recordedAt(),
           run_id: runId,
-          kind: 'step.artifact_written',
+          kind: 'step.report_written',
           step_id: step.id,
           attempt,
-          artifact_path: step.writes.artifact.path,
-          artifact_schema: step.writes.artifact.schema,
+          report_path: step.writes.report.path,
+          report_schema: step.writes.report.schema,
         });
       }
     }
@@ -209,13 +209,13 @@ export function runCheckpointStep(
             resolutionSource: 'operator',
             autoResolved: false,
           }
-        : resolveCheckpoint(step, rigor);
+        : resolveCheckpoint(step, depth);
 
     if (resolution.kind === 'waiting') {
       // Snapshot is derived for the waiting result; coordinator owns the
       // CheckpointWaitingResult assembly. Re-deriving here so the
-      // snapshot file on disk reflects the most recent events.
-      writeDerivedSnapshot(runRoot);
+      // snapshot file on disk reflects the most recent trace_entrys.
+      writeDerivedSnapshot(runFolder);
       return {
         kind: 'waiting_checkpoint',
         checkpoint: {
@@ -232,10 +232,10 @@ export function runCheckpointStep(
         sequence: state.sequence,
         recorded_at: recordedAt(),
         run_id: runId,
-        kind: 'gate.evaluated',
+        kind: 'check.evaluated',
         step_id: step.id,
         attempt,
-        gate_kind: 'checkpoint_selection',
+        check_kind: 'checkpoint_selection',
         outcome: 'fail',
         reason: resolution.reason,
       });
@@ -252,13 +252,13 @@ export function runCheckpointStep(
       return { kind: 'aborted', reason: resolution.reason };
     }
 
-    if (!step.gate.allow.includes(resolution.selection)) {
+    if (!step.check.allow.includes(resolution.selection)) {
       throw new Error(
-        `checkpoint step '${step.id}' selected '${resolution.selection}' but gate.allow is [${step.gate.allow.join(', ')}]`,
+        `checkpoint step '${step.id}' selected '${resolution.selection}' but check.allow is [${step.check.allow.join(', ')}]`,
       );
     }
-    writeJsonArtifact(
-      runRoot,
+    writeJsonReport(
+      runFolder,
       step.writes.response,
       checkpointResponseBody({
         step,
@@ -284,10 +284,10 @@ export function runCheckpointStep(
       sequence: state.sequence,
       recorded_at: recordedAt(),
       run_id: runId,
-      kind: 'gate.evaluated',
+      kind: 'check.evaluated',
       step_id: step.id,
       attempt,
-      gate_kind: 'checkpoint_selection',
+      check_kind: 'checkpoint_selection',
       outcome: 'pass',
     });
     return { kind: 'advance' };
@@ -299,10 +299,10 @@ export function runCheckpointStep(
       sequence: state.sequence,
       recorded_at: recordedAt(),
       run_id: runId,
-      kind: 'gate.evaluated',
+      kind: 'check.evaluated',
       step_id: step.id,
       attempt,
-      gate_kind: 'checkpoint_selection',
+      check_kind: 'checkpoint_selection',
       outcome: 'fail',
       reason,
     });

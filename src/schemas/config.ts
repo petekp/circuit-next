@@ -1,42 +1,42 @@
 import { z } from 'zod';
 import {
-  AdapterName,
-  BuiltInAdapter,
-  CustomAdapterDescriptor,
+  ConnectorName,
+  CustomConnectorDescriptor,
+  EnabledConnector,
   RESERVED_ADAPTER_NAMES,
-} from './adapter.js';
-import { WorkflowId } from './ids.js';
+} from './connector.js';
+import { CompiledFlowId } from './ids.js';
 import { SelectionOverride } from './selection-policy.js';
-import { DispatchRole } from './step.js';
+import { RelayRole } from './step.js';
 
-// ADAPTER-I5 + ADAPTER-I9: the registry-layer `AdapterReference` is a
+// connector-I5 + connector-I9: the registry-layer `ConnectorReference` is a
 // 2-variant discriminated union with per-variant `.strict()`. Inline
-// `CustomAdapterDescriptor` is NOT a legal registry-layer reference —
-// custom adapters must be registered in `dispatch.adapters` exactly once
+// `CustomConnectorDescriptor` is NOT a legal registry-layer reference —
+// custom connectors must be registered in `relay.connectors` exactly once
 // and referenced by name. Surplus keys (typos like `nmae: 'gemini'`) are
 // rejected at parse time so they point at the typo directly.
 //
-// `AdapterReference` is exported so future callers
+// `ConnectorReference` is exported so future callers
 // can validate registry-layer references directly (instead of reaching for
-// `AdapterRef`, which admits inline custom descriptors and would silently
-// relax ADAPTER-I5).
-export const AdapterReference = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('builtin'), name: BuiltInAdapter }).strict(),
-  z.object({ kind: z.literal('named'), name: AdapterName }).strict(),
+// `ConnectorRef`, which admits inline custom descriptors and would silently
+// relax connector-I5).
+export const ConnectorReference = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('builtin'), name: EnabledConnector }).strict(),
+  z.object({ kind: z.literal('named'), name: ConnectorName }).strict(),
 ]);
-export type AdapterReference = z.infer<typeof AdapterReference>;
+export type ConnectorReference = z.infer<typeof ConnectorReference>;
 
-// ADAPTER-I9: `.strict()` on DispatchConfigBody rejects surplus keys at the
-// top level (e.g. `dispatch.adpaters` typo transposition), so the author's
-// intent — "register a custom adapter" — fails loudly rather than silently
+// connector-I9: `.strict()` on RelayConfigBody rejects surplus keys at the
+// top level (e.g. `relay.adpaters` typo transposition), so the author's
+// intent — "register a custom connector" — fails loudly rather than silently
 // producing an empty registry whose named references then fail closure with
 // a misleading error far from the typo.
-const DispatchConfigBody = z
+const RelayConfigBody = z
   .object({
-    default: z.union([BuiltInAdapter, z.literal('auto'), AdapterName]).default('auto'),
-    roles: z.record(DispatchRole, AdapterReference).default({}),
-    circuits: z.record(WorkflowId, AdapterReference).default({}),
-    adapters: z.record(AdapterName, CustomAdapterDescriptor).default({}),
+    default: z.union([EnabledConnector, z.literal('auto'), ConnectorName]).default('auto'),
+    roles: z.record(RelayRole, ConnectorReference).default({}),
+    circuits: z.record(CompiledFlowId, ConnectorReference).default({}),
+    connectors: z.record(ConnectorName, CustomConnectorDescriptor).default({}),
   })
   .strict();
 
@@ -44,10 +44,10 @@ const issueAt = (ctx: z.RefinementCtx, path: (string | number)[], message: strin
   ctx.addIssue({ code: z.ZodIssueCode.custom, path, message });
 };
 
-export const DispatchConfig = DispatchConfigBody.superRefine((cfg, ctx) => {
-  // ADAPTER-I2: reserved-name disjointness. A custom adapter keyed under a
-  // `BuiltInAdapter` value or the `'auto'` sentinel would silently shadow
-  // the built-in in `dispatch.default` resolution — it would parse, appear
+export const RelayConfig = RelayConfigBody.superRefine((cfg, ctx) => {
+  // connector-I2: reserved-name disjointness. A custom connector keyed under a
+  // `EnabledConnector` value or the `'auto'` sentinel would silently shadow
+  // the built-in in `relay.default` resolution — it would parse, appear
   // in the registry, and be picked by `default: 'codex'`, producing a
   // behavior divergence the author did not intend. Reject at parse time.
   //
@@ -55,51 +55,51 @@ export const DispatchConfig = DispatchConfigBody.superRefine((cfg, ctx) => {
   // check membership via a Set (not via bracket access on the record), so
   // inherited prototype names like `constructor`, `toString`, `__proto__`,
   // and `hasOwnProperty` cannot smuggle past closure checks. Bracket
-  // access `cfg.adapters['constructor']` on a parsed object would resolve
+  // access `cfg.connectors['constructor']` on a parsed object would resolve
   // to `Object.prototype.constructor` and satisfy a truthiness check even
   // when no own property exists.
-  const ownAdapterKeys = Object.keys(cfg.adapters);
-  const registered = new Set<string>(ownAdapterKeys);
+  const ownConnectorKeys = Object.keys(cfg.connectors);
+  const registered = new Set<string>(ownConnectorKeys);
   const reserved = new Set<string>(RESERVED_ADAPTER_NAMES);
-  for (const name of ownAdapterKeys) {
+  for (const name of ownConnectorKeys) {
     if (reserved.has(name)) {
       issueAt(
         ctx,
-        ['adapters', name],
-        `adapter name '${name}' is reserved (built-in or 'auto') and cannot be used as a custom adapter key`,
+        ['connectors', name],
+        `connector name '${name}' is reserved (built-in or 'auto') and cannot be used as a custom connector key`,
       );
     }
     // Registry key and descriptor `name` must
-    // agree. `{adapters: {gemini: {name: 'ollama', ...}}}` parses per
-    // AdapterName regex but leaves two adapter identities (`gemini` via
+    // agree. `{connectors: {gemini: {name: 'ollama', ...}}}` parses per
+    // ConnectorName regex but leaves two connector identities (`gemini` via
     // registry key, `ollama` via emitted descriptor) for a single
-    // registered executor. Events would carry a `name` the audit index
+    // registered executor. TraceEntrys would carry a `name` the audit index
     // doesn't know about.
-    const descriptor = cfg.adapters[name];
+    const descriptor = cfg.connectors[name];
     if (descriptor && descriptor.name !== name) {
       issueAt(
         ctx,
-        ['adapters', name, 'name'],
-        `adapter registry key '${name}' does not match descriptor name '${descriptor.name}'`,
+        ['connectors', name, 'name'],
+        `connector registry key '${name}' does not match descriptor name '${descriptor.name}'`,
       );
     }
   }
-  const known = new Set<string>(['auto', ...BuiltInAdapter.options, ...ownAdapterKeys]);
+  const known = new Set<string>(['auto', ...EnabledConnector.options, ...ownConnectorKeys]);
   if (typeof cfg.default === 'string' && !known.has(cfg.default)) {
-    issueAt(ctx, ['default'], `dispatch.default references unknown adapter: ${cfg.default}`);
+    issueAt(ctx, ['default'], `relay.default references unknown connector: ${cfg.default}`);
   }
   for (const [role, ref] of Object.entries(cfg.roles)) {
     if (ref && ref.kind === 'named' && !registered.has(ref.name)) {
-      issueAt(ctx, ['roles', role], `role adapter not registered: ${ref.name}`);
+      issueAt(ctx, ['roles', role], `role connector not registered: ${ref.name}`);
     }
   }
   for (const [circuit, ref] of Object.entries(cfg.circuits)) {
     if (ref && ref.kind === 'named' && !registered.has(ref.name)) {
-      issueAt(ctx, ['circuits', circuit], `circuit adapter not registered: ${ref.name}`);
+      issueAt(ctx, ['circuits', circuit], `circuit connector not registered: ${ref.name}`);
     }
   }
 });
-export type DispatchConfig = z.infer<typeof DispatchConfig>;
+export type RelayConfig = z.infer<typeof RelayConfig>;
 
 // Legacy `skills: string[]` channel removed. The
 // previous shape bypassed `SkillOverride` AND accepted arbitrary strings
@@ -121,13 +121,13 @@ export type CircuitOverride = z.infer<typeof CircuitOverride>;
 export const Config = z
   .object({
     schema_version: z.literal(1),
-    dispatch: DispatchConfig.default({
+    relay: RelayConfig.default({
       default: 'auto',
       roles: {},
       circuits: {},
-      adapters: {},
+      connectors: {},
     }),
-    circuits: z.record(WorkflowId, CircuitOverride).default({}),
+    circuits: z.record(CompiledFlowId, CircuitOverride).default({}),
     defaults: z
       .object({
         selection: SelectionOverride.optional(),

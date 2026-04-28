@@ -12,7 +12,7 @@ export const CONT_NARRATIVE = {
 
 export const CONT_RUN_PROVENANCE = {
   run_id: CONT_RUN,
-  current_phase: 'frame',
+  current_stage: 'frame',
   current_step: 'frame-goal',
   runtime_status: 'in_progress',
   runtime_updated_at: '2026-04-19T00:00:00.000Z',

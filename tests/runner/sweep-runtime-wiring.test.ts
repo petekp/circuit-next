@@ -3,12 +3,6 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { AgentDispatchInput } from '../../src/runtime/adapters/agent.js';
-import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
-import { type DispatchFn, runWorkflow } from '../../src/runtime/runner.js';
-import { RunId } from '../../src/schemas/ids.js';
-import type { LaneDeclaration } from '../../src/schemas/lane.js';
-import { Workflow } from '../../src/schemas/workflow.js';
 import {
   SweepAnalysis,
   SweepBatch,
@@ -17,15 +11,21 @@ import {
   SweepResult,
   SweepReview,
   SweepVerification,
-} from '../../src/workflows/sweep/artifacts.js';
+} from '../../src/flows/sweep/reports.js';
+import type { AgentRelayInput } from '../../src/runtime/connectors/agent.js';
+import type { RelayResult } from '../../src/runtime/connectors/shared.js';
+import { type RelayFn, runCompiledFlow } from '../../src/runtime/runner.js';
+import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
+import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
+import { RunId } from '../../src/schemas/ids.js';
 
 const FIXTURE_PATH = resolve('.claude-plugin', 'skills', 'sweep', 'circuit.json');
 const REPO_ROOT = resolve('.');
 
-function loadFixture(): { workflow: Workflow; bytes: Buffer } {
+function loadFixture(): { flow: CompiledFlow; bytes: Buffer } {
   const bytes = readFileSync(FIXTURE_PATH);
   const raw: unknown = JSON.parse(bytes.toString('utf8'));
-  return { workflow: Workflow.parse(raw), bytes };
+  return { flow: CompiledFlow.parse(raw), bytes };
 }
 
 function deterministicNow(startMs: number): () => Date {
@@ -33,15 +33,15 @@ function deterministicNow(startMs: number): () => Date {
   return () => new Date(startMs + n++ * 1000);
 }
 
-function lane(): LaneDeclaration {
+function change_kind(): ChangeKindDeclaration {
   return {
-    lane: 'ratchet-advance',
+    change_kind: 'ratchet-advance',
     failure_mode:
-      'Sweep had typed artifacts but no live fixture proving the seven-canonical-phase spine through the runtime',
+      'Sweep had typed reports but no live fixture proving the seven-canonical-stage stage path through the runtime',
     acceptance_evidence:
-      'sweep-runtime-wiring runs the live Sweep fixture with stubbed worker dispatch and parses all six typed artifacts plus the close result',
+      'sweep-runtime-wiring runs the live Sweep fixture with stubbed worker relay and parses all six typed reports plus the close result',
     alternate_framing:
-      'extend the build wiring test to cover Sweep — rejected because the substrate-proof claim is that Sweep stands on its own per-workflow modules',
+      'extend the build wiring test to cover Sweep — rejected because the substrate-proof claim is that Sweep stands on its own per-flow modules',
   };
 }
 
@@ -92,20 +92,20 @@ const DEFAULT_REVIEW_BODY = JSON.stringify({
   findings: [],
 });
 
-function dispatcherWith(
+function relayerWith(
   options: {
     analysisBody?: string;
     batchBody?: string;
     reviewBody?: string;
   } = {},
-): DispatchFn {
+): RelayFn {
   const analysisBody = options.analysisBody ?? DEFAULT_ANALYSIS_BODY;
   const batchBody = options.batchBody ?? DEFAULT_BATCH_BODY;
   const reviewBody = options.reviewBody ?? DEFAULT_REVIEW_BODY;
 
   return {
-    adapterName: 'agent',
-    dispatch: async (input: AgentDispatchInput): Promise<DispatchResult> => {
+    connectorName: 'agent',
+    relay: async (input: AgentRelayInput): Promise<RelayResult> => {
       const isSurvey = input.prompt.includes('Step: survey-step');
       const isExecute = input.prompt.includes('Step: execute-step');
       const isReview = input.prompt.includes('Step: review-step');
@@ -128,30 +128,32 @@ function dispatcherWith(
   };
 }
 
-function eventLabel(event: { kind: string; step_id?: unknown }): string {
-  return typeof event.step_id === 'string' ? `${event.kind}:${event.step_id}` : event.kind;
+function trace_entryLabel(trace_entry: { kind: string; step_id?: unknown }): string {
+  return typeof trace_entry.step_id === 'string'
+    ? `${trace_entry.kind}:${trace_entry.step_id}`
+    : trace_entry.kind;
 }
 
-let runRootBase: string;
+let runFolderBase: string;
 
 beforeEach(() => {
-  runRootBase = mkdtempSync(join(tmpdir(), 'circuit-next-sweep-runtime-'));
+  runFolderBase = mkdtempSync(join(tmpdir(), 'circuit-next-sweep-runtime-'));
 });
 
 afterEach(() => {
-  rmSync(runRootBase, { recursive: true, force: true });
+  rmSync(runFolderBase, { recursive: true, force: true });
 });
 
 describe('Sweep runtime wiring', () => {
-  it('declares the seven-canonical-phase spine with default, lite, deep, and autonomous entry modes', () => {
-    const { workflow } = loadFixture();
-    expect(workflow.entry_modes.map((mode) => mode.name)).toEqual([
+  it('declares the seven-canonical-stage stage path with default, lite, deep, and autonomous entry modes', () => {
+    const { flow } = loadFixture();
+    expect(flow.entry_modes.map((mode) => mode.name)).toEqual([
       'default',
       'lite',
       'deep',
       'autonomous',
     ]);
-    expect(workflow.phases.map((phase) => phase.canonical)).toEqual([
+    expect(flow.stages.map((stage) => stage.canonical)).toEqual([
       'frame',
       'analyze',
       'plan',
@@ -160,9 +162,9 @@ describe('Sweep runtime wiring', () => {
       'review',
       'close',
     ]);
-    const stepsById = new Map(workflow.steps.map((step) => [step.id as unknown as string, step]));
+    const stepsById = new Map(flow.steps.map((step) => [step.id as unknown as string, step]));
     const visited: string[] = [];
-    let current: string | undefined = workflow.entry_modes[0]?.start_at as unknown as string;
+    let current: string | undefined = flow.entry_modes[0]?.start_at as unknown as string;
     while (current !== undefined && !current.startsWith('@')) {
       visited.push(current);
       current = stepsById.get(current)?.routes.pass;
@@ -178,71 +180,71 @@ describe('Sweep runtime wiring', () => {
     ]);
   });
 
-  it('runs the live Sweep fixture through synthesis, dispatch, verification, and close — proving the substrate composes a second workflow with no runner.ts edits', async () => {
-    const { workflow, bytes } = loadFixture();
-    const runRoot = join(runRootBase, 'complete');
+  it('runs the live Sweep fixture through compose, relay, verification, and close — proving the substrate composes a second flow with no runner.ts edits', async () => {
+    const { flow, bytes } = loadFixture();
+    const runFolder = join(runFolderBase, 'complete');
 
-    const outcome = await runWorkflow({
-      runRoot,
-      workflow,
-      workflowBytes: bytes,
+    const outcome = await runCompiledFlow({
+      runFolder,
+      flow,
+      flowBytes: bytes,
       runId: RunId.parse('57000000-0000-0000-0000-000000000000'),
       goal: 'Sweep dead code from src/example',
-      rigor: 'standard',
-      lane: lane(),
+      depth: 'standard',
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 26, 9, 0, 0)),
-      dispatcher: dispatcherWith(),
+      relayer: relayerWith(),
       projectRoot: REPO_ROOT,
     });
 
     expect(outcome.result.outcome).toBe('complete');
-    const labels = outcome.events.map(eventLabel);
-    expect(labels).toContain('dispatch.completed:survey-step');
-    expect(labels).toContain('dispatch.completed:execute-step');
-    expect(labels).toContain('dispatch.completed:review-step');
+    const labels = outcome.trace_entrys.map(trace_entryLabel);
+    expect(labels).toContain('relay.completed:survey-step');
+    expect(labels).toContain('relay.completed:execute-step');
+    expect(labels).toContain('relay.completed:review-step');
 
     const brief = SweepBrief.parse(
-      JSON.parse(readFileSync(join(runRoot, 'artifacts/sweep/brief.json'), 'utf8')),
+      JSON.parse(readFileSync(join(runFolder, 'reports/sweep/brief.json'), 'utf8')),
     );
     expect(brief.objective).toBe('Sweep dead code from src/example');
     expect(brief.sweep_type).toBe('cleanup');
 
     const analysis = SweepAnalysis.parse(
-      JSON.parse(readFileSync(join(runRoot, 'artifacts/sweep/analysis.json'), 'utf8')),
+      JSON.parse(readFileSync(join(runFolder, 'reports/sweep/analysis.json'), 'utf8')),
     );
     expect(analysis.candidates.map((c) => c.id)).toEqual(['cand-1', 'cand-2']);
 
     const queue = SweepQueue.parse(
-      JSON.parse(readFileSync(join(runRoot, 'artifacts/sweep/queue.json'), 'utf8')),
+      JSON.parse(readFileSync(join(runFolder, 'reports/sweep/queue.json'), 'utf8')),
     );
     expect(queue.classified.map((item) => item.action)).toEqual(['act', 'act']);
     expect(queue.to_execute).toEqual(['cand-1', 'cand-2']);
     expect(queue.deferred).toEqual([]);
 
     const batch = SweepBatch.parse(
-      JSON.parse(readFileSync(join(runRoot, 'artifacts/sweep/batch.json'), 'utf8')),
+      JSON.parse(readFileSync(join(runFolder, 'reports/sweep/batch.json'), 'utf8')),
     );
     expect(batch.verdict).toBe('accept');
     expect(batch.items).toHaveLength(2);
 
     const verification = SweepVerification.parse(
-      JSON.parse(readFileSync(join(runRoot, 'artifacts/sweep/verification.json'), 'utf8')),
+      JSON.parse(readFileSync(join(runFolder, 'reports/sweep/verification.json'), 'utf8')),
     );
     expect(verification.overall_status).toBe('passed');
     expect(verification.commands[0]?.argv).toEqual(['npm', 'run', 'check']);
 
     const review = SweepReview.parse(
-      JSON.parse(readFileSync(join(runRoot, 'artifacts/sweep/review.json'), 'utf8')),
+      JSON.parse(readFileSync(join(runFolder, 'reports/sweep/review.json'), 'utf8')),
     );
     expect(review.verdict).toBe('clean');
 
     const result = SweepResult.parse(
-      JSON.parse(readFileSync(join(runRoot, 'artifacts/sweep-result.json'), 'utf8')),
+      JSON.parse(readFileSync(join(runFolder, 'reports/sweep-result.json'), 'utf8')),
     );
     expect(result.outcome).toBe('complete');
     expect(result.review_verdict).toBe('clean');
     expect(result.deferred_count).toBe(0);
-    expect(result.artifact_pointers.map((p) => p.artifact_id)).toEqual([
+    expect(result.evidence_links.map((p) => p.report_id)).toEqual([
       'sweep.brief',
       'sweep.analysis',
       'sweep.queue',
@@ -253,8 +255,8 @@ describe('Sweep runtime wiring', () => {
   });
 
   it('defers low-confidence high-risk candidates and surfaces deferred_count in the close result', async () => {
-    const { workflow, bytes } = loadFixture();
-    const runRoot = join(runRootBase, 'deferred');
+    const { flow, bytes } = loadFixture();
+    const runFolder = join(runFolderBase, 'deferred');
 
     const analysisWithDeferred = JSON.stringify({
       verdict: 'accept',
@@ -292,16 +294,16 @@ describe('Sweep runtime wiring', () => {
       ],
     });
 
-    const outcome = await runWorkflow({
-      runRoot,
-      workflow,
-      workflowBytes: bytes,
+    const outcome = await runCompiledFlow({
+      runFolder,
+      flow,
+      flowBytes: bytes,
       runId: RunId.parse('57000000-0000-0000-0000-000000000001'),
       goal: 'Sweep with deferred items',
-      rigor: 'standard',
-      lane: lane(),
+      depth: 'standard',
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 26, 10, 0, 0)),
-      dispatcher: dispatcherWith({
+      relayer: relayerWith({
         analysisBody: analysisWithDeferred,
         batchBody: batchActsOnSafeOnly,
       }),
@@ -311,31 +313,31 @@ describe('Sweep runtime wiring', () => {
     expect(outcome.result.outcome).toBe('complete');
 
     const queue = SweepQueue.parse(
-      JSON.parse(readFileSync(join(runRoot, 'artifacts/sweep/queue.json'), 'utf8')),
+      JSON.parse(readFileSync(join(runFolder, 'reports/sweep/queue.json'), 'utf8')),
     );
     expect(queue.deferred).toEqual(['risky-1']);
     expect(queue.to_execute).toEqual(['safe-1']);
 
     const result = SweepResult.parse(
-      JSON.parse(readFileSync(join(runRoot, 'artifacts/sweep-result.json'), 'utf8')),
+      JSON.parse(readFileSync(join(runFolder, 'reports/sweep-result.json'), 'utf8')),
     );
     expect(result.deferred_count).toBe(1);
   });
 
-  it('aborts when survey dispatch passes the verdict gate but fails sweep.analysis@v1 parsing', async () => {
-    const { workflow, bytes } = loadFixture();
-    const runRoot = join(runRootBase, 'bad-analysis');
+  it('aborts when survey relay passes the verdict check but fails sweep.analysis@v1 parsing', async () => {
+    const { flow, bytes } = loadFixture();
+    const runFolder = join(runFolderBase, 'bad-analysis');
 
-    const outcome = await runWorkflow({
-      runRoot,
-      workflow,
-      workflowBytes: bytes,
+    const outcome = await runCompiledFlow({
+      runFolder,
+      flow,
+      flowBytes: bytes,
       runId: RunId.parse('57000000-0000-0000-0000-000000000002'),
-      goal: 'Reject malformed analysis artifact',
-      rigor: 'standard',
-      lane: lane(),
+      goal: 'Reject malformed analysis report',
+      depth: 'standard',
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 26, 11, 0, 0)),
-      dispatcher: dispatcherWith({
+      relayer: relayerWith({
         analysisBody: JSON.stringify({
           verdict: 'accept',
           summary: 'Missing candidates field',
@@ -346,24 +348,24 @@ describe('Sweep runtime wiring', () => {
 
     expect(outcome.result.outcome).toBe('aborted');
     expect(outcome.result.reason).toMatch(/sweep\.analysis@v1/);
-    expect(existsSync(join(runRoot, 'artifacts/sweep/analysis.json'))).toBe(false);
-    expect(existsSync(join(runRoot, 'artifacts/dispatch/sweep-survey.result.json'))).toBe(true);
+    expect(existsSync(join(runFolder, 'reports/sweep/analysis.json'))).toBe(false);
+    expect(existsSync(join(runFolder, 'reports/relay/sweep-survey.result.json'))).toBe(true);
   });
 
-  it('aborts on critical-injections review verdict before writing the canonical Sweep review artifact', async () => {
-    const { workflow, bytes } = loadFixture();
-    const runRoot = join(runRootBase, 'review-critical');
+  it('aborts on critical-injections review verdict before writing the canonical Sweep review report', async () => {
+    const { flow, bytes } = loadFixture();
+    const runFolder = join(runFolderBase, 'review-critical');
 
-    const outcome = await runWorkflow({
-      runRoot,
-      workflow,
-      workflowBytes: bytes,
+    const outcome = await runCompiledFlow({
+      runFolder,
+      flow,
+      flowBytes: bytes,
       runId: RunId.parse('57000000-0000-0000-0000-000000000003'),
       goal: 'Reject a Sweep with critical injections',
-      rigor: 'standard',
-      lane: lane(),
+      depth: 'standard',
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 26, 12, 0, 0)),
-      dispatcher: dispatcherWith({
+      relayer: relayerWith({
         reviewBody: JSON.stringify({
           verdict: 'critical-injections',
           summary: 'Sweep introduced a regression',
@@ -381,7 +383,7 @@ describe('Sweep runtime wiring', () => {
 
     expect(outcome.result.outcome).toBe('aborted');
     expect(outcome.result.reason).toMatch(/critical-injections/);
-    expect(existsSync(join(runRoot, 'artifacts/sweep/review.json'))).toBe(false);
-    expect(existsSync(join(runRoot, 'artifacts/dispatch/sweep-review.result.json'))).toBe(true);
+    expect(existsSync(join(runFolder, 'reports/sweep/review.json'))).toBe(false);
+    expect(existsSync(join(runFolder, 'reports/relay/sweep-review.result.json'))).toBe(true);
   });
 });

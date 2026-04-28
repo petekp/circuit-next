@@ -5,42 +5,42 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { resultPath } from '../../src/runtime/result-writer.js';
 import {
-  type ChildWorkflowResolver,
-  type DispatchFn,
-  type WorkflowInvocation,
-  type WorkflowRunResult,
-  type WorkflowRunner,
+  type ChildCompiledFlowResolver,
+  type CompiledFlowInvocation,
+  type CompiledFlowRunResult,
+  type CompiledFlowRunner,
+  type RelayFn,
   type WorktreeRunner,
-  runWorkflow,
+  runCompiledFlow,
 } from '../../src/runtime/runner.js';
-import { RunId, type WorkflowId } from '../../src/schemas/ids.js';
-import type { LaneDeclaration } from '../../src/schemas/lane.js';
+import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
+import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
+import { type CompiledFlowId, RunId } from '../../src/schemas/ids.js';
 import { RunResult } from '../../src/schemas/result.js';
 import { Snapshot } from '../../src/schemas/snapshot.js';
-import { Workflow } from '../../src/schemas/workflow.js';
 
-// Fanout runtime test. Verifies that a parent workflow declaring a
+// Fanout runtime test. Verifies that a parent flow declaring a
 // `fanout` step:
 //   - Resolves static and dynamic branches.
 //   - Provisions a per-branch worktree via the injected runner.
 //   - Runs each branch through the injected childRunner with isolated
 //     RunIds and the worktree path as projectRoot.
 //   - Emits fanout.{started,branch_started,branch_completed,joined}
-//     events with the resolved branch_ids on fanout.started.
-//   - Materializes the aggregate artifact at writes.aggregate.path.
-//   - Honors the join policy (pick-winner, disjoint-merge, aggregate-only)
-//     and the gate.evaluated outcome that follows.
+//     trace_entrys with the resolved branch_ids on fanout.started.
+//   - Materializes the aggrecheck report at writes.aggrecheck.path.
+//   - Honors the join policy (pick-winner, disjoint-merge, aggrecheck-only)
+//     and the check.evaluated outcome that follows.
 //   - Cleans up worktrees in try/finally even when branches fail.
 
-const PARENT_WORKFLOW_ID = 'parent-fanout' as unknown as WorkflowId;
-const CHILD_WORKFLOW_ID = 'child-branch' as unknown as WorkflowId;
+const PARENT_WORKFLOW_ID = 'parent-fanout' as unknown as CompiledFlowId;
+const CHILD_WORKFLOW_ID = 'child-branch' as unknown as CompiledFlowId;
 
-function lane(): LaneDeclaration {
+function change_kind(): ChangeKindDeclaration {
   return {
-    lane: 'ratchet-advance',
+    change_kind: 'ratchet-advance',
     failure_mode: 'fanout omits worktree cleanup or audit linkage',
     acceptance_evidence:
-      'parent log carries fanout.started + per-branch fanout.branch_{started,completed} + fanout.joined; aggregate artifact materialized; worktrees provisioned + released',
+      'parent log carries fanout.started + per-branch fanout.branch_{started,completed} + fanout.joined; aggrecheck report materialized; worktrees provisioned + released',
     alternate_framing: 'unit test of the fanout handler in isolation',
   };
 }
@@ -50,24 +50,24 @@ function deterministicNow(startMs: number): () => Date {
   return () => new Date(startMs + n++ * 1000);
 }
 
-function unusedDispatcher(): DispatchFn {
+function unusedRelayer(): RelayFn {
   return {
-    adapterName: 'agent',
-    dispatch: async () => {
-      throw new Error('dispatcher should not run during fanout-only parent execution');
+    connectorName: 'agent',
+    relay: async () => {
+      throw new Error('relayer should not run during fanout-only parent execution');
     },
   };
 }
 
-interface ParentWorkflowOpts {
+interface ParentCompiledFlowOpts {
   branches: 'static-two' | 'dynamic-from-source';
-  policy: 'pick-winner' | 'disjoint-merge' | 'aggregate-only';
+  policy: 'pick-winner' | 'disjoint-merge' | 'aggrecheck-only';
   admit?: readonly string[];
   concurrency?: { kind: 'unbounded' } | { kind: 'bounded'; max: number };
   on_child_failure?: 'abort-all' | 'continue-others';
 }
 
-function buildParentWorkflow(opts: ParentWorkflowOpts): Workflow {
+function buildParentCompiledFlow(opts: ParentCompiledFlowOpts): CompiledFlow {
   const admit = opts.admit ?? ['ok'];
   const branches =
     opts.branches === 'static-two'
@@ -76,36 +76,36 @@ function buildParentWorkflow(opts: ParentWorkflowOpts): Workflow {
           branches: [
             {
               branch_id: 'a',
-              workflow_ref: {
-                workflow_id: CHILD_WORKFLOW_ID as unknown as string,
+              flow_ref: {
+                flow_id: CHILD_WORKFLOW_ID as unknown as string,
                 entry_mode: 'default',
               },
               goal: 'branch-a goal',
-              rigor: 'standard',
+              depth: 'standard',
             },
             {
               branch_id: 'b',
-              workflow_ref: {
-                workflow_id: CHILD_WORKFLOW_ID as unknown as string,
+              flow_ref: {
+                flow_id: CHILD_WORKFLOW_ID as unknown as string,
                 entry_mode: 'default',
               },
               goal: 'branch-b goal',
-              rigor: 'standard',
+              depth: 'standard',
             },
           ],
         }
       : {
           kind: 'dynamic',
-          source_artifact: 'artifacts/source.json',
+          source_report: 'reports/source.json',
           items_path: 'items',
           template: {
             branch_id: '$item.id',
-            workflow_ref: {
-              workflow_id: CHILD_WORKFLOW_ID as unknown as string,
+            flow_ref: {
+              flow_id: CHILD_WORKFLOW_ID as unknown as string,
               entry_mode: 'default',
             },
             goal: '$item.goal',
-            rigor: 'standard',
+            depth: 'standard',
           },
         };
   const raw = {
@@ -121,12 +121,12 @@ function buildParentWorkflow(opts: ParentWorkflowOpts): Workflow {
       {
         name: 'fanout-test',
         start_at: 'fanout-step',
-        rigor: 'standard',
+        depth: 'standard',
         description: 'Default fanout entry.',
       },
     ],
-    phases: [{ id: 'act-phase', title: 'Act', canonical: 'act', steps: ['fanout-step'] }],
-    spine_policy: {
+    stages: [{ id: 'act-stage', title: 'Act', canonical: 'act', steps: ['fanout-step'] }],
+    stage_path_policy: {
       mode: 'partial',
       omits: ['frame', 'analyze', 'plan', 'verify', 'review', 'close'],
       rationale: 'narrow fanout runtime test.',
@@ -144,22 +144,22 @@ function buildParentWorkflow(opts: ParentWorkflowOpts): Workflow {
         concurrency: opts.concurrency ?? { kind: 'bounded', max: 4 },
         on_child_failure: opts.on_child_failure ?? 'abort-all',
         writes: {
-          branches_dir: 'artifacts/branches',
-          aggregate: { path: 'artifacts/aggregate.json', schema: 'fanout-aggregate@v1' },
+          branches_dir: 'reports/branches',
+          aggrecheck: { path: 'reports/aggrecheck.json', schema: 'fanout-aggrecheck@v1' },
         },
-        gate: {
-          kind: 'fanout_aggregate',
-          source: { kind: 'fanout_results', ref: 'aggregate' },
+        check: {
+          kind: 'fanout_aggrecheck',
+          source: { kind: 'fanout_results', ref: 'aggrecheck' },
           join: { policy: opts.policy },
           verdicts: { admit },
         },
       },
     ],
   };
-  return Workflow.parse(raw);
+  return CompiledFlow.parse(raw);
 }
 
-function buildChildWorkflow(): Workflow {
+function buildChildCompiledFlow(): CompiledFlow {
   const raw = {
     schema_version: '2',
     id: CHILD_WORKFLOW_ID as unknown as string,
@@ -167,10 +167,10 @@ function buildChildWorkflow(): Workflow {
     purpose: 'fanout test child',
     entry: { signals: { include: ['child'], exclude: [] }, intent_prefixes: ['child'] },
     entry_modes: [
-      { name: 'default', start_at: 'child-step', rigor: 'standard', description: 'Child entry.' },
+      { name: 'default', start_at: 'child-step', depth: 'standard', description: 'Child entry.' },
     ],
-    phases: [{ id: 'act-phase', title: 'Act', canonical: 'act', steps: ['child-step'] }],
-    spine_policy: {
+    stages: [{ id: 'act-stage', title: 'Act', canonical: 'act', steps: ['child-step'] }],
+    stage_path_policy: {
       mode: 'partial',
       omits: ['frame', 'analyze', 'plan', 'verify', 'review', 'close'],
       rationale: 'narrow stub child for fanout test.',
@@ -178,24 +178,24 @@ function buildChildWorkflow(): Workflow {
     steps: [
       {
         id: 'child-step',
-        title: 'Child synthesis',
-        protocol: 'child-synthesis@v1',
+        title: 'Child compose',
+        protocol: 'child-compose@v1',
         reads: [],
         routes: { pass: '@complete' },
         executor: 'orchestrator',
-        kind: 'synthesis',
+        kind: 'compose',
         writes: {
-          artifact: { path: 'artifacts/child-synthesis.json', schema: 'child-synthesis@v1' },
+          report: { path: 'reports/child-compose.json', schema: 'child-compose@v1' },
         },
-        gate: {
+        check: {
           kind: 'schema_sections',
-          source: { kind: 'artifact', ref: 'artifact' },
+          source: { kind: 'report', ref: 'report' },
           required: ['summary'],
         },
       },
     ],
   };
-  return Workflow.parse(raw);
+  return CompiledFlow.parse(raw);
 }
 
 interface BranchVerdictPlan {
@@ -204,48 +204,48 @@ interface BranchVerdictPlan {
   readonly verdicts: Record<string, string | 'aborted'>;
 }
 
-function makeStubChildRunner(plan: BranchVerdictPlan): WorkflowRunner {
-  return async (inv: WorkflowInvocation): Promise<WorkflowRunResult> => {
+function makeStubChildRunner(plan: BranchVerdictPlan): CompiledFlowRunner {
+  return async (inv: CompiledFlowInvocation): Promise<CompiledFlowRunResult> => {
     // Map by goal — branches differ by goal. For static fixtures we use
     // unique goals per branch; for dynamic fixtures the goal includes
     // the substituted $item.goal.
     const planEntry = Object.entries(plan.verdicts).find(
-      ([branchId]) => inv.goal.includes(branchId) || inv.runRoot.includes(branchId),
+      ([branchId]) => inv.goal.includes(branchId) || inv.runFolder.includes(branchId),
     );
     const verdict: string | 'aborted' = planEntry?.[1] ?? 'ok';
     const outcome: 'complete' | 'aborted' = verdict === 'aborted' ? 'aborted' : 'complete';
-    const childResultAbs = resultPath(inv.runRoot);
+    const childResultAbs = resultPath(inv.runFolder);
     mkdirSync(dirname(childResultAbs), { recursive: true });
     const body = RunResult.parse({
       schema_version: 1,
       run_id: inv.runId as unknown as string,
-      workflow_id: inv.workflow.id as unknown as string,
+      flow_id: inv.flow.id as unknown as string,
       goal: inv.goal,
       outcome,
       summary: 'stub child result',
       closed_at: new Date(0).toISOString(),
-      events_observed: 1,
+      trace_entries_observed: 1,
       manifest_hash: 'stub-manifest-hash',
       ...(verdict === 'aborted' ? {} : { verdict }),
     });
     writeFileSync(childResultAbs, `${JSON.stringify(body, null, 2)}\n`);
     return {
-      runRoot: inv.runRoot,
+      runFolder: inv.runFolder,
       result: body,
       snapshot: Snapshot.parse({
         schema_version: 1,
         run_id: body.run_id,
-        workflow_id: body.workflow_id,
-        rigor: 'standard',
-        lane: inv.lane,
+        flow_id: body.flow_id,
+        depth: 'standard',
+        change_kind: inv.change_kind,
         status: outcome === 'complete' ? 'complete' : 'aborted',
         steps: [],
-        events_consumed: 1,
+        trace_entries_consumed: 1,
         manifest_hash: 'stub-manifest-hash',
         updated_at: new Date(0).toISOString(),
       }),
-      events: [],
-      dispatchResults: [],
+      trace_entrys: [],
+      relayResults: [],
     };
   };
 }
@@ -274,83 +274,86 @@ function makeStubWorktreeRunner(initial: Map<string, readonly string[]> = new Ma
   return { provisioned, released, changedFilesByPath, runner };
 }
 
-function makeChildResolver(child: { workflow: Workflow; bytes: Buffer }): ChildWorkflowResolver {
+function makeChildResolver(child: {
+  flow: CompiledFlow;
+  bytes: Buffer;
+}): ChildCompiledFlowResolver {
   return () => child;
 }
 
-let runRootBase: string;
+let runFolderBase: string;
 let projectRoot: string;
 
 beforeEach(() => {
-  runRootBase = mkdtempSync(join(tmpdir(), 'circuit-next-fanout-'));
+  runFolderBase = mkdtempSync(join(tmpdir(), 'circuit-next-fanout-'));
   projectRoot = mkdtempSync(join(tmpdir(), 'circuit-next-fanout-project-'));
 });
 
 afterEach(() => {
-  rmSync(runRootBase, { recursive: true, force: true });
+  rmSync(runFolderBase, { recursive: true, force: true });
   rmSync(projectRoot, { recursive: true, force: true });
 });
 
 describe('fanout runtime', () => {
   it('fans out to two static branches, picks the winner under pick-winner, and cleans up worktrees', async () => {
-    const parent = buildParentWorkflow({
+    const parent = buildParentCompiledFlow({
       branches: 'static-two',
       policy: 'pick-winner',
       admit: ['ok'],
     });
     const parentBytes = Buffer.from(JSON.stringify(parent));
-    const child = buildChildWorkflow();
+    const child = buildChildCompiledFlow();
     const childBytes = Buffer.from(JSON.stringify(child));
 
     const stubChildRunner = makeStubChildRunner({
       verdicts: { 'branch-a': 'ok', 'branch-b': 'ok' },
     });
     const worktree = makeStubWorktreeRunner();
-    const childResolver = makeChildResolver({ workflow: child, bytes: childBytes });
+    const childResolver = makeChildResolver({ flow: child, bytes: childBytes });
 
     const parentRunId = RunId.parse('22222222-2222-2222-2222-222222222221');
-    const parentRunRoot = join(runRootBase, parentRunId as unknown as string);
+    const parentRunFolder = join(runFolderBase, parentRunId as unknown as string);
 
-    const outcome = await runWorkflow({
-      runRoot: parentRunRoot,
-      workflow: parent,
-      workflowBytes: parentBytes,
+    const outcome = await runCompiledFlow({
+      runFolder: parentRunFolder,
+      flow: parent,
+      flowBytes: parentBytes,
       runId: parentRunId,
       goal: 'fanout pick-winner test',
-      rigor: 'standard',
-      lane: lane(),
+      depth: 'standard',
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 27, 12, 0, 0)),
-      dispatcher: unusedDispatcher(),
+      relayer: unusedRelayer(),
       projectRoot,
-      childWorkflowResolver: childResolver,
+      childCompiledFlowResolver: childResolver,
       childRunner: stubChildRunner,
       worktreeRunner: worktree.runner,
     });
 
     expect(outcome.result.outcome).toBe('complete');
 
-    const fanoutStarted = outcome.events.find((e) => e.kind === 'fanout.started');
+    const fanoutStarted = outcome.trace_entrys.find((e) => e.kind === 'fanout.started');
     if (fanoutStarted?.kind !== 'fanout.started') throw new Error('expected fanout.started');
     expect(fanoutStarted.branch_ids).toEqual(['a', 'b']);
     expect(fanoutStarted.on_child_failure).toBe('abort-all');
 
-    const fanoutJoined = outcome.events.find((e) => e.kind === 'fanout.joined');
+    const fanoutJoined = outcome.trace_entrys.find((e) => e.kind === 'fanout.joined');
     if (fanoutJoined?.kind !== 'fanout.joined') throw new Error('expected fanout.joined');
     expect(fanoutJoined.policy).toBe('pick-winner');
     expect(fanoutJoined.selected_branch_id).toBe('a');
-    expect(fanoutJoined.aggregate_path).toBe('artifacts/aggregate.json');
+    expect(fanoutJoined.aggrecheck_path).toBe('reports/aggrecheck.json');
     expect(fanoutJoined.branches_completed).toBe(2);
     expect(fanoutJoined.branches_failed).toBe(0);
 
-    // Aggregate artifact materialized.
-    const aggregateAbs = join(parentRunRoot, 'artifacts', 'aggregate.json');
-    const aggregateBody = JSON.parse(readFileSync(aggregateAbs, 'utf8')) as {
+    // Aggrecheck report materialized.
+    const aggrecheckAbs = join(parentRunFolder, 'reports', 'aggrecheck.json');
+    const aggrecheckBody = JSON.parse(readFileSync(aggrecheckAbs, 'utf8')) as {
       branch_count: number;
       winner_branch_id?: string;
       branches: ReadonlyArray<{ branch_id: string; admitted: boolean }>;
     };
-    expect(aggregateBody.branch_count).toBe(2);
-    expect(aggregateBody.winner_branch_id).toBe('a');
+    expect(aggrecheckBody.branch_count).toBe(2);
+    expect(aggrecheckBody.winner_branch_id).toBe('a');
 
     // Worktrees provisioned and released for both branches.
     expect(worktree.provisioned.size).toBe(2);
@@ -360,57 +363,57 @@ describe('fanout runtime', () => {
     }
   });
 
-  it('aggregate-only join admits all-complete + parseable branches', async () => {
-    const parent = buildParentWorkflow({
+  it('aggrecheck-only join admits all-complete + parseable branches', async () => {
+    const parent = buildParentCompiledFlow({
       branches: 'static-two',
-      policy: 'aggregate-only',
+      policy: 'aggrecheck-only',
       admit: ['ok'],
     });
     const parentBytes = Buffer.from(JSON.stringify(parent));
-    const child = buildChildWorkflow();
+    const child = buildChildCompiledFlow();
     const childBytes = Buffer.from(JSON.stringify(child));
 
     const stubChildRunner = makeStubChildRunner({
       verdicts: { 'branch-a': 'ok', 'branch-b': 'something-else' },
     });
     const worktree = makeStubWorktreeRunner();
-    const childResolver = makeChildResolver({ workflow: child, bytes: childBytes });
+    const childResolver = makeChildResolver({ flow: child, bytes: childBytes });
 
     const parentRunId = RunId.parse('22222222-2222-2222-2222-222222222222');
-    const parentRunRoot = join(runRootBase, parentRunId as unknown as string);
+    const parentRunFolder = join(runFolderBase, parentRunId as unknown as string);
 
-    const outcome = await runWorkflow({
-      runRoot: parentRunRoot,
-      workflow: parent,
-      workflowBytes: parentBytes,
+    const outcome = await runCompiledFlow({
+      runFolder: parentRunFolder,
+      flow: parent,
+      flowBytes: parentBytes,
       runId: parentRunId,
-      goal: 'fanout aggregate-only test',
-      rigor: 'standard',
-      lane: lane(),
+      goal: 'fanout aggrecheck-only test',
+      depth: 'standard',
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 27, 12, 30, 0)),
-      dispatcher: unusedDispatcher(),
+      relayer: unusedRelayer(),
       projectRoot,
-      childWorkflowResolver: childResolver,
+      childCompiledFlowResolver: childResolver,
       childRunner: stubChildRunner,
       worktreeRunner: worktree.runner,
     });
 
-    // aggregate-only passes when both branches close cleanly with parseable bodies — verdicts irrelevant.
+    // aggrecheck-only passes when both branches close cleanly with parseable bodies — verdicts irrelevant.
     expect(outcome.result.outcome).toBe('complete');
-    const fanoutJoined = outcome.events.find((e) => e.kind === 'fanout.joined');
+    const fanoutJoined = outcome.trace_entrys.find((e) => e.kind === 'fanout.joined');
     if (fanoutJoined?.kind !== 'fanout.joined') throw new Error('expected fanout.joined');
-    expect(fanoutJoined.policy).toBe('aggregate-only');
+    expect(fanoutJoined.policy).toBe('aggrecheck-only');
     expect(fanoutJoined.selected_branch_id).toBeUndefined();
   });
 
   it('disjoint-merge fails when two branches modify the same file', async () => {
-    const parent = buildParentWorkflow({
+    const parent = buildParentCompiledFlow({
       branches: 'static-two',
       policy: 'disjoint-merge',
       admit: ['ok'],
     });
     const parentBytes = Buffer.from(JSON.stringify(parent));
-    const child = buildChildWorkflow();
+    const child = buildChildCompiledFlow();
     const childBytes = Buffer.from(JSON.stringify(child));
 
     const stubChildRunner = makeStubChildRunner({
@@ -427,23 +430,23 @@ describe('fanout runtime', () => {
       // Both branches "modified" the same file.
       worktree.changedFilesByPath.set(input.worktreePath, ['shared.txt']);
     };
-    const childResolver = makeChildResolver({ workflow: child, bytes: childBytes });
+    const childResolver = makeChildResolver({ flow: child, bytes: childBytes });
 
     const parentRunId = RunId.parse('22222222-2222-2222-2222-222222222223');
-    const parentRunRoot = join(runRootBase, parentRunId as unknown as string);
+    const parentRunFolder = join(runFolderBase, parentRunId as unknown as string);
 
-    const outcome = await runWorkflow({
-      runRoot: parentRunRoot,
-      workflow: parent,
-      workflowBytes: parentBytes,
+    const outcome = await runCompiledFlow({
+      runFolder: parentRunFolder,
+      flow: parent,
+      flowBytes: parentBytes,
       runId: parentRunId,
       goal: 'fanout disjoint-merge collision test',
-      rigor: 'standard',
-      lane: lane(),
+      depth: 'standard',
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 27, 13, 0, 0)),
-      dispatcher: unusedDispatcher(),
+      relayer: unusedRelayer(),
       projectRoot,
-      childWorkflowResolver: childResolver,
+      childCompiledFlowResolver: childResolver,
       childRunner: stubChildRunner,
       worktreeRunner: worktree.runner,
     });
@@ -453,28 +456,28 @@ describe('fanout runtime', () => {
     expect(outcome.result.reason).toContain('shared.txt');
   });
 
-  it('expands dynamic branches from a source artifact via $item.<key> templates', async () => {
-    // For dynamic, the parent recipe needs a synthesis upstream that
-    // materializes the source artifact before fanout reads it. The
-    // simplest path: build a 2-step parent (synthesis → fanout) where
-    // synthesis writes source.json via the injected synthesisWriter.
-    const child = buildChildWorkflow();
+  it('expands dynamic branches from a source report via $item.<key> templates', async () => {
+    // For dynamic, the parent schematic needs a compose upstream that
+    // materializes the source report before fanout reads it. The
+    // simplest path: build a 2-step parent (compose → fanout) where
+    // compose writes source.json via the injected composeWriter.
+    const child = buildChildCompiledFlow();
     const childBytes = Buffer.from(JSON.stringify(child));
 
-    const dynamicParent = Workflow.parse({
+    const dynamicParent = CompiledFlow.parse({
       schema_version: '2',
       id: PARENT_WORKFLOW_ID as unknown as string,
       version: '0.1.0',
       purpose: 'fanout dynamic test',
       entry: { signals: { include: ['fanout-dyn'], exclude: [] }, intent_prefixes: ['fanout-dyn'] },
       entry_modes: [
-        { name: 'fanout-dyn', start_at: 'seed-source', rigor: 'standard', description: 'Dynamic.' },
+        { name: 'fanout-dyn', start_at: 'seed-source', depth: 'standard', description: 'Dynamic.' },
       ],
-      phases: [
-        { id: 'plan-phase', title: 'Plan', canonical: 'plan', steps: ['seed-source'] },
-        { id: 'act-phase', title: 'Act', canonical: 'act', steps: ['fanout-step'] },
+      stages: [
+        { id: 'plan-stage', title: 'Plan', canonical: 'plan', steps: ['seed-source'] },
+        { id: 'act-stage', title: 'Act', canonical: 'act', steps: ['fanout-step'] },
       ],
-      spine_policy: {
+      stage_path_policy: {
         mode: 'partial',
         omits: ['frame', 'analyze', 'verify', 'review', 'close'],
         rationale: 'narrow dynamic-fanout test.',
@@ -482,16 +485,16 @@ describe('fanout runtime', () => {
       steps: [
         {
           id: 'seed-source',
-          title: 'Seed source artifact for fanout expansion',
+          title: 'Seed source report for fanout expansion',
           protocol: 'seed-source@v1',
           reads: [],
           routes: { pass: 'fanout-step' },
           executor: 'orchestrator',
-          kind: 'synthesis',
-          writes: { artifact: { path: 'artifacts/source.json', schema: 'fanout-source@v1' } },
-          gate: {
+          kind: 'compose',
+          writes: { report: { path: 'reports/source.json', schema: 'fanout-source@v1' } },
+          check: {
             kind: 'schema_sections',
-            source: { kind: 'artifact', ref: 'artifact' },
+            source: { kind: 'report', ref: 'report' },
             required: ['items'],
           },
         },
@@ -505,28 +508,28 @@ describe('fanout runtime', () => {
           kind: 'fanout',
           branches: {
             kind: 'dynamic',
-            source_artifact: 'artifacts/source.json',
+            source_report: 'reports/source.json',
             items_path: 'items',
             template: {
               branch_id: '$item.id',
-              workflow_ref: {
-                workflow_id: CHILD_WORKFLOW_ID as unknown as string,
+              flow_ref: {
+                flow_id: CHILD_WORKFLOW_ID as unknown as string,
                 entry_mode: 'default',
               },
               goal: '$item.goal',
-              rigor: 'standard',
+              depth: 'standard',
             },
           },
           concurrency: { kind: 'bounded', max: 4 },
           on_child_failure: 'continue-others',
           writes: {
-            branches_dir: 'artifacts/branches',
-            aggregate: { path: 'artifacts/aggregate.json', schema: 'fanout-aggregate@v1' },
+            branches_dir: 'reports/branches',
+            aggrecheck: { path: 'reports/aggrecheck.json', schema: 'fanout-aggrecheck@v1' },
           },
-          gate: {
-            kind: 'fanout_aggregate',
-            source: { kind: 'fanout_results', ref: 'aggregate' },
-            join: { policy: 'aggregate-only' },
+          check: {
+            kind: 'fanout_aggrecheck',
+            source: { kind: 'fanout_results', ref: 'aggrecheck' },
+            join: { policy: 'aggrecheck-only' },
             verdicts: { admit: ['ok'] },
           },
         },
@@ -534,11 +537,11 @@ describe('fanout runtime', () => {
     });
     const dynamicParentBytes = Buffer.from(JSON.stringify(dynamicParent));
 
-    const seedSourceArtifact = (input: {
-      runRoot: string;
-      step: { writes: { artifact: { path: string } } };
+    const seedSourceReport = (input: {
+      runFolder: string;
+      step: { writes: { report: { path: string } } };
     }): void => {
-      const dest = join(input.runRoot, input.step.writes.artifact.path);
+      const dest = join(input.runFolder, input.step.writes.report.path);
       mkdirSync(dirname(dest), { recursive: true });
       writeFileSync(
         dest,
@@ -559,101 +562,101 @@ describe('fanout runtime', () => {
       verdicts: { 'batch-1': 'ok', 'batch-2': 'ok' },
     });
     const worktree = makeStubWorktreeRunner();
-    const childResolver = makeChildResolver({ workflow: child, bytes: childBytes });
+    const childResolver = makeChildResolver({ flow: child, bytes: childBytes });
 
     const parentRunId = RunId.parse('22222222-2222-2222-2222-222222222224');
-    const parentRunRoot = join(runRootBase, parentRunId as unknown as string);
+    const parentRunFolder = join(runFolderBase, parentRunId as unknown as string);
 
-    const outcome = await runWorkflow({
-      runRoot: parentRunRoot,
-      workflow: dynamicParent,
-      workflowBytes: dynamicParentBytes,
+    const outcome = await runCompiledFlow({
+      runFolder: parentRunFolder,
+      flow: dynamicParent,
+      flowBytes: dynamicParentBytes,
       runId: parentRunId,
       goal: 'dynamic fanout test',
-      rigor: 'standard',
-      lane: lane(),
+      depth: 'standard',
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 27, 14, 0, 0)),
-      dispatcher: unusedDispatcher(),
+      relayer: unusedRelayer(),
       projectRoot,
-      synthesisWriter: seedSourceArtifact as never,
-      childWorkflowResolver: childResolver,
+      composeWriter: seedSourceReport as never,
+      childCompiledFlowResolver: childResolver,
       childRunner: stubChildRunner,
       worktreeRunner: worktree.runner,
     });
 
     expect(outcome.result.outcome).toBe('complete');
 
-    const fanoutStarted = outcome.events.find((e) => e.kind === 'fanout.started');
+    const fanoutStarted = outcome.trace_entrys.find((e) => e.kind === 'fanout.started');
     if (fanoutStarted?.kind !== 'fanout.started') throw new Error('expected fanout.started');
     expect(fanoutStarted.branch_ids).toEqual(['batch-1', 'batch-2']);
 
-    const fanoutJoined = outcome.events.find((e) => e.kind === 'fanout.joined');
+    const fanoutJoined = outcome.trace_entrys.find((e) => e.kind === 'fanout.joined');
     if (fanoutJoined?.kind !== 'fanout.joined') throw new Error('expected fanout.joined');
-    expect(fanoutJoined.policy).toBe('aggregate-only');
+    expect(fanoutJoined.policy).toBe('aggrecheck-only');
     expect(fanoutJoined.branches_completed).toBe(2);
   });
 
   it('continue-others lets the parent join after one branch aborts (the other still completes)', async () => {
-    // Coverage gap from the Phase 4 audit: continue-others was only
+    // Coverage gap from the Stage 4 audit: continue-others was only
     // exercised in the dynamic fixture where every branch succeeded.
-    // This case proves the parent does NOT propagate a single child
+    // This case proves the parent does NOT propacheck a single child
     // abort when on_child_failure='continue-others' is set.
-    const parent = buildParentWorkflow({
+    const parent = buildParentCompiledFlow({
       branches: 'static-two',
-      policy: 'aggregate-only',
+      policy: 'aggrecheck-only',
       on_child_failure: 'continue-others',
     });
     const parentBytes = Buffer.from(JSON.stringify(parent));
-    const child = buildChildWorkflow();
+    const child = buildChildCompiledFlow();
     const childBytes = Buffer.from(JSON.stringify(child));
 
     const stubChildRunner = makeStubChildRunner({
       verdicts: { 'branch-a': 'aborted', 'branch-b': 'ok' },
     });
     const worktree = makeStubWorktreeRunner();
-    const childResolver = makeChildResolver({ workflow: child, bytes: childBytes });
+    const childResolver = makeChildResolver({ flow: child, bytes: childBytes });
 
     const parentRunId = RunId.parse('22222222-2222-2222-2222-22222222222a');
-    const parentRunRoot = join(runRootBase, parentRunId as unknown as string);
+    const parentRunFolder = join(runFolderBase, parentRunId as unknown as string);
 
-    const outcome = await runWorkflow({
-      runRoot: parentRunRoot,
-      workflow: parent,
-      workflowBytes: parentBytes,
+    const outcome = await runCompiledFlow({
+      runFolder: parentRunFolder,
+      flow: parent,
+      flowBytes: parentBytes,
       runId: parentRunId,
       goal: 'fanout continue-others test',
-      rigor: 'standard',
-      lane: lane(),
+      depth: 'standard',
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 27, 15, 0, 0)),
-      dispatcher: unusedDispatcher(),
+      relayer: unusedRelayer(),
       projectRoot,
-      childWorkflowResolver: childResolver,
+      childCompiledFlowResolver: childResolver,
       childRunner: stubChildRunner,
       worktreeRunner: worktree.runner,
     });
 
     // continue-others lets the fanout STEP complete (one branch
-    // succeeded, one failed, the loop did not propagate the failure).
-    // The aggregate-only join then evaluates: it requires every
+    // succeeded, one failed, the loop did not propacheck the failure).
+    // The aggrecheck-only join then evaluates: it requires every
     // branch to close cleanly with a parseable body, so it fails —
-    // and the parent run aborts at the gate. The behavioral
+    // and the parent run aborts at the check. The behavioral
     // distinction continue-others draws is "the loop continues vs.
     // the loop aborts the moment one branch fails," which the
-    // events surface and we pin here. The parent outcome is
+    // trace_entrys surface and we pin here. The parent outcome is
     // intentionally pinned too so a future regression that
-    // accidentally skipped the gate fail (or accidentally aborted
+    // accidentally skipped the check fail (or accidentally aborted
     // mid-loop) flips this test red.
-    const fanoutStarted = outcome.events.find((e) => e.kind === 'fanout.started');
+    const fanoutStarted = outcome.trace_entrys.find((e) => e.kind === 'fanout.started');
     if (fanoutStarted?.kind !== 'fanout.started') throw new Error('expected fanout.started');
     expect(fanoutStarted.on_child_failure).toBe('continue-others');
 
-    const fanoutJoined = outcome.events.find((e) => e.kind === 'fanout.joined');
+    const fanoutJoined = outcome.trace_entrys.find((e) => e.kind === 'fanout.joined');
     if (fanoutJoined?.kind !== 'fanout.joined') throw new Error('expected fanout.joined');
     expect(fanoutJoined.branches_completed).toBe(1);
     expect(fanoutJoined.branches_failed).toBe(1);
 
     // The parent ultimately aborts because the join policy
-    // (aggregate-only) requires every branch to complete cleanly.
+    // (aggrecheck-only) requires every branch to complete cleanly.
     expect(outcome.result.outcome).toBe('aborted');
 
     // Both worktrees were still released — even on the failed branch.
@@ -667,36 +670,36 @@ describe('fanout runtime', () => {
   it('abort-all aborts the parent on first branch failure (default failure policy)', async () => {
     // Inverse of the continue-others case. abort-all is the default,
     // and a single child abort must cascade to a parent abort.
-    const parent = buildParentWorkflow({
+    const parent = buildParentCompiledFlow({
       branches: 'static-two',
-      policy: 'aggregate-only',
+      policy: 'aggrecheck-only',
       on_child_failure: 'abort-all',
     });
     const parentBytes = Buffer.from(JSON.stringify(parent));
-    const child = buildChildWorkflow();
+    const child = buildChildCompiledFlow();
     const childBytes = Buffer.from(JSON.stringify(child));
 
     const stubChildRunner = makeStubChildRunner({
       verdicts: { 'branch-a': 'aborted', 'branch-b': 'ok' },
     });
     const worktree = makeStubWorktreeRunner();
-    const childResolver = makeChildResolver({ workflow: child, bytes: childBytes });
+    const childResolver = makeChildResolver({ flow: child, bytes: childBytes });
 
     const parentRunId = RunId.parse('22222222-2222-2222-2222-22222222222b');
-    const parentRunRoot = join(runRootBase, parentRunId as unknown as string);
+    const parentRunFolder = join(runFolderBase, parentRunId as unknown as string);
 
-    const outcome = await runWorkflow({
-      runRoot: parentRunRoot,
-      workflow: parent,
-      workflowBytes: parentBytes,
+    const outcome = await runCompiledFlow({
+      runFolder: parentRunFolder,
+      flow: parent,
+      flowBytes: parentBytes,
       runId: parentRunId,
       goal: 'fanout abort-all test',
-      rigor: 'standard',
-      lane: lane(),
+      depth: 'standard',
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 27, 15, 30, 0)),
-      dispatcher: unusedDispatcher(),
+      relayer: unusedRelayer(),
       projectRoot,
-      childWorkflowResolver: childResolver,
+      childCompiledFlowResolver: childResolver,
       childRunner: stubChildRunner,
       worktreeRunner: worktree.runner,
     });

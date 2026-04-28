@@ -1,23 +1,23 @@
-import type { Event, RunClosedOutcome } from '../schemas/event.js';
-import type { RunLog } from '../schemas/run.js';
+import type { RunTrace } from '../schemas/run.js';
 import {
   Snapshot,
   type SnapshotStatus,
   type StepState,
   type StepStatus,
 } from '../schemas/snapshot.js';
+import type { RunClosedOutcome, TraceEntry } from '../schemas/trace-entry.js';
 
-// Pure reducer: (RunLog) -> Snapshot. Authored against production
+// Pure reducer: (RunTrace) -> Snapshot. Authored against production
 // src/schemas/snapshot.ts (run.snapshot == state.json).
 //
-// Design: `reduce = fold(applyEvent, seed)`.
-// Seed is produced by the `run.bootstrapped` event (the first event in
-// any well-formed RunLog per RUN-I1). Subsequent events mutate a
+// Design: `reduce = fold(applyTraceEntry, seed)`.
+// Seed is produced by the `run.bootstrapped` trace_entry (the first trace_entry in
+// any well-formed RunTrace per RUN-I1). Subsequent trace_entrys mutate a
 // structural clone of the prior snapshot; we never mutate in place.
 //
-// `events_consumed` is bound to log length at every step, so a prefix
+// `trace_entries_consumed` is bound to log length at every step, so a prefix
 // snapshot equals `reduce(log.slice(0, k))` exactly. This is the
-// property dogfood-run-0's delete-an-event mismatch test depends on.
+// property runtime-proof's delete-an-trace_entry mismatch test depends on.
 
 const OUTCOME_TO_STATUS: Record<RunClosedOutcome, Exclude<SnapshotStatus, 'in_progress'>> = {
   complete: 'complete',
@@ -57,54 +57,54 @@ function mutateStep(
   return upserted;
 }
 
-function applyEvent(prev: Snapshot, event: Event): Snapshot {
-  // Non-bootstrap events assume prev exists. Bootstrap is handled outside
+function applyTraceEntry(prev: Snapshot, trace_entry: TraceEntry): Snapshot {
+  // Non-bootstrap trace_entrys assume prev exists. Bootstrap is handled outside
   // this function because it seeds from nothing.
   const next: Snapshot = {
     ...prev,
     steps: prev.steps.map(cloneStepState),
-    events_consumed: prev.events_consumed + 1,
-    updated_at: event.recorded_at,
+    trace_entries_consumed: prev.trace_entries_consumed + 1,
+    updated_at: trace_entry.recorded_at,
   };
 
-  switch (event.kind) {
+  switch (trace_entry.kind) {
     case 'run.bootstrapped':
-      // A second bootstrap violates RUN-I4 and is rejected at RunLog
+      // A second bootstrap violates RUN-I4 and is rejected at RunTrace
       // parse time. If we reach here with a second bootstrap, the caller
       // passed an unvalidated log; we surface the violation loudly.
       throw new Error(
-        'reducer: duplicate run.bootstrapped event; RunLog parsing should have rejected this',
+        'reducer: duplicate run.bootstrapped trace_entry; RunTrace parsing should have rejected this',
       );
     case 'step.entered': {
-      const stepId = event.step_id as unknown as string;
+      const stepId = trace_entry.step_id as unknown as string;
       return {
         ...next,
-        current_step: event.step_id,
+        current_step: trace_entry.step_id,
         steps: mutateStep(next.steps, stepId, (s) => ({
           ...s,
           status: 'in_progress' as StepStatus,
-          attempts: Math.max(s.attempts, event.attempt),
+          attempts: Math.max(s.attempts, trace_entry.attempt),
         })),
       };
     }
-    case 'step.artifact_written': {
-      const stepId = event.step_id as unknown as string;
+    case 'step.report_written': {
+      const stepId = trace_entry.step_id as unknown as string;
       return {
         ...next,
         steps: mutateStep(next.steps, stepId, (s) => ({
           ...s,
-          last_artifact_path: event.artifact_path,
+          last_report_path: trace_entry.report_path,
         })),
       };
     }
-    case 'gate.evaluated': {
-      const stepId = event.step_id as unknown as string;
-      if (event.outcome === 'fail') {
+    case 'check.evaluated': {
+      const stepId = trace_entry.step_id as unknown as string;
+      if (trace_entry.outcome === 'fail') {
         return {
           ...next,
           steps: mutateStep(next.steps, stepId, (s) => ({
             ...s,
-            status: 'gate_failed' as StepStatus,
+            status: 'check_failed' as StepStatus,
           })),
         };
       }
@@ -113,17 +113,17 @@ function applyEvent(prev: Snapshot, event: Event): Snapshot {
     case 'checkpoint.requested':
       return next;
     case 'checkpoint.resolved': {
-      const stepId = event.step_id as unknown as string;
+      const stepId = trace_entry.step_id as unknown as string;
       return {
         ...next,
         steps: mutateStep(next.steps, stepId, (s) => ({
           ...s,
-          last_checkpoint_selection: event.selection,
+          last_checkpoint_selection: trace_entry.selection,
         })),
       };
     }
-    case 'dispatch.started': {
-      const stepId = event.step_id as unknown as string;
+    case 'relay.started': {
+      const stepId = trace_entry.step_id as unknown as string;
       return {
         ...next,
         steps: mutateStep(next.steps, stepId, (s) => ({
@@ -132,17 +132,17 @@ function applyEvent(prev: Snapshot, event: Event): Snapshot {
         })),
       };
     }
-    case 'dispatch.request':
-    case 'dispatch.failed':
-    case 'dispatch.receipt':
-    case 'dispatch.result':
-      // Durable dispatch transcript events. Carry request/receipt/result
+    case 'relay.request':
+    case 'relay.failed':
+    case 'relay.receipt':
+    case 'relay.result':
+      // Durable relay transcript trace_entrys. Carry request/receipt/result
       // identifiers for the round-trip close criterion; no snapshot-shape
-      // change — the dispatch outcome still flows into the step via
+      // change — the relay outcome still flows into the step via
       // step.completed.
       return next;
-    case 'dispatch.completed':
-      // Dispatch outcomes flow into the step via step.completed; no
+    case 'relay.completed':
+      // Relay outcomes flow into the step via step.completed; no
       // snapshot-shape change here.
       return next;
     case 'sub_run.started':
@@ -151,25 +151,25 @@ function applyEvent(prev: Snapshot, event: Event): Snapshot {
     case 'fanout.branch_started':
     case 'fanout.branch_completed':
     case 'fanout.joined':
-      // Sub-run / fanout linkage events are audit-only at this slice;
+      // Sub-run / fanout linkage trace_entrys are audit-only at this slice;
       // the parent step's status flows through step.entered / step.completed
       // / step.aborted just like other orchestrator-executed steps. The
-      // child run's own snapshot lives in the child run-root and is not
+      // child run's own snapshot lives in the child run-folder and is not
       // merged into the parent (RUN-I3 scoping).
       return next;
     case 'step.completed': {
-      const stepId = event.step_id as unknown as string;
+      const stepId = trace_entry.step_id as unknown as string;
       return {
         ...next,
         steps: mutateStep(next.steps, stepId, (s) => ({
           ...s,
           status: 'complete' as StepStatus,
-          last_route_taken: event.route_taken,
+          last_route_taken: trace_entry.route_taken,
         })),
       };
     }
     case 'step.aborted': {
-      const stepId = event.step_id as unknown as string;
+      const stepId = trace_entry.step_id as unknown as string;
       return {
         ...next,
         steps: mutateStep(next.steps, stepId, (s) => ({
@@ -181,49 +181,51 @@ function applyEvent(prev: Snapshot, event: Event): Snapshot {
     case 'run.closed':
       return {
         ...next,
-        status: OUTCOME_TO_STATUS[event.outcome],
+        status: OUTCOME_TO_STATUS[trace_entry.outcome],
       };
   }
 }
 
-function seedFromBootstrap(event: Event, totalEvents: number): Snapshot {
-  if (event.kind !== 'run.bootstrapped') {
+function seedFromBootstrap(trace_entry: TraceEntry, totalTraceEntrys: number): Snapshot {
+  if (trace_entry.kind !== 'run.bootstrapped') {
     throw new Error(
-      `reducer: first event must be run.bootstrapped, got ${event.kind}; RunLog parsing should have rejected this`,
+      `reducer: first trace_entry must be run.bootstrapped, got ${trace_entry.kind}; RunTrace parsing should have rejected this`,
     );
   }
   const seed = {
     schema_version: 1 as const,
-    run_id: event.run_id,
-    workflow_id: event.workflow_id,
-    rigor: event.rigor,
-    lane: event.lane,
+    run_id: trace_entry.run_id,
+    flow_id: trace_entry.flow_id,
+    depth: trace_entry.depth,
+    change_kind: trace_entry.change_kind,
     status: 'in_progress' as SnapshotStatus,
     steps: [] as StepState[],
-    events_consumed: 1,
-    manifest_hash: event.manifest_hash,
-    updated_at: event.recorded_at,
-    ...(event.invocation_id === undefined ? {} : { invocation_id: event.invocation_id }),
+    trace_entries_consumed: 1,
+    manifest_hash: trace_entry.manifest_hash,
+    updated_at: trace_entry.recorded_at,
+    ...(trace_entry.invocation_id === undefined
+      ? {}
+      : { invocation_id: trace_entry.invocation_id }),
   };
-  // Ensure events_consumed starts at 1 for the bootstrap event itself;
-  // further events advance it one-by-one.
-  void totalEvents;
+  // Ensure trace_entries_consumed starts at 1 for the bootstrap trace_entry itself;
+  // further trace_entrys advance it one-by-one.
+  void totalTraceEntrys;
   return Snapshot.parse(seed);
 }
 
-export function reduce(log: RunLog): Snapshot {
+export function reduce(log: RunTrace): Snapshot {
   if (log.length === 0) {
-    throw new Error('reducer: empty RunLog');
+    throw new Error('reducer: empty RunTrace');
   }
   const first = log[0];
-  if (first === undefined) throw new Error('reducer: empty RunLog');
+  if (first === undefined) throw new Error('reducer: empty RunTrace');
   let state: Snapshot = seedFromBootstrap(first, log.length);
   for (let i = 1; i < log.length; i++) {
     const ev = log[i];
     if (ev === undefined) continue;
-    state = applyEvent(state, ev);
+    state = applyTraceEntry(state, ev);
   }
   // Final validation: the snapshot must parse cleanly, which includes
-  // events_consumed matching log length (RUN-I7 on the projection side).
+  // trace_entries_consumed matching log length (RUN-I7 on the projection side).
   return Snapshot.parse(state);
 }

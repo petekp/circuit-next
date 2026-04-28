@@ -8,8 +8,8 @@ import {
 } from '../../src/schemas/flow-schematic.js';
 import { StepId } from '../../src/schemas/ids.js';
 
-const blockCatalogPath = 'docs/workflows/block-catalog.json';
-const fixSchematicPath = 'src/workflows/fix/schematic.json';
+const blockCatalogPath = 'docs/flows/block-catalog.json';
+const fixSchematicPath = 'src/flows/fix/schematic.json';
 
 function readJson(path: string): unknown {
   return JSON.parse(readFileSync(path, 'utf8')) as unknown;
@@ -43,7 +43,7 @@ describe('flow schematic schema — active Fix schematic', () => {
   it('keeps Fix human-decision evidence bound through a generic evidence alias', () => {
     const schematic = parseFixSchematic();
     expect(schematic.contract_aliases).toContainEqual({
-      generic: 'workflow.evidence@v1',
+      generic: 'flow.evidence@v1',
       actual: 'fix.diagnosis@v1',
     });
   });
@@ -64,9 +64,9 @@ describe('flow schematic schema — active Fix schematic', () => {
     ]);
   });
 
-  it('keeps Fix phase bindings aligned with the intended flow shape', () => {
+  it('keeps Fix stage bindings aligned with the intended flow shape', () => {
     const schematic = parseFixSchematic();
-    expect(schematic.items.map((item) => [item.id as unknown as string, item.phase])).toEqual([
+    expect(schematic.items.map((item) => [item.id as unknown as string, item.stage])).toEqual([
       ['fix-frame', 'frame'],
       ['fix-gather-context', 'analyze'],
       ['fix-diagnose', 'analyze'],
@@ -83,16 +83,16 @@ describe('flow schematic schema — active Fix schematic', () => {
   it('keeps Fix execution bindings aligned with the intended compiler shape', () => {
     const schematic = parseFixSchematic();
     expect(schematic.items.map((item) => [item.id as unknown as string, item.execution])).toEqual([
-      ['fix-frame', { kind: 'synthesis' }],
-      ['fix-gather-context', { kind: 'dispatch', role: 'researcher' }],
-      ['fix-diagnose', { kind: 'dispatch', role: 'researcher' }],
+      ['fix-frame', { kind: 'compose' }],
+      ['fix-gather-context', { kind: 'relay', role: 'researcher' }],
+      ['fix-diagnose', { kind: 'relay', role: 'researcher' }],
       ['fix-no-repro-decision', { kind: 'checkpoint' }],
-      ['fix-act', { kind: 'dispatch', role: 'implementer' }],
+      ['fix-act', { kind: 'relay', role: 'implementer' }],
       ['fix-verify', { kind: 'verification' }],
-      ['fix-review', { kind: 'dispatch', role: 'reviewer' }],
-      ['fix-close-lite', { kind: 'synthesis' }],
-      ['fix-close', { kind: 'synthesis' }],
-      ['fix-handoff', { kind: 'synthesis' }],
+      ['fix-review', { kind: 'relay', role: 'reviewer' }],
+      ['fix-close-lite', { kind: 'compose' }],
+      ['fix-close', { kind: 'compose' }],
+      ['fix-handoff', { kind: 'compose' }],
     ]);
   });
 
@@ -191,31 +191,31 @@ describe('flow schematic schema — active Fix schematic', () => {
     }
   });
 
-  it('rejects dispatch execution without a role at parse time', () => {
+  it('rejects relay execution without a role at parse time', () => {
     const raw = readJson(fixSchematicPath) as Record<string, unknown>;
     const items = raw.items as Array<Record<string, unknown>>;
     const act = items.find((item) => item.id === 'fix-act');
     if (act === undefined) throw new Error('fixture missing act item');
-    act.execution = { kind: 'dispatch' };
+    act.execution = { kind: 'relay' };
 
     const result = FlowSchematic.safeParse(raw);
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.message).toMatch(/dispatch execution requires a dispatch role/);
+      expect(result.error.message).toMatch(/relay execution requires a relay role/);
     }
   });
 
-  it('rejects dispatch roles on non-dispatch execution at parse time', () => {
+  it('rejects relay roles on non-relay execution at parse time', () => {
     const raw = readJson(fixSchematicPath) as Record<string, unknown>;
     const items = raw.items as Array<Record<string, unknown>>;
     const frame = items.find((item) => item.id === 'fix-frame');
     if (frame === undefined) throw new Error('fixture missing frame item');
-    frame.execution = { kind: 'synthesis', role: 'researcher' };
+    frame.execution = { kind: 'compose', role: 'researcher' };
 
     const result = FlowSchematic.safeParse(raw);
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.message).toMatch(/dispatch role is only allowed for dispatch execution/);
+      expect(result.error.message).toMatch(/relay role is only allowed for relay execution/);
     }
   });
 
@@ -257,20 +257,20 @@ describe('flow schematic schema — active Fix schematic', () => {
     expect(issues).toContainEqual({
       item_id: 'fix-act',
       message:
-        'execution kind "checkpoint" is not compatible with block "act"; expected one of dispatch, synthesis',
+        'execution kind "checkpoint" is not compatible with block "act"; expected one of relay, compose',
     });
   });
 
-  it('reports phase bindings that do not match the selected block', () => {
+  it('reports stage bindings that do not match the selected block', () => {
     const schematic = parseFixSchematic();
     const act = schematic.items.find((item) => (item.id as unknown as string) === 'fix-act');
     if (act === undefined) throw new Error('fix-act missing');
-    act.phase = 'analyze';
+    act.stage = 'analyze';
 
     const issues = validateFlowSchematicCatalogCompatibility(schematic, parseBlockCatalog());
     expect(issues).toContainEqual({
       item_id: 'fix-act',
-      message: 'phase "analyze" is not compatible with block "act"; expected one of act',
+      message: 'stage "analyze" is not compatible with block "act"; expected one of act',
     });
   });
 
@@ -278,13 +278,13 @@ describe('flow schematic schema — active Fix schematic', () => {
     const schematic = parseFixSchematic();
     const verify = schematic.items.find((item) => (item.id as unknown as string) === 'fix-verify');
     if (verify === undefined) throw new Error('fix-verify missing');
-    verify.execution = { kind: 'synthesis' };
+    verify.execution = { kind: 'compose' };
 
     const issues = validateFlowSchematicCatalogCompatibility(schematic, parseBlockCatalog());
     expect(issues).toContainEqual({
       item_id: 'fix-verify',
       message:
-        'execution kind "synthesis" is not compatible with block "run-verification"; expected one of verification',
+        'execution kind "compose" is not compatible with block "run-verification"; expected one of verification',
     });
   });
 
@@ -304,7 +304,7 @@ describe('flow schematic schema — active Fix schematic', () => {
     expect(issues).toContainEqual({
       item_id: 'fix-diagnose',
       message:
-        'inputs do not satisfy block "diagnose"; expected one of [workflow.brief@v1, context.packet@v1]',
+        'inputs do not satisfy block "diagnose"; expected one of [flow.brief@v1, context.packet@v1]',
     });
   });
 
@@ -318,7 +318,7 @@ describe('flow schematic schema — active Fix schematic', () => {
     expect(issues).toContainEqual({
       item_id: 'fix-act',
       message:
-        'inputs do not satisfy block "act"; expected one of [workflow.brief@v1, diagnosis.result@v1] or [workflow.brief@v1, plan.strategy@v1] or [workflow.brief@v1, plan.strategy@v1, diagnosis.result@v1]',
+        'inputs do not satisfy block "act"; expected one of [flow.brief@v1, diagnosis.result@v1] or [flow.brief@v1, plan.strategy@v1] or [flow.brief@v1, plan.strategy@v1, diagnosis.result@v1]',
     });
   });
 
@@ -358,8 +358,7 @@ describe('flow schematic schema — active Fix schematic', () => {
     expect(issues).toEqual([
       {
         item_id: 'fix-close',
-        message:
-          'output "wrong.result@v1" is not compatible with block output "workflow.result@v1"',
+        message: 'output "wrong.result@v1" is not compatible with block output "flow.result@v1"',
       },
     ]);
   });
@@ -367,7 +366,7 @@ describe('flow schematic schema — active Fix schematic', () => {
 
 // Compiler-required metadata. These fields are optional at parse time to
 // avoid breaking candidate schematics mid-upgrade, but their cross-field
-// shape (kind ↔ writes, kind ↔ gate, checkpoint_policy ↔ checkpoint kind)
+// shape (kind ↔ writes, kind ↔ check, checkpoint_policy ↔ checkpoint kind)
 // is enforced when present so authors get clear feedback.
 describe('flow schematic compiler-required metadata', () => {
   function frameItemWithExtras(extras: Record<string, unknown>): Record<string, unknown> {
@@ -375,11 +374,11 @@ describe('flow schematic compiler-required metadata', () => {
       id: 'a-frame',
       block: 'frame',
       title: 'Frame',
-      phase: 'frame',
+      stage: 'frame',
       input: {},
-      output: 'workflow.brief@v1',
+      output: 'flow.brief@v1',
       evidence_requirements: ['scope boundary', 'constraints', 'proof plan'],
-      execution: { kind: 'synthesis' },
+      execution: { kind: 'compose' },
       routes: { continue: '@complete' },
       ...extras,
     };
@@ -390,11 +389,11 @@ describe('flow schematic compiler-required metadata', () => {
       id: 'a-act',
       block: 'act',
       title: 'Act',
-      phase: 'act',
-      input: { brief: 'workflow.brief@v1', plan: 'plan.strategy@v1' },
+      stage: 'act',
+      input: { brief: 'flow.brief@v1', plan: 'plan.strategy@v1' },
       output: 'change.evidence@v1',
       evidence_requirements: ['changed files', 'change rationale', 'declared follow-up proof'],
-      execution: { kind: 'dispatch', role: 'implementer' },
+      execution: { kind: 'relay', role: 'implementer' },
       routes: { continue: '@complete' },
       ...extras,
     };
@@ -414,96 +413,96 @@ describe('flow schematic compiler-required metadata', () => {
     };
   }
 
-  it('accepts a synthesis item with required gate, schema-sections writes, and protocol', () => {
+  it('accepts a compose item with required check, schema-sections writes, and protocol', () => {
     const schematic = baseSchematic([
       frameItemWithExtras({
         protocol: 'demo-frame@v1',
-        writes: { artifact_path: 'artifacts/brief.json' },
-        gate: { required: ['scope', 'constraints'] },
+        writes: { report_path: 'reports/brief.json' },
+        check: { required: ['scope', 'constraints'] },
       }),
     ]);
     const result = FlowSchematic.safeParse(schematic);
     expect(result.success).toBe(true);
   });
 
-  it('rejects synthesis item missing writes.artifact_path', () => {
+  it('rejects compose item missing writes.report_path', () => {
     const schematic = baseSchematic([
       frameItemWithExtras({
         writes: {},
-        gate: { required: ['scope'] },
+        check: { required: ['scope'] },
       }),
     ]);
     const result = FlowSchematic.safeParse(schematic);
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.message).toMatch(/synthesis execution requires writes\.artifact_path/);
+      expect(result.error.message).toMatch(/compose execution requires writes\.report_path/);
     }
   });
 
-  it('rejects synthesis item with gate.allow (checkpoint-only field)', () => {
+  it('rejects compose item with check.allow (checkpoint-only field)', () => {
     const schematic = baseSchematic([
       frameItemWithExtras({
-        writes: { artifact_path: 'artifacts/brief.json' },
-        gate: { required: ['scope'], allow: ['continue'] },
+        writes: { report_path: 'reports/brief.json' },
+        check: { required: ['scope'], allow: ['continue'] },
       }),
     ]);
     const result = FlowSchematic.safeParse(schematic);
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.message).toMatch(/gate\.allow is only allowed for checkpoint execution/);
+      expect(result.error.message).toMatch(/check\.allow is only allowed for checkpoint execution/);
     }
   });
 
-  it('accepts a dispatch item with full path slots and gate.pass', () => {
+  it('accepts a relay item with full path slots and check.pass', () => {
     const schematic = baseSchematic([
       actItemWithExtras({
         protocol: 'demo-act@v1',
         writes: {
-          artifact_path: 'artifacts/change.json',
-          request_path: 'artifacts/dispatch/act.request.json',
-          receipt_path: 'artifacts/dispatch/act.receipt.txt',
-          result_path: 'artifacts/dispatch/act.result.json',
+          report_path: 'reports/change.json',
+          request_path: 'reports/relay/act.request.json',
+          receipt_path: 'reports/relay/act.receipt.txt',
+          result_path: 'reports/relay/act.result.json',
         },
-        gate: { pass: ['accept'] },
+        check: { pass: ['accept'] },
       }),
     ]);
     const result = FlowSchematic.safeParse(schematic);
     expect(result.success).toBe(true);
   });
 
-  it('rejects dispatch item missing receipt_path', () => {
+  it('rejects relay item missing receipt_path', () => {
     const schematic = baseSchematic([
       actItemWithExtras({
         writes: {
-          request_path: 'artifacts/dispatch/act.request.json',
-          result_path: 'artifacts/dispatch/act.result.json',
+          request_path: 'reports/relay/act.request.json',
+          result_path: 'reports/relay/act.result.json',
         },
-        gate: { pass: ['accept'] },
+        check: { pass: ['accept'] },
       }),
     ]);
     const result = FlowSchematic.safeParse(schematic);
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.message).toMatch(/dispatch execution requires writes\.receipt_path/);
+      expect(result.error.message).toMatch(/relay execution requires writes\.receipt_path/);
     }
   });
 
-  it('rejects dispatch item with gate.required (synthesis-only field)', () => {
+  it('rejects relay item with check.required (compose-only field)', () => {
     const schematic = baseSchematic([
       actItemWithExtras({
         writes: {
-          request_path: 'artifacts/dispatch/act.request.json',
-          receipt_path: 'artifacts/dispatch/act.receipt.txt',
-          result_path: 'artifacts/dispatch/act.result.json',
+          request_path: 'reports/relay/act.request.json',
+          receipt_path: 'reports/relay/act.receipt.txt',
+          result_path: 'reports/relay/act.result.json',
         },
-        gate: { pass: ['accept'], required: ['summary'] },
+        check: { pass: ['accept'], required: ['summary'] },
       }),
     ]);
     const result = FlowSchematic.safeParse(schematic);
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.message).toMatch(
-        /gate\.required is only allowed for synthesis\|verification execution/,
+        /check\.required is only allowed for compose\|verification execution/,
       );
     }
   });
@@ -511,8 +510,8 @@ describe('flow schematic compiler-required metadata', () => {
   it('rejects checkpoint_policy on non-checkpoint execution', () => {
     const schematic = baseSchematic([
       frameItemWithExtras({
-        writes: { artifact_path: 'artifacts/brief.json' },
-        gate: { required: ['scope'] },
+        writes: { report_path: 'reports/brief.json' },
+        check: { required: ['scope'] },
         checkpoint_policy: {
           prompt: 'go?',
           choices: [{ id: 'continue' }],
@@ -528,23 +527,23 @@ describe('flow schematic compiler-required metadata', () => {
     }
   });
 
-  it('accepts schematic-level entry, entry_modes, spine_policy, phases', () => {
+  it('accepts schematic-level entry, entry_modes, stage_path_policy, stages', () => {
     const schematic = {
       ...baseSchematic([
         frameItemWithExtras({
-          writes: { artifact_path: 'artifacts/brief.json' },
-          gate: { required: ['scope'] },
+          writes: { report_path: 'reports/brief.json' },
+          check: { required: ['scope'] },
         }),
       ]),
       version: '0.1.0',
       entry: { signals: { include: ['demo'], exclude: [] }, intent_prefixes: ['demo'] },
-      entry_modes: [{ name: 'default', rigor: 'standard', description: 'default mode' }],
-      spine_policy: {
+      entry_modes: [{ name: 'default', depth: 'standard', description: 'default mode' }],
+      stage_path_policy: {
         mode: 'partial',
         omits: ['analyze', 'plan', 'act', 'verify', 'review', 'close'],
-        rationale: 'demo schematic with only a frame phase for testing',
+        rationale: 'demo schematic with only a frame stage for testing',
       },
-      phases: [{ canonical: 'frame', id: 'frame-phase', title: 'Frame' }],
+      stages: [{ canonical: 'frame', id: 'frame-stage', title: 'Frame' }],
     };
     const result = FlowSchematic.safeParse(schematic);
     expect(result.success).toBe(true);
@@ -554,13 +553,13 @@ describe('flow schematic compiler-required metadata', () => {
     const schematic = {
       ...baseSchematic([
         frameItemWithExtras({
-          writes: { artifact_path: 'artifacts/brief.json' },
-          gate: { required: ['scope'] },
+          writes: { report_path: 'reports/brief.json' },
+          check: { required: ['scope'] },
         }),
       ]),
       entry_modes: [
-        { name: 'default', rigor: 'standard', description: 'a' },
-        { name: 'default', rigor: 'lite', description: 'b' },
+        { name: 'default', depth: 'standard', description: 'a' },
+        { name: 'default', depth: 'lite', description: 'b' },
       ],
     };
     const result = FlowSchematic.safeParse(schematic);
@@ -570,34 +569,34 @@ describe('flow schematic compiler-required metadata', () => {
     }
   });
 
-  it('rejects phases entry mismatch with item phase usage', () => {
+  it('rejects stages entry mismatch with item stage usage', () => {
     const schematic = {
       ...baseSchematic([
         frameItemWithExtras({
-          writes: { artifact_path: 'artifacts/brief.json' },
-          gate: { required: ['scope'] },
+          writes: { report_path: 'reports/brief.json' },
+          check: { required: ['scope'] },
         }),
       ]),
-      phases: [{ canonical: 'analyze', id: 'analyze-phase', title: 'Analyze' }],
+      stages: [{ canonical: 'analyze', id: 'analyze-stage', title: 'Analyze' }],
     };
     const result = FlowSchematic.safeParse(schematic);
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.message).toMatch(
-        /phases is missing an entry for canonical phase 'frame'/,
+        /stages is missing an entry for canonical stage 'frame'/,
       );
     }
   });
 
-  it('rejects spine_policy.omits that includes a used canonical phase', () => {
+  it('rejects stage_path_policy.omits that includes a used canonical stage', () => {
     const schematic = {
       ...baseSchematic([
         frameItemWithExtras({
-          writes: { artifact_path: 'artifacts/brief.json' },
-          gate: { required: ['scope'] },
+          writes: { report_path: 'reports/brief.json' },
+          check: { required: ['scope'] },
         }),
       ]),
-      spine_policy: {
+      stage_path_policy: {
         mode: 'partial',
         omits: ['frame'],
         rationale: 'invalid omit because frame is used by an item',
@@ -607,7 +606,7 @@ describe('flow schematic compiler-required metadata', () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.message).toMatch(
-        /canonical phase 'frame' is omitted but used by at least one item/,
+        /canonical stage 'frame' is omitted but used by at least one item/,
       );
     }
   });

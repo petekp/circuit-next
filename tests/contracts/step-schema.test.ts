@@ -15,122 +15,122 @@ describe('Step discriminated union', () => {
     safe_default_choice: choices[0],
   });
 
-  const baseSynthesis = {
+  const baseCompose = {
     id: 'frame',
     title: 'Frame',
     executor: 'orchestrator' as const,
-    kind: 'synthesis' as const,
+    kind: 'compose' as const,
     protocol: 'build-frame@v1',
     reads: [],
-    writes: { artifact: { path: 'artifacts/brief.md', schema: 'brief@v1' } },
-    gate: {
+    writes: { report: { path: 'reports/brief.md', schema: 'brief@v1' } },
+    check: {
       kind: 'schema_sections' as const,
-      source: { kind: 'artifact' as const, ref: 'artifact' },
+      source: { kind: 'report' as const, ref: 'report' },
       required: ['Objective'],
     },
     routes: { pass: '@complete' },
   };
 
-  it('synthesis step is legal', () => {
-    expect(Step.safeParse(baseSynthesis).success).toBe(true);
+  it('compose step is legal', () => {
+    expect(Step.safeParse(baseCompose).success).toBe(true);
   });
 
-  it('verification step is legal and uses schema_sections artifact gating', () => {
+  it('verification step is legal and uses schema_sections report gating', () => {
     const ok = Step.safeParse({
-      ...baseSynthesis,
+      ...baseCompose,
       id: 'verify',
       title: 'Verify',
       kind: 'verification',
       protocol: 'build-verify@v1',
       writes: {
-        artifact: { path: 'artifacts/build/verification.json', schema: 'build.verification@v1' },
+        report: { path: 'reports/build/verification.json', schema: 'build.verification@v1' },
       },
-      gate: {
+      check: {
         kind: 'schema_sections',
-        source: { kind: 'artifact', ref: 'artifact' },
+        source: { kind: 'report', ref: 'report' },
         required: ['overall_status', 'commands'],
       },
     });
     expect(ok.success).toBe(true);
   });
 
-  it('worker + dispatch requires a dispatch role', () => {
+  it('worker + relay requires a relay role', () => {
     const noRole = Step.safeParse({
-      ...baseSynthesis,
+      ...baseCompose,
       executor: 'worker',
-      kind: 'dispatch',
+      kind: 'relay',
       writes: {
         request: 'r.json',
         receipt: 'c.json',
         result: 's.json',
       },
-      gate: {
+      check: {
         kind: 'result_verdict',
-        source: { kind: 'dispatch_result', ref: 'result' },
+        source: { kind: 'relay_result', ref: 'result' },
         pass: ['ok'],
       },
     });
     expect(noRole.success).toBe(false);
 
     const ok = Step.safeParse({
-      ...baseSynthesis,
+      ...baseCompose,
       executor: 'worker',
-      kind: 'dispatch',
+      kind: 'relay',
       role: 'researcher',
       writes: {
         request: 'r.json',
         receipt: 'c.json',
         result: 's.json',
       },
-      gate: {
+      check: {
         kind: 'result_verdict',
-        source: { kind: 'dispatch_result', ref: 'result' },
+        source: { kind: 'relay_result', ref: 'result' },
         pass: ['ok'],
       },
     });
     expect(ok.success).toBe(true);
   });
 
-  it('STEP-I1 — rejects orchestrator + dispatch kind/gate/writes mismatch', () => {
+  it('STEP-I1 — rejects orchestrator + relay kind/check/writes mismatch', () => {
     expectSchemaRejects(
       Step,
       {
-        ...baseSynthesis,
-        kind: 'dispatch',
+        ...baseCompose,
+        kind: 'relay',
         writes: { request: 'r.json', receipt: 'c.json', result: 's.json' },
-        gate: {
+        check: {
           kind: 'result_verdict',
-          source: { kind: 'dispatch_result', ref: 'result' },
+          source: { kind: 'relay_result', ref: 'result' },
           pass: ['ok'],
         },
       },
-      'STEP-I1: orchestrator role is incompatible with dispatch step kind/gate/writes shape',
+      'STEP-I1: orchestrator role is incompatible with relay step kind/check/writes shape',
     );
   });
 
-  it('STEP-I1 — checkpoint step requires checkpoint_selection gate', () => {
+  it('STEP-I1 — checkpoint step requires checkpoint_selection check', () => {
     const bad = Step.safeParse({
-      ...baseSynthesis,
+      ...baseCompose,
       kind: 'checkpoint',
       policy: checkpointPolicy(['continue']),
       writes: { request: 'req.json', response: 'resp.json' },
-      gate: {
+      check: {
         kind: 'schema_sections',
-        source: { kind: 'artifact', ref: 'artifact' },
+        source: { kind: 'report', ref: 'report' },
         required: ['y'],
       },
     });
     expect(bad.success).toBe(false);
   });
 
-  it('STEP-I1 — verification step requires schema_sections gate', () => {
+  it('STEP-I1 — verification step requires schema_sections check', () => {
     const bad = Step.safeParse({
-      ...baseSynthesis,
+      ...baseCompose,
       kind: 'verification',
       writes: {
-        artifact: { path: 'artifacts/build/verification.json', schema: 'build.verification@v1' },
+        report: { path: 'reports/build/verification.json', schema: 'build.verification@v1' },
       },
-      gate: {
+      check: {
         kind: 'checkpoint_selection',
         source: { kind: 'checkpoint_response', ref: 'response' },
         allow: ['continue'],
@@ -139,12 +139,12 @@ describe('Step discriminated union', () => {
     expect(bad.success).toBe(false);
   });
 
-  it('STEP-I6 — verification step rejects dispatch role', () => {
+  it('STEP-I6 — verification step rejects relay role', () => {
     const bad = Step.safeParse({
-      ...baseSynthesis,
+      ...baseCompose,
       kind: 'verification',
       writes: {
-        artifact: { path: 'artifacts/build/verification.json', schema: 'build.verification@v1' },
+        report: { path: 'reports/build/verification.json', schema: 'build.verification@v1' },
       },
       role: 'implementer',
     });
@@ -153,7 +153,7 @@ describe('Step discriminated union', () => {
 
   it('STEP-I2 — rejects empty routes map', () => {
     const bad = Step.safeParse({
-      ...baseSynthesis,
+      ...baseCompose,
       routes: {},
     });
     expect(bad.success).toBe(false);
@@ -167,35 +167,35 @@ describe('Step discriminated union', () => {
       { max_attempts: 1, wall_clock_ms: 0 },
       { max_attempts: 1, wall_clock_ms: 1.5 },
     ]) {
-      expect(Step.safeParse({ ...baseSynthesis, budgets }).success).toBe(false);
+      expect(Step.safeParse({ ...baseCompose, budgets }).success).toBe(false);
     }
   });
 
   it('STEP-I7 — rejects a step without protocol', () => {
-    const { protocol: _protocol, ...withoutProtocol } = baseSynthesis;
+    const { protocol: _protocol, ...withoutProtocol } = baseCompose;
     const bad = Step.safeParse(withoutProtocol);
     expect(bad.success).toBe(false);
   });
 
-  it('SynthesisStep rejects gate.source.ref naming a missing writes slot (STEP-I3)', () => {
+  it('ComposeStep rejects check.source.ref naming a missing writes slot (STEP-I3)', () => {
     const bad = Step.safeParse({
-      ...baseSynthesis,
-      gate: {
+      ...baseCompose,
+      check: {
         kind: 'schema_sections' as const,
-        source: { kind: 'artifact' as const, ref: 'missing-slot' },
+        source: { kind: 'report' as const, ref: 'missing-slot' },
         required: ['Objective'],
       },
     });
     expect(bad.success).toBe(false);
   });
 
-  it('CheckpointStep rejects gate.source.ref naming a missing writes slot (STEP-I3)', () => {
+  it('CheckpointStep rejects check.source.ref naming a missing writes slot (STEP-I3)', () => {
     const bad = Step.safeParse({
-      ...baseSynthesis,
+      ...baseCompose,
       kind: 'checkpoint',
       policy: checkpointPolicy(['continue']),
       writes: { request: 'req.json', response: 'resp.json' },
-      gate: {
+      check: {
         kind: 'checkpoint_selection',
         source: { kind: 'checkpoint_response', ref: 'nope' },
         allow: ['continue'],
@@ -204,20 +204,20 @@ describe('Step discriminated union', () => {
     expect(bad.success).toBe(false);
   });
 
-  it('DispatchStep rejects gate.source.ref naming a missing writes slot (STEP-I3)', () => {
+  it('RelayStep rejects check.source.ref naming a missing writes slot (STEP-I3)', () => {
     const bad = Step.safeParse({
-      ...baseSynthesis,
+      ...baseCompose,
       executor: 'worker',
-      kind: 'dispatch',
+      kind: 'relay',
       role: 'researcher',
       writes: {
         request: 'r.json',
         receipt: 'c.json',
         result: 's.json',
       },
-      gate: {
+      check: {
         kind: 'result_verdict',
-        source: { kind: 'dispatch_result', ref: 'ghost' },
+        source: { kind: 'relay_result', ref: 'ghost' },
         pass: ['ok'],
       },
     });
@@ -226,11 +226,11 @@ describe('Step discriminated union', () => {
 
   it('CheckpointStep accepts ref naming a real writes slot (positive pair for STEP-I3)', () => {
     const ok = Step.safeParse({
-      ...baseSynthesis,
+      ...baseCompose,
       kind: 'checkpoint',
       policy: checkpointPolicy(),
       writes: { request: 'req.json', response: 'resp.json' },
-      gate: {
+      check: {
         kind: 'checkpoint_selection',
         source: { kind: 'checkpoint_response', ref: 'response' },
         allow: ['continue', 'revise'],
@@ -241,11 +241,11 @@ describe('Step discriminated union', () => {
 
   it('STEP-I9 — checkpoint policy safe choices must be declared choices', () => {
     const bad = Step.safeParse({
-      ...baseSynthesis,
+      ...baseCompose,
       kind: 'checkpoint',
       policy: { ...checkpointPolicy(['continue']), safe_autonomous_choice: 'ghost' },
       writes: { request: 'req.json', response: 'resp.json' },
-      gate: {
+      check: {
         kind: 'checkpoint_selection',
         source: { kind: 'checkpoint_response', ref: 'response' },
         allow: ['continue'],
@@ -254,13 +254,13 @@ describe('Step discriminated union', () => {
     expect(bad.success).toBe(false);
   });
 
-  it('STEP-I9 — checkpoint gate allow list must match policy choices', () => {
+  it('STEP-I9 — checkpoint check allow list must match policy choices', () => {
     const bad = Step.safeParse({
-      ...baseSynthesis,
+      ...baseCompose,
       kind: 'checkpoint',
       policy: checkpointPolicy(['continue', 'revise']),
       writes: { request: 'req.json', response: 'resp.json' },
-      gate: {
+      check: {
         kind: 'checkpoint_selection',
         source: { kind: 'checkpoint_response', ref: 'response' },
         allow: ['continue'],
@@ -269,17 +269,17 @@ describe('Step discriminated union', () => {
     expect(bad.success).toBe(false);
   });
 
-  it('STEP-I9 — checkpoint artifact writing is restricted to typed Build brief policy', () => {
+  it('STEP-I9 — checkpoint report writing is restricted to typed Build brief policy', () => {
     const missingTemplate = Step.safeParse({
-      ...baseSynthesis,
+      ...baseCompose,
       kind: 'checkpoint',
       policy: checkpointPolicy(['continue']),
       writes: {
         request: 'req.json',
         response: 'resp.json',
-        artifact: { path: 'artifacts/build/brief.json', schema: 'build.brief@v1' },
+        report: { path: 'reports/build/brief.json', schema: 'build.brief@v1' },
       },
-      gate: {
+      check: {
         kind: 'checkpoint_selection',
         source: { kind: 'checkpoint_response', ref: 'response' },
         allow: ['continue'],
@@ -287,8 +287,8 @@ describe('Step discriminated union', () => {
     });
     expect(missingTemplate.success).toBe(false);
 
-    const unsupportedArtifact = Step.safeParse({
-      ...baseSynthesis,
+    const unsupportedReport = Step.safeParse({
+      ...baseCompose,
       kind: 'checkpoint',
       policy: {
         ...checkpointPolicy(['continue']),
@@ -310,37 +310,37 @@ describe('Step discriminated union', () => {
       writes: {
         request: 'req.json',
         response: 'resp.json',
-        artifact: { path: 'artifacts/other.json', schema: 'other@v1' },
+        report: { path: 'reports/other.json', schema: 'other@v1' },
       },
-      gate: {
+      check: {
         kind: 'checkpoint_selection',
         source: { kind: 'checkpoint_response', ref: 'response' },
         allow: ['continue'],
       },
     });
-    expect(unsupportedArtifact.success).toBe(false);
+    expect(unsupportedReport.success).toBe(false);
   });
 
   // Prototype-chain `in` operator attack.
   // With `ref` as a Zod literal per source kind, these fail at parse.
-  it('rejects artifact source with ref "toString" (prototype-chain attack, STEP-I3)', () => {
+  it('rejects report source with ref "toString" (prototype-chain attack, STEP-I3)', () => {
     const bad = Step.safeParse({
-      ...baseSynthesis,
-      gate: {
+      ...baseCompose,
+      check: {
         kind: 'schema_sections',
-        source: { kind: 'artifact', ref: 'toString' },
+        source: { kind: 'report', ref: 'toString' },
         required: ['Objective'],
       },
     });
     expect(bad.success).toBe(false);
   });
 
-  it('rejects artifact source with ref "__proto__" (prototype-chain attack, STEP-I3)', () => {
+  it('rejects report source with ref "__proto__" (prototype-chain attack, STEP-I3)', () => {
     const bad = Step.safeParse({
-      ...baseSynthesis,
-      gate: {
+      ...baseCompose,
+      check: {
         kind: 'schema_sections',
-        source: { kind: 'artifact', ref: '__proto__' },
+        source: { kind: 'report', ref: '__proto__' },
         required: ['Objective'],
       },
     });
@@ -351,11 +351,11 @@ describe('Step discriminated union', () => {
   // any existing slot. `ref` literal enforces this.
   it('rejects checkpoint_response source with ref "request" (cross-slot drift, STEP-I4)', () => {
     const bad = Step.safeParse({
-      ...baseSynthesis,
+      ...baseCompose,
       kind: 'checkpoint',
       policy: checkpointPolicy(['continue']),
       writes: { request: 'req.json', response: 'resp.json' },
-      gate: {
+      check: {
         kind: 'checkpoint_selection',
         source: { kind: 'checkpoint_response', ref: 'request' },
         allow: ['continue'],
@@ -364,20 +364,20 @@ describe('Step discriminated union', () => {
     expect(bad.success).toBe(false);
   });
 
-  it('rejects dispatch_result source with ref "receipt" (cross-slot drift, STEP-I4)', () => {
+  it('rejects relay_result source with ref "receipt" (cross-slot drift, STEP-I4)', () => {
     const bad = Step.safeParse({
-      ...baseSynthesis,
+      ...baseCompose,
       executor: 'worker',
-      kind: 'dispatch',
+      kind: 'relay',
       role: 'researcher',
       writes: {
         request: 'r.json',
         receipt: 'c.json',
         result: 's.json',
       },
-      gate: {
+      check: {
         kind: 'result_verdict',
-        source: { kind: 'dispatch_result', ref: 'receipt' },
+        source: { kind: 'relay_result', ref: 'receipt' },
         pass: ['ok'],
       },
     });
@@ -385,32 +385,32 @@ describe('Step discriminated union', () => {
   });
 
   // STEP-I6: `.strict()` rejects surplus keys.
-  it('rejects SynthesisStep with surplus top-level key (STEP-I6 strict)', () => {
+  it('rejects ComposeStep with surplus top-level key (STEP-I6 strict)', () => {
     const bad = Step.safeParse({
-      ...baseSynthesis,
+      ...baseCompose,
       role: 'implementer',
     });
     expect(bad.success).toBe(false);
   });
 
-  it('rejects gate source with surplus key (STEP-I6 strict on source objects)', () => {
+  it('rejects check source with surplus key (STEP-I6 strict on source objects)', () => {
     const bad = Step.safeParse({
-      ...baseSynthesis,
-      gate: {
+      ...baseCompose,
+      check: {
         kind: 'schema_sections',
-        source: { kind: 'artifact', ref: 'artifact', stray: true },
+        source: { kind: 'report', ref: 'report', stray: true },
         required: ['Objective'],
       },
     });
     expect(bad.success).toBe(false);
   });
 
-  it('rejects gate top-level with surplus key (STEP-I6 strict on gate variants)', () => {
+  it('rejects check top-level with surplus key (STEP-I6 strict on check variants)', () => {
     const bad = Step.safeParse({
-      ...baseSynthesis,
-      gate: {
+      ...baseCompose,
+      check: {
         kind: 'schema_sections',
-        source: { kind: 'artifact', ref: 'artifact' },
+        source: { kind: 'report', ref: 'report' },
         required: ['Objective'],
         extra: 'field',
       },
@@ -418,114 +418,114 @@ describe('Step discriminated union', () => {
     expect(bad.success).toBe(false);
   });
 
-  it('STEP-I8 — rejects non-run-relative paths on every workflow-controlled Step path surface', () => {
+  it('STEP-I8 — rejects non-run-relative paths on every flow-controlled Step path surface', () => {
     const invalidPaths = [
       '../escaped.json',
-      'artifacts/../../escaped.json',
+      'reports/../../escaped.json',
       '/tmp/escaped.json',
       'C:\\escaped.json',
-      'artifacts\\escaped.json',
-      'artifacts//x.json',
+      'reports\\escaped.json',
+      'reports//x.json',
       './x.json',
-      'artifacts/./x.json',
+      'reports/./x.json',
       '',
     ];
     const invalidCases = [
       (path: string) => ({
-        ...baseSynthesis,
+        ...baseCompose,
         reads: [path],
       }),
       (path: string) => ({
-        ...baseSynthesis,
-        writes: { artifact: { path, schema: 'brief@v1' } },
+        ...baseCompose,
+        writes: { report: { path, schema: 'brief@v1' } },
       }),
       (path: string) => ({
-        ...baseSynthesis,
+        ...baseCompose,
         kind: 'checkpoint' as const,
         policy: checkpointPolicy(['continue']),
         writes: { request: path, response: 'resp.json' },
-        gate: {
+        check: {
           kind: 'checkpoint_selection' as const,
           source: { kind: 'checkpoint_response' as const, ref: 'response' as const },
           allow: ['continue'],
         },
       }),
       (path: string) => ({
-        ...baseSynthesis,
+        ...baseCompose,
         kind: 'checkpoint' as const,
         policy: checkpointPolicy(['continue']),
         writes: { request: 'req.json', response: path },
-        gate: {
+        check: {
           kind: 'checkpoint_selection' as const,
           source: { kind: 'checkpoint_response' as const, ref: 'response' as const },
           allow: ['continue'],
         },
       }),
       (path: string) => ({
-        ...baseSynthesis,
+        ...baseCompose,
         kind: 'checkpoint' as const,
         policy: checkpointPolicy(['continue']),
         writes: {
           request: 'req.json',
           response: 'resp.json',
-          artifact: { path, schema: 'brief@v1' },
+          report: { path, schema: 'brief@v1' },
         },
-        gate: {
+        check: {
           kind: 'checkpoint_selection' as const,
           source: { kind: 'checkpoint_response' as const, ref: 'response' as const },
           allow: ['continue'],
         },
       }),
       (path: string) => ({
-        ...baseSynthesis,
+        ...baseCompose,
         executor: 'worker' as const,
-        kind: 'dispatch' as const,
+        kind: 'relay' as const,
         role: 'researcher' as const,
         writes: { request: path, receipt: 'receipt.json', result: 'result.json' },
-        gate: {
+        check: {
           kind: 'result_verdict' as const,
-          source: { kind: 'dispatch_result' as const, ref: 'result' as const },
+          source: { kind: 'relay_result' as const, ref: 'result' as const },
           pass: ['ok'],
         },
       }),
       (path: string) => ({
-        ...baseSynthesis,
+        ...baseCompose,
         executor: 'worker' as const,
-        kind: 'dispatch' as const,
+        kind: 'relay' as const,
         role: 'researcher' as const,
         writes: { request: 'request.json', receipt: path, result: 'result.json' },
-        gate: {
+        check: {
           kind: 'result_verdict' as const,
-          source: { kind: 'dispatch_result' as const, ref: 'result' as const },
+          source: { kind: 'relay_result' as const, ref: 'result' as const },
           pass: ['ok'],
         },
       }),
       (path: string) => ({
-        ...baseSynthesis,
+        ...baseCompose,
         executor: 'worker' as const,
-        kind: 'dispatch' as const,
+        kind: 'relay' as const,
         role: 'researcher' as const,
         writes: { request: 'request.json', receipt: 'receipt.json', result: path },
-        gate: {
+        check: {
           kind: 'result_verdict' as const,
-          source: { kind: 'dispatch_result' as const, ref: 'result' as const },
+          source: { kind: 'relay_result' as const, ref: 'result' as const },
           pass: ['ok'],
         },
       }),
       (path: string) => ({
-        ...baseSynthesis,
+        ...baseCompose,
         executor: 'worker' as const,
-        kind: 'dispatch' as const,
+        kind: 'relay' as const,
         role: 'researcher' as const,
         writes: {
           request: 'request.json',
           receipt: 'receipt.json',
           result: 'result.json',
-          artifact: { path, schema: 'brief@v1' },
+          report: { path, schema: 'brief@v1' },
         },
-        gate: {
+        check: {
           kind: 'result_verdict' as const,
-          source: { kind: 'dispatch_result' as const, ref: 'result' as const },
+          source: { kind: 'relay_result' as const, ref: 'result' as const },
           pass: ['ok'],
         },
       }),

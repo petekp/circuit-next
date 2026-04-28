@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { Rigor } from '../../src/index.js';
+import { Depth } from '../../src/index.js';
 
 describe('smoke', () => {
   it('vitest runs and schemas import cleanly', () => {
-    expect(Rigor.options).toContain('deep');
+    expect(Depth.options).toContain('deep');
   });
 });

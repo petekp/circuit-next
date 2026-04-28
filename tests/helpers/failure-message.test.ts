@@ -137,7 +137,7 @@ describe('expectStepWaitingCheckpoint', () => {
     kind: 'waiting_checkpoint',
     checkpoint: {
       stepId: 'step-x',
-      requestPath: 'artifacts/x.json',
+      requestPath: 'reports/x.json',
       allowedChoices: ['continue'],
     },
   };

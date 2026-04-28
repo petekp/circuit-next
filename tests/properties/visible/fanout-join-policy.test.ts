@@ -1,5 +1,5 @@
 // Property tests for the three fanout join policies — pick-winner,
-// disjoint-merge, aggregate-only — driven through the pure
+// disjoint-merge, aggrecheck-only — driven through the pure
 // `evaluateFanoutJoinPolicy` helper in src/runtime/step-handlers/fanout.ts.
 //
 // The example-based tests in tests/runner/fanout-handler-direct.test.ts
@@ -14,7 +14,7 @@
 //   disjoint-merge    : all branches must be admitted; with admitted
 //                       outcomes, the join passes iff per-branch file
 //                       lists are pairwise disjoint.
-//   aggregate-only    : the join passes iff every branch reached a
+//   aggrecheck-only    : the join passes iff every branch reached a
 //                       terminal child outcome AND every branch closed
 //                       'complete' with a parseable result body.
 //
@@ -153,7 +153,7 @@ describe('evaluateFanoutJoinPolicy — pick-winner', () => {
 describe('evaluateFanoutJoinPolicy — disjoint-merge', () => {
   // Property: pass iff every branch is admitted AND per-branch file
   // lists are pairwise disjoint. If any branch is not admitted the
-  // failure reason names the admission gate; if a file collision
+  // failure reason names the admission check; if a file collision
   // exists the failure reason names the colliding file and the two
   // branches.
   it('passes iff all admitted and file lists pairwise disjoint, else fails with the diagnostic reason', () => {
@@ -286,17 +286,17 @@ describe('evaluateFanoutJoinPolicy — disjoint-merge', () => {
   });
 });
 
-describe('evaluateFanoutJoinPolicy — aggregate-only', () => {
+describe('evaluateFanoutJoinPolicy — aggrecheck-only', () => {
   // Property: pass iff every branch closed at a terminal child
   // outcome AND every branch closed 'complete' with a parseable
   // result body. Verdict admission is intentionally ignored.
   it('passes iff all complete with parseable body, regardless of verdict admission', () => {
     const rng = mulberry32(0xfa1c04);
-    const stepId = 'fanout-aggregate';
+    const stepId = 'fanout-aggrecheck';
     let acceptedAll = 0;
     let rejectedNotParseable = 0;
 
-    // Note: aggregate-only's "did not close cleanly" reject path is
+    // Note: aggrecheck-only's "did not close cleanly" reject path is
     // unreachable from this generator because CHILD_OUTCOMES is the
     // exhaustive set of terminal child outcomes. The helper still
     // implements the not-closed branch defensively (it would matter
@@ -327,14 +327,14 @@ describe('evaluateFanoutJoinPolicy — aggregate-only', () => {
         outcomes.push({
           branch_id: branchId,
           child_outcome: childOutcome,
-          verdict: 'whatever', // aggregate-only ignores verdict
-          admitted: false, // aggregate-only ignores admission
+          verdict: 'whatever', // aggrecheck-only ignores verdict
+          admitted: false, // aggrecheck-only ignores admission
           ...(includeBody ? { result_body: { verdict: 'whatever' } } : {}),
         });
       }
 
       const result = evaluateFanoutJoinPolicy({
-        policy: 'aggregate-only',
+        policy: 'aggrecheck-only',
         stepId,
         admitOrder: ['ok'],
         outcomes,
@@ -345,7 +345,7 @@ describe('evaluateFanoutJoinPolicy — aggregate-only', () => {
         expect(result.joinedSuccessfully, `case ${i}: expected reject (not all parseable)`).toBe(
           false,
         );
-        expect(result.failureReason ?? '').toContain('aggregate-only');
+        expect(result.failureReason ?? '').toContain('aggrecheck-only');
         expect(result.failureReason ?? '').toMatch(/parseable result body|did not close cleanly/);
       } else {
         acceptedAll++;

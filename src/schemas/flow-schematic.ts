@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { ChangeKind } from './change-kind.js';
+import { Depth } from './depth.js';
 import {
   FlowBlockCatalog,
   type FlowBlockCatalog as FlowBlockCatalogValue,
@@ -10,18 +12,16 @@ import {
   FlowRoute,
   type FlowRoute as FlowRouteValue,
 } from './flow-blocks.js';
-import { PhaseId, ProtocolId, StepId, WorkflowId } from './ids.js';
-import { Lane } from './lane.js';
-import {
-  CANONICAL_PHASES,
-  CanonicalPhase,
-  type CanonicalPhase as CanonicalPhaseValue,
-  SpinePolicy,
-} from './phase.js';
-import { RunRelativePath } from './primitives.js';
-import { Rigor } from './rigor.js';
+import { CompiledFlowId, ProtocolId, StageId, StepId } from './ids.js';
+import { RunRelativePath } from './scalars.js';
 import { SelectionOverride } from './selection-policy.js';
-import { CheckpointPolicy, DispatchRole, WorkflowRef } from './step.js';
+import {
+  CANONICAL_STAGES,
+  CanonicalStage,
+  type CanonicalStage as CanonicalStageValue,
+  SpinePolicy,
+} from './stage.js';
+import { CheckpointPolicy, CompiledFlowRef, RelayRole } from './step.js';
 
 export const FlowSchematicStatus = z.enum(['candidate', 'active', 'deprecated']);
 export type FlowSchematicStatus = z.infer<typeof FlowSchematicStatus>;
@@ -33,9 +33,9 @@ export const StepRouteTarget = z.union([StepId, StepRouteTerminalTarget]);
 export type StepRouteTarget = z.infer<typeof StepRouteTarget>;
 
 export const SchematicRouteModeOverrides = z
-  .record(Rigor, StepRouteTarget)
+  .record(Depth, StepRouteTarget)
   .refine((overrides) => Object.keys(overrides).length > 0, {
-    message: 'route override must declare at least one rigor',
+    message: 'route override must declare at least one depth',
   });
 export type SchematicRouteModeOverrides = z.infer<typeof SchematicRouteModeOverrides>;
 
@@ -69,50 +69,50 @@ export const SchematicEvidenceRequirements = z
 export type SchematicEvidenceRequirements = z.infer<typeof SchematicEvidenceRequirements>;
 
 export const StepExecutionKind = z.enum([
-  'synthesis',
-  'dispatch',
+  'compose',
+  'relay',
   'verification',
   'checkpoint',
   'sub-run',
 ]);
 export type StepExecutionKind = z.infer<typeof StepExecutionKind>;
 
-// Schematic-level shape for a sub-run step's child workflow handoff. Mirrors
-// the runtime SubRunStep fields (workflow_ref + goal + rigor) but kept as
-// schematic-level optional fields so existing dispatch/synthesis/etc.
+// Schematic-level shape for a sub-run step's child flow handoff. Mirrors
+// the runtime SubRunStep fields (flow_ref + goal + depth) but kept as
+// schematic-level optional fields so existing relay/compose/etc.
 // executions stay parseable. The cross-field rule lives in the
 // superRefine below.
 export const StepExecution = z
   .object({
     kind: StepExecutionKind,
-    role: DispatchRole.optional(),
-    workflow_ref: WorkflowRef.optional(),
+    role: RelayRole.optional(),
+    flow_ref: CompiledFlowRef.optional(),
     goal: z.string().min(1).optional(),
-    rigor: Rigor.optional(),
+    depth: Depth.optional(),
   })
   .strict()
   .superRefine((execution, ctx) => {
-    if (execution.kind === 'dispatch') {
+    if (execution.kind === 'relay') {
       if (execution.role === undefined) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['role'],
-          message: 'dispatch execution requires a dispatch role',
+          message: 'relay execution requires a relay role',
         });
       }
     } else if (execution.role !== undefined) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['role'],
-        message: 'dispatch role is only allowed for dispatch execution',
+        message: 'relay role is only allowed for relay execution',
       });
     }
     if (execution.kind === 'sub-run') {
-      if (execution.workflow_ref === undefined) {
+      if (execution.flow_ref === undefined) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ['workflow_ref'],
-          message: 'sub-run execution requires workflow_ref',
+          path: ['flow_ref'],
+          message: 'sub-run execution requires flow_ref',
         });
       }
       if (execution.goal === undefined) {
@@ -122,19 +122,19 @@ export const StepExecution = z
           message: 'sub-run execution requires goal',
         });
       }
-      if (execution.rigor === undefined) {
+      if (execution.depth === undefined) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ['rigor'],
-          message: 'sub-run execution requires rigor',
+          path: ['depth'],
+          message: 'sub-run execution requires depth',
         });
       }
     } else {
-      if (execution.workflow_ref !== undefined) {
+      if (execution.flow_ref !== undefined) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ['workflow_ref'],
-          message: 'workflow_ref is only allowed for sub-run execution',
+          path: ['flow_ref'],
+          message: 'flow_ref is only allowed for sub-run execution',
         });
       }
       if (execution.goal !== undefined) {
@@ -144,11 +144,11 @@ export const StepExecution = z
           message: 'goal is only allowed for sub-run execution',
         });
       }
-      if (execution.rigor !== undefined) {
+      if (execution.depth !== undefined) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ['rigor'],
-          message: 'rigor is only allowed for sub-run execution',
+          path: ['depth'],
+          message: 'depth is only allowed for sub-run execution',
         });
       }
     }
@@ -156,18 +156,18 @@ export const StepExecution = z
 export type StepExecution = z.infer<typeof StepExecution>;
 
 // Per-item write paths. Conditional on execution.kind:
-//   synthesis | verification           → artifact_path required (single-artifact write)
-//   dispatch                           → request_path, receipt_path, result_path required;
-//                                        artifact_path optional (worker-emitted typed artifact)
+//   compose | verification           → report_path required (single-report write)
+//   relay                           → request_path, receipt_path, result_path required;
+//                                        report_path optional (worker-emitted typed report)
 //   checkpoint                         → checkpoint_request_path, checkpoint_response_path required;
-//                                        artifact_path optional (only for build_brief checkpoints)
+//                                        report_path optional (only for build_brief checkpoints)
 //   sub-run                            → result_path required (child run's result.json copied
 //                                        into parent's writes.result slot — RunResult shape)
 // Cross-field shape is enforced at the SchematicStep superRefine where
 // execution.kind is in scope.
 export const StepWrites = z
   .object({
-    artifact_path: RunRelativePath.optional(),
+    report_path: RunRelativePath.optional(),
     request_path: RunRelativePath.optional(),
     receipt_path: RunRelativePath.optional(),
     result_path: RunRelativePath.optional(),
@@ -177,10 +177,10 @@ export const StepWrites = z
   .strict();
 export type StepWrites = z.infer<typeof StepWrites>;
 
-// Per-item gate metadata. Conditional on execution.kind:
-//   synthesis | verification           → required: SchemaSectionsGate.required
-//   checkpoint                         → allow: CheckpointSelectionGate.allow
-//   dispatch | sub-run                 → pass: ResultVerdictGate.pass
+// Per-item check metadata. Conditional on execution.kind:
+//   compose | verification           → required: SchemaSectionsCheck.required
+//   checkpoint                         → allow: CheckpointSelectionCheck.allow
+//   relay | sub-run                 → pass: ResultVerdictCheck.pass
 // Cross-field shape is enforced at the SchematicStep superRefine.
 export const StepCheck = z
   .object({
@@ -196,7 +196,7 @@ export const SchematicStep = z
     id: StepId,
     block: FlowBlockId,
     title: z.string().min(1),
-    phase: CanonicalPhase,
+    stage: CanonicalStage,
     input: z.record(z.string().regex(/^[a-z][a-z0-9_]*$/), FlowContractRef).default({}),
     output: FlowContractRef,
     evidence_requirements: SchematicEvidenceRequirements,
@@ -206,14 +206,14 @@ export const SchematicStep = z
       return Object.keys(routes).length > 0;
     }, 'schematic item must declare at least one route'),
     route_overrides: z.record(z.string(), SchematicRouteModeOverrides).default({}),
-    // The fields below are required by the schematic → Workflow compiler. They
+    // The fields below are required by the schematic → CompiledFlow compiler. They
     // are optional at parse time so existing candidate schematics remain
     // parseable while the active schematics (build/explore/review) are
     // populated incrementally. The compiler enforces presence and
-    // (kind, gate, writes) shape.
+    // (kind, check, writes) shape.
     protocol: ProtocolId.optional(),
     writes: StepWrites.optional(),
-    gate: StepCheck.optional(),
+    check: StepCheck.optional(),
     checkpoint_policy: CheckpointPolicy.optional(),
   })
   .strict()
@@ -257,7 +257,7 @@ export const SchematicStep = z
 export type SchematicStep = z.infer<typeof SchematicStep>;
 
 // Cross-field check for the optional executor metadata. When `writes` or
-// `gate` is supplied, its shape must match `execution.kind`. When
+// `check` is supplied, its shape must match `execution.kind`. When
 // `checkpoint_policy` is supplied, `execution.kind` must be 'checkpoint'.
 // Absence is allowed (these fields are populated per-schematic over time and
 // the compiler raises a separate "missing" diagnostic).
@@ -265,7 +265,7 @@ function validateExecutionShape(
   item: {
     execution: StepExecution;
     writes?: StepWrites | undefined;
-    gate?: StepCheck | undefined;
+    check?: StepCheck | undefined;
     checkpoint_policy?: CheckpointPolicy | undefined;
   },
   ctx: z.RefinementCtx,
@@ -275,22 +275,22 @@ function validateExecutionShape(
   if (item.writes !== undefined) {
     const w = item.writes;
     const has = (key: keyof StepWrites) => w[key] !== undefined;
-    const expectArtifact = () => {
-      if (!has('artifact_path')) {
+    const expectReport = () => {
+      if (!has('report_path')) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ['writes', 'artifact_path'],
-          message: `${kind} execution requires writes.artifact_path`,
+          path: ['writes', 'report_path'],
+          message: `${kind} execution requires writes.report_path`,
         });
       }
     };
-    const expectDispatchSlots = () => {
+    const expectRelaySlots = () => {
       for (const key of ['request_path', 'receipt_path', 'result_path'] as const) {
         if (!has(key)) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             path: ['writes', key],
-            message: `dispatch execution requires writes.${key}`,
+            message: `relay execution requires writes.${key}`,
           });
         }
       }
@@ -325,45 +325,45 @@ function validateExecutionShape(
       }
     };
     switch (kind) {
-      case 'synthesis':
+      case 'compose':
       case 'verification':
-        expectArtifact();
-        forbid('request_path', 'dispatch');
-        forbid('receipt_path', 'dispatch');
-        forbid('result_path', 'dispatch|sub-run');
+        expectReport();
+        forbid('request_path', 'relay');
+        forbid('receipt_path', 'relay');
+        forbid('result_path', 'relay|sub-run');
         forbid('checkpoint_request_path', 'checkpoint');
         forbid('checkpoint_response_path', 'checkpoint');
         break;
-      case 'dispatch':
-        expectDispatchSlots();
+      case 'relay':
+        expectRelaySlots();
         forbid('checkpoint_request_path', 'checkpoint');
         forbid('checkpoint_response_path', 'checkpoint');
         break;
       case 'checkpoint':
         expectCheckpointSlots();
-        forbid('request_path', 'dispatch');
-        forbid('receipt_path', 'dispatch');
-        forbid('result_path', 'dispatch|sub-run');
+        forbid('request_path', 'relay');
+        forbid('receipt_path', 'relay');
+        forbid('result_path', 'relay|sub-run');
         break;
       case 'sub-run':
         expectSubRunSlots();
-        forbid('artifact_path', 'synthesis|verification');
-        forbid('request_path', 'dispatch');
-        forbid('receipt_path', 'dispatch');
+        forbid('report_path', 'compose|verification');
+        forbid('request_path', 'relay');
+        forbid('receipt_path', 'relay');
         forbid('checkpoint_request_path', 'checkpoint');
         forbid('checkpoint_response_path', 'checkpoint');
         break;
     }
   }
 
-  if (item.gate !== undefined) {
-    const g = item.gate;
+  if (item.check !== undefined) {
+    const g = item.check;
     const expectField = (field: 'required' | 'allow' | 'pass', forKinds: string) => {
       if (g[field] === undefined) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ['gate', field],
-          message: `${forKinds} execution requires gate.${field}`,
+          path: ['check', field],
+          message: `${forKinds} execution requires check.${field}`,
         });
       }
     };
@@ -371,27 +371,27 @@ function validateExecutionShape(
       if (g[field] !== undefined) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ['gate', field],
-          message: `gate.${field} is only allowed for ${allowedKinds} execution`,
+          path: ['check', field],
+          message: `check.${field} is only allowed for ${allowedKinds} execution`,
         });
       }
     };
     switch (kind) {
-      case 'synthesis':
+      case 'compose':
       case 'verification':
         expectField('required', `${kind}`);
         forbidField('allow', 'checkpoint');
-        forbidField('pass', 'dispatch|sub-run');
+        forbidField('pass', 'relay|sub-run');
         break;
       case 'checkpoint':
         expectField('allow', 'checkpoint');
-        forbidField('required', 'synthesis|verification');
-        forbidField('pass', 'dispatch|sub-run');
+        forbidField('required', 'compose|verification');
+        forbidField('pass', 'relay|sub-run');
         break;
-      case 'dispatch':
+      case 'relay':
       case 'sub-run':
         expectField('pass', `${kind}`);
-        forbidField('required', 'synthesis|verification');
+        forbidField('required', 'compose|verification');
         forbidField('allow', 'checkpoint');
         break;
     }
@@ -406,31 +406,31 @@ function validateExecutionShape(
   }
 }
 
-// Schematic-level entry mode. Each emitted Workflow inherits these as
-// Workflow.entry_modes[i] with start_at = schematic.starts_at.
+// Schematic-level entry mode. Each emitted CompiledFlow inherits these as
+// CompiledFlow.entry_modes[i] with start_at = schematic.starts_at.
 export const FlowEntryMode = z
   .object({
     name: z.string().regex(/^[a-z][a-z0-9-]*$/),
-    rigor: Rigor,
+    depth: Depth,
     description: z.string().min(1),
-    default_lane: Lane.optional(),
+    default_change_kind: ChangeKind.optional(),
   })
   .strict();
 export type FlowEntryMode = z.infer<typeof FlowEntryMode>;
 
-// Per-canonical-phase metadata. Lets a schematic map its canonical phases
-// to author-friendly phase ids and titles ("Synthesize" for explore's
-// canonical=act phase, "Independent Audit" for review's canonical=analyze).
-export const SchematicPhase = z
+// Per-canonical-stage metadata. Lets a schematic map its canonical stages
+// to author-friendly stage ids and titles ("Synthesize" for explore's
+// canonical=act stage, "Independent Audit" for review's canonical=analyze).
+export const SchematicStage = z
   .object({
-    canonical: CanonicalPhase,
-    id: PhaseId,
+    canonical: CanonicalStage,
+    id: StageId,
     title: z.string().min(1),
   })
   .strict();
-export type SchematicPhase = z.infer<typeof SchematicPhase>;
+export type SchematicStage = z.infer<typeof SchematicStage>;
 
-// Schematic-level entry classification — matches Workflow.entry shape so the
+// Schematic-level entry classification — matches CompiledFlow.entry shape so the
 // compiler can pass it through directly.
 export const FlowSchematicEntry = z
   .object({
@@ -448,7 +448,7 @@ export type FlowSchematicEntry = z.infer<typeof FlowSchematicEntry>;
 export const FlowSchematic = z
   .object({
     schema_version: z.literal('1'),
-    id: WorkflowId,
+    id: CompiledFlowId,
     title: z.string().min(1),
     purpose: z.string().min(1),
     status: FlowSchematicStatus,
@@ -462,8 +462,8 @@ export const FlowSchematic = z
     version: z.string().min(1).optional(),
     entry: FlowSchematicEntry.optional(),
     entry_modes: z.array(FlowEntryMode).min(1).optional(),
-    spine_policy: SpinePolicy.optional(),
-    phases: z.array(SchematicPhase).optional(),
+    stage_path_policy: SpinePolicy.optional(),
+    stages: z.array(SchematicStage).optional(),
     default_selection: SelectionOverride.optional(),
   })
   .strict()
@@ -501,12 +501,12 @@ export const FlowSchematic = z
         }
       }
       for (const [route, overrides] of Object.entries(item.route_overrides)) {
-        for (const [rigor, target] of Object.entries(overrides)) {
+        for (const [depth, target] of Object.entries(overrides)) {
           if (StepRouteTerminalTarget.safeParse(target).success) continue;
           if (!itemIds.has(target)) {
             ctx.addIssue({
               code: z.ZodIssueCode.custom,
-              path: ['items', index, 'route_overrides', route, rigor],
+              path: ['items', index, 'route_overrides', route, depth],
               message: `route override target references unknown schematic item id: ${target}`,
             });
           }
@@ -541,80 +541,83 @@ export const FlowSchematic = z
       }
     }
 
-    if (schematic.phases !== undefined) {
-      const seenCanonicals = new Set<CanonicalPhaseValue>();
+    if (schematic.stages !== undefined) {
+      const seenCanonicals = new Set<CanonicalStageValue>();
       const seenIds = new Set<string>();
-      for (const [index, phase] of schematic.phases.entries()) {
-        if (seenCanonicals.has(phase.canonical)) {
+      for (const [index, stage] of schematic.stages.entries()) {
+        if (seenCanonicals.has(stage.canonical)) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            path: ['phases', index, 'canonical'],
-            message: `duplicate canonical phase mapping: ${phase.canonical}`,
+            path: ['stages', index, 'canonical'],
+            message: `duplicate canonical stage mapping: ${stage.canonical}`,
           });
         }
-        seenCanonicals.add(phase.canonical);
-        if (seenIds.has(phase.id as unknown as string)) {
+        seenCanonicals.add(stage.canonical);
+        if (seenIds.has(stage.id as unknown as string)) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            path: ['phases', index, 'id'],
-            message: `duplicate phase id: ${phase.id}`,
+            path: ['stages', index, 'id'],
+            message: `duplicate stage id: ${stage.id}`,
           });
         }
-        seenIds.add(phase.id as unknown as string);
+        seenIds.add(stage.id as unknown as string);
       }
-      // Every canonical phase touched by any item must have a phases entry.
-      const itemCanonicals = new Set<CanonicalPhaseValue>(
-        schematic.items.map((item) => item.phase),
+      // Every canonical stage touched by any item must have a stages entry.
+      const itemCanonicals = new Set<CanonicalStageValue>(
+        schematic.items.map((item) => item.stage),
       );
       for (const canonical of itemCanonicals) {
         if (!seenCanonicals.has(canonical)) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            path: ['phases'],
-            message: `phases is missing an entry for canonical phase '${canonical}' which is used by at least one item`,
+            path: ['stages'],
+            message: `stages is missing an entry for canonical stage '${canonical}' which is used by at least one item`,
           });
         }
       }
-      // The reverse — phases entries that no item references — is allowed
-      // for now; the compiler may still want to declare empty phases for
-      // spine completeness. spine_policy carries the omit story.
+      // The reverse — stages entries that no item references — is allowed
+      // for now; the compiler may still want to declare empty stages for
+      // stage path completeness. stage_path_policy carries the omit story.
     }
 
-    if (schematic.spine_policy !== undefined && schematic.spine_policy.mode === 'partial') {
-      const seenOmits = new Set<CanonicalPhaseValue>();
-      for (const [index, omitted] of schematic.spine_policy.omits.entries()) {
+    if (
+      schematic.stage_path_policy !== undefined &&
+      schematic.stage_path_policy.mode === 'partial'
+    ) {
+      const seenOmits = new Set<CanonicalStageValue>();
+      for (const [index, omitted] of schematic.stage_path_policy.omits.entries()) {
         if (seenOmits.has(omitted)) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            path: ['spine_policy', 'omits', index],
-            message: `duplicate omitted phase: ${omitted}`,
+            path: ['stage_path_policy', 'omits', index],
+            message: `duplicate omitted stage: ${omitted}`,
           });
         }
         seenOmits.add(omitted);
       }
-      // omits must be disjoint from phases.canonical when both are present.
-      if (schematic.phases !== undefined) {
-        const declared = new Set(schematic.phases.map((phase) => phase.canonical));
+      // omits must be disjoint from stages.canonical when both are present.
+      if (schematic.stages !== undefined) {
+        const declared = new Set(schematic.stages.map((stage) => stage.canonical));
         for (const omitted of seenOmits) {
           if (declared.has(omitted)) {
             ctx.addIssue({
               code: z.ZodIssueCode.custom,
-              path: ['spine_policy', 'omits'],
-              message: `canonical phase '${omitted}' is both declared in phases and listed in spine_policy.omits`,
+              path: ['stage_path_policy', 'omits'],
+              message: `canonical stage '${omitted}' is both declared in stages and listed in stage_path_policy.omits`,
             });
           }
         }
       }
-      // omits must not include a phase that any item uses.
-      const itemCanonicals = new Set<CanonicalPhaseValue>(
-        schematic.items.map((item) => item.phase),
+      // omits must not include a stage that any item uses.
+      const itemCanonicals = new Set<CanonicalStageValue>(
+        schematic.items.map((item) => item.stage),
       );
       for (const omitted of seenOmits) {
         if (itemCanonicals.has(omitted)) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            path: ['spine_policy', 'omits'],
-            message: `canonical phase '${omitted}' is omitted but used by at least one item`,
+            path: ['stage_path_policy', 'omits'],
+            message: `canonical stage '${omitted}' is omitted but used by at least one item`,
           });
         }
       }
@@ -674,34 +677,34 @@ function schematicStepRouteOutcomes(item: SchematicStep): string[] {
 
 // Schematic-author-selectable execution kinds for a block. The catalog's
 // `action_surface` describes the block's *typical* role, but the actual
-// committed Workflows show that blocks are flexibly used: Build's plan
-// is inline synthesis though the catalog calls plan a "worker" block;
+// committed CompiledFlows show that blocks are flexibly used: Build's plan
+// is inline compose though the catalog calls plan a "worker" block;
 // Build's frame is a checkpoint though frame is "orchestrator". Treat
-// action_surface as a recommendation: a worker block can be dispatched
-// OR done inline as synthesis; an orchestrator block can write a brief
-// (synthesis) OR pause for confirmation (checkpoint). The runtime decides
-// based on rigor and architecture.
+// action_surface as a recommendation: a worker block can be relayed
+// OR done inline as compose; an orchestrator block can write a brief
+// (compose) OR pause for confirmation (checkpoint). The runtime decides
+// based on depth and architecture.
 function acceptedExecutionKinds(block: FlowBlockValue): readonly StepExecutionKind[] {
   if (block.id === 'run-verification') return ['verification'];
-  // sub-run is an orchestration pattern (parent invokes a child workflow,
-  // gate admits the child's terminal verdict). The 'batch' block is
-  // its first consumer (Migrate's batch step delegates to a Build child),
+  // sub-run is an orchestration pattern (parent invokes a child flow,
+  // check admits the child's terminal verdict). The 'batch' block is
+  // its first consumer (Migrate's batch step delechecks to a Build child),
   // so sub-run is allowed wherever 'batch'-shaped work fits — i.e., for
   // 'mixed' surfaces. 'orchestrator' surfaces also accept sub-run because
   // the parent step authoring the sub-run IS an orchestrator action.
   switch (block.action_surface) {
     case 'worker':
-      return ['dispatch', 'synthesis'];
+      return ['relay', 'compose'];
     case 'host':
       return ['checkpoint'];
     case 'orchestrator':
-      return ['synthesis', 'checkpoint', 'sub-run'];
+      return ['compose', 'checkpoint', 'sub-run'];
     case 'mixed':
-      return ['synthesis', 'dispatch', 'verification', 'checkpoint', 'sub-run'];
+      return ['compose', 'relay', 'verification', 'checkpoint', 'sub-run'];
   }
 }
 
-function acceptedPhases(block: FlowBlockValue): readonly CanonicalPhaseValue[] {
+function acceptedStages(block: FlowBlockValue): readonly CanonicalStageValue[] {
   switch (block.id) {
     case 'intake':
     case 'route':
@@ -719,10 +722,10 @@ function acceptedPhases(block: FlowBlockValue): readonly CanonicalPhaseValue[] {
     case 'run-verification':
       return ['verify'];
     case 'review':
-      // Review block runs in the canonical 'review' phase by default,
-      // but the audit-only Review workflow places its reviewer dispatch in
-      // the canonical 'analyze' phase (the audit IS the analysis there;
-      // there is no separate "act + review" structure to gate against).
+      // Review block runs in the canonical 'review' stage by default,
+      // but the audit-only Review flow places its reviewer relay in
+      // the canonical 'analyze' stage (the audit IS the analysis there;
+      // there is no separate "act + review" structure to check against).
       return ['review', 'analyze'];
     case 'risk-rollback-check':
       return ['verify', 'close'];
@@ -730,7 +733,7 @@ function acceptedPhases(block: FlowBlockValue): readonly CanonicalPhaseValue[] {
     case 'handoff':
       return ['close'];
     case 'human-decision':
-      return CANONICAL_PHASES;
+      return CANONICAL_STAGES;
   }
 }
 
@@ -862,11 +865,11 @@ export function validateFlowSchematicCatalogCompatibility(
       });
     }
 
-    const phases = acceptedPhases(block);
-    if (!phases.includes(item.phase)) {
+    const stages = acceptedStages(block);
+    if (!stages.includes(item.stage)) {
       issues.push({
         item_id: item.id,
-        message: `phase "${item.phase}" is not compatible with block "${item.block}"; expected one of ${phases.join(', ')}`,
+        message: `stage "${item.stage}" is not compatible with block "${item.block}"; expected one of ${stages.join(', ')}`,
       });
     }
   }

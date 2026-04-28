@@ -1,31 +1,31 @@
-// Pure derivation helpers that turn workflow packages into engine
-// registries. Each registry file delegates to one of these so the
+// Pure derivation helpers that turn flow packages into engine
+// registries. Each registry file delechecks to one of these so the
 // derivation logic (with its duplicate-detection and default-package
 // invariants) is testable in isolation against synthetic packages.
 
 import type { z } from 'zod';
-import type { WorkflowPackage, WorkflowRoutingMetadata } from '../workflows/types.js';
+import type { CompiledFlowPackage, CompiledFlowRoutingMetadata } from '../flows/types.js';
 import type { CheckpointBriefBuilder } from './registries/checkpoint-writers/types.js';
 import type { CloseBuilder } from './registries/close-writers/types.js';
-import type { CrossArtifactValidator } from './registries/cross-artifact-validators.js';
+import type { ComposeBuilder } from './registries/compose-writers/types.js';
+import type { CrossReportValidator } from './registries/cross-report-validators.js';
 import type { StructuralShapeHint } from './registries/shape-hints/types.js';
-import type { SynthesisBuilder } from './registries/synthesis-writers/types.js';
 import type { VerificationBuilder } from './registries/verification-writers/types.js';
 
 // Build a Map keyed by builder.resultSchemaName from one writer slot
 // across all packages. Throws on duplicate keys with a message that
-// names both the slot and the offending workflow id.
+// names both the slot and the offending flow id.
 function buildBuilderRegistry<B extends { readonly resultSchemaName: string }>(
-  packages: readonly WorkflowPackage[],
-  slot: 'synthesis' | 'close' | 'verification' | 'checkpoint',
-  pluck: (pkg: WorkflowPackage) => readonly B[],
+  packages: readonly CompiledFlowPackage[],
+  slot: 'compose' | 'close' | 'verification' | 'checkpoint',
+  pluck: (pkg: CompiledFlowPackage) => readonly B[],
 ): ReadonlyMap<string, B> {
   const map = new Map<string, B>();
   for (const pkg of packages) {
     for (const builder of pluck(pkg)) {
       if (map.has(builder.resultSchemaName)) {
         throw new Error(
-          `duplicate ${slot} builder registered for schema '${builder.resultSchemaName}' (workflow ${pkg.id})`,
+          `duplicate ${slot} builder registered for schema '${builder.resultSchemaName}' (flow ${pkg.id})`,
         );
       }
       map.set(builder.resultSchemaName, builder);
@@ -34,91 +34,91 @@ function buildBuilderRegistry<B extends { readonly resultSchemaName: string }>(
   return map;
 }
 
-export function buildSynthesisRegistry(
-  packages: readonly WorkflowPackage[],
-): ReadonlyMap<string, SynthesisBuilder> {
-  return buildBuilderRegistry(packages, 'synthesis', (pkg) => pkg.writers.synthesis);
+export function buildComposeRegistry(
+  packages: readonly CompiledFlowPackage[],
+): ReadonlyMap<string, ComposeBuilder> {
+  return buildBuilderRegistry(packages, 'compose', (pkg) => pkg.writers.compose);
 }
 
 export function buildCloseRegistry(
-  packages: readonly WorkflowPackage[],
+  packages: readonly CompiledFlowPackage[],
 ): ReadonlyMap<string, CloseBuilder> {
   return buildBuilderRegistry(packages, 'close', (pkg) => pkg.writers.close);
 }
 
 export function buildVerificationRegistry(
-  packages: readonly WorkflowPackage[],
+  packages: readonly CompiledFlowPackage[],
 ): ReadonlyMap<string, VerificationBuilder> {
   return buildBuilderRegistry(packages, 'verification', (pkg) => pkg.writers.verification);
 }
 
 export function buildCheckpointRegistry(
-  packages: readonly WorkflowPackage[],
+  packages: readonly CompiledFlowPackage[],
 ): ReadonlyMap<string, CheckpointBriefBuilder> {
   return buildBuilderRegistry(packages, 'checkpoint', (pkg) => pkg.writers.checkpoint);
 }
 
-// Compose the dispatch-artifact zod registry from the catalog plus an
+// Compose the relay-report zod registry from the catalog plus an
 // optional fixtures map (used by tests). Throws when a schema name
 // collides between fixtures and packages, or across packages.
-export function buildArtifactSchemaRegistry(
-  packages: readonly WorkflowPackage[],
+export function buildReportSchemaRegistry(
+  packages: readonly CompiledFlowPackage[],
   fixtures: Readonly<Record<string, z.ZodType<unknown>>> = {},
 ): Readonly<Record<string, z.ZodType<unknown>>> {
   const out: Record<string, z.ZodType<unknown>> = { ...fixtures };
   for (const pkg of packages) {
-    for (const artifact of pkg.dispatchArtifacts) {
-      if (Object.hasOwn(out, artifact.schemaName)) {
+    for (const report of pkg.relayReports) {
+      if (Object.hasOwn(out, report.schemaName)) {
         throw new Error(
-          `duplicate dispatch artifact schema '${artifact.schemaName}' registered (workflow ${pkg.id})`,
+          `duplicate relay report schema '${report.schemaName}' registered (flow ${pkg.id})`,
         );
       }
-      out[artifact.schemaName] = artifact.schema;
+      out[report.schemaName] = report.schema;
     }
   }
   return Object.freeze(out);
 }
 
-// Schema-keyed dispatch shape hints. Throws on duplicates so a hint
+// Schema-keyed relay shape hints. Throws on duplicates so a hint
 // authoring error fails loudly at registry construction.
 export function buildSchemaHintMap(
-  packages: readonly WorkflowPackage[],
+  packages: readonly CompiledFlowPackage[],
 ): ReadonlyMap<string, string> {
   const map = new Map<string, string>();
   for (const pkg of packages) {
-    for (const artifact of pkg.dispatchArtifacts) {
-      if (artifact.dispatchHint === undefined) continue;
-      if (map.has(artifact.schemaName)) {
+    for (const report of pkg.relayReports) {
+      if (report.relayHint === undefined) continue;
+      if (map.has(report.schemaName)) {
         throw new Error(
-          `duplicate shape hint registered for schema '${artifact.schemaName}' (workflow ${pkg.id})`,
+          `duplicate shape hint registered for schema '${report.schemaName}' (flow ${pkg.id})`,
         );
       }
-      map.set(artifact.schemaName, artifact.dispatchHint);
+      map.set(report.schemaName, report.relayHint);
     }
   }
   return map;
 }
 
-export function buildCrossArtifactValidatorRegistry(
-  packages: readonly WorkflowPackage[],
-): ReadonlyMap<string, CrossArtifactValidator> {
-  const map = new Map<string, CrossArtifactValidator>();
+export function buildCrossReportValidatorRegistry(
+  packages: readonly CompiledFlowPackage[],
+): ReadonlyMap<string, CrossReportValidator> {
+  const map = new Map<string, CrossReportValidator>();
   for (const pkg of packages) {
-    for (const artifact of pkg.dispatchArtifacts) {
-      if (artifact.crossArtifactValidate === undefined) continue;
-      if (map.has(artifact.schemaName)) {
+    for (const report of pkg.relayReports) {
+      if (report.crossReportValidate === undefined) continue;
+      if (map.has(report.schemaName)) {
         throw new Error(
-          `duplicate cross-artifact validator registered for schema '${artifact.schemaName}' (workflow ${pkg.id})`,
+          `duplicate cross-report validator registered for schema '${report.schemaName}' (flow ${pkg.id})`,
         );
       }
-      map.set(artifact.schemaName, artifact.crossArtifactValidate);
+      map.set(report.schemaName, report.crossReportValidate);
     }
   }
   return map;
 }
 
 export function buildStructuralHintList(
-  packages: readonly WorkflowPackage[],
+  packages: readonly CompiledFlowPackage[],
 ): readonly StructuralShapeHint[] {
   const list: StructuralShapeHint[] = [];
   const seen = new Set<string>();
@@ -126,7 +126,7 @@ export function buildStructuralHintList(
     if (pkg.structuralHints === undefined) continue;
     for (const hint of pkg.structuralHints) {
       if (seen.has(hint.id)) {
-        throw new Error(`duplicate structural shape hint id '${hint.id}' (workflow ${pkg.id})`);
+        throw new Error(`duplicate structural shape hint id '${hint.id}' (flow ${pkg.id})`);
       }
       seen.add(hint.id);
       list.push(hint);
@@ -136,15 +136,15 @@ export function buildStructuralHintList(
 }
 
 export interface RoutablePackage {
-  readonly pkg: WorkflowPackage;
-  readonly routing: WorkflowRoutingMetadata;
+  readonly pkg: CompiledFlowPackage;
+  readonly routing: CompiledFlowRoutingMetadata;
 }
 
 // Walk packages, keep the routable ones (those with a routing block),
 // and sort by routing.order ascending. Stable sort: input order breaks
 // ties.
 export function buildRoutablePackages(
-  packages: readonly WorkflowPackage[],
+  packages: readonly CompiledFlowPackage[],
 ): readonly RoutablePackage[] {
   const out: RoutablePackage[] = [];
   for (const pkg of packages) {
@@ -160,11 +160,11 @@ export function findDefaultRoutablePackage(routables: readonly RoutablePackage[]
   const defaults = routables.filter((entry) => entry.routing.isDefault === true);
   const [first, ...rest] = defaults;
   if (first === undefined) {
-    throw new Error('no workflow package marked isDefault — router has no fallback');
+    throw new Error('no flow package marked isDefault — router has no fallback');
   }
   if (rest.length > 0) {
     throw new Error(
-      `more than one default workflow package: ${defaults.map((entry) => entry.pkg.id).join(', ')}`,
+      `more than one default flow package: ${defaults.map((entry) => entry.pkg.id).join(', ')}`,
     );
   }
   return first;

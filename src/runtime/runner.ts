@@ -10,22 +10,16 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 
+import type { ChangeKindDeclaration } from '../schemas/change-kind.js';
+import { CompiledFlow } from '../schemas/compiled-flow.js';
 import { LayeredConfig, type LayeredConfig as LayeredConfigValue } from '../schemas/config.js';
-import type { Event, RunClosedOutcome } from '../schemas/event.js';
-import type { InvocationId, RunId, WorkflowId } from '../schemas/ids.js';
-import type { LaneDeclaration } from '../schemas/lane.js';
+import type { Depth } from '../schemas/depth.js';
+import type { CompiledFlowId, InvocationId, RunId } from '../schemas/ids.js';
 import { computeManifestHash } from '../schemas/manifest.js';
-import type { Rigor } from '../schemas/rigor.js';
 import type { Snapshot } from '../schemas/snapshot.js';
-import { Workflow } from '../schemas/workflow.js';
-import { sha256Hex } from './adapters/shared.js';
+import type { RunClosedOutcome, TraceEntry } from '../schemas/trace-entry.js';
 import { appendAndDerive } from './append-and-derive.js';
-import {
-  bindsExecutionRigorToDispatchSelection,
-  selectionConfigLayersWithExecutionRigor,
-} from './dispatch-selection.js';
-import { readRunLog } from './event-log-reader.js';
-import { appendEvent, eventLogPath } from './event-writer.js';
+import { sha256Hex } from './connectors/shared.js';
 import {
   type ManifestSnapshotInput,
   manifestSnapshotPath,
@@ -35,21 +29,25 @@ import {
 import { findCheckpointBriefBuilder } from './registries/checkpoint-writers/registry.js';
 import { findCloseBuilder, resolveCloseReadPaths } from './registries/close-writers/registry.js';
 import {
-  findSynthesisBuilder,
-  resolveSynthesisReadPaths,
-} from './registries/synthesis-writers/registry.js';
+  findComposeBuilder,
+  resolveComposeReadPaths,
+} from './registries/compose-writers/registry.js';
+import {
+  bindsExecutionDepthToRelaySelection,
+  selectionConfigLayersWithExecutionDepth,
+} from './relay-selection.js';
 import { writeResult } from './result-writer.js';
 import { resolveRunRelative } from './run-relative-path.js';
 import type {
   CheckpointResumeInvocation,
-  ChildWorkflowResolver,
-  DispatchFn,
-  DispatchResultMetadata,
-  SynthesisWriterFn,
-  SynthesisWriterInput,
-  WorkflowInvocation,
-  WorkflowRunResult,
-  WorkflowRunner,
+  ChildCompiledFlowResolver,
+  CompiledFlowInvocation,
+  CompiledFlowRunResult,
+  CompiledFlowRunner,
+  ComposeWriterFn,
+  ComposeWriterInput,
+  RelayFn,
+  RelayResultMetadata,
   WorktreeRunner,
 } from './runner-types.js';
 import { writeDerivedSnapshot } from './snapshot-writer.js';
@@ -59,7 +57,9 @@ import {
   type StepHandlerResult,
   runStepHandler,
 } from './step-handlers/index.js';
-import { isRunRelativePathError, writeJsonArtifact } from './step-handlers/shared.js';
+import { isRunRelativePathError, writeJsonReport } from './step-handlers/shared.js';
+import { readRunTrace } from './trace-reader.js';
+import { appendTraceEntry, trace_entryLogPath } from './trace-writer.js';
 
 // Public API surface from runner.ts. Implementations have moved to
 // dedicated modules during the handler-extraction split; the surface
@@ -67,49 +67,49 @@ import { isRunRelativePathError, writeJsonArtifact } from './step-handlers/share
 export type {
   CheckpointResumeInvocation,
   CheckpointWaitingResult,
-  ChildWorkflowResolver,
-  DispatchFn,
-  DispatchInput,
-  DispatchResultMetadata,
-  ResolvedChildWorkflow,
-  SynthesisWriterFn,
-  SynthesisWriterInput,
-  WorkflowInvocation,
-  WorkflowRunResult,
-  WorkflowRunner,
+  ChildCompiledFlowResolver,
+  RelayFn,
+  RelayInput,
+  RelayResultMetadata,
+  ResolvedChildCompiledFlow,
+  ComposeWriterFn,
+  ComposeWriterInput,
+  CompiledFlowInvocation,
+  CompiledFlowRunResult,
+  CompiledFlowRunner,
   WorktreeRunner,
   WorktreeProvisionInput,
 } from './runner-types.js';
 export { appendAndDerive } from './append-and-derive.js';
 export type { AppendResult } from './append-and-derive.js';
 
-interface RunRootInit {
-  runRoot: string;
+interface RunFolderInit {
+  runFolder: string;
 }
 
-export function initRunRoot({ runRoot }: RunRootInit): void {
-  mkdirSync(runRoot, { recursive: true });
-  mkdirSync(dirname(eventLogPath(runRoot)), { recursive: true });
+export function initRunFolder({ runFolder }: RunFolderInit): void {
+  mkdirSync(runFolder, { recursive: true });
+  mkdirSync(dirname(trace_entryLogPath(runFolder)), { recursive: true });
 }
 
-const RUN_ROOT_CLAIM_FILE = '.run-root.claim';
+const RUN_ROOT_CLAIM_FILE = '.run-folder.claim';
 
-export interface FreshRunRootClaim {
-  readonly runRoot: string;
+export interface FreshRunFolderClaim {
+  readonly runFolder: string;
   readonly path: string;
 }
 
-function runRootReuseError(runRoot: string, detail: string): Error {
+function runFolderReuseError(runFolder: string, detail: string): Error {
   return new Error(
-    `run-root reuse rejected for ${runRoot}: ${detail}; use checkpoint resume for paused checkpoint runs`,
+    `run-folder reuse rejected for ${runFolder}: ${detail}; use checkpoint resume for paused checkpoint runs`,
   );
 }
 
-export function claimFreshRunRoot(runRoot: string): FreshRunRootClaim {
-  const existing = lstatSync(runRoot, { throwIfNoEntry: false });
+export function claimFreshRunFolder(runFolder: string): FreshRunFolderClaim {
+  const existing = lstatSync(runFolder, { throwIfNoEntry: false });
   if (existing === undefined) {
     try {
-      mkdirSync(runRoot, { recursive: true });
+      mkdirSync(runFolder, { recursive: true });
     } catch (err) {
       if (
         err &&
@@ -117,72 +117,78 @@ export function claimFreshRunRoot(runRoot: string): FreshRunRootClaim {
         'code' in err &&
         (err.code === 'EEXIST' || err.code === 'ENOTDIR')
       ) {
-        throw runRootReuseError(runRoot, 'path already exists and is not an empty directory');
+        throw runFolderReuseError(runFolder, 'path already exists and is not an empty directory');
       }
       throw err;
     }
   }
-  const stat = lstatSync(runRoot);
+  const stat = lstatSync(runFolder);
   if (!stat.isDirectory() || stat.isSymbolicLink()) {
-    throw runRootReuseError(runRoot, 'path already exists and is not an empty directory');
+    throw runFolderReuseError(runFolder, 'path already exists and is not an empty directory');
   }
-  const claimPath = join(runRoot, RUN_ROOT_CLAIM_FILE);
+  const claimPath = join(runFolder, RUN_ROOT_CLAIM_FILE);
   let fd: number | undefined;
   try {
     fd = openSync(claimPath, 'wx');
     writeSync(fd, `${new Date().toISOString()}\n`);
   } catch (err) {
     if (err && typeof err === 'object' && 'code' in err && err.code === 'EEXIST') {
-      throw runRootReuseError(runRoot, 'another invocation has already claimed this run root');
+      throw runFolderReuseError(
+        runFolder,
+        'another invocation has already claimed this run folder',
+      );
     }
     throw err;
   } finally {
     if (fd !== undefined) closeSync(fd);
   }
 
-  const claim = { runRoot, path: claimPath };
+  const claim = { runFolder, path: claimPath };
   try {
-    const entries = readdirSync(runRoot).filter((entry) => entry !== RUN_ROOT_CLAIM_FILE);
+    const entries = readdirSync(runFolder).filter((entry) => entry !== RUN_ROOT_CLAIM_FILE);
     if (entries.length > 0) {
-      throw runRootReuseError(runRoot, `existing directory is not empty (${entries.join(', ')})`);
+      throw runFolderReuseError(
+        runFolder,
+        `existing directory is not empty (${entries.join(', ')})`,
+      );
     }
     return claim;
   } catch (err) {
-    releaseFreshRunRootClaim(claim);
+    releaseFreshRunFolderClaim(claim);
     throw err;
   }
 }
 
-export function releaseFreshRunRootClaim(claim: FreshRunRootClaim): void {
+export function releaseFreshRunFolderClaim(claim: FreshRunFolderClaim): void {
   rmSync(claim.path, { force: true });
 }
 
 interface BootstrapInput {
-  runRoot: string;
+  runFolder: string;
   manifest: ManifestSnapshotInput;
-  bootstrapEvent: Event;
+  bootstrapTraceEntry: TraceEntry;
 }
 
 interface BootstrapResult {
   manifestSnapshotPath: string;
-  eventLogPath: string;
+  trace_entryLogPath: string;
   snapshot: Snapshot;
 }
 
 export function bootstrapRun(input: BootstrapInput): BootstrapResult {
-  const claim = claimFreshRunRoot(input.runRoot);
+  const claim = claimFreshRunFolder(input.runFolder);
   try {
-    initRunRoot({ runRoot: input.runRoot });
-    writeManifestSnapshot(input.runRoot, input.manifest);
-    appendEvent(input.runRoot, input.bootstrapEvent);
-    const snapshot = writeDerivedSnapshot(input.runRoot);
+    initRunFolder({ runFolder: input.runFolder });
+    writeManifestSnapshot(input.runFolder, input.manifest);
+    appendTraceEntry(input.runFolder, input.bootstrapTraceEntry);
+    const snapshot = writeDerivedSnapshot(input.runFolder);
     return {
-      manifestSnapshotPath: manifestSnapshotPath(input.runRoot),
-      eventLogPath: eventLogPath(input.runRoot),
+      manifestSnapshotPath: manifestSnapshotPath(input.runFolder),
+      trace_entryLogPath: trace_entryLogPath(input.runFolder),
       snapshot,
     };
   } finally {
-    releaseFreshRunRootClaim(claim);
+    releaseFreshRunFolderClaim(claim);
   }
 }
 
@@ -199,152 +205,150 @@ function terminalOutcomeForRoute(route: string): RunClosedOutcome | undefined {
     : undefined;
 }
 
-function readJsonArtifact(runRoot: string, path: string): unknown {
-  return JSON.parse(readFileSync(resolveRunRelative(runRoot, path), 'utf8')) as unknown;
+function readJsonReport(runFolder: string, path: string): unknown {
+  return JSON.parse(readFileSync(resolveRunRelative(runFolder, path), 'utf8')) as unknown;
 }
 
-// Synthesis writer fallback. Workflow-specific synthesis logic lives
-// under src/runtime/registries/synthesis-writers/ and is registered by
-// output schema name; close-with-evidence dispatch lives in
-// src/runtime/registries/close-writers/. The runner stays workflow-
-// agnostic — adding a new synthesis step means adding a SynthesisBuilder
+// Compose writer fallback. CompiledFlow-specific compose logic lives
+// under src/runtime/registries/compose-writers/ and is registered by
+// output schema name; close-with-evidence relay lives in
+// src/runtime/registries/close-writers/. The runner stays flow-
+// agnostic — adding a new compose step means adding a ComposeBuilder
 // file + registry entry.
-function tryWriteRegisteredSynthesisArtifact(input: SynthesisWriterInput): boolean {
-  const { runRoot, workflow, step, goal } = input;
-  const schemaName = step.writes.artifact.schema;
+function tryWriteRegisteredComposeReport(input: ComposeWriterInput): boolean {
+  const { runFolder, flow, step, goal } = input;
+  const schemaName = step.writes.report.schema;
 
-  const synthesisBuilder = findSynthesisBuilder(schemaName);
-  if (synthesisBuilder !== undefined) {
-    const readPaths = resolveSynthesisReadPaths(synthesisBuilder, workflow, step);
+  const composeBuilder = findComposeBuilder(schemaName);
+  if (composeBuilder !== undefined) {
+    const readPaths = resolveComposeReadPaths(composeBuilder, flow, step);
     const inputs: Record<string, unknown | undefined> = {};
     for (const [name, path] of Object.entries(readPaths)) {
-      inputs[name] = path === undefined ? undefined : readJsonArtifact(runRoot, path);
+      inputs[name] = path === undefined ? undefined : readJsonReport(runFolder, path);
     }
-    const artifact = synthesisBuilder.build({ runRoot, workflow, step, goal, inputs });
-    writeJsonArtifact(runRoot, step.writes.artifact.path, artifact);
+    const report = composeBuilder.build({ runFolder, flow, step, goal, inputs });
+    writeJsonReport(runFolder, step.writes.report.path, report);
     return true;
   }
 
   const closeBuilder = findCloseBuilder(schemaName);
-  if (closeBuilder !== undefined && step.kind === 'synthesis') {
-    const readPaths = resolveCloseReadPaths(closeBuilder, workflow, step);
+  if (closeBuilder !== undefined && step.kind === 'compose') {
+    const readPaths = resolveCloseReadPaths(closeBuilder, flow, step);
     const inputs: Record<string, unknown | undefined> = {};
     for (const [name, path] of Object.entries(readPaths)) {
-      inputs[name] = path === undefined ? undefined : readJsonArtifact(runRoot, path);
+      inputs[name] = path === undefined ? undefined : readJsonReport(runFolder, path);
     }
-    const artifact = closeBuilder.build({
-      runRoot,
-      workflow,
+    const report = closeBuilder.build({
+      runFolder,
+      flow,
       closeStep: step,
       goal,
       inputs,
     });
-    writeJsonArtifact(runRoot, step.writes.artifact.path, artifact);
+    writeJsonReport(runFolder, step.writes.report.path, report);
     return true;
   }
 
   return false;
 }
 
-export function writeSynthesisArtifact(input: SynthesisWriterInput): void {
-  const { runRoot, step } = input;
-  if (tryWriteRegisteredSynthesisArtifact(input)) return;
+export function writeComposeReport(input: ComposeWriterInput): void {
+  const { runFolder, step } = input;
+  if (tryWriteRegisteredComposeReport(input)) return;
   const body: Record<string, string> = {};
-  for (const section of step.gate.required) {
+  for (const section of step.check.required) {
     body[section] = `<${step.id as unknown as string}-placeholder-${section}>`;
   }
-  writeJsonArtifact(runRoot, step.writes.artifact.path, body);
+  writeJsonReport(runFolder, step.writes.report.path, body);
 }
 
-interface WorkflowExecutionContext {
-  readonly runRoot: string;
-  readonly workflow: Workflow;
-  readonly workflowBytes: Buffer;
+interface CompiledFlowExecutionContext {
+  readonly runFolder: string;
+  readonly flow: CompiledFlow;
+  readonly flowBytes: Buffer;
   readonly runId: RunId;
   readonly goal: string;
-  readonly rigor?: Rigor;
+  readonly depth?: Depth;
   readonly entryModeName?: string;
-  readonly lane: LaneDeclaration;
+  readonly change_kind: ChangeKindDeclaration;
   readonly now: () => Date;
-  readonly dispatcher?: DispatchFn;
-  readonly synthesisWriter?: SynthesisWriterFn;
+  readonly relayer?: RelayFn;
+  readonly composeWriter?: ComposeWriterFn;
   readonly selectionConfigLayers?: readonly LayeredConfigValue[];
   readonly projectRoot?: string;
   readonly invocationId?: InvocationId;
-  readonly initialEvents?: readonly Event[];
+  readonly initialTraceEntrys?: readonly TraceEntry[];
   readonly startStepId?: string;
   readonly resumeCheckpoint?: ResumeCheckpointState;
-  readonly childWorkflowResolver?: ChildWorkflowResolver;
-  readonly childRunner?: WorkflowRunner;
+  readonly childCompiledFlowResolver?: ChildCompiledFlowResolver;
+  readonly childRunner?: CompiledFlowRunner;
   readonly worktreeRunner?: WorktreeRunner;
 }
 
-async function resolveDispatcher(inv: { dispatcher?: DispatchFn }): Promise<DispatchFn> {
-  if (inv.dispatcher !== undefined) return inv.dispatcher;
-  const { dispatchAgent } = await import('./adapters/agent.js');
-  return { adapterName: 'agent', dispatch: dispatchAgent };
+async function resolveRelayer(inv: { relayer?: RelayFn }): Promise<RelayFn> {
+  if (inv.relayer !== undefined) return inv.relayer;
+  const { relayAgent } = await import('./connectors/agent.js');
+  return { connectorName: 'agent', relay: relayAgent };
 }
 
 function selectEntryMode(
-  workflow: Workflow,
+  flow: CompiledFlow,
   entryModeName: string | undefined,
-): Workflow['entry_modes'][number] {
-  if (workflow.entry_modes.length === 0) {
-    throw new Error(`runWorkflow: workflow ${workflow.id} declares no entry_modes`);
+): CompiledFlow['entry_modes'][number] {
+  if (flow.entry_modes.length === 0) {
+    throw new Error(`runCompiledFlow: flow ${flow.id} declares no entry_modes`);
   }
   if (entryModeName === undefined) {
-    const entry = workflow.entry_modes[0];
+    const entry = flow.entry_modes[0];
     if (entry === undefined) {
-      throw new Error(`runWorkflow: workflow ${workflow.id} entry_modes[0] unreadable`);
+      throw new Error(`runCompiledFlow: flow ${flow.id} entry_modes[0] unreadable`);
     }
     return entry;
   }
-  const entry = workflow.entry_modes.find((mode) => mode.name === entryModeName);
+  const entry = flow.entry_modes.find((mode) => mode.name === entryModeName);
   if (entry === undefined) {
     throw new Error(
-      `runWorkflow: workflow ${workflow.id} declares no entry_mode named '${entryModeName}'`,
+      `runCompiledFlow: flow ${flow.id} declares no entry_mode named '${entryModeName}'`,
     );
   }
   return entry;
 }
 
-function workflowFromManifestBytes(bytes: Buffer): Workflow {
-  return Workflow.parse(JSON.parse(bytes.toString('utf8')));
+function flowFromManifestBytes(bytes: Buffer): CompiledFlow {
+  return CompiledFlow.parse(JSON.parse(bytes.toString('utf8')));
 }
 
 interface CheckpointRequestContext {
   readonly projectRoot?: string;
   readonly selectionConfigLayers: readonly LayeredConfigValue[];
-  readonly checkpointArtifactSha256?: string;
+  readonly checkpointReportSha256?: string;
 }
 
-type CheckpointWorkflowStep = Workflow['steps'][number] & { kind: 'checkpoint' };
+type CheckpointCompiledFlowStep = CompiledFlow['steps'][number] & { kind: 'checkpoint' };
 
 function readCheckpointRequestContext(input: {
-  readonly runRoot: string;
-  readonly step: CheckpointWorkflowStep;
-  readonly expectedRequestArtifactHash: string;
+  readonly runFolder: string;
+  readonly step: CheckpointCompiledFlowStep;
+  readonly expectedRequestReportHash: string;
 }): CheckpointRequestContext {
-  const requestAbs = resolveRunRelative(input.runRoot, input.step.writes.request);
+  const requestAbs = resolveRunRelative(input.runFolder, input.step.writes.request);
   const requestText = readFileSync(requestAbs, 'utf8');
   const observedRequestHash = sha256Hex(requestText);
-  if (observedRequestHash !== input.expectedRequestArtifactHash) {
-    throw new Error('checkpoint resume rejected: checkpoint request hash differs from event log');
+  if (observedRequestHash !== input.expectedRequestReportHash) {
+    throw new Error('checkpoint resume rejected: checkpoint request hash differs from trace');
   }
   const raw: unknown = JSON.parse(requestText);
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
-    throw new Error(
-      `checkpoint resume rejected: request artifact for '${input.step.id}' is invalid`,
-    );
+    throw new Error(`checkpoint resume rejected: request report for '${input.step.id}' is invalid`);
   }
   const record = raw as Record<string, unknown>;
   if (record.schema_version !== 1 || record.step_id !== input.step.id) {
-    throw new Error(`checkpoint resume rejected: request artifact for '${input.step.id}' is stale`);
+    throw new Error(`checkpoint resume rejected: request report for '${input.step.id}' is stale`);
   }
   const context = record.execution_context;
   if (context === null || typeof context !== 'object' || Array.isArray(context)) {
     throw new Error(
-      `checkpoint resume rejected: request artifact for '${input.step.id}' has no execution context`,
+      `checkpoint resume rejected: request report for '${input.step.id}' has no execution context`,
     );
   }
   const contextRecord = context as Record<string, unknown>;
@@ -355,37 +359,37 @@ function readCheckpointRequestContext(input: {
   const selectionConfigLayers = LayeredConfig.array().parse(
     contextRecord.selection_config_layers ?? [],
   );
-  const checkpointArtifactSha256 = contextRecord.checkpoint_artifact_sha256;
-  if (checkpointArtifactSha256 !== undefined && typeof checkpointArtifactSha256 !== 'string') {
+  const checkpointReportSha256 = contextRecord.checkpoint_report_sha256;
+  if (checkpointReportSha256 !== undefined && typeof checkpointReportSha256 !== 'string') {
     throw new Error(
-      'checkpoint resume rejected: checkpoint_artifact_sha256 in checkpoint request is invalid',
+      'checkpoint resume rejected: checkpoint_report_sha256 in checkpoint request is invalid',
     );
   }
   return {
     ...(projectRoot === undefined ? {} : { projectRoot }),
     selectionConfigLayers,
-    ...(checkpointArtifactSha256 === undefined ? {} : { checkpointArtifactSha256 }),
+    ...(checkpointReportSha256 === undefined ? {} : { checkpointReportSha256 }),
   };
 }
 
-function readCheckpointResumeArtifact(input: {
-  readonly runRoot: string;
-  readonly step: CheckpointWorkflowStep;
+function readCheckpointResumeReport(input: {
+  readonly runFolder: string;
+  readonly step: CheckpointCompiledFlowStep;
   readonly requestContext: CheckpointRequestContext;
 }): unknown {
-  const artifact = input.step.writes.artifact;
-  if (artifact === undefined) return undefined;
-  const builder = findCheckpointBriefBuilder(artifact.schema);
+  const report = input.step.writes.report;
+  if (report === undefined) return undefined;
+  const builder = findCheckpointBriefBuilder(report.schema);
   if (builder === undefined) return undefined;
-  // step-handlers/checkpoint.ts stores checkpoint_artifact_sha256 in the
-  // request iff a builder exists for the artifact schema. So on resume,
+  // step-handlers/checkpoint.ts stores checkpoint_report_sha256 in the
+  // request iff a builder exists for the report schema. So on resume,
   // if the request carries a hash, the builder MUST own resume
-  // validation. A builder that writes artifacts but skips
+  // validation. A builder that writes reports but skips
   // validateResumeContext would silently lose hash protection.
   if (builder.validateResumeContext === undefined) {
-    if (input.requestContext.checkpointArtifactSha256 !== undefined) {
+    if (input.requestContext.checkpointReportSha256 !== undefined) {
       throw new Error(
-        `checkpoint resume rejected: builder for schema '${artifact.schema}' is missing validateResumeContext but the checkpoint request carries an artifact hash`,
+        `checkpoint resume rejected: builder for schema '${report.schema}' is missing validateResumeContext but the checkpoint request carries an report hash`,
       );
     }
     return undefined;
@@ -396,91 +400,92 @@ function readCheckpointResumeArtifact(input: {
   // operator. Wrap so every error from this seam carries the prefix.
   try {
     return builder.validateResumeContext({
-      runRoot: input.runRoot,
+      runFolder: input.runFolder,
       step: input.step,
-      artifactPath: artifact.path,
-      ...(input.requestContext.checkpointArtifactSha256 === undefined
+      reportPath: report.path,
+      ...(input.requestContext.checkpointReportSha256 === undefined
         ? {}
-        : { artifactSha256: input.requestContext.checkpointArtifactSha256 }),
+        : { reportSha256: input.requestContext.checkpointReportSha256 }),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (message.startsWith('checkpoint resume rejected:')) throw err;
     throw new Error(
-      `checkpoint resume rejected: builder for schema '${artifact.schema}' validateResumeContext threw: ${message}`,
+      `checkpoint resume rejected: builder for schema '${report.schema}' validateResumeContext threw: ${message}`,
     );
   }
 }
 
 function findWaitingCheckpoint(input: {
-  readonly runRoot: string;
-  readonly workflow: Workflow;
+  readonly runFolder: string;
+  readonly flow: CompiledFlow;
   readonly selection: string;
 }): {
-  readonly events: readonly Event[];
+  readonly trace_entrys: readonly TraceEntry[];
   readonly stepId: string;
   readonly attempt: number;
-  readonly bootstrap: Extract<Event, { kind: 'run.bootstrapped' }>;
+  readonly bootstrap: Extract<TraceEntry, { kind: 'run.bootstrapped' }>;
   readonly requestContext: CheckpointRequestContext;
 } {
-  const events = readRunLog(input.runRoot);
-  const bootstrap = events[0];
+  const trace_entrys = readRunTrace(input.runFolder);
+  const bootstrap = trace_entrys[0];
   if (bootstrap === undefined || bootstrap.kind !== 'run.bootstrapped') {
-    throw new Error('checkpoint resume requires a bootstrapped event log');
+    throw new Error('checkpoint resume requires a bootstrapped trace');
   }
-  if (events.some((event) => event.kind === 'run.closed')) {
+  if (trace_entrys.some((trace_entry) => trace_entry.kind === 'run.closed')) {
     throw new Error('checkpoint resume rejected: run is already closed');
   }
-  const snapshot = writeDerivedSnapshot(input.runRoot);
+  const snapshot = writeDerivedSnapshot(input.runFolder);
   if (snapshot.status !== 'in_progress' || snapshot.current_step === undefined) {
     throw new Error('checkpoint resume rejected: run is not paused at an in-progress step');
   }
   const stepId = snapshot.current_step as unknown as string;
-  const step = input.workflow.steps.find(
-    (candidate) => (candidate.id as unknown as string) === stepId,
-  );
+  const step = input.flow.steps.find((candidate) => (candidate.id as unknown as string) === stepId);
   if (step === undefined || step.kind !== 'checkpoint') {
     throw new Error(`checkpoint resume rejected: current step '${stepId}' is not a checkpoint`);
   }
-  const requested = [...events]
+  const requested = [...trace_entrys]
     .reverse()
     .find(
-      (event): event is Extract<Event, { kind: 'checkpoint.requested' }> =>
-        event.kind === 'checkpoint.requested' && (event.step_id as unknown as string) === stepId,
+      (trace_entry): trace_entry is Extract<TraceEntry, { kind: 'checkpoint.requested' }> =>
+        trace_entry.kind === 'checkpoint.requested' &&
+        (trace_entry.step_id as unknown as string) === stepId,
     );
   if (requested === undefined) {
-    throw new Error(`checkpoint resume rejected: checkpoint '${stepId}' has no request event`);
+    throw new Error(
+      `checkpoint resume rejected: checkpoint '${stepId}' has no request trace_entry`,
+    );
   }
-  const alreadyResolved = events.some(
-    (event) =>
-      event.kind === 'checkpoint.resolved' &&
-      (event.step_id as unknown as string) === stepId &&
-      event.attempt === requested.attempt,
+  const alreadyResolved = trace_entrys.some(
+    (trace_entry) =>
+      trace_entry.kind === 'checkpoint.resolved' &&
+      (trace_entry.step_id as unknown as string) === stepId &&
+      trace_entry.attempt === requested.attempt,
   );
   if (alreadyResolved) {
     throw new Error(`checkpoint resume rejected: checkpoint '${stepId}' is already resolved`);
   }
-  if (!step.gate.allow.includes(input.selection)) {
+  if (!step.check.allow.includes(input.selection)) {
     throw new Error(
       `checkpoint resume rejected: selection '${input.selection}' is not allowed for checkpoint '${stepId}'`,
     );
   }
   const requestContext = readCheckpointRequestContext({
-    runRoot: input.runRoot,
+    runFolder: input.runFolder,
     step,
-    expectedRequestArtifactHash: requested.request_artifact_hash,
+    expectedRequestReportHash: requested.request_report_hash,
   });
   // Run validateResumeContext for tamper detection + shape verification.
   // Return value is unused — the brief is no longer re-stamped post-
-  // resolution, so the runtime doesn't need an `existingArtifact`
+  // resolution, so the runtime doesn't need an `existingReport`
   // handle to thread through.
-  readCheckpointResumeArtifact({
-    runRoot: input.runRoot,
+  readCheckpointResumeReport({
+    runFolder: input.runFolder,
     step,
     requestContext,
   });
   return {
-    events,
+    trace_entrys,
     stepId,
     attempt: requested.attempt,
     bootstrap,
@@ -488,84 +493,86 @@ function findWaitingCheckpoint(input: {
   };
 }
 
-// Execution loop. Bootstrap, walk routes from entry.start_at, delegate
-// per-step work to the kind→handler dispatcher, advance pass route, emit
+// Execution loop. Bootstrap, walk routes from entry.start_at, delecheck
+// per-step work to the kind→handler relayer, advance pass route, emit
 // run.closed, write result.json. The loop stays narrow: it owns the
-// route walk and run-level events; per-kind logic lives in
+// route walk and run-level trace_entrys; per-kind logic lives in
 // src/runtime/step-handlers/.
-async function executeWorkflow(ctx: WorkflowExecutionContext): Promise<WorkflowRunResult> {
-  const { runRoot, workflow, workflowBytes, runId, goal, lane, now } = ctx;
-  const dispatcher = await resolveDispatcher(ctx);
-  const synthesisWriter = ctx.synthesisWriter ?? writeSynthesisArtifact;
-  const entry = selectEntryMode(workflow, ctx.entryModeName);
-  const rigor = ctx.rigor ?? entry.rigor;
-  const executionSelectionConfigLayers = bindsExecutionRigorToDispatchSelection(workflow)
-    ? selectionConfigLayersWithExecutionRigor(ctx, workflow, rigor)
+async function executeCompiledFlow(
+  ctx: CompiledFlowExecutionContext,
+): Promise<CompiledFlowRunResult> {
+  const { runFolder, flow, flowBytes, runId, goal, change_kind, now } = ctx;
+  const relayer = await resolveRelayer(ctx);
+  const composeWriter = ctx.composeWriter ?? writeComposeReport;
+  const entry = selectEntryMode(flow, ctx.entryModeName);
+  const depth = ctx.depth ?? entry.depth;
+  const executionSelectionConfigLayers = bindsExecutionDepthToRelaySelection(flow)
+    ? selectionConfigLayersWithExecutionDepth(ctx, flow, depth)
     : (ctx.selectionConfigLayers ?? []);
 
-  const manifestHash = computeManifestHash(workflowBytes);
+  const manifestHash = computeManifestHash(flowBytes);
   const bootstrapTs = now().toISOString();
-  const bootstrapEvent: Event = {
+  const bootstrapTraceEntry: TraceEntry = {
     schema_version: 1,
     sequence: 0,
     recorded_at: bootstrapTs,
     run_id: runId,
     kind: 'run.bootstrapped',
-    workflow_id: workflow.id as WorkflowId,
+    flow_id: flow.id as CompiledFlowId,
     ...(ctx.invocationId === undefined ? {} : { invocation_id: ctx.invocationId }),
-    rigor,
+    depth,
     goal,
-    lane,
+    change_kind,
     manifest_hash: manifestHash,
   };
 
-  const events: Event[] =
-    ctx.initialEvents === undefined ? [bootstrapEvent] : [...ctx.initialEvents];
-  if (ctx.initialEvents === undefined) {
+  const trace_entrys: TraceEntry[] =
+    ctx.initialTraceEntrys === undefined ? [bootstrapTraceEntry] : [...ctx.initialTraceEntrys];
+  if (ctx.initialTraceEntrys === undefined) {
     bootstrapRun({
-      runRoot,
+      runFolder,
       manifest: {
         run_id: runId,
-        workflow_id: workflow.id as WorkflowId,
+        flow_id: flow.id as CompiledFlowId,
         captured_at: bootstrapTs,
-        bytes: workflowBytes,
+        bytes: flowBytes,
       },
-      bootstrapEvent,
+      bootstrapTraceEntry,
     });
   }
-  // Capture per-dispatch metadata for AGENT_SMOKE / CODEX_SMOKE
-  // fingerprint binding to cli_version without forcing a dispatch event
+  // Capture per-relay metadata for AGENT_SMOKE / CODEX_SMOKE
+  // fingerprint binding to cli_version without forcing a relay trace_entry
   // schema bump.
-  const dispatchResults: DispatchResultMetadata[] = [];
-  const state: RunState = { events, sequence: events.length, dispatchResults };
+  const relayResults: RelayResultMetadata[] = [];
+  const state: RunState = { trace_entrys, sequence: trace_entrys.length, relayResults };
   const recordedAt = (): string => now().toISOString();
   // push() is the single sequence-assignment authority: it overwrites
-  // the caller-supplied `sequence` field on the event with the current
+  // the caller-supplied `sequence` field on the trace_entry with the current
   // state.sequence and increments. JS is single-threaded and push() is
   // fully synchronous (appendAndDerive uses sync fs writes), so today
-  // concurrent callers cannot interleave at the event-loop level. The
+  // concurrent callers cannot interleave at the trace_entry-loop level. The
   // overwrite locks that property in by construction and guards
   // against (a) future async refactors that would expose the
   // read-then-increment as a real race, and (b) callers reading a
-  // stale `state.sequence` snapshot into an event literal across an
+  // stale `state.sequence` snapshot into an trace_entry literal across an
   // await boundary. Adversarial-review fix #3 + #12: handlers can no
   // longer corrupt the sequence stream by passing wrong values, and
-  // the only path to emit an event is push().
-  const push = (ev: Event): void => {
-    const sequenced: Event = { ...ev, sequence: state.sequence };
-    events.push(sequenced);
-    appendAndDerive(runRoot, sequenced);
+  // the only path to emit an trace_entry is push().
+  const push = (ev: TraceEntry): void => {
+    const sequenced: TraceEntry = { ...ev, sequence: state.sequence };
+    trace_entrys.push(sequenced);
+    appendAndDerive(runFolder, sequenced);
     state.sequence += 1;
   };
 
   // Walk the routes graph from entry.start_at. Terminate when a step's
   // pass route resolves to one of the terminal route labels, or when a
   // step handler reports an aborted outcome.
-  const stepsById = new Map(workflow.steps.map((s) => [s.id as unknown as string, s] as const));
+  const stepsById = new Map(flow.steps.map((s) => [s.id as unknown as string, s] as const));
   const executedStepIds = new Set(
-    events
-      .filter((event) => event.kind === 'step.completed')
-      .map((event) => event.step_id as unknown as string),
+    trace_entrys
+      .filter((trace_entry) => trace_entry.kind === 'step.completed')
+      .map((trace_entry) => trace_entry.step_id as unknown as string),
   );
   let currentStepId: string | undefined = ctx.startStepId ?? (entry.start_at as unknown as string);
   let runOutcome: RunClosedOutcome = 'complete';
@@ -575,7 +582,7 @@ async function executeWorkflow(ctx: WorkflowExecutionContext): Promise<WorkflowR
     const step = stepsById.get(currentStepId);
     if (step === undefined) {
       throw new Error(
-        `runWorkflow: route target '${currentStepId}' is not a known step id (fixture/reduction mismatch)`,
+        `runCompiledFlow: route target '${currentStepId}' is not a known step id (fixture/reduction mismatch)`,
       );
     }
     if (executedStepIds.has(currentStepId)) {
@@ -600,28 +607,28 @@ async function executeWorkflow(ctx: WorkflowExecutionContext): Promise<WorkflowR
       });
     }
 
-    // Handler exceptions must not corrupt the run-root: a thrown error
-    // that escapes executeWorkflow leaves step.entered on disk with no
+    // Handler exceptions must not corrupt the run-folder: a thrown error
+    // that escapes executeCompiledFlow leaves step.entered on disk with no
     // matching step.aborted, no run.closed, and no result.json — the
-    // run-root is then half-bootstrapped and claimFreshRunRoot rejects
+    // run-folder is then half-bootstrapped and claimFreshRunFolder rejects
     // every retry. Wrap so unexpected throws emit step.aborted and fall
     // through to the standard close path. Path-escape errors are a
     // security boundary (callers must see no partial output is trusted)
-    // and continue to propagate.
+    // and continue to propacheck.
     let result: StepHandlerResult;
     try {
       result = await runStepHandler({
-        runRoot,
-        workflow,
+        runFolder,
+        flow,
         runId,
         goal,
-        lane,
-        rigor,
+        change_kind,
+        depth,
         executionSelectionConfigLayers,
         ...(ctx.projectRoot === undefined ? {} : { projectRoot: ctx.projectRoot }),
         ...(ctx.invocationId === undefined ? {} : { invocationId: ctx.invocationId }),
-        dispatcher,
-        synthesisWriter,
+        relayer,
+        composeWriter,
         now,
         recordedAt,
         state,
@@ -630,10 +637,10 @@ async function executeWorkflow(ctx: WorkflowExecutionContext): Promise<WorkflowR
         attempt,
         isResumedCheckpoint,
         ...(ctx.resumeCheckpoint === undefined ? {} : { resumeCheckpoint: ctx.resumeCheckpoint }),
-        childRunner: ctx.childRunner ?? runWorkflow,
-        ...(ctx.childWorkflowResolver === undefined
+        childRunner: ctx.childRunner ?? runCompiledFlow,
+        ...(ctx.childCompiledFlowResolver === undefined
           ? {}
-          : { childWorkflowResolver: ctx.childWorkflowResolver }),
+          : { childCompiledFlowResolver: ctx.childCompiledFlowResolver }),
         ...(ctx.worktreeRunner === undefined ? {} : { worktreeRunner: ctx.worktreeRunner }),
       });
     } catch (err) {
@@ -657,17 +664,17 @@ async function executeWorkflow(ctx: WorkflowExecutionContext): Promise<WorkflowR
     }
 
     if (result.kind === 'waiting_checkpoint') {
-      const snapshot = writeDerivedSnapshot(runRoot);
+      const snapshot = writeDerivedSnapshot(runFolder);
       return {
-        runRoot,
+        runFolder,
         result: {
           schema_version: 1,
           run_id: runId,
-          workflow_id: workflow.id,
+          flow_id: flow.id,
           goal,
           outcome: 'checkpoint_waiting',
           summary: `checkpoint '${result.checkpoint.stepId}' is waiting for an operator choice.`,
-          events_observed: events.length,
+          trace_entries_observed: trace_entrys.length,
           manifest_hash: manifestHash,
           checkpoint: {
             step_id: result.checkpoint.stepId,
@@ -676,8 +683,8 @@ async function executeWorkflow(ctx: WorkflowExecutionContext): Promise<WorkflowR
           },
         },
         snapshot,
-        events,
-        dispatchResults,
+        trace_entrys,
+        relayResults,
       };
     }
 
@@ -690,7 +697,7 @@ async function executeWorkflow(ctx: WorkflowExecutionContext): Promise<WorkflowR
 
     const passRoute = step.routes.pass;
     if (passRoute === undefined) {
-      throw new Error(`runWorkflow: step '${step.id}' missing 'pass' route (WF-I10 violation)`);
+      throw new Error(`runCompiledFlow: step '${step.id}' missing 'pass' route (WF-I10 violation)`);
     }
     const terminalOutcome = terminalOutcomeForRoute(passRoute);
 
@@ -735,7 +742,7 @@ async function executeWorkflow(ctx: WorkflowExecutionContext): Promise<WorkflowR
   }
 
   const closedAt = recordedAt();
-  const closed: Event = {
+  const closed: TraceEntry = {
     schema_version: 1,
     sequence: state.sequence,
     recorded_at: closedAt,
@@ -746,84 +753,84 @@ async function executeWorkflow(ctx: WorkflowExecutionContext): Promise<WorkflowR
   };
   push(closed);
 
-  const terminalVerdict = deriveTerminalVerdict(events, runOutcome);
-  const result = writeResult(runRoot, {
+  const terminalVerdict = deriveTerminalVerdict(trace_entrys, runOutcome);
+  const result = writeResult(runFolder, {
     schema_version: 1,
     run_id: runId,
-    workflow_id: workflow.id,
+    flow_id: flow.id,
     goal,
     outcome: runOutcome,
-    summary: buildSummary({ workflow, goal, events }),
+    summary: buildSummary({ flow, goal, trace_entrys }),
     closed_at: closedAt,
-    events_observed: events.length,
+    trace_entries_observed: trace_entrys.length,
     manifest_hash: manifestHash,
-    // RESULT-I4: mirror the close-event reason onto the user-visible
+    // RESULT-I4: mirror the close-trace_entry reason onto the user-visible
     // result.json so an aborted run explains itself without requiring
-    // the operator to walk the event log.
+    // the operator to walk the trace.
     ...(closeReason === undefined ? {} : { reason: closeReason }),
     // Sub-run runtime slice (RESULT-I5): expose the run's terminal
     // admitted verdict so a parent sub-run can admit/reject the child
-    // against its own gate.pass.
+    // against its own check.pass.
     ...(terminalVerdict === undefined ? {} : { verdict: terminalVerdict }),
   });
 
   // Final snapshot is whatever the last appendAndDerive produced; re-derive
   // once at close to return the definitive state.
-  const finalSnapshot = writeDerivedSnapshot(runRoot);
+  const finalSnapshot = writeDerivedSnapshot(runFolder);
 
   return {
-    runRoot,
+    runFolder,
     result,
     snapshot: finalSnapshot,
-    events,
-    dispatchResults,
+    trace_entrys,
+    relayResults,
   };
 }
 
-export async function runWorkflow(inv: WorkflowInvocation): Promise<WorkflowRunResult> {
-  return executeWorkflow(inv);
+export async function runCompiledFlow(inv: CompiledFlowInvocation): Promise<CompiledFlowRunResult> {
+  return executeCompiledFlow(inv);
 }
 
-export async function resumeWorkflowCheckpoint(
+export async function resumeCompiledFlowCheckpoint(
   inv: CheckpointResumeInvocation,
-): Promise<WorkflowRunResult> {
-  const manifest = verifyManifestSnapshotBytes(inv.runRoot);
-  const workflowBytes = Buffer.from(manifest.bytes_base64, 'base64');
-  const workflow = workflowFromManifestBytes(workflowBytes);
-  if (workflow.id !== manifest.workflow_id) {
+): Promise<CompiledFlowRunResult> {
+  const manifest = verifyManifestSnapshotBytes(inv.runFolder);
+  const flowBytes = Buffer.from(manifest.bytes_base64, 'base64');
+  const flow = flowFromManifestBytes(flowBytes);
+  if (flow.id !== manifest.flow_id) {
     throw new Error(
-      `checkpoint resume rejected: manifest workflow_id '${manifest.workflow_id as unknown as string}' does not match workflow bytes '${workflow.id as unknown as string}'`,
+      `checkpoint resume rejected: manifest flow_id '${manifest.flow_id as unknown as string}' does not match flow bytes '${flow.id as unknown as string}'`,
     );
   }
   const waiting = findWaitingCheckpoint({
-    runRoot: inv.runRoot,
-    workflow,
+    runFolder: inv.runFolder,
+    flow,
     selection: inv.selection,
   });
   if (waiting.bootstrap.run_id !== manifest.run_id) {
-    throw new Error('checkpoint resume rejected: manifest run_id differs from event log');
+    throw new Error('checkpoint resume rejected: manifest run_id differs from trace');
   }
-  if (waiting.bootstrap.workflow_id !== manifest.workflow_id) {
-    throw new Error('checkpoint resume rejected: manifest workflow_id differs from event log');
+  if (waiting.bootstrap.flow_id !== manifest.flow_id) {
+    throw new Error('checkpoint resume rejected: manifest flow_id differs from trace');
   }
   if (waiting.bootstrap.manifest_hash !== manifest.hash) {
-    throw new Error('checkpoint resume rejected: manifest hash differs from event log');
+    throw new Error('checkpoint resume rejected: manifest hash differs from trace');
   }
 
-  return executeWorkflow({
-    runRoot: inv.runRoot,
-    workflow,
-    workflowBytes,
+  return executeCompiledFlow({
+    runFolder: inv.runFolder,
+    flow,
+    flowBytes,
     runId: waiting.bootstrap.run_id,
     goal: waiting.bootstrap.goal,
-    rigor: waiting.bootstrap.rigor,
-    lane: waiting.bootstrap.lane,
+    depth: waiting.bootstrap.depth,
+    change_kind: waiting.bootstrap.change_kind,
     now: inv.now,
-    ...(inv.dispatcher === undefined ? {} : { dispatcher: inv.dispatcher }),
-    ...(inv.synthesisWriter === undefined ? {} : { synthesisWriter: inv.synthesisWriter }),
-    ...(inv.childWorkflowResolver === undefined
+    ...(inv.relayer === undefined ? {} : { relayer: inv.relayer }),
+    ...(inv.composeWriter === undefined ? {} : { composeWriter: inv.composeWriter }),
+    ...(inv.childCompiledFlowResolver === undefined
       ? {}
-      : { childWorkflowResolver: inv.childWorkflowResolver }),
+      : { childCompiledFlowResolver: inv.childCompiledFlowResolver }),
     ...(inv.childRunner === undefined ? {} : { childRunner: inv.childRunner }),
     ...(inv.worktreeRunner === undefined ? {} : { worktreeRunner: inv.worktreeRunner }),
     selectionConfigLayers: waiting.requestContext.selectionConfigLayers,
@@ -833,7 +840,7 @@ export async function resumeWorkflowCheckpoint(
     ...(waiting.bootstrap.invocation_id === undefined
       ? {}
       : { invocationId: waiting.bootstrap.invocation_id }),
-    initialEvents: waiting.events,
+    initialTraceEntrys: waiting.trace_entrys,
     startStepId: waiting.stepId,
     resumeCheckpoint: {
       stepId: waiting.stepId,
@@ -843,47 +850,51 @@ export async function resumeWorkflowCheckpoint(
   });
 }
 
-function buildSummary(input: { workflow: Workflow; goal: string; events: Event[] }): string {
-  const stepCount = input.events.filter((e) => e.kind === 'step.completed').length;
-  return `${input.workflow.id} v${input.workflow.version} closed ${stepCount} step(s) for goal "${input.goal}".`;
+function buildSummary(input: {
+  flow: CompiledFlow;
+  goal: string;
+  trace_entrys: TraceEntry[];
+}): string {
+  const stepCount = input.trace_entrys.filter((e) => e.kind === 'step.completed').length;
+  return `${input.flow.id} v${input.flow.version} closed ${stepCount} step(s) for goal "${input.goal}".`;
 }
 
 // RESULT-I5: derive the run's terminal admitted verdict for the user-
 // visible result.json. The contract:
 //
 // - Returns the verdict from the LATEST (chronologically last)
-//   dispatch.completed | sub_run.completed event whose corresponding
-//   gate.evaluated for the same (step_id, attempt) had
-//   gate_kind='result_verdict' and outcome='pass'.
+//   relay.completed | sub_run.completed trace_entry whose corresponding
+//   check.evaluated for the same (step_id, attempt) had
+//   check_kind='result_verdict' and outcome='pass'.
 // - Returns undefined for any run that did not reach outcome=complete.
 // - Returns undefined for runs that completed with no verdict-bearing
-//   admitted step (synthesis-only routes, close-with-evidence
+//   admitted step (compose-only routes, close-with-evidence
 //   terminations, fanout-only steps).
 //
 // Why walk-backward instead of "the closing step's verdict":
-//   Every workflow we ship has a non-verdict-bearing close step
-//   (synthesis that materializes the canonical close artifact). A
+//   Every flow we ship has a non-verdict-bearing close step
+//   (compose that materializes the canonical close report). A
 //   "closing step's verdict" semantic would therefore return undefined
 //   for every Build / Migrate / Sweep / Review / Fix run, defeating
 //   the purpose of the field. Authors place the verdict-bearing step
-//   ahead of the close synthesis (Build's review step, Migrate's
+//   ahead of the close compose (Build's review step, Migrate's
 //   cutover-review step) and expect the latest such admission to
-//   surface. Walk-backward picks that exact event.
+//   surface. Walk-backward picks that exact trace_entry.
 //
-// Why filter to gate_kind='result_verdict':
-//   Synthesis steps emit gate.evaluated with kind='schema_sections'
-//   (artifact admission), verification steps with kind='verification',
-//   fanout with kind='fanout_aggregate'. None of those carry a
-//   verdict — only result_verdict gates do, and only dispatch /
+// Why filter to check_kind='result_verdict':
+//   Compose steps emit check.evaluated with kind='schema_sections'
+//   (report admission), verification steps with kind='verification',
+//   fanout with kind='fanout_aggrecheck'. None of those carry a
+//   verdict — only result_verdict checks do, and only relay /
 //   sub-run steps emit them. Including any other kind would conflate
 //   schema admission with verdict admission.
 //
 // Why this is safe across re-routes / retries:
-//   The runner emits gate.evaluated outcome='pass' only on the route
-//   actually taken to @complete (dispatch.ts emits outcome='fail'
-//   then step.aborted on a failed gate; failed gates don't advance to
+//   The runner emits check.evaluated outcome='pass' only on the route
+//   actually taken to @complete (relay.ts emits outcome='fail'
+//   then step.aborted on a failed check; failed checks don't advance to
 //   a fail-route). So every (step_id, attempt) with a matching pass
-//   gate is a step whose verdict was admitted on the path to
+//   check is a step whose verdict was admitted on the path to
 //   @complete.
 //
 // Adversarial-review fix #2: the implementation was correct already,
@@ -892,25 +903,25 @@ function buildSummary(input: { workflow: Workflow; goal: string; events: Event[]
 // regression coverage. Tests in tests/runner/terminal-verdict-
 // derivation.test.ts now pin the contract end-to-end.
 function deriveTerminalVerdict(
-  events: readonly Event[],
+  trace_entrys: readonly TraceEntry[],
   runOutcome: RunClosedOutcome,
 ): string | undefined {
   if (runOutcome !== 'complete') return undefined;
-  for (let i = events.length - 1; i >= 0; i -= 1) {
-    const ev = events[i];
+  for (let i = trace_entrys.length - 1; i >= 0; i -= 1) {
+    const ev = trace_entrys[i];
     if (ev === undefined) continue;
-    if (ev.kind !== 'dispatch.completed' && ev.kind !== 'sub_run.completed') continue;
-    const matchingGatePass = events.some(
+    if (ev.kind !== 'relay.completed' && ev.kind !== 'sub_run.completed') continue;
+    const matchingCheckPass = trace_entrys.some(
       (g) =>
-        g.kind === 'gate.evaluated' &&
-        g.gate_kind === 'result_verdict' &&
+        g.kind === 'check.evaluated' &&
+        g.check_kind === 'result_verdict' &&
         g.outcome === 'pass' &&
         (g.step_id as unknown as string) === (ev.step_id as unknown as string) &&
         g.attempt === ev.attempt,
     );
-    if (matchingGatePass) return ev.verdict;
+    if (matchingCheckPass) return ev.verdict;
   }
   return undefined;
 }
 
-export type { RunId, WorkflowId };
+export type { RunId, CompiledFlowId };

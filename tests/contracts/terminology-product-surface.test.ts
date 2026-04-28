@@ -5,40 +5,40 @@
 //   flow / schematic / block / route / relay / check / trace / report /
 //   evidence / run folder / depth / mode / checkpoint
 //
-// Internal runtime/schema names (Workflow / Adapter / Artifact / Gate /
-// Dispatch / Synthesis) may remain in low-level code, but they MUST NOT
-// leak into product-facing prose: README, AGENTS, slash commands,
-// per-flow command sources, per-flow contracts, or the workflow design
-// notes. docs/terminology.md is the one place those internal names are
-// allowed to appear in prose, because it documents the layered model.
-//
-// Scoped narrow on purpose. The intent is to keep the user-facing
-// surface clean; deeper code-level renames (recipe → schematic file
-// rename, primitive → block rename, etc.) are tracked elsewhere in
-// todos/terminology-migration.md.
+// The clean-break migration rejects the old vocabulary in active product
+// surfaces and schematic purpose text. Historical/reference files are covered
+// by the broader active-file audit, not this prose-only smoke test.
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const BANNED: ReadonlyArray<{ readonly name: string; readonly pattern: RegExp }> = [
+  { name: 'workflow', pattern: /\bworkflow(s)?\b/i },
   { name: 'recipe', pattern: /\brecipe(s)?\b/i },
   { name: 'primitive', pattern: /\bprimitive(s)?\b/i },
+  { name: 'phase', pattern: /\bphase(s)?\b/i },
   { name: 'dispatch', pattern: /\bdispatch(?:es|ed|ing)?\b/i },
+  { name: 'adapter', pattern: /\badapter(s)?\b/i },
   { name: 'synthesis', pattern: /\bsynthesis\b/i },
-  { name: 'orchestrator-synthesis', pattern: /\borchestrator-synthesis\b/i },
-  { name: 'artifact pointer', pattern: /\bartifact pointer(s)?\b/i },
-  { name: 'canonical event log', pattern: /\bcanonical event log\b/i },
+  { name: 'gate', pattern: /\bgate(s)?\b/i },
+  { name: 'artifact', pattern: /\bartifact(s)?\b/i },
+  { name: 'event log', pattern: /\bevent log\b/i },
+  { name: 'events.ndjson', pattern: /\bevents\.ndjson\b/i },
   { name: 'run root', pattern: /\brun root\b/i },
+  { name: 'run_root', pattern: /\brun_root\b/i },
+  { name: '--run-root', pattern: /\b--run-root\b/i },
   { name: 'rigor', pattern: /\brigor\b/i },
-  { name: 'lane', pattern: /\blane\b/i },
+  { name: 'lane', pattern: /\blane(s)?\b/i },
   { name: 'spine', pattern: /\bspine\b/i },
+  { name: 'dogfood', pattern: /\bdogfood\b/i },
+  { name: 'scalar', pattern: /\bscalar(s)?\b/i },
   { name: 'fixture', pattern: /\bfixture(s)?\b/i },
   { name: 'ADR-NNN id', pattern: /\bADR-[0-9]+\b/i },
   { name: 'Slice', pattern: /\bSlice\b/ },
   { name: 'CC#P[0-9]', pattern: /\bCC#P[0-9]/i },
   { name: 'placeholder-parity', pattern: /\bplaceholder-parity\b/i },
-  { name: 'dogfood', pattern: /\bdogfood\b/i },
+  { name: 'runtime-proof', pattern: /\bruntime-proof\b/i },
 ];
 
 // Files where the banned vocabulary is allowed to appear in prose
@@ -78,7 +78,7 @@ function stripCodeAndFrontmatter(source: string): string {
 
 // Catalog the files this test guards. We list explicit roots and walk
 // directories so adding a new flow or doc doesn't silently dodge the
-// gate.
+// check.
 function listProductFacingFiles(): readonly string[] {
   const files: string[] = [];
 
@@ -94,8 +94,8 @@ function listProductFacingFiles(): readonly string[] {
   }
 
   // Per-flow command and contract sources.
-  for (const id of readdirSync('src/workflows')) {
-    const dir = join('src/workflows', id);
+  for (const id of readdirSync('src/flows')) {
+    const dir = join('src/flows', id);
     let isDir = false;
     try {
       isDir = statSync(dir).isDirectory();
@@ -118,9 +118,9 @@ function listProductFacingFiles(): readonly string[] {
   }
 
   // Flow design notes.
-  for (const entry of readdirSync('docs/workflows')) {
+  for (const entry of readdirSync('docs/flows')) {
     if (entry.endsWith('.md')) {
-      files.push(join('docs/workflows', entry));
+      files.push(join('docs/flows', entry));
     }
   }
 
@@ -129,7 +129,7 @@ function listProductFacingFiles(): readonly string[] {
 
 describe('terminology — product-facing prose', () => {
   // Anti-vacuity floor: if file discovery breaks (wrong root, missing
-  // workflow folders, etc.), this test would silently pass. Pin a
+  // flow folders, etc.), this test would silently pass. Pin a
   // realistic minimum and surface a clear failure if it drops.
   it('discovers a non-trivial set of product-facing files', () => {
     const files = listProductFacingFiles();
@@ -171,5 +171,61 @@ describe('terminology — product-facing prose', () => {
         'or in low-level engine modules, not in product surfaces.',
       ].join(' '),
     ).toEqual([]);
+  });
+
+  it('schematic purpose text uses the canonical Circuit vocabulary', () => {
+    const offenders: {
+      readonly file: string;
+      readonly term: string;
+      readonly text: string;
+    }[] = [];
+
+    for (const id of readdirSync('src/flows')) {
+      const file = join('src/flows', id, 'schematic.json');
+      try {
+        if (!statSync(file).isFile()) continue;
+      } catch {
+        continue;
+      }
+      const raw = readFileSync(file, 'utf8');
+      const parsed = JSON.parse(raw) as { readonly purpose?: unknown };
+      const text = typeof parsed.purpose === 'string' ? parsed.purpose : '';
+      for (const { name, pattern } of BANNED) {
+        if (pattern.test(text)) {
+          offenders.push({ file, term: name, text });
+        }
+      }
+    }
+
+    expect(offenders, 'Banned terminology found in schematic purpose text.').toEqual([]);
+  });
+
+  it('report ledger points at renamed schematic and block files', () => {
+    const raw = readFileSync('specs/reports.json', 'utf8');
+
+    expect(raw).not.toMatch(/\bsrc\/schemas\/flow-scalars\.ts\b/);
+    expect(raw).not.toMatch(/\bsrc\/schemas\/flow-recipe\.ts\b/);
+    expect(raw).not.toMatch(/\bdocs\/flows\/scalar-catalog\.json\b/);
+    expect(raw).not.toMatch(/\bsrc\/runtime\/compile-recipe-to-flow\.ts\b/);
+    expect(raw).not.toMatch(/\bsrc\/flows\/[^"\s]+\/recipe\.json\b/);
+    expect(raw).toMatch(/\bsrc\/schemas\/flow-blocks\.ts\b/);
+    expect(raw).toMatch(/\bsrc\/schemas\/flow-schematic\.ts\b/);
+    expect(raw).toMatch(/\bdocs\/flows\/block-catalog\.json\b/);
+    expect(raw).toMatch(/\bsrc\/runtime\/compile-schematic-to-flow\.ts\b/);
+    expect(raw).toMatch(/\bsrc\/flows\/\*\/schematic\.json\b/);
+  });
+
+  it('domain glossary is based on flows, schematics, blocks, and relays', () => {
+    const raw = readFileSync('specs/domain.md', 'utf8');
+
+    for (const term of ['Flow', 'Schematic', 'Block', 'Stage', 'Route', 'Relay', 'Trace']) {
+      expect(raw, `domain glossary should define ${term}`).toMatch(
+        new RegExp(`\\*\\*${term}\\*\\*`),
+      );
+    }
+
+    expect(raw).not.toMatch(/Stage 1 draft/);
+    expect(raw).not.toMatch(/## Methodology vocabulary/);
+    expect(raw).not.toMatch(/## Core types[\s\S]*\*\*CompiledFlow\*\* `\[draft\]`/);
   });
 });

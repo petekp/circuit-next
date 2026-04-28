@@ -18,10 +18,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  DispatchStep,
+  ComposeStep,
+  RelayStep,
   RunRelativePath,
   SubRunStep,
-  SynthesisStep,
   VerificationStep,
 } from '../../../src/index.js';
 
@@ -63,7 +63,7 @@ describe('step.prop.run_relative_paths — RunRelativePath validation', () => {
     let rejectedSegment = 0;
     let rejectedEmpty = 0;
 
-    const segmentParts = ['artifacts', 'data', 'a', 'b', 'foo', 'bar', 'sub', 'leaf'];
+    const segmentParts = ['reports', 'data', 'a', 'b', 'foo', 'bar', 'sub', 'leaf'];
 
     for (let i = 0; i < 400; i++) {
       const segCount = 1 + nextInt(rng, 4); // 1..4 segments
@@ -160,18 +160,18 @@ describe('step.prop.writes_shape_per_variant — strict writes shape per kind', 
   // Property: every Step variant uses `.strict()` on `writes`, so a
   // surplus key on the writes record is a parse error regardless of
   // which kind. Each kind also enforces variant-specific required
-  // keys (synthesis: artifact; verification: artifact; dispatch:
-  // request/receipt/result, optional artifact; sub-run: result,
-  // optional artifact). Generator drives random (kind, mutation)
+  // keys (compose: report; verification: report; relay:
+  // request/receipt/result, optional report; sub-run: result,
+  // optional report). Generator drives random (kind, mutation)
   // pairs and asserts the schema agrees with the law.
   it('rejects surplus keys on writes for every kind, and accepts the canonical shape', () => {
     const rng = mulberry32(0x4a71c20);
-    let synthesisAccepts = 0;
-    let synthesisSurplusRejects = 0;
+    let composeAccepts = 0;
+    let composeSurplusRejects = 0;
     let verificationAccepts = 0;
     let verificationSurplusRejects = 0;
-    let dispatchAccepts = 0;
-    let dispatchSurplusRejects = 0;
+    let relayAccepts = 0;
+    let relaySurplusRejects = 0;
     let subrunAccepts = 0;
     let subrunSurplusRejects = 0;
 
@@ -186,58 +186,58 @@ describe('step.prop.writes_shape_per_variant — strict writes shape per kind', 
     const surplusKeys = ['extraneous', 'phantom', 'sneaky', 'misc'];
 
     for (let i = 0; i < 200; i++) {
-      const kind = pick(rng, ['synthesis', 'verification', 'dispatch', 'sub-run'] as const);
+      const kind = pick(rng, ['compose', 'verification', 'relay', 'sub-run'] as const);
       const surplus = nextInt(rng, 2) === 0;
       // Pick a surplus key from the pool to vary the rejection
       // signature; the property is "surplus rejected", not
       // "this-particular-key rejected".
       const surplusKey = pick(rng, surplusKeys);
 
-      const sharedArtifact = {
-        path: `artifacts/${kind}-${i}.md`,
+      const sharedReport = {
+        path: `reports/${kind}-${i}.md`,
         schema: `${kind}@v1`,
       };
 
-      if (kind === 'synthesis') {
+      if (kind === 'compose') {
         const writes = surplus
-          ? { artifact: sharedArtifact, [surplusKey]: 'surplus' }
-          : { artifact: sharedArtifact };
+          ? { report: sharedReport, [surplusKey]: 'surplus' }
+          : { report: sharedReport };
         const payload = {
           ...baseStepCommon(`synth-${i}`),
           executor: 'orchestrator',
-          kind: 'synthesis',
+          kind: 'compose',
           writes,
-          gate: {
+          check: {
             kind: 'schema_sections',
-            source: { kind: 'artifact', ref: 'artifact' },
+            source: { kind: 'report', ref: 'report' },
             required: ['Heading'],
           },
         };
-        const result = SynthesisStep.safeParse(payload);
+        const result = ComposeStep.safeParse(payload);
         if (surplus) {
-          synthesisSurplusRejects++;
-          expect(result.success, `case ${i} synthesis surplus accepted`).toBe(false);
+          composeSurplusRejects++;
+          expect(result.success, `case ${i} compose surplus accepted`).toBe(false);
         } else {
-          synthesisAccepts++;
+          composeAccepts++;
           expect(
             result.success,
-            `case ${i} synthesis sound rejected: ${
+            `case ${i} compose sound rejected: ${
               result.success ? '' : JSON.stringify(result.error.issues)
             }`,
           ).toBe(true);
         }
       } else if (kind === 'verification') {
         const writes = surplus
-          ? { artifact: sharedArtifact, [surplusKey]: 'surplus' }
-          : { artifact: sharedArtifact };
+          ? { report: sharedReport, [surplusKey]: 'surplus' }
+          : { report: sharedReport };
         const payload = {
           ...baseStepCommon(`verif-${i}`),
           executor: 'orchestrator',
           kind: 'verification',
           writes,
-          gate: {
+          check: {
             kind: 'schema_sections',
-            source: { kind: 'artifact', ref: 'artifact' },
+            source: { kind: 'report', ref: 'report' },
             required: ['Heading'],
           },
         };
@@ -249,40 +249,40 @@ describe('step.prop.writes_shape_per_variant — strict writes shape per kind', 
           verificationAccepts++;
           expect(result.success).toBe(true);
         }
-      } else if (kind === 'dispatch') {
+      } else if (kind === 'relay') {
         const writes = surplus
           ? {
-              request: 'dispatch/request.json',
-              receipt: 'dispatch/receipt.json',
-              result: 'dispatch/result.json',
+              request: 'relay/request.json',
+              receipt: 'relay/receipt.json',
+              result: 'relay/result.json',
               [surplusKey]: 'surplus',
             }
           : {
-              request: 'dispatch/request.json',
-              receipt: 'dispatch/receipt.json',
-              result: 'dispatch/result.json',
+              request: 'relay/request.json',
+              receipt: 'relay/receipt.json',
+              result: 'relay/result.json',
             };
         const payload = {
           ...baseStepCommon(`disp-${i}`),
           executor: 'worker',
-          kind: 'dispatch',
+          kind: 'relay',
           role: 'implementer',
           writes,
-          gate: {
+          check: {
             kind: 'result_verdict',
-            source: { kind: 'dispatch_result', ref: 'result' },
+            source: { kind: 'relay_result', ref: 'result' },
             pass: ['accept', 'reject'],
           },
         };
-        const result = DispatchStep.safeParse(payload);
+        const result = RelayStep.safeParse(payload);
         if (surplus) {
-          dispatchSurplusRejects++;
+          relaySurplusRejects++;
           expect(result.success).toBe(false);
         } else {
-          dispatchAccepts++;
+          relayAccepts++;
           expect(
             result.success,
-            `case ${i} dispatch sound rejected: ${
+            `case ${i} relay sound rejected: ${
               result.success ? '' : JSON.stringify(result.error.issues)
             }`,
           ).toBe(true);
@@ -299,11 +299,11 @@ describe('step.prop.writes_shape_per_variant — strict writes shape per kind', 
           ...baseStepCommon(`subr-${i}`),
           executor: 'orchestrator',
           kind: 'sub-run',
-          workflow_ref: { workflow_id: 'build', entry_mode: 'default' },
+          flow_ref: { flow_id: 'build', entry_mode: 'default' },
           goal: 'do work',
-          rigor: 'standard',
+          depth: 'standard',
           writes,
-          gate: {
+          check: {
             kind: 'result_verdict',
             source: { kind: 'sub_run_result', ref: 'result' },
             pass: ['accept', 'reject'],
@@ -325,12 +325,12 @@ describe('step.prop.writes_shape_per_variant — strict writes shape per kind', 
       }
     }
 
-    expect(synthesisAccepts).toBeGreaterThan(15);
-    expect(synthesisSurplusRejects).toBeGreaterThan(15);
+    expect(composeAccepts).toBeGreaterThan(15);
+    expect(composeSurplusRejects).toBeGreaterThan(15);
     expect(verificationAccepts).toBeGreaterThan(15);
     expect(verificationSurplusRejects).toBeGreaterThan(15);
-    expect(dispatchAccepts).toBeGreaterThan(15);
-    expect(dispatchSurplusRejects).toBeGreaterThan(15);
+    expect(relayAccepts).toBeGreaterThan(15);
+    expect(relaySurplusRejects).toBeGreaterThan(15);
     expect(subrunAccepts).toBeGreaterThan(15);
     expect(subrunSurplusRejects).toBeGreaterThan(15);
   });

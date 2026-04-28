@@ -1,0 +1,585 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  type CompiledFlowKindPolicyCheckResult,
+  EXEMPT_FLOW_IDS,
+  FLOW_KIND_CANONICAL_SETS,
+  checkCompiledFlowKindCanonicalPolicy,
+} from '../../scripts/policy/flow-kind-policy.mjs';
+import {
+  type ValidateCompiledFlowKindPolicyResult,
+  validateCompiledFlowKindPolicy,
+} from '../../src/runtime/policy/flow-kind-policy.js';
+
+// validateCompiledFlowKindPolicy helper unit tests cover the shared JS
+// canonical-set check AND the TS wrapper that adds CompiledFlow.safeParse.
+
+function validExploreSteps(): ReadonlyArray<Record<string, unknown>> {
+  return [
+    {
+      id: 'frame-step',
+      title: 'Frame',
+      protocol: 'explore-frame@v1',
+      reads: [],
+      routes: { pass: 'analyze-step' },
+      executor: 'orchestrator',
+      kind: 'compose',
+      writes: { report: { path: 'reports/brief.json', schema: 'explore.brief@v1' } },
+      check: {
+        kind: 'schema_sections',
+        source: { kind: 'report', ref: 'report' },
+        required: ['subject'],
+      },
+    },
+    {
+      id: 'analyze-step',
+      title: 'Analyze',
+      protocol: 'explore-analyze@v1',
+      reads: ['reports/brief.json'],
+      routes: { pass: 'synthesize-step' },
+      executor: 'orchestrator',
+      kind: 'compose',
+      writes: { report: { path: 'reports/analysis.json', schema: 'explore.analysis@v1' } },
+      check: {
+        kind: 'schema_sections',
+        source: { kind: 'report', ref: 'report' },
+        required: ['aspects'],
+      },
+    },
+    {
+      id: 'synthesize-step',
+      title: 'Synthesize',
+      protocol: 'explore-synthesize@v1',
+      reads: ['reports/brief.json', 'reports/analysis.json'],
+      routes: { pass: 'review-step' },
+      executor: 'worker',
+      kind: 'relay',
+      role: 'implementer',
+      writes: {
+        report: { path: 'reports/compose.json', schema: 'explore.compose@v1' },
+        request: 'reports/relay/synthesize.request.json',
+        receipt: 'reports/relay/synthesize.receipt.txt',
+        result: 'reports/relay/synthesize.result.json',
+      },
+      check: {
+        kind: 'result_verdict',
+        source: { kind: 'relay_result', ref: 'result' },
+        pass: ['accept'],
+      },
+    },
+    {
+      id: 'review-step',
+      title: 'Review',
+      protocol: 'explore-review@v1',
+      reads: ['reports/brief.json', 'reports/analysis.json', 'reports/compose.json'],
+      routes: { pass: 'close-step' },
+      executor: 'worker',
+      kind: 'relay',
+      role: 'reviewer',
+      writes: {
+        report: {
+          path: 'reports/review-verdict.json',
+          schema: 'explore.review-verdict@v1',
+        },
+        request: 'reports/relay/review.request.json',
+        receipt: 'reports/relay/review.receipt.txt',
+        result: 'reports/relay/review.result.json',
+      },
+      check: {
+        kind: 'result_verdict',
+        source: { kind: 'relay_result', ref: 'result' },
+        pass: ['accept'],
+      },
+    },
+    {
+      id: 'close-step',
+      title: 'Close',
+      protocol: 'explore-close@v1',
+      reads: ['reports/compose.json', 'reports/review-verdict.json'],
+      routes: { pass: '@complete' },
+      executor: 'orchestrator',
+      kind: 'compose',
+      writes: {
+        report: { path: 'reports/explore-result.json', schema: 'explore.result@v1' },
+      },
+      check: {
+        kind: 'schema_sections',
+        source: { kind: 'report', ref: 'report' },
+        required: ['summary', 'verdict_snapshot'],
+      },
+    },
+  ];
+}
+
+function validExploreFixture(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    schema_version: '2',
+    id: 'explore',
+    version: '0.1.0',
+    purpose: 'test fixture',
+    entry: { signals: { include: [], exclude: [] }, intent_prefixes: [] },
+    entry_modes: [
+      {
+        name: 'default',
+        start_at: 'frame-step',
+        depth: 'standard',
+        description: 'test entry mode',
+      },
+    ],
+    stages: [
+      { id: 'frame-stage', title: 'Frame', canonical: 'frame', steps: ['frame-step'] },
+      { id: 'analyze-stage', title: 'Analyze', canonical: 'analyze', steps: ['analyze-step'] },
+      {
+        id: 'synthesize-stage',
+        title: 'Synthesize',
+        canonical: 'act',
+        steps: ['synthesize-step'],
+      },
+      { id: 'review-stage', title: 'Review', canonical: 'review', steps: ['review-step'] },
+      { id: 'close-stage', title: 'Close', canonical: 'close', steps: ['close-step'] },
+    ],
+    stage_path_policy: {
+      mode: 'partial',
+      omits: ['plan', 'verify'],
+      rationale: 'test: explore — plan folded into frame; verify covered by review.',
+    },
+    steps: validExploreSteps(),
+    ...overrides,
+  };
+}
+
+function reviewPolicyOnlyPayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    schema_version: '2',
+    id: 'review',
+    // Deliberately policy/invariant-only: the real review fixture and
+    // runtime compose behavior land in later P2.9 slices.
+    stages: [
+      { title: 'Intake', canonical: 'frame', steps: ['intake-step'] },
+      { title: 'Independent Audit', canonical: 'analyze', steps: ['audit-step'] },
+      { title: 'Verdict', canonical: 'close', steps: ['verdict-step'] },
+    ],
+    stage_path_policy: {
+      mode: 'partial',
+      omits: ['plan', 'act', 'verify', 'review'],
+      rationale: 'policy-only review payload for the canonical stage table test.',
+    },
+    steps: [
+      { id: 'intake-step', kind: 'compose', writes: { report: {} } },
+      { id: 'audit-step', kind: 'relay', role: 'reviewer' },
+      {
+        id: 'verdict-step',
+        kind: 'compose',
+        writes: {
+          report: { path: 'reports/review-result.json', schema: 'review.result@v1' },
+        },
+      },
+    ],
+    ...overrides,
+  };
+}
+
+function buildPolicyOnlyPayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    schema_version: '2',
+    id: 'build',
+    // Deliberately policy-only: the real Build fixture waits for the
+    // checkpoint and relay slices.
+    stages: [
+      { title: 'Frame', canonical: 'frame', steps: ['frame-step'] },
+      { title: 'Plan', canonical: 'plan', steps: ['plan-step'] },
+      { title: 'Act', canonical: 'act', steps: ['act-step'] },
+      { title: 'Verify', canonical: 'verify', steps: ['verify-step'] },
+      { title: 'Review', canonical: 'review', steps: ['review-step'] },
+      { title: 'Close', canonical: 'close', steps: ['close-step'] },
+    ],
+    stage_path_policy: {
+      mode: 'partial',
+      omits: ['analyze'],
+      rationale:
+        'policy-only build payload: Build omits analyze but keeps plan, act, verify, and review.',
+    },
+    steps: [
+      { id: 'frame-step', kind: 'checkpoint', writes: { report: {} } },
+      { id: 'plan-step', kind: 'compose', writes: { report: {} } },
+      { id: 'act-step', kind: 'relay', role: 'implementer' },
+      { id: 'verify-step', kind: 'verification', writes: { report: {} } },
+      { id: 'review-step', kind: 'relay', role: 'reviewer' },
+      { id: 'close-step', kind: 'compose', writes: { report: {} } },
+    ],
+    ...overrides,
+  };
+}
+
+function fixPolicyOnlyPayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    schema_version: '2',
+    id: 'fix',
+    // Deliberately policy-only: the real Fix fixture waits for the report
+    // schemas and runtime substrate widenings.
+    stages: [
+      { title: 'Frame', canonical: 'frame', steps: ['frame-step'] },
+      { title: 'Analyze', canonical: 'analyze', steps: ['analyze-step'] },
+      { title: 'Fix', canonical: 'act', steps: ['fix-step'] },
+      { title: 'Verify', canonical: 'verify', steps: ['verify-step'] },
+      { title: 'Review', canonical: 'review', steps: ['review-step'] },
+      { title: 'Close', canonical: 'close', steps: ['close-step'] },
+    ],
+    stage_path_policy: {
+      mode: 'partial',
+      omits: ['plan'],
+      rationale: 'policy-only fix payload: Fix omits plan because diagnosis replaces it.',
+    },
+    steps: [
+      { id: 'frame-step', kind: 'checkpoint', writes: { report: {} } },
+      { id: 'analyze-step', kind: 'compose', writes: { report: {} } },
+      { id: 'fix-step', kind: 'relay', role: 'implementer' },
+      { id: 'verify-step', kind: 'verification', writes: { report: {} } },
+      { id: 'review-step', kind: 'relay', role: 'reviewer' },
+      { id: 'close-step', kind: 'compose', writes: { report: {} } },
+    ],
+    ...overrides,
+  };
+}
+
+describe('checkCompiledFlowKindCanonicalPolicy (audit-level, no Zod)', () => {
+  it('EXPLORE-I1 — returns green on a valid explore fixture (canonical set + stage_path_policy.partial)', () => {
+    const result = checkCompiledFlowKindCanonicalPolicy(validExploreFixture());
+    expect(result.kind).toBe('green');
+    expect(result.detail).toMatch(/explore: canonical set/);
+  });
+
+  it('returns green on a policy-only review payload that satisfies REVIEW-I1', () => {
+    const result = checkCompiledFlowKindCanonicalPolicy(reviewPolicyOnlyPayload());
+    expect(result.kind).toBe('green');
+    expect(result.detail).toMatch(/review: canonical set/);
+    expect(result.detail).toMatch(/frame, analyze, close/);
+  });
+
+  it('returns green on a policy-only build payload with the Build canonical stage set', () => {
+    const result = checkCompiledFlowKindCanonicalPolicy(buildPolicyOnlyPayload());
+    expect(result.kind).toBe('green');
+    expect(result.detail).toMatch(/build: canonical set/);
+    expect(result.detail).toMatch(/frame, plan, act, verify, review, close/);
+    expect(result.detail).toMatch(/omits \{analyze\}/);
+  });
+
+  it('returns green on a policy-only fix payload with the Fix canonical stage set', () => {
+    const result = checkCompiledFlowKindCanonicalPolicy(fixPolicyOnlyPayload());
+    expect(result.kind).toBe('green');
+    expect(result.detail).toMatch(/fix: canonical set/);
+    expect(result.detail).toMatch(/frame, analyze, act, verify, review, close/);
+    expect(result.detail).toMatch(/omits \{plan\}/);
+  });
+
+  it('returns exempt on runtime-proof fixture', () => {
+    const result = checkCompiledFlowKindCanonicalPolicy({
+      schema_version: '2',
+      id: 'runtime-proof',
+      stages: [],
+      stage_path_policy: { mode: 'partial', omits: [] },
+    });
+    expect(result.kind).toBe('exempt');
+    expect(result.detail).toMatch(/runtime-proof.*exempt/);
+  });
+
+  it('returns pass_through on unknown flow-kind ids', () => {
+    const result = checkCompiledFlowKindCanonicalPolicy({
+      schema_version: '2',
+      id: 'future-kind',
+      stages: [],
+      stage_path_policy: { mode: 'partial', omits: [] },
+    });
+    expect(result.kind).toBe('pass_through');
+    expect(result.detail).toMatch(/no canonical-set entry.*pass-through/);
+  });
+
+  it('returns red when explore fixture omits a required canonical stage', () => {
+    const fixture = validExploreFixture();
+    const stages = fixture.stages as Array<Record<string, unknown>>;
+    fixture.stages = stages.filter((p) => p.canonical !== 'review');
+    const result = checkCompiledFlowKindCanonicalPolicy(fixture);
+    expect(result.kind).toBe('red');
+    expect(result.detail).toMatch(/missing canonical\(s\): review/);
+  });
+
+  it('returns red when explore fixture has mode=strict', () => {
+    const fixture = validExploreFixture();
+    fixture.stage_path_policy = { mode: 'strict' };
+    const result = checkCompiledFlowKindCanonicalPolicy(fixture);
+    expect(result.kind).toBe('red');
+    expect(result.detail).toMatch(/stage_path_policy\.mode must be 'partial'/);
+  });
+
+  it('returns red when omits list is missing expected entries', () => {
+    const fixture = validExploreFixture();
+    fixture.stage_path_policy = {
+      mode: 'partial',
+      omits: ['plan'], // missing 'verify'
+    };
+    const result = checkCompiledFlowKindCanonicalPolicy(fixture);
+    expect(result.kind).toBe('red');
+    expect(result.detail).toMatch(/missing omit\(s\): verify/);
+  });
+
+  it('returns red when review declares the omitted review canonical', () => {
+    const fixture = reviewPolicyOnlyPayload();
+    const stages = fixture.stages as Array<Record<string, unknown>>;
+    fixture.stages = [...stages, { title: 'Nested Review', canonical: 'review' }];
+    const result = checkCompiledFlowKindCanonicalPolicy(fixture);
+    expect(result.kind).toBe('red');
+    expect(result.detail).toMatch(/unexpected canonical\(s\): review/);
+  });
+
+  it('returns red when build declares the omitted analyze canonical', () => {
+    const fixture = buildPolicyOnlyPayload();
+    const stages = fixture.stages as Array<Record<string, unknown>>;
+    fixture.stages = [...stages, { title: 'Analyze', canonical: 'analyze' }];
+    const result = checkCompiledFlowKindCanonicalPolicy(fixture);
+    expect(result.kind).toBe('red');
+    expect(result.detail).toMatch(/unexpected canonical\(s\): analyze/);
+  });
+
+  it('returns red when build omits verify from the canonical set', () => {
+    const fixture = buildPolicyOnlyPayload();
+    const stages = fixture.stages as Array<Record<string, unknown>>;
+    fixture.stages = stages.filter((p) => p.canonical !== 'verify');
+    const result = checkCompiledFlowKindCanonicalPolicy(fixture);
+    expect(result.kind).toBe('red');
+    expect(result.detail).toMatch(/missing canonical\(s\): verify/);
+  });
+
+  it('returns red when fix declares the omitted plan canonical', () => {
+    const fixture = fixPolicyOnlyPayload();
+    const stages = fixture.stages as Array<Record<string, unknown>>;
+    fixture.stages = [...stages, { title: 'Plan', canonical: 'plan' }];
+    const result = checkCompiledFlowKindCanonicalPolicy(fixture);
+    expect(result.kind).toBe('red');
+    expect(result.detail).toMatch(/unexpected canonical\(s\): plan/);
+  });
+
+  it('returns red when fix stage_path_policy.omits does not declare the omitted plan stage', () => {
+    const fixture = fixPolicyOnlyPayload({
+      stage_path_policy: {
+        mode: 'partial',
+        omits: [],
+        rationale: 'policy-only fix payload with the required plan omit missing.',
+      },
+    });
+    const result = checkCompiledFlowKindCanonicalPolicy(fixture);
+    expect(result.kind).toBe('red');
+    expect(result.detail).toMatch(/missing omit\(s\): plan/);
+  });
+
+  it('returns red when fix omits analyze from the canonical set', () => {
+    const fixture = fixPolicyOnlyPayload();
+    const stages = fixture.stages as Array<Record<string, unknown>>;
+    fixture.stages = stages.filter((p) => p.canonical !== 'analyze');
+    const result = checkCompiledFlowKindCanonicalPolicy(fixture);
+    expect(result.kind).toBe('red');
+    expect(result.detail).toMatch(/missing canonical\(s\): analyze/);
+  });
+
+  it('returns green on a fix variant that omits the optional review canonical', () => {
+    const fixture = fixPolicyOnlyPayload({
+      stages: [
+        { title: 'Frame', canonical: 'frame', steps: ['frame-step'] },
+        { title: 'Analyze', canonical: 'analyze', steps: ['analyze-step'] },
+        { title: 'Fix', canonical: 'act', steps: ['fix-step'] },
+        { title: 'Verify', canonical: 'verify', steps: ['verify-step'] },
+        { title: 'Close', canonical: 'close', steps: ['close-step'] },
+      ],
+      stage_path_policy: {
+        mode: 'partial',
+        omits: ['plan', 'review'],
+        rationale: 'lite-mode fix variant: review skipped via route_overrides.continue.lite.',
+      },
+    });
+    const result = checkCompiledFlowKindCanonicalPolicy(fixture);
+    expect(result.kind).toBe('green');
+    expect(result.detail).toMatch(/fix: canonical set/);
+  });
+
+  it('returns red when a fix variant omits review from canonicals but does not put review in omits', () => {
+    const fixture = fixPolicyOnlyPayload({
+      stages: [
+        { title: 'Frame', canonical: 'frame', steps: ['frame-step'] },
+        { title: 'Analyze', canonical: 'analyze', steps: ['analyze-step'] },
+        { title: 'Fix', canonical: 'act', steps: ['fix-step'] },
+        { title: 'Verify', canonical: 'verify', steps: ['verify-step'] },
+        { title: 'Close', canonical: 'close', steps: ['close-step'] },
+      ],
+      stage_path_policy: {
+        mode: 'partial',
+        omits: ['plan'],
+        rationale: 'lite-mode fix variant missing the required review-omit pairing.',
+      },
+    });
+    const result = checkCompiledFlowKindCanonicalPolicy(fixture);
+    expect(result.kind).toBe('red');
+    expect(result.detail).toMatch(/missing omit\(s\): review/);
+  });
+
+  it('returns red when a fix variant declares review AND lists review in omits', () => {
+    const fixture = fixPolicyOnlyPayload({
+      stage_path_policy: {
+        mode: 'partial',
+        omits: ['plan', 'review'],
+        rationale: 'fix variant cannot both declare review and omit it.',
+      },
+    });
+    const result = checkCompiledFlowKindCanonicalPolicy(fixture);
+    expect(result.kind).toBe('red');
+    expect(result.detail).toMatch(/unexpected omit\(s\): review/);
+  });
+
+  it('returns red when review close writes a non-primary report shape', () => {
+    const fixture = reviewPolicyOnlyPayload({
+      steps: [
+        { id: 'intake-step', kind: 'compose', writes: { report: {} } },
+        { id: 'audit-step', kind: 'relay', role: 'reviewer' },
+        {
+          id: 'verdict-step',
+          kind: 'compose',
+          writes: {
+            report: { path: 'reports/not-review-result.json', schema: 'wrong.result@v1' },
+          },
+        },
+      ],
+    });
+    const result = checkCompiledFlowKindCanonicalPolicy(fixture);
+    expect(result.kind).toBe('red');
+    expect(result.detail).toMatch(/primary review\.result report/);
+  });
+
+  it('returns red on non-object fixture input', () => {
+    expect(checkCompiledFlowKindCanonicalPolicy(null).kind).toBe('red');
+    expect(checkCompiledFlowKindCanonicalPolicy('not an object').kind).toBe('red');
+    expect(checkCompiledFlowKindCanonicalPolicy(42).kind).toBe('red');
+  });
+
+  it('returns red when `id` field is missing', () => {
+    const result = checkCompiledFlowKindCanonicalPolicy({ schema_version: '2' });
+    expect(result.kind).toBe('red');
+    expect(result.detail).toMatch(/missing top-level `id`/);
+  });
+
+  it('exposes FLOW_KIND_CANONICAL_SETS and EXEMPT_FLOW_IDS as single source of truth', () => {
+    const explore = FLOW_KIND_CANONICAL_SETS.explore;
+    expect(explore).toBeDefined();
+    if (explore === undefined) throw new Error('unreachable');
+    expect(explore.canonicals).toEqual(['frame', 'analyze', 'act', 'review', 'close']);
+    expect(explore.omits).toEqual(['plan', 'verify']);
+    expect(explore.optional_canonicals).toEqual([]);
+    const review = FLOW_KIND_CANONICAL_SETS.review;
+    expect(review).toBeDefined();
+    if (review === undefined) throw new Error('unreachable');
+    expect(review.canonicals).toEqual(['frame', 'analyze', 'close']);
+    expect(review.omits).toEqual(['plan', 'act', 'verify', 'review']);
+    expect(review.optional_canonicals).toEqual([]);
+    expect(review.title).toBe('Intake → Independent Audit → Verdict');
+    expect(review.authority).toBe('specs/plans/p2-9-second-flow.md §3');
+    const build = FLOW_KIND_CANONICAL_SETS.build;
+    expect(build).toBeDefined();
+    if (build === undefined) throw new Error('unreachable');
+    expect(build.canonicals).toEqual(['frame', 'plan', 'act', 'verify', 'review', 'close']);
+    expect(build.omits).toEqual(['analyze']);
+    expect(build.optional_canonicals).toEqual([]);
+    expect(build.title).toBe('Frame → Plan → Act → Verify → Review → Close');
+    expect(build.authority).toBe('specs/plans/build-flow-parity.md §9 Work item 1');
+    const fix = FLOW_KIND_CANONICAL_SETS.fix;
+    expect(fix).toBeDefined();
+    if (fix === undefined) throw new Error('unreachable');
+    expect(fix.canonicals).toEqual(['frame', 'analyze', 'act', 'verify', 'review', 'close']);
+    expect(fix.omits).toEqual(['plan']);
+    expect(fix.optional_canonicals).toEqual(['review']);
+    expect(fix.title).toBe('Frame → Diagnose → Fix → Verify → Review → Close');
+    expect(fix.authority).toBe('specs/adrs/ADR-0013-scalar-backed-flow-schematics.md §Decision');
+    expect(EXEMPT_FLOW_IDS.has('runtime-proof')).toBe(true);
+    expect(EXEMPT_FLOW_IDS.has('explore')).toBe(false);
+    expect(EXEMPT_FLOW_IDS.has('build')).toBe(false);
+    expect(EXEMPT_FLOW_IDS.has('fix')).toBe(false);
+  });
+});
+
+describe('validateCompiledFlowKindPolicy (runtime-level, safeParse-first)', () => {
+  it('returns ok:true green on a fully valid explore flow', () => {
+    const result: ValidateCompiledFlowKindPolicyResult = validateCompiledFlowKindPolicy(
+      validExploreFixture(),
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.kind).toBe('green');
+      expect(result.detail).toMatch(/explore: canonical set/);
+    }
+  });
+
+  it('returns ok:false with Zod issue summary when safeParse fails (empty steps)', () => {
+    const fixture = validExploreFixture({ steps: [] });
+    const result = validateCompiledFlowKindPolicy(fixture);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toMatch(/CompiledFlow\.safeParse failed/);
+      expect(result.reason).toMatch(/steps/i);
+    }
+  });
+
+  it('returns ok:false when Zod catches the violation at the safeParse layer (missing review stage)', () => {
+    // For the `explore` kind, CompiledFlow.safeParse's stage-I4 superRefine
+    // already enforces the canonical-stage-set invariant — removing the
+    // review stage fails at safeParse before the kind-specific policy
+    // check can fire. The helper therefore surfaces the Zod issue
+    // summary. This is by design: safeParse is the primary check and
+    // the kind-specific policy is defense-in-depth for future kinds
+    // whose constraints Zod cannot express schematically.
+    const fixture = validExploreFixture();
+    const stages = fixture.stages as Array<Record<string, unknown>>;
+    fixture.stages = stages.filter((p) => p.canonical !== 'review');
+    const result = validateCompiledFlowKindPolicy(fixture);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toMatch(/CompiledFlow\.safeParse failed/);
+      expect(result.reason).toMatch(/review/);
+    }
+  });
+
+  it('returns ok:true pass_through on unknown flow kinds (not red at runtime load)', () => {
+    const fixture = validExploreFixture({ id: 'future-kind' });
+    const result = validateCompiledFlowKindPolicy(fixture);
+    // pass_through is an acceptable runtime-load outcome; future flow
+    // kinds must land their own entry before enforcement tightens.
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.kind).toBe('pass_through');
+    }
+  });
+
+  it('returns ok:false with a human-readable reason (no Zod dump) on malformed input', () => {
+    const result = validateCompiledFlowKindPolicy({ id: 'explore' });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason.length).toBeGreaterThan(0);
+      expect(result.reason).not.toMatch(/undefined|\[object Object\]/);
+    }
+  });
+});
+
+describe('audit-level CompiledFlowKindPolicyCheckResult discriminated union shape', () => {
+  it('all four result kinds are distinguishable', () => {
+    const results: CompiledFlowKindPolicyCheckResult[] = [
+      checkCompiledFlowKindCanonicalPolicy(validExploreFixture()),
+      checkCompiledFlowKindCanonicalPolicy({
+        id: 'runtime-proof',
+        stages: [],
+        stage_path_policy: { mode: 'partial', omits: [] },
+      }),
+      checkCompiledFlowKindCanonicalPolicy({
+        id: 'future-kind',
+        stages: [],
+        stage_path_policy: { mode: 'partial', omits: [] },
+      }),
+      checkCompiledFlowKindCanonicalPolicy({ id: 'explore' }),
+    ];
+    expect(results.map((r) => r.kind)).toEqual(['green', 'exempt', 'pass_through', 'red']);
+  });
+});

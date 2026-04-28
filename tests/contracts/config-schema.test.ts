@@ -12,7 +12,7 @@ describe('Config strict surface (CONFIG-I1)', () => {
     const ok = Config.safeParse({ schema_version: 1 });
     expect(ok.success).toBe(true);
     if (ok.success) {
-      expect(ok.data.dispatch.default).toBe('auto');
+      expect(ok.data.relay.default).toBe('auto');
       expect(ok.data.circuits).toEqual({});
       expect(ok.data.defaults).toEqual({});
     }
@@ -70,7 +70,7 @@ describe('Config.defaults nested strict surface (CONFIG-I4)', () => {
   it('rejects unexpected nested field in defaults (CONFIG-I4 — attempted smuggle)', () => {
     const bad = Config.safeParse({
       schema_version: 1,
-      defaults: { selection: {}, rigor: 'crucible' },
+      defaults: { selection: {}, depth: 'crucible' },
     });
     expect(bad.success).toBe(false);
   });
@@ -88,7 +88,7 @@ describe('CircuitOverride strict surface (CONFIG-I3)', () => {
   });
 
   it('rejects circuit override with `skills: string[]` v0.0 shortcut (CONFIG-I3)', () => {
-    const bad = CircuitOverride.safeParse({ skills: ['dogfood'] });
+    const bad = CircuitOverride.safeParse({ skills: ['runtime-proof'] });
     expect(bad.success).toBe(false);
   });
 
@@ -159,7 +159,7 @@ describe('ConfigLayer closed enum (CONFIG-I5)', () => {
 });
 
 describe('Config.circuits key closure (CONFIG-I8)', () => {
-  it('accepts a valid slug WorkflowId as a circuits key', () => {
+  it('accepts a valid slug CompiledFlowId as a circuits key', () => {
     const ok = Config.safeParse({
       schema_version: 1,
       circuits: { explore: { selection: { effort: 'medium' } } },
@@ -167,7 +167,7 @@ describe('Config.circuits key closure (CONFIG-I8)', () => {
     expect(ok.success).toBe(true);
   });
 
-  it('rejects a circuits key that fails WorkflowId regex (CONFIG-I8 — whitespace)', () => {
+  it('rejects a circuits key that fails CompiledFlowId regex (CONFIG-I8 — whitespace)', () => {
     const bad = Config.safeParse({
       schema_version: 1,
       circuits: { 'Bad Id': {} },
@@ -175,17 +175,17 @@ describe('Config.circuits key closure (CONFIG-I8)', () => {
     expect(bad.success).toBe(false);
   });
 
-  it('rejects a circuits key that fails WorkflowId regex (CONFIG-I8 — path separator)', () => {
+  it('rejects a circuits key that fails CompiledFlowId regex (CONFIG-I8 — path separator)', () => {
     const bad = Config.safeParse({
       schema_version: 1,
-      circuits: { 'workflow/name': {} },
+      circuits: { 'flow/name': {} },
     });
     expect(bad.success).toBe(false);
   });
 });
 
 describe('Config strictness scoped to declared shapes', () => {
-  it('rejects a typo INSIDE SelectionOverride (declared shape — `rigr` for `rigor`)', () => {
+  it('rejects a typo INSIDE SelectionOverride (declared shape — `rigr` for `depth`)', () => {
     const bad = Config.safeParse({
       schema_version: 1,
       defaults: { selection: { rigr: 'crucible' } },
@@ -199,7 +199,7 @@ describe('Config strictness scoped to declared shapes', () => {
       defaults: {
         selection: {
           invocation_options: {
-            some_adapter_key: 'value',
+            some_connector_key: 'value',
             another_knob: 42,
             nested_payload: { a: 1, b: [2, 3] },
           },
@@ -220,10 +220,10 @@ describe('LayeredConfig default-layer ergonomic (CONFIG-I7 + CONFIG-I2 compositi
     if (ok.success) {
       expect(ok.data.layer).toBe('default');
       expect(ok.data.config.schema_version).toBe(1);
-      expect(ok.data.config.dispatch.default).toBe('auto');
-      expect(ok.data.config.dispatch.roles).toEqual({});
-      expect(ok.data.config.dispatch.circuits).toEqual({});
-      expect(ok.data.config.dispatch.adapters).toEqual({});
+      expect(ok.data.config.relay.default).toBe('auto');
+      expect(ok.data.config.relay.roles).toEqual({});
+      expect(ok.data.config.relay.circuits).toEqual({});
+      expect(ok.data.config.relay.connectors).toEqual({});
       expect(ok.data.config.circuits).toEqual({});
       expect(ok.data.config.defaults).toEqual({});
     }

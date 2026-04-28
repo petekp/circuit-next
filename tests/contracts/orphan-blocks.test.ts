@@ -1,13 +1,13 @@
-// Exerciser schematics for the five primitives in the catalog that no
+// Exerciser schematics for the five scalars in the catalog that no
 // active schematic currently uses: queue, batch, risk-rollback-check,
-// human-decision, handoff. The unexercised primitives' contracts are
-// unfalsified claims — they say "this primitive accepts these inputs
+// human-decision, handoff. The unexercised scalars' contracts are
+// unfalsified claims — they say "this scalar accepts these inputs
 // and produces this output", but no schematic has ever tried to wire them
 // up. This test forces each one through the validation + compile +
 // runtime path and records what's actually missing.
 //
 // Each test is a tight contract probe: build the smallest possible
-// schematic that uses one orphan primitive and assert what happens at
+// schematic that uses one orphan scalar and assert what happens at
 // each layer (schematic parse → catalog compatibility → schematic compile →
 // runtime execution). When a layer rejects, the assertion captures
 // the message so the test documents the contract gap as observed
@@ -20,25 +20,25 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   type CompileResult,
-  compileSchematicToWorkflow,
-} from '../../src/runtime/compile-schematic-to-workflow.js';
-import { runWorkflow } from '../../src/runtime/runner.js';
+  compileSchematicToCompiledFlow,
+} from '../../src/runtime/compile-schematic-to-flow.js';
+import { runCompiledFlow } from '../../src/runtime/runner.js';
+import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
+import type { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { FlowBlockCatalog } from '../../src/schemas/flow-blocks.js';
 import {
   FlowSchematic,
   validateFlowSchematicCatalogCompatibility,
 } from '../../src/schemas/flow-schematic.js';
 import { RunId } from '../../src/schemas/ids.js';
-import type { LaneDeclaration } from '../../src/schemas/lane.js';
-import type { Workflow } from '../../src/schemas/workflow.js';
 
-function exerciserLane(): LaneDeclaration {
+function exerciserChangeKind(): ChangeKindDeclaration {
   return {
-    lane: 'ratchet-advance',
-    failure_mode: 'orphan primitive contract is unfalsified — no schematic exercises it',
+    change_kind: 'ratchet-advance',
+    failure_mode: 'orphan scalar contract is unfalsified — no schematic exercises it',
     acceptance_evidence:
       'synthetic schematic compiles and runs through the runtime placeholder substrate',
-    alternate_framing: 'wait for real workflow — rejected because the contract gap stays hidden',
+    alternate_framing: 'wait for real flow — rejected because the contract gap stays hidden',
   };
 }
 
@@ -47,36 +47,36 @@ function deterministicNow(startMs: number): () => Date {
   return () => new Date(startMs + n++ * 1000);
 }
 
-function singleWorkflow(result: CompileResult): Workflow {
-  if (result.kind === 'single') return result.workflow;
-  const first = [...result.workflows.values()][0];
-  if (first === undefined) throw new Error('compile produced zero workflows');
+function singleCompiledFlow(result: CompileResult): CompiledFlow {
+  if (result.kind === 'single') return result.flow;
+  const first = [...result.flows.values()][0];
+  if (first === undefined) throw new Error('compile produced zero flows');
   return first;
 }
 
 function loadCatalog() {
-  const raw = JSON.parse(readFileSync('docs/workflows/block-catalog.json', 'utf8')) as unknown;
+  const raw = JSON.parse(readFileSync('docs/flows/block-catalog.json', 'utf8')) as unknown;
   return FlowBlockCatalog.parse(raw);
 }
 
 // Minimal schematic shell. Per-test customizes the items and contract aliases.
-// Default phases include frame + close so an orphan primitive that wants
-// a different phase can be added by the test.
+// Default stages include frame + close so an orphan scalar that wants
+// a different stage can be added by the test.
 function schematicShell(overrides: {
   id: string;
   starts_at: string;
   initial_contracts?: readonly string[];
   contract_aliases?: ReadonlyArray<{ generic: string; actual: string }>;
   items: ReadonlyArray<unknown>;
-  phases: ReadonlyArray<{ canonical: string; id: string; title: string }>;
-  spine_omits: readonly string[];
-  spine_rationale?: string;
+  stages: ReadonlyArray<{ canonical: string; id: string; title: string }>;
+  stage_path_omits: readonly string[];
+  stage_path_rationale?: string;
 }): unknown {
   return {
     schema_version: '1',
     id: overrides.id,
-    title: `Orphan primitive exerciser: ${overrides.id}`,
-    purpose: `Synthetic schematic that exercises a single orphan primitive (${overrides.id}) so its contract is forced through validate → compile → run.`,
+    title: `Orphan scalar exerciser: ${overrides.id}`,
+    purpose: `Synthetic schematic that exercises a single orphan scalar (${overrides.id}) so its contract is forced through validate → compile → run.`,
     status: 'candidate',
     starts_at: overrides.starts_at,
     initial_contracts: overrides.initial_contracts ?? [],
@@ -87,63 +87,63 @@ function schematicShell(overrides: {
     entry_modes: [
       {
         name: 'default',
-        rigor: 'standard',
+        depth: 'standard',
         description: `Default exerciser entry mode for ${overrides.id}.`,
       },
     ],
-    spine_policy: {
+    stage_path_policy: {
       mode: 'partial',
-      omits: overrides.spine_omits,
+      omits: overrides.stage_path_omits,
       rationale:
-        overrides.spine_rationale ??
-        'Synthetic exerciser for orphan primitive — non-exercised canonical phases are deliberately omitted.',
+        overrides.stage_path_rationale ??
+        'Synthetic exerciser for orphan scalar — non-exercised canonical stages are deliberately omitted.',
     },
-    phases: overrides.phases,
+    stages: overrides.stages,
   };
 }
 
-let runRoot: string;
+let runFolder: string;
 
 beforeEach(() => {
-  runRoot = mkdtempSync(join(tmpdir(), 'circuit-next-orphan-'));
+  runFolder = mkdtempSync(join(tmpdir(), 'circuit-next-orphan-'));
 });
 
 afterEach(() => {
-  rmSync(runRoot, { recursive: true, force: true });
+  rmSync(runFolder, { recursive: true, force: true });
 });
 
 // =====================================================================
-// handoff: inputs workflow.state + workflow.brief → output continuity.record
-// surface: orchestrator, allowed kinds: synthesis | checkpoint
+// handoff: inputs flow.state + flow.brief → output continuity.record
+// surface: orchestrator, allowed kinds: compose | checkpoint
 // allowed routes: continue | handoff | escalate
-// phase: close
+// stage: close
 // =====================================================================
-describe('orphan primitive: handoff', () => {
+describe('orphan scalar: handoff', () => {
   const schematicRaw = schematicShell({
     id: 'orphan-handoff',
     starts_at: 'frame-step',
-    initial_contracts: ['workflow.state@v1', 'task.intake@v1', 'route.decision@v1'],
+    initial_contracts: ['flow.state@v1', 'task.intake@v1', 'route.decision@v1'],
     items: [
       {
         id: 'frame-step',
         block: 'frame',
         title: 'Frame',
-        phase: 'frame',
+        stage: 'frame',
         input: { intake: 'task.intake@v1', route: 'route.decision@v1' },
-        output: 'workflow.brief@v1',
+        output: 'flow.brief@v1',
         evidence_requirements: ['scope boundary', 'constraints', 'proof plan'],
-        execution: { kind: 'synthesis' },
+        execution: { kind: 'compose' },
         protocol: 'orphan-frame@v1',
-        writes: { artifact_path: 'artifacts/brief.json' },
-        gate: { required: ['scope'] },
+        writes: { report_path: 'reports/brief.json' },
+        check: { required: ['scope'] },
         routes: { continue: 'handoff-step' },
       },
       {
         id: 'handoff-step',
         block: 'handoff',
         title: 'Handoff',
-        phase: 'close',
-        input: { state: 'workflow.state@v1', brief: 'workflow.brief@v1' },
+        stage: 'close',
+        input: { state: 'flow.state@v1', brief: 'flow.brief@v1' },
         output: 'continuity.record@v1',
         evidence_requirements: [
           'goal',
@@ -152,18 +152,18 @@ describe('orphan primitive: handoff', () => {
           'next action',
           'known debt',
         ],
-        execution: { kind: 'synthesis' },
+        execution: { kind: 'compose' },
         protocol: 'orphan-handoff@v1',
-        writes: { artifact_path: 'artifacts/handoff.json' },
-        gate: { required: ['continuity_record_path'] },
+        writes: { report_path: 'reports/handoff.json' },
+        check: { required: ['continuity_record_path'] },
         routes: { complete: '@complete' },
       },
     ],
-    phases: [
-      { canonical: 'frame', id: 'frame-phase', title: 'Frame' },
-      { canonical: 'close', id: 'close-phase', title: 'Close' },
+    stages: [
+      { canonical: 'frame', id: 'frame-stage', title: 'Frame' },
+      { canonical: 'close', id: 'close-stage', title: 'Close' },
     ],
-    spine_omits: ['analyze', 'plan', 'act', 'verify', 'review'],
+    stage_path_omits: ['analyze', 'plan', 'act', 'verify', 'review'],
   });
 
   it('parses through FlowSchematic', () => {
@@ -176,22 +176,22 @@ describe('orphan primitive: handoff', () => {
     expect(issues, JSON.stringify(issues, null, 2)).toEqual([]);
   });
 
-  it('compiles to a Workflow', () => {
+  it('compiles to a CompiledFlow', () => {
     const schematic = FlowSchematic.parse(schematicRaw);
-    expect(() => compileSchematicToWorkflow(schematic)).not.toThrow();
+    expect(() => compileSchematicToCompiledFlow(schematic)).not.toThrow();
   });
 
-  it('runs end-to-end via the placeholder synthesis fallback', async () => {
+  it('runs end-to-end via the placeholder compose fallback', async () => {
     const schematic = FlowSchematic.parse(schematicRaw);
-    const workflow = singleWorkflow(compileSchematicToWorkflow(schematic));
-    const outcome = await runWorkflow({
-      runRoot: join(runRoot, 'handoff-run'),
-      workflow,
-      workflowBytes: Buffer.from(JSON.stringify(workflow)),
+    const flow = singleCompiledFlow(compileSchematicToCompiledFlow(schematic));
+    const outcome = await runCompiledFlow({
+      runFolder: join(runFolder, 'handoff-run'),
+      flow,
+      flowBytes: Buffer.from(JSON.stringify(flow)),
       runId: RunId.parse('00000000-0000-0000-0000-00000000aaaa'),
       goal: 'orphan-handoff exerciser',
-      rigor: 'standard',
-      lane: exerciserLane(),
+      depth: 'standard',
+      change_kind: exerciserChangeKind(),
       now: deterministicNow(Date.UTC(2026, 3, 26, 12, 0, 0)),
     });
     expect(outcome.result.outcome).toBe('complete');
@@ -199,42 +199,42 @@ describe('orphan primitive: handoff', () => {
 });
 
 // =====================================================================
-// human-decision: inputs workflow.question + workflow.evidence → output decision.answer
+// human-decision: inputs flow.question + flow.evidence → output decision.answer
 // surface: host, allowed kinds: checkpoint
 // allowed routes: continue | retry | revise | ask | stop | handoff | escalate
-// phase: any canonical phase
+// stage: any canonical stage
 // =====================================================================
-describe('orphan primitive: human-decision', () => {
+describe('orphan scalar: human-decision', () => {
   const schematicRaw = schematicShell({
     id: 'orphan-human-decision',
     starts_at: 'frame-step',
     initial_contracts: [
       'task.intake@v1',
       'route.decision@v1',
-      'workflow.question@v1',
-      'workflow.evidence@v1',
+      'flow.question@v1',
+      'flow.evidence@v1',
     ],
     items: [
       {
         id: 'frame-step',
         block: 'frame',
         title: 'Frame',
-        phase: 'frame',
+        stage: 'frame',
         input: { intake: 'task.intake@v1', route: 'route.decision@v1' },
-        output: 'workflow.brief@v1',
+        output: 'flow.brief@v1',
         evidence_requirements: ['scope boundary', 'constraints', 'proof plan'],
-        execution: { kind: 'synthesis' },
+        execution: { kind: 'compose' },
         protocol: 'orphan-frame@v1',
-        writes: { artifact_path: 'artifacts/brief.json' },
-        gate: { required: ['scope'] },
+        writes: { report_path: 'reports/brief.json' },
+        check: { required: ['scope'] },
         routes: { continue: 'decision-step' },
       },
       {
         id: 'decision-step',
         block: 'human-decision',
         title: 'Human Decision',
-        phase: 'analyze',
-        input: { question: 'workflow.question@v1', evidence: 'workflow.evidence@v1' },
+        stage: 'analyze',
+        input: { question: 'flow.question@v1', evidence: 'flow.evidence@v1' },
         output: 'decision.answer@v1',
         evidence_requirements: [
           'question',
@@ -245,10 +245,10 @@ describe('orphan primitive: human-decision', () => {
         execution: { kind: 'checkpoint' },
         protocol: 'orphan-decision@v1',
         writes: {
-          checkpoint_request_path: 'artifacts/checkpoints/decision.request.json',
-          checkpoint_response_path: 'artifacts/checkpoints/decision.response.json',
+          checkpoint_request_path: 'reports/checkpoints/decision.request.json',
+          checkpoint_response_path: 'reports/checkpoints/decision.response.json',
         },
-        gate: { allow: ['continue'] },
+        check: { allow: ['continue'] },
         routes: { continue: '@complete' },
         checkpoint_policy: {
           prompt: 'Should the run continue past this human-decision exerciser?',
@@ -264,11 +264,11 @@ describe('orphan primitive: human-decision', () => {
         },
       },
     ],
-    phases: [
-      { canonical: 'frame', id: 'frame-phase', title: 'Frame' },
-      { canonical: 'analyze', id: 'analyze-phase', title: 'Analyze' },
+    stages: [
+      { canonical: 'frame', id: 'frame-stage', title: 'Frame' },
+      { canonical: 'analyze', id: 'analyze-stage', title: 'Analyze' },
     ],
-    spine_omits: ['plan', 'act', 'verify', 'review', 'close'],
+    stage_path_omits: ['plan', 'act', 'verify', 'review', 'close'],
   });
 
   it('parses through FlowSchematic', () => {
@@ -281,30 +281,30 @@ describe('orphan primitive: human-decision', () => {
     expect(issues, JSON.stringify(issues, null, 2)).toEqual([]);
   });
 
-  it('compiles to a Workflow', () => {
+  it('compiles to a CompiledFlow', () => {
     const schematic = FlowSchematic.parse(schematicRaw);
-    expect(() => compileSchematicToWorkflow(schematic)).not.toThrow();
+    expect(() => compileSchematicToCompiledFlow(schematic)).not.toThrow();
   });
 
   it('resolves the checkpoint via safe_autonomous_choice and runs to complete', async () => {
-    // The host primitive's runtime contract is "pause for the operator and
+    // The host scalar's runtime contract is "pause for the operator and
     // record the answer". When no operator is present, the runner takes
     // the safe_autonomous_choice declared in the policy — the same path
     // Build's autonomous mode uses for its frame checkpoint. So the run
     // resolves the checkpoint immediately and completes. To observe an
     // actual pause we'd need a checkpoint policy that omits
     // safe_autonomous_choice; the contract probe here just confirms the
-    // primitive is wireable end-to-end.
+    // scalar is wireable end-to-end.
     const schematic = FlowSchematic.parse(schematicRaw);
-    const workflow = singleWorkflow(compileSchematicToWorkflow(schematic));
-    const outcome = await runWorkflow({
-      runRoot: join(runRoot, 'human-decision-run'),
-      workflow,
-      workflowBytes: Buffer.from(JSON.stringify(workflow)),
+    const flow = singleCompiledFlow(compileSchematicToCompiledFlow(schematic));
+    const outcome = await runCompiledFlow({
+      runFolder: join(runFolder, 'human-decision-run'),
+      flow,
+      flowBytes: Buffer.from(JSON.stringify(flow)),
       runId: RunId.parse('00000000-0000-0000-0000-00000000eeee'),
       goal: 'orphan-human-decision exerciser',
-      rigor: 'standard',
-      lane: exerciserLane(),
+      depth: 'standard',
+      change_kind: exerciserChangeKind(),
       now: deterministicNow(Date.UTC(2026, 3, 26, 12, 20, 0)),
     });
     expect(outcome.result.outcome).toBe('complete');
@@ -312,11 +312,11 @@ describe('orphan primitive: human-decision', () => {
 });
 
 // =====================================================================
-// queue: inputs workflow.brief + context.packet → output work.queue
-// surface: orchestrator, allowed kinds: synthesis | checkpoint
-// phase: plan
+// queue: inputs flow.brief + context.packet → output work.queue
+// surface: orchestrator, allowed kinds: compose | checkpoint
+// stage: plan
 // =====================================================================
-describe('orphan primitive: queue', () => {
+describe('orphan scalar: queue', () => {
   const schematicRaw = schematicShell({
     id: 'orphan-queue',
     starts_at: 'frame-step',
@@ -326,36 +326,36 @@ describe('orphan primitive: queue', () => {
         id: 'frame-step',
         block: 'frame',
         title: 'Frame',
-        phase: 'frame',
+        stage: 'frame',
         input: { intake: 'task.intake@v1', route: 'route.decision@v1' },
-        output: 'workflow.brief@v1',
+        output: 'flow.brief@v1',
         evidence_requirements: ['scope boundary', 'constraints', 'proof plan'],
-        execution: { kind: 'synthesis' },
+        execution: { kind: 'compose' },
         protocol: 'orphan-frame@v1',
-        writes: { artifact_path: 'artifacts/brief.json' },
-        gate: { required: ['scope'] },
+        writes: { report_path: 'reports/brief.json' },
+        check: { required: ['scope'] },
         routes: { continue: 'queue-step' },
       },
       {
         id: 'queue-step',
         block: 'queue',
         title: 'Queue',
-        phase: 'plan',
-        input: { brief: 'workflow.brief@v1', context: 'context.packet@v1' },
+        stage: 'plan',
+        input: { brief: 'flow.brief@v1', context: 'context.packet@v1' },
         output: 'work.queue@v1',
         evidence_requirements: ['ordered items', 'item state', 'risk class', 'selection rule'],
-        execution: { kind: 'synthesis' },
+        execution: { kind: 'compose' },
         protocol: 'orphan-queue@v1',
-        writes: { artifact_path: 'artifacts/queue.json' },
-        gate: { required: ['items'] },
+        writes: { report_path: 'reports/queue.json' },
+        check: { required: ['items'] },
         routes: { continue: '@complete' },
       },
     ],
-    phases: [
-      { canonical: 'frame', id: 'frame-phase', title: 'Frame' },
-      { canonical: 'plan', id: 'plan-phase', title: 'Plan' },
+    stages: [
+      { canonical: 'frame', id: 'frame-stage', title: 'Frame' },
+      { canonical: 'plan', id: 'plan-stage', title: 'Plan' },
     ],
-    spine_omits: ['analyze', 'act', 'verify', 'review', 'close'],
+    stage_path_omits: ['analyze', 'act', 'verify', 'review', 'close'],
   });
 
   it('parses through FlowSchematic', () => {
@@ -368,22 +368,22 @@ describe('orphan primitive: queue', () => {
     expect(issues, JSON.stringify(issues, null, 2)).toEqual([]);
   });
 
-  it('compiles to a Workflow', () => {
+  it('compiles to a CompiledFlow', () => {
     const schematic = FlowSchematic.parse(schematicRaw);
-    expect(() => compileSchematicToWorkflow(schematic)).not.toThrow();
+    expect(() => compileSchematicToCompiledFlow(schematic)).not.toThrow();
   });
 
-  it('runs end-to-end via the placeholder synthesis fallback', async () => {
+  it('runs end-to-end via the placeholder compose fallback', async () => {
     const schematic = FlowSchematic.parse(schematicRaw);
-    const workflow = singleWorkflow(compileSchematicToWorkflow(schematic));
-    const outcome = await runWorkflow({
-      runRoot: join(runRoot, 'queue-run'),
-      workflow,
-      workflowBytes: Buffer.from(JSON.stringify(workflow)),
+    const flow = singleCompiledFlow(compileSchematicToCompiledFlow(schematic));
+    const outcome = await runCompiledFlow({
+      runFolder: join(runFolder, 'queue-run'),
+      flow,
+      flowBytes: Buffer.from(JSON.stringify(flow)),
       runId: RunId.parse('00000000-0000-0000-0000-00000000bbbb'),
       goal: 'orphan-queue exerciser',
-      rigor: 'standard',
-      lane: exerciserLane(),
+      depth: 'standard',
+      change_kind: exerciserChangeKind(),
       now: deterministicNow(Date.UTC(2026, 3, 26, 12, 5, 0)),
     });
     expect(outcome.result.outcome).toBe('complete');
@@ -391,11 +391,11 @@ describe('orphan primitive: queue', () => {
 });
 
 // =====================================================================
-// batch: inputs work.queue + workflow.brief → output batch.result
-// surface: mixed, allowed kinds: synthesis | dispatch | verification | checkpoint
-// phase: act
+// batch: inputs work.queue + flow.brief → output batch.result
+// surface: mixed, allowed kinds: compose | relay | verification | checkpoint
+// stage: act
 // =====================================================================
-describe('orphan primitive: batch', () => {
+describe('orphan scalar: batch', () => {
   const schematicRaw = schematicShell({
     id: 'orphan-batch',
     starts_at: 'frame-step',
@@ -405,22 +405,22 @@ describe('orphan primitive: batch', () => {
         id: 'frame-step',
         block: 'frame',
         title: 'Frame',
-        phase: 'frame',
+        stage: 'frame',
         input: { intake: 'task.intake@v1', route: 'route.decision@v1' },
-        output: 'workflow.brief@v1',
+        output: 'flow.brief@v1',
         evidence_requirements: ['scope boundary', 'constraints', 'proof plan'],
-        execution: { kind: 'synthesis' },
+        execution: { kind: 'compose' },
         protocol: 'orphan-frame@v1',
-        writes: { artifact_path: 'artifacts/brief.json' },
-        gate: { required: ['scope'] },
+        writes: { report_path: 'reports/brief.json' },
+        check: { required: ['scope'] },
         routes: { continue: 'batch-step' },
       },
       {
         id: 'batch-step',
         block: 'batch',
         title: 'Batch',
-        phase: 'act',
-        input: { queue: 'work.queue@v1', brief: 'workflow.brief@v1' },
+        stage: 'act',
+        input: { queue: 'work.queue@v1', brief: 'flow.brief@v1' },
         output: 'batch.result@v1',
         evidence_requirements: [
           'completed items',
@@ -428,18 +428,18 @@ describe('orphan primitive: batch', () => {
           'blocked items',
           'failed items',
         ],
-        execution: { kind: 'synthesis' },
+        execution: { kind: 'compose' },
         protocol: 'orphan-batch@v1',
-        writes: { artifact_path: 'artifacts/batch.json' },
-        gate: { required: ['items'] },
+        writes: { report_path: 'reports/batch.json' },
+        check: { required: ['items'] },
         routes: { continue: '@complete' },
       },
     ],
-    phases: [
-      { canonical: 'frame', id: 'frame-phase', title: 'Frame' },
-      { canonical: 'act', id: 'act-phase', title: 'Act' },
+    stages: [
+      { canonical: 'frame', id: 'frame-stage', title: 'Frame' },
+      { canonical: 'act', id: 'act-stage', title: 'Act' },
     ],
-    spine_omits: ['analyze', 'plan', 'verify', 'review', 'close'],
+    stage_path_omits: ['analyze', 'plan', 'verify', 'review', 'close'],
   });
 
   it('parses through FlowSchematic', () => {
@@ -452,22 +452,22 @@ describe('orphan primitive: batch', () => {
     expect(issues, JSON.stringify(issues, null, 2)).toEqual([]);
   });
 
-  it('compiles to a Workflow', () => {
+  it('compiles to a CompiledFlow', () => {
     const schematic = FlowSchematic.parse(schematicRaw);
-    expect(() => compileSchematicToWorkflow(schematic)).not.toThrow();
+    expect(() => compileSchematicToCompiledFlow(schematic)).not.toThrow();
   });
 
-  it('runs end-to-end via the placeholder synthesis fallback', async () => {
+  it('runs end-to-end via the placeholder compose fallback', async () => {
     const schematic = FlowSchematic.parse(schematicRaw);
-    const workflow = singleWorkflow(compileSchematicToWorkflow(schematic));
-    const outcome = await runWorkflow({
-      runRoot: join(runRoot, 'batch-run'),
-      workflow,
-      workflowBytes: Buffer.from(JSON.stringify(workflow)),
+    const flow = singleCompiledFlow(compileSchematicToCompiledFlow(schematic));
+    const outcome = await runCompiledFlow({
+      runFolder: join(runFolder, 'batch-run'),
+      flow,
+      flowBytes: Buffer.from(JSON.stringify(flow)),
       runId: RunId.parse('00000000-0000-0000-0000-00000000cccc'),
       goal: 'orphan-batch exerciser',
-      rigor: 'standard',
-      lane: exerciserLane(),
+      depth: 'standard',
+      change_kind: exerciserChangeKind(),
       now: deterministicNow(Date.UTC(2026, 3, 26, 12, 10, 0)),
     });
     expect(outcome.result.outcome).toBe('complete');
@@ -475,12 +475,12 @@ describe('orphan primitive: batch', () => {
 });
 
 // =====================================================================
-// risk-rollback-check: inputs change.evidence + verification.result + workflow.brief
+// risk-rollback-check: inputs change.evidence + verification.result + flow.brief
 // → output risk.decision
-// surface: orchestrator, allowed kinds: synthesis | checkpoint
-// phase: verify or close
+// surface: orchestrator, allowed kinds: compose | checkpoint
+// stage: verify or close
 // =====================================================================
-describe('orphan primitive: risk-rollback-check', () => {
+describe('orphan scalar: risk-rollback-check', () => {
   const schematicRaw = schematicShell({
     id: 'orphan-risk-rollback-check',
     starts_at: 'frame-step',
@@ -495,40 +495,40 @@ describe('orphan primitive: risk-rollback-check', () => {
         id: 'frame-step',
         block: 'frame',
         title: 'Frame',
-        phase: 'frame',
+        stage: 'frame',
         input: { intake: 'task.intake@v1', route: 'route.decision@v1' },
-        output: 'workflow.brief@v1',
+        output: 'flow.brief@v1',
         evidence_requirements: ['scope boundary', 'constraints', 'proof plan'],
-        execution: { kind: 'synthesis' },
+        execution: { kind: 'compose' },
         protocol: 'orphan-frame@v1',
-        writes: { artifact_path: 'artifacts/brief.json' },
-        gate: { required: ['scope'] },
+        writes: { report_path: 'reports/brief.json' },
+        check: { required: ['scope'] },
         routes: { continue: 'risk-step' },
       },
       {
         id: 'risk-step',
         block: 'risk-rollback-check',
         title: 'Risk and Rollback',
-        phase: 'close',
+        stage: 'close',
         input: {
           change: 'change.evidence@v1',
           verification: 'verification.result@v1',
-          brief: 'workflow.brief@v1',
+          brief: 'flow.brief@v1',
         },
         output: 'risk.decision@v1',
         evidence_requirements: ['risk class', 'allowed next action', 'recovery option'],
-        execution: { kind: 'synthesis' },
+        execution: { kind: 'compose' },
         protocol: 'orphan-risk@v1',
-        writes: { artifact_path: 'artifacts/risk.json' },
-        gate: { required: ['decision'] },
+        writes: { report_path: 'reports/risk.json' },
+        check: { required: ['decision'] },
         routes: { continue: '@complete' },
       },
     ],
-    phases: [
-      { canonical: 'frame', id: 'frame-phase', title: 'Frame' },
-      { canonical: 'close', id: 'close-phase', title: 'Close' },
+    stages: [
+      { canonical: 'frame', id: 'frame-stage', title: 'Frame' },
+      { canonical: 'close', id: 'close-stage', title: 'Close' },
     ],
-    spine_omits: ['analyze', 'plan', 'act', 'verify', 'review'],
+    stage_path_omits: ['analyze', 'plan', 'act', 'verify', 'review'],
   });
 
   it('parses through FlowSchematic', () => {
@@ -541,22 +541,22 @@ describe('orphan primitive: risk-rollback-check', () => {
     expect(issues, JSON.stringify(issues, null, 2)).toEqual([]);
   });
 
-  it('compiles to a Workflow', () => {
+  it('compiles to a CompiledFlow', () => {
     const schematic = FlowSchematic.parse(schematicRaw);
-    expect(() => compileSchematicToWorkflow(schematic)).not.toThrow();
+    expect(() => compileSchematicToCompiledFlow(schematic)).not.toThrow();
   });
 
-  it('runs end-to-end via the placeholder synthesis fallback', async () => {
+  it('runs end-to-end via the placeholder compose fallback', async () => {
     const schematic = FlowSchematic.parse(schematicRaw);
-    const workflow = singleWorkflow(compileSchematicToWorkflow(schematic));
-    const outcome = await runWorkflow({
-      runRoot: join(runRoot, 'risk-run'),
-      workflow,
-      workflowBytes: Buffer.from(JSON.stringify(workflow)),
+    const flow = singleCompiledFlow(compileSchematicToCompiledFlow(schematic));
+    const outcome = await runCompiledFlow({
+      runFolder: join(runFolder, 'risk-run'),
+      flow,
+      flowBytes: Buffer.from(JSON.stringify(flow)),
       runId: RunId.parse('00000000-0000-0000-0000-00000000dddd'),
       goal: 'orphan-risk exerciser',
-      rigor: 'standard',
-      lane: exerciserLane(),
+      depth: 'standard',
+      change_kind: exerciserChangeKind(),
       now: deterministicNow(Date.UTC(2026, 3, 26, 12, 15, 0)),
     });
     expect(outcome.result.outcome).toBe('complete');

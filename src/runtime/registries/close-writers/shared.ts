@@ -1,46 +1,41 @@
 // Shared helpers for close-with-evidence builders.
 //
-// `artifactPathForSchemaInWorkflow` mirrors runner.ts's internal lookup
-// so close builders can populate `artifact_pointers` paths without
+// `reportPathForSchemaInCompiledFlow` mirrors runner.ts's internal lookup
+// so close builders can populate `evidence_links` paths without
 // depending on the runner's private API surface. The lookup resolves
-// the unique workflow step that writes a given schema and returns its
+// the unique flow step that writes a given schema and returns its
 // path — it's intentionally strict (exactly one writer required) so
-// recipe shape errors surface here instead of producing ambiguous
-// pointers in the result artifact.
+// schematic shape errors surface here instead of producing ambiguous
+// pointers in the result report.
 
-import type { Workflow } from '../../../schemas/workflow.js';
+import type { CompiledFlow } from '../../../schemas/compiled-flow.js';
 
 // Sub-run / fanout step kinds widened the Step union — fanout's writes
-// holds {branches_dir, aggregate} with no `artifact` slot. The `'artifact'
-// in writes` guard narrows to step variants that carry an artifact slot
+// holds {branches_dir, aggrecheck} with no `report` slot. The `'report'
+// in writes` guard narrows to step variants that carry an report slot
 // before reading `.schema`, keeping this helper sound across all kinds.
-export function artifactPathForSchemaInWorkflow(workflow: Workflow, schemaName: string): string {
-  const matches = workflow.steps.filter(
-    (candidate) =>
-      'artifact' in candidate.writes && candidate.writes.artifact?.schema === schemaName,
+export function reportPathForSchemaInCompiledFlow(flow: CompiledFlow, schemaName: string): string {
+  const matches = flow.steps.filter(
+    (candidate) => 'report' in candidate.writes && candidate.writes.report?.schema === schemaName,
   );
   if (matches.length !== 1) {
     throw new Error(
-      `artifact schema '${schemaName}' must be written by exactly one workflow step, found ${matches.length}`,
+      `report schema '${schemaName}' must be written by exactly one flow step, found ${matches.length}`,
     );
   }
   const match = matches[0];
   if (match === undefined) {
-    throw new Error(`artifact schema '${schemaName}' matched no workflow step`);
+    throw new Error(`report schema '${schemaName}' matched no flow step`);
   }
-  const artifact = 'artifact' in match.writes ? match.writes.artifact : undefined;
-  if (artifact === undefined) {
-    throw new Error(`artifact schema '${schemaName}' matched a step without an artifact writer`);
+  const report = 'report' in match.writes ? match.writes.report : undefined;
+  if (report === undefined) {
+    throw new Error(`report schema '${schemaName}' matched a step without an report writer`);
   }
-  return artifact.path as unknown as string;
+  return report.path as unknown as string;
 }
 
-export function workflowHasArtifactSchemaInWorkflow(
-  workflow: Workflow,
-  schemaName: string,
-): boolean {
-  return workflow.steps.some(
-    (candidate) =>
-      'artifact' in candidate.writes && candidate.writes.artifact?.schema === schemaName,
+export function flowHasReportSchemaInCompiledFlow(flow: CompiledFlow, schemaName: string): boolean {
+  return flow.steps.some(
+    (candidate) => 'report' in candidate.writes && candidate.writes.report?.schema === schemaName,
   );
 }

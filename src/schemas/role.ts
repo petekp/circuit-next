@@ -1,6 +1,6 @@
-import { DispatchRole } from './step.js';
+import { RelayRole } from './step.js';
 
-// Convenience re-export. Dispatch roles are the authoritative enum.
-// `orchestrator` is an executor, not a role — it does not dispatch.
-export const Role = DispatchRole;
-export type Role = DispatchRole;
+// Convenience re-export. Relay roles are the authoritative enum.
+// `orchestrator` is an executor, not a role — it does not relay.
+export const Role = RelayRole;
+export type Role = RelayRole;

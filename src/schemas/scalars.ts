@@ -1,0 +1,61 @@
+import { z } from 'zod';
+
+/**
+ * Path-safe filename stem for control-pchange_kind reports (continuity records,
+ * run folders, similar). Used for any field whose value is joined into a
+ * filesystem path AT PARSE TIME, not at the call site.
+ *
+ * Authority: reports.json rows with `path_derived_fields` MUST use this
+ * (or a conservatively-equivalent scalar) for those fields. Enforced
+ * by ADR-0003 and `scripts/audit.mjs` authority-graph dimension.
+ */
+export const ControlPchange_kindFileStem = z
+  .string()
+  .min(1)
+  .max(128)
+  .regex(/^[a-z0-9][a-z0-9._-]*$/, {
+    message:
+      'must match /^[a-z0-9][a-z0-9._-]*$/ (lowercase alnum start; alnum, dot, underscore, hyphen thereafter)',
+  })
+  .refine((value) => value !== '.' && value !== '..', {
+    message: 'must not be a current or parent directory segment',
+  })
+  .refine((value) => !value.includes('..'), {
+    message: 'must not contain parent-directory traversal',
+  })
+  .refine((value) => !value.includes('/') && !value.includes('\\'), {
+    message: 'must not contain path separators',
+  });
+
+export type ControlPchange_kindFileStem = z.infer<typeof ControlPchange_kindFileStem>;
+
+/**
+ * Portable POSIX-style path relative to a single run folder. This scalar is
+ * for flow-authored read/write paths that the runtime later resolves into
+ * the run directory.
+ */
+export const RunRelativePath = z
+  .string()
+  .min(1, { message: 'run-relative path must be non-empty' })
+  .refine((value) => !value.startsWith('/'), {
+    message: 'run-relative path must not be absolute',
+  })
+  .refine((value) => !value.includes('\\'), {
+    message: 'run-relative path must use POSIX "/" separators, not backslashes',
+  })
+  .refine((value) => !value.includes(':'), {
+    message: 'run-relative path must not contain drive-letter or colon forms',
+  })
+  .refine(
+    (value) =>
+      value
+        .split('/')
+        .every((segment) => segment.length > 0 && segment !== '.' && segment !== '..'),
+    {
+      message:
+        'run-relative path must not contain empty, current-directory, or parent-directory segments',
+    },
+  )
+  .brand<'RunRelativePath'>();
+
+export type RunRelativePath = z.infer<typeof RunRelativePath>;

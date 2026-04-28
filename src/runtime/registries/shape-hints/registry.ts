@@ -1,18 +1,18 @@
-// Registry of dispatch shape hints, keyed by output schema name.
+// Registry of relay shape hints, keyed by output schema name.
 //
-// Hints come from src/workflows/catalog.ts via buildSchemaHintMap and
+// Hints come from src/flows/catalog.ts via buildSchemaHintMap and
 // buildStructuralHintList. Schema lookup runs first; structural hints
 // are tried in registration order only when the schema lookup misses.
 
-import { workflowPackages } from '../../../workflows/catalog.js';
+import { flowPackages } from '../../../flows/catalog.js';
 import { buildSchemaHintMap, buildStructuralHintList } from '../../catalog-derivations.js';
-import type { DispatchStep, SchemaShapeHint, StructuralShapeHint } from './types.js';
+import type { RelayStep, SchemaShapeHint, StructuralShapeHint } from './types.js';
 
-const SCHEMA_HINTS = buildSchemaHintMap(workflowPackages);
-const STRUCTURAL_HINTS = buildStructuralHintList(workflowPackages);
+const SCHEMA_HINTS = buildSchemaHintMap(flowPackages);
+const STRUCTURAL_HINTS = buildStructuralHintList(flowPackages);
 
-export function findDispatchShapeHint(step: DispatchStep): string | undefined {
-  const schema = step.writes.artifact?.schema;
+export function findRelayShapeHint(step: RelayStep): string | undefined {
+  const schema = step.writes.report?.schema;
   if (schema !== undefined) {
     const bySchema = SCHEMA_HINTS.get(schema);
     if (bySchema !== undefined) return bySchema;

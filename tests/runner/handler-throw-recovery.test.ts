@@ -3,31 +3,31 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
+import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { RunId } from '../../src/schemas/ids.js';
-import type { LaneDeclaration } from '../../src/schemas/lane.js';
 import { RunResult } from '../../src/schemas/result.js';
-import { Workflow } from '../../src/schemas/workflow.js';
 
-import type { AgentDispatchInput } from '../../src/runtime/adapters/agent.js';
-import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
-import { readRunLog } from '../../src/runtime/event-log-reader.js';
-import { type DispatchFn, runWorkflow } from '../../src/runtime/runner.js';
+import type { AgentRelayInput } from '../../src/runtime/connectors/agent.js';
+import type { RelayResult } from '../../src/runtime/connectors/shared.js';
+import { type RelayFn, runCompiledFlow } from '../../src/runtime/runner.js';
+import { readRunTrace } from '../../src/runtime/trace-reader.js';
 
 // Adversarial-review fix #4: a handler that throws unexpectedly must not
-// leave the run-root half-bootstrapped (step.entered on disk, no
+// leave the run-folder half-bootstrapped (step.entered on disk, no
 // step.aborted, no run.closed, no result.json). Pre-fix, an uncaught
-// throw out of executeWorkflow produced exactly that state — and the
-// next run on the same run-root failed claimFreshRunRoot because the
+// throw out of executeCompiledFlow produced exactly that state — and the
+// next run on the same run-folder failed claimFreshRunFolder because the
 // directory was non-empty, forcing manual cleanup. The wrapper around
 // runStepHandler now emits step.aborted + run.closed + result.json on
 // any non-path-escape throw.
 
-const FIXTURE_PATH = resolve('.claude-plugin/skills/dogfood-run-0/circuit.json');
+const FIXTURE_PATH = resolve('.claude-plugin/skills/runtime-proof/circuit.json');
 
-function loadFixture(): { workflow: Workflow; bytes: Buffer } {
+function loadFixture(): { flow: CompiledFlow; bytes: Buffer } {
   const bytes = readFileSync(FIXTURE_PATH);
   const raw: unknown = JSON.parse(bytes.toString('utf8'));
-  return { workflow: Workflow.parse(raw), bytes };
+  return { flow: CompiledFlow.parse(raw), bytes };
 }
 
 function deterministicNow(startMs: number): () => Date {
@@ -35,10 +35,10 @@ function deterministicNow(startMs: number): () => Date {
   return () => new Date(startMs + n++ * 1000);
 }
 
-function stubDispatcher(): DispatchFn {
+function stubRelayer(): RelayFn {
   return {
-    adapterName: 'agent',
-    dispatch: async (input: AgentDispatchInput): Promise<DispatchResult> => ({
+    connectorName: 'agent',
+    relay: async (input: AgentRelayInput): Promise<RelayResult> => ({
       request_payload: input.prompt,
       receipt_id: 'stub-receipt-handler-throw',
       result_body: '{"verdict":"ok"}',
@@ -48,107 +48,107 @@ function stubDispatcher(): DispatchFn {
   };
 }
 
-function lane(): LaneDeclaration {
+function change_kind(): ChangeKindDeclaration {
   return {
-    lane: 'ratchet-advance',
+    change_kind: 'ratchet-advance',
     failure_mode:
-      'pre-fix, an uncaught handler throw left the run-root half-bootstrapped and blocked retries',
+      'pre-fix, an uncaught handler throw left the run-folder half-bootstrapped and blocked retries',
     acceptance_evidence:
-      'runWorkflow resolves with outcome=aborted, step.aborted + run.closed events, and a parseable result.json',
+      'runCompiledFlow resolves with outcome=aborted, step.aborted + run.closed trace_entrys, and a parseable result.json',
     alternate_framing:
-      'allow handler exceptions to propagate raw — rejected; corrupts the run-root',
+      'allow handler exceptions to propacheck raw — rejected; corrupts the run-folder',
   };
 }
 
-let runRootBase: string;
+let runFolderBase: string;
 
 beforeEach(() => {
-  runRootBase = mkdtempSync(join(tmpdir(), 'circuit-next-handler-throw-'));
+  runFolderBase = mkdtempSync(join(tmpdir(), 'circuit-next-handler-throw-'));
 });
 
 afterEach(() => {
-  rmSync(runRootBase, { recursive: true, force: true });
+  rmSync(runFolderBase, { recursive: true, force: true });
 });
 
 describe('handler-throw recovery — fix #4', () => {
   it('graceful-aborts when a step has an unsupported kind, writes step.aborted + run.closed + result.json', async () => {
-    const { workflow, bytes } = loadFixture();
+    const { flow, bytes } = loadFixture();
 
-    // Mutate one step's `kind` to a value the dispatcher's default case
-    // rejects ("no handler registered"). The Workflow schema validates
+    // Mutate one step's `kind` to a value the relayer's default case
+    // rejects ("no handler registered"). The CompiledFlow schema validates
     // kind at parse time, so the cast bypasses author-time validation —
     // which is exactly the failure mode the wrapper guards against
     // (corrupted-runtime / mid-flight unexpected throws).
-    const badWorkflow = structuredClone(workflow);
-    const firstStep = badWorkflow.steps[0];
-    if (firstStep === undefined) throw new Error('fixture drift: dogfood-run-0 has no first step');
+    const badCompiledFlow = structuredClone(flow);
+    const firstStep = badCompiledFlow.steps[0];
+    if (firstStep === undefined) throw new Error('fixture drift: runtime-proof has no first step');
     (firstStep as { kind: string }).kind = 'bogus-kind';
 
-    const runRoot = join(runRootBase, 'run-bogus');
-    const outcome = await runWorkflow({
-      runRoot,
-      workflow: badWorkflow,
-      workflowBytes: bytes,
+    const runFolder = join(runFolderBase, 'run-bogus');
+    const outcome = await runCompiledFlow({
+      runFolder,
+      flow: badCompiledFlow,
+      flowBytes: bytes,
       runId: RunId.parse('11111111-2222-3333-4444-555555555555'),
       goal: 'prove handler throws fall through to a graceful aborted run',
-      rigor: 'standard',
-      lane: lane(),
+      depth: 'standard',
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 26, 12, 0, 0)),
-      dispatcher: stubDispatcher(),
+      relayer: stubRelayer(),
     });
 
     // Did not throw. Outcome surfaces the abort with a reason naming the
     // unsupported kind so the operator can diagnose without reading the
-    // event log.
+    // trace.
     expect(outcome.result.outcome).toBe('aborted');
     expect(outcome.result.reason).toBeDefined();
     expect(outcome.result.reason).toMatch(/handler threw/);
     expect(outcome.result.reason).toMatch(/bogus-kind/);
 
-    // The run-root is now in a closed state — events.ndjson, state.json,
-    // manifest.snapshot.json, artifacts/result.json all exist. A retry
-    // uses a fresh run-root; this one is preserved as audit evidence.
-    expect(existsSync(join(runRoot, 'events.ndjson'))).toBe(true);
-    expect(existsSync(join(runRoot, 'state.json'))).toBe(true);
-    expect(existsSync(join(runRoot, 'manifest.snapshot.json'))).toBe(true);
-    expect(existsSync(join(runRoot, 'artifacts', 'result.json'))).toBe(true);
+    // The run-folder is now in a closed state — trace.ndjson, state.json,
+    // manifest.snapshot.json, reports/result.json all exist. A retry
+    // uses a fresh run-folder; this one is preserved as audit evidence.
+    expect(existsSync(join(runFolder, 'trace.ndjson'))).toBe(true);
+    expect(existsSync(join(runFolder, 'state.json'))).toBe(true);
+    expect(existsSync(join(runFolder, 'manifest.snapshot.json'))).toBe(true);
+    expect(existsSync(join(runFolder, 'reports', 'result.json'))).toBe(true);
 
     // result.json parses through RunResult and pins the abort.
     const result = RunResult.parse(
-      JSON.parse(readFileSync(join(runRoot, 'artifacts', 'result.json'), 'utf8')),
+      JSON.parse(readFileSync(join(runFolder, 'reports', 'result.json'), 'utf8')),
     );
     expect(result.outcome).toBe('aborted');
     expect(result.reason).toMatch(/handler threw/);
 
-    // Event log invariants: step.entered → step.aborted → run.closed.
+    // TraceEntry log invariants: step.entered → step.aborted → run.closed.
     // run.closed is single and last (no step.completed for the bad
     // step).
-    const log = readRunLog(runRoot);
-    const lastEvent = log[log.length - 1];
-    expect(lastEvent?.kind).toBe('run.closed');
-    if (lastEvent?.kind !== 'run.closed') throw new Error('expected run.closed last');
-    expect(lastEvent.outcome).toBe('aborted');
+    const log = readRunTrace(runFolder);
+    const lastTraceEntry = log[log.length - 1];
+    expect(lastTraceEntry?.kind).toBe('run.closed');
+    if (lastTraceEntry?.kind !== 'run.closed') throw new Error('expected run.closed last');
+    expect(lastTraceEntry.outcome).toBe('aborted');
 
-    const stepAborted = log.find((event) => event.kind === 'step.aborted');
+    const stepAborted = log.find((trace_entry) => trace_entry.kind === 'step.aborted');
     expect(stepAborted).toBeDefined();
     if (stepAborted?.kind !== 'step.aborted') throw new Error('expected step.aborted in log');
     expect(stepAborted.reason).toMatch(/handler threw/);
     expect(stepAborted.reason).toMatch(/bogus-kind/);
 
     const stepCompletedForBad = log.some(
-      (event) =>
-        event.kind === 'step.completed' &&
-        (event.step_id as unknown as string) === (firstStep.id as unknown as string),
+      (trace_entry) =>
+        trace_entry.kind === 'step.completed' &&
+        (trace_entry.step_id as unknown as string) === (firstStep.id as unknown as string),
     );
     expect(stepCompletedForBad).toBe(false);
   });
 
-  it("graceful-aborts when a synthesis writer throws (the synthesis handler's local try/catch covers this)", async () => {
-    // Note: this test proves the SYNTHESIS-HANDLER-LOCAL try/catch
+  it("graceful-aborts when a compose writer throws (the compose handler's local try/catch covers this)", async () => {
+    // Note: this test proves the compose-HANDLER-LOCAL try/catch
     // around the writer invocation, not the runStepHandler wrapper.
-    // The synthesis handler catches the writer throw itself and
+    // The compose handler catches the writer throw itself and
     // returns `{ kind: 'aborted', reason }` — control never reaches
-    // the wrap. Pinning the "artifact writer failed" message here is
+    // the wrap. Pinning the "report writer failed" message here is
     // intentional: it's the local handler's contract.
     //
     // The runStepHandler wrap (commit 20ca1dd) is exercised by the
@@ -157,55 +157,55 @@ describe('handler-throw recovery — fix #4', () => {
     // that bypass a handler's local catch are hard to construct
     // without further injection seams; the wrap stays as the safety
     // net for those.
-    const { workflow, bytes } = loadFixture();
-    const runRoot = join(runRootBase, 'run-mid-throw');
+    const { flow, bytes } = loadFixture();
+    const runFolder = join(runFolderBase, 'run-mid-throw');
 
-    const outcome = await runWorkflow({
-      runRoot,
-      workflow,
-      workflowBytes: bytes,
+    const outcome = await runCompiledFlow({
+      runFolder,
+      flow,
+      flowBytes: bytes,
       runId: RunId.parse('11111111-2222-3333-4444-555555555556'),
       goal: 'prove handler throws mid-execution recover gracefully',
-      rigor: 'standard',
-      lane: lane(),
+      depth: 'standard',
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 26, 13, 0, 0)),
-      dispatcher: stubDispatcher(),
-      synthesisWriter: () => {
-        throw new Error('synthesisWriter exploded after step.entered');
+      relayer: stubRelayer(),
+      composeWriter: () => {
+        throw new Error('composeWriter exploded after step.entered');
       },
     });
 
-    // Run still produced a parseable result and never propagated the
-    // raw throw out of runWorkflow. The synthesis handler has its OWN
+    // Run still produced a parseable result and never propacheckd the
+    // raw throw out of runCompiledFlow. The compose handler has its OWN
     // try/catch around the writer invocation that maps the failure to
-    // an "artifact writer failed" abort, so the wrapper around
+    // an "report writer failed" abort, so the wrapper around
     // runStepHandler does not need to catch this one — both layers
     // deliver a clean abort and the test pins the writer-failure shape.
     expect(outcome.result.outcome).toBe('aborted');
     expect(outcome.result.reason).toBeDefined();
-    expect(outcome.result.reason).toMatch(/artifact writer failed/);
-    expect(outcome.result.reason).toMatch(/synthesisWriter exploded/);
+    expect(outcome.result.reason).toMatch(/report writer failed/);
+    expect(outcome.result.reason).toMatch(/composeWriter exploded/);
 
     // Run-root is in the closed state. This is the load-bearing
     // guarantee from commit 20ca1dd: a mid-handler throw cannot leave
-    // the run-root half-bootstrapped, even when the handler had
+    // the run-folder half-bootstrapped, even when the handler had
     // already started doing work.
-    expect(existsSync(join(runRoot, 'events.ndjson'))).toBe(true);
-    expect(existsSync(join(runRoot, 'state.json'))).toBe(true);
-    expect(existsSync(join(runRoot, 'manifest.snapshot.json'))).toBe(true);
-    expect(existsSync(join(runRoot, 'artifacts', 'result.json'))).toBe(true);
+    expect(existsSync(join(runFolder, 'trace.ndjson'))).toBe(true);
+    expect(existsSync(join(runFolder, 'state.json'))).toBe(true);
+    expect(existsSync(join(runFolder, 'manifest.snapshot.json'))).toBe(true);
+    expect(existsSync(join(runFolder, 'reports', 'result.json'))).toBe(true);
 
     const result = RunResult.parse(
-      JSON.parse(readFileSync(join(runRoot, 'artifacts', 'result.json'), 'utf8')),
+      JSON.parse(readFileSync(join(runFolder, 'reports', 'result.json'), 'utf8')),
     );
     expect(result.outcome).toBe('aborted');
-    expect(result.reason).toMatch(/artifact writer failed/);
+    expect(result.reason).toMatch(/report writer failed/);
 
-    // Event log is well-formed: no half-state, ends in run.closed.
-    const log = readRunLog(runRoot);
-    const lastEvent = log[log.length - 1];
-    expect(lastEvent?.kind).toBe('run.closed');
-    if (lastEvent?.kind !== 'run.closed') throw new Error('expected run.closed last');
-    expect(lastEvent.outcome).toBe('aborted');
+    // TraceEntry log is well-formed: no half-state, ends in run.closed.
+    const log = readRunTrace(runFolder);
+    const lastTraceEntry = log[log.length - 1];
+    expect(lastTraceEntry?.kind).toBe('run.closed');
+    if (lastTraceEntry?.kind !== 'run.closed') throw new Error('expected run.closed last');
+    expect(lastTraceEntry.outcome).toBe('aborted');
   });
 });

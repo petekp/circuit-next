@@ -7,7 +7,7 @@ last_updated: 2026-04-19
 depends_on: [ids]
 compatibility_policy: n/a
 legacy_parse_policy: n/a
-artifact_ids:
+report_ids:
   - skill.descriptor
 invariant_ids: [SKILL-I1, SKILL-I2, SKILL-I3, SKILL-I4, SKILL-I5, SKILL-I6]
 property_ids: [skill.prop.descriptor_round_trips_through_json, skill.prop.id_closure_under_selection, skill.prop.id_is_unique_within_catalog, skill.prop.trigger_is_advisory_not_grammar]
@@ -30,9 +30,9 @@ is a catalog-compiler concern, not a schema concern; when that compiler
 lands it will cite this contract as its output target.
 
 `skill.descriptor` is therefore classified `greenfield` in the authority
-graph (`specs/artifacts.json`): the descriptor shape is invented by
+graph (`specs/reports.json`): the descriptor shape is invented by
 circuit-next. The upstream SKILL.md frontmatter (external-protocol) will
-become a separate artifact id if/when the compiler lands and the
+become a separate report id if/when the compiler lands and the
 mapping needs its own contract.
 
 ## Ubiquitous language
@@ -45,7 +45,7 @@ The distinction to keep straight: a **skill** is the capability (what
 the plugin does when invoked); the **descriptor** is the catalog entry
 that names it, triggers it, and classifies it. The descriptor is
 authored once per skill at build time and read by the selection
-resolver at dispatch time.
+resolver at relay time.
 
 ## Invariants
 
@@ -58,11 +58,11 @@ invariants are enforced via `src/schemas/skill.ts` and tested in
   path separators, and leading digits are rejected at parse time.
 
   **Brand scope caveat.** `SkillId` is TypeScript-nominal only: it
-  shares the runtime regex with `WorkflowId`, `PhaseId`, and `StepId`.
+  shares the runtime regex with `CompiledFlowId`, `StageId`, and `StepId`.
   After parse, TypeScript callers cannot accidentally substitute
   one for another at call sites. BUT the regex itself does NOT
   distinguish them — a string that parses as `SkillId` also parses as
-  `WorkflowId`. JSON, YAML, and explicit casts erase the brand. If
+  `CompiledFlowId`. JSON, YAML, and explicit casts erase the brand. If
   nominal runtime separation is ever required (e.g., a union-type
   surface accepting any of the four), use distinct regex prefixes or
   a discriminated-id object. v0.1 accepts the structural overlap.
@@ -111,7 +111,7 @@ invariants are enforced via `src/schemas/skill.ts` and tested in
 - **SKILL-I5 — `.strict()` rejects surplus keys.** No free-form
   extension fields at parse time. A future slice MAY introduce typed
   extension slots (e.g. `tags`, `mcp_integrations`); v0.1 keeps the
-  surface closed. Surplus-key attacks (e.g. smuggling an `adapter` or
+  surface closed. Surplus-key attacks (e.g. smuggling an `connector` or
   `model` field through a descriptor to bypass `SelectionOverride`)
   are rejected here at the catalog boundary.
 
@@ -132,10 +132,10 @@ invariants are enforced via `src/schemas/skill.ts` and tested in
   `SkillDescriptor.safeParse`.
 - The catalog compiler closes `SkillId` references across the catalog:
   every `SkillId` named by a `SelectionOverride.skills[]`, a
-  `Workflow.default_skills` (if the schema ever reintroduces it), or a
+  `CompiledFlow.default_skills` (if the schema ever reintroduces it), or a
   plugin's `.claude-plugin/plugin.json` skills list MUST resolve to an
   existing `skill.descriptor` row in the compiled catalog. Schema-level
-  enforcement is infeasible (cross-artifact closure); this is catalog-
+  enforcement is infeasible (cross-report closure); this is catalog-
   compiler work.
 
 ## Post-conditions
@@ -147,7 +147,7 @@ After a `SkillDescriptor` is accepted:
   **Existence closure** — that a `SkillId` in a selection override
   resolves to an actual descriptor in the compiled catalog — is NOT
   proven by `SkillDescriptor.safeParse` or `SelectionOverride.safeParse`.
-  That is catalog-compiler work and is reserved as Phase 2 property
+  That is catalog-compiler work and is reserved as Stage 2 property
   `skill.prop.id_closure_under_selection`.
 - `domain` is always present (default-applied if omitted).
 - `capabilities` is either absent or a non-empty list of non-empty
@@ -155,7 +155,7 @@ After a `SkillDescriptor` is accepted:
 - No undocumented keys are accepted; consumers that want new fields
   must land a v0.2 schema change first.
 
-## Property ids (reserved for Phase 2 testing)
+## Property ids (reserved for Stage 2 testing)
 
 - `skill.prop.id_closure_under_selection` — for every catalog-compiled
   skill set and every `SelectionOverride.skills[]` that references
@@ -169,7 +169,7 @@ After a `SkillDescriptor` is accepted:
   true`. Documents that the schema is JSON-safe at the descriptor
   boundary.
 - `skill.prop.trigger_is_advisory_not_grammar` — property placeholder
-  asserting that no runtime dispatch depends on `trigger` string
+  asserting that no runtime relay depends on `trigger` string
   shape. Exists to anchor a future debate (if a later slice tries to
   promote `trigger` to a structured grammar, this property must be
   retired explicitly).
@@ -188,14 +188,14 @@ After a `SkillDescriptor` is accepted:
 
 - **carry-forward:untyped-skill-bypass** — **Partially closed in v0.1
   (catalog boundary) + selection.md SEL-I3 (selection boundary).** The
-  legacy untyped skill channels (`Workflow.default_skills`,
+  legacy untyped skill channels (`CompiledFlow.default_skills`,
   `CircuitOverride.skills`) were removed in selection.md v0.1
   (Codex HIGH #5). SkillDescriptor v0.1 ratifies the catalog-boundary
   side: no surplus keys, typed id, closed-enum domain, non-empty
   capabilities when present.
 
 - **carry-forward:silent-extension-slots** — **Closed in v0.1 via
-  SKILL-I5.** `.strict()` at the descriptor boundary prevents ad-hoc
+  SKILL-I5.** `.strict()` at the descriptor boundary prtrace_entrys ad-hoc
   fields from accreting. Adding a field is a v0.2+ schema change with
   explicit evolution note.
 
@@ -213,7 +213,7 @@ After a `SkillDescriptor` is accepted:
   in v0.1 by reframing.** `skill.descriptor` governs the compiled
   catalog entry (greenfield); the upstream CC `SKILL.md` frontmatter
   (external-protocol) is a separate concern for a future
-  `skill.frontmatter` artifact. `backing_paths` updated accordingly.
+  `skill.frontmatter` report. `backing_paths` updated accordingly.
   Codex v0.1 HIGH #1.
 
 ## Codex adversarial review (v0.1)
@@ -225,8 +225,8 @@ deferred. Full record at `specs/reviews/skill-md-v0.1-codex.md`.
 ## Evolution
 
 - **v0.1 (this draft)** — initial contract with SKILL-I1..I6 (SKILL-I6
-  added post-Codex for prototype-chain defense). Four Phase 2 property
-  ids reserved. Closes the selection / adapter / skill dispatch-time
+  added post-Codex for prototype-chain defense). Four Stage 2 property
+  ids reserved. Closes the selection / connector / skill relay-time
   triplet on the authoring side. All 8 Codex objections folded in
   (HIGH #1 external-protocol reframe, MED #2 post-condition narrow,
   MED #3 trigger scope caveat, MED #4 capabilities prose tightened,
@@ -244,13 +244,13 @@ deferred. Full record at `specs/reviews/skill-md-v0.1-codex.md`.
     data motivates structured grammar; (c) build-time NLP cost becomes
     a bottleneck. Until one of these lands, `trigger` stays free-form.
   - **Catalog-level closure property.** Promote
-    `skill.prop.id_closure_under_selection` from Phase 2 property id
-    to a schema-level `CatalogSnapshot` aggregate that binds
+    `skill.prop.id_closure_under_selection` from Stage 2 property id
+    to a schema-level `CatalogSnapshot` aggrecheck that binds
     `SkillDescriptor[]` to the reachable `SelectionOverride.skills`
     references. Reopen condition: selection resolver ships and
     operators hit unresolved-skill-id bugs in practice.
   - **Upstream SKILL.md mapping contract.** Introduce a separate
-    artifact id (likely `skill.frontmatter`, `external-protocol`) to
+    report id (likely `skill.frontmatter`, `external-protocol`) to
     govern the Claude Code `SKILL.md` YAML shape that the catalog
     compiler consumes as input. Reopen condition: catalog compiler
     lands, OR host CC frontmatter changes in a way that breaks the
@@ -259,6 +259,6 @@ deferred. Full record at `specs/reviews/skill-md-v0.1-codex.md`.
     resolver treats `capabilities` as deterministic policy (filter,
     routing, eligibility), reopen to promote it from operator-facing
     documentation to typed policy vocabulary. Reopen condition: first
-    resolver proposes `capabilities`-based dispatch.
-- **v1.0 (Phase 2)** — ratified invariants + property tests under
+    resolver proposes `capabilities`-based relay.
+- **v1.0 (Stage 2)** — ratified invariants + property tests under
   `tests/properties/visible/skill/` + catalog-level property harness.

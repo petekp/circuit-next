@@ -1,26 +1,28 @@
 // Behavioral guarantees of the catalog-driven router, verified against
 // synthetic mini-catalogs so the assertions don't depend on incidental
-// properties of the live workflow set.
+// properties of the live flow set.
 //
-// What this file is NOT: a duplicate of tests/contracts/workflow-router.test.ts.
+// What this file is NOT: a duplicate of tests/contracts/flow-router.test.ts.
 // That test exercises the live classifier against real-world phrases.
 // This test isolates the three mechanisms the live test conflates:
 //   - routing.order precedence
 //   - isDefault selection
-//   - skipOnPlanningArtifact suppression
+//   - skipOnPlanningReport suppression
 
 import { describe, expect, it } from 'vitest';
 
+import type { CompiledFlowPackage } from '../../src/flows/types.js';
 import { classifyTaskAgainstRoutables, deriveRoutingForTesting } from '../../src/runtime/router.js';
-import type { WorkflowPackage } from '../../src/workflows/types.js';
 
-function fakePackage(opts: Partial<WorkflowPackage> & { readonly id: string }): WorkflowPackage {
+function fakePackage(
+  opts: Partial<CompiledFlowPackage> & { readonly id: string },
+): CompiledFlowPackage {
   return {
     id: opts.id,
     paths: opts.paths ?? { schematic: `synthetic/${opts.id}.schematic.json` },
     ...(opts.routing === undefined ? {} : { routing: opts.routing }),
-    dispatchArtifacts: opts.dispatchArtifacts ?? [],
-    writers: opts.writers ?? { synthesis: [], close: [], verification: [], checkpoint: [] },
+    relayReports: opts.relayReports ?? [],
+    writers: opts.writers ?? { compose: [], close: [], verification: [], checkpoint: [] },
   };
 }
 
@@ -61,7 +63,7 @@ describe('router.classifyTaskAgainstRoutables — behavioral isolation', () => {
       fallback,
     ]);
     const decision = classifyTaskAgainstRoutables('this is foo', routables, defaultPackage);
-    expect(decision.workflowName).toBe('early');
+    expect(decision.flowName).toBe('early');
     expect(decision.matched_signal).toBe('shared');
   });
 
@@ -93,7 +95,7 @@ describe('router.classifyTaskAgainstRoutables — behavioral isolation', () => {
     });
     const { routables, defaultPackage } = deriveRoutingForTesting([a, b, fallback]);
     const decision = classifyTaskAgainstRoutables('bar', routables, defaultPackage);
-    expect(decision.workflowName).toBe('a');
+    expect(decision.flowName).toBe('a');
   });
 
   it('isDefault: selected on no signal match independent of input position', () => {
@@ -123,7 +125,7 @@ describe('router.classifyTaskAgainstRoutables — behavioral isolation', () => {
       routables,
       defaultPackage,
     );
-    expect(decision.workflowName).toBe('fallback');
+    expect(decision.flowName).toBe('fallback');
     expect(decision.matched_signal).toBeUndefined();
     expect(decision.reason).toBe('fell through to default');
   });
@@ -148,18 +150,18 @@ describe('router.classifyTaskAgainstRoutables — behavioral isolation', () => {
     // package, the classifier should fall through to the default path
     // (which here picks the same package, but via the default reason
     // rather than the signal-match path).
-    expect(decision.workflowName).toBe('fallback');
+    expect(decision.flowName).toBe('fallback');
     expect(decision.matched_signal).toBeUndefined();
     expect(decision.reason).toBe('fell through');
   });
 
-  it('skipOnPlanningArtifact: a positive match is suppressed when text mentions a planning artifact', () => {
+  it('skipOnPlanningReport: a positive match is suppressed when text mentions a planning report', () => {
     const guarded = fakePackage({
       id: 'guarded',
       routing: {
         order: 10,
         signals: [{ label: 'guarded-signal', pattern: /\bbuild\b/i }],
-        skipOnPlanningArtifact: true,
+        skipOnPlanningReport: true,
         reasonForMatch: () => 'guarded matched',
       },
     });
@@ -175,28 +177,28 @@ describe('router.classifyTaskAgainstRoutables — behavioral isolation', () => {
     });
     const { routables, defaultPackage } = deriveRoutingForTesting([guarded, fallback]);
     // 'build' matches the signal AND 'proposal' triggers the planning
-    // artifact regex → the match is suppressed and we fall through.
+    // report regex → the match is suppressed and we fall through.
     const suppressed = classifyTaskAgainstRoutables(
       'build a proposal for foo',
       routables,
       defaultPackage,
     );
-    expect(suppressed.workflowName).toBe('fallback');
+    expect(suppressed.flowName).toBe('fallback');
     expect(suppressed.reason).toBe('planning suppression: fell through');
-    // 'build' alone, without a planning artifact, should match.
+    // 'build' alone, without a planning report, should match.
     const matched = classifyTaskAgainstRoutables('build something', routables, defaultPackage);
-    expect(matched.workflowName).toBe('guarded');
+    expect(matched.flowName).toBe('guarded');
   });
 
-  it('skipOnPlanningArtifact only suppresses packages that opt in', () => {
-    // 'review' does NOT set skipOnPlanningArtifact; even with a
-    // planning-artifact word in the request, it should still match.
+  it('skipOnPlanningReport only suppresses packages that opt in', () => {
+    // 'review' does NOT set skipOnPlanningReport; even with a
+    // planning-report word in the request, it should still match.
     const unguarded = fakePackage({
       id: 'unguarded',
       routing: {
         order: 10,
         signals: [{ label: 'unguarded-signal', pattern: /\breview\b/i }],
-        // skipOnPlanningArtifact intentionally omitted
+        // skipOnPlanningReport intentionally omitted
         reasonForMatch: () => 'unguarded matched',
       },
     });
@@ -211,6 +213,6 @@ describe('router.classifyTaskAgainstRoutables — behavioral isolation', () => {
     });
     const { routables, defaultPackage } = deriveRoutingForTesting([unguarded, fallback]);
     const decision = classifyTaskAgainstRoutables('review my proposal', routables, defaultPackage);
-    expect(decision.workflowName).toBe('unguarded');
+    expect(decision.flowName).toBe('unguarded');
   });
 });

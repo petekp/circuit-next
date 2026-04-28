@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 
 import { FLOW_BLOCK_IDS, FlowBlockCatalog } from '../../src/schemas/flow-blocks.js';
 
-const catalogPath = 'docs/workflows/block-catalog.json';
-const blocksDocPath = 'docs/workflows/blocks.md';
-const compositionDocPath = 'docs/workflows/flow-schematics.md';
+const catalogPath = 'docs/flows/block-catalog.json';
+const blocksDocPath = 'docs/flows/blocks.md';
+const compositionDocPath = 'docs/flows/flow-schematics.md';
 
 function readCatalog() {
   return JSON.parse(readFileSync(catalogPath, 'utf8')) as unknown;
@@ -68,10 +68,10 @@ describe('flow block catalog', () => {
     const act = parseCatalog().blocks.find((block) => block.id === 'act');
     expect(act).toBeDefined();
     if (act === undefined) throw new Error('act block missing');
-    expect(act.input_contracts).toEqual(['workflow.brief@v1', 'diagnosis.result@v1']);
+    expect(act.input_contracts).toEqual(['flow.brief@v1', 'diagnosis.result@v1']);
     expect(act.alternative_input_contracts).toEqual([
-      ['workflow.brief@v1', 'plan.strategy@v1'],
-      ['workflow.brief@v1', 'plan.strategy@v1', 'diagnosis.result@v1'],
+      ['flow.brief@v1', 'plan.strategy@v1'],
+      ['flow.brief@v1', 'plan.strategy@v1', 'diagnosis.result@v1'],
     ]);
   });
 
@@ -84,7 +84,7 @@ describe('flow block catalog', () => {
     };
     const act = raw.blocks.find((block) => block.id === 'act');
     if (act === undefined) throw new Error('act block missing');
-    act.input_contracts = ['workflow.brief@v1', 'workflow.brief@v1'];
+    act.input_contracts = ['flow.brief@v1', 'flow.brief@v1'];
     const result = FlowBlockCatalog.safeParse(raw);
     expect(result.success).toBe(false);
     if (!result.success) {
@@ -113,14 +113,14 @@ describe('flow block catalog', () => {
     const handoff = parsed.blocks.find((block) => block.id === 'handoff');
     expect(close?.allowed_routes).toEqual(['complete', 'stop', 'handoff', 'escalate']);
     expect(close?.input_contracts).toEqual([
-      'workflow.brief@v1',
+      'flow.brief@v1',
       'verification.result@v1',
       'review.verdict@v1',
     ]);
     expect(close?.alternative_input_contracts).toEqual([
-      ['workflow.brief@v1', 'verification.result@v1'],
-      ['workflow.brief@v1', 'review.verdict@v1'],
-      ['workflow.brief@v1'],
+      ['flow.brief@v1', 'verification.result@v1'],
+      ['flow.brief@v1', 'review.verdict@v1'],
+      ['flow.brief@v1'],
     ]);
     expect(close?.human_interaction).toBe('never');
     expect(handoff?.allowed_routes).toEqual(['complete', 'stop']);
@@ -129,7 +129,7 @@ describe('flow block catalog', () => {
 
   it('has a composition note that points schematics at the catalog, not freeform graphs', () => {
     const note = readFileSync(compositionDocPath, 'utf8');
-    expect(note).toContain('docs/workflows/block-catalog.json');
+    expect(note).toContain('docs/flows/block-catalog.json');
     expect(note).toMatch(/schematic/i);
     expect(note).toMatch(/freeform graph/i);
     expect(note).toMatch(/named outcomes/i);

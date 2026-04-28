@@ -1,15 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { copyFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import type { CompiledFlow } from '../../schemas/compiled-flow.js';
 import { RunId } from '../../schemas/ids.js';
-import type { Workflow } from '../../schemas/workflow.js';
 import { resultPath } from '../result-writer.js';
 import { resolveRunRelative } from '../run-relative-path.js';
-import type { WorkflowInvocation } from '../runner-types.js';
+import type { CompiledFlowInvocation } from '../runner-types.js';
 import { isRunRelativePathError } from './shared.js';
 import type { StepHandlerContext, StepHandlerResult } from './types.js';
 
-type SubRunStep = Workflow['steps'][number] & { kind: 'sub-run' };
+type SubRunStep = CompiledFlow['steps'][number] & { kind: 'sub-run' };
 
 const NO_VERDICT_SENTINEL = '<no-verdict>';
 
@@ -45,11 +45,11 @@ function evaluateChildVerdict(step: SubRunStep, resultBody: string): ChildVerdic
       failureReason: `sub-run step '${step.id}': child result body lacks a non-empty string 'verdict' field`,
     };
   }
-  if (!step.gate.pass.includes(verdictRaw)) {
+  if (!step.check.pass.includes(verdictRaw)) {
     return {
       verdict: verdictRaw,
       admitted: false,
-      failureReason: `sub-run step '${step.id}': child verdict '${verdictRaw}' is not in gate.pass [${step.gate.pass.join(', ')}]`,
+      failureReason: `sub-run step '${step.id}': child verdict '${verdictRaw}' is not in check.pass [${step.check.pass.join(', ')}]`,
     };
   }
   return { verdict: verdictRaw, admitted: true };
@@ -59,7 +59,7 @@ export async function runSubRunStep(
   ctx: StepHandlerContext & { readonly step: SubRunStep },
 ): Promise<StepHandlerResult> {
   const {
-    runRoot,
+    runFolder,
     step,
     runId,
     attempt,
@@ -68,35 +68,35 @@ export async function runSubRunStep(
     state,
     now,
     childRunner,
-    childWorkflowResolver,
-    dispatcher,
-    synthesisWriter,
+    childCompiledFlowResolver,
+    relayer,
+    composeWriter,
     executionSelectionConfigLayers,
     projectRoot,
-    lane,
+    change_kind,
   } = ctx;
 
-  if (step.writes.artifact !== undefined && step.writes.artifact.path !== step.writes.result) {
-    // v0 narrows scope: writes.artifact materialization (republishing the
-    // child's primary artifact into a parent slot at a DIFFERENT path)
+  if (step.writes.report !== undefined && step.writes.report.path !== step.writes.result) {
+    // v0 narrows scope: writes.report materialization (republishing the
+    // child's primary report into a parent slot at a DIFFERENT path)
     // is not yet wired — semantics depend on what "republish verbatim"
-    // means for each child workflow, and there's no consumer driving the
-    // choice yet. The schema-annotation case (artifact.path equals
-    // result path) is allowed: the result.json IS the typed artifact,
-    // and downstream lookups via artifactPathForSchemaInWorkflow can
+    // means for each child flow, and there's no consumer driving the
+    // choice yet. The schema-annotation case (report.path equals
+    // result path) is allowed: the result.json IS the typed report,
+    // and downstream lookups via reportPathForSchemaInCompiledFlow can
     // find this sub-run step by its declared schema. Authors who
-    // declare a divergent artifact path today get a loud abort rather
+    // declare a divergent report path today get a loud abort rather
     // than silent omission.
-    const reason = `sub-run step '${step.id}': writes.artifact materialization at a path different from writes.result is not yet supported; either omit writes.artifact or declare it with the same path as writes.result (schema-annotation form)`;
+    const reason = `sub-run step '${step.id}': writes.report materialization at a path different from writes.result is not yet supported; either omit writes.report or declare it with the same path as writes.result (schema-annotation form)`;
     push({
       schema_version: 1,
       sequence: state.sequence,
       recorded_at: recordedAt(),
       run_id: runId,
-      kind: 'gate.evaluated',
+      kind: 'check.evaluated',
       step_id: step.id,
       attempt,
-      gate_kind: 'result_verdict',
+      check_kind: 'result_verdict',
       outcome: 'fail',
       reason,
     });
@@ -113,17 +113,17 @@ export async function runSubRunStep(
     return { kind: 'aborted', reason };
   }
 
-  if (childWorkflowResolver === undefined) {
-    const reason = `sub-run step '${step.id}': WorkflowInvocation.childWorkflowResolver is required to resolve child workflow '${step.workflow_ref.workflow_id as unknown as string}'`;
+  if (childCompiledFlowResolver === undefined) {
+    const reason = `sub-run step '${step.id}': CompiledFlowInvocation.childCompiledFlowResolver is required to resolve child flow '${step.flow_ref.flow_id as unknown as string}'`;
     push({
       schema_version: 1,
       sequence: state.sequence,
       recorded_at: recordedAt(),
       run_id: runId,
-      kind: 'gate.evaluated',
+      kind: 'check.evaluated',
       step_id: step.id,
       attempt,
-      gate_kind: 'result_verdict',
+      check_kind: 'result_verdict',
       outcome: 'fail',
       reason,
     });
@@ -141,30 +141,30 @@ export async function runSubRunStep(
   }
 
   // RUN-I3: child gets a fresh RunId. Audit linkage flows through
-  // sub_run.{started,completed} events at the parent step boundary —
-  // not by sharing the parent's run_id. Child run-roots are sibling
+  // sub_run.{started,completed} trace_entrys at the parent step boundary —
+  // not by sharing the parent's run_id. Child run-folders are sibling
   // directories under the parent's runs base, NOT nested under the
-  // parent's run-root.
+  // parent's run-folder.
   const childRunId: RunId = RunId.parse(randomUUID());
-  const runsBase = dirname(runRoot);
-  const childRunRoot = `${runsBase}/${childRunId as unknown as string}`;
+  const runsBase = dirname(runFolder);
+  const childRunFolder = `${runsBase}/${childRunId as unknown as string}`;
   mkdirSync(runsBase, { recursive: true });
 
-  let resolved: { workflow: Workflow; bytes: Buffer };
+  let resolved: { flow: CompiledFlow; bytes: Buffer };
   try {
-    resolved = childWorkflowResolver(step.workflow_ref);
+    resolved = childCompiledFlowResolver(step.flow_ref);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    const reason = `sub-run step '${step.id}': child workflow resolution failed (${message})`;
+    const reason = `sub-run step '${step.id}': child flow resolution failed (${message})`;
     push({
       schema_version: 1,
       sequence: state.sequence,
       recorded_at: recordedAt(),
       run_id: runId,
-      kind: 'gate.evaluated',
+      kind: 'check.evaluated',
       step_id: step.id,
       attempt,
-      gate_kind: 'result_verdict',
+      check_kind: 'result_verdict',
       outcome: 'fail',
       reason,
     });
@@ -181,20 +181,17 @@ export async function runSubRunStep(
     return { kind: 'aborted', reason };
   }
 
-  if (
-    (resolved.workflow.id as unknown as string) !==
-    (step.workflow_ref.workflow_id as unknown as string)
-  ) {
-    const reason = `sub-run step '${step.id}': resolver returned workflow id '${resolved.workflow.id as unknown as string}' but workflow_ref names '${step.workflow_ref.workflow_id as unknown as string}'`;
+  if ((resolved.flow.id as unknown as string) !== (step.flow_ref.flow_id as unknown as string)) {
+    const reason = `sub-run step '${step.id}': resolver returned flow id '${resolved.flow.id as unknown as string}' but flow_ref names '${step.flow_ref.flow_id as unknown as string}'`;
     push({
       schema_version: 1,
       sequence: state.sequence,
       recorded_at: recordedAt(),
       run_id: runId,
-      kind: 'gate.evaluated',
+      kind: 'check.evaluated',
       step_id: step.id,
       attempt,
-      gate_kind: 'result_verdict',
+      check_kind: 'result_verdict',
       outcome: 'fail',
       reason,
     });
@@ -220,26 +217,26 @@ export async function runSubRunStep(
     step_id: step.id,
     attempt,
     child_run_id: childRunId,
-    child_workflow_id: resolved.workflow.id,
-    child_entry_mode: step.workflow_ref.entry_mode,
-    child_rigor: step.rigor,
+    child_flow_id: resolved.flow.id,
+    child_entry_mode: step.flow_ref.entry_mode,
+    child_depth: step.depth,
   });
 
   const startMs = Date.now();
-  const childInvocation: WorkflowInvocation = {
-    runRoot: childRunRoot,
-    workflow: resolved.workflow,
-    workflowBytes: resolved.bytes,
+  const childInvocation: CompiledFlowInvocation = {
+    runFolder: childRunFolder,
+    flow: resolved.flow,
+    flowBytes: resolved.bytes,
     runId: childRunId,
     goal: step.goal,
-    rigor: step.rigor,
-    entryModeName: step.workflow_ref.entry_mode,
-    lane,
+    depth: step.depth,
+    entryModeName: step.flow_ref.entry_mode,
+    change_kind,
     now,
-    dispatcher,
-    synthesisWriter,
+    relayer,
+    composeWriter,
     selectionConfigLayers: executionSelectionConfigLayers,
-    childWorkflowResolver,
+    childCompiledFlowResolver,
     ...(projectRoot === undefined ? {} : { projectRoot }),
   };
 
@@ -249,16 +246,16 @@ export async function runSubRunStep(
   } catch (err) {
     if (isRunRelativePathError(err)) throw err;
     const message = err instanceof Error ? err.message : String(err);
-    const reason = `sub-run step '${step.id}': child workflow invocation failed (${message})`;
+    const reason = `sub-run step '${step.id}': child flow invocation failed (${message})`;
     push({
       schema_version: 1,
       sequence: state.sequence,
       recorded_at: recordedAt(),
       run_id: runId,
-      kind: 'gate.evaluated',
+      kind: 'check.evaluated',
       step_id: step.id,
       attempt,
-      gate_kind: 'result_verdict',
+      check_kind: 'result_verdict',
       outcome: 'fail',
       reason,
     });
@@ -279,19 +276,19 @@ export async function runSubRunStep(
     // v0 narrows scope: a child sub-run that waited at a checkpoint
     // cannot be resumed through the parent's checkpoint-resume API
     // (parent's `current_step` is a sub-run, not a checkpoint). This is
-    // a future-slice concern. Practically, child rigor of lite /
+    // a future-slice concern. Practically, child depth of lite /
     // standard / autonomous resolves checkpoints automatically; deep /
-    // tournament rigor on a child is the path that surfaces this.
-    const reason = `sub-run step '${step.id}': child workflow waited at checkpoint '${childResult.result.checkpoint.step_id}'; nested checkpoint resume is not yet supported in v0 (use child rigor lite/standard/autonomous to auto-resolve)`;
+    // tournament depth on a child is the path that surfaces this.
+    const reason = `sub-run step '${step.id}': child flow waited at checkpoint '${childResult.result.checkpoint.step_id}'; nested checkpoint resume is not yet supported in v0 (use child depth lite/standard/autonomous to auto-resolve)`;
     push({
       schema_version: 1,
       sequence: state.sequence,
       recorded_at: recordedAt(),
       run_id: runId,
-      kind: 'gate.evaluated',
+      kind: 'check.evaluated',
       step_id: step.id,
       attempt,
-      gate_kind: 'result_verdict',
+      check_kind: 'result_verdict',
       outcome: 'fail',
       reason,
     });
@@ -309,10 +306,10 @@ export async function runSubRunStep(
   }
 
   const durationMs = Math.max(0, Date.now() - startMs);
-  const childResultPathAbs = resultPath(childRunRoot);
+  const childResultPathAbs = resultPath(childRunFolder);
   const childResultBody = readFileSync(childResultPathAbs, 'utf8');
 
-  const parentResultAbs = resolveRunRelative(runRoot, step.writes.result);
+  const parentResultAbs = resolveRunRelative(runFolder, step.writes.result);
   mkdirSync(dirname(parentResultAbs), { recursive: true });
   copyFileSync(childResultPathAbs, parentResultAbs);
 
@@ -339,19 +336,19 @@ export async function runSubRunStep(
       sequence: state.sequence,
       recorded_at: recordedAt(),
       run_id: runId,
-      kind: 'gate.evaluated',
+      kind: 'check.evaluated',
       step_id: step.id,
       attempt,
-      gate_kind: 'result_verdict',
+      check_kind: 'result_verdict',
       outcome: 'pass',
     });
     return { kind: 'advance' };
   }
 
-  // Gate-fail termination path. Verdict was either rejected by gate.pass,
+  // Check-fail termination path. Verdict was either rejected by check.pass,
   // unparseable, or child closed with a non-complete RunClosedOutcome
   // (aborted / handoff / stopped / escalated). Each is a runtime-level
-  // sub-run failure even when the verdict itself is in gate.pass — a
+  // sub-run failure even when the verdict itself is in check.pass — a
   // child that aborts midway hasn't earned the verdict it might emit.
   const reason =
     verdictEvaluation.failureReason ??
@@ -361,10 +358,10 @@ export async function runSubRunStep(
     sequence: state.sequence,
     recorded_at: recordedAt(),
     run_id: runId,
-    kind: 'gate.evaluated',
+    kind: 'check.evaluated',
     step_id: step.id,
     attempt,
-    gate_kind: 'result_verdict',
+    check_kind: 'result_verdict',
     outcome: 'fail',
     reason,
   });

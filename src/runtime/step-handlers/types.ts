@@ -1,22 +1,22 @@
+import type { ChangeKindDeclaration } from '../../schemas/change-kind.js';
+import type { CompiledFlow } from '../../schemas/compiled-flow.js';
 import type { LayeredConfig as LayeredConfigValue } from '../../schemas/config.js';
-import type { Event } from '../../schemas/event.js';
+import type { Depth } from '../../schemas/depth.js';
 import type { InvocationId, RunId } from '../../schemas/ids.js';
-import type { LaneDeclaration } from '../../schemas/lane.js';
-import type { Rigor } from '../../schemas/rigor.js';
-import type { Workflow } from '../../schemas/workflow.js';
+import type { TraceEntry } from '../../schemas/trace-entry.js';
 import type {
-  ChildWorkflowResolver,
-  DispatchFn,
-  DispatchResultMetadata,
-  SynthesisWriterFn,
-  WorkflowRunner,
+  ChildCompiledFlowResolver,
+  CompiledFlowRunner,
+  ComposeWriterFn,
+  RelayFn,
+  RelayResultMetadata,
   WorktreeRunner,
 } from '../runner-types.js';
 
 export interface RunState {
-  readonly events: Event[];
+  readonly trace_entrys: TraceEntry[];
   sequence: number;
-  readonly dispatchResults: DispatchResultMetadata[];
+  readonly relayResults: RelayResultMetadata[];
 }
 
 export interface ResumeCheckpointState {
@@ -26,36 +26,36 @@ export interface ResumeCheckpointState {
 }
 
 export interface StepHandlerContext {
-  readonly runRoot: string;
-  readonly workflow: Workflow;
+  readonly runFolder: string;
+  readonly flow: CompiledFlow;
   readonly runId: RunId;
   readonly goal: string;
-  readonly lane: LaneDeclaration;
-  readonly rigor: Rigor;
+  readonly change_kind: ChangeKindDeclaration;
+  readonly depth: Depth;
   readonly executionSelectionConfigLayers: readonly LayeredConfigValue[];
   readonly projectRoot?: string;
   readonly invocationId?: InvocationId;
-  readonly dispatcher: DispatchFn;
-  readonly synthesisWriter: SynthesisWriterFn;
+  readonly relayer: RelayFn;
+  readonly composeWriter: ComposeWriterFn;
   readonly now: () => Date;
   readonly recordedAt: () => string;
   readonly state: RunState;
-  readonly push: (ev: Event) => void;
-  readonly step: Workflow['steps'][number];
+  readonly push: (ev: TraceEntry) => void;
+  readonly step: CompiledFlow['steps'][number];
   readonly attempt: number;
   readonly isResumedCheckpoint: boolean;
   readonly resumeCheckpoint?: ResumeCheckpointState;
-  // Sub-run / fanout slices: invoke a child workflow run sequentially
+  // Sub-run / fanout slices: invoke a child flow run sequentially
   // (sub-run) or in parallel (fanout). Wired by the coordinator to
-  // `runWorkflow`. Tests injecting a stub childRunner can avoid the full
-  // executeWorkflow stack.
-  readonly childRunner: WorkflowRunner;
-  // Sub-run / fanout slices: resolve a `WorkflowRef` (workflow_id +
-  // entry_mode + version) to the child workflow's manifest. Production
+  // `runCompiledFlow`. Tests injecting a stub childRunner can avoid the full
+  // executeCompiledFlow stack.
+  readonly childRunner: CompiledFlowRunner;
+  // Sub-run / fanout slices: resolve a `CompiledFlowRef` (flow_id +
+  // entry_mode + version) to the child flow's manifest. Production
   // CLI provides a fixture-loader resolver; tests inject deterministic
   // stubs. Undefined when the parent invocation didn't supply one — the
   // sub-run handler errors loudly in that case.
-  readonly childWorkflowResolver?: ChildWorkflowResolver;
+  readonly childCompiledFlowResolver?: ChildCompiledFlowResolver;
   // Fanout slice: provisions / releases per-branch git worktrees.
   // Default (wired by the coordinator) shells out to `git worktree`.
   // Tests inject in-memory stubs.

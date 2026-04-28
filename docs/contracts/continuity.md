@@ -4,11 +4,11 @@ status: ratified-v0.1
 version: 0.1
 schema_source: src/schemas/continuity.ts
 last_updated: 2026-04-19
-depends_on: [ids, primitives, snapshot]
+depends_on: [ids, scalars, snapshot]
 compatibility_policy: clean-break
 legacy_parse_policy: reject
 reference_evidence: specs/reference/legacy-circuit/continuity-characterization.md
-artifact_ids:
+report_ids:
   - continuity.record
   - continuity.index
 invariant_ids: [CONT-I1, CONT-I2, CONT-I3, CONT-I4, CONT-I5, CONT-I6, CONT-I7, CONT-I8, CONT-I9, CONT-I10, CONT-I11, CONT-I12]
@@ -17,13 +17,13 @@ property_ids: [continuity.prop.boundary_own_property_defense, continuity.prop.di
 
 # Continuity Contract
 
-A **continuity record** is the cross-session handoff artifact that lets a
+A **continuity record** is the cross-session handoff report that lets a
 later session pick up where an earlier one left off. A **continuity index**
 is the resolver that determines which record (if any) is authoritative for
 the next resume and which run (if any) is currently attached.
 
 Continuity is classified **`successor-to-live` / `clean-break`** in the
-authority graph (`specs/artifacts.json`). Live reference surface is
+authority graph (`specs/reports.json`). Live reference surface is
 characterized at
 `specs/reference/legacy-circuit/continuity-characterization.md`. circuit-next
 will NOT parse legacy Circuit records through normal runtime paths
@@ -37,22 +37,22 @@ See `specs/domain.md#continuity-vocabulary` for canonical term definitions
 `specs/domain.md`:
 
 - **Run-attached provenance** — the snapshot-of-state embedded in a
-  run-backed continuity record (`current_phase`, `current_step`,
+  run-backed continuity record (`current_stage`, `current_step`,
   `runtime_status`, `runtime_updated_at`). Enough for resume adjudication
   to compare "what was true at save time" against "what is true now."
 - **Pending-record pointer** — the index entry that names which continuity
   record is authoritative for the next resume. Keyed by `record_id`, which
-  is a `ControlPlaneFileStem` (see §Path-safe identity below).
+  is a `ControlPchange_kindFileStem` (see §Path-safe identity below).
 - **Attached-run pointer** — the index entry that names which run is
   currently live in the session. Orthogonal to pending-record pointer;
   both may be null, both may be populated, or either alone may be
   populated.
 - **Dangling reference (continuity)** — the failure state where the index
   `pending_record.record_id` names a file that is not present at
-  `<control-plane>/continuity/records/${record_id}.json`. Runtime
+  `<control-pchange_kind>/continuity/records/${record_id}.json`. Runtime
   semantics: surface as an error at resume time; do not silently drop.
 
-The distinction to keep straight: a **continuity record** is the artifact
+The distinction to keep straight: a **continuity record** is the report
 at rest (a JSON file carrying narrative + resume contract + optional run
 provenance). A **continuity index** is a resolver that points AT zero or
 one records and zero or one attached runs. The record is the identity; the
@@ -61,16 +61,16 @@ index is the edge.
 ## Path-safe identity
 
 `continuity.record.record_id` is a `path_derived_field`: its value is
-joined into a filesystem path (`<control-plane>/continuity/records/
+joined into a filesystem path (`<control-pchange_kind>/continuity/records/
 ${record_id}.json`) at parse time, not at the call site. The schema
-primitive is **`ControlPlaneFileStem`** (`src/schemas/primitives.ts`),
+scalar is **`ControlPchange_kindFileStem`** (`src/schemas/scalars.ts`),
 which enforces `/^[a-z0-9][a-z0-9._-]*$/`, rejects `.` / `..` / parent-
 traversal sequences, and forbids `/` and `\` path separators. Authority
-graph entries with `path_derived_fields` MUST cite `ControlPlaneFileStem`
+graph entries with `path_derived_fields` MUST cite `ControlPchange_kindFileStem`
 by name (ADR-0003 §Machine enforcement; verified by
 `scripts/audit.mjs`).
 
-The same primitive is used by `ContinuityIndex.pending_record.record_id`
+The same scalar is used by `ContinuityIndex.pending_record.record_id`
 (the index-side pointer), so the index→record join is type-aligned.
 
 ## Invariants
@@ -79,7 +79,7 @@ The runtime MUST reject any `ContinuityRecord` or `ContinuityIndex` that
 violates these. All invariants are enforced via `src/schemas/continuity.ts`
 and tested in `tests/contracts/schema-parity.test.ts`.
 
-- **CONT-I1 — `record_id` is a `ControlPlaneFileStem`.** The identity
+- **CONT-I1 — `record_id` is a `ControlPchange_kindFileStem`.** The identity
   field IS the filename stem. Parse-time rejection for uppercase, path
   separators, `.`/`..`, and parent-traversal (`..` anywhere in the
   string). Closes the naive `z.string().min(1)` drift that would have
@@ -121,7 +121,7 @@ and tested in `tests/contracts/schema-parity.test.ts`.
 - **CONT-I7 — Run-attached provenance is a fixed shape.** A run-backed
   record's `run_ref` MUST carry:
   - `run_id: RunId`
-  - `current_phase: PhaseId`
+  - `current_stage: StageId`
   - `current_step: StepId`
   - `runtime_status: SnapshotStatus` (one of the closed
     `SnapshotStatus` enum variants)
@@ -136,17 +136,17 @@ and tested in `tests/contracts/schema-parity.test.ts`.
   `RunBackedContinuity`, both `resume_contract` inner objects,
   `RunAttachedProvenance`, `ContinuityIndex`, `PendingRecordPointer`, and
   `AttachedRunPointer`. Surplus keys are rejected at every depth. This
-  closes the aggregate-level HIGH flagged by the pre-authoring review
+  closes the aggrecheck-level HIGH flagged by the pre-authoring review
   (the prior schema only strict-checked the top level).
 
-- **CONT-I9 — `ContinuityIndex` is a standalone aggregate.** The index
-  is not an envelope around records; it is a separate on-disk artifact
-  (`<control-plane>/continuity/index.json`) with its own
+- **CONT-I9 — `ContinuityIndex` is a standalone aggrecheck.** The index
+  is not an envelope around records; it is a separate on-disk report
+  (`<control-pchange_kind>/continuity/index.json`) with its own
   `schema_version`, `project_root`, `pending_record` pointer, and
   `current_run` pointer. Both pointers are nullable and independent.
 
 - **CONT-I10 — `PendingRecordPointer.record_id` uses
-  `ControlPlaneFileStem`.** The index-side pointer is type-aligned with
+  `ControlPchange_kindFileStem`.** The index-side pointer is type-aligned with
   the record-side identity (CONT-I1). A round-trip from index to record
   file is schema-safe. Mismatched stems (uppercase, path separator, etc.)
   are rejected at parse time. The dangling-reference case (stem valid but
@@ -154,11 +154,11 @@ and tested in `tests/contracts/schema-parity.test.ts`.
   policy.
 
 - **CONT-I11 — `AttachedRunPointer` carries enough state to validate
-  liveness.** `run_id`, `current_phase`, `current_step`,
+  liveness.** `run_id`, `current_stage`, `current_step`,
   `runtime_status`, `attached_at`, `last_validated_at`. A pointer
   missing `runtime_status` or either timestamp is rejected. Resume
   semantics MAY later require re-validating `last_validated_at` against
-  the on-disk run log; that is resolver work, not schema work.
+  the on-disk run trace; that is resolver work, not schema work.
 
 - **CONT-I12 — Raw-input own-property guard (prototype-chain defense).**
   `.strict()` rejects surplus own keys but does NOT defend against
@@ -170,9 +170,9 @@ and tested in `tests/contracts/schema-parity.test.ts`.
   (`schema_version`, `record_id`, `continuity_kind`, `resume_contract`
   for the record; `schema_version`, `project_root`, `pending_record`,
   `current_run` for the index). Inherited values fail before Zod's own
-  property access. Mirrors `RunLog`'s identity-field defense (run.ts
+  property access. Mirrors `RunTrace`'s identity-field defense (run.ts
   RUN MED #3). Closes Codex HIGH #1. Recursive defense over every
-  nested required field is deferred to Phase 2 property
+  nested required field is deferred to Stage 2 property
   `continuity.prop.boundary_own_property_defense`; v0.1 covers the
   load-bearing identity/discriminator surface.
 
@@ -184,7 +184,7 @@ and tested in `tests/contracts/schema-parity.test.ts`.
   (enforced by the handoff writer, checked by the audit at commit time
   once the writer lands).
 - If a record is `run-backed`, the named `run_id` SHOULD correspond to
-  a run whose event log is reachable at runtime — but that is resolver-
+  a run whose trace is reachable at runtime — but that is resolver-
   level liveness, not schema-level parse. A `run-backed` record with a
   live-at-save-time `run_id` that has since been garbage-collected is
   still parse-valid; the resume flow is the surface that adjudicates.
@@ -199,10 +199,10 @@ After a `ContinuityRecord` is accepted:
   consistent with `resume_contract.mode` (CONT-I5).
 - Exactly one of the two safety booleans is true (CONT-I6); the record
   has an unambiguous resume posture.
-- If `run-backed`, the attached run's phase/step/status snapshot is
+- If `run-backed`, the attached run's stage/step/status snapshot is
   recoverable from the record alone (CONT-I7) without needing to read
-  the run log. This does NOT mean the snapshot is consistent with the
-  run log at resume time — that is a Phase 2 property
+  the run trace. This does NOT mean the snapshot is consistent with the
+  run trace at resume time — that is a Stage 2 property
   (`continuity.prop.run_ref_matches_log_at_save`).
 
 After a `ContinuityIndex` is accepted:
@@ -212,7 +212,7 @@ After a `ContinuityIndex` is accepted:
 - Dangling-reference (stem valid but file absent) is NOT rejected at
   parse time; it is a runtime adjudication at resume, per the
   `dangling_reference_policy` on `continuity.index` in
-  `specs/artifacts.json`.
+  `specs/reports.json`.
 
 ## Dangling reference policy
 
@@ -220,10 +220,10 @@ After a `ContinuityIndex` is accepted:
 directory. The schema MUST NOT attempt filesystem resolution at parse
 time (zod schemas are pure). At resume time, the resolver:
 
-1. Reads `<control-plane>/continuity/index.json` and validates under
+1. Reads `<control-pchange_kind>/continuity/index.json` and validates under
    `ContinuityIndex`.
 2. If `pending_record` is populated, resolves the record path and
-   attempts to read `<control-plane>/continuity/records/
+   attempts to read `<control-pchange_kind>/continuity/records/
    ${pending_record.record_id}.json`.
 3. If the record file is absent, surfaces the mismatch as an error;
    does NOT silently drop the pointer. Policy matches legacy Circuit's
@@ -231,8 +231,8 @@ time (zod schemas are pure). At resume time, the resolver:
    `specs/reference/legacy-circuit/continuity-characterization.md`
    §Observed resolver / index discriminants).
 
-The policy value on the `continuity.index` artifact row in
-`specs/artifacts.json` is `dangling_reference_policy: "error-at-resolve"`.
+The policy value on the `continuity.index` report row in
+`specs/reports.json` is `dangling_reference_policy: "error-at-resolve"`.
 The audit validates the enum.
 
 ## Resolver precedence (pending_record vs current_run)
@@ -246,7 +246,7 @@ the **resolver** adjudicates conflicts. Two cases are material:
    entry is a denormalized hint — not authority. The record is the
    source of truth. A resolver that branches on the index hint before
    reading the record bypasses CONT-I3/CONT-I5. The v0.1 schema does
-   not enforce the coherence; Phase 2 property
+   not enforce the coherence; Stage 2 property
    `continuity.prop.index_pointer_kind_matches_record` ratifies it. The
    prose here documents the non-authoritativeness. **v0.2 consideration:**
    remove `continuity_kind` from the pointer entirely if the audit
@@ -262,18 +262,18 @@ the **resolver** adjudicates conflicts. Two cases are material:
    resume MUST surface the mismatch rather than silently picking one.
    The v0.1 schema does not enforce `run_id` agreement across the two
    pointers (cross-field refine would make the schema non-pure — it
-   depends on semantic intent). Phase 2 property
+   depends on semantic intent). Stage 2 property
    `continuity.prop.index_pointer_run_id_coherence` ratifies the
    resolver's handling. **v0.2 consideration:** add a resolver
    precedence table (pending-record-wins vs current-run-wins vs
    error-on-conflict) once the resume flow lands and the operator
    picks a policy.
 
-## Property ids (reserved for Phase 2 testing)
+## Property ids (reserved for Stage 2 testing)
 
 - `continuity.prop.record_id_stem_roundtrip` — for every accepted
   `ContinuityRecord`, `record_id` joined into
-  `<control-plane>/continuity/records/${record_id}.json` reverses back
+  `<control-pchange_kind>/continuity/records/${record_id}.json` reverses back
   to the same `record_id` (no escaping introduced).
 - `continuity.prop.discriminator_field_presence_closure` — for every
   accepted record, the `run_ref` field is present iff `continuity_kind
@@ -285,7 +285,7 @@ the **resolver** adjudicates conflicts. Two cases are material:
   (CONT-I6).
 - `continuity.prop.run_ref_matches_log_at_save` — for every accepted
   run-backed record, `run_ref.current_step` and `run_ref.runtime_status`
-  are consistent with the run log at save time. Resolver-level
+  are consistent with the run trace at save time. Resolver-level
   property; CONT-I7 is the schema scaffold.
 - `continuity.prop.index_pointer_roundtrip` — for every accepted
   `ContinuityIndex` with `pending_record` populated, the pointed-at
@@ -306,21 +306,21 @@ the **resolver** adjudicates conflicts. Two cases are material:
 - `continuity.prop.boundary_own_property_defense` — recursive
   own-property guarding across every required field on every nested
   object. v0.1 covers load-bearing identity/discriminator fields
-  (CONT-I12); Phase 2 extends.
+  (CONT-I12); Stage 2 extends.
 
 ## Cross-contract dependencies
 
-- **ids**: `RunId`, `PhaseId`, `StepId`, `InvocationId` — used for
+- **ids**: `RunId`, `StageId`, `StepId`, `InvocationId` — used for
   run-attached provenance and attached-run pointer identity.
-- **primitives**: `ControlPlaneFileStem` — used for `record_id` and
+- **scalars**: `ControlPchange_kindFileStem` — used for `record_id` and
   `PendingRecordPointer.record_id`. ADR-0003 §Machine enforcement
   requires explicit naming.
 - **snapshot**: `SnapshotStatus` — reused for `runtime_status` on both
   `RunAttachedProvenance` and `AttachedRunPointer`. The closed enum is
   load-bearing; a `runtime_status: 'frozen'` record is rejected.
 - **run** (indirect): `run_id` in a run-backed record SHOULD correspond
-  to a `RunId` present in a `RunLog` somewhere on disk. Schema-level
-  enforcement is infeasible (would require cross-artifact IO);
+  to a `RunId` present in a `RunTrace` somewhere on disk. Schema-level
+  enforcement is infeasible (would require cross-report IO);
   property-level enforcement is `continuity.prop.run_ref_matches_log_at_save`.
 
 ## Failure modes addressed
@@ -336,36 +336,36 @@ the **resolver** adjudicates conflicts. Two cases are material:
   true. Closes pre-authoring review carryover #7.
 
 - **carry-forward:under-provenance-on-resume** — **Closed in v0.1 via
-  CONT-I7.** `run_ref` carries `current_phase`, `current_step`,
+  CONT-I7.** `run_ref` carries `current_stage`, `current_step`,
   `runtime_status`, `runtime_updated_at`; a bare `{run_id}` is rejected.
   Closes pre-authoring review carryover #8.
 
-- **carry-forward:aggregate-level-strict-gap** — **Closed in v0.1 via
+- **carry-forward:aggrecheck-level-strict-gap** — **Closed in v0.1 via
   CONT-I8.** Transitive `.strict()` on every nested object. Closes the
-  aggregate-level HIGH flagged in the pre-authoring review.
+  aggrecheck-level HIGH flagged in the pre-authoring review.
 
-- **carry-forward:path-derived-identity-without-primitive** — **Closed
+- **carry-forward:path-derived-identity-without-scalar** — **Closed
   in v0.1 via CONT-I1 + CONT-I10.** Both `record_id` fields use
-  `ControlPlaneFileStem`. ADR-0003 §Machine enforcement is satisfied.
+  `ControlPchange_kindFileStem`. ADR-0003 §Machine enforcement is satisfied.
 
-- **carry-forward:missing-index-aggregate** — **Closed in v0.1 via
+- **carry-forward:missing-index-aggrecheck** — **Closed in v0.1 via
   CONT-I9..I11.** `ContinuityIndex` is a first-class schema with its
   own invariants. Prior to v0.1 the index was undocumented and unvalidated
   in circuit-next; only the record existed. This closes the index-
-  aggregate HIGH flagged in the pre-authoring review.
+  aggrecheck HIGH flagged in the pre-authoring review.
 
 - **carry-forward:prototype-chain-smuggle** — **Closed in v0.1 via
   CONT-I12.** Raw-input own-property guards on ContinuityRecord and
   ContinuityIndex reject `Object.create(...)` prototype-chain attacks
-  on load-bearing identity/discriminator fields. Mirrors run.ts RunLog
+  on load-bearing identity/discriminator fields. Mirrors run.ts RunTrace
   defense (RUN MED #3). Closes Codex v0.1 HIGH #1.
 
 - **carry-forward:authority-graph-nested-path** — **Closed in v0.1 via
   `continuity.index.path_derived_fields: ["pending_record.record_id"]`
-  (dotted notation) + `specs/artifacts.md` relaxation of the
-  "path_derived_fields ⊆ identity_fields" rule.** Singleton artifacts
+  (dotted notation) + `specs/reports.md` relaxation of the
+  "path_derived_fields ⊆ identity_fields" rule.** Singleton reports
   with no in-body identity use `identity_fields: []` and may declare
-  nested `path_derived_fields` for cross-artifact path references.
+  nested `path_derived_fields` for cross-report path references.
   Closes Codex v0.1 HIGH #2.
 
 ## Codex adversarial review (v0.1)
@@ -380,10 +380,10 @@ above. Full record at
 ## Evolution
 
 - **v0.1 (this draft)** — initial contract covering both
-  `continuity.record` and `continuity.index` aggregates. Twelve
-  invariants (CONT-I1..I12; CONT-I12 added post-Codex). Ten Phase 2
+  `continuity.record` and `continuity.index` aggrechecks. Twelve
+  invariants (CONT-I1..I12; CONT-I12 added post-Codex). Ten Stage 2
   property ids reserved. All pre-authoring carryovers folded in (#7
-  safety booleans, #8 resume provenance, plus the index-aggregate
+  safety booleans, #8 resume provenance, plus the index-aggrecheck
   HIGH). Codex v0.1 HIGH #1 (prototype-chain defense) + HIGH #2
   (authority-graph nested path) + MED #5 (dangling-reference enum) +
   LOW #6 (coverage additions) folded in; MED #3 (pointer-kind
@@ -411,7 +411,7 @@ above. Full record at
     error-on-conflict (force operator action). Reopen condition: the
     resume flow ships OR a split-brain incident is observed in
     practice.
-- **v1.0 (Phase 2)** — ratified invariants plus property tests:
+- **v1.0 (Stage 2)** — ratified invariants plus property tests:
   `continuity.prop.*` under `tests/properties/visible/continuity/`.
   Resolver-level properties (dangling reference, liveness validation)
   land with the resume implementation.

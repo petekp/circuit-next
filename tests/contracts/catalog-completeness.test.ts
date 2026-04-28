@@ -1,9 +1,9 @@
 // Catalog completeness — structural invariants that bind the real
-// `src/workflows/catalog.ts` to the on-disk package layout.
+// `src/flows/catalog.ts` to the on-disk package layout.
 //
-// Sister test to `engine-workflow-boundary.test.ts`. The boundary test
+// Sister test to `engine-flow-boundary.test.ts`. The boundary test
 // enforces import direction (runtime → catalog only). This test
-// enforces shape: every workflow on disk appears in the catalog,
+// enforces shape: every flow on disk appears in the catalog,
 // every catalog entry has the expected files, and every package
 // declares its required state in a uniform way.
 //
@@ -11,7 +11,7 @@
 // - `tests/runner/catalog-derivations.test.ts` already exercises the
 //   pure derivation helpers against synthetic packages (duplicate-id
 //   throws, duplicate-schema throws, default-package selection). Those
-//   throws fire at module load when the real `workflowPackages` is
+//   throws fire at module load when the real `flowPackages` is
 //   imported, so the real-catalog assertions here would crash before
 //   running. We rely on the derivation tests for the failure-case
 //   coverage and use this file for the cross-cutting structural
@@ -22,13 +22,13 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { workflowPackages } from '../../src/workflows/catalog.js';
+import { flowPackages } from '../../src/flows/catalog.js';
 
-const WORKFLOWS_ROOT = 'src/workflows';
+const WORKFLOWS_ROOT = 'src/flows';
 
-// Files at the workflows root that are NOT workflow-package directories
+// Files at the flows root that are NOT flow-package directories
 // (catalog, types, shared schemas/types). Anything else under
-// src/workflows/ that isn't in this list is expected to be a package.
+// src/flows/ that isn't in this list is expected to be a package.
 const NON_PACKAGE_FILES = new Set(['catalog.ts', 'types.ts']);
 
 function isFile(path: string): boolean {
@@ -43,7 +43,7 @@ function listPackageDirectories(): readonly string[] {
   const entries: string[] = [];
   for (const entry of readdirSync(WORKFLOWS_ROOT)) {
     // Skip dot-prefixed entries (e.g. .DS_Store, .cache/) — they're
-    // never workflow packages and must not flag as "missing from
+    // never flow packages and must not flag as "missing from
     // catalog" if a tool drops one in.
     if (entry.startsWith('.')) continue;
     const path = join(WORKFLOWS_ROOT, entry);
@@ -58,21 +58,21 @@ function listPackageDirectories(): readonly string[] {
   return entries;
 }
 
-describe('workflow catalog completeness', () => {
+describe('flow catalog completeness', () => {
   // Anti-vacuity floor — guards every "every package has X" assertion
-  // below from passing vacuously if `workflowPackages` is silently
+  // below from passing vacuously if `flowPackages` is silently
   // empty (e.g. a refactor that broke catalog imports). Six packages
   // live today: build, explore, fix, migrate, review, sweep.
-  it('catalog has the expected non-zero workflow package count', () => {
+  it('catalog has the expected non-zero flow package count', () => {
     expect(
-      workflowPackages.length,
-      'workflowPackages is unexpectedly small — catalog discovery is likely broken',
+      flowPackages.length,
+      'flowPackages is unexpectedly small — catalog discovery is likely broken',
     ).toBeGreaterThanOrEqual(6);
   });
 
-  it('every src/workflows/<id>/ directory is registered in the catalog', () => {
+  it('every src/flows/<id>/ directory is registered in the catalog', () => {
     const onDisk = new Set(listPackageDirectories());
-    const inCatalog = new Set(workflowPackages.map((pkg) => pkg.id));
+    const inCatalog = new Set(flowPackages.map((pkg) => pkg.id));
     const missing = [...onDisk].filter((id) => !inCatalog.has(id));
     const extra = [...inCatalog].filter((id) => !onDisk.has(id));
     expect(
@@ -81,11 +81,11 @@ describe('workflow catalog completeness', () => {
     ).toEqual({ missing: [], extra: [] });
   });
 
-  it('every src/workflows/ entry that is not a known shared file is a package directory', () => {
+  it('every src/flows/ entry that is not a known shared file is a package directory', () => {
     const entries = readdirSync(WORKFLOWS_ROOT).filter((e) => !e.startsWith('.'));
     expect(
       entries.length,
-      'src/workflows/ has unexpectedly few entries — discovery loop is likely broken',
+      'src/flows/ has unexpectedly few entries — discovery loop is likely broken',
     ).toBeGreaterThanOrEqual(6);
     const offenders: string[] = [];
     for (const entry of entries) {
@@ -96,26 +96,26 @@ describe('workflow catalog completeness', () => {
     }
     expect(
       offenders,
-      'unexpected file at the workflows root: only catalog.ts/types.ts plus package directories belong here',
+      'unexpected file at the flows root: only catalog.ts/types.ts plus package directories belong here',
     ).toEqual([]);
   });
 
-  it('every workflow package has an index.ts file at its directory root', () => {
+  it('every flow package has an index.ts file at its directory root', () => {
     const offenders: string[] = [];
-    for (const pkg of workflowPackages) {
+    for (const pkg of flowPackages) {
       if (!isFile(join(WORKFLOWS_ROOT, pkg.id, 'index.ts'))) {
         offenders.push(pkg.id);
       }
     }
     expect(
       offenders,
-      'missing or non-file index.ts — workflow packages must export their package via index.ts',
+      'missing or non-file index.ts — flow packages must export their package via index.ts',
     ).toEqual([]);
   });
 
   it('every flow package declares a schematic path that points to a real file', () => {
     const offenders: { readonly id: string; readonly schematic: string }[] = [];
-    for (const pkg of workflowPackages) {
+    for (const pkg of flowPackages) {
       if (pkg.paths.schematic.length === 0) {
         offenders.push({ id: pkg.id, schematic: '<empty>' });
         continue;
@@ -132,7 +132,7 @@ describe('workflow catalog completeness', () => {
 
   it('declared command and contract paths point to real files when present', () => {
     const offenders: { readonly id: string; readonly path: string; readonly kind: string }[] = [];
-    for (const pkg of workflowPackages) {
+    for (const pkg of flowPackages) {
       if (pkg.paths.command !== undefined && !isFile(pkg.paths.command)) {
         offenders.push({ id: pkg.id, path: pkg.paths.command, kind: 'command' });
       }
@@ -146,56 +146,56 @@ describe('workflow catalog completeness', () => {
     ).toEqual([]);
   });
 
-  it('every package that declares dispatchArtifacts ships an artifacts.ts module', () => {
-    // A package that registers a dispatch artifact must own the
-    // schema. The artifact-schema registry derives from
-    // dispatchArtifacts, so an empty / missing artifacts.ts here
+  it('every package that declares relayReports ships an reports.ts module', () => {
+    // A package that registers a relay report must own the
+    // schema. The report-schema registry derives from
+    // relayReports, so an empty / missing reports.ts here
     // would mean the schemas live somewhere else (a regression to
     // the pre-2026-04-27 layout).
     const offenders: string[] = [];
-    for (const pkg of workflowPackages) {
-      if (pkg.dispatchArtifacts.length === 0) continue;
-      if (!isFile(join(WORKFLOWS_ROOT, pkg.id, 'artifacts.ts'))) {
+    for (const pkg of flowPackages) {
+      if (pkg.relayReports.length === 0) continue;
+      if (!isFile(join(WORKFLOWS_ROOT, pkg.id, 'reports.ts'))) {
         offenders.push(pkg.id);
       }
     }
     expect(
       offenders,
-      'package declares dispatchArtifacts but has no <id>/artifacts.ts — schemas must live in the package',
+      'package declares relayReports but has no <id>/reports.ts — schemas must live in the package',
     ).toEqual([]);
   });
 
-  it('every dispatchArtifact schema is referentially identical to an export from the package artifacts.ts', async () => {
+  it('every relayReport schema is referentially identical to an export from the package reports.ts', async () => {
     // Catches the regression where a package re-exports schemas from
-    // a sibling workflow's artifacts.ts (e.g. `export { BuildBrief }
-    // from '../build/artifacts.js'`). The dispatchArtifacts entry's
+    // a sibling flow's reports.ts (e.g. `export { BuildBrief }
+    // from '../build/reports.js'`). The relayReports entry's
     // `schema` field would still parse and the file would still
-    // exist, but the schema would be owned by a different workflow —
-    // exactly the cross-workflow coupling the schema relocation
+    // exist, but the schema would be owned by a different flow —
+    // exactly the cross-flow coupling the schema relocation
     // refactor was meant to eliminate.
     const offenders: {
       readonly id: string;
       readonly schemaName: string;
       readonly reason: string;
     }[] = [];
-    for (const pkg of workflowPackages) {
-      if (pkg.dispatchArtifacts.length === 0) continue;
-      const moduleUrl = new URL(`../../src/workflows/${pkg.id}/artifacts.js`, import.meta.url);
+    for (const pkg of flowPackages) {
+      if (pkg.relayReports.length === 0) continue;
+      const moduleUrl = new URL(`../../src/flows/${pkg.id}/reports.js`, import.meta.url);
       const module: Record<string, unknown> = await import(moduleUrl.href);
       const moduleExports = new Set(Object.values(module));
-      for (const artifact of pkg.dispatchArtifacts) {
-        if (!moduleExports.has(artifact.schema as unknown as object)) {
+      for (const report of pkg.relayReports) {
+        if (!moduleExports.has(report.schema as unknown as object)) {
           offenders.push({
             id: pkg.id,
-            schemaName: artifact.schemaName,
-            reason: `dispatchArtifacts.schema is not a reference equal to any export from src/workflows/${pkg.id}/artifacts.ts`,
+            schemaName: report.schemaName,
+            reason: `relayReports.schema is not a reference equal to any export from src/flows/${pkg.id}/reports.ts`,
           });
         }
       }
     }
     expect(
       offenders,
-      'dispatch artifact schema came from outside the package — the package must own its dispatch schemas',
+      'relay report schema came from outside the package — the package must own its relay schemas',
     ).toEqual([]);
   });
 
@@ -207,7 +207,7 @@ describe('workflow catalog completeness', () => {
     // mentioning the path can't satisfy the assertion.
     const catalogText = readFileSync(join(WORKFLOWS_ROOT, 'catalog.ts'), 'utf8');
     const offenders: { readonly id: string; readonly missing: 'import' }[] = [];
-    for (const pkg of workflowPackages) {
+    for (const pkg of flowPackages) {
       const importPattern = new RegExp(
         `^\\s*import\\s+.*from\\s+['"]\\./${pkg.id}/index\\.js['"]\\s*;?`,
         'm',
@@ -218,36 +218,36 @@ describe('workflow catalog completeness', () => {
     }
     expect(
       offenders,
-      'package present at runtime but not imported by the static catalog source — catalog.ts must mirror the workflowPackages array via a real import statement',
+      'package present at runtime but not imported by the static catalog source — catalog.ts must mirror the flowPackages array via a real import statement',
     ).toEqual([]);
   });
 
-  it('every dispatch artifact schemaName is unique across the catalog', () => {
+  it('every relay report schemaName is unique across the catalog', () => {
     // Duplicate schema names would silently drop one of the entries
-    // in the artifact-schema registry. The derivation also throws on
+    // in the report-schema registry. The derivation also throws on
     // duplicates (catalog-derivations.test.ts covers it against
-    // synthetic packages); this test names the colliding workflow ids
+    // synthetic packages); this test names the colliding flow ids
     // for the production catalog so a regression report points at
     // the right file.
     const seen = new Map<string, string[]>();
-    for (const pkg of workflowPackages) {
-      for (const artifact of pkg.dispatchArtifacts) {
-        const owners = seen.get(artifact.schemaName) ?? [];
+    for (const pkg of flowPackages) {
+      for (const report of pkg.relayReports) {
+        const owners = seen.get(report.schemaName) ?? [];
         owners.push(pkg.id);
-        seen.set(artifact.schemaName, owners);
+        seen.set(report.schemaName, owners);
       }
     }
     const duplicates = [...seen.entries()].filter(([, owners]) => owners.length > 1);
-    expect(duplicates, 'duplicate dispatch artifact schemaName across packages').toEqual([]);
+    expect(duplicates, 'duplicate relay report schemaName across packages').toEqual([]);
   });
 
-  // The previous "validator schemaName matches a dispatchArtifact"
+  // The previous "validator schemaName matches a relayReport"
   // test became structurally vestigial after co-locating
-  // `crossArtifactValidate` on `WorkflowDispatchArtifact` itself —
-  // the schemaName is now read off the artifact that owns the
+  // `crossReportValidate` on `CompiledFlowRelayReport` itself —
+  // the schemaName is now read off the report that owns the
   // validator, so the cross-reference cannot drift. Runtime regressions
   // (validator stops firing for sweep.batch@v1) are caught by
-  // `tests/runner/cross-artifact-validators.test.ts` via the registry's
+  // `tests/runner/cross-report-validators.test.ts` via the registry's
   // lookup-keyed-by-schemaName behavior.
 
   it('writer resultSchemaName values are unique across all packages and writer slots', () => {
@@ -255,12 +255,12 @@ describe('workflow catalog completeness', () => {
     // resultSchemaName. The catalog-derivation throws on intra-slot
     // collisions (catalog-derivations.test.ts). This test additionally
     // surfaces cross-slot collisions for the same schema (e.g. a
-    // synthesis builder and a close builder both claiming to produce
-    // 'build.plan@v1') — the runtime would dispatch to whichever was
+    // compose builder and a close builder both claiming to produce
+    // 'build.plan@v1') — the runtime would relay to whichever was
     // registered first, silently picking a winner.
     const seen = new Map<string, { pkg: string; slot: string }[]>();
-    for (const pkg of workflowPackages) {
-      for (const slot of ['synthesis', 'close', 'verification', 'checkpoint'] as const) {
+    for (const pkg of flowPackages) {
+      for (const slot of ['compose', 'close', 'verification', 'checkpoint'] as const) {
         for (const builder of pkg.writers[slot]) {
           const owners = seen.get(builder.resultSchemaName) ?? [];
           owners.push({ pkg: pkg.id, slot });

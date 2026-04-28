@@ -12,7 +12,7 @@ vocabulary (flow, schematic, block, route, relay, check, trace, report, evidence
 - `/circuit:explore` — investigation and planning flow.
 - `/circuit:review` — audit-only review flow.
 - `/circuit:build` — implementation flow with checkpoint, relay, verification, review, and close.
-- `/circuit:fix` — fix flow with full standard-mode review pass and a `lite` entry mode that skips review (per-mode emit driven by `route_overrides` in `src/workflows/fix/schematic.json`).
+- `/circuit:fix` — fix flow with full standard-mode review pass and a `lite` entry mode that skips review (per-mode emit driven by `route_overrides` in `src/flows/fix/schematic.json`).
 - Migrate and Sweep flows are present as sub-run packages (no slash command yet); Migrate is reachable via `/circuit:run` intent classification.
 
 Per-step configurability of model, reasoning effort, and skills is wired
@@ -20,21 +20,21 @@ through the runtime selection resolver. User-global config at
 `~/.config/circuit-next/config.yaml` and per-project config at
 `./.circuit/config.yaml` are both honored.
 
-Flow source files live under `src/workflows/<id>/` (schematic, command,
+Flow source files live under `src/flows/<id>/` (schematic, command,
 contract, writers, relay hints — everything specific to that flow in one
-folder). The catalog at `src/workflows/catalog.ts` aggregates all packages;
+folder). The catalog at `src/flows/catalog.ts` aggrechecks all packages;
 the engine derives every per-flow registry from it. Schematics are compiled
 to `.claude-plugin/skills/<id>/circuit.json` (and per-mode `<mode>.json`
 siblings when `route_overrides` is non-empty), and slash commands are
-copied to `commands/<id>.md`, by `npm run emit-workflows`. The drift check
-(`node scripts/emit-workflows.mjs --check`, also wired into
+copied to `commands/<id>.md`, by `npm run emit-flows`. The drift check
+(`node scripts/emit-flows.mjs --check`, also wired into
 `npm run verify`) enforces the committed compiled flows stay byte-equivalent
 with what the schematics and command sources produce.
 
-(Internal file names like `dispatch-hints.ts` are still on their
-pre-migration names; the eventual rename to `relay-hints.ts` is part of
-the deferred deep `dispatch → relay` rename — see
-`todos/terminology-migration.md` Phase 8.)
+(Internal file names like `relay-hints.ts` are still on their
+pre-migration names; the trace_entryual rename to `relay-hints.ts` is part of
+the deferred deep `relay → relay` rename — see
+`todos/terminology-migration.md` Stage 8.)
 
 ## Verification
 
@@ -57,12 +57,12 @@ circuit-next/
 ├── commands/                  # Generated slash commands (run.md is the CLI router entry)
 ├── .claude-plugin/            # Plugin manifest + generated skill outputs
 ├── docs/
-│   ├── contracts/             # Engine contracts (adapter, config, run, step, workflow, …)
+│   ├── contracts/             # Engine contracts (connector, config, run, step, flow, …)
 │   ├── terminology.md         # Canonical product vocabulary
-│   └── workflows/             # Flow design notes + block catalog
+│   └── flows/             # Flow design notes + block catalog
 ├── specs/
 │   ├── domain.md              # Ubiquitous language
-│   ├── artifacts.json         # Typed-output authority graph
+│   ├── reports.json         # Typed-output authority graph
 │   ├── invariants.json        # Invariant ledger
 │   ├── behavioral/            # Behavioral concerns
 │   └── reference/             # Legacy-surface characterizations
@@ -70,10 +70,10 @@ circuit-next/
 │   ├── runtime/               # Engine: registries, runner, step handlers, connectors
 │   ├── schemas/               # Zod schemas for all typed surfaces
 │   ├── cli/circuit.ts         # CLI entry (router + flow launcher)
-│   └── workflows/             # Flow packages (one folder per flow)
+│   └── flows/             # Flow packages (one folder per flow)
 │       ├── catalog.ts         # Single source of truth the engine derives from
 │       ├── types.ts
-│       ├── build/             # schematic.json, artifacts.ts, command.md, contract.md, writers/, dispatch-hints.ts
+│       ├── build/             # schematic.json, reports.ts, command.md, contract.md, writers/, relay-hints.ts
 │       ├── explore/
 │       ├── fix/
 │       ├── migrate/
@@ -84,13 +84,13 @@ circuit-next/
 
 Adding a flow:
 
-1. Create `src/workflows/<id>/` with `schematic.json`,
-   `artifacts.ts` (the flow's Zod schemas), optional `command.md` and
+1. Create `src/flows/<id>/` with `schematic.json`,
+   `reports.ts` (the flow's Zod schemas), optional `command.md` and
    `contract.md`, `index.ts` (the package descriptor),
-   `dispatch-hints.ts` (if any relay steps have shape hints), and
+   `relay-hints.ts` (if any relay steps have shape hints), and
    `writers/`.
-2. Add the package to `src/workflows/catalog.ts`.
-3. `npm run build && node scripts/emit-workflows.mjs` to regenerate
+2. Add the package to `src/flows/catalog.ts`.
+3. `npm run build && node scripts/emit-flows.mjs` to regenerate
    `commands/<id>.md` and `.claude-plugin/skills/<id>/`.
 4. `npm run verify`.
 

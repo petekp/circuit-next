@@ -3,37 +3,37 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
+import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { RunId } from '../../src/schemas/ids.js';
-import type { LaneDeclaration } from '../../src/schemas/lane.js';
-import { Workflow } from '../../src/schemas/workflow.js';
 
-import type { AgentDispatchInput } from '../../src/runtime/adapters/agent.js';
-import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
-import { type DispatchFn, runWorkflow } from '../../src/runtime/runner.js';
+import type { AgentRelayInput } from '../../src/runtime/connectors/agent.js';
+import type { RelayResult } from '../../src/runtime/connectors/shared.js';
+import { type RelayFn, runCompiledFlow } from '../../src/runtime/runner.js';
 
 // Adversarial-review fix #2: deriveTerminalVerdict (in runner.ts) had
 // no direct end-to-end coverage. Every existing sub-run / migrate
 // test stubs the childRunner and hand-writes the child's result.json,
-// so the runner's own walk-backward over events never executes in
+// so the runner's own walk-backward over trace_entrys never executes in
 // those tests. These tests exercise real derivation through
-// runWorkflow:
+// runCompiledFlow:
 //
-//   1) single-dispatch happy path — the only verdict-bearing step's
+//   1) single-relay happy path — the only verdict-bearing step's
 //      verdict surfaces as result.verdict.
-//   2) multi-dispatch sequence — when a workflow admits two distinct
+//   2) multi-relay sequence — when a flow admits two distinct
 //      verdicts before close, walk-backward picks the LATER one
 //      (the verdict on the route-segment closest to @complete).
 //   3) aborted run — result.verdict is undefined regardless of any
 //      mid-route admitted verdict.
-//   4) synthesis-only run — no dispatch / sub-run admission means no
+//   4) compose-only run — no relay / sub-run admission means no
 //      terminal verdict; result.verdict is undefined.
 
-const FIXTURE_PATH = resolve('.claude-plugin/skills/dogfood-run-0/circuit.json');
+const FIXTURE_PATH = resolve('.claude-plugin/skills/runtime-proof/circuit.json');
 
-function loadDogfood(): { workflow: Workflow; bytes: Buffer } {
+function loadDogfood(): { flow: CompiledFlow; bytes: Buffer } {
   const bytes = readFileSync(FIXTURE_PATH);
   const raw: unknown = JSON.parse(bytes.toString('utf8'));
-  return { workflow: Workflow.parse(raw), bytes };
+  return { flow: CompiledFlow.parse(raw), bytes };
 }
 
 function deterministicNow(startMs: number): () => Date {
@@ -41,10 +41,10 @@ function deterministicNow(startMs: number): () => Date {
   return () => new Date(startMs + n++ * 1000);
 }
 
-function fixedDispatcher(verdict: string): DispatchFn {
+function fixedRelayer(verdict: string): RelayFn {
   return {
-    adapterName: 'agent',
-    dispatch: async (input: AgentDispatchInput): Promise<DispatchResult> => ({
+    connectorName: 'agent',
+    relay: async (input: AgentRelayInput): Promise<RelayResult> => ({
       request_payload: input.prompt,
       receipt_id: 'stub-receipt-verdict-derivation',
       result_body: JSON.stringify({ verdict }),
@@ -54,15 +54,15 @@ function fixedDispatcher(verdict: string): DispatchFn {
   };
 }
 
-function sequenceDispatcher(verdicts: string[]): DispatchFn {
+function sequenceRelayer(verdicts: string[]): RelayFn {
   let call = 0;
   return {
-    adapterName: 'agent',
-    dispatch: async (input: AgentDispatchInput): Promise<DispatchResult> => {
+    connectorName: 'agent',
+    relay: async (input: AgentRelayInput): Promise<RelayResult> => {
       const verdict = verdicts[call++];
       if (verdict === undefined) {
         throw new Error(
-          `sequenceDispatcher exhausted at call ${call}; provided ${verdicts.length} verdicts`,
+          `sequenceRelayer exhausted at call ${call}; provided ${verdicts.length} verdicts`,
         );
       }
       return {
@@ -76,9 +76,9 @@ function sequenceDispatcher(verdicts: string[]): DispatchFn {
   };
 }
 
-function lane(): LaneDeclaration {
+function change_kind(): ChangeKindDeclaration {
   return {
-    lane: 'ratchet-advance',
+    change_kind: 'ratchet-advance',
     failure_mode:
       'pre-fix, deriveTerminalVerdict had no end-to-end coverage and could regress silently',
     acceptance_evidence:
@@ -87,30 +87,30 @@ function lane(): LaneDeclaration {
   };
 }
 
-let runRootBase: string;
+let runFolderBase: string;
 
 beforeEach(() => {
-  runRootBase = mkdtempSync(join(tmpdir(), 'circuit-next-verdict-'));
+  runFolderBase = mkdtempSync(join(tmpdir(), 'circuit-next-verdict-'));
 });
 
 afterEach(() => {
-  rmSync(runRootBase, { recursive: true, force: true });
+  rmSync(runFolderBase, { recursive: true, force: true });
 });
 
 describe('deriveTerminalVerdict — fix #2 coverage', () => {
-  it('single-dispatch run surfaces the verdict on result.json', async () => {
-    const { workflow, bytes } = loadDogfood();
-    const runRoot = join(runRootBase, 'run-single');
-    const outcome = await runWorkflow({
-      runRoot,
-      workflow,
-      workflowBytes: bytes,
+  it('single-relay run surfaces the verdict on result.json', async () => {
+    const { flow, bytes } = loadDogfood();
+    const runFolder = join(runFolderBase, 'run-single');
+    const outcome = await runCompiledFlow({
+      runFolder,
+      flow,
+      flowBytes: bytes,
       runId: RunId.parse('aaaaaaaa-1111-1111-1111-111111111111'),
-      goal: 'single-dispatch verdict derivation',
-      rigor: 'standard',
-      lane: lane(),
+      goal: 'single-relay verdict derivation',
+      depth: 'standard',
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 26, 12, 0, 0)),
-      dispatcher: fixedDispatcher('ok'),
+      relayer: fixedRelayer('ok'),
     });
 
     if (outcome.result.outcome === 'checkpoint_waiting') {
@@ -120,92 +120,92 @@ describe('deriveTerminalVerdict — fix #2 coverage', () => {
     expect(outcome.result.verdict).toBe('ok');
   });
 
-  it('multi-dispatch run surfaces the LATER admitted verdict (walk-backward)', async () => {
-    // Two dispatch steps in sequence, each admitting a distinct
-    // verdict. Walk-backward must return the second dispatch's
+  it('multi-relay run surfaces the LATER admitted verdict (walk-backward)', async () => {
+    // Two relay steps in sequence, each admitting a distinct
+    // verdict. Walk-backward must return the second relay's
     // verdict — the one on the segment that reached @complete.
-    const workflow = Workflow.parse({
+    const flow = CompiledFlow.parse({
       schema_version: '2',
-      id: 'multi-dispatch-fixture',
+      id: 'multi-relay-fixture',
       version: '0.1.0',
-      purpose: 'Test fixture for multi-dispatch terminal verdict derivation.',
+      purpose: 'Test fixture for multi-relay terminal verdict derivation.',
       entry: { signals: { include: ['multi'], exclude: [] }, intent_prefixes: ['multi'] },
       entry_modes: [
         {
           name: 'multi',
-          start_at: 'first-dispatch',
-          rigor: 'standard',
-          description: 'two-dispatch route',
+          start_at: 'first-relay',
+          depth: 'standard',
+          description: 'two-relay route',
         },
       ],
-      phases: [
+      stages: [
         {
-          id: 'act-phase',
+          id: 'act-stage',
           title: 'Act',
           canonical: 'act',
-          steps: ['first-dispatch', 'second-dispatch'],
+          steps: ['first-relay', 'second-relay'],
         },
       ],
-      spine_policy: {
+      stage_path_policy: {
         mode: 'partial',
         omits: ['frame', 'plan', 'analyze', 'verify', 'review', 'close'],
         rationale: 'narrow test fixture for verdict derivation',
       },
       steps: [
         {
-          id: 'first-dispatch',
-          title: 'First dispatch — admits "intermediate"',
-          protocol: 'multi-dispatch@v1',
+          id: 'first-relay',
+          title: 'First relay — admits "intermediate"',
+          protocol: 'multi-relay@v1',
           reads: [],
-          routes: { pass: 'second-dispatch' },
+          routes: { pass: 'second-relay' },
           executor: 'worker',
-          kind: 'dispatch',
+          kind: 'relay',
           role: 'implementer',
           writes: {
-            request: 'artifacts/first.request.json',
-            receipt: 'artifacts/first.receipt.json',
-            result: 'artifacts/first.result.json',
+            request: 'reports/first.request.json',
+            receipt: 'reports/first.receipt.json',
+            result: 'reports/first.result.json',
           },
-          gate: {
+          check: {
             kind: 'result_verdict',
-            source: { kind: 'dispatch_result', ref: 'result' },
+            source: { kind: 'relay_result', ref: 'result' },
             pass: ['intermediate'],
           },
         },
         {
-          id: 'second-dispatch',
-          title: 'Second dispatch — admits "final"',
-          protocol: 'multi-dispatch@v1',
+          id: 'second-relay',
+          title: 'Second relay — admits "final"',
+          protocol: 'multi-relay@v1',
           reads: [],
           routes: { pass: '@complete' },
           executor: 'worker',
-          kind: 'dispatch',
+          kind: 'relay',
           role: 'implementer',
           writes: {
-            request: 'artifacts/second.request.json',
-            receipt: 'artifacts/second.receipt.json',
-            result: 'artifacts/second.result.json',
+            request: 'reports/second.request.json',
+            receipt: 'reports/second.receipt.json',
+            result: 'reports/second.result.json',
           },
-          gate: {
+          check: {
             kind: 'result_verdict',
-            source: { kind: 'dispatch_result', ref: 'result' },
+            source: { kind: 'relay_result', ref: 'result' },
             pass: ['final'],
           },
         },
       ],
     });
-    const bytes = Buffer.from(JSON.stringify(workflow));
-    const runRoot = join(runRootBase, 'run-multi');
-    const outcome = await runWorkflow({
-      runRoot,
-      workflow,
-      workflowBytes: bytes,
+    const bytes = Buffer.from(JSON.stringify(flow));
+    const runFolder = join(runFolderBase, 'run-multi');
+    const outcome = await runCompiledFlow({
+      runFolder,
+      flow,
+      flowBytes: bytes,
       runId: RunId.parse('bbbbbbbb-2222-2222-2222-222222222222'),
-      goal: 'multi-dispatch terminal verdict derivation',
-      rigor: 'standard',
-      lane: lane(),
+      goal: 'multi-relay terminal verdict derivation',
+      depth: 'standard',
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 26, 13, 0, 0)),
-      dispatcher: sequenceDispatcher(['intermediate', 'final']),
+      relayer: sequenceRelayer(['intermediate', 'final']),
     });
 
     if (outcome.result.outcome === 'checkpoint_waiting') {
@@ -220,21 +220,21 @@ describe('deriveTerminalVerdict — fix #2 coverage', () => {
   });
 
   it('aborted run has no terminal verdict regardless of mid-route admissions', async () => {
-    // dogfood gate.pass = ['ok']; force a verdict the gate rejects.
-    // The earlier synthesis step admitted via gate_kind=schema_sections
+    // runtime-proof check.pass = ['ok']; force a verdict the check rejects.
+    // The earlier compose step admitted via check_kind=schema_sections
     // (not result_verdict) so it doesn't contribute either way.
-    const { workflow, bytes } = loadDogfood();
-    const runRoot = join(runRootBase, 'run-aborted');
-    const outcome = await runWorkflow({
-      runRoot,
-      workflow,
-      workflowBytes: bytes,
+    const { flow, bytes } = loadDogfood();
+    const runFolder = join(runFolderBase, 'run-aborted');
+    const outcome = await runCompiledFlow({
+      runFolder,
+      flow,
+      flowBytes: bytes,
       runId: RunId.parse('cccccccc-3333-3333-3333-333333333333'),
       goal: 'aborted run has no terminal verdict',
-      rigor: 'standard',
-      lane: lane(),
+      depth: 'standard',
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 26, 14, 0, 0)),
-      dispatcher: fixedDispatcher('not-in-gate'),
+      relayer: fixedRelayer('not-in-check'),
     });
 
     if (outcome.result.outcome === 'checkpoint_waiting') {
@@ -244,62 +244,62 @@ describe('deriveTerminalVerdict — fix #2 coverage', () => {
     expect(outcome.result.verdict).toBeUndefined();
   });
 
-  it('synthesis-only run has no terminal verdict (no result_verdict admission)', async () => {
-    // No dispatch / sub-run step exists, so no gate.evaluated event
+  it('compose-only run has no terminal verdict (no result_verdict admission)', async () => {
+    // No relay / sub-run step exists, so no check.evaluated trace_entry
     // ever fires with kind='result_verdict'. The walk finds nothing
     // and returns undefined.
-    const workflow = Workflow.parse({
+    const flow = CompiledFlow.parse({
       schema_version: '2',
-      id: 'synthesis-only-fixture',
+      id: 'compose-only-fixture',
       version: '0.1.0',
-      purpose: 'Test fixture: a workflow with no verdict-bearing steps.',
+      purpose: 'Test fixture: a flow with no verdict-bearing steps.',
       entry: { signals: { include: ['syn'], exclude: [] }, intent_prefixes: ['syn'] },
       entry_modes: [
         {
           name: 'syn',
-          start_at: 'only-synthesis',
-          rigor: 'standard',
-          description: 'one synthesis step',
+          start_at: 'only-compose',
+          depth: 'standard',
+          description: 'one compose step',
         },
       ],
-      phases: [{ id: 'plan-phase', title: 'Plan', canonical: 'plan', steps: ['only-synthesis'] }],
-      spine_policy: {
+      stages: [{ id: 'plan-stage', title: 'Plan', canonical: 'plan', steps: ['only-compose'] }],
+      stage_path_policy: {
         mode: 'partial',
         omits: ['frame', 'analyze', 'act', 'verify', 'review', 'close'],
         rationale: 'narrow test fixture for verdict-undefined case',
       },
       steps: [
         {
-          id: 'only-synthesis',
-          title: 'Synthesis — no verdict surface',
-          protocol: 'synthesis-only@v1',
+          id: 'only-compose',
+          title: 'Compose — no verdict surface',
+          protocol: 'compose-only@v1',
           reads: [],
           routes: { pass: '@complete' },
           executor: 'orchestrator',
-          kind: 'synthesis',
+          kind: 'compose',
           writes: {
-            artifact: { path: 'artifacts/only.json', schema: 'dogfood-synthesis@v1' },
+            report: { path: 'reports/only.json', schema: 'plan.strategy@v1' },
           },
-          gate: {
+          check: {
             kind: 'schema_sections',
-            source: { kind: 'artifact', ref: 'artifact' },
+            source: { kind: 'report', ref: 'report' },
             required: ['summary'],
           },
         },
       ],
     });
-    const bytes = Buffer.from(JSON.stringify(workflow));
-    const runRoot = join(runRootBase, 'run-synth-only');
-    const outcome = await runWorkflow({
-      runRoot,
-      workflow,
-      workflowBytes: bytes,
+    const bytes = Buffer.from(JSON.stringify(flow));
+    const runFolder = join(runFolderBase, 'run-synth-only');
+    const outcome = await runCompiledFlow({
+      runFolder,
+      flow,
+      flowBytes: bytes,
       runId: RunId.parse('dddddddd-4444-4444-4444-444444444444'),
-      goal: 'synthesis-only run has no verdict',
-      rigor: 'standard',
-      lane: lane(),
+      goal: 'compose-only run has no verdict',
+      depth: 'standard',
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 26, 15, 0, 0)),
-      dispatcher: fixedDispatcher('unused'),
+      relayer: fixedRelayer('unused'),
     });
 
     if (outcome.result.outcome === 'checkpoint_waiting') {

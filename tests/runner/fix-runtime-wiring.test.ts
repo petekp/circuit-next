@@ -1,37 +1,37 @@
-// End-to-end runtime wiring for the lite Fix workflow.
+// End-to-end runtime wiring for the lite Fix flow.
 //
 // Loads `.claude-plugin/skills/fix/lite.json` (the compiled lite-mode
-// Workflow) and runs it through `runWorkflow` with stubbed dispatchers
-// for context/diagnose/act and a custom synthesisWriter that overrides
+// CompiledFlow) and runs it through `runCompiledFlow` with stubbed relayers
+// for context/diagnose/act and a custom composeWriter that overrides
 // fix-frame to produce a brief with a fast no-op verification command.
-// Other synthesis steps fall through to the registered writer, so this
+// Other compose steps fall through to the registered writer, so this
 // is a real proof that fix.brief, fix.verify, and fix.result close
-// writers compose correctly through the actual Workflow + runner.
+// writers compose correctly through the actual CompiledFlow + runner.
 
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { AgentDispatchInput } from '../../src/runtime/adapters/agent.js';
-import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
+import { FixBrief, FixResult } from '../../src/flows/fix/reports.js';
+import type { AgentRelayInput } from '../../src/runtime/connectors/agent.js';
+import type { RelayResult } from '../../src/runtime/connectors/shared.js';
 import {
-  type DispatchFn,
-  type SynthesisWriterInput,
-  runWorkflow,
-  writeSynthesisArtifact,
+  type ComposeWriterInput,
+  type RelayFn,
+  runCompiledFlow,
+  writeComposeReport,
 } from '../../src/runtime/runner.js';
+import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
+import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { RunId } from '../../src/schemas/ids.js';
-import type { LaneDeclaration } from '../../src/schemas/lane.js';
-import { Workflow } from '../../src/schemas/workflow.js';
-import { FixBrief, FixResult } from '../../src/workflows/fix/artifacts.js';
 
 const FIX_LITE_FIXTURE_PATH = resolve('.claude-plugin', 'skills', 'fix', 'lite.json');
 
-function loadLiteFixture(): { workflow: Workflow; bytes: Buffer } {
+function loadLiteFixture(): { flow: CompiledFlow; bytes: Buffer } {
   const bytes = readFileSync(FIX_LITE_FIXTURE_PATH);
   const raw: unknown = JSON.parse(bytes.toString('utf8'));
-  return { workflow: Workflow.parse(raw), bytes };
+  return { flow: CompiledFlow.parse(raw), bytes };
 }
 
 function deterministicNow(startMs: number): () => Date {
@@ -39,24 +39,24 @@ function deterministicNow(startMs: number): () => Date {
   return () => new Date(startMs + n++ * 1000);
 }
 
-function lane(): LaneDeclaration {
+function change_kind(): ChangeKindDeclaration {
   return {
-    lane: 'ratchet-advance',
+    change_kind: 'ratchet-advance',
     failure_mode: 'lite Fix had no end-to-end runtime proof through close',
     acceptance_evidence:
-      'runWorkflow closes the lite Fix workflow via real Workflow with stubbed dispatchers and a fast verification command',
+      'runCompiledFlow closes the lite Fix flow via real CompiledFlow with stubbed relayers and a fast verification command',
     alternate_framing:
-      'defer until full Fix is wired — rejected because lite is the proving substrate per workflow-direction.md',
+      'defer until full Fix is wired — rejected because lite is the proving substrate per flow-direction.md',
   };
 }
 
-// Custom synthesis writer for the e2e test: overrides fix-frame to
+// Custom compose writer for the e2e test: overrides fix-frame to
 // produce a brief with a fast no-op verification command (so fix-verify
 // runs in milliseconds instead of executing real `npm run verify`),
-// and falls through to the standard writeSynthesisArtifact for every
-// other synthesis step (notably fix-close-lite, which exercises the
+// and falls through to the standard writeComposeReport for every
+// other compose step (notably fix-close-lite, which exercises the
 // new fix.result close writer).
-function frameOverrideSynthesisWriter(input: SynthesisWriterInput): void {
+function frameOverrideComposeWriter(input: ComposeWriterInput): void {
   if ((input.step.id as unknown as string) === 'fix-frame') {
     const brief = FixBrief.parse({
       problem_statement: input.goal,
@@ -87,18 +87,18 @@ function frameOverrideSynthesisWriter(input: SynthesisWriterInput): void {
         },
       ],
     });
-    const abs = join(input.runRoot, input.step.writes.artifact.path as unknown as string);
+    const abs = join(input.runFolder, input.step.writes.report.path as unknown as string);
     mkdirSync(dirname(abs), { recursive: true });
     writeFileSync(abs, `${JSON.stringify(brief, null, 2)}\n`);
     return;
   }
-  writeSynthesisArtifact(input);
+  writeComposeReport(input);
 }
 
-function dispatcher(): DispatchFn {
+function relayer(): RelayFn {
   return {
-    adapterName: 'agent',
-    dispatch: async (input: AgentDispatchInput): Promise<DispatchResult> => {
+    connectorName: 'agent',
+    relay: async (input: AgentRelayInput): Promise<RelayResult> => {
       const isContext = input.prompt.includes('Step: fix-gather-context');
       const isDiagnose = input.prompt.includes('Step: fix-diagnose');
       const isAct = input.prompt.includes('Step: fix-act');
@@ -141,56 +141,56 @@ function dispatcher(): DispatchFn {
   };
 }
 
-let runRootBase: string;
+let runFolderBase: string;
 
 beforeEach(() => {
-  runRootBase = mkdtempSync(join(tmpdir(), 'circuit-next-fix-runtime-'));
+  runFolderBase = mkdtempSync(join(tmpdir(), 'circuit-next-fix-runtime-'));
 });
 
 afterEach(() => {
-  rmSync(runRootBase, { recursive: true, force: true });
+  rmSync(runFolderBase, { recursive: true, force: true });
 });
 
 describe('Lite Fix runtime wiring', () => {
-  it('runs the live lite Fix Workflow end-to-end and closes with a FixResult', async () => {
-    const { workflow, bytes } = loadLiteFixture();
-    const runRoot = join(runRootBase, 'lite-complete');
+  it('runs the live lite Fix CompiledFlow end-to-end and closes with a FixResult', async () => {
+    const { flow, bytes } = loadLiteFixture();
+    const runFolder = join(runFolderBase, 'lite-complete');
 
-    const outcome = await runWorkflow({
-      runRoot,
-      workflow,
-      workflowBytes: bytes,
+    const outcome = await runCompiledFlow({
+      runFolder,
+      flow,
+      flowBytes: bytes,
       runId: RunId.parse('f1000000-0000-0000-0000-000000000000'),
       goal: 'fix off-by-one in pagination',
-      rigor: 'lite',
-      lane: lane(),
+      depth: 'lite',
+      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 26, 10, 0, 0)),
-      dispatcher: dispatcher(),
-      synthesisWriter: frameOverrideSynthesisWriter,
+      relayer: relayer(),
+      composeWriter: frameOverrideComposeWriter,
       projectRoot: resolve('.'),
     });
 
     if (outcome.result.outcome !== 'complete') {
       throw new Error(
-        `lite Fix run did not complete: outcome=${outcome.result.outcome} reason=${outcome.result.reason ?? '<none>'} events=${outcome.events.map((e) => e.kind).join(',')}`,
+        `lite Fix run did not complete: outcome=${outcome.result.outcome} reason=${outcome.result.reason ?? '<none>'} trace_entrys=${outcome.trace_entrys.map((e) => e.kind).join(',')}`,
       );
     }
     expect(outcome.result.outcome).toBe('complete');
-    expect(existsSync(join(runRoot, 'artifacts/fix/brief.json'))).toBe(true);
-    expect(existsSync(join(runRoot, 'artifacts/fix/context.json'))).toBe(true);
-    expect(existsSync(join(runRoot, 'artifacts/fix/diagnosis.json'))).toBe(true);
-    expect(existsSync(join(runRoot, 'artifacts/fix/change.json'))).toBe(true);
-    expect(existsSync(join(runRoot, 'artifacts/fix/verification.json'))).toBe(true);
-    expect(existsSync(join(runRoot, 'artifacts/fix-result.json'))).toBe(true);
+    expect(existsSync(join(runFolder, 'reports/fix/brief.json'))).toBe(true);
+    expect(existsSync(join(runFolder, 'reports/fix/context.json'))).toBe(true);
+    expect(existsSync(join(runFolder, 'reports/fix/diagnosis.json'))).toBe(true);
+    expect(existsSync(join(runFolder, 'reports/fix/change.json'))).toBe(true);
+    expect(existsSync(join(runFolder, 'reports/fix/verification.json'))).toBe(true);
+    expect(existsSync(join(runFolder, 'reports/fix-result.json'))).toBe(true);
 
     const result = FixResult.parse(
-      JSON.parse(readFileSync(join(runRoot, 'artifacts/fix-result.json'), 'utf8')),
+      JSON.parse(readFileSync(join(runFolder, 'reports/fix-result.json'), 'utf8')),
     );
     expect(result.review_status).toBe('skipped');
     expect(result.verification_status).toBe('passed');
     expect(['fixed', 'partial']).toContain(result.outcome);
     // Required pointers — review absent in lite.
-    const ids = result.artifact_pointers.map((p) => p.artifact_id);
+    const ids = result.evidence_links.map((p) => p.report_id);
     expect(ids).toEqual([
       'fix.brief',
       'fix.context',

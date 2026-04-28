@@ -3,58 +3,58 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { Event, RunBootstrappedEvent } from '../../../src/schemas/event.js';
 import { ManifestSnapshot, computeManifestHash } from '../../../src/schemas/manifest.js';
-import { type RunLog, RunProjection } from '../../../src/schemas/run.js';
+import { RunProjection, type RunTrace } from '../../../src/schemas/run.js';
 import { Snapshot } from '../../../src/schemas/snapshot.js';
+import { RunBootstrappedTraceEntry, TraceEntry } from '../../../src/schemas/trace-entry.js';
 
-import { readRunLog } from '../../../src/runtime/event-log-reader.js';
-import { appendEvent, eventLogPath } from '../../../src/runtime/event-writer.js';
 import {
   manifestSnapshotPath,
   readManifestSnapshot,
   writeManifestSnapshot,
 } from '../../../src/runtime/manifest-snapshot-writer.js';
 import { reduce } from '../../../src/runtime/reducer.js';
-import { appendAndDerive, bootstrapRun, initRunRoot } from '../../../src/runtime/runner.js';
+import { appendAndDerive, bootstrapRun, initRunFolder } from '../../../src/runtime/runner.js';
 import {
   deriveSnapshot,
   snapshotPath,
   writeDerivedSnapshot,
 } from '../../../src/runtime/snapshot-writer.js';
+import { readRunTrace } from '../../../src/runtime/trace-reader.js';
+import { appendTraceEntry, trace_entryLogPath } from '../../../src/runtime/trace-writer.js';
 
-// events.ndjson append → parse → reduce → derive state.json
-// round-trip test. Closes the boundary dogfood-run-0 runs through:
-// without this file in place, dogfood would write real bytes through the
+// trace.ndjson append → parse → reduce → derive state.json
+// round-trip test. Closes the boundary runtime-proof runs through:
+// without this file in place, runtime-proof would write real bytes through the
 // very gap meant to be proven safe.
 
 const MANIFEST_BODY = Buffer.from(
-  JSON.stringify({ id: 'dogfood-run-0-fixture', steps: [] }, null, 2),
+  JSON.stringify({ id: 'runtime-proof-fixture', steps: [] }, null, 2),
   'utf8',
 );
 
 const RUN_ID = '11111111-2222-3333-4444-555555555555';
-const WORKFLOW_ID = 'dogfood-run-0-fixture';
+const WORKFLOW_ID = 'runtime-proof-fixture';
 
 function baseRecordedAt(step: number): string {
   const base = Date.UTC(2026, 3, 20, 12, 0, 0);
   return new Date(base + step * 1000).toISOString();
 }
 
-function buildBootstrapEvent(manifestHash: string) {
-  return RunBootstrappedEvent.parse({
+function buildBootstrapTraceEntry(manifestHash: string) {
+  return RunBootstrappedTraceEntry.parse({
     schema_version: 1,
     sequence: 0,
     recorded_at: baseRecordedAt(0),
     run_id: RUN_ID,
     kind: 'run.bootstrapped',
-    workflow_id: WORKFLOW_ID,
-    rigor: 'standard',
+    flow_id: WORKFLOW_ID,
+    depth: 'standard',
     goal: 'prove circuit-next can close one run',
-    lane: {
-      lane: 'ratchet-advance',
+    change_kind: {
+      change_kind: 'ratchet-advance',
       failure_mode: 'no end-to-end product proof',
-      acceptance_evidence: 'events.ndjson + state.json + manifest.snapshot.json round-trip',
+      acceptance_evidence: 'trace.ndjson + state.json + manifest.snapshot.json round-trip',
       alternate_framing: 'defer runtime boundary to 27d',
     },
     manifest_hash: manifestHash,
@@ -62,7 +62,7 @@ function buildBootstrapEvent(manifestHash: string) {
 }
 
 function buildStepEntered(sequence: number, stepId: string, attempt = 1) {
-  return Event.parse({
+  return TraceEntry.parse({
     schema_version: 1,
     sequence,
     recorded_at: baseRecordedAt(sequence),
@@ -74,7 +74,7 @@ function buildStepEntered(sequence: number, stepId: string, attempt = 1) {
 }
 
 function buildStepCompleted(sequence: number, stepId: string, attempt = 1) {
-  return Event.parse({
+  return TraceEntry.parse({
     schema_version: 1,
     sequence,
     recorded_at: baseRecordedAt(sequence),
@@ -87,7 +87,7 @@ function buildStepCompleted(sequence: number, stepId: string, attempt = 1) {
 }
 
 function buildRunClosed(sequence: number, outcome: 'complete' = 'complete') {
-  return Event.parse({
+  return TraceEntry.parse({
     schema_version: 1,
     sequence,
     recorded_at: baseRecordedAt(sequence),
@@ -97,54 +97,54 @@ function buildRunClosed(sequence: number, outcome: 'complete' = 'complete') {
   });
 }
 
-function seedRun(runRoot: string) {
+function seedRun(runFolder: string) {
   const manifestHash = computeManifestHash(MANIFEST_BODY);
-  const boot = buildBootstrapEvent(manifestHash);
+  const boot = buildBootstrapTraceEntry(manifestHash);
   bootstrapRun({
-    runRoot,
+    runFolder,
     manifest: {
       run_id: boot.run_id,
-      workflow_id: boot.workflow_id,
+      flow_id: boot.flow_id,
       captured_at: boot.recorded_at,
       bytes: MANIFEST_BODY,
     },
-    bootstrapEvent: boot,
+    bootstrapTraceEntry: boot,
   });
   return { manifestHash };
 }
 
-let runRoot: string;
+let runFolder: string;
 
 beforeEach(() => {
-  runRoot = mkdtempSync(join(tmpdir(), 'circuit-next-27c-'));
+  runFolder = mkdtempSync(join(tmpdir(), 'circuit-next-27c-'));
 });
 
 afterEach(() => {
-  rmSync(runRoot, { recursive: true, force: true });
+  rmSync(runFolder, { recursive: true, force: true });
 });
 
-describe('events.ndjson append→reduce→state.json round-trip', () => {
-  it('writes events.ndjson, state.json, manifest.snapshot.json at bootstrap', () => {
-    seedRun(runRoot);
-    const logText = readFileSync(eventLogPath(runRoot), 'utf8');
-    const snapText = readFileSync(snapshotPath(runRoot), 'utf8');
-    const manifestText = readFileSync(manifestSnapshotPath(runRoot), 'utf8');
+describe('trace.ndjson append→reduce→state.json round-trip', () => {
+  it('writes trace.ndjson, state.json, manifest.snapshot.json at bootstrap', () => {
+    seedRun(runFolder);
+    const logText = readFileSync(trace_entryLogPath(runFolder), 'utf8');
+    const snapText = readFileSync(snapshotPath(runFolder), 'utf8');
+    const manifestText = readFileSync(manifestSnapshotPath(runFolder), 'utf8');
     expect(logText.endsWith('\n')).toBe(true);
     expect(logText.split('\n').filter(Boolean)).toHaveLength(1);
     const snap = Snapshot.parse(JSON.parse(snapText));
-    expect(snap.events_consumed).toBe(1);
+    expect(snap.trace_entries_consumed).toBe(1);
     expect(snap.status).toBe('in_progress');
     const manifest = ManifestSnapshot.parse(JSON.parse(manifestText));
     expect(manifest.algorithm).toBe('sha256-raw');
   });
 
-  it('events.ndjson parses as RunLog through a full happy-path run', () => {
-    const { manifestHash } = seedRun(runRoot);
-    appendAndDerive(runRoot, buildStepEntered(1, 'frame'));
-    appendAndDerive(runRoot, buildStepCompleted(2, 'frame'));
-    appendAndDerive(runRoot, buildRunClosed(3));
+  it('trace.ndjson parses as RunTrace through a full happy-path run', () => {
+    const { manifestHash } = seedRun(runFolder);
+    appendAndDerive(runFolder, buildStepEntered(1, 'frame'));
+    appendAndDerive(runFolder, buildStepCompleted(2, 'frame'));
+    appendAndDerive(runFolder, buildRunClosed(3));
 
-    const log = readRunLog(runRoot);
+    const log = readRunTrace(runFolder);
     expect(log).toHaveLength(4);
     const first = log[0];
     if (first === undefined || first.kind !== 'run.bootstrapped') {
@@ -158,16 +158,16 @@ describe('events.ndjson append→reduce→state.json round-trip', () => {
   });
 
   it('state.json parses as Snapshot (not RunProjection)', () => {
-    seedRun(runRoot);
-    appendAndDerive(runRoot, buildStepEntered(1, 'frame'));
-    appendAndDerive(runRoot, buildStepCompleted(2, 'frame'));
-    appendAndDerive(runRoot, buildRunClosed(3));
+    seedRun(runFolder);
+    appendAndDerive(runFolder, buildStepEntered(1, 'frame'));
+    appendAndDerive(runFolder, buildStepCompleted(2, 'frame'));
+    appendAndDerive(runFolder, buildRunClosed(3));
 
-    const snapText = readFileSync(snapshotPath(runRoot), 'utf8');
+    const snapText = readFileSync(snapshotPath(runFolder), 'utf8');
     const raw: unknown = JSON.parse(snapText);
     const snapshot = Snapshot.parse(raw);
     expect(snapshot.status).toBe('complete');
-    expect(snapshot.events_consumed).toBe(4);
+    expect(snapshot.trace_entries_consumed).toBe(4);
 
     // Defensive: the persisted file is Snapshot, not RunProjection. A
     // RunProjection has `log` and `snapshot` keys; attempting to parse
@@ -177,64 +177,66 @@ describe('events.ndjson append→reduce→state.json round-trip', () => {
   });
 
   it('RunProjection.safeParse({ log, snapshot }) succeeds', () => {
-    seedRun(runRoot);
-    appendAndDerive(runRoot, buildStepEntered(1, 'frame'));
-    appendAndDerive(runRoot, buildStepCompleted(2, 'frame'));
-    appendAndDerive(runRoot, buildRunClosed(3));
+    seedRun(runFolder);
+    appendAndDerive(runFolder, buildStepEntered(1, 'frame'));
+    appendAndDerive(runFolder, buildStepCompleted(2, 'frame'));
+    appendAndDerive(runFolder, buildRunClosed(3));
 
-    const log = readRunLog(runRoot);
-    const snapshot = deriveSnapshot(runRoot);
+    const log = readRunTrace(runFolder);
+    const snapshot = deriveSnapshot(runFolder);
     const parsed = RunProjection.safeParse({ log, snapshot });
     expect(parsed.success).toBe(true);
   });
 
-  it('append-only: later writes do not overwrite or truncate prior events', () => {
-    seedRun(runRoot);
-    const afterBoot = readFileSync(eventLogPath(runRoot), 'utf8');
-    appendEvent(runRoot, buildStepEntered(1, 'frame'));
-    const afterStep = readFileSync(eventLogPath(runRoot), 'utf8');
+  it('append-only: later writes do not overwrite or truncate prior trace_entrys', () => {
+    seedRun(runFolder);
+    const afterBoot = readFileSync(trace_entryLogPath(runFolder), 'utf8');
+    appendTraceEntry(runFolder, buildStepEntered(1, 'frame'));
+    const afterStep = readFileSync(trace_entryLogPath(runFolder), 'utf8');
     expect(afterStep.startsWith(afterBoot)).toBe(true);
     expect(afterStep.length).toBeGreaterThan(afterBoot.length);
-    appendEvent(runRoot, buildStepCompleted(2, 'frame'));
-    const afterCompleted = readFileSync(eventLogPath(runRoot), 'utf8');
+    appendTraceEntry(runFolder, buildStepCompleted(2, 'frame'));
+    const afterCompleted = readFileSync(trace_entryLogPath(runFolder), 'utf8');
     expect(afterCompleted.startsWith(afterStep)).toBe(true);
   });
 
-  it('reducer-derived: deleting one event mid-log creates a mismatch', () => {
-    seedRun(runRoot);
-    appendAndDerive(runRoot, buildStepEntered(1, 'frame'));
-    appendAndDerive(runRoot, buildStepCompleted(2, 'frame'));
-    appendAndDerive(runRoot, buildRunClosed(3));
-    const originalSnapshot = deriveSnapshot(runRoot);
+  it('reducer-derived: deleting one trace_entry mid-log creates a mismatch', () => {
+    seedRun(runFolder);
+    appendAndDerive(runFolder, buildStepEntered(1, 'frame'));
+    appendAndDerive(runFolder, buildStepCompleted(2, 'frame'));
+    appendAndDerive(runFolder, buildRunClosed(3));
+    const originalSnapshot = deriveSnapshot(runFolder);
 
-    // Tamper: delete the middle event by rewriting the NDJSON without it.
-    const lines = readFileSync(eventLogPath(runRoot), 'utf8').split('\n').filter(Boolean);
+    // Tamper: delete the middle trace_entry by rewriting the NDJSON without it.
+    const lines = readFileSync(trace_entryLogPath(runFolder), 'utf8').split('\n').filter(Boolean);
     const tampered = [lines[0], lines[2], lines[3]].join('\n').concat('\n');
-    writeFileSync(eventLogPath(runRoot), tampered);
+    writeFileSync(trace_entryLogPath(runFolder), tampered);
 
     // Re-reading the tampered log must fail RUN-I2 (sequence contiguity):
     // the remaining sequences are [0, 2, 3] — a gap at 1 breaks RUN-I2.
-    expect(() => readRunLog(runRoot)).toThrow();
+    expect(() => readRunTrace(runFolder)).toThrow();
 
-    // If the caller bypasses RunLog validation (hand-forged array), the
+    // If the caller bypasses RunTrace validation (hand-forged array), the
     // derived snapshot differs from the original — no silent acceptance.
-    const rawRaw = readFileSync(eventLogPath(runRoot), 'utf8').split('\n').filter(Boolean);
-    const forged = rawRaw.map((l) => Event.parse(JSON.parse(l)));
-    // Force-reduce the forged (un-validated) log by constructing a RunLog
-    // that skips superRefine — we cast via the parsed Event[] directly
-    // because RunLog.parse would reject the gap. The reducer still runs
-    // but events_consumed binds to log length, which now differs.
+    const rawRaw = readFileSync(trace_entryLogPath(runFolder), 'utf8').split('\n').filter(Boolean);
+    const forged = rawRaw.map((l) => TraceEntry.parse(JSON.parse(l)));
+    // Force-reduce the forged (un-validated) log by constructing a RunTrace
+    // that skips superRefine — we cast via the parsed TraceEntry[] directly
+    // because RunTrace.parse would reject the gap. The reducer still runs
+    // but trace_entries_consumed binds to log length, which now differs.
     // The simplest way to demonstrate mismatch: the tampered log has a
     // different length than the original, so `reduce` produces a
-    // different events_consumed.
-    const forgedAsLog = forged as unknown as RunLog;
+    // different trace_entries_consumed.
+    const forgedAsLog = forged as unknown as RunTrace;
     const tamperedSnapshot = reduce(forgedAsLog);
-    expect(tamperedSnapshot.events_consumed).not.toBe(originalSnapshot.events_consumed);
+    expect(tamperedSnapshot.trace_entries_consumed).not.toBe(
+      originalSnapshot.trace_entries_consumed,
+    );
   });
 
   it('byte-for-byte manifest: persisted bytes hash matches declared hash', () => {
-    const { manifestHash } = seedRun(runRoot);
-    const manifest = readManifestSnapshot(runRoot);
+    const { manifestHash } = seedRun(runFolder);
+    const manifest = readManifestSnapshot(runFolder);
     const decoded = Buffer.from(manifest.bytes_base64, 'base64');
     expect(decoded.equals(MANIFEST_BODY)).toBe(true);
     expect(computeManifestHash(decoded)).toBe(manifestHash);
@@ -242,92 +244,92 @@ describe('events.ndjson append→reduce→state.json round-trip', () => {
   });
 
   it('corrupt manifest snapshot bytes: parse fails loudly', () => {
-    seedRun(runRoot);
-    const text = readFileSync(manifestSnapshotPath(runRoot), 'utf8');
+    seedRun(runFolder);
+    const text = readFileSync(manifestSnapshotPath(runFolder), 'utf8');
     const parsed: { bytes_base64: string } = JSON.parse(text);
     const tampered = {
       ...parsed,
       bytes_base64: Buffer.from('not the real manifest bytes', 'utf8').toString('base64'),
     };
-    writeFileSync(manifestSnapshotPath(runRoot), JSON.stringify(tampered));
-    expect(() => readManifestSnapshot(runRoot)).toThrow(/manifest hash mismatch/);
+    writeFileSync(manifestSnapshotPath(runFolder), JSON.stringify(tampered));
+    expect(() => readManifestSnapshot(runFolder)).toThrow(/manifest hash mismatch/);
   });
 
   it('corrupt manifest hash: declared hash that does not match bytes is rejected', () => {
-    initRunRoot({ runRoot });
+    initRunFolder({ runFolder });
     const forged = {
       schema_version: 1,
       run_id: RUN_ID,
-      workflow_id: WORKFLOW_ID,
+      flow_id: WORKFLOW_ID,
       captured_at: baseRecordedAt(0),
       algorithm: 'sha256-raw',
       hash: '0'.repeat(64),
       bytes_base64: MANIFEST_BODY.toString('base64'),
     };
-    writeFileSync(manifestSnapshotPath(runRoot), JSON.stringify(forged));
-    expect(() => readManifestSnapshot(runRoot)).toThrow(/manifest hash mismatch/);
+    writeFileSync(manifestSnapshotPath(runFolder), JSON.stringify(forged));
+    expect(() => readManifestSnapshot(runFolder)).toThrow(/manifest hash mismatch/);
   });
 
   it('deriveSnapshot is pure: same log replays to equal snapshot', () => {
-    seedRun(runRoot);
-    appendAndDerive(runRoot, buildStepEntered(1, 'frame'));
-    appendAndDerive(runRoot, buildStepCompleted(2, 'frame'));
-    appendAndDerive(runRoot, buildRunClosed(3));
-    const first = deriveSnapshot(runRoot);
-    const second = deriveSnapshot(runRoot);
+    seedRun(runFolder);
+    appendAndDerive(runFolder, buildStepEntered(1, 'frame'));
+    appendAndDerive(runFolder, buildStepCompleted(2, 'frame'));
+    appendAndDerive(runFolder, buildRunClosed(3));
+    const first = deriveSnapshot(runFolder);
+    const second = deriveSnapshot(runFolder);
     expect(JSON.stringify(first)).toBe(JSON.stringify(second));
   });
 
   it('writeDerivedSnapshot after every append keeps state.json equal to reduce(log)', () => {
-    seedRun(runRoot);
-    appendAndDerive(runRoot, buildStepEntered(1, 'frame'));
-    appendAndDerive(runRoot, buildStepCompleted(2, 'frame'));
-    const persisted = Snapshot.parse(JSON.parse(readFileSync(snapshotPath(runRoot), 'utf8')));
-    const recomputed = reduce(readRunLog(runRoot));
+    seedRun(runFolder);
+    appendAndDerive(runFolder, buildStepEntered(1, 'frame'));
+    appendAndDerive(runFolder, buildStepCompleted(2, 'frame'));
+    const persisted = Snapshot.parse(JSON.parse(readFileSync(snapshotPath(runFolder), 'utf8')));
+    const recomputed = reduce(readRunTrace(runFolder));
     expect(JSON.stringify(persisted)).toBe(JSON.stringify(recomputed));
   });
 
-  it('manifest snapshot path and event log path are distinct and stable', () => {
-    expect(eventLogPath(runRoot)).toContain('events.ndjson');
-    expect(snapshotPath(runRoot)).toContain('state.json');
-    expect(manifestSnapshotPath(runRoot)).toContain('manifest.snapshot.json');
-    expect(eventLogPath(runRoot)).not.toBe(snapshotPath(runRoot));
-    expect(eventLogPath(runRoot)).not.toBe(manifestSnapshotPath(runRoot));
+  it('manifest snapshot path and trace path are distinct and stable', () => {
+    expect(trace_entryLogPath(runFolder)).toContain('trace.ndjson');
+    expect(snapshotPath(runFolder)).toContain('state.json');
+    expect(manifestSnapshotPath(runFolder)).toContain('manifest.snapshot.json');
+    expect(trace_entryLogPath(runFolder)).not.toBe(snapshotPath(runFolder));
+    expect(trace_entryLogPath(runFolder)).not.toBe(manifestSnapshotPath(runFolder));
   });
 
   it('writeManifestSnapshot/bootstrapRun compose without stepping on each other', () => {
-    // Clean run_root, call the lower-level writer directly, confirm the
+    // Clean run_folder, call the lower-level writer directly, confirm the
     // file is readable, then re-bootstrap through runner without conflict.
-    initRunRoot({ runRoot });
+    initRunFolder({ runFolder });
     const captured_at = baseRecordedAt(0);
-    writeManifestSnapshot(runRoot, {
+    writeManifestSnapshot(runFolder, {
       run_id: RUN_ID as unknown as import('../../../src/schemas/ids.js').RunId,
-      workflow_id: WORKFLOW_ID as unknown as import('../../../src/schemas/ids.js').WorkflowId,
+      flow_id: WORKFLOW_ID as unknown as import('../../../src/schemas/ids.js').CompiledFlowId,
       captured_at,
       bytes: MANIFEST_BODY,
     });
-    const first = readManifestSnapshot(runRoot);
+    const first = readManifestSnapshot(runFolder);
     expect(first.hash).toBe(computeManifestHash(MANIFEST_BODY));
     // Re-writing with the same bytes is idempotent at the byte level.
-    writeManifestSnapshot(runRoot, {
+    writeManifestSnapshot(runFolder, {
       run_id: RUN_ID as unknown as import('../../../src/schemas/ids.js').RunId,
-      workflow_id: WORKFLOW_ID as unknown as import('../../../src/schemas/ids.js').WorkflowId,
+      flow_id: WORKFLOW_ID as unknown as import('../../../src/schemas/ids.js').CompiledFlowId,
       captured_at,
       bytes: MANIFEST_BODY,
     });
-    const second = readManifestSnapshot(runRoot);
+    const second = readManifestSnapshot(runFolder);
     expect(second.hash).toBe(first.hash);
   });
 
-  it('malformed event-log line fails loudly (Phase 2 defers durable-tail distinction)', () => {
-    seedRun(runRoot);
-    writeFileSync(eventLogPath(runRoot), 'not json at all\n');
-    expect(() => readRunLog(runRoot)).toThrow(/valid JSON|Event|RunLog/);
+  it('malformed trace_entry-log line fails loudly (Stage 2 defers durable-tail distinction)', () => {
+    seedRun(runFolder);
+    writeFileSync(trace_entryLogPath(runFolder), 'not json at all\n');
+    expect(() => readRunTrace(runFolder)).toThrow(/valid JSON|TraceEntry|RunTrace/);
   });
 
   it('writeDerivedSnapshot produces a Snapshot with schema_version 1', () => {
-    seedRun(runRoot);
-    const snap = writeDerivedSnapshot(runRoot);
+    seedRun(runFolder);
+    const snap = writeDerivedSnapshot(runFolder);
     expect(snap.schema_version).toBe(1);
     expect(snap.manifest_hash.length).toBeGreaterThan(0);
   });

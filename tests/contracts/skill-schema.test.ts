@@ -93,7 +93,7 @@ describe('SkillDescriptor — SKILL-I1..I6 from docs/contracts/skill.md v0.1', (
   });
 
   it('SKILL-I5 — rejects ad-hoc selection-override smuggle key', () => {
-    const bad = SkillDescriptor.safeParse({ ...base, adapter: 'agent' });
+    const bad = SkillDescriptor.safeParse({ ...base, connector: 'agent' });
     expect(bad.success).toBe(false);
   });
 

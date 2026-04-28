@@ -4,14 +4,14 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { main } from '../../src/cli/circuit.js';
-import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
 import {
   discoverConfigLayers,
   projectConfigPath,
   userGlobalConfigPath,
 } from '../../src/runtime/config-loader.js';
-import type { DispatchFn, DispatchInput } from '../../src/runtime/runner.js';
-import { SkillId, WorkflowId } from '../../src/schemas/ids.js';
+import type { RelayResult } from '../../src/runtime/connectors/shared.js';
+import type { RelayFn, RelayInput } from '../../src/runtime/runner.js';
+import { CompiledFlowId, SkillId } from '../../src/schemas/ids.js';
 import type { ResolvedSelection } from '../../src/schemas/selection-policy.js';
 
 let root: string;
@@ -22,7 +22,7 @@ const EXPLORE_SYNTHESIS_BODY = JSON.stringify({
   verdict: 'accept',
   subject: 'Config-loaded explore goal',
   recommendation: 'Use the resolved config while synthesizing the result',
-  success_condition_alignment: 'The run proves config reaches dispatch selection evidence',
+  success_condition_alignment: 'The run proves config reaches relay selection evidence',
   supporting_aspects: [
     {
       aspect: 'config-selection',
@@ -33,7 +33,7 @@ const EXPLORE_SYNTHESIS_BODY = JSON.stringify({
 
 const EXPLORE_REVIEW_VERDICT_BODY = JSON.stringify({
   verdict: 'accept',
-  overall_assessment: 'The config-loaded synthesis is acceptable',
+  overall_assessment: 'The config-loaded compose is acceptable',
   objections: [],
   missed_angles: [],
 });
@@ -107,7 +107,7 @@ circuits:
     expect(layers[0]?.source_path).toBe(userGlobalConfigPath(homeDir));
     expect(layers[1]?.source_path).toBe(projectConfigPath(cwdDir));
     expect(layers[0]?.config.defaults.selection?.effort).toBe('low');
-    const exploreId = WorkflowId.parse('explore');
+    const exploreId = CompiledFlowId.parse('explore');
     expect(layers[1]?.config.circuits[exploreId]?.selection?.model).toEqual({
       provider: 'openai',
       model: 'gpt-5.4',
@@ -136,7 +136,7 @@ defuults: {}
 });
 
 describe('CLI config discovery', () => {
-  it('passes loaded user-global and project config layers into dispatch selection evidence', async () => {
+  it('passes loaded user-global and project config layers into relay selection evidence', async () => {
     writeUserConfig(`
 schema_version: 1
 defaults:
@@ -177,11 +177,11 @@ circuits:
         projectCircuit: true
 `);
 
-    const dispatchInputs: DispatchInput[] = [];
-    const dispatcher: DispatchFn = {
-      adapterName: 'agent',
-      dispatch: async (input: DispatchInput): Promise<DispatchResult> => {
-        dispatchInputs.push(input);
+    const relayInputs: RelayInput[] = [];
+    const relayer: RelayFn = {
+      connectorName: 'agent',
+      relay: async (input: RelayInput): Promise<RelayResult> => {
+        relayInputs.push(input);
         return {
           request_payload: input.prompt,
           receipt_id: 'config-loader-receipt',
@@ -195,13 +195,13 @@ circuits:
         };
       },
     };
-    const runRoot = join(root, 'run');
+    const runFolder = join(root, 'run');
     const stdout = captureStdout();
     try {
       const exit = await main(
-        ['explore', '--goal', 'prove config reaches selection evidence', '--run-root', runRoot],
+        ['explore', '--goal', 'prove config reaches selection evidence', '--run-folder', runFolder],
         {
-          dispatcher,
+          relayer,
           now: deterministicNow(Date.UTC(2026, 3, 24, 23, 0, 0)),
           runId: '86868686-8686-4686-8686-868686868686',
           configHomeDir: homeDir,
@@ -228,31 +228,31 @@ circuits:
         projectCircuit: true,
       },
     };
-    expect(dispatchInputs[0]?.resolvedSelection).toEqual(expected);
+    expect(relayInputs[0]?.resolvedSelection).toEqual(expected);
 
-    const events = readFileSync(join(runRoot, 'events.ndjson'), 'utf8')
+    const trace_entrys = readFileSync(join(runFolder, 'trace.ndjson'), 'utf8')
       .split('\n')
       .filter(Boolean)
       .map((line) => JSON.parse(line) as Record<string, unknown>);
-    const started = events.find((event) => event.kind === 'dispatch.started');
+    const started = trace_entrys.find((trace_entry) => trace_entry.kind === 'relay.started');
     expect(started?.resolved_selection).toEqual(expected);
 
     const output = JSON.parse(stdout.text()) as Record<string, unknown>;
-    expect(output.workflow_id).toBe('explore');
+    expect(output.flow_id).toBe('explore');
     expect(output.outcome).toBe('complete');
   });
 
-  it('rejects invalid discovered config before dispatch', async () => {
+  it('rejects invalid discovered config before relay', async () => {
     writeProjectConfig('schema_version: 1\nbad: [unterminated\n');
 
-    let dispatchCalls = 0;
-    const dispatcher: DispatchFn = {
-      adapterName: 'agent',
-      dispatch: async (input: DispatchInput): Promise<DispatchResult> => {
-        dispatchCalls += 1;
+    let relayCalls = 0;
+    const relayer: RelayFn = {
+      connectorName: 'agent',
+      relay: async (input: RelayInput): Promise<RelayResult> => {
+        relayCalls += 1;
         return {
           request_payload: input.prompt,
-          receipt_id: 'should-not-dispatch',
+          receipt_id: 'should-not-relay',
           result_body: '{"verdict":"accept"}',
           duration_ms: 1,
           cli_version: '0.0.0-stub',
@@ -261,14 +261,14 @@ circuits:
     };
 
     await expect(
-      main(['explore', '--goal', 'invalid config must stop before dispatch'], {
-        dispatcher,
+      main(['explore', '--goal', 'invalid config must stop before relay'], {
+        relayer,
         now: deterministicNow(Date.UTC(2026, 3, 24, 23, 30, 0)),
         runId: '86868686-8686-4686-8686-868686868687',
         configHomeDir: homeDir,
         configCwd: cwdDir,
       }),
     ).rejects.toThrow(/config YAML parse failed/i);
-    expect(dispatchCalls).toBe(0);
+    expect(relayCalls).toBe(0);
   });
 });

@@ -9,7 +9,7 @@
 //     Example: `"WF-I10: pass routes must target canonical outcome ids"`.
 //   - When the rule is a runtime / handler discipline that has no
 //     ledger entry, pass plain prose with a domain-prefixed claim.
-//     Example: `"dispatch handler: result_body that is not valid JSON
+//     Example: `"relay handler: result_body that is not valid JSON
 //     aborts with a parse-failure reason"`.
 //
 // FU-T07. Imported lazily by tests as files are touched. The

@@ -1,8 +1,8 @@
-// Verification primitives — engine-shared schemas for command-list
-// verification artifacts. Used by Build/Fix/Migrate/Sweep verification
+// Verification scalars — engine-shared schemas for command-list
+// verification reports. Used by Build/Fix/Migrate/Sweep verification
 // outputs, by Build's checkpoint policy template, and by any future
-// workflow that runs a budgeted command list. Lifted out of Build's
-// artifact module so the same shape isn't owned by one workflow that
+// flow that runs a budgeted command list. Lifted out of Build's
+// report module so the same shape isn't owned by one flow that
 // others must reach across to.
 
 import { z } from 'zod';

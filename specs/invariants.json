@@ -1,106 +1,106 @@
 {
   "version": 1,
-  "description": "Contract + behavioral-track invariant/property ledger. Scope: docs/contracts/*.md (generic engine contracts) + src/workflows/*/contract.md (per-workflow contracts) + specs/behavioral/*.md. Out of scope: CLAUDE.md hard invariants, specs/evidence.md invariants, ADR-level invariants.",
+  "description": "Contract + behavioral-track invariant/property ledger. Scope: docs/contracts/*.md (generic engine contracts) + src/flows/*/contract.md (per-flow contracts) + specs/behavioral/*.md. Out of scope: CLAUDE.md hard invariants, specs/evidence.md invariants, ADR-level invariants.",
   "enforcement_state_semantics": {
     "test-enforced": "Invariant id appears as a token in at least one binding_ref test-file path (describe/it title or assertion message). Eligibility: required default for any contract invariant stated as 'MUST reject', 'MUST enforce', or 'is rejected'.",
-    "audit-only": "Invariant id appears as a token in scripts/audit.mjs. Eligibility: audit-layer or discipline invariants (session hygiene, lane discipline, citation rule).",
-    "static-anchor": "Invariant enforced structurally by schema export or superRefine; binding_refs name the schema file plus at least one test file that parses that schema. Eligibility: structural invariants whose id may not appear as a test title but whose enforcement cannot regress without the schema change firing a named test failure. Grandfathered scope_ids entries in tests/contracts/cross-model-challenger.test.ts count as binding_refs for step.md and workflow.md.",
+    "audit-only": "Invariant id appears as a token in scripts/audit.mjs. Eligibility: audit-layer or discipline invariants (session hygiene, change_kind discipline, citation rule).",
+    "static-anchor": "Invariant enforced structurally by schema export or superRefine; binding_refs name the schema file plus at least one test file that parses that schema. Eligibility: structural invariants whose id may not appear as a test title but whose enforcement cannot regress without the schema change firing a named test failure. Grandfathered scope_ids entries in tests/contracts/cross-model-challenger.test.ts count as binding_refs for step.md and flow.md.",
     "prose-only": "Policy statement not directly testable (e.g. when the challenger should be invoked; what the challenger cannot replace). Eligibility: behavioral-track meta-invariants only. Requires `rationale` field. A contract 'MUST reject' invariant cannot be prose-only.",
-    "phase2-property": "Reserved for Phase 2 property-test harness; not enforced at Phase 1 verify time. Requires `target_slice` (29 = property registry scaffold) + `reopen_condition`.",
-    "blocked": "Invariant declared as normative; enforcement deferred to a substrate-widening slice named in the arc via `substrate_slice:`. REQUIRES full escrow: `substrate_slice`, `owner`, `expiry_date`, `reopen_condition`, `acceptance_evidence` (post-resolution). Forbids arc close while unresolved (plan-lint rule #22). Differs from `phase2-property` in that `phase2-property` has a known harness landing at a specific Phase 2 property-scaffold slice (scheduled, non-escrow), while `blocked` requires substrate widening of a new step kind / schema / runtime surface AND an explicit expiry + reopen condition. Added at Slice 59 of planning-readiness-meta-arc per ADR-0010 §Vocabulary + §3.E (Codex pass 02 HIGH 5 fold-in)."
+    "stage2-property": "Reserved for Stage 2 property-test harness; not enforced at Stage 1 verify time. Requires `target_slice` (29 = property registry scaffold) + `reopen_condition`.",
+    "blocked": "Invariant declared as normative; enforcement deferred to a substrate-widening slice named in the arc via `substrate_slice:`. REQUIRES full escrow: `substrate_slice`, `owner`, `expiry_date`, `reopen_condition`, `acceptance_evidence` (post-resolution). Forbids arc close while unresolved (plan-lint rule #22). Differs from `stage2-property` in that `stage2-property` has a known harness landing at a specific Stage 2 property-scaffold slice (scheduled, non-escrow), while `blocked` requires substrate widening of a new step kind / schema / runtime surface AND an explicit expiry + reopen condition. Added at Slice 59 of planning-readiness-meta-arc per ADR-0010 §Vocabulary + §3.E (Codex pass 02 HIGH 5 fold-in)."
   },
   "out_of_scope_notes": [
-    "AR-H1 persisted-shape binding for invariants to artifacts is deferred to Slice 26a. Optional `artifact_ids` ledger field may be added in a later slice; absence here is intentional and not a silent omission.",
+    "AR-H1 persisted-shape binding for invariants to reports is deferred to Slice 26a. Optional `report_ids` ledger field may be added in a later slice; absence here is intentional and not a silent omission.",
     "CLAUDE.md §Hard invariants 1-10, specs/evidence.md Invariant 1-N, and ADR-0001/0002/0003 reopen/authority constraints are out of scope for Slice 25 per Codex challenger MED #9 fold-in disposition; expansion is v0.2 scope."
   ],
   "invariants": [
     {
-      "id": "ADAPTER-I1",
-      "contract": "adapter",
+      "id": "connector-I1",
+      "contract": "connector",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/adapter.md#ADAPTER-I1",
-      "binding_refs": [{ "path": "tests/contracts/adapter-schema.test.ts", "kind": "test_title" }]
+      "source_anchor": "docs/contracts/connector.md#connector-I1",
+      "binding_refs": [{ "path": "tests/contracts/connector-schema.test.ts", "kind": "test_title" }]
     },
     {
-      "id": "ADAPTER-I2",
-      "contract": "adapter",
+      "id": "connector-I2",
+      "contract": "connector",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/adapter.md#ADAPTER-I2",
-      "binding_refs": [{ "path": "tests/contracts/adapter-schema.test.ts", "kind": "test_title" }]
+      "source_anchor": "docs/contracts/connector.md#connector-I2",
+      "binding_refs": [{ "path": "tests/contracts/connector-schema.test.ts", "kind": "test_title" }]
     },
     {
-      "id": "ADAPTER-I3",
-      "contract": "adapter",
+      "id": "connector-I3",
+      "contract": "connector",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/adapter.md#ADAPTER-I3",
-      "binding_refs": [{ "path": "tests/contracts/adapter-schema.test.ts", "kind": "test_title" }]
+      "source_anchor": "docs/contracts/connector.md#connector-I3",
+      "binding_refs": [{ "path": "tests/contracts/connector-schema.test.ts", "kind": "test_title" }]
     },
     {
-      "id": "ADAPTER-I4",
-      "contract": "adapter",
+      "id": "connector-I4",
+      "contract": "connector",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/adapter.md#ADAPTER-I4",
-      "binding_refs": [{ "path": "tests/contracts/adapter-schema.test.ts", "kind": "test_title" }]
+      "source_anchor": "docs/contracts/connector.md#connector-I4",
+      "binding_refs": [{ "path": "tests/contracts/connector-schema.test.ts", "kind": "test_title" }]
     },
     {
-      "id": "ADAPTER-I5",
-      "contract": "adapter",
+      "id": "connector-I5",
+      "contract": "connector",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/adapter.md#ADAPTER-I5",
-      "binding_refs": [{ "path": "tests/contracts/adapter-schema.test.ts", "kind": "test_title" }]
+      "source_anchor": "docs/contracts/connector.md#connector-I5",
+      "binding_refs": [{ "path": "tests/contracts/connector-schema.test.ts", "kind": "test_title" }]
     },
     {
-      "id": "ADAPTER-I6",
-      "contract": "adapter",
+      "id": "connector-I6",
+      "contract": "connector",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/adapter.md#ADAPTER-I6",
-      "binding_refs": [{ "path": "tests/contracts/adapter-schema.test.ts", "kind": "test_title" }]
+      "source_anchor": "docs/contracts/connector.md#connector-I6",
+      "binding_refs": [{ "path": "tests/contracts/connector-schema.test.ts", "kind": "test_title" }]
     },
     {
-      "id": "ADAPTER-I7",
-      "contract": "adapter",
+      "id": "connector-I7",
+      "contract": "connector",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/adapter.md#ADAPTER-I7",
-      "binding_refs": [{ "path": "tests/contracts/adapter-schema.test.ts", "kind": "test_title" }]
+      "source_anchor": "docs/contracts/connector.md#connector-I7",
+      "binding_refs": [{ "path": "tests/contracts/connector-schema.test.ts", "kind": "test_title" }]
     },
     {
-      "id": "ADAPTER-I8",
-      "contract": "adapter",
+      "id": "connector-I8",
+      "contract": "connector",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/adapter.md#ADAPTER-I8",
-      "binding_refs": [{ "path": "tests/contracts/adapter-schema.test.ts", "kind": "test_title" }]
+      "source_anchor": "docs/contracts/connector.md#connector-I8",
+      "binding_refs": [{ "path": "tests/contracts/connector-schema.test.ts", "kind": "test_title" }]
     },
     {
-      "id": "ADAPTER-I9",
-      "contract": "adapter",
+      "id": "connector-I9",
+      "contract": "connector",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/adapter.md#ADAPTER-I9",
-      "binding_refs": [{ "path": "tests/contracts/adapter-schema.test.ts", "kind": "test_title" }]
+      "source_anchor": "docs/contracts/connector.md#connector-I9",
+      "binding_refs": [{ "path": "tests/contracts/connector-schema.test.ts", "kind": "test_title" }]
     },
     {
-      "id": "ADAPTER-I10",
-      "contract": "adapter",
+      "id": "connector-I10",
+      "contract": "connector",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/adapter.md#ADAPTER-I10",
-      "binding_refs": [{ "path": "tests/contracts/adapter-schema.test.ts", "kind": "test_title" }]
+      "source_anchor": "docs/contracts/connector.md#connector-I10",
+      "binding_refs": [{ "path": "tests/contracts/connector-schema.test.ts", "kind": "test_title" }]
     },
     {
-      "id": "ADAPTER-I11",
-      "contract": "adapter",
+      "id": "connector-I11",
+      "contract": "connector",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/adapter.md#ADAPTER-I11",
-      "binding_refs": [{ "path": "tests/contracts/adapter-schema.test.ts", "kind": "test_title" }]
+      "source_anchor": "docs/contracts/connector.md#connector-I11",
+      "binding_refs": [{ "path": "tests/contracts/connector-schema.test.ts", "kind": "test_title" }]
     },
 
     {
@@ -290,63 +290,63 @@
     },
 
     {
-      "id": "PHASE-I1",
-      "contract": "phase",
+      "id": "stage-I1",
+      "contract": "stage",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/phase.md#PHASE-I1",
+      "source_anchor": "docs/contracts/stage.md#stage-I1",
       "binding_refs": [
-        { "path": "tests/contracts/workflow-path-safety-schema.test.ts", "kind": "test_title" }
+        { "path": "tests/contracts/flow-path-safety-schema.test.ts", "kind": "test_title" }
       ]
     },
     {
-      "id": "PHASE-I2",
-      "contract": "phase",
+      "id": "stage-I2",
+      "contract": "stage",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/phase.md#PHASE-I2",
+      "source_anchor": "docs/contracts/stage.md#stage-I2",
       "binding_refs": [
-        { "path": "tests/contracts/workflow-path-safety-schema.test.ts", "kind": "test_title" }
+        { "path": "tests/contracts/flow-path-safety-schema.test.ts", "kind": "test_title" }
       ]
     },
     {
-      "id": "PHASE-I3",
-      "contract": "phase",
+      "id": "stage-I3",
+      "contract": "stage",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/phase.md#PHASE-I3",
+      "source_anchor": "docs/contracts/stage.md#stage-I3",
       "binding_refs": [
-        { "path": "tests/contracts/workflow-path-safety-schema.test.ts", "kind": "test_title" }
+        { "path": "tests/contracts/flow-path-safety-schema.test.ts", "kind": "test_title" }
       ]
     },
     {
-      "id": "PHASE-I4",
-      "contract": "phase",
+      "id": "stage-I4",
+      "contract": "stage",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/phase.md#PHASE-I4",
+      "source_anchor": "docs/contracts/stage.md#stage-I4",
       "binding_refs": [
-        { "path": "tests/contracts/workflow-path-safety-schema.test.ts", "kind": "test_title" }
+        { "path": "tests/contracts/flow-path-safety-schema.test.ts", "kind": "test_title" }
       ]
     },
     {
-      "id": "PHASE-I5",
-      "contract": "phase",
+      "id": "stage-I5",
+      "contract": "stage",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/phase.md#PHASE-I5",
+      "source_anchor": "docs/contracts/stage.md#stage-I5",
       "binding_refs": [
-        { "path": "tests/contracts/workflow-path-safety-schema.test.ts", "kind": "test_title" }
+        { "path": "tests/contracts/flow-path-safety-schema.test.ts", "kind": "test_title" }
       ]
     },
     {
-      "id": "PHASE-I6",
-      "contract": "phase",
+      "id": "stage-I6",
+      "contract": "stage",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/phase.md#PHASE-I6",
+      "source_anchor": "docs/contracts/stage.md#stage-I6",
       "binding_refs": [
-        { "path": "tests/contracts/workflow-path-safety-schema.test.ts", "kind": "test_title" }
+        { "path": "tests/contracts/flow-path-safety-schema.test.ts", "kind": "test_title" }
       ]
     },
 
@@ -355,9 +355,9 @@
       "contract": "review",
       "surface_type": "contract",
       "enforcement_state": "static-anchor",
-      "source_anchor": "src/workflows/review/contract.md#REVIEW-I1",
+      "source_anchor": "src/flows/review/contract.md#REVIEW-I1",
       "binding_refs": [
-        { "path": "scripts/policy/workflow-kind-policy.mjs", "kind": "static_regex" },
+        { "path": "scripts/policy/flow-kind-policy.mjs", "kind": "static_regex" },
         { "path": "tests/properties/visible/review-i1.test.ts", "kind": "test_title" }
       ]
     },
@@ -366,9 +366,9 @@
       "contract": "review",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "src/workflows/review/contract.md#REVIEW-I2",
+      "source_anchor": "src/flows/review/contract.md#REVIEW-I2",
       "binding_refs": [
-        { "path": "src/workflows/review/artifacts.ts", "kind": "schema_export" },
+        { "path": "src/flows/review/reports.ts", "kind": "schema_export" },
         { "path": "tests/properties/visible/review-i2.test.ts", "kind": "test_title" }
       ]
     },
@@ -379,7 +379,7 @@
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
       "source_anchor": "docs/contracts/run.md#RUN-I1",
-      "binding_refs": [{ "path": "tests/contracts/runlog-schema.test.ts", "kind": "test_title" }]
+      "binding_refs": [{ "path": "tests/contracts/runtrace-schema.test.ts", "kind": "test_title" }]
     },
     {
       "id": "RUN-I2",
@@ -387,7 +387,7 @@
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
       "source_anchor": "docs/contracts/run.md#RUN-I2",
-      "binding_refs": [{ "path": "tests/contracts/runlog-schema.test.ts", "kind": "test_title" }]
+      "binding_refs": [{ "path": "tests/contracts/runtrace-schema.test.ts", "kind": "test_title" }]
     },
     {
       "id": "RUN-I3",
@@ -395,7 +395,7 @@
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
       "source_anchor": "docs/contracts/run.md#RUN-I3",
-      "binding_refs": [{ "path": "tests/contracts/runlog-schema.test.ts", "kind": "test_title" }]
+      "binding_refs": [{ "path": "tests/contracts/runtrace-schema.test.ts", "kind": "test_title" }]
     },
     {
       "id": "RUN-I4",
@@ -403,7 +403,7 @@
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
       "source_anchor": "docs/contracts/run.md#RUN-I4",
-      "binding_refs": [{ "path": "tests/contracts/runlog-schema.test.ts", "kind": "test_title" }]
+      "binding_refs": [{ "path": "tests/contracts/runtrace-schema.test.ts", "kind": "test_title" }]
     },
     {
       "id": "RUN-I5",
@@ -411,7 +411,7 @@
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
       "source_anchor": "docs/contracts/run.md#RUN-I5",
-      "binding_refs": [{ "path": "tests/contracts/runlog-schema.test.ts", "kind": "test_title" }]
+      "binding_refs": [{ "path": "tests/contracts/runtrace-schema.test.ts", "kind": "test_title" }]
     },
     {
       "id": "RUN-I6",
@@ -419,7 +419,7 @@
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
       "source_anchor": "docs/contracts/run.md#RUN-I6",
-      "binding_refs": [{ "path": "tests/contracts/runlog-schema.test.ts", "kind": "test_title" }]
+      "binding_refs": [{ "path": "tests/contracts/runtrace-schema.test.ts", "kind": "test_title" }]
     },
     {
       "id": "RUN-I7",
@@ -428,7 +428,7 @@
       "enforcement_state": "test-enforced",
       "source_anchor": "docs/contracts/run.md#RUN-I7",
       "binding_refs": [
-        { "path": "tests/contracts/runlog-schema.test.ts", "kind": "test_title" },
+        { "path": "tests/contracts/runtrace-schema.test.ts", "kind": "test_title" },
         { "path": "tests/runner/terminal-outcome-mapping.test.ts", "kind": "test_title" }
       ]
     },
@@ -438,7 +438,7 @@
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
       "source_anchor": "docs/contracts/run.md#RUN-I8",
-      "binding_refs": [{ "path": "tests/contracts/runlog-schema.test.ts", "kind": "test_title" }]
+      "binding_refs": [{ "path": "tests/contracts/runtrace-schema.test.ts", "kind": "test_title" }]
     },
 
     {
@@ -641,125 +641,125 @@
 
     {
       "id": "WF-I1",
-      "contract": "workflow",
+      "contract": "flow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/workflow.md#WF-I1",
+      "source_anchor": "docs/contracts/flow.md#WF-I1",
       "binding_refs": [
-        { "path": "tests/contracts/workflow-graph-schema.test.ts", "kind": "test_title" }
+        { "path": "tests/contracts/flow-graph-schema.test.ts", "kind": "test_title" }
       ],
-      "rationale": "Unique step ids enforced by Workflow superRefine in src/schemas/workflow.ts. Slice 27 workflow.md v0.2 exits the skeleton grandfather and binds WF-I1 to a per-invariant titled negative test."
+      "rationale": "Unique step ids enforced by CompiledFlow superRefine in src/schemas/compiled-flow.ts. Slice 27 flow.md v0.2 exits the skeleton grandfather and binds WF-I1 to a per-invariant titled negative test."
     },
     {
       "id": "WF-I2",
-      "contract": "workflow",
+      "contract": "flow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/workflow.md#WF-I2",
+      "source_anchor": "docs/contracts/flow.md#WF-I2",
       "binding_refs": [
-        { "path": "tests/contracts/workflow-graph-schema.test.ts", "kind": "test_title" }
+        { "path": "tests/contracts/flow-graph-schema.test.ts", "kind": "test_title" }
       ],
-      "rationale": "Closed entry_modes.start_at references enforced by Workflow superRefine. Slice 27 upgrade from static-anchor to test-enforced via per-invariant titled negative test."
+      "rationale": "Closed entry_modes.start_at references enforced by CompiledFlow superRefine. Slice 27 upgrade from static-anchor to test-enforced via per-invariant titled negative test."
     },
     {
       "id": "WF-I3",
-      "contract": "workflow",
+      "contract": "flow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/workflow.md#WF-I3",
+      "source_anchor": "docs/contracts/flow.md#WF-I3",
       "binding_refs": [
-        { "path": "tests/contracts/workflow-graph-schema.test.ts", "kind": "test_title" }
+        { "path": "tests/contracts/flow-graph-schema.test.ts", "kind": "test_title" }
       ],
-      "rationale": "Closed phase step references enforced by Workflow superRefine. Slice 27 upgrade from static-anchor to test-enforced via per-invariant titled negative test."
+      "rationale": "Closed stage step references enforced by CompiledFlow superRefine. Slice 27 upgrade from static-anchor to test-enforced via per-invariant titled negative test."
     },
     {
       "id": "WF-I4",
-      "contract": "workflow",
+      "contract": "flow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/workflow.md#WF-I4",
+      "source_anchor": "docs/contracts/flow.md#WF-I4",
       "binding_refs": [
-        { "path": "tests/contracts/workflow-graph-schema.test.ts", "kind": "test_title" }
+        { "path": "tests/contracts/flow-graph-schema.test.ts", "kind": "test_title" }
       ],
-      "rationale": "Closed route targets enforced by Workflow superRefine. Slice 27 upgrade from static-anchor to test-enforced via per-invariant titled negative test."
+      "rationale": "Closed route targets enforced by CompiledFlow superRefine. Slice 27 upgrade from static-anchor to test-enforced via per-invariant titled negative test."
     },
     {
       "id": "WF-I5",
-      "contract": "workflow",
+      "contract": "flow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/workflow.md#WF-I5",
+      "source_anchor": "docs/contracts/flow.md#WF-I5",
       "binding_refs": [
-        { "path": "tests/contracts/workflow-graph-schema.test.ts", "kind": "test_title" }
+        { "path": "tests/contracts/flow-graph-schema.test.ts", "kind": "test_title" }
       ],
-      "rationale": "Unique entry-mode names enforced by Workflow superRefine. Slice 27 upgrade adds per-invariant titled negative test."
+      "rationale": "Unique entry-mode names enforced by CompiledFlow superRefine. Slice 27 upgrade adds per-invariant titled negative test."
     },
     {
       "id": "WF-I6",
-      "contract": "workflow",
+      "contract": "flow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/workflow.md#WF-I6",
+      "source_anchor": "docs/contracts/flow.md#WF-I6",
       "binding_refs": [
-        { "path": "tests/contracts/workflow-graph-schema.test.ts", "kind": "test_title" }
+        { "path": "tests/contracts/flow-graph-schema.test.ts", "kind": "test_title" }
       ],
-      "rationale": "Unique phase ids enforced by Workflow superRefine. Slice 27 upgrade adds per-invariant titled negative test."
+      "rationale": "Unique stage ids enforced by CompiledFlow superRefine. Slice 27 upgrade adds per-invariant titled negative test."
     },
     {
       "id": "WF-I7",
-      "contract": "workflow",
+      "contract": "flow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/workflow.md#WF-I7",
+      "source_anchor": "docs/contracts/flow.md#WF-I7",
       "binding_refs": [
-        { "path": "tests/contracts/workflow-graph-schema.test.ts", "kind": "test_title" }
+        { "path": "tests/contracts/flow-graph-schema.test.ts", "kind": "test_title" }
       ],
-      "rationale": "schema_version=2 enforced by the Workflow literal field on WorkflowBody (before superRefine). Slice 27 upgrade adds per-invariant titled negative test rejecting non-'2' schema_version values (Codex challenger LOW #8 fold-in — prior phrasing said 'surplus unknown literals' which conflated literal-mismatch with strict-key rejection)."
+      "rationale": "schema_version=2 enforced by the CompiledFlow literal field on CompiledFlowBody (before superRefine). Slice 27 upgrade adds per-invariant titled negative test rejecting non-'2' schema_version values (Codex challenger LOW #8 fold-in — prior phrasing said 'surplus unknown literals' which conflated literal-mismatch with strict-key rejection)."
     },
     {
       "id": "WF-I8",
-      "contract": "workflow",
+      "contract": "flow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/workflow.md#WF-I8",
+      "source_anchor": "docs/contracts/flow.md#WF-I8",
       "binding_refs": [
-        { "path": "tests/contracts/workflow-graph-schema.test.ts", "kind": "test_title" }
+        { "path": "tests/contracts/flow-graph-schema.test.ts", "kind": "test_title" }
       ],
-      "rationale": "Terminal reachability enforced by Workflow superRefine via iterative fixpoint over terminal-reaching steps. New in Slice 27 workflow.md v0.2 — structural requirement for dogfood-run-0: a workflow fixture where some step cannot reach @complete/@stop/@escalate/@handoff would bootstrap a Run that could never emit run.closed."
+      "rationale": "Terminal reachability enforced by CompiledFlow superRefine via iterative fixpoint over terminal-reaching steps. New in Slice 27 flow.md v0.2 — structural requirement for runtime-proof: a flow fixture where some step cannot reach @complete/@stop/@escalate/@handoff would bootstrap a Run that could never emit run.closed."
     },
     {
       "id": "WF-I9",
-      "contract": "workflow",
+      "contract": "flow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/workflow.md#WF-I9",
+      "source_anchor": "docs/contracts/flow.md#WF-I9",
       "binding_refs": [
-        { "path": "tests/contracts/workflow-graph-schema.test.ts", "kind": "test_title" }
+        { "path": "tests/contracts/flow-graph-schema.test.ts", "kind": "test_title" }
       ],
-      "rationale": "No dead steps enforced by Workflow superRefine via BFS from every entry_mode.start_at. New in Slice 27 workflow.md v0.2 — a declared step not reachable from any entry is a silent declaration bug for dogfood fixtures. The reachability pass is gated on WF-I1/WF-I4/WF-I2 structural soundness (allEntryStartsKnown precondition) so a single WF-I2 violation does not cascade into WF-I9 noise (Codex challenger MED #4 fold-in)."
+      "rationale": "No dead steps enforced by CompiledFlow superRefine via BFS from every entry_mode.start_at. New in Slice 27 flow.md v0.2 — a declared step not reachable from any entry is a silent declaration bug for runtime-proof fixtures. The reachability pass is checkd on WF-I1/WF-I4/WF-I2 structural soundness (allEntryStartsKnown precondition) so a single WF-I2 violation does not cascade into WF-I9 noise (Codex challenger MED #4 fold-in)."
     },
     {
       "id": "WF-I10",
-      "contract": "workflow",
+      "contract": "flow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/workflow.md#WF-I10",
+      "source_anchor": "docs/contracts/flow.md#WF-I10",
       "binding_refs": [
-        { "path": "tests/contracts/workflow-graph-schema.test.ts", "kind": "test_title" }
+        { "path": "tests/contracts/flow-graph-schema.test.ts", "kind": "test_title" }
       ],
-      "rationale": "Pass-route presence enforced by Workflow superRefine — every step's routes map must contain key 'pass'. GateEvaluatedEvent.outcome is z.enum(['pass','fail']) uniformly across all three gate kinds (src/schemas/event.ts), so a successful gate outcome routes through routes['pass']. New in Slice 27 workflow.md v0.2 as Codex challenger HIGH #1 fold-in — closes the WF-I8 graph-reachable-but-runtime-unselectable hole (fixture routes like { success: '@complete' } would satisfy WF-I8 and stall at runtime). `fail`-route presence deferred to v0.3 / Phase 2."
+      "rationale": "Pass-route presence enforced by CompiledFlow superRefine — every step's routes map must contain key 'pass'. CheckEvaluatedTraceEntry.outcome is z.enum(['pass','fail']) uniformly across all three check kinds (src/schemas/trace-entry.ts), so a successful check outcome routes through routes['pass']. New in Slice 27 flow.md v0.2 as Codex challenger HIGH #1 fold-in — closes the WF-I8 graph-reachable-but-runtime-unselectable hole (fixture routes like { success: '@complete' } would satisfy WF-I8 and stall at runtime). `fail`-route presence deferred to v0.3 / Stage 2."
     },
     {
       "id": "WF-I11",
-      "contract": "workflow",
+      "contract": "flow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/workflow.md#WF-I11",
+      "source_anchor": "docs/contracts/flow.md#WF-I11",
       "binding_refs": [
-        { "path": "tests/contracts/workflow-graph-schema.test.ts", "kind": "test_title" },
+        { "path": "tests/contracts/flow-graph-schema.test.ts", "kind": "test_title" },
         { "path": "tests/runner/pass-route-cycle-guard.test.ts", "kind": "test_title" }
       ],
-      "rationale": "Pass-route terminal reachability enforced by Workflow superRefine by following only routes.pass. WF-I8 remains the broad terminal-reachability graph sanity check, but the current runner follows pass routes after successful gates; a workflow whose fail route reaches @complete while pass cycles forever is rejected at parse time, with a runtime guard closing schema-bypass cases as aborted runs."
+      "rationale": "Pass-route terminal reachability enforced by CompiledFlow superRefine by following only routes.pass. WF-I8 remains the broad terminal-reachability graph sanity check, but the current runner follows pass routes after successful checks; a flow whose fail route reaches @complete while pass cycles forever is rejected at parse time, with a runtime guard closing schema-bypass cases as aborted runs."
     },
 
     {
@@ -800,7 +800,7 @@
       "surface_type": "behavioral",
       "enforcement_state": "prose-only",
       "source_anchor": "specs/behavioral/cross-model-challenger.md#CHALLENGER-I5",
-      "rationale": "Test enforcement removed in the methodology strip (commit 60b1263, 2026-04-25). Dispatch-via-/codex-skill discipline is a runtime invocation choice with no testable artifact in the codebase; preserved as documentation in user memory + specs/behavioral/cross-model-challenger.md."
+      "rationale": "Test enforcement removed in the methodology strip (commit 60b1263, 2026-04-25). Relay-via-/codex-skill discipline is a runtime invocation choice with no testable report in the codebase; preserved as documentation in user memory + specs/behavioral/cross-model-challenger.md."
     },
     {
       "id": "CHALLENGER-I6",
@@ -817,7 +817,7 @@
       "surface_type": "behavioral",
       "enforcement_state": "prose-only",
       "source_anchor": "specs/behavioral/prose-yaml-parity.md#PROSE-YAML-I1",
-      "rationale": "Test enforcement removed in the methodology strip (commit 60b1263, 2026-04-25). The catalog-compiler architecture this invariant targeted was not adopted; circuit-next solved prose/YAML drift through the recipe → command.md emit pattern enforced by `npm run check-workflow-drift`. Original invariant preserved as documentation of the source-of-truth principle."
+      "rationale": "Test enforcement removed in the methodology strip (commit 60b1263, 2026-04-25). The catalog-compiler architecture this invariant targeted was not adopted; circuit-next solved prose/YAML drift through the schematic → command.md emit pattern enforced by `npm run check-flow-drift`. Original invariant preserved as documentation of the source-of-truth principle."
     },
     {
       "id": "PROSE-YAML-I2",
@@ -897,52 +897,50 @@
       "contract": "explore",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "src/workflows/explore/contract.md#EXPLORE-I1",
-      "binding_refs": [
-        { "path": "tests/contracts/workflow-kind-policy.test.ts", "kind": "test_title" }
-      ]
+      "source_anchor": "src/flows/explore/contract.md#EXPLORE-I1",
+      "binding_refs": [{ "path": "tests/contracts/flow-kind-policy.test.ts", "kind": "test_title" }]
     }
   ],
   "properties": [
     {
-      "id": "adapter.prop.custom_command_direct_exec_semantics",
-      "contract": "adapter",
-      "enforcement_state": "phase2-property",
+      "id": "connector.prop.custom_command_direct_exec_semantics",
+      "contract": "connector",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id under tests/properties/visible/"
     },
     {
-      "id": "adapter.prop.custom_command_environment_isolation",
-      "contract": "adapter",
-      "enforcement_state": "phase2-property",
+      "id": "connector.prop.custom_command_environment_isolation",
+      "contract": "connector",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
-      "id": "adapter.prop.registry_closure_preserved_under_config_merge",
-      "contract": "adapter",
-      "enforcement_state": "phase2-property",
+      "id": "connector.prop.registry_closure_preserved_under_config_merge",
+      "contract": "connector",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
-      "id": "adapter.prop.reserved_name_disjointness_across_layer_merge",
-      "contract": "adapter",
-      "enforcement_state": "phase2-property",
+      "id": "connector.prop.reserved_name_disjointness_across_layer_merge",
+      "contract": "connector",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
-      "id": "adapter.prop.resolution_is_total_and_first_match_wins",
-      "contract": "adapter",
-      "enforcement_state": "phase2-property",
+      "id": "connector.prop.resolution_is_total_and_first_match_wins",
+      "contract": "connector",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
-      "id": "adapter.prop.resolved_from_agrees_with_resolution",
-      "contract": "adapter",
-      "enforcement_state": "phase2-property",
+      "id": "connector.prop.resolved_from_agrees_with_resolution",
+      "contract": "connector",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
@@ -950,21 +948,21 @@
     {
       "id": "config.prop.surplus_keys_rejected_transitively",
       "contract": "config",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
       "id": "config.prop.layered_composition_preserves_strictness",
       "contract": "config",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
-      "id": "config.prop.circuit_override_record_closed_under_workflow_id",
+      "id": "config.prop.circuit_override_record_closed_under_flow_id",
       "contract": "config",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
@@ -972,233 +970,233 @@
     {
       "id": "continuity.prop.boundary_own_property_defense",
       "contract": "continuity",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
       "id": "continuity.prop.discriminator_field_presence_closure",
       "contract": "continuity",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
       "id": "continuity.prop.index_dangling_reference_surfaces",
       "contract": "continuity",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
       "id": "continuity.prop.index_pointer_kind_matches_record",
       "contract": "continuity",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
       "id": "continuity.prop.index_pointer_roundtrip",
       "contract": "continuity",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
       "id": "continuity.prop.index_pointer_run_id_coherence",
       "contract": "continuity",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
       "id": "continuity.prop.mode_kind_coherence",
       "contract": "continuity",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
       "id": "continuity.prop.record_id_stem_roundtrip",
       "contract": "continuity",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
       "id": "continuity.prop.run_ref_matches_log_at_save",
       "contract": "continuity",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
       "id": "continuity.prop.safety_boolean_non_contradiction",
       "contract": "continuity",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
 
     {
-      "id": "phase.prop.canonical_phase_reachability",
-      "contract": "phase",
-      "enforcement_state": "phase2-property",
+      "id": "stage.prop.canonical_stage_reachability",
+      "contract": "stage",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
-      "id": "phase.prop.canonical_set_is_enum",
-      "contract": "phase",
-      "enforcement_state": "phase2-property",
+      "id": "stage.prop.canonical_set_is_enum",
+      "contract": "stage",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
-      "id": "phase.prop.every_step_has_a_phase",
-      "contract": "phase",
-      "enforcement_state": "phase2-property",
+      "id": "stage.prop.every_step_has_a_stage",
+      "contract": "stage",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
-      "id": "phase.prop.omits_disjoint_from_declared",
-      "contract": "phase",
-      "enforcement_state": "phase2-property",
+      "id": "stage.prop.omits_disjoint_from_declared",
+      "contract": "stage",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
-      "id": "phase.prop.omits_pairwise_unique",
-      "contract": "phase",
-      "enforcement_state": "phase2-property",
+      "id": "stage.prop.omits_pairwise_unique",
+      "contract": "stage",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
-      "id": "phase.prop.partial_requires_rationale",
-      "contract": "phase",
-      "enforcement_state": "phase2-property",
+      "id": "stage.prop.partial_requires_rationale",
+      "contract": "stage",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
-      "id": "phase.prop.review_semantic_adequacy",
-      "contract": "phase",
-      "enforcement_state": "phase2-property",
+      "id": "stage.prop.review_semantic_adequacy",
+      "contract": "stage",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
-      "id": "phase.prop.spine_partial_covers_complement",
-      "contract": "phase",
-      "enforcement_state": "phase2-property",
+      "id": "stage.prop.stage path_partial_covers_complement",
+      "contract": "stage",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
-      "id": "phase.prop.spine_strict_covers_all_seven",
-      "contract": "phase",
-      "enforcement_state": "phase2-property",
+      "id": "stage.prop.stage path_strict_covers_all_seven",
+      "contract": "stage",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
-      "id": "phase.prop.steps_closure",
-      "contract": "phase",
-      "enforcement_state": "phase2-property",
+      "id": "stage.prop.steps_closure",
+      "contract": "stage",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
-      "id": "phase.prop.unique_canonicals",
-      "contract": "phase",
-      "enforcement_state": "phase2-property",
+      "id": "stage.prop.unique_canonicals",
+      "contract": "stage",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
-      "id": "phase.prop.unique_ids",
-      "contract": "phase",
-      "enforcement_state": "phase2-property",
+      "id": "stage.prop.unique_ids",
+      "contract": "stage",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
-      "id": "phase.prop.verify_semantic_adequacy",
-      "contract": "phase",
-      "enforcement_state": "phase2-property",
+      "id": "stage.prop.verify_semantic_adequacy",
+      "contract": "stage",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
 
     {
-      "id": "run.prop.artifact_written_before_gate",
+      "id": "run.prop.report_written_before_check",
       "contract": "run",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
       "id": "run.prop.attempt_monotonicity_per_step",
       "contract": "run",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
       "id": "run.prop.boundary_own_property_defense",
       "contract": "run",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
-      "id": "run.prop.checkpoint_event_pairing",
+      "id": "run.prop.checkpoint_trace_entry_pairing",
       "contract": "run",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
       "id": "run.prop.close_outcome_semantic_adequacy",
       "contract": "run",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
       "id": "run.prop.deterministic_replay",
       "contract": "run",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
-      "id": "run.prop.dispatch_event_pairing",
+      "id": "run.prop.relay_trace_entry_pairing",
       "contract": "run",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
       "id": "run.prop.projection_is_a_function",
       "contract": "run",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
       "id": "run.prop.recorded_at_sanity",
       "contract": "run",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
-      "id": "run.prop.step_event_causal_ordering",
+      "id": "run.prop.step_trace_entry_causal_ordering",
       "contract": "run",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
@@ -1206,63 +1204,63 @@
     {
       "id": "selection.prop.config_layer_precompose_is_right_biased",
       "contract": "selection",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
       "id": "selection.prop.invocation_options_merge_is_right_biased",
       "contract": "selection",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
-      "id": "selection.prop.overlapping_phase_composition_well_defined",
+      "id": "selection.prop.overlapping_stage_composition_well_defined",
       "contract": "selection",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
       "id": "selection.prop.override_empty_roundtrip",
       "contract": "selection",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
-      "id": "selection.prop.phase_source_only_when_phase_declared_selection",
+      "id": "selection.prop.stage_source_only_when_stage_declared_selection",
       "contract": "selection",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
       "id": "selection.prop.precedence_const_parity",
       "contract": "selection",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
       "id": "selection.prop.resolved_matches_applied_composition",
       "contract": "selection",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
       "id": "selection.prop.resolved_skills_are_unique_and_order_is_documented",
       "contract": "selection",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
       "id": "selection.prop.skill_override_composition_total",
       "contract": "selection",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
@@ -1270,28 +1268,28 @@
     {
       "id": "skill.prop.descriptor_round_trips_through_json",
       "contract": "skill",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
       "id": "skill.prop.id_closure_under_selection",
       "contract": "skill",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
       "id": "skill.prop.id_is_unique_within_catalog",
       "contract": "skill",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
       "id": "skill.prop.trigger_is_advisory_not_grammar",
       "contract": "skill",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
@@ -1299,28 +1297,28 @@
     {
       "id": "step.prop.budget_bounds",
       "contract": "step",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
-      "id": "step.prop.dispatch_role_presence",
+      "id": "step.prop.relay_role_presence",
       "contract": "step",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
-      "id": "step.prop.gate_kind_source_kind_pairing",
+      "id": "step.prop.check_kind_source_kind_pairing",
       "contract": "step",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
     {
-      "id": "step.prop.gate_source_ref_closure",
+      "id": "step.prop.check_source_ref_closure",
       "contract": "step",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 29,
       "reopen_condition": "property harness (Slice 29) lands without registering this id"
     },
@@ -1331,7 +1329,7 @@
       "binding_refs": [
         { "path": "tests/properties/visible/step-paths-and-writes.test.ts", "kind": "test_title" }
       ],
-      "rationale": "Property test exercises the RunRelativePath Zod primitive across ~400 deterministic cases, varying along five disallowed-form axes (absolute prefix, backslash, drive-letter colon, '.'/'..'/empty segment, empty string) plus a sound-path bucket. Each axis has its own anti-vacuity floor so a silent generator regression would fail loudly. FU-T12."
+      "rationale": "Property test exercises the RunRelativePath Zod scalar across ~400 deterministic cases, varying along five disallowed-form axes (absolute prefix, backslash, drive-letter colon, '.'/'..'/empty segment, empty string) plus a sound-path bucket. Each axis has its own anti-vacuity floor so a silent generator regression would fail loudly. FU-T12."
     },
     {
       "id": "step.prop.writes_shape_per_variant",
@@ -1340,86 +1338,88 @@
       "binding_refs": [
         { "path": "tests/properties/visible/step-paths-and-writes.test.ts", "kind": "test_title" }
       ],
-      "rationale": "Property test drives surplus-key injection across the four step variants with declared writes records (synthesis, verification, dispatch, sub-run) over ~200 cases. Each variant has accept-and-reject anti-vacuity floors so the .strict() shape is exercised end-to-end. FU-T12."
+      "rationale": "Property test drives surplus-key injection across the four step variants with declared writes records (compose, verification, relay, sub-run) over ~200 cases. Each variant has accept-and-reject anti-vacuity floors so the .strict() shape is exercised end-to-end. FU-T12."
     },
 
     {
-      "id": "workflow.prop.entry_mode_reachability",
-      "contract": "workflow",
+      "id": "flow.prop.entry_mode_reachability",
+      "contract": "flow",
       "enforcement_state": "test-enforced",
       "binding_refs": [
-        { "path": "tests/properties/visible/workflow-graph-closure.test.ts", "kind": "test_title" }
+        { "path": "tests/properties/visible/flow-graph-closure.test.ts", "kind": "test_title" }
       ],
-      "rationale": "Property test exercises the WF-I2 closure: entry_modes[].start_at must resolve to a declared step id. Generator emits ~200 cases per branch via mulberry32, isolating this dimension while the chain base keeps every other workflow closure invariant satisfied. FU-T12."
+      "rationale": "Property test exercises the WF-I2 closure: entry_modes[].start_at must resolve to a declared step id. Generator emits ~200 cases per branch via mulberry32, isolating this dimension while the chain base keeps every other flow closure invariant satisfied. FU-T12."
     },
     {
-      "id": "workflow.prop.no_dead_steps",
-      "contract": "workflow",
+      "id": "flow.prop.no_dead_steps",
+      "contract": "flow",
       "enforcement_state": "test-enforced",
       "binding_refs": [
-        { "path": "tests/properties/visible/workflow-graph-closure.test.ts", "kind": "test_title" }
+        { "path": "tests/properties/visible/flow-graph-closure.test.ts", "kind": "test_title" }
       ],
-      "rationale": "Property test exercises the WF-I9 reachability law: every declared step must be reachable from some entry_mode.start_at via the routes graph. Generator pairs a chainBase (sound) with an injected orphan step (declared, in-phase, but no edge points at it) to drive ~200 cases per branch. FU-T12."
+      "rationale": "Property test exercises the WF-I9 reachability law: every declared step must be reachable from some entry_mode.start_at via the routes graph. Generator pairs a chainBase (sound) with an injected orphan step (declared, in-stage, but no edge points at it) to drive ~200 cases per branch. FU-T12."
     },
     {
-      "id": "workflow.prop.phase_step_closure",
-      "contract": "workflow",
+      "id": "flow.prop.stage_step_closure",
+      "contract": "flow",
       "enforcement_state": "test-enforced",
       "binding_refs": [
-        { "path": "tests/properties/visible/workflow-graph-closure.test.ts", "kind": "test_title" }
+        { "path": "tests/properties/visible/flow-graph-closure.test.ts", "kind": "test_title" }
       ],
-      "rationale": "Property test exercises the WF-I3 closure: every entry of phase.steps[] must resolve to a declared step id. Generator drives ~200 chainBase cases with optional ghost step id injected into phase.steps. FU-T12."
+      "rationale": "Property test exercises the WF-I3 closure: every entry of stage.steps[] must resolve to a declared step id. Generator drives ~200 chainBase cases with optional ghost step id injected into stage.steps. FU-T12."
     },
     {
-      "id": "workflow.prop.route_target_closure",
-      "contract": "workflow",
+      "id": "flow.prop.route_target_closure",
+      "contract": "flow",
       "enforcement_state": "test-enforced",
       "binding_refs": [
-        { "path": "tests/properties/visible/workflow-graph-closure.test.ts", "kind": "test_title" }
+        { "path": "tests/properties/visible/flow-graph-closure.test.ts", "kind": "test_title" }
       ],
       "rationale": "Property test exercises the WF-I4 closure: every pass-route target must be either a terminal label (@complete/@stop/@escalate/@handoff) or a declared step id. Generator drives ~200 chainBase cases with an optional unknown route target injected per case. FU-T12."
     },
     {
-      "id": "workflow.prop.terminal_target_coverage",
-      "contract": "workflow",
+      "id": "flow.prop.terminal_target_coverage",
+      "contract": "flow",
       "enforcement_state": "test-enforced",
       "binding_refs": [
-        { "path": "tests/properties/visible/workflow-graph-closure.test.ts", "kind": "test_title" }
+        { "path": "tests/properties/visible/flow-graph-closure.test.ts", "kind": "test_title" }
       ],
       "rationale": "Property test exercises the WF-I8 reachability law: every declared step must reach some terminal route target via its pass-route chain. Generator drives ~200 chainBase cases, optionally introducing a self-loop on a non-last step (which both severs WF-I8 and trips WF-I11 — the assertion accepts either citation). FU-T12."
     },
     {
-      "id": "explore.prop.canonical_phase_set_is_correct",
+      "id": "explore.prop.canonical_stage_set_is_correct",
       "contract": "explore",
       "enforcement_state": "test-enforced",
-      "source_anchor": "src/workflows/explore/contract.md#EXPLORE-I1",
-      "binding_refs": [{ "path": "tests/contracts/spine-coverage.test.ts", "kind": "test_title" }]
+      "source_anchor": "src/flows/explore/contract.md#EXPLORE-I1",
+      "binding_refs": [
+        { "path": "tests/contracts/stage path-coverage.test.ts", "kind": "test_title" }
+      ]
     },
     {
-      "id": "explore.prop.artifact_emission_ordered",
+      "id": "explore.prop.report_emission_ordered",
       "contract": "explore",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 38,
       "reopen_condition": "P2.5 end-to-end explore fixture test (projected slice 38+) lands without registering this property id via test-title binding; reopen to re-evaluate deferral"
     },
     {
-      "id": "explore.prop.review_after_synthesis",
+      "id": "explore.prop.review_after_compose",
       "contract": "explore",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 38,
       "reopen_condition": "P2.5 end-to-end explore fixture test (projected slice 38+) lands without registering this property id via test-title binding; reopen to re-evaluate deferral"
     },
     {
       "id": "explore.prop.no_skip_to_close",
       "contract": "explore",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 38,
       "reopen_condition": "P2.5 end-to-end explore fixture test (projected slice 38+) lands without registering this property id via test-title binding; reopen to re-evaluate deferral"
     },
     {
       "id": "explore.prop.reachable_close_only_via_review",
       "contract": "explore",
-      "enforcement_state": "phase2-property",
+      "enforcement_state": "stage2-property",
       "target_slice": 38,
       "reopen_condition": "P2.5 end-to-end explore fixture test (projected slice 38+) lands without registering this property id via test-title binding; reopen to re-evaluate deferral"
     }

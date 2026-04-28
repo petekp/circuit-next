@@ -1,42 +1,44 @@
-// Tests the pure derivation helpers that turn workflow packages into
+// Tests the pure derivation helpers that turn flow packages into
 // engine registries. Synthetic mini-catalogs let us exercise the
 // duplicate-detection and default-package invariants in isolation
-// without touching the real workflow set.
+// without touching the real flow set.
 
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
+import type { CompiledFlowPackage } from '../../src/flows/types.js';
 import {
-  buildArtifactSchemaRegistry,
   buildCheckpointRegistry,
   buildCloseRegistry,
+  buildComposeRegistry,
+  buildReportSchemaRegistry,
   buildRoutablePackages,
   buildSchemaHintMap,
   buildStructuralHintList,
-  buildSynthesisRegistry,
   buildVerificationRegistry,
   findDefaultRoutablePackage,
 } from '../../src/runtime/catalog-derivations.js';
 import type { CheckpointBriefBuilder } from '../../src/runtime/registries/checkpoint-writers/types.js';
 import type { CloseBuilder } from '../../src/runtime/registries/close-writers/types.js';
+import type { ComposeBuilder } from '../../src/runtime/registries/compose-writers/types.js';
 import type { StructuralShapeHint } from '../../src/runtime/registries/shape-hints/types.js';
-import type { SynthesisBuilder } from '../../src/runtime/registries/synthesis-writers/types.js';
 import type { VerificationBuilder } from '../../src/runtime/registries/verification-writers/types.js';
-import type { WorkflowPackage } from '../../src/workflows/types.js';
 
-function fakePackage(opts: Partial<WorkflowPackage> & { readonly id: string }): WorkflowPackage {
+function fakePackage(
+  opts: Partial<CompiledFlowPackage> & { readonly id: string },
+): CompiledFlowPackage {
   return {
     id: opts.id,
     paths: opts.paths ?? { schematic: `synthetic/${opts.id}.schematic.json` },
     ...(opts.routing === undefined ? {} : { routing: opts.routing }),
-    dispatchArtifacts: opts.dispatchArtifacts ?? [],
-    writers: opts.writers ?? { synthesis: [], close: [], verification: [], checkpoint: [] },
+    relayReports: opts.relayReports ?? [],
+    writers: opts.writers ?? { compose: [], close: [], verification: [], checkpoint: [] },
     ...(opts.structuralHints === undefined ? {} : { structuralHints: opts.structuralHints }),
     ...(opts.engineFlags === undefined ? {} : { engineFlags: opts.engineFlags }),
   };
 }
 
-const fakeSynthesisBuilder = (schema: string): SynthesisBuilder => ({
+const fakeComposeBuilder = (schema: string): ComposeBuilder => ({
   resultSchemaName: schema,
   build: () => ({}),
 });
@@ -66,12 +68,12 @@ const fakeStructuralHint = (id: string): StructuralShapeHint => ({
 });
 
 describe('catalog-derivations: builder registries', () => {
-  it('flattens synthesis builders across packages by resultSchemaName', () => {
+  it('flattens compose builders across packages by resultSchemaName', () => {
     const packages = [
       fakePackage({
         id: 'a',
         writers: {
-          synthesis: [fakeSynthesisBuilder('a.one@v1'), fakeSynthesisBuilder('a.two@v1')],
+          compose: [fakeComposeBuilder('a.one@v1'), fakeComposeBuilder('a.two@v1')],
           close: [],
           verification: [],
           checkpoint: [],
@@ -80,26 +82,26 @@ describe('catalog-derivations: builder registries', () => {
       fakePackage({
         id: 'b',
         writers: {
-          synthesis: [fakeSynthesisBuilder('b.one@v1')],
+          compose: [fakeComposeBuilder('b.one@v1')],
           close: [],
           verification: [],
           checkpoint: [],
         },
       }),
     ];
-    const registry = buildSynthesisRegistry(packages);
+    const registry = buildComposeRegistry(packages);
     expect(registry.size).toBe(3);
     expect(registry.get('a.one@v1')).toBeDefined();
     expect(registry.get('a.two@v1')).toBeDefined();
     expect(registry.get('b.one@v1')).toBeDefined();
   });
 
-  it('throws when two packages register synthesis builders for the same schema', () => {
+  it('throws when two packages register compose builders for the same schema', () => {
     const packages = [
       fakePackage({
         id: 'a',
         writers: {
-          synthesis: [fakeSynthesisBuilder('shared@v1')],
+          compose: [fakeComposeBuilder('shared@v1')],
           close: [],
           verification: [],
           checkpoint: [],
@@ -108,15 +110,15 @@ describe('catalog-derivations: builder registries', () => {
       fakePackage({
         id: 'b',
         writers: {
-          synthesis: [fakeSynthesisBuilder('shared@v1')],
+          compose: [fakeComposeBuilder('shared@v1')],
           close: [],
           verification: [],
           checkpoint: [],
         },
       }),
     ];
-    expect(() => buildSynthesisRegistry(packages)).toThrow(
-      /duplicate synthesis builder registered for schema 'shared@v1' \(workflow b\)/,
+    expect(() => buildComposeRegistry(packages)).toThrow(
+      /duplicate compose builder registered for schema 'shared@v1' \(flow b\)/,
     );
   });
 
@@ -125,7 +127,7 @@ describe('catalog-derivations: builder registries', () => {
       fakePackage({
         id: 'a',
         writers: {
-          synthesis: [],
+          compose: [],
           close: [fakeCloseBuilder('shared.result@v1')],
           verification: [],
           checkpoint: [],
@@ -134,7 +136,7 @@ describe('catalog-derivations: builder registries', () => {
       fakePackage({
         id: 'b',
         writers: {
-          synthesis: [],
+          compose: [],
           close: [fakeCloseBuilder('shared.result@v1')],
           verification: [],
           checkpoint: [],
@@ -149,7 +151,7 @@ describe('catalog-derivations: builder registries', () => {
       fakePackage({
         id: 'a',
         writers: {
-          synthesis: [],
+          compose: [],
           close: [],
           verification: [fakeVerificationBuilder('v@v1')],
           checkpoint: [],
@@ -158,7 +160,7 @@ describe('catalog-derivations: builder registries', () => {
       fakePackage({
         id: 'b',
         writers: {
-          synthesis: [],
+          compose: [],
           close: [],
           verification: [fakeVerificationBuilder('v@v1')],
           checkpoint: [],
@@ -173,7 +175,7 @@ describe('catalog-derivations: builder registries', () => {
       fakePackage({
         id: 'a',
         writers: {
-          synthesis: [],
+          compose: [],
           close: [],
           verification: [],
           checkpoint: [fakeCheckpointBuilder('c@v1')],
@@ -182,7 +184,7 @@ describe('catalog-derivations: builder registries', () => {
       fakePackage({
         id: 'b',
         writers: {
-          synthesis: [],
+          compose: [],
           close: [],
           verification: [],
           checkpoint: [fakeCheckpointBuilder('c@v1')],
@@ -193,15 +195,15 @@ describe('catalog-derivations: builder registries', () => {
   });
 });
 
-describe('catalog-derivations: artifact schema registry', () => {
-  it('combines fixtures and per-package dispatch artifacts', () => {
+describe('catalog-derivations: report schema registry', () => {
+  it('combines fixtures and per-package relay reports', () => {
     const fixture = z.object({ verdict: z.string() });
     const real = z.object({ verdict: z.string(), summary: z.string() });
-    const registry = buildArtifactSchemaRegistry(
+    const registry = buildReportSchemaRegistry(
       [
         fakePackage({
           id: 'a',
-          dispatchArtifacts: [{ schemaName: 'a.one@v1', schema: real }],
+          relayReports: [{ schemaName: 'a.one@v1', schema: real }],
         }),
       ],
       { 'fixture@v1': fixture },
@@ -216,47 +218,47 @@ describe('catalog-derivations: artifact schema registry', () => {
     const packages = [
       fakePackage({
         id: 'a',
-        dispatchArtifacts: [{ schemaName: 'shared@v1', schema }],
+        relayReports: [{ schemaName: 'shared@v1', schema }],
       }),
       fakePackage({
         id: 'b',
-        dispatchArtifacts: [{ schemaName: 'shared@v1', schema }],
+        relayReports: [{ schemaName: 'shared@v1', schema }],
       }),
     ];
-    expect(() => buildArtifactSchemaRegistry(packages, {})).toThrow(
-      /duplicate dispatch artifact schema 'shared@v1' registered \(workflow b\)/,
+    expect(() => buildReportSchemaRegistry(packages, {})).toThrow(
+      /duplicate relay report schema 'shared@v1' registered \(flow b\)/,
     );
   });
 
-  it('throws on collision between fixtures and a package artifact', () => {
+  it('throws on collision between fixtures and a package report', () => {
     const schema = z.object({ verdict: z.string() });
     expect(() =>
-      buildArtifactSchemaRegistry(
+      buildReportSchemaRegistry(
         [
           fakePackage({
             id: 'a',
-            dispatchArtifacts: [{ schemaName: 'fixture@v1', schema }],
+            relayReports: [{ schemaName: 'fixture@v1', schema }],
           }),
         ],
         { 'fixture@v1': schema },
       ),
-    ).toThrow(/duplicate dispatch artifact schema 'fixture@v1'/);
+    ).toThrow(/duplicate relay report schema 'fixture@v1'/);
   });
 
   it('returns a frozen map', () => {
-    const registry = buildArtifactSchemaRegistry([], {});
+    const registry = buildReportSchemaRegistry([], {});
     expect(Object.isFrozen(registry)).toBe(true);
   });
 });
 
 describe('catalog-derivations: schema and structural hint maps', () => {
-  it('maps schema name to dispatchHint and skips artifacts with no hint', () => {
+  it('maps schema name to relayHint and skips reports with no hint', () => {
     const schema = z.object({ verdict: z.string() });
     const packages = [
       fakePackage({
         id: 'a',
-        dispatchArtifacts: [
-          { schemaName: 'with-hint@v1', schema, dispatchHint: 'use this shape' },
+        relayReports: [
+          { schemaName: 'with-hint@v1', schema, relayHint: 'use this shape' },
           { schemaName: 'no-hint@v1', schema },
         ],
       }),
@@ -272,15 +274,15 @@ describe('catalog-derivations: schema and structural hint maps', () => {
     const packages = [
       fakePackage({
         id: 'a',
-        dispatchArtifacts: [{ schemaName: 'shared@v1', schema, dispatchHint: 'a' }],
+        relayReports: [{ schemaName: 'shared@v1', schema, relayHint: 'a' }],
       }),
       fakePackage({
         id: 'b',
-        dispatchArtifacts: [{ schemaName: 'shared@v1', schema, dispatchHint: 'b' }],
+        relayReports: [{ schemaName: 'shared@v1', schema, relayHint: 'b' }],
       }),
     ];
     expect(() => buildSchemaHintMap(packages)).toThrow(
-      /duplicate shape hint registered for schema 'shared@v1' \(workflow b\)/,
+      /duplicate shape hint registered for schema 'shared@v1' \(flow b\)/,
     );
   });
 
@@ -299,7 +301,7 @@ describe('catalog-derivations: schema and structural hint maps', () => {
       fakePackage({ id: 'b', structuralHints: [fakeStructuralHint('shared@v1')] }),
     ];
     expect(() => buildStructuralHintList(packages)).toThrow(
-      /duplicate structural shape hint id 'shared@v1' \(workflow b\)/,
+      /duplicate structural shape hint id 'shared@v1' \(flow b\)/,
     );
   });
 });
@@ -351,9 +353,7 @@ describe('catalog-derivations: routable packages and default selection', () => {
         },
       }),
     ]);
-    expect(() => findDefaultRoutablePackage(routables)).toThrow(
-      /no workflow package marked isDefault/,
-    );
+    expect(() => findDefaultRoutablePackage(routables)).toThrow(/no flow package marked isDefault/);
   });
 
   it('throws when more than one routable package is marked isDefault', () => {
@@ -380,7 +380,7 @@ describe('catalog-derivations: routable packages and default selection', () => {
       }),
     ]);
     expect(() => findDefaultRoutablePackage(routables)).toThrow(
-      /more than one default workflow package: a, b/,
+      /more than one default flow package: a, b/,
     );
   });
 
@@ -407,57 +407,57 @@ describe('catalog-derivations: routable packages and default selection', () => {
 });
 
 describe('catalog-derivations: real catalog invariants', () => {
-  // These run against the actual src/workflows/catalog.ts so the
+  // These run against the actual src/flows/catalog.ts so the
   // behavioral guarantees apply to the live engine state, not just
   // synthetic fixtures.
   it('the live catalog has exactly one isDefault routable package', async () => {
-    const { workflowPackages } = await import('../../src/workflows/catalog.js');
-    const routables = buildRoutablePackages(workflowPackages);
+    const { flowPackages } = await import('../../src/flows/catalog.js');
+    const routables = buildRoutablePackages(flowPackages);
     const defaults = routables.filter((r) => r.routing.isDefault === true);
     expect(defaults).toHaveLength(1);
     expect(defaults[0]?.pkg.id).toBe('explore');
   });
 
-  it('the live catalog has no duplicate workflow ids', async () => {
-    const { workflowPackages } = await import('../../src/workflows/catalog.js');
-    const ids = workflowPackages.map((p) => p.id);
+  it('the live catalog has no duplicate flow ids', async () => {
+    const { flowPackages } = await import('../../src/flows/catalog.js');
+    const ids = flowPackages.map((p) => p.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('the live catalog has no duplicate dispatch artifact schema names', async () => {
-    const { workflowPackages } = await import('../../src/workflows/catalog.js');
-    // buildArtifactSchemaRegistry would throw if there were duplicates.
+  it('the live catalog has no duplicate relay report schema names', async () => {
+    const { flowPackages } = await import('../../src/flows/catalog.js');
+    // buildReportSchemaRegistry would throw if there were duplicates.
     // This is a smoke that the live state hasn't drifted into a broken
     // shape.
-    expect(() => buildArtifactSchemaRegistry(workflowPackages, {})).not.toThrow();
+    expect(() => buildReportSchemaRegistry(flowPackages, {})).not.toThrow();
   });
 
   it('every catalog writer resolves through its registry by resultSchemaName', async () => {
-    // Phase 4 audit gap: the architecture-boundary test is purely
+    // Stage 4 audit gap: the architecture-boundary test is purely
     // static. This is the runtime parity check — for every writer
-    // declared on a WorkflowPackage, the live registry's find function
+    // declared on a CompiledFlowPackage, the live registry's find function
     // returns exactly that builder. Catches: a writer accidentally
     // dropped from a registry-build path; a registry that returns a
     // different instance (identity matters because the runner uses
     // builder methods directly).
-    const { workflowPackages } = await import('../../src/workflows/catalog.js');
+    const { flowPackages } = await import('../../src/flows/catalog.js');
 
     // Floor: at least 6 packages and at least one writer overall, so
     // the for-loop body must execute. Without this the test would
     // pass vacuously against an emptied catalog or empty writer arrays.
-    expect(workflowPackages.length).toBeGreaterThanOrEqual(6);
-    const totalWriters = workflowPackages.reduce(
+    expect(flowPackages.length).toBeGreaterThanOrEqual(6);
+    const totalWriters = flowPackages.reduce(
       (n, pkg) =>
         n +
-        pkg.writers.synthesis.length +
+        pkg.writers.compose.length +
         pkg.writers.close.length +
         pkg.writers.verification.length +
         pkg.writers.checkpoint.length,
       0,
     );
     expect(totalWriters).toBeGreaterThan(0);
-    const { findSynthesisBuilder } = await import(
-      '../../src/runtime/registries/synthesis-writers/registry.js'
+    const { findComposeBuilder } = await import(
+      '../../src/runtime/registries/compose-writers/registry.js'
     );
     const { findCloseBuilder } = await import(
       '../../src/runtime/registries/close-writers/registry.js'
@@ -469,29 +469,29 @@ describe('catalog-derivations: real catalog invariants', () => {
       '../../src/runtime/registries/checkpoint-writers/registry.js'
     );
 
-    for (const pkg of workflowPackages) {
-      for (const builder of pkg.writers.synthesis) {
+    for (const pkg of flowPackages) {
+      for (const builder of pkg.writers.compose) {
         expect(
-          findSynthesisBuilder(builder.resultSchemaName),
-          `synthesis builder for ${builder.resultSchemaName} (workflow ${pkg.id}) does not resolve`,
+          findComposeBuilder(builder.resultSchemaName),
+          `compose builder for ${builder.resultSchemaName} (flow ${pkg.id}) does not resolve`,
         ).toBe(builder);
       }
       for (const builder of pkg.writers.close) {
         expect(
           findCloseBuilder(builder.resultSchemaName),
-          `close builder for ${builder.resultSchemaName} (workflow ${pkg.id}) does not resolve`,
+          `close builder for ${builder.resultSchemaName} (flow ${pkg.id}) does not resolve`,
         ).toBe(builder);
       }
       for (const builder of pkg.writers.verification) {
         expect(
           findVerificationWriter(builder.resultSchemaName),
-          `verification builder for ${builder.resultSchemaName} (workflow ${pkg.id}) does not resolve`,
+          `verification builder for ${builder.resultSchemaName} (flow ${pkg.id}) does not resolve`,
         ).toBe(builder);
       }
       for (const builder of pkg.writers.checkpoint) {
         expect(
           findCheckpointBriefBuilder(builder.resultSchemaName),
-          `checkpoint builder for ${builder.resultSchemaName} (workflow ${pkg.id}) does not resolve`,
+          `checkpoint builder for ${builder.resultSchemaName} (flow ${pkg.id}) does not resolve`,
         ).toBe(builder);
       }
     }
