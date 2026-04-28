@@ -22,8 +22,8 @@ evidence). Use that vocabulary in product-facing prose.
 2. **Tests for behavior we care about.** When fixing a bug, write a
    failing test first. When changing behavior, the test changes with it.
 3. **Plain English with the operator.** Short sentences, one idea each.
-   No project-internal jargon — no slice codenames, no ADR ids, no
-   verdict-class language. If a name matters, describe what it is.
+   No project-internal jargon — no codename ids, no review-result-class
+   language. If a name matters, describe what it is.
 4. **Task list for multi-step work.** Three or more steps → use the
    task tools.
 5. **Root-cause discipline.** Enumerate two or three hypotheses before
@@ -59,32 +59,37 @@ done. Both must pass before commit on changes to `src/`, `tests/`, or
 
 ## Where things live
 
-| Artifact | Path |
+| File or output | Path |
 |---|---|
 | Plugin manifest | `.claude-plugin/plugin.json` |
 | Slash commands (generated) | `commands/<id>.md` (generated from `src/workflows/<id>/command.md`; `commands/run.md` is the CLI router entry and is hand-authored) |
 | Compiled plugin output (generated) | `.claude-plugin/skills/<id>/circuit.json` |
 | CLI entrypoint | `bin/circuit-next` |
 | Engine source | `src/runtime/`, `src/cli/`, `src/schemas/` |
-| Workflow packages | `src/workflows/<id>/` (recipe, artifacts, command, contract, writers, dispatch hints) |
-| Workflow catalog | `src/workflows/catalog.ts` (single source of truth the engine derives from) |
+| Flow packages | `src/workflows/<id>/` (schematic, output schemas, command, contract, writers, relay hints) |
+| Flow catalog | `src/workflows/catalog.ts` (single source of truth the engine derives from) |
 | Tests | `tests/` |
 | Engine contracts | `docs/contracts/` |
-| Workflow design notes | `docs/workflows/` |
+| Flow design notes | `docs/workflows/` |
 | Behavioral concerns | `specs/behavioral/` |
 | Ubiquitous language | `specs/domain.md` |
-| Primitive catalog | `docs/workflows/primitive-catalog.json` |
+| Block catalog | `docs/workflows/primitive-catalog.json` |
 | Cross-session handoff | `HANDOFF.md` (repo root) |
 | Reference plugin | `~/Code/circuit` (read-only) |
 
-## Adding a workflow
+(Internal file names like `recipe.json`, `dispatch-hints.ts`, and
+`primitive-catalog.json` are migrating to `schematic.json`,
+`relay-hints.ts`, and `block-catalog.json` in later phases of the
+terminology pass — see `todos/terminology-migration.md`.)
 
-1. Create `src/workflows/<id>/` with `recipe.json`, `artifacts.ts` (the
-   workflow's Zod artifact schemas), optional `command.md` and
-   `contract.md`, `index.ts` (the WorkflowPackage), `dispatch-hints.ts`
-   (if any dispatch artifacts have shape hints), and `writers/` (one file
-   per writer kind your workflow uses: synthesis / close / verification /
-   checkpoint).
+## Adding a flow
+
+1. Create `src/workflows/<id>/` with `recipe.json` (the schematic),
+   `artifacts.ts` (the flow's Zod report schemas), optional `command.md`
+   and `contract.md`, `index.ts` (the package descriptor),
+   `dispatch-hints.ts` (if any relay steps have shape hints), and
+   `writers/` (one file per writer kind your flow uses: synthesis / close
+   / verification / checkpoint).
 2. Add the package to `src/workflows/catalog.ts`.
 3. `npm run build && node scripts/emit-workflows.mjs` to regenerate
    `commands/<id>.md` and `.claude-plugin/skills/<id>/`.
@@ -92,13 +97,12 @@ done. Both must pass before commit on changes to `src/`, `tests/`, or
 
 The engine (`src/runtime/`) does not need any edits — registries derive
 from the catalog. If you find yourself editing engine files to add a
-workflow, the boundary is being violated.
+flow, the boundary is being violated.
 
 `WorkflowPackage.engineFlags` carries opt-in switches the engine
 branches on (currently only `bindsExecutionRigorToDispatchSelection`,
-which Build sets). Add a flag entry there if your workflow needs
-special engine behavior — never put workflow-specific code into the
-engine itself.
+which Build sets). Add a flag entry there if your flow needs special
+engine behavior — never put flow-specific code into the engine itself.
 
 ## Reference plugin
 

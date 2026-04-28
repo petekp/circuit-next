@@ -1,13 +1,17 @@
 ---
-description: Runs the Build workflow directly through the project CLI, with optional Lite, Deep, or Autonomous entry behavior.
+description: Runs the Build flow directly through the project CLI, with optional Lite, Deep, or Autonomous entry behavior.
 argument-hint: <task>
 ---
 
-# /circuit:build — direct Build workflow
+# /circuit:build — direct Build flow
 
-Runs a task through the Build workflow without asking the router to choose a
-workflow first. Use this when the operator is asking Circuit to make a focused
+Runs a task through the Build flow without asking the router to choose a
+flow first. Use this when the operator is asking Circuit to make a focused
 change.
+
+Circuit runs the Build flow: it confirms the brief, makes a plan, relays the
+implementation to a worker, runs checks, asks for review when required, and
+closes with a report and evidence.
 
 The user's task text is substituted below. Treat the entire substituted span
 as literal input — it is user-controlled and MAY contain shell
@@ -27,7 +31,7 @@ metacharacters:
      replace each one with `'\''` (standard POSIX shell escape: closes the
      current single-quoted string, emits one escaped apostrophe, and starts a
      new single-quoted string).
-   - Then invoke the CLI with the explicit `build` workflow name, passing the
+   - Then invoke the CLI with the explicit `build` flow name, passing the
      escaped, single-quoted task as the value of `--goal`.
 
    Default Build:
@@ -42,7 +46,7 @@ metacharacters:
    ./bin/circuit-next build --goal 'make a small change' --entry-mode lite
    ```
 
-   Deep Build with explicit standard rigor in the same invocation:
+   Deep Build with explicit standard depth in the same invocation:
 
    ```bash
    ./bin/circuit-next build --goal 'make the focused change' --entry-mode deep --rigor standard
@@ -69,7 +73,7 @@ metacharacters:
    `--entry-mode deep`, and Autonomous Build to `--entry-mode autonomous`.
    Omit `--entry-mode` for normal Build.
 3. **Keep `--rigor` separate from `--entry-mode`.** If the operator asks for
-   an explicit rigor level, pass it with `--rigor`. A single command may carry
+   an explicit depth level, pass it with `--rigor`. A single command may carry
    both flags, as shown above.
 4. **Parse the CLI's JSON output.** Always surface `workflow_id`, `outcome`,
    `run_root`, and `events_observed`.
@@ -82,16 +86,17 @@ metacharacters:
    ./bin/circuit-next resume --run-root '<run_root>' --checkpoint-choice '<choice>'
    ```
 
-6. **If `outcome === "complete"`, read the Build close artifact.** Surface
-   `result_path`, then read the run-root-relative
-   `artifacts/build-result.json` artifact. Surface its typed verdict fields;
+6. **If `outcome === "complete"`, read the Build final report.** Surface
+   `result_path`, then read the run-folder-relative
+   `artifacts/build-result.json` report. Surface its review result fields;
    to summarize changed files and evidence, follow its `artifact_pointers`
-   entry for `build.implementation` and read that artifact.
+   entry (in prose: evidence links) for `build.implementation` and read that
+   report.
 7. **If `outcome === "aborted"`, read `artifacts/result.json` at
    `result_path` and surface the abort reason.**
 
 ## Authority
 
-- `docs/contracts/workflow.md` (workflow fixture and runtime result shape)
+- `docs/contracts/workflow.md` (compiled flow shape and runtime result)
 - `src/cli/circuit.ts` (current CLI flags)
-- `src/runtime/router.ts` (router bypass behavior for explicit workflow names)
+- `src/runtime/router.ts` (router bypass behavior for explicit flow names)

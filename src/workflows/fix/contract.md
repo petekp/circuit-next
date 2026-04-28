@@ -4,7 +4,7 @@ status: draft
 version: 0.1
 schema_source: src/workflows/fix/artifacts.ts
 reference_evidence: specs/reference/legacy-circuit/repair-characterization.md
-last_updated: 2026-04-25
+last_updated: 2026-04-28
 depends_on: [workflow, workflow-primitives, workflow-recipe, step, adapter]
 artifact_ids:
   - fix.brief
@@ -19,36 +19,36 @@ invariant_ids: []
 property_ids: []
 ---
 
-# Fix Artifact Contract
+# Fix Report Contract
 
 Fix is the clearer v1 successor to the old Repair evidence. Its job is to take
 a concrete problem, understand it, make the smallest safe change, prove it, and
 close with evidence.
 
-This contract starts as the artifact home for the Fix recipe draft. It does not
-wire a runnable Fix command or runtime behavior.
+This contract starts as the typed-output home for the Fix schematic draft. It
+does not wire a runnable Fix command or runtime behavior.
 
-| Artifact | Role | Backing path |
+| Report | Role | Backing path |
 |---|---|---|
-| `fix.brief` | Problem boundary and proof target | `<run-root>/artifacts/fix/brief.json` |
-| `fix.context` | Evidence gathered before diagnosis | `<run-root>/artifacts/fix/context.json` |
-| `fix.diagnosis` | Cause, reproduction status, and uncertainty | `<run-root>/artifacts/fix/diagnosis.json` |
-| `fix.no-repro-decision` | Operator or mode-policy choice when evidence is uncertain | `<run-root>/artifacts/fix/no-repro-decision.json` |
-| `fix.change` | Focused change evidence | `<run-root>/artifacts/fix/change.json` |
-| `fix.verification` | Executed proof evidence | `<run-root>/artifacts/fix/verification.json` |
-| `fix.review` | Independent review result when the mode requires it | `<run-root>/artifacts/fix/review.json` |
-| `fix.result` | Close summary | `<run-root>/artifacts/fix-result.json` |
+| `fix.brief` | Problem boundary and proof target | `<run-folder>/artifacts/fix/brief.json` |
+| `fix.context` | Evidence gathered before diagnosis | `<run-folder>/artifacts/fix/context.json` |
+| `fix.diagnosis` | Cause, reproduction status, and uncertainty | `<run-folder>/artifacts/fix/diagnosis.json` |
+| `fix.no-repro-decision` | Operator or mode-policy choice when evidence is uncertain | `<run-folder>/artifacts/fix/no-repro-decision.json` |
+| `fix.change` | Focused change evidence | `<run-folder>/artifacts/fix/change.json` |
+| `fix.verification` | Executed proof evidence | `<run-folder>/artifacts/fix/verification.json` |
+| `fix.review` | Independent review result when the mode requires it | `<run-folder>/artifacts/fix/review.json` |
+| `fix.result` | Close summary | `<run-folder>/artifacts/fix-result.json` |
 
-Fix role artifacts live under `artifacts/fix/` so they do not collide with
-Explore, Review, or Build artifacts. The workflow-specific Fix result is
+Fix role outputs live under `artifacts/fix/` so they do not collide with
+Explore, Review, or Build outputs. The flow-specific Fix result file is
 `artifacts/fix-result.json`; the universal engine result remains
 `artifacts/result.json`.
 
-Any persisted path carried inside a Fix artifact is treated as a
-`RunRelativePath`-style value: it must stay inside the run root and must not
+Any persisted path carried inside a Fix report is treated as a
+`RunRelativePath`-style value: it must stay inside the run folder and must not
 use absolute, home-directory, parent-directory, Windows absolute, or UNC path
 forms. This applies to context source refs, diagnosis refs, verification command
-ids, and result artifact pointers registered as path-derived fields in the
+ids, and evidence-link fields registered as path-derived fields in the
 authority graph.
 
 `fix.verification@v1` carries direct-argv verification results and reuses the
@@ -61,15 +61,15 @@ cleanly reproduced, it must carry residual uncertainty instead of closing as if
 the problem were proven.
 
 `fix.brief@v1` carries a regression contract: expected behavior, actual
-behavior, a reproduction command or recipe when available, and either a
+behavior, a reproduction command or schematic when available, and either a
 failing-before-fix regression test or an explicit deferral reason when the bug
 is not yet reproducible.
 
 `fix.result@v1` cannot report `fixed` unless verification passed and the
 regression contract is proved. A `not-reproduced` result must point at the
-human-decision artifact that records how the run chose to stop or continue.
+human-decision report that records how the run chose to stop or continue.
 
 Independent review is conditional. When review runs, `fix.result@v1` must carry
-a review verdict and a pointer to `fix.review`. When review is skipped, the
+a review result and a pointer to `fix.review`. When review is skipped, the
 result must carry explicit skipped-review evidence instead of fabricating a
-review artifact pointer.
+review-result evidence link.

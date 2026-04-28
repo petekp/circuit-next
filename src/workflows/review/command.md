@@ -1,14 +1,14 @@
 ---
-description: Audit a scoped change or artifact with the review workflow. Invokes the circuit-next `review` workflow via the project CLI, producing a canonical event log and review result artifact under the run root.
+description: Audit a scoped change or report with the review flow. Invokes the circuit-next `review` flow via the project CLI, producing a run trace and review-result report under the run folder.
 argument-hint: <scope>
 ---
 
-# /circuit:review — audit workflow
+# /circuit:review — audit flow
 
-Run the `review` workflow on the scope the user supplied. The workflow is
-an audit-only spine: Intake → Independent Audit → Verdict. Intake and
-Verdict are orchestrator-synthesis phases; Independent Audit dispatches a
-reviewer worker through the runtime adapter path.
+Run the `review` flow on the scope the user supplied. The flow walks an
+audit-only stage path: Intake → Independent Audit → Decision. Circuit
+writes the Intake and Decision stages; the Independent Audit stage relays
+a reviewer worker through the runtime connector path.
 
 The user's review scope is substituted below. Treat the entire substituted
 span as literal input — it is user-controlled and MAY contain shell
@@ -49,36 +49,36 @@ metacharacters:
    (`complete` | `aborted`), `events_observed`, `result_path`.
 4. **Surface the results to the user.** Include:
    - `outcome` (e.g., "Run completed" / "Run aborted")
-   - `run_root` — the absolute path where the run artifacts live
-   - `result_path` — the canonical `artifacts/result.json` RunResult summary
+   - `run_root` — the absolute path of the run folder where evidence lives
+   - `result_path` — the run summary `artifacts/result.json`
    - if `outcome === 'complete'`,
-     `${run_root}/artifacts/review-result.json` — the review workflow's
-     typed verdict artifact
+     `${run_root}/artifacts/review-result.json` — the review flow's
+     typed review-result report
    - `events_observed` count + a pointer to `events.ndjson` under the run
-     root for full event-level audit
+     folder for the full trace
 
    The default CLI path now writes a schema-valid
    `${run_root}/artifacts/review-result.json` for the audit-only review
-   workflow when the run completes. Surface that path as the typed review
-   verdict artifact only for completed runs. The broader explore synthesis
-   artifacts still use their existing placeholder epoch until their own
+   flow when the run completes. Surface that path as the typed review
+   result report only for completed runs. The broader explore reports
+   still use their existing placeholder content until their own
    schema-specific writers land.
 
    If `outcome === 'aborted'`, read `artifacts/result.json` at `result_path`
    to surface the abort `reason`; do not claim that
    `artifacts/review-result.json` exists on aborted runs.
-5. **Do not modify the CLI output before surfacing.** The run root + artifact
+5. **Do not modify the CLI output before surfacing.** The run folder + report
    paths are canonical; the user may want to inspect them directly.
 
-## Rigor
+## Depth
 
-This command runs at `standard` rigor by default. The CLI accepts
+This command runs at `standard` depth by default. The CLI accepts
 `--rigor <lite|standard|deep|tournament|autonomous>` — if the user's scope
-text includes an explicit rigor request, map it to the flag; otherwise
+text includes an explicit depth request, map it to the flag; otherwise
 omit the flag and accept the default.
 
 ## Authority
 
-- `src/workflows/review/contract.md` (review workflow contract)
+- `src/workflows/review/contract.md` (review flow contract)
 - `tests/runner/review-runtime-wiring.test.ts` (default registered review
-  synthesis writer)
+  composer writer)

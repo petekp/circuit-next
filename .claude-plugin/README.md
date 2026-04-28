@@ -6,8 +6,8 @@ This directory is the plugin surface the Claude Code loader reads.
 
 - `plugin.json` — hand-authored plugin manifest (name, version,
   description, keywords).
-- `skills/<workflow>/` — **generated** skill JSON files. One folder per
-  workflow that registers a slash command. Each folder contains
+- `skills/<flow>/` — **generated** skill JSON files. One folder per
+  flow that registers a slash command. Each folder contains
   `circuit.json` (the default mode) and any per-mode variants
   (e.g. `lite.json`).
 - `commands/` — empty placeholder. Slash-command markdown lives at the
@@ -17,13 +17,15 @@ This directory is the plugin surface the Claude Code loader reads.
 ## Editing rules
 
 - `plugin.json` — edit by hand.
-- `skills/<workflow>/*.json` — **do not edit by hand**. Edit the
-  workflow's recipe (`src/workflows/<id>/recipe.json`) and run
-  `npm run emit-workflows`. The drift check (`npm run emit-workflows
-  -- --check`) fails CI if a generated file diverges from the source.
+- `skills/<flow>/*.json` — **do not edit by hand**. Edit the
+  flow's schematic (`src/workflows/<id>/recipe.json`, renamed to
+  `schematic.json` in Phase 4 of the terminology migration) and run
+  `npm run emit-workflows`. The drift check
+  (`npm run emit-workflows -- --check`) fails CI if a generated file
+  diverges from the source.
 
 ## Why generated
 
-The runtime composes a `Workflow` from each recipe via the catalog and
-emit pipeline. This is the canonical source. Hand-edited skill JSON
-would silently diverge from the recipe and break the runtime contract.
+The runtime composes a compiled flow from each schematic via the catalog
+and emit pipeline. This is the canonical source. Hand-edited skill JSON
+would silently diverge from the schematic and break the runtime contract.

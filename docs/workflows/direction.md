@@ -1,41 +1,42 @@
 ---
-name: workflow-direction
-description: Product direction for Circuit workflows after the primitive/recipe pivot.
+name: flow-direction
+description: Product direction for Circuit flows after the block/schematic pivot.
 type: product-architecture
-date: 2026-04-25
+date: 2026-04-28
 status: active
 ---
 
-# Workflow Direction
+# Flow Direction
 
 See [`../terminology.md`](../terminology.md) for the canonical product
 vocabulary used throughout this doc (flow, schematic, block, route, relay,
 check, trace, report, evidence).
 
-Circuit should not rebuild every first-generation workflow one by one.
+Circuit should not rebuild every first-generation flow one by one.
 
 The old implementation is reference evidence. It shows useful patterns and
-operator needs, but it is not the destination. The destination is a small set of
-trustworthy workflow moves that can be assembled into clear recipes.
+operator needs, but it is not the destination. The destination is a small
+set of trustworthy flow blocks that can be assembled into clear schematics.
 
 ## Product Shape
 
-A workflow is a recipe.
+A flow is defined by a schematic.
 
-A recipe is an ordered set of reusable moves. Each move consumes typed evidence,
-does one clear job, writes typed evidence, and returns a small named outcome.
+A schematic is an ordered set of reusable blocks. Each block consumes typed
+evidence, does one clear job, writes typed evidence, and returns a small
+named outcome.
 
 This keeps Circuit closer to an evidence ledger than a generic flowchart
-builder. Users should be able to understand what the workflow will do without
+builder. Users should be able to understand what the flow will do without
 reading every prompt or every step output.
 
 ## V1 Boundaries
 
-For v1, users can compose built-in moves only.
+For v1, users can compose built-in blocks only.
 
-That means custom workflows can choose and configure known moves, but they do
-not define arbitrary new move code yet. New move creation can come later, after
-the built-in catalog has proved itself across several real recipes.
+That means custom flows can choose and configure known blocks, but they do
+not define arbitrary new block code yet. New block creation can come later,
+after the built-in catalog has proved itself across several real schematics.
 
 Branches should stay limited and named:
 
@@ -50,20 +51,20 @@ Branches should stay limited and named:
 - complete
 
 Those outcomes are enough to express real product choices without turning
-recipes into hidden control-flow puzzles.
+schematics into hidden control-flow puzzles.
 
-## First Proving Recipe
+## First Proving Schematic
 
-The old Repair workflow name is ambiguous. The clearer v1 product shape is
+The old Repair flow name is ambiguous. The clearer v1 product shape is
 Fix:
 
-> Take a concrete problem, understand it, make the smallest safe change, prove
-> the change, and close with evidence.
+> Take a concrete problem, understand it, make the smallest safe change,
+> prove the change, and close with evidence.
 
-Old Repair evidence should inform Fix. It should not force Circuit to ship a
-workflow named Repair if Fix is clearer to users.
+Old Repair evidence should inform Fix. It should not force Circuit to ship
+a flow named Repair if Fix is clearer to users.
 
-Fix should prove the reusable recipe path:
+Fix should prove the reusable schematic path:
 
 1. Intake
 2. Route
@@ -79,10 +80,11 @@ Fix should prove the reusable recipe path:
 
 ## Human Decisions
 
-Human Decision is a reusable move.
+Human Decision is a reusable block.
 
-The recipe declares the question, choices, default policy, and what each answer
-means. Each host should use its native user-prompting mechanism where possible:
+The schematic declares the question, choices, default policy, and what
+each answer means. Each host should use its native user-prompting
+mechanism where possible:
 
 - Claude Code should use AskUserQuestion or the closest available native
   question surface.
@@ -90,18 +92,18 @@ means. Each host should use its native user-prompting mechanism where possible:
 - Non-interactive runs should use an explicit safe default, pause, or fail
   clearly.
 
-The answer is recorded as typed evidence so later moves do not need to know
-which host asked the question.
+The answer is recorded as typed evidence so later blocks do not need to
+know which host asked the question.
 
 ## Immediate Consequence
 
-Do not open more one-off Repair implementation work from the old signed plan.
-Repair-only artifacts, `/circuit:repair`, and Repair-only runtime code stay out
-of scope unless a later operator decision explicitly reopens Repair as a
-first-class product recipe.
+Do not open more one-off Repair implementation work from the old signed
+plan. Repair-only reports, `/circuit:repair`, and Repair-only runtime code
+stay out of scope unless a later operator decision explicitly reopens
+Repair as a first-class product schematic.
 
 The next implementation work should either:
 
-- strengthen the primitive and recipe contracts needed by Fix; or
-- build Fix behavior in a way that leaves behind reusable move machinery for
-  later Migrate, Sweep, and custom recipes.
+- strengthen the block and schematic contracts needed by Fix; or
+- build Fix behavior in a way that leaves behind reusable block machinery
+  for later Migrate, Sweep, and custom schematics.

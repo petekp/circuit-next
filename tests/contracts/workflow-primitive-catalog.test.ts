@@ -30,12 +30,12 @@ function titleToId(title: string): string {
 
 function canonicalPrimitiveTitlesFromMarkdown(): string[] {
   const markdown = readFileSync(primitivesDocPath, 'utf8');
-  const section = markdown.split('## Canonical Primitive List')[1]?.split('## Fix-Derived')[0];
-  if (section === undefined) throw new Error('Canonical Primitive List section not found');
+  const section = markdown.split('## Canonical Block List')[1]?.split('## Fix-Derived')[0];
+  if (section === undefined) throw new Error('Canonical Block List section not found');
   return section
     .split('\n')
     .filter(
-      (line) => line.startsWith('| ') && !line.includes('---') && !line.startsWith('| Primitive'),
+      (line) => line.startsWith('| ') && !line.includes('---') && !line.startsWith('| Block'),
     )
     .map((line) => line.split('|')[1]?.trim())
     .filter((title): title is string => title !== undefined && title.length > 0);
@@ -134,10 +134,10 @@ describe('workflow primitive catalog', () => {
     expect(handoff?.output_contract).toBe('continuity.record@v1');
   });
 
-  it('has a composition note that points recipes at the catalog, not freeform graphs', () => {
+  it('has a composition note that points schematics at the catalog, not freeform graphs', () => {
     const note = readFileSync(compositionDocPath, 'utf8');
     expect(note).toContain('docs/workflows/primitive-catalog.json');
-    expect(note).toMatch(/recipe/i);
+    expect(note).toMatch(/schematic/i);
     expect(note).toMatch(/freeform graph/i);
     expect(note).toMatch(/named outcomes/i);
   });

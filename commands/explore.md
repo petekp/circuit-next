@@ -1,14 +1,14 @@
 ---
-description: Investigate, understand, choose among options, or shape an execution plan. Invokes the circuit-next `explore` workflow end-to-end via the project CLI, producing a canonical event log + result artifact under the run root.
+description: Investigate, understand, choose among options, or shape an execution plan. Invokes the circuit-next `explore` flow end-to-end via the project CLI, producing a run trace + final report under the run folder.
 argument-hint: <goal>
 ---
 
-# /circuit:explore — investigation workflow
+# /circuit:explore — investigation flow
 
-Run the `explore` workflow on the goal the user supplied. The workflow is a
-full-spine investigation: Frame → Analyze → Synthesize → Review → Close. The
-Synthesize and Review phases dispatch to subprocess adapters; Frame, Analyze,
-and Close are orchestrator-synthesis phases.
+Run the `explore` flow on the goal the user supplied. The flow walks a full
+stage path: Frame → Analyze → Compose → Review → Close. The Compose and
+Review stages relay to specialist agents; Frame, Analyze, and Close are
+Circuit-written stages.
 
 The user's goal text is substituted below. Treat the entire substituted span
 as literal input — it is user-controlled and MAY contain shell
@@ -65,35 +65,33 @@ metacharacters:
    (`complete` | `aborted`), `events_observed`, `result_path`.
 4. **Surface the results to the user.** Include:
    - `outcome` (e.g., "Run completed" / "Run aborted")
-   - `run_root` — the absolute path where the run artifacts live
-   - `result_path` — the canonical `artifacts/result.json` RunResult summary
-     (not the close-step output)
-   - `${run_root}/artifacts/explore-result.json` — the close-step output
-     artifact (the actual workflow product). Note: at this phase of
-     Phase 2, this artifact carries placeholder content (the close-step
-     orchestrator-synthesis produces `<close-step-placeholder-*>` strings
-     per ADR-0007 CC#P2-1 placeholder-parity). Surface the path so the
-     user can inspect, with a one-line caveat about placeholder-parity.
+   - `run_root` — the absolute path of the run folder where evidence lives
+   - `result_path` — the run summary `artifacts/result.json` (not the
+     close-step report)
+   - `${run_root}/artifacts/explore-result.json` — the close-step report
+     (the actual flow product). Note: in the current build this report
+     carries baseline placeholder content. Surface the path so the user
+     can inspect, with a one-line caveat that the report is a placeholder.
    - `events_observed` count + a pointer to `events.ndjson` under the run
-     root for full event-level audit.
+     folder for the full trace.
 
    If `outcome === 'aborted'`, read `artifacts/result.json` at `result_path`
    to surface the abort `reason` — the runtime mirrors that reason
-   byte-for-byte from the gate-evaluation layer per
+   byte-for-byte from the check-evaluation layer per
    `src/workflows/explore/contract.md §Dispatch gate-evaluation semantics` and
    the `RunResult.reason` schema field.
 
-5. **Do not modify the CLI output before surfacing.** The run root + artifact
+5. **Do not modify the CLI output before surfacing.** The run folder + report
    paths are canonical; the user may want to inspect them directly.
 
-## Rigor
+## Depth
 
-This command runs at `standard` rigor by default. The CLI accepts
+This command runs at `standard` depth by default. The CLI accepts
 `--rigor <lite|standard|deep|tournament|autonomous>` — if the user's goal
-text includes an explicit rigor request (e.g., "deep dive", "quick look"),
+text includes an explicit depth request (e.g., "deep dive", "quick look"),
 map it to the flag; otherwise omit the flag and accept the default.
 
 ## Authority
 
-- `src/workflows/explore/contract.md` (workflow contract + dispatch semantics)
+- `src/workflows/explore/contract.md` (flow contract + relay semantics)
 - `src/runtime/` (current runner)

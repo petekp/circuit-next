@@ -1,111 +1,114 @@
 ---
-name: workflow-primitives
-description: Canonical first-principles inventory of reusable workflow moves for circuit-next.
+name: flow-blocks
+description: Canonical first-principles inventory of reusable flow blocks for circuit-next.
 type: product-architecture
-date: 2026-04-24
+date: 2026-04-28
 status: active
 ---
 
-# Workflow Primitives
+# Flow Blocks
 
-This document names the reusable workflow moves circuit-next should build
-toward. It is intentionally not a list of old Circuit workflows to clone.
+This document names the reusable flow blocks circuit-next should build
+toward. It is intentionally not a list of old Circuit flows to clone.
 
-Old Circuit remains useful reference evidence: it shows real operator needs and
-good workflow instincts. But circuit-next should not recreate every old workflow
-one by one if a smaller set of reusable primitives gives users a better system.
+Old Circuit remains useful reference evidence: it shows real operator needs
+and good flow instincts. But circuit-next should not recreate every old
+flow one by one if a smaller set of reusable blocks gives users a better
+system.
 
 Deep prior-art research should be evaluated through
-`docs/workflows/research-intake.md` before it changes this inventory.
-The machine-readable companion catalog is
-`docs/workflows/primitive-catalog.json`; the composition model is sketched in
-`docs/workflows/recipe-composition.md`. The product direction is summarized in
+`docs/workflows/research-intake.md` before it changes this inventory. The
+machine-readable companion catalog is
+`docs/workflows/primitive-catalog.json` (renamed to `block-catalog.json`
+in Phase 5 of the terminology migration); the composition model is
+sketched in `docs/workflows/recipe-composition.md` (renamed to
+`flow-schematics.md` in Phase 4). The product direction is summarized in
 `docs/workflows/direction.md`.
 
 ## Core Idea
 
-A workflow should be assembled from moves.
+A flow should be assembled from blocks.
 
-Each move has:
+Each block has:
 
 - a clear purpose;
 - structured inputs;
 - a prompt or tool call rendered from those inputs;
 - a typed output;
-- gates that decide whether the output can be trusted;
+- checks that decide whether the output can be trusted;
 - routes that decide what can happen next.
 
-The prompt is a delivery format, not the source of truth. The runtime should
-pass structured state between moves whenever possible, and only render prompts
-at the adapter boundary.
+The prompt is a delivery format, not the source of truth. The runtime
+should pass structured state between blocks whenever possible, and only
+render prompts at the connector boundary.
 
 ## Compatibility Rule
 
-Not every move works after every other move.
+Not every block works after every other block.
 
-A move can run only when previous outputs satisfy its input contract. This lets
-the runtime reject impossible workflow assemblies early.
+A block can run only when previous outputs satisfy its input contract.
+This lets the runtime reject impossible flow assemblies early.
 
 Example:
 
-- a Fix move can consume a diagnosis;
-- a Verify move can consume implementation evidence plus proof commands;
-- a Close move can consume the required evidence for that workflow;
-- a Fix move should not consume only a vague idea list.
+- a Fix block can consume a diagnosis;
+- a Verify block can consume implementation evidence plus proof commands;
+- a Close block can consume the required evidence for that flow;
+- a Fix block should not consume only a vague idea list.
 
-Some moves have more than one valid input shape. Act is the first important
-case: it can work from a plan, from a diagnosis, or from both, as long as the
-brief is also present. The machine-readable catalog records those alternatives
-so recipe validation can reject under-specified items without forcing every
-workflow to include a separate Plan move.
+Some blocks have more than one valid input shape. Act is the first
+important case: it can work from a plan, from a diagnosis, or from both,
+as long as the brief is also present. The machine-readable catalog records
+those alternatives so schematic validation can reject under-specified
+steps without forcing every flow to include a separate Plan block.
 
-Close With Evidence also has more than one valid input shape. A reviewed close
-should consume review evidence. A Lite close that intentionally skips Review
-can consume the brief and verification result, but it should be a separate
-recipe item so the skipped-review path stays visible.
+Close With Evidence also has more than one valid input shape. A reviewed
+close should consume review evidence. A Lite close that intentionally
+skips Review can consume the brief and verification result, but it should
+be a separate schematic step so the skipped-review path stays visible.
 
-## Canonical Primitive List
+## Canonical Block List
 
-| Primitive | Purpose | Typical inputs | Typed output | Common next routes |
+| Block | Purpose | Typical inputs | Typed output | Common next routes |
 |---|---|---|---|---|
-| Intake | Capture the user's goal and requested mode. | Goal text, explicit workflow, entry mode, project context. | Normalized task intake. | Route, Frame, Human Decision. |
-| Route | Choose the workflow or move sequence. | Intake, known workflow catalog, shortcut rules. | Route decision with reason. | Frame, Human Decision, Stop. |
-| Frame | Define the work boundary and proof needed. | Intake, selected workflow, constraints, known context. | Brief with scope, constraints, proof plan. | Human Decision, Plan, Diagnose, Act. |
-| Human Decision | Pause for an operator choice and record it. | Question, options, default policy, mode policy, current evidence. | Decision artifact with selected option and source. | Continue, revise, stop, hand off, escalate. |
+| Intake | Capture the user's goal and requested mode. | Goal text, explicit flow, entry mode, project context. | Normalized task intake. | Route, Frame, Human Decision. |
+| Route | Choose the flow or block sequence. | Intake, known flow catalog, shortcut rules. | Route decision with reason. | Frame, Human Decision, Stop. |
+| Frame | Define the work boundary and proof needed. | Intake, selected flow, constraints, known context. | Brief with scope, constraints, proof plan. | Human Decision, Plan, Diagnose, Act. |
+| Human Decision | Pause for an operator choice and record it. | Question, options, default policy, mode policy, current evidence. | Decision report with selected option and source. | Continue, revise, stop, hand off, escalate. |
 | Gather Context | Collect facts before deciding or acting. | Brief, target paths, search instructions, allowed tools. | Context packet with sources and confidence. | Plan, Diagnose, Review, Human Decision. |
 | Diagnose | Explain what is wrong or unknown. | Brief, context packet, repro instructions, observed behavior. | Diagnosis with cause, confidence, repro status, diagnostic path. | Act, Gather Context, Human Decision, Stop. |
 | Plan | Choose an implementation or investigation path. | Brief, context, diagnosis, constraints. | Plan with steps, risk notes, proof strategy. | Human Decision, Act, Batch. |
 | Act | Make or delegate the change. | Brief or plan, diagnosis when relevant, allowed scope, model/tool policy. | Implementation evidence with changed files and rationale. | Verify, Review, Human Decision. |
 | Run Verification | Execute declared proof commands and capture results. | Proof plan, command list, timeout/output policy, current work evidence. | Verification result with commands, exit status, and evidence. | Review, Act retry, Human Decision, Close. |
-| Review | Independently judge the result. | Brief, plan/diagnosis, implementation evidence, verification result. | Review verdict with findings, confidence, and required fixes. | Act retry, Verify retry, Close, Human Decision. |
+| Review | Independently judge the result. | Brief, plan/diagnosis, implementation evidence, verification result. | Review result with findings, confidence, and required fixes. | Act retry, Verify retry, Close, Human Decision. |
 | Queue | Turn broad work into ordered items. | Survey/context, safety criteria, prioritization rule. | Work queue with item state and risk class. | Batch, Human Decision, Close. |
 | Batch | Process a bounded set of queue items. | Queue, batch size, safety policy, proof policy. | Batch result with completed, skipped, blocked, and failed items. | Verify, Queue, Human Decision, Close. |
 | Risk/Rollback Check | Decide whether continuing is safe. | Current diff/evidence, risk policy, rollback or recovery options. | Risk decision with allowed next action. | Continue, split, revert plan, Human Decision, Stop. |
-| Close With Evidence | End honestly. | Required artifacts, verification, review when required, residual risks. | Workflow result with outcome, evidence pointers, follow-ups. | Complete, stop, hand off, escalate. |
-| Handoff | Persist enough state to resume later. | Current goal, completed moves, pending evidence, next action, debt. | Continuity record or handoff artifact. | Stop, Resume later. |
+| Close With Evidence | End honestly. | Required reports, verification, review when required, residual risks. | Flow result with outcome, evidence pointers, follow-ups. | Complete, stop, hand off, escalate. |
+| Handoff | Persist enough state to resume later. | Current goal, completed blocks, pending evidence, next action, debt. | Continuity record or handoff report. | Stop, Resume later. |
 
-## Fix-Derived Reusable Moves
+## Fix-Derived Reusable Blocks
 
-The old Repair workflow is useful reference evidence, but the clearer v1
-product recipe is Fix: understand a concrete problem, make the smallest safe
-change, prove it, and close honestly.
+The old Repair flow is useful reference evidence, but the clearer v1
+product schematic is Fix: understand a concrete problem, make the smallest
+safe change, prove it, and close honestly.
 
-Fix should contribute these reusable moves:
+Fix should contribute these reusable blocks:
 
-| Move | Why it is reusable |
+| Block | Why it is reusable |
 |---|---|
-| Regression Contract | Many change workflows need expected behavior, actual behavior, and proof target. |
+| Regression Contract | Many change flows need expected behavior, actual behavior, and proof target. |
 | Diagnose Problem | Fix needs it directly; Migrate and Sweep also need "why this is risky or broken" analysis. |
-| No-Repro Decision | Any workflow can hit uncertain evidence and need operator choice. |
+| No-Repro Decision | Any flow can hit uncertain evidence and need operator choice. |
 | Optional Review Branch | Lite-style paths can skip review only when mode and evidence allow it. |
-| Conditional Close | Some workflows close as fixed, not reproduced, partially complete, skipped, or handed off. |
+| Conditional Close | Some flows close as fixed, not reproduced, partially complete, skipped, or handed off. |
 
-## Human Decision Primitive
+## Human Decision Block
 
-Human Decision should be a first-class primitive, not a Claude-specific
+Human Decision should be a first-class block, not a Claude-specific
 instruction.
 
-The workflow-level input is structured:
+The flow-level input is structured:
 
 ```json
 {
@@ -138,12 +141,12 @@ The workflow-level input is structured:
 }
 ```
 
-The adapter maps that request to the host's native mechanism:
+The connector maps that request to the host's native mechanism:
 
 - Claude Code can use its user-question tool.
 - Codex can use the interactive question mechanism exposed by its host.
-- A non-interactive host can use the declared default, pause the run, or fail
-  clearly, depending on the mode policy.
+- A non-interactive host can use the declared default, pause the run, or
+  fail clearly, depending on the mode policy.
 
 The output is structured:
 
@@ -157,25 +160,25 @@ The output is structured:
 }
 ```
 
-## How This Changes Workflow Planning
+## How This Changes Flow Planning
 
 Future work should start by asking:
 
-1. Which primitives does this workflow compose?
+1. Which blocks does this flow compose?
 2. Which inputs and outputs are already available?
-3. Which evidence is workflow-specific?
+3. Which evidence is flow-specific?
 4. Which routes are allowed by mode?
-5. Which primitive is missing and should be built generically?
+5. Which block is missing and should be built generically?
 
-This means Fix, Migrate, Sweep, and custom workflows are not necessarily
-separate implementation towers. They should be different recipes over a shared
-set of moves.
+This means Fix, Migrate, Sweep, and custom flows are not necessarily
+separate implementation towers. They should be different schematics over
+a shared set of blocks.
 
 ## Product Direction
 
 Do not treat feature parity as the only goal.
 
-The better opportunity is to make Circuit a workflow assembly system: a small
-catalog of trustworthy moves that can be composed into built-in workflows and,
-eventually, user-authored workflows. Old Circuit's workflow list is a source of
+The better opportunity is to make Circuit a flow assembly system: a small
+catalog of trustworthy blocks that can be composed into built-in flows and,
+eventually, user-authored flows. Old Circuit's flow list is a source of
 examples, not a ceiling.

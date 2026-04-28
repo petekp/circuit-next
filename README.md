@@ -8,29 +8,32 @@ vocabulary (flow, schematic, block, route, relay, check, trace, report, evidence
 
 ## What's wired today
 
-- `/circuit:run` — classifies a free-form task and routes it to the right workflow.
-- `/circuit:explore` — investigation and planning workflow.
-- `/circuit:review` — audit-only review workflow.
-- `/circuit:build` — implementation workflow with checkpoint, dispatch, verification, review, and close.
-- `/circuit:fix` — fix workflow with full standard-mode review pass and a `lite` entry mode that skips review (per-mode emit driven by `route_overrides` in `src/workflows/fix/recipe.json`).
-- Migrate and Sweep workflows are present as sub-run packages (no slash command yet); Migrate is reachable via `/circuit:run` intent classification.
+- `/circuit:run` — classifies a free-form task and routes it to the right flow.
+- `/circuit:explore` — investigation and planning flow.
+- `/circuit:review` — audit-only review flow.
+- `/circuit:build` — implementation flow with checkpoint, relay, verification, review, and close.
+- `/circuit:fix` — fix flow with full standard-mode review pass and a `lite` entry mode that skips review (per-mode emit driven by `route_overrides` in `src/workflows/fix/recipe.json`).
+- Migrate and Sweep flows are present as sub-run packages (no slash command yet); Migrate is reachable via `/circuit:run` intent classification.
 
 Per-step configurability of model, reasoning effort, and skills is wired
 through the runtime selection resolver. User-global config at
 `~/.config/circuit-next/config.yaml` and per-project config at
 `./.circuit/config.yaml` are both honored.
 
-Workflow source files live under `src/workflows/<id>/` (recipe, command,
-contract, writers, dispatch hints — everything specific to that workflow
-in one folder). The catalog at `src/workflows/catalog.ts` aggregates all
-packages; the engine derives every per-workflow registry from it.
-Recipes are compiled to `.claude-plugin/skills/<id>/circuit.json` (and
-per-mode `<mode>.json` siblings when `route_overrides` is non-empty),
-and slash commands are copied to `commands/<id>.md`, by
-`npm run emit-workflows`. The drift check
+Flow source files live under `src/workflows/<id>/` (schematic, command,
+contract, writers, relay hints — everything specific to that flow in one
+folder). The catalog at `src/workflows/catalog.ts` aggregates all packages;
+the engine derives every per-flow registry from it. Schematics are compiled
+to `.claude-plugin/skills/<id>/circuit.json` (and per-mode `<mode>.json`
+siblings when `route_overrides` is non-empty), and slash commands are
+copied to `commands/<id>.md`, by `npm run emit-workflows`. The drift check
 (`node scripts/emit-workflows.mjs --check`, also wired into
-`npm run verify`) enforces the committed fixtures stay byte-equivalent
-with what the recipes and command sources produce.
+`npm run verify`) enforces the committed compiled flows stay byte-equivalent
+with what the schematics and command sources produce.
+
+(Schema field and file names like `recipe.json` and "dispatch hints" are
+the current internal names; they'll be migrated in later phases of the
+terminology pass — see `todos/terminology-migration.md`.)
 
 ## Verification
 
@@ -54,18 +57,19 @@ circuit-next/
 ├── .claude-plugin/            # Plugin manifest + generated skill outputs
 ├── docs/
 │   ├── contracts/             # Engine contracts (adapter, config, run, step, workflow, …)
-│   └── workflows/             # Workflow design notes + primitive catalog
+│   ├── terminology.md         # Canonical product vocabulary
+│   └── workflows/             # Flow design notes + block catalog
 ├── specs/
 │   ├── domain.md              # Ubiquitous language
-│   ├── artifacts.json         # Typed-artifact authority graph
+│   ├── artifacts.json         # Typed-output authority graph
 │   ├── invariants.json        # Invariant ledger
 │   ├── behavioral/            # Behavioral concerns
 │   └── reference/             # Legacy-surface characterizations
 ├── src/
-│   ├── runtime/               # Engine: registries, runner, step handlers, adapters
+│   ├── runtime/               # Engine: registries, runner, step handlers, connectors
 │   ├── schemas/               # Zod schemas for all typed surfaces
-│   ├── cli/circuit.ts         # CLI entry (router + workflow launcher)
-│   └── workflows/             # Workflow packages (one folder per workflow)
+│   ├── cli/circuit.ts         # CLI entry (router + flow launcher)
+│   └── workflows/             # Flow packages (one folder per flow)
 │       ├── catalog.ts         # Single source of truth the engine derives from
 │       ├── types.ts
 │       ├── build/             # recipe.json, artifacts.ts, command.md, contract.md, writers/, dispatch-hints.ts
@@ -77,12 +81,13 @@ circuit-next/
 └── tests/                     # Tests
 ```
 
-Adding a workflow:
+Adding a flow:
 
-1. Create `src/workflows/<id>/` with `recipe.json`, `artifacts.ts` (the
-   workflow's Zod schemas), optional `command.md` and `contract.md`,
-   `index.ts` (the WorkflowPackage), `dispatch-hints.ts` (if any dispatch
-   artifacts have shape hints), and `writers/`.
+1. Create `src/workflows/<id>/` with `recipe.json` (the schematic),
+   `artifacts.ts` (the flow's Zod schemas), optional `command.md` and
+   `contract.md`, `index.ts` (the package descriptor),
+   `dispatch-hints.ts` (if any relay steps have shape hints), and
+   `writers/`.
 2. Add the package to `src/workflows/catalog.ts`.
 3. `npm run build && node scripts/emit-workflows.mjs` to regenerate
    `commands/<id>.md` and `.claude-plugin/skills/<id>/`.

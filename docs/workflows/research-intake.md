@@ -1,38 +1,38 @@
 ---
 name: workflow-research-intake
-description: Rubric for turning prior-art research into circuit-next workflow design decisions.
+description: Rubric for turning prior-art research into circuit-next flow design decisions.
 type: product-architecture
-date: 2026-04-25
+date: 2026-04-28
 status: active
 authority: guidance
 ---
 
-# Workflow Research Intake
+# Flow Research Intake
 
 This document is the landing pad for the deep prior-art research now in flight.
 Its job is to keep the research useful. We are not looking for a bigger list of
-tools; we are looking for lessons that help Circuit become a better workflow
+tools; we are looking for lessons that help Circuit become a better flow
 system.
 
 ## What We Are Trying To Learn
 
-Circuit should not blindly clone the first-generation workflow list. The better
+Circuit should not blindly clone the first-generation flow list. The better
 question is:
 
-> What small set of reusable moves lets people assemble trustworthy AI coding
-> workflows without turning the product into a generic box-and-arrow builder?
+> What small set of reusable blocks lets people assemble trustworthy AI coding
+> flows without turning the product into a generic box-and-arrow builder?
 
 The research should help us decide:
 
-- which workflow primitives are missing or named poorly;
-- which primitive interfaces need to be typed more carefully;
-- how recipes should compose primitives;
+- which flow blocks are missing or named poorly;
+- which block interfaces need to be typed more carefully;
+- how schematics should compose blocks;
 - how much branching should be allowed;
 - how human decisions should work across Claude, Codex, and non-interactive
   hosts;
 - how evidence should be stored so humans can understand outcomes without
   reading raw step logs;
-- how adapters can preserve each host's strengths without collapsing into the
+- how connectors can preserve each host's strengths without collapsing into the
   weakest shared feature set.
 
 ## What Counts As A Useful Finding
@@ -43,21 +43,21 @@ testable pattern.
 Good findings look like this:
 
 - "Temporal shows why durable execution and replay are separate from business
-  logic. Circuit should keep durable run state below workflow recipes."
+  logic. Circuit should keep durable run state below flow schematics."
 - "BPMN human tasks are useful, but freeform process diagrams become hard to
   govern. Circuit should expose named decision points, not arbitrary graph
   editing first."
-- "LangGraph's typed state idea maps well to Circuit primitives, but Circuit
-  should keep final evidence artifacts stable and inspectable instead of hiding
+- "LangGraph's typed state idea maps well to Circuit blocks, but Circuit
+  should keep final evidence reports stable and inspectable instead of hiding
   everything inside agent memory."
 - "SWE-agent and OpenHands prove that coding agents need tight loops around
-  tests, patches, and environment state. Circuit's Verify and Review moves
+  tests, patches, and environment state. Circuit's Verify and Review blocks
   should treat command evidence as first-class data."
 
 Less useful findings look like this:
 
 - "Tool X has agents."
-- "Tool Y supports workflows."
+- "Tool Y supports flows."
 - "Tool Z has a nice UI."
 
 Those can still be sources, but we need the concrete lesson underneath.
@@ -69,14 +69,14 @@ Use this shape when importing the research result into our own notes.
 | Field | What To Capture |
 |---|---|
 | Source | Official docs, repo, paper, or design writeup. |
-| Category | Durable workflow, business process, AI agent framework, coding agent, CI, or other. |
+| Category | Durable flow, business process, AI agent framework, coding agent, CI, or other. |
 | Core idea | The shortest plain-English description of the system. |
 | Circuit relevance | Why this matters to Circuit specifically. |
-| Primitive lesson | Which reusable move it informs: Frame, Diagnose, Act, Verify, Review, Human Decision, Queue, Batch, Close, Handoff, or a missing move. |
-| Composition lesson | What it teaches about recipes, typed state, allowed routes, or branch control. |
-| Evidence lesson | What it teaches about artifacts, logs, replay, proof, review, or final summaries. |
+| Block lesson | Which reusable block it informs: Frame, Diagnose, Act, Verify, Review, Human Decision, Queue, Batch, Close, Handoff, or a missing block. |
+| Composition lesson | What it teaches about schematics, typed state, allowed routes, or branch control. |
+| Evidence lesson | What it teaches about reports, logs, replay, proof, review, or final summaries. |
 | Human loop lesson | What it teaches about questions, approvals, defaults, pauses, escalation, or unattended mode. |
-| Adapter lesson | What it teaches about supporting multiple hosts without flattening their differences. |
+| Connector lesson | What it teaches about supporting multiple hosts without flattening their differences. |
 | Borrow | What Circuit should copy directly. |
 | Adapt | What Circuit should use with changes. |
 | Reject | What Circuit should avoid. |
@@ -85,25 +85,25 @@ Use this shape when importing the research result into our own notes.
 ## Design Questions To Answer After Research
 
 These are the questions we should answer before adding many more built-in
-workflows.
+flows.
 
-1. What is the smallest durable interface for a primitive?
-2. Should recipe files name primitive types directly, or use higher-level
-   aliases like "bug-fix diagnosis" that expand into primitives?
+1. What is the smallest durable interface for a block?
+2. Should schematic files name block types directly, or use higher-level
+   aliases like "bug-fix diagnosis" that expand into blocks?
 3. Should branches be exposed to users, or mostly appear as named outcomes from
-   gates?
-4. How should a Human Decision primitive behave in four cases: interactive
+   checks?
+4. How should a Human Decision block behave in four cases: interactive
    Claude, interactive Codex, unattended mode, and non-interactive CI-like mode?
-5. Which output should every primitive produce: a detailed step artifact, a
+5. Which output should every block produce: a detailed step report, a
    short human summary, or both?
-6. Which parts of a workflow are declarative config, and which require code?
-7. How do model and effort settings attach to primitives without making recipes
+6. Which parts of a flow are declarative config, and which require code?
+7. How do model and effort settings attach to blocks without making schematics
    noisy?
-8. How do we let custom workflows reuse primitives without letting invalid
+8. How do we let custom flows reuse blocks without letting invalid
    combinations parse?
-9. What should the first user-authored workflow format look like?
-10. Which old Circuit workflows should become recipes, and which should become
-    special cases of broader moves?
+9. What should the first user-authored flow format look like?
+10. Which old Circuit flows should become schematics, and which should become
+    special cases of broader blocks?
 
 ## Working Product Bets
 
@@ -111,16 +111,16 @@ Treat these as hypotheses to test against the research, not settled doctrine.
 
 | Bet | Why It Seems Right | What Could Disprove It |
 |---|---|---|
-| Recipes over freeform graphs | Users need understandable workflow shapes, and the runtime needs bounded routes. | Prior art shows users can safely author expressive graphs without making review, debugging, or safety much harder. |
-| Typed evidence over prose blobs | Later steps should consume facts, not scrape text. | Prior art shows strict artifacts make useful workflow authoring too slow or brittle. |
-| Branches as named outcomes | "pass", "retry", "ask", "stop", and "handoff" are easier to reason about than arbitrary edges. | Prior art shows important coding workflows need open-ended branching early. |
-| Human decisions as primitives | Pauses, approvals, and defaults need durable records and host-specific UI. | Prior art shows host-native prompts are too different to share one structured request shape. |
-| Adapter capability matrix | Claude, Codex, and other hosts should expose their strengths cleanly. | Prior art shows the matrix becomes harder than a smaller shared abstraction. |
-| Custom workflows after primitive stability | Users should author against stable building blocks. | Prior art shows early custom-workflow use is the best way to discover primitives. |
+| Schematics over freeform graphs | Users need understandable flow shapes, and the runtime needs bounded routes. | Prior art shows users can safely author expressive graphs without making review, debugging, or safety much harder. |
+| Typed evidence over prose blobs | Later steps should consume facts, not scrape text. | Prior art shows strict reports make useful flow authoring too slow or brittle. |
+| Branches as named outcomes | "pass", "retry", "ask", "stop", and "handoff" are easier to reason about than arbitrary edges. | Prior art shows important coding flows need open-ended branching early. |
+| Human decisions as blocks | Pauses, approvals, and defaults need durable records and host-specific UI. | Prior art shows host-native prompts are too different to share one structured request shape. |
+| Connector capability matrix | Claude, Codex, and other hosts should expose their strengths cleanly. | Prior art shows the matrix becomes harder than a smaller shared abstraction. |
+| Custom flows after block stability | Users should author against stable building blocks. | Prior art shows early custom-flow use is the best way to discover blocks. |
 
 ## Prior-Art Buckets To Compare
 
-### Durable Workflow Engines
+### Durable Flow Engines
 
 Look for lessons about replay, retries, idempotence, state history, failure
 recovery, and long-running work. Temporal, Cadence, Durable Task, and AWS Step
@@ -131,11 +131,11 @@ avoid asking users to think like distributed-systems engineers.
 
 ### Data And CI Pipelines
 
-Look for lessons about artifacts, dependency edges, fan-out, caching, retries,
+Look for lessons about reports, dependency edges, fan-out, caching, retries,
 and observability. Dagster, Prefect, Airflow, GitHub Actions, and Buildkite
 belong here.
 
-Circuit likely borrows artifact-first thinking and command evidence, but should
+Circuit likely borrows report-first thinking and command evidence, but should
 avoid turning human coding work into a rigid job graph.
 
 ### Business Process Systems
@@ -163,20 +163,20 @@ OpenHands, SWE-agent, Cursor, Cline/Roo Code, Continue, Devin-like systems,
 CodeRabbit, Sweep, Factory, and Sourcegraph Cody belong here.
 
 Circuit should pay special attention to which systems expose repeatable coding
-workflows versus one-off chat sessions.
+flows versus one-off chat sessions.
 
 ## Coding-System Questions
 
 When looking at AI coding tools, ask:
 
-- Does the tool have repeatable named workflows, or only conversational tasks?
+- Does the tool have repeatable named flows, or only conversational tasks?
 - Can users configure model, effort, tools, or skills per step?
 - Does it keep structured evidence of what happened?
 - Does it separate planning, action, verification, review, and closeout?
 - Can a run pause for a human choice and later continue honestly?
 - Can it run unattended without pretending uncertain choices were approved?
 - Can it hand work across models or hosts?
-- Can users author new workflows without writing code?
+- Can users author new flows without writing code?
 - Does it have a clean story for failed tests, flaky reproduction, partial
   completion, and abandoned work?
 
@@ -185,12 +185,12 @@ When looking at AI coding tools, ask:
 When the research comes back, do this in order:
 
 1. Extract the ten strongest lessons into the intake template above.
-2. Compare those lessons against `docs/workflows/primitives.md`.
-3. Mark each current primitive as keep, rename, split, merge, or remove.
-4. Name any missing primitive.
-5. Decide the first recipe shape worth implementing.
-6. Decide whether Repair should continue immediately, or whether a small recipe
-   abstraction should come first.
+2. Compare those lessons against `docs/workflows/blocks.md`.
+3. Mark each current block as keep, rename, split, merge, or remove.
+4. Name any missing block.
+5. Decide the first schematic shape worth implementing.
+6. Decide whether Repair should continue immediately, or whether a small
+   schematic abstraction should come first.
 
-The goal is a smaller, clearer Circuit. If the research only makes us clone more
-old workflows, we learned the wrong lesson.
+The goal is a smaller, clearer Circuit. If the research only makes us clone
+more old flows, we learned the wrong lesson.

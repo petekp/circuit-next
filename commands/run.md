@@ -1,23 +1,23 @@
 ---
-description: Classifies free-form tasks into the current router-supported workflows (`explore`, `review`, `fix`, or `build`) and runs the selected workflow through the project CLI.
+description: Classifies free-form tasks into the current router-supported flows (`explore`, `review`, `fix`, or `build`) and runs the selected flow through the project CLI.
 argument-hint: <task>
 ---
 
 <!--
-  This file is HAND-AUTHORED. Unlike commands/<workflow>.md (which are
+  This file is HAND-AUTHORED. Unlike commands/<flow>.md (which are
   generated from src/workflows/<id>/command.md by scripts/emit-workflows.mjs),
-  /circuit:run is the CLI router entry, not a workflow, so its source of
+  /circuit:run is the CLI router entry, not a flow, so its source of
   truth lives directly here.
 -->
 
-# /circuit:run — workflow router
+# /circuit:run — flow router
 
-Classifies a free-form task into the current router-supported workflows and runs
-the selected workflow through the project CLI. The first classifier is
+Classifies a free-form task into the current router-supported flows and runs
+the selected flow through the project CLI. The first classifier is
 deterministic and intentionally small: review/audit-style tasks route to
 `review`, fix/repair-style tasks route to `fix`, build-like tasks route to
 `build`, and everything else routes to `explore`. Explicit router-free
-workflow commands remain available as `/circuit:explore`, `/circuit:review`,
+flow commands remain available as `/circuit:explore`, `/circuit:review`,
 `/circuit:fix`, and `/circuit:build`.
 
 The user's task text is substituted below. Treat the entire substituted span
@@ -29,8 +29,9 @@ metacharacters:
 ## Instructions
 
 1. **Do not classify the task yourself.** Let the project CLI choose the
-   workflow. It prints `selected_workflow`, `routed_by`, and
-   `router_reason` in the JSON output.
+   flow. It prints `selected_workflow`, `routed_by`, and
+   `router_reason` in the JSON output. (`selected_workflow` is the schema
+   field name; in prose we call it the selected flow.)
 2. **Construct the Bash invocation SAFELY.** Do NOT build the shell command
    by double-quoting the raw task text (double quotes expand `$VAR`,
    `` `cmd` ``, `$(cmd)`, and `\` sequences — a malicious or accidental
@@ -43,7 +44,7 @@ metacharacters:
      replace each one with `'\''` (standard POSIX shell escape: closes the
      current single-quoted string, emits one escaped apostrophe, and
      starts a new single-quoted string).
-   - Then invoke the CLI without an explicit workflow name, passing the
+   - Then invoke the CLI without an explicit flow name, passing the
      escaped, single-quoted task as the value of `--goal`.
 
    Example for an exploratory task `find deprecated APIs`:
@@ -95,21 +96,22 @@ metacharacters:
 3. **Parse the CLI's JSON output and surface:** `selected_workflow`,
    `routed_by`, `router_reason`, `outcome`, `run_root`, `events_observed`,
    and `result_path` when present. If present, also surface `router_signal`.
-4. **Surface the selected workflow's close artifact when available.**
-   For `selected_workflow === "explore"`, read the run-root-relative
-   `artifacts/explore-result.json` close-step artifact (placeholder-parity
-   per ADR-0007 CC#P2-1 — include the caveat). For
+4. **Surface the selected flow's final report when available.**
+   For `selected_workflow === "explore"`, read the run-folder-relative
+   `artifacts/explore-result.json` close-step report (this is a baseline
+   placeholder report; surface that caveat when present). For
    `selected_workflow === "review"` and `outcome === "complete"`, read
-   `artifacts/review-result.json` and surface its typed verdict. For
+   `artifacts/review-result.json` and surface its review result. For
    `selected_workflow === "build"` and `outcome === "complete"`, read
-   `artifacts/build-result.json` and surface its typed verdict fields; to
-   summarize changed files and evidence, follow its `artifact_pointers` entry
-   for `build.implementation` and read that artifact. For
+   `artifacts/build-result.json` and surface its review result fields; to
+   summarize changed files and evidence, follow its `artifact_pointers`
+   entry (the JSON field is named `artifact_pointers`; in prose call them
+   evidence links) for `build.implementation` and read that report. For
    `selected_workflow === "fix"` and `outcome === "complete"`, read
-   `artifacts/fix-result.json` and surface its typed verdict fields; to
+   `artifacts/fix-result.json` and surface its review result fields; to
    summarize the change and verification evidence, follow its
    `artifact_pointers` entries (for example `fix.change` and the
-   verification artifact) and read those artifacts.
+   verification report) and read those reports.
 5. **If `outcome === "checkpoint_waiting"`, do not read or claim
    `result_path`.** Surface the routed metadata (`selected_workflow`,
    `routed_by`, `router_reason`, and optional `router_signal`), then surface
@@ -123,11 +125,11 @@ metacharacters:
 6. **If `outcome === "aborted"`, read `artifacts/result.json` at
    `result_path` to surface the abort `reason`.**
 
-## Direct Workflow Bypass
+## Direct Flow Bypass
 
 Use `/circuit:explore`, `/circuit:review`, `/circuit:fix`, or `/circuit:build`
-when the operator already knows which workflow they want. Those commands call
-the same CLI with an explicit workflow name and skip this classifier layer.
+when the operator already knows which flow they want. Those commands call
+the same CLI with an explicit flow name and skip this classifier layer.
 
 ## Authority
 
