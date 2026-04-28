@@ -1,6 +1,6 @@
 # HANDOFF
 
-Last updated: 2026-04-27 — Sessions 1 + 2 + 3 of the test-quality backlog complete. Session 1: lint cleared, invariant-ledger meta-test landed, CI workflow live. Session 2: ledger triage done, coverage tooling added, fast/slow split added. Session 3: slice vocabulary stripped from comments / test names, anti-vacuity floors added to discovery-loop tests, real-recursion integration test for sub-run landed.
+Last updated: 2026-04-27 — Sessions 1 + 2 + 3 + 4 of the test-quality backlog complete. Session 1: lint cleared, invariant-ledger meta-test landed, CI workflow live. Session 2: ledger triage done, coverage tooling added, fast/slow split added. Session 3: slice vocabulary stripped, anti-vacuity floors added, real-recursion integration test for sub-run landed. Session 4: brittle prose pins in plugin-command-invocation collapsed, real-recursion test for fanout landed.
 
 ## Where we are
 
@@ -30,7 +30,9 @@ at the top of the file noting that.
 
 ## Tests
 
-932 tests pass, 6 skipped. tsc clean, biome clean, drift clean.
+927 tests pass, 6 skipped (count dropped 932 → 927 in Session 4 from
+the FU-T10 prose-pin removal; +1 from the new fanout real-recursion
+test). tsc clean, biome clean, drift clean.
 `npm run verify` is green on origin. CI workflow at
 `.github/workflows/verify.yml` mirrors the gate on every push and PR
 to `main`. `npm run verify:fast` is the tight-loop alternative
@@ -163,21 +165,26 @@ estimates assume an LLM-paced session.
   full `verify`.
 
 **FU-T06. Real recursion integration test (sub-run / fanout).**
-- State: **done** in `b26eb64` (2026-04-27). New file
-  `tests/runner/sub-run-real-recursion.test.ts` omits the
-  `childRunner` stub so the runner defaults to `runWorkflow` itself
-  and recurses end-to-end. Parent has a single sub-run step; child
-  has a single dispatch step served by a fake `acceptingDispatcher`.
-  Hermetic, ~12ms. Verifies child has its own run-root + event log
-  with its own run_id, dispatch lifecycle events fire on the child
-  (proof the child step actually ran), child's result.json is
-  authored via the real result-writer and copied verbatim into the
-  parent's writes.result slot, parent's gate admits the verdict.
-  Sister to `tests/runner/sub-run-runtime.test.ts` (handler-isolation
-  unit test).
-- Fanout real-recursion test deferred — same pattern would apply,
-  but fanout has additional fanout-specific surface that warrants a
-  separate hermetic case.
+- State: **done** across `b26eb64` + `f5647d7` (2026-04-27). Two
+  hermetic no-stub tests that omit `childRunner` so the runner
+  defaults to `runWorkflow` itself and recurses end-to-end.
+  - `tests/runner/sub-run-real-recursion.test.ts` (single-child
+    case): parent has a single sub-run step, child has a single
+    dispatch step served by a fake `acceptingDispatcher`. Verifies
+    child has its own run-root + event log + run_id, dispatch
+    lifecycle events fire on the child, child's result.json is
+    authored via the real result-writer and copied verbatim into the
+    parent's writes.result slot, parent's gate admits the verdict.
+  - `tests/runner/fanout-real-recursion.test.ts` (multi-child case):
+    parent has a fanout step with two static branches under
+    aggregate-only join. Verifies each branch produces a distinct
+    fresh run_id, each child has its own event log with the right
+    run_id and the dispatch lifecycle events, each result.json
+    carries the child's run_id and verdict, the aggregate artifact
+    materializes, parent admits via fanout.joined.
+  Sisters to `tests/runner/sub-run-runtime.test.ts` and
+  `tests/runner/fanout-runtime.test.ts` (handler-isolation unit
+  tests).
 
 ### P2 — maintainability + agent repair ergonomics
 
@@ -218,16 +225,15 @@ estimates assume an LLM-paced session.
 
 **FU-T10. Collapse `plugin-command-invocation.test.ts` brittle
 doc-shape pins.**
-- State: open. ~19 doc-shape assertions; reviewer recommends keeping
-  the shell-injection regression + 1 smoke and dropping prose pins.
-- Fix: keep — shell-injection regression, every generated command
-  has at least one executable invocation, invocation resolves to the
-  intended CLI entrypoint, manifest exposes every generated command.
-  Drop — exact prose pins, markdown-shape assertions, duplicated
-  "docs mention X" checks.
-- Why it matters: agents are especially prone to satisfying brittle
-  text tests while damaging behavior.
-- Effort: ~1 hour.
+- State: **done** in `e7f61e9` (2026-04-27). Dropped 6 `it` blocks
+  (~26 individual expects) of prose / doc-shape pins. Kept the
+  shell-injection regression block, the four positive
+  executable-invocation tests (one per command), the
+  direct-launcher correctness check, the negative-fixture predicate
+  tests, and the manifest-exposure tests (split into one `it` per
+  command for clearer failure attribution). Removed the now-unused
+  `PLACEHOLDER_STRING` constant and `hasEntryModeAndRigorInvocation`
+  helper.
 
 **FU-T11. Direct tests for step-handlers.**
 - State: open. `src/runtime/step-handlers/*.ts` has 0/9 direct
@@ -270,15 +276,13 @@ FU-T02b's triage + the two mechanical P1 items (FU-T04, FU-T05) all
 landed. The verify gate is green, CI mirrors it, the invariant
 ledger is honest, coverage is observable, and the inner loop has a
 fast-path. Session 3 cleared FU-T13 (slice-vocabulary residue),
-FU-T08 (anti-vacuity floors), and FU-T06 (real recursion integration
-test for sub-run). Session 4+ remaining: FU-T07 (failure-message
-helpers naming the invariant, ~2h), FU-T09 (mega-file splits —
-verify current sizes first, ~3-4h), FU-T10 (collapse
-plugin-command-invocation prose pins, ~1h), FU-T11 (direct
-step-handler tests, ~3-4h), FU-T12 (property-test expansion,
-~2-3h per area). A fanout-side companion to FU-T06 also fits the
-remaining work — same hermetic-recursion approach applied to the
-fanout step kind.
+FU-T08 (anti-vacuity floors), and the sub-run half of FU-T06.
+Session 4 cleared FU-T10 (brittle prose pins) and the fanout half
+of FU-T06 (full FU-T06 now closed). Session 5+ remaining: FU-T07
+(failure-message helpers naming the invariant, ~2h), FU-T09
+(mega-file splits — schema-parity.test.ts is still 4152 lines,
+~3-4h), FU-T11 (direct step-handler tests, ~3-4h), FU-T12
+(property-test expansion, ~2-3h per area).
 
 ## Notes
 
