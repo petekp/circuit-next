@@ -1,16 +1,19 @@
-import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import * as api from '@/lib/api';
 import type { Block, BlockCatalog } from '@/lib/types';
+import { useEffect, useState } from 'react';
 
 export function BlockLibrary() {
   const [catalog, setCatalog] = useState<BlockCatalog | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api.loadBlocks().then(setCatalog).catch((err) => setError(String(err)));
+    api
+      .loadBlocks()
+      .then(setCatalog)
+      .catch((err) => setError(String(err)));
   }, []);
 
   if (error) {

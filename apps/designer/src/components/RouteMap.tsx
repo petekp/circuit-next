@@ -1,7 +1,7 @@
-import { useMemo } from 'react';
-import { isTerminalTarget, STAGE_ORDER, TERMINAL_TARGETS } from '@/lib/spine';
+import { STAGE_ORDER, TERMINAL_TARGETS, isTerminalTarget } from '@/lib/spine';
 import type { SchematicStep } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { useMemo } from 'react';
 
 const STAGE_WIDTH = 180;
 const STEP_WIDTH = 150;
@@ -44,9 +44,7 @@ type Layout = {
 };
 
 function buildLayout(steps: readonly SchematicStep[]): Layout {
-  const stagesPresent = STAGE_ORDER.filter((stage) =>
-    steps.some((s) => s.stage === stage),
-  );
+  const stagesPresent = STAGE_ORDER.filter((stage) => steps.some((s) => s.stage === stage));
   const customStages = [
     ...new Set(steps.map((s) => s.stage).filter((s) => !STAGE_ORDER.includes(s as never))),
   ];
@@ -74,8 +72,7 @@ function buildLayout(steps: readonly SchematicStep[]): Layout {
   }
 
   // Terminals stacked along the right edge.
-  const terminalsX =
-    PADDING_X + orderedStages.length * STAGE_WIDTH + STEP_VGAP;
+  const terminalsX = PADDING_X + orderedStages.length * STAGE_WIDTH + STEP_VGAP;
   const terminals: TerminalBox[] = TERMINAL_TARGETS.map((t, i) => ({
     target: t,
     x: terminalsX,
@@ -126,9 +123,7 @@ export function RouteMap({ steps, selectedStepId, onSelect }: Props) {
   const layout = useMemo(() => buildLayout(steps), [steps]);
 
   if (steps.length === 0) {
-    return (
-      <p className="text-muted-foreground p-3 text-xs">No steps to map.</p>
-    );
+    return <p className="text-muted-foreground p-3 text-xs">No steps to map.</p>;
   }
 
   return (
@@ -137,12 +132,8 @@ export function RouteMap({ steps, selectedStepId, onSelect }: Props) {
         Route map
       </div>
       <div className="overflow-auto" style={{ height: 'calc(100% - 28px)' }}>
-        <svg
-          width={layout.width}
-          height={layout.height}
-          className="block"
-          aria-label="Route map"
-        >
+        <svg width={layout.width} height={layout.height} className="block" aria-label="Route map">
+          <title>Route map</title>
           <defs>
             <marker
               id="route-arrow"
@@ -200,7 +191,17 @@ export function RouteMap({ steps, selectedStepId, onSelect }: Props) {
                   key={box.step.id}
                   transform={`translate(${box.x}, ${box.y})`}
                   onClick={() => onSelect(box.step.id)}
-                  className="cursor-pointer"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onSelect(box.step.id);
+                    }
+                  }}
+                  // biome-ignore lint/a11y/useSemanticElements: <button> not valid inside SVG
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Select step ${box.step.id}`}
+                  className="cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <rect
                     width={box.w}
@@ -212,18 +213,10 @@ export function RouteMap({ steps, selectedStepId, onSelect }: Props) {
                     )}
                     strokeWidth={selected ? 2 : 1}
                   />
-                  <text
-                    x={10}
-                    y={18}
-                    className="fill-foreground text-[11px] font-medium"
-                  >
+                  <text x={10} y={18} className="fill-foreground text-[11px] font-medium">
                     {truncate(box.step.title, 22)}
                   </text>
-                  <text
-                    x={10}
-                    y={32}
-                    className="fill-muted-foreground font-mono text-[9px]"
-                  >
+                  <text x={10} y={32} className="fill-muted-foreground font-mono text-[9px]">
                     {box.step.id}
                   </text>
                 </g>

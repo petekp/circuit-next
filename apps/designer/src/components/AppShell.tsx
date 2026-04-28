@@ -18,9 +18,7 @@ export function AppShell({ header, left, center, right, bottom }: AppShellProps)
         <aside className="border-border min-h-0 overflow-hidden border-l">{right}</aside>
       </div>
       {bottom && (
-        <div className="border-border h-[220px] shrink-0 overflow-auto border-t">
-          {bottom}
-        </div>
+        <div className="border-border h-[220px] shrink-0 overflow-auto border-t">{bottom}</div>
       )}
     </div>
   );

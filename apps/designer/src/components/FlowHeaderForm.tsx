@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -12,6 +11,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import type { Schematic, ValidationIssue } from '@/lib/types';
+import type { ReactNode } from 'react';
 
 type Props = {
   schematic: Schematic;
@@ -19,10 +19,7 @@ type Props = {
   onPatch: (patch: Partial<Schematic>) => void;
 };
 
-function fieldErrors(
-  field: string,
-  errs: Map<string, ValidationIssue[]>,
-): ValidationIssue[] {
+function fieldErrors(field: string, errs: Map<string, ValidationIssue[]>): ValidationIssue[] {
   return errs.get(field) ?? [];
 }
 
@@ -39,10 +36,7 @@ export function FlowHeaderForm({ schematic, errorsByPath, onPatch }: Props) {
       </CardHeader>
       <CardContent className="space-y-4">
         <Field label="Title" errors={fieldErrors('title', errorsByPath)}>
-          <Input
-            value={schematic.title}
-            onChange={(e) => onPatch({ title: e.target.value })}
-          />
+          <Input value={schematic.title} onChange={(e) => onPatch({ title: e.target.value })} />
         </Field>
         <Field label="Purpose" errors={fieldErrors('purpose', errorsByPath)}>
           <Textarea
@@ -71,9 +65,7 @@ export function FlowHeaderForm({ schematic, errorsByPath, onPatch }: Props) {
             <Input
               value={schematic.version ?? ''}
               placeholder="0.1.0"
-              onChange={(e) =>
-                onPatch({ version: e.target.value || undefined })
-              }
+              onChange={(e) => onPatch({ version: e.target.value || undefined })}
             />
           </Field>
         </div>
@@ -82,11 +74,7 @@ export function FlowHeaderForm({ schematic, errorsByPath, onPatch }: Props) {
             <Input value={schematic.starts_at} readOnly className="font-mono" />
           </Field>
           <Field label="Step count">
-            <Input
-              value={String(schematic.items?.length ?? 0)}
-              readOnly
-              className="font-mono"
-            />
+            <Input value={String(schematic.items?.length ?? 0)} readOnly className="font-mono" />
           </Field>
         </div>
       </CardContent>
@@ -109,8 +97,8 @@ function Field({
       {children}
       {errors && errors.length > 0 && (
         <ul className="text-destructive space-y-0.5 text-xs">
-          {errors.map((e, i) => (
-            <li key={i}>{e.message}</li>
+          {errors.map((e) => (
+            <li key={`${e.path?.join('.') ?? ''}:${e.message}`}>{e.message}</li>
           ))}
         </ul>
       )}

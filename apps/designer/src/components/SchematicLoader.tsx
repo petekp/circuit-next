@@ -16,14 +16,7 @@ type Props = {
   onSave: () => void;
 };
 
-export function SchematicLoader({
-  flows,
-  currentFlowId,
-  dirty,
-  saving,
-  onPick,
-  onSave,
-}: Props) {
+export function SchematicLoader({ flows, currentFlowId, dirty, saving, onPick, onSave }: Props) {
   return (
     <div className="flex items-center justify-between gap-4 px-5 py-3">
       <div className="flex items-baseline gap-3">
@@ -31,7 +24,12 @@ export function SchematicLoader({
         <span className="text-muted-foreground text-xs">design flows visually</span>
       </div>
       <div className="flex items-center gap-3">
-        <Select value={currentFlowId ?? undefined} onValueChange={onPick}>
+        <Select
+          value={currentFlowId ?? undefined}
+          onValueChange={(id) => {
+            if (id !== null) onPick(id);
+          }}
+        >
           <SelectTrigger className="w-44">
             <SelectValue placeholder="Pick a flow…" />
           </SelectTrigger>
