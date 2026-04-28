@@ -2,17 +2,32 @@
   "schema_version": "1",
   "id": "explore",
   "title": "Explore Recipe",
-  "purpose": "Phase 2 first-parity target workflow per ADR-0007 CC#P2-1. Full-spine investigation: frame → analyze → synthesize → review → close. Canonical phase set {frame, analyze, act, review, close} with omits=[plan, verify] per explore contract §Canonical phase set. Synthesize and Review are worker-dispatch steps per ADR-0008 (distinct-adapter Knight-Leveson boundary crossings); Frame, Analyze, and Close remain orchestrator-synthesis (framing, decomposition, aggregation).",
+  "purpose": "Phase 2 first-parity target workflow per ADR-0007 CC#P2-1. Full-spine investigation: frame \u2192 analyze \u2192 synthesize \u2192 review \u2192 close. Canonical phase set {frame, analyze, act, review, close} with omits=[plan, verify] per explore contract \u00a7Canonical phase set. Synthesize and Review are worker-dispatch steps per ADR-0008 (distinct-adapter Knight-Leveson boundary crossings); Frame, Analyze, and Close remain orchestrator-synthesis (framing, decomposition, aggregation).",
   "status": "active",
   "version": "0.1.0",
   "starts_at": "frame-step",
   "initial_contracts": ["task.intake@v1", "route.decision@v1", "context.packet@v1"],
   "contract_aliases": [
-    { "generic": "workflow.brief@v1", "actual": "explore.brief@v1" },
-    { "generic": "diagnosis.result@v1", "actual": "explore.analysis@v1" },
-    { "generic": "change.evidence@v1", "actual": "explore.synthesis@v1" },
-    { "generic": "review.verdict@v1", "actual": "explore.review-verdict@v1" },
-    { "generic": "workflow.result@v1", "actual": "explore.result@v1" }
+    {
+      "generic": "workflow.brief@v1",
+      "actual": "explore.brief@v1"
+    },
+    {
+      "generic": "diagnosis.result@v1",
+      "actual": "explore.analysis@v1"
+    },
+    {
+      "generic": "change.evidence@v1",
+      "actual": "explore.synthesis@v1"
+    },
+    {
+      "generic": "review.verdict@v1",
+      "actual": "explore.review-verdict@v1"
+    },
+    {
+      "generic": "workflow.result@v1",
+      "actual": "explore.result@v1"
+    }
   ],
   "entry": {
     "signals": {
@@ -25,26 +40,45 @@
     {
       "name": "default",
       "rigor": "standard",
-      "description": "Default explore entry mode — seeds the run at Frame. Standard rigor per ADR-0007 CC#P2-6 resolution of plan Open Question #5."
+      "description": "Default explore entry mode \u2014 seeds the run at Frame. Standard rigor per ADR-0007 CC#P2-6 resolution of plan Open Question #5."
     }
   ],
   "spine_policy": {
     "mode": "partial",
     "omits": ["plan", "verify"],
-    "rationale": "Explore is an investigation workflow — plan-mode is folded into Frame (investigation scoping); verify is omitted because explore output is not executable and does not admit mechanical verification. Review is the adversarial pass that IS in scope and, per ADR-0008, is a distinct-adapter review dispatch (not a weaker substitute for verify as previously described at v0.1 authoring). See src/workflows/explore/contract.md §Canonical phase set for the full rationale."
+    "rationale": "Explore is an investigation workflow \u2014 plan-mode is folded into Frame (investigation scoping); verify is omitted because explore output is not executable and does not admit mechanical verification. Review is the adversarial pass that IS in scope and, per ADR-0008, is a distinct-adapter review dispatch (not a weaker substitute for verify as previously described at v0.1 authoring). See src/workflows/explore/contract.md \u00a7Canonical phase set for the full rationale."
   },
   "phases": [
-    { "canonical": "frame", "id": "frame-phase", "title": "Frame" },
-    { "canonical": "analyze", "id": "analyze-phase", "title": "Analyze" },
-    { "canonical": "act", "id": "synthesize-phase", "title": "Synthesize" },
-    { "canonical": "review", "id": "review-phase", "title": "Review" },
-    { "canonical": "close", "id": "close-phase", "title": "Close" }
+    {
+      "canonical": "frame",
+      "id": "frame-phase",
+      "title": "Frame"
+    },
+    {
+      "canonical": "analyze",
+      "id": "analyze-phase",
+      "title": "Analyze"
+    },
+    {
+      "canonical": "act",
+      "id": "synthesize-phase",
+      "title": "Synthesize"
+    },
+    {
+      "canonical": "review",
+      "id": "review-phase",
+      "title": "Review"
+    },
+    {
+      "canonical": "close",
+      "id": "close-phase",
+      "title": "Close"
+    }
   ],
   "items": [
     {
       "id": "frame-step",
-      "uses": "frame",
-      "title": "Frame — produce explore.brief",
+      "title": "Frame \u2014 produce explore.brief",
       "phase": "frame",
       "input": {
         "task": "task.intake@v1",
@@ -52,21 +86,25 @@
       },
       "output": "explore.brief@v1",
       "evidence_requirements": ["scope boundary", "constraints", "proof plan"],
-      "execution": { "kind": "synthesis" },
+      "execution": {
+        "kind": "synthesis"
+      },
       "protocol": "explore-frame@v1",
       "writes": {
         "artifact_path": "artifacts/brief.json"
       },
-      "gate": { "required": ["subject", "success_condition"] },
+      "gate": {
+        "required": ["subject", "success_condition"]
+      },
       "routes": {
         "continue": "analyze-step",
         "stop": "@stop"
-      }
+      },
+      "block": "frame"
     },
     {
       "id": "analyze-step",
-      "uses": "diagnose",
-      "title": "Analyze — produce explore.analysis",
+      "title": "Analyze \u2014 produce explore.analysis",
       "phase": "analyze",
       "input": {
         "brief": "explore.brief@v1",
@@ -79,22 +117,26 @@
         "reproduction status",
         "diagnostic path"
       ],
-      "execution": { "kind": "synthesis" },
+      "execution": {
+        "kind": "synthesis"
+      },
       "protocol": "explore-analyze@v1",
       "writes": {
         "artifact_path": "artifacts/analysis.json"
       },
-      "gate": { "required": ["aspects"] },
+      "gate": {
+        "required": ["aspects"]
+      },
       "routes": {
         "continue": "synthesize-step",
         "retry": "analyze-step",
         "stop": "@stop"
-      }
+      },
+      "block": "diagnose"
     },
     {
       "id": "synthesize-step",
-      "uses": "act",
-      "title": "Synthesize — produce explore.synthesis (adapter-bound dispatch per ADR-0008)",
+      "title": "Synthesize \u2014 produce explore.synthesis (adapter-bound dispatch per ADR-0008)",
       "phase": "act",
       "input": {
         "brief": "explore.brief@v1",
@@ -102,7 +144,10 @@
       },
       "output": "explore.synthesis@v1",
       "evidence_requirements": ["changed files", "change rationale", "declared follow-up proof"],
-      "execution": { "kind": "dispatch", "role": "implementer" },
+      "execution": {
+        "kind": "dispatch",
+        "role": "implementer"
+      },
       "protocol": "explore-synthesize@v1",
       "writes": {
         "artifact_path": "artifacts/synthesis.json",
@@ -110,17 +155,19 @@
         "receipt_path": "artifacts/dispatch/synthesize.receipt.txt",
         "result_path": "artifacts/dispatch/synthesize.result.json"
       },
-      "gate": { "pass": ["accept"] },
+      "gate": {
+        "pass": ["accept"]
+      },
       "routes": {
         "continue": "review-step",
         "retry": "synthesize-step",
         "stop": "@stop"
-      }
+      },
+      "block": "act"
     },
     {
       "id": "review-step",
-      "uses": "review",
-      "title": "Review — adversarial pass over synthesis (adapter-bound dispatch per ADR-0008)",
+      "title": "Review \u2014 adversarial pass over synthesis (adapter-bound dispatch per ADR-0008)",
       "phase": "review",
       "input": {
         "brief": "explore.brief@v1",
@@ -129,7 +176,10 @@
       },
       "output": "explore.review-verdict@v1",
       "evidence_requirements": ["verdict", "findings", "confidence", "required fixes"],
-      "execution": { "kind": "dispatch", "role": "reviewer" },
+      "execution": {
+        "kind": "dispatch",
+        "role": "reviewer"
+      },
       "protocol": "explore-review@v1",
       "writes": {
         "artifact_path": "artifacts/review-verdict.json",
@@ -137,18 +187,20 @@
         "receipt_path": "artifacts/dispatch/review.receipt.txt",
         "result_path": "artifacts/dispatch/review.result.json"
       },
-      "gate": { "pass": ["accept", "accept-with-fold-ins"] },
+      "gate": {
+        "pass": ["accept", "accept-with-fold-ins"]
+      },
       "routes": {
         "continue": "close-step",
         "retry": "synthesize-step",
         "revise": "synthesize-step",
         "stop": "@stop"
-      }
+      },
+      "block": "review"
     },
     {
       "id": "close-step",
-      "uses": "close-with-evidence",
-      "title": "Close — emit final result artifact",
+      "title": "Close \u2014 emit final result artifact",
       "phase": "close",
       "input": {
         "brief": "explore.brief@v1",
@@ -157,16 +209,21 @@
       },
       "output": "explore.result@v1",
       "evidence_requirements": ["outcome", "evidence pointers", "residual risks", "follow-ups"],
-      "execution": { "kind": "synthesis" },
+      "execution": {
+        "kind": "synthesis"
+      },
       "protocol": "explore-close@v1",
       "writes": {
         "artifact_path": "artifacts/explore-result.json"
       },
-      "gate": { "required": ["summary", "verdict_snapshot"] },
+      "gate": {
+        "required": ["summary", "verdict_snapshot"]
+      },
       "routes": {
         "complete": "@complete",
         "stop": "@stop"
-      }
+      },
+      "block": "close-with-evidence"
     }
   ]
 }

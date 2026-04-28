@@ -1,4 +1,15 @@
 import { z } from 'zod';
+import {
+  FlowBlockCatalog,
+  type FlowBlockCatalog as FlowBlockCatalogValue,
+  FlowBlockId,
+  type FlowBlockId as FlowBlockIdValue,
+  type FlowBlock as FlowBlockValue,
+  FlowContractRef,
+  type FlowContractRef as FlowContractRefValue,
+  FlowRoute,
+  type FlowRoute as FlowRouteValue,
+} from './flow-blocks.js';
 import { PhaseId, ProtocolId, StepId, WorkflowId } from './ids.js';
 import { Lane } from './lane.js';
 import {
@@ -11,17 +22,6 @@ import { RunRelativePath } from './primitives.js';
 import { Rigor } from './rigor.js';
 import { SelectionOverride } from './selection-policy.js';
 import { CheckpointPolicy, DispatchRole, WorkflowRef } from './step.js';
-import {
-  WorkflowPrimitiveCatalog,
-  type WorkflowPrimitiveCatalog as WorkflowPrimitiveCatalogValue,
-  WorkflowPrimitiveContractRef,
-  type WorkflowPrimitiveContractRef as WorkflowPrimitiveContractRefValue,
-  WorkflowPrimitiveId,
-  type WorkflowPrimitiveId as WorkflowPrimitiveIdValue,
-  WorkflowPrimitiveRoute,
-  type WorkflowPrimitiveRoute as WorkflowPrimitiveRouteValue,
-  type WorkflowPrimitive as WorkflowPrimitiveValue,
-} from './workflow-primitives.js';
 
 export const FlowSchematicStatus = z.enum(['candidate', 'active', 'deprecated']);
 export type FlowSchematicStatus = z.infer<typeof FlowSchematicStatus>;
@@ -41,8 +41,8 @@ export type SchematicRouteModeOverrides = z.infer<typeof SchematicRouteModeOverr
 
 export const SchematicContractAlias = z
   .object({
-    generic: WorkflowPrimitiveContractRef,
-    actual: WorkflowPrimitiveContractRef,
+    generic: FlowContractRef,
+    actual: FlowContractRef,
   })
   .strict();
 export type SchematicContractAlias = z.infer<typeof SchematicContractAlias>;
@@ -194,13 +194,11 @@ export type StepCheck = z.infer<typeof StepCheck>;
 export const SchematicStep = z
   .object({
     id: StepId,
-    uses: WorkflowPrimitiveId,
+    block: FlowBlockId,
     title: z.string().min(1),
     phase: CanonicalPhase,
-    input: z
-      .record(z.string().regex(/^[a-z][a-z0-9_]*$/), WorkflowPrimitiveContractRef)
-      .default({}),
-    output: WorkflowPrimitiveContractRef,
+    input: z.record(z.string().regex(/^[a-z][a-z0-9_]*$/), FlowContractRef).default({}),
+    output: FlowContractRef,
     evidence_requirements: SchematicEvidenceRequirements,
     execution: StepExecution,
     selection: SelectionOverride.optional(),
@@ -222,7 +220,7 @@ export const SchematicStep = z
   .superRefine((item, ctx) => {
     const seenRoutes = new Set<string>();
     for (const route of Object.keys(item.routes)) {
-      if (!WorkflowPrimitiveRoute.safeParse(route).success) {
+      if (!FlowRoute.safeParse(route).success) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['routes', route],
@@ -239,7 +237,7 @@ export const SchematicStep = z
       seenRoutes.add(route);
     }
     for (const route of Object.keys(item.route_overrides)) {
-      if (!WorkflowPrimitiveRoute.safeParse(route).success) {
+      if (!FlowRoute.safeParse(route).success) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['route_overrides', route],
@@ -455,7 +453,7 @@ export const FlowSchematic = z
     purpose: z.string().min(1),
     status: FlowSchematicStatus,
     starts_at: StepId,
-    initial_contracts: z.array(WorkflowPrimitiveContractRef).default([]),
+    initial_contracts: z.array(FlowContractRef).default([]),
     contract_aliases: z.array(SchematicContractAlias).default([]),
     items: z.array(SchematicStep).min(1),
     // Compiler-required metadata. Optional at parse time so candidate schematics
@@ -630,23 +628,23 @@ export type FlowSchematicCatalogCompatibilityIssue = {
 };
 
 function contractIsCompatible(
-  expected: WorkflowPrimitiveContractRefValue,
-  actual: WorkflowPrimitiveContractRefValue,
+  expected: FlowContractRefValue,
+  actual: FlowContractRefValue,
   aliases: readonly SchematicContractAlias[],
 ): boolean {
   if (expected === actual) return true;
   return aliases.some((alias) => alias.generic === expected && alias.actual === actual);
 }
 
-function primitiveAcceptedInputSets(
-  primitive: WorkflowPrimitiveValue,
-): readonly (readonly WorkflowPrimitiveContractRefValue[])[] {
-  return [primitive.input_contracts, ...primitive.alternative_input_contracts];
+function blockAcceptedInputSets(
+  block: FlowBlockValue,
+): readonly (readonly FlowContractRefValue[])[] {
+  return [block.input_contracts, ...block.alternative_input_contracts];
 }
 
 function schematicStepSatisfiesInputSet(
   item: SchematicStep,
-  expectedContracts: readonly WorkflowPrimitiveContractRefValue[],
+  expectedContracts: readonly FlowContractRefValue[],
   aliases: readonly SchematicContractAlias[],
 ): boolean {
   const actualContracts = Object.values(item.input);
@@ -655,7 +653,7 @@ function schematicStepSatisfiesInputSet(
   );
 }
 
-function formatContractSet(contracts: readonly WorkflowPrimitiveContractRefValue[]): string {
+function formatContractSet(contracts: readonly FlowContractRefValue[]): string {
   return `[${contracts.join(', ')}]`;
 }
 
@@ -674,24 +672,24 @@ function schematicStepRouteOutcomes(item: SchematicStep): string[] {
   return [...new Set([...Object.keys(item.routes), ...Object.keys(item.route_overrides)])];
 }
 
-// Schematic-author-selectable execution kinds for a primitive. The catalog's
-// `action_surface` describes the primitive's *typical* role, but the actual
-// committed Workflows show that primitives are flexibly used: Build's plan
-// is inline synthesis though the catalog calls plan a "worker" primitive;
+// Schematic-author-selectable execution kinds for a block. The catalog's
+// `action_surface` describes the block's *typical* role, but the actual
+// committed Workflows show that blocks are flexibly used: Build's plan
+// is inline synthesis though the catalog calls plan a "worker" block;
 // Build's frame is a checkpoint though frame is "orchestrator". Treat
-// action_surface as a recommendation: a worker primitive can be dispatched
-// OR done inline as synthesis; an orchestrator primitive can write a brief
+// action_surface as a recommendation: a worker block can be dispatched
+// OR done inline as synthesis; an orchestrator block can write a brief
 // (synthesis) OR pause for confirmation (checkpoint). The runtime decides
 // based on rigor and architecture.
-function acceptedExecutionKinds(primitive: WorkflowPrimitiveValue): readonly StepExecutionKind[] {
-  if (primitive.id === 'run-verification') return ['verification'];
+function acceptedExecutionKinds(block: FlowBlockValue): readonly StepExecutionKind[] {
+  if (block.id === 'run-verification') return ['verification'];
   // sub-run is an orchestration pattern (parent invokes a child workflow,
-  // gate admits the child's terminal verdict). The 'batch' primitive is
+  // gate admits the child's terminal verdict). The 'batch' block is
   // its first consumer (Migrate's batch step delegates to a Build child),
   // so sub-run is allowed wherever 'batch'-shaped work fits — i.e., for
   // 'mixed' surfaces. 'orchestrator' surfaces also accept sub-run because
   // the parent step authoring the sub-run IS an orchestrator action.
-  switch (primitive.action_surface) {
+  switch (block.action_surface) {
     case 'worker':
       return ['dispatch', 'synthesis'];
     case 'host':
@@ -703,8 +701,8 @@ function acceptedExecutionKinds(primitive: WorkflowPrimitiveValue): readonly Ste
   }
 }
 
-function acceptedPhases(primitive: WorkflowPrimitiveValue): readonly CanonicalPhaseValue[] {
-  switch (primitive.id) {
+function acceptedPhases(block: FlowBlockValue): readonly CanonicalPhaseValue[] {
+  switch (block.id) {
     case 'intake':
     case 'route':
     case 'frame':
@@ -721,7 +719,7 @@ function acceptedPhases(primitive: WorkflowPrimitiveValue): readonly CanonicalPh
     case 'run-verification':
       return ['verify'];
     case 'review':
-      // Review primitive runs in the canonical 'review' phase by default,
+      // Review block runs in the canonical 'review' phase by default,
       // but the audit-only Review workflow places its reviewer dispatch in
       // the canonical 'analyze' phase (the audit IS the analysis there;
       // there is no separate "act + review" structure to gate against).
@@ -737,10 +735,10 @@ function acceptedPhases(primitive: WorkflowPrimitiveValue): readonly CanonicalPh
 }
 
 function intersectContracts(
-  left: ReadonlySet<WorkflowPrimitiveContractRefValue>,
-  right: ReadonlySet<WorkflowPrimitiveContractRefValue>,
-): Set<WorkflowPrimitiveContractRefValue> {
-  const intersection = new Set<WorkflowPrimitiveContractRefValue>();
+  left: ReadonlySet<FlowContractRefValue>,
+  right: ReadonlySet<FlowContractRefValue>,
+): Set<FlowContractRefValue> {
+  const intersection = new Set<FlowContractRefValue>();
   for (const value of left) {
     if (right.has(value)) intersection.add(value);
   }
@@ -748,8 +746,8 @@ function intersectContracts(
 }
 
 function contractSetsEqual(
-  left: ReadonlySet<WorkflowPrimitiveContractRefValue>,
-  right: ReadonlySet<WorkflowPrimitiveContractRefValue>,
+  left: ReadonlySet<FlowContractRefValue>,
+  right: ReadonlySet<FlowContractRefValue>,
 ): boolean {
   if (left.size !== right.size) return false;
   for (const value of left) {
@@ -760,9 +758,9 @@ function contractSetsEqual(
 
 function collectRouteAwareAvailability(
   schematic: FlowSchematic,
-): Map<string, Set<WorkflowPrimitiveContractRefValue>> {
+): Map<string, Set<FlowContractRefValue>> {
   const itemById = new Map(schematic.items.map((item) => [item.id as unknown as string, item]));
-  const availableAt = new Map<string, Set<WorkflowPrimitiveContractRefValue>>();
+  const availableAt = new Map<string, Set<FlowContractRefValue>>();
   const worklist: string[] = [schematic.starts_at];
   availableAt.set(schematic.starts_at, new Set(schematic.initial_contracts));
 
@@ -797,36 +795,36 @@ function collectRouteAwareAvailability(
 
 export function validateFlowSchematicCatalogCompatibility(
   schematic: FlowSchematic,
-  catalog: WorkflowPrimitiveCatalogValue,
+  catalog: FlowBlockCatalogValue,
 ): FlowSchematicCatalogCompatibilityIssue[] {
-  const parsedCatalog = WorkflowPrimitiveCatalog.safeParse(catalog);
+  const parsedCatalog = FlowBlockCatalog.safeParse(catalog);
   if (!parsedCatalog.success) {
-    return [{ message: `primitive catalog failed to parse: ${parsedCatalog.error.message}` }];
+    return [{ message: `block catalog failed to parse: ${parsedCatalog.error.message}` }];
   }
 
-  const primitiveById = new Map(parsedCatalog.data.primitives.map((p) => [p.id, p]));
+  const blockById = new Map(parsedCatalog.data.blocks.map((p) => [p.id, p]));
   const issues: FlowSchematicCatalogCompatibilityIssue[] = [];
 
   for (const item of schematic.items) {
-    const primitive = primitiveById.get(item.uses as WorkflowPrimitiveIdValue);
-    if (primitive === undefined) {
+    const block = blockById.get(item.block as FlowBlockIdValue);
+    if (block === undefined) {
       issues.push({
         item_id: item.id,
-        message: `unknown primitive id: ${item.uses}`,
+        message: `unknown block id: ${item.block}`,
       });
       continue;
     }
 
-    for (const route of schematicStepRouteOutcomes(item) as WorkflowPrimitiveRouteValue[]) {
-      if (!primitive.allowed_routes.includes(route)) {
+    for (const route of schematicStepRouteOutcomes(item) as FlowRouteValue[]) {
+      if (!block.allowed_routes.includes(route)) {
         issues.push({
           item_id: item.id,
-          message: `route "${route}" is not allowed by primitive "${item.uses}"`,
+          message: `route "${route}" is not allowed by block "${item.block}"`,
         });
       }
     }
 
-    const acceptedInputSets = primitiveAcceptedInputSets(primitive);
+    const acceptedInputSets = blockAcceptedInputSets(block);
     if (
       !acceptedInputSets.some((expectedContracts) =>
         schematicStepSatisfiesInputSet(item, expectedContracts, schematic.contract_aliases),
@@ -834,41 +832,41 @@ export function validateFlowSchematicCatalogCompatibility(
     ) {
       issues.push({
         item_id: item.id,
-        message: `inputs do not satisfy primitive "${item.uses}"; expected one of ${acceptedInputSets
+        message: `inputs do not satisfy block "${item.block}"; expected one of ${acceptedInputSets
           .map(formatContractSet)
           .join(' or ')}`,
       });
     }
 
-    if (!contractIsCompatible(primitive.output_contract, item.output, schematic.contract_aliases)) {
+    if (!contractIsCompatible(block.output_contract, item.output, schematic.contract_aliases)) {
       issues.push({
         item_id: item.id,
-        message: `output "${item.output}" is not compatible with primitive output "${primitive.output_contract}"`,
+        message: `output "${item.output}" is not compatible with block output "${block.output_contract}"`,
       });
     }
 
-    for (const requirement of primitive.produces_evidence) {
+    for (const requirement of block.produces_evidence) {
       if (!item.evidence_requirements.includes(requirement)) {
         issues.push({
           item_id: item.id,
-          message: `evidence requirement "${requirement}" from primitive "${item.uses}" is not declared by schematic item`,
+          message: `evidence requirement "${requirement}" from block "${item.block}" is not declared by schematic item`,
         });
       }
     }
 
-    const executionKinds = acceptedExecutionKinds(primitive);
+    const executionKinds = acceptedExecutionKinds(block);
     if (!executionKinds.includes(item.execution.kind)) {
       issues.push({
         item_id: item.id,
-        message: `execution kind "${item.execution.kind}" is not compatible with primitive "${item.uses}"; expected one of ${executionKinds.join(', ')}`,
+        message: `execution kind "${item.execution.kind}" is not compatible with block "${item.block}"; expected one of ${executionKinds.join(', ')}`,
       });
     }
 
-    const phases = acceptedPhases(primitive);
+    const phases = acceptedPhases(block);
     if (!phases.includes(item.phase)) {
       issues.push({
         item_id: item.id,
-        message: `phase "${item.phase}" is not compatible with primitive "${item.uses}"; expected one of ${phases.join(', ')}`,
+        message: `phase "${item.phase}" is not compatible with block "${item.block}"; expected one of ${phases.join(', ')}`,
       });
     }
   }

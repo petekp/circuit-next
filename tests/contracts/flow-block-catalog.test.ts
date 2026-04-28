@@ -1,13 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-import {
-  WORKFLOW_PRIMITIVE_IDS,
-  WorkflowPrimitiveCatalog,
-} from '../../src/schemas/workflow-primitives.js';
+import { FLOW_BLOCK_IDS, FlowBlockCatalog } from '../../src/schemas/flow-blocks.js';
 
-const catalogPath = 'docs/workflows/primitive-catalog.json';
-const primitivesDocPath = 'docs/workflows/primitives.md';
+const catalogPath = 'docs/workflows/block-catalog.json';
+const blocksDocPath = 'docs/workflows/blocks.md';
 const compositionDocPath = 'docs/workflows/flow-schematics.md';
 
 function readCatalog() {
@@ -15,7 +12,7 @@ function readCatalog() {
 }
 
 function parseCatalog() {
-  return WorkflowPrimitiveCatalog.parse(readCatalog());
+  return FlowBlockCatalog.parse(readCatalog());
 }
 
 function titleToId(title: string): string {
@@ -28,8 +25,8 @@ function titleToId(title: string): string {
     .replace(/^-|-$/g, '');
 }
 
-function canonicalPrimitiveTitlesFromMarkdown(): string[] {
-  const markdown = readFileSync(primitivesDocPath, 'utf8');
+function canonicalBlockTitlesFromMarkdown(): string[] {
+  const markdown = readFileSync(blocksDocPath, 'utf8');
   const section = markdown.split('## Canonical Block List')[1]?.split('## Fix-Derived')[0];
   if (section === undefined) throw new Error('Canonical Block List section not found');
   return section
@@ -39,28 +36,28 @@ function canonicalPrimitiveTitlesFromMarkdown(): string[] {
     .filter((title): title is string => title !== undefined && title.length > 0);
 }
 
-describe('workflow primitive catalog', () => {
+describe('flow block catalog', () => {
   it('parses the machine-readable catalog with the schema', () => {
     const parsed = parseCatalog();
     expect(parsed.schema_version).toBe('1');
-    expect(parsed.primitives).toHaveLength(WORKFLOW_PRIMITIVE_IDS.length);
+    expect(parsed.blocks).toHaveLength(FLOW_BLOCK_IDS.length);
   });
 
-  it('contains exactly the canonical primitive ids, in declared order', () => {
+  it('contains exactly the canonical block ids, in declared order', () => {
     const parsed = parseCatalog();
-    expect(parsed.primitives.map((primitive) => primitive.id)).toEqual([...WORKFLOW_PRIMITIVE_IDS]);
+    expect(parsed.blocks.map((block) => block.id)).toEqual([...FLOW_BLOCK_IDS]);
   });
 
-  it('stays aligned with the Markdown primitive inventory table', () => {
+  it('stays aligned with the Markdown block inventory table', () => {
     const parsed = parseCatalog();
-    const markdownTitles = canonicalPrimitiveTitlesFromMarkdown();
-    expect(markdownTitles).toEqual(parsed.primitives.map((primitive) => primitive.title));
-    expect(markdownTitles.map(titleToId)).toEqual([...WORKFLOW_PRIMITIVE_IDS]);
+    const markdownTitles = canonicalBlockTitlesFromMarkdown();
+    expect(markdownTitles).toEqual(parsed.blocks.map((block) => block.title));
+    expect(markdownTitles.map(titleToId)).toEqual([...FLOW_BLOCK_IDS]);
   });
 
-  it('keeps primitive outputs typed and unique', () => {
+  it('keeps block outputs typed and unique', () => {
     const parsed = parseCatalog();
-    const outputs = parsed.primitives.map((primitive) => primitive.output_contract);
+    const outputs = parsed.blocks.map((block) => block.output_contract);
     expect(new Set(outputs).size).toBe(outputs.length);
     for (const output of outputs) {
       expect(output).toMatch(/^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)+@v[0-9]+$/);
@@ -68,9 +65,9 @@ describe('workflow primitive catalog', () => {
   });
 
   it('models Act as accepting either diagnosis-based or plan-based input', () => {
-    const act = parseCatalog().primitives.find((primitive) => primitive.id === 'act');
+    const act = parseCatalog().blocks.find((block) => block.id === 'act');
     expect(act).toBeDefined();
-    if (act === undefined) throw new Error('act primitive missing');
+    if (act === undefined) throw new Error('act block missing');
     expect(act.input_contracts).toEqual(['workflow.brief@v1', 'diagnosis.result@v1']);
     expect(act.alternative_input_contracts).toEqual([
       ['workflow.brief@v1', 'plan.strategy@v1'],
@@ -78,27 +75,25 @@ describe('workflow primitive catalog', () => {
     ]);
   });
 
-  it('rejects duplicate contracts inside a primitive input set', () => {
+  it('rejects duplicate contracts inside a block input set', () => {
     const raw = readCatalog() as {
-      primitives: Array<{
+      blocks: Array<{
         id: string;
         input_contracts?: string[];
       }>;
     };
-    const act = raw.primitives.find((primitive) => primitive.id === 'act');
-    if (act === undefined) throw new Error('act primitive missing');
+    const act = raw.blocks.find((block) => block.id === 'act');
+    if (act === undefined) throw new Error('act block missing');
     act.input_contracts = ['workflow.brief@v1', 'workflow.brief@v1'];
-    const result = WorkflowPrimitiveCatalog.safeParse(raw);
+    const result = FlowBlockCatalog.safeParse(raw);
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.message).toMatch(/duplicate input contract/);
     }
   });
 
-  it('pins human decision as a host-mapped, mode-aware primitive', () => {
-    const humanDecision = parseCatalog().primitives.find(
-      (primitive) => primitive.id === 'human-decision',
-    );
+  it('pins human decision as a host-mapped, mode-aware block', () => {
+    const humanDecision = parseCatalog().blocks.find((block) => block.id === 'human-decision');
     expect(humanDecision).toBeDefined();
     if (humanDecision === undefined) throw new Error('human-decision missing');
     expect(humanDecision.action_surface).toBe('host');
@@ -114,8 +109,8 @@ describe('workflow primitive catalog', () => {
 
   it('keeps close and handoff as honest terminal shapes', () => {
     const parsed = parseCatalog();
-    const close = parsed.primitives.find((primitive) => primitive.id === 'close-with-evidence');
-    const handoff = parsed.primitives.find((primitive) => primitive.id === 'handoff');
+    const close = parsed.blocks.find((block) => block.id === 'close-with-evidence');
+    const handoff = parsed.blocks.find((block) => block.id === 'handoff');
     expect(close?.allowed_routes).toEqual(['complete', 'stop', 'handoff', 'escalate']);
     expect(close?.input_contracts).toEqual([
       'workflow.brief@v1',
@@ -134,7 +129,7 @@ describe('workflow primitive catalog', () => {
 
   it('has a composition note that points schematics at the catalog, not freeform graphs', () => {
     const note = readFileSync(compositionDocPath, 'utf8');
-    expect(note).toContain('docs/workflows/primitive-catalog.json');
+    expect(note).toContain('docs/workflows/block-catalog.json');
     expect(note).toMatch(/schematic/i);
     expect(note).toMatch(/freeform graph/i);
     expect(note).toMatch(/named outcomes/i);

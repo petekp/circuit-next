@@ -12,14 +12,12 @@ This note describes how Circuit should compose reusable flow blocks into
 schematics. It does not define runtime behavior yet.
 
 The companion machine-readable block list lives at
-`docs/workflows/primitive-catalog.json` (renamed to `block-catalog.json` in
-Phase 5 of the terminology migration), with the schema in
-`src/schemas/workflow-primitives.ts`.
+`docs/workflows/block-catalog.json`, with the schema in
+`src/schemas/flow-blocks.ts`.
 
-The active Fix schematic lives at `src/workflows/fix/recipe.json` (renamed
-to `schematic.json` in Phase 4 of the terminology migration), with the
-schematic schema in `src/schemas/workflow-recipe.ts` and the schematic →
-compiled-flow compiler at `src/runtime/compile-recipe-to-workflow.ts`.
+The active Fix schematic lives at `src/workflows/fix/schematic.json`, with
+the schematic schema in `src/schemas/flow-schematic.ts` and the schematic →
+compiled-flow compiler at `src/runtime/compile-schematic-to-workflow.ts`.
 Compiled flows are emitted to `.claude-plugin/skills/fix/circuit.json` and
 (because Fix uses `route_overrides`) `.claude-plugin/skills/fix/lite.json`.
 The product direction note at `docs/workflows/direction.md` reframes old
@@ -303,7 +301,7 @@ definitions.
 Two layers, both load-bearing:
 
 **Block contracts** are nominal. They live in
-`docs/workflows/primitive-catalog.json` as named identifiers
+`docs/workflows/block-catalog.json` as named identifiers
 (`workflow.brief@v1`, `verification.result@v1`, `change.evidence@v1`,
 etc.). Blocks declare them as inputs and outputs. They express the
 abstract claim "this block needs a brief" without binding to a specific

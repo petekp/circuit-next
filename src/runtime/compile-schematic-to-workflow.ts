@@ -25,6 +25,7 @@
 // or any `kind ↔ artifact schema` pair is one the runner does not support,
 // the compile throws with a clear message naming the offending item.
 
+import type { FlowContractRef } from '../schemas/flow-blocks.js';
 import type {
   FlowEntryMode,
   FlowSchematic,
@@ -34,7 +35,6 @@ import type {
 import type { CanonicalPhase } from '../schemas/phase.js';
 import { CANONICAL_PHASES } from '../schemas/phase.js';
 import type { Step } from '../schemas/step.js';
-import type { WorkflowPrimitiveContractRef } from '../schemas/workflow-primitives.js';
 import type { Workflow as WorkflowValue } from '../schemas/workflow.js';
 import { Workflow } from '../schemas/workflow.js';
 import { findCheckpointBriefBuilder } from './registries/checkpoint-writers/registry.js';
@@ -169,8 +169,8 @@ function computeReachableForMode(schematic: FlowSchematic, mode: FlowEntryMode):
 function buildContractProducerIndex(
   schematicId: string,
   items: readonly SchematicStep[],
-): Map<WorkflowPrimitiveContractRef, SchematicStep> {
-  const index = new Map<WorkflowPrimitiveContractRef, SchematicStep>();
+): Map<FlowContractRef, SchematicStep> {
+  const index = new Map<FlowContractRef, SchematicStep>();
   for (const item of items) {
     if (index.has(item.output)) {
       const prior = index.get(item.output);
@@ -197,8 +197,8 @@ function readPathForProducer(producer: SchematicStep): string {
 
 function computeReads(
   item: SchematicStep,
-  initialContracts: ReadonlySet<WorkflowPrimitiveContractRef>,
-  producerByContract: ReadonlyMap<WorkflowPrimitiveContractRef, SchematicStep>,
+  initialContracts: ReadonlySet<FlowContractRef>,
+  producerByContract: ReadonlyMap<FlowContractRef, SchematicStep>,
 ): string[] {
   const reads: string[] = [];
   const seen = new Set<string>();
@@ -482,7 +482,7 @@ interface SchematicFrame {
     intent_prefixes: readonly string[];
   };
   startsAt: string;
-  initialContracts: Set<WorkflowPrimitiveContractRef>;
+  initialContracts: Set<FlowContractRef>;
   phaseEntries: readonly { canonical: CanonicalPhase; id: string; title: string }[];
   declaredOmits: readonly CanonicalPhase[];
   spineRationale: string | undefined;

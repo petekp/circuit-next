@@ -1,22 +1,22 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
+import { FlowBlockCatalog } from '../../src/schemas/flow-blocks.js';
 import {
   FlowSchematic,
   validateFlowSchematicCatalogCompatibility,
 } from '../../src/schemas/flow-schematic.js';
 import { StepId } from '../../src/schemas/ids.js';
-import { WorkflowPrimitiveCatalog } from '../../src/schemas/workflow-primitives.js';
 
-const primitiveCatalogPath = 'docs/workflows/primitive-catalog.json';
+const blockCatalogPath = 'docs/workflows/block-catalog.json';
 const fixSchematicPath = 'src/workflows/fix/schematic.json';
 
 function readJson(path: string): unknown {
   return JSON.parse(readFileSync(path, 'utf8')) as unknown;
 }
 
-function parsePrimitiveCatalog() {
-  return WorkflowPrimitiveCatalog.parse(readJson(primitiveCatalogPath));
+function parseBlockCatalog() {
+  return FlowBlockCatalog.parse(readJson(blockCatalogPath));
 }
 
 function parseFixSchematic() {
@@ -32,10 +32,10 @@ describe('flow schematic schema — active Fix schematic', () => {
     expect(schematic.starts_at as unknown as string).toBe('fix-frame');
   });
 
-  it('keeps the Fix schematic compatible with the primitive catalog', () => {
+  it('keeps the Fix schematic compatible with the block catalog', () => {
     const issues = validateFlowSchematicCatalogCompatibility(
       parseFixSchematic(),
-      parsePrimitiveCatalog(),
+      parseBlockCatalog(),
     );
     expect(issues).toEqual([]);
   });
@@ -48,9 +48,9 @@ describe('flow schematic schema — active Fix schematic', () => {
     });
   });
 
-  it('uses the expected Fix primitive sequence', () => {
+  it('uses the expected Fix block sequence', () => {
     const schematic = parseFixSchematic();
-    expect(schematic.items.map((item) => item.uses)).toEqual([
+    expect(schematic.items.map((item) => item.block)).toEqual([
       'frame',
       'gather-context',
       'diagnose',
@@ -219,19 +219,19 @@ describe('flow schematic schema — active Fix schematic', () => {
     }
   });
 
-  it('reports route outcomes that the selected primitive does not allow', () => {
+  it('reports route outcomes that the selected block does not allow', () => {
     const schematic = parseFixSchematic();
     const frame = schematic.items.find((item) => (item.id as unknown as string) === 'fix-frame');
     if (frame === undefined) throw new Error('fix-frame missing');
     frame.routes = { ...frame.routes, complete: '@complete' };
-    const issues = validateFlowSchematicCatalogCompatibility(schematic, parsePrimitiveCatalog());
+    const issues = validateFlowSchematicCatalogCompatibility(schematic, parseBlockCatalog());
     expect(issues).toContainEqual({
       item_id: 'fix-frame',
-      message: 'route "complete" is not allowed by primitive "frame"',
+      message: 'route "complete" is not allowed by block "frame"',
     });
   });
 
-  it('reports schematic items that omit primitive evidence requirements', () => {
+  it('reports schematic items that omit block evidence requirements', () => {
     const schematic = parseFixSchematic();
     const diagnose = schematic.items.find(
       (item) => (item.id as unknown as string) === 'fix-diagnose',
@@ -239,38 +239,38 @@ describe('flow schematic schema — active Fix schematic', () => {
     if (diagnose === undefined) throw new Error('fix-diagnose missing');
     diagnose.evidence_requirements = ['cause hypothesis'];
 
-    const issues = validateFlowSchematicCatalogCompatibility(schematic, parsePrimitiveCatalog());
+    const issues = validateFlowSchematicCatalogCompatibility(schematic, parseBlockCatalog());
     expect(issues).toContainEqual({
       item_id: 'fix-diagnose',
       message:
-        'evidence requirement "confidence" from primitive "diagnose" is not declared by schematic item',
+        'evidence requirement "confidence" from block "diagnose" is not declared by schematic item',
     });
   });
 
-  it('reports execution kinds that do not match the selected primitive surface', () => {
+  it('reports execution kinds that do not match the selected block surface', () => {
     const schematic = parseFixSchematic();
     const act = schematic.items.find((item) => (item.id as unknown as string) === 'fix-act');
     if (act === undefined) throw new Error('fix-act missing');
     act.execution = { kind: 'checkpoint' };
 
-    const issues = validateFlowSchematicCatalogCompatibility(schematic, parsePrimitiveCatalog());
+    const issues = validateFlowSchematicCatalogCompatibility(schematic, parseBlockCatalog());
     expect(issues).toContainEqual({
       item_id: 'fix-act',
       message:
-        'execution kind "checkpoint" is not compatible with primitive "act"; expected one of dispatch, synthesis',
+        'execution kind "checkpoint" is not compatible with block "act"; expected one of dispatch, synthesis',
     });
   });
 
-  it('reports phase bindings that do not match the selected primitive', () => {
+  it('reports phase bindings that do not match the selected block', () => {
     const schematic = parseFixSchematic();
     const act = schematic.items.find((item) => (item.id as unknown as string) === 'fix-act');
     if (act === undefined) throw new Error('fix-act missing');
     act.phase = 'analyze';
 
-    const issues = validateFlowSchematicCatalogCompatibility(schematic, parsePrimitiveCatalog());
+    const issues = validateFlowSchematicCatalogCompatibility(schematic, parseBlockCatalog());
     expect(issues).toContainEqual({
       item_id: 'fix-act',
-      message: 'phase "analyze" is not compatible with primitive "act"; expected one of act',
+      message: 'phase "analyze" is not compatible with block "act"; expected one of act',
     });
   });
 
@@ -280,11 +280,11 @@ describe('flow schematic schema — active Fix schematic', () => {
     if (verify === undefined) throw new Error('fix-verify missing');
     verify.execution = { kind: 'synthesis' };
 
-    const issues = validateFlowSchematicCatalogCompatibility(schematic, parsePrimitiveCatalog());
+    const issues = validateFlowSchematicCatalogCompatibility(schematic, parseBlockCatalog());
     expect(issues).toContainEqual({
       item_id: 'fix-verify',
       message:
-        'execution kind "synthesis" is not compatible with primitive "run-verification"; expected one of verification',
+        'execution kind "synthesis" is not compatible with block "run-verification"; expected one of verification',
     });
   });
 
@@ -295,7 +295,7 @@ describe('flow schematic schema — active Fix schematic', () => {
     );
     if (diagnose === undefined) throw new Error('fix-diagnose missing');
     diagnose.input.context = 'missing.context@v1';
-    const issues = validateFlowSchematicCatalogCompatibility(schematic, parsePrimitiveCatalog());
+    const issues = validateFlowSchematicCatalogCompatibility(schematic, parseBlockCatalog());
     expect(issues).toContainEqual({
       item_id: 'fix-diagnose',
       message:
@@ -304,21 +304,21 @@ describe('flow schematic schema — active Fix schematic', () => {
     expect(issues).toContainEqual({
       item_id: 'fix-diagnose',
       message:
-        'inputs do not satisfy primitive "diagnose"; expected one of [workflow.brief@v1, context.packet@v1]',
+        'inputs do not satisfy block "diagnose"; expected one of [workflow.brief@v1, context.packet@v1]',
     });
   });
 
-  it('reports schematic items that omit every accepted primitive input set', () => {
+  it('reports schematic items that omit every accepted block input set', () => {
     const schematic = parseFixSchematic();
     const act = schematic.items.find((item) => (item.id as unknown as string) === 'fix-act');
     if (act === undefined) throw new Error('fix-act missing');
     act.input = { brief: 'fix.brief@v1' };
 
-    const issues = validateFlowSchematicCatalogCompatibility(schematic, parsePrimitiveCatalog());
+    const issues = validateFlowSchematicCatalogCompatibility(schematic, parseBlockCatalog());
     expect(issues).toContainEqual({
       item_id: 'fix-act',
       message:
-        'inputs do not satisfy primitive "act"; expected one of [workflow.brief@v1, diagnosis.result@v1] or [workflow.brief@v1, plan.strategy@v1] or [workflow.brief@v1, plan.strategy@v1, diagnosis.result@v1]',
+        'inputs do not satisfy block "act"; expected one of [workflow.brief@v1, diagnosis.result@v1] or [workflow.brief@v1, plan.strategy@v1] or [workflow.brief@v1, plan.strategy@v1, diagnosis.result@v1]',
     });
   });
 
@@ -328,7 +328,7 @@ describe('flow schematic schema — active Fix schematic', () => {
     if (verify === undefined) throw new Error('fix-verify missing');
     verify.routes.continue = StepId.parse('fix-close');
 
-    const issues = validateFlowSchematicCatalogCompatibility(schematic, parsePrimitiveCatalog());
+    const issues = validateFlowSchematicCatalogCompatibility(schematic, parseBlockCatalog());
     expect(issues).toContainEqual({
       item_id: 'fix-close',
       message:
@@ -342,24 +342,24 @@ describe('flow schematic schema — active Fix schematic', () => {
     if (frame === undefined) throw new Error('fix-frame missing');
     frame.routes = { stop: '@stop' };
 
-    const issues = validateFlowSchematicCatalogCompatibility(schematic, parsePrimitiveCatalog());
+    const issues = validateFlowSchematicCatalogCompatibility(schematic, parseBlockCatalog());
     expect(issues).toContainEqual({
       item_id: 'fix-gather-context',
       message: 'schematic item is unreachable from starts_at',
     });
   });
 
-  it('reports outputs that are not primitive outputs or declared aliases', () => {
+  it('reports outputs that are not block outputs or declared aliases', () => {
     const schematic = parseFixSchematic();
     const close = schematic.items.find((item) => (item.id as unknown as string) === 'fix-close');
     if (close === undefined) throw new Error('fix-close missing');
     close.output = 'wrong.result@v1';
-    const issues = validateFlowSchematicCatalogCompatibility(schematic, parsePrimitiveCatalog());
+    const issues = validateFlowSchematicCatalogCompatibility(schematic, parseBlockCatalog());
     expect(issues).toEqual([
       {
         item_id: 'fix-close',
         message:
-          'output "wrong.result@v1" is not compatible with primitive output "workflow.result@v1"',
+          'output "wrong.result@v1" is not compatible with block output "workflow.result@v1"',
       },
     ]);
   });
@@ -373,7 +373,7 @@ describe('flow schematic compiler-required metadata', () => {
   function frameItemWithExtras(extras: Record<string, unknown>): Record<string, unknown> {
     return {
       id: 'a-frame',
-      uses: 'frame',
+      block: 'frame',
       title: 'Frame',
       phase: 'frame',
       input: {},
@@ -388,7 +388,7 @@ describe('flow schematic compiler-required metadata', () => {
   function actItemWithExtras(extras: Record<string, unknown>): Record<string, unknown> {
     return {
       id: 'a-act',
-      uses: 'act',
+      block: 'act',
       title: 'Act',
       phase: 'act',
       input: { brief: 'workflow.brief@v1', plan: 'plan.strategy@v1' },

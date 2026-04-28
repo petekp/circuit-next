@@ -18,12 +18,9 @@ system.
 
 Deep prior-art research should be evaluated through
 `docs/workflows/research-intake.md` before it changes this inventory. The
-machine-readable companion catalog is
-`docs/workflows/primitive-catalog.json` (renamed to `block-catalog.json`
-in Phase 5 of the terminology migration); the composition model is
-sketched in `docs/workflows/recipe-composition.md` (renamed to
-`flow-schematics.md` in Phase 4). The product direction is summarized in
-`docs/workflows/direction.md`.
+machine-readable companion catalog is `docs/workflows/block-catalog.json`;
+the composition model is sketched in `docs/workflows/flow-schematics.md`.
+The product direction is summarized in `docs/workflows/direction.md`.
 
 ## Core Idea
 

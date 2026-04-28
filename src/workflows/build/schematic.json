@@ -8,12 +8,30 @@
   "starts_at": "frame-step",
   "initial_contracts": ["task.intake@v1", "route.decision@v1", "verification.plan@v1"],
   "contract_aliases": [
-    { "generic": "workflow.brief@v1", "actual": "build.brief@v1" },
-    { "generic": "plan.strategy@v1", "actual": "build.plan@v1" },
-    { "generic": "change.evidence@v1", "actual": "build.implementation@v1" },
-    { "generic": "verification.result@v1", "actual": "build.verification@v1" },
-    { "generic": "review.verdict@v1", "actual": "build.review@v1" },
-    { "generic": "workflow.result@v1", "actual": "build.result@v1" }
+    {
+      "generic": "workflow.brief@v1",
+      "actual": "build.brief@v1"
+    },
+    {
+      "generic": "plan.strategy@v1",
+      "actual": "build.plan@v1"
+    },
+    {
+      "generic": "change.evidence@v1",
+      "actual": "build.implementation@v1"
+    },
+    {
+      "generic": "verification.result@v1",
+      "actual": "build.verification@v1"
+    },
+    {
+      "generic": "review.verdict@v1",
+      "actual": "build.review@v1"
+    },
+    {
+      "generic": "workflow.result@v1",
+      "actual": "build.result@v1"
+    }
   ],
   "entry": {
     "signals": {
@@ -23,10 +41,26 @@
     "intent_prefixes": ["build", "implement", "develop"]
   },
   "entry_modes": [
-    { "name": "default", "rigor": "standard", "description": "Default Build entry mode." },
-    { "name": "lite", "rigor": "lite", "description": "Lite Build entry mode." },
-    { "name": "deep", "rigor": "deep", "description": "Deep Build entry mode." },
-    { "name": "autonomous", "rigor": "autonomous", "description": "Autonomous Build entry mode." }
+    {
+      "name": "default",
+      "rigor": "standard",
+      "description": "Default Build entry mode."
+    },
+    {
+      "name": "lite",
+      "rigor": "lite",
+      "description": "Lite Build entry mode."
+    },
+    {
+      "name": "deep",
+      "rigor": "deep",
+      "description": "Deep Build entry mode."
+    },
+    {
+      "name": "autonomous",
+      "rigor": "autonomous",
+      "description": "Autonomous Build entry mode."
+    }
   ],
   "spine_policy": {
     "mode": "partial",
@@ -34,17 +68,40 @@
     "rationale": "Build follows Frame, Plan, Act, Verify, Review, Close. The Analyze phase is omitted because analysis is folded into Frame and Plan for this workflow."
   },
   "phases": [
-    { "canonical": "frame", "id": "frame-phase", "title": "Frame" },
-    { "canonical": "plan", "id": "plan-phase", "title": "Plan" },
-    { "canonical": "act", "id": "act-phase", "title": "Act" },
-    { "canonical": "verify", "id": "verify-phase", "title": "Verify" },
-    { "canonical": "review", "id": "review-phase", "title": "Review" },
-    { "canonical": "close", "id": "close-phase", "title": "Close" }
+    {
+      "canonical": "frame",
+      "id": "frame-phase",
+      "title": "Frame"
+    },
+    {
+      "canonical": "plan",
+      "id": "plan-phase",
+      "title": "Plan"
+    },
+    {
+      "canonical": "act",
+      "id": "act-phase",
+      "title": "Act"
+    },
+    {
+      "canonical": "verify",
+      "id": "verify-phase",
+      "title": "Verify"
+    },
+    {
+      "canonical": "review",
+      "id": "review-phase",
+      "title": "Review"
+    },
+    {
+      "canonical": "close",
+      "id": "close-phase",
+      "title": "Close"
+    }
   ],
   "items": [
     {
       "id": "frame-step",
-      "uses": "frame",
       "title": "Frame - confirm Build brief",
       "phase": "frame",
       "input": {
@@ -53,17 +110,26 @@
       },
       "output": "build.brief@v1",
       "evidence_requirements": ["scope boundary", "constraints", "proof plan"],
-      "execution": { "kind": "checkpoint" },
+      "execution": {
+        "kind": "checkpoint"
+      },
       "protocol": "build-frame@v1",
       "writes": {
         "checkpoint_request_path": "artifacts/checkpoints/frame-step-request.json",
         "checkpoint_response_path": "artifacts/checkpoints/frame-step-response.json",
         "artifact_path": "artifacts/build/brief.json"
       },
-      "gate": { "allow": ["continue"] },
+      "gate": {
+        "allow": ["continue"]
+      },
       "checkpoint_policy": {
         "prompt": "Confirm the Build brief before implementation starts.",
-        "choices": [{ "id": "continue", "label": "Continue" }],
+        "choices": [
+          {
+            "id": "continue",
+            "label": "Continue"
+          }
+        ],
         "safe_default_choice": "continue",
         "safe_autonomous_choice": "continue",
         "build_brief": {
@@ -88,11 +154,11 @@
       "routes": {
         "continue": "plan-step",
         "stop": "@stop"
-      }
+      },
+      "block": "frame"
     },
     {
       "id": "plan-step",
-      "uses": "plan",
       "title": "Plan - produce Build plan",
       "phase": "plan",
       "input": {
@@ -100,21 +166,25 @@
       },
       "output": "build.plan@v1",
       "evidence_requirements": ["ordered steps", "risk notes", "proof strategy"],
-      "execution": { "kind": "synthesis" },
+      "execution": {
+        "kind": "synthesis"
+      },
       "protocol": "build-plan@v1",
       "writes": {
         "artifact_path": "artifacts/build/plan.json"
       },
-      "gate": { "required": ["objective", "verification"] },
+      "gate": {
+        "required": ["objective", "verification"]
+      },
       "routes": {
         "continue": "act-step",
         "revise": "plan-step",
         "stop": "@stop"
-      }
+      },
+      "block": "plan"
     },
     {
       "id": "act-step",
-      "uses": "act",
       "title": "Act - implementation dispatch",
       "phase": "act",
       "input": {
@@ -123,7 +193,10 @@
       },
       "output": "build.implementation@v1",
       "evidence_requirements": ["changed files", "change rationale", "declared follow-up proof"],
-      "execution": { "kind": "dispatch", "role": "implementer" },
+      "execution": {
+        "kind": "dispatch",
+        "role": "implementer"
+      },
       "protocol": "build-act@v1",
       "writes": {
         "artifact_path": "artifacts/build/implementation.json",
@@ -131,16 +204,18 @@
         "receipt_path": "artifacts/dispatch/build-act.receipt.txt",
         "result_path": "artifacts/dispatch/build-act.result.json"
       },
-      "gate": { "pass": ["accept"] },
+      "gate": {
+        "pass": ["accept"]
+      },
       "routes": {
         "continue": "verify-step",
         "retry": "act-step",
         "stop": "@stop"
-      }
+      },
+      "block": "act"
     },
     {
       "id": "verify-step",
-      "uses": "run-verification",
       "title": "Verify - run Build verification",
       "phase": "verify",
       "input": {
@@ -150,21 +225,25 @@
       },
       "output": "build.verification@v1",
       "evidence_requirements": ["command list", "exit status", "bounded output", "pass or fail"],
-      "execution": { "kind": "verification" },
+      "execution": {
+        "kind": "verification"
+      },
       "protocol": "build-verify@v1",
       "writes": {
         "artifact_path": "artifacts/build/verification.json"
       },
-      "gate": { "required": ["overall_status", "commands"] },
+      "gate": {
+        "required": ["overall_status", "commands"]
+      },
       "routes": {
         "continue": "review-step",
         "retry": "act-step",
         "stop": "@stop"
-      }
+      },
+      "block": "run-verification"
     },
     {
       "id": "review-step",
-      "uses": "review",
       "title": "Review - implementation review dispatch",
       "phase": "review",
       "input": {
@@ -175,7 +254,10 @@
       },
       "output": "build.review@v1",
       "evidence_requirements": ["verdict", "findings", "confidence", "required fixes"],
-      "execution": { "kind": "dispatch", "role": "reviewer" },
+      "execution": {
+        "kind": "dispatch",
+        "role": "reviewer"
+      },
       "protocol": "build-review@v1",
       "writes": {
         "artifact_path": "artifacts/build/review.json",
@@ -183,17 +265,19 @@
         "receipt_path": "artifacts/dispatch/build-review.receipt.txt",
         "result_path": "artifacts/dispatch/build-review.result.json"
       },
-      "gate": { "pass": ["accept", "accept-with-fixes"] },
+      "gate": {
+        "pass": ["accept", "accept-with-fixes"]
+      },
       "routes": {
         "continue": "close-step",
         "retry": "act-step",
         "revise": "act-step",
         "stop": "@stop"
-      }
+      },
+      "block": "review"
     },
     {
       "id": "close-step",
-      "uses": "close-with-evidence",
       "title": "Close - emit Build result",
       "phase": "close",
       "input": {
@@ -205,16 +289,21 @@
       },
       "output": "build.result@v1",
       "evidence_requirements": ["outcome", "evidence pointers", "residual risks", "follow-ups"],
-      "execution": { "kind": "synthesis" },
+      "execution": {
+        "kind": "synthesis"
+      },
       "protocol": "build-close@v1",
       "writes": {
         "artifact_path": "artifacts/build-result.json"
       },
-      "gate": { "required": ["summary", "outcome", "artifact_pointers"] },
+      "gate": {
+        "required": ["summary", "outcome", "artifact_pointers"]
+      },
       "routes": {
         "complete": "@complete",
         "stop": "@stop"
-      }
+      },
+      "block": "close-with-evidence"
     }
   ]
 }

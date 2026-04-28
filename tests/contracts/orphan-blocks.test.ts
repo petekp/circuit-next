@@ -23,13 +23,13 @@ import {
   compileSchematicToWorkflow,
 } from '../../src/runtime/compile-schematic-to-workflow.js';
 import { runWorkflow } from '../../src/runtime/runner.js';
+import { FlowBlockCatalog } from '../../src/schemas/flow-blocks.js';
 import {
   FlowSchematic,
   validateFlowSchematicCatalogCompatibility,
 } from '../../src/schemas/flow-schematic.js';
 import { RunId } from '../../src/schemas/ids.js';
 import type { LaneDeclaration } from '../../src/schemas/lane.js';
-import { WorkflowPrimitiveCatalog } from '../../src/schemas/workflow-primitives.js';
 import type { Workflow } from '../../src/schemas/workflow.js';
 
 function exerciserLane(): LaneDeclaration {
@@ -55,8 +55,8 @@ function singleWorkflow(result: CompileResult): Workflow {
 }
 
 function loadCatalog() {
-  const raw = JSON.parse(readFileSync('docs/workflows/primitive-catalog.json', 'utf8')) as unknown;
-  return WorkflowPrimitiveCatalog.parse(raw);
+  const raw = JSON.parse(readFileSync('docs/workflows/block-catalog.json', 'utf8')) as unknown;
+  return FlowBlockCatalog.parse(raw);
 }
 
 // Minimal schematic shell. Per-test customizes the items and contract aliases.
@@ -126,7 +126,7 @@ describe('orphan primitive: handoff', () => {
     items: [
       {
         id: 'frame-step',
-        uses: 'frame',
+        block: 'frame',
         title: 'Frame',
         phase: 'frame',
         input: { intake: 'task.intake@v1', route: 'route.decision@v1' },
@@ -140,7 +140,7 @@ describe('orphan primitive: handoff', () => {
       },
       {
         id: 'handoff-step',
-        uses: 'handoff',
+        block: 'handoff',
         title: 'Handoff',
         phase: 'close',
         input: { state: 'workflow.state@v1', brief: 'workflow.brief@v1' },
@@ -217,7 +217,7 @@ describe('orphan primitive: human-decision', () => {
     items: [
       {
         id: 'frame-step',
-        uses: 'frame',
+        block: 'frame',
         title: 'Frame',
         phase: 'frame',
         input: { intake: 'task.intake@v1', route: 'route.decision@v1' },
@@ -231,7 +231,7 @@ describe('orphan primitive: human-decision', () => {
       },
       {
         id: 'decision-step',
-        uses: 'human-decision',
+        block: 'human-decision',
         title: 'Human Decision',
         phase: 'analyze',
         input: { question: 'workflow.question@v1', evidence: 'workflow.evidence@v1' },
@@ -324,7 +324,7 @@ describe('orphan primitive: queue', () => {
     items: [
       {
         id: 'frame-step',
-        uses: 'frame',
+        block: 'frame',
         title: 'Frame',
         phase: 'frame',
         input: { intake: 'task.intake@v1', route: 'route.decision@v1' },
@@ -338,7 +338,7 @@ describe('orphan primitive: queue', () => {
       },
       {
         id: 'queue-step',
-        uses: 'queue',
+        block: 'queue',
         title: 'Queue',
         phase: 'plan',
         input: { brief: 'workflow.brief@v1', context: 'context.packet@v1' },
@@ -403,7 +403,7 @@ describe('orphan primitive: batch', () => {
     items: [
       {
         id: 'frame-step',
-        uses: 'frame',
+        block: 'frame',
         title: 'Frame',
         phase: 'frame',
         input: { intake: 'task.intake@v1', route: 'route.decision@v1' },
@@ -417,7 +417,7 @@ describe('orphan primitive: batch', () => {
       },
       {
         id: 'batch-step',
-        uses: 'batch',
+        block: 'batch',
         title: 'Batch',
         phase: 'act',
         input: { queue: 'work.queue@v1', brief: 'workflow.brief@v1' },
@@ -493,7 +493,7 @@ describe('orphan primitive: risk-rollback-check', () => {
     items: [
       {
         id: 'frame-step',
-        uses: 'frame',
+        block: 'frame',
         title: 'Frame',
         phase: 'frame',
         input: { intake: 'task.intake@v1', route: 'route.decision@v1' },
@@ -507,7 +507,7 @@ describe('orphan primitive: risk-rollback-check', () => {
       },
       {
         id: 'risk-step',
-        uses: 'risk-rollback-check',
+        block: 'risk-rollback-check',
         title: 'Risk and Rollback',
         phase: 'close',
         input: {

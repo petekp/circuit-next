@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "primitives": [
+  "blocks": [
     {
       "id": "intake",
       "title": "Intake",

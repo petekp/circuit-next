@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const WORKFLOW_PRIMITIVE_IDS = [
+export const FLOW_BLOCK_IDS = [
   'intake',
   'route',
   'frame',
@@ -18,10 +18,10 @@ export const WORKFLOW_PRIMITIVE_IDS = [
   'handoff',
 ] as const;
 
-export const WorkflowPrimitiveId = z.enum(WORKFLOW_PRIMITIVE_IDS);
-export type WorkflowPrimitiveId = z.infer<typeof WorkflowPrimitiveId>;
+export const FlowBlockId = z.enum(FLOW_BLOCK_IDS);
+export type FlowBlockId = z.infer<typeof FlowBlockId>;
 
-export const WorkflowPrimitiveRoute = z.enum([
+export const FlowRoute = z.enum([
   'continue',
   'retry',
   'revise',
@@ -32,12 +32,12 @@ export const WorkflowPrimitiveRoute = z.enum([
   'escalate',
   'complete',
 ]);
-export type WorkflowPrimitiveRoute = z.infer<typeof WorkflowPrimitiveRoute>;
+export type FlowRoute = z.infer<typeof FlowRoute>;
 
-export const WorkflowPrimitiveActionSurface = z.enum(['orchestrator', 'worker', 'host', 'mixed']);
-export type WorkflowPrimitiveActionSurface = z.infer<typeof WorkflowPrimitiveActionSurface>;
+export const FlowBlockActionSurface = z.enum(['orchestrator', 'worker', 'host', 'mixed']);
+export type FlowBlockActionSurface = z.infer<typeof FlowBlockActionSurface>;
 
-export const WorkflowPrimitiveGateKind = z.enum([
+export const FlowBlockCheckKind = z.enum([
   'schema',
   'decision',
   'command',
@@ -45,23 +45,21 @@ export const WorkflowPrimitiveGateKind = z.enum([
   'risk',
   'queue',
 ]);
-export type WorkflowPrimitiveGateKind = z.infer<typeof WorkflowPrimitiveGateKind>;
+export type FlowBlockCheckKind = z.infer<typeof FlowBlockCheckKind>;
 
-export const WorkflowPrimitiveHumanInteraction = z.enum([
+export const FlowBlockHumanInteraction = z.enum([
   'never',
   'optional',
   'required',
   'mode-dependent',
 ]);
-export type WorkflowPrimitiveHumanInteraction = z.infer<typeof WorkflowPrimitiveHumanInteraction>;
+export type FlowBlockHumanInteraction = z.infer<typeof FlowBlockHumanInteraction>;
 
-export const WorkflowPrimitiveContractRef = z
-  .string()
-  .regex(/^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)+@v[0-9]+$/);
-export type WorkflowPrimitiveContractRef = z.infer<typeof WorkflowPrimitiveContractRef>;
+export const FlowContractRef = z.string().regex(/^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)+@v[0-9]+$/);
+export type FlowContractRef = z.infer<typeof FlowContractRef>;
 
-export const WorkflowPrimitiveInputContractSet = z
-  .array(WorkflowPrimitiveContractRef)
+export const FlowInputContractSet = z
+  .array(FlowContractRef)
   .min(1)
   .superRefine((contracts, ctx) => {
     const seen = new Set<string>();
@@ -76,7 +74,7 @@ export const WorkflowPrimitiveInputContractSet = z
       seen.add(contract);
     }
   });
-export type WorkflowPrimitiveInputContractSet = z.infer<typeof WorkflowPrimitiveInputContractSet>;
+export type FlowInputContractSet = z.infer<typeof FlowInputContractSet>;
 
 const nonEmptyUniqueStrings = z
   .array(z.string().min(1))
@@ -104,31 +102,31 @@ const HostCapabilities = z
   .strict();
 export type HostCapabilities = z.infer<typeof HostCapabilities>;
 
-export const WorkflowPrimitive = z
+export const FlowBlock = z
   .object({
-    id: WorkflowPrimitiveId,
+    id: FlowBlockId,
     title: z.string().min(1),
     purpose: z.string().min(1),
-    input_contracts: WorkflowPrimitiveInputContractSet,
-    alternative_input_contracts: z.array(WorkflowPrimitiveInputContractSet).default([]),
-    output_contract: WorkflowPrimitiveContractRef,
-    action_surface: WorkflowPrimitiveActionSurface,
+    input_contracts: FlowInputContractSet,
+    alternative_input_contracts: z.array(FlowInputContractSet).default([]),
+    output_contract: FlowContractRef,
+    action_surface: FlowBlockActionSurface,
     produces_evidence: nonEmptyUniqueStrings,
     gate: z
       .object({
-        kind: WorkflowPrimitiveGateKind,
+        kind: FlowBlockCheckKind,
         description: z.string().min(1),
       })
       .strict(),
-    allowed_routes: z.array(WorkflowPrimitiveRoute).min(1),
-    human_interaction: WorkflowPrimitiveHumanInteraction,
+    allowed_routes: z.array(FlowRoute).min(1),
+    human_interaction: FlowBlockHumanInteraction,
     host_capabilities: HostCapabilities,
     notes: z.string().min(1).optional(),
   })
   .strict()
-  .superRefine((primitive, ctx) => {
-    const routeSet = new Set<WorkflowPrimitiveRoute>();
-    for (const [index, route] of primitive.allowed_routes.entries()) {
+  .superRefine((block, ctx) => {
+    const routeSet = new Set<FlowRoute>();
+    for (const [index, route] of block.allowed_routes.entries()) {
       if (routeSet.has(route)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -139,29 +137,29 @@ export const WorkflowPrimitive = z
       routeSet.add(route);
     }
 
-    if (primitive.id === 'human-decision') {
-      if (primitive.human_interaction !== 'mode-dependent') {
+    if (block.id === 'human-decision') {
+      if (block.human_interaction !== 'mode-dependent') {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['human_interaction'],
           message: 'human-decision must be mode-dependent',
         });
       }
-      if (primitive.host_capabilities.claude.length === 0) {
+      if (block.host_capabilities.claude.length === 0) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['host_capabilities', 'claude'],
           message: 'human-decision must name a Claude host strategy',
         });
       }
-      if (primitive.host_capabilities.codex.length === 0) {
+      if (block.host_capabilities.codex.length === 0) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['host_capabilities', 'codex'],
           message: 'human-decision must name a Codex host strategy',
         });
       }
-      if (primitive.host_capabilities.non_interactive.length === 0) {
+      if (block.host_capabilities.non_interactive.length === 0) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['host_capabilities', 'non_interactive'],
@@ -170,7 +168,7 @@ export const WorkflowPrimitive = z
       }
     }
 
-    if (primitive.id === 'close-with-evidence' && !routeSet.has('complete')) {
+    if (block.id === 'close-with-evidence' && !routeSet.has('complete')) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['allowed_routes'],
@@ -178,36 +176,36 @@ export const WorkflowPrimitive = z
       });
     }
   });
-export type WorkflowPrimitive = z.infer<typeof WorkflowPrimitive>;
+export type FlowBlock = z.infer<typeof FlowBlock>;
 
-export const WorkflowPrimitiveCatalog = z
+export const FlowBlockCatalog = z
   .object({
     schema_version: z.literal('1'),
-    primitives: z.array(WorkflowPrimitive).min(WORKFLOW_PRIMITIVE_IDS.length),
+    blocks: z.array(FlowBlock).min(FLOW_BLOCK_IDS.length),
   })
   .strict()
   .superRefine((catalog, ctx) => {
-    const seen = new Map<WorkflowPrimitiveId, number>();
-    for (const [index, primitive] of catalog.primitives.entries()) {
-      const prior = seen.get(primitive.id);
+    const seen = new Map<FlowBlockId, number>();
+    for (const [index, block] of catalog.blocks.entries()) {
+      const prior = seen.get(block.id);
       if (prior !== undefined) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ['primitives', index, 'id'],
-          message: `duplicate primitive id: ${primitive.id} also appears at index ${prior}`,
+          path: ['blocks', index, 'id'],
+          message: `duplicate block id: ${block.id} also appears at index ${prior}`,
         });
       }
-      seen.set(primitive.id, index);
+      seen.set(block.id, index);
     }
 
-    for (const requiredId of WORKFLOW_PRIMITIVE_IDS) {
+    for (const requiredId of FLOW_BLOCK_IDS) {
       if (!seen.has(requiredId)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ['primitives'],
-          message: `missing primitive id: ${requiredId}`,
+          path: ['blocks'],
+          message: `missing block id: ${requiredId}`,
         });
       }
     }
   });
-export type WorkflowPrimitiveCatalog = z.infer<typeof WorkflowPrimitiveCatalog>;
+export type FlowBlockCatalog = z.infer<typeof FlowBlockCatalog>;
