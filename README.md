@@ -31,9 +31,9 @@ copied to `commands/<id>.md`, by `npm run emit-workflows`. The drift check
 `npm run verify`) enforces the committed compiled flows stay byte-equivalent
 with what the schematics and command sources produce.
 
-(Schema field and file names like `recipe.json` and "dispatch hints" are
-the current internal names; they'll be migrated in later phases of the
-terminology pass — see `todos/terminology-migration.md`.)
+(Schema field and file names like `recipe.json` and `dispatch-hints.ts`
+are the current internal names; they'll be migrated in later phases of
+the terminology pass — see `todos/terminology-migration.md`.)
 
 ## Verification
 

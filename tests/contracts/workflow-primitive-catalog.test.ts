@@ -34,9 +34,7 @@ function canonicalPrimitiveTitlesFromMarkdown(): string[] {
   if (section === undefined) throw new Error('Canonical Block List section not found');
   return section
     .split('\n')
-    .filter(
-      (line) => line.startsWith('| ') && !line.includes('---') && !line.startsWith('| Block'),
-    )
+    .filter((line) => line.startsWith('| ') && !line.includes('---') && !line.startsWith('| Block'))
     .map((line) => line.split('|')[1]?.trim())
     .filter((title): title is string => title !== undefined && title.length > 0);
 }

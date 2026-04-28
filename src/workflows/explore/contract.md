@@ -25,7 +25,7 @@ property_ids:
 
 The **Explore** flow is the first-parity flow target. It walks a five-stage
 investigation: frame the investigation, analyze the subject, synthesize
-findings, review the synthesis adversarially, and close with a final report.
+findings, review those findings adversarially, and close with a final report.
 
 Unlike the base domain contracts (`workflow.md`, `step.md`, `phase.md`, etc.)
 which govern the shape of any flow, this contract governs a specific flow:
@@ -71,12 +71,14 @@ See `specs/domain.md#core-types` for canonical definitions of **Workflow**,
 - **Explore analysis** (`explore.analysis`): the report emitted by the
   Analyze stage. Decomposes the subject into named aspects with evidence
   citations.
-- **Explore synthesis** (`explore.synthesis`): the report emitted by the
+- **Explore findings** (`explore.synthesis`): the report emitted by the
   Synthesize stage. Produces the investigation's primary output — a
   recommendation, decision candidate set, or conclusion — with explicit
-  mapping back to the brief's success condition.
+  mapping back to the brief's success condition. (The schema id keeps
+  the legacy `explore.synthesis` name; in prose we call it the findings
+  report.)
 - **Explore review verdict** (`explore.review-verdict`): the report
-  emitted by the Review stage. Adversarial pass over the synthesis;
+  emitted by the Review stage. Adversarial pass over `explore.synthesis`;
   reports objections, missed angles, and overall result.
 - **Explore result** (`explore.result`): the aggregate report emitted by
   the Close stage. A summary plus result snapshot plus pointers to the
@@ -102,7 +104,7 @@ This contract records the title-to-canonical translation as follows:
 | Frame                  | `frame`    | State the subject and success condition. |
 | Analyze                | `analyze`  | Decompose the subject into aspects with evidence. |
 | Synthesize             | `act`      | Produce the investigation's primary output. |
-| Review                 | `review`   | Adversarial pass over the synthesis. |
+| Review                 | `review`   | Adversarial pass over `explore.synthesis`. |
 | Close                  | `close`    | Final aggregate report and closure. |
 
 **Canonical set:** `{frame, analyze, act, review, close}`.
@@ -120,10 +122,11 @@ The runtime locks the executor + kind for each stage:
 | Review / `review`         | `worker`       | `dispatch`  | `reviewer`    | `{artifact, request, receipt, result}`     | `result_verdict`   |
 | Close / `close`           | `orchestrator` | `synthesis` | —             | `{artifact}`                               | `schema_sections`  |
 
-**Why Synthesize and Review relay to workers.** Synthesis IS the
-investigation output (the model doing the work); Review IS the adversarial
-pass (the model doing the checking). If the orchestrator does both, explore
-produces same-model self-review — the methodology rejects that.
+**Why Synthesize and Review relay to workers.** The Synthesize stage IS
+the investigation output (the model doing the work); Review IS the
+adversarial pass (the model doing the checking). If the orchestrator does
+both, explore produces same-model self-review — the methodology rejects
+that.
 
 Flipping these two stages to worker relays makes the relay routing a
 contract-visible surface: the step schema carries a `role` tag, a
@@ -140,7 +143,7 @@ bookkeeping the orchestrator does. They do not benefit from crossing a
 model boundary; their output is deterministic given the inputs.
 
 **Why `Synthesize → act`.** Synthesize is the primary work-producing stage.
-It consumes the brief + analysis and emits the explore.synthesis report —
+It consumes the brief + analysis and emits the `explore.synthesis` report —
 the investigation's output. In the canonical seven-stage path, `act` is the
 "do the work" stage, where the flow's primary deliverable is produced.
 This matches.
@@ -251,16 +254,17 @@ this table exactly.
 | `explore.review-verdict` | Review / review-step | Close / close-step                                                                  |
 | `explore.result`         | Close / close-step  | *(none — terminal report at `<run-folder>/artifacts/explore-result.json`; consumed by the run-result consumer only)* |
 
-**Close reads synthesis + review-verdict only** (not brief or analysis).
-The synthesis report encapsulates the investigation output; the review
-verdict encapsulates the adversarial pass. The brief + analysis are
-upstream inputs already composed into the synthesis; re-reading them at
-Close would duplicate input rather than add value.
+**Close reads `explore.synthesis` + `explore.review-verdict` only** (not
+brief or analysis). The `explore.synthesis` report encapsulates the
+investigation output; the review verdict encapsulates the adversarial
+pass. The brief + analysis are upstream inputs already composed into
+`explore.synthesis`; re-reading them at Close would duplicate input
+rather than add value.
 
-## Relay artifact materialization
+## Relay report materialization
 
-After the dispatch-kind flip, `explore.synthesis` and
-`explore.review-verdict` are dispatch-step outputs, not Circuit-written
+After the relay-kind flip, `explore.synthesis` and
+`explore.review-verdict` are relay-step outputs, not Circuit-written
 outputs. Their content shape is unchanged; their provenance is now
 model-authored via connector relay (implementer-role connector at
 Synthesize, reviewer-role connector at Review). The five-event relay
@@ -279,13 +283,13 @@ The compiled explore flow satisfies the precondition for this rule: both
 relay steps declare `writes.artifact` alongside `writes.result`. Check 27
 asserts this structurally.
 
-## Dispatch gate-evaluation semantics
+## Relay check semantics
 
 The `ResultVerdictGate` declared on each relay step is evaluated by the
 runtime against the connector's `result_body`:
 
 1. `JSON.parse(dispatchResult.result_body)` — must yield a JSON object
-   (not array, not null, not a primitive).
+   (not array, not null, not a scalar).
 2. The parsed object MUST carry a top-level `verdict` field whose value
    is a non-empty string. The membership check is exact string equality —
    no trimming, no case folding. `"OK"` is not `"ok"`. Connector prompts
@@ -323,7 +327,7 @@ sequences events:
 
 **Connector invocation failure ordering.** If the connector invocation
 itself throws or fails before returning a receipt/result body, the runtime
-records the pre-await dispatch context instead of stranding the run after
+records the pre-await relay context instead of stranding the run after
 `step.entered`:
 
 1. `step.entered`
@@ -337,7 +341,7 @@ records the pre-await dispatch context instead of stranding the run after
 
 `<run-folder>/artifacts/result.json` mirrors the aborted outcome and
 reason. No `dispatch.receipt`, `dispatch.result`, `dispatch.completed`, or
-`step.completed` event is emitted for that failed dispatch attempt.
+`step.completed` event is emitted for that failed relay attempt.
 
 **Runtime sentinels on `dispatch.completed.verdict`.**
 `DispatchCompletedEvent.verdict` is `z.string().min(1)` so the slot must
@@ -452,8 +456,8 @@ This contract is reopened if any of:
 ## Authority
 
 - `specs/adrs/` (operator-level decisions on canonical stage set,
-  spine policy, dispatch granularity)
-- `specs/plans/` (slice framing for stages of this contract's
+  stage-path policy, relay granularity)
+- `specs/plans/` (planning notes for stages of this contract's
   development)
 - `src/workflows/explore/artifacts.ts` (report schemas)
 - `.claude-plugin/skills/explore/circuit.json` (compiled flow)

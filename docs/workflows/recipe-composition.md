@@ -133,9 +133,9 @@ while omitting the evidence that block is supposed to leave behind.
 
 `execution` names how the schematic step would run when schematics become
 executable. It is still design-time only. For now it keeps the future
-compiler honest: worker blocks bind to dispatch roles, Human Decision
-binds to checkpoint, Run Verification binds to verification, and simple
-orchestrator blocks bind to synthesis.
+compiler honest: worker blocks bind to relay roles, Human Decision binds
+to checkpoint, Run Verification binds to verification, and simple
+orchestrator blocks bind to compose steps.
 
 `phase` names where the step fits in the existing flow shape. It gives a
 future compiler enough information to group schematic steps into Frame,

@@ -65,7 +65,8 @@ metacharacters:
    ./bin/circuit-next --goal 'develop: add a focused feature'
    ```
 
-   Example for a Build task using both an entry mode and explicit rigor:
+   Example for a Build task using both an entry mode and an explicit
+   `--rigor` flag:
 
    ```bash
    ./bin/circuit-next --goal 'develop: make the focused change' --entry-mode deep --rigor standard

@@ -88,8 +88,8 @@ terminology pass — see `todos/terminology-migration.md`.)
    `artifacts.ts` (the flow's Zod report schemas), optional `command.md`
    and `contract.md`, `index.ts` (the package descriptor),
    `dispatch-hints.ts` (if any relay steps have shape hints), and
-   `writers/` (one file per writer kind your flow uses: synthesis / close
-   / verification / checkpoint).
+   `writers/` (one file per writer kind your flow uses: `synthesis` /
+   `close` / `verification` / `checkpoint`).
 2. Add the package to `src/workflows/catalog.ts`.
 3. `npm run build && node scripts/emit-workflows.mjs` to regenerate
    `commands/<id>.md` and `.claude-plugin/skills/<id>/`.
