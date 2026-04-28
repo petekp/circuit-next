@@ -233,7 +233,7 @@ invariant; tested in `tests/contracts/schema-parity.test.ts`.
   a role; attempting to register `relay.roles.orchestrator = ...`
   is a schema error because `orchestrator` is not a legal record key
   under `z.record(RelayRole, ...)`. This mirrors Step's executor-vs-
-  role distinction and prtrace_entrys the category confusion the existing
+  role distinction and prevents the category confusion the existing
   Circuit carries. Enforced at `src/schemas/step.ts` (definition) and
   `src/schemas/config.ts` (consumer).
 

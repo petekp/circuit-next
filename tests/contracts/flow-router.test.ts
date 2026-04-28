@@ -137,13 +137,13 @@ describe('P2.8 flow router classifier', () => {
   it('falls back to explore when no review/audit signal is present', () => {
     const cases = [
       'figure out how the connector pipeline fits together',
-      'investicheck options for a build flow',
+      'investigate options for a build flow',
       'map the current project state',
       'review possible approaches for the next flow',
       'inspect the project structure',
       'find options for a build flow',
       'find issue #123 in the tracker',
-      'investicheck whether to create a new endpoint',
+      'investigate whether to create a new endpoint',
       'explore whether we should implement the command wiring',
       'map options before we add a new integration',
       'build a tool evaluation matrix for parser libraries',

@@ -42,7 +42,7 @@ function change_kind(): ChangeKindDeclaration {
     failure_mode:
       'fanout handler skips real branch execution or shares the runner instance with the parent',
     acceptance_evidence:
-      'each branch recurses through real runCompiledFlow with a fresh RunId and a sibling run-folder, each child emits its own trace, parent admits via aggrecheck-only join',
+      'each branch recurses through real runCompiledFlow with a fresh RunId and a sibling run-folder, each child emits its own trace, parent admits via aggregate-only join',
     alternate_framing:
       'integration test of fanout + real recursive runCompiledFlow rather than handler-isolation unit test',
   };
@@ -191,12 +191,12 @@ function buildParentCompiledFlow(): CompiledFlow {
         on_child_failure: 'abort-all',
         writes: {
           branches_dir: 'reports/branches',
-          aggrecheck: { path: 'reports/aggrecheck.json', schema: 'fanout-aggrecheck@v1' },
+          aggregate: { path: 'reports/aggregate.json', schema: 'fanout-aggregate@v1' },
         },
         check: {
-          kind: 'fanout_aggrecheck',
-          source: { kind: 'fanout_results', ref: 'aggrecheck' },
-          join: { policy: 'aggrecheck-only' },
+          kind: 'fanout_aggregate',
+          source: { kind: 'fanout_results', ref: 'aggregate' },
+          join: { policy: 'aggregate-only' },
           verdicts: { admit: ['accept'] },
         },
       },
@@ -218,7 +218,7 @@ afterEach(() => {
 });
 
 describe('fanout real recursion', () => {
-  it('runs each branch via real runCompiledFlow (no childRunner stub) and admits via aggrecheck-only', async () => {
+  it('runs each branch via real runCompiledFlow (no childRunner stub) and admits via aggregate-only', async () => {
     const parentCompiledFlow = buildParentCompiledFlow();
     const parentBytes = Buffer.from(JSON.stringify(parentCompiledFlow));
     const childCompiledFlow = buildChildCompiledFlow();
@@ -268,7 +268,7 @@ describe('fanout real recursion', () => {
 
     const fanoutJoined = outcome.trace_entrys.find((e) => e.kind === 'fanout.joined');
     if (fanoutJoined?.kind !== 'fanout.joined') throw new Error('expected fanout.joined');
-    expect(fanoutJoined.policy).toBe('aggrecheck-only');
+    expect(fanoutJoined.policy).toBe('aggregate-only');
     expect(fanoutJoined.branches_completed).toBe(2);
     expect(fanoutJoined.branches_failed).toBe(0);
 
@@ -313,13 +313,13 @@ describe('fanout real recursion', () => {
       expect(childResult.outcome).toBe('complete');
     }
 
-    // The aggrecheck report was materialized at the parent's
+    // The aggregate report was materialized at the parent's
     // declared path.
-    const aggrecheckPath = join(parentRunFolder, 'reports', 'aggrecheck.json');
-    const aggrecheck = JSON.parse(readFileSync(aggrecheckPath, 'utf8')) as {
+    const aggregatePath = join(parentRunFolder, 'reports', 'aggregate.json');
+    const aggregate = JSON.parse(readFileSync(aggregatePath, 'utf8')) as {
       branches: ReadonlyArray<{ branch_id: string; admitted: boolean }>;
     };
-    expect(aggrecheck.branches.map((b) => b.branch_id).sort()).toEqual(['a', 'b']);
+    expect(aggregate.branches.map((b) => b.branch_id).sort()).toEqual(['a', 'b']);
   });
 });
 

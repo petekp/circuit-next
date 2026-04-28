@@ -121,7 +121,7 @@ enforced via `src/schemas/step.ts`, `src/schemas/check.ts`, and
   declares the choices an operator or auto-resolver may select in
   `policy.choices`. The checkpoint check's `allow` list MUST exactly match
   those choice ids, and any safe default or safe autonomous choice MUST name
-  one of those declared choices. This prtrace_entrys the request report, response
+  one of those declared choices. This prevents the request report, response
   check, and auto-resolution policy from drifting apart.
 
 - **STEP-I7 — Protocol required.** Every Step carries a `ProtocolId`

@@ -7,7 +7,7 @@ export const exploreComposeShapeHint: SchemaShapeHint = {
   schema: 'explore.compose@v1',
   instruction: [
     'Respond with a single raw JSON object whose top-level shape is exactly:',
-    '{ "verdict": "<one-of-accepted-verdicts>", "subject": "<subject investicheckd>", "recommendation": "<primary conclusion or recommendation>", "success_condition_alignment": "<how the recommendation satisfies the brief success condition>", "supporting_aspects": [{ "aspect": "<analysis aspect name>", "contribution": "<how this aspect supports the recommendation>" }] }',
+    '{ "verdict": "<one-of-accepted-verdicts>", "subject": "<subject investigated>", "recommendation": "<primary conclusion or recommendation>", "success_condition_alignment": "<how the recommendation satisfies the brief success condition>", "supporting_aspects": [{ "aspect": "<analysis aspect name>", "contribution": "<how this aspect supports the recommendation>" }] }',
     'Do not include extra top-level keys. Do not wrap the JSON in Markdown code fences. Do not include any prose before or after the JSON object.',
     'The runtime parses your response with JSON.parse, rejects any verdict not drawn from the accepted-verdicts list, and validates the full report body against explore.compose@v1 before writing reports/compose.json.',
   ].join(' '),

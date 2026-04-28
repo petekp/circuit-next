@@ -12,11 +12,10 @@ See [`../terminology.md`](../terminology.md) for the canonical product
 vocabulary used throughout this doc (flow, schematic, block, route, relay,
 check, trace, report, evidence).
 
-Circuit should not rebuild every first-generation flow one by one.
+Circuit should not aim for a long list of one-off flows.
 
-The old implementation is reference evidence. It shows useful patterns and
-operator needs, but it is not the destination. The destination is a small
-set of trustworthy flow blocks that can be assembled into clear schematics.
+The destination is a small set of trustworthy flow blocks that can be
+assembled into clear schematics.
 
 ## Product Shape
 

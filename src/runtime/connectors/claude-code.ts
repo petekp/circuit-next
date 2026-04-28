@@ -42,7 +42,7 @@ export { sha256Hex };
 //                              behaviour is bounded by its prompt + tools,
 //                              not by user-defined skills.
 //   --setting-sources ''     — skip user, project, and local settings files.
-//                              Prtrace_entrys operator-configured hooks from
+//                              Prevents operator-configured hooks from
 //                              firing inside the connector subprocess (e.g.
 //                              this project's Stop hook), which would
 //                              otherwise deadlock the subprocess via

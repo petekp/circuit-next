@@ -49,14 +49,14 @@ export const SubRunResultSource = z
   .strict();
 export type SubRunResultSource = z.infer<typeof SubRunResultSource>;
 
-// Fanout emits N child results plus an aggrecheck report built by the
-// runtime at join time. The check consults the aggrecheck slot, never the
+// Fanout emits N child results plus an aggregate report built by the
+// runtime at join time. The check consults the aggregate slot, never the
 // individual branch result.json files (those are read evidence, not the
 // checkd report).
 export const FanoutResultsSource = z
   .object({
     kind: z.literal('fanout_results'),
-    ref: z.literal('aggrecheck'),
+    ref: z.literal('aggregate'),
   })
   .strict();
 export type FanoutResultsSource = z.infer<typeof FanoutResultsSource>;
@@ -115,8 +115,8 @@ export type ResultVerdictCheck = z.infer<typeof ResultVerdictCheck>;
 // disjoint-merge: Migrate shape. ALL children must close 'complete' with an
 //   admitted verdict. Runtime validates per-child worktree changes are
 //   pairwise file-disjoint, then merges all into the parent tree.
-// aggrecheck-only: Crucible shape. No worktree merge. Children's result
-//   bodies are gathered into the parent's `aggrecheck` report for
+// aggregate-only: Crucible shape. No worktree merge. Children's result
+//   bodies are gathered into the parent's `aggregate` report for
 //   downstream consumption. Check passes iff every child reached a closed
 //   outcome (any outcome) and produced a parseable result body.
 export const PickWinnerJoin = z
@@ -133,28 +133,28 @@ export const DisjointMergeJoin = z
   .strict();
 export type DisjointMergeJoin = z.infer<typeof DisjointMergeJoin>;
 
-export const AggrecheckOnlyJoin = z
+export const AggregateOnlyJoin = z
   .object({
-    policy: z.literal('aggrecheck-only'),
+    policy: z.literal('aggregate-only'),
   })
   .strict();
-export type AggrecheckOnlyJoin = z.infer<typeof AggrecheckOnlyJoin>;
+export type AggregateOnlyJoin = z.infer<typeof AggregateOnlyJoin>;
 
 export const FanoutJoinPolicy = z.discriminatedUnion('policy', [
   PickWinnerJoin,
   DisjointMergeJoin,
-  AggrecheckOnlyJoin,
+  AggregateOnlyJoin,
 ]);
 export type FanoutJoinPolicy = z.infer<typeof FanoutJoinPolicy>;
 
-export const FanoutAggrecheckCheck = z
+export const FanoutAggregateCheck = z
   .object({
-    kind: z.literal('fanout_aggrecheck'),
+    kind: z.literal('fanout_aggregate'),
     source: FanoutResultsSource,
     join: FanoutJoinPolicy,
     // verdicts.admit is the per-child verdict allowlist consulted by
     // pick-winner (preference-ordered) and disjoint-merge (membership-only).
-    // aggrecheck-only ignores the field but still requires it for surface
+    // aggregate-only ignores the field but still requires it for surface
     // uniformity — schematic authors who later switch policies don't have to
     // reauthor the verdict surface.
     verdicts: z
@@ -164,12 +164,12 @@ export const FanoutAggrecheckCheck = z
       .strict(),
   })
   .strict();
-export type FanoutAggrecheckCheck = z.infer<typeof FanoutAggrecheckCheck>;
+export type FanoutAggregateCheck = z.infer<typeof FanoutAggregateCheck>;
 
 export const Check = z.discriminatedUnion('kind', [
   SchemaSectionsCheck,
   CheckpointSelectionCheck,
   ResultVerdictCheck,
-  FanoutAggrecheckCheck,
+  FanoutAggregateCheck,
 ]);
 export type Check = z.infer<typeof Check>;

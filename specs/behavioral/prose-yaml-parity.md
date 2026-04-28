@@ -71,7 +71,7 @@ hand-maintained files.
   distinguishable visually (via region markers) and structurally
   (different sections of the file). An author who wants to add
   operator-facing narrative edits the "why/how" half; an author who
-  wants to change "what" edits the YAML and regenerates. Prtrace_entrys
+  wants to change "what" edits the YAML and regenerates. Prevents
   the implicit-bidirectional failure mode where prose starts to
   drive structural decisions by accretion.
 
@@ -90,24 +90,24 @@ hand-maintained files.
 
 - `prose-yaml-drift:build-lite-skill-md-contradicts-yaml` — the
   motivating incident in `bootstrap/evidence-draft-codex.md`.
-  Miticheckd by PROSE-YAML-I1 + PROSE-YAML-I2.
+  Mitigated by PROSE-YAML-I1 + PROSE-YAML-I2.
 
 - `prose-as-hidden-policy` — judgment rules live in prose rather than
   in typed contracts; a resolver branches on prose tokens. Maps to
-  `specs/domain.md` anti-pattern. Miticheckd by constraining prose to
+  `specs/domain.md` anti-pattern. Mitigated by constraining prose to
   operator-facing narrative (PROSE-YAML-I3) and reserving deterministic
   behavior to typed fields enforced by schema. The `skill.md` v0.1
   `trigger` scope caveat (SKILL-I2) is the first concrete application.
 
 - `bidirectional-drift` — authors edit prose expecting the YAML will
   follow, and other authors edit YAML expecting prose will follow;
-  result is neither is authoritative and both disagree. Miticheckd by
+  result is neither is authoritative and both disagree. Mitigated by
   PROSE-YAML-I3 (one direction is compiler-owned, one is
   hand-authored, each has a distinct surface).
 
 - `hand-edit-compiler-region` — an operator overrides a compiler-owned
   region in a markdown file, and the next build silently reverts the
-  edit. Miticheckd by PROSE-YAML-I2 build-time diff detection: the
+  edit. Mitigated by PROSE-YAML-I2 build-time diff detection: the
   compiler fails the build with a named region and file rather than
   silently regenerating.
 

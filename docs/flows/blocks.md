@@ -9,12 +9,11 @@ status: active
 # Flow Blocks
 
 This document names the reusable flow blocks circuit-next should build
-toward. It is intentionally not a list of old Circuit flows to clone.
+toward.
 
-Old Circuit remains useful reference evidence: it shows real operator needs
-and good flow instincts. But circuit-next should not recreate every old
-flow one by one if a smaller set of reusable blocks gives users a better
-system.
+The system aims for a small set of reusable blocks that operators can
+assemble into clear flows, rather than a long list of one-off flow
+schematics.
 
 Deep prior-art research should be evaluated through
 `docs/flows/research-intake.md` before it changes this inventory. The
@@ -75,7 +74,7 @@ be a separate schematic step so the skipped-review path stays visible.
 | Gather Context | Collect facts before deciding or acting. | Brief, target paths, search instructions, allowed tools. | Context packet with sources and confidence. | Plan, Diagnose, Review, Human Decision. |
 | Diagnose | Explain what is wrong or unknown. | Brief, context packet, repro instructions, observed behavior. | Diagnosis with cause, confidence, repro status, diagnostic path. | Act, Gather Context, Human Decision, Stop. |
 | Plan | Choose an implementation or investigation path. | Brief, context, diagnosis, constraints. | Plan with steps, risk notes, proof strategy. | Human Decision, Act, Batch. |
-| Act | Make or delecheck the change. | Brief or plan, diagnosis when relevant, allowed scope, model/tool policy. | Implementation evidence with changed files and rationale. | Verify, Review, Human Decision. |
+| Act | Make or delegate the change. | Brief or plan, diagnosis when relevant, allowed scope, model/tool policy. | Implementation evidence with changed files and rationale. | Verify, Review, Human Decision. |
 | Run Verification | Execute declared proof commands and capture results. | Proof plan, command list, timeout/output policy, current work evidence. | Verification result with commands, exit status, and evidence. | Review, Act retry, Human Decision, Close. |
 | Review | Independently judge the result. | Brief, plan/diagnosis, implementation evidence, verification result. | Review result with findings, confidence, and required fixes. | Act retry, Verify retry, Close, Human Decision. |
 | Queue | Turn broad work into ordered items. | Survey/context, safety criteria, prioritization rule. | Work queue with item state and risk class. | Batch, Human Decision, Close. |
@@ -177,5 +176,5 @@ Do not treat feature parity as the only goal.
 
 The better opportunity is to make Circuit a flow assembly system: a small
 catalog of trustworthy blocks that can be composed into built-in flows and,
-trace_entryually, user-authored flows. Old Circuit's flow list is a source of
+eventually, user-authored flows. Old Circuit's flow list is a source of
 examples, not a ceiling.

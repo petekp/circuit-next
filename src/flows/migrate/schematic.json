@@ -216,7 +216,7 @@
     },
     {
       "id": "batch-step",
-      "title": "Batch Execution - delecheck the migration changes to a Build sub-run",
+      "title": "Batch Execution - delegate the migration changes to a Build sub-run",
       "stage": "act",
       "input": {
         "brief": "migrate.brief@v1",

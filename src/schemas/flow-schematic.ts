@@ -688,7 +688,7 @@ function acceptedExecutionKinds(block: FlowBlockValue): readonly StepExecutionKi
   if (block.id === 'run-verification') return ['verification'];
   // sub-run is an orchestration pattern (parent invokes a child flow,
   // check admits the child's terminal verdict). The 'batch' block is
-  // its first consumer (Migrate's batch step delechecks to a Build child),
+  // its first consumer (Migrate's batch step delegates to a Build child),
   // so sub-run is allowed wherever 'batch'-shaped work fits — i.e., for
   // 'mixed' surfaces. 'orchestrator' surfaces also accept sub-run because
   // the parent step authoring the sub-run IS an orchestrator action.

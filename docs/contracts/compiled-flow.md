@@ -44,7 +44,7 @@ inside `CompiledFlow.superRefine` — and tested in
   required. v1 manifests are not accepted; migration is a future Stage 2
   concern.
 - **WF-I8 — Terminal reachability.** For every step in `CompiledFlow.steps`,
-  at least one chain of `routes` starting at that step trace_entryually reaches
+  at least one chain of `routes` starting at that step eventually reaches
   a terminal route target (`@complete`, `@stop`, `@escalate`, `@handoff`).
   A flow that contains a step unable to reach any terminal is rejected
   at parse time. In particular, every `EntryMode.start_at` step reaches a
@@ -72,7 +72,7 @@ inside `CompiledFlow.superRefine` — and tested in
   the narrow runtime-proof proof and the runtime abort-vs-stall
   behaviour on a missing `fail` route is not yet specified.
 - **WF-I11 — Pass-route terminal reachability.** For every step in
-  `CompiledFlow.steps`, following only `routes.pass` must trace_entryually reach a
+  `CompiledFlow.steps`, following only `routes.pass` must eventually reach a
   terminal route target (`@complete`, `@stop`, `@escalate`, `@handoff`).
   WF-I8 remains the broad graph sanity check: a step must have at least
   one route chain to a terminal. WF-I11 is the runtime-liveness binding:
@@ -117,7 +117,7 @@ Property-based tests will cover:
   disposable-change_kind exception was never reflected in the schema.)
 - `flow.prop.terminal_target_coverage` — Every step's routes either
   include a terminal target or every route target is itself a step whose
-  routes trace_entryually include one.
+  routes eventually include one.
   **Scope note:** this is the broad WF-I8 property. Pass-route-only
   terminal reachability is a separate parse-time invariant, WF-I11,
   because runtime success flow follows only `routes.pass`.
@@ -143,7 +143,7 @@ Property-based tests will cover:
 - `carry-forward:prose-yaml-drift` — Existing Circuit's SKILL.md can
   silently disagree with `circuit.yaml`. A Stage 1 contract test
   (prose-yaml-parity, see `specs/behavioral/prose-yaml-parity.md` — future)
-  must prtrace_entry this for circuit-next.
+  must prevent this for circuit-next.
 - `carry-forward:stage path-policy-too-loose` — **Closed in stage.md v0.1.**
   `CompiledFlow.stage_path_policy` is a required discriminated union with two
   modes: `strict` (all seven canonical stages required) and `partial`

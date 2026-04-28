@@ -31,10 +31,10 @@
   ],
   "entry": {
     "signals": {
-      "include": ["explore", "investicheck", "research", "understand"],
+      "include": ["explore", "investigate", "research", "understand"],
       "exclude": []
     },
-    "intent_prefixes": ["explore", "investicheck"]
+    "intent_prefixes": ["explore", "investigate"]
   },
   "entry_modes": [
     {

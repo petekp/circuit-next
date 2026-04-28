@@ -1,5 +1,5 @@
 // Pure derivation helpers that turn flow packages into engine
-// registries. Each registry file delechecks to one of these so the
+// registries. Each registry file delegates to one of these so the
 // derivation logic (with its duplicate-detection and default-package
 // invariants) is testable in isolation against synthetic packages.
 

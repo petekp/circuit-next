@@ -13,7 +13,7 @@ import { CompiledFlow } from '../../schemas/compiled-flow.js';
 // policy-invalid fixtures with a single call.
 //
 // Design note: the canonical-set table lives in JS (shared source of
-// truth with audit.mjs Check 24) to prtrace_entry drift. This TS layer adds
+// truth with audit.mjs Check 24) to prevent drift. This TS layer adds
 // the structural check via CompiledFlow.safeParse — audit.mjs has no Zod
 // path, so it runs the table check only; runtime has both checks.
 //

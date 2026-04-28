@@ -487,7 +487,7 @@ function findWaitingCheckpoint(input: {
   };
 }
 
-// Execution loop. Bootstrap, walk routes from entry.start_at, delecheck
+// Execution loop. Bootstrap, walk routes from entry.start_at, delegate
 // per-step work to the kind→handler relayer, advance pass route, emit
 // run.closed, write result.json. The loop stays narrow: it owns the
 // route walk and run-level trace_entrys; per-kind logic lives in
@@ -607,7 +607,7 @@ async function executeCompiledFlow(
     // every retry. Wrap so unexpected throws emit step.aborted and fall
     // through to the standard close path. Path-escape errors are a
     // security boundary (callers must see no partial output is trusted)
-    // and continue to propacheck.
+    // and continue to propagate.
     let result: StepHandlerResult;
     try {
       result = await runStepHandler({
@@ -877,7 +877,7 @@ function buildSummary(input: {
 // Why filter to check_kind='result_verdict':
 //   Compose steps emit check.evaluated with kind='schema_sections'
 //   (report admission), verification steps with kind='verification',
-//   fanout with kind='fanout_aggrecheck'. None of those carry a
+//   fanout with kind='fanout_aggregate'. None of those carry a
 //   verdict — only result_verdict checks do, and only relay /
 //   sub-run steps emit them. Including any other kind would conflate
 //   schema admission with verdict admission.

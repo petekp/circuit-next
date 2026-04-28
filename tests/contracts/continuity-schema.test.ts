@@ -322,7 +322,7 @@ describe('Continuity transitive strict — CONT-I8', () => {
   });
 });
 
-describe('ContinuityIndex aggrecheck — CONT-I9..I11', () => {
+describe('ContinuityIndex aggregate — CONT-I9..I11', () => {
   it('CONT-I9 — parses fully null (idle index)', () => {
     const ok = ContinuityIndex.safeParse({
       schema_version: 1,

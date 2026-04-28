@@ -195,7 +195,7 @@ After a `SkillDescriptor` is accepted:
   capabilities when present.
 
 - **carry-forward:silent-extension-slots** — **Closed in v0.1 via
-  SKILL-I5.** `.strict()` at the descriptor boundary prtrace_entrys ad-hoc
+  SKILL-I5.** `.strict()` at the descriptor boundary prevents ad-hoc
   fields from accreting. Adding a field is a v0.2+ schema change with
   explicit evolution note.
 
@@ -245,7 +245,7 @@ deferred. Full record at `specs/reviews/skill-md-v0.1-codex.md`.
     a bottleneck. Until one of these lands, `trigger` stays free-form.
   - **Catalog-level closure property.** Promote
     `skill.prop.id_closure_under_selection` from Stage 2 property id
-    to a schema-level `CatalogSnapshot` aggrecheck that binds
+    to a schema-level `CatalogSnapshot` aggregate that binds
     `SkillDescriptor[]` to the reachable `SelectionOverride.skills`
     references. Reopen condition: selection resolver ships and
     operators hit unresolved-skill-id bugs in practice.

@@ -19,10 +19,9 @@ property_ids: []
 
 # Build Flow Contract
 
-The **Build** flow is the first broader parity target after the first
-working flow stage path. It is a clean-break structured JSON successor to the
-first-generation Build flow described in
-`specs/reference/legacy-circuit/build-characterization.md`.
+The **Build** flow is circuit-next's standard implementation flow:
+frame, plan, act, verify, review, close. It produces a typed,
+structured JSON report and an evidence chain at every step.
 
 This contract starts as the typed-output home for the six Build reports:
 

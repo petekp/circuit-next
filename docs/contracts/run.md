@@ -19,7 +19,7 @@ property_ids: [run.prop.report_written_before_check, run.prop.attempt_monotonici
 # Run Contract
 
 A **Run** is an instance of a **CompiledFlow** executing. A Run is not a single
-type in the schema; it is the aggrecheck of three projections:
+type in the schema; it is the aggregate of three projections:
 
 1. The **CompiledFlow manifest** snapshot taken at bootstrap (identified by
    `manifest_hash`).
@@ -74,7 +74,7 @@ and `RunProjection.superRefine`) and tested in
 - **RUN-I3 — `run_id` is consistent across the log.** Every trace_entry in a
   `RunTrace` shares the `run_id` of the bootstrap trace_entry. Cross-run trace_entry
   smuggling is the single most dangerous corruption mode for trace_entry-sourced
-  state (it silently merges two runs' histories), so the `RunTrace` aggrecheck
+  state (it silently merges two runs' histories), so the `RunTrace` aggregate
   enforces it even though no individual trace_entry can. **Defense-in-depth
   (closes Codex MED #3 at the identity-field layer).** Zod normally reads
   inherited properties during parse, which lets `Object.create({run_id:
@@ -309,7 +309,7 @@ property-test harness + reducer exist in Stage 2.
   connector-level close criterion (ADR-0007 CC#P2-2 Enforcement binding,
   enforced in the P2.4 round-trip test and the CI-skip local-smoke
   report), not here — the contract widens the schema; the connector
-  contract oblichecks the writer.
+  contract obligates the writer.
 
 - `run.prop.report_written_before_check` — For any compose step, every
   `check.evaluated` trace_entry with `outcome: 'pass'` on that step is preceded by
@@ -385,9 +385,9 @@ property-test harness + reducer exist in Stage 2.
 ## Evolution
 
 - **v0.1 (this draft)** — RUN-I1..I8 enforced at the schema layer:
-  `RunTrace` aggrecheck with bootstrap/first-trace_entry, sequence monotonicity,
+  `RunTrace` aggregate with bootstrap/first-trace_entry, sequence monotonicity,
   run_id consistency, bootstrap singleton, closure singleton with
-  no-post-closure-trace_entrys. `RunProjection` aggrecheck binding log and
+  no-post-closure-trace_entrys. `RunProjection` aggregate binding log and
   snapshot with bootstrap-frozen field parity, exact `trace_entries_consumed`
   equality (no stale prefix), and closure-to-status mapping as a
   compile-time total function (`OutcomeStatusEquality`). `.strict()`
@@ -422,7 +422,7 @@ property-test harness + reducer exist in Stage 2.
   `relay.failed` for connector invocation exceptions. The log-level
   pairing invariant `run.prop.relay_trace_entry_pairing` widened (not
   renamed) to govern ordering when transcript/failure trace_entrys are present;
-  full five-trace_entry success ordering is oblicheckd at the connector level
+  full five-trace_entry success ordering is obligated at the connector level
   (CC#P2-2), not the contract level. Closes composition-review §HIGH 2
   (`specs/reviews/p2-foundation-composition-review.md`). Authorized by
   ADR-0007 §Amendment (Slice 37).

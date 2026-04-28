@@ -146,7 +146,7 @@ function deterministicRelayer(): RelayFn {
           result_body: JSON.stringify({
             verdict: 'accept',
             subject: 'explore: deterministic close-result parity run',
-            recommendation: 'Keep the explore close aggrecheck deterministic',
+            recommendation: 'Keep the explore close aggregate deterministic',
             success_condition_alignment: 'The close result summarizes the typed reports',
             supporting_aspects: [
               {

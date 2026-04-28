@@ -113,7 +113,7 @@ Closes Codex LOW #12 (enforcement-location claim drift).
   `SkillId`s at parse time, because set-algebra composition (union,
   difference) at the resolver layer expects set-typed inputs; a YAML
   typo that ships `['tdd', 'tdd']` was indistinguishable from an authored
-  set and would propacheck through composition unchanged. Canonical
+  set and would propagate through composition unchanged. Canonical
   *order* of the composed resolver output is reducer-level and tracked
   as Stage 2 property
   `selection.prop.resolved_skills_are_unique_and_order_is_documented`.

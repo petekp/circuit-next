@@ -56,7 +56,7 @@ export const CheckEvaluatedTraceEntry = TraceEntryBase.extend({
     'schema_sections',
     'checkpoint_selection',
     'result_verdict',
-    'fanout_aggrecheck',
+    'fanout_aggregate',
   ]),
   outcome: z.enum(['pass', 'fail']),
   missing_sections: z.array(z.string()).optional(),
@@ -301,14 +301,14 @@ export const FanoutJoinedTraceEntry = TraceEntryBase.extend({
   kind: z.literal('fanout.joined'),
   step_id: StepId,
   attempt: z.number().int().positive(),
-  // The join policy that ran; mirrors the FanoutAggrecheckCheck.join.policy
+  // The join policy that ran; mirrors the FanoutAggregateCheck.join.policy
   // field but echoed into the trace_entry so the audit log is self-contained
   // (no need to cross-reference the schematic to interpret outcomes).
-  policy: z.enum(['pick-winner', 'disjoint-merge', 'aggrecheck-only']),
+  policy: z.enum(['pick-winner', 'disjoint-merge', 'aggregate-only']),
   // For pick-winner: the selected branch_id. Absent for the other policies.
   selected_branch_id: z.string().min(1).optional(),
-  // Path to the runtime-built aggrecheck report.
-  aggrecheck_path: z.string().min(1),
+  // Path to the runtime-built aggregate report.
+  aggregate_path: z.string().min(1),
   // Count of branches that closed 'complete' vs other outcomes — quick
   // health summary readable without reconstructing per-branch trace_entrys.
   branches_completed: z.number().int().nonnegative(),

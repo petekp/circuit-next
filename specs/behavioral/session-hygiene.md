@@ -104,22 +104,22 @@ agent) drive the repo across session boundaries**.
 
 - `session-drift:stale-project-state` — a session starts with an
   out-of-date PROJECT_STATE mental model and the first commit acts on
-  wrong assumptions. Miticheckd by SESSION-I2 + audit freshness check.
+  wrong assumptions. Mitigated by SESSION-I2 + audit freshness check.
 - `session-drift:compacted-summary-loses-decision` — compaction
-  erases a load-bearing "we decided X" line. Miticheckd by SESSION-I3
+  erases a load-bearing "we decided X" line. Mitigated by SESSION-I3
   (disabled) + SESSION-I2 (report-persisted state).
 - `prompt-bloat:agent-guide-overflow` — AGENTS.md exceeds 450 lines (cap
   raised 300 → 450 per ADR-0011 on 2026-04-23 after Slice 61 Codex
   semantic-loss evidence) and the primary instruction budget starts
-  evicting tail lines silently. Miticheckd by SESSION-I1 + test.
+  evicting tail lines silently. Mitigated by SESSION-I1 + test.
 - `slice-dilation:unbounded-coupled-changes` — a "slice" actually
   touches four subsystems and cannot be reverted individually.
-  Miticheckd by SESSION-I4 + framing pair requirement.
+  Mitigated by SESSION-I4 + framing pair requirement.
 - `circuit-as-justification` — a commit justifies its decision by
-  citing unnamed existing Circuit behavior. Miticheckd by SESSION-I5
+  citing unnamed existing Circuit behavior. Mitigated by SESSION-I5
   + ADR-0002 citation rule + audit smell check.
 - `orchestration-report-bleed` — `.circuit/` run state lands in git
-  and becomes implicit dependency. Miticheckd by SESSION-I6 + audit
+  and becomes implicit dependency. Mitigated by SESSION-I6 + audit
   gitignore check.
 
 ## Planned test location

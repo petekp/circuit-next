@@ -136,10 +136,10 @@ and tested in `tests/contracts/schema-parity.test.ts`.
   `RunBackedContinuity`, both `resume_contract` inner objects,
   `RunAttachedProvenance`, `ContinuityIndex`, `PendingRecordPointer`, and
   `AttachedRunPointer`. Surplus keys are rejected at every depth. This
-  closes the aggrecheck-level HIGH flagged by the pre-authoring review
+  closes the aggregate-level HIGH flagged by the pre-authoring review
   (the prior schema only strict-checked the top level).
 
-- **CONT-I9 — `ContinuityIndex` is a standalone aggrecheck.** The index
+- **CONT-I9 — `ContinuityIndex` is a standalone aggregate.** The index
   is not an envelope around records; it is a separate on-disk report
   (`<control-pchange_kind>/continuity/index.json`) with its own
   `schema_version`, `project_root`, `pending_record` pointer, and
@@ -340,19 +340,19 @@ the **resolver** adjudicates conflicts. Two cases are material:
   `runtime_status`, `runtime_updated_at`; a bare `{run_id}` is rejected.
   Closes pre-authoring review carryover #8.
 
-- **carry-forward:aggrecheck-level-strict-gap** — **Closed in v0.1 via
+- **carry-forward:aggregate-level-strict-gap** — **Closed in v0.1 via
   CONT-I8.** Transitive `.strict()` on every nested object. Closes the
-  aggrecheck-level HIGH flagged in the pre-authoring review.
+  aggregate-level HIGH flagged in the pre-authoring review.
 
 - **carry-forward:path-derived-identity-without-scalar** — **Closed
   in v0.1 via CONT-I1 + CONT-I10.** Both `record_id` fields use
   `ControlPchange_kindFileStem`. ADR-0003 §Machine enforcement is satisfied.
 
-- **carry-forward:missing-index-aggrecheck** — **Closed in v0.1 via
+- **carry-forward:missing-index-aggregate** — **Closed in v0.1 via
   CONT-I9..I11.** `ContinuityIndex` is a first-class schema with its
   own invariants. Prior to v0.1 the index was undocumented and unvalidated
   in circuit-next; only the record existed. This closes the index-
-  aggrecheck HIGH flagged in the pre-authoring review.
+  aggregate HIGH flagged in the pre-authoring review.
 
 - **carry-forward:prototype-chain-smuggle** — **Closed in v0.1 via
   CONT-I12.** Raw-input own-property guards on ContinuityRecord and
@@ -380,10 +380,10 @@ above. Full record at
 ## Evolution
 
 - **v0.1 (this draft)** — initial contract covering both
-  `continuity.record` and `continuity.index` aggrechecks. Twelve
+  `continuity.record` and `continuity.index` aggregates. Twelve
   invariants (CONT-I1..I12; CONT-I12 added post-Codex). Ten Stage 2
   property ids reserved. All pre-authoring carryovers folded in (#7
-  safety booleans, #8 resume provenance, plus the index-aggrecheck
+  safety booleans, #8 resume provenance, plus the index-aggregate
   HIGH). Codex v0.1 HIGH #1 (prototype-chain defense) + HIGH #2
   (authority-graph nested path) + MED #5 (dangling-reference enum) +
   LOW #6 (coverage additions) folded in; MED #3 (pointer-kind

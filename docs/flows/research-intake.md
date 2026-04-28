@@ -16,7 +16,7 @@ system.
 
 ## What We Are Trying To Learn
 
-Circuit should not blindly clone the first-generation flow list. The better
+Circuit should not aim for an exhaustive list of named flows. The better
 question is:
 
 > What small set of reusable blocks lets people assemble trustworthy AI coding
@@ -102,7 +102,7 @@ flows.
 8. How do we let custom flows reuse blocks without letting invalid
    combinations parse?
 9. What should the first user-authored flow format look like?
-10. Which old Circuit flows should become schematics, and which should become
+10. Which named flows justify their own schematic, and which should become
     special cases of broader blocks?
 
 ## Working Product Bets

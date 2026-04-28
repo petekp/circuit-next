@@ -116,33 +116,33 @@ using the challenger WELL given that reframing.
 ## Failure modes addressed
 
 - `knight-leveson-blind-spot` — treating the challenger as
-  independent corroboration. Miticheckd by CHALLENGER-I1 + CHALLENGER-I6
+  independent corroboration. Mitigated by CHALLENGER-I1 + CHALLENGER-I6
   + the explicit "adversarial lint, not independent corroboration"
   framing in ADR-0003 and this track.
 
 - `challenger-as-approval` — a green challenger pass is read as
   "correct" rather than "no objections within one sampling."
-  Miticheckd by CHALLENGER-I1 prose + the recorded-verdict discipline
+  Mitigated by CHALLENGER-I1 prose + the recorded-verdict discipline
   of CHALLENGER-I3.
 
 - `silent-ignore-of-objection` — a challenger raises a HIGH / MED
-  and the operator quietly moves on without disposition. Miticheckd
+  and the operator quietly moves on without disposition. Mitigated
   by CHALLENGER-I4 explicit fold-in record + review-record frontmatter
   verdict field.
 
 - `framing-filtered-relay` — invoking `codex:rescue` or otherwise
   wrapping Codex's output in Claude's framing, causing the "Codex"
-  output to be pre-filtered. Miticheckd by CHALLENGER-I5 + the user-
+  output to be pre-filtered. Mitigated by CHALLENGER-I5 + the user-
   memory feedback entry that surfaces on every session start.
 
 - `challenger-creep` — invoking the challenger for trivia, diluting
   the signal and training operators to skim green passes as
-  approval. Miticheckd by CHALLENGER-I2 + reviewer discipline on
+  approval. Mitigated by CHALLENGER-I2 + reviewer discipline on
   what counts as a ratchet-changing surface.
 
 - `reviewing-the-wrong-thing` — the challenger reads a subset of
   files that does not actually exercise the surface at risk.
-  Miticheckd by the prompt discipline in `specs/reviews/*.md` records
+  Mitigated by the prompt discipline in `specs/reviews/*.md` records
   themselves: every review prompt names the target files and focus
   areas explicitly, and the operator verifies Codex actually read
   them (e.g. by checking that Codex's evidence cites those files).

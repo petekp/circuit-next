@@ -26,12 +26,12 @@ describe('P2.10 — explore report schemas', () => {
   it('accepts the typed explore.brief shape', () => {
     expect(
       ExploreBrief.parse({
-        subject: 'Investicheck the runtime',
+        subject: 'Investigate the runtime',
         task: 'Find the next risk',
         success_condition: 'A clear recommendation exists',
       }),
     ).toEqual({
-      subject: 'Investicheck the runtime',
+      subject: 'Investigate the runtime',
       task: 'Find the next risk',
       success_condition: 'A clear recommendation exists',
     });
@@ -39,7 +39,7 @@ describe('P2.10 — explore report schemas', () => {
 
   it('rejects surplus keys in explore.brief', () => {
     const parsed = ExploreBrief.safeParse({
-      subject: 'Investicheck the runtime',
+      subject: 'Investigate the runtime',
       task: 'Find the next risk',
       success_condition: 'A clear recommendation exists',
       smuggled: true,
@@ -61,11 +61,11 @@ describe('P2.10 — explore report schemas', () => {
 
     expect(
       ExploreAnalysis.parse({
-        subject: 'Investicheck the runtime',
+        subject: 'Investigate the runtime',
         aspects: [aspect],
       }),
     ).toEqual({
-      subject: 'Investicheck the runtime',
+      subject: 'Investigate the runtime',
       aspects: [aspect],
     });
   });
@@ -73,14 +73,14 @@ describe('P2.10 — explore report schemas', () => {
   it('rejects explore.analysis without at least one aspect and one evidence citation', () => {
     expect(
       ExploreAnalysis.safeParse({
-        subject: 'Investicheck the runtime',
+        subject: 'Investigate the runtime',
         aspects: [],
       }).success,
     ).toBe(false);
 
     expect(
       ExploreAnalysis.safeParse({
-        subject: 'Investicheck the runtime',
+        subject: 'Investigate the runtime',
         aspects: [{ name: 'runtime-risk', summary: 'No evidence', evidence: [] }],
       }).success,
     ).toBe(false);
@@ -95,14 +95,14 @@ describe('P2.10 — explore report schemas', () => {
     expect(
       ExploreCompose.parse({
         verdict: 'accept',
-        subject: 'Investicheck the runtime',
+        subject: 'Investigate the runtime',
         recommendation: 'Harden the report writer first',
         success_condition_alignment: 'The recommendation names the next action',
         supporting_aspects: [supportingAspect],
       }),
     ).toEqual({
       verdict: 'accept',
-      subject: 'Investicheck the runtime',
+      subject: 'Investigate the runtime',
       recommendation: 'Harden the report writer first',
       success_condition_alignment: 'The recommendation names the next action',
       supporting_aspects: [supportingAspect],
@@ -113,7 +113,7 @@ describe('P2.10 — explore report schemas', () => {
     expect(
       ExploreCompose.safeParse({
         verdict: 'accept',
-        subject: 'Investicheck the runtime',
+        subject: 'Investigate the runtime',
         success_condition_alignment: 'The recommendation names the next action',
         supporting_aspects: [
           {
@@ -127,7 +127,7 @@ describe('P2.10 — explore report schemas', () => {
     expect(
       ExploreCompose.safeParse({
         verdict: 'accept',
-        subject: 'Investicheck the runtime',
+        subject: 'Investigate the runtime',
         recommendation: 'Harden the report writer first',
         success_condition_alignment: 'The recommendation names the next action',
         supporting_aspects: [],
@@ -139,7 +139,7 @@ describe('P2.10 — explore report schemas', () => {
     expect(
       ExploreCompose.safeParse({
         verdict: 'accept',
-        subject: 'Investicheck the runtime',
+        subject: 'Investigate the runtime',
         recommendation: 'Harden the report writer first',
         success_condition_alignment: 'The recommendation names the next action',
         supporting_aspects: [
@@ -155,7 +155,7 @@ describe('P2.10 — explore report schemas', () => {
     expect(
       ExploreCompose.safeParse({
         verdict: 'accept',
-        subject: 'Investicheck the runtime',
+        subject: 'Investigate the runtime',
         recommendation: 'Harden the report writer first',
         success_condition_alignment: 'The recommendation names the next action',
         supporting_aspects: [
@@ -214,7 +214,7 @@ describe('P2.10 — explore report schemas', () => {
     expect(reviewStep.check.pass).toEqual([...ExploreReviewVerdictValue.options]);
   });
 
-  it('accepts the typed explore.result aggrecheck shape', () => {
+  it('accepts the typed explore.result aggregate shape', () => {
     const pointers = [
       ExploreResultReportPointer.parse({
         report_id: 'explore.brief',
@@ -240,7 +240,7 @@ describe('P2.10 — explore report schemas', () => {
 
     expect(
       ExploreResult.parse({
-        summary: 'Explore recommendation: keep the aggrecheck deterministic',
+        summary: 'Explore recommendation: keep the aggregate deterministic',
         verdict_snapshot: {
           compose_verdict: 'accept',
           review_verdict: 'accept-with-fold-ins',
@@ -250,7 +250,7 @@ describe('P2.10 — explore report schemas', () => {
         evidence_links: pointers,
       }),
     ).toEqual({
-      summary: 'Explore recommendation: keep the aggrecheck deterministic',
+      summary: 'Explore recommendation: keep the aggregate deterministic',
       verdict_snapshot: {
         compose_verdict: 'accept',
         review_verdict: 'accept-with-fold-ins',

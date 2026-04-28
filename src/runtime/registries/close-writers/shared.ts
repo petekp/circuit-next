@@ -11,7 +11,7 @@
 import type { CompiledFlow } from '../../../schemas/compiled-flow.js';
 
 // Sub-run / fanout step kinds widened the Step union — fanout's writes
-// holds {branches_dir, aggrecheck} with no `report` slot. The `'report'
+// holds {branches_dir, aggregate} with no `report` slot. The `'report'
 // in writes` guard narrows to step variants that carry an report slot
 // before reading `.schema`, keeping this helper sound across all kinds.
 export function reportPathForSchemaInCompiledFlow(flow: CompiledFlow, schemaName: string): string {

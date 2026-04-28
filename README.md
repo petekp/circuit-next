@@ -1,15 +1,11 @@
 # circuit-next
 
-**Automate your Claude Code workflows with a single command.**
+**Automate your Claude Code flows with a single command.**
 
 Circuit is an orchestration layer for structured, resumable, multi-stage
 flows inside Claude Code. Enter `/circuit:run` and describe your task.
 Circuit picks the most suitable flow from the core set and executes it,
 checking each step's output against a contract before moving on to the next.
-
-`circuit-next` is the second-generation rewrite of the original
-[Circuit](../circuit) plugin. The product is the same idea; the engine,
-schematics, and vocabulary have all been reworked.
 
 - **Configurable per step.** Pick the model, reasoning effort, and skills for
   each step in a flow.
@@ -35,7 +31,7 @@ Then run a flow through the local launcher:
 ./bin/circuit-next run --goal '<your task>'
 ```
 
-The router classifies your task and dispatches the right flow. To use the
+The router classifies your task and runs the right flow. To use the
 slash commands inside Claude Code, point your plugin loader at this checkout
 and reload — the generated `commands/` directory is the user-facing surface.
 
@@ -201,7 +197,7 @@ plugin rebuild.
 
 ## Optional: Codex CLI
 
-Circuit can dispatch worker steps through Codex CLI as well as through Claude
+Circuit can relay worker steps through Codex CLI as well as through Claude
 Code's built-in Agent transport. Both are synchronous and work out of the
 box. Codex is optional.
 

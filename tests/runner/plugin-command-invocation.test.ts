@@ -47,7 +47,7 @@ function extractBashBlocks(body: string): string[] {
 // invocation with the --goal flag? "Executable" means the flow appears
 // as the CLI positional token after `./bin/circuit-next run` or after
 // `node dist/cli/circuit.js`, AND the same line has `--goal `. Prose
-// mentions, goal text, or necheckd ("do not run …") text DO NOT satisfy.
+// mentions, goal text, or negated ("do not run …") text DO NOT satisfy.
 function hasExecutableCompiledFlowInvocation(body: string, flow: string): boolean {
   const blocks = extractBashBlocks(body);
   const flowPattern = flow.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -194,7 +194,7 @@ describe('plugin command invocation binding', () => {
     });
   });
 
-  describe('MED 1 negative fixtures: prose-only / P2.8-only / necheckd bodies', () => {
+  describe('MED 1 negative fixtures: prose-only / P2.8-only / negated bodies', () => {
     it('rejects a body that mentions the CLI only in prose (not a bash block)', () => {
       const proseOnly = `---
 name: circuit:explore

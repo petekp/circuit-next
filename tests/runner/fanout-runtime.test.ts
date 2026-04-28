@@ -27,8 +27,8 @@ import { Snapshot } from '../../src/schemas/snapshot.js';
 //     RunIds and the worktree path as projectRoot.
 //   - Emits fanout.{started,branch_started,branch_completed,joined}
 //     trace_entrys with the resolved branch_ids on fanout.started.
-//   - Materializes the aggrecheck report at writes.aggrecheck.path.
-//   - Honors the join policy (pick-winner, disjoint-merge, aggrecheck-only)
+//   - Materializes the aggregate report at writes.aggregate.path.
+//   - Honors the join policy (pick-winner, disjoint-merge, aggregate-only)
 //     and the check.evaluated outcome that follows.
 //   - Cleans up worktrees in try/finally even when branches fail.
 
@@ -40,7 +40,7 @@ function change_kind(): ChangeKindDeclaration {
     change_kind: 'ratchet-advance',
     failure_mode: 'fanout omits worktree cleanup or audit linkage',
     acceptance_evidence:
-      'parent log carries fanout.started + per-branch fanout.branch_{started,completed} + fanout.joined; aggrecheck report materialized; worktrees provisioned + released',
+      'parent log carries fanout.started + per-branch fanout.branch_{started,completed} + fanout.joined; aggregate report materialized; worktrees provisioned + released',
     alternate_framing: 'unit test of the fanout handler in isolation',
   };
 }
@@ -61,7 +61,7 @@ function unusedRelayer(): RelayFn {
 
 interface ParentCompiledFlowOpts {
   branches: 'static-two' | 'dynamic-from-source';
-  policy: 'pick-winner' | 'disjoint-merge' | 'aggrecheck-only';
+  policy: 'pick-winner' | 'disjoint-merge' | 'aggregate-only';
   admit?: readonly string[];
   concurrency?: { kind: 'unbounded' } | { kind: 'bounded'; max: number };
   on_child_failure?: 'abort-all' | 'continue-others';
@@ -145,11 +145,11 @@ function buildParentCompiledFlow(opts: ParentCompiledFlowOpts): CompiledFlow {
         on_child_failure: opts.on_child_failure ?? 'abort-all',
         writes: {
           branches_dir: 'reports/branches',
-          aggrecheck: { path: 'reports/aggrecheck.json', schema: 'fanout-aggrecheck@v1' },
+          aggregate: { path: 'reports/aggregate.json', schema: 'fanout-aggregate@v1' },
         },
         check: {
-          kind: 'fanout_aggrecheck',
-          source: { kind: 'fanout_results', ref: 'aggrecheck' },
+          kind: 'fanout_aggregate',
+          source: { kind: 'fanout_results', ref: 'aggregate' },
           join: { policy: opts.policy },
           verdicts: { admit },
         },
@@ -341,19 +341,19 @@ describe('fanout runtime', () => {
     if (fanoutJoined?.kind !== 'fanout.joined') throw new Error('expected fanout.joined');
     expect(fanoutJoined.policy).toBe('pick-winner');
     expect(fanoutJoined.selected_branch_id).toBe('a');
-    expect(fanoutJoined.aggrecheck_path).toBe('reports/aggrecheck.json');
+    expect(fanoutJoined.aggregate_path).toBe('reports/aggregate.json');
     expect(fanoutJoined.branches_completed).toBe(2);
     expect(fanoutJoined.branches_failed).toBe(0);
 
-    // Aggrecheck report materialized.
-    const aggrecheckAbs = join(parentRunFolder, 'reports', 'aggrecheck.json');
-    const aggrecheckBody = JSON.parse(readFileSync(aggrecheckAbs, 'utf8')) as {
+    // Aggregate report materialized.
+    const aggregateAbs = join(parentRunFolder, 'reports', 'aggregate.json');
+    const aggregateBody = JSON.parse(readFileSync(aggregateAbs, 'utf8')) as {
       branch_count: number;
       winner_branch_id?: string;
       branches: ReadonlyArray<{ branch_id: string; admitted: boolean }>;
     };
-    expect(aggrecheckBody.branch_count).toBe(2);
-    expect(aggrecheckBody.winner_branch_id).toBe('a');
+    expect(aggregateBody.branch_count).toBe(2);
+    expect(aggregateBody.winner_branch_id).toBe('a');
 
     // Worktrees provisioned and released for both branches.
     expect(worktree.provisioned.size).toBe(2);
@@ -363,10 +363,10 @@ describe('fanout runtime', () => {
     }
   });
 
-  it('aggrecheck-only join admits all-complete + parseable branches', async () => {
+  it('aggregate-only join admits all-complete + parseable branches', async () => {
     const parent = buildParentCompiledFlow({
       branches: 'static-two',
-      policy: 'aggrecheck-only',
+      policy: 'aggregate-only',
       admit: ['ok'],
     });
     const parentBytes = Buffer.from(JSON.stringify(parent));
@@ -387,7 +387,7 @@ describe('fanout runtime', () => {
       flow: parent,
       flowBytes: parentBytes,
       runId: parentRunId,
-      goal: 'fanout aggrecheck-only test',
+      goal: 'fanout aggregate-only test',
       depth: 'standard',
       change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 27, 12, 30, 0)),
@@ -398,11 +398,11 @@ describe('fanout runtime', () => {
       worktreeRunner: worktree.runner,
     });
 
-    // aggrecheck-only passes when both branches close cleanly with parseable bodies — verdicts irrelevant.
+    // aggregate-only passes when both branches close cleanly with parseable bodies — verdicts irrelevant.
     expect(outcome.result.outcome).toBe('complete');
     const fanoutJoined = outcome.trace_entrys.find((e) => e.kind === 'fanout.joined');
     if (fanoutJoined?.kind !== 'fanout.joined') throw new Error('expected fanout.joined');
-    expect(fanoutJoined.policy).toBe('aggrecheck-only');
+    expect(fanoutJoined.policy).toBe('aggregate-only');
     expect(fanoutJoined.selected_branch_id).toBeUndefined();
   });
 
@@ -524,12 +524,12 @@ describe('fanout runtime', () => {
           on_child_failure: 'continue-others',
           writes: {
             branches_dir: 'reports/branches',
-            aggrecheck: { path: 'reports/aggrecheck.json', schema: 'fanout-aggrecheck@v1' },
+            aggregate: { path: 'reports/aggregate.json', schema: 'fanout-aggregate@v1' },
           },
           check: {
-            kind: 'fanout_aggrecheck',
-            source: { kind: 'fanout_results', ref: 'aggrecheck' },
-            join: { policy: 'aggrecheck-only' },
+            kind: 'fanout_aggregate',
+            source: { kind: 'fanout_results', ref: 'aggregate' },
+            join: { policy: 'aggregate-only' },
             verdicts: { admit: ['ok'] },
           },
         },
@@ -592,18 +592,18 @@ describe('fanout runtime', () => {
 
     const fanoutJoined = outcome.trace_entrys.find((e) => e.kind === 'fanout.joined');
     if (fanoutJoined?.kind !== 'fanout.joined') throw new Error('expected fanout.joined');
-    expect(fanoutJoined.policy).toBe('aggrecheck-only');
+    expect(fanoutJoined.policy).toBe('aggregate-only');
     expect(fanoutJoined.branches_completed).toBe(2);
   });
 
   it('continue-others lets the parent join after one branch aborts (the other still completes)', async () => {
     // Coverage gap from the Stage 4 audit: continue-others was only
     // exercised in the dynamic fixture where every branch succeeded.
-    // This case proves the parent does NOT propacheck a single child
+    // This case proves the parent does NOT propagate a single child
     // abort when on_child_failure='continue-others' is set.
     const parent = buildParentCompiledFlow({
       branches: 'static-two',
-      policy: 'aggrecheck-only',
+      policy: 'aggregate-only',
       on_child_failure: 'continue-others',
     });
     const parentBytes = Buffer.from(JSON.stringify(parent));
@@ -636,8 +636,8 @@ describe('fanout runtime', () => {
     });
 
     // continue-others lets the fanout STEP complete (one branch
-    // succeeded, one failed, the loop did not propacheck the failure).
-    // The aggrecheck-only join then evaluates: it requires every
+    // succeeded, one failed, the loop did not propagate the failure).
+    // The aggregate-only join then evaluates: it requires every
     // branch to close cleanly with a parseable body, so it fails —
     // and the parent run aborts at the check. The behavioral
     // distinction continue-others draws is "the loop continues vs.
@@ -656,7 +656,7 @@ describe('fanout runtime', () => {
     expect(fanoutJoined.branches_failed).toBe(1);
 
     // The parent ultimately aborts because the join policy
-    // (aggrecheck-only) requires every branch to complete cleanly.
+    // (aggregate-only) requires every branch to complete cleanly.
     expect(outcome.result.outcome).toBe('aborted');
 
     // Both worktrees were still released — even on the failed branch.
@@ -672,7 +672,7 @@ describe('fanout runtime', () => {
     // and a single child abort must cascade to a parent abort.
     const parent = buildParentCompiledFlow({
       branches: 'static-two',
-      policy: 'aggrecheck-only',
+      policy: 'aggregate-only',
       on_child_failure: 'abort-all',
     });
     const parentBytes = Buffer.from(JSON.stringify(parent));

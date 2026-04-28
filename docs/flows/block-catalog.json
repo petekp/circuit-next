@@ -154,7 +154,7 @@
     {
       "id": "act",
       "title": "Act",
-      "purpose": "Make or delecheck the change within the declared scope.",
+      "purpose": "Make or delegate the change within the declared scope.",
       "input_contracts": ["flow.brief@v1", "diagnosis.result@v1"],
       "alternative_input_contracts": [
         ["flow.brief@v1", "plan.strategy@v1"],

@@ -15,7 +15,7 @@ import { sha256Hex } from '../../src/runtime/connectors/shared.js';
 //
 // Capability-boundary empirical proof: the argv-constant assertion in
 // `CODEX_NO_WRITE_FLAGS` is module-load-bound; the OS-level `-s
-// read-only` sandbox prtrace_entrys repo writes at the process level
+// read-only` sandbox prevents repo writes at the process level
 // regardless of model behavior. This smoke test is the positive
 // end-to-end regression guard: if a future change loosens
 // `CODEX_NO_WRITE_FLAGS` (e.g., swapping `read-only` for

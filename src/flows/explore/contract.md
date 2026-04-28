@@ -80,7 +80,7 @@ See `specs/domain.md#core-types` for canonical definitions of **CompiledFlow**,
 - **Explore review verdict** (`explore.review-verdict`): the report
   emitted by the Review stage. Adversarial pass over `explore.compose`;
   reports objections, missed angles, and overall result.
-- **Explore result** (`explore.result`): the aggrecheck report emitted by
+- **Explore result** (`explore.result`): the aggregate report emitted by
   the Close stage. A summary plus result snapshot plus pointers to the
   four prior reports. The flow-specific "what the explore run produced."
   Persisted at `<run-folder>/reports/explore-result.json`. This is
@@ -105,7 +105,7 @@ This contract records the title-to-canonical translation as follows:
 | Analyze                | `analyze`  | Decompose the subject into aspects with evidence. |
 | Synthesize             | `act`      | Produce the investigation's primary output. |
 | Review                 | `review`   | Adversarial pass over `explore.compose`. |
-| Close                  | `close`    | Final aggrecheck report and closure. |
+| Close                  | `close`    | Final aggregate report and closure. |
 
 **Canonical set:** `{frame, analyze, act, review, close}`.
 **Omits:** `{plan, verify}` (partial path).
@@ -447,7 +447,7 @@ This contract is reopened if any of:
    `evidence_links` shape, reopen to amend the result schema and the
    report registry row together.
 9. **`<kind>.result` envelope consolidation.** If a second flow's
-   close-stage aggrecheck (e.g., `build.result`, `fix.result`) has a
+   close-stage aggregate (e.g., `build.result`, `fix.result`) has a
    shape structurally identical to `explore.result`'s structure (summary
    + result snapshot + prior-report pointers), reopen the result-path
    split rationale to re-evaluate envelope-in-`run.result` against

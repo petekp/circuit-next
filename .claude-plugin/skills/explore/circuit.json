@@ -5,10 +5,10 @@
   "purpose": "Explore flow: frame the investigation, analyze the subject, relay findings composition to a worker, relay review to a separate worker, and close with findings plus evidence. The schematic uses the Frame, Analyze, Act, Review, and Close stages; Plan and Verify are intentionally omitted because Explore produces an investigation report rather than an executable change.",
   "entry": {
     "signals": {
-      "include": ["explore", "investicheck", "research", "understand"],
+      "include": ["explore", "investigate", "research", "understand"],
       "exclude": []
     },
-    "intent_prefixes": ["explore", "investicheck"]
+    "intent_prefixes": ["explore", "investigate"]
   },
   "entry_modes": [
     {

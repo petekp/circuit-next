@@ -8,7 +8,7 @@ export const sweepAnalysisShapeHint: SchemaShapeHint = {
   instruction: [
     'Respond with a single raw JSON object whose top-level shape is exactly:',
     '{ "verdict": "accept", "summary": "<what was surveyed>", "candidates": [{ "id": "<stable candidate id>", "category": "<candidate category, e.g. dead-code, lint, coverage-gap>", "path": "<project-relative path>", "description": "<one-line description of the candidate>", "confidence": "<low|medium|high>", "risk": "<low|medium|high>" }] }',
-    'Each candidate id must be unique within candidates. The candidates array must contain at least one entry; if the survey finds none, do not respond — instead investicheck further reads first.',
+    'Each candidate id must be unique within candidates. The candidates array must contain at least one entry; if the survey finds none, do not respond — instead investigate further reads first.',
     'Do not include extra top-level keys. Do not wrap the JSON in Markdown code fences. Do not include any prose before or after the JSON object.',
     'The runtime parses your response with JSON.parse, rejects any verdict not drawn from the accepted-verdicts list, and validates the full report body against sweep.analysis@v1 before writing reports/sweep/analysis.json.',
   ].join(' '),

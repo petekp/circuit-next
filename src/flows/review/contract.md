@@ -21,14 +21,14 @@ The **Review** flow is an audit-only review variant. It walks three stages:
 |---|---|---|
 | Intake | `frame` | Resolve the review scope from the run goal. |
 | Independent Audit | `analyze` | Relay a reviewer worker and collect findings. |
-| Verdict | `close` | Aggrecheck findings into the final `review.result` report. |
+| Verdict | `close` | Aggregate findings into the final `review.result` report. |
 
 (The runtime stage title in the compiled flow is `Verdict`; in product prose
 we describe this as the Decision stage.)
 
-The flow deliberately omits `plan`, `act`, `verify`, and nested `review`. The
-previous-generation review skill has a verification rerun stage; this audit-only
-variant does not. A verification-bearing variant would be a separate flow kind.
+The flow deliberately omits `plan`, `act`, `verify`, and nested `review`.
+This is an audit-only flow; a verification-bearing variant would be a
+separate flow kind.
 
 ## Scope Note
 

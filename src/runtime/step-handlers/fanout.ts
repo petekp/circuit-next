@@ -52,7 +52,7 @@ export interface FanoutJoinOutcome {
   readonly verdict: string;
   readonly admitted: boolean;
   // Present iff `child_outcome === 'complete'` and the child's
-  // `result.json` parsed to an object. aggrecheck-only treats
+  // `result.json` parsed to an object. aggregate-only treats
   // `undefined` as "non-parseable".
   readonly result_body?: unknown;
 }
@@ -133,7 +133,7 @@ export function evaluateFanoutJoinPolicy(input: FanoutJoinInput): FanoutJoinResu
     return { joinedSuccessfully: true };
   }
 
-  // aggrecheck-only.
+  // aggregate-only.
   const allClosed = outcomes.every(
     (o) =>
       o.child_outcome === 'complete' ||
@@ -148,13 +148,13 @@ export function evaluateFanoutJoinPolicy(input: FanoutJoinInput): FanoutJoinResu
   if (!allClosed) {
     return {
       joinedSuccessfully: false,
-      failureReason: `fanout step '${stepId}' aggrecheck-only: at least one branch did not close cleanly`,
+      failureReason: `fanout step '${stepId}' aggregate-only: at least one branch did not close cleanly`,
     };
   }
   if (!allParseable) {
     return {
       joinedSuccessfully: false,
-      failureReason: `fanout step '${stepId}' aggrecheck-only: at least one branch did not produce a parseable result body`,
+      failureReason: `fanout step '${stepId}' aggregate-only: at least one branch did not produce a parseable result body`,
     };
   }
   return { joinedSuccessfully: true };
@@ -327,7 +327,7 @@ function evaluateChildVerdict(
   return { verdict: verdictRaw, admitted: admitList.includes(verdictRaw) };
 }
 
-interface FanoutAggrecheckBody {
+interface FanoutAggregateBody {
   readonly schema_version: 1;
   readonly join_policy: FanoutStep['check']['join']['policy'];
   readonly branch_count: number;
@@ -343,11 +343,11 @@ interface FanoutAggrecheckBody {
   }>;
 }
 
-function buildAggrecheck(
+function buildAggregate(
   policy: FanoutStep['check']['join']['policy'],
   outcomes: readonly BranchOutcome[],
   winnerBranchId: string | undefined,
-): FanoutAggrecheckBody {
+): FanoutAggregateBody {
   return {
     schema_version: 1,
     join_policy: policy,
@@ -430,7 +430,7 @@ export async function runFanoutStep(
       kind: 'check.evaluated',
       step_id: step.id,
       attempt,
-      check_kind: 'fanout_aggrecheck',
+      check_kind: 'fanout_aggregate',
       outcome: 'fail',
       reason,
     });
@@ -749,14 +749,14 @@ export async function runFanoutStep(
   const winnerBranchId = joinDecision.winnerBranchId;
   const joinFailureReason = joinDecision.failureReason;
   // v0 limitation: disjoint-merge file-disjoint validation runs but
-  // the actual merge into the parent tree is not yet wired. Aggrecheck
+  // the actual merge into the parent tree is not yet wired. Aggregate
   // report still records the per-branch outcomes for operators to
   // merge manually until the merge slice lands.
 
-  // Always materialise the aggrecheck report — the durable record of
+  // Always materialise the aggregate report — the durable record of
   // what happened, regardless of join outcome.
-  const aggrecheckBody = buildAggrecheck(policy, outcomes, winnerBranchId);
-  writeJsonReport(runFolder, step.writes.aggrecheck.path, aggrecheckBody);
+  const aggregateBody = buildAggregate(policy, outcomes, winnerBranchId);
+  writeJsonReport(runFolder, step.writes.aggregate.path, aggregateBody);
 
   push({
     schema_version: 1,
@@ -766,8 +766,8 @@ export async function runFanoutStep(
     kind: 'step.report_written',
     step_id: step.id,
     attempt,
-    report_path: step.writes.aggrecheck.path,
-    report_schema: step.writes.aggrecheck.schema,
+    report_path: step.writes.aggregate.path,
+    report_schema: step.writes.aggregate.schema,
   });
 
   const branchesCompleted = outcomes.filter((o) => o.child_outcome === 'complete').length;
@@ -782,7 +782,7 @@ export async function runFanoutStep(
     attempt,
     policy,
     ...(winnerBranchId === undefined ? {} : { selected_branch_id: winnerBranchId }),
-    aggrecheck_path: step.writes.aggrecheck.path,
+    aggregate_path: step.writes.aggregate.path,
     branches_completed: branchesCompleted,
     branches_failed: branchesFailed,
   });
@@ -796,7 +796,7 @@ export async function runFanoutStep(
       kind: 'check.evaluated',
       step_id: step.id,
       attempt,
-      check_kind: 'fanout_aggrecheck',
+      check_kind: 'fanout_aggregate',
       outcome: 'pass',
     });
     return { kind: 'advance' };
@@ -812,7 +812,7 @@ export async function runFanoutStep(
     kind: 'check.evaluated',
     step_id: step.id,
     attempt,
-    check_kind: 'fanout_aggrecheck',
+    check_kind: 'fanout_aggregate',
     outcome: 'fail',
     reason,
   });

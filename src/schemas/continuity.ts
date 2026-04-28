@@ -150,7 +150,7 @@ export const ContinuityRecord = recordOwnPropertyGuard.pipe(
 export type ContinuityRecord = z.infer<typeof ContinuityRecord>;
 
 /**
- * CONT-I9/I10/I11 — ContinuityIndex aggrecheck. The index is the resolver
+ * CONT-I9/I10/I11 — ContinuityIndex aggregate. The index is the resolver
  * that determines which continuity record is authoritative for resume.
  * Two orthogonal pointers:
  *   - `pending_record`: by `record_id` (a `ControlPchange_kindFileStem`); null
@@ -195,7 +195,7 @@ const ContinuityIndexBody = z
 
 /**
  * CONT-I12 (continued) — same own-property guard applied to the index
- * aggrecheck. Required fields MUST be own-properties on the raw input.
+ * aggregate. Required fields MUST be own-properties on the raw input.
  * Nullable fields still require the KEY to be own (value may be null).
  */
 const indexOwnPropertyGuard = z.custom<unknown>((raw) => {

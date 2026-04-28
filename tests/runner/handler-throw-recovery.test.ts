@@ -56,7 +56,7 @@ function change_kind(): ChangeKindDeclaration {
     acceptance_evidence:
       'runCompiledFlow resolves with outcome=aborted, step.aborted + run.closed trace_entrys, and a parseable result.json',
     alternate_framing:
-      'allow handler exceptions to propacheck raw — rejected; corrupts the run-folder',
+      'allow handler exceptions to propagate raw — rejected; corrupts the run-folder',
   };
 }
 
@@ -175,7 +175,7 @@ describe('handler-throw recovery — fix #4', () => {
       },
     });
 
-    // Run still produced a parseable result and never propacheckd the
+    // Run still produced a parseable result and never propagated the
     // raw throw out of runCompiledFlow. The compose handler has its OWN
     // try/catch around the writer invocation that maps the failure to
     // an "report writer failed" abort, so the wrapper around

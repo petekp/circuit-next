@@ -1,7 +1,7 @@
 {
   "name": "circuit",
   "version": "0.1.0-alpha.2",
-  "description": "Claude Code plugin that runs configurable developer flows. Current wired state: `/circuit:run` classifies free-form tasks into the current router-supported flows (`explore`, `review`, `fix`, or `build`) and invokes the selected flow through the direct `./bin/circuit-next` launcher; `/circuit:explore`, `/circuit:review`, `/circuit:fix`, and `/circuit:build` remain explicit flow commands. Future stages add `migrate`, `sweep`, and user-authored custom flows with per-step model + reasoning-effort + skills configuration.",
+  "description": "Structured, resumable, multi-stage developer flows for Claude Code. /circuit:run classifies free-form tasks and routes them to /circuit:explore, /circuit:review, /circuit:fix, /circuit:build, or migrate/sweep flows, with per-step configuration of model, reasoning effort, and skills.",
   "author": {
     "name": "Pete Petrash"
   },

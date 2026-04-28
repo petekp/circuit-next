@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import {
   CheckpointSelectionCheck,
-  FanoutAggrecheckCheck,
+  FanoutAggregateCheck,
   ResultVerdictCheck,
   SchemaSectionsCheck,
 } from './check.js';
@@ -278,7 +278,7 @@ export const FanoutBranchesDynamic = z
     source_report: RunRelativePath,
     items_path: z.string().min(1),
     template: FanoutBranchTemplate,
-    // Hard cap to prtrace_entry runaway fanouts when the source report is
+    // Hard cap to prevent runaway fanouts when the source report is
     // unexpectedly large.
     max_branches: z.number().int().positive().max(256).default(16),
   })
@@ -304,7 +304,7 @@ export type FanoutConcurrency = z.infer<typeof FanoutConcurrency>;
 
 // `abort-all` mirrors test-runner default — first child failure stops the
 // rest. `continue-others` lets Migrate-style fanouts complete what batches
-// they can and surface a partial-failure aggrecheck.
+// they can and surface a partial-failure aggregate.
 export const FanoutFailurePolicy = z.enum(['abort-all', 'continue-others']);
 export type FanoutFailurePolicy = z.infer<typeof FanoutFailurePolicy>;
 
@@ -323,12 +323,12 @@ export const FanoutStep = StepBase.extend({
       // branch's result.json at `<branches_dir>/<branch_id>/result.json`.
       // The directory is runtime-owned; schematic authors declare its location.
       branches_dir: RunRelativePath,
-      // Aggrecheck report summarising all child results, built by the
+      // Aggregate report summarising all child results, built by the
       // runtime after join. This is the slot the check reads.
-      aggrecheck: ReportRef,
+      aggregate: ReportRef,
     })
     .strict(),
-  check: FanoutAggrecheckCheck,
+  check: FanoutAggregateCheck,
 }).strict();
 export type FanoutStep = z.infer<typeof FanoutStep>;
 
@@ -339,7 +339,7 @@ export type FanoutStep = z.infer<typeof FanoutStep>;
 //
 // `Object.hasOwn` blocks prototype-chain `in` attacks. The `!== undefined`
 // guard rejects optional slots that are present-but-undefined. These attacks
-// are already structurally prtrace_entryed by check.ts's literal `ref` per source
+// are already structurally prevented by check.ts's literal `ref` per source
 // kind; this refinement is defense-in-depth for any future source kind that
 // relaxes the `ref` literal.
 export const Step = z

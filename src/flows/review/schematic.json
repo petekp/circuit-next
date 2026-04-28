@@ -38,7 +38,7 @@
   "stage_path_policy": {
     "mode": "partial",
     "omits": ["plan", "act", "verify", "review"],
-    "rationale": "Review is an audit-only flow in P2.9: Intake frames the scope, Independent Audit performs the reviewer relay, and Verdict aggrechecks findings. There is no planning stage, no implementation/action stage, no verification rerun, and no nested review stage in this narrowed variant."
+    "rationale": "Review is an audit-only flow in P2.9: Intake frames the scope, Independent Audit performs the reviewer relay, and Verdict aggregates findings. There is no planning stage, no implementation/action stage, no verification rerun, and no nested review stage in this narrowed variant."
   },
   "stages": [
     {

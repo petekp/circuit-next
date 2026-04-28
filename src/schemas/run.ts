@@ -9,7 +9,7 @@ import {
 
 // RUN-I1..I5 live on `RunTrace`: a typed projection of `trace.ndjson` parsed into
 // an ordered array. The individual TraceEntry variants are already strict-mode and
-// individually validated; this aggrecheck encodes the log-level invariants that
+// individually validated; this aggregate encodes the log-level invariants that
 // no single trace_entry can assert on its own.
 
 const RunTraceBody = z.array(TraceEntry).min(1);

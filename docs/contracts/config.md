@@ -198,7 +198,7 @@ After a `Config` is accepted:
 - `defaults.selection` (when present) is a `SelectionOverride` per
   `docs/contracts/selection.md` SEL-I1..SEL-I4.
 - No surplus keys in any **declared object shape** under this
-  contract's ownership (CONFIG-I1 + CONFIG-I4) or under delecheckd
+  contract's ownership (CONFIG-I1 + CONFIG-I4) or under delegated
   contracts' ownership (connector-I9 transitivity + SEL-I8 nested
   strictness on `SelectionOverride`). Strictness applies to declared
   object shapes (e.g. `Config`, `LayeredConfig`, `defaults`,
@@ -316,7 +316,7 @@ After a `CircuitOverride` is accepted:
   IF that flow runs).
 
 - **ids** (`src/schemas/ids.ts`) — `CompiledFlowId` is the key-type for
-  `Config.circuits`. Key-shape validation is delecheckd to that
+  `Config.circuits`. Key-shape validation is delegated to that
   scalar.
 
 - **step** (`src/schemas/step.ts`) — `RelayRole` (declared there)

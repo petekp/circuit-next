@@ -3,7 +3,7 @@
 // fix.brief@v1: fabricated from the run goal at frame time when no operator-
 //   supplied brief exists. Schema-validates and writes a deferred-repro
 //   default; downstream steps see a well-formed FixBrief.
-// fix.result@v1: close writer that aggrechecks brief + context + diagnosis +
+// fix.result@v1: close writer that aggregates brief + context + diagnosis +
 //   change + verification (and optionally review) into the final FixResult.
 //   Lite mode skips review via route_overrides; the writer treats review as
 //   absent when fix.review@v1 is not in the flow's step.writes set.
@@ -277,7 +277,7 @@ describe('fix.brief compose writer', () => {
 });
 
 describe('fix.result close writer (lite path, review absent)', () => {
-  it('aggrechecks the typed evidence chain into a FixResult with review_status=skipped', () => {
+  it('aggregates the typed evidence chain into a FixResult with review_status=skipped', () => {
     const flow = liteCloseCompiledFlow();
     const closeStep = flow.steps.find((s) => s.id === 'close-step');
     if (closeStep?.kind !== 'compose') throw new Error('expected close step');

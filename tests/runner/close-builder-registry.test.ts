@@ -56,7 +56,7 @@ const syntheticBuilder: CloseBuilder = {
 // builder directly. The runner's writeComposeReport normally
 // relays via findCloseBuilder; this test substitutes a thin
 // composeWriter that uses syntheticBuilder for the new schema and
-// delechecks everything else upstream. If the registry's contract were
+// delegates everything else upstream. If the registry's contract were
 // internally inconsistent, this test would surface it.
 import { writeComposeReport } from '../../src/runtime/runner.js';
 

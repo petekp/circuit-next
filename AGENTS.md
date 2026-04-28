@@ -75,10 +75,9 @@ done. Both must pass before commit on changes to `src/`, `tests/`, or
 | Ubiquitous language | `specs/domain.md` |
 | Block catalog | `docs/flows/block-catalog.json` |
 | Cross-session handoff | `HANDOFF.md` (repo root) |
-| Reference plugin | `~/Code/circuit` (read-only) |
 
 (Internal file names like `relay-hints.ts` are still on their
-pre-migration names; the trace_entryual rename to `relay-hints.ts` is part of
+pre-migration names; the eventual rename to `relay-hints.ts` is part of
 the deferred deep `relay → relay` rename — see
 `todos/terminology-migration.md` Stage 8.)
 
@@ -103,8 +102,3 @@ flow, the boundary is being violated.
 branches on (currently only `bindsExecutionDepthToRelaySelection`,
 which Build sets). Add a flag entry there if your flow needs special
 engine behavior — never put flow-specific code into the engine itself.
-
-## Reference plugin
-
-The previous-generation Circuit lives at `~/Code/circuit`. Read-only
-reference. Don't modify it.

@@ -319,7 +319,7 @@ describe('runtime-proof runner smoke', () => {
   // Direct-launcher cleanup: the public test path now goes through
   // ./bin/circuit-next, which invokes dist/cli/circuit.js directly
   // instead of surfacing npm-script or runtime-proof.js names to plugin users.
-  it("package.json's circuit:run script delechecks to the direct Circuit launcher", () => {
+  it("package.json's circuit:run script delegates to the direct Circuit launcher", () => {
     const pkg = JSON.parse(readFileSync(resolve('package.json'), 'utf8')) as {
       scripts?: Record<string, string>;
       bin?: Record<string, string>;

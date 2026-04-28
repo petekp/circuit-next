@@ -172,7 +172,7 @@
     },
     {
       "id": "batch-step",
-      "title": "Batch Execution - delecheck the migration changes to a Build sub-run",
+      "title": "Batch Execution - delegate the migration changes to a Build sub-run",
       "protocol": "migrate-batch@v1",
       "reads": ["reports/migrate/brief.json", "reports/migrate/inventory.json"],
       "routes": {

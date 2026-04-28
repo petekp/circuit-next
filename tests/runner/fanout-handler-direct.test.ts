@@ -55,7 +55,7 @@ function deterministicNow(startMs: number): () => Date {
   return () => new Date(startMs + n++ * 1000);
 }
 
-type JoinPolicy = 'pick-winner' | 'disjoint-merge' | 'aggrecheck-only';
+type JoinPolicy = 'pick-winner' | 'disjoint-merge' | 'aggregate-only';
 
 interface ParentCompiledFlowOpts {
   readonly branches:
@@ -130,11 +130,11 @@ function buildParentCompiledFlow(opts: ParentCompiledFlowOpts): CompiledFlow {
         on_child_failure: opts.onChildFailure ?? 'abort-all',
         writes: {
           branches_dir: 'reports/branches',
-          aggrecheck: { path: 'reports/aggrecheck.json', schema: 'fanout-aggrecheck@v1' },
+          aggregate: { path: 'reports/aggregate.json', schema: 'fanout-aggregate@v1' },
         },
         check: {
-          kind: 'fanout_aggrecheck',
-          source: { kind: 'fanout_results', ref: 'aggrecheck' },
+          kind: 'fanout_aggregate',
+          source: { kind: 'fanout_results', ref: 'aggregate' },
           join: { policy: opts.policy },
           verdicts: { admit },
         },
@@ -446,7 +446,7 @@ describe('runFanoutStep direct — pre-execution aborts', () => {
     const check = harness.trace_entrys.find((e) => e.kind === 'check.evaluated');
     if (check?.kind !== 'check.evaluated') throw new Error('expected check.evaluated');
     expect(check.outcome).toBe('fail');
-    expect(check.check_kind).toBe('fanout_aggrecheck');
+    expect(check.check_kind).toBe('fanout_aggregate');
     expect(harness.trace_entrys.some((e) => e.kind === 'step.aborted')).toBe(true);
   });
 
@@ -731,17 +731,17 @@ describe('runFanoutStep direct — join policies', () => {
     expect(result).toEqual({ kind: 'advance' });
   });
 
-  it('aggrecheck-only: passes when all branches close complete with parseable bodies', async () => {
+  it('aggregate-only: passes when all branches close complete with parseable bodies', async () => {
     const harness = buildHarness(
       {
         parent: {
           branches: { kind: 'static', branchIds: ['a', 'b'] },
-          policy: 'aggrecheck-only',
+          policy: 'aggregate-only',
           admit: ['ok'],
         },
         childPlan: {
           'branch-a': { mode: 'verdict', verdict: 'ok' },
-          // verdict that is NOT in admit list — aggrecheck-only ignores
+          // verdict that is NOT in admit list — aggregate-only ignores
           // verdicts and only checks parseable+complete.
           'branch-b': { mode: 'verdict', verdict: 'something-else' },
         },
@@ -755,7 +755,7 @@ describe('runFanoutStep direct — join policies', () => {
     expect(result).toEqual({ kind: 'advance' });
     const joined = harness.trace_entrys.find((e) => e.kind === 'fanout.joined');
     if (joined?.kind !== 'fanout.joined') throw new Error('expected fanout.joined');
-    expect(joined.policy).toBe('aggrecheck-only');
+    expect(joined.policy).toBe('aggregate-only');
   });
 });
 
