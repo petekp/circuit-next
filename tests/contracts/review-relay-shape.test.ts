@@ -34,7 +34,7 @@ function assertReviewAnalyzeRelayShape(step: typeof REVIEW_ANALYZE_DISPATCH_STEP
   expect(step.check.pass).toEqual(['NO_ISSUES_FOUND', 'ISSUES_FOUND']);
 }
 
-describe('P2.9 review analyze relay shape', () => {
+describe('review analyze relay shape', () => {
   it('pins writes.result, check source literals, check pass vocabulary, and connector JSON response shape', () => {
     assertReviewAnalyzeRelayShape(REVIEW_ANALYZE_DISPATCH_STEP);
     const parsedStep = RelayStep.parse(REVIEW_ANALYZE_DISPATCH_STEP);

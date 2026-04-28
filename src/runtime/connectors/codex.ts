@@ -4,65 +4,64 @@ import type { Effort } from '../../schemas/selection-policy.js';
 import type { ConnectorRelayInput, RelayResult } from './shared.js';
 import { extractJsonObject, selectedModelForProvider } from './shared.js';
 
-// Real codex connector. Invokes the Codex CLI as a subprocess of the
-// Node.js runtime (subprocess-per-connector for v0). Mirrors the
-// `claude-code.ts` template: no external SDK dependency, Node stdlib only
-// (`node:child_process` + `node:perf_hooks`; `node:crypto` via
-// `./shared.ts`).
+// Codex CLI connector. Invokes Codex as a Node subprocess (no external
+// SDK dependency; Node stdlib only — node:child_process, node:perf_hooks,
+// and node:crypto via ./shared.ts). Mirrors the claude-code.ts template.
 //
-// Capability boundary — OS-level sandbox, different mechanism from
-// `claude-code`. Where the `claude-code` connector layers the `claude -p` declarative
-// tool-list flags (`--tools ""`, `--strict-mcp-config`,
-// `--disable-slash-commands`) with a parse-time assertion against the
-// subprocess's init trace_entry, the `codex` connector's boundary is enforced
-// by Codex's OS-level sandbox (Seatbelt on macOS, Landlock on Linux)
-// via `codex exec -s read-only`. The sandbox checks write syscalls at
-// the process level, not at the declarative-tool level, so the
-// parse-time assertion shape does not transfer — Codex's `--json`
-// stream does not emit an init trace_entry enumerating tool surfaces.
+// Capability boundary — OS-level sandbox.
 //
-// The P2.6 capability-boundary proof is therefore two-layered:
-//   (a) Argv-constant assertion at spawn time — `CODEX_NO_WRITE_FLAGS`
-//       MUST include `-s read-only` AND MUST NOT include
+// Where the claude-code connector enforces its boundary at the declarative
+// tool layer (`claude -p` with `--tools ""`, `--strict-mcp-config`,
+// `--disable-slash-commands`, plus a parse-time assertion against the
+// subprocess's init trace_entry), the Codex connector relies on Codex's
+// OS-level sandbox (Seatbelt on macOS, Landlock on Linux) via
+// `codex exec -s read-only`. The sandbox blocks write syscalls at the
+// process level, not at the tool level, so the parse-time assertion
+// shape doesn't transfer — Codex's --json stream does not emit an init
+// trace_entry enumerating tool surfaces.
+//
+// Capability-boundary proof is therefore two-layered:
+//
+//   (a) Argv-constant assertion at spawn time — CODEX_NO_WRITE_FLAGS
+//       must include `-s read-only` and must NOT include
 //       `--dangerously-bypass-approvals-and-sandbox`. Both facts are
-//       provable at module-load time (the assertions fire in a
-//       frozen constant) and bound by contract tests at
-//       `tests/contracts/codex-connector-schema.test.ts`.
-//   (b) TraceEntry-stream capability discipline — `parseCodexStdout()` is
-//       fail-closed against missing `thread.started` trace_entrys (no session
-//       identifier available), missing / malformed terminal
-//       `agent_message`, or `item.completed` trace_entrys carrying
-//       unexpected `item.type` values. A future Codex CLI version that
-//       reintroduces a write-capable tool trace_entry would surface as an
-//       unexpected item type and be rejected rather than silently
-//       passed through.
+//       provable at module-load time (assertions fire on a frozen
+//       constant) and pinned by contract tests at
+//       tests/contracts/codex-connector-schema.test.ts.
 //
-// Each flag in `CODEX_NO_WRITE_FLAGS` is load-bearing:
+//   (b) TraceEntry-stream capability discipline — parseCodexStdout() is
+//       fail-closed against missing `thread.started` trace_entries (no
+//       session identifier available), missing or malformed terminal
+//       `agent_message`, or `item.completed` trace_entries carrying
+//       unexpected item.type values. A future Codex CLI that reintroduces
+//       a write-capable tool trace_entry would surface as an unexpected
+//       item type and be rejected rather than silently passed through.
+//
+// Each flag in CODEX_NO_WRITE_FLAGS is load-bearing:
 //   'exec'                      — subcommand selecting non-interactive
 //                                 run.
-//   '--json'                    — JSONL trace_entrys on stdout (one object
-//                                 per line). Pure stream; stderr carries
-//                                 Codex's skills-loader tracing noise
-//                                 separately.
-//   '-s', 'read-only'           — sandbox policy. The capability-
-//                                 boundary anchor. `workspace-write`
-//                                 and `danger-full-access` are the two
-//                                 other values; both are forbidden
-//                                 under this connector's invariant.
+//   '--json'                    — JSONL trace_entries on stdout (one
+//                                 object per line). Pure stream; stderr
+//                                 carries Codex's skills-loader tracing
+//                                 noise separately.
+//   '-s', 'read-only'           — sandbox policy. The capability-boundary
+//                                 anchor. `workspace-write` and
+//                                 `danger-full-access` are the other two
+//                                 values; both are forbidden by this
+//                                 connector.
 //   '--ephemeral'               — no session file persisted under
-//                                 `~/.codex/sessions/**`. Analog of the
-//                                 claude-code connector's `--no-session-
-//                                 persistence`.
-//   '--skip-git-repo-check'     — allow running outside a git repo
-//                                 (the subprocess-cwd passed by the
-//                                 runtime may or may not be a git
-//                                 worktree; Codex's default is to
-//                                 refuse non-repo cwd).
+//                                 ~/.codex/sessions/**. Analog of the
+//                                 claude-code connector's
+//                                 --no-session-persistence.
+//   '--skip-git-repo-check'     — allow running outside a git repo (the
+//                                 subprocess cwd passed by the runtime
+//                                 may or may not be a worktree; Codex
+//                                 defaults to refusing non-repo cwd).
 //
-// If any of these assumptions change upstream (Codex CLI version bump
-// changes flag semantics; sandbox policy enum grows a new value that
-// bypasses read-only; `--json` format changes shape), ADR-0009 §6
-// reopen trigger 5 (connector-level capability regression) fires.
+// If any of these assumptions change upstream (Codex CLI version bumps,
+// sandbox enum grows a new value that bypasses read-only, --json format
+// changes shape), this connector's contract is broken and the relevant
+// guardrail above will catch it.
 export const CODEX_NO_WRITE_FLAGS = Object.freeze([
   'exec',
   '--json',
@@ -143,7 +142,7 @@ export const CODEX_SUPPORTED_EFFORTS = ['low', 'medium', 'high', 'xhigh'] as con
 // CODEX_SMOKE path still surfaces the invariant break.
 if (!CODEX_NO_WRITE_FLAGS.includes('-s') || !CODEX_NO_WRITE_FLAGS.includes('read-only')) {
   throw new Error(
-    'CODEX_NO_WRITE_FLAGS capability-boundary invariant broken: must include "-s read-only" per ADR-0009 §2.v',
+    'CODEX_NO_WRITE_FLAGS capability-boundary invariant broken: must include "-s read-only"',
   );
 }
 const flagsAsStringArray: readonly string[] = CODEX_NO_WRITE_FLAGS;
@@ -163,7 +162,7 @@ const DEFAULT_TIMEOUT_MS = 120_000;
 const SIGTERM_TO_SIGKILL_GRACE_MS = 2_000;
 
 // stdout / stderr caps. Codex's `--json` stream is typically tiny
-// (four trace_entrys for a single-turn relay), but a misbehaving
+// (four trace_entries for a single-turn relay), but a misbehaving
 // subprocess should not exhaust connector memory.
 const STDOUT_MAX_BYTES = 16 * 1024 * 1024;
 const STDERR_MAX_BYTES = 1024 * 1024;
@@ -460,7 +459,8 @@ export async function relayCodex(input: CodexRelayInput): Promise<RelayResult> {
 //
 // A future CLI bump that introduces a genuinely-sandboxed item type
 // (e.g., a reasoning variant) can extend this list; a bump that
-// introduces a write-capable item type triggers ADR-0009 §6 reopen.
+// introduces a write-capable item type breaks the read-only boundary
+// and must be reviewed before this allowlist is extended.
 const KNOWN_CODEX_ITEM_TYPES = new Set<string>(['agent_message', 'command_execution', 'reasoning']);
 
 // Top-level trace_entry types the parser expects at Codex CLI 0.118-0.125 —
@@ -478,7 +478,7 @@ const KNOWN_CODEX_EVENT_TYPES = new Set<string>([
 ]);
 
 // Explicit failure-trace_entry types. The challenger's no-network probe
-// observed top-level `turn.failed` and `error` trace_entrys alongside a
+// observed top-level `turn.failed` and `error` trace_entries alongside a
 // partial `thread.started` / `turn.started`. Rejecting these with
 // named error messages keeps relay failures legible — the connector
 // says "codex reported turn.failed" rather than surfacing as "missing
@@ -495,7 +495,7 @@ export function parseCodexStdout(
   if (lines.length === 0) {
     throw new Error('codex --json stdout is empty');
   }
-  const trace_entrys: Array<Record<string, unknown>> = [];
+  const trace_entries: Array<Record<string, unknown>> = [];
   for (const [idx, line] of lines.entries()) {
     let parsed: unknown;
     try {
@@ -508,17 +508,17 @@ export function parseCodexStdout(
     if (typeof parsed !== 'object' || parsed === null) {
       throw new Error(`codex --json line ${idx + 1} is not a JSON object`);
     }
-    trace_entrys.push(parsed as Record<string, unknown>);
+    trace_entries.push(parsed as Record<string, unknown>);
   }
 
   // Top-level trace_entry-type gating.
-  //   (a) Reject failure trace_entrys up front with a named error so relay
+  //   (a) Reject failure trace_entries up front with a named error so relay
   //       callers see "codex reported turn.failed" / "codex reported
   //       error" instead of a generic downstream parse error.
   //   (b) Reject unknown top-level trace_entry types so a new Codex CLI
   //       version that adds a capability trace_entry cannot slip past the
   //       known-types allowlist and land in the transcript implicitly.
-  for (const [idx, trace_entry] of trace_entrys.entries()) {
+  for (const [idx, trace_entry] of trace_entries.entries()) {
     const type = trace_entry.type;
     if (typeof type !== 'string') {
       throw new Error(`codex --json line ${idx + 1}: trace_entry has no string 'type' field`);
@@ -531,19 +531,19 @@ export function parseCodexStdout(
             ? trace_entry.error
             : JSON.stringify(trace_entry).slice(0, 200);
       throw new Error(
-        `codex reported ${type}: ${msgField}. ADR-0009 §6 reopen-trigger-5 context: if this recurs, examine whether the failure shape indicates a capability-boundary regression (e.g., a sandboxed write attempt surfacing as turn.failed).`,
+        `codex reported ${type}: ${msgField}. If this recurs, examine whether the failure shape indicates a capability-boundary regression (e.g., a sandboxed write attempt surfacing as turn.failed).`,
       );
     }
     if (!KNOWN_CODEX_EVENT_TYPES.has(type)) {
       throw new Error(
-        `codex --json line ${idx + 1}: unknown top-level trace_entry type '${type}' (allowlist: ${Array.from(KNOWN_CODEX_EVENT_TYPES).join(', ')}). A new Codex trace_entry type requires ADR-0009 §6 reopen-trigger-5 review before the connector admits it.`,
+        `codex --json line ${idx + 1}: unknown top-level trace_entry type '${type}' (allowlist: ${Array.from(KNOWN_CODEX_EVENT_TYPES).join(', ')}). A new Codex trace_entry type must be reviewed before the connector admits it.`,
       );
     }
   }
 
   // `thread.started` carries the thread_id. It is emitted as the FIRST
   // trace_entry of any exec invocation under Codex 0.118.
-  const threadStarted = trace_entrys.find((e) => e.type === 'thread.started');
+  const threadStarted = trace_entries.find((e) => e.type === 'thread.started');
   if (threadStarted === undefined) {
     throw new Error('thread.started trace_entry missing from codex --json stdout');
   }
@@ -555,18 +555,17 @@ export function parseCodexStdout(
   // `turn.completed` is the terminal turn marker. Missing = the turn did
   // not complete cleanly even if the exit code was 0 (shouldn't happen
   // at v0 but the assertion is cheap).
-  const turnCompleted = trace_entrys.find((e) => e.type === 'turn.completed');
+  const turnCompleted = trace_entries.find((e) => e.type === 'turn.completed');
   if (turnCompleted === undefined) {
     throw new Error('turn.completed trace_entry missing from codex --json stdout');
   }
 
-  // Collect `item.completed` trace_entrys. Each carries an `item` object with
-  // an `id`, `type`, and type-specific fields. Reject any item whose
-  // type is not in `KNOWN_CODEX_ITEM_TYPES`: the capability-boundary
-  // discipline requires new Codex item types to be reviewed before the
-  // connector emits them into the transcript (a silent pass-through of a
-  // novel write-capable item would bypass the P2.6 boundary proof).
-  const itemCompleted = trace_entrys.filter((e) => e.type === 'item.completed');
+  // Collect `item.completed` trace_entries. Each carries an `item` object
+  // with an `id`, `type`, and type-specific fields. Reject any item whose
+  // type is not in KNOWN_CODEX_ITEM_TYPES: a silent pass-through of a
+  // novel write-capable item would bypass the read-only sandbox proof.
+  // New Codex item types must be reviewed before extending the allowlist.
+  const itemCompleted = trace_entries.filter((e) => e.type === 'item.completed');
   for (const [idx, e] of itemCompleted.entries()) {
     const item = e.item;
     if (typeof item !== 'object' || item === null) {
@@ -578,7 +577,7 @@ export function parseCodexStdout(
     }
     if (!KNOWN_CODEX_ITEM_TYPES.has(itemType)) {
       throw new Error(
-        `capability-boundary violation: item.completed[${idx}].item.type='${itemType}' is not in the known-types allowlist (${Array.from(KNOWN_CODEX_ITEM_TYPES).join(', ')}). A new Codex item type requires ADR-0009 §6 reopen-trigger-5 review before the connector admits it.`,
+        `capability-boundary violation: item.completed[${idx}].item.type='${itemType}' is not in the known-types allowlist (${Array.from(KNOWN_CODEX_ITEM_TYPES).join(', ')}). A new Codex item type must be reviewed before the connector admits it.`,
       );
     }
   }

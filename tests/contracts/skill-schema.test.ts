@@ -1,8 +1,4 @@
-// SkillDescriptor schema contract — SKILL-I1..I6 from
-// docs/contracts/skill.md v0.1.
-//
-// Split from the original `schema-parity.test.ts` mega-file as part
-// of FU-T09.
+// SkillDescriptor schema contract — see docs/contracts/skill.md.
 
 import { describe, expect, it } from 'vitest';
 import { SkillDescriptor } from '../../src/index.js';

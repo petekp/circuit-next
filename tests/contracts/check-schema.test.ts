@@ -1,8 +1,5 @@
 // Check discriminated-union schema — schema_sections vs
 // checkpoint_selection vs result_verdict.
-//
-// Split from the original `schema-parity.test.ts` mega-file as part
-// of FU-T09.
 
 import { describe, expect, it } from 'vitest';
 import { Check } from '../../src/index.js';

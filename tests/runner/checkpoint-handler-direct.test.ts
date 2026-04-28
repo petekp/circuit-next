@@ -3,12 +3,10 @@
 // The runner suites exercise checkpoint transitively (resume path,
 // build-frame brief assembly), but the handler's own surface — the
 // resolution lattice (waiting / failed / resolved) and each branch's
-// trace_entry sequence + reason string — is not directly tested. This file
-// invokes `runCheckpointStep` against a minimal in-memory
+// trace_entry sequence + reason string — is not directly covered. This
+// file invokes `runCheckpointStep` against a minimal in-memory
 // `StepHandlerContext` so each handler-local branch is exercised in
 // isolation.
-//
-// FU-T11 priority target #3 (per HANDOFF.md).
 
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -17,7 +15,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { runCheckpointStep } from '../../src/runtime/step-handlers/checkpoint.js';
 import type { RunState, StepHandlerContext } from '../../src/runtime/step-handlers/types.js';
-import { trace_entryLogPath } from '../../src/runtime/trace-writer.js';
+import { traceEntryLogPath } from '../../src/runtime/trace-writer.js';
 import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import type { Depth } from '../../src/schemas/depth.js';
@@ -122,7 +120,7 @@ interface BuildHarnessOpts {
 }
 
 interface Harness {
-  readonly trace_entrys: TraceEntry[];
+  readonly trace_entries: TraceEntry[];
   readonly state: RunState;
   readonly ctx: StepHandlerContext & {
     readonly step: CompiledFlow['steps'][number] & { kind: 'checkpoint' };
@@ -142,8 +140,8 @@ function buildHarness(opts: BuildHarnessOpts, runFolder: string): Harness {
   if (step === undefined || step.kind !== 'checkpoint') {
     throw new Error('test fixture invariant: step[0] must be a checkpoint step');
   }
-  const trace_entrys: TraceEntry[] = [];
-  const state: RunState = { trace_entrys, sequence: 0, relayResults: [] };
+  const trace_entries: TraceEntry[] = [];
+  const state: RunState = { trace_entries, sequence: 0, relayResults: [] };
   const now = deterministicNow(Date.UTC(2026, 3, 27, 0, 0, 0));
   const recordedAt = (): string => now().toISOString();
   const isResumedCheckpoint = opts.isResumedCheckpoint ?? false;
@@ -170,7 +168,7 @@ function buildHarness(opts: BuildHarnessOpts, runFolder: string): Harness {
     recordedAt,
     state,
     push: (ev: TraceEntry) => {
-      trace_entrys.push({ ...ev, sequence: state.sequence });
+      trace_entries.push({ ...ev, sequence: state.sequence });
       state.sequence += 1;
     },
     step,
@@ -189,7 +187,7 @@ function buildHarness(opts: BuildHarnessOpts, runFolder: string): Harness {
       throw new Error('childRunner should not be invoked by a checkpoint step');
     },
   };
-  return { trace_entrys, state, ctx };
+  return { trace_entries, state, ctx };
 }
 
 // The waiting-depth branch (deep / tournament) calls writeDerivedSnapshot,
@@ -210,7 +208,7 @@ function primeBootstrap(harness: Harness, flowId: CompiledFlowId): void {
     change_kind: harness.ctx.change_kind,
     manifest_hash: 'stub-manifest-hash',
   };
-  writeFileSync(trace_entryLogPath(harness.ctx.runFolder), `${JSON.stringify(bootstrap)}\n`);
+  writeFileSync(traceEntryLogPath(harness.ctx.runFolder), `${JSON.stringify(bootstrap)}\n`);
   // Next push() should stamp sequence=1.
   harness.state.sequence = 1;
 }
@@ -238,10 +236,10 @@ describe('runCheckpointStep direct — resolution lattice', () => {
     );
     expect(result.checkpoint.stepId).toBe('checkpoint-step');
     expect(result.checkpoint.allowedChoices).toEqual(['continue']);
-    expect(harness.trace_entrys.some((e) => e.kind === 'checkpoint.requested')).toBe(true);
-    expect(harness.trace_entrys.find((e) => e.kind === 'check.evaluated')).toBeUndefined();
-    expect(harness.trace_entrys.find((e) => e.kind === 'checkpoint.resolved')).toBeUndefined();
-    expect(harness.trace_entrys.find((e) => e.kind === 'step.aborted')).toBeUndefined();
+    expect(harness.trace_entries.some((e) => e.kind === 'checkpoint.requested')).toBe(true);
+    expect(harness.trace_entries.find((e) => e.kind === 'check.evaluated')).toBeUndefined();
+    expect(harness.trace_entries.find((e) => e.kind === 'checkpoint.resolved')).toBeUndefined();
+    expect(harness.trace_entries.find((e) => e.kind === 'step.aborted')).toBeUndefined();
   });
 
   it('returns waiting_checkpoint at tournament depth', () => {
@@ -263,13 +261,13 @@ describe('runCheckpointStep direct — resolution lattice', () => {
     expect(result.reason).toMatch(
       /checkpoint step 'checkpoint-step' cannot resolve standard depth without a declared safe default choice/,
     );
-    const check = harness.trace_entrys.find((e) => e.kind === 'check.evaluated');
+    const check = harness.trace_entries.find((e) => e.kind === 'check.evaluated');
     if (check?.kind !== 'check.evaluated') throw new Error('expected check.evaluated');
     expect(check.outcome).toBe('fail');
     expect(check.check_kind).toBe('checkpoint_selection');
-    expect(harness.trace_entrys.some((e) => e.kind === 'step.aborted')).toBe(true);
+    expect(harness.trace_entries.some((e) => e.kind === 'step.aborted')).toBe(true);
     // checkpoint.resolved should NOT fire on a failed-resolution branch.
-    expect(harness.trace_entrys.find((e) => e.kind === 'checkpoint.resolved')).toBeUndefined();
+    expect(harness.trace_entries.find((e) => e.kind === 'checkpoint.resolved')).toBeUndefined();
   });
 
   it('aborts at autonomous depth with an autonomous-choice-required reason when policy.safe_autonomous_choice is undefined', async () => {
@@ -289,12 +287,12 @@ describe('runCheckpointStep direct — resolution lattice', () => {
     const result = runCheckpointStep(harness.ctx);
 
     expect(result).toEqual({ kind: 'advance' });
-    const resolved = harness.trace_entrys.find((e) => e.kind === 'checkpoint.resolved');
+    const resolved = harness.trace_entries.find((e) => e.kind === 'checkpoint.resolved');
     if (resolved?.kind !== 'checkpoint.resolved') throw new Error('expected checkpoint.resolved');
     expect(resolved.selection).toBe('continue');
     expect(resolved.resolution_source).toBe('safe-default');
     expect(resolved.auto_resolved).toBe(true);
-    const check = harness.trace_entrys.find((e) => e.kind === 'check.evaluated');
+    const check = harness.trace_entries.find((e) => e.kind === 'check.evaluated');
     if (check?.kind !== 'check.evaluated') throw new Error('expected check.evaluated');
     expect(check.outcome).toBe('pass');
   });
@@ -312,7 +310,7 @@ describe('runCheckpointStep direct — resolution lattice', () => {
     const result = runCheckpointStep(harness.ctx);
 
     expect(result).toEqual({ kind: 'advance' });
-    const resolved = harness.trace_entrys.find((e) => e.kind === 'checkpoint.resolved');
+    const resolved = harness.trace_entries.find((e) => e.kind === 'checkpoint.resolved');
     if (resolved?.kind !== 'checkpoint.resolved') throw new Error('expected checkpoint.resolved');
     expect(resolved.resolution_source).toBe('safe-autonomous');
     expect(resolved.auto_resolved).toBe(true);
@@ -324,7 +322,7 @@ describe('runCheckpointStep direct — resolution lattice', () => {
     const result = runCheckpointStep(harness.ctx);
 
     expect(result).toEqual({ kind: 'advance' });
-    const resolved = harness.trace_entrys.find((e) => e.kind === 'checkpoint.resolved');
+    const resolved = harness.trace_entries.find((e) => e.kind === 'checkpoint.resolved');
     if (resolved?.kind !== 'checkpoint.resolved') throw new Error('expected checkpoint.resolved');
     expect(resolved.resolution_source).toBe('safe-default');
   });
@@ -346,14 +344,14 @@ describe('runCheckpointStep direct — operator resume', () => {
     const result = runCheckpointStep(harness.ctx);
 
     expect(result).toEqual({ kind: 'advance' });
-    const resolved = harness.trace_entrys.find((e) => e.kind === 'checkpoint.resolved');
+    const resolved = harness.trace_entries.find((e) => e.kind === 'checkpoint.resolved');
     if (resolved?.kind !== 'checkpoint.resolved') throw new Error('expected checkpoint.resolved');
     expect(resolved.selection).toBe('revise');
     expect(resolved.resolution_source).toBe('operator');
     expect(resolved.auto_resolved).toBe(false);
     // On resume, checkpoint.requested should NOT fire — the request was
     // emitted on the original (pre-resume) invocation.
-    expect(harness.trace_entrys.find((e) => e.kind === 'checkpoint.requested')).toBeUndefined();
+    expect(harness.trace_entries.find((e) => e.kind === 'checkpoint.requested')).toBeUndefined();
   });
 
   it('falls back to the resolveCheckpoint lattice when isResumedCheckpoint is true but resumeCheckpoint is undefined', async () => {
@@ -373,11 +371,11 @@ describe('runCheckpointStep direct — operator resume', () => {
     const result = runCheckpointStep(harness.ctx);
 
     expect(result).toEqual({ kind: 'advance' });
-    const resolved = harness.trace_entrys.find((e) => e.kind === 'checkpoint.resolved');
+    const resolved = harness.trace_entries.find((e) => e.kind === 'checkpoint.resolved');
     if (resolved?.kind !== 'checkpoint.resolved') throw new Error('expected checkpoint.resolved');
     expect(resolved.resolution_source).toBe('safe-default');
     // checkpoint.requested still skipped because isResumedCheckpoint is true.
-    expect(harness.trace_entrys.find((e) => e.kind === 'checkpoint.requested')).toBeUndefined();
+    expect(harness.trace_entries.find((e) => e.kind === 'checkpoint.requested')).toBeUndefined();
   });
 });
 
@@ -407,10 +405,10 @@ describe('runCheckpointStep direct — error paths caught by the catch block', (
     if (result.kind !== 'aborted') throw new Error('expected aborted');
     expect(result.reason).toMatch(/checkpoint step 'checkpoint-step': checkpoint handling failed/);
     expect(result.reason).toMatch(/selected 'continue' but check\.allow is \[something-else\]/);
-    const check = harness.trace_entrys.find((e) => e.kind === 'check.evaluated');
+    const check = harness.trace_entries.find((e) => e.kind === 'check.evaluated');
     if (check?.kind !== 'check.evaluated') throw new Error('expected check.evaluated');
     expect(check.outcome).toBe('fail');
-    expect(harness.trace_entrys.some((e) => e.kind === 'step.aborted')).toBe(true);
+    expect(harness.trace_entries.some((e) => e.kind === 'step.aborted')).toBe(true);
   });
 });
 
@@ -420,7 +418,7 @@ describe('runCheckpointStep direct — trace_entry sequence invariants', () => {
 
     runCheckpointStep(harness.ctx);
 
-    const kinds = harness.trace_entrys.map((e) => e.kind);
+    const kinds = harness.trace_entries.map((e) => e.kind);
     expect(kinds).toEqual(['checkpoint.requested', 'checkpoint.resolved', 'check.evaluated']);
   });
 
@@ -429,7 +427,7 @@ describe('runCheckpointStep direct — trace_entry sequence invariants', () => {
 
     runCheckpointStep(harness.ctx);
 
-    const kinds = harness.trace_entrys.map((e) => e.kind);
+    const kinds = harness.trace_entries.map((e) => e.kind);
     expect(kinds).toEqual(['checkpoint.requested', 'check.evaluated', 'step.aborted']);
   });
 
@@ -445,7 +443,7 @@ describe('runCheckpointStep direct — trace_entry sequence invariants', () => {
 
     runCheckpointStep(harness.ctx);
 
-    const kinds = harness.trace_entrys.map((e) => e.kind);
+    const kinds = harness.trace_entries.map((e) => e.kind);
     expect(kinds).toEqual(['checkpoint.resolved', 'check.evaluated']);
   });
 

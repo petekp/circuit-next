@@ -189,16 +189,16 @@ describe('codex relay round-trip (second-connector evidence)', () => {
           now,
         });
 
-        for (const trace_entry of materialized.trace_entrys) {
+        for (const trace_entry of materialized.trace_entries) {
           appendAndDerive(runFolder, trace_entry);
         }
 
         const runtrace = readRunTrace(runFolder);
-        expect(runtrace).toHaveLength(6); // bootstrap + 5 relay trace_entrys
-        const relayTraceEntrys = runtrace.filter((e) => e.kind.startsWith('relay.'));
-        expect(relayTraceEntrys).toHaveLength(5);
+        expect(runtrace).toHaveLength(6); // bootstrap + 5 relay trace_entries
+        const relayTraceEntries = runtrace.filter((e) => e.kind.startsWith('relay.'));
+        expect(relayTraceEntries).toHaveLength(5);
 
-        const [started, request, receipt, result, completed] = relayTraceEntrys;
+        const [started, request, receipt, result, completed] = relayTraceEntries;
         // The critical surface — connector name binding differs from the
         // agent round-trip. If materializer drift parameterization
         // regressed, this assertion catches it.

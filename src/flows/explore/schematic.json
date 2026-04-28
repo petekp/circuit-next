@@ -40,13 +40,13 @@
     {
       "name": "default",
       "depth": "standard",
-      "description": "Default explore entry mode \u2014 seeds the run at Frame. Standard depth per ADR-0007 CC#P2-6 resolution of plan Open Question #5."
+      "description": "Default explore entry mode \u2014 seeds the run at Frame at standard depth."
     }
   ],
   "stage_path_policy": {
     "mode": "partial",
     "omits": ["plan", "verify"],
-    "rationale": "Explore is an investigation flow \u2014 plan-mode is folded into Frame (investigation scoping); verify is omitted because explore output is not executable and does not admit mechanical verification. Review is the adversarial pass that IS in scope and, per ADR-0008, is a distinct-connector review relay (not a weaker substitute for verify as previously described at v0.1 authoring). See src/flows/explore/contract.md \u00a7Canonical stage set for the full rationale."
+    "rationale": "Explore is an investigation flow \u2014 plan-mode is folded into Frame (investigation scoping); verify is omitted because explore output is not executable and does not admit mechanical verification. Review is the adversarial pass that IS in scope, and is a distinct-connector review relay. See src/flows/explore/contract.md \u00a7Canonical stage set for the full rationale."
   },
   "stages": [
     {
@@ -136,7 +136,7 @@
     },
     {
       "id": "synthesize-step",
-      "title": "Synthesize \u2014 produce explore.compose (connector-bound relay per ADR-0008)",
+      "title": "Synthesize \u2014 produce explore.compose (connector-bound relay)",
       "stage": "act",
       "input": {
         "brief": "explore.brief@v1",
@@ -167,7 +167,7 @@
     },
     {
       "id": "review-step",
-      "title": "Review \u2014 adversarial pass over compose (connector-bound relay per ADR-0008)",
+      "title": "Review \u2014 adversarial pass over compose (connector-bound relay)",
       "stage": "review",
       "input": {
         "brief": "explore.brief@v1",

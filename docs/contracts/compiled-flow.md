@@ -16,7 +16,7 @@ property_ids: [flow.prop.entry_mode_reachability, flow.prop.no_dead_steps, flow.
 # CompiledFlow Contract
 
 A **CompiledFlow** is a typed, versioned definition of a multi-step automation.
-It compiles to a stable execution graph the runtime can replay from trace_entrys.
+It compiles to a stable execution graph the runtime can replay from trace_entries.
 
 ## Ubiquitous language
 

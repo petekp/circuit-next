@@ -1,11 +1,6 @@
 // Declaration-layer scalar schemas — `Depth`, `Role`, and
-// `ChangeKindDeclaration` exports from `src/index.ts`. No invariant ID
-// family is bound to these scalars directly; the tests cover the
-// closed-enum + structural shape contracts that the larger family
-// suites build on top of.
-//
-// Split from the original `schema-parity.test.ts` mega-file as part
-// of FU-T09.
+// `ChangeKindDeclaration` exports from `src/index.ts`. Covers closed-enum
+// and structural-shape contracts that the larger family suites build on.
 
 import { describe, expect, it } from 'vitest';
 import { ChangeKindDeclaration, Depth, Role, isConsequentialDepth } from '../../src/index.js';

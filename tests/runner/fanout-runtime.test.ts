@@ -26,7 +26,7 @@ import { Snapshot } from '../../src/schemas/snapshot.js';
 //   - Runs each branch through the injected childRunner with isolated
 //     RunIds and the worktree path as projectRoot.
 //   - Emits fanout.{started,branch_started,branch_completed,joined}
-//     trace_entrys with the resolved branch_ids on fanout.started.
+//     trace_entries with the resolved branch_ids on fanout.started.
 //   - Materializes the aggregate report at writes.aggregate.path.
 //   - Honors the join policy (pick-winner, disjoint-merge, aggregate-only)
 //     and the check.evaluated outcome that follows.
@@ -244,7 +244,7 @@ function makeStubChildRunner(plan: BranchVerdictPlan): CompiledFlowRunner {
         manifest_hash: 'stub-manifest-hash',
         updated_at: new Date(0).toISOString(),
       }),
-      trace_entrys: [],
+      trace_entries: [],
       relayResults: [],
     };
   };
@@ -332,12 +332,12 @@ describe('fanout runtime', () => {
 
     expect(outcome.result.outcome).toBe('complete');
 
-    const fanoutStarted = outcome.trace_entrys.find((e) => e.kind === 'fanout.started');
+    const fanoutStarted = outcome.trace_entries.find((e) => e.kind === 'fanout.started');
     if (fanoutStarted?.kind !== 'fanout.started') throw new Error('expected fanout.started');
     expect(fanoutStarted.branch_ids).toEqual(['a', 'b']);
     expect(fanoutStarted.on_child_failure).toBe('abort-all');
 
-    const fanoutJoined = outcome.trace_entrys.find((e) => e.kind === 'fanout.joined');
+    const fanoutJoined = outcome.trace_entries.find((e) => e.kind === 'fanout.joined');
     if (fanoutJoined?.kind !== 'fanout.joined') throw new Error('expected fanout.joined');
     expect(fanoutJoined.policy).toBe('pick-winner');
     expect(fanoutJoined.selected_branch_id).toBe('a');
@@ -400,7 +400,7 @@ describe('fanout runtime', () => {
 
     // aggregate-only passes when both branches close cleanly with parseable bodies — verdicts irrelevant.
     expect(outcome.result.outcome).toBe('complete');
-    const fanoutJoined = outcome.trace_entrys.find((e) => e.kind === 'fanout.joined');
+    const fanoutJoined = outcome.trace_entries.find((e) => e.kind === 'fanout.joined');
     if (fanoutJoined?.kind !== 'fanout.joined') throw new Error('expected fanout.joined');
     expect(fanoutJoined.policy).toBe('aggregate-only');
     expect(fanoutJoined.selected_branch_id).toBeUndefined();
@@ -586,11 +586,11 @@ describe('fanout runtime', () => {
 
     expect(outcome.result.outcome).toBe('complete');
 
-    const fanoutStarted = outcome.trace_entrys.find((e) => e.kind === 'fanout.started');
+    const fanoutStarted = outcome.trace_entries.find((e) => e.kind === 'fanout.started');
     if (fanoutStarted?.kind !== 'fanout.started') throw new Error('expected fanout.started');
     expect(fanoutStarted.branch_ids).toEqual(['batch-1', 'batch-2']);
 
-    const fanoutJoined = outcome.trace_entrys.find((e) => e.kind === 'fanout.joined');
+    const fanoutJoined = outcome.trace_entries.find((e) => e.kind === 'fanout.joined');
     if (fanoutJoined?.kind !== 'fanout.joined') throw new Error('expected fanout.joined');
     expect(fanoutJoined.policy).toBe('aggregate-only');
     expect(fanoutJoined.branches_completed).toBe(2);
@@ -642,15 +642,15 @@ describe('fanout runtime', () => {
     // and the parent run aborts at the check. The behavioral
     // distinction continue-others draws is "the loop continues vs.
     // the loop aborts the moment one branch fails," which the
-    // trace_entrys surface and we pin here. The parent outcome is
+    // trace_entries surface and we pin here. The parent outcome is
     // intentionally pinned too so a future regression that
     // accidentally skipped the check fail (or accidentally aborted
     // mid-loop) flips this test red.
-    const fanoutStarted = outcome.trace_entrys.find((e) => e.kind === 'fanout.started');
+    const fanoutStarted = outcome.trace_entries.find((e) => e.kind === 'fanout.started');
     if (fanoutStarted?.kind !== 'fanout.started') throw new Error('expected fanout.started');
     expect(fanoutStarted.on_child_failure).toBe('continue-others');
 
-    const fanoutJoined = outcome.trace_entrys.find((e) => e.kind === 'fanout.joined');
+    const fanoutJoined = outcome.trace_entries.find((e) => e.kind === 'fanout.joined');
     if (fanoutJoined?.kind !== 'fanout.joined') throw new Error('expected fanout.joined');
     expect(fanoutJoined.branches_completed).toBe(1);
     expect(fanoutJoined.branches_failed).toBe(1);

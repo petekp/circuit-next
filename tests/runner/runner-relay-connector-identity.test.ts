@@ -93,7 +93,7 @@ describe('RelayFn descriptor carries connector identity into relay.started', () 
     expect(outcome.result.outcome).toBe('complete');
     expect(outcome.result.flow_id).toBe(CompiledFlowId.parse('runtime-proof'));
 
-    const relayStarted = outcome.trace_entrys.find((e) => e.kind === 'relay.started');
+    const relayStarted = outcome.trace_entries.find((e) => e.kind === 'relay.started');
     if (!relayStarted || relayStarted.kind !== 'relay.started') {
       throw new Error('expected relay.started trace_entry');
     }

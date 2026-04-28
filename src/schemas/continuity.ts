@@ -1,26 +1,18 @@
 import { z } from 'zod';
 import { InvocationId, RunId, StageId, StepId } from './ids.js';
-import { ControlPchange_kindFileStem } from './scalars.js';
+import { ControlPlaneFileStem } from './scalars.js';
 import { SnapshotStatus } from './snapshot.js';
 
 /**
- * Continuity surfaces — docs/contracts/continuity.md v0.1.
+ * Continuity surfaces — see docs/contracts/continuity.md.
  *
- * Authority: report_ids [`continuity.record`, `continuity.index`] in
- * `specs/reports.json`, both classified `successor-to-live` /
- * `compatibility_policy: clean-break` / `legacy_parse_policy: reject`.
- * `record_id` is a `path_derived_field`; the path-safe scalar is
- * `ControlPchange_kindFileStem` (see `src/schemas/scalars.ts`).
+ * Two reports — `continuity.record` and `continuity.index` — describe
+ * a saved cross-session resume point. `record_id` is a path-derived
+ * field, so it uses ControlPlaneFileStem (see ./scalars.ts).
  *
- * Live reference surface characterization:
- * `specs/reference/legacy-circuit/continuity-characterization.md`.
- */
-
-/**
- * CONT-I8 — transitive `.strict()`. Every object in the continuity surface
- * rejects surplus keys at parse time. Applied at each ZodObject, including
- * the continuity variants, `resume_contract`, `run_ref` provenance, and
- * the index pointers.
+ * All ZodObjects below use `.strict()` to reject surplus keys at parse
+ * time, both on outer records and on every nested object (resume_contract,
+ * run_ref provenance, and the index pointers).
  */
 
 export const GitState = z
@@ -44,11 +36,11 @@ export const ContinuityNarrative = z
 export type ContinuityNarrative = z.infer<typeof ContinuityNarrative>;
 
 /**
- * CONT-I7 — run-attached resume provenance. When a continuity record is
- * saved against a live run, the record MUST capture enough state at save
- * time to make resume adjudication auditable. `run_id` alone is
- * insufficient: resume needs to compare "what was true at save time" vs
- * "what is true now". This closes the pre-authoring carryover #8.
+ * Run-attached resume provenance. When a continuity record is saved
+ * against a live run, the record must capture enough state at save time
+ * for resume adjudication to be auditable. `run_id` alone is insufficient
+ * — resume needs to compare "what was true at save time" vs "what is true
+ * now".
  */
 export const RunAttachedProvenance = z
   .object({
@@ -63,12 +55,10 @@ export const RunAttachedProvenance = z
 export type RunAttachedProvenance = z.infer<typeof RunAttachedProvenance>;
 
 /**
- * CONT-I6 — non-contradiction between `auto_resume` and
- * `requires_explicit_resume`. These are defense-in-depth booleans; exactly
- * one must be true. Both-true means "auto-resume AND require explicit
- * resume" — incoherent. Both-false means neither resume path is armed —
- * also incoherent, and leaves the record in a silent-dead state. This
- * closes the pre-authoring carryover #7.
+ * Non-contradiction between `auto_resume` and `requires_explicit_resume`.
+ * Exactly one must be true. Both-true means "auto-resume AND require
+ * explicit resume" — incoherent. Both-false means neither resume path is
+ * armed and leaves the record silently dead.
  */
 const resumeContractRefine = <
   T extends { auto_resume: boolean; requires_explicit_resume: boolean },
@@ -100,7 +90,7 @@ const RunBackedResumeContract = z
 
 const ContinuityBase = z.object({
   schema_version: z.literal(1),
-  record_id: ControlPchange_kindFileStem,
+  record_id: ControlPlaneFileStem,
   project_root: z.string().min(1),
   created_at: z.string().datetime(),
   git: GitState,
@@ -121,13 +111,12 @@ export const RunBackedContinuity = ContinuityBase.extend({
 export type RunBackedContinuity = z.infer<typeof RunBackedContinuity>;
 
 /**
- * CONT-I12 — raw-input own-property guard. `.strict()` rejects surplus own
- * keys but does NOT defend against prototype-chain smuggle: Zod reads
- * inherited properties during parse, so `Object.create({record_id: 'evil'})`
- * would satisfy a `record_id` requirement through the prototype. The
- * guards run on the raw input BEFORE Zod's property access, so required
- * identity fields MUST be own. Mirrors the run.ts RunTrace defense (RUN MED
- * #3).
+ * Raw-input own-property guard. `.strict()` rejects surplus own keys but
+ * does NOT defend against prototype-chain smuggle: Zod reads inherited
+ * properties during parse, so `Object.create({record_id: 'evil'})` would
+ * satisfy a `record_id` requirement through the prototype. This guard
+ * runs on the raw input before Zod's property access, requiring identity
+ * fields to be own properties. Mirrors the same defense in run.ts.
  */
 const recordOwnPropertyGuard = z.custom<unknown>((raw) => {
   if (raw === null || typeof raw !== 'object') return true;
@@ -137,12 +126,11 @@ const recordOwnPropertyGuard = z.custom<unknown>((raw) => {
 }, 'continuity record has inherited (not own) identity/discriminator field; prototype-chain smuggle rejected');
 
 /**
- * CONT-I3/I4/I5 — ContinuityRecord is a discriminated union on
- * `continuity_kind`. Standalone records reject `run_ref` (CONT-I4
- * enforced by `.strict()`); run-backed records require it.
- * `resume_contract.mode` is bound to `continuity_kind` via the per-variant
- * literal (CONT-I5). The outer pipeline prepends an own-property guard
- * (CONT-I12) before the discriminated union.
+ * ContinuityRecord is a discriminated union on `continuity_kind`.
+ * Standalone records reject `run_ref` (enforced by `.strict()`);
+ * run-backed records require it. `resume_contract.mode` is bound to
+ * `continuity_kind` via the per-variant literal. The outer pipeline
+ * prepends an own-property guard before the discriminated union.
  */
 export const ContinuityRecord = recordOwnPropertyGuard.pipe(
   z.discriminatedUnion('continuity_kind', [StandaloneContinuity, RunBackedContinuity]),
@@ -150,22 +138,19 @@ export const ContinuityRecord = recordOwnPropertyGuard.pipe(
 export type ContinuityRecord = z.infer<typeof ContinuityRecord>;
 
 /**
- * CONT-I9/I10/I11 — ContinuityIndex aggregate. The index is the resolver
- * that determines which continuity record is authoritative for resume.
- * Two orthogonal pointers:
- *   - `pending_record`: by `record_id` (a `ControlPchange_kindFileStem`); null
- *     when no record is pending.
+ * ContinuityIndex aggregate. The index resolves which continuity record
+ * is authoritative for resume. Two orthogonal pointers:
+ *   - `pending_record`: by `record_id`; null when no record is pending.
  *   - `current_run`: by `run_id` plus the at-attach stage/step snapshot;
  *     null when no run is attached.
  *
- * Both pointers MAY be simultaneously populated, simultaneously null, or
- * mixed — observed in legacy Circuit. Resume semantics (which pointer
- * wins when both are set) is a resolver-level concern, not a schema
- * invariant.
+ * Both pointers may be simultaneously populated, simultaneously null, or
+ * mixed. Resume semantics (which pointer wins when both are set) is a
+ * resolver-level concern, not a schema invariant.
  */
 export const PendingRecordPointer = z
   .object({
-    record_id: ControlPchange_kindFileStem,
+    record_id: ControlPlaneFileStem,
     continuity_kind: z.union([z.literal('standalone'), z.literal('run-backed')]),
     created_at: z.string().datetime(),
   })
@@ -194,9 +179,9 @@ const ContinuityIndexBody = z
   .strict();
 
 /**
- * CONT-I12 (continued) — same own-property guard applied to the index
- * aggregate. Required fields MUST be own-properties on the raw input.
- * Nullable fields still require the KEY to be own (value may be null).
+ * Own-property guard applied to the index aggregate. Required fields
+ * must be own properties on the raw input. Nullable fields still
+ * require the key to be own (value may be null).
  */
 const indexOwnPropertyGuard = z.custom<unknown>((raw) => {
   if (raw === null || typeof raw !== 'object') return true;

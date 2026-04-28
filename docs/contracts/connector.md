@@ -108,14 +108,14 @@ invariant; tested in `tests/contracts/schema-parity.test.ts`.
     `--config`, `-p` / `--profile`) — this is the deny-list for argv
     surfaces that would silently widen the sandbox or reach a repo-write
     path outside sandbox scope; and (ii) trace_entry-stream **protocol drift
-    detection** (`parseCodexStdout()` rejects top-level trace_entrys outside
-    `KNOWN_CODEX_EVENT_TYPES`, `item.completed` trace_entrys whose `item.type`
-    is outside the known-types allowlist, and failure trace_entrys
+    detection** (`parseCodexStdout()` rejects top-level trace_entries outside
+    `KNOWN_CODEX_EVENT_TYPES`, `item.completed` trace_entries whose `item.type`
+    is outside the known-types allowlist, and failure trace_entries
     `turn.failed`/`error` with named error messages) — this is drift
     detection, NOT the capability boundary itself. The boundary is the
     OS sandbox + argv enforcement; the item-type discipline is a
     protocol hygiene layer that catches new Codex capability surfaces
-    (write-tool trace_entrys, apply-patch trace_entrys) before they land in the
+    (write-tool trace_entries, apply-patch trace_entries) before they land in the
     relay transcript implicitly. Slice 87 wires resolved selection
     into this connector: compatible OpenAI model ids are passed with `-m`;
     effort is passed through the single allowlisted config override
@@ -354,7 +354,7 @@ invariant; tested in `tests/contracts/schema-parity.test.ts`.
   `descriptor.name` field MUST be equal. `{connectors: {gemini:
   {name: 'ollama', command: [...]}}}` parses syntactically (both
   `gemini` and `ollama` satisfy `ConnectorName`) but produces two
-  identities for a single registered executor: trace_entrys would carry
+  identities for a single registered executor: trace_entries would carry
   `connector.name: 'ollama'` while role/circuit references resolve to
   key `gemini`. An audit could not cross-reference the two without
   inverting the descriptor index. Enforced at `src/schemas/config.ts`

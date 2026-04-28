@@ -1,29 +1,14 @@
-// Slice 43a — validateCompiledFlowKindPolicy helper extraction (HIGH 5
-// retargeting per Slice 40, landed at P2.5 per plan §Slice 40
-// Retargeting note).
+// Single source of truth for flow-kind canonical stage-set policy.
 //
-// This module is the single source of truth for flow-kind canonical
-// stage-set policy. Two surfaces consume it:
-//   (1) scripts/audit.mjs Check 24 (checkSpineCoverage) — audit-level;
-//       receives raw JSON from generated/flows/<kind>/circuit.json
-//       and checks canonical-stage-set + omits invariants against this
-//       module's FLOW_KIND_CANONICAL_SETS table.
-//   (2) src/runtime/policy/flow-kind-policy.ts — runtime-level;
-//       receives a CompiledFlow.safeParse'd object and runs the same check
-//       post-schema-validation so the CLI fixture loader rejects
-//       structurally-invalid or policy-invalid fixtures with a clear
-//       diagnostic.
+// Consumed by src/runtime/policy/flow-kind-policy.ts, which wraps these
+// checks with Zod-driven CompiledFlow.safeParse so the CLI fixture
+// loader can reject structurally- or policy-invalid fixtures with one
+// call.
 //
-// The module is JS (.mjs) rather than TS because audit.mjs is pure
-// Node ESM with no TS transpilation path; the TS layer at
-// src/runtime/policy/ re-exports this module's constants and adds the
-// Zod-driven safeParse wrapper.
-//
-// Why split the concerns: the audit-level check runs WITHOUT Zod (JS
-// surface has no access to the schemas/ types); the runtime-level check
-// runs WITH Zod so runtime errors carry Zod's structured issue detail.
-// The canonical-stage-set table itself is identical in both surfaces —
-// defining it once here prtrace_entrys drift.
+// Why this is .mjs (not .ts): historically a JS-only audit script also
+// consumed the canonical-set table, so the table was defined here. The
+// audit script is gone, but keeping the table in one place prevents
+// drift if a second consumer reappears.
 
 /**
  * @typedef {Object} CompiledFlowKindPolicyEntry
@@ -71,9 +56,9 @@ export const FLOW_KIND_CANONICAL_SETS = {
 };
 
 /**
- * CompiledFlow IDs explicitly exempt from kind-canonical enforcement.
- * runtime-proof is the Stage 1.5 Alpha Proof partial-stage path fixture
- * (stage_path_policy.omits intentionally covers 5 of 7 canonicals).
+ * CompiledFlow IDs exempt from kind-canonical enforcement. `runtime-proof`
+ * is the partial-stage-path fixture used by the runtime test harness;
+ * its `stage_path_policy.omits` intentionally covers 5 of 7 canonicals.
  * @type {Set<string>}
  */
 export const EXEMPT_FLOW_IDS = new Set(['runtime-proof']);
@@ -110,9 +95,10 @@ function isReviewerRelay(step) {
 }
 
 /**
- * REVIEW-I1 structural ordering: the close-stage primary review.result
- * report writer must be preceded in steps[] by an analyze-stage relay
- * step with role=reviewer.
+ * Structural ordering check for review flows: the close-stage `review.result`
+ * report writer must be preceded in steps[] by an analyze-stage relay step
+ * with role=reviewer. Enforces reviewer/result separation: the writer
+ * cannot run without a prior reviewer relay producing the verdict.
  *
  * @param {unknown} fixture
  * @returns {{ ok: true, detail: string } | { ok: false, detail: string }}
@@ -141,7 +127,7 @@ export function checkReviewIdentitySeparationPolicy(fixture) {
     return {
       ok: false,
       detail:
-        'REVIEW-I1: analyze stage must contain a relay step with role=reviewer before the close report writer',
+        'analyze stage must contain a relay step with role=reviewer before the close report writer',
     };
   }
 
@@ -153,7 +139,7 @@ export function checkReviewIdentitySeparationPolicy(fixture) {
     return {
       ok: false,
       detail:
-        'REVIEW-I1: close stage must contain a compose step that writes the primary review.result report',
+        'close stage must contain a compose step that writes the primary review.result report',
     };
   }
 
@@ -164,34 +150,29 @@ export function checkReviewIdentitySeparationPolicy(fixture) {
     return {
       ok: false,
       detail:
-        'REVIEW-I1: each close-stage review.result report writer must be preceded in steps[] by an analyze-stage reviewer relay',
+        'each close-stage review.result report writer must be preceded in steps[] by an analyze-stage reviewer relay',
     };
   }
 
   return {
     ok: true,
-    detail:
-      'REVIEW-I1: close review.result report writer is preceded by an analyze-stage reviewer relay',
+    detail: 'close review.result report writer is preceded by an analyze-stage reviewer relay',
   };
 }
 
 /**
- * Audit-level canonical-stage-set check. Input is a raw fixture object
- * (already JSON-parsed). Does NOT run CompiledFlow.safeParse — Zod lives on
- * the TS side; this function is deliberately Zod-free so it is callable
- * from audit.mjs. The runtime-level helper at
- * src/runtime/policy/flow-kind-policy.ts adds the safeParse wrapper.
+ * Canonical-stage-set check. Input is a raw fixture object (already
+ * JSON-parsed). Does not run CompiledFlow.safeParse — that wrapper lives
+ * in src/runtime/policy/flow-kind-policy.ts so this stays Zod-free and
+ * callable from non-TS contexts.
  *
  * Returns a discriminated result:
- *   - { kind: 'green', detail } — fixture passes canonical-stage-set
- *     policy for its declared flow kind.
- *   - { kind: 'exempt', detail } — fixture's id is in
- *     EXEMPT_FLOW_IDS (information-only pass-through).
- *   - { kind: 'pass_through', detail } — fixture's id is not a known
- *     flow kind (unknown → pass-through, not red; future kinds
- *     author their own entry).
- *   - { kind: 'red', detail } — fixture violates canonical-stage-set
- *     policy for a known flow kind.
+ *   - 'green' — fixture passes canonical-stage-set policy.
+ *   - 'exempt' — fixture id is in EXEMPT_FLOW_IDS.
+ *   - 'pass_through' — fixture id has no canonical-set entry (unknown
+ *     flow kinds pass through rather than fail; new kinds author their
+ *     own entry).
+ *   - 'red' — fixture violates canonical-stage-set policy for a known kind.
  *
  * @param {unknown} fixture
  * @returns {{ kind: 'green' | 'exempt' | 'pass_through' | 'red', detail: string }}
@@ -267,9 +248,9 @@ export function checkCompiledFlowKindCanonicalPolicy(fixture) {
     };
   }
   const omits = Array.isArray(spObj.omits) ? spObj.omits.filter((s) => typeof s === 'string') : [];
-  // Required omits always belong in the omit list. Optional canonicals that the
-  // variant chose NOT to declare also belong in the omit list (stage-I4 forces
-  // every canonical to be either declared or omitted; the policy mirrors that).
+  // Required omits always belong in the omit list. Optional canonicals that
+  // the variant chose NOT to declare must also appear in the omit list —
+  // every canonical must be either declared or omitted.
   const optionalOmitted = [...optionalCanonicals].filter((c) => !declared.has(c));
   const expectedOmits = new Set([...expected.omits, ...optionalOmitted]);
   const missingOmits = [...expectedOmits].filter((o) => !omits.includes(o));

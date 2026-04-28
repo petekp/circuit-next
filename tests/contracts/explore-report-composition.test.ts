@@ -118,7 +118,7 @@ function stepById(flow: CompiledFlow, stepId: string): StepWithReport {
   return step as StepWithReport;
 }
 
-describe('P2.10 report-schema composition seam', () => {
+describe('report-schema composition seam', () => {
   it('binds landed explore report schemas across fixture, ledger, and runtime validation', () => {
     const reports = loadReports();
     const flow = loadExploreCompiledFlow();

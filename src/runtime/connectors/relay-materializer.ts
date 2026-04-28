@@ -66,7 +66,7 @@ export interface RelayMaterializeInput {
 }
 
 export interface RelayMaterializeOutput {
-  readonly trace_entrys: readonly TraceEntry[];
+  readonly trace_entries: readonly TraceEntry[];
   readonly sequenceAfter: number;
   readonly requestPath: string;
   readonly receiptPath: string;
@@ -81,8 +81,8 @@ export interface RelayMaterializeOutput {
 // sequence. Callers may pre-write the request slot and append
 // `relay.started` / `relay.request` before awaiting an connector; in
 // that case `priorStart` carries the already-durable request hash and this
-// materializer emits only receipt/result/completed trace_entrys.
-// Caller is responsible for appending the trace_entrys via `appendTraceEntry`
+// materializer emits only receipt/result/completed trace_entries.
+// Caller is responsible for appending the trace_entries via `appendTraceEntry`
 // (or `appendAndDerive` if snapshot derivation is wanted).
 //
 // Materialization rule: when `writes.report` is declared, after BOTH
@@ -99,8 +99,8 @@ export interface RelayMaterializeOutput {
 // `writes.report` slot. The body bytes written here are the same
 // bytes that satisfied the schema parse — the report file and the
 // relay transcript `result` file are distinct on disk but share a
-// byte-for-byte payload at v0.3 (P2.10 may introduce canonicalization
-// before write).
+// byte-for-byte payload (a future canonicalization pass before write
+// would change this).
 export function materializeRelay(input: RelayMaterializeInput): RelayMaterializeOutput {
   const {
     runId,
@@ -155,10 +155,10 @@ export function materializeRelay(input: RelayMaterializeInput): RelayMaterialize
 
   let sequence = startingSequence;
   const ts = () => now().toISOString();
-  const trace_entrys: TraceEntry[] = [];
+  const trace_entries: TraceEntry[] = [];
 
   if (priorStart === undefined) {
-    trace_entrys.push({
+    trace_entries.push({
       schema_version: 1,
       sequence: sequence++,
       recorded_at: ts(),
@@ -172,7 +172,7 @@ export function materializeRelay(input: RelayMaterializeInput): RelayMaterialize
       resolved_from: resolvedFrom,
     });
 
-    trace_entrys.push({
+    trace_entries.push({
       schema_version: 1,
       sequence: sequence++,
       recorded_at: ts(),
@@ -184,7 +184,7 @@ export function materializeRelay(input: RelayMaterializeInput): RelayMaterialize
     });
   }
 
-  trace_entrys.push({
+  trace_entries.push({
     schema_version: 1,
     sequence: sequence++,
     recorded_at: ts(),
@@ -195,7 +195,7 @@ export function materializeRelay(input: RelayMaterializeInput): RelayMaterialize
     receipt_id: relayResult.receipt_id,
   });
 
-  trace_entrys.push({
+  trace_entries.push({
     schema_version: 1,
     sequence: sequence++,
     recorded_at: ts(),
@@ -206,7 +206,7 @@ export function materializeRelay(input: RelayMaterializeInput): RelayMaterialize
     result_report_hash: resultReportHash,
   });
 
-  trace_entrys.push({
+  trace_entries.push({
     schema_version: 1,
     sequence: sequence++,
     recorded_at: ts(),
@@ -221,7 +221,7 @@ export function materializeRelay(input: RelayMaterializeInput): RelayMaterialize
   });
 
   return {
-    trace_entrys,
+    trace_entries,
     sequenceAfter: sequence,
     requestPath: requestAbs,
     receiptPath: receiptAbs,

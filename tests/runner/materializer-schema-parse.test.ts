@@ -84,7 +84,7 @@ function change_kind(): ChangeKindDeclaration {
     failure_mode:
       'materializer wrote the canonical report as raw result_body bytes without schema parse; the contract requires schema-parsing result_body against writes.report.schema before materialization',
     acceptance_evidence:
-      'report write requires both the verdict check pass AND a schema-parse pass against writes.report.schema; unknown schemas fail-closed by default; failure emits check.evaluated outcome=fail + step.aborted + run.closed outcome=aborted with the reason byte-identical across the three trace_entrys and on the user-visible result.json',
+      'report write requires both the verdict check pass AND a schema-parse pass against writes.report.schema; unknown schemas fail-closed by default; failure emits check.evaluated outcome=fail + step.aborted + run.closed outcome=aborted with the reason byte-identical across the three trace_entries and on the user-visible result.json',
     alternate_framing:
       'land schema parsing inside materializeRelay instead of at the runner layer — rejected because the runner already owns check-evaluation; keeping both checks at the same layer keeps the failure-path trace_entry surface uniform without duplicating schema logic across layers',
   };
@@ -141,7 +141,7 @@ describe('materializer schema-parse', () => {
     const reportBody = readFileSync(reportAbs, 'utf8');
     expect(reportBody).toBe(resultBody);
 
-    const checkEvaluated = outcome.trace_entrys.filter(
+    const checkEvaluated = outcome.trace_entries.filter(
       (e) => e.kind === 'check.evaluated' && e.check_kind === 'result_verdict',
     );
     expect(checkEvaluated).toHaveLength(1);
@@ -150,13 +150,13 @@ describe('materializer schema-parse', () => {
     expect(ge.outcome).toBe('pass');
     expect(ge.reason).toBeUndefined();
 
-    const relayCompleted = outcome.trace_entrys.find((e) => e.kind === 'relay.completed');
+    const relayCompleted = outcome.trace_entries.find((e) => e.kind === 'relay.completed');
     if (relayCompleted?.kind !== 'relay.completed') {
       throw new Error('expected relay.completed');
     }
     expect(relayCompleted.verdict).toBe('ok');
 
-    expect(outcome.trace_entrys.find((e) => e.kind === 'step.aborted')).toBeUndefined();
+    expect(outcome.trace_entries.find((e) => e.kind === 'step.aborted')).toBeUndefined();
   });
 
   it('(b) invalid payload: check passes but schema rejects → canonical report NOT written; outcome=aborted; check.evaluated outcome=fail names the schema parse error; reason byte-identical across check.evaluated / step.aborted / run.closed / result.json', async () => {
@@ -188,7 +188,7 @@ describe('materializer schema-parse', () => {
     expect(existsSync(join(runFolder, 'reports', 'relay.receipt.json'))).toBe(true);
     expect(existsSync(join(runFolder, 'reports', 'relay.result.json'))).toBe(true);
 
-    const ge = outcome.trace_entrys.find(
+    const ge = outcome.trace_entries.find(
       (e) => e.kind === 'check.evaluated' && e.check_kind === 'result_verdict',
     );
     if (ge?.kind !== 'check.evaluated') throw new Error('expected check.evaluated');
@@ -199,16 +199,16 @@ describe('materializer schema-parse', () => {
     expect(ge.reason).toMatch(/rationale/);
     expect(ge.reason).toMatch(/runtime-proof-strict@v1/);
 
-    const aborted = outcome.trace_entrys.find((e) => e.kind === 'step.aborted');
+    const aborted = outcome.trace_entries.find((e) => e.kind === 'step.aborted');
     if (aborted?.kind !== 'step.aborted') throw new Error('expected step.aborted');
     expect(aborted.step_id).toBe('relay-step');
 
-    const relayStepCompleted = outcome.trace_entrys.find(
+    const relayStepCompleted = outcome.trace_entries.find(
       (e) => e.kind === 'step.completed' && e.step_id === 'relay-step',
     );
     expect(relayStepCompleted).toBeUndefined();
 
-    const closed = outcome.trace_entrys.find((e) => e.kind === 'run.closed');
+    const closed = outcome.trace_entries.find((e) => e.kind === 'run.closed');
     if (closed?.kind !== 'run.closed') throw new Error('expected run.closed');
     expect(closed.outcome).toBe('aborted');
 
@@ -223,7 +223,7 @@ describe('materializer schema-parse', () => {
     // not the runtime sentinel — connector declared a verdict in
     // check.pass but the body failed schema parse. The durable
     // transcript reflects what the connector said.
-    const relayCompleted = outcome.trace_entrys.find((e) => e.kind === 'relay.completed');
+    const relayCompleted = outcome.trace_entries.find((e) => e.kind === 'relay.completed');
     if (relayCompleted?.kind !== 'relay.completed') {
       throw new Error('expected relay.completed');
     }
@@ -265,7 +265,7 @@ describe('materializer schema-parse', () => {
     expect(existsSync(join(runFolder, 'reports', 'relay.receipt.json'))).toBe(true);
     expect(existsSync(join(runFolder, 'reports', 'relay.result.json'))).toBe(true);
 
-    const ge = outcome.trace_entrys.find(
+    const ge = outcome.trace_entries.find(
       (e) => e.kind === 'check.evaluated' && e.check_kind === 'result_verdict',
     );
     if (ge?.kind !== 'check.evaluated') throw new Error('expected check.evaluated');
@@ -274,7 +274,7 @@ describe('materializer schema-parse', () => {
     expect(ge.reason).toMatch(/not-registered-anywhere@v1/);
     expect(ge.reason).toMatch(/fail-closed/);
 
-    const aborted = outcome.trace_entrys.find((e) => e.kind === 'step.aborted');
+    const aborted = outcome.trace_entries.find((e) => e.kind === 'step.aborted');
     if (aborted?.kind !== 'step.aborted') throw new Error('expected step.aborted');
     expect(aborted.step_id).toBe('relay-step');
 
@@ -282,12 +282,12 @@ describe('materializer schema-parse', () => {
     // surface. The fail-closed branch is the one most likely to regress
     // independently, so it must lock the full surface the
     // check-pass/schema-fail case locks.
-    const relayStepCompleted = outcome.trace_entrys.find(
+    const relayStepCompleted = outcome.trace_entries.find(
       (e) => e.kind === 'step.completed' && e.step_id === 'relay-step',
     );
     expect(relayStepCompleted).toBeUndefined();
 
-    const closed = outcome.trace_entrys.find((e) => e.kind === 'run.closed');
+    const closed = outcome.trace_entries.find((e) => e.kind === 'run.closed');
     if (closed?.kind !== 'run.closed') throw new Error('expected run.closed');
     expect(closed.outcome).toBe('aborted');
 
@@ -303,7 +303,7 @@ describe('materializer schema-parse', () => {
     // not the runtime sentinel — connector declared a verdict in
     // check.pass; only the schema lookup failed, not the connector output
     // itself. Symmetric to case (b).
-    const relayCompleted = outcome.trace_entrys.find((e) => e.kind === 'relay.completed');
+    const relayCompleted = outcome.trace_entries.find((e) => e.kind === 'relay.completed');
     if (relayCompleted?.kind !== 'relay.completed') {
       throw new Error('expected relay.completed');
     }
@@ -345,7 +345,7 @@ describe('materializer schema-parse', () => {
     const reportAbs = join(runFolder, 'reports', 'relay-canonical.json');
     expect(existsSync(reportAbs)).toBe(false);
 
-    const ge = outcome.trace_entrys.find(
+    const ge = outcome.trace_entries.find(
       (e) => e.kind === 'check.evaluated' && e.check_kind === 'result_verdict',
     );
     if (ge?.kind !== 'check.evaluated') throw new Error('expected check.evaluated');
@@ -366,7 +366,7 @@ describe('materializer schema-parse', () => {
     // relay.completed.verdict carries the observed verdict "reject"
     // — durable transcript reflects what connector said even on
     // rejection.
-    const relayCompleted = outcome.trace_entrys.find((e) => e.kind === 'relay.completed');
+    const relayCompleted = outcome.trace_entries.find((e) => e.kind === 'relay.completed');
     if (relayCompleted?.kind !== 'relay.completed') {
       throw new Error('expected relay.completed');
     }
@@ -393,7 +393,7 @@ describe('materializer schema-parse', () => {
     expect(outcome.result.outcome).toBe('aborted');
     expect(existsSync(join(runFolder, 'reports', 'relay-analysis.json'))).toBe(false);
 
-    const ge = outcome.trace_entrys.find(
+    const ge = outcome.trace_entries.find(
       (e) => e.kind === 'check.evaluated' && e.check_kind === 'result_verdict',
     );
     if (ge?.kind !== 'check.evaluated') throw new Error('expected check.evaluated');
@@ -401,7 +401,7 @@ describe('materializer schema-parse', () => {
     expect(ge.reason).toMatch(/explore\.analysis@v1/);
     expect(ge.reason).toMatch(/not registered/);
 
-    const relayCompleted = outcome.trace_entrys.find((e) => e.kind === 'relay.completed');
+    const relayCompleted = outcome.trace_entries.find((e) => e.kind === 'relay.completed');
     if (relayCompleted?.kind !== 'relay.completed') {
       throw new Error('expected relay.completed');
     }

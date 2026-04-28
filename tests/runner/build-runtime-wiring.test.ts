@@ -83,17 +83,17 @@ function relayerWith(
   };
 }
 
-function trace_entryLabel(trace_entry: { kind: string; step_id?: unknown }): string {
+function traceEntryLabel(trace_entry: { kind: string; step_id?: unknown }): string {
   return typeof trace_entry.step_id === 'string'
     ? `${trace_entry.kind}:${trace_entry.step_id}`
     : trace_entry.kind;
 }
 
-function trace_entryByKind<T extends { kind: string }>(
-  trace_entrys: readonly T[],
+function traceEntryByKind<T extends { kind: string }>(
+  trace_entries: readonly T[],
   kind: string,
 ): T | undefined {
-  return trace_entrys.find((trace_entry) => trace_entry.kind === kind);
+  return trace_entries.find((trace_entry) => trace_entry.kind === kind);
 }
 
 let runFolderBase: string;
@@ -135,9 +135,9 @@ describe('Build runtime wiring', () => {
     });
 
     expect(outcome.result.outcome).toBe('complete');
-    expect(outcome.trace_entrys.map(trace_entryLabel)).toContain('checkpoint.resolved:frame-step');
-    expect(outcome.trace_entrys.map(trace_entryLabel)).toContain('relay.completed:act-step');
-    expect(outcome.trace_entrys.map(trace_entryLabel)).toContain('relay.completed:review-step');
+    expect(outcome.trace_entries.map(traceEntryLabel)).toContain('checkpoint.resolved:frame-step');
+    expect(outcome.trace_entries.map(traceEntryLabel)).toContain('relay.completed:act-step');
+    expect(outcome.trace_entries.map(traceEntryLabel)).toContain('relay.completed:review-step');
 
     const implementation = BuildImplementation.parse(
       JSON.parse(readFileSync(join(runFolder, 'reports/build/implementation.json'), 'utf8')),
@@ -316,11 +316,11 @@ describe('Build runtime wiring', () => {
       projectRoot: REPO_ROOT,
     });
 
-    const bootstrap = trace_entryByKind(outcome.trace_entrys, 'run.bootstrapped');
-    const checkpoint = outcome.trace_entrys.find(
+    const bootstrap = traceEntryByKind(outcome.trace_entries, 'run.bootstrapped');
+    const checkpoint = outcome.trace_entries.find(
       (trace_entry) =>
         trace_entry.kind === 'checkpoint.resolved' &&
-        trace_entryLabel(trace_entry) === 'checkpoint.resolved:frame-step',
+        traceEntryLabel(trace_entry) === 'checkpoint.resolved:frame-step',
     );
     expect(outcome.result.outcome).toBe('complete');
     expect(bootstrap).toMatchObject({ depth: 'lite' });
@@ -329,7 +329,7 @@ describe('Build runtime wiring', () => {
       resolution_source: 'safe-default',
     });
     expect(relayInputs[0]?.resolvedSelection).toMatchObject({ depth: 'lite' });
-    expect(outcome.trace_entrys.map(trace_entryLabel)).toContain('relay.completed:review-step');
+    expect(outcome.trace_entries.map(traceEntryLabel)).toContain('relay.completed:review-step');
   });
 
   it('uses deep entry mode to pause at the operator checkpoint when no explicit depth is supplied', async () => {
@@ -349,10 +349,10 @@ describe('Build runtime wiring', () => {
       projectRoot: REPO_ROOT,
     });
 
-    const bootstrap = trace_entryByKind(outcome.trace_entrys, 'run.bootstrapped');
+    const bootstrap = traceEntryByKind(outcome.trace_entries, 'run.bootstrapped');
     expect(outcome.result.outcome).toBe('checkpoint_waiting');
     expect(bootstrap).toMatchObject({ depth: 'deep' });
-    expect(outcome.trace_entrys.map(trace_entryLabel)).not.toContain('run.closed');
+    expect(outcome.trace_entries.map(traceEntryLabel)).not.toContain('run.closed');
     expect(existsSync(join(runFolder, 'reports/result.json'))).toBe(false);
   });
 
@@ -382,7 +382,7 @@ describe('Build runtime wiring', () => {
       projectRoot: REPO_ROOT,
     });
 
-    const bootstrap = trace_entryByKind(outcome.trace_entrys, 'run.bootstrapped');
+    const bootstrap = traceEntryByKind(outcome.trace_entries, 'run.bootstrapped');
     expect(outcome.result.outcome).toBe('complete');
     expect(bootstrap).toMatchObject({ depth: 'standard' });
     expect(relayInputs[0]?.resolvedSelection).toMatchObject({ depth: 'standard' });
@@ -414,11 +414,11 @@ describe('Build runtime wiring', () => {
       projectRoot: REPO_ROOT,
     });
 
-    const bootstrap = trace_entryByKind(outcome.trace_entrys, 'run.bootstrapped');
-    const checkpoint = outcome.trace_entrys.find(
+    const bootstrap = traceEntryByKind(outcome.trace_entries, 'run.bootstrapped');
+    const checkpoint = outcome.trace_entries.find(
       (trace_entry) =>
         trace_entry.kind === 'checkpoint.resolved' &&
-        trace_entryLabel(trace_entry) === 'checkpoint.resolved:frame-step',
+        traceEntryLabel(trace_entry) === 'checkpoint.resolved:frame-step',
     );
     expect(outcome.result.outcome).toBe('complete');
     expect(bootstrap).toMatchObject({ depth: 'autonomous' });
@@ -446,11 +446,11 @@ describe('Build runtime wiring', () => {
       projectRoot: REPO_ROOT,
     });
 
-    const bootstrap = trace_entryByKind(outcome.trace_entrys, 'run.bootstrapped');
-    const checkpoint = outcome.trace_entrys.find(
+    const bootstrap = traceEntryByKind(outcome.trace_entries, 'run.bootstrapped');
+    const checkpoint = outcome.trace_entries.find(
       (trace_entry) =>
         trace_entry.kind === 'checkpoint.resolved' &&
-        trace_entryLabel(trace_entry) === 'checkpoint.resolved:frame-step',
+        traceEntryLabel(trace_entry) === 'checkpoint.resolved:frame-step',
     );
     expect(outcome.result.outcome).toBe('complete');
     expect(bootstrap).toMatchObject({ depth: 'autonomous' });

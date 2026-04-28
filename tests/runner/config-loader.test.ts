@@ -230,11 +230,11 @@ circuits:
     };
     expect(relayInputs[0]?.resolvedSelection).toEqual(expected);
 
-    const trace_entrys = readFileSync(join(runFolder, 'trace.ndjson'), 'utf8')
+    const trace_entries = readFileSync(join(runFolder, 'trace.ndjson'), 'utf8')
       .split('\n')
       .filter(Boolean)
       .map((line) => JSON.parse(line) as Record<string, unknown>);
-    const started = trace_entrys.find((trace_entry) => trace_entry.kind === 'relay.started');
+    const started = trace_entries.find((trace_entry) => trace_entry.kind === 'relay.started');
     expect(started?.resolved_selection).toEqual(expected);
 
     const output = JSON.parse(stdout.text()) as Record<string, unknown>;

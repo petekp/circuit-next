@@ -22,7 +22,7 @@ function loadExploreCompiledFlow(): CompiledFlow {
   return CompiledFlow.parse(JSON.parse(readFileSync(EXPLORE_FIXTURE_PATH, 'utf8')));
 }
 
-describe('P2.10 — explore report schemas', () => {
+describe('explore report schemas', () => {
   it('accepts the typed explore.brief shape', () => {
     expect(
       ExploreBrief.parse({

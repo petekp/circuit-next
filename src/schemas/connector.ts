@@ -105,11 +105,10 @@ export type ConnectorRef = z.infer<typeof ConnectorRef>;
 export const ResolvedConnector = z.union([BuiltInConnectorRef, CustomConnectorDescriptor]);
 export type ResolvedConnector = z.infer<typeof ResolvedConnector>;
 
-// connector-I7: relay resolution source with category + disambiguator.
-// Closes the category-only-provenance gap pre-emptively (same shape as
-// SEL-I7 applied[] entries for selection). An audit reading
+// Relay resolution source carries a category plus a disambiguator. Same
+// shape as the applied[] entries on the selection side. An audit reading
 // `RelayStartedTraceEntry.resolved_from` can identify the exact config
-// entry that chose the connector.
+// entry that chose the connector, not just the category.
 const ExplicitResolutionSource = z.object({ source: z.literal('explicit') }).strict();
 const RoleResolutionSource = z.object({ source: z.literal('role'), role: RelayRole }).strict();
 const CircuitResolutionSource = z

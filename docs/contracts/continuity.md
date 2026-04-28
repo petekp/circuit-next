@@ -42,14 +42,14 @@ See `specs/domain.md#continuity-vocabulary` for canonical term definitions
   to compare "what was true at save time" against "what is true now."
 - **Pending-record pointer** — the index entry that names which continuity
   record is authoritative for the next resume. Keyed by `record_id`, which
-  is a `ControlPchange_kindFileStem` (see §Path-safe identity below).
+  is a `ControlPlaneFileStem` (see §Path-safe identity below).
 - **Attached-run pointer** — the index entry that names which run is
   currently live in the session. Orthogonal to pending-record pointer;
   both may be null, both may be populated, or either alone may be
   populated.
 - **Dangling reference (continuity)** — the failure state where the index
   `pending_record.record_id` names a file that is not present at
-  `<control-pchange_kind>/continuity/records/${record_id}.json`. Runtime
+  `<control-plane>/continuity/records/${record_id}.json`. Runtime
   semantics: surface as an error at resume time; do not silently drop.
 
 The distinction to keep straight: a **continuity record** is the report
@@ -61,12 +61,12 @@ index is the edge.
 ## Path-safe identity
 
 `continuity.record.record_id` is a `path_derived_field`: its value is
-joined into a filesystem path (`<control-pchange_kind>/continuity/records/
+joined into a filesystem path (`<control-plane>/continuity/records/
 ${record_id}.json`) at parse time, not at the call site. The schema
-scalar is **`ControlPchange_kindFileStem`** (`src/schemas/scalars.ts`),
+scalar is **`ControlPlaneFileStem`** (`src/schemas/scalars.ts`),
 which enforces `/^[a-z0-9][a-z0-9._-]*$/`, rejects `.` / `..` / parent-
 traversal sequences, and forbids `/` and `\` path separators. Authority
-graph entries with `path_derived_fields` MUST cite `ControlPchange_kindFileStem`
+graph entries with `path_derived_fields` MUST cite `ControlPlaneFileStem`
 by name (ADR-0003 §Machine enforcement; verified by
 `scripts/audit.mjs`).
 
@@ -79,7 +79,7 @@ The runtime MUST reject any `ContinuityRecord` or `ContinuityIndex` that
 violates these. All invariants are enforced via `src/schemas/continuity.ts`
 and tested in `tests/contracts/schema-parity.test.ts`.
 
-- **CONT-I1 — `record_id` is a `ControlPchange_kindFileStem`.** The identity
+- **CONT-I1 — `record_id` is a `ControlPlaneFileStem`.** The identity
   field IS the filename stem. Parse-time rejection for uppercase, path
   separators, `.`/`..`, and parent-traversal (`..` anywhere in the
   string). Closes the naive `z.string().min(1)` drift that would have
@@ -141,12 +141,12 @@ and tested in `tests/contracts/schema-parity.test.ts`.
 
 - **CONT-I9 — `ContinuityIndex` is a standalone aggregate.** The index
   is not an envelope around records; it is a separate on-disk report
-  (`<control-pchange_kind>/continuity/index.json`) with its own
+  (`<control-plane>/continuity/index.json`) with its own
   `schema_version`, `project_root`, `pending_record` pointer, and
   `current_run` pointer. Both pointers are nullable and independent.
 
 - **CONT-I10 — `PendingRecordPointer.record_id` uses
-  `ControlPchange_kindFileStem`.** The index-side pointer is type-aligned with
+  `ControlPlaneFileStem`.** The index-side pointer is type-aligned with
   the record-side identity (CONT-I1). A round-trip from index to record
   file is schema-safe. Mismatched stems (uppercase, path separator, etc.)
   are rejected at parse time. The dangling-reference case (stem valid but
@@ -220,10 +220,10 @@ After a `ContinuityIndex` is accepted:
 directory. The schema MUST NOT attempt filesystem resolution at parse
 time (zod schemas are pure). At resume time, the resolver:
 
-1. Reads `<control-pchange_kind>/continuity/index.json` and validates under
+1. Reads `<control-plane>/continuity/index.json` and validates under
    `ContinuityIndex`.
 2. If `pending_record` is populated, resolves the record path and
-   attempts to read `<control-pchange_kind>/continuity/records/
+   attempts to read `<control-plane>/continuity/records/
    ${pending_record.record_id}.json`.
 3. If the record file is absent, surfaces the mismatch as an error;
    does NOT silently drop the pointer. Policy matches legacy Circuit's
@@ -273,7 +273,7 @@ the **resolver** adjudicates conflicts. Two cases are material:
 
 - `continuity.prop.record_id_stem_roundtrip` — for every accepted
   `ContinuityRecord`, `record_id` joined into
-  `<control-pchange_kind>/continuity/records/${record_id}.json` reverses back
+  `<control-plane>/continuity/records/${record_id}.json` reverses back
   to the same `record_id` (no escaping introduced).
 - `continuity.prop.discriminator_field_presence_closure` — for every
   accepted record, the `run_ref` field is present iff `continuity_kind
@@ -312,7 +312,7 @@ the **resolver** adjudicates conflicts. Two cases are material:
 
 - **ids**: `RunId`, `StageId`, `StepId`, `InvocationId` — used for
   run-attached provenance and attached-run pointer identity.
-- **scalars**: `ControlPchange_kindFileStem` — used for `record_id` and
+- **scalars**: `ControlPlaneFileStem` — used for `record_id` and
   `PendingRecordPointer.record_id`. ADR-0003 §Machine enforcement
   requires explicit naming.
 - **snapshot**: `SnapshotStatus` — reused for `runtime_status` on both
@@ -346,7 +346,7 @@ the **resolver** adjudicates conflicts. Two cases are material:
 
 - **carry-forward:path-derived-identity-without-scalar** — **Closed
   in v0.1 via CONT-I1 + CONT-I10.** Both `record_id` fields use
-  `ControlPchange_kindFileStem`. ADR-0003 §Machine enforcement is satisfied.
+  `ControlPlaneFileStem`. ADR-0003 §Machine enforcement is satisfied.
 
 - **carry-forward:missing-index-aggregate** — **Closed in v0.1 via
   CONT-I9..I11.** `ContinuityIndex` is a first-class schema with its

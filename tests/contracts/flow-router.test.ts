@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { ROUTABLE_WORKFLOWS, classifyCompiledFlowTask } from '../../src/runtime/router.js';
 
-describe('P2.8 flow router classifier', () => {
+describe('flow router classifier', () => {
   it('declares the current routable flow set explicitly', () => {
     // Order is incidental — the router's evaluation order comes from
     // each package's routing.order, not from this array. Asserting set

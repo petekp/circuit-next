@@ -13,10 +13,9 @@ export const CanonicalStage = z.enum([
 ]);
 export type CanonicalStage = z.infer<typeof CanonicalStage>;
 
-// SEL-I9: Stage carries an optional
-// `selection: SelectionOverride`, symmetric with Step.selection and
-// CompiledFlow.default_selection. stage-I2 `.strict()` still governs surplus-
-// key rejection at the Stage level.
+// Stage carries an optional `selection: SelectionOverride`, symmetric
+// with Step.selection and CompiledFlow.default_selection. `.strict()`
+// rejects surplus keys at the Stage level.
 export const Stage = z
   .object({
     id: StageId,

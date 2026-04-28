@@ -93,7 +93,7 @@ function relayerWithBody(body: string): RelayFn {
   };
 }
 
-function trace_entryLabel(trace_entry: { kind: string; step_id?: unknown }): string {
+function traceEntryLabel(trace_entry: { kind: string; step_id?: unknown }): string {
   return typeof trace_entry.step_id === 'string'
     ? `${trace_entry.kind}:${trace_entry.step_id}`
     : trace_entry.kind;
@@ -139,7 +139,7 @@ afterEach(() => {
   rmSync(runFolderBase, { recursive: true, force: true });
 });
 
-describe('P2.9 follow-on - registered review compose writer', () => {
+describe('registered review compose writer', () => {
   it('writes schema-valid review.result with the default compose writer', async () => {
     const { flow, bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'default-registered-review-writer');
@@ -232,7 +232,7 @@ describe('P2.9 follow-on - registered review compose writer', () => {
     expect(outcome.result.reason).toContain("compose step 'verdict-step': report writer failed");
     expect(existsSync(join(runFolder, 'reports', 'review-result.json'))).toBe(false);
 
-    const verdictCheck = outcome.trace_entrys.find(
+    const verdictCheck = outcome.trace_entries.find(
       (trace_entry) =>
         trace_entry.kind === 'check.evaluated' && trace_entry.step_id === 'verdict-step',
     );
@@ -241,7 +241,7 @@ describe('P2.9 follow-on - registered review compose writer', () => {
     expect(verdictCheck.check_kind).toBe('schema_sections');
     expect(verdictCheck.outcome).toBe('fail');
 
-    expect(outcome.trace_entrys.map(trace_entryLabel)).toEqual([
+    expect(outcome.trace_entries.map(traceEntryLabel)).toEqual([
       'run.bootstrapped',
       'step.entered:intake-step',
       'step.report_written:intake-step',
@@ -297,7 +297,7 @@ describe('P2.9 follow-on - registered review compose writer', () => {
       expect(report.verdict).toBe(expectedVerdict);
       expect(report.verdict).toBe(computeReviewVerdict(report.findings));
 
-      const relayCompleted = outcome.trace_entrys.find(
+      const relayCompleted = outcome.trace_entries.find(
         (trace_entry) => trace_entry.kind === 'relay.completed',
       );
       if (relayCompleted?.kind !== 'relay.completed') {
@@ -305,7 +305,7 @@ describe('P2.9 follow-on - registered review compose writer', () => {
       }
       expect(relayCompleted.verdict).toBe(relay.verdict);
 
-      const reviewCheck = outcome.trace_entrys.find(
+      const reviewCheck = outcome.trace_entries.find(
         (trace_entry) =>
           trace_entry.kind === 'check.evaluated' && trace_entry.step_id === 'audit-step',
       );
@@ -319,7 +319,7 @@ describe('P2.9 follow-on - registered review compose writer', () => {
       // evidence is relay.result rather than step.report_written.
       // The sequence below proves frame -> analyze -> close execution
       // and the expected trace_entry ordering for each stage.
-      expect(outcome.trace_entrys.map(trace_entryLabel)).toEqual([
+      expect(outcome.trace_entries.map(traceEntryLabel)).toEqual([
         'run.bootstrapped',
         'step.entered:intake-step',
         'step.report_written:intake-step',

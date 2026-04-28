@@ -109,7 +109,7 @@ describe("relay.started carries honest 'resolved_from' from the runner's decisio
       relayer: stubRelayer(),
     });
 
-    const relayStarted = outcome.trace_entrys.find((e) => e.kind === 'relay.started');
+    const relayStarted = outcome.trace_entries.find((e) => e.kind === 'relay.started');
     if (!relayStarted || relayStarted.kind !== 'relay.started') {
       throw new Error('expected relay.started trace_entry');
     }
@@ -356,7 +356,7 @@ describe("relay.started carries honest 'resolved_selection' from flow + step inp
       relayer: stubRelayer(),
     });
 
-    const relayStarted = outcome.trace_entrys.find((e) => e.kind === 'relay.started');
+    const relayStarted = outcome.trace_entries.find((e) => e.kind === 'relay.started');
     if (!relayStarted || relayStarted.kind !== 'relay.started') {
       throw new Error('expected relay.started trace_entry');
     }
@@ -392,7 +392,7 @@ describe("relay.started carries honest 'resolved_selection' from flow + step inp
       relayer: stubRelayer(),
     });
 
-    const relayStarted = outcome.trace_entrys.find((e) => e.kind === 'relay.started');
+    const relayStarted = outcome.trace_entries.find((e) => e.kind === 'relay.started');
     if (!relayStarted || relayStarted.kind !== 'relay.started') {
       throw new Error('expected relay.started trace_entry');
     }
@@ -439,7 +439,7 @@ describe("relay.started carries honest 'resolved_selection' from flow + step inp
       relayer: stubRelayer(),
     });
 
-    const relayStarted = outcome.trace_entrys.find((e) => e.kind === 'relay.started');
+    const relayStarted = outcome.trace_entries.find((e) => e.kind === 'relay.started');
     if (!relayStarted || relayStarted.kind !== 'relay.started') {
       throw new Error('expected relay.started trace_entry');
     }
@@ -483,7 +483,7 @@ describe("SkillOverride 'append' / 'remove' / 'inherit' compose per SEL-I3", () 
       now: deterministicNow(Date.UTC(2026, 3, 22, 14, 0, 0)),
       relayer: stubRelayer(),
     });
-    const relayStarted = outcome.trace_entrys.find((e) => e.kind === 'relay.started');
+    const relayStarted = outcome.trace_entries.find((e) => e.kind === 'relay.started');
     if (!relayStarted || relayStarted.kind !== 'relay.started') {
       throw new Error('expected relay.started trace_entry');
     }
@@ -512,7 +512,7 @@ describe("SkillOverride 'append' / 'remove' / 'inherit' compose per SEL-I3", () 
       now: deterministicNow(Date.UTC(2026, 3, 22, 14, 0, 0)),
       relayer: stubRelayer(),
     });
-    const relayStarted = outcome.trace_entrys.find((e) => e.kind === 'relay.started');
+    const relayStarted = outcome.trace_entries.find((e) => e.kind === 'relay.started');
     if (!relayStarted || relayStarted.kind !== 'relay.started') {
       throw new Error('expected relay.started trace_entry');
     }
@@ -543,7 +543,7 @@ describe("SkillOverride 'append' / 'remove' / 'inherit' compose per SEL-I3", () 
       now: deterministicNow(Date.UTC(2026, 3, 22, 14, 0, 0)),
       relayer: stubRelayer(),
     });
-    const relayStarted = outcome.trace_entrys.find((e) => e.kind === 'relay.started');
+    const relayStarted = outcome.trace_entries.find((e) => e.kind === 'relay.started');
     if (!relayStarted || relayStarted.kind !== 'relay.started') {
       throw new Error('expected relay.started trace_entry');
     }
@@ -572,7 +572,7 @@ describe("SkillOverride 'append' / 'remove' / 'inherit' compose per SEL-I3", () 
       now: deterministicNow(Date.UTC(2026, 3, 22, 14, 0, 0)),
       relayer: stubRelayer(),
     });
-    const relayStarted = outcome.trace_entrys.find((e) => e.kind === 'relay.started');
+    const relayStarted = outcome.trace_entries.find((e) => e.kind === 'relay.started');
     if (!relayStarted || relayStarted.kind !== 'relay.started') {
       throw new Error('expected relay.started trace_entry');
     }

@@ -2,22 +2,20 @@
 //
 // The runner suites exercise verification transitively (real registered
 // writers running real commands), but the handler's own surface — its
-// two handler-local error branches and their trace_entry sequences — is not
-// directly tested. This file invokes `runVerificationStep` against a
-// minimal in-memory `StepHandlerContext` so each handler-local branch
-// is exercised in isolation.
+// two handler-local error branches and their trace_entry sequences —
+// is not directly covered. This file invokes `runVerificationStep`
+// against a minimal in-memory `StepHandlerContext` so each
+// handler-local branch is exercised in isolation.
 //
 // Registry coupling: `findVerificationWriter` pulls from a closed
-// global registry built at module load from flowPackages. Direct
-// tests cannot register a fake writer, so this file is scoped to the
-// two error paths reachable WITHOUT a registered writer:
+// global registry built at module load from flowPackages. Direct tests
+// cannot register a fake writer, so this file is scoped to the two
+// error paths reachable WITHOUT a registered writer:
 //   1. projectRoot is undefined (fires before the registry call).
-//   2. step.writes.report.schema is not a registered schema (fires
-//      at the registry call, returning undefined → handler throws).
+//   2. step.writes.report.schema is not a registered schema (fires at
+//      the registry call, returning undefined → handler throws).
 // The spawn-subprocess + builder.buildResult branches stay covered
 // through runner-level tests using real flow packages.
-//
-// FU-T11 priority target #5 (per HANDOFF.md).
 
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -115,7 +113,7 @@ interface BuildHarnessOpts {
 }
 
 interface Harness {
-  readonly trace_entrys: TraceEntry[];
+  readonly trace_entries: TraceEntry[];
   readonly state: RunState;
   readonly ctx: StepHandlerContext & {
     readonly step: CompiledFlow['steps'][number] & { kind: 'verification' };
@@ -130,8 +128,8 @@ function buildHarness(opts: BuildHarnessOpts, runFolder: string): Harness {
   if (step === undefined || step.kind !== 'verification') {
     throw new Error('test fixture invariant: step[0] must be a verification step');
   }
-  const trace_entrys: TraceEntry[] = [];
-  const state: RunState = { trace_entrys, sequence: 0, relayResults: [] };
+  const trace_entries: TraceEntry[] = [];
+  const state: RunState = { trace_entries, sequence: 0, relayResults: [] };
   const now = deterministicNow(Date.UTC(2026, 3, 27, 0, 0, 0));
   const recordedAt = (): string => now().toISOString();
   const projectRoot = opts.omitProjectRoot === true ? undefined : (opts.projectRoot ?? runFolder);
@@ -159,7 +157,7 @@ function buildHarness(opts: BuildHarnessOpts, runFolder: string): Harness {
     recordedAt,
     state,
     push: (ev: TraceEntry) => {
-      trace_entrys.push({ ...ev, sequence: state.sequence });
+      trace_entries.push({ ...ev, sequence: state.sequence });
       state.sequence += 1;
     },
     step,
@@ -169,7 +167,7 @@ function buildHarness(opts: BuildHarnessOpts, runFolder: string): Harness {
       throw new Error('childRunner should not be invoked by a verification step');
     },
   };
-  return { trace_entrys, state, ctx };
+  return { trace_entries, state, ctx };
 }
 
 let runFolder: string;
@@ -193,13 +191,13 @@ describe('runVerificationStep direct — handler-local error paths', () => {
     expect(result.reason).toMatch(
       /verification step 'verification-step' requires CompiledFlowInvocation\.projectRoot/,
     );
-    const check = harness.trace_entrys.find((e) => e.kind === 'check.evaluated');
+    const check = harness.trace_entries.find((e) => e.kind === 'check.evaluated');
     if (check?.kind !== 'check.evaluated') throw new Error('expected check.evaluated');
     expect(check.outcome).toBe('fail');
     expect(check.check_kind).toBe('schema_sections');
-    expect(harness.trace_entrys.some((e) => e.kind === 'step.aborted')).toBe(true);
+    expect(harness.trace_entries.some((e) => e.kind === 'step.aborted')).toBe(true);
     // step.report_written must NOT fire on a pre-write failure path.
-    expect(harness.trace_entrys.find((e) => e.kind === 'step.report_written')).toBeUndefined();
+    expect(harness.trace_entries.find((e) => e.kind === 'step.report_written')).toBeUndefined();
   });
 
   it('aborts with unsupported-report-schema reason when the writer is not registered', () => {
@@ -215,12 +213,12 @@ describe('runVerificationStep direct — handler-local error paths', () => {
     expect(result.reason).toMatch(
       /verification step 'verification-step' has unsupported report schema/,
     );
-    const check = harness.trace_entrys.find((e) => e.kind === 'check.evaluated');
+    const check = harness.trace_entries.find((e) => e.kind === 'check.evaluated');
     if (check?.kind !== 'check.evaluated') throw new Error('expected check.evaluated');
     expect(check.outcome).toBe('fail');
     expect(check.check_kind).toBe('schema_sections');
-    expect(harness.trace_entrys.some((e) => e.kind === 'step.aborted')).toBe(true);
-    expect(harness.trace_entrys.find((e) => e.kind === 'step.report_written')).toBeUndefined();
+    expect(harness.trace_entries.some((e) => e.kind === 'step.aborted')).toBe(true);
+    expect(harness.trace_entries.find((e) => e.kind === 'step.report_written')).toBeUndefined();
   });
 });
 
@@ -230,7 +228,7 @@ describe('runVerificationStep direct — trace_entry sequence invariants', () =>
 
     runVerificationStep(harness.ctx);
 
-    const kinds = harness.trace_entrys.map((e) => e.kind);
+    const kinds = harness.trace_entries.map((e) => e.kind);
     expect(kinds).toEqual(['check.evaluated', 'step.aborted']);
   });
 
@@ -239,7 +237,7 @@ describe('runVerificationStep direct — trace_entry sequence invariants', () =>
 
     runVerificationStep(harness.ctx);
 
-    const kinds = harness.trace_entrys.map((e) => e.kind);
+    const kinds = harness.trace_entries.map((e) => e.kind);
     expect(kinds).toEqual(['check.evaluated', 'step.aborted']);
   });
 
@@ -248,8 +246,8 @@ describe('runVerificationStep direct — trace_entry sequence invariants', () =>
 
     runVerificationStep(harness.ctx);
 
-    const check = harness.trace_entrys.find((e) => e.kind === 'check.evaluated');
-    const aborted = harness.trace_entrys.find((e) => e.kind === 'step.aborted');
+    const check = harness.trace_entries.find((e) => e.kind === 'check.evaluated');
+    const aborted = harness.trace_entries.find((e) => e.kind === 'step.aborted');
     if (check?.kind !== 'check.evaluated' || aborted?.kind !== 'step.aborted') {
       throw new Error('expected both check.evaluated and step.aborted');
     }

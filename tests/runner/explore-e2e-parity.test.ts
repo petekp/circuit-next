@@ -361,7 +361,7 @@ describe('explore fixture static declarations (ratchet-floor contribution)', () 
       // sequence on its own (step_id, attempt) pair.
       const relaySteps = ['synthesize-step', 'review-step'];
       for (const stepId of relaySteps) {
-        const kindsForStep = outcome.trace_entrys
+        const kindsForStep = outcome.trace_entries
           .filter((e) => 'step_id' in e && e.step_id === stepId)
           .map((e) => e.kind);
         expect(kindsForStep).toContain('relay.started');

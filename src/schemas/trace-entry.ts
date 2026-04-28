@@ -170,7 +170,7 @@ export type RelayFailedTraceEntry = z.infer<typeof RelayFailedTraceEntry>;
 // echo the receipt. The receipt id is identity-of-record for the
 // connector-side relay (so an auditor can ask the connector "what
 // happened to receipt X"), not a cryptographic binding between the
-// in-log trace_entrys. Hash-tightening of `receipt_id` is deferred until a
+// in-log trace_entries. Hash-tightening of `receipt_id` is deferred until a
 // real connector surfaces concrete receipt formats; `z.string().min(1)`
 // + the whitespace-rejection test in
 // `tests/contracts/relay-transcript-schema.test.ts` is the
@@ -220,10 +220,11 @@ export type StepAbortedTraceEntry = z.infer<typeof StepAbortedTraceEntry>;
 export const RunClosedOutcome = z.enum(['complete', 'aborted', 'handoff', 'stopped', 'escalated']);
 export type RunClosedOutcome = z.infer<typeof RunClosedOutcome>;
 
-// Sub-run / fanout linkage trace_entrys. The substrate gives every run (parent
-// and child) its own RunId; RUN-I3 forbids cross-run trace_entry smuggling. So
-// audit linkage flows through dedicated trace_entrys at the parent step boundary
-// — never by nesting child trace_entrys inside the parent log.
+// Sub-run / fanout linkage trace entries. Every run (parent and child)
+// gets its own RunId, and run_id-consistency forbids cross-run trace
+// smuggling. Audit linkage therefore flows through dedicated trace
+// entries at the parent step boundary — never by nesting child trace
+// entries inside the parent log.
 //
 // `child_run_id` is the canonical handle. An auditor reading the parent
 // log can locate the child's separate run directory, replay the child's
@@ -310,7 +311,7 @@ export const FanoutJoinedTraceEntry = TraceEntryBase.extend({
   // Path to the runtime-built aggregate report.
   aggregate_path: z.string().min(1),
   // Count of branches that closed 'complete' vs other outcomes — quick
-  // health summary readable without reconstructing per-branch trace_entrys.
+  // health summary readable without reconstructing per-branch trace_entries.
   branches_completed: z.number().int().nonnegative(),
   branches_failed: z.number().int().nonnegative(),
 }).strict();

@@ -295,13 +295,13 @@ export async function runRelayStep(
     priorStart: { requestPayloadHash },
   });
   // Adversarial-review fix #12: emit through push() rather than
-  // mutating state.trace_entrys directly. push() overwrites each trace_entry's
+  // mutating state.trace_entries directly. push() overwrites each trace_entry's
   // sequence atomically, so the materializer's pre-assigned sequences
   // (and `sequenceAfter`) become advisory — they remain on the return
   // shape because tests call materializeRelay directly and assert
   // on its trace_entry array. The state.sequence advance previously done
   // manually here is now handled by push() per emission.
-  for (const ev of materialized.trace_entrys) {
+  for (const ev of materialized.trace_entries) {
     push(ev);
   }
 

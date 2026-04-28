@@ -92,7 +92,7 @@ describe('relay verdict truth', () => {
 
     expect(outcome.result.outcome).toBe('complete');
 
-    const resultVerdictCheck = outcome.trace_entrys.filter(
+    const resultVerdictCheck = outcome.trace_entries.filter(
       (e) => e.kind === 'check.evaluated' && e.check_kind === 'result_verdict',
     );
     expect(resultVerdictCheck).toHaveLength(1);
@@ -101,13 +101,13 @@ describe('relay verdict truth', () => {
     expect(ge.outcome).toBe('pass');
     expect(ge.reason).toBeUndefined();
 
-    const relayCompleted = outcome.trace_entrys.find((e) => e.kind === 'relay.completed');
+    const relayCompleted = outcome.trace_entries.find((e) => e.kind === 'relay.completed');
     if (relayCompleted?.kind !== 'relay.completed')
       throw new Error('expected relay.completed trace_entry');
     expect(relayCompleted.verdict).toBe('ok');
 
-    expect(outcome.trace_entrys.find((e) => e.kind === 'step.aborted')).toBeUndefined();
-    const relayStepCompleted = outcome.trace_entrys.find(
+    expect(outcome.trace_entries.find((e) => e.kind === 'step.aborted')).toBeUndefined();
+    const relayStepCompleted = outcome.trace_entries.find(
       (e) => e.kind === 'step.completed' && e.step_id === 'relay-step',
     );
     expect(relayStepCompleted).toBeDefined();
@@ -132,7 +132,7 @@ describe('relay verdict truth', () => {
     expect(outcome.result.reason).toBeDefined();
     expect(outcome.result.reason).toMatch(/reject/);
 
-    const resultVerdictCheck = outcome.trace_entrys.filter(
+    const resultVerdictCheck = outcome.trace_entries.filter(
       (e) => e.kind === 'check.evaluated' && e.check_kind === 'result_verdict',
     );
     expect(resultVerdictCheck).toHaveLength(1);
@@ -142,22 +142,22 @@ describe('relay verdict truth', () => {
     expect(ge.reason).toBeDefined();
     expect(ge.reason).toMatch(/reject/);
 
-    const aborted = outcome.trace_entrys.find((e) => e.kind === 'step.aborted');
+    const aborted = outcome.trace_entries.find((e) => e.kind === 'step.aborted');
     if (aborted?.kind !== 'step.aborted') throw new Error('expected step.aborted trace_entry');
     expect(aborted.step_id).toBe('relay-step');
     expect(aborted.reason).toMatch(/reject/);
 
-    const relayStepCompleted = outcome.trace_entrys.find(
+    const relayStepCompleted = outcome.trace_entries.find(
       (e) => e.kind === 'step.completed' && e.step_id === 'relay-step',
     );
     expect(relayStepCompleted).toBeUndefined();
 
-    const closed = outcome.trace_entrys.find((e) => e.kind === 'run.closed');
+    const closed = outcome.trace_entries.find((e) => e.kind === 'run.closed');
     if (closed?.kind !== 'run.closed') throw new Error('expected run.closed trace_entry');
     expect(closed.outcome).toBe('aborted');
     expect(closed.reason).toBeDefined();
 
-    // The reason is byte-identical across the three trace_entrys that carry
+    // The reason is byte-identical across the three trace_entries that carry
     // it AND on the user-visible result.json. A future regression that
     // diverged the strings would silently degrade audit traceability.
     expect(ge.reason).toBe(aborted.reason);
@@ -167,7 +167,7 @@ describe('relay verdict truth', () => {
     // The relay.completed trace_entry carries the OBSERVED verdict
     // ("reject"), not the runtime sentinel — the connector said
     // something parseable, so the durable transcript reflects it.
-    const relayCompleted = outcome.trace_entrys.find((e) => e.kind === 'relay.completed');
+    const relayCompleted = outcome.trace_entries.find((e) => e.kind === 'relay.completed');
     if (relayCompleted?.kind !== 'relay.completed')
       throw new Error('expected relay.completed trace_entry');
     expect(relayCompleted.verdict).toBe('reject');
@@ -196,30 +196,30 @@ describe('relay verdict truth', () => {
 
     expect(outcome.result.outcome).toBe('aborted');
 
-    const ge = outcome.trace_entrys.find(
+    const ge = outcome.trace_entries.find(
       (e) => e.kind === 'check.evaluated' && e.check_kind === 'result_verdict',
     );
     if (ge?.kind !== 'check.evaluated') throw new Error('expected check.evaluated trace_entry');
     expect(ge.outcome).toBe('fail');
     expect(ge.reason).toMatch(/parse/i);
 
-    const aborted = outcome.trace_entrys.find((e) => e.kind === 'step.aborted');
+    const aborted = outcome.trace_entries.find((e) => e.kind === 'step.aborted');
     if (aborted?.kind !== 'step.aborted') throw new Error('expected step.aborted trace_entry');
     expect(aborted.step_id).toBe('relay-step');
 
-    const relayStepCompleted = outcome.trace_entrys.find(
+    const relayStepCompleted = outcome.trace_entries.find(
       (e) => e.kind === 'step.completed' && e.step_id === 'relay-step',
     );
     expect(relayStepCompleted).toBeUndefined();
 
-    const closed = outcome.trace_entrys.find((e) => e.kind === 'run.closed');
+    const closed = outcome.trace_entries.find((e) => e.kind === 'run.closed');
     if (closed?.kind !== 'run.closed') throw new Error('expected run.closed trace_entry');
     expect(closed.outcome).toBe('aborted');
 
     // No observed verdict, so relay.completed.verdict carries the
     // runtime '<no-verdict>' sentinel — disclosed in the explore
     // contract as runtime-injected, not connector-declared.
-    const relayCompleted = outcome.trace_entrys.find((e) => e.kind === 'relay.completed');
+    const relayCompleted = outcome.trace_entries.find((e) => e.kind === 'relay.completed');
     if (relayCompleted?.kind !== 'relay.completed')
       throw new Error('expected relay.completed trace_entry');
     expect(relayCompleted.verdict).toBe('<no-verdict>');
@@ -257,7 +257,7 @@ describe('relay verdict truth', () => {
 
     expect(outcome.result.outcome).toBe('complete');
 
-    const relayCompleted = outcome.trace_entrys.find((e) => e.kind === 'relay.completed');
+    const relayCompleted = outcome.trace_entries.find((e) => e.kind === 'relay.completed');
     if (relayCompleted?.kind !== 'relay.completed')
       throw new Error('expected relay.completed trace_entry');
     // Earlier regression: relayVerdictForStep returned
@@ -266,7 +266,7 @@ describe('relay verdict truth', () => {
     // "ok-with-caveats".
     expect(relayCompleted.verdict).toBe('ok-with-caveats');
 
-    const ge = outcome.trace_entrys.find(
+    const ge = outcome.trace_entries.find(
       (e) => e.kind === 'check.evaluated' && e.check_kind === 'result_verdict',
     );
     if (ge?.kind !== 'check.evaluated') throw new Error('expected check.evaluated trace_entry');
@@ -290,27 +290,27 @@ describe('relay verdict truth', () => {
 
     expect(outcome.result.outcome).toBe('aborted');
 
-    const ge = outcome.trace_entrys.find(
+    const ge = outcome.trace_entries.find(
       (e) => e.kind === 'check.evaluated' && e.check_kind === 'result_verdict',
     );
     if (ge?.kind !== 'check.evaluated') throw new Error('expected check.evaluated trace_entry');
     expect(ge.outcome).toBe('fail');
     expect(ge.reason).toMatch(/verdict/);
 
-    const aborted = outcome.trace_entrys.find((e) => e.kind === 'step.aborted');
+    const aborted = outcome.trace_entries.find((e) => e.kind === 'step.aborted');
     if (aborted?.kind !== 'step.aborted') throw new Error('expected step.aborted trace_entry');
     expect(aborted.step_id).toBe('relay-step');
 
-    const relayStepCompleted = outcome.trace_entrys.find(
+    const relayStepCompleted = outcome.trace_entries.find(
       (e) => e.kind === 'step.completed' && e.step_id === 'relay-step',
     );
     expect(relayStepCompleted).toBeUndefined();
 
-    const closed = outcome.trace_entrys.find((e) => e.kind === 'run.closed');
+    const closed = outcome.trace_entries.find((e) => e.kind === 'run.closed');
     if (closed?.kind !== 'run.closed') throw new Error('expected run.closed trace_entry');
     expect(closed.outcome).toBe('aborted');
 
-    const relayCompleted = outcome.trace_entrys.find((e) => e.kind === 'relay.completed');
+    const relayCompleted = outcome.trace_entries.find((e) => e.kind === 'relay.completed');
     if (relayCompleted?.kind !== 'relay.completed')
       throw new Error('expected relay.completed trace_entry');
     expect(relayCompleted.verdict).toBe('<no-verdict>');
@@ -375,7 +375,7 @@ describe('relay verdict truth: edge-case parser coverage', () => {
         relayer: relayerWith(c.body),
       });
       expect(outcome.result.outcome).toBe('aborted');
-      const ge = outcome.trace_entrys.find(
+      const ge = outcome.trace_entries.find(
         (e) => e.kind === 'check.evaluated' && e.check_kind === 'result_verdict',
       );
       if (ge?.kind !== 'check.evaluated') throw new Error('expected check.evaluated trace_entry');

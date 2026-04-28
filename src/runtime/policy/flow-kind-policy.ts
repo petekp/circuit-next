@@ -6,18 +6,10 @@ import {
 } from '../../../scripts/policy/flow-kind-policy.mjs';
 import { CompiledFlow } from '../../schemas/compiled-flow.js';
 
-// Runtime-level validateCompiledFlowKindPolicy helper. Wraps the shared JS
-// canonical-set check at scripts/policy/flow-kind-policy.mjs with a
-// Zod-driven CompiledFlow.safeParse pre-check, so CLI fixture loading
-// (src/cli/circuit.ts:loadFixture) can reject structurally-invalid OR
+// Wraps the canonical-set check from scripts/policy/flow-kind-policy.mjs
+// with a Zod CompiledFlow.safeParse pre-check, so CLI fixture loading
+// (src/cli/circuit.ts:loadFixture) rejects structurally-invalid or
 // policy-invalid fixtures with a single call.
-//
-// Design note: the canonical-set table lives in JS (shared source of
-// truth with audit.mjs Check 24) to prevent drift. This TS layer adds
-// the structural check via CompiledFlow.safeParse — audit.mjs has no Zod
-// path, so it runs the table check only; runtime has both checks.
-//
-// CLI fixture loading lives at src/cli/circuit.ts:loadFixture.
 
 export { FLOW_KIND_CANONICAL_SETS, EXEMPT_FLOW_IDS };
 export type { CompiledFlowKindPolicyCheckResult };
@@ -27,14 +19,12 @@ export type ValidateCompiledFlowKindPolicyResult =
   | { ok: false; reason: string };
 
 /**
- * Runtime-level helper: validates that an unknown input is a valid
- * CompiledFlow (Zod safeParse) AND that its declared flow kind satisfies
- * the canonical stage-set policy.
+ * Validates that an unknown input is a valid CompiledFlow (Zod safeParse)
+ * AND that its declared flow kind satisfies the canonical stage-set policy.
  *
- * Called by src/cli/circuit.ts after CompiledFlow.parse() succeeds (already
- * structurally valid at that point); the safeParse here is belt-and-
- * braces for direct callers that haven't run the schema yet. Returns
- * ok:false with a human-readable reason string — callers throw.
+ * Called by src/cli/circuit.ts after CompiledFlow.parse() succeeds; the
+ * safeParse here is defensive for direct callers who haven't run the schema
+ * yet. Returns ok:false with a human-readable reason string — callers throw.
  */
 export function validateCompiledFlowKindPolicy(
   flow: unknown,

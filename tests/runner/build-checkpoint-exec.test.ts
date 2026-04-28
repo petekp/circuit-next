@@ -349,7 +349,7 @@ describe('Build checkpoint execution substrate', () => {
       response_path: 'reports/checkpoints/frame-step-response.json',
       allowed_choices: ['continue', 'revise'],
     });
-    const resolved = outcome.trace_entrys.find(
+    const resolved = outcome.trace_entries.find(
       (trace_entry) => trace_entry.kind === 'checkpoint.resolved',
     );
     expect(resolved).toMatchObject({
@@ -386,7 +386,7 @@ describe('Build checkpoint execution substrate', () => {
     });
     expect(outcome.snapshot.status).toBe('in_progress');
     expect(outcome.snapshot.current_step).toBe('frame-step');
-    expect(outcome.trace_entrys.some((trace_entry) => trace_entry.kind === 'run.closed')).toBe(
+    expect(outcome.trace_entries.some((trace_entry) => trace_entry.kind === 'run.closed')).toBe(
       false,
     );
     expect(existsSync(join(runFolder, 'reports/result.json'))).toBe(false);
@@ -424,7 +424,7 @@ describe('Build checkpoint execution substrate', () => {
 
     expect(resumed.result.outcome).toBe('complete');
     expect(resumed.snapshot.status).toBe('complete');
-    const resolved = resumed.trace_entrys.find(
+    const resolved = resumed.trace_entries.find(
       (trace_entry) => trace_entry.kind === 'checkpoint.resolved',
     );
     expect(resolved).toMatchObject({
@@ -445,7 +445,7 @@ describe('Build checkpoint execution substrate', () => {
     // checkpoint.resolved trace_entry. A second step.report_written would
     // mean the brief is being mutated post-request, re-opening that
     // window.
-    const briefReportWrites = resumed.trace_entrys.filter(
+    const briefReportWrites = resumed.trace_entries.filter(
       (trace_entry) =>
         trace_entry.kind === 'step.report_written' &&
         (trace_entry.step_id as unknown as string) === 'frame-step' &&
@@ -865,7 +865,7 @@ describe('Build checkpoint execution substrate', () => {
     });
 
     expect(outcome.result.outcome).toBe('complete');
-    const resolved = outcome.trace_entrys.find(
+    const resolved = outcome.trace_entries.find(
       (trace_entry) => trace_entry.kind === 'checkpoint.resolved',
     );
     expect(resolved).toMatchObject({

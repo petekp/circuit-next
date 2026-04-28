@@ -1,15 +1,16 @@
 import { z } from 'zod';
 
 /**
- * Path-safe filename stem for control-pchange_kind reports (continuity records,
- * run folders, similar). Used for any field whose value is joined into a
- * filesystem path AT PARSE TIME, not at the call site.
+ * Path-safe filename stem for engine state and continuity records (run
+ * folders, continuity records, similar). Used for any field whose value
+ * is joined into a filesystem path at parse time, not at the call site.
  *
- * Authority: reports.json rows with `path_derived_fields` MUST use this
- * (or a conservatively-equivalent scalar) for those fields. Enforced
- * by ADR-0003 and `scripts/audit.mjs` authority-graph dimension.
+ * Any field listed in `reports.json` under `path_derived_fields` must
+ * use this (or a conservatively-equivalent scalar) so path-traversal,
+ * Windows reserved names, and case-folding hazards are rejected up
+ * front rather than at the eventual `path.join` call.
  */
-export const ControlPchange_kindFileStem = z
+export const ControlPlaneFileStem = z
   .string()
   .min(1)
   .max(128)
@@ -27,7 +28,7 @@ export const ControlPchange_kindFileStem = z
     message: 'must not contain path separators',
   });
 
-export type ControlPchange_kindFileStem = z.infer<typeof ControlPchange_kindFileStem>;
+export type ControlPlaneFileStem = z.infer<typeof ControlPlaneFileStem>;
 
 /**
  * Portable POSIX-style path relative to a single run folder. This scalar is

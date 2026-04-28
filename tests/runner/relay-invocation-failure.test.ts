@@ -77,7 +77,7 @@ describe('runtime-safety-floor connector invocation failure closure', () => {
     expect(outcome.result.reason).toMatch(/connector invocation failed/i);
     expect(outcome.result.reason).toMatch(/auth token missing/);
 
-    const started = outcome.trace_entrys.find((e) => e.kind === 'relay.started');
+    const started = outcome.trace_entries.find((e) => e.kind === 'relay.started');
     if (started?.kind !== 'relay.started') throw new Error('expected relay.started');
     expect(started.step_id).toBe('relay-step');
     expect(started.connector).toEqual({ kind: 'builtin', name: 'claude-code' });
@@ -85,7 +85,7 @@ describe('runtime-safety-floor connector invocation failure closure', () => {
     expect(started.resolved_from).toEqual({ source: 'explicit' });
     expect(started.resolved_selection).toEqual({ skills: [], invocation_options: {} });
 
-    const relayStepKinds = outcome.trace_entrys
+    const relayStepKinds = outcome.trace_entries
       .filter((trace_entry) => 'step_id' in trace_entry && trace_entry.step_id === 'relay-step')
       .map((trace_entry) => trace_entry.kind);
     expect(relayStepKinds).toEqual([
@@ -97,12 +97,12 @@ describe('runtime-safety-floor connector invocation failure closure', () => {
       'step.aborted',
     ]);
 
-    const request = outcome.trace_entrys.find((e) => e.kind === 'relay.request');
+    const request = outcome.trace_entries.find((e) => e.kind === 'relay.request');
     if (request?.kind !== 'relay.request') throw new Error('expected relay.request');
     expect(request.step_id).toBe('relay-step');
     expect(request.request_payload_hash).toMatch(/^[0-9a-f]{64}$/);
 
-    const failed = outcome.trace_entrys.find((e) => e.kind === 'relay.failed');
+    const failed = outcome.trace_entries.find((e) => e.kind === 'relay.failed');
     if (failed?.kind !== 'relay.failed') throw new Error('expected relay.failed');
     expect(failed.step_id).toBe('relay-step');
     expect(failed.connector).toEqual(started.connector);
@@ -111,17 +111,17 @@ describe('runtime-safety-floor connector invocation failure closure', () => {
     expect(failed.resolved_selection).toEqual(started.resolved_selection);
     expect(failed.request_payload_hash).toBe(request.request_payload_hash);
 
-    const check = outcome.trace_entrys.find(
+    const check = outcome.trace_entries.find(
       (e) => e.kind === 'check.evaluated' && e.step_id === 'relay-step',
     );
     if (check?.kind !== 'check.evaluated') throw new Error('expected check.evaluated');
     expect(check.outcome).toBe('fail');
 
-    const aborted = outcome.trace_entrys.find((e) => e.kind === 'step.aborted');
+    const aborted = outcome.trace_entries.find((e) => e.kind === 'step.aborted');
     if (aborted?.kind !== 'step.aborted') throw new Error('expected step.aborted');
     expect(aborted.step_id).toBe('relay-step');
 
-    const closed = outcome.trace_entrys.find((e) => e.kind === 'run.closed');
+    const closed = outcome.trace_entries.find((e) => e.kind === 'run.closed');
     if (closed?.kind !== 'run.closed') throw new Error('expected run.closed');
     expect(closed.outcome).toBe('aborted');
 
@@ -131,11 +131,11 @@ describe('runtime-safety-floor connector invocation failure closure', () => {
     expect(outcome.result.reason).toBe(failed.reason);
 
     expect(
-      outcome.trace_entrys.find((e) => e.kind === 'step.completed' && e.step_id === 'relay-step'),
+      outcome.trace_entries.find((e) => e.kind === 'step.completed' && e.step_id === 'relay-step'),
     ).toBeUndefined();
-    expect(outcome.trace_entrys.find((e) => e.kind === 'relay.completed')).toBeUndefined();
-    expect(outcome.trace_entrys.find((e) => e.kind === 'relay.receipt')).toBeUndefined();
-    expect(outcome.trace_entrys.find((e) => e.kind === 'relay.result')).toBeUndefined();
+    expect(outcome.trace_entries.find((e) => e.kind === 'relay.completed')).toBeUndefined();
+    expect(outcome.trace_entries.find((e) => e.kind === 'relay.receipt')).toBeUndefined();
+    expect(outcome.trace_entries.find((e) => e.kind === 'relay.result')).toBeUndefined();
 
     expect(existsSync(join(runFolder, 'reports', 'relay.request.json'))).toBe(true);
     expect(existsSync(join(runFolder, 'reports', 'relay.receipt.json'))).toBe(false);

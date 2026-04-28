@@ -153,7 +153,7 @@ function reviewPolicyOnlyPayload(overrides: Record<string, unknown> = {}): Recor
     schema_version: '2',
     id: 'review',
     // Deliberately policy/invariant-only: the real review fixture and
-    // runtime compose behavior land in later P2.9 slices.
+    // runtime compose behavior are exercised by the review flow tests.
     stages: [
       { title: 'Intake', canonical: 'frame', steps: ['intake-step'] },
       { title: 'Independent Audit', canonical: 'analyze', steps: ['audit-step'] },

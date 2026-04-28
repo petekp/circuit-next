@@ -21,7 +21,7 @@ import {
   writeDerivedSnapshot,
 } from '../../../src/runtime/snapshot-writer.js';
 import { readRunTrace } from '../../../src/runtime/trace-reader.js';
-import { appendTraceEntry, trace_entryLogPath } from '../../../src/runtime/trace-writer.js';
+import { appendTraceEntry, traceEntryLogPath } from '../../../src/runtime/trace-writer.js';
 
 // trace.ndjson append → parse → reduce → derive state.json
 // round-trip test. Closes the boundary runtime-proof runs through:
@@ -126,7 +126,7 @@ afterEach(() => {
 describe('trace.ndjson append→reduce→state.json round-trip', () => {
   it('writes trace.ndjson, state.json, manifest.snapshot.json at bootstrap', () => {
     seedRun(runFolder);
-    const logText = readFileSync(trace_entryLogPath(runFolder), 'utf8');
+    const logText = readFileSync(traceEntryLogPath(runFolder), 'utf8');
     const snapText = readFileSync(snapshotPath(runFolder), 'utf8');
     const manifestText = readFileSync(manifestSnapshotPath(runFolder), 'utf8');
     expect(logText.endsWith('\n')).toBe(true);
@@ -188,15 +188,15 @@ describe('trace.ndjson append→reduce→state.json round-trip', () => {
     expect(parsed.success).toBe(true);
   });
 
-  it('append-only: later writes do not overwrite or truncate prior trace_entrys', () => {
+  it('append-only: later writes do not overwrite or truncate prior trace_entries', () => {
     seedRun(runFolder);
-    const afterBoot = readFileSync(trace_entryLogPath(runFolder), 'utf8');
+    const afterBoot = readFileSync(traceEntryLogPath(runFolder), 'utf8');
     appendTraceEntry(runFolder, buildStepEntered(1, 'frame'));
-    const afterStep = readFileSync(trace_entryLogPath(runFolder), 'utf8');
+    const afterStep = readFileSync(traceEntryLogPath(runFolder), 'utf8');
     expect(afterStep.startsWith(afterBoot)).toBe(true);
     expect(afterStep.length).toBeGreaterThan(afterBoot.length);
     appendTraceEntry(runFolder, buildStepCompleted(2, 'frame'));
-    const afterCompleted = readFileSync(trace_entryLogPath(runFolder), 'utf8');
+    const afterCompleted = readFileSync(traceEntryLogPath(runFolder), 'utf8');
     expect(afterCompleted.startsWith(afterStep)).toBe(true);
   });
 
@@ -208,9 +208,9 @@ describe('trace.ndjson append→reduce→state.json round-trip', () => {
     const originalSnapshot = deriveSnapshot(runFolder);
 
     // Tamper: delete the middle trace_entry by rewriting the NDJSON without it.
-    const lines = readFileSync(trace_entryLogPath(runFolder), 'utf8').split('\n').filter(Boolean);
+    const lines = readFileSync(traceEntryLogPath(runFolder), 'utf8').split('\n').filter(Boolean);
     const tampered = [lines[0], lines[2], lines[3]].join('\n').concat('\n');
-    writeFileSync(trace_entryLogPath(runFolder), tampered);
+    writeFileSync(traceEntryLogPath(runFolder), tampered);
 
     // Re-reading the tampered log must fail RUN-I2 (sequence contiguity):
     // the remaining sequences are [0, 2, 3] — a gap at 1 breaks RUN-I2.
@@ -218,7 +218,7 @@ describe('trace.ndjson append→reduce→state.json round-trip', () => {
 
     // If the caller bypasses RunTrace validation (hand-forged array), the
     // derived snapshot differs from the original — no silent acceptance.
-    const rawRaw = readFileSync(trace_entryLogPath(runFolder), 'utf8').split('\n').filter(Boolean);
+    const rawRaw = readFileSync(traceEntryLogPath(runFolder), 'utf8').split('\n').filter(Boolean);
     const forged = rawRaw.map((l) => TraceEntry.parse(JSON.parse(l)));
     // Force-reduce the forged (un-validated) log by constructing a RunTrace
     // that skips superRefine — we cast via the parsed TraceEntry[] directly
@@ -290,11 +290,11 @@ describe('trace.ndjson append→reduce→state.json round-trip', () => {
   });
 
   it('manifest snapshot path and trace path are distinct and stable', () => {
-    expect(trace_entryLogPath(runFolder)).toContain('trace.ndjson');
+    expect(traceEntryLogPath(runFolder)).toContain('trace.ndjson');
     expect(snapshotPath(runFolder)).toContain('state.json');
     expect(manifestSnapshotPath(runFolder)).toContain('manifest.snapshot.json');
-    expect(trace_entryLogPath(runFolder)).not.toBe(snapshotPath(runFolder));
-    expect(trace_entryLogPath(runFolder)).not.toBe(manifestSnapshotPath(runFolder));
+    expect(traceEntryLogPath(runFolder)).not.toBe(snapshotPath(runFolder));
+    expect(traceEntryLogPath(runFolder)).not.toBe(manifestSnapshotPath(runFolder));
   });
 
   it('writeManifestSnapshot/bootstrapRun compose without stepping on each other', () => {
@@ -323,7 +323,7 @@ describe('trace.ndjson append→reduce→state.json round-trip', () => {
 
   it('malformed trace_entry-log line fails loudly (Stage 2 defers durable-tail distinction)', () => {
     seedRun(runFolder);
-    writeFileSync(trace_entryLogPath(runFolder), 'not json at all\n');
+    writeFileSync(traceEntryLogPath(runFolder), 'not json at all\n');
     expect(() => readRunTrace(runFolder)).toThrow(/valid JSON|TraceEntry|RunTrace/);
   });
 

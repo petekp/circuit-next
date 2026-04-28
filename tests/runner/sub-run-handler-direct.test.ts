@@ -1,18 +1,16 @@
 // Direct unit tests for the sub-run step handler.
 //
-// `tests/runner/sub-run-runtime.test.ts` exercises the handler
-// transitively (3 cases — happy path, out-of-check verdict, missing
-// resolver) and `tests/runner/sub-run-real-recursion.test.ts` proves
-// real recursion works end-to-end. Neither covers the handler-local
-// early-abort branches that fire BEFORE child execution: divergent
-// writes.report path, resolver throw, resolver-returns-wrong-id,
-// child invocation throw, child-returned-checkpoint-waiting, and
-// the full evaluateChildVerdict shape lattice (parse fail, non-
-// object, missing verdict). This file invokes `runSubRunStep`
-// directly against a minimal in-memory `StepHandlerContext` to pin
-// each branch's reason string + trace_entry sequence.
-//
-// FU-T11 priority target #4 (per HANDOFF.md).
+// `sub-run-runtime.test.ts` exercises the handler transitively (3 cases
+// — happy path, out-of-check verdict, missing resolver), and
+// `sub-run-real-recursion.test.ts` proves real recursion works
+// end-to-end. Neither covers the handler-local early-abort branches that
+// fire BEFORE child execution: divergent writes.report path, resolver
+// throw, resolver-returns-wrong-id, child invocation throw,
+// child-returned-checkpoint-waiting, and the full evaluateChildVerdict
+// shape lattice (parse fail, non-object, missing verdict). This file
+// invokes `runSubRunStep` directly against a minimal in-memory
+// `StepHandlerContext` to pin each branch's reason string + trace
+// sequence.
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -202,7 +200,7 @@ function makeStubChildRunner(spec: ChildRunnerSpec): CompiledFlowRunner {
           manifest_hash: 'stub-manifest-hash',
           updated_at: new Date(0).toISOString(),
         }),
-        trace_entrys: [],
+        trace_entries: [],
         relayResults: [],
       };
     }
@@ -248,7 +246,7 @@ function makeStubChildRunner(spec: ChildRunnerSpec): CompiledFlowRunner {
         manifest_hash: 'stub-manifest-hash',
         updated_at: new Date(0).toISOString(),
       }),
-      trace_entrys: [],
+      trace_entries: [],
       relayResults: [],
     };
   };
@@ -264,7 +262,7 @@ interface BuildHarnessOpts {
 }
 
 interface Harness {
-  readonly trace_entrys: TraceEntry[];
+  readonly trace_entries: TraceEntry[];
   readonly state: RunState;
   readonly ctx: StepHandlerContext & {
     readonly step: CompiledFlow['steps'][number] & { kind: 'sub-run' };
@@ -307,8 +305,8 @@ function buildHarness(opts: BuildHarnessOpts, parentRunFolder: string): Harness 
     });
   }
 
-  const trace_entrys: TraceEntry[] = [];
-  const state: RunState = { trace_entrys, sequence: 0, relayResults: [] };
+  const trace_entries: TraceEntry[] = [];
+  const state: RunState = { trace_entries, sequence: 0, relayResults: [] };
   const now = deterministicNow(Date.UTC(2026, 3, 27, 0, 0, 0));
   const recordedAt = (): string => now().toISOString();
   const childRunnerSpec = opts.childRunner ?? { resultBody: JSON.stringify({ verdict: 'accept' }) };
@@ -336,7 +334,7 @@ function buildHarness(opts: BuildHarnessOpts, parentRunFolder: string): Harness 
     recordedAt,
     state,
     push: (ev: TraceEntry) => {
-      trace_entrys.push({ ...ev, sequence: state.sequence });
+      trace_entries.push({ ...ev, sequence: state.sequence });
       state.sequence += 1;
     },
     step,
@@ -345,7 +343,7 @@ function buildHarness(opts: BuildHarnessOpts, parentRunFolder: string): Harness 
     childRunner,
     ...(resolver === undefined ? {} : { childCompiledFlowResolver: resolver }),
   };
-  return { trace_entrys, state, ctx };
+  return { trace_entries, state, ctx };
 }
 
 let runFolderBase: string;
@@ -375,11 +373,11 @@ describe('runSubRunStep direct — early aborts (before child execution)', () =>
 
     if (result.kind !== 'aborted') throw new Error('expected aborted');
     expect(result.reason).toMatch(/writes\.report materialization at a path different/);
-    expect(harness.trace_entrys.find((e) => e.kind === 'sub_run.started')).toBeUndefined();
-    const check = harness.trace_entrys.find((e) => e.kind === 'check.evaluated');
+    expect(harness.trace_entries.find((e) => e.kind === 'sub_run.started')).toBeUndefined();
+    const check = harness.trace_entries.find((e) => e.kind === 'check.evaluated');
     if (check?.kind !== 'check.evaluated') throw new Error('expected check.evaluated');
     expect(check.outcome).toBe('fail');
-    expect(harness.trace_entrys.some((e) => e.kind === 'step.aborted')).toBe(true);
+    expect(harness.trace_entries.some((e) => e.kind === 'step.aborted')).toBe(true);
   });
 
   it('aborts when childCompiledFlowResolver is undefined', async () => {
@@ -398,7 +396,7 @@ describe('runSubRunStep direct — early aborts (before child execution)', () =>
       'sub-run handler: a sub-run step requires a childCompiledFlowResolver in context; missing resolver aborts before sub_run.started fires',
       { reason: /childCompiledFlowResolver is required/ },
     );
-    expect(harness.trace_entrys.find((e) => e.kind === 'sub_run.started')).toBeUndefined();
+    expect(harness.trace_entries.find((e) => e.kind === 'sub_run.started')).toBeUndefined();
   });
 
   it('aborts with resolution-failed reason when the resolver throws', async () => {
@@ -414,7 +412,7 @@ describe('runSubRunStep direct — early aborts (before child execution)', () =>
 
     if (result.kind !== 'aborted') throw new Error('expected aborted');
     expect(result.reason).toMatch(/child flow resolution failed.*resolver blew up/);
-    expect(harness.trace_entrys.find((e) => e.kind === 'sub_run.started')).toBeUndefined();
+    expect(harness.trace_entries.find((e) => e.kind === 'sub_run.started')).toBeUndefined();
   });
 
   it('aborts when the resolver returns a flow with a different id than flow_ref names', async () => {
@@ -430,7 +428,7 @@ describe('runSubRunStep direct — early aborts (before child execution)', () =>
 
     if (result.kind !== 'aborted') throw new Error('expected aborted');
     expect(result.reason).toMatch(/resolver returned flow id 'wrong-flow-id'/);
-    expect(harness.trace_entrys.find((e) => e.kind === 'sub_run.started')).toBeUndefined();
+    expect(harness.trace_entries.find((e) => e.kind === 'sub_run.started')).toBeUndefined();
   });
 });
 
@@ -450,10 +448,10 @@ describe('runSubRunStep direct — child execution failures', () => {
     expect(result.reason).toMatch(/child flow invocation failed.*child blew up/);
     // sub_run.started fires BEFORE the child runner is called, so it
     // should be present even on child throw.
-    expect(harness.trace_entrys.some((e) => e.kind === 'sub_run.started')).toBe(true);
+    expect(harness.trace_entries.some((e) => e.kind === 'sub_run.started')).toBe(true);
     // sub_run.completed should NOT fire — the child invocation
     // failed.
-    expect(harness.trace_entrys.find((e) => e.kind === 'sub_run.completed')).toBeUndefined();
+    expect(harness.trace_entries.find((e) => e.kind === 'sub_run.completed')).toBeUndefined();
   });
 
   it('aborts with checkpoint-resume-not-supported reason when the child returns checkpoint_waiting', async () => {
@@ -490,7 +488,7 @@ describe('runSubRunStep direct — child verdict evaluation', () => {
     expect(result.reason).toMatch(/child result body did not parse as JSON/);
     // sub_run.completed fires before verdict evaluation finalizes —
     // verdict slot carries the no-verdict sentinel.
-    const completed = harness.trace_entrys.find((e) => e.kind === 'sub_run.completed');
+    const completed = harness.trace_entries.find((e) => e.kind === 'sub_run.completed');
     if (completed?.kind !== 'sub_run.completed') throw new Error('expected sub_run.completed');
     expect(completed.verdict).toBe('<no-verdict>');
   });
@@ -535,7 +533,7 @@ describe('runSubRunStep direct — child verdict evaluation', () => {
 
     if (result.kind !== 'aborted') throw new Error('expected aborted');
     expect(result.reason).toMatch(/lacks a non-empty string 'verdict' field/);
-    const completed = harness.trace_entrys.find((e) => e.kind === 'sub_run.completed');
+    const completed = harness.trace_entries.find((e) => e.kind === 'sub_run.completed');
     if (completed?.kind !== 'sub_run.completed') throw new Error('expected sub_run.completed');
     expect(completed.verdict).toBe('<no-verdict>');
   });
@@ -566,7 +564,7 @@ describe('runSubRunStep direct — child verdict evaluation', () => {
 
     if (result.kind !== 'aborted') throw new Error('expected aborted');
     expect(result.reason).toMatch(/child verdict 'reject' is not in check\.pass \[accept\]/);
-    const completed = harness.trace_entrys.find((e) => e.kind === 'sub_run.completed');
+    const completed = harness.trace_entries.find((e) => e.kind === 'sub_run.completed');
     if (completed?.kind !== 'sub_run.completed') throw new Error('expected sub_run.completed');
     expect(completed.verdict).toBe('reject');
   });

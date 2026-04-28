@@ -74,7 +74,7 @@ export const RelayConfig = RelayConfigBody.superRefine((cfg, ctx) => {
     // agree. `{connectors: {gemini: {name: 'ollama', ...}}}` parses per
     // ConnectorName regex but leaves two connector identities (`gemini` via
     // registry key, `ollama` via emitted descriptor) for a single
-    // registered executor. TraceEntrys would carry a `name` the audit index
+    // registered executor. TraceEntries would carry a `name` the audit index
     // doesn't know about.
     const descriptor = cfg.connectors[name];
     if (descriptor && descriptor.name !== name) {
@@ -112,10 +112,9 @@ export const RelayConfig = RelayConfigBody.superRefine((cfg, ctx) => {
 });
 export type RelayConfig = z.infer<typeof RelayConfig>;
 
-// Legacy `skills: string[]` channel removed. The
-// previous shape bypassed `SkillOverride` AND accepted arbitrary strings
-// (not `SkillId`-validated). Per-circuit skill contribution flows through
-// `selection.skills` via typed `SkillOverride` operations (SEL-I3).
+// Per-circuit skill contribution flows through `selection.skills` via
+// typed `SkillOverride` operations. (Earlier shapes accepted an untyped
+// `skills: string[]` channel that bypassed validation.)
 export const CircuitOverride = z
   .object({
     selection: SelectionOverride.optional(),
@@ -123,12 +122,12 @@ export const CircuitOverride = z
   .strict();
 export type CircuitOverride = z.infer<typeof CircuitOverride>;
 
-// CONFIG-I1 + CONFIG-I4 + CONFIG-I6 + CONFIG-I7 — top-level Config and its
-// nested `defaults` object both `.strict()` so authorial typos (e.g.
-// `defuults: {...}` at root or `defaults: {selections: ...}` nested) fail
-// fast at parse time rather than silently stripping to empty defaults.
-// `.default(...)` on every non-version field preserves the ergonomic that
-// a minimal `{schema_version: 1}` parses as a fully-populated Config.
+// Top-level Config and its nested `defaults` object both `.strict()` so
+// authorial typos (e.g. `defuults: {...}` at root or
+// `defaults: {selections: ...}` nested) fail fast at parse time rather
+// than silently stripping to empty defaults. `.default(...)` on every
+// non-version field preserves the ergonomic that a minimal
+// `{schema_version: 1}` parses as a fully-populated Config.
 export const Config = z
   .object({
     schema_version: z.literal(1),

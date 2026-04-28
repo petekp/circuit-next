@@ -128,7 +128,7 @@ function relayerWith(
   };
 }
 
-function trace_entryLabel(trace_entry: { kind: string; step_id?: unknown }): string {
+function traceEntryLabel(trace_entry: { kind: string; step_id?: unknown }): string {
   return typeof trace_entry.step_id === 'string'
     ? `${trace_entry.kind}:${trace_entry.step_id}`
     : trace_entry.kind;
@@ -198,7 +198,7 @@ describe('Sweep runtime wiring', () => {
     });
 
     expect(outcome.result.outcome).toBe('complete');
-    const labels = outcome.trace_entrys.map(trace_entryLabel);
+    const labels = outcome.trace_entries.map(traceEntryLabel);
     expect(labels).toContain('relay.completed:survey-step');
     expect(labels).toContain('relay.completed:execute-step');
     expect(labels).toContain('relay.completed:review-step');

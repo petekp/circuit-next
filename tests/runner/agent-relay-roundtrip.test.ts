@@ -101,7 +101,7 @@ describe('agent relay round-trip', () => {
         };
 
         // (1) Bootstrap run. run.bootstrapped is sequence 0; relay
-        // trace_entrys start at sequence 1.
+        // trace_entries start at sequence 1.
         bootstrapRun({
           runFolder,
           manifest: {
@@ -155,18 +155,18 @@ describe('agent relay round-trip', () => {
           now,
         });
 
-        for (const trace_entry of materialized.trace_entrys) {
+        for (const trace_entry of materialized.trace_entries) {
           appendAndDerive(runFolder, trace_entry);
         }
 
         // (5) Read the trace back. RunTrace.parse enforces
         // RUN-I1..I5; any transcript-level regression would fail here.
         const runtrace = readRunTrace(runFolder);
-        expect(runtrace).toHaveLength(6); // bootstrap + 5 relay trace_entrys
-        const relayTraceEntrys = runtrace.filter((e) => e.kind.startsWith('relay.'));
-        expect(relayTraceEntrys).toHaveLength(5);
+        expect(runtrace).toHaveLength(6); // bootstrap + 5 relay trace_entries
+        const relayTraceEntries = runtrace.filter((e) => e.kind.startsWith('relay.'));
+        expect(relayTraceEntries).toHaveLength(5);
 
-        const [started, request, receipt, result, completed] = relayTraceEntrys;
+        const [started, request, receipt, result, completed] = relayTraceEntries;
         // Connector name binding — the critical CC#P2-2 surface.
         if (started?.kind !== 'relay.started') throw new Error('unreachable');
         expect(started.connector).toEqual({ kind: 'builtin', name: 'claude-code' });
@@ -204,12 +204,12 @@ describe('agent relay round-trip', () => {
         // relay.started and leaves it there until step.completed
         // fires. This round-trip test does not emit step.completed (it
         // stops at relay.completed), so in_progress is the expected
-        // terminal state. The CC#P2-2 binding does not require
-        // step.completed — it requires the five relay trace_entrys
+        // terminal state. The contract here does not require
+        // step.completed — it requires the five relay trace entries
         // consumed by the reducer.
         expect(stepState?.status).toBeDefined();
 
-        // (7) Report materialization per ADR-0008 §Decision.3a.
+        // (7) Report materialization.
         const reportAbs = join(runFolder, writes.report.path);
         expect(existsSync(reportAbs)).toBe(true);
         const reportBytes = readFileSync(reportAbs, 'utf-8');

@@ -1,11 +1,8 @@
-// Selection contract — SEL-I1..I9 from
-// docs/contracts/selection.md v0.1. Each invariant gets positive +
-// negative coverage; SEL-I6/I7 get adversarial permutations of the
-// applied chain to guard against accidental ordering or uniqueness
-// regressions in future resolver changes.
-//
-// Split from the original `schema-parity.test.ts` mega-file as part
-// of FU-T09.
+// Selection contract — see docs/contracts/selection.md. Each invariant
+// gets positive + negative coverage; the precedence-order and
+// unique-identity rules also get adversarial permutations of the applied
+// chain to guard against accidental ordering / uniqueness regressions
+// in future resolver changes.
 
 import { describe, expect, it } from 'vitest';
 import {

@@ -1,8 +1,5 @@
-// Stage contract + CompiledFlow stage_path_policy schema —
-// stage-I1..I6 from docs/contracts/stage.md v0.1.
-//
-// Split from the original `schema-parity.test.ts` mega-file as part
-// of FU-T09.
+// Stage contract + CompiledFlow stage_path_policy schema — see
+// docs/contracts/stage.md.
 
 import { describe, expect, it } from 'vitest';
 import { CompiledFlow, Stage } from '../../src/index.js';

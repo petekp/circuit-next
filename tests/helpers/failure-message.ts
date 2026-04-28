@@ -1,19 +1,16 @@
-// Failure-message helpers that name the violated invariant in the
-// assertion message itself. Designed to make agent (and human) repair
-// faster — when a test fails, the message states which rule was
+// Failure-message helpers that name the violated rule in the assertion
+// message itself. When a test fails, the message states which rule was
 // violated and what that rule says, not just which value mismatched.
 //
 // Convention for the `rule` argument:
-//   - When a contract invariant ID exists in `specs/invariants.json`,
-//     pass `"<INVARIANT-ID>: <claim>"`.
-//     Example: `"WF-I10: pass routes must target canonical outcome ids"`.
-//   - When the rule is a runtime / handler discipline that has no
-//     ledger entry, pass plain prose with a domain-prefixed claim.
-//     Example: `"relay handler: result_body that is not valid JSON
-//     aborts with a parse-failure reason"`.
+//   - For schema/contract checks, pass a short claim — e.g.
+//     `"pass routes must target canonical outcome ids"`. If a stable
+//     invariant ID exists, prefix it: `"WF-I10: pass routes ..."`.
+//   - For runtime / handler discipline, pass a domain-prefixed claim —
+//     e.g. `"relay handler: result_body that is not valid JSON aborts
+//     with a parse-failure reason"`.
 //
-// FU-T07. Imported lazily by tests as files are touched. The
-// step-handler assertion helpers double as `asserts result is ...`
+// The step-handler assertion helpers double as `asserts result is ...`
 // type narrows so callers can read `.reason` / `.checkpoint` without a
 // manual `if (result.kind !== ...) throw` preamble.
 

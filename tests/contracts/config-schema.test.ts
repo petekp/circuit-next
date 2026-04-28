@@ -1,8 +1,4 @@
-// Config + LayeredConfig schemas — CONFIG-I1..I8 from
-// docs/contracts/config.md v0.1.
-//
-// Split from the original `schema-parity.test.ts` mega-file as part
-// of FU-T09.
+// Config + LayeredConfig schemas — see docs/contracts/config.md.
 
 import { describe, expect, it } from 'vitest';
 import { CircuitOverride, Config, ConfigLayer, LayeredConfig } from '../../src/index.js';

@@ -1,8 +1,4 @@
-// Continuity contract — CONT-I1..I12 from
-// docs/contracts/continuity.md v0.1.
-//
-// Split from the original `schema-parity.test.ts` mega-file as part
-// of FU-T09.
+// Continuity contract — see docs/contracts/continuity.md.
 
 import { describe, expect, it } from 'vitest';
 import {
@@ -127,7 +123,7 @@ describe('Continuity discriminated union (CONT-I3..I5)', () => {
   });
 });
 
-describe('Continuity record_id — CONT-I1 (ControlPchange_kindFileStem)', () => {
+describe('Continuity record_id — CONT-I1 (ControlPlaneFileStem)', () => {
   const baseStandalone = {
     schema_version: 1,
     project_root: '/Users/x/Code',
@@ -354,7 +350,7 @@ describe('ContinuityIndex aggregate — CONT-I9..I11', () => {
     expect(ok.success).toBe(true);
   });
 
-  it('CONT-I10 — pending_record.record_id uses ControlPchange_kindFileStem (rejects uppercase)', () => {
+  it('CONT-I10 — pending_record.record_id uses ControlPlaneFileStem (rejects uppercase)', () => {
     const bad = PendingRecordPointer.safeParse({
       record_id: 'CONTINUITY-ABC',
       continuity_kind: 'standalone',

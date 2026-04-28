@@ -14,7 +14,7 @@ import type {
 } from '../runner-types.js';
 
 export interface RunState {
-  readonly trace_entrys: TraceEntry[];
+  readonly trace_entries: TraceEntry[];
   sequence: number;
   readonly relayResults: RelayResultMetadata[];
 }

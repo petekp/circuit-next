@@ -4,15 +4,14 @@ import type { CompiledFlowId, RunId } from '../schemas/ids.js';
 import { ManifestSnapshot, computeManifestHash } from '../schemas/manifest.js';
 
 // Manifest snapshot writer. Writes <run-folder>/manifest.snapshot.json as
-// a byte-for-byte copy of the persisted manifest, plus an SHA-256 hash
-// over those exact bytes. Hash algorithm per ADR-0001 Addendum B §Stage
-// 1.5 Close Criteria #8 (sha256-raw; no canonicalization).
+// a byte-for-byte copy of the persisted manifest, plus a SHA-256 hash
+// over those exact bytes. Hash is sha256-raw with no canonicalization.
 //
 // Byte-match semantics: at re-entry/resume the runtime re-reads the
 // declared bytes, recomputes sha256, and rejects the run if the hash
-// does not agree. This is what closes the "run evolves while manifest
-// drifts silently" failure mode — a regenerated or edited manifest
-// produces a different hash and fails the check loudly.
+// does not agree. This closes the "run evolves while manifest drifts
+// silently" failure — a regenerated or edited manifest produces a
+// different hash and fails loudly.
 
 export function manifestSnapshotPath(runFolder: string): string {
   return join(runFolder, 'manifest.snapshot.json');

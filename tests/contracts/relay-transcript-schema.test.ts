@@ -10,14 +10,11 @@ import {
 } from '../../src/index.js';
 import { reduce } from '../../src/runtime/reducer.js';
 
-// ADR-0007 CC#P2-2 names
-// `relay.request` / `relay.receipt` / `relay.result` as
-// non-substitutable close-criterion evidence. Before this slice the
-// three trace_entry kinds were prose-only; the TraceEntry discriminated union
-// rejected them. This test file binds the schema-level widening to the
-// ADR §Amendment so the governance surface and the runtime surface
-// agree. Authority: composition review §HIGH 2 + ADR-0007 §Amendment
-// + `src/schemas/trace-entry.ts`.
+// `relay.request` / `relay.receipt` / `relay.result` are the
+// non-substitutable close-criterion entries on a relay step. Each of
+// the three trace_entry kinds is admitted by the TraceEntry discriminated
+// union and consumed by the reducer. These tests pin the five-entry
+// durable transcript shape (started, request, receipt, result, completed).
 
 const RUN_A = '0191d2f0-aaaa-7fff-8aaa-000000000000';
 
@@ -403,7 +400,7 @@ describe('TraceEntry discriminated union admits the three new relay transcript k
   });
 });
 
-describe('Five-trace_entry durable relay transcript sequence (ADR-0007 CC#P2-2)', () => {
+describe('Five-entry durable relay transcript sequence', () => {
   it('parses the canonical five-trace_entry sequence as a well-formed RunTrace', () => {
     const log = [
       bootstrapTraceEntry,
@@ -480,10 +477,10 @@ describe('Five-trace_entry durable relay transcript sequence (ADR-0007 CC#P2-2)'
     expect(projection.success).toBe(true);
   });
 
-  it('parses a dry-run-shaped relay log (no transcript trace_entrys) as a RunTrace', () => {
-    // CC#P2-2 Enforcement binding: transcript trace_entrys are required for a
-    // non-dry-run connector. The dry-run path remains legal at the schema
-    // layer — only relay.started + relay.completed on a pair.
+  it('parses a dry-run-shaped relay log (no transcript trace_entries) as a RunTrace', () => {
+    // Transcript entries are required for a non-dry-run connector. The
+    // dry-run path remains legal at the schema layer — only
+    // relay.started + relay.completed on a pair.
     const log = [
       bootstrapTraceEntry,
       stepEnteredTraceEntry,
@@ -497,13 +494,10 @@ describe('Five-trace_entry durable relay transcript sequence (ADR-0007 CC#P2-2)'
   });
 });
 
-// ADR-0007 CC#P2-2 Enforcement
-// binding requires that "the reducer must have consumed that
-// sequence" (adr-0007 §CC#P2-2:136). This file proves the
-// schema/reducer half of that obligation here; the P2.4 connector test
-// proves the full real-connector round-trip. Without this test the
-// reducer-consumption claim is only implicit (via `noImplicitReturns`
-// exhaustiveness); this describe block makes it executable.
+// The reducer must consume the full five-entry relay sequence — this
+// describe block makes that consumption claim executable. The connector
+// round-trip test in tests/runner/agent-relay-roundtrip.test.ts covers
+// the full real-connector path.
 describe('Reducer consumes the five-trace_entry relay transcript', () => {
   it('reduce() advances trace_entries_consumed by the full log length on the canonical sequence', () => {
     const log = [

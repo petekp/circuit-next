@@ -148,15 +148,17 @@ export const RelayStep = StepBase.extend({
 export type RelayStep = z.infer<typeof RelayStep>;
 
 // Sub-run nests a complete flow run inside the parent run. The child
-// run gets its own RunId (no nesting in run identity); RUN-I3 forbids cross-
-// run trace_entry smuggling, so audit linkage flows through dedicated sub_run.*
-// trace_entrys at the parent step boundary, not through shared trace_entry scope.
+// run gets its own RunId (run identity does not nest); cross-run trace
+// smuggling is forbidden by RunTrace's run_id-consistency check, so audit
+// linkage flows through dedicated `sub_run.*` trace entries at the parent
+// step boundary rather than through shared trace scope.
 //
 // `flow_ref` points to a registered schematic by id + entry mode. Inline
 // child flow definitions are intentionally out of scope — they would
-// require recursive CompiledFlow schema, schematic-loader changes, and manifest
-// rescoping. Sibling references cover Migrate (Build as inner executor),
-// tournament (parallel attempts at one flow), and crucible patterns.
+// require recursive CompiledFlow schema, schematic-loader changes, and
+// manifest rescoping. Sibling references cover Migrate (Build as inner
+// executor), tournament (parallel attempts at one flow), and crucible
+// patterns.
 //
 // Child depth is independent of parent depth — a deep parent can run a
 // lite child for a fast inner check, or vice versa.

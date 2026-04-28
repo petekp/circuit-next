@@ -215,13 +215,13 @@ function makeStubChildRunner(verdict: string): CompiledFlowRunner {
         manifest_hash: 'stub-manifest-hash',
         updated_at: new Date(0).toISOString(),
       }),
-      trace_entrys: [],
+      trace_entries: [],
       relayResults: [],
     };
   };
 }
 
-function trace_entryLabel(trace_entry: { kind: string; step_id?: unknown }): string {
+function traceEntryLabel(trace_entry: { kind: string; step_id?: unknown }): string {
   return typeof trace_entry.step_id === 'string'
     ? `${trace_entry.kind}:${trace_entry.step_id}`
     : trace_entry.kind;
@@ -295,7 +295,7 @@ describe('Migrate runtime wiring', () => {
     });
 
     expect(outcome.result.outcome).toBe('complete');
-    const labels = outcome.trace_entrys.map(trace_entryLabel);
+    const labels = outcome.trace_entries.map(traceEntryLabel);
     expect(labels).toContain('relay.completed:inventory-step');
     expect(labels).toContain('sub_run.started:batch-step');
     expect(labels).toContain('sub_run.completed:batch-step');
@@ -411,7 +411,7 @@ describe('Migrate runtime wiring', () => {
 
     expect(outcome.result.outcome).toBe('aborted');
     expect(outcome.result.reason).toContain('reject');
-    const labels = outcome.trace_entrys.map(trace_entryLabel);
+    const labels = outcome.trace_entries.map(traceEntryLabel);
     expect(labels).toContain('sub_run.completed:batch-step');
     expect(labels).toContain('step.aborted:batch-step');
   });

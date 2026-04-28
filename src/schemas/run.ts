@@ -7,10 +7,14 @@ import {
   TraceEntry,
 } from './trace-entry.js';
 
-// RUN-I1..I5 live on `RunTrace`: a typed projection of `trace.ndjson` parsed into
-// an ordered array. The individual TraceEntry variants are already strict-mode and
-// individually validated; this aggregate encodes the log-level invariants that
-// no single trace_entry can assert on its own.
+// RunTrace is a typed projection of `trace.ndjson` parsed into an ordered
+// array. Individual TraceEntry variants are already strict-mode and
+// individually validated; this aggregate encodes the log-level invariants
+// that no single trace_entry can assert on its own:
+//   - first entry is run.bootstrapped
+//   - sequence is 0-based, contiguous, monotonic
+//   - run_id is consistent across all entries
+//   - exactly one bootstrap; at most one close; nothing after close
 
 const RunTraceBody = z.array(TraceEntry).min(1);
 
@@ -20,12 +24,12 @@ const issueAt = (ctx: z.RefinementCtx, path: (string | number)[], message: strin
 
 // Own-property guard for identity fields on raw input. Zod normally reads
 // inherited properties during parse, which lets `Object.create({run_id:
-// other})` smuggle a phantom run_id past the discriminated union. We run the
-// check as a preprocess on the raw array so that the guard sees the original
-// objects (with their prototype chains) before Zod copies properties into
-// fresh plain objects. Full recursive own-property defense for every required
-// field on every trace_entry is a Stage 2 property; the guarded fields here are the
-// identity fields whose spoofing is load-bearing for RUN-I1/I3.
+// other})` smuggle a phantom run_id past the discriminated union. We run
+// the check as a preprocess on the raw array so the guard sees the
+// original objects (with their prototype chains) before Zod copies
+// properties into fresh plain objects. The guarded fields are the
+// identity fields whose spoofing would defeat the bootstrap-first and
+// run_id-consistency invariants.
 const GUARDED_OWN_FIELDS = ['run_id', 'kind', 'sequence'] as const;
 
 const ownPropertyGuardedArray = z.custom<unknown[]>((raw) => {
@@ -40,11 +44,12 @@ const ownPropertyGuardedArray = z.custom<unknown[]>((raw) => {
 }, 'trace_entry has inherited (not own) identity field; prototype-chain smuggle rejected');
 
 export const RunTrace = ownPropertyGuardedArray.pipe(
-  RunTraceBody.superRefine((trace_entrys, ctx) => {
-    // RUN-I1 — first trace_entry is `run.bootstrapped`. A RunTrace with any other
-    // leading trace_entry is structurally invalid: bootstrap carries change_kind, depth,
-    // manifest_hash, and flow_id, none of which can be inferred later.
-    const first = trace_entrys[0];
+  RunTraceBody.superRefine((trace_entries, ctx) => {
+    // First trace_entry must be `run.bootstrapped`. A RunTrace with any
+    // other leading entry is structurally invalid: bootstrap carries
+    // change_kind, depth, manifest_hash, and flow_id, none of which can
+    // be inferred later.
+    const first = trace_entries[0];
     if (first === undefined || first.kind !== 'run.bootstrapped') {
       issueAt(
         ctx,
@@ -53,11 +58,11 @@ export const RunTrace = ownPropertyGuardedArray.pipe(
       );
     }
 
-    // RUN-I4 — bootstrap singleton. Multiple bootstraps within one log would
-    // make change_kind/depth/manifest_hash ambiguous at replay time.
+    // Bootstrap singleton. Multiple bootstraps within one log would make
+    // change_kind/depth/manifest_hash ambiguous at replay time.
     let bootstrapCount = 0;
-    for (let i = 0; i < trace_entrys.length; i++) {
-      const e = trace_entrys[i];
+    for (let i = 0; i < trace_entries.length; i++) {
+      const e = trace_entries[i];
       if (e?.kind === 'run.bootstrapped') {
         bootstrapCount += 1;
         if (bootstrapCount > 1) {
@@ -70,13 +75,13 @@ export const RunTrace = ownPropertyGuardedArray.pipe(
       }
     }
 
-    // RUN-I2 — sequence is 0-based, contiguous, monotonic. Gaps or repeats
-    // indicate an ingestion bug or a concurrent-writer race and make replay
-    // non-deterministic. Note: `sequence` is the authoritative ordering key;
-    // `recorded_at` is diagnostic metadata and may legitimately non-monotone
-    // under clock adjustments. Timestamp-sanity is a Stage 2 property.
-    for (let i = 0; i < trace_entrys.length; i++) {
-      const e = trace_entrys[i];
+    // Sequence is 0-based, contiguous, monotonic. Gaps or repeats indicate
+    // an ingestion bug or a concurrent-writer race and make replay
+    // non-deterministic. `sequence` is the authoritative ordering key;
+    // `recorded_at` is diagnostic metadata and may legitimately be
+    // non-monotonic under clock adjustments.
+    for (let i = 0; i < trace_entries.length; i++) {
+      const e = trace_entries[i];
       if (e === undefined) continue;
       if (e.sequence !== i) {
         issueAt(
@@ -87,11 +92,11 @@ export const RunTrace = ownPropertyGuardedArray.pipe(
       }
     }
 
-    // RUN-I3 — run_id consistency. Cross-run trace_entry smuggling is the single
-    // most dangerous corruption mode for trace_entry-sourced state.
+    // Run_id consistency. Cross-run trace_entry smuggling is the single
+    // most dangerous corruption mode for trace-sourced state.
     const canonical = first?.run_id;
-    for (let i = 0; i < trace_entrys.length; i++) {
-      const e = trace_entrys[i];
+    for (let i = 0; i < trace_entries.length; i++) {
+      const e = trace_entries[i];
       if (e === undefined || canonical === undefined) continue;
       if (e.run_id !== canonical) {
         issueAt(
@@ -102,12 +107,12 @@ export const RunTrace = ownPropertyGuardedArray.pipe(
       }
     }
 
-    // RUN-I5 — at-most-one close; no trace_entrys after close. A closed run whose
-    // log grows again silently re-opens it; stage-I4-style discipline says the
-    // transition must be explicit and is therefore rejected.
+    // At-most-one close; no trace entries after close. A closed run whose
+    // log grows again silently re-opens it; the transition from in-progress
+    // to closed must be explicit and one-way.
     let closedAt = -1;
-    for (let i = 0; i < trace_entrys.length; i++) {
-      const e = trace_entrys[i];
+    for (let i = 0; i < trace_entries.length; i++) {
+      const e = trace_entries[i];
       if (e?.kind !== 'run.closed') continue;
       if (closedAt >= 0) {
         issueAt(
@@ -119,11 +124,11 @@ export const RunTrace = ownPropertyGuardedArray.pipe(
         closedAt = i;
       }
     }
-    if (closedAt >= 0 && closedAt !== trace_entrys.length - 1) {
+    if (closedAt >= 0 && closedAt !== trace_entries.length - 1) {
       issueAt(
         ctx,
         [closedAt + 1, 'kind'],
-        `trace_entrys after 'run.closed' at index ${closedAt}; nothing may be appended after closure`,
+        `trace_entries after 'run.closed' at index ${closedAt}; nothing may be appended after closure`,
       );
     }
   }),
@@ -131,9 +136,9 @@ export const RunTrace = ownPropertyGuardedArray.pipe(
 export type RunTrace = z.infer<typeof RunTrace>;
 
 // The outcome-to-status mapping is pinned as a compile-time total function.
-// By typing the record as `Record<RunClosedOutcome, Exclude<SnapshotStatus,
-// 'in_progress'>>`, any future drift between the two enums breaks the
-// compile, not just this file's tests. See RUN-I7.
+// Typing the record as `Record<RunClosedOutcome, Exclude<SnapshotStatus,
+// 'in_progress'>>` makes any future drift between the two enums a compile
+// error, not just a runtime test failure.
 type ClosedSnapshotStatus = Exclude<SnapshotStatus, 'in_progress'>;
 const SNAPSHOT_STATUS_FOR_OUTCOME: Record<RunClosedOutcome, ClosedSnapshotStatus> = {
   complete: 'complete',
@@ -145,10 +150,8 @@ const SNAPSHOT_STATUS_FOR_OUTCOME: Record<RunClosedOutcome, ClosedSnapshotStatus
 
 // Compile-time bidirectional guard: `ClosedSnapshotStatus` and `RunClosedOutcome`
 // must be the same string-literal set. If one drifts, `OutcomeStatusEquality`
-// collapses to `never` and the `_compileTimeOutcomeStatusParity` marker rejects
-// the build before the runtime ever sees an unmapped outcome. This is the
-// "total by construction" claim in RUN-I7 becoming a compile-time property,
-// not a test-time one.
+// collapses to `never` and the `_compileTimeOutcomeStatusParity` marker fails
+// the build before the runtime ever sees an unmapped outcome.
 type IsExact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 type OutcomeStatusEquality = IsExact<ClosedSnapshotStatus, RunClosedOutcome> extends true
   ? true
@@ -162,17 +165,16 @@ const RunProjectionBody = z
   })
   .strict();
 
-// RUN-I6..I7 bind the trace and its derived snapshot. `RunProjection` is
-// the schema-level statement of "snapshot is a pure function of log": if the
-// two disagree on run_id, flow_id, change_kind, depth, manifest_hash, or
-// invocation_id, or if `trace_entries_consumed` is not equal to `log.length`, or if
+// RunProjection binds the trace and its derived snapshot. Schema-level
+// statement of "snapshot is a pure function of log": if the two disagree
+// on run_id, flow_id, change_kind, depth, manifest_hash, or invocation_id,
+// or if `trace_entries_consumed` is not equal to `log.length`, or if
 // snapshot.status contradicts the log's closure state, the projection is
-// rejected. This does not prove the reducer is correct (that's a Stage 2
-// property test); it proves that a RunProjection a caller hands us is
-// internally consistent.
+// rejected. This proves a RunProjection a caller hands us is internally
+// consistent; it does not prove the reducer that produced it is correct.
 export const RunProjection = RunProjectionBody.superRefine(({ log, snapshot }, ctx) => {
-  // Find the bootstrap trace_entry — RUN-I1 guarantees it exists and is at index 0,
-  // but we guard anyway so narrowing is explicit.
+  // Find the bootstrap trace_entry. RunTrace already guarantees it exists
+  // and is at index 0, but we guard anyway so narrowing is explicit.
   const bootstrapTraceEntry = log[0];
   if (bootstrapTraceEntry === undefined || bootstrapTraceEntry.kind !== 'run.bootstrapped') {
     // RunTrace parsing will have already complained; bail without duplicating.
@@ -180,8 +182,8 @@ export const RunProjection = RunProjectionBody.superRefine(({ log, snapshot }, c
   }
   const bootstrap: RunBootstrappedTraceEntry = bootstrapTraceEntry;
 
-  // RUN-I6 — binding fields that are frozen at bootstrap and must survive
-  // into the snapshot unchanged.
+  // Binding fields that are frozen at bootstrap and must survive into the
+  // snapshot unchanged.
   if (snapshot.run_id !== bootstrap.run_id) {
     issueAt(ctx, ['snapshot', 'run_id'], 'snapshot.run_id differs from bootstrap.run_id');
   }
@@ -220,10 +222,9 @@ export const RunProjection = RunProjectionBody.superRefine(({ log, snapshot }, c
     );
   }
 
-  // RUN-I7 — trace_entries_consumed is bound to log length exactly. A snapshot that
-  // claims fewer trace_entrys than exist is a stale prefix cache, not "the" current
-  // projection; prefix-snapshot semantics are Stage 2 scope (see
-  // `run.prop.projection_is_a_function`). Equality is the stronger bar.
+  // trace_entries_consumed is bound to log length exactly. A snapshot that
+  // claims fewer entries than exist is a stale prefix cache, not "the"
+  // current projection. Equality is the stronger bar than ≤.
   if (snapshot.trace_entries_consumed !== log.length) {
     issueAt(
       ctx,

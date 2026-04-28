@@ -34,11 +34,11 @@ describe('claude-code connector smoke (capability boundary)', () => {
   });
 
   it('static: sha256Hex produces a canonical hex digest of a known input', () => {
-    // This binds the hash format used by relay transcript trace_entrys
+    // This binds the hash format used by relay transcript trace_entries
     // (RelayRequestTraceEntry.request_payload_hash +
     // RelayResultTraceEntry.result_report_hash — both ContentHash HEX64
     // per src/schemas/trace-entry.ts). A regression in the hash shape would
-    // silently produce trace_entrys that fail to round-trip through
+    // silently produce trace_entries that fail to round-trip through
     // TraceEntry.parse() at write time.
     const digest = sha256Hex('circuit-next');
     expect(digest).toMatch(/^[0-9a-f]{64}$/);

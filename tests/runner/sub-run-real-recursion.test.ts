@@ -1,26 +1,22 @@
 // Real recursion integration test for sub-run.
 //
-// Sister test to `sub-run-runtime.test.ts`. That file exercises the
+// Sister test to `sub-run-runtime.test.ts`, which exercises the
 // parent's sub-run handler with a stubbed `childRunner` so the
-// handler's own surface (path derivation, file copy, audit trace_entrys,
-// check admission) can be tested in isolation. THIS test omits the
+// handler's own surface (path derivation, file copy, audit entries,
+// check admission) can be tested in isolation. This test omits the
 // stub: when `childRunner` is undefined on the CompiledFlowInvocation,
-// the runner defaults to `runCompiledFlow` itself (see
-// `src/runtime/runner.ts:633`), and the parent's sub-run step
-// recurses into a real child execution end-to-end.
+// the runner defaults to `runCompiledFlow` itself, and the parent's
+// sub-run step recurses into a real child execution end-to-end.
 //
-// Why this is worth its own test: every other parent sub-run /
-// fanout test stubs the child. The "child flow actually runs
-// through the same runner code path the parent did" claim has been
-// trust-by-stubbing. This test pins it: a real recursive call
-// produces a real child trace, a real child result.json, and
-// a real verdict that the parent admits via its check.
+// Why this is worth its own test: every other parent sub-run / fanout
+// test stubs the child. The "child flow actually runs through the same
+// runner code path the parent did" claim is otherwise trust-by-stubbing.
+// This test pins it: a real recursive call produces a real child trace,
+// a real child result.json, and a real verdict that the parent admits
+// via its check.
 //
-// Hermetic: a fake relayer serves both parent and child (the
-// child's single relay step uses it); no subprocesses spawn.
-// Fast: ~50ms.
-//
-// Captures FU-T06 from HANDOFF.md.
+// Hermetic: a fake relayer serves both parent and child (the child's
+// single relay step uses it); no subprocesses spawn. Fast: ~50ms.
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -216,8 +212,8 @@ describe('sub-run real recursion', () => {
     expect(outcome.result.verdict).toBe('accept');
 
     // Sub-run audit linkage on the parent's trace.
-    const subRunStarted = outcome.trace_entrys.find((e) => e.kind === 'sub_run.started');
-    const subRunCompleted = outcome.trace_entrys.find((e) => e.kind === 'sub_run.completed');
+    const subRunStarted = outcome.trace_entries.find((e) => e.kind === 'sub_run.started');
+    const subRunCompleted = outcome.trace_entries.find((e) => e.kind === 'sub_run.completed');
     if (subRunStarted?.kind !== 'sub_run.started') throw new Error('expected sub_run.started');
     if (subRunCompleted?.kind !== 'sub_run.completed')
       throw new Error('expected sub_run.completed');
@@ -252,9 +248,9 @@ describe('sub-run real recursion', () => {
     // Child has its OWN trace under its run-folder — proof the
     // recursive runner produced a separate trace_entry stream rather than
     // appending to the parent's. Real-recursion's smoking gun.
-    const childTraceEntrysPath = join(expectedChildRunFolder, 'trace.ndjson');
-    const childTraceEntrysRaw = readFileSync(childTraceEntrysPath, 'utf8');
-    const childTraceEntryLines = childTraceEntrysRaw.split('\n').filter((line) => line.length > 0);
+    const childTraceEntriesPath = join(expectedChildRunFolder, 'trace.ndjson');
+    const childTraceEntriesRaw = readFileSync(childTraceEntriesPath, 'utf8');
+    const childTraceEntryLines = childTraceEntriesRaw.split('\n').filter((line) => line.length > 0);
     expect(childTraceEntryLines.length).toBeGreaterThan(0);
     // Every child trace_entry carries the child's run_id, never the parent's.
     for (const line of childTraceEntryLines) {
@@ -262,7 +258,7 @@ describe('sub-run real recursion', () => {
       expect(parsed.run_id).toBe(childRunId);
       expect(parsed.run_id).not.toBe(parentRunId as unknown as string);
     }
-    // Child trace includes the relay lifecycle trace_entrys that
+    // Child trace includes the relay lifecycle trace_entries that
     // prove the child's relay step actually executed (rather than
     // being short-circuited).
     const childTraceEntryKinds = new Set(
@@ -279,7 +275,7 @@ describe('sub-run real recursion', () => {
     expect(parentCopyBytes).toBe(childResultBytes);
 
     // Parent's check admitted the child's verdict.
-    const passCheck = outcome.trace_entrys.find(
+    const passCheck = outcome.trace_entries.find(
       (e) =>
         e.kind === 'check.evaluated' &&
         e.check_kind === 'result_verdict' &&

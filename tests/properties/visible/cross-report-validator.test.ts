@@ -1,15 +1,12 @@
-// Property test for the cross-report validator binding sweep.batch
-// items to sweep.queue.to_execute (FU-T12 area: cross-report authority
-// references). The example-based path is exercised by sweep-runtime-
-// wiring.test.ts; this property test adds width — for any deterministic
-// (queue, batch) pair, the validator must agree with the predicate
-// "every batch.items[].candidate_id is in queue.to_execute."
+// Property test for the cross-report validator that binds sweep.batch
+// items to sweep.queue.to_execute. The example-based path is exercised
+// by sweep-runtime-wiring.test.ts; this property test adds width — for
+// any deterministic (queue, batch) pair, the validator must agree with
+// the predicate "every batch.items[].candidate_id is in
+// queue.to_execute."
 //
 // Validator under test: validateSweepBatchAgainstQueue at
-// src/flows/sweep/cross-report-validators.ts. Used here as the
-// canonical instance of cross-report authority binding so FU-T12's
-// last open area closes against real production code rather than a
-// built-for-test validator.
+// src/flows/sweep/cross-report-validators.ts.
 
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';

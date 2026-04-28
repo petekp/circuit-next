@@ -312,7 +312,7 @@ advance — `step.completed` is not emitted for the aborted step, and
 `routes.pass` is not taken.
 
 **TraceEntry ordering.** When the connector returns a result, the runtime
-sequences trace_entrys:
+sequences trace_entries:
 
 1. `step.entered`
 2. The five-trace_entry relay transcript via `materializeRelay`:

@@ -213,7 +213,7 @@ function makeStubChildRunner(observed: {
         manifest_hash: 'stub-manifest-hash',
         updated_at: new Date(0).toISOString(),
       }),
-      trace_entrys: [],
+      trace_entries: [],
       relayResults: [],
     };
   };
@@ -269,9 +269,9 @@ describe('sub-run runtime', () => {
     expect(childRunId).not.toBe(parentRunId);
 
     // sub_run.started + sub_run.completed both fired with matching
-    // child_run_id. (The parent's trace_entrys log is the audit trail.)
-    const subRunStarted = outcome.trace_entrys.find((e) => e.kind === 'sub_run.started');
-    const subRunCompleted = outcome.trace_entrys.find((e) => e.kind === 'sub_run.completed');
+    // child_run_id. (The parent's trace_entries log is the audit trail.)
+    const subRunStarted = outcome.trace_entries.find((e) => e.kind === 'sub_run.started');
+    const subRunCompleted = outcome.trace_entries.find((e) => e.kind === 'sub_run.completed');
     if (subRunStarted?.kind !== 'sub_run.started') throw new Error('expected sub_run.started');
     if (subRunCompleted?.kind !== 'sub_run.completed')
       throw new Error('expected sub_run.completed');
@@ -281,7 +281,7 @@ describe('sub-run runtime', () => {
     expect(subRunCompleted.child_outcome).toBe('complete');
 
     // Parent's check admitted the child verdict.
-    const passCheck = outcome.trace_entrys.find(
+    const passCheck = outcome.trace_entries.find(
       (e) =>
         e.kind === 'check.evaluated' &&
         e.check_kind === 'result_verdict' &&
@@ -342,12 +342,12 @@ describe('sub-run runtime', () => {
 
     // sub_run.completed still fired with the observed verdict before
     // the check rejected — durable transcript of what the child said.
-    const subRunCompleted = outcome.trace_entrys.find((e) => e.kind === 'sub_run.completed');
+    const subRunCompleted = outcome.trace_entries.find((e) => e.kind === 'sub_run.completed');
     if (subRunCompleted?.kind !== 'sub_run.completed')
       throw new Error('expected sub_run.completed');
     expect(subRunCompleted.verdict).toBe('reject');
 
-    const failCheck = outcome.trace_entrys.find(
+    const failCheck = outcome.trace_entries.find(
       (e) =>
         e.kind === 'check.evaluated' && e.check_kind === 'result_verdict' && e.outcome === 'fail',
     );

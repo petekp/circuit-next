@@ -1,8 +1,4 @@
-// Step discriminated-union schema — STEP-I1..I9 from
-// docs/contracts/step.md v0.1.
-//
-// Split from the original `schema-parity.test.ts` mega-file as part
-// of FU-T09.
+// Step discriminated-union schema — see docs/contracts/step.md.
 
 import { describe, expect, it } from 'vitest';
 import { Step } from '../../src/index.js';

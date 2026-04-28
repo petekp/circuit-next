@@ -17,22 +17,22 @@ import {
 const HAPPY_PATH_FIXTURE = resolve('tests/fixtures/codex-smoke/protocol/happy-path-ok.jsonl');
 const TURN_FAILED_FIXTURE = resolve('tests/fixtures/codex-smoke/protocol/turn-failed.jsonl');
 
-// P2.6 real codex connector. Mirrors the claude-code connector
-// contract test shape for the connector shape + parser branches. Three
-// concerns:
+// Codex connector contract tests. Mirrors the claude-code connector
+// contract test shape. Three concerns:
 //   (A) `src/runtime/connectors/codex.ts` module shape + capability-
 //       boundary argv-constant invariants.
 //   (B) `parseCodexStdout` NDJSON parser branches (happy path + each
 //       fail-closed assertion).
-//   (C) Cross-connector parity assertions — both connectors produce the same
+//   (C) Cross-connector parity — both connectors produce the same
 //       `RelayResult` shape so the materializer consumes them
 //       interchangeably (the connector-name discriminant on
 //       `materializeRelay` is what records identity, not the result
 //       shape).
 //
-// Check 29 (import-level connector discipline) coverage for `codex.ts` is
-// exercised by the live-repo regression guard in the claude-code connector suite;
-// adding a new connector file cannot smuggle a forbidden SDK because the
+// Import-level connector discipline coverage for `codex.ts` is
+// exercised by the live-repo regression guard in the claude-code
+// connector suite; adding a new connector file cannot smuggle a
+// forbidden SDK because the
 // scan pattern walks the tree recursively.
 
 // ---- (A) module shape + capability-boundary argv-constant invariants ---
@@ -72,9 +72,9 @@ describe('Codex connector — src/runtime/connectors/codex.ts module shape', () 
   });
 
   it('CODEX_NO_WRITE_FLAGS does NOT contain --dangerously-bypass-approvals-and-sandbox', () => {
-    // ADR-0009 §2.v capability-boundary anchor. If this flag ever
-    // enters the constant, the OS-level no-write sandbox is bypassed
-    // and the connector's capability-boundary claim collapses.
+    // Capability-boundary anchor. If this flag ever enters the constant,
+    // the OS-level no-write sandbox is bypassed and the connector's
+    // capability-boundary claim collapses.
     expect([...CODEX_NO_WRITE_FLAGS]).not.toContain('--dangerously-bypass-approvals-and-sandbox');
   });
 
@@ -459,7 +459,7 @@ describe('Codex connector — parseCodexStdout against real Codex 0.118 JSONL fi
   it('rejects the turn-failed.jsonl fixture with a named "codex reported turn.failed" error', () => {
     // Failure-shape fixture modeled on the challenger's observed
     // no-network probe output (no-network probe shape): top-level
-    // `error` and `turn.failed` trace_entrys. Rejected with a named message
+    // `error` and `turn.failed` trace_entries. Rejected with a named message
     // so relay callers see a legible cause rather than "missing
     // turn.completed" and guessing.
     const stdout = readFileSync(TURN_FAILED_FIXTURE, 'utf-8');

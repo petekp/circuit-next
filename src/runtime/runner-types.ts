@@ -155,7 +155,7 @@ export interface CompiledFlowRunResult {
   runFolder: string;
   result: RunResult | CheckpointWaitingResult;
   snapshot: Snapshot;
-  trace_entrys: TraceEntry[];
+  trace_entries: TraceEntry[];
   relayResults: readonly RelayResultMetadata[];
 }
 

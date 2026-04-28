@@ -2,9 +2,9 @@ import { z } from 'zod';
 import { Depth } from './depth.js';
 import { SkillId, StageId, StepId } from './ids.js';
 
-// SEL-I4 — provider-scoped model. The four-provider enum is closed; `model`
-// is an open string because connector-specific code owns provider/model
-// handling. New model releases do not force a schema change here.
+// Provider-scoped model. The four-provider enum is closed; `model` is an
+// open string because connector-specific code owns provider/model handling.
+// New model releases do not force a schema change here.
 export const ProviderScopedModel = z
   .object({
     provider: z.enum(['openai', 'anthropic', 'gemini', 'custom']),
@@ -13,8 +13,8 @@ export const ProviderScopedModel = z
   .strict();
 export type ProviderScopedModel = z.infer<typeof ProviderScopedModel>;
 
-// SEL-I4 — Effort tier. OpenAI's 6-tier vocabulary, chosen for cross-
-// provider portability (see specs/evidence.md hard invariant 8).
+// Effort tier. OpenAI's 6-tier vocabulary, chosen for cross-provider
+// portability — connectors map non-OpenAI effort levels onto this set.
 export const Effort = z.enum(['none', 'minimal', 'low', 'medium', 'high', 'xhigh']);
 export type Effort = z.infer<typeof Effort>;
 
@@ -39,11 +39,10 @@ const JsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
 const JsonObject = z.record(z.string(), JsonValueSchema);
 export type JsonObject = z.infer<typeof JsonObject>;
 
-// Skill arrays enforce uniqueness. Set-algebra
-// composition (union, difference) at the resolver layer expects the inputs
-// to be sets; accepting duplicates at parse time let a typo in an author's
-// YAML silently produce `['tdd', 'tdd']` and masked the intent. Canonical
-// *order* of the composed resolver output is a Stage 2 property.
+// Skill arrays enforce uniqueness. Set-algebra composition (union,
+// difference) at the resolver layer expects the inputs to be sets;
+// accepting duplicates at parse time would let a YAML author's typo
+// silently produce `['tdd', 'tdd']` and mask the intent.
 const UniqueSkillArray = z.array(SkillId).refine(
   (arr) => new Set(arr).size === arr.length,
   (arr) => ({
@@ -51,9 +50,9 @@ const UniqueSkillArray = z.array(SkillId).refine(
   }),
 );
 
-// SEL-I3 — typed skill operations, no empty-array ambiguity. `inherit` is
-// a pure sentinel; the other three carry an explicit `skills: SkillId[]`.
-// Empty arrays under non-`inherit` modes are legal and mean what they say:
+// Typed skill operations, no empty-array ambiguity. `inherit` is a pure
+// sentinel; the other three carry an explicit `skills: SkillId[]`. Empty
+// arrays under non-inherit modes are legal and mean what they say:
 // replace:[] clears the set; append:[] and remove:[] are no-ops.
 export const SkillOverride = z.discriminatedUnion('mode', [
   z.object({ mode: z.literal('inherit') }).strict(),
@@ -63,10 +62,10 @@ export const SkillOverride = z.discriminatedUnion('mode', [
 ]);
 export type SkillOverride = z.infer<typeof SkillOverride>;
 
-// SEL-I2 — every field optional; `.strict()` rejects surplus keys (typos
-// that would otherwise silently leave the effective selection at the prior
-// layer's default). `invocation_options` is JSON-safe; its
-// merge semantics (right-biased by precedence) are a Stage 2 property.
+// Every field optional; `.strict()` rejects surplus keys (typos that
+// would otherwise silently leave the effective selection at the prior
+// layer's default). `invocation_options` is JSON-safe; its merge
+// semantics are right-biased by precedence (later layers override).
 export const SelectionOverride = z
   .object({
     model: ProviderScopedModel.optional(),
@@ -78,14 +77,13 @@ export const SelectionOverride = z
   .strict();
 export type SelectionOverride = z.infer<typeof SelectionOverride>;
 
-// SEL-I5 — resolved is the effective record at relay time.
-// `invocation_options` is included because it IS effective-state
-// data — connectors consume it, and omitting it from the resolved surface
-// makes `RelayStartedTraceEntry.resolved_selection` insufficient for audit or
-// replay. The resolver flattens `applied[].override.invocation_options` via
-// right-biased merge by precedence. What ResolvedSelection still does NOT
-// carry is `SkillOverride` — the resolver flattens the override chain into
-// a final unique `SkillId[]`.
+// ResolvedSelection is the effective record at relay time.
+// `invocation_options` is included because connectors consume it; omitting
+// it would make RelayStartedTraceEntry.resolved_selection insufficient for
+// audit or replay. The resolver flattens `applied[].override.invocation_options`
+// via right-biased merge by precedence. ResolvedSelection does NOT carry
+// SkillOverride — the resolver flattens the override chain into a final
+// unique SkillId[].
 export const ResolvedSelection = z
   .object({
     model: ProviderScopedModel.optional(),
@@ -108,11 +106,11 @@ export const SelectionSource = z.enum([
 ]);
 export type SelectionSource = z.infer<typeof SelectionSource>;
 
-// SEL-I1 — precedence is declared, closed, and compile-time pinned to the
+// Precedence is declared, closed, and compile-time pinned to the
 // `SelectionSource` enum. The `as const satisfies readonly SelectionSource[]`
 // makes drift between the enum and the precedence list a `tsc --strict`
-// error — if a source is added to the enum without being added here (or
-// vice versa), the build fails before the runtime ever sees it.
+// error — adding a source to the enum without adding it here (or vice
+// versa) fails the build before the runtime sees it.
 export const SELECTION_PRECEDENCE = [
   'default',
   'user-global',
@@ -126,9 +124,7 @@ export const SELECTION_PRECEDENCE = [
 // Compile-time bidirectional equality: `SelectionSource` and the
 // tuple-derived element type must be the same string-literal set. If one
 // drifts, `_SelectionSourcePrecedenceParity` collapses to `never` and the
-// build fails. This is the static form of SEL-I1; the runtime
-// `selection.prop.precedence_const_parity` property is Stage 2
-// defense-in-depth.
+// build fails.
 type _IsExact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 type _PrecedenceSource = (typeof SELECTION_PRECEDENCE)[number];
 type _SelectionSourcePrecedenceParity = _IsExact<SelectionSource, _PrecedenceSource> extends true
@@ -136,7 +132,7 @@ type _SelectionSourcePrecedenceParity = _IsExact<SelectionSource, _PrecedenceSou
   : never;
 export const _compileTimeSelectionSourceParity: _SelectionSourcePrecedenceParity = true;
 
-// Precedence-index lookup used by SEL-I6.
+// Precedence-index lookup used by the applied-chain ordering check.
 const PRECEDENCE_INDEX: Record<SelectionSource, number> = Object.fromEntries(
   SELECTION_PRECEDENCE.map((s, i) => [s, i]),
 ) as Record<SelectionSource, number>;
@@ -147,11 +143,10 @@ const PRECEDENCE_INDEX: Record<SelectionSource, number> = Object.fromEntries(
 // flow, invocation) do not, because a Run has at most one contribution
 // from each.
 //
-// The disambiguators ensure provenance is independently auditable: reading
-// an `applied` entry with `source: 'stage'` now names the exact stage. Two
+// Disambiguators make provenance independently auditable: reading an
+// `applied` entry with `source: 'stage'` names the exact stage. Two
 // `stage` entries are permitted when a step legally belongs to multiple
-// stages (the `every_step_has_a_stage` property is deferred to Stage 2 at
-// stage.md, so overlapping stages is permitted at v0.1 and the trace must
+// stages (overlapping stages are allowed in the schema; the trace must
 // be able to represent them).
 const AppliedEntry = z.discriminatedUnion('source', [
   z.object({ source: z.literal('default'), override: SelectionOverride }).strict(),
@@ -170,13 +165,10 @@ const AppliedEntry = z.discriminatedUnion('source', [
 ]);
 export type AppliedEntry = z.infer<typeof AppliedEntry>;
 
-// Ghost provenance rejection. An override is
-// "empty" iff every field is at its schema default: no model, no effort,
-// no depth, skills in `inherit` mode, invocation_options empty. Applied
-// entries whose override is empty fabricate provenance for a non-
-// contributing layer and are rejected. This is the v0.1 schema-level
-// complement to the reducer-level binding check (Stage 2
-// property `selection.prop.resolved_matches_applied_composition`).
+// Ghost-provenance rejection. An override is "empty" iff every field is
+// at its schema default: no model, no effort, no depth, skills in `inherit`
+// mode, invocation_options empty. Applied entries whose override is empty
+// fabricate provenance for a non-contributing layer and are rejected.
 function overrideContributes(o: SelectionOverride): boolean {
   if (o.model !== undefined) return true;
   if (o.effort !== undefined) return true;
@@ -197,16 +189,15 @@ const issueAt = (ctx: z.RefinementCtx, path: (string | number)[], message: strin
   ctx.addIssue({ code: z.ZodIssueCode.custom, path, message });
 };
 
-// SEL-I6 + SEL-I7 + ghost-provenance enforcement on the applied chain. Walk
-// once:
-//   - SEL-I6: each source must have a precedence index > the previous for
-//     category changes. Equal index is tolerated when disambiguator
-//     distinguishes the entries (two stage entries are legal).
-//   - SEL-I7: no identity (source + disambiguator) appears twice. For
-//     singleton sources (default, user-global, project, flow,
+// Single-pass enforcement on the applied chain:
+//   - Precedence-order: each source must have a precedence index > the
+//     previous for category changes. Equal index is tolerated when the
+//     disambiguator distinguishes the entries (two stage entries are
+//     legal).
+//   - Unique-identity: no identity (source + disambiguator) appears twice.
+//     For singleton sources (default, user-global, project, flow,
 //     invocation), identity is the source alone. For plural sources
-//     (stage, step), identity is `{source, stage_id}` / `{source,
-//     step_id}`.
+//     (stage, step), identity is `{source, stage_id}` / `{source, step_id}`.
 //   - Ghost-provenance: every entry's override must contribute — no entry
 //     that re-asserts the prior chain's resolved value.
 function identityKey(entry: AppliedEntry): string {

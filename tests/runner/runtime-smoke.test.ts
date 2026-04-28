@@ -70,7 +70,7 @@ function change_kind(): ChangeKindDeclaration {
     change_kind: 'ratchet-advance',
     failure_mode: 'runtime-proof smoke needs end-to-end product proof',
     acceptance_evidence:
-      'runner smoke test closes a run with trace_entrys/state/manifest/result reports',
+      'runner smoke test closes a run with trace_entries/state/manifest/result reports',
     alternate_framing:
       'skip the runner smoke entirely — not viable because Close Criterion #5 requires reducer-derived state.json and result.json evidence.',
   };
@@ -111,12 +111,12 @@ describe('runtime-proof runner smoke', () => {
     // Snapshot parses cleanly and advances to status=complete.
     const snap = Snapshot.parse(JSON.parse(readFileSync(join(runFolder, 'state.json'), 'utf8')));
     expect(snap.status).toBe('complete');
-    expect(snap.trace_entries_consumed).toBe(outcome.trace_entrys.length);
+    expect(snap.trace_entries_consumed).toBe(outcome.trace_entries.length);
 
     // RunTrace reconstructed from NDJSON parses cleanly; last trace_entry is
     // run.closed; bootstrap is first.
     const log = readRunTrace(runFolder);
-    expect(log).toHaveLength(outcome.trace_entrys.length);
+    expect(log).toHaveLength(outcome.trace_entries.length);
     const first = log[0];
     const last = log[log.length - 1];
     if (first === undefined || first.kind !== 'run.bootstrapped') {
@@ -162,7 +162,7 @@ describe('runtime-proof runner smoke', () => {
       relayer: stubRelayer(),
     });
 
-    const kinds = new Set(outcome.trace_entrys.map((e) => e.kind));
+    const kinds = new Set(outcome.trace_entries.map((e) => e.kind));
     // Closure criterion: a broader trace_entry-kind subset is exercised. The
     // relay trail is the five-trace_entry transcript; all five kinds must
     // appear.
@@ -180,7 +180,7 @@ describe('runtime-proof runner smoke', () => {
     expect(kinds.size).toBeGreaterThanOrEqual(11);
 
     // The relay.started trace_entry carries the dry-run claude-code connector.
-    const relayStarted = outcome.trace_entrys.find((e) => e.kind === 'relay.started');
+    const relayStarted = outcome.trace_entries.find((e) => e.kind === 'relay.started');
     if (!relayStarted || relayStarted.kind !== 'relay.started') {
       throw new Error('expected relay.started trace_entry');
     }
@@ -198,9 +198,9 @@ describe('runtime-proof runner smoke', () => {
     expect(relayStarted.resolved_selection).toEqual({ skills: [], invocation_options: {} });
 
     // run.closed is single and last.
-    const closedTraceEntrys = outcome.trace_entrys.filter((e) => e.kind === 'run.closed');
-    expect(closedTraceEntrys).toHaveLength(1);
-    expect(outcome.trace_entrys[outcome.trace_entrys.length - 1]?.kind).toBe('run.closed');
+    const closedTraceEntries = outcome.trace_entries.filter((e) => e.kind === 'run.closed');
+    expect(closedTraceEntries).toHaveLength(1);
+    expect(outcome.trace_entries[outcome.trace_entries.length - 1]?.kind).toBe('run.closed');
   });
 
   it('produces DIFFERING result.json reports from two runs with different goals (Close Criterion #4)', async () => {
@@ -243,15 +243,13 @@ describe('runtime-proof runner smoke', () => {
   it.skipIf(process.env.CLI_SMOKE !== '1')(
     'CLI entrypoint loads the fixture and closes a run end-to-end from a clean run-folder (CLI_SMOKE=1)',
     async () => {
-      // ADR-0001 Addendum B Close Criterion "CLI loading of
-      // generated/flows/runtime-proof/circuit.json is tested."
-      //
       // The CLI's exported `main(argv)` function is the same entrypoint
       // the launcher invokes, so importing it directly exercises every
       // code path the subprocess version would (argv parsing, fixture
-      // load, schema parse, runCompiledFlow composition, JSON serialization
-      // to stdout) without depending on the IPC pipe directory. The
-      // launcher binding is separately pinned by the package.json
+      // load, schema parse, runCompiledFlow composition, JSON
+      // serialization to stdout) without depending on the IPC pipe
+      // directory. The launcher binding is separately pinned by the
+      // package.json
       // contract test below so the binary path remains covered.
       //
       // The launcher binding compiles JS — `dist/cli/circuit.js`. The

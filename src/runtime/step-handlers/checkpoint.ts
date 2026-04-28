@@ -214,7 +214,7 @@ export function runCheckpointStep(
     if (resolution.kind === 'waiting') {
       // Snapshot is derived for the waiting result; coordinator owns the
       // CheckpointWaitingResult assembly. Re-deriving here so the
-      // snapshot file on disk reflects the most recent trace_entrys.
+      // snapshot file on disk reflects the most recent trace_entries.
       writeDerivedSnapshot(runFolder);
       return {
         kind: 'waiting_checkpoint',

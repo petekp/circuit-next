@@ -1,8 +1,4 @@
-// CompiledFlow graph closure schema — WF-I1..I11 from
-// docs/contracts/flow.md v0.1.
-//
-// Split from the original `schema-parity.test.ts` mega-file as part
-// of FU-T09.
+// CompiledFlow graph closure schema — see docs/contracts/flow.md.
 
 import { describe, expect, it } from 'vitest';
 import { CompiledFlow } from '../../src/index.js';

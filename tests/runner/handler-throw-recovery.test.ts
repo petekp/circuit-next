@@ -54,7 +54,7 @@ function change_kind(): ChangeKindDeclaration {
     failure_mode:
       'pre-fix, an uncaught handler throw left the run-folder half-bootstrapped and blocked retries',
     acceptance_evidence:
-      'runCompiledFlow resolves with outcome=aborted, step.aborted + run.closed trace_entrys, and a parseable result.json',
+      'runCompiledFlow resolves with outcome=aborted, step.aborted + run.closed trace_entries, and a parseable result.json',
     alternate_framing:
       'allow handler exceptions to propagate raw — rejected; corrupts the run-folder',
   };

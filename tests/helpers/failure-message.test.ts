@@ -1,15 +1,15 @@
 // Self-tests for the failure-message helper module. Pins:
 //   - the formatter prefixes the rule and concatenates detail with em dash
-//   - schema helpers pass on the correct outcome and fail with messages that
-//     contain the rule string
-//   - step-handler helpers narrow the result type on success and throw with
-//     a rule-tagged message on the wrong kind
-//   - the optional reason pattern matcher on expectStepAborted fires when
-//     the reason does not match
+//   - schema helpers pass on the correct outcome and fail with messages
+//     that contain the rule string
+//   - step-handler helpers narrow the result type on success and throw
+//     with a rule-tagged message on the wrong kind
+//   - the optional reason pattern matcher on expectStepAborted fires
+//     when the reason does not match
 //
 // Each negative case asserts the failure message contains the rule
-// substring — the whole point of FU-T07 is that the rule shows up in the
-// failure output.
+// substring — the whole point of these helpers is that the rule shows
+// up in the failure output.
 
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';

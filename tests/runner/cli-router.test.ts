@@ -69,7 +69,7 @@ function relayerWithBody(body: string): RelayFn {
   };
 }
 
-function trace_entryLog(runFolder: string): Array<Record<string, unknown>> {
+function traceEntryLog(runFolder: string): Array<Record<string, unknown>> {
   return readFileSync(join(runFolder, 'trace.ndjson'), 'utf8')
     .trim()
     .split('\n')
@@ -138,7 +138,7 @@ afterEach(() => {
   rmSync(runFolderBase, { recursive: true, force: true });
 });
 
-describe('P2.8 CLI router', () => {
+describe('CLI router', () => {
   it('omitted flow positional routes review-like goals through the classifier', async () => {
     const output = await runMainJson(
       [
@@ -300,9 +300,9 @@ describe('P2.8 CLI router', () => {
       '{"verdict":"accept"}',
     );
 
-    const trace_entrys = trace_entryLog(runFolder);
-    const bootstrap = trace_entrys.find((trace_entry) => trace_entry.kind === 'run.bootstrapped');
-    const relayStarted = trace_entrys.find(
+    const trace_entries = traceEntryLog(runFolder);
+    const bootstrap = trace_entries.find((trace_entry) => trace_entry.kind === 'run.bootstrapped');
+    const relayStarted = trace_entries.find(
       (trace_entry) => trace_entry.kind === 'relay.started' && trace_entry.step_id === 'act-step',
     );
     expect(output.flow_id).toBe('build');
@@ -328,9 +328,9 @@ describe('P2.8 CLI router', () => {
       '{"verdict":"accept"}',
     );
 
-    const trace_entrys = trace_entryLog(runFolder);
-    const bootstrap = trace_entrys.find((trace_entry) => trace_entry.kind === 'run.bootstrapped');
-    const relayStarted = trace_entrys.find(
+    const trace_entries = traceEntryLog(runFolder);
+    const bootstrap = trace_entries.find((trace_entry) => trace_entry.kind === 'run.bootstrapped');
+    const relayStarted = trace_entries.find(
       (trace_entry) => trace_entry.kind === 'relay.started' && trace_entry.step_id === 'act-step',
     );
     expect(output.flow_id).toBe('build');
@@ -356,13 +356,13 @@ describe('P2.8 CLI router', () => {
       '{"verdict":"accept"}',
     );
 
-    const trace_entrys = trace_entryLog(runFolder);
-    const bootstrap = trace_entrys.find((trace_entry) => trace_entry.kind === 'run.bootstrapped');
-    const checkpoint = trace_entrys.find(
+    const trace_entries = traceEntryLog(runFolder);
+    const bootstrap = trace_entries.find((trace_entry) => trace_entry.kind === 'run.bootstrapped');
+    const checkpoint = trace_entries.find(
       (trace_entry) =>
         trace_entry.kind === 'checkpoint.resolved' && trace_entry.step_id === 'frame-step',
     );
-    const relayStarted = trace_entrys.find(
+    const relayStarted = trace_entries.find(
       (trace_entry) => trace_entry.kind === 'relay.started' && trace_entry.step_id === 'act-step',
     );
     expect(output.flow_id).toBe('build');
@@ -416,7 +416,7 @@ describe('P2.8 CLI router', () => {
         },
       ),
     ).rejects.toThrow(/entry_mode named 'missing'/);
-    expect(() => trace_entryLog(runFolder)).toThrow();
+    expect(() => traceEntryLog(runFolder)).toThrow();
   });
 
   it('prints a versioned checkpoint_waiting envelope without result_path', async () => {

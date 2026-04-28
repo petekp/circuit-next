@@ -289,7 +289,7 @@ export function parseClaudeCodeStdout(
   if (lines.length === 0) {
     throw new Error('stream-json stdout is empty');
   }
-  const trace_entrys: Array<Record<string, unknown>> = [];
+  const trace_entries: Array<Record<string, unknown>> = [];
   for (const [idx, line] of lines.entries()) {
     let parsed: unknown;
     try {
@@ -302,17 +302,17 @@ export function parseClaudeCodeStdout(
     if (typeof parsed !== 'object' || parsed === null) {
       throw new Error(`stream-json line ${idx + 1} is not a JSON object`);
     }
-    trace_entrys.push(parsed as Record<string, unknown>);
+    trace_entries.push(parsed as Record<string, unknown>);
   }
 
   // Filter strictly for `subtype === 'init'`.
-  const initTraceEntry = trace_entrys.find((e) => e.type === 'system' && e.subtype === 'init');
+  const initTraceEntry = trace_entries.find((e) => e.type === 'system' && e.subtype === 'init');
   // Take the LAST result trace_entry (terminal), not the first. `stream-json`
   // emits a single terminal result trace_entry at v0, but depending on future
-  // CLI changes multiple result trace_entrys could appear; the terminal one is
+  // CLI changes multiple result trace_entries could appear; the terminal one is
   // authoritative.
-  const resultTraceEntrys = trace_entrys.filter((e) => e.type === 'result');
-  const resultTraceEntry = resultTraceEntrys[resultTraceEntrys.length - 1];
+  const resultTraceEntries = trace_entries.filter((e) => e.type === 'result');
+  const resultTraceEntry = resultTraceEntries[resultTraceEntries.length - 1];
 
   if (initTraceEntry === undefined) {
     throw new Error('system/init trace_entry missing from subprocess stdout');

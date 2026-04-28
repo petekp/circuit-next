@@ -172,7 +172,7 @@ describe('Lite Fix runtime wiring', () => {
 
     if (outcome.result.outcome !== 'complete') {
       throw new Error(
-        `lite Fix run did not complete: outcome=${outcome.result.outcome} reason=${outcome.result.reason ?? '<none>'} trace_entrys=${outcome.trace_entrys.map((e) => e.kind).join(',')}`,
+        `lite Fix run did not complete: outcome=${outcome.result.outcome} reason=${outcome.result.reason ?? '<none>'} trace_entries=${outcome.trace_entries.map((e) => e.kind).join(',')}`,
       );
     }
     expect(outcome.result.outcome).toBe('complete');

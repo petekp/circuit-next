@@ -1,17 +1,14 @@
 // Direct unit tests for the fanout step handler.
 //
-// `tests/runner/fanout-runtime.test.ts` and
-// `tests/runner/fanout-real-recursion.test.ts` exercise the handler
-// transitively through full runCompiledFlow runs. Neither covers the
-// handler-local pre-execution aborts (childCompiledFlowResolver / projectRoot
-// undefined, branch resolution throws, zero-branches), the per-branch
-// failure paths (worktree provisioning throw, resolver throw, child
-// runner throw), or each join-policy decision lattice in isolation.
-// This file invokes `runFanoutStep` directly against a minimal
-// in-memory `StepHandlerContext` so each handler-local branch is
-// pinned with named-failure attribution.
-//
-// FU-T11 priority target #6 (per HANDOFF.md).
+// `fanout-runtime.test.ts` and `fanout-real-recursion.test.ts` exercise
+// the handler transitively through full runCompiledFlow runs. Neither
+// covers the handler-local pre-execution aborts (childCompiledFlowResolver
+// / projectRoot undefined, branch resolution throws, zero-branches),
+// the per-branch failure paths (worktree provisioning throw, resolver
+// throw, child runner throw), or each join-policy decision lattice in
+// isolation. This file invokes `runFanoutStep` directly against a
+// minimal in-memory `StepHandlerContext` so each handler-local branch
+// is pinned with named-failure attribution.
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -233,7 +230,7 @@ function makeStubChildRunner(plan: Record<string, BranchPlanEntry>): CompiledFlo
           manifest_hash: 'stub-manifest-hash',
           updated_at: new Date(0).toISOString(),
         }),
-        trace_entrys: [],
+        trace_entries: [],
         relayResults: [],
       };
     }
@@ -268,7 +265,7 @@ function makeStubChildRunner(plan: Record<string, BranchPlanEntry>): CompiledFlo
         manifest_hash: 'stub-manifest-hash',
         updated_at: new Date(0).toISOString(),
       }),
-      trace_entrys: [],
+      trace_entries: [],
       relayResults: [],
     };
   };
@@ -325,7 +322,7 @@ interface BuildHarnessOpts {
 }
 
 interface Harness {
-  readonly trace_entrys: TraceEntry[];
+  readonly trace_entries: TraceEntry[];
   readonly state: RunState;
   readonly worktree: WorktreeStub;
   readonly ctx: StepHandlerContext & {
@@ -350,8 +347,8 @@ function buildHarness(
     mkdirSync(dirname(abs), { recursive: true });
     writeFileSync(abs, JSON.stringify(opts.seedSourceReport.body));
   }
-  const trace_entrys: TraceEntry[] = [];
-  const state: RunState = { trace_entrys, sequence: 0, relayResults: [] };
+  const trace_entries: TraceEntry[] = [];
+  const state: RunState = { trace_entries, sequence: 0, relayResults: [] };
   const now = deterministicNow(Date.UTC(2026, 3, 27, 0, 0, 0));
   const recordedAt = (): string => now().toISOString();
   let resolver: ChildCompiledFlowResolver | undefined;
@@ -396,7 +393,7 @@ function buildHarness(
     recordedAt,
     state,
     push: (ev: TraceEntry) => {
-      trace_entrys.push({ ...ev, sequence: state.sequence });
+      trace_entries.push({ ...ev, sequence: state.sequence });
       state.sequence += 1;
     },
     step,
@@ -406,7 +403,7 @@ function buildHarness(
     ...(resolver === undefined ? {} : { childCompiledFlowResolver: resolver }),
     worktreeRunner: worktree.runner,
   };
-  return { trace_entrys, state, worktree, ctx };
+  return { trace_entries, state, worktree, ctx };
 }
 
 let runFolderBase: string;
@@ -442,12 +439,12 @@ describe('runFanoutStep direct — pre-execution aborts', () => {
     expect(result.reason).toMatch(/childCompiledFlowResolver is required/);
     // No fanout.started should fire — the abort happens before any
     // branch is touched.
-    expect(harness.trace_entrys.find((e) => e.kind === 'fanout.started')).toBeUndefined();
-    const check = harness.trace_entrys.find((e) => e.kind === 'check.evaluated');
+    expect(harness.trace_entries.find((e) => e.kind === 'fanout.started')).toBeUndefined();
+    const check = harness.trace_entries.find((e) => e.kind === 'check.evaluated');
     if (check?.kind !== 'check.evaluated') throw new Error('expected check.evaluated');
     expect(check.outcome).toBe('fail');
     expect(check.check_kind).toBe('fanout_aggregate');
-    expect(harness.trace_entrys.some((e) => e.kind === 'step.aborted')).toBe(true);
+    expect(harness.trace_entries.some((e) => e.kind === 'step.aborted')).toBe(true);
   });
 
   it('aborts when projectRoot is undefined', async () => {
@@ -464,7 +461,7 @@ describe('runFanoutStep direct — pre-execution aborts', () => {
 
     if (result.kind !== 'aborted') throw new Error('expected aborted');
     expect(result.reason).toMatch(/projectRoot is required to anchor per-branch worktrees/);
-    expect(harness.trace_entrys.find((e) => e.kind === 'fanout.started')).toBeUndefined();
+    expect(harness.trace_entries.find((e) => e.kind === 'fanout.started')).toBeUndefined();
   });
 
   it('aborts with branch-resolution-failed reason when dynamic source report has wrong shape', async () => {
@@ -495,7 +492,7 @@ describe('runFanoutStep direct — pre-execution aborts', () => {
     if (result.kind !== 'aborted') throw new Error('expected aborted');
     expect(result.reason).toMatch(/branch resolution failed/);
     expect(result.reason).toMatch(/did not resolve to an array/);
-    expect(harness.trace_entrys.find((e) => e.kind === 'fanout.started')).toBeUndefined();
+    expect(harness.trace_entries.find((e) => e.kind === 'fanout.started')).toBeUndefined();
   });
 
   it('aborts with zero-branches reason when dynamic source resolves to an empty array', async () => {
@@ -522,7 +519,7 @@ describe('runFanoutStep direct — pre-execution aborts', () => {
 
     if (result.kind !== 'aborted') throw new Error('expected aborted');
     expect(result.reason).toMatch(/branch resolution produced zero branches/);
-    expect(harness.trace_entrys.find((e) => e.kind === 'fanout.started')).toBeUndefined();
+    expect(harness.trace_entries.find((e) => e.kind === 'fanout.started')).toBeUndefined();
   });
 });
 
@@ -544,7 +541,7 @@ describe('runFanoutStep direct — branch-level failure paths', () => {
     expect(result.reason).toMatch(/pick-winner: no branch closed 'complete' with an admitted/);
     // The branch's branch_completed trace_entry records child_outcome='aborted'
     // and verdict=NO_VERDICT_SENTINEL.
-    const completed = harness.trace_entrys.find((e) => e.kind === 'fanout.branch_completed');
+    const completed = harness.trace_entries.find((e) => e.kind === 'fanout.branch_completed');
     if (completed?.kind !== 'fanout.branch_completed') {
       throw new Error('expected fanout.branch_completed');
     }
@@ -566,7 +563,7 @@ describe('runFanoutStep direct — branch-level failure paths', () => {
 
     if (result.kind !== 'aborted') throw new Error('expected aborted');
     expect(result.reason).toMatch(/pick-winner: no branch closed 'complete' with an admitted/);
-    const completed = harness.trace_entrys.find((e) => e.kind === 'fanout.branch_completed');
+    const completed = harness.trace_entries.find((e) => e.kind === 'fanout.branch_completed');
     if (completed?.kind !== 'fanout.branch_completed') {
       throw new Error('expected fanout.branch_completed');
     }
@@ -592,7 +589,7 @@ describe('runFanoutStep direct — branch-level failure paths', () => {
 
     if (result.kind !== 'aborted') throw new Error('expected aborted');
     expect(result.reason).toMatch(/pick-winner: no branch closed 'complete' with an admitted/);
-    const completed = harness.trace_entrys.find((e) => e.kind === 'fanout.branch_completed');
+    const completed = harness.trace_entries.find((e) => e.kind === 'fanout.branch_completed');
     if (completed?.kind !== 'fanout.branch_completed') {
       throw new Error('expected fanout.branch_completed');
     }
@@ -612,7 +609,7 @@ describe('runFanoutStep direct — branch-level failure paths', () => {
     const result = await runFanoutStep(harness.ctx);
 
     if (result.kind !== 'aborted') throw new Error('expected aborted');
-    const completed = harness.trace_entrys.find((e) => e.kind === 'fanout.branch_completed');
+    const completed = harness.trace_entries.find((e) => e.kind === 'fanout.branch_completed');
     if (completed?.kind !== 'fanout.branch_completed') {
       throw new Error('expected fanout.branch_completed');
     }
@@ -642,7 +639,7 @@ describe('runFanoutStep direct — join policies', () => {
     const result = await runFanoutStep(harness.ctx);
 
     expect(result).toEqual({ kind: 'advance' });
-    const joined = harness.trace_entrys.find((e) => e.kind === 'fanout.joined');
+    const joined = harness.trace_entries.find((e) => e.kind === 'fanout.joined');
     if (joined?.kind !== 'fanout.joined') throw new Error('expected fanout.joined');
     // 'gold' precedes 'silver' in admit order, so branch-b wins despite
     // alphabetical order putting branch-a first.
@@ -753,7 +750,7 @@ describe('runFanoutStep direct — join policies', () => {
     const result = await runFanoutStep(harness.ctx);
 
     expect(result).toEqual({ kind: 'advance' });
-    const joined = harness.trace_entrys.find((e) => e.kind === 'fanout.joined');
+    const joined = harness.trace_entries.find((e) => e.kind === 'fanout.joined');
     if (joined?.kind !== 'fanout.joined') throw new Error('expected fanout.joined');
     expect(joined.policy).toBe('aggregate-only');
   });
@@ -778,7 +775,7 @@ describe('runFanoutStep direct — trace_entry sequence invariants', () => {
 
     await runFanoutStep(harness.ctx);
 
-    const kinds = harness.trace_entrys.map((e) => e.kind);
+    const kinds = harness.trace_entries.map((e) => e.kind);
     expect(kinds).toEqual([
       'fanout.started',
       'fanout.branch_started',
@@ -807,7 +804,7 @@ describe('runFanoutStep direct — trace_entry sequence invariants', () => {
 
     await runFanoutStep(harness.ctx);
 
-    const kinds = harness.trace_entrys.map((e) => e.kind);
+    const kinds = harness.trace_entries.map((e) => e.kind);
     expect(kinds).toEqual([
       'fanout.started',
       'fanout.branch_started',

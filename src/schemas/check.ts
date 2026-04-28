@@ -39,7 +39,7 @@ export type RelayResultSource = z.infer<typeof RelayResultSource>;
 
 // Sub-run and relay both emit a result.json with a `.verdict` field, so
 // the verdict-admission logic is identical. The source kind is distinct so
-// audit trace_entrys record which execution shape produced the result; both pin
+// audit trace_entries record which execution shape produced the result; both pin
 // `ref: 'result'` because the writes slot name is the same.
 export const SubRunResultSource = z
   .object({

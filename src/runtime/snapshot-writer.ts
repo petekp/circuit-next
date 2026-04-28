@@ -4,11 +4,13 @@ import type { Snapshot } from '../schemas/snapshot.js';
 import { reduce } from './reducer.js';
 import { readRunTrace } from './trace-reader.js';
 
-// Reducer-derived snapshot writer. state.json is NEVER authored
-// independently: it is always the output of `reduce(readRunTrace(runFolder))`.
-// This writer is the only path by which state.json comes into being.
-// A separate path (e.g. a step executor writing state.json directly)
-// would break RUN-I7 (trace_entries_consumed === log.length) on the next read.
+// Reducer-derived snapshot writer. state.json is never authored
+// independently: it is always the output of
+// `reduce(readRunTrace(runFolder))`. This writer is the only path by
+// which state.json comes into being. A separate writer (e.g. a step
+// executor producing state.json directly) would let
+// `trace_entries_consumed` drift from `log.length` and fail validation
+// on the next read.
 
 export function snapshotPath(runFolder: string): string {
   return join(runFolder, 'state.json');

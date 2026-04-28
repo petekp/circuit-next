@@ -7,17 +7,17 @@ import {
 } from '../schemas/snapshot.js';
 import type { RunClosedOutcome, TraceEntry } from '../schemas/trace-entry.js';
 
-// Pure reducer: (RunTrace) -> Snapshot. Authored against production
-// src/schemas/snapshot.ts (run.snapshot == state.json).
+// Pure reducer: (RunTrace) -> Snapshot. Authored against the Snapshot
+// schema in src/schemas/snapshot.ts (i.e. state.json).
 //
-// Design: `reduce = fold(applyTraceEntry, seed)`.
-// Seed is produced by the `run.bootstrapped` trace_entry (the first trace_entry in
-// any well-formed RunTrace per RUN-I1). Subsequent trace_entrys mutate a
-// structural clone of the prior snapshot; we never mutate in place.
+// `reduce = fold(applyTraceEntry, seed)`. Seed comes from the
+// `run.bootstrapped` trace_entry (always the first entry in a well-formed
+// RunTrace). Subsequent entries mutate a structural clone of the prior
+// snapshot; we never mutate in place.
 //
-// `trace_entries_consumed` is bound to log length at every step, so a prefix
-// snapshot equals `reduce(log.slice(0, k))` exactly. This is the
-// property runtime-proof's delete-an-trace_entry mismatch test depends on.
+// `trace_entries_consumed` is bound to log length at every step, so a
+// prefix snapshot equals `reduce(log.slice(0, k))` exactly — the property
+// the delete-an-entry mismatch test depends on.
 
 const OUTCOME_TO_STATUS: Record<RunClosedOutcome, Exclude<SnapshotStatus, 'in_progress'>> = {
   complete: 'complete',
@@ -58,7 +58,7 @@ function mutateStep(
 }
 
 function applyTraceEntry(prev: Snapshot, trace_entry: TraceEntry): Snapshot {
-  // Non-bootstrap trace_entrys assume prev exists. Bootstrap is handled outside
+  // Non-bootstrap entries assume prev exists. Bootstrap is handled outside
   // this function because it seeds from nothing.
   const next: Snapshot = {
     ...prev,
@@ -69,9 +69,10 @@ function applyTraceEntry(prev: Snapshot, trace_entry: TraceEntry): Snapshot {
 
   switch (trace_entry.kind) {
     case 'run.bootstrapped':
-      // A second bootstrap violates RUN-I4 and is rejected at RunTrace
-      // parse time. If we reach here with a second bootstrap, the caller
-      // passed an unvalidated log; we surface the violation loudly.
+      // Duplicate bootstrap is rejected at RunTrace parse time. If we
+      // reach here, the caller passed an unvalidated log; surface the
+      // violation loudly rather than silently building an inconsistent
+      // snapshot.
       throw new Error(
         'reducer: duplicate run.bootstrapped trace_entry; RunTrace parsing should have rejected this',
       );
@@ -136,10 +137,9 @@ function applyTraceEntry(prev: Snapshot, trace_entry: TraceEntry): Snapshot {
     case 'relay.failed':
     case 'relay.receipt':
     case 'relay.result':
-      // Durable relay transcript trace_entrys. Carry request/receipt/result
-      // identifiers for the round-trip close criterion; no snapshot-shape
-      // change — the relay outcome still flows into the step via
-      // step.completed.
+      // Durable relay transcript entries. Carry request/receipt/result
+      // identifiers for round-trip auditability; no snapshot-shape change
+      // — the relay outcome still flows into the step via step.completed.
       return next;
     case 'relay.completed':
       // Relay outcomes flow into the step via step.completed; no
@@ -151,11 +151,11 @@ function applyTraceEntry(prev: Snapshot, trace_entry: TraceEntry): Snapshot {
     case 'fanout.branch_started':
     case 'fanout.branch_completed':
     case 'fanout.joined':
-      // Sub-run / fanout linkage trace_entrys are audit-only at this slice;
-      // the parent step's status flows through step.entered / step.completed
-      // / step.aborted just like other orchestrator-executed steps. The
+      // Sub-run / fanout linkage entries are audit-only here. The parent
+      // step's status flows through step.entered / step.completed /
+      // step.aborted just like other orchestrator-executed steps. The
       // child run's own snapshot lives in the child run-folder and is not
-      // merged into the parent (RUN-I3 scoping).
+      // merged into the parent — every run is scoped to its own RunId.
       return next;
     case 'step.completed': {
       const stepId = trace_entry.step_id as unknown as string;
@@ -186,7 +186,7 @@ function applyTraceEntry(prev: Snapshot, trace_entry: TraceEntry): Snapshot {
   }
 }
 
-function seedFromBootstrap(trace_entry: TraceEntry, totalTraceEntrys: number): Snapshot {
+function seedFromBootstrap(trace_entry: TraceEntry, totalTraceEntries: number): Snapshot {
   if (trace_entry.kind !== 'run.bootstrapped') {
     throw new Error(
       `reducer: first trace_entry must be run.bootstrapped, got ${trace_entry.kind}; RunTrace parsing should have rejected this`,
@@ -207,9 +207,9 @@ function seedFromBootstrap(trace_entry: TraceEntry, totalTraceEntrys: number): S
       ? {}
       : { invocation_id: trace_entry.invocation_id }),
   };
-  // Ensure trace_entries_consumed starts at 1 for the bootstrap trace_entry itself;
-  // further trace_entrys advance it one-by-one.
-  void totalTraceEntrys;
+  // trace_entries_consumed starts at 1 for the bootstrap entry itself;
+  // further entries advance it one-by-one.
+  void totalTraceEntries;
   return Snapshot.parse(seed);
 }
 
@@ -226,6 +226,6 @@ export function reduce(log: RunTrace): Snapshot {
     state = applyTraceEntry(state, ev);
   }
   // Final validation: the snapshot must parse cleanly, which includes
-  // trace_entries_consumed matching log length (RUN-I7 on the projection side).
+  // trace_entries_consumed matching log length.
   return Snapshot.parse(state);
 }

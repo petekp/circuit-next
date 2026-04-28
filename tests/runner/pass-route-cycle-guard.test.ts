@@ -87,7 +87,7 @@ describe('WF-I11 runtime-safety-floor pass-route cycle guard', () => {
     expect(outcome.result.reason).toContain('pass-route cycle detected');
     expect(outcome.result.reason).toContain(firstStep.id);
 
-    const stepKinds = outcome.trace_entrys
+    const stepKinds = outcome.trace_entries
       .filter((trace_entry) => 'step_id' in trace_entry && trace_entry.step_id === firstStep.id)
       .map((trace_entry) => trace_entry.kind);
     expect(stepKinds).toEqual([
@@ -97,21 +97,21 @@ describe('WF-I11 runtime-safety-floor pass-route cycle guard', () => {
       'step.aborted',
     ]);
     expect(
-      outcome.trace_entrys.find(
+      outcome.trace_entries.find(
         (trace_entry) =>
           trace_entry.kind === 'step.completed' && trace_entry.step_id === firstStep.id,
       ),
     ).toBeUndefined();
     expect(
-      outcome.trace_entrys.find((trace_entry) => trace_entry.kind === 'relay.started'),
+      outcome.trace_entries.find((trace_entry) => trace_entry.kind === 'relay.started'),
     ).toBeUndefined();
 
-    const aborted = outcome.trace_entrys.find(
+    const aborted = outcome.trace_entries.find(
       (trace_entry) => trace_entry.kind === 'step.aborted' && trace_entry.step_id === firstStep.id,
     );
     if (aborted?.kind !== 'step.aborted') throw new Error('expected step.aborted');
 
-    const closed = outcome.trace_entrys[outcome.trace_entrys.length - 1];
+    const closed = outcome.trace_entries[outcome.trace_entries.length - 1];
     if (closed?.kind !== 'run.closed') throw new Error('expected run.closed last');
     expect(closed.outcome).toBe('aborted');
     expect(closed.reason).toBe(aborted.reason);
@@ -129,7 +129,7 @@ describe('WF-I11 runtime-safety-floor pass-route cycle guard', () => {
     expect(projectedStep?.status).toBe('aborted');
     expect(projectedStep?.last_route_taken).toBeUndefined();
     const log = readRunTrace(runFolder);
-    expect(log).toHaveLength(outcome.trace_entrys.length);
+    expect(log).toHaveLength(outcome.trace_entries.length);
     expect(RunProjection.safeParse({ log, snapshot }).success).toBe(true);
 
     const result = RunResult.parse(

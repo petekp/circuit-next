@@ -289,7 +289,7 @@ describe('P2-MODEL-EFFORT — full selection precedence resolver', () => {
       selectionConfigLayers: layeredConfigs(),
     });
 
-    const started = outcome.trace_entrys.find(
+    const started = outcome.trace_entries.find(
       (trace_entry) =>
         trace_entry.kind === 'relay.started' && trace_entry.step_id === 'synthesize-step',
     );

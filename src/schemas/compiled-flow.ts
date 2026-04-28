@@ -39,10 +39,10 @@ const CompiledFlowBody = z
     stages: z.array(Stage).min(1),
     stage_path_policy: SpinePolicy,
     steps: z.array(Step).min(1),
-    // Legacy skill channels removed. Seed skill set
-    // is now expressed through `default_selection.skills = {mode: 'replace',
-    // skills: [...]}` so every skill contribution flows through the typed
-    // `SkillOverride` operations (SEL-I3). Closes the untyped-bypass path.
+    // Seed skill set is expressed through
+    // `default_selection.skills = {mode: 'replace', skills: [...]}` so every
+    // skill contribution flows through the typed SkillOverride operations,
+    // closing the untyped-bypass path.
     default_selection: SelectionOverride.optional(),
   })
   .strict();
@@ -112,19 +112,14 @@ export const CompiledFlow = CompiledFlowBody.superRefine((wf, ctx) => {
         );
       }
     }
-    // WF-I10. Every step's `routes` must contain a `pass` key. The
-    // CheckEvaluatedTraceEntry `outcome`
-    // field at `src/schemas/trace-entry.ts` is `z.enum(['pass', 'fail'])` — uniform
-    // across all three check kinds — so the runtime's route pick on a
-    // successful check outcome looks up `routes['pass']`. A fixture whose
-    // routes use author-friendly aliases like `{ success: '@complete' }`
-    // would pass WF-I8 (terminal reachable via the `success` edge) and
-    // still stall at runtime because `routes['pass']` is undefined on the
-    // actual check outcome. This invariant is the parse-time version of
-    // that binding; `fail`-route presence is intentionally deferred to
-    // v0.3 / Stage 2 (failure-path handling is not part of the narrow
-    // runtime-proof proof and the runtime abort-vs-stall behaviour on a
-    // missing `fail` route is not yet specified).
+    // Every step's `routes` must contain a `pass` key. CheckEvaluatedTraceEntry's
+    // `outcome` field is `z.enum(['pass', 'fail'])` — uniform across all three
+    // check kinds — so the runtime's route pick on a successful check outcome
+    // looks up `routes['pass']`. A fixture whose routes use author-friendly
+    // aliases like `{ success: '@complete' }` would pass terminal-reachability
+    // checks via the `success` edge but stall at runtime because `routes['pass']`
+    // is undefined on the actual check outcome. `fail`-route presence is not
+    // checked here — failure-path handling is not yet specified.
     if (!Object.hasOwn(step.routes, 'pass')) {
       issueAt(
         ctx,
@@ -134,9 +129,9 @@ export const CompiledFlow = CompiledFlowBody.superRefine((wf, ctx) => {
     }
   }
 
-  // stage-I5: canonical uniqueness. Two stages sharing the same defined
-  // canonical label create structural ambiguity about which is "the" canonical
-  // stage; rejecting at parse time avoids a silent-convention bug later.
+  // Canonical uniqueness. Two stages sharing the same canonical label
+  // create structural ambiguity about which is "the" canonical stage;
+  // rejecting at parse time avoids a silent-convention bug later.
   const canonicalSeenAt = new Map<CanonicalStage, number>();
   for (let i = 0; i < wf.stages.length; i++) {
     const stage = wf.stages[i];
@@ -154,7 +149,7 @@ export const CompiledFlow = CompiledFlowBody.superRefine((wf, ctx) => {
     }
   }
 
-  // stage-I4: stage path policy enforcement (declaration layer). Every non-omitted
+  // Stage path policy enforcement (declaration layer). Every non-omitted
   // canonical stage must appear as a Stage.canonical somewhere in wf.stages.
   const declaredCanonicals = new Set<CanonicalStage>(canonicalSeenAt.keys());
   const omits = new Set<CanonicalStage>();
@@ -200,19 +195,15 @@ export const CompiledFlow = CompiledFlowBody.superRefine((wf, ctx) => {
     }
   }
 
-  // WF-I8 + WF-I9. Graph reachability checks for runtime-proof
-  // structural safety. Both checks require
-  // that earlier closure invariants already hold structurally: step
-  // ids must be unique (otherwise adjacency cannot be keyed), every
-  // route target must be either a terminal label or a known step
-  // (otherwise the reachability traversal would visit nonexistent
-  // nodes), AND every `entry_mode.start_at` must be a known step id
-  // (otherwise WF-I9's BFS would seed from nonexistent nodes, giving
-  // misleading coverage). Each of those preconditions is already
-  // flagged by the WF-I1 / WF-I4 / WF-I2 loops above; when any is
-  // malformed, we skip the reachability pass so a single WF-I2
-  // violation does not cascade into noisy WF-I9 errors (WF-I2's test
-  // must remain uniquely provable).
+  // Graph reachability checks: terminal-reaching (every step can reach a
+  // terminal route) and no-dead-steps (every step is reachable from some
+  // entry mode). Both require earlier structural checks to have held:
+  // unique step ids (so adjacency can be keyed), every route target is
+  // either a terminal label or a known step, and every entry_mode.start_at
+  // is a known step id. Those preconditions are checked by the WF-I1 /
+  // WF-I2 / WF-I4 loops above; when any of them fails, we skip the
+  // reachability pass so a single bad route target does not cascade into
+  // noisy reachability errors.
   const noDuplicateIds = stepIds.size === wf.steps.length;
   const adjacency = new Map<string, string[]>();
   let allRouteTargetsKnown = true;
@@ -236,10 +227,10 @@ export const CompiledFlow = CompiledFlowBody.superRefine((wf, ctx) => {
   }
 
   if (noDuplicateIds && allRouteTargetsKnown && allEntryStartsKnown) {
-    // WF-I8 terminal reachability: iterative fixpoint from steps that
-    // route directly to a terminal. A step reaches a terminal iff some
-    // outgoing route is either a terminal label or a step already
-    // known to reach a terminal.
+    // Terminal reachability via iterative fixpoint from steps that route
+    // directly to a terminal. A step reaches a terminal iff some outgoing
+    // route is either a terminal label or a step already known to reach
+    // one.
     const terminalReaching = new Set<string>();
     for (const [sid, targets] of adjacency) {
       for (const t of targets) {
@@ -275,10 +266,10 @@ export const CompiledFlow = CompiledFlowBody.superRefine((wf, ctx) => {
       }
     }
 
-    // WF-I11 pass-route terminal reachability. WF-I8 remains the broad
-    // "some route can reach a terminal" graph sanity check, but runtime
-    // success flow follows only `routes.pass`. A step whose pass chain cycles
-    // while another edge reaches @complete is still a runtime liveness bug.
+    // Pass-route terminal reachability. The terminal-reachability check
+    // above admits any outgoing route, but runtime success flow follows
+    // only `routes.pass`. A step whose pass chain cycles while another
+    // edge reaches @complete is still a runtime liveness bug.
     const stepsById = new Map(wf.steps.map((step) => [step.id as unknown as string, step]));
     for (let i = 0; i < wf.steps.length; i++) {
       const step = wf.steps[i];
@@ -305,10 +296,10 @@ export const CompiledFlow = CompiledFlowBody.superRefine((wf, ctx) => {
       }
     }
 
-    // WF-I9 no dead steps: BFS from every entry_mode.start_at, union
-    // reachable set. Any step not reached is a silent declaration
-    // error (author intended it to execute, but no route path leads
-    // there from any entry).
+    // No dead steps. BFS from every entry_mode.start_at and union the
+    // reachable set; any step not reached is a silent declaration error
+    // (the author intended it to execute, but no route path leads there
+    // from any entry).
     const reachableFromEntry = new Set<string>();
     const queue: string[] = [];
     for (const mode of wf.entry_modes) {

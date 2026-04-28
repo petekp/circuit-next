@@ -18,9 +18,9 @@ import { readRunTrace } from '../../src/runtime/trace-reader.js';
 // state.sequence and increments — so on-disk sequences are always
 // 0..N-1 contiguous monotonic (RUN-I2). This pins the invariant
 // specifically across the relay path, which previously bypassed
-// push() by mutating state.trace_entrys directly + setting state.sequence
+// push() by mutating state.trace_entries directly + setting state.sequence
 // from the materializer's sequenceAfter. If a future contributor
-// reverts to direct state.trace_entrys.push (or otherwise emits without
+// reverts to direct state.trace_entries.push (or otherwise emits without
 // going through the central push), this test fails.
 
 const FIXTURE_PATH = resolve('generated/flows/runtime-proof/circuit.json');
@@ -70,7 +70,7 @@ afterEach(() => {
 });
 
 describe('push() is the single sequence-assignment authority — fix #3 + #12', () => {
-  it('on-disk trace_entrys have sequence === array index across compose + relay + close', async () => {
+  it('on-disk trace_entries have sequence === array index across compose + relay + close', async () => {
     const { flow, bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'run');
     const outcome = await runCompiledFlow({
@@ -99,13 +99,13 @@ describe('push() is the single sequence-assignment authority — fix #3 + #12', 
       expect(trace_entry.sequence).toBe(index);
     });
 
-    // The runtime-returned trace_entrys array must agree with the on-disk
-    // log — same sequences, same order. If push() ever returned trace_entrys
+    // The runtime-returned trace_entries array must agree with the on-disk
+    // log — same sequences, same order. If push() ever returned trace_entries
     // with a different sequence than what landed on disk (impossible
-    // under the current fix; possible if direct state.trace_entrys.push is
+    // under the current fix; possible if direct state.trace_entries.push is
     // ever revived), this assertion catches it.
-    expect(outcome.trace_entrys).toHaveLength(log.length);
-    outcome.trace_entrys.forEach((trace_entry, index) => {
+    expect(outcome.trace_entries).toHaveLength(log.length);
+    outcome.trace_entries.forEach((trace_entry, index) => {
       expect(trace_entry.sequence).toBe(index);
       expect(trace_entry.sequence).toBe(log[index]?.sequence);
     });
@@ -113,15 +113,15 @@ describe('push() is the single sequence-assignment authority — fix #3 + #12', 
     // The relay transcript must thread through push() in the
     // correct order: started → request → receipt → result → completed,
     // each strictly increasing in sequence. Pre-fix the materializer's
-    // trace_entrys bypassed push() via direct state.trace_entrys.push and the
+    // trace_entries bypassed push() via direct state.trace_entries.push and the
     // sequence advance was a manual state.sequence = sequenceAfter
     // assignment — both fragile. This assertion proves the materialized
     // batch flows through push() now.
-    const relayTraceEntrys = log.filter((e) => e.kind.startsWith('relay.'));
-    expect(relayTraceEntrys.length).toBeGreaterThanOrEqual(5);
-    for (let i = 1; i < relayTraceEntrys.length; i += 1) {
-      const prev = relayTraceEntrys[i - 1];
-      const curr = relayTraceEntrys[i];
+    const relayTraceEntries = log.filter((e) => e.kind.startsWith('relay.'));
+    expect(relayTraceEntries.length).toBeGreaterThanOrEqual(5);
+    for (let i = 1; i < relayTraceEntries.length; i += 1) {
+      const prev = relayTraceEntries[i - 1];
+      const curr = relayTraceEntries[i];
       if (prev === undefined || curr === undefined) throw new Error('unreachable');
       expect(curr.sequence).toBeGreaterThan(prev.sequence);
     }

@@ -17,7 +17,7 @@ import { describe, expect, it } from 'vitest';
 // single-quoted --goal arguments. Tests extract fenced bash blocks and
 // assert the invocation lives INSIDE a block (not merely in prose).
 // Anti-pattern negative fixtures exercise prose-only mentions and
-// P2.8-pointer-only bodies so regressions cannot pass by keyword
+// classifier-pointer-only bodies so regressions cannot pass by keyword
 // overlap. Manifest description consistency tracks the deterministic
 // classifier truth.
 

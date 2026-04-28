@@ -1,8 +1,5 @@
-// Run contract — RUN-I1..I8 from docs/contracts/run.md v0.1, plus the
-// TraceEntry + Snapshot bootstrap-shape parity checks.
-//
-// Split from the original `schema-parity.test.ts` mega-file as part
-// of FU-T09.
+// Run contract — see docs/contracts/run.md. Also covers TraceEntry +
+// Snapshot bootstrap-shape parity checks.
 
 import { describe, expect, it } from 'vitest';
 import {
@@ -150,7 +147,7 @@ describe('RunTrace structural invariants (RUN-I1..I5)', () => {
     expect(bad.success).toBe(false);
   });
 
-  it('RUN-I3: mismatched run_id across trace_entrys is rejected (cross-run smuggle)', () => {
+  it('RUN-I3: mismatched run_id across trace_entries is rejected (cross-run smuggle)', () => {
     const bad = RunTrace.safeParse([bootstrapAt(0, RUN_A), stepEntered(1, RUN_B)]);
     expect(bad.success).toBe(false);
     if (!bad.success) {
@@ -158,7 +155,7 @@ describe('RunTrace structural invariants (RUN-I1..I5)', () => {
     }
   });
 
-  it('RUN-I4: multiple run.bootstrapped trace_entrys rejected', () => {
+  it('RUN-I4: multiple run.bootstrapped trace_entries rejected', () => {
     const bad = RunTrace.safeParse([bootstrapAt(0), bootstrapAt(1)]);
     expect(bad.success).toBe(false);
     if (!bad.success) {
@@ -166,7 +163,7 @@ describe('RunTrace structural invariants (RUN-I1..I5)', () => {
     }
   });
 
-  it('RUN-I5: multiple run.closed trace_entrys rejected', () => {
+  it('RUN-I5: multiple run.closed trace_entries rejected', () => {
     const bad = RunTrace.safeParse([bootstrapAt(0), runClosed(1), runClosed(2)]);
     expect(bad.success).toBe(false);
     if (!bad.success) {

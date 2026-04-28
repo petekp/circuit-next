@@ -255,18 +255,18 @@ describe('fanout real recursion', () => {
     expect(outcome.result.outcome).toBe('complete');
 
     // Fanout audit linkage on the parent's trace.
-    const fanoutStarted = outcome.trace_entrys.find((e) => e.kind === 'fanout.started');
+    const fanoutStarted = outcome.trace_entries.find((e) => e.kind === 'fanout.started');
     if (fanoutStarted?.kind !== 'fanout.started') throw new Error('expected fanout.started');
     expect(fanoutStarted.branch_ids).toEqual(['a', 'b']);
 
-    const branchStarted = outcome.trace_entrys.filter((e) => e.kind === 'fanout.branch_started');
-    const branchCompleted = outcome.trace_entrys.filter(
+    const branchStarted = outcome.trace_entries.filter((e) => e.kind === 'fanout.branch_started');
+    const branchCompleted = outcome.trace_entries.filter(
       (e) => e.kind === 'fanout.branch_completed',
     );
     expect(branchStarted).toHaveLength(2);
     expect(branchCompleted).toHaveLength(2);
 
-    const fanoutJoined = outcome.trace_entrys.find((e) => e.kind === 'fanout.joined');
+    const fanoutJoined = outcome.trace_entries.find((e) => e.kind === 'fanout.joined');
     if (fanoutJoined?.kind !== 'fanout.joined') throw new Error('expected fanout.joined');
     expect(fanoutJoined.policy).toBe('aggregate-only');
     expect(fanoutJoined.branches_completed).toBe(2);
@@ -286,14 +286,14 @@ describe('fanout real recursion', () => {
 
     // Each branch child has its own trace, with every trace_entry
     // carrying that branch's child_run_id and relay lifecycle
-    // trace_entrys firing — proof real recursion ran each branch.
+    // trace_entries firing — proof real recursion ran each branch.
     for (const branchChildRunId of branchChildRunIds) {
       const branchChildRoot = findChildRunFolder(runFolderBase, branchChildRunId);
-      const trace_entrysRaw = readFileSync(join(branchChildRoot, 'trace.ndjson'), 'utf8');
-      const trace_entryLines = trace_entrysRaw.split('\n').filter((l) => l.length > 0);
-      expect(trace_entryLines.length).toBeGreaterThan(0);
+      const trace_entriesRaw = readFileSync(join(branchChildRoot, 'trace.ndjson'), 'utf8');
+      const traceEntryLines = trace_entriesRaw.split('\n').filter((l) => l.length > 0);
+      expect(traceEntryLines.length).toBeGreaterThan(0);
       const kinds = new Set<string>();
-      for (const line of trace_entryLines) {
+      for (const line of traceEntryLines) {
         const parsed = JSON.parse(line) as { run_id: string; kind: string };
         expect(parsed.run_id).toBe(branchChildRunId);
         expect(parsed.run_id).not.toBe(parentRunId as unknown as string);

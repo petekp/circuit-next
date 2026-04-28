@@ -59,7 +59,7 @@ import {
 } from './step-handlers/index.js';
 import { isRunRelativePathError, writeJsonReport } from './step-handlers/shared.js';
 import { readRunTrace } from './trace-reader.js';
-import { appendTraceEntry, trace_entryLogPath } from './trace-writer.js';
+import { appendTraceEntry, traceEntryLogPath } from './trace-writer.js';
 
 // Public API surface from runner.ts. Implementations have moved to
 // dedicated modules during the handler-extraction split; the surface
@@ -89,7 +89,7 @@ interface RunFolderInit {
 
 export function initRunFolder({ runFolder }: RunFolderInit): void {
   mkdirSync(runFolder, { recursive: true });
-  mkdirSync(dirname(trace_entryLogPath(runFolder)), { recursive: true });
+  mkdirSync(dirname(traceEntryLogPath(runFolder)), { recursive: true });
 }
 
 const RUN_ROOT_CLAIM_FILE = '.run-folder.claim';
@@ -171,7 +171,7 @@ interface BootstrapInput {
 
 interface BootstrapResult {
   manifestSnapshotPath: string;
-  trace_entryLogPath: string;
+  traceEntryLogPath: string;
   snapshot: Snapshot;
 }
 
@@ -184,7 +184,7 @@ export function bootstrapRun(input: BootstrapInput): BootstrapResult {
     const snapshot = writeDerivedSnapshot(input.runFolder);
     return {
       manifestSnapshotPath: manifestSnapshotPath(input.runFolder),
-      trace_entryLogPath: trace_entryLogPath(input.runFolder),
+      traceEntryLogPath: traceEntryLogPath(input.runFolder),
       snapshot,
     };
   } finally {
@@ -226,7 +226,13 @@ function tryWriteRegisteredComposeReport(input: ComposeWriterInput): boolean {
     for (const [name, path] of Object.entries(readPaths)) {
       inputs[name] = path === undefined ? undefined : readJsonReport(runFolder, path);
     }
-    const report = composeBuilder.build({ runFolder, flow, step, goal, inputs });
+    const report = composeBuilder.build({
+      runFolder,
+      flow,
+      step,
+      goal,
+      inputs,
+    });
     writeJsonReport(runFolder, step.writes.report.path, report);
     return true;
   }
@@ -277,7 +283,7 @@ interface CompiledFlowExecutionContext {
   readonly selectionConfigLayers?: readonly LayeredConfigValue[];
   readonly projectRoot?: string;
   readonly invocationId?: InvocationId;
-  readonly initialTraceEntrys?: readonly TraceEntry[];
+  readonly initialTraceEntries?: readonly TraceEntry[];
   readonly startStepId?: string;
   readonly resumeCheckpoint?: ResumeCheckpointState;
   readonly childCompiledFlowResolver?: ChildCompiledFlowResolver;
@@ -415,18 +421,18 @@ function findWaitingCheckpoint(input: {
   readonly flow: CompiledFlow;
   readonly selection: string;
 }): {
-  readonly trace_entrys: readonly TraceEntry[];
+  readonly trace_entries: readonly TraceEntry[];
   readonly stepId: string;
   readonly attempt: number;
   readonly bootstrap: Extract<TraceEntry, { kind: 'run.bootstrapped' }>;
   readonly requestContext: CheckpointRequestContext;
 } {
-  const trace_entrys = readRunTrace(input.runFolder);
-  const bootstrap = trace_entrys[0];
+  const trace_entries = readRunTrace(input.runFolder);
+  const bootstrap = trace_entries[0];
   if (bootstrap === undefined || bootstrap.kind !== 'run.bootstrapped') {
     throw new Error('checkpoint resume requires a bootstrapped trace');
   }
-  if (trace_entrys.some((trace_entry) => trace_entry.kind === 'run.closed')) {
+  if (trace_entries.some((trace_entry) => trace_entry.kind === 'run.closed')) {
     throw new Error('checkpoint resume rejected: run is already closed');
   }
   const snapshot = writeDerivedSnapshot(input.runFolder);
@@ -438,7 +444,7 @@ function findWaitingCheckpoint(input: {
   if (step === undefined || step.kind !== 'checkpoint') {
     throw new Error(`checkpoint resume rejected: current step '${stepId}' is not a checkpoint`);
   }
-  const requested = [...trace_entrys]
+  const requested = [...trace_entries]
     .reverse()
     .find(
       (trace_entry): trace_entry is Extract<TraceEntry, { kind: 'checkpoint.requested' }> =>
@@ -450,7 +456,7 @@ function findWaitingCheckpoint(input: {
       `checkpoint resume rejected: checkpoint '${stepId}' has no request trace_entry`,
     );
   }
-  const alreadyResolved = trace_entrys.some(
+  const alreadyResolved = trace_entries.some(
     (trace_entry) =>
       trace_entry.kind === 'checkpoint.resolved' &&
       (trace_entry.step_id as unknown as string) === stepId &&
@@ -479,7 +485,7 @@ function findWaitingCheckpoint(input: {
     requestContext,
   });
   return {
-    trace_entrys,
+    trace_entries,
     stepId,
     attempt: requested.attempt,
     bootstrap,
@@ -490,7 +496,7 @@ function findWaitingCheckpoint(input: {
 // Execution loop. Bootstrap, walk routes from entry.start_at, delegate
 // per-step work to the kind→handler relayer, advance pass route, emit
 // run.closed, write result.json. The loop stays narrow: it owns the
-// route walk and run-level trace_entrys; per-kind logic lives in
+// route walk and run-level trace_entries; per-kind logic lives in
 // src/runtime/step-handlers/.
 async function executeCompiledFlow(
   ctx: CompiledFlowExecutionContext,
@@ -519,9 +525,9 @@ async function executeCompiledFlow(
     manifest_hash: manifestHash,
   };
 
-  const trace_entrys: TraceEntry[] =
-    ctx.initialTraceEntrys === undefined ? [bootstrapTraceEntry] : [...ctx.initialTraceEntrys];
-  if (ctx.initialTraceEntrys === undefined) {
+  const trace_entries: TraceEntry[] =
+    ctx.initialTraceEntries === undefined ? [bootstrapTraceEntry] : [...ctx.initialTraceEntries];
+  if (ctx.initialTraceEntries === undefined) {
     bootstrapRun({
       runFolder,
       manifest: {
@@ -537,7 +543,7 @@ async function executeCompiledFlow(
   // fingerprint binding to cli_version without forcing a relay trace_entry
   // schema bump.
   const relayResults: RelayResultMetadata[] = [];
-  const state: RunState = { trace_entrys, sequence: trace_entrys.length, relayResults };
+  const state: RunState = { trace_entries, sequence: trace_entries.length, relayResults };
   const recordedAt = (): string => now().toISOString();
   // push() is the single sequence-assignment authority: it overwrites
   // the caller-supplied `sequence` field on the trace_entry with the current
@@ -553,7 +559,7 @@ async function executeCompiledFlow(
   // the only path to emit an trace_entry is push().
   const push = (ev: TraceEntry): void => {
     const sequenced: TraceEntry = { ...ev, sequence: state.sequence };
-    trace_entrys.push(sequenced);
+    trace_entries.push(sequenced);
     appendAndDerive(runFolder, sequenced);
     state.sequence += 1;
   };
@@ -563,7 +569,7 @@ async function executeCompiledFlow(
   // step handler reports an aborted outcome.
   const stepsById = new Map(flow.steps.map((s) => [s.id as unknown as string, s] as const));
   const executedStepIds = new Set(
-    trace_entrys
+    trace_entries
       .filter((trace_entry) => trace_entry.kind === 'step.completed')
       .map((trace_entry) => trace_entry.step_id as unknown as string),
   );
@@ -667,7 +673,7 @@ async function executeCompiledFlow(
           goal,
           outcome: 'checkpoint_waiting',
           summary: `checkpoint '${result.checkpoint.stepId}' is waiting for an operator choice.`,
-          trace_entries_observed: trace_entrys.length,
+          trace_entries_observed: trace_entries.length,
           manifest_hash: manifestHash,
           checkpoint: {
             step_id: result.checkpoint.stepId,
@@ -676,7 +682,7 @@ async function executeCompiledFlow(
           },
         },
         snapshot,
-        trace_entrys,
+        trace_entries,
         relayResults,
       };
     }
@@ -746,24 +752,23 @@ async function executeCompiledFlow(
   };
   push(closed);
 
-  const terminalVerdict = deriveTerminalVerdict(trace_entrys, runOutcome);
+  const terminalVerdict = deriveTerminalVerdict(trace_entries, runOutcome);
   const result = writeResult(runFolder, {
     schema_version: 1,
     run_id: runId,
     flow_id: flow.id,
     goal,
     outcome: runOutcome,
-    summary: buildSummary({ flow, goal, trace_entrys }),
+    summary: buildSummary({ flow, goal, trace_entries }),
     closed_at: closedAt,
-    trace_entries_observed: trace_entrys.length,
+    trace_entries_observed: trace_entries.length,
     manifest_hash: manifestHash,
-    // RESULT-I4: mirror the close-trace_entry reason onto the user-visible
-    // result.json so an aborted run explains itself without requiring
-    // the operator to walk the trace.
+    // Mirror the close-entry reason onto the user-visible result.json so
+    // an aborted run explains itself without forcing readers to walk the
+    // trace.
     ...(closeReason === undefined ? {} : { reason: closeReason }),
-    // Sub-run runtime slice (RESULT-I5): expose the run's terminal
-    // admitted verdict so a parent sub-run can admit/reject the child
-    // against its own check.pass.
+    // Expose the run's terminal admitted verdict so a parent sub-run
+    // can admit/reject the child against its own check.pass.
     ...(terminalVerdict === undefined ? {} : { verdict: terminalVerdict }),
   });
 
@@ -775,7 +780,7 @@ async function executeCompiledFlow(
     runFolder,
     result,
     snapshot: finalSnapshot,
-    trace_entrys,
+    trace_entries,
     relayResults,
   };
 }
@@ -833,7 +838,7 @@ export async function resumeCompiledFlowCheckpoint(
     ...(waiting.bootstrap.invocation_id === undefined
       ? {}
       : { invocationId: waiting.bootstrap.invocation_id }),
-    initialTraceEntrys: waiting.trace_entrys,
+    initialTraceEntries: waiting.trace_entries,
     startStepId: waiting.stepId,
     resumeCheckpoint: {
       stepId: waiting.stepId,
@@ -846,17 +851,17 @@ export async function resumeCompiledFlowCheckpoint(
 function buildSummary(input: {
   flow: CompiledFlow;
   goal: string;
-  trace_entrys: TraceEntry[];
+  trace_entries: TraceEntry[];
 }): string {
-  const stepCount = input.trace_entrys.filter((e) => e.kind === 'step.completed').length;
+  const stepCount = input.trace_entries.filter((e) => e.kind === 'step.completed').length;
   return `${input.flow.id} v${input.flow.version} closed ${stepCount} step(s) for goal "${input.goal}".`;
 }
 
-// RESULT-I5: derive the run's terminal admitted verdict for the user-
-// visible result.json. The contract:
+// Derive the run's terminal admitted verdict for the user-visible
+// result.json. Contract:
 //
 // - Returns the verdict from the LATEST (chronologically last)
-//   relay.completed | sub_run.completed trace_entry whose corresponding
+//   relay.completed | sub_run.completed trace entry whose corresponding
 //   check.evaluated for the same (step_id, attempt) had
 //   check_kind='result_verdict' and outcome='pass'.
 // - Returns undefined for any run that did not reach outcome=complete.
@@ -865,46 +870,39 @@ function buildSummary(input: {
 //   terminations, fanout-only steps).
 //
 // Why walk-backward instead of "the closing step's verdict":
-//   Every flow we ship has a non-verdict-bearing close step
-//   (compose that materializes the canonical close report). A
-//   "closing step's verdict" semantic would therefore return undefined
-//   for every Build / Migrate / Sweep / Review / Fix run, defeating
-//   the purpose of the field. Authors place the verdict-bearing step
-//   ahead of the close compose (Build's review step, Migrate's
-//   cutover-review step) and expect the latest such admission to
-//   surface. Walk-backward picks that exact trace_entry.
+//   Every flow we ship has a non-verdict-bearing close step (a compose
+//   that materializes the canonical close report). A "closing step's
+//   verdict" semantic would therefore return undefined for every
+//   Build / Migrate / Sweep / Review / Fix run, defeating the purpose
+//   of the field. Authors place the verdict-bearing step ahead of the
+//   close compose (Build's review step, Migrate's cutover-review step)
+//   and expect the latest such admission to surface. Walk-backward
+//   picks that exact entry.
 //
 // Why filter to check_kind='result_verdict':
 //   Compose steps emit check.evaluated with kind='schema_sections'
 //   (report admission), verification steps with kind='verification',
-//   fanout with kind='fanout_aggregate'. None of those carry a
-//   verdict — only result_verdict checks do, and only relay /
-//   sub-run steps emit them. Including any other kind would conflate
-//   schema admission with verdict admission.
+//   fanout with kind='fanout_aggregate'. None of those carry a verdict
+//   — only result_verdict checks do, and only relay / sub-run steps
+//   emit them. Including any other kind would conflate schema admission
+//   with verdict admission.
 //
 // Why this is safe across re-routes / retries:
 //   The runner emits check.evaluated outcome='pass' only on the route
-//   actually taken to @complete (relay.ts emits outcome='fail'
-//   then step.aborted on a failed check; failed checks don't advance to
-//   a fail-route). So every (step_id, attempt) with a matching pass
-//   check is a step whose verdict was admitted on the path to
-//   @complete.
-//
-// Adversarial-review fix #2: the implementation was correct already,
-// but the only sub-run test exercised a stub childRunner that hand-
-// wrote result.json — so deriveTerminalVerdict itself had no direct
-// regression coverage. Tests in tests/runner/terminal-verdict-
-// derivation.test.ts now pin the contract end-to-end.
+//   actually taken to @complete (relay.ts emits outcome='fail' then
+//   step.aborted on a failed check; failed checks do not advance to a
+//   fail-route). So every (step_id, attempt) with a matching pass check
+//   is a step whose verdict was admitted on the path to @complete.
 function deriveTerminalVerdict(
-  trace_entrys: readonly TraceEntry[],
+  trace_entries: readonly TraceEntry[],
   runOutcome: RunClosedOutcome,
 ): string | undefined {
   if (runOutcome !== 'complete') return undefined;
-  for (let i = trace_entrys.length - 1; i >= 0; i -= 1) {
-    const ev = trace_entrys[i];
+  for (let i = trace_entries.length - 1; i >= 0; i -= 1) {
+    const ev = trace_entries[i];
     if (ev === undefined) continue;
     if (ev.kind !== 'relay.completed' && ev.kind !== 'sub_run.completed') continue;
-    const matchingCheckPass = trace_entrys.some(
+    const matchingCheckPass = trace_entries.some(
       (g) =>
         g.kind === 'check.evaluated' &&
         g.check_kind === 'result_verdict' &&

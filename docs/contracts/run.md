@@ -50,7 +50,7 @@ and `RunProjection.superRefine`) and tested in
 `tests/contracts/schema-parity.test.ts`.
 
 - **RUN-I1 — First trace_entry is `run.bootstrapped`.** A `RunTrace` is a non-empty
-  array of trace_entrys whose index-0 trace_entry has `kind: 'run.bootstrapped'`. The
+  array of trace_entries whose index-0 trace_entry has `kind: 'run.bootstrapped'`. The
   bootstrap trace_entry carries `flow_id`, `invocation_id`, `depth`, `change_kind`,
   and `manifest_hash` — fields that cannot be inferred from any later trace_entry
   — so a log that begins with anything else has structurally-undefined
@@ -95,7 +95,7 @@ and `RunProjection.superRefine`) and tested in
   wins, latest-wins, last-bootstrap-for-each-field, etc.). Enforced at
   `src/schemas/run.ts`.
 
-- **RUN-I5 — Closure singleton; no trace_entrys after close.** At most one
+- **RUN-I5 — Closure singleton; no trace_entries after close.** At most one
   `run.closed` trace_entry per `RunTrace`, and if present it MUST be the final
   trace_entry. A closed run whose log grows again has silently re-opened — a
   transition that is never legal, because "closed" is the terminal state.
@@ -117,7 +117,7 @@ and `RunProjection.superRefine`) and tested in
 
 - **RUN-I7 — Projection binding: `trace_entries_consumed` equals `log.length`;
   `status` reflects closure.** `Snapshot.trace_entries_consumed === log.length`.
-  A snapshot claiming fewer consumed trace_entrys than the log contains is a
+  A snapshot claiming fewer consumed trace_entries than the log contains is a
   **stale prefix cache**, not *the* current projection of this log; the
   contract rejects prefix-bound projections at parse time rather than
   accepting them with ambiguity. Prefix-snapshot semantics are Stage 2
@@ -240,7 +240,7 @@ property-test harness + reducer exist in Stage 2.
 
 - `run.prop.attempt_monotonicity_per_step` — For every step_id that appears
   in the log, the sequence of `attempt` values observed on that step_id's
-  trace_entrys is weakly monotonic (each attempt value is ≥ the previous, strictly
+  trace_entries is weakly monotonic (each attempt value is ≥ the previous, strictly
   greater when a retry is observed, never decreasing).
 
 - `run.prop.step_trace_entry_causal_ordering` — For every `(step_id, attempt)`
@@ -293,19 +293,19 @@ property-test harness + reducer exist in Stage 2.
   preserving the existing relay audit trail.
 
   Log-level pairing invariant (this property's scope): whenever any of
-  the three transcript trace_entrys appears on a pair, each must appear at
+  the three transcript trace_entries appears on a pair, each must appear at
   most once and MUST appear strictly between `relay.started` and
   the terminal relay trace_entry on that pair (i.e. after started, before
   completed/failed, and in the order request → receipt → result if more
   than one returned-result transcript trace_entry is present). Zero transcript
-  trace_entrys is legal (dry-run connector path; transcript only required for
+  trace_entries is legal (dry-run connector path; transcript only required for
   non-dry-run connectors per CC#P2-2 Enforcement binding). An out-of-order
   transcript trace_entry (e.g. `relay.receipt` preceding `relay.request`
   on the same pair, or any transcript trace_entry on a pair with no matching
   `relay.started`, or a transcript trace_entry appearing after
   `relay.completed` / `relay.failed`) is a reducer inconsistency.
   The tighter requirement that all three returned-result
-  transcript trace_entrys MUST appear for a non-dry-run connector lives at the
+  transcript trace_entries MUST appear for a non-dry-run connector lives at the
   connector-level close criterion (ADR-0007 CC#P2-2 Enforcement binding,
   enforced in the P2.4 round-trip test and the CI-skip local-smoke
   report), not here — the contract widens the schema; the connector
@@ -348,7 +348,7 @@ property-test harness + reducer exist in Stage 2.
 
 - `carry-forward:trace_entry-log-insufficient-to-replay` — Existing Circuit's
   `RunBootstrappedTraceEntry` was missing change_kind; `Snapshot` did not carry
-  `manifest_hash`; richer `step.completed`/`step.aborted` trace_entrys were
+  `manifest_hash`; richer `step.completed`/`step.aborted` trace_entries were
   missing (adversarial-review HIGH #3 — `specs/evidence.md` §Adversarial).
   **Closed in Tier 0 skeleton** (`change_kind` + `manifest_hash` on both;
   `step.*_completed`/`step.aborted` added). Re-ratified here: `RunTrace`
@@ -368,8 +368,8 @@ property-test harness + reducer exist in Stage 2.
   legal trace_entry with the misspelled key silently stripped. Closed by RUN-I8.
 
 - `carry-forward:cross-run-smuggle` — A log produced by concatenating two
-  runs' trace_entrys would parse under the flat `TraceEntry` schema — individual
-  trace_entrys are valid; only the `run_id` inconsistency reveals the error.
+  runs' trace_entries would parse under the flat `TraceEntry` schema — individual
+  trace_entries are valid; only the `run_id` inconsistency reveals the error.
   Closed by RUN-I3, with defense-in-depth via the identity-field own-
   property guard (prototype-chain attack class).
 
@@ -387,7 +387,7 @@ property-test harness + reducer exist in Stage 2.
 - **v0.1 (this draft)** — RUN-I1..I8 enforced at the schema layer:
   `RunTrace` aggregate with bootstrap/first-trace_entry, sequence monotonicity,
   run_id consistency, bootstrap singleton, closure singleton with
-  no-post-closure-trace_entrys. `RunProjection` aggregate binding log and
+  no-post-closure-trace_entries. `RunProjection` aggregate binding log and
   snapshot with bootstrap-frozen field parity, exact `trace_entries_consumed`
   equality (no stale prefix), and closure-to-status mapping as a
   compile-time total function (`OutcomeStatusEquality`). `.strict()`
@@ -421,7 +421,7 @@ property-test harness + reducer exist in Stage 2.
   Slice 3 later widened the same trace_entry surface with additive
   `relay.failed` for connector invocation exceptions. The log-level
   pairing invariant `run.prop.relay_trace_entry_pairing` widened (not
-  renamed) to govern ordering when transcript/failure trace_entrys are present;
+  renamed) to govern ordering when transcript/failure trace_entries are present;
   full five-trace_entry success ordering is obligated at the connector level
   (CC#P2-2), not the contract level. Closes composition-review §HIGH 2
   (`specs/reviews/p2-foundation-composition-review.md`). Authorized by

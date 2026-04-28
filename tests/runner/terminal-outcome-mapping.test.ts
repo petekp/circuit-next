@@ -168,7 +168,7 @@ describe('RUN-I7 terminal route outcome mapping', () => {
       expect(existsSync(join(runFolder, 'state.json'))).toBe(true);
       expect(existsSync(join(runFolder, 'reports', 'result.json'))).toBe(true);
 
-      expect(outcome.trace_entrys.map((trace_entry) => trace_entry.kind)).toEqual([
+      expect(outcome.trace_entries.map((trace_entry) => trace_entry.kind)).toEqual([
         'run.bootstrapped',
         'step.entered',
         'step.report_written',
@@ -177,16 +177,16 @@ describe('RUN-I7 terminal route outcome mapping', () => {
         'run.closed',
       ]);
       expect(
-        outcome.trace_entrys.find((trace_entry) => trace_entry.kind === 'relay.started'),
+        outcome.trace_entries.find((trace_entry) => trace_entry.kind === 'relay.started'),
       ).toBeUndefined();
 
-      const completed = outcome.trace_entrys.find(
+      const completed = outcome.trace_entries.find(
         (trace_entry) => trace_entry.kind === 'step.completed',
       );
       if (completed?.kind !== 'step.completed') throw new Error('expected step.completed');
       expect(completed.route_taken).toBe('pass');
 
-      const closed = outcome.trace_entrys[outcome.trace_entrys.length - 1];
+      const closed = outcome.trace_entries[outcome.trace_entries.length - 1];
       if (closed?.kind !== 'run.closed') throw new Error('expected run.closed last');
       expect(closed.outcome).toBe(c.outcome);
       if (c.reason === undefined) {
@@ -200,13 +200,13 @@ describe('RUN-I7 terminal route outcome mapping', () => {
         JSON.parse(readFileSync(join(runFolder, 'state.json'), 'utf8')),
       );
       expect(snapshot.status).toBe(c.outcome);
-      expect(snapshot.trace_entries_consumed).toBe(outcome.trace_entrys.length);
+      expect(snapshot.trace_entries_consumed).toBe(outcome.trace_entries.length);
       const projectedStep = snapshot.steps.find((step) => step.step_id === 'terminal-step');
       expect(projectedStep?.status).toBe('complete');
       expect(projectedStep?.last_route_taken).toBe('pass');
 
       const log = readRunTrace(runFolder);
-      expect(log).toHaveLength(outcome.trace_entrys.length);
+      expect(log).toHaveLength(outcome.trace_entries.length);
       expect(RunProjection.safeParse({ log, snapshot }).success).toBe(true);
 
       const result = RunResult.parse(

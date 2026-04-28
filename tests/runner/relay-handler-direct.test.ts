@@ -1,14 +1,12 @@
 // Direct unit tests for the relay step handler.
 //
 // The runner suites exercise relay transitively through full
-// runCompiledFlow runs, but the handler's own surface — check evaluation,
-// failure-reason composition, the trace_entry sequence on each error path —
-// is not directly tested. This file invokes `runRelayStep` against
-// a minimal in-memory `StepHandlerContext` so each handler-local
-// branch is exercised in isolation.
-//
-// FU-T11 priority target #1 (per HANDOFF.md). Sister tests will cover
-// `checkpoint.ts`, `verification.ts`, `sub-run.ts`, and `fanout.ts`.
+// runCompiledFlow runs, but the handler's own surface — check
+// evaluation, failure-reason composition, the trace_entry sequence on
+// each error path — is not directly covered. This file invokes
+// `runRelayStep` against a minimal in-memory `StepHandlerContext` so
+// each handler-local branch is exercised in isolation. Sister tests
+// cover `checkpoint.ts`, `verification.ts`, `sub-run.ts`, and `fanout.ts`.
 
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -111,7 +109,7 @@ function makeRelayer(spec: RelayerSpec) {
 }
 
 interface Harness {
-  readonly trace_entrys: TraceEntry[];
+  readonly trace_entries: TraceEntry[];
   readonly state: RunState;
   readonly ctx: StepHandlerContext;
 }
@@ -125,8 +123,8 @@ function buildHarness(opts: { readonly passVerdicts: readonly string[] } & Relay
   if (step === undefined || step.kind !== 'relay') {
     throw new Error('test fixture invariant: step[0] must be a relay step');
   }
-  const trace_entrys: TraceEntry[] = [];
-  const state: RunState = { trace_entrys, sequence: 0, relayResults: [] };
+  const trace_entries: TraceEntry[] = [];
+  const state: RunState = { trace_entries, sequence: 0, relayResults: [] };
   const now = deterministicNow(Date.UTC(2026, 3, 27, 0, 0, 0));
   const recordedAt = (): string => now().toISOString();
   const ctx: StepHandlerContext = {
@@ -146,7 +144,7 @@ function buildHarness(opts: { readonly passVerdicts: readonly string[] } & Relay
     state,
     push: (ev: TraceEntry) => {
       const stamped = { ...ev, sequence: state.sequence };
-      trace_entrys.push(stamped);
+      trace_entries.push(stamped);
       state.sequence += 1;
     },
     step,
@@ -156,7 +154,7 @@ function buildHarness(opts: { readonly passVerdicts: readonly string[] } & Relay
       throw new Error('childRunner should not be invoked by a relay step');
     },
   };
-  return { flow, harness: { trace_entrys, state, ctx } };
+  return { flow, harness: { trace_entries, state, ctx } };
 }
 
 let runFolder: string;
@@ -186,15 +184,15 @@ describe('runRelayStep direct — check evaluation', () => {
       result,
       'relay handler: a verdict in check.pass returns advance and emits check.evaluated/pass',
     );
-    const check = harness.trace_entrys.find((e) => e.kind === 'check.evaluated');
+    const check = harness.trace_entries.find((e) => e.kind === 'check.evaluated');
     if (check?.kind !== 'check.evaluated') throw new Error('expected check.evaluated');
     expect(check.outcome).toBe('pass');
     // relay.completed carries the admitted verdict.
-    const completed = harness.trace_entrys.find((e) => e.kind === 'relay.completed');
+    const completed = harness.trace_entries.find((e) => e.kind === 'relay.completed');
     if (completed?.kind !== 'relay.completed') throw new Error('expected relay.completed');
     expect(completed.verdict).toBe('accept');
     // No abort trace_entry.
-    expect(harness.trace_entrys.find((e) => e.kind === 'step.aborted')).toBeUndefined();
+    expect(harness.trace_entries.find((e) => e.kind === 'step.aborted')).toBeUndefined();
   });
 
   it('aborts with parse-failure reason when result_body is not valid JSON', async () => {
@@ -214,13 +212,13 @@ describe('runRelayStep direct — check evaluation', () => {
       'relay handler: a result_body that is not valid JSON aborts with a parse-failure reason',
       { reason: /did not parse as JSON/ },
     );
-    const check = harness.trace_entrys.find((e) => e.kind === 'check.evaluated');
+    const check = harness.trace_entries.find((e) => e.kind === 'check.evaluated');
     if (check?.kind !== 'check.evaluated') throw new Error('expected check.evaluated');
     expect(check.outcome).toBe('fail');
-    expect(harness.trace_entrys.some((e) => e.kind === 'step.aborted')).toBe(true);
+    expect(harness.trace_entries.some((e) => e.kind === 'step.aborted')).toBe(true);
     // relay.completed.verdict carries the no-verdict sentinel
     // because no verdict could be parsed.
-    const completed = harness.trace_entrys.find((e) => e.kind === 'relay.completed');
+    const completed = harness.trace_entries.find((e) => e.kind === 'relay.completed');
     if (completed?.kind !== 'relay.completed') throw new Error('expected relay.completed');
     expect(completed.verdict).toBe('<no-verdict>');
   });
@@ -309,7 +307,7 @@ describe('runRelayStep direct — check evaluation', () => {
     );
     // relay.completed.verdict carries the observed (rejected) verdict
     // — the durable transcript reflects what the connector said.
-    const completed = harness.trace_entrys.find((e) => e.kind === 'relay.completed');
+    const completed = harness.trace_entries.find((e) => e.kind === 'relay.completed');
     if (completed?.kind !== 'relay.completed') throw new Error('expected relay.completed');
     expect(completed.verdict).toBe('reject');
   });
@@ -330,16 +328,16 @@ describe('runRelayStep direct — connector failure', () => {
 
     if (result.kind !== 'aborted') throw new Error('expected aborted');
     expect(result.reason).toMatch(/connector invocation failed.*upstream connector exploded/);
-    const failed = harness.trace_entrys.find((e) => e.kind === 'relay.failed');
+    const failed = harness.trace_entries.find((e) => e.kind === 'relay.failed');
     if (failed?.kind !== 'relay.failed') throw new Error('expected relay.failed');
     expect(failed.reason).toMatch(/upstream connector exploded/);
     // relay.completed should NOT fire on connector throw — only relay.failed.
-    expect(harness.trace_entrys.find((e) => e.kind === 'relay.completed')).toBeUndefined();
+    expect(harness.trace_entries.find((e) => e.kind === 'relay.completed')).toBeUndefined();
     // check.evaluated/fail + step.aborted both fire.
-    const check = harness.trace_entrys.find((e) => e.kind === 'check.evaluated');
+    const check = harness.trace_entries.find((e) => e.kind === 'check.evaluated');
     if (check?.kind !== 'check.evaluated') throw new Error('expected check.evaluated');
     expect(check.outcome).toBe('fail');
-    expect(harness.trace_entrys.some((e) => e.kind === 'step.aborted')).toBe(true);
+    expect(harness.trace_entries.some((e) => e.kind === 'step.aborted')).toBe(true);
   });
 });
 
@@ -356,8 +354,8 @@ describe('runRelayStep direct — trace_entry sequence invariants', () => {
       },
     );
 
-    const kinds = harness.trace_entrys.map((e) => e.kind);
-    // Anchor: the first three trace_entrys MUST be relay.started, relay.request, ...
+    const kinds = harness.trace_entries.map((e) => e.kind);
+    // Anchor: the first three trace_entries MUST be relay.started, relay.request, ...
     expect(kinds[0]).toBe('relay.started');
     expect(kinds[1]).toBe('relay.request');
     // Final trace_entry MUST be check.evaluated (pass) — no step.aborted.
@@ -378,7 +376,7 @@ describe('runRelayStep direct — trace_entry sequence invariants', () => {
       },
     );
 
-    const kinds = harness.trace_entrys.map((e) => e.kind);
+    const kinds = harness.trace_entries.map((e) => e.kind);
     expect(kinds).toEqual([
       'relay.started',
       'relay.request',
@@ -400,7 +398,7 @@ describe('runRelayStep direct — trace_entry sequence invariants', () => {
       },
     );
 
-    const kinds = harness.trace_entrys.map((e) => e.kind);
+    const kinds = harness.trace_entries.map((e) => e.kind);
     // First and last anchors.
     expect(kinds[0]).toBe('relay.started');
     expect(kinds[kinds.length - 1]).toBe('step.aborted');

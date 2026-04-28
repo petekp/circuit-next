@@ -233,7 +233,7 @@ afterEach(() => {
   rmSync(runFolderBase, { recursive: true, force: true });
 });
 
-describe('P2.10a — default explore report writer', () => {
+describe('default explore report writer', () => {
   it('writes schema-valid explore.brief and explore.analysis reports', async () => {
     const { flow, bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'typed-explore-reports');
@@ -345,9 +345,9 @@ describe('P2.10a — default explore report writer', () => {
 
     expect(outcome.result.outcome).toBe('aborted');
     expect(
-      outcome.trace_entrys.find((trace_entry) => trace_entry.kind === 'step.aborted')?.step_id,
+      outcome.trace_entries.find((trace_entry) => trace_entry.kind === 'step.aborted')?.step_id,
     ).toBe('synthesize-step');
-    const check = outcome.trace_entrys.find(
+    const check = outcome.trace_entries.find(
       (trace_entry) =>
         trace_entry.kind === 'check.evaluated' && trace_entry.step_id === 'synthesize-step',
     );
@@ -375,7 +375,7 @@ describe('P2.10a — default explore report writer', () => {
     });
 
     expect(outcome.result.outcome).toBe('aborted');
-    const check = outcome.trace_entrys.find(
+    const check = outcome.trace_entries.find(
       (trace_entry) =>
         trace_entry.kind === 'check.evaluated' && trace_entry.step_id === 'synthesize-step',
     );
@@ -403,7 +403,7 @@ describe('P2.10a — default explore report writer', () => {
     });
 
     expect(outcome.result.outcome).toBe('aborted');
-    const check = outcome.trace_entrys.find(
+    const check = outcome.trace_entries.find(
       (trace_entry) =>
         trace_entry.kind === 'check.evaluated' && trace_entry.step_id === 'review-step',
     );
@@ -431,7 +431,7 @@ describe('P2.10a — default explore report writer', () => {
     });
 
     expect(outcome.result.outcome).toBe('aborted');
-    const check = outcome.trace_entrys.find(
+    const check = outcome.trace_entries.find(
       (trace_entry) =>
         trace_entry.kind === 'check.evaluated' && trace_entry.step_id === 'review-step',
     );
@@ -463,7 +463,7 @@ describe('P2.10a — default explore report writer', () => {
     });
 
     expect(outcome.result.outcome).toBe('aborted');
-    const check = outcome.trace_entrys.find(
+    const check = outcome.trace_entries.find(
       (trace_entry) =>
         trace_entry.kind === 'check.evaluated' && trace_entry.step_id === 'close-step',
     );
@@ -495,7 +495,7 @@ describe('P2.10a — default explore report writer', () => {
     });
 
     expect(outcome.result.outcome).toBe('aborted');
-    const check = outcome.trace_entrys.find(
+    const check = outcome.trace_entries.find(
       (trace_entry) =>
         trace_entry.kind === 'check.evaluated' && trace_entry.step_id === 'close-step',
     );
@@ -527,7 +527,7 @@ describe('P2.10a — default explore report writer', () => {
     });
 
     expect(outcome.result.outcome).toBe('aborted');
-    const check = outcome.trace_entrys.find(
+    const check = outcome.trace_entries.find(
       (trace_entry) =>
         trace_entry.kind === 'check.evaluated' && trace_entry.step_id === 'close-step',
     );

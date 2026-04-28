@@ -38,7 +38,7 @@
   "stage_path_policy": {
     "mode": "partial",
     "omits": ["plan", "act", "verify", "review"],
-    "rationale": "Review is an audit-only flow in P2.9: Intake frames the scope, Independent Audit performs the reviewer relay, and Verdict aggregates findings. There is no planning stage, no implementation/action stage, no verification rerun, and no nested review stage in this narrowed variant."
+    "rationale": "Review is an audit-only flow: Intake frames the scope, Independent Audit performs the reviewer relay, and Verdict aggregates findings. There is no planning stage, no implementation/action stage, no verification rerun, and no nested review stage in this narrowed variant."
   },
   "stages": [
     {
@@ -67,7 +67,11 @@
         "route": "route.decision@v1"
       },
       "output": "review.intake@v1",
-      "evidence_requirements": ["scope boundary", "constraints", "proof plan"],
+      "evidence_requirements": [
+        "scope boundary",
+        "working tree status",
+        "diff or unavailable reason"
+      ],
       "execution": {
         "kind": "compose"
       },
@@ -76,7 +80,7 @@
         "report_path": "reports/review-intake.json"
       },
       "check": {
-        "required": ["scope"]
+        "required": ["scope", "evidence"]
       },
       "routes": {
         "continue": "audit-step",

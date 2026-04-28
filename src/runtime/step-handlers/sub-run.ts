@@ -140,11 +140,11 @@ export async function runSubRunStep(
     return { kind: 'aborted', reason };
   }
 
-  // RUN-I3: child gets a fresh RunId. Audit linkage flows through
-  // sub_run.{started,completed} trace_entrys at the parent step boundary —
-  // not by sharing the parent's run_id. Child run-folders are sibling
-  // directories under the parent's runs base, NOT nested under the
-  // parent's run-folder.
+  // Child gets a fresh RunId — every run is scoped to its own run_id, so
+  // audit linkage flows through sub_run.{started,completed} entries at the
+  // parent step boundary rather than by sharing run_id. Child run-folders
+  // are sibling directories under the parent's runs base, NOT nested
+  // under the parent's run-folder.
   const childRunId: RunId = RunId.parse(randomUUID());
   const runsBase = dirname(runFolder);
   const childRunFolder = `${runsBase}/${childRunId as unknown as string}`;

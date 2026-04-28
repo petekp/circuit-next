@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { ControlPchange_kindFileStem, RunRelativePath } from '../../src/schemas/scalars.js';
+import { ControlPlaneFileStem, RunRelativePath } from '../../src/schemas/scalars.js';
 
-describe('ControlPchange_kindFileStem', () => {
+describe('ControlPlaneFileStem', () => {
   describe('rejects', () => {
     const invalid: Array<[string, string]> = [
       ['empty string', ''],
@@ -26,7 +26,7 @@ describe('ControlPchange_kindFileStem', () => {
 
     for (const [label, value] of invalid) {
       it(`rejects ${label}`, () => {
-        const result = ControlPchange_kindFileStem.safeParse(value);
+        const result = ControlPlaneFileStem.safeParse(value);
         expect(result.success).toBe(false);
       });
     }
@@ -45,7 +45,7 @@ describe('ControlPchange_kindFileStem', () => {
 
     for (const [label, value] of valid) {
       it(`accepts ${label}`, () => {
-        const result = ControlPchange_kindFileStem.safeParse(value);
+        const result = ControlPlaneFileStem.safeParse(value);
         expect(result.success).toBe(true);
         if (result.success) {
           expect(result.data).toBe(value);
@@ -55,7 +55,7 @@ describe('ControlPchange_kindFileStem', () => {
   });
 
   it('produces a helpful error for parent-directory traversal', () => {
-    const result = ControlPchange_kindFileStem.safeParse('../etc');
+    const result = ControlPlaneFileStem.safeParse('../etc');
     expect(result.success).toBe(false);
     if (!result.success) {
       const messages = result.error.issues.map((i) => i.message).join(' | ');
@@ -64,7 +64,7 @@ describe('ControlPchange_kindFileStem', () => {
   });
 
   it('produces a helpful error for path separators', () => {
-    const result = ControlPchange_kindFileStem.safeParse('abc/def');
+    const result = ControlPlaneFileStem.safeParse('abc/def');
     expect(result.success).toBe(false);
   });
 });

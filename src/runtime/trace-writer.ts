@@ -13,16 +13,16 @@ import { TraceEntry } from '../schemas/trace-entry.js';
 //      validate sequence contiguity across appends (that is a RunTrace
 //      property checked at read time). The writer DOES re-parse the trace_entry
 //      through the `TraceEntry` schema before writing, so structurally invalid
-//      trace_entrys never touch disk.
+//      trace_entries never touch disk.
 
-export function trace_entryLogPath(runFolder: string): string {
+export function traceEntryLogPath(runFolder: string): string {
   return join(runFolder, 'trace.ndjson');
 }
 
 export function appendTraceEntry(runFolder: string, trace_entry: TraceEntry): void {
   const parsed = TraceEntry.parse(trace_entry);
   const line = `${JSON.stringify(parsed)}\n`;
-  const path = trace_entryLogPath(runFolder);
+  const path = traceEntryLogPath(runFolder);
   const fd = openSync(path, 'a');
   try {
     writeSync(fd, line);
