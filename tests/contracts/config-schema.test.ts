@@ -1,0 +1,231 @@
+// Config + LayeredConfig schemas — CONFIG-I1..I8 from
+// docs/contracts/config.md v0.1.
+//
+// Split from the original `schema-parity.test.ts` mega-file as part
+// of FU-T09.
+
+import { describe, expect, it } from 'vitest';
+import { CircuitOverride, Config, ConfigLayer, LayeredConfig } from '../../src/index.js';
+
+describe('Config strict surface (CONFIG-I1)', () => {
+  it('accepts bare `{schema_version: 1}` and applies all defaults (CONFIG-I7)', () => {
+    const ok = Config.safeParse({ schema_version: 1 });
+    expect(ok.success).toBe(true);
+    if (ok.success) {
+      expect(ok.data.dispatch.default).toBe('auto');
+      expect(ok.data.circuits).toEqual({});
+      expect(ok.data.defaults).toEqual({});
+    }
+  });
+
+  it('rejects surplus top-level key (CONFIG-I1 — `defuults` typo at root)', () => {
+    const bad = Config.safeParse({
+      schema_version: 1,
+      defuults: { selection: {} },
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('rejects surplus top-level key (CONFIG-I1 — `dispath` typo at root)', () => {
+    const bad = Config.safeParse({
+      schema_version: 1,
+      dispath: { default: 'codex' },
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('rejects schema_version other than 1 (CONFIG-I6)', () => {
+    const bad = Config.safeParse({ schema_version: 2 });
+    expect(bad.success).toBe(false);
+  });
+
+  it('rejects missing schema_version', () => {
+    const bad = Config.safeParse({});
+    expect(bad.success).toBe(false);
+  });
+});
+
+describe('Config.defaults nested strict surface (CONFIG-I4)', () => {
+  it('accepts empty defaults object', () => {
+    const ok = Config.safeParse({ schema_version: 1, defaults: {} });
+    expect(ok.success).toBe(true);
+  });
+
+  it('accepts defaults.selection as a valid SelectionOverride', () => {
+    const ok = Config.safeParse({
+      schema_version: 1,
+      defaults: { selection: { effort: 'medium' } },
+    });
+    expect(ok.success).toBe(true);
+  });
+
+  it('rejects surplus key inside defaults (CONFIG-I4 — `selections` plural typo)', () => {
+    const bad = Config.safeParse({
+      schema_version: 1,
+      defaults: { selections: { effort: 'medium' } },
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('rejects unexpected nested field in defaults (CONFIG-I4 — attempted smuggle)', () => {
+    const bad = Config.safeParse({
+      schema_version: 1,
+      defaults: { selection: {}, rigor: 'crucible' },
+    });
+    expect(bad.success).toBe(false);
+  });
+});
+
+describe('CircuitOverride strict surface (CONFIG-I3)', () => {
+  it('accepts empty circuit override', () => {
+    const ok = CircuitOverride.safeParse({});
+    expect(ok.success).toBe(true);
+  });
+
+  it('accepts circuit override with selection field', () => {
+    const ok = CircuitOverride.safeParse({ selection: { effort: 'high' } });
+    expect(ok.success).toBe(true);
+  });
+
+  it('rejects circuit override with `skills: string[]` v0.0 shortcut (CONFIG-I3)', () => {
+    const bad = CircuitOverride.safeParse({ skills: ['dogfood'] });
+    expect(bad.success).toBe(false);
+  });
+
+  it('rejects circuit override with surplus key (CONFIG-I3 — typo smuggle)', () => {
+    const bad = CircuitOverride.safeParse({ selection: {}, priority: 'high' });
+    expect(bad.success).toBe(false);
+  });
+});
+
+describe('LayeredConfig strict surface (CONFIG-I2)', () => {
+  it('accepts minimal LayeredConfig with required fields only', () => {
+    const ok = LayeredConfig.safeParse({
+      layer: 'user-global',
+      config: { schema_version: 1 },
+    });
+    expect(ok.success).toBe(true);
+  });
+
+  it('accepts LayeredConfig with optional source_path', () => {
+    const ok = LayeredConfig.safeParse({
+      layer: 'project',
+      source_path: '/workspace/.circuit/config.yaml',
+      config: { schema_version: 1 },
+    });
+    expect(ok.success).toBe(true);
+  });
+
+  it('rejects LayeredConfig with surplus wrapper-level key (CONFIG-I2)', () => {
+    const bad = LayeredConfig.safeParse({
+      layer: 'project',
+      source_path: '/workspace/.circuit/config.yaml',
+      config: { schema_version: 1 },
+      checksum: 'sha256:deadbeef',
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('rejects LayeredConfig with `souce_path` typo (CONFIG-I2 — silent-strip defense)', () => {
+    const bad = LayeredConfig.safeParse({
+      layer: 'project',
+      souce_path: '/workspace/.circuit/config.yaml',
+      config: { schema_version: 1 },
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('rejects LayeredConfig whose config payload carries a surplus key (CONFIG-I1 transitivity)', () => {
+    const bad = LayeredConfig.safeParse({
+      layer: 'default',
+      config: { schema_version: 1, defuults: {} },
+    });
+    expect(bad.success).toBe(false);
+  });
+});
+
+describe('ConfigLayer closed enum (CONFIG-I5)', () => {
+  it('accepts the four documented layers', () => {
+    for (const layer of ['default', 'user-global', 'project', 'invocation']) {
+      expect(ConfigLayer.safeParse(layer).success).toBe(true);
+    }
+  });
+
+  it('rejects an undocumented layer name (CONFIG-I5)', () => {
+    expect(ConfigLayer.safeParse('environment').success).toBe(false);
+    expect(ConfigLayer.safeParse('remote').success).toBe(false);
+    expect(ConfigLayer.safeParse('').success).toBe(false);
+  });
+});
+
+describe('Config.circuits key closure (CONFIG-I8)', () => {
+  it('accepts a valid slug WorkflowId as a circuits key', () => {
+    const ok = Config.safeParse({
+      schema_version: 1,
+      circuits: { explore: { selection: { effort: 'medium' } } },
+    });
+    expect(ok.success).toBe(true);
+  });
+
+  it('rejects a circuits key that fails WorkflowId regex (CONFIG-I8 — whitespace)', () => {
+    const bad = Config.safeParse({
+      schema_version: 1,
+      circuits: { 'Bad Id': {} },
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('rejects a circuits key that fails WorkflowId regex (CONFIG-I8 — path separator)', () => {
+    const bad = Config.safeParse({
+      schema_version: 1,
+      circuits: { 'workflow/name': {} },
+    });
+    expect(bad.success).toBe(false);
+  });
+});
+
+describe('Config strictness scoped to declared shapes', () => {
+  it('rejects a typo INSIDE SelectionOverride (declared shape — `rigr` for `rigor`)', () => {
+    const bad = Config.safeParse({
+      schema_version: 1,
+      defaults: { selection: { rigr: 'crucible' } },
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('accepts arbitrary keys INSIDE invocation_options (open data-map value by design)', () => {
+    const ok = Config.safeParse({
+      schema_version: 1,
+      defaults: {
+        selection: {
+          invocation_options: {
+            some_adapter_key: 'value',
+            another_knob: 42,
+            nested_payload: { a: 1, b: [2, 3] },
+          },
+        },
+      },
+    });
+    expect(ok.success).toBe(true);
+  });
+});
+
+describe('LayeredConfig default-layer ergonomic (CONFIG-I7 + CONFIG-I2 composition)', () => {
+  it('`{layer: "default", config: {schema_version: 1}}` parses and produces all schema-level defaults', () => {
+    const ok = LayeredConfig.safeParse({
+      layer: 'default',
+      config: { schema_version: 1 },
+    });
+    expect(ok.success).toBe(true);
+    if (ok.success) {
+      expect(ok.data.layer).toBe('default');
+      expect(ok.data.config.schema_version).toBe(1);
+      expect(ok.data.config.dispatch.default).toBe('auto');
+      expect(ok.data.config.dispatch.roles).toEqual({});
+      expect(ok.data.config.dispatch.circuits).toEqual({});
+      expect(ok.data.config.dispatch.adapters).toEqual({});
+      expect(ok.data.config.circuits).toEqual({});
+      expect(ok.data.config.defaults).toEqual({});
+    }
+  });
+});
