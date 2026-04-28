@@ -73,18 +73,18 @@ done. Both must pass before commit on changes to `src/`, `tests/`, or
 | Flow design notes | `docs/workflows/` |
 | Behavioral concerns | `specs/behavioral/` |
 | Ubiquitous language | `specs/domain.md` |
-| Block catalog | `docs/workflows/primitive-catalog.json` |
+| Block catalog | `docs/workflows/block-catalog.json` |
 | Cross-session handoff | `HANDOFF.md` (repo root) |
 | Reference plugin | `~/Code/circuit` (read-only) |
 
-(Internal file names like `recipe.json`, `dispatch-hints.ts`, and
-`primitive-catalog.json` are migrating to `schematic.json`,
-`relay-hints.ts`, and `block-catalog.json` in later phases of the
-terminology pass — see `todos/terminology-migration.md`.)
+(Internal file names like `dispatch-hints.ts` are still on their
+pre-migration names; the eventual rename to `relay-hints.ts` is part of
+the deferred deep `dispatch → relay` rename — see
+`todos/terminology-migration.md` Phase 8.)
 
 ## Adding a flow
 
-1. Create `src/workflows/<id>/` with `recipe.json` (the schematic),
+1. Create `src/workflows/<id>/` with `schematic.json`,
    `artifacts.ts` (the flow's Zod report schemas), optional `command.md`
    and `contract.md`, `index.ts` (the package descriptor),
    `dispatch-hints.ts` (if any relay steps have shape hints), and

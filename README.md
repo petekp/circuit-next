@@ -12,7 +12,7 @@ vocabulary (flow, schematic, block, route, relay, check, trace, report, evidence
 - `/circuit:explore` — investigation and planning flow.
 - `/circuit:review` — audit-only review flow.
 - `/circuit:build` — implementation flow with checkpoint, relay, verification, review, and close.
-- `/circuit:fix` — fix flow with full standard-mode review pass and a `lite` entry mode that skips review (per-mode emit driven by `route_overrides` in `src/workflows/fix/recipe.json`).
+- `/circuit:fix` — fix flow with full standard-mode review pass and a `lite` entry mode that skips review (per-mode emit driven by `route_overrides` in `src/workflows/fix/schematic.json`).
 - Migrate and Sweep flows are present as sub-run packages (no slash command yet); Migrate is reachable via `/circuit:run` intent classification.
 
 Per-step configurability of model, reasoning effort, and skills is wired
@@ -31,9 +31,10 @@ copied to `commands/<id>.md`, by `npm run emit-workflows`. The drift check
 `npm run verify`) enforces the committed compiled flows stay byte-equivalent
 with what the schematics and command sources produce.
 
-(Schema field and file names like `recipe.json` and `dispatch-hints.ts`
-are the current internal names; they'll be migrated in later phases of
-the terminology pass — see `todos/terminology-migration.md`.)
+(Internal file names like `dispatch-hints.ts` are still on their
+pre-migration names; the eventual rename to `relay-hints.ts` is part of
+the deferred deep `dispatch → relay` rename — see
+`todos/terminology-migration.md` Phase 8.)
 
 ## Verification
 
@@ -72,7 +73,7 @@ circuit-next/
 │   └── workflows/             # Flow packages (one folder per flow)
 │       ├── catalog.ts         # Single source of truth the engine derives from
 │       ├── types.ts
-│       ├── build/             # recipe.json, artifacts.ts, command.md, contract.md, writers/, dispatch-hints.ts
+│       ├── build/             # schematic.json, artifacts.ts, command.md, contract.md, writers/, dispatch-hints.ts
 │       ├── explore/
 │       ├── fix/
 │       ├── migrate/
@@ -83,7 +84,7 @@ circuit-next/
 
 Adding a flow:
 
-1. Create `src/workflows/<id>/` with `recipe.json` (the schematic),
+1. Create `src/workflows/<id>/` with `schematic.json`,
    `artifacts.ts` (the flow's Zod schemas), optional `command.md` and
    `contract.md`, `index.ts` (the package descriptor),
    `dispatch-hints.ts` (if any relay steps have shape hints), and
