@@ -1,6 +1,6 @@
 # HANDOFF
 
-Last updated: 2026-04-27 — Sessions 1-5 of the test-quality backlog complete. Session 1: lint cleared, invariant-ledger meta-test landed, CI workflow live. Session 2: ledger triage, coverage tooling, fast/slow split. Session 3: slice vocabulary stripped, anti-vacuity floors, real-recursion sub-run test. Session 4: prose-pin collapse, real-recursion fanout test. Session 5: direct unit tests for the dispatch and sub-run step handlers (FU-T11 parts 1 + 2 of 5).
+Last updated: 2026-04-27 — Sessions 1-6 of the test-quality backlog complete. Session 1: lint cleared, invariant-ledger meta-test landed, CI workflow live. Session 2: ledger triage, coverage tooling, fast/slow split. Session 3: slice vocabulary stripped, anti-vacuity floors, real-recursion sub-run test. Session 4: prose-pin collapse, real-recursion fanout test. Session 5: direct unit tests for the dispatch and sub-run step handlers (FU-T11 parts 1 + 2 of 5). Session 6: direct unit tests for the checkpoint, verification, and fanout step handlers (FU-T11 parts 3-5 of 5 — FU-T11 now fully closed).
 
 ## Where we are
 
@@ -30,10 +30,12 @@ at the top of the file noting that.
 
 ## Tests
 
-948 tests pass, 6 skipped (Session 5 added the dispatch
-direct-handler test file with 11 cases and the sub-run
-direct-handler test file with 10 cases). tsc clean, biome clean,
-drift clean.
+982 tests pass, 6 skipped (Session 6 added 34 cases across three
+direct-handler test files: 14 for checkpoint, 5 for verification —
+scoped to the two pre-/at-registry error branches because the
+verification-writers registry is closed by design — and 15 for fanout
+covering pre-execution aborts, branch-level failures, and each join
+policy). tsc clean, biome clean, drift clean.
 `npm run verify` is green on origin. CI workflow at
 `.github/workflows/verify.yml` mirrors the gate on every push and PR
 to `main`. `npm run verify:fast` is the tight-loop alternative
@@ -237,7 +239,7 @@ doc-shape pins.**
   helper.
 
 **FU-T11. Direct tests for step-handlers.**
-- State: **partially done.** Two of five priority targets covered.
+- State: **done.** All five priority targets covered.
   - `tests/runner/dispatch-handler-direct.test.ts` (commit
     `0210fab`, 2026-04-27, 11 cases): full lattice of
     evaluateDispatchGate failure paths (parse / non-object / no
@@ -248,10 +250,35 @@ doc-shape pins.**
     missing resolver, resolver throw, wrong workflow id), child
     failures (child runner throw, checkpoint_waiting), and the full
     evaluateChildVerdict shape lattice.
-- Remaining: `checkpoint.ts`, `verification.ts`, `fanout.ts` direct
-  test files. Each ~10-15 cases following the same harness pattern
-  (StepHandlerContext + captured push() events). Estimated ~30-45
-  min per remaining handler.
+  - `tests/runner/checkpoint-handler-direct.test.ts` (commit
+    `7a4ee40`, 2026-04-27, 14 cases): resolution-lattice branches
+    (waiting at deep/tournament rigor, failed-resolution at
+    standard/autonomous without safe choices, resolved at
+    standard/autonomous/lite), operator resume, post-resolution
+    selection-not-in-gate.allow throw, three event-sequence anchors,
+    and one artifact-content assertion. The deep/tournament cases
+    use a `primeBootstrap` helper to seed events.ndjson because
+    `writeDerivedSnapshot` reads from disk.
+  - `tests/runner/verification-handler-direct.test.ts` (commit
+    `ff88f44`, 2026-04-27, 5 cases): scoped to the two error
+    branches reachable without a registered verification writer
+    (projectRoot undefined fires before the registry call,
+    unsupported artifact schema fires when findVerificationWriter
+    returns undefined). The verification-writers registry is closed
+    by design and built at module load from workflowPackages, so
+    the spawn-subprocess and builder.buildResult branches stay
+    covered through runner-level tests using real workflow packages.
+  - `tests/runner/fanout-handler-direct.test.ts` (commit `0cbccd7`,
+    2026-04-27, 15 cases): pre-execution aborts
+    (childWorkflowResolver/projectRoot undefined, dynamic resolution
+    throw, zero-branches), per-branch failures (worktreeRunner.add
+    throw, resolver throw, childRunner throw, child returns
+    checkpoint_waiting), each join-policy decision (pick-winner
+    admit-order, pick-winner no-admitted, disjoint-merge collision,
+    disjoint-merge pass, aggregate-only ignores verdicts), and two
+    event-sequence anchors. Stub WorktreeRunner and BranchPlanEntry
+    helpers extend the harness pattern for per-branch fault
+    injection.
 
 **FU-T12. Property-test expansion.**
 - State: open. Currently 2 property test files / ~141 LOC, both
@@ -286,8 +313,9 @@ FU-T08 (anti-vacuity floors), and the sub-run half of FU-T06.
 Session 4 cleared FU-T10 (brittle prose pins) and the fanout half
 of FU-T06 (full FU-T06 now closed). Session 5 cleared two of the
 five FU-T11 priority targets (dispatch + sub-run direct unit
-tests). Session 6+ remaining: finish FU-T11 (checkpoint.ts,
-verification.ts, fanout.ts direct tests, ~30-45 min each), FU-T07
+tests). Session 6 cleared the remaining three FU-T11 targets
+(checkpoint, verification, fanout direct unit tests — 34 new cases)
+so FU-T11 is fully closed. Session 7+ remaining: FU-T07
 (failure-message helpers naming the invariant, ~2h), FU-T09
 (mega-file splits — schema-parity.test.ts is still 4152 lines,
 ~3-4h), FU-T12 (property-test expansion, ~2-3h per area).
