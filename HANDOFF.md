@@ -1,6 +1,6 @@
 # HANDOFF
 
-Last updated: 2026-04-27 — Sessions 1-6 of the test-quality backlog complete. Session 1: lint cleared, invariant-ledger meta-test landed, CI workflow live. Session 2: ledger triage, coverage tooling, fast/slow split. Session 3: slice vocabulary stripped, anti-vacuity floors, real-recursion sub-run test. Session 4: prose-pin collapse, real-recursion fanout test. Session 5: direct unit tests for the dispatch and sub-run step handlers (FU-T11 parts 1 + 2 of 5). Session 6: direct unit tests for the checkpoint, verification, and fanout step handlers (FU-T11 parts 3-5 of 5 — FU-T11 now fully closed).
+Last updated: 2026-04-28 — Sessions 1-7 of the test-quality backlog complete. Session 1: lint cleared, invariant-ledger meta-test landed, CI workflow live. Session 2: ledger triage, coverage tooling, fast/slow split. Session 3: slice vocabulary stripped, anti-vacuity floors, real-recursion sub-run test. Session 4: prose-pin collapse, real-recursion fanout test. Session 5: direct unit tests for the dispatch and sub-run step handlers (FU-T11 parts 1 + 2 of 5). Session 6: direct unit tests for the checkpoint, verification, and fanout step handlers (FU-T11 parts 3-5 of 5 — FU-T11 now fully closed). Session 7: failure-message helper module + 5 high-value conversions (FU-T07 closed).
 
 ## Where we are
 
@@ -30,12 +30,11 @@ at the top of the file noting that.
 
 ## Tests
 
-982 tests pass, 6 skipped (Session 6 added 34 cases across three
-direct-handler test files: 14 for checkpoint, 5 for verification —
-scoped to the two pre-/at-registry error branches because the
-verification-writers registry is closed by design — and 15 for fanout
-covering pre-execution aborts, branch-level failures, and each join
-policy). tsc clean, biome clean, drift clean.
+997 tests pass, 6 skipped (Session 7 added 15 self-tests for the new
+failure-message helper module at `tests/helpers/failure-message.ts`;
+the 5 high-value conversions did not change test count — they
+replaced existing assertions in place). tsc clean, biome clean,
+drift clean.
 `npm run verify` is green on origin. CI workflow at
 `.github/workflows/verify.yml` mirrors the gate on every push and PR
 to `main`. `npm run verify:fast` is the tight-loop alternative
@@ -192,16 +191,30 @@ estimates assume an LLM-paced session.
 ### P2 — maintainability + agent repair ergonomics
 
 **FU-T07. Failure-message helpers naming the invariant.**
-- State: open. Most assertions name the bad value, not the violated
-  concept.
-- Fix: helpers like `expectWorkflowRejected(recipe, "WF-I10: pass
-  routes must target canonical outcome ids")`. Apply selectively to
-  high-traffic contract tests.
-- Why it matters: agents repair faster when the failure names the
-  invariant + intended behavior.
-- Effort: incremental — add as a helper module, migrate as test
-  files are touched. ~2 hours for an initial helper + ~5 high-value
-  conversions.
+- State: **done** across `7a715f7` + `921ce07` (2026-04-28). New
+  module `tests/helpers/failure-message.ts` exposes five high-level
+  helpers (`expectSchemaRejects`, `expectSchemaAccepts`,
+  `expectStepAborted`, `expectStepAdvance`,
+  `expectStepWaitingCheckpoint`) plus a primitive formatter
+  (`invariantMessage(rule, detail?)`) for ad-hoc cases. Step-handler
+  helpers double as `asserts result is ...` type narrows so callers
+  no longer write the `if (result.kind !== 'aborted') throw` preamble
+  manually. 15 self-tests at
+  `tests/helpers/failure-message.test.ts` pin both positive and
+  negative paths (negatives capture the failure and assert the rule
+  string appears in the message).
+- Convention for the rule string: `"<INVARIANT-ID>: <claim>"` when the
+  invariant exists in `specs/invariants.json`; plain prose with a
+  domain-prefixed claim otherwise (e.g., `"dispatch handler: a
+  result_body that is not valid JSON aborts with a parse-failure
+  reason"`).
+- 5 high-value conversions landed (one per helper-shape, 4 files, 4
+  invariant families): STEP-I1 dispatch mismatch in
+  `schema-parity.test.ts`; advance-on-pass + parse-failure abort in
+  `dispatch-handler-direct.test.ts`; childWorkflowResolver-undefined
+  abort in `sub-run-handler-direct.test.ts`; deep-rigor waiting in
+  `checkpoint-handler-direct.test.ts`. Future test files migrate to
+  the helper as they're touched — no big-bang rewrite needed.
 
 **FU-T08. Anti-vacuity check pattern.**
 - State: **done** in `14f78ea` (2026-04-27). Floors added to:
@@ -315,8 +328,10 @@ of FU-T06 (full FU-T06 now closed). Session 5 cleared two of the
 five FU-T11 priority targets (dispatch + sub-run direct unit
 tests). Session 6 cleared the remaining three FU-T11 targets
 (checkpoint, verification, fanout direct unit tests — 34 new cases)
-so FU-T11 is fully closed. Session 7+ remaining: FU-T07
-(failure-message helpers naming the invariant, ~2h), FU-T09
+so FU-T11 is fully closed. Session 7 cleared FU-T07 (failure-message
+helper module with 5 helpers + a primitive formatter; 15 self-tests;
+5 high-value conversions across schema-parity, dispatch, sub-run, and
+checkpoint direct-handler tests). Session 8+ remaining: FU-T09
 (mega-file splits — schema-parity.test.ts is still 4152 lines,
 ~3-4h), FU-T12 (property-test expansion, ~2-3h per area).
 
