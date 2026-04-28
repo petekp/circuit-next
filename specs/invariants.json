@@ -1327,16 +1327,20 @@
     {
       "id": "step.prop.run_relative_paths",
       "contract": "step",
-      "enforcement_state": "phase2-property",
-      "target_slice": 29,
-      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+      "enforcement_state": "test-enforced",
+      "binding_refs": [
+        { "path": "tests/properties/visible/step-paths-and-writes.test.ts", "kind": "test_title" }
+      ],
+      "rationale": "Property test exercises the RunRelativePath Zod primitive across ~400 deterministic cases, varying along five disallowed-form axes (absolute prefix, backslash, drive-letter colon, '.'/'..'/empty segment, empty string) plus a sound-path bucket. Each axis has its own anti-vacuity floor so a silent generator regression would fail loudly. FU-T12."
     },
     {
       "id": "step.prop.writes_shape_per_variant",
       "contract": "step",
-      "enforcement_state": "phase2-property",
-      "target_slice": 29,
-      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+      "enforcement_state": "test-enforced",
+      "binding_refs": [
+        { "path": "tests/properties/visible/step-paths-and-writes.test.ts", "kind": "test_title" }
+      ],
+      "rationale": "Property test drives surplus-key injection across the four step variants with declared writes records (synthesis, verification, dispatch, sub-run) over ~200 cases. Each variant has accept-and-reject anti-vacuity floors so the .strict() shape is exercised end-to-end. FU-T12."
     },
 
     {
