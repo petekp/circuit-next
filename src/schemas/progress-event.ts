@@ -3,6 +3,15 @@ import { CompiledFlowId, RunId, StepId } from './ids.js';
 import { RelayRole } from './step.js';
 import { RunClosedOutcome } from './trace-entry.js';
 
+export const ProgressDisplay = z
+  .object({
+    text: z.string().min(1).max(240),
+    importance: z.enum(['major', 'detail']),
+    tone: z.enum(['info', 'success', 'warning', 'error', 'checkpoint']),
+  })
+  .strict();
+export type ProgressDisplay = z.infer<typeof ProgressDisplay>;
+
 const ProgressEventBase = z
   .object({
     schema_version: z.literal(1),
@@ -11,6 +20,7 @@ const ProgressEventBase = z
     flow_id: CompiledFlowId,
     recorded_at: z.string().datetime(),
     label: z.string().min(1),
+    display: ProgressDisplay,
   })
   .strict();
 

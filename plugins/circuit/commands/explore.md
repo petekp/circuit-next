@@ -61,13 +61,19 @@ metacharacters:
    packaged flow root before it invokes `circuit-next`.
 3. **Render progress while the run is active.** `--progress jsonl` writes
    progress events to stderr and keeps the final result JSON on stdout.
-   Surface the selected flow, major stage changes, relay role and connector,
-   checkpoint choices, and completion. Do not show raw step IDs unless the
-   user asks for debug detail.
+   For every event whose `display.importance === "major"` or whose
+   `display.tone` is `warning`, `error`, or `checkpoint`, render
+   `display.text` exactly. Suppress `detail` events unless the user asks for
+   debug detail. Do not show raw JSON, raw step IDs, or trace internals by
+   default.
 4. **Parse the final JSON output.** On success the CLI prints a JSON object
    with these fields on stdout: `run_id`, `run_folder`, `outcome`
-   (`complete` | `aborted`), `trace_entries_observed`, `result_path`.
-5. **Surface the results to the user.** Include:
+   (`complete` | `aborted`), `trace_entries_observed`, `result_path`,
+   `operator_summary_path`, and `operator_summary_markdown_path`.
+5. **Render Circuit's final summary.** Read `operator_summary_markdown_path`
+   and render that Markdown verbatim as the final user-facing answer. Do not
+   invent a separate summary. If the operator summary is missing, fall back to
+   the Explore reports and include:
    - `outcome` (e.g., "Run completed" / "Run aborted")
    - `run_folder` — the absolute path of the run folder where evidence lives
    - `result_path` — the run summary `reports/result.json` (not the

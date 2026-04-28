@@ -21,7 +21,7 @@ export const exploreCompiledFlowPackage: CompiledFlowPackage = {
       throw new Error('explore is the default flow; reasonForMatch should not be called');
     },
     isDefault: true,
-    defaultReason: 'no review/audit signal matched; routed to explore as the conservative default',
+    defaultReason: 'no routed flow signal matched; routed to explore as the conservative default',
   },
   relayReports: [
     {

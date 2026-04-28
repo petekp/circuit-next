@@ -45,6 +45,7 @@ export const ExploreComposeAspect = z
   .object({
     aspect: z.string().min(1),
     contribution: z.string().min(1),
+    evidence_refs: z.array(z.string().min(1)).min(1),
   })
   .strict();
 export type ExploreComposeAspect = z.infer<typeof ExploreComposeAspect>;

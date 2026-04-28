@@ -22,14 +22,15 @@ Do not use a path relative to the user's current project.
 Single-quote the task. If the task contains a single quote, escape it as
 `'\''`.
 
-Parse progress JSONL from stderr while the run is active. Surface the selected
-flow and router reason, major stage changes, evidence warnings, relay role and
-connector, checkpoint choices, and completion. Do not show raw step IDs unless
-the user asks for debug detail.
+Parse progress JSONL from stderr while the run is active. For every event whose
+`display.importance === "major"` or whose `display.tone` is `warning`, `error`,
+or `checkpoint`, render `display.text` exactly. Suppress `detail` events unless
+the user asks for debug detail. Do not show raw JSON, raw step IDs, or trace
+internals by default.
 
 Parse the final JSON output from stdout. Surface `selected_flow`, `routed_by`,
 `router_reason`, `outcome`, `run_folder`, `trace_entries_observed`, and
-`result_path` when present.
+`operator_summary_markdown_path`, and `result_path` when present.
 
 ## Run an Explicit Flow
 
@@ -39,7 +40,7 @@ When the user names a flow, run:
 node '<plugin root>/scripts/circuit-next.mjs' run <flow> --goal '<task>' --progress jsonl
 ```
 
-Valid explicit flows are `explore`, `review`, `fix`, and `build`.
+Valid explicit flows are `explore`, `review`, `migrate`, `fix`, and `build`.
 
 ## Resume a Checkpoint
 
@@ -55,9 +56,11 @@ When the run completes, read the report paths from the run folder instead of
 guessing. For aborted runs, read `reports/result.json` and surface the abort
 reason.
 
-For completed runs, include a compact final summary with the selected flow,
-outcome, verdict or result headline, finding count when present, evidence
-warnings, run folder, and final report path.
+For completed runs, read `operator_summary_markdown_path` and render that
+Markdown verbatim as the final user-facing answer. Do not invent a separate
+summary. If the operator summary is missing, include a compact fallback summary
+with the selected flow, outcome, verdict or result headline, finding count when
+present, evidence warnings, run folder, and final report path.
 
 ## Boundaries
 

@@ -136,7 +136,7 @@ describe('flow router classifier', () => {
     }
   });
 
-  it('falls back to explore when no review/audit signal is present', () => {
+  it('falls back to explore when no routed flow signal is present', () => {
     const cases = [
       'figure out how the connector pipeline fits together',
       'investigate options for a build flow',
@@ -145,6 +145,7 @@ describe('flow router classifier', () => {
       'inspect the project structure',
       'find options for a build flow',
       'find issue #123 in the tracker',
+      'evaluate our Codex integration and grade it on a scale of 100',
       'investigate whether to create a new endpoint',
       'explore whether we should implement the command wiring',
       'map options before we add a new integration',

@@ -23,6 +23,8 @@ Every host adapter MUST support:
 - Stable final JSON parsing from stdout.
 - Progress JSONL parsing from stderr when invoked with `--progress jsonl`.
 - Report reading from the returned `run_folder` and `result_path`.
+- Verbatim host rendering from `display.text` and
+  `operator_summary_markdown_path` per `docs/contracts/host-rendering.md`.
 - Clear failures when the CLI, packaged flows, or installed host files are missing.
 
 ## Packaged Flow Lookup
@@ -51,14 +53,9 @@ saved run manifest.
 Hosts SHOULD pass `--progress jsonl` for `run` and `resume`. Circuit writes one
 progress event per stderr line and keeps the final result JSON on stdout.
 
-Hosts should render short, user-facing updates for:
-
-- selected flow and router reason
-- current major stage
-- evidence warnings
-- relay role and connector
-- checkpoint choices
-- completion or abort
+Hosts should render Circuit-authored `display.text` exactly for major progress
+updates, warnings, errors, checkpoints, and completion. Detailed rendering rules
+live in `docs/contracts/host-rendering.md`.
 
 Hosts MUST NOT treat progress events as the canonical outcome. The final stdout
 JSON and report files remain authoritative.
@@ -103,5 +100,6 @@ Hosts MUST preserve the distinction between:
 
 Host summaries should surface `selected_flow`, `routed_by`, `router_reason`,
 `outcome`, `run_folder`, `trace_entries_observed`, and `result_path` when
-present. Checkpoint results should surface the allowed choices and exact resume
-shape.
+present. When `operator_summary_markdown_path` is present, hosts should render
+that Markdown verbatim as the final user-facing answer. Checkpoint results
+should surface the allowed choices and exact resume shape.

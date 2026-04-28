@@ -373,6 +373,7 @@ describe('registered review compose writer', () => {
       expect.objectContaining({
         type: 'evidence.warning',
         warning_kind: 'evidence_unavailable',
+        display: expect.objectContaining({ tone: 'warning' }),
       }),
     );
   });

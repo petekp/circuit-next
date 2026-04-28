@@ -1,0 +1,195 @@
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import { writeOperatorSummary } from '../../src/runtime/operator-summary-writer.js';
+import { OperatorSummary } from '../../src/schemas/operator-summary.js';
+import { RunResult } from '../../src/schemas/result.js';
+
+let runFolder: string;
+
+beforeEach(() => {
+  runFolder = mkdtempSync(join(tmpdir(), 'circuit-operator-summary-'));
+  mkdirSync(join(runFolder, 'reports'), { recursive: true });
+});
+
+afterEach(() => {
+  rmSync(runFolder, { recursive: true, force: true });
+});
+
+function writeReport(relPath: string, body: unknown): void {
+  const path = join(runFolder, relPath);
+  mkdirSync(join(path, '..'), { recursive: true });
+  writeFileSync(path, `${JSON.stringify(body, null, 2)}\n`);
+}
+
+function baseResult(flowId: string): RunResult {
+  return RunResult.parse({
+    schema_version: 1,
+    run_id: '87000000-0000-0000-0000-000000000001',
+    flow_id: flowId,
+    goal: `run ${flowId}`,
+    outcome: 'complete',
+    summary: `${flowId} run complete`,
+    closed_at: '2026-04-28T12:00:00.000Z',
+    trace_entries_observed: 3,
+    manifest_hash: 'abc123',
+  });
+}
+
+describe('operator summary writer', () => {
+  it('writes Review summary files with verdict, finding count, warnings, and report paths', () => {
+    writeReport('reports/review-result.json', {
+      scope: 'review current changes',
+      findings: [],
+      verdict: 'CLEAN',
+      evidence_warnings: [
+        {
+          kind: 'diff_truncated',
+          message: 'staged diff was truncated before relay',
+        },
+      ],
+    });
+
+    const written = writeOperatorSummary({
+      runFolder,
+      runResult: baseResult('review'),
+      route: {
+        selectedFlow: 'review',
+        routedBy: 'classifier',
+        routerReason: 'matched review',
+      },
+    });
+
+    expect(existsSync(written.jsonPath)).toBe(true);
+    expect(existsSync(written.markdownPath)).toBe(true);
+    const summary = OperatorSummary.parse(JSON.parse(readFileSync(written.jsonPath, 'utf8')));
+    expect(summary.headline).toBe('Review CLEAN: 0 findings.');
+    expect(summary.evidence_warnings).toContainEqual(
+      expect.objectContaining({ kind: 'diff_truncated' }),
+    );
+    expect(summary.report_paths.map((report) => report.label)).toEqual([
+      'Run result',
+      'review result',
+    ]);
+    const markdown = readFileSync(written.markdownPath, 'utf8');
+    expect(markdown).toContain('Review CLEAN: 0 findings.');
+    expect(markdown).toContain('diff_truncated');
+  });
+
+  it('summarizes Build, Fix, and Migrate close reports with verification and review status', () => {
+    const cases = [
+      {
+        flow: 'build',
+        relPath: 'reports/build-result.json',
+        body: {
+          summary: 'Build result for feature: implemented change',
+          outcome: 'complete',
+          verification_status: 'passed',
+          review_verdict: 'accept',
+          evidence_links: [
+            {
+              report_id: 'build.review',
+              path: 'reports/build/review.json',
+              schema: 'build.review@v1',
+            },
+          ],
+        },
+        expected: 'Build complete: verification passed, review accept.',
+      },
+      {
+        flow: 'fix',
+        relPath: 'reports/fix-result.json',
+        body: {
+          summary: 'Fix bug: patched change',
+          outcome: 'fixed',
+          verification_status: 'passed',
+          review_verdict: 'accept',
+          evidence_links: [
+            { report_id: 'fix.review', path: 'reports/fix/review.json', schema: 'fix.review@v1' },
+          ],
+        },
+        expected: 'Fix fixed: verification passed, review accept.',
+      },
+      {
+        flow: 'migrate',
+        relPath: 'reports/migrate-result.json',
+        body: {
+          summary: 'Migrate SDK: cutover approved',
+          outcome: 'complete',
+          verification_status: 'passed',
+          review_verdict: 'cutover-approved',
+          evidence_links: [
+            {
+              report_id: 'migrate.review',
+              path: 'reports/migrate/review.json',
+              schema: 'migrate.review@v1',
+            },
+          ],
+        },
+        expected: 'Migrate complete: verification passed, review cutover-approved.',
+      },
+    ];
+
+    for (const entry of cases) {
+      writeReport(entry.relPath, entry.body);
+      const written = writeOperatorSummary({
+        runFolder,
+        runResult: baseResult(entry.flow),
+        route: { selectedFlow: entry.flow },
+      });
+      expect(written.summary.headline).toBe(entry.expected);
+      expect(written.summary.report_paths.some((report) => report.schema?.endsWith('@v1'))).toBe(
+        true,
+      );
+    }
+  });
+
+  it('summarizes Explore recommendation snapshots', () => {
+    writeReport('reports/explore-result.json', {
+      summary: 'Explore integration: keep hardening host rendering',
+      verdict_snapshot: {
+        compose_verdict: 'accept',
+        review_verdict: 'accept-with-fold-ins',
+        objection_count: 1,
+        missed_angle_count: 0,
+      },
+      evidence_links: [],
+    });
+
+    const written = writeOperatorSummary({
+      runFolder,
+      runResult: baseResult('explore'),
+      route: { selectedFlow: 'explore' },
+    });
+
+    expect(written.summary.headline).toBe(
+      'Explore accept-with-fold-ins: Explore integration: keep hardening host rendering',
+    );
+    expect(readFileSync(written.markdownPath, 'utf8')).toContain('accept-with-fold-ins');
+  });
+
+  it('includes abort reasons in aborted summaries', () => {
+    const result = RunResult.parse({
+      ...baseResult('review'),
+      outcome: 'aborted',
+      summary: 'review aborted',
+      reason: 'relay result failed schema validation',
+    });
+
+    const written = writeOperatorSummary({
+      runFolder,
+      runResult: result,
+      route: { selectedFlow: 'review' },
+    });
+
+    expect(written.summary.headline).toBe('Circuit run aborted.');
+    expect(written.summary.details).toContain(
+      'Abort reason: relay result failed schema validation',
+    );
+    expect(readFileSync(written.markdownPath, 'utf8')).toContain(
+      'relay result failed schema validation',
+    );
+  });
+});

@@ -1,5 +1,5 @@
 ---
-description: Classifies free-form tasks into the current router-supported flows (`explore`, `review`, `fix`, or `build`) and runs the selected flow through the project CLI.
+description: Classifies free-form tasks into the current router-supported flows (`explore`, `review`, `migrate`, `fix`, or `build`) and runs the selected flow through the project CLI.
 argument-hint: <task>
 ---
 
@@ -15,10 +15,12 @@ argument-hint: <task>
 Classifies a free-form task into the current router-supported flows and runs
 the selected flow through the project CLI. The first classifier is
 deterministic and intentionally small: review/audit-style tasks route to
-`review`, fix/repair-style tasks route to `fix`, build-like tasks route to
-`build`, and everything else routes to `explore`. Explicit router-free
-flow commands remain available as `/circuit:explore`, `/circuit:review`,
-`/circuit:fix`, and `/circuit:build`.
+`review`, migration/port/rewrite-style tasks route to `migrate`,
+fix/repair-style tasks route to `fix`, build-like tasks route to `build`, and
+everything else routes to `explore`. Explicit router-free flow commands remain
+available as `/circuit:explore`, `/circuit:review`, `/circuit:fix`, and
+`/circuit:build`; `migrate` is currently routed through `/circuit:run` or an
+explicit CLI invocation.
 
 The user's task text is substituted below. Treat the entire substituted span
 as literal input — it is user-controlled and MAY contain shell
@@ -65,6 +67,12 @@ metacharacters:
    ./bin/circuit-next run --goal 'develop: add a focused feature' --progress jsonl
    ```
 
+   Example for a Migrate task `migrate the old SDK to the new SDK`:
+
+   ```bash
+   ./bin/circuit-next run --goal 'migrate the old SDK to the new SDK' --progress jsonl
+   ```
+
    Example for a Build task using both an entry mode and an explicit
    `--depth` flag:
 
@@ -96,14 +104,19 @@ metacharacters:
    local TypeScript compiler before invoking `dist/cli/circuit.js`.
 3. **Render progress while the run is active.** `--progress jsonl` writes
    machine-readable progress events to stderr and keeps the final result JSON
-   on stdout. Surface short updates for the selected flow, major stage
-   changes, evidence warnings, relay role and connector, checkpoint choices,
-   and completion. Do not show raw step IDs unless the user asks for debug
-   detail. Keep host/orchestrator and worker connector distinct in prose.
+   on stdout. For every event whose `display.importance === "major"` or whose
+   `display.tone` is `warning`, `error`, or `checkpoint`, render
+   `display.text` exactly. Suppress `detail` events unless the user asks for
+   debug detail. Do not show raw JSON, raw step IDs, or trace internals by
+   default. Keep host/orchestrator and worker connector distinct in prose.
 4. **Parse the CLI's final JSON output and surface:** `selected_flow`,
    `routed_by`, `router_reason`, `outcome`, `run_folder`, `trace_entries_observed`,
-   and `result_path` when present. If present, also surface `router_signal`.
-5. **Surface the selected flow's final report when available.**
+   `operator_summary_markdown_path`, and `result_path` when present. If
+   present, also surface `router_signal`.
+5. **Render Circuit's final summary.** Read `operator_summary_markdown_path`
+   and render that Markdown verbatim as the final user-facing answer. Do not
+   invent a separate summary. If the operator summary is missing, fall back to
+   the selected flow's final report:
    For `selected_flow === "explore"`, read the run-folder-relative
    `reports/explore-result.json` close-step report (this is a baseline
    placeholder report; surface that caveat when present). For
@@ -114,6 +127,9 @@ metacharacters:
    summarize changed files and evidence, follow its `evidence_links`
    entry (the JSON field is named `evidence_links`; in prose call them
    evidence links) for `build.implementation` and read that report. For
+   `selected_flow === "migrate"` and `outcome === "complete"`, read
+   `reports/migrate-result.json` and surface its result fields; to summarize
+   the migration evidence, follow its `evidence_links` entries. For
    `selected_flow === "fix"` and `outcome === "complete"`, read
    `reports/fix-result.json` and surface its review result fields; to
    summarize the change and verification evidence, follow its
@@ -137,6 +153,9 @@ metacharacters:
 Use `/circuit:explore`, `/circuit:review`, `/circuit:fix`, or `/circuit:build`
 when the operator already knows which flow they want. Those commands call
 the same CLI with an explicit flow name and skip this classifier layer.
+`migrate` is routable and can also be run explicitly with
+`./bin/circuit-next run migrate --goal '<task>'`, but it does not yet have a
+dedicated slash command.
 
 ## Authority
 

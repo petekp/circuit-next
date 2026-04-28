@@ -21,7 +21,7 @@ import {
 import type { Depth } from '../schemas/depth.js';
 import { type CompiledFlowId, type InvocationId, type RunId, StepId } from '../schemas/ids.js';
 import { computeManifestHash } from '../schemas/manifest.js';
-import type { ProgressEvent } from '../schemas/progress-event.js';
+import type { ProgressDisplay, ProgressEvent } from '../schemas/progress-event.js';
 import type { Snapshot } from '../schemas/snapshot.js';
 import type { RunClosedOutcome, TraceEntry } from '../schemas/trace-entry.js';
 import { appendAndDerive } from './append-and-derive.js';
@@ -205,6 +205,7 @@ const TERMINAL_ROUTE_OUTCOME = {
   '@escalate': 'escalated',
   '@handoff': 'handoff',
 } as const satisfies Record<string, RunClosedOutcome>;
+const MAX_PROGRESS_DISPLAY_TEXT_CHARS = 240;
 
 function terminalOutcomeForRoute(route: string): RunClosedOutcome | undefined {
   return Object.hasOwn(TERMINAL_ROUTE_OUTCOME, route)
@@ -224,6 +225,19 @@ function reportProgress(progress: ProgressReporter | undefined, event: ProgressE
     // Progress is a host-facing side channel. A broken renderer must not
     // corrupt the run or change terminal behavior.
   }
+}
+
+function progressDisplay(
+  text: string,
+  importance: ProgressDisplay['importance'],
+  tone: ProgressDisplay['tone'],
+): ProgressDisplay {
+  if (text.length <= MAX_PROGRESS_DISPLAY_TEXT_CHARS) return { text, importance, tone };
+  return {
+    text: `${text.slice(0, MAX_PROGRESS_DISPLAY_TEXT_CHARS - 14)} [truncated]`,
+    importance,
+    tone,
+  };
 }
 
 function connectorName(connector: ResolvedConnector): string {
@@ -290,6 +304,13 @@ function reportEvidenceProgress(input: {
     flow_id: input.flow.id,
     recorded_at: input.recordedAt,
     label: warnings.length > 0 ? 'Collected evidence with warnings' : 'Collected evidence',
+    display: progressDisplay(
+      warnings.length > 0
+        ? `Circuit collected evidence with ${warnings.length} warning${warnings.length === 1 ? '' : 's'}.`
+        : 'Circuit collected evidence.',
+      'major',
+      warnings.length > 0 ? 'warning' : 'info',
+    ),
     step_id: input.traceEntry.step_id,
     report_path: input.traceEntry.report_path,
     report_schema: input.traceEntry.report_schema,
@@ -303,6 +324,7 @@ function reportEvidenceProgress(input: {
       flow_id: input.flow.id,
       recorded_at: input.recordedAt,
       label: 'Evidence warning',
+      display: progressDisplay(`Circuit evidence warning: ${warning.message}`, 'major', 'warning'),
       step_id: input.traceEntry.step_id,
       report_path: input.traceEntry.report_path,
       warning_kind: warning.kind,
@@ -651,6 +673,13 @@ async function executeCompiledFlow(
     flow_id: flow.id,
     recorded_at: bootstrapTs,
     label: ctx.initialTraceEntries === undefined ? 'Started Circuit run' : 'Resumed Circuit run',
+    display: progressDisplay(
+      ctx.initialTraceEntries === undefined
+        ? `Circuit started ${flow.id}.`
+        : `Circuit resumed ${flow.id}.`,
+      'major',
+      'info',
+    ),
     run_folder: runFolder,
   });
   // Capture per-relay metadata for AGENT_SMOKE / CODEX_SMOKE
@@ -684,6 +713,11 @@ async function executeCompiledFlow(
           flow_id: flow.id,
           recorded_at: sequenced.recorded_at,
           label: progressStepTitle(flow, sequenced.step_id),
+          display: progressDisplay(
+            `Circuit started ${progressStepTitle(flow, sequenced.step_id)}.`,
+            'major',
+            'info',
+          ),
           step_id: sequenced.step_id,
           step_title: progressStepTitle(flow, sequenced.step_id),
           attempt: sequenced.attempt,
@@ -707,6 +741,11 @@ async function executeCompiledFlow(
           flow_id: flow.id,
           recorded_at: sequenced.recorded_at,
           label: `Running ${sequenced.role} relay with ${connectorName(sequenced.connector)}`,
+          display: progressDisplay(
+            `Circuit is running the ${sequenced.role} relay with ${connectorName(sequenced.connector)} (${connectorFilesystemCapability(sequenced.connector)}).`,
+            'major',
+            'info',
+          ),
           step_id: sequenced.step_id,
           step_title: progressStepTitle(flow, sequenced.step_id),
           attempt: sequenced.attempt,
@@ -724,6 +763,11 @@ async function executeCompiledFlow(
           flow_id: flow.id,
           recorded_at: sequenced.recorded_at,
           label: `Relay completed with ${sequenced.verdict}`,
+          display: progressDisplay(
+            `Circuit relay completed with ${sequenced.verdict}.`,
+            'major',
+            'success',
+          ),
           step_id: sequenced.step_id,
           step_title: progressStepTitle(flow, sequenced.step_id),
           attempt: sequenced.attempt,
@@ -739,6 +783,11 @@ async function executeCompiledFlow(
           flow_id: flow.id,
           recorded_at: sequenced.recorded_at,
           label: `Completed ${progressStepTitle(flow, sequenced.step_id)}`,
+          display: progressDisplay(
+            `Circuit completed ${progressStepTitle(flow, sequenced.step_id)}.`,
+            'detail',
+            'success',
+          ),
           step_id: sequenced.step_id,
           step_title: progressStepTitle(flow, sequenced.step_id),
           attempt: sequenced.attempt,
@@ -753,6 +802,11 @@ async function executeCompiledFlow(
           flow_id: flow.id,
           recorded_at: sequenced.recorded_at,
           label: `Aborted ${progressStepTitle(flow, sequenced.step_id)}`,
+          display: progressDisplay(
+            `Circuit aborted ${progressStepTitle(flow, sequenced.step_id)}: ${sequenced.reason}`,
+            'major',
+            'error',
+          ),
           step_id: sequenced.step_id,
           step_title: progressStepTitle(flow, sequenced.step_id),
           attempt: sequenced.attempt,
@@ -870,6 +924,11 @@ async function executeCompiledFlow(
         flow_id: flow.id,
         recorded_at: waitingRecordedAt,
         label: `Waiting for checkpoint ${result.checkpoint.stepId}`,
+        display: progressDisplay(
+          `Circuit is waiting for a checkpoint choice: ${result.checkpoint.allowedChoices.join(', ')}.`,
+          'major',
+          'checkpoint',
+        ),
         step_id: StepId.parse(result.checkpoint.stepId),
         request_path: result.checkpoint.requestPath,
         allowed_choices: [...result.checkpoint.allowedChoices],
@@ -990,6 +1049,11 @@ async function executeCompiledFlow(
       flow_id: flow.id,
       recorded_at: closedAt,
       label: 'Circuit run aborted',
+      display: progressDisplay(
+        closeReason === undefined ? 'Circuit run aborted.' : `Circuit run aborted: ${closeReason}`,
+        'major',
+        'error',
+      ),
       outcome: 'aborted',
       result_path: `${runFolder}/reports/result.json`,
       ...(closeReason === undefined ? {} : { reason: closeReason }),
@@ -1002,6 +1066,7 @@ async function executeCompiledFlow(
       flow_id: flow.id,
       recorded_at: closedAt,
       label: `Circuit run ${runOutcome}`,
+      display: progressDisplay(`Circuit run ${runOutcome}.`, 'major', 'success'),
       outcome: runOutcome,
       result_path: `${runFolder}/reports/result.json`,
     });

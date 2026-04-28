@@ -90,6 +90,7 @@ describe('explore report schemas', () => {
     const supportingAspect = ExploreComposeAspect.parse({
       aspect: 'runtime-risk',
       contribution: 'Identifies the runtime path most likely to affect users',
+      evidence_refs: ['reports/analysis.json'],
     });
 
     expect(
@@ -119,6 +120,7 @@ describe('explore report schemas', () => {
           {
             aspect: 'runtime-risk',
             contribution: 'Identifies the runtime path most likely to affect users',
+            evidence_refs: ['reports/analysis.json'],
           },
         ],
       }).success,
@@ -146,6 +148,7 @@ describe('explore report schemas', () => {
           {
             aspect: 'runtime-risk',
             contribution: 'Identifies the runtime path most likely to affect users',
+            evidence_refs: ['reports/analysis.json'],
           },
         ],
         smuggled: true,
@@ -162,9 +165,19 @@ describe('explore report schemas', () => {
           {
             aspect: 'runtime-risk',
             contribution: 'Identifies the runtime path most likely to affect users',
+            evidence_refs: ['reports/analysis.json'],
             smuggled: true,
           },
         ],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects explore.compose supporting aspects without evidence references', () => {
+    expect(
+      ExploreComposeAspect.safeParse({
+        aspect: 'runtime-risk',
+        contribution: 'Identifies the runtime path most likely to affect users',
       }).success,
     ).toBe(false);
   });

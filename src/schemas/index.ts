@@ -7,6 +7,7 @@ export * from './check.js';
 export * from './ids.js';
 export * from './change-kind.js';
 export * from './manifest.js';
+export * from './operator-summary.js';
 export * from './stage.js';
 export * from './scalars.js';
 export * from './result.js';

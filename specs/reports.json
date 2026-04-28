@@ -310,6 +310,32 @@
       "dangling_reference_policy": "n/a"
     },
     {
+      "id": "run.operator_summary",
+      "surface_class": "greenfield",
+      "compatibility_policy": "n/a",
+      "plane": "data-plane",
+      "description": "Host-facing summary of what Circuit should show the operator at run close, persisted as JSON and Markdown under <circuit-next-run-folder>/reports/operator-summary.*. The Markdown is exact host-facing final text; the JSON is the typed data behind it.",
+      "contract": "docs/contracts/host-rendering.md",
+      "schema_file": "src/schemas/operator-summary.ts",
+      "schema_exports": ["OperatorSummary", "OperatorSummaryReportLink", "OperatorSummaryWarning"],
+      "writers": ["circuit-next CLI (operator summary writer)"],
+      "readers": ["Codex host", "Claude Code host", "generic-shell host"],
+      "resolvers": [],
+      "backing_paths": [
+        "<circuit-next-run-folder>/reports/operator-summary.json",
+        "<circuit-next-run-folder>/reports/operator-summary.md"
+      ],
+      "identity_fields": ["run_id", "flow_id", "selected_flow"],
+      "path_derived_fields": ["run_folder", "result_path", "report_paths"],
+      "dangerous_sinks": ["host final answer", "operator-facing progress closeout"],
+      "trust_boundary": "operator-local persisted state; written by the CLI after the runtime returns a top-level run or resume result. Hosts render the Markdown verbatim and use JSON for tooling only.",
+      "reference_surfaces": [],
+      "reference_evidence": [],
+      "migration_policy": "n/a",
+      "legacy_parse_policy": "n/a",
+      "dangling_reference_policy": "n/a"
+    },
+    {
       "id": "selection.override",
       "surface_class": "greenfield",
       "compatibility_policy": "n/a",

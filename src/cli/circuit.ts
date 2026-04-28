@@ -7,11 +7,13 @@ import { CompiledFlow } from '../schemas/compiled-flow.js';
 import { Depth } from '../schemas/depth.js';
 import { RunId } from '../schemas/ids.js';
 import {
+  type ProgressDisplay,
   ProgressEvent,
   type ProgressEvent as ProgressEventValue,
 } from '../schemas/progress-event.js';
 
 import { discoverConfigLayers } from '../runtime/config-loader.js';
+import { writeOperatorSummary } from '../runtime/operator-summary-writer.js';
 import { validateCompiledFlowKindPolicy } from '../runtime/policy/flow-kind-policy.js';
 import { classifyCompiledFlowTask } from '../runtime/router.js';
 import {
@@ -38,6 +40,7 @@ import {
 // flag stays rejected until real dry-run support lands.
 
 const DEFAULT_RUNS_BASE = '.circuit-next/runs';
+const MAX_PROGRESS_DISPLAY_TEXT_CHARS = 240;
 
 interface ParsedArgs {
   command?: 'run' | 'resume';
@@ -271,6 +274,19 @@ function progressReporter(enabled: boolean): ((event: ProgressEventValue) => voi
   };
 }
 
+function progressDisplay(
+  text: string,
+  importance: ProgressDisplay['importance'],
+  tone: ProgressDisplay['tone'],
+): ProgressDisplay {
+  if (text.length <= MAX_PROGRESS_DISPLAY_TEXT_CHARS) return { text, importance, tone };
+  return {
+    text: `${text.slice(0, MAX_PROGRESS_DISPLAY_TEXT_CHARS - 14)} [truncated]`,
+    importance,
+    tone,
+  };
+}
+
 function resolveCompiledFlowRoute(args: ParsedArgs): ResolvedCompiledFlowRoute {
   if (args.flowName !== undefined) {
     return {
@@ -339,6 +355,17 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
       ...(progress === undefined ? {} : { progress }),
       ...(selectionConfigLayers.length === 0 ? {} : { selectionConfigLayers }),
     });
+    const operatorSummary = writeOperatorSummary({
+      runFolder: outcome.runFolder,
+      runResult: outcome.result,
+      route: {
+        selectedFlow: outcome.result.flow_id as unknown as string,
+      },
+    });
+    const resumeResultPath =
+      outcome.result.outcome === 'checkpoint_waiting'
+        ? {}
+        : { result_path: `${outcome.runFolder}/reports/result.json` };
     process.stdout.write(
       `${JSON.stringify(
         {
@@ -348,7 +375,12 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
           run_folder: outcome.runFolder,
           outcome: outcome.result.outcome,
           trace_entries_observed: outcome.result.trace_entries_observed,
-          result_path: `${outcome.runFolder}/reports/result.json`,
+          ...resumeResultPath,
+          operator_summary_path: operatorSummary.jsonPath,
+          operator_summary_markdown_path: operatorSummary.markdownPath,
+          ...(outcome.result.outcome === 'checkpoint_waiting'
+            ? { checkpoint: outcome.result.checkpoint }
+            : {}),
         },
         null,
         2,
@@ -380,6 +412,11 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
     flow_id: flow.id,
     recorded_at: now().toISOString(),
     label: `Selected ${route.flowName}`,
+    display: progressDisplay(
+      `Circuit selected ${route.flowName}: ${route.reason}`,
+      'major',
+      'info',
+    ),
     selected_flow: flow.id,
     routed_by: route.source,
     router_reason: route.reason,
@@ -419,6 +456,15 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
   }
 
   const outcome = await runCompiledFlow(invocation);
+  const operatorSummary = writeOperatorSummary({
+    runFolder: outcome.runFolder,
+    runResult: outcome.result,
+    route: {
+      selectedFlow: route.flowName,
+      routedBy: route.source,
+      routerReason: route.reason,
+    },
+  });
   const resultPath =
     outcome.result.outcome === 'checkpoint_waiting'
       ? {}
@@ -438,6 +484,8 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
         outcome: outcome.result.outcome,
         trace_entries_observed: outcome.result.trace_entries_observed,
         ...resultPath,
+        operator_summary_path: operatorSummary.jsonPath,
+        operator_summary_markdown_path: operatorSummary.markdownPath,
         ...(outcome.result.outcome === 'checkpoint_waiting'
           ? { checkpoint: outcome.result.checkpoint }
           : {}),

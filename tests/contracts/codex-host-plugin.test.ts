@@ -66,12 +66,16 @@ describe('Codex host plugin package', () => {
 
   it('documents the host adapter contract', () => {
     const contract = readFileSync(resolve(REPO_ROOT, 'docs/contracts/host-adapter.md'), 'utf8');
+    const rendering = readFileSync(resolve(REPO_ROOT, 'docs/contracts/host-rendering.md'), 'utf8');
 
     expect(contract).toContain('contract: host-adapter');
     expect(contract).toContain('Routed runs');
     expect(contract).toContain('--progress jsonl');
     expect(contract).toContain("node '<plugin root>/scripts/circuit-next.mjs' doctor");
     expect(contract).toContain('Host summaries should surface');
+    expect(rendering).toContain('contract: host-rendering');
+    expect(rendering).toContain('render `display.text` exactly');
+    expect(rendering).toContain('operator_summary_markdown_path');
   });
 
   it('exposes Codex skill and command surfaces backed by the Circuit CLI protocol', () => {
@@ -83,6 +87,11 @@ describe('Codex host plugin package', () => {
     expect(skill).not.toContain('name: circuit-run');
     expect(skill).toContain("node '<plugin root>/scripts/circuit-next.mjs' run --goal '<task>'");
     expect(skill).toContain('--progress jsonl');
+    expect(skill).toContain('render `display.text` exactly');
+    expect(skill).toContain('operator_summary_markdown_path');
+    expect(skill).toContain(
+      'Valid explicit flows are `explore`, `review`, `migrate`, `fix`, and `build`.',
+    );
     expect(skill).toContain('Do not use a path relative to the user');
     expect(skill).not.toContain('node plugins/circuit/scripts/circuit-next.mjs');
     expect(skill).toContain(
@@ -235,7 +244,16 @@ describe('Codex host plugin package', () => {
         expect.objectContaining({ name: 'temp_repo_review_progress', ok: true }),
       );
       expect(output.checks).toContainEqual(
+        expect.objectContaining({ name: 'temp_repo_review_progress_display', ok: true }),
+      );
+      expect(output.checks).toContainEqual(
+        expect.objectContaining({ name: 'temp_repo_review_operator_summary', ok: true }),
+      );
+      expect(output.checks).toContainEqual(
         expect.objectContaining({ name: 'circuit_next_binary_available', ok: true }),
+      );
+      expect(output.checks).toContainEqual(
+        expect.objectContaining({ name: 'packaged_flow_migrate', ok: true }),
       );
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
@@ -292,7 +310,7 @@ describe('Codex host plugin package', () => {
   });
 
   it('mirrors canonical flow files into the Codex host output tree', () => {
-    for (const flow of ['build', 'explore', 'fix', 'review']) {
+    for (const flow of ['build', 'explore', 'fix', 'migrate', 'review']) {
       const canonical = readFileSync(resolve(REPO_ROOT, `generated/flows/${flow}/circuit.json`));
       const codex = readFileSync(resolve(PLUGIN_ROOT, `flows/${flow}/circuit.json`));
       expect(codex).toEqual(canonical);
@@ -305,9 +323,13 @@ describe('Codex host plugin package', () => {
       const codex = readFileSync(resolve(PLUGIN_ROOT, `commands/${command}.md`), 'utf8');
       expect(source).toContain('./bin/circuit-next');
       expect(source).toContain('--progress jsonl');
+      expect(source).toContain('display.text');
+      expect(source).toContain('operator_summary_markdown_path');
       expect(source).not.toContain("node '<plugin root>/scripts/circuit-next.mjs'");
       expect(codex).toContain("node '<plugin root>/scripts/circuit-next.mjs'");
       expect(codex).toContain('--progress jsonl');
+      expect(codex).toContain('display.text');
+      expect(codex).toContain('operator_summary_markdown_path');
       expect(codex).not.toContain('./bin/circuit-next');
       expect(codex).not.toContain('repo-local launcher');
     }

@@ -67,6 +67,7 @@ const LANDED_ARTIFACTS = [
         {
           aspect: 'schema-binding',
           contribution: 'The fixture, report ledger, and registry agree',
+          evidence_refs: ['reports/analysis.json'],
         },
       ],
     },

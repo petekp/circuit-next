@@ -152,6 +152,7 @@ function deterministicRelayer(): RelayFn {
               {
                 aspect: 'report-shape',
                 contribution: 'The prior reports give the close step stable inputs',
+                evidence_refs: ['reports/analysis.json'],
               },
             ],
           }),

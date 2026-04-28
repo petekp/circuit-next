@@ -62,14 +62,13 @@ function listMarkdownFiles(root) {
     .map((entry) => entry.name);
 }
 
-function parseProgressTypes(stderr) {
-  const types = [];
+function parseProgressEvents(stderr) {
+  const events = [];
   for (const line of stderr.split(/\r?\n/)) {
     if (line.trim().length === 0) continue;
-    const parsed = JSON.parse(line);
-    if (typeof parsed.type === 'string') types.push(parsed.type);
+    events.push(JSON.parse(line));
   }
-  return types;
+  return events;
 }
 
 function runDoctor() {
@@ -117,7 +116,7 @@ function runDoctor() {
   const wrapperPath = resolve(scriptDir, 'circuit-next.mjs');
   checks.push(check('wrapper_exists', existsSync(wrapperPath), wrapperPath));
   checks.push(check('packaged_flow_root_exists', existsSync(packagedFlowRoot), packagedFlowRoot));
-  for (const flow of ['build', 'explore', 'fix', 'review']) {
+  for (const flow of ['build', 'explore', 'fix', 'migrate', 'review']) {
     const flowPath = resolve(packagedFlowRoot, flow, 'circuit.json');
     checks.push(check(`packaged_flow_${flow}`, existsSync(flowPath), flowPath));
   }
@@ -202,12 +201,15 @@ function runDoctor() {
       } catch {
         output = undefined;
       }
-      let progressTypes = [];
+      let progressEvents = [];
       try {
-        progressTypes = parseProgressTypes(result.stderr);
+        progressEvents = parseProgressEvents(result.stderr);
       } catch (_err) {
-        progressTypes = [];
+        progressEvents = [];
       }
+      const progressTypes = progressEvents
+        .map((event) => event.type)
+        .filter((type) => typeof type === 'string');
       checks.push(
         check(
           'temp_repo_review_smoke',
@@ -228,6 +230,32 @@ function runDoctor() {
           progressTypes.length > 0
             ? `events=${progressTypes.join(',')}`
             : `stderr=${result.stderr.slice(0, 500)}`,
+        ),
+      );
+      checks.push(
+        check(
+          'temp_repo_review_progress_display',
+          progressEvents.length > 0 &&
+            progressEvents.every(
+              (event) =>
+                typeof event.display?.text === 'string' &&
+                event.display.text.length > 0 &&
+                typeof event.display?.importance === 'string' &&
+                typeof event.display?.tone === 'string',
+            ),
+          progressEvents.length > 0
+            ? `display_events=${progressEvents.length}`
+            : `stderr=${result.stderr.slice(0, 500)}`,
+        ),
+      );
+      checks.push(
+        check(
+          'temp_repo_review_operator_summary',
+          typeof output?.operator_summary_markdown_path === 'string' &&
+            existsSync(output.operator_summary_markdown_path),
+          typeof output?.operator_summary_markdown_path === 'string'
+            ? output.operator_summary_markdown_path
+            : 'operator_summary_markdown_path missing',
         ),
       );
     } else {

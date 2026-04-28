@@ -8,6 +8,11 @@ const BASE = {
   flow_id: 'review',
   recorded_at: '2026-04-28T12:00:00.000Z',
   label: 'Progress label',
+  display: {
+    text: 'Circuit is making progress.',
+    importance: 'major',
+    tone: 'info',
+  },
 } as const;
 
 describe('progress event schema', () => {
@@ -101,5 +106,42 @@ describe('progress event schema', () => {
     for (const event of events) {
       expect(ProgressEvent.safeParse(event).success, event.type).toBe(true);
     }
+  });
+
+  it('requires short host-facing display text on every progress event', () => {
+    expect(
+      ProgressEvent.safeParse({
+        ...BASE,
+        type: 'run.started',
+        run_folder: '/tmp/run',
+        display: undefined,
+      }).success,
+    ).toBe(false);
+
+    expect(
+      ProgressEvent.safeParse({
+        ...BASE,
+        type: 'run.started',
+        run_folder: '/tmp/run',
+        display: {
+          text: 'x'.repeat(241),
+          importance: 'major',
+          tone: 'info',
+        },
+      }).success,
+    ).toBe(false);
+
+    expect(
+      ProgressEvent.safeParse({
+        ...BASE,
+        type: 'run.started',
+        run_folder: '/tmp/run',
+        display: {
+          text: 'Circuit started.',
+          importance: 'loud',
+          tone: 'sparkly',
+        },
+      }).success,
+    ).toBe(false);
   });
 });

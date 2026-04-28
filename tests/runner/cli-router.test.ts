@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -17,6 +17,7 @@ const EXPLORE_SYNTHESIS_BODY = JSON.stringify({
     {
       aspect: 'routing',
       contribution: 'The explore flow reached the synthesize step',
+      evidence_refs: ['reports/analysis.json'],
     },
   ],
 });
@@ -215,6 +216,10 @@ describe('CLI router', () => {
     expect(output.flow_id).toBe('review');
     expect(output.selected_flow).toBe('review');
     expect(output.outcome).toBe('complete');
+    expect(typeof output.operator_summary_path).toBe('string');
+    expect(typeof output.operator_summary_markdown_path).toBe('string');
+    expect(existsSync(output.operator_summary_path as string)).toBe(true);
+    expect(existsSync(output.operator_summary_markdown_path as string)).toBe(true);
     expect(progress.map((event) => event.type)).toEqual(
       expect.arrayContaining([
         'route.selected',
@@ -226,10 +231,18 @@ describe('CLI router', () => {
         'run.completed',
       ]),
     );
+    expect(progress.every((event) => event.display.text.length > 0)).toBe(true);
+    expect(progress.find((event) => event.type === 'route.selected')?.display.text).toContain(
+      'Circuit selected review',
+    );
     expect(progress.find((event) => event.type === 'relay.started')).toMatchObject({
       role: 'reviewer',
       connector_name: 'claude-code',
       filesystem_capability: 'trusted-write',
+      display: {
+        importance: 'major',
+        tone: 'info',
+      },
     });
   });
 
@@ -248,7 +261,9 @@ describe('CLI router', () => {
     );
 
     expect(output.outcome).toBe('aborted');
+    expect(typeof output.operator_summary_markdown_path).toBe('string');
     expect(progress.map((event) => event.type)).toContain('run.aborted');
+    expect(progress.find((event) => event.type === 'run.aborted')?.display.tone).toBe('error');
   });
 
   it('omitted flow positional keeps exploratory goals on explore', async () => {
@@ -324,11 +339,14 @@ describe('CLI router', () => {
     );
 
     expect(output.outcome).toBe('checkpoint_waiting');
+    expect(typeof output.operator_summary_markdown_path).toBe('string');
+    expect(existsSync(output.operator_summary_markdown_path as string)).toBe(true);
     expect(progress).toContainEqual(
       expect.objectContaining({
         type: 'checkpoint.waiting',
         step_id: 'frame-step',
         allowed_choices: ['continue'],
+        display: expect.objectContaining({ tone: 'checkpoint' }),
       }),
     );
   });

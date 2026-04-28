@@ -27,6 +27,7 @@ const EXPLORE_SYNTHESIS_BODY = JSON.stringify({
     {
       aspect: 'config-selection',
       contribution: 'The synthesize step received the resolved selection inputs',
+      evidence_refs: ['reports/analysis.json'],
     },
   ],
 });

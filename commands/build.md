@@ -77,11 +77,14 @@ metacharacters:
    both flags, as shown above.
 4. **Render progress while the run is active.** `--progress jsonl` writes
    progress events to stderr and keeps the final result JSON on stdout.
-   Surface the selected flow, major stage changes, relay role and connector,
-   checkpoint choices, evidence warnings when present, and completion. Do not
-   show raw step IDs unless the user asks for debug detail.
+   For every event whose `display.importance === "major"` or whose
+   `display.tone` is `warning`, `error`, or `checkpoint`, render
+   `display.text` exactly. Suppress `detail` events unless the user asks for
+   debug detail. Do not show raw JSON, raw step IDs, or trace internals by
+   default.
 5. **Parse the CLI's final JSON output.** Always surface `flow_id`, `outcome`,
-   `run_folder`, and `trace_entries_observed`.
+   `run_folder`, `trace_entries_observed`, `operator_summary_path`, and
+   `operator_summary_markdown_path`.
 6. **If `outcome === "checkpoint_waiting"`, do not read or claim
    `result_path`.** Instead surface the waiting checkpoint details:
    `checkpoint.step_id`, `checkpoint.request_path`,
@@ -91,8 +94,10 @@ metacharacters:
    ./bin/circuit-next resume --run-folder '<run_folder>' --checkpoint-choice '<choice>' --progress jsonl
    ```
 
-7. **If `outcome === "complete"`, read the Build final report.** Surface
-   `result_path`, then read the run-folder-relative
+7. **If `outcome === "complete"`, render Circuit's final summary.** Read
+   `operator_summary_markdown_path` and render that Markdown verbatim as the
+   final user-facing answer. Do not invent a separate summary. If the operator
+   summary is missing, surface `result_path`, then read the run-folder-relative
    `reports/build-result.json` report. Surface its review result fields;
    to summarize changed files and evidence, follow its `evidence_links`
    entry (in prose: evidence links) for `build.implementation` and read that

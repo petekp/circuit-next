@@ -53,6 +53,8 @@ function stubRelayer(): RelayFn {
         expect(input.prompt).toContain('"recommendation"');
         expect(input.prompt).toContain('success_condition_alignment');
         expect(input.prompt).toContain('supporting_aspects');
+        expect(input.prompt).toContain('evidence_refs');
+        expect(input.prompt).toContain('Ground claims in the provided reports');
         expect(input.prompt).toContain('Do not include extra top-level keys');
         expect(input.prompt).toContain('explore.compose@v1 before writing reports/compose.json');
         return {
@@ -67,6 +69,7 @@ function stubRelayer(): RelayFn {
               {
                 aspect: 'task-framing',
                 contribution: 'The brief and analysis identify the report boundary',
+                evidence_refs: ['reports/analysis.json'],
               },
             ],
           }),
@@ -126,6 +129,7 @@ function incompleteReviewRelayer(): RelayFn {
               {
                 aspect: 'review-boundary',
                 contribution: 'The review step receives a valid compose report',
+                evidence_refs: ['reports/analysis.json'],
               },
             ],
           }),
@@ -161,6 +165,7 @@ function extraKeyReviewRelayer(): RelayFn {
               {
                 aspect: 'review-strictness',
                 contribution: 'The review step receives a valid compose report',
+                evidence_refs: ['reports/analysis.json'],
               },
             ],
           }),
@@ -200,6 +205,7 @@ function extraKeyComposeRelayer(): RelayFn {
           {
             aspect: 'strictness',
             contribution: 'Unknown fields must not pass through to downstream readers',
+            evidence_refs: ['reports/analysis.json'],
           },
         ],
         smuggled: true,
