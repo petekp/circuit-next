@@ -3,13 +3,17 @@
 ## What this project is
 
 `circuit-next` is a Claude Code plugin that runs configurable developer
-workflows. The product surface is `src/` (TypeScript), `tests/`, the
-generated `commands/` and `.claude-plugin/`, the workflow packages
+flows. The product surface is `src/` (TypeScript), `tests/`, the
+generated `commands/` and `.claude-plugin/`, the flow packages
 under `src/workflows/`, the engine contracts under `docs/contracts/`,
 and the behavioral notes under `specs/behavioral/`.
 
 This file is the agent-facing operating doc. Keep it short. If something
 isn't here, it isn't a rule.
+
+See [`docs/terminology.md`](docs/terminology.md) for the canonical product
+vocabulary (flow, schematic, block, route, relay, check, trace, report,
+evidence). Use that vocabulary in product-facing prose.
 
 ## Rules that earned their place
 

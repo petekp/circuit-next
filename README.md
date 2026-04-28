@@ -1,7 +1,10 @@
 # circuit-next
 
-Claude Code plugin that runs configurable developer workflows.
+Claude Code plugin that runs configurable developer flows.
 Successor to the first-generation [Circuit](../circuit) plugin.
+
+See [`docs/terminology.md`](docs/terminology.md) for the canonical product
+vocabulary (flow, schematic, block, route, relay, check, trace, report, evidence).
 
 ## What's wired today
 

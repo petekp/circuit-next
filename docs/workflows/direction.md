@@ -8,6 +8,10 @@ status: active
 
 # Workflow Direction
 
+See [`../terminology.md`](../terminology.md) for the canonical product
+vocabulary used throughout this doc (flow, schematic, block, route, relay,
+check, trace, report, evidence).
+
 Circuit should not rebuild every first-generation workflow one by one.
 
 The old implementation is reference evidence. It shows useful patterns and
