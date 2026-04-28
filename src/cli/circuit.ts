@@ -63,8 +63,10 @@ export interface CliMainOptions {
 
 function usage(): string {
   return [
-    'usage: circuit-next [workflow-name] --goal "<goal>" [--entry-mode <default|lite|deep|autonomous>] [--rigor <lite|standard|deep|tournament|autonomous>] [--run-root <path>] [--fixture <path>]',
-    '       circuit-next resume --run-root <path> --checkpoint-choice <choice>',
+    'usage: circuit-next [flow-name] --goal "<goal>" [--mode <default|lite|deep|autonomous>] [--depth <lite|standard|deep|tournament|autonomous>] [--run-folder <path>] [--fixture <path>]',
+    '       circuit-next resume --run-folder <path> --checkpoint-choice <choice>',
+    '',
+    '`--mode` is the friendly alias for `--entry-mode`; `--depth` is the friendly alias for `--rigor`; `--run-folder` is the friendly alias for `--run-root`. The legacy flag names are still accepted; supplying both forms of the same option is an error.',
     '',
     'With an explicit workflow name, loads .claude-plugin/skills/<name>/circuit.json. Without one, classifies the free-form goal across the registered explore/review/fix/build workflows and then composes the runtime boundary against the real `dispatchAgent`.',
     '',
@@ -96,25 +98,34 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
       i += 1;
       continue;
     }
-    if (tok === '--rigor') {
+    if (tok === '--rigor' || tok === '--depth') {
       const next = argv[i + 1];
-      if (next === undefined) throw new Error('--rigor requires a value');
+      if (next === undefined) throw new Error(`${tok} requires a value`);
+      if (rigorProvided) {
+        throw new Error('use either --depth or --rigor, not both');
+      }
       rigor = Rigor.parse(next);
       rigorProvided = true;
       i += 1;
       continue;
     }
-    if (tok === '--entry-mode') {
+    if (tok === '--entry-mode' || tok === '--mode') {
       const next = argv[i + 1];
-      if (next === undefined) throw new Error('--entry-mode requires a value');
-      if (next.length === 0) throw new Error('--entry-mode requires a non-empty value');
+      if (next === undefined) throw new Error(`${tok} requires a value`);
+      if (next.length === 0) throw new Error(`${tok} requires a non-empty value`);
+      if (entryMode !== undefined) {
+        throw new Error('use either --mode or --entry-mode, not both');
+      }
       entryMode = next;
       i += 1;
       continue;
     }
-    if (tok === '--run-root') {
+    if (tok === '--run-root' || tok === '--run-folder') {
       const next = argv[i + 1];
-      if (next === undefined) throw new Error('--run-root requires a value');
+      if (next === undefined) throw new Error(`${tok} requires a value`);
+      if (runRoot !== undefined) {
+        throw new Error('use either --run-folder or --run-root, not both');
+      }
       runRoot = next;
       i += 1;
       continue;
@@ -163,7 +174,8 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
     if (command !== 'resume') {
       throw new Error('checkpoint resume must use the `resume` subcommand');
     }
-    if (runRoot === undefined) throw new Error('--run-root is required for checkpoint resume');
+    if (runRoot === undefined)
+      throw new Error('--run-folder (or --run-root) is required for checkpoint resume');
     if (checkpointChoice === undefined || checkpointChoice.length === 0) {
       throw new Error('--checkpoint-choice is required for checkpoint resume');
     }
@@ -177,10 +189,10 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
       throw new Error('checkpoint resume loads the saved workflow manifest; omit --fixture');
     }
     if (rigorProvided) {
-      throw new Error('checkpoint resume reuses the saved run rigor; omit --rigor');
+      throw new Error('checkpoint resume reuses the saved run depth; omit --depth/--rigor');
     }
     if (entryMode !== undefined) {
-      throw new Error('checkpoint resume reuses the saved workflow position; omit --entry-mode');
+      throw new Error('checkpoint resume reuses the saved flow position; omit --mode/--entry-mode');
     }
   } else if (goal === undefined || goal.length === 0) {
     throw new Error('--goal is required and must be non-empty');

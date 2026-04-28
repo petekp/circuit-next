@@ -599,7 +599,7 @@ describe('P2.8 CLI router', () => {
       'deep',
     ]);
     expect(withRigor.exit).toBe(2);
-    expect(withRigor.stderr).toMatch(/omit --rigor/);
+    expect(withRigor.stderr).toMatch(/omit --depth\/--rigor/);
 
     const withFixture = await runMainExit([
       'resume',
@@ -623,7 +623,99 @@ describe('P2.8 CLI router', () => {
       'lite',
     ]);
     expect(withEntryMode.exit).toBe(2);
-    expect(withEntryMode.stderr).toMatch(/omit --entry-mode/);
+    expect(withEntryMode.stderr).toMatch(/omit --mode\/--entry-mode/);
+  });
+
+  it('accepts --depth as a synonym for --rigor', async () => {
+    const withDepth = await runMainExit([
+      'resume',
+      '--run-root',
+      join(runRootBase, 'not-needed'),
+      '--checkpoint-choice',
+      'continue',
+      '--depth',
+      'deep',
+    ]);
+    expect(withDepth.exit).toBe(2);
+    expect(withDepth.stderr).toMatch(/omit --depth\/--rigor/);
+  });
+
+  it('accepts --mode as a synonym for --entry-mode', async () => {
+    const withMode = await runMainExit([
+      'resume',
+      '--run-root',
+      join(runRootBase, 'not-needed'),
+      '--checkpoint-choice',
+      'continue',
+      '--mode',
+      'lite',
+    ]);
+    expect(withMode.exit).toBe(2);
+    expect(withMode.stderr).toMatch(/omit --mode\/--entry-mode/);
+  });
+
+  it('accepts --run-folder as a synonym for --run-root (parses cleanly)', async () => {
+    // Resume validates other flags after argv parsing; pairing --run-folder
+    // with --rigor exercises the same downstream "omit --depth/--rigor"
+    // branch the --run-root variant does. The branch firing proves
+    // --run-folder parsed and populated the same internal slot.
+    const result = await runMainExit([
+      'resume',
+      '--run-folder',
+      join(runRootBase, 'not-needed'),
+      '--checkpoint-choice',
+      'continue',
+      '--rigor',
+      'deep',
+    ]);
+    expect(result.exit).toBe(2);
+    expect(result.stderr).toMatch(/omit --depth\/--rigor/);
+  });
+
+  it('rejects supplying both --depth and --rigor', async () => {
+    const conflict = await runMainExit([
+      'resume',
+      '--run-root',
+      join(runRootBase, 'not-needed'),
+      '--checkpoint-choice',
+      'continue',
+      '--depth',
+      'standard',
+      '--rigor',
+      'deep',
+    ]);
+    expect(conflict.exit).toBe(2);
+    expect(conflict.stderr).toMatch(/use either --depth or --rigor, not both/);
+  });
+
+  it('rejects supplying both --mode and --entry-mode', async () => {
+    const conflict = await runMainExit([
+      'resume',
+      '--run-root',
+      join(runRootBase, 'not-needed'),
+      '--checkpoint-choice',
+      'continue',
+      '--mode',
+      'lite',
+      '--entry-mode',
+      'deep',
+    ]);
+    expect(conflict.exit).toBe(2);
+    expect(conflict.stderr).toMatch(/use either --mode or --entry-mode, not both/);
+  });
+
+  it('rejects supplying both --run-folder and --run-root', async () => {
+    const conflict = await runMainExit([
+      'resume',
+      '--run-folder',
+      join(runRootBase, 'a'),
+      '--run-root',
+      join(runRootBase, 'b'),
+      '--checkpoint-choice',
+      'continue',
+    ]);
+    expect(conflict.exit).toBe(2);
+    expect(conflict.stderr).toMatch(/use either --run-folder or --run-root, not both/);
   });
 
   it('keeps CLI help text aligned with the router-supported workflow set', () => {
