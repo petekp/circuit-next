@@ -1,6 +1,6 @@
 # HANDOFF
 
-Last updated: 2026-04-28 — Sessions 1-7 of the test-quality backlog complete. Session 1: lint cleared, invariant-ledger meta-test landed, CI workflow live. Session 2: ledger triage, coverage tooling, fast/slow split. Session 3: slice vocabulary stripped, anti-vacuity floors, real-recursion sub-run test. Session 4: prose-pin collapse, real-recursion fanout test. Session 5: direct unit tests for the dispatch and sub-run step handlers (FU-T11 parts 1 + 2 of 5). Session 6: direct unit tests for the checkpoint, verification, and fanout step handlers (FU-T11 parts 3-5 of 5 — FU-T11 now fully closed). Session 7: failure-message helper module + 5 high-value conversions (FU-T07 closed).
+Last updated: 2026-04-28 — Sessions 1-8 of the test-quality backlog complete. Session 1: lint cleared, invariant-ledger meta-test landed, CI workflow live. Session 2: ledger triage, coverage tooling, fast/slow split. Session 3: slice vocabulary stripped, anti-vacuity floors, real-recursion sub-run test. Session 4: prose-pin collapse, real-recursion fanout test. Session 5: direct unit tests for the dispatch and sub-run step handlers (FU-T11 parts 1 + 2 of 5). Session 6: direct unit tests for the checkpoint, verification, and fanout step handlers (FU-T11 parts 3-5 of 5 — FU-T11 now fully closed). Session 7: failure-message helper module + 5 high-value conversions (FU-T07 closed). Session 8: split `tests/contracts/schema-parity.test.ts` (4156 lines / 359 tests) into 11 per-invariant-family files with two shared builder modules under `tests/helpers/`; all 80 ledger binding_refs repointed (FU-T09 closed).
 
 ## Where we are
 
@@ -30,11 +30,10 @@ at the top of the file noting that.
 
 ## Tests
 
-997 tests pass, 6 skipped (Session 7 added 15 self-tests for the new
-failure-message helper module at `tests/helpers/failure-message.ts`;
-the 5 high-value conversions did not change test count — they
-replaced existing assertions in place). tsc clean, biome clean,
-drift clean.
+997 tests pass, 6 skipped across 85 test files (Session 8 split one
+4156-line file into 11 family files — net +10 files, no test-count
+change since the split is mechanical: each describe block stayed
+intact in its new home). tsc clean, biome clean, drift clean.
 `npm run verify` is green on origin. CI workflow at
 `.github/workflows/verify.yml` mirrors the gate on every push and PR
 to `main`. `npm run verify:fast` is the tight-loop alternative
@@ -227,17 +226,36 @@ estimates assume an LLM-paced session.
   pre-this work).
 
 **FU-T09. Mega-file splits.**
-- State: open. Reviewer flagged `contracts/schema-parity.test.ts` at
-  4,159 lines and Build tests at 4 files / ~2,435 lines. Verify
-  current sizes before acting — may have shrunk since the prior
-  HANDOFF.
-- Fix: split `schema-parity.test.ts` by invariant family
-  (gate-schema, step-schema, selection-schema, workflow-graph,
-  workflow-path-safety, skill-schema, pass-route-policy). Extract
-  shared builders to `tests/helpers/`.
-- Why it matters: smaller failure neighborhoods → faster agent
-  repair.
-- Effort: ~3-4 hours (large diff, ratifying refactor).
+- State: **done** in Session 8 (2026-04-28). Original
+  `tests/contracts/schema-parity.test.ts` (4,156 lines / 359 tests)
+  split into 11 per-invariant-family files alongside
+  `tests/contracts/`:
+  - `declaration-primitives.test.ts` — `Rigor`, `Role`,
+    `LaneDeclaration` (6 tests, no invariant family).
+  - `gate-schema.test.ts` — `Gate` discriminated union (3 tests).
+  - `skill-schema.test.ts` — SKILL-I1..I6 (19 tests).
+  - `step-schema.test.ts` — STEP-I1..I9 (25 tests).
+  - `workflow-graph-schema.test.ts` — WF-I1..I11 (17 tests).
+  - `workflow-path-safety-schema.test.ts` — PHASE-I1..I6 (19 tests).
+  - `runlog-schema.test.ts` — RUN-I1..I8 + Event/Snapshot bootstrap
+    (79 tests).
+  - `continuity-schema.test.ts` — CONT-I1..I12 (40 tests).
+  - `selection-schema.test.ts` — SEL-I1..I9 (64 tests).
+  - `adapter-schema.test.ts` — ADAPTER-I1..I11 + Config+adapter
+    registry parity (61 tests).
+  - `config-schema.test.ts` — CONFIG-I1..I8 (26 tests).
+  Two shared builder modules extracted to `tests/helpers/`:
+  `runlog-builders.ts` (RUN_A, RUN_B, lane, bootstrapAt,
+  stepEntered, runClosed — RUN_A also imported by
+  `adapter-schema.test.ts` for DispatchStartedEvent fixtures) and
+  `continuity-builders.ts` (CONT_RUN, CONT_NARRATIVE,
+  CONT_RUN_PROVENANCE). Per-describe-block scoped helpers
+  (`baseSynthesis`, `okWorkflow`, etc) stayed local to their family
+  file. Invariant tokens (STEP-I, WF-I, ADAPTER-I, …) preserved in
+  describe/it titles so the invariant-ledger semantic is intact.
+  All 80 `binding_refs[].path` entries in `specs/invariants.json`
+  repointed from `schema-parity.test.ts` to the appropriate family
+  file.
 
 **FU-T10. Collapse `plugin-command-invocation.test.ts` brittle
 doc-shape pins.**
@@ -331,9 +349,12 @@ tests). Session 6 cleared the remaining three FU-T11 targets
 so FU-T11 is fully closed. Session 7 cleared FU-T07 (failure-message
 helper module with 5 helpers + a primitive formatter; 15 self-tests;
 5 high-value conversions across schema-parity, dispatch, sub-run, and
-checkpoint direct-handler tests). Session 8+ remaining: FU-T09
-(mega-file splits — schema-parity.test.ts is still 4152 lines,
-~3-4h), FU-T12 (property-test expansion, ~2-3h per area).
+checkpoint direct-handler tests). Session 8 cleared FU-T09
+(mechanical split of `tests/contracts/schema-parity.test.ts` into 11
+per-invariant-family files; two shared builder modules extracted to
+`tests/helpers/`; 80 ledger binding_refs repointed; verify gate
+holds at 997 / 6). Session 9+ remaining: only FU-T12
+(property-test expansion, ~2-3h per area).
 
 ## Notes
 
