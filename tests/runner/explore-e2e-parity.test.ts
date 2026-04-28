@@ -14,19 +14,19 @@ import { type RelayFn, type RelayInput, runCompiledFlow } from '../../src/runtim
 
 // `explore` end-to-end fixture run.
 //
-// Structure mirrors the agent connector smoke file: always-running static
+// Structure mirrors the claude-code connector smoke file: always-running static
 // declarations (ratchet-floor contribution) + AGENT_SMOKE-checkd
 // real-subprocess end-to-end. Static tests bind the explore fixture
 // shape, the normalization rule used to hash the normalized result
 // report, and the `sha256Hex` helper format. The AGENT_SMOKE-checkd
 // branch runs the real explore fixture through `runCompiledFlow` with the
-// default `relayAgent` (spawns `claude -p`), asserts the five-trace_entry
+// default `relayClaudeCode` (spawns `claude -p`), asserts the five-trace_entry
 // relay transcript lands twice (synthesize + review), normalizes +
 // hashes `reports/explore-result.json` against the checked-in golden,
 // and writes the `tests/fixtures/agent-smoke/last-run.json` fingerprint
 // that audit Check 30 verifies at every run.
 
-const EXPLORE_FIXTURE_PATH = resolve('.claude-plugin/skills/explore/circuit.json');
+const EXPLORE_FIXTURE_PATH = resolve('generated/flows/explore/circuit.json');
 const GOLDEN_RESULT_SHA256_PATH = resolve('tests/fixtures/golden/explore/result.sha256');
 const LAST_RUN_FINGERPRINT_PATH = resolve('tests/fixtures/agent-smoke/last-run.json');
 
@@ -47,7 +47,7 @@ const UPDATE_AGENT_FINGERPRINT = process.env.UPDATE_AGENT_FINGERPRINT === '1';
 // drift detection itself surfaces the mismatch as yellow on first
 // repromotion.
 const AGENT_ADAPTER_SOURCE_PATHS = [
-  'src/runtime/connectors/agent.ts',
+  'src/runtime/connectors/claude-code.ts',
   'src/runtime/connectors/shared.ts',
   'src/runtime/connectors/relay-materializer.ts',
   'src/runtime/runner.ts',
@@ -129,7 +129,7 @@ function change_kind(): ChangeKindDeclaration {
     change_kind: 'ratchet-advance',
     failure_mode: 'explore flow lacks end-to-end real-connector proof of parity',
     acceptance_evidence:
-      'runCompiledFlow closes the explore fixture under real relayAgent with 2x five-trace_entry transcripts and a byte-shape golden on explore-result.json',
+      'runCompiledFlow closes the explore fixture under real relayClaudeCode with 2x five-trace_entry transcripts and a byte-shape golden on explore-result.json',
     alternate_framing:
       'defer end-to-end explore until P2.9 second-flow slice; rejected because CC#P2-1 + CC#P2-2 are Stage 2 close criteria that bind on one-flow-parity substrate, not two.',
   };
@@ -137,7 +137,7 @@ function change_kind(): ChangeKindDeclaration {
 
 function deterministicRelayer(): RelayFn {
   return {
-    connectorName: 'agent',
+    connectorName: 'claude-code',
     relay: async (input: RelayInput): Promise<RelayResult> => {
       if (input.prompt.includes('Step: synthesize-step')) {
         return {
@@ -326,7 +326,7 @@ describe('explore fixture static declarations (ratchet-floor contribution)', () 
   });
 
   it(
-    'closes the explore run end-to-end through the real relayAgent + 2x five-trace_entry transcript + normalized golden parity',
+    'closes the explore run end-to-end through the real relayClaudeCode + 2x five-trace_entry transcript + normalized golden parity',
     async () => {
       const { flow, bytes } = loadExploreFixture();
       const runFolder = join(runFolderBase, 'explore-e2e');
@@ -383,16 +383,18 @@ describe('explore fixture static declarations (ratchet-floor contribution)', () 
         // Bind cli_version to the actual subprocess init trace_entry via
         // CompiledFlowRunResult.relayResults (populated by runCompiledFlow;
         // sourced from each relayer's RelayResult.cli_version,
-        // which agent.ts reads from init.claude_code_version). The
+        // which claude-code.ts reads from init.claude_code_version). The
         // audit rejects fingerprints with empty/unknown cli_version
         // on v2, so this binding fails closed at promotion time.
-        const firstAgentRelay = outcome.relayResults.find((d) => d.connectorName === 'agent');
-        if (firstAgentRelay === undefined) {
+        const firstClaudeCodeRelay = outcome.relayResults.find(
+          (d) => d.connectorName === 'claude-code',
+        );
+        if (firstClaudeCodeRelay === undefined) {
           throw new Error(
-            'AGENT_SMOKE fingerprint promotion: no agent-relay result captured (CompiledFlowRunResult.relayResults empty for connector=agent)',
+            'AGENT_SMOKE fingerprint promotion: no claude-code relay result captured (CompiledFlowRunResult.relayResults empty for connector=claude-code)',
           );
         }
-        const cliVersion = firstAgentRelay.cli_version;
+        const cliVersion = firstClaudeCodeRelay.cli_version;
         if (cliVersion.length === 0 || /\(unknown\)/.test(cliVersion)) {
           throw new Error(
             `AGENT_SMOKE fingerprint promotion: cli_version "${cliVersion}" is empty or sentinel; refusing to write a fingerprint that audit Check 30 will reject`,

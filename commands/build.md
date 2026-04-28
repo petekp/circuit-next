@@ -37,31 +37,31 @@ metacharacters:
    Default Build:
 
    ```bash
-   ./bin/circuit-next build --goal 'add a focused feature'
+   ./bin/circuit-next run build --goal 'add a focused feature'
    ```
 
    Lite Build:
 
    ```bash
-   ./bin/circuit-next build --goal 'make a small change' --entry-mode lite
+   ./bin/circuit-next run build --goal 'make a small change' --entry-mode lite
    ```
 
    Deep Build with explicit standard depth in the same invocation:
 
    ```bash
-   ./bin/circuit-next build --goal 'make the focused change' --entry-mode deep --depth standard
+   ./bin/circuit-next run build --goal 'make the focused change' --entry-mode deep --depth standard
    ```
 
    Autonomous Build:
 
    ```bash
-   ./bin/circuit-next build --goal 'ship the requested fix' --entry-mode autonomous
+   ./bin/circuit-next run build --goal 'ship the requested fix' --entry-mode autonomous
    ```
 
    Example for a task `can't ship` (contains one apostrophe):
 
    ```bash
-   ./bin/circuit-next build --goal 'can'\''t ship'
+   ./bin/circuit-next run build --goal 'can'\''t ship'
    ```
 
    Use the Bash tool to execute the constructed command. `./bin/circuit-next`

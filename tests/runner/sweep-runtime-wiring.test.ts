@@ -12,7 +12,7 @@ import {
   SweepReview,
   SweepVerification,
 } from '../../src/flows/sweep/reports.js';
-import type { AgentRelayInput } from '../../src/runtime/connectors/agent.js';
+import type { ClaudeCodeRelayInput } from '../../src/runtime/connectors/claude-code.js';
 import type { RelayResult } from '../../src/runtime/connectors/shared.js';
 import { type RelayFn, runCompiledFlow } from '../../src/runtime/runner.js';
 import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
@@ -104,8 +104,8 @@ function relayerWith(
   const reviewBody = options.reviewBody ?? DEFAULT_REVIEW_BODY;
 
   return {
-    connectorName: 'agent',
-    relay: async (input: AgentRelayInput): Promise<RelayResult> => {
+    connectorName: 'claude-code',
+    relay: async (input: ClaudeCodeRelayInput): Promise<RelayResult> => {
       const isSurvey = input.prompt.includes('Step: survey-step');
       const isExecute = input.prompt.includes('Step: execute-step');
       const isReview = input.prompt.includes('Step: review-step');

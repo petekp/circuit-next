@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { EnabledConnector, RelayResolutionSource } from '../../schemas/connector.js';
+import type { RelayResolutionSource, ResolvedConnector } from '../../schemas/connector.js';
 import type { RunId, StepId } from '../../schemas/ids.js';
 import type { ResolvedSelection } from '../../schemas/selection-policy.js';
 import type { RelayRole } from '../../schemas/step.js';
@@ -46,12 +46,9 @@ export interface RelayMaterializeInput {
     readonly result: string;
     readonly report?: { readonly path: string; readonly schema: string };
   };
-  // The connector-name discriminant is required so the
-  // `relay.started` trace_entry's `connector: {kind: 'builtin', name}` field
-  // is connector-accurate rather than agent-hardcoded. Typed against the
-  // `EnabledConnector` enum at `src/schemas/connector.ts` so the discriminant
-  // matches the connector-I1 closed-enum invariant.
-  readonly connectorName: EnabledConnector;
+  // The resolved connector is required so relay trace entries can carry
+  // either a built-in connector or the custom descriptor selected from config.
+  readonly connector: ResolvedConnector;
   // Selection + provenance are REQUIRED inputs to materialization rather
   // than hardcoded defaults. The materializer is fail-closed at the type
   // boundary: callers MUST compute and pass the real values. The runner
@@ -113,7 +110,7 @@ export function materializeRelay(input: RelayMaterializeInput): RelayMaterialize
     startingSequence,
     runFolder,
     writes,
-    connectorName,
+    connector,
     resolvedSelection,
     resolvedFrom,
     relayResult,
@@ -169,7 +166,7 @@ export function materializeRelay(input: RelayMaterializeInput): RelayMaterialize
       kind: 'relay.started',
       step_id: stepId,
       attempt,
-      connector: { kind: 'builtin', name: connectorName },
+      connector,
       role,
       resolved_selection: resolvedSelection,
       resolved_from: resolvedFrom,

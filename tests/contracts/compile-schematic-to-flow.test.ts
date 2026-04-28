@@ -25,17 +25,17 @@ describe('compileSchematicToCompiledFlow — byte-equivalence with committed com
     {
       label: 'build',
       schematicPath: 'src/flows/build/schematic.json',
-      committedPath: '.claude-plugin/skills/build/circuit.json',
+      committedPath: 'generated/flows/build/circuit.json',
     },
     {
       label: 'explore',
       schematicPath: 'src/flows/explore/schematic.json',
-      committedPath: '.claude-plugin/skills/explore/circuit.json',
+      committedPath: 'generated/flows/explore/circuit.json',
     },
     {
       label: 'review',
       schematicPath: 'src/flows/review/schematic.json',
-      committedPath: '.claude-plugin/skills/review/circuit.json',
+      committedPath: 'generated/flows/review/circuit.json',
     },
   ] as const;
 

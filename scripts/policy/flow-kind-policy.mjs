@@ -5,7 +5,7 @@
 // This module is the single source of truth for flow-kind canonical
 // stage-set policy. Two surfaces consume it:
 //   (1) scripts/audit.mjs Check 24 (checkSpineCoverage) — audit-level;
-//       receives raw JSON from .claude-plugin/skills/<kind>/circuit.json
+//       receives raw JSON from generated/flows/<kind>/circuit.json
 //       and checks canonical-stage-set + omits invariants against this
 //       module's FLOW_KIND_CANONICAL_SETS table.
 //   (2) src/runtime/policy/flow-kind-policy.ts — runtime-level;

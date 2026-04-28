@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
-import { relayAgent, sha256Hex } from '../../src/runtime/connectors/agent.js';
+import { relayClaudeCode, sha256Hex } from '../../src/runtime/connectors/claude-code.js';
 
 // Agent connector smoke test.
 //
@@ -27,10 +27,10 @@ import { relayAgent, sha256Hex } from '../../src/runtime/connectors/agent.js';
 
 const AGENT_SMOKE = process.env.AGENT_SMOKE === '1';
 
-describe('agent connector smoke (capability boundary)', () => {
-  it('static: relayAgent exports a function (ratchet-floor declaration)', () => {
-    expect(typeof relayAgent).toBe('function');
-    expect(relayAgent.length).toBeGreaterThanOrEqual(1);
+describe('claude-code connector smoke (capability boundary)', () => {
+  it('static: relayClaudeCode exports a function (ratchet-floor declaration)', () => {
+    expect(typeof relayClaudeCode).toBe('function');
+    expect(relayClaudeCode.length).toBeGreaterThanOrEqual(1);
   });
 
   it('static: sha256Hex produces a canonical hex digest of a known input', () => {
@@ -48,10 +48,10 @@ describe('agent connector smoke (capability boundary)', () => {
   // AGENT_SMOKE-checkd real-subprocess path. Skipped when the env var is
   // not set so CI (and developer-local runs without auth) stay green.
   (AGENT_SMOKE ? it : it.skip)(
-    'end-to-end: relayAgent spawns claude -p and returns a result triple (AGENT_SMOKE=1)',
+    'end-to-end: relayClaudeCode spawns claude -p and returns a result triple (AGENT_SMOKE=1)',
     async () => {
       const prompt = 'Respond with exactly the single word: OK';
-      const result = await relayAgent({ prompt, timeoutMs: 120_000 });
+      const result = await relayClaudeCode({ prompt, timeoutMs: 120_000 });
 
       // request_payload is echoed verbatim (the bytes hashed into
       // relay.request.request_payload_hash).

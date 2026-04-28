@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { AgentRelayInput } from '../../src/runtime/connectors/agent.js';
+import type { ClaudeCodeRelayInput } from '../../src/runtime/connectors/claude-code.js';
 import { type RelayFn, runCompiledFlow } from '../../src/runtime/runner.js';
 import { readRunTrace } from '../../src/runtime/trace-reader.js';
 import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
@@ -13,7 +13,7 @@ import { RunResult } from '../../src/schemas/result.js';
 import { RunProjection } from '../../src/schemas/run.js';
 import { Snapshot } from '../../src/schemas/snapshot.js';
 
-const FIXTURE_PATH = resolve('.claude-plugin/skills/runtime-proof/circuit.json');
+const FIXTURE_PATH = resolve('generated/flows/runtime-proof/circuit.json');
 
 function loadFixture(): { flow: CompiledFlow; bytes: Buffer } {
   const bytes = readFileSync(FIXTURE_PATH);
@@ -39,8 +39,8 @@ function change_kind(): ChangeKindDeclaration {
 
 function throwingRelayer(): RelayFn {
   return {
-    connectorName: 'agent',
-    relay: async (_input: AgentRelayInput) => {
+    connectorName: 'claude-code',
+    relay: async (_input: ClaudeCodeRelayInput) => {
       throw new Error('auth token missing');
     },
   };
@@ -80,7 +80,7 @@ describe('runtime-safety-floor connector invocation failure closure', () => {
     const started = outcome.trace_entrys.find((e) => e.kind === 'relay.started');
     if (started?.kind !== 'relay.started') throw new Error('expected relay.started');
     expect(started.step_id).toBe('relay-step');
-    expect(started.connector).toEqual({ kind: 'builtin', name: 'agent' });
+    expect(started.connector).toEqual({ kind: 'builtin', name: 'claude-code' });
     expect(started.role).toBe('implementer');
     expect(started.resolved_from).toEqual({ source: 'explicit' });
     expect(started.resolved_selection).toEqual({ skills: [], invocation_options: {} });

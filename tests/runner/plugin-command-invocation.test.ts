@@ -45,14 +45,16 @@ function extractBashBlocks(body: string): string[] {
 
 // Does ANY fenced bash block in the body contain an executable flow
 // invocation with the --goal flag? "Executable" means the flow appears
-// as the CLI positional token after `./bin/circuit-next` or after
+// as the CLI positional token after `./bin/circuit-next run` or after
 // `node dist/cli/circuit.js`, AND the same line has `--goal `. Prose
 // mentions, goal text, or necheckd ("do not run …") text DO NOT satisfy.
 function hasExecutableCompiledFlowInvocation(body: string, flow: string): boolean {
   const blocks = extractBashBlocks(body);
   const flowPattern = flow.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const binInvocation = new RegExp(`^\\s*\\.\\/bin\\/circuit-next ${flowPattern}(?:\\s|$)`);
-  const nodeInvocation = new RegExp(`^\\s*node dist\\/cli\\/circuit\\.js ${flowPattern}(?:\\s|$)`);
+  const binInvocation = new RegExp(`^\\s*\\.\\/bin\\/circuit-next run ${flowPattern}(?:\\s|$)`);
+  const nodeInvocation = new RegExp(
+    `^\\s*node dist\\/cli\\/circuit\\.js run ${flowPattern}(?:\\s|$)`,
+  );
   for (const block of blocks) {
     for (const line of block.split('\n')) {
       const hasCli = binInvocation.test(line) || nodeInvocation.test(line);
@@ -77,8 +79,8 @@ function hasExecutableBuildInvocation(body: string): boolean {
 
 function hasExecutableRouterInvocation(body: string): boolean {
   const blocks = extractBashBlocks(body);
-  const binInvocation = /^\s*\.\/bin\/circuit-next --goal(?:\s|$)/;
-  const nodeInvocation = /^\s*node dist\/cli\/circuit\.js --goal(?:\s|$)/;
+  const binInvocation = /^\s*\.\/bin\/circuit-next run --goal(?:\s|$)/;
+  const nodeInvocation = /^\s*node dist\/cli\/circuit\.js run --goal(?:\s|$)/;
   for (const block of blocks) {
     for (const line of block.split('\n')) {
       if (binInvocation.test(line) || nodeInvocation.test(line)) return true;
@@ -250,7 +252,7 @@ description: stub
 ---
 
 \`\`\`bash
-./bin/circuit-next explore --goal 'find deprecated APIs'
+./bin/circuit-next run explore --goal 'find deprecated APIs'
 \`\`\`
 `;
       expect(hasExecutableExploreInvocation(goodBody)).toBe(true);
@@ -263,7 +265,7 @@ description: stub
 ---
 
 \`\`\`bash
-node dist/cli/circuit.js explore --goal 'find deprecated APIs'
+node dist/cli/circuit.js run explore --goal 'find deprecated APIs'
 \`\`\`
 `;
       expect(hasExecutableExploreInvocation(compiledJsBody)).toBe(true);

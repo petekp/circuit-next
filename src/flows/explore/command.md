@@ -46,14 +46,14 @@ metacharacters:
    and the full Bash command becomes:
 
    ```bash
-   ./bin/circuit-next explore --goal 'can'\''t go'
+   ./bin/circuit-next run explore --goal 'can'\''t go'
    ```
 
    For a goal with no special characters (e.g., `find deprecated APIs`),
    the straightforward single-quoted form is sufficient:
 
    ```bash
-   ./bin/circuit-next explore --goal 'find deprecated APIs'
+   ./bin/circuit-next run explore --goal 'find deprecated APIs'
    ```
 
    Use the Bash tool to execute the constructed command. `./bin/circuit-next`

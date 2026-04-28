@@ -7,7 +7,7 @@ import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { RunId } from '../../src/schemas/ids.js';
 
-import type { AgentRelayInput } from '../../src/runtime/connectors/agent.js';
+import type { ClaudeCodeRelayInput } from '../../src/runtime/connectors/claude-code.js';
 import type { RelayResult } from '../../src/runtime/connectors/shared.js';
 import { type RelayFn, runCompiledFlow } from '../../src/runtime/runner.js';
 
@@ -26,7 +26,7 @@ import { type RelayFn, runCompiledFlow } from '../../src/runtime/runner.js';
 // integration against the runCompiledFlow loop's flow control is part of
 // the assertion surface, not just the in-isolation verdict parser.
 
-const FIXTURE_PATH = resolve('.claude-plugin/skills/runtime-proof/circuit.json');
+const FIXTURE_PATH = resolve('generated/flows/runtime-proof/circuit.json');
 
 function loadFixture(): { flow: CompiledFlow; bytes: Buffer } {
   const bytes = readFileSync(FIXTURE_PATH);
@@ -41,8 +41,8 @@ function deterministicNow(startMs: number): () => Date {
 
 function relayerWith(resultBody: string): RelayFn {
   return {
-    connectorName: 'agent',
-    relay: async (input: AgentRelayInput): Promise<RelayResult> => ({
+    connectorName: 'claude-code',
+    relay: async (input: ClaudeCodeRelayInput): Promise<RelayResult> => ({
       request_payload: input.prompt,
       receipt_id: 'stub-receipt-check-eval',
       result_body: resultBody,

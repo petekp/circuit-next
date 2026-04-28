@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { ResolvedSelection } from '../../schemas/selection-policy.js';
 
-// Shared connector-layer scalars. Both `agent` and `codex` connectors
+// Shared connector-layer scalars. Both `claude-code` and `codex` connectors
 // need symmetric access to the hash helper + a uniform relay-result
 // shape.
 //
@@ -16,9 +16,9 @@ import type { ResolvedSelection } from '../../schemas/selection-policy.js';
 // import-level scan over the connectors tree covers it — a future
 // regression that smuggles a forbidden SDK identifier into a shared
 // helper would trip Check 29 the same way a direct import under
-// `codex.ts` or `agent.ts` would.
+// `codex.ts` or `claude-code.ts` would.
 
-// Shared relay-result shape produced by both the `agent` and
+// Shared relay-result shape produced by both the `claude-code` and
 // `codex` connectors. The materializer is parameterized on
 // `connectorName` and consumes this shape uniformly per-connector.
 //
@@ -27,7 +27,7 @@ import type { ResolvedSelection } from '../../schemas/selection-policy.js';
 //   - `request_payload` — the prompt bytes submitted to the subprocess.
 //     Hashed into `relay.request.request_payload_hash`.
 //   - `receipt_id` — the subprocess-assigned session identifier
-//     (claude session_id for `agent`; Codex thread_id for `codex`).
+//     (Claude Code session_id for `claude-code`; Codex thread_id for `codex`).
 //     Carried verbatim into `relay.receipt.receipt_id`.
 //   - `result_body` — the terminal text payload from the subprocess.
 //     Hashed into `relay.result.result_report_hash`; also the raw
@@ -36,7 +36,7 @@ import type { ResolvedSelection } from '../../schemas/selection-policy.js';
 //     invocation, measured via performance.now(). Feeds
 //     `relay.completed.duration_ms`.
 //   - `cli_version` — vendor-CLI version string captured at relay
-//     time. For `agent`, from the subprocess's init trace_entry
+//     time. For `claude-code`, from the subprocess's init trace_entry
 //     `claude_code_version` field. For `codex`, from a pre-invocation
 //     `codex --version` shellout (Codex's `--json` stream does not emit
 //     version in-band). Recorded for version-pinned transcript evidence.

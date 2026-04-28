@@ -637,7 +637,7 @@ describe('Build checkpoint execution substrate', () => {
     const runFolder = join(runFolderBase, 'resume-relay-context');
     const captured: RelayInput[] = [];
     const relayer: RelayFn = {
-      connectorName: 'agent',
+      connectorName: 'claude-code',
       relay: async (input): Promise<RelayResult> => {
         captured.push(input);
         return {
@@ -665,6 +665,7 @@ describe('Build checkpoint execution substrate', () => {
           layer: 'invocation',
           config: {
             schema_version: 1,
+            host: { kind: 'generic-shell' },
             relay: { default: 'auto', roles: {}, circuits: {}, connectors: {} },
             circuits: {},
             defaults: {
@@ -691,6 +692,7 @@ describe('Build checkpoint execution substrate', () => {
           layer: 'invocation',
           config: {
             schema_version: 1,
+            host: { kind: 'generic-shell' },
             relay: { default: 'auto', roles: {}, circuits: {}, connectors: {} },
             circuits: {},
             defaults: {
@@ -720,7 +722,7 @@ describe('Build checkpoint execution substrate', () => {
     const runFolder = join(runFolderBase, 'resume-empty-relay-context');
     const captured: RelayInput[] = [];
     const relayer: RelayFn = {
-      connectorName: 'agent',
+      connectorName: 'claude-code',
       relay: async (input): Promise<RelayResult> => {
         captured.push(input);
         return {
@@ -756,6 +758,7 @@ describe('Build checkpoint execution substrate', () => {
           layer: 'invocation',
           config: {
             schema_version: 1,
+            host: { kind: 'generic-shell' },
             relay: { default: 'auto', roles: {}, circuits: {}, connectors: {} },
             circuits: {},
             defaults: {

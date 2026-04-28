@@ -3,18 +3,18 @@
 // Reads the active schematics declared by each flow package and
 // compiles each to a CompileResult via
 // src/runtime/compile-schematic-to-flow.ts (consumed here through
-// dist/), then writes the JSON files under .claude-plugin/skills/<id>/.
-// Then runs `biome format --write` on the emitted files so they match
-// the surrounding formatting.
+// dist/), then writes canonical JSON files under generated/flows/<id>/.
+// Claude Code host output under .claude-plugin/skills/<id>/ mirrors those
+// canonical files.
 //
 // File layout:
-//   - kind:'single'   → .claude-plugin/skills/<id>/circuit.json
+//   - kind:'single'   → generated/flows/<id>/circuit.json
 //                       (entry_modes carries the full schematic list)
 //   - kind:'per-mode' → group compiled flows by graph identity
 //                       (everything except entry_modes). The largest
 //                       group goes to circuit.json with merged
 //                       entry_modes; remaining modes get one file each
-//                       at .claude-plugin/skills/<id>/<mode-name>.json.
+//                       at generated/flows/<id>/<mode-name>.json.
 //                       The CLI loader prefers <mode>.json when an entry
 //                       mode is requested and falls back to circuit.json.
 //
@@ -176,7 +176,7 @@ function planSchematicFiles(id, result) {
   if (result.kind === 'single') {
     return [
       {
-        outRel: `.claude-plugin/skills/${id}/circuit.json`,
+        outRel: `generated/flows/${id}/circuit.json`,
         flow: result.flow,
       },
     ];
@@ -205,7 +205,7 @@ function planSchematicFiles(id, result) {
   const main = ordered[0];
   const mainEntryModes = main.modes.map((m) => result.flows.get(m).entry_modes[0]);
   plan.push({
-    outRel: `.claude-plugin/skills/${id}/circuit.json`,
+    outRel: `generated/flows/${id}/circuit.json`,
     flow: { ...main.flow, entry_modes: mainEntryModes },
   });
   // Remaining groups → one file per mode in those groups, with single-mode
@@ -214,7 +214,7 @@ function planSchematicFiles(id, result) {
     for (const modeName of ordered[i].modes) {
       const flow = result.flows.get(modeName);
       plan.push({
-        outRel: `.claude-plugin/skills/${id}/${modeName}.json`,
+        outRel: `generated/flows/${id}/${modeName}.json`,
         flow,
       });
     }
@@ -222,19 +222,25 @@ function planSchematicFiles(id, result) {
   return plan;
 }
 
-// Returns the set of unexpected `*.json` files in a flow's skill directory:
-// anything on disk under `.claude-plugin/skills/<id>/` that ends in `.json`
+function claudeHostRel(canonicalRel) {
+  return canonicalRel.replace(/^generated\/flows\//, '.claude-plugin/skills/');
+}
+
+function claudeHostPlan(plan) {
+  return plan.map((p) => ({ ...p, outRel: claudeHostRel(p.outRel) }));
+}
+
+// Returns the set of unexpected `*.json` files in a generated flow directory:
+// anything on disk under `<rootRel>/<id>/` that ends in `.json`
 // but isn't in the emit plan. These are stale per-mode siblings from a
-// renamed/collapsed entry mode — the CLI loader prefers `<mode>.json` over
-// `circuit.json`, so a stale sibling can drive runtime behavior even though
-// `npm run verify` stays green.
-function findStaleSiblings(id, plan) {
-  const skillDirAbs = resolve(projectRoot, `.claude-plugin/skills/${id}`);
+// renamed/collapsed entry mode.
+function findStaleSiblings(id, plan, rootRel) {
+  const skillDirAbs = resolve(projectRoot, `${rootRel}/${id}`);
   if (!existsSync(skillDirAbs)) return [];
   const expected = new Set(plan.map((p) => basename(p.outRel)));
   return readdirSync(skillDirAbs)
     .filter((name) => name.endsWith('.json') && !expected.has(name))
-    .map((name) => `.claude-plugin/skills/${id}/${name}`);
+    .map((name) => `${rootRel}/${id}/${name}`);
 }
 
 async function emitMode() {
@@ -247,11 +253,19 @@ async function emitMode() {
       writeFileSync(outAbs, stringifyCompiledFlow(flow));
       biomeFormatInPlace(outAbs);
       console.log(`emitted ${outRel}`);
+      const hostRel = claudeHostRel(outRel);
+      const hostAbs = resolve(projectRoot, hostRel);
+      mkdirSync(dirname(hostAbs), { recursive: true });
+      writeFileSync(hostAbs, readFileSync(outAbs, 'utf8'));
+      console.log(`emitted ${hostRel} (claude-code host output)`);
     }
     // Stale `<mode>.json` siblings would otherwise survive emit and silently
     // drive runtime behavior via the CLI loader. Treat them as stale outputs
     // of this build step and remove them.
-    for (const stale of findStaleSiblings(entry.id, plan)) {
+    for (const stale of [
+      ...findStaleSiblings(entry.id, plan, 'generated/flows'),
+      ...findStaleSiblings(entry.id, claudeHostPlan(plan), '.claude-plugin/skills'),
+    ]) {
       unlinkSync(resolve(projectRoot, stale));
       console.log(`removed stale ${stale}`);
     }
@@ -289,11 +303,32 @@ async function checkMode() {
           console.error('  Run `npm run emit-flows` to regenerate, then commit the diff.');
           drifted = true;
         }
+        const hostRel = claudeHostRel(outRel);
+        let hostBytes;
+        try {
+          hostBytes = readFileSync(resolve(projectRoot, hostRel), 'utf8');
+        } catch (_err) {
+          console.error(
+            `✗ ${hostRel} is missing on disk but the claude-code host compiles to it. Run \`npm run emit-flows\` to regenerate, then commit.`,
+          );
+          drifted = true;
+          continue;
+        }
+        if (compiledBytes === hostBytes) {
+          console.log(`✓ ${hostRel} mirrors ${outRel}`);
+        } else {
+          console.error(`✗ ${hostRel} drifted from canonical ${outRel}`);
+          console.error('  Run `npm run emit-flows` to regenerate, then commit the diff.');
+          drifted = true;
+        }
       }
       // Stale `<mode>.json` siblings in this skill dir would silently drive
       // runtime behavior via the CLI loader, while the byte-by-byte check
       // above only ranges over files in the current emit plan.
-      const stale = findStaleSiblings(entry.id, plan);
+      const stale = [
+        ...findStaleSiblings(entry.id, plan, 'generated/flows'),
+        ...findStaleSiblings(entry.id, claudeHostPlan(plan), '.claude-plugin/skills'),
+      ];
       for (const rel of stale) {
         console.error(
           `✗ ${rel} is not in the emit plan for ${entry.schematicPath}. Run \`npm run emit-flows\` to clean up stale siblings, then commit the deletion.`,

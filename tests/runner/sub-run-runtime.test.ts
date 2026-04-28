@@ -50,7 +50,7 @@ function deterministicNow(startMs: number): () => Date {
 
 function unusedRelayer(): RelayFn {
   return {
-    connectorName: 'agent',
+    connectorName: 'claude-code',
     relay: async () => {
       throw new Error('relayer should not run during sub-run-only parent execution');
     },

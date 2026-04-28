@@ -1,7 +1,7 @@
 // Pure compiler: FlowSchematic → CompiledFlow(s). Takes a fully-populated schematic
 // (schematic-level entry/entry_modes/stage_path_policy/stages/version present;
 // per-item protocol/writes/check present) and produces compiled CompiledFlow
-// objects shaped like the existing committed `.claude-plugin/skills/<id>/`
+// objects shaped like the existing committed `generated/flows/<id>/`
 // fixtures.
 //
 // Compile is per entry mode: routes are resolved against

@@ -8,7 +8,7 @@ import { parseReport } from '../../src/runtime/registries/report-schemas.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 
 const REPO_ROOT = resolve('.');
-const EXPLORE_FIXTURE_PATH = join(REPO_ROOT, '.claude-plugin/skills/explore/circuit.json');
+const EXPLORE_FIXTURE_PATH = join(REPO_ROOT, 'generated/flows/explore/circuit.json');
 const ARTIFACTS_PATH = join(REPO_ROOT, 'specs/reports.json');
 
 // Schemas whose runtime writer is a ComposeBuilder (rather than a

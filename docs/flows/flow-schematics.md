@@ -18,8 +18,8 @@ The companion machine-readable block list lives at
 The active Fix schematic lives at `src/flows/fix/schematic.json`, with
 the schematic schema in `src/schemas/flow-schematic.ts` and the schematic →
 compiled-flow compiler at `src/runtime/compile-schematic-to-flow.ts`.
-Compiled flows are emitted to `.claude-plugin/skills/fix/circuit.json` and
-(because Fix uses `route_overrides`) `.claude-plugin/skills/fix/lite.json`.
+Compiled flows are emitted to `generated/flows/fix/circuit.json` and
+(because Fix uses `route_overrides`) `generated/flows/fix/lite.json`.
 The product direction note at `docs/flows/direction.md` reframes old
 Repair evidence into the clearer Fix schematic.
 

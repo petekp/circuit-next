@@ -13,6 +13,7 @@ import {
   ConnectorReference,
   CustomConnectorDescriptor,
   EnabledConnector,
+  HostKind,
   RESERVED_ADAPTER_NAMES,
   RelayConfig,
   RelayResolutionSource,
@@ -20,6 +21,17 @@ import {
   TraceEntry,
 } from '../../src/index.js';
 import { RUN_A } from '../helpers/runtrace-builders.js';
+
+function customConnector(name = 'gemini', command = ['./bin/g']) {
+  return {
+    kind: 'custom' as const,
+    name,
+    command,
+    prompt_transport: 'append-argv' as const,
+    output: { kind: 'json-field' as const, field: 'response' },
+    capabilities: { filesystem: 'read-only' as const, structured_output: 'json' as const },
+  };
+}
 
 describe('Config + connector registry', () => {
   it('relay.default parses auto/builtin/registered-connector-name', () => {
@@ -38,11 +50,11 @@ describe('Config + connector registry', () => {
     const ok = RelayConfig.safeParse({
       default: 'gemini',
       connectors: {
-        gemini: {
-          kind: 'custom',
-          name: 'gemini',
-          command: ['./docs/examples/gemini-relay.sh', '--model', 'gemini-2.5-pro'],
-        },
+        gemini: customConnector('gemini', [
+          './docs/examples/gemini-relay.sh',
+          '--model',
+          'gemini-2.5-pro',
+        ]),
       },
     });
     expect(ok.success).toBe(true);
@@ -59,25 +71,36 @@ describe('Config + connector registry', () => {
     const c = Config.safeParse({ schema_version: 1 });
     expect(c.success).toBe(true);
     if (c.success) {
+      expect(c.data.host.kind).toBe('generic-shell');
       expect(c.data.relay.default).toBe('auto');
     }
   });
 });
+
+describe('HostKind', () => {
+  it('accepts supported V1 hosts and rejects worker names', () => {
+    expect(HostKind.safeParse('generic-shell').success).toBe(true);
+    expect(HostKind.safeParse('claude-code').success).toBe(true);
+    expect(HostKind.safeParse('codex').success).toBe(false);
+  });
+});
+
 describe('EnabledConnector (connector-I1)', () => {
   it('accepts the 3 declared built-ins', () => {
-    expect(EnabledConnector.safeParse('agent').success).toBe(true);
+    expect(EnabledConnector.safeParse('claude-code').success).toBe(true);
     expect(EnabledConnector.safeParse('codex').success).toBe(true);
     expect(EnabledConnector.safeParse('codex-isolated').success).toBe(true);
   });
 
   it('rejects unknown built-in names', () => {
+    expect(EnabledConnector.safeParse('agent').success).toBe(false);
     expect(EnabledConnector.safeParse('gemini').success).toBe(false);
     expect(EnabledConnector.safeParse('ollama').success).toBe(false);
     expect(EnabledConnector.safeParse('').success).toBe(false);
   });
 
   it('built-in enum is the frozen 3-tuple and ordering is stable', () => {
-    expect(EnabledConnector.options).toEqual(['agent', 'codex', 'codex-isolated']);
+    expect(EnabledConnector.options).toEqual(['claude-code', 'codex', 'codex-isolated']);
   });
 });
 
@@ -100,16 +123,16 @@ describe('ConnectorName regex (connector-I2 syntax)', () => {
 
 describe('RESERVED_ADAPTER_NAMES (connector-I2 reservation set)', () => {
   it('contains every built-in plus the auto sentinel and nothing else', () => {
-    expect(RESERVED_ADAPTER_NAMES).toEqual(['agent', 'codex', 'codex-isolated', 'auto']);
+    expect(RESERVED_ADAPTER_NAMES).toEqual(['claude-code', 'codex', 'codex-isolated', 'auto']);
   });
 });
 
 describe('CustomConnectorDescriptor (connector-I3)', () => {
-  const ok = {
-    kind: 'custom' as const,
-    name: 'gemini',
-    command: ['./docs/examples/gemini-relay.sh', '--model', 'gemini-2.5-pro'],
-  };
+  const ok = customConnector('gemini', [
+    './docs/examples/gemini-relay.sh',
+    '--model',
+    'gemini-2.5-pro',
+  ]);
 
   it('parses a well-formed descriptor', () => {
     expect(CustomConnectorDescriptor.safeParse(ok).success).toBe(true);
@@ -139,6 +162,22 @@ describe('CustomConnectorDescriptor (connector-I3)', () => {
   it('rejects name that violates ConnectorName regex', () => {
     expect(CustomConnectorDescriptor.safeParse({ ...ok, name: 'Gemini' }).success).toBe(false);
   });
+
+  it('requires declared capabilities and output extraction', () => {
+    const { capabilities: _capabilities, ...withoutCapabilities } = ok;
+    const { output: _output, ...withoutOutput } = ok;
+    expect(CustomConnectorDescriptor.safeParse(withoutCapabilities).success).toBe(false);
+    expect(CustomConnectorDescriptor.safeParse(withoutOutput).success).toBe(false);
+  });
+
+  it('rejects unsupported capability values', () => {
+    expect(
+      CustomConnectorDescriptor.safeParse({
+        ...ok,
+        capabilities: { filesystem: 'trusted-write', structured_output: 'json' },
+      }).success,
+    ).toBe(false);
+  });
 });
 
 describe('ConnectorRef discriminated union (connector-I4)', () => {
@@ -154,9 +193,7 @@ describe('ConnectorRef discriminated union (connector-I4)', () => {
 
   it('accepts inline custom variant (distinct from ConnectorReference — connector-I5)', () => {
     const ok = ConnectorRef.safeParse({
-      kind: 'custom',
-      name: 'gemini',
-      command: ['./bin/gemini-relay'],
+      ...customConnector('gemini', ['./bin/gemini-relay']),
     });
     expect(ok.success).toBe(true);
   });
@@ -182,9 +219,7 @@ describe('RelayConfig reserved-name disjointness (connector-I2)', () => {
     const bad = RelayConfig.safeParse({
       connectors: {
         codex: {
-          kind: 'custom',
-          name: 'codex',
-          command: ['./bin/shadow-codex'],
+          ...customConnector('codex', ['./bin/shadow-codex']),
         },
       },
     });
@@ -195,9 +230,7 @@ describe('RelayConfig reserved-name disjointness (connector-I2)', () => {
     const bad = RelayConfig.safeParse({
       connectors: {
         auto: {
-          kind: 'custom',
-          name: 'auto',
-          command: ['./bin/pick-for-me'],
+          ...customConnector('auto', ['./bin/pick-for-me']),
         },
       },
     });
@@ -207,11 +240,7 @@ describe('RelayConfig reserved-name disjointness (connector-I2)', () => {
   it('accepts non-reserved custom connector names', () => {
     const ok = RelayConfig.safeParse({
       connectors: {
-        gemini: {
-          kind: 'custom',
-          name: 'gemini',
-          command: ['./bin/gemini'],
-        },
+        gemini: customConnector('gemini', ['./bin/gemini']),
       },
     });
     expect(ok.success).toBe(true);
@@ -243,7 +272,7 @@ describe('RelayConfig strict surface (connector-I9)', () => {
     const bad = RelayConfig.safeParse({
       roles: { researcher: { kind: 'named', name: 'gemini', alias: 'g' } },
       connectors: {
-        gemini: { kind: 'custom', name: 'gemini', command: ['./bin/g'] },
+        gemini: customConnector(),
       },
     });
     expect(bad.success).toBe(false);
@@ -259,6 +288,14 @@ describe('RelayConfig strict surface (connector-I9)', () => {
   it('rejects RelayRole key outside the closed enum (connector-I6 — orchestrator not a role)', () => {
     const bad = RelayConfig.safeParse({
       roles: { orchestrator: { kind: 'builtin', name: 'codex' } },
+    });
+    expect(bad.success).toBe(false);
+  });
+
+  it('rejects read-only custom connectors for implementer roles', () => {
+    const bad = RelayConfig.safeParse({
+      roles: { implementer: { kind: 'named', name: 'gemini' } },
+      connectors: { gemini: customConnector() },
     });
     expect(bad.success).toBe(false);
   });
@@ -383,9 +420,7 @@ describe('connector-I10 — ResolvedConnector rejects pre-resolution named refer
   it('accepts inline custom descriptor variant', () => {
     expect(
       ResolvedConnector.safeParse({
-        kind: 'custom',
-        name: 'gemini',
-        command: ['./bin/g'],
+        ...customConnector(),
       }).success,
     ).toBe(true);
   });
@@ -422,7 +457,7 @@ describe('connector-I10 — RelayStartedTraceEntry.connector rejects named refer
     expect(
       TraceEntry.safeParse({
         ...baseEv,
-        connector: { kind: 'custom', name: 'gemini', command: ['./bin/g'] },
+        connector: customConnector(),
       }).success,
     ).toBe(true);
   });
@@ -442,9 +477,7 @@ describe('RelayConfig registry-key/descriptor-name parity (connector-I11)', () =
     const bad = RelayConfig.safeParse({
       connectors: {
         gemini: {
-          kind: 'custom',
-          name: 'ollama',
-          command: ['./bin/ollama'],
+          ...customConnector('ollama', ['./bin/ollama']),
         },
       },
     });
@@ -454,11 +487,7 @@ describe('RelayConfig registry-key/descriptor-name parity (connector-I11)', () =
   it('connector-I11 — accepts matching registry key and descriptor name', () => {
     const ok = RelayConfig.safeParse({
       connectors: {
-        gemini: {
-          kind: 'custom',
-          name: 'gemini',
-          command: ['./bin/gemini'],
-        },
+        gemini: customConnector('gemini', ['./bin/gemini']),
       },
     });
     expect(ok.success).toBe(true);
@@ -494,7 +523,7 @@ describe('RelayConfig closure via own-property check (connector-I8)', () => {
     const ok = RelayConfig.safeParse({
       roles: { researcher: { kind: 'named', name: 'gemini' } },
       connectors: {
-        gemini: { kind: 'custom', name: 'gemini', command: ['./bin/g'] },
+        gemini: customConnector(),
       },
     });
     expect(ok.success).toBe(true);

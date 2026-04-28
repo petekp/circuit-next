@@ -233,7 +233,7 @@ export async function runSubRunStep(
     entryModeName: step.flow_ref.entry_mode,
     change_kind,
     now,
-    relayer,
+    ...(relayer === undefined ? {} : { relayer }),
     composeWriter,
     selectionConfigLayers: executionSelectionConfigLayers,
     childCompiledFlowResolver,

@@ -6,12 +6,12 @@ import { extractJsonObject, selectedModelForProvider } from './shared.js';
 
 // Real codex connector. Invokes the Codex CLI as a subprocess of the
 // Node.js runtime (subprocess-per-connector for v0). Mirrors the
-// `agent.ts` template: no external SDK dependency, Node stdlib only
+// `claude-code.ts` template: no external SDK dependency, Node stdlib only
 // (`node:child_process` + `node:perf_hooks`; `node:crypto` via
 // `./shared.ts`).
 //
 // Capability boundary — OS-level sandbox, different mechanism from
-// `agent`. Where the `agent` connector layers the `claude -p` declarative
+// `claude-code`. Where the `claude-code` connector layers the `claude -p` declarative
 // tool-list flags (`--tools ""`, `--strict-mcp-config`,
 // `--disable-slash-commands`) with a parse-time assertion against the
 // subprocess's init trace_entry, the `codex` connector's boundary is enforced
@@ -51,7 +51,7 @@ import { extractJsonObject, selectedModelForProvider } from './shared.js';
 //                                 under this connector's invariant.
 //   '--ephemeral'               — no session file persisted under
 //                                 `~/.codex/sessions/**`. Analog of the
-//                                 agent connector's `--no-session-
+//                                 claude-code connector's `--no-session-
 //                                 persistence`.
 //   '--skip-git-repo-check'     — allow running outside a git repo
 //                                 (the subprocess-cwd passed by the
@@ -159,7 +159,7 @@ for (const forbidden of CODEX_FORBIDDEN_ARGV_TOKENS) {
 // `budgets.wall_clock_ms` overrides this when present.
 const DEFAULT_TIMEOUT_MS = 120_000;
 
-// Grace period between SIGTERM and SIGKILL, modeled on agent.ts.
+// Grace period between SIGTERM and SIGKILL, modeled on claude-code.ts.
 const SIGTERM_TO_SIGKILL_GRACE_MS = 2_000;
 
 // stdout / stderr caps. Codex's `--json` stream is typically tiny
@@ -185,7 +185,7 @@ const VERSION_CAPTURE_TIMEOUT_MS = 5_000;
 // deferred-by-design, not oversight.
 export interface CodexRelayInput extends ConnectorRelayInput {}
 
-// The `CodexRelayResult` name parallels `AgentRelayResult` —
+// The `CodexRelayResult` name parallels `ClaudeCodeRelayResult` —
 // both alias the shared `RelayResult` shape and exist for call-site
 // clarity at the connector boundary.
 export type CodexRelayResult = RelayResult;
@@ -329,7 +329,7 @@ export async function relayCodex(input: CodexRelayInput): Promise<RelayResult> {
       // stdin is `ignore` so codex exec does not read from stdin and
       // append a `<stdin>` block to the prompt. `detached: true` puts
       // the subprocess in its own process group so the timeout-kill
-      // path can signal the group (mirrors agent.ts HIGH 4 containment
+      // path can signal the group (mirrors claude-code.ts containment
       // discipline); if codex spawns helper processes, they are killed
       // via the group kill.
       child = spawn(CODEX_EXECUTABLE, args, {
@@ -452,26 +452,27 @@ export async function relayCodex(input: CodexRelayInput): Promise<RelayResult> {
   });
 }
 
-// Known `item.completed` `item.type` values at Codex CLI 0.118. The
-// connector accepts the `agent_message` and `reasoning` types (model
-// narration) and rejects anything else — an unknown type may represent
-// a new capability surface (tool use, patch apply, shell command)
-// that bypasses the sandbox's intent and needs to be explicitly
-// reviewed before we start emitting it into the relay transcript.
+// Known `item.completed` `item.type` values at Codex CLI 0.118-0.125. The
+// connector accepts model narration plus read-only command execution
+// events and rejects anything else — an unknown type may represent a new
+// capability surface that bypasses the sandbox's intent and needs to be
+// explicitly reviewed before we start emitting it into the relay transcript.
 //
 // A future CLI bump that introduces a genuinely-sandboxed item type
 // (e.g., a reasoning variant) can extend this list; a bump that
 // introduces a write-capable item type triggers ADR-0009 §6 reopen.
-const KNOWN_CODEX_ITEM_TYPES = new Set<string>(['agent_message', 'reasoning']);
+const KNOWN_CODEX_ITEM_TYPES = new Set<string>(['agent_message', 'command_execution', 'reasoning']);
 
-// Top-level trace_entry types the parser expects at Codex CLI 0.118 —
+// Top-level trace_entry types the parser expects at Codex CLI 0.118-0.125 —
 // grounded in the `tests/fixtures/codex-smoke/protocol/happy-path-
-// ok.jsonl` real capture. An trace_entry whose `type` is outside this set is
-// rejected: the connector refuses to admit unfamiliar protocol surfaces
-// into the relay transcript.
+// ok.jsonl` real capture and a 0.125 manual smoke that emitted
+// `item.started` before a read-only `command_execution`. An trace_entry whose
+// `type` is outside this set is rejected: the connector refuses to admit
+// unfamiliar protocol surfaces into the relay transcript.
 const KNOWN_CODEX_EVENT_TYPES = new Set<string>([
   'thread.started',
   'turn.started',
+  'item.started',
   'item.completed',
   'turn.completed',
 ]);
@@ -601,7 +602,7 @@ export function parseCodexStdout(
   }
   // Tolerant extraction: workers preamble status sentences before their
   // JSON response despite the shape-hint instruction. Symmetric with
-  // `parseAgentStdout`. Non-JSON output flows through unchanged.
+  // `parseClaudeCodeStdout`. Non-JSON output flows through unchanged.
   const result_body = extractJsonObject(result_body_raw);
 
   return {

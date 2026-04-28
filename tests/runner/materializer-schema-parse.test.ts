@@ -7,7 +7,7 @@ import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { RunId } from '../../src/schemas/ids.js';
 
-import type { AgentRelayInput } from '../../src/runtime/connectors/agent.js';
+import type { ClaudeCodeRelayInput } from '../../src/runtime/connectors/claude-code.js';
 import type { RelayResult } from '../../src/runtime/connectors/shared.js';
 import { type RelayFn, runCompiledFlow } from '../../src/runtime/runner.js';
 
@@ -38,7 +38,7 @@ import { type RelayFn, runCompiledFlow } from '../../src/runtime/runner.js';
 // loop so the integration with the check-evaluation path is part of the
 // assertion surface.
 
-const FIXTURE_PATH = resolve('.claude-plugin/skills/runtime-proof/circuit.json');
+const FIXTURE_PATH = resolve('generated/flows/runtime-proof/circuit.json');
 
 function loadMutatedFixture(
   mutator: (raw: {
@@ -67,8 +67,8 @@ function deterministicNow(startMs: number): () => Date {
 
 function relayerWith(resultBody: string): RelayFn {
   return {
-    connectorName: 'agent',
-    relay: async (input: AgentRelayInput): Promise<RelayResult> => ({
+    connectorName: 'claude-code',
+    relay: async (input: ClaudeCodeRelayInput): Promise<RelayResult> => ({
       request_payload: input.prompt,
       receipt_id: 'stub-receipt-materializer-schema-parse',
       result_body: resultBody,

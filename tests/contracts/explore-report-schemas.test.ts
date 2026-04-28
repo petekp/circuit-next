@@ -16,7 +16,7 @@ import {
 } from '../../src/flows/explore/reports.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 
-const EXPLORE_FIXTURE_PATH = resolve('.claude-plugin/skills/explore/circuit.json');
+const EXPLORE_FIXTURE_PATH = resolve('generated/flows/explore/circuit.json');
 
 function loadExploreCompiledFlow(): CompiledFlow {
   return CompiledFlow.parse(JSON.parse(readFileSync(EXPLORE_FIXTURE_PATH, 'utf8')));

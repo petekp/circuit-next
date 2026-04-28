@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { AgentRelayInput } from '../../src/runtime/connectors/agent.js';
+import type { ClaudeCodeRelayInput } from '../../src/runtime/connectors/claude-code.js';
 import type { RelayResult } from '../../src/runtime/connectors/shared.js';
 import { manifestSnapshotPath } from '../../src/runtime/manifest-snapshot-writer.js';
 import { resultPath } from '../../src/runtime/result-writer.js';
@@ -27,7 +27,7 @@ import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { RunId } from '../../src/schemas/ids.js';
 
-const FIXTURE_PATH = resolve('.claude-plugin/skills/runtime-proof/circuit.json');
+const FIXTURE_PATH = resolve('generated/flows/runtime-proof/circuit.json');
 
 function loadFixture(): { flow: CompiledFlow; bytes: Buffer } {
   const bytes = readFileSync(FIXTURE_PATH);
@@ -53,8 +53,8 @@ function change_kind(): ChangeKindDeclaration {
 
 function stubRelayer(): RelayFn {
   return {
-    connectorName: 'agent',
-    relay: async (input: AgentRelayInput): Promise<RelayResult> => ({
+    connectorName: 'claude-code',
+    relay: async (input: ClaudeCodeRelayInput): Promise<RelayResult> => ({
       request_payload: input.prompt,
       receipt_id: 'stub-receipt-fresh-run-folder',
       result_body: '{"verdict":"ok"}',

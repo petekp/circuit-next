@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { AgentRelayInput } from '../../src/runtime/connectors/agent.js';
+import type { ClaudeCodeRelayInput } from '../../src/runtime/connectors/claude-code.js';
 import type { RelayResult } from '../../src/runtime/connectors/shared.js';
 import { type RelayFn, runCompiledFlow } from '../../src/runtime/runner.js';
 import { readRunTrace } from '../../src/runtime/trace-reader.js';
@@ -14,7 +14,7 @@ import { RunResult } from '../../src/schemas/result.js';
 import { RunProjection } from '../../src/schemas/run.js';
 import { Snapshot } from '../../src/schemas/snapshot.js';
 
-const FIXTURE_PATH = resolve('.claude-plugin/skills/runtime-proof/circuit.json');
+const FIXTURE_PATH = resolve('generated/flows/runtime-proof/circuit.json');
 
 function loadFixture(): { flow: CompiledFlow; bytes: Buffer } {
   const bytes = readFileSync(FIXTURE_PATH);
@@ -40,8 +40,8 @@ function change_kind(): ChangeKindDeclaration {
 
 function unusedRelayer(): RelayFn {
   return {
-    connectorName: 'agent',
-    relay: async (_input: AgentRelayInput): Promise<RelayResult> => ({
+    connectorName: 'claude-code',
+    relay: async (_input: ClaudeCodeRelayInput): Promise<RelayResult> => ({
       request_payload: 'unused',
       receipt_id: 'unused',
       result_body: '{"verdict":"ok"}',

@@ -627,7 +627,7 @@ export async function runFanoutStep(
         entryModeName: branch.flow_ref.entry_mode,
         change_kind,
         now,
-        relayer,
+        ...(relayer === undefined ? {} : { relayer }),
         composeWriter,
         selectionConfigLayers: executionSelectionConfigLayers,
         childCompiledFlowResolver,

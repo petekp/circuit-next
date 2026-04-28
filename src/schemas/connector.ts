@@ -2,8 +2,41 @@ import { z } from 'zod';
 import { CompiledFlowId } from './ids.js';
 import { RelayRole } from './step.js';
 
-export const EnabledConnector = z.enum(['agent', 'codex', 'codex-isolated']);
+export const EnabledConnector = z.enum(['claude-code', 'codex', 'codex-isolated']);
 export type EnabledConnector = z.infer<typeof EnabledConnector>;
+
+export const FilesystemCapability = z.enum(['read-only', 'trusted-write', 'isolated-write']);
+export type FilesystemCapability = z.infer<typeof FilesystemCapability>;
+
+export const StructuredOutputCapability = z.enum(['json']);
+export type StructuredOutputCapability = z.infer<typeof StructuredOutputCapability>;
+
+export const ConnectorCapabilities = z
+  .object({
+    filesystem: FilesystemCapability,
+    structured_output: StructuredOutputCapability,
+  })
+  .strict();
+export type ConnectorCapabilities = z.infer<typeof ConnectorCapabilities>;
+
+export const PromptTransport = z.enum(['append-argv']);
+export type PromptTransport = z.infer<typeof PromptTransport>;
+
+export const ConnectorOutputExtraction = z
+  .object({
+    kind: z.literal('json-field'),
+    field: z.string().min(1),
+  })
+  .strict();
+export type ConnectorOutputExtraction = z.infer<typeof ConnectorOutputExtraction>;
+
+export const BUILTIN_CONNECTOR_CAPABILITIES: Readonly<
+  Record<EnabledConnector, ConnectorCapabilities>
+> = {
+  'claude-code': { filesystem: 'trusted-write', structured_output: 'json' },
+  codex: { filesystem: 'read-only', structured_output: 'json' },
+  'codex-isolated': { filesystem: 'isolated-write', structured_output: 'json' },
+} as const;
 
 // connector-I2: the `'auto'` literal is a reserved sentinel for
 // `RelayConfig.default`; connector names must not collide with it.
@@ -23,8 +56,21 @@ export const CustomConnectorDescriptor = z
     kind: z.literal('custom'),
     name: ConnectorName,
     command: z.array(z.string().min(1)).min(1),
+    prompt_transport: PromptTransport,
+    output: ConnectorOutputExtraction,
+    capabilities: ConnectorCapabilities,
   })
-  .strict();
+  .strict()
+  .superRefine((descriptor, ctx) => {
+    if (descriptor.capabilities.filesystem !== 'read-only') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['capabilities', 'filesystem'],
+        message:
+          'custom connectors are read-only in V1; writable custom workers require a later isolated mode',
+      });
+    }
+  });
 export type CustomConnectorDescriptor = z.infer<typeof CustomConnectorDescriptor>;
 
 export const BuiltInConnectorRef = z
@@ -43,7 +89,7 @@ export const NamedConnectorRef = z
   .strict();
 export type NamedConnectorRef = z.infer<typeof NamedConnectorRef>;
 
-export const ConnectorRef = z.discriminatedUnion('kind', [
+export const ConnectorRef = z.union([
   BuiltInConnectorRef,
   NamedConnectorRef,
   CustomConnectorDescriptor,
@@ -56,10 +102,7 @@ export type ConnectorRef = z.infer<typeof ConnectorRef>;
 // `ResolvedConnector` is the 2-variant discriminated union used at the trace_entry
 // layer; `ConnectorRef` remains the 3-variant pre-resolution union used in
 // config and CLI parsing.
-export const ResolvedConnector = z.discriminatedUnion('kind', [
-  BuiltInConnectorRef,
-  CustomConnectorDescriptor,
-]);
+export const ResolvedConnector = z.union([BuiltInConnectorRef, CustomConnectorDescriptor]);
 export type ResolvedConnector = z.infer<typeof ResolvedConnector>;
 
 // connector-I7: relay resolution source with category + disambiguator.

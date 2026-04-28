@@ -3,7 +3,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { type AgentRelayResult, relayAgent } from '../../src/runtime/connectors/agent.js';
+import {
+  type ClaudeCodeRelayResult,
+  relayClaudeCode,
+} from '../../src/runtime/connectors/claude-code.js';
 import { materializeRelay } from '../../src/runtime/connectors/relay-materializer.js';
 import { sha256Hex } from '../../src/runtime/connectors/shared.js';
 import { reduce } from '../../src/runtime/reducer.js';
@@ -15,9 +18,9 @@ import { TraceEntry } from '../../src/schemas/trace-entry.js';
 
 // Agent-relay-roundtrip test with the five-trace_entry transcript binding.
 //
-// The test exercises the full runtime boundary with a REAL agent connector:
+// The test exercises the full runtime boundary with a REAL claude-code connector:
 //   (1) bootstrap a run (trace-writer writes run.bootstrapped);
-//   (2) invoke relayAgent() against the live `claude` CLI;
+//   (2) invoke relayClaudeCode() against the live `claude` CLI;
 //   (3) materialize the five-trace_entry relay transcript + four on-disk
 //       slots (request, receipt, result, report) via
 //       materializeRelay();
@@ -33,7 +36,7 @@ import { TraceEntry } from '../../src/schemas/trace-entry.js';
 //
 // Enforcement binding §Durable relay transcript: this IS the
 // non-substitutable evidence that
-//   - relay.started carries connector.name='agent' via ResolvedConnector,
+//   - relay.started carries connector.name='claude-code' via ResolvedConnector,
 //   - relay.request carries a non-empty request_payload_hash,
 //   - relay.receipt carries a receipt_id,
 //   - relay.result carries a result_report_hash,
@@ -71,7 +74,7 @@ describe('agent relay round-trip', () => {
   });
 
   (AGENT_SMOKE ? it : it.skip)(
-    'end-to-end: relayAgent → 5-trace_entry transcript → reducer snapshot → materialized report (AGENT_SMOKE=1)',
+    'end-to-end: relayClaudeCode → 5-trace_entry transcript → reducer snapshot → materialized report (AGENT_SMOKE=1)',
     async () => {
       const runFolder = mkdtempSync(join(tmpdir(), 'agent-relay-roundtrip-'));
       try {
@@ -125,14 +128,14 @@ describe('agent relay round-trip', () => {
         // keeps the result small and the hash stable-ish (model output
         // may vary but hashes are computed over whatever comes back).
         const prompt = 'Respond with exactly the single word: ACCEPT';
-        const agentResult: AgentRelayResult = await relayAgent({
+        const agentResult: ClaudeCodeRelayResult = await relayClaudeCode({
           prompt,
           timeoutMs: 120_000,
         });
 
         // (3+4) Materialize and append. Selection + provenance are
         // required at the materializer boundary; this AGENT_SMOKE
-        // round-trip tests the agent connector's full five-trace_entry
+        // round-trip tests the claude-code connector's full five-trace_entry
         // transcript with the canonical empty selection and `source:
         // 'explicit'` provenance (the test injects the connector directly,
         // so the honest claim is `'explicit'`).
@@ -144,7 +147,7 @@ describe('agent relay round-trip', () => {
           startingSequence: 1,
           runFolder,
           writes,
-          connectorName: 'agent',
+          connector: { kind: 'builtin', name: 'claude-code' },
           resolvedSelection: { skills: [], invocation_options: {} },
           resolvedFrom: { source: 'explicit' },
           relayResult: agentResult,
@@ -166,7 +169,7 @@ describe('agent relay round-trip', () => {
         const [started, request, receipt, result, completed] = relayTraceEntrys;
         // Connector name binding — the critical CC#P2-2 surface.
         if (started?.kind !== 'relay.started') throw new Error('unreachable');
-        expect(started.connector).toEqual({ kind: 'builtin', name: 'agent' });
+        expect(started.connector).toEqual({ kind: 'builtin', name: 'claude-code' });
         expect(started.role).toBe('implementer');
 
         if (request?.kind !== 'relay.request') throw new Error('unreachable');

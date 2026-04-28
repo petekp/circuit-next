@@ -3,12 +3,14 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { AgentRelayInput } from '../../src/runtime/connectors/agent.js';
+import type { ClaudeCodeRelayInput } from '../../src/runtime/connectors/claude-code.js';
 import { materializeRelay } from '../../src/runtime/connectors/relay-materializer.js';
 import type { RelayResult } from '../../src/runtime/connectors/shared.js';
+import { resolveRelayDecision } from '../../src/runtime/relay-selection.js';
 import { type RelayFn, runCompiledFlow } from '../../src/runtime/runner.js';
 import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
+import { Config } from '../../src/schemas/config.js';
 import { RunId, StepId } from '../../src/schemas/ids.js';
 
 // Relay-trace_entry provenance plumbing through `runCompiledFlow`.
@@ -20,12 +22,35 @@ import { RunId, StepId } from '../../src/schemas/ids.js';
 // invariant: provenance is derived from real inputs at the runner
 // boundary and the materializer is fail-closed at the type signature.
 
-const FIXTURE_PATH = resolve('.claude-plugin/skills/runtime-proof/circuit.json');
+const FIXTURE_PATH = resolve('generated/flows/runtime-proof/circuit.json');
+
+function loadGeneratedFixture(flowId: string): { flow: CompiledFlow; bytes: Buffer } {
+  const bytes = readFileSync(resolve('generated/flows', flowId, 'circuit.json'));
+  const raw: unknown = JSON.parse(bytes.toString('utf8'));
+  return { flow: CompiledFlow.parse(raw), bytes };
+}
 
 function loadFixture(): { flow: CompiledFlow; bytes: Buffer } {
   const bytes = readFileSync(FIXTURE_PATH);
   const raw: unknown = JSON.parse(bytes.toString('utf8'));
   return { flow: CompiledFlow.parse(raw), bytes };
+}
+
+function relayStep(
+  flow: CompiledFlow,
+  role?: CompiledFlow['steps'][number] extends infer Step
+    ? Step extends { kind: 'relay'; role: infer Role }
+      ? Role
+      : never
+    : never,
+): CompiledFlow['steps'][number] & { kind: 'relay' } {
+  const step = flow.steps.find(
+    (candidate) => candidate.kind === 'relay' && (role === undefined || candidate.role === role),
+  );
+  if (step === undefined || step.kind !== 'relay') {
+    throw new Error(`fixture missing ${role ?? ''} relay step`);
+  }
+  return step;
 }
 
 function deterministicNow(startMs: number): () => Date {
@@ -35,8 +60,8 @@ function deterministicNow(startMs: number): () => Date {
 
 function stubRelayer(): RelayFn {
   return {
-    connectorName: 'agent',
-    relay: async (input: AgentRelayInput): Promise<RelayResult> => ({
+    connectorName: 'claude-code',
+    relay: async (input: ClaudeCodeRelayInput): Promise<RelayResult> => ({
       request_payload: input.prompt,
       receipt_id: 'stub-receipt',
       result_body: '{"verdict":"ok"}',
@@ -89,6 +114,221 @@ describe("relay.started carries honest 'resolved_from' from the runner's decisio
       throw new Error('expected relay.started trace_entry');
     }
     expect(relayStarted.resolved_from).toEqual({ source: 'explicit' });
+  });
+});
+
+describe('relay connector resolution precedence', () => {
+  it('role config beats circuit/default and records role provenance', async () => {
+    const { flow } = loadGeneratedFixture('build');
+    const step = relayStep(flow, 'reviewer');
+
+    const decision = await resolveRelayDecision({
+      flow,
+      step,
+      configLayers: [
+        {
+          layer: 'project',
+          config: {
+            schema_version: 1,
+            host: { kind: 'generic-shell' },
+            relay: {
+              default: 'claude-code',
+              roles: { [step.role]: { kind: 'builtin', name: 'codex' } },
+              circuits: { [flow.id]: { kind: 'builtin', name: 'claude-code' } },
+              connectors: {},
+            },
+            circuits: {},
+            defaults: {},
+          },
+        },
+      ],
+    });
+
+    expect(decision.relayer.connectorName).toBe('codex');
+    expect(decision.resolvedFrom).toEqual({ source: 'role', role: step.role });
+  });
+
+  it('circuit config beats default and records circuit provenance', async () => {
+    const { flow } = loadGeneratedFixture('build');
+    const step = relayStep(flow, 'reviewer');
+
+    const decision = await resolveRelayDecision({
+      flow,
+      step,
+      configLayers: [
+        {
+          layer: 'project',
+          config: {
+            schema_version: 1,
+            host: { kind: 'generic-shell' },
+            relay: {
+              default: 'claude-code',
+              roles: {},
+              circuits: { [flow.id]: { kind: 'builtin', name: 'codex' } },
+              connectors: {},
+            },
+            circuits: {},
+            defaults: {},
+          },
+        },
+      ],
+    });
+
+    expect(decision.relayer.connectorName).toBe('codex');
+    expect(decision.resolvedFrom).toEqual({ source: 'circuit', flow_id: flow.id });
+  });
+
+  it('auto resolves to claude-code and records auto provenance', async () => {
+    const { flow } = loadFixture();
+    const step = relayStep(flow);
+
+    const decision = await resolveRelayDecision({ flow, step, configLayers: [] });
+
+    expect(decision.relayer.connectorName).toBe('claude-code');
+    expect(decision.resolvedFrom).toEqual({ source: 'auto' });
+  });
+
+  it('a project layer with default auto does not erase an inherited relay.default', async () => {
+    const { flow } = loadGeneratedFixture('build');
+    const step = relayStep(flow, 'reviewer');
+
+    const decision = await resolveRelayDecision({
+      flow,
+      step,
+      configLayers: [
+        {
+          layer: 'user-global',
+          config: Config.parse({ schema_version: 1, relay: { default: 'codex' } }),
+        },
+        {
+          layer: 'project',
+          config: Config.parse({
+            schema_version: 1,
+            circuits: { [flow.id]: { selection: { effort: 'low' } } },
+          }),
+        },
+      ],
+    });
+
+    expect(decision.relayer.connectorName).toBe('codex');
+    expect(decision.resolvedFrom).toEqual({ source: 'default' });
+  });
+
+  it('read-only role connector is rejected for implementer relay steps', async () => {
+    const { flow } = loadFixture();
+    const step = relayStep(flow, 'implementer');
+
+    await expect(
+      resolveRelayDecision({
+        flow,
+        step,
+        configLayers: [
+          {
+            layer: 'project',
+            config: {
+              schema_version: 1,
+              host: { kind: 'generic-shell' },
+              relay: {
+                default: 'claude-code',
+                roles: { implementer: { kind: 'builtin', name: 'codex' } },
+                circuits: {},
+                connectors: {},
+              },
+              circuits: {},
+              defaults: {},
+            },
+          },
+        ],
+      }),
+    ).rejects.toThrow(/read-only and cannot run implementer/);
+  });
+
+  it('read-only default connector is rejected for implementer relay steps', async () => {
+    const { flow } = loadFixture();
+    const step = relayStep(flow, 'implementer');
+
+    await expect(
+      resolveRelayDecision({
+        flow,
+        step,
+        configLayers: [
+          {
+            layer: 'project',
+            config: {
+              schema_version: 1,
+              host: { kind: 'generic-shell' },
+              relay: {
+                default: 'codex',
+                roles: {},
+                circuits: {},
+                connectors: {},
+              },
+              circuits: {},
+              defaults: {},
+            },
+          },
+        ],
+      }),
+    ).rejects.toThrow(/read-only and cannot run implementer/);
+  });
+
+  it('custom reviewer connectors run and unwrap configured JSON fields', async () => {
+    const { flow } = loadGeneratedFixture('build');
+    const step = relayStep(flow, 'reviewer');
+    const script = [
+      'const field = process.argv[1];',
+      'const prompt = process.argv.at(-1);',
+      "const result = JSON.stringify({ verdict: 'accept', prompt });",
+      'console.log(JSON.stringify({ receipt_id: `custom-${field}`, [field]: result }));',
+    ].join(' ');
+
+    for (const [name, field] of [
+      ['gemini-reviewer', 'response'],
+      ['cursor-reviewer', 'result'],
+    ] as const) {
+      const decision = await resolveRelayDecision({
+        flow,
+        step,
+        configLayers: [
+          {
+            layer: 'project',
+            config: {
+              schema_version: 1,
+              host: { kind: 'generic-shell' },
+              relay: {
+                default: 'auto',
+                roles: { reviewer: { kind: 'named', name } },
+                circuits: {},
+                connectors: {
+                  [name]: {
+                    kind: 'custom',
+                    name,
+                    command: [process.execPath, '-e', script, field],
+                    prompt_transport: 'append-argv',
+                    output: { kind: 'json-field', field },
+                    capabilities: { filesystem: 'read-only', structured_output: 'json' },
+                  },
+                },
+              },
+              circuits: {},
+              defaults: {},
+            },
+          },
+        ],
+      });
+
+      expect(decision.relayer.connectorName).toBe(name);
+      expect(decision.resolvedFrom).toEqual({ source: 'role', role: 'reviewer' });
+      const result = await decision.relayer.relay({
+        prompt: `review with ${name}`,
+        resolvedSelection: { skills: [], invocation_options: {} },
+      });
+      expect(result.receipt_id).toBe(`custom-${field}`);
+      expect(JSON.parse(result.result_body)).toEqual({
+        verdict: 'accept',
+        prompt: `review with ${name}`,
+      });
+    }
   });
 });
 
@@ -362,7 +602,7 @@ describe('CompiledFlowRunResult.relayResults surfaces per-relay cli_version', ()
     expect(outcome.relayResults.length).toBeGreaterThan(0);
     const first = outcome.relayResults[0];
     if (first === undefined) throw new Error('expected relayResults[0]');
-    expect(first.connectorName).toBe('agent');
+    expect(first.connectorName).toBe('claude-code');
     expect(first.cli_version).toBe('0.0.0-stub');
     expect(typeof first.stepId).toBe('string');
     expect(first.stepId.length).toBeGreaterThan(0);
@@ -389,7 +629,7 @@ describe("materializer fails closed when resolved_from.role does not match the r
           startingSequence: 0,
           runFolder,
           writes: { request: 'request', receipt: 'receipt', result: 'result' },
-          connectorName: 'agent',
+          connector: { kind: 'builtin', name: 'claude-code' },
           resolvedSelection: { skills: [], invocation_options: {} },
           // `role` source with a role that does NOT equal the step's role
           // — the cross-validation in src/schemas/trace-entry.ts catches this at

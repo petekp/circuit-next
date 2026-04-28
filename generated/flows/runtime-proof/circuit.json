@@ -1,0 +1,92 @@
+{
+  "schema_version": "2",
+  "id": "runtime-proof",
+  "version": "0.1.0",
+  "purpose": "Runtime Proof flow: exercise one compose step and one relay step end-to-end so the runtime boundary can be observed closing a real run.",
+  "entry": {
+    "signals": {
+      "include": ["runtime-proof", "alpha-proof"],
+      "exclude": []
+    },
+    "intent_prefixes": ["runtime-proof"]
+  },
+  "entry_modes": [
+    {
+      "name": "runtime-proof",
+      "start_at": "compose-step",
+      "depth": "standard",
+      "description": "Default runtime-proof entry mode; seeds the run at the compose step."
+    }
+  ],
+  "stages": [
+    {
+      "id": "plan-stage",
+      "title": "Plan",
+      "canonical": "plan",
+      "steps": ["compose-step"]
+    },
+    {
+      "id": "act-stage",
+      "title": "Act",
+      "canonical": "act",
+      "steps": ["relay-step"]
+    }
+  ],
+  "stage_path_policy": {
+    "mode": "partial",
+    "omits": ["frame", "analyze", "verify", "review", "close"],
+    "rationale": "Runtime Proof is a narrow proof flow; only plan and act are needed to exercise compose and relay through the runtime boundary."
+  },
+  "steps": [
+    {
+      "id": "compose-step",
+      "title": "Compose runtime proof report",
+      "protocol": "runtime-proof-compose@v1",
+      "reads": [],
+      "routes": {
+        "pass": "relay-step"
+      },
+      "executor": "orchestrator",
+      "kind": "compose",
+      "writes": {
+        "report": {
+          "path": "reports/compose.json",
+          "schema": "plan.strategy@v1"
+        }
+      },
+      "check": {
+        "kind": "schema_sections",
+        "source": {
+          "kind": "report",
+          "ref": "report"
+        },
+        "required": ["summary"]
+      }
+    },
+    {
+      "id": "relay-step",
+      "title": "Relay dry-run connector",
+      "protocol": "runtime-proof-relay@v1",
+      "reads": ["reports/compose.json"],
+      "routes": {
+        "pass": "@complete"
+      },
+      "executor": "worker",
+      "kind": "relay",
+      "role": "implementer",
+      "writes": {
+        "request": "reports/relay.request.json",
+        "receipt": "reports/relay.receipt.json",
+        "result": "reports/relay.result.json"
+      },
+      "check": {
+        "kind": "result_verdict",
+        "source": {
+          "kind": "relay_result",
+          "ref": "result"
+        },
+        "pass": ["ok"]
+      }
+    }
+  ]
+}

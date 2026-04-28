@@ -38,31 +38,31 @@ metacharacters:
    Default Fix (standard depth, full review pass):
 
    ```bash
-   ./bin/circuit-next fix --goal 'fix the foo bug'
+   ./bin/circuit-next run fix --goal 'fix the foo bug'
    ```
 
    Lite Fix (skips review, closes after verification):
 
    ```bash
-   ./bin/circuit-next fix --goal 'fix the missing-token edge case' --entry-mode lite
+   ./bin/circuit-next run fix --goal 'fix the missing-token edge case' --entry-mode lite
    ```
 
    Deep Fix:
 
    ```bash
-   ./bin/circuit-next fix --goal 'repair the failing pipeline' --entry-mode deep
+   ./bin/circuit-next run fix --goal 'repair the failing pipeline' --entry-mode deep
    ```
 
    Autonomous Fix:
 
    ```bash
-   ./bin/circuit-next fix --goal 'diagnose and patch the crash' --entry-mode autonomous
+   ./bin/circuit-next run fix --goal 'diagnose and patch the crash' --entry-mode autonomous
    ```
 
    Example for a task `can't reproduce` (contains one apostrophe):
 
    ```bash
-   ./bin/circuit-next fix --goal 'can'\''t reproduce'
+   ./bin/circuit-next run fix --goal 'can'\''t reproduce'
    ```
 
    Use the Bash tool to execute the constructed command. `./bin/circuit-next`
@@ -77,7 +77,7 @@ metacharacters:
    an explicit depth level, pass it with `--depth`. A single command may carry
    both flags.
 4. **Per-mode flow files.** When `--entry-mode lite` is supplied, the CLI
-   prefers `.claude-plugin/skills/fix/lite.json` over `circuit.json` because
+   prefers `generated/flows/fix/lite.json` over `circuit.json` because
    the Fix schematic emits a Lite-only compiled flow that skips the review
    relay. Other modes (default/deep/autonomous) load `circuit.json`.
 5. **Parse the CLI's JSON output.** Always surface `flow_id`, `outcome`,

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { AgentRelayInput } from '../../src/runtime/connectors/agent.js';
+import type { ClaudeCodeRelayInput } from '../../src/runtime/connectors/claude-code.js';
 import type { RelayResult } from '../../src/runtime/connectors/shared.js';
 import { type RelayFn, runCompiledFlow } from '../../src/runtime/runner.js';
 import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
@@ -27,7 +27,7 @@ import { CompiledFlowId, RunId } from '../../src/schemas/ids.js';
 // regression the round-trip alone cannot catch, since the round-trip
 // calls `materializeRelay` directly and bypasses `runCompiledFlow`.
 
-const FIXTURE_PATH = resolve('.claude-plugin/skills/runtime-proof/circuit.json');
+const FIXTURE_PATH = resolve('generated/flows/runtime-proof/circuit.json');
 
 function loadFixture(): { flow: CompiledFlow; bytes: Buffer } {
   const bytes = readFileSync(FIXTURE_PATH);
@@ -43,7 +43,7 @@ function deterministicNow(startMs: number): () => Date {
 function codexShapedStub(): RelayFn {
   return {
     connectorName: 'codex',
-    relay: async (input: AgentRelayInput): Promise<RelayResult> => ({
+    relay: async (input: ClaudeCodeRelayInput): Promise<RelayResult> => ({
       request_payload: input.prompt,
       receipt_id: 'stub-codex-thread-id',
       result_body: '{"verdict":"ok"}',
@@ -56,7 +56,7 @@ function codexShapedStub(): RelayFn {
 function change_kind(): ChangeKindDeclaration {
   return {
     change_kind: 'ratchet-advance',
-    failure_mode: 'runner materializer call site hardcodes connectorName="agent"',
+    failure_mode: 'runner materializer call site hardcodes connectorName="claude-code"',
     acceptance_evidence:
       'relay.started trace_entry carries connector.name="codex" when a codex-shaped descriptor is injected',
     alternate_framing:
@@ -98,7 +98,7 @@ describe('RelayFn descriptor carries connector identity into relay.started', () 
       throw new Error('expected relay.started trace_entry');
     }
     // The critical regression: identity comes from the descriptor, not
-    // a call-site literal. A regression here would land `name: 'agent'`
+    // a call-site literal. A regression here would land `name: 'claude-code'`
     // and fail this test.
     expect(relayStarted.connector).toEqual({ kind: 'builtin', name: 'codex' });
   });

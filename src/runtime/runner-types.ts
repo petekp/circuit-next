@@ -1,7 +1,7 @@
 import type { ChangeKindDeclaration } from '../schemas/change-kind.js';
 import type { CompiledFlow } from '../schemas/compiled-flow.js';
 import type { LayeredConfig as LayeredConfigValue } from '../schemas/config.js';
-import type { EnabledConnector } from '../schemas/connector.js';
+import type { ResolvedConnector } from '../schemas/connector.js';
 import type { Depth } from '../schemas/depth.js';
 import type { CompiledFlowId, InvocationId, RunId } from '../schemas/ids.js';
 import type { RunResult } from '../schemas/result.js';
@@ -13,14 +13,15 @@ import type { ConnectorRelayInput, RelayResult } from './connectors/shared.js';
 
 // Structured relayer descriptor. Without it, `RelayFn` would be a
 // bare function type and the runner's materializer call site would
-// hardcode `connectorName: 'agent'`; injecting a non-agent relayer
+// hardcode `connectorName: 'claude-code'`; injecting a non-claude-code relayer
 // (e.g. `relayCodex`) through `CompiledFlowInvocation.relayer` would
 // silently lie on the `relay.started` trace_entry's connector discriminant.
 // The descriptor binds the relayer function to its connector identity
 // at the injection seam, so the materializer is parameterized from the
 // descriptor instead of from a call-site literal.
 export interface RelayFn {
-  readonly connectorName: EnabledConnector;
+  readonly connectorName: string;
+  readonly connector?: ResolvedConnector;
   readonly relay: (input: RelayInput) => Promise<RelayResult>;
 }
 
@@ -43,14 +44,14 @@ export type ComposeWriterFn = (input: ComposeWriterInput) => void;
 // side-channel env var.
 export interface RelayResultMetadata {
   readonly stepId: string;
-  readonly connectorName: EnabledConnector;
+  readonly connectorName: string;
   readonly cli_version: string;
 }
 
 // Sub-run / fanout child flow lookup. The runtime stays flow-
 // agnostic by accepting a resolver from the caller (CLI / tests) instead
 // of baking in a manifest-layout convention. The CLI's resolver reads
-// `.claude-plugin/skills/<flow_id>/<entry_mode|circuit>.json`; tests
+// `generated/flows/<flow_id>/<entry_mode|circuit>.json`; tests
 // inject deterministic stubs.
 export interface ResolvedChildCompiledFlow {
   readonly flow: CompiledFlow;
@@ -94,7 +95,7 @@ export interface CompiledFlowInvocation {
   change_kind: ChangeKindDeclaration;
   now: () => Date;
   invocationId?: InvocationId;
-  // Injection seam for the relay connector. Default is `relayAgent`
+  // Injection seam for the relay connector. Default is `relayClaudeCode`
   // (lazy-imported so tests that don't exercise relay don't pull the
   // subprocess module into their graph).
   relayer?: RelayFn;

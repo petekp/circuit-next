@@ -1,0 +1,235 @@
+{
+  "schema_version": "2",
+  "id": "fix",
+  "version": "0.1.0",
+  "purpose": "Fix flow: capture problem boundary, gather context, diagnose, apply a focused change, verify, review (in standard depth), and close with evidence. Lite mode skips the review relay and closes immediately after verification via the fix-verify route_overrides.continue.lite override. fix-no-repro-decision and fix-handoff remain in the schematic as authoring intent for future ask/handoff routing in the runtime; they are unreachable at compile and do not appear in the emitted compiled flows.",
+  "entry": {
+    "signals": {
+      "include": ["fix", "bug", "broken", "regression", "incident", "outage", "diagnose"],
+      "exclude": []
+    },
+    "intent_prefixes": ["fix", "diagnose"]
+  },
+  "entry_modes": [
+    {
+      "name": "lite",
+      "start_at": "fix-frame",
+      "depth": "lite",
+      "description": "Lite Fix entry mode — skips the review relay and closes immediately after verification."
+    }
+  ],
+  "stages": [
+    {
+      "id": "frame-stage",
+      "title": "Frame",
+      "canonical": "frame",
+      "steps": ["fix-frame"]
+    },
+    {
+      "id": "analyze-stage",
+      "title": "Analyze",
+      "canonical": "analyze",
+      "steps": ["fix-gather-context", "fix-diagnose"]
+    },
+    {
+      "id": "act-stage",
+      "title": "Act",
+      "canonical": "act",
+      "steps": ["fix-act"]
+    },
+    {
+      "id": "verify-stage",
+      "title": "Verify",
+      "canonical": "verify",
+      "steps": ["fix-verify"]
+    },
+    {
+      "id": "close-stage",
+      "title": "Close",
+      "canonical": "close",
+      "steps": ["fix-close-lite"]
+    }
+  ],
+  "stage_path_policy": {
+    "mode": "partial",
+    "omits": ["plan", "review"],
+    "rationale": "Fix follows Frame, Analyze, Act, Verify, Review, Close. The Plan stage is omitted because Fix's planning is folded into Diagnose during the Analyze stage — there is no separate plan-of-attack report distinct from the diagnosis. mode 'lite' (depth 'lite') also omits 'review' because route_overrides leave those canonicals with no reachable items."
+  },
+  "steps": [
+    {
+      "id": "fix-frame",
+      "title": "Frame — confirm Fix brief",
+      "protocol": "fix-frame@v1",
+      "reads": [],
+      "routes": {
+        "pass": "fix-gather-context"
+      },
+      "executor": "orchestrator",
+      "kind": "compose",
+      "writes": {
+        "report": {
+          "path": "reports/fix/brief.json",
+          "schema": "fix.brief@v1"
+        }
+      },
+      "check": {
+        "kind": "schema_sections",
+        "source": {
+          "kind": "report",
+          "ref": "report"
+        },
+        "required": ["problem_statement", "scope", "regression_contract", "success_criteria"]
+      }
+    },
+    {
+      "id": "fix-gather-context",
+      "title": "Analyze — gather problem context",
+      "protocol": "fix-gather-context@v1",
+      "reads": ["reports/fix/brief.json"],
+      "routes": {
+        "pass": "fix-diagnose"
+      },
+      "executor": "worker",
+      "kind": "relay",
+      "role": "researcher",
+      "writes": {
+        "report": {
+          "path": "reports/fix/context.json",
+          "schema": "fix.context@v1"
+        },
+        "request": "reports/relay/fix-gather-context.request.json",
+        "receipt": "reports/relay/fix-gather-context.receipt.txt",
+        "result": "reports/relay/fix-gather-context.result.json"
+      },
+      "check": {
+        "kind": "result_verdict",
+        "source": {
+          "kind": "relay_result",
+          "ref": "result"
+        },
+        "pass": ["accept"]
+      }
+    },
+    {
+      "id": "fix-diagnose",
+      "title": "Analyze — diagnose problem",
+      "protocol": "fix-diagnose@v1",
+      "reads": ["reports/fix/brief.json", "reports/fix/context.json"],
+      "routes": {
+        "pass": "fix-act"
+      },
+      "executor": "worker",
+      "kind": "relay",
+      "role": "researcher",
+      "writes": {
+        "report": {
+          "path": "reports/fix/diagnosis.json",
+          "schema": "fix.diagnosis@v1"
+        },
+        "request": "reports/relay/fix-diagnose.request.json",
+        "receipt": "reports/relay/fix-diagnose.receipt.txt",
+        "result": "reports/relay/fix-diagnose.result.json"
+      },
+      "check": {
+        "kind": "result_verdict",
+        "source": {
+          "kind": "relay_result",
+          "ref": "result"
+        },
+        "pass": ["accept"]
+      }
+    },
+    {
+      "id": "fix-act",
+      "title": "Act — apply focused fix",
+      "protocol": "fix-act@v1",
+      "reads": ["reports/fix/brief.json", "reports/fix/diagnosis.json"],
+      "routes": {
+        "pass": "fix-verify"
+      },
+      "executor": "worker",
+      "kind": "relay",
+      "role": "implementer",
+      "writes": {
+        "report": {
+          "path": "reports/fix/change.json",
+          "schema": "fix.change@v1"
+        },
+        "request": "reports/relay/fix-act.request.json",
+        "receipt": "reports/relay/fix-act.receipt.txt",
+        "result": "reports/relay/fix-act.result.json"
+      },
+      "check": {
+        "kind": "result_verdict",
+        "source": {
+          "kind": "relay_result",
+          "ref": "result"
+        },
+        "pass": ["accept"]
+      }
+    },
+    {
+      "id": "fix-verify",
+      "title": "Verify — run Fix proof",
+      "protocol": "fix-verify@v1",
+      "reads": ["reports/fix/brief.json", "reports/fix/change.json"],
+      "routes": {
+        "pass": "fix-close-lite"
+      },
+      "executor": "orchestrator",
+      "kind": "verification",
+      "writes": {
+        "report": {
+          "path": "reports/fix/verification.json",
+          "schema": "fix.verification@v1"
+        }
+      },
+      "check": {
+        "kind": "schema_sections",
+        "source": {
+          "kind": "report",
+          "ref": "report"
+        },
+        "required": ["overall_status", "commands"]
+      }
+    },
+    {
+      "id": "fix-close-lite",
+      "title": "Close (lite) — emit Fix result without review",
+      "protocol": "fix-close-lite@v1",
+      "reads": [
+        "reports/fix/brief.json",
+        "reports/fix/context.json",
+        "reports/fix/diagnosis.json",
+        "reports/fix/change.json",
+        "reports/fix/verification.json"
+      ],
+      "routes": {
+        "pass": "@complete"
+      },
+      "executor": "orchestrator",
+      "kind": "compose",
+      "writes": {
+        "report": {
+          "path": "reports/fix-result.json",
+          "schema": "fix.result@v1"
+        }
+      },
+      "check": {
+        "kind": "schema_sections",
+        "source": {
+          "kind": "report",
+          "ref": "report"
+        },
+        "required": [
+          "summary",
+          "outcome",
+          "verification_status",
+          "regression_status",
+          "review_status",
+          "evidence_links"
+        ]
+      }
+    }
+  ]
+}

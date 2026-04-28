@@ -2,7 +2,7 @@
 contract: explore
 status: draft
 version: 0.7
-schema_source: .claude-plugin/skills/explore/circuit.json (compiled flow) + src/flows/explore/reports.ts (explore.brief / explore.analysis / explore.compose / explore.review-verdict / explore.result)
+schema_source: generated/flows/explore/circuit.json (compiled flow) + src/flows/explore/reports.ts (explore.brief / explore.analysis / explore.compose / explore.review-verdict / explore.result)
 reference_evidence: specs/reference/legacy-circuit/explore-characterization.md
 last_updated: 2026-04-28
 depends_on: [flow, stage, step, selection, depth, change_kind, skill, connector]
@@ -35,7 +35,7 @@ deferred properties.
 
 ## Scope note
 
-The compiled `explore` flow at `.claude-plugin/skills/explore/circuit.json`
+The compiled `explore` flow at `generated/flows/explore/circuit.json`
 is validated by the base `CompiledFlow` schema (`src/schemas/compiled-flow.ts`). This
 contract is the flow-specific discipline layer over that base schema — it
 names one invariant (EXPLORE-I1) the base schema cannot express, plus five
@@ -221,7 +221,7 @@ to satisfy but that are not runtime-enforced today. Each is recorded in
 
 ## Pre-conditions
 
-- The compiled flow at `.claude-plugin/skills/explore/circuit.json` parses
+- The compiled flow at `generated/flows/explore/circuit.json` parses
   under the base `CompiledFlow.safeParse`.
 - The flow's top-level `id` equals the string literal `'explore'`.
 - All five report ids under `report_ids` are registered in
@@ -243,7 +243,7 @@ After an `explore` compiled flow is accepted:
 
 The following table is the authoritative reader/writer graph.
 `specs/reports.json` writers/readers lists and
-`.claude-plugin/skills/explore/circuit.json` step `reads` arrays MUST match
+`generated/flows/explore/circuit.json` step `reads` arrays MUST match
 this table exactly.
 
 | Report                   | Writer (stage/step) | Readers (stage/step)                                                                 |
@@ -460,4 +460,4 @@ This contract is reopened if any of:
 - `specs/plans/` (planning notes for stages of this contract's
   development)
 - `src/flows/explore/reports.ts` (report schemas)
-- `.claude-plugin/skills/explore/circuit.json` (compiled flow)
+- `generated/flows/explore/circuit.json` (compiled flow)

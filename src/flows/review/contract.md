@@ -2,7 +2,7 @@
 contract: review
 status: draft
 version: 0.1
-schema_source: .claude-plugin/skills/review/circuit.json + src/flows/review/reports.ts
+schema_source: generated/flows/review/circuit.json + src/flows/review/reports.ts
 last_updated: 2026-04-28
 depends_on: [flow, stage, step, connector]
 report_ids:
@@ -83,7 +83,7 @@ authority-graph reports.
 
 ## Compiled Flow Binding
 
-The compiled flow at `.claude-plugin/skills/review/circuit.json` binds this
+The compiled flow at `generated/flows/review/circuit.json` binds this
 contract as follows:
 
 | Stage | Step | Kind | Output |
@@ -149,4 +149,4 @@ This contract reopens if any of:
 - `specs/plans/p2-9-second-flow.md §4` (REVIEW-I1 / REVIEW-I2)
 - `specs/plans/p2-9-second-flow.md §5` (report model and relay shape)
 - `src/flows/review/reports.ts` (report schemas)
-- `.claude-plugin/skills/review/circuit.json` (compiled flow)
+- `generated/flows/review/circuit.json` (compiled flow)

@@ -1,6 +1,6 @@
 // End-to-end runtime wiring for the lite Fix flow.
 //
-// Loads `.claude-plugin/skills/fix/lite.json` (the compiled lite-mode
+// Loads `generated/flows/fix/lite.json` (the compiled lite-mode
 // CompiledFlow) and runs it through `runCompiledFlow` with stubbed relayers
 // for context/diagnose/act and a custom composeWriter that overrides
 // fix-frame to produce a brief with a fast no-op verification command.
@@ -14,7 +14,7 @@ import { dirname, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { FixBrief, FixResult } from '../../src/flows/fix/reports.js';
-import type { AgentRelayInput } from '../../src/runtime/connectors/agent.js';
+import type { ClaudeCodeRelayInput } from '../../src/runtime/connectors/claude-code.js';
 import type { RelayResult } from '../../src/runtime/connectors/shared.js';
 import {
   type ComposeWriterInput,
@@ -97,8 +97,8 @@ function frameOverrideComposeWriter(input: ComposeWriterInput): void {
 
 function relayer(): RelayFn {
   return {
-    connectorName: 'agent',
-    relay: async (input: AgentRelayInput): Promise<RelayResult> => {
+    connectorName: 'claude-code',
+    relay: async (input: ClaudeCodeRelayInput): Promise<RelayResult> => {
       const isContext = input.prompt.includes('Step: fix-gather-context');
       const isDiagnose = input.prompt.includes('Step: fix-diagnose');
       const isAct = input.prompt.includes('Step: fix-act');

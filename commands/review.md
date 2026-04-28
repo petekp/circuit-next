@@ -35,13 +35,13 @@ metacharacters:
    Example:
 
    ```bash
-   ./bin/circuit-next review --goal 'review the latest change'
+   ./bin/circuit-next run review --goal 'review the latest change'
    ```
 
    Example with an apostrophe:
 
    ```bash
-   ./bin/circuit-next review --goal 'can'\''t regress runtime safety'
+   ./bin/circuit-next run review --goal 'can'\''t regress runtime safety'
    ```
 
 3. **Parse the JSON output.** On success the CLI prints a JSON object with

@@ -47,7 +47,7 @@ function deterministicNow(startMs: number): () => Date {
 
 function relayerWithBody(body: string): RelayFn {
   return {
-    connectorName: 'agent',
+    connectorName: 'claude-code',
     relay: async (input: RelayInput): Promise<RelayResult> => ({
       request_payload: input.prompt,
       receipt_id: 'stub-receipt-cli-router',
@@ -251,6 +251,40 @@ describe('P2.8 CLI router', () => {
     expect(output.router_signal).toBeUndefined();
   });
 
+  it('run --goal routes through the classifier', async () => {
+    const output = await runMainJson(
+      [
+        'run',
+        '--goal',
+        'review this patch for safety problems',
+        '--run-folder',
+        join(runFolderBase, 'run-routed-review'),
+      ],
+      '{"verdict":"NO_ISSUES_FOUND","findings":[]}',
+    );
+
+    expect(output.flow_id).toBe('review');
+    expect(output.routed_by).toBe('classifier');
+    expect(output.outcome).toBe('complete');
+  });
+
+  it('run <flow> --goal bypasses the classifier', async () => {
+    const output = await runMainJson(
+      [
+        'run',
+        'explore',
+        '--goal',
+        'review this patch for safety problems',
+        '--run-folder',
+        join(runFolderBase, 'run-explicit-explore'),
+      ],
+      '{"verdict":"accept"}',
+    );
+
+    expect(output.flow_id).toBe('explore');
+    expect(output.routed_by).toBe('explicit');
+  });
+
   it('accepts --entry-mode and uses that mode depth when --depth is omitted', async () => {
     const runFolder = join(runFolderBase, 'build-lite-entry-mode');
     const output = await runMainJson(
@@ -345,7 +379,7 @@ describe('P2.8 CLI router', () => {
           '--goal',
           'review this patch for safety problems',
           '--fixture',
-          '.claude-plugin/skills/explore/circuit.json',
+          'generated/flows/explore/circuit.json',
           '--run-folder',
           join(runFolderBase, 'mismatch'),
         ],
@@ -600,7 +634,7 @@ describe('P2.8 CLI router', () => {
       'deep',
     ]);
     expect(withDepth.exit).toBe(2);
-    expect(withDepth.stderr).toMatch(/omit --depth\/--depth/);
+    expect(withDepth.stderr).toMatch(/omit --depth/);
 
     const withFixture = await runMainExit([
       'resume',
@@ -627,7 +661,7 @@ describe('P2.8 CLI router', () => {
     expect(withEntryMode.stderr).toMatch(/omit --mode\/--entry-mode/);
   });
 
-  it('accepts --depth as a synonym for --depth', async () => {
+  it('rejects --depth on checkpoint resume', async () => {
     const withDepth = await runMainExit([
       'resume',
       '--run-folder',
@@ -638,7 +672,7 @@ describe('P2.8 CLI router', () => {
       'deep',
     ]);
     expect(withDepth.exit).toBe(2);
-    expect(withDepth.stderr).toMatch(/omit --depth\/--depth/);
+    expect(withDepth.stderr).toMatch(/omit --depth/);
   });
 
   it('accepts --mode as a synonym for --entry-mode', async () => {
@@ -655,11 +689,10 @@ describe('P2.8 CLI router', () => {
     expect(withMode.stderr).toMatch(/omit --mode\/--entry-mode/);
   });
 
-  it('accepts --run-folder as a synonym for --run-folder (parses cleanly)', async () => {
+  it('parses --run-folder before rejecting resume-only --depth', async () => {
     // Resume validates other flags after argv parsing; pairing --run-folder
-    // with --depth exercises the same downstream "omit --depth/--depth"
-    // branch the --run-folder variant does. The branch firing proves
-    // --run-folder parsed and populated the same internal slot.
+    // with --depth exercises the downstream "omit --depth" branch. The
+    // branch firing proves --run-folder parsed and populated the run-folder slot.
     const result = await runMainExit([
       'resume',
       '--run-folder',
@@ -670,10 +703,10 @@ describe('P2.8 CLI router', () => {
       'deep',
     ]);
     expect(result.exit).toBe(2);
-    expect(result.stderr).toMatch(/omit --depth\/--depth/);
+    expect(result.stderr).toMatch(/omit --depth/);
   });
 
-  it('rejects supplying both --depth and --depth', async () => {
+  it('rejects supplying --depth more than once', async () => {
     const conflict = await runMainExit([
       'resume',
       '--run-folder',
@@ -686,7 +719,7 @@ describe('P2.8 CLI router', () => {
       'deep',
     ]);
     expect(conflict.exit).toBe(2);
-    expect(conflict.stderr).toMatch(/use either --depth or --depth, not both/);
+    expect(conflict.stderr).toMatch(/supply --depth only once/);
   });
 
   it('rejects supplying both --mode and --entry-mode', async () => {
@@ -705,7 +738,7 @@ describe('P2.8 CLI router', () => {
     expect(conflict.stderr).toMatch(/use either --mode or --entry-mode, not both/);
   });
 
-  it('rejects supplying both --run-folder and --run-folder', async () => {
+  it('rejects supplying --run-folder more than once', async () => {
     const conflict = await runMainExit([
       'resume',
       '--run-folder',
@@ -716,7 +749,7 @@ describe('P2.8 CLI router', () => {
       'continue',
     ]);
     expect(conflict.exit).toBe(2);
-    expect(conflict.stderr).toMatch(/use either --run-folder or --run-folder, not both/);
+    expect(conflict.stderr).toMatch(/supply --run-folder only once/);
   });
 
   it('keeps CLI help text aligned with the router-supported flow set', () => {

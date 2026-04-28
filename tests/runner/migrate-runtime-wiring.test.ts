@@ -12,7 +12,7 @@ import {
   MigrateReview,
   MigrateVerification,
 } from '../../src/flows/migrate/reports.js';
-import type { AgentRelayInput } from '../../src/runtime/connectors/agent.js';
+import type { ClaudeCodeRelayInput } from '../../src/runtime/connectors/claude-code.js';
 import type { RelayResult } from '../../src/runtime/connectors/shared.js';
 import { resultPath } from '../../src/runtime/result-writer.js';
 import {
@@ -105,8 +105,8 @@ function migrateRelayerWith(
   inventoryBody: string = DEFAULT_INVENTORY_BODY,
 ): RelayFn {
   return {
-    connectorName: 'agent',
-    relay: async (input: AgentRelayInput): Promise<RelayResult> => {
+    connectorName: 'claude-code',
+    relay: async (input: ClaudeCodeRelayInput): Promise<RelayResult> => {
       if (input.prompt.includes('Step: inventory-step')) {
         return {
           request_payload: input.prompt,

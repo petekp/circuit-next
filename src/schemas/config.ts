@@ -5,6 +5,7 @@ import {
   EnabledConnector,
   RESERVED_ADAPTER_NAMES,
 } from './connector.js';
+import { HostConfig } from './host.js';
 import { CompiledFlowId } from './ids.js';
 import { SelectionOverride } from './selection-policy.js';
 import { RelayRole } from './step.js';
@@ -92,6 +93,16 @@ export const RelayConfig = RelayConfigBody.superRefine((cfg, ctx) => {
     if (ref && ref.kind === 'named' && !registered.has(ref.name)) {
       issueAt(ctx, ['roles', role], `role connector not registered: ${ref.name}`);
     }
+    if (role === 'implementer' && ref && ref.kind === 'named') {
+      const descriptor = cfg.connectors[ref.name];
+      if (descriptor?.capabilities.filesystem === 'read-only') {
+        issueAt(
+          ctx,
+          ['roles', role],
+          `custom connector '${ref.name}' is read-only and cannot be used for implementer relay steps`,
+        );
+      }
+    }
   }
   for (const [circuit, ref] of Object.entries(cfg.circuits)) {
     if (ref && ref.kind === 'named' && !registered.has(ref.name)) {
@@ -121,6 +132,7 @@ export type CircuitOverride = z.infer<typeof CircuitOverride>;
 export const Config = z
   .object({
     schema_version: z.literal(1),
+    host: HostConfig.default({ kind: 'generic-shell' }),
     relay: RelayConfig.default({
       default: 'auto',
       roles: {},

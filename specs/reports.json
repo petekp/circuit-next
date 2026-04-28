@@ -72,7 +72,7 @@
       "surface_class": "greenfield",
       "compatibility_policy": "n/a",
       "pchange_kind": "control-pchange_kind",
-      "description": "Authoring-layer schematic shape for assembling reusable flow blocks into runnable compiled flows. Captures schematic steps, stage bindings, execution labels, typed evidence contracts, contract aliases, named route targets, and per-depth route_overrides. Compiled to .claude-plugin/skills/<id>/circuit.json (and per-mode <mode>.json siblings) by src/runtime/compile-schematic-to-flow.ts at build time.",
+      "description": "Authoring-layer schematic shape for assembling reusable flow blocks into runnable compiled flows. Captures schematic steps, stage bindings, execution labels, typed evidence contracts, contract aliases, named route targets, and per-depth route_overrides. Compiled to generated/flows/<id>/circuit.json (and per-mode <mode>.json siblings) by src/runtime/compile-schematic-to-flow.ts at build time.",
       "contract": "docs/contracts/flow.md",
       "schema_file": "src/schemas/flow-schematic.ts",
       "schema_exports": [

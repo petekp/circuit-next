@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { AgentRelayInput } from '../../src/runtime/connectors/agent.js';
+import type { ClaudeCodeRelayInput } from '../../src/runtime/connectors/claude-code.js';
 import { materializeRelay } from '../../src/runtime/connectors/relay-materializer.js';
 import type { RelayResult } from '../../src/runtime/connectors/shared.js';
 import { type RelayFn, runCompiledFlow } from '../../src/runtime/runner.js';
@@ -19,7 +19,7 @@ import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
 import type { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { RunId, StepId } from '../../src/schemas/ids.js';
 
-const FIXTURE_PATH = resolve('.claude-plugin/skills/runtime-proof/circuit.json');
+const FIXTURE_PATH = resolve('generated/flows/runtime-proof/circuit.json');
 
 function loadFixture(): { flow: CompiledFlow; bytes: Buffer } {
   const bytes = readFileSync(FIXTURE_PATH);
@@ -44,8 +44,8 @@ function change_kind(): ChangeKindDeclaration {
 
 function relayerWithCapture(capture: string[]): RelayFn {
   return {
-    connectorName: 'agent',
-    relay: async (input: AgentRelayInput): Promise<RelayResult> => {
+    connectorName: 'claude-code',
+    relay: async (input: ClaudeCodeRelayInput): Promise<RelayResult> => {
       capture.push(input.prompt);
       return {
         request_payload: input.prompt,
@@ -162,7 +162,7 @@ describe('STEP-I8 runtime run-relative path containment', () => {
           startingSequence: 1,
           runFolder,
           writes,
-          connectorName: 'agent',
+          connector: { kind: 'builtin', name: 'claude-code' },
           resolvedSelection: { skills: [], invocation_options: {} },
           resolvedFrom: { source: 'explicit' },
           relayResult: {
@@ -258,7 +258,7 @@ describe('STEP-I8 runtime run-relative path containment', () => {
           result: 'reports/result.txt',
           report: { path: 'reports/report.json', schema: 'relay@v1' },
         },
-        connectorName: 'agent',
+        connector: { kind: 'builtin', name: 'claude-code' },
         resolvedSelection: { skills: [], invocation_options: {} },
         resolvedFrom: { source: 'explicit' },
         relayResult: {

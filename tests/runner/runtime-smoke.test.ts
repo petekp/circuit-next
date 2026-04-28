@@ -11,13 +11,13 @@ import { RunResult } from '../../src/schemas/result.js';
 import { RunProjection } from '../../src/schemas/run.js';
 import { Snapshot } from '../../src/schemas/snapshot.js';
 
-import type { AgentRelayInput } from '../../src/runtime/connectors/agent.js';
+import type { ClaudeCodeRelayInput } from '../../src/runtime/connectors/claude-code.js';
 import type { RelayResult } from '../../src/runtime/connectors/shared.js';
 import { type RelayFn, runCompiledFlow } from '../../src/runtime/runner.js';
 import { readRunTrace } from '../../src/runtime/trace-reader.js';
 
 // Runner smoke test exercising one compose + one relay step
-// end-to-end via the dry-run agent connector. The test reads the
+// end-to-end via the dry-run claude-code connector. The test reads the
 // production runtime-proof flow fixture — the same JSON a user
 // invocation of `./bin/circuit-next runtime-proof ...` would load — and
 // composes the runtime boundary via `runCompiledFlow`.
@@ -27,7 +27,7 @@ import { readRunTrace } from '../../src/runtime/trace-reader.js';
 // Close Criterion #4 "two different fixtures or goals ... differing
 // result reports". The byte-match check is also exercised end-to-end.
 
-const FIXTURE_PATH = resolve('.claude-plugin/skills/runtime-proof/circuit.json');
+const FIXTURE_PATH = resolve('generated/flows/runtime-proof/circuit.json');
 
 function loadFixture(): { flow: CompiledFlow; bytes: Buffer } {
   const bytes = readFileSync(FIXTURE_PATH);
@@ -42,20 +42,20 @@ function deterministicNow(startMs: number): () => Date {
 
 // Deterministic stub relayer so the runner smoke doesn't spawn a
 // real `claude` subprocess. The capability-boundary assertion at
-// parseAgentStdout is a real-subprocess-only concern; the stub satisfies
+// parseClaudeCodeStdout is a real-subprocess-only concern; the stub satisfies
 // the RelayResult shape without traversing that path. The
 // AGENT_SMOKE-checkd explore e2e exercises the real connector end-to-end.
 //
 // The stub uses the structured `RelayFn` descriptor shape and binds
-// `connectorName: 'agent'` so the runner's `relay.started` trace_entry
+// `connectorName: 'claude-code'` so the runner's `relay.started` trace_entry
 // records the agent identity for this smoke suite; the dedicated
 // codex-routing regression test at
 // `runner-relay-connector-identity.test.ts` exercises the
 // `connectorName: 'codex'` branch.
 function stubRelayer(): RelayFn {
   return {
-    connectorName: 'agent',
-    relay: async (input: AgentRelayInput): Promise<RelayResult> => ({
+    connectorName: 'claude-code',
+    relay: async (input: ClaudeCodeRelayInput): Promise<RelayResult> => ({
       request_payload: input.prompt,
       receipt_id: 'stub-receipt-runtime-proof',
       result_body: '{"verdict":"ok"}',
@@ -179,12 +179,12 @@ describe('runtime-proof runner smoke', () => {
     expect(kinds.has('run.closed')).toBe(true);
     expect(kinds.size).toBeGreaterThanOrEqual(11);
 
-    // The relay.started trace_entry carries the dry-run agent connector.
+    // The relay.started trace_entry carries the dry-run claude-code connector.
     const relayStarted = outcome.trace_entrys.find((e) => e.kind === 'relay.started');
     if (!relayStarted || relayStarted.kind !== 'relay.started') {
       throw new Error('expected relay.started trace_entry');
     }
-    expect(relayStarted.connector).toEqual({ kind: 'builtin', name: 'agent' });
+    expect(relayStarted.connector).toEqual({ kind: 'builtin', name: 'claude-code' });
     // `resolved_from` is derived from the runner's actual decision path
     // (see runner.ts `deriveResolvedFrom`): the test injects a stub
     // relayer via `CompiledFlowInvocation.relayer`, so the honest
@@ -244,7 +244,7 @@ describe('runtime-proof runner smoke', () => {
     'CLI entrypoint loads the fixture and closes a run end-to-end from a clean run-folder (CLI_SMOKE=1)',
     async () => {
       // ADR-0001 Addendum B Close Criterion "CLI loading of
-      // .claude-plugin/skills/runtime-proof/circuit.json is tested."
+      // generated/flows/runtime-proof/circuit.json is tested."
       //
       // The CLI's exported `main(argv)` function is the same entrypoint
       // the launcher invokes, so importing it directly exercises every
@@ -258,7 +258,7 @@ describe('runtime-proof runner smoke', () => {
       // direct `main()` import strategy this test uses is unchanged —
       // `main()` is the same entrypoint the binding converges on.
       //
-      // `main()` invokes the real `relayAgent` default (which spawns
+      // `main()` invokes the real `relayClaudeCode` default (which spawns
       // an authenticated `claude` CLI subprocess). That default fails
       // in sandboxed agent environments where the `claude` CLI is
       // unauthenticated, making the test non-portable across

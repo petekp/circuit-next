@@ -130,7 +130,7 @@ Closes Codex LOW #12 (enforcement-location claim drift).
   honoring of known model strings is a Stage 2 connector concern, not a
   schema concern; new model releases do not require a circuit-next
   schema change. Slice 87 gives the current built-in connectors narrow
-  handling: `agent` accepts provider `anthropic` and passes the model to
+  handling: `claude-code` accepts provider `anthropic` and passes the model to
   Claude's `--model`; `codex` accepts provider `openai` and passes the
   model to Codex's `-m`. Provider mismatches fail before subprocess
   spawn. **Effort** is the closed 6-tier enum `none | minimal | low |

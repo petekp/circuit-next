@@ -179,7 +179,7 @@ circuits:
 
     const relayInputs: RelayInput[] = [];
     const relayer: RelayFn = {
-      connectorName: 'agent',
+      connectorName: 'claude-code',
       relay: async (input: RelayInput): Promise<RelayResult> => {
         relayInputs.push(input);
         return {
@@ -247,7 +247,7 @@ circuits:
 
     let relayCalls = 0;
     const relayer: RelayFn = {
-      connectorName: 'agent',
+      connectorName: 'claude-code',
       relay: async (input: RelayInput): Promise<RelayResult> => {
         relayCalls += 1;
         return {

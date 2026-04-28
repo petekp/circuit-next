@@ -7,7 +7,7 @@ import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { RunId } from '../../src/schemas/ids.js';
 
-import type { AgentRelayInput } from '../../src/runtime/connectors/agent.js';
+import type { ClaudeCodeRelayInput } from '../../src/runtime/connectors/claude-code.js';
 import type { RelayResult } from '../../src/runtime/connectors/shared.js';
 import { type RelayFn, runCompiledFlow } from '../../src/runtime/runner.js';
 
@@ -28,7 +28,7 @@ import { type RelayFn, runCompiledFlow } from '../../src/runtime/runner.js';
 //   4) compose-only run — no relay / sub-run admission means no
 //      terminal verdict; result.verdict is undefined.
 
-const FIXTURE_PATH = resolve('.claude-plugin/skills/runtime-proof/circuit.json');
+const FIXTURE_PATH = resolve('generated/flows/runtime-proof/circuit.json');
 
 function loadDogfood(): { flow: CompiledFlow; bytes: Buffer } {
   const bytes = readFileSync(FIXTURE_PATH);
@@ -43,8 +43,8 @@ function deterministicNow(startMs: number): () => Date {
 
 function fixedRelayer(verdict: string): RelayFn {
   return {
-    connectorName: 'agent',
-    relay: async (input: AgentRelayInput): Promise<RelayResult> => ({
+    connectorName: 'claude-code',
+    relay: async (input: ClaudeCodeRelayInput): Promise<RelayResult> => ({
       request_payload: input.prompt,
       receipt_id: 'stub-receipt-verdict-derivation',
       result_body: JSON.stringify({ verdict }),
@@ -57,8 +57,8 @@ function fixedRelayer(verdict: string): RelayFn {
 function sequenceRelayer(verdicts: string[]): RelayFn {
   let call = 0;
   return {
-    connectorName: 'agent',
-    relay: async (input: AgentRelayInput): Promise<RelayResult> => {
+    connectorName: 'claude-code',
+    relay: async (input: ClaudeCodeRelayInput): Promise<RelayResult> => {
       const verdict = verdicts[call++];
       if (verdict === undefined) {
         throw new Error(

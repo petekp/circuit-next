@@ -24,7 +24,7 @@ Flow source files live under `src/flows/<id>/` (schematic, command,
 contract, writers, relay hints — everything specific to that flow in one
 folder). The catalog at `src/flows/catalog.ts` aggrechecks all packages;
 the engine derives every per-flow registry from it. Schematics are compiled
-to `.claude-plugin/skills/<id>/circuit.json` (and per-mode `<mode>.json`
+to `generated/flows/<id>/circuit.json` (and per-mode `<mode>.json`
 siblings when `route_overrides` is non-empty), and slash commands are
 copied to `commands/<id>.md`, by `npm run emit-flows`. The drift check
 (`node scripts/emit-flows.mjs --check`, also wired into
@@ -91,7 +91,7 @@ Adding a flow:
    `writers/`.
 2. Add the package to `src/flows/catalog.ts`.
 3. `npm run build && node scripts/emit-flows.mjs` to regenerate
-   `commands/<id>.md` and `.claude-plugin/skills/<id>/`.
+   `commands/<id>.md` and `generated/flows/<id>/`.
 4. `npm run verify`.
 
 The engine (`src/runtime/`) needs no edits — registries derive from the

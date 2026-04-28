@@ -15,7 +15,7 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 const projectRoot = resolve(__dirname, '../..');
 const emitScript = resolve(projectRoot, 'scripts/emit-flows.mjs');
-const buildSkillDir = resolve(projectRoot, '.claude-plugin/skills/build');
+const buildSkillDir = resolve(projectRoot, 'generated/flows/build');
 const stalePath = resolve(buildSkillDir, 'never-a-mode.json');
 
 function planted(): boolean {
@@ -50,7 +50,7 @@ describe('emit-flows.mjs — stale per-mode sibling guard', () => {
     });
     expect(res.status).toBe(1);
     const combined = `${res.stdout ?? ''}\n${res.stderr ?? ''}`;
-    expect(combined).toContain('.claude-plugin/skills/build/never-a-mode.json');
+    expect(combined).toContain('generated/flows/build/never-a-mode.json');
     expect(combined).toContain('not in the emit plan');
   });
 
@@ -63,8 +63,6 @@ describe('emit-flows.mjs — stale per-mode sibling guard', () => {
     });
     expect(res.status).toBe(0);
     expect(planted()).toBe(false);
-    expect(res.stdout ?? '').toContain(
-      'removed stale .claude-plugin/skills/build/never-a-mode.json',
-    );
+    expect(res.stdout ?? '').toContain('removed stale generated/flows/build/never-a-mode.json');
   });
 });

@@ -35,7 +35,7 @@ export interface StepHandlerContext {
   readonly executionSelectionConfigLayers: readonly LayeredConfigValue[];
   readonly projectRoot?: string;
   readonly invocationId?: InvocationId;
-  readonly relayer: RelayFn;
+  readonly relayer?: RelayFn;
   readonly composeWriter: ComposeWriterFn;
   readonly now: () => Date;
   readonly recordedAt: () => string;

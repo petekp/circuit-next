@@ -18,7 +18,7 @@ import {
 } from '../runtime/runner.js';
 
 // Runtime CLI entry point — invoked through ./bin/circuit-next. Loads the
-// named flow fixture at `.claude-plugin/skills/<flow-name>/circuit.json`,
+// named flow fixture at `generated/flows/<flow-name>/circuit.json`,
 // parses it through the production `CompiledFlow` schema, calls
 // `validateCompiledFlowKindPolicy`, composes the runtime boundary via the runner,
 // and prints the <run-folder> path on success.
@@ -35,7 +35,7 @@ import {
 const DEFAULT_RUNS_BASE = '.circuit-next/runs';
 
 interface ParsedArgs {
-  command?: 'resume';
+  command?: 'run' | 'resume';
   flowName?: string;
   goal?: string;
   depth?: Depth;
@@ -63,12 +63,12 @@ export interface CliMainOptions {
 
 function usage(): string {
   return [
-    'usage: circuit-next [flow-name] --goal "<goal>" [--mode <default|lite|deep|autonomous>] [--depth <lite|standard|deep|tournament|autonomous>] [--run-folder <path>] [--fixture <path>]',
+    'usage: circuit-next run [flow-name] --goal "<goal>" [--mode <default|lite|deep|autonomous>] [--depth <lite|standard|deep|tournament|autonomous>] [--run-folder <path>] [--fixture <path>]',
     '       circuit-next resume --run-folder <path> --checkpoint-choice <choice>',
     '',
-    '`--mode` is the friendly alias for `--entry-mode`; `--depth` is the friendly alias for `--depth`; `--run-folder` is the friendly alias for `--run-folder`. The legacy flag names are still accepted; supplying both forms of the same option is an error.',
+    '`--mode` is the friendly alias for `--entry-mode`; supplying both forms of that option is an error.',
     '',
-    'With an explicit flow name, loads .claude-plugin/skills/<name>/circuit.json. Without one, classifies the free-form goal across the registered explore/review/fix/build flows and then composes the runtime boundary against the real `relayAgent`.',
+    'With an explicit flow name, loads generated/flows/<name>/circuit.json. Without one, classifies the free-form goal across the registered explore/review/fix/build flows and then composes the runtime boundary using the configured relay connector.',
     '',
     'Config: if present, loads ~/.config/circuit-next/config.yaml and ./.circuit/config.yaml from the current working directory into the selection resolver before relay.',
     '',
@@ -79,7 +79,7 @@ function usage(): string {
 function parseArgs(argv: readonly string[]): ParsedArgs {
   // Positional: first non-flag token is the flow name.
   let flowName: string | undefined;
-  let command: 'resume' | undefined;
+  let command: 'run' | 'resume' | undefined;
   let goal: string | undefined;
   let depth: Depth | undefined;
   let depthProvided = false;
@@ -98,11 +98,11 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
       i += 1;
       continue;
     }
-    if (tok === '--depth' || tok === '--depth') {
+    if (tok === '--depth') {
       const next = argv[i + 1];
       if (next === undefined) throw new Error(`${tok} requires a value`);
       if (depthProvided) {
-        throw new Error('use either --depth or --depth, not both');
+        throw new Error('supply --depth only once');
       }
       depth = Depth.parse(next);
       depthProvided = true;
@@ -120,11 +120,11 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
       i += 1;
       continue;
     }
-    if (tok === '--run-folder' || tok === '--run-folder') {
+    if (tok === '--run-folder') {
       const next = argv[i + 1];
       if (next === undefined) throw new Error(`${tok} requires a value`);
       if (runFolder !== undefined) {
-        throw new Error('use either --run-folder or --run-folder, not both');
+        throw new Error('supply --run-folder only once');
       }
       runFolder = next;
       i += 1;
@@ -159,8 +159,8 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
     if (tok.startsWith('--')) {
       throw new Error(`unknown flag: ${tok}`);
     }
-    if (tok === 'resume' && flowName === undefined && command === undefined) {
-      command = 'resume';
+    if ((tok === 'run' || tok === 'resume') && flowName === undefined && command === undefined) {
+      command = tok;
       continue;
     }
     if (flowName === undefined) {
@@ -174,8 +174,7 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
     if (command !== 'resume') {
       throw new Error('checkpoint resume must use the `resume` subcommand');
     }
-    if (runFolder === undefined)
-      throw new Error('--run-folder (or --run-folder) is required for checkpoint resume');
+    if (runFolder === undefined) throw new Error('--run-folder is required for checkpoint resume');
     if (checkpointChoice === undefined || checkpointChoice.length === 0) {
       throw new Error('--checkpoint-choice is required for checkpoint resume');
     }
@@ -189,7 +188,7 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
       throw new Error('checkpoint resume loads the saved flow manifest; omit --fixture');
     }
     if (depthProvided) {
-      throw new Error('checkpoint resume reuses the saved run depth; omit --depth/--depth');
+      throw new Error('checkpoint resume reuses the saved run depth; omit --depth');
     }
     if (entryMode !== undefined) {
       throw new Error('checkpoint resume reuses the saved flow position; omit --mode/--entry-mode');
@@ -223,10 +222,10 @@ function resolveFixturePath(
   // <mode>.json siblings of circuit.json — see scripts/emit-flows.mjs).
   // Falls back to the canonical circuit.json otherwise.
   if (modeName !== undefined) {
-    const perMode = resolve(`.claude-plugin/skills/${flowName}/${modeName}.json`);
+    const perMode = resolve(`generated/flows/${flowName}/${modeName}.json`);
     if (existsSync(perMode)) return perMode;
   }
-  return resolve(`.claude-plugin/skills/${flowName}/circuit.json`);
+  return resolve(`generated/flows/${flowName}/circuit.json`);
 }
 
 function resolveCompiledFlowRoute(args: ParsedArgs): ResolvedCompiledFlowRoute {

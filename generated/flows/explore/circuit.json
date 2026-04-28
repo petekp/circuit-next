@@ -1,0 +1,193 @@
+{
+  "schema_version": "2",
+  "id": "explore",
+  "version": "0.1.0",
+  "purpose": "Explore flow: frame the investigation, analyze the subject, relay findings composition to a worker, relay review to a separate worker, and close with findings plus evidence. The schematic uses the Frame, Analyze, Act, Review, and Close stages; Plan and Verify are intentionally omitted because Explore produces an investigation report rather than an executable change.",
+  "entry": {
+    "signals": {
+      "include": ["explore", "investicheck", "research", "understand"],
+      "exclude": []
+    },
+    "intent_prefixes": ["explore", "investicheck"]
+  },
+  "entry_modes": [
+    {
+      "name": "default",
+      "start_at": "frame-step",
+      "depth": "standard",
+      "description": "Default explore entry mode — seeds the run at Frame. Standard depth per ADR-0007 CC#P2-6 resolution of plan Open Question #5."
+    }
+  ],
+  "stages": [
+    {
+      "id": "frame-stage",
+      "title": "Frame",
+      "canonical": "frame",
+      "steps": ["frame-step"]
+    },
+    {
+      "id": "analyze-stage",
+      "title": "Analyze",
+      "canonical": "analyze",
+      "steps": ["analyze-step"]
+    },
+    {
+      "id": "synthesize-stage",
+      "title": "Synthesize",
+      "canonical": "act",
+      "steps": ["synthesize-step"]
+    },
+    {
+      "id": "review-stage",
+      "title": "Review",
+      "canonical": "review",
+      "steps": ["review-step"]
+    },
+    {
+      "id": "close-stage",
+      "title": "Close",
+      "canonical": "close",
+      "steps": ["close-step"]
+    }
+  ],
+  "stage_path_policy": {
+    "mode": "partial",
+    "omits": ["plan", "verify"],
+    "rationale": "Explore is an investigation flow — plan-mode is folded into Frame (investigation scoping); verify is omitted because explore output is not executable and does not admit mechanical verification. Review is the adversarial pass that IS in scope and, per ADR-0008, is a distinct-connector review relay (not a weaker substitute for verify as previously described at v0.1 authoring). See src/flows/explore/contract.md §Canonical stage set for the full rationale."
+  },
+  "steps": [
+    {
+      "id": "frame-step",
+      "title": "Frame — produce explore.brief",
+      "protocol": "explore-frame@v1",
+      "reads": [],
+      "routes": {
+        "pass": "analyze-step"
+      },
+      "executor": "orchestrator",
+      "kind": "compose",
+      "writes": {
+        "report": {
+          "path": "reports/brief.json",
+          "schema": "explore.brief@v1"
+        }
+      },
+      "check": {
+        "kind": "schema_sections",
+        "source": {
+          "kind": "report",
+          "ref": "report"
+        },
+        "required": ["subject", "success_condition"]
+      }
+    },
+    {
+      "id": "analyze-step",
+      "title": "Analyze — produce explore.analysis",
+      "protocol": "explore-analyze@v1",
+      "reads": ["reports/brief.json"],
+      "routes": {
+        "pass": "synthesize-step"
+      },
+      "executor": "orchestrator",
+      "kind": "compose",
+      "writes": {
+        "report": {
+          "path": "reports/analysis.json",
+          "schema": "explore.analysis@v1"
+        }
+      },
+      "check": {
+        "kind": "schema_sections",
+        "source": {
+          "kind": "report",
+          "ref": "report"
+        },
+        "required": ["aspects"]
+      }
+    },
+    {
+      "id": "synthesize-step",
+      "title": "Synthesize — produce explore.compose (connector-bound relay per ADR-0008)",
+      "protocol": "explore-synthesize@v1",
+      "reads": ["reports/brief.json", "reports/analysis.json"],
+      "routes": {
+        "pass": "review-step"
+      },
+      "executor": "worker",
+      "kind": "relay",
+      "role": "implementer",
+      "writes": {
+        "report": {
+          "path": "reports/compose.json",
+          "schema": "explore.compose@v1"
+        },
+        "request": "reports/relay/synthesize.request.json",
+        "receipt": "reports/relay/synthesize.receipt.txt",
+        "result": "reports/relay/synthesize.result.json"
+      },
+      "check": {
+        "kind": "result_verdict",
+        "source": {
+          "kind": "relay_result",
+          "ref": "result"
+        },
+        "pass": ["accept"]
+      }
+    },
+    {
+      "id": "review-step",
+      "title": "Review — adversarial pass over compose (connector-bound relay per ADR-0008)",
+      "protocol": "explore-review@v1",
+      "reads": ["reports/brief.json", "reports/analysis.json", "reports/compose.json"],
+      "routes": {
+        "pass": "close-step"
+      },
+      "executor": "worker",
+      "kind": "relay",
+      "role": "reviewer",
+      "writes": {
+        "report": {
+          "path": "reports/review-verdict.json",
+          "schema": "explore.review-verdict@v1"
+        },
+        "request": "reports/relay/review.request.json",
+        "receipt": "reports/relay/review.receipt.txt",
+        "result": "reports/relay/review.result.json"
+      },
+      "check": {
+        "kind": "result_verdict",
+        "source": {
+          "kind": "relay_result",
+          "ref": "result"
+        },
+        "pass": ["accept", "accept-with-fold-ins"]
+      }
+    },
+    {
+      "id": "close-step",
+      "title": "Close — emit final result file",
+      "protocol": "explore-close@v1",
+      "reads": ["reports/brief.json", "reports/compose.json", "reports/review-verdict.json"],
+      "routes": {
+        "pass": "@complete"
+      },
+      "executor": "orchestrator",
+      "kind": "compose",
+      "writes": {
+        "report": {
+          "path": "reports/explore-result.json",
+          "schema": "explore.result@v1"
+        }
+      },
+      "check": {
+        "kind": "schema_sections",
+        "source": {
+          "kind": "report",
+          "ref": "report"
+        },
+        "required": ["summary", "verdict_snapshot"]
+      }
+    }
+  ]
+}

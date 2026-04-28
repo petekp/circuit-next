@@ -158,7 +158,7 @@ function buildHarness(opts: BuildHarnessOpts, runFolder: string): Harness {
     depth: opts.depth,
     executionSelectionConfigLayers: [],
     relayer: {
-      connectorName: 'agent',
+      connectorName: 'claude-code',
       relay: async () => {
         throw new Error('relayer should not be invoked by these tests');
       },

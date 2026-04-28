@@ -9,7 +9,7 @@ import {
   BuildReview,
   BuildVerification,
 } from '../../src/flows/build/reports.js';
-import type { AgentRelayInput } from '../../src/runtime/connectors/agent.js';
+import type { ClaudeCodeRelayInput } from '../../src/runtime/connectors/claude-code.js';
 import type { RelayResult } from '../../src/runtime/connectors/shared.js';
 import { type RelayFn, runCompiledFlow } from '../../src/runtime/runner.js';
 import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
@@ -65,8 +65,8 @@ function relayerWith(
     });
 
   return {
-    connectorName: 'agent',
-    relay: async (input: AgentRelayInput): Promise<RelayResult> => {
+    connectorName: 'claude-code',
+    relay: async (input: ClaudeCodeRelayInput): Promise<RelayResult> => {
       const isAct = input.prompt.includes('Step: act-step');
       const isReview = input.prompt.includes('Step: review-step');
       expect(isAct || isReview).toBe(true);
@@ -294,7 +294,7 @@ describe('Build runtime wiring', () => {
   it('uses the selected lite entry mode as the run depth when no explicit depth is supplied', async () => {
     const { flow, bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'lite-entry-mode');
-    const relayInputs: AgentRelayInput[] = [];
+    const relayInputs: ClaudeCodeRelayInput[] = [];
     const relayer = relayerWith();
 
     const outcome = await runCompiledFlow({
@@ -359,7 +359,7 @@ describe('Build runtime wiring', () => {
   it('lets an explicit depth override the selected entry mode default', async () => {
     const { flow, bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'entry-mode-depth-override');
-    const relayInputs: AgentRelayInput[] = [];
+    const relayInputs: ClaudeCodeRelayInput[] = [];
     const relayer = relayerWith();
 
     const outcome = await runCompiledFlow({
@@ -391,7 +391,7 @@ describe('Build runtime wiring', () => {
   it('uses explicit autonomous depth over the default entry mode for checkpoint policy', async () => {
     const { flow, bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'default-entry-autonomous-override');
-    const relayInputs: AgentRelayInput[] = [];
+    const relayInputs: ClaudeCodeRelayInput[] = [];
     const relayer = relayerWith();
 
     const outcome = await runCompiledFlow({

@@ -1,12 +1,13 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { CompiledFlow } from '../../schemas/compiled-flow.js';
+import { EnabledConnector, type ResolvedConnector } from '../../schemas/connector.js';
 import { materializeRelay } from '../connectors/relay-materializer.js';
 import { type RelayResult, sha256Hex } from '../connectors/shared.js';
 import { runCrossReportValidator } from '../registries/cross-report-validators.js';
 import { parseReport } from '../registries/report-schemas.js';
 import { findRelayShapeHint } from '../registries/shape-hints/registry.js';
-import { deriveResolvedFrom, deriveResolvedSelection } from '../relay-selection.js';
+import { deriveResolvedSelection, resolveRelayDecision } from '../relay-selection.js';
 import { resolveRunRelative } from '../run-relative-path.js';
 import type { RelayInput } from '../runner-types.js';
 import type { StepHandlerContext, StepHandlerResult } from './types.js';
@@ -104,13 +105,21 @@ function connectorFailureReason(stepId: string, err: unknown): string {
   return `relay step '${stepId}': connector invocation failed (${message})`;
 }
 
+function connectorForRelayer(relayer: { connectorName: string; connector?: ResolvedConnector }) {
+  return (
+    relayer.connector ?? {
+      kind: 'builtin' as const,
+      name: EnabledConnector.parse(relayer.connectorName),
+    }
+  );
+}
+
 export async function runRelayStep(
   ctx: StepHandlerContext & { readonly step: RelayStep },
 ): Promise<StepHandlerResult> {
-  const { runFolder, flow, step, runId, depth, attempt, recordedAt, push, state, relayer, now } =
-    ctx;
+  const { runFolder, flow, step, runId, depth, attempt, recordedAt, push, state, now } = ctx;
   const relayerInv = {
-    relayer: ctx.relayer,
+    ...(ctx.relayer === undefined ? {} : { relayer: ctx.relayer }),
     selectionConfigLayers: ctx.executionSelectionConfigLayers,
   };
 
@@ -120,8 +129,14 @@ export async function runRelayStep(
   if (step.budgets?.wall_clock_ms !== undefined) {
     relayInput.timeoutMs = step.budgets.wall_clock_ms;
   }
-  const resolvedFrom = deriveResolvedFrom(relayerInv);
+  const { relayer, resolvedFrom } = await resolveRelayDecision({
+    ...(ctx.relayer === undefined ? {} : { explicitRelayer: ctx.relayer }),
+    configLayers: ctx.executionSelectionConfigLayers,
+    flow,
+    step,
+  });
   const requestAbs = resolveRunRelative(runFolder, step.writes.request);
+  const connector = connectorForRelayer(relayer);
   mkdirSync(dirname(requestAbs), { recursive: true });
   writeFileSync(requestAbs, prompt);
   const requestPayloadHash = sha256Hex(prompt);
@@ -134,7 +149,7 @@ export async function runRelayStep(
     kind: 'relay.started',
     step_id: step.id,
     attempt,
-    connector: { kind: 'builtin', name: relayer.connectorName },
+    connector,
     role: step.role,
     resolved_selection: resolvedSelection,
     resolved_from: resolvedFrom,
@@ -163,7 +178,7 @@ export async function runRelayStep(
       kind: 'relay.failed',
       step_id: step.id,
       attempt,
-      connector: { kind: 'builtin', name: relayer.connectorName },
+      connector,
       role: step.role,
       resolved_selection: resolvedSelection,
       resolved_from: resolvedFrom,
@@ -271,7 +286,7 @@ export async function runRelayStep(
         ? {}
         : { report: step.writes.report }),
     },
-    connectorName: relayer.connectorName,
+    connector,
     resolvedSelection,
     resolvedFrom,
     relayResult,

@@ -1,5 +1,6 @@
 export * from './connector.js';
 export * from './config.js';
+export * from './host.js';
 export * from './continuity.js';
 export * from './trace-entry.js';
 export * from './check.js';

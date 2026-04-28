@@ -48,7 +48,7 @@ category-plus-disambiguator record emitted on every `RelayStartedTraceEntry`)
 to `specs/domain.md`.
 
 The distinction to keep straight: an **connector** is the executor that
-runs a worker (Claude Code Agent tool subagent, Codex CLI, custom
+runs a worker (Claude Code headless CLI, Codex CLI, custom
 operator-authored command). An **connector reference** is what a config
 file or step carries pointing AT an connector. `ConnectorRef` (in
 `src/schemas/connector.ts`) is the full 3-variant union that admits an
@@ -69,9 +69,9 @@ invariant; tested in `tests/contracts/schema-parity.test.ts`.
 
 - **connector-I1 — `EnabledConnector` is a closed 3-variant enum with
   declared semantic distinctions; adding a built-in is a breaking
-  change.** The enum is the frozen tuple `['agent', 'codex',
+  change.** The enum is the frozen tuple `['claude-code', 'codex',
   'codex-isolated']`. The three built-ins mean:
-  - `agent` — the Claude Code headless CLI (`claude -p` print-mode or
+  - `claude-code` — the Claude Code headless CLI (`claude -p` print-mode or
     equivalent), invoked as a **subprocess** of the Node.js runtime per
     ADR-0009 §1 (v0 invocation-pattern decision: subprocess-per-connector).
     Superseded prior wording described this as "the Claude Code Agent
@@ -87,17 +87,17 @@ invariant; tested in `tests/contracts/schema-parity.test.ts`.
     providers or unsupported built-in effort tiers fail before spawn.
   - `codex` — the Codex CLI relayed via `codex exec` as a
     **subprocess** of the Node.js runtime (same invocation pattern as
-    `agent` per ADR-0009 §1) in the operator's current session context.
-    Same host session as `agent`; distinct model vendor; distinct
-    subprocess. Capability-boundary mechanism **differs** from `agent`:
-    where `agent` uses declarative tool-list flags (`--tools ""`,
+    `claude-code` per ADR-0009 §1) in the operator's current session context.
+    Same host session as `claude-code`; distinct model vendor; distinct
+    subprocess. Capability-boundary mechanism **differs** from `claude-code`:
+    where `claude-code` uses declarative tool-list flags (`--tools ""`,
     `--strict-mcp-config`, `--disable-slash-commands`) with a parse-time
     assertion over the subprocess's init trace_entry, `codex` uses an OS-level
     sandbox (Seatbelt on macOS, Landlock on Linux) via `codex exec -s
     read-only` that checks write syscalls at the process level. Codex's
     `--json` stream does not emit an init trace_entry enumerating tool
     surfaces, so the parse-time `tools=[]` / `mcp_servers=[]` /
-    `slash_commands=[]` assertion shape from `agent` does not transfer;
+    `slash_commands=[]` assertion shape from `claude-code` does not transfer;
     the `codex` boundary is therefore a single mechanism (OS-level
     sandbox) with two supporting disciplines: (i) argv-constant
     assertion at spawn time over `CODEX_NO_WRITE_FLAGS` (must include
@@ -125,21 +125,21 @@ invariant; tested in `tests/contracts/schema-parity.test.ts`.
     Slice 45 (P2.6) binds the mechanism and lands
     `src/runtime/connectors/codex.ts`; ADR-0009 §Consequences.Enabling is
     the governance authority (§Enabling explicitly names `codex` as the
-    next connector after `agent`).
+    next connector after `claude-code`).
   - `codex-isolated` — the Codex CLI relayed as a subprocess in a
     git worktree (or a distinct-UID sandbox once Tier 2+ lands). Same
     subprocess invocation pattern as `codex`; separate filesystem view;
     implementer isolation discipline per CLAUDE.md Hard Invariants #1-#3.
   The three are NOT interchangeable: `codex` and `codex-isolated`
   relay to the same binary but under different isolation regimes;
-  `agent` relays to a different binary entirely. Choosing between
+  `claude-code` relays to a different binary entirely. Choosing between
   `codex` and `codex-isolated` is a correctness-of-isolation decision
   (same-filesystem vs separate-worktree), not an ergonomic one.
   Adding a fourth built-in is a schema-level change that forces all
   consumers (`RelayConfig.default`, `relay.roles`,
   `relay.circuits`, the connector-bridge relayer, and every
   contract test) to coordinate. Enforced at `src/schemas/connector.ts`
-  (`EnabledConnector = z.enum(['agent', 'codex', 'codex-isolated'])`).
+  (`EnabledConnector = z.enum(['claude-code', 'codex', 'codex-isolated'])`).
 
 - **connector-I2 — `ConnectorName` regex + reserved-name disjointness.**
   `ConnectorName` matches `^[a-z][a-z0-9-]*$`: lowercase letter + optional

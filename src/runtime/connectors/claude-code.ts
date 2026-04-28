@@ -11,7 +11,7 @@ import {
 
 export { sha256Hex };
 
-// Real agent connector. Invokes the Claude Code CLI as a subprocess of the
+// Real claude-code connector. Invokes the Claude Code CLI as a subprocess of the
 // Node.js runtime (subprocess-per-connector at v0). No external SDK
 // dependency; Node stdlib only (`node:child_process` + `node:perf_hooks`
 // here; `node:crypto` via `./shared.ts` for the shared `sha256Hex` helper).
@@ -24,7 +24,7 @@ export { sha256Hex };
 // reason about; every other tool is on by default and the worker decides
 // what it needs.
 //
-// Each flag in AGENT_DISPATCH_FLAGS is load-bearing:
+// Each flag in CLAUDE_CODE_DISPATCH_FLAGS is load-bearing:
 //   -p                       — print mode (non-interactive single relay).
 //   --permission-mode        — bypassPermissions: the worker can invoke
 //   bypassPermissions          its tools without an interactive approval
@@ -60,7 +60,7 @@ export { sha256Hex };
 //   --verbose                — required by `--output-format stream-json`.
 //   --no-session-persistence — ephemeral session; no resumable session file
 //                              written under ~/.claude/projects/** per run.
-export const AGENT_DISPATCH_FLAGS = [
+export const CLAUDE_CODE_DISPATCH_FLAGS = [
   '-p',
   '--permission-mode',
   'bypassPermissions',
@@ -76,8 +76,8 @@ export const AGENT_DISPATCH_FLAGS = [
   '--no-session-persistence',
 ] as const;
 
-export const AGENT_CLAUDE_EXECUTABLE = 'claude';
-export const AGENT_SUPPORTED_EFFORTS = ['low', 'medium', 'high', 'xhigh'] as const;
+export const CLAUDE_CODE_EXECUTABLE = 'claude';
+export const CLAUDE_CODE_SUPPORTED_EFFORTS = ['low', 'medium', 'high', 'xhigh'] as const;
 
 // Default wall-clock budget for a single relay. With the open tool
 // surface, workers do real file inspection / edits / verification before
@@ -99,43 +99,43 @@ const SIGTERM_TO_SIGKILL_GRACE_MS = 2_000;
 const STDOUT_MAX_BYTES = 16 * 1024 * 1024;
 const STDERR_MAX_BYTES = 1024 * 1024;
 
-export interface AgentRelayInput extends ConnectorRelayInput {}
+export interface ClaudeCodeRelayInput extends ConnectorRelayInput {}
 
-// The `AgentRelayResult` name is retained as the connector-specific
-// alias for call sites that want a name bound to the `agent` connector's
+// The `ClaudeCodeRelayResult` name is retained as the connector-specific
+// alias for call sites that want a name bound to the `claude-code` connector's
 // producer contract. The shape lives in `./shared.ts` `RelayResult`
 // so the `codex` connector produces the same shape and the materializer
 // consumes it uniformly.
-export type AgentRelayResult = RelayResult;
+export type ClaudeCodeRelayResult = RelayResult;
 
-function assertAgentEffort(
+function assertClaudeCodeEffort(
   effort: Effort,
-): asserts effort is (typeof AGENT_SUPPORTED_EFFORTS)[number] {
-  if (!(AGENT_SUPPORTED_EFFORTS as readonly string[]).includes(effort)) {
+): asserts effort is (typeof CLAUDE_CODE_SUPPORTED_EFFORTS)[number] {
+  if (!(CLAUDE_CODE_SUPPORTED_EFFORTS as readonly string[]).includes(effort)) {
     throw new Error(
-      `agent connector cannot honor effort '${effort}'; supported efforts: ${AGENT_SUPPORTED_EFFORTS.join(', ')}`,
+      `claude-code connector cannot honor effort '${effort}'; supported efforts: ${CLAUDE_CODE_SUPPORTED_EFFORTS.join(', ')}`,
     );
   }
 }
 
-export function buildAgentArgs(input: AgentRelayInput): string[] {
-  const args: string[] = [...AGENT_DISPATCH_FLAGS];
-  const model = selectedModelForProvider('agent', input.resolvedSelection, 'anthropic');
+export function buildClaudeCodeArgs(input: ClaudeCodeRelayInput): string[] {
+  const args: string[] = [...CLAUDE_CODE_DISPATCH_FLAGS];
+  const model = selectedModelForProvider('claude-code', input.resolvedSelection, 'anthropic');
   if (model !== undefined) {
     args.push('--model', model);
   }
   const effort = input.resolvedSelection?.effort;
   if (effort !== undefined) {
-    assertAgentEffort(effort);
+    assertClaudeCodeEffort(effort);
     args.push('--effort', effort);
   }
   args.push(input.prompt);
   return args;
 }
 
-export async function relayAgent(input: AgentRelayInput): Promise<RelayResult> {
+export async function relayClaudeCode(input: ClaudeCodeRelayInput): Promise<RelayResult> {
   const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const args = buildAgentArgs(input);
+  const args = buildClaudeCodeArgs(input);
   const start = performance.now();
   return await new Promise<RelayResult>((resolve, reject) => {
     let child: ChildProcess;
@@ -150,7 +150,7 @@ export async function relayAgent(input: AgentRelayInput): Promise<RelayResult> {
       // `detached: true` puts the subprocess in its own process group so
       // the timeout-kill path can signal the group; if claude itself
       // spawns helper processes, they are killed via the group kill.
-      child = spawn(AGENT_CLAUDE_EXECUTABLE, args, {
+      child = spawn(CLAUDE_CODE_EXECUTABLE, args, {
         stdio: ['ignore', 'pipe', 'pipe'],
         // Inherit the parent process's environment explicitly. Some test
         // harnesses (vitest workers) launch children through a process-
@@ -161,7 +161,7 @@ export async function relayAgent(input: AgentRelayInput): Promise<RelayResult> {
         detached: true,
       });
     } catch (err) {
-      reject(new Error(`agent subprocess spawn failed: ${(err as Error).message}`));
+      reject(new Error(`claude-code subprocess spawn failed: ${(err as Error).message}`));
       return;
     }
     let stdout = '';
@@ -226,7 +226,7 @@ export async function relayAgent(input: AgentRelayInput): Promise<RelayResult> {
     });
     child.on('error', (err) => {
       clearTimeout(timer);
-      reject(new Error(`agent subprocess spawn error: ${err.message}`));
+      reject(new Error(`claude-code subprocess spawn error: ${err.message}`));
     });
     child.on('close', (code, signal) => {
       clearTimeout(timer);
@@ -234,7 +234,7 @@ export async function relayAgent(input: AgentRelayInput): Promise<RelayResult> {
       if (timedOut) {
         reject(
           new Error(
-            `agent subprocess timed out after ${timeoutMs}ms; group-kill ${killGroupSucceeded ? 'sent' : 'failed'}; final signal=${signal ?? 'none'}; stderr[:500]=${stderr.slice(0, 500)}`,
+            `claude-code subprocess timed out after ${timeoutMs}ms; group-kill ${killGroupSucceeded ? 'sent' : 'failed'}; final signal=${signal ?? 'none'}; stderr[:500]=${stderr.slice(0, 500)}`,
           ),
         );
         return;
@@ -242,7 +242,7 @@ export async function relayAgent(input: AgentRelayInput): Promise<RelayResult> {
       if (code !== 0) {
         reject(
           new Error(
-            `agent subprocess exited with code ${code}${signal ? ` (signal ${signal})` : ''}; stderr[:500]=${stderr.slice(0, 500)}`,
+            `claude-code subprocess exited with code ${code}${signal ? ` (signal ${signal})` : ''}; stderr[:500]=${stderr.slice(0, 500)}`,
           ),
         );
         return;
@@ -250,18 +250,18 @@ export async function relayAgent(input: AgentRelayInput): Promise<RelayResult> {
       if (stdoutCapped) {
         reject(
           new Error(
-            `agent subprocess stdout exceeded ${STDOUT_MAX_BYTES} bytes; capability-boundary check cannot be evaluated on truncated stream`,
+            `claude-code subprocess stdout exceeded ${STDOUT_MAX_BYTES} bytes; capability-boundary check cannot be evaluated on truncated stream`,
           ),
         );
         return;
       }
       try {
-        resolve(parseAgentStdout(stdout, input.prompt, duration_ms));
+        resolve(parseClaudeCodeStdout(stdout, input.prompt, duration_ms));
       } catch (err) {
         const stderrSuffix = stderrCapped ? ' [stderr capped]' : '';
         reject(
           new Error(
-            `agent subprocess: ${(err as Error).message}; stdout[:500]=${stdout.slice(0, 500)}; stderr[:200]=${stderr.slice(0, 200)}${stderrSuffix}`,
+            `claude-code subprocess: ${(err as Error).message}; stdout[:500]=${stdout.slice(0, 500)}; stderr[:200]=${stderr.slice(0, 200)}${stderrSuffix}`,
           ),
         );
       }
@@ -280,7 +280,11 @@ export async function relayAgent(input: AgentRelayInput): Promise<RelayResult> {
 // silently widens either surface is caught before the connector result
 // reaches any downstream trace-writer. Tools are unconstrained by design
 // — the runtime check is the safety net for what workers produce.
-export function parseAgentStdout(stdout: string, prompt: string, duration_ms: number): RelayResult {
+export function parseClaudeCodeStdout(
+  stdout: string,
+  prompt: string,
+  duration_ms: number,
+): RelayResult {
   const lines = stdout.split('\n').filter((line) => line.length > 0);
   if (lines.length === 0) {
     throw new Error('stream-json stdout is empty');
@@ -330,12 +334,12 @@ export function parseAgentStdout(stdout: string, prompt: string, duration_ms: nu
   const slashCommands = initTraceEntry.slash_commands;
   if (!Array.isArray(mcpServers) || mcpServers.length !== 0) {
     throw new Error(
-      `init.mcp_servers must be []; got ${JSON.stringify(mcpServers)}. AGENT_DISPATCH_FLAGS includes --strict-mcp-config to keep this surface closed.`,
+      `init.mcp_servers must be []; got ${JSON.stringify(mcpServers)}. CLAUDE_CODE_DISPATCH_FLAGS includes --strict-mcp-config to keep this surface closed.`,
     );
   }
   if (!Array.isArray(slashCommands) || slashCommands.length !== 0) {
     throw new Error(
-      `init.slash_commands must be []; got ${JSON.stringify(slashCommands)}. AGENT_DISPATCH_FLAGS includes --disable-slash-commands to keep this surface closed.`,
+      `init.slash_commands must be []; got ${JSON.stringify(slashCommands)}. CLAUDE_CODE_DISPATCH_FLAGS includes --disable-slash-commands to keep this surface closed.`,
     );
   }
 

@@ -181,7 +181,7 @@ describe('codex relay round-trip (second-connector evidence)', () => {
           startingSequence: 1,
           runFolder,
           writes,
-          connectorName: 'codex',
+          connector: { kind: 'builtin', name: 'codex' },
           resolvedSelection: CODEX_SMOKE_SELECTION,
           resolvedFrom: { source: 'explicit' },
           relayResult: codexResult,

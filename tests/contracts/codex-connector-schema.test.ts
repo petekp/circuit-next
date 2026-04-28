@@ -17,7 +17,7 @@ import {
 const HAPPY_PATH_FIXTURE = resolve('tests/fixtures/codex-smoke/protocol/happy-path-ok.jsonl');
 const TURN_FAILED_FIXTURE = resolve('tests/fixtures/codex-smoke/protocol/turn-failed.jsonl');
 
-// P2.6 real codex connector. Mirrors the agent-connector agent-connector
+// P2.6 real codex connector. Mirrors the claude-code connector
 // contract test shape for the connector shape + parser branches. Three
 // concerns:
 //   (A) `src/runtime/connectors/codex.ts` module shape + capability-
@@ -31,7 +31,7 @@ const TURN_FAILED_FIXTURE = resolve('tests/fixtures/codex-smoke/protocol/turn-fa
 //       shape).
 //
 // Check 29 (import-level connector discipline) coverage for `codex.ts` is
-// exercised by the live-repo regression guard in the agent-connector suite;
+// exercised by the live-repo regression guard in the claude-code connector suite;
 // adding a new connector file cannot smuggle a forbidden SDK because the
 // scan pattern walks the tree recursively.
 
@@ -332,6 +332,47 @@ describe('Codex connector — parseCodexStdout NDJSON parser branches', () => {
     });
     const parsed = parseCodexStdout(stdout, 'p', 0, 'codex-cli 0.118.0');
     expect(parsed.result_body).toBe('response');
+  });
+
+  it('accepts Codex 0.125 command_execution start/completion events before the terminal agent message', () => {
+    const stdout =
+      `${JSON.stringify({ type: 'thread.started', thread_id: 'thread-abc-123' })}\n` +
+      `${JSON.stringify({ type: 'turn.started' })}\n` +
+      `${JSON.stringify({
+        type: 'item.started',
+        item: {
+          id: 'item_0',
+          type: 'command_execution',
+          command: 'pwd',
+          status: 'in_progress',
+        },
+      })}\n` +
+      `${JSON.stringify({
+        type: 'item.completed',
+        item: {
+          id: 'item_0',
+          type: 'command_execution',
+          command: 'pwd',
+          aggregated_output: '/tmp/project',
+          exit_code: 0,
+          status: 'completed',
+        },
+      })}\n` +
+      `${JSON.stringify({
+        type: 'item.completed',
+        item: {
+          id: 'item_1',
+          type: 'agent_message',
+          text: '{"verdict":"NO_ISSUES_FOUND","findings":[]}',
+        },
+      })}\n` +
+      `${JSON.stringify({ type: 'turn.completed' })}\n`;
+
+    const parsed = parseCodexStdout(stdout, 'p', 0, 'codex-cli 0.125.0');
+    expect(JSON.parse(parsed.result_body)).toEqual({
+      verdict: 'NO_ISSUES_FOUND',
+      findings: [],
+    });
   });
 
   it('throws on empty stdout', () => {

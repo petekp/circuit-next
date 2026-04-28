@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { AgentRelayInput } from '../../src/runtime/connectors/agent.js';
+import type { ClaudeCodeRelayInput } from '../../src/runtime/connectors/claude-code.js';
 import type { RelayResult } from '../../src/runtime/connectors/shared.js';
 import { runRelayStep } from '../../src/runtime/step-handlers/relay.js';
 import type { RunState, StepHandlerContext } from '../../src/runtime/step-handlers/types.js';
@@ -96,8 +96,8 @@ interface RelayerSpec {
 
 function makeRelayer(spec: RelayerSpec) {
   return {
-    connectorName: 'agent' as const,
-    relay: async (_input: AgentRelayInput): Promise<RelayResult> => {
+    connectorName: 'claude-code' as const,
+    relay: async (_input: ClaudeCodeRelayInput): Promise<RelayResult> => {
       if (spec.throwError !== undefined) throw spec.throwError;
       return {
         request_payload: 'unused-by-test',

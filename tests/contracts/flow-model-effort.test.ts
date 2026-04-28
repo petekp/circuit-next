@@ -13,7 +13,7 @@ import { RunId, SkillId } from '../../src/schemas/ids.js';
 import type { ResolvedSelection } from '../../src/schemas/selection-policy.js';
 import { SelectionOverride } from '../../src/schemas/selection-policy.js';
 
-const FIXTURE_PATH = resolve('.claude-plugin/skills/explore/circuit.json');
+const FIXTURE_PATH = resolve('generated/flows/explore/circuit.json');
 
 type MutableCompiledFlowFixture = Record<string, unknown> & {
   default_selection?: unknown;
@@ -263,7 +263,7 @@ describe('P2-MODEL-EFFORT — full selection precedence resolver', () => {
     const { flow, bytes } = flowWithModelEffortSelections();
     const relayInputs: RelayInput[] = [];
     const relayer: RelayFn = {
-      connectorName: 'agent',
+      connectorName: 'claude-code',
       relay: async (input: RelayInput): Promise<RelayResult> => {
         relayInputs.push(input);
         return {

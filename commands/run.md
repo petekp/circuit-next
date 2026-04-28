@@ -50,44 +50,44 @@ metacharacters:
    Example for an exploratory task `find deprecated APIs`:
 
    ```bash
-   ./bin/circuit-next --goal 'find deprecated APIs'
+   ./bin/circuit-next run --goal 'find deprecated APIs'
    ```
 
    Example for a review task `review this change for safety problems`:
 
    ```bash
-   ./bin/circuit-next --goal 'review this change for safety problems'
+   ./bin/circuit-next run --goal 'review this change for safety problems'
    ```
 
    Example for a Build task `develop: add a focused feature`:
 
    ```bash
-   ./bin/circuit-next --goal 'develop: add a focused feature'
+   ./bin/circuit-next run --goal 'develop: add a focused feature'
    ```
 
    Example for a Build task using both an entry mode and an explicit
    `--depth` flag:
 
    ```bash
-   ./bin/circuit-next --goal 'develop: make the focused change' --entry-mode deep --depth standard
+   ./bin/circuit-next run --goal 'develop: make the focused change' --entry-mode deep --depth standard
    ```
 
    Example for a Fix task `fix the foo bug`:
 
    ```bash
-   ./bin/circuit-next --goal 'fix the foo bug'
+   ./bin/circuit-next run --goal 'fix the foo bug'
    ```
 
    Example for a Fix task using Lite mode (skips the review pass):
 
    ```bash
-   ./bin/circuit-next --goal 'fix the missing-token edge case' --entry-mode lite
+   ./bin/circuit-next run --goal 'fix the missing-token edge case' --entry-mode lite
    ```
 
    Example for a task `can't ship` (contains one apostrophe):
 
    ```bash
-   ./bin/circuit-next --goal 'can'\''t ship'
+   ./bin/circuit-next run --goal 'can'\''t ship'
    ```
 
    Use the Bash tool to execute the constructed command. `./bin/circuit-next`

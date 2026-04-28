@@ -285,12 +285,6 @@ interface CompiledFlowExecutionContext {
   readonly worktreeRunner?: WorktreeRunner;
 }
 
-async function resolveRelayer(inv: { relayer?: RelayFn }): Promise<RelayFn> {
-  if (inv.relayer !== undefined) return inv.relayer;
-  const { relayAgent } = await import('./connectors/agent.js');
-  return { connectorName: 'agent', relay: relayAgent };
-}
-
 function selectEntryMode(
   flow: CompiledFlow,
   entryModeName: string | undefined,
@@ -502,7 +496,6 @@ async function executeCompiledFlow(
   ctx: CompiledFlowExecutionContext,
 ): Promise<CompiledFlowRunResult> {
   const { runFolder, flow, flowBytes, runId, goal, change_kind, now } = ctx;
-  const relayer = await resolveRelayer(ctx);
   const composeWriter = ctx.composeWriter ?? writeComposeReport;
   const entry = selectEntryMode(flow, ctx.entryModeName);
   const depth = ctx.depth ?? entry.depth;
@@ -627,7 +620,7 @@ async function executeCompiledFlow(
         executionSelectionConfigLayers,
         ...(ctx.projectRoot === undefined ? {} : { projectRoot: ctx.projectRoot }),
         ...(ctx.invocationId === undefined ? {} : { invocationId: ctx.invocationId }),
-        relayer,
+        ...(ctx.relayer === undefined ? {} : { relayer: ctx.relayer }),
         composeWriter,
         now,
         recordedAt,

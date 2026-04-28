@@ -16,7 +16,7 @@ import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { RunId } from '../../src/schemas/ids.js';
 
-const FIXTURE_PATH = resolve('.claude-plugin/skills/explore/circuit.json');
+const FIXTURE_PATH = resolve('generated/flows/explore/circuit.json');
 
 function loadFixture(mutator?: (raw: { steps: Array<{ id: string; reads: string[] }> }) => void): {
   flow: CompiledFlow;
@@ -47,7 +47,7 @@ function change_kind(): ChangeKindDeclaration {
 
 function stubRelayer(): RelayFn {
   return {
-    connectorName: 'agent',
+    connectorName: 'claude-code',
     relay: async (input: RelayInput): Promise<RelayResult> => {
       if (input.prompt.includes('Step: synthesize-step')) {
         expect(input.prompt).toContain('"recommendation"');
@@ -111,7 +111,7 @@ function stubRelayer(): RelayFn {
 
 function incompleteReviewRelayer(): RelayFn {
   return {
-    connectorName: 'agent',
+    connectorName: 'claude-code',
     relay: async (input: RelayInput): Promise<RelayResult> => {
       if (input.prompt.includes('Step: synthesize-step')) {
         return {
@@ -146,7 +146,7 @@ function incompleteReviewRelayer(): RelayFn {
 
 function extraKeyReviewRelayer(): RelayFn {
   return {
-    connectorName: 'agent',
+    connectorName: 'claude-code',
     relay: async (input: RelayInput): Promise<RelayResult> => {
       if (input.prompt.includes('Step: synthesize-step')) {
         return {
@@ -187,7 +187,7 @@ function extraKeyReviewRelayer(): RelayFn {
 
 function extraKeyComposeRelayer(): RelayFn {
   return {
-    connectorName: 'agent',
+    connectorName: 'claude-code',
     relay: async (input: RelayInput): Promise<RelayResult> => ({
       request_payload: input.prompt,
       receipt_id: 'stub-extra',
@@ -212,7 +212,7 @@ function extraKeyComposeRelayer(): RelayFn {
 
 function incompleteComposeRelayer(): RelayFn {
   return {
-    connectorName: 'agent',
+    connectorName: 'claude-code',
     relay: async (input: RelayInput): Promise<RelayResult> => ({
       request_payload: input.prompt,
       receipt_id: 'stub-incomplete',
