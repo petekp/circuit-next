@@ -38,6 +38,128 @@ interface BranchOutcome {
   readonly admitted: boolean;
 }
 
+// Pure-function inputs for the join policy decision. Every field
+// listed here is either a literal from the workflow (policy,
+// admitOrder, stepId), a per-branch summary derived from
+// already-completed child runs (outcomes), or a precomputed pair of
+// changed-file lists / file-discovery-error string for the
+// disjoint-merge branch (which is the one impure dimension in
+// runFanoutStep — hoisted ahead of the call so the join decision
+// itself stays pure and table-testable).
+export interface FanoutJoinOutcome {
+  readonly branch_id: string;
+  readonly child_outcome: BranchOutcome['child_outcome'];
+  readonly verdict: string;
+  readonly admitted: boolean;
+  // Present iff `child_outcome === 'complete'` and the child's
+  // `result.json` parsed to an object. aggregate-only treats
+  // `undefined` as "non-parseable".
+  readonly result_body?: unknown;
+}
+
+export interface FanoutJoinInput {
+  readonly policy: FanoutStep['gate']['join']['policy'];
+  readonly stepId: string;
+  readonly admitOrder: readonly string[];
+  readonly outcomes: readonly FanoutJoinOutcome[];
+  // disjoint-merge only: changed files per branch_id. Either
+  // `branchFiles` is provided (the usual path) or `branchFilesError`
+  // is set when the worktree-runner threw during discovery.
+  readonly branchFiles?: ReadonlyMap<string, readonly string[]>;
+  readonly branchFilesError?: string;
+}
+
+export interface FanoutJoinResult {
+  readonly joinedSuccessfully: boolean;
+  readonly winnerBranchId?: string;
+  readonly failureReason?: string;
+}
+
+export function evaluateFanoutJoinPolicy(input: FanoutJoinInput): FanoutJoinResult {
+  const { policy, stepId, admitOrder, outcomes } = input;
+
+  if (policy === 'pick-winner') {
+    for (const admittedVerdict of admitOrder) {
+      const found = outcomes.find(
+        (o) => o.child_outcome === 'complete' && o.verdict === admittedVerdict,
+      );
+      if (found !== undefined) {
+        return { joinedSuccessfully: true, winnerBranchId: found.branch_id };
+      }
+    }
+    return {
+      joinedSuccessfully: false,
+      failureReason: `fanout step '${stepId}' pick-winner: no branch closed 'complete' with an admitted verdict (admit order [${admitOrder.join(', ')}])`,
+    };
+  }
+
+  if (policy === 'disjoint-merge') {
+    const allAdmitted = outcomes.every((o) => o.admitted);
+    if (!allAdmitted) {
+      return {
+        joinedSuccessfully: false,
+        failureReason: `fanout step '${stepId}' disjoint-merge: not all branches closed 'complete' with an admitted verdict`,
+      };
+    }
+    if (input.branchFilesError !== undefined) {
+      return {
+        joinedSuccessfully: false,
+        failureReason: `fanout step '${stepId}' disjoint-merge: file-disjoint validation failed (${input.branchFilesError})`,
+      };
+    }
+    const branchFiles = input.branchFiles;
+    if (branchFiles === undefined) {
+      // Caller contract violation: disjoint-merge requires either
+      // branchFiles or branchFilesError. Surface as a pure-function
+      // assertion instead of silently passing.
+      throw new Error(
+        'evaluateFanoutJoinPolicy: disjoint-merge requires branchFiles or branchFilesError',
+      );
+    }
+    const seenFile = new Map<string, string>();
+    for (const outcome of outcomes) {
+      const files = branchFiles.get(outcome.branch_id) ?? [];
+      for (const file of files) {
+        const prior = seenFile.get(file);
+        if (prior !== undefined && prior !== outcome.branch_id) {
+          return {
+            joinedSuccessfully: false,
+            failureReason: `fanout step '${stepId}' disjoint-merge: file '${file}' modified by branches '${prior}' and '${outcome.branch_id}'`,
+          };
+        }
+        seenFile.set(file, outcome.branch_id);
+      }
+    }
+    return { joinedSuccessfully: true };
+  }
+
+  // aggregate-only.
+  const allClosed = outcomes.every(
+    (o) =>
+      o.child_outcome === 'complete' ||
+      o.child_outcome === 'aborted' ||
+      o.child_outcome === 'handoff' ||
+      o.child_outcome === 'stopped' ||
+      o.child_outcome === 'escalated',
+  );
+  const allParseable = outcomes.every(
+    (o) => o.child_outcome === 'complete' && o.result_body !== undefined,
+  );
+  if (!allClosed) {
+    return {
+      joinedSuccessfully: false,
+      failureReason: `fanout step '${stepId}' aggregate-only: at least one branch did not close cleanly`,
+    };
+  }
+  if (!allParseable) {
+    return {
+      joinedSuccessfully: false,
+      failureReason: `fanout step '${stepId}' aggregate-only: at least one branch did not produce a parseable result body`,
+    };
+  }
+  return { joinedSuccessfully: true };
+}
+
 const NO_VERDICT_SENTINEL = '<no-verdict>';
 
 // Default worktree provisioner — shells out to `git worktree`. Tests
@@ -586,86 +708,50 @@ export async function runFanoutStep(
   }
 
   // Apply join policy to determine pass / fail and (for pick-winner) the
-  // winning branch id.
+  // winning branch id. Heavy lifting is in `evaluateFanoutJoinPolicy`
+  // (pure); the only impure dimension — disjoint-merge's per-branch
+  // changed-file discovery — is hoisted ahead of the call so the join
+  // decision itself is table-testable.
   const policy = step.gate.join.policy;
   const admitOrder = step.gate.verdicts.admit;
-  let winnerBranchId: string | undefined;
-  let joinedSuccessfully = false;
-  let joinFailureReason: string | undefined;
-
-  if (policy === 'pick-winner') {
-    for (const admittedVerdict of admitOrder) {
-      const found = outcomes.find(
-        (o) => o.child_outcome === 'complete' && o.verdict === admittedVerdict,
+  let branchFiles: ReadonlyMap<string, readonly string[]> | undefined;
+  let branchFilesError: string | undefined;
+  if (policy === 'disjoint-merge' && outcomes.every((o) => o.admitted)) {
+    try {
+      const collected = await Promise.all(
+        outcomes.map(async (o) => {
+          const files = worktreeRunner.changedFiles
+            ? await Promise.resolve(worktreeRunner.changedFiles(o.worktree_path, baseRef))
+            : [];
+          return [o.branch_id, files] as const;
+        }),
       );
-      if (found !== undefined) {
-        winnerBranchId = found.branch_id;
-        joinedSuccessfully = true;
-        break;
-      }
-    }
-    if (!joinedSuccessfully) {
-      joinFailureReason = `fanout step '${step.id}' pick-winner: no branch closed 'complete' with an admitted verdict (admit order [${admitOrder.join(', ')}])`;
-    }
-  } else if (policy === 'disjoint-merge') {
-    const allAdmitted = outcomes.every((o) => o.admitted);
-    if (!allAdmitted) {
-      joinFailureReason = `fanout step '${step.id}' disjoint-merge: not all branches closed 'complete' with an admitted verdict`;
-    } else {
-      // Validate file-disjoint changes across branches.
-      try {
-        const branchFiles = await Promise.all(
-          outcomes.map(async (o) => {
-            const files = worktreeRunner.changedFiles
-              ? await Promise.resolve(worktreeRunner.changedFiles(o.worktree_path, baseRef))
-              : [];
-            return { branch_id: o.branch_id, files };
-          }),
-        );
-        const seenFile = new Map<string, string>();
-        for (const entry of branchFiles) {
-          for (const file of entry.files) {
-            const prior = seenFile.get(file);
-            if (prior !== undefined && prior !== entry.branch_id) {
-              joinFailureReason = `fanout step '${step.id}' disjoint-merge: file '${file}' modified by branches '${prior}' and '${entry.branch_id}'`;
-              break;
-            }
-            seenFile.set(file, entry.branch_id);
-          }
-          if (joinFailureReason !== undefined) break;
-        }
-        if (joinFailureReason === undefined) {
-          joinedSuccessfully = true;
-          // v0 limitation: file-disjoint validation runs but the actual
-          // merge into the parent tree is not yet wired. Aggregate
-          // artifact still records the per-branch outcomes for
-          // operators to merge manually until the merge slice lands.
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        joinFailureReason = `fanout step '${step.id}' disjoint-merge: file-disjoint validation failed (${message})`;
-      }
-    }
-  } else if (policy === 'aggregate-only') {
-    const allClosed = outcomes.every(
-      (o) =>
-        o.child_outcome === 'complete' ||
-        o.child_outcome === 'aborted' ||
-        o.child_outcome === 'handoff' ||
-        o.child_outcome === 'stopped' ||
-        o.child_outcome === 'escalated',
-    );
-    const allParseable = outcomes.every(
-      (o) => o.child_outcome === 'complete' && o.result_body !== undefined,
-    );
-    if (!allClosed) {
-      joinFailureReason = `fanout step '${step.id}' aggregate-only: at least one branch did not close cleanly`;
-    } else if (!allParseable) {
-      joinFailureReason = `fanout step '${step.id}' aggregate-only: at least one branch did not produce a parseable result body`;
-    } else {
-      joinedSuccessfully = true;
+      branchFiles = new Map(collected);
+    } catch (err) {
+      branchFilesError = err instanceof Error ? err.message : String(err);
     }
   }
+  const joinDecision = evaluateFanoutJoinPolicy({
+    policy,
+    stepId: step.id,
+    admitOrder,
+    outcomes: outcomes.map((o) => ({
+      branch_id: o.branch_id,
+      child_outcome: o.child_outcome,
+      verdict: o.verdict,
+      admitted: o.admitted,
+      result_body: o.result_body,
+    })),
+    ...(branchFiles === undefined ? {} : { branchFiles }),
+    ...(branchFilesError === undefined ? {} : { branchFilesError }),
+  });
+  const joinedSuccessfully = joinDecision.joinedSuccessfully;
+  const winnerBranchId = joinDecision.winnerBranchId;
+  const joinFailureReason = joinDecision.failureReason;
+  // v0 limitation: disjoint-merge file-disjoint validation runs but
+  // the actual merge into the parent tree is not yet wired. Aggregate
+  // artifact still records the per-branch outcomes for operators to
+  // merge manually until the merge slice lands.
 
   // Always materialise the aggregate artifact — the durable record of
   // what happened, regardless of join outcome.
