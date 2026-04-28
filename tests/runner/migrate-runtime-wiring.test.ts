@@ -29,17 +29,17 @@ import {
   MigrateVerification,
 } from '../../src/workflows/migrate/artifacts.js';
 
-// Migrate runtime wiring test. Loads the live Migrate fixture compiled
-// from src/workflows/migrate/recipe.json, runs it end-to-end
+// Migrate runtime wiring test. Loads the live Migrate compiled flow
+// from src/workflows/migrate/schematic.json, runs it end-to-end
 // with a stub childRunner (so the batch sub-run does not descend into a
 // real Build child) and a stub reviewer dispatcher, and asserts that
-// every typed Migrate artifact is materialised correctly. Verification
+// every typed Migrate report is materialised correctly. Verification
 // runs the brief's default `npm run check` command in REPO_ROOT, the
 // same pattern as sweep-runtime-wiring.test.ts.
 //
 // What this test proves at the substrate level:
-//   - The recipe → Workflow compile path supports `sub-run` execution
-//     kind end-to-end (recipe schema → compiler → runtime handler).
+//   - The schematic → Workflow compile path supports `sub-run` execution
+//     kind end-to-end (schematic schema → compiler → runtime handler).
 //   - The sub-run gate admits the child's terminal verdict
 //     (deriveTerminalVerdict in runner.ts populates RunResult.verdict
 //     for a Build-like child whose review dispatch passed).

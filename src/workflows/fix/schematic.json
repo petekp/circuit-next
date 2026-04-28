@@ -1,7 +1,7 @@
 {
   "schema_version": "1",
   "id": "fix",
-  "title": "Fix Recipe",
+  "title": "Fix Schematic",
   "purpose": "Fix workflow: capture problem boundary, gather context, diagnose, apply a focused change, verify, review (in standard rigor), and close with evidence. Lite mode skips the review dispatch and closes immediately after verification via the fix-verify route_overrides.continue.lite override. fix-no-repro-decision and fix-handoff remain in the recipe as authoring intent for future ask/handoff routing in the runtime; they are unreachable at compile and do not appear in the emitted Workflows.",
   "status": "active",
   "version": "0.1.0",

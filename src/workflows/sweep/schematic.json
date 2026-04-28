@@ -1,7 +1,7 @@
 {
   "schema_version": "1",
   "id": "sweep",
-  "title": "Sweep Recipe",
+  "title": "Sweep Schematic",
   "purpose": "Systematic codebase sweeps: cleanup, quality passes, coverage improvements, docs-sync. Frame the sweep, survey for candidates, triage by confidence x risk, execute a batch of acted items, verify no regression, review for injections, close with evidence. The minimal-but-honest single-batch composition: full seven-canonical-phase spine, only existing step kinds (synthesis / dispatch / verification / close-with-evidence). Empirical proof of the workflow-agnostic substrate after the runner.ts decomposition into per-workflow registries.",
   "status": "active",
   "version": "0.1.0",

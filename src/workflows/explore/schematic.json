@@ -1,7 +1,7 @@
 {
   "schema_version": "1",
   "id": "explore",
-  "title": "Explore Recipe",
+  "title": "Explore Schematic",
   "purpose": "Phase 2 first-parity target workflow per ADR-0007 CC#P2-1. Full-spine investigation: frame \u2192 analyze \u2192 synthesize \u2192 review \u2192 close. Canonical phase set {frame, analyze, act, review, close} with omits=[plan, verify] per explore contract \u00a7Canonical phase set. Synthesize and Review are worker-dispatch steps per ADR-0008 (distinct-adapter Knight-Leveson boundary crossings); Frame, Analyze, and Close remain orchestrator-synthesis (framing, decomposition, aggregation).",
   "status": "active",
   "version": "0.1.0",
@@ -200,7 +200,7 @@
     },
     {
       "id": "close-step",
-      "title": "Close \u2014 emit final result artifact",
+      "title": "Close \u2014 emit final result file",
       "phase": "close",
       "input": {
         "brief": "explore.brief@v1",

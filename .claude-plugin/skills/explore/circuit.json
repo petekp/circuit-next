@@ -166,7 +166,7 @@
     },
     {
       "id": "close-step",
-      "title": "Close — emit final result artifact",
+      "title": "Close — emit final result file",
       "protocol": "explore-close@v1",
       "reads": [
         "artifacts/brief.json",

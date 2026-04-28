@@ -1,7 +1,7 @@
 {
   "schema_version": "1",
   "id": "migrate",
-  "title": "Migrate Recipe",
+  "title": "Migrate Schematic",
   "purpose": "Large-scale migrations: framework swaps, dependency replacements, architecture transitions, incremental rewrites. Frame the migration's source and target, inventory what needs to move, plan the coexistence window and rollback path, execute the migration through a sub-run that delegates the actual code change to a Build child workflow, verify nothing regressed, run a cutover review, and close with evidence. v0 default executor: sub-run sequential per batch (single batch at v0). The fanout-over-batches expansion lands once the WorktreeRunner CLI wiring is in place.",
   "status": "active",
   "version": "0.1.0",

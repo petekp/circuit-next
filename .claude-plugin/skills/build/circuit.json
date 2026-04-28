@@ -2,7 +2,7 @@
   "schema_version": "2",
   "id": "build",
   "version": "0.1.0",
-  "purpose": "Build workflow parity fixture. The workflow frames a requested change, plans it, sends implementation to a worker, verifies it, sends review to a separate worker, and closes with a Build result artifact.",
+  "purpose": "Build flow. Circuit frames a requested change, plans it, relays implementation to a worker, runs verification, relays review to a separate worker, and closes with a Build result file plus evidence.",
   "entry": {
     "signals": {
       "include": ["build", "implement", "develop", "change", "fix", "add"],
