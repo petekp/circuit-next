@@ -16,12 +16,11 @@ import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
 import { readRunLog } from '../../src/runtime/event-log-reader.js';
 import { type DispatchFn, runWorkflow } from '../../src/runtime/runner.js';
 
-// Slice 27d — runner smoke test exercising one synthesis + one dispatch
-// step end-to-end via the dry-run agent adapter (per ADR-0001 Addendum B
-// §Phase 1.5 Close Criteria #4/#5/#6/#7). The test reads the production
-// dogfood-run-0 workflow fixture — the same JSON a user invocation of
-// `./bin/circuit-next dogfood-run-0 ...` would load — and composes
-// the runtime boundary via `runWorkflow`.
+// Runner smoke test exercising one synthesis + one dispatch step
+// end-to-end via the dry-run agent adapter. The test reads the
+// production dogfood-run-0 workflow fixture — the same JSON a user
+// invocation of `./bin/circuit-next dogfood-run-0 ...` would load — and
+// composes the runtime boundary via `runWorkflow`.
 //
 // Two-run acceptance: same fixture, two different goals, two different
 // result.json files with differing `goal` and `run_id` fields satisfy
@@ -41,18 +40,17 @@ function deterministicNow(startMs: number): () => Date {
   return () => new Date(startMs + n++ * 1000);
 }
 
-// Slice 43b: deterministic stub dispatcher so the runner smoke doesn't
-// spawn a real `claude` subprocess. The capability-boundary assertion at
+// Deterministic stub dispatcher so the runner smoke doesn't spawn a
+// real `claude` subprocess. The capability-boundary assertion at
 // parseAgentStdout is a real-subprocess-only concern; the stub satisfies
 // the DispatchResult shape without traversing that path. The
-// AGENT_SMOKE-gated explore e2e (Slice 43c) exercises the real adapter
-// end-to-end.
+// AGENT_SMOKE-gated explore e2e exercises the real adapter end-to-end.
 //
-// Slice 45a (P2.6 HIGH 3 fold-in): lifted into the structured
-// `DispatchFn` descriptor shape. The stub binds `adapterName: 'agent'`
-// so the runner's `dispatch.started` event records the agent identity
-// for this smoke suite; Slice 45a's dedicated codex-routing regression
-// test at `runner-dispatch-adapter-identity.test.ts` exercises the
+// The stub uses the structured `DispatchFn` descriptor shape and binds
+// `adapterName: 'agent'` so the runner's `dispatch.started` event
+// records the agent identity for this smoke suite; the dedicated
+// codex-routing regression test at
+// `runner-dispatch-adapter-identity.test.ts` exercises the
 // `adapterName: 'codex'` branch.
 function stubDispatcher(): DispatchFn {
   return {
@@ -81,14 +79,14 @@ function lane(): LaneDeclaration {
 let runRootBase: string;
 
 beforeEach(() => {
-  runRootBase = mkdtempSync(join(tmpdir(), 'circuit-next-27d-'));
+  runRootBase = mkdtempSync(join(tmpdir(), 'circuit-next-runtime-smoke-'));
 });
 
 afterEach(() => {
   rmSync(runRootBase, { recursive: true, force: true });
 });
 
-describe('Slice 27d — dogfood-run-0 runner smoke', () => {
+describe('dogfood-run-0 runner smoke', () => {
   it('closes one run producing events.ndjson / state.json / manifest.snapshot.json / artifacts/result.json', async () => {
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'run-a');
@@ -165,9 +163,9 @@ describe('Slice 27d — dogfood-run-0 runner smoke', () => {
     });
 
     const kinds = new Set(outcome.events.map((e) => e.kind));
-    // Closure criterion: more than 27c's 4-kind subset is exercised. Slice
-    // 43b widens the dispatch trail to the five-event transcript per
-    // ADR-0007 §Amendment Slice 37; all five kinds must appear.
+    // Closure criterion: a broader event-kind subset is exercised. The
+    // dispatch trail is the five-event transcript; all five kinds must
+    // appear.
     expect(kinds.has('run.bootstrapped')).toBe(true);
     expect(kinds.has('step.entered')).toBe(true);
     expect(kinds.has('step.artifact_written')).toBe(true);
@@ -187,19 +185,16 @@ describe('Slice 27d — dogfood-run-0 runner smoke', () => {
       throw new Error('expected dispatch.started event');
     }
     expect(dispatchStarted.adapter).toEqual({ kind: 'builtin', name: 'agent' });
-    // Slice 47a — `resolved_from` is now derived from the runner's
-    // actual decision path (see runner.ts `deriveResolvedFrom`):
-    // the test injects a stub dispatcher via `WorkflowInvocation.dispatcher`,
-    // so the honest claim is `source: 'explicit'`. Pre-Slice-47a the
-    // materializer hardcoded `source: 'default'` regardless of caller
-    // (CONVERGENT HIGH A in the Phase 2-to-date comprehensive review).
+    // `resolved_from` is derived from the runner's actual decision path
+    // (see runner.ts `deriveResolvedFrom`): the test injects a stub
+    // dispatcher via `WorkflowInvocation.dispatcher`, so the honest
+    // claim is `source: 'explicit'`.
     expect(dispatchStarted.resolved_from).toEqual({ source: 'explicit' });
-    // Slice 47a — `resolved_selection` is now derived from
-    // `workflow.default_selection` + `step.selection` (right-biased per
-    // SEL precedence). The dogfood-run-0 fixture and the explore
-    // fixture both use empty default selections at v0, so the canonical
-    // empty selection is the honest claim — but it is now genuinely
-    // empty, not fabricated.
+    // `resolved_selection` is derived from `workflow.default_selection`
+    // + `step.selection` (right-biased per SEL precedence). The
+    // dogfood-run-0 fixture and the explore fixture both use empty
+    // default selections at v0, so the canonical empty selection is
+    // the honest claim — and it is genuinely empty, not fabricated.
     expect(dispatchStarted.resolved_selection).toEqual({ skills: [], invocation_options: {} });
 
     // run.closed is single and last.
@@ -251,43 +246,27 @@ describe('Slice 27d — dogfood-run-0 runner smoke', () => {
       // ADR-0001 Addendum B Close Criterion "CLI loading of
       // .claude-plugin/skills/dogfood-run-0/circuit.json is tested."
       //
-      // Slice 47b (Codex Slice 47a comprehensive review HIGH 1 fold-in) —
-      // pre-Slice-47b this test shelled the CLI through `tsx` to
-      // exercise the same invocation `./bin/circuit-next` uses, but
-      // tsx's parent-child IPC mechanism allocates `/tmp/tsx-<uid>/*.pipe`
-      // and fails with `listen EPERM` in restricted-filesystem agent
-      // sandboxes (Codex CLI sandbox; potentially CI workers under
-      // hardened mounts). The CLI's exported `main(argv)` function is
-      // the same entrypoint tsx invokes, so importing it directly
-      // exercises every code path the subprocess version exercised
-      // (argv parsing, fixture load, schema parse, runWorkflow
-      // composition, JSON serialization to stdout) without depending
-      // on the IPC pipe directory. The launcher binding is separately pinned
-      // by the package.json contract test below so the binary path remains
-      // covered.
+      // The CLI's exported `main(argv)` function is the same entrypoint
+      // the launcher invokes, so importing it directly exercises every
+      // code path the subprocess version would (argv parsing, fixture
+      // load, schema parse, runWorkflow composition, JSON serialization
+      // to stdout) without depending on the IPC pipe directory. The
+      // launcher binding is separately pinned by the package.json
+      // contract test below so the binary path remains covered.
       //
-      // Slice 52 (Codex H11 fold-in — Clean-Clone Reality Gate): the
-      // launcher binding moved from tsx to compiled JS. tsx's same
-      // `/tmp/tsx-<uid>/*.pipe` EPERM failure class reproduces in
-      // operator-local restricted-filesystem runs (not just sandboxed
-      // agents), so the real launcher now invokes `dist/cli/circuit.js`.
-      // The direct `main()` import strategy this test uses is unchanged —
-      // `main()` is the same entrypoint both bindings converge on.
+      // The launcher binding compiles JS — `dist/cli/circuit.js`. The
+      // direct `main()` import strategy this test uses is unchanged —
+      // `main()` is the same entrypoint the binding converges on.
       //
-      // Slice 47d (Codex HIGH 1 fold-in + Slice 47b Codex MED 1 deferred
-      // subprocess-boundary contract trigger): `main()` invokes the real
-      // `dispatchAgent` default (which spawns an authenticated `claude`
-      // CLI subprocess). That default fails in sandboxed agent
-      // environments where the `claude` CLI is unauthenticated, making
-      // the test non-portable across operator-local and sandboxed
-      // environments. Env-gated under CLI_SMOKE=1 (same pattern as
-      // AGENT_SMOKE at Slice 43c + CODEX_SMOKE at Slice 45) so the
+      // `main()` invokes the real `dispatchAgent` default (which spawns
+      // an authenticated `claude` CLI subprocess). That default fails
+      // in sandboxed agent environments where the `claude` CLI is
+      // unauthenticated, making the test non-portable across
+      // operator-local and sandboxed environments. Env-gated under
+      // CLI_SMOKE=1 (same pattern as AGENT_SMOKE / CODEX_SMOKE) so the
       // default `npm run verify` path does not depend on a live CLI.
       // Operator-local full coverage via `CLI_SMOKE=1 npm run verify`.
-      // The env-gate IS the subprocess-boundary contract the Slice 47b
-      // Codex MED 1 deferred trigger required (env-gated subprocess
-      // smoke form per that MED's "static wrapper-pattern assert OR
-      // env-gated subprocess smoke" disjunction).
+      // The env-gate IS the subprocess-boundary contract.
       const runRoot = join(runRootBase, 'cli-run');
       const { main } = await import('../../src/cli/circuit.js');
       let captured = '';
@@ -334,16 +313,12 @@ describe('Slice 27d — dogfood-run-0 runner smoke', () => {
     15000,
   );
 
-  // Slice 47b — CLI binding pin. Pre-Slice-47b, the
-  // execFileSync('node_modules/.bin/tsx', ['src/cli/circuit.ts', ...])
-  // call implicitly verified that `circuit:run` was wired to tsx +
-  // the CLI entry. Replacing the subprocess invocation with a direct
-  // main() import drops that coverage; this contract test re-pins it
+  // CLI binding pin. This contract test pins the launcher binding
   // statically without spawning a subprocess.
   //
-  // Slice 102 direct-launcher cleanup: the public test path now goes through
-  // ./bin/circuit-next, which invokes dist/cli/circuit.js directly instead of
-  // surfacing npm-script or dogfood.js names to plugin users.
+  // Direct-launcher cleanup: the public test path now goes through
+  // ./bin/circuit-next, which invokes dist/cli/circuit.js directly
+  // instead of surfacing npm-script or dogfood.js names to plugin users.
   it("package.json's circuit:run script delegates to the direct Circuit launcher", () => {
     const pkg = JSON.parse(readFileSync(resolve('package.json'), 'utf8')) as {
       scripts?: Record<string, string>;

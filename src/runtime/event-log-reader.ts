@@ -8,9 +8,7 @@ import { eventLogPath } from './event-writer.js';
 // RUN-I1..I5: bootstrap-first, bootstrap-singleton, sequence contiguity,
 // run_id consistency, at-most-one-close-last).
 //
-// Slice 27c MVP: malformed lines fail loudly. The spike's "durable vs
-// transient malformed-tail" distinction is deferred to Phase 2 per 27a
-// mining §Decisions 27c must make. The MVP reader rejects any malformed
+// MVP: malformed lines fail loudly. The reader rejects any malformed
 // line (including the last one) because dogfood-run-0 writes all events
 // through `appendEvent`, which parses and JSON-encodes atomically; a
 // malformed line would indicate a crash mid-write, not a normal tail.

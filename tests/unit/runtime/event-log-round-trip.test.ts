@@ -23,10 +23,10 @@ import {
   writeDerivedSnapshot,
 } from '../../../src/runtime/snapshot-writer.js';
 
-// Slice 27c — events.ndjson append → parse → reduce → derive state.json
-// round-trip test. Closes the boundary Slice 27d dogfood-run-0 will run
-// through: without this file in place, dogfood would write real bytes
-// through the very gap the slice is supposed to prove safe.
+// events.ndjson append → parse → reduce → derive state.json
+// round-trip test. Closes the boundary dogfood-run-0 runs through:
+// without this file in place, dogfood would write real bytes through the
+// very gap meant to be proven safe.
 
 const MANIFEST_BODY = Buffer.from(
   JSON.stringify({ id: 'dogfood-run-0-fixture', steps: [] }, null, 2),
@@ -123,7 +123,7 @@ afterEach(() => {
   rmSync(runRoot, { recursive: true, force: true });
 });
 
-describe('Slice 27c — events.ndjson append→reduce→state.json round-trip', () => {
+describe('events.ndjson append→reduce→state.json round-trip', () => {
   it('writes events.ndjson, state.json, manifest.snapshot.json at bootstrap', () => {
     seedRun(runRoot);
     const logText = readFileSync(eventLogPath(runRoot), 'utf8');

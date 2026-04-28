@@ -11,8 +11,7 @@ import {
   validateWorkflowKindPolicy,
 } from '../../src/runtime/policy/workflow-kind-policy.js';
 
-// Slice 43a — validateWorkflowKindPolicy helper extraction (HIGH 5
-// retargeting per Slice 40 → P2.5). Unit tests cover the shared JS
+// validateWorkflowKindPolicy helper unit tests cover the shared JS
 // canonical-set check AND the TS wrapper that adds Workflow.safeParse.
 
 function validExploreSteps(): ReadonlyArray<Record<string, unknown>> {

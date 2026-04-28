@@ -10,15 +10,10 @@ import { RunId, WorkflowId } from '../../src/schemas/ids.js';
 import type { LaneDeclaration } from '../../src/schemas/lane.js';
 import { Workflow } from '../../src/schemas/workflow.js';
 
-// Slice 45a (P2.6 HIGH 3 fold-in) — adapter-identity plumbing through
-// `runWorkflow`. Prior to 45a the runner's materializer call site
-// hardcoded `adapterName: 'agent'`; injecting a non-agent dispatcher via
-// `WorkflowInvocation.dispatcher` would produce `dispatch.started` with
-// `adapter: {kind:'builtin', name:'agent'}` regardless of which
-// dispatcher actually ran — an adapter-identity lie at the event-log
-// level. The refactor changed `DispatchFn` to a structured descriptor
+// Adapter-identity plumbing through `runWorkflow`. `DispatchFn` is a
+// structured descriptor
 // `{ adapterName: BuiltInAdapter; dispatch: (input) => Promise<DispatchResult> }`
-// and parameterized the materializer call site on
+// and the materializer call site is parameterized on
 // `dispatcher.adapterName`. This test injects a codex-shaped descriptor
 // (no real codex subprocess; stub `dispatch` function returning a
 // deterministic `DispatchResult`) and asserts the event-log records
@@ -72,14 +67,14 @@ function lane(): LaneDeclaration {
 let runRootBase: string;
 
 beforeEach(() => {
-  runRootBase = mkdtempSync(join(tmpdir(), 'circuit-next-45a-'));
+  runRootBase = mkdtempSync(join(tmpdir(), 'circuit-next-adapter-identity-'));
 });
 
 afterEach(() => {
   rmSync(runRootBase, { recursive: true, force: true });
 });
 
-describe('Slice 45a — DispatchFn descriptor carries adapter identity into dispatch.started', () => {
+describe('DispatchFn descriptor carries adapter identity into dispatch.started', () => {
   it('injecting a codex-shaped descriptor through WorkflowInvocation.dispatcher lands adapter.name="codex"', async () => {
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'codex-identity');
@@ -88,7 +83,7 @@ describe('Slice 45a — DispatchFn descriptor carries adapter identity into disp
       workflow,
       workflowBytes: bytes,
       runId: RunId.parse('45a45a45-a45a-45a4-5a45-a45a45a45a45'),
-      goal: 'slice 45a adapter-identity regression',
+      goal: 'adapter-identity regression',
       rigor: 'standard',
       lane: lane(),
       now: deterministicNow(Date.UTC(2026, 3, 22, 14, 0, 0)),
@@ -102,9 +97,9 @@ describe('Slice 45a — DispatchFn descriptor carries adapter identity into disp
     if (!dispatchStarted || dispatchStarted.kind !== 'dispatch.started') {
       throw new Error('expected dispatch.started event');
     }
-    // The critical regression: identity comes from the descriptor, not a
-    // call-site literal. A revert of Slice 45a would land `name: 'agent'`
-    // here and fail this test.
+    // The critical regression: identity comes from the descriptor, not
+    // a call-site literal. A regression here would land `name: 'agent'`
+    // and fail this test.
     expect(dispatchStarted.adapter).toEqual({ kind: 'builtin', name: 'codex' });
   });
 });

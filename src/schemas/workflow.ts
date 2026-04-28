@@ -39,7 +39,7 @@ const WorkflowBody = z
     phases: z.array(Phase).min(1),
     spine_policy: SpinePolicy,
     steps: z.array(Step).min(1),
-    // Codex HIGH #5 fold-in — legacy skill channels removed. Seed skill set
+    // Legacy skill channels removed. Seed skill set
     // is now expressed through `default_selection.skills = {mode: 'replace',
     // skills: [...]}` so every skill contribution flows through the typed
     // `SkillOverride` operations (SEL-I3). Closes the untyped-bypass path.
@@ -112,8 +112,8 @@ export const Workflow = WorkflowBody.superRefine((wf, ctx) => {
         );
       }
     }
-    // WF-I10 (Slice 27 v0.2, Codex challenger HIGH #1 fold-in). Every step's
-    // `routes` must contain a `pass` key. The GateEvaluatedEvent `outcome`
+    // WF-I10. Every step's `routes` must contain a `pass` key. The
+    // GateEvaluatedEvent `outcome`
     // field at `src/schemas/event.ts` is `z.enum(['pass', 'fail'])` — uniform
     // across all three gate kinds — so the runtime's route pick on a
     // successful gate outcome looks up `routes['pass']`. A fixture whose
@@ -159,7 +159,7 @@ export const Workflow = WorkflowBody.superRefine((wf, ctx) => {
   const declaredCanonicals = new Set<CanonicalPhase>(canonicalSeenAt.keys());
   const omits = new Set<CanonicalPhase>();
   if (wf.spine_policy.mode === 'partial') {
-    // MED #6.b: omits must be pairwise unique. Duplicates imply a typo or
+    // Omits must be pairwise unique. Duplicates imply a typo or
     // misunderstanding; both deserve a loud parse failure rather than silent
     // set-collapse semantics.
     const seenOmits = new Set<CanonicalPhase>();
@@ -178,8 +178,8 @@ export const Workflow = WorkflowBody.superRefine((wf, ctx) => {
       omits.add(o);
     }
   }
-  // MED #6.a: omits must be disjoint from declared canonicals. A canonical
-  // cannot be both declared and omitted; that's self-contradictory bookkeeping.
+  // Omits must be disjoint from declared canonicals. A canonical cannot be
+  // both declared and omitted; that's self-contradictory bookkeeping.
   for (const o of omits) {
     if (declaredCanonicals.has(o)) {
       issueAt(
@@ -200,8 +200,8 @@ export const Workflow = WorkflowBody.superRefine((wf, ctx) => {
     }
   }
 
-  // WF-I8 + WF-I9 (Slice 27, workflow.md v0.2). Graph reachability
-  // checks for dogfood-run-0 structural safety. Both checks require
+  // WF-I8 + WF-I9. Graph reachability checks for dogfood-run-0
+  // structural safety. Both checks require
   // that earlier closure invariants already hold structurally: step
   // ids must be unique (otherwise adjacency cannot be keyed), every
   // route target must be either a terminal label or a known step
@@ -211,9 +211,8 @@ export const Workflow = WorkflowBody.superRefine((wf, ctx) => {
   // misleading coverage). Each of those preconditions is already
   // flagged by the WF-I1 / WF-I4 / WF-I2 loops above; when any is
   // malformed, we skip the reachability pass so a single WF-I2
-  // violation does not cascade into noisy WF-I9 errors (Codex
-  // challenger MED #4 fold-in — WF-I2's test must remain uniquely
-  // provable).
+  // violation does not cascade into noisy WF-I9 errors (WF-I2's test
+  // must remain uniquely provable).
   const noDuplicateIds = stepIds.size === wf.steps.length;
   const adjacency = new Map<string, string[]>();
   let allRouteTargetsKnown = true;

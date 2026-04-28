@@ -11,19 +11,14 @@ import { RunId, StepId } from '../../src/schemas/ids.js';
 import type { LaneDeclaration } from '../../src/schemas/lane.js';
 import { Workflow } from '../../src/schemas/workflow.js';
 
-// Slice 47a (CONVERGENT HIGH A from the Phase 2-to-date comprehensive
-// review) — dispatch-event provenance plumbing through `runWorkflow`.
+// Dispatch-event provenance plumbing through `runWorkflow`.
 //
-// Pre-Slice-47a, `materializeDispatch` hardcoded
-// `resolved_selection: { skills: [], invocation_options: {} }` and
-// `resolved_from: { source: 'default' }` on every `dispatch.started`
-// event regardless of the actual selection-resolution path or caller
-// intent. Both the Claude fresh-read prong and the Codex cross-model
-// challenger flagged this as a HIGH because P2.8 router and
-// P2-MODEL-EFFORT will need to consume that audit-trail data. This
-// test file pins the post-fold-in invariant: provenance is derived
-// from real inputs at the runner boundary and the materializer is
-// fail-closed at the type signature.
+// `materializeDispatch` does not hardcode
+// `resolved_selection: { skills: [], invocation_options: {} }` or
+// `resolved_from: { source: 'default' }`; both fields flow from the
+// runner's actual selection-resolution path. This test file pins the
+// invariant: provenance is derived from real inputs at the runner
+// boundary and the materializer is fail-closed at the type signature.
 
 const FIXTURE_PATH = resolve('.claude-plugin/skills/dogfood-run-0/circuit.json');
 
@@ -66,14 +61,14 @@ function lane(): LaneDeclaration {
 let runRootBase: string;
 
 beforeEach(() => {
-  runRootBase = mkdtempSync(join(tmpdir(), 'circuit-next-47a-'));
+  runRootBase = mkdtempSync(join(tmpdir(), 'circuit-next-dispatch-provenance-'));
 });
 
 afterEach(() => {
   rmSync(runRootBase, { recursive: true, force: true });
 });
 
-describe("Slice 47a — dispatch.started carries honest 'resolved_from' from the runner's decision path", () => {
+describe("dispatch.started carries honest 'resolved_from' from the runner's decision path", () => {
   it('injecting a dispatcher via WorkflowInvocation.dispatcher lands resolved_from.source="explicit"', async () => {
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'explicit-provenance');
@@ -82,7 +77,7 @@ describe("Slice 47a — dispatch.started carries honest 'resolved_from' from the
       workflow,
       workflowBytes: bytes,
       runId: RunId.parse('47a47a47-a47a-47a4-7a47-a47a47a47a47'),
-      goal: 'slice 47a explicit provenance',
+      goal: 'explicit provenance',
       rigor: 'standard',
       lane: lane(),
       now: deterministicNow(Date.UTC(2026, 3, 22, 14, 0, 0)),
@@ -97,13 +92,12 @@ describe("Slice 47a — dispatch.started carries honest 'resolved_from' from the
   });
 });
 
-describe("Slice 47a — dispatch.started carries honest 'resolved_selection' from workflow + step inputs", () => {
+describe("dispatch.started carries honest 'resolved_selection' from workflow + step inputs", () => {
   it('canonical empty selection survives when workflow.default_selection and step.selection are both absent', async () => {
     const { workflow, bytes } = loadFixture();
     // The dogfood fixture does not declare default_selection or per-step
     // selection; the canonical empty resolution is the honest claim and
-    // is now genuinely derived from inputs that are empty (vs. fabricated
-    // pre-Slice-47a regardless of inputs).
+    // is genuinely derived from inputs that are empty.
     expect(workflow.default_selection).toBeUndefined();
     const dispatchStep = workflow.steps.find((s) => s.kind === 'dispatch');
     if (dispatchStep === undefined) throw new Error('fixture missing dispatch step');
@@ -115,7 +109,7 @@ describe("Slice 47a — dispatch.started carries honest 'resolved_selection' fro
       workflow,
       workflowBytes: bytes,
       runId: RunId.parse('47a47a47-a47a-47a4-7a47-a47a47a47a48'),
-      goal: 'slice 47a empty selection composition',
+      goal: 'empty selection composition',
       rigor: 'standard',
       lane: lane(),
       now: deterministicNow(Date.UTC(2026, 3, 22, 14, 0, 0)),
@@ -151,7 +145,7 @@ describe("Slice 47a — dispatch.started carries honest 'resolved_selection' fro
       workflow,
       workflowBytes: bytes,
       runId: RunId.parse('47a47a47-a47a-47a4-7a47-a47a47a47a49'),
-      goal: 'slice 47a workflow-level selection',
+      goal: 'workflow-level selection',
       rigor: 'standard',
       lane: lane(),
       now: deterministicNow(Date.UTC(2026, 3, 22, 14, 0, 0)),
@@ -198,7 +192,7 @@ describe("Slice 47a — dispatch.started carries honest 'resolved_selection' fro
       workflow,
       workflowBytes: bytes,
       runId: RunId.parse('47a47a47-a47a-47a4-7a47-a47a47a47a4a'),
-      goal: 'slice 47a step overrides workflow',
+      goal: 'step overrides workflow',
       rigor: 'standard',
       lane: lane(),
       now: deterministicNow(Date.UTC(2026, 3, 22, 14, 0, 0)),
@@ -221,15 +215,11 @@ describe("Slice 47a — dispatch.started carries honest 'resolved_selection' fro
   });
 });
 
-// Slice 47a Codex challenger HIGH 1 fold-in — SkillOverride
-// composition pins. Pre-fold-in, `deriveResolvedSelection` collapsed
-// non-`inherit` overlays to their raw skills payload, silently
-// producing wrong sets for legal `append` / `remove` overrides. The
-// post-fold-in helper applies SEL-I3 composition (inherit no-op,
-// replace set, append union, remove difference) over a workflow →
-// step base chain.
-describe("Slice 47a Codex HIGH 1 — SkillOverride 'append' / 'remove' / 'inherit' compose per SEL-I3", () => {
-  it("workflow=replace ['tdd','react-doctor'] + step=remove ['tdd'] → ['react-doctor'] (was: ['tdd'] pre-fold-in)", async () => {
+// SkillOverride composition pins. The helper applies SEL-I3
+// composition (inherit no-op, replace set, append union, remove
+// difference) over a workflow → step base chain.
+describe("SkillOverride 'append' / 'remove' / 'inherit' compose per SEL-I3", () => {
+  it("workflow=replace ['tdd','react-doctor'] + step=remove ['tdd'] → ['react-doctor']", async () => {
     const { bytes } = loadFixture();
     const raw = JSON.parse(bytes.toString('utf8'));
     raw.default_selection = {
@@ -350,13 +340,11 @@ describe("Slice 47a Codex HIGH 1 — SkillOverride 'append' / 'remove' / 'inheri
   });
 });
 
-// Slice 47a Codex HIGH 2 fold-in — WorkflowRunResult.dispatchResults
-// surface for AGENT_SMOKE / CODEX_SMOKE fingerprint cli_version
-// binding. The pre-fold-in env-var side-channel let unknown/empty
-// cli_version through; the post-fold-in path reads from the actual
-// adapter return and the audit rejects v2 fingerprints with empty/
-// unknown cli_version.
-describe('Slice 47a Codex HIGH 2 — WorkflowRunResult.dispatchResults surfaces per-dispatch cli_version', () => {
+// WorkflowRunResult.dispatchResults surface for AGENT_SMOKE /
+// CODEX_SMOKE fingerprint cli_version binding. The path reads from the
+// actual adapter return and the audit rejects v2 fingerprints with
+// empty/unknown cli_version.
+describe('WorkflowRunResult.dispatchResults surfaces per-dispatch cli_version', () => {
   it('captures stepId + adapterName + cli_version from each dispatcher invocation', async () => {
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'cli-version-capture');
@@ -381,7 +369,7 @@ describe('Slice 47a Codex HIGH 2 — WorkflowRunResult.dispatchResults surfaces 
   });
 });
 
-describe("Slice 47a — materializer fails closed when resolved_from.role does not match the dispatch step's role", () => {
+describe("materializer fails closed when resolved_from.role does not match the dispatch step's role", () => {
   it('materializeDispatch throws when resolvedFrom.source="role" carries a role that disagrees with the event role', () => {
     const stub: DispatchResult = {
       request_payload: 'x',
@@ -390,7 +378,7 @@ describe("Slice 47a — materializer fails closed when resolved_from.role does n
       duration_ms: 1,
       cli_version: '0',
     };
-    const runRoot = mkdtempSync(join(tmpdir(), 'circuit-next-47a-throw-'));
+    const runRoot = mkdtempSync(join(tmpdir(), 'circuit-next-dispatch-provenance-throw-'));
     try {
       expect(() =>
         materializeDispatch({

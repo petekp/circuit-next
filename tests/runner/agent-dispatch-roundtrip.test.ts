@@ -13,8 +13,7 @@ import { Event } from '../../src/schemas/event.js';
 import { RunId, StepId, WorkflowId } from '../../src/schemas/ids.js';
 import type { LaneDeclaration } from '../../src/schemas/lane.js';
 
-// Slice 42 (P2.4) — agent-dispatch-roundtrip test per ADR-0007 CC#P2-2
-// (as amended at Slice 37 with the five-event transcript binding).
+// Agent-dispatch-roundtrip test with the five-event transcript binding.
 //
 // The test exercises the full runtime boundary with a REAL agent adapter:
 //   (1) bootstrap a run (event-writer writes run.bootstrapped);
@@ -32,8 +31,8 @@ import type { LaneDeclaration } from '../../src/schemas/lane.js';
 //       artifact file exists with bytes byte-equal to the adapter's
 //       result_body.
 //
-// ADR-0007 CC#P2-2 Enforcement binding §Durable dispatch transcript:
-// this IS the non-substitutable evidence that
+// Enforcement binding §Durable dispatch transcript: this IS the
+// non-substitutable evidence that
 //   - dispatch.started carries adapter.name='agent' via ResolvedAdapter,
 //   - dispatch.request carries a non-empty request_payload_hash,
 //   - dispatch.receipt carries a receipt_id,
@@ -50,7 +49,7 @@ import type { LaneDeclaration } from '../../src/schemas/lane.js';
 
 const AGENT_SMOKE = process.env.AGENT_SMOKE === '1';
 
-describe('Slice 42 — agent dispatch round-trip (ADR-0007 CC#P2-2)', () => {
+describe('agent dispatch round-trip', () => {
   it('static: materializeDispatch is an exported function (ratchet-floor declaration)', () => {
     expect(typeof materializeDispatch).toBe('function');
   });
@@ -74,7 +73,7 @@ describe('Slice 42 — agent dispatch round-trip (ADR-0007 CC#P2-2)', () => {
   (AGENT_SMOKE ? it : it.skip)(
     'end-to-end: dispatchAgent → 5-event transcript → reducer snapshot → materialized artifact (AGENT_SMOKE=1)',
     async () => {
-      const runRoot = mkdtempSync(join(tmpdir(), 'slice-42-roundtrip-'));
+      const runRoot = mkdtempSync(join(tmpdir(), 'agent-dispatch-roundtrip-'));
       try {
         const runId = RunId.parse('42424242-4242-4242-4242-424242424242');
         const workflowId = WorkflowId.parse('agent-smoke-0');
@@ -84,9 +83,9 @@ describe('Slice 42 — agent dispatch round-trip (ADR-0007 CC#P2-2)', () => {
         const now = () => startAt;
         const lane: LaneDeclaration = {
           lane: 'ratchet-advance',
-          failure_mode: 'Slice 42 CC#P2-2 round-trip',
+          failure_mode: 'agent dispatch round-trip',
           acceptance_evidence: '5-event transcript consumed by reducer',
-          alternate_framing: 'Defer to P2.5 — rejected per Codex Slice 42 HIGH 3',
+          alternate_framing: 'Defer to later phase — rejected',
         };
         const writes = {
           request: 'artifacts/dispatch/smoke.request.txt',
@@ -116,7 +115,7 @@ describe('Slice 42 — agent dispatch round-trip (ADR-0007 CC#P2-2)', () => {
             kind: 'run.bootstrapped',
             workflow_id: workflowId,
             rigor: 'standard',
-            goal: 'slice 42 round-trip',
+            goal: 'agent dispatch round-trip',
             lane,
             manifest_hash: 'a'.repeat(64),
           },
@@ -131,12 +130,12 @@ describe('Slice 42 — agent dispatch round-trip (ADR-0007 CC#P2-2)', () => {
           timeoutMs: 120_000,
         });
 
-        // (3+4) Materialize and append. Slice 47a — selection +
-        // provenance are now required at the materializer boundary;
-        // this AGENT_SMOKE round-trip tests the agent adapter's full
-        // five-event transcript with the canonical empty selection
-        // and `source: 'explicit'` provenance (the test injects the
-        // adapter directly, so the honest claim is `'explicit'`).
+        // (3+4) Materialize and append. Selection + provenance are
+        // required at the materializer boundary; this AGENT_SMOKE
+        // round-trip tests the agent adapter's full five-event
+        // transcript with the canonical empty selection and `source:
+        // 'explicit'` provenance (the test injects the adapter directly,
+        // so the honest claim is `'explicit'`).
         const materialized = materializeDispatch({
           runId,
           stepId,

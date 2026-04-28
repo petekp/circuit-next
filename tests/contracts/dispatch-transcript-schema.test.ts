@@ -257,11 +257,11 @@ describe('DispatchReceiptEvent', () => {
     expect(bad.success).toBe(false);
   });
 
-  // Codex MED #2 fold-in — receipt_id must contain at least
+  // receipt_id must contain at least
   // one non-whitespace character. A spaces-only string has length > 0
   // and would have passed the naive `z.string().min(1)` constraint,
   // but such a value is useless as audit evidence.
-  it('rejects a dispatch.receipt with whitespace-only receipt_id (Codex MED #2 fold-in)', () => {
+  it('rejects a dispatch.receipt with whitespace-only receipt_id', () => {
     const bad = DispatchReceiptEvent.safeParse({
       ...dispatchReceiptEvent,
       receipt_id: '   ',
@@ -269,7 +269,7 @@ describe('DispatchReceiptEvent', () => {
     expect(bad.success).toBe(false);
   });
 
-  it('rejects a dispatch.receipt with tab+newline-only receipt_id (Codex MED #2 fold-in)', () => {
+  it('rejects a dispatch.receipt with tab+newline-only receipt_id', () => {
     const bad = DispatchReceiptEvent.safeParse({
       ...dispatchReceiptEvent,
       receipt_id: '\t\n\r ',
@@ -497,14 +497,14 @@ describe('Five-event durable dispatch transcript sequence (ADR-0007 CC#P2-2)', (
   });
 });
 
-// Codex MED #3 fold-in — ADR-0007 CC#P2-2 Enforcement
+// ADR-0007 CC#P2-2 Enforcement
 // binding requires that "the reducer must have consumed that
 // sequence" (adr-0007 §CC#P2-2:136). This file proves the
 // schema/reducer half of that obligation here; the P2.4 adapter test
 // proves the full real-adapter round-trip. Without this test the
 // reducer-consumption claim is only implicit (via `noImplicitReturns`
 // exhaustiveness); this describe block makes it executable.
-describe('Reducer consumes the five-event dispatch transcript (Codex MED #3 fold-in)', () => {
+describe('Reducer consumes the five-event dispatch transcript', () => {
   it('reduce() advances events_consumed by the full log length on the canonical sequence', () => {
     const log = [
       bootstrapEvent,

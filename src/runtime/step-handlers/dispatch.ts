@@ -13,17 +13,16 @@ import type { StepHandlerContext, StepHandlerResult } from './types.js';
 
 type DispatchStep = Workflow['steps'][number] & { kind: 'dispatch' };
 
-// Slice 53 (Codex H14 fold-in) — parse adapter result_body for the
-// gate verdict and evaluate against `step.gate.pass`. Result shape: a
-// discriminated union the handler consumes downstream. On 'pass' the
-// handler uses the parsed verdict on `dispatch.completed` and emits
-// `gate.evaluated` with `outcome: 'pass'`. On 'fail' the handler emits
-// `gate.evaluated` with `outcome: 'fail'` + the reason, then
-// `step.aborted`. The dispatch-completed verdict on fail carries the
-// observed verdict when one was present (e.g., a parseable body with a
-// verdict not in pass), so the durable transcript reflects what the
-// adapter said even on rejection. When no verdict was observable
-// (unparseable / no verdict field), `dispatch.completed.verdict`
+// Parse adapter result_body for the gate verdict and evaluate against
+// `step.gate.pass`. Result shape: a discriminated union the handler
+// consumes downstream. On 'pass' the handler uses the parsed verdict on
+// `dispatch.completed` and emits `gate.evaluated` with `outcome: 'pass'`.
+// On 'fail' the handler emits `gate.evaluated` with `outcome: 'fail'` +
+// the reason, then `step.aborted`. The dispatch-completed verdict on
+// fail carries the observed verdict when one was present (e.g., a
+// parseable body with a verdict not in pass), so the durable transcript
+// reflects what the adapter said even on rejection. When no verdict was
+// observable (unparseable / no verdict field), `dispatch.completed.verdict`
 // carries the `'<no-verdict>'` sentinel — `DispatchCompletedEvent.verdict`
 // is `z.string().min(1)` so the slot must hold a non-empty string.
 type GateEvaluation =
@@ -213,22 +212,20 @@ export async function runDispatchStep(
     cli_version: dispatchResult.cli_version,
   });
 
-  // Slice 53 (Codex H14 fold-in): evaluate the gate against the
-  // adapter's actual result_body BEFORE materializing, so the
-  // verdict written into `dispatch.completed` reflects what the
-  // adapter declared (or a sentinel on unparseable / no-verdict
-  // cases). The transcript still materializes either way — the
-  // dispatch happened, and the request/receipt/result bytes are
+  // Evaluate the gate against the adapter's actual result_body BEFORE
+  // materializing, so the verdict written into `dispatch.completed`
+  // reflects what the adapter declared (or a sentinel on unparseable /
+  // no-verdict cases). The transcript still materializes either way —
+  // the dispatch happened, and the request/receipt/result bytes are
   // durable evidence of the call regardless of admission.
   //
-  // Slice 54 (Codex H15 fold-in): when the Slice 53 gate admits a
-  // verdict AND the step declares `writes.artifact`, schema-parse
-  // `dispatchResult.result_body` against `writes.artifact.schema`. A
-  // parse failure coerces the evaluation to `kind: 'fail'` with the
-  // parse reason — mirroring the Slice 53 reject-on-bad-verdict shape
-  // so the content/schema failure-path event surface stays uniform.
-  // Artifact write requires BOTH gate pass (Slice 53) AND schema parse
-  // pass (Slice 54); failure on either path leaves
+  // When the gate admits a verdict AND the step declares
+  // `writes.artifact`, schema-parse `dispatchResult.result_body` against
+  // `writes.artifact.schema`. A parse failure coerces the evaluation to
+  // `kind: 'fail'` with the parse reason — mirroring the
+  // reject-on-bad-verdict shape so the content/schema failure-path event
+  // surface stays uniform. Artifact write requires BOTH gate pass AND
+  // schema parse pass; failure on either path leaves
   // `writes.artifact.path` absent on disk.
   const gateEvaluation = evaluateDispatchGate(step, dispatchResult.result_body);
   let evaluation: GateEvaluation = gateEvaluation;
@@ -265,9 +262,8 @@ export async function runDispatchStep(
       ? evaluation.verdict
       : (evaluation.observedVerdict ?? NO_VERDICT_SENTINEL);
 
-  // Slice 53 (Codex H2 fold-in): gate the canonical artifact write on
-  // `evaluation.kind === 'pass'` per ADR-0008 §Decision.3a — the
-  // canonical downstream-readable artifact at `writes.artifact.path`
+  // Gate the canonical artifact write on `evaluation.kind === 'pass'` —
+  // the canonical downstream-readable artifact at `writes.artifact.path`
   // is materialized ONLY after the verdict gate passes. The transcript
   // slots (request / receipt / result) remain durable evidence on
   // either path.
@@ -320,7 +316,7 @@ export async function runDispatchStep(
     return { kind: 'advance' };
   }
 
-  // Slice 53 (Codex H14 fold-in): gate-fail termination path.
+  // Gate-fail termination path.
   push({
     schema_version: 1,
     sequence: state.sequence,

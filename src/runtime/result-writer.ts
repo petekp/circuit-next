@@ -3,8 +3,7 @@ import { dirname, join } from 'node:path';
 import { RunResult } from '../schemas/result.js';
 
 // RESULT-I1 — <run-root>/artifacts/result.json is authored once at close
-// and never mutated. The writer is wired at Slice 27d (dogfood-run-0)
-// per ADR-0001 Addendum B §Phase 1.5 Close Criteria #5.
+// and never mutated.
 //
 // This module is the ONLY path by which result.json comes into being.
 // The shape is enforced by `RunResult` in src/schemas/result.ts; this

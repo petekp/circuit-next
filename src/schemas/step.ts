@@ -38,7 +38,7 @@ const StepBase = z.object({
 });
 
 // `.strict()` rejects surplus keys (no `role` on synthesis/checkpoint, no
-// stray fields on writes); this backs STEP-I6 and LOW #7 tightening.
+// stray fields on writes); this backs STEP-I6.
 export const SynthesisStep = StepBase.extend({
   executor: z.literal('orchestrator'),
   kind: z.literal('synthesis'),
@@ -337,11 +337,11 @@ export type FanoutStep = z.infer<typeof FanoutStep>;
 // the variant schemas stay ZodObject. See CHARTER.md Seam B and
 // `docs/contracts/step.md` STEP-I3.
 //
-// `Object.hasOwn` closes Codex review HIGH #1 (prototype-chain `in` attack).
-// The `!== undefined` guard closes HIGH #3 (optional slot present-but-
-// undefined). Note: HIGH #1/#2/#3 are already structurally prevented by
-// gate.ts's literal `ref` per source kind; this refinement is defense-in-
-// depth for any future source kind that relaxes the `ref` literal.
+// `Object.hasOwn` blocks prototype-chain `in` attacks. The `!== undefined`
+// guard rejects optional slots that are present-but-undefined. These attacks
+// are already structurally prevented by gate.ts's literal `ref` per source
+// kind; this refinement is defense-in-depth for any future source kind that
+// relaxes the `ref` literal.
 export const Step = z
   .discriminatedUnion('kind', [
     SynthesisStep,

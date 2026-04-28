@@ -92,12 +92,12 @@ export type CheckpointResolvedEvent = z.infer<typeof CheckpointResolvedEvent>;
 // that chose the adapter — closes the category-only-provenance gap that the
 // flat-enum drafting left open.
 //
-// Codex HIGH #1 fold-in — `adapter: ResolvedAdapter` (2-variant: built-in or
+// `adapter: ResolvedAdapter` (2-variant: built-in or
 // custom descriptor). Named references are pre-resolution pointers and MUST
 // NOT appear in the event log; the dispatcher dereferences them against the
 // registry before emitting the event.
 //
-// The role ↔ resolved_from.role binding (Codex HIGH #4) is enforced at the
+// The role ↔ resolved_from.role binding is enforced at the
 // Event-union level, not here, because `z.discriminatedUnion` cannot admit
 // ZodEffects variants (wrapped via superRefine). Mirrors the `Step` pattern.
 export const DispatchStartedEvent = EventBase.extend({
@@ -122,9 +122,8 @@ export const DispatchCompletedEvent = EventBase.extend({
 }).strict();
 export type DispatchCompletedEvent = z.infer<typeof DispatchCompletedEvent>;
 
-// ADR-0007 CC#P2-2 §Amendment (Slice 37) — the durable dispatch
-// transcript the P2.4 adapter round-trip test asserts on is a five-event
-// sequence on a single `(step_id, attempt)` pair:
+// The durable dispatch transcript the adapter round-trip test asserts
+// on is a five-event sequence on a single `(step_id, attempt)` pair:
 //
 //   dispatch.started → dispatch.request → dispatch.receipt →
 //   dispatch.result → dispatch.completed
@@ -165,8 +164,8 @@ export type DispatchFailedEvent = z.infer<typeof DispatchFailedEvent>;
 // `z.string().min(1)` (not a hash) because adapters choose their own
 // receipt-id format (UUID, ULID, provider-side run id, etc.).
 //
-// Codex MED #2 (Slice 37) — scoping note. The intra-log correlation
-// between `dispatch.request` and `dispatch.result` is `(step_id,
+// Scoping note. The intra-log correlation between `dispatch.request`
+// and `dispatch.result` is `(step_id,
 // attempt, ordering)`, NOT `receipt_id`. `DispatchResultEvent` does not
 // echo the receipt. The receipt id is identity-of-record for the
 // adapter-side dispatch (so an auditor can ask the adapter "what
@@ -324,7 +323,7 @@ export const RunClosedEvent = EventBase.extend({
 }).strict();
 export type RunClosedEvent = z.infer<typeof RunClosedEvent>;
 
-// Codex HIGH #4 fold-in — cross-variant superRefine enforces the
+// Cross-variant superRefine enforces the
 // `DispatchStartedEvent.role === resolved_from.role` binding when
 // `resolved_from.source === 'role'`. Mirrors the Step pattern: keep each
 // discriminated-union variant as a plain ZodObject (so discrimination works)

@@ -75,10 +75,9 @@ function selectionConfigLayersForDispatch(
   return selectionConfigLayersWithExecutionRigor(inv, workflow, rigor);
 }
 
-// Slice 47a (CONVERGENT HIGH A fold-in): compute the dispatch-event
-// provenance honestly from the runner's actual decision path, instead
-// of letting the materializer fabricate `{ source: 'default' }` on
-// every event. Two cases at v0:
+// Compute the dispatch-event provenance honestly from the runner's
+// actual decision path, instead of letting the materializer fabricate
+// `{ source: 'default' }` on every event. Two cases at v0:
 //   - The caller injected a dispatcher (tests, future role-keyed
 //     routing) → `source: 'explicit'`.
 //   - The runner picked the default → `source: 'default'`.

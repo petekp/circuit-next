@@ -21,9 +21,9 @@ export type SkillDomain = z.infer<typeof SkillDomain>;
 
 /**
  * SKILL-I6 — raw-input own-property guard (prototype-chain defense).
- * Mirrors continuity.ts CONT-I12 and run.ts RUN MED #3. Required catalog
- * fields MUST be own on the raw input; inherited values through the
- * prototype chain are rejected BEFORE Zod's own property access.
+ * Mirrors continuity.ts CONT-I12 and run.ts. Required catalog fields MUST be
+ * own on the raw input; inherited values through the prototype chain are
+ * rejected BEFORE Zod's own property access.
  */
 const descriptorOwnPropertyGuard = z.custom<unknown>((raw) => {
   if (raw === null || typeof raw !== 'object') return true;

@@ -18,8 +18,8 @@ const issueAt = (ctx: z.RefinementCtx, path: (string | number)[], message: strin
   ctx.addIssue({ code: z.ZodIssueCode.custom, path, message });
 };
 
-// MED #3: own-property guard for identity fields on raw input. Zod normally
-// reads inherited properties during parse, which lets `Object.create({run_id:
+// Own-property guard for identity fields on raw input. Zod normally reads
+// inherited properties during parse, which lets `Object.create({run_id:
 // other})` smuggle a phantom run_id past the discriminated union. We run the
 // check as a preprocess on the raw array so that the guard sees the original
 // objects (with their prototype chains) before Zod copies properties into
@@ -130,10 +130,10 @@ export const RunLog = ownPropertyGuardedArray.pipe(
 );
 export type RunLog = z.infer<typeof RunLog>;
 
-// MED #6: the outcome-to-status mapping is pinned as a compile-time total
-// function. By typing the record as `Record<RunClosedOutcome, Exclude<
-// SnapshotStatus, 'in_progress'>>`, any future drift between the two enums
-// breaks the compile, not just this file's tests. See RUN-I7.
+// The outcome-to-status mapping is pinned as a compile-time total function.
+// By typing the record as `Record<RunClosedOutcome, Exclude<SnapshotStatus,
+// 'in_progress'>>`, any future drift between the two enums breaks the
+// compile, not just this file's tests. See RUN-I7.
 type ClosedSnapshotStatus = Exclude<SnapshotStatus, 'in_progress'>;
 const SNAPSHOT_STATUS_FOR_OUTCOME: Record<RunClosedOutcome, ClosedSnapshotStatus> = {
   complete: 'complete',

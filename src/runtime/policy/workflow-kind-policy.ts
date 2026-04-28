@@ -6,11 +6,10 @@ import {
 } from '../../../scripts/policy/workflow-kind-policy.mjs';
 import { Workflow } from '../../schemas/workflow.js';
 
-// Slice 43a — runtime-level validateWorkflowKindPolicy helper (HIGH 5
-// retargeting per Slice 40 → P2.5). Wraps the shared JS canonical-set
-// check at scripts/policy/workflow-kind-policy.mjs with a Zod-driven
-// Workflow.safeParse pre-check, so CLI fixture loading (src/cli/
-// circuit.ts:loadFixture) can reject structurally-invalid OR
+// Runtime-level validateWorkflowKindPolicy helper. Wraps the shared JS
+// canonical-set check at scripts/policy/workflow-kind-policy.mjs with a
+// Zod-driven Workflow.safeParse pre-check, so CLI fixture loading
+// (src/cli/circuit.ts:loadFixture) can reject structurally-invalid OR
 // policy-invalid fixtures with a single call.
 //
 // Design note: the canonical-set table lives in JS (shared source of

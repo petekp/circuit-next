@@ -13,7 +13,7 @@ export const CanonicalPhase = z.enum([
 ]);
 export type CanonicalPhase = z.infer<typeof CanonicalPhase>;
 
-// SEL-I9 closes phase.md v0.1 Codex MED #7: Phase carries an optional
+// SEL-I9: Phase carries an optional
 // `selection: SelectionOverride`, symmetric with Step.selection and
 // Workflow.default_selection. PHASE-I2 `.strict()` still governs surplus-
 // key rejection at the Phase level.
@@ -41,8 +41,8 @@ export const CANONICAL_PHASES = [
 // SpinePolicy is a plain discriminated union (no superRefine on the variants)
 // so Zod's discriminated-union machinery can dispatch on the `mode` literal.
 // Structural invariants that span the whole variant — notably, omits must be
-// pairwise unique (Codex MED #6.b) and disjoint from declared canonicals
-// (Codex MED #6.a) — are enforced in the Workflow superRefine where the
+// pairwise unique and disjoint from declared canonicals — are enforced in
+// the Workflow superRefine where the
 // surrounding wf.phases context is available.
 export const SpinePolicy = z.discriminatedUnion('mode', [
   z

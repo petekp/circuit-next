@@ -4,11 +4,11 @@ import type { Effort } from '../../schemas/selection-policy.js';
 import type { AdapterDispatchInput, DispatchResult } from './shared.js';
 import { extractJsonObject, selectedModelForProvider } from './shared.js';
 
-// Slice 45 — P2.6 real codex adapter. Invokes the Codex CLI as a
-// subprocess of the Node.js runtime per ADR-0009 §1 (subprocess-per-
-// adapter for v0). Mirrors the Slice 42 `agent.ts` template: no external
-// SDK dependency, Node stdlib only (`node:child_process` +
-// `node:perf_hooks`; `node:crypto` via `./shared.ts`).
+// Real codex adapter. Invokes the Codex CLI as a subprocess of the
+// Node.js runtime (subprocess-per-adapter for v0). Mirrors the
+// `agent.ts` template: no external SDK dependency, Node stdlib only
+// (`node:child_process` + `node:perf_hooks`; `node:crypto` via
+// `./shared.ts`).
 //
 // Capability boundary — OS-level sandbox, different mechanism from
 // `agent`. Where the `agent` adapter layers the `claude -p` declarative
@@ -94,8 +94,8 @@ export const CODEX_EXECUTABLE = 'codex';
 //   -c / --config <key=value>
 //     Can override `sandbox_mode` / `sandbox_permissions` /
 //     `shell_environment_policy` / `approval_policy` and therefore
-//     disable the boundary from inside config rather than argv. Slice 87
-//     adds one controlled exception outside CODEX_NO_WRITE_FLAGS:
+//     disable the boundary from inside config rather than argv. There is
+//     one controlled exception outside CODEX_NO_WRITE_FLAGS:
 //     buildCodexArgs may emit `-c model_reasoning_effort="<effort>"`
 //     from the adapter-owned effort allowlist. assertCodexSpawnArgvBoundary()
 //     validates the final spawn argv so no caller-authored config key is
@@ -115,11 +115,9 @@ export const CODEX_EXECUTABLE = 'codex';
 // reaching this assertion would still fire on the `-c` match if it were
 // added to CODEX_NO_WRITE_FLAGS).
 //
-// Codex Slice 45 HIGH 2 fold-in (2026-04-22): expanded from a single
-// forbidden flag to the forbidden-token set above after the challenger
-// pass surfaced that `--full-auto`, `--add-dir`, `-c sandbox_mode=
-// workspace-write`, `--profile`, and `-o` all break the boundary while
-// preserving `-s read-only`.
+// The forbidden-token set above covers `--full-auto`, `--add-dir`,
+// `-c sandbox_mode=workspace-write`, `--profile`, and `-o` — all of
+// which break the boundary while preserving `-s read-only`.
 export const CODEX_FORBIDDEN_ARGV_TOKENS = Object.freeze([
   '--dangerously-bypass-approvals-and-sandbox',
   '--full-auto',
@@ -152,7 +150,7 @@ const flagsAsStringArray: readonly string[] = CODEX_NO_WRITE_FLAGS;
 for (const forbidden of CODEX_FORBIDDEN_ARGV_TOKENS) {
   if (flagsAsStringArray.includes(forbidden)) {
     throw new Error(
-      `CODEX_NO_WRITE_FLAGS capability-boundary invariant broken: must NOT include "${forbidden}" per ADR-0009 §2.v (Codex Slice 45 HIGH 2 fold-in forbidden-token set)`,
+      `CODEX_NO_WRITE_FLAGS capability-boundary invariant broken: must NOT include "${forbidden}" (forbidden-token set)`,
     );
   }
 }
@@ -180,11 +178,11 @@ const VERSION_CAPTURE_TIMEOUT_MS = 5_000;
 // subprocess inherits the parent Node process's cwd via `spawn`'s
 // default behavior. This is intentional: `docs/contracts/adapter.md`
 // ADAPTER-I1 codex bullet says the adapter runs "in the operator's
-// current session context," which at v0 is the parent cwd. If a future
-// slice needs per-dispatch cwd override (distinct-UID sandbox, git
+// current session context," which at v0 is the parent cwd. If future
+// work needs per-dispatch cwd override (distinct-UID sandbox, git
 // worktree routing, workflow-scoped directories), the field is added
-// here and threaded into the `spawn` options below. Codex Slice 45
-// MED 2: noted as deferred-by-design, not oversight.
+// here and threaded into the `spawn` options below. Noted as
+// deferred-by-design, not oversight.
 export interface CodexDispatchInput extends AdapterDispatchInput {}
 
 // The `CodexDispatchResult` name parallels `AgentDispatchResult` —
@@ -196,18 +194,16 @@ export type CodexDispatchResult = DispatchResult;
 // shellout. Codex's `--json` stream does not emit version in-band
 // (unlike `claude`'s `system/init` event which carries
 // `claude_code_version`), so a pre-invocation shellout is the only
-// direct way to version-pin a dispatch per Codex Slice 42 MED 2
-// fold-in.
+// direct way to version-pin a dispatch.
 //
-// Codex Slice 45 MED 1 fold-in (2026-04-22): the version capture is
-// memoized per process lifetime so the overhead is paid once per
-// adapter import, not once per dispatch. The challenger pass observed
-// that `codex --version` also prints PATH-update warnings to stderr on
-// some installations; memoizing localizes that side-effect to the
-// first dispatch in a process. Trade-off: if the operator upgrades
-// the Codex CLI mid-process, the cached version goes stale until the
-// process restarts. At v0 this is an accepted corner case — CLI
-// upgrades mid-session are rare, and the fingerprint writer invokes
+// The version capture is memoized per process lifetime so the overhead
+// is paid once per adapter import, not once per dispatch. `codex
+// --version` also prints PATH-update warnings to stderr on some
+// installations; memoizing localizes that side-effect to the first
+// dispatch in a process. Trade-off: if the operator upgrades the Codex
+// CLI mid-process, the cached version goes stale until the process
+// restarts. At v0 this is an accepted corner case — CLI upgrades
+// mid-session are rare, and the fingerprint writer invokes
 // dispatchCodex fresh each smoke run (so fingerprint evidence remains
 // version-accurate as long as the smoke run process restarts after a
 // CLI upgrade, which it does since vitest spawns fresh workers).
@@ -370,8 +366,8 @@ export async function dispatchCodex(input: CodexDispatchInput): Promise<Dispatch
       }
     };
 
-    // Codex Slice 45 LOW 2 fold-in: track the nested SIGKILL escalation
-    // timer separately so the `close`/`error` handlers can clear it.
+    // Track the nested SIGKILL escalation timer separately so the
+    // `close`/`error` handlers can clear it.
     // Without this, a subprocess that exits between SIGTERM and the
     // grace window would still receive a delayed SIGKILL callback
     // against either a dead pid or (worst case) a pid recycled to a
@@ -468,11 +464,11 @@ export async function dispatchCodex(input: CodexDispatchInput): Promise<Dispatch
 // introduces a write-capable item type triggers ADR-0009 §6 reopen.
 const KNOWN_CODEX_ITEM_TYPES = new Set<string>(['agent_message', 'reasoning']);
 
-// Top-level event types the parser expects at Codex CLI 0.118 (Codex
-// Slice 45 HIGH 5 fold-in — grounded in the `tests/fixtures/codex-
-// smoke/protocol/happy-path-ok.jsonl` real capture). An event whose
-// `type` is outside this set is rejected: the adapter refuses to admit
-// unfamiliar protocol surfaces into the dispatch transcript.
+// Top-level event types the parser expects at Codex CLI 0.118 —
+// grounded in the `tests/fixtures/codex-smoke/protocol/happy-path-
+// ok.jsonl` real capture. An event whose `type` is outside this set is
+// rejected: the adapter refuses to admit unfamiliar protocol surfaces
+// into the dispatch transcript.
 const KNOWN_CODEX_EVENT_TYPES = new Set<string>([
   'thread.started',
   'turn.started',
@@ -514,7 +510,7 @@ export function parseCodexStdout(
     events.push(parsed as Record<string, unknown>);
   }
 
-  // Top-level event-type gating (Codex Slice 45 HIGH 5 fold-in).
+  // Top-level event-type gating.
   //   (a) Reject failure events up front with a named error so dispatch
   //       callers see "codex reported turn.failed" / "codex reported
   //       error" instead of a generic downstream parse error.

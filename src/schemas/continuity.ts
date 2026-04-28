@@ -127,7 +127,7 @@ export type RunBackedContinuity = z.infer<typeof RunBackedContinuity>;
  * would satisfy a `record_id` requirement through the prototype. The
  * guards run on the raw input BEFORE Zod's property access, so required
  * identity fields MUST be own. Mirrors the run.ts RunLog defense (RUN MED
- * #3); Codex HIGH #1 for continuity v0.1.
+ * #3).
  */
 const recordOwnPropertyGuard = z.custom<unknown>((raw) => {
   if (raw === null || typeof raw !== 'object') return true;

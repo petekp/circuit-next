@@ -7,13 +7,10 @@ import {
   type StepStatus,
 } from '../schemas/snapshot.js';
 
-// Pure reducer: (RunLog) -> Snapshot. Authored fresh against production
-// src/schemas/snapshot.ts per Slice 26a artifact binding (run.snapshot ==
-// state.json). NOT a cherry-pick of spike/kernel-replay/reducer.ts —
-// spike's Snapshot is narrower (no SnapshotStatus / StepStatus / StepState)
-// and would silently regress the Slice 26a binding.
+// Pure reducer: (RunLog) -> Snapshot. Authored against production
+// src/schemas/snapshot.ts (run.snapshot == state.json).
 //
-// Design: `reduce = fold(applyEvent, seed)` per 27a mining lesson 10.
+// Design: `reduce = fold(applyEvent, seed)`.
 // Seed is produced by the `run.bootstrapped` event (the first event in
 // any well-formed RunLog per RUN-I1). Subsequent events mutate a
 // structural clone of the prior snapshot; we never mutate in place.
@@ -139,10 +136,10 @@ function applyEvent(prev: Snapshot, event: Event): Snapshot {
     case 'dispatch.failed':
     case 'dispatch.receipt':
     case 'dispatch.result':
-      // Durable dispatch transcript events (ADR-0007 CC#P2-2 §Amendment
-      // Slice 37). Carry request/receipt/result identifiers for the
-      // P2.4 round-trip close criterion; no snapshot-shape change — the
-      // dispatch outcome still flows into the step via step.completed.
+      // Durable dispatch transcript events. Carry request/receipt/result
+      // identifiers for the round-trip close criterion; no snapshot-shape
+      // change — the dispatch outcome still flows into the step via
+      // step.completed.
       return next;
     case 'dispatch.completed':
       // Dispatch outcomes flow into the step via step.completed; no

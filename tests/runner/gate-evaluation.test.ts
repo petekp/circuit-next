@@ -11,23 +11,15 @@ import type { AgentDispatchInput } from '../../src/runtime/adapters/agent.js';
 import type { DispatchResult } from '../../src/runtime/adapters/shared.js';
 import { type DispatchFn, runWorkflow } from '../../src/runtime/runner.js';
 
-// Slice 53 — dispatch verdict truth (Codex H14 fold-in).
+// Dispatch verdict truth.
 //
-// Pre-Slice-53, `dispatchVerdictForStep` returned `step.gate.pass[0]`
-// unconditionally and the runner emitted `gate.evaluated` with
-// `outcome: 'pass'` immediately after `materializeDispatch` regardless
-// of what the adapter actually said. Dispatch steps advanced by
-// construction. This was the core dishonesty in the dispatch path
-// surfaced as Codex HIGH 14 in the 2026-04-22 project-holistic
-// critical review.
-//
-// Post-Slice-53, the runner parses the adapter's `result_body` against
-// the minimal `{ verdict: string }` shape and admits only verdicts that
-// appear in `step.gate.pass`. Unparseable output, output without a
-// string `verdict` field, and verdicts not in the pass set all fail
-// the gate: a `gate.evaluated` with `outcome: 'fail'` and a
-// human-readable `reason` is emitted, followed by `step.aborted` with
-// the same reason, then `run.closed` with `outcome: 'aborted'`.
+// The runner parses the adapter's `result_body` against the minimal
+// `{ verdict: string }` shape and admits only verdicts that appear in
+// `step.gate.pass`. Unparseable output, output without a string
+// `verdict` field, and verdicts not in the pass set all fail the gate:
+// a `gate.evaluated` with `outcome: 'fail'` and a human-readable
+// `reason` is emitted, followed by `step.aborted` with the same reason,
+// then `run.closed` with `outcome: 'aborted'`.
 //
 // Tests below exercise the four cases through `runWorkflow` end-to-end
 // against the dogfood-run-0 fixture (`gate.pass = ["ok"]`) so the
@@ -64,25 +56,25 @@ function lane(): LaneDeclaration {
   return {
     lane: 'ratchet-advance',
     failure_mode:
-      'dispatch verdict was returned as step.gate.pass[0] unconditionally; gate.evaluated outcome was hardcoded to pass; dispatch steps advanced by construction regardless of model output (Codex H14)',
+      'dispatch verdict was returned as step.gate.pass[0] unconditionally; gate.evaluated outcome was hardcoded to pass; dispatch steps advanced by construction regardless of model output',
     acceptance_evidence:
       'gate evaluation parses adapter result_body for a string verdict field and admits only verdicts in step.gate.pass; reject / unparseable / no-verdict cases fail the gate, abort the step, and close the run with outcome=aborted',
     alternate_framing:
-      'add a gate.schema field to ResultVerdictGate so adapter output can be parsed against a typed schema instead of the minimal {verdict: string} shape — rejected because it expands contract surface beyond what closes H14; deferred until a verdict-with-payload pattern emerges in the wild',
+      'add a gate.schema field to ResultVerdictGate so adapter output can be parsed against a typed schema instead of the minimal {verdict: string} shape — rejected because it expands contract surface beyond what is needed; deferred until a verdict-with-payload pattern emerges in the wild',
   };
 }
 
 let runRootBase: string;
 
 beforeEach(() => {
-  runRootBase = mkdtempSync(join(tmpdir(), 'circuit-next-53-'));
+  runRootBase = mkdtempSync(join(tmpdir(), 'circuit-next-gate-eval-'));
 });
 
 afterEach(() => {
   rmSync(runRootBase, { recursive: true, force: true });
 });
 
-describe('Slice 53 — dispatch verdict truth (Codex H14)', () => {
+describe('dispatch verdict truth', () => {
   it('PASS: adapter result_body parses with verdict in step.gate.pass → gate.evaluated outcome=pass; dispatch step advances; run closes complete', async () => {
     const { workflow, bytes } = loadFixture();
     const runRoot = join(runRootBase, 'pass-case');
@@ -91,7 +83,7 @@ describe('Slice 53 — dispatch verdict truth (Codex H14)', () => {
       workflow,
       workflowBytes: bytes,
       runId: RunId.parse('53000000-0000-0000-0000-000000000001'),
-      goal: 'slice 53 pass-case: verdict matches gate.pass',
+      goal: 'pass-case: verdict matches gate.pass',
       rigor: 'standard',
       lane: lane(),
       now: deterministicNow(Date.UTC(2026, 3, 22, 18, 0, 0)),
@@ -129,7 +121,7 @@ describe('Slice 53 — dispatch verdict truth (Codex H14)', () => {
       workflow,
       workflowBytes: bytes,
       runId: RunId.parse('53000000-0000-0000-0000-000000000002'),
-      goal: 'slice 53 reject-case: verdict not in gate.pass',
+      goal: 'reject-case: verdict not in gate.pass',
       rigor: 'standard',
       lane: lane(),
       now: deterministicNow(Date.UTC(2026, 3, 22, 18, 0, 0)),
@@ -165,10 +157,9 @@ describe('Slice 53 — dispatch verdict truth (Codex H14)', () => {
     expect(closed.outcome).toBe('aborted');
     expect(closed.reason).toBeDefined();
 
-    // Slice 53 (Codex MED 2 fold-in): the reason is byte-identical
-    // across the three events that carry it AND on the user-visible
-    // result.json. A future regression that diverged the strings
-    // would silently degrade audit traceability.
+    // The reason is byte-identical across the three events that carry
+    // it AND on the user-visible result.json. A future regression that
+    // diverged the strings would silently degrade audit traceability.
     expect(ge.reason).toBe(aborted.reason);
     expect(closed.reason).toBe(aborted.reason);
     expect(outcome.result.reason).toBe(aborted.reason);
@@ -196,7 +187,7 @@ describe('Slice 53 — dispatch verdict truth (Codex H14)', () => {
       workflow,
       workflowBytes: bytes,
       runId: RunId.parse('53000000-0000-0000-0000-000000000003'),
-      goal: 'slice 53 unparseable-case: adapter output is not JSON',
+      goal: 'unparseable-case: adapter output is not JSON',
       rigor: 'standard',
       lane: lane(),
       now: deterministicNow(Date.UTC(2026, 3, 22, 18, 0, 0)),
@@ -225,10 +216,9 @@ describe('Slice 53 — dispatch verdict truth (Codex H14)', () => {
     if (closed?.kind !== 'run.closed') throw new Error('expected run.closed event');
     expect(closed.outcome).toBe('aborted');
 
-    // Slice 53 (Codex MED 2 + MED 1 disclosure fold-ins): no observed
-    // verdict, so dispatch.completed.verdict carries the runtime
-    // '<no-verdict>' sentinel — disclosed in the explore contract as
-    // runtime-injected, not adapter-declared.
+    // No observed verdict, so dispatch.completed.verdict carries the
+    // runtime '<no-verdict>' sentinel — disclosed in the explore
+    // contract as runtime-injected, not adapter-declared.
     const dispatchCompleted = outcome.events.find((e) => e.kind === 'dispatch.completed');
     if (dispatchCompleted?.kind !== 'dispatch.completed')
       throw new Error('expected dispatch.completed event');
@@ -258,7 +248,7 @@ describe('Slice 53 — dispatch verdict truth (Codex H14)', () => {
       workflow,
       workflowBytes: mutatedBytes,
       runId: RunId.parse('53000000-0000-0000-0000-000000000005'),
-      goal: 'slice 53 parsed-from-body: verdict is the second entry in gate.pass',
+      goal: 'parsed-from-body: verdict is the second entry in gate.pass',
       rigor: 'standard',
       lane: lane(),
       now: deterministicNow(Date.UTC(2026, 3, 22, 18, 0, 0)),
@@ -270,9 +260,10 @@ describe('Slice 53 — dispatch verdict truth (Codex H14)', () => {
     const dispatchCompleted = outcome.events.find((e) => e.kind === 'dispatch.completed');
     if (dispatchCompleted?.kind !== 'dispatch.completed')
       throw new Error('expected dispatch.completed event');
-    // Pre-Slice-53 regression: dispatchVerdictForStep returned step.gate.pass[0]
-    // → dispatch.completed.verdict would be "ok" here. Post-Slice-53 the
-    // verdict comes from the parsed body and is "ok-with-caveats".
+    // Earlier regression: dispatchVerdictForStep returned
+    // step.gate.pass[0] → dispatch.completed.verdict would be "ok"
+    // here. Now the verdict comes from the parsed body and is
+    // "ok-with-caveats".
     expect(dispatchCompleted.verdict).toBe('ok-with-caveats');
 
     const ge = outcome.events.find(
@@ -290,7 +281,7 @@ describe('Slice 53 — dispatch verdict truth (Codex H14)', () => {
       workflow,
       workflowBytes: bytes,
       runId: RunId.parse('53000000-0000-0000-0000-000000000004'),
-      goal: 'slice 53 no-verdict-case: adapter output has no verdict field',
+      goal: 'no-verdict-case: adapter output has no verdict field',
       rigor: 'standard',
       lane: lane(),
       now: deterministicNow(Date.UTC(2026, 3, 22, 18, 0, 0)),
@@ -330,14 +321,13 @@ describe('Slice 53 — dispatch verdict truth (Codex H14)', () => {
   });
 });
 
-// Slice 53 (Codex MED 3 fold-in) — exhaustive edge-case coverage on the
-// gate evaluator. The implementation requires a top-level `verdict`
-// field that is a non-empty string. These cases lock down the exact
-// boundary so a future "be lenient" refactor can't silently widen
-// admission. Each case asserts run.outcome=aborted (the gate failure
-// path); the per-case reason regex names the surface the case
-// exercises.
-describe('Slice 53 — dispatch verdict truth: edge-case parser coverage (Codex MED 3 fold-in)', () => {
+// Exhaustive edge-case coverage on the gate evaluator. The
+// implementation requires a top-level `verdict` field that is a
+// non-empty string. These cases lock down the exact boundary so a
+// future "be lenient" refactor can't silently widen admission. Each
+// case asserts run.outcome=aborted (the gate failure path); the
+// per-case reason regex names the surface the case exercises.
+describe('dispatch verdict truth: edge-case parser coverage', () => {
   const cases: ReadonlyArray<{
     label: string;
     body: string;
@@ -378,7 +368,7 @@ describe('Slice 53 — dispatch verdict truth: edge-case parser coverage (Codex 
         workflow,
         workflowBytes: bytes,
         runId: RunId.parse('53000000-0000-0000-0000-00000000ed01'),
-        goal: `slice 53 edge case: ${c.label}`,
+        goal: `edge case: ${c.label}`,
         rigor: 'standard',
         lane: lane(),
         now: deterministicNow(Date.UTC(2026, 3, 22, 18, 0, 0)),
@@ -395,14 +385,13 @@ describe('Slice 53 — dispatch verdict truth: edge-case parser coverage (Codex 
   }
 });
 
-// Slice 53 (Codex HIGH 2 fold-in regression) — when a dispatch step
-// declares `writes.artifact` and the gate FAILS, the canonical
-// artifact at `writes.artifact.path` must NOT be written. Transcript
-// slots (request / receipt / result) are still durable evidence of
-// what was attempted and ARE written. This locks down the ADR-0008
-// §Decision.3a semantics for the verdict-admissibility half (Slice 53);
-// Slice 54 will add the symmetric schema-parse condition.
-describe('Slice 53 — gate fail does not materialize the canonical artifact (Codex HIGH 2 fold-in)', () => {
+// When a dispatch step declares `writes.artifact` and the gate FAILS,
+// the canonical artifact at `writes.artifact.path` must NOT be written.
+// Transcript slots (request / receipt / result) are still durable
+// evidence of what was attempted and ARE written. This locks down the
+// verdict-admissibility half of materialization; the materializer
+// schema-parse test covers the symmetric schema-parse condition.
+describe('gate fail does not materialize the canonical artifact', () => {
   it('explore-shaped fixture (writes.artifact declared) on gate fail: transcript files exist, artifact file does NOT', async () => {
     // Mutate the dogfood fixture to declare writes.artifact on the
     // dispatch step (dogfood-run-0 vanilla has no artifact slot).

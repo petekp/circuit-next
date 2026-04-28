@@ -3,28 +3,28 @@ import { describe, expect, it } from 'vitest';
 import { dispatchCodex } from '../../src/runtime/adapters/codex.js';
 import { sha256Hex } from '../../src/runtime/adapters/shared.js';
 
-// Slice 45 (P2.6) — codex adapter smoke test. Mirrors the Slice 42 agent
-// smoke shape: a static branch (always runs, contributes to the contract-
-// test ratchet regardless of env), plus a CODEX_SMOKE=1-gated end-to-end
-// branch that spawns the real `codex exec` subprocess.
+// Codex adapter smoke test. Mirrors the agent smoke shape: a static
+// branch (always runs, contributes to the contract-test ratchet
+// regardless of env), plus a CODEX_SMOKE=1-gated end-to-end branch that
+// spawns the real `codex exec` subprocess.
 //
 // CODEX_SMOKE=1 is opt-in for the same reason AGENT_SMOKE=1 is: the
 // subprocess requires (1) the `codex` CLI on $PATH, (2) authenticated
 // session or API key, (3) network access. CI and unauthenticated
 // developer runs stay green without it.
 //
-// Slice 45 capability-boundary empirical proof: the argv-constant
-// assertion in `CODEX_NO_WRITE_FLAGS` is module-load-bound; the OS-level
-// `-s read-only` sandbox prevents repo writes at the process level
+// Capability-boundary empirical proof: the argv-constant assertion in
+// `CODEX_NO_WRITE_FLAGS` is module-load-bound; the OS-level `-s
+// read-only` sandbox prevents repo writes at the process level
 // regardless of model behavior. This smoke test is the positive
-// end-to-end regression guard: if a future slice loosens
+// end-to-end regression guard: if a future change loosens
 // `CODEX_NO_WRITE_FLAGS` (e.g., swapping `read-only` for
 // `workspace-write`), the module-load assertion fires before the smoke
 // test even starts.
 
 const CODEX_SMOKE = process.env.CODEX_SMOKE === '1';
 
-describe('Slice 45 (P2.6) — codex adapter smoke (ADR-0009 §1, capability boundary §2.v)', () => {
+describe('codex adapter smoke (capability boundary)', () => {
   it('static: dispatchCodex exports a function (ratchet-floor declaration)', () => {
     expect(typeof dispatchCodex).toBe('function');
     expect(dispatchCodex.length).toBeGreaterThanOrEqual(1);

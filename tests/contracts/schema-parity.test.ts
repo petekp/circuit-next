@@ -48,7 +48,7 @@ describe('rigor', () => {
     expect(Rigor.safeParse('max').success).toBe(false);
   });
 
-  it('consequential rigor includes autonomous (adversarial-review fix)', () => {
+  it('consequential rigor includes autonomous', () => {
     expect(isConsequentialRigor('deep')).toBe(true);
     expect(isConsequentialRigor('tournament')).toBe(true);
     expect(isConsequentialRigor('autonomous')).toBe(true);
@@ -133,7 +133,7 @@ describe('Gate', () => {
     ).toBe(false);
   });
 
-  it('rejects unknown source.kind (MED #7 closed)', () => {
+  it('rejects unknown source.kind', () => {
     const bad = Gate.safeParse({
       kind: 'schema_sections',
       source: { kind: 'bogus', ref: 'artifact' },
@@ -465,7 +465,7 @@ describe('Step discriminated union', () => {
     expect(bad.success).toBe(false);
   });
 
-  it('SynthesisStep rejects gate.source.ref naming a missing writes slot (STEP-I3, MED #7 closed)', () => {
+  it('SynthesisStep rejects gate.source.ref naming a missing writes slot (STEP-I3)', () => {
     const bad = Step.safeParse({
       ...baseSynthesis,
       gate: {
@@ -609,7 +609,7 @@ describe('Step discriminated union', () => {
     expect(unsupportedArtifact.success).toBe(false);
   });
 
-  // Codex review HIGH #1: prototype-chain `in` operator attack.
+  // Prototype-chain `in` operator attack.
   // With `ref` as a Zod literal per source kind, these fail at parse.
   it('rejects artifact source with ref "toString" (prototype-chain attack, STEP-I3)', () => {
     const bad = Step.safeParse({
@@ -635,8 +635,8 @@ describe('Step discriminated union', () => {
     expect(bad.success).toBe(false);
   });
 
-  // Codex review HIGH #2: source.kind must semantically pair with the correct
-  // writes slot, not just any existing slot. `ref` literal enforces this.
+  // source.kind must semantically pair with the correct writes slot, not just
+  // any existing slot. `ref` literal enforces this.
   it('rejects checkpoint_response source with ref "request" (cross-slot drift, STEP-I4)', () => {
     const bad = Step.safeParse({
       ...baseSynthesis,
@@ -672,7 +672,7 @@ describe('Step discriminated union', () => {
     expect(bad.success).toBe(false);
   });
 
-  // Codex review MED #4 / STEP-I6: `.strict()` rejects surplus keys.
+  // STEP-I6: `.strict()` rejects surplus keys.
   it('rejects SynthesisStep with surplus top-level key (STEP-I6 strict)', () => {
     const bad = Step.safeParse({
       ...baseSynthesis,
@@ -827,7 +827,7 @@ describe('Step discriminated union', () => {
   });
 });
 
-describe('Workflow graph closure (adversarial-review fix #1)', () => {
+describe('Workflow graph closure', () => {
   const okFrameStep = {
     id: 'frame',
     title: 'Frame',
@@ -882,7 +882,7 @@ describe('Workflow graph closure (adversarial-review fix #1)', () => {
   });
 
   it('WF-I2: rejects entry_modes.start_at referencing an unknown step', () => {
-    // Codex challenger MED #4 fold-in: include a second, valid entry mode
+    // Include a second, valid entry mode
     // so that WF-I9 (no dead steps) is satisfied via the valid entry, and
     // WF-I2 is the unique failure mode the test proves. Without this, a
     // single unknown start_at would cascade into a WF-I9 violation, and
@@ -957,7 +957,7 @@ describe('Workflow graph closure (adversarial-review fix #1)', () => {
     expect(Workflow.safeParse(okWorkflow({ schema_version: 2 })).success).toBe(false);
   });
 
-  it('WF-I8 (Slice 27 v0.2): rejects a workflow with a step that cannot reach a terminal route target', () => {
+  it('WF-I8: rejects a workflow with a step that cannot reach a terminal route target', () => {
     // Two steps routing only to each other — cycle with no terminal escape.
     // Neither step can reach @complete/@stop/@escalate/@handoff.
     const stepA = {
@@ -984,7 +984,7 @@ describe('Workflow graph closure (adversarial-review fix #1)', () => {
     }
   });
 
-  it('WF-I8 (Slice 27 v0.2): accepts a workflow where every step has a terminal route chain', () => {
+  it('WF-I8: accepts a workflow where every step has a terminal route chain', () => {
     // Two steps: a → b → @complete. Both reach a terminal.
     const stepA = {
       ...okFrameStep,
@@ -1006,7 +1006,7 @@ describe('Workflow graph closure (adversarial-review fix #1)', () => {
     expect(result.success).toBe(true);
   });
 
-  it('WF-I9 (Slice 27 v0.2): rejects a workflow with a step unreachable from any entry_mode', () => {
+  it('WF-I9: rejects a workflow with a step unreachable from any entry_mode', () => {
     // Step 'a' goes to @complete. Step 'b' goes to @complete but nothing
     // routes into 'b' and no entry_mode.start_at is 'b'. 'b' is declared but dead.
     const stepA = {
@@ -1033,7 +1033,7 @@ describe('Workflow graph closure (adversarial-review fix #1)', () => {
     }
   });
 
-  it('WF-I9 (Slice 27 v0.2): accepts when both steps are reached by distinct entry_modes', () => {
+  it('WF-I9: accepts when both steps are reached by distinct entry_modes', () => {
     // Two entry_modes, each pointing at a different step. Both steps are
     // reached. Both close to @complete.
     const stepA = {
@@ -1059,12 +1059,11 @@ describe('Workflow graph closure (adversarial-review fix #1)', () => {
     expect(result.success).toBe(true);
   });
 
-  it('WF-I10 (Slice 27 v0.2): rejects a step whose routes use an author-friendly alias (no `pass` key)', () => {
-    // Codex challenger HIGH #1 fixture: routes use `success` instead of
-    // `pass`. WF-I8 would accept (the `success` edge reaches @complete)
-    // but at runtime the gate.evaluated outcome is `pass`, and
-    // routes['pass'] is undefined — the run stalls. WF-I10 fails this
-    // at parse time.
+  it('WF-I10: rejects a step whose routes use an author-friendly alias (no `pass` key)', () => {
+    // Routes use `success` instead of `pass`. WF-I8 would accept (the
+    // `success` edge reaches @complete) but at runtime the
+    // gate.evaluated outcome is `pass`, and routes['pass'] is undefined
+    // — the run stalls. WF-I10 fails this at parse time.
     const aliasedStep = {
       ...okFrameStep,
       routes: { success: '@complete' },
@@ -1081,7 +1080,7 @@ describe('Workflow graph closure (adversarial-review fix #1)', () => {
     }
   });
 
-  it('WF-I10 (Slice 27 v0.2): accepts a step that contains the `pass` key among its routes', () => {
+  it('WF-I10: accepts a step that contains the `pass` key among its routes', () => {
     // Minimum legal fixture for WF-I10: routes contains `pass`. Extra
     // route labels (like `fail`) are allowed but not required at v0.2.
     const result = Workflow.safeParse(
@@ -1092,7 +1091,7 @@ describe('Workflow graph closure (adversarial-review fix #1)', () => {
     expect(result.success).toBe(true);
   });
 
-  it('WF-I11 (Runtime Safety Floor Slice 4): rejects a self-cycle on routes.pass even when fail reaches @complete', () => {
+  it('WF-I11 (Runtime Safety Floor): rejects a self-cycle on routes.pass even when fail reaches @complete', () => {
     const loopStep = {
       ...okFrameStep,
       id: 'loop-step',
@@ -1115,7 +1114,7 @@ describe('Workflow graph closure (adversarial-review fix #1)', () => {
     }
   });
 
-  it('WF-I11 (Runtime Safety Floor Slice 4): rejects a multi-step pass-cycle even when alternate routes reach terminals', () => {
+  it('WF-I11 (Runtime Safety Floor): rejects a multi-step pass-cycle even when alternate routes reach terminals', () => {
     const stepA = {
       ...okFrameStep,
       id: 'a',
@@ -1141,7 +1140,7 @@ describe('Workflow graph closure (adversarial-review fix #1)', () => {
     }
   });
 
-  it('WF-I11 (Runtime Safety Floor Slice 4): accepts a pass chain that reaches a terminal', () => {
+  it('WF-I11 (Runtime Safety Floor): accepts a pass chain that reaches a terminal', () => {
     const stepA = {
       ...okFrameStep,
       id: 'a',
@@ -1213,7 +1212,7 @@ describe('Phase contract (PHASE-I1..I3)', () => {
   });
 });
 
-describe('Workflow spine_policy (PHASE-I4, closes adversarial-review MED #11)', () => {
+describe('Workflow spine_policy (PHASE-I4)', () => {
   const okFrameStep = {
     id: 'frame',
     title: 'Frame',
@@ -1344,9 +1343,7 @@ describe('Workflow spine_policy (PHASE-I4, closes adversarial-review MED #11)', 
     expect(result.success).toBe(false);
   });
 
-  // Codex adversarial-auditor pass (2026-04-18): MED #4, MED #6, LOW #8 coverage.
-
-  it('PHASE-I5: rejects duplicate canonical phases (Codex MED #4)', () => {
+  it('PHASE-I5: rejects duplicate canonical phases', () => {
     const result = Workflow.safeParse({
       ...workflowBase,
       phases: [
@@ -1371,7 +1368,7 @@ describe('Workflow spine_policy (PHASE-I4, closes adversarial-review MED #11)', 
     expect(result.success).toBe(true);
   });
 
-  it('partial-mode omits must be disjoint from declared canonicals (Codex MED #6.a)', () => {
+  it('partial-mode omits must be disjoint from declared canonicals', () => {
     const result = Workflow.safeParse({
       ...workflowBase,
       phases: sevenPhases, // includes canonical: 'plan'
@@ -1384,7 +1381,7 @@ describe('Workflow spine_policy (PHASE-I4, closes adversarial-review MED #11)', 
     expect(result.success).toBe(false);
   });
 
-  it('partial-mode omits must be pairwise unique (Codex MED #6.b)', () => {
+  it('partial-mode omits must be pairwise unique', () => {
     const result = Workflow.safeParse({
       ...workflowBase,
       phases: sevenPhases.filter((p) => p.canonical !== 'plan'),
@@ -1397,7 +1394,7 @@ describe('Workflow spine_policy (PHASE-I4, closes adversarial-review MED #11)', 
     expect(result.success).toBe(false);
   });
 
-  it('PHASE-I6: Workflow itself rejects top-level surplus keys (Codex LOW #8)', () => {
+  it('PHASE-I6: Workflow itself rejects top-level surplus keys', () => {
     const result = Workflow.safeParse({
       ...workflowBase,
       phases: sevenPhases,
@@ -1409,7 +1406,7 @@ describe('Workflow spine_policy (PHASE-I4, closes adversarial-review MED #11)', 
 });
 
 describe('Event has lane + manifest_hash at bootstrap', () => {
-  it('bootstrapped event requires lane (adversarial-review fix #2)', () => {
+  it('bootstrapped event requires lane', () => {
     const noLane = Event.safeParse({
       schema_version: 1,
       sequence: 0,
@@ -1445,7 +1442,7 @@ describe('Event has lane + manifest_hash at bootstrap', () => {
     expect(ok.success).toBe(true);
   });
 
-  it('step.completed carries route_taken (adversarial-review fix #3)', () => {
+  it('step.completed carries route_taken', () => {
     const ok = Event.safeParse({
       schema_version: 1,
       sequence: 5,
@@ -1484,7 +1481,7 @@ describe('Snapshot requires lane + manifest_hash', () => {
     expect(ok.success).toBe(true);
   });
 
-  it('snapshot without lane fails (adversarial-review fix #2)', () => {
+  it('snapshot without lane fails', () => {
     const noLane = Snapshot.safeParse({
       schema_version: 1,
       run_id: '0191d2f0-aaaa-7fff-8aaa-000000000000',
@@ -1500,7 +1497,7 @@ describe('Snapshot requires lane + manifest_hash', () => {
   });
 });
 
-describe('Config + adapter registry (adversarial-review fix #5)', () => {
+describe('Config + adapter registry', () => {
   it('dispatch.default parses auto/builtin/registered-adapter-name', () => {
     const a = DispatchConfig.safeParse({ default: 'auto' });
     expect(a.success).toBe(true);
@@ -1952,7 +1949,7 @@ describe('ContinuityIndex aggregate — CONT-I9..I11', () => {
   });
 });
 
-describe('Continuity own-property guard — CONT-I12 (Codex HIGH #1)', () => {
+describe('Continuity own-property guard — CONT-I12', () => {
   const buildStandalone = (): Record<string, unknown> => ({
     schema_version: 1,
     record_id: 'continuity-abc',
@@ -2024,7 +2021,7 @@ describe('Continuity own-property guard — CONT-I12 (Codex HIGH #1)', () => {
   });
 });
 
-describe('Continuity LOW #6 coverage additions', () => {
+describe('Continuity coverage additions', () => {
   it('CONT-I2 — rejects record with string schema_version "1" (legacy shape)', () => {
     const bad = ContinuityRecord.safeParse({
       schema_version: '1',
@@ -2429,7 +2426,7 @@ describe('RunProjection binding (RUN-I6, RUN-I7)', () => {
     expect(bad.success).toBe(false);
   });
 
-  // HIGH #2 fold-in — prefix snapshot rejection.
+  // Prefix snapshot rejection.
   it('RUN-I7: events_consumed less than log.length is rejected (prefix snapshot)', () => {
     const bad = RunProjection.safeParse({
       log: validLog,
@@ -2441,7 +2438,7 @@ describe('RunProjection binding (RUN-I6, RUN-I7)', () => {
     }
   });
 
-  // LOW #8 fold-in — missing-direction invocation_id.
+  // Missing-direction invocation_id.
   it('RUN-I6: bootstrap carries invocation_id but snapshot lacks it', () => {
     const logWithInvocation = [
       bootstrapAt(0, RUN_A, { invocation_id: 'inv_aaaa' }),
@@ -2467,7 +2464,7 @@ describe('RunProjection binding (RUN-I6, RUN-I7)', () => {
     expect(ok.success).toBe(true);
   });
 
-  // MED #6 fold-in — positive coverage for all five run.closed.outcome values.
+  // Positive coverage for all five run.closed.outcome values.
   for (const outcome of ['complete', 'aborted', 'handoff', 'stopped', 'escalated'] as const) {
     it(`RUN-I7: run.closed.outcome=${outcome} → snapshot.status=${outcome} accepted`, () => {
       const closedLog = [bootstrapAt(0), runClosed(1, RUN_A, outcome)];
@@ -2479,7 +2476,7 @@ describe('RunProjection binding (RUN-I6, RUN-I7)', () => {
     });
   }
 
-  // LOW #9 fold-in — lane equality is structural, not key-order dependent.
+  // Lane equality is structural, not key-order dependent.
   it('RUN-I6: lane equality is structural across different field insertion orders', () => {
     const laneAKeyOrder = {
       failure_mode: 'evidence gap',
@@ -2501,7 +2498,7 @@ describe('RunProjection binding (RUN-I6, RUN-I7)', () => {
   });
 });
 
-// MED #7 fold-in — table-driven strict-mode coverage across representative Event variants.
+// Table-driven strict-mode coverage across representative Event variants.
 describe('Event variants reject top-level surplus keys (RUN-I8 coverage expansion)', () => {
   const base = {
     schema_version: 1 as const,
@@ -2700,7 +2697,7 @@ describe('Checkpoint event evidence is required', () => {
   });
 });
 
-// HIGH #1 fold-in — nested schemas are transitively strict.
+// Nested schemas are transitively strict.
 describe('Nested schemas reject surplus keys transitively (RUN-I8 transitivity)', () => {
   it('bootstrap lane with surplus key is rejected', () => {
     const bad = Event.safeParse({
@@ -2786,7 +2783,7 @@ describe('Nested schemas reject surplus keys transitively (RUN-I8 transitivity)'
   });
 });
 
-// MED #3 fold-in — own-property guard against prototype-chain identity smuggle.
+// Own-property guard against prototype-chain identity smuggle.
 describe('RunLog rejects prototype-chain inherited identity keys (RUN-I3 defense-in-depth)', () => {
   it('rejects event whose run_id is inherited (not own)', () => {
     // Event parse may coerce (Zod reads inherited), but RunLog's own-property
@@ -2945,17 +2942,17 @@ describe('SkillOverride (SEL-I3)', () => {
     );
   });
 
-  it('rejects duplicate skills in replace (Codex MED #8 fold-in)', () => {
+  it('rejects duplicate skills in replace', () => {
     const bad = SkillOverride.safeParse({ mode: 'replace', skills: ['tdd', 'tdd'] });
     expect(bad.success).toBe(false);
   });
 
-  it('rejects duplicate skills in append (MED #8)', () => {
+  it('rejects duplicate skills in append', () => {
     const bad = SkillOverride.safeParse({ mode: 'append', skills: ['tdd', 'tdd'] });
     expect(bad.success).toBe(false);
   });
 
-  it('rejects duplicate skills in remove (MED #8)', () => {
+  it('rejects duplicate skills in remove', () => {
     const bad = SkillOverride.safeParse({ mode: 'remove', skills: ['tdd', 'tdd'] });
     expect(bad.success).toBe(false);
   });
@@ -3012,7 +3009,7 @@ describe('ResolvedSelection (SEL-I5)', () => {
     expect(parsed.success).toBe(true);
   });
 
-  it('accepts invocation_options (Codex HIGH #4 fold-in: effective state at dispatch time)', () => {
+  it('accepts invocation_options (effective state at dispatch time)', () => {
     const ok = ResolvedSelection.safeParse({
       skills: [],
       invocation_options: { temperature: 0 },
@@ -3032,12 +3029,12 @@ describe('ResolvedSelection (SEL-I5)', () => {
     expect(bad.success).toBe(false);
   });
 
-  it('rejects duplicate skill ids (Codex MED #8 fold-in)', () => {
+  it('rejects duplicate skill ids', () => {
     const bad = ResolvedSelection.safeParse({ skills: ['tdd', 'tdd'] });
     expect(bad.success).toBe(false);
   });
 
-  it('rejects non-JSON invocation_options value: function (Codex MED #10 fold-in)', () => {
+  it('rejects non-JSON invocation_options value: function', () => {
     const bad = ResolvedSelection.safeParse({
       skills: [],
       invocation_options: { hook: () => 1 },
@@ -3045,7 +3042,7 @@ describe('ResolvedSelection (SEL-I5)', () => {
     expect(bad.success).toBe(false);
   });
 
-  it('rejects non-JSON invocation_options value: Date (Codex MED #10)', () => {
+  it('rejects non-JSON invocation_options value: Date', () => {
     const bad = ResolvedSelection.safeParse({
       skills: [],
       invocation_options: { deadline: new Date() },
@@ -3053,7 +3050,7 @@ describe('ResolvedSelection (SEL-I5)', () => {
     expect(bad.success).toBe(false);
   });
 
-  it('rejects non-JSON invocation_options value: NaN (Codex MED #10)', () => {
+  it('rejects non-JSON invocation_options value: NaN', () => {
     const bad = ResolvedSelection.safeParse({
       skills: [],
       invocation_options: { temperature: Number.NaN },
@@ -3061,7 +3058,7 @@ describe('ResolvedSelection (SEL-I5)', () => {
     expect(bad.success).toBe(false);
   });
 
-  it('rejects non-JSON invocation_options value: Infinity (Codex MED #10)', () => {
+  it('rejects non-JSON invocation_options value: Infinity', () => {
     const bad = ResolvedSelection.safeParse({
       skills: [],
       invocation_options: { temperature: Number.POSITIVE_INFINITY },
@@ -3071,7 +3068,7 @@ describe('ResolvedSelection (SEL-I5)', () => {
 });
 
 describe('SelectionResolution ordering and uniqueness (SEL-I6, SEL-I7)', () => {
-  // Codex MED #7 fold-in: applied entries require non-empty overrides
+  // Applied entries require non-empty overrides
   // (ghost-provenance rejection). Each helper below sets exactly one field
   // so the override legitimately contributes to the chain.
   const contributes = { rigor: 'standard' as const };
@@ -3179,11 +3176,11 @@ describe('SelectionResolution ordering and uniqueness (SEL-I6, SEL-I7)', () => {
   });
 });
 
-// Codex HIGH #1 + HIGH #2 fold-in: phase/step applied entries are
+// Phase/step applied entries are
 // disambiguated by id, so two distinct phases or steps can legally appear
 // in the same applied chain. SEL-I7's uniqueness is now keyed on identity
 // (source + disambiguator), not bare source.
-describe('SelectionResolution HIGH #1/#2 fold-in: phase/step disambiguators', () => {
+describe('SelectionResolution phase/step disambiguators', () => {
   const contributes = { rigor: 'standard' as const };
 
   it('accepts two phase entries with distinct phase_ids (overlapping phases)', () => {
@@ -3263,11 +3260,11 @@ describe('SelectionResolution HIGH #1/#2 fold-in: phase/step disambiguators', ()
   });
 });
 
-// Codex MED #7 fold-in: ghost provenance rejection. An applied entry
+// Ghost provenance rejection. An applied entry
 // whose override is empty (no model/effort/rigor, skills at inherit,
 // empty invocation_options) fabricates provenance for a non-contributing
 // layer. v0.1 rejects at the schema layer.
-describe('SelectionResolution ghost provenance (MED #7)', () => {
+describe('SelectionResolution ghost provenance', () => {
   it('rejects applied entry with fully empty override', () => {
     const bad = SelectionResolution.safeParse({
       resolved: { skills: [] },
@@ -3377,7 +3374,7 @@ describe('SelectionResolution transitive strict (SEL-I8)', () => {
   });
 });
 
-describe('Phase.selection (SEL-I9 — closes phase.md v0.1 Codex MED #7)', () => {
+describe('Phase.selection (SEL-I9)', () => {
   it('accepts a Phase with no selection (backward compatibility with existing phase.md)', () => {
     const ok = Phase.safeParse({
       id: 'frame',
@@ -3733,11 +3730,7 @@ describe('DispatchStartedEvent.resolved_from consumes DispatchResolutionSource (
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────────
-// Codex cross-model adversarial pass fold-ins (2026-04-19)
-// ─────────────────────────────────────────────────────────────────────────
-
-describe('ADAPTER-I10 — ResolvedAdapter rejects pre-resolution named references (Codex HIGH #1)', () => {
+describe('ADAPTER-I10 — ResolvedAdapter rejects pre-resolution named references', () => {
   it('accepts built-in variant', () => {
     expect(ResolvedAdapter.safeParse({ kind: 'builtin', name: 'codex-isolated' }).success).toBe(
       true,
@@ -3759,7 +3752,7 @@ describe('ADAPTER-I10 — ResolvedAdapter rejects pre-resolution named reference
   });
 });
 
-describe('ADAPTER-I10 — DispatchStartedEvent.adapter rejects named references (Codex HIGH #1 via event)', () => {
+describe('ADAPTER-I10 — DispatchStartedEvent.adapter rejects named references via event', () => {
   const baseEv = {
     schema_version: 1 as const,
     sequence: 0,
@@ -3801,7 +3794,7 @@ describe('ADAPTER-I10 — DispatchStartedEvent.adapter rejects named references 
   });
 });
 
-describe('DispatchConfig registry-key/descriptor-name parity (ADAPTER-I11, Codex HIGH #2)', () => {
+describe('DispatchConfig registry-key/descriptor-name parity (ADAPTER-I11)', () => {
   it('ADAPTER-I11 — rejects a descriptor whose `name` does not equal its registry key', () => {
     const bad = DispatchConfig.safeParse({
       adapters: {
@@ -3829,7 +3822,7 @@ describe('DispatchConfig registry-key/descriptor-name parity (ADAPTER-I11, Codex
   });
 });
 
-describe('DispatchConfig closure via own-property check (ADAPTER-I8, Codex HIGH #3)', () => {
+describe('DispatchConfig closure via own-property check (ADAPTER-I8)', () => {
   it('ADAPTER-I8 — rejects a role reference to `constructor` when no own registry entry exists', () => {
     const bad = DispatchConfig.safeParse({
       roles: { researcher: { kind: 'named', name: 'constructor' } },
@@ -3865,7 +3858,7 @@ describe('DispatchConfig closure via own-property check (ADAPTER-I8, Codex HIGH 
   });
 });
 
-describe('DispatchStartedEvent role ↔ resolved_from.role binding (Codex HIGH #4)', () => {
+describe('DispatchStartedEvent role ↔ resolved_from.role binding', () => {
   const baseEv = {
     schema_version: 1 as const,
     sequence: 0,
@@ -3906,7 +3899,7 @@ describe('DispatchStartedEvent role ↔ resolved_from.role binding (Codex HIGH #
   });
 });
 
-describe('AdapterReference registry-layer refusal (Codex MED #8 — exported surface)', () => {
+describe('AdapterReference registry-layer refusal — exported surface', () => {
   it('accepts builtin variant', () => {
     expect(AdapterReference.safeParse({ kind: 'builtin', name: 'codex' }).success).toBe(true);
   });
@@ -3932,7 +3925,7 @@ describe('AdapterReference registry-layer refusal (Codex MED #8 — exported sur
 });
 
 // ---------------------------------------------------------------------------
-// Config contract — CONFIG-I1 through CONFIG-I7 (Slice 26).
+// Config contract — CONFIG-I1 through CONFIG-I7.
 // ---------------------------------------------------------------------------
 
 describe('Config strict surface (CONFIG-I1)', () => {
@@ -4086,7 +4079,7 @@ describe('ConfigLayer closed enum (CONFIG-I5)', () => {
   });
 });
 
-describe('Config.circuits key closure (CONFIG-I8, Codex MED #5 fold-in)', () => {
+describe('Config.circuits key closure (CONFIG-I8)', () => {
   it('accepts a valid slug WorkflowId as a circuits key', () => {
     const ok = Config.safeParse({
       schema_version: 1,
@@ -4112,7 +4105,7 @@ describe('Config.circuits key closure (CONFIG-I8, Codex MED #5 fold-in)', () => 
   });
 });
 
-describe('Config strictness scoped to declared shapes (Codex MED #4 fold-in)', () => {
+describe('Config strictness scoped to declared shapes', () => {
   it('rejects a typo INSIDE SelectionOverride (declared shape — `rigr` for `rigor`)', () => {
     const bad = Config.safeParse({
       schema_version: 1,
@@ -4138,7 +4131,7 @@ describe('Config strictness scoped to declared shapes (Codex MED #4 fold-in)', (
   });
 });
 
-describe('LayeredConfig default-layer ergonomic (CONFIG-I7 + CONFIG-I2 composition — Codex LOW #6 fold-in)', () => {
+describe('LayeredConfig default-layer ergonomic (CONFIG-I7 + CONFIG-I2 composition)', () => {
   it('`{layer: "default", config: {schema_version: 1}}` parses and produces all schema-level defaults', () => {
     const ok = LayeredConfig.safeParse({
       layer: 'default',

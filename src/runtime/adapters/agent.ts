@@ -86,18 +86,16 @@ export const AGENT_SUPPORTED_EFFORTS = ['low', 'medium', 'high', 'xhigh'] as con
 // overrides this when present.
 const DEFAULT_TIMEOUT_MS = 600_000;
 
-// Grace period between SIGTERM and SIGKILL per Codex Slice 42 HIGH 4
-// subprocess-kill hygiene fold-in. SIGTERM gives the subprocess a chance
-// to close cleanly; if it is still alive after this window, SIGKILL is
-// delivered and we resolve only after `close` actually fires.
+// Grace period between SIGTERM and SIGKILL. SIGTERM gives the
+// subprocess a chance to close cleanly; if it is still alive after this
+// window, SIGKILL is delivered and we resolve only after `close`
+// actually fires.
 const SIGTERM_TO_SIGKILL_GRACE_MS = 2_000;
 
-// stdout / stderr caps per Codex Slice 42 HIGH 4. A misbehaving subprocess
-// emitting an unbounded byte stream should not exhaust adapter memory.
-// Real dispatch transcripts for v0 are well under these bounds (the
-// smoke test produces ~30 KB). 16 MiB stdout + 1 MiB stderr is the
-// current ceiling; ADR-0009 §6 reopen trigger 5 covers ceiling adjustment
-// if a legitimate dispatch needs more.
+// stdout / stderr caps. A misbehaving subprocess emitting an unbounded
+// byte stream should not exhaust adapter memory. Real dispatch
+// transcripts for v0 are well under these bounds (the smoke test
+// produces ~30 KB). 16 MiB stdout + 1 MiB stderr is the current ceiling.
 const STDOUT_MAX_BYTES = 16 * 1024 * 1024;
 const STDERR_MAX_BYTES = 1024 * 1024;
 
@@ -105,9 +103,9 @@ export interface AgentDispatchInput extends AdapterDispatchInput {}
 
 // The `AgentDispatchResult` name is retained as the adapter-specific
 // alias for call sites that want a name bound to the `agent` adapter's
-// producer contract. Slice 45 (P2.6) extracted the shape to
-// `./shared.ts` `DispatchResult` so the `codex` adapter produces the
-// same shape and the materializer consumes it uniformly.
+// producer contract. The shape lives in `./shared.ts` `DispatchResult`
+// so the `codex` adapter produces the same shape and the materializer
+// consumes it uniformly.
 export type AgentDispatchResult = DispatchResult;
 
 function assertAgentEffort(
@@ -150,9 +148,8 @@ export async function dispatchAgent(input: AgentDispatchInput): Promise<Dispatch
       // first-byte read.
       //
       // `detached: true` puts the subprocess in its own process group so
-      // the timeout-kill path can signal the group (Codex Slice 42 HIGH 4
-      // subprocess-containment fold-in); if claude itself spawns helper
-      // processes, they are killed via the group kill.
+      // the timeout-kill path can signal the group; if claude itself
+      // spawns helper processes, they are killed via the group kill.
       child = spawn(AGENT_CLAUDE_EXECUTABLE, args, {
         stdio: ['ignore', 'pipe', 'pipe'],
         // Inherit the parent process's environment explicitly. Some test
@@ -308,12 +305,12 @@ export function parseAgentStdout(
     events.push(parsed as Record<string, unknown>);
   }
 
-  // Filter strictly for `subtype === 'init'` per Codex Slice 42 MED 4.
+  // Filter strictly for `subtype === 'init'`.
   const initEvent = events.find((e) => e.type === 'system' && e.subtype === 'init');
-  // Take the LAST result event (terminal), not the first, per Codex
-  // Slice 42 MED 4. `stream-json` emits a single terminal result event at
-  // v0, but depending on future CLI changes multiple result events could
-  // appear; the terminal one is authoritative.
+  // Take the LAST result event (terminal), not the first. `stream-json`
+  // emits a single terminal result event at v0, but depending on future
+  // CLI changes multiple result events could appear; the terminal one is
+  // authoritative.
   const resultEvents = events.filter((e) => e.type === 'result');
   const resultEvent = resultEvents[resultEvents.length - 1];
 

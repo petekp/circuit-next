@@ -19,7 +19,7 @@ import { RunId, WorkflowId } from './ids.js';
 // narrative of what the run produced. Both are user-visible strings;
 // neither is a dispatch sink.
 //
-// RESULT-I4 (Slice 53 Codex H1 fold-in) — `reason` mirrors
+// RESULT-I4 — `reason` mirrors
 // `RunClosedEvent.reason` and is OPTIONAL. When `outcome` is
 // 'aborted' / 'stopped' / 'escalated' / 'handoff', the runtime SHOULD
 // populate `reason` with a human-readable explanation so the

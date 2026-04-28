@@ -12,23 +12,19 @@ import { Workflow } from '../../src/schemas/workflow.js';
 import { validateWorkflowKindPolicy } from '../../src/runtime/policy/workflow-kind-policy.js';
 import { type DispatchFn, type DispatchInput, runWorkflow } from '../../src/runtime/runner.js';
 
-// Slice 43c (P2.5) — `explore` end-to-end fixture run. Closes Phase 2
-// close criteria CC#P2-1 (one-workflow parity substrate) and CC#P2-2
-// (real-agent dispatch transcript + artifact materialization)
-// simultaneously per ADR-0007 §Decision.1 + §Amendment Slice 37.
+// `explore` end-to-end fixture run.
 //
-// Structure mirrors the Slice 42 adapter smoke file: always-running
-// static declarations (ratchet-floor contribution) + AGENT_SMOKE-gated
+// Structure mirrors the agent adapter smoke file: always-running static
+// declarations (ratchet-floor contribution) + AGENT_SMOKE-gated
 // real-subprocess end-to-end. Static tests bind the explore fixture
-// shape, the normalization rule used to hash the normalized result artifact,
-// and the `sha256Hex` helper format. The AGENT_SMOKE-gated branch runs
-// the real explore fixture through `runWorkflow` with the default
-// `dispatchAgent` (spawns `claude -p` per Slice 42), asserts the
-// five-event dispatch transcript lands twice (synthesize + review),
-// normalizes + hashes `artifacts/explore-result.json` against the
-// checked-in golden, and writes the `tests/fixtures/agent-smoke/
-// last-run.json` fingerprint that audit Check 30 verifies at every
-// run.
+// shape, the normalization rule used to hash the normalized result
+// artifact, and the `sha256Hex` helper format. The AGENT_SMOKE-gated
+// branch runs the real explore fixture through `runWorkflow` with the
+// default `dispatchAgent` (spawns `claude -p`), asserts the five-event
+// dispatch transcript lands twice (synthesize + review), normalizes +
+// hashes `artifacts/explore-result.json` against the checked-in golden,
+// and writes the `tests/fixtures/agent-smoke/last-run.json` fingerprint
+// that audit Check 30 verifies at every run.
 
 const EXPLORE_FIXTURE_PATH = resolve('.claude-plugin/skills/explore/circuit.json');
 const GOLDEN_RESULT_SHA256_PATH = resolve('tests/fixtures/golden/explore/result.sha256');
@@ -36,18 +32,17 @@ const LAST_RUN_FINGERPRINT_PATH = resolve('tests/fixtures/agent-smoke/last-run.j
 
 const AGENT_SMOKE = process.env.AGENT_SMOKE === '1';
 const UPDATE_GOLDEN = process.env.UPDATE_GOLDEN === '1';
-// Slice 47a (Codex HIGH 4 fold-in) — fingerprint promotion is now
-// gated separately from the AGENT_SMOKE invocation, mirroring
-// UPDATE_CODEX_FINGERPRINT (Slice 45 MED 3 fold-in). A bare
-// AGENT_SMOKE=1 run exercises the adapter end-to-end without
-// mutating tests/fixtures/agent-smoke/last-run.json; explicit
+// Fingerprint promotion is gated separately from the AGENT_SMOKE
+// invocation, mirroring UPDATE_CODEX_FINGERPRINT. A bare AGENT_SMOKE=1
+// run exercises the adapter end-to-end without mutating
+// tests/fixtures/agent-smoke/last-run.json; explicit
 // UPDATE_AGENT_FINGERPRINT=1 opt-in is required to refresh the
 // recorded fingerprint that audit Check 30 binds against.
 const UPDATE_AGENT_FINGERPRINT = process.env.UPDATE_AGENT_FINGERPRINT === '1';
 
-// Slice 47a — adapter source paths the fingerprint binds against.
-// Inlined here (rather than importing from scripts/audit.mjs) to keep
-// the test stdlib-only and consistent with the codex-dispatch-roundtrip
+// Adapter source paths the fingerprint binds against. Inlined here
+// (rather than importing from scripts/audit.mjs) to keep the test
+// stdlib-only and consistent with the codex-dispatch-roundtrip
 // inlining; if the test's list ever drifts from the audit's list the
 // drift detection itself surfaces the mismatch as yellow on first
 // repromotion.
@@ -180,7 +175,7 @@ function deterministicDispatcher(): DispatchFn {
   };
 }
 
-describe('Slice 43c — explore fixture static declarations (ratchet-floor contribution)', () => {
+describe('explore fixture static declarations (ratchet-floor contribution)', () => {
   it('explore fixture parses through the production Workflow schema', () => {
     const { workflow } = loadExploreFixture();
     expect(workflow.id).toBe('explore');
@@ -319,112 +314,105 @@ describe('Slice 43c — explore fixture static declarations (ratchet-floor contr
 // effects update `tests/fixtures/agent-smoke/last-run.json` so the
 // commit-ancestor audit (Check 30) can bind the fingerprint to the
 // committing slice.
-(AGENT_SMOKE ? describe : describe.skip)(
-  'Slice 43c — explore fixture AGENT_SMOKE end-to-end (CC#P2-1 + CC#P2-2 simultaneous close)',
-  () => {
-    let runRootBase: string;
+(AGENT_SMOKE ? describe : describe.skip)('explore fixture AGENT_SMOKE end-to-end', () => {
+  let runRootBase: string;
 
-    beforeEach(() => {
-      runRootBase = mkdtempSync(join(tmpdir(), 'circuit-next-43c-'));
-    });
+  beforeEach(() => {
+    runRootBase = mkdtempSync(join(tmpdir(), 'circuit-next-explore-e2e-'));
+  });
 
-    afterEach(() => {
-      rmSync(runRootBase, { recursive: true, force: true });
-    });
+  afterEach(() => {
+    rmSync(runRootBase, { recursive: true, force: true });
+  });
 
-    it(
-      'closes the explore run end-to-end through the real dispatchAgent + 2x five-event transcript + normalized golden parity',
-      async () => {
-        const { workflow, bytes } = loadExploreFixture();
-        const runRoot = join(runRootBase, 'explore-e2e');
-        const outcome = await runWorkflow({
-          runRoot,
-          workflow,
-          workflowBytes: bytes,
-          runId: RunId.parse('33333333-3333-3333-3333-333333333333'),
-          goal: 'explore: AGENT_SMOKE end-to-end parity run',
-          rigor: 'standard',
-          lane: lane(),
-          now: () => new Date(),
-        });
+  it(
+    'closes the explore run end-to-end through the real dispatchAgent + 2x five-event transcript + normalized golden parity',
+    async () => {
+      const { workflow, bytes } = loadExploreFixture();
+      const runRoot = join(runRootBase, 'explore-e2e');
+      const outcome = await runWorkflow({
+        runRoot,
+        workflow,
+        workflowBytes: bytes,
+        runId: RunId.parse('33333333-3333-3333-3333-333333333333'),
+        goal: 'explore: AGENT_SMOKE end-to-end parity run',
+        rigor: 'standard',
+        lane: lane(),
+        now: () => new Date(),
+      });
 
-        expect(outcome.result.outcome).toBe('complete');
+      expect(outcome.result.outcome).toBe('complete');
 
-        // Close-step's explore-result.json landed at the expected path.
-        const exploreResultPath = join(runRoot, 'artifacts', 'explore-result.json');
-        expect(existsSync(exploreResultPath)).toBe(true);
+      // Close-step's explore-result.json landed at the expected path.
+      const exploreResultPath = join(runRoot, 'artifacts', 'explore-result.json');
+      expect(existsSync(exploreResultPath)).toBe(true);
 
-        // Hash the normalized close-step artifact against the golden.
-        const normalized = normalizeExploreResult(readFileSync(exploreResultPath, 'utf8'));
-        const digest = sha256Hex(normalized);
-        if (UPDATE_GOLDEN) {
-          mkdirSync(dirname(GOLDEN_RESULT_SHA256_PATH), { recursive: true });
-          writeFileSync(GOLDEN_RESULT_SHA256_PATH, `${digest}\n`);
+      // Hash the normalized close-step artifact against the golden.
+      const normalized = normalizeExploreResult(readFileSync(exploreResultPath, 'utf8'));
+      const digest = sha256Hex(normalized);
+      if (UPDATE_GOLDEN) {
+        mkdirSync(dirname(GOLDEN_RESULT_SHA256_PATH), { recursive: true });
+        writeFileSync(GOLDEN_RESULT_SHA256_PATH, `${digest}\n`);
+      }
+      const golden = readFileSync(GOLDEN_RESULT_SHA256_PATH, 'utf8').trim();
+      expect(digest).toBe(golden);
+
+      // Two dispatch transcripts landed; each carries the five-event
+      // sequence on its own (step_id, attempt) pair.
+      const dispatchSteps = ['synthesize-step', 'review-step'];
+      for (const stepId of dispatchSteps) {
+        const kindsForStep = outcome.events
+          .filter((e) => 'step_id' in e && e.step_id === stepId)
+          .map((e) => e.kind);
+        expect(kindsForStep).toContain('dispatch.started');
+        expect(kindsForStep).toContain('dispatch.request');
+        expect(kindsForStep).toContain('dispatch.receipt');
+        expect(kindsForStep).toContain('dispatch.result');
+        expect(kindsForStep).toContain('dispatch.completed');
+      }
+
+      // Fingerprint promotion is gated on UPDATE_AGENT_FINGERPRINT=1
+      // and writes the schema_version 2 shape with
+      // adapter_source_sha256 + cli_version, mirroring the
+      // codex-dispatch-roundtrip promotion path. A bare AGENT_SMOKE=1
+      // run exercises the adapter end-to-end without mutating
+      // tracked state. The first-run dispatch result on the explore
+      // fixture is the one whose result_sha256 is recorded.
+      if (UPDATE_AGENT_FINGERPRINT) {
+        const commitSha = currentHeadSha();
+        // Bind cli_version to the actual subprocess init event via
+        // WorkflowRunResult.dispatchResults (populated by runWorkflow;
+        // sourced from each dispatcher's DispatchResult.cli_version,
+        // which agent.ts reads from init.claude_code_version). The
+        // audit rejects fingerprints with empty/unknown cli_version
+        // on v2, so this binding fails closed at promotion time.
+        const firstAgentDispatch = outcome.dispatchResults.find((d) => d.adapterName === 'agent');
+        if (firstAgentDispatch === undefined) {
+          throw new Error(
+            'AGENT_SMOKE fingerprint promotion: no agent-dispatch result captured (WorkflowRunResult.dispatchResults empty for adapter=agent)',
+          );
         }
-        const golden = readFileSync(GOLDEN_RESULT_SHA256_PATH, 'utf8').trim();
-        expect(digest).toBe(golden);
-
-        // Two dispatch transcripts landed; each carries the Slice 37
-        // five-event sequence on its own (step_id, attempt) pair.
-        const dispatchSteps = ['synthesize-step', 'review-step'];
-        for (const stepId of dispatchSteps) {
-          const kindsForStep = outcome.events
-            .filter((e) => 'step_id' in e && e.step_id === stepId)
-            .map((e) => e.kind);
-          expect(kindsForStep).toContain('dispatch.started');
-          expect(kindsForStep).toContain('dispatch.request');
-          expect(kindsForStep).toContain('dispatch.receipt');
-          expect(kindsForStep).toContain('dispatch.result');
-          expect(kindsForStep).toContain('dispatch.completed');
+        const cliVersion = firstAgentDispatch.cli_version;
+        if (cliVersion.length === 0 || /\(unknown\)/.test(cliVersion)) {
+          throw new Error(
+            `AGENT_SMOKE fingerprint promotion: cli_version "${cliVersion}" is empty or sentinel; refusing to write a fingerprint that audit Check 30 will reject`,
+          );
         }
-
-        // Slice 47a (Codex HIGH 4 fold-in) — fingerprint promotion
-        // is gated on UPDATE_AGENT_FINGERPRINT=1 and writes the
-        // schema_version 2 shape with adapter_source_sha256 +
-        // cli_version, mirroring the codex-dispatch-roundtrip
-        // promotion path. A bare AGENT_SMOKE=1 run exercises the
-        // adapter end-to-end without mutating tracked state. The
-        // first-run dispatch result on the explore fixture is the
-        // one whose result_sha256 is recorded (matching prior shape).
-        if (UPDATE_AGENT_FINGERPRINT) {
-          const commitSha = currentHeadSha();
-          // Slice 47a Codex HIGH 2 fold-in — bind cli_version to the
-          // actual subprocess init event via WorkflowRunResult.dispatchResults
-          // (populated by runWorkflow; sourced from each dispatcher's
-          // DispatchResult.cli_version, which agent.ts reads from
-          // init.claude_code_version). The earlier env-var side-channel
-          // (process.env.AGENT_CLI_VERSION ?? 'claude (unknown)') let
-          // a missing/unknown cli_version through; the audit now also
-          // rejects fingerprints with empty/unknown cli_version on v2,
-          // so this binding fails closed at promotion time.
-          const firstAgentDispatch = outcome.dispatchResults.find((d) => d.adapterName === 'agent');
-          if (firstAgentDispatch === undefined) {
-            throw new Error(
-              'AGENT_SMOKE fingerprint promotion: no agent-dispatch result captured (WorkflowRunResult.dispatchResults empty for adapter=agent)',
-            );
-          }
-          const cliVersion = firstAgentDispatch.cli_version;
-          if (cliVersion.length === 0 || /\(unknown\)/.test(cliVersion)) {
-            throw new Error(
-              `AGENT_SMOKE fingerprint promotion: cli_version "${cliVersion}" is empty or sentinel; refusing to write a fingerprint that audit Check 30 will reject`,
-            );
-          }
-          const fingerprint = {
-            schema_version: 2,
-            commit_sha: commitSha,
-            result_sha256: digest,
-            adapter_source_sha256: adapterSourceSha256(),
-            cli_version: cliVersion,
-            recorded_at: new Date().toISOString(),
-          };
-          mkdirSync(dirname(LAST_RUN_FINGERPRINT_PATH), { recursive: true });
-          writeFileSync(LAST_RUN_FINGERPRINT_PATH, `${JSON.stringify(fingerprint, null, 2)}\n`);
-        }
-      },
-      5 * 60 * 1000,
-    );
-  },
-);
+        const fingerprint = {
+          schema_version: 2,
+          commit_sha: commitSha,
+          result_sha256: digest,
+          adapter_source_sha256: adapterSourceSha256(),
+          cli_version: cliVersion,
+          recorded_at: new Date().toISOString(),
+        };
+        mkdirSync(dirname(LAST_RUN_FINGERPRINT_PATH), { recursive: true });
+        writeFileSync(LAST_RUN_FINGERPRINT_PATH, `${JSON.stringify(fingerprint, null, 2)}\n`);
+      }
+    },
+    5 * 60 * 1000,
+  );
+});
 
 function currentHeadSha(): string {
   // Shelling to git keeps the test stdlib-only w.r.t. npm deps; the

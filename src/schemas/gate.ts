@@ -1,17 +1,17 @@
 import { z } from 'zod';
 
-// Gate sources are typed refs, not opaque strings (adversarial-review MED #7).
+// Gate sources are typed refs, not opaque strings.
 // Each gate variant is kind-bound to exactly one source schema so a
 // SchemaSectionsGate cannot carry a dispatch_result source at the type layer
 // or at parse time. The `ref` field is a Zod literal per source kind — NOT an
 // arbitrary string — so the source kind + ref pair names exactly one write
 // slot: artifact → 'artifact', checkpoint_response → 'response',
-// dispatch_result → 'result'. This closes Codex review HIGH #1 (prototype-
-// chain `in` attack) and HIGH #2 (cross-slot drift) at the type boundary.
+// dispatch_result → 'result'. This blocks prototype-chain `in` attacks and
+// cross-slot drift at the type boundary.
 // See `docs/contracts/step.md` STEP-I3 and STEP-I4.
 //
 // `.strict()` is applied on every variant so surplus keys are rejected, not
-// stripped (Codex review MED #4 / STEP-I6 enforcement story).
+// stripped (STEP-I6 enforcement story).
 
 export const ArtifactSource = z
   .object({

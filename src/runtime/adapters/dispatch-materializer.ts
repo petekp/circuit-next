@@ -8,15 +8,14 @@ import type { DispatchRole } from '../../schemas/step.js';
 import { resolveRunRelative } from '../run-relative-path.js';
 import { type DispatchResult, sha256Hex } from './shared.js';
 
-// Slice 42 (P2.4) — dispatch materialization glue between an adapter's
-// raw subprocess output and the five-event dispatch transcript + ADR-
-// 0008 §Decision.3a artifact materialization. Slice 45 (P2.6) generalized
-// the `adapter.name` discriminant on the `dispatch.started` event so a
-// second adapter (`codex`) reuses the same materialization seam without
-// drifting the transcript shape.
+// Dispatch materialization glue between an adapter's raw subprocess
+// output and the five-event dispatch transcript + artifact
+// materialization. The `adapter.name` discriminant on the
+// `dispatch.started` event is generic so a second adapter (`codex`)
+// reuses the same materialization seam without drifting the transcript
+// shape.
 //
-// Per ADR-0007 CC#P2-2 §Amendment (Slice 37), the durable dispatch
-// transcript is the five-event sequence
+// The durable dispatch transcript is the five-event sequence
 //   dispatch.started → dispatch.request → dispatch.receipt →
 //   dispatch.result → dispatch.completed
 // on a single `(step_id, attempt)` pair. This module builds that
@@ -47,26 +46,18 @@ export interface DispatchMaterializeInput {
     readonly result: string;
     readonly artifact?: { readonly path: string; readonly schema: string };
   };
-  // Slice 45 (P2.6): the adapter-name discriminant is required so the
+  // The adapter-name discriminant is required so the
   // `dispatch.started` event's `adapter: {kind: 'builtin', name}` field
   // is adapter-accurate rather than agent-hardcoded. Typed against the
   // `BuiltInAdapter` enum at `src/schemas/adapter.ts` so the discriminant
   // matches the ADAPTER-I1 closed-enum invariant.
   readonly adapterName: BuiltInAdapter;
-  // Slice 47a (CONVERGENT HIGH A fold-in): selection + provenance are
-  // REQUIRED inputs to materialization rather than hardcoded defaults.
-  // Pre-Slice-47a, `materializeDispatch` fabricated
-  // `resolved_selection: { skills: [], invocation_options: {} }` and
-  // `resolved_from: { source: 'default' }` on every dispatch.started
-  // event regardless of the actual selection-resolution path or caller
-  // intent — falsifying the audit trail consumed by P2.8 router and
-  // P2-MODEL-EFFORT cascade work. The materializer is now fail-closed
-  // at the type boundary: callers MUST compute and pass the real
-  // values. The runner derives them in `runWorkflow`: adapter provenance is
-  // explicit-vs-default, while selection now flows through the full
+  // Selection + provenance are REQUIRED inputs to materialization rather
+  // than hardcoded defaults. The materializer is fail-closed at the type
+  // boundary: callers MUST compute and pass the real values. The runner
+  // derives them in `runWorkflow`: adapter provenance is
+  // explicit-vs-default, while selection flows through the full
   // default/user-global/project/workflow/phase/step/invocation resolver.
-  // The materializer's type contract did not need to change when that
-  // resolver landed.
   readonly resolvedSelection: ResolvedSelection;
   readonly resolvedFrom: DispatchResolutionSource;
   readonly dispatchResult: DispatchResult;
@@ -97,10 +88,10 @@ export interface DispatchMaterializeOutput {
 // Caller is responsible for appending the events via `appendEvent`
 // (or `appendAndDerive` if snapshot derivation is wanted).
 //
-// ADR-0008 §Decision.3a materialization rule: when `writes.artifact`
-// is declared, after BOTH the Slice 53 verdict gate AND the Slice 54
-// schema parse pass, the runtime materializes the artifact at
-// `writes.artifact.path` from the `result` payload. Verdict-gate
+// Materialization rule: when `writes.artifact` is declared, after BOTH
+// the verdict gate AND the schema parse pass, the runtime materializes
+// the artifact at `writes.artifact.path` from the `result` payload.
+// Verdict-gate
 // evaluation and schema-parse both live in the runner (see
 // `src/runtime/runner.ts::evaluateDispatchGate` + the `parseArtifact`
 // call around the materializer call site); by the time `writes.artifact`
@@ -131,8 +122,8 @@ export function materializeDispatch(input: DispatchMaterializeInput): DispatchMa
     priorStart,
   } = input;
 
-  // Slice 47a — cross-validation of the role binding the Event-union
-  // schema enforces (`resolved_from.source === 'role'` requires
+  // Cross-validation of the role binding the Event-union schema enforces
+  // (`resolved_from.source === 'role'` requires
   // `resolved_from.role === role`). Catching here at the materializer
   // boundary surfaces the mismatch with a precise error before the
   // event is constructed and round-tripped through the schema.

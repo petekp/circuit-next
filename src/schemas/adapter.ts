@@ -50,7 +50,7 @@ export const AdapterRef = z.discriminatedUnion('kind', [
 ]);
 export type AdapterRef = z.infer<typeof AdapterRef>;
 
-// Codex HIGH #1 fold-in — a resolved adapter MUST NOT still be a named
+// A resolved adapter MUST NOT still be a named
 // reference. Named references are pre-resolution pointers at the registry;
 // the dispatcher must dereference them before emitting DispatchStartedEvent.
 // `ResolvedAdapter` is the 2-variant discriminated union used at the event

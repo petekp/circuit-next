@@ -6,9 +6,8 @@ import { RunId, WorkflowId } from './ids.js';
 // workflow manifest taken at run bootstrap. `bytes_base64` carries the
 // exact persisted manifest bytes (base64 for JSON transport); `hash` is
 // SHA-256 over those raw persisted bytes, as a 64-char lowercase hex
-// string. Per ADR-0001 Addendum B §Phase 1.5 Close Criteria #8,
-// SHA-256-over-raw-bytes is the default; any canonicalization (e.g. RFC
-// 8785 JCS) would require a stricter ADR — Slice 27c does not open one.
+// string. SHA-256-over-raw-bytes is the default; any canonicalization
+// (e.g. RFC 8785 JCS) would be a deliberate future change.
 //
 // MANIFEST-I2 — `hash === sha256(decoded bytes_base64)` is enforced at
 // parse time. A ManifestSnapshot whose declared hash disagrees with its

@@ -1,18 +1,16 @@
 import { createHash } from 'node:crypto';
 import type { ResolvedSelection } from '../../schemas/selection-policy.js';
 
-// Slice 45 (P2.6) — shared adapter-layer primitives. Extracted from
-// Slice 42 `agent.ts` when the `codex` adapter landed and both adapters
-// needed symmetric access to the hash helper + a uniform dispatch-result
+// Shared adapter-layer primitives. Both `agent` and `codex` adapters
+// need symmetric access to the hash helper + a uniform dispatch-result
 // shape.
 //
 // Adapter files import these two symbols so the five-event dispatch
-// transcript (Slice 37) is byte-identical regardless of which adapter
-// produced the result: both adapters hash request/result bytes via
-// `sha256Hex`, both adapters return the same `DispatchResult` struct,
-// and the materializer at `dispatch-materializer.ts` consumes that
-// struct uniformly (discriminating only on the `adapterName` passed
-// alongside it).
+// transcript is byte-identical regardless of which adapter produced the
+// result: both adapters hash request/result bytes via `sha256Hex`, both
+// adapters return the same `DispatchResult` struct, and the materializer
+// at `dispatch-materializer.ts` consumes that struct uniformly
+// (discriminating only on the `adapterName` passed alongside it).
 //
 // This module stays under `src/runtime/adapters/**` so Check 29's
 // import-level scan over the adapters tree covers it — a future
@@ -27,15 +25,13 @@ import type { ResolvedSelection } from '../../schemas/selection-policy.js';
 // Fields are the adapter-producer contract:
 //
 //   - `request_payload` — the prompt bytes submitted to the subprocess.
-//     Hashed into `dispatch.request.request_payload_hash` per Slice 37
-//     event schema.
+//     Hashed into `dispatch.request.request_payload_hash`.
 //   - `receipt_id` — the subprocess-assigned session identifier
 //     (claude session_id for `agent`; Codex thread_id for `codex`).
 //     Carried verbatim into `dispatch.receipt.receipt_id`.
 //   - `result_body` — the terminal text payload from the subprocess.
-//     Hashed into `dispatch.result.result_artifact_hash` per Slice 37;
-//     also the raw bytes the runtime materializes into the validated
-//     artifact per ADR-0008 §Decision.3a.
+//     Hashed into `dispatch.result.result_artifact_hash`; also the raw
+//     bytes the runtime materializes into the validated artifact.
 //   - `duration_ms` — monotonic wall-clock duration of the subprocess
 //     invocation, measured via performance.now(). Feeds
 //     `dispatch.completed.duration_ms`.
@@ -43,8 +39,7 @@ import type { ResolvedSelection } from '../../schemas/selection-policy.js';
 //     time. For `agent`, from the subprocess's init event
 //     `claude_code_version` field. For `codex`, from a pre-invocation
 //     `codex --version` shellout (Codex's `--json` stream does not emit
-//     version in-band). Recorded for version-pinned transcript evidence
-//     per Codex Slice 42 MED 2 fold-in.
+//     version in-band). Recorded for version-pinned transcript evidence.
 export interface DispatchResult {
   readonly request_payload: string;
   readonly receipt_id: string;

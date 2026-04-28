@@ -16,17 +16,13 @@ import { RunId, StepId, WorkflowId } from '../../src/schemas/ids.js';
 import type { LaneDeclaration } from '../../src/schemas/lane.js';
 import type { ResolvedSelection } from '../../src/schemas/selection-policy.js';
 
-// Slice 45 (P2.6) — codex-dispatch-roundtrip test strengthening
-// ADR-0007 CC#P2-2 (real-agent dispatch) with the second adapter named
-// in that criterion's enumeration; bound to the Slice 37 five-event
-// transcript shape. (Earlier draft of this comment mis-cited CC#P2-4 —
-// that criterion is session hooks per ADR-0007:326-349; corrected per
-// Codex Slice 45 HIGH 1 fold-in.)
+// Codex-dispatch-roundtrip test, bound to the five-event transcript
+// shape and the second adapter (`codex`).
 //
-// Mirrors the Slice 42 agent-dispatch-roundtrip structurally: bootstrap
-// a run; invoke the real `codex exec` adapter; materialize the five-
-// event transcript + four on-disk slots; read back via readRunLog;
-// reduce; assert the materialized artifact bytes match the adapter's
+// Mirrors the agent-dispatch-roundtrip structurally: bootstrap a run;
+// invoke the real `codex exec` adapter; materialize the five-event
+// transcript + four on-disk slots; read back via readRunLog; reduce;
+// assert the materialized artifact bytes match the adapter's
 // `result_body`. The ONLY field that differs between the two round-
 // trips is `adapter.name = 'codex'` on dispatch.started — proving that
 // the materializer seam parameterizes correctly on adapter identity
@@ -38,13 +34,12 @@ import type { ResolvedSelection } from '../../src/schemas/selection-policy.js';
 // sanity tests at the top.
 
 const CODEX_SMOKE = process.env.CODEX_SMOKE === '1';
-// Write-gate per Codex Slice 45 MED 3 fold-in: CODEX_SMOKE=1 exercises
-// the end-to-end path but no longer implicitly mutates the tracked
-// fingerprint. Promotion requires an explicit UPDATE_CODEX_FINGERPRINT=1
-// env var (mirrors the UPDATE_GOLDEN=1 pattern at
-// tests/runner/explore-e2e-parity.test.ts). Without the explicit
-// promotion flag, the round-trip still runs end-to-end but leaves
-// tests/fixtures/codex-smoke/last-run.json alone.
+// Write-gate: CODEX_SMOKE=1 exercises the end-to-end path but does not
+// implicitly mutate the tracked fingerprint. Promotion requires an
+// explicit UPDATE_CODEX_FINGERPRINT=1 env var (mirrors the UPDATE_GOLDEN=1
+// pattern at tests/runner/explore-e2e-parity.test.ts). Without the
+// explicit promotion flag, the round-trip still runs end-to-end but
+// leaves tests/fixtures/codex-smoke/last-run.json alone.
 const UPDATE_CODEX_FINGERPRINT = process.env.UPDATE_CODEX_FINGERPRINT === '1';
 const LAST_RUN_FINGERPRINT_PATH = resolve('tests/fixtures/codex-smoke/last-run.json');
 
@@ -58,8 +53,8 @@ const CODEX_SMOKE_SELECTION = {
   invocation_options: {},
 } satisfies ResolvedSelection;
 
-// Slice 45 HIGH 4 fold-in: the fingerprint binds to the current adapter
-// surface, not just an ancestor commit. The adapter_source_sha256 field
+// The fingerprint binds to the current adapter surface, not just an
+// ancestor commit. The adapter_source_sha256 field
 // is the sha256 of the concatenation of the three adapter-layer source
 // files that materially determine the codex dispatch behavior:
 //   (a) src/runtime/adapters/codex.ts — dispatchCodex + parseCodexStdout
@@ -72,12 +67,12 @@ const CODEX_SMOKE_SELECTION = {
 // of the current adapter surface. Check 32 re-computes this hash at
 // audit time and flags drift (yellow: fingerprint exists but adapter
 // has changed since the last CODEX_SMOKE run).
-// Slice 47a Codex challenger HIGH 3 fold-in — `runner.ts` added for
-// symmetry with the AGENT writer's source path list. The Slice 47a
-// runner-side selection/provenance derivation participates in the
-// codex dispatch transcript via the materializeDispatch call site;
-// excluding `runner.ts` from this list would let a runner edit
-// silently invalidate the CODEX fingerprint without tripping drift.
+// `runner.ts` is included for symmetry with the AGENT writer's source
+// path list. The runner-side selection/provenance derivation
+// participates in the codex dispatch transcript via the
+// materializeDispatch call site; excluding `runner.ts` from this list
+// would let a runner edit silently invalidate the CODEX fingerprint
+// without tripping drift.
 const ADAPTER_SOURCE_PATHS = [
   resolve('src/runtime/adapters/codex.ts'),
   resolve('src/runtime/adapters/shared.ts'),
@@ -96,7 +91,7 @@ function adapterSourceSha256(): string {
   return h.digest('hex');
 }
 
-describe('Slice 45 — codex dispatch round-trip (ADR-0007 CC#P2-2 second-adapter evidence)', () => {
+describe('codex dispatch round-trip (second-adapter evidence)', () => {
   it('static: materializeDispatch accepts adapterName="codex" (ratchet-floor declaration)', () => {
     expect(typeof materializeDispatch).toBe('function');
   });
@@ -121,7 +116,7 @@ describe('Slice 45 — codex dispatch round-trip (ADR-0007 CC#P2-2 second-adapte
   (CODEX_SMOKE ? it : it.skip)(
     'end-to-end: dispatchCodex → 5-event transcript → reducer snapshot → materialized artifact (CODEX_SMOKE=1)',
     async () => {
-      const runRoot = mkdtempSync(join(tmpdir(), 'slice-45-roundtrip-'));
+      const runRoot = mkdtempSync(join(tmpdir(), 'codex-dispatch-roundtrip-'));
       try {
         const runId = RunId.parse('45454545-4545-4545-4545-454545454545');
         const workflowId = WorkflowId.parse('codex-smoke-0');
@@ -131,9 +126,9 @@ describe('Slice 45 — codex dispatch round-trip (ADR-0007 CC#P2-2 second-adapte
         const now = () => startAt;
         const lane: LaneDeclaration = {
           lane: 'ratchet-advance',
-          failure_mode: 'Slice 45 CC#P2-2 second-adapter round-trip',
+          failure_mode: 'codex dispatch second-adapter round-trip',
           acceptance_evidence: '5-event transcript consumed by reducer; adapter.name=codex',
-          alternate_framing: 'Defer to P2.7 session hooks — rejected per P2.6 plan block',
+          alternate_framing: 'Defer to later phase — rejected',
         };
         const writes = {
           request: 'artifacts/dispatch/smoke.request.txt',
@@ -161,7 +156,7 @@ describe('Slice 45 — codex dispatch round-trip (ADR-0007 CC#P2-2 second-adapte
             kind: 'run.bootstrapped',
             workflow_id: workflowId,
             rigor: 'standard',
-            goal: 'slice 45 round-trip',
+            goal: 'codex dispatch round-trip',
             lane,
             manifest_hash: 'b'.repeat(64),
           },
@@ -174,10 +169,10 @@ describe('Slice 45 — codex dispatch round-trip (ADR-0007 CC#P2-2 second-adapte
           resolvedSelection: CODEX_SMOKE_SELECTION,
         });
 
-        // Slice 47a — selection + provenance now required at the
-        // materializer boundary; CODEX_SMOKE round-trip mirrors the
-        // AGENT_SMOKE round-trip with `source: 'explicit'` (the test
-        // injects the adapter directly).
+        // Selection + provenance are required at the materializer
+        // boundary; CODEX_SMOKE round-trip mirrors the AGENT_SMOKE
+        // round-trip with `source: 'explicit'` (the test injects the
+        // adapter directly).
         const materialized = materializeDispatch({
           runId,
           stepId,
@@ -204,9 +199,9 @@ describe('Slice 45 — codex dispatch round-trip (ADR-0007 CC#P2-2 second-adapte
         expect(dispatchEvents).toHaveLength(5);
 
         const [started, request, receipt, result, completed] = dispatchEvents;
-        // The critical CC#P2-4 surface — adapter name binding differs
-        // from Slice 42 agent round-trip. If materializer drift
-        // parameterization regressed, this assertion catches it.
+        // The critical surface — adapter name binding differs from the
+        // agent round-trip. If materializer drift parameterization
+        // regressed, this assertion catches it.
         if (started?.kind !== 'dispatch.started') throw new Error('unreachable');
         expect(started.adapter).toEqual({ kind: 'builtin', name: 'codex' });
         expect(started.role).toBe('implementer');
@@ -248,15 +243,14 @@ describe('Slice 45 — codex dispatch round-trip (ADR-0007 CC#P2-2 second-adapte
         expect(existsSync(join(runRoot, writes.result))).toBe(true);
         expect(readFileSync(join(runRoot, writes.result), 'utf-8')).toBe(codexResult.result_body);
 
-        // Fingerprint promotion path (Codex Slice 45 HIGH 4 + MED 3
-        // fold-in). The fingerprint now binds to the current adapter
-        // surface via `adapter_source_sha256` AND the Codex CLI
-        // version string, so a later edit to codex.ts / shared.ts /
-        // dispatch-materializer.ts surfaces as Check 32 yellow (drift
-        // detected) until a fresh CODEX_SMOKE run promotes a new
-        // fingerprint. Promotion is gated on UPDATE_CODEX_FINGERPRINT=1
-        // per MED 3 (mirrors the UPDATE_GOLDEN pattern from
-        // explore-e2e-parity.test.ts) so a bare CODEX_SMOKE=1 run
+        // Fingerprint promotion path. The fingerprint binds to the
+        // current adapter surface via `adapter_source_sha256` AND the
+        // Codex CLI version string, so a later edit to codex.ts /
+        // shared.ts / dispatch-materializer.ts surfaces as Check 32
+        // yellow (drift detected) until a fresh CODEX_SMOKE run
+        // promotes a new fingerprint. Promotion is gated on
+        // UPDATE_CODEX_FINGERPRINT=1 (mirrors the UPDATE_GOLDEN pattern
+        // from explore-e2e-parity.test.ts) so a bare CODEX_SMOKE=1 run
         // exercises the adapter end-to-end without mutating tracked
         // state unless the operator explicitly opts in to the promotion.
         if (UPDATE_CODEX_FINGERPRINT) {

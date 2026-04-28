@@ -16,7 +16,7 @@ import { DispatchRole } from './step.js';
 // and referenced by name. Surplus keys (typos like `nmae: 'gemini'`) are
 // rejected at parse time so they point at the typo directly.
 //
-// Codex MED #8 fold-in — `AdapterReference` is exported so future callers
+// `AdapterReference` is exported so future callers
 // can validate registry-layer references directly (instead of reaching for
 // `AdapterRef`, which admits inline custom descriptors and would silently
 // relax ADAPTER-I5).
@@ -51,7 +51,7 @@ export const DispatchConfig = DispatchConfigBody.superRefine((cfg, ctx) => {
   // in the registry, and be picked by `default: 'codex'`, producing a
   // behavior divergence the author did not intend. Reject at parse time.
   //
-  // Codex HIGH #3 fold-in — iterate only OWN keys via `Object.keys` and
+  // Iterate only OWN keys via `Object.keys` and
   // check membership via a Set (not via bracket access on the record), so
   // inherited prototype names like `constructor`, `toString`, `__proto__`,
   // and `hasOwnProperty` cannot smuggle past closure checks. Bracket
@@ -69,7 +69,7 @@ export const DispatchConfig = DispatchConfigBody.superRefine((cfg, ctx) => {
         `adapter name '${name}' is reserved (built-in or 'auto') and cannot be used as a custom adapter key`,
       );
     }
-    // Codex HIGH #2 fold-in — registry key and descriptor `name` must
+    // Registry key and descriptor `name` must
     // agree. `{adapters: {gemini: {name: 'ollama', ...}}}` parses per
     // AdapterName regex but leaves two adapter identities (`gemini` via
     // registry key, `ollama` via emitted descriptor) for a single
@@ -101,7 +101,7 @@ export const DispatchConfig = DispatchConfigBody.superRefine((cfg, ctx) => {
 });
 export type DispatchConfig = z.infer<typeof DispatchConfig>;
 
-// Codex HIGH #5 fold-in — legacy `skills: string[]` channel removed. The
+// Legacy `skills: string[]` channel removed. The
 // previous shape bypassed `SkillOverride` AND accepted arbitrary strings
 // (not `SkillId`-validated). Per-circuit skill contribution flows through
 // `selection.skills` via typed `SkillOverride` operations (SEL-I3).

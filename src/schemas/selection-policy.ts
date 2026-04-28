@@ -18,7 +18,7 @@ export type ProviderScopedModel = z.infer<typeof ProviderScopedModel>;
 export const Effort = z.enum(['none', 'minimal', 'low', 'medium', 'high', 'xhigh']);
 export type Effort = z.infer<typeof Effort>;
 
-// Codex MED #10 fold-in — invocation_options must be JSON-safe. A
+// Invocation_options must be JSON-safe. A
 // z.record(z.unknown()) boundary admits functions, Dates, symbols, and
 // `undefined` — none of which can be authored in YAML/TOML/JSON or survive
 // event-log serialization. `JsonValue` is the recursive predicate; the
@@ -39,7 +39,7 @@ const JsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
 const JsonObject = z.record(z.string(), JsonValueSchema);
 export type JsonObject = z.infer<typeof JsonObject>;
 
-// Codex MED #8 fold-in — skill arrays enforce uniqueness. Set-algebra
+// Skill arrays enforce uniqueness. Set-algebra
 // composition (union, difference) at the resolver layer expects the inputs
 // to be sets; accepting duplicates at parse time let a typo in an author's
 // YAML silently produce `['tdd', 'tdd']` and masked the intent. Canonical
@@ -65,7 +65,7 @@ export type SkillOverride = z.infer<typeof SkillOverride>;
 
 // SEL-I2 — every field optional; `.strict()` rejects surplus keys (typos
 // that would otherwise silently leave the effective selection at the prior
-// layer's default). `invocation_options` is JSON-safe (Codex MED #10); its
+// layer's default). `invocation_options` is JSON-safe; its
 // merge semantics (right-biased by precedence) are a Phase 2 property.
 export const SelectionOverride = z
   .object({
@@ -78,8 +78,8 @@ export const SelectionOverride = z
   .strict();
 export type SelectionOverride = z.infer<typeof SelectionOverride>;
 
-// SEL-I5 — resolved is the effective record at dispatch time. Codex HIGH #4
-// fold-in: `invocation_options` is included because it IS effective-state
+// SEL-I5 — resolved is the effective record at dispatch time.
+// `invocation_options` is included because it IS effective-state
 // data — adapters consume it, and omitting it from the resolved surface
 // makes `DispatchStartedEvent.resolved_selection` insufficient for audit or
 // replay. The resolver flattens `applied[].override.invocation_options` via
@@ -141,16 +141,15 @@ const PRECEDENCE_INDEX: Record<SelectionSource, number> = Object.fromEntries(
   SELECTION_PRECEDENCE.map((s, i) => [s, i]),
 ) as Record<SelectionSource, number>;
 
-// Codex HIGH #1 + HIGH #2 fold-in — applied[] entries are now a
-// discriminated union on `source`. The `phase` and `step` variants carry a
-// required disambiguator (`phase_id`, `step_id`). The five singleton-
-// identified variants (default, user-global, project, workflow, invocation)
-// do not, because a Run has at most one contribution from each.
+// Applied[] entries are a discriminated union on `source`. The `phase` and
+// `step` variants carry a required disambiguator (`phase_id`, `step_id`).
+// The five singleton-identified variants (default, user-global, project,
+// workflow, invocation) do not, because a Run has at most one contribution
+// from each.
 //
-// The disambiguators close HIGH #1 (category-only provenance not
-// independently auditable): reading an `applied` entry with
-// `source: 'phase'` now names the exact phase. They close HIGH #2 by
-// allowing two `phase` entries when a step legally belongs to multiple
+// The disambiguators ensure provenance is independently auditable: reading
+// an `applied` entry with `source: 'phase'` now names the exact phase. Two
+// `phase` entries are permitted when a step legally belongs to multiple
 // phases (the `every_step_has_a_phase` property is deferred to Phase 2 at
 // phase.md, so overlapping phases is permitted at v0.1 and the trace must
 // be able to represent them).
@@ -171,12 +170,12 @@ const AppliedEntry = z.discriminatedUnion('source', [
 ]);
 export type AppliedEntry = z.infer<typeof AppliedEntry>;
 
-// Codex MED #7 fold-in — ghost provenance rejection. An override is
+// Ghost provenance rejection. An override is
 // "empty" iff every field is at its schema default: no model, no effort,
 // no rigor, skills in `inherit` mode, invocation_options empty. Applied
 // entries whose override is empty fabricate provenance for a non-
 // contributing layer and are rejected. This is the v0.1 schema-level
-// complement to the reducer-level binding check (HIGH #3 / Phase 2
+// complement to the reducer-level binding check (Phase 2
 // property `selection.prop.resolved_matches_applied_composition`).
 function overrideContributes(o: SelectionOverride): boolean {
   if (o.model !== undefined) return true;
@@ -198,18 +197,18 @@ const issueAt = (ctx: z.RefinementCtx, path: (string | number)[], message: strin
   ctx.addIssue({ code: z.ZodIssueCode.custom, path, message });
 };
 
-// SEL-I6 + SEL-I7 + MED #7 enforcement on the applied chain. Walk once:
+// SEL-I6 + SEL-I7 + ghost-provenance enforcement on the applied chain. Walk
+// once:
 //   - SEL-I6: each source must have a precedence index > the previous for
 //     category changes. Equal index is tolerated when disambiguator
-//     distinguishes the entries (two phase entries are legal under HIGH
-//     #2's fold-in).
+//     distinguishes the entries (two phase entries are legal).
 //   - SEL-I7: no identity (source + disambiguator) appears twice. For
 //     singleton sources (default, user-global, project, workflow,
 //     invocation), identity is the source alone. For plural sources
 //     (phase, step), identity is `{source, phase_id}` / `{source,
 //     step_id}`.
-//   - MED #7: every entry's override must contribute — no ghost
-//     provenance.
+//   - Ghost-provenance: every entry's override must contribute — no entry
+//     that re-asserts the prior chain's resolved value.
 function identityKey(entry: AppliedEntry): string {
   switch (entry.source) {
     case 'phase':

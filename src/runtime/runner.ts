@@ -203,12 +203,12 @@ function readJsonArtifact(runRoot: string, path: string): unknown {
   return JSON.parse(readFileSync(resolveRunRelative(runRoot, path), 'utf8')) as unknown;
 }
 
-// Slice 43c synthesis writer fallback. Workflow-specific synthesis logic
-// lives under src/runtime/registries/synthesis-writers/ and is registered by output
-// schema name; close-with-evidence dispatch lives in
-// src/runtime/registries/close-writers/. The runner stays workflow-agnostic — adding
-// a new synthesis step means adding a SynthesisBuilder file + registry
-// entry.
+// Synthesis writer fallback. Workflow-specific synthesis logic lives
+// under src/runtime/registries/synthesis-writers/ and is registered by
+// output schema name; close-with-evidence dispatch lives in
+// src/runtime/registries/close-writers/. The runner stays workflow-
+// agnostic — adding a new synthesis step means adding a SynthesisBuilder
+// file + registry entry.
 function tryWriteRegisteredSynthesisArtifact(input: SynthesisWriterInput): boolean {
   const { runRoot, workflow, step, goal } = input;
   const schemaName = step.writes.artifact.schema;
@@ -488,10 +488,10 @@ function findWaitingCheckpoint(input: {
   };
 }
 
-// Slice 27d execution loop. Bootstrap, walk routes from entry.start_at,
-// delegate per-step work to the kind→handler dispatcher, advance pass
-// route, emit run.closed, write result.json. The loop stays narrow: it
-// owns the route walk and run-level events; per-kind logic lives in
+// Execution loop. Bootstrap, walk routes from entry.start_at, delegate
+// per-step work to the kind→handler dispatcher, advance pass route, emit
+// run.closed, write result.json. The loop stays narrow: it owns the
+// route walk and run-level events; per-kind logic lives in
 // src/runtime/step-handlers/.
 async function executeWorkflow(ctx: WorkflowExecutionContext): Promise<WorkflowRunResult> {
   const { runRoot, workflow, workflowBytes, runId, goal, lane, now } = ctx;
@@ -533,9 +533,9 @@ async function executeWorkflow(ctx: WorkflowExecutionContext): Promise<WorkflowR
       bootstrapEvent,
     });
   }
-  // Slice 47a Codex HIGH 2 fold-in — capture per-dispatch metadata
-  // for AGENT_SMOKE / CODEX_SMOKE fingerprint binding to cli_version
-  // without forcing a dispatch event schema bump.
+  // Capture per-dispatch metadata for AGENT_SMOKE / CODEX_SMOKE
+  // fingerprint binding to cli_version without forcing a dispatch event
+  // schema bump.
   const dispatchResults: DispatchResultMetadata[] = [];
   const state: RunState = { events, sequence: events.length, dispatchResults };
   const recordedAt = (): string => now().toISOString();
@@ -757,10 +757,9 @@ async function executeWorkflow(ctx: WorkflowExecutionContext): Promise<WorkflowR
     closed_at: closedAt,
     events_observed: events.length,
     manifest_hash: manifestHash,
-    // Slice 53 (Codex H1 fold-in / RESULT-I4): mirror the close-event
-    // reason onto the user-visible result.json so an aborted run
-    // explains itself without requiring the operator to walk the
-    // event log.
+    // RESULT-I4: mirror the close-event reason onto the user-visible
+    // result.json so an aborted run explains itself without requiring
+    // the operator to walk the event log.
     ...(closeReason === undefined ? {} : { reason: closeReason }),
     // Sub-run runtime slice (RESULT-I5): expose the run's terminal
     // admitted verdict so a parent sub-run can admit/reject the child

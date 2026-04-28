@@ -3,28 +3,23 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-// Slice 56 (P2.11 plugin-wiring) — plan
-// `specs/plans/p2-11-plugin-wiring.md` scope item 4. These tests assert that
-// the plugin command bodies under root `commands/` are wired to the runtime
-// rather than carrying placeholder "Not implemented yet" text AND that the
-// runtime binding is demonstrated via an executable workflow invocation in a
-// fenced bash block (not merely a prose mention). Structural plugin-manifest
-// + frontmatter requirements are covered by Check 23 +
+// These tests assert that the plugin command bodies under root
+// `commands/` are wired to the runtime rather than carrying placeholder
+// "Not implemented yet" text AND that the runtime binding is
+// demonstrated via an executable workflow invocation in a fenced bash
+// block (not merely a prose mention). Structural plugin-manifest +
+// frontmatter requirements are covered by Check 23 +
 // `tests/contracts/plugin-surface.test.ts`.
 //
-// Codex challenger fold-ins (specs/reviews/arc-slice-56-codex.md):
-//   - HIGH 2: the safe-construction rule forbids the unsafe
-//     `--goal "$ARGUMENTS"` double-quoted splice pattern; this file carries
-//     a regression test that rejects that exact pattern AND asserts that all
-//     fenced bash invocation examples use single-quoted --goal arguments.
-//   - MED 1: tests over-relied on substring matches; this file now extracts
-//     fenced bash blocks and asserts the invocation lives INSIDE a block
-//     (not merely in prose). Anti-pattern negative fixtures exercise
-//     prose-only mentions and P2.8-pointer-only bodies so regressions
-//     cannot pass by keyword overlap.
-//   - MED 2: manifest description consistency originally asserted the
-//     pre-P2.8 "always explore" route. Slice 84 updates that assertion
-//     to the deterministic classifier truth.
+// Safe-construction: the unsafe `--goal "$ARGUMENTS"` double-quoted
+// splice pattern is forbidden; a regression test rejects that exact
+// pattern AND asserts that all fenced bash invocation examples use
+// single-quoted --goal arguments. Tests extract fenced bash blocks and
+// assert the invocation lives INSIDE a block (not merely in prose).
+// Anti-pattern negative fixtures exercise prose-only mentions and
+// P2.8-pointer-only bodies so regressions cannot pass by keyword
+// overlap. Manifest description consistency tracks the deterministic
+// classifier truth.
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, '..', '..');
@@ -113,7 +108,7 @@ function hasEntryModeAndRigorInvocation(body: string): boolean {
   return false;
 }
 
-describe('plugin command invocation binding (Slice 56 / P2.11)', () => {
+describe('plugin command invocation binding', () => {
   describe('real command bodies — positive assertions', () => {
     const exploreBody = readFileSync(EXPLORE_COMMAND_PATH, 'utf-8');
     const runBody = readFileSync(RUN_COMMAND_PATH, 'utf-8');
@@ -202,7 +197,7 @@ describe('plugin command invocation binding (Slice 56 / P2.11)', () => {
     it('neither body contains the unsafe --goal "$ARGUMENTS" double-quoted splice', () => {
       // Double-quoting $ARGUMENTS expands $VAR, $(cmd), `cmd`, and \
       // sequences from user-controlled goal text — a shell-injection vector.
-      // The Codex HIGH 2 fold-in forbids this literal pattern.
+      // This literal pattern is forbidden.
       expect(exploreBody).not.toMatch(/--goal "\$ARGUMENTS"/);
       expect(runBody).not.toMatch(/--goal "\$ARGUMENTS"/);
       expect(reviewBody).not.toMatch(/--goal "\$ARGUMENTS"/);
