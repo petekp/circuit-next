@@ -216,7 +216,7 @@ function readJsonReport(runFolder: string, path: string): unknown {
 // agnostic — adding a new compose step means adding a ComposeBuilder
 // file + registry entry.
 function tryWriteRegisteredComposeReport(input: ComposeWriterInput): boolean {
-  const { runFolder, flow, step, goal } = input;
+  const { runFolder, flow, step, goal, projectRoot } = input;
   const schemaName = step.writes.report.schema;
 
   const composeBuilder = findComposeBuilder(schemaName);
@@ -231,6 +231,7 @@ function tryWriteRegisteredComposeReport(input: ComposeWriterInput): boolean {
       flow,
       step,
       goal,
+      ...(projectRoot === undefined ? {} : { projectRoot }),
       inputs,
     });
     writeJsonReport(runFolder, step.writes.report.path, report);

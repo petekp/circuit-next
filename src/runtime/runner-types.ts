@@ -34,6 +34,7 @@ export interface ComposeWriterInput {
   readonly flow: CompiledFlow;
   readonly step: CompiledFlow['steps'][number] & { kind: 'compose' };
   readonly goal: string;
+  readonly projectRoot?: string;
 }
 
 export type ComposeWriterFn = (input: ComposeWriterInput) => void;

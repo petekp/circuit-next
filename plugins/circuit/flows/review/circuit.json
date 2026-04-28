@@ -1,0 +1,123 @@
+{
+  "schema_version": "2",
+  "id": "review",
+  "version": "0.1.0",
+  "purpose": "Review flow: frame the audit scope, relay independent review to a reviewer, and close with a verdict report. The schematic uses a compact Intake, Independent Audit, and Verdict shape because Review is audit-only and does not implement or verify a change.",
+  "entry": {
+    "signals": {
+      "include": ["review", "audit", "check"],
+      "exclude": []
+    },
+    "intent_prefixes": ["review"]
+  },
+  "entry_modes": [
+    {
+      "name": "default",
+      "start_at": "intake-step",
+      "depth": "standard",
+      "description": "Default review entry mode — resolves the review scope, relays an independent audit, then writes the verdict report."
+    }
+  ],
+  "stages": [
+    {
+      "id": "intake-stage",
+      "title": "Intake",
+      "canonical": "frame",
+      "steps": ["intake-step"]
+    },
+    {
+      "id": "audit-stage",
+      "title": "Independent Audit",
+      "canonical": "analyze",
+      "steps": ["audit-step"]
+    },
+    {
+      "id": "verdict-stage",
+      "title": "Verdict",
+      "canonical": "close",
+      "steps": ["verdict-step"]
+    }
+  ],
+  "stage_path_policy": {
+    "mode": "partial",
+    "omits": ["plan", "act", "verify", "review"],
+    "rationale": "Review is an audit-only flow: Intake frames the scope, Independent Audit performs the reviewer relay, and Verdict aggregates findings. There is no planning stage, no implementation/action stage, no verification rerun, and no nested review stage in this narrowed variant."
+  },
+  "steps": [
+    {
+      "id": "intake-step",
+      "title": "Intake — resolve review scope",
+      "protocol": "review-intake@v1",
+      "reads": [],
+      "routes": {
+        "pass": "audit-step"
+      },
+      "executor": "orchestrator",
+      "kind": "compose",
+      "writes": {
+        "report": {
+          "path": "reports/review-intake.json",
+          "schema": "review.intake@v1"
+        }
+      },
+      "check": {
+        "kind": "schema_sections",
+        "source": {
+          "kind": "report",
+          "ref": "report"
+        },
+        "required": ["scope", "evidence"]
+      }
+    },
+    {
+      "id": "audit-step",
+      "title": "Independent Audit — reviewer relay",
+      "protocol": "review-audit@v1",
+      "reads": ["reports/review-intake.json"],
+      "routes": {
+        "pass": "verdict-step"
+      },
+      "executor": "worker",
+      "kind": "relay",
+      "role": "reviewer",
+      "writes": {
+        "request": "reports/relay/review.request.json",
+        "receipt": "reports/relay/review.receipt.txt",
+        "result": "stages/analyze/review-raw-findings.json"
+      },
+      "check": {
+        "kind": "result_verdict",
+        "source": {
+          "kind": "relay_result",
+          "ref": "result"
+        },
+        "pass": ["NO_ISSUES_FOUND", "ISSUES_FOUND"]
+      }
+    },
+    {
+      "id": "verdict-step",
+      "title": "Verdict — emit review.result",
+      "protocol": "review-verdict@v1",
+      "reads": ["reports/review-intake.json", "stages/analyze/review-raw-findings.json"],
+      "routes": {
+        "pass": "@complete"
+      },
+      "executor": "orchestrator",
+      "kind": "compose",
+      "writes": {
+        "report": {
+          "path": "reports/review-result.json",
+          "schema": "review.result@v1"
+        }
+      },
+      "check": {
+        "kind": "schema_sections",
+        "source": {
+          "kind": "report",
+          "ref": "report"
+        },
+        "required": ["scope", "findings", "verdict"]
+      }
+    }
+  ]
+}

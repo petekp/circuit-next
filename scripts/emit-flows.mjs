@@ -4,8 +4,9 @@
 // compiles each to a CompileResult via
 // src/runtime/compile-schematic-to-flow.ts (consumed here through
 // dist/), then writes canonical JSON files under generated/flows/<id>/.
-// Claude Code host output under .claude-plugin/skills/<id>/ mirrors those
-// canonical files.
+// Claude Code host output under .claude-plugin/skills/<id>/ and Codex
+// host output under plugins/circuit/flows/<id>/ mirror those canonical
+// files.
 //
 // File layout:
 //   - kind:'single'   → generated/flows/<id>/circuit.json
@@ -69,35 +70,54 @@ async function loadSchematicsFromCatalog() {
 }
 
 const SCHEMATICS = await loadSchematicsFromCatalog();
+const CODEX_PLUGIN_ROOT_REL = 'plugins/circuit';
+const CODEX_PLUGIN_WRAPPER_COMMAND = "node '<plugin root>/scripts/circuit-next.mjs'";
 
 // Slash command source files live next to their flow under
 // src/flows/<id>/command.md. The plugin loader reads commands/<id>.md
 // at the repo root, so this script copies the source to the plugin
 // location. commands/run.md is owned by the CLI router (not a flow)
 // and is not generated.
-function emitCommandFile(entry) {
-  if (entry.commandSourcePath === undefined) return;
-  const sourceAbs = resolve(projectRoot, entry.commandSourcePath);
-  const destRel = `commands/${entry.id}.md`;
-  const destAbs = resolve(projectRoot, destRel);
-  const sourceContent = readFileSync(sourceAbs, 'utf8');
-  mkdirSync(dirname(destAbs), { recursive: true });
-  writeFileSync(destAbs, sourceContent);
-  console.log(`emitted ${destRel} (from ${entry.commandSourcePath})`);
+function renderCodexHostCommand(sourceContent) {
+  return sourceContent
+    .replaceAll('./bin/circuit-next', CODEX_PLUGIN_WRAPPER_COMMAND)
+    .replace(
+      /1\. \*\*Confirm working directory\.\*\* The CLI is.*?2\. \*\*Construct the Bash invocation SAFELY\.\*\*/s,
+      [
+        '1. **Resolve plugin root.** Use the absolute path to the installed',
+        '   Circuit plugin directory, the directory that contains',
+        '   `.codex-plugin/plugin.json`. Do not use a path relative to the',
+        "   user's project.",
+        '2. **Construct the Bash invocation SAFELY.**',
+      ].join('\n'),
+    )
+    .replace(
+      /Use the Bash tool to execute the constructed command\. `node '<plugin root>\/scripts\/circuit-next\.mjs'`\n\s+is the .*?`dist\/cli\/circuit\.js`\./gs,
+      [
+        'Use the Bash tool to execute the constructed command. The wrapper',
+        "   lives in the installed Circuit plugin directory and injects the plugin's",
+        '   packaged flow root before it invokes `circuit-next`.',
+      ].join('\n'),
+    );
 }
 
-function checkCommandFile(entry) {
-  if (entry.commandSourcePath === undefined) return false;
-  const sourceAbs = resolve(projectRoot, entry.commandSourcePath);
-  const destRel = `commands/${entry.id}.md`;
+function copyMarkdownFile(sourceRel, destRel, label, transform = (content) => content) {
+  const sourceAbs = resolve(projectRoot, sourceRel);
+  const destAbs = resolve(projectRoot, destRel);
+  const sourceContent = transform(readFileSync(sourceAbs, 'utf8'));
+  mkdirSync(dirname(destAbs), { recursive: true });
+  writeFileSync(destAbs, sourceContent);
+  console.log(`emitted ${destRel} (${label})`);
+}
+
+function checkMarkdownMirror(sourceRel, destRel, label, transform = (content) => content) {
+  const sourceAbs = resolve(projectRoot, sourceRel);
   const destAbs = resolve(projectRoot, destRel);
   let sourceContent;
   try {
-    sourceContent = readFileSync(sourceAbs, 'utf8');
+    sourceContent = transform(readFileSync(sourceAbs, 'utf8'));
   } catch (_err) {
-    console.error(
-      `✗ ${entry.commandSourcePath} is missing on disk but the catalog references it as ${entry.id}'s command source.`,
-    );
+    console.error(`✗ ${sourceRel} is missing on disk but ${label} references it.`);
     return true;
   }
   let destContent;
@@ -110,13 +130,60 @@ function checkCommandFile(entry) {
     return true;
   }
   if (sourceContent === destContent) {
-    console.log(`✓ ${destRel} is in sync with ${entry.commandSourcePath}`);
+    console.log(`✓ ${destRel} is in sync with ${sourceRel}`);
     return false;
   }
-  console.error(
-    `✗ ${destRel} drifted from ${entry.commandSourcePath}; run \`npm run emit-flows\` to regenerate, then commit the diff.`,
-  );
+  console.error(`✗ ${destRel} drifted from ${sourceRel}; run \`npm run emit-flows\`.`);
   return true;
+}
+
+function emitCommandFile(entry) {
+  if (entry.commandSourcePath === undefined) return;
+  copyMarkdownFile(
+    entry.commandSourcePath,
+    `commands/${entry.id}.md`,
+    `from ${entry.commandSourcePath}`,
+  );
+  copyMarkdownFile(
+    entry.commandSourcePath,
+    `${CODEX_PLUGIN_ROOT_REL}/commands/${entry.id}.md`,
+    `codex host command from ${entry.commandSourcePath}`,
+    renderCodexHostCommand,
+  );
+}
+
+function emitCodexRouterCommand() {
+  copyMarkdownFile(
+    'commands/run.md',
+    `${CODEX_PLUGIN_ROOT_REL}/commands/run.md`,
+    'codex host router command',
+    renderCodexHostCommand,
+  );
+}
+
+function checkCommandFile(entry) {
+  if (entry.commandSourcePath === undefined) return false;
+  const rootDrifted = checkMarkdownMirror(
+    entry.commandSourcePath,
+    `commands/${entry.id}.md`,
+    `${entry.id} root command`,
+  );
+  const codexDrifted = checkMarkdownMirror(
+    entry.commandSourcePath,
+    `${CODEX_PLUGIN_ROOT_REL}/commands/${entry.id}.md`,
+    `${entry.id} codex host command`,
+    renderCodexHostCommand,
+  );
+  return rootDrifted || codexDrifted;
+}
+
+function checkCodexRouterCommand() {
+  return checkMarkdownMirror(
+    'commands/run.md',
+    `${CODEX_PLUGIN_ROOT_REL}/commands/run.md`,
+    'codex host router command',
+    renderCodexHostCommand,
+  );
 }
 
 async function loadCompilerModule() {
@@ -230,6 +297,14 @@ function claudeHostPlan(plan) {
   return plan.map((p) => ({ ...p, outRel: claudeHostRel(p.outRel) }));
 }
 
+function codexHostRel(canonicalRel) {
+  return canonicalRel.replace(/^generated\/flows\//, `${CODEX_PLUGIN_ROOT_REL}/flows/`);
+}
+
+function codexHostPlan(plan) {
+  return plan.map((p) => ({ ...p, outRel: codexHostRel(p.outRel) }));
+}
+
 // Returns the set of unexpected `*.json` files in a generated flow directory:
 // anything on disk under `<rootRel>/<id>/` that ends in `.json`
 // but isn't in the emit plan. These are stale per-mode siblings from a
@@ -258,6 +333,11 @@ async function emitMode() {
       mkdirSync(dirname(hostAbs), { recursive: true });
       writeFileSync(hostAbs, readFileSync(outAbs, 'utf8'));
       console.log(`emitted ${hostRel} (claude-code host output)`);
+      const codexRel = codexHostRel(outRel);
+      const codexAbs = resolve(projectRoot, codexRel);
+      mkdirSync(dirname(codexAbs), { recursive: true });
+      writeFileSync(codexAbs, readFileSync(outAbs, 'utf8'));
+      console.log(`emitted ${codexRel} (codex host output)`);
     }
     // Stale `<mode>.json` siblings would otherwise survive emit and silently
     // drive runtime behavior via the CLI loader. Treat them as stale outputs
@@ -265,12 +345,14 @@ async function emitMode() {
     for (const stale of [
       ...findStaleSiblings(entry.id, plan, 'generated/flows'),
       ...findStaleSiblings(entry.id, claudeHostPlan(plan), '.claude-plugin/skills'),
+      ...findStaleSiblings(entry.id, codexHostPlan(plan), `${CODEX_PLUGIN_ROOT_REL}/flows`),
     ]) {
       unlinkSync(resolve(projectRoot, stale));
       console.log(`removed stale ${stale}`);
     }
     emitCommandFile(entry);
   }
+  emitCodexRouterCommand();
 }
 
 async function checkMode() {
@@ -321,6 +403,24 @@ async function checkMode() {
           console.error('  Run `npm run emit-flows` to regenerate, then commit the diff.');
           drifted = true;
         }
+        const codexRel = codexHostRel(outRel);
+        let codexBytes;
+        try {
+          codexBytes = readFileSync(resolve(projectRoot, codexRel), 'utf8');
+        } catch (_err) {
+          console.error(
+            `✗ ${codexRel} is missing on disk but the codex host compiles to it. Run \`npm run emit-flows\` to regenerate, then commit.`,
+          );
+          drifted = true;
+          continue;
+        }
+        if (compiledBytes === codexBytes) {
+          console.log(`✓ ${codexRel} mirrors ${outRel}`);
+        } else {
+          console.error(`✗ ${codexRel} drifted from canonical ${outRel}`);
+          console.error('  Run `npm run emit-flows` to regenerate, then commit the diff.');
+          drifted = true;
+        }
       }
       // Stale `<mode>.json` siblings in this skill dir would silently drive
       // runtime behavior via the CLI loader, while the byte-by-byte check
@@ -328,6 +428,7 @@ async function checkMode() {
       const stale = [
         ...findStaleSiblings(entry.id, plan, 'generated/flows'),
         ...findStaleSiblings(entry.id, claudeHostPlan(plan), '.claude-plugin/skills'),
+        ...findStaleSiblings(entry.id, codexHostPlan(plan), `${CODEX_PLUGIN_ROOT_REL}/flows`),
       ];
       for (const rel of stale) {
         console.error(
@@ -338,6 +439,9 @@ async function checkMode() {
       if (checkCommandFile(entry)) {
         drifted = true;
       }
+    }
+    if (checkCodexRouterCommand()) {
+      drifted = true;
     }
   } finally {
     rmSync(tmpDir, { recursive: true, force: true });

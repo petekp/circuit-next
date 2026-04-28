@@ -17,20 +17,21 @@ import {
   runCompiledFlow,
 } from '../runtime/runner.js';
 
-// Runtime CLI entry point — invoked through ./bin/circuit-next. Loads the
-// named flow fixture at `generated/flows/<flow-name>/circuit.json`,
-// parses it through the production `CompiledFlow` schema, calls
-// `validateCompiledFlowKindPolicy`, composes the runtime boundary via the runner,
-// and prints the <run-folder> path on success.
+// Runtime CLI entry point — invoked through ./bin/circuit-next.
 //
-// Invocation-layer config remains narrow (`--goal`, `--depth`, `--run-folder`,
-// `--fixture`), but the product path now discovers user-global and project
-// config files and supplies them as `LayeredConfig`s to the selection
-// resolver.
+// Loads the named flow fixture at generated/flows/<flow-name>/circuit.json,
+// parses it through the CompiledFlow schema, validates kind-canonical
+// stage-set policy, composes the runtime boundary via the runner, and
+// prints the <run-folder> path on success.
+//
+// Invocation-layer flags stay narrow (--goal, --depth, --run-folder,
+// --fixture, --flow-root). The product path discovers user-global and
+// project config files and supplies them as LayeredConfigs to the
+// selection resolver.
 //
 // `--dry-run` fails closed. An earlier version accepted the flag as a
-// no-op while still spawning the real connector — a safety bug. The flag
-// stays rejected until real dry-run support lands.
+// no-op while still spawning the real connector — a safety bug. The
+// flag stays rejected until real dry-run support lands.
 
 const DEFAULT_RUNS_BASE = '.circuit-next/runs';
 
@@ -43,6 +44,7 @@ interface ParsedArgs {
   entryMode?: string;
   runFolder?: string;
   fixturePath?: string;
+  flowRoot?: string;
   checkpointChoice?: string;
 }
 
@@ -63,7 +65,7 @@ export interface CliMainOptions {
 
 function usage(): string {
   return [
-    'usage: circuit-next run [flow-name] --goal "<goal>" [--mode <default|lite|deep|autonomous>] [--depth <lite|standard|deep|tournament|autonomous>] [--run-folder <path>] [--fixture <path>]',
+    'usage: circuit-next run [flow-name] --goal "<goal>" [--mode <default|lite|deep|autonomous>] [--depth <lite|standard|deep|tournament|autonomous>] [--run-folder <path>] [--fixture <path>] [--flow-root <path>]',
     '       circuit-next resume --run-folder <path> --checkpoint-choice <choice>',
     '',
     '`--mode` is the friendly alias for `--entry-mode`; supplying both forms of that option is an error.',
@@ -86,6 +88,7 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
   let entryMode: string | undefined;
   let runFolder: string | undefined;
   let fixturePath: string | undefined;
+  let flowRoot: string | undefined;
   let checkpointChoice: string | undefined;
 
   for (let i = 0; i < argv.length; i++) {
@@ -134,6 +137,17 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
       const next = argv[i + 1];
       if (next === undefined) throw new Error('--fixture requires a value');
       fixturePath = next;
+      i += 1;
+      continue;
+    }
+    if (tok === '--flow-root') {
+      const next = argv[i + 1];
+      if (next === undefined) throw new Error('--flow-root requires a value');
+      if (next.length === 0) throw new Error('--flow-root requires a non-empty value');
+      if (flowRoot !== undefined) {
+        throw new Error('supply --flow-root only once');
+      }
+      flowRoot = next;
       i += 1;
       continue;
     }
@@ -187,6 +201,9 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
     if (fixturePath !== undefined) {
       throw new Error('checkpoint resume loads the saved flow manifest; omit --fixture');
     }
+    if (flowRoot !== undefined) {
+      throw new Error('checkpoint resume loads the saved flow manifest; omit --flow-root');
+    }
     if (depthProvided) {
       throw new Error('checkpoint resume reuses the saved run depth; omit --depth');
     }
@@ -207,6 +224,7 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
   if (flowName !== undefined) result.flowName = flowName;
   if (runFolder !== undefined) result.runFolder = runFolder;
   if (fixturePath !== undefined) result.fixturePath = fixturePath;
+  if (flowRoot !== undefined) result.flowRoot = flowRoot;
   if (checkpointChoice !== undefined) result.checkpointChoice = checkpointChoice;
   return result;
 }
@@ -215,17 +233,19 @@ function resolveFixturePath(
   flowName: string,
   modeName: string | undefined,
   override: string | undefined,
+  flowRoot: string | undefined,
 ): string {
   if (override !== undefined) return resolve(override);
+  const root = resolve(flowRoot ?? 'generated/flows');
   // When a mode is explicitly requested, prefer the per-mode file if the
-  // schematic author emitted one (schematics with route_overrides produce
-  // <mode>.json siblings of circuit.json — see scripts/emit-flows.mjs).
-  // Falls back to the canonical circuit.json otherwise.
+  // schematic author emitted one. Schematics with route_overrides produce
+  // <mode>.json siblings of circuit.json — see scripts/emit-flows.mjs.
+  // Falls back to circuit.json otherwise.
   if (modeName !== undefined) {
-    const perMode = resolve(`generated/flows/${flowName}/${modeName}.json`);
+    const perMode = resolve(root, flowName, `${modeName}.json`);
     if (existsSync(perMode)) return perMode;
   }
-  return resolve(`generated/flows/${flowName}/circuit.json`);
+  return resolve(root, flowName, 'circuit.json');
 }
 
 function resolveCompiledFlowRoute(args: ParsedArgs): ResolvedCompiledFlowRoute {
@@ -249,9 +269,8 @@ function loadFixture(fixturePath: string): { flow: CompiledFlow; bytes: Buffer }
   const bytes = readFileSync(fixturePath);
   const raw: unknown = JSON.parse(bytes.toString('utf8'));
   const flow = CompiledFlow.parse(raw);
-  // Enforce flow-kind canonical stage-set policy at runtime fixture
-  // load. See src/runtime/policy/flow-kind-policy.ts for the
-  // validator.
+  // Enforce flow-kind canonical stage-set policy at fixture load.
+  // Validator: src/runtime/policy/flow-kind-policy.ts.
   const policy = validateCompiledFlowKindPolicy(flow);
   if (!policy.ok) {
     throw new Error(`flow fixture policy violation (${fixturePath}):\n  ${policy.reason}`);
@@ -318,7 +337,12 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
   }
 
   const route = resolveCompiledFlowRoute(args);
-  const fixturePath = resolveFixturePath(route.flowName, args.entryMode, args.fixturePath);
+  const fixturePath = resolveFixturePath(
+    route.flowName,
+    args.entryMode,
+    args.fixturePath,
+    args.flowRoot,
+  );
   const { flow, bytes } = loadFixture(fixturePath);
   assertFixtureMatchesRoute(flow, route);
   const runId = RunId.parse(options.runId ?? randomUUID());
@@ -335,7 +359,7 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
     acceptance_evidence:
       'trace.ndjson + state.json + manifest.snapshot.json + reports/result.json from clean checkout',
     alternate_framing:
-      'defer Alpha Proof to post-Stage-2; not an option because ADR-0001 Addendum B checks Stage 2 on this.',
+      'defer the runtime proof; not an option because the CLI is the proof harness and must produce a real run-folder per invocation.',
   };
 
   const invocation: CompiledFlowInvocation = {

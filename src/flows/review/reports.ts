@@ -9,6 +9,55 @@ export type ReviewResultVerdict = z.infer<typeof ReviewResultVerdict>;
 export const ReviewRelayVerdict = z.enum(['NO_ISSUES_FOUND', 'ISSUES_FOUND']);
 export type ReviewRelayVerdict = z.infer<typeof ReviewRelayVerdict>;
 
+export const ReviewEvidenceText = z
+  .object({
+    text: z.string(),
+    truncated: z.boolean(),
+  })
+  .strict();
+export type ReviewEvidenceText = z.infer<typeof ReviewEvidenceText>;
+
+export const ReviewUntrackedFileEvidence = z
+  .object({
+    path: z.string().min(1),
+    byte_length: z.number().int().nonnegative(),
+    content: ReviewEvidenceText.optional(),
+    skipped_reason: z.string().min(1).optional(),
+  })
+  .strict();
+export type ReviewUntrackedFileEvidence = z.infer<typeof ReviewUntrackedFileEvidence>;
+
+export const ReviewEvidence = z.discriminatedUnion('kind', [
+  z
+    .object({
+      kind: z.literal('unavailable'),
+      reason: z.string().min(1),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('git-working-tree'),
+      project_root: z.string().min(1),
+      status_short: z.string(),
+      staged_diff: ReviewEvidenceText,
+      unstaged_diff: ReviewEvidenceText,
+      diff_stat: z.string(),
+      untracked_file_count: z.number().int().nonnegative(),
+      untracked_files_truncated: z.boolean(),
+      untracked_files: z.array(ReviewUntrackedFileEvidence),
+    })
+    .strict(),
+]);
+export type ReviewEvidence = z.infer<typeof ReviewEvidence>;
+
+export const ReviewIntake = z
+  .object({
+    scope: z.string().min(1),
+    evidence: ReviewEvidence,
+  })
+  .strict();
+export type ReviewIntake = z.infer<typeof ReviewIntake>;
+
 export const ReviewFinding = z
   .object({
     severity: ReviewFindingSeverity,
@@ -40,7 +89,7 @@ export const ReviewResult = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['verdict'],
-        message: `REVIEW-I2: verdict must be ${expected} for the report findings (CLEAN iff critical_count == 0 and high_count == 0)`,
+        message: `verdict must be ${expected} for the report findings (CLEAN iff critical_count == 0 and high_count == 0)`,
       });
     }
   });

@@ -1,9 +1,5 @@
-// Connector contract — connector-I1..I11 from
-// docs/contracts/connector.md v0.1, plus the Config + connector registry
-// parity checks.
-//
-// Split from the original `schema-parity.test.ts` mega-file as part
-// of FU-T09.
+// Connector contract — see docs/contracts/connector.md. Also covers
+// Config + connector registry parity checks.
 
 import { describe, expect, it } from 'vitest';
 import {
@@ -75,13 +71,22 @@ describe('Config + connector registry', () => {
       expect(c.data.relay.default).toBe('auto');
     }
   });
+
+  it('Config accepts codex as a host kind', () => {
+    const c = Config.safeParse({ schema_version: 1, host: { kind: 'codex' } });
+    expect(c.success).toBe(true);
+    if (c.success) {
+      expect(c.data.host.kind).toBe('codex');
+    }
+  });
 });
 
 describe('HostKind', () => {
-  it('accepts supported V1 hosts and rejects worker names', () => {
+  it('accepts supported V1 hosts and rejects worker-only names', () => {
     expect(HostKind.safeParse('generic-shell').success).toBe(true);
     expect(HostKind.safeParse('claude-code').success).toBe(true);
-    expect(HostKind.safeParse('codex').success).toBe(false);
+    expect(HostKind.safeParse('codex').success).toBe(true);
+    expect(HostKind.safeParse('codex-isolated').success).toBe(false);
   });
 });
 

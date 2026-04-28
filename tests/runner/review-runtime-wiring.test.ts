@@ -1,10 +1,20 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   type ReviewFinding,
+  ReviewIntake,
   ReviewRelayResult,
   ReviewResult,
   type ReviewResultVerdict,
@@ -167,6 +177,140 @@ describe('registered review compose writer', () => {
       findings: [],
       verdict: 'CLEAN',
     });
+  });
+
+  it('passes working tree evidence into the reviewer relay when projectRoot is available', async () => {
+    const { flow, bytes } = loadFixture();
+    const runFolder = join(runFolderBase, 'working-tree-evidence');
+    const projectRoot = join(runFolderBase, 'project');
+    mkdirSync(join(projectRoot, 'src'), { recursive: true });
+    execFileSync('git', ['init'], { cwd: projectRoot, stdio: 'pipe' });
+    writeFileSync(join(projectRoot, 'src', 'review-target.ts'), 'const answer = 42;\n');
+    execFileSync('git', ['add', 'src/review-target.ts'], { cwd: projectRoot, stdio: 'pipe' });
+
+    const outcome = await runCompiledFlow({
+      runFolder,
+      flow,
+      flowBytes: bytes,
+      runId: RunId.parse('79000000-0000-0000-0000-000000000005'),
+      goal: 'review the current changes',
+      depth: 'standard',
+      change_kind: change_kind(),
+      now: deterministicNow(Date.UTC(2026, 3, 24, 14, 0, 0)),
+      projectRoot,
+      relayer: {
+        connectorName: 'claude-code',
+        relay: async (input: ClaudeCodeRelayInput): Promise<RelayResult> => {
+          expect(input.prompt).toContain('"kind": "git-working-tree"');
+          expect(input.prompt).toContain('"status_short"');
+          expect(input.prompt).toContain('src/review-target.ts');
+          expect(input.prompt).toContain('+const answer = 42;');
+          return {
+            request_payload: input.prompt,
+            receipt_id: 'stub-receipt-review-evidence',
+            result_body: JSON.stringify({ verdict: 'NO_ISSUES_FOUND', findings: [] }),
+            duration_ms: 1,
+            cli_version: '0.0.0-stub',
+          };
+        },
+      },
+    });
+
+    expect(outcome.result.outcome).toBe('complete');
+  });
+
+  it('keeps review evidence from large diffs instead of replacing it with a git buffer error', async () => {
+    const { flow, bytes } = loadFixture();
+    const runFolder = join(runFolderBase, 'large-diff-evidence');
+    const projectRoot = join(runFolderBase, 'large-diff-project');
+    mkdirSync(join(projectRoot, 'src'), { recursive: true });
+    execFileSync('git', ['init'], { cwd: projectRoot, stdio: 'pipe' });
+
+    const marker = 'large-review-diff-marker';
+    writeFileSync(join(projectRoot, 'src', 'large-review-target.txt'), `${marker}\n`);
+    const largeBody = `${marker}-${'x'.repeat(11 * 1024 * 1024)}\n`;
+    writeFileSync(join(projectRoot, 'src', 'large-review-target.txt'), largeBody);
+    execFileSync('git', ['add', 'src/large-review-target.txt'], {
+      cwd: projectRoot,
+      stdio: 'pipe',
+    });
+
+    const outcome = await runCompiledFlow({
+      runFolder,
+      flow,
+      flowBytes: bytes,
+      runId: RunId.parse('79000000-0000-0000-0000-000000000006'),
+      goal: 'review the current large staged diff',
+      depth: 'standard',
+      change_kind: change_kind(),
+      now: deterministicNow(Date.UTC(2026, 3, 24, 14, 0, 0)),
+      projectRoot,
+      relayer: {
+        connectorName: 'claude-code',
+        relay: async (input: ClaudeCodeRelayInput): Promise<RelayResult> => {
+          expect(input.prompt).toContain('"kind": "git-working-tree"');
+          expect(input.prompt).toContain(`+${marker}-`);
+          expect(input.prompt).not.toContain('ENOBUFS');
+          return {
+            request_payload: input.prompt,
+            receipt_id: 'stub-receipt-review-large-diff',
+            result_body: JSON.stringify({ verdict: 'NO_ISSUES_FOUND', findings: [] }),
+            duration_ms: 1,
+            cli_version: '0.0.0-stub',
+          };
+        },
+      },
+    });
+
+    expect(outcome.result.outcome).toBe('complete');
+    const intake = ReviewIntake.parse(
+      JSON.parse(readFileSync(join(runFolder, 'reports', 'review-intake.json'), 'utf8')),
+    );
+    expect(intake.evidence.kind).toBe('git-working-tree');
+    if (intake.evidence.kind !== 'git-working-tree') return;
+    expect(intake.evidence.staged_diff.text).toContain(`+${marker}-`);
+    expect(intake.evidence.staged_diff.text).not.toContain('ENOBUFS');
+    expect(intake.evidence.staged_diff.truncated).toBe(true);
+  });
+
+  it('skips unreadable untracked files instead of aborting review intake', async () => {
+    const { flow, bytes } = loadFixture();
+    const runFolder = join(runFolderBase, 'unreadable-untracked-evidence');
+    const projectRoot = join(runFolderBase, 'unreadable-project');
+    const unreadablePath = join(projectRoot, 'unreadable.txt');
+    mkdirSync(projectRoot, { recursive: true });
+    execFileSync('git', ['init'], { cwd: projectRoot, stdio: 'pipe' });
+    writeFileSync(unreadablePath, 'do not read me\n');
+    chmodSync(unreadablePath, 0o000);
+
+    try {
+      const outcome = await runCompiledFlow({
+        runFolder,
+        flow,
+        flowBytes: bytes,
+        runId: RunId.parse('79000000-0000-0000-0000-000000000007'),
+        goal: 'review the current untracked files',
+        depth: 'standard',
+        change_kind: change_kind(),
+        now: deterministicNow(Date.UTC(2026, 3, 24, 14, 0, 0)),
+        projectRoot,
+        relayer: relayerWith({ verdict: 'NO_ISSUES_FOUND', findings: [] }),
+      });
+
+      expect(outcome.result.outcome).toBe('complete');
+      const intake = ReviewIntake.parse(
+        JSON.parse(readFileSync(join(runFolder, 'reports', 'review-intake.json'), 'utf8')),
+      );
+      expect(intake.evidence.kind).toBe('git-working-tree');
+      if (intake.evidence.kind !== 'git-working-tree') return;
+      const unreadable = intake.evidence.untracked_files.find(
+        (file) => file.path === 'unreadable.txt',
+      );
+      expect(unreadable?.content).toBeUndefined();
+      expect(unreadable?.skipped_reason).toMatch(/failed to read|permission|EACCES/i);
+    } finally {
+      chmodSync(unreadablePath, 0o600);
+    }
   });
 
   it('derives the analyze result path from the live flow graph', async () => {

@@ -12,9 +12,15 @@ function composeFailureReason(stepId: string, err: unknown): string {
 export function runComposeStep(
   ctx: StepHandlerContext & { readonly step: ComposeStep },
 ): StepHandlerResult {
-  const { runFolder, flow, step, goal, runId, attempt, recordedAt, push, state } = ctx;
+  const { runFolder, flow, step, goal, runId, attempt, recordedAt, push, state, projectRoot } = ctx;
   try {
-    ctx.composeWriter({ runFolder, flow, step, goal });
+    ctx.composeWriter({
+      runFolder,
+      flow,
+      step,
+      goal,
+      ...(projectRoot === undefined ? {} : { projectRoot }),
+    });
   } catch (err) {
     if (isRunRelativePathError(err)) throw err;
     const reason = composeFailureReason(step.id as unknown as string, err);

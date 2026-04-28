@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const HostKind = z.enum(['generic-shell', 'claude-code']);
+export const HostKind = z.enum(['generic-shell', 'claude-code', 'codex']);
 export type HostKind = z.infer<typeof HostKind>;
 
 export const HostConfig = z

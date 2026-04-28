@@ -15,6 +15,8 @@ describe('flow router classifier', () => {
   it('routes review/audit-style tasks to the review flow', () => {
     const cases = [
       'review this patch for safety regressions',
+      'review the current uncommitted Circuit Codex host surface changes and report any correctness issues',
+      'review the current changes for correctness issues',
       'please audit the command wiring',
       'critique this migration plan',
       'inspect this diff',

@@ -1,0 +1,20 @@
+{
+  "name": "circuit-next-local",
+  "interface": {
+    "displayName": "Circuit Next Local"
+  },
+  "plugins": [
+    {
+      "name": "circuit",
+      "source": {
+        "source": "local",
+        "path": "./plugins/circuit"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Coding"
+    }
+  ]
+}

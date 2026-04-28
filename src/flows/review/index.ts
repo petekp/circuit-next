@@ -10,7 +10,7 @@ const REVIEW_SIGNALS: readonly CompiledFlowSignal[] = [
   {
     label: 'change review request',
     pattern:
-      /\breview\s+(?:this\s+|the\s+|my\s+|a\s+)?(?:change|diff|patch|commit|pr|pull\s+request|code|report|file)\b/i,
+      /\breview\s+(?:this\s+|the\s+|my\s+|a\s+)?(?:[\w-]+\s+){0,8}(?:changes?|diff|patch|commit|pr|pull\s+request|code|report|file)\b/i,
   },
   { label: 'audit request', pattern: /\baudit\b/i },
   { label: 'critique request', pattern: /\bcritique\b/i },

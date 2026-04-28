@@ -1,0 +1,28 @@
+{
+  "name": "circuit",
+  "version": "0.1.0",
+  "description": "Run Circuit flows from Codex.",
+  "author": {
+    "name": "Circuit"
+  },
+  "homepage": "https://github.com/petepetrash/circuit-next",
+  "repository": "https://github.com/petepetrash/circuit-next",
+  "license": "UNLICENSED",
+  "keywords": ["circuit", "developer-flows", "codex", "automation"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Circuit",
+    "shortDescription": "Run Circuit local flows from Codex",
+    "longDescription": "Adds Codex-native Circuit skills and commands that invoke the circuit-next CLI, read JSON run summaries, and surface report paths for follow-up inspection.",
+    "developerName": "Circuit",
+    "category": "Coding",
+    "capabilities": ["Interactive", "Write"],
+    "websiteURL": "https://github.com/petepetrash/circuit-next",
+    "defaultPrompt": [
+      "Run Circuit on this task",
+      "Review this change with Circuit",
+      "Resume my Circuit checkpoint"
+    ],
+    "brandColor": "#10A37F"
+  }
+}
