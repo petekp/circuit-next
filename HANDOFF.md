@@ -1,6 +1,6 @@
 # HANDOFF
 
-Last updated: 2026-04-28 — Sessions 1-8 of the test-quality backlog complete. Session 1: lint cleared, invariant-ledger meta-test landed, CI workflow live. Session 2: ledger triage, coverage tooling, fast/slow split. Session 3: slice vocabulary stripped, anti-vacuity floors, real-recursion sub-run test. Session 4: prose-pin collapse, real-recursion fanout test. Session 5: direct unit tests for the dispatch and sub-run step handlers (FU-T11 parts 1 + 2 of 5). Session 6: direct unit tests for the checkpoint, verification, and fanout step handlers (FU-T11 parts 3-5 of 5 — FU-T11 now fully closed). Session 7: failure-message helper module + 5 high-value conversions (FU-T07 closed). Session 8: split `tests/contracts/schema-parity.test.ts` (4156 lines / 359 tests) into 11 per-invariant-family files with two shared builder modules under `tests/helpers/`; all 80 ledger binding_refs repointed (FU-T09 closed).
+Last updated: 2026-04-28 — Sessions 1-9 of the test-quality backlog complete. Session 1: lint cleared, invariant-ledger meta-test landed, CI workflow live. Session 2: ledger triage, coverage tooling, fast/slow split. Session 3: slice vocabulary stripped, anti-vacuity floors, real-recursion sub-run test. Session 4: prose-pin collapse, real-recursion fanout test. Session 5: direct unit tests for the dispatch and sub-run step handlers (FU-T11 parts 1 + 2 of 5). Session 6: direct unit tests for the checkpoint, verification, and fanout step handlers (FU-T11 parts 3-5 of 5 — FU-T11 now fully closed). Session 7: failure-message helper module + 5 high-value conversions (FU-T07 closed). Session 8: split `tests/contracts/schema-parity.test.ts` (4156 lines / 359 tests) into 11 per-invariant-family files with two shared builder modules under `tests/helpers/`; all 80 ledger binding_refs repointed (FU-T09 closed). Session 9: 4 of 6 FU-T12 areas closed (property-test expansion across workflow graph closure, fanout join policies, artifact pointer normalization, and route collision/tie-breaking); 7 `*.prop.*` ledger entries flipped from `phase2-property` to `test-enforced`; small `evaluateFanoutJoinPolicy` extraction to make the fanout join decision a pure helper.
 
 ## Where we are
 
@@ -30,10 +30,11 @@ at the top of the file noting that.
 
 ## Tests
 
-997 tests pass, 6 skipped across 85 test files (Session 8 split one
-4156-line file into 11 family files — net +10 files, no test-count
-change since the split is mechanical: each describe block stayed
-intact in its new home). tsc clean, biome clean, drift clean.
+1010 tests pass, 6 skipped across 89 test files. Session 9 added
+four new property-test files under `tests/properties/visible/` — the
+test count rose by 13 vitest cases (each property file exercises
+hundreds of inner cases via deterministic mulberry32 loops, but
+counts as a small number of vitest top-level cases). tsc clean, biome clean, drift clean.
 `npm run verify` is green on origin. CI workflow at
 `.github/workflows/verify.yml` mirrors the gate on every push and PR
 to `main`. `npm run verify:fast` is the tight-loop alternative
@@ -312,14 +313,49 @@ doc-shape pins.**
     injection.
 
 **FU-T12. Property-test expansion.**
-- State: open. Currently 2 property test files / ~141 LOC, both
-  Review. `tests/properties/hidden/` is empty.
-- Fix: add property tests for workflow graph closure, route
-  collision/tie-breaking, artifact pointer normalization,
-  checkpoint/resume state transitions, fanout join policies,
-  cross-artifact authority references. Deterministic table loops
-  are fine — property-test dependency not required initially.
-- Effort: ~2-3 hours per area.
+- State: 4 of 6 areas closed (Session 9). Property test count is now
+  6 files / ~1.5k LOC under `tests/properties/visible/`.
+  `tests/properties/hidden/` is still empty.
+- Closed in Session 9:
+  - **Workflow graph closure** —
+    `tests/properties/visible/workflow-graph-closure.test.ts`
+    covers WF-I2/I3/I4/I8/I9 via deterministic mulberry32-driven
+    chainBase fixtures, ~200 cases per branch. Five ledger
+    entries (`workflow.prop.{entry_mode_reachability,
+    no_dead_steps, phase_step_closure, route_target_closure,
+    terminal_target_coverage}`) flipped from `phase2-property` to
+    `test-enforced`.
+  - **Fanout join policies** — small src/ refactor extracted
+    `evaluateFanoutJoinPolicy` (pure helper) from
+    `runFanoutStep`; runner hoists `worktreeRunner.changedFiles`
+    ahead of the call so the join decision stays
+    table-testable. `tests/properties/visible/fanout-join-policy.test.ts`
+    drives the helper across pick-winner (250 cases),
+    disjoint-merge happy/sad (300 cases), disjoint-merge
+    file-discovery error (50 cases), and aggregate-only (300
+    cases). All 22 existing fanout direct-handler/runtime tests
+    still pass.
+  - **Artifact pointer normalization** —
+    `tests/properties/visible/step-paths-and-writes.test.ts`
+    exercises `RunRelativePath` across six failure-mode buckets
+    (~400 cases) and surplus-key rejection on the four step
+    variants with declared writes records (~200 cases). Two
+    ledger entries (`step.prop.{run_relative_paths,
+    writes_shape_per_variant}`) flipped to `test-enforced`.
+  - **Route collision / tie-breaking** —
+    `tests/properties/visible/workflow-router-tiebreak.test.ts`
+    drives `classifyTaskAgainstRoutables` over synthetic
+    routables with shuffled `order` and optional
+    `skipOnPlanningArtifact` flags (~300 cases) plus a 200-case
+    totality check. No ledger flips — the router's
+    tie-breaking law has no property invariant id yet.
+- Remaining (Session 10+):
+  - **Checkpoint/resume state transitions** — substantial; ties
+    into the substrate work the deferred-decision memory tracks
+    (nested checkpoint sub-run resume).
+  - **Cross-artifact authority references** — needs investigation
+    to identify which artifact pairs the property would target.
+- Effort remaining: ~4-6 hours total for the two open areas.
 
 **FU-T13. Slice-vocabulary residue sweep.**
 - State: **done** in `3983ff7` (2026-04-27). Three sweep passes
@@ -353,8 +389,16 @@ checkpoint direct-handler tests). Session 8 cleared FU-T09
 (mechanical split of `tests/contracts/schema-parity.test.ts` into 11
 per-invariant-family files; two shared builder modules extracted to
 `tests/helpers/`; 80 ledger binding_refs repointed; verify gate
-holds at 997 / 6). Session 9+ remaining: only FU-T12
-(property-test expansion, ~2-3h per area).
+holds at 997 / 6). Session 9 closed 4 of 6 FU-T12 areas (workflow
+graph closure, fanout join policies, artifact pointer
+normalization, route collision/tie-breaking — see the FU-T12
+entry above for file-by-file detail). Verify gate now at 1010 / 6;
+seven `*.prop.*` ledger entries flipped from `phase2-property` to
+`test-enforced`. Session 10+ remaining: the two open FU-T12
+areas (checkpoint/resume state transitions, cross-artifact
+authority references) and substrate work
+(WorktreeRunner CLI wiring, real Inventory dispatcher per the
+deferred-decision memory, nested checkpoint sub-run resume).
 
 ## Notes
 
