@@ -10,6 +10,9 @@
   "engines": {
     "node": ">=20.0.0"
   },
+  "workspaces": [
+    "apps/*"
+  ],
   "scripts": {
     "check": "tsc --noEmit",
     "build": "tsc -p tsconfig.build.json",
