@@ -23,6 +23,7 @@ import type { Event } from '../../src/schemas/event.js';
 import { RunId, type WorkflowId } from '../../src/schemas/ids.js';
 import type { LaneDeclaration } from '../../src/schemas/lane.js';
 import { Workflow } from '../../src/schemas/workflow.js';
+import { expectStepAborted, expectStepAdvance } from '../helpers/failure-message.js';
 
 const WORKFLOW_ID = 'dispatch-direct-test' as unknown as WorkflowId;
 const RUN_ID = RunId.parse('44444444-4444-4444-4444-444444444444');
@@ -181,7 +182,10 @@ describe('runDispatchStep direct — gate evaluation', () => {
       },
     );
 
-    expect(result).toEqual({ kind: 'advance' });
+    expectStepAdvance(
+      result,
+      'dispatch handler: a verdict in gate.pass returns advance and emits gate.evaluated/pass',
+    );
     const gate = harness.events.find((e) => e.kind === 'gate.evaluated');
     if (gate?.kind !== 'gate.evaluated') throw new Error('expected gate.evaluated');
     expect(gate.outcome).toBe('pass');
@@ -205,8 +209,11 @@ describe('runDispatchStep direct — gate evaluation', () => {
       },
     );
 
-    if (result.kind !== 'aborted') throw new Error('expected aborted');
-    expect(result.reason).toMatch(/did not parse as JSON/);
+    expectStepAborted(
+      result,
+      'dispatch handler: a result_body that is not valid JSON aborts with a parse-failure reason',
+      { reason: /did not parse as JSON/ },
+    );
     const gate = harness.events.find((e) => e.kind === 'gate.evaluated');
     if (gate?.kind !== 'gate.evaluated') throw new Error('expected gate.evaluated');
     expect(gate.outcome).toBe('fail');

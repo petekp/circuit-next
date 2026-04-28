@@ -40,6 +40,7 @@ import {
   Workflow,
   isConsequentialRigor,
 } from '../../src/index.js';
+import { expectSchemaRejects } from '../helpers/failure-message.js';
 
 describe('rigor', () => {
   it('accepts known tiers and rejects unknown', () => {
@@ -383,17 +384,20 @@ describe('Step discriminated union', () => {
   });
 
   it('STEP-I1 — rejects orchestrator + dispatch kind/gate/writes mismatch', () => {
-    const bad = Step.safeParse({
-      ...baseSynthesis,
-      kind: 'dispatch',
-      writes: { request: 'r.json', receipt: 'c.json', result: 's.json' },
-      gate: {
-        kind: 'result_verdict',
-        source: { kind: 'dispatch_result', ref: 'result' },
-        pass: ['ok'],
+    expectSchemaRejects(
+      Step,
+      {
+        ...baseSynthesis,
+        kind: 'dispatch',
+        writes: { request: 'r.json', receipt: 'c.json', result: 's.json' },
+        gate: {
+          kind: 'result_verdict',
+          source: { kind: 'dispatch_result', ref: 'result' },
+          pass: ['ok'],
+        },
       },
-    });
-    expect(bad.success).toBe(false);
+      'STEP-I1: orchestrator role is incompatible with dispatch step kind/gate/writes shape',
+    );
   });
 
   it('STEP-I1 — checkpoint step requires checkpoint_selection gate', () => {

@@ -34,6 +34,7 @@ import type { LaneDeclaration } from '../../src/schemas/lane.js';
 import { RunResult } from '../../src/schemas/result.js';
 import { Snapshot } from '../../src/schemas/snapshot.js';
 import { Workflow } from '../../src/schemas/workflow.js';
+import { expectStepAborted } from '../helpers/failure-message.js';
 
 const PARENT_WORKFLOW_ID = 'sub-run-direct-parent' as unknown as WorkflowId;
 const CHILD_WORKFLOW_ID = 'sub-run-direct-child' as unknown as WorkflowId;
@@ -392,8 +393,11 @@ describe('runSubRunStep direct — early aborts (before child execution)', () =>
 
     const result = await runSubRunStep(harness.ctx);
 
-    if (result.kind !== 'aborted') throw new Error('expected aborted');
-    expect(result.reason).toMatch(/childWorkflowResolver is required/);
+    expectStepAborted(
+      result,
+      'sub-run handler: a sub-run step requires a childWorkflowResolver in context; missing resolver aborts before sub_run.started fires',
+      { reason: /childWorkflowResolver is required/ },
+    );
     expect(harness.events.find((e) => e.kind === 'sub_run.started')).toBeUndefined();
   });
 

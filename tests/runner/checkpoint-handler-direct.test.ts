@@ -23,6 +23,7 @@ import { RunId, type WorkflowId } from '../../src/schemas/ids.js';
 import type { LaneDeclaration } from '../../src/schemas/lane.js';
 import type { Rigor } from '../../src/schemas/rigor.js';
 import { Workflow } from '../../src/schemas/workflow.js';
+import { expectStepWaitingCheckpoint } from '../helpers/failure-message.js';
 
 const WORKFLOW_ID = 'checkpoint-direct-test' as unknown as WorkflowId;
 const RUN_ID = RunId.parse('66666666-6666-6666-6666-666666666666');
@@ -231,7 +232,10 @@ describe('runCheckpointStep direct — resolution lattice', () => {
 
     const result = runCheckpointStep(harness.ctx);
 
-    if (result.kind !== 'waiting_checkpoint') throw new Error('expected waiting_checkpoint');
+    expectStepWaitingCheckpoint(
+      result,
+      'checkpoint handler: deep / tournament rigor pauses for operator selection — gate.evaluated and checkpoint.resolved are deferred to the post-resume invocation',
+    );
     expect(result.checkpoint.stepId).toBe('checkpoint-step');
     expect(result.checkpoint.allowedChoices).toEqual(['continue']);
     expect(harness.events.some((e) => e.kind === 'checkpoint.requested')).toBe(true);
