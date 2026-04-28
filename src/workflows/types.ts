@@ -81,13 +81,13 @@ export interface WorkflowDispatchArtifact {
 }
 
 export interface WorkflowPaths {
-  // Recipe path is required — every workflow has a recipe.
-  readonly recipe: string;
-  // Optional: not every workflow ships a slash command (sweep is
+  // Schematic path is required — every flow has a schematic.
+  readonly schematic: string;
+  // Optional: not every flow ships a slash command (sweep is
   // sub-run only; migrate is /circuit:run only).
   readonly command?: string;
-  // Optional: workflow-specific contract narrative. Not every
-  // workflow has one yet.
+  // Optional: flow-specific contract narrative. Not every
+  // flow has one yet.
   readonly contract?: string;
 }
 

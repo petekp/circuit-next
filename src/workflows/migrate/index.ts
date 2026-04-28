@@ -27,7 +27,7 @@ const MIGRATE_SIGNALS: readonly WorkflowSignal[] = [
 export const migrateWorkflowPackage: WorkflowPackage = {
   id: 'migrate',
   paths: {
-    recipe: 'src/workflows/migrate/recipe.json',
+    schematic: 'src/workflows/migrate/schematic.json',
   },
   routing: {
     order: 10,

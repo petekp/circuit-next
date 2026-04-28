@@ -18,7 +18,7 @@ const FIX_SIGNALS: readonly WorkflowSignal[] = [
 export const fixWorkflowPackage: WorkflowPackage = {
   id: 'fix',
   paths: {
-    recipe: 'src/workflows/fix/recipe.json',
+    schematic: 'src/workflows/fix/schematic.json',
     command: 'src/workflows/fix/command.md',
     contract: 'src/workflows/fix/contract.md',
   },

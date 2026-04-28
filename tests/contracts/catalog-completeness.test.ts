@@ -113,20 +113,20 @@ describe('workflow catalog completeness', () => {
     ).toEqual([]);
   });
 
-  it('every workflow package declares a recipe path that points to a real file', () => {
-    const offenders: { readonly id: string; readonly recipe: string }[] = [];
+  it('every flow package declares a schematic path that points to a real file', () => {
+    const offenders: { readonly id: string; readonly schematic: string }[] = [];
     for (const pkg of workflowPackages) {
-      if (pkg.paths.recipe.length === 0) {
-        offenders.push({ id: pkg.id, recipe: '<empty>' });
+      if (pkg.paths.schematic.length === 0) {
+        offenders.push({ id: pkg.id, schematic: '<empty>' });
         continue;
       }
-      if (!isFile(pkg.paths.recipe)) {
-        offenders.push({ id: pkg.id, recipe: pkg.paths.recipe });
+      if (!isFile(pkg.paths.schematic)) {
+        offenders.push({ id: pkg.id, schematic: pkg.paths.schematic });
       }
     }
     expect(
       offenders,
-      `recipe path missing or not a regular file — every package's recipe must exist as a file`,
+      `schematic path missing or not a regular file — every package's schematic must exist as a file`,
     ).toEqual([]);
   });
 

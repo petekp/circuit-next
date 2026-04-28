@@ -1,14 +1,14 @@
-// Exerciser recipes for the five primitives in the catalog that no
-// active recipe currently uses: queue, batch, risk-rollback-check,
+// Exerciser schematics for the five primitives in the catalog that no
+// active schematic currently uses: queue, batch, risk-rollback-check,
 // human-decision, handoff. The unexercised primitives' contracts are
 // unfalsified claims — they say "this primitive accepts these inputs
-// and produces this output", but no recipe has ever tried to wire them
+// and produces this output", but no schematic has ever tried to wire them
 // up. This test forces each one through the validation + compile +
 // runtime path and records what's actually missing.
 //
 // Each test is a tight contract probe: build the smallest possible
-// recipe that uses one orphan primitive and assert what happens at
-// each layer (recipe parse → catalog compatibility → recipe compile →
+// schematic that uses one orphan primitive and assert what happens at
+// each layer (schematic parse → catalog compatibility → schematic compile →
 // runtime execution). When a layer rejects, the assertion captures
 // the message so the test documents the contract gap as observed
 // behavior. As gaps are closed, the assertions tighten.
@@ -20,24 +20,24 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   type CompileResult,
-  compileRecipeToWorkflow,
-} from '../../src/runtime/compile-recipe-to-workflow.js';
+  compileSchematicToWorkflow,
+} from '../../src/runtime/compile-schematic-to-workflow.js';
 import { runWorkflow } from '../../src/runtime/runner.js';
+import {
+  FlowSchematic,
+  validateFlowSchematicCatalogCompatibility,
+} from '../../src/schemas/flow-schematic.js';
 import { RunId } from '../../src/schemas/ids.js';
 import type { LaneDeclaration } from '../../src/schemas/lane.js';
 import { WorkflowPrimitiveCatalog } from '../../src/schemas/workflow-primitives.js';
-import {
-  WorkflowRecipe,
-  validateWorkflowRecipeCatalogCompatibility,
-} from '../../src/schemas/workflow-recipe.js';
 import type { Workflow } from '../../src/schemas/workflow.js';
 
 function exerciserLane(): LaneDeclaration {
   return {
     lane: 'ratchet-advance',
-    failure_mode: 'orphan primitive contract is unfalsified — no recipe exercises it',
+    failure_mode: 'orphan primitive contract is unfalsified — no schematic exercises it',
     acceptance_evidence:
-      'synthetic recipe compiles and runs through the runtime placeholder substrate',
+      'synthetic schematic compiles and runs through the runtime placeholder substrate',
     alternate_framing: 'wait for real workflow — rejected because the contract gap stays hidden',
   };
 }
@@ -59,10 +59,10 @@ function loadCatalog() {
   return WorkflowPrimitiveCatalog.parse(raw);
 }
 
-// Minimal recipe shell. Per-test customizes the items and contract aliases.
+// Minimal schematic shell. Per-test customizes the items and contract aliases.
 // Default phases include frame + close so an orphan primitive that wants
 // a different phase can be added by the test.
-function recipeShell(overrides: {
+function schematicShell(overrides: {
   id: string;
   starts_at: string;
   initial_contracts?: readonly string[];
@@ -76,7 +76,7 @@ function recipeShell(overrides: {
     schema_version: '1',
     id: overrides.id,
     title: `Orphan primitive exerciser: ${overrides.id}`,
-    purpose: `Synthetic recipe that exercises a single orphan primitive (${overrides.id}) so its contract is forced through validate → compile → run.`,
+    purpose: `Synthetic schematic that exercises a single orphan primitive (${overrides.id}) so its contract is forced through validate → compile → run.`,
     status: 'candidate',
     starts_at: overrides.starts_at,
     initial_contracts: overrides.initial_contracts ?? [],
@@ -119,7 +119,7 @@ afterEach(() => {
 // phase: close
 // =====================================================================
 describe('orphan primitive: handoff', () => {
-  const recipeRaw = recipeShell({
+  const schematicRaw = schematicShell({
     id: 'orphan-handoff',
     starts_at: 'frame-step',
     initial_contracts: ['workflow.state@v1', 'task.intake@v1', 'route.decision@v1'],
@@ -166,24 +166,24 @@ describe('orphan primitive: handoff', () => {
     spine_omits: ['analyze', 'plan', 'act', 'verify', 'review'],
   });
 
-  it('parses through WorkflowRecipe', () => {
-    expect(() => WorkflowRecipe.parse(recipeRaw)).not.toThrow();
+  it('parses through FlowSchematic', () => {
+    expect(() => FlowSchematic.parse(schematicRaw)).not.toThrow();
   });
 
   it('passes catalog compatibility validation', () => {
-    const recipe = WorkflowRecipe.parse(recipeRaw);
-    const issues = validateWorkflowRecipeCatalogCompatibility(recipe, loadCatalog());
+    const schematic = FlowSchematic.parse(schematicRaw);
+    const issues = validateFlowSchematicCatalogCompatibility(schematic, loadCatalog());
     expect(issues, JSON.stringify(issues, null, 2)).toEqual([]);
   });
 
   it('compiles to a Workflow', () => {
-    const recipe = WorkflowRecipe.parse(recipeRaw);
-    expect(() => compileRecipeToWorkflow(recipe)).not.toThrow();
+    const schematic = FlowSchematic.parse(schematicRaw);
+    expect(() => compileSchematicToWorkflow(schematic)).not.toThrow();
   });
 
   it('runs end-to-end via the placeholder synthesis fallback', async () => {
-    const recipe = WorkflowRecipe.parse(recipeRaw);
-    const workflow = singleWorkflow(compileRecipeToWorkflow(recipe));
+    const schematic = FlowSchematic.parse(schematicRaw);
+    const workflow = singleWorkflow(compileSchematicToWorkflow(schematic));
     const outcome = await runWorkflow({
       runRoot: join(runRoot, 'handoff-run'),
       workflow,
@@ -205,7 +205,7 @@ describe('orphan primitive: handoff', () => {
 // phase: any canonical phase
 // =====================================================================
 describe('orphan primitive: human-decision', () => {
-  const recipeRaw = recipeShell({
+  const schematicRaw = schematicShell({
     id: 'orphan-human-decision',
     starts_at: 'frame-step',
     initial_contracts: [
@@ -271,19 +271,19 @@ describe('orphan primitive: human-decision', () => {
     spine_omits: ['plan', 'act', 'verify', 'review', 'close'],
   });
 
-  it('parses through WorkflowRecipe', () => {
-    expect(() => WorkflowRecipe.parse(recipeRaw)).not.toThrow();
+  it('parses through FlowSchematic', () => {
+    expect(() => FlowSchematic.parse(schematicRaw)).not.toThrow();
   });
 
   it('passes catalog compatibility validation', () => {
-    const recipe = WorkflowRecipe.parse(recipeRaw);
-    const issues = validateWorkflowRecipeCatalogCompatibility(recipe, loadCatalog());
+    const schematic = FlowSchematic.parse(schematicRaw);
+    const issues = validateFlowSchematicCatalogCompatibility(schematic, loadCatalog());
     expect(issues, JSON.stringify(issues, null, 2)).toEqual([]);
   });
 
   it('compiles to a Workflow', () => {
-    const recipe = WorkflowRecipe.parse(recipeRaw);
-    expect(() => compileRecipeToWorkflow(recipe)).not.toThrow();
+    const schematic = FlowSchematic.parse(schematicRaw);
+    expect(() => compileSchematicToWorkflow(schematic)).not.toThrow();
   });
 
   it('resolves the checkpoint via safe_autonomous_choice and runs to complete', async () => {
@@ -295,8 +295,8 @@ describe('orphan primitive: human-decision', () => {
     // actual pause we'd need a checkpoint policy that omits
     // safe_autonomous_choice; the contract probe here just confirms the
     // primitive is wireable end-to-end.
-    const recipe = WorkflowRecipe.parse(recipeRaw);
-    const workflow = singleWorkflow(compileRecipeToWorkflow(recipe));
+    const schematic = FlowSchematic.parse(schematicRaw);
+    const workflow = singleWorkflow(compileSchematicToWorkflow(schematic));
     const outcome = await runWorkflow({
       runRoot: join(runRoot, 'human-decision-run'),
       workflow,
@@ -317,7 +317,7 @@ describe('orphan primitive: human-decision', () => {
 // phase: plan
 // =====================================================================
 describe('orphan primitive: queue', () => {
-  const recipeRaw = recipeShell({
+  const schematicRaw = schematicShell({
     id: 'orphan-queue',
     starts_at: 'frame-step',
     initial_contracts: ['task.intake@v1', 'route.decision@v1', 'context.packet@v1'],
@@ -358,24 +358,24 @@ describe('orphan primitive: queue', () => {
     spine_omits: ['analyze', 'act', 'verify', 'review', 'close'],
   });
 
-  it('parses through WorkflowRecipe', () => {
-    expect(() => WorkflowRecipe.parse(recipeRaw)).not.toThrow();
+  it('parses through FlowSchematic', () => {
+    expect(() => FlowSchematic.parse(schematicRaw)).not.toThrow();
   });
 
   it('passes catalog compatibility validation', () => {
-    const recipe = WorkflowRecipe.parse(recipeRaw);
-    const issues = validateWorkflowRecipeCatalogCompatibility(recipe, loadCatalog());
+    const schematic = FlowSchematic.parse(schematicRaw);
+    const issues = validateFlowSchematicCatalogCompatibility(schematic, loadCatalog());
     expect(issues, JSON.stringify(issues, null, 2)).toEqual([]);
   });
 
   it('compiles to a Workflow', () => {
-    const recipe = WorkflowRecipe.parse(recipeRaw);
-    expect(() => compileRecipeToWorkflow(recipe)).not.toThrow();
+    const schematic = FlowSchematic.parse(schematicRaw);
+    expect(() => compileSchematicToWorkflow(schematic)).not.toThrow();
   });
 
   it('runs end-to-end via the placeholder synthesis fallback', async () => {
-    const recipe = WorkflowRecipe.parse(recipeRaw);
-    const workflow = singleWorkflow(compileRecipeToWorkflow(recipe));
+    const schematic = FlowSchematic.parse(schematicRaw);
+    const workflow = singleWorkflow(compileSchematicToWorkflow(schematic));
     const outcome = await runWorkflow({
       runRoot: join(runRoot, 'queue-run'),
       workflow,
@@ -396,7 +396,7 @@ describe('orphan primitive: queue', () => {
 // phase: act
 // =====================================================================
 describe('orphan primitive: batch', () => {
-  const recipeRaw = recipeShell({
+  const schematicRaw = schematicShell({
     id: 'orphan-batch',
     starts_at: 'frame-step',
     initial_contracts: ['task.intake@v1', 'route.decision@v1', 'work.queue@v1'],
@@ -442,24 +442,24 @@ describe('orphan primitive: batch', () => {
     spine_omits: ['analyze', 'plan', 'verify', 'review', 'close'],
   });
 
-  it('parses through WorkflowRecipe', () => {
-    expect(() => WorkflowRecipe.parse(recipeRaw)).not.toThrow();
+  it('parses through FlowSchematic', () => {
+    expect(() => FlowSchematic.parse(schematicRaw)).not.toThrow();
   });
 
   it('passes catalog compatibility validation', () => {
-    const recipe = WorkflowRecipe.parse(recipeRaw);
-    const issues = validateWorkflowRecipeCatalogCompatibility(recipe, loadCatalog());
+    const schematic = FlowSchematic.parse(schematicRaw);
+    const issues = validateFlowSchematicCatalogCompatibility(schematic, loadCatalog());
     expect(issues, JSON.stringify(issues, null, 2)).toEqual([]);
   });
 
   it('compiles to a Workflow', () => {
-    const recipe = WorkflowRecipe.parse(recipeRaw);
-    expect(() => compileRecipeToWorkflow(recipe)).not.toThrow();
+    const schematic = FlowSchematic.parse(schematicRaw);
+    expect(() => compileSchematicToWorkflow(schematic)).not.toThrow();
   });
 
   it('runs end-to-end via the placeholder synthesis fallback', async () => {
-    const recipe = WorkflowRecipe.parse(recipeRaw);
-    const workflow = singleWorkflow(compileRecipeToWorkflow(recipe));
+    const schematic = FlowSchematic.parse(schematicRaw);
+    const workflow = singleWorkflow(compileSchematicToWorkflow(schematic));
     const outcome = await runWorkflow({
       runRoot: join(runRoot, 'batch-run'),
       workflow,
@@ -481,7 +481,7 @@ describe('orphan primitive: batch', () => {
 // phase: verify or close
 // =====================================================================
 describe('orphan primitive: risk-rollback-check', () => {
-  const recipeRaw = recipeShell({
+  const schematicRaw = schematicShell({
     id: 'orphan-risk-rollback-check',
     starts_at: 'frame-step',
     initial_contracts: [
@@ -531,24 +531,24 @@ describe('orphan primitive: risk-rollback-check', () => {
     spine_omits: ['analyze', 'plan', 'act', 'verify', 'review'],
   });
 
-  it('parses through WorkflowRecipe', () => {
-    expect(() => WorkflowRecipe.parse(recipeRaw)).not.toThrow();
+  it('parses through FlowSchematic', () => {
+    expect(() => FlowSchematic.parse(schematicRaw)).not.toThrow();
   });
 
   it('passes catalog compatibility validation', () => {
-    const recipe = WorkflowRecipe.parse(recipeRaw);
-    const issues = validateWorkflowRecipeCatalogCompatibility(recipe, loadCatalog());
+    const schematic = FlowSchematic.parse(schematicRaw);
+    const issues = validateFlowSchematicCatalogCompatibility(schematic, loadCatalog());
     expect(issues, JSON.stringify(issues, null, 2)).toEqual([]);
   });
 
   it('compiles to a Workflow', () => {
-    const recipe = WorkflowRecipe.parse(recipeRaw);
-    expect(() => compileRecipeToWorkflow(recipe)).not.toThrow();
+    const schematic = FlowSchematic.parse(schematicRaw);
+    expect(() => compileSchematicToWorkflow(schematic)).not.toThrow();
   });
 
   it('runs end-to-end via the placeholder synthesis fallback', async () => {
-    const recipe = WorkflowRecipe.parse(recipeRaw);
-    const workflow = singleWorkflow(compileRecipeToWorkflow(recipe));
+    const schematic = FlowSchematic.parse(schematicRaw);
+    const workflow = singleWorkflow(compileSchematicToWorkflow(schematic));
     const outcome = await runWorkflow({
       runRoot: join(runRoot, 'risk-run'),
       workflow,

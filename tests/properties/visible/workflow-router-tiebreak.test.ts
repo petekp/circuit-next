@@ -86,7 +86,7 @@ function makeRoutable(spec: FixturePackage): RoutablePackage {
   // during classification.
   const pkg = {
     id: spec.id,
-    paths: { recipe: `dummy/${spec.id}/recipe.json` },
+    paths: { schematic: `dummy/${spec.id}/schematic.json` },
     dispatchArtifacts: [],
     writers: { synthesis: [], close: [], verification: [], checkpoint: [] },
     routing,

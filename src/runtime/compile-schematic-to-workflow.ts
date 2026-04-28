@@ -1,17 +1,17 @@
-// Pure compiler: WorkflowRecipe → Workflow(s). Takes a fully-populated recipe
-// (recipe-level entry/entry_modes/spine_policy/phases/version present;
+// Pure compiler: FlowSchematic → Workflow(s). Takes a fully-populated schematic
+// (schematic-level entry/entry_modes/spine_policy/phases/version present;
 // per-item protocol/writes/gate present) and produces compiled Workflow
 // objects shaped like the existing committed `.claude-plugin/skills/<id>/`
 // fixtures.
 //
 // Compile is per entry mode: routes are resolved against
-// `route_overrides[outcome][mode.rigor]` when the recipe declares one;
+// `route_overrides[outcome][mode.rigor]` when the schematic declares one;
 // reachability is computed against that resolved graph and unreachable
 // items are dropped per mode. The result is a discriminated union:
 //
-//   - `kind: 'single'`  when the recipe declares no route_overrides anywhere.
+//   - `kind: 'single'`  when the schematic declares no route_overrides anywhere.
 //                       All entry modes share the same compiled graph; the
-//                       returned Workflow's entry_modes is the full recipe
+//                       returned Workflow's entry_modes is the full schematic
 //                       list. Build-time emit writes one `circuit.json`.
 //
 //   - `kind: 'per-mode'` when at least one item declares route_overrides.
@@ -25,25 +25,25 @@
 // or any `kind ↔ artifact schema` pair is one the runner does not support,
 // the compile throws with a clear message naming the offending item.
 
+import type {
+  FlowEntryMode,
+  FlowSchematic,
+  SchematicStep,
+  StepWrites,
+} from '../schemas/flow-schematic.js';
 import type { CanonicalPhase } from '../schemas/phase.js';
 import { CANONICAL_PHASES } from '../schemas/phase.js';
 import type { Step } from '../schemas/step.js';
 import type { WorkflowPrimitiveContractRef } from '../schemas/workflow-primitives.js';
-import type {
-  WorkflowRecipe,
-  WorkflowRecipeEntryMode,
-  WorkflowRecipeItem,
-  WorkflowRecipeWrites,
-} from '../schemas/workflow-recipe.js';
 import type { Workflow as WorkflowValue } from '../schemas/workflow.js';
 import { Workflow } from '../schemas/workflow.js';
 import { findCheckpointBriefBuilder } from './registries/checkpoint-writers/registry.js';
 import { findVerificationWriter } from './registries/verification-writers/registry.js';
 
-export class WorkflowRecipeCompileError extends Error {
+export class FlowSchematicCompileError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'WorkflowRecipeCompileError';
+    this.name = 'FlowSchematicCompileError';
   }
 }
 
@@ -52,19 +52,19 @@ export type CompileResult =
   | { kind: 'per-mode'; workflows: Map<string, WorkflowValue> };
 
 function fail(message: string): never {
-  throw new WorkflowRecipeCompileError(message);
+  throw new FlowSchematicCompileError(message);
 }
 
-const RECIPE_TO_WORKFLOW_ROUTE: Record<string, string> = {
+const SCHEMATIC_TO_WORKFLOW_ROUTE: Record<string, string> = {
   continue: 'pass',
   complete: 'pass',
 };
 
-// Recipe-level routes that the runtime cannot execute through the static
+// Schematic-level routes that the runtime cannot execute through the static
 // Workflow's per-step `routes` map (one edge per gate outcome). They are
 // intentionally treated as authoring metadata until the runtime grows
 // per-attempt path indexing or new terminal outcomes; the compiler drops them.
-const RECIPE_ROUTES_DROPPED_AT_COMPILE = new Set([
+const SCHEMATIC_ROUTES_DROPPED_AT_COMPILE = new Set([
   'retry',
   'revise',
   'stop',
@@ -77,46 +77,46 @@ const RECIPE_ROUTES_DROPPED_AT_COMPILE = new Set([
 // understand. Both verification and checkpoint kinds consult their
 // per-kind writer registries (the single source of truth — adding a
 // writer there auto-permits the schema here).
-function ensureSupportedKindArtifactPair(item: WorkflowRecipeItem): void {
+function ensureSupportedKindArtifactPair(item: SchematicStep): void {
   if (item.execution.kind === 'verification') {
     if (findVerificationWriter(item.output as unknown as string) === undefined) {
       fail(
-        `recipe item '${item.id}' has verification kind but writes '${item.output}'; no verification writer is registered for that schema (see src/runtime/registries/verification-writers/registry.ts)`,
+        `schematic item '${item.id}' has verification kind but writes '${item.output}'; no verification writer is registered for that schema (see src/runtime/registries/verification-writers/registry.ts)`,
       );
     }
   }
   if (item.execution.kind === 'checkpoint' && item.writes?.artifact_path !== undefined) {
     if (findCheckpointBriefBuilder(item.output as unknown as string) === undefined) {
       fail(
-        `recipe item '${item.id}' has checkpoint kind writing artifact '${item.output}'; no checkpoint writer is registered for that schema (see src/runtime/registries/checkpoint-writers/registry.ts)`,
+        `schematic item '${item.id}' has checkpoint kind writing artifact '${item.output}'; no checkpoint writer is registered for that schema (see src/runtime/registries/checkpoint-writers/registry.ts)`,
       );
     }
   }
 }
 
-function requireRecipeField<T>(value: T | undefined, fieldName: string, recipeId: string): T {
+function requireSchematicField<T>(value: T | undefined, fieldName: string, schematicId: string): T {
   if (value === undefined) {
-    fail(`recipe '${recipeId}' is missing required compile-time field '${fieldName}'`);
+    fail(`schematic '${schematicId}' is missing required compile-time field '${fieldName}'`);
   }
   return value;
 }
 
 function requireItemField<T>(value: T | undefined, fieldName: string, itemId: string): T {
   if (value === undefined) {
-    fail(`recipe item '${itemId}' is missing required compile-time field '${fieldName}'`);
+    fail(`schematic item '${itemId}' is missing required compile-time field '${fieldName}'`);
   }
   return value;
 }
 
-// Resolve a single recipe-side route outcome to its target after applying
+// Resolve a single schematic-side route outcome to its target after applying
 // any mode-specific override. The override map is keyed by Rigor; we look
 // it up using `mode.rigor`, not `mode.name` (the schema declares it that
 // way so authors can express "lite-rigor variants of this workflow skip
 // review" without naming individual entry modes).
 function resolveRouteTarget(
-  item: WorkflowRecipeItem,
+  item: SchematicStep,
   outcome: string,
-  mode: WorkflowRecipeEntryMode,
+  mode: FlowEntryMode,
 ): string | undefined {
   const overrides = item.route_overrides[outcome];
   const overridden = overrides?.[mode.rigor];
@@ -128,16 +128,13 @@ function resolveRouteTarget(
 // the routes that the compiler maps to executable Workflow edges
 // (continue/complete → pass) with mode-specific overrides applied. Items
 // referenced only by dropped outcomes (retry/revise/stop/ask/handoff/
-// escalate) are intentionally unreachable here; they live in the recipe
+// escalate) are intentionally unreachable here; they live in the schematic
 // as authoring intent but are not emitted into the compiled Workflow
 // until the runtime grows the corresponding outcomes.
-function computeReachableForMode(
-  recipe: WorkflowRecipe,
-  mode: WorkflowRecipeEntryMode,
-): Set<string> {
-  const itemById = new Map(recipe.items.map((item) => [item.id as unknown as string, item]));
+function computeReachableForMode(schematic: FlowSchematic, mode: FlowEntryMode): Set<string> {
+  const itemById = new Map(schematic.items.map((item) => [item.id as unknown as string, item]));
   const reachable = new Set<string>();
-  const queue: string[] = [recipe.starts_at as unknown as string];
+  const queue: string[] = [schematic.starts_at as unknown as string];
   while (queue.length > 0) {
     const id = queue.shift();
     if (id === undefined) continue;
@@ -146,12 +143,12 @@ function computeReachableForMode(
     const item = itemById.get(id);
     if (item === undefined) {
       fail(
-        `recipe '${recipe.id as unknown as string}' references unknown item id '${id}' through routes (or starts_at)`,
+        `schematic '${schematic.id as unknown as string}' references unknown item id '${id}' through routes (or starts_at)`,
       );
     }
     for (const outcome of Object.keys(item.routes)) {
-      if (RECIPE_ROUTES_DROPPED_AT_COMPILE.has(outcome)) continue;
-      if (RECIPE_TO_WORKFLOW_ROUTE[outcome] === undefined) {
+      if (SCHEMATIC_ROUTES_DROPPED_AT_COMPILE.has(outcome)) continue;
+      if (SCHEMATIC_TO_WORKFLOW_ROUTE[outcome] === undefined) {
         // Defer the precise error to compileRoutes so the message is
         // produced once and includes the offending item id.
         continue;
@@ -170,15 +167,15 @@ function computeReachableForMode(
 // contracts. If a contract has no producer (and is not in
 // initial_contracts) the consumer's compile fails.
 function buildContractProducerIndex(
-  recipeId: string,
-  items: readonly WorkflowRecipeItem[],
-): Map<WorkflowPrimitiveContractRef, WorkflowRecipeItem> {
-  const index = new Map<WorkflowPrimitiveContractRef, WorkflowRecipeItem>();
+  schematicId: string,
+  items: readonly SchematicStep[],
+): Map<WorkflowPrimitiveContractRef, SchematicStep> {
+  const index = new Map<WorkflowPrimitiveContractRef, SchematicStep>();
   for (const item of items) {
     if (index.has(item.output)) {
       const prior = index.get(item.output);
       fail(
-        `recipe '${recipeId}' items '${prior?.id}' and '${item.id}' both write contract '${item.output}' on the same compiled graph — read-path resolution requires a single producer per contract per mode`,
+        `schematic '${schematicId}' items '${prior?.id}' and '${item.id}' both write contract '${item.output}' on the same compiled graph — read-path resolution requires a single producer per contract per mode`,
       );
     }
     index.set(item.output, item);
@@ -186,7 +183,7 @@ function buildContractProducerIndex(
   return index;
 }
 
-function readPathForProducer(producer: WorkflowRecipeItem): string {
+function readPathForProducer(producer: SchematicStep): string {
   // Prefer the typed artifact path; fall back to the dispatch result path
   // when the producer is a dispatch step that does not emit a typed
   // artifact (Review's audit-step pattern).
@@ -194,25 +191,25 @@ function readPathForProducer(producer: WorkflowRecipeItem): string {
   if (writes.artifact_path !== undefined) return writes.artifact_path;
   if (writes.result_path !== undefined) return writes.result_path;
   fail(
-    `recipe item '${producer.id}' produces '${producer.output}' but has no writes.artifact_path or writes.result_path — downstream consumers cannot find a read path`,
+    `schematic item '${producer.id}' produces '${producer.output}' but has no writes.artifact_path or writes.result_path — downstream consumers cannot find a read path`,
   );
 }
 
 function computeReads(
-  item: WorkflowRecipeItem,
+  item: SchematicStep,
   initialContracts: ReadonlySet<WorkflowPrimitiveContractRef>,
-  producerByContract: ReadonlyMap<WorkflowPrimitiveContractRef, WorkflowRecipeItem>,
+  producerByContract: ReadonlyMap<WorkflowPrimitiveContractRef, SchematicStep>,
 ): string[] {
   const reads: string[] = [];
   const seen = new Set<string>();
   // Iterate inputs in declaration order so the emitted reads list is
-  // stable and matches the recipe author's intent.
+  // stable and matches the schematic author's intent.
   for (const contract of Object.values(item.input)) {
     if (initialContracts.has(contract)) continue;
     const producer = producerByContract.get(contract);
     if (producer === undefined) {
       fail(
-        `recipe item '${item.id}' input contract '${contract}' has no producer reachable in this mode and is not in initial_contracts`,
+        `schematic item '${item.id}' input contract '${contract}' has no producer reachable in this mode and is not in initial_contracts`,
       );
     }
     const path = readPathForProducer(producer);
@@ -224,34 +221,31 @@ function computeReads(
   return reads;
 }
 
-// Map recipe routes to Workflow routes for a given mode. The runtime's
-// gate emits 'pass' or 'fail' uniformly across all gate kinds; recipes
+// Map schematic routes to Workflow routes for a given mode. The runtime's
+// gate emits 'pass' or 'fail' uniformly across all gate kinds; schematics
 // carry author-friendly outcome names. Only continue and complete map to
 // pass; the rest are non-executable metadata for now and are dropped at
 // compile.
-function compileRoutesForMode(
-  item: WorkflowRecipeItem,
-  mode: WorkflowRecipeEntryMode,
-): Record<string, string> {
+function compileRoutesForMode(item: SchematicStep, mode: FlowEntryMode): Record<string, string> {
   const routes: Record<string, string> = {};
   let passSet = false;
   for (const outcome of Object.keys(item.routes)) {
-    if (RECIPE_ROUTES_DROPPED_AT_COMPILE.has(outcome)) continue;
-    const workflowRoute = RECIPE_TO_WORKFLOW_ROUTE[outcome];
+    if (SCHEMATIC_ROUTES_DROPPED_AT_COMPILE.has(outcome)) continue;
+    const workflowRoute = SCHEMATIC_TO_WORKFLOW_ROUTE[outcome];
     if (workflowRoute === undefined) {
       fail(
-        `recipe item '${item.id}' has route outcome '${outcome}' the compiler does not know how to map to the Workflow's pass/fail route alphabet`,
+        `schematic item '${item.id}' has route outcome '${outcome}' the compiler does not know how to map to the Workflow's pass/fail route alphabet`,
       );
     }
     if (workflowRoute === 'pass' && passSet) {
       fail(
-        `recipe item '${item.id}' has multiple outcomes that map to 'pass' (only one allowed); pick whichever maps to the live runtime success edge`,
+        `schematic item '${item.id}' has multiple outcomes that map to 'pass' (only one allowed); pick whichever maps to the live runtime success edge`,
       );
     }
     const target = resolveRouteTarget(item, outcome, mode);
     if (target === undefined) {
       fail(
-        `recipe item '${item.id}' route outcome '${outcome}' has no target after applying mode '${mode.name}' (rigor '${mode.rigor}') overrides`,
+        `schematic item '${item.id}' route outcome '${outcome}' has no target after applying mode '${mode.name}' (rigor '${mode.rigor}') overrides`,
       );
     }
     routes[workflowRoute] = target;
@@ -259,14 +253,14 @@ function compileRoutesForMode(
   }
   if (!passSet) {
     fail(
-      `recipe item '${item.id}' has no outcome that maps to 'pass'; declare a 'continue' or 'complete' route so the compiled Workflow has a success edge`,
+      `schematic item '${item.id}' has no outcome that maps to 'pass'; declare a 'continue' or 'complete' route so the compiled Workflow has a success edge`,
     );
   }
   return routes;
 }
 
 function compileItem(
-  item: WorkflowRecipeItem,
+  item: SchematicStep,
   reads: readonly string[],
   routes: Record<string, string>,
 ): Step {
@@ -358,7 +352,7 @@ function compileItem(
     case 'dispatch': {
       const role = item.execution.role;
       if (role === undefined) {
-        fail(`recipe item '${item.id}' has dispatch kind but no execution.role`);
+        fail(`schematic item '${item.id}' has dispatch kind but no execution.role`);
       }
       const requestPath = requireWritesField(writes, 'request_path', item.id, 'dispatch');
       const receiptPath = requireWritesField(writes, 'receipt_path', item.id, 'dispatch');
@@ -394,13 +388,13 @@ function compileItem(
       const goal = item.execution.goal;
       const rigor = item.execution.rigor;
       if (workflowRef === undefined) {
-        fail(`recipe item '${item.id}' has sub-run kind but no execution.workflow_ref`);
+        fail(`schematic item '${item.id}' has sub-run kind but no execution.workflow_ref`);
       }
       if (goal === undefined) {
-        fail(`recipe item '${item.id}' has sub-run kind but no execution.goal`);
+        fail(`schematic item '${item.id}' has sub-run kind but no execution.goal`);
       }
       if (rigor === undefined) {
-        fail(`recipe item '${item.id}' has sub-run kind but no execution.rigor`);
+        fail(`schematic item '${item.id}' has sub-run kind but no execution.rigor`);
       }
       const resultPath = requireWritesField(writes, 'result_path', item.id, 'sub-run');
       // Emit writes.artifact as a schema annotation pointing at the same
@@ -432,14 +426,14 @@ function compileItem(
 }
 
 function requireWritesField(
-  writes: WorkflowRecipeWrites,
-  field: keyof WorkflowRecipeWrites,
+  writes: StepWrites,
+  field: keyof StepWrites,
   itemId: string,
   kind: string,
 ): string {
   const value = writes[field];
   if (value === undefined) {
-    fail(`recipe item '${itemId}' (${kind}) is missing writes.${field}`);
+    fail(`schematic item '${itemId}' (${kind}) is missing writes.${field}`);
   }
   return value;
 }
@@ -451,13 +445,13 @@ function requireGateField(
   kind: string,
 ): string[] {
   if (value === undefined) {
-    fail(`recipe item '${itemId}' (${kind}) is missing gate.${field}`);
+    fail(`schematic item '${itemId}' (${kind}) is missing gate.${field}`);
   }
   return [...value];
 }
 
 function compileEntryMode(
-  mode: WorkflowRecipeEntryMode,
+  mode: FlowEntryMode,
   startsAt: string,
 ): {
   name: string;
@@ -475,12 +469,12 @@ function compileEntryMode(
   };
 }
 
-function recipeHasOverrides(recipe: WorkflowRecipe): boolean {
-  return recipe.items.some((item) => Object.keys(item.route_overrides).length > 0);
+function schematicHasOverrides(schematic: FlowSchematic): boolean {
+  return schematic.items.some((item) => Object.keys(item.route_overrides).length > 0);
 }
 
-interface RecipeFrame {
-  recipeId: string;
+interface SchematicFrame {
+  schematicId: string;
   version: string;
   purpose: string;
   entry: {
@@ -492,19 +486,19 @@ interface RecipeFrame {
   phaseEntries: readonly { canonical: CanonicalPhase; id: string; title: string }[];
   declaredOmits: readonly CanonicalPhase[];
   spineRationale: string | undefined;
-  defaultSelection: WorkflowRecipe['default_selection'];
+  defaultSelection: FlowSchematic['default_selection'];
 }
 
-function frameRecipe(recipe: WorkflowRecipe): RecipeFrame {
-  const recipeId = recipe.id as unknown as string;
-  const version = requireRecipeField(recipe.version, 'version', recipeId);
-  const entry = requireRecipeField(recipe.entry, 'entry', recipeId);
-  const phaseEntries = requireRecipeField(recipe.phases, 'phases', recipeId);
-  const spinePolicy = requireRecipeField(recipe.spine_policy, 'spine_policy', recipeId);
+function frameSchematic(schematic: FlowSchematic): SchematicFrame {
+  const schematicId = schematic.id as unknown as string;
+  const version = requireSchematicField(schematic.version, 'version', schematicId);
+  const entry = requireSchematicField(schematic.entry, 'entry', schematicId);
+  const phaseEntries = requireSchematicField(schematic.phases, 'phases', schematicId);
+  const spinePolicy = requireSchematicField(schematic.spine_policy, 'spine_policy', schematicId);
   return {
-    recipeId,
+    schematicId,
     version,
-    purpose: recipe.purpose,
+    purpose: schematic.purpose,
     entry: {
       signals: {
         include: entry.signals.include,
@@ -512,8 +506,8 @@ function frameRecipe(recipe: WorkflowRecipe): RecipeFrame {
       },
       intent_prefixes: entry.intent_prefixes,
     },
-    startsAt: recipe.starts_at as unknown as string,
-    initialContracts: new Set(recipe.initial_contracts),
+    startsAt: schematic.starts_at as unknown as string,
+    initialContracts: new Set(schematic.initial_contracts),
     phaseEntries: phaseEntries.map((p) => ({
       canonical: p.canonical,
       id: p.id as unknown as string,
@@ -521,29 +515,31 @@ function frameRecipe(recipe: WorkflowRecipe): RecipeFrame {
     })),
     declaredOmits: spinePolicy.mode === 'partial' ? spinePolicy.omits : [],
     spineRationale: spinePolicy.mode === 'partial' ? spinePolicy.rationale : undefined,
-    defaultSelection: recipe.default_selection,
+    defaultSelection: schematic.default_selection,
   };
 }
 
-// Compile the recipe for a single entry mode. Reachability + overrides are
+// Compile the schematic for a single entry mode. Reachability + overrides are
 // applied; unreachable items are dropped, empty phases are filtered, and
 // spine_policy.omits is widened to include any canonical that ends up
 // empty in this mode (so the Workflow validator's spine completeness rule
 // stays satisfied).
 function compileForMode(
-  recipe: WorkflowRecipe,
-  frame: RecipeFrame,
-  mode: WorkflowRecipeEntryMode,
+  schematic: FlowSchematic,
+  frame: SchematicFrame,
+  mode: FlowEntryMode,
 ): WorkflowValue {
-  const reachable = computeReachableForMode(recipe, mode);
-  const reachableItems = recipe.items.filter((item) => reachable.has(item.id as unknown as string));
+  const reachable = computeReachableForMode(schematic, mode);
+  const reachableItems = schematic.items.filter((item) =>
+    reachable.has(item.id as unknown as string),
+  );
   if (reachableItems.length === 0) {
     fail(
-      `recipe '${frame.recipeId}' has no reachable items from starts_at '${frame.startsAt}' for mode '${mode.name}'`,
+      `schematic '${frame.schematicId}' has no reachable items from starts_at '${frame.startsAt}' for mode '${mode.name}'`,
     );
   }
 
-  const producerByContract = buildContractProducerIndex(frame.recipeId, reachableItems);
+  const producerByContract = buildContractProducerIndex(frame.schematicId, reachableItems);
 
   const phases: { id: string; title: string; canonical: CanonicalPhase; steps: string[] }[] = [];
   const reachedCanonicals = new Set<CanonicalPhase>();
@@ -559,7 +555,7 @@ function compileForMode(
     });
   }
   if (phases.length === 0) {
-    fail(`recipe '${frame.recipeId}' compiled to zero phases for mode '${mode.name}'`);
+    fail(`schematic '${frame.schematicId}' compiled to zero phases for mode '${mode.name}'`);
   }
 
   const steps: Step[] = reachableItems.map((item) => {
@@ -568,7 +564,7 @@ function compileForMode(
     return compileItem(item, reads, routes);
   });
 
-  // Per-mode spine_policy: union of recipe-declared omits and any
+  // Per-mode spine_policy: union of schematic-declared omits and any
   // canonical that ended up empty for this mode. The rationale gets
   // a per-mode suffix so the file is self-explanatory.
   const declaredOmitSet = new Set<CanonicalPhase>(frame.declaredOmits);
@@ -576,15 +572,15 @@ function compileForMode(
   for (const canonical of CANONICAL_PHASES) {
     if (declaredOmitSet.has(canonical)) continue;
     if (reachedCanonicals.has(canonical)) continue;
-    // Only add if the recipe had a phase entry for this canonical
-    // (otherwise it was already absent at the recipe level).
+    // Only add if the schematic had a phase entry for this canonical
+    // (otherwise it was already absent at the schematic level).
     const wasDeclared = frame.phaseEntries.some((p) => p.canonical === canonical);
     if (wasDeclared) autoOmits.push(canonical);
   }
   const omits: CanonicalPhase[] = [...frame.declaredOmits, ...autoOmits];
 
   // SpinePolicy discriminator: 'strict' when zero omits, 'partial' when at
-  // least one. If the recipe was 'strict' and per-mode reachability auto-
+  // least one. If the schematic was 'strict' and per-mode reachability auto-
   // omits a phase, the compiled output flips to 'partial' with an auto-
   // generated rationale.
   const spinePolicy =
@@ -600,7 +596,7 @@ function compileForMode(
 
   const workflow: unknown = {
     schema_version: '2',
-    id: recipe.id,
+    id: schematic.id,
     version: frame.version,
     purpose: frame.purpose,
     entry: {
@@ -620,7 +616,7 @@ function compileForMode(
   const parsed = Workflow.safeParse(workflow);
   if (!parsed.success) {
     fail(
-      `recipe '${frame.recipeId}' compiled to a Workflow that fails parse for mode '${mode.name}': ${parsed.error.message}`,
+      `schematic '${frame.schematicId}' compiled to a Workflow that fails parse for mode '${mode.name}': ${parsed.error.message}`,
     );
   }
   return parsed.data;
@@ -629,7 +625,7 @@ function compileForMode(
 function composeSpineRationale(
   declared: string | undefined,
   autoOmits: readonly CanonicalPhase[],
-  mode: WorkflowRecipeEntryMode,
+  mode: FlowEntryMode,
 ): string {
   if (autoOmits.length === 0) {
     return declared ?? '';
@@ -640,19 +636,19 @@ function composeSpineRationale(
   return declared !== undefined && declared.length > 0 ? `${declared} ${autoNote}` : autoNote;
 }
 
-export function compileRecipeToWorkflow(recipe: WorkflowRecipe): CompileResult {
-  const frame = frameRecipe(recipe);
-  const entryModes = requireRecipeField(recipe.entry_modes, 'entry_modes', frame.recipeId);
+export function compileSchematicToWorkflow(schematic: FlowSchematic): CompileResult {
+  const frame = frameSchematic(schematic);
+  const entryModes = requireSchematicField(schematic.entry_modes, 'entry_modes', frame.schematicId);
 
-  if (!recipeHasOverrides(recipe)) {
+  if (!schematicHasOverrides(schematic)) {
     // No mode-specific topology. Compile once for the first mode, then
-    // expand entry_modes to the full recipe list. This preserves the
+    // expand entry_modes to the full schematic list. This preserves the
     // historical single-circuit.json shape for build/explore/review.
     const firstMode = entryModes[0];
     if (firstMode === undefined) {
-      fail(`recipe '${frame.recipeId}' has empty entry_modes`);
+      fail(`schematic '${frame.schematicId}' has empty entry_modes`);
     }
-    const single = compileForMode(recipe, frame, firstMode);
+    const single = compileForMode(schematic, frame, firstMode);
     const expanded = {
       ...single,
       entry_modes: entryModes.map((mode) => compileEntryMode(mode, frame.startsAt)),
@@ -660,7 +656,7 @@ export function compileRecipeToWorkflow(recipe: WorkflowRecipe): CompileResult {
     const reparsed = Workflow.safeParse(expanded);
     if (!reparsed.success) {
       fail(
-        `recipe '${frame.recipeId}' failed to re-parse after entry_modes expansion: ${reparsed.error.message}`,
+        `schematic '${frame.schematicId}' failed to re-parse after entry_modes expansion: ${reparsed.error.message}`,
       );
     }
     return { kind: 'single', workflow: reparsed.data };
@@ -668,7 +664,7 @@ export function compileRecipeToWorkflow(recipe: WorkflowRecipe): CompileResult {
 
   const workflows = new Map<string, WorkflowValue>();
   for (const mode of entryModes) {
-    workflows.set(mode.name, compileForMode(recipe, frame, mode));
+    workflows.set(mode.name, compileForMode(schematic, frame, mode));
   }
   return { kind: 'per-mode', workflows };
 }

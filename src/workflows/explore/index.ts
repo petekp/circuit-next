@@ -10,7 +10,7 @@ import { exploreCloseBuilder } from './writers/close.js';
 export const exploreWorkflowPackage: WorkflowPackage = {
   id: 'explore',
   paths: {
-    recipe: 'src/workflows/explore/recipe.json',
+    schematic: 'src/workflows/explore/schematic.json',
     command: 'src/workflows/explore/command.md',
     contract: 'src/workflows/explore/contract.md',
   },

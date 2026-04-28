@@ -1,0 +1,123 @@
+import { readFileSync } from 'node:fs';
+import { describe, expect, it } from 'vitest';
+
+import {
+  FlowSchematicCompileError,
+  compileSchematicToWorkflow,
+} from '../../src/runtime/compile-schematic-to-workflow.js';
+import { FlowSchematic } from '../../src/schemas/flow-schematic.js';
+import { Workflow } from '../../src/schemas/workflow.js';
+
+function readJson(path: string): unknown {
+  return JSON.parse(readFileSync(path, 'utf8')) as unknown;
+}
+
+function loadSchematic(path: string) {
+  return FlowSchematic.parse(readJson(path));
+}
+
+function loadWorkflow(path: string) {
+  return Workflow.parse(readJson(path));
+}
+
+describe('compileSchematicToWorkflow — byte-equivalence with committed compiled flows', () => {
+  const cases = [
+    {
+      label: 'build',
+      schematicPath: 'src/workflows/build/schematic.json',
+      committedPath: '.claude-plugin/skills/build/circuit.json',
+    },
+    {
+      label: 'explore',
+      schematicPath: 'src/workflows/explore/schematic.json',
+      committedPath: '.claude-plugin/skills/explore/circuit.json',
+    },
+    {
+      label: 'review',
+      schematicPath: 'src/workflows/review/schematic.json',
+      committedPath: '.claude-plugin/skills/review/circuit.json',
+    },
+  ] as const;
+
+  for (const c of cases) {
+    it(`compiles ${c.label} schematic to a single compiled flow that matches the committed fixture`, () => {
+      const schematic = loadSchematic(c.schematicPath);
+      const compiled = compileSchematicToWorkflow(schematic);
+      expect(compiled.kind).toBe('single');
+      if (compiled.kind !== 'single') return;
+      const committed = loadWorkflow(c.committedPath);
+      // toEqual on parsed objects ignores key order. The drift check
+      // compares canonical-stringified bytes; for unit assertions,
+      // structural equality is the right shape check.
+      expect(compiled.workflow).toEqual(committed);
+    });
+  }
+});
+
+describe('compileSchematicToWorkflow — failure modes', () => {
+  function loadBuildSchematic() {
+    return FlowSchematic.parse(readJson('src/workflows/build/schematic.json'));
+  }
+
+  it('throws if a required schematic-level field is missing', () => {
+    const schematic = loadBuildSchematic();
+    // Force-clear via type assertion since FlowSchematic normally enforces presence
+    // through the compiler, not through the parse layer (it is optional in zod).
+    const broken = { ...schematic, version: undefined } as unknown as typeof schematic;
+    expect(() => compileSchematicToWorkflow(broken)).toThrow(FlowSchematicCompileError);
+    expect(() => compileSchematicToWorkflow(broken)).toThrow(/missing required.*version/);
+  });
+
+  it('throws if a step is missing protocol', () => {
+    const schematic = loadBuildSchematic();
+    const itemsCopy = schematic.items.map((item, i) =>
+      i === 0 ? ({ ...item, protocol: undefined } as unknown as typeof item) : item,
+    );
+    const broken = { ...schematic, items: itemsCopy } as unknown as typeof schematic;
+    expect(() => compileSchematicToWorkflow(broken)).toThrow(/missing.*protocol/);
+  });
+
+  it('throws if a verification step writes a schema the runner does not support', () => {
+    const schematic = loadBuildSchematic();
+    const itemsCopy = schematic.items.map((item) =>
+      item.id === ('verify-step' as unknown as typeof item.id)
+        ? ({ ...item, output: 'foo.bar@v1' } as unknown as typeof item)
+        : item,
+    );
+    const broken = { ...schematic, items: itemsCopy } as unknown as typeof schematic;
+    expect(() => compileSchematicToWorkflow(broken)).toThrow(
+      /no verification writer is registered for that schema/,
+    );
+  });
+
+  it('accepts the active Fix schematic (verify-step writes fix.verification@v1)', () => {
+    const fixSchematic = FlowSchematic.parse(
+      JSON.parse(readFileSync('src/workflows/fix/schematic.json', 'utf8')),
+    );
+    expect(() => compileSchematicToWorkflow(fixSchematic)).not.toThrow();
+  });
+
+  it('throws if a checkpoint step writes an artifact whose schema has no registered checkpoint writer', () => {
+    const schematic = loadBuildSchematic();
+    const itemsCopy = schematic.items.map((item) =>
+      item.id === ('frame-step' as unknown as typeof item.id)
+        ? ({ ...item, output: 'foo.bar@v1' } as unknown as typeof item)
+        : item,
+    );
+    const broken = { ...schematic, items: itemsCopy } as unknown as typeof schematic;
+    expect(() => compileSchematicToWorkflow(broken)).toThrow(
+      /no checkpoint writer is registered for that schema/,
+    );
+  });
+
+  it('throws if a step has no continue/complete route mapping to pass', () => {
+    const schematic = loadBuildSchematic();
+    const itemsCopy = schematic.items.map((item) =>
+      item.id === ('frame-step' as unknown as typeof item.id)
+        ? ({ ...item, routes: { stop: '@stop' } } as unknown as typeof item)
+        : item,
+    );
+    const broken = { ...schematic, items: itemsCopy } as unknown as typeof schematic;
+    expect(() => compileSchematicToWorkflow(broken)).toThrow(/no outcome that maps to 'pass'/);
+  });
+});

@@ -1,27 +1,28 @@
-// Unit tests for the per-mode behavior of compileRecipeToWorkflow:
+// Unit tests for the per-mode behavior of compileSchematicToWorkflow:
 // reachability with route_overrides, dead-step elimination per mode,
 // auto-omitted canonicals in spine_policy, and the dropped-outcomes
-// (handoff/escalate) handling. Byte-equivalence against committed fixtures
-// is covered separately by tests/contracts/compile-recipe-to-workflow.test.ts.
+// (handoff/escalate) handling. Byte-equivalence against committed
+// compiled flows is covered separately by
+// tests/contracts/compile-schematic-to-workflow.test.ts.
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-import { compileRecipeToWorkflow } from '../../src/runtime/compile-recipe-to-workflow.js';
-import { WorkflowRecipe } from '../../src/schemas/workflow-recipe.js';
+import { compileSchematicToWorkflow } from '../../src/runtime/compile-schematic-to-workflow.js';
+import { FlowSchematic } from '../../src/schemas/flow-schematic.js';
 
 function readJson(path: string): unknown {
   return JSON.parse(readFileSync(path, 'utf8')) as unknown;
 }
 
-function loadBuildRecipe() {
-  return WorkflowRecipe.parse(readJson('src/workflows/build/recipe.json'));
+function loadBuildSchematic() {
+  return FlowSchematic.parse(readJson('src/workflows/build/schematic.json'));
 }
 
-describe('compileRecipeToWorkflow — per-mode emission', () => {
+describe('compileSchematicToWorkflow — per-mode emission', () => {
   it('returns kind:single when no item declares route_overrides', () => {
-    const recipe = loadBuildRecipe();
-    const result = compileRecipeToWorkflow(recipe);
+    const schematic = loadBuildSchematic();
+    const result = compileSchematicToWorkflow(schematic);
     expect(result.kind).toBe('single');
     if (result.kind !== 'single') return;
     expect(result.workflow.entry_modes.map((m) => m.name)).toEqual([
@@ -33,15 +34,15 @@ describe('compileRecipeToWorkflow — per-mode emission', () => {
   });
 
   it('returns kind:per-mode when an item declares route_overrides; lite mode drops unreachable items', () => {
-    const recipe = loadBuildRecipe();
-    const items = recipe.items.map((item) =>
+    const schematic = loadBuildSchematic();
+    const items = schematic.items.map((item) =>
       (item.id as unknown as string) === 'review-step'
         ? { ...item, route_overrides: { continue: { lite: '@complete' as const } } }
         : item,
     );
-    const mutated = { ...recipe, items } as typeof recipe;
+    const mutated = { ...schematic, items } as typeof schematic;
 
-    const result = compileRecipeToWorkflow(mutated);
+    const result = compileSchematicToWorkflow(mutated);
     expect(result.kind).toBe('per-mode');
     if (result.kind !== 'per-mode') return;
 
@@ -64,26 +65,26 @@ describe('compileRecipeToWorkflow — per-mode emission', () => {
     expect(liteReview?.routes.pass).toBe('@complete');
     expect(defReview?.routes.pass).toBe('close-step');
 
-    // Each per-mode Workflow lists only that mode in entry_modes.
+    // Each per-mode compiled flow lists only that mode in entry_modes.
     expect(lite.entry_modes.map((m) => m.name)).toEqual(['lite']);
     expect(def.entry_modes.map((m) => m.name)).toEqual(['default']);
   });
 
   it('auto-omits canonicals that have no reachable items in a given mode', () => {
-    const recipe = loadBuildRecipe();
-    const items = recipe.items.map((item) =>
+    const schematic = loadBuildSchematic();
+    const items = schematic.items.map((item) =>
       (item.id as unknown as string) === 'review-step'
         ? { ...item, route_overrides: { continue: { lite: '@complete' as const } } }
         : item,
     );
-    const mutated = { ...recipe, items } as typeof recipe;
+    const mutated = { ...schematic, items } as typeof schematic;
 
-    const result = compileRecipeToWorkflow(mutated);
+    const result = compileSchematicToWorkflow(mutated);
     if (result.kind !== 'per-mode') {
       throw new Error('expected per-mode result');
     }
     const lite = result.workflows.get('lite');
-    if (lite === undefined) throw new Error('expected lite workflow');
+    if (lite === undefined) throw new Error('expected lite compiled flow');
 
     // close-step's canonical phase is 'close'. Lite drops it; the compiled
     // spine_policy must auto-omit 'close' so the Workflow validator's
@@ -95,8 +96,8 @@ describe('compileRecipeToWorkflow — per-mode emission', () => {
   });
 
   it('drops handoff and escalate outcomes at compile without erroring', () => {
-    const recipe = loadBuildRecipe();
-    const items = recipe.items.map((item) =>
+    const schematic = loadBuildSchematic();
+    const items = schematic.items.map((item) =>
       (item.id as unknown as string) === 'close-step'
         ? {
             ...item,
@@ -108,15 +109,15 @@ describe('compileRecipeToWorkflow — per-mode emission', () => {
           }
         : item,
     );
-    const mutated = { ...recipe, items } as typeof recipe;
+    const mutated = { ...schematic, items } as typeof schematic;
 
-    const result = compileRecipeToWorkflow(mutated);
+    const result = compileSchematicToWorkflow(mutated);
     expect(result.kind).toBe('single');
     if (result.kind !== 'single') return;
     const close = result.workflow.steps.find((s) => (s.id as unknown as string) === 'close-step');
     expect(close).toBeDefined();
     // The compiled close-step should only carry the pass edge; handoff /
-    // escalate outcomes are author-intent and live only in the recipe.
+    // escalate outcomes are author-intent and live only in the schematic.
     expect(Object.keys(close?.routes ?? {})).toEqual(['pass']);
   });
 });

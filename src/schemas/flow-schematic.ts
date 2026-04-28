@@ -23,35 +23,35 @@ import {
   type WorkflowPrimitive as WorkflowPrimitiveValue,
 } from './workflow-primitives.js';
 
-export const WorkflowRecipeStatus = z.enum(['candidate', 'active', 'deprecated']);
-export type WorkflowRecipeStatus = z.infer<typeof WorkflowRecipeStatus>;
+export const FlowSchematicStatus = z.enum(['candidate', 'active', 'deprecated']);
+export type FlowSchematicStatus = z.infer<typeof FlowSchematicStatus>;
 
-export const WorkflowRecipeTerminalTarget = z.enum(['@complete', '@stop', '@handoff', '@escalate']);
-export type WorkflowRecipeTerminalTarget = z.infer<typeof WorkflowRecipeTerminalTarget>;
+export const StepRouteTerminalTarget = z.enum(['@complete', '@stop', '@handoff', '@escalate']);
+export type StepRouteTerminalTarget = z.infer<typeof StepRouteTerminalTarget>;
 
-export const WorkflowRecipeRouteTarget = z.union([StepId, WorkflowRecipeTerminalTarget]);
-export type WorkflowRecipeRouteTarget = z.infer<typeof WorkflowRecipeRouteTarget>;
+export const StepRouteTarget = z.union([StepId, StepRouteTerminalTarget]);
+export type StepRouteTarget = z.infer<typeof StepRouteTarget>;
 
-export const WorkflowRecipeRouteModeOverrides = z
-  .record(Rigor, WorkflowRecipeRouteTarget)
+export const SchematicRouteModeOverrides = z
+  .record(Rigor, StepRouteTarget)
   .refine((overrides) => Object.keys(overrides).length > 0, {
     message: 'route override must declare at least one rigor',
   });
-export type WorkflowRecipeRouteModeOverrides = z.infer<typeof WorkflowRecipeRouteModeOverrides>;
+export type SchematicRouteModeOverrides = z.infer<typeof SchematicRouteModeOverrides>;
 
-export const WorkflowRecipeContractAlias = z
+export const SchematicContractAlias = z
   .object({
     generic: WorkflowPrimitiveContractRef,
     actual: WorkflowPrimitiveContractRef,
   })
   .strict();
-export type WorkflowRecipeContractAlias = z.infer<typeof WorkflowRecipeContractAlias>;
+export type SchematicContractAlias = z.infer<typeof SchematicContractAlias>;
 
-export const WorkflowRecipeEvidenceRequirement = z.string().min(1);
-export type WorkflowRecipeEvidenceRequirement = z.infer<typeof WorkflowRecipeEvidenceRequirement>;
+export const SchematicEvidenceRequirement = z.string().min(1);
+export type SchematicEvidenceRequirement = z.infer<typeof SchematicEvidenceRequirement>;
 
-export const WorkflowRecipeEvidenceRequirements = z
-  .array(WorkflowRecipeEvidenceRequirement)
+export const SchematicEvidenceRequirements = z
+  .array(SchematicEvidenceRequirement)
   .min(1)
   .superRefine((requirements, ctx) => {
     const seen = new Set<string>();
@@ -66,25 +66,25 @@ export const WorkflowRecipeEvidenceRequirements = z
       seen.add(requirement);
     }
   });
-export type WorkflowRecipeEvidenceRequirements = z.infer<typeof WorkflowRecipeEvidenceRequirements>;
+export type SchematicEvidenceRequirements = z.infer<typeof SchematicEvidenceRequirements>;
 
-export const WorkflowRecipeExecutionKind = z.enum([
+export const StepExecutionKind = z.enum([
   'synthesis',
   'dispatch',
   'verification',
   'checkpoint',
   'sub-run',
 ]);
-export type WorkflowRecipeExecutionKind = z.infer<typeof WorkflowRecipeExecutionKind>;
+export type StepExecutionKind = z.infer<typeof StepExecutionKind>;
 
-// Recipe-level shape for a sub-run step's child workflow handoff. Mirrors
+// Schematic-level shape for a sub-run step's child workflow handoff. Mirrors
 // the runtime SubRunStep fields (workflow_ref + goal + rigor) but kept as
-// recipe-level optional fields so existing dispatch/synthesis/etc.
+// schematic-level optional fields so existing dispatch/synthesis/etc.
 // executions stay parseable. The cross-field rule lives in the
 // superRefine below.
-export const WorkflowRecipeExecution = z
+export const StepExecution = z
   .object({
-    kind: WorkflowRecipeExecutionKind,
+    kind: StepExecutionKind,
     role: DispatchRole.optional(),
     workflow_ref: WorkflowRef.optional(),
     goal: z.string().min(1).optional(),
@@ -153,7 +153,7 @@ export const WorkflowRecipeExecution = z
       }
     }
   });
-export type WorkflowRecipeExecution = z.infer<typeof WorkflowRecipeExecution>;
+export type StepExecution = z.infer<typeof StepExecution>;
 
 // Per-item write paths. Conditional on execution.kind:
 //   synthesis | verification           → artifact_path required (single-artifact write)
@@ -163,9 +163,9 @@ export type WorkflowRecipeExecution = z.infer<typeof WorkflowRecipeExecution>;
 //                                        artifact_path optional (only for build_brief checkpoints)
 //   sub-run                            → result_path required (child run's result.json copied
 //                                        into parent's writes.result slot — RunResult shape)
-// Cross-field shape is enforced at the WorkflowRecipeItem superRefine where
+// Cross-field shape is enforced at the SchematicStep superRefine where
 // execution.kind is in scope.
-export const WorkflowRecipeWrites = z
+export const StepWrites = z
   .object({
     artifact_path: RunRelativePath.optional(),
     request_path: RunRelativePath.optional(),
@@ -175,23 +175,23 @@ export const WorkflowRecipeWrites = z
     checkpoint_response_path: RunRelativePath.optional(),
   })
   .strict();
-export type WorkflowRecipeWrites = z.infer<typeof WorkflowRecipeWrites>;
+export type StepWrites = z.infer<typeof StepWrites>;
 
 // Per-item gate metadata. Conditional on execution.kind:
 //   synthesis | verification           → required: SchemaSectionsGate.required
 //   checkpoint                         → allow: CheckpointSelectionGate.allow
 //   dispatch | sub-run                 → pass: ResultVerdictGate.pass
-// Cross-field shape is enforced at the WorkflowRecipeItem superRefine.
-export const WorkflowRecipeGate = z
+// Cross-field shape is enforced at the SchematicStep superRefine.
+export const StepCheck = z
   .object({
     required: z.array(z.string().min(1)).min(1).optional(),
     allow: z.array(z.string().min(1)).min(1).optional(),
     pass: z.array(z.string().min(1)).min(1).optional(),
   })
   .strict();
-export type WorkflowRecipeGate = z.infer<typeof WorkflowRecipeGate>;
+export type StepCheck = z.infer<typeof StepCheck>;
 
-export const WorkflowRecipeItem = z
+export const SchematicStep = z
   .object({
     id: StepId,
     uses: WorkflowPrimitiveId,
@@ -201,21 +201,21 @@ export const WorkflowRecipeItem = z
       .record(z.string().regex(/^[a-z][a-z0-9_]*$/), WorkflowPrimitiveContractRef)
       .default({}),
     output: WorkflowPrimitiveContractRef,
-    evidence_requirements: WorkflowRecipeEvidenceRequirements,
-    execution: WorkflowRecipeExecution,
+    evidence_requirements: SchematicEvidenceRequirements,
+    execution: StepExecution,
     selection: SelectionOverride.optional(),
-    routes: z.record(z.string(), WorkflowRecipeRouteTarget).refine((routes) => {
+    routes: z.record(z.string(), StepRouteTarget).refine((routes) => {
       return Object.keys(routes).length > 0;
-    }, 'recipe item must declare at least one route'),
-    route_overrides: z.record(z.string(), WorkflowRecipeRouteModeOverrides).default({}),
-    // The fields below are required by the recipe → Workflow compiler. They
-    // are optional at parse time so existing candidate recipes remain
-    // parseable while the active recipes (build/explore/review) are
+    }, 'schematic item must declare at least one route'),
+    route_overrides: z.record(z.string(), SchematicRouteModeOverrides).default({}),
+    // The fields below are required by the schematic → Workflow compiler. They
+    // are optional at parse time so existing candidate schematics remain
+    // parseable while the active schematics (build/explore/review) are
     // populated incrementally. The compiler enforces presence and
     // (kind, gate, writes) shape.
     protocol: ProtocolId.optional(),
-    writes: WorkflowRecipeWrites.optional(),
-    gate: WorkflowRecipeGate.optional(),
+    writes: StepWrites.optional(),
+    gate: StepCheck.optional(),
     checkpoint_policy: CheckpointPolicy.optional(),
   })
   .strict()
@@ -226,7 +226,7 @@ export const WorkflowRecipeItem = z
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['routes', route],
-          message: `unknown recipe route outcome: ${route}`,
+          message: `unknown schematic route outcome: ${route}`,
         });
       }
       if (seenRoutes.has(route)) {
@@ -243,7 +243,7 @@ export const WorkflowRecipeItem = z
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['route_overrides', route],
-          message: `unknown recipe route outcome: ${route}`,
+          message: `unknown schematic route outcome: ${route}`,
         });
       }
       if (!Object.hasOwn(item.routes, route)) {
@@ -256,18 +256,18 @@ export const WorkflowRecipeItem = z
     }
     validateExecutionShape(item, ctx);
   });
-export type WorkflowRecipeItem = z.infer<typeof WorkflowRecipeItem>;
+export type SchematicStep = z.infer<typeof SchematicStep>;
 
 // Cross-field check for the optional executor metadata. When `writes` or
 // `gate` is supplied, its shape must match `execution.kind`. When
 // `checkpoint_policy` is supplied, `execution.kind` must be 'checkpoint'.
-// Absence is allowed (these fields are populated per-recipe over time and
+// Absence is allowed (these fields are populated per-schematic over time and
 // the compiler raises a separate "missing" diagnostic).
 function validateExecutionShape(
   item: {
-    execution: WorkflowRecipeExecution;
-    writes?: WorkflowRecipeWrites | undefined;
-    gate?: WorkflowRecipeGate | undefined;
+    execution: StepExecution;
+    writes?: StepWrites | undefined;
+    gate?: StepCheck | undefined;
     checkpoint_policy?: CheckpointPolicy | undefined;
   },
   ctx: z.RefinementCtx,
@@ -276,7 +276,7 @@ function validateExecutionShape(
 
   if (item.writes !== undefined) {
     const w = item.writes;
-    const has = (key: keyof WorkflowRecipeWrites) => w[key] !== undefined;
+    const has = (key: keyof StepWrites) => w[key] !== undefined;
     const expectArtifact = () => {
       if (!has('artifact_path')) {
         ctx.addIssue({
@@ -317,7 +317,7 @@ function validateExecutionShape(
         });
       }
     };
-    const forbid = (key: keyof WorkflowRecipeWrites, allowedKinds: string) => {
+    const forbid = (key: keyof StepWrites, allowedKinds: string) => {
       if (has(key)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -408,9 +408,9 @@ function validateExecutionShape(
   }
 }
 
-// Recipe-level entry mode. Each emitted Workflow inherits these as
-// Workflow.entry_modes[i] with start_at = recipe.starts_at.
-export const WorkflowRecipeEntryMode = z
+// Schematic-level entry mode. Each emitted Workflow inherits these as
+// Workflow.entry_modes[i] with start_at = schematic.starts_at.
+export const FlowEntryMode = z
   .object({
     name: z.string().regex(/^[a-z][a-z0-9-]*$/),
     rigor: Rigor,
@@ -418,23 +418,23 @@ export const WorkflowRecipeEntryMode = z
     default_lane: Lane.optional(),
   })
   .strict();
-export type WorkflowRecipeEntryMode = z.infer<typeof WorkflowRecipeEntryMode>;
+export type FlowEntryMode = z.infer<typeof FlowEntryMode>;
 
-// Per-canonical-phase metadata. Lets a recipe map its canonical phases
+// Per-canonical-phase metadata. Lets a schematic map its canonical phases
 // to author-friendly phase ids and titles ("Synthesize" for explore's
 // canonical=act phase, "Independent Audit" for review's canonical=analyze).
-export const WorkflowRecipePhase = z
+export const SchematicPhase = z
   .object({
     canonical: CanonicalPhase,
     id: PhaseId,
     title: z.string().min(1),
   })
   .strict();
-export type WorkflowRecipePhase = z.infer<typeof WorkflowRecipePhase>;
+export type SchematicPhase = z.infer<typeof SchematicPhase>;
 
-// Recipe-level entry classification — matches Workflow.entry shape so the
+// Schematic-level entry classification — matches Workflow.entry shape so the
 // compiler can pass it through directly.
-export const WorkflowRecipeEntry = z
+export const FlowSchematicEntry = z
   .object({
     signals: z
       .object({
@@ -445,71 +445,71 @@ export const WorkflowRecipeEntry = z
     intent_prefixes: z.array(z.string()).default([]),
   })
   .strict();
-export type WorkflowRecipeEntry = z.infer<typeof WorkflowRecipeEntry>;
+export type FlowSchematicEntry = z.infer<typeof FlowSchematicEntry>;
 
-export const WorkflowRecipe = z
+export const FlowSchematic = z
   .object({
     schema_version: z.literal('1'),
     id: WorkflowId,
     title: z.string().min(1),
     purpose: z.string().min(1),
-    status: WorkflowRecipeStatus,
+    status: FlowSchematicStatus,
     starts_at: StepId,
     initial_contracts: z.array(WorkflowPrimitiveContractRef).default([]),
-    contract_aliases: z.array(WorkflowRecipeContractAlias).default([]),
-    items: z.array(WorkflowRecipeItem).min(1),
-    // Compiler-required metadata. Optional at parse time so candidate recipes
-    // (and recipes still being upgraded) keep parsing. The compiler enforces
+    contract_aliases: z.array(SchematicContractAlias).default([]),
+    items: z.array(SchematicStep).min(1),
+    // Compiler-required metadata. Optional at parse time so candidate schematics
+    // (and schematics still being upgraded) keep parsing. The compiler enforces
     // presence and consistency at emit time.
     version: z.string().min(1).optional(),
-    entry: WorkflowRecipeEntry.optional(),
-    entry_modes: z.array(WorkflowRecipeEntryMode).min(1).optional(),
+    entry: FlowSchematicEntry.optional(),
+    entry_modes: z.array(FlowEntryMode).min(1).optional(),
     spine_policy: SpinePolicy.optional(),
-    phases: z.array(WorkflowRecipePhase).optional(),
+    phases: z.array(SchematicPhase).optional(),
     default_selection: SelectionOverride.optional(),
   })
   .strict()
-  .superRefine((recipe, ctx) => {
+  .superRefine((schematic, ctx) => {
     const itemIds = new Map<string, number>();
-    for (const [index, item] of recipe.items.entries()) {
+    for (const [index, item] of schematic.items.entries()) {
       const prior = itemIds.get(item.id);
       if (prior !== undefined) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['items', index, 'id'],
-          message: `duplicate recipe item id: ${item.id} also appears at index ${prior}`,
+          message: `duplicate schematic item id: ${item.id} also appears at index ${prior}`,
         });
       }
       itemIds.set(item.id, index);
     }
 
-    if (!itemIds.has(recipe.starts_at)) {
+    if (!itemIds.has(schematic.starts_at)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['starts_at'],
-        message: `starts_at references unknown item id: ${recipe.starts_at}`,
+        message: `starts_at references unknown item id: ${schematic.starts_at}`,
       });
     }
 
-    for (const [index, item] of recipe.items.entries()) {
+    for (const [index, item] of schematic.items.entries()) {
       for (const [route, target] of Object.entries(item.routes)) {
-        if (WorkflowRecipeTerminalTarget.safeParse(target).success) continue;
+        if (StepRouteTerminalTarget.safeParse(target).success) continue;
         if (!itemIds.has(target)) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             path: ['items', index, 'routes', route],
-            message: `route target references unknown recipe item id: ${target}`,
+            message: `route target references unknown schematic item id: ${target}`,
           });
         }
       }
       for (const [route, overrides] of Object.entries(item.route_overrides)) {
         for (const [rigor, target] of Object.entries(overrides)) {
-          if (WorkflowRecipeTerminalTarget.safeParse(target).success) continue;
+          if (StepRouteTerminalTarget.safeParse(target).success) continue;
           if (!itemIds.has(target)) {
             ctx.addIssue({
               code: z.ZodIssueCode.custom,
               path: ['items', index, 'route_overrides', route, rigor],
-              message: `route override target references unknown recipe item id: ${target}`,
+              message: `route override target references unknown schematic item id: ${target}`,
             });
           }
         }
@@ -517,7 +517,7 @@ export const WorkflowRecipe = z
     }
 
     const aliases = new Set<string>();
-    for (const [index, alias] of recipe.contract_aliases.entries()) {
+    for (const [index, alias] of schematic.contract_aliases.entries()) {
       const key = `${alias.generic}\0${alias.actual}`;
       if (aliases.has(key)) {
         ctx.addIssue({
@@ -529,9 +529,9 @@ export const WorkflowRecipe = z
       aliases.add(key);
     }
 
-    if (recipe.entry_modes !== undefined) {
+    if (schematic.entry_modes !== undefined) {
       const seenNames = new Set<string>();
-      for (const [index, mode] of recipe.entry_modes.entries()) {
+      for (const [index, mode] of schematic.entry_modes.entries()) {
         if (seenNames.has(mode.name)) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
@@ -543,10 +543,10 @@ export const WorkflowRecipe = z
       }
     }
 
-    if (recipe.phases !== undefined) {
+    if (schematic.phases !== undefined) {
       const seenCanonicals = new Set<CanonicalPhaseValue>();
       const seenIds = new Set<string>();
-      for (const [index, phase] of recipe.phases.entries()) {
+      for (const [index, phase] of schematic.phases.entries()) {
         if (seenCanonicals.has(phase.canonical)) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
@@ -565,7 +565,9 @@ export const WorkflowRecipe = z
         seenIds.add(phase.id as unknown as string);
       }
       // Every canonical phase touched by any item must have a phases entry.
-      const itemCanonicals = new Set<CanonicalPhaseValue>(recipe.items.map((item) => item.phase));
+      const itemCanonicals = new Set<CanonicalPhaseValue>(
+        schematic.items.map((item) => item.phase),
+      );
       for (const canonical of itemCanonicals) {
         if (!seenCanonicals.has(canonical)) {
           ctx.addIssue({
@@ -580,9 +582,9 @@ export const WorkflowRecipe = z
       // spine completeness. spine_policy carries the omit story.
     }
 
-    if (recipe.spine_policy !== undefined && recipe.spine_policy.mode === 'partial') {
+    if (schematic.spine_policy !== undefined && schematic.spine_policy.mode === 'partial') {
       const seenOmits = new Set<CanonicalPhaseValue>();
-      for (const [index, omitted] of recipe.spine_policy.omits.entries()) {
+      for (const [index, omitted] of schematic.spine_policy.omits.entries()) {
         if (seenOmits.has(omitted)) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
@@ -593,8 +595,8 @@ export const WorkflowRecipe = z
         seenOmits.add(omitted);
       }
       // omits must be disjoint from phases.canonical when both are present.
-      if (recipe.phases !== undefined) {
-        const declared = new Set(recipe.phases.map((phase) => phase.canonical));
+      if (schematic.phases !== undefined) {
+        const declared = new Set(schematic.phases.map((phase) => phase.canonical));
         for (const omitted of seenOmits) {
           if (declared.has(omitted)) {
             ctx.addIssue({
@@ -606,7 +608,9 @@ export const WorkflowRecipe = z
         }
       }
       // omits must not include a phase that any item uses.
-      const itemCanonicals = new Set<CanonicalPhaseValue>(recipe.items.map((item) => item.phase));
+      const itemCanonicals = new Set<CanonicalPhaseValue>(
+        schematic.items.map((item) => item.phase),
+      );
       for (const omitted of seenOmits) {
         if (itemCanonicals.has(omitted)) {
           ctx.addIssue({
@@ -618,9 +622,9 @@ export const WorkflowRecipe = z
       }
     }
   });
-export type WorkflowRecipe = z.infer<typeof WorkflowRecipe>;
+export type FlowSchematic = z.infer<typeof FlowSchematic>;
 
-export type WorkflowRecipeCatalogCompatibilityIssue = {
+export type FlowSchematicCatalogCompatibilityIssue = {
   item_id?: string;
   message: string;
 };
@@ -628,7 +632,7 @@ export type WorkflowRecipeCatalogCompatibilityIssue = {
 function contractIsCompatible(
   expected: WorkflowPrimitiveContractRefValue,
   actual: WorkflowPrimitiveContractRefValue,
-  aliases: readonly WorkflowRecipeContractAlias[],
+  aliases: readonly SchematicContractAlias[],
 ): boolean {
   if (expected === actual) return true;
   return aliases.some((alias) => alias.generic === expected && alias.actual === actual);
@@ -640,10 +644,10 @@ function primitiveAcceptedInputSets(
   return [primitive.input_contracts, ...primitive.alternative_input_contracts];
 }
 
-function recipeItemSatisfiesInputSet(
-  item: WorkflowRecipeItem,
+function schematicStepSatisfiesInputSet(
+  item: SchematicStep,
   expectedContracts: readonly WorkflowPrimitiveContractRefValue[],
-  aliases: readonly WorkflowRecipeContractAlias[],
+  aliases: readonly SchematicContractAlias[],
 ): boolean {
   const actualContracts = Object.values(item.input);
   return expectedContracts.every((expected) =>
@@ -655,24 +659,22 @@ function formatContractSet(contracts: readonly WorkflowPrimitiveContractRefValue
   return `[${contracts.join(', ')}]`;
 }
 
-function isTerminalTarget(
-  target: WorkflowRecipeRouteTarget,
-): target is WorkflowRecipeTerminalTarget {
-  return WorkflowRecipeTerminalTarget.safeParse(target).success;
+function isTerminalTarget(target: StepRouteTarget): target is StepRouteTerminalTarget {
+  return StepRouteTerminalTarget.safeParse(target).success;
 }
 
-function recipeItemRouteTargets(item: WorkflowRecipeItem): WorkflowRecipeRouteTarget[] {
+function schematicStepRouteTargets(item: SchematicStep): StepRouteTarget[] {
   return [
     ...Object.values(item.routes),
     ...Object.values(item.route_overrides).flatMap((overrides) => Object.values(overrides)),
   ];
 }
 
-function recipeItemRouteOutcomes(item: WorkflowRecipeItem): string[] {
+function schematicStepRouteOutcomes(item: SchematicStep): string[] {
   return [...new Set([...Object.keys(item.routes), ...Object.keys(item.route_overrides)])];
 }
 
-// Recipe-author-selectable execution kinds for a primitive. The catalog's
+// Schematic-author-selectable execution kinds for a primitive. The catalog's
 // `action_surface` describes the primitive's *typical* role, but the actual
 // committed Workflows show that primitives are flexibly used: Build's plan
 // is inline synthesis though the catalog calls plan a "worker" primitive;
@@ -681,9 +683,7 @@ function recipeItemRouteOutcomes(item: WorkflowRecipeItem): string[] {
 // OR done inline as synthesis; an orchestrator primitive can write a brief
 // (synthesis) OR pause for confirmation (checkpoint). The runtime decides
 // based on rigor and architecture.
-function acceptedExecutionKinds(
-  primitive: WorkflowPrimitiveValue,
-): readonly WorkflowRecipeExecutionKind[] {
+function acceptedExecutionKinds(primitive: WorkflowPrimitiveValue): readonly StepExecutionKind[] {
   if (primitive.id === 'run-verification') return ['verification'];
   // sub-run is an orchestration pattern (parent invokes a child workflow,
   // gate admits the child's terminal verdict). The 'batch' primitive is
@@ -759,12 +759,12 @@ function contractSetsEqual(
 }
 
 function collectRouteAwareAvailability(
-  recipe: WorkflowRecipe,
+  schematic: FlowSchematic,
 ): Map<string, Set<WorkflowPrimitiveContractRefValue>> {
-  const itemById = new Map(recipe.items.map((item) => [item.id as unknown as string, item]));
+  const itemById = new Map(schematic.items.map((item) => [item.id as unknown as string, item]));
   const availableAt = new Map<string, Set<WorkflowPrimitiveContractRefValue>>();
-  const worklist: string[] = [recipe.starts_at];
-  availableAt.set(recipe.starts_at, new Set(recipe.initial_contracts));
+  const worklist: string[] = [schematic.starts_at];
+  availableAt.set(schematic.starts_at, new Set(schematic.initial_contracts));
 
   while (worklist.length > 0) {
     const itemId = worklist.shift();
@@ -776,7 +776,7 @@ function collectRouteAwareAvailability(
     const afterItem = new Set(current);
     afterItem.add(item.output);
 
-    for (const target of recipeItemRouteTargets(item)) {
+    for (const target of schematicStepRouteTargets(item)) {
       if (isTerminalTarget(target)) continue;
       const prior = availableAt.get(target);
       if (prior === undefined) {
@@ -795,19 +795,19 @@ function collectRouteAwareAvailability(
   return availableAt;
 }
 
-export function validateWorkflowRecipeCatalogCompatibility(
-  recipe: WorkflowRecipe,
+export function validateFlowSchematicCatalogCompatibility(
+  schematic: FlowSchematic,
   catalog: WorkflowPrimitiveCatalogValue,
-): WorkflowRecipeCatalogCompatibilityIssue[] {
+): FlowSchematicCatalogCompatibilityIssue[] {
   const parsedCatalog = WorkflowPrimitiveCatalog.safeParse(catalog);
   if (!parsedCatalog.success) {
     return [{ message: `primitive catalog failed to parse: ${parsedCatalog.error.message}` }];
   }
 
   const primitiveById = new Map(parsedCatalog.data.primitives.map((p) => [p.id, p]));
-  const issues: WorkflowRecipeCatalogCompatibilityIssue[] = [];
+  const issues: FlowSchematicCatalogCompatibilityIssue[] = [];
 
-  for (const item of recipe.items) {
+  for (const item of schematic.items) {
     const primitive = primitiveById.get(item.uses as WorkflowPrimitiveIdValue);
     if (primitive === undefined) {
       issues.push({
@@ -817,7 +817,7 @@ export function validateWorkflowRecipeCatalogCompatibility(
       continue;
     }
 
-    for (const route of recipeItemRouteOutcomes(item) as WorkflowPrimitiveRouteValue[]) {
+    for (const route of schematicStepRouteOutcomes(item) as WorkflowPrimitiveRouteValue[]) {
       if (!primitive.allowed_routes.includes(route)) {
         issues.push({
           item_id: item.id,
@@ -829,7 +829,7 @@ export function validateWorkflowRecipeCatalogCompatibility(
     const acceptedInputSets = primitiveAcceptedInputSets(primitive);
     if (
       !acceptedInputSets.some((expectedContracts) =>
-        recipeItemSatisfiesInputSet(item, expectedContracts, recipe.contract_aliases),
+        schematicStepSatisfiesInputSet(item, expectedContracts, schematic.contract_aliases),
       )
     ) {
       issues.push({
@@ -840,7 +840,7 @@ export function validateWorkflowRecipeCatalogCompatibility(
       });
     }
 
-    if (!contractIsCompatible(primitive.output_contract, item.output, recipe.contract_aliases)) {
+    if (!contractIsCompatible(primitive.output_contract, item.output, schematic.contract_aliases)) {
       issues.push({
         item_id: item.id,
         message: `output "${item.output}" is not compatible with primitive output "${primitive.output_contract}"`,
@@ -851,7 +851,7 @@ export function validateWorkflowRecipeCatalogCompatibility(
       if (!item.evidence_requirements.includes(requirement)) {
         issues.push({
           item_id: item.id,
-          message: `evidence requirement "${requirement}" from primitive "${item.uses}" is not declared by recipe item`,
+          message: `evidence requirement "${requirement}" from primitive "${item.uses}" is not declared by schematic item`,
         });
       }
     }
@@ -873,13 +873,13 @@ export function validateWorkflowRecipeCatalogCompatibility(
     }
   }
 
-  const availableAt = collectRouteAwareAvailability(recipe);
-  for (const item of recipe.items) {
+  const availableAt = collectRouteAwareAvailability(schematic);
+  for (const item of schematic.items) {
     const availableContracts = availableAt.get(item.id);
     if (availableContracts === undefined) {
       issues.push({
         item_id: item.id,
-        message: 'recipe item is unreachable from starts_at',
+        message: 'schematic item is unreachable from starts_at',
       });
       continue;
     }

@@ -24,7 +24,7 @@ const BUILD_SIGNALS: readonly WorkflowSignal[] = [
 export const buildWorkflowPackage: WorkflowPackage = {
   id: 'build',
   paths: {
-    recipe: 'src/workflows/build/recipe.json',
+    schematic: 'src/workflows/build/schematic.json',
     command: 'src/workflows/build/command.md',
     contract: 'src/workflows/build/contract.md',
   },

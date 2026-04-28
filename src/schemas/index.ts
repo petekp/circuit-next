@@ -19,4 +19,4 @@ export * from './step.js';
 export * from './verification.js';
 export * from './workflow.js';
 export * from './workflow-primitives.js';
-export * from './workflow-recipe.js';
+export * from './flow-schematic.js';

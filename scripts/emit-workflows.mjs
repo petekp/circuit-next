@@ -1,15 +1,16 @@
-// Build-time emit + CI drift check for compiled Workflow fixtures.
+// Build-time emit + CI drift check for compiled flow JSON files.
 //
-// Reads the active recipes under specs/workflow-recipes/, compiles each
-// to a CompileResult via src/runtime/compile-recipe-to-workflow.ts
-// (consumed here through dist/), and writes the JSON files under
-// .claude-plugin/skills/<id>/. Then runs `biome format --write` on the
-// emitted files so they match the surrounding formatting.
+// Reads the active schematics declared by each workflow package and
+// compiles each to a CompileResult via
+// src/runtime/compile-schematic-to-workflow.ts (consumed here through
+// dist/), then writes the JSON files under .claude-plugin/skills/<id>/.
+// Then runs `biome format --write` on the emitted files so they match
+// the surrounding formatting.
 //
 // File layout:
 //   - kind:'single'   → .claude-plugin/skills/<id>/circuit.json
-//                       (entry_modes carries the full recipe list)
-//   - kind:'per-mode' → group compiled Workflows by graph identity
+//                       (entry_modes carries the full schematic list)
+//   - kind:'per-mode' → group compiled flows by graph identity
 //                       (everything except entry_modes). The largest
 //                       group goes to circuit.json with merged
 //                       entry_modes; remaining modes get one file each
@@ -46,17 +47,17 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const projectRoot = resolve(__dirname, '..');
 
-// RECIPES is loaded from src/workflows/catalog.ts (compiled to dist/) so
-// adding a workflow doesn't require touching this script. The compiled
+// SCHEMATICS is loaded from src/workflows/catalog.ts (compiled to dist/)
+// so adding a flow doesn't require touching this script. The compiled
 // catalog is read once at startup and snapshotted into the constant
 // below for the rest of the script.
-async function loadRecipesFromCatalog() {
+async function loadSchematicsFromCatalog() {
   const catalogPath = resolve(projectRoot, 'dist/workflows/catalog.js');
   try {
     const { workflowPackages } = await import(catalogPath);
     return workflowPackages.map((pkg) => ({
       id: pkg.id,
-      recipePath: pkg.paths.recipe,
+      schematicPath: pkg.paths.schematic,
       commandSourcePath: pkg.paths.command,
     }));
   } catch (err) {
@@ -67,12 +68,12 @@ async function loadRecipesFromCatalog() {
   }
 }
 
-const RECIPES = await loadRecipesFromCatalog();
+const SCHEMATICS = await loadSchematicsFromCatalog();
 
-// Slash command source files live next to their workflow under
+// Slash command source files live next to their flow under
 // src/workflows/<id>/command.md. The plugin loader reads commands/<id>.md
 // at the repo root, so this script copies the source to the plugin
-// location. commands/run.md is owned by the CLI router (not a workflow)
+// location. commands/run.md is owned by the CLI router (not a flow)
 // and is not generated.
 function emitCommandFile(entry) {
   if (entry.commandSourcePath === undefined) return;
@@ -119,10 +120,10 @@ function checkCommandFile(entry) {
 }
 
 async function loadCompilerModule() {
-  // dist/runtime/compile-recipe-to-workflow.js is produced by `npm run build`.
-  // The emit script depends on a fresh dist/, so callers should run `npm run
-  // build` first (the verify pipeline does this in order).
-  const distPath = resolve(projectRoot, 'dist/runtime/compile-recipe-to-workflow.js');
+  // dist/runtime/compile-schematic-to-workflow.js is produced by `npm run
+  // build`. The emit script depends on a fresh dist/, so callers should
+  // run `npm run build` first (the verify pipeline does this in order).
+  const distPath = resolve(projectRoot, 'dist/runtime/compile-schematic-to-workflow.js');
   try {
     return await import(distPath);
   } catch (err) {
@@ -133,19 +134,19 @@ async function loadCompilerModule() {
   }
 }
 
-async function loadRecipeSchemaModule() {
-  const distPath = resolve(projectRoot, 'dist/schemas/workflow-recipe.js');
+async function loadSchematicSchemaModule() {
+  const distPath = resolve(projectRoot, 'dist/schemas/flow-schematic.js');
   return import(distPath);
 }
 
-async function compileOne(recipePath) {
-  const [{ compileRecipeToWorkflow }, { WorkflowRecipe }] = await Promise.all([
+async function compileOneSchematic(schematicPath) {
+  const [{ compileSchematicToWorkflow }, { FlowSchematic }] = await Promise.all([
     loadCompilerModule(),
-    loadRecipeSchemaModule(),
+    loadSchematicSchemaModule(),
   ]);
-  const raw = JSON.parse(readFileSync(resolve(projectRoot, recipePath), 'utf8'));
-  const recipe = WorkflowRecipe.parse(raw);
-  return compileRecipeToWorkflow(recipe);
+  const raw = JSON.parse(readFileSync(resolve(projectRoot, schematicPath), 'utf8'));
+  const schematic = FlowSchematic.parse(raw);
+  return compileSchematicToWorkflow(schematic);
 }
 
 function stringifyWorkflow(workflow) {
@@ -159,8 +160,8 @@ function biomeFormatInPlace(absolutePath) {
   });
 }
 
-// Stable structural identity for grouping per-mode Workflows. Two compiled
-// Workflows belong to the same group when their stringified form (with
+// Stable structural identity for grouping per-mode flows. Two compiled
+// flows belong to the same group when their stringified form (with
 // entry_modes stripped) is byte-identical. JSON.stringify is deterministic
 // for our object construction order.
 function graphIdentityHash(workflow) {
@@ -168,10 +169,10 @@ function graphIdentityHash(workflow) {
   return JSON.stringify(rest);
 }
 
-// Decide the per-recipe file plan: what to write, where, and with which
+// Decide the per-schematic file plan: what to write, where, and with which
 // entry_modes payload. Exposed so the emit and check paths share the
 // same logic.
-function planRecipeFiles(id, result) {
+function planSchematicFiles(id, result) {
   if (result.kind === 'single') {
     return [
       {
@@ -221,12 +222,12 @@ function planRecipeFiles(id, result) {
   return plan;
 }
 
-// Returns the set of unexpected `*.json` files in a recipe's skill directory:
+// Returns the set of unexpected `*.json` files in a flow's skill directory:
 // anything on disk under `.claude-plugin/skills/<id>/` that ends in `.json`
 // but isn't in the emit plan. These are stale per-mode siblings from a
-// renamed/collapsed entry mode — the CLI loader at src/cli/dogfood.ts
-// prefers `<mode>.json` over `circuit.json`, so a stale sibling can drive
-// runtime behavior even though `npm run verify` stays green.
+// renamed/collapsed entry mode — the CLI loader prefers `<mode>.json` over
+// `circuit.json`, so a stale sibling can drive runtime behavior even though
+// `npm run verify` stays green.
 function findStaleSiblings(id, plan) {
   const skillDirAbs = resolve(projectRoot, `.claude-plugin/skills/${id}`);
   if (!existsSync(skillDirAbs)) return [];
@@ -237,9 +238,9 @@ function findStaleSiblings(id, plan) {
 }
 
 async function emitMode() {
-  for (const entry of RECIPES) {
-    const result = await compileOne(entry.recipePath);
-    const plan = planRecipeFiles(entry.id, result);
+  for (const entry of SCHEMATICS) {
+    const result = await compileOneSchematic(entry.schematicPath);
+    const plan = planSchematicFiles(entry.id, result);
     for (const { outRel, workflow } of plan) {
       const outAbs = resolve(projectRoot, outRel);
       mkdirSync(dirname(outAbs), { recursive: true });
@@ -262,9 +263,9 @@ async function checkMode() {
   const tmpDir = mkdtempSync(join(tmpdir(), 'workflow-drift-'));
   let drifted = false;
   try {
-    for (const entry of RECIPES) {
-      const result = await compileOne(entry.recipePath);
-      const plan = planRecipeFiles(entry.id, result);
+    for (const entry of SCHEMATICS) {
+      const result = await compileOneSchematic(entry.schematicPath);
+      const plan = planSchematicFiles(entry.id, result);
       for (const { outRel, workflow } of plan) {
         const tmpFile = join(tmpDir, outRel.replace(/[/]/g, '_'));
         writeFileSync(tmpFile, stringifyWorkflow(workflow));
@@ -276,15 +277,15 @@ async function checkMode() {
           committedBytes = readFileSync(committedAbs, 'utf8');
         } catch (_err) {
           console.error(
-            `✗ ${outRel} is missing on disk but the recipe compiles to it. Run \`npm run emit-workflows\` to regenerate, then commit.`,
+            `✗ ${outRel} is missing on disk but the schematic compiles to it. Run \`npm run emit-workflows\` to regenerate, then commit.`,
           );
           drifted = true;
           continue;
         }
         if (compiledBytes === committedBytes) {
-          console.log(`✓ ${outRel} is in sync with ${entry.recipePath}`);
+          console.log(`✓ ${outRel} is in sync with ${entry.schematicPath}`);
         } else {
-          console.error(`✗ ${outRel} drifted from compiled output of ${entry.recipePath}`);
+          console.error(`✗ ${outRel} drifted from compiled output of ${entry.schematicPath}`);
           console.error('  Run `npm run emit-workflows` to regenerate, then commit the diff.');
           drifted = true;
         }
@@ -295,7 +296,7 @@ async function checkMode() {
       const stale = findStaleSiblings(entry.id, plan);
       for (const rel of stale) {
         console.error(
-          `✗ ${rel} is not in the emit plan for ${entry.recipePath}. Run \`npm run emit-workflows\` to clean up stale siblings, then commit the deletion.`,
+          `✗ ${rel} is not in the emit plan for ${entry.schematicPath}. Run \`npm run emit-workflows\` to clean up stale siblings, then commit the deletion.`,
         );
         drifted = true;
       }

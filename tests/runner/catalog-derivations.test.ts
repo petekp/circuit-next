@@ -27,7 +27,7 @@ import type { WorkflowPackage } from '../../src/workflows/types.js';
 function fakePackage(opts: Partial<WorkflowPackage> & { readonly id: string }): WorkflowPackage {
   return {
     id: opts.id,
-    paths: opts.paths ?? { recipe: `synthetic/${opts.id}.recipe.json` },
+    paths: opts.paths ?? { schematic: `synthetic/${opts.id}.schematic.json` },
     ...(opts.routing === undefined ? {} : { routing: opts.routing }),
     dispatchArtifacts: opts.dispatchArtifacts ?? [],
     writers: opts.writers ?? { synthesis: [], close: [], verification: [], checkpoint: [] },

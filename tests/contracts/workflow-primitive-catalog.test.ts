@@ -8,7 +8,7 @@ import {
 
 const catalogPath = 'docs/workflows/primitive-catalog.json';
 const primitivesDocPath = 'docs/workflows/primitives.md';
-const compositionDocPath = 'docs/workflows/recipe-composition.md';
+const compositionDocPath = 'docs/workflows/flow-schematics.md';
 
 function readCatalog() {
   return JSON.parse(readFileSync(catalogPath, 'utf8')) as unknown;

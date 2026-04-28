@@ -20,7 +20,7 @@ import { sweepVerificationWriter } from './writers/verification.js';
 export const sweepWorkflowPackage: WorkflowPackage = {
   id: 'sweep',
   paths: {
-    recipe: 'src/workflows/sweep/recipe.json',
+    schematic: 'src/workflows/sweep/schematic.json',
   },
   dispatchArtifacts: [
     {

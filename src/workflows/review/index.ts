@@ -37,7 +37,7 @@ const REVIEW_SIGNALS: readonly WorkflowSignal[] = [
 export const reviewWorkflowPackage: WorkflowPackage = {
   id: 'review',
   paths: {
-    recipe: 'src/workflows/review/recipe.json',
+    schematic: 'src/workflows/review/schematic.json',
     command: 'src/workflows/review/command.md',
     contract: 'src/workflows/review/contract.md',
   },
