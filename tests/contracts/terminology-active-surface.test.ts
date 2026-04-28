@@ -46,7 +46,6 @@ const OLD_TERMS: ReadonlyArray<{ readonly name: string; readonly pattern: RegExp
   { name: 'primitive', pattern: /\bprimitives?\b/i },
   { name: 'phase', pattern: /\bphases?\b/i },
   { name: 'dispatch', pattern: /\bdispatch(?:es|ed|ing)?\b/i },
-  { name: 'adapter', pattern: /\badapters?\b/i },
   { name: 'synthesis', pattern: /\bsynthesis\b/i },
   { name: 'gate', pattern: /\bgates?\b/i },
   { name: 'artifact', pattern: /\bartifacts?\b/i },

@@ -4,6 +4,7 @@ import type { LayeredConfig as LayeredConfigValue } from '../schemas/config.js';
 import type { ResolvedConnector } from '../schemas/connector.js';
 import type { Depth } from '../schemas/depth.js';
 import type { CompiledFlowId, InvocationId, RunId } from '../schemas/ids.js';
+import type { ProgressEvent } from '../schemas/progress-event.js';
 import type { RunResult } from '../schemas/result.js';
 import type { ResolvedSelection } from '../schemas/selection-policy.js';
 import type { Snapshot } from '../schemas/snapshot.js';
@@ -60,6 +61,7 @@ export interface ResolvedChildCompiledFlow {
 }
 
 export type ChildCompiledFlowResolver = (ref: CompiledFlowRef) => ResolvedChildCompiledFlow;
+export type ProgressReporter = (event: ProgressEvent) => void;
 
 // Fanout-runtime worktree provisioning seam. Default implementation
 // shells out to `git worktree add` / `git worktree remove`. The seam
@@ -120,6 +122,10 @@ export interface CompiledFlowInvocation {
   // `git worktree add/remove`. Tests inject in-memory stubs so they
   // don't require a real git repo at projectRoot.
   worktreeRunner?: WorktreeRunner;
+  // Optional host-facing progress stream. The CLI wires this to stderr
+  // JSONL for hosts that want live updates while preserving final stdout
+  // JSON. Runtime correctness never depends on this callback.
+  progress?: ProgressReporter;
 }
 
 export interface CheckpointResumeInvocation {
@@ -133,6 +139,7 @@ export interface CheckpointResumeInvocation {
   childCompiledFlowResolver?: ChildCompiledFlowResolver;
   childRunner?: CompiledFlowRunner;
   worktreeRunner?: WorktreeRunner;
+  progress?: ProgressReporter;
 }
 
 export interface CheckpointWaitingResult {

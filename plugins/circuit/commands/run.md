@@ -50,53 +50,59 @@ metacharacters:
    Example for an exploratory task `find deprecated APIs`:
 
    ```bash
-   node '<plugin root>/scripts/circuit-next.mjs' run --goal 'find deprecated APIs'
+   node '<plugin root>/scripts/circuit-next.mjs' run --goal 'find deprecated APIs' --progress jsonl
    ```
 
    Example for a review task `review this change for safety problems`:
 
    ```bash
-   node '<plugin root>/scripts/circuit-next.mjs' run --goal 'review this change for safety problems'
+   node '<plugin root>/scripts/circuit-next.mjs' run --goal 'review this change for safety problems' --progress jsonl
    ```
 
    Example for a Build task `develop: add a focused feature`:
 
    ```bash
-   node '<plugin root>/scripts/circuit-next.mjs' run --goal 'develop: add a focused feature'
+   node '<plugin root>/scripts/circuit-next.mjs' run --goal 'develop: add a focused feature' --progress jsonl
    ```
 
    Example for a Build task using both an entry mode and an explicit
    `--depth` flag:
 
    ```bash
-   node '<plugin root>/scripts/circuit-next.mjs' run --goal 'develop: make the focused change' --entry-mode deep --depth standard
+   node '<plugin root>/scripts/circuit-next.mjs' run --goal 'develop: make the focused change' --entry-mode deep --depth standard --progress jsonl
    ```
 
    Example for a Fix task `fix the foo bug`:
 
    ```bash
-   node '<plugin root>/scripts/circuit-next.mjs' run --goal 'fix the foo bug'
+   node '<plugin root>/scripts/circuit-next.mjs' run --goal 'fix the foo bug' --progress jsonl
    ```
 
    Example for a Fix task using Lite mode (skips the review pass):
 
    ```bash
-   node '<plugin root>/scripts/circuit-next.mjs' run --goal 'fix the missing-token edge case' --entry-mode lite
+   node '<plugin root>/scripts/circuit-next.mjs' run --goal 'fix the missing-token edge case' --entry-mode lite --progress jsonl
    ```
 
    Example for a task `can't ship` (contains one apostrophe):
 
    ```bash
-   node '<plugin root>/scripts/circuit-next.mjs' run --goal 'can'\''t ship'
+   node '<plugin root>/scripts/circuit-next.mjs' run --goal 'can'\''t ship' --progress jsonl
    ```
 
    Use the Bash tool to execute the constructed command. The wrapper
    lives in the installed Circuit plugin directory and injects the plugin's
    packaged flow root before it invokes `circuit-next`.
-3. **Parse the CLI's JSON output and surface:** `selected_flow`,
+3. **Render progress while the run is active.** `--progress jsonl` writes
+   machine-readable progress events to stderr and keeps the final result JSON
+   on stdout. Surface short updates for the selected flow, major stage
+   changes, evidence warnings, relay role and connector, checkpoint choices,
+   and completion. Do not show raw step IDs unless the user asks for debug
+   detail. Keep host/orchestrator and worker connector distinct in prose.
+4. **Parse the CLI's final JSON output and surface:** `selected_flow`,
    `routed_by`, `router_reason`, `outcome`, `run_folder`, `trace_entries_observed`,
    and `result_path` when present. If present, also surface `router_signal`.
-4. **Surface the selected flow's final report when available.**
+5. **Surface the selected flow's final report when available.**
    For `selected_flow === "explore"`, read the run-folder-relative
    `reports/explore-result.json` close-step report (this is a baseline
    placeholder report; surface that caveat when present). For
@@ -112,17 +118,17 @@ metacharacters:
    summarize the change and verification evidence, follow its
    `evidence_links` entries (for example `fix.change` and the
    verification report) and read those reports.
-5. **If `outcome === "checkpoint_waiting"`, do not read or claim
+6. **If `outcome === "checkpoint_waiting"`, do not read or claim
    `result_path`.** Surface the routed metadata (`selected_flow`,
    `routed_by`, `router_reason`, and optional `router_signal`), then surface
    `checkpoint.step_id`, `checkpoint.request_path`,
    `checkpoint.allowed_choices`, and the exact resume command:
 
    ```bash
-   node '<plugin root>/scripts/circuit-next.mjs' resume --run-folder '<run_folder>' --checkpoint-choice '<choice>'
+   node '<plugin root>/scripts/circuit-next.mjs' resume --run-folder '<run_folder>' --checkpoint-choice '<choice>' --progress jsonl
    ```
 
-6. **If `outcome === "aborted"`, read `reports/result.json` at
+7. **If `outcome === "aborted"`, read `reports/result.json` at
    `result_path` to surface the abort `reason`.**
 
 ## Direct Flow Bypass

@@ -37,31 +37,31 @@ metacharacters:
    Default Build:
 
    ```bash
-   node '<plugin root>/scripts/circuit-next.mjs' run build --goal 'add a focused feature'
+   node '<plugin root>/scripts/circuit-next.mjs' run build --goal 'add a focused feature' --progress jsonl
    ```
 
    Lite Build:
 
    ```bash
-   node '<plugin root>/scripts/circuit-next.mjs' run build --goal 'make a small change' --entry-mode lite
+   node '<plugin root>/scripts/circuit-next.mjs' run build --goal 'make a small change' --entry-mode lite --progress jsonl
    ```
 
    Deep Build with explicit standard depth in the same invocation:
 
    ```bash
-   node '<plugin root>/scripts/circuit-next.mjs' run build --goal 'make the focused change' --entry-mode deep --depth standard
+   node '<plugin root>/scripts/circuit-next.mjs' run build --goal 'make the focused change' --entry-mode deep --depth standard --progress jsonl
    ```
 
    Autonomous Build:
 
    ```bash
-   node '<plugin root>/scripts/circuit-next.mjs' run build --goal 'ship the requested fix' --entry-mode autonomous
+   node '<plugin root>/scripts/circuit-next.mjs' run build --goal 'ship the requested fix' --entry-mode autonomous --progress jsonl
    ```
 
    Example for a task `can't ship` (contains one apostrophe):
 
    ```bash
-   node '<plugin root>/scripts/circuit-next.mjs' run build --goal 'can'\''t ship'
+   node '<plugin root>/scripts/circuit-next.mjs' run build --goal 'can'\''t ship' --progress jsonl
    ```
 
    Use the Bash tool to execute the constructed command. The wrapper
@@ -74,24 +74,29 @@ metacharacters:
 3. **Keep `--depth` separate from `--entry-mode`.** If the operator asks for
    an explicit depth level, pass it with `--depth`. A single command may carry
    both flags, as shown above.
-4. **Parse the CLI's JSON output.** Always surface `flow_id`, `outcome`,
+4. **Render progress while the run is active.** `--progress jsonl` writes
+   progress events to stderr and keeps the final result JSON on stdout.
+   Surface the selected flow, major stage changes, relay role and connector,
+   checkpoint choices, evidence warnings when present, and completion. Do not
+   show raw step IDs unless the user asks for debug detail.
+5. **Parse the CLI's final JSON output.** Always surface `flow_id`, `outcome`,
    `run_folder`, and `trace_entries_observed`.
-5. **If `outcome === "checkpoint_waiting"`, do not read or claim
+6. **If `outcome === "checkpoint_waiting"`, do not read or claim
    `result_path`.** Instead surface the waiting checkpoint details:
    `checkpoint.step_id`, `checkpoint.request_path`,
    `checkpoint.allowed_choices`, and the exact resume command:
 
    ```bash
-   node '<plugin root>/scripts/circuit-next.mjs' resume --run-folder '<run_folder>' --checkpoint-choice '<choice>'
+   node '<plugin root>/scripts/circuit-next.mjs' resume --run-folder '<run_folder>' --checkpoint-choice '<choice>' --progress jsonl
    ```
 
-6. **If `outcome === "complete"`, read the Build final report.** Surface
+7. **If `outcome === "complete"`, read the Build final report.** Surface
    `result_path`, then read the run-folder-relative
    `reports/build-result.json` report. Surface its review result fields;
    to summarize changed files and evidence, follow its `evidence_links`
    entry (in prose: evidence links) for `build.implementation` and read that
    report.
-7. **If `outcome === "aborted"`, read `reports/result.json` at
+8. **If `outcome === "aborted"`, read `reports/result.json` at
    `result_path` and surface the abort reason.**
 
 ## Authority

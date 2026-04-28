@@ -10,6 +10,7 @@ export * from './manifest.js';
 export * from './stage.js';
 export * from './scalars.js';
 export * from './result.js';
+export * from './progress-event.js';
 export * from './depth.js';
 export * from './role.js';
 export * from './run.js';

@@ -6,6 +6,10 @@ import type { ChangeKindDeclaration } from '../schemas/change-kind.js';
 import { CompiledFlow } from '../schemas/compiled-flow.js';
 import { Depth } from '../schemas/depth.js';
 import { RunId } from '../schemas/ids.js';
+import {
+  ProgressEvent,
+  type ProgressEvent as ProgressEventValue,
+} from '../schemas/progress-event.js';
 
 import { discoverConfigLayers } from '../runtime/config-loader.js';
 import { validateCompiledFlowKindPolicy } from '../runtime/policy/flow-kind-policy.js';
@@ -46,6 +50,7 @@ interface ParsedArgs {
   fixturePath?: string;
   flowRoot?: string;
   checkpointChoice?: string;
+  progress?: 'jsonl';
 }
 
 interface ResolvedCompiledFlowRoute {
@@ -65,8 +70,8 @@ export interface CliMainOptions {
 
 function usage(): string {
   return [
-    'usage: circuit-next run [flow-name] --goal "<goal>" [--mode <default|lite|deep|autonomous>] [--depth <lite|standard|deep|tournament|autonomous>] [--run-folder <path>] [--fixture <path>] [--flow-root <path>]',
-    '       circuit-next resume --run-folder <path> --checkpoint-choice <choice>',
+    'usage: circuit-next run [flow-name] --goal "<goal>" [--mode <default|lite|deep|autonomous>] [--depth <lite|standard|deep|tournament|autonomous>] [--run-folder <path>] [--fixture <path>] [--flow-root <path>] [--progress jsonl]',
+    '       circuit-next resume --run-folder <path> --checkpoint-choice <choice> [--progress jsonl]',
     '',
     '`--mode` is the friendly alias for `--entry-mode`; supplying both forms of that option is an error.',
     '',
@@ -90,6 +95,7 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
   let fixturePath: string | undefined;
   let flowRoot: string | undefined;
   let checkpointChoice: string | undefined;
+  let progress: 'jsonl' | undefined;
 
   for (let i = 0; i < argv.length; i++) {
     const tok = argv[i];
@@ -155,6 +161,14 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
       const next = argv[i + 1];
       if (next === undefined) throw new Error('--checkpoint-choice requires a value');
       checkpointChoice = next;
+      i += 1;
+      continue;
+    }
+    if (tok === '--progress') {
+      const next = argv[i + 1];
+      if (next === undefined) throw new Error('--progress requires a value');
+      if (next !== 'jsonl') throw new Error("--progress only supports 'jsonl'");
+      progress = 'jsonl';
       i += 1;
       continue;
     }
@@ -226,6 +240,7 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
   if (fixturePath !== undefined) result.fixturePath = fixturePath;
   if (flowRoot !== undefined) result.flowRoot = flowRoot;
   if (checkpointChoice !== undefined) result.checkpointChoice = checkpointChoice;
+  if (progress !== undefined) result.progress = progress;
   return result;
 }
 
@@ -246,6 +261,14 @@ function resolveFixturePath(
     if (existsSync(perMode)) return perMode;
   }
   return resolve(root, flowName, 'circuit.json');
+}
+
+function progressReporter(enabled: boolean): ((event: ProgressEventValue) => void) | undefined {
+  if (!enabled) return undefined;
+  return (event) => {
+    const parsed = ProgressEvent.parse(event);
+    process.stderr.write(`${JSON.stringify(parsed)}\n`);
+  };
 }
 
 function resolveCompiledFlowRoute(args: ParsedArgs): ResolvedCompiledFlowRoute {
@@ -306,12 +329,14 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
       ...(options.configHomeDir !== undefined ? { homeDir: options.configHomeDir } : {}),
       ...(options.configCwd !== undefined ? { cwd: options.configCwd } : {}),
     });
+    const progress = progressReporter(args.progress === 'jsonl');
     const outcome = await resumeCompiledFlowCheckpoint({
       runFolder,
       selection: args.checkpointChoice,
       projectRoot: resolve(options.configCwd ?? process.cwd()),
       now: options.now ?? (() => new Date()),
       ...(options.relayer === undefined ? {} : { relayer: options.relayer }),
+      ...(progress === undefined ? {} : { progress }),
       ...(selectionConfigLayers.length === 0 ? {} : { selectionConfigLayers }),
     });
     process.stdout.write(
@@ -347,6 +372,19 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
   assertFixtureMatchesRoute(flow, route);
   const runId = RunId.parse(options.runId ?? randomUUID());
   const now = options.now ?? (() => new Date());
+  const progress = progressReporter(args.progress === 'jsonl');
+  progress?.({
+    schema_version: 1,
+    type: 'route.selected',
+    run_id: runId,
+    flow_id: flow.id,
+    recorded_at: now().toISOString(),
+    label: `Selected ${route.flowName}`,
+    selected_flow: flow.id,
+    routed_by: route.source,
+    router_reason: route.reason,
+    ...(route.matched_signal === undefined ? {} : { router_signal: route.matched_signal }),
+  });
   const runFolder = resolve(args.runFolder ?? `${DEFAULT_RUNS_BASE}/${runId as unknown as string}`);
   const selectionConfigLayers = discoverConfigLayers({
     ...(options.configHomeDir !== undefined ? { homeDir: options.configHomeDir } : {}),
@@ -375,6 +413,7 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
   if (args.depth !== undefined) invocation.depth = args.depth;
   if (args.entryMode !== undefined) invocation.entryModeName = args.entryMode;
   if (options.relayer !== undefined) invocation.relayer = options.relayer;
+  if (progress !== undefined) invocation.progress = progress;
   if (selectionConfigLayers.length > 0) {
     invocation.selectionConfigLayers = selectionConfigLayers;
   }

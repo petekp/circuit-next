@@ -9,6 +9,24 @@ export type ReviewResultVerdict = z.infer<typeof ReviewResultVerdict>;
 export const ReviewRelayVerdict = z.enum(['NO_ISSUES_FOUND', 'ISSUES_FOUND']);
 export type ReviewRelayVerdict = z.infer<typeof ReviewRelayVerdict>;
 
+export const ReviewEvidenceWarningKind = z.enum([
+  'diff_truncated',
+  'git_command_failed',
+  'untracked_file_skipped',
+  'untracked_files_truncated',
+  'evidence_unavailable',
+]);
+export type ReviewEvidenceWarningKind = z.infer<typeof ReviewEvidenceWarningKind>;
+
+export const ReviewEvidenceWarning = z
+  .object({
+    kind: ReviewEvidenceWarningKind,
+    message: z.string().min(1),
+    path: z.string().min(1).optional(),
+  })
+  .strict();
+export type ReviewEvidenceWarning = z.infer<typeof ReviewEvidenceWarning>;
+
 export const ReviewEvidenceText = z
   .object({
     text: z.string(),
@@ -54,6 +72,7 @@ export const ReviewIntake = z
   .object({
     scope: z.string().min(1),
     evidence: ReviewEvidence,
+    evidence_warnings: z.array(ReviewEvidenceWarning).default([]),
   })
   .strict();
 export type ReviewIntake = z.infer<typeof ReviewIntake>;
@@ -81,6 +100,7 @@ export const ReviewResult = z
     scope: z.string().min(1),
     findings: z.array(ReviewFinding),
     verdict: ReviewResultVerdict,
+    evidence_warnings: z.array(ReviewEvidenceWarning).default([]),
   })
   .strict()
   .superRefine((report, ctx) => {

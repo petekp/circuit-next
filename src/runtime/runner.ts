@@ -13,9 +13,15 @@ import { dirname, join } from 'node:path';
 import type { ChangeKindDeclaration } from '../schemas/change-kind.js';
 import { CompiledFlow } from '../schemas/compiled-flow.js';
 import { LayeredConfig, type LayeredConfig as LayeredConfigValue } from '../schemas/config.js';
+import {
+  BUILTIN_CONNECTOR_CAPABILITIES,
+  type FilesystemCapability,
+  type ResolvedConnector,
+} from '../schemas/connector.js';
 import type { Depth } from '../schemas/depth.js';
-import type { CompiledFlowId, InvocationId, RunId } from '../schemas/ids.js';
+import { type CompiledFlowId, type InvocationId, type RunId, StepId } from '../schemas/ids.js';
 import { computeManifestHash } from '../schemas/manifest.js';
+import type { ProgressEvent } from '../schemas/progress-event.js';
 import type { Snapshot } from '../schemas/snapshot.js';
 import type { RunClosedOutcome, TraceEntry } from '../schemas/trace-entry.js';
 import { appendAndDerive } from './append-and-derive.js';
@@ -46,6 +52,7 @@ import type {
   CompiledFlowRunner,
   ComposeWriterFn,
   ComposeWriterInput,
+  ProgressReporter,
   RelayFn,
   RelayResultMetadata,
   WorktreeRunner,
@@ -209,6 +216,102 @@ function readJsonReport(runFolder: string, path: string): unknown {
   return JSON.parse(readFileSync(resolveRunRelative(runFolder, path), 'utf8')) as unknown;
 }
 
+function reportProgress(progress: ProgressReporter | undefined, event: ProgressEvent): void {
+  if (progress === undefined) return;
+  try {
+    progress(event);
+  } catch {
+    // Progress is a host-facing side channel. A broken renderer must not
+    // corrupt the run or change terminal behavior.
+  }
+}
+
+function connectorName(connector: ResolvedConnector): string {
+  return connector.name;
+}
+
+function connectorFilesystemCapability(connector: ResolvedConnector): FilesystemCapability {
+  return connector.kind === 'builtin'
+    ? BUILTIN_CONNECTOR_CAPABILITIES[connector.name].filesystem
+    : connector.capabilities.filesystem;
+}
+
+function progressStepTitle(flow: CompiledFlow, stepId: unknown): string {
+  const step = flow.steps.find((candidate) => candidate.id === stepId);
+  return step?.title ?? String(stepId);
+}
+
+function warningRecordsFromReport(body: unknown): Array<{
+  readonly kind: string;
+  readonly message: string;
+  readonly path?: string;
+}> {
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) return [];
+  const raw = (body as Record<string, unknown>).evidence_warnings;
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item) => {
+    if (item === null || typeof item !== 'object' || Array.isArray(item)) return [];
+    const record = item as Record<string, unknown>;
+    if (typeof record.kind !== 'string' || typeof record.message !== 'string') return [];
+    return [
+      {
+        kind: record.kind,
+        message: record.message,
+        ...(typeof record.path === 'string' ? { path: record.path } : {}),
+      },
+    ];
+  });
+}
+
+function reportEvidenceProgress(input: {
+  readonly progress?: ProgressReporter;
+  readonly runFolder: string;
+  readonly flow: CompiledFlow;
+  readonly runId: RunId;
+  readonly recordedAt: string;
+  readonly traceEntry: Extract<TraceEntry, { kind: 'step.report_written' }>;
+}): void {
+  let body: unknown;
+  try {
+    body = readJsonReport(input.runFolder, input.traceEntry.report_path);
+  } catch {
+    return;
+  }
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) return;
+  const record = body as Record<string, unknown>;
+  const hasEvidence = Object.hasOwn(record, 'evidence');
+  const warnings = warningRecordsFromReport(record);
+  if (!hasEvidence && warnings.length === 0) return;
+
+  reportProgress(input.progress, {
+    schema_version: 1,
+    type: 'evidence.collected',
+    run_id: input.runId,
+    flow_id: input.flow.id,
+    recorded_at: input.recordedAt,
+    label: warnings.length > 0 ? 'Collected evidence with warnings' : 'Collected evidence',
+    step_id: input.traceEntry.step_id,
+    report_path: input.traceEntry.report_path,
+    report_schema: input.traceEntry.report_schema,
+    warning_count: warnings.length,
+  });
+  for (const warning of warnings) {
+    reportProgress(input.progress, {
+      schema_version: 1,
+      type: 'evidence.warning',
+      run_id: input.runId,
+      flow_id: input.flow.id,
+      recorded_at: input.recordedAt,
+      label: 'Evidence warning',
+      step_id: input.traceEntry.step_id,
+      report_path: input.traceEntry.report_path,
+      warning_kind: warning.kind,
+      message: warning.message,
+      ...(warning.path === undefined ? {} : { path: warning.path }),
+    });
+  }
+}
+
 // Compose writer fallback. CompiledFlow-specific compose logic lives
 // under src/runtime/registries/compose-writers/ and is registered by
 // output schema name; close-with-evidence relay lives in
@@ -290,6 +393,7 @@ interface CompiledFlowExecutionContext {
   readonly childCompiledFlowResolver?: ChildCompiledFlowResolver;
   readonly childRunner?: CompiledFlowRunner;
   readonly worktreeRunner?: WorktreeRunner;
+  readonly progress?: ProgressReporter;
 }
 
 function selectEntryMode(
@@ -540,6 +644,15 @@ async function executeCompiledFlow(
       bootstrapTraceEntry,
     });
   }
+  reportProgress(ctx.progress, {
+    schema_version: 1,
+    type: 'run.started',
+    run_id: runId,
+    flow_id: flow.id,
+    recorded_at: bootstrapTs,
+    label: ctx.initialTraceEntries === undefined ? 'Started Circuit run' : 'Resumed Circuit run',
+    run_folder: runFolder,
+  });
   // Capture per-relay metadata for AGENT_SMOKE / CODEX_SMOKE
   // fingerprint binding to cli_version without forcing a relay trace_entry
   // schema bump.
@@ -562,6 +675,91 @@ async function executeCompiledFlow(
     const sequenced: TraceEntry = { ...ev, sequence: state.sequence };
     trace_entries.push(sequenced);
     appendAndDerive(runFolder, sequenced);
+    switch (sequenced.kind) {
+      case 'step.entered':
+        reportProgress(ctx.progress, {
+          schema_version: 1,
+          type: 'step.started',
+          run_id: runId,
+          flow_id: flow.id,
+          recorded_at: sequenced.recorded_at,
+          label: progressStepTitle(flow, sequenced.step_id),
+          step_id: sequenced.step_id,
+          step_title: progressStepTitle(flow, sequenced.step_id),
+          attempt: sequenced.attempt,
+        });
+        break;
+      case 'step.report_written':
+        reportEvidenceProgress({
+          runFolder,
+          flow,
+          runId,
+          recordedAt: sequenced.recorded_at,
+          traceEntry: sequenced,
+          ...(ctx.progress === undefined ? {} : { progress: ctx.progress }),
+        });
+        break;
+      case 'relay.started':
+        reportProgress(ctx.progress, {
+          schema_version: 1,
+          type: 'relay.started',
+          run_id: runId,
+          flow_id: flow.id,
+          recorded_at: sequenced.recorded_at,
+          label: `Running ${sequenced.role} relay with ${connectorName(sequenced.connector)}`,
+          step_id: sequenced.step_id,
+          step_title: progressStepTitle(flow, sequenced.step_id),
+          attempt: sequenced.attempt,
+          role: sequenced.role,
+          connector_name: connectorName(sequenced.connector),
+          connector_kind: sequenced.connector.kind,
+          filesystem_capability: connectorFilesystemCapability(sequenced.connector),
+        });
+        break;
+      case 'relay.completed':
+        reportProgress(ctx.progress, {
+          schema_version: 1,
+          type: 'relay.completed',
+          run_id: runId,
+          flow_id: flow.id,
+          recorded_at: sequenced.recorded_at,
+          label: `Relay completed with ${sequenced.verdict}`,
+          step_id: sequenced.step_id,
+          step_title: progressStepTitle(flow, sequenced.step_id),
+          attempt: sequenced.attempt,
+          verdict: sequenced.verdict,
+          duration_ms: sequenced.duration_ms,
+        });
+        break;
+      case 'step.completed':
+        reportProgress(ctx.progress, {
+          schema_version: 1,
+          type: 'step.completed',
+          run_id: runId,
+          flow_id: flow.id,
+          recorded_at: sequenced.recorded_at,
+          label: `Completed ${progressStepTitle(flow, sequenced.step_id)}`,
+          step_id: sequenced.step_id,
+          step_title: progressStepTitle(flow, sequenced.step_id),
+          attempt: sequenced.attempt,
+          route_taken: sequenced.route_taken,
+        });
+        break;
+      case 'step.aborted':
+        reportProgress(ctx.progress, {
+          schema_version: 1,
+          type: 'step.aborted',
+          run_id: runId,
+          flow_id: flow.id,
+          recorded_at: sequenced.recorded_at,
+          label: `Aborted ${progressStepTitle(flow, sequenced.step_id)}`,
+          step_id: sequenced.step_id,
+          step_title: progressStepTitle(flow, sequenced.step_id),
+          attempt: sequenced.attempt,
+          reason: sequenced.reason,
+        });
+        break;
+    }
     state.sequence += 1;
   };
 
@@ -664,6 +862,18 @@ async function executeCompiledFlow(
     }
 
     if (result.kind === 'waiting_checkpoint') {
+      const waitingRecordedAt = recordedAt();
+      reportProgress(ctx.progress, {
+        schema_version: 1,
+        type: 'checkpoint.waiting',
+        run_id: runId,
+        flow_id: flow.id,
+        recorded_at: waitingRecordedAt,
+        label: `Waiting for checkpoint ${result.checkpoint.stepId}`,
+        step_id: StepId.parse(result.checkpoint.stepId),
+        request_path: result.checkpoint.requestPath,
+        allowed_choices: [...result.checkpoint.allowedChoices],
+      });
       const snapshot = writeDerivedSnapshot(runFolder);
       return {
         runFolder,
@@ -772,6 +982,30 @@ async function executeCompiledFlow(
     // can admit/reject the child against its own check.pass.
     ...(terminalVerdict === undefined ? {} : { verdict: terminalVerdict }),
   });
+  if (runOutcome === 'aborted') {
+    reportProgress(ctx.progress, {
+      schema_version: 1,
+      type: 'run.aborted',
+      run_id: runId,
+      flow_id: flow.id,
+      recorded_at: closedAt,
+      label: 'Circuit run aborted',
+      outcome: 'aborted',
+      result_path: `${runFolder}/reports/result.json`,
+      ...(closeReason === undefined ? {} : { reason: closeReason }),
+    });
+  } else {
+    reportProgress(ctx.progress, {
+      schema_version: 1,
+      type: 'run.completed',
+      run_id: runId,
+      flow_id: flow.id,
+      recorded_at: closedAt,
+      label: `Circuit run ${runOutcome}`,
+      outcome: runOutcome,
+      result_path: `${runFolder}/reports/result.json`,
+    });
+  }
 
   // Final snapshot is whatever the last appendAndDerive produced; re-derive
   // once at close to return the definitive state.
@@ -832,6 +1066,7 @@ export async function resumeCompiledFlowCheckpoint(
       : { childCompiledFlowResolver: inv.childCompiledFlowResolver }),
     ...(inv.childRunner === undefined ? {} : { childRunner: inv.childRunner }),
     ...(inv.worktreeRunner === undefined ? {} : { worktreeRunner: inv.worktreeRunner }),
+    ...(inv.progress === undefined ? {} : { progress: inv.progress }),
     selectionConfigLayers: waiting.requestContext.selectionConfigLayers,
     ...(waiting.requestContext.projectRoot !== undefined
       ? { projectRoot: waiting.requestContext.projectRoot }

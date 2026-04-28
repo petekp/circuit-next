@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { main } from '../../src/cli/circuit.js';
 import type { RelayResult } from '../../src/runtime/connectors/shared.js';
 import type { RelayFn, RelayInput } from '../../src/runtime/runner.js';
+import { ProgressEvent } from '../../src/schemas/progress-event.js';
 
 const EXPLORE_SYNTHESIS_BODY = JSON.stringify({
   verdict: 'accept',
@@ -107,6 +108,45 @@ async function runMainJson(
   return parsed as Record<string, unknown>;
 }
 
+async function runMainJsonWithProgress(
+  argv: readonly string[],
+  relayBody: string,
+): Promise<{ output: Record<string, unknown>; progress: Array<ProgressEvent> }> {
+  let stdout = '';
+  let stderr = '';
+  const origStdoutWrite = process.stdout.write;
+  const origStderrWrite = process.stderr.write;
+  process.stdout.write = ((chunk: string | Uint8Array): boolean => {
+    stdout += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+    return true;
+  }) as typeof process.stdout.write;
+  process.stderr.write = ((chunk: string | Uint8Array): boolean => {
+    stderr += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+    return true;
+  }) as typeof process.stderr.write;
+  try {
+    const exit = await main(argv, {
+      relayer: relayerWithBody(relayBody),
+      now: deterministicNow(Date.UTC(2026, 3, 24, 15, 0, 0)),
+      runId: '84000000-0000-0000-0000-000000000001',
+      configHomeDir: join(runFolderBase, 'empty-home'),
+      configCwd: process.cwd(),
+    });
+    expect(exit).toBe(0);
+  } finally {
+    process.stdout.write = origStdoutWrite;
+    process.stderr.write = origStderrWrite;
+  }
+
+  const output = JSON.parse(stdout) as Record<string, unknown>;
+  const progress = stderr
+    .trim()
+    .split('\n')
+    .filter((line) => line.length > 0)
+    .map((line) => ProgressEvent.parse(JSON.parse(line)));
+  return { output, progress };
+}
+
 async function runMainExit(argv: readonly string[]): Promise<{ exit: number; stderr: string }> {
   let stderr = '';
   const origWrite = process.stderr.write;
@@ -156,6 +196,59 @@ describe('CLI router', () => {
     expect(output.router_reason).toMatch(/review/i);
     expect(output.router_signal).toBeDefined();
     expect(output.outcome).toBe('complete');
+  });
+
+  it('emits parseable progress JSONL to stderr without changing final stdout JSON', async () => {
+    const runFolder = join(runFolderBase, 'review-progress-jsonl');
+    const { output, progress } = await runMainJsonWithProgress(
+      [
+        '--goal',
+        'review this patch for safety problems',
+        '--progress',
+        'jsonl',
+        '--run-folder',
+        runFolder,
+      ],
+      '{"verdict":"NO_ISSUES_FOUND","findings":[]}',
+    );
+
+    expect(output.flow_id).toBe('review');
+    expect(output.selected_flow).toBe('review');
+    expect(output.outcome).toBe('complete');
+    expect(progress.map((event) => event.type)).toEqual(
+      expect.arrayContaining([
+        'route.selected',
+        'run.started',
+        'step.started',
+        'evidence.collected',
+        'relay.started',
+        'relay.completed',
+        'run.completed',
+      ]),
+    );
+    expect(progress.find((event) => event.type === 'relay.started')).toMatchObject({
+      role: 'reviewer',
+      connector_name: 'claude-code',
+      filesystem_capability: 'trusted-write',
+    });
+  });
+
+  it('emits run.aborted progress when a run aborts', async () => {
+    const { output, progress } = await runMainJsonWithProgress(
+      [
+        'review',
+        '--goal',
+        'review this malformed relay body',
+        '--progress',
+        'jsonl',
+        '--run-folder',
+        join(runFolderBase, 'review-progress-aborted'),
+      ],
+      '{"verdict":"NO_ISSUES_FOUND","findings":"not-an-array"}',
+    );
+
+    expect(output.outcome).toBe('aborted');
+    expect(progress.map((event) => event.type)).toContain('run.aborted');
   });
 
   it('omitted flow positional keeps exploratory goals on explore', async () => {
@@ -212,6 +305,32 @@ describe('CLI router', () => {
       request_path: join(runFolder, 'reports/checkpoints/frame-step-request.json'),
       allowed_choices: ['continue'],
     });
+  });
+
+  it('emits checkpoint.waiting progress for paused checkpoint runs', async () => {
+    const runFolder = join(runFolderBase, 'build-router-checkpoint-progress');
+    const { output, progress } = await runMainJsonWithProgress(
+      [
+        '--goal',
+        'develop: add a focused feature that waits for framing',
+        '--depth',
+        'deep',
+        '--progress',
+        'jsonl',
+        '--run-folder',
+        runFolder,
+      ],
+      '{"verdict":"accept"}',
+    );
+
+    expect(output.outcome).toBe('checkpoint_waiting');
+    expect(progress).toContainEqual(
+      expect.objectContaining({
+        type: 'checkpoint.waiting',
+        step_id: 'frame-step',
+        allowed_choices: ['continue'],
+      }),
+    );
   });
 
   it('omitted flow positional keeps develop-prefixed planning goals on explore', async () => {

@@ -46,24 +46,29 @@ metacharacters:
    and the full Bash command becomes:
 
    ```bash
-   ./bin/circuit-next run explore --goal 'can'\''t go'
+   ./bin/circuit-next run explore --goal 'can'\''t go' --progress jsonl
    ```
 
    For a goal with no special characters (e.g., `find deprecated APIs`),
    the straightforward single-quoted form is sufficient:
 
    ```bash
-   ./bin/circuit-next run explore --goal 'find deprecated APIs'
+   ./bin/circuit-next run explore --goal 'find deprecated APIs' --progress jsonl
    ```
 
    Use the Bash tool to execute the constructed command. `./bin/circuit-next`
    is the repo-local launcher for the compiled Circuit runtime; when the
    compiled CLI is absent in a fresh checkout, it builds `dist/` with the
    local TypeScript compiler before invoking `dist/cli/circuit.js`.
-3. **Parse the JSON output.** On success the CLI prints a JSON object with
-   these fields on stdout: `run_id`, `run_folder`, `outcome`
+3. **Render progress while the run is active.** `--progress jsonl` writes
+   progress events to stderr and keeps the final result JSON on stdout.
+   Surface the selected flow, major stage changes, relay role and connector,
+   checkpoint choices, and completion. Do not show raw step IDs unless the
+   user asks for debug detail.
+4. **Parse the final JSON output.** On success the CLI prints a JSON object
+   with these fields on stdout: `run_id`, `run_folder`, `outcome`
    (`complete` | `aborted`), `trace_entries_observed`, `result_path`.
-4. **Surface the results to the user.** Include:
+5. **Surface the results to the user.** Include:
    - `outcome` (e.g., "Run completed" / "Run aborted")
    - `run_folder` — the absolute path of the run folder where evidence lives
    - `result_path` — the run summary `reports/result.json` (not the
@@ -81,7 +86,7 @@ metacharacters:
    `src/flows/explore/contract.md §Relay check-evaluation semantics` and
    the `RunResult.reason` schema field.
 
-5. **Do not modify the CLI output before surfacing.** The run folder + report
+6. **Do not modify the CLI output before surfacing.** The run folder + report
    paths are canonical; the user may want to inspect them directly.
 
 ## Depth

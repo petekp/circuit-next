@@ -50,54 +50,60 @@ metacharacters:
    Example for an exploratory task `find deprecated APIs`:
 
    ```bash
-   ./bin/circuit-next run --goal 'find deprecated APIs'
+   ./bin/circuit-next run --goal 'find deprecated APIs' --progress jsonl
    ```
 
    Example for a review task `review this change for safety problems`:
 
    ```bash
-   ./bin/circuit-next run --goal 'review this change for safety problems'
+   ./bin/circuit-next run --goal 'review this change for safety problems' --progress jsonl
    ```
 
    Example for a Build task `develop: add a focused feature`:
 
    ```bash
-   ./bin/circuit-next run --goal 'develop: add a focused feature'
+   ./bin/circuit-next run --goal 'develop: add a focused feature' --progress jsonl
    ```
 
    Example for a Build task using both an entry mode and an explicit
    `--depth` flag:
 
    ```bash
-   ./bin/circuit-next run --goal 'develop: make the focused change' --entry-mode deep --depth standard
+   ./bin/circuit-next run --goal 'develop: make the focused change' --entry-mode deep --depth standard --progress jsonl
    ```
 
    Example for a Fix task `fix the foo bug`:
 
    ```bash
-   ./bin/circuit-next run --goal 'fix the foo bug'
+   ./bin/circuit-next run --goal 'fix the foo bug' --progress jsonl
    ```
 
    Example for a Fix task using Lite mode (skips the review pass):
 
    ```bash
-   ./bin/circuit-next run --goal 'fix the missing-token edge case' --entry-mode lite
+   ./bin/circuit-next run --goal 'fix the missing-token edge case' --entry-mode lite --progress jsonl
    ```
 
    Example for a task `can't ship` (contains one apostrophe):
 
    ```bash
-   ./bin/circuit-next run --goal 'can'\''t ship'
+   ./bin/circuit-next run --goal 'can'\''t ship' --progress jsonl
    ```
 
    Use the Bash tool to execute the constructed command. `./bin/circuit-next`
    is the repo-local launcher for the compiled Circuit runtime; when the
    compiled CLI is absent in a fresh checkout, it builds `dist/` with the
    local TypeScript compiler before invoking `dist/cli/circuit.js`.
-3. **Parse the CLI's JSON output and surface:** `selected_flow`,
+3. **Render progress while the run is active.** `--progress jsonl` writes
+   machine-readable progress events to stderr and keeps the final result JSON
+   on stdout. Surface short updates for the selected flow, major stage
+   changes, evidence warnings, relay role and connector, checkpoint choices,
+   and completion. Do not show raw step IDs unless the user asks for debug
+   detail. Keep host/orchestrator and worker connector distinct in prose.
+4. **Parse the CLI's final JSON output and surface:** `selected_flow`,
    `routed_by`, `router_reason`, `outcome`, `run_folder`, `trace_entries_observed`,
    and `result_path` when present. If present, also surface `router_signal`.
-4. **Surface the selected flow's final report when available.**
+5. **Surface the selected flow's final report when available.**
    For `selected_flow === "explore"`, read the run-folder-relative
    `reports/explore-result.json` close-step report (this is a baseline
    placeholder report; surface that caveat when present). For
@@ -113,17 +119,17 @@ metacharacters:
    summarize the change and verification evidence, follow its
    `evidence_links` entries (for example `fix.change` and the
    verification report) and read those reports.
-5. **If `outcome === "checkpoint_waiting"`, do not read or claim
+6. **If `outcome === "checkpoint_waiting"`, do not read or claim
    `result_path`.** Surface the routed metadata (`selected_flow`,
    `routed_by`, `router_reason`, and optional `router_signal`), then surface
    `checkpoint.step_id`, `checkpoint.request_path`,
    `checkpoint.allowed_choices`, and the exact resume command:
 
    ```bash
-   ./bin/circuit-next resume --run-folder '<run_folder>' --checkpoint-choice '<choice>'
+   ./bin/circuit-next resume --run-folder '<run_folder>' --checkpoint-choice '<choice>' --progress jsonl
    ```
 
-6. **If `outcome === "aborted"`, read `reports/result.json` at
+7. **If `outcome === "aborted"`, read `reports/result.json` at
    `result_path` to surface the abort `reason`.**
 
 ## Direct Flow Bypass

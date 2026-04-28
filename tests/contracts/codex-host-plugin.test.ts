@@ -64,6 +64,16 @@ describe('Codex host plugin package', () => {
     });
   });
 
+  it('documents the host adapter contract', () => {
+    const contract = readFileSync(resolve(REPO_ROOT, 'docs/contracts/host-adapter.md'), 'utf8');
+
+    expect(contract).toContain('contract: host-adapter');
+    expect(contract).toContain('Routed runs');
+    expect(contract).toContain('--progress jsonl');
+    expect(contract).toContain("node '<plugin root>/scripts/circuit-next.mjs' doctor");
+    expect(contract).toContain('Host summaries should surface');
+  });
+
   it('exposes Codex skill and command surfaces backed by the Circuit CLI protocol', () => {
     expect(existsSync(resolve(PLUGIN_ROOT, 'skills/run/SKILL.md'))).toBe(true);
     expect(existsSync(resolve(PLUGIN_ROOT, 'scripts/circuit-next.mjs'))).toBe(true);
@@ -72,6 +82,7 @@ describe('Codex host plugin package', () => {
     expect(skill).toContain('name: run');
     expect(skill).not.toContain('name: circuit-run');
     expect(skill).toContain("node '<plugin root>/scripts/circuit-next.mjs' run --goal '<task>'");
+    expect(skill).toContain('--progress jsonl');
     expect(skill).toContain('Do not use a path relative to the user');
     expect(skill).not.toContain('node plugins/circuit/scripts/circuit-next.mjs');
     expect(skill).toContain(
@@ -195,6 +206,42 @@ describe('Codex host plugin package', () => {
     }
   });
 
+  it('doctor verifies the installed Codex host package from a target repo', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'circuit-codex-host-doctor-'));
+    try {
+      const result = spawnSync(
+        process.execPath,
+        [resolve(PLUGIN_ROOT, 'scripts/circuit-next.mjs'), 'doctor'],
+        {
+          cwd: tempDir,
+          encoding: 'utf8',
+          env: {
+            ...process.env,
+            PATH: `${resolve(REPO_ROOT, 'bin')}${delimiter}${process.env.PATH ?? ''}`,
+          },
+        },
+      );
+
+      expect(result.status, result.stderr).toBe(0);
+      const output = JSON.parse(result.stdout) as {
+        status: string;
+        checks: Array<{ name: string; ok: boolean }>;
+      };
+      expect(output.status).toBe('ok');
+      expect(output.checks).toContainEqual(
+        expect.objectContaining({ name: 'temp_repo_review_smoke', ok: true }),
+      );
+      expect(output.checks).toContainEqual(
+        expect.objectContaining({ name: 'temp_repo_review_progress', ok: true }),
+      );
+      expect(output.checks).toContainEqual(
+        expect.objectContaining({ name: 'circuit_next_binary_available', ok: true }),
+      );
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it('Circuit CLI can load routed flows from the packaged Codex flow root outside this checkout', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'circuit-codex-cli-root-'));
     const runFolder = join(tempDir, 'run');
@@ -257,7 +304,10 @@ describe('Codex host plugin package', () => {
       const source = readFileSync(resolve(REPO_ROOT, `commands/${command}.md`), 'utf8');
       const codex = readFileSync(resolve(PLUGIN_ROOT, `commands/${command}.md`), 'utf8');
       expect(source).toContain('./bin/circuit-next');
+      expect(source).toContain('--progress jsonl');
+      expect(source).not.toContain("node '<plugin root>/scripts/circuit-next.mjs'");
       expect(codex).toContain("node '<plugin root>/scripts/circuit-next.mjs'");
+      expect(codex).toContain('--progress jsonl');
       expect(codex).not.toContain('./bin/circuit-next');
       expect(codex).not.toContain('repo-local launcher');
     }

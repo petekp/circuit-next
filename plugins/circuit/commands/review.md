@@ -35,25 +35,31 @@ metacharacters:
    Example:
 
    ```bash
-   node '<plugin root>/scripts/circuit-next.mjs' run review --goal 'review the latest change'
+   node '<plugin root>/scripts/circuit-next.mjs' run review --goal 'review the latest change' --progress jsonl
    ```
 
    Example with an apostrophe:
 
    ```bash
-   node '<plugin root>/scripts/circuit-next.mjs' run review --goal 'can'\''t regress runtime safety'
+   node '<plugin root>/scripts/circuit-next.mjs' run review --goal 'can'\''t regress runtime safety' --progress jsonl
    ```
 
-3. **Parse the JSON output.** On success the CLI prints a JSON object with
-   these fields on stdout: `run_id`, `run_folder`, `outcome`
+3. **Render progress while the run is active.** `--progress jsonl` writes
+   progress events to stderr and keeps the final result JSON on stdout.
+   Surface the selected flow, major stage changes, evidence warnings, relay
+   role and connector, checkpoint choices, and completion. Do not show raw
+   step IDs unless the user asks for debug detail.
+4. **Parse the final JSON output.** On success the CLI prints a JSON object
+   with these fields on stdout: `run_id`, `run_folder`, `outcome`
    (`complete` | `aborted`), `trace_entries_observed`, `result_path`.
-4. **Surface the results to the user.** Include:
+5. **Surface the results to the user.** Include:
    - `outcome` (e.g., "Run completed" / "Run aborted")
    - `run_folder` — the absolute path of the run folder where evidence lives
    - `result_path` — the run summary `reports/result.json`
    - if `outcome === 'complete'`,
      `${run_folder}/reports/review-result.json` — the review flow's
      typed review-result report
+   - any `evidence_warnings` from the intake or review-result report
    - `trace_entries_observed` count + a pointer to `trace.ndjson` under the run
      folder for the full trace
 
@@ -67,7 +73,7 @@ metacharacters:
    If `outcome === 'aborted'`, read `reports/result.json` at `result_path`
    to surface the abort `reason`; do not claim that
    `reports/review-result.json` exists on aborted runs.
-5. **Do not modify the CLI output before surfacing.** The run folder + report
+6. **Do not modify the CLI output before surfacing.** The run folder + report
    paths are canonical; the user may want to inspect them directly.
 
 ## Depth

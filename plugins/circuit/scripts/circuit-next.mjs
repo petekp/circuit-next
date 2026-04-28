@@ -1,12 +1,22 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { delimiter, dirname, resolve } from 'node:path';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const pluginRoot = resolve(scriptDir, '..');
 const packagedFlowRoot = resolve(pluginRoot, 'flows');
+const DOCTOR_SMOKE_TIMEOUT_MS = 120_000;
 
 function findLocalLauncher() {
   const candidate = resolve(process.cwd(), 'bin/circuit-next');
@@ -27,6 +37,225 @@ const localLauncher = findLocalLauncher();
 const command = localLauncher ?? 'circuit-next';
 const rawArgs = process.argv.slice(2);
 
+function commandExists() {
+  return localLauncher !== undefined || hasPathCommand(command);
+}
+
+function check(name, ok, detail) {
+  return detail === undefined ? { name, ok } : { name, ok, detail };
+}
+
+function readJson(path) {
+  return JSON.parse(readFileSync(path, 'utf8'));
+}
+
+function skillNameFromMarkdown(path) {
+  const text = readFileSync(path, 'utf8');
+  const match = /^name:\s*(\S+)\s*$/m.exec(text);
+  return match?.[1];
+}
+
+function listMarkdownFiles(root) {
+  if (!existsSync(root)) return [];
+  return readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
+    .map((entry) => entry.name);
+}
+
+function parseProgressTypes(stderr) {
+  const types = [];
+  for (const line of stderr.split(/\r?\n/)) {
+    if (line.trim().length === 0) continue;
+    const parsed = JSON.parse(line);
+    if (typeof parsed.type === 'string') types.push(parsed.type);
+  }
+  return types;
+}
+
+function runDoctor() {
+  const checks = [];
+  const manifestPath = resolve(pluginRoot, '.codex-plugin/plugin.json');
+  checks.push(check('plugin_manifest_exists', existsSync(manifestPath), manifestPath));
+
+  let manifest;
+  try {
+    manifest = existsSync(manifestPath) ? readJson(manifestPath) : undefined;
+    checks.push(check('plugin_manifest_parseable', manifest !== undefined, manifestPath));
+  } catch (err) {
+    checks.push(
+      check('plugin_manifest_parseable', false, err instanceof Error ? err.message : String(err)),
+    );
+  }
+  checks.push(
+    check(
+      'plugin_manifest_shape',
+      manifest?.name === 'circuit' &&
+        manifest?.skills === './skills/' &&
+        manifest?.interface?.displayName === 'Circuit',
+      manifestPath,
+    ),
+  );
+
+  const skillsRoot = resolve(pluginRoot, 'skills');
+  const skillDirs = existsSync(skillsRoot)
+    ? readdirSync(skillsRoot, { withFileTypes: true }).filter((entry) => entry.isDirectory())
+    : [];
+  checks.push(check('skills_directory_exists', existsSync(skillsRoot), skillsRoot));
+  checks.push(check('skills_present', skillDirs.length > 0, `${skillDirs.length} skills`));
+  for (const entry of skillDirs) {
+    const skillPath = resolve(skillsRoot, entry.name, 'SKILL.md');
+    const skillName = existsSync(skillPath) ? skillNameFromMarkdown(skillPath) : undefined;
+    checks.push(
+      check(
+        `skill_name_${entry.name}`,
+        skillName === entry.name && !/^circuit[:-]/.test(skillName ?? ''),
+        skillName === undefined ? `${skillPath} missing name` : `name=${skillName}`,
+      ),
+    );
+  }
+
+  const wrapperPath = resolve(scriptDir, 'circuit-next.mjs');
+  checks.push(check('wrapper_exists', existsSync(wrapperPath), wrapperPath));
+  checks.push(check('packaged_flow_root_exists', existsSync(packagedFlowRoot), packagedFlowRoot));
+  for (const flow of ['build', 'explore', 'fix', 'review']) {
+    const flowPath = resolve(packagedFlowRoot, flow, 'circuit.json');
+    checks.push(check(`packaged_flow_${flow}`, existsSync(flowPath), flowPath));
+  }
+
+  const commandsRoot = resolve(pluginRoot, 'commands');
+  checks.push(check('commands_directory_exists', existsSync(commandsRoot), commandsRoot));
+  for (const name of listMarkdownFiles(commandsRoot)) {
+    const commandPath = resolve(commandsRoot, name);
+    const text = readFileSync(commandPath, 'utf8');
+    checks.push(
+      check(
+        `command_${name}_uses_wrapper`,
+        text.includes("node '<plugin root>/scripts/circuit-next.mjs'") &&
+          !text.includes('./bin/circuit-next') &&
+          text.includes('--progress jsonl'),
+        commandPath,
+      ),
+    );
+  }
+
+  checks.push(check('circuit_next_binary_available', commandExists(), command));
+
+  const smokeRoot = mkdtempSync(join(tmpdir(), 'circuit-codex-doctor-'));
+  try {
+    const configDir = resolve(smokeRoot, '.circuit');
+    const runFolder = resolve(smokeRoot, 'run');
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(
+      resolve(configDir, 'config.yaml'),
+      `${JSON.stringify(
+        {
+          schema_version: 1,
+          host: { kind: 'codex' },
+          relay: {
+            roles: {
+              reviewer: { kind: 'named', name: 'doctor-reviewer' },
+            },
+            connectors: {
+              'doctor-reviewer': {
+                kind: 'custom',
+                name: 'doctor-reviewer',
+                command: [
+                  process.execPath,
+                  '-e',
+                  "console.log(JSON.stringify({receipt_id:'doctor-reviewer',response:JSON.stringify({verdict:'NO_ISSUES_FOUND',findings:[]})}))",
+                ],
+                prompt_transport: 'append-argv',
+                output: { kind: 'json-field', field: 'response' },
+                capabilities: { filesystem: 'read-only', structured_output: 'json' },
+              },
+            },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    if (commandExists()) {
+      const result = spawnSync(
+        command,
+        [
+          'run',
+          '--goal',
+          'review this patch',
+          '--flow-root',
+          packagedFlowRoot,
+          '--run-folder',
+          runFolder,
+          '--progress',
+          'jsonl',
+        ],
+        {
+          cwd: smokeRoot,
+          encoding: 'utf8',
+          timeout: DOCTOR_SMOKE_TIMEOUT_MS,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        },
+      );
+      let output;
+      try {
+        output = result.stdout.length > 0 ? JSON.parse(result.stdout) : undefined;
+      } catch {
+        output = undefined;
+      }
+      let progressTypes = [];
+      try {
+        progressTypes = parseProgressTypes(result.stderr);
+      } catch (_err) {
+        progressTypes = [];
+      }
+      checks.push(
+        check(
+          'temp_repo_review_smoke',
+          result.status === 0 &&
+            result.error === undefined &&
+            output?.selected_flow === 'review' &&
+            output?.outcome === 'complete' &&
+            existsSync(resolve(runFolder, 'reports', 'review-result.json')),
+          `status=${result.status ?? 'unknown'} error=${result.error?.message ?? 'none'} stderr=${result.stderr.slice(0, 500)}`,
+        ),
+      );
+      checks.push(
+        check(
+          'temp_repo_review_progress',
+          progressTypes.includes('route.selected') &&
+            progressTypes.includes('evidence.warning') &&
+            progressTypes.includes('run.completed'),
+          progressTypes.length > 0
+            ? `events=${progressTypes.join(',')}`
+            : `stderr=${result.stderr.slice(0, 500)}`,
+        ),
+      );
+    } else {
+      checks.push(check('temp_repo_review_smoke', false, 'circuit-next binary unavailable'));
+    }
+  } finally {
+    rmSync(smokeRoot, { recursive: true, force: true });
+  }
+
+  const ok = checks.every((item) => item.ok);
+  process.stdout.write(
+    `${JSON.stringify(
+      {
+        schema_version: 1,
+        host: 'codex',
+        status: ok ? 'ok' : 'fail',
+        plugin_root: pluginRoot,
+        flow_root: packagedFlowRoot,
+        command,
+        checks,
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  return ok ? 0 : 1;
+}
+
 function shouldInjectPackagedFlowRoot(args) {
   if (args.includes('--fixture') || args.includes('--flow-root')) return false;
   if (args.includes('--help') || args.includes('-h')) return false;
@@ -38,7 +267,11 @@ const forwardedArgs = shouldInjectPackagedFlowRoot(rawArgs)
   ? [...rawArgs, '--flow-root', packagedFlowRoot]
   : rawArgs;
 
-if (localLauncher === undefined && !hasPathCommand(command)) {
+if (rawArgs[0] === 'doctor') {
+  process.exit(runDoctor());
+}
+
+if (!commandExists()) {
   process.stderr.write(
     [
       'error: could not find circuit-next.',

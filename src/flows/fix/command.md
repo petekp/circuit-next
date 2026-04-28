@@ -38,31 +38,31 @@ metacharacters:
    Default Fix (standard depth, full review pass):
 
    ```bash
-   ./bin/circuit-next run fix --goal 'fix the foo bug'
+   ./bin/circuit-next run fix --goal 'fix the foo bug' --progress jsonl
    ```
 
    Lite Fix (skips review, closes after verification):
 
    ```bash
-   ./bin/circuit-next run fix --goal 'fix the missing-token edge case' --entry-mode lite
+   ./bin/circuit-next run fix --goal 'fix the missing-token edge case' --entry-mode lite --progress jsonl
    ```
 
    Deep Fix:
 
    ```bash
-   ./bin/circuit-next run fix --goal 'repair the failing pipeline' --entry-mode deep
+   ./bin/circuit-next run fix --goal 'repair the failing pipeline' --entry-mode deep --progress jsonl
    ```
 
    Autonomous Fix:
 
    ```bash
-   ./bin/circuit-next run fix --goal 'diagnose and patch the crash' --entry-mode autonomous
+   ./bin/circuit-next run fix --goal 'diagnose and patch the crash' --entry-mode autonomous --progress jsonl
    ```
 
    Example for a task `can't reproduce` (contains one apostrophe):
 
    ```bash
-   ./bin/circuit-next run fix --goal 'can'\''t reproduce'
+   ./bin/circuit-next run fix --goal 'can'\''t reproduce' --progress jsonl
    ```
 
    Use the Bash tool to execute the constructed command. `./bin/circuit-next`
@@ -80,24 +80,29 @@ metacharacters:
    prefers `generated/flows/fix/lite.json` over `circuit.json` because
    the Fix schematic emits a Lite-only compiled flow that skips the review
    relay. Other modes (default/deep/autonomous) load `circuit.json`.
-5. **Parse the CLI's JSON output.** Always surface `flow_id`, `outcome`,
+5. **Render progress while the run is active.** `--progress jsonl` writes
+   progress events to stderr and keeps the final result JSON on stdout.
+   Surface the selected flow, major stage changes, relay role and connector,
+   checkpoint choices, evidence warnings when present, and completion. Do not
+   show raw step IDs unless the user asks for debug detail.
+6. **Parse the CLI's final JSON output.** Always surface `flow_id`, `outcome`,
    `run_folder`, and `trace_entries_observed`.
-6. **If `outcome === "checkpoint_waiting"`, do not read or claim
+7. **If `outcome === "checkpoint_waiting"`, do not read or claim
    `result_path`.** Instead surface the waiting checkpoint details:
    `checkpoint.step_id`, `checkpoint.request_path`,
    `checkpoint.allowed_choices`, and the exact resume command:
 
    ```bash
-   ./bin/circuit-next resume --run-folder '<run_folder>' --checkpoint-choice '<choice>'
+   ./bin/circuit-next resume --run-folder '<run_folder>' --checkpoint-choice '<choice>' --progress jsonl
    ```
 
-7. **If `outcome === "complete"`, read the Fix final report.** Surface
+8. **If `outcome === "complete"`, read the Fix final report.** Surface
    `result_path`, then read the run-folder-relative
    `reports/fix-result.json` report. Surface its review result fields;
    to summarize the change and verification evidence, follow its
    `evidence_links` entries (in prose: evidence links — for example
    `fix.change` and the verification report) and read those reports.
-8. **If `outcome === "aborted"`, read `reports/result.json` at
+9. **If `outcome === "aborted"`, read `reports/result.json` at
    `result_path` and surface the abort reason.**
 
 ## Authority

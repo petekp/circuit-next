@@ -14,9 +14,10 @@ import type {
 } from '../../../runtime/registries/compose-writers/types.js';
 import { resolveRunRelative } from '../../../runtime/run-relative-path.js';
 import type { CompiledFlow } from '../../../schemas/compiled-flow.js';
-import { ReviewRelayResult, ReviewResult, computeReviewVerdict } from '../reports.js';
+import { ReviewIntake, ReviewRelayResult, ReviewResult, computeReviewVerdict } from '../reports.js';
 
 type RelayStep = CompiledFlow['steps'][number] & { kind: 'relay' };
+type ComposeStep = CompiledFlow['steps'][number] & { kind: 'compose' };
 
 function reviewerRelayResultPath(
   flow: CompiledFlow,
@@ -43,6 +44,23 @@ function reviewerRelayResultPath(
   return resultPath;
 }
 
+function reviewIntakePath(flow: CompiledFlow, closeStep: ComposeBuildContext['step']): string {
+  const closeStepId = closeStep.id as unknown as string;
+  const intakeStep = flow.steps.find(
+    (candidate): candidate is ComposeStep =>
+      candidate.kind === 'compose' &&
+      candidate.writes.report.schema === 'review.intake@v1' &&
+      closeStep.reads.includes(candidate.writes.report.path as never),
+  );
+  const path = intakeStep?.writes.report.path as unknown as string | undefined;
+  if (path === undefined) {
+    throw new Error(
+      `review.result@v1 requires close step '${closeStepId}' to read the review intake report`,
+    );
+  }
+  return path;
+}
+
 export const reviewResultComposeBuilder: ComposeBuilder = {
   resultSchemaName: 'review.result@v1',
   // No declarative reads — the read is a relay result body, not a
@@ -50,13 +68,22 @@ export const reviewResultComposeBuilder: ComposeBuilder = {
   // its own resolution.
   build(context: ComposeBuildContext): unknown {
     const path = reviewerRelayResultPath(context.flow, context.step);
+    const intake = ReviewIntake.parse(
+      JSON.parse(
+        readFileSync(
+          resolveRunRelative(context.runFolder, reviewIntakePath(context.flow, context.step)),
+          'utf8',
+        ),
+      ),
+    );
     const relayResult = ReviewRelayResult.parse(
       JSON.parse(readFileSync(resolveRunRelative(context.runFolder, path), 'utf8')),
     );
     return ReviewResult.parse({
-      scope: context.goal,
+      scope: intake.scope,
       findings: relayResult.findings,
       verdict: computeReviewVerdict(relayResult.findings),
+      evidence_warnings: intake.evidence_warnings,
     });
   },
 };

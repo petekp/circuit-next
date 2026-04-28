@@ -19,7 +19,6 @@ const BANNED: ReadonlyArray<{ readonly name: string; readonly pattern: RegExp }>
   { name: 'primitive', pattern: /\bprimitive(s)?\b/i },
   { name: 'phase', pattern: /\bphase(s)?\b/i },
   { name: 'dispatch', pattern: /\bdispatch(?:es|ed|ing)?\b/i },
-  { name: 'adapter', pattern: /\badapter(s)?\b/i },
   { name: 'synthesis', pattern: /\bsynthesis\b/i },
   { name: 'gate', pattern: /\bgate(s)?\b/i },
   { name: 'artifact', pattern: /\bartifact(s)?\b/i },

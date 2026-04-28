@@ -23,6 +23,7 @@ import {
 import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { RunId } from '../../src/schemas/ids.js';
+import { ProgressEvent } from '../../src/schemas/progress-event.js';
 
 import type { ClaudeCodeRelayInput } from '../../src/runtime/connectors/claude-code.js';
 import type { RelayResult } from '../../src/runtime/connectors/shared.js';
@@ -176,6 +177,12 @@ describe('registered review compose writer', () => {
       scope: goal,
       findings: [],
       verdict: 'CLEAN',
+      evidence_warnings: [
+        {
+          kind: 'evidence_unavailable',
+          message: 'CompiledFlowInvocation.projectRoot was not provided',
+        },
+      ],
     });
   });
 
@@ -271,6 +278,15 @@ describe('registered review compose writer', () => {
     expect(intake.evidence.staged_diff.text).toContain(`+${marker}-`);
     expect(intake.evidence.staged_diff.text).not.toContain('ENOBUFS');
     expect(intake.evidence.staged_diff.truncated).toBe(true);
+    expect(intake.evidence_warnings).toContainEqual(
+      expect.objectContaining({ kind: 'diff_truncated' }),
+    );
+    const report = ReviewResult.parse(
+      JSON.parse(readFileSync(join(runFolder, 'reports', 'review-result.json'), 'utf8')),
+    );
+    expect(report.evidence_warnings).toContainEqual(
+      expect.objectContaining({ kind: 'diff_truncated' }),
+    );
   });
 
   it('skips unreadable untracked files instead of aborting review intake', async () => {
@@ -308,9 +324,57 @@ describe('registered review compose writer', () => {
       );
       expect(unreadable?.content).toBeUndefined();
       expect(unreadable?.skipped_reason).toMatch(/failed to read|permission|EACCES/i);
+      expect(intake.evidence_warnings).toContainEqual(
+        expect.objectContaining({ kind: 'untracked_file_skipped', path: 'unreadable.txt' }),
+      );
+      const report = ReviewResult.parse(
+        JSON.parse(readFileSync(join(runFolder, 'reports', 'review-result.json'), 'utf8')),
+      );
+      expect(report.evidence_warnings).toContainEqual(
+        expect.objectContaining({ kind: 'untracked_file_skipped', path: 'unreadable.txt' }),
+      );
     } finally {
       chmodSync(unreadablePath, 0o600);
     }
+  });
+
+  it('surfaces unavailable evidence as an explicit warning in intake and result', async () => {
+    const { flow, bytes } = loadFixture();
+    const runFolder = join(runFolderBase, 'unavailable-evidence-warning');
+    const progress: ProgressEvent[] = [];
+
+    const outcome = await runCompiledFlow({
+      runFolder,
+      flow,
+      flowBytes: bytes,
+      runId: RunId.parse('79000000-0000-0000-0000-000000000008'),
+      goal: 'review without project root evidence',
+      depth: 'standard',
+      change_kind: change_kind(),
+      now: deterministicNow(Date.UTC(2026, 3, 24, 14, 0, 0)),
+      relayer: relayerWith({ verdict: 'NO_ISSUES_FOUND', findings: [] }),
+      progress: (event) => progress.push(ProgressEvent.parse(event)),
+    });
+
+    expect(outcome.result.outcome).toBe('complete');
+    const intake = ReviewIntake.parse(
+      JSON.parse(readFileSync(join(runFolder, 'reports', 'review-intake.json'), 'utf8')),
+    );
+    expect(intake.evidence_warnings).toContainEqual(
+      expect.objectContaining({ kind: 'evidence_unavailable' }),
+    );
+    const report = ReviewResult.parse(
+      JSON.parse(readFileSync(join(runFolder, 'reports', 'review-result.json'), 'utf8')),
+    );
+    expect(report.evidence_warnings).toContainEqual(
+      expect.objectContaining({ kind: 'evidence_unavailable' }),
+    );
+    expect(progress).toContainEqual(
+      expect.objectContaining({
+        type: 'evidence.warning',
+        warning_kind: 'evidence_unavailable',
+      }),
+    );
   });
 
   it('derives the analyze result path from the live flow graph', async () => {

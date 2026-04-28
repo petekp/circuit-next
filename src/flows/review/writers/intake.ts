@@ -15,6 +15,7 @@ import type {
 import {
   type ReviewEvidence,
   type ReviewEvidenceText,
+  type ReviewEvidenceWarning,
   ReviewIntake,
   type ReviewUntrackedFileEvidence,
 } from '../reports.js';
@@ -195,12 +196,77 @@ function collectReviewEvidence(projectRoot: string | undefined): ReviewEvidence 
   };
 }
 
+function gitCommandFailed(text: string): boolean {
+  return /^git\s+.+\s+failed:/.test(text);
+}
+
+function evidenceWarnings(evidence: ReviewEvidence): ReviewEvidenceWarning[] {
+  if (evidence.kind === 'unavailable') {
+    return [
+      {
+        kind: 'evidence_unavailable',
+        message: evidence.reason,
+      },
+    ];
+  }
+
+  const warnings: ReviewEvidenceWarning[] = [];
+  if (evidence.staged_diff.truncated) {
+    warnings.push({
+      kind: 'diff_truncated',
+      message: 'staged diff was truncated before relay',
+    });
+  }
+  if (evidence.unstaged_diff.truncated) {
+    warnings.push({
+      kind: 'diff_truncated',
+      message: 'unstaged diff was truncated before relay',
+    });
+  }
+  if (gitCommandFailed(evidence.staged_diff.text)) {
+    warnings.push({
+      kind: 'git_command_failed',
+      message: evidence.staged_diff.text,
+    });
+  }
+  if (gitCommandFailed(evidence.unstaged_diff.text)) {
+    warnings.push({
+      kind: 'git_command_failed',
+      message: evidence.unstaged_diff.text,
+    });
+  }
+  if (gitCommandFailed(evidence.diff_stat)) {
+    warnings.push({
+      kind: 'git_command_failed',
+      message: evidence.diff_stat,
+    });
+  }
+  if (evidence.untracked_files_truncated) {
+    warnings.push({
+      kind: 'untracked_files_truncated',
+      message: `untracked file evidence was limited to ${MAX_UNTRACKED_FILES} files`,
+    });
+  }
+  for (const file of evidence.untracked_files) {
+    if (file.skipped_reason !== undefined) {
+      warnings.push({
+        kind: 'untracked_file_skipped',
+        path: file.path,
+        message: file.skipped_reason,
+      });
+    }
+  }
+  return warnings;
+}
+
 export const reviewIntakeComposeBuilder: ComposeBuilder = {
   resultSchemaName: 'review.intake@v1',
   build(context: ComposeBuildContext): unknown {
+    const evidence = collectReviewEvidence(context.projectRoot);
     return ReviewIntake.parse({
       scope: context.goal,
-      evidence: collectReviewEvidence(context.projectRoot),
+      evidence,
+      evidence_warnings: evidenceWarnings(evidence),
     });
   },
 };
