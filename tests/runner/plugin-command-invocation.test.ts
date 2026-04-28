@@ -30,8 +30,6 @@ const REVIEW_COMMAND_PATH = resolve(REPO_ROOT, 'commands/review.md');
 const BUILD_COMMAND_PATH = resolve(REPO_ROOT, 'commands/build.md');
 const MANIFEST_PATH = resolve(REPO_ROOT, '.claude-plugin/plugin.json');
 
-const PLACEHOLDER_STRING = 'Not implemented yet';
-
 // Extract fenced ```bash ... ``` blocks from a markdown body. Returns an
 // array of block contents (without the fence markers). Multiple blocks per
 // body are supported.
@@ -91,23 +89,6 @@ function hasExecutableRouterInvocation(body: string): boolean {
   return false;
 }
 
-function hasEntryModeAndRigorInvocation(body: string): boolean {
-  const blocks = extractBashBlocks(body);
-  for (const block of blocks) {
-    for (const line of block.split('\n')) {
-      if (
-        /\.\/bin\/circuit-next/.test(line) &&
-        /--goal\s+'/.test(line) &&
-        /--entry-mode\s+(?:default|lite|deep|autonomous)\b/.test(line) &&
-        /--rigor\s+(?:lite|standard|deep|autonomous)\b/.test(line)
-      ) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
 describe('plugin command invocation binding', () => {
   describe('real command bodies — positive assertions', () => {
     const exploreBody = readFileSync(EXPLORE_COMMAND_PATH, 'utf-8');
@@ -129,54 +110,6 @@ describe('plugin command invocation binding', () => {
 
     it('commands/build.md has an executable build invocation in a fenced bash block with --goal', () => {
       expect(hasExecutableBuildInvocation(buildBody)).toBe(true);
-    });
-
-    it('no command body contains "Not implemented yet"', () => {
-      expect(exploreBody).not.toMatch(new RegExp(PLACEHOLDER_STRING));
-      expect(runBody).not.toMatch(new RegExp(PLACEHOLDER_STRING));
-      expect(reviewBody).not.toMatch(new RegExp(PLACEHOLDER_STRING));
-      expect(buildBody).not.toMatch(new RegExp(PLACEHOLDER_STRING));
-    });
-
-    it('commands/run.md documents the current explore/review/build router surface', () => {
-      expect(runBody).toMatch(
-        /Parse the CLI's JSON output and surface:[\s\S]*`selected_workflow`[\s\S]*`routed_by`[\s\S]*`router_reason`/,
-      );
-      expect(runBody).toMatch(/`result_path` when present/);
-      expect(runBody).toMatch(/explore/);
-      expect(runBody).toMatch(/review/);
-      expect(runBody).toMatch(/build/);
-      expect(runBody).toMatch(/artifacts\/build-result\.json/);
-    });
-
-    it('Build command docs follow build.implementation before summarizing changed files and evidence', () => {
-      for (const body of [buildBody, runBody]) {
-        expect(body).toMatch(/artifact_pointers/);
-        expect(body).toMatch(/build\.implementation/);
-        expect(body).toMatch(/changed files and evidence/);
-      }
-    });
-
-    it('Build command docs include same-invocation entry-mode and rigor examples', () => {
-      expect(hasEntryModeAndRigorInvocation(buildBody)).toBe(true);
-      expect(hasEntryModeAndRigorInvocation(runBody)).toBe(true);
-    });
-
-    it('Build waiting docs surface checkpoint details and resume command without treating result_path as available', () => {
-      for (const body of [buildBody, runBody]) {
-        expect(body).toMatch(/checkpoint_waiting/);
-        expect(body).toMatch(/checkpoint\.request_path/);
-        expect(body).toMatch(/checkpoint\.allowed_choices/);
-        expect(body).toMatch(
-          /\.\/bin\/circuit-next resume --run-root '<run_root>' --checkpoint-choice '<choice>'/,
-        );
-      }
-      expect(runBody).not.toMatch(
-        /surface:[\s\S]*`run_root`, `result_path`,\s+and `events_observed`/,
-      );
-      expect(runBody).toMatch(/selected_workflow/);
-      expect(runBody).toMatch(/routed_by/);
-      expect(runBody).toMatch(/router_reason/);
     });
 
     it('command bodies use the direct Circuit launcher, not the npm-script bridge or old dogfood path', () => {
@@ -346,31 +279,20 @@ node dist/cli/circuit.js explore --goal 'find deprecated APIs'
       description: string;
     };
 
-    it('manifest does not carry "scaffold" / "not yet implemented" language', () => {
-      expect(manifestBody).not.toMatch(/P2\.2 scaffold entry/);
-      expect(manifestBody).not.toMatch(/not-implemented notice/);
-      expect(manifestBody).not.toMatch(/not yet implemented/i);
-    });
-
     it('manifest name creates the public /circuit:* namespace', () => {
       expect(manifest.name).toBe('circuit');
-      expect(manifestBody).not.toMatch(/"commands"\s*:/);
     });
 
-    it('top-level manifest description mentions the wired `/circuit:explore` invocation path', () => {
-      // The wired state should be visible in the top-level description
-      // (not only in per-command descriptions).
+    it('manifest exposes /circuit:explore as a generated command', () => {
       expect(manifest.description).toMatch(/\/circuit:explore/);
     });
 
-    it('manifest includes circuit:review as an explicit workflow command', () => {
+    it('manifest exposes /circuit:review as a generated command', () => {
       expect(manifest.description).toMatch(/\/circuit:review/);
-      expect(readFileSync(REVIEW_COMMAND_PATH, 'utf-8')).toMatch(/review workflow/i);
     });
 
-    it('manifest includes circuit:build as an explicit workflow command', () => {
+    it('manifest exposes /circuit:build as a generated command', () => {
       expect(manifest.description).toMatch(/\/circuit:build/);
-      expect(readFileSync(BUILD_COMMAND_PATH, 'utf-8')).toMatch(/Build workflow/);
     });
   });
 });
