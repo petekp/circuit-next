@@ -1,6 +1,6 @@
 # HANDOFF
 
-Last updated: 2026-04-27 — Sessions 1 + 2 of the test-quality backlog complete. Session 1: lint cleared, invariant-ledger meta-test landed, CI workflow live. Session 2: ledger triage done (15 stale bindings cleared — meta-test now active and green), coverage tooling added, fast/slow split added.
+Last updated: 2026-04-27 — Sessions 1 + 2 + 3 of the test-quality backlog complete. Session 1: lint cleared, invariant-ledger meta-test landed, CI workflow live. Session 2: ledger triage done, coverage tooling added, fast/slow split added. Session 3: slice vocabulary stripped from comments / test names, anti-vacuity floors added to discovery-loop tests, real-recursion integration test for sub-run landed.
 
 ## Where we are
 
@@ -30,7 +30,7 @@ at the top of the file noting that.
 
 ## Tests
 
-930 tests pass, 6 skipped. tsc clean, biome clean, drift clean.
+932 tests pass, 6 skipped. tsc clean, biome clean, drift clean.
 `npm run verify` is green on origin. CI workflow at
 `.github/workflows/verify.yml` mirrors the gate on every push and PR
 to `main`. `npm run verify:fast` is the tight-loop alternative
@@ -163,16 +163,21 @@ estimates assume an LLM-paced session.
   full `verify`.
 
 **FU-T06. Real recursion integration test (sub-run / fanout).**
-- State: open, flagged by both reviewers and prior HANDOFF. Every
-  parent sub-run/fanout test stubs `childRunner`; no test proves
-  real recursive child execution end-to-end.
-- Fix: one small hermetic integration test — parent workflow with a
-  sub-run, child resolved through real resolver, real `runWorkflow`
-  for the child, fake dispatcher, assertions on parent + child event
-  logs and the copied result.
-- Why it matters: sub-run/fanout is substrate-critical and currently
-  trust-by-stubbing.
-- Effort: ~2-3 hours.
+- State: **done** in `b26eb64` (2026-04-27). New file
+  `tests/runner/sub-run-real-recursion.test.ts` omits the
+  `childRunner` stub so the runner defaults to `runWorkflow` itself
+  and recurses end-to-end. Parent has a single sub-run step; child
+  has a single dispatch step served by a fake `acceptingDispatcher`.
+  Hermetic, ~12ms. Verifies child has its own run-root + event log
+  with its own run_id, dispatch lifecycle events fire on the child
+  (proof the child step actually ran), child's result.json is
+  authored via the real result-writer and copied verbatim into the
+  parent's writes.result slot, parent's gate admits the verdict.
+  Sister to `tests/runner/sub-run-runtime.test.ts` (handler-isolation
+  unit test).
+- Fanout real-recursion test deferred — same pattern would apply,
+  but fanout has additional fanout-specific surface that warrants a
+  separate hermetic case.
 
 ### P2 — maintainability + agent repair ergonomics
 
@@ -189,14 +194,14 @@ estimates assume an LLM-paced session.
   conversions.
 
 **FU-T08. Anti-vacuity check pattern.**
-- State: open. `catalog-derivations.test.ts` already does this
-  (asserts catalog floor). Generalize wherever a test loops over a
-  dynamic collection.
-- Fix: add `expect(x.length).toBeGreaterThanOrEqual(MIN)` (or
-  `.toBeGreaterThan(0)`) to discovery loops.
-- Why it matters: agents break discovery logic in ways that make
-  tests vacuously pass.
-- Effort: ~1 hour for an initial sweep across high-traffic files.
+- State: **done** in `14f78ea` (2026-04-27). Floors added to:
+  `tests/contracts/schemas-barrel.test.ts` (modules >= 10),
+  `tests/contracts/engine-workflow-boundary.test.ts` (4 walks: src/
+  runtime / inspected workflow packages / src / tests),
+  `tests/contracts/catalog-completeness.test.ts` (workflow-package
+  count + WORKFLOWS_ROOT entry count). Pattern reference:
+  `tests/runner/catalog-derivations.test.ts` (already had floors
+  pre-this work).
 
 **FU-T09. Mega-file splits.**
 - State: open. Reviewer flagged `contracts/schema-parity.test.ts` at
@@ -247,14 +252,16 @@ doc-shape pins.**
 - Effort: ~2-3 hours per area.
 
 **FU-T13. Slice-vocabulary residue sweep.**
-- State: open, carried from prior session. The two filename renames
-  are done, but adjacent test files (codex-dispatch-roundtrip,
-  agent-dispatch-roundtrip, runtime-smoke,
-  runner-dispatch-adapter-identity, etc.) still carry "Slice N"
-  references. Per methodology-strip, this vocabulary is gone from
-  the rest of the codebase and should be cleaned out of these
-  files.
-- Effort: ~30 min — pure rename / comment cleanup.
+- State: **done** in `3983ff7` (2026-04-27). Three sweep passes
+  cleared ~230 references across 41 files (net -134 lines): slice
+  tags (`Slice 27d`, `slice-43a-`, `(Slice 47c-2)`); Codex
+  challenger tags (`Codex HIGH #1 fold-in`, `Codex MED #4`,
+  references to deleted `specs/reviews/*.md`); bare review tags
+  (`(adversarial-review MED #7)`, `Codex review`, `MED #6.b:`).
+  Invariant IDs preserved; technical content preserved; only
+  historical scaffolding dropped. mkdtemp prefix strings renamed
+  from `'slice-42-roundtrip-'` style to descriptive
+  `'agent-dispatch-roundtrip-'` style.
 
 ### Recommended order across sessions
 
@@ -262,13 +269,16 @@ Sessions 1 + 2 closed. The full P0 trio (FU-T01, FU-T02a, FU-T03) +
 FU-T02b's triage + the two mechanical P1 items (FU-T04, FU-T05) all
 landed. The verify gate is green, CI mirrors it, the invariant
 ledger is honest, coverage is observable, and the inner loop has a
-fast-path. Session 3+ moves into the design-heavy items: FU-T06
-(real recursion integration test), FU-T07 (failure-message helpers
-naming the invariant), FU-T09 (mega-file splits — verify current
-sizes first), FU-T11 (direct step-handler tests), FU-T12 (property-
-test expansion). FU-T08 (anti-vacuity sweep), FU-T10 (collapse
-plugin-command-invocation prose pins), and FU-T13 (slice-vocabulary
-residue) are smaller fold-ins.
+fast-path. Session 3 cleared FU-T13 (slice-vocabulary residue),
+FU-T08 (anti-vacuity floors), and FU-T06 (real recursion integration
+test for sub-run). Session 4+ remaining: FU-T07 (failure-message
+helpers naming the invariant, ~2h), FU-T09 (mega-file splits —
+verify current sizes first, ~3-4h), FU-T10 (collapse
+plugin-command-invocation prose pins, ~1h), FU-T11 (direct
+step-handler tests, ~3-4h), FU-T12 (property-test expansion,
+~2-3h per area). A fanout-side companion to FU-T06 also fits the
+remaining work — same hermetic-recursion approach applied to the
+fanout step kind.
 
 ## Notes
 
