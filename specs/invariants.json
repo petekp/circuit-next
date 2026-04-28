@@ -1342,37 +1342,47 @@
     {
       "id": "workflow.prop.entry_mode_reachability",
       "contract": "workflow",
-      "enforcement_state": "phase2-property",
-      "target_slice": 29,
-      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+      "enforcement_state": "test-enforced",
+      "binding_refs": [
+        { "path": "tests/properties/visible/workflow-graph-closure.test.ts", "kind": "test_title" }
+      ],
+      "rationale": "Property test exercises the WF-I2 closure: entry_modes[].start_at must resolve to a declared step id. Generator emits ~200 cases per branch via mulberry32, isolating this dimension while the chain base keeps every other workflow closure invariant satisfied. FU-T12."
     },
     {
       "id": "workflow.prop.no_dead_steps",
       "contract": "workflow",
-      "enforcement_state": "phase2-property",
-      "target_slice": 29,
-      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+      "enforcement_state": "test-enforced",
+      "binding_refs": [
+        { "path": "tests/properties/visible/workflow-graph-closure.test.ts", "kind": "test_title" }
+      ],
+      "rationale": "Property test exercises the WF-I9 reachability law: every declared step must be reachable from some entry_mode.start_at via the routes graph. Generator pairs a chainBase (sound) with an injected orphan step (declared, in-phase, but no edge points at it) to drive ~200 cases per branch. FU-T12."
     },
     {
       "id": "workflow.prop.phase_step_closure",
       "contract": "workflow",
-      "enforcement_state": "phase2-property",
-      "target_slice": 29,
-      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+      "enforcement_state": "test-enforced",
+      "binding_refs": [
+        { "path": "tests/properties/visible/workflow-graph-closure.test.ts", "kind": "test_title" }
+      ],
+      "rationale": "Property test exercises the WF-I3 closure: every entry of phase.steps[] must resolve to a declared step id. Generator drives ~200 chainBase cases with optional ghost step id injected into phase.steps. FU-T12."
     },
     {
       "id": "workflow.prop.route_target_closure",
       "contract": "workflow",
-      "enforcement_state": "phase2-property",
-      "target_slice": 29,
-      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+      "enforcement_state": "test-enforced",
+      "binding_refs": [
+        { "path": "tests/properties/visible/workflow-graph-closure.test.ts", "kind": "test_title" }
+      ],
+      "rationale": "Property test exercises the WF-I4 closure: every pass-route target must be either a terminal label (@complete/@stop/@escalate/@handoff) or a declared step id. Generator drives ~200 chainBase cases with an optional unknown route target injected per case. FU-T12."
     },
     {
       "id": "workflow.prop.terminal_target_coverage",
       "contract": "workflow",
-      "enforcement_state": "phase2-property",
-      "target_slice": 29,
-      "reopen_condition": "property harness (Slice 29) lands without registering this id"
+      "enforcement_state": "test-enforced",
+      "binding_refs": [
+        { "path": "tests/properties/visible/workflow-graph-closure.test.ts", "kind": "test_title" }
+      ],
+      "rationale": "Property test exercises the WF-I8 reachability law: every declared step must reach some terminal route target via its pass-route chain. Generator drives ~200 chainBase cases, optionally introducing a self-loop on a non-last step (which both severs WF-I8 and trips WF-I11 — the assertion accepts either citation). FU-T12."
     },
     {
       "id": "explore.prop.canonical_phase_set_is_correct",
