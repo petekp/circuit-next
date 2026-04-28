@@ -59,6 +59,17 @@ function listPackageDirectories(): readonly string[] {
 }
 
 describe('workflow catalog completeness', () => {
+  // Anti-vacuity floor — guards every "every package has X" assertion
+  // below from passing vacuously if `workflowPackages` is silently
+  // empty (e.g. a refactor that broke catalog imports). Six packages
+  // live today: build, explore, fix, migrate, review, sweep.
+  it('catalog has the expected non-zero workflow package count', () => {
+    expect(
+      workflowPackages.length,
+      'workflowPackages is unexpectedly small — catalog discovery is likely broken',
+    ).toBeGreaterThanOrEqual(6);
+  });
+
   it('every src/workflows/<id>/ directory is registered in the catalog', () => {
     const onDisk = new Set(listPackageDirectories());
     const inCatalog = new Set(workflowPackages.map((pkg) => pkg.id));
@@ -71,9 +82,13 @@ describe('workflow catalog completeness', () => {
   });
 
   it('every src/workflows/ entry that is not a known shared file is a package directory', () => {
+    const entries = readdirSync(WORKFLOWS_ROOT).filter((e) => !e.startsWith('.'));
+    expect(
+      entries.length,
+      'src/workflows/ has unexpectedly few entries — discovery loop is likely broken',
+    ).toBeGreaterThanOrEqual(6);
     const offenders: string[] = [];
-    for (const entry of readdirSync(WORKFLOWS_ROOT)) {
-      if (entry.startsWith('.')) continue;
+    for (const entry of entries) {
       const path = join(WORKFLOWS_ROOT, entry);
       if (statSync(path).isDirectory()) continue;
       if (NON_PACKAGE_FILES.has(entry)) continue;

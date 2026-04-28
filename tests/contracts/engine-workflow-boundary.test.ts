@@ -67,8 +67,16 @@ function isAllowedEngineImport(importPath: string): boolean {
 
 describe('engine ↔ workflow boundary', () => {
   it('no file under src/runtime/ imports a workflow source other than the catalog or types', () => {
+    const runtimeFiles = walk(RUNTIME_ROOT);
+    // Anti-vacuity floor — if walk() silently returns empty (root
+    // moved, file extension filter broke), the boundary check below
+    // would pass without inspecting any code.
+    expect(
+      runtimeFiles.length,
+      'src/runtime walk returned unexpectedly few files — discovery loop is likely broken',
+    ).toBeGreaterThanOrEqual(10);
     const offenders: { readonly file: string; readonly importPath: string }[] = [];
-    for (const file of walk(RUNTIME_ROOT)) {
+    for (const file of runtimeFiles) {
       for (const importPath of importPathsFrom(file)) {
         if (!isWorkflowImport(importPath)) continue;
         if (isAllowedEngineImport(importPath)) continue;
@@ -91,9 +99,11 @@ describe('engine ↔ workflow boundary', () => {
       readonly fromWorkflow: string;
       readonly toWorkflow: string;
     }[] = [];
+    let workflowsInspected = 0;
     for (const entry of readdirSync(WORKFLOWS_ROOT)) {
       const workflowDir = join(WORKFLOWS_ROOT, entry);
       if (!statSync(workflowDir).isDirectory()) continue;
+      workflowsInspected++;
       for (const file of walk(workflowDir)) {
         for (const importPath of importPathsFrom(file)) {
           if (!isWorkflowImport(importPath)) continue;
@@ -115,6 +125,12 @@ describe('engine ↔ workflow boundary', () => {
         }
       }
     }
+    // Anti-vacuity floor — guards against the discovery loop silently
+    // skipping every workflow package (e.g. WORKFLOWS_ROOT moved).
+    expect(
+      workflowsInspected,
+      'workflow-package walk inspected unexpectedly few packages — discovery loop is likely broken',
+    ).toBeGreaterThanOrEqual(6);
     expect(
       offenders,
       `cross-workflow imports detected:\n${offenders
@@ -130,8 +146,13 @@ describe('engine ↔ workflow boundary', () => {
     // rather than reach into a specific workflow package directly.
     // Tests are exempt because they may legitimately exercise a
     // single workflow in isolation.
+    const srcFiles = walk('src');
+    expect(
+      srcFiles.length,
+      'src walk returned unexpectedly few files — discovery loop is likely broken',
+    ).toBeGreaterThanOrEqual(20);
     const offenders: { readonly file: string; readonly importPath: string }[] = [];
-    for (const file of walk('src')) {
+    for (const file of srcFiles) {
       if (file === join(WORKFLOWS_ROOT, 'catalog.ts')) continue;
       for (const importPath of importPathsFrom(file)) {
         if (!isWorkflowImport(importPath)) continue;
@@ -159,8 +180,13 @@ describe('engine ↔ workflow boundary', () => {
     // surface, not internals). What they MUST NOT do is import a
     // workflow's writer / dispatch-hint internals — that would
     // entangle the test surface with the workflow's internal layout.
+    const testFiles = walk('tests');
+    expect(
+      testFiles.length,
+      'tests walk returned unexpectedly few files — discovery loop is likely broken',
+    ).toBeGreaterThanOrEqual(40);
     const offenders: { readonly file: string; readonly importPath: string }[] = [];
-    for (const file of walk('tests')) {
+    for (const file of testFiles) {
       for (const importPath of importPathsFrom(file)) {
         if (!isWorkflowImport(importPath)) continue;
         // index.js / catalog.js / types.js / artifacts.js are the
