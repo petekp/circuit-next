@@ -1,6 +1,6 @@
 # HANDOFF
 
-Last updated: 2026-04-27 — Sessions 1 + 2 + 3 + 4 of the test-quality backlog complete. Session 1: lint cleared, invariant-ledger meta-test landed, CI workflow live. Session 2: ledger triage done, coverage tooling added, fast/slow split added. Session 3: slice vocabulary stripped, anti-vacuity floors added, real-recursion integration test for sub-run landed. Session 4: brittle prose pins in plugin-command-invocation collapsed, real-recursion test for fanout landed.
+Last updated: 2026-04-27 — Sessions 1-5 of the test-quality backlog complete. Session 1: lint cleared, invariant-ledger meta-test landed, CI workflow live. Session 2: ledger triage, coverage tooling, fast/slow split. Session 3: slice vocabulary stripped, anti-vacuity floors, real-recursion sub-run test. Session 4: prose-pin collapse, real-recursion fanout test. Session 5: direct unit tests for the dispatch and sub-run step handlers (FU-T11 parts 1 + 2 of 5).
 
 ## Where we are
 
@@ -30,9 +30,10 @@ at the top of the file noting that.
 
 ## Tests
 
-927 tests pass, 6 skipped (count dropped 932 → 927 in Session 4 from
-the FU-T10 prose-pin removal; +1 from the new fanout real-recursion
-test). tsc clean, biome clean, drift clean.
+948 tests pass, 6 skipped (Session 5 added the dispatch
+direct-handler test file with 11 cases and the sub-run
+direct-handler test file with 10 cases). tsc clean, biome clean,
+drift clean.
 `npm run verify` is green on origin. CI workflow at
 `.github/workflows/verify.yml` mirrors the gate on every push and PR
 to `main`. `npm run verify:fast` is the tight-loop alternative
@@ -236,16 +237,21 @@ doc-shape pins.**
   helper.
 
 **FU-T11. Direct tests for step-handlers.**
-- State: open. `src/runtime/step-handlers/*.ts` has 0/9 direct
-  imports from tests (transitively covered through runner suites).
-- Fix: priority targets — `dispatch.ts`, `checkpoint.ts`,
-  `verification.ts`, `sub-run.ts`, `fanout.ts`. One direct test file
-  each, focused on the handler's own responsibilities (parsing
-  step config, returning step results, error paths). Not a
-  duplicate of runner tests.
-- Why it matters: localized failures help agents fix the right
-  layer.
-- Effort: ~3-4 hours.
+- State: **partially done.** Two of five priority targets covered.
+  - `tests/runner/dispatch-handler-direct.test.ts` (commit
+    `0210fab`, 2026-04-27, 11 cases): full lattice of
+    evaluateDispatchGate failure paths (parse / non-object / no
+    verdict / not-in-pass), adapter throw, plus three event-sequence
+    shape tests.
+  - `tests/runner/sub-run-handler-direct.test.ts` (commit `6ed7948`,
+    2026-04-27, 10 cases): early aborts (divergent artifact path,
+    missing resolver, resolver throw, wrong workflow id), child
+    failures (child runner throw, checkpoint_waiting), and the full
+    evaluateChildVerdict shape lattice.
+- Remaining: `checkpoint.ts`, `verification.ts`, `fanout.ts` direct
+  test files. Each ~10-15 cases following the same harness pattern
+  (StepHandlerContext + captured push() events). Estimated ~30-45
+  min per remaining handler.
 
 **FU-T12. Property-test expansion.**
 - State: open. Currently 2 property test files / ~141 LOC, both
@@ -278,11 +284,13 @@ ledger is honest, coverage is observable, and the inner loop has a
 fast-path. Session 3 cleared FU-T13 (slice-vocabulary residue),
 FU-T08 (anti-vacuity floors), and the sub-run half of FU-T06.
 Session 4 cleared FU-T10 (brittle prose pins) and the fanout half
-of FU-T06 (full FU-T06 now closed). Session 5+ remaining: FU-T07
+of FU-T06 (full FU-T06 now closed). Session 5 cleared two of the
+five FU-T11 priority targets (dispatch + sub-run direct unit
+tests). Session 6+ remaining: finish FU-T11 (checkpoint.ts,
+verification.ts, fanout.ts direct tests, ~30-45 min each), FU-T07
 (failure-message helpers naming the invariant, ~2h), FU-T09
 (mega-file splits — schema-parity.test.ts is still 4152 lines,
-~3-4h), FU-T11 (direct step-handler tests, ~3-4h), FU-T12
-(property-test expansion, ~2-3h per area).
+~3-4h), FU-T12 (property-test expansion, ~2-3h per area).
 
 ## Notes
 
