@@ -4,11 +4,11 @@
 // it through intent classification, not /circuit:migrate.
 
 import type { WorkflowPackage, WorkflowSignal } from '../types.js';
-import { MigrateReview } from './artifacts.js';
+import { MigrateInventory, MigrateReview } from './artifacts.js';
+import { migrateInventoryShapeHint } from './dispatch-hints.js';
 import { migrateBriefSynthesisBuilder } from './writers/brief.js';
 import { migrateCloseBuilder } from './writers/close.js';
 import { migrateCoexistenceSynthesisBuilder } from './writers/coexistence.js';
-import { migrateInventorySynthesisBuilder } from './writers/inventory.js';
 import { migrateVerificationWriter } from './writers/verification.js';
 
 const MIGRATE_SIGNALS: readonly WorkflowSignal[] = [
@@ -37,15 +37,16 @@ export const migrateWorkflowPackage: WorkflowPackage = {
       return `matched ${signal.label}; routed to Migrate workflow`;
     },
   },
-  // Migrate's dispatch step (review) currently uses the generic
-  // shape instruction. Preserved here so refactoring is explicit.
-  dispatchArtifacts: [{ schemaName: 'migrate.review@v1', schema: MigrateReview }],
+  dispatchArtifacts: [
+    {
+      schemaName: 'migrate.inventory@v1',
+      schema: MigrateInventory,
+      dispatchHint: migrateInventoryShapeHint.instruction,
+    },
+    { schemaName: 'migrate.review@v1', schema: MigrateReview },
+  ],
   writers: {
-    synthesis: [
-      migrateBriefSynthesisBuilder,
-      migrateInventorySynthesisBuilder,
-      migrateCoexistenceSynthesisBuilder,
-    ],
+    synthesis: [migrateBriefSynthesisBuilder, migrateCoexistenceSynthesisBuilder],
     close: [migrateCloseBuilder],
     verification: [migrateVerificationWriter],
     checkpoint: [],

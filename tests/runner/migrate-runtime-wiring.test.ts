@@ -79,19 +79,55 @@ const DEFAULT_REVIEW_BODY = JSON.stringify({
   findings: [],
 });
 
-function reviewerDispatcherWith(reviewBody: string = DEFAULT_REVIEW_BODY): DispatchFn {
+const DEFAULT_INVENTORY_BODY = JSON.stringify({
+  verdict: 'accept',
+  summary: 'Stub inventory for migrate-runtime-wiring test',
+  items: [
+    {
+      id: 'item-1',
+      path: 'src/legacy/auth.ts',
+      category: 'import-site',
+      description: 'Stub legacy auth import site',
+    },
+  ],
+  batches: [
+    {
+      id: 'batch-1',
+      title: 'All migration targets',
+      item_ids: ['item-1'],
+      rationale: 'Single-batch v0 stub',
+    },
+  ],
+});
+
+function migrateDispatcherWith(
+  reviewBody: string = DEFAULT_REVIEW_BODY,
+  inventoryBody: string = DEFAULT_INVENTORY_BODY,
+): DispatchFn {
   return {
     adapterName: 'agent',
     dispatch: async (input: AgentDispatchInput): Promise<DispatchResult> => {
-      expect(input.prompt).toContain('Step: review-step');
-      expect(input.prompt).toContain('Respond with a single raw JSON object');
-      return {
-        request_payload: input.prompt,
-        receipt_id: 'stub-migrate-review',
-        result_body: reviewBody,
-        duration_ms: 1,
-        cli_version: '0.0.0-stub',
-      };
+      if (input.prompt.includes('Step: inventory-step')) {
+        return {
+          request_payload: input.prompt,
+          receipt_id: 'stub-migrate-inventory',
+          result_body: inventoryBody,
+          duration_ms: 1,
+          cli_version: '0.0.0-stub',
+        };
+      }
+      if (input.prompt.includes('Step: review-step')) {
+        return {
+          request_payload: input.prompt,
+          receipt_id: 'stub-migrate-review',
+          result_body: reviewBody,
+          duration_ms: 1,
+          cli_version: '0.0.0-stub',
+        };
+      }
+      throw new Error(
+        `migrateDispatcherWith: unexpected dispatch step in prompt: ${input.prompt.slice(0, 200)}`,
+      );
     },
   };
 }
@@ -250,7 +286,7 @@ describe('Migrate runtime wiring', () => {
       rigor: 'standard',
       lane: lane(),
       now: deterministicNow(Date.UTC(2026, 3, 27, 9, 0, 0)),
-      dispatcher: reviewerDispatcherWith(),
+      dispatcher: migrateDispatcherWith(),
       childWorkflowResolver: makeChildResolver(),
       childRunner: makeStubChildRunner('accept'),
       projectRoot: REPO_ROOT,
@@ -258,6 +294,7 @@ describe('Migrate runtime wiring', () => {
 
     expect(outcome.result.outcome).toBe('complete');
     const labels = outcome.events.map(eventLabel);
+    expect(labels).toContain('dispatch.completed:inventory-step');
     expect(labels).toContain('sub_run.started:batch-step');
     expect(labels).toContain('sub_run.completed:batch-step');
     expect(labels).toContain('dispatch.completed:review-step');
@@ -337,7 +374,7 @@ describe('Migrate runtime wiring', () => {
       rigor: 'standard',
       lane: lane(),
       now: deterministicNow(Date.UTC(2026, 3, 27, 10, 0, 0)),
-      dispatcher: reviewerDispatcherWith(reviewBody),
+      dispatcher: migrateDispatcherWith(reviewBody),
       childWorkflowResolver: makeChildResolver(),
       childRunner: makeStubChildRunner('accept-with-fixes'),
       projectRoot: REPO_ROOT,
@@ -364,7 +401,7 @@ describe('Migrate runtime wiring', () => {
       rigor: 'standard',
       lane: lane(),
       now: deterministicNow(Date.UTC(2026, 3, 27, 11, 0, 0)),
-      dispatcher: reviewerDispatcherWith(),
+      dispatcher: migrateDispatcherWith(),
       childWorkflowResolver: makeChildResolver(),
       childRunner: makeStubChildRunner('reject'),
       projectRoot: REPO_ROOT,

@@ -60,6 +60,7 @@ export type MigrateBatchPlan = z.infer<typeof MigrateBatchPlan>;
 
 export const MigrateInventory = z
   .object({
+    verdict: z.literal('accept'),
     summary: z.string().min(1),
     items: z.array(MigrateInventoryItem).min(1),
     batches: z.array(MigrateBatchPlan).min(1),

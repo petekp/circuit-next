@@ -124,21 +124,25 @@
       "routes": {
         "pass": "coexistence-step"
       },
-      "executor": "orchestrator",
-      "kind": "synthesis",
+      "executor": "worker",
+      "kind": "dispatch",
+      "role": "implementer",
       "writes": {
         "artifact": {
           "path": "artifacts/migrate/inventory.json",
           "schema": "migrate.inventory@v1"
-        }
+        },
+        "request": "artifacts/dispatch/migrate-inventory.request.json",
+        "receipt": "artifacts/dispatch/migrate-inventory.receipt.txt",
+        "result": "artifacts/dispatch/migrate-inventory.result.json"
       },
       "gate": {
-        "kind": "schema_sections",
+        "kind": "result_verdict",
         "source": {
-          "kind": "artifact",
-          "ref": "artifact"
+          "kind": "dispatch_result",
+          "ref": "result"
         },
-        "required": ["items", "batches"]
+        "pass": ["accept"]
       }
     },
     {

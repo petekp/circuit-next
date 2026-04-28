@@ -98,12 +98,15 @@
         "reproduction status",
         "diagnostic path"
       ],
-      "execution": { "kind": "synthesis" },
+      "execution": { "kind": "dispatch", "role": "implementer" },
       "protocol": "migrate-inventory@v1",
       "writes": {
-        "artifact_path": "artifacts/migrate/inventory.json"
+        "artifact_path": "artifacts/migrate/inventory.json",
+        "request_path": "artifacts/dispatch/migrate-inventory.request.json",
+        "receipt_path": "artifacts/dispatch/migrate-inventory.receipt.txt",
+        "result_path": "artifacts/dispatch/migrate-inventory.result.json"
       },
-      "gate": { "required": ["items", "batches"] },
+      "gate": { "pass": ["accept"] },
       "routes": {
         "continue": "coexistence-step",
         "stop": "@stop"
