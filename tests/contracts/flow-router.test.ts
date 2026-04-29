@@ -126,6 +126,9 @@ describe('flow router classifier', () => {
       'create a new endpoint',
       'make the focused change',
       'please build a tool for plugin checks',
+      'Add the missing titleCase helper in strings.js so npm run check passes.',
+      'implement the missing isEven export so tests pass',
+      'create the missing parser function and get verification green',
     ];
 
     for (const task of cases) {

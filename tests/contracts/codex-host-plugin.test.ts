@@ -88,6 +88,8 @@ describe('Codex host plugin package', () => {
     expect(skill).toContain("node '<plugin root>/scripts/circuit-next.mjs' run --goal '<task>'");
     expect(skill).toContain('--progress jsonl');
     expect(skill).toContain('render `display.text` exactly');
+    expect(skill).toContain('task_list.updated');
+    expect(skill).toContain('user_input.requested');
     expect(skill).toContain('operator_summary_markdown_path');
     expect(skill).toContain(
       'Valid explicit flows are `explore`, `review`, `migrate`, `fix`, and `build`.',
@@ -250,6 +252,9 @@ describe('Codex host plugin package', () => {
         expect.objectContaining({ name: 'temp_repo_review_operator_summary', ok: true }),
       );
       expect(output.checks).toContainEqual(
+        expect.objectContaining({ name: 'temp_repo_checkpoint_user_input_requested', ok: true }),
+      );
+      expect(output.checks).toContainEqual(
         expect.objectContaining({ name: 'circuit_next_binary_available', ok: true }),
       );
       expect(output.checks).toContainEqual(
@@ -324,11 +329,15 @@ describe('Codex host plugin package', () => {
       expect(source).toContain('./bin/circuit-next');
       expect(source).toContain('--progress jsonl');
       expect(source).toContain('display.text');
+      expect(source).toContain('task_list.updated');
+      expect(source).toContain('user_input.requested');
       expect(source).toContain('operator_summary_markdown_path');
       expect(source).not.toContain("node '<plugin root>/scripts/circuit-next.mjs'");
       expect(codex).toContain("node '<plugin root>/scripts/circuit-next.mjs'");
       expect(codex).toContain('--progress jsonl');
       expect(codex).toContain('display.text');
+      expect(codex).toContain('task_list.updated');
+      expect(codex).toContain('user_input.requested');
       expect(codex).toContain('operator_summary_markdown_path');
       expect(codex).not.toContain('./bin/circuit-next');
       expect(codex).not.toContain('repo-local launcher');

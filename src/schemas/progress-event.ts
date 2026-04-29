@@ -12,6 +12,18 @@ export const ProgressDisplay = z
   .strict();
 export type ProgressDisplay = z.infer<typeof ProgressDisplay>;
 
+export const ProgressTaskStatus = z.enum(['pending', 'in_progress', 'completed', 'failed']);
+export type ProgressTaskStatus = z.infer<typeof ProgressTaskStatus>;
+
+export const ProgressTask = z
+  .object({
+    id: z.string().min(1).max(96),
+    title: z.string().min(1).max(120),
+    status: ProgressTaskStatus,
+  })
+  .strict();
+export type ProgressTask = z.infer<typeof ProgressTask>;
+
 const ProgressEventBase = z
   .object({
     schema_version: z.literal(1),
@@ -104,6 +116,48 @@ export const CheckpointWaitingProgressEvent = ProgressEventBase.extend({
   allowed_choices: z.array(z.string().min(1)).min(1),
 }).strict();
 
+export const TaskListUpdatedProgressEvent = ProgressEventBase.extend({
+  type: z.literal('task_list.updated'),
+  tasks: z.array(ProgressTask).min(1),
+}).strict();
+
+const UserInputOption = z
+  .object({
+    label: z.string().min(1).max(80),
+    description: z.string().min(1).max(160),
+    checkpoint_choice: z.string().min(1).max(80),
+  })
+  .strict();
+
+const UserInputQuestion = z
+  .object({
+    id: z.string().min(1).max(80),
+    header: z.string().min(1).max(12),
+    question: z.string().min(1).max(240),
+    options: z.array(UserInputOption).min(1).max(4),
+    allow_free_text: z.literal(false),
+  })
+  .strict();
+
+export const UserInputRequestedProgressEvent = ProgressEventBase.extend({
+  type: z.literal('user_input.requested'),
+  checkpoint: z
+    .object({
+      step_id: StepId,
+      request_path: z.string().min(1),
+      allowed_choices: z.array(z.string().min(1)).min(1),
+    })
+    .strict(),
+  questions: z.array(UserInputQuestion).min(1).max(3),
+  resume: z
+    .object({
+      run_folder: z.string().min(1),
+      checkpoint_choice_arg: z.string().min(1),
+      command: z.string().min(1),
+    })
+    .strict(),
+}).strict();
+
 export const RunCompletedProgressEvent = ProgressEventBase.extend({
   type: z.literal('run.completed'),
   outcome: RunClosedOutcome,
@@ -128,6 +182,8 @@ export const ProgressEvent = z.discriminatedUnion('type', [
   RelayStartedProgressEvent,
   RelayCompletedProgressEvent,
   CheckpointWaitingProgressEvent,
+  TaskListUpdatedProgressEvent,
+  UserInputRequestedProgressEvent,
   RunCompletedProgressEvent,
   RunAbortedProgressEvent,
 ]);

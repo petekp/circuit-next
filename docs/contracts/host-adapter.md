@@ -9,9 +9,14 @@ depends_on: [compiled-flow, run, connector]
 # Host Adapter Contract
 
 A host adapter is the surface that lets an orchestrator drive Circuit from a
-normal project checkout. The host is not the worker connector. The host starts
-Circuit, reads its JSON summary and reports, and presents the outcome to the
-operator.
+normal project checkout. Keep three concepts separate:
+
+- host/orchestrator: `generic-shell`, `codex`, or `claude-code`
+- flow: `explore`, `review`, `migrate`, `fix`, `build`, or a custom flow
+- worker connector: `claude-code`, `codex`, or a custom connector
+
+The host is not the worker connector. The host starts Circuit, reads its JSON
+summary and reports, and presents the outcome to the operator.
 
 ## Required Behavior
 
@@ -22,6 +27,8 @@ Every host adapter MUST support:
 - Checkpoint resume: `circuit-next resume --run-folder <path> --checkpoint-choice <choice>`.
 - Stable final JSON parsing from stdout.
 - Progress JSONL parsing from stderr when invoked with `--progress jsonl`.
+- Task-list rendering from `task_list.updated` progress events.
+- User-input rendering from `user_input.requested` progress events.
 - Report reading from the returned `run_folder` and `result_path`.
 - Verbatim host rendering from `display.text` and
   `operator_summary_markdown_path` per `docs/contracts/host-rendering.md`.
@@ -57,8 +64,32 @@ Hosts should render Circuit-authored `display.text` exactly for major progress
 updates, warnings, errors, checkpoints, and completion. Detailed rendering rules
 live in `docs/contracts/host-rendering.md`.
 
+Hosts should map `task_list.updated` into a native task or plan surface when one
+exists. Hosts should map `user_input.requested` into a native user-question
+surface when one exists, otherwise ask in-thread and resume with the provided
+command.
+
 Hosts MUST NOT treat progress events as the canonical outcome. The final stdout
 JSON and report files remain authoritative.
+
+## Capability Levels
+
+Host affordances are described with three levels:
+
+- `native`: the host adapter controls a real host UI/API surface.
+- `model-mediated`: the host model is instructed to use a host feature when it
+  is available.
+- `fallback`: Circuit provides plain text, files, and resume commands.
+
+Current adapters:
+
+| Adapter | Progress | Task list | User input | Summary |
+|---|---|---|---|---|
+| `generic-shell` | `fallback` JSONL | `fallback` JSONL | `fallback` resume command | Markdown report |
+| `codex-plugin` | `model-mediated` | `model-mediated` | `model-mediated` or in-thread fallback | Markdown report |
+| `codex-app-server` | planned `native` | planned `native` plan events | planned `native` `tool/requestUserInput` | Markdown report |
+| `claude-command` | `model-mediated` | `model-mediated` `TodoWrite` | in-thread fallback | Markdown report |
+| `claude-agent-sdk` | planned `native` | planned `native` `TodoWrite` stream | planned `native` `AskUserQuestion` | Markdown report |
 
 ## Generated Output
 
@@ -87,9 +118,11 @@ The doctor returns JSON on stdout and checks:
 - core packaged flow files exist
 - command files invoke the installed plugin wrapper, not `./bin/circuit-next`
 - command files request `--progress jsonl`
+- command files explain `task_list.updated` and `user_input.requested`
 - a `circuit-next` binary is available
 - a temp-repo routed Review smoke run succeeds with a read-only custom reviewer
 - the temp-repo smoke run emits parseable progress events
+- a checkpoint smoke run emits `user_input.requested`
 
 ## Result Handling
 
@@ -102,4 +135,8 @@ Host summaries should surface `selected_flow`, `routed_by`, `router_reason`,
 `outcome`, `run_folder`, `trace_entries_observed`, and `result_path` when
 present. When `operator_summary_markdown_path` is present, hosts should render
 that Markdown verbatim as the final user-facing answer. Checkpoint results
-should surface the allowed choices and exact resume shape.
+should surface the allowed choices, `user_input.requested` question, and exact
+resume shape.
+
+The stable CLI namespace stays `circuit-next run <flow>` so user-defined flow
+names cannot collide with future top-level CLI commands.

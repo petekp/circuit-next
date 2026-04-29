@@ -93,6 +93,49 @@ describe('progress event schema', () => {
         request_path: 'reports/checkpoints/frame-step-request.json',
         allowed_choices: ['continue'],
       },
+      {
+        ...BASE,
+        type: 'task_list.updated',
+        tasks: [
+          { id: 'frame-step', title: 'Frame the work', status: 'completed' },
+          { id: 'act-step', title: 'Make the change', status: 'in_progress' },
+        ],
+      },
+      {
+        ...BASE,
+        type: 'user_input.requested',
+        display: {
+          text: 'Circuit needs your checkpoint choice to continue.',
+          importance: 'major',
+          tone: 'checkpoint',
+        },
+        checkpoint: {
+          step_id: 'frame-step',
+          request_path: 'reports/checkpoints/frame-step-request.json',
+          allowed_choices: ['continue'],
+        },
+        questions: [
+          {
+            id: 'checkpoint-choice',
+            header: 'Choice',
+            question: 'Confirm the Build brief before implementation starts.',
+            options: [
+              {
+                label: 'Continue',
+                description: "Resume Circuit with 'continue'.",
+                checkpoint_choice: 'continue',
+              },
+            ],
+            allow_free_text: false,
+          },
+        ],
+        resume: {
+          run_folder: '/tmp/run',
+          checkpoint_choice_arg: '<choice>',
+          command:
+            "circuit-next resume --run-folder '/tmp/run' --checkpoint-choice '<choice>' --progress jsonl",
+        },
+      },
       { ...BASE, type: 'run.completed', outcome: 'complete', result_path: '/tmp/run/result.json' },
       {
         ...BASE,
@@ -140,6 +183,79 @@ describe('progress event schema', () => {
           text: 'Circuit started.',
           importance: 'loud',
           tone: 'sparkly',
+        },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects invalid task-list and user-input limits', () => {
+    expect(
+      ProgressEvent.safeParse({
+        ...BASE,
+        type: 'task_list.updated',
+        tasks: [{ id: 'frame-step', title: 'Frame the work', status: 'active' }],
+      }).success,
+    ).toBe(false);
+
+    const validQuestion = {
+      id: 'checkpoint-choice',
+      header: 'Choice',
+      question: 'Choose how Circuit should continue.',
+      options: [
+        {
+          label: 'Continue',
+          description: "Resume Circuit with 'continue'.",
+          checkpoint_choice: 'continue',
+        },
+      ],
+      allow_free_text: false,
+    };
+
+    expect(
+      ProgressEvent.safeParse({
+        ...BASE,
+        type: 'user_input.requested',
+        checkpoint: {
+          step_id: 'frame-step',
+          request_path: 'reports/checkpoints/frame-step-request.json',
+          allowed_choices: ['continue'],
+        },
+        questions: [validQuestion, validQuestion, validQuestion, validQuestion],
+        resume: {
+          run_folder: '/tmp/run',
+          checkpoint_choice_arg: '<choice>',
+          command:
+            "circuit-next resume --run-folder '/tmp/run' --checkpoint-choice '<choice>' --progress jsonl",
+        },
+      }).success,
+    ).toBe(false);
+
+    expect(
+      ProgressEvent.safeParse({
+        ...BASE,
+        type: 'user_input.requested',
+        checkpoint: {
+          step_id: 'frame-step',
+          request_path: 'reports/checkpoints/frame-step-request.json',
+          allowed_choices: ['continue'],
+        },
+        questions: [
+          {
+            ...validQuestion,
+            options: [
+              ...validQuestion.options,
+              ...validQuestion.options,
+              ...validQuestion.options,
+              ...validQuestion.options,
+              ...validQuestion.options,
+            ],
+          },
+        ],
+        resume: {
+          run_folder: '/tmp/run',
+          checkpoint_choice_arg: '<choice>',
+          command:
+            "circuit-next resume --run-folder '/tmp/run' --checkpoint-choice '<choice>' --progress jsonl",
         },
       }).success,
     ).toBe(false);

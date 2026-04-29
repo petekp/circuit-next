@@ -131,7 +131,9 @@ function runDoctor() {
         `command_${name}_uses_wrapper`,
         text.includes("node '<plugin root>/scripts/circuit-next.mjs'") &&
           !text.includes('./bin/circuit-next') &&
-          text.includes('--progress jsonl'),
+          text.includes('--progress jsonl') &&
+          text.includes('task_list.updated') &&
+          text.includes('user_input.requested'),
         commandPath,
       ),
     );
@@ -256,6 +258,59 @@ function runDoctor() {
           typeof output?.operator_summary_markdown_path === 'string'
             ? output.operator_summary_markdown_path
             : 'operator_summary_markdown_path missing',
+        ),
+      );
+
+      const checkpointRunFolder = resolve(smokeRoot, 'checkpoint-run');
+      const checkpointResult = spawnSync(
+        command,
+        [
+          'run',
+          'build',
+          '--goal',
+          'develop: add a focused feature that waits for framing',
+          '--entry-mode',
+          'deep',
+          '--flow-root',
+          packagedFlowRoot,
+          '--run-folder',
+          checkpointRunFolder,
+          '--progress',
+          'jsonl',
+        ],
+        {
+          cwd: smokeRoot,
+          encoding: 'utf8',
+          timeout: DOCTOR_SMOKE_TIMEOUT_MS,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        },
+      );
+      let checkpointOutput;
+      try {
+        checkpointOutput =
+          checkpointResult.stdout.length > 0 ? JSON.parse(checkpointResult.stdout) : undefined;
+      } catch {
+        checkpointOutput = undefined;
+      }
+      let checkpointProgressEvents = [];
+      try {
+        checkpointProgressEvents = parseProgressEvents(checkpointResult.stderr);
+      } catch (_err) {
+        checkpointProgressEvents = [];
+      }
+      const checkpointProgressTypes = checkpointProgressEvents
+        .map((event) => event.type)
+        .filter((type) => typeof type === 'string');
+      checks.push(
+        check(
+          'temp_repo_checkpoint_user_input_requested',
+          checkpointResult.status === 0 &&
+            checkpointOutput?.outcome === 'checkpoint_waiting' &&
+            checkpointProgressTypes.includes('checkpoint.waiting') &&
+            checkpointProgressTypes.includes('user_input.requested'),
+          checkpointProgressTypes.length > 0
+            ? `events=${checkpointProgressTypes.join(',')}`
+            : `stderr=${checkpointResult.stderr.slice(0, 500)}`,
         ),
       );
     } else {

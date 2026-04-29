@@ -11,6 +11,10 @@ depends_on: [host-adapter, run]
 Circuit owns the text that hosts show while a run is active and when a run
 finishes. Hosts render that text; they do not rewrite it.
 
+Native host affordances such as task lists and user-question tools are mapped in
+`docs/contracts/host-capabilities.md`. Those affordances must still render
+Circuit-authored text rather than host-authored paraphrases.
+
 ## Progress Rendering
 
 When invoking `run` or `resume`, hosts SHOULD pass `--progress jsonl`.
@@ -22,13 +26,19 @@ For each progress event:
 - Render `display.text` exactly when `display.importance === "major"`.
 - Always render `display.text` exactly when `display.tone` is `warning`,
   `error`, or `checkpoint`.
+- When `type === "task_list.updated"`, update the host task or plan surface
+  from `tasks` when one is available. Do not print the full task list as a
+  separate message by default.
+- When `type === "user_input.requested"`, use the host's native user-question
+  surface when one is available. If not, ask the question in-thread and resume
+  with the selected option's `checkpoint_choice`.
 - Suppress `display.importance === "detail"` by default unless the operator
   asks for debug output.
 - Do not render raw JSON, raw step ids, or trace internals by default.
 
 The existing machine fields remain available for tooling and debug views:
-`type`, `label`, `step_id`, `connector_name`, `report_path`, and related
-fields.
+`type`, `label`, `step_id`, `connector_name`, `report_path`, `tasks`,
+`questions`, `resume`, and related fields.
 
 ## Final Rendering
 

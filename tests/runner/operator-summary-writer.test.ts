@@ -31,7 +31,7 @@ function baseResult(flowId: string): RunResult {
     flow_id: flowId,
     goal: `run ${flowId}`,
     outcome: 'complete',
-    summary: `${flowId} run complete`,
+    summary: `${flowId} v0.1.0 closed 3 step(s) for goal "run ${flowId}".`,
     closed_at: '2026-04-28T12:00:00.000Z',
     trace_entries_observed: 3,
     manifest_hash: 'abc123',
@@ -65,7 +65,7 @@ describe('operator summary writer', () => {
     expect(existsSync(written.jsonPath)).toBe(true);
     expect(existsSync(written.markdownPath)).toBe(true);
     const summary = OperatorSummary.parse(JSON.parse(readFileSync(written.jsonPath, 'utf8')));
-    expect(summary.headline).toBe('Review CLEAN: 0 findings.');
+    expect(summary.headline).toBe('Circuit finished Review. Verdict: CLEAN. Findings: 0.');
     expect(summary.evidence_warnings).toContainEqual(
       expect.objectContaining({ kind: 'diff_truncated' }),
     );
@@ -74,14 +74,16 @@ describe('operator summary writer', () => {
       'review result',
     ]);
     const markdown = readFileSync(written.markdownPath, 'utf8');
-    expect(markdown).toContain('Review CLEAN: 0 findings.');
+    expect(markdown).toContain('Circuit finished Review. Verdict: CLEAN. Findings: 0.');
     expect(markdown).toContain('diff_truncated');
+    expect(markdown).not.toContain('v0.1.0 closed');
   });
 
   it('summarizes Build, Fix, and Migrate close reports with verification and review status', () => {
     const cases = [
       {
         flow: 'build',
+        label: 'Build',
         relPath: 'reports/build-result.json',
         body: {
           summary: 'Build result for feature: implemented change',
@@ -96,10 +98,12 @@ describe('operator summary writer', () => {
             },
           ],
         },
-        expected: 'Build complete: verification passed, review accept.',
+        expected:
+          'Circuit finished Build. The change was implemented, verification passed, and review accepted it.',
       },
       {
         flow: 'fix',
+        label: 'Fix',
         relPath: 'reports/fix-result.json',
         body: {
           summary: 'Fix bug: patched change',
@@ -110,10 +114,11 @@ describe('operator summary writer', () => {
             { report_id: 'fix.review', path: 'reports/fix/review.json', schema: 'fix.review@v1' },
           ],
         },
-        expected: 'Fix fixed: verification passed, review accept.',
+        expected: 'Circuit finished Fix with outcome fixed. Verification: passed. Review: accept.',
       },
       {
         flow: 'migrate',
+        label: 'Migrate',
         relPath: 'reports/migrate-result.json',
         body: {
           summary: 'Migrate SDK: cutover approved',
@@ -128,7 +133,8 @@ describe('operator summary writer', () => {
             },
           ],
         },
-        expected: 'Migrate complete: verification passed, review cutover-approved.',
+        expected:
+          'Circuit finished Migrate with outcome complete. Verification: passed. Review: cutover-approved.',
       },
     ];
 
@@ -140,6 +146,11 @@ describe('operator summary writer', () => {
         route: { selectedFlow: entry.flow },
       });
       expect(written.summary.headline).toBe(entry.expected);
+      expect(written.summary.details).toContain(
+        `Run note: Circuit completed 3 ${entry.label} steps for this goal.`,
+      );
+      expect(written.summary.details.join('\n')).not.toContain(`${entry.flow} v0.1.0 closed`);
+      expect(written.summary.details.join('\n')).not.toContain('result for');
       expect(written.summary.report_paths.some((report) => report.schema?.endsWith('@v1'))).toBe(
         true,
       );
@@ -165,7 +176,7 @@ describe('operator summary writer', () => {
     });
 
     expect(written.summary.headline).toBe(
-      'Explore accept-with-fold-ins: Explore integration: keep hardening host rendering',
+      'Circuit finished Explore. Review: accept-with-fold-ins. Explore integration: keep hardening host rendering',
     );
     expect(readFileSync(written.markdownPath, 'utf8')).toContain('accept-with-fold-ins');
   });

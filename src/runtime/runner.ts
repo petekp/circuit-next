@@ -21,7 +21,12 @@ import {
 import type { Depth } from '../schemas/depth.js';
 import { type CompiledFlowId, type InvocationId, type RunId, StepId } from '../schemas/ids.js';
 import { computeManifestHash } from '../schemas/manifest.js';
-import type { ProgressDisplay, ProgressEvent } from '../schemas/progress-event.js';
+import type {
+  ProgressDisplay,
+  ProgressEvent,
+  ProgressTask,
+  ProgressTaskStatus,
+} from '../schemas/progress-event.js';
 import type { Snapshot } from '../schemas/snapshot.js';
 import type { RunClosedOutcome, TraceEntry } from '../schemas/trace-entry.js';
 import { appendAndDerive } from './append-and-derive.js';
@@ -253,6 +258,179 @@ function connectorFilesystemCapability(connector: ResolvedConnector): Filesystem
 function progressStepTitle(flow: CompiledFlow, stepId: unknown): string {
   const step = flow.steps.find((candidate) => candidate.id === stepId);
   return step?.title ?? String(stepId);
+}
+
+function shellSingleQuote(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+function progressTasks(
+  flow: CompiledFlow,
+  statuses: ReadonlyMap<string, ProgressTaskStatus>,
+): ProgressTask[] {
+  return flow.steps.map((step) => {
+    const id = step.id as unknown as string;
+    return {
+      id,
+      title: step.title,
+      status: statuses.get(id) ?? 'pending',
+    };
+  });
+}
+
+function taskStatusesFromTrace(
+  flow: CompiledFlow,
+  traceEntries: readonly TraceEntry[],
+  startStepId: string | undefined,
+): Map<string, ProgressTaskStatus> {
+  const statuses = new Map<string, ProgressTaskStatus>(
+    flow.steps.map((step) => [step.id as unknown as string, 'pending'] as const),
+  );
+  for (const traceEntry of traceEntries) {
+    if (traceEntry.kind === 'step.entered') {
+      const id = traceEntry.step_id as unknown as string;
+      if (statuses.get(id) !== 'completed' && statuses.get(id) !== 'failed') {
+        statuses.set(id, 'in_progress');
+      }
+    }
+    if (traceEntry.kind === 'step.completed') {
+      statuses.set(traceEntry.step_id as unknown as string, 'completed');
+    }
+    if (traceEntry.kind === 'step.aborted') {
+      statuses.set(traceEntry.step_id as unknown as string, 'failed');
+    }
+  }
+  if (startStepId !== undefined && statuses.get(startStepId) !== 'completed') {
+    statuses.set(startStepId, 'in_progress');
+  }
+  return statuses;
+}
+
+function reportTaskListProgress(input: {
+  readonly progress: ProgressReporter | undefined;
+  readonly runId: RunId;
+  readonly flow: CompiledFlow;
+  readonly recordedAt: string;
+  readonly statuses: ReadonlyMap<string, ProgressTaskStatus>;
+  readonly label: string;
+  readonly displayText: string;
+  readonly tone?: ProgressDisplay['tone'];
+}): void {
+  reportProgress(input.progress, {
+    schema_version: 1,
+    type: 'task_list.updated',
+    run_id: input.runId,
+    flow_id: input.flow.id,
+    recorded_at: input.recordedAt,
+    label: input.label,
+    display: progressDisplay(input.displayText, 'detail', input.tone ?? 'info'),
+    tasks: progressTasks(input.flow, input.statuses),
+  });
+}
+
+function markInProgressTasksFailed(statuses: Map<string, ProgressTaskStatus>): boolean {
+  let changed = false;
+  for (const [id, status] of statuses) {
+    if (status === 'in_progress') {
+      statuses.set(id, 'failed');
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+function choiceLabel(choice: { readonly id: string; readonly label?: string | undefined }): string {
+  return choice.label ?? choice.id;
+}
+
+type UserInputRequestedProgressEvent = Extract<ProgressEvent, { type: 'user_input.requested' }>;
+
+function userInputQuestionsForCheckpoint(input: {
+  readonly flow: CompiledFlow;
+  readonly stepId: string;
+  readonly allowedChoices: readonly string[];
+}): UserInputRequestedProgressEvent['questions'] {
+  const step = input.flow.steps.find(
+    (candidate) => (candidate.id as unknown as string) === input.stepId,
+  );
+  const policyChoices =
+    step?.kind === 'checkpoint'
+      ? new Map(step.policy.choices.map((choice) => [choice.id, choice] as const))
+      : new Map<
+          string,
+          {
+            readonly id: string;
+            readonly label?: string | undefined;
+            readonly description?: string | undefined;
+          }
+        >();
+  const question =
+    step?.kind === 'checkpoint' ? step.policy.prompt : 'Choose how Circuit should continue.';
+
+  return [
+    {
+      id: 'checkpoint-choice',
+      header: 'Choice',
+      question,
+      options: input.allowedChoices.slice(0, 4).map((choiceId) => {
+        const choice = policyChoices.get(choiceId);
+        return {
+          label: choice === undefined ? choiceId : choiceLabel(choice),
+          description: choice?.description ?? `Resume Circuit with '${choiceId}'.`,
+          checkpoint_choice: choiceId,
+        };
+      }),
+      allow_free_text: false,
+    },
+  ];
+}
+
+function reportUserInputRequested(input: {
+  readonly progress: ProgressReporter | undefined;
+  readonly runFolder: string;
+  readonly flow: CompiledFlow;
+  readonly runId: RunId;
+  readonly recordedAt: string;
+  readonly checkpoint: {
+    readonly stepId: string;
+    readonly requestPath: string;
+    readonly allowedChoices: readonly string[];
+  };
+}): void {
+  const command = [
+    'circuit-next resume',
+    `--run-folder ${shellSingleQuote(input.runFolder)}`,
+    "--checkpoint-choice '<choice>'",
+    '--progress jsonl',
+  ].join(' ');
+  reportProgress(input.progress, {
+    schema_version: 1,
+    type: 'user_input.requested',
+    run_id: input.runId,
+    flow_id: input.flow.id,
+    recorded_at: input.recordedAt,
+    label: 'Circuit needs input',
+    display: progressDisplay(
+      'Circuit needs your checkpoint choice to continue.',
+      'major',
+      'checkpoint',
+    ),
+    checkpoint: {
+      step_id: StepId.parse(input.checkpoint.stepId),
+      request_path: input.checkpoint.requestPath,
+      allowed_choices: [...input.checkpoint.allowedChoices],
+    },
+    questions: userInputQuestionsForCheckpoint({
+      flow: input.flow,
+      stepId: input.checkpoint.stepId,
+      allowedChoices: input.checkpoint.allowedChoices,
+    }),
+    resume: {
+      run_folder: input.runFolder,
+      checkpoint_choice_arg: '<choice>',
+      command,
+    },
+  });
 }
 
 function warningRecordsFromReport(body: unknown): Array<{
@@ -682,6 +860,16 @@ async function executeCompiledFlow(
     ),
     run_folder: runFolder,
   });
+  const taskStatuses = taskStatusesFromTrace(flow, trace_entries, ctx.startStepId);
+  reportTaskListProgress({
+    progress: ctx.progress,
+    runId,
+    flow,
+    recordedAt: bootstrapTs,
+    statuses: taskStatuses,
+    label: 'Flow checklist initialized',
+    displayText: 'Circuit prepared the flow checklist.',
+  });
   // Capture per-relay metadata for AGENT_SMOKE / CODEX_SMOKE
   // fingerprint binding to cli_version without forcing a relay trace_entry
   // schema bump.
@@ -706,6 +894,7 @@ async function executeCompiledFlow(
     appendAndDerive(runFolder, sequenced);
     switch (sequenced.kind) {
       case 'step.entered':
+        taskStatuses.set(sequenced.step_id as unknown as string, 'in_progress');
         reportProgress(ctx.progress, {
           schema_version: 1,
           type: 'step.started',
@@ -721,6 +910,15 @@ async function executeCompiledFlow(
           step_id: sequenced.step_id,
           step_title: progressStepTitle(flow, sequenced.step_id),
           attempt: sequenced.attempt,
+        });
+        reportTaskListProgress({
+          progress: ctx.progress,
+          runId,
+          flow,
+          recordedAt: sequenced.recorded_at,
+          statuses: taskStatuses,
+          label: `${progressStepTitle(flow, sequenced.step_id)} in progress`,
+          displayText: `Circuit is working on ${progressStepTitle(flow, sequenced.step_id)}.`,
         });
         break;
       case 'step.report_written':
@@ -776,6 +974,7 @@ async function executeCompiledFlow(
         });
         break;
       case 'step.completed':
+        taskStatuses.set(sequenced.step_id as unknown as string, 'completed');
         reportProgress(ctx.progress, {
           schema_version: 1,
           type: 'step.completed',
@@ -793,8 +992,19 @@ async function executeCompiledFlow(
           attempt: sequenced.attempt,
           route_taken: sequenced.route_taken,
         });
+        reportTaskListProgress({
+          progress: ctx.progress,
+          runId,
+          flow,
+          recordedAt: sequenced.recorded_at,
+          statuses: taskStatuses,
+          label: `${progressStepTitle(flow, sequenced.step_id)} completed`,
+          displayText: `Circuit finished ${progressStepTitle(flow, sequenced.step_id)}.`,
+          tone: 'success',
+        });
         break;
       case 'step.aborted':
+        taskStatuses.set(sequenced.step_id as unknown as string, 'failed');
         reportProgress(ctx.progress, {
           schema_version: 1,
           type: 'step.aborted',
@@ -811,6 +1021,16 @@ async function executeCompiledFlow(
           step_title: progressStepTitle(flow, sequenced.step_id),
           attempt: sequenced.attempt,
           reason: sequenced.reason,
+        });
+        reportTaskListProgress({
+          progress: ctx.progress,
+          runId,
+          flow,
+          recordedAt: sequenced.recorded_at,
+          statuses: taskStatuses,
+          label: `${progressStepTitle(flow, sequenced.step_id)} failed`,
+          displayText: `Circuit marked ${progressStepTitle(flow, sequenced.step_id)} as failed.`,
+          tone: 'error',
         });
         break;
     }
@@ -933,6 +1153,14 @@ async function executeCompiledFlow(
         request_path: result.checkpoint.requestPath,
         allowed_choices: [...result.checkpoint.allowedChoices],
       });
+      reportUserInputRequested({
+        progress: ctx.progress,
+        runFolder,
+        flow,
+        runId,
+        recordedAt: waitingRecordedAt,
+        checkpoint: result.checkpoint,
+      });
       const snapshot = writeDerivedSnapshot(runFolder);
       return {
         runFolder,
@@ -958,6 +1186,17 @@ async function executeCompiledFlow(
     }
 
     if (result.kind === 'aborted') {
+      taskStatuses.set(step.id as unknown as string, 'failed');
+      reportTaskListProgress({
+        progress: ctx.progress,
+        runId,
+        flow,
+        recordedAt: recordedAt(),
+        statuses: taskStatuses,
+        label: `${step.title} failed`,
+        displayText: `Circuit marked ${step.title} as failed.`,
+        tone: 'error',
+      });
       runOutcome = 'aborted';
       closeReason = result.reason;
       currentStepId = undefined;
@@ -1042,6 +1281,18 @@ async function executeCompiledFlow(
     ...(terminalVerdict === undefined ? {} : { verdict: terminalVerdict }),
   });
   if (runOutcome === 'aborted') {
+    if (markInProgressTasksFailed(taskStatuses)) {
+      reportTaskListProgress({
+        progress: ctx.progress,
+        runId,
+        flow,
+        recordedAt: closedAt,
+        statuses: taskStatuses,
+        label: 'Flow checklist failed',
+        displayText: 'Circuit marked the active flow step as failed.',
+        tone: 'error',
+      });
+    }
     reportProgress(ctx.progress, {
       schema_version: 1,
       type: 'run.aborted',

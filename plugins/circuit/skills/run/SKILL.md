@@ -28,6 +28,14 @@ or `checkpoint`, render `display.text` exactly. Suppress `detail` events unless
 the user asks for debug detail. Do not show raw JSON, raw step IDs, or trace
 internals by default.
 
+When `task_list.updated` arrives, update Codex's plan/task surface when
+available. If that surface is unavailable, keep the thread output compact and do
+not print the full checklist unless the user asks for debug detail.
+
+When `user_input.requested` arrives, use Codex's native user-input affordance
+when available. Otherwise ask the question in-thread, map the chosen option to
+its `checkpoint_choice`, and resume with the provided command shape.
+
 Parse the final JSON output from stdout. Surface `selected_flow`, `routed_by`,
 `router_reason`, `outcome`, `run_folder`, `trace_entries_observed`, and
 `operator_summary_markdown_path`, and `result_path` when present.
@@ -49,6 +57,10 @@ When a previous run is waiting at a checkpoint, run:
 ```bash
 node '<plugin root>/scripts/circuit-next.mjs' resume --run-folder '<run_folder>' --checkpoint-choice '<choice>' --progress jsonl
 ```
+
+If the active progress stream includes `user_input.requested`, prefer its
+question text, options, and `checkpoint_choice` values over guessing from the
+summary JSON.
 
 ## Read Reports
 

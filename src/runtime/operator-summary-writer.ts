@@ -69,6 +69,24 @@ function plural(count: number, singular: string, pluralText = `${singular}s`): s
   return `${count} ${count === 1 ? singular : pluralText}`;
 }
 
+function capitalized(value: string): string {
+  const first = value[0];
+  if (first === undefined) return value;
+  return `${first.toUpperCase()}${value.slice(1)}`;
+}
+
+function friendlyRunNote(flowId: string, summary: string): string {
+  const match = /^([a-z-]+) v[\d.]+ closed (\d+) step\(s\) for goal ".+"\.$/.exec(summary);
+  if (match !== null) {
+    return `Circuit completed ${match[2]} ${capitalized(flowId)} steps for this goal.`;
+  }
+  return summary;
+}
+
+function friendlyResultSummary(summary: string): string {
+  return summary.replace(/^(?:Build|Fix|Migrate|Review|Explore|Sweep) result for .+?:\s*/, '');
+}
+
 function reportLink(
   runFolder: string,
   label: string,
@@ -115,13 +133,16 @@ function flowHeadline(input: {
   if (flowId === 'review') {
     const verdict = stringField(flowReport, 'verdict') ?? 'review complete';
     const findings = arrayField(flowReport, 'findings').length;
-    return `Review ${verdict}: ${plural(findings, 'finding')}.`;
+    return `Circuit finished Review. Verdict: ${verdict}. Findings: ${findings}.`;
   }
   if (flowId === 'build') {
     const outcome = stringField(flowReport, 'outcome') ?? 'complete';
     const verification = stringField(flowReport, 'verification_status') ?? 'unknown';
     const review = stringField(flowReport, 'review_verdict') ?? 'unknown';
-    return `Build ${outcome}: verification ${verification}, review ${review}.`;
+    if (outcome === 'complete' && verification === 'passed' && review === 'accept') {
+      return 'Circuit finished Build. The change was implemented, verification passed, and review accepted it.';
+    }
+    return `Circuit finished Build with outcome ${outcome}. Verification: ${verification}. Review: ${review}.`;
   }
   if (flowId === 'fix') {
     const outcome = stringField(flowReport, 'outcome') ?? 'complete';
@@ -130,13 +151,13 @@ function flowHeadline(input: {
       stringField(flowReport, 'review_verdict') ??
       stringField(flowReport, 'review_status') ??
       'unknown';
-    return `Fix ${outcome}: verification ${verification}, review ${review}.`;
+    return `Circuit finished Fix with outcome ${outcome}. Verification: ${verification}. Review: ${review}.`;
   }
   if (flowId === 'migrate') {
     const outcome = stringField(flowReport, 'outcome') ?? 'complete';
     const verification = stringField(flowReport, 'verification_status') ?? 'unknown';
     const review = stringField(flowReport, 'review_verdict') ?? 'unknown';
-    return `Migrate ${outcome}: verification ${verification}, review ${review}.`;
+    return `Circuit finished Migrate with outcome ${outcome}. Verification: ${verification}. Review: ${review}.`;
   }
   if (flowId === 'explore') {
     const verdictSnapshot = isObject(flowReport?.verdict_snapshot)
@@ -144,14 +165,14 @@ function flowHeadline(input: {
       : undefined;
     const review = stringField(verdictSnapshot, 'review_verdict') ?? 'complete';
     const summary = stringField(flowReport, 'summary') ?? resultSummary;
-    return `Explore ${review}: ${summary}`;
+    return `Circuit finished Explore. Review: ${review}. ${summary}`;
   }
   if (flowId === 'sweep') {
     const outcome = stringField(flowReport, 'outcome') ?? 'complete';
     const deferred = numberField(flowReport, 'deferred_count');
     return deferred === undefined
-      ? `Sweep ${outcome}.`
-      : `Sweep ${outcome}: ${plural(deferred, 'deferred item')}.`;
+      ? `Circuit finished Sweep with outcome ${outcome}.`
+      : `Circuit finished Sweep with outcome ${outcome}. Deferred: ${plural(deferred, 'item')}.`;
   }
   return resultSummary;
 }
@@ -163,16 +184,14 @@ function flowDetails(input: {
   const { flowId, flowReport } = input;
   const details: string[] = [];
   const summary = stringField(flowReport, 'summary');
-  if (summary !== undefined) details.push(`Result headline: ${summary}`);
+  if (summary !== undefined) details.push(`Result: ${friendlyResultSummary(summary)}`);
   if (flowId === 'review') {
     const findings = arrayField(flowReport, 'findings').length;
     details.push(`Findings: ${findings}`);
   }
   if (flowId === 'build' || flowId === 'fix' || flowId === 'migrate') {
-    const outcome = stringField(flowReport, 'outcome');
     const verification = stringField(flowReport, 'verification_status');
     const review = stringField(flowReport, 'review_verdict');
-    if (outcome !== undefined) details.push(`Flow result: ${outcome}`);
     if (verification !== undefined) details.push(`Verification: ${verification}`);
     if (review !== undefined) details.push(`Review verdict: ${review}`);
   }
@@ -185,13 +204,13 @@ function renderMarkdown(summary: OperatorSummary): string {
     '',
     summary.headline,
     '',
+    '## What Happened',
+    '',
     `- Selected flow: \`${summary.selected_flow}\``,
     `- Outcome: \`${summary.outcome}\``,
   ];
   if (summary.routed_by !== undefined) lines.push(`- Routed by: \`${summary.routed_by}\``);
   if (summary.router_reason !== undefined) lines.push(`- Router reason: ${summary.router_reason}`);
-  lines.push(`- Run folder: ${summary.run_folder}`);
-  if (summary.result_path !== undefined) lines.push(`- Result path: ${summary.result_path}`);
 
   if (summary.checkpoint !== undefined) {
     lines.push('', '## Checkpoint', '');
@@ -214,6 +233,10 @@ function renderMarkdown(summary: OperatorSummary): string {
       lines.push(`- ${warning.kind}${path}: ${warning.message}`);
     }
   }
+
+  lines.push('', '## Run Files', '');
+  lines.push(`- Run folder: ${summary.run_folder}`);
+  if (summary.result_path !== undefined) lines.push(`- Result path: ${summary.result_path}`);
 
   lines.push('', '## Reports', '');
   for (const report of summary.report_paths) {
@@ -257,7 +280,7 @@ export function writeOperatorSummary(input: {
   reportPaths.push(...evidenceLinks(input.runFolder, flowReport));
 
   const details = [
-    `Circuit summary: ${input.runResult.summary}`,
+    `Run note: ${friendlyRunNote(flowId, input.runResult.summary)}`,
     ...flowDetails({ flowId, flowReport }),
   ];
   if (input.runResult.outcome === 'aborted' && input.runResult.reason !== undefined) {

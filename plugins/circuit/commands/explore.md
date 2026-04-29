@@ -65,7 +65,11 @@ metacharacters:
    `display.tone` is `warning`, `error`, or `checkpoint`, render
    `display.text` exactly. Suppress `detail` events unless the user asks for
    debug detail. Do not show raw JSON, raw step IDs, or trace internals by
-   default.
+   default. When `task_list.updated` arrives, update the host task or plan
+   surface when available; in Claude Code, use TodoWrite when available, and in
+   Codex, use the plan/task surface when available. When `user_input.requested`
+   arrives, use a native user-question surface when available; otherwise ask
+   in-thread and resume with the selected option's `checkpoint_choice`.
 4. **Parse the final JSON output.** On success the CLI prints a JSON object
    with these fields on stdout: `run_id`, `run_folder`, `outcome`
    (`complete` | `aborted`), `trace_entries_observed`, `result_path`,

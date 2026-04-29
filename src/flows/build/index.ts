@@ -13,7 +13,17 @@ const BUILD_SIGNALS: readonly CompiledFlowSignal[] = [
   {
     label: 'build implementation request',
     pattern:
-      /^\s*(?:please\s+)?(?:build|implement|develop|add|create|ship)\s+(?:a\s+|an\s+|the\s+|this\s+|that\s+)?(?:new\s+)?(?:feature|change|fix|implementation|endpoint|component|command|tool|integration)\b/i,
+      /^\s*(?:please\s+)?(?:build|implement|develop|add|create|ship)\s+(?:a\s+|an\s+|the\s+|this\s+|that\s+)?(?:new\s+|missing\s+)?(?:feature|change|fix|implementation|endpoint|component|command|tool|integration|helper|export|function|method|behavior)\b/i,
+  },
+  {
+    label: 'missing implementation request',
+    pattern:
+      /^\s*(?:please\s+)?(?:add|implement|create|ship)\s+(?:the\s+)?missing\s+(?:[\w.-]+\s+)?(?:helper|export|function|method|component|command|endpoint|behavior)\b/i,
+  },
+  {
+    label: 'test-passing implementation request',
+    pattern:
+      /^\s*(?:please\s+)?(?:add|implement|create|ship|make)\b.*\b(?:helper|export|function|method|component|command|endpoint|behavior)\b.*\b(?:test|tests|check|build|verification)\b.*\b(?:pass|passes|green)\b/i,
   },
   {
     label: 'make change request',

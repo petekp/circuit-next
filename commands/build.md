@@ -81,14 +81,19 @@ metacharacters:
    `display.tone` is `warning`, `error`, or `checkpoint`, render
    `display.text` exactly. Suppress `detail` events unless the user asks for
    debug detail. Do not show raw JSON, raw step IDs, or trace internals by
-   default.
+   default. When `task_list.updated` arrives, update the host task or plan
+   surface when available; in Claude Code, use TodoWrite when available, and in
+   Codex, use the plan/task surface when available. When `user_input.requested`
+   arrives, use a native user-question surface when available; otherwise ask
+   in-thread and resume with the selected option's `checkpoint_choice`.
 5. **Parse the CLI's final JSON output.** Always surface `flow_id`, `outcome`,
    `run_folder`, `trace_entries_observed`, `operator_summary_path`, and
    `operator_summary_markdown_path`.
 6. **If `outcome === "checkpoint_waiting"`, do not read or claim
    `result_path`.** Instead surface the waiting checkpoint details:
    `checkpoint.step_id`, `checkpoint.request_path`,
-   `checkpoint.allowed_choices`, and the exact resume command:
+   `checkpoint.allowed_choices`, the `user_input.requested` question/options,
+   and the exact resume command:
 
    ```bash
    ./bin/circuit-next resume --run-folder '<run_folder>' --checkpoint-choice '<choice>' --progress jsonl

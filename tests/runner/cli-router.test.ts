@@ -224,6 +224,7 @@ describe('CLI router', () => {
       expect.arrayContaining([
         'route.selected',
         'run.started',
+        'task_list.updated',
         'step.started',
         'evidence.collected',
         'relay.started',
@@ -235,6 +236,15 @@ describe('CLI router', () => {
     expect(progress.find((event) => event.type === 'route.selected')?.display.text).toContain(
       'Circuit selected review',
     );
+    const taskListEvents = progress.filter((event) => event.type === 'task_list.updated');
+    expect(taskListEvents.length).toBeGreaterThan(1);
+    expect(taskListEvents[0]?.tasks.every((task) => task.status === 'pending')).toBe(true);
+    expect(
+      taskListEvents.some((event) => event.tasks.some((task) => task.status === 'in_progress')),
+    ).toBe(true);
+    expect(
+      taskListEvents.some((event) => event.tasks.some((task) => task.status === 'completed')),
+    ).toBe(true);
     expect(progress.find((event) => event.type === 'relay.started')).toMatchObject({
       role: 'reviewer',
       connector_name: 'claude-code',
@@ -264,6 +274,8 @@ describe('CLI router', () => {
     expect(typeof output.operator_summary_markdown_path).toBe('string');
     expect(progress.map((event) => event.type)).toContain('run.aborted');
     expect(progress.find((event) => event.type === 'run.aborted')?.display.tone).toBe('error');
+    const lastTaskList = progress.filter((event) => event.type === 'task_list.updated').at(-1);
+    expect(lastTaskList?.tasks.some((task) => task.status === 'failed')).toBe(true);
   });
 
   it('omitted flow positional keeps exploratory goals on explore', async () => {
@@ -346,6 +358,34 @@ describe('CLI router', () => {
         type: 'checkpoint.waiting',
         step_id: 'frame-step',
         allowed_choices: ['continue'],
+        display: expect.objectContaining({ tone: 'checkpoint' }),
+      }),
+    );
+    expect(progress).toContainEqual(
+      expect.objectContaining({
+        type: 'user_input.requested',
+        checkpoint: expect.objectContaining({
+          step_id: 'frame-step',
+          request_path: join(runFolder, 'reports/checkpoints/frame-step-request.json'),
+          allowed_choices: ['continue'],
+        }),
+        questions: [
+          expect.objectContaining({
+            id: 'checkpoint-choice',
+            header: 'Choice',
+            allow_free_text: false,
+            options: [
+              expect.objectContaining({
+                label: 'Continue',
+                checkpoint_choice: 'continue',
+              }),
+            ],
+          }),
+        ],
+        resume: expect.objectContaining({
+          run_folder: runFolder,
+          checkpoint_choice_arg: '<choice>',
+        }),
         display: expect.objectContaining({ tone: 'checkpoint' }),
       }),
     );

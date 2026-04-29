@@ -107,6 +107,16 @@ describe('relay shape-hint registry', () => {
     expect(review).toContain('critical-injections');
   });
 
+  it('Build hints keep implementation and review scoped to the requested behavior', () => {
+    const implementation = findRelayShapeHint(relayStepWithSchema('build.implementation@v1'));
+    const review = findRelayShapeHint(relayStepWithSchema('build.review@v1'));
+
+    expect(implementation).toContain('smallest behaviorally scoped change');
+    expect(implementation).toContain('Do not broaden semantics');
+    expect(review).toContain('not just against passing tests');
+    expect(review).toContain('broadens semantics beyond the goal');
+  });
+
   it('returns undefined when the schema is not registered and no structural hint matches', () => {
     expect(findRelayShapeHint(relayStepWithSchema('unknown.schema@v1'))).toBeUndefined();
   });
