@@ -177,6 +177,10 @@ describe('registered review compose writer', () => {
       scope: goal,
       findings: [],
       verdict: 'CLEAN',
+      evidence_summary: {
+        kind: 'unavailable',
+        message: 'CompiledFlowInvocation.projectRoot was not provided',
+      },
       evidence_warnings: [
         {
           kind: 'evidence_unavailable',
@@ -224,6 +228,120 @@ describe('registered review compose writer', () => {
     });
 
     expect(outcome.result.outcome).toBe('complete');
+  });
+
+  it('omits untracked file contents by default while keeping path metadata', async () => {
+    const { flow, bytes } = loadFixture();
+    const runFolder = join(runFolderBase, 'untracked-metadata-only');
+    const projectRoot = join(runFolderBase, 'metadata-only-project');
+    const secret = 'secret-like scratch content must not be relayed by default';
+    mkdirSync(projectRoot, { recursive: true });
+    execFileSync('git', ['init'], { cwd: projectRoot, stdio: 'pipe' });
+    writeFileSync(join(projectRoot, 'scratch-notes.txt'), `${secret}\n`);
+
+    const outcome = await runCompiledFlow({
+      runFolder,
+      flow,
+      flowBytes: bytes,
+      runId: RunId.parse('79000000-0000-0000-0000-000000000009'),
+      goal: 'review the current untracked files',
+      depth: 'standard',
+      change_kind: change_kind(),
+      now: deterministicNow(Date.UTC(2026, 3, 24, 14, 0, 0)),
+      projectRoot,
+      relayer: {
+        connectorName: 'claude-code',
+        relay: async (input: ClaudeCodeRelayInput): Promise<RelayResult> => {
+          expect(input.prompt).toContain('scratch-notes.txt');
+          expect(input.prompt).toContain('"untracked_content_policy": "metadata-only"');
+          expect(input.prompt).not.toContain(secret);
+          return {
+            request_payload: input.prompt,
+            receipt_id: 'stub-receipt-review-metadata-only',
+            result_body: JSON.stringify({ verdict: 'NO_ISSUES_FOUND', findings: [] }),
+            duration_ms: 1,
+            cli_version: '0.0.0-stub',
+          };
+        },
+      },
+    });
+
+    expect(outcome.result.outcome).toBe('complete');
+    const intake = ReviewIntake.parse(
+      JSON.parse(readFileSync(join(runFolder, 'reports', 'review-intake.json'), 'utf8')),
+    );
+    expect(intake.evidence.kind).toBe('git-working-tree');
+    if (intake.evidence.kind !== 'git-working-tree') return;
+    expect(intake.evidence.untracked_content_policy).toBe('metadata-only');
+    expect(intake.evidence.untracked_files).toContainEqual({
+      path: 'scratch-notes.txt',
+      byte_length: Buffer.byteLength(`${secret}\n`),
+    });
+    expect(intake.evidence_warnings).toContainEqual(
+      expect.objectContaining({ kind: 'untracked_file_content_omitted' }),
+    );
+  });
+
+  it('includes untracked file contents only with explicit evidence policy opt-in', async () => {
+    const { flow, bytes } = loadFixture();
+    const runFolder = join(runFolderBase, 'untracked-content-opt-in');
+    const projectRoot = join(runFolderBase, 'content-opt-in-project');
+    const scratch = 'operator explicitly allowed this untracked content';
+    mkdirSync(projectRoot, { recursive: true });
+    execFileSync('git', ['init'], { cwd: projectRoot, stdio: 'pipe' });
+    writeFileSync(join(projectRoot, 'scratch-notes.txt'), `${scratch}\n`);
+
+    const outcome = await runCompiledFlow({
+      runFolder,
+      flow,
+      flowBytes: bytes,
+      runId: RunId.parse('79000000-0000-0000-0000-000000000010'),
+      goal: 'review the current untracked files',
+      depth: 'standard',
+      evidencePolicy: { includeUntrackedFileContent: true },
+      change_kind: change_kind(),
+      now: deterministicNow(Date.UTC(2026, 3, 24, 14, 0, 0)),
+      projectRoot,
+      relayer: {
+        connectorName: 'claude-code',
+        relay: async (input: ClaudeCodeRelayInput): Promise<RelayResult> => {
+          expect(input.prompt).toContain('"untracked_content_policy": "include-content"');
+          expect(input.prompt).toContain(scratch);
+          return {
+            request_payload: input.prompt,
+            receipt_id: 'stub-receipt-review-content-opt-in',
+            result_body: JSON.stringify({ verdict: 'NO_ISSUES_FOUND', findings: [] }),
+            duration_ms: 1,
+            cli_version: '0.0.0-stub',
+          };
+        },
+      },
+    });
+
+    expect(outcome.result.outcome).toBe('complete');
+    const intake = ReviewIntake.parse(
+      JSON.parse(readFileSync(join(runFolder, 'reports', 'review-intake.json'), 'utf8')),
+    );
+    expect(intake.evidence.kind).toBe('git-working-tree');
+    if (intake.evidence.kind !== 'git-working-tree') return;
+    expect(intake.evidence.untracked_content_policy).toBe('include-content');
+    expect(intake.evidence.untracked_files[0]).toMatchObject({
+      path: 'scratch-notes.txt',
+      content: { text: `${scratch}\n`, truncated: false },
+    });
+    expect(intake.evidence_warnings).not.toContainEqual(
+      expect.objectContaining({ kind: 'untracked_file_content_omitted' }),
+    );
+    const report = ReviewResult.parse(
+      JSON.parse(readFileSync(join(runFolder, 'reports', 'review-result.json'), 'utf8')),
+    );
+    expect(report.evidence_summary).toMatchObject({
+      kind: 'git-working-tree',
+      untracked_content_policy: 'include-content',
+      untracked_file_count: 1,
+      untracked_files_sampled: 1,
+      untracked_files_truncated: false,
+    });
   });
 
   it('keeps review evidence from large diffs instead of replacing it with a git buffer error', async () => {
@@ -307,6 +425,7 @@ describe('registered review compose writer', () => {
         runId: RunId.parse('79000000-0000-0000-0000-000000000007'),
         goal: 'review the current untracked files',
         depth: 'standard',
+        evidencePolicy: { includeUntrackedFileContent: true },
         change_kind: change_kind(),
         now: deterministicNow(Date.UTC(2026, 3, 24, 14, 0, 0)),
         projectRoot,
@@ -336,6 +455,53 @@ describe('registered review compose writer', () => {
     } finally {
       chmodSync(unreadablePath, 0o600);
     }
+  });
+
+  it('skips binary untracked files and truncates large untracked text after opt-in', async () => {
+    const { flow, bytes } = loadFixture();
+    const runFolder = join(runFolderBase, 'untracked-content-redaction');
+    const projectRoot = join(runFolderBase, 'redaction-project');
+    mkdirSync(projectRoot, { recursive: true });
+    execFileSync('git', ['init'], { cwd: projectRoot, stdio: 'pipe' });
+    writeFileSync(join(projectRoot, 'binary.dat'), Buffer.from([0x61, 0x00, 0x62]));
+    writeFileSync(join(projectRoot, 'large.txt'), `${'x'.repeat(25_000)}\n`);
+
+    const outcome = await runCompiledFlow({
+      runFolder,
+      flow,
+      flowBytes: bytes,
+      runId: RunId.parse('79000000-0000-0000-0000-000000000011'),
+      goal: 'review the current untracked files',
+      depth: 'standard',
+      evidencePolicy: { includeUntrackedFileContent: true },
+      change_kind: change_kind(),
+      now: deterministicNow(Date.UTC(2026, 3, 24, 14, 0, 0)),
+      projectRoot,
+      relayer: relayerWith({ verdict: 'NO_ISSUES_FOUND', findings: [] }),
+    });
+
+    expect(outcome.result.outcome).toBe('complete');
+    const intake = ReviewIntake.parse(
+      JSON.parse(readFileSync(join(runFolder, 'reports', 'review-intake.json'), 'utf8')),
+    );
+    expect(intake.evidence.kind).toBe('git-working-tree');
+    if (intake.evidence.kind !== 'git-working-tree') return;
+    expect(intake.evidence.untracked_content_policy).toBe('include-content');
+    expect(intake.evidence.untracked_files).toContainEqual(
+      expect.objectContaining({
+        path: 'binary.dat',
+        skipped_reason: 'binary file skipped',
+      }),
+    );
+    expect(
+      intake.evidence.untracked_files.find((file) => file.path === 'binary.dat')?.content,
+    ).toBeUndefined();
+    const large = intake.evidence.untracked_files.find((file) => file.path === 'large.txt');
+    expect(large?.content?.truncated).toBe(true);
+    expect(large?.content?.text).toContain('[truncated');
+    expect(intake.evidence_warnings).toContainEqual(
+      expect.objectContaining({ kind: 'untracked_file_skipped', path: 'binary.dat' }),
+    );
   });
 
   it('surfaces unavailable evidence as an explicit warning in intake and result', async () => {

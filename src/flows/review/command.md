@@ -44,7 +44,12 @@ metacharacters:
    ./bin/circuit-next run review --goal 'can'\''t regress runtime safety' --progress jsonl
    ```
 
-3. **Render progress while the run is active.** `--progress jsonl` writes
+3. **Handle untracked file contents deliberately.** Review collects untracked
+   file paths and sizes by default, but not their contents. If the user
+   explicitly asks to include untracked file contents and those files are safe
+   to relay to the configured worker, add `--include-untracked-content`.
+   Otherwise omit the flag.
+4. **Render progress while the run is active.** `--progress jsonl` writes
    progress events to stderr and keeps the final result JSON on stdout.
    For every event whose `display.importance === "major"` or whose
    `display.tone` is `warning`, `error`, or `checkpoint`, render
@@ -55,11 +60,11 @@ metacharacters:
    Codex, use the plan/task surface when available. When `user_input.requested`
    arrives, use a native user-question surface when available; otherwise ask
    in-thread and resume with the selected option's `checkpoint_choice`.
-4. **Parse the final JSON output.** On success the CLI prints a JSON object
+5. **Parse the final JSON output.** On success the CLI prints a JSON object
    with these fields on stdout: `run_id`, `run_folder`, `outcome`
    (`complete` | `aborted`), `trace_entries_observed`, `result_path`,
    `operator_summary_path`, and `operator_summary_markdown_path`.
-5. **Render Circuit's final summary.** Read `operator_summary_markdown_path`
+6. **Render Circuit's final summary.** Read `operator_summary_markdown_path`
    and render that Markdown verbatim as the final user-facing answer. Do not
    invent a separate summary. If the operator summary is missing, fall back to
    the Review reports and include:
@@ -83,7 +88,7 @@ metacharacters:
    If `outcome === 'aborted'`, read `reports/result.json` at `result_path`
    to surface the abort `reason`; do not claim that
    `reports/review-result.json` exists on aborted runs.
-6. **Do not modify the CLI output before surfacing.** The run folder + report
+7. **Do not modify the CLI output before surfacing.** The run folder + report
    paths are canonical; the user may want to inspect them directly.
 
 ## Depth

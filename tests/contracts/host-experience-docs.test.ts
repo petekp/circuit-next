@@ -56,4 +56,14 @@ describe('host experience docs', () => {
     expect(doc).toContain('Codex Scenarios');
     expect(doc).toContain('Claude Code Scenarios');
   });
+
+  it('keeps /circuit:run host guidance aligned with routed Sweep support', () => {
+    const doc = readFileSync(resolve(REPO_ROOT, 'commands/run.md'), 'utf8');
+
+    expect(doc).toContain('cleanup/overnight tasks route to `sweep`');
+    expect(doc).toContain("./bin/circuit-next run --goal 'cleanup: remove safe dead code'");
+    expect(doc).toContain("./bin/circuit-next run --goal 'overnight: improve repo quality'");
+    expect(doc).toContain('selected_flow === "sweep"');
+    expect(doc).toContain('reports/sweep-result.json');
+  });
 });

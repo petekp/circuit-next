@@ -29,10 +29,77 @@ interface CompiledFlowRouteDecision {
   source: 'classifier';
   reason: string;
   matched_signal?: string;
+  inferredEntryModeName?: string;
+  inferredEntryModeReason?: string;
 }
 
 const PLANNING_ARTIFACT_SIGNAL =
   /\b(?:proposal|plan|brief|matrix|evaluation\s+matrix|design\s+doc|design\s+document|spec|specification|rfc|memo|document|doc|guide|analysis|evaluation|selection|strategy|outline|report|comparison|recommendation|write-?up|options|approaches)\b/i;
+
+const QUICK_FIX_SIGNAL =
+  /^\s*(?:(?:quick|small|tiny|simple)\s+fix\s*:|fix\s*:\s*(?:quick|small|tiny|simple)\b)/i;
+const DEEP_FIX_SIGNAL =
+  /\b(?:regression|flaky|intermittent|incident|outage|crash|failure|failing\s+(?:test|build)|debug|diagnose|reproduce|root\s+cause)\b/i;
+
+function inferEntryMode(
+  flowName: string,
+  taskText: string,
+): Pick<CompiledFlowRouteDecision, 'inferredEntryModeName' | 'inferredEntryModeReason'> {
+  if (flowName === 'build' && /^\s*develop\s*:/i.test(taskText)) {
+    return {
+      inferredEntryModeName: 'default',
+      inferredEntryModeReason: 'matched develop intent; selected default Build thoroughness',
+    };
+  }
+  if (flowName === 'migrate' && /^\s*migrate\s*:/i.test(taskText)) {
+    return {
+      inferredEntryModeName: 'deep',
+      inferredEntryModeReason: 'matched migrate intent; selected deep migration thoroughness',
+    };
+  }
+  if (flowName === 'sweep') {
+    if (/^\s*overnight\s*:/i.test(taskText)) {
+      return {
+        inferredEntryModeName: 'autonomous',
+        inferredEntryModeReason:
+          'matched overnight cleanup intent; selected autonomous Sweep thoroughness',
+      };
+    }
+    if (/^\s*cleanup\s*:/i.test(taskText)) {
+      return {
+        inferredEntryModeName: 'default',
+        inferredEntryModeReason: 'matched cleanup intent; selected default Sweep thoroughness',
+      };
+    }
+  }
+  if (flowName === 'explore' && /^\s*decide\s*:/i.test(taskText)) {
+    return {
+      inferredEntryModeName: 'tournament',
+      inferredEntryModeReason: 'matched decide intent; selected Explore tournament mode',
+    };
+  }
+  if (flowName !== 'fix') return {};
+  if (/\bflaky\b/i.test(taskText)) {
+    return {
+      inferredEntryModeName: 'deep',
+      inferredEntryModeReason: 'matched flaky signal; selected deep thoroughness',
+    };
+  }
+  const deepMatch = taskText.match(DEEP_FIX_SIGNAL);
+  if (deepMatch?.[0] !== undefined) {
+    return {
+      inferredEntryModeName: 'deep',
+      inferredEntryModeReason: `matched ${deepMatch[0]} signal; selected deep thoroughness`,
+    };
+  }
+  if (QUICK_FIX_SIGNAL.test(taskText)) {
+    return {
+      inferredEntryModeName: 'lite',
+      inferredEntryModeReason: 'matched quick Fix intent; selected lite thoroughness',
+    };
+  }
+  return {};
+}
 
 // Pure classifier: takes pre-derived routables and a default package.
 // The exported classifyCompiledFlowTask is a thin wrapper that binds the
@@ -60,6 +127,7 @@ export function classifyTaskAgainstRoutables(
         source: 'classifier',
         matched_signal: signal.label,
         reason: routing.reasonForMatch(signal),
+        ...inferEntryMode(pkg.id, taskText),
       };
     }
   }
@@ -69,6 +137,7 @@ export function classifyTaskAgainstRoutables(
     reason:
       defaultPackage.routing.defaultReason ??
       `no signal matched; routed to ${defaultPackage.pkg.id} as the conservative default`,
+    ...inferEntryMode(defaultPackage.pkg.id, taskText),
   };
 }
 

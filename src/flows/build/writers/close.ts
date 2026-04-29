@@ -2,8 +2,8 @@
 //
 // Reads brief + plan + implementation + verification + review and emits
 // build.result@v1 with verification_status, review_verdict, summary, and
-// the canonical pointer set. Outcome is 'complete' iff verification
-// passed AND review did not reject.
+// the canonical pointer set. Outcome is 'complete' only when verification
+// passed and review accepted cleanly; accepted follow-ups need attention.
 
 import { reportPathForSchemaInCompiledFlow } from '../../../runtime/registries/close-writers/shared.js';
 import type {
@@ -42,12 +42,17 @@ export const buildCloseBuilder: CloseBuilder = {
     const implementation = BuildImplementation.parse(context.inputs.implementation);
     const verification = BuildVerification.parse(context.inputs.verification);
     const review = BuildReview.parse(context.inputs.review);
+    const outcome: BuildResult['outcome'] =
+      verification.overall_status !== 'passed'
+        ? 'failed'
+        : review.verdict === 'accept'
+          ? 'complete'
+          : review.verdict === 'accept-with-fixes'
+            ? 'needs_attention'
+            : 'failed';
     return BuildResult.parse({
       summary: `Build result for ${brief.objective}: ${implementation.summary}`,
-      outcome:
-        verification.overall_status === 'passed' && review.verdict !== 'reject'
-          ? 'complete'
-          : 'failed',
+      outcome,
       verification_status: verification.overall_status,
       review_verdict: review.verdict,
       evidence_links: POINTERS.map((p) => ({

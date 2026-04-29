@@ -50,8 +50,7 @@ you already know what you want.
 **Core Flows:**
 
 These flows ship with the plugin. Build, Fix, Explore, and Review have direct
-slash commands. Migrate is reachable through the router; Sweep is wired in
-the runtime and will follow.
+slash commands. Migrate and Sweep are reachable through the router.
 
 | Flow | Purpose |
 |----------|-------------|
@@ -114,6 +113,8 @@ holds.
 | `/circuit:run review: <scope>` | Routes to Review |
 | `/circuit:run develop: <feature>` | Routes to Build |
 | `/circuit:run migrate: <target>` | Routes to Migrate |
+| `/circuit:run cleanup: <target>` | Routes to Sweep |
+| `/circuit:run overnight: <scope>` | Routes to Sweep autonomous mode |
 
 **Direct flows:**
 
@@ -127,6 +128,11 @@ holds.
 The slash commands wrap the underlying CLI. Each one accepts a `--goal`, an
 `--entry-mode` (lite, deep, autonomous), and an explicit `--depth` flag if
 you want to override the mode's depth pairing.
+
+Review collects untracked file paths and sizes by default, but not untracked
+file contents. If you explicitly want Review to send untracked file contents
+to the configured worker, add `--include-untracked-content` after confirming
+those files are safe to relay.
 
 ## Key Features
 
@@ -231,8 +237,9 @@ Built-in connectors:
 
 Custom connectors are wrapper executables. Define them under
 `relay.connectors.<name>.command` as a YAML argv array. Circuit appends
-`PROMPT_FILE OUTPUT_FILE` as the final two arguments — keeps wrapper
-contracts small and avoids shell interpolation. See
+`PROMPT_FILE OUTPUT_FILE` as the final two arguments; the wrapper reads the
+prompt file and writes a JSON response object to the output file. This keeps
+wrapper contracts small and avoids shell interpolation. See
 [`docs/contracts/connector.md`](docs/contracts/connector.md) for the full
 contract.
 

@@ -20,8 +20,8 @@ the schematic schema in `src/schemas/flow-schematic.ts` and the schematic →
 compiled-flow compiler at `src/runtime/compile-schematic-to-flow.ts`.
 Compiled flows are emitted to `generated/flows/fix/circuit.json` and
 (because Fix uses `route_overrides`) `generated/flows/fix/lite.json`.
-The product direction note at `docs/flows/direction.md` reframes old
-Repair evidence into the clearer Fix schematic.
+The product direction note at `docs/flows/direction.md` reframes older bug-fix
+evidence into the clearer Fix schematic.
 
 ## The Short Version
 
@@ -261,9 +261,9 @@ from having to read raw step logs.
 
 ## What This Means For Fix
 
-The old Repair flow should be treated as reference evidence. The active
-Fix schematic takes intake and route as initial contracts (the runner
-produces them before the flow starts) and follows this shape:
+The older bug-fix flow should be treated as reference evidence. The active Fix
+schematic takes intake and route as initial contracts (the runner produces them
+before the flow starts) and follows this shape:
 
 1. Frame — confirm Fix brief
 2. Gather Context (relayed to a researcher)
@@ -282,10 +282,10 @@ produces them before the flow starts) and follows this shape:
 If that shape feels too rigid after the deep research lands, the research
 should tell us exactly which block or route policy needs to change.
 
-Do not add more one-off Repair behavior from the old signed plan.
-Repair-only reports, `/circuit:repair`, and Repair-only runtime code stay
-out of scope unless a later operator decision explicitly reopens Repair as
-a first-class product schematic.
+Do not add more one-off behavior from the old signed plan for a second bug-fix
+flow name. Separate reports, commands, or runtime code for that name stay out
+of scope unless a later operator decision explicitly reopens the public naming
+model.
 
 ## V1 Custom Flow Boundary
 

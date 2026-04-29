@@ -519,7 +519,7 @@ function reportEvidenceProgress(input: {
 // agnostic — adding a new compose step means adding a ComposeBuilder
 // file + registry entry.
 function tryWriteRegisteredComposeReport(input: ComposeWriterInput): boolean {
-  const { runFolder, flow, step, goal, projectRoot } = input;
+  const { runFolder, flow, step, goal, projectRoot, evidencePolicy } = input;
   const schemaName = step.writes.report.schema;
 
   const composeBuilder = findComposeBuilder(schemaName);
@@ -535,6 +535,7 @@ function tryWriteRegisteredComposeReport(input: ComposeWriterInput): boolean {
       step,
       goal,
       ...(projectRoot === undefined ? {} : { projectRoot }),
+      ...(evidencePolicy === undefined ? {} : { evidencePolicy }),
       inputs,
     });
     writeJsonReport(runFolder, step.writes.report.path, report);
@@ -586,6 +587,7 @@ interface CompiledFlowExecutionContext {
   readonly composeWriter?: ComposeWriterFn;
   readonly selectionConfigLayers?: readonly LayeredConfigValue[];
   readonly projectRoot?: string;
+  readonly evidencePolicy?: CompiledFlowInvocation['evidencePolicy'];
   readonly invocationId?: InvocationId;
   readonly initialTraceEntries?: readonly TraceEntry[];
   readonly startStepId?: string;
@@ -1098,6 +1100,7 @@ async function executeCompiledFlow(
         depth,
         executionSelectionConfigLayers,
         ...(ctx.projectRoot === undefined ? {} : { projectRoot: ctx.projectRoot }),
+        ...(ctx.evidencePolicy === undefined ? {} : { evidencePolicy: ctx.evidencePolicy }),
         ...(ctx.invocationId === undefined ? {} : { invocationId: ctx.invocationId }),
         ...(ctx.relayer === undefined ? {} : { relayer: ctx.relayer }),
         composeWriter,

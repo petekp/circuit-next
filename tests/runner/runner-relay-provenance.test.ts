@@ -272,20 +272,18 @@ describe('relay connector resolution precedence', () => {
     ).rejects.toThrow(/read-only and cannot run implementer/);
   });
 
-  it('custom reviewer connectors run and unwrap configured JSON fields', async () => {
+  it('custom reviewer connectors run with documented prompt and output files', async () => {
     const { flow } = loadGeneratedFixture('build');
     const step = relayStep(flow, 'reviewer');
     const script = [
-      'const field = process.argv[1];',
-      'const prompt = process.argv.at(-1);',
-      "const result = JSON.stringify({ verdict: 'accept', prompt });",
-      'console.log(JSON.stringify({ receipt_id: `custom-${field}`, [field]: result }));',
+      "const { readFileSync, writeFileSync } = require('node:fs');",
+      'const [promptFile, outputFile] = process.argv.slice(1);',
+      "const prompt = readFileSync(promptFile, 'utf8');",
+      "const result = JSON.stringify({ verdict: 'accept', prompt, saw_raw_prompt_argv: process.argv.includes(prompt) });",
+      'writeFileSync(outputFile, result);',
     ].join(' ');
 
-    for (const [name, field] of [
-      ['gemini-reviewer', 'response'],
-      ['cursor-reviewer', 'result'],
-    ] as const) {
+    for (const name of ['gemini-reviewer', 'cursor-reviewer'] as const) {
       const decision = await resolveRelayDecision({
         flow,
         step,
@@ -303,9 +301,9 @@ describe('relay connector resolution precedence', () => {
                   [name]: {
                     kind: 'custom',
                     name,
-                    command: [process.execPath, '-e', script, field],
-                    prompt_transport: 'append-argv',
-                    output: { kind: 'json-field', field },
+                    command: [process.execPath, '-e', script],
+                    prompt_transport: 'prompt-file',
+                    output: { kind: 'output-file' },
                     capabilities: { filesystem: 'read-only', structured_output: 'json' },
                   },
                 },
@@ -323,10 +321,11 @@ describe('relay connector resolution precedence', () => {
         prompt: `review with ${name}`,
         resolvedSelection: { skills: [], invocation_options: {} },
       });
-      expect(result.receipt_id).toBe(`custom-${field}`);
+      expect(result.receipt_id).toMatch(new RegExp(`^custom:${name}:\\d+$`));
       expect(JSON.parse(result.result_body)).toEqual({
         verdict: 'accept',
         prompt: `review with ${name}`,
+        saw_raw_prompt_argv: false,
       });
     }
   });

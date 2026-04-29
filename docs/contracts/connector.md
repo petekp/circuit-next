@@ -166,14 +166,48 @@ invariant; tested in `tests/contracts/schema-parity.test.ts`.
   behavior, at best misleading, at worst a silent error). The argv
   form is **direct exec** (`spawn(command[0], command.slice(1).concat([promptFile, outputFile]))`
   or equivalent); no `/bin/sh -c` wrapping; no shell interpolation; no
-  `${VAR}` expansion by the relayer. **Calling convention.** The
+  `${VAR}` expansion by the relayer. `prompt_transport` is
+  `prompt-file`, and `output.kind` is `output-file`. **Calling
+  convention.** The
   relayer appends two positional arguments `PROMPT_FILE` and
   `OUTPUT_FILE` to `command` at invocation time; the connector reads its
-  prompt from `PROMPT_FILE` and writes its single-string response to
+  prompt from `PROMPT_FILE` and writes its JSON response object to
   `OUTPUT_FILE`. The connector's exit code distinguishes success (0)
   from failure (non-zero); failure semantics are Stage 2. This is the
   contract every custom connector must satisfy. Enforced at
   `src/schemas/connector.ts`.
+
+  Minimal custom connector example:
+
+  ```yaml
+  relay:
+    connectors:
+      echo-reviewer:
+        kind: custom
+        name: echo-reviewer
+        command: [node, ./scripts/echo-reviewer.mjs]
+        prompt_transport: prompt-file
+        output: { kind: output-file }
+        capabilities:
+          filesystem: read-only
+          structured_output: json
+  ```
+
+  ```js
+  // scripts/echo-reviewer.mjs
+  import { readFileSync, writeFileSync } from 'node:fs';
+
+  const [, , promptFile, outputFile] = process.argv;
+  const prompt = readFileSync(promptFile, 'utf8');
+
+  writeFileSync(
+    outputFile,
+    JSON.stringify({
+      verdict: 'accept',
+      summary: `Reviewed ${prompt.length} prompt characters.`,
+    }),
+  );
+  ```
 
   **Scope caveat — cwd, env, path resolution, timeouts, and stdin
   semantics are Stage 2 (closes Codex LOW #9).** v0.1 deliberately

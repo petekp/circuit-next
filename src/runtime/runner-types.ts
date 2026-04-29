@@ -36,6 +36,7 @@ export interface ComposeWriterInput {
   readonly step: CompiledFlow['steps'][number] & { kind: 'compose' };
   readonly goal: string;
   readonly projectRoot?: string;
+  readonly evidencePolicy?: RuntimeEvidencePolicy;
 }
 
 export type ComposeWriterFn = (input: ComposeWriterInput) => void;
@@ -91,6 +92,7 @@ export interface CompiledFlowInvocation {
   flow: CompiledFlow;
   flowBytes: Buffer;
   projectRoot?: string;
+  evidencePolicy?: RuntimeEvidencePolicy;
   runId: RunId;
   goal: string;
   depth?: Depth;
@@ -126,6 +128,10 @@ export interface CompiledFlowInvocation {
   // JSONL for hosts that want live updates while preserving final stdout
   // JSON. Runtime correctness never depends on this callback.
   progress?: ProgressReporter;
+}
+
+export interface RuntimeEvidencePolicy {
+  readonly includeUntrackedFileContent?: boolean;
 }
 
 export interface CheckpointResumeInvocation {

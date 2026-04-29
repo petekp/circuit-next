@@ -17,6 +17,7 @@ import {
   type ReviewEvidenceText,
   type ReviewEvidenceWarning,
   ReviewIntake,
+  type ReviewUntrackedContentPolicy,
   type ReviewUntrackedFileEvidence,
 } from '../reports.js';
 
@@ -100,7 +101,11 @@ function insideProject(projectRoot: string, path: string): boolean {
   return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
 }
 
-function readUntrackedFile(projectRoot: string, path: string): ReviewUntrackedFileEvidence {
+function readUntrackedFile(
+  projectRoot: string,
+  path: string,
+  contentPolicy: ReviewUntrackedContentPolicy,
+): ReviewUntrackedFileEvidence {
   const abs = resolve(projectRoot, path);
   if (!insideProject(projectRoot, abs)) {
     return { path, byte_length: 0, skipped_reason: 'path resolves outside project root' };
@@ -116,6 +121,9 @@ function readUntrackedFile(projectRoot: string, path: string): ReviewUntrackedFi
   }
   if (!stat.isFile()) {
     return { path, byte_length: stat.size, skipped_reason: 'not a regular file' };
+  }
+  if (contentPolicy === 'metadata-only') {
+    return { path, byte_length: stat.size };
   }
 
   let fd: number | undefined;
@@ -153,7 +161,10 @@ function readUntrackedFile(projectRoot: string, path: string): ReviewUntrackedFi
   }
 }
 
-function collectUntrackedFiles(projectRoot: string): {
+function collectUntrackedFiles(
+  projectRoot: string,
+  contentPolicy: ReviewUntrackedContentPolicy,
+): {
   readonly count: number;
   readonly truncated: boolean;
   readonly files: ReviewUntrackedFileEvidence[];
@@ -164,11 +175,16 @@ function collectUntrackedFiles(projectRoot: string): {
   return {
     count: paths.length,
     truncated: paths.length > MAX_UNTRACKED_FILES,
-    files: paths.slice(0, MAX_UNTRACKED_FILES).map((path) => readUntrackedFile(projectRoot, path)),
+    files: paths
+      .slice(0, MAX_UNTRACKED_FILES)
+      .map((path) => readUntrackedFile(projectRoot, path, contentPolicy)),
   };
 }
 
-function collectReviewEvidence(projectRoot: string | undefined): ReviewEvidence {
+function collectReviewEvidence(
+  projectRoot: string | undefined,
+  options: { readonly includeUntrackedFileContent?: boolean } = {},
+): ReviewEvidence {
   if (projectRoot === undefined) {
     return {
       kind: 'unavailable',
@@ -181,7 +197,9 @@ function collectReviewEvidence(projectRoot: string | undefined): ReviewEvidence 
   const staged = runGitDiff(projectRoot, ['diff', '--cached', '--no-ext-diff', '--']);
   const unstaged = runGitDiff(projectRoot, ['diff', '--no-ext-diff', '--']);
   const diffStat = runGit(projectRoot, ['diff', '--stat', '--cached', '--no-ext-diff']);
-  const untracked = collectUntrackedFiles(projectRoot);
+  const untrackedContentPolicy: ReviewUntrackedContentPolicy =
+    options.includeUntrackedFileContent === true ? 'include-content' : 'metadata-only';
+  const untracked = collectUntrackedFiles(projectRoot, untrackedContentPolicy);
 
   return {
     kind: 'git-working-tree',
@@ -192,6 +210,7 @@ function collectReviewEvidence(projectRoot: string | undefined): ReviewEvidence 
     diff_stat: diffStat.ok ? diffStat.stdout : diffStat.reason,
     untracked_file_count: untracked.count,
     untracked_files_truncated: untracked.truncated,
+    untracked_content_policy: untrackedContentPolicy,
     untracked_files: untracked.files,
   };
 }
@@ -247,6 +266,13 @@ function evidenceWarnings(evidence: ReviewEvidence): ReviewEvidenceWarning[] {
       message: `untracked file evidence was limited to ${MAX_UNTRACKED_FILES} files`,
     });
   }
+  if (evidence.untracked_content_policy === 'metadata-only' && evidence.untracked_file_count > 0) {
+    warnings.push({
+      kind: 'untracked_file_content_omitted',
+      message:
+        'untracked file contents were not included; pass --include-untracked-content only when those files are safe to relay',
+    });
+  }
   for (const file of evidence.untracked_files) {
     if (file.skipped_reason !== undefined) {
       warnings.push({
@@ -262,7 +288,12 @@ function evidenceWarnings(evidence: ReviewEvidence): ReviewEvidenceWarning[] {
 export const reviewIntakeComposeBuilder: ComposeBuilder = {
   resultSchemaName: 'review.intake@v1',
   build(context: ComposeBuildContext): unknown {
-    const evidence = collectReviewEvidence(context.projectRoot);
+    const evidence = collectReviewEvidence(
+      context.projectRoot,
+      context.evidencePolicy?.includeUntrackedFileContent === true
+        ? { includeUntrackedFileContent: true }
+        : {},
+    );
     return ReviewIntake.parse({
       scope: context.goal,
       evidence,

@@ -1,9 +1,11 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { main } from '../../src/cli/circuit.js';
+import { ReviewIntake } from '../../src/flows/review/reports.js';
 import type { RelayResult } from '../../src/runtime/connectors/shared.js';
 import type { RelayFn, RelayInput } from '../../src/runtime/runner.js';
 import { ProgressEvent } from '../../src/schemas/progress-event.js';
@@ -79,9 +81,91 @@ function traceEntryLog(runFolder: string): Array<Record<string, unknown>> {
     .map((line) => JSON.parse(line) as Record<string, unknown>);
 }
 
+function writeCliFixFixture(path: string): void {
+  mkdirSync(dirname(path), { recursive: true });
+  const composeStep = (id: string, title: string, reportPath: string, next: string) => ({
+    id,
+    title,
+    protocol: `${id}@v1`,
+    reads: [],
+    routes: { pass: next },
+    executor: 'orchestrator',
+    kind: 'compose',
+    writes: { report: { path: reportPath, schema: 'fix.brief@v1' } },
+    check: {
+      kind: 'schema_sections',
+      source: { kind: 'report', ref: 'report' },
+      required: ['problem_statement', 'success_criteria'],
+    },
+  });
+  const steps = [
+    composeStep('frame-step', 'Frame', 'reports/fix/frame-brief.json', 'analyze-step'),
+    composeStep('analyze-step', 'Analyze', 'reports/fix/analyze-brief.json', 'act-step'),
+    composeStep('act-step', 'Fix', 'reports/fix/act-brief.json', 'verify-step'),
+    composeStep('verify-step', 'Verify', 'reports/fix/verify-brief.json', 'review-step'),
+    composeStep('review-step', 'Review', 'reports/fix/review-brief.json', 'close-step'),
+    composeStep('close-step', 'Close', 'reports/fix/close-brief.json', '@complete'),
+  ];
+
+  writeFileSync(
+    path,
+    `${JSON.stringify(
+      {
+        schema_version: '2',
+        id: 'fix',
+        version: '0.1.0',
+        purpose: 'CLI router test fixture for Fix entry-mode selection.',
+        entry: { signals: { include: [], exclude: [] }, intent_prefixes: [] },
+        entry_modes: [
+          {
+            name: 'default',
+            start_at: 'frame-step',
+            depth: 'standard',
+            description: 'Default Fix test mode.',
+          },
+          {
+            name: 'lite',
+            start_at: 'frame-step',
+            depth: 'lite',
+            description: 'Lite Fix test mode.',
+          },
+          {
+            name: 'deep',
+            start_at: 'frame-step',
+            depth: 'deep',
+            description: 'Deep Fix test mode.',
+          },
+        ],
+        stages: [
+          { id: 'frame-stage', title: 'Frame', canonical: 'frame', steps: ['frame-step'] },
+          {
+            id: 'analyze-stage',
+            title: 'Analyze',
+            canonical: 'analyze',
+            steps: ['analyze-step'],
+          },
+          { id: 'act-stage', title: 'Fix', canonical: 'act', steps: ['act-step'] },
+          { id: 'verify-stage', title: 'Verify', canonical: 'verify', steps: ['verify-step'] },
+          { id: 'review-stage', title: 'Review', canonical: 'review', steps: ['review-step'] },
+          { id: 'close-stage', title: 'Close', canonical: 'close', steps: ['close-step'] },
+        ],
+        stage_path_policy: {
+          mode: 'partial',
+          omits: ['plan'],
+          rationale: 'CLI test fixture: Fix folds planning into diagnosis.',
+        },
+        steps,
+      },
+      null,
+      2,
+    )}\n`,
+  );
+}
+
 async function runMainJson(
   argv: readonly string[],
   relayBody: string,
+  options: { readonly configCwd?: string } = {},
 ): Promise<Record<string, unknown>> {
   let captured = '';
   const origWrite = process.stdout.write;
@@ -95,7 +179,7 @@ async function runMainJson(
       now: deterministicNow(Date.UTC(2026, 3, 24, 15, 0, 0)),
       runId: '84000000-0000-0000-0000-000000000001',
       configHomeDir: join(runFolderBase, 'empty-home'),
-      configCwd: process.cwd(),
+      configCwd: options.configCwd ?? process.cwd(),
     });
     expect(exit).toBe(0);
   } finally {
@@ -254,6 +338,42 @@ describe('CLI router', () => {
         tone: 'info',
       },
     });
+  });
+
+  it('passes explicit untracked-content opt-in to Review evidence intake', async () => {
+    const projectRoot = join(runFolderBase, 'review-untracked-cli-project');
+    const runFolder = join(runFolderBase, 'review-untracked-cli-run');
+    const scratch = 'CLI flag explicitly allowed this untracked content';
+    mkdirSync(projectRoot, { recursive: true });
+    execFileSync('git', ['init'], { cwd: projectRoot, stdio: 'pipe' });
+    writeFileSync(join(projectRoot, 'scratch.txt'), `${scratch}\n`);
+
+    const output = await runMainJson(
+      [
+        'review',
+        '--goal',
+        'review this untracked scratch file',
+        '--include-untracked-content',
+        '--run-folder',
+        runFolder,
+      ],
+      '{"verdict":"NO_ISSUES_FOUND","findings":[]}',
+      { configCwd: projectRoot },
+    );
+
+    const intake = ReviewIntake.parse(
+      JSON.parse(readFileSync(join(runFolder, 'reports', 'review-intake.json'), 'utf8')),
+    );
+    expect(intake.evidence.kind).toBe('git-working-tree');
+    if (intake.evidence.kind !== 'git-working-tree') return;
+    expect(intake.evidence.untracked_content_policy).toBe('include-content');
+    expect(intake.evidence.untracked_files[0]).toMatchObject({
+      path: 'scratch.txt',
+      content: { text: `${scratch}\n`, truncated: false },
+    });
+    expect(typeof output.operator_summary_markdown_path).toBe('string');
+    const markdown = readFileSync(output.operator_summary_markdown_path as string, 'utf8');
+    expect(markdown).toContain('Untracked evidence: contents included for 1 file');
   });
 
   it('emits run.aborted progress when a run aborts', async () => {
@@ -460,6 +580,128 @@ describe('CLI router', () => {
 
     expect(output.flow_id).toBe('explore');
     expect(output.routed_by).toBe('explicit');
+  });
+
+  it('uses classifier-inferred Fix lite mode only for explicit quick Fix intent', async () => {
+    const fixturePath = join(runFolderBase, 'fixtures', 'fix.json');
+    const runFolder = join(runFolderBase, 'fix-lite-inferred');
+    writeCliFixFixture(fixturePath);
+
+    const { output, progress } = await runMainJsonWithProgress(
+      [
+        '--goal',
+        'quick fix: restore the missing token edge case',
+        '--fixture',
+        fixturePath,
+        '--progress',
+        'jsonl',
+        '--run-folder',
+        runFolder,
+      ],
+      '{"verdict":"accept"}',
+    );
+
+    const bootstrap = traceEntryLog(runFolder).find(
+      (trace_entry) => trace_entry.kind === 'run.bootstrapped',
+    );
+    expect(output.flow_id).toBe('fix');
+    expect(output.routed_by).toBe('classifier');
+    expect(output.entry_mode).toBe('lite');
+    expect(output.entry_mode_source).toBe('classifier');
+    expect(bootstrap).toMatchObject({ depth: 'lite' });
+    expect(progress.find((event) => event.type === 'route.selected')).toMatchObject({
+      entry_mode: 'lite',
+      entry_mode_source: 'classifier',
+    });
+  });
+
+  it('uses classifier-inferred Fix deep mode for bare serious Fix intent', async () => {
+    const fixturePath = join(runFolderBase, 'fixtures', 'fix-deep-inferred.json');
+    const runFolder = join(runFolderBase, 'fix-deep-inferred');
+    writeCliFixFixture(fixturePath);
+
+    const { output, progress } = await runMainJsonWithProgress(
+      [
+        '--goal',
+        'fix: restore the missing token regression test',
+        '--fixture',
+        fixturePath,
+        '--progress',
+        'jsonl',
+        '--run-folder',
+        runFolder,
+      ],
+      '{"verdict":"accept"}',
+    );
+
+    const bootstrap = traceEntryLog(runFolder).find(
+      (trace_entry) => trace_entry.kind === 'run.bootstrapped',
+    );
+    expect(output.flow_id).toBe('fix');
+    expect(output.routed_by).toBe('classifier');
+    expect(output.entry_mode).toBe('deep');
+    expect(output.entry_mode_source).toBe('classifier');
+    expect(bootstrap).toMatchObject({ depth: 'deep' });
+    expect(progress.find((event) => event.type === 'route.selected')).toMatchObject({
+      entry_mode: 'deep',
+      entry_mode_source: 'classifier',
+    });
+  });
+
+  it('lets explicit --mode override classifier-inferred Fix mode', async () => {
+    const fixturePath = join(runFolderBase, 'fixtures', 'fix-explicit-default.json');
+    const runFolder = join(runFolderBase, 'fix-explicit-default-mode');
+    writeCliFixFixture(fixturePath);
+
+    const output = await runMainJson(
+      [
+        '--goal',
+        'fix: restore the missing token regression test',
+        '--mode',
+        'default',
+        '--fixture',
+        fixturePath,
+        '--run-folder',
+        runFolder,
+      ],
+      '{"verdict":"accept"}',
+    );
+
+    const bootstrap = traceEntryLog(runFolder).find(
+      (trace_entry) => trace_entry.kind === 'run.bootstrapped',
+    );
+    expect(output.flow_id).toBe('fix');
+    expect(output.entry_mode).toBe('default');
+    expect(output.entry_mode_source).toBe('explicit');
+    expect(bootstrap).toMatchObject({ depth: 'standard' });
+  });
+
+  it('lets explicit --depth suppress classifier-inferred Fix mode', async () => {
+    const fixturePath = join(runFolderBase, 'fixtures', 'fix-explicit-depth.json');
+    const runFolder = join(runFolderBase, 'fix-explicit-depth');
+    writeCliFixFixture(fixturePath);
+
+    const output = await runMainJson(
+      [
+        '--goal',
+        'fix: restore the missing token regression test',
+        '--depth',
+        'deep',
+        '--fixture',
+        fixturePath,
+        '--run-folder',
+        runFolder,
+      ],
+      '{"verdict":"accept"}',
+    );
+
+    const bootstrap = traceEntryLog(runFolder).find(
+      (trace_entry) => trace_entry.kind === 'run.bootstrapped',
+    );
+    expect(output.flow_id).toBe('fix');
+    expect(output.entry_mode).toBeUndefined();
+    expect(output.entry_mode_source).toBeUndefined();
+    expect(bootstrap).toMatchObject({ depth: 'deep' });
   });
 
   it('accepts --entry-mode and uses that mode depth when --depth is omitted', async () => {
@@ -931,7 +1173,7 @@ describe('CLI router', () => {
 
   it('keeps CLI help text aligned with the router-supported flow set', () => {
     const source = readFileSync(join(process.cwd(), 'src/cli/circuit.ts'), 'utf-8');
-    expect(source).toContain('registered explore/review/fix/build flows');
+    expect(source).toContain('registered explore/review/fix/build/migrate/sweep flows');
     expect(source).not.toContain('registered explore/review/build flows');
     expect(source).not.toContain('registered explore/review flows');
   });

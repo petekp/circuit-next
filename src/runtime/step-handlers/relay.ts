@@ -12,7 +12,7 @@ import { resolveRunRelative } from '../run-relative-path.js';
 import type { RelayInput } from '../runner-types.js';
 import type { StepHandlerContext, StepHandlerResult } from './types.js';
 
-type RelayStep = CompiledFlow['steps'][number] & { kind: 'relay' };
+export type RelayStep = CompiledFlow['steps'][number] & { kind: 'relay' };
 
 // Parse connector result_body for the check verdict and evaluate against
 // `step.check.pass`. Result shape: a discriminated union the handler
@@ -26,13 +26,13 @@ type RelayStep = CompiledFlow['steps'][number] & { kind: 'relay' };
 // observable (unparseable / no verdict field), `relay.completed.verdict`
 // carries the `'<no-verdict>'` sentinel — `RelayCompletedTraceEntry.verdict`
 // is `z.string().min(1)` so the slot must hold a non-empty string.
-type CheckEvaluation =
+export type CheckEvaluation =
   | { readonly kind: 'pass'; readonly verdict: string }
   | { readonly kind: 'fail'; readonly reason: string; readonly observedVerdict?: string };
 
 const NO_VERDICT_SENTINEL = '<no-verdict>';
 
-function evaluateRelayCheck(step: RelayStep, resultBody: string): CheckEvaluation {
+export function evaluateRelayCheck(step: RelayStep, resultBody: string): CheckEvaluation {
   let parsed: unknown;
   try {
     parsed = JSON.parse(resultBody);
@@ -76,7 +76,7 @@ function relayResponseInstruction(step: RelayStep): string {
 // v0 prompt composition: name the step, enumerate accepted verdicts, and
 // inline every reads-declared report (or a clear placeholder if the
 // reads report hasn't been written yet).
-function composeRelayPrompt(step: RelayStep, runFolder: string): string {
+export function composeRelayPrompt(step: RelayStep, runFolder: string): string {
   const readsBody =
     step.reads.length === 0
       ? '(no reads)'
@@ -105,7 +105,10 @@ function connectorFailureReason(stepId: string, err: unknown): string {
   return `relay step '${stepId}': connector invocation failed (${message})`;
 }
 
-function connectorForRelayer(relayer: { connectorName: string; connector?: ResolvedConnector }) {
+export function connectorForRelayer(relayer: {
+  connectorName: string;
+  connector?: ResolvedConnector;
+}) {
   return (
     relayer.connector ?? {
       kind: 'builtin' as const,

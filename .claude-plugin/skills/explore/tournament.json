@@ -1,0 +1,330 @@
+{
+  "schema_version": "2",
+  "id": "explore",
+  "version": "0.1.0",
+  "purpose": "Explore flow: frame the investigation, analyze the subject, either synthesize and review findings or run a decision tournament, then close with findings plus evidence. The default path uses Frame, Analyze, Act, Review, and Close. Tournament mode uses Frame, Analyze, Plan, and Close, with stress review embedded inside the Decision/Plan stage rather than a separate canonical Review stage.",
+  "entry": {
+    "signals": {
+      "include": ["explore", "investigate", "research", "understand"],
+      "exclude": []
+    },
+    "intent_prefixes": ["explore", "investigate", "decide"]
+  },
+  "entry_modes": [
+    {
+      "name": "tournament",
+      "start_at": "frame-step",
+      "depth": "tournament",
+      "description": "Decision tournament entry mode — frames and analyzes the question, fans out option cases, pauses for a bounded tradeoff choice, then closes with the selected decision."
+    }
+  ],
+  "stages": [
+    {
+      "id": "frame-stage",
+      "title": "Frame",
+      "canonical": "frame",
+      "steps": ["frame-step"]
+    },
+    {
+      "id": "analyze-stage",
+      "title": "Analyze",
+      "canonical": "analyze",
+      "steps": ["analyze-step"]
+    },
+    {
+      "id": "decision-stage",
+      "title": "Decision",
+      "canonical": "plan",
+      "steps": [
+        "decision-options-step",
+        "proposal-fanout-step",
+        "stress-proposals-step",
+        "tradeoff-checkpoint-step",
+        "decision-step"
+      ]
+    },
+    {
+      "id": "close-stage",
+      "title": "Close",
+      "canonical": "close",
+      "steps": ["close-tournament-step"]
+    }
+  ],
+  "stage_path_policy": {
+    "mode": "partial",
+    "omits": ["verify", "act", "review"],
+    "rationale": "Explore is an investigation and decision flow. Default mode auto-omits Plan because it synthesizes findings through Act and Review. Tournament mode auto-omits Act and Review because option stress review is embedded inside the canonical Plan/Decision stage. Verify is omitted because Explore output is not executable and does not admit mechanical verification. See src/flows/explore/contract.md §Canonical stage set for the full rationale. mode 'tournament' (depth 'tournament') also omits 'act', 'review' because route_overrides leave those canonicals with no reachable items."
+  },
+  "steps": [
+    {
+      "id": "frame-step",
+      "title": "Frame — produce explore.brief",
+      "protocol": "explore-frame@v1",
+      "reads": [],
+      "routes": {
+        "pass": "analyze-step"
+      },
+      "executor": "orchestrator",
+      "kind": "compose",
+      "writes": {
+        "report": {
+          "path": "reports/brief.json",
+          "schema": "explore.brief@v1"
+        }
+      },
+      "check": {
+        "kind": "schema_sections",
+        "source": {
+          "kind": "report",
+          "ref": "report"
+        },
+        "required": ["subject", "success_condition"]
+      }
+    },
+    {
+      "id": "analyze-step",
+      "title": "Analyze — produce explore.analysis",
+      "protocol": "explore-analyze@v1",
+      "reads": ["reports/brief.json"],
+      "routes": {
+        "pass": "decision-options-step"
+      },
+      "executor": "orchestrator",
+      "kind": "compose",
+      "writes": {
+        "report": {
+          "path": "reports/analysis.json",
+          "schema": "explore.analysis@v1"
+        }
+      },
+      "check": {
+        "kind": "schema_sections",
+        "source": {
+          "kind": "report",
+          "ref": "report"
+        },
+        "required": ["aspects"]
+      }
+    },
+    {
+      "id": "decision-options-step",
+      "title": "Decision — draft tournament options",
+      "protocol": "explore-decision-options@v1",
+      "reads": ["reports/brief.json", "reports/analysis.json"],
+      "routes": {
+        "pass": "proposal-fanout-step"
+      },
+      "executor": "orchestrator",
+      "kind": "compose",
+      "writes": {
+        "report": {
+          "path": "reports/decision-options.json",
+          "schema": "explore.decision-options@v1"
+        }
+      },
+      "check": {
+        "kind": "schema_sections",
+        "source": {
+          "kind": "report",
+          "ref": "report"
+        },
+        "required": ["decision_question", "options"]
+      }
+    },
+    {
+      "id": "proposal-fanout-step",
+      "title": "Decision — fan out option cases",
+      "protocol": "explore-proposal-fanout@v1",
+      "reads": ["reports/brief.json", "reports/decision-options.json"],
+      "routes": {
+        "pass": "stress-proposals-step"
+      },
+      "executor": "orchestrator",
+      "kind": "fanout",
+      "branches": {
+        "kind": "dynamic",
+        "source_report": "reports/decision-options.json",
+        "items_path": "options",
+        "template": {
+          "branch_id": "$item.id",
+          "execution": {
+            "kind": "relay",
+            "role": "researcher",
+            "goal": "$item.best_case_prompt",
+            "report_schema": "explore.tournament-proposal@v1",
+            "provenance_field": "option_id"
+          }
+        },
+        "max_branches": 4
+      },
+      "concurrency": {
+        "kind": "bounded",
+        "max": 2
+      },
+      "on_child_failure": "abort-all",
+      "writes": {
+        "branches_dir": "reports/tournament-branches",
+        "aggregate": {
+          "path": "reports/tournament-aggregate.json",
+          "schema": "explore.tournament-aggregate@v1"
+        }
+      },
+      "check": {
+        "kind": "fanout_aggregate",
+        "source": {
+          "kind": "fanout_results",
+          "ref": "aggregate"
+        },
+        "join": {
+          "policy": "aggregate-only"
+        },
+        "verdicts": {
+          "admit": ["accept"]
+        }
+      }
+    },
+    {
+      "id": "stress-proposals-step",
+      "title": "Decision — stress proposals",
+      "protocol": "explore-stress-proposals@v1",
+      "reads": [
+        "reports/brief.json",
+        "reports/decision-options.json",
+        "reports/tournament-aggregate.json"
+      ],
+      "routes": {
+        "pass": "tradeoff-checkpoint-step"
+      },
+      "executor": "worker",
+      "kind": "relay",
+      "role": "reviewer",
+      "writes": {
+        "report": {
+          "path": "reports/tournament-review.json",
+          "schema": "explore.tournament-review@v1"
+        },
+        "request": "reports/relay/tournament-review.request.json",
+        "receipt": "reports/relay/tournament-review.receipt.txt",
+        "result": "reports/relay/tournament-review.result.json"
+      },
+      "check": {
+        "kind": "result_verdict",
+        "source": {
+          "kind": "relay_result",
+          "ref": "result"
+        },
+        "pass": ["recommend", "no-clear-winner", "needs-operator"]
+      }
+    },
+    {
+      "id": "tradeoff-checkpoint-step",
+      "title": "Decision — tradeoff checkpoint",
+      "protocol": "explore-tradeoff-checkpoint@v1",
+      "reads": ["reports/tournament-review.json", "reports/tournament-aggregate.json"],
+      "routes": {
+        "pass": "decision-step"
+      },
+      "executor": "orchestrator",
+      "kind": "checkpoint",
+      "policy": {
+        "prompt": "Choose the option Circuit should close with. This checkpoint only supports final option choices; ask-for-more-evidence and stop routes are intentionally not encoded until the runtime has executable route semantics for them.",
+        "choices": [
+          {
+            "id": "option-1",
+            "label": "Option 1",
+            "description": "Close with the first drafted option."
+          },
+          {
+            "id": "option-2",
+            "label": "Option 2",
+            "description": "Close with the second drafted option."
+          },
+          {
+            "id": "option-3",
+            "label": "Option 3",
+            "description": "Close with the third drafted option."
+          },
+          {
+            "id": "option-4",
+            "label": "Option 4",
+            "description": "Close with the fourth drafted option."
+          }
+        ],
+        "safe_default_choice": "option-1"
+      },
+      "writes": {
+        "request": "reports/checkpoints/tradeoff-request.json",
+        "response": "reports/checkpoints/tradeoff-response.json"
+      },
+      "check": {
+        "kind": "checkpoint_selection",
+        "source": {
+          "kind": "checkpoint_response",
+          "ref": "response"
+        },
+        "allow": ["option-1", "option-2", "option-3", "option-4"]
+      }
+    },
+    {
+      "id": "decision-step",
+      "title": "Decision — compose final choice",
+      "protocol": "explore-decision@v1",
+      "reads": [
+        "reports/brief.json",
+        "reports/decision-options.json",
+        "reports/tournament-aggregate.json",
+        "reports/tournament-review.json"
+      ],
+      "routes": {
+        "pass": "close-tournament-step"
+      },
+      "executor": "orchestrator",
+      "kind": "compose",
+      "writes": {
+        "report": {
+          "path": "reports/decision.json",
+          "schema": "explore.decision@v1"
+        }
+      },
+      "check": {
+        "kind": "schema_sections",
+        "source": {
+          "kind": "report",
+          "ref": "report"
+        },
+        "required": ["decision", "selected_option_id", "rationale"]
+      }
+    },
+    {
+      "id": "close-tournament-step",
+      "title": "Close — emit tournament result file",
+      "protocol": "explore-close-tournament@v1",
+      "reads": [
+        "reports/brief.json",
+        "reports/decision-options.json",
+        "reports/tournament-aggregate.json",
+        "reports/tournament-review.json",
+        "reports/decision.json"
+      ],
+      "routes": {
+        "pass": "@complete"
+      },
+      "executor": "orchestrator",
+      "kind": "compose",
+      "writes": {
+        "report": {
+          "path": "reports/explore-result.json",
+          "schema": "explore.result@v1"
+        }
+      },
+      "check": {
+        "kind": "schema_sections",
+        "source": {
+          "kind": "report",
+          "ref": "report"
+        },
+        "required": ["summary", "verdict_snapshot"]
+      }
+    }
+  ]
+}

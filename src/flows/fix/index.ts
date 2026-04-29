@@ -8,6 +8,7 @@ import { fixVerificationWriter } from './writers/verification.js';
 
 const FIX_SIGNALS: readonly CompiledFlowSignal[] = [
   { label: 'fix prefix', pattern: /^\s*fix\s*:/i },
+  { label: 'quick fix prefix', pattern: /^\s*(?:quick|small|tiny|simple)\s+fix\s*:/i },
   {
     label: 'fix request',
     pattern:

@@ -14,7 +14,14 @@ import type {
 } from '../../../runtime/registries/compose-writers/types.js';
 import { resolveRunRelative } from '../../../runtime/run-relative-path.js';
 import type { CompiledFlow } from '../../../schemas/compiled-flow.js';
-import { ReviewIntake, ReviewRelayResult, ReviewResult, computeReviewVerdict } from '../reports.js';
+import {
+  type ReviewEvidence,
+  type ReviewEvidenceSummary,
+  ReviewIntake,
+  ReviewRelayResult,
+  ReviewResult,
+  computeReviewVerdict,
+} from '../reports.js';
 
 type RelayStep = CompiledFlow['steps'][number] & { kind: 'relay' };
 type ComposeStep = CompiledFlow['steps'][number] & { kind: 'compose' };
@@ -61,6 +68,19 @@ function reviewIntakePath(flow: CompiledFlow, closeStep: ComposeBuildContext['st
   return path;
 }
 
+function evidenceSummary(evidence: ReviewEvidence): ReviewEvidenceSummary {
+  if (evidence.kind === 'unavailable') {
+    return { kind: 'unavailable', message: evidence.reason };
+  }
+  return {
+    kind: 'git-working-tree',
+    untracked_content_policy: evidence.untracked_content_policy,
+    untracked_file_count: evidence.untracked_file_count,
+    untracked_files_sampled: evidence.untracked_files.length,
+    untracked_files_truncated: evidence.untracked_files_truncated,
+  };
+}
+
 export const reviewResultComposeBuilder: ComposeBuilder = {
   resultSchemaName: 'review.result@v1',
   // No declarative reads — the read is a relay result body, not a
@@ -83,6 +103,7 @@ export const reviewResultComposeBuilder: ComposeBuilder = {
       scope: intake.scope,
       findings: relayResult.findings,
       verdict: computeReviewVerdict(relayResult.findings),
+      evidence_summary: evidenceSummary(intake.evidence),
       evidence_warnings: intake.evidence_warnings,
     });
   },

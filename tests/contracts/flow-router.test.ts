@@ -8,7 +8,7 @@ describe('flow router classifier', () => {
     // each package's routing.order, not from this array. Asserting set
     // membership keeps the test stable across catalog reordering.
     expect([...ROUTABLE_WORKFLOWS].sort()).toEqual(
-      ['build', 'explore', 'fix', 'migrate', 'review'].sort(),
+      ['build', 'explore', 'fix', 'migrate', 'review', 'sweep'].sort(),
     );
   });
 
@@ -87,6 +87,33 @@ describe('flow router classifier', () => {
     }
   });
 
+  it('infers Fix thoroughness from bug-fix intent when the user did not provide a mode', () => {
+    const bare = classifyCompiledFlowTask('fix: handle the missing token edge case');
+    expect(bare.flowName).toBe('fix');
+    expect(bare.inferredEntryModeName).toBeUndefined();
+    expect(bare.inferredEntryModeReason).toBeUndefined();
+
+    const quick = classifyCompiledFlowTask('quick fix: handle the missing token edge case');
+    expect(quick.flowName).toBe('fix');
+    expect(quick.inferredEntryModeName).toBe('lite');
+    expect(quick.inferredEntryModeReason).toMatch(/quick/i);
+
+    const regression = classifyCompiledFlowTask('fix: please fix the auth regression');
+    expect(regression.flowName).toBe('fix');
+    expect(regression.inferredEntryModeName).toBe('deep');
+    expect(regression.inferredEntryModeReason).toMatch(/regression/i);
+
+    const seriousQuick = classifyCompiledFlowTask('quick fix: diagnose the crash on launch');
+    expect(seriousQuick.flowName).toBe('fix');
+    expect(seriousQuick.inferredEntryModeName).toBe('deep');
+    expect(seriousQuick.inferredEntryModeReason).toMatch(/diagnose|crash/i);
+
+    const flaky = classifyCompiledFlowTask('debug the flaky integration test');
+    expect(flaky.flowName).toBe('fix');
+    expect(flaky.inferredEntryModeName).toBe('deep');
+    expect(flaky.inferredEntryModeReason).toMatch(/flaky/i);
+  });
+
   it('keeps review-style fix-mention goals on review, not fix', () => {
     const cases = [
       'audit this bug fix before merge',
@@ -137,6 +164,33 @@ describe('flow router classifier', () => {
       expect(decision.source).toBe('classifier');
       expect(decision.matched_signal).toBeDefined();
     }
+  });
+
+  it('infers parity entry modes for routed intent prefixes', () => {
+    const develop = classifyCompiledFlowTask('develop: add SSO flow');
+    expect(develop.flowName).toBe('build');
+    expect(develop.inferredEntryModeName).toBe('default');
+    expect(develop.inferredEntryModeReason).toMatch(/develop/i);
+
+    const migrate = classifyCompiledFlowTask('migrate: replace the legacy SDK');
+    expect(migrate.flowName).toBe('migrate');
+    expect(migrate.inferredEntryModeName).toBe('deep');
+    expect(migrate.inferredEntryModeReason).toMatch(/migrate/i);
+
+    const cleanup = classifyCompiledFlowTask('cleanup: remove safe dead code');
+    expect(cleanup.flowName).toBe('sweep');
+    expect(cleanup.inferredEntryModeName).toBe('default');
+    expect(cleanup.inferredEntryModeReason).toMatch(/cleanup/i);
+
+    const overnight = classifyCompiledFlowTask('overnight: improve repo quality');
+    expect(overnight.flowName).toBe('sweep');
+    expect(overnight.inferredEntryModeName).toBe('autonomous');
+    expect(overnight.inferredEntryModeReason).toMatch(/overnight/i);
+
+    const decide = classifyCompiledFlowTask('decide: choose the rollout strategy');
+    expect(decide.flowName).toBe('explore');
+    expect(decide.inferredEntryModeName).toBe('tournament');
+    expect(decide.inferredEntryModeReason).toMatch(/decide/i);
   });
 
   it('falls back to explore when no routed flow signal is present', () => {

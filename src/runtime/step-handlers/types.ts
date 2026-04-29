@@ -10,6 +10,7 @@ import type {
   ComposeWriterFn,
   RelayFn,
   RelayResultMetadata,
+  RuntimeEvidencePolicy,
   WorktreeRunner,
 } from '../runner-types.js';
 
@@ -34,6 +35,7 @@ export interface StepHandlerContext {
   readonly depth: Depth;
   readonly executionSelectionConfigLayers: readonly LayeredConfigValue[];
   readonly projectRoot?: string;
+  readonly evidencePolicy?: RuntimeEvidencePolicy;
   readonly invocationId?: InvocationId;
   readonly relayer?: RelayFn;
   readonly composeWriter: ComposeWriterFn;

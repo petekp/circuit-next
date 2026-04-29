@@ -413,6 +413,18 @@ export const FixResult = z
       });
     }
 
+    if (
+      result.outcome === 'fixed' &&
+      result.review_status === 'completed' &&
+      result.review_verdict !== 'accept'
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['review_verdict'],
+        message: "review_verdict must be 'accept' when outcome is 'fixed' and review completed",
+      });
+    }
+
     if (result.review_status === 'completed') {
       if (result.review_verdict === undefined) {
         ctx.addIssue({

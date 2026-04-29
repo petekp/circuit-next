@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -404,6 +404,135 @@ describe('fanout runtime', () => {
     if (fanoutJoined?.kind !== 'fanout.joined') throw new Error('expected fanout.joined');
     expect(fanoutJoined.policy).toBe('aggregate-only');
     expect(fanoutJoined.selected_branch_id).toBeUndefined();
+  });
+
+  it('fans out relay branches with per-branch request, receipt, result, report, and aggregate provenance', async () => {
+    const parent = CompiledFlow.parse({
+      schema_version: '2',
+      id: PARENT_WORKFLOW_ID as unknown as string,
+      version: '0.1.0',
+      purpose: 'fanout relay branch test parent',
+      entry: {
+        signals: { include: ['fanout-relay'], exclude: [] },
+        intent_prefixes: ['fanout-relay'],
+      },
+      entry_modes: [
+        {
+          name: 'fanout-relay',
+          start_at: 'fanout-step',
+          depth: 'standard',
+          description: 'Relay fanout entry.',
+        },
+      ],
+      stages: [{ id: 'plan-stage', title: 'Plan', canonical: 'plan', steps: ['fanout-step'] }],
+      stage_path_policy: {
+        mode: 'partial',
+        omits: ['frame', 'analyze', 'act', 'verify', 'review', 'close'],
+        rationale: 'narrow relay-fanout runtime test.',
+      },
+      steps: [
+        {
+          id: 'fanout-step',
+          title: 'Fanout relay branches',
+          protocol: 'fanout-protocol@v1',
+          reads: [],
+          routes: { pass: '@complete' },
+          executor: 'orchestrator',
+          kind: 'fanout',
+          branches: {
+            kind: 'static',
+            branches: [
+              {
+                branch_id: 'a',
+                execution: {
+                  kind: 'relay',
+                  role: 'researcher',
+                  goal: 'branch-a goal',
+                  report_schema: 'runtime-proof-canonical@v1',
+                },
+              },
+              {
+                branch_id: 'b',
+                execution: {
+                  kind: 'relay',
+                  role: 'researcher',
+                  goal: 'branch-b goal',
+                  report_schema: 'runtime-proof-canonical@v1',
+                },
+              },
+            ],
+          },
+          concurrency: { kind: 'bounded', max: 2 },
+          on_child_failure: 'abort-all',
+          writes: {
+            branches_dir: 'reports/branches',
+            aggregate: { path: 'reports/aggregate.json', schema: 'fanout-aggregate@v1' },
+          },
+          check: {
+            kind: 'fanout_aggregate',
+            source: { kind: 'fanout_results', ref: 'aggregate' },
+            join: { policy: 'aggregate-only' },
+            verdicts: { admit: ['ok'] },
+          },
+        },
+      ],
+    });
+    const parentBytes = Buffer.from(JSON.stringify(parent));
+    const relayer: RelayFn = {
+      connectorName: 'claude-code',
+      relay: async (input) => {
+        const branch = input.prompt.includes('branch-a goal') ? 'a' : 'b';
+        return {
+          request_payload: input.prompt,
+          receipt_id: `receipt-${branch}`,
+          result_body: JSON.stringify({ verdict: 'ok', branch }),
+          duration_ms: 3,
+          cli_version: 'test-relay',
+        };
+      },
+    };
+
+    const parentRunId = RunId.parse('22222222-2222-2222-2222-22222222222c');
+    const parentRunFolder = join(runFolderBase, parentRunId as unknown as string);
+
+    const outcome = await runCompiledFlow({
+      runFolder: parentRunFolder,
+      flow: parent,
+      flowBytes: parentBytes,
+      runId: parentRunId,
+      goal: 'fanout relay branch test',
+      depth: 'standard',
+      change_kind: change_kind(),
+      now: deterministicNow(Date.UTC(2026, 3, 27, 16, 0, 0)),
+      relayer,
+    });
+
+    expect(outcome.result.outcome).toBe('complete');
+    const relayStarted = outcome.trace_entries.filter((e) => e.kind === 'relay.started');
+    expect(relayStarted.map((e) => e.step_id).sort()).toEqual(['fanout-step-a', 'fanout-step-b']);
+
+    for (const branch of ['a', 'b']) {
+      const branchDir = join(parentRunFolder, 'reports', 'branches', branch);
+      expect(existsSync(join(branchDir, 'request.txt'))).toBe(true);
+      expect(existsSync(join(branchDir, 'receipt.txt'))).toBe(true);
+      expect(existsSync(join(branchDir, 'result.json'))).toBe(true);
+      expect(existsSync(join(branchDir, 'report.json'))).toBe(true);
+    }
+
+    const aggregate = JSON.parse(
+      readFileSync(join(parentRunFolder, 'reports', 'aggregate.json'), 'utf8'),
+    ) as {
+      branches: ReadonlyArray<{
+        branch_id: string;
+        result_path: string;
+        result_body?: { verdict: string; branch: string };
+      }>;
+    };
+    expect(aggregate.branches.map((branch) => branch.branch_id).sort()).toEqual(['a', 'b']);
+    for (const branch of aggregate.branches) {
+      expect(branch.result_path).toBe(`reports/branches/${branch.branch_id}/report.json`);
+      expect(branch.result_body).toEqual({ verdict: 'ok', branch: branch.branch_id });
+    }
   });
 
   it('disjoint-merge fails when two branches modify the same file', async () => {

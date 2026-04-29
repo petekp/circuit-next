@@ -65,6 +65,10 @@ function arrayField(report: JsonObject | undefined, key: string): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
+function stringArrayField(report: JsonObject | undefined, key: string): string[] {
+  return arrayField(report, key).filter((item): item is string => typeof item === 'string');
+}
+
 function plural(count: number, singular: string, pluralText = `${singular}s`): string {
   return `${count} ${count === 1 ? singular : pluralText}`;
 }
@@ -85,6 +89,10 @@ function friendlyRunNote(flowId: string, summary: string): string {
 
 function friendlyResultSummary(summary: string): string {
   return summary.replace(/^(?:Build|Fix|Migrate|Review|Explore|Sweep) result for .+?:\s*/, '');
+}
+
+function sentence(value: string): string {
+  return /[.!?]$/.test(value) ? value : `${value}.`;
 }
 
 function reportLink(
@@ -124,12 +132,72 @@ function evidenceLinks(
   });
 }
 
+function evidenceReportById(
+  runFolder: string,
+  report: JsonObject | undefined,
+  reportId: string,
+): JsonObject | undefined {
+  for (const item of arrayField(report, 'evidence_links')) {
+    if (!isObject(item)) continue;
+    if (stringField(item, 'report_id') !== reportId) continue;
+    const path = stringField(item, 'path');
+    if (path === undefined) return undefined;
+    return readJsonIfPresent(runFolder, path);
+  }
+  return undefined;
+}
+
+function exploreDecisionReport(
+  runFolder: string,
+  flowReport: JsonObject | undefined,
+): JsonObject | undefined {
+  return (
+    evidenceReportById(runFolder, flowReport, 'explore.decision') ??
+    readJsonIfPresent(runFolder, 'reports/decision.json')
+  );
+}
+
+function exploreTournamentSnapshot(flowReport: JsonObject | undefined): JsonObject | undefined {
+  const snapshot = isObject(flowReport?.verdict_snapshot) ? flowReport.verdict_snapshot : undefined;
+  if (stringField(snapshot, 'decision_verdict') === 'decided') return snapshot;
+  return stringField(snapshot, 'selected_option_id') === undefined ? undefined : snapshot;
+}
+
+function reviewEvidenceDetails(report: JsonObject | undefined): string[] {
+  const evidenceSummary = isObject(report?.evidence_summary) ? report.evidence_summary : undefined;
+  const kind = stringField(evidenceSummary, 'kind');
+  if (kind === 'unavailable') {
+    const message = stringField(evidenceSummary, 'message');
+    return message === undefined ? [] : [`Review evidence: unavailable (${message})`];
+  }
+  if (kind !== 'git-working-tree') return [];
+
+  const policy = stringField(evidenceSummary, 'untracked_content_policy');
+  const count = numberField(evidenceSummary, 'untracked_file_count') ?? 0;
+  const sampled = numberField(evidenceSummary, 'untracked_files_sampled') ?? 0;
+  const truncated = evidenceSummary?.untracked_files_truncated === true;
+  if (policy === 'include-content') {
+    const suffix = truncated ? '; additional untracked files were not sampled' : '';
+    return [
+      `Untracked evidence: contents included for ${plural(sampled, 'file')} (${plural(count, 'untracked file')} found${suffix}).`,
+    ];
+  }
+  if (policy === 'metadata-only' && count > 0) {
+    const suffix = truncated ? '; additional untracked files were not sampled' : '';
+    return [
+      `Untracked evidence: paths and sizes only for ${plural(sampled, 'file')} (${plural(count, 'untracked file')} found${suffix}).`,
+    ];
+  }
+  return [];
+}
+
 function flowHeadline(input: {
+  readonly runFolder: string;
   readonly flowId: string;
   readonly resultSummary: string;
   readonly flowReport: JsonObject | undefined;
 }): string {
-  const { flowId, flowReport, resultSummary } = input;
+  const { flowId, flowReport, resultSummary, runFolder } = input;
   if (flowId === 'review') {
     const verdict = stringField(flowReport, 'verdict') ?? 'review complete';
     const findings = arrayField(flowReport, 'findings').length;
@@ -141,6 +209,9 @@ function flowHeadline(input: {
     const review = stringField(flowReport, 'review_verdict') ?? 'unknown';
     if (outcome === 'complete' && verification === 'passed' && review === 'accept') {
       return 'Circuit finished Build. The change was implemented, verification passed, and review accepted it.';
+    }
+    if (outcome === 'needs_attention' && verification === 'passed') {
+      return 'Circuit finished Build. Verification passed, but review requested follow-up fixes.';
     }
     return `Circuit finished Build with outcome ${outcome}. Verification: ${verification}. Review: ${review}.`;
   }
@@ -163,6 +234,18 @@ function flowHeadline(input: {
     const verdictSnapshot = isObject(flowReport?.verdict_snapshot)
       ? flowReport.verdict_snapshot
       : undefined;
+    if (exploreTournamentSnapshot(flowReport) !== undefined) {
+      const decisionReport = exploreDecisionReport(runFolder, flowReport);
+      const selected =
+        stringField(decisionReport, 'selected_option_label') ??
+        stringField(verdictSnapshot, 'selected_option_id') ??
+        'selected option';
+      const decision =
+        stringField(decisionReport, 'decision') ??
+        stringField(flowReport, 'summary') ??
+        resultSummary;
+      return `Circuit finished Explore decision. Selected: ${selected}. ${sentence(decision)}`;
+    }
     const review = stringField(verdictSnapshot, 'review_verdict') ?? 'complete';
     const summary = stringField(flowReport, 'summary') ?? resultSummary;
     return `Circuit finished Explore. Review: ${review}. ${summary}`;
@@ -178,22 +261,35 @@ function flowHeadline(input: {
 }
 
 function flowDetails(input: {
+  readonly runFolder: string;
   readonly flowId: string;
   readonly flowReport: JsonObject | undefined;
 }): string[] {
-  const { flowId, flowReport } = input;
+  const { flowId, flowReport, runFolder } = input;
   const details: string[] = [];
   const summary = stringField(flowReport, 'summary');
   if (summary !== undefined) details.push(`Result: ${friendlyResultSummary(summary)}`);
   if (flowId === 'review') {
     const findings = arrayField(flowReport, 'findings').length;
     details.push(`Findings: ${findings}`);
+    details.push(...reviewEvidenceDetails(flowReport));
   }
   if (flowId === 'build' || flowId === 'fix' || flowId === 'migrate') {
     const verification = stringField(flowReport, 'verification_status');
     const review = stringField(flowReport, 'review_verdict');
     if (verification !== undefined) details.push(`Verification: ${verification}`);
     if (review !== undefined) details.push(`Review verdict: ${review}`);
+  }
+  if (flowId === 'explore' && exploreTournamentSnapshot(flowReport) !== undefined) {
+    const decisionReport = exploreDecisionReport(runFolder, flowReport);
+    const question = stringField(decisionReport, 'decision_question');
+    const rationale = stringField(decisionReport, 'rationale');
+    const risks = stringArrayField(decisionReport, 'residual_risks');
+    const nextAction = stringField(decisionReport, 'next_action');
+    if (question !== undefined) details.push(`Decision question: ${question}`);
+    if (rationale !== undefined) details.push(`Rationale: ${rationale}`);
+    if (risks.length > 0) details.push(`Residual risks: ${risks.join('; ')}`);
+    if (nextAction !== undefined) details.push(`Next action: ${nextAction}`);
   }
   return details;
 }
@@ -281,7 +377,7 @@ export function writeOperatorSummary(input: {
 
   const details = [
     `Run note: ${friendlyRunNote(flowId, input.runResult.summary)}`,
-    ...flowDetails({ flowId, flowReport }),
+    ...flowDetails({ runFolder: input.runFolder, flowId, flowReport }),
   ];
   if (input.runResult.outcome === 'aborted' && input.runResult.reason !== undefined) {
     details.push(`Abort reason: ${input.runResult.reason}`);
@@ -300,7 +396,12 @@ export function writeOperatorSummary(input: {
         ? 'Circuit is waiting for a checkpoint choice.'
         : input.runResult.outcome === 'aborted'
           ? 'Circuit run aborted.'
-          : flowHeadline({ flowId, flowReport, resultSummary: input.runResult.summary }),
+          : flowHeadline({
+              runFolder: input.runFolder,
+              flowId,
+              flowReport,
+              resultSummary: input.runResult.summary,
+            }),
     details,
     evidence_warnings: warningRecords(flowReport),
     run_folder: input.runFolder,

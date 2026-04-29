@@ -4,7 +4,8 @@
 // plus review (optional — lite mode skips review via route_overrides).
 // Outcome rules:
 //   - reproduction_status='not-reproduced' → 'not-reproduced'
-//   - verification passed AND regression proved AND review not 'reject' → 'fixed'
+//   - verification passed AND regression proved AND review accepted cleanly → 'fixed'
+//   - verification passed AND regression proved AND review accepted with fixes → 'partial'
 //   - verification passed AND regression not proved → 'partial'
 //   - otherwise → 'failed'
 // review_status is 'completed' when the review input is present (and
@@ -70,9 +71,10 @@ export const fixCloseBuilder: CloseBuilder = {
         ? 'not-reproduced'
         : verificationStatus === 'passed' &&
             regressionStatus === 'proved' &&
-            (review === undefined || review.verdict !== 'reject')
+            (review === undefined || review.verdict === 'accept')
           ? 'fixed'
-          : verificationStatus === 'passed' && regressionStatus !== 'proved'
+          : verificationStatus === 'passed' &&
+              (regressionStatus !== 'proved' || review?.verdict === 'accept-with-fixes')
             ? 'partial'
             : 'failed';
 

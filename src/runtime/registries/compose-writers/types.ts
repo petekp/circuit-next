@@ -20,6 +20,7 @@
 // that don't apply to upstream compose steps.
 
 import type { CompiledFlow } from '../../../schemas/compiled-flow.js';
+import type { RuntimeEvidencePolicy } from '../../runner-types.js';
 
 export type ComposeStep = CompiledFlow['steps'][number] & {
   readonly kind: 'compose';
@@ -43,6 +44,7 @@ export interface ComposeBuildContext {
   readonly step: ComposeStep;
   readonly goal: string;
   readonly projectRoot?: string;
+  readonly evidencePolicy?: RuntimeEvidencePolicy;
   // Pre-resolved inputs from declared reads (or empty if no reads
   // declared). Builders narrow each via their own Zod schema.
   readonly inputs: Record<string, unknown | undefined>;

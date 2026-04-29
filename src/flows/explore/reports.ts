@@ -5,7 +5,27 @@ const EXPLORE_RESULT_SCHEMA_BY_ARTIFACT_ID = {
   'explore.analysis': 'explore.analysis@v1',
   'explore.compose': 'explore.compose@v1',
   'explore.review-verdict': 'explore.review-verdict@v1',
+  'explore.decision-options': 'explore.decision-options@v1',
+  'explore.tournament-aggregate': 'explore.tournament-aggregate@v1',
+  'explore.tournament-review': 'explore.tournament-review@v1',
+  'explore.decision': 'explore.decision@v1',
 } as const;
+
+const DEFAULT_RESULT_REPORT_IDS = [
+  'explore.brief',
+  'explore.analysis',
+  'explore.compose',
+  'explore.review-verdict',
+] as const;
+
+const TOURNAMENT_RESULT_REPORT_IDS = [
+  'explore.brief',
+  'explore.analysis',
+  'explore.decision-options',
+  'explore.tournament-aggregate',
+  'explore.tournament-review',
+  'explore.decision',
+] as const;
 
 export const ExploreBrief = z
   .object({
@@ -74,11 +94,167 @@ export const ExploreReviewVerdict = z
   .strict();
 export type ExploreReviewVerdict = z.infer<typeof ExploreReviewVerdict>;
 
+export const ExploreDecisionOptionId = z
+  .string()
+  .regex(/^option-[1-4]$/, { message: 'option id must be option-1 through option-4' });
+export type ExploreDecisionOptionId = z.infer<typeof ExploreDecisionOptionId>;
+
+export const ExploreDecisionOption = z
+  .object({
+    id: ExploreDecisionOptionId,
+    label: z.string().min(1),
+    summary: z.string().min(1),
+    best_case_prompt: z.string().min(1),
+    evidence_refs: z.array(z.string().min(1)).min(1),
+    tradeoffs: z.array(z.string().min(1)).min(1),
+  })
+  .strict();
+export type ExploreDecisionOption = z.infer<typeof ExploreDecisionOption>;
+
+export const ExploreDecisionOptions = z
+  .object({
+    decision_question: z.string().min(1),
+    options: z.array(ExploreDecisionOption).min(2).max(4),
+    recommendation_basis: z.string().min(1),
+  })
+  .strict()
+  .superRefine((report, ctx) => {
+    const seen = new Set<ExploreDecisionOptionId>();
+    for (const [index, option] of report.options.entries()) {
+      if (seen.has(option.id)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['options', index, 'id'],
+          message: `duplicate option id '${option.id}'`,
+        });
+      }
+      seen.add(option.id);
+    }
+  });
+export type ExploreDecisionOptions = z.infer<typeof ExploreDecisionOptions>;
+
+export const ExploreTournamentProposal = z
+  .object({
+    verdict: z.literal('accept'),
+    option_id: ExploreDecisionOptionId,
+    option_label: z.string().min(1),
+    case_summary: z.string().min(1),
+    assumptions: z.array(z.string().min(1)),
+    evidence_refs: z.array(z.string().min(1)).min(1),
+    risks: z.array(z.string().min(1)),
+    next_action: z.string().min(1),
+  })
+  .strict();
+export type ExploreTournamentProposal = z.infer<typeof ExploreTournamentProposal>;
+
+export const ExploreTournamentAggregateBranch = z
+  .object({
+    branch_id: ExploreDecisionOptionId,
+    child_run_id: z.string().min(1),
+    child_outcome: z.enum(['complete', 'aborted', 'handoff', 'stopped', 'escalated']),
+    verdict: z.string().min(1),
+    admitted: z.boolean(),
+    result_path: z.string().min(1),
+    duration_ms: z.number().nonnegative(),
+    result_body: ExploreTournamentProposal.optional(),
+  })
+  .strict();
+export type ExploreTournamentAggregateBranch = z.infer<typeof ExploreTournamentAggregateBranch>;
+
+export const ExploreTournamentAggregate = z
+  .object({
+    schema_version: z.literal(1),
+    join_policy: z.literal('aggregate-only'),
+    branch_count: z.number().int().positive(),
+    branches: z.array(ExploreTournamentAggregateBranch).min(1),
+  })
+  .strict()
+  .superRefine((aggregate, ctx) => {
+    if (aggregate.branch_count !== aggregate.branches.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['branch_count'],
+        message: 'branch_count must match branches.length',
+      });
+    }
+    for (const [index, branch] of aggregate.branches.entries()) {
+      if (branch.child_outcome === 'complete' && branch.result_body === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['branches', index, 'result_body'],
+          message: 'complete tournament branches must include result_body provenance',
+        });
+      }
+      if (
+        branch.child_outcome === 'complete' &&
+        branch.result_body !== undefined &&
+        branch.result_body.option_id !== branch.branch_id
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['branches', index, 'result_body', 'option_id'],
+          message: `branch_id '${branch.branch_id}' must match result_body.option_id '${branch.result_body.option_id}'`,
+        });
+      }
+    }
+  });
+export type ExploreTournamentAggregate = z.infer<typeof ExploreTournamentAggregate>;
+
+export const ExploreTournamentReviewVerdict = z.enum([
+  'recommend',
+  'no-clear-winner',
+  'needs-operator',
+]);
+export type ExploreTournamentReviewVerdict = z.infer<typeof ExploreTournamentReviewVerdict>;
+
+export const ExploreTournamentReview = z
+  .object({
+    verdict: ExploreTournamentReviewVerdict,
+    recommended_option_id: ExploreDecisionOptionId,
+    comparison: z.string().min(1),
+    objections: z.array(z.string().min(1)),
+    missing_evidence: z.array(z.string().min(1)),
+    tradeoff_question: z.string().min(1),
+    confidence: z.enum(['low', 'medium', 'high']),
+  })
+  .strict();
+export type ExploreTournamentReview = z.infer<typeof ExploreTournamentReview>;
+
+export const ExploreDecisionRejectedOption = z
+  .object({
+    option_id: ExploreDecisionOptionId,
+    reason: z.string().min(1),
+  })
+  .strict();
+export type ExploreDecisionRejectedOption = z.infer<typeof ExploreDecisionRejectedOption>;
+
+export const ExploreDecision = z
+  .object({
+    verdict: z.literal('decided'),
+    decision_question: z.string().min(1),
+    selected_option_id: ExploreDecisionOptionId,
+    selected_option_label: z.string().min(1),
+    decision: z.string().min(1),
+    rationale: z.string().min(1),
+    rejected_options: z.array(ExploreDecisionRejectedOption),
+    evidence_links: z.array(z.string().min(1)).min(1),
+    assumptions: z.array(z.string().min(1)),
+    residual_risks: z.array(z.string().min(1)),
+    next_action: z.string().min(1),
+    follow_up_workflow: z.string().min(1),
+  })
+  .strict();
+export type ExploreDecision = z.infer<typeof ExploreDecision>;
+
 export const ExploreResultReportId = z.enum([
   'explore.brief',
   'explore.analysis',
   'explore.compose',
   'explore.review-verdict',
+  'explore.decision-options',
+  'explore.tournament-aggregate',
+  'explore.tournament-review',
+  'explore.decision',
 ]);
 export type ExploreResultReportId = z.infer<typeof ExploreResultReportId>;
 
@@ -101,7 +277,7 @@ export const ExploreResultReportPointer = z
   });
 export type ExploreResultReportPointer = z.infer<typeof ExploreResultReportPointer>;
 
-export const ExploreResultVerdictSnapshot = z
+export const ExploreDefaultResultVerdictSnapshot = z
   .object({
     compose_verdict: z.string().min(1),
     review_verdict: ExploreReviewVerdictValue,
@@ -109,13 +285,34 @@ export const ExploreResultVerdictSnapshot = z
     missed_angle_count: z.number().int().nonnegative(),
   })
   .strict();
+export type ExploreDefaultResultVerdictSnapshot = z.infer<
+  typeof ExploreDefaultResultVerdictSnapshot
+>;
+
+export const ExploreTournamentResultVerdictSnapshot = z
+  .object({
+    decision_verdict: z.literal('decided'),
+    tournament_review_verdict: ExploreTournamentReviewVerdict,
+    selected_option_id: ExploreDecisionOptionId,
+    objection_count: z.number().int().nonnegative(),
+    missing_evidence_count: z.number().int().nonnegative(),
+  })
+  .strict();
+export type ExploreTournamentResultVerdictSnapshot = z.infer<
+  typeof ExploreTournamentResultVerdictSnapshot
+>;
+
+export const ExploreResultVerdictSnapshot = z.union([
+  ExploreDefaultResultVerdictSnapshot,
+  ExploreTournamentResultVerdictSnapshot,
+]);
 export type ExploreResultVerdictSnapshot = z.infer<typeof ExploreResultVerdictSnapshot>;
 
 export const ExploreResult = z
   .object({
     summary: z.string().min(1),
     verdict_snapshot: ExploreResultVerdictSnapshot,
-    evidence_links: z.array(ExploreResultReportPointer).length(4),
+    evidence_links: z.array(ExploreResultReportPointer).min(1),
   })
   .strict()
   .superRefine((result, ctx) => {
@@ -130,14 +327,17 @@ export const ExploreResult = z
       }
       seen.add(pointer.report_id);
     }
-    for (const reportId of ExploreResultReportId.options) {
-      if (!seen.has(reportId)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['evidence_links'],
-          message: `missing report_id '${reportId}'`,
-        });
-      }
+    const ids = result.evidence_links.map((pointer) => pointer.report_id);
+    const matchesSet = (expected: readonly string[]) =>
+      ids.length === expected.length &&
+      expected.every((reportId) => seen.has(reportId as ExploreResultReportId));
+    if (!matchesSet(DEFAULT_RESULT_REPORT_IDS) && !matchesSet(TOURNAMENT_RESULT_REPORT_IDS)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['evidence_links'],
+        message:
+          'evidence_links must contain exactly the default Explore report set or exactly the tournament Explore report set',
+      });
     }
   });
 export type ExploreResult = z.infer<typeof ExploreResult>;

@@ -23,8 +23,8 @@ function customConnector(name = 'gemini', command = ['./bin/g']) {
     kind: 'custom' as const,
     name,
     command,
-    prompt_transport: 'append-argv' as const,
-    output: { kind: 'json-field' as const, field: 'response' },
+    prompt_transport: 'prompt-file' as const,
+    output: { kind: 'output-file' as const },
     capabilities: { filesystem: 'read-only' as const, structured_output: 'json' as const },
   };
 }

@@ -13,6 +13,7 @@ export const ReviewEvidenceWarningKind = z.enum([
   'diff_truncated',
   'git_command_failed',
   'untracked_file_skipped',
+  'untracked_file_content_omitted',
   'untracked_files_truncated',
   'evidence_unavailable',
 ]);
@@ -34,6 +35,9 @@ export const ReviewEvidenceText = z
   })
   .strict();
 export type ReviewEvidenceText = z.infer<typeof ReviewEvidenceText>;
+
+export const ReviewUntrackedContentPolicy = z.enum(['metadata-only', 'include-content']);
+export type ReviewUntrackedContentPolicy = z.infer<typeof ReviewUntrackedContentPolicy>;
 
 export const ReviewUntrackedFileEvidence = z
   .object({
@@ -62,11 +66,31 @@ export const ReviewEvidence = z.discriminatedUnion('kind', [
       diff_stat: z.string(),
       untracked_file_count: z.number().int().nonnegative(),
       untracked_files_truncated: z.boolean(),
+      untracked_content_policy: ReviewUntrackedContentPolicy,
       untracked_files: z.array(ReviewUntrackedFileEvidence),
     })
     .strict(),
 ]);
 export type ReviewEvidence = z.infer<typeof ReviewEvidence>;
+
+export const ReviewEvidenceSummary = z.discriminatedUnion('kind', [
+  z
+    .object({
+      kind: z.literal('unavailable'),
+      message: z.string().min(1),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('git-working-tree'),
+      untracked_content_policy: ReviewUntrackedContentPolicy,
+      untracked_file_count: z.number().int().nonnegative(),
+      untracked_files_sampled: z.number().int().nonnegative(),
+      untracked_files_truncated: z.boolean(),
+    })
+    .strict(),
+]);
+export type ReviewEvidenceSummary = z.infer<typeof ReviewEvidenceSummary>;
 
 export const ReviewIntake = z
   .object({
@@ -100,6 +124,7 @@ export const ReviewResult = z
     scope: z.string().min(1),
     findings: z.array(ReviewFinding),
     verdict: ReviewResultVerdict,
+    evidence_summary: ReviewEvidenceSummary.optional(),
     evidence_warnings: z.array(ReviewEvidenceWarning).default([]),
   })
   .strict()

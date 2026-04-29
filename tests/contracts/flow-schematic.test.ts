@@ -257,7 +257,7 @@ describe('flow schematic schema — active Fix schematic', () => {
     expect(issues).toContainEqual({
       item_id: 'fix-act',
       message:
-        'execution kind "checkpoint" is not compatible with block "act"; expected one of relay, compose',
+        'execution kind "checkpoint" is not compatible with block "act"; expected one of relay, compose, fanout',
     });
   });
 

@@ -163,10 +163,10 @@ function runDoctor() {
                 command: [
                   process.execPath,
                   '-e',
-                  "console.log(JSON.stringify({receipt_id:'doctor-reviewer',response:JSON.stringify({verdict:'NO_ISSUES_FOUND',findings:[]})}))",
+                  "require('node:fs').writeFileSync(process.argv[2], JSON.stringify({verdict:'NO_ISSUES_FOUND',findings:[]}))",
                 ],
-                prompt_transport: 'append-argv',
-                output: { kind: 'json-field', field: 'response' },
+                prompt_transport: 'prompt-file',
+                output: { kind: 'output-file' },
                 capabilities: { filesystem: 'read-only', structured_output: 'json' },
               },
             },

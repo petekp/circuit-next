@@ -47,6 +47,8 @@ export const RouteSelectedProgressEvent = ProgressEventBase.extend({
   routed_by: z.enum(['explicit', 'classifier']),
   router_reason: z.string().min(1),
   router_signal: z.string().min(1).optional(),
+  entry_mode: z.string().min(1).optional(),
+  entry_mode_source: z.enum(['explicit', 'classifier']).optional(),
 }).strict();
 
 export const StepStartedProgressEvent = ProgressEventBase.extend({

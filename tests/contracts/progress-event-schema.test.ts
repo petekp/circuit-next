@@ -26,6 +26,8 @@ describe('progress event schema', () => {
         routed_by: 'classifier',
         router_reason: 'matched review',
         router_signal: 'change review request',
+        entry_mode: 'default',
+        entry_mode_source: 'classifier',
       },
       {
         ...BASE,

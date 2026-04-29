@@ -257,6 +257,43 @@ describe('Build runtime wiring', () => {
     expect(existsSync(join(runFolder, 'reports/relay/build-review.result.json'))).toBe(true);
   });
 
+  it('marks Build as needs_attention when review accepts with required fixes', async () => {
+    const { flow, bytes } = loadFixture();
+    const runFolder = join(runFolderBase, 'review-followups');
+
+    const outcome = await runCompiledFlow({
+      runFolder,
+      flow,
+      flowBytes: bytes,
+      runId: RunId.parse('b2000000-0000-0000-0000-000000000004'),
+      goal: 'Accept Build with follow-up fixes',
+      depth: 'standard',
+      change_kind: change_kind(),
+      now: deterministicNow(Date.UTC(2026, 3, 25, 8, 35, 0)),
+      relayer: relayerWith({
+        reviewBody: JSON.stringify({
+          verdict: 'accept-with-fixes',
+          summary: 'Usable, but a follow-up is required',
+          findings: [
+            {
+              severity: 'medium',
+              text: 'Add coverage for the boundary case before treating this as done',
+              file_refs: ['tests/example.test.ts:1'],
+            },
+          ],
+        }),
+      }),
+      projectRoot: REPO_ROOT,
+    });
+
+    expect(outcome.result.outcome).toBe('complete');
+    const result = BuildResult.parse(
+      JSON.parse(readFileSync(join(runFolder, 'reports/build-result.json'), 'utf8')),
+    );
+    expect(result.outcome).toBe('needs_attention');
+    expect(result.review_verdict).toBe('accept-with-fixes');
+  });
+
   it('declares default, lite, deep, and autonomous entry modes, and lite reaches Review by the pass route', () => {
     const { flow } = loadFixture();
     expect(flow.entry_modes.map((mode) => mode.name)).toEqual([

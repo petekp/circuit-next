@@ -488,11 +488,36 @@ describe('fix.result close writer (standard path, review present)', () => {
     });
 
     const result = FixResult.parse(readJson(runFolder, 'reports/fix-result.json'));
+    expect(result.outcome).toBe('fixed');
     expect(result.review_status).toBe('completed');
     expect(result.review_verdict).toBe('accept');
     expect(result.review_skip_reason).toBeUndefined();
     expect(result.evidence_links).toHaveLength(6);
     const ids = result.evidence_links.map((p) => p.report_id);
     expect(ids).toContain('fix.review');
+
+    writeJson(runFolder, 'reports/fix/review.json', {
+      verdict: 'accept-with-fixes',
+      summary: 'One follow-up is still required',
+      findings: [
+        {
+          severity: 'medium',
+          text: 'Add regression coverage for lockout reset timing',
+          file_refs: ['tests/auth/login.test.ts:1'],
+        },
+      ],
+    });
+
+    writeComposeReport({
+      runFolder,
+      flow,
+      step: closeStep,
+      goal: 'Login retry storm',
+    });
+
+    const followupResult = FixResult.parse(readJson(runFolder, 'reports/fix-result.json'));
+    expect(followupResult.outcome).toBe('partial');
+    expect(followupResult.review_status).toBe('completed');
+    expect(followupResult.review_verdict).toBe('accept-with-fixes');
   });
 });

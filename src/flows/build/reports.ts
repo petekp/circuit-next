@@ -128,7 +128,7 @@ export type BuildResultReportPointer = z.infer<typeof BuildResultReportPointer>;
 export const BuildResult = z
   .object({
     summary: z.string().min(1),
-    outcome: z.enum(['complete', 'failed']),
+    outcome: z.enum(['complete', 'needs_attention', 'failed']),
     verification_status: z.enum(['passed', 'failed']),
     review_verdict: BuildReviewVerdict,
     evidence_links: z.array(BuildResultReportPointer).length(5),
@@ -152,6 +152,38 @@ export const BuildResult = z
           code: z.ZodIssueCode.custom,
           path: ['evidence_links'],
           message: `missing report_id '${reportId}'`,
+        });
+      }
+    }
+    if (result.outcome === 'complete') {
+      if (result.verification_status !== 'passed') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['verification_status'],
+          message: "verification_status must be 'passed' when outcome is 'complete'",
+        });
+      }
+      if (result.review_verdict !== 'accept') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['review_verdict'],
+          message: "review_verdict must be 'accept' when outcome is 'complete'",
+        });
+      }
+    }
+    if (result.outcome === 'needs_attention') {
+      if (result.verification_status !== 'passed') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['verification_status'],
+          message: "verification_status must be 'passed' when outcome is 'needs_attention'",
+        });
+      }
+      if (result.review_verdict !== 'accept-with-fixes') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['review_verdict'],
+          message: "review_verdict must be 'accept-with-fixes' when outcome is 'needs_attention'",
         });
       }
     }

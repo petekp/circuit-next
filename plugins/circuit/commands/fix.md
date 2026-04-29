@@ -50,7 +50,7 @@ metacharacters:
    Deep Fix:
 
    ```bash
-   node '<plugin root>/scripts/circuit-next.mjs' run fix --goal 'repair the failing pipeline' --entry-mode deep --progress jsonl
+   node '<plugin root>/scripts/circuit-next.mjs' run fix --goal 'fix the failing pipeline' --entry-mode deep --progress jsonl
    ```
 
    Autonomous Fix:

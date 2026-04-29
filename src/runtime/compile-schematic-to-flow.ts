@@ -422,6 +422,33 @@ function compileItem(
         },
       } as Step;
     }
+    case 'fanout': {
+      const fanout = requireItemField(item.fanout, 'fanout', item.id);
+      const reportPath = requireWritesField(writes, 'report_path', item.id, 'fanout');
+      const branchesDir = requireWritesField(writes, 'branches_dir_path', item.id, 'fanout');
+      return {
+        ...stepBase,
+        executor: 'orchestrator',
+        kind: 'fanout',
+        branches: fanout.branches,
+        ...(fanout.concurrency === undefined ? {} : { concurrency: fanout.concurrency }),
+        ...(fanout.on_child_failure === undefined
+          ? {}
+          : { on_child_failure: fanout.on_child_failure }),
+        writes: {
+          branches_dir: branchesDir,
+          aggregate: { path: reportPath, schema: item.output },
+        },
+        check: {
+          kind: 'fanout_aggregate',
+          source: { kind: 'fanout_results', ref: 'aggregate' },
+          join: fanout.join,
+          verdicts: {
+            admit: requireCheckField(check.pass, 'pass', item.id, 'fanout'),
+          },
+        },
+      } as Step;
+    }
   }
 }
 

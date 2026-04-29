@@ -1,10 +1,9 @@
 // Sweep flow package.
 //
-// Sub-run only — no slash command, no router entry. Sweep is invoked
-// as a child of Migrate (and potentially other future parent
-// flows). Routing is intentionally undefined.
+// Sweep has no slash command, but original-Circuit parity requires
+// /circuit:run cleanup: and overnight: to reach it through intent routing.
 
-import type { CompiledFlowPackage } from '../types.js';
+import type { CompiledFlowPackage, CompiledFlowSignal } from '../types.js';
 import { validateSweepBatchAgainstQueue } from './cross-report-validators.js';
 import {
   sweepAnalysisShapeHint,
@@ -17,10 +16,27 @@ import { sweepCloseBuilder } from './writers/close.js';
 import { sweepQueueComposeBuilder } from './writers/queue.js';
 import { sweepVerificationWriter } from './writers/verification.js';
 
+const SWEEP_SIGNALS: readonly CompiledFlowSignal[] = [
+  { label: 'cleanup prefix', pattern: /^\s*cleanup\s*:/i },
+  { label: 'overnight prefix', pattern: /^\s*overnight\s*:/i },
+  {
+    label: 'sweep request',
+    pattern:
+      /^\s*(?:please\s+)?(?:sweep|cleanup|clean\s+up)\s+(?:a\s+|an\s+|the\s+|this\s+|that\s+|our\s+|my\s+)?(?:repo|repository|codebase|dead\s+code|lint|docs|documentation|coverage|quality)\b/i,
+  },
+];
+
 export const sweepCompiledFlowPackage: CompiledFlowPackage = {
   id: 'sweep',
   paths: {
     schematic: 'src/flows/sweep/schematic.json',
+  },
+  routing: {
+    order: 40,
+    signals: SWEEP_SIGNALS,
+    reasonForMatch(signal) {
+      return `matched ${signal.label}; routed to Sweep flow`;
+    },
   },
   relayReports: [
     {

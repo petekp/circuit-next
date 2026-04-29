@@ -198,16 +198,13 @@ export const SubRunStep = StepBase.extend({
 }).strict();
 export type SubRunStep = z.infer<typeof SubRunStep>;
 
-// Fanout: N parallel branches, each a sub-run shape, each running in its
-// own ephemeral git worktree. The worktree-per-branch coordination strategy
-// generalises across consumer patterns (Migrate disjoint batches, tournament
-// parallel attempts at one problem, crucible parallel exploration) where
-// upfront file-claims would only fit Migrate. Worktrees also isolate build
-// state (node_modules, framework caches), not just source files.
-//
-// Children of a fanout are sub-run shapes only. A future widening to
-// per-branch relay / compose is non-breaking; restricting now keeps
-// the surface narrow until a real consumer demands the variation.
+// Fanout: N parallel branches. Branches can either run complete child
+// flows in ephemeral git worktrees (Migrate-style batch execution) or
+// send independent relay requests and collect their typed reports
+// (Explore-style tournaments). The worktree strategy remains attached
+// only to sub-run branches; relay branches prove their provenance
+// through request / receipt / result / report files under the branch
+// directory.
 
 // FanoutBranchId regex: kebab-case slug used for static branches and
 // post-substitution validation of dynamic templates. Worktree paths and
@@ -215,7 +212,7 @@ export type SubRunStep = z.infer<typeof SubRunStep>;
 // filesystem-safe.
 const FANOUT_BRANCH_ID_REGEX = /^[a-z0-9][a-z0-9-]*$/;
 
-export const FanoutBranch = z
+export const FanoutSubRunBranch = z
   .object({
     // Branch identifier; unique across the fanout's branches. Used to
     // derive the per-branch worktree name and the per-branch result
@@ -233,15 +230,48 @@ export const FanoutBranch = z
     selection: SelectionOverride.optional(),
   })
   .strict();
+export type FanoutSubRunBranch = z.infer<typeof FanoutSubRunBranch>;
+
+export const FanoutRelayBranchExecution = z
+  .object({
+    kind: z.literal('relay'),
+    role: RelayRole,
+    goal: z.string().min(1),
+    report_schema: z.string().min(1),
+    provenance_field: z
+      .string()
+      .regex(/^[a-z_][a-z0-9_]*$/i, {
+        message: 'provenance_field must be a top-level JSON field name',
+      })
+      .optional(),
+  })
+  .strict();
+export type FanoutRelayBranchExecution = z.infer<typeof FanoutRelayBranchExecution>;
+
+export const FanoutRelayBranch = z
+  .object({
+    branch_id: z
+      .string()
+      .min(1)
+      .max(64)
+      .regex(FANOUT_BRANCH_ID_REGEX, { message: 'branch_id must be a kebab-case slug' }),
+    execution: FanoutRelayBranchExecution,
+    selection: SelectionOverride.optional(),
+  })
+  .strict();
+export type FanoutRelayBranch = z.infer<typeof FanoutRelayBranch>;
+
+export const FanoutBranch = z.union([FanoutSubRunBranch, FanoutRelayBranch]);
 export type FanoutBranch = z.infer<typeof FanoutBranch>;
 
 // FanoutBranchTemplate is the dynamic-fanout authoring shape: same
-// fields as FanoutBranch, but `branch_id` and `goal` accept `$item` /
-// `$item.<key>` placeholders that the runtime substitutes per item.
+// fields as FanoutBranch, but `branch_id` and string-valued goal fields
+// accept `$item` / `$item.<key>` placeholders that the runtime
+// substitutes per item.
 // Post-substitution the runtime parses each expanded branch through
 // FanoutBranch (strict regex), so authoring placeholders that resolve
 // to invalid kebab-case ids fail loudly at runtime, not at parse time.
-export const FanoutBranchTemplate = z
+export const FanoutSubRunBranchTemplate = z
   .object({
     branch_id: z.string().min(1).max(64),
     flow_ref: CompiledFlowRef,
@@ -250,6 +280,21 @@ export const FanoutBranchTemplate = z
     selection: SelectionOverride.optional(),
   })
   .strict();
+export type FanoutSubRunBranchTemplate = z.infer<typeof FanoutSubRunBranchTemplate>;
+
+export const FanoutRelayBranchTemplate = z
+  .object({
+    branch_id: z.string().min(1).max(64),
+    execution: FanoutRelayBranchExecution,
+    selection: SelectionOverride.optional(),
+  })
+  .strict();
+export type FanoutRelayBranchTemplate = z.infer<typeof FanoutRelayBranchTemplate>;
+
+export const FanoutBranchTemplate = z.union([
+  FanoutSubRunBranchTemplate,
+  FanoutRelayBranchTemplate,
+]);
 export type FanoutBranchTemplate = z.infer<typeof FanoutBranchTemplate>;
 
 // Note: cross-field refinements (static branch_id uniqueness, dynamic

@@ -1,0 +1,99 @@
+schema_version: 1
+claims:
+  - id: CLAIM-FLOW-CATALOG-CURRENT
+    claim: Circuit-next has current flow packages for Build, Explore, Fix, Migrate, Review, and Sweep.
+    type: flow
+    status: verified_current
+    surfaces: [README.md, docs/release/parity-matrix.generated.md]
+    backing:
+      capability_ids: [flow:build, flow:explore, flow:fix, flow:migrate, flow:review, flow:sweep]
+      script_checks: [scripts/release/emit-current-capabilities.mjs --check]
+    user_risk: If false, the release catalog itself is misleading.
+    readiness_refs: [REL-004]
+  - id: CLAIM-FIX-CANONICAL
+    claim: Fix is Circuit's public bug-fixing flow.
+    type: flow
+    status: verified_current
+    surfaces: [README.md, commands/run.md, docs/release/parity-matrix.generated.md]
+    backing:
+      capability_ids: [flow:fix]
+      script_checks: [scripts/release/emit-current-capabilities.mjs --check]
+    user_risk: Users need one clear bug-fixing entry point, not two names for the same kind of work.
+    readiness_refs: [REL-018]
+  - id: CLAIM-CUSTOM-CONNECTOR-PROTOCOL
+    claim: Custom connectors use the documented prompt-file/output-file protocol.
+    type: connector
+    status: verified_current
+    surfaces: [README.md, docs/contracts/connector.md]
+    backing:
+      capability_ids: [connector:custom]
+      test_paths: [tests/runner/runner-relay-provenance.test.ts]
+      script_checks: [scripts/release/emit-current-capabilities.mjs --check]
+    user_risk: Users following docs must be able to build a compatible connector.
+    readiness_refs: [REL-001]
+  - id: CLAIM-CODEX-ISOLATED
+    claim: codex-isolated is not a current supported connector until implemented and tested.
+    type: connector
+    status: release_blocker
+    surfaces: [README.md, docs/contracts/connector.md, docs/contracts/host-capabilities.md]
+    backing:
+      exception_ids: [EX-REL-002-CODEX-ISOLATED]
+    user_risk: Users may trust an isolation guarantee that runtime does not provide.
+    readiness_refs: [REL-002]
+  - id: CLAIM-RICH-ROUTES
+    claim: Rich recovery routes are not release-ready until route declarations execute or generation fails loudly.
+    type: safety
+    status: release_blocker
+    surfaces: [docs/public-release-readiness.md, docs/release/readiness-report.generated.md]
+    backing:
+      exception_ids: [EX-REL-003-RICH-ROUTES]
+    user_risk: Real failures can abort instead of retrying, revising, asking, handing off, or escalating.
+    readiness_refs: [REL-003]
+  - id: CLAIM-REVIEW-EVIDENCE-POLICY
+    claim: Review sends untracked paths and sizes by default; untracked file contents require explicit opt-in and still apply skip/truncation safeguards.
+    type: safety
+    status: verified_current
+    surfaces: [README.md, commands/run.md, commands/review.md, docs/release/readiness-report.generated.md]
+    backing:
+      capability_ids: [safety:review-untracked-evidence]
+      test_paths:
+        - tests/runner/review-runtime-wiring.test.ts
+        - tests/runner/cli-router.test.ts
+    user_risk: Untracked scratch or secret-like files could be relayed unexpectedly if this regresses.
+    readiness_refs: [REL-005]
+  - id: CLAIM-PLAN-EXECUTION
+    claim: Plan-execution requests must start the right work slice, ask one blocking question, or return one exact next command.
+    type: plan-execution
+    status: release_blocker
+    surfaces: [commands/run.md, plugins/circuit/skills/run/SKILL.md, docs/release/readiness-report.generated.md]
+    backing:
+      exception_ids: [EX-REL-016-PLAN-EXECUTION]
+    user_risk: Users can ask Circuit to execute a plan and receive analysis-only output that preserves the next-action burden.
+    readiness_refs: [REL-016]
+  - id: CLAIM-WRITE-CAPABLE-WORKER
+    claim: Write-capable worker behavior must be disclosed before first Build/Fix/Migrate/Sweep runs that can edit files.
+    type: safety
+    status: release_blocker
+    surfaces: [README.md, progress output, final summaries]
+    backing:
+      exception_ids: [EX-REL-007-WRITE-CAPABLE-DISCLOSURE]
+    user_risk: Users may be surprised that a delegated worker can edit files with bypassed host approvals.
+    readiness_refs: [REL-007]
+  - id: CLAIM-GOLDEN-PROOF
+    claim: Public proof must cover doing work, deciding, maintenance/migration, continuity, customization, failure, first-run, and plan execution.
+    type: proof
+    status: release_blocker
+    surfaces: [README.md, docs/release/proofs/index.yaml, examples/runs]
+    backing:
+      exception_ids: [EX-REL-011-GOLDEN-RUNS]
+    user_risk: Circuit will look like a prompt wrapper without durable examples that show the operator system working.
+    readiness_refs: [REL-011, REL-023]
+  - id: CLAIM-FIRST-RUN-DOCTOR
+    claim: First-run onboarding should begin with a doctor step before the first useful run.
+    type: first-run
+    status: release_blocker
+    surfaces: [README.md, docs/first-run.md]
+    backing:
+      exception_ids: [EX-REL-011-GOLDEN-RUNS]
+    user_risk: A setup failure can be mistaken for a product failure.
+    readiness_refs: [REL-017]

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ChangeKind } from './change-kind.js';
+import { FanoutJoinPolicy } from './check.js';
 import { Depth } from './depth.js';
 import {
   FlowBlockCatalog,
@@ -21,7 +22,14 @@ import {
   type CanonicalStage as CanonicalStageValue,
   SpinePolicy,
 } from './stage.js';
-import { CheckpointPolicy, CompiledFlowRef, RelayRole } from './step.js';
+import {
+  CheckpointPolicy,
+  CompiledFlowRef,
+  FanoutBranches,
+  FanoutConcurrency,
+  FanoutFailurePolicy,
+  RelayRole,
+} from './step.js';
 
 export const FlowSchematicStatus = z.enum(['candidate', 'active', 'deprecated']);
 export type FlowSchematicStatus = z.infer<typeof FlowSchematicStatus>;
@@ -74,6 +82,7 @@ export const StepExecutionKind = z.enum([
   'verification',
   'checkpoint',
   'sub-run',
+  'fanout',
 ]);
 export type StepExecutionKind = z.infer<typeof StepExecutionKind>;
 
@@ -171,16 +180,27 @@ export const StepWrites = z
     request_path: RunRelativePath.optional(),
     receipt_path: RunRelativePath.optional(),
     result_path: RunRelativePath.optional(),
+    branches_dir_path: RunRelativePath.optional(),
     checkpoint_request_path: RunRelativePath.optional(),
     checkpoint_response_path: RunRelativePath.optional(),
   })
   .strict();
 export type StepWrites = z.infer<typeof StepWrites>;
 
+export const SchematicFanout = z
+  .object({
+    branches: FanoutBranches,
+    concurrency: FanoutConcurrency.optional(),
+    on_child_failure: FanoutFailurePolicy.optional(),
+    join: FanoutJoinPolicy,
+  })
+  .strict();
+export type SchematicFanout = z.infer<typeof SchematicFanout>;
+
 // Per-item check metadata. Conditional on execution.kind:
 //   compose | verification           → required: SchemaSectionsCheck.required
 //   checkpoint                         → allow: CheckpointSelectionCheck.allow
-//   relay | sub-run                 → pass: ResultVerdictCheck.pass
+//   relay | sub-run | fanout          → pass: ResultVerdictCheck.pass / Fanout admit list
 // Cross-field shape is enforced at the SchematicStep superRefine.
 export const StepCheck = z
   .object({
@@ -215,6 +235,7 @@ export const SchematicStep = z
     writes: StepWrites.optional(),
     check: StepCheck.optional(),
     checkpoint_policy: CheckpointPolicy.optional(),
+    fanout: SchematicFanout.optional(),
   })
   .strict()
   .superRefine((item, ctx) => {
@@ -267,6 +288,7 @@ function validateExecutionShape(
     writes?: StepWrites | undefined;
     check?: StepCheck | undefined;
     checkpoint_policy?: CheckpointPolicy | undefined;
+    fanout?: SchematicFanout | undefined;
   },
   ctx: z.RefinementCtx,
 ): void {
@@ -331,11 +353,13 @@ function validateExecutionShape(
         forbid('request_path', 'relay');
         forbid('receipt_path', 'relay');
         forbid('result_path', 'relay|sub-run');
+        forbid('branches_dir_path', 'fanout');
         forbid('checkpoint_request_path', 'checkpoint');
         forbid('checkpoint_response_path', 'checkpoint');
         break;
       case 'relay':
         expectRelaySlots();
+        forbid('branches_dir_path', 'fanout');
         forbid('checkpoint_request_path', 'checkpoint');
         forbid('checkpoint_response_path', 'checkpoint');
         break;
@@ -344,12 +368,29 @@ function validateExecutionShape(
         forbid('request_path', 'relay');
         forbid('receipt_path', 'relay');
         forbid('result_path', 'relay|sub-run');
+        forbid('branches_dir_path', 'fanout');
         break;
       case 'sub-run':
         expectSubRunSlots();
         forbid('report_path', 'compose|verification');
         forbid('request_path', 'relay');
         forbid('receipt_path', 'relay');
+        forbid('branches_dir_path', 'fanout');
+        forbid('checkpoint_request_path', 'checkpoint');
+        forbid('checkpoint_response_path', 'checkpoint');
+        break;
+      case 'fanout':
+        expectReport();
+        if (!has('branches_dir_path')) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['writes', 'branches_dir_path'],
+            message: 'fanout execution requires writes.branches_dir_path',
+          });
+        }
+        forbid('request_path', 'relay');
+        forbid('receipt_path', 'relay');
+        forbid('result_path', 'relay|sub-run');
         forbid('checkpoint_request_path', 'checkpoint');
         forbid('checkpoint_response_path', 'checkpoint');
         break;
@@ -394,6 +435,11 @@ function validateExecutionShape(
         forbidField('required', 'compose|verification');
         forbidField('allow', 'checkpoint');
         break;
+      case 'fanout':
+        expectField('pass', 'fanout');
+        forbidField('required', 'compose|verification');
+        forbidField('allow', 'checkpoint');
+        break;
     }
   }
 
@@ -402,6 +448,20 @@ function validateExecutionShape(
       code: z.ZodIssueCode.custom,
       path: ['checkpoint_policy'],
       message: 'checkpoint_policy is only allowed for checkpoint execution',
+    });
+  }
+  if (kind === 'fanout' && item.fanout === undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['fanout'],
+      message: 'fanout execution requires fanout metadata',
+    });
+  }
+  if (item.fanout !== undefined && kind !== 'fanout') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['fanout'],
+      message: 'fanout metadata is only allowed for fanout execution',
     });
   }
 }
@@ -694,13 +754,13 @@ function acceptedExecutionKinds(block: FlowBlockValue): readonly StepExecutionKi
   // the parent step authoring the sub-run IS an orchestrator action.
   switch (block.action_surface) {
     case 'worker':
-      return ['relay', 'compose'];
+      return ['relay', 'compose', 'fanout'];
     case 'host':
       return ['checkpoint'];
     case 'orchestrator':
-      return ['compose', 'checkpoint', 'sub-run'];
+      return ['compose', 'checkpoint', 'sub-run', 'fanout'];
     case 'mixed':
-      return ['compose', 'relay', 'verification', 'checkpoint', 'sub-run'];
+      return ['compose', 'relay', 'verification', 'checkpoint', 'sub-run', 'fanout'];
   }
 }
 

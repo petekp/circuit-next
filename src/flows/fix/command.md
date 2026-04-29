@@ -50,7 +50,7 @@ metacharacters:
    Deep Fix:
 
    ```bash
-   ./bin/circuit-next run fix --goal 'repair the failing pipeline' --entry-mode deep --progress jsonl
+   ./bin/circuit-next run fix --goal 'fix the failing pipeline' --entry-mode deep --progress jsonl
    ```
 
    Autonomous Fix:

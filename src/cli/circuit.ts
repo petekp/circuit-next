@@ -54,6 +54,7 @@ interface ParsedArgs {
   flowRoot?: string;
   checkpointChoice?: string;
   progress?: 'jsonl';
+  includeUntrackedContent: boolean;
 }
 
 interface ResolvedCompiledFlowRoute {
@@ -61,6 +62,14 @@ interface ResolvedCompiledFlowRoute {
   source: 'explicit' | 'classifier';
   reason: string;
   matched_signal?: string;
+  inferredEntryModeName?: string;
+  inferredEntryModeReason?: string;
+}
+
+interface ResolvedEntryModeSelection {
+  entryModeName?: string;
+  source?: 'explicit' | 'classifier';
+  reason?: string;
 }
 
 export interface CliMainOptions {
@@ -78,11 +87,13 @@ function usage(): string {
     '',
     '`--mode` is the friendly alias for `--entry-mode`; supplying both forms of that option is an error.',
     '',
-    'With an explicit flow name, loads generated/flows/<name>/circuit.json. Without one, classifies the free-form goal across the registered explore/review/fix/build flows and then composes the runtime boundary using the configured relay connector.',
+    'With an explicit flow name, loads generated/flows/<name>/circuit.json. Without one, classifies the free-form goal across the registered explore/review/fix/build/migrate/sweep flows and then composes the runtime boundary using the configured relay connector.',
     '',
     'Config: if present, loads ~/.config/circuit-next/config.yaml and ./.circuit/config.yaml from the current working directory into the selection resolver before relay.',
     '',
     'Note: `--dry-run` is not implemented and is rejected. An earlier version silently invoked the real connector while reporting dry_run:true, which is a safety bug; the flag stays rejected until real dry-run support lands.',
+    '',
+    'Review evidence: untracked file contents are omitted by default. Add `--include-untracked-content` only when those files are safe to relay to the configured worker.',
   ].join('\n');
 }
 
@@ -99,6 +110,7 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
   let flowRoot: string | undefined;
   let checkpointChoice: string | undefined;
   let progress: 'jsonl' | undefined;
+  let includeUntrackedContent = false;
 
   for (let i = 0; i < argv.length; i++) {
     const tok = argv[i];
@@ -183,6 +195,10 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
         '--dry-run is not currently implemented and is rejected. An earlier version silently invoked the real connector while reporting dry_run:true, which is a safety bug. The flag stays rejected until real dry-run support lands.',
       );
     }
+    if (tok === '--include-untracked-content') {
+      includeUntrackedContent = true;
+      continue;
+    }
     if (tok === '--help' || tok === '-h') {
       process.stdout.write(`${usage()}\n`);
       process.exit(0);
@@ -227,12 +243,18 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
     if (entryMode !== undefined) {
       throw new Error('checkpoint resume reuses the saved flow position; omit --mode/--entry-mode');
     }
+    if (includeUntrackedContent) {
+      throw new Error(
+        'checkpoint resume reuses the saved evidence policy; omit --include-untracked-content',
+      );
+    }
   } else if (goal === undefined || goal.length === 0) {
     throw new Error('--goal is required and must be non-empty');
   }
 
   const result: ParsedArgs = {
     depthProvided,
+    includeUntrackedContent,
   };
   if (depth !== undefined) result.depth = depth;
   if (entryMode !== undefined) result.entryMode = entryMode;
@@ -299,6 +321,30 @@ function resolveCompiledFlowRoute(args: ParsedArgs): ResolvedCompiledFlowRoute {
     throw new Error('--goal is required when not resuming a checkpoint');
   }
   return classifyCompiledFlowTask(args.goal);
+}
+
+function resolveEntryModeSelection(
+  args: ParsedArgs,
+  route: ResolvedCompiledFlowRoute,
+): ResolvedEntryModeSelection {
+  if (args.entryMode !== undefined) {
+    return {
+      entryModeName: args.entryMode,
+      source: 'explicit',
+      reason: 'explicit --mode/--entry-mode argument',
+    };
+  }
+  if (args.depthProvided) return {};
+  if (route.inferredEntryModeName !== undefined) {
+    return {
+      entryModeName: route.inferredEntryModeName,
+      source: 'classifier',
+      ...(route.inferredEntryModeReason === undefined
+        ? {}
+        : { reason: route.inferredEntryModeReason }),
+    };
+  }
+  return {};
 }
 
 function loadFixture(fixturePath: string): { flow: CompiledFlow; bytes: Buffer } {
@@ -394,9 +440,10 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
   }
 
   const route = resolveCompiledFlowRoute(args);
+  const entryModeSelection = resolveEntryModeSelection(args, route);
   const fixturePath = resolveFixturePath(
     route.flowName,
-    args.entryMode,
+    entryModeSelection.entryModeName,
     args.fixturePath,
     args.flowRoot,
   );
@@ -413,7 +460,9 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
     recorded_at: now().toISOString(),
     label: `Selected ${route.flowName}`,
     display: progressDisplay(
-      `Circuit selected ${route.flowName}: ${route.reason}`,
+      entryModeSelection.entryModeName === undefined
+        ? `Circuit selected ${route.flowName}: ${route.reason}`
+        : `Circuit selected ${route.flowName} with ${entryModeSelection.entryModeName} thoroughness: ${route.reason}`,
       'major',
       'info',
     ),
@@ -421,6 +470,12 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
     routed_by: route.source,
     router_reason: route.reason,
     ...(route.matched_signal === undefined ? {} : { router_signal: route.matched_signal }),
+    ...(entryModeSelection.entryModeName === undefined
+      ? {}
+      : { entry_mode: entryModeSelection.entryModeName }),
+    ...(entryModeSelection.source === undefined
+      ? {}
+      : { entry_mode_source: entryModeSelection.source }),
   });
   const runFolder = resolve(args.runFolder ?? `${DEFAULT_RUNS_BASE}/${runId as unknown as string}`);
   const selectionConfigLayers = discoverConfigLayers({
@@ -448,11 +503,16 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
     now,
   };
   if (args.depth !== undefined) invocation.depth = args.depth;
-  if (args.entryMode !== undefined) invocation.entryModeName = args.entryMode;
+  if (entryModeSelection.entryModeName !== undefined) {
+    invocation.entryModeName = entryModeSelection.entryModeName;
+  }
   if (options.relayer !== undefined) invocation.relayer = options.relayer;
   if (progress !== undefined) invocation.progress = progress;
   if (selectionConfigLayers.length > 0) {
     invocation.selectionConfigLayers = selectionConfigLayers;
+  }
+  if (args.includeUntrackedContent) {
+    invocation.evidencePolicy = { includeUntrackedFileContent: true };
   }
 
   const outcome = await runCompiledFlow(invocation);
@@ -480,6 +540,12 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
         routed_by: route.source,
         router_reason: route.reason,
         ...(route.matched_signal === undefined ? {} : { router_signal: route.matched_signal }),
+        ...(entryModeSelection.entryModeName === undefined
+          ? {}
+          : { entry_mode: entryModeSelection.entryModeName }),
+        ...(entryModeSelection.source === undefined
+          ? {}
+          : { entry_mode_source: entryModeSelection.source }),
         run_folder: outcome.runFolder,
         outcome: outcome.result.outcome,
         trace_entries_observed: outcome.result.trace_entries_observed,

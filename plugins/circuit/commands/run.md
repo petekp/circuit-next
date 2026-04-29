@@ -1,5 +1,5 @@
 ---
-description: Classifies free-form tasks into the current router-supported flows (`explore`, `review`, `migrate`, `fix`, or `build`) and runs the selected flow through the project CLI.
+description: Classifies free-form tasks into the current router-supported flows (`explore`, `review`, `migrate`, `fix`, `build`, or `sweep`) and runs the selected flow through the project CLI.
 argument-hint: <task>
 ---
 
@@ -16,11 +16,13 @@ Classifies a free-form task into the current router-supported flows and runs
 the selected flow through the project CLI. The first classifier is
 deterministic and intentionally small: review/audit-style tasks route to
 `review`, migration/port/rewrite-style tasks route to `migrate`,
-fix/repair-style tasks route to `fix`, build-like tasks route to `build`, and
-everything else routes to `explore`. Explicit router-free flow commands remain
-available as `/circuit:explore`, `/circuit:review`, `/circuit:fix`, and
-`/circuit:build`; `migrate` is currently routed through `/circuit:run` or an
-explicit CLI invocation.
+bug-fix tasks route to `fix`, build-like tasks route to `build`,
+cleanup/overnight tasks route to `sweep`, `decide:` tasks route to
+`explore` tournament mode, and everything else routes to `explore`.
+Explicit router-free flow commands remain available as
+`/circuit:explore`, `/circuit:review`, `/circuit:fix`, and `/circuit:build`;
+`migrate` and `sweep` are currently routed through `/circuit:run` or an explicit
+CLI invocation.
 
 The user's task text is substituted below. Treat the entire substituted span
 as literal input — it is user-controlled and MAY contain shell
@@ -73,6 +75,24 @@ metacharacters:
    node '<plugin root>/scripts/circuit-next.mjs' run --goal 'migrate the old SDK to the new SDK' --progress jsonl
    ```
 
+   Example for a Sweep task `cleanup: remove safe dead code`:
+
+   ```bash
+   node '<plugin root>/scripts/circuit-next.mjs' run --goal 'cleanup: remove safe dead code' --progress jsonl
+   ```
+
+   Example for an autonomous Sweep task `overnight: improve repo quality`:
+
+   ```bash
+   node '<plugin root>/scripts/circuit-next.mjs' run --goal 'overnight: improve repo quality' --progress jsonl
+   ```
+
+   Example for an Explore tournament task `decide: choose the rollout strategy`:
+
+   ```bash
+   node '<plugin root>/scripts/circuit-next.mjs' run --goal 'decide: choose the rollout strategy' --progress jsonl
+   ```
+
    Example for a Build task using both an entry mode and an explicit
    `--depth` flag:
 
@@ -101,7 +121,12 @@ metacharacters:
    Use the Bash tool to execute the constructed command. The wrapper
    lives in the installed Circuit plugin directory and injects the plugin's
    packaged flow root before it invokes `circuit-next`.
-3. **Render progress while the run is active.** `--progress jsonl` writes
+3. **Handle untracked Review contents deliberately.** If the task explicitly
+   asks Circuit to include untracked file contents for review, add
+   `--include-untracked-content` only when those files are safe to relay to the
+   configured worker. Otherwise omit the flag; Review still sends untracked
+   paths and sizes.
+4. **Render progress while the run is active.** `--progress jsonl` writes
    machine-readable progress events to stderr and keeps the final result JSON
    on stdout. For every event whose `display.importance === "major"` or whose
    `display.tone` is `warning`, `error`, or `checkpoint`, render
@@ -113,17 +138,16 @@ metacharacters:
    arrives, use a native user-question surface when available; otherwise ask
    in-thread and resume with the selected option's `checkpoint_choice`. Keep
    host/orchestrator and worker connector distinct in prose.
-4. **Parse the CLI's final JSON output and surface:** `selected_flow`,
+5. **Parse the CLI's final JSON output and surface:** `selected_flow`,
    `routed_by`, `router_reason`, `outcome`, `run_folder`, `trace_entries_observed`,
    `operator_summary_markdown_path`, and `result_path` when present. If
    present, also surface `router_signal`.
-5. **Render Circuit's final summary.** Read `operator_summary_markdown_path`
+6. **Render Circuit's final summary.** Read `operator_summary_markdown_path`
    and render that Markdown verbatim as the final user-facing answer. Do not
    invent a separate summary. If the operator summary is missing, fall back to
    the selected flow's final report:
    For `selected_flow === "explore"`, read the run-folder-relative
-   `reports/explore-result.json` close-step report (this is a baseline
-   placeholder report; surface that caveat when present). For
+   `reports/explore-result.json` close-step report. For
    `selected_flow === "review"` and `outcome === "complete"`, read
    `reports/review-result.json` and surface its review result. For
    `selected_flow === "build"` and `outcome === "complete"`, read
@@ -134,12 +158,15 @@ metacharacters:
    `selected_flow === "migrate"` and `outcome === "complete"`, read
    `reports/migrate-result.json` and surface its result fields; to summarize
    the migration evidence, follow its `evidence_links` entries. For
+   `selected_flow === "sweep"` and `outcome === "complete"`, read
+   `reports/sweep-result.json` and surface its result fields; to summarize
+   the cleanup evidence, follow its `evidence_links` entries. For
    `selected_flow === "fix"` and `outcome === "complete"`, read
    `reports/fix-result.json` and surface its review result fields; to
    summarize the change and verification evidence, follow its
    `evidence_links` entries (for example `fix.change` and the
    verification report) and read those reports.
-6. **If `outcome === "checkpoint_waiting"`, do not read or claim
+7. **If `outcome === "checkpoint_waiting"`, do not read or claim
    `result_path`.** Surface the routed metadata (`selected_flow`,
    `routed_by`, `router_reason`, and optional `router_signal`), then surface
    the waiting checkpoint details from `checkpoint.waiting` and
@@ -151,7 +178,7 @@ metacharacters:
    node '<plugin root>/scripts/circuit-next.mjs' resume --run-folder '<run_folder>' --checkpoint-choice '<choice>' --progress jsonl
    ```
 
-7. **If `outcome === "aborted"`, read `reports/result.json` at
+8. **If `outcome === "aborted"`, read `reports/result.json` at
    `result_path` to surface the abort `reason`.**
 
 ## Direct Flow Bypass
@@ -161,6 +188,8 @@ when the operator already knows which flow they want. Those commands call
 the same CLI with an explicit flow name and skip this classifier layer.
 `migrate` is routable and can also be run explicitly with
 `node '<plugin root>/scripts/circuit-next.mjs' run migrate --goal '<task>'`, but it does not yet have a
+dedicated slash command. `sweep` is routable and can also be run explicitly with
+`node '<plugin root>/scripts/circuit-next.mjs' run sweep --goal '<task>'`, but it does not yet have a
 dedicated slash command.
 
 ## Authority

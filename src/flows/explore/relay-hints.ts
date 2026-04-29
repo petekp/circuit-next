@@ -24,3 +24,25 @@ export const exploreReviewVerdictShapeHint: SchemaShapeHint = {
     'The runtime parses your response with JSON.parse, rejects any verdict not drawn from the accepted-verdicts list, and validates the full report body against explore.review-verdict@v1 before writing reports/review-verdict.json.',
   ].join(' '),
 };
+
+export const exploreTournamentProposalShapeHint: SchemaShapeHint = {
+  kind: 'schema',
+  schema: 'explore.tournament-proposal@v1',
+  instruction: [
+    'Respond with a single raw JSON object whose top-level shape is exactly:',
+    '{ "verdict": "accept", "option_id": "<option-1-through-option-4>", "option_label": "<option label>", "case_summary": "<strongest case for this option>", "assumptions": ["<assumption>"], "evidence_refs": ["<report path or file:line reference>"], "risks": ["<risk>"], "next_action": "<next action if this option is selected>" }',
+    'Argue for the option named in the branch title. Set option_id to the branch option id named in the step id and title. Do not compare every option; make the strongest evidence-backed case for this branch. Do not include extra top-level keys. Do not wrap the JSON in Markdown code fences. Do not include prose before or after the JSON object.',
+    'The runtime parses your response with JSON.parse and validates the full report body against explore.tournament-proposal@v1 before writing the branch report.',
+  ].join(' '),
+};
+
+export const exploreTournamentReviewShapeHint: SchemaShapeHint = {
+  kind: 'schema',
+  schema: 'explore.tournament-review@v1',
+  instruction: [
+    'Respond with a single raw JSON object whose top-level shape is exactly:',
+    '{ "verdict": "<recommend|no-clear-winner|needs-operator>", "recommended_option_id": "<option-1-through-option-4>", "comparison": "<comparative assessment>", "objections": ["<objection>"], "missing_evidence": ["<missing evidence>"], "tradeoff_question": "<specific choice the operator must make>", "confidence": "<low|medium|high>" }',
+    'Use the proposal aggregate and source reports. Treat this as the stress review inside the Decision stage, not as a separate canonical Review stage. Do not include extra top-level keys. Do not wrap the JSON in Markdown code fences.',
+    'The runtime parses your response with JSON.parse and validates the full report body against explore.tournament-review@v1 before writing reports/tournament-review.json.',
+  ].join(' '),
+};

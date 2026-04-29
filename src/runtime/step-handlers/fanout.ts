@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { copyFileSync, mkdirSync, readFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { CompiledFlow } from '../../schemas/compiled-flow.js';
 import { RunId } from '../../schemas/ids.js';
@@ -8,23 +8,49 @@ import {
   type CompiledFlowRef,
   type FanoutBranch,
   FanoutBranch as FanoutBranchSchema,
+  type FanoutRelayBranch,
   type FanoutStep,
+  type FanoutSubRunBranch,
 } from '../../schemas/step.js';
+import { materializeRelay } from '../connectors/relay-materializer.js';
+import { type RelayResult, sha256Hex } from '../connectors/shared.js';
+import { runCrossReportValidator } from '../registries/cross-report-validators.js';
+import { parseReport } from '../registries/report-schemas.js';
+import { deriveResolvedSelection, resolveRelayDecision } from '../relay-selection.js';
 import { resultPath } from '../result-writer.js';
 import { resolveRunRelative } from '../run-relative-path.js';
-import type { CompiledFlowInvocation, WorktreeRunner } from '../runner-types.js';
+import type { CompiledFlowInvocation, RelayInput, WorktreeRunner } from '../runner-types.js';
+import {
+  type CheckEvaluation,
+  type RelayStep,
+  composeRelayPrompt,
+  connectorForRelayer,
+  evaluateRelayCheck,
+} from './relay.js';
 import { isRunRelativePathError, writeJsonReport } from './shared.js';
 import type { StepHandlerContext, StepHandlerResult } from './types.js';
 
 type FanoutStepNarrow = CompiledFlow['steps'][number] & { kind: 'fanout' };
 
-interface ResolvedBranch {
-  readonly branch_id: string;
-  readonly flow_ref: CompiledFlowRef;
-  readonly goal: string;
-  readonly depth: FanoutBranch['depth'];
-  readonly selection?: FanoutBranch['selection'];
-}
+type ResolvedBranch =
+  | {
+      readonly kind: 'sub-run';
+      readonly branch_id: string;
+      readonly flow_ref: CompiledFlowRef;
+      readonly goal: string;
+      readonly depth: FanoutSubRunBranch['depth'];
+      readonly selection?: FanoutBranch['selection'];
+    }
+  | {
+      readonly kind: 'relay';
+      readonly branch_id: string;
+      readonly role: FanoutRelayBranch['execution']['role'];
+      readonly goal: string;
+      readonly report_schema: string;
+      readonly provenance_field?: string;
+      readonly selection?: FanoutBranch['selection'];
+    };
+type ResolvedRelayBranch = Extract<ResolvedBranch, { kind: 'relay' }>;
 
 interface BranchOutcome {
   readonly branch_id: string;
@@ -36,6 +62,7 @@ interface BranchOutcome {
   readonly result_body: unknown;
   readonly duration_ms: number;
   readonly admitted: boolean;
+  readonly failure_reason?: string;
 }
 
 // Pure-function inputs for the join policy decision. Every field
@@ -55,6 +82,7 @@ export interface FanoutJoinOutcome {
   // `result.json` parsed to an object. aggregate-only treats
   // `undefined` as "non-parseable".
   readonly result_body?: unknown;
+  readonly failure_reason?: string;
 }
 
 export interface FanoutJoinInput {
@@ -152,6 +180,13 @@ export function evaluateFanoutJoinPolicy(input: FanoutJoinInput): FanoutJoinResu
     };
   }
   if (!allParseable) {
+    const failedOutcome = outcomes.find((o) => o.failure_reason !== undefined);
+    if (failedOutcome?.failure_reason !== undefined) {
+      return {
+        joinedSuccessfully: false,
+        failureReason: `fanout step '${stepId}' aggregate-only: ${failedOutcome.failure_reason}`,
+      };
+    }
     return {
       joinedSuccessfully: false,
       failureReason: `fanout step '${stepId}' aggregate-only: at least one branch did not produce a parseable result body`,
@@ -266,13 +301,7 @@ function expandTemplate<T>(template: T, item: unknown): T {
 
 function resolveBranches(step: FanoutStepNarrow, runFolder: string): readonly ResolvedBranch[] {
   if (step.branches.kind === 'static') {
-    return step.branches.branches.map((b) => ({
-      branch_id: b.branch_id,
-      flow_ref: b.flow_ref,
-      goal: b.goal,
-      depth: b.depth,
-      ...(b.selection === undefined ? {} : { selection: b.selection }),
-    }));
+    return step.branches.branches.map((b) => resolveBranch(b));
   }
   // dynamic — load source report, traverse items_path, expand template per item.
   const sourceAbs = resolveRunRelative(runFolder, step.branches.source_report);
@@ -302,15 +331,49 @@ function resolveBranches(step: FanoutStepNarrow, runFolder: string): readonly Re
       );
     }
     seen.add(branch.branch_id);
-    expanded.push({
+    expanded.push(resolveBranch(branch));
+  }
+  return expanded;
+}
+
+function resolveBranch(branch: FanoutBranch): ResolvedBranch {
+  if ('flow_ref' in branch) {
+    return {
+      kind: 'sub-run',
       branch_id: branch.branch_id,
       flow_ref: branch.flow_ref,
       goal: branch.goal,
       depth: branch.depth,
       ...(branch.selection === undefined ? {} : { selection: branch.selection }),
-    });
+    };
   }
-  return expanded;
+  return {
+    kind: 'relay',
+    branch_id: branch.branch_id,
+    role: branch.execution.role,
+    goal: branch.execution.goal,
+    report_schema: branch.execution.report_schema,
+    ...(branch.execution.provenance_field === undefined
+      ? {}
+      : { provenance_field: branch.execution.provenance_field }),
+    ...(branch.selection === undefined ? {} : { selection: branch.selection }),
+  };
+}
+
+function relayBranchProvenanceFailure(
+  branch: ResolvedRelayBranch,
+  reportBody: unknown,
+): string | undefined {
+  const field = branch.provenance_field;
+  if (field === undefined) return undefined;
+  if (reportBody === null || typeof reportBody !== 'object' || Array.isArray(reportBody)) {
+    return `relay fanout branch '${branch.branch_id}': report field '${field}' must equal branch_id '${branch.branch_id}' but report body is not an object`;
+  }
+  const observed = (reportBody as Record<string, unknown>)[field];
+  if (observed !== branch.branch_id) {
+    return `relay fanout branch '${branch.branch_id}': report field '${field}' must equal branch_id '${branch.branch_id}' (got ${typeof observed === 'string' ? `'${observed}'` : typeof observed})`;
+  }
+  return undefined;
 }
 
 function evaluateChildVerdict(
@@ -340,6 +403,7 @@ interface FanoutAggregateBody {
     readonly admitted: boolean;
     readonly result_path: string;
     readonly duration_ms: number;
+    readonly result_body?: unknown;
   }>;
 }
 
@@ -361,6 +425,7 @@ function buildAggregate(
       admitted: b.admitted,
       result_path: b.result_path,
       duration_ms: b.duration_ms,
+      ...(b.result_body === undefined ? {} : { result_body: b.result_body }),
     })),
   };
 }
@@ -397,6 +462,277 @@ async function runWithConcurrency<T>(
     );
   }
   await Promise.all(workers);
+}
+
+async function runRelayFanoutBranch(
+  ctx: StepHandlerContext & { readonly step: FanoutStepNarrow },
+  branch: ResolvedRelayBranch,
+  childRunIdValue: RunId,
+  branchDirRel: string,
+  branchDirAbs: string,
+): Promise<BranchOutcome> {
+  const {
+    runFolder,
+    flow,
+    step,
+    runId,
+    depth,
+    attempt,
+    recordedAt,
+    push,
+    state,
+    now,
+    executionSelectionConfigLayers,
+  } = ctx;
+  const relayStep: RelayStep = {
+    id: `${step.id as unknown as string}-${branch.branch_id}` as never,
+    title: `${step.title} / ${branch.branch_id}: ${branch.goal}`,
+    protocol: step.protocol,
+    reads: step.reads,
+    routes: { pass: '@complete' },
+    ...(branch.selection === undefined ? {} : { selection: branch.selection }),
+    executor: 'worker',
+    kind: 'relay',
+    role: branch.role,
+    writes: {
+      request: `${branchDirRel}/request.txt` as never,
+      receipt: `${branchDirRel}/receipt.txt` as never,
+      result: `${branchDirRel}/result.json` as never,
+      report: {
+        path: `${branchDirRel}/report.json` as never,
+        schema: branch.report_schema,
+      },
+    },
+    check: {
+      kind: 'result_verdict',
+      source: { kind: 'relay_result', ref: 'result' },
+      pass: step.check.verdicts.admit,
+    },
+  };
+
+  const startMs = Date.now();
+  const relayerInv = {
+    ...(ctx.relayer === undefined ? {} : { relayer: ctx.relayer }),
+    selectionConfigLayers: executionSelectionConfigLayers,
+  };
+  const prompt = composeRelayPrompt(relayStep, runFolder);
+  const resolvedSelection = deriveResolvedSelection(relayerInv, flow, relayStep, depth);
+  const relayInput: RelayInput = { prompt, resolvedSelection };
+  if (relayStep.budgets?.wall_clock_ms !== undefined) {
+    relayInput.timeoutMs = relayStep.budgets.wall_clock_ms;
+  }
+  const { relayer, resolvedFrom } = await resolveRelayDecision({
+    ...(ctx.relayer === undefined ? {} : { explicitRelayer: ctx.relayer }),
+    configLayers: executionSelectionConfigLayers,
+    flow,
+    step: relayStep,
+  });
+  const connector = connectorForRelayer(relayer);
+  const requestAbs = resolveRunRelative(runFolder, relayStep.writes.request);
+  mkdirSync(dirname(requestAbs), { recursive: true });
+  writeFileSync(requestAbs, prompt);
+  const requestPayloadHash = sha256Hex(prompt);
+
+  push({
+    schema_version: 1,
+    sequence: state.sequence,
+    recorded_at: recordedAt(),
+    run_id: runId,
+    kind: 'relay.started',
+    step_id: relayStep.id,
+    attempt,
+    connector,
+    role: relayStep.role,
+    resolved_selection: resolvedSelection,
+    resolved_from: resolvedFrom,
+  });
+  push({
+    schema_version: 1,
+    sequence: state.sequence,
+    recorded_at: recordedAt(),
+    run_id: runId,
+    kind: 'relay.request',
+    step_id: relayStep.id,
+    attempt,
+    request_payload_hash: requestPayloadHash,
+  });
+
+  let relayResult: RelayResult;
+  try {
+    relayResult = await relayer.relay(relayInput);
+  } catch (err) {
+    const durationMs = Math.max(0, Date.now() - startMs);
+    const reason = err instanceof Error ? err.message : String(err);
+    const failureReason = `relay fanout branch '${branch.branch_id}': connector invocation failed (${reason})`;
+    push({
+      schema_version: 1,
+      sequence: state.sequence,
+      recorded_at: recordedAt(),
+      run_id: runId,
+      kind: 'relay.failed',
+      step_id: relayStep.id,
+      attempt,
+      connector,
+      role: relayStep.role,
+      resolved_selection: resolvedSelection,
+      resolved_from: resolvedFrom,
+      request_payload_hash: requestPayloadHash,
+      reason: failureReason,
+    });
+    push({
+      schema_version: 1,
+      sequence: state.sequence,
+      recorded_at: recordedAt(),
+      run_id: runId,
+      kind: 'check.evaluated',
+      step_id: relayStep.id,
+      attempt,
+      check_kind: 'result_verdict',
+      outcome: 'fail',
+      reason: failureReason,
+    });
+    return {
+      branch_id: branch.branch_id,
+      child_run_id: childRunIdValue,
+      worktree_path: branchDirAbs,
+      child_outcome: 'aborted',
+      verdict: NO_VERDICT_SENTINEL,
+      result_path: '',
+      result_body: undefined,
+      duration_ms: durationMs,
+      admitted: false,
+      failure_reason: failureReason,
+    };
+  }
+
+  state.relayResults.push({
+    stepId: relayStep.id as unknown as string,
+    connectorName: relayer.connectorName,
+    cli_version: relayResult.cli_version,
+  });
+
+  const checkEvaluation = evaluateRelayCheck(relayStep, relayResult.result_body);
+  let evaluation: CheckEvaluation = checkEvaluation;
+  let parsedBody: unknown;
+  if (checkEvaluation.kind === 'pass') {
+    const parseResult = parseReport(branch.report_schema, relayResult.result_body);
+    if (parseResult.kind === 'fail') {
+      evaluation = {
+        kind: 'fail',
+        reason: `relay fanout branch '${branch.branch_id}': ${parseResult.reason}`,
+        observedVerdict: checkEvaluation.verdict,
+      };
+    } else {
+      parsedBody = JSON.parse(relayResult.result_body);
+      const provenanceFailure = relayBranchProvenanceFailure(branch, parsedBody);
+      if (provenanceFailure !== undefined) {
+        evaluation = {
+          kind: 'fail',
+          reason: provenanceFailure,
+          observedVerdict: checkEvaluation.verdict,
+        };
+      } else {
+        const crossResult = runCrossReportValidator(
+          branch.report_schema,
+          flow,
+          runFolder,
+          relayResult.result_body,
+        );
+        if (crossResult.kind === 'fail') {
+          evaluation = {
+            kind: 'fail',
+            reason: `relay fanout branch '${branch.branch_id}': ${crossResult.reason}`,
+            observedVerdict: checkEvaluation.verdict,
+          };
+        }
+      }
+    }
+  }
+
+  const relayCompletedVerdict =
+    evaluation.kind === 'pass'
+      ? evaluation.verdict
+      : (evaluation.observedVerdict ?? NO_VERDICT_SENTINEL);
+  const materialized = materializeRelay({
+    runId,
+    stepId: relayStep.id,
+    attempt,
+    role: relayStep.role,
+    startingSequence: state.sequence,
+    runFolder,
+    writes: {
+      request: relayStep.writes.request,
+      receipt: relayStep.writes.receipt,
+      result: relayStep.writes.result,
+      ...(evaluation.kind === 'pass' && relayStep.writes.report !== undefined
+        ? { report: relayStep.writes.report }
+        : {}),
+    },
+    connector,
+    resolvedSelection,
+    resolvedFrom,
+    relayResult,
+    verdict: relayCompletedVerdict,
+    now,
+    priorStart: { requestPayloadHash },
+  });
+  for (const ev of materialized.trace_entries) {
+    push(ev);
+  }
+
+  const durationMs = Math.max(0, Date.now() - startMs);
+  if (evaluation.kind === 'pass') {
+    if (relayStep.writes.report === undefined) {
+      throw new Error(`relay fanout branch '${branch.branch_id}': missing report write`);
+    }
+    push({
+      schema_version: 1,
+      sequence: state.sequence,
+      recorded_at: recordedAt(),
+      run_id: runId,
+      kind: 'check.evaluated',
+      step_id: relayStep.id,
+      attempt,
+      check_kind: 'result_verdict',
+      outcome: 'pass',
+    });
+    return {
+      branch_id: branch.branch_id,
+      child_run_id: childRunIdValue,
+      worktree_path: branchDirAbs,
+      child_outcome: 'complete',
+      verdict: evaluation.verdict,
+      result_path: relayStep.writes.report.path,
+      result_body: parsedBody,
+      duration_ms: durationMs,
+      admitted: true,
+    };
+  }
+
+  push({
+    schema_version: 1,
+    sequence: state.sequence,
+    recorded_at: recordedAt(),
+    run_id: runId,
+    kind: 'check.evaluated',
+    step_id: relayStep.id,
+    attempt,
+    check_kind: 'result_verdict',
+    outcome: 'fail',
+    reason: evaluation.reason,
+  });
+  return {
+    branch_id: branch.branch_id,
+    child_run_id: childRunIdValue,
+    worktree_path: branchDirAbs,
+    child_outcome: 'aborted',
+    verdict: relayCompletedVerdict,
+    result_path: relayStep.writes.result,
+    result_body: undefined,
+    duration_ms: durationMs,
+    admitted: false,
+    failure_reason: evaluation.reason,
+  };
 }
 
 export async function runFanoutStep(
@@ -447,19 +783,6 @@ export async function runFanoutStep(
     return { kind: 'aborted', reason };
   };
 
-  if (childCompiledFlowResolver === undefined) {
-    return abortReason(
-      `fanout step '${step.id}': CompiledFlowInvocation.childCompiledFlowResolver is required to resolve branch flows`,
-    );
-  }
-  if (projectRoot === undefined) {
-    return abortReason(
-      `fanout step '${step.id}': CompiledFlowInvocation.projectRoot is required to anchor per-branch worktrees`,
-    );
-  }
-
-  const worktreeRunner = ctxWorktreeRunner ?? DEFAULT_WORKTREE_RUNNER;
-
   let resolvedBranches: readonly ResolvedBranch[];
   try {
     resolvedBranches = resolveBranches(step, runFolder);
@@ -471,6 +794,27 @@ export async function runFanoutStep(
   if (resolvedBranches.length === 0) {
     return abortReason(`fanout step '${step.id}': branch resolution produced zero branches`);
   }
+  const hasSubRunBranches = resolvedBranches.some((branch) => branch.kind === 'sub-run');
+  if (hasSubRunBranches && childCompiledFlowResolver === undefined) {
+    return abortReason(
+      `fanout step '${step.id}': CompiledFlowInvocation.childCompiledFlowResolver is required to resolve branch flows`,
+    );
+  }
+  if (hasSubRunBranches && projectRoot === undefined) {
+    return abortReason(
+      `fanout step '${step.id}': CompiledFlowInvocation.projectRoot is required to anchor per-branch worktrees`,
+    );
+  }
+  if (
+    step.check.join.policy === 'disjoint-merge' &&
+    resolvedBranches.some((branch) => branch.kind === 'relay')
+  ) {
+    return abortReason(
+      `fanout step '${step.id}': disjoint-merge is only supported for sub-run branches with worktrees`,
+    );
+  }
+
+  const worktreeRunner = ctxWorktreeRunner ?? DEFAULT_WORKTREE_RUNNER;
 
   const branchIds = resolvedBranches.map((b) => b.branch_id);
 
@@ -497,7 +841,55 @@ export async function runFanoutStep(
     await runWithConcurrency(resolvedBranches, concurrencyLimit, async (branch, abortSignal) => {
       if (abortSignal.value) return;
       const childRunIdValue: RunId = RunId.parse(randomUUID());
+      const branchDirRel = `${step.writes.branches_dir}/${branch.branch_id}`;
+      const branchDirAbs = resolveRunRelative(runFolder, branchDirRel);
+
+      if (branch.kind === 'relay') {
+        push({
+          schema_version: 1,
+          sequence: state.sequence,
+          recorded_at: recordedAt(),
+          run_id: runId,
+          kind: 'fanout.branch_started',
+          step_id: step.id,
+          attempt,
+          branch_id: branch.branch_id,
+          child_run_id: childRunIdValue,
+          worktree_path: branchDirAbs,
+        });
+        const relayOutcome = await runRelayFanoutBranch(
+          ctx,
+          branch,
+          childRunIdValue,
+          branchDirRel,
+          branchDirAbs,
+        );
+        outcomes.push(relayOutcome);
+        push({
+          schema_version: 1,
+          sequence: state.sequence,
+          recorded_at: recordedAt(),
+          run_id: runId,
+          kind: 'fanout.branch_completed',
+          step_id: step.id,
+          attempt,
+          branch_id: branch.branch_id,
+          child_run_id: childRunIdValue,
+          child_outcome: relayOutcome.child_outcome,
+          verdict: relayOutcome.verdict,
+          duration_ms: relayOutcome.duration_ms,
+          result_path: relayOutcome.result_path,
+        });
+        if (!relayOutcome.admitted && step.on_child_failure === 'abort-all') {
+          abortSignal.value = true;
+        }
+        return;
+      }
+
       const childRunFolder = join(runsBase, childRunIdValue as unknown as string);
+      if (projectRoot === undefined || childCompiledFlowResolver === undefined) {
+        throw new Error('fanout sub-run branch reached without required projectRoot/resolver');
+      }
       const worktreePath = join(
         projectRoot,
         '.circuit-next',
@@ -741,6 +1133,7 @@ export async function runFanoutStep(
       verdict: o.verdict,
       admitted: o.admitted,
       result_body: o.result_body,
+      ...(o.failure_reason === undefined ? {} : { failure_reason: o.failure_reason }),
     })),
     ...(branchFiles === undefined ? {} : { branchFiles }),
     ...(branchFilesError === undefined ? {} : { branchFilesError }),

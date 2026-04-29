@@ -187,6 +187,24 @@ describe('Build report schemas', () => {
         evidence_links: resultPointers(),
       }),
     ).toBeDefined();
+    expect(
+      BuildResult.parse({
+        summary: 'Feature added and verified with follow-ups',
+        outcome: 'needs_attention',
+        verification_status: 'passed',
+        review_verdict: 'accept-with-fixes',
+        evidence_links: resultPointers(),
+      }),
+    ).toBeDefined();
+    expect(
+      BuildResult.safeParse({
+        summary: 'Should not look complete with follow-ups',
+        outcome: 'complete',
+        verification_status: 'passed',
+        review_verdict: 'accept-with-fixes',
+        evidence_links: resultPointers(),
+      }).success,
+    ).toBe(false);
   });
 
   it('rejects missing required fields and surplus keys across report schemas', () => {

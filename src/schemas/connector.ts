@@ -19,13 +19,12 @@ export const ConnectorCapabilities = z
   .strict();
 export type ConnectorCapabilities = z.infer<typeof ConnectorCapabilities>;
 
-export const PromptTransport = z.enum(['append-argv']);
+export const PromptTransport = z.enum(['prompt-file']);
 export type PromptTransport = z.infer<typeof PromptTransport>;
 
 export const ConnectorOutputExtraction = z
   .object({
-    kind: z.literal('json-field'),
-    field: z.string().min(1),
+    kind: z.literal('output-file'),
   })
   .strict();
 export type ConnectorOutputExtraction = z.infer<typeof ConnectorOutputExtraction>;

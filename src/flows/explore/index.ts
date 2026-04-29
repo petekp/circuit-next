@@ -1,11 +1,23 @@
 // Explore flow package — also the conservative default for routing.
 
 import type { CompiledFlowPackage } from '../types.js';
-import { exploreComposeShapeHint, exploreReviewVerdictShapeHint } from './relay-hints.js';
-import { ExploreCompose, ExploreReviewVerdict } from './reports.js';
+import {
+  exploreComposeShapeHint,
+  exploreReviewVerdictShapeHint,
+  exploreTournamentProposalShapeHint,
+  exploreTournamentReviewShapeHint,
+} from './relay-hints.js';
+import {
+  ExploreCompose,
+  ExploreReviewVerdict,
+  ExploreTournamentProposal,
+  ExploreTournamentReview,
+} from './reports.js';
 import { exploreAnalysisComposeBuilder } from './writers/analysis.js';
 import { exploreBriefComposeBuilder } from './writers/brief.js';
 import { exploreCloseBuilder } from './writers/close.js';
+import { exploreDecisionOptionsComposeBuilder } from './writers/decision-options.js';
+import { exploreDecisionComposeBuilder } from './writers/decision.js';
 
 export const exploreCompiledFlowPackage: CompiledFlowPackage = {
   id: 'explore',
@@ -34,9 +46,24 @@ export const exploreCompiledFlowPackage: CompiledFlowPackage = {
       schema: ExploreReviewVerdict,
       relayHint: exploreReviewVerdictShapeHint.instruction,
     },
+    {
+      schemaName: 'explore.tournament-proposal@v1',
+      schema: ExploreTournamentProposal,
+      relayHint: exploreTournamentProposalShapeHint.instruction,
+    },
+    {
+      schemaName: 'explore.tournament-review@v1',
+      schema: ExploreTournamentReview,
+      relayHint: exploreTournamentReviewShapeHint.instruction,
+    },
   ],
   writers: {
-    compose: [exploreBriefComposeBuilder, exploreAnalysisComposeBuilder],
+    compose: [
+      exploreBriefComposeBuilder,
+      exploreAnalysisComposeBuilder,
+      exploreDecisionOptionsComposeBuilder,
+      exploreDecisionComposeBuilder,
+    ],
     close: [exploreCloseBuilder],
     verification: [],
     checkpoint: [],

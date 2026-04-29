@@ -2,13 +2,13 @@
   "schema_version": "2",
   "id": "explore",
   "version": "0.1.0",
-  "purpose": "Explore flow: frame the investigation, analyze the subject, relay findings composition to a worker, relay review to a separate worker, and close with findings plus evidence. The schematic uses the Frame, Analyze, Act, Review, and Close stages; Plan and Verify are intentionally omitted because Explore produces an investigation report rather than an executable change.",
+  "purpose": "Explore flow: frame the investigation, analyze the subject, either synthesize and review findings or run a decision tournament, then close with findings plus evidence. The default path uses Frame, Analyze, Act, Review, and Close. Tournament mode uses Frame, Analyze, Plan, and Close, with stress review embedded inside the Decision/Plan stage rather than a separate canonical Review stage.",
   "entry": {
     "signals": {
       "include": ["explore", "investigate", "research", "understand"],
       "exclude": []
     },
-    "intent_prefixes": ["explore", "investigate"]
+    "intent_prefixes": ["explore", "investigate", "decide"]
   },
   "entry_modes": [
     {
@@ -52,8 +52,8 @@
   ],
   "stage_path_policy": {
     "mode": "partial",
-    "omits": ["plan", "verify"],
-    "rationale": "Explore is an investigation flow — plan-mode is folded into Frame (investigation scoping); verify is omitted because explore output is not executable and does not admit mechanical verification. Review is the adversarial pass that IS in scope, and is a distinct-connector review relay. See src/flows/explore/contract.md §Canonical stage set for the full rationale."
+    "omits": ["verify", "plan"],
+    "rationale": "Explore is an investigation and decision flow. Default mode auto-omits Plan because it synthesizes findings through Act and Review. Tournament mode auto-omits Act and Review because option stress review is embedded inside the canonical Plan/Decision stage. Verify is omitted because Explore output is not executable and does not admit mechanical verification. See src/flows/explore/contract.md §Canonical stage set for the full rationale. mode 'default' (depth 'standard') also omits 'plan' because route_overrides leave those canonicals with no reachable items."
   },
   "steps": [
     {

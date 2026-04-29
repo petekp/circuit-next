@@ -44,6 +44,13 @@ describe('operator summary writer', () => {
       scope: 'review current changes',
       findings: [],
       verdict: 'CLEAN',
+      evidence_summary: {
+        kind: 'git-working-tree',
+        untracked_content_policy: 'include-content',
+        untracked_file_count: 1,
+        untracked_files_sampled: 1,
+        untracked_files_truncated: false,
+      },
       evidence_warnings: [
         {
           kind: 'diff_truncated',
@@ -66,6 +73,9 @@ describe('operator summary writer', () => {
     expect(existsSync(written.markdownPath)).toBe(true);
     const summary = OperatorSummary.parse(JSON.parse(readFileSync(written.jsonPath, 'utf8')));
     expect(summary.headline).toBe('Circuit finished Review. Verdict: CLEAN. Findings: 0.');
+    expect(summary.details).toContain(
+      'Untracked evidence: contents included for 1 file (1 untracked file found).',
+    );
     expect(summary.evidence_warnings).toContainEqual(
       expect.objectContaining({ kind: 'diff_truncated' }),
     );
@@ -75,6 +85,7 @@ describe('operator summary writer', () => {
     ]);
     const markdown = readFileSync(written.markdownPath, 'utf8');
     expect(markdown).toContain('Circuit finished Review. Verdict: CLEAN. Findings: 0.');
+    expect(markdown).toContain('Untracked evidence: contents included for 1 file');
     expect(markdown).toContain('diff_truncated');
     expect(markdown).not.toContain('v0.1.0 closed');
   });
@@ -100,6 +111,26 @@ describe('operator summary writer', () => {
         },
         expected:
           'Circuit finished Build. The change was implemented, verification passed, and review accepted it.',
+      },
+      {
+        flow: 'build',
+        label: 'Build',
+        relPath: 'reports/build-result.json',
+        body: {
+          summary: 'Build result for feature: implemented change with follow-ups',
+          outcome: 'needs_attention',
+          verification_status: 'passed',
+          review_verdict: 'accept-with-fixes',
+          evidence_links: [
+            {
+              report_id: 'build.review',
+              path: 'reports/build/review.json',
+              schema: 'build.review@v1',
+            },
+          ],
+        },
+        expected:
+          'Circuit finished Build. Verification passed, but review requested follow-up fixes.',
       },
       {
         flow: 'fix',
@@ -179,6 +210,84 @@ describe('operator summary writer', () => {
       'Circuit finished Explore. Review: accept-with-fold-ins. Explore integration: keep hardening host rendering',
     );
     expect(readFileSync(written.markdownPath, 'utf8')).toContain('accept-with-fold-ins');
+  });
+
+  it('summarizes Explore tournament decisions with selected option, rationale, risks, and next action', () => {
+    writeReport('reports/decision.json', {
+      verdict: 'decided',
+      decision_question: 'Which frontend framework should the project use?',
+      selected_option_id: 'option-2',
+      selected_option_label: 'Vue',
+      decision: 'Choose Vue for a smaller surface and faster product iteration.',
+      rationale: 'Vue gives this team the fastest path to a polished prototype.',
+      rejected_options: [{ option_id: 'option-1', reason: 'React was safer but slower here.' }],
+      evidence_links: [
+        'reports/decision-options.json',
+        'reports/tournament-aggregate.json',
+        'reports/tournament-review.json',
+        'reports/checkpoints/tradeoff-response.json',
+      ],
+      assumptions: ['The team is comfortable learning Vue quickly.'],
+      residual_risks: ['Hiring familiarity may be thinner.'],
+      next_action: 'Run a Build plan for a Vue prototype.',
+      follow_up_workflow: 'Build',
+    });
+    writeReport('reports/explore-result.json', {
+      summary: "Explore 'decide: React vs Vue': Choose Vue for a smaller surface.",
+      verdict_snapshot: {
+        decision_verdict: 'decided',
+        tournament_review_verdict: 'recommend',
+        selected_option_id: 'option-2',
+        objection_count: 1,
+        missing_evidence_count: 1,
+      },
+      evidence_links: [
+        { report_id: 'explore.brief', path: 'reports/brief.json', schema: 'explore.brief@v1' },
+        {
+          report_id: 'explore.analysis',
+          path: 'reports/analysis.json',
+          schema: 'explore.analysis@v1',
+        },
+        {
+          report_id: 'explore.decision-options',
+          path: 'reports/decision-options.json',
+          schema: 'explore.decision-options@v1',
+        },
+        {
+          report_id: 'explore.tournament-aggregate',
+          path: 'reports/tournament-aggregate.json',
+          schema: 'explore.tournament-aggregate@v1',
+        },
+        {
+          report_id: 'explore.tournament-review',
+          path: 'reports/tournament-review.json',
+          schema: 'explore.tournament-review@v1',
+        },
+        {
+          report_id: 'explore.decision',
+          path: 'reports/decision.json',
+          schema: 'explore.decision@v1',
+        },
+      ],
+    });
+
+    const written = writeOperatorSummary({
+      runFolder,
+      runResult: baseResult('explore'),
+      route: { selectedFlow: 'explore' },
+    });
+
+    expect(written.summary.headline).toBe(
+      'Circuit finished Explore decision. Selected: Vue. Choose Vue for a smaller surface and faster product iteration.',
+    );
+    expect(written.summary.details).toContain(
+      'Decision question: Which frontend framework should the project use?',
+    );
+    expect(written.summary.details).toContain(
+      'Rationale: Vue gives this team the fastest path to a polished prototype.',
+    );
+    expect(written.summary.details).toContain('Residual risks: Hiring familiarity may be thinner.');
+    expect(written.summary.details).toContain('Next action: Run a Build plan for a Vue prototype.');
   });
 
   it('includes abort reasons in aborted summaries', () => {

@@ -1,0 +1,104 @@
+schema_version: 1
+exceptions:
+  - id: EX-REL-002-CODEX-ISOLATED
+    capability_id: connector:codex-isolated
+    status: release_blocker
+    readiness_ref: REL-002
+    rationale: codex-isolated is declared in schemas but relay selection throws because the connector is not implemented.
+    public_wording: Isolated Codex worker support is not current until implemented and tested.
+  - id: EX-REL-003-RICH-ROUTES
+    capability_id: route-outcomes:rich
+    status: release_blocker
+    readiness_ref: REL-003
+    rationale: retry, revise, stop, ask, handoff, and escalate routes may exist in schematics but are not emitted as executable runtime routes.
+    public_wording: Recovery routes are a tracked parity blocker until they execute or fail generation explicitly.
+  - id: EX-REL-004-MODE-MATRIX
+    capability_id: matrix:flow-mode-parity
+    status: release_blocker
+    readiness_ref: REL-004
+    rationale: Current generated modes do not yet prove the full original behavioral matrix for every flow and mode.
+    public_wording: Flow and mode support must be read from the generated parity matrix.
+  - id: EX-REL-004-EXPLORE-BEHAVIORAL-AXES
+    capability_id: flow:explore
+    status: release_blocker
+    readiness_ref: REL-004
+    rationale: Explore exists as a current flow, but its original modes, decision/tournament behavior, outputs, checkpoint policy, worker handoff, continuity, and proof are not yet behaviorally proven.
+    public_wording: Explore parity is tracked until the generated matrix proves its modes and behavior, not just flow registration.
+  - id: EX-REL-004-BUILD-BEHAVIORAL-AXES
+    capability_id: flow:build
+    status: release_blocker
+    readiness_ref: REL-004
+    rationale: Build exists as a current flow, but its original artifacts, checkpoint policy, review/verification behavior, worker handoff, continuity, and proof are not yet behaviorally proven by the parity matrix.
+    public_wording: Build parity requires proof of the full handoff, verification, review, continuity, and summary behavior.
+  - id: EX-REL-004-MIGRATE-BEHAVIORAL-AXES
+    capability_id: flow:migrate
+    status: release_blocker
+    readiness_ref: REL-004
+    rationale: Migrate exists as a current flow, but its original phase shape, mode set, migration artifacts, checkpoint policy, review/verification behavior, continuity, and proof are not yet behaviorally proven.
+    public_wording: Migrate parity is tracked until its migration-specific behavior is proven.
+  - id: EX-REL-004-SWEEP-BEHAVIORAL-AXES
+    capability_id: flow:sweep
+    status: release_blocker
+    readiness_ref: REL-004
+    rationale: Sweep exists as a current flow, but its original cleanup/overnight routing, queue/deferred artifacts, checkpoint policy, verification/review behavior, continuity, and proof are not yet behaviorally proven.
+    public_wording: Sweep parity is tracked until cleanup and overnight behavior are proven.
+  - id: EX-REL-004-REVIEW-BEHAVIORAL-AXES
+    capability_id: utility:review
+    status: release_blocker
+    readiness_ref: REL-004
+    rationale: Review exists as a current command, but the parity matrix must still prove its standalone output contract, fresh-context review behavior, and golden run.
+    public_wording: Review parity requires proof of the standalone review receipt and evidence policy.
+  - id: EX-REL-004-FIX-BEHAVIORAL-AXES
+    capability_id: flow:fix
+    status: release_blocker
+    readiness_ref: REL-004
+    rationale: Fix exists as a current flow, but its bug/regression phase shape, outputs, checkpoint policy, verification/review behavior, continuity, and proof are not yet behaviorally proven by the parity matrix.
+    public_wording: Fix parity requires proof of the full bug-fix, verification, review, continuity, and summary behavior.
+  - id: EX-REL-004-FIX-INTENT-MODE
+    capability_id: router:intent:fix
+    status: approved_exception
+    readiness_ref: REL-004
+    rationale: Original Circuit treated bare "fix:" as Lite. circuit-next intentionally keeps bare "fix:" at normal routing depth and reserves Lite for explicit quick/small/tiny/simple Fix language so serious bug fixes do not skip review.
+    public_wording: Bare "fix:" selects the Fix flow; Lite requires an explicit quick/small/tiny/simple hint or an explicit mode flag.
+  - id: EX-REL-004-CHECKPOINT-BEHAVIORAL-AXES
+    capability_id: feature:checkpoints
+    status: release_blocker
+    readiness_ref: REL-004
+    rationale: Checkpoint runtime paths exist, but original checkpoint policy and proof coverage across scope, tradeoff, coexistence, and publish choices are not yet proven.
+    public_wording: Checkpoint parity is tracked until policy and resume proof runs are captured.
+  - id: EX-REL-007-WRITE-CAPABLE-DISCLOSURE
+    capability_id: safety:write-capable-worker
+    status: release_blocker
+    readiness_ref: REL-007
+    rationale: First write-capable runs do not yet disclose Claude Code bypass-permission worker behavior clearly enough.
+    public_wording: Write-capable worker behavior must be disclosed before first use.
+  - id: EX-REL-011-GOLDEN-RUNS
+    capability_id: proof:golden-runs
+    status: release_blocker
+    readiness_ref: REL-011
+    rationale: Representative public release runs are not yet captured across the parity surface.
+    public_wording: Golden examples are required before public release claims are final.
+  - id: EX-REL-013-CREATE-PARITY
+    capability_id: utility:create
+    status: release_blocker
+    readiness_ref: REL-013
+    rationale: "Original /circuit:create custom-circuit creation is part of parity but no current command surface is present."
+    public_wording: Custom workflow creation is a tracked parity blocker.
+  - id: EX-REL-014-HANDOFF-PARITY
+    capability_id: utility:handoff
+    status: release_blocker
+    readiness_ref: REL-014
+    rationale: "Original /circuit:handoff continuity utility is part of parity but no current command surface is present."
+    public_wording: Handoff continuity support must be proven before it is claimed as current.
+  - id: EX-REL-014-CONTINUITY-PARITY
+    capability_id: feature:continuity
+    status: release_blocker
+    readiness_ref: REL-014
+    rationale: Current run records and checkpoint resume are present, but original explicit handoff continuity parity is not yet proven.
+    public_wording: Continuity is tracked as partial until Handoff parity and proof runs are complete.
+  - id: EX-REL-016-PLAN-EXECUTION
+    capability_id: feature:plan-execution
+    status: release_blocker
+    readiness_ref: REL-016
+    rationale: Plan-execution requests can still end as Explore synthesis instead of starting the right work slice, asking a checkpoint, or giving one exact command.
+    public_wording: Broad plan execution is a tracked operator-experience blocker.

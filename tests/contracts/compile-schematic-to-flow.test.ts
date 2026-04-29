@@ -28,11 +28,6 @@ describe('compileSchematicToCompiledFlow — byte-equivalence with committed com
       committedPath: 'generated/flows/build/circuit.json',
     },
     {
-      label: 'explore',
-      schematicPath: 'src/flows/explore/schematic.json',
-      committedPath: 'generated/flows/explore/circuit.json',
-    },
-    {
       label: 'review',
       schematicPath: 'src/flows/review/schematic.json',
       committedPath: 'generated/flows/review/circuit.json',
@@ -52,6 +47,19 @@ describe('compileSchematicToCompiledFlow — byte-equivalence with committed com
       expect(compiled.flow).toEqual(committed);
     });
   }
+
+  it('compiles explore schematic to default and tournament fixtures', () => {
+    const schematic = loadSchematic('src/flows/explore/schematic.json');
+    const compiled = compileSchematicToCompiledFlow(schematic);
+    expect(compiled.kind).toBe('per-mode');
+    if (compiled.kind !== 'per-mode') return;
+    expect(compiled.flows.get('default')).toEqual(
+      loadCompiledFlow('generated/flows/explore/circuit.json'),
+    );
+    expect(compiled.flows.get('tournament')).toEqual(
+      loadCompiledFlow('generated/flows/explore/tournament.json'),
+    );
+  });
 });
 
 describe('compileSchematicToCompiledFlow — failure modes', () => {

@@ -1,0 +1,221 @@
+schema_version: 1
+sources:
+  - id: legacy-readme
+    path: /Users/petepetrash/Code/circuit/README.md
+    note: Lists the public product promise, core workflows, utilities, commands, and rigor profiles.
+  - id: legacy-circuits
+    path: /Users/petepetrash/Code/circuit/CIRCUITS.md
+    note: Lists workflow phase shapes, artifacts, entry modes, and behavior tables.
+  - id: legacy-run-command
+    path: /Users/petepetrash/Code/circuit/commands/run.md
+    note: Defines router intent prefixes and the action-first bootstrap contract.
+  - id: legacy-custom
+    path: /Users/petepetrash/Code/circuit/CUSTOM-CIRCUITS.md
+    note: Documents create/publish and hand-authored custom circuit paths.
+capabilities:
+  - id: flow:explore
+    kind: flow
+    title: Explore
+    summary: Investigate, decide among options, and shape execution plans.
+    axes:
+      invocation: "/circuit:explore and /circuit:run decide:"
+      intent_hints: ["decide:"]
+      modes: [lite, default, deep, tournament, autonomous]
+      stage_path: [Frame, Analyze, Plan or Decision, Close]
+      outputs: [brief.md, analysis.md, plan.md, decision.md, result.md]
+      checkpoint: One tradeoff checkpoint for tournament decisions; autonomous carries ambiguity forward.
+      review: Embedded critique/stress testing in tournament and decision modes.
+      verification: Seam proof in deep mode when a plan has a risky assumption.
+      worker_handoff: Evidence probes and tournament proposal/review rounds.
+      continuity: Produces plan/decision output that can transfer to doing work.
+      proof: Golden decision or tournament run.
+    source_refs: [legacy-readme, legacy-circuits, legacy-run-command]
+  - id: flow:build
+    kind: flow
+    title: Build
+    summary: Build features, scoped refactors, docs, tests, and mixed changes.
+    axes:
+      invocation: "/circuit:build and /circuit:run develop:"
+      intent_hints: ["develop:"]
+      modes: [lite, default, deep, autonomous]
+      stage_path: [Frame, Plan, Act, Verify, Review, Close]
+      outputs: [brief.md, plan.md, review.md, result.md]
+      checkpoint: Scope and high-risk choices pause unless autonomous policy can resolve safely.
+      review: Independent fresh-context review for standard and above; original docs record Build Lite review behavior as a known drift point.
+      verification: Verification commands rerun and recorded before close.
+      worker_handoff: Implementation worker plus independent reviewer.
+      continuity: Active run state survives session boundary.
+      proof: Routed and explicit Build golden runs.
+    source_refs: [legacy-readme, legacy-circuits, legacy-run-command]
+  - id: flow:fix
+    kind: flow
+    title: Fix
+    summary: Fix bugs, regressions, flaky behavior, and incidents with regression discipline.
+    axes:
+      invocation: "/circuit:fix and /circuit:run fix:"
+      intent_hints: ["fix:"]
+      modes: [lite, default, deep, autonomous]
+      stage_path: [Frame, Analyze, Fix, Verify, Review, Close]
+      outputs: [brief.md, analysis.md, review.md, result.md]
+      checkpoint: Escalates after bounded no-repro or root-cause search.
+      review: Lite skips independent review; standard and above run it.
+      verification: Regression test or diagnostic proof is required where reproducible.
+      worker_handoff: Diagnosis and fix may use worker sessions by mode.
+      continuity: Active run and handoff support.
+      proof: Fix golden run with regression evidence.
+    source_refs: [legacy-readme, legacy-circuits, legacy-run-command]
+  - id: flow:migrate
+    kind: flow
+    title: Migrate
+    summary: Manage framework swaps, dependency replacements, and architecture transitions.
+    axes:
+      invocation: "/circuit:migrate and /circuit:run migrate:"
+      intent_hints: ["migrate:"]
+      modes: [default, deep, autonomous]
+      stage_path: [Frame, Inventory, Coexistence Plan, Batch Execution, Verify, Cutover Review, Close]
+      outputs: [brief.md, inventory.md, plan.md, review.md, result.md]
+      checkpoint: Coexistence plan checkpoint is first-class.
+      review: Cutover review checks migration safety.
+      verification: Each batch is independently verifiable.
+      worker_handoff: Batch execution can use Build as inner executor.
+      continuity: Migration plan and active run continue across sessions.
+      proof: Migration plan and batch proof run.
+    source_refs: [legacy-readme, legacy-circuits, legacy-run-command]
+  - id: flow:sweep
+    kind: flow
+    title: Sweep
+    summary: Run cleanup, quality, coverage, and docs-sync passes by confidence and risk.
+    axes:
+      invocation: "/circuit:sweep and /circuit:run cleanup: or overnight:"
+      intent_hints: ["cleanup:", "overnight:"]
+      modes: [lite, default, deep, autonomous]
+      stage_path: [Frame, Survey, Queue/Triage, Batch Execute, Verify, Deferred Review, Close]
+      outputs: [brief.md, analysis.md, queue.md, review.md, deferred.md, result.md]
+      checkpoint: Deep confirms each batch; autonomous stops after bounded batch budget.
+      review: Sweep writes review/deferred output during verification.
+      verification: Verifies after each batch and defers ambiguous work.
+      worker_handoff: Survey and batch execution can use workers.
+      continuity: Active run and deferred work survive interruption.
+      proof: Sweep golden run covering queue/deferred output.
+    source_refs: [legacy-readme, legacy-circuits, legacy-run-command]
+  - id: utility:review
+    kind: utility
+    title: Review
+    summary: Standalone fresh-context code review.
+    axes:
+      invocation: "/circuit:review"
+      outputs: [review.md]
+      review: Independent reviewer starts fresh and reports findings by severity.
+      proof: Standalone Review golden run.
+    source_refs: [legacy-readme, legacy-circuits]
+  - id: utility:create
+    kind: customization
+    title: Create
+    summary: Draft, validate, and publish user-global custom circuits.
+    axes:
+      invocation: "/circuit:create"
+      outputs: [SKILL.md, circuit.yaml, publish summary]
+      checkpoint: Waits for publish confirmation before promotion.
+      verification: Validates the draft through engine bootstrap.
+      continuity: Publishes into user-global custom circuit root after confirmation.
+      proof: Create or custom-connector proof scenario.
+    source_refs: [legacy-readme, legacy-circuits, legacy-custom]
+  - id: utility:handoff
+    kind: continuity
+    title: Handoff
+    summary: Save, resume, or clear cross-session continuity.
+    axes:
+      invocation: "/circuit:handoff save, resume, done"
+      outputs: [active-run.md, continuity record]
+      continuity: Fresh sessions can resume only through explicit handoff.
+      proof: Handoff/resume golden run.
+    source_refs: [legacy-readme, legacy-circuits]
+  - id: router:intent:fix
+    kind: router_intent
+    title: "fix: intent"
+    summary: Routes a quick bug-fix request to Fix Lite.
+    axes:
+      invocation: "/circuit:run fix: <bug>"
+      intent_hints: ["fix:"]
+      modes: [lite]
+    source_refs: [legacy-run-command]
+  - id: router:intent:develop
+    kind: router_intent
+    title: "develop: intent"
+    summary: Routes implementation work to Build Standard.
+    axes:
+      invocation: "/circuit:run develop: <feature>"
+      intent_hints: ["develop:"]
+      modes: [default]
+    source_refs: [legacy-run-command]
+  - id: router:intent:decide
+    kind: router_intent
+    title: "decide: intent"
+    summary: Routes consequential choices to Explore Tournament.
+    axes:
+      invocation: "/circuit:run decide: <choice>"
+      intent_hints: ["decide:"]
+      modes: [tournament]
+    source_refs: [legacy-run-command]
+  - id: router:intent:migrate
+    kind: router_intent
+    title: "migrate: intent"
+    summary: Routes migration work to Migrate Deep.
+    axes:
+      invocation: "/circuit:run migrate: <target>"
+      intent_hints: ["migrate:"]
+      modes: [deep]
+    source_refs: [legacy-run-command]
+  - id: router:intent:cleanup
+    kind: router_intent
+    title: "cleanup: intent"
+    summary: Routes cleanup work to Sweep Standard.
+    axes:
+      invocation: "/circuit:run cleanup: <target>"
+      intent_hints: ["cleanup:"]
+      modes: [default]
+    source_refs: [legacy-run-command]
+  - id: router:intent:overnight
+    kind: router_intent
+    title: "overnight: intent"
+    summary: Routes unattended quality work to Sweep Autonomous.
+    axes:
+      invocation: "/circuit:run overnight: <scope>"
+      intent_hints: ["overnight:"]
+      modes: [autonomous]
+    source_refs: [legacy-run-command]
+  - id: connector:custom
+    kind: connector
+    title: Custom connectors
+    summary: Users can define wrapper executables for custom worker backends.
+    axes:
+      invocation: User config adapter command.
+      worker_handoff: Wrapper receives a prompt and returns structured output.
+      proof: Working custom connector example.
+    source_refs: [legacy-readme, legacy-custom]
+  - id: feature:checkpoints
+    kind: checkpoint
+    title: Checkpoints
+    summary: Circuit pauses when judgment is needed and otherwise proceeds.
+    axes:
+      checkpoint: Scope, tradeoff, coexistence, and publish choices pause by policy.
+      proof: Checkpoint/resume golden run.
+    source_refs: [legacy-readme, legacy-circuits]
+  - id: feature:continuity
+    kind: continuity
+    title: Continuity
+    summary: Active run state and explicit handoff preserve progress across sessions.
+    axes:
+      outputs: [active-run.md, continuity record]
+      continuity: Resume is explicit and auditable.
+      proof: Handoff/resume golden run.
+    source_refs: [legacy-readme, legacy-circuits]
+  - id: feature:plan-execution
+    kind: plan_execution
+    title: Plan execution
+    summary: A planning run should transfer into work, ask the blocking question, or leave one exact next action.
+    axes:
+      invocation: "/circuit:run Execute this plan:<path>"
+      worker_handoff: Selects the first executable workflow slice from plan content.
+      proof: Plan-execution campaign-start proof.
+    source_refs: [legacy-circuits, legacy-run-command]

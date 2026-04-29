@@ -54,14 +54,13 @@ schematics into hidden control-flow puzzles.
 
 ## First Proving Schematic
 
-The old Repair flow name is ambiguous. The clearer v1 product shape is
-Fix:
+The older bug-fix flow name is ambiguous. The clearer v1 product shape is Fix:
 
 > Take a concrete problem, understand it, make the smallest safe change,
 > prove the change, and close with evidence.
 
-Old Repair evidence should inform Fix. It should not force Circuit to ship
-a flow named Repair if Fix is clearer to users.
+Older bug-fix evidence should inform Fix. It should not force Circuit to ship
+two names for the same kind of work.
 
 Fix should prove the reusable schematic path:
 
@@ -96,10 +95,10 @@ know which host asked the question.
 
 ## Immediate Consequence
 
-Do not open more one-off Repair implementation work from the old signed
-plan. Repair-only reports, `/circuit:repair`, and Repair-only runtime code
-stay out of scope unless a later operator decision explicitly reopens
-Repair as a first-class product schematic.
+Do not open more one-off implementation work from the old signed plan for a
+second bug-fix flow name. Separate reports, commands, or runtime code for that
+name stay out of scope unless a later operator decision explicitly reopens the
+public naming model.
 
 The next implementation work should either:
 

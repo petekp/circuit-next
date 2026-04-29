@@ -351,6 +351,18 @@ describe('Fix report schemas', () => {
     ).toBe(false);
     expect(
       FixResult.safeParse({
+        summary: 'Follow-up fixes required',
+        outcome: 'fixed',
+        verification_status: 'passed',
+        regression_status: 'proved',
+        review_status: 'completed',
+        review_verdict: 'accept-with-fixes',
+        residual_risks: [],
+        evidence_links: resultPointers(),
+      }).success,
+    ).toBe(false);
+    expect(
+      FixResult.safeParse({
         summary: 'No reproduction seen',
         outcome: 'not-reproduced',
         verification_status: 'not-run',
