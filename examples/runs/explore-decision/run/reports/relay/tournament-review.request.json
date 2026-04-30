@@ -1,0 +1,186 @@
+Step: stress-proposals-step
+Title: Decision — stress proposals
+Role: reviewer
+Accepted verdicts: recommend, no-clear-winner, needs-operator
+
+Context (from reads):
+--- reports/brief.json ---
+{
+  "subject": "decide: React vs Vue",
+  "task": "decide: React vs Vue",
+  "success_condition": "Produce a useful explore result for: decide: React vs Vue"
+}
+
+
+--- reports/decision-options.json ---
+{
+  "decision_question": "Which path should Circuit recommend for: decide: React vs Vue?",
+  "options": [
+    {
+      "id": "option-1",
+      "label": "React",
+      "summary": "Choose React as the best-supported path for decide: React vs Vue.",
+      "best_case_prompt": "Make the strongest case for choosing React on decide: React vs Vue.",
+      "evidence_refs": [
+        "reports/brief.json"
+      ],
+      "tradeoffs": [
+        "Can move the decision forward now",
+        "May miss strengths from another option"
+      ]
+    },
+    {
+      "id": "option-2",
+      "label": "Vue",
+      "summary": "Choose Vue as the best-supported path for decide: React vs Vue.",
+      "best_case_prompt": "Make the strongest case for choosing Vue on decide: React vs Vue.",
+      "evidence_refs": [
+        "reports/brief.json"
+      ],
+      "tradeoffs": [
+        "Can move the decision forward now",
+        "May miss strengths from another option"
+      ]
+    },
+    {
+      "id": "option-3",
+      "label": "Hybrid path",
+      "summary": "Combine the strongest parts of the named options for decide: React vs Vue before locking the choice.",
+      "best_case_prompt": "Make the strongest case for a hybrid path on decide: React vs Vue.",
+      "evidence_refs": [
+        "reports/brief.json"
+      ],
+      "tradeoffs": [
+        "Can move the decision forward now",
+        "May blur ownership of the final direction"
+      ]
+    },
+    {
+      "id": "option-4",
+      "label": "Defer pending evidence",
+      "summary": "Pause the final choice for decide: React vs Vue until the missing evidence is gathered.",
+      "best_case_prompt": "Make the strongest case for deferring decide: React vs Vue until the missing evidence is gathered.",
+      "evidence_refs": [
+        "reports/brief.json"
+      ],
+      "tradeoffs": [
+        "Reduces decision risk",
+        "May miss strengths from another option"
+      ]
+    }
+  ],
+  "recommendation_basis": "Compare the named options and bounded fallback choices against the available evidence."
+}
+
+
+--- reports/tournament-aggregate.json ---
+{
+  "schema_version": 1,
+  "join_policy": "aggregate-only",
+  "branch_count": 4,
+  "branches": [
+    {
+      "branch_id": "option-1",
+      "child_run_id": "c5238214-8211-41ff-9c1b-628eee0d8cd7",
+      "child_outcome": "complete",
+      "verdict": "accept",
+      "admitted": true,
+      "result_path": "reports/tournament-branches/option-1/report.json",
+      "duration_ms": 4,
+      "result_body": {
+        "verdict": "accept",
+        "option_id": "option-1",
+        "option_label": "React",
+        "case_summary": "Choose React for the broad ecosystem and hiring pool.",
+        "assumptions": [
+          "The operator values ecosystem maturity."
+        ],
+        "evidence_refs": [
+          "reports/decision-options.json"
+        ],
+        "risks": [
+          "The larger ecosystem may add dependency sprawl."
+        ],
+        "next_action": "Run a Build plan for a React prototype."
+      }
+    },
+    {
+      "branch_id": "option-2",
+      "child_run_id": "61addd9c-acc9-4960-905b-c1080f50b549",
+      "child_outcome": "complete",
+      "verdict": "accept",
+      "admitted": true,
+      "result_path": "reports/tournament-branches/option-2/report.json",
+      "duration_ms": 7,
+      "result_body": {
+        "verdict": "accept",
+        "option_id": "option-2",
+        "option_label": "Vue",
+        "case_summary": "Choose Vue for a smaller surface and faster product iteration.",
+        "assumptions": [
+          "The operator values implementation speed."
+        ],
+        "evidence_refs": [
+          "reports/decision-options.json"
+        ],
+        "risks": [
+          "Team familiarity may be thinner."
+        ],
+        "next_action": "Run a Build plan for a Vue prototype."
+      }
+    },
+    {
+      "branch_id": "option-3",
+      "child_run_id": "0e6caebd-9365-4db7-b26c-38ea6bdd54c6",
+      "child_outcome": "complete",
+      "verdict": "accept",
+      "admitted": true,
+      "result_path": "reports/tournament-branches/option-3/report.json",
+      "duration_ms": 4,
+      "result_body": {
+        "verdict": "accept",
+        "option_id": "option-3",
+        "option_label": "Hybrid path",
+        "case_summary": "Prototype the shared requirements before locking the framework.",
+        "assumptions": [
+          "A brief comparison prototype is affordable."
+        ],
+        "evidence_refs": [
+          "reports/decision-options.json"
+        ],
+        "risks": [
+          "The decision takes longer."
+        ],
+        "next_action": "Run a short Explore follow-up with prototype criteria."
+      }
+    },
+    {
+      "branch_id": "option-4",
+      "child_run_id": "05e4635e-afd2-4e50-bd88-d4f4b02de4ca",
+      "child_outcome": "complete",
+      "verdict": "accept",
+      "admitted": true,
+      "result_path": "reports/tournament-branches/option-4/report.json",
+      "duration_ms": 6,
+      "result_body": {
+        "verdict": "accept",
+        "option_id": "option-4",
+        "option_label": "Defer pending evidence",
+        "case_summary": "Gather missing team and product constraints before choosing.",
+        "assumptions": [
+          "The decision is reversible enough to pause briefly."
+        ],
+        "evidence_refs": [
+          "reports/decision-options.json"
+        ],
+        "risks": [
+          "The project loses momentum."
+        ],
+        "next_action": "Collect the missing constraints and rerun the decision."
+      }
+    }
+  ]
+}
+
+
+Respond with a single raw JSON object whose top-level shape is exactly: { "verdict": "<recommend|no-clear-winner|needs-operator>", "recommended_option_id": "<option-1-through-option-4>", "comparison": "<comparative assessment>", "objections": ["<objection>"], "missing_evidence": ["<missing evidence>"], "tradeoff_question": "<specific choice the operator must make>", "confidence": "<low|medium|high>" } Use the proposal aggregate and source reports. Treat this as the stress review inside the Decision stage, not as a separate canonical Review stage. Do not include extra top-level keys. Do not wrap the JSON in Markdown code fences. The runtime parses your response with JSON.parse and validates the full report body against explore.tournament-review@v1 before writing reports/tournament-review.json.

@@ -29,7 +29,7 @@
       "id": "analyze-stage",
       "title": "Analyze",
       "canonical": "analyze",
-      "steps": ["fix-gather-context", "fix-diagnose"]
+      "steps": ["fix-gather-context", "fix-diagnose", "fix-no-repro-decision"]
     },
     {
       "id": "act-stage",
@@ -47,7 +47,7 @@
       "id": "close-stage",
       "title": "Close",
       "canonical": "close",
-      "steps": ["fix-close-lite"]
+      "steps": ["fix-close-lite", "fix-handoff"]
     }
   ],
   "stage_path_policy": {
@@ -62,7 +62,11 @@
       "protocol": "fix-frame@v1",
       "reads": [],
       "routes": {
-        "pass": "fix-gather-context"
+        "continue": "fix-gather-context",
+        "pass": "fix-gather-context",
+        "revise": "fix-frame",
+        "ask": "@stop",
+        "stop": "@stop"
       },
       "executor": "orchestrator",
       "kind": "compose",
@@ -87,7 +91,11 @@
       "protocol": "fix-gather-context@v1",
       "reads": ["reports/fix/brief.json"],
       "routes": {
-        "pass": "fix-diagnose"
+        "continue": "fix-diagnose",
+        "pass": "fix-diagnose",
+        "retry": "fix-gather-context",
+        "ask": "@stop",
+        "stop": "@stop"
       },
       "executor": "worker",
       "kind": "relay",
@@ -116,7 +124,11 @@
       "protocol": "fix-diagnose@v1",
       "reads": ["reports/fix/brief.json", "reports/fix/context.json"],
       "routes": {
-        "pass": "fix-act"
+        "continue": "fix-act",
+        "pass": "fix-act",
+        "retry": "fix-gather-context",
+        "ask": "fix-no-repro-decision",
+        "stop": "@stop"
       },
       "executor": "worker",
       "kind": "relay",
@@ -140,12 +152,56 @@
       }
     },
     {
+      "id": "fix-no-repro-decision",
+      "title": "Analyze — choose path forward when reproduction is uncertain",
+      "protocol": "fix-no-repro-decision@v1",
+      "reads": ["reports/fix/diagnosis.json"],
+      "routes": {
+        "continue": "fix-act",
+        "pass": "fix-act",
+        "revise": "fix-diagnose",
+        "stop": "@stop",
+        "handoff": "fix-handoff",
+        "escalate": "@escalate"
+      },
+      "executor": "orchestrator",
+      "kind": "checkpoint",
+      "policy": {
+        "prompt": "Diagnosis did not cleanly reproduce the bug. Choose how to proceed.",
+        "choices": [
+          {
+            "id": "continue",
+            "label": "Continue with a focused fix anyway"
+          }
+        ],
+        "safe_default_choice": "continue",
+        "safe_autonomous_choice": "continue"
+      },
+      "writes": {
+        "request": "reports/checkpoints/fix-no-repro-decision-request.json",
+        "response": "reports/checkpoints/fix-no-repro-decision-response.json"
+      },
+      "check": {
+        "kind": "checkpoint_selection",
+        "source": {
+          "kind": "checkpoint_response",
+          "ref": "response"
+        },
+        "allow": ["continue"]
+      }
+    },
+    {
       "id": "fix-act",
       "title": "Act — apply focused fix",
       "protocol": "fix-act@v1",
       "reads": ["reports/fix/brief.json", "reports/fix/diagnosis.json"],
       "routes": {
-        "pass": "fix-verify"
+        "continue": "fix-verify",
+        "pass": "fix-verify",
+        "retry": "fix-act",
+        "ask": "fix-no-repro-decision",
+        "stop": "@stop",
+        "handoff": "fix-handoff"
       },
       "executor": "worker",
       "kind": "relay",
@@ -174,7 +230,11 @@
       "protocol": "fix-verify@v1",
       "reads": ["reports/fix/brief.json", "reports/fix/change.json"],
       "routes": {
-        "pass": "fix-close-lite"
+        "continue": "fix-close-lite",
+        "pass": "fix-close-lite",
+        "retry": "fix-act",
+        "ask": "fix-no-repro-decision",
+        "stop": "@stop"
       },
       "executor": "orchestrator",
       "kind": "verification",
@@ -205,7 +265,11 @@
         "reports/fix/verification.json"
       ],
       "routes": {
-        "pass": "@complete"
+        "complete": "@complete",
+        "pass": "@complete",
+        "stop": "@stop",
+        "handoff": "fix-handoff",
+        "escalate": "@escalate"
       },
       "executor": "orchestrator",
       "kind": "compose",
@@ -229,6 +293,33 @@
           "review_status",
           "evidence_links"
         ]
+      }
+    },
+    {
+      "id": "fix-handoff",
+      "title": "Persist Fix handoff",
+      "protocol": "fix-handoff@v1",
+      "reads": ["reports/fix/brief.json"],
+      "routes": {
+        "complete": "@handoff",
+        "pass": "@handoff",
+        "stop": "@stop"
+      },
+      "executor": "orchestrator",
+      "kind": "compose",
+      "writes": {
+        "report": {
+          "path": "reports/fix/handoff.json",
+          "schema": "continuity.record@v1"
+        }
+      },
+      "check": {
+        "kind": "schema_sections",
+        "source": {
+          "kind": "report",
+          "ref": "report"
+        },
+        "required": ["goal", "next_action"]
       }
     }
   ]

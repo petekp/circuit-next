@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "step_id": "frame-step",
+  "prompt": "Confirm the Build brief before implementation starts.",
+  "allowed_choices": [
+    "continue"
+  ],
+  "safe_default_choice": "continue",
+  "safe_autonomous_choice": "continue",
+  "execution_context": {
+    "project_root": "<repo>",
+    "selection_config_layers": [
+      {
+        "layer": "invocation",
+        "config": {
+          "schema_version": 1,
+          "host": {
+            "kind": "generic-shell"
+          },
+          "relay": {
+            "default": "auto",
+            "roles": {},
+            "circuits": {},
+            "connectors": {}
+          },
+          "circuits": {
+            "build": {
+              "selection": {
+                "skills": {
+                  "mode": "inherit"
+                },
+                "depth": "standard",
+                "invocation_options": {}
+              }
+            }
+          },
+          "defaults": {}
+        }
+      }
+    ],
+    "checkpoint_report_sha256": "32ad1138f4a615a4d8e5f9a3196705e846b120ecc34ad1cab9210e63f915f78e"
+  }
+}

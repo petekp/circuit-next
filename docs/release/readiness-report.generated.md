@@ -9,11 +9,11 @@ This report is the current release truth surface. The infra checks may pass whil
 | Measure | Value |
 | --- | --- |
 | Original capabilities | 18 |
-| Current capabilities | 96 |
-| Tracked exceptions | 17 |
+| Current capabilities | 98 |
+| Tracked exceptions | 3 |
 | Public claims | 10 |
 | Proof scenarios | 13 |
-| Release blockers | 35 |
+| Release blockers | 0 |
 | Infra issues | 0 |
 
 ## Infra Issues
@@ -22,83 +22,18 @@ This report is the current release truth surface. The infra checks may pass whil
 
 ## Tracked Warnings
 
-- tracked behavioral gap: flow:explore behavioral axes differ: modes missing lite, deep, autonomous; stage_path extra act, review; outputs missing brief.md, analysis.md, plan.md, decision.md, result.md; extra explore.analysis@v1, explore.brief@v1, explore.compose@v1, explore.decision-options@v1, explore.decision@v1, explore.result@v1, explore.review-verdict@v1, explore.tournament-aggregate@v1, explore.tournament-proposal@v1, explore.tournament-review@v1; checkpoint missing current value; review missing current value; verification missing current value; worker_handoff missing current value; continuity missing current value; proof missing current value
-- tracked behavioral gap: flow:build behavioral axes differ: outputs missing brief.md, plan.md, review.md, result.md; extra build.brief@v1, build.implementation@v1, build.plan@v1, build.result@v1, build.review@v1, build.verification@v1; checkpoint missing current value; review missing current value; verification missing current value; worker_handoff missing current value; continuity missing current value; proof missing current value
-- tracked behavioral gap: flow:fix behavioral axes differ: stage_path missing Fix; extra act; outputs missing brief.md, analysis.md, review.md, result.md; extra fix.brief@v1, fix.change@v1, fix.context@v1, fix.diagnosis@v1, fix.result@v1, fix.review@v1, fix.verification@v1; checkpoint missing current value; review missing current value; verification missing current value; worker_handoff missing current value; continuity missing current value; proof missing current value
-- tracked behavioral gap: flow:migrate behavioral axes differ: modes extra lite; stage_path missing Inventory, Coexistence Plan, Batch Execution, Cutover Review; extra analyze, plan, act, review; outputs missing brief.md, inventory.md, plan.md, review.md, result.md; extra migrate.batch@v1, migrate.brief@v1, migrate.coexistence@v1, migrate.inventory@v1, migrate.result@v1, migrate.review@v1, migrate.verification@v1; checkpoint missing current value; review missing current value; verification missing current value; worker_handoff missing current value; continuity missing current value; proof missing current value
-- tracked behavioral gap: flow:sweep behavioral axes differ: stage_path missing Survey, Queue/Triage, Batch Execute, Deferred Review; extra analyze, plan, act, review; outputs missing brief.md, analysis.md, queue.md, review.md, deferred.md, result.md; extra sweep.analysis@v1, sweep.batch@v1, sweep.brief@v1, sweep.queue@v1, sweep.result@v1, sweep.review@v1, sweep.verification@v1; checkpoint missing current value; review missing current value; verification missing current value; worker_handoff missing current value; continuity missing current value; proof missing current value
-- tracked behavioral gap: utility:review behavioral axes differ: outputs missing review.md; review missing current value; proof missing current value
-- tracked gap: utility:create is missing
-- tracked gap: utility:handoff is missing
 - tracked behavioral gap: router:intent:fix behavioral axes differ: modes missing lite
-- tracked behavioral gap: feature:checkpoints behavioral axes differ: checkpoint missing current value; proof missing current value
-- tracked gap: feature:continuity is partial
-- tracked gap: feature:plan-execution is partial
-- tracked claim: CLAIM-CODEX-ISOLATED is release_blocker
-- tracked claim: CLAIM-RICH-ROUTES is release_blocker
-- tracked claim: CLAIM-PLAN-EXECUTION is release_blocker
-- tracked claim: CLAIM-WRITE-CAPABLE-WORKER is release_blocker
-- tracked claim: CLAIM-GOLDEN-PROOF is release_blocker
-- tracked claim: CLAIM-FIRST-RUN-DOCTOR is release_blocker
-- tracked proof: proof:routed-build is release_blocker
-- tracked proof: proof:explicit-build is release_blocker
-- tracked proof: proof:review is release_blocker
-- tracked proof: proof:checkpoint-resume is release_blocker
-- tracked proof: proof:abort-failure is release_blocker
-- tracked proof: proof:fix is release_blocker
-- tracked proof: proof:migrate is release_blocker
-- tracked proof: proof:sweep is release_blocker
-- tracked proof: proof:explore-decision is release_blocker
-- tracked proof: proof:handoff is release_blocker
-- tracked proof: proof:customization is release_blocker
-- tracked proof: proof:doctor-first-run is release_blocker
-- tracked proof: proof:plan-execution is release_blocker
 
 ## Release Blockers
 
-- EX-REL-002-CODEX-ISOLATED: codex-isolated is declared in schemas but relay selection throws because the connector is not implemented.
-- EX-REL-003-RICH-ROUTES: retry, revise, stop, ask, handoff, and escalate routes may exist in schematics but are not emitted as executable runtime routes.
-- EX-REL-004-MODE-MATRIX: Current generated modes do not yet prove the full original behavioral matrix for every flow and mode.
-- EX-REL-004-EXPLORE-BEHAVIORAL-AXES: Explore exists as a current flow, but its original modes, decision/tournament behavior, outputs, checkpoint policy, worker handoff, continuity, and proof are not yet behaviorally proven.
-- EX-REL-004-BUILD-BEHAVIORAL-AXES: Build exists as a current flow, but its original artifacts, checkpoint policy, review/verification behavior, worker handoff, continuity, and proof are not yet behaviorally proven by the parity matrix.
-- EX-REL-004-MIGRATE-BEHAVIORAL-AXES: Migrate exists as a current flow, but its original phase shape, mode set, migration artifacts, checkpoint policy, review/verification behavior, continuity, and proof are not yet behaviorally proven.
-- EX-REL-004-SWEEP-BEHAVIORAL-AXES: Sweep exists as a current flow, but its original cleanup/overnight routing, queue/deferred artifacts, checkpoint policy, verification/review behavior, continuity, and proof are not yet behaviorally proven.
-- EX-REL-004-REVIEW-BEHAVIORAL-AXES: Review exists as a current command, but the parity matrix must still prove its standalone output contract, fresh-context review behavior, and golden run.
-- EX-REL-004-FIX-BEHAVIORAL-AXES: Fix exists as a current flow, but its bug/regression phase shape, outputs, checkpoint policy, verification/review behavior, continuity, and proof are not yet behaviorally proven by the parity matrix.
-- EX-REL-004-CHECKPOINT-BEHAVIORAL-AXES: Checkpoint runtime paths exist, but original checkpoint policy and proof coverage across scope, tradeoff, coexistence, and publish choices are not yet proven.
-- EX-REL-007-WRITE-CAPABLE-DISCLOSURE: First write-capable runs do not yet disclose Claude Code bypass-permission worker behavior clearly enough.
-- EX-REL-011-GOLDEN-RUNS: Representative public release runs are not yet captured across the parity surface.
-- EX-REL-013-CREATE-PARITY: Original /circuit:create custom-circuit creation is part of parity but no current command surface is present.
-- EX-REL-014-HANDOFF-PARITY: Original /circuit:handoff continuity utility is part of parity but no current command surface is present.
-- EX-REL-014-CONTINUITY-PARITY: Current run records and checkpoint resume are present, but original explicit handoff continuity parity is not yet proven.
-- EX-REL-016-PLAN-EXECUTION: Plan-execution requests can still end as Explore synthesis instead of starting the right work slice, asking a checkpoint, or giving one exact command.
-- CLAIM-CODEX-ISOLATED: codex-isolated is not a current supported connector until implemented and tested.
-- CLAIM-RICH-ROUTES: Rich recovery routes are not release-ready until route declarations execute or generation fails loudly.
-- CLAIM-PLAN-EXECUTION: Plan-execution requests must start the right work slice, ask one blocking question, or return one exact next command.
-- CLAIM-WRITE-CAPABLE-WORKER: Write-capable worker behavior must be disclosed before first Build/Fix/Migrate/Sweep runs that can edit files.
-- CLAIM-GOLDEN-PROOF: Public proof must cover doing work, deciding, maintenance/migration, continuity, customization, failure, first-run, and plan execution.
-- CLAIM-FIRST-RUN-DOCTOR: First-run onboarding should begin with a doctor step before the first useful run.
-- proof:routed-build: proof scenario is not captured
-- proof:explicit-build: proof scenario is not captured
-- proof:review: proof scenario is not captured
-- proof:checkpoint-resume: proof scenario is not captured
-- proof:abort-failure: proof scenario is not captured
-- proof:fix: proof scenario is not captured
-- proof:migrate: proof scenario is not captured
-- proof:sweep: proof scenario is not captured
-- proof:explore-decision: proof scenario is not captured
-- proof:handoff: proof scenario is not captured
-- proof:customization: proof scenario is not captured
-- proof:doctor-first-run: proof scenario is not captured
-- proof:plan-execution: proof scenario is not captured
+- None
 
 ## Next Actions
 
-- Capture the golden Explore Tournament proof for proof:explore-decision.
-- Implement or fail generation for rich route outcomes.
-- Finish the custom connector guide with a copy-pasteable file-protocol example.
-- Capture golden release runs across proof categories.
-- Replace hand-maintained support claims with generated matrix blocks.
+- Decide whether the approved Fix Lite intent exception needs public release-note wording.
+- Harden the partial host surfaces that are outside original parity: generic shell text progress and native host adapters.
+- Keep golden runs refreshed whenever command, summary, or report contracts change.
+- Run `npm run check-release-ready` as the strict final release check.
 
 ## Source Files
 

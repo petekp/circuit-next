@@ -2,7 +2,7 @@
   "schema_version": "2",
   "id": "explore",
   "version": "0.1.0",
-  "purpose": "Explore flow: frame the investigation, analyze the subject, either synthesize and review findings or run a decision tournament, then close with findings plus evidence. The default path uses Frame, Analyze, Act, Review, and Close. Tournament mode uses Frame, Analyze, Plan, and Close, with stress review embedded inside the Decision/Plan stage rather than a separate canonical Review stage.",
+  "purpose": "Explore flow: frame the investigation, analyze the subject, either synthesize and critique findings or run a decision tournament, then close with findings plus evidence. All modes use Frame, Analyze, Plan or Decision, and Close; critique is embedded inside the Plan/Decision stage rather than exposed as a separate canonical Review stage.",
   "entry": {
     "signals": {
       "include": ["explore", "investigate", "research", "understand"],
@@ -33,7 +33,7 @@
     },
     {
       "id": "decision-stage",
-      "title": "Decision",
+      "title": "Plan or Decision",
       "canonical": "plan",
       "steps": [
         "decision-options-step",
@@ -52,8 +52,8 @@
   ],
   "stage_path_policy": {
     "mode": "partial",
-    "omits": ["verify", "act", "review"],
-    "rationale": "Explore is an investigation and decision flow. Default mode auto-omits Plan because it synthesizes findings through Act and Review. Tournament mode auto-omits Act and Review because option stress review is embedded inside the canonical Plan/Decision stage. Verify is omitted because Explore output is not executable and does not admit mechanical verification. See src/flows/explore/contract.md §Canonical stage set for the full rationale. mode 'tournament' (depth 'tournament') also omits 'act', 'review' because route_overrides leave those canonicals with no reachable items."
+    "omits": ["act", "verify", "review"],
+    "rationale": "Explore is an investigation and decision flow. Synthesize, critique, and tournament stress review are all embedded inside the canonical Plan/Decision stage. Verify is omitted because Explore output is not executable and uses evidence/seam proof rather than mechanical command verification. See src/flows/explore/contract.md §Canonical stage set for the full rationale."
   },
   "steps": [
     {
@@ -62,7 +62,9 @@
       "protocol": "explore-frame@v1",
       "reads": [],
       "routes": {
-        "pass": "analyze-step"
+        "continue": "analyze-step",
+        "pass": "analyze-step",
+        "stop": "@stop"
       },
       "executor": "orchestrator",
       "kind": "compose",
@@ -87,7 +89,10 @@
       "protocol": "explore-analyze@v1",
       "reads": ["reports/brief.json"],
       "routes": {
-        "pass": "decision-options-step"
+        "continue": "decision-options-step",
+        "pass": "decision-options-step",
+        "retry": "analyze-step",
+        "stop": "@stop"
       },
       "executor": "orchestrator",
       "kind": "compose",
@@ -112,7 +117,9 @@
       "protocol": "explore-decision-options@v1",
       "reads": ["reports/brief.json", "reports/analysis.json"],
       "routes": {
-        "pass": "proposal-fanout-step"
+        "continue": "proposal-fanout-step",
+        "pass": "proposal-fanout-step",
+        "stop": "@stop"
       },
       "executor": "orchestrator",
       "kind": "compose",
@@ -137,7 +144,9 @@
       "protocol": "explore-proposal-fanout@v1",
       "reads": ["reports/brief.json", "reports/decision-options.json"],
       "routes": {
-        "pass": "stress-proposals-step"
+        "continue": "stress-proposals-step",
+        "pass": "stress-proposals-step",
+        "stop": "@stop"
       },
       "executor": "orchestrator",
       "kind": "fanout",
@@ -193,7 +202,10 @@
         "reports/tournament-aggregate.json"
       ],
       "routes": {
-        "pass": "tradeoff-checkpoint-step"
+        "continue": "tradeoff-checkpoint-step",
+        "pass": "tradeoff-checkpoint-step",
+        "revise": "decision-options-step",
+        "stop": "@stop"
       },
       "executor": "worker",
       "kind": "relay",
@@ -222,7 +234,9 @@
       "protocol": "explore-tradeoff-checkpoint@v1",
       "reads": ["reports/tournament-review.json", "reports/tournament-aggregate.json"],
       "routes": {
-        "pass": "decision-step"
+        "continue": "decision-step",
+        "pass": "decision-step",
+        "stop": "@stop"
       },
       "executor": "orchestrator",
       "kind": "checkpoint",
@@ -276,7 +290,9 @@
         "reports/tournament-review.json"
       ],
       "routes": {
-        "pass": "close-tournament-step"
+        "continue": "close-tournament-step",
+        "pass": "close-tournament-step",
+        "stop": "@stop"
       },
       "executor": "orchestrator",
       "kind": "compose",
@@ -307,7 +323,9 @@
         "reports/decision.json"
       ],
       "routes": {
-        "pass": "@complete"
+        "complete": "@complete",
+        "pass": "@complete",
+        "stop": "@stop"
       },
       "executor": "orchestrator",
       "kind": "compose",

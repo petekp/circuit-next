@@ -53,7 +53,7 @@
       "id": "triage-stage",
       "title": "Triage",
       "canonical": "plan",
-      "steps": ["triage-step"]
+      "steps": ["triage-step", "triage-checkpoint-step"]
     },
     {
       "id": "execute-stage",
@@ -90,7 +90,9 @@
       "protocol": "sweep-frame@v1",
       "reads": [],
       "routes": {
-        "pass": "survey-step"
+        "continue": "survey-step",
+        "pass": "survey-step",
+        "stop": "@stop"
       },
       "executor": "orchestrator",
       "kind": "compose",
@@ -115,7 +117,10 @@
       "protocol": "sweep-survey@v1",
       "reads": ["reports/sweep/brief.json"],
       "routes": {
-        "pass": "triage-step"
+        "continue": "triage-step",
+        "pass": "triage-step",
+        "retry": "survey-step",
+        "stop": "@stop"
       },
       "executor": "worker",
       "kind": "relay",
@@ -144,7 +149,10 @@
       "protocol": "sweep-triage@v1",
       "reads": ["reports/sweep/brief.json", "reports/sweep/analysis.json"],
       "routes": {
-        "pass": "execute-step"
+        "continue": "triage-checkpoint-step",
+        "pass": "triage-checkpoint-step",
+        "revise": "triage-step",
+        "stop": "@stop"
       },
       "executor": "orchestrator",
       "kind": "compose",
@@ -164,12 +172,60 @@
       }
     },
     {
+      "id": "triage-checkpoint-step",
+      "title": "Queue/Triage - confirm sweep batch",
+      "protocol": "sweep-triage-checkpoint@v1",
+      "reads": ["reports/sweep/queue.json"],
+      "routes": {
+        "continue": "execute-step",
+        "pass": "execute-step",
+        "revise": "triage-step",
+        "stop": "@stop"
+      },
+      "executor": "orchestrator",
+      "kind": "checkpoint",
+      "policy": {
+        "prompt": "Confirm the queued sweep batch before execution.",
+        "choices": [
+          {
+            "id": "continue",
+            "label": "Execute the queued batch"
+          },
+          {
+            "id": "revise",
+            "label": "Revise the triage"
+          },
+          {
+            "id": "stop",
+            "label": "Stop before execution"
+          }
+        ],
+        "safe_default_choice": "continue",
+        "safe_autonomous_choice": "continue"
+      },
+      "writes": {
+        "request": "reports/checkpoints/sweep-triage-request.json",
+        "response": "reports/checkpoints/sweep-triage-response.json"
+      },
+      "check": {
+        "kind": "checkpoint_selection",
+        "source": {
+          "kind": "checkpoint_response",
+          "ref": "response"
+        },
+        "allow": ["continue", "revise", "stop"]
+      }
+    },
+    {
       "id": "execute-step",
       "title": "Execute - act on triaged batch",
       "protocol": "sweep-execute@v1",
       "reads": ["reports/sweep/brief.json", "reports/sweep/queue.json"],
       "routes": {
-        "pass": "verify-step"
+        "continue": "verify-step",
+        "pass": "verify-step",
+        "retry": "execute-step",
+        "stop": "@stop"
       },
       "executor": "worker",
       "kind": "relay",
@@ -198,7 +254,10 @@
       "protocol": "sweep-verify@v1",
       "reads": ["reports/sweep/brief.json", "reports/sweep/batch.json"],
       "routes": {
-        "pass": "review-step"
+        "continue": "review-step",
+        "pass": "review-step",
+        "retry": "execute-step",
+        "stop": "@stop"
       },
       "executor": "orchestrator",
       "kind": "verification",
@@ -227,7 +286,11 @@
         "reports/sweep/verification.json"
       ],
       "routes": {
-        "pass": "close-step"
+        "continue": "close-step",
+        "pass": "close-step",
+        "retry": "execute-step",
+        "revise": "execute-step",
+        "stop": "@stop"
       },
       "executor": "worker",
       "kind": "relay",
@@ -263,7 +326,9 @@
         "reports/sweep/review.json"
       ],
       "routes": {
-        "pass": "@complete"
+        "complete": "@complete",
+        "pass": "@complete",
+        "stop": "@stop"
       },
       "executor": "orchestrator",
       "kind": "compose",

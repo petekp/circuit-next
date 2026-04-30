@@ -1,0 +1,30 @@
+{
+  "objective": "add a focused change",
+  "scope": "Make the smallest safe change that satisfies the requested goal.",
+  "success_criteria": [
+    "The requested behavior is implemented",
+    "Verification passes",
+    "Review completes without a blocking issue"
+  ],
+  "verification_command_candidates": [
+    {
+      "id": "npm-check",
+      "cwd": ".",
+      "argv": [
+        "npm",
+        "run",
+        "check"
+      ],
+      "timeout_ms": 120000,
+      "max_output_bytes": 200000,
+      "env": {}
+    }
+  ],
+  "checkpoint": {
+    "request_path": "reports/checkpoints/frame-step-request.json",
+    "response_path": "reports/checkpoints/frame-step-response.json",
+    "allowed_choices": [
+      "continue"
+    ]
+  }
+}

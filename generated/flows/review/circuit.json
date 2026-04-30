@@ -50,7 +50,9 @@
       "protocol": "review-intake@v1",
       "reads": [],
       "routes": {
-        "pass": "audit-step"
+        "continue": "audit-step",
+        "pass": "audit-step",
+        "stop": "@stop"
       },
       "executor": "orchestrator",
       "kind": "compose",
@@ -75,7 +77,10 @@
       "protocol": "review-audit@v1",
       "reads": ["reports/review-intake.json"],
       "routes": {
-        "pass": "verdict-step"
+        "continue": "verdict-step",
+        "pass": "verdict-step",
+        "retry": "audit-step",
+        "stop": "@stop"
       },
       "executor": "worker",
       "kind": "relay",
@@ -100,7 +105,9 @@
       "protocol": "review-verdict@v1",
       "reads": ["reports/review-intake.json", "stages/analyze/review-raw-findings.json"],
       "routes": {
-        "pass": "@complete"
+        "complete": "@complete",
+        "pass": "@complete",
+        "stop": "@stop"
       },
       "executor": "orchestrator",
       "kind": "compose",

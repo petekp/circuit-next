@@ -90,12 +90,13 @@ See `specs/domain.md#core-types` for canonical definitions of **CompiledFlow**,
 
 ## Canonical stage set and title-to-canonical translation
 
-The flow uses flow-specific titles `{Frame, Analyze, Synthesize, Review,
-Close}`. Those titles are human-readable and match the reference Circuit
-explore flow. They are not all canonical stage ids — `Synthesize` in
-particular is not in the CanonicalStage enum at `src/schemas/stage.ts`
-(which is the seven-stage path `frame, analyze, plan, act, verify, review,
-close`).
+The default investigation path uses flow-specific titles `{Frame, Analyze,
+Synthesize, Review, Close}`. The tournament decision path uses `{Frame,
+Analyze, Decision, Close}`. These titles are human-readable and match the
+reference Circuit explore behavior. They are not all canonical stage ids —
+`Synthesize` in particular is not in the CanonicalStage enum at
+`src/schemas/stage.ts` (which is the seven-stage path `frame, analyze, plan,
+act, verify, review, close`).
 
 This contract records the title-to-canonical translation as follows:
 
@@ -104,11 +105,19 @@ This contract records the title-to-canonical translation as follows:
 | Frame                  | `frame`    | State the subject and success condition. |
 | Analyze                | `analyze`  | Decompose the subject into aspects with evidence. |
 | Synthesize             | `act`      | Produce the investigation's primary output. |
+| Decision               | `plan`     | Run option drafting, proposal fanout, stress review, tradeoff checkpoint, and final decision composition. |
 | Review                 | `review`   | Adversarial pass over `explore.compose`. |
 | Close                  | `close`    | Final aggregate report and closure. |
 
-**Canonical set:** `{frame, analyze, act, review, close}`.
-**Omits:** `{plan, verify}` (partial path).
+**Default canonical set:** `{frame, analyze, act, review, close}`.
+**Default omits:** `{plan, verify}` (partial path).
+
+**Tournament canonical set:** `{frame, analyze, plan, close}`.
+**Tournament omits:** `{act, verify, review}` (partial path).
+
+Tournament does not add a canonical Review stage. Its adversarial stress pass is
+inside the canonical `plan` stage titled `Decision`, because original Explore
+parity treats this as `Plan or Decision` with embedded critique.
 
 ### Executor and kind per stage
 
@@ -148,16 +157,16 @@ the investigation's output. In the canonical seven-stage path, `act` is the
 "do the work" stage, where the flow's primary deliverable is produced.
 This matches.
 
-**Why `plan` is omitted.** Explore is an investigation flow.
-Investigation-planning is folded into the Frame stage (where the subject,
-success condition, and investigation scope are stated). There is no
-separate plan-mode producing a plan report; `explore.brief` serves that role.
+**Why `plan` is present.** Explore is an investigation and decision flow.
+Synthesize, critique, and tournament decisions live inside the canonical
+Plan/Decision stage. This keeps default exploration and tournament exploration
+on the same parity path: Frame, Analyze, Plan or Decision, Close.
 
 **Why `verify` is omitted.** Explore produces investigation output (not
 executable reports), so there is no mechanical verification step
-analogous to `build`'s test-run check. The Review stage is the adversarial
-pass — a worker relay step with `role: "reviewer"` — but it is a peer
-review, not a mechanical check. A future variant of explore that emits
+analogous to `build`'s test-run check. Critique is an adversarial pass inside
+Plan/Decision — usually a worker relay step with `role: "reviewer"` — but it is
+peer critique, not a mechanical check. A future variant of explore that emits
 executable reports (e.g., a generated migration script) would need
 `verify` to hold a mechanical check; that would be a different flow kind.
 
@@ -167,13 +176,13 @@ The runtime MUST reject any `explore`-kinded flow that violates EXPLORE-I1.
 Other semantic guarantees are recorded as deferred properties (see below).
 
 - **EXPLORE-I1 — Canonical stage set matches kind, stage_path_policy is partial
-  with omits {plan, verify}.** Any compiled flow whose top-level `id`
-  equals the string `'explore'` MUST:
-  1. Declare stages whose `canonical` fields collectively equal the set
-     `{frame, analyze, act, review, close}`. Extra canonicals (e.g. `plan`,
-     `verify`) are rejected; missing canonicals are rejected.
-  2. Declare `stage_path_policy.mode = 'partial'` with `omits = [plan, verify]`
-     (order-independent set equality).
+  with omits that match the selected Explore graph.** Any compiled flow whose
+  top-level `id` equals the string `'explore'` MUST:
+  1. Match the approved Explore canonical set:
+     `{frame, analyze, plan, close}` with `omits = [act, verify, review]`.
+     Extra canonicals are rejected; missing canonicals are rejected.
+  2. Declare `stage_path_policy.mode = 'partial'` with an `omits` set matching
+     the selected variant.
 
   **Scope of EXPLORE-I1 enforcement.** `checkSpineCoverage` enforces (1)
   and (2). It does not currently enforce:
@@ -184,7 +193,7 @@ Other semantic guarantees are recorded as deferred properties (see below).
     pass Check 24 if their stage canonicals match).
 
   **Executor/kind shape is enforced by `CompiledFlow.safeParse`, not by
-  Check 24 or EXPLORE-I1.** Synthesize and Review must be `RelayStep`-
+  Check 24 or EXPLORE-I1.** Synthesize and critique steps must be `RelayStep`-
   shaped (`executor: "worker"`, `kind: "relay"`, `role` present,
   `writes: {report?, request, receipt, result}`,
   `check: ResultVerdictCheck`). Failures hit the base schema before
@@ -231,13 +240,13 @@ to satisfy but that are not runtime-enforced today. Each is recorded in
 
 After an `explore` compiled flow is accepted:
 
-- The flow's stage set covers `{frame, analyze, act, review, close}` with
-  `stage_path_policy.mode = 'partial'` and `omits = [plan, verify]`.
+- The flow's stage set covers `{frame, analyze, plan, close}` with
+  `stage_path_policy.mode = 'partial'` and `omits = [act, verify, review]`.
 - The flow emits five named reports in stage order (deferred enforcement).
 - The flow exposes at least one entry mode (`default` or `explore`)
   starting at the Frame stage's step.
-- No execution path reaches `@complete` without passing through the Review
-  stage (deferred enforcement).
+- No execution path reaches `@complete` without passing through the configured
+  critique or decision path inside Plan/Decision (deferred enforcement).
 
 ## Report reader/writer graph
 
@@ -248,10 +257,10 @@ this table exactly.
 
 | Report                   | Writer (stage/step) | Readers (stage/step)                                                                 |
 |--------------------------|---------------------|--------------------------------------------------------------------------------------|
-| `explore.brief`          | Frame / frame-step  | Analyze / analyze-step; Synthesize / synthesize-step; Review / review-step           |
-| `explore.analysis`       | Analyze / analyze-step | Synthesize / synthesize-step; Review / review-step                                |
-| `explore.compose`      | Synthesize / synthesize-step | Review / review-step; Close / close-step                                     |
-| `explore.review-verdict` | Review / review-step | Close / close-step                                                                  |
+| `explore.brief`          | Frame / frame-step  | Analyze / analyze-step; Plan or Decision / synthesize-step; Plan or Decision / review-step |
+| `explore.analysis`       | Analyze / analyze-step | Plan or Decision / synthesize-step; Plan or Decision / review-step                |
+| `explore.compose`      | Plan or Decision / synthesize-step | Plan or Decision / review-step; Close / close-step                         |
+| `explore.review-verdict` | Plan or Decision / review-step | Close / close-step                                                          |
 | `explore.result`         | Close / close-step  | *(none — terminal report at `<run-folder>/reports/explore-result.json`; consumed by the run-result consumer only)* |
 
 **Close reads `explore.compose` + `explore.review-verdict` only** (not

@@ -1,0 +1,35 @@
+{
+  "problem_statement": "quick fix: restore the failing login test",
+  "expected_behavior": "After fix: quick fix: restore the failing login test",
+  "observed_behavior": "Before fix: quick fix: restore the failing login test",
+  "scope": "Synthetic Fix proof fixture.",
+  "regression_contract": {
+    "expected_behavior": "After fix: quick fix: restore the failing login test",
+    "actual_behavior": "Before fix: quick fix: restore the failing login test",
+    "repro": {
+      "kind": "not-reproducible",
+      "deferred_reason": "Synthetic proof fixture; no live bug reproduction is required."
+    },
+    "regression_test": {
+      "status": "deferred",
+      "deferred_reason": "Synthetic proof fixture uses a deterministic verification command."
+    }
+  },
+  "success_criteria": [
+    "Deterministic Fix proof verification exits 0."
+  ],
+  "verification_command_candidates": [
+    {
+      "id": "proof-fix-verify",
+      "cwd": ".",
+      "argv": [
+        "node",
+        "-e",
+        "process.exit(0)"
+      ],
+      "timeout_ms": 30000,
+      "max_output_bytes": 200000,
+      "env": {}
+    }
+  ]
+}

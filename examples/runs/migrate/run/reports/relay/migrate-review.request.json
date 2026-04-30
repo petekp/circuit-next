@@ -1,0 +1,72 @@
+Step: review-step
+Title: Cutover Review - independent audit of the migration cutover
+Role: reviewer
+Accepted verdicts: cutover-approved, cutover-with-followups
+
+Context (from reads):
+--- reports/migrate/brief.json ---
+{
+  "objective": "migrate: replace a small legacy API",
+  "source": "Existing implementation referenced by: migrate: replace a small legacy API",
+  "target": "Replacement implementation requested by: migrate: replace a small legacy API",
+  "scope": "migrate: replace a small legacy API",
+  "success_criteria": [
+    "Demonstrate the migration addresses: migrate: replace a small legacy API"
+  ],
+  "coexistence_appetite": "short-window",
+  "rollback_plan": "Revert the batch sub-run commit; the pre-migration source still works because coexistence kept it in place.",
+  "verification_command_candidates": [
+    {
+      "id": "migrate-proof",
+      "cwd": ".",
+      "argv": [
+        "npm",
+        "run",
+        "check"
+      ],
+      "timeout_ms": 120000,
+      "max_output_bytes": 200000,
+      "env": {}
+    }
+  ]
+}
+
+
+--- reports/migrate/batch-result.json ---
+{
+  "schema_version": 1,
+  "run_id": "8fafe2b8-090a-4d6d-b0d2-4f64547b26d6",
+  "flow_id": "build",
+  "goal": "Migrate the inventoried targets per migrate.coexistence@v1 batch plan",
+  "outcome": "complete",
+  "summary": "build v0.1.0 closed 6 step(s) for goal \"Migrate the inventoried targets per migrate.coexistence@v1 batch plan\".",
+  "closed_at": "2026-04-29T21:01:00.000Z",
+  "trace_entries_observed": 36,
+  "manifest_hash": "a008ee51358bf22d880dc72f920f3bf6e7e0f1c31c5dc82e70064fedc0090f0d",
+  "verdict": "accept"
+}
+
+
+--- reports/migrate/verification.json ---
+{
+  "overall_status": "passed",
+  "commands": [
+    {
+      "command_id": "migrate-proof",
+      "argv": [
+        "npm",
+        "run",
+        "check"
+      ],
+      "cwd": ".",
+      "exit_code": 0,
+      "status": "passed",
+      "duration_ms": 1855,
+      "stdout_summary": "\n> circuit-next@0.0.1 check\n> tsc --noEmit\n\n",
+      "stderr_summary": ""
+    }
+  ]
+}
+
+
+Respond with a single raw JSON object whose top-level shape is exactly { "verdict": "<one-of-accepted-verdicts>" } (additional fields permitted). Do not wrap the JSON in Markdown code fences. Do not include any prose before or after the JSON object. The runtime parses your response with JSON.parse and rejects the run on any parse failure or on a verdict not drawn from the accepted-verdicts list.

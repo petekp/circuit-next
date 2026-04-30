@@ -234,8 +234,16 @@ Built-in connectors:
   same-workspace connector and the current auto default.
 - **`codex`** — Codex CLI subprocess using Codex's read-only sandbox flags.
   This connector cannot run implementer steps.
-- **`codex-isolated`** — Reserved for a future isolated writable Codex worker.
-  It is declared in schemas but not implemented yet.
+
+`codex-isolated` is planned for a future isolated writable Codex worker. It is
+not a current config value; use `codex` for read-only Codex relays or
+`claude-code` for trusted same-workspace writes.
+
+Before a Build, Fix, Migrate, or Sweep run invokes an implementer, Circuit
+discloses the write-capable worker path:
+
+> This flow may invoke a write-capable Claude Code worker. Circuit will verify
+> and review the result, but the worker can edit files in this checkout.
 
 Custom connectors are wrapper executables. Define them under
 `relay.connectors.<name>.command` as a YAML argv array. Circuit appends

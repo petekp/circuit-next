@@ -7,6 +7,10 @@ import {
 } from '../schemas/operator-summary.js';
 import { resolveRunRelative } from './run-relative-path.js';
 import type { CheckpointWaitingResult, CompiledFlowRunResult } from './runner-types.js';
+import {
+  WRITE_CAPABLE_WORKER_DISCLOSURE,
+  flowMayInvokeWriteCapableWorker,
+} from './write-capable-worker-disclosure.js';
 
 type RouteSummary = {
   readonly selectedFlow: string;
@@ -161,6 +165,22 @@ function exploreTournamentSnapshot(flowReport: JsonObject | undefined): JsonObje
   const snapshot = isObject(flowReport?.verdict_snapshot) ? flowReport.verdict_snapshot : undefined;
   if (stringField(snapshot, 'decision_verdict') === 'decided') return snapshot;
   return stringField(snapshot, 'selected_option_id') === undefined ? undefined : snapshot;
+}
+
+function checkpointOptionDetails(runFolder: string, allowedChoices: readonly string[]): string[] {
+  const optionsReport = readJsonIfPresent(runFolder, 'reports/decision-options.json');
+  const labelsById = new Map<string, string>();
+  for (const option of arrayField(optionsReport, 'options')) {
+    if (!isObject(option)) continue;
+    const id = stringField(option, 'id');
+    const label = stringField(option, 'label');
+    if (id === undefined || label === undefined) continue;
+    labelsById.set(id, label);
+  }
+  return allowedChoices.flatMap((choice) => {
+    const label = labelsById.get(choice);
+    return label === undefined ? [] : [`${label} (${choice})`];
+  });
 }
 
 function reviewEvidenceDetails(report: JsonObject | undefined): string[] {
@@ -376,9 +396,17 @@ export function writeOperatorSummary(input: {
   reportPaths.push(...evidenceLinks(input.runFolder, flowReport));
 
   const details = [
+    ...(flowMayInvokeWriteCapableWorker(flowId)
+      ? [`Worker access: ${WRITE_CAPABLE_WORKER_DISCLOSURE}`]
+      : []),
     `Run note: ${friendlyRunNote(flowId, input.runResult.summary)}`,
     ...flowDetails({ runFolder: input.runFolder, flowId, flowReport }),
   ];
+  if (input.runResult.outcome === 'checkpoint_waiting') {
+    const checkpoint = (input.runResult as CheckpointWaitingResult).checkpoint;
+    const optionDetails = checkpointOptionDetails(input.runFolder, checkpoint.allowed_choices);
+    if (optionDetails.length > 0) details.push(`Checkpoint options: ${optionDetails.join('; ')}`);
+  }
   if (input.runResult.outcome === 'aborted' && input.runResult.reason !== undefined) {
     details.push(`Abort reason: ${input.runResult.reason}`);
   }

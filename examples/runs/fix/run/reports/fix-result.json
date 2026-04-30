@@ -1,0 +1,36 @@
+{
+  "summary": "Fix 'quick fix: restore the failing login test': Added the fallback guard for the synthetic missing token path.",
+  "outcome": "partial",
+  "verification_status": "passed",
+  "regression_status": "deferred",
+  "review_status": "skipped",
+  "review_skip_reason": "Lite mode skipped review per route_overrides.",
+  "residual_risks": [],
+  "evidence_links": [
+    {
+      "report_id": "fix.brief",
+      "path": "reports/fix/brief.json",
+      "schema": "fix.brief@v1"
+    },
+    {
+      "report_id": "fix.context",
+      "path": "reports/fix/context.json",
+      "schema": "fix.context@v1"
+    },
+    {
+      "report_id": "fix.diagnosis",
+      "path": "reports/fix/diagnosis.json",
+      "schema": "fix.diagnosis@v1"
+    },
+    {
+      "report_id": "fix.change",
+      "path": "reports/fix/change.json",
+      "schema": "fix.change@v1"
+    },
+    {
+      "report_id": "fix.verification",
+      "path": "reports/fix/verification.json",
+      "schema": "fix.verification@v1"
+    }
+  ]
+}

@@ -33,6 +33,22 @@ Hosts should map Circuit runs onto these slots:
   it is available.
 - `fallback`: Circuit provides text, files, and resume commands.
 
+## Worker Connector Status
+
+Hosts must keep the host adapter separate from the worker connector. The host
+starts Circuit and renders its progress; the worker connector executes relayed
+steps.
+
+| Worker connector | Current status | Filesystem posture | First-run wording |
+| --- | --- | --- | --- |
+| `claude-code` | Supported and the auto default | Trusted same-workspace writes with `bypassPermissions` | Disclose before Build, Fix, Migrate, or Sweep can run an implementer step. |
+| `codex` | Supported for read-only relays | Codex CLI read-only sandbox; cannot run implementer steps | Safe to present as the read-only Codex worker. |
+| custom connector | Supported for read-only registered wrappers | Trusted local process; Circuit only routes it to read-only roles | Say it inherits cwd/env and is not an OS sandbox. |
+
+`codex-isolated` is planned but not current. It must stay out of public config
+examples and fail config parsing until an isolated writable implementation is
+tested.
+
 ## Current Host Mappings
 
 ### Generic Shell

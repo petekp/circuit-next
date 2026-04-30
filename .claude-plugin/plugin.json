@@ -1,7 +1,7 @@
 {
   "name": "circuit",
   "version": "0.1.0-alpha.2",
-  "description": "Structured, resumable, multi-stage developer flows for Claude Code. /circuit:run classifies free-form tasks and routes them to /circuit:explore, /circuit:review, /circuit:fix, /circuit:build, or migrate/sweep flows, with per-step configuration of model, reasoning effort, and skills.",
+  "description": "Structured, resumable, multi-stage developer flows for Claude Code. /circuit:run classifies free-form tasks and routes them to /circuit:explore, /circuit:review, /circuit:migrate, /circuit:fix, /circuit:build, or /circuit:sweep; /circuit:create and /circuit:handoff cover custom flows and continuity.",
   "author": {
     "name": "Pete Petrash"
   },

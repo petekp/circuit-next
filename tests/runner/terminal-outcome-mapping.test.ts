@@ -16,6 +16,7 @@ import { Snapshot } from '../../src/schemas/snapshot.js';
 import type { RunClosedOutcome } from '../../src/schemas/trace-entry.js';
 
 type TerminalRoute = '@complete' | '@stop' | '@escalate' | '@handoff';
+type RichRoute = 'ask' | 'retry' | 'revise' | 'stop' | 'handoff' | 'escalate';
 
 const CASES: Array<{
   route: TerminalRoute;
@@ -100,6 +101,253 @@ function terminalCompiledFlow(route: TerminalRoute): { flow: CompiledFlow; bytes
       mode: 'partial',
       omits: ['frame', 'analyze', 'act', 'verify', 'review', 'close'],
       rationale: 'One-step terminal route regression keeps this fixture focused on run closure.',
+    },
+  };
+  const flow = CompiledFlow.parse(raw);
+  return { flow, bytes: Buffer.from(JSON.stringify(flow)) };
+}
+
+function richCheckpointRouteCompiledFlow(route: RichRoute): { flow: CompiledFlow; bytes: Buffer } {
+  const targetByRoute: Record<RichRoute, string> = {
+    ask: 'ask-step',
+    retry: 'retry-step',
+    revise: 'revise-step',
+    stop: '@stop',
+    handoff: '@handoff',
+    escalate: '@escalate',
+  };
+  const routeSteps = (['ask', 'retry', 'revise'] as const).map((id) => ({
+    id: `${id}-step`,
+    title: `${id} follow-up`,
+    protocol: `rich-route-${id}@v1`,
+    reads: [],
+    routes: { pass: '@complete' },
+    executor: 'orchestrator',
+    kind: 'compose',
+    writes: {
+      report: {
+        path: `reports/${id}.json`,
+        schema: 'terminal-outcome@v1',
+      },
+    },
+    check: {
+      kind: 'schema_sections',
+      source: { kind: 'report', ref: 'report' },
+      required: ['summary'],
+    },
+  }));
+  const raw = {
+    schema_version: '2',
+    id: 'rich-route-flow',
+    version: '0.1.0',
+    purpose: 'Runtime regression fixture for rich checkpoint route labels.',
+    entry: {
+      signals: { include: ['rich-route'], exclude: [] },
+      intent_prefixes: ['rich-route'],
+    },
+    entry_modes: [
+      {
+        name: 'default',
+        start_at: 'checkpoint-step',
+        depth: 'standard',
+        description: 'Auto-select one rich checkpoint route.',
+      },
+    ],
+    stages: [
+      {
+        id: 'plan-stage',
+        title: 'Plan',
+        canonical: 'plan',
+        steps: ['checkpoint-step', 'ask-step', 'retry-step', 'revise-step'],
+      },
+    ],
+    steps: [
+      {
+        id: 'checkpoint-step',
+        title: 'Choose rich route',
+        protocol: 'rich-route-checkpoint@v1',
+        reads: [],
+        routes: {
+          pass: '@complete',
+          ask: targetByRoute.ask,
+          retry: targetByRoute.retry,
+          revise: targetByRoute.revise,
+          stop: targetByRoute.stop,
+          handoff: targetByRoute.handoff,
+          escalate: targetByRoute.escalate,
+        },
+        executor: 'orchestrator',
+        kind: 'checkpoint',
+        policy: {
+          prompt: 'Choose the route to test',
+          choices: [
+            { id: 'ask' },
+            { id: 'retry' },
+            { id: 'revise' },
+            { id: 'stop' },
+            { id: 'handoff' },
+            { id: 'escalate' },
+          ],
+          safe_default_choice: route,
+          safe_autonomous_choice: route,
+        },
+        writes: {
+          request: 'reports/checkpoints/rich-route-request.json',
+          response: 'reports/checkpoints/rich-route-response.json',
+        },
+        check: {
+          kind: 'checkpoint_selection',
+          source: { kind: 'checkpoint_response', ref: 'response' },
+          allow: ['ask', 'retry', 'revise', 'stop', 'handoff', 'escalate'],
+        },
+      },
+      ...routeSteps,
+    ],
+    stage_path_policy: {
+      mode: 'partial',
+      omits: ['frame', 'analyze', 'act', 'verify', 'review', 'close'],
+      rationale: 'One-stage rich route regression fixture.',
+    },
+  };
+  const flow = CompiledFlow.parse(raw);
+  return { flow, bytes: Buffer.from(JSON.stringify(flow)) };
+}
+
+function retryLoopCompiledFlow(): { flow: CompiledFlow; bytes: Buffer } {
+  const raw = {
+    schema_version: '2',
+    id: 'retry-loop-flow',
+    version: '0.1.0',
+    purpose: 'Runtime regression fixture for bounded retry routes.',
+    entry: {
+      signals: { include: ['retry-loop'], exclude: [] },
+      intent_prefixes: ['retry-loop'],
+    },
+    entry_modes: [
+      {
+        name: 'default',
+        start_at: 'checkpoint-step',
+        depth: 'standard',
+        description: 'Auto-select retry until the route budget is exhausted.',
+      },
+    ],
+    stages: [
+      {
+        id: 'plan-stage',
+        title: 'Plan',
+        canonical: 'plan',
+        steps: ['checkpoint-step'],
+      },
+    ],
+    steps: [
+      {
+        id: 'checkpoint-step',
+        title: 'Retry checkpoint',
+        protocol: 'retry-loop-checkpoint@v1',
+        reads: [],
+        routes: { pass: '@complete', retry: 'checkpoint-step' },
+        budgets: { max_attempts: 2 },
+        executor: 'orchestrator',
+        kind: 'checkpoint',
+        policy: {
+          prompt: 'Retry until bounded',
+          choices: [{ id: 'retry' }],
+          safe_default_choice: 'retry',
+          safe_autonomous_choice: 'retry',
+        },
+        writes: {
+          request: 'reports/checkpoints/retry-loop-request.json',
+          response: 'reports/checkpoints/retry-loop-response.json',
+        },
+        check: {
+          kind: 'checkpoint_selection',
+          source: { kind: 'checkpoint_response', ref: 'response' },
+          allow: ['retry'],
+        },
+      },
+    ],
+    stage_path_policy: {
+      mode: 'partial',
+      omits: ['frame', 'analyze', 'act', 'verify', 'review', 'close'],
+      rationale: 'One-step retry loop regression fixture.',
+    },
+  };
+  const flow = CompiledFlow.parse(raw);
+  return { flow, bytes: Buffer.from(JSON.stringify(flow)) };
+}
+
+function relayFailureRecoveryCompiledFlow(): { flow: CompiledFlow; bytes: Buffer } {
+  const raw = {
+    schema_version: '2',
+    id: 'relay-failure-recovery-flow',
+    version: '0.1.0',
+    purpose: 'Runtime regression fixture for failed relay recovery routes.',
+    entry: {
+      signals: { include: ['relay-recovery'], exclude: [] },
+      intent_prefixes: ['relay-recovery'],
+    },
+    entry_modes: [
+      {
+        name: 'default',
+        start_at: 'relay-step',
+        depth: 'standard',
+        description: 'Recover from a rejected relay verdict through retry route.',
+      },
+    ],
+    stages: [
+      {
+        id: 'act-stage',
+        title: 'Act',
+        canonical: 'act',
+        steps: ['relay-step', 'fallback-step'],
+      },
+    ],
+    steps: [
+      {
+        id: 'relay-step',
+        title: 'Rejecting relay',
+        protocol: 'relay-recovery@v1',
+        reads: [],
+        routes: { pass: '@complete', retry: 'fallback-step', stop: '@stop' },
+        executor: 'worker',
+        kind: 'relay',
+        role: 'implementer',
+        writes: {
+          request: 'reports/relay/request.txt',
+          receipt: 'reports/relay/receipt.txt',
+          result: 'reports/relay/result.json',
+        },
+        check: {
+          kind: 'result_verdict',
+          source: { kind: 'relay_result', ref: 'result' },
+          pass: ['accept'],
+        },
+      },
+      {
+        id: 'fallback-step',
+        title: 'Fallback after retry',
+        protocol: 'relay-recovery-fallback@v1',
+        reads: [],
+        routes: { pass: '@complete' },
+        executor: 'orchestrator',
+        kind: 'compose',
+        writes: {
+          report: {
+            path: 'reports/fallback.json',
+            schema: 'terminal-outcome@v1',
+          },
+        },
+        check: {
+          kind: 'schema_sections',
+          source: { kind: 'report', ref: 'report' },
+          required: ['summary'],
+        },
+      },
+    ],
+    stage_path_policy: {
+      mode: 'partial',
+      omits: ['frame', 'analyze', 'plan', 'verify', 'review', 'close'],
+      rationale: 'One-stage relay recovery regression fixture.',
     },
   };
   const flow = CompiledFlow.parse(raw);
@@ -220,4 +468,119 @@ describe('RUN-I7 terminal route outcome mapping', () => {
       }
     });
   }
+});
+
+describe('REL-003 rich route execution', () => {
+  const expectedTerminal: Partial<Record<RichRoute, RunClosedOutcome>> = {
+    stop: 'stopped',
+    handoff: 'handoff',
+    escalate: 'escalated',
+  };
+
+  for (const route of ['ask', 'retry', 'revise', 'stop', 'handoff', 'escalate'] as const) {
+    it(`executes checkpoint route '${route}' instead of collapsing it to pass`, async () => {
+      const { flow, bytes } = richCheckpointRouteCompiledFlow(route);
+      const runFolder = join(runFolderBase, `rich-${route}`);
+      const outcome = await runCompiledFlow({
+        runFolder,
+        flow,
+        flowBytes: bytes,
+        runId: RunId.parse(`74000000-0000-0000-0000-00000000000${route.length}`),
+        goal: `rich route ${route} maps honestly`,
+        depth: 'standard',
+        change_kind: change_kind(),
+        now: deterministicNow(Date.UTC(2026, 3, 24, 21, 0, 0)),
+        relayer: unusedRelayer(),
+      });
+
+      expect(outcome.result.outcome).toBe(expectedTerminal[route] ?? 'complete');
+      const completed = outcome.trace_entries.find(
+        (trace_entry) =>
+          trace_entry.kind === 'step.completed' && trace_entry.step_id === 'checkpoint-step',
+      );
+      if (completed?.kind !== 'step.completed') throw new Error('expected checkpoint completion');
+      expect(completed.route_taken).toBe(route);
+      const snapshot = Snapshot.parse(
+        JSON.parse(readFileSync(join(runFolder, 'state.json'), 'utf8')),
+      );
+      expect(snapshot.status).toBe(expectedTerminal[route] ?? 'complete');
+      expect(RunProjection.safeParse({ log: readRunTrace(runFolder), snapshot }).success).toBe(
+        true,
+      );
+    });
+  }
+
+  it('bounds retry loops by max_attempts instead of spinning forever', async () => {
+    const { flow, bytes } = retryLoopCompiledFlow();
+    const runFolder = join(runFolderBase, 'retry-loop');
+    const outcome = await runCompiledFlow({
+      runFolder,
+      flow,
+      flowBytes: bytes,
+      runId: RunId.parse('74000000-0000-0000-0000-000000000099'),
+      goal: 'retry route stops after bounded attempts',
+      depth: 'standard',
+      change_kind: change_kind(),
+      now: deterministicNow(Date.UTC(2026, 3, 24, 22, 0, 0)),
+      relayer: unusedRelayer(),
+    });
+
+    expect(outcome.result.outcome).toBe('aborted');
+    expect(outcome.result.reason).toContain("route 'retry'");
+    expect(outcome.result.reason).toContain('max_attempts=2');
+    expect(
+      outcome.trace_entries.filter(
+        (trace_entry) =>
+          trace_entry.kind === 'step.completed' && trace_entry.route_taken === 'retry',
+      ),
+    ).toHaveLength(2);
+  });
+
+  it('routes a failed relay check through retry when the step declares recovery', async () => {
+    const { flow, bytes } = relayFailureRecoveryCompiledFlow();
+    const runFolder = join(runFolderBase, 'relay-recovery');
+    const outcome = await runCompiledFlow({
+      runFolder,
+      flow,
+      flowBytes: bytes,
+      runId: RunId.parse('74000000-0000-0000-0000-000000000100'),
+      goal: 'relay check failure uses recovery route',
+      depth: 'standard',
+      change_kind: change_kind(),
+      now: deterministicNow(Date.UTC(2026, 3, 24, 23, 0, 0)),
+      relayer: {
+        connectorName: 'claude-code',
+        relay: async (): Promise<RelayResult> => ({
+          request_payload: 'rejecting relay',
+          receipt_id: 'rejecting-relay',
+          result_body: '{"verdict":"reject"}',
+          duration_ms: 1,
+          cli_version: '0.0.0-test',
+        }),
+      },
+    });
+
+    expect(outcome.result.outcome).toBe('complete');
+    expect(outcome.trace_entries).toContainEqual(
+      expect.objectContaining({
+        kind: 'check.evaluated',
+        step_id: 'relay-step',
+        outcome: 'fail',
+      }),
+    );
+    expect(outcome.trace_entries).toContainEqual(
+      expect.objectContaining({
+        kind: 'step.completed',
+        step_id: 'relay-step',
+        route_taken: 'retry',
+      }),
+    );
+    expect(outcome.trace_entries).toContainEqual(
+      expect.objectContaining({
+        kind: 'step.completed',
+        step_id: 'fallback-step',
+        route_taken: 'pass',
+      }),
+    );
+  });
 });

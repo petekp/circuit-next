@@ -1,0 +1,1 @@
+{"verdict":"accept","option_id":"option-3","option_label":"Hybrid path","case_summary":"Prototype the shared requirements before locking the framework.","assumptions":["A brief comparison prototype is affordable."],"evidence_refs":["reports/decision-options.json"],"risks":["The decision takes longer."],"next_action":"Run a short Explore follow-up with prototype criteria."}

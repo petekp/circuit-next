@@ -91,8 +91,8 @@ describe('Codex host plugin package', () => {
     expect(skill).toContain('task_list.updated');
     expect(skill).toContain('user_input.requested');
     expect(skill).toContain('operator_summary_markdown_path');
-    expect(skill).toContain(
-      'Valid explicit flows are `explore`, `review`, `migrate`, `fix`, and `build`.',
+    expect(skill).toMatch(
+      /Valid explicit flows are `explore`, `review`, `migrate`, `fix`, `build`, and\s+`sweep`/,
     );
     expect(skill).toContain('Do not use a path relative to the user');
     expect(skill).not.toContain('node plugins/circuit/scripts/circuit-next.mjs');
@@ -260,6 +260,9 @@ describe('Codex host plugin package', () => {
       expect(output.checks).toContainEqual(
         expect.objectContaining({ name: 'packaged_flow_migrate', ok: true }),
       );
+      expect(output.checks).toContainEqual(
+        expect.objectContaining({ name: 'packaged_flow_sweep', ok: true }),
+      );
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
     }
@@ -315,7 +318,7 @@ describe('Codex host plugin package', () => {
   });
 
   it('mirrors canonical flow files into the Codex host output tree', () => {
-    for (const flow of ['build', 'explore', 'fix', 'migrate', 'review']) {
+    for (const flow of ['build', 'explore', 'fix', 'migrate', 'review', 'sweep']) {
       const canonical = readFileSync(resolve(REPO_ROOT, `generated/flows/${flow}/circuit.json`));
       const codex = readFileSync(resolve(PLUGIN_ROOT, `flows/${flow}/circuit.json`));
       expect(codex).toEqual(canonical);
@@ -323,7 +326,17 @@ describe('Codex host plugin package', () => {
   });
 
   it('generates Codex host command files that invoke the installed plugin wrapper', () => {
-    for (const command of ['build', 'explore', 'fix', 'review', 'run']) {
+    for (const command of [
+      'build',
+      'create',
+      'explore',
+      'fix',
+      'handoff',
+      'migrate',
+      'review',
+      'run',
+      'sweep',
+    ]) {
       const source = readFileSync(resolve(REPO_ROOT, `commands/${command}.md`), 'utf8');
       const codex = readFileSync(resolve(PLUGIN_ROOT, `commands/${command}.md`), 'utf8');
       expect(source).toContain('./bin/circuit-next');

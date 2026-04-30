@@ -1,0 +1,1 @@
+{"verdict":"accept","option_id":"option-2","option_label":"Vue","case_summary":"Choose Vue for a smaller surface and faster product iteration.","assumptions":["The operator values implementation speed."],"evidence_refs":["reports/decision-options.json"],"risks":["Team familiarity may be thinner."],"next_action":"Run a Build plan for a Vue prototype."}

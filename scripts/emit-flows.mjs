@@ -153,12 +153,14 @@ function emitCommandFile(entry) {
 }
 
 function emitCodexRouterCommand() {
-  copyMarkdownFile(
-    'commands/run.md',
-    `${CODEX_PLUGIN_ROOT_REL}/commands/run.md`,
-    'codex host router command',
-    renderCodexHostCommand,
-  );
+  for (const command of ['create', 'handoff', 'migrate', 'run', 'sweep']) {
+    copyMarkdownFile(
+      `commands/${command}.md`,
+      `${CODEX_PLUGIN_ROOT_REL}/commands/${command}.md`,
+      `codex host ${command} command`,
+      renderCodexHostCommand,
+    );
+  }
 }
 
 function checkCommandFile(entry) {
@@ -178,11 +180,13 @@ function checkCommandFile(entry) {
 }
 
 function checkCodexRouterCommand() {
-  return checkMarkdownMirror(
-    'commands/run.md',
-    `${CODEX_PLUGIN_ROOT_REL}/commands/run.md`,
-    'codex host router command',
-    renderCodexHostCommand,
+  return ['create', 'handoff', 'migrate', 'run', 'sweep'].some((command) =>
+    checkMarkdownMirror(
+      `commands/${command}.md`,
+      `${CODEX_PLUGIN_ROOT_REL}/commands/${command}.md`,
+      `codex host ${command} command`,
+      renderCodexHostCommand,
+    ),
   );
 }
 

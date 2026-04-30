@@ -3,14 +3,14 @@ name: explore-tournament-decision-mode
 description: Focused design for Explore Tournament and decide routing.
 type: product-architecture
 date: 2026-04-29
-status: proposed
+status: implemented
 ---
 
 # Explore Tournament Decision Mode
 
-This is a design note, not implementation truth. Until the behavior below is
-implemented, tested, and proven with a golden run, `decide:` remains a release
-blocker.
+This note records the implemented Explore Tournament contract for `decide:`
+requests. The behavior is backed by runtime tests, generated release truth, and
+the `proof:explore-decision` golden run.
 
 ## Goal
 
@@ -329,23 +329,22 @@ The result should link to:
 The close writer should produce an operator-facing summary that reads like a
 decision receipt, not a raw trace.
 
-## Required Implementation Changes
+## Implemented Runtime Shape
 
 ### Schematic And Compiler
 
-- Add schematic authoring support for `fanout`.
-- Add relay branch support to compiled fanout, or add an equivalent
-  `relay-fanout` compiled step if the schema change proves cleaner.
-- Keep existing sub-run fanout behavior backward-compatible.
-- Allow Explore tournament mode to route from Analyze into the Decision stage
-  without changing default Explore behavior.
-- Ensure the emitted tournament path reports canonical stages as Frame, Analyze,
-  Decision, and Close. The stress pass must not appear as an extra canonical
+- Schematic authoring supports `fanout`.
+- Compiled fanout supports relay branches while keeping existing sub-run fanout
+  behavior backward-compatible.
+- Explore tournament mode routes from Analyze into the Decision stage without
+  changing default Explore behavior.
+- The emitted tournament path reports canonical stages as Frame, Analyze,
+  Decision, and Close. The stress pass does not appear as an extra canonical
   Review stage in the parity matrix.
-- Ensure checkpoint choices either all advance safely into Compose Decision or
-  have real executable routes. Do not model non-advancing choices as normal
-  passing checkpoint selections.
-- Add tests proving default Explore still follows the current path.
+- Checkpoint choices all advance safely into Compose Decision. Non-advancing
+  choices such as "ask for more evidence" or "stop" remain out of the
+  checkpoint until they have executable route semantics.
+- Tests cover the tournament path and the default Explore regression path.
 
 ### Explore Reports And Writers
 
@@ -380,14 +379,15 @@ decision is final.
 
 ## Acceptance Tests
 
-Minimum tests before clearing the release blocker:
+Minimum tests that clear the release blocker:
 
 - Router: `decide:` selects Explore tournament.
 - Schematic compile: Explore emits a tournament entry mode whose path includes
-  Decision-stage option drafting, fanout, stress pass, checkpoint, decision, and
-  close, without adding a canonical Review stage to the tournament path.
-- Regression: default Explore keeps the existing Frame, Analyze, Synthesize,
-  Review, Close path.
+  Plan/Decision-stage option drafting, fanout, stress pass, checkpoint,
+  decision, and close, without adding a canonical Review stage to the
+  tournament path.
+- Regression: default Explore keeps the existing synthesize and critique work,
+  but exposes it inside the canonical Plan/Decision stage.
 - Fanout: relay fanout writes request, receipt, raw result, and one typed
   proposal report per option, plus an aggregate report that downstream stress
   review can consume.
@@ -403,24 +403,14 @@ Minimum tests before clearing the release blocker:
 
 ## Release Truth Rules
 
-Until the golden proof exists:
-
-- README may describe Tournament as implemented only where generated proof backs
-  it.
-- `docs/release/parity/exceptions.yaml` should keep only the Explore behavior
-  gaps that are still true after regeneration.
-- `docs/release/readiness-report.generated.md` remains the current truth after
-  regeneration.
-- `check-release-ready` should continue to fail.
-
-After implementation:
-
-- `generated/release/current-capabilities.json` should show Explore intent
-  hints including `decide:`.
-- `generated/flows/explore/circuit.json` should expose `tournament` or the
-  emitted per-mode equivalent.
-- `docs/release/proofs/index.yaml` proof `proof:explore-decision` should move
-  from blocker to captured proof.
+- `generated/release/current-capabilities.json` shows Explore intent hints
+  including `decide:`.
+- `generated/flows/explore/tournament.json` exposes the tournament path.
+- `docs/release/proofs/index.yaml` marks `proof:explore-decision` as verified
+  current.
+- `docs/release/readiness-report.generated.md` remains the current release truth
+  after regeneration.
+- `check-release-ready` passes unless a future release blocker is introduced.
 
 ## Implementation Decisions
 

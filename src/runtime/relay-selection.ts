@@ -130,9 +130,8 @@ async function relayerForBuiltin(name: EnabledConnector): Promise<RelayFn> {
     const { relayCodex } = await import('./connectors/codex.js');
     return { connectorName: 'codex', connector, relay: relayCodex };
   }
-  throw new Error(
-    "codex-isolated connector is declared but not implemented yet; use 'codex' for read-only relay or 'claude-code' for trusted same-workspace writes",
-  );
+  const exhaustive: never = name;
+  throw new Error(`unsupported built-in connector '${exhaustive}'`);
 }
 
 function capabilitiesFor(connector: ResolvedConnector): ConnectorCapabilities {
@@ -186,7 +185,7 @@ function resolvedConnectorFromDefault(
   defaultRef: RelayConfigValue['default'],
   relay: RelayConfigValue,
 ): ResolvedConnector {
-  if (defaultRef === 'claude-code' || defaultRef === 'codex' || defaultRef === 'codex-isolated') {
+  if (defaultRef === 'claude-code' || defaultRef === 'codex') {
     return { kind: 'builtin', name: defaultRef };
   }
   const descriptor = relay.connectors[defaultRef];

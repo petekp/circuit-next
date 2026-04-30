@@ -33,12 +33,17 @@ describe('Config + connector registry', () => {
   it('relay.default parses auto/builtin/registered-connector-name', () => {
     const a = RelayConfig.safeParse({ default: 'auto' });
     expect(a.success).toBe(true);
-    const b = RelayConfig.safeParse({ default: 'codex-isolated' });
+    const b = RelayConfig.safeParse({ default: 'codex' });
     expect(b.success).toBe(true);
   });
 
   it('relay.default rejects unknown connector name without registry entry', () => {
     const bad = RelayConfig.safeParse({ default: 'gemini' });
+    expect(bad.success).toBe(false);
+  });
+
+  it('relay.default rejects the planned codex-isolated connector until it is implemented', () => {
+    const bad = RelayConfig.safeParse({ default: 'codex-isolated' });
     expect(bad.success).toBe(false);
   });
 
@@ -91,21 +96,21 @@ describe('HostKind', () => {
 });
 
 describe('EnabledConnector (connector-I1)', () => {
-  it('accepts the 3 declared built-ins', () => {
+  it('accepts the 2 current built-ins', () => {
     expect(EnabledConnector.safeParse('claude-code').success).toBe(true);
     expect(EnabledConnector.safeParse('codex').success).toBe(true);
-    expect(EnabledConnector.safeParse('codex-isolated').success).toBe(true);
   });
 
   it('rejects unknown built-in names', () => {
+    expect(EnabledConnector.safeParse('codex-isolated').success).toBe(false);
     expect(EnabledConnector.safeParse('agent').success).toBe(false);
     expect(EnabledConnector.safeParse('gemini').success).toBe(false);
     expect(EnabledConnector.safeParse('ollama').success).toBe(false);
     expect(EnabledConnector.safeParse('').success).toBe(false);
   });
 
-  it('built-in enum is the frozen 3-tuple and ordering is stable', () => {
-    expect(EnabledConnector.options).toEqual(['claude-code', 'codex', 'codex-isolated']);
+  it('built-in enum is the frozen current tuple and ordering is stable', () => {
+    expect(EnabledConnector.options).toEqual(['claude-code', 'codex']);
   });
 });
 
@@ -128,7 +133,7 @@ describe('ConnectorName regex (connector-I2 syntax)', () => {
 
 describe('RESERVED_ADAPTER_NAMES (connector-I2 reservation set)', () => {
   it('contains every built-in plus the auto sentinel and nothing else', () => {
-    expect(RESERVED_ADAPTER_NAMES).toEqual(['claude-code', 'codex', 'codex-isolated', 'auto']);
+    expect(RESERVED_ADAPTER_NAMES).toEqual(['claude-code', 'codex', 'auto']);
   });
 });
 
@@ -187,8 +192,13 @@ describe('CustomConnectorDescriptor (connector-I3)', () => {
 
 describe('ConnectorRef discriminated union (connector-I4)', () => {
   it('accepts builtin variant', () => {
-    const ok = ConnectorRef.safeParse({ kind: 'builtin', name: 'codex-isolated' });
+    const ok = ConnectorRef.safeParse({ kind: 'builtin', name: 'codex' });
     expect(ok.success).toBe(true);
+  });
+
+  it('rejects the planned codex-isolated built-in until it is implemented', () => {
+    const bad = ConnectorRef.safeParse({ kind: 'builtin', name: 'codex-isolated' });
+    expect(bad.success).toBe(false);
   });
 
   it('accepts named variant', () => {
@@ -417,9 +427,7 @@ describe('RelayStartedTraceEntry.resolved_from consumes RelayResolutionSource (c
 
 describe('connector-I10 — ResolvedConnector rejects pre-resolution named references', () => {
   it('accepts built-in variant', () => {
-    expect(ResolvedConnector.safeParse({ kind: 'builtin', name: 'codex-isolated' }).success).toBe(
-      true,
-    );
+    expect(ResolvedConnector.safeParse({ kind: 'builtin', name: 'codex' }).success).toBe(true);
   });
 
   it('accepts inline custom descriptor variant', () => {

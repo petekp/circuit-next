@@ -60,19 +60,6 @@ const SCHEMATIC_TO_WORKFLOW_ROUTE: Record<string, string> = {
   complete: 'pass',
 };
 
-// Schematic-level routes that the runtime cannot execute through the static
-// CompiledFlow's per-step `routes` map (one edge per check outcome). They are
-// intentionally treated as authoring metadata until the runtime grows
-// per-attempt path indexing or new terminal outcomes; the compiler drops them.
-const SCHEMATIC_ROUTES_DROPPED_AT_COMPILE = new Set([
-  'retry',
-  'revise',
-  'stop',
-  'ask',
-  'handoff',
-  'escalate',
-]);
-
 // (step kind, report schema) pairs the runner's writers actually
 // understand. Both verification and checkpoint kinds consult their
 // per-kind writer registries (the single source of truth — adding a
@@ -124,13 +111,11 @@ function resolveRouteTarget(
   return item.routes[outcome];
 }
 
-// Compute the set of items reachable for a given mode by following only
-// the routes that the compiler maps to executable CompiledFlow edges
-// (continue/complete → pass) with mode-specific overrides applied. Items
-// referenced only by dropped outcomes (retry/revise/stop/ask/handoff/
-// escalate) are intentionally unreachable here; they live in the schematic
-// as authoring intent but are not emitted into the compiled CompiledFlow
-// until the runtime grows the corresponding outcomes.
+// Compute the set of items reachable for a given mode by following every
+// declared schematic route with mode-specific overrides applied. Rich route
+// labels stay in the compiled flow, so steps reachable only through ask,
+// handoff, retry, or revise are real runtime targets instead of hidden
+// authoring notes.
 function computeReachableForMode(schematic: FlowSchematic, mode: FlowEntryMode): Set<string> {
   const itemById = new Map(schematic.items.map((item) => [item.id as unknown as string, item]));
   const reachable = new Set<string>();
@@ -147,12 +132,6 @@ function computeReachableForMode(schematic: FlowSchematic, mode: FlowEntryMode):
       );
     }
     for (const outcome of Object.keys(item.routes)) {
-      if (SCHEMATIC_ROUTES_DROPPED_AT_COMPILE.has(outcome)) continue;
-      if (SCHEMATIC_TO_WORKFLOW_ROUTE[outcome] === undefined) {
-        // Defer the precise error to compileRoutes so the message is
-        // produced once and includes the offending item id.
-        continue;
-      }
       const target = resolveRouteTarget(item, outcome, mode);
       if (target === undefined) continue;
       if (target.startsWith('@')) continue;
@@ -221,35 +200,31 @@ function computeReads(
   return reads;
 }
 
-// Map schematic routes to CompiledFlow routes for a given mode. The runtime's
-// check emits 'pass' or 'fail' uniformly across all check kinds; schematics
-// carry author-friendly outcome names. Only continue and complete map to
-// pass; the rest are non-executable metadata for now and are dropped at
-// compile.
+// Map schematic routes to CompiledFlow routes for a given mode. continue and
+// complete still populate the historical `pass` edge because most handlers
+// advance on success. The original schematic labels are preserved too, so
+// checkpoint selections and rich route outcomes can execute without a second
+// hand-maintained graph.
 function compileRoutesForMode(item: SchematicStep, mode: FlowEntryMode): Record<string, string> {
   const routes: Record<string, string> = {};
   let passSet = false;
   for (const outcome of Object.keys(item.routes)) {
-    if (SCHEMATIC_ROUTES_DROPPED_AT_COMPILE.has(outcome)) continue;
-    const flowRoute = SCHEMATIC_TO_WORKFLOW_ROUTE[outcome];
-    if (flowRoute === undefined) {
-      fail(
-        `schematic item '${item.id}' has route outcome '${outcome}' the compiler does not know how to map to the CompiledFlow's pass/fail route alphabet`,
-      );
-    }
-    if (flowRoute === 'pass' && passSet) {
-      fail(
-        `schematic item '${item.id}' has multiple outcomes that map to 'pass' (only one allowed); pick whichever maps to the live runtime success edge`,
-      );
-    }
     const target = resolveRouteTarget(item, outcome, mode);
     if (target === undefined) {
       fail(
         `schematic item '${item.id}' route outcome '${outcome}' has no target after applying mode '${mode.name}' (depth '${mode.depth}') overrides`,
       );
     }
+    routes[outcome] = target;
+    const flowRoute = SCHEMATIC_TO_WORKFLOW_ROUTE[outcome];
+    if (flowRoute === undefined) continue;
+    if (passSet) {
+      fail(
+        `schematic item '${item.id}' has multiple outcomes that map to 'pass' (only one allowed); pick whichever maps to the live runtime success edge`,
+      );
+    }
     routes[flowRoute] = target;
-    if (flowRoute === 'pass') passSet = true;
+    passSet = true;
   }
   if (!passSet) {
     fail(

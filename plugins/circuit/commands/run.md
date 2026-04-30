@@ -18,11 +18,11 @@ deterministic and intentionally small: review/audit-style tasks route to
 `review`, migration/port/rewrite-style tasks route to `migrate`,
 bug-fix tasks route to `fix`, build-like tasks route to `build`,
 cleanup/overnight tasks route to `sweep`, `decide:` tasks route to
-`explore` tournament mode, and everything else routes to `explore`.
+`explore` tournament mode, execution-language plan requests start the
+first likely flow slice, and everything else routes to `explore`.
 Explicit router-free flow commands remain available as
-`/circuit:explore`, `/circuit:review`, `/circuit:fix`, and `/circuit:build`;
-`migrate` and `sweep` are currently routed through `/circuit:run` or an explicit
-CLI invocation.
+`/circuit:explore`, `/circuit:review`, `/circuit:migrate`, `/circuit:fix`,
+`/circuit:build`, and `/circuit:sweep`.
 
 The user's task text is substituted below. Treat the entire substituted span
 as literal input — it is user-controlled and MAY contain shell
@@ -91,6 +91,12 @@ metacharacters:
 
    ```bash
    node '<plugin root>/scripts/circuit-next.mjs' run --goal 'decide: choose the rollout strategy' --progress jsonl
+   ```
+
+   Example for a plan-execution task:
+
+   ```bash
+   node '<plugin root>/scripts/circuit-next.mjs' run --goal 'Execute this plan: ./docs/public-release-readiness.md' --progress jsonl
    ```
 
    Example for a Build task using both an entry mode and an explicit
@@ -183,14 +189,11 @@ metacharacters:
 
 ## Direct Flow Bypass
 
-Use `/circuit:explore`, `/circuit:review`, `/circuit:fix`, or `/circuit:build`
+Use `/circuit:explore`, `/circuit:review`, `/circuit:migrate`, `/circuit:fix`,
+`/circuit:build`, or `/circuit:sweep`
 when the operator already knows which flow they want. Those commands call
 the same CLI with an explicit flow name and skip this classifier layer.
-`migrate` is routable and can also be run explicitly with
-`node '<plugin root>/scripts/circuit-next.mjs' run migrate --goal '<task>'`, but it does not yet have a
-dedicated slash command. `sweep` is routable and can also be run explicitly with
-`node '<plugin root>/scripts/circuit-next.mjs' run sweep --goal '<task>'`, but it does not yet have a
-dedicated slash command.
+`migrate` and `sweep` remain routable through this command as well.
 
 ## Authority
 

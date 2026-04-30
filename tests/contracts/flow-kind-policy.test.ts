@@ -130,22 +130,53 @@ function validExploreFixture(overrides: Record<string, unknown> = {}): Record<st
       { id: 'frame-stage', title: 'Frame', canonical: 'frame', steps: ['frame-step'] },
       { id: 'analyze-stage', title: 'Analyze', canonical: 'analyze', steps: ['analyze-step'] },
       {
-        id: 'synthesize-stage',
-        title: 'Synthesize',
-        canonical: 'act',
-        steps: ['synthesize-step'],
+        id: 'decision-stage',
+        title: 'Plan or Decision',
+        canonical: 'plan',
+        steps: ['synthesize-step', 'review-step'],
       },
-      { id: 'review-stage', title: 'Review', canonical: 'review', steps: ['review-step'] },
       { id: 'close-stage', title: 'Close', canonical: 'close', steps: ['close-step'] },
     ],
     stage_path_policy: {
       mode: 'partial',
-      omits: ['plan', 'verify'],
-      rationale: 'test: explore — plan folded into frame; verify covered by review.',
+      omits: ['act', 'verify', 'review'],
+      rationale: 'test: explore — synthesize and critique are folded into Plan/Decision.',
     },
     steps: validExploreSteps(),
     ...overrides,
   };
+}
+
+function validExploreTournamentFixture(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return validExploreFixture({
+    entry_modes: [
+      {
+        name: 'tournament',
+        start_at: 'frame-step',
+        depth: 'tournament',
+        description: 'test tournament entry mode',
+      },
+    ],
+    stages: [
+      { id: 'frame-stage', title: 'Frame', canonical: 'frame', steps: ['frame-step'] },
+      { id: 'analyze-stage', title: 'Analyze', canonical: 'analyze', steps: ['analyze-step'] },
+      {
+        id: 'decision-stage',
+        title: 'Plan or Decision',
+        canonical: 'plan',
+        steps: ['synthesize-step', 'review-step'],
+      },
+      { id: 'close-stage', title: 'Close', canonical: 'close', steps: ['close-step'] },
+    ],
+    stage_path_policy: {
+      mode: 'partial',
+      omits: ['act', 'verify', 'review'],
+      rationale: 'test: explore tournament keeps critique inside the Decision stage.',
+    },
+    ...overrides,
+  });
 }
 
 function reviewPolicyOnlyPayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -249,6 +280,13 @@ describe('checkCompiledFlowKindCanonicalPolicy (audit-level, no Zod)', () => {
     expect(result.detail).toMatch(/explore: canonical set/);
   });
 
+  it('EXPLORE-I1 — returns green on the Explore tournament Decision-stage variant', () => {
+    const result = checkCompiledFlowKindCanonicalPolicy(validExploreTournamentFixture());
+    expect(result.kind).toBe('green');
+    expect(result.detail).toMatch(/frame, analyze, plan, close/);
+    expect(result.detail).toMatch(/omits \{act, verify, review\}/);
+  });
+
   it('returns green on a policy-only review payload that satisfies REVIEW-I1', () => {
     const result = checkCompiledFlowKindCanonicalPolicy(reviewPolicyOnlyPayload());
     expect(result.kind).toBe('green');
@@ -297,10 +335,10 @@ describe('checkCompiledFlowKindCanonicalPolicy (audit-level, no Zod)', () => {
   it('returns red when explore fixture omits a required canonical stage', () => {
     const fixture = validExploreFixture();
     const stages = fixture.stages as Array<Record<string, unknown>>;
-    fixture.stages = stages.filter((p) => p.canonical !== 'review');
+    fixture.stages = stages.filter((p) => p.canonical !== 'plan');
     const result = checkCompiledFlowKindCanonicalPolicy(fixture);
     expect(result.kind).toBe('red');
-    expect(result.detail).toMatch(/missing canonical\(s\): review/);
+    expect(result.detail).toMatch(/missing canonical\(s\): plan/);
   });
 
   it('returns red when explore fixture has mode=strict', () => {
@@ -315,7 +353,7 @@ describe('checkCompiledFlowKindCanonicalPolicy (audit-level, no Zod)', () => {
     const fixture = validExploreFixture();
     fixture.stage_path_policy = {
       mode: 'partial',
-      omits: ['plan'], // missing 'verify'
+      omits: ['act', 'review'], // missing 'verify'
     };
     const result = checkCompiledFlowKindCanonicalPolicy(fixture);
     expect(result.kind).toBe('red');
@@ -468,8 +506,8 @@ describe('checkCompiledFlowKindCanonicalPolicy (audit-level, no Zod)', () => {
     const explore = FLOW_KIND_CANONICAL_SETS.explore;
     expect(explore).toBeDefined();
     if (explore === undefined) throw new Error('unreachable');
-    expect(explore.canonicals).toEqual(['frame', 'analyze', 'act', 'review', 'close']);
-    expect(explore.omits).toEqual(['plan', 'verify']);
+    expect(explore.canonicals).toEqual(['frame', 'analyze', 'plan', 'close']);
+    expect(explore.omits).toEqual(['act', 'verify', 'review']);
     expect(explore.optional_canonicals).toEqual([]);
     const review = FLOW_KIND_CANONICAL_SETS.review;
     expect(review).toBeDefined();
@@ -514,6 +552,17 @@ describe('validateCompiledFlowKindPolicy (runtime-level, safeParse-first)', () =
     }
   });
 
+  it('returns ok:true green on the generated Explore tournament fixture', () => {
+    const result: ValidateCompiledFlowKindPolicyResult = validateCompiledFlowKindPolicy(
+      validExploreTournamentFixture(),
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.kind).toBe('green');
+      expect(result.detail).toMatch(/frame, analyze, plan, close/);
+    }
+  });
+
   it('returns ok:false with Zod issue summary when safeParse fails (empty steps)', () => {
     const fixture = validExploreFixture({ steps: [] });
     const result = validateCompiledFlowKindPolicy(fixture);
@@ -524,22 +573,22 @@ describe('validateCompiledFlowKindPolicy (runtime-level, safeParse-first)', () =
     }
   });
 
-  it('returns ok:false when Zod catches the violation at the safeParse layer (missing review stage)', () => {
+  it('returns ok:false when Zod catches the violation at the safeParse layer (missing plan stage)', () => {
     // For the `explore` kind, CompiledFlow.safeParse's stage-I4 superRefine
     // already enforces the canonical-stage-set invariant — removing the
-    // review stage fails at safeParse before the kind-specific policy
+    // plan stage fails at safeParse before the kind-specific policy
     // check can fire. The helper therefore surfaces the Zod issue
     // summary. This is by design: safeParse is the primary check and
     // the kind-specific policy is defense-in-depth for future kinds
     // whose constraints Zod cannot express schematically.
     const fixture = validExploreFixture();
     const stages = fixture.stages as Array<Record<string, unknown>>;
-    fixture.stages = stages.filter((p) => p.canonical !== 'review');
+    fixture.stages = stages.filter((p) => p.canonical !== 'plan');
     const result = validateCompiledFlowKindPolicy(fixture);
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.reason).toMatch(/CompiledFlow\.safeParse failed/);
-      expect(result.reason).toMatch(/review/);
+      expect(result.reason).toMatch(/plan/);
     }
   });
 

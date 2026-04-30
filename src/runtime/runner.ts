@@ -72,6 +72,10 @@ import {
 import { isRunRelativePathError, writeJsonReport } from './step-handlers/shared.js';
 import { readRunTrace } from './trace-reader.js';
 import { appendTraceEntry, traceEntryLogPath } from './trace-writer.js';
+import {
+  WRITE_CAPABLE_WORKER_DISCLOSURE,
+  compiledFlowMayInvokeWriteCapableWorker,
+} from './write-capable-worker-disclosure.js';
 
 // Public API surface from runner.ts. Implementations have moved to
 // dedicated modules during the handler-extraction split; the surface
@@ -210,12 +214,21 @@ const TERMINAL_ROUTE_OUTCOME = {
   '@escalate': 'escalated',
   '@handoff': 'handoff',
 } as const satisfies Record<string, RunClosedOutcome>;
+const RECOVERY_ROUTE_LABELS = new Set(['retry', 'revise']);
 const MAX_PROGRESS_DISPLAY_TEXT_CHARS = 240;
 
 function terminalOutcomeForRoute(route: string): RunClosedOutcome | undefined {
   return Object.hasOwn(TERMINAL_ROUTE_OUTCOME, route)
     ? TERMINAL_ROUTE_OUTCOME[route as keyof typeof TERMINAL_ROUTE_OUTCOME]
     : undefined;
+}
+
+function maxAttemptsForRoute(
+  step: CompiledFlow['steps'][number],
+  routeTaken: string | undefined,
+): number {
+  if (step.budgets?.max_attempts !== undefined) return step.budgets.max_attempts;
+  return routeTaken !== undefined && RECOVERY_ROUTE_LABELS.has(routeTaken) ? 2 : 1;
 }
 
 function readJsonReport(runFolder: string, path: string): unknown {
@@ -345,7 +358,87 @@ function choiceLabel(choice: { readonly id: string; readonly label?: string | un
 
 type UserInputRequestedProgressEvent = Extract<ProgressEvent, { type: 'user_input.requested' }>;
 
+type CheckpointChoiceUi = {
+  readonly label?: string;
+  readonly description?: string;
+};
+
+function jsonObject(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function readJsonObjectReport(
+  runFolder: string,
+  path: string,
+): Record<string, unknown> | undefined {
+  try {
+    return jsonObject(readJsonReport(runFolder, path));
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizedSingleLine(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function boundedUserInputText(value: string, maxLength: number): string {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= maxLength) return normalized;
+  const suffix = ' [truncated]';
+  return `${normalized.slice(0, Math.max(1, maxLength - suffix.length))}${suffix}`;
+}
+
+function decisionOptionCheckpointChoices(input: {
+  readonly runFolder: string;
+  readonly allowedChoices: readonly string[];
+}): ReadonlyMap<string, CheckpointChoiceUi> {
+  const report = readJsonObjectReport(input.runFolder, 'reports/decision-options.json');
+  const options = Array.isArray(report?.options) ? report.options : [];
+  const allowed = new Set(input.allowedChoices);
+  const byChoice = new Map<string, CheckpointChoiceUi>();
+
+  for (const rawOption of options) {
+    const option = jsonObject(rawOption);
+    const id = normalizedSingleLine(option?.id);
+    if (id === undefined || !allowed.has(id)) continue;
+    const label = normalizedSingleLine(option?.label);
+    const summary = normalizedSingleLine(option?.summary);
+    const tradeoffs = Array.isArray(option?.tradeoffs)
+      ? option.tradeoffs.flatMap((item) => normalizedSingleLine(item) ?? [])
+      : [];
+    const description = summary ?? (tradeoffs.length > 0 ? tradeoffs.join('; ') : undefined);
+    byChoice.set(id, {
+      ...(label === undefined ? {} : { label }),
+      ...(description === undefined ? {} : { description }),
+    });
+  }
+
+  return byChoice;
+}
+
+function tournamentCheckpointQuestion(runFolder: string): string | undefined {
+  return normalizedSingleLine(
+    readJsonObjectReport(runFolder, 'reports/tournament-review.json')?.tradeoff_question,
+  );
+}
+
+function checkpointChoiceDisplayLabels(input: {
+  readonly runFolder: string;
+  readonly allowedChoices: readonly string[];
+}): readonly string[] {
+  const dynamicChoices = decisionOptionCheckpointChoices(input);
+  return input.allowedChoices.map((choiceId) =>
+    boundedUserInputText(dynamicChoices.get(choiceId)?.label ?? choiceId, 80),
+  );
+}
+
 function userInputQuestionsForCheckpoint(input: {
+  readonly runFolder: string;
   readonly flow: CompiledFlow;
   readonly stepId: string;
   readonly allowedChoices: readonly string[];
@@ -364,8 +457,15 @@ function userInputQuestionsForCheckpoint(input: {
             readonly description?: string | undefined;
           }
         >();
-  const question =
-    step?.kind === 'checkpoint' ? step.policy.prompt : 'Choose how Circuit should continue.';
+  const question = boundedUserInputText(
+    tournamentCheckpointQuestion(input.runFolder) ??
+      (step?.kind === 'checkpoint' ? step.policy.prompt : 'Choose how Circuit should continue.'),
+    240,
+  );
+  const dynamicChoices = decisionOptionCheckpointChoices({
+    runFolder: input.runFolder,
+    allowedChoices: input.allowedChoices,
+  });
 
   return [
     {
@@ -374,9 +474,18 @@ function userInputQuestionsForCheckpoint(input: {
       question,
       options: input.allowedChoices.slice(0, 4).map((choiceId) => {
         const choice = policyChoices.get(choiceId);
+        const dynamicChoice = dynamicChoices.get(choiceId);
         return {
-          label: choice === undefined ? choiceId : choiceLabel(choice),
-          description: choice?.description ?? `Resume Circuit with '${choiceId}'.`,
+          label: boundedUserInputText(
+            dynamicChoice?.label ?? (choice === undefined ? choiceId : choiceLabel(choice)),
+            80,
+          ),
+          description: boundedUserInputText(
+            dynamicChoice?.description ??
+              choice?.description ??
+              `Resume Circuit with '${choiceId}'.`,
+            160,
+          ),
           checkpoint_choice: choiceId,
         };
       }),
@@ -421,6 +530,7 @@ function reportUserInputRequested(input: {
       allowed_choices: [...input.checkpoint.allowedChoices],
     },
     questions: userInputQuestionsForCheckpoint({
+      runFolder: input.runFolder,
       flow: input.flow,
       stepId: input.checkpoint.stepId,
       allowedChoices: input.checkpoint.allowedChoices,
@@ -846,6 +956,14 @@ async function executeCompiledFlow(
       bootstrapTraceEntry,
     });
   }
+  const runStartedText =
+    ctx.initialTraceEntries === undefined
+      ? `Circuit started ${flow.id}.`
+      : `Circuit resumed ${flow.id}.`;
+  const shouldDiscloseWriteCapableWorker = compiledFlowMayInvokeWriteCapableWorker(flow);
+  const runStartedDisplayText = shouldDiscloseWriteCapableWorker
+    ? `${runStartedText} ${WRITE_CAPABLE_WORKER_DISCLOSURE}`
+    : runStartedText;
   reportProgress(ctx.progress, {
     schema_version: 1,
     type: 'run.started',
@@ -854,11 +972,9 @@ async function executeCompiledFlow(
     recorded_at: bootstrapTs,
     label: ctx.initialTraceEntries === undefined ? 'Started Circuit run' : 'Resumed Circuit run',
     display: progressDisplay(
-      ctx.initialTraceEntries === undefined
-        ? `Circuit started ${flow.id}.`
-        : `Circuit resumed ${flow.id}.`,
+      runStartedDisplayText,
       'major',
-      'info',
+      shouldDiscloseWriteCapableWorker ? 'warning' : 'info',
     ),
     run_folder: runFolder,
   });
@@ -1039,16 +1155,19 @@ async function executeCompiledFlow(
     state.sequence += 1;
   };
 
-  // Walk the routes graph from entry.start_at. Terminate when a step's
-  // pass route resolves to one of the terminal route labels, or when a
-  // step handler reports an aborted outcome.
+  // Walk the routes graph from entry.start_at. Terminate when a step route
+  // resolves to one of the terminal route labels, or when a step handler
+  // reports an aborted outcome.
   const stepsById = new Map(flow.steps.map((s) => [s.id as unknown as string, s] as const));
-  const executedStepIds = new Set(
-    trace_entries
-      .filter((trace_entry) => trace_entry.kind === 'step.completed')
-      .map((trace_entry) => trace_entry.step_id as unknown as string),
-  );
+  const completedStepCounts = new Map<string, number>();
+  for (const trace_entry of trace_entries) {
+    if (trace_entry.kind !== 'step.completed') continue;
+    const stepId = trace_entry.step_id as unknown as string;
+    completedStepCounts.set(stepId, (completedStepCounts.get(stepId) ?? 0) + 1);
+  }
   let currentStepId: string | undefined = ctx.startStepId ?? (entry.start_at as unknown as string);
+  let incomingRouteTaken: string | undefined;
+  let activeRecoveryReason: string | undefined;
   let runOutcome: RunClosedOutcome = 'complete';
   let closeReason: string | undefined;
 
@@ -1059,15 +1178,32 @@ async function executeCompiledFlow(
         `runCompiledFlow: route target '${currentStepId}' is not a known step id (fixture/reduction mismatch)`,
       );
     }
-    if (executedStepIds.has(currentStepId)) {
+    const priorCompletions = completedStepCounts.get(currentStepId) ?? 0;
+    const maxAttempts = maxAttemptsForRoute(step, incomingRouteTaken);
+    const incomingIsRecovery =
+      incomingRouteTaken !== undefined && RECOVERY_ROUTE_LABELS.has(incomingRouteTaken);
+    if (priorCompletions > 0 && (!incomingIsRecovery || priorCompletions >= maxAttempts)) {
       runOutcome = 'aborted';
-      closeReason = `pass-route cycle detected at step '${currentStepId}'; aborting run before re-entering an already executed step`;
+      const recoverySuffix =
+        activeRecoveryReason === undefined ? '' : `; last recovery reason: ${activeRecoveryReason}`;
+      closeReason = incomingIsRecovery
+        ? `route '${incomingRouteTaken}' for step '${currentStepId}' exhausted max_attempts=${maxAttempts}${recoverySuffix}`
+        : `route cycle detected at step '${currentStepId}' via '${incomingRouteTaken ?? 'pass'}'; aborting run before re-entering an already executed step${recoverySuffix}`;
+      push({
+        schema_version: 1,
+        sequence: state.sequence,
+        recorded_at: recordedAt(),
+        run_id: runId,
+        kind: 'step.aborted',
+        step_id: step.id,
+        attempt: priorCompletions + 1,
+        reason: closeReason,
+      });
       currentStepId = undefined;
       break;
     }
-    executedStepIds.add(currentStepId);
     const isResumedCheckpoint = ctx.resumeCheckpoint?.stepId === currentStepId;
-    const attempt = isResumedCheckpoint ? ctx.resumeCheckpoint.attempt : 1;
+    const attempt = isResumedCheckpoint ? ctx.resumeCheckpoint.attempt : priorCompletions + 1;
 
     if (!isResumedCheckpoint) {
       push({
@@ -1140,6 +1276,10 @@ async function executeCompiledFlow(
 
     if (result.kind === 'waiting_checkpoint') {
       const waitingRecordedAt = recordedAt();
+      const checkpointChoiceLabels = checkpointChoiceDisplayLabels({
+        runFolder,
+        allowedChoices: result.checkpoint.allowedChoices,
+      });
       reportProgress(ctx.progress, {
         schema_version: 1,
         type: 'checkpoint.waiting',
@@ -1148,7 +1288,7 @@ async function executeCompiledFlow(
         recorded_at: waitingRecordedAt,
         label: `Waiting for checkpoint ${result.checkpoint.stepId}`,
         display: progressDisplay(
-          `Circuit is waiting for a checkpoint choice: ${result.checkpoint.allowedChoices.join(', ')}.`,
+          `Circuit is waiting for a checkpoint choice: ${checkpointChoiceLabels.join(', ')}.`,
           'major',
           'checkpoint',
         ),
@@ -1206,14 +1346,55 @@ async function executeCompiledFlow(
       break;
     }
 
-    const passRoute = step.routes.pass;
-    if (passRoute === undefined) {
-      throw new Error(`runCompiledFlow: step '${step.id}' missing 'pass' route (WF-I10 violation)`);
+    const routeTaken = result.route ?? 'pass';
+    if (result.recovery_reason !== undefined) {
+      activeRecoveryReason = result.recovery_reason;
     }
-    const terminalOutcome = terminalOutcomeForRoute(passRoute);
+    const nextRoute = step.routes[routeTaken];
+    if (nextRoute === undefined) {
+      throw new Error(
+        `runCompiledFlow: step '${step.id}' selected route '${routeTaken}' but the compiled step has no target for that route`,
+      );
+    }
+    const terminalOutcome = terminalOutcomeForRoute(nextRoute);
 
-    if (terminalOutcome === undefined && executedStepIds.has(passRoute)) {
-      const reason = `pass-route cycle detected: step '${step.id}' routes to already executed step '${passRoute}'`;
+    if (terminalOutcome === undefined) {
+      const nextStep = stepsById.get(nextRoute);
+      if (nextStep === undefined) {
+        throw new Error(
+          `runCompiledFlow: route target '${nextRoute}' is not a known step id (fixture/reduction mismatch)`,
+        );
+      }
+      const nextCompletedCount = completedStepCounts.get(nextRoute) ?? 0;
+      const nextIsRecovery = RECOVERY_ROUTE_LABELS.has(routeTaken);
+      const nextMaxAttempts = maxAttemptsForRoute(nextStep, routeTaken);
+      if (nextCompletedCount > 0 && (!nextIsRecovery || nextCompletedCount >= nextMaxAttempts)) {
+        const recoverySuffix =
+          activeRecoveryReason === undefined
+            ? ''
+            : `; last recovery reason: ${activeRecoveryReason}`;
+        const reason = nextIsRecovery
+          ? `route '${routeTaken}' from step '${step.id}' to '${nextRoute}' exhausted max_attempts=${nextMaxAttempts}${recoverySuffix}`
+          : `route cycle detected: step '${step.id}' routes via '${routeTaken}' to already executed step '${nextRoute}'${recoverySuffix}`;
+        push({
+          schema_version: 1,
+          sequence: state.sequence,
+          recorded_at: recordedAt(),
+          run_id: runId,
+          kind: 'step.aborted',
+          step_id: step.id,
+          attempt,
+          reason,
+        });
+        runOutcome = 'aborted';
+        closeReason = reason;
+        currentStepId = undefined;
+        break;
+      }
+    }
+
+    if (terminalOutcome === undefined && nextRoute === currentStepId && routeTaken === 'pass') {
+      const reason = `pass-route cycle detected: step '${step.id}' routes via 'pass' to itself`;
       push({
         schema_version: 1,
         sequence: state.sequence,
@@ -1238,17 +1419,19 @@ async function executeCompiledFlow(
       kind: 'step.completed',
       step_id: step.id,
       attempt,
-      route_taken: 'pass',
+      route_taken: routeTaken,
     });
+    completedStepCounts.set(currentStepId, (completedStepCounts.get(currentStepId) ?? 0) + 1);
 
     if (terminalOutcome !== undefined) {
       runOutcome = terminalOutcome;
       currentStepId = undefined;
-      if (passRoute !== '@complete') {
-        closeReason = `terminal route ${passRoute}`;
+      if (nextRoute !== '@complete') {
+        closeReason = `terminal route ${nextRoute}`;
       }
     } else {
-      currentStepId = passRoute;
+      currentStepId = nextRoute;
+      incomingRouteTaken = routeTaken;
     }
   }
 

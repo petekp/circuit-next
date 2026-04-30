@@ -25,6 +25,16 @@ function table(headers, rows) {
   return [headerLine, sep, ...body].join('\n');
 }
 
+function proofVerified(proofs, id) {
+  return proofs.scenarios.some(
+    (scenario) => scenario.id === id && scenario.status === 'verified_current',
+  );
+}
+
+function capabilityStatus(current, id) {
+  return current.capabilities.find((capability) => capability.id === id)?.status;
+}
+
 async function main() {
   const schemas = await loadReleaseSchemas();
   const checks = await loadReleaseChecks();
@@ -68,13 +78,25 @@ async function main() {
     ['Release blockers', blockers.length],
     ['Infra issues', issues.length],
   ];
-  const nextActions = [
-    'Capture the golden Explore Tournament proof for proof:explore-decision.',
-    'Implement or fail generation for rich route outcomes.',
-    'Finish the custom connector guide with a copy-pasteable file-protocol example.',
-    'Capture golden release runs across proof categories.',
-    'Replace hand-maintained support claims with generated matrix blocks.',
-  ];
+  const nextActions =
+    blockers.length === 0
+      ? [
+          'Decide whether the approved Fix Lite intent exception needs public release-note wording.',
+          'Harden the partial host surfaces that are outside original parity: generic shell text progress and native host adapters.',
+          'Keep golden runs refreshed whenever command, summary, or report contracts change.',
+          'Run `npm run check-release-ready` as the strict final release check.',
+        ]
+      : [
+          proofVerified(proofs, 'proof:explore-decision')
+            ? 'Use the verified Explore Tournament proof to keep shrinking Explore behavioral axes.'
+            : 'Capture the golden Explore Tournament proof for proof:explore-decision.',
+          capabilityStatus(current, 'route-outcomes:rich') === 'implemented'
+            ? 'Use the executable rich route substrate in checkpoint, recovery, and failure proof runs.'
+            : 'Implement or fail generation for rich route outcomes.',
+          'Finish the custom connector guide with a copy-pasteable file-protocol example.',
+          'Capture golden release runs across proof categories.',
+          'Replace hand-maintained support claims with generated matrix blocks.',
+        ];
 
   const lines = [
     '# Circuit Release Readiness Report',

@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "run_id": "44444444-4444-4444-4444-444444444408",
+  "flow_id": "migrate",
+  "goal": "migrate: replace a small legacy API",
+  "outcome": "complete",
+  "summary": "migrate v0.1.0 closed 8 step(s) for goal \"migrate: replace a small legacy API\".",
+  "closed_at": "2026-04-29T21:01:20.000Z",
+  "trace_entries_observed": 44,
+  "manifest_hash": "1e8ce6f15d60689d965e95e20e9949aaccfd5b70e542640dc6fda7ce8a30d700",
+  "verdict": "cutover-approved"
+}

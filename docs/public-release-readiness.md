@@ -246,49 +246,38 @@ Primary files:
 
 ### REL-002: Correct Connector Names, Auto Selection, And Codex Isolation Claims
 
-Problem:
-Current public docs make connector claims that do not match runtime behavior.
+Current state:
+Resolved for the public parity release by making the connector set coherent and
+truthful:
 
-Evidence:
+- `README.md`, `docs/contracts/connector.md`, and
+  `docs/contracts/host-capabilities.md` name the current built-ins as
+  `claude-code` and `codex`.
+- Auto-selection defaults to `claude-code`.
+- `codex` is documented as a read-only Codex CLI worker that inherits the
+  Circuit process environment and current working directory.
+- `codex-isolated` is planned, not current. It is absent from the config schema
+  and must fail config parsing until isolated writable support is implemented
+  and tested.
+- Custom connectors use the documented prompt-file/output-file protocol and are
+  trusted local processes, not OS sandboxes.
 
-- `README.md` refers to an `agent` connector, but built-ins are
-  `claude-code`, `codex`, and `codex-isolated`.
-- `src/runtime/relay-selection.ts` auto-resolves to `claude-code`, not "Codex
-  if installed, else agent".
-- `README.md` says Codex runs inside isolated `CODEX_HOME` and `TMPDIR`.
-- `src/runtime/connectors/codex.ts` spawns with `env: process.env` and comments
-  that the subprocess inherits the parent cwd by design.
-- `docs/contracts/connector.md` and `src/schemas/connector.ts` mention
-  `codex-isolated`, while `src/runtime/relay-selection.ts` throws when it is
-  selected.
+Remaining release note:
+`codex-isolated` remains an approved post-release extension, not a current
+supported connector. This avoids a precise-sounding isolation promise that the
+runtime cannot yet honor.
 
 Why users care:
 Containment and connector behavior are trust surfaces. A precise-sounding but
 partly false isolation claim is worse than a clearly stated limitation.
 
-Decision needed:
-Decide whether `codex-isolated` is part of the public host/worker promise. If it
-is, implement and test the stronger containment. If it is not, remove it from
-the public promise and record it as a post-parity extension.
-
-Recommendation:
-For the public parity release, document and implement a coherent connector set:
-
-- `claude-code`: trusted write-capable worker.
-- `codex`: read-only Codex CLI worker using Codex read-only sandbox flags and
-  the current process environment.
-- `codex-isolated`: either implemented with isolated `CODEX_HOME`/`TMPDIR` and
-  tests, or removed from public config/docs with an approved exception.
-- Auto-selection defaults to `claude-code` unless config says otherwise.
-
 Acceptance checks:
 
-- README and connector docs use `claude-code`, not `agent`.
-- `codex-isolated` either works as documented or is absent from public config
-  examples and docs with a named parity exception.
-- No public doc claims isolated `CODEX_HOME` or `TMPDIR` unless implemented and
-  tested.
-- A support matrix states current host and worker status in plain language.
+- [x] README and connector docs use `claude-code`, not `agent`.
+- [x] `codex-isolated` is absent from public config examples and rejected by
+  schema parsing until implemented.
+- [x] No public doc claims isolated `CODEX_HOME` or `TMPDIR`.
+- [x] A support matrix states current host and worker status in plain language.
 
 Primary files:
 
@@ -301,18 +290,25 @@ Primary files:
 
 ### REL-003: Implement Rich Schematic Routes For Parity
 
+Current state:
+The compiler now preserves declared rich route labels in generated flows instead
+of dropping them. Checkpoint selections can take those labels directly, terminal
+routes close as stop/handoff/escalate, failed relay and verification checks can
+take declared recovery routes, and retry/revise loops are bounded by
+`max_attempts`.
+
 Problem:
-Schematics can declare outcomes such as `retry`, `revise`, `stop`, `ask`,
-`handoff`, and `escalate`. The compiler currently drops those routes. Real
-failures abort instead of retrying, asking, or revising.
+Schematics declare outcomes such as `retry`, `revise`, `stop`, `ask`,
+`handoff`, and `escalate`. These routes must keep matching runtime behavior as
+the shipped flows evolve.
 
 Evidence:
 
-- `src/runtime/compile-schematic-to-flow.ts` has
-  `SCHEMATIC_ROUTES_DROPPED_AT_COMPILE`.
 - Build and Fix schematics declare richer route outcomes.
-- Generated compiled flows keep only executable `pass` routes for many checks.
-- The runner advances through compiled pass routes or aborts on failure.
+- Generated compiled flows include route labels such as `retry`, `revise`,
+  `stop`, `ask`, `handoff`, and `escalate`.
+- Runtime route tests cover checkpoint-selected rich routes, failed relay
+  recovery, terminal outcomes, and bounded retry loops.
 
 Why users care:
 Circuit's promise is structured delegation. If docs or flow schematics imply
@@ -555,10 +551,11 @@ Primary files:
 
 ### REL-007: Disclose Write-Capable Worker Behavior On First Write-Capable Run
 
-Problem:
-The Claude Code connector invokes a write-capable subprocess with
-`bypassPermissions`. This may be correct for implementation, but the first-run
-experience must not hide it.
+Current state:
+Resolved for the public parity release. The Claude Code connector remains the
+trusted same-workspace write-capable worker, and Circuit now discloses that
+path in first-run docs, host capability docs, progress output, and final
+summaries for Build, Fix, Migrate, and Sweep.
 
 Evidence:
 
@@ -566,26 +563,26 @@ Evidence:
   like Read, Write, Edit, Bash, Glob, and Grep.
 - It passes `--permission-mode bypassPermissions`.
 - Codex worker relays are read-only and cannot run implementer roles.
+- `src/runtime/write-capable-worker-disclosure.ts` owns the shared public
+  disclosure text.
+- `src/runtime/runner.ts` includes the disclosure in the run-start progress
+  display for write-capable flows.
+- `src/runtime/operator-summary-writer.ts` includes the disclosure in the final
+  summary details.
+- `README.md`, `docs/first-run.md`, and `docs/contracts/host-capabilities.md`
+  disclose the worker status in plain language.
 
 Why users care:
 Users need to know when Circuit can edit files. Honest disclosure increases
 trust; surprise write access destroys it.
 
-Decision needed:
-Where should the disclosure appear?
-
-Recommendation:
-Show it in first-run docs and, for the first write-capable Build, Fix, Migrate,
-or Sweep run, in progress or the initial summary:
-
-> This flow may invoke a write-capable Claude Code worker. Circuit will verify
-> and review the result, but the worker can edit files in this checkout.
-
 Acceptance checks:
 
-- README and first-run guide disclose write-capable workflow behavior.
-- Review is presented as the safer read-only first run when appropriate.
-- Connector matrix clearly separates write-capable and read-only workers.
+- [x] README and first-run guide disclose write-capable workflow behavior.
+- [x] Review is presented as the safer read-only first run when appropriate.
+- [x] Connector matrix clearly separates write-capable and read-only workers.
+- [x] Progress output and final summaries include the disclosure for
+  write-capable flows.
 
 Primary files:
 
@@ -1031,10 +1028,13 @@ Primary files:
 
 ### REL-016: Treat Plan-Execution Requests As Campaign Starts, Not Analysis
 
-Problem:
-When the user says "execute this plan," Circuit can route to Explore, summarize
-the plan, and stop. That is safe, but it leaves the operator with the same
-burden they started with: deciding what to do next.
+Current state:
+Resolved for the public parity release's first slice. Plan-execution language
+now routes into an executable workflow instead of falling through to
+analysis-only Explore. General `Execute this plan:` requests start Build at
+default depth; migration, cleanup, bug-fix, overnight, and decision-oriented
+plan requests route to Migrate, Sweep, Fix, Sweep autonomous, or Explore
+tournament respectively.
 
 Evidence:
 
@@ -1045,6 +1045,13 @@ Evidence:
 - Original Circuit had a useful product instinct here: Explore plans could
   transfer into Build when `plan.md` existed with slices, but that behavior was
   encoded in SKILL prose rather than enforceable runtime state.
+- `src/runtime/router.ts` recognizes execution-language plan requests before
+  planning-report suppression can route them to Explore.
+- `tests/contracts/flow-router.test.ts` covers Build, Fix, Migrate, Sweep,
+  autonomous Sweep, and Explore tournament plan-execution routing.
+- `tests/runner/cli-router.test.ts` proves the public CLI starts Build for
+  `Execute this plan: ./docs/public-release-readiness.md`.
+- `examples/runs/plan-execution/` captures the public golden proof.
 
 Why users care:
 The operator does not want a better description of a campaign when they asked
@@ -1061,9 +1068,11 @@ language, Circuit must do one of three things:
 3. Produce an execution campaign with an explicit next command, not a completed
    Explore with no handoff.
 
-Decision needed:
-Should the first release implement plan execution as router behavior, Explore
-close behavior, or an explicit checkpoint/handoff outcome?
+Decision:
+Use router behavior for the first parity slice. This is deterministic, starts
+work immediately for ordinary campaign plans, and keeps the door open for
+future Explore handoff and campaign checkpoint behavior when the plan needs
+deeper content inspection.
 
 Options:
 
@@ -1082,15 +1091,21 @@ Circuit to execute a plan.
 
 Acceptance checks:
 
-- `/circuit:run Execute this plan: <doc>` cannot finish as plain Explore unless
+- [x] `/circuit:run Execute this plan: <doc>` cannot finish as plain Explore unless
   the user explicitly asked for analysis only.
-- If the plan has ordered items, Circuit identifies the first executable slice.
-- If the first slice requires a decision, Circuit asks one checkpoint question.
-- If Circuit does not start work, it provides the exact suggested next
+- [x] If the plan has ordered items, Circuit identifies the first executable slice
+  at the workflow-family level.
+- [x] If the first slice requires a decision, Circuit routes to Explore
+  tournament.
+- [x] If Circuit does not start work, it provides the exact suggested next
   invocation.
-- Golden plan-execution fixtures cover at least Build, Fix, Migrate, Sweep, and
-  Explore decision plans, including `docs/public-release-readiness.md` or a
-  scrubbed fixture derived from it.
+- [x] Golden plan-execution fixtures include
+  `docs/public-release-readiness.md`.
+
+Remaining improvement:
+The first public slice identifies the workflow family from the request text. A
+later hardening pass can inspect referenced plan contents deeply enough to pick
+an exact checklist item inside arbitrary documents.
 
 Primary files:
 

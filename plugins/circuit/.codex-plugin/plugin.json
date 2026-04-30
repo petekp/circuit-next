@@ -13,7 +13,7 @@
   "interface": {
     "displayName": "Circuit",
     "shortDescription": "Run Circuit local flows from Codex",
-    "longDescription": "Adds Codex-native Circuit skills and commands that invoke the circuit-next CLI, read JSON run summaries, and surface report paths for follow-up inspection.",
+    "longDescription": "Adds Codex-native Circuit skills and commands that invoke the circuit-next CLI, read JSON run summaries, publish custom flow drafts, save handoff continuity, and surface report paths for follow-up inspection.",
     "developerName": "Circuit",
     "category": "Coding",
     "capabilities": ["Interactive", "Write"],

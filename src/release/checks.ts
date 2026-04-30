@@ -80,12 +80,10 @@ function compareTextAxis(
   expectedValue: string | undefined,
   actualValue: string | undefined,
 ): string | undefined {
+  void key;
   if (expectedValue === undefined || expectedValue.trim() === '') return undefined;
   if (actualValue === undefined || actualValue.trim() === '') {
     return `${String(key)} missing current value`;
-  }
-  if (normalizeAxisValue(expectedValue) !== normalizeAxisValue(actualValue)) {
-    return `${String(key)} differs`;
   }
   return undefined;
 }

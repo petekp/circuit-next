@@ -65,7 +65,7 @@ export interface StepHandlerContext {
 }
 
 export type StepHandlerResult =
-  | { readonly kind: 'advance' }
+  | { readonly kind: 'advance'; readonly route?: string; readonly recovery_reason?: string }
   | { readonly kind: 'aborted'; readonly reason: string }
   | {
       readonly kind: 'waiting_checkpoint';

@@ -10,6 +10,7 @@ import { findRelayShapeHint } from '../registries/shape-hints/registry.js';
 import { deriveResolvedSelection, resolveRelayDecision } from '../relay-selection.js';
 import { resolveRunRelative } from '../run-relative-path.js';
 import type { RelayInput } from '../runner-types.js';
+import { recoveryRouteForStep } from './recovery-route.js';
 import type { StepHandlerContext, StepHandlerResult } from './types.js';
 
 export type RelayStep = CompiledFlow['steps'][number] & { kind: 'relay' };
@@ -19,13 +20,14 @@ export type RelayStep = CompiledFlow['steps'][number] & { kind: 'relay' };
 // consumes downstream. On 'pass' the handler uses the parsed verdict on
 // `relay.completed` and emits `check.evaluated` with `outcome: 'pass'`.
 // On 'fail' the handler emits `check.evaluated` with `outcome: 'fail'` +
-// the reason, then `step.aborted`. The relay-completed verdict on
-// fail carries the observed verdict when one was present (e.g., a
-// parseable body with a verdict not in pass), so the durable transcript
-// reflects what the connector said even on rejection. When no verdict was
-// observable (unparseable / no verdict field), `relay.completed.verdict`
-// carries the `'<no-verdict>'` sentinel — `RelayCompletedTraceEntry.verdict`
-// is `z.string().min(1)` so the slot must hold a non-empty string.
+// the reason, then either takes a declared recovery route or aborts.
+// The relay-completed verdict on fail carries the observed verdict when one
+// was present (e.g., a parseable body with a verdict not in pass), so the
+// durable transcript reflects what the connector said even on rejection.
+// When no verdict was observable (unparseable / no verdict field),
+// `relay.completed.verdict` carries the `'<no-verdict>'` sentinel —
+// `RelayCompletedTraceEntry.verdict` is `z.string().min(1)` so the slot must
+// hold a non-empty string.
 export type CheckEvaluation =
   | { readonly kind: 'pass'; readonly verdict: string }
   | { readonly kind: 'fail'; readonly reason: string; readonly observedVerdict?: string };
@@ -200,6 +202,10 @@ export async function runRelayStep(
       outcome: 'fail',
       reason,
     });
+    const recoveryRoute = recoveryRouteForStep(step, ['retry', 'revise']);
+    if (recoveryRoute !== undefined) {
+      return { kind: 'advance', route: recoveryRoute, recovery_reason: reason };
+    }
     push({
       schema_version: 1,
       sequence: state.sequence,
@@ -336,6 +342,10 @@ export async function runRelayStep(
     outcome: 'fail',
     reason: evaluation.reason,
   });
+  const recoveryRoute = recoveryRouteForStep(step);
+  if (recoveryRoute !== undefined) {
+    return { kind: 'advance', route: recoveryRoute, recovery_reason: evaluation.reason };
+  }
   push({
     schema_version: 1,
     sequence: state.sequence,

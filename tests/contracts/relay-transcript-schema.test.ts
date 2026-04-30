@@ -568,4 +568,35 @@ describe('Reducer consumes the five-trace_entry relay transcript', () => {
     const snapshot = reduce(parsed.data);
     expect(snapshot.trace_entries_consumed).toBe(log.length);
   });
+
+  it('reduce() marks relay-only step state complete after relay.completed', () => {
+    const branchRelayStarted = {
+      ...relayStartedTraceEntry,
+      step_id: 'proposal-fanout-step-option-1',
+      sequence: 1,
+    };
+    const branchRelayCompleted = {
+      ...relayCompletedTraceEntry,
+      step_id: 'proposal-fanout-step-option-1',
+      sequence: 2,
+    };
+    const log = [
+      bootstrapTraceEntry,
+      branchRelayStarted,
+      branchRelayCompleted,
+      { ...runClosedTraceEntry, sequence: 3 },
+    ];
+    const parsed = RunTrace.safeParse(log);
+    if (!parsed.success) {
+      throw new Error(`RunTrace.safeParse failed: ${JSON.stringify(parsed.error.issues)}`);
+    }
+    const snapshot = reduce(parsed.data);
+    expect(snapshot.steps).toContainEqual(
+      expect.objectContaining({
+        step_id: 'proposal-fanout-step-option-1',
+        status: 'complete',
+        attempts: 1,
+      }),
+    );
+  });
 });

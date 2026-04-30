@@ -117,7 +117,7 @@ function flowWithModelEffortSelections(): { flow: CompiledFlow; bytes: Buffer } 
     invocation_options: { shared: 'flow', flowOnly: true },
   };
   for (const stage of raw.stages) {
-    if (stage.id === 'synthesize-stage') {
+    if (stage.id === 'decision-stage') {
       stage.selection = {
         skills: { mode: 'append', skills: ['typography'] },
         depth: 'deep',
@@ -203,7 +203,7 @@ describe('P2-MODEL-EFFORT — full selection precedence resolver', () => {
     ]);
     expect(resolution.applied.find((entry) => entry.source === 'stage')).toMatchObject({
       source: 'stage',
-      stage_id: 'synthesize-stage',
+      stage_id: 'decision-stage',
     });
     expect(resolution.applied.find((entry) => entry.source === 'step')).toMatchObject({
       source: 'step',

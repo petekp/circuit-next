@@ -173,6 +173,7 @@ describe('Sweep runtime wiring', () => {
       'frame-step',
       'survey-step',
       'triage-step',
+      'triage-checkpoint-step',
       'execute-step',
       'verify-step',
       'review-step',
@@ -200,6 +201,7 @@ describe('Sweep runtime wiring', () => {
     expect(outcome.result.outcome).toBe('complete');
     const labels = outcome.trace_entries.map(traceEntryLabel);
     expect(labels).toContain('relay.completed:survey-step');
+    expect(labels).toContain('checkpoint.resolved:triage-checkpoint-step');
     expect(labels).toContain('relay.completed:execute-step');
     expect(labels).toContain('relay.completed:review-step');
 

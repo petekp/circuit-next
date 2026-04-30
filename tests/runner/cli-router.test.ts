@@ -73,6 +73,158 @@ function relayerWithBody(body: string): RelayFn {
   };
 }
 
+function tournamentRelayer(): RelayFn {
+  return {
+    connectorName: 'claude-code',
+    relay: async (input: RelayInput): Promise<RelayResult> => {
+      const proposal = (option_id: string, option_label: string, case_summary: string) => ({
+        verdict: 'accept',
+        option_id,
+        option_label,
+        case_summary,
+        assumptions: ['The operator accepts the stated tradeoff.'],
+        evidence_refs: ['reports/decision-options.json'],
+        risks: ['The proof fixture only covers synthetic decision evidence.'],
+        next_action: `Run a Build plan for ${option_label}.`,
+      });
+      if (input.prompt.includes('Step: proposal-fanout-step-option-1')) {
+        return {
+          request_payload: input.prompt,
+          receipt_id: 'stub-tournament-option-1',
+          result_body: JSON.stringify(
+            proposal('option-1', 'React', 'Choose React for ecosystem depth.'),
+          ),
+          duration_ms: 1,
+          cli_version: '0.0.0-stub',
+        };
+      }
+      if (input.prompt.includes('Step: proposal-fanout-step-option-2')) {
+        return {
+          request_payload: input.prompt,
+          receipt_id: 'stub-tournament-option-2',
+          result_body: JSON.stringify(
+            proposal('option-2', 'Vue', 'Choose Vue for iteration speed.'),
+          ),
+          duration_ms: 1,
+          cli_version: '0.0.0-stub',
+        };
+      }
+      if (input.prompt.includes('Step: proposal-fanout-step-option-3')) {
+        return {
+          request_payload: input.prompt,
+          receipt_id: 'stub-tournament-option-3',
+          result_body: JSON.stringify(
+            proposal('option-3', 'Hybrid path', 'Prototype both paths before choosing.'),
+          ),
+          duration_ms: 1,
+          cli_version: '0.0.0-stub',
+        };
+      }
+      if (input.prompt.includes('Step: proposal-fanout-step-option-4')) {
+        return {
+          request_payload: input.prompt,
+          receipt_id: 'stub-tournament-option-4',
+          result_body: JSON.stringify(
+            proposal('option-4', 'Defer pending evidence', 'Gather missing constraints first.'),
+          ),
+          duration_ms: 1,
+          cli_version: '0.0.0-stub',
+        };
+      }
+      return {
+        request_payload: input.prompt,
+        receipt_id: 'stub-tournament-review',
+        result_body: JSON.stringify({
+          verdict: 'recommend',
+          recommended_option_id: 'option-1',
+          comparison: 'React carries ecosystem depth while Vue carries speed.',
+          objections: ['The choice lacks a spike.'],
+          missing_evidence: ['No production spike exists.'],
+          tradeoff_question: 'Choose ecosystem depth or iteration speed.',
+          confidence: 'medium',
+        }),
+        duration_ms: 1,
+        cli_version: '0.0.0-stub',
+      };
+    },
+  };
+}
+
+function migrateCliRelayer(): RelayFn {
+  return {
+    connectorName: 'claude-code',
+    relay: async (input: RelayInput): Promise<RelayResult> => {
+      if (input.prompt.includes('Step: inventory-step')) {
+        return {
+          request_payload: input.prompt,
+          receipt_id: 'stub-cli-migrate-inventory',
+          result_body: JSON.stringify({
+            verdict: 'accept',
+            summary: 'One legacy API site found for the CLI proof.',
+            items: [
+              {
+                id: 'item-1',
+                path: 'src/legacy-api.ts',
+                category: 'import-site',
+                description: 'Legacy API import site.',
+              },
+            ],
+            batches: [
+              {
+                id: 'batch-1',
+                title: 'Replace the legacy API import',
+                item_ids: ['item-1'],
+                rationale: 'Single safe batch for the CLI proof.',
+              },
+            ],
+          }),
+          duration_ms: 1,
+          cli_version: '0.0.0-stub',
+        };
+      }
+
+      if (
+        input.prompt.includes('Step: review-step') &&
+        input.prompt.includes('Accepted verdicts: cutover-approved, cutover-with-followups')
+      ) {
+        return {
+          request_payload: input.prompt,
+          receipt_id: 'stub-cli-migrate-review',
+          result_body: JSON.stringify({
+            verdict: 'cutover-approved',
+            summary: 'Cutover approved for the synthetic migration.',
+            findings: [],
+          }),
+          duration_ms: 1,
+          cli_version: '0.0.0-stub',
+        };
+      }
+
+      if (input.prompt.includes('Step: act-step')) {
+        return {
+          request_payload: input.prompt,
+          receipt_id: 'stub-cli-build-act',
+          result_body: BUILD_IMPLEMENTATION_BODY,
+          duration_ms: 1,
+          cli_version: '0.0.0-stub',
+        };
+      }
+
+      if (input.prompt.includes('Step: review-step') && input.prompt.includes('build.review@v1')) {
+        return {
+          request_payload: input.prompt,
+          receipt_id: 'stub-cli-build-review',
+          result_body: BUILD_REVIEW_BODY,
+          duration_ms: 1,
+          cli_version: '0.0.0-stub',
+        };
+      }
+
+      throw new Error(`unexpected migrate CLI relay prompt: ${input.prompt.slice(0, 240)}`);
+    },
+  };
+}
+
 function traceEntryLog(runFolder: string): Array<Record<string, unknown>> {
   return readFileSync(join(runFolder, 'trace.ndjson'), 'utf8')
     .trim()
@@ -191,6 +343,70 @@ async function runMainJson(
     throw new Error('CLI output was not a JSON object');
   }
   return parsed as Record<string, unknown>;
+}
+
+async function runMainJsonWithRelayer(
+  argv: readonly string[],
+  relayer: RelayFn,
+): Promise<Record<string, unknown>> {
+  let captured = '';
+  const origWrite = process.stdout.write;
+  process.stdout.write = ((chunk: string | Uint8Array): boolean => {
+    captured += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+    return true;
+  }) as typeof process.stdout.write;
+  try {
+    const exit = await main(argv, {
+      relayer,
+      now: deterministicNow(Date.UTC(2026, 3, 24, 15, 0, 0)),
+      runId: '84000000-0000-0000-0000-000000000001',
+      configHomeDir: join(runFolderBase, 'empty-home'),
+      configCwd: process.cwd(),
+    });
+    expect(exit).toBe(0);
+  } finally {
+    process.stdout.write = origWrite;
+  }
+  return JSON.parse(captured) as Record<string, unknown>;
+}
+
+async function runMainJsonWithRelayerAndProgress(
+  argv: readonly string[],
+  relayer: RelayFn,
+): Promise<{ output: Record<string, unknown>; progress: Array<ProgressEvent> }> {
+  let stdout = '';
+  let stderr = '';
+  const origStdoutWrite = process.stdout.write;
+  const origStderrWrite = process.stderr.write;
+  process.stdout.write = ((chunk: string | Uint8Array): boolean => {
+    stdout += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+    return true;
+  }) as typeof process.stdout.write;
+  process.stderr.write = ((chunk: string | Uint8Array): boolean => {
+    stderr += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+    return true;
+  }) as typeof process.stderr.write;
+  try {
+    const exit = await main(argv, {
+      relayer,
+      now: deterministicNow(Date.UTC(2026, 3, 24, 15, 0, 0)),
+      runId: '84000000-0000-0000-0000-000000000001',
+      configHomeDir: join(runFolderBase, 'empty-home'),
+      configCwd: process.cwd(),
+    });
+    expect(exit).toBe(0);
+  } finally {
+    process.stdout.write = origStdoutWrite;
+    process.stderr.write = origStderrWrite;
+  }
+
+  const output = JSON.parse(stdout) as Record<string, unknown>;
+  const progress = stderr
+    .trim()
+    .split('\n')
+    .filter((line) => line.length > 0)
+    .map((line) => ProgressEvent.parse(JSON.parse(line)));
+  return { output, progress };
 }
 
 async function runMainJsonWithProgress(
@@ -340,6 +556,89 @@ describe('CLI router', () => {
     });
   });
 
+  it('routes decide: through the public CLI to the Explore tournament fixture', async () => {
+    const runFolder = join(runFolderBase, 'explore-tournament-cli');
+    const output = await runMainJsonWithRelayer(
+      ['--goal', 'decide: React vs Vue', '--run-folder', runFolder],
+      tournamentRelayer(),
+    );
+
+    const trace_entries = traceEntryLog(runFolder);
+    const bootstrap = trace_entries.find((trace_entry) => trace_entry.kind === 'run.bootstrapped');
+    const stressReview = trace_entries.find(
+      (trace_entry) =>
+        trace_entry.kind === 'relay.completed' && trace_entry.step_id === 'stress-proposals-step',
+    );
+    expect(output.flow_id).toBe('explore');
+    expect(output.selected_flow).toBe('explore');
+    expect(output.entry_mode).toBe('tournament');
+    expect(output.entry_mode_source).toBe('classifier');
+    expect(output.outcome).toBe('checkpoint_waiting');
+    expect(output.checkpoint).toMatchObject({
+      step_id: 'tradeoff-checkpoint-step',
+      allowed_choices: ['option-1', 'option-2', 'option-3', 'option-4'],
+    });
+    expect(bootstrap).toMatchObject({ depth: 'tournament' });
+    expect(stressReview).toBeDefined();
+  });
+
+  it('surfaces actual tournament option labels in checkpoint user input', async () => {
+    const runFolder = join(runFolderBase, 'explore-tournament-progress');
+    const { output, progress } = await runMainJsonWithRelayerAndProgress(
+      ['--goal', 'decide: React vs Vue', '--run-folder', runFolder, '--progress', 'jsonl'],
+      tournamentRelayer(),
+    );
+
+    expect(output.outcome).toBe('checkpoint_waiting');
+    const waiting = progress.find((event) => event.type === 'checkpoint.waiting');
+    expect(waiting?.display.text).toContain('React, Vue');
+    const userInput = progress.find((event) => event.type === 'user_input.requested');
+    if (userInput?.type !== 'user_input.requested') {
+      throw new Error('expected user_input.requested progress event');
+    }
+    const [question] = userInput.questions;
+    expect(question?.question).toContain('ecosystem depth or iteration speed');
+    expect(question?.options.map((option) => option.label)).toEqual([
+      'React',
+      'Vue',
+      'Hybrid path',
+      'Defer pending evidence',
+    ]);
+    expect(question?.options.map((option) => option.checkpoint_choice)).toEqual([
+      'option-1',
+      'option-2',
+      'option-3',
+      'option-4',
+    ]);
+    expect(typeof output.operator_summary_markdown_path).toBe('string');
+    const markdown = readFileSync(output.operator_summary_markdown_path as string, 'utf8');
+    expect(markdown).toContain('Checkpoint options: React (option-1); Vue (option-2)');
+  });
+
+  it('resolves sub-run child flows through the public CLI', async () => {
+    const runFolder = join(runFolderBase, 'migrate-cli-sub-run');
+    const output = await runMainJsonWithRelayer(
+      ['migrate', '--goal', 'migrate a tiny legacy API', '--run-folder', runFolder],
+      migrateCliRelayer(),
+    );
+
+    const trace_entries = traceEntryLog(runFolder);
+    expect(output.flow_id).toBe('migrate');
+    expect(output.selected_flow).toBe('migrate');
+    expect(output.outcome).toBe('complete');
+    expect(output.result_path).toBe(join(runFolder, 'reports/result.json'));
+    expect(trace_entries).toContainEqual(
+      expect.objectContaining({
+        kind: 'sub_run.started',
+        step_id: 'batch-step',
+        child_flow_id: 'build',
+        child_entry_mode: 'default',
+      }),
+    );
+    expect(existsSync(join(runFolder, 'reports/migrate/batch-result.json'))).toBe(true);
+    expect(existsSync(join(runFolder, 'reports/migrate-result.json'))).toBe(true);
+  }, 180_000);
+
   it('passes explicit untracked-content opt-in to Review evidence intake', async () => {
     const projectRoot = join(runFolderBase, 'review-untracked-cli-project');
     const runFolder = join(runFolderBase, 'review-untracked-cli-run');
@@ -475,6 +774,15 @@ describe('CLI router', () => {
     expect(existsSync(output.operator_summary_markdown_path as string)).toBe(true);
     expect(progress).toContainEqual(
       expect.objectContaining({
+        type: 'run.started',
+        display: expect.objectContaining({
+          tone: 'warning',
+          text: expect.stringContaining('write-capable Claude Code worker'),
+        }),
+      }),
+    );
+    expect(progress).toContainEqual(
+      expect.objectContaining({
         type: 'checkpoint.waiting',
         step_id: 'frame-step',
         allowed_choices: ['continue'],
@@ -526,6 +834,27 @@ describe('CLI router', () => {
     expect(output.selected_flow).toBe('explore');
     expect(output.routed_by).toBe('classifier');
     expect(output.router_signal).toBeUndefined();
+    expect(output.outcome).toBe('complete');
+  });
+
+  it('omitted flow positional starts a flow for plan-execution requests', async () => {
+    const output = await runMainJson(
+      [
+        '--goal',
+        'Execute this plan: ./docs/public-release-readiness.md',
+        '--run-folder',
+        join(runFolderBase, 'plan-execution'),
+      ],
+      '{"verdict":"accept"}',
+    );
+
+    expect(output.flow_id).toBe('build');
+    expect(output.selected_flow).toBe('build');
+    expect(output.routed_by).toBe('classifier');
+    expect(output.router_signal).toBe('plan-execution');
+    expect(output.entry_mode).toBe('default');
+    expect(output.entry_mode_source).toBe('classifier');
+    expect(output.router_reason).toMatch(/first executable slice/i);
     expect(output.outcome).toBe('complete');
   });
 

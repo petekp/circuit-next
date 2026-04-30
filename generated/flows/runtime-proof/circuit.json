@@ -44,6 +44,7 @@
       "protocol": "runtime-proof-compose@v1",
       "reads": [],
       "routes": {
+        "continue": "relay-step",
         "pass": "relay-step"
       },
       "executor": "orchestrator",
@@ -69,6 +70,7 @@
       "protocol": "runtime-proof-relay@v1",
       "reads": ["reports/compose.json"],
       "routes": {
+        "continue": "@complete",
         "pass": "@complete"
       },
       "executor": "worker",

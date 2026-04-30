@@ -20,6 +20,11 @@ function loadCompiledFlow(path: string) {
   return CompiledFlow.parse(readJson(path));
 }
 
+function withoutEntryModes(flow: CompiledFlow) {
+  const { entry_modes: _entryModes, ...rest } = flow;
+  return rest;
+}
+
 describe('compileSchematicToCompiledFlow — byte-equivalence with committed compiled flows', () => {
   const cases = [
     {
@@ -53,9 +58,16 @@ describe('compileSchematicToCompiledFlow — byte-equivalence with committed com
     const compiled = compileSchematicToCompiledFlow(schematic);
     expect(compiled.kind).toBe('per-mode');
     if (compiled.kind !== 'per-mode') return;
-    expect(compiled.flows.get('default')).toEqual(
-      loadCompiledFlow('generated/flows/explore/circuit.json'),
-    );
+    const defaultFlow = compiled.flows.get('default');
+    if (defaultFlow === undefined) throw new Error('missing default Explore mode');
+    const committedDefault = loadCompiledFlow('generated/flows/explore/circuit.json');
+    expect(withoutEntryModes(defaultFlow)).toEqual(withoutEntryModes(committedDefault));
+    expect(committedDefault.entry_modes.map((mode) => mode.name)).toEqual([
+      'default',
+      'lite',
+      'deep',
+      'autonomous',
+    ]);
     expect(compiled.flows.get('tournament')).toEqual(
       loadCompiledFlow('generated/flows/explore/tournament.json'),
     );

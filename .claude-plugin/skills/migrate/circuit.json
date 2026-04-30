@@ -25,12 +25,6 @@
       "description": "Default Migrate entry mode."
     },
     {
-      "name": "lite",
-      "start_at": "frame-step",
-      "depth": "lite",
-      "description": "Lite Migrate entry mode."
-    },
-    {
       "name": "deep",
       "start_at": "frame-step",
       "depth": "deep",
@@ -60,7 +54,7 @@
       "id": "coexistence-stage",
       "title": "Coexistence Plan",
       "canonical": "plan",
-      "steps": ["coexistence-step"]
+      "steps": ["coexistence-step", "coexistence-checkpoint-step"]
     },
     {
       "id": "execute-stage",
@@ -97,7 +91,9 @@
       "protocol": "migrate-frame@v1",
       "reads": [],
       "routes": {
-        "pass": "inventory-step"
+        "continue": "inventory-step",
+        "pass": "inventory-step",
+        "stop": "@stop"
       },
       "executor": "orchestrator",
       "kind": "compose",
@@ -122,7 +118,9 @@
       "protocol": "migrate-inventory@v1",
       "reads": ["reports/migrate/brief.json"],
       "routes": {
-        "pass": "coexistence-step"
+        "continue": "coexistence-step",
+        "pass": "coexistence-step",
+        "stop": "@stop"
       },
       "executor": "worker",
       "kind": "relay",
@@ -151,7 +149,9 @@
       "protocol": "migrate-coexistence@v1",
       "reads": ["reports/migrate/brief.json", "reports/migrate/inventory.json"],
       "routes": {
-        "pass": "batch-step"
+        "continue": "coexistence-checkpoint-step",
+        "pass": "coexistence-checkpoint-step",
+        "stop": "@stop"
       },
       "executor": "orchestrator",
       "kind": "compose",
@@ -171,12 +171,59 @@
       }
     },
     {
+      "id": "coexistence-checkpoint-step",
+      "title": "Coexistence Plan - confirm migration path",
+      "protocol": "migrate-coexistence-checkpoint@v1",
+      "reads": ["reports/migrate/coexistence.json"],
+      "routes": {
+        "continue": "batch-step",
+        "pass": "batch-step",
+        "revise": "coexistence-step",
+        "stop": "@stop"
+      },
+      "executor": "orchestrator",
+      "kind": "checkpoint",
+      "policy": {
+        "prompt": "Confirm the coexistence plan before migration batch execution.",
+        "choices": [
+          {
+            "id": "continue",
+            "label": "Continue with the plan"
+          },
+          {
+            "id": "revise",
+            "label": "Revise the coexistence plan"
+          },
+          {
+            "id": "stop",
+            "label": "Stop before migration execution"
+          }
+        ],
+        "safe_default_choice": "continue",
+        "safe_autonomous_choice": "continue"
+      },
+      "writes": {
+        "request": "reports/checkpoints/migrate-coexistence-request.json",
+        "response": "reports/checkpoints/migrate-coexistence-response.json"
+      },
+      "check": {
+        "kind": "checkpoint_selection",
+        "source": {
+          "kind": "checkpoint_response",
+          "ref": "response"
+        },
+        "allow": ["continue", "revise", "stop"]
+      }
+    },
+    {
       "id": "batch-step",
       "title": "Batch Execution - delegate the migration changes to a Build sub-run",
       "protocol": "migrate-batch@v1",
       "reads": ["reports/migrate/brief.json", "reports/migrate/inventory.json"],
       "routes": {
-        "pass": "verify-step"
+        "continue": "verify-step",
+        "pass": "verify-step",
+        "stop": "@stop"
       },
       "executor": "orchestrator",
       "kind": "sub-run",
@@ -208,7 +255,9 @@
       "protocol": "migrate-verify@v1",
       "reads": ["reports/migrate/brief.json", "reports/migrate/batch-result.json"],
       "routes": {
-        "pass": "review-step"
+        "continue": "review-step",
+        "pass": "review-step",
+        "stop": "@stop"
       },
       "executor": "orchestrator",
       "kind": "verification",
@@ -237,7 +286,9 @@
         "reports/migrate/verification.json"
       ],
       "routes": {
-        "pass": "close-step"
+        "continue": "close-step",
+        "pass": "close-step",
+        "stop": "@stop"
       },
       "executor": "worker",
       "kind": "relay",
@@ -273,7 +324,9 @@
         "reports/migrate/review.json"
       ],
       "routes": {
-        "pass": "@complete"
+        "complete": "@complete",
+        "pass": "@complete",
+        "stop": "@stop"
       },
       "executor": "orchestrator",
       "kind": "compose",

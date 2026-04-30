@@ -19,6 +19,9 @@
  *   When declared, they must NOT appear in stage_path_policy.omits. When absent
  *   from declared stages, they MUST appear in stage_path_policy.omits.
  *   Empty array for flow ids whose every canonical is mandatory.
+ * @property {{ canonicals: string[], omits: string[], title: string }[]} variants
+ *   Complete alternate canonical policies for per-mode fixtures whose graph is
+ *   intentionally not the default graph.
  * @property {string} title
  * @property {string} authority
  */
@@ -26,16 +29,18 @@
 /** @type {Record<string, CompiledFlowKindPolicyEntry>} */
 export const FLOW_KIND_CANONICAL_SETS = {
   explore: {
-    canonicals: ['frame', 'analyze', 'act', 'review', 'close'],
-    omits: ['plan', 'verify'],
+    canonicals: ['frame', 'analyze', 'plan', 'close'],
+    omits: ['act', 'verify', 'review'],
     optional_canonicals: [],
-    title: 'Frame → Analyze → Synthesize → Review → Close',
+    variants: [],
+    title: 'Frame → Analyze → Plan or Decision → Close',
     authority: 'src/flows/explore/contract.md §Canonical stage set',
   },
   review: {
     canonicals: ['frame', 'analyze', 'close'],
     omits: ['plan', 'act', 'verify', 'review'],
     optional_canonicals: [],
+    variants: [],
     title: 'Intake → Independent Audit → Verdict',
     authority: 'specs/plans/p2-9-second-flow.md §3',
   },
@@ -43,6 +48,7 @@ export const FLOW_KIND_CANONICAL_SETS = {
     canonicals: ['frame', 'plan', 'act', 'verify', 'review', 'close'],
     omits: ['analyze'],
     optional_canonicals: [],
+    variants: [],
     title: 'Frame → Plan → Act → Verify → Review → Close',
     authority: 'specs/plans/build-flow-parity.md §9 Work item 1',
   },
@@ -50,6 +56,7 @@ export const FLOW_KIND_CANONICAL_SETS = {
     canonicals: ['frame', 'analyze', 'act', 'verify', 'review', 'close'],
     omits: ['plan'],
     optional_canonicals: ['review'],
+    variants: [],
     title: 'Frame → Diagnose → Fix → Verify → Review → Close',
     authority: 'specs/adrs/ADR-0013-scalar-backed-flow-schematics.md §Decision',
   },
@@ -92,6 +99,69 @@ function isReviewResultReportWriter(step) {
 function isReviewerRelay(step) {
   const s = objectRecord(step);
   return s !== undefined && s.kind === 'relay' && s.role === 'reviewer';
+}
+
+function declaredCanonicalsFor(fixture) {
+  const declared = new Set();
+  const stages = Array.isArray(fixture.stages) ? fixture.stages : [];
+  for (const stage of stages) {
+    if (stage !== null && typeof stage === 'object' && typeof stage.canonical === 'string') {
+      declared.add(stage.canonical);
+    }
+  }
+  return declared;
+}
+
+function checkCanonicalStagePolicyVariant(id, fixture, variant, optionalCanonicals, authority) {
+  const declared = declaredCanonicalsFor(fixture);
+  const optional = new Set(optionalCanonicals);
+  const required = new Set(variant.canonicals.filter((c) => !optional.has(c)));
+  const acceptedDeclared = new Set([...required, ...optional]);
+  const missing = [...required].filter((c) => !declared.has(c));
+  const extra = [...declared].filter((c) => !acceptedDeclared.has(c));
+  if (missing.length > 0 || extra.length > 0) {
+    const parts = [];
+    if (missing.length > 0) parts.push(`missing canonical(s): ${missing.join(', ')}`);
+    if (extra.length > 0) parts.push(`unexpected canonical(s): ${extra.join(', ')}`);
+    return {
+      ok: false,
+      detail: `${id}: canonical stage-set mismatch — ${parts.join('; ')} (authority: ${authority})`,
+    };
+  }
+
+  const sp = fixture.stage_path_policy;
+  if (sp === null || typeof sp !== 'object') {
+    return {
+      ok: false,
+      detail: `${id}: stage_path_policy missing or not an object`,
+    };
+  }
+  const spObj = /** @type {Record<string, unknown>} */ (sp);
+  if (spObj.mode !== 'partial') {
+    return {
+      ok: false,
+      detail: `${id}: stage_path_policy.mode must be 'partial' for kind-canonical enforcement; got '${String(spObj.mode)}'`,
+    };
+  }
+  const omits = Array.isArray(spObj.omits) ? spObj.omits.filter((s) => typeof s === 'string') : [];
+  const optionalOmitted = [...optional].filter((c) => !declared.has(c));
+  const expectedOmits = new Set([...variant.omits, ...optionalOmitted]);
+  const missingOmits = [...expectedOmits].filter((o) => !omits.includes(o));
+  const extraOmits = omits.filter((o) => !expectedOmits.has(o));
+  if (missingOmits.length > 0 || extraOmits.length > 0) {
+    const parts = [];
+    if (missingOmits.length > 0) parts.push(`missing omit(s): ${missingOmits.join(', ')}`);
+    if (extraOmits.length > 0) parts.push(`unexpected omit(s): ${extraOmits.join(', ')}`);
+    return {
+      ok: false,
+      detail: `${id}: stage_path_policy.omits mismatch — ${parts.join('; ')} (authority: ${authority})`,
+    };
+  }
+
+  return {
+    ok: true,
+    detail: `${id}: canonical set {${variant.canonicals.join(', ')}} + omits {${variant.omits.join(', ')}} enforced (authority: ${authority})`,
+  };
 }
 
 /**
@@ -208,60 +278,24 @@ export function checkCompiledFlowKindCanonicalPolicy(fixture) {
     };
   }
 
-  // Extract declared canonical set from stages (ignoring undefined canonicals).
-  const declared = new Set();
-  const stages = Array.isArray(f.stages) ? f.stages : [];
-  for (const stage of stages) {
-    if (stage !== null && typeof stage === 'object' && typeof stage.canonical === 'string') {
-      declared.add(stage.canonical);
-    }
-  }
-  const optionalCanonicals = new Set(expected.optional_canonicals);
-  const requiredCanonicals = new Set(expected.canonicals.filter((c) => !optionalCanonicals.has(c)));
-  const acceptedDeclared = new Set([...requiredCanonicals, ...optionalCanonicals]);
-
-  const missing = [...requiredCanonicals].filter((c) => !declared.has(c));
-  const extra = [...declared].filter((c) => !acceptedDeclared.has(c));
-  if (missing.length > 0 || extra.length > 0) {
-    const parts = [];
-    if (missing.length > 0) parts.push(`missing canonical(s): ${missing.join(', ')}`);
-    if (extra.length > 0) parts.push(`unexpected canonical(s): ${extra.join(', ')}`);
+  const variants = [
+    { canonicals: expected.canonicals, omits: expected.omits, title: expected.title },
+    ...(expected.variants ?? []),
+  ];
+  const checkedVariants = variants.map((variant) =>
+    checkCanonicalStagePolicyVariant(
+      id,
+      f,
+      variant,
+      expected.optional_canonicals,
+      expected.authority,
+    ),
+  );
+  const acceptedVariant = checkedVariants.find((variant) => variant.ok);
+  if (acceptedVariant === undefined) {
     return {
       kind: 'red',
-      detail: `${id}: canonical stage-set mismatch — ${parts.join('; ')} (authority: ${expected.authority})`,
-    };
-  }
-
-  // Validate stage_path_policy shape + omits list.
-  const sp = f.stage_path_policy;
-  if (sp === null || typeof sp !== 'object') {
-    return {
-      kind: 'red',
-      detail: `${id}: stage_path_policy missing or not an object`,
-    };
-  }
-  const spObj = /** @type {Record<string, unknown>} */ (sp);
-  if (spObj.mode !== 'partial') {
-    return {
-      kind: 'red',
-      detail: `${id}: stage_path_policy.mode must be 'partial' for kind-canonical enforcement; got '${String(spObj.mode)}'`,
-    };
-  }
-  const omits = Array.isArray(spObj.omits) ? spObj.omits.filter((s) => typeof s === 'string') : [];
-  // Required omits always belong in the omit list. Optional canonicals that
-  // the variant chose NOT to declare must also appear in the omit list —
-  // every canonical must be either declared or omitted.
-  const optionalOmitted = [...optionalCanonicals].filter((c) => !declared.has(c));
-  const expectedOmits = new Set([...expected.omits, ...optionalOmitted]);
-  const missingOmits = [...expectedOmits].filter((o) => !omits.includes(o));
-  const extraOmits = omits.filter((o) => !expectedOmits.has(o));
-  if (missingOmits.length > 0 || extraOmits.length > 0) {
-    const parts = [];
-    if (missingOmits.length > 0) parts.push(`missing omit(s): ${missingOmits.join(', ')}`);
-    if (extraOmits.length > 0) parts.push(`unexpected omit(s): ${extraOmits.join(', ')}`);
-    return {
-      kind: 'red',
-      detail: `${id}: stage_path_policy.omits mismatch — ${parts.join('; ')} (authority: ${expected.authority})`,
+      detail: checkedVariants.map((variant) => variant.detail).join(' OR '),
     };
   }
 
@@ -277,6 +311,6 @@ export function checkCompiledFlowKindCanonicalPolicy(fixture) {
 
   return {
     kind: 'green',
-    detail: `${id}: canonical set {${expected.canonicals.join(', ')}} + omits {${expected.omits.join(', ')}} enforced (authority: ${expected.authority})`,
+    detail: acceptedVariant.detail,
   };
 }

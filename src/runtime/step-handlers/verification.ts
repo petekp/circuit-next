@@ -3,6 +3,7 @@ import { existsSync, lstatSync, realpathSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
 import type { CompiledFlow } from '../../schemas/compiled-flow.js';
 import { findVerificationWriter } from '../registries/verification-writers/registry.js';
+import { recoveryRouteForStep } from './recovery-route.js';
 import { isRunRelativePathError, writeJsonReport } from './shared.js';
 import type { StepHandlerContext, StepHandlerResult } from './types.js';
 
@@ -217,6 +218,10 @@ export function runVerificationStep(
     outcome: 'fail',
     reason,
   });
+  const recoveryRoute = recoveryRouteForStep(step);
+  if (recoveryRoute !== undefined) {
+    return { kind: 'advance', route: recoveryRoute, recovery_reason: reason };
+  }
   push({
     schema_version: 1,
     sequence: state.sequence,

@@ -15,6 +15,10 @@ When the user wants Circuit to choose the flow, run:
 node '<plugin root>/scripts/circuit-next.mjs' run --goal '<task>' --progress jsonl
 ```
 
+Execution-language plan requests, such as `Execute this plan: <path>`, should
+also use the routed form. Circuit will start the first likely workflow slice
+instead of returning an analysis-only Explore run.
+
 Replace `<plugin root>` with the absolute path to this installed Circuit
 plugin directory, the directory that contains `.codex-plugin/plugin.json`.
 Do not use a path relative to the user's current project.
@@ -48,7 +52,8 @@ When the user names a flow, run:
 node '<plugin root>/scripts/circuit-next.mjs' run <flow> --goal '<task>' --progress jsonl
 ```
 
-Valid explicit flows are `explore`, `review`, `migrate`, `fix`, and `build`.
+Valid explicit flows are `explore`, `review`, `migrate`, `fix`, `build`, and
+`sweep`.
 
 ## Resume a Checkpoint
 

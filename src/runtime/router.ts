@@ -40,6 +40,67 @@ const QUICK_FIX_SIGNAL =
   /^\s*(?:(?:quick|small|tiny|simple)\s+fix\s*:|fix\s*:\s*(?:quick|small|tiny|simple)\b)/i;
 const DEEP_FIX_SIGNAL =
   /\b(?:regression|flaky|intermittent|incident|outage|crash|failure|failing\s+(?:test|build)|debug|diagnose|reproduce|root\s+cause)\b/i;
+const PLAN_EXECUTION_SIGNAL =
+  /^\s*(?:execute|run|start|begin|work\s+through|carry\s+out|tackle)\s+(?:this\s+|the\s+)?(?:[\w-]+\s+){0,3}(?:plan|backlog|checklist|roadmap|doc|document)(?::|\b)/i;
+
+function classifyPlanExecutionRequest(taskText: string): CompiledFlowRouteDecision | undefined {
+  if (!PLAN_EXECUTION_SIGNAL.test(taskText)) return undefined;
+  const lower = taskText.toLowerCase();
+  if (/\b(?:decide|decision|choose|choice|option|options|tradeoff|trade-off)\b/.test(lower)) {
+    return {
+      flowName: 'explore',
+      source: 'classifier',
+      matched_signal: 'plan-execution',
+      reason: 'matched plan-execution request; selected Explore tournament for a blocking decision',
+      inferredEntryModeName: 'tournament',
+      inferredEntryModeReason:
+        'matched decision-oriented plan execution; selected Explore tournament mode',
+    };
+  }
+  if (/\b(?:migrate|migration|port|rewrite|replace|transition|framework\s+swap)\b/.test(lower)) {
+    return {
+      flowName: 'migrate',
+      source: 'classifier',
+      matched_signal: 'plan-execution',
+      reason: 'matched plan-execution request; selected Migrate for the first migration slice',
+      inferredEntryModeName: 'deep',
+      inferredEntryModeReason:
+        'matched migration-oriented plan execution; selected deep migration thoroughness',
+    };
+  }
+  if (/\b(?:cleanup|clean\s+up|sweep|dead\s+code|quality|coverage|overnight)\b/.test(lower)) {
+    const autonomous = /\bovernight\b/.test(lower);
+    return {
+      flowName: 'sweep',
+      source: 'classifier',
+      matched_signal: 'plan-execution',
+      reason: 'matched plan-execution request; selected Sweep for the first cleanup slice',
+      inferredEntryModeName: autonomous ? 'autonomous' : 'default',
+      inferredEntryModeReason: autonomous
+        ? 'matched overnight plan execution; selected autonomous Sweep thoroughness'
+        : 'matched cleanup-oriented plan execution; selected default Sweep thoroughness',
+    };
+  }
+  if (/\b(?:fix|bug|regression|flaky|incident|outage|debug|diagnose|crash|failure)\b/.test(lower)) {
+    return {
+      flowName: 'fix',
+      source: 'classifier',
+      matched_signal: 'plan-execution',
+      reason: 'matched plan-execution request; selected Fix for the first bug-fix slice',
+      inferredEntryModeName: 'deep',
+      inferredEntryModeReason:
+        'matched bug-fix-oriented plan execution; selected deep thoroughness',
+    };
+  }
+  return {
+    flowName: 'build',
+    source: 'classifier',
+    matched_signal: 'plan-execution',
+    reason: 'matched plan-execution request; selected Build to start the first executable slice',
+    inferredEntryModeName: 'default',
+    inferredEntryModeReason: 'matched general plan execution; selected default Build thoroughness',
+  };
+}
 
 function inferEntryMode(
   flowName: string,
@@ -111,6 +172,9 @@ export function classifyTaskAgainstRoutables(
   routables: readonly RoutablePackage[],
   defaultPackage: RoutablePackage,
 ): CompiledFlowRouteDecision {
+  const planExecution = classifyPlanExecutionRequest(taskText);
+  if (planExecution !== undefined) return planExecution;
+
   const hasPlanningReport = PLANNING_ARTIFACT_SIGNAL.test(taskText);
   for (const { pkg, routing } of routables) {
     if (routing.isDefault) continue;
@@ -131,13 +195,15 @@ export function classifyTaskAgainstRoutables(
       };
     }
   }
+  const inferred = inferEntryMode(defaultPackage.pkg.id, taskText);
   return {
     flowName: defaultPackage.pkg.id,
     source: 'classifier',
     reason:
+      inferred.inferredEntryModeReason ??
       defaultPackage.routing.defaultReason ??
       `no signal matched; routed to ${defaultPackage.pkg.id} as the conservative default`,
-    ...inferEntryMode(defaultPackage.pkg.id, taskText),
+    ...inferred,
   };
 }
 

@@ -157,11 +157,11 @@ describe('explore tournament runtime', () => {
       'close',
     ]);
     const decisionStage = flow.stages.find((stage) => stage.canonical === 'plan');
-    expect(decisionStage?.title).toBe('Decision');
+    expect(decisionStage?.title).toBe('Plan or Decision');
     expect(decisionStage?.steps).toContain('stress-proposals-step');
     expect(flow.stage_path_policy).toMatchObject({
       mode: 'partial',
-      omits: ['verify', 'act', 'review'],
+      omits: ['act', 'verify', 'review'],
     });
   });
 
@@ -234,10 +234,12 @@ describe('explore tournament runtime', () => {
       selected_option_id: string;
       selected_option_label: string;
       decision: string;
+      follow_up_workflow: string;
     };
     expect(decision.selected_option_id).toBe('option-2');
     expect(decision.selected_option_label).toBe('Vue');
     expect(decision.decision).toMatch(/smaller surface/);
+    expect(decision.follow_up_workflow).toBe('Build');
 
     const result = readJson(runFolder, 'reports/explore-result.json') as {
       verdict_snapshot: { selected_option_id: string };

@@ -200,14 +200,10 @@ describe('agent relay round-trip', () => {
         const snapshot = reduce(runtrace);
         expect(snapshot.trace_entries_consumed).toBe(runtrace.length);
         const stepState = snapshot.steps.find((s) => s.step_id === stepId);
-        // The reducer marks a relay step as in_progress on
-        // relay.started and leaves it there until step.completed
-        // fires. This round-trip test does not emit step.completed (it
-        // stops at relay.completed), so in_progress is the expected
-        // terminal state. The contract here does not require
-        // step.completed — it requires the five relay trace entries
-        // consumed by the reducer.
-        expect(stepState?.status).toBeDefined();
+        // The relay transcript is enough for the reducer to close the
+        // relay-only step; a later step.completed entry can still add the
+        // parent route.
+        expect(stepState?.status).toBe('complete');
 
         // (7) Report materialization.
         const reportAbs = join(runFolder, writes.report.path);

@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "record_id": "continuity-44444444-4444-4444-8444-444444444411",
+  "project_root": "<repo>",
+  "created_at": "2026-04-29T22:31:00.000Z",
+  "git": {
+    "cwd": "<repo>"
+  },
+  "narrative": {
+    "goal": "Resume the waiting Build proof run.",
+    "next": "DO: resolve the Build checkpoint and continue.",
+    "state_markdown": "- checkpoint is waiting on the framed Build proof",
+    "debt_markdown": "- BLOCKED: checkpoint needs an operator choice"
+  },
+  "continuity_kind": "run-backed",
+  "run_ref": {
+    "run_id": "44444444-4444-4444-4444-444444444411",
+    "current_stage": "frame",
+    "current_step": "frame-step",
+    "runtime_status": "in_progress",
+    "runtime_updated_at": "2026-04-29T22:30:04.000Z"
+  },
+  "resume_contract": {
+    "mode": "resume_run",
+    "auto_resume": false,
+    "requires_explicit_resume": true
+  }
+}

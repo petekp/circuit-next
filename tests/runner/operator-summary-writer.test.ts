@@ -87,6 +87,7 @@ describe('operator summary writer', () => {
     expect(markdown).toContain('Circuit finished Review. Verdict: CLEAN. Findings: 0.');
     expect(markdown).toContain('Untracked evidence: contents included for 1 file');
     expect(markdown).toContain('diff_truncated');
+    expect(markdown).not.toContain('write-capable Claude Code worker');
     expect(markdown).not.toContain('v0.1.0 closed');
   });
 
@@ -179,6 +180,9 @@ describe('operator summary writer', () => {
       expect(written.summary.headline).toBe(entry.expected);
       expect(written.summary.details).toContain(
         `Run note: Circuit completed 3 ${entry.label} steps for this goal.`,
+      );
+      expect(written.summary.details).toContainEqual(
+        expect.stringContaining('write-capable Claude Code worker'),
       );
       expect(written.summary.details.join('\n')).not.toContain(`${entry.flow} v0.1.0 closed`);
       expect(written.summary.details.join('\n')).not.toContain('result for');

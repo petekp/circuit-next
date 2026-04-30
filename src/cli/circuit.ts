@@ -17,11 +17,15 @@ import { writeOperatorSummary } from '../runtime/operator-summary-writer.js';
 import { validateCompiledFlowKindPolicy } from '../runtime/policy/flow-kind-policy.js';
 import { classifyCompiledFlowTask } from '../runtime/router.js';
 import {
+  type ChildCompiledFlowResolver,
   type CompiledFlowInvocation,
+  type ComposeWriterFn,
   type RelayFn,
   resumeCompiledFlowCheckpoint,
   runCompiledFlow,
 } from '../runtime/runner.js';
+import { runCreateCommand } from './create.js';
+import { runHandoffCommand } from './handoff.js';
 
 // Runtime CLI entry point — invoked through ./bin/circuit-next.
 //
@@ -74,6 +78,7 @@ interface ResolvedEntryModeSelection {
 
 export interface CliMainOptions {
   relayer?: RelayFn;
+  composeWriter?: ComposeWriterFn;
   now?: () => Date;
   runId?: string;
   configHomeDir?: string;
@@ -84,6 +89,8 @@ function usage(): string {
   return [
     'usage: circuit-next run [flow-name] --goal "<goal>" [--mode <default|lite|deep|autonomous>] [--depth <lite|standard|deep|tournament|autonomous>] [--run-folder <path>] [--fixture <path>] [--flow-root <path>] [--progress jsonl]',
     '       circuit-next resume --run-folder <path> --checkpoint-choice <choice> [--progress jsonl]',
+    '       circuit-next handoff [save|resume|done] [options]',
+    '       circuit-next create --description "<flow idea>" [--name <slug>] [--publish --yes]',
     '',
     '`--mode` is the friendly alias for `--entry-mode`; supplying both forms of that option is an error.',
     '',
@@ -363,6 +370,18 @@ function loadFixture(fixturePath: string): { flow: CompiledFlow; bytes: Buffer }
   return { flow, bytes };
 }
 
+function defaultChildCompiledFlowResolver(flowRoot: string | undefined): ChildCompiledFlowResolver {
+  return (ref) => {
+    const fixturePath = resolveFixturePath(
+      ref.flow_id as unknown as string,
+      ref.entry_mode as unknown as string | undefined,
+      undefined,
+      flowRoot,
+    );
+    return loadFixture(fixturePath);
+  };
+}
+
 function assertFixtureMatchesRoute(flow: CompiledFlow, route: ResolvedCompiledFlowRoute): void {
   const flowId = flow.id as unknown as string;
   if (flowId !== route.flowName) {
@@ -373,6 +392,17 @@ function assertFixtureMatchesRoute(flow: CompiledFlow, route: ResolvedCompiledFl
 }
 
 export async function main(argv: readonly string[], options: CliMainOptions = {}): Promise<number> {
+  if (argv[0] === 'handoff') {
+    return runHandoffCommand(argv.slice(1), {
+      ...(options.now === undefined ? {} : { now: options.now }),
+    });
+  }
+  if (argv[0] === 'create') {
+    return runCreateCommand(argv.slice(1), {
+      ...(options.now === undefined ? {} : { now: options.now }),
+    });
+  }
+
   let args: ParsedArgs;
   try {
     args = parseArgs(argv);
@@ -398,6 +428,7 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
       projectRoot: resolve(options.configCwd ?? process.cwd()),
       now: options.now ?? (() => new Date()),
       ...(options.relayer === undefined ? {} : { relayer: options.relayer }),
+      childCompiledFlowResolver: defaultChildCompiledFlowResolver(undefined),
       ...(progress === undefined ? {} : { progress }),
       ...(selectionConfigLayers.length === 0 ? {} : { selectionConfigLayers }),
     });
@@ -507,6 +538,8 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
     invocation.entryModeName = entryModeSelection.entryModeName;
   }
   if (options.relayer !== undefined) invocation.relayer = options.relayer;
+  if (options.composeWriter !== undefined) invocation.composeWriter = options.composeWriter;
+  invocation.childCompiledFlowResolver = defaultChildCompiledFlowResolver(args.flowRoot);
   if (progress !== undefined) invocation.progress = progress;
   if (selectionConfigLayers.length > 0) {
     invocation.selectionConfigLayers = selectionConfigLayers;

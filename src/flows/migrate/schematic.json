@@ -71,11 +71,6 @@
       "description": "Default Migrate entry mode."
     },
     {
-      "name": "lite",
-      "depth": "lite",
-      "description": "Lite Migrate entry mode."
-    },
-    {
       "name": "deep",
       "depth": "deep",
       "description": "Deep Migrate entry mode."
@@ -209,10 +204,56 @@
         "required": ["strategy", "switchover_criteria", "rollback_path"]
       },
       "routes": {
-        "continue": "batch-step",
+        "continue": "coexistence-checkpoint-step",
         "stop": "@stop"
       },
       "block": "plan"
+    },
+    {
+      "id": "coexistence-checkpoint-step",
+      "title": "Coexistence Plan - confirm migration path",
+      "stage": "plan",
+      "input": {
+        "plan": "migrate.coexistence@v1"
+      },
+      "output": "migrate.coexistence-checkpoint@v1",
+      "evidence_requirements": ["selected path", "answer source", "resume route"],
+      "execution": {
+        "kind": "checkpoint"
+      },
+      "protocol": "migrate-coexistence-checkpoint@v1",
+      "writes": {
+        "checkpoint_request_path": "reports/checkpoints/migrate-coexistence-request.json",
+        "checkpoint_response_path": "reports/checkpoints/migrate-coexistence-response.json"
+      },
+      "check": {
+        "allow": ["continue", "revise", "stop"]
+      },
+      "checkpoint_policy": {
+        "prompt": "Confirm the coexistence plan before migration batch execution.",
+        "choices": [
+          {
+            "id": "continue",
+            "label": "Continue with the plan"
+          },
+          {
+            "id": "revise",
+            "label": "Revise the coexistence plan"
+          },
+          {
+            "id": "stop",
+            "label": "Stop before migration execution"
+          }
+        ],
+        "safe_default_choice": "continue",
+        "safe_autonomous_choice": "continue"
+      },
+      "routes": {
+        "continue": "batch-step",
+        "revise": "coexistence-step",
+        "stop": "@stop"
+      },
+      "block": "human-decision"
     },
     {
       "id": "batch-step",

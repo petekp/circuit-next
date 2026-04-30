@@ -28,6 +28,8 @@ const EXPLORE_COMMAND_PATH = resolve(REPO_ROOT, 'commands/explore.md');
 const RUN_COMMAND_PATH = resolve(REPO_ROOT, 'commands/run.md');
 const REVIEW_COMMAND_PATH = resolve(REPO_ROOT, 'commands/review.md');
 const BUILD_COMMAND_PATH = resolve(REPO_ROOT, 'commands/build.md');
+const MIGRATE_COMMAND_PATH = resolve(REPO_ROOT, 'commands/migrate.md');
+const SWEEP_COMMAND_PATH = resolve(REPO_ROOT, 'commands/sweep.md');
 const MANIFEST_PATH = resolve(REPO_ROOT, '.claude-plugin/plugin.json');
 
 // Extract fenced ```bash ... ``` blocks from a markdown body. Returns an
@@ -77,6 +79,14 @@ function hasExecutableBuildInvocation(body: string): boolean {
   return hasExecutableCompiledFlowInvocation(body, 'build');
 }
 
+function hasExecutableMigrateInvocation(body: string): boolean {
+  return hasExecutableCompiledFlowInvocation(body, 'migrate');
+}
+
+function hasExecutableSweepInvocation(body: string): boolean {
+  return hasExecutableCompiledFlowInvocation(body, 'sweep');
+}
+
 function hasExecutableRouterInvocation(body: string): boolean {
   const blocks = extractBashBlocks(body);
   const binInvocation = /^\s*\.\/bin\/circuit-next run --goal(?:\s|$)/;
@@ -95,6 +105,8 @@ describe('plugin command invocation binding', () => {
     const runBody = readFileSync(RUN_COMMAND_PATH, 'utf-8');
     const reviewBody = readFileSync(REVIEW_COMMAND_PATH, 'utf-8');
     const buildBody = readFileSync(BUILD_COMMAND_PATH, 'utf-8');
+    const migrateBody = readFileSync(MIGRATE_COMMAND_PATH, 'utf-8');
+    const sweepBody = readFileSync(SWEEP_COMMAND_PATH, 'utf-8');
 
     it('commands/explore.md has an executable explore invocation in a fenced bash block with --goal', () => {
       expect(hasExecutableExploreInvocation(exploreBody)).toBe(true);
@@ -112,8 +124,16 @@ describe('plugin command invocation binding', () => {
       expect(hasExecutableBuildInvocation(buildBody)).toBe(true);
     });
 
+    it('commands/migrate.md has an executable migrate invocation in a fenced bash block with --goal', () => {
+      expect(hasExecutableMigrateInvocation(migrateBody)).toBe(true);
+    });
+
+    it('commands/sweep.md has an executable sweep invocation in a fenced bash block with --goal', () => {
+      expect(hasExecutableSweepInvocation(sweepBody)).toBe(true);
+    });
+
     it('command bodies use the direct Circuit launcher, not the npm-script bridge or old runtime-proof path', () => {
-      for (const body of [exploreBody, runBody, reviewBody, buildBody]) {
+      for (const body of [exploreBody, runBody, reviewBody, buildBody, migrateBody, sweepBody]) {
         expect(body).toMatch(/\.\/bin\/circuit-next/);
         expect(body).not.toMatch(/npm run circuit:run/);
         expect(body).not.toMatch(/dist\/cli\/runtime-proof\.js/);

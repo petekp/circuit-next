@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "project_root": "<repo>",
+  "pending_record": {
+    "record_id": "continuity-44444444-4444-4444-8444-444444444411",
+    "continuity_kind": "run-backed",
+    "created_at": "2026-04-29T22:31:00.000Z"
+  },
+  "current_run": {
+    "run_id": "44444444-4444-4444-4444-444444444411",
+    "current_stage": "frame",
+    "current_step": "frame-step",
+    "runtime_status": "in_progress",
+    "attached_at": "2026-04-29T22:31:00.000Z",
+    "last_validated_at": "2026-04-29T22:31:00.000Z"
+  }
+}

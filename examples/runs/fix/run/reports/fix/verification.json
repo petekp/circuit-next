@@ -1,0 +1,22 @@
+{
+  "overall_status": "passed",
+  "commands": [
+    {
+      "command_id": "proof-fix-verify",
+      "cwd": ".",
+      "argv": [
+        "node",
+        "-e",
+        "process.exit(0)"
+      ],
+      "timeout_ms": 30000,
+      "max_output_bytes": 200000,
+      "env": {},
+      "exit_code": 0,
+      "status": "passed",
+      "duration_ms": 19,
+      "stdout_summary": "",
+      "stderr_summary": ""
+    }
+  ]
+}

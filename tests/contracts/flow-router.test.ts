@@ -189,8 +189,39 @@ describe('flow router classifier', () => {
 
     const decide = classifyCompiledFlowTask('decide: choose the rollout strategy');
     expect(decide.flowName).toBe('explore');
+    expect(decide.reason).toMatch(/decide/i);
     expect(decide.inferredEntryModeName).toBe('tournament');
     expect(decide.inferredEntryModeReason).toMatch(/decide/i);
+  });
+
+  it('routes plan-execution requests into executable work instead of analysis-only Explore', () => {
+    const general = classifyCompiledFlowTask(
+      'Execute this plan: ./docs/public-release-readiness.md',
+    );
+    expect(general.flowName).toBe('build');
+    expect(general.matched_signal).toBe('plan-execution');
+    expect(general.inferredEntryModeName).toBe('default');
+    expect(general.reason).toMatch(/first executable slice/i);
+
+    const migrate = classifyCompiledFlowTask('Execute this migration plan: replace legacy SDK');
+    expect(migrate.flowName).toBe('migrate');
+    expect(migrate.inferredEntryModeName).toBe('deep');
+
+    const sweep = classifyCompiledFlowTask('Execute this cleanup checklist: remove dead code');
+    expect(sweep.flowName).toBe('sweep');
+    expect(sweep.inferredEntryModeName).toBe('default');
+
+    const overnight = classifyCompiledFlowTask('Execute this overnight cleanup plan');
+    expect(overnight.flowName).toBe('sweep');
+    expect(overnight.inferredEntryModeName).toBe('autonomous');
+
+    const fix = classifyCompiledFlowTask('Execute this bug fix plan: diagnose the flaky test');
+    expect(fix.flowName).toBe('fix');
+    expect(fix.inferredEntryModeName).toBe('deep');
+
+    const decision = classifyCompiledFlowTask('Execute this decision plan: choose React vs Vue');
+    expect(decision.flowName).toBe('explore');
+    expect(decision.inferredEntryModeName).toBe('tournament');
   });
 
   it('falls back to explore when no routed flow signal is present', () => {

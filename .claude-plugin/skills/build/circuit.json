@@ -86,7 +86,9 @@
       "protocol": "build-frame@v1",
       "reads": [],
       "routes": {
-        "pass": "plan-step"
+        "continue": "plan-step",
+        "pass": "plan-step",
+        "stop": "@stop"
       },
       "executor": "orchestrator",
       "kind": "checkpoint",
@@ -142,7 +144,10 @@
       "protocol": "build-plan@v1",
       "reads": ["reports/build/brief.json"],
       "routes": {
-        "pass": "act-step"
+        "continue": "act-step",
+        "pass": "act-step",
+        "revise": "plan-step",
+        "stop": "@stop"
       },
       "executor": "orchestrator",
       "kind": "compose",
@@ -167,7 +172,10 @@
       "protocol": "build-act@v1",
       "reads": ["reports/build/brief.json", "reports/build/plan.json"],
       "routes": {
-        "pass": "verify-step"
+        "continue": "verify-step",
+        "pass": "verify-step",
+        "retry": "act-step",
+        "stop": "@stop"
       },
       "executor": "worker",
       "kind": "relay",
@@ -196,7 +204,10 @@
       "protocol": "build-verify@v1",
       "reads": ["reports/build/plan.json", "reports/build/implementation.json"],
       "routes": {
-        "pass": "review-step"
+        "continue": "review-step",
+        "pass": "review-step",
+        "retry": "act-step",
+        "stop": "@stop"
       },
       "executor": "orchestrator",
       "kind": "verification",
@@ -226,7 +237,11 @@
         "reports/build/verification.json"
       ],
       "routes": {
-        "pass": "close-step"
+        "continue": "close-step",
+        "pass": "close-step",
+        "retry": "act-step",
+        "revise": "act-step",
+        "stop": "@stop"
       },
       "executor": "worker",
       "kind": "relay",
@@ -261,7 +276,9 @@
         "reports/build/review.json"
       ],
       "routes": {
-        "pass": "@complete"
+        "complete": "@complete",
+        "pass": "@complete",
+        "stop": "@stop"
       },
       "executor": "orchestrator",
       "kind": "compose",

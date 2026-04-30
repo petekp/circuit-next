@@ -116,7 +116,7 @@ function runDoctor() {
   const wrapperPath = resolve(scriptDir, 'circuit-next.mjs');
   checks.push(check('wrapper_exists', existsSync(wrapperPath), wrapperPath));
   checks.push(check('packaged_flow_root_exists', existsSync(packagedFlowRoot), packagedFlowRoot));
-  for (const flow of ['build', 'explore', 'fix', 'migrate', 'review']) {
+  for (const flow of ['build', 'explore', 'fix', 'migrate', 'review', 'sweep']) {
     const flowPath = resolve(packagedFlowRoot, flow, 'circuit.json');
     checks.push(check(`packaged_flow_${flow}`, existsSync(flowPath), flowPath));
   }
@@ -346,9 +346,17 @@ function shouldInjectPackagedFlowRoot(args) {
   return args[0] === 'run' || args.includes('--goal');
 }
 
+function shouldInjectCreateTemplateRoot(args) {
+  if (args.includes('--template-flow-root')) return false;
+  if (args.includes('--help') || args.includes('-h')) return false;
+  return args[0] === 'create';
+}
+
 const forwardedArgs = shouldInjectPackagedFlowRoot(rawArgs)
   ? [...rawArgs, '--flow-root', packagedFlowRoot]
-  : rawArgs;
+  : shouldInjectCreateTemplateRoot(rawArgs)
+    ? [...rawArgs, '--template-flow-root', packagedFlowRoot]
+    : rawArgs;
 
 if (rawArgs[0] === 'doctor') {
   process.exit(runDoctor());

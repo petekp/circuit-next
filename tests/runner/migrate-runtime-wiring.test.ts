@@ -238,14 +238,9 @@ afterEach(() => {
 });
 
 describe('Migrate runtime wiring', () => {
-  it('declares the seven-canonical-stage stage path with the standard four entry modes', () => {
+  it('declares the seven-canonical-stage stage path with the parity entry modes', () => {
     const { flow } = loadFixture();
-    expect(flow.entry_modes.map((mode) => mode.name)).toEqual([
-      'default',
-      'lite',
-      'deep',
-      'autonomous',
-    ]);
+    expect(flow.entry_modes.map((mode) => mode.name)).toEqual(['default', 'deep', 'autonomous']);
     expect(flow.stages.map((stage) => stage.canonical)).toEqual([
       'frame',
       'analyze',
@@ -266,6 +261,7 @@ describe('Migrate runtime wiring', () => {
       'frame-step',
       'inventory-step',
       'coexistence-step',
+      'coexistence-checkpoint-step',
       'batch-step',
       'verify-step',
       'review-step',
@@ -297,6 +293,7 @@ describe('Migrate runtime wiring', () => {
     expect(outcome.result.outcome).toBe('complete');
     const labels = outcome.trace_entries.map(traceEntryLabel);
     expect(labels).toContain('relay.completed:inventory-step');
+    expect(labels).toContain('checkpoint.resolved:coexistence-checkpoint-step');
     expect(labels).toContain('sub_run.started:batch-step');
     expect(labels).toContain('sub_run.completed:batch-step');
     expect(labels).toContain('relay.completed:review-step');

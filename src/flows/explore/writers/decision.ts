@@ -42,6 +42,13 @@ function checkpointResponsePath(context: ComposeBuildContext): string {
   return checkpoint.writes.response;
 }
 
+function followUpWorkflowFor(nextAction: string): string {
+  const match = /\b(Build|Fix|Migrate|Sweep|Explore|Review)\b/i.exec(nextAction);
+  if (match?.[1] === undefined) return 'Explore';
+  const lower = match[1].toLowerCase();
+  return lower[0]?.toUpperCase() + lower.slice(1);
+}
+
 export const exploreDecisionComposeBuilder: ComposeBuilder = {
   resultSchemaName: 'explore.decision@v1',
   build(context: ComposeBuildContext): unknown {
@@ -93,7 +100,7 @@ export const exploreDecisionComposeBuilder: ComposeBuilder = {
       assumptions: selectedProposal.assumptions,
       residual_risks: [...selectedProposal.risks, ...review.objections, ...review.missing_evidence],
       next_action: selectedProposal.next_action,
-      follow_up_workflow: 'Run Build, Fix, Migrate, or Explore again once the operator is ready.',
+      follow_up_workflow: followUpWorkflowFor(selectedProposal.next_action),
     });
   },
 };

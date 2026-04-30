@@ -35,21 +35,27 @@ claims:
     user_risk: Users following docs must be able to build a compatible connector.
     readiness_refs: [REL-001]
   - id: CLAIM-CODEX-ISOLATED
-    claim: codex-isolated is not a current supported connector until implemented and tested.
+    claim: codex-isolated is not a current config value until isolated writable Codex support is implemented and tested.
     type: connector
-    status: release_blocker
+    status: verified_current
     surfaces: [README.md, docs/contracts/connector.md, docs/contracts/host-capabilities.md]
     backing:
-      exception_ids: [EX-REL-002-CODEX-ISOLATED]
+      test_paths:
+        - tests/contracts/connector-schema.test.ts
+      script_checks: [scripts/release/emit-current-capabilities.mjs --check]
     user_risk: Users may trust an isolation guarantee that runtime does not provide.
     readiness_refs: [REL-002]
   - id: CLAIM-RICH-ROUTES
-    claim: Rich recovery routes are not release-ready until route declarations execute or generation fails loudly.
+    claim: Rich recovery routes are emitted into compiled flows and checkpoint selections can execute them.
     type: safety
-    status: release_blocker
+    status: verified_current
     surfaces: [docs/public-release-readiness.md, docs/release/readiness-report.generated.md]
     backing:
-      exception_ids: [EX-REL-003-RICH-ROUTES]
+      capability_ids: [route-outcomes:rich]
+      test_paths:
+        - tests/unit/compile-schematic-per-mode.test.ts
+        - tests/runner/terminal-outcome-mapping.test.ts
+      script_checks: [scripts/release/emit-current-capabilities.mjs --check]
     user_risk: Real failures can abort instead of retrying, revising, asking, handing off, or escalating.
     readiness_refs: [REL-003]
   - id: CLAIM-REVIEW-EVIDENCE-POLICY
@@ -67,36 +73,62 @@ claims:
   - id: CLAIM-PLAN-EXECUTION
     claim: Plan-execution requests must start the right work slice, ask one blocking question, or return one exact next command.
     type: plan-execution
-    status: release_blocker
+    status: verified_current
     surfaces: [commands/run.md, plugins/circuit/skills/run/SKILL.md, docs/release/readiness-report.generated.md]
     backing:
-      exception_ids: [EX-REL-016-PLAN-EXECUTION]
+      capability_ids: [feature:plan-execution]
+      proof_ids: [proof:plan-execution]
+      test_paths:
+        - tests/contracts/flow-router.test.ts
+        - tests/runner/cli-router.test.ts
+      script_checks: [scripts/release/emit-current-capabilities.mjs --check]
     user_risk: Users can ask Circuit to execute a plan and receive analysis-only output that preserves the next-action burden.
     readiness_refs: [REL-016]
   - id: CLAIM-WRITE-CAPABLE-WORKER
     claim: Write-capable worker behavior must be disclosed before first Build/Fix/Migrate/Sweep runs that can edit files.
     type: safety
-    status: release_blocker
+    status: verified_current
     surfaces: [README.md, progress output, final summaries]
     backing:
-      exception_ids: [EX-REL-007-WRITE-CAPABLE-DISCLOSURE]
+      capability_ids: [safety:write-capable-worker]
+      test_paths:
+        - tests/runner/cli-router.test.ts
+        - tests/runner/operator-summary-writer.test.ts
+      script_checks: [scripts/release/emit-current-capabilities.mjs --check]
     user_risk: Users may be surprised that a delegated worker can edit files with bypassed host approvals.
     readiness_refs: [REL-007]
   - id: CLAIM-GOLDEN-PROOF
     claim: Public proof must cover doing work, deciding, maintenance/migration, continuity, customization, failure, first-run, and plan execution.
     type: proof
-    status: release_blocker
+    status: verified_current
     surfaces: [README.md, docs/release/proofs/index.yaml, examples/runs]
     backing:
-      exception_ids: [EX-REL-011-GOLDEN-RUNS]
+      proof_ids:
+        - proof:routed-build
+        - proof:explicit-build
+        - proof:review
+        - proof:checkpoint-resume
+        - proof:abort-failure
+        - proof:fix
+        - proof:migrate
+        - proof:sweep
+        - proof:explore-decision
+        - proof:handoff
+        - proof:customization
+        - proof:doctor-first-run
+        - proof:plan-execution
+      script_checks: [scripts/release/check-proof-coverage.mjs]
     user_risk: Circuit will look like a prompt wrapper without durable examples that show the operator system working.
     readiness_refs: [REL-011, REL-023]
   - id: CLAIM-FIRST-RUN-DOCTOR
     claim: First-run onboarding should begin with a doctor step before the first useful run.
     type: first-run
-    status: release_blocker
+    status: verified_current
     surfaces: [README.md, docs/first-run.md]
     backing:
-      exception_ids: [EX-REL-011-GOLDEN-RUNS]
+      proof_ids: [proof:doctor-first-run]
+      test_paths:
+        - tests/contracts/host-experience-docs.test.ts
+      script_checks: [scripts/release/emit-current-capabilities.mjs --check]
     user_risk: A setup failure can be mistaken for a product failure.
     readiness_refs: [REL-017]

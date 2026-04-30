@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "run_id": "44444444-4444-4444-4444-444444444441",
+  "flow_id": "explore",
+  "goal": "decide: React vs Vue",
+  "outcome": "complete",
+  "summary": "explore v0.1.0 closed 8 step(s) for goal \"decide: React vs Vue\".",
+  "closed_at": "2026-04-29T17:01:15.000Z",
+  "trace_entries_observed": 73,
+  "manifest_hash": "61dcfee63620e4380a707b45e9d26e5a4d03f311d7aefddb10e6d03325d252cf",
+  "verdict": "recommend"
+}

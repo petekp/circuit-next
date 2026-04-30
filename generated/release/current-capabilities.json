@@ -23,7 +23,7 @@
         ]
       },
       "entry_modes": ["default"],
-      "stages": ["frame", "analyze", "close"],
+      "stages": ["Intake", "Independent Audit", "Verdict"],
       "reports": ["review.intake@v1", "review.result@v1"],
       "writers": {
         "compose": 2,
@@ -32,7 +32,7 @@
         "checkpoint": 0
       },
       "route_outcomes": ["complete", "continue", "retry", "stop"],
-      "unsupported_route_outcomes": ["retry", "stop"]
+      "unsupported_route_outcomes": []
     },
     {
       "id": "migrate",
@@ -43,8 +43,16 @@
         "order": 10,
         "signal_labels": ["framework swap signal", "migrate prefix", "migrate request"]
       },
-      "entry_modes": ["autonomous", "deep", "default", "lite"],
-      "stages": ["frame", "analyze", "plan", "act", "verify", "review", "close"],
+      "entry_modes": ["autonomous", "deep", "default"],
+      "stages": [
+        "Frame",
+        "Inventory",
+        "Coexistence Plan",
+        "Batch Execution",
+        "Verify",
+        "Cutover Review",
+        "Close"
+      ],
       "reports": [
         "migrate.batch@v1",
         "migrate.brief@v1",
@@ -60,8 +68,8 @@
         "verification": 1,
         "checkpoint": 0
       },
-      "route_outcomes": ["complete", "continue", "stop"],
-      "unsupported_route_outcomes": ["stop"]
+      "route_outcomes": ["complete", "continue", "revise", "stop"],
+      "unsupported_route_outcomes": []
     },
     {
       "id": "fix",
@@ -75,8 +83,9 @@
         "signal_labels": ["fix prefix", "fix request", "quick fix prefix"]
       },
       "entry_modes": ["autonomous", "deep", "default", "lite"],
-      "stages": ["frame", "analyze", "act", "verify", "review", "close"],
+      "stages": ["Frame", "Analyze", "Fix", "Verify", "Review", "Close"],
       "reports": [
+        "continuity.record@v1",
         "fix.brief@v1",
         "fix.change@v1",
         "fix.context@v1",
@@ -101,7 +110,7 @@
         "revise",
         "stop"
       ],
-      "unsupported_route_outcomes": ["ask", "escalate", "handoff", "retry", "revise", "stop"]
+      "unsupported_route_outcomes": []
     },
     {
       "id": "runtime-proof",
@@ -112,7 +121,7 @@
         "signal_labels": []
       },
       "entry_modes": ["runtime-proof"],
-      "stages": ["plan", "act"],
+      "stages": ["Plan", "Act"],
       "reports": ["plan.strategy@v1"],
       "writers": {
         "compose": 1,
@@ -141,7 +150,7 @@
         ]
       },
       "entry_modes": ["autonomous", "deep", "default", "lite"],
-      "stages": ["frame", "plan", "act", "verify", "review", "close"],
+      "stages": ["Frame", "Plan", "Act", "Verify", "Review", "Close"],
       "reports": [
         "build.brief@v1",
         "build.implementation@v1",
@@ -157,7 +166,7 @@
         "checkpoint": 1
       },
       "route_outcomes": ["complete", "continue", "retry", "revise", "stop"],
-      "unsupported_route_outcomes": ["retry", "revise", "stop"]
+      "unsupported_route_outcomes": []
     },
     {
       "id": "explore",
@@ -171,8 +180,8 @@
         "signal_labels": [],
         "default_reason": "no routed flow signal matched; routed to explore as the conservative default"
       },
-      "entry_modes": ["default", "tournament"],
-      "stages": ["frame", "analyze", "Plan or Decision", "act", "review", "close"],
+      "entry_modes": ["autonomous", "deep", "default", "lite", "tournament"],
+      "stages": ["Frame", "Analyze", "Plan or Decision", "Close"],
       "reports": [
         "explore.analysis@v1",
         "explore.brief@v1",
@@ -192,7 +201,7 @@
         "checkpoint": 0
       },
       "route_outcomes": ["complete", "continue", "retry", "revise", "stop"],
-      "unsupported_route_outcomes": ["retry", "revise", "stop"]
+      "unsupported_route_outcomes": []
     },
     {
       "id": "sweep",
@@ -204,7 +213,15 @@
         "signal_labels": ["cleanup prefix", "overnight prefix", "sweep request"]
       },
       "entry_modes": ["autonomous", "deep", "default", "lite"],
-      "stages": ["frame", "analyze", "plan", "act", "verify", "review", "close"],
+      "stages": [
+        "Frame",
+        "Survey",
+        "Queue/Triage",
+        "Batch Execute",
+        "Verify",
+        "Deferred Review",
+        "Close"
+      ],
       "reports": [
         "sweep.analysis@v1",
         "sweep.batch@v1",
@@ -221,7 +238,7 @@
         "checkpoint": 0
       },
       "route_outcomes": ["complete", "continue", "retry", "revise", "stop"],
-      "unsupported_route_outcomes": ["retry", "revise", "stop"]
+      "unsupported_route_outcomes": []
     }
   ],
   "router_intents": [
@@ -286,15 +303,38 @@
     {
       "id": "plan-execution",
       "input": "Execute this plan: ./docs/public-release-readiness.md",
-      "expected_flow": "first-executable-slice",
-      "actual_flow": "explore",
-      "status": "partial",
-      "readiness_refs": ["REL-016"]
+      "expected_flow": "build",
+      "actual_flow": "build",
+      "expected_entry_mode": "default",
+      "actual_entry_mode": "default",
+      "status": "implemented",
+      "readiness_refs": []
     }
   ],
   "commands": {
-    "root": ["README", "build", "explore", "fix", "review", "run"],
-    "codex_plugin": ["build", "explore", "fix", "review", "run"],
+    "root": [
+      "README",
+      "build",
+      "create",
+      "explore",
+      "fix",
+      "handoff",
+      "migrate",
+      "review",
+      "run",
+      "sweep"
+    ],
+    "codex_plugin": [
+      "build",
+      "create",
+      "explore",
+      "fix",
+      "handoff",
+      "migrate",
+      "review",
+      "run",
+      "sweep"
+    ],
     "claude_plugin_skills": [
       "build",
       "explore",
@@ -323,15 +363,6 @@
       "protocol": "builtin-json",
       "summary": "codex is a built-in connector.",
       "readiness_refs": []
-    },
-    {
-      "id": "codex-isolated",
-      "status": "missing",
-      "filesystem": "isolated-write",
-      "structured_output": "json",
-      "protocol": "builtin-json",
-      "summary": "codex-isolated is declared but not implemented by relay selection.",
-      "readiness_refs": ["REL-002"]
     },
     {
       "id": "custom",
@@ -403,10 +434,10 @@
       "id": "command:create",
       "kind": "flow",
       "title": "root command create",
-      "status": "missing",
-      "summary": "Command create is absent for root.",
-      "evidence": [],
-      "readiness_refs": ["REL-004"],
+      "status": "implemented",
+      "summary": "Command create is present for root.",
+      "evidence": ["commands/create.md"],
+      "readiness_refs": [],
       "axes": {
         "intent_hints": [],
         "modes": [],
@@ -448,10 +479,10 @@
       "id": "command:handoff",
       "kind": "flow",
       "title": "root command handoff",
-      "status": "missing",
-      "summary": "Command handoff is absent for root.",
-      "evidence": [],
-      "readiness_refs": ["REL-004"],
+      "status": "implemented",
+      "summary": "Command handoff is present for root.",
+      "evidence": ["commands/handoff.md"],
+      "readiness_refs": [],
       "axes": {
         "intent_hints": [],
         "modes": [],
@@ -463,10 +494,10 @@
       "id": "command:migrate",
       "kind": "flow",
       "title": "root command migrate",
-      "status": "missing",
-      "summary": "Command migrate is absent for root.",
-      "evidence": [],
-      "readiness_refs": ["REL-004"],
+      "status": "implemented",
+      "summary": "Command migrate is present for root.",
+      "evidence": ["commands/migrate.md"],
+      "readiness_refs": [],
       "axes": {
         "intent_hints": [],
         "modes": [],
@@ -523,10 +554,10 @@
       "id": "command:sweep",
       "kind": "flow",
       "title": "root command sweep",
-      "status": "missing",
-      "summary": "Command sweep is absent for root.",
-      "evidence": [],
-      "readiness_refs": ["REL-004"],
+      "status": "implemented",
+      "summary": "Command sweep is present for root.",
+      "evidence": ["commands/sweep.md"],
+      "readiness_refs": [],
       "axes": {
         "intent_hints": [],
         "modes": [],
@@ -567,22 +598,6 @@
       }
     },
     {
-      "id": "connector:codex-isolated",
-      "kind": "connector",
-      "title": "codex-isolated connector",
-      "status": "missing",
-      "summary": "codex-isolated is declared but not implemented by relay selection.",
-      "evidence": ["src/schemas/connector.ts", "src/runtime/relay-selection.ts"],
-      "readiness_refs": ["REL-002"],
-      "axes": {
-        "intent_hints": [],
-        "modes": [],
-        "stage_path": [],
-        "outputs": [],
-        "worker_handoff": "builtin-json"
-      }
-    },
-    {
       "id": "connector:custom",
       "kind": "connector",
       "title": "custom connector",
@@ -611,37 +626,43 @@
         "intent_hints": [],
         "modes": [],
         "stage_path": [],
-        "outputs": []
+        "outputs": [],
+        "checkpoint": "Compiled checkpoints can pause, auto-resolve safe defaults, or resume from operator input.",
+        "proof": "Checkpoint/resume golden run."
       }
     },
     {
       "id": "feature:continuity",
       "kind": "continuity",
       "title": "Continuity",
-      "status": "partial",
-      "summary": "Run records and checkpoint resume exist; original handoff utility parity is still tracked separately.",
-      "evidence": ["src/runtime/snapshot-writer.ts", "src/runtime/runner.ts"],
-      "readiness_refs": ["REL-014"],
+      "status": "implemented",
+      "summary": "Run records, checkpoint resume, and explicit handoff continuity records are proven.",
+      "evidence": ["src/runtime/snapshot-writer.ts", "src/runtime/runner.ts", "src/cli/handoff.ts"],
+      "readiness_refs": [],
       "axes": {
         "intent_hints": [],
         "modes": [],
         "stage_path": [],
-        "outputs": []
+        "outputs": ["active-run.md", "continuity record"],
+        "continuity": "Resume is explicit and auditable through continuity record and index files.",
+        "proof": "Handoff/resume golden run."
       }
     },
     {
       "id": "feature:plan-execution",
       "kind": "plan_execution",
       "title": "Plan execution",
-      "status": "partial",
-      "summary": "Plan-execution requests can still finish as analysis-only Explore runs.",
-      "evidence": ["src/runtime/router.ts", "docs/public-release-readiness.md"],
-      "readiness_refs": ["REL-016"],
+      "status": "implemented",
+      "summary": "Plan-execution requests start the first executable flow slice instead of ending as analysis-only Explore.",
+      "evidence": ["src/runtime/router.ts", "tests/contracts/flow-router.test.ts"],
+      "readiness_refs": [],
       "axes": {
         "intent_hints": [],
         "modes": [],
         "stage_path": [],
-        "outputs": []
+        "outputs": [],
+        "worker_handoff": "Plan-execution requests route into the first executable flow slice instead of ending as analysis-only Explore.",
+        "proof": "Plan-execution campaign-start proof."
       }
     },
     {
@@ -655,15 +676,14 @@
       "axes": {
         "intent_hints": ["develop:"],
         "modes": ["autonomous", "deep", "default", "lite"],
-        "stage_path": ["frame", "plan", "act", "verify", "review", "close"],
-        "outputs": [
-          "build.brief@v1",
-          "build.implementation@v1",
-          "build.plan@v1",
-          "build.result@v1",
-          "build.review@v1",
-          "build.verification@v1"
-        ]
+        "stage_path": ["Frame", "Plan", "Act", "Verify", "Review", "Close"],
+        "outputs": ["brief.md", "plan.md", "result.md", "review.md"],
+        "checkpoint": "Compiled checkpoints can pause, auto-resolve safe defaults, or resume from operator input.",
+        "review": "Compiled review stages or reviewer relays are present.",
+        "verification": "Compiled verification steps write command-result reports before close.",
+        "worker_handoff": "Compiled worker handoffs write request, receipt, result, and report evidence where applicable.",
+        "continuity": "Runs persist manifest, trace, state, result, and checkpoint resume data in the run folder.",
+        "proof": "Routed Build golden run. Explicit Build checkpoint golden run."
       }
     },
     {
@@ -676,20 +696,15 @@
       "readiness_refs": [],
       "axes": {
         "intent_hints": ["decide:"],
-        "modes": ["default", "tournament"],
-        "stage_path": ["frame", "analyze", "Plan or Decision", "act", "review", "close"],
-        "outputs": [
-          "explore.analysis@v1",
-          "explore.brief@v1",
-          "explore.compose@v1",
-          "explore.decision-options@v1",
-          "explore.decision@v1",
-          "explore.result@v1",
-          "explore.review-verdict@v1",
-          "explore.tournament-aggregate@v1",
-          "explore.tournament-proposal@v1",
-          "explore.tournament-review@v1"
-        ]
+        "modes": ["autonomous", "deep", "default", "lite", "tournament"],
+        "stage_path": ["Frame", "Analyze", "Plan or Decision", "Close"],
+        "outputs": ["analysis.md", "brief.md", "decision.md", "plan.md", "result.md"],
+        "checkpoint": "Compiled checkpoints can pause, auto-resolve safe defaults, or resume from operator input.",
+        "review": "Compiled review stages or reviewer relays are present.",
+        "verification": "Explore deep mode records seam proof through analysis and embedded critique rather than command verification.",
+        "worker_handoff": "Compiled worker handoffs write request, receipt, result, and report evidence where applicable.",
+        "continuity": "Runs persist manifest, trace, state, result, and checkpoint resume data in the run folder.",
+        "proof": "Golden decision or tournament run."
       }
     },
     {
@@ -703,16 +718,14 @@
       "axes": {
         "intent_hints": ["fix:"],
         "modes": ["autonomous", "deep", "default", "lite"],
-        "stage_path": ["frame", "analyze", "act", "verify", "review", "close"],
-        "outputs": [
-          "fix.brief@v1",
-          "fix.change@v1",
-          "fix.context@v1",
-          "fix.diagnosis@v1",
-          "fix.result@v1",
-          "fix.review@v1",
-          "fix.verification@v1"
-        ]
+        "stage_path": ["Frame", "Analyze", "Fix", "Verify", "Review", "Close"],
+        "outputs": ["analysis.md", "brief.md", "result.md", "review.md"],
+        "checkpoint": "Compiled checkpoints can pause, auto-resolve safe defaults, or resume from operator input.",
+        "review": "Compiled review stages or reviewer relays are present.",
+        "verification": "Compiled verification steps write command-result reports before close.",
+        "worker_handoff": "Compiled worker handoffs write request, receipt, result, and report evidence where applicable.",
+        "continuity": "Runs persist manifest, trace, state, result, and checkpoint resume data in the run folder.",
+        "proof": "Fix golden run with regression evidence."
       }
     },
     {
@@ -725,17 +738,23 @@
       "readiness_refs": [],
       "axes": {
         "intent_hints": ["migrate:"],
-        "modes": ["autonomous", "deep", "default", "lite"],
-        "stage_path": ["frame", "analyze", "plan", "act", "verify", "review", "close"],
-        "outputs": [
-          "migrate.batch@v1",
-          "migrate.brief@v1",
-          "migrate.coexistence@v1",
-          "migrate.inventory@v1",
-          "migrate.result@v1",
-          "migrate.review@v1",
-          "migrate.verification@v1"
-        ]
+        "modes": ["autonomous", "deep", "default"],
+        "stage_path": [
+          "Frame",
+          "Inventory",
+          "Coexistence Plan",
+          "Batch Execution",
+          "Verify",
+          "Cutover Review",
+          "Close"
+        ],
+        "outputs": ["brief.md", "inventory.md", "plan.md", "result.md", "review.md"],
+        "checkpoint": "Compiled checkpoints can pause, auto-resolve safe defaults, or resume from operator input.",
+        "review": "Compiled review stages or reviewer relays are present.",
+        "verification": "Compiled verification steps write command-result reports before close.",
+        "worker_handoff": "Compiled worker handoffs write request, receipt, result, and report evidence where applicable.",
+        "continuity": "Runs persist manifest, trace, state, result, and checkpoint resume data in the run folder.",
+        "proof": "Migration plan and batch proof run."
       }
     },
     {
@@ -749,8 +768,11 @@
       "axes": {
         "intent_hints": [],
         "modes": ["default"],
-        "stage_path": ["frame", "analyze", "close"],
-        "outputs": ["review.intake@v1", "review.result@v1"]
+        "stage_path": ["Intake", "Independent Audit", "Verdict"],
+        "outputs": ["review.md"],
+        "review": "Compiled review stages or reviewer relays are present.",
+        "worker_handoff": "Compiled worker handoffs write request, receipt, result, and report evidence where applicable.",
+        "continuity": "Runs persist manifest, trace, state, result, and checkpoint resume data in the run folder."
       }
     },
     {
@@ -767,8 +789,10 @@
       "axes": {
         "intent_hints": [],
         "modes": ["runtime-proof"],
-        "stage_path": ["plan", "act"],
-        "outputs": ["plan.strategy@v1"]
+        "stage_path": ["Plan", "Act"],
+        "outputs": ["plan.strategy@v1"],
+        "worker_handoff": "Compiled worker handoffs write request, receipt, result, and report evidence where applicable.",
+        "continuity": "Runs persist manifest, trace, state, result, and checkpoint resume data in the run folder."
       }
     },
     {
@@ -782,16 +806,22 @@
       "axes": {
         "intent_hints": ["cleanup:", "overnight:"],
         "modes": ["autonomous", "deep", "default", "lite"],
-        "stage_path": ["frame", "analyze", "plan", "act", "verify", "review", "close"],
-        "outputs": [
-          "sweep.analysis@v1",
-          "sweep.batch@v1",
-          "sweep.brief@v1",
-          "sweep.queue@v1",
-          "sweep.result@v1",
-          "sweep.review@v1",
-          "sweep.verification@v1"
-        ]
+        "stage_path": [
+          "Frame",
+          "Survey",
+          "Queue/Triage",
+          "Batch Execute",
+          "Verify",
+          "Deferred Review",
+          "Close"
+        ],
+        "outputs": ["analysis.md", "brief.md", "deferred.md", "queue.md", "result.md", "review.md"],
+        "checkpoint": "Compiled checkpoints can pause, auto-resolve safe defaults, or resume from operator input.",
+        "review": "Compiled review stages or reviewer relays are present.",
+        "verification": "Compiled verification steps write command-result reports before close.",
+        "worker_handoff": "Compiled worker handoffs write request, receipt, result, and report evidence where applicable.",
+        "continuity": "Runs persist manifest, trace, state, result, and checkpoint resume data in the run folder.",
+        "proof": "Sweep golden run covering queue/deferred output."
       }
     },
     {
@@ -876,10 +906,10 @@
       "id": "matrix:flow-mode-parity",
       "kind": "docs",
       "title": "Flow and mode parity matrix",
-      "status": "partial",
-      "summary": "Generated matrix exists, but behavioral parity gaps remain tracked.",
+      "status": "implemented",
+      "summary": "Generated matrix exists; approved behavioral exceptions are tracked in the exception ledger.",
       "evidence": ["docs/release/parity-matrix.generated.md"],
-      "readiness_refs": ["REL-004"],
+      "readiness_refs": [],
       "axes": {
         "intent_hints": [],
         "modes": [],
@@ -948,11 +978,56 @@
       }
     },
     {
+      "id": "mode:explore:autonomous",
+      "kind": "mode",
+      "title": "explore autonomous",
+      "status": "implemented",
+      "summary": "explore declares entry mode autonomous.",
+      "evidence": ["generated/flows/explore"],
+      "readiness_refs": [],
+      "axes": {
+        "intent_hints": [],
+        "modes": [],
+        "stage_path": [],
+        "outputs": []
+      }
+    },
+    {
+      "id": "mode:explore:deep",
+      "kind": "mode",
+      "title": "explore deep",
+      "status": "implemented",
+      "summary": "explore declares entry mode deep.",
+      "evidence": ["generated/flows/explore"],
+      "readiness_refs": [],
+      "axes": {
+        "intent_hints": [],
+        "modes": [],
+        "stage_path": [],
+        "outputs": []
+      }
+    },
+    {
       "id": "mode:explore:default",
       "kind": "mode",
       "title": "explore default",
       "status": "implemented",
       "summary": "explore declares entry mode default.",
+      "evidence": ["generated/flows/explore"],
+      "readiness_refs": [],
+      "axes": {
+        "intent_hints": [],
+        "modes": [],
+        "stage_path": [],
+        "outputs": []
+      }
+    },
+    {
+      "id": "mode:explore:lite",
+      "kind": "mode",
+      "title": "explore lite",
+      "status": "implemented",
+      "summary": "explore declares entry mode lite.",
       "evidence": ["generated/flows/explore"],
       "readiness_refs": [],
       "axes": {
@@ -1083,21 +1158,6 @@
       }
     },
     {
-      "id": "mode:migrate:lite",
-      "kind": "mode",
-      "title": "migrate lite",
-      "status": "implemented",
-      "summary": "migrate declares entry mode lite.",
-      "evidence": ["generated/flows/migrate"],
-      "readiness_refs": [],
-      "axes": {
-        "intent_hints": [],
-        "modes": [],
-        "stage_path": [],
-        "outputs": []
-      }
-    },
-    {
       "id": "mode:review:default",
       "kind": "mode",
       "title": "review default",
@@ -1191,10 +1251,10 @@
       "id": "proof:golden-runs",
       "kind": "proof",
       "title": "Golden release runs",
-      "status": "missing",
-      "summary": "Golden example runs are defined but not captured.",
+      "status": "implemented",
+      "summary": "All defined golden example runs are captured.",
       "evidence": ["docs/release/proofs/index.yaml"],
-      "readiness_refs": ["REL-011"],
+      "readiness_refs": [],
       "axes": {
         "intent_hints": [],
         "modes": [],
@@ -1236,10 +1296,10 @@
       "id": "route-outcome:build:retry",
       "kind": "route_outcome",
       "title": "build route retry",
-      "status": "partial",
-      "summary": "retry is declared in the schematic but not executable in compiled routes.",
+      "status": "implemented",
+      "summary": "retry maps to an executable compiled route.",
       "evidence": ["src/flows/build/schematic.json"],
-      "readiness_refs": ["REL-003"],
+      "readiness_refs": [],
       "axes": {
         "intent_hints": [],
         "modes": [],
@@ -1251,10 +1311,10 @@
       "id": "route-outcome:build:revise",
       "kind": "route_outcome",
       "title": "build route revise",
-      "status": "partial",
-      "summary": "revise is declared in the schematic but not executable in compiled routes.",
+      "status": "implemented",
+      "summary": "revise maps to an executable compiled route.",
       "evidence": ["src/flows/build/schematic.json"],
-      "readiness_refs": ["REL-003"],
+      "readiness_refs": [],
       "axes": {
         "intent_hints": [],
         "modes": [],
@@ -1266,10 +1326,10 @@
       "id": "route-outcome:build:stop",
       "kind": "route_outcome",
       "title": "build route stop",
-      "status": "partial",
-      "summary": "stop is declared in the schematic but not executable in compiled routes.",
+      "status": "implemented",
+      "summary": "stop maps to an executable compiled route.",
       "evidence": ["src/flows/build/schematic.json"],
-      "readiness_refs": ["REL-003"],
+      "readiness_refs": [],
       "axes": {
         "intent_hints": [],
         "modes": [],
@@ -1311,10 +1371,10 @@
       "id": "route-outcome:explore:retry",
       "kind": "route_outcome",
       "title": "explore route retry",
-      "status": "partial",
-      "summary": "retry is declared in the schematic but not executable in compiled routes.",
+      "status": "implemented",
+      "summary": "retry maps to an executable compiled route.",
       "evidence": ["src/flows/explore/schematic.json"],
-      "readiness_refs": ["REL-003"],
+      "readiness_refs": [],
       "axes": {
         "intent_hints": [],
         "modes": [],
@@ -1326,10 +1386,10 @@
       "id": "route-outcome:explore:revise",
       "kind": "route_outcome",
       "title": "explore route revise",
-      "status": "partial",
-      "summary": "revise is declared in the schematic but not executable in compiled routes.",
+      "status": "implemented",
+      "summary": "revise maps to an executable compiled route.",
       "evidence": ["src/flows/explore/schematic.json"],
-      "readiness_refs": ["REL-003"],
+      "readiness_refs": [],
       "axes": {
         "intent_hints": [],
         "modes": [],
@@ -1341,10 +1401,10 @@
       "id": "route-outcome:explore:stop",
       "kind": "route_outcome",
       "title": "explore route stop",
-      "status": "partial",
-      "summary": "stop is declared in the schematic but not executable in compiled routes.",
+      "status": "implemented",
+      "summary": "stop maps to an executable compiled route.",
       "evidence": ["src/flows/explore/schematic.json"],
-      "readiness_refs": ["REL-003"],
+      "readiness_refs": [],
       "axes": {
         "intent_hints": [],
         "modes": [],
@@ -1356,10 +1416,10 @@
       "id": "route-outcome:fix:ask",
       "kind": "route_outcome",
       "title": "fix route ask",
-      "status": "partial",
-      "summary": "ask is declared in the schematic but not executable in compiled routes.",
+      "status": "implemented",
+      "summary": "ask maps to an executable compiled route.",
       "evidence": ["src/flows/fix/schematic.json"],
-      "readiness_refs": ["REL-003"],
+      "readiness_refs": [],
       "axes": {
         "intent_hints": [],
         "modes": [],
@@ -1401,10 +1461,10 @@
       "id": "route-outcome:fix:escalate",
       "kind": "route_outcome",
       "title": "fix route escalate",
-      "status": "partial",
-      "summary": "escalate is declared in the schematic but not executable in compiled routes.",
+      "status": "implemented",
+      "summary": "escalate maps to an executable compiled route.",
       "evidence": ["src/flows/fix/schematic.json"],
-      "readiness_refs": ["REL-003"],
+      "readiness_refs": [],
       "axes": {
         "intent_hints": [],
         "modes": [],
@@ -1416,10 +1476,10 @@
       "id": "route-outcome:fix:handoff",
       "kind": "route_outcome",
       "title": "fix route handoff",
-      "status": "partial",
-      "summary": "handoff is declared in the schematic but not executable in compiled routes.",
+      "status": "implemented",
+      "summary": "handoff maps to an executable compiled route.",
       "evidence": ["src/flows/fix/schematic.json"],
-      "readiness_refs": ["REL-003"],
+      "readiness_refs": [],
       "axes": {
         "intent_hints": [],
         "modes": [],
@@ -1431,10 +1491,10 @@
       "id": "route-outcome:fix:retry",
       "kind": "route_outcome",
       "title": "fix route retry",
-      "status": "partial",
-      "summary": "retry is declared in the schematic but not executable in compiled routes.",
+      "status": "implemented",
+      "summary": "retry maps to an executable compiled route.",
       "evidence": ["src/flows/fix/schematic.json"],
-      "readiness_refs": ["REL-003"],
+      "readiness_refs": [],
       "axes": {
         "intent_hints": [],
         "modes": [],
@@ -1446,10 +1506,10 @@
       "id": "route-outcome:fix:revise",
       "kind": "route_outcome",
       "title": "fix route revise",
-      "status": "partial",
-      "summary": "revise is declared in the schematic but not executable in compiled routes.",
+      "status": "implemented",
+      "summary": "revise maps to an executable compiled route.",
       "evidence": ["src/flows/fix/schematic.json"],
-      "readiness_refs": ["REL-003"],
+      "readiness_refs": [],
       "axes": {
         "intent_hints": [],
         "modes": [],
@@ -1461,10 +1521,10 @@
       "id": "route-outcome:fix:stop",
       "kind": "route_outcome",
       "title": "fix route stop",
-      "status": "partial",
-      "summary": "stop is declared in the schematic but not executable in compiled routes.",
+      "status": "implemented",
+      "summary": "stop maps to an executable compiled route.",
       "evidence": ["src/flows/fix/schematic.json"],
-      "readiness_refs": ["REL-003"],
+      "readiness_refs": [],
       "axes": {
         "intent_hints": [],
         "modes": [],
@@ -1503,13 +1563,28 @@
       }
     },
     {
+      "id": "route-outcome:migrate:revise",
+      "kind": "route_outcome",
+      "title": "migrate route revise",
+      "status": "implemented",
+      "summary": "revise maps to an executable compiled route.",
+      "evidence": ["src/flows/migrate/schematic.json"],
+      "readiness_refs": [],
+      "axes": {
+        "intent_hints": [],
+        "modes": [],
+        "stage_path": [],
+        "outputs": []
+      }
+    },
+    {
       "id": "route-outcome:migrate:stop",
       "kind": "route_outcome",
       "title": "migrate route stop",
-      "status": "partial",
-      "summary": "stop is declared in the schematic but not executable in compiled routes.",
+      "status": "implemented",
+      "summary": "stop maps to an executable compiled route.",
       "evidence": ["src/flows/migrate/schematic.json"],
-      "readiness_refs": ["REL-003"],
+      "readiness_refs": [],
       "axes": {
         "intent_hints": [],
         "modes": [],
@@ -1551,10 +1626,10 @@
       "id": "route-outcome:review:retry",
       "kind": "route_outcome",
       "title": "review route retry",
-      "status": "partial",
-      "summary": "retry is declared in the schematic but not executable in compiled routes.",
+      "status": "implemented",
+      "summary": "retry maps to an executable compiled route.",
       "evidence": ["src/flows/review/schematic.json"],
-      "readiness_refs": ["REL-003"],
+      "readiness_refs": [],
       "axes": {
         "intent_hints": [],
         "modes": [],
@@ -1566,10 +1641,10 @@
       "id": "route-outcome:review:stop",
       "kind": "route_outcome",
       "title": "review route stop",
-      "status": "partial",
-      "summary": "stop is declared in the schematic but not executable in compiled routes.",
+      "status": "implemented",
+      "summary": "stop maps to an executable compiled route.",
       "evidence": ["src/flows/review/schematic.json"],
-      "readiness_refs": ["REL-003"],
+      "readiness_refs": [],
       "axes": {
         "intent_hints": [],
         "modes": [],
@@ -1626,10 +1701,10 @@
       "id": "route-outcome:sweep:retry",
       "kind": "route_outcome",
       "title": "sweep route retry",
-      "status": "partial",
-      "summary": "retry is declared in the schematic but not executable in compiled routes.",
+      "status": "implemented",
+      "summary": "retry maps to an executable compiled route.",
       "evidence": ["src/flows/sweep/schematic.json"],
-      "readiness_refs": ["REL-003"],
+      "readiness_refs": [],
       "axes": {
         "intent_hints": [],
         "modes": [],
@@ -1641,10 +1716,10 @@
       "id": "route-outcome:sweep:revise",
       "kind": "route_outcome",
       "title": "sweep route revise",
-      "status": "partial",
-      "summary": "revise is declared in the schematic but not executable in compiled routes.",
+      "status": "implemented",
+      "summary": "revise maps to an executable compiled route.",
       "evidence": ["src/flows/sweep/schematic.json"],
-      "readiness_refs": ["REL-003"],
+      "readiness_refs": [],
       "axes": {
         "intent_hints": [],
         "modes": [],
@@ -1656,10 +1731,10 @@
       "id": "route-outcome:sweep:stop",
       "kind": "route_outcome",
       "title": "sweep route stop",
-      "status": "partial",
-      "summary": "stop is declared in the schematic but not executable in compiled routes.",
+      "status": "implemented",
+      "summary": "stop maps to an executable compiled route.",
       "evidence": ["src/flows/sweep/schematic.json"],
-      "readiness_refs": ["REL-003"],
+      "readiness_refs": [],
       "axes": {
         "intent_hints": [],
         "modes": [],
@@ -1671,10 +1746,10 @@
       "id": "route-outcomes:rich",
       "kind": "route_outcome",
       "title": "Rich route outcomes",
-      "status": "partial",
-      "summary": "Rich route outcomes are inventoried but not yet executable.",
+      "status": "implemented",
+      "summary": "Rich route outcomes are emitted into compiled routes and checkpoint selections can execute them.",
       "evidence": ["src/runtime/compile-schematic-to-flow.ts"],
-      "readiness_refs": ["REL-003"],
+      "readiness_refs": [],
       "axes": {
         "intent_hints": [],
         "modes": [],
@@ -1776,13 +1851,13 @@
       "id": "router:intent:plan-execution",
       "kind": "plan_execution",
       "title": "plan-execution routing",
-      "status": "partial",
-      "summary": "Execute this plan: ./docs/public-release-readiness.md routed to explore; expected first-executable-slice.",
+      "status": "implemented",
+      "summary": "Execute this plan: ./docs/public-release-readiness.md routed to build with default mode; expected build.",
       "evidence": ["src/runtime/router.ts"],
-      "readiness_refs": ["REL-016"],
+      "readiness_refs": [],
       "axes": {
         "intent_hints": ["plan-execution:"],
-        "modes": [],
+        "modes": ["default"],
         "stage_path": [],
         "outputs": []
       }
@@ -1825,10 +1900,17 @@
       "id": "safety:write-capable-worker",
       "kind": "safety",
       "title": "Write-capable worker disclosure",
-      "status": "partial",
-      "summary": "Write-capable Claude Code worker behavior needs first-run disclosure.",
-      "evidence": ["src/runtime/connectors/claude-code.ts"],
-      "readiness_refs": ["REL-007"],
+      "status": "implemented",
+      "summary": "Write-capable Claude Code worker behavior is disclosed in docs, progress, and final summaries for Build/Fix/Migrate/Sweep.",
+      "evidence": [
+        "README.md",
+        "docs/first-run.md",
+        "docs/contracts/host-capabilities.md",
+        "src/runtime/write-capable-worker-disclosure.ts",
+        "src/runtime/runner.ts",
+        "src/runtime/operator-summary-writer.ts"
+      ],
+      "readiness_refs": [],
       "axes": {
         "intent_hints": [],
         "modes": [],
@@ -1840,30 +1922,36 @@
       "id": "utility:create",
       "kind": "customization",
       "title": "Create utility",
-      "status": "missing",
-      "summary": "Create utility command is not present in the current command surface.",
-      "evidence": [],
-      "readiness_refs": ["REL-013"],
+      "status": "implemented",
+      "summary": "Create drafts, validates, and publishes a user-global custom flow package after explicit confirmation.",
+      "evidence": ["commands/create.md", "src/cli/create.ts", "tests/runner/utility-cli.test.ts"],
+      "readiness_refs": [],
       "axes": {
         "intent_hints": [],
         "modes": [],
         "stage_path": [],
-        "outputs": []
+        "outputs": ["SKILL.md", "circuit.yaml", "publish summary"],
+        "checkpoint": "Publishing requires an explicit --yes confirmation after draft validation.",
+        "verification": "The generated compiled flow parses and passes flow-kind policy validation.",
+        "continuity": "Published custom flows are written to the user-global custom flow root.",
+        "proof": "Create or custom-connector proof scenario."
       }
     },
     {
       "id": "utility:handoff",
       "kind": "continuity",
       "title": "Handoff utility",
-      "status": "missing",
-      "summary": "Handoff utility command is not present in the current command surface.",
-      "evidence": [],
-      "readiness_refs": ["REL-014"],
+      "status": "implemented",
+      "summary": "Handoff saves, resumes, and clears explicit continuity records through the CLI.",
+      "evidence": ["commands/handoff.md", "src/cli/handoff.ts", "tests/runner/utility-cli.test.ts"],
+      "readiness_refs": [],
       "axes": {
         "intent_hints": [],
         "modes": [],
         "stage_path": [],
-        "outputs": []
+        "outputs": ["active-run.md", "continuity record"],
+        "continuity": "Fresh sessions resume from an explicit continuity record or get a clear not-found result.",
+        "proof": "Handoff/resume golden run."
       }
     },
     {
@@ -1878,7 +1966,9 @@
         "intent_hints": [],
         "modes": [],
         "stage_path": [],
-        "outputs": []
+        "outputs": ["review.md"],
+        "review": "Standalone Review runs a fresh reviewer relay and writes a severity-ordered review result.",
+        "proof": "Standalone Review golden run."
       }
     }
   ]

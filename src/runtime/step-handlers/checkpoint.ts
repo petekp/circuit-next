@@ -290,7 +290,10 @@ export function runCheckpointStep(
       check_kind: 'checkpoint_selection',
       outcome: 'pass',
     });
-    return { kind: 'advance' };
+    return {
+      kind: 'advance',
+      ...(Object.hasOwn(step.routes, resolution.selection) ? { route: resolution.selection } : {}),
+    };
   } catch (err) {
     if (isRunRelativePathError(err)) throw err;
     const reason = checkpointFailureReason(step.id as unknown as string, err);

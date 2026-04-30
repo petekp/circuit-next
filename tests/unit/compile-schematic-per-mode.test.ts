@@ -1,8 +1,7 @@
 // Unit tests for the per-mode behavior of compileSchematicToCompiledFlow:
 // reachability with route_overrides, dead-step elimination per mode,
-// auto-omitted canonicals in stage_path_policy, and the dropped-outcomes
-// (handoff/escalate) handling. Byte-equivalence against committed
-// compiled flows is covered separately by
+// auto-omitted canonicals in stage_path_policy, and rich route preservation.
+// Byte-equivalence against committed compiled flows is covered separately by
 // tests/contracts/compile-schematic-to-flow.test.ts.
 
 import { readFileSync } from 'node:fs';
@@ -95,7 +94,7 @@ describe('compileSchematicToCompiledFlow — per-mode emission', () => {
     expect(lite.stage_path_policy.rationale).toMatch(/lite/);
   });
 
-  it('drops handoff and escalate outcomes at compile without erroring', () => {
+  it('preserves rich schematic outcomes as executable compiled routes', () => {
     const schematic = loadBuildSchematic();
     const items = schematic.items.map((item) =>
       (item.id as unknown as string) === 'close-step'
@@ -116,8 +115,12 @@ describe('compileSchematicToCompiledFlow — per-mode emission', () => {
     if (result.kind !== 'single') return;
     const close = result.flow.steps.find((s) => (s.id as unknown as string) === 'close-step');
     expect(close).toBeDefined();
-    // The compiled close-step should only carry the pass edge; handoff /
-    // escalate outcomes are author-intent and live only in the schematic.
-    expect(Object.keys(close?.routes ?? {})).toEqual(['pass']);
+    expect(close?.routes).toMatchObject({
+      pass: '@complete',
+      complete: '@complete',
+      stop: '@stop',
+      handoff: '@handoff',
+      escalate: '@escalate',
+    });
   });
 });

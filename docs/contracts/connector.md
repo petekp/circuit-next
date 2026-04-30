@@ -67,10 +67,10 @@ violates these. All invariants are enforced via `src/schemas/connector.ts`
 and — for the cross-schema invariants — the schema files named per
 invariant; tested in `tests/contracts/schema-parity.test.ts`.
 
-- **connector-I1 — `EnabledConnector` is a closed 3-variant enum with
+- **connector-I1 — `EnabledConnector` is a closed 2-variant enum with
   declared semantic distinctions; adding a built-in is a breaking
-  change.** The enum is the frozen tuple `['claude-code', 'codex',
-  'codex-isolated']`. The three built-ins mean:
+  change.** The enum is the frozen tuple `['claude-code', 'codex']`.
+  The two built-ins mean:
   - `claude-code` — the Claude Code headless CLI (`claude -p` print-mode or
     equivalent), invoked as a **subprocess** of the Node.js runtime per
     ADR-0009 §1 (v0 invocation-pattern decision: subprocess-per-connector).
@@ -126,20 +126,17 @@ invariant; tested in `tests/contracts/schema-parity.test.ts`.
     `src/runtime/connectors/codex.ts`; ADR-0009 §Consequences.Enabling is
     the governance authority (§Enabling explicitly names `codex` as the
     next connector after `claude-code`).
-  - `codex-isolated` — the Codex CLI relayed as a subprocess in a
-    git worktree (or a distinct-UID sandbox once Tier 2+ lands). Same
-    subprocess invocation pattern as `codex`; separate filesystem view;
-    implementer isolation discipline per CLAUDE.md Hard Invariants #1-#3.
-  The three are NOT interchangeable: `codex` and `codex-isolated`
-  relay to the same binary but under different isolation regimes;
-  `claude-code` relays to a different binary entirely. Choosing between
-  `codex` and `codex-isolated` is a correctness-of-isolation decision
-  (same-filesystem vs separate-worktree), not an ergonomic one.
-  Adding a fourth built-in is a schema-level change that forces all
+  `codex-isolated` is a planned future connector, not a current
+  `EnabledConnector` value. Until a git-worktree or distinct-UID isolation
+  implementation lands with tests, configs that name `codex-isolated` must
+  fail at parse time instead of reaching relay-time and failing late.
+  The two current built-ins are NOT interchangeable: `codex` is read-only,
+  while `claude-code` is trusted same-workspace write-capable. Adding a third
+  built-in is a schema-level change that forces all
   consumers (`RelayConfig.default`, `relay.roles`,
   `relay.circuits`, the connector-bridge relayer, and every
   contract test) to coordinate. Enforced at `src/schemas/connector.ts`
-  (`EnabledConnector = z.enum(['claude-code', 'codex', 'codex-isolated'])`).
+  (`EnabledConnector = z.enum(['claude-code', 'codex'])`).
 
 - **connector-I2 — `ConnectorName` regex + reserved-name disjointness.**
   `ConnectorName` matches `^[a-z][a-z0-9-]*$`: lowercase letter + optional

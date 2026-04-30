@@ -2,7 +2,7 @@
   "schema_version": "2",
   "id": "explore",
   "version": "0.1.0",
-  "purpose": "Explore flow: frame the investigation, analyze the subject, either synthesize and review findings or run a decision tournament, then close with findings plus evidence. The default path uses Frame, Analyze, Act, Review, and Close. Tournament mode uses Frame, Analyze, Plan, and Close, with stress review embedded inside the Decision/Plan stage rather than a separate canonical Review stage.",
+  "purpose": "Explore flow: frame the investigation, analyze the subject, either synthesize and critique findings or run a decision tournament, then close with findings plus evidence. All modes use Frame, Analyze, Plan or Decision, and Close; critique is embedded inside the Plan/Decision stage rather than exposed as a separate canonical Review stage.",
   "entry": {
     "signals": {
       "include": ["explore", "investigate", "research", "understand"],
@@ -16,6 +16,24 @@
       "start_at": "frame-step",
       "depth": "standard",
       "description": "Default explore entry mode — seeds the run at Frame at standard depth."
+    },
+    {
+      "name": "lite",
+      "start_at": "frame-step",
+      "depth": "lite",
+      "description": "Lite Explore entry mode — frames, analyzes, and closes with a compact Plan/Decision pass."
+    },
+    {
+      "name": "deep",
+      "start_at": "frame-step",
+      "depth": "deep",
+      "description": "Deep Explore entry mode — frames, analyzes, and spends more effort on Plan/Decision evidence and seam proof."
+    },
+    {
+      "name": "autonomous",
+      "start_at": "frame-step",
+      "depth": "autonomous",
+      "description": "Autonomous Explore entry mode — carries ambiguity forward when no safe checkpoint answer is available."
     }
   ],
   "stages": [
@@ -32,16 +50,10 @@
       "steps": ["analyze-step"]
     },
     {
-      "id": "synthesize-stage",
-      "title": "Synthesize",
-      "canonical": "act",
-      "steps": ["synthesize-step"]
-    },
-    {
-      "id": "review-stage",
-      "title": "Review",
-      "canonical": "review",
-      "steps": ["review-step"]
+      "id": "decision-stage",
+      "title": "Plan or Decision",
+      "canonical": "plan",
+      "steps": ["synthesize-step", "review-step"]
     },
     {
       "id": "close-stage",
@@ -52,8 +64,8 @@
   ],
   "stage_path_policy": {
     "mode": "partial",
-    "omits": ["verify", "plan"],
-    "rationale": "Explore is an investigation and decision flow. Default mode auto-omits Plan because it synthesizes findings through Act and Review. Tournament mode auto-omits Act and Review because option stress review is embedded inside the canonical Plan/Decision stage. Verify is omitted because Explore output is not executable and does not admit mechanical verification. See src/flows/explore/contract.md §Canonical stage set for the full rationale. mode 'default' (depth 'standard') also omits 'plan' because route_overrides leave those canonicals with no reachable items."
+    "omits": ["act", "verify", "review"],
+    "rationale": "Explore is an investigation and decision flow. Synthesize, critique, and tournament stress review are all embedded inside the canonical Plan/Decision stage. Verify is omitted because Explore output is not executable and uses evidence/seam proof rather than mechanical command verification. See src/flows/explore/contract.md §Canonical stage set for the full rationale."
   },
   "steps": [
     {
@@ -62,7 +74,9 @@
       "protocol": "explore-frame@v1",
       "reads": [],
       "routes": {
-        "pass": "analyze-step"
+        "continue": "analyze-step",
+        "pass": "analyze-step",
+        "stop": "@stop"
       },
       "executor": "orchestrator",
       "kind": "compose",
@@ -87,7 +101,10 @@
       "protocol": "explore-analyze@v1",
       "reads": ["reports/brief.json"],
       "routes": {
-        "pass": "synthesize-step"
+        "continue": "synthesize-step",
+        "pass": "synthesize-step",
+        "retry": "analyze-step",
+        "stop": "@stop"
       },
       "executor": "orchestrator",
       "kind": "compose",
@@ -112,7 +129,10 @@
       "protocol": "explore-synthesize@v1",
       "reads": ["reports/brief.json", "reports/analysis.json"],
       "routes": {
-        "pass": "review-step"
+        "continue": "review-step",
+        "pass": "review-step",
+        "retry": "synthesize-step",
+        "stop": "@stop"
       },
       "executor": "worker",
       "kind": "relay",
@@ -141,7 +161,11 @@
       "protocol": "explore-review@v1",
       "reads": ["reports/brief.json", "reports/analysis.json", "reports/compose.json"],
       "routes": {
-        "pass": "close-step"
+        "continue": "close-step",
+        "pass": "close-step",
+        "retry": "synthesize-step",
+        "revise": "synthesize-step",
+        "stop": "@stop"
       },
       "executor": "worker",
       "kind": "relay",
@@ -170,7 +194,9 @@
       "protocol": "explore-close@v1",
       "reads": ["reports/brief.json", "reports/compose.json", "reports/review-verdict.json"],
       "routes": {
-        "pass": "@complete"
+        "complete": "@complete",
+        "pass": "@complete",
+        "stop": "@stop"
       },
       "executor": "orchestrator",
       "kind": "compose",

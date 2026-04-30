@@ -1,0 +1,353 @@
+{
+  "schema_version": "2",
+  "id": "release-note-flow",
+  "version": "0.1.0",
+  "purpose": "Draft release notes from a change summary.",
+  "entry": {
+    "signals": {
+      "include": [
+        "release-note-flow",
+        "draft",
+        "release",
+        "notes",
+        "from",
+        "change"
+      ],
+      "exclude": []
+    },
+    "intent_prefixes": [
+      "release-note-flow"
+    ]
+  },
+  "entry_modes": [
+    {
+      "name": "default",
+      "start_at": "frame-step",
+      "depth": "standard",
+      "description": "Default Build entry mode."
+    },
+    {
+      "name": "lite",
+      "start_at": "frame-step",
+      "depth": "lite",
+      "description": "Lite Build entry mode."
+    },
+    {
+      "name": "deep",
+      "start_at": "frame-step",
+      "depth": "deep",
+      "description": "Deep Build entry mode."
+    },
+    {
+      "name": "autonomous",
+      "start_at": "frame-step",
+      "depth": "autonomous",
+      "description": "Autonomous Build entry mode."
+    }
+  ],
+  "stages": [
+    {
+      "id": "frame-stage",
+      "title": "Frame",
+      "canonical": "frame",
+      "steps": [
+        "frame-step"
+      ]
+    },
+    {
+      "id": "plan-stage",
+      "title": "Plan",
+      "canonical": "plan",
+      "steps": [
+        "plan-step"
+      ]
+    },
+    {
+      "id": "act-stage",
+      "title": "Act",
+      "canonical": "act",
+      "steps": [
+        "act-step"
+      ]
+    },
+    {
+      "id": "verify-stage",
+      "title": "Verify",
+      "canonical": "verify",
+      "steps": [
+        "verify-step"
+      ]
+    },
+    {
+      "id": "review-stage",
+      "title": "Review",
+      "canonical": "review",
+      "steps": [
+        "review-step"
+      ]
+    },
+    {
+      "id": "close-stage",
+      "title": "Close",
+      "canonical": "close",
+      "steps": [
+        "close-step"
+      ]
+    }
+  ],
+  "stage_path_policy": {
+    "mode": "partial",
+    "omits": [
+      "analyze"
+    ],
+    "rationale": "Build follows Frame, Plan, Act, Verify, Review, Close. The Analyze stage is omitted because analysis is folded into Frame and Plan for this flow."
+  },
+  "steps": [
+    {
+      "id": "frame-step",
+      "title": "Frame - confirm Build brief",
+      "protocol": "build-frame@v1",
+      "reads": [],
+      "routes": {
+        "continue": "plan-step",
+        "pass": "plan-step",
+        "stop": "@stop"
+      },
+      "executor": "orchestrator",
+      "kind": "checkpoint",
+      "policy": {
+        "prompt": "Confirm the Build brief before implementation starts.",
+        "choices": [
+          {
+            "id": "continue",
+            "label": "Continue"
+          }
+        ],
+        "safe_default_choice": "continue",
+        "safe_autonomous_choice": "continue",
+        "build_brief": {
+          "scope": "Make the smallest safe change that satisfies the requested goal.",
+          "success_criteria": [
+            "The requested behavior is implemented",
+            "Verification passes",
+            "Review completes without a blocking issue"
+          ],
+          "verification_command_candidates": [
+            {
+              "id": "npm-check",
+              "cwd": ".",
+              "argv": [
+                "npm",
+                "run",
+                "check"
+              ],
+              "timeout_ms": 120000,
+              "max_output_bytes": 200000,
+              "env": {}
+            }
+          ]
+        }
+      },
+      "writes": {
+        "request": "reports/checkpoints/frame-step-request.json",
+        "response": "reports/checkpoints/frame-step-response.json",
+        "report": {
+          "path": "reports/build/brief.json",
+          "schema": "build.brief@v1"
+        }
+      },
+      "check": {
+        "kind": "checkpoint_selection",
+        "source": {
+          "kind": "checkpoint_response",
+          "ref": "response"
+        },
+        "allow": [
+          "continue"
+        ]
+      }
+    },
+    {
+      "id": "plan-step",
+      "title": "Plan - produce Build plan",
+      "protocol": "build-plan@v1",
+      "reads": [
+        "reports/build/brief.json"
+      ],
+      "routes": {
+        "continue": "act-step",
+        "pass": "act-step",
+        "revise": "plan-step",
+        "stop": "@stop"
+      },
+      "executor": "orchestrator",
+      "kind": "compose",
+      "writes": {
+        "report": {
+          "path": "reports/build/plan.json",
+          "schema": "build.plan@v1"
+        }
+      },
+      "check": {
+        "kind": "schema_sections",
+        "source": {
+          "kind": "report",
+          "ref": "report"
+        },
+        "required": [
+          "objective",
+          "verification"
+        ]
+      }
+    },
+    {
+      "id": "act-step",
+      "title": "Act - implementation relay",
+      "protocol": "build-act@v1",
+      "reads": [
+        "reports/build/brief.json",
+        "reports/build/plan.json"
+      ],
+      "routes": {
+        "continue": "verify-step",
+        "pass": "verify-step",
+        "retry": "act-step",
+        "stop": "@stop"
+      },
+      "executor": "worker",
+      "kind": "relay",
+      "role": "implementer",
+      "writes": {
+        "report": {
+          "path": "reports/build/implementation.json",
+          "schema": "build.implementation@v1"
+        },
+        "request": "reports/relay/build-act.request.json",
+        "receipt": "reports/relay/build-act.receipt.txt",
+        "result": "reports/relay/build-act.result.json"
+      },
+      "check": {
+        "kind": "result_verdict",
+        "source": {
+          "kind": "relay_result",
+          "ref": "result"
+        },
+        "pass": [
+          "accept"
+        ]
+      }
+    },
+    {
+      "id": "verify-step",
+      "title": "Verify - run Build verification",
+      "protocol": "build-verify@v1",
+      "reads": [
+        "reports/build/plan.json",
+        "reports/build/implementation.json"
+      ],
+      "routes": {
+        "continue": "review-step",
+        "pass": "review-step",
+        "retry": "act-step",
+        "stop": "@stop"
+      },
+      "executor": "orchestrator",
+      "kind": "verification",
+      "writes": {
+        "report": {
+          "path": "reports/build/verification.json",
+          "schema": "build.verification@v1"
+        }
+      },
+      "check": {
+        "kind": "schema_sections",
+        "source": {
+          "kind": "report",
+          "ref": "report"
+        },
+        "required": [
+          "overall_status",
+          "commands"
+        ]
+      }
+    },
+    {
+      "id": "review-step",
+      "title": "Review - implementation review relay",
+      "protocol": "build-review@v1",
+      "reads": [
+        "reports/build/brief.json",
+        "reports/build/plan.json",
+        "reports/build/implementation.json",
+        "reports/build/verification.json"
+      ],
+      "routes": {
+        "continue": "close-step",
+        "pass": "close-step",
+        "retry": "act-step",
+        "revise": "act-step",
+        "stop": "@stop"
+      },
+      "executor": "worker",
+      "kind": "relay",
+      "role": "reviewer",
+      "writes": {
+        "report": {
+          "path": "reports/build/review.json",
+          "schema": "build.review@v1"
+        },
+        "request": "reports/relay/build-review.request.json",
+        "receipt": "reports/relay/build-review.receipt.txt",
+        "result": "reports/relay/build-review.result.json"
+      },
+      "check": {
+        "kind": "result_verdict",
+        "source": {
+          "kind": "relay_result",
+          "ref": "result"
+        },
+        "pass": [
+          "accept",
+          "accept-with-fixes"
+        ]
+      }
+    },
+    {
+      "id": "close-step",
+      "title": "Close - emit Build result",
+      "protocol": "build-close@v1",
+      "reads": [
+        "reports/build/brief.json",
+        "reports/build/plan.json",
+        "reports/build/implementation.json",
+        "reports/build/verification.json",
+        "reports/build/review.json"
+      ],
+      "routes": {
+        "complete": "@complete",
+        "pass": "@complete",
+        "stop": "@stop"
+      },
+      "executor": "orchestrator",
+      "kind": "compose",
+      "writes": {
+        "report": {
+          "path": "reports/build-result.json",
+          "schema": "build.result@v1"
+        }
+      },
+      "check": {
+        "kind": "schema_sections",
+        "source": {
+          "kind": "report",
+          "ref": "report"
+        },
+        "required": [
+          "summary",
+          "outcome",
+          "evidence_links"
+        ]
+      }
+    }
+  ]
+}

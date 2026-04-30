@@ -200,11 +200,57 @@
         "required": ["classified", "to_execute"]
       },
       "routes": {
-        "continue": "execute-step",
+        "continue": "triage-checkpoint-step",
         "revise": "triage-step",
         "stop": "@stop"
       },
       "block": "queue"
+    },
+    {
+      "id": "triage-checkpoint-step",
+      "title": "Queue/Triage - confirm sweep batch",
+      "stage": "plan",
+      "input": {
+        "queue": "sweep.queue@v1"
+      },
+      "output": "sweep.triage-checkpoint@v1",
+      "evidence_requirements": ["selected batch", "answer source", "resume route"],
+      "execution": {
+        "kind": "checkpoint"
+      },
+      "protocol": "sweep-triage-checkpoint@v1",
+      "writes": {
+        "checkpoint_request_path": "reports/checkpoints/sweep-triage-request.json",
+        "checkpoint_response_path": "reports/checkpoints/sweep-triage-response.json"
+      },
+      "check": {
+        "allow": ["continue", "revise", "stop"]
+      },
+      "checkpoint_policy": {
+        "prompt": "Confirm the queued sweep batch before execution.",
+        "choices": [
+          {
+            "id": "continue",
+            "label": "Execute the queued batch"
+          },
+          {
+            "id": "revise",
+            "label": "Revise the triage"
+          },
+          {
+            "id": "stop",
+            "label": "Stop before execution"
+          }
+        ],
+        "safe_default_choice": "continue",
+        "safe_autonomous_choice": "continue"
+      },
+      "routes": {
+        "continue": "execute-step",
+        "revise": "triage-step",
+        "stop": "@stop"
+      },
+      "block": "human-decision"
     },
     {
       "id": "execute-step",

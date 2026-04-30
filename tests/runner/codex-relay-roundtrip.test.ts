@@ -230,7 +230,7 @@ describe('codex relay round-trip (second-connector evidence)', () => {
         const snapshot = reduce(runtrace);
         expect(snapshot.trace_entries_consumed).toBe(runtrace.length);
         const stepState = snapshot.steps.find((s) => s.step_id === stepId);
-        expect(stepState?.status).toBeDefined();
+        expect(stepState?.status).toBe('complete');
 
         const reportAbs = join(runFolder, writes.report.path);
         expect(existsSync(reportAbs)).toBe(true);

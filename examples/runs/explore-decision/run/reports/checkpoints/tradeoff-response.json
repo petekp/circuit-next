@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "step_id": "tradeoff-checkpoint-step",
+  "selection": "option-2",
+  "resolution_source": "operator"
+}

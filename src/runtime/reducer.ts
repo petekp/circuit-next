@@ -130,6 +130,7 @@ function applyTraceEntry(prev: Snapshot, trace_entry: TraceEntry): Snapshot {
         steps: mutateStep(next.steps, stepId, (s) => ({
           ...s,
           status: 'in_progress' as StepStatus,
+          attempts: Math.max(s.attempts, trace_entry.attempt),
         })),
       };
     }
@@ -141,10 +142,16 @@ function applyTraceEntry(prev: Snapshot, trace_entry: TraceEntry): Snapshot {
       // identifiers for round-trip auditability; no snapshot-shape change
       // — the relay outcome still flows into the step via step.completed.
       return next;
-    case 'relay.completed':
-      // Relay outcomes flow into the step via step.completed; no
-      // snapshot-shape change here.
-      return next;
+    case 'relay.completed': {
+      const stepId = trace_entry.step_id as unknown as string;
+      return {
+        ...next,
+        steps: mutateStep(next.steps, stepId, (s) => ({
+          ...s,
+          status: 'complete' as StepStatus,
+        })),
+      };
+    }
     case 'sub_run.started':
     case 'sub_run.completed':
     case 'fanout.started':

@@ -1,0 +1,25 @@
+{
+  "objective": "deep change that asks for scope",
+  "approach": "Make the smallest safe change inside scope: Make the smallest safe change that satisfies the requested goal.",
+  "slices": [
+    "Satisfy: The requested behavior is implemented",
+    "Satisfy: Verification passes",
+    "Satisfy: Review completes without a blocking issue"
+  ],
+  "verification": {
+    "commands": [
+      {
+        "id": "npm-check",
+        "cwd": ".",
+        "argv": [
+          "npm",
+          "run",
+          "check"
+        ],
+        "timeout_ms": 120000,
+        "max_output_bytes": 200000,
+        "env": {}
+      }
+    ]
+  }
+}
