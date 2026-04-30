@@ -1,0 +1,470 @@
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { main } from '../../src/cli/circuit.js';
+import { sha256Hex } from '../../src/runtime/connectors/shared.js';
+import { writeManifestSnapshot } from '../../src/runtime/manifest-snapshot-writer.js';
+import { projectRunStatusFromRunFolder } from '../../src/runtime/run-status-projection.js';
+import { appendTraceEntry } from '../../src/runtime/trace-writer.js';
+import { CompiledFlowId, RunId } from '../../src/schemas/ids.js';
+import { TraceEntry } from '../../src/schemas/trace-entry.js';
+
+const tempRoots: string[] = [];
+const RUN_ID = '11111111-1111-4111-8111-111111111111';
+const OTHER_RUN_ID = '22222222-2222-4222-8222-222222222222';
+const RECORDED_AT = '2026-04-30T12:00:00.000Z';
+const FIX_FLOW_BYTES = readFileSync(resolve('generated/flows/fix/circuit.json'));
+const BUILD_FLOW_BYTES = readFileSync(resolve('generated/flows/build/circuit.json'));
+const FIX_CHECKPOINT_REQUEST_PATH = 'reports/checkpoints/fix-no-repro-decision-request.json';
+
+const change_kind = {
+  change_kind: 'discovery' as const,
+  failure_mode: 'status projection test fixture',
+  acceptance_evidence: 'semantic projection assertions pass',
+  alternate_framing: 'hand-authored run folder fixture',
+};
+
+function tempRunFolder(prefix: string): string {
+  const root = mkdtempSync(join(tmpdir(), prefix));
+  tempRoots.push(root);
+  const runFolder = join(root, 'run');
+  mkdirSync(runFolder, { recursive: true });
+  return runFolder;
+}
+
+function writeManifest(input: {
+  readonly runFolder: string;
+  readonly runId?: string;
+  readonly flowId?: string;
+  readonly bytes?: Buffer;
+}): string {
+  const manifest = writeManifestSnapshot(input.runFolder, {
+    run_id: RunId.parse(input.runId ?? RUN_ID),
+    flow_id: CompiledFlowId.parse(input.flowId ?? 'fix'),
+    captured_at: RECORDED_AT,
+    bytes: input.bytes ?? FIX_FLOW_BYTES,
+  });
+  return manifest.hash;
+}
+
+function append(runFolder: string, candidate: unknown): void {
+  appendTraceEntry(runFolder, TraceEntry.parse(candidate));
+}
+
+function bootstrap(input: {
+  readonly runId?: string;
+  readonly flowId?: string;
+  readonly manifestHash: string;
+  readonly goal?: string;
+}): unknown {
+  return {
+    schema_version: 1,
+    sequence: 0,
+    recorded_at: RECORDED_AT,
+    run_id: input.runId ?? RUN_ID,
+    kind: 'run.bootstrapped',
+    flow_id: input.flowId ?? 'fix',
+    depth: 'standard',
+    goal: input.goal ?? 'Fix the checkout bug',
+    change_kind,
+    manifest_hash: input.manifestHash,
+  };
+}
+
+function stepEntered(sequence: number, stepId: string, attempt = 1): unknown {
+  return {
+    schema_version: 1,
+    sequence,
+    recorded_at: RECORDED_AT,
+    run_id: RUN_ID,
+    kind: 'step.entered',
+    step_id: stepId,
+    attempt,
+  };
+}
+
+function runClosed(sequence: number, outcome: string): unknown {
+  return {
+    schema_version: 1,
+    sequence,
+    recorded_at: RECORDED_AT,
+    run_id: RUN_ID,
+    kind: 'run.closed',
+    outcome,
+  };
+}
+
+function writeResultPlaceholder(runFolder: string): void {
+  const path = join(runFolder, 'reports', 'result.json');
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, '{}\n');
+}
+
+function writeCheckpointRequest(input: {
+  readonly runFolder: string;
+  readonly allowedChoices?: readonly string[];
+  readonly stepId?: string;
+  readonly corruptJson?: boolean;
+}): string {
+  const requestPath = join(input.runFolder, FIX_CHECKPOINT_REQUEST_PATH);
+  mkdirSync(dirname(requestPath), { recursive: true });
+  const text =
+    input.corruptJson === true
+      ? '{not-json'
+      : `${JSON.stringify(
+          {
+            schema_version: 1,
+            step_id: input.stepId ?? 'fix-no-repro-decision',
+            prompt: 'Diagnosis did not cleanly reproduce the bug. Choose how to proceed.',
+            allowed_choices: input.allowedChoices ?? ['continue'],
+            execution_context: {
+              selection_config_layers: [],
+            },
+          },
+          null,
+          2,
+        )}\n`;
+  writeFileSync(requestPath, text);
+  return sha256Hex(text);
+}
+
+function appendWaitingCheckpoint(runFolder: string, requestHash: string): void {
+  append(runFolder, stepEntered(1, 'fix-no-repro-decision'));
+  append(runFolder, {
+    schema_version: 1,
+    sequence: 2,
+    recorded_at: RECORDED_AT,
+    run_id: RUN_ID,
+    kind: 'checkpoint.requested',
+    step_id: 'fix-no-repro-decision',
+    attempt: 1,
+    options: ['continue'],
+    request_path: FIX_CHECKPOINT_REQUEST_PATH,
+    request_report_hash: requestHash,
+  });
+}
+
+async function captureMain(argv: readonly string[]): Promise<{
+  readonly code: number;
+  readonly stdout: string;
+  readonly stderr: string;
+}> {
+  let stdout = '';
+  let stderr = '';
+  const originalStdout = process.stdout.write;
+  const originalStderr = process.stderr.write;
+  process.stdout.write = ((chunk: string | Uint8Array): boolean => {
+    stdout += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+    return true;
+  }) as typeof process.stdout.write;
+  process.stderr.write = ((chunk: string | Uint8Array): boolean => {
+    stderr += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+    return true;
+  }) as typeof process.stderr.write;
+  try {
+    const code = await main(argv);
+    return { code, stdout, stderr };
+  } finally {
+    process.stdout.write = originalStdout;
+    process.stderr.write = originalStderr;
+  }
+}
+
+afterEach(() => {
+  for (const root of tempRoots.splice(0)) {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+describe('run folder status projection', () => {
+  it('projects completed runs with terminal outcome and result path', () => {
+    const runFolder = tempRunFolder('circuit-run-status-complete-');
+    const manifestHash = writeManifest({ runFolder });
+    append(runFolder, bootstrap({ manifestHash }));
+    append(runFolder, stepEntered(1, 'fix-close'));
+    append(runFolder, runClosed(2, 'complete'));
+    writeResultPlaceholder(runFolder);
+
+    const projection = projectRunStatusFromRunFolder(runFolder);
+
+    expect(projection).toMatchObject({
+      engine_state: 'completed',
+      reason: 'run_closed',
+      terminal_outcome: 'complete',
+      legal_next_actions: ['inspect'],
+      result_path: join(runFolder, 'reports', 'result.json'),
+    });
+    expect(projection).not.toHaveProperty('current_step');
+  });
+
+  it('projects aborted runs without a current step', () => {
+    const runFolder = tempRunFolder('circuit-run-status-aborted-');
+    const manifestHash = writeManifest({ runFolder });
+    append(runFolder, bootstrap({ manifestHash }));
+    append(runFolder, stepEntered(1, 'fix-act'));
+    append(runFolder, runClosed(2, 'aborted'));
+
+    const projection = projectRunStatusFromRunFolder(runFolder);
+
+    expect(projection).toMatchObject({
+      engine_state: 'aborted',
+      reason: 'run_closed',
+      terminal_outcome: 'aborted',
+    });
+    expect(projection).not.toHaveProperty('current_step');
+  });
+
+  it.each(['handoff', 'stopped', 'escalated'] as const)(
+    'projects %s terminal outcomes as completed with preserved outcome',
+    (outcome) => {
+      const runFolder = tempRunFolder(`circuit-run-status-${outcome}-`);
+      const manifestHash = writeManifest({ runFolder });
+      append(runFolder, bootstrap({ manifestHash }));
+      append(runFolder, runClosed(1, outcome));
+
+      const projection = projectRunStatusFromRunFolder(runFolder);
+
+      expect(projection).toMatchObject({
+        engine_state: 'completed',
+        reason: 'run_closed',
+        terminal_outcome: outcome,
+      });
+    },
+  );
+
+  it('projects waiting checkpoints only when request data can resume', () => {
+    const runFolder = tempRunFolder('circuit-run-status-checkpoint-');
+    const manifestHash = writeManifest({ runFolder });
+    append(runFolder, bootstrap({ manifestHash }));
+    const requestHash = writeCheckpointRequest({ runFolder });
+    appendWaitingCheckpoint(runFolder, requestHash);
+
+    const projection = projectRunStatusFromRunFolder(runFolder);
+
+    expect(projection).toMatchObject({
+      engine_state: 'waiting_checkpoint',
+      reason: 'checkpoint_waiting',
+      legal_next_actions: ['inspect', 'resume'],
+      current_step: {
+        step_id: 'fix-no-repro-decision',
+        attempt: 1,
+        stage_id: 'analyze-stage',
+      },
+      checkpoint: {
+        checkpoint_id: 'fix-no-repro-decision:1',
+        step_id: 'fix-no-repro-decision',
+        attempt: 1,
+        choices: [
+          { id: 'continue', label: 'Continue with a focused fix anyway', value: 'continue' },
+        ],
+      },
+    });
+    expect(
+      projection.engine_state === 'waiting_checkpoint' && projection.checkpoint.request_path,
+    ).toBe(join(runFolder, FIX_CHECKPOINT_REQUEST_PATH));
+    expect(
+      projection.engine_state === 'waiting_checkpoint' && projection.current_step?.label,
+    ).toContain('choose path forward');
+  });
+
+  it('marks waiting checkpoints invalid when the request file is missing or corrupt', () => {
+    const runFolder = tempRunFolder('circuit-run-status-bad-checkpoint-');
+    const manifestHash = writeManifest({ runFolder });
+    append(runFolder, bootstrap({ manifestHash }));
+    appendWaitingCheckpoint(runFolder, '0'.repeat(64));
+
+    const projection = projectRunStatusFromRunFolder(runFolder);
+
+    expect(projection).toMatchObject({
+      engine_state: 'invalid',
+      reason: 'checkpoint_invalid',
+      legal_next_actions: ['none'],
+    });
+  });
+
+  it('projects open runs without implying liveness or resume', () => {
+    const runFolder = tempRunFolder('circuit-run-status-open-');
+    const manifestHash = writeManifest({ runFolder });
+    append(runFolder, bootstrap({ manifestHash }));
+    append(runFolder, stepEntered(1, 'fix-gather-context'));
+
+    const projection = projectRunStatusFromRunFolder(runFolder);
+
+    expect(projection).toMatchObject({
+      engine_state: 'open',
+      reason: 'active_or_unknown',
+      legal_next_actions: ['inspect'],
+      current_step: {
+        step_id: 'fix-gather-context',
+        attempt: 1,
+        stage_id: 'analyze-stage',
+      },
+    });
+    expect(projection.engine_state === 'open' && projection.current_step?.label).toContain(
+      'gather problem context',
+    );
+  });
+
+  it('does not borrow current-step labels from mismatched saved flow bytes', () => {
+    const runFolder = tempRunFolder('circuit-run-status-flow-mismatch-open-');
+    const manifestHash = writeManifest({ runFolder, bytes: BUILD_FLOW_BYTES });
+    append(runFolder, bootstrap({ manifestHash }));
+    append(runFolder, stepEntered(1, 'frame-step'));
+
+    const projection = projectRunStatusFromRunFolder(runFolder);
+
+    expect(projection).toMatchObject({
+      engine_state: 'open',
+      reason: 'active_or_unknown',
+      flow_id: 'fix',
+      current_step: {
+        step_id: 'frame-step',
+        attempt: 1,
+      },
+    });
+    expect(projection.engine_state === 'open' && projection.current_step).not.toHaveProperty(
+      'stage_id',
+    );
+    expect(projection.engine_state === 'open' && projection.current_step).not.toHaveProperty(
+      'label',
+    );
+  });
+
+  it('does not advertise checkpoint resume when saved flow bytes disagree with manifest flow id', () => {
+    const runFolder = tempRunFolder('circuit-run-status-flow-mismatch-checkpoint-');
+    const manifestHash = writeManifest({ runFolder, bytes: BUILD_FLOW_BYTES });
+    append(runFolder, bootstrap({ manifestHash }));
+    const requestHash = writeCheckpointRequest({ runFolder });
+    appendWaitingCheckpoint(runFolder, requestHash);
+
+    const projection = projectRunStatusFromRunFolder(runFolder);
+
+    expect(projection).toMatchObject({
+      engine_state: 'invalid',
+      reason: 'identity_mismatch',
+      legal_next_actions: ['none'],
+      error: { code: 'flow_identity_mismatch' },
+      flow_id: 'fix',
+      goal: 'Fix the checkout bug',
+    });
+  });
+
+  it('returns invalid trace projections without throwing', () => {
+    const runFolder = tempRunFolder('circuit-run-status-corrupt-trace-');
+    writeManifest({ runFolder });
+    writeFileSync(join(runFolder, 'trace.ndjson'), '{not-json\n');
+
+    const projection = projectRunStatusFromRunFolder(runFolder);
+
+    expect(projection).toMatchObject({
+      engine_state: 'invalid',
+      reason: 'trace_invalid',
+      legal_next_actions: ['none'],
+      flow_id: 'fix',
+    });
+    expect(projection).not.toHaveProperty('goal');
+  });
+
+  it('returns invalid manifest projections without requiring trace metadata', () => {
+    const runFolder = tempRunFolder('circuit-run-status-missing-manifest-');
+
+    const projection = projectRunStatusFromRunFolder(runFolder);
+
+    expect(projection).toMatchObject({
+      engine_state: 'invalid',
+      reason: 'manifest_invalid',
+      legal_next_actions: ['none'],
+    });
+    expect(projection).not.toHaveProperty('goal');
+    expect(projection).not.toHaveProperty('run_id');
+  });
+
+  it('returns identity mismatch when manifest and trace disagree', () => {
+    const runFolder = tempRunFolder('circuit-run-status-identity-mismatch-');
+    const manifestHash = writeManifest({ runFolder, runId: RUN_ID });
+    append(runFolder, bootstrap({ runId: OTHER_RUN_ID, manifestHash }));
+
+    const projection = projectRunStatusFromRunFolder(runFolder);
+
+    expect(projection).toMatchObject({
+      engine_state: 'invalid',
+      reason: 'identity_mismatch',
+      legal_next_actions: ['none'],
+      run_id: RUN_ID,
+      flow_id: 'fix',
+      goal: 'Fix the checkout bug',
+    });
+  });
+
+  it('does not invalidate closed runs when compiled-flow bytes cannot be parsed', () => {
+    const runFolder = tempRunFolder('circuit-run-status-bad-flow-bytes-');
+    const badBytes = Buffer.from('not json');
+    const manifestHash = writeManifest({ runFolder, bytes: badBytes });
+    append(runFolder, bootstrap({ manifestHash }));
+    append(runFolder, runClosed(1, 'complete'));
+
+    const projection = projectRunStatusFromRunFolder(runFolder);
+
+    expect(projection).toMatchObject({
+      engine_state: 'completed',
+      reason: 'run_closed',
+      terminal_outcome: 'complete',
+    });
+  });
+});
+
+describe('runs show CLI', () => {
+  it('prints a projection for a valid run folder', async () => {
+    const runFolder = tempRunFolder('circuit-runs-show-valid-');
+    const manifestHash = writeManifest({ runFolder });
+    append(runFolder, bootstrap({ manifestHash }));
+    append(runFolder, runClosed(1, 'complete'));
+
+    const result = await captureMain(['runs', 'show', '--run-folder', runFolder, '--json']);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      api_version: 'run-status-v1',
+      engine_state: 'completed',
+    });
+  });
+
+  it('prints invalid projections with exit 0 for existing broken run folders', async () => {
+    const runFolder = tempRunFolder('circuit-runs-show-invalid-');
+
+    const result = await captureMain(['runs', 'show', '--run-folder', runFolder, '--json']);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      api_version: 'run-status-v1',
+      engine_state: 'invalid',
+      reason: 'manifest_invalid',
+    });
+  });
+
+  it('prints engine errors with exit 1 for missing folders', async () => {
+    const runFolder = join(tempRunFolder('circuit-runs-show-missing-'), 'missing');
+
+    const result = await captureMain(['runs', 'show', '--run-folder', runFolder, '--json']);
+
+    expect(result.code).toBe(1);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      api_version: 'engine-error-v1',
+      error: { code: 'folder_not_found' },
+    });
+  });
+
+  it('requires --json and bypasses the normal flow parser', async () => {
+    const runFolder = tempRunFolder('circuit-runs-show-no-json-');
+
+    const result = await captureMain(['runs', 'show', '--run-folder', runFolder]);
+
+    expect(result.code).toBe(2);
+    expect(result.stderr).toBe('');
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      api_version: 'engine-error-v1',
+      error: { code: 'invalid_invocation' },
+    });
+  });
+});

@@ -26,6 +26,7 @@ import {
 } from '../runtime/runner.js';
 import { runCreateCommand } from './create.js';
 import { runHandoffCommand } from './handoff.js';
+import { runRunsCommand } from './runs.js';
 
 // Runtime CLI entry point — invoked through ./bin/circuit-next.
 //
@@ -89,6 +90,7 @@ function usage(): string {
   return [
     'usage: circuit-next run [flow-name] --goal "<goal>" [--mode <default|lite|deep|autonomous>] [--depth <lite|standard|deep|tournament|autonomous>] [--run-folder <path>] [--fixture <path>] [--flow-root <path>] [--progress jsonl]',
     '       circuit-next resume --run-folder <path> --checkpoint-choice <choice> [--progress jsonl]',
+    '       circuit-next runs show --run-folder <path> --json',
     '       circuit-next handoff [save|resume|done] [options]',
     '       circuit-next create --description "<flow idea>" [--name <slug>] [--publish --yes]',
     '',
@@ -401,6 +403,9 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
     return runCreateCommand(argv.slice(1), {
       ...(options.now === undefined ? {} : { now: options.now }),
     });
+  }
+  if (argv[0] === 'runs') {
+    return runRunsCommand(argv.slice(1));
   }
 
   let args: ParsedArgs;

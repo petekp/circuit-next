@@ -15,6 +15,7 @@ export * from './progress-event.js';
 export * from './depth.js';
 export * from './role.js';
 export * from './run.js';
+export * from './run-status.js';
 export * from './selection-policy.js';
 export * from './skill.js';
 export * from './snapshot.js';
