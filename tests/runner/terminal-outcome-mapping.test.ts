@@ -5,7 +5,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { ClaudeCodeRelayInput } from '../../src/runtime/connectors/claude-code.js';
 import type { RelayResult } from '../../src/runtime/connectors/shared.js';
-import { type RelayFn, runCompiledFlow } from '../../src/runtime/runner.js';
+import {
+  type RelayFn,
+  runCompiledFlow,
+  writePrototypeComposeReport,
+} from '../../src/runtime/runner.js';
 import { readRunTrace } from '../../src/runtime/trace-reader.js';
 import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
@@ -408,6 +412,7 @@ describe('RUN-I7 terminal route outcome mapping', () => {
         change_kind: change_kind(),
         now: deterministicNow(Date.UTC(2026, 3, 24, 20, 0, 0)),
         relayer: unusedRelayer(),
+        composeWriter: writePrototypeComposeReport,
       });
 
       expect(outcome.result.outcome).toBe(c.outcome);
@@ -491,6 +496,7 @@ describe('REL-003 rich route execution', () => {
         change_kind: change_kind(),
         now: deterministicNow(Date.UTC(2026, 3, 24, 21, 0, 0)),
         relayer: unusedRelayer(),
+        composeWriter: writePrototypeComposeReport,
       });
 
       expect(outcome.result.outcome).toBe(expectedTerminal[route] ?? 'complete');
@@ -558,6 +564,7 @@ describe('REL-003 rich route execution', () => {
           cli_version: '0.0.0-test',
         }),
       },
+      composeWriter: writePrototypeComposeReport,
     });
 
     expect(outcome.result.outcome).toBe('complete');

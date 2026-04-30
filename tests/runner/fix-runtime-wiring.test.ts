@@ -55,7 +55,7 @@ function change_kind(): ChangeKindDeclaration {
 // runs in milliseconds instead of executing real `npm run verify`),
 // and falls through to the standard writeComposeReport for every
 // other compose step (notably fix-close-lite, which exercises the
-// new fix.result close writer).
+// registered fix.result close writer).
 function frameOverrideComposeWriter(input: ComposeWriterInput): void {
   if ((input.step.id as unknown as string) === 'fix-frame') {
     const brief = FixBrief.parse({

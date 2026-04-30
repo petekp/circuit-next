@@ -674,6 +674,15 @@ function tryWriteRegisteredComposeReport(input: ComposeWriterInput): boolean {
 }
 
 export function writeComposeReport(input: ComposeWriterInput): void {
+  if (tryWriteRegisteredComposeReport(input)) return;
+  const schemaName = input.step.writes.report.schema;
+  const stepId = input.step.id as unknown as string;
+  throw new Error(
+    `no compose report writer registered for schema '${schemaName}' at compose step '${stepId}'`,
+  );
+}
+
+export function writePrototypeComposeReport(input: ComposeWriterInput): void {
   const { runFolder, step } = input;
   if (tryWriteRegisteredComposeReport(input)) return;
   const body: Record<string, string> = {};

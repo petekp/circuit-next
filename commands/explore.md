@@ -84,9 +84,8 @@ metacharacters:
    - `result_path` — the run summary `reports/result.json` (not the
      close-step report)
    - `${run_folder}/reports/explore-result.json` — the close-step report
-     (the actual flow product). Note: in the current build this report
-     carries baseline placeholder content. Surface the path so the user
-     can inspect, with a one-line caveat that the report is a placeholder.
+     (the actual flow product). Surface the path so the user can inspect
+     the typed report when needed.
    - `trace_entries_observed` count + a pointer to `trace.ndjson` under the run
      folder for the full trace.
 

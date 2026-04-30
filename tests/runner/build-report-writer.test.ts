@@ -29,8 +29,7 @@ function deterministicNow(startMs: number): () => Date {
 function change_kind(): ChangeKindDeclaration {
   return {
     change_kind: 'ratchet-advance',
-    failure_mode:
-      'Build reports have schemas but the runtime fallback writer can still emit placeholders',
+    failure_mode: 'Build reports have schemas but registered report writers are not exercised',
     acceptance_evidence:
       'default runCompiledFlow path writes build.plan@v1 and build.result@v1 reports that parse through their schemas',
     alternate_framing:

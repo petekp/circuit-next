@@ -20,7 +20,7 @@ import { z } from 'zod';
 
 import { findCloseBuilder } from '../../src/runtime/registries/close-writers/registry.js';
 import type { CloseBuilder } from '../../src/runtime/registries/close-writers/types.js';
-import { runCompiledFlow } from '../../src/runtime/runner.js';
+import { runCompiledFlow, writePrototypeComposeReport } from '../../src/runtime/runner.js';
 import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { RunId } from '../../src/schemas/ids.js';
@@ -58,7 +58,6 @@ const syntheticBuilder: CloseBuilder = {
 // composeWriter that uses syntheticBuilder for the new schema and
 // delegates everything else upstream. If the registry's contract were
 // internally inconsistent, this test would surface it.
-import { writeComposeReport } from '../../src/runtime/runner.js';
 
 function deterministicNow(startMs: number): () => Date {
   let n = 0;
@@ -196,10 +195,10 @@ describe('close-with-evidence registry', () => {
           );
           return;
         }
-        // For non-synthetic schemas (the frame-stub brief in this test),
-        // the placeholder fallback writes a minimum-viable brief from
-        // check.required sections, which the synthetic close consumes.
-        writeComposeReport(input);
+        // This synthetic frame has no registered writer. The test opts into
+        // the prototype-only fallback instead of relying on production
+        // placeholder behavior.
+        writePrototypeComposeReport(input);
       },
     });
     if (outcome.result.outcome !== 'complete') {

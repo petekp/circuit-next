@@ -105,8 +105,8 @@ export interface CompiledFlowInvocation {
   // subprocess module into their graph).
   relayer?: RelayFn;
   // Test seam for deterministic compose fixtures. Production invocations
-  // omit this and use the registered writer below, which composes the
-  // schema-specific compose builder with a placeholder fallback.
+  // omit this and use the registered writer below, which fails closed when
+  // a compose step has no schema-specific writer.
   composeWriter?: ComposeWriterFn;
   // Parsed config layers are supplied by callers that have already handled
   // discovery/loading. The product CLI discovers user-global and project

@@ -6,7 +6,7 @@
 // edits required. If any compose step in the runner ever regrows
 // flow-specific knowledge, this test breaks.
 
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -117,6 +117,26 @@ describe('compose writer registry', () => {
 
   it('returns undefined for an unregistered schema', () => {
     expect(findComposeBuilder(SYNTHETIC_BRIEF_SCHEMA)).toBeUndefined();
+  });
+
+  it('aborts the default runtime path when no compose writer is registered', async () => {
+    const flow = syntheticComposeCompiledFlow();
+    const outcome = await runCompiledFlow({
+      runFolder,
+      flow,
+      flowBytes: Buffer.from(JSON.stringify(flow)),
+      runId: RunId.parse('00000000-0000-0000-0000-0000bbbb5678'),
+      goal: 'missing compose registry test',
+      depth: 'standard',
+      change_kind: change_kind(),
+      now: deterministicNow(Date.UTC(2026, 3, 26, 14, 5, 0)),
+    });
+
+    expect(outcome.result.outcome).toBe('aborted');
+    expect(outcome.result.reason).toContain(
+      "no compose report writer registered for schema 'synthetic.brief@v1'",
+    );
+    expect(existsSync(join(runFolder, 'reports/synthetic-brief.json'))).toBe(false);
   });
 
   it('produces a synthetic report end-to-end via the registry contract', async () => {

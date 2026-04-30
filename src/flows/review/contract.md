@@ -40,8 +40,8 @@ shape is validated by `src/flows/review/reports.ts`.
 At v0.2, the default runtime composer writer has a narrow review
 registration: `review.intake@v1` writes the scoped intake object and
 `review.result@v1` reads the analyze-stage relay result to produce the
-typed close-stage report. Other Circuit-written outputs keep the
-placeholder fallback until their own schema-specific writers land.
+typed close-stage report. Runtime compose steps fail closed when a
+schema-specific writer is missing.
 
 ## Report
 

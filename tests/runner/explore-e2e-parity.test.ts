@@ -70,13 +70,9 @@ function sha256Hex(payload: string): string {
 }
 
 // Normalize before hashing so deterministic sections stay stable across
-// runs even when the run folder changes. At v0 the close-step's report
-// is a static JSON object (see src/runtime/runner.ts writeComposeReport)
-// with no timestamps, receipt ids, run ids, or absolute paths — so the
-// normalization is effectively a canonical JSON pretty-print with sorted
-// keys. The three sentinel replacements stay in place so a future
-// compose-writer that DOES emit timestamps / ids / paths doesn't
-// silently drift the golden.
+// runs even when the run folder changes. The close-step report may include
+// timestamps, receipt ids, run ids, or absolute paths, so the sentinel
+// replacements keep the golden focused on semantic result shape.
 function normalizeExploreResult(raw: string): string {
   const parsed: unknown = JSON.parse(raw);
   const canonical = canonicalize(parsed);

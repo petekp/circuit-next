@@ -22,7 +22,7 @@ import {
   type CompileResult,
   compileSchematicToCompiledFlow,
 } from '../../src/runtime/compile-schematic-to-flow.js';
-import { runCompiledFlow } from '../../src/runtime/runner.js';
+import { runCompiledFlow, writePrototypeComposeReport } from '../../src/runtime/runner.js';
 import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
 import type { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { FlowBlockCatalog } from '../../src/schemas/flow-blocks.js';
@@ -37,7 +37,7 @@ function exerciserChangeKind(): ChangeKindDeclaration {
     change_kind: 'ratchet-advance',
     failure_mode: 'orphan scalar contract is unfalsified — no schematic exercises it',
     acceptance_evidence:
-      'synthetic schematic compiles and runs through the runtime placeholder substrate',
+      'synthetic schematic compiles and runs through the explicit prototype placeholder writer',
     alternate_framing: 'wait for real flow — rejected because the contract gap stays hidden',
   };
 }
@@ -181,7 +181,7 @@ describe('orphan scalar: handoff', () => {
     expect(() => compileSchematicToCompiledFlow(schematic)).not.toThrow();
   });
 
-  it('runs end-to-end via the placeholder compose fallback', async () => {
+  it('runs end-to-end via the explicit prototype compose fallback', async () => {
     const schematic = FlowSchematic.parse(schematicRaw);
     const flow = singleCompiledFlow(compileSchematicToCompiledFlow(schematic));
     const outcome = await runCompiledFlow({
@@ -193,6 +193,7 @@ describe('orphan scalar: handoff', () => {
       depth: 'standard',
       change_kind: exerciserChangeKind(),
       now: deterministicNow(Date.UTC(2026, 3, 26, 12, 0, 0)),
+      composeWriter: writePrototypeComposeReport,
     });
     expect(outcome.result.outcome).toBe('complete');
   });
@@ -306,6 +307,7 @@ describe('orphan scalar: human-decision', () => {
       depth: 'standard',
       change_kind: exerciserChangeKind(),
       now: deterministicNow(Date.UTC(2026, 3, 26, 12, 20, 0)),
+      composeWriter: writePrototypeComposeReport,
     });
     expect(outcome.result.outcome).toBe('complete');
   });
@@ -373,7 +375,7 @@ describe('orphan scalar: queue', () => {
     expect(() => compileSchematicToCompiledFlow(schematic)).not.toThrow();
   });
 
-  it('runs end-to-end via the placeholder compose fallback', async () => {
+  it('runs end-to-end via the explicit prototype compose fallback', async () => {
     const schematic = FlowSchematic.parse(schematicRaw);
     const flow = singleCompiledFlow(compileSchematicToCompiledFlow(schematic));
     const outcome = await runCompiledFlow({
@@ -385,6 +387,7 @@ describe('orphan scalar: queue', () => {
       depth: 'standard',
       change_kind: exerciserChangeKind(),
       now: deterministicNow(Date.UTC(2026, 3, 26, 12, 5, 0)),
+      composeWriter: writePrototypeComposeReport,
     });
     expect(outcome.result.outcome).toBe('complete');
   });
@@ -457,7 +460,7 @@ describe('orphan scalar: batch', () => {
     expect(() => compileSchematicToCompiledFlow(schematic)).not.toThrow();
   });
 
-  it('runs end-to-end via the placeholder compose fallback', async () => {
+  it('runs end-to-end via the explicit prototype compose fallback', async () => {
     const schematic = FlowSchematic.parse(schematicRaw);
     const flow = singleCompiledFlow(compileSchematicToCompiledFlow(schematic));
     const outcome = await runCompiledFlow({
@@ -469,6 +472,7 @@ describe('orphan scalar: batch', () => {
       depth: 'standard',
       change_kind: exerciserChangeKind(),
       now: deterministicNow(Date.UTC(2026, 3, 26, 12, 10, 0)),
+      composeWriter: writePrototypeComposeReport,
     });
     expect(outcome.result.outcome).toBe('complete');
   });
@@ -546,7 +550,7 @@ describe('orphan scalar: risk-rollback-check', () => {
     expect(() => compileSchematicToCompiledFlow(schematic)).not.toThrow();
   });
 
-  it('runs end-to-end via the placeholder compose fallback', async () => {
+  it('runs end-to-end via the explicit prototype compose fallback', async () => {
     const schematic = FlowSchematic.parse(schematicRaw);
     const flow = singleCompiledFlow(compileSchematicToCompiledFlow(schematic));
     const outcome = await runCompiledFlow({
@@ -558,6 +562,7 @@ describe('orphan scalar: risk-rollback-check', () => {
       depth: 'standard',
       change_kind: exerciserChangeKind(),
       now: deterministicNow(Date.UTC(2026, 3, 26, 12, 15, 0)),
+      composeWriter: writePrototypeComposeReport,
     });
     expect(outcome.result.outcome).toBe('complete');
   });

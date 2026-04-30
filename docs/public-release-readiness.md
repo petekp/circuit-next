@@ -984,18 +984,18 @@ Primary files:
 ### REL-015: Address Release Audit And Packaging Hygiene
 
 Problem:
-Current release packaging is not yet public-release grade, and dependency audit
-has production moderate issues through the designer workspace.
+Current release packaging is not yet public-release grade. The root CLI/plugin
+package no longer includes the designer workspace in its install footprint, but
+the public release path, license, and distribution metadata are still unsettled.
 
 Evidence:
 
 - `package.json` has `"private": true`.
-- `package.json` has workspace `apps/*`, which brings designer dependencies
-  into the root install.
-- `apps/designer/package.json` depends on Vite.
-- `npm audit --omit=dev --json` on 2026-04-29 reported two moderate
-  production vulnerabilities through `vite` and `esbuild`; the available fix is
-  a semver-major Vite upgrade.
+- `package.json` no longer declares `apps/*` as a workspace, so
+  `apps/designer` keeps its own dependency tree instead of riding along with
+  the root CLI/plugin install.
+- `npm audit --omit=dev --json` on 2026-04-30 reports zero production
+  vulnerabilities for the root package.
 - README license is still `TBD`.
 
 Why users care:

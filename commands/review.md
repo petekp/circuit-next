@@ -81,9 +81,7 @@ metacharacters:
    The default CLI path now writes a schema-valid
    `${run_folder}/reports/review-result.json` for the audit-only review
    flow when the run completes. Surface that path as the typed review
-   result report only for completed runs. The broader explore reports
-   still use their existing placeholder content until their own
-   schema-specific writers land.
+   result report only for completed runs.
 
    If `outcome === 'aborted'`, read `reports/result.json` at `result_path`
    to surface the abort `reason`; do not claim that
