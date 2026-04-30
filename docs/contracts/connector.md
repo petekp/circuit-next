@@ -3,7 +3,7 @@ contract: connector
 status: ratified-v0.1
 version: 0.1
 schema_source: src/schemas/connector.ts
-last_updated: 2026-04-19
+last_updated: 2026-04-29
 depends_on: [ids, step, selection-policy]
 enforces_also_in: [src/schemas/config.ts, src/schemas/trace-entry.ts]
 report_ids:
@@ -173,9 +173,9 @@ invariant; tested in `tests/contracts/schema-parity.test.ts`.
   `OUTPUT_FILE` to `command` at invocation time; the connector reads its
   prompt from `PROMPT_FILE` and writes its JSON response object to
   `OUTPUT_FILE`. The connector's exit code distinguishes success (0)
-  from failure (non-zero); failure semantics are Stage 2. This is the
-  contract every custom connector must satisfy. Enforced at
-  `src/schemas/connector.ts`.
+  from failure (non-zero). This is the contract every custom connector
+  must satisfy. Enforced at `src/schemas/connector.ts` and
+  `src/runtime/connectors/custom.ts`.
 
   Minimal custom connector example:
 
@@ -209,22 +209,34 @@ invariant; tested in `tests/contracts/schema-parity.test.ts`.
   );
   ```
 
-  **Scope caveat — cwd, env, path resolution, timeouts, and stdin
-  semantics are Stage 2 (closes Codex LOW #9).** v0.1 deliberately
-  does not specify: (a) whether `command[0]` may be relative, and if
-  so what `PATH` lookup applies; (b) whether the connector inherits
-  the operator's `cwd` or the run's worktree; (c) whether environment
-  variables are inherited, filtered, or augmented; (d) whether
-  `stdin` is attached, closed, or piped with the prompt; (e) timeout
-  enforcement. These are relayer-side runtime decisions that
-  depend on the implementer-isolation regime (same-process vs
-  worktree vs sandbox), which itself is Tier 2+ per CLAUDE.md Hard
-  Invariants. The v0.1 contract constrains only the **structural
-  shape** of `command`: non-empty argv of non-empty strings, direct
-  exec, positional PROMPT_FILE/OUTPUT_FILE appended. The Stage 2
-  property `connector.prop.custom_command_direct_exec_semantics` plus
-  a new property `connector.prop.custom_command_environment_isolation`
-  (to be authored in v0.2) will ratify the runtime policy.
+  Runtime policy:
+
+  - `command[0]` is passed to Node's `child_process.spawn` directly.
+    There is no shell, no `/bin/sh -c`, and no relayer-side expansion
+    of `$VAR`, backticks, globs, or command separators.
+  - Relative executable paths and bare executable names follow normal
+    `spawn` lookup from the Circuit process current working directory
+    and inherited `PATH`.
+  - The subprocess inherits the Circuit process current working
+    directory and `process.env`.
+  - `stdin` is ignored. The prompt is available only through
+    `PROMPT_FILE`.
+  - `stdout` is debug output only. The canonical response is the first
+    parseable JSON object extracted from `OUTPUT_FILE`.
+  - `stderr` is captured for failure messages and capped.
+  - The default timeout is 120 seconds unless the relay step provides
+    a timeout. On timeout, the runtime sends `SIGTERM` to the child
+    process group and then `SIGKILL` after a short grace period.
+  - `OUTPUT_FILE` is rejected if it is empty or larger than the runtime
+    output cap.
+  - Circuit generates the receipt id as
+    `custom:<connector-name>:<timestamp>`.
+
+  **Capability caveat.** `capabilities.filesystem: read-only` is a
+  Circuit routing promise, not an OS sandbox. Circuit refuses to route
+  read-only custom connectors to implementer roles, but the wrapper is
+  still a trusted local process with the inherited cwd and environment.
+  Writable isolated custom workers require a later isolated mode.
 
 - **connector-I4 — `ConnectorRef` is a 3-variant discriminated union with
   transitive `.strict()`.** The variants are `BuiltInConnectorRef`
@@ -494,6 +506,13 @@ After a `RelayStartedTraceEntry` is accepted:
   relayer. Adversarial cases fuzz command vectors with shell-
   meaningful substrings (`"; rm -rf /"`, `$HOME`, backticks) and
   verify they are passed literally.
+
+- `connector.prop.custom_command_environment_isolation` — Future
+  hardening property for the custom connector process environment.
+  v0.1 deliberately documents and tests the current inherited cwd/env
+  policy; this property stays reserved for the later choice to either
+  ratify that policy under a property harness or replace it with an
+  explicit filtered environment / isolated cwd policy.
 
 - `connector.prop.reserved_name_disjointness_across_layer_merge` —
   The reservation check (connector-I2) holds not only within a

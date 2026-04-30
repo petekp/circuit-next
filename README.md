@@ -203,17 +203,17 @@ plugin rebuild.
 
 ## Optional: Codex CLI
 
-Circuit can relay worker steps through Codex CLI as well as through Claude
-Code's built-in Agent transport. Both are synchronous and work out of the
-box. Codex is optional.
+Circuit can relay worker steps through the Claude Code CLI or the Codex CLI.
+Codex is optional.
 
 ```bash
 npm install -g @openai/codex
 ```
 
-When Codex is the connector for a step, Circuit launches it inside an
-isolated `CODEX_HOME` and `TMPDIR` for the run, so it does not inherit your
-ambient Codex MCP servers, plugins, skills, or project-local Codex config.
+When Codex is the connector for a step, Circuit launches `codex exec` with the
+read-only sandbox flags. It inherits the Circuit process environment and
+current working directory, so configure it only where those process settings are
+appropriate for the worker.
 
 ## Connector Routing
 
@@ -226,20 +226,29 @@ Connector resolution at relay time follows a fixed order:
 1. `relay.roles.<role>` mapping (matches the role of the step being relayed)
 2. `relay.circuits.<flow_id>` mapping (matches the active flow)
 3. `relay.default`
-4. Auto-detect (Codex if installed, else the in-process Agent transport)
+4. Auto-detect (currently `claude-code`)
 
 Built-in connectors:
 
-- **`agent`** — Claude Code Agent transport with worktree isolation. The
-  default when Codex is not installed, and a first-class option even when
-  it is.
-- **`codex`** — Codex CLI launched inside Circuit's isolated runtime home.
+- **`claude-code`** — Claude Code CLI subprocess. This is the trusted
+  same-workspace connector and the current auto default.
+- **`codex`** — Codex CLI subprocess using Codex's read-only sandbox flags.
+  This connector cannot run implementer steps.
+- **`codex-isolated`** — Reserved for a future isolated writable Codex worker.
+  It is declared in schemas but not implemented yet.
 
 Custom connectors are wrapper executables. Define them under
 `relay.connectors.<name>.command` as a YAML argv array. Circuit appends
 `PROMPT_FILE OUTPUT_FILE` as the final two arguments; the wrapper reads the
 prompt file and writes a JSON response object to the output file. This keeps
-wrapper contracts small and avoids shell interpolation. See
+wrapper contracts small and avoids shell interpolation.
+
+Custom connectors are trusted local processes, not an OS sandbox. For custom
+connectors, stdin is ignored, stdout is treated as debug output, and stderr is
+included in failure messages. They inherit the Circuit process environment and
+current working directory. `capabilities.filesystem: read-only` means Circuit
+will only route them to read-only worker roles; it does not prevent the wrapper
+process from writing files on its own. See
 [`docs/contracts/connector.md`](docs/contracts/connector.md) for the full
 contract.
 
@@ -269,9 +278,9 @@ npm run emit-flows
 Verify there is no drift with `npm run check-flow-drift`. CI runs the same
 check on every push.
 
-**"codex not found" warning.** Codex CLI is optional. The `agent` connector
-runs through Claude Code's built-in Agent transport and works without Codex.
-Install Codex only if you want a separate worker process per relay.
+**"codex not found" warning.** Codex CLI is optional. The `claude-code`
+connector works without Codex. Install Codex only if you want a separate
+read-only Codex worker process per relay.
 
 **A run resumed from the wrong step.** Each run's state lives in its run
 folder under `.circuit-next/runs/`. To resume a specific run with an explicit

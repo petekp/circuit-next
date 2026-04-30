@@ -193,16 +193,21 @@ reads the prompt file and writes a JSON response object to the output file.
 Evidence:
 
 - `README.md` says custom connectors receive `PROMPT_FILE OUTPUT_FILE`.
+- `README.md` and `docs/contracts/connector.md` say custom connectors are
+  trusted local wrappers, not OS sandboxes.
 - `docs/contracts/connector.md` says the relayer appends two positional
-  arguments, `PROMPT_FILE` and `OUTPUT_FILE`.
+  arguments, `PROMPT_FILE` and `OUTPUT_FILE`, ignores stdin, inherits cwd/env,
+  treats stdout as debug output, and reads the result from `OUTPUT_FILE`.
 - `src/schemas/connector.ts` declares `PromptTransport = 'prompt-file'` and
   `output.kind = 'output-file'`.
 - `src/runtime/connectors/custom.ts` writes the prompt to a temporary prompt
   file, appends prompt/output file paths to the wrapper argv, and reads the
   result from the output file.
-- `tests/runner/runner-relay-provenance.test.ts` proves a custom reviewer
-  connector receives file paths, not the raw prompt argv, and returns the JSON
-  result through the output file.
+- `tests/runner/custom-connector-runtime.test.ts` proves the direct argv,
+  prompt/output file, inherited cwd/env, ignored stdin, output-file, and
+  timeout behavior.
+- `tests/runner/runner-relay-provenance.test.ts` proves a configured custom
+  reviewer connector works through relay resolution.
 
 Why users care:
 A user following the docs will build an incompatible connector. This is a fast
@@ -229,7 +234,7 @@ Acceptance checks:
 - [x] README, connector contract, schemas, and runtime describe the same
   protocol.
 - [x] At least one test proves a documented custom connector works end to end.
-- [ ] Advanced docs include a copy-pasteable custom connector example.
+- [x] Advanced docs include a copy-pasteable custom connector example.
 
 Primary files:
 

@@ -27,7 +27,10 @@ claims:
     surfaces: [README.md, docs/contracts/connector.md]
     backing:
       capability_ids: [connector:custom]
-      test_paths: [tests/runner/runner-relay-provenance.test.ts]
+      test_paths:
+        - tests/runner/custom-connector-runtime.test.ts
+        - tests/runner/runner-relay-provenance.test.ts
+        - tests/contracts/host-experience-docs.test.ts
       script_checks: [scripts/release/emit-current-capabilities.mjs --check]
     user_risk: Users following docs must be able to build a compatible connector.
     readiness_refs: [REL-001]

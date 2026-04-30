@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { EnabledConnector } from '../../src/schemas/connector.js';
 
 const REPO_ROOT = resolve(__dirname, '..', '..');
 
@@ -65,5 +66,17 @@ describe('host experience docs', () => {
     expect(doc).toContain("./bin/circuit-next run --goal 'overnight: improve repo quality'");
     expect(doc).toContain('selected_flow === "sweep"');
     expect(doc).toContain('reports/sweep-result.json');
+  });
+
+  it('keeps README connector names and custom protocol aligned with schemas and runtime', () => {
+    const doc = readFileSync(resolve(REPO_ROOT, 'README.md'), 'utf8');
+
+    for (const connector of EnabledConnector.options) {
+      expect(doc).toContain(`**\`${connector}\`**`);
+    }
+    expect(doc).not.toContain('**`agent`**');
+    expect(doc).toContain('stdin is ignored');
+    expect(doc).toContain('inherits the Circuit process environment');
+    expect(doc).toContain('not an OS sandbox');
   });
 });
