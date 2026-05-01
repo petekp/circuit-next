@@ -42,6 +42,8 @@ describe('Codex host plugin package', () => {
 
     expect(manifest.interface.capabilities).toContain('Interactive');
     expect(manifest.interface.capabilities).toContain('Write');
+    expect(manifest).not.toHaveProperty('hooks');
+    expect(existsSync(resolve(PLUGIN_ROOT, 'hooks/hooks.json'))).toBe(false);
   });
 
   it('ships a repo-local marketplace entry for Codex plugin discovery', () => {
@@ -236,9 +238,27 @@ describe('Codex host plugin package', () => {
       expect(result.status, result.stderr).toBe(0);
       const output = JSON.parse(result.stdout) as {
         status: string;
-        checks: Array<{ name: string; ok: boolean }>;
+        checks: Array<{ name: string; ok: boolean; severity?: string }>;
       };
       expect(output.status).toBe('ok');
+      expect(output.checks).toContainEqual(
+        expect.objectContaining({ name: 'bundled_hooks_config_absent', ok: true }),
+      );
+      expect(output.checks).toContainEqual(
+        expect.objectContaining({ name: 'session_start_hook_exists', ok: true }),
+      );
+      expect(output.checks).toContainEqual(
+        expect.objectContaining({
+          name: 'codex_hooks_feature_flag_visible',
+          severity: 'warning',
+        }),
+      );
+      expect(output.checks).toContainEqual(
+        expect.objectContaining({
+          name: 'codex_user_handoff_hook_installed',
+          severity: 'warning',
+        }),
+      );
       expect(output.checks).toContainEqual(
         expect.objectContaining({ name: 'temp_repo_review_smoke', ok: true }),
       );

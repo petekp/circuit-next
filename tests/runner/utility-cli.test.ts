@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -224,6 +224,447 @@ describe('utility CLI commands', () => {
     expect(
       ContinuityIndex.parse(JSON.parse(readFileSync(saved.index_path, 'utf8'))).pending_record,
     ).toBeNull();
+  });
+
+  it('renders a read-only handoff brief for host injection', async () => {
+    const projectRoot = tempRoot('circuit-handoff-brief-project-');
+    const controlPlane = join(projectRoot, '.circuit-next');
+    const save = await captureMain([
+      'handoff',
+      'save',
+      '--goal',
+      'Resume release work',
+      '--next',
+      'continue the parity matrix',
+      '--state-markdown',
+      '- release truth is current',
+      '--debt-markdown',
+      '- keep claims generated',
+      '--project-root',
+      projectRoot,
+      '--record-id',
+      'continuity-33333333-3333-4333-8333-333333333333',
+      '--created-at',
+      '2026-04-29T23:12:00.000Z',
+    ]);
+    expect(save.code, save.stderr).toBe(0);
+    const saved = JSON.parse(save.stdout) as { continuity_path: string; index_path: string };
+    const indexBefore = readFileSync(saved.index_path, 'utf8');
+    const recordBefore = readFileSync(saved.continuity_path, 'utf8');
+
+    const brief = await captureMain(['handoff', 'brief', '--json', '--project-root', projectRoot]);
+
+    expect(brief.code, brief.stderr).toBe(0);
+    const output = JSON.parse(brief.stdout) as {
+      api_version: string;
+      status: string;
+      record_id: string;
+      additional_context: string;
+    };
+    expect(output).toMatchObject({
+      api_version: 'handoff-brief-v1',
+      status: 'available',
+      record_id: 'continuity-33333333-3333-4333-8333-333333333333',
+    });
+    expect(output.additional_context).toContain('Circuit handoff is present for this repo.');
+    expect(output.additional_context).toContain('Goal: Resume release work');
+    expect(output.additional_context).toContain('Next: continue the parity matrix');
+    expect(output.additional_context).toContain(
+      'Boundary: Use this as context only. Do not continue unless the user asks.',
+    );
+    expect(output.additional_context.length).toBeLessThanOrEqual(3000);
+    expect(readFileSync(saved.index_path, 'utf8')).toBe(indexBefore);
+    expect(readFileSync(saved.continuity_path, 'utf8')).toBe(recordBefore);
+    expect(existsSync(join(controlPlane, 'continuity/reports/brief-result.json'))).toBe(false);
+  });
+
+  it('keeps required handoff brief framing when narrative details are truncated', async () => {
+    const projectRoot = tempRoot('circuit-handoff-brief-truncated-');
+    const longState = `- ${'state '.repeat(700)}`;
+    const longDebt = `- ${'debt '.repeat(700)}`;
+    const save = await captureMain([
+      'handoff',
+      'save',
+      '--goal',
+      'Resume release work',
+      '--next',
+      'continue the parity matrix',
+      '--state-markdown',
+      longState,
+      '--debt-markdown',
+      longDebt,
+      '--project-root',
+      projectRoot,
+      '--record-id',
+      'continuity-44444444-4444-4444-8444-444444444444',
+      '--created-at',
+      '2026-04-29T23:13:00.000Z',
+    ]);
+    expect(save.code, save.stderr).toBe(0);
+
+    const brief = await captureMain(['handoff', 'brief', '--json', '--project-root', projectRoot]);
+
+    expect(brief.code, brief.stderr).toBe(0);
+    const output = JSON.parse(brief.stdout) as {
+      status: string;
+      additional_context: string;
+    };
+    expect(output.status).toBe('available');
+    expect(output.additional_context.length).toBeLessThanOrEqual(3000);
+    expect(output.additional_context).toContain('Goal: Resume release work');
+    expect(output.additional_context).toContain('Next: continue the parity matrix');
+    expect(output.additional_context).toContain('[truncated]');
+    expect(output.additional_context).toContain(
+      'Boundary: Use this as context only. Do not continue unless the user asks.',
+    );
+  });
+
+  it('returns invalid instead of dropping required handoff brief framing', async () => {
+    const projectRoot = tempRoot('circuit-handoff-brief-too-large-');
+    const save = await captureMain([
+      'handoff',
+      'save',
+      '--goal',
+      'Resume release work',
+      '--next',
+      'N'.repeat(4000),
+      '--state-markdown',
+      '- release truth is current',
+      '--debt-markdown',
+      '- keep claims generated',
+      '--project-root',
+      projectRoot,
+      '--record-id',
+      'continuity-55555555-5555-4555-8555-555555555555',
+      '--created-at',
+      '2026-04-29T23:14:00.000Z',
+    ]);
+    expect(save.code, save.stderr).toBe(0);
+
+    const brief = await captureMain(['handoff', 'brief', '--json', '--project-root', projectRoot]);
+
+    expect(brief.code, brief.stderr).toBe(0);
+    expect(JSON.parse(brief.stdout)).toMatchObject({
+      api_version: 'handoff-brief-v1',
+      status: 'invalid',
+      record_id: 'continuity-55555555-5555-4555-8555-555555555555',
+      error: { code: 'brief_too_large' },
+    });
+  });
+
+  it('returns empty for missing or cleared handoff state without writing files', async () => {
+    const projectRoot = tempRoot('circuit-handoff-brief-empty-');
+
+    const missing = await captureMain([
+      'handoff',
+      'brief',
+      '--json',
+      '--project-root',
+      projectRoot,
+    ]);
+    expect(missing.code, missing.stderr).toBe(0);
+    expect(JSON.parse(missing.stdout)).toMatchObject({
+      api_version: 'handoff-brief-v1',
+      status: 'empty',
+      reason: 'no_index',
+    });
+    expect(existsSync(join(projectRoot, '.circuit-next'))).toBe(false);
+
+    const done = await captureMain(['handoff', 'done', '--project-root', projectRoot]);
+    expect(done.code, done.stderr).toBe(0);
+
+    const cleared = await captureMain([
+      'handoff',
+      'brief',
+      '--json',
+      '--project-root',
+      projectRoot,
+    ]);
+    expect(cleared.code, cleared.stderr).toBe(0);
+    expect(JSON.parse(cleared.stdout)).toMatchObject({
+      status: 'empty',
+      reason: 'no_pending_record',
+    });
+  });
+
+  it('returns invalid for corrupt or dangling handoff state', async () => {
+    const projectRoot = tempRoot('circuit-handoff-brief-invalid-');
+    const controlPlane = join(projectRoot, '.circuit-next');
+    const continuityRoot = join(controlPlane, 'continuity');
+    mkdirSync(continuityRoot, { recursive: true });
+    writeFileSync(join(continuityRoot, 'index.json'), '{not-json');
+
+    const corruptIndex = await captureMain([
+      'handoff',
+      'brief',
+      '--json',
+      '--project-root',
+      projectRoot,
+    ]);
+    expect(corruptIndex.code, corruptIndex.stderr).toBe(0);
+    expect(JSON.parse(corruptIndex.stdout)).toMatchObject({
+      status: 'invalid',
+      error: { code: 'index_invalid' },
+    });
+
+    writeFileSync(
+      join(continuityRoot, 'index.json'),
+      `${JSON.stringify(
+        {
+          schema_version: 1,
+          project_root: projectRoot,
+          pending_record: {
+            record_id: 'continuity-missing',
+            continuity_kind: 'standalone',
+            created_at: '2026-04-29T23:12:00.000Z',
+          },
+          current_run: null,
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    const missingRecord = await captureMain([
+      'handoff',
+      'brief',
+      '--json',
+      '--project-root',
+      projectRoot,
+    ]);
+    expect(missingRecord.code, missingRecord.stderr).toBe(0);
+    expect(JSON.parse(missingRecord.stdout)).toMatchObject({
+      status: 'invalid',
+      record_id: 'continuity-missing',
+      error: { code: 'record_missing' },
+    });
+
+    mkdirSync(join(continuityRoot, 'records'), { recursive: true });
+    writeFileSync(join(continuityRoot, 'records/continuity-missing.json'), '{not-json');
+    const corruptRecord = await captureMain([
+      'handoff',
+      'brief',
+      '--json',
+      '--project-root',
+      projectRoot,
+    ]);
+    expect(corruptRecord.code, corruptRecord.stderr).toBe(0);
+    expect(JSON.parse(corruptRecord.stdout)).toMatchObject({
+      status: 'invalid',
+      record_id: 'continuity-missing',
+      error: { code: 'record_invalid' },
+    });
+  });
+
+  it('requires --json for handoff brief', async () => {
+    const result = await captureMain(['handoff', 'brief']);
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain('handoff brief requires --json');
+  });
+
+  it('installs and removes the Codex user-level handoff hook without clobbering existing hooks', async () => {
+    const root = tempRoot('circuit-handoff-hooks-');
+    const hooksFile = join(root, 'codex/hooks.json');
+    const launcher = join(root, 'bin/circuit-next');
+    mkdirSync(join(root, 'codex'), { recursive: true });
+    mkdirSync(join(root, 'bin'), { recursive: true });
+    writeFileSync(launcher, '#!/usr/bin/env node\n');
+    writeFileSync(
+      hooksFile,
+      `${JSON.stringify(
+        {
+          hooks: {
+            SessionStart: [
+              {
+                matcher: 'startup',
+                hooks: [{ type: 'command', command: 'echo existing-hook' }],
+              },
+            ],
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    const install = await captureMain([
+      'handoff',
+      'hooks',
+      'install',
+      '--host',
+      'codex',
+      '--hooks-file',
+      hooksFile,
+      '--launcher',
+      launcher,
+    ]);
+
+    expect(install.code, install.stderr).toBe(0);
+    const installed = JSON.parse(install.stdout) as {
+      status: string;
+      backup_path: string;
+      command: string;
+    };
+    expect(installed.status).toBe('installed');
+    expect(installed.command).toContain('handoff hook --host codex');
+    expect(existsSync(installed.backup_path)).toBe(true);
+    const configAfterInstall = JSON.parse(readFileSync(hooksFile, 'utf8')) as {
+      hooks: { SessionStart: Array<{ matcher: string; hooks: Array<{ command: string }> }> };
+    };
+    expect(configAfterInstall.hooks.SessionStart).toHaveLength(2);
+    expect(configAfterInstall.hooks.SessionStart[1]?.matcher).toBe('startup|resume|clear');
+    expect(JSON.stringify(configAfterInstall)).toContain('echo existing-hook');
+    expect(JSON.stringify(configAfterInstall)).toContain('handoff hook --host codex');
+
+    const secondInstall = await captureMain([
+      'handoff',
+      'hooks',
+      'install',
+      '--host',
+      'codex',
+      '--hooks-file',
+      hooksFile,
+      '--launcher',
+      launcher,
+    ]);
+    expect(secondInstall.code, secondInstall.stderr).toBe(0);
+    expect(JSON.parse(secondInstall.stdout)).toMatchObject({ status: 'already_installed' });
+    const configAfterSecondInstall = JSON.parse(readFileSync(hooksFile, 'utf8')) as {
+      hooks: { SessionStart: unknown[] };
+    };
+    expect(
+      configAfterSecondInstall.hooks.SessionStart.filter((entry) =>
+        JSON.stringify(entry).includes('handoff hook --host codex'),
+      ),
+    ).toHaveLength(1);
+
+    const doctor = await captureMain([
+      'handoff',
+      'hooks',
+      'doctor',
+      '--host',
+      'codex',
+      '--hooks-file',
+      hooksFile,
+    ]);
+    expect(doctor.code, doctor.stderr).toBe(0);
+    expect(JSON.parse(doctor.stdout)).toMatchObject({ status: 'ok' });
+
+    const uninstall = await captureMain([
+      'handoff',
+      'hooks',
+      'uninstall',
+      '--host',
+      'codex',
+      '--hooks-file',
+      hooksFile,
+    ]);
+    expect(uninstall.code, uninstall.stderr).toBe(0);
+    expect(JSON.parse(uninstall.stdout)).toMatchObject({ status: 'uninstalled' });
+    const configAfterUninstall = JSON.parse(readFileSync(hooksFile, 'utf8')) as {
+      hooks: { SessionStart: unknown[] };
+    };
+    expect(JSON.stringify(configAfterUninstall)).toContain('echo existing-hook');
+    expect(JSON.stringify(configAfterUninstall)).not.toContain('handoff hook --host codex');
+  });
+
+  it('marks an installed Codex handoff hook invalid when the launcher is missing', async () => {
+    const root = tempRoot('circuit-handoff-hooks-stale-launcher-');
+    const hooksFile = join(root, 'codex/hooks.json');
+    const launcher = join(root, 'bin/circuit-next');
+    mkdirSync(join(root, 'bin'), { recursive: true });
+    writeFileSync(launcher, '#!/usr/bin/env node\n');
+
+    const install = await captureMain([
+      'handoff',
+      'hooks',
+      'install',
+      '--host',
+      'codex',
+      '--hooks-file',
+      hooksFile,
+      '--launcher',
+      launcher,
+    ]);
+    expect(install.code, install.stderr).toBe(0);
+    rmSync(launcher, { force: true });
+
+    const doctor = await captureMain([
+      'handoff',
+      'hooks',
+      'doctor',
+      '--host',
+      'codex',
+      '--hooks-file',
+      hooksFile,
+    ]);
+
+    expect(doctor.code, doctor.stderr).toBe(0);
+    expect(JSON.parse(doctor.stdout)).toMatchObject({
+      status: 'invalid',
+      checks: expect.arrayContaining([
+        expect.objectContaining({
+          name: 'circuit_handoff_hook_launcher_exists',
+          ok: false,
+        }),
+      ]),
+    });
+  });
+
+  it('renders Codex SessionStart JSON from the CLI hook entrypoint', async () => {
+    const projectRoot = tempRoot('circuit-handoff-hook-entry-project-');
+    const save = await captureMain([
+      'handoff',
+      'save',
+      '--goal',
+      'Resume release work',
+      '--next',
+      'continue the parity matrix',
+      '--state-markdown',
+      '- release truth is current',
+      '--debt-markdown',
+      '- keep claims generated',
+      '--project-root',
+      projectRoot,
+      '--record-id',
+      'continuity-66666666-6666-4666-8666-666666666666',
+      '--created-at',
+      '2026-04-29T23:15:00.000Z',
+    ]);
+    expect(save.code, save.stderr).toBe(0);
+
+    const hook = await captureMain([
+      'handoff',
+      'hook',
+      '--host',
+      'codex',
+      '--project-root',
+      projectRoot,
+    ]);
+
+    expect(hook.code, hook.stderr).toBe(0);
+    const output = JSON.parse(hook.stdout) as {
+      hookSpecificOutput: { hookEventName: string; additionalContext: string };
+    };
+    expect(output.hookSpecificOutput.hookEventName).toBe('SessionStart');
+    expect(output.hookSpecificOutput.additionalContext).toContain(
+      'Circuit handoff is present for this repo.',
+    );
+    expect(output.hookSpecificOutput.additionalContext).toContain(
+      'Boundary: Use this as context only. Do not continue unless the user asks.',
+    );
+
+    const emptyProjectRoot = tempRoot('circuit-handoff-hook-entry-empty-');
+    const empty = await captureMain([
+      'handoff',
+      'hook',
+      '--host',
+      'codex',
+      '--project-root',
+      emptyProjectRoot,
+    ]);
+    expect(empty.code, empty.stderr).toBe(0);
+    expect(empty.stdout).toBe('');
   });
 
   it('can bind handoff continuity to a waiting run and write active-run output', async () => {

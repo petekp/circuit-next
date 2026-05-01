@@ -17,6 +17,7 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const pluginRoot = resolve(scriptDir, '..');
 const packagedFlowRoot = resolve(pluginRoot, 'flows');
 const DOCTOR_SMOKE_TIMEOUT_MS = 120_000;
+const CODEX_FEATURES_TIMEOUT_MS = 5_000;
 
 function findLocalLauncher() {
   const candidate = resolve(process.cwd(), 'bin/circuit-next');
@@ -45,6 +46,12 @@ function check(name, ok, detail) {
   return detail === undefined ? { name, ok } : { name, ok, detail };
 }
 
+function warningCheck(name, ok, detail) {
+  return detail === undefined
+    ? { name, ok, severity: 'warning' }
+    : { name, ok, detail, severity: 'warning' };
+}
+
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
 }
@@ -71,6 +78,48 @@ function parseProgressEvents(stderr) {
   return events;
 }
 
+function codexHome() {
+  return process.env.CODEX_HOME ?? resolve(process.env.HOME ?? '', '.codex');
+}
+
+function codexUserHooksPath() {
+  return resolve(codexHome(), 'hooks.json');
+}
+
+function codexHooksEnabledFromConfig() {
+  const home = process.env.CODEX_HOME ?? resolve(process.env.HOME ?? '', '.codex');
+  const configPath = resolve(home, 'config.toml');
+  if (!existsSync(configPath)) return false;
+  const text = readFileSync(configPath, 'utf8');
+  return /^\s*codex_hooks\s*=\s*true\s*$/m.test(text);
+}
+
+function codexHooksEnabled() {
+  const result = spawnSync('codex', ['features', 'list'], {
+    encoding: 'utf8',
+    timeout: CODEX_FEATURES_TIMEOUT_MS,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  if (
+    result.error === undefined &&
+    result.status === 0 &&
+    /\bcodex_hooks\b[^\n]*\btrue\b/.test(result.stdout)
+  ) {
+    return true;
+  }
+  return codexHooksEnabledFromConfig();
+}
+
+function codexUserHandoffHookInstalled() {
+  const hooksPath = codexUserHooksPath();
+  if (!existsSync(hooksPath)) return false;
+  try {
+    return JSON.stringify(readJson(hooksPath)).includes('handoff hook --host codex');
+  } catch {
+    return false;
+  }
+}
+
 function runDoctor() {
   const checks = [];
   const manifestPath = resolve(pluginRoot, '.codex-plugin/plugin.json');
@@ -90,8 +139,42 @@ function runDoctor() {
       'plugin_manifest_shape',
       manifest?.name === 'circuit' &&
         manifest?.skills === './skills/' &&
+        manifest?.hooks === undefined &&
         manifest?.interface?.displayName === 'Circuit',
       manifestPath,
+    ),
+  );
+  checks.push(
+    warningCheck(
+      'codex_bundled_handoff_hooks_unregistered',
+      manifest?.hooks === undefined,
+      'Codex bundled plugin hooks are not registered in V1; use circuit-next handoff hooks install --host codex',
+    ),
+  );
+
+  const hooksRoot = resolve(pluginRoot, 'hooks');
+  const hooksConfigPath = resolve(hooksRoot, 'hooks.json');
+  const sessionStartPath = resolve(hooksRoot, 'session-start.mjs');
+  checks.push(
+    check(
+      'bundled_hooks_config_absent',
+      !existsSync(hooksConfigPath),
+      'Codex loads hooks/hooks.json by default; V1 uses user-level hooks instead',
+    ),
+  );
+  checks.push(check('session_start_hook_exists', existsSync(sessionStartPath), sessionStartPath));
+  checks.push(
+    warningCheck(
+      'codex_hooks_feature_flag_visible',
+      codexHooksEnabled(),
+      'Codex SessionStart hooks require codex_hooks to be enabled or stable',
+    ),
+  );
+  checks.push(
+    warningCheck(
+      'codex_user_handoff_hook_installed',
+      codexUserHandoffHookInstalled(),
+      `Install with: circuit-next handoff hooks install --host codex (checks ${codexUserHooksPath()})`,
     ),
   );
 
@@ -320,7 +403,7 @@ function runDoctor() {
     rmSync(smokeRoot, { recursive: true, force: true });
   }
 
-  const ok = checks.every((item) => item.ok);
+  const ok = checks.every((item) => item.ok || item.severity === 'warning');
   process.stdout.write(
     `${JSON.stringify(
       {

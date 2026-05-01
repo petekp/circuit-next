@@ -26,6 +26,8 @@
     "capture-proofs:golden-runs": "npm run build && node scripts/release/capture-golden-run-proofs.mjs",
     "check-release-infra": "npm run build && node scripts/release/emit-current-capabilities.mjs --check && node scripts/release/check-parity.mjs && node scripts/release/check-public-claims.mjs && node scripts/release/check-proof-coverage.mjs && node scripts/release/render-parity-matrix.mjs --check && node scripts/release/render-readiness-report.mjs --check && node scripts/release/audit-public-docs.mjs",
     "check-release-ready": "npm run check-release-infra && node scripts/release/check-release-ready.mjs",
+    "smoke:host:codex": "node scripts/host-smoke/codex-handoff.mjs",
+    "smoke:host:claude": "node scripts/host-smoke/claude-handoff.mjs",
     "verify": "npm run check && npm run lint && npm run build && npm run test && node scripts/emit-flows.mjs --check && npm run check-release-infra",
     "verify:fast": "npm run check && npm run lint && npm run build && npm run test:fast && node scripts/emit-flows.mjs --check",
     "circuit:run": "./bin/circuit-next"

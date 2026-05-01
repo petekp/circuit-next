@@ -2,7 +2,7 @@
 contract: host-adapter
 status: draft-v0.1
 version: 0.1
-last_updated: 2026-04-28
+last_updated: 2026-04-30
 depends_on: [compiled-flow, run, connector]
 ---
 
@@ -17,6 +17,9 @@ normal project checkout. Keep three concepts separate:
 
 The host is not the worker connector. The host starts Circuit, reads its JSON
 summary and reports, and presents the outcome to the operator.
+
+Support claims for each host adapter are governed by
+`docs/contracts/host-adapter-acceptance.md`.
 
 ## Required Behavior
 
@@ -72,6 +75,45 @@ command.
 Hosts MUST NOT treat progress events as the canonical outcome. The final stdout
 JSON and report files remain authoritative.
 
+## Hook Adapters
+
+Host lifecycle hooks are adapters, not authority. A hook MUST parse the host's
+stdin JSON and use the hook-provided `cwd` as the workspace identity. It MUST
+pass that value explicitly to Circuit as `--project-root`. Hook scripts MUST NOT
+use `process.cwd()` as the project authority because hosts may run hooks from a
+plugin cache, a project directory, or another implementation-defined location.
+
+Hooks should invoke packaged launchers, not bare `circuit-next`, so installed
+plugins do not depend on the operator's shell `PATH`. Hooks should inject only
+Circuit-authored context, and they should fail soft: no saved state, invalid
+state, missing launchers, or parse errors must not block the host session.
+Debug warnings may go to stderr when an explicit debug flag is set.
+
+Claude Code uses the bundled plugin `SessionStart` hook. Codex V1 uses a
+user-level hook because current CLI smoke tests have not proven reliable
+plugin-root resolution for bundled Codex hook commands. Install the supported
+Codex path with:
+
+```bash
+circuit-next handoff hooks install --host codex
+```
+
+That command writes an absolute launcher command into `~/.codex/hooks.json`.
+The installed hook calls:
+
+```bash
+circuit-next handoff hook --host codex
+```
+
+The hook entrypoint reads Codex stdin, extracts `cwd`, and renders the same
+read-only `handoff-brief-v1` context used by other hosts. The Codex plugin MUST
+NOT ship `hooks/hooks.json` in V1: Codex loads that file by default even when
+the manifest omits `hooks`, and hook commands run from the session `cwd`.
+Unregistered experimental hook scripts may remain in the package for future
+packaging tests, but host docs and doctor output must not treat bundled Codex
+hooks as the supported V1 path until an installed-plugin smoke test proves they
+fire.
+
 ## Capability Levels
 
 Host affordances are described with three levels:
@@ -119,6 +161,11 @@ The doctor returns JSON on stdout and checks:
 - command files invoke the installed plugin wrapper, not `./bin/circuit-next`
 - command files request `--progress jsonl`
 - command files explain `task_list.updated` and `user_input.requested`
+- bundled Codex `hooks/hooks.json` is absent
+- Codex SessionStart hook script exists but is not registered as a bundled hook
+- Codex hook feature flag visibility is reported as a warning
+- Codex user-level handoff hook install state is reported as a warning
+- installed Codex user-level hook launcher existence is validated when present
 - a `circuit-next` binary is available
 - a temp-repo routed Review smoke run succeeds with a read-only custom reviewer
 - the temp-repo smoke run emits parseable progress events

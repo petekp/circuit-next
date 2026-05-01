@@ -38,6 +38,9 @@ evidence). Use that vocabulary in product-facing prose.
    attempts, or you ask. Use `/codex` explicitly so the handoff is
    visible. Don't use Codex for cleanup, mechanical refactors, or
    anything `npm run verify` proves. No challenger passes on plans.
+8. **Host hooks use hook input for identity.** Hook scripts must read the
+   host's stdin JSON for workspace identity and pass explicit project roots.
+   Do not treat `process.cwd()` as the project authority inside hooks.
 
 ## Verification
 
