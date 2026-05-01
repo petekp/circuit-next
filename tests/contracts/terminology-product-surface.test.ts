@@ -13,6 +13,8 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+import { flowPackages } from '../../src/flows/catalog.js';
+
 const BANNED: ReadonlyArray<{ readonly name: string; readonly pattern: RegExp }> = [
   { name: 'workflow', pattern: /\bworkflow(s)?\b/i },
   { name: 'recipe', pattern: /\brecipe(s)?\b/i },
@@ -43,6 +45,9 @@ const BANNED: ReadonlyArray<{ readonly name: string; readonly pattern: RegExp }>
 // Files where the banned vocabulary is allowed to appear in prose
 // because the file documents the layered model itself.
 const EXEMPT_FILES = new Set<string>(['docs/terminology.md']);
+const PUBLIC_FLOW_IDS = new Set(
+  flowPackages.filter((pkg) => pkg.visibility === 'public').map((pkg) => pkg.id),
+);
 
 // Strip YAML frontmatter, fenced code blocks, and inline code spans.
 // What remains is the prose surface that should teach the new vocabulary.
@@ -180,6 +185,7 @@ describe('terminology — product-facing prose', () => {
     }[] = [];
 
     for (const id of readdirSync('src/flows')) {
+      if (!PUBLIC_FLOW_IDS.has(id)) continue;
       const file = join('src/flows', id, 'schematic.json');
       try {
         if (!statSync(file).isFile()) continue;

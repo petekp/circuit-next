@@ -25,6 +25,7 @@ import { describe, expect, it } from 'vitest';
 import { flowPackages } from '../../src/flows/catalog.js';
 
 const WORKFLOWS_ROOT = 'src/flows';
+const ROOT_COMMANDS = ['create', 'handoff', 'migrate', 'run', 'sweep'] as const;
 
 // Files at the flows root that are NOT flow-package directories
 // (catalog, types, shared schemas/types). Anything else under
@@ -68,6 +69,15 @@ describe('flow catalog completeness', () => {
       flowPackages.length,
       'flowPackages is unexpectedly small — catalog discovery is likely broken',
     ).toBeGreaterThanOrEqual(6);
+  });
+
+  it('classifies user-visible and internal flow packages explicitly', () => {
+    const visibilityById = new Map(flowPackages.map((pkg) => [pkg.id, pkg.visibility]));
+
+    expect(visibilityById.get('runtime-proof')).toBe('internal');
+    for (const flow of ['build', 'explore', 'fix', 'migrate', 'review', 'sweep']) {
+      expect(visibilityById.get(flow), `${flow} should be host-visible`).toBe('public');
+    }
   });
 
   it('every src/flows/<id>/ directory is registered in the catalog', () => {
@@ -144,6 +154,40 @@ describe('flow catalog completeness', () => {
       offenders,
       'optional path declared on package but file is missing or not a regular file on disk',
     ).toEqual([]);
+  });
+
+  it('command surface ownership is documented and matches emit-flows', () => {
+    const commandReadme = readFileSync('commands/README.md', 'utf8');
+    const emitScript = readFileSync('scripts/emit-flows.mjs', 'utf8');
+    const routerMatch = /const CODEX_ROUTER_COMMANDS = \[([^\]]+)\]/.exec(emitScript);
+    expect(
+      routerMatch,
+      'emit-flows should declare CODEX_ROUTER_COMMANDS as a literal array',
+    ).not.toBeNull();
+    if (routerMatch === null || routerMatch[1] === undefined) {
+      throw new Error('emit-flows should declare CODEX_ROUTER_COMMANDS as a literal array');
+    }
+    const routerCommands =
+      routerMatch[1]
+        .match(/'([^']+)'/g)
+        ?.map((value) => value.slice(1, -1))
+        .sort() ?? [];
+
+    expect(routerCommands).toEqual([...ROOT_COMMANDS].sort());
+
+    for (const command of ROOT_COMMANDS) {
+      expect(isFile(`commands/${command}.md`), `root command ${command} must exist`).toBe(true);
+      expect(commandReadme).toContain(
+        `| \`${command}.md\` | \`commands/${command}.md\` | root command |`,
+      );
+    }
+
+    for (const pkg of flowPackages) {
+      if (pkg.paths.command === undefined) continue;
+      expect(commandReadme).toContain(
+        `| \`${pkg.id}.md\` | \`${pkg.paths.command}\` | flow package |`,
+      );
+    }
   });
 
   it('every package that declares relayReports ships an reports.ts module', () => {

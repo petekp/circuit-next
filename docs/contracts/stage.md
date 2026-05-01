@@ -208,7 +208,7 @@ exist in Stage 2:
   `Stage.canonical` was optional with no cross-flow check that
   required canonical labels were present. A malformed flow could
   silently skip `review`, short-circuiting the cross-model-challenger
-  check. `docs/contracts/flow.md` v0.1 flagged this as
+  check. `docs/contracts/compiled-flow.md` v0.1 flagged this as
   `carry-forward:stage path-policy-too-loose`, and `specs/evidence.md`
   §Adversarial MED #11 lists it among the open Tier 0 ratchets. Closed
   by stage-I4.

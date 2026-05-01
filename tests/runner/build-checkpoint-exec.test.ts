@@ -87,7 +87,7 @@ function checkpointCompiledFlow(options: {
           ...(options.safeAutonomous === undefined
             ? {}
             : { safe_autonomous_choice: options.safeAutonomous }),
-          build_brief: {
+          report_template: {
             scope: 'Only prove checkpoint execution',
             success_criteria: ['Frame checkpoint is represented honestly'],
             verification_command_candidates: [
@@ -156,7 +156,7 @@ function checkpointToRelayCompiledFlow(): { flow: CompiledFlow; bytes: Buffer } 
           prompt: 'Frame',
           choices: [{ id: 'continue' }],
           safe_default_choice: 'continue',
-          build_brief: {
+          report_template: {
             scope: 'Relay resume context test',
             success_criteria: ['Resume preserves original selection context'],
             verification_command_candidates: [
@@ -249,7 +249,7 @@ function checkpointToVerificationCompiledFlow(commandCwd = '.'): {
           prompt: 'Frame',
           choices: [{ id: 'continue' }],
           safe_default_choice: 'continue',
-          build_brief: {
+          report_template: {
             scope: 'Verification resume context test',
             success_criteria: ['Resume preserves original project root'],
             verification_command_candidates: [

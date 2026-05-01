@@ -83,13 +83,17 @@ export interface CompiledFlowRelayReport {
 export interface CompiledFlowPaths {
   // Schematic path is required — every flow has a schematic.
   readonly schematic: string;
-  // Optional: not every flow ships a slash command (sweep is
-  // sub-run only; migrate is /circuit:run only).
+  // Optional: flow-owned command source copied to commands/<id>.md.
+  // Root-authored direct command surfaces can still exist without this
+  // field; package command ownership only means the source lives next
+  // to the flow.
   readonly command?: string;
   // Optional: flow-specific contract narrative. Not every
   // flow has one yet.
   readonly contract?: string;
 }
+
+export type CompiledFlowVisibility = 'public' | 'internal';
 
 // Engine-visible flags a flow can opt into. Kept narrow on purpose:
 // only flags that the engine currently branches on belong here. New
@@ -104,6 +108,9 @@ export interface CompiledFlowEngineFlags {
 
 export interface CompiledFlowPackage {
   readonly id: string;
+  // Public flows are installed into host-visible plugin surfaces.
+  // Internal flows are emitted only as canonical generated fixtures.
+  readonly visibility: CompiledFlowVisibility;
   readonly paths: CompiledFlowPaths;
   readonly routing?: CompiledFlowRoutingMetadata;
   readonly relayReports: readonly CompiledFlowRelayReport[];

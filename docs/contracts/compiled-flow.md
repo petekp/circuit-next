@@ -59,7 +59,7 @@ inside `CompiledFlow.superRefine` — and tested in
   never will), not a feature; WF-I9 fails the fixture fast rather than
   letting it pass and then puzzling the operator.
 - **WF-I10 — Pass-route presence.** Every step's `routes` map must
-  contain the key `pass`. The `CheckEvaluatedTraceEntry.outcome` field in
+  contain the runtime success key `pass`. The `CheckEvaluatedTraceEntry.outcome` field in
   `src/schemas/trace-entry.ts` is `z.enum(['pass', 'fail'])` — uniform across
   all three check kinds (`schema_sections`, `checkpoint_selection`,
   `result_verdict`) — so the runtime's route pick on a successful check
@@ -71,6 +71,9 @@ inside `CompiledFlow.superRefine` — and tested in
   **deferred** to v0.3 / Stage 2 — failure-path handling is not part of
   the narrow runtime-proof proof and the runtime abort-vs-stall
   behaviour on a missing `fail` route is not yet specified.
+  Schematics may use the authored success aliases `continue` or
+  `complete`; the compiler maps exactly one of those aliases to `pass`
+  through `src/schemas/route-policy.ts`.
 - **WF-I11 — Pass-route terminal reachability.** For every step in
   `CompiledFlow.steps`, following only `routes.pass` must eventually reach a
   terminal route target (`@complete`, `@stop`, `@escalate`, `@handoff`).

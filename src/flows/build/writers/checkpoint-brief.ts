@@ -1,7 +1,7 @@
 // Build brief checkpoint writer.
 //
 // Assembles a fresh BuildBrief from the run goal plus the
-// policy.build_brief template. The brief is fully populated at first
+// policy.report_template object. The brief is fully populated at first
 // write — checkpoint.response_path always points at step.writes.response
 // — so no re-stamp happens after operator resolution. This eliminates
 // the crash window between a stamped-brief write and the
@@ -13,6 +13,7 @@
 // belongs to the waiting step.
 
 import { readFileSync } from 'node:fs';
+import { z } from 'zod';
 import { sha256Hex } from '../../../runtime/connectors/shared.js';
 import {
   type CheckpointBriefBuilder,
@@ -21,17 +22,27 @@ import {
   checkpointChoiceIds,
 } from '../../../runtime/registries/checkpoint-writers/types.js';
 import { resolveRunRelative } from '../../../runtime/run-relative-path.js';
+import { VerificationCommand } from '../../../schemas/verification.js';
 import { BuildBrief } from '../reports.js';
+
+const BuildBriefReportTemplate = z
+  .object({
+    scope: z.string().min(1),
+    success_criteria: z.array(z.string().min(1)).min(1),
+    verification_command_candidates: z.array(VerificationCommand).min(1),
+  })
+  .strict();
 
 export const buildBriefCheckpointBuilder: CheckpointBriefBuilder = {
   resultSchemaName: 'build.brief@v1',
   build(context: CheckpointBuildContext): unknown {
-    const template = context.step.policy.build_brief;
-    if (template === undefined) {
+    const rawTemplate = context.step.policy.report_template;
+    if (rawTemplate === undefined) {
       throw new Error(
-        `checkpoint step '${context.step.id}' writing build.brief@v1 requires policy.build_brief`,
+        `checkpoint step '${context.step.id}' writing build.brief@v1 requires policy.report_template`,
       );
     }
+    const template = BuildBriefReportTemplate.parse(rawTemplate);
     return BuildBrief.parse({
       objective: context.goal,
       scope: template.scope,

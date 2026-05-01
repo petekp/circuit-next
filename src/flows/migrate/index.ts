@@ -1,7 +1,8 @@
 // Migrate flow package.
 //
-// Routable via /circuit:run but has no slash command — operators reach
-// it through intent classification, not /circuit:migrate.
+// Routable via /circuit:run and also exposed through a root-authored
+// direct command surface. It has no flow-owned command source because
+// commands/migrate.md is maintained at the root.
 
 import type { CompiledFlowPackage, CompiledFlowSignal } from '../types.js';
 import { migrateInventoryShapeHint } from './relay-hints.js';
@@ -26,6 +27,7 @@ const MIGRATE_SIGNALS: readonly CompiledFlowSignal[] = [
 
 export const migrateCompiledFlowPackage: CompiledFlowPackage = {
   id: 'migrate',
+  visibility: 'public',
   paths: {
     schematic: 'src/flows/migrate/schematic.json',
   },

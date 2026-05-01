@@ -65,8 +65,8 @@ done. Both must pass before commit on changes to `src/`, `tests/`, or
 | File or output | Path |
 |---|---|
 | Plugin manifest | `.claude-plugin/plugin.json` |
-| Slash commands (generated) | `commands/<id>.md` (generated from `src/flows/<id>/command.md`; `commands/run.md` is the CLI router entry and is hand-authored) |
-| Compiled plugin output (generated) | `.claude-plugin/skills/<id>/circuit.json` |
+| Slash commands | `commands/<id>.md` (flow-owned commands are generated from `src/flows/<id>/command.md`; root-authored router/direct commands live in `commands/`) |
+| Compiled plugin output (generated) | `.claude-plugin/skills/<id>/circuit.json` for public flows |
 | CLI entrypoint | `bin/circuit-next` |
 | Engine source | `src/runtime/`, `src/cli/`, `src/schemas/` |
 | Flow packages | `src/flows/<id>/` (schematic, output schemas, command, contract, writers, relay hints) |
@@ -79,10 +79,9 @@ done. Both must pass before commit on changes to `src/`, `tests/`, or
 | Block catalog | `docs/flows/block-catalog.json` |
 | Cross-session handoff | `HANDOFF.md` (repo root) |
 
-(Internal file names like `relay-hints.ts` are still on their
-pre-migration names; the eventual rename to `relay-hints.ts` is part of
-the deferred deep `relay → relay` rename — see
-`todos/terminology-migration.md` Stage 8.)
+Internal file names such as `relay-hints.ts` are intentional runtime names.
+Do not rename them while adding a flow unless there is an explicit
+terminology migration in progress.
 
 ## Adding a flow
 
@@ -94,7 +93,7 @@ the deferred deep `relay → relay` rename — see
    `close` / `verification` / `checkpoint`).
 2. Add the package to `src/flows/catalog.ts`.
 3. `npm run build && node scripts/emit-flows.mjs` to regenerate
-   `commands/<id>.md` and `.claude-plugin/skills/<id>/`.
+   command mirrors and public host flow output.
 4. `npm run verify`.
 
 The engine (`src/runtime/`) does not need any edits — registries derive

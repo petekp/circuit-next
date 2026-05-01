@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { Depth } from './depth.js';
 import { SkillId, StageId, StepId } from './ids.js';
+import { JsonObject } from './json.js';
 
 // Provider-scoped model. The four-provider enum is closed; `model` is an
 // open string because connector-specific code owns provider/model handling.
@@ -17,27 +18,6 @@ export type ProviderScopedModel = z.infer<typeof ProviderScopedModel>;
 // portability — connectors map non-OpenAI effort levels onto this set.
 export const Effort = z.enum(['none', 'minimal', 'low', 'medium', 'high', 'xhigh']);
 export type Effort = z.infer<typeof Effort>;
-
-// Invocation_options must be JSON-safe. A
-// z.record(z.unknown()) boundary admits functions, Dates, symbols, and
-// `undefined` — none of which can be authored in YAML/TOML/JSON or survive
-// trace_entry-log serialization. `JsonValue` is the recursive predicate; the
-// refinement rejects anything else. The extra `Number.isFinite` check
-// rejects NaN/Infinity, which JSON.stringify silently turns into null.
-type JsonValue = null | boolean | number | string | JsonValue[] | { [k: string]: JsonValue };
-const JsonPrimitive = z.union([
-  z.null(),
-  z.boolean(),
-  z.number().refine((n) => Number.isFinite(n), {
-    message: 'invocation_options: non-finite numbers (NaN/Infinity) are not JSON-safe',
-  }),
-  z.string(),
-]);
-const JsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
-  z.union([JsonPrimitive, z.array(JsonValueSchema), z.record(z.string(), JsonValueSchema)]),
-);
-const JsonObject = z.record(z.string(), JsonValueSchema);
-export type JsonObject = z.infer<typeof JsonObject>;
 
 // Skill arrays enforce uniqueness. Set-algebra composition (union,
 // difference) at the resolver layer expects the inputs to be sets;

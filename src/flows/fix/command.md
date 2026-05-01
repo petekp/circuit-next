@@ -118,6 +118,6 @@ metacharacters:
 ## Authority
 
 - `src/flows/fix/contract.md` (Fix report contract)
-- `docs/contracts/flow.md` (compiled flow shape and runtime result)
+- `docs/contracts/compiled-flow.md` (compiled flow shape)
 - `src/cli/circuit.ts` (current CLI flags + per-mode flow file resolution)
 - `src/runtime/router.ts` (router bypass behavior for explicit flow names)

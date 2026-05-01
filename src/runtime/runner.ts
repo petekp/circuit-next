@@ -13,20 +13,10 @@ import { dirname, join } from 'node:path';
 import type { ChangeKindDeclaration } from '../schemas/change-kind.js';
 import { CompiledFlow } from '../schemas/compiled-flow.js';
 import { LayeredConfig, type LayeredConfig as LayeredConfigValue } from '../schemas/config.js';
-import {
-  BUILTIN_CONNECTOR_CAPABILITIES,
-  type FilesystemCapability,
-  type ResolvedConnector,
-} from '../schemas/connector.js';
 import type { Depth } from '../schemas/depth.js';
 import { type CompiledFlowId, type InvocationId, type RunId, StepId } from '../schemas/ids.js';
 import { computeManifestHash } from '../schemas/manifest.js';
-import type {
-  ProgressDisplay,
-  ProgressEvent,
-  ProgressTask,
-  ProgressTaskStatus,
-} from '../schemas/progress-event.js';
+import type { ProgressEvent, ProgressTaskStatus } from '../schemas/progress-event.js';
 import type { Snapshot } from '../schemas/snapshot.js';
 import type { RunClosedOutcome, TraceEntry } from '../schemas/trace-entry.js';
 import { appendAndDerive } from './append-and-derive.js';
@@ -37,6 +27,13 @@ import {
   verifyManifestSnapshotBytes,
   writeManifestSnapshot,
 } from './manifest-snapshot-writer.js';
+import {
+  progressDisplay,
+  projectTraceEntryToProgress,
+  reportProgress,
+  reportTaskListProgress,
+  taskStatusesFromTrace,
+} from './progress-projector.js';
 import { findCheckpointBriefBuilder } from './registries/checkpoint-writers/registry.js';
 import { findCloseBuilder, resolveCloseReadPaths } from './registries/close-writers/registry.js';
 import {
@@ -215,7 +212,6 @@ const TERMINAL_ROUTE_OUTCOME = {
   '@handoff': 'handoff',
 } as const satisfies Record<string, RunClosedOutcome>;
 const RECOVERY_ROUTE_LABELS = new Set(['retry', 'revise']);
-const MAX_PROGRESS_DISPLAY_TEXT_CHARS = 240;
 
 function terminalOutcomeForRoute(route: string): RunClosedOutcome | undefined {
   return Object.hasOwn(TERMINAL_ROUTE_OUTCOME, route)
@@ -235,110 +231,8 @@ function readJsonReport(runFolder: string, path: string): unknown {
   return JSON.parse(readFileSync(resolveRunRelative(runFolder, path), 'utf8')) as unknown;
 }
 
-function reportProgress(progress: ProgressReporter | undefined, event: ProgressEvent): void {
-  if (progress === undefined) return;
-  try {
-    progress(event);
-  } catch {
-    // Progress is a host-facing side channel. A broken renderer must not
-    // corrupt the run or change terminal behavior.
-  }
-}
-
-function progressDisplay(
-  text: string,
-  importance: ProgressDisplay['importance'],
-  tone: ProgressDisplay['tone'],
-): ProgressDisplay {
-  if (text.length <= MAX_PROGRESS_DISPLAY_TEXT_CHARS) return { text, importance, tone };
-  return {
-    text: `${text.slice(0, MAX_PROGRESS_DISPLAY_TEXT_CHARS - 14)} [truncated]`,
-    importance,
-    tone,
-  };
-}
-
-function connectorName(connector: ResolvedConnector): string {
-  return connector.name;
-}
-
-function connectorFilesystemCapability(connector: ResolvedConnector): FilesystemCapability {
-  return connector.kind === 'builtin'
-    ? BUILTIN_CONNECTOR_CAPABILITIES[connector.name].filesystem
-    : connector.capabilities.filesystem;
-}
-
-function progressStepTitle(flow: CompiledFlow, stepId: unknown): string {
-  const step = flow.steps.find((candidate) => candidate.id === stepId);
-  return step?.title ?? String(stepId);
-}
-
 function shellSingleQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;
-}
-
-function progressTasks(
-  flow: CompiledFlow,
-  statuses: ReadonlyMap<string, ProgressTaskStatus>,
-): ProgressTask[] {
-  return flow.steps.map((step) => {
-    const id = step.id as unknown as string;
-    return {
-      id,
-      title: step.title,
-      status: statuses.get(id) ?? 'pending',
-    };
-  });
-}
-
-function taskStatusesFromTrace(
-  flow: CompiledFlow,
-  traceEntries: readonly TraceEntry[],
-  startStepId: string | undefined,
-): Map<string, ProgressTaskStatus> {
-  const statuses = new Map<string, ProgressTaskStatus>(
-    flow.steps.map((step) => [step.id as unknown as string, 'pending'] as const),
-  );
-  for (const traceEntry of traceEntries) {
-    if (traceEntry.kind === 'step.entered') {
-      const id = traceEntry.step_id as unknown as string;
-      if (statuses.get(id) !== 'completed' && statuses.get(id) !== 'failed') {
-        statuses.set(id, 'in_progress');
-      }
-    }
-    if (traceEntry.kind === 'step.completed') {
-      statuses.set(traceEntry.step_id as unknown as string, 'completed');
-    }
-    if (traceEntry.kind === 'step.aborted') {
-      statuses.set(traceEntry.step_id as unknown as string, 'failed');
-    }
-  }
-  if (startStepId !== undefined && statuses.get(startStepId) !== 'completed') {
-    statuses.set(startStepId, 'in_progress');
-  }
-  return statuses;
-}
-
-function reportTaskListProgress(input: {
-  readonly progress: ProgressReporter | undefined;
-  readonly runId: RunId;
-  readonly flow: CompiledFlow;
-  readonly recordedAt: string;
-  readonly statuses: ReadonlyMap<string, ProgressTaskStatus>;
-  readonly label: string;
-  readonly displayText: string;
-  readonly tone?: ProgressDisplay['tone'];
-}): void {
-  reportProgress(input.progress, {
-    schema_version: 1,
-    type: 'task_list.updated',
-    run_id: input.runId,
-    flow_id: input.flow.id,
-    recorded_at: input.recordedAt,
-    label: input.label,
-    display: progressDisplay(input.displayText, 'detail', input.tone ?? 'info'),
-    tasks: progressTasks(input.flow, input.statuses),
-  });
 }
 
 function markInProgressTasksFailed(statuses: Map<string, ProgressTaskStatus>): boolean {
@@ -541,85 +435,6 @@ function reportUserInputRequested(input: {
       command,
     },
   });
-}
-
-function warningRecordsFromReport(body: unknown): Array<{
-  readonly kind: string;
-  readonly message: string;
-  readonly path?: string;
-}> {
-  if (body === null || typeof body !== 'object' || Array.isArray(body)) return [];
-  const raw = (body as Record<string, unknown>).evidence_warnings;
-  if (!Array.isArray(raw)) return [];
-  return raw.flatMap((item) => {
-    if (item === null || typeof item !== 'object' || Array.isArray(item)) return [];
-    const record = item as Record<string, unknown>;
-    if (typeof record.kind !== 'string' || typeof record.message !== 'string') return [];
-    return [
-      {
-        kind: record.kind,
-        message: record.message,
-        ...(typeof record.path === 'string' ? { path: record.path } : {}),
-      },
-    ];
-  });
-}
-
-function reportEvidenceProgress(input: {
-  readonly progress?: ProgressReporter;
-  readonly runFolder: string;
-  readonly flow: CompiledFlow;
-  readonly runId: RunId;
-  readonly recordedAt: string;
-  readonly traceEntry: Extract<TraceEntry, { kind: 'step.report_written' }>;
-}): void {
-  let body: unknown;
-  try {
-    body = readJsonReport(input.runFolder, input.traceEntry.report_path);
-  } catch {
-    return;
-  }
-  if (body === null || typeof body !== 'object' || Array.isArray(body)) return;
-  const record = body as Record<string, unknown>;
-  const hasEvidence = Object.hasOwn(record, 'evidence');
-  const warnings = warningRecordsFromReport(record);
-  if (!hasEvidence && warnings.length === 0) return;
-
-  reportProgress(input.progress, {
-    schema_version: 1,
-    type: 'evidence.collected',
-    run_id: input.runId,
-    flow_id: input.flow.id,
-    recorded_at: input.recordedAt,
-    label: warnings.length > 0 ? 'Collected evidence with warnings' : 'Collected evidence',
-    display: progressDisplay(
-      warnings.length > 0
-        ? `Circuit collected evidence with ${warnings.length} warning${warnings.length === 1 ? '' : 's'}.`
-        : 'Circuit collected evidence.',
-      'major',
-      warnings.length > 0 ? 'warning' : 'info',
-    ),
-    step_id: input.traceEntry.step_id,
-    report_path: input.traceEntry.report_path,
-    report_schema: input.traceEntry.report_schema,
-    warning_count: warnings.length,
-  });
-  for (const warning of warnings) {
-    reportProgress(input.progress, {
-      schema_version: 1,
-      type: 'evidence.warning',
-      run_id: input.runId,
-      flow_id: input.flow.id,
-      recorded_at: input.recordedAt,
-      label: 'Evidence warning',
-      display: progressDisplay(`Circuit evidence warning: ${warning.message}`, 'major', 'warning'),
-      step_id: input.traceEntry.step_id,
-      report_path: input.traceEntry.report_path,
-      warning_kind: warning.kind,
-      message: warning.message,
-      ...(warning.path === undefined ? {} : { path: warning.path }),
-    });
-  }
 }
 
 // Compose writer fallback. CompiledFlow-specific compose logic lives
@@ -1019,148 +834,14 @@ async function executeCompiledFlow(
     const sequenced: TraceEntry = { ...ev, sequence: state.sequence };
     trace_entries.push(sequenced);
     appendAndDerive(runFolder, sequenced);
-    switch (sequenced.kind) {
-      case 'step.entered':
-        taskStatuses.set(sequenced.step_id as unknown as string, 'in_progress');
-        reportProgress(ctx.progress, {
-          schema_version: 1,
-          type: 'step.started',
-          run_id: runId,
-          flow_id: flow.id,
-          recorded_at: sequenced.recorded_at,
-          label: progressStepTitle(flow, sequenced.step_id),
-          display: progressDisplay(
-            `Circuit started ${progressStepTitle(flow, sequenced.step_id)}.`,
-            'major',
-            'info',
-          ),
-          step_id: sequenced.step_id,
-          step_title: progressStepTitle(flow, sequenced.step_id),
-          attempt: sequenced.attempt,
-        });
-        reportTaskListProgress({
-          progress: ctx.progress,
-          runId,
-          flow,
-          recordedAt: sequenced.recorded_at,
-          statuses: taskStatuses,
-          label: `${progressStepTitle(flow, sequenced.step_id)} in progress`,
-          displayText: `Circuit is working on ${progressStepTitle(flow, sequenced.step_id)}.`,
-        });
-        break;
-      case 'step.report_written':
-        reportEvidenceProgress({
-          runFolder,
-          flow,
-          runId,
-          recordedAt: sequenced.recorded_at,
-          traceEntry: sequenced,
-          ...(ctx.progress === undefined ? {} : { progress: ctx.progress }),
-        });
-        break;
-      case 'relay.started':
-        reportProgress(ctx.progress, {
-          schema_version: 1,
-          type: 'relay.started',
-          run_id: runId,
-          flow_id: flow.id,
-          recorded_at: sequenced.recorded_at,
-          label: `Running ${sequenced.role} relay with ${connectorName(sequenced.connector)}`,
-          display: progressDisplay(
-            `Circuit is running the ${sequenced.role} relay with ${connectorName(sequenced.connector)} (${connectorFilesystemCapability(sequenced.connector)}).`,
-            'major',
-            'info',
-          ),
-          step_id: sequenced.step_id,
-          step_title: progressStepTitle(flow, sequenced.step_id),
-          attempt: sequenced.attempt,
-          role: sequenced.role,
-          connector_name: connectorName(sequenced.connector),
-          connector_kind: sequenced.connector.kind,
-          filesystem_capability: connectorFilesystemCapability(sequenced.connector),
-        });
-        break;
-      case 'relay.completed':
-        reportProgress(ctx.progress, {
-          schema_version: 1,
-          type: 'relay.completed',
-          run_id: runId,
-          flow_id: flow.id,
-          recorded_at: sequenced.recorded_at,
-          label: `Relay completed with ${sequenced.verdict}`,
-          display: progressDisplay(
-            `Circuit relay completed with ${sequenced.verdict}.`,
-            'major',
-            'success',
-          ),
-          step_id: sequenced.step_id,
-          step_title: progressStepTitle(flow, sequenced.step_id),
-          attempt: sequenced.attempt,
-          verdict: sequenced.verdict,
-          duration_ms: sequenced.duration_ms,
-        });
-        break;
-      case 'step.completed':
-        taskStatuses.set(sequenced.step_id as unknown as string, 'completed');
-        reportProgress(ctx.progress, {
-          schema_version: 1,
-          type: 'step.completed',
-          run_id: runId,
-          flow_id: flow.id,
-          recorded_at: sequenced.recorded_at,
-          label: `Completed ${progressStepTitle(flow, sequenced.step_id)}`,
-          display: progressDisplay(
-            `Circuit completed ${progressStepTitle(flow, sequenced.step_id)}.`,
-            'detail',
-            'success',
-          ),
-          step_id: sequenced.step_id,
-          step_title: progressStepTitle(flow, sequenced.step_id),
-          attempt: sequenced.attempt,
-          route_taken: sequenced.route_taken,
-        });
-        reportTaskListProgress({
-          progress: ctx.progress,
-          runId,
-          flow,
-          recordedAt: sequenced.recorded_at,
-          statuses: taskStatuses,
-          label: `${progressStepTitle(flow, sequenced.step_id)} completed`,
-          displayText: `Circuit finished ${progressStepTitle(flow, sequenced.step_id)}.`,
-          tone: 'success',
-        });
-        break;
-      case 'step.aborted':
-        taskStatuses.set(sequenced.step_id as unknown as string, 'failed');
-        reportProgress(ctx.progress, {
-          schema_version: 1,
-          type: 'step.aborted',
-          run_id: runId,
-          flow_id: flow.id,
-          recorded_at: sequenced.recorded_at,
-          label: `Aborted ${progressStepTitle(flow, sequenced.step_id)}`,
-          display: progressDisplay(
-            `Circuit aborted ${progressStepTitle(flow, sequenced.step_id)}: ${sequenced.reason}`,
-            'major',
-            'error',
-          ),
-          step_id: sequenced.step_id,
-          step_title: progressStepTitle(flow, sequenced.step_id),
-          attempt: sequenced.attempt,
-          reason: sequenced.reason,
-        });
-        reportTaskListProgress({
-          progress: ctx.progress,
-          runId,
-          flow,
-          recordedAt: sequenced.recorded_at,
-          statuses: taskStatuses,
-          label: `${progressStepTitle(flow, sequenced.step_id)} failed`,
-          displayText: `Circuit marked ${progressStepTitle(flow, sequenced.step_id)} as failed.`,
-          tone: 'error',
-        });
-        break;
-    }
+    projectTraceEntryToProgress({
+      progress: ctx.progress,
+      runFolder,
+      flow,
+      runId,
+      taskStatuses,
+      traceEntry: sequenced,
+    });
     state.sequence += 1;
   };
 

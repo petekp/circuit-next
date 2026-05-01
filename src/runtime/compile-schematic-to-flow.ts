@@ -34,6 +34,11 @@ import type {
   SchematicStep,
   StepWrites,
 } from '../schemas/flow-schematic.js';
+import {
+  RUNTIME_SUCCESS_ROUTE,
+  SCHEMATIC_SUCCESS_ROUTE_ALIASES,
+  schematicOutcomeToRuntimeRoute,
+} from '../schemas/route-policy.js';
 import type { CanonicalStage } from '../schemas/stage.js';
 import { CANONICAL_STAGES } from '../schemas/stage.js';
 import type { Step } from '../schemas/step.js';
@@ -54,11 +59,6 @@ export type CompileResult =
 function fail(message: string): never {
   throw new FlowSchematicCompileError(message);
 }
-
-const SCHEMATIC_TO_WORKFLOW_ROUTE: Record<string, string> = {
-  continue: 'pass',
-  complete: 'pass',
-};
 
 // (step kind, report schema) pairs the runner's writers actually
 // understand. Both verification and checkpoint kinds consult their
@@ -200,10 +200,10 @@ function computeReads(
   return reads;
 }
 
-// Map schematic routes to CompiledFlow routes for a given mode. continue and
-// complete still populate the historical `pass` edge because most handlers
-// advance on success. The original schematic labels are preserved too, so
-// checkpoint selections and rich route outcomes can execute without a second
+// Map schematic routes to CompiledFlow routes for a given mode. Schematic
+// success aliases populate the runtime success edge because handlers advance
+// on `pass`. The original schematic labels are preserved too, so checkpoint
+// selections and rich route outcomes can execute without a second
 // hand-maintained graph.
 function compileRoutesForMode(item: SchematicStep, mode: FlowEntryMode): Record<string, string> {
   const routes: Record<string, string> = {};
@@ -216,11 +216,11 @@ function compileRoutesForMode(item: SchematicStep, mode: FlowEntryMode): Record<
       );
     }
     routes[outcome] = target;
-    const flowRoute = SCHEMATIC_TO_WORKFLOW_ROUTE[outcome];
+    const flowRoute = schematicOutcomeToRuntimeRoute(outcome);
     if (flowRoute === undefined) continue;
     if (passSet) {
       fail(
-        `schematic item '${item.id}' has multiple outcomes that map to 'pass' (only one allowed); pick whichever maps to the live runtime success edge`,
+        `schematic item '${item.id}' has multiple outcomes that map to '${RUNTIME_SUCCESS_ROUTE}' (only one allowed); pick whichever maps to the live runtime success edge`,
       );
     }
     routes[flowRoute] = target;
@@ -228,7 +228,7 @@ function compileRoutesForMode(item: SchematicStep, mode: FlowEntryMode): Record<
   }
   if (!passSet) {
     fail(
-      `schematic item '${item.id}' has no outcome that maps to 'pass'; declare a 'continue' or 'complete' route so the compiled CompiledFlow has a success edge`,
+      `schematic item '${item.id}' has no outcome that maps to '${RUNTIME_SUCCESS_ROUTE}'; declare one success route (${SCHEMATIC_SUCCESS_ROUTE_ALIASES.join(' or ')}) so the compiled CompiledFlow has a success edge`,
     );
   }
   return routes;

@@ -111,6 +111,6 @@ metacharacters:
 
 ## Authority
 
-- `docs/contracts/flow.md` (compiled flow shape and runtime result)
+- `docs/contracts/compiled-flow.md` (compiled flow shape)
 - `src/cli/circuit.ts` (current CLI flags)
 - `src/runtime/router.ts` (router bypass behavior for explicit flow names)

@@ -63,7 +63,7 @@ enforced via `src/schemas/step.ts`, `src/schemas/check.ts`, and
 - **STEP-I2 — Non-empty routes.** Every Step declares at least one route
   target. The `routes` record is refined at `src/schemas/step.ts:L20-L22`
   (`Object.keys(m).length > 0`). Route target closure is enforced at the
-  CompiledFlow level (see `docs/contracts/flow.md` WF-I4), not in the
+  CompiledFlow level (see `docs/contracts/compiled-flow.md` WF-I4), not in the
   Step contract.
 
 - **STEP-I3 — Check source closure (adversarial-review MED #7 closed).**
@@ -224,7 +224,7 @@ Property-based tests will cover:
   steps. The confusion is structurally eliminated.
 - `carry-forward:check-source-opacity` — Prior to this contract, check
   sources were opaque strings (adversarial-review MED #7). Closed by
-  STEP-I3 + STEP-I4; see `docs/contracts/flow.md` "Check source
+  STEP-I3 + STEP-I4; see `docs/contracts/compiled-flow.md` "Check source
   tightening" for the transition record.
 
 ## Evolution

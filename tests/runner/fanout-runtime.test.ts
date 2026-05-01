@@ -281,6 +281,195 @@ function makeChildResolver(child: {
   return () => child;
 }
 
+interface RelayFanoutParentOpts {
+  readonly reportSchema?: string;
+  readonly admit?: readonly string[];
+  readonly provenanceField?: string;
+  readonly seedSweepQueue?: boolean;
+}
+
+function buildRelayFanoutParent(opts: RelayFanoutParentOpts = {}): CompiledFlow {
+  const reportSchema = opts.reportSchema ?? 'runtime-proof-canonical@v1';
+  const admit = opts.admit ?? ['ok'];
+  const seedSweepQueue = opts.seedSweepQueue === true;
+  const fanoutStep = {
+    id: 'fanout-step',
+    title: 'Fanout relay branch',
+    protocol: 'fanout-protocol@v1',
+    reads: seedSweepQueue ? ['reports/sweep-queue.json'] : [],
+    routes: { pass: '@complete' },
+    executor: 'orchestrator',
+    kind: 'fanout',
+    branches: {
+      kind: 'static',
+      branches: [
+        {
+          branch_id: 'a',
+          execution: {
+            kind: 'relay',
+            role: 'researcher',
+            goal: 'branch-a goal',
+            report_schema: reportSchema,
+            ...(opts.provenanceField === undefined
+              ? {}
+              : { provenance_field: opts.provenanceField }),
+          },
+        },
+      ],
+    },
+    concurrency: { kind: 'bounded', max: 1 },
+    on_child_failure: 'abort-all',
+    writes: {
+      branches_dir: 'reports/branches',
+      aggregate: { path: 'reports/aggregate.json', schema: 'fanout-aggregate@v1' },
+    },
+    check: {
+      kind: 'fanout_aggregate',
+      source: { kind: 'fanout_results', ref: 'aggregate' },
+      join: { policy: 'aggregate-only' },
+      verdicts: { admit },
+    },
+  };
+  const steps = seedSweepQueue
+    ? [
+        {
+          id: 'seed-sweep-queue',
+          title: 'Seed Sweep queue',
+          protocol: 'seed-sweep-queue@v1',
+          reads: [],
+          routes: { pass: 'fanout-step' },
+          executor: 'orchestrator',
+          kind: 'compose',
+          writes: { report: { path: 'reports/sweep-queue.json', schema: 'sweep.queue@v1' } },
+          check: {
+            kind: 'schema_sections',
+            source: { kind: 'report', ref: 'report' },
+            required: ['classified', 'to_execute', 'deferred'],
+          },
+        },
+        fanoutStep,
+      ]
+    : [fanoutStep];
+  return CompiledFlow.parse({
+    schema_version: '2',
+    id: PARENT_WORKFLOW_ID as unknown as string,
+    version: '0.1.0',
+    purpose: 'fanout relay failure test parent',
+    entry: {
+      signals: { include: ['fanout-relay-failure'], exclude: [] },
+      intent_prefixes: ['fanout-relay-failure'],
+    },
+    entry_modes: [
+      {
+        name: 'fanout-relay-failure',
+        start_at: seedSweepQueue ? 'seed-sweep-queue' : 'fanout-step',
+        depth: 'standard',
+        description: 'Relay fanout failure entry.',
+      },
+    ],
+    stages: [
+      {
+        id: 'plan-stage',
+        title: 'Plan',
+        canonical: 'plan',
+        steps: seedSweepQueue ? ['seed-sweep-queue', 'fanout-step'] : ['fanout-step'],
+      },
+    ],
+    stage_path_policy: {
+      mode: 'partial',
+      omits: ['frame', 'analyze', 'act', 'verify', 'review', 'close'],
+      rationale: 'narrow relay-fanout failure characterization test.',
+    },
+    steps,
+  });
+}
+
+async function runRelayFanoutParent(input: {
+  readonly parent: CompiledFlow;
+  readonly runId: RunId;
+  readonly relayer: RelayFn;
+  readonly composeWriter?: CompiledFlowInvocation['composeWriter'];
+}) {
+  const parentRunFolder = join(runFolderBase, input.runId as unknown as string);
+  const outcome = await runCompiledFlow({
+    runFolder: parentRunFolder,
+    flow: input.parent,
+    flowBytes: Buffer.from(JSON.stringify(input.parent)),
+    runId: input.runId,
+    goal: 'relay fanout failure characterization',
+    depth: 'standard',
+    change_kind: change_kind(),
+    now: deterministicNow(Date.UTC(2026, 3, 27, 16, 30, 0)),
+    relayer: input.relayer,
+    ...(input.composeWriter === undefined ? {} : { composeWriter: input.composeWriter }),
+  });
+  return { outcome, parentRunFolder };
+}
+
+function relayReturning(resultBody: string): RelayFn {
+  return {
+    connectorName: 'claude-code',
+    relay: async (input) => ({
+      request_payload: input.prompt,
+      receipt_id: 'receipt-a',
+      result_body: resultBody,
+      duration_ms: 3,
+      cli_version: 'test-relay',
+    }),
+  };
+}
+
+function expectRejectedRelayFanoutBranch(input: {
+  readonly outcome: Awaited<ReturnType<typeof runCompiledFlow>>;
+  readonly parentRunFolder: string;
+  readonly reason: RegExp;
+  readonly verdict: string;
+  readonly resultPath: string;
+}): void {
+  expect(input.outcome.result.outcome).toBe('aborted');
+  expect(input.outcome.result.reason).toMatch(input.reason);
+
+  const branchCompleted = input.outcome.trace_entries.find(
+    (entry) => entry.kind === 'fanout.branch_completed',
+  );
+  if (branchCompleted?.kind !== 'fanout.branch_completed') {
+    throw new Error('expected fanout.branch_completed');
+  }
+  expect(branchCompleted.child_outcome).toBe('aborted');
+  expect(branchCompleted.verdict).toBe(input.verdict);
+  expect(branchCompleted.result_path).toBe(input.resultPath);
+
+  const branchCheck = input.outcome.trace_entries.find(
+    (entry) => entry.kind === 'check.evaluated' && entry.step_id === 'fanout-step-a',
+  );
+  if (branchCheck?.kind !== 'check.evaluated') {
+    throw new Error('expected relay-branch check.evaluated');
+  }
+  expect(branchCheck.outcome).toBe('fail');
+  expect(branchCheck.reason).toMatch(input.reason);
+
+  const aggregate = JSON.parse(
+    readFileSync(join(input.parentRunFolder, 'reports', 'aggregate.json'), 'utf8'),
+  ) as {
+    branches: ReadonlyArray<{
+      branch_id: string;
+      child_outcome: string;
+      verdict: string;
+      admitted: boolean;
+      result_path: string;
+    }>;
+  };
+  expect(aggregate.branches).toEqual([
+    expect.objectContaining({
+      branch_id: 'a',
+      child_outcome: 'aborted',
+      verdict: input.verdict,
+      admitted: false,
+      result_path: input.resultPath,
+    }),
+  ]);
+}
+
 let runFolderBase: string;
 let projectRoot: string;
 
@@ -533,6 +722,154 @@ describe('fanout runtime', () => {
       expect(branch.result_path).toBe(`reports/branches/${branch.branch_id}/report.json`);
       expect(branch.result_body).toEqual({ verdict: 'ok', branch: branch.branch_id });
     }
+  });
+
+  it('maps relay-fanout connector failure to an aborted branch outcome', async () => {
+    const parent = buildRelayFanoutParent();
+    const { outcome, parentRunFolder } = await runRelayFanoutParent({
+      parent,
+      runId: RunId.parse('22222222-2222-2222-2222-222222222230'),
+      relayer: {
+        connectorName: 'claude-code',
+        relay: async () => {
+          throw new Error('upstream connector exploded');
+        },
+      },
+    });
+
+    expectRejectedRelayFanoutBranch({
+      outcome,
+      parentRunFolder,
+      reason:
+        /relay fanout branch 'a': connector invocation failed \(upstream connector exploded\)/,
+      verdict: '<no-verdict>',
+      resultPath: 'reports/branches/a/result.json',
+    });
+    expect(outcome.trace_entries.some((entry) => entry.kind === 'relay.failed')).toBe(true);
+    expect(outcome.trace_entries.some((entry) => entry.kind === 'relay.completed')).toBe(false);
+  });
+
+  it('maps relay-fanout invalid JSON to an aborted branch outcome', async () => {
+    const parent = buildRelayFanoutParent();
+    const { outcome, parentRunFolder } = await runRelayFanoutParent({
+      parent,
+      runId: RunId.parse('22222222-2222-2222-2222-222222222231'),
+      relayer: relayReturning('not-json{{{'),
+    });
+
+    expectRejectedRelayFanoutBranch({
+      outcome,
+      parentRunFolder,
+      reason: /did not parse as JSON/,
+      verdict: '<no-verdict>',
+      resultPath: 'reports/branches/a/result.json',
+    });
+    expect(existsSync(join(parentRunFolder, 'reports', 'branches', 'a', 'result.json'))).toBe(true);
+    expect(existsSync(join(parentRunFolder, 'reports', 'branches', 'a', 'report.json'))).toBe(
+      false,
+    );
+  });
+
+  it('maps relay-fanout bad verdict to an aborted branch outcome', async () => {
+    const parent = buildRelayFanoutParent();
+    const { outcome, parentRunFolder } = await runRelayFanoutParent({
+      parent,
+      runId: RunId.parse('22222222-2222-2222-2222-222222222232'),
+      relayer: relayReturning(JSON.stringify({ verdict: 'reject' })),
+    });
+
+    expectRejectedRelayFanoutBranch({
+      outcome,
+      parentRunFolder,
+      reason: /not in check\.pass/,
+      verdict: 'reject',
+      resultPath: 'reports/branches/a/result.json',
+    });
+  });
+
+  it('maps relay-fanout report schema failure to an aborted branch outcome', async () => {
+    const parent = buildRelayFanoutParent({ reportSchema: 'runtime-proof-strict@v1' });
+    const { outcome, parentRunFolder } = await runRelayFanoutParent({
+      parent,
+      runId: RunId.parse('22222222-2222-2222-2222-222222222233'),
+      relayer: relayReturning(JSON.stringify({ verdict: 'ok' })),
+    });
+
+    expectRejectedRelayFanoutBranch({
+      outcome,
+      parentRunFolder,
+      reason: /runtime-proof-strict@v1/,
+      verdict: 'ok',
+      resultPath: 'reports/branches/a/result.json',
+    });
+    expect(outcome.result.reason).toMatch(/rationale/);
+  });
+
+  it('maps relay-fanout provenance failure to an aborted branch outcome', async () => {
+    const parent = buildRelayFanoutParent({ provenanceField: 'branch' });
+    const { outcome, parentRunFolder } = await runRelayFanoutParent({
+      parent,
+      runId: RunId.parse('22222222-2222-2222-2222-222222222234'),
+      relayer: relayReturning(JSON.stringify({ verdict: 'ok', branch: 'wrong-branch' })),
+    });
+
+    expectRejectedRelayFanoutBranch({
+      outcome,
+      parentRunFolder,
+      reason: /report field 'branch' must equal branch_id 'a'/,
+      verdict: 'ok',
+      resultPath: 'reports/branches/a/result.json',
+    });
+  });
+
+  it('maps relay-fanout cross-report failure to an aborted branch outcome', async () => {
+    const parent = buildRelayFanoutParent({
+      reportSchema: 'sweep.batch@v1',
+      admit: ['accept'],
+      seedSweepQueue: true,
+    });
+    const writeSweepQueue = (input: {
+      runFolder: string;
+      step: { writes: { report: { path: string } } };
+    }): void => {
+      const dest = join(input.runFolder, input.step.writes.report.path);
+      mkdirSync(dirname(dest), { recursive: true });
+      writeFileSync(
+        dest,
+        `${JSON.stringify(
+          {
+            classified: [
+              { candidate_id: 'c-1', action: 'act', rationale: 'authorized cleanup' },
+              { candidate_id: 'c-99', action: 'defer', rationale: 'not authorized' },
+            ],
+            to_execute: ['c-1'],
+            deferred: ['c-99'],
+          },
+          null,
+          2,
+        )}\n`,
+      );
+    };
+    const offPrescriptionBatch = {
+      verdict: 'accept',
+      summary: 'executed the wrong candidate',
+      changed_files: ['src/off-prescription.ts'],
+      items: [{ candidate_id: 'c-99', status: 'acted', evidence: 'off prescription' }],
+    };
+    const { outcome, parentRunFolder } = await runRelayFanoutParent({
+      parent,
+      runId: RunId.parse('22222222-2222-2222-2222-222222222235'),
+      relayer: relayReturning(JSON.stringify(offPrescriptionBatch)),
+      composeWriter: writeSweepQueue as never,
+    });
+
+    expectRejectedRelayFanoutBranch({
+      outcome,
+      parentRunFolder,
+      reason: /not in queue\.to_execute/,
+      verdict: 'accept',
+      resultPath: 'reports/branches/a/result.json',
+    });
   });
 
   it('disjoint-merge fails when two branches modify the same file', async () => {

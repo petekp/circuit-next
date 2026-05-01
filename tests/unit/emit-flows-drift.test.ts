@@ -9,7 +9,7 @@
 // schematic-controlled skill dir; `emit` mode must remove it.
 
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
@@ -19,6 +19,8 @@ const buildSkillDir = resolve(projectRoot, 'generated/flows/build');
 const stalePath = resolve(buildSkillDir, 'never-a-mode.json');
 const codexBuildSkillDir = resolve(projectRoot, 'plugins/circuit/flows/build');
 const codexStalePath = resolve(codexBuildSkillDir, 'never-a-mode.json');
+const runtimeProofClaudeDir = resolve(projectRoot, '.claude-plugin/skills/runtime-proof');
+const runtimeProofCodexDir = resolve(projectRoot, 'plugins/circuit/flows/runtime-proof');
 
 function planted(path: string): boolean {
   return existsSync(path);
@@ -33,6 +35,15 @@ function removeStaleSiblingIfPresent(path: string) {
   if (planted(path)) unlinkSync(path);
 }
 
+function plantInternalHostMirror(dir: string) {
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(resolve(dir, 'circuit.json'), '{"id":"runtime-proof"}\n');
+}
+
+function removeDirIfPresent(path: string) {
+  if (planted(path)) rmSync(path, { recursive: true, force: true });
+}
+
 describe('emit-flows.mjs — stale per-mode sibling guard', () => {
   beforeAll(() => {
     // The script imports from dist/, so make sure it's built before any
@@ -44,6 +55,8 @@ describe('emit-flows.mjs — stale per-mode sibling guard', () => {
   afterEach(() => {
     removeStaleSiblingIfPresent(stalePath);
     removeStaleSiblingIfPresent(codexStalePath);
+    removeDirIfPresent(runtimeProofClaudeDir);
+    removeDirIfPresent(runtimeProofCodexDir);
   });
 
   it('--check exits 1 and names the stale sibling when one exists', () => {
@@ -75,6 +88,42 @@ describe('emit-flows.mjs — stale per-mode sibling guard', () => {
     expect(res.stdout ?? '').toContain('removed stale generated/flows/build/never-a-mode.json');
     expect(res.stdout ?? '').toContain(
       'removed stale plugins/circuit/flows/build/never-a-mode.json',
+    );
+  });
+
+  it('--check exits 1 when an internal flow has stale host mirrors', () => {
+    plantInternalHostMirror(runtimeProofClaudeDir);
+    plantInternalHostMirror(runtimeProofCodexDir);
+
+    const res = spawnSync('node', [emitScript, '--check'], {
+      cwd: projectRoot,
+      encoding: 'utf8',
+    });
+
+    expect(res.status).toBe(1);
+    const combined = `${res.stdout ?? ''}\n${res.stderr ?? ''}`;
+    expect(combined).toContain('.claude-plugin/skills/runtime-proof');
+    expect(combined).toContain('plugins/circuit/flows/runtime-proof');
+    expect(combined).toContain('stale host mirror for internal flow');
+  });
+
+  it('emit mode removes stale host mirrors for internal flows', () => {
+    plantInternalHostMirror(runtimeProofClaudeDir);
+    plantInternalHostMirror(runtimeProofCodexDir);
+
+    const res = spawnSync('node', [emitScript], {
+      cwd: projectRoot,
+      encoding: 'utf8',
+    });
+
+    expect(res.status).toBe(0);
+    expect(planted(runtimeProofClaudeDir)).toBe(false);
+    expect(planted(runtimeProofCodexDir)).toBe(false);
+    expect(res.stdout ?? '').toContain(
+      'removed internal host mirror .claude-plugin/skills/runtime-proof',
+    );
+    expect(res.stdout ?? '').toContain(
+      'removed internal host mirror plugins/circuit/flows/runtime-proof',
     );
   });
 });

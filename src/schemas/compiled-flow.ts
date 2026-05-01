@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import { ChangeKind } from './change-kind.js';
+import { normalizeCompiledFlowCompatibility } from './compiled-flow-compat.js';
 import { Depth } from './depth.js';
 import { CompiledFlowId, StepId } from './ids.js';
+import { RUNTIME_SUCCESS_ROUTE } from './route-policy.js';
 import { SelectionOverride } from './selection-policy.js';
 import { CANONICAL_STAGES, type CanonicalStage, SpinePolicy, Stage } from './stage.js';
 import { Step } from './step.js';
@@ -51,7 +53,7 @@ const issueAt = (ctx: z.RefinementCtx, path: (string | number)[], message: strin
   ctx.addIssue({ code: z.ZodIssueCode.custom, path, message });
 };
 
-export const CompiledFlow = CompiledFlowBody.superRefine((wf, ctx) => {
+const CompiledFlowStrict = CompiledFlowBody.superRefine((wf, ctx) => {
   const stepIds = new Set<string>();
   for (let i = 0; i < wf.steps.length; i++) {
     const step = wf.steps[i];
@@ -112,19 +114,20 @@ export const CompiledFlow = CompiledFlowBody.superRefine((wf, ctx) => {
         );
       }
     }
-    // Every step's `routes` must contain a `pass` key. CheckEvaluatedTraceEntry's
+    // Every step's `routes` must contain the runtime success route key.
+    // CheckEvaluatedTraceEntry's
     // `outcome` field is `z.enum(['pass', 'fail'])` — uniform across all three
     // check kinds — so the runtime's route pick on a successful check outcome
-    // looks up `routes['pass']`. A fixture whose routes use author-friendly
+    // looks up that key. A fixture whose routes use author-friendly
     // aliases like `{ success: '@complete' }` would pass terminal-reachability
-    // checks via the `success` edge but stall at runtime because `routes['pass']`
+    // checks via the `success` edge but stall at runtime because the success key
     // is undefined on the actual check outcome. `fail`-route presence is not
     // checked here — failure-path handling is not yet specified.
-    if (!Object.hasOwn(step.routes, 'pass')) {
+    if (!Object.hasOwn(step.routes, RUNTIME_SUCCESS_ROUTE)) {
       issueAt(
         ctx,
         ['steps', i, 'routes'],
-        `WF-I10: step '${step.id}' is missing a 'pass' route key — check.evaluated emits outcome ∈ {pass, fail} uniformly, so routes must contain 'pass' to route on a successful check outcome`,
+        `WF-I10: step '${step.id}' is missing a '${RUNTIME_SUCCESS_ROUTE}' route key — check.evaluated emits outcome ∈ {pass, fail} uniformly, so routes must contain '${RUNTIME_SUCCESS_ROUTE}' to route on a successful check outcome`,
       );
     }
   }
@@ -281,15 +284,15 @@ export const CompiledFlow = CompiledFlowBody.superRefine((wf, ctx) => {
         if (seen.has(cur)) {
           issueAt(
             ctx,
-            ['steps', i, 'routes', 'pass'],
-            `WF-I11: step '${startId}' cannot reach a terminal by following only routes.pass — pass chain cycles at '${cur}'`,
+            ['steps', i, 'routes', RUNTIME_SUCCESS_ROUTE],
+            `WF-I11: step '${startId}' cannot reach a terminal by following only routes.${RUNTIME_SUCCESS_ROUTE} — ${RUNTIME_SUCCESS_ROUTE} chain cycles at '${cur}'`,
           );
           break;
         }
         seen.add(cur);
         const curStep = stepsById.get(cur);
         if (curStep === undefined) break;
-        const passTarget = curStep.routes.pass;
+        const passTarget = curStep.routes[RUNTIME_SUCCESS_ROUTE];
         if (passTarget === undefined) break;
         if (TERMINAL_ROUTE_TARGETS.has(passTarget)) break;
         cur = passTarget;
@@ -330,4 +333,5 @@ export const CompiledFlow = CompiledFlowBody.superRefine((wf, ctx) => {
     }
   }
 });
+export const CompiledFlow = z.preprocess(normalizeCompiledFlowCompatibility, CompiledFlowStrict);
 export type CompiledFlow = z.infer<typeof CompiledFlow>;

@@ -1,7 +1,8 @@
 // Sweep flow package.
 //
-// Sweep has no slash command, but original-Circuit parity requires
-// /circuit:run cleanup: and overnight: to reach it through intent routing.
+// Sweep is routable through /circuit:run and also exposed through a
+// root-authored direct command surface. It has no flow-owned command
+// source because commands/sweep.md is maintained at the root.
 
 import type { CompiledFlowPackage, CompiledFlowSignal } from '../types.js';
 import { validateSweepBatchAgainstQueue } from './cross-report-validators.js';
@@ -28,6 +29,7 @@ const SWEEP_SIGNALS: readonly CompiledFlowSignal[] = [
 
 export const sweepCompiledFlowPackage: CompiledFlowPackage = {
   id: 'sweep',
+  visibility: 'public',
   paths: {
     schematic: 'src/flows/sweep/schematic.json',
   },

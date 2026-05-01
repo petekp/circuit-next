@@ -36,6 +36,7 @@ const REVIEW_SIGNALS: readonly CompiledFlowSignal[] = [
 
 export const reviewCompiledFlowPackage: CompiledFlowPackage = {
   id: 'review',
+  visibility: 'public',
   paths: {
     schematic: 'src/flows/review/schematic.json',
     command: 'src/flows/review/command.md',

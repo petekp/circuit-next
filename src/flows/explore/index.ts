@@ -21,6 +21,7 @@ import { exploreDecisionComposeBuilder } from './writers/decision.js';
 
 export const exploreCompiledFlowPackage: CompiledFlowPackage = {
   id: 'explore',
+  visibility: 'public',
   paths: {
     schematic: 'src/flows/explore/schematic.json',
     command: 'src/flows/explore/command.md',

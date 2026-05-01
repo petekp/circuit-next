@@ -33,6 +33,7 @@ const BUILD_SIGNALS: readonly CompiledFlowSignal[] = [
 
 export const buildCompiledFlowPackage: CompiledFlowPackage = {
   id: 'build',
+  visibility: 'public',
   paths: {
     schematic: 'src/flows/build/schematic.json',
     command: 'src/flows/build/command.md',

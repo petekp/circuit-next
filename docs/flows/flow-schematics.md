@@ -201,6 +201,10 @@ These outcomes are broad enough for real flows but small enough to reason
 about. A schematic can map them to the next step, but the block controls
 which outcomes are valid.
 
+Schematics may use `continue` or `complete` as their success outcome. The
+compiler preserves the authored label and also emits the runtime success route
+`pass`, which is what step handlers follow after a successful check.
+
 ## Where Branches Help
 
 Branches are useful when they represent a real product choice:

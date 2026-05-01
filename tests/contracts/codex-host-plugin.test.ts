@@ -457,6 +457,8 @@ describe('Codex host plugin package', () => {
       const codex = readFileSync(resolve(PLUGIN_ROOT, `flows/${flow}/circuit.json`));
       expect(codex).toEqual(canonical);
     }
+    expect(existsSync(resolve(PLUGIN_ROOT, 'flows/runtime-proof'))).toBe(false);
+    expect(existsSync(resolve(REPO_ROOT, '.claude-plugin/skills/runtime-proof'))).toBe(false);
   });
 
   it('generates Codex host command files that invoke the installed plugin wrapper', () => {

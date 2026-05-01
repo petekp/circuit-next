@@ -4,9 +4,10 @@
 // compiles each to a CompileResult via
 // src/runtime/compile-schematic-to-flow.ts (consumed here through
 // dist/), then writes canonical JSON files under generated/flows/<id>/.
-// Claude Code host output under .claude-plugin/skills/<id>/ and Codex
-// host output under plugins/circuit/flows/<id>/ mirror those canonical
-// files.
+// Public flows also mirror to Claude Code host output under
+// .claude-plugin/skills/<id>/ and Codex host output under
+// plugins/circuit/flows/<id>/. Internal flows stay under generated/flows
+// and are not installed into host-visible plugin surfaces.
 //
 // File layout:
 //   - kind:'single'   → generated/flows/<id>/circuit.json
@@ -58,6 +59,7 @@ async function loadSchematicsFromCatalog() {
     const { flowPackages } = await import(catalogPath);
     return flowPackages.map((pkg) => ({
       id: pkg.id,
+      visibility: pkg.visibility ?? 'public',
       schematicPath: pkg.paths.schematic,
       commandSourcePath: pkg.paths.command,
     }));
@@ -285,6 +287,7 @@ function checkMarkdownMirror(sourceRel, destRel, label, transform = (content) =>
 }
 
 function emitCommandFile(entry) {
+  if (entry.visibility !== 'public') return;
   if (entry.commandSourcePath === undefined) return;
   copyMarkdownFile(
     entry.commandSourcePath,
@@ -323,6 +326,7 @@ function emitCodexRouterCommand() {
 }
 
 function checkCommandFile(entry) {
+  if (entry.visibility !== 'public') return false;
   if (entry.commandSourcePath === undefined) return false;
   const rootDrifted = checkMarkdownMirror(
     entry.commandSourcePath,
@@ -364,7 +368,9 @@ function checkCodexRouterCommand() {
 
 function expectedCodexSkillIds() {
   return new Set([
-    ...SCHEMATICS.filter((entry) => entry.commandSourcePath !== undefined).map((entry) => entry.id),
+    ...SCHEMATICS.filter(
+      (entry) => entry.visibility === 'public' && entry.commandSourcePath !== undefined,
+    ).map((entry) => entry.id),
     ...CODEX_ROUTER_COMMANDS,
   ]);
 }
@@ -509,6 +515,15 @@ function findStaleSiblings(id, plan, rootRel) {
     .map((name) => `${rootRel}/${id}/${name}`);
 }
 
+function internalHostMirrorDirs(entry) {
+  if (entry.visibility !== 'internal') return [];
+  return [`.claude-plugin/skills/${entry.id}`, `${CODEX_PLUGIN_ROOT_REL}/flows/${entry.id}`];
+}
+
+function findExistingInternalHostMirrorDirs(entry) {
+  return internalHostMirrorDirs(entry).filter((rel) => existsSync(resolve(projectRoot, rel)));
+}
+
 async function emitMode() {
   const expectedSkills = expectedCodexSkillIds();
   for (const entry of SCHEMATICS) {
@@ -520,6 +535,7 @@ async function emitMode() {
       writeFileSync(outAbs, stringifyCompiledFlow(flow));
       biomeFormatInPlace(outAbs);
       console.log(`emitted ${outRel}`);
+      if (entry.visibility !== 'public') continue;
       const hostRel = claudeHostRel(outRel);
       const hostAbs = resolve(projectRoot, hostRel);
       mkdirSync(dirname(hostAbs), { recursive: true });
@@ -536,11 +552,19 @@ async function emitMode() {
     // of this build step and remove them.
     for (const stale of [
       ...findStaleSiblings(entry.id, plan, 'generated/flows'),
-      ...findStaleSiblings(entry.id, claudeHostPlan(plan), '.claude-plugin/skills'),
-      ...findStaleSiblings(entry.id, codexHostPlan(plan), `${CODEX_PLUGIN_ROOT_REL}/flows`),
+      ...(entry.visibility === 'public'
+        ? [
+            ...findStaleSiblings(entry.id, claudeHostPlan(plan), '.claude-plugin/skills'),
+            ...findStaleSiblings(entry.id, codexHostPlan(plan), `${CODEX_PLUGIN_ROOT_REL}/flows`),
+          ]
+        : []),
     ]) {
       unlinkSync(resolve(projectRoot, stale));
       console.log(`removed stale ${stale}`);
+    }
+    for (const staleDir of findExistingInternalHostMirrorDirs(entry)) {
+      rmSync(resolve(projectRoot, staleDir), { recursive: true, force: true });
+      console.log(`removed internal host mirror ${staleDir}`);
     }
     emitCommandFile(entry);
   }
@@ -582,41 +606,43 @@ async function checkMode() {
           console.error('  Run `npm run emit-flows` to regenerate, then commit the diff.');
           drifted = true;
         }
-        const hostRel = claudeHostRel(outRel);
-        let hostBytes;
-        try {
-          hostBytes = readFileSync(resolve(projectRoot, hostRel), 'utf8');
-        } catch (_err) {
-          console.error(
-            `✗ ${hostRel} is missing on disk but the claude-code host compiles to it. Run \`npm run emit-flows\` to regenerate, then commit.`,
-          );
-          drifted = true;
-          continue;
-        }
-        if (compiledBytes === hostBytes) {
-          console.log(`✓ ${hostRel} mirrors ${outRel}`);
-        } else {
-          console.error(`✗ ${hostRel} drifted from canonical ${outRel}`);
-          console.error('  Run `npm run emit-flows` to regenerate, then commit the diff.');
-          drifted = true;
-        }
-        const codexRel = codexHostRel(outRel);
-        let codexBytes;
-        try {
-          codexBytes = readFileSync(resolve(projectRoot, codexRel), 'utf8');
-        } catch (_err) {
-          console.error(
-            `✗ ${codexRel} is missing on disk but the codex host compiles to it. Run \`npm run emit-flows\` to regenerate, then commit.`,
-          );
-          drifted = true;
-          continue;
-        }
-        if (compiledBytes === codexBytes) {
-          console.log(`✓ ${codexRel} mirrors ${outRel}`);
-        } else {
-          console.error(`✗ ${codexRel} drifted from canonical ${outRel}`);
-          console.error('  Run `npm run emit-flows` to regenerate, then commit the diff.');
-          drifted = true;
+        if (entry.visibility === 'public') {
+          const hostRel = claudeHostRel(outRel);
+          let hostBytes;
+          try {
+            hostBytes = readFileSync(resolve(projectRoot, hostRel), 'utf8');
+          } catch (_err) {
+            console.error(
+              `✗ ${hostRel} is missing on disk but the claude-code host compiles to it. Run \`npm run emit-flows\` to regenerate, then commit.`,
+            );
+            drifted = true;
+            continue;
+          }
+          if (compiledBytes === hostBytes) {
+            console.log(`✓ ${hostRel} mirrors ${outRel}`);
+          } else {
+            console.error(`✗ ${hostRel} drifted from canonical ${outRel}`);
+            console.error('  Run `npm run emit-flows` to regenerate, then commit the diff.');
+            drifted = true;
+          }
+          const codexRel = codexHostRel(outRel);
+          let codexBytes;
+          try {
+            codexBytes = readFileSync(resolve(projectRoot, codexRel), 'utf8');
+          } catch (_err) {
+            console.error(
+              `✗ ${codexRel} is missing on disk but the codex host compiles to it. Run \`npm run emit-flows\` to regenerate, then commit.`,
+            );
+            drifted = true;
+            continue;
+          }
+          if (compiledBytes === codexBytes) {
+            console.log(`✓ ${codexRel} mirrors ${outRel}`);
+          } else {
+            console.error(`✗ ${codexRel} drifted from canonical ${outRel}`);
+            console.error('  Run `npm run emit-flows` to regenerate, then commit the diff.');
+            drifted = true;
+          }
         }
       }
       // Stale `<mode>.json` siblings in this skill dir would silently drive
@@ -624,12 +650,22 @@ async function checkMode() {
       // above only ranges over files in the current emit plan.
       const stale = [
         ...findStaleSiblings(entry.id, plan, 'generated/flows'),
-        ...findStaleSiblings(entry.id, claudeHostPlan(plan), '.claude-plugin/skills'),
-        ...findStaleSiblings(entry.id, codexHostPlan(plan), `${CODEX_PLUGIN_ROOT_REL}/flows`),
+        ...(entry.visibility === 'public'
+          ? [
+              ...findStaleSiblings(entry.id, claudeHostPlan(plan), '.claude-plugin/skills'),
+              ...findStaleSiblings(entry.id, codexHostPlan(plan), `${CODEX_PLUGIN_ROOT_REL}/flows`),
+            ]
+          : []),
       ];
       for (const rel of stale) {
         console.error(
           `✗ ${rel} is not in the emit plan for ${entry.schematicPath}. Run \`npm run emit-flows\` to clean up stale siblings, then commit the deletion.`,
+        );
+        drifted = true;
+      }
+      for (const rel of findExistingInternalHostMirrorDirs(entry)) {
+        console.error(
+          `✗ ${rel} is a stale host mirror for internal flow '${entry.id}'. Run \`npm run emit-flows\` to remove it, then commit the deletion.`,
         );
         drifted = true;
       }

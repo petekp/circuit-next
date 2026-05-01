@@ -3,6 +3,7 @@ import { runtimeProofComposeBuilder } from './writers/compose.js';
 
 export const runtimeProofCompiledFlowPackage: CompiledFlowPackage = {
   id: 'runtime-proof',
+  visibility: 'internal',
   paths: {
     schematic: 'src/flows/runtime-proof/schematic.json',
   },

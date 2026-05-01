@@ -80,6 +80,10 @@ describe('release truth infrastructure', () => {
     );
     expect(snapshot.capabilities.length).toBeGreaterThan(30);
     expect(snapshot.flows.map((flow) => flow.id).sort()).toContain('build');
+    expect(snapshot.flows.map((flow) => flow.id)).not.toContain('runtime-proof');
+    expect(snapshot.capabilities.map((capability) => capability.id)).not.toContain(
+      'flow:runtime-proof',
+    );
     expect(snapshot.connectors.map((connector) => connector.id).sort()).toContain('custom');
   });
 

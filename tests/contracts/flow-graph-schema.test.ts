@@ -1,4 +1,4 @@
-// CompiledFlow graph closure schema — see docs/contracts/flow.md.
+// CompiledFlow graph closure schema — see docs/contracts/compiled-flow.md.
 
 import { describe, expect, it } from 'vitest';
 import { CompiledFlow } from '../../src/index.js';

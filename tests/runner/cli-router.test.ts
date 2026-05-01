@@ -532,6 +532,21 @@ describe('CLI router', () => {
         'run.completed',
       ]),
     );
+    expect(progress.slice(0, 3).map((event) => event.type)).toEqual([
+      'route.selected',
+      'run.started',
+      'task_list.updated',
+    ]);
+    const progressTypes = progress.map((event) => event.type);
+    expect(progressTypes.indexOf('step.started')).toBeLessThan(
+      progressTypes.indexOf('relay.started'),
+    );
+    expect(progressTypes.indexOf('relay.started')).toBeLessThan(
+      progressTypes.indexOf('relay.completed'),
+    );
+    expect(progressTypes.indexOf('relay.completed')).toBeLessThan(
+      progressTypes.indexOf('run.completed'),
+    );
     expect(progress.every((event) => event.display.text.length > 0)).toBe(true);
     expect(progress.find((event) => event.type === 'route.selected')?.display.text).toContain(
       'Circuit selected review',
@@ -553,6 +568,11 @@ describe('CLI router', () => {
         importance: 'major',
         tone: 'info',
       },
+    });
+    expect(progress.find((event) => event.type === 'step.started')).toMatchObject({
+      step_id: 'intake-step',
+      step_title: 'Intake — resolve review scope',
+      attempt: 1,
     });
   });
 
@@ -1213,7 +1233,7 @@ describe('CLI router', () => {
               prompt: 'Frame',
               choices: [{ id: 'continue' }],
               safe_default_choice: 'continue',
-              build_brief: {
+              report_template: {
                 scope: 'CLI envelope test',
                 success_criteria: ['Envelope is shaped'],
                 verification_command_candidates: [
@@ -1313,7 +1333,7 @@ describe('CLI router', () => {
               prompt: 'Frame',
               choices: [{ id: 'continue' }, { id: 'revise' }],
               safe_default_choice: 'continue',
-              build_brief: {
+              report_template: {
                 scope: 'CLI resume test',
                 success_criteria: ['Resume closes the run'],
                 verification_command_candidates: [

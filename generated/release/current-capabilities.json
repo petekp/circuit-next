@@ -113,26 +113,6 @@
       "unsupported_route_outcomes": []
     },
     {
-      "id": "runtime-proof",
-      "source": "src/flows/runtime-proof/schematic.json",
-      "routing": {
-        "routable": false,
-        "is_default": false,
-        "signal_labels": []
-      },
-      "entry_modes": ["runtime-proof"],
-      "stages": ["Plan", "Act"],
-      "reports": ["plan.strategy@v1"],
-      "writers": {
-        "compose": 1,
-        "close": 0,
-        "verification": 0,
-        "checkpoint": 0
-      },
-      "route_outcomes": ["continue"],
-      "unsupported_route_outcomes": []
-    },
-    {
       "id": "build",
       "source": "src/flows/build/schematic.json",
       "command_path": "src/flows/build/command.md",
@@ -335,15 +315,7 @@
       "run",
       "sweep"
     ],
-    "claude_plugin_skills": [
-      "build",
-      "explore",
-      "fix",
-      "migrate",
-      "review",
-      "runtime-proof",
-      "sweep"
-    ]
+    "claude_plugin_skills": ["build", "explore", "fix", "migrate", "review", "sweep"]
   },
   "connectors": [
     {
@@ -776,26 +748,6 @@
       }
     },
     {
-      "id": "flow:runtime-proof",
-      "kind": "flow",
-      "title": "runtime-proof flow",
-      "status": "implemented",
-      "summary": "Runtime proof flow is present as an internal test surface.",
-      "evidence": [
-        "src/flows/runtime-proof/schematic.json",
-        "generated/flows/runtime-proof/circuit.json"
-      ],
-      "readiness_refs": [],
-      "axes": {
-        "intent_hints": [],
-        "modes": ["runtime-proof"],
-        "stage_path": ["Plan", "Act"],
-        "outputs": ["plan.strategy@v1"],
-        "worker_handoff": "Compiled worker handoffs write request, receipt, result, and report evidence where applicable.",
-        "continuity": "Runs persist manifest, trace, state, result, and checkpoint resume data in the run folder."
-      }
-    },
-    {
       "id": "flow:sweep",
       "kind": "flow",
       "title": "sweep flow",
@@ -1164,21 +1116,6 @@
       "status": "implemented",
       "summary": "review declares entry mode default.",
       "evidence": ["generated/flows/review"],
-      "readiness_refs": [],
-      "axes": {
-        "intent_hints": [],
-        "modes": [],
-        "stage_path": [],
-        "outputs": []
-      }
-    },
-    {
-      "id": "mode:runtime-proof:runtime-proof",
-      "kind": "mode",
-      "title": "runtime-proof runtime-proof",
-      "status": "implemented",
-      "summary": "runtime-proof declares entry mode runtime-proof.",
-      "evidence": ["generated/flows/runtime-proof"],
       "readiness_refs": [],
       "axes": {
         "intent_hints": [],
@@ -1644,21 +1581,6 @@
       "status": "implemented",
       "summary": "stop maps to an executable compiled route.",
       "evidence": ["src/flows/review/schematic.json"],
-      "readiness_refs": [],
-      "axes": {
-        "intent_hints": [],
-        "modes": [],
-        "stage_path": [],
-        "outputs": []
-      }
-    },
-    {
-      "id": "route-outcome:runtime-proof:continue",
-      "kind": "route_outcome",
-      "title": "runtime-proof route continue",
-      "status": "implemented",
-      "summary": "continue maps to an executable compiled route.",
-      "evidence": ["src/flows/runtime-proof/schematic.json"],
       "readiness_refs": [],
       "axes": {
         "intent_hints": [],

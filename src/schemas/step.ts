@@ -7,9 +7,9 @@ import {
 } from './check.js';
 import { Depth } from './depth.js';
 import { CompiledFlowId, ProtocolId, StepId } from './ids.js';
+import { JsonObject } from './json.js';
 import { RunRelativePath } from './scalars.js';
 import { SelectionOverride } from './selection-policy.js';
-import { VerificationCommand } from './verification.js';
 
 export const RelayRole = z.enum(['researcher', 'implementer', 'reviewer']);
 export type RelayRole = z.infer<typeof RelayRole>;
@@ -79,14 +79,7 @@ export const CheckpointPolicy = z
       .min(1),
     safe_default_choice: z.string().min(1).optional(),
     safe_autonomous_choice: z.string().min(1).optional(),
-    build_brief: z
-      .object({
-        scope: z.string().min(1),
-        success_criteria: z.array(z.string().min(1)).min(1),
-        verification_command_candidates: z.array(VerificationCommand).min(1),
-      })
-      .strict()
-      .optional(),
+    report_template: JsonObject.optional(),
   })
   .strict()
   .superRefine((policy, ctx) => {
@@ -419,18 +412,11 @@ export const Step = z
         });
       }
       if (step.writes.report !== undefined) {
-        if (step.writes.report.schema !== 'build.brief@v1') {
+        if (step.policy.report_template === undefined) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            path: ['writes', 'report', 'schema'],
-            message: 'checkpoint report writing currently supports only build.brief@v1',
-          });
-        }
-        if (step.policy.build_brief === undefined) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['policy', 'build_brief'],
-            message: 'checkpoint report writing build.brief@v1 requires policy.build_brief',
+            path: ['policy', 'report_template'],
+            message: 'checkpoint report writing requires policy.report_template',
           });
         }
       }

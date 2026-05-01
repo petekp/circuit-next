@@ -7,6 +7,11 @@ import {
 } from '../../src/runtime/compile-schematic-to-flow.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { FlowSchematic } from '../../src/schemas/flow-schematic.js';
+import {
+  RUNTIME_SUCCESS_ROUTE,
+  SCHEMATIC_SUCCESS_ROUTE_ALIASES,
+  schematicOutcomeToRuntimeRoute,
+} from '../../src/schemas/route-policy.js';
 
 function readJson(path: string): unknown {
   return JSON.parse(readFileSync(path, 'utf8')) as unknown;
@@ -130,6 +135,14 @@ describe('compileSchematicToCompiledFlow — failure modes', () => {
     );
   });
 
+  it('maps documented schematic success aliases to the runtime success route', () => {
+    expect(SCHEMATIC_SUCCESS_ROUTE_ALIASES).toEqual(['continue', 'complete']);
+    for (const alias of SCHEMATIC_SUCCESS_ROUTE_ALIASES) {
+      expect(schematicOutcomeToRuntimeRoute(alias)).toBe(RUNTIME_SUCCESS_ROUTE);
+    }
+    expect(schematicOutcomeToRuntimeRoute('retry')).toBeUndefined();
+  });
+
   it('throws if a step has no continue/complete route mapping to pass', () => {
     const schematic = loadBuildSchematic();
     const itemsCopy = schematic.items.map((item) =>
@@ -139,5 +152,21 @@ describe('compileSchematicToCompiledFlow — failure modes', () => {
     );
     const broken = { ...schematic, items: itemsCopy } as unknown as typeof schematic;
     expect(() => compileSchematicToCompiledFlow(broken)).toThrow(/no outcome that maps to 'pass'/);
+  });
+
+  it('throws if a step declares duplicate success aliases', () => {
+    const schematic = loadBuildSchematic();
+    const itemsCopy = schematic.items.map((item) =>
+      item.id === ('frame-step' as unknown as typeof item.id)
+        ? ({
+            ...item,
+            routes: { ...item.routes, complete: '@complete' },
+          } as unknown as typeof item)
+        : item,
+    );
+    const broken = { ...schematic, items: itemsCopy } as unknown as typeof schematic;
+    expect(() => compileSchematicToCompiledFlow(broken)).toThrow(
+      /multiple outcomes that map to 'pass'/,
+    );
   });
 });

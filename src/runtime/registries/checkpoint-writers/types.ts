@@ -2,15 +2,12 @@
 //
 // A checkpoint step optionally writes a typed report alongside its
 // request/response files. Build's frame step is the canonical example:
-// the policy carries a `build_brief` template, the runner assembles a
-// BuildBrief at first invocation and re-stamps the response_path
-// after operator selection. Future flows would add their own
-// policy templates + builders.
+// the policy carries a generic `report_template` object, the Build writer
+// validates it and assembles a BuildBrief before operator selection.
+// Future flows would add their own policy templates + builders.
 //
 // To add a new flow's checkpoint-with-report:
-//   1. Extend CheckpointPolicy in src/schemas/step.ts with the new
-//      template field (or evolve the policy to a generic
-//      template-by-schema map).
+//   1. Add `policy.report_template` to the checkpoint step.
 //   2. Define a CheckpointBriefBuilder in the flow package
 //      (src/flows/<id>/writers/checkpoint-*.ts).
 //   3. Register it on the CompiledFlowPackage's `writers.checkpoint`.
@@ -41,8 +38,8 @@ export interface CheckpointBuildContext {
 // a waiting checkpoint with a typed report. The builder owns hash
 // verification + flow-specific shape checks (e.g. Build's brief
 // must match the step's choice ids and request_path). Returns the
-// validated report body as `unknown` — only the same builder will
-// later consume it via `existingReport` on re-stamp.
+// validated report body as `unknown` for callers that need the typed
+// body after resume-time validation.
 export interface CheckpointResumeContext {
   readonly runFolder: string;
   readonly step: CheckpointStep;
@@ -61,8 +58,8 @@ export interface CheckpointBriefBuilder {
   // Optional resume-time validator. Reads the previously-written
   // report from disk, verifies the request hash matches what the
   // checkpoint request stored, and runs flow-specific shape
-  // checks. Returns the validated report body so the runner can
-  // thread it back through the re-stamp path. Builders may omit this
+  // checks. Returns the validated report body for callers that need
+  // the typed report after resume-time validation. Builders may omit this
   // for checkpoint schemas they never use as `step.writes.report`,
   // but the runner fails loud at resume time if the request stored
   // a hash and no validator exists (see runner.ts

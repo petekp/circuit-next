@@ -19,6 +19,7 @@ function fakePackage(
 ): CompiledFlowPackage {
   return {
     id: opts.id,
+    visibility: opts.visibility ?? 'public',
     paths: opts.paths ?? { schematic: `synthetic/${opts.id}.schematic.json` },
     ...(opts.routing === undefined ? {} : { routing: opts.routing }),
     relayReports: opts.relayReports ?? [],

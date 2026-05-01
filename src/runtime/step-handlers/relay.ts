@@ -119,9 +119,78 @@ export function connectorForRelayer(relayer: {
   );
 }
 
-export async function runRelayStep(
+export interface RelayPrimitiveValidationInput {
+  readonly flow: CompiledFlow;
+  readonly runFolder: string;
+  readonly step: RelayStep;
+  readonly relayResult: RelayResult;
+  readonly checkEvaluation: Extract<CheckEvaluation, { kind: 'pass' }>;
+}
+
+export interface RelayPrimitiveValidationResult {
+  readonly evaluation: CheckEvaluation;
+  readonly parsedBody?: unknown;
+}
+
+export type RelayPrimitiveResult =
+  | {
+      readonly kind: 'connector_failed';
+      readonly reason: string;
+      readonly duration_ms: number;
+    }
+  | {
+      readonly kind: 'completed';
+      readonly evaluation: CheckEvaluation;
+      readonly relay_completed_verdict: string;
+      readonly duration_ms: number;
+      readonly parsed_body?: unknown;
+      readonly report_path?: string;
+    };
+
+function validateAcceptedRelayResult(
+  input: RelayPrimitiveValidationInput,
+): RelayPrimitiveValidationResult {
+  const { flow, runFolder, step, relayResult, checkEvaluation } = input;
+  if (step.writes.report === undefined) {
+    return { evaluation: checkEvaluation };
+  }
+  const parseResult = parseReport(step.writes.report.schema, relayResult.result_body);
+  if (parseResult.kind === 'fail') {
+    return {
+      evaluation: {
+        kind: 'fail',
+        reason: `relay step '${step.id}': ${parseResult.reason}`,
+        observedVerdict: checkEvaluation.verdict,
+      },
+    };
+  }
+  const crossResult = runCrossReportValidator(
+    step.writes.report.schema,
+    flow,
+    runFolder,
+    relayResult.result_body,
+  );
+  if (crossResult.kind === 'fail') {
+    return {
+      evaluation: {
+        kind: 'fail',
+        reason: `relay step '${step.id}': ${crossResult.reason}`,
+        observedVerdict: checkEvaluation.verdict,
+      },
+    };
+  }
+  return { evaluation: checkEvaluation };
+}
+
+export async function executeRelayPrimitive(
   ctx: StepHandlerContext & { readonly step: RelayStep },
-): Promise<StepHandlerResult> {
+  options: {
+    readonly formatConnectorFailureReason?: (stepId: string, err: unknown) => string;
+    readonly validateAcceptedResult?: (
+      input: RelayPrimitiveValidationInput,
+    ) => RelayPrimitiveValidationResult;
+  } = {},
+): Promise<RelayPrimitiveResult> {
   const { runFolder, flow, step, runId, depth, attempt, recordedAt, push, state, now } = ctx;
   const relayerInv = {
     ...(ctx.relayer === undefined ? {} : { relayer: ctx.relayer }),
@@ -145,6 +214,7 @@ export async function runRelayStep(
   mkdirSync(dirname(requestAbs), { recursive: true });
   writeFileSync(requestAbs, prompt);
   const requestPayloadHash = sha256Hex(prompt);
+  const startMs = Date.now();
 
   push({
     schema_version: 1,
@@ -174,7 +244,11 @@ export async function runRelayStep(
   try {
     relayResult = await relayer.relay(relayInput);
   } catch (err) {
-    const reason = connectorFailureReason(step.id as unknown as string, err);
+    const reason = (options.formatConnectorFailureReason ?? connectorFailureReason)(
+      step.id as unknown as string,
+      err,
+    );
+    const durationMs = Math.max(0, Date.now() - startMs);
     push({
       schema_version: 1,
       sequence: state.sequence,
@@ -202,21 +276,7 @@ export async function runRelayStep(
       outcome: 'fail',
       reason,
     });
-    const recoveryRoute = recoveryRouteForStep(step, ['retry', 'revise']);
-    if (recoveryRoute !== undefined) {
-      return { kind: 'advance', route: recoveryRoute, recovery_reason: reason };
-    }
-    push({
-      schema_version: 1,
-      sequence: state.sequence,
-      recorded_at: recordedAt(),
-      run_id: runId,
-      kind: 'step.aborted',
-      step_id: step.id,
-      attempt,
-      reason,
-    });
-    return { kind: 'aborted', reason };
+    return { kind: 'connector_failed', reason, duration_ms: durationMs };
   }
 
   state.relayResults.push({
@@ -225,61 +285,25 @@ export async function runRelayStep(
     cli_version: relayResult.cli_version,
   });
 
-  // Evaluate the check against the connector's actual result_body BEFORE
-  // materializing, so the verdict written into `relay.completed`
-  // reflects what the connector declared (or a sentinel on unparseable /
-  // no-verdict cases). The transcript still materializes either way —
-  // the relay happened, and the request/receipt/result bytes are
-  // durable evidence of the call regardless of admission.
-  //
-  // When the check admits a verdict AND the step declares
-  // `writes.report`, schema-parse `relayResult.result_body` against
-  // `writes.report.schema`. A parse failure coerces the evaluation to
-  // `kind: 'fail'` with the parse reason — mirroring the
-  // reject-on-bad-verdict shape so the content/schema failure-path trace_entry
-  // surface stays uniform. Report write requires BOTH check pass AND
-  // schema parse pass; failure on either path leaves
-  // `writes.report.path` absent on disk.
   const checkEvaluation = evaluateRelayCheck(step, relayResult.result_body);
+  let parsedBody: unknown;
   let evaluation: CheckEvaluation = checkEvaluation;
-  if (checkEvaluation.kind === 'pass' && step.writes.report !== undefined) {
-    const parseResult = parseReport(step.writes.report.schema, relayResult.result_body);
-    if (parseResult.kind === 'fail') {
-      evaluation = {
-        kind: 'fail',
-        reason: `relay step '${step.id}': ${parseResult.reason}`,
-        observedVerdict: checkEvaluation.verdict,
-      };
-    } else {
-      // Cross-report validation enforces constraints that span more
-      // than one report (e.g., sweep.batch.items[].candidate_id ⊆
-      // sweep.queue.to_execute). Returns ok for schemas with no
-      // registered cross-report rule.
-      const crossResult = runCrossReportValidator(
-        step.writes.report.schema,
-        flow,
-        runFolder,
-        relayResult.result_body,
-      );
-      if (crossResult.kind === 'fail') {
-        evaluation = {
-          kind: 'fail',
-          reason: `relay step '${step.id}': ${crossResult.reason}`,
-          observedVerdict: checkEvaluation.verdict,
-        };
-      }
-    }
+  if (checkEvaluation.kind === 'pass') {
+    const validation = (options.validateAcceptedResult ?? validateAcceptedRelayResult)({
+      flow,
+      runFolder,
+      step,
+      relayResult,
+      checkEvaluation,
+    });
+    evaluation = validation.evaluation;
+    parsedBody = validation.parsedBody;
   }
+
   const relayCompletedVerdict =
     evaluation.kind === 'pass'
       ? evaluation.verdict
       : (evaluation.observedVerdict ?? NO_VERDICT_SENTINEL);
-
-  // Check the canonical report write on `evaluation.kind === 'pass'` —
-  // the canonical downstream-readable report at `writes.report.path`
-  // is materialized ONLY after the verdict check passes. The transcript
-  // slots (request / receipt / result) remain durable evidence on
-  // either path.
   const materialized = materializeRelay({
     runId,
     stepId: step.id,
@@ -303,13 +327,6 @@ export async function runRelayStep(
     now,
     priorStart: { requestPayloadHash },
   });
-  // Adversarial-review fix #12: emit through push() rather than
-  // mutating state.trace_entries directly. push() overwrites each trace_entry's
-  // sequence atomically, so the materializer's pre-assigned sequences
-  // (and `sequenceAfter`) become advisory — they remain on the return
-  // shape because tests call materializeRelay directly and assert
-  // on its trace_entry array. The state.sequence advance previously done
-  // manually here is now handled by push() per emission.
   for (const ev of materialized.trace_entries) {
     push(ev);
   }
@@ -326,22 +343,59 @@ export async function runRelayStep(
       check_kind: 'result_verdict',
       outcome: 'pass',
     });
-    return { kind: 'advance' };
+  } else {
+    push({
+      schema_version: 1,
+      sequence: state.sequence,
+      recorded_at: recordedAt(),
+      run_id: runId,
+      kind: 'check.evaluated',
+      step_id: step.id,
+      attempt,
+      check_kind: 'result_verdict',
+      outcome: 'fail',
+      reason: evaluation.reason,
+    });
   }
 
+  return {
+    kind: 'completed',
+    evaluation,
+    relay_completed_verdict: relayCompletedVerdict,
+    duration_ms: Math.max(0, Date.now() - startMs),
+    ...(parsedBody === undefined ? {} : { parsed_body: parsedBody }),
+    ...(step.writes.report === undefined || evaluation.kind !== 'pass'
+      ? {}
+      : { report_path: step.writes.report.path }),
+  };
+}
+
+export async function runRelayStep(
+  ctx: StepHandlerContext & { readonly step: RelayStep },
+): Promise<StepHandlerResult> {
+  const { step, runId, attempt, recordedAt, push, state } = ctx;
+  const primitiveResult = await executeRelayPrimitive(ctx);
+  if (primitiveResult.kind === 'connector_failed') {
+    const recoveryRoute = recoveryRouteForStep(step, ['retry', 'revise']);
+    if (recoveryRoute !== undefined) {
+      return { kind: 'advance', route: recoveryRoute, recovery_reason: primitiveResult.reason };
+    }
+    push({
+      schema_version: 1,
+      sequence: state.sequence,
+      recorded_at: recordedAt(),
+      run_id: runId,
+      kind: 'step.aborted',
+      step_id: step.id,
+      attempt,
+      reason: primitiveResult.reason,
+    });
+    return { kind: 'aborted', reason: primitiveResult.reason };
+  }
+  const { evaluation } = primitiveResult;
+  if (evaluation.kind === 'pass') return { kind: 'advance' };
+
   // Check-fail termination path.
-  push({
-    schema_version: 1,
-    sequence: state.sequence,
-    recorded_at: recordedAt(),
-    run_id: runId,
-    kind: 'check.evaluated',
-    step_id: step.id,
-    attempt,
-    check_kind: 'result_verdict',
-    outcome: 'fail',
-    reason: evaluation.reason,
-  });
   const recoveryRoute = recoveryRouteForStep(step);
   if (recoveryRoute !== undefined) {
     return { kind: 'advance', route: recoveryRoute, recovery_reason: evaluation.reason };

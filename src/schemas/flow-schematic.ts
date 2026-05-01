@@ -169,7 +169,7 @@ export type StepExecution = z.infer<typeof StepExecution>;
 //   relay                           → request_path, receipt_path, result_path required;
 //                                        report_path optional (worker-emitted typed report)
 //   checkpoint                         → checkpoint_request_path, checkpoint_response_path required;
-//                                        report_path optional (only for build_brief checkpoints)
+//                                        report_path optional (for checkpoints that write a report)
 //   sub-run                            → result_path required (child run's result.json copied
 //                                        into parent's writes.result slot — RunResult shape)
 // Cross-field shape is enforced at the SchematicStep superRefine where

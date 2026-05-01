@@ -827,7 +827,8 @@ async function main() {
     loadConnectorSchemas(),
   ]);
 
-  const flows = flowPackages.map(flowRecord);
+  const publicFlowPackages = flowPackages.filter((pkg) => pkg.visibility !== 'internal');
+  const flows = publicFlowPackages.map(flowRecord);
   const routerIntents = routerIntentCases(router.classifyCompiledFlowTask);
   const intentHintsByFlow = implementedIntentHintsByFlow(routerIntents);
   const proofs = loadYamlWithSchema('docs/release/proofs/index.yaml', ProofScenarioIndex);
