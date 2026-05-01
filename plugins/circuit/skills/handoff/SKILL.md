@@ -1,14 +1,18 @@
 ---
 name: handoff
-description: "Saves, resumes, clears, briefs, or installs hooks for Circuit continuity through the project CLI."
+description: "Use when the user wants Circuit to save, resume, clear, brief, or install continuity handoff support across sessions."
 ---
+
+# Circuit Handoff
+
+## When to Use This Skill
+
+Use when the user wants Circuit to save, resume, clear, brief, or install continuity handoff support across sessions.
 
 ## Codex Host Invocation
 
 `<plugin root>` means the absolute path to the installed Circuit plugin directory,
 the directory that contains `.codex-plugin/plugin.json`. Do not use a path relative to the user's project.
-
-# /circuit:handoff — continuity utility
 
 Saves a continuity record for the current session, resumes the saved record,
 clears it when the work is truly done, renders a read-only host-injection

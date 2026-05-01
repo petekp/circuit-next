@@ -1,11 +1,15 @@
 # circuit-next
 
-**Automate your Claude Code flows with a single command.**
+**Structured flows for coding agents.**
 
 Circuit is an orchestration layer for structured, resumable, multi-stage
-flows inside Claude Code. Enter `/circuit:run` and describe your task.
-Circuit picks the most suitable flow from the core set and executes it,
-checking each step's output against a contract before moving on to the next.
+developer flows. Ask Circuit to handle a task in natural language. In
+Claude Code, `/circuit:run` selects the right flow before it starts. In
+Codex, `@Circuit` lets Codex choose the best bundled Circuit skill. In the
+local CLI, `circuit-next run --goal` keeps the deterministic router path.
+
+Once a flow is selected, Circuit runs the same headless engine in every
+host and checks each step's output against a contract before moving on.
 
 - **Configurable per step.** Pick the model, reasoning effort, and skills for
   each step in a flow.
@@ -31,9 +35,12 @@ Then run a flow through the local launcher:
 ./bin/circuit-next run --goal '<your task>'
 ```
 
-The router classifies your task and runs the right flow. To use the
+The CLI router classifies your task and runs the right flow. To use the
 slash commands inside Claude Code, point your plugin loader at this checkout
-and reload — the generated `commands/` directory is the user-facing surface.
+and reload — the generated `commands/` directory is the Claude Code surface.
+To use Circuit from Codex, install or refresh the Codex plugin package and ask
+Codex to use `@Circuit`. Codex can choose the best bundled Circuit flow
+skill from your natural-language request.
 
 Optional but recommended: drop a personal config at
 `~/.config/circuit-next/config.yaml` to set defaults (model, reasoning effort,
@@ -43,14 +50,14 @@ skills, connector routing) across every project. A repo-local
 
 ## How It Works
 
-Circuit replaces ad-hoc skill invocation and copy-pasted instructions. Use
-`/circuit:run` to let the router pick a flow, or call a flow directly when
+Circuit replaces ad-hoc skill invocation and copy-pasted instructions. Use one
+natural-language front door for normal work, or call a flow directly when
 you already know what you want.
 
 **Core Flows:**
 
-These flows ship with the plugin. Build, Fix, Explore, and Review have direct
-slash commands. Migrate and Sweep are reachable through the router.
+These flows ship with the plugin. Build, Fix, Explore, Review, Migrate,
+and Sweep can all be selected by the host model or invoked explicitly.
 
 | Flow | Purpose |
 |----------|-------------|
@@ -84,9 +91,9 @@ Every flow is built from a fixed set of stages: **Frame, Analyze, Plan, Act,
 Verify, Review, Close**. Not every flow runs every stage, but the order
 holds.
 
-1. **The router classifies your task.** Circuit matches free-form text to a
-   flow. The classifier is deliberately small and deterministic — it routes,
-   then the flow itself takes over.
+1. **The flow is selected.** In host plugins, the host model may choose a
+   flow before calling Circuit. In CLI router mode, Circuit's deterministic
+   router chooses.
 
 2. **Steps run in the right order.** Research before decisions. Decisions
    before implementation. Implementation gets an independent review from a
@@ -104,30 +111,37 @@ holds.
 
 ## Commands
 
-**Using the router:**
+**Default front doors:**
 
-| You type | What happens |
-|----------|-------------|
-| `/circuit:run <task>` | Router picks the best flow and mode |
-| `/circuit:run fix: <bug>` | Routes to Fix |
-| `/circuit:run review: <scope>` | Routes to Review |
-| `/circuit:run develop: <feature>` | Routes to Build |
-| `/circuit:run migrate: <target>` | Routes to Migrate |
-| `/circuit:run cleanup: <target>` | Routes to Sweep |
-| `/circuit:run overnight: <scope>` | Routes to Sweep autonomous mode |
+| Host | You type | What chooses |
+|----------|-------------|-------------|
+| Claude Code | `/circuit:run the checkout total is wrong when discounts and tax both apply` | The host model selects an explicit Circuit flow. |
+| Codex | `@Circuit the checkout total is wrong when discounts and tax both apply` | Codex chooses the best bundled Circuit flow skill. |
+| CLI | `./bin/circuit-next run --goal "the checkout total is wrong when discounts and tax both apply"` | Circuit's deterministic CLI router chooses. |
 
-**Direct flows:**
+**Direct flow control:**
 
-| You type | What happens |
-|----------|-------------|
-| `/circuit:explore` | Investigation, decisions, planning |
-| `/circuit:build` | Features, refactors, docs, tests |
-| `/circuit:fix` | Bug fixes with test-first verification |
-| `/circuit:review` | Audit-only review of an existing change |
+| Host | You type | What happens |
+|----------|-------------|-------------|
+| Claude Code | `/circuit:fix checkout total is wrong` | Runs Fix directly. |
+| Claude Code | `/circuit:review current diff` | Runs Review directly. |
+| Claude Code | `/circuit:build add billing settings` | Runs Build directly. |
+| Claude Code | `/circuit:explore compare auth providers` | Runs Explore directly. |
+| Claude Code | `/circuit:migrate move from the old SDK` | Runs Migrate directly. |
+| Claude Code | `/circuit:sweep remove safe dead code` | Runs Sweep directly. |
+| Codex | Invoke the specific Circuit flow skill directly. | Runs that flow through the Codex plugin wrapper. |
+| CLI | `./bin/circuit-next run fix --goal "checkout total is wrong"` | Runs Fix directly. |
 
-The slash commands wrap the underlying CLI. Each one accepts a `--goal`, an
-`--entry-mode` (lite, deep, autonomous), and an explicit `--depth` flag if
+The host commands wrap the underlying CLI. Each flow accepts a `--goal`,
+an `--entry-mode` (lite, deep, autonomous), and an explicit `--depth` flag if
 you want to override the mode's depth pairing.
+
+**Advanced compatibility:**
+
+The deterministic CLI router still understands old intent prefixes such as
+`fix:`, `review:`, `develop:`, `migrate:`, `cleanup:`, `overnight:`, and
+`decide:`. They are kept for scripts and older habits, not as the normal user
+experience.
 
 Review collects untracked file paths and sizes by default, but not untracked
 file contents. If you explicitly want Review to send untracked file contents
@@ -136,8 +150,9 @@ those files are safe to relay.
 
 ## Key Features
 
-**Automatic flow selection.** Describe your task. The router picks a flow
-based on a small deterministic classifier, not an LLM call.
+**Natural flow selection.** Describe your task. In host plugins, the host
+model may choose the flow before calling Circuit. In CLI router mode,
+Circuit uses a small deterministic classifier.
 
 **Independent review.** For default and deep modes, implementation and review
 run in separate workers. The reviewer starts fresh with no knowledge of the
@@ -201,16 +216,23 @@ Configuration controls:
 Config is read at run time, so editing either file does not require a
 plugin rebuild.
 
-## Optional: Codex CLI
+## Codex Host And Codex Worker
 
-Circuit can relay worker steps through the Claude Code CLI or the Codex CLI.
-Codex is optional.
+Codex can use Circuit in two separate ways:
+
+- **host/orchestrator behavior:** in Codex, ask `@Circuit` to handle a task.
+  Codex chooses the best bundled Circuit flow skill and invokes the local
+  Circuit engine.
+- **worker connector behavior:** Circuit can also relay read-only worker steps
+  through the Codex CLI from any host.
+
+The Codex worker connector is optional.
 
 ```bash
 npm install -g @openai/codex
 ```
 
-When Codex is the connector for a step, Circuit launches `codex exec` with the
+When Codex is the connector for a step, Circuit launches `codex exec` with
 read-only sandbox flags. It inherits the Circuit process environment and
 current working directory, so configure it only where those process settings are
 appropriate for the worker.

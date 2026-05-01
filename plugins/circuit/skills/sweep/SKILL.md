@@ -1,14 +1,18 @@
 ---
 name: sweep
-description: "Runs the Sweep flow directly through the project CLI."
+description: "Use when the user wants Circuit to run cleanup, dead-code removal, quality passes, coverage improvements, or safe maintenance batches."
 ---
+
+# Circuit Sweep
+
+## When to Use This Skill
+
+Use when the user wants Circuit to run cleanup, dead-code removal, quality passes, coverage improvements, or safe maintenance batches.
 
 ## Codex Host Invocation
 
 `<plugin root>` means the absolute path to the installed Circuit plugin directory,
 the directory that contains `.codex-plugin/plugin.json`. Do not use a path relative to the user's project.
-
-# /circuit:sweep — direct Sweep flow
 
 Runs cleanup, quality, coverage, and docs-sync work through the Sweep flow
 without asking the router to choose a flow first.

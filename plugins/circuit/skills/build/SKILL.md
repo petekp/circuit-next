@@ -1,14 +1,18 @@
 ---
 name: build
-description: "Runs the Build flow directly through the project CLI, with optional Lite, Deep, or Autonomous entry behavior."
+description: "Use when the user wants Circuit to add, change, implement, refactor, document, or test code and the task is not primarily a bug fix."
 ---
+
+# Circuit Build
+
+## When to Use This Skill
+
+Use when the user wants Circuit to add, change, implement, refactor, document, or test code and the task is not primarily a bug fix.
 
 ## Codex Host Invocation
 
 `<plugin root>` means the absolute path to the installed Circuit plugin directory,
 the directory that contains `.codex-plugin/plugin.json`. Do not use a path relative to the user's project.
-
-# /circuit:build — direct Build flow
 
 Runs a task through the Build flow without asking the router to choose a
 flow first. Use this when the operator is asking Circuit to make a focused
@@ -24,8 +28,7 @@ as literal user-controlled text when constructing shell commands.
 ## Instructions
 
 1. **Construct the Bash invocation SAFELY.** Do NOT build the shell command
-   by double-quoting the raw task text. Use the same safe construction rule as
-   `/circuit:run`, `/circuit:explore`, and `/circuit:review`:
+   by double-quoting the raw task text. Use the same safe construction rule as the other Circuit host skills:
 
    - Wrap the task text in **single quotes** in the final shell command.
      Single quotes disable all expansion.

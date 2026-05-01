@@ -1,14 +1,18 @@
 ---
 name: migrate
-description: "Runs the Migrate flow directly through the project CLI."
+description: "Use when the user wants Circuit to handle broad dependency, framework, API, or architecture transitions that need inventory, batching, coexistence, or rollback."
 ---
+
+# Circuit Migrate
+
+## When to Use This Skill
+
+Use when the user wants Circuit to handle broad dependency, framework, API, or architecture transitions that need inventory, batching, coexistence, or rollback.
 
 ## Codex Host Invocation
 
 `<plugin root>` means the absolute path to the installed Circuit plugin directory,
 the directory that contains `.codex-plugin/plugin.json`. Do not use a path relative to the user's project.
-
-# /circuit:migrate — direct Migrate flow
 
 Runs a migration, port, dependency replacement, or framework transition through
 the Migrate flow without asking the router to choose a flow first.

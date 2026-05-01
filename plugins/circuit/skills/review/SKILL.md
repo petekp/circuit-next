@@ -1,14 +1,18 @@
 ---
 name: review
-description: "Audit a scoped change or report with the review flow. Invokes the circuit-next `review` flow via the project CLI, producing a run trace and review-result report under the run folder."
+description: "Use when the user wants Circuit to audit existing code, a diff, PR, implementation, plan, report, or risk surface without implementing changes."
 ---
+
+# Circuit Review
+
+## When to Use This Skill
+
+Use when the user wants Circuit to audit existing code, a diff, PR, implementation, plan, report, or risk surface without implementing changes.
 
 ## Codex Host Invocation
 
 `<plugin root>` means the absolute path to the installed Circuit plugin directory,
 the directory that contains `.codex-plugin/plugin.json`. Do not use a path relative to the user's project.
-
-# /circuit:review — audit flow
 
 Run the `review` flow on the scope the user supplied. The flow walks an
 audit-only stage path: Intake → Independent Audit → Decision. Circuit

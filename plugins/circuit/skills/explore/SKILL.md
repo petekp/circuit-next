@@ -1,14 +1,18 @@
 ---
 name: explore
-description: "Investigate, understand, choose among options, or shape an execution plan. Invokes the circuit-next `explore` flow end-to-end via the project CLI, producing a run trace + final report under the run folder."
+description: "Use when the user wants Circuit to investigate, explain, compare options, analyze architecture, or make a decision before editing code."
 ---
+
+# Circuit Explore
+
+## When to Use This Skill
+
+Use when the user wants Circuit to investigate, explain, compare options, analyze architecture, or make a decision before editing code.
 
 ## Codex Host Invocation
 
 `<plugin root>` means the absolute path to the installed Circuit plugin directory,
 the directory that contains `.codex-plugin/plugin.json`. Do not use a path relative to the user's project.
-
-# /circuit:explore — investigation flow
 
 Run the `explore` flow on the goal the user supplied. The flow walks a full
 stage path: Frame → Analyze → Compose → Review → Close. The Compose and

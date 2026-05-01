@@ -12,13 +12,19 @@ ready for broader use.
 
 ## Codex Scenarios
 
-- Routed Build: run `Circuit:run` with a plain implementation request and
-  confirm the router selects Build.
-- Explicit Build: run `Circuit:run build` for the same kind of change.
-- Review: review a real uncommitted diff and confirm evidence warnings are
-  visible when present.
-- Explore: ask for an architectural recommendation and confirm the final summary
-  is useful without opening raw reports.
+- Natural Fix: run
+  `@Circuit the checkout total is wrong when discounts and tax both apply` and
+  confirm Codex invokes Circuit with the Fix flow.
+- Natural Review: run `@Circuit please review my current diff` and confirm
+  Codex invokes Circuit with the Review flow.
+- Natural Build: run `@Circuit add billing settings to the account page` and
+  confirm Codex invokes Circuit with the Build flow.
+- Natural Explore: run
+  `Use Circuit to decide whether we should migrate auth providers` and confirm
+  Codex invokes Circuit with the Explore flow or an explicit decision flow
+  path.
+- Explicit Build: invoke the Build flow skill directly for the same kind of
+  change.
 - Checkpoint: exercise a checkpointing run and confirm the question/choice is
   understandable.
 - Failure: force a verification failure and confirm the final summary explains
@@ -26,8 +32,8 @@ ready for broader use.
 
 ## Claude Code Scenarios
 
-- Routed Build: invoke the generated command with a plain implementation request
-  and confirm the router selects Build.
+- Natural Run: invoke `/circuit:run <natural task>` and confirm the host selects
+  an explicit flow command before Circuit starts.
 - Explicit Build: invoke the Build command directly.
 - Review: review a real uncommitted diff and confirm evidence warnings are
   visible when present.
@@ -47,4 +53,3 @@ ready for broader use.
 - Did verification and review actually run?
 - Could the operator understand the outcome from the final summary alone?
 - Were deeper report paths available without dominating the thread?
-

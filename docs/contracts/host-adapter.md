@@ -37,6 +37,19 @@ Every host adapter MUST support:
   `operator_summary_markdown_path` per `docs/contracts/host-rendering.md`.
 - Clear failures when the CLI, packaged flows, or installed host files are missing.
 
+## Flow Selection Authority
+
+Host plugins may let the host model choose a flow before calling Circuit.
+For example, Claude Code `/circuit:run` can select Fix, Review, Build,
+Explore, Migrate, or Sweep and then invoke `circuit-next run <flow> --goal
+"<task>"`. Codex may choose a bundled Circuit flow skill from the user's
+natural-language request.
+
+The deterministic router remains the CLI authority when a host calls
+`circuit-next run --goal "<task>"` without an explicit flow. Public docs must
+keep these two paths separate: host-orchestrated flow selection is not the
+same thing as deterministic CLI routing.
+
 ## Packaged Flow Lookup
 
 Hosts that are installed outside this repository MUST NOT load flows from the

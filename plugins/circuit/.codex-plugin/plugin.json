@@ -1,7 +1,7 @@
 {
   "name": "circuit",
   "version": "0.1.0",
-  "description": "Run Circuit flows from Codex.",
+  "description": "Choose and run the right Circuit flow from Codex.",
   "author": {
     "name": "Circuit"
   },
@@ -12,16 +12,16 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Circuit",
-    "shortDescription": "Run Circuit local flows from Codex",
-    "longDescription": "Adds Codex-native Circuit skills and commands that invoke the circuit-next CLI, read JSON run summaries, publish custom flow drafts, save handoff continuity, and surface report paths for follow-up inspection.",
+    "shortDescription": "Choose and run the right Circuit flow",
+    "longDescription": "Use @Circuit with a natural-language coding task. Codex can choose the best bundled Circuit flow, run the local circuit-next engine, render progress, and surface the Circuit summary. Direct Circuit flow skills remain available when you already know the flow.",
     "developerName": "Circuit",
     "category": "Coding",
     "capabilities": ["Interactive", "Write"],
     "websiteURL": "https://github.com/petepetrash/circuit-next",
     "defaultPrompt": [
-      "Run Circuit on this task",
-      "Review this change with Circuit",
-      "Resume my Circuit checkpoint"
+      "Use Circuit on this task",
+      "Use Circuit to fix this bug",
+      "Use Circuit to review this change"
     ],
     "brandColor": "#10A37F"
   }

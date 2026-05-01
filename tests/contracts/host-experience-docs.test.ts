@@ -48,24 +48,49 @@ describe('host experience docs', () => {
   it('keeps a repeatable Codex and Claude Code host trial checklist', () => {
     const doc = readFileSync(resolve(REPO_ROOT, 'docs/host-trial-checklist.md'), 'utf8');
 
-    expect(doc).toContain('Routed Build');
+    expect(doc).toContain('@Circuit the checkout total is wrong when discounts and tax both apply');
+    expect(doc).toContain('@Circuit please review my current diff');
+    expect(doc).toContain('@Circuit add billing settings to the account page');
+    expect(doc).toContain('Use Circuit to decide whether we should migrate auth providers');
+    expect(doc).toContain('/circuit:run <natural task>');
     expect(doc).toContain('Explicit Build');
-    expect(doc).toContain('Review');
-    expect(doc).toContain('Explore');
     expect(doc).toContain('Checkpoint');
     expect(doc).toContain('Failure');
     expect(doc).toContain('Codex Scenarios');
     expect(doc).toContain('Claude Code Scenarios');
   });
 
-  it('keeps /circuit:run host guidance aligned with routed Sweep support', () => {
+  it('keeps /circuit:run host guidance aligned with model-mediated selection', () => {
     const doc = readFileSync(resolve(REPO_ROOT, 'commands/run.md'), 'utf8');
 
-    expect(doc).toContain('cleanup/overnight tasks route to `sweep`');
-    expect(doc).toContain("./bin/circuit-next run --goal 'cleanup: remove safe dead code'");
-    expect(doc).toContain("./bin/circuit-next run --goal 'overnight: improve repo quality'");
+    expect(doc).toContain('/circuit:run — flow selector');
+    expect(doc).toContain('Select the flow before invoking the CLI');
+    expect(doc).toContain("./bin/circuit-next run sweep --goal 'remove safe dead code'");
+    expect(doc).toContain(
+      "./bin/circuit-next run --goal 'choose the right Circuit flow for this task'",
+    );
+    expect(doc).not.toContain('Do not classify the task yourself');
     expect(doc).toContain('selected_flow === "sweep"');
     expect(doc).toContain('reports/sweep-result.json');
+  });
+
+  it('teaches one natural-language front door per host in the README', () => {
+    const doc = readFileSync(resolve(REPO_ROOT, 'README.md'), 'utf8');
+    const advancedIndex = doc.indexOf('**Advanced compatibility:**');
+
+    expect(doc).toContain(
+      '/circuit:run the checkout total is wrong when discounts and tax both apply',
+    );
+    expect(doc).toContain('@Circuit the checkout total is wrong when discounts and tax both apply');
+    expect(doc).toMatch(/Codex can choose the best bundled Circuit flow\s+skill/);
+    expect(doc).toContain('host/orchestrator behavior');
+    expect(doc).toContain('worker connector behavior');
+    expect(advancedIndex).toBeGreaterThan(0);
+
+    for (const prefix of ['fix:', 'develop:', 'cleanup:', 'overnight:', 'decide:']) {
+      const firstIndex = doc.indexOf(prefix);
+      expect(firstIndex).toBeGreaterThan(advancedIndex);
+    }
   });
 
   it('keeps README connector names and custom protocol aligned with schemas and runtime', () => {

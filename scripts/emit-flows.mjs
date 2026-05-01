@@ -73,6 +73,53 @@ const SCHEMATICS = await loadSchematicsFromCatalog();
 const CODEX_PLUGIN_ROOT_REL = 'plugins/circuit';
 const CODEX_PLUGIN_WRAPPER_COMMAND = "node '<plugin root>/scripts/circuit-next.mjs'";
 const CODEX_ROUTER_COMMANDS = ['create', 'handoff', 'migrate', 'run', 'sweep'];
+const CODEX_SKILL_METADATA = {
+  build: {
+    title: 'Circuit Build',
+    description:
+      'Use when the user wants Circuit to add, change, implement, refactor, document, or test code and the task is not primarily a bug fix.',
+  },
+  create: {
+    title: 'Circuit Create',
+    description:
+      'Use when the user wants Circuit to draft, validate, or publish a reusable custom flow.',
+  },
+  explore: {
+    title: 'Circuit Explore',
+    description:
+      'Use when the user wants Circuit to investigate, explain, compare options, analyze architecture, or make a decision before editing code.',
+  },
+  fix: {
+    title: 'Circuit Fix',
+    description:
+      'Use when the user wants Circuit to fix a bug, regression, failing test, crash, broken behavior, flaky behavior, or production issue.',
+  },
+  handoff: {
+    title: 'Circuit Handoff',
+    description:
+      'Use when the user wants Circuit to save, resume, clear, brief, or install continuity handoff support across sessions.',
+  },
+  migrate: {
+    title: 'Circuit Migrate',
+    description:
+      'Use when the user wants Circuit to handle broad dependency, framework, API, or architecture transitions that need inventory, batching, coexistence, or rollback.',
+  },
+  review: {
+    title: 'Circuit Review',
+    description:
+      'Use when the user wants Circuit to audit existing code, a diff, PR, implementation, plan, report, or risk surface without implementing changes.',
+  },
+  run: {
+    title: 'Circuit Run',
+    description:
+      'Use when the user asks Circuit to choose the flow, or when no direct Circuit flow clearly fits the current coding task.',
+  },
+  sweep: {
+    title: 'Circuit Sweep',
+    description:
+      'Use when the user wants Circuit to run cleanup, dead-code removal, quality passes, coverage improvements, or safe maintenance batches.',
+  },
+};
 
 // Slash command source files live next to their flow under
 // src/flows/<id>/command.md. The plugin loader reads commands/<id>.md
@@ -134,8 +181,31 @@ function renderCodexHostSkillBody(body) {
   );
 }
 
+function renderCodexNativeSkillBody(body) {
+  return renderCodexHostSkillBody(body)
+    .replace(/<!--[\s\S]*?-->\s*/g, '')
+    .trimStart()
+    .replace(/^#\s+\/circuit:[^\n]*\n+/, '')
+    .replace(
+      /The safe construction rule matches\n\s+`\/circuit:[^\n]+:\n/g,
+      'Use the same single-quote construction rule as the other Circuit host skills:\n',
+    )
+    .replace(
+      /Use the same safe construction rule as\n\s+`\/circuit:[^\n]+:\n/g,
+      'Use the same safe construction rule as the other Circuit host skills:\n',
+    )
+    .replace(
+      /Explicit flow commands remain available as\s+`\/circuit:explore`,[\s\S]*?`\/circuit:sweep`\./,
+      'Direct Circuit flow skills remain available when the user already knows the flow.',
+    )
+    .replace(/\n## Direct Flow Bypass\n[\s\S]*?(?=\n## Authority|\n## |\s*$)/g, '\n')
+    .replace(/\bslash-command\b/g, 'host-command')
+    .replace(/\bslash command\b/gi, 'host command')
+    .trimStart();
+}
+
 function assertCodexHostSkillHasNoCommandPlaceholders(command, content) {
-  const forbidden = ['$ARGUMENTS', 'argument-hint:', 'substituted below'];
+  const forbidden = ['$ARGUMENTS', 'argument-hint:', 'substituted below', '/circuit:'];
   for (const token of forbidden) {
     if (content.includes(token)) {
       throw new Error(
@@ -146,23 +216,33 @@ function assertCodexHostSkillHasNoCommandPlaceholders(command, content) {
 }
 
 function renderCodexHostSkill(command, sourceContent) {
-  const sourceParts = splitMarkdownFrontmatter(sourceContent);
   const codexParts = splitMarkdownFrontmatter(renderCodexHostCommand(sourceContent));
-  const description =
-    frontmatterValue(sourceParts.frontmatter, 'description') ??
-    `Run the Circuit ${command} command from Codex.`;
+  const sourceParts = splitMarkdownFrontmatter(sourceContent);
+  const metadata = CODEX_SKILL_METADATA[command] ?? {
+    title: `Circuit ${command}`,
+    description:
+      frontmatterValue(sourceParts.frontmatter, 'description') ??
+      `Use when the user wants Circuit to run the ${command} flow from Codex.`,
+  };
+  const nativeBody = renderCodexNativeSkillBody(codexParts.body);
   const content = [
     '---',
     `name: ${command}`,
-    `description: ${JSON.stringify(description)}`,
+    `description: ${JSON.stringify(metadata.description)}`,
     '---',
+    '',
+    `# ${metadata.title}`,
+    '',
+    '## When to Use This Skill',
+    '',
+    metadata.description,
     '',
     '## Codex Host Invocation',
     '',
     '`<plugin root>` means the absolute path to the installed Circuit plugin directory,',
     "the directory that contains `.codex-plugin/plugin.json`. Do not use a path relative to the user's project.",
     '',
-    renderCodexHostSkillBody(codexParts.body).trimStart(),
+    nativeBody,
   ].join('\n');
   assertCodexHostSkillHasNoCommandPlaceholders(command, content);
   return content;

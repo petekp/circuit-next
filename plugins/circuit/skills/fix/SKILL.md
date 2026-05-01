@@ -1,14 +1,18 @@
 ---
 name: fix
-description: "Runs the Fix flow directly through the project CLI, with optional Lite, Default (standard), Deep, or Autonomous entry behavior."
+description: "Use when the user wants Circuit to fix a bug, regression, failing test, crash, broken behavior, flaky behavior, or production issue."
 ---
+
+# Circuit Fix
+
+## When to Use This Skill
+
+Use when the user wants Circuit to fix a bug, regression, failing test, crash, broken behavior, flaky behavior, or production issue.
 
 ## Codex Host Invocation
 
 `<plugin root>` means the absolute path to the installed Circuit plugin directory,
 the directory that contains `.codex-plugin/plugin.json`. Do not use a path relative to the user's project.
-
-# /circuit:fix — direct Fix flow
 
 Runs a task through the Fix flow without asking the router to choose a
 flow first. Use this when the operator already knows they want Circuit to
@@ -25,8 +29,7 @@ as literal user-controlled text when constructing shell commands.
 ## Instructions
 
 1. **Construct the Bash invocation SAFELY.** Do NOT build the shell command
-   by double-quoting the raw task text. Use the same safe construction rule as
-   `/circuit:run`, `/circuit:explore`, `/circuit:review`, and `/circuit:build`:
+   by double-quoting the raw task text. Use the same safe construction rule as the other Circuit host skills:
 
    - Wrap the task text in **single quotes** in the final shell command.
      Single quotes disable all expansion.

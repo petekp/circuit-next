@@ -30,6 +30,17 @@ const EXPECTED_CODEX_COMMANDS = [
   'run',
   'sweep',
 ];
+const EXPECTED_CODEX_SKILL_TITLES: Record<string, string> = {
+  build: 'Circuit Build',
+  create: 'Circuit Create',
+  explore: 'Circuit Explore',
+  fix: 'Circuit Fix',
+  handoff: 'Circuit Handoff',
+  migrate: 'Circuit Migrate',
+  review: 'Circuit Review',
+  run: 'Circuit Run',
+  sweep: 'Circuit Sweep',
+};
 
 const PluginManifest = z
   .object({
@@ -39,6 +50,8 @@ const PluginManifest = z
     skills: z.literal('./skills/'),
     interface: z.object({
       displayName: z.literal('Circuit'),
+      shortDescription: z.string().min(1),
+      longDescription: z.string().min(1),
       category: z.literal('Coding'),
       capabilities: z.array(z.string()).min(1),
       defaultPrompt: z.array(z.string().max(128)).max(3),
@@ -53,6 +66,15 @@ describe('Codex host plugin package', () => {
 
     expect(manifest.interface.capabilities).toContain('Interactive');
     expect(manifest.interface.capabilities).toContain('Write');
+    expect(manifest.description).toContain('right Circuit flow');
+    expect(manifest.interface.shortDescription).toContain('right Circuit flow');
+    expect(manifest.interface.longDescription).toContain('@Circuit');
+    expect(manifest.interface.longDescription).toContain('choose the best bundled Circuit flow');
+    expect(manifest.interface.defaultPrompt).toEqual([
+      'Use Circuit on this task',
+      'Use Circuit to fix this bug',
+      'Use Circuit to review this change',
+    ]);
     expect(manifest).not.toHaveProperty('hooks');
     expect(existsSync(resolve(PLUGIN_ROOT, 'hooks/hooks.json'))).toBe(false);
   });
@@ -170,14 +192,24 @@ describe('Codex host plugin package', () => {
     const skill = readFileSync(resolve(PLUGIN_ROOT, 'skills/run/SKILL.md'), 'utf8');
     expect(skill).toContain('name: run');
     expect(skill).not.toContain('name: circuit-run');
+    expect(skill).toContain('# Circuit Run');
+    expect(skill).toContain('## When to Use This Skill');
+    expect(skill).toContain(
+      'Use when the user asks Circuit to choose the flow, or when no direct Circuit flow clearly fits',
+    );
     expect(skill).toContain("node '<plugin root>/scripts/circuit-next.mjs' run --goal");
+    expect(skill).toContain("node '<plugin root>/scripts/circuit-next.mjs' run fix --goal");
     expect(skill).toContain('--progress jsonl');
     expect(skill).toContain('display.text');
     expect(skill).toContain('task_list.updated');
     expect(skill).toContain('user_input.requested');
     expect(skill).toContain('operator_summary_markdown_path');
-    expect(skill).toContain('Explicit router-free flow commands remain available');
+    expect(skill).toContain('Direct Circuit flow skills remain available');
     expect(skill).toContain('Do not use a path relative to the user');
+    expect(skill).not.toMatch(/^# \/circuit:/m);
+    expect(skill).not.toContain('/circuit:');
+    expect(skill).not.toMatch(/\bslash command\b/i);
+    expect(skill).not.toContain('slash-command');
     expect(skill).not.toContain('node plugins/circuit/scripts/circuit-next.mjs');
     expect(skill).toContain(
       "node '<plugin root>/scripts/circuit-next.mjs' resume --run-folder '<run_folder>' --checkpoint-choice '<choice>'",
@@ -455,6 +487,11 @@ describe('Codex host plugin package', () => {
       const skill = readFileSync(resolve(PLUGIN_ROOT, `skills/${command}/SKILL.md`), 'utf8');
 
       expect(skill).toContain(`name: ${command}`);
+      expect(skill).toContain(`# ${EXPECTED_CODEX_SKILL_TITLES[command]}`);
+      expect(skill).toContain('## When to Use This Skill');
+      expect(skill).toMatch(
+        /description: "Use when the user wants Circuit|description: "Use when the user asks Circuit/,
+      );
       expect(skill).toContain("node '<plugin root>/scripts/circuit-next.mjs'");
       expect(skill).toContain('--progress jsonl');
       expect(skill).toContain('display.text');
@@ -465,6 +502,10 @@ describe('Codex host plugin package', () => {
       expect(skill).not.toContain('argument-hint:');
       expect(skill).not.toContain('$ARGUMENTS');
       expect(skill).not.toContain('substituted below');
+      expect(skill).not.toMatch(/^# \/circuit:/m);
+      expect(skill).not.toContain('/circuit:');
+      expect(skill).not.toMatch(/\bslash command\b/i);
+      expect(skill).not.toContain('slash-command');
       expect(skill).toContain("Use the user's current request as the command input.");
       expect(commandMarkdown).toContain("node '<plugin root>/scripts/circuit-next.mjs'");
     }

@@ -1,14 +1,18 @@
 ---
 name: create
-description: "Drafts, validates, and optionally publishes a user-global custom Circuit flow."
+description: "Use when the user wants Circuit to draft, validate, or publish a reusable custom flow."
 ---
+
+# Circuit Create
+
+## When to Use This Skill
+
+Use when the user wants Circuit to draft, validate, or publish a reusable custom flow.
 
 ## Codex Host Invocation
 
 `<plugin root>` means the absolute path to the installed Circuit plugin directory,
 the directory that contains `.codex-plugin/plugin.json`. Do not use a path relative to the user's project.
-
-# /circuit:create — custom flow utility
 
 Drafts a reusable custom flow package, validates the compiled flow, and
 publishes it only after explicit confirmation.
