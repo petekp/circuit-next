@@ -19,6 +19,17 @@ import type { RelayInput } from '../../src/runtime/runner.js';
 
 const REPO_ROOT = resolve('.');
 const PLUGIN_ROOT = resolve(REPO_ROOT, 'plugins/circuit');
+const EXPECTED_CODEX_COMMANDS = [
+  'build',
+  'create',
+  'explore',
+  'fix',
+  'handoff',
+  'migrate',
+  'review',
+  'run',
+  'sweep',
+];
 
 const PluginManifest = z
   .object({
@@ -66,6 +77,74 @@ describe('Codex host plugin package', () => {
     });
   });
 
+  it('syncs and checks the local Codex plugin cache package', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'circuit-codex-cache-'));
+    try {
+      const cachePath = join(tempDir, 'plugins/cache/circuit-next-local/circuit/0.1.0');
+      const syncResult = spawnSync(
+        process.execPath,
+        [resolve(REPO_ROOT, 'scripts/sync-codex-plugin-cache.mjs'), '--cache-path', cachePath],
+        { cwd: REPO_ROOT, encoding: 'utf8' },
+      );
+      expect(syncResult.status, syncResult.stderr).toBe(0);
+
+      const syncSummary = JSON.parse(syncResult.stdout) as {
+        status: string;
+        commands: string[];
+        skills: string[];
+      };
+      expect(syncSummary.status).toBe('synced');
+      expect(syncSummary.commands).toEqual([...EXPECTED_CODEX_COMMANDS].sort());
+      expect(syncSummary.skills).toEqual([...EXPECTED_CODEX_COMMANDS].sort());
+      expect(existsSync(join(cachePath, 'skills/fix/SKILL.md'))).toBe(true);
+
+      const cleanCheck = spawnSync(
+        process.execPath,
+        [
+          resolve(REPO_ROOT, 'scripts/sync-codex-plugin-cache.mjs'),
+          '--check',
+          '--cache-path',
+          cachePath,
+        ],
+        { cwd: REPO_ROOT, encoding: 'utf8' },
+      );
+      expect(cleanCheck.status, cleanCheck.stderr).toBe(0);
+      expect(JSON.parse(cleanCheck.stdout)).toMatchObject({ status: 'ok' });
+
+      writeFileSync(join(cachePath, 'skills/run/SKILL.md'), 'stale cache');
+      const staleCheck = spawnSync(
+        process.execPath,
+        [
+          resolve(REPO_ROOT, 'scripts/sync-codex-plugin-cache.mjs'),
+          '--check',
+          '--cache-path',
+          cachePath,
+        ],
+        { cwd: REPO_ROOT, encoding: 'utf8' },
+      );
+      expect(staleCheck.status).toBe(1);
+      expect(JSON.parse(staleCheck.stdout)).toMatchObject({ status: 'stale' });
+
+      for (const unsafePath of [
+        tempDir,
+        join(tempDir, 'plugins/cache/circuit-next-local'),
+        join(tempDir, 'plugins/cache/circuit-next-local/circuit/wrong-version'),
+        REPO_ROOT,
+      ]) {
+        const unsafeSync = spawnSync(
+          process.execPath,
+          [resolve(REPO_ROOT, 'scripts/sync-codex-plugin-cache.mjs'), '--cache-path', unsafePath],
+          { cwd: REPO_ROOT, encoding: 'utf8' },
+        );
+
+        expect(unsafeSync.status).toBe(2);
+        expect(unsafeSync.stderr).toContain('refusing');
+      }
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it('documents the host adapter contract', () => {
     const contract = readFileSync(resolve(REPO_ROOT, 'docs/contracts/host-adapter.md'), 'utf8');
     const rendering = readFileSync(resolve(REPO_ROOT, 'docs/contracts/host-rendering.md'), 'utf8');
@@ -81,21 +160,23 @@ describe('Codex host plugin package', () => {
   });
 
   it('exposes Codex skill and command surfaces backed by the Circuit CLI protocol', () => {
-    expect(existsSync(resolve(PLUGIN_ROOT, 'skills/run/SKILL.md'))).toBe(true);
     expect(existsSync(resolve(PLUGIN_ROOT, 'scripts/circuit-next.mjs'))).toBe(true);
+
+    for (const command of EXPECTED_CODEX_COMMANDS) {
+      expect(existsSync(resolve(PLUGIN_ROOT, `commands/${command}.md`))).toBe(true);
+      expect(existsSync(resolve(PLUGIN_ROOT, `skills/${command}/SKILL.md`))).toBe(true);
+    }
 
     const skill = readFileSync(resolve(PLUGIN_ROOT, 'skills/run/SKILL.md'), 'utf8');
     expect(skill).toContain('name: run');
     expect(skill).not.toContain('name: circuit-run');
-    expect(skill).toContain("node '<plugin root>/scripts/circuit-next.mjs' run --goal '<task>'");
+    expect(skill).toContain("node '<plugin root>/scripts/circuit-next.mjs' run --goal");
     expect(skill).toContain('--progress jsonl');
-    expect(skill).toContain('render `display.text` exactly');
+    expect(skill).toContain('display.text');
     expect(skill).toContain('task_list.updated');
     expect(skill).toContain('user_input.requested');
     expect(skill).toContain('operator_summary_markdown_path');
-    expect(skill).toMatch(
-      /Valid explicit flows are `explore`, `review`, `migrate`, `fix`, `build`, and\s+`sweep`/,
-    );
+    expect(skill).toContain('Explicit router-free flow commands remain available');
     expect(skill).toContain('Do not use a path relative to the user');
     expect(skill).not.toContain('node plugins/circuit/scripts/circuit-next.mjs');
     expect(skill).toContain(
@@ -105,18 +186,19 @@ describe('Codex host plugin package', () => {
 
   it('uses plugin-local skill names so Codex resolves Circuit:<skill>', () => {
     const skillsRoot = resolve(PLUGIN_ROOT, 'skills');
-    const skillDirs = readdirSync(skillsRoot, { withFileTypes: true }).filter((entry) =>
-      entry.isDirectory(),
-    );
+    const skillDirs = readdirSync(skillsRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort();
 
-    expect(skillDirs.length).toBeGreaterThan(0);
+    expect(skillDirs).toEqual([...EXPECTED_CODEX_COMMANDS].sort());
 
-    for (const entry of skillDirs) {
-      const skillPath = resolve(skillsRoot, entry.name, 'SKILL.md');
+    for (const skillDir of skillDirs) {
+      const skillPath = resolve(skillsRoot, skillDir, 'SKILL.md');
       const skill = readFileSync(skillPath, 'utf8');
       const name = /^name:\s*(\S+)\s*$/m.exec(skill)?.[1];
 
-      expect(name).toBe(entry.name);
+      expect(name).toBe(skillDir);
       expect(name).not.toMatch(/^circuit[:-]/);
     }
   });
@@ -346,17 +428,7 @@ describe('Codex host plugin package', () => {
   });
 
   it('generates Codex host command files that invoke the installed plugin wrapper', () => {
-    for (const command of [
-      'build',
-      'create',
-      'explore',
-      'fix',
-      'handoff',
-      'migrate',
-      'review',
-      'run',
-      'sweep',
-    ]) {
+    for (const command of EXPECTED_CODEX_COMMANDS) {
       const source = readFileSync(resolve(REPO_ROOT, `commands/${command}.md`), 'utf8');
       const codex = readFileSync(resolve(PLUGIN_ROOT, `commands/${command}.md`), 'utf8');
       expect(source).toContain('./bin/circuit-next');
@@ -374,6 +446,27 @@ describe('Codex host plugin package', () => {
       expect(codex).toContain('operator_summary_markdown_path');
       expect(codex).not.toContain('./bin/circuit-next');
       expect(codex).not.toContain('repo-local launcher');
+    }
+  });
+
+  it('generates Codex host skills from the same command surfaces', () => {
+    for (const command of EXPECTED_CODEX_COMMANDS) {
+      const commandMarkdown = readFileSync(resolve(PLUGIN_ROOT, `commands/${command}.md`), 'utf8');
+      const skill = readFileSync(resolve(PLUGIN_ROOT, `skills/${command}/SKILL.md`), 'utf8');
+
+      expect(skill).toContain(`name: ${command}`);
+      expect(skill).toContain("node '<plugin root>/scripts/circuit-next.mjs'");
+      expect(skill).toContain('--progress jsonl');
+      expect(skill).toContain('display.text');
+      expect(skill).toContain('task_list.updated');
+      expect(skill).toContain('user_input.requested');
+      expect(skill).toContain('operator_summary_markdown_path');
+      expect(skill).not.toContain('./bin/circuit-next');
+      expect(skill).not.toContain('argument-hint:');
+      expect(skill).not.toContain('$ARGUMENTS');
+      expect(skill).not.toContain('substituted below');
+      expect(skill).toContain("Use the user's current request as the command input.");
+      expect(commandMarkdown).toContain("node '<plugin root>/scripts/circuit-next.mjs'");
     }
   });
 });

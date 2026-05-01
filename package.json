@@ -28,6 +28,8 @@
     "check-release-ready": "npm run check-release-infra && node scripts/release/check-release-ready.mjs",
     "smoke:host:codex": "node scripts/host-smoke/codex-handoff.mjs",
     "smoke:host:claude": "node scripts/host-smoke/claude-handoff.mjs",
+    "sync:codex-plugin-cache": "node scripts/sync-codex-plugin-cache.mjs",
+    "check:codex-plugin-cache": "node scripts/sync-codex-plugin-cache.mjs --check",
     "verify": "npm run check && npm run lint && npm run build && npm run test && node scripts/emit-flows.mjs --check && npm run check-release-infra",
     "verify:fast": "npm run check && npm run lint && npm run build && npm run test:fast && node scripts/emit-flows.mjs --check",
     "circuit:run": "./bin/circuit-next"

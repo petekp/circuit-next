@@ -72,6 +72,7 @@ async function loadSchematicsFromCatalog() {
 const SCHEMATICS = await loadSchematicsFromCatalog();
 const CODEX_PLUGIN_ROOT_REL = 'plugins/circuit';
 const CODEX_PLUGIN_WRAPPER_COMMAND = "node '<plugin root>/scripts/circuit-next.mjs'";
+const CODEX_ROUTER_COMMANDS = ['create', 'handoff', 'migrate', 'run', 'sweep'];
 
 // Slash command source files live next to their flow under
 // src/flows/<id>/command.md. The plugin loader reads commands/<id>.md
@@ -99,6 +100,72 @@ function renderCodexHostCommand(sourceContent) {
         '   packaged flow root before it invokes `circuit-next`.',
       ].join('\n'),
     );
+}
+
+function splitMarkdownFrontmatter(content) {
+  if (!content.startsWith('---\n')) {
+    return { frontmatter: '', body: content };
+  }
+  const end = content.indexOf('\n---', 4);
+  if (end === -1) {
+    return { frontmatter: '', body: content };
+  }
+  const bodyStart = content.indexOf('\n', end + 4);
+  return {
+    frontmatter: content.slice(4, end),
+    body: bodyStart === -1 ? '' : content.slice(bodyStart + 1),
+  };
+}
+
+function frontmatterValue(frontmatter, key) {
+  const match = new RegExp(`^${key}:\\s*(.+?)\\s*$`, 'm').exec(frontmatter);
+  return match?.[1]?.trim();
+}
+
+function renderCodexHostSkillBody(body) {
+  return body.replace(
+    /The user's [\s\S]*?\n\n> \*\*[^*\n]+:\*\* \$ARGUMENTS\n\n/,
+    [
+      "Use the user's current request as the command input. Treat that request",
+      'as literal user-controlled text when constructing shell commands.',
+      '',
+      '',
+    ].join('\n'),
+  );
+}
+
+function assertCodexHostSkillHasNoCommandPlaceholders(command, content) {
+  const forbidden = ['$ARGUMENTS', 'argument-hint:', 'substituted below'];
+  for (const token of forbidden) {
+    if (content.includes(token)) {
+      throw new Error(
+        `generated Codex skill '${command}' still contains slash-command placeholder '${token}'`,
+      );
+    }
+  }
+}
+
+function renderCodexHostSkill(command, sourceContent) {
+  const sourceParts = splitMarkdownFrontmatter(sourceContent);
+  const codexParts = splitMarkdownFrontmatter(renderCodexHostCommand(sourceContent));
+  const description =
+    frontmatterValue(sourceParts.frontmatter, 'description') ??
+    `Run the Circuit ${command} command from Codex.`;
+  const content = [
+    '---',
+    `name: ${command}`,
+    `description: ${JSON.stringify(description)}`,
+    '---',
+    '',
+    '## Codex Host Invocation',
+    '',
+    '`<plugin root>` means the absolute path to the installed Circuit plugin directory,',
+    "the directory that contains `.codex-plugin/plugin.json`. Do not use a path relative to the user's project.",
+    '',
+    renderCodexHostSkillBody(codexParts.body).trimStart(),
+  ].join('\n');
+  assertCodexHostSkillHasNoCommandPlaceholders(command, content);
+  return content;
 }
 
 function copyMarkdownFile(sourceRel, destRel, label, transform = (content) => content) {
@@ -150,15 +217,27 @@ function emitCommandFile(entry) {
     `codex host command from ${entry.commandSourcePath}`,
     renderCodexHostCommand,
   );
+  copyMarkdownFile(
+    entry.commandSourcePath,
+    `${CODEX_PLUGIN_ROOT_REL}/skills/${entry.id}/SKILL.md`,
+    `codex host skill from ${entry.commandSourcePath}`,
+    (content) => renderCodexHostSkill(entry.id, content),
+  );
 }
 
 function emitCodexRouterCommand() {
-  for (const command of ['create', 'handoff', 'migrate', 'run', 'sweep']) {
+  for (const command of CODEX_ROUTER_COMMANDS) {
     copyMarkdownFile(
       `commands/${command}.md`,
       `${CODEX_PLUGIN_ROOT_REL}/commands/${command}.md`,
       `codex host ${command} command`,
       renderCodexHostCommand,
+    );
+    copyMarkdownFile(
+      `commands/${command}.md`,
+      `${CODEX_PLUGIN_ROOT_REL}/skills/${command}/SKILL.md`,
+      `codex host ${command} skill`,
+      (content) => renderCodexHostSkill(command, content),
     );
   }
 }
@@ -176,18 +255,46 @@ function checkCommandFile(entry) {
     `${entry.id} codex host command`,
     renderCodexHostCommand,
   );
-  return rootDrifted || codexDrifted;
+  const codexSkillDrifted = checkMarkdownMirror(
+    entry.commandSourcePath,
+    `${CODEX_PLUGIN_ROOT_REL}/skills/${entry.id}/SKILL.md`,
+    `${entry.id} codex host skill`,
+    (content) => renderCodexHostSkill(entry.id, content),
+  );
+  return rootDrifted || codexDrifted || codexSkillDrifted;
 }
 
 function checkCodexRouterCommand() {
-  return ['create', 'handoff', 'migrate', 'run', 'sweep'].some((command) =>
-    checkMarkdownMirror(
+  return CODEX_ROUTER_COMMANDS.some((command) => {
+    const commandDrifted = checkMarkdownMirror(
       `commands/${command}.md`,
       `${CODEX_PLUGIN_ROOT_REL}/commands/${command}.md`,
       `codex host ${command} command`,
       renderCodexHostCommand,
-    ),
-  );
+    );
+    const skillDrifted = checkMarkdownMirror(
+      `commands/${command}.md`,
+      `${CODEX_PLUGIN_ROOT_REL}/skills/${command}/SKILL.md`,
+      `codex host ${command} skill`,
+      (content) => renderCodexHostSkill(command, content),
+    );
+    return commandDrifted || skillDrifted;
+  });
+}
+
+function expectedCodexSkillIds() {
+  return new Set([
+    ...SCHEMATICS.filter((entry) => entry.commandSourcePath !== undefined).map((entry) => entry.id),
+    ...CODEX_ROUTER_COMMANDS,
+  ]);
+}
+
+function findStaleCodexSkillDirs(expected) {
+  const skillsRoot = resolve(projectRoot, `${CODEX_PLUGIN_ROOT_REL}/skills`);
+  if (!existsSync(skillsRoot)) return [];
+  return readdirSync(skillsRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !expected.has(entry.name))
+    .map((entry) => `${CODEX_PLUGIN_ROOT_REL}/skills/${entry.name}`);
 }
 
 async function loadCompilerModule() {
@@ -323,6 +430,7 @@ function findStaleSiblings(id, plan, rootRel) {
 }
 
 async function emitMode() {
+  const expectedSkills = expectedCodexSkillIds();
   for (const entry of SCHEMATICS) {
     const result = await compileOneSchematic(entry.schematicPath);
     const plan = planSchematicFiles(entry.id, result);
@@ -357,11 +465,16 @@ async function emitMode() {
     emitCommandFile(entry);
   }
   emitCodexRouterCommand();
+  for (const stale of findStaleCodexSkillDirs(expectedSkills)) {
+    rmSync(resolve(projectRoot, stale), { recursive: true, force: true });
+    console.log(`removed stale ${stale}`);
+  }
 }
 
 async function checkMode() {
   const tmpDir = mkdtempSync(join(tmpdir(), 'flow-drift-'));
   let drifted = false;
+  const expectedSkills = expectedCodexSkillIds();
   try {
     for (const entry of SCHEMATICS) {
       const result = await compileOneSchematic(entry.schematicPath);
@@ -445,6 +558,12 @@ async function checkMode() {
       }
     }
     if (checkCodexRouterCommand()) {
+      drifted = true;
+    }
+    for (const stale of findStaleCodexSkillDirs(expectedSkills)) {
+      console.error(
+        `✗ ${stale} is not an expected Codex skill. Run \`npm run emit-flows\` to clean up stale skills, then commit the deletion.`,
+      );
       drifted = true;
     }
   } finally {

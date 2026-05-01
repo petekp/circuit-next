@@ -144,6 +144,38 @@ output mirrors those files:
 Host command files may be transformed for host-specific invocation paths, but
 they MUST be generated or drift-checked from their source commands.
 
+Codex command files are mirrored into `plugins/circuit/skills/<command>/SKILL.md`
+because Codex discovers plugin commands through skills in V1. The generated
+Codex skill set MUST match the public Circuit command set exactly:
+`build`, `create`, `explore`, `fix`, `handoff`, `migrate`, `review`, `run`,
+and `sweep`. Generated Codex skills MUST translate slash-command placeholders
+into skill-safe wording; they must not contain `$ARGUMENTS`, `argument-hint`,
+or "substituted below" text.
+
+Local development caches can drift from this repo package. Prefer the official
+refresh path when it is available:
+
+```bash
+codex plugin marketplace upgrade circuit-next-local
+```
+
+For local-package development, this repo also provides a deterministic cache
+sync:
+
+```bash
+npm run sync:codex-plugin-cache
+```
+
+The sync script deletes and replaces only the exact Circuit package cache path.
+Explicit `--cache-path` is test-only and must point under the system temp
+directory with the same package-path suffix.
+
+Use the check form when debugging a stale command surface:
+
+```bash
+npm run check:codex-plugin-cache
+```
+
 ## Codex Doctor
 
 The Codex plugin wrapper MUST support:
