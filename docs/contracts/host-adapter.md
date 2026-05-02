@@ -148,22 +148,14 @@ Current adapters:
 
 ## Generated Output
 
-Canonical compiled flows live under `generated/flows/**`. Host-specific flow
-output mirrors those files:
+The generated surface source map at `docs/generated-surfaces.md` is the
+source of truth for command sources, compiled flow outputs, host mirrors, and
+edit rules. `scripts/emit-flows.mjs --check` drift-checks that map alongside
+the generated files it describes.
 
-- Claude Code host output: `.claude-plugin/skills/**`.
-- Codex host output: `plugins/circuit/flows/**`.
-
-Host command files may be transformed for host-specific invocation paths, but
-they MUST be generated or drift-checked from their source commands.
-
-Codex command files are mirrored into `plugins/circuit/skills/<command>/SKILL.md`
-because Codex discovers plugin commands through skills in V1. The generated
-Codex skill set MUST match the public Circuit command set exactly:
-`build`, `create`, `explore`, `fix`, `handoff`, `migrate`, `review`, `run`,
-and `sweep`. Generated Codex skills MUST translate slash-command placeholders
-into skill-safe wording; they must not contain `$ARGUMENTS`, `argument-hint`,
-or "substituted below" text.
+Generated Codex skills MUST translate slash-command placeholders into
+skill-safe wording; they must not contain `$ARGUMENTS`, `argument-hint`, or
+"substituted below" text.
 
 Local development caches can drift from this repo package. Prefer the official
 refresh path when it is available:

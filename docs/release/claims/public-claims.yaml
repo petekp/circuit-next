@@ -49,7 +49,7 @@ claims:
     claim: Rich recovery routes are emitted into compiled flows and checkpoint selections can execute them.
     type: safety
     status: verified_current
-    surfaces: [docs/public-release-readiness.md, docs/release/readiness-report.generated.md]
+    surfaces: [docs/release/parity-matrix.generated.md, docs/release/readiness-report.generated.md]
     backing:
       capability_ids: [route-outcomes:rich]
       test_paths:

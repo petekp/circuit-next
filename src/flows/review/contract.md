@@ -93,7 +93,7 @@ contract as follows:
 | Verdict / `close` | `verdict-step` | `compose` | registered `review.result@v1` report |
 
 (The `compose` and `relay` literals are the serialized step kind names
-in the runtime schema; see `docs/terminology.md` for the layered model that
+in the runtime schema; see `UBIQUITOUS_LANGUAGE.md` for the layered model that
 keeps these internal while product prose uses Circuit writes / relay.)
 
 The analyze relay step uses:

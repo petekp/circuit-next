@@ -457,7 +457,7 @@ function routerIntentCases(classifyCompiledFlowTask) {
     },
     {
       id: 'plan-execution',
-      input: 'Execute this plan: ./docs/public-release-readiness.md',
+      input: 'Execute this plan: ./docs/specs/headless-engine-host-api-v1.md',
       expected_flow: 'build',
       expected_entry_mode: 'default',
       readiness_refs: [],

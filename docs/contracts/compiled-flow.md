@@ -20,7 +20,7 @@ It compiles to a stable execution graph the runtime can replay from trace_entrie
 
 ## Ubiquitous language
 
-See `specs/domain.md#core-types` for canonical term definitions.
+See `UBIQUITOUS_LANGUAGE.md#core-flow-language` for canonical term definitions.
 
 ## Invariants
 
@@ -143,7 +143,7 @@ Property-based tests will cover:
 - `carry-forward:verdict-enum-bloat` — Existing Circuit uses per-protocol
   verdict conditionals. circuit-next's Step discriminated union constrains
   verdicts per step kind, not per protocol.
-- `carry-forward:prose-yaml-drift` — Existing Circuit's SKILL.md can
+- `carry-forward:prose-schema-drift` — Existing Circuit's SKILL.md can
   silently disagree with `circuit.yaml`. A Stage 1 contract test
   (prose-yaml-parity, see `specs/behavioral/prose-yaml-parity.md` — future)
   must prevent this for circuit-next.

@@ -37,7 +37,7 @@ mapping needs its own contract.
 
 ## Ubiquitous language
 
-See `specs/domain.md#skill--plugin-vocabulary` for canonical definitions
+See `UBIQUITOUS_LANGUAGE.md#skill-and-plugin-language` for canonical definitions
 of **Skill**, **Plugin**, and **Catalog compiler**. This contract adds
 no new vocabulary — it only ratifies the existing entries.
 

@@ -34,9 +34,9 @@ non-matching check or writes shape.
 
 ## Ubiquitous language
 
-See `specs/domain.md#core-types` for canonical definitions of **Step**,
+See `UBIQUITOUS_LANGUAGE.md#core-flow-language` for canonical definitions of **Step**,
 **Check**, **RelayRole**, **ReportRef**, and the four step variants.
-Do not introduce synonyms; new vocabulary must land in `specs/domain.md`
+Do not introduce synonyms; new vocabulary must land in `UBIQUITOUS_LANGUAGE.md`
 before use here.
 
 ## Invariants
@@ -115,7 +115,7 @@ enforced via `src/schemas/step.ts`, `src/schemas/check.ts`, and
   MED #4: the Zod-strict enforcement story is now backed by explicit
   `.strict()` calls at `src/schemas/step.ts` and `src/schemas/check.ts`.
   `orchestrator` is an executor, not a role; see
-  `specs/domain.md#relay-vocabulary`.
+  `UBIQUITOUS_LANGUAGE.md#relay-language`.
 
 - **STEP-I9 — Checkpoint policy and check agreement.** A `CheckpointStep`
   declares the choices an operator or auto-resolver may select in
@@ -198,7 +198,7 @@ Property-based tests will cover:
   type-layer invariant rather than a runtime refinement.
 - **selection-policy** (`src/schemas/selection-policy.ts`) — Step's
   optional `selection: SelectionOverride` participates in the selection
-  layer stack defined in `specs/domain.md#configuration-vocabulary`.
+  layer stack defined in `UBIQUITOUS_LANGUAGE.md#configuration-language`.
 - **flow** (`src/schemas/compiled-flow.ts`) — CompiledFlow-level invariants
   (WF-I1 unique step ids, WF-I4 closed route targets) reference Step
   identity; they are not repeated here.

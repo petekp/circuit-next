@@ -44,7 +44,7 @@ const BANNED: ReadonlyArray<{ readonly name: string; readonly pattern: RegExp }>
 
 // Files where the banned vocabulary is allowed to appear in prose
 // because the file documents the layered model itself.
-const EXEMPT_FILES = new Set<string>(['docs/terminology.md']);
+const EXEMPT_FILES = new Set<string>(['UBIQUITOUS_LANGUAGE.md']);
 const PUBLIC_FLOW_IDS = new Set(
   flowPackages.filter((pkg) => pkg.visibility === 'public').map((pkg) => pkg.id),
 );
@@ -170,7 +170,7 @@ describe('terminology — product-facing prose', () => {
       offenders,
       [
         'Banned terminology found in product-facing prose.',
-        'See docs/terminology.md for the canonical vocabulary;',
+        'See UBIQUITOUS_LANGUAGE.md for the canonical vocabulary;',
         'internal/runtime names belong inside backticks or fenced code,',
         'or in low-level engine modules, not in product surfaces.',
       ].join(' '),
@@ -220,11 +220,11 @@ describe('terminology — product-facing prose', () => {
     expect(raw).toMatch(/\bsrc\/flows\/\*\/schematic\.json\b/);
   });
 
-  it('domain glossary is based on flows, schematics, blocks, and relays', () => {
-    const raw = readFileSync('specs/domain.md', 'utf8');
+  it('ubiquitous language is based on flows, schematics, blocks, and relays', () => {
+    const raw = readFileSync('UBIQUITOUS_LANGUAGE.md', 'utf8');
 
     for (const term of ['Flow', 'Schematic', 'Block', 'Stage', 'Route', 'Relay', 'Trace']) {
-      expect(raw, `domain glossary should define ${term}`).toMatch(
+      expect(raw, `ubiquitous language should define ${term}`).toMatch(
         new RegExp(`\\*\\*${term}\\*\\*`),
       );
     }

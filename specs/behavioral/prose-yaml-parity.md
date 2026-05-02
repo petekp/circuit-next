@@ -46,7 +46,7 @@ hand-maintained files.
   not hand-edited. Operator edits happen in the YAML; the compiler
   updates the prose. Hand-editing a compiler-owned prose region is
   an anti-pattern and rejected at compiler build time. Maps directly
-  to `specs/domain.md` anti-pattern **"Prose/YAML drift"**.
+  to `UBIQUITOUS_LANGUAGE.md` anti-pattern **"Prose/schema drift"**.
 
 - **PROSE-YAML-I2 — Prose regions are delimited, typed, and
   addressable.** The catalog compiler cannot update arbitrary
@@ -60,7 +60,7 @@ hand-maintained files.
   at build time and fails the build with a specific error naming the
   region and the file. Maps to `docs/contracts/flow.md`
   §"Failure modes (carried from evidence)"
-  `carry-forward:prose-yaml-drift`.
+  `carry-forward:prose-schema-drift`.
 
 - **PROSE-YAML-I3 — The prose → YAML direction is hand-authored; the
   YAML → prose direction is compiler-owned.** A flow author
@@ -88,13 +88,13 @@ hand-maintained files.
 
 ## Failure modes addressed
 
-- `prose-yaml-drift:build-lite-skill-md-contradicts-yaml` — the
+- `prose-schema-drift:build-lite-skill-md-contradicts-yaml` — the
   motivating incident in `bootstrap/evidence-draft-codex.md`.
   Mitigated by PROSE-YAML-I1 + PROSE-YAML-I2.
 
 - `prose-as-hidden-policy` — judgment rules live in prose rather than
   in typed contracts; a resolver branches on prose tokens. Maps to
-  `specs/domain.md` anti-pattern. Mitigated by constraining prose to
+  `UBIQUITOUS_LANGUAGE.md` anti-pattern. Mitigated by constraining prose to
   operator-facing narrative (PROSE-YAML-I3) and reserving deterministic
   behavior to typed fields enforced by schema. The `skill.md` v0.1
   `trigger` scope caveat (SKILL-I2) is the first concrete application.
@@ -134,10 +134,10 @@ round-trip on generated YAML fixtures.
 
 ## Cross-references
 
-- `specs/domain.md` §Anti-patterns — **Prose/YAML drift** (named
+- `UBIQUITOUS_LANGUAGE.md` §Anti-patterns — **Prose/schema drift** (named
   anti-pattern), **Prose-as-hidden-policy** (related anti-pattern).
 - `docs/contracts/flow.md` §"Failure modes (carried from
-  evidence)" `carry-forward:prose-yaml-drift`.
+  evidence)" `carry-forward:prose-schema-drift`.
 - `docs/contracts/skill.md` SKILL-I2 `trigger` scope caveat.
 - `bootstrap/evidence-draft-codex.md` — Build Lite incident evidence.
 - `specs/evidence.md` §Contract targets — lists this track as the

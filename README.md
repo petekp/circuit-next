@@ -329,14 +329,11 @@ folder and start the task again from scratch.
 
 - **[`AGENTS.md`](AGENTS.md):** The agent-facing operating doc for this
   repo.
-- **[`docs/terminology.md`](docs/terminology.md):** Canonical product
-  vocabulary (flow, schematic, block, route, relay, check, trace, report,
-  evidence).
+- **[`UBIQUITOUS_LANGUAGE.md`](UBIQUITOUS_LANGUAGE.md):** Canonical vocabulary
+  for Circuit.
 - **[`docs/contracts/`](docs/contracts/):** Engine contracts (config,
   connector, run, step, flow, selection, continuity, skill, stage).
 - **[`docs/flows/`](docs/flows/):** Flow design notes and the block catalog.
-- **[`specs/domain.md`](specs/domain.md):** Ubiquitous language for the
-  domain model.
 - **[`HANDOFF.md`](HANDOFF.md):** Cross-session handoff — where we are and
   what's next.
 

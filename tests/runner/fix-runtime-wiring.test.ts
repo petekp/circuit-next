@@ -46,7 +46,7 @@ function change_kind(): ChangeKindDeclaration {
     acceptance_evidence:
       'runCompiledFlow closes the lite Fix flow via real CompiledFlow with stubbed relayers and a fast verification command',
     alternate_framing:
-      'defer until full Fix is wired — rejected because lite is the proving substrate per flow-direction.md',
+      'defer until full Fix is wired — rejected because lite is the proving substrate per flow-authoring-model.md',
   };
 }
 

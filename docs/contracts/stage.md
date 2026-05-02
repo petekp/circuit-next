@@ -23,9 +23,9 @@ execution semantics. Step invariants (routing, gating, writes) live in
 
 ## Ubiquitous language
 
-See `specs/domain.md#core-types` for canonical definitions of **Stage**,
+See `UBIQUITOUS_LANGUAGE.md#core-flow-language` for canonical definitions of **Stage**,
 **Step**, and the seven canonical-stage labels. Do not introduce synonyms;
-new vocabulary must land in `specs/domain.md` before use here.
+new vocabulary must land in `UBIQUITOUS_LANGUAGE.md` before use here.
 
 ## Invariants
 
@@ -194,7 +194,7 @@ exist in Stage 2:
   Step-shape dependency from Stage itself; Stage just groups existing
   Steps.
 - **selection-policy** (`src/schemas/selection-policy.ts`) —
-  `domain.md#configuration-vocabulary` lists `stage` as a selection
+  `UBIQUITOUS_LANGUAGE.md#configuration-language` lists `stage` as a selection
   layer, and `SelectionSource` includes `'stage'`. `Stage.selection:
   SelectionOverride.optional()` landed in `selection.md` v0.1 (SEL-I9),
   closing stage.md v0.1 Codex MED #7. Any `SelectionResolution.applied`

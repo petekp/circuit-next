@@ -48,4 +48,4 @@ text:
 
 - `src/cli/create.ts`
 - `src/schemas/compiled-flow.ts`
-- `docs/flows/flow-schematics.md`
+- `docs/flows/authoring-model.md`

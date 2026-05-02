@@ -196,7 +196,7 @@ describe('flow router classifier', () => {
 
   it('routes plan-execution requests into executable work instead of analysis-only Explore', () => {
     const general = classifyCompiledFlowTask(
-      'Execute this plan: ./docs/public-release-readiness.md',
+      'Execute this plan: ./docs/specs/headless-engine-host-api-v1.md',
     );
     expect(general.flowName).toBe('build');
     expect(general.matched_signal).toBe('plan-execution');

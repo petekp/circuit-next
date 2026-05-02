@@ -790,7 +790,7 @@ const scenarios = [
   },
   {
     slug: 'plan-execution',
-    argv: ['run', '--goal', 'Execute this plan: ./docs/public-release-readiness.md'],
+    argv: ['run', '--goal', 'Execute this plan: ./docs/specs/headless-engine-host-api-v1.md'],
     relayer: buildRelayer(),
     runId: '44444444-4444-4444-4444-444444444410',
     startMs: Date.UTC(2026, 3, 29, 22, 0, 0),

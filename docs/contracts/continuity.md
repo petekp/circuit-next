@@ -32,9 +32,9 @@ separate migration-source contract; the runtime schema stays strict.
 
 ## Ubiquitous language
 
-See `specs/domain.md#continuity-vocabulary` for canonical term definitions
+See `UBIQUITOUS_LANGUAGE.md#continuity-language` for canonical term definitions
 (**continuity record**, **resume contract**). This slice adds to
-`specs/domain.md`:
+`UBIQUITOUS_LANGUAGE.md`:
 
 - **Run-attached provenance** — the snapshot-of-state embedded in a
   run-backed continuity record (`current_stage`, `current_step`,

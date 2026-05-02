@@ -59,7 +59,7 @@ It does NOT cover:
 
 ## Ubiquitous language
 
-See `specs/domain.md#configuration-vocabulary` for canonical definitions
+See `UBIQUITOUS_LANGUAGE.md#configuration-language` for canonical definitions
 of **Config layer**, **Selection layer**, **Selection override**, and
 **Resolved selection**. This contract binds to the existing vocabulary
 and does not introduce new terms.
@@ -124,7 +124,7 @@ The runtime MUST reject any `Config`, `LayeredConfig`, or
   'invocation']`. The four layers are the persistence-plus-invocation
   set that config-file composition adjudicates over. Adding a fifth
   layer (e.g. `environment`, `remote`) requires an ADR because the
-  precedence order documented in `specs/domain.md#configuration-vocabulary`
+  precedence order documented in `UBIQUITOUS_LANGUAGE.md#configuration-language`
   and the `ConfigLayer` enum must evolve together. Enforced at
   `src/schemas/config.ts` (`ConfigLayer = z.enum([...])`).
 
@@ -248,7 +248,7 @@ After a `CircuitOverride` is accepted:
 
 - `config.prop.layered_composition_preserves_strictness` — When
   multiple `LayeredConfig`s are composed per the documented
-  precedence vocabulary in `specs/domain.md#configuration-vocabulary`,
+  precedence vocabulary in `UBIQUITOUS_LANGUAGE.md#configuration-language`,
   the composed record still rejects surplus keys at every declared
   object shape. A surplus key present in any contributing layer
   taints the composed view. The property is deliberately named
@@ -300,7 +300,7 @@ After a `CircuitOverride` is accepted:
   product path discovers only user-global/project YAML and does not yet
   expose plugin default discovery or per-command invocation selection flags.
   This cross-contract mapping between ConfigLayer and SelectionLayer is
-  documented in `specs/domain.md#configuration-vocabulary`. Slice 85
+  documented in `UBIQUITOUS_LANGUAGE.md#configuration-language`. Slice 85
   adds the runtime selection resolver for already-loaded layers; Slice
   86 wires the product CLI to produce user-global/project layers from
   the canonical YAML paths. Additional discovery policy remains outside

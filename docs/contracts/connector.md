@@ -37,15 +37,15 @@ independently auditable?
 
 ## Ubiquitous language
 
-See `specs/domain.md#relay-vocabulary` for canonical definitions of
+See `UBIQUITOUS_LANGUAGE.md#relay-language` for canonical definitions of
 **Connector**, **ConnectorRef**, **Role**, and **Relay resolution**. Do
-not introduce synonyms; new vocabulary must land in `specs/domain.md`
+not introduce synonyms; new vocabulary must land in `UBIQUITOUS_LANGUAGE.md`
 before use here. This slice adds the entry **ConnectorName** (as a regex-
 constrained slug, reserved-name-disjoint from `EnabledConnector`), the
 entry **Custom connector descriptor** (a registered executor with an
 argv command vector), and the entry **Relay resolution source** (the
 category-plus-disambiguator record emitted on every `RelayStartedTraceEntry`)
-to `specs/domain.md`.
+to `UBIQUITOUS_LANGUAGE.md`.
 
 The distinction to keep straight: an **connector** is the executor that
 runs a worker (Claude Code headless CLI, Codex CLI, custom

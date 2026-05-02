@@ -58,7 +58,7 @@ export const FLOW_KIND_CANONICAL_SETS = {
     optional_canonicals: ['review'],
     variants: [],
     title: 'Frame → Diagnose → Fix → Verify → Review → Close',
-    authority: 'specs/adrs/ADR-0013-scalar-backed-flow-schematics.md §Decision',
+    authority: 'docs/flows/authoring-model.md §Fix As The Proving Shape',
   },
 };
 

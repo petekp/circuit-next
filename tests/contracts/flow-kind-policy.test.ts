@@ -532,7 +532,7 @@ describe('checkCompiledFlowKindCanonicalPolicy (audit-level, no Zod)', () => {
     expect(fix.omits).toEqual(['plan']);
     expect(fix.optional_canonicals).toEqual(['review']);
     expect(fix.title).toBe('Frame → Diagnose → Fix → Verify → Review → Close');
-    expect(fix.authority).toBe('specs/adrs/ADR-0013-scalar-backed-flow-schematics.md §Decision');
+    expect(fix.authority).toBe('docs/flows/authoring-model.md §Fix As The Proving Shape');
     expect(EXEMPT_FLOW_IDS.has('runtime-proof')).toBe(true);
     expect(EXEMPT_FLOW_IDS.has('explore')).toBe(false);
     expect(EXEMPT_FLOW_IDS.has('build')).toBe(false);

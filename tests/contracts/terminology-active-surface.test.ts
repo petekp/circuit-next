@@ -12,6 +12,7 @@ const ROOTS = [
   '.claude-plugin',
   'README.md',
   'AGENTS.md',
+  'UBIQUITOUS_LANGUAGE.md',
   'package.json',
 ] as const;
 
@@ -19,13 +20,11 @@ const EXEMPT_PATH_PREFIXES = [
   'specs/reference/legacy-circuit/',
   'tests/fixtures/reference/legacy-circuit/',
   'docs/release/',
-  'todos/',
 ] as const;
 
 const EXEMPT_FILES = new Set([
   'HANDOFF.md',
-  'docs/public-release-readiness.md',
-  'docs/terminology.md',
+  'UBIQUITOUS_LANGUAGE.md',
   'tests/contracts/terminology-active-surface.test.ts',
   'tests/contracts/terminology-product-surface.test.ts',
 ]);

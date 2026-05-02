@@ -5,7 +5,7 @@ import { FLOW_BLOCK_IDS, FlowBlockCatalog } from '../../src/schemas/flow-blocks.
 
 const catalogPath = 'docs/flows/block-catalog.json';
 const blocksDocPath = 'docs/flows/blocks.md';
-const compositionDocPath = 'docs/flows/flow-schematics.md';
+const authoringModelDocPath = 'docs/flows/authoring-model.md';
 
 function readCatalog() {
   return JSON.parse(readFileSync(catalogPath, 'utf8')) as unknown;
@@ -127,8 +127,8 @@ describe('flow block catalog', () => {
     expect(handoff?.output_contract).toBe('continuity.record@v1');
   });
 
-  it('has a composition note that points schematics at the catalog, not freeform graphs', () => {
-    const note = readFileSync(compositionDocPath, 'utf8');
+  it('has an authoring model that points schematics at the catalog, not freeform graphs', () => {
+    const note = readFileSync(authoringModelDocPath, 'utf8');
     expect(note).toContain('docs/flows/block-catalog.json');
     expect(note).toMatch(/schematic/i);
     expect(note).toMatch(/freeform graph/i);

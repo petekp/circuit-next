@@ -157,7 +157,7 @@ describe('flow catalog completeness', () => {
   });
 
   it('command surface ownership is documented and matches emit-flows', () => {
-    const commandReadme = readFileSync('commands/README.md', 'utf8');
+    const generatedSurfaceMap = readFileSync('docs/generated-surfaces.md', 'utf8');
     const emitScript = readFileSync('scripts/emit-flows.mjs', 'utf8');
     const routerMatch = /const CODEX_ROUTER_COMMANDS = \[([^\]]+)\]/.exec(emitScript);
     expect(
@@ -177,16 +177,17 @@ describe('flow catalog completeness', () => {
 
     for (const command of ROOT_COMMANDS) {
       expect(isFile(`commands/${command}.md`), `root command ${command} must exist`).toBe(true);
-      expect(commandReadme).toContain(
-        `| \`${command}.md\` | \`commands/${command}.md\` | root command |`,
+      expect(generatedSurfaceMap).toContain(
+        `| \`${command}\` | \`commands/${command}.md\` | \`plugins/circuit/commands/${command}.md\`<br>\`plugins/circuit/skills/${command}/SKILL.md\` |`,
       );
     }
 
     for (const pkg of flowPackages) {
-      if (pkg.paths.command === undefined) continue;
-      expect(commandReadme).toContain(
-        `| \`${pkg.id}.md\` | \`${pkg.paths.command}\` | flow package |`,
+      expect(generatedSurfaceMap).toContain(
+        `| \`${pkg.id}\` | \`${pkg.visibility ?? 'public'}\` | \`${pkg.paths.schematic}\` |`,
       );
+      if (pkg.paths.command === undefined) continue;
+      expect(generatedSurfaceMap).toContain(`\`${pkg.paths.command}\``);
     }
   });
 

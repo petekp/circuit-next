@@ -36,10 +36,10 @@ single override can assert alone.
 
 ## Ubiquitous language
 
-See `specs/domain.md#configuration-vocabulary` for canonical definitions of
+See `UBIQUITOUS_LANGUAGE.md#configuration-language` for canonical definitions of
 **Config layer**, **Selection layer**, **Selection override**, **Resolved
 selection**, **Provider-scoped model**, and **Effort**. Do not introduce
-synonyms; new vocabulary must land in `specs/domain.md` before use here.
+synonyms; new vocabulary must land in `UBIQUITOUS_LANGUAGE.md` before use here.
 
 The distinction to keep straight: a **config layer** is a source of Config
 (default, user-global, project, invocation — 4 sources). A **selection

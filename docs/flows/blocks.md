@@ -18,8 +18,7 @@ schematics.
 Deep prior-art research should be evaluated through
 `docs/flows/research-intake.md` before it changes this inventory. The
 machine-readable companion catalog is `docs/flows/block-catalog.json`;
-the composition model is sketched in `docs/flows/flow-schematics.md`.
-The product direction is summarized in `docs/flows/direction.md`.
+the authoring model is described in `docs/flows/authoring-model.md`.
 
 ## Core Idea
 

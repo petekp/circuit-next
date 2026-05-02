@@ -11,7 +11,7 @@ and the behavioral notes under `specs/behavioral/`.
 This file is the agent-facing operating doc. Keep it short. If something
 isn't here, it isn't a rule.
 
-See [`docs/terminology.md`](docs/terminology.md) for the canonical product
+See [`UBIQUITOUS_LANGUAGE.md`](UBIQUITOUS_LANGUAGE.md) for the canonical product
 vocabulary (flow, schematic, block, route, relay, check, trace, report,
 evidence). Use that vocabulary in product-facing prose.
 
@@ -67,6 +67,7 @@ done. Both must pass before commit on changes to `src/`, `tests/`, or
 | Plugin manifest | `.claude-plugin/plugin.json` |
 | Slash commands | `commands/<id>.md` (flow-owned commands are generated from `src/flows/<id>/command.md`; root-authored router/direct commands live in `commands/`) |
 | Compiled plugin output (generated) | `.claude-plugin/skills/<id>/circuit.json` for public flows |
+| Generated surface source map | `docs/generated-surfaces.md` |
 | CLI entrypoint | `bin/circuit-next` |
 | Engine source | `src/runtime/`, `src/cli/`, `src/schemas/` |
 | Flow packages | `src/flows/<id>/` (schematic, output schemas, command, contract, writers, relay hints) |
@@ -75,7 +76,7 @@ done. Both must pass before commit on changes to `src/`, `tests/`, or
 | Engine contracts | `docs/contracts/` |
 | Flow design notes | `docs/flows/` |
 | Behavioral concerns | `specs/behavioral/` |
-| Ubiquitous language | `specs/domain.md` |
+| Ubiquitous language | `UBIQUITOUS_LANGUAGE.md` |
 | Block catalog | `docs/flows/block-catalog.json` |
 | Cross-session handoff | `HANDOFF.md` (repo root) |
 

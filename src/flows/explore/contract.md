@@ -62,7 +62,7 @@ generalizes to `build-result.json`, `fix-result.json`, etc.
 
 ## Ubiquitous language
 
-See `specs/domain.md#core-types` for canonical definitions of **CompiledFlow**,
+See `UBIQUITOUS_LANGUAGE.md#core-flow-language` for canonical definitions of **CompiledFlow**,
 **Stage**, **Step**. This contract adds five report ids:
 
 - **Explore brief** (`explore.brief`): the framing report emitted by the

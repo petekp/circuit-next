@@ -274,11 +274,11 @@ scenarios:
   - id: proof:plan-execution
     title: Plan Execution Campaign Start
     category: plan-execution
-    command: './bin/circuit-next run --goal "Execute this plan: ./docs/public-release-readiness.md" --progress jsonl'
+    command: './bin/circuit-next run --goal "Execute this plan: ./docs/specs/headless-engine-host-api-v1.md" --progress jsonl'
     expected_flow: build
     expected_outcome: complete or needs_attention
-    summary_contract: Summary identifies plan execution, the selected workflow, verification, review, risk, and next action.
-    redaction_policy: Uses a scrubbed plan fixture if the live readiness doc contains local details.
+    summary_contract: Summary identifies plan execution, the selected flow, verification, review, risk, and next action.
+    redaction_policy: Uses a scrubbed plan fixture if the live spec contains local details.
     required_files:
       - examples/runs/plan-execution/progress.jsonl
       - examples/runs/plan-execution/operator-summary.md
