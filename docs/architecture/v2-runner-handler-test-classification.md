@@ -1,7 +1,11 @@
 # Circuit v2 Runner And Handler Test Classification
 
-Phase 4.33 classifies old runner and direct handler tests before any checkpoint
+Phase 4.33 classified old runner and direct handler tests before any checkpoint
 resume implementation, retained-resume shrink, or old runtime deletion.
+Phase 4.39 refreshes the same map after Phase 4.37 extracted retained
+checkpoint resume preparation into `src/runtime/checkpoint-resume.ts` and
+Phase 4.38 recommended stopping further runner shrinkage for now.
+Phase 4.41 adds a focused helper test for the extracted terminal verdict rule.
 
 No code moves are approved by this document.
 
@@ -20,7 +24,7 @@ No code moves are approved by this document.
 
 | Test | Classification | Why keep |
 |---|---|---|
-| `tests/runner/build-checkpoint-exec.test.ts` | checkpoint-resume product coverage | Covers deep checkpoint waiting, operator resume, invalid choices, missing/tampered brief, request hash tampering, original selection/config restoration, original project root restoration, post-checkpoint relay, and post-checkpoint verification. |
+| `tests/runner/build-checkpoint-exec.test.ts` | checkpoint-resume product coverage | Covers deep checkpoint waiting, operator resume, invalid choices, manifest/trace identity rejection, missing/tampered brief, request hash tampering, original selection/config restoration, original project root restoration, post-checkpoint relay, and post-checkpoint verification. |
 | `tests/runner/explore-tournament-runtime.test.ts` | checkpoint-resume product coverage | Covers Explore tournament retained checkpoint behavior and resume paths. |
 | `tests/runner/cli-v2-runtime.test.ts` | retained product fallback | Proves default selector keeps checkpoint resume and checkpoint-waiting modes on retained runtime. |
 | `tests/runner/run-status-projection.test.ts` | checkpoint-resume product coverage | Proves `runs show` projects waiting checkpoints and validates malformed checkpoint request/report state. |
@@ -54,6 +58,7 @@ low-level proof for retained fallback and for behaviors v2 must preserve.
 | `tests/runner/push-sequence-authority.test.ts` | retained product fallback | Proves retained push sequencing is the trace sequence authority. |
 | `tests/runner/terminal-outcome-mapping.test.ts` | retained product fallback | Proves terminal route mapping for retained runs. |
 | `tests/runner/terminal-verdict-derivation.test.ts` | retained product fallback | Proves retained result verdict derivation. |
+| `tests/runner/terminal-verdict-helper.test.ts` | retained product fallback | Proves the pure terminal admitted verdict helper now called by the retained close tail. |
 | `tests/runner/check-evaluation.test.ts` | retained product fallback | Proves retained check evaluation and route behavior through the full runner loop. |
 | `tests/runner/relay-invocation-failure.test.ts` | retained product fallback | Proves retained relay invocation failures close safely. |
 | `tests/runner/run-relative-path.test.ts` | retained product fallback | Proves retained runner rejects unsafe run-relative reads/writes. |
@@ -161,19 +166,18 @@ Do not delete old runner or handler tests.
 
 Do not move old runner or handler code.
 
-The next implementation choice should be one of:
+The earlier next-step options have now landed:
 
-```text
-Option B1: shrink retained checkpoint resume behind a smaller retained module,
-           using this test map as the guardrail.
+- Phase 4.34 produced a current-only old runner/handler import inventory.
+- Phase 4.35 classified retained progress projection ownership.
+- Phase 4.37 extracted retained checkpoint resume preparation behind
+  `src/runtime/checkpoint-resume.ts`.
+- Phase 4.38 mapped the remaining runner boundary and recommended stopping
+  runner shrinkage for now.
+- Phase 4.41 extracted only pure terminal verdict derivation to
+  `src/runtime/terminal-verdict.ts`; close/result finalization remains in
+  `src/runtime/runner.ts`.
 
-Option P1: classify retained progress projection as permanent retained
-           infrastructure or move it behind a neutral v1 progress facade.
-
-Option R1: create a current-only import inventory for old runner/handler files
-           before any shrink proposal.
-```
-
-Recommended next step: **R1 current-only import inventory for old runner and
-handler files**. It is still planning/evidence work, and it will make any later
-resume shrink proposal much safer.
+Current recommendation: keep these tests as live product and oracle evidence.
+Any future close/result finalization move still needs focused review first. Do
+not start by deleting or migrating tests.

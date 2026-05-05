@@ -13,10 +13,12 @@ import {
   resumeCompiledFlowCheckpoint,
   runCompiledFlow,
 } from '../../src/runtime/runner.js';
+import { traceEntryLogPath } from '../../src/runtime/trace-writer.js';
 import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { RunId } from '../../src/schemas/ids.js';
 import { SkillId } from '../../src/schemas/ids.js';
+import { manifestSnapshotPath } from '../../src/shared/manifest-snapshot.js';
 
 function deterministicNow(startMs: number): () => Date {
   let n = 0;
@@ -36,6 +38,37 @@ function change_kind(): ChangeKindDeclaration {
 
 function readJson(root: string, rel: string): unknown {
   return JSON.parse(readFileSync(join(root, rel), 'utf8')) as unknown;
+}
+
+function rewriteJsonObjectFile(
+  path: string,
+  rewrite: (record: Record<string, unknown>) => Record<string, unknown>,
+): void {
+  const parsed = JSON.parse(readFileSync(path, 'utf8')) as unknown;
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(`${path} did not contain a JSON object`);
+  }
+  writeFileSync(path, `${JSON.stringify(rewrite(parsed as Record<string, unknown>), null, 2)}\n`);
+}
+
+function rewriteTraceEntry(
+  runFolder: string,
+  index: number,
+  rewrite: (record: Record<string, unknown>) => Record<string, unknown>,
+): void {
+  const tracePath = traceEntryLogPath(runFolder);
+  const text = readFileSync(tracePath, 'utf8');
+  const lines = text.trimEnd().split('\n');
+  const line = lines[index];
+  if (line === undefined) {
+    throw new Error(`trace entry ${index} is missing`);
+  }
+  const parsed = JSON.parse(line) as unknown;
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(`trace entry ${index} did not contain a JSON object`);
+  }
+  lines[index] = JSON.stringify(rewrite(parsed as Record<string, unknown>));
+  writeFileSync(tracePath, `${lines.join('\n')}\n`);
 }
 
 function checkpointCompiledFlow(options: {
@@ -324,6 +357,25 @@ afterEach(() => {
   rmSync(runFolderBase, { recursive: true, force: true });
 });
 
+async function startPausedBuildCheckpoint(input: {
+  readonly runFolder: string;
+  readonly runId: string;
+  readonly goal: string;
+}): Promise<void> {
+  const { flow, bytes } = checkpointCompiledFlow({ safeDefault: 'continue' });
+  await runCompiledFlow({
+    runFolder: input.runFolder,
+    flow,
+    flowBytes: bytes,
+    projectRoot: process.cwd(),
+    runId: RunId.parse(input.runId),
+    goal: input.goal,
+    depth: 'deep',
+    change_kind: change_kind(),
+    now: deterministicNow(Date.UTC(2026, 3, 25, 5, 0, 0)),
+  });
+}
+
 describe('Build checkpoint execution substrate', () => {
   it('resolves standard depth through a declared safe default choice', async () => {
     const { flow, bytes } = checkpointCompiledFlow({ safeDefault: 'continue' });
@@ -478,6 +530,100 @@ describe('Build checkpoint execution substrate', () => {
         now: deterministicNow(Date.UTC(2026, 3, 25, 3, 35, 0)),
       }),
     ).rejects.toThrow(/not allowed/);
+    expect(existsSync(join(runFolder, 'reports/result.json'))).toBe(false);
+  });
+
+  it('rejects checkpoint resume when manifest flow_id differs from the flow bytes', async () => {
+    const runFolder = join(runFolderBase, 'resume-manifest-flow-id-mismatch');
+    await startPausedBuildCheckpoint({
+      runFolder,
+      runId: 'b3000000-0000-0000-0000-000000000013',
+      goal: 'Reject manifest flow id mismatch',
+    });
+    rewriteJsonObjectFile(manifestSnapshotPath(runFolder), (manifest) => ({
+      ...manifest,
+      flow_id: 'different-flow-id',
+    }));
+
+    await expect(
+      resumeCompiledFlowCheckpoint({
+        runFolder,
+        selection: 'continue',
+        projectRoot: process.cwd(),
+        now: deterministicNow(Date.UTC(2026, 3, 25, 5, 5, 0)),
+      }),
+    ).rejects.toThrow(
+      "checkpoint resume rejected: manifest flow_id 'different-flow-id' does not match flow bytes 'build-checkpoint-exec-test'",
+    );
+    expect(existsSync(join(runFolder, 'reports/result.json'))).toBe(false);
+  });
+
+  it('rejects checkpoint resume when manifest run_id differs from the bootstrap trace', async () => {
+    const runFolder = join(runFolderBase, 'resume-manifest-run-id-mismatch');
+    await startPausedBuildCheckpoint({
+      runFolder,
+      runId: 'b3000000-0000-0000-0000-000000000014',
+      goal: 'Reject manifest run id mismatch',
+    });
+    rewriteJsonObjectFile(manifestSnapshotPath(runFolder), (manifest) => ({
+      ...manifest,
+      run_id: 'b3000000-0000-0000-0000-000000000015',
+    }));
+
+    await expect(
+      resumeCompiledFlowCheckpoint({
+        runFolder,
+        selection: 'continue',
+        projectRoot: process.cwd(),
+        now: deterministicNow(Date.UTC(2026, 3, 25, 5, 10, 0)),
+      }),
+    ).rejects.toThrow('checkpoint resume rejected: manifest run_id differs from trace');
+    expect(existsSync(join(runFolder, 'reports/result.json'))).toBe(false);
+  });
+
+  it('rejects checkpoint resume when manifest flow_id differs from the bootstrap trace', async () => {
+    const runFolder = join(runFolderBase, 'resume-bootstrap-flow-id-mismatch');
+    await startPausedBuildCheckpoint({
+      runFolder,
+      runId: 'b3000000-0000-0000-0000-000000000016',
+      goal: 'Reject bootstrap flow id mismatch',
+    });
+    rewriteTraceEntry(runFolder, 0, (bootstrap) => ({
+      ...bootstrap,
+      flow_id: 'different-flow-id',
+    }));
+
+    await expect(
+      resumeCompiledFlowCheckpoint({
+        runFolder,
+        selection: 'continue',
+        projectRoot: process.cwd(),
+        now: deterministicNow(Date.UTC(2026, 3, 25, 5, 15, 0)),
+      }),
+    ).rejects.toThrow('checkpoint resume rejected: manifest flow_id differs from trace');
+    expect(existsSync(join(runFolder, 'reports/result.json'))).toBe(false);
+  });
+
+  it('rejects checkpoint resume when manifest hash differs from the bootstrap trace', async () => {
+    const runFolder = join(runFolderBase, 'resume-bootstrap-manifest-hash-mismatch');
+    await startPausedBuildCheckpoint({
+      runFolder,
+      runId: 'b3000000-0000-0000-0000-000000000017',
+      goal: 'Reject bootstrap manifest hash mismatch',
+    });
+    rewriteTraceEntry(runFolder, 0, (bootstrap) => ({
+      ...bootstrap,
+      manifest_hash: 'b'.repeat(64),
+    }));
+
+    await expect(
+      resumeCompiledFlowCheckpoint({
+        runFolder,
+        selection: 'continue',
+        projectRoot: process.cwd(),
+        now: deterministicNow(Date.UTC(2026, 3, 25, 5, 20, 0)),
+      }),
+    ).rejects.toThrow('checkpoint resume rejected: manifest hash differs from trace');
     expect(existsSync(join(runFolder, 'reports/result.json'))).toBe(false);
   });
 

@@ -21,7 +21,8 @@ infrastructure, or retained fallback/oracle code.
 | Trace reader/writer/reducer/snapshot | retained runner, status/progress, event-log tests, checkpoint resume | Reads, appends, reduces, and snapshots v1 run traces | v1 trace oracle and retained state model | Keep until retained trace/status ownership is narrowed | High | runtrace schema tests, event-log round-trip tests, status projection tests, retained runner tests |
 | Status/progress projection | `runs show`, CLI progress, old and v2 run folders, tests | Projects v1/v2 run folders and progress events for operators | Operator inspection and host progress compatibility | Keep as cross-runtime compatibility infrastructure | High | run-status projection tests, progress schema tests, CLI progress tests, malformed trace tests |
 | Result writer | retained runner and old result tests | Writes retained runtime `reports/result.json` and checks trace/result consistency | User-visible run result report | Keep until retained runner result ownership is narrowed | Medium | result writer tests, runner close tests, status tests |
-| Old runner | CLI fallback, rollback, unsupported modes, arbitrary fixtures, `composeWriter`, checkpoint resume, old tests | Retained execution path for non-v2-owned invocations | Product fallback and resume owner | Keep until fallback/resume policy changes | High | CLI fallback tests, checkpoint resume tests, old runner oracle tests, full verify |
+| Old runner | CLI fallback, rollback, unsupported modes, arbitrary fixtures, `composeWriter`, public checkpoint resume wrapper, old tests | Retained execution path for non-v2-owned invocations | Product fallback and resume execution owner | Keep until fallback/resume policy changes | High | CLI fallback tests, checkpoint resume tests, old runner oracle tests, full verify |
+| Checkpoint resume preparation | `src/runtime/runner.ts`, retained trace/snapshot/checkpoint infrastructure | Finds and validates waiting checkpoint runs before retained resume execution | Manifest/trace/request/report validation | Keep retained-runtime-owned while checkpoint resume remains retained | High | checkpoint resume identity/tamper tests, manifest snapshot tests, CLI resume tests |
 | Old step handlers | retained runner and handler tests | Executes retained checkpoint, compose, relay, verification, sub-run, fanout, and recovery behavior | Old execution oracle and fallback behavior | Keep until each handler is v2-owned or explicitly retained | High | direct handler tests, runtime wiring tests, v2 parity tests |
 | Checkpoint resume | CLI `resume`, retained checkpoint handler, manifest/snapshot/trace infrastructure | Continues waiting checkpoint runs | Interactive/resume product behavior | Keep retained-runtime-owned until v2 resume is implemented or permanently retained | High | checkpoint resume tests, manifest snapshot tests, CLI resume tests |
 
@@ -60,13 +61,24 @@ It should choose one of these paths and write the proof plan first:
    Best if the team wants to reduce retained runtime product ownership rather
    than keep moving shared infrastructure.
 
-Recommendation after Phase 4.36: the next implementation move should be a
-reviewed retained checkpoint resume shrink. The proposed safe shape is
-extracting resume discovery/validation to `src/runtime/checkpoint-resume.ts`
-while keeping `resumeCompiledFlowCheckpoint(...)` and `executeCompiledFlow(...)`
-in `src/runtime/runner.ts`. Do not move `progress-projector.ts`, trace
+Phase 4.37 completed the first retained checkpoint resume shrink:
+`src/runtime/checkpoint-resume.ts` owns resume discovery/validation while
+`resumeCompiledFlowCheckpoint(...)` and `executeCompiledFlow(...)` remain in
+`src/runtime/runner.ts`. Do not move `progress-projector.ts`, trace
 reader/writer, reducer, snapshot writer, checkpoint handler, old runner
-execution loop, or step handlers as part of that first shrink.
+execution loop, or step handlers without another focused ownership decision.
+
+Phase 4.38 maps the remaining runner boundary and recommends stopping runner
+shrinkage for now. The only plausible next shrink candidate is close/result
+finalization, and that should get a focused proposal before any code movement.
+
+Phase 4.39 refreshes the runner/handler test classification and current import
+inventory after the resume extraction. The refresh does not change the boundary:
+old runner and handler tests remain live product or oracle evidence.
+
+Phase 4.40 proposes the close/result finalization boundary and recommends
+keeping it in `runner.ts` for now. Any extraction of the retained close tail
+needs focused review before code movement.
 
 ## Deletion Status
 

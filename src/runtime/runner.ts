@@ -11,8 +11,8 @@ import {
 import { dirname, join } from 'node:path';
 
 import type { ChangeKindDeclaration } from '../schemas/change-kind.js';
-import { CompiledFlow } from '../schemas/compiled-flow.js';
-import { LayeredConfig, type LayeredConfig as LayeredConfigValue } from '../schemas/config.js';
+import type { CompiledFlow } from '../schemas/compiled-flow.js';
+import type { LayeredConfig as LayeredConfigValue } from '../schemas/config.js';
 import type { Depth } from '../schemas/depth.js';
 import { type CompiledFlowId, type InvocationId, type RunId, StepId } from '../schemas/ids.js';
 import { computeManifestHash } from '../schemas/manifest.js';
@@ -20,11 +20,10 @@ import type { ProgressEvent, ProgressTaskStatus } from '../schemas/progress-even
 import type { Snapshot } from '../schemas/snapshot.js';
 import type { RunClosedOutcome, TraceEntry } from '../schemas/trace-entry.js';
 import { appendAndDerive } from './append-and-derive.js';
-import { sha256Hex } from './connectors/shared.js';
+import { prepareCheckpointResume } from './checkpoint-resume.js';
 import {
   type ManifestSnapshotInput,
   manifestSnapshotPath,
-  verifyManifestSnapshotBytes,
   writeManifestSnapshot,
 } from './manifest-snapshot-writer.js';
 import {
@@ -34,7 +33,6 @@ import {
   reportTaskListProgress,
   taskStatusesFromTrace,
 } from './progress-projector.js';
-import { findCheckpointBriefBuilder } from './registries/checkpoint-writers/registry.js';
 import { findCloseBuilder, resolveCloseReadPaths } from './registries/close-writers/registry.js';
 import {
   findComposeBuilder,
@@ -67,7 +65,7 @@ import {
   runStepHandler,
 } from './step-handlers/index.js';
 import { isRunRelativePathError, writeJsonReport } from './step-handlers/shared.js';
-import { readRunTrace } from './trace-reader.js';
+import { deriveTerminalVerdict } from './terminal-verdict.js';
 import { appendTraceEntry, traceEntryLogPath } from './trace-writer.js';
 import {
   WRITE_CAPABLE_WORKER_DISCLOSURE,
@@ -555,185 +553,6 @@ function selectEntryMode(
   return entry;
 }
 
-function flowFromManifestBytes(bytes: Buffer): CompiledFlow {
-  return CompiledFlow.parse(JSON.parse(bytes.toString('utf8')));
-}
-
-interface CheckpointRequestContext {
-  readonly projectRoot?: string;
-  readonly selectionConfigLayers: readonly LayeredConfigValue[];
-  readonly checkpointReportSha256?: string;
-}
-
-type CheckpointCompiledFlowStep = CompiledFlow['steps'][number] & { kind: 'checkpoint' };
-
-function readCheckpointRequestContext(input: {
-  readonly runFolder: string;
-  readonly step: CheckpointCompiledFlowStep;
-  readonly expectedRequestReportHash: string;
-}): CheckpointRequestContext {
-  const requestAbs = resolveRunRelative(input.runFolder, input.step.writes.request);
-  const requestText = readFileSync(requestAbs, 'utf8');
-  const observedRequestHash = sha256Hex(requestText);
-  if (observedRequestHash !== input.expectedRequestReportHash) {
-    throw new Error('checkpoint resume rejected: checkpoint request hash differs from trace');
-  }
-  const raw: unknown = JSON.parse(requestText);
-  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
-    throw new Error(`checkpoint resume rejected: request report for '${input.step.id}' is invalid`);
-  }
-  const record = raw as Record<string, unknown>;
-  if (record.schema_version !== 1 || record.step_id !== input.step.id) {
-    throw new Error(`checkpoint resume rejected: request report for '${input.step.id}' is stale`);
-  }
-  const context = record.execution_context;
-  if (context === null || typeof context !== 'object' || Array.isArray(context)) {
-    throw new Error(
-      `checkpoint resume rejected: request report for '${input.step.id}' has no execution context`,
-    );
-  }
-  const contextRecord = context as Record<string, unknown>;
-  const projectRoot = contextRecord.project_root;
-  if (projectRoot !== undefined && typeof projectRoot !== 'string') {
-    throw new Error('checkpoint resume rejected: project_root in checkpoint request is invalid');
-  }
-  const selectionConfigLayers = LayeredConfig.array().parse(
-    contextRecord.selection_config_layers ?? [],
-  );
-  const checkpointReportSha256 = contextRecord.checkpoint_report_sha256;
-  if (checkpointReportSha256 !== undefined && typeof checkpointReportSha256 !== 'string') {
-    throw new Error(
-      'checkpoint resume rejected: checkpoint_report_sha256 in checkpoint request is invalid',
-    );
-  }
-  return {
-    ...(projectRoot === undefined ? {} : { projectRoot }),
-    selectionConfigLayers,
-    ...(checkpointReportSha256 === undefined ? {} : { checkpointReportSha256 }),
-  };
-}
-
-function readCheckpointResumeReport(input: {
-  readonly runFolder: string;
-  readonly step: CheckpointCompiledFlowStep;
-  readonly requestContext: CheckpointRequestContext;
-}): unknown {
-  const report = input.step.writes.report;
-  if (report === undefined) return undefined;
-  const builder = findCheckpointBriefBuilder(report.schema);
-  if (builder === undefined) return undefined;
-  // step-handlers/checkpoint.ts stores checkpoint_report_sha256 in the
-  // request iff a builder exists for the report schema. So on resume,
-  // if the request carries a hash, the builder MUST own resume
-  // validation. A builder that writes reports but skips
-  // validateResumeContext would silently lose hash protection.
-  if (builder.validateResumeContext === undefined) {
-    if (input.requestContext.checkpointReportSha256 !== undefined) {
-      throw new Error(
-        `checkpoint resume rejected: builder for schema '${report.schema}' is missing validateResumeContext but the checkpoint request carries an report hash`,
-      );
-    }
-    return undefined;
-  }
-  // Defense-in-depth: builders are expected to throw `checkpoint resume
-  // rejected: ...` errors, but raw Node throws (ENOENT, SyntaxError,
-  // ZodError) would surface without resume framing and confuse the
-  // operator. Wrap so every error from this seam carries the prefix.
-  try {
-    return builder.validateResumeContext({
-      runFolder: input.runFolder,
-      step: input.step,
-      reportPath: report.path,
-      ...(input.requestContext.checkpointReportSha256 === undefined
-        ? {}
-        : { reportSha256: input.requestContext.checkpointReportSha256 }),
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    if (message.startsWith('checkpoint resume rejected:')) throw err;
-    throw new Error(
-      `checkpoint resume rejected: builder for schema '${report.schema}' validateResumeContext threw: ${message}`,
-    );
-  }
-}
-
-function findWaitingCheckpoint(input: {
-  readonly runFolder: string;
-  readonly flow: CompiledFlow;
-  readonly selection: string;
-}): {
-  readonly trace_entries: readonly TraceEntry[];
-  readonly stepId: string;
-  readonly attempt: number;
-  readonly bootstrap: Extract<TraceEntry, { kind: 'run.bootstrapped' }>;
-  readonly requestContext: CheckpointRequestContext;
-} {
-  const trace_entries = readRunTrace(input.runFolder);
-  const bootstrap = trace_entries[0];
-  if (bootstrap === undefined || bootstrap.kind !== 'run.bootstrapped') {
-    throw new Error('checkpoint resume requires a bootstrapped trace');
-  }
-  if (trace_entries.some((trace_entry) => trace_entry.kind === 'run.closed')) {
-    throw new Error('checkpoint resume rejected: run is already closed');
-  }
-  const snapshot = writeDerivedSnapshot(input.runFolder);
-  if (snapshot.status !== 'in_progress' || snapshot.current_step === undefined) {
-    throw new Error('checkpoint resume rejected: run is not paused at an in-progress step');
-  }
-  const stepId = snapshot.current_step as unknown as string;
-  const step = input.flow.steps.find((candidate) => (candidate.id as unknown as string) === stepId);
-  if (step === undefined || step.kind !== 'checkpoint') {
-    throw new Error(`checkpoint resume rejected: current step '${stepId}' is not a checkpoint`);
-  }
-  const requested = [...trace_entries]
-    .reverse()
-    .find(
-      (trace_entry): trace_entry is Extract<TraceEntry, { kind: 'checkpoint.requested' }> =>
-        trace_entry.kind === 'checkpoint.requested' &&
-        (trace_entry.step_id as unknown as string) === stepId,
-    );
-  if (requested === undefined) {
-    throw new Error(
-      `checkpoint resume rejected: checkpoint '${stepId}' has no request trace_entry`,
-    );
-  }
-  const alreadyResolved = trace_entries.some(
-    (trace_entry) =>
-      trace_entry.kind === 'checkpoint.resolved' &&
-      (trace_entry.step_id as unknown as string) === stepId &&
-      trace_entry.attempt === requested.attempt,
-  );
-  if (alreadyResolved) {
-    throw new Error(`checkpoint resume rejected: checkpoint '${stepId}' is already resolved`);
-  }
-  if (!step.check.allow.includes(input.selection)) {
-    throw new Error(
-      `checkpoint resume rejected: selection '${input.selection}' is not allowed for checkpoint '${stepId}'`,
-    );
-  }
-  const requestContext = readCheckpointRequestContext({
-    runFolder: input.runFolder,
-    step,
-    expectedRequestReportHash: requested.request_report_hash,
-  });
-  // Run validateResumeContext for tamper detection + shape verification.
-  // Return value is unused — the brief is no longer re-stamped post-
-  // resolution, so the runtime doesn't need an `existingReport`
-  // handle to thread through.
-  readCheckpointResumeReport({
-    runFolder: input.runFolder,
-    step,
-    requestContext,
-  });
-  return {
-    trace_entries,
-    stepId,
-    attempt: requested.attempt,
-    bootstrap,
-    requestContext,
-  };
-}
-
 // Execution loop. Bootstrap, walk routes from entry.start_at, delegate
 // per-step work to the kind→handler relayer, advance pass route, emit
 // run.closed, write result.json. The loop stays narrow: it owns the
@@ -1219,37 +1038,19 @@ export async function runCompiledFlow(inv: CompiledFlowInvocation): Promise<Comp
 export async function resumeCompiledFlowCheckpoint(
   inv: CheckpointResumeInvocation,
 ): Promise<CompiledFlowRunResult> {
-  const manifest = verifyManifestSnapshotBytes(inv.runFolder);
-  const flowBytes = Buffer.from(manifest.bytes_base64, 'base64');
-  const flow = flowFromManifestBytes(flowBytes);
-  if (flow.id !== manifest.flow_id) {
-    throw new Error(
-      `checkpoint resume rejected: manifest flow_id '${manifest.flow_id as unknown as string}' does not match flow bytes '${flow.id as unknown as string}'`,
-    );
-  }
-  const waiting = findWaitingCheckpoint({
+  const prepared = prepareCheckpointResume({
     runFolder: inv.runFolder,
-    flow,
     selection: inv.selection,
   });
-  if (waiting.bootstrap.run_id !== manifest.run_id) {
-    throw new Error('checkpoint resume rejected: manifest run_id differs from trace');
-  }
-  if (waiting.bootstrap.flow_id !== manifest.flow_id) {
-    throw new Error('checkpoint resume rejected: manifest flow_id differs from trace');
-  }
-  if (waiting.bootstrap.manifest_hash !== manifest.hash) {
-    throw new Error('checkpoint resume rejected: manifest hash differs from trace');
-  }
 
   return executeCompiledFlow({
     runFolder: inv.runFolder,
-    flow,
-    flowBytes,
-    runId: waiting.bootstrap.run_id,
-    goal: waiting.bootstrap.goal,
-    depth: waiting.bootstrap.depth,
-    change_kind: waiting.bootstrap.change_kind,
+    flow: prepared.flow,
+    flowBytes: prepared.flowBytes,
+    runId: prepared.bootstrap.run_id,
+    goal: prepared.bootstrap.goal,
+    depth: prepared.bootstrap.depth,
+    change_kind: prepared.bootstrap.change_kind,
     now: inv.now,
     ...(inv.relayer === undefined ? {} : { relayer: inv.relayer }),
     ...(inv.composeWriter === undefined ? {} : { composeWriter: inv.composeWriter }),
@@ -1259,18 +1060,18 @@ export async function resumeCompiledFlowCheckpoint(
     ...(inv.childRunner === undefined ? {} : { childRunner: inv.childRunner }),
     ...(inv.worktreeRunner === undefined ? {} : { worktreeRunner: inv.worktreeRunner }),
     ...(inv.progress === undefined ? {} : { progress: inv.progress }),
-    selectionConfigLayers: waiting.requestContext.selectionConfigLayers,
-    ...(waiting.requestContext.projectRoot !== undefined
-      ? { projectRoot: waiting.requestContext.projectRoot }
+    selectionConfigLayers: prepared.requestContext.selectionConfigLayers,
+    ...(prepared.requestContext.projectRoot !== undefined
+      ? { projectRoot: prepared.requestContext.projectRoot }
       : {}),
-    ...(waiting.bootstrap.invocation_id === undefined
+    ...(prepared.bootstrap.invocation_id === undefined
       ? {}
-      : { invocationId: waiting.bootstrap.invocation_id }),
-    initialTraceEntries: waiting.trace_entries,
-    startStepId: waiting.stepId,
+      : { invocationId: prepared.bootstrap.invocation_id }),
+    initialTraceEntries: prepared.trace_entries,
+    startStepId: prepared.stepId,
     resumeCheckpoint: {
-      stepId: waiting.stepId,
-      attempt: waiting.attempt,
+      stepId: prepared.stepId,
+      attempt: prepared.attempt,
       selection: inv.selection,
     },
   });
@@ -1283,64 +1084,6 @@ function buildSummary(input: {
 }): string {
   const stepCount = input.trace_entries.filter((e) => e.kind === 'step.completed').length;
   return `${input.flow.id} v${input.flow.version} closed ${stepCount} step(s) for goal "${input.goal}".`;
-}
-
-// Derive the run's terminal admitted verdict for the user-visible
-// result.json. Contract:
-//
-// - Returns the verdict from the LATEST (chronologically last)
-//   relay.completed | sub_run.completed trace entry whose corresponding
-//   check.evaluated for the same (step_id, attempt) had
-//   check_kind='result_verdict' and outcome='pass'.
-// - Returns undefined for any run that did not reach outcome=complete.
-// - Returns undefined for runs that completed with no verdict-bearing
-//   admitted step (compose-only routes, close-with-evidence
-//   terminations, fanout-only steps).
-//
-// Why walk-backward instead of "the closing step's verdict":
-//   Every flow we ship has a non-verdict-bearing close step (a compose
-//   that materializes the canonical close report). A "closing step's
-//   verdict" semantic would therefore return undefined for every
-//   Build / Migrate / Sweep / Review / Fix run, defeating the purpose
-//   of the field. Authors place the verdict-bearing step ahead of the
-//   close compose (Build's review step, Migrate's cutover-review step)
-//   and expect the latest such admission to surface. Walk-backward
-//   picks that exact entry.
-//
-// Why filter to check_kind='result_verdict':
-//   Compose steps emit check.evaluated with kind='schema_sections'
-//   (report admission), verification steps with kind='verification',
-//   fanout with kind='fanout_aggregate'. None of those carry a verdict
-//   — only result_verdict checks do, and only relay / sub-run steps
-//   emit them. Including any other kind would conflate schema admission
-//   with verdict admission.
-//
-// Why this is safe across re-routes / retries:
-//   The runner emits check.evaluated outcome='pass' only on the route
-//   actually taken to @complete (relay.ts emits outcome='fail' then
-//   step.aborted on a failed check; failed checks do not advance to a
-//   fail-route). So every (step_id, attempt) with a matching pass check
-//   is a step whose verdict was admitted on the path to @complete.
-function deriveTerminalVerdict(
-  trace_entries: readonly TraceEntry[],
-  runOutcome: RunClosedOutcome,
-): string | undefined {
-  if (runOutcome !== 'complete') return undefined;
-  for (let i = trace_entries.length - 1; i >= 0; i -= 1) {
-    const ev = trace_entries[i];
-    if (ev === undefined) continue;
-    if (ev.kind !== 'relay.completed' && ev.kind !== 'sub_run.completed') continue;
-    const matchingCheckPass = trace_entries.some(
-      (g) =>
-        g.kind === 'check.evaluated' &&
-        g.check_kind === 'result_verdict' &&
-        g.outcome === 'pass' &&
-        (g.step_id as unknown as string) === (ev.step_id as unknown as string) &&
-        g.attempt === ev.attempt,
-    );
-    if (matchingCheckPass) return ev.verdict;
-  }
-  return undefined;
 }
 
 export type { RunId, CompiledFlowId };

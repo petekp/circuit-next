@@ -52,6 +52,7 @@ Tested for universality (earlier "Design the product" leaned designer-specific).
 - *"Staged schematics"* — both terms felt too internal as lead language.
 - *"We sweat the meta. You ship the product."* — strong tagline but currently overclaims; no active update channel ships yet.
 - *"Borrowed taste"* — too designer-specific once audience recalibrated to fatigue persona broadly.
+- *"Anti-rationalization" / "the agent can't fake done"* — true claim, but VexJoy Agent (see Section 9) has staked the rhetorical position. Find different language for the same property; lean on the records-as-receipts angle they don't emphasize.
 
 ## 3. Code audit — where the messaging is supported, stretched, or unsupported
 
@@ -218,7 +219,107 @@ The thing that's genuinely new isn't any one UX innovation. It's the **data laye
 
 That's defensible.
 
-## 9. Open decisions
+## 9. Competitive landscape
+
+Findings from a market scan in May 2026. The point: who is operating in the same shape-of-the-work space as Circuit, where they overlap, where Circuit is genuinely differentiated.
+
+### Direct competitors (closest to Circuit's shape)
+
+- **VexJoy Agent (`notque/vexjoy-agent`)** — 366 stars, 7 weeks old, very active. Multi-runtime (Claude Code / Codex / Gemini / Factory). Single-command intent routing (`/do <task>`) into a 6-step pipeline (ROUTE → PLAN → EXECUTE → VERIFY → DELIVER → LEARN). 44 domain agents, 106 skills, 71 hooks blocking incomplete work, 93 deterministic scripts. Key claim: *"Anti-Rationalization"* — exit codes, not assertions, count as evidence. **The closest analog Circuit has.** Their README leads with the exact unfurl marketing structure we developed (one command, steps dramatized, receipts at the end).
+- **Superpowers (`obra/superpowers`)** — Active, official Anthropic marketplace listing. One opinionated 7-stage methodology (brainstorm → worktree → plan → subagent routing → TDD → review → finish) with skills library. Single methodology, not a flow taxonomy. Markdown-based records, not schema-versioned.
+- **GSD / Get Shit Done (`gsd-build/get-shit-done`)** — Very active. 6 steps (Initialize → Discuss → Plan → Execute → Verify → Ship), parallel-wave execution, atomic commits per task, multi-runtime. `.planning/intel/` markdown+JSON store. The other close direct competitor.
+
+### Adjacent (worth watching but not directly competing)
+
+- **BMAD-METHOD (`bmad-code-org/BMAD-METHOD`)** — agile-roles-as-personas (PM, Architect, SM, Dev, QA). Different theory of the work — "what's missing is roles" vs Circuit's "what's missing is flows."
+- **Spec Kit (`github/spec-kit`)** — GitHub-backed, agent-agnostic, 4-step spec→plan→tasks→implement. Will normalize spec-driven framing as default mental model. Platform risk, not feature risk.
+- **shinpr's Claude Code flow repo** — niche stars (~333), strong execution on multi-agent role separation (task-executor + code-reviewer as separate agents). Worth watching as a smaller competitor with similar multi-agent discipline.
+- **claude-mem (`thedotmack/claude-mem`)** — passive session memory capture with vector store. Complementary to Circuit, not competing.
+- **Agent OS (`buildermethods/agent-os`)** — coding-standards injection layer for Cursor/Claude Code/Antigravity. Adjacent.
+- **claude-task-master (`eyaltoledano/claude-task-master`)** — drop-in AI task management. Could feed into Circuit; not directly competing.
+
+### Circuit's defensible differentiators (verified against the field)
+
+The four properties Circuit has and direct competitors don't:
+
+1. **Flow taxonomy.** Competitors ship one pipeline. Circuit ships six different shapes for six kinds of work (Build / Explore / Repair / Migrate / Sweep / Review). *Different work needs different shapes* is a different theory of the field than *one universal pipeline.* Migrate and Sweep especially have no peer.
+2. **Schema-versioned typed records.** Competitors produce markdown. Circuit's typed JSON reports are queryable in ways markdown isn't — the foundation for the project-memory positioning in Section 7.
+3. **Six-layer override chain + depth modes.** No other project found has this granularity. Per-step model/effort selection plus lite/standard/deep/autonomous as per-invocation choice is genuinely unique.
+4. **Custom flow shapes.** `/circuit:create` lets users author their own typed schematic flows that the engine runs as first-class peers to the built-in ones. Most competitors offer skill/agent extensibility, not flow-shape extensibility. (See Section 10 for the personalized-flow direction.)
+
+### Where Circuit is NOT differentiated (drop from lead)
+
+- **TDD / evidence requirements** — VexJoy, Superpowers, GSD all do this. No longer category-defining.
+- **Multi-agent routing** — commodity.
+- **Claude-Code-plugin shape** — commodity.
+- **Skills integration** — commodity.
+- **Single-command unfurl marketing** — VexJoy's README does this; the structure is becoming category table-stakes.
+- **"Anti-rationalization" framing** — VexJoy owns the rhetorical claim. Find different language.
+
+### Open ground (no competitor found doing this)
+
+- **YAML/JSON-defined flows as a product** (not a framework). `/circuit:create` is unusual.
+- **Per-step model/effort overrides** at six layers of granularity.
+- **Standalone Review surface** as a peer to Build (not a step inside Build).
+- **Migrate-shaped and Sweep-shaped flows** — the kinds of work the universal-pipeline competitors don't address well.
+
+### Implications for the lead pitch
+
+The lead should surface flow taxonomy *early* and *visibly*. The current pitch has it in the second sentence (*"named ways to explore, build, fix, and sweep"*) but doesn't make the philosophical bet explicit. A reader pattern-matching to VexJoy or Superpowers will assume "named flows" means "one pipeline with named stages" rather than "different flow shapes for different kinds of work."
+
+Probable adjustment: make the *six-flows* and the *different-shapes-for-different-work* claim louder. *"One universal pipeline doesn't fit all your work. Circuit ships six different shapes."* Forces the reader to choose between the two theories of the field instead of conflating them.
+
+### One-line answers for direct comparisons (before pitch ships)
+
+- *vs. VexJoy:* "VexJoy ships one pipeline that routes everything. Circuit ships six different flows for six different kinds of work, with typed schema-versioned records you can query."
+- *vs. Superpowers:* "Superpowers is one methodology. Circuit is a taxonomy of flows for different kinds of work."
+- *vs. GSD:* "GSD ships a staged pipeline. Circuit ships routed flows with schema-versioned records and per-step model selection."
+
+## 10. Flow customization — beyond "here are the pieces"
+
+The lazy version of custom flows is *"here's the schematic format, build your own."* That treats personalization as a 2%-power-user feature. The bar in 2026 is higher: Circuit should *infer* a personalized flow from real signals and propose it.
+
+### The tier structure of personalization
+
+Useful mental model — not all "customization" is the same thing:
+
+- **Tier 0** — Use the defaults. Most users.
+- **Tier 1** — Tune knobs (depth, skills, model overrides). Easy.
+- **Tier 2** — Adopt a Circuit-proposed flow variant. *This is where the personalization story should live.*
+- **Tier 3** — Iterate on a flow conversationally with Circuit. *"Add a security-review checkpoint after Act."*
+- **Tier 4** — Author a schematic from scratch. Power user only.
+
+Circuit's distinctive bet should be making Tiers 2 and 3 effortless. Tier 4 is the existing lazy story; pushing users toward it is not the move.
+
+### Concrete capabilities (from real signal, not vibes)
+
+1. **Project-shape detection on install.** Read `package.json`, infer test runner, build command, lint command, framework. Propose flow defaults. *"I see Vitest. Build's verify step is `npm test`. I see Husky pre-commit. Verify adds those checks. Confirm?"*
+2. **`/circuit:propose <description>`** — operator describes how they work in plain English; Circuit composes a flow shape from existing modules; shows a diff against the closest built-in flow; user accepts, edits, or rejects.
+3. **Adaptive defaults from past runs.** *"Your Build runs revise at Plan 60% of the time. Suggest deeper Frame on default."* Concrete adjustment, surfaced to the user, opt-in.
+4. **Conversational flow editing.** Schematic-as-data means edits can be natural-language requests that produce typed diffs.
+5. **Flow-from-prose for new shapes.** The user describes the shape they want; Circuit produces a real, editable, exportable schematic.
+
+### Why this is consistent with driver-stays-in-control
+
+Every personalization move uses *real signal* (codebase shape, past runs, stated preferences) — not vibes-based AI inference. Every move is *transparent* (the user sees the proposed schematic, can read it, can edit it). Every move is *opt-in*. The output is a regular schematic — auditable, editable, exportable. Personalized but accountable.
+
+### Working pitch line
+
+> *Most agent tools give you templates and tell you to fill them in. Circuit watches your project, reads your past runs, and listens to what you tell it — then proposes flows that fit how you actually work. You stay in the driver's seat; Circuit handles the road.*
+
+### Sober status
+
+- **Today (architecture supports):** custom flow authoring via `/circuit:create`; schematic-as-data so changes are auditable, editable, exportable.
+- **Near-term (small builds):** project-shape detection at install; `/circuit:propose <description>`; flow-diff visualization; conversational editing.
+- **Aspirational (real product work):** adaptive defaults from past runs (depends on cross-run recall surface); behavior-based personalization (observing what the user actually does).
+
+Don't ship the aspirational stuff in marketing. The near-term capabilities are enough to make the personalization claim concrete and verifiable.
+
+### Risk to flag
+
+"AI-personalized everything" is a tired marketing trope. The audience for Circuit will reject vibes-based claims instinctively. The defense: be aggressively concrete about what signals Circuit uses. Don't say *"learns how you work"* — say *"reads your package.json, looks at your past Circuit runs, and asks you three questions."* That's the version that survives the BS detector.
+
+## 11. Open decisions
 
 1. **Is project memory a co-equal lead beat, or the second beat under flow shape?**
    Working answer: flow leads (immediate hook), memory is the strong second beat. But the *Twitter-ready* one-liner is the memory framing — that's what travels.
@@ -228,7 +329,7 @@ That's defensible.
 4. **Pick the wedge audience for first launch.** Working answer: engineers, not designers — they have urgency and budget. Designers are second wave.
 5. **Pick the noun.** Plugin, CLI, framework, service? Affects every downstream messaging choice.
 
-## 10. Recommended near-term sequence
+## 12. Recommended near-term sequence
 
 In order:
 

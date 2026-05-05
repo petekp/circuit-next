@@ -11,8 +11,8 @@ import type { ClaudeCodeRelayInput } from '../../src/runtime/connectors/claude-c
 import type { RelayResult } from '../../src/runtime/connectors/shared.js';
 import { type RelayFn, runCompiledFlow } from '../../src/runtime/runner.js';
 
-// Adversarial-review fix #2: deriveTerminalVerdict (in runner.ts) had
-// no direct end-to-end coverage. Every existing sub-run / migrate
+// Adversarial-review fix #2: deriveTerminalVerdict had no direct
+// end-to-end coverage. Every existing sub-run / migrate
 // test stubs the childRunner and hand-writes the child's result.json,
 // so the runner's own walk-backward over trace_entries never executes in
 // those tests. These tests exercise real derivation through

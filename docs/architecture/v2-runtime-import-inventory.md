@@ -11,6 +11,7 @@ find src/runtime -type f | sort
 ```text
 src/runtime/append-and-derive.ts
 src/runtime/catalog-derivations.ts
+src/runtime/checkpoint-resume.ts
 src/runtime/compile-schematic-to-flow.ts
 src/runtime/config-loader.ts
 src/runtime/connectors/claude-code.ts
@@ -75,7 +76,7 @@ Phase 4.18 did not move connector subprocess modules, relay materialization, or 
 src/core-v2/executors/relay.ts imports relayClaudeCode, relayCodex, and relayCustom from src/runtime/connectors/*.
 src/runtime/relay-selection.ts dynamically imports relayClaudeCode, relayCodex, and relayCustom for retained runtime relay resolution.
 src/runtime/connectors/relay-materializer.ts imports RelayResult and sha256Hex through the runtime connector compatibility surface.
-src/runtime/runner.ts imports sha256Hex through the runtime connector compatibility surface for retained relay/checkpoint verification.
+src/runtime/checkpoint-resume.ts imports sha256Hex from src/shared/connector-relay.ts for retained checkpoint request hash validation.
 tests/runner/agent-relay-roundtrip.test.ts and tests/runner/codex-relay-roundtrip.test.ts import materializeRelay directly.
 tests/runner/agent-connector-smoke.test.ts and tests/runner/codex-connector-smoke.test.ts import the subprocess connector modules directly.
 tests/runner/custom-connector-runtime.test.ts imports relayCustom directly.
@@ -111,7 +112,8 @@ src/core-v2/executors/checkpoint.ts imports checkpoint writer registry.
 src/core-v2/executors/verification.ts imports verification writer registry.
 src/core-v2/executors/relay.ts imports cross-report validators and report schemas.
 src/shared/relay-support.ts imports the shape-hint registry.
-src/runtime/runner.ts imports compose, close, and checkpoint writer registries.
+src/runtime/runner.ts imports compose and close writer registries.
+src/runtime/checkpoint-resume.ts imports the checkpoint writer registry for retained checkpoint report resume validation.
 src/runtime/step-handlers/checkpoint.ts imports checkpoint writer registry.
 src/runtime/step-handlers/verification.ts imports verification writer registry.
 src/runtime/step-handlers/relay.ts and fanout.ts import report schemas and cross-report validators.
@@ -143,6 +145,11 @@ Phase 4.33: docs/architecture/v2-runner-handler-test-classification.md classifie
 Phase 4.34: docs/architecture/v2-runner-handler-current-import-inventory.md records current-only old runner/handler imports without historical scan blocks.
 Phase 4.35: docs/architecture/v2-retained-progress-contract-plan.md keeps retained v1 progress projection in src/runtime/progress-projector.ts until checkpoint resume or retained runner ownership changes.
 Phase 4.36: docs/architecture/v2-retained-checkpoint-resume-shrink-proposal.md proposes extracting retained resume discovery/validation into src/runtime/checkpoint-resume.ts; no code moved yet.
+Phase 4.37: src/runtime/checkpoint-resume.ts owns retained checkpoint resume discovery and validation; src/runtime/runner.ts keeps the public resume wrapper and retained execution loop.
+Phase 4.38: docs/architecture/v2-retained-runner-boundary-plan.md maps remaining runner responsibilities and recommends no further runner shrink before a focused close/result finalization proposal.
+Phase 4.39: docs/architecture/v2-runner-handler-test-classification.md and docs/architecture/v2-runner-handler-current-import-inventory.md were refreshed after the checkpoint resume extraction; no old runner or handler test is deletion-ready.
+Phase 4.40: docs/architecture/v2-close-result-finalization-proposal.md maps retained close/result finalization and recommends keeping it in runner.ts pending focused review.
+Phase 4.41: src/runtime/terminal-verdict.ts owns pure terminal admitted verdict derivation; src/runtime/runner.ts still owns retained close/result finalization.
 ```
 
 ## Phase 4.23 Heavy Boundary Inventory

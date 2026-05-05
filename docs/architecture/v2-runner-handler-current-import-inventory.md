@@ -1,10 +1,14 @@
 # Circuit v2 Runner And Handler Current Import Inventory
 
-Phase 4.34 records current-only import evidence for old runner and handler
-files. It excludes historical inventory output so future review can see the
+Phase 4.34 recorded current-only import evidence for old runner and handler
+files. Phase 4.39 refreshed the disposition after Phase 4.37 extracted retained
+checkpoint resume preparation into `src/runtime/checkpoint-resume.ts`. Phase
+4.41 adds the pure retained terminal verdict helper.
+
+This file excludes historical inventory output so future review can see the
 live dependency graph without sorting through older scan blocks.
 
-No code moved in this phase.
+No old runner or handler code moved in this phase.
 
 ## Commands
 
@@ -27,7 +31,9 @@ rg -l "from ['\"].*(runtime/runner|runtime/step-handlers)|from ['\"].*src/runtim
 | File | Current dependency | Classification |
 |---|---|---|
 | `src/cli/circuit.ts` | imports `runCompiledFlow` and `resumeCompiledFlowCheckpoint` from `src/runtime/runner.ts` | retained product fallback and checkpoint resume |
-| `src/runtime/runner.ts` | imports retained handler dispatcher, trace append/read, reducer snapshot writer, progress projector, result writer, registries | retained execution owner |
+| `src/runtime/checkpoint-resume.ts` | imported only by `src/runtime/runner.ts` | retained checkpoint resume preparation |
+| `src/runtime/terminal-verdict.ts` | imported only by `src/runtime/runner.ts` | retained close/result verdict helper |
+| `src/runtime/runner.ts` | imports retained handler dispatcher, trace append/read, reducer snapshot writer, progress projector, result writer, registries, and terminal verdict helper | retained execution owner |
 | `src/runtime/step-handlers/index.ts` | imports all retained handler implementations | retained handler dispatcher |
 | `src/runtime/step-handlers/*.ts` | import `StepHandlerContext`, `StepHandlerResult`, helper types | retained handler cluster |
 | `src/runtime/runner-types.ts` | exposes retained invocation/result types plus compatibility relay/progress types | retained type surface |
@@ -104,6 +110,7 @@ tests/runner/sub-run-runtime.test.ts
 tests/runner/sweep-runtime-wiring.test.ts
 tests/runner/terminal-outcome-mapping.test.ts
 tests/runner/terminal-verdict-derivation.test.ts
+tests/runner/terminal-verdict-helper.test.ts
 tests/unit/runtime/event-log-round-trip.test.ts
 ```
 
@@ -136,6 +143,8 @@ must update or intentionally retain them.
 | Surface | Disposition |
 |---|---|
 | `src/runtime/runner.ts` | retain product fallback and checkpoint resume |
+| `src/runtime/checkpoint-resume.ts` | retain checkpoint resume preparation while checkpoint resume stays retained-runtime-owned |
+| `src/runtime/terminal-verdict.ts` | retain pure terminal admitted verdict derivation while retained close/result finalization uses it |
 | `src/runtime/runner-types.ts` | retain compatibility and retained invocation/result types |
 | `src/runtime/step-handlers/checkpoint.ts` | retain checkpoint pause/resume behavior |
 | `src/runtime/step-handlers/compose.ts` | retain fallback and `composeWriter` behavior |
@@ -152,15 +161,7 @@ No old runner or handler file is deletion-ready.
 
 ## Recommended Next Action
 
-Do not move code yet.
+Keep close/result finalization in `src/runtime/runner.ts`.
 
-The next useful planning slice is retained progress contract classification:
-
-```text
-Should src/runtime/progress-projector.ts remain retained-only,
-move behind a neutral v1 progress facade,
-or wait until checkpoint resume ownership changes?
-```
-
-That decision is lower risk than moving checkpoint resume, and it can be made
-without changing runtime behavior.
+Phase 4.41 completed the only approved small readability extraction. Any move
+of the retained close tail still needs focused review first.

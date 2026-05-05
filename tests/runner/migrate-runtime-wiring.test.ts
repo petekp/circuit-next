@@ -41,7 +41,7 @@ import { Snapshot } from '../../src/schemas/snapshot.js';
 //   - The schematic → CompiledFlow compile path supports `sub-run` execution
 //     kind end-to-end (schematic schema → compiler → runtime handler).
 //   - The sub-run check admits the child's terminal verdict
-//     (deriveTerminalVerdict in runner.ts populates RunResult.verdict
+//     (deriveTerminalVerdict populates RunResult.verdict
 //     for a Build-like child whose review relay passed).
 //   - The migrate close-writer reads brief + inventory + coexistence +
 //     batch (RunResult shape) + verification + review and produces a
