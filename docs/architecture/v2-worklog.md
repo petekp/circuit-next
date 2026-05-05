@@ -1268,6 +1268,616 @@ Concerns:
 Next recommended action: run validation, then stop for heavy review before
 moving connector subprocess modules, relay materialization, or registries.
 
+## 2026-05-04 - Phase 4.36 Retained Checkpoint Resume Shrink Proposal
+
+Goal: propose the first retained checkpoint resume shrink before moving code.
+
+Files inspected:
+
+- `src/runtime/runner.ts`
+- `src/runtime/runner-types.ts`
+- `src/runtime/step-handlers/checkpoint.ts`
+- `src/runtime/reducer.ts`
+- `src/runtime/snapshot-writer.ts`
+- `src/runtime/trace-reader.ts`
+- `src/runtime/trace-writer.ts`
+- `docs/architecture/v2-checkpoint-resume-ownership-plan.md`
+- `docs/architecture/v2-runner-handler-test-classification.md`
+- `docs/architecture/v2-runner-handler-current-import-inventory.md`
+
+Files changed:
+
+- `docs/architecture/v2-retained-checkpoint-resume-shrink-proposal.md`
+- `docs/architecture/v2-checkpoint-4.36.md`
+- `docs/architecture/v2-deletion-plan.md`
+- `docs/architecture/v2-heavy-boundary-plan.md`
+- `docs/architecture/v2-runtime-import-inventory.md`
+- `docs/architecture/v2-worklog.md`
+
+Tests run:
+
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npx vitest run tests/runner/build-checkpoint-exec.test.ts tests/runner/run-status-projection.test.ts tests/unit/runtime/event-log-round-trip.test.ts tests/runner/cli-v2-runtime.test.ts tests/unit/runtime/progress-projector.test.ts tests/contracts/progress-event-schema.test.ts tests/core-v2 tests/parity`:
+  passed.
+- `npm run test:fast`: passed.
+- `npm run check-flow-drift`: passed.
+- `npm run verify`: passed.
+
+Behavior changed? No runtime behavior changed. This is a proposal checkpoint.
+
+Proposal:
+
+- Extract checkpoint resume discovery and validation from
+  `src/runtime/runner.ts` to `src/runtime/checkpoint-resume.ts`.
+- Keep public `resumeCompiledFlowCheckpoint(...)` in `runner.ts`.
+- Keep private `executeCompiledFlow(...)` in `runner.ts`.
+- Do not move checkpoint handler, trace reader/writer, reducer, snapshot
+  writer, progress projector, or step handlers.
+
+Concerns:
+
+- This is the first proposal that names a concrete code move across the
+  checkpoint resume boundary, so implementation should wait for review.
+
+Next recommended action: review the proposal before code movement.
+
+## 2026-05-04 - Phase 4.35 Retained Progress Contract Classification
+
+Goal: classify retained progress projection ownership before adding a neutral
+facade or moving `src/runtime/progress-projector.ts`.
+
+Files inspected:
+
+- `src/runtime/progress-projector.ts`
+- `src/runtime/runner.ts`
+- `src/core-v2/projections/progress.ts`
+- `src/shared/progress-output.ts`
+- `tests/unit/runtime/progress-projector.test.ts`
+- `tests/contracts/progress-event-schema.test.ts`
+- `tests/runner/cli-v2-runtime.test.ts`
+
+Files changed:
+
+- `docs/architecture/v2-retained-progress-contract-plan.md`
+- `docs/architecture/v2-checkpoint-4.35.md`
+- `docs/architecture/v2-deletion-plan.md`
+- `docs/architecture/v2-heavy-boundary-plan.md`
+- `docs/architecture/v2-runtime-import-inventory.md`
+- `docs/architecture/v2-worklog.md`
+
+Tests run:
+
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npx vitest run tests/runner/build-checkpoint-exec.test.ts tests/runner/run-status-projection.test.ts tests/unit/runtime/event-log-round-trip.test.ts tests/runner/cli-v2-runtime.test.ts tests/unit/runtime/progress-projector.test.ts tests/contracts/progress-event-schema.test.ts tests/core-v2 tests/parity`:
+  passed.
+- `npm run test:fast`: passed.
+- `npm run check-flow-drift`: passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? No runtime behavior changed. This is a planning and
+classification checkpoint.
+
+Decision:
+
+- Keep retained v1 progress projection in `src/runtime/progress-projector.ts`
+  for now.
+- Do not add a neutral v1 progress facade yet.
+- Do not move retained progress projector internals yet.
+
+Concerns:
+
+- Retained progress is still coupled to retained runner lifecycle events and
+  checkpoint waiting/user-input progress.
+- Moving only the projector would not reduce checkpoint resume ownership.
+
+Next recommended action: validate. The next implementation move would be a
+real architecture decision, likely a retained checkpoint resume shrink proposal.
+
+## 2026-05-04 - Phase 4.34 Current Old Runner/Handler Import Inventory
+
+Goal: produce a current-only import inventory for old runner and handler files
+before any retained checkpoint resume shrink proposal.
+
+Files inspected:
+
+- `README.md`
+- `commands/`
+- `plugins/`
+- `.claude-plugin/`
+- `generated/`
+- `docs/`
+- `specs/`
+- `scripts/`
+- `src/`
+- `tests/`
+- `package.json`
+
+Files changed:
+
+- `docs/architecture/v2-runner-handler-current-import-inventory.md`
+- `docs/architecture/v2-checkpoint-4.34.md`
+- `docs/architecture/v2-deletion-plan.md`
+- `docs/architecture/v2-heavy-boundary-plan.md`
+- `docs/architecture/v2-runtime-import-inventory.md`
+- `docs/architecture/v2-worklog.md`
+
+Tests run:
+
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npx vitest run tests/runner/build-checkpoint-exec.test.ts tests/runner/run-status-projection.test.ts tests/unit/runtime/event-log-round-trip.test.ts tests/runner/cli-v2-runtime.test.ts tests/unit/runtime/progress-projector.test.ts tests/contracts/progress-event-schema.test.ts tests/core-v2 tests/parity`:
+  passed.
+- `npm run test:fast`: passed.
+- `npm run check-flow-drift`: passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? No runtime behavior changed. This is an import inventory
+checkpoint.
+
+Decision:
+
+- `src/runtime/runner.ts` remains a live product fallback and checkpoint resume
+  owner.
+- old step handlers remain live through retained fallback and direct handler
+  tests.
+- release evidence still imports `writeComposeReport` from the built runtime
+  runner surface.
+- no old runner or handler file is deletion-ready.
+
+Concerns:
+
+- Current imports remain broad enough that a retained checkpoint resume shrink
+  proposal needs a dedicated implementation plan.
+
+Next recommended action: classify retained progress projection ownership.
+
+## 2026-05-04 - Phase 4.33 Old Runner And Handler Test Classification
+
+Goal: classify old runner and direct handler tests before any retained resume
+shrink, v2 checkpoint resume implementation, or old runtime deletion.
+
+Files inspected:
+
+- `tests/runner/*`
+- `tests/unit/runtime/event-log-round-trip.test.ts`
+- `tests/unit/runtime/progress-projector.test.ts`
+- `tests/properties/visible/fanout-join-policy.test.ts`
+- `tests/contracts/orphan-blocks.test.ts`
+- `tests/contracts/flow-model-effort.test.ts`
+- `tests/contracts/codex-host-plugin.test.ts`
+- `src/runtime/runner.ts`
+- `src/runtime/step-handlers/*`
+
+Files changed:
+
+- `docs/architecture/v2-runner-handler-test-classification.md`
+- `docs/architecture/v2-checkpoint-4.33.md`
+- `docs/architecture/v2-deletion-plan.md`
+- `docs/architecture/v2-heavy-boundary-plan.md`
+- `docs/architecture/v2-runtime-import-inventory.md`
+- `docs/architecture/v2-worklog.md`
+
+Tests run:
+
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npx vitest run tests/runner/build-checkpoint-exec.test.ts tests/runner/run-status-projection.test.ts tests/unit/runtime/event-log-round-trip.test.ts tests/runner/cli-v2-runtime.test.ts tests/unit/runtime/progress-projector.test.ts tests/contracts/progress-event-schema.test.ts tests/core-v2 tests/parity`:
+  passed.
+- `npm run test:fast`: passed.
+- `npm run check-flow-drift`: passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? No runtime behavior changed. This is a planning and
+classification checkpoint.
+
+Decision:
+
+- No old runner/handler test is currently deletion-ready.
+- The tests classify as retained product fallback, checkpoint-resume product
+  coverage, old-runtime oracle, or compatibility import coverage.
+- The next safe evidence slice is a current-only import inventory for old
+  runner and handler files.
+
+Concerns:
+
+- Old runner and handler code still has broad product/test ownership.
+- Connector subprocess, relay materializer, registry, trace/progress, and
+  checkpoint resume ownership remain out of scope.
+
+Next recommended action: create a current-only import inventory for old runner
+and handler files before any retained checkpoint resume shrink proposal.
+
+## 2026-05-04 - Phase 4.32 Checkpoint Resume Ownership Decision
+
+Goal: decide checkpoint resume ownership before moving lower-level retained
+trace/progress/checkpoint infrastructure or old runner/handler code.
+
+Files inspected:
+
+- `HANDOFF.md`
+- `src/cli/circuit.ts`
+- `src/runtime/runner.ts`
+- `src/runtime/runner-types.ts`
+- `src/runtime/step-handlers/checkpoint.ts`
+- `src/runtime/reducer.ts`
+- `src/runtime/snapshot-writer.ts`
+- `src/runtime/append-and-derive.ts`
+- `src/runtime/trace-reader.ts`
+- `src/runtime/trace-writer.ts`
+- `src/run-status/v1-run-folder.ts`
+- `tests/runner/build-checkpoint-exec.test.ts`
+- `tests/unit/runtime/event-log-round-trip.test.ts`
+- `tests/unit/runtime/progress-projector.test.ts`
+
+Files changed:
+
+- `docs/architecture/v2-checkpoint-resume-ownership-plan.md`
+- `docs/architecture/v2-checkpoint-4.32.md`
+- `docs/architecture/v2-trace-progress-checkpoint-boundary-plan.md`
+- `docs/architecture/v2-deletion-plan.md`
+- `docs/architecture/v2-heavy-boundary-plan.md`
+- `docs/architecture/v2-runtime-import-inventory.md`
+- `docs/architecture/v2-worklog.md`
+
+Tests run:
+
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npx vitest run tests/runner/build-checkpoint-exec.test.ts tests/runner/run-status-projection.test.ts tests/unit/runtime/event-log-round-trip.test.ts tests/runner/cli-v2-runtime.test.ts tests/unit/runtime/progress-projector.test.ts tests/contracts/progress-event-schema.test.ts tests/core-v2 tests/parity`:
+  passed.
+- `npm run test:fast`: passed.
+- `npm run check-flow-drift`: passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? No runtime behavior changed. This is a planning checkpoint.
+
+Decision:
+
+- Do not implement v2 checkpoint resume next.
+- Do not shrink checkpoint resume into a smaller retained module yet.
+- Classify old runner and direct handler tests before choosing v2 resume parity
+  or retained resume shrinkage.
+
+Concerns:
+
+- Checkpoint resume remains retained-runtime-owned.
+- The old runner and direct handler tests still need exact disposition.
+- v1 trace/state snapshot infrastructure remains live until resume ownership
+  changes or is explicitly retained.
+
+Next recommended action: classify old runner and direct handler tests.
+
+## 2026-05-04 - Phase 4.31 Trace, Progress, And Checkpoint Boundary Plan
+
+Goal: document the next real boundary before moving lower-level retained
+trace/progress/checkpoint infrastructure.
+
+Files inspected:
+
+- `docs/architecture/v2-trace-status-progress-plan.md`
+- `src/runtime/runner.ts`
+- `src/runtime/step-handlers/checkpoint.ts`
+- `src/runtime/reducer.ts`
+- `src/runtime/snapshot-writer.ts`
+- `src/runtime/trace-reader.ts`
+- `src/runtime/trace-writer.ts`
+- `src/runtime/progress-projector.ts`
+- `tests/runner/build-checkpoint-exec.test.ts`
+- `tests/unit/runtime/event-log-round-trip.test.ts`
+- `tests/unit/runtime/progress-projector.test.ts`
+
+Files changed:
+
+- `docs/architecture/v2-trace-progress-checkpoint-boundary-plan.md`
+- `docs/architecture/v2-checkpoint-4.31.md`
+- `docs/architecture/v2-deletion-plan.md`
+- `docs/architecture/v2-heavy-boundary-plan.md`
+- `docs/architecture/v2-runtime-import-inventory.md`
+- `docs/architecture/v2-worklog.md`
+
+Tests run:
+
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npx vitest run tests/runner/run-status-facade.test.ts tests/runner/run-status-projection.test.ts tests/runner/cli-v2-runtime.test.ts tests/core-v2 tests/parity`:
+  passed.
+- `npm run test:fast`: passed.
+- `npm run check-flow-drift`: passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? No runtime behavior changed. This is a planning checkpoint.
+
+Concerns:
+
+- Checkpoint resume remains retained-runtime-owned.
+- v1 trace/state snapshot infrastructure remains retained-runtime-owned.
+- retained v1 progress projection remains in `src/runtime/progress-projector.ts`.
+
+Next recommended action: stop before moving lower-level retained
+trace/progress/checkpoint infrastructure. The next useful work is checkpoint
+resume ownership or old runner/handler test classification.
+
+## 2026-05-04 - Phase 4.30.1 Run-Status Dependency Direction Cleanup
+
+Goal: clean up neutral run-status imports so already-moved shared helpers are
+not reached through retained runtime compatibility wrappers.
+
+Files inspected:
+
+- `src/run-status/projection-common.ts`
+- `src/run-status/v1-run-folder.ts`
+- `tests/runner/run-status-facade.test.ts`
+- `docs/architecture/v2-deletion-plan.md`
+- `docs/architecture/v2-runtime-import-inventory.md`
+
+Files changed:
+
+- `src/run-status/projection-common.ts`
+- `src/run-status/v1-run-folder.ts`
+- `tests/runner/run-status-facade.test.ts`
+- `docs/architecture/v2-checkpoint-4.30.1.md`
+- `docs/architecture/v2-trace-status-progress-plan.md`
+- `docs/architecture/v2-deletion-plan.md`
+- `docs/architecture/v2-runtime-import-inventory.md`
+- `docs/architecture/v2-worklog.md`
+
+Tests run:
+
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npx vitest run tests/runner/run-status-facade.test.ts tests/runner/run-status-projection.test.ts`:
+  passed.
+- `npm run build`: passed.
+- `npx vitest run tests/runner/run-status-facade.test.ts tests/runner/run-status-projection.test.ts tests/runner/cli-v2-runtime.test.ts tests/core-v2 tests/parity`:
+  passed.
+- `npm run test:fast`: passed.
+- `npm run check-flow-drift`: passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? No intended behavior change. `projection-common.ts` now uses
+`src/shared/result-path.ts`, and `v1-run-folder.ts` now uses
+`src/shared/run-relative-path.ts`.
+
+Concerns:
+
+- Neutral status modules still depend on retained runtime for retained v1 trace
+  reading, reduction, and checkpoint writer validation.
+- Progress projection, trace writer, reducer implementation, snapshot writer,
+  checkpoint resume, runner, and step handlers did not move.
+
+Next recommended action: validate this cleanup, then write the
+trace/progress/checkpoint boundary plan before moving lower-level retained
+infrastructure.
+
+## 2026-05-04 - Phase 4.30 V1 Run-Status Module Split
+
+Goal: split retained v1 run-folder status projection out of the public
+dispatcher without moving retained trace/reducer/checkpoint helper modules.
+
+Files inspected:
+
+- `src/run-status/project-run-folder.ts`
+- `src/run-status/v1-run-folder.ts`
+- `src/run-status/v2-run-folder.ts`
+- `tests/runner/run-status-facade.test.ts`
+- `tests/runner/run-status-projection.test.ts`
+
+Files changed:
+
+- `src/run-status/project-run-folder.ts`
+- `src/run-status/v1-run-folder.ts`
+- `tests/runner/run-status-facade.test.ts`
+- `docs/architecture/v2-checkpoint-4.30.md`
+- `docs/architecture/v2-trace-status-progress-plan.md`
+- `docs/architecture/v2-deletion-plan.md`
+- `docs/architecture/v2-heavy-boundary-plan.md`
+- `docs/architecture/v2-runtime-import-inventory.md`
+- `docs/architecture/v2-worklog.md`
+
+Tests run:
+
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npx vitest run tests/runner/run-status-facade.test.ts tests/runner/run-status-projection.test.ts tests/runner/cli-v2-runtime.test.ts tests/unit/runtime/event-log-round-trip.test.ts tests/runner/fresh-run-root.test.ts tests/runner/build-checkpoint-exec.test.ts tests/core-v2 tests/parity`:
+  passed.
+- `npm run test:fast`: passed.
+- `npm run check-flow-drift`: passed.
+- `npm run verify`: passed.
+
+Behavior changed? No intended behavior change. The public dispatcher now
+delegates retained v1 projection to `src/run-status/v1-run-folder.ts` and
+marked core-v2 projection to `src/run-status/v2-run-folder.ts`.
+
+Concerns:
+
+- The retained v1 projector still depends on retained
+  trace/reducer/checkpoint helpers.
+- Progress projection, trace writer, reducer implementation, snapshot writer,
+  checkpoint resume, runner, and step handlers did not move.
+
+Next recommended action: validate this slice. Further status/progress work
+should pause before moving retained trace, reducer, progress, snapshot,
+checkpoint, runner, or handler infrastructure.
+
+## 2026-05-04 - Phase 4.29 V2 Run-Status Module Split
+
+Goal: split marked core-v2 run-folder status projection out of the public
+dispatcher without moving retained v1 trace/reducer/checkpoint helpers.
+
+Files inspected:
+
+- `src/run-status/project-run-folder.ts`
+- `src/runtime/run-status-projection.ts`
+- `tests/runner/run-status-facade.test.ts`
+- `tests/runner/run-status-projection.test.ts`
+- `docs/architecture/v2-trace-status-progress-plan.md`
+
+Files changed:
+
+- `src/run-status/project-run-folder.ts`
+- `src/run-status/projection-common.ts`
+- `src/run-status/v2-run-folder.ts`
+- `tests/runner/run-status-facade.test.ts`
+- `docs/architecture/v2-checkpoint-4.29.md`
+- `docs/architecture/v2-trace-status-progress-plan.md`
+- `docs/architecture/v2-deletion-plan.md`
+- `docs/architecture/v2-heavy-boundary-plan.md`
+- `docs/architecture/v2-runtime-import-inventory.md`
+- `docs/architecture/v2-worklog.md`
+
+Tests run:
+
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npx vitest run tests/runner/run-status-facade.test.ts tests/runner/run-status-projection.test.ts tests/runner/cli-v2-runtime.test.ts tests/unit/runtime/event-log-round-trip.test.ts tests/runner/fresh-run-root.test.ts tests/runner/build-checkpoint-exec.test.ts tests/core-v2 tests/parity`:
+  passed.
+- `npm run test:fast`: passed.
+- `npm run check-flow-drift`: passed.
+- `npm run verify`: passed.
+
+Behavior changed? No intended behavior change. The marked core-v2 run-folder
+projection now lives in `src/run-status/v2-run-folder.ts`; the public
+dispatcher calls it when retained v1 trace reading fails and the trace is a
+marked core-v2 trace.
+
+Concerns:
+
+- The retained v1 status path still depends on retained
+  trace/reducer/checkpoint helpers.
+- Progress projection, trace reader/writer, reducer, snapshot writer,
+  checkpoint resume, runner, and step handlers did not move.
+
+Next recommended action: validate this slice. Any further status work should
+split retained v1 run-folder projection only with an explicit v1
+trace/reducer/checkpoint ownership boundary.
+
+## 2026-05-04 - Phase 4.28 Run-Status Dispatcher Move
+
+Goal: move the run-status dispatcher implementation into the neutral
+`src/run-status/` namespace without moving retained trace/reducer/checkpoint
+helpers.
+
+Files inspected:
+
+- `src/runtime/run-status-projection.ts`
+- `src/run-status/project-run-folder.ts`
+- `tests/runner/run-status-projection.test.ts`
+- `tests/runner/run-status-facade.test.ts`
+- `docs/architecture/v2-trace-status-progress-plan.md`
+
+Files changed:
+
+- `src/run-status/project-run-folder.ts`
+- `src/runtime/run-status-projection.ts`
+- `tests/runner/run-status-projection.test.ts`
+- `docs/architecture/v2-checkpoint-4.28.md`
+- `docs/architecture/v2-trace-status-progress-plan.md`
+- `docs/architecture/v2-deletion-plan.md`
+- `docs/architecture/v2-heavy-boundary-plan.md`
+- `docs/architecture/v2-runtime-import-inventory.md`
+- `docs/architecture/v2-worklog.md`
+
+Tests run:
+
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npx vitest run tests/runner/run-status-facade.test.ts tests/runner/run-status-projection.test.ts tests/runner/cli-v2-runtime.test.ts tests/unit/runtime/event-log-round-trip.test.ts tests/runner/fresh-run-root.test.ts tests/runner/build-checkpoint-exec.test.ts tests/core-v2 tests/parity`:
+  passed.
+- `npm run test:fast`: passed.
+- `npm run check-flow-drift`: passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Note: one parallel `check-flow-drift` attempt raced with the emit-flow drift
+fixture tests and saw temporary `never-a-mode.json` files. The fixture cleanup
+removed those files, and `npm run check-flow-drift` passed when rerun by
+itself.
+
+Behavior changed? No intended behavior change. The same dispatcher now lives in
+`src/run-status/project-run-folder.ts`; `src/runtime/run-status-projection.ts`
+re-exports it for compatibility.
+
+Concerns:
+
+- The dispatcher still depends on retained v1 trace/reducer/checkpoint helpers.
+- Progress projection, trace reader/writer, reducer, snapshot writer,
+  checkpoint resume, runner, and step handlers did not move.
+
+Next recommended action: validate this slice. Any further status work should
+split v1 and v2 run-folder projection under `src/run-status/`; do not move
+progress/reducer/trace/snapshot code without a focused plan.
+
+## 2026-05-04 - Phase 4.27 Public Run-Status Facade
+
+Goal: move the public `runs show` import surface away from `src/runtime/`
+without moving projection internals.
+
+Files inspected:
+
+- `src/cli/runs.ts`
+- `src/runtime/run-status-projection.ts`
+- `src/runtime/result-writer.ts`
+- `tests/runner/run-status-projection.test.ts`
+- `docs/architecture/v2-trace-status-progress-plan.md`
+
+Files changed:
+
+- `src/run-status/project-run-folder.ts`
+- `src/cli/runs.ts`
+- `src/runtime/result-writer.ts`
+- `tests/runner/run-status-facade.test.ts`
+- `tests/runner/run-status-projection.test.ts`
+- `docs/architecture/v2-checkpoint-4.27.md`
+- `docs/architecture/v2-trace-status-progress-plan.md`
+- `docs/architecture/v2-deletion-plan.md`
+- `docs/architecture/v2-heavy-boundary-plan.md`
+- `docs/architecture/v2-runtime-import-inventory.md`
+- `docs/architecture/v2-worklog.md`
+
+Tests run:
+
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npx vitest run tests/runner/run-status-facade.test.ts tests/runner/run-status-projection.test.ts tests/runner/cli-v2-runtime.test.ts tests/unit/runtime/event-log-round-trip.test.ts tests/runner/fresh-run-root.test.ts tests/runner/build-checkpoint-exec.test.ts tests/core-v2 tests/parity`:
+  passed.
+- `npm run test:fast`: passed.
+- `npm run check-flow-drift`: passed.
+- `npm run verify`: passed.
+
+Behavior changed? No intended behavior change. At the end of Phase 4.27, the
+neutral facade delegated to `src/runtime/run-status-projection.ts`; the CLI and
+public status behavior tests imported the facade. Phase 4.28 later moved the
+dispatcher body into the neutral facade.
+
+Concerns:
+
+- At the end of Phase 4.27, `src/runtime/run-status-projection.ts` remained the
+  implementation and was not deletable. Phase 4.28 later turned it into a
+  compatibility re-export.
+- No progress projection, reducer, trace reader/writer, snapshot, checkpoint,
+  runner, or step-handler code moved.
+
+Next recommended action: validate this slice. If green, continue only with
+another narrow ownership slice; stop before moving projection internals.
+
 ## 2026-05-04 - Phase 4.26 Trace, Status, And Progress Ownership Plan
 
 Goal: plan trace/status/progress ownership before moving operator-facing

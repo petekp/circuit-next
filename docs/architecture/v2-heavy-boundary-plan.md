@@ -60,9 +60,13 @@ It should choose one of these paths and write the proof plan first:
    Best if the team wants to reduce retained runtime product ownership rather
    than keep moving shared infrastructure.
 
-Recommendation after Phase 4.25: plan trace/status/progress ownership next if
-the team wants to reduce deletion risk more directly. Do not merge retained and
-v2 result writers yet.
+Recommendation after Phase 4.36: the next implementation move should be a
+reviewed retained checkpoint resume shrink. The proposed safe shape is
+extracting resume discovery/validation to `src/runtime/checkpoint-resume.ts`
+while keeping `resumeCompiledFlowCheckpoint(...)` and `executeCompiledFlow(...)`
+in `src/runtime/runner.ts`. Do not move `progress-projector.ts`, trace
+reader/writer, reducer, snapshot writer, checkpoint handler, old runner
+execution loop, or step handlers as part of that first shrink.
 
 ## Deletion Status
 

@@ -13,10 +13,12 @@ round-trips, checkpoint waiting state, and malformed-folder diagnostics.
 |---|---|---|---|---|
 | v1 trace writer/reader | `src/runtime/trace-writer.ts`, `src/runtime/trace-reader.ts` | retained runner, checkpoint handler, event-log tests, relay roundtrip tests, many runner tests | Append/read `trace.ndjson` as schema-validated v1 `TraceEntry` / `RunTrace`. | Keep with retained runtime until checkpoint resume and retained fallback shrink. |
 | v1 reducer/snapshot | `src/runtime/reducer.ts`, `src/runtime/snapshot-writer.ts`, `src/runtime/append-and-derive.ts` | retained runner, checkpoint handler, handoff CLI, event-log tests, fresh-run-root tests | Derive and write `state.json` from v1 trace. | Keep with retained runtime. Do not move before checkpoint resume decision. |
-| status projection dispatcher | `src/runtime/run-status-projection.ts` | `src/cli/runs.ts`, run-status tests, v2 CLI tests | Projects both retained v1 and marked core-v2 run folders into `RunStatusProjectionV1`. | Keep for now, but it is a future neutralization candidate. |
+| status projection dispatcher | `src/run-status/project-run-folder.ts` with compatibility re-export at `src/runtime/run-status-projection.ts` | `src/cli/runs.ts`, run-status tests, v2 CLI tests | Verifies the run folder and manifest, then delegates retained v1 and marked core-v2 run folders into `RunStatusProjectionV1`. | Neutral-owned as of Phase 4.28. |
+| status projection common helpers | `src/run-status/projection-common.ts` | neutral dispatcher and v1/v2 run-folder projectors | Shared invalid projection, saved-flow decoding, report paths, and step metadata. Uses shared result path helpers, not retained result-writer wrappers. | Neutral-owned as of Phase 4.29; dependency direction cleaned up in Phase 4.30.1. |
+| v1 run-folder status projection | `src/run-status/v1-run-folder.ts` | neutral dispatcher, run-status tests, checkpoint status tests | Projects retained v1 trace folders, including checkpoint-waiting status. Uses shared run-relative path helpers, not retained run-relative wrappers. | Neutral-owned as of Phase 4.30, while still depending on retained v1 trace/reducer/checkpoint helper modules. |
 | v1 progress projection | `src/runtime/progress-projector.ts` | retained runner, old progress tests | Converts v1 `TraceEntry` stream into `ProgressEvent`; still owns evidence progress for v1 trace. | Keep as v1 projection until retained runner shrinks. |
 | shared progress output helpers | `src/shared/progress-output.ts` | retained progress projector, v2 progress projector | Safe progress callback wrapper and display truncation. | Already neutral. |
-| v2 status projection | `src/core-v2/projections/status.ts` plus v2 branch inside `run-status-projection.ts` | v2 tests, `runs show` for v2 folders | Projects v2 trace state; run-folder projection currently lives in runtime compatibility dispatcher. | Keep split for now; plan a v2 run-folder projector before moving. |
+| v2 status projection | `src/core-v2/projections/status.ts` plus `src/run-status/v2-run-folder.ts` | v2 tests, `runs show` for v2 folders | Projects v2 trace state; run-folder projection is split out from the dispatcher. | Neutral v2 run-folder ownership moved in Phase 4.29. Keep in-memory core-v2 projection separate. |
 | v2 progress projection | `src/core-v2/projections/progress.ts` | v2 graph runner, CLI progress tests | Converts v2 trace entries into `ProgressEvent`. | Keep v2-owned. |
 | status/progress schemas | `src/schemas/run-status.ts`, `src/schemas/progress-event.ts` | CLI, tests, generated/release checks, hosts | Public contract. | Keep in schemas. |
 
@@ -102,8 +104,10 @@ Long term, split by product contract rather than by old namespace:
 ```text
 src/run-status/
   project-run-folder.ts        # neutral public dispatcher for runs show
-  v1.ts                        # v1 retained trace/status projection
-  v2.ts                        # v2 trace/status projection
+  projection-common.ts         # shared status projection helpers
+  v1-run-folder.ts             # retained v1 run-folder projection
+  v2-run-folder.ts             # marked core-v2 run-folder projection
+  v2.ts                        # possible later in-memory v2 status projection home
 
 src/progress/
   output.ts                    # already src/shared/progress-output.ts
@@ -121,48 +125,120 @@ src/runtime/
 Do not move the v1 trace/reducer/snapshot files first. They remain tied to
 retained fallback and checkpoint resume.
 
-## Recommended Next Code Slice
+## Implemented Status Surface Slices
 
-The safest next implementation slice is:
-
-```text
-Move only the public run-status dispatcher to a neutral module.
-```
-
-Suggested shape:
+Phase 4.27 implemented the first safe slice:
 
 ```text
-src/shared/run-status-projection.ts
+Move only the public run-status dispatcher import surface to a neutral module.
 ```
-
-or, if the repo wants a dedicated namespace:
 
 ```text
 src/run-status/project-run-folder.ts
 ```
 
-The first slice should:
+Phase 4.28 then moved the dispatcher implementation into that neutral module
+and left `src/runtime/run-status-projection.ts` as a compatibility re-export.
+
+Phase 4.29 split shared projection helpers and the marked core-v2 run-folder
+projection out from the dispatcher into:
+
+```text
+src/run-status/projection-common.ts
+src/run-status/v2-run-folder.ts
+```
+
+Phase 4.30 split the retained v1 run-folder projection out from the dispatcher
+into:
+
+```text
+src/run-status/v1-run-folder.ts
+```
+
+The implemented slices:
 
 - move only `projectRunStatusFromRunFolder` and `RunStatusFolderError` as the
-  public import surface;
-- keep v1 internals delegated to the existing runtime module, or move the whole
-  file only if the wrapper remains and tests prove identical behavior;
+  public surface;
+- keep v1 trace/reducer/snapshot/checkpoint helper modules in `src/runtime`;
+- keep retained v1 run-folder projection in `src/run-status/v1-run-folder.ts`;
+- keep marked core-v2 run-folder projection in `src/run-status/v2-run-folder.ts`;
 - update `src/cli/runs.ts` to import the neutral surface;
-- keep `src/runtime/run-status-projection.ts` as a compatibility wrapper or
-  retained implementation;
+- keep `src/runtime/run-status-projection.ts` as a compatibility wrapper;
 - not move reducer, trace reader/writer, snapshot writer, progress projector,
   or checkpoint logic.
 
-Conservative implementation option:
+Current shape:
 
 ```text
-src/shared/run-status-projection.ts re-exports from src/runtime/run-status-projection.ts
-src/cli/runs.ts imports from src/shared/run-status-projection.ts
+src/run-status/project-run-folder.ts owns the dispatcher implementation
+src/run-status/v1-run-folder.ts owns retained v1 run-folder projection
+src/run-status/v2-run-folder.ts owns marked core-v2 run-folder projection
+src/run-status/projection-common.ts owns shared status projection helpers
+src/runtime/run-status-projection.ts re-exports from src/run-status/project-run-folder.ts
+src/cli/runs.ts imports from src/run-status/project-run-folder.ts
 ```
 
-That option changes dependency direction for the CLI without moving the
-implementation. A later slice can split v1/v2 internals once the public import
-surface is neutral.
+This changes dependency direction for the CLI and public status tests without
+changing projection behavior. A later slice should not move retained trace,
+reducer, snapshot, progress, or checkpoint-resume code without a separate
+ownership decision.
+
+## Phase 4.27 Implementation Note
+
+Phase 4.27 implemented the conservative option at the time:
+
+- `src/run-status/project-run-folder.ts` is the neutral public facade;
+- `src/cli/runs.ts` imports the facade;
+- `src/runtime/run-status-projection.ts` remained the implementation and old
+  compatibility import surface during Phase 4.27;
+- no projection internals moved.
+
+Phase 4.28 superseded that implementation placement by moving the dispatcher
+body into `src/run-status/project-run-folder.ts`.
+
+## Phase 4.28 Implementation Note
+
+Phase 4.28 moved the status dispatcher implementation into the neutral facade:
+
+- `src/run-status/project-run-folder.ts` owns `projectRunStatusFromRunFolder(...)`
+  and `RunStatusFolderError`;
+- `src/runtime/run-status-projection.ts` is now only a compatibility re-export;
+- public status behavior tests import the neutral module;
+- v1 trace/reducer/snapshot/checkpoint helpers remain in `src/runtime`;
+- progress projection did not move.
+
+## Phase 4.29 Implementation Note
+
+Phase 4.29 split the status dispatcher into smaller neutral modules:
+
+- `src/run-status/projection-common.ts` owns shared projection helpers;
+- `src/run-status/v2-run-folder.ts` owns marked core-v2 run-folder projection;
+- `src/run-status/project-run-folder.ts` still owns the public dispatcher and
+  retained v1/checkpoint projection path;
+- v1 trace/reducer/snapshot/checkpoint helpers remain in `src/runtime`;
+- progress projection did not move.
+
+## Phase 4.30 Implementation Note
+
+Phase 4.30 split retained v1 run-folder projection into a neutral module:
+
+- `src/run-status/v1-run-folder.ts` owns retained v1 run-folder projection and
+  checkpoint-waiting status projection;
+- `src/run-status/project-run-folder.ts` delegates to the v1 and v2 modules;
+- v1 trace/reducer/snapshot/checkpoint helper modules remain in `src/runtime`;
+- progress projection did not move.
+
+## Phase 4.30.1 Implementation Note
+
+Phase 4.30.1 cleaned up dependency direction inside neutral status modules:
+
+- `src/run-status/projection-common.ts` imports `runResultPath(...)` from
+  `src/shared/result-path.ts`;
+- `src/run-status/v1-run-folder.ts` imports `resolveRunRelative(...)` from
+  `src/shared/run-relative-path.ts`;
+- neutral status modules now depend on retained runtime only for retained v1
+  trace reading, reduction, and checkpoint writer validation infrastructure;
+- progress projection did not move.
 
 ## Required Tests For Any Status Move
 

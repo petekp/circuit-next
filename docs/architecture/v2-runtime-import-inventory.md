@@ -1,6 +1,6 @@
 # Circuit v2 Runtime Import Inventory
 
-Generated for Phase 4.26 retained-runtime narrowing prep. This file records current command output and targeted ownership evidence for deletion-readiness review. The inventory excludes this generated file from the rg scans so it does not cite itself.
+Generated for Phase 4.28 retained-runtime narrowing prep. This file records current command output and targeted ownership evidence for deletion-readiness review. The inventory excludes this generated file from the rg scans so it does not cite itself.
 
 ## Runtime file tree
 
@@ -132,6 +132,17 @@ Phase 4.23: src/shared/write-capable-worker-disclosure.ts is now cited in releas
 Phase 4.24: docs/architecture/v2-result-writer-plan.md classifies retained and v2 result writer ownership. No result writer code moved.
 Phase 4.25: src/shared/result-path.ts owns the shared reports/result.json path helper; src/runtime/result-writer.ts keeps resultPath(...) as a compatibility export.
 Phase 4.26: docs/architecture/v2-trace-status-progress-plan.md classifies runs show, progress JSONL, v1 trace/reducer/snapshot, and v2 projection ownership. No projection code moved.
+Phase 4.27: src/run-status/project-run-folder.ts owns the neutral public runs show import surface while delegating to src/runtime/run-status-projection.ts.
+Phase 4.28: src/run-status/project-run-folder.ts owns the run-status dispatcher implementation; src/runtime/run-status-projection.ts is a compatibility re-export.
+Phase 4.29: src/run-status/v2-run-folder.ts owns marked core-v2 run-folder projection; src/run-status/projection-common.ts owns shared status projection helpers.
+Phase 4.30: src/run-status/v1-run-folder.ts owns retained v1 run-folder projection while retained trace/reducer/checkpoint helper modules stay in src/runtime.
+Phase 4.30.1: neutral status modules import result path and run-relative path from shared helpers instead of retained runtime wrappers.
+Phase 4.31: docs/architecture/v2-trace-progress-checkpoint-boundary-plan.md classifies lower-level retained trace/progress/checkpoint ownership before any move.
+Phase 4.32: docs/architecture/v2-checkpoint-resume-ownership-plan.md maps retained checkpoint resume ownership and recommends old runner/handler test classification before any resume implementation or shrink.
+Phase 4.33: docs/architecture/v2-runner-handler-test-classification.md classifies old runner and handler tests; no old runner/handler test is currently deletion-ready.
+Phase 4.34: docs/architecture/v2-runner-handler-current-import-inventory.md records current-only old runner/handler imports without historical scan blocks.
+Phase 4.35: docs/architecture/v2-retained-progress-contract-plan.md keeps retained v1 progress projection in src/runtime/progress-projector.ts until checkpoint resume or retained runner ownership changes.
+Phase 4.36: docs/architecture/v2-retained-checkpoint-resume-shrink-proposal.md proposes extracting retained resume discovery/validation into src/runtime/checkpoint-resume.ts; no code moved yet.
 ```
 
 ## Phase 4.23 Heavy Boundary Inventory
@@ -1870,15 +1881,27 @@ rg -n "projectRunStatusFromRunFolder|runRunsCommand|runs show|--progress jsonl|P
 High-signal consumer groups:
 
 ```text
-src/cli/runs.ts imports projectRunStatusFromRunFolder from the runtime status
-projector today. The Phase 4.26 plan recommends moving only that public import
-surface first, while keeping the implementation delegated to the current
-runtime projector.
+src/run-status/project-run-folder.ts owns projectRunStatusFromRunFolder and
+RunStatusFolderError as the neutral public runs show dispatcher. src/cli/runs.ts
+and public status behavior tests import it directly.
 
-src/runtime/run-status-projection.ts imports reduce(...) and readRunTrace(...)
-for retained v1 folders, and also contains the marked core-v2 run-folder
-projection path. It is intentionally cross-runtime compatibility
+src/runtime/run-status-projection.ts is now an old-path compatibility
+re-export.
+
+src/run-status/project-run-folder.ts reads retained v1 traces and delegates to
+src/run-status/v1-run-folder.ts, or falls back to src/run-status/v2-run-folder.ts
+for marked core-v2 run folders. It is intentionally cross-runtime status
 infrastructure today, not old-runner debris.
+
+src/run-status/projection-common.ts owns shared invalid-projection,
+saved-flow, report-path, and step-metadata helpers used by both the dispatcher
+and the v1/v2 run-folder projectors. It imports result path from
+src/shared/result-path.ts.
+
+src/run-status/v1-run-folder.ts imports retained reducer and checkpoint writer
+registry helpers to project retained v1 run folders. It imports run-relative
+path resolution from src/shared/run-relative-path.ts. The retained reducer and
+checkpoint registry dependencies remain retained infrastructure.
 
 src/runtime/progress-projector.ts still owns v1 TraceEntry-to-ProgressEvent
 projection. core-v2 uses src/core-v2/projections/progress.ts and shared
@@ -1899,17 +1922,31 @@ schema contracts shared by CLI, host surfaces, tests, and release checks.
 docs/specs/headless-engine-host-api-v1.md describes runs show as host recovery
 and progress JSONL as live rendering. That reinforces the Phase 4.26 decision:
 do not move or rewrite projection internals mechanically.
+
+docs/architecture/v2-trace-progress-checkpoint-boundary-plan.md records the
+current stop line: do not move trace reader/writer, reducer, snapshot writer,
+progress projector, checkpoint resume, old runner, or step handlers before a
+checkpoint resume ownership decision or old runner/handler test classification.
 ```
 
 Targeted current output:
 
 ```text
+src/run-status/project-run-folder.ts:11:export class RunStatusFolderError extends Error {
+src/run-status/project-run-folder.ts:67:export function projectRunStatusFromRunFolder(runFolder: string): RunStatusProjectionV1 {
+src/run-status/project-run-folder.ts:3:import { readRunTrace } from '../runtime/trace-reader.js';
+src/run-status/v1-run-folder.ts:3:import { reduce } from '../runtime/reducer.js';
+src/run-status/v1-run-folder.ts:4:import { findCheckpointBriefBuilder } from '../runtime/registries/checkpoint-writers/registry.js';
+src/run-status/v1-run-folder.ts:13:import { resolveRunRelative } from '../shared/run-relative-path.js';
+src/run-status/projection-common.ts:7:import { runResultPath } from '../shared/result-path.js';
 src/cli/runs.ts:3:  projectRunStatusFromRunFolder,
 src/cli/runs.ts:66:export async function runRunsCommand(argv: readonly string[]): Promise<number> {
 src/cli/runs.ts:80:    writeJson(projectRunStatusFromRunFolder(parsed.runFolder));
-src/runtime/run-status-projection.ts:13:import { reduce } from './reducer.js';
-src/runtime/run-status-projection.ts:17:import { readRunTrace } from './trace-reader.js';
-src/runtime/run-status-projection.ts:739:export function projectRunStatusFromRunFolder(runFolder: string): RunStatusProjectionV1 {
+src/runtime/run-status-projection.ts:2:  RunStatusFolderError,
+src/runtime/run-status-projection.ts:3:  projectRunStatusFromRunFolder,
+src/runtime/run-status-projection.ts:4:} from '../run-status/project-run-folder.js';
+src/run-status/v2-run-folder.ts:138:export function projectV2RunStatusFromRunFolder(
+src/run-status/projection-common.ts:20:export function invalidProjection(input: {
 src/runtime/progress-projector.ts:183:export function projectTraceEntryToProgress(input: {
 src/runtime/snapshot-writer.ts:4:import { reduce } from './reducer.js';
 src/runtime/snapshot-writer.ts:5:import { readRunTrace } from './trace-reader.js';
@@ -1931,7 +1968,9 @@ src/cli/handoff.ts:6:import { deriveSnapshot } from '../runtime/snapshot-writer.
 src/core-v2/run/graph-runner.ts:17:import { createProgressProjectorV2 } from '../projections/progress.js';
 src/core-v2/projections/progress.ts:165:export function createProgressProjectorV2(input: {
 src/core-v2/projections/status.ts:14:export function projectStatusFromTraceV2(entries: readonly TraceEntryV2[]): RunStatusV2 {
-tests/runner/run-status-projection.test.ts:6:import { projectRunStatusFromRunFolder } from '../../src/runtime/run-status-projection.js';
+tests/runner/run-status-projection.test.ts:6:import { projectRunStatusFromRunFolder } from '../../src/run-status/project-run-folder.js';
+tests/runner/run-status-facade.test.ts:7:} from '../../src/run-status/project-run-folder.js';
+tests/runner/run-status-facade.test.ts:11:} from '../../src/runtime/run-status-projection.js';
 tests/unit/runtime/progress-projector.test.ts:6:import { projectTraceEntryToProgress } from '../../../src/runtime/progress-projector.js';
 tests/unit/runtime/event-log-round-trip.test.ts:20:import { reduce } from '../../../src/runtime/reducer.js';
 tests/unit/runtime/event-log-round-trip.test.ts:27:import { readRunTrace } from '../../../src/runtime/trace-reader.js';

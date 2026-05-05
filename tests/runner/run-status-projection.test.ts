@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { main } from '../../src/cli/circuit.js';
-import { projectRunStatusFromRunFolder } from '../../src/runtime/run-status-projection.js';
+import { projectRunStatusFromRunFolder } from '../../src/run-status/project-run-folder.js';
 import { appendTraceEntry } from '../../src/runtime/trace-writer.js';
 import { CompiledFlowId, RunId } from '../../src/schemas/ids.js';
 import { TraceEntry } from '../../src/schemas/trace-entry.js';

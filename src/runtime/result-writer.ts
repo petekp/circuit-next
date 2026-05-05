@@ -6,7 +6,7 @@ import { runResultPath } from '../shared/result-path.js';
 // RESULT-I1 — <run-folder>/reports/result.json is authored once at close
 // and never mutated.
 //
-// This module is the ONLY path by which result.json comes into being.
+// This module owns retained-runtime result.json writing.
 // The shape is enforced by `RunResult` in src/schemas/result.ts; this
 // writer re-parses through that schema before persisting so a caller
 // cannot smuggle a structurally invalid result past the boundary.

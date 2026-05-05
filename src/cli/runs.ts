@@ -1,7 +1,7 @@
 import {
   RunStatusFolderError,
   projectRunStatusFromRunFolder,
-} from '../runtime/run-status-projection.js';
+} from '../run-status/project-run-folder.js';
 import { type EngineErrorCodeV1, EngineErrorV1 } from '../schemas/run-status.js';
 
 function engineError(input: {
