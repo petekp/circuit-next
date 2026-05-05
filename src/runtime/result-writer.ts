@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname } from 'node:path';
 import { RunResult } from '../schemas/result.js';
+import { runResultPath } from '../shared/result-path.js';
 
 // RESULT-I1 — <run-folder>/reports/result.json is authored once at close
 // and never mutated.
@@ -11,7 +12,7 @@ import { RunResult } from '../schemas/result.js';
 // cannot smuggle a structurally invalid result past the boundary.
 
 export function resultPath(runFolder: string): string {
-  return join(runFolder, 'reports', 'result.json');
+  return runResultPath(runFolder);
 }
 
 export function writeResult(runFolder: string, candidate: unknown): RunResult {

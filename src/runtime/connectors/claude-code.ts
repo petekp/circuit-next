@@ -1,13 +1,8 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
 import type { Effort } from '../../schemas/selection-policy.js';
-import {
-  type ConnectorRelayInput,
-  type RelayResult,
-  extractJsonObject,
-  selectedModelForProvider,
-  sha256Hex,
-} from './shared.js';
+import { extractJsonObject, selectedModelForProvider } from '../../shared/connector-helpers.js';
+import { type ConnectorRelayInput, type RelayResult, sha256Hex } from './shared.js';
 
 export { sha256Hex };
 

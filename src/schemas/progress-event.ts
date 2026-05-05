@@ -111,6 +111,47 @@ export const RelayCompletedProgressEvent = ProgressEventBase.extend({
   duration_ms: z.number().int().nonnegative(),
 }).strict();
 
+export const FanoutStartedProgressEvent = ProgressEventBase.extend({
+  type: z.literal('fanout.started'),
+  step_id: StepId,
+  step_title: z.string().min(1),
+  branch_count: z.number().int().positive(),
+  branch_ids: z.array(z.string().min(1)).min(1),
+}).strict();
+
+export const FanoutBranchStartedProgressEvent = ProgressEventBase.extend({
+  type: z.literal('fanout.branch_started'),
+  step_id: StepId,
+  step_title: z.string().min(1),
+  branch_id: z.string().min(1),
+  branch_kind: z.enum(['relay', 'sub-run']),
+  child_run_id: RunId.optional(),
+  worktree_path: z.string().min(1).optional(),
+}).strict();
+
+export const FanoutBranchCompletedProgressEvent = ProgressEventBase.extend({
+  type: z.literal('fanout.branch_completed'),
+  step_id: StepId,
+  step_title: z.string().min(1),
+  branch_id: z.string().min(1),
+  branch_kind: z.enum(['relay', 'sub-run']),
+  child_run_id: RunId.optional(),
+  child_outcome: RunClosedOutcome,
+  verdict: z.string().min(1),
+  duration_ms: z.number().int().nonnegative(),
+}).strict();
+
+export const FanoutJoinedProgressEvent = ProgressEventBase.extend({
+  type: z.literal('fanout.joined'),
+  step_id: StepId,
+  step_title: z.string().min(1),
+  policy: z.enum(['pick-winner', 'disjoint-merge', 'aggregate-only']),
+  aggregate_path: z.string().min(1),
+  branches_completed: z.number().int().nonnegative(),
+  branches_failed: z.number().int().nonnegative(),
+  selected_branch_id: z.string().min(1).optional(),
+}).strict();
+
 export const CheckpointWaitingProgressEvent = ProgressEventBase.extend({
   type: z.literal('checkpoint.waiting'),
   step_id: StepId,
@@ -183,6 +224,10 @@ export const ProgressEvent = z.discriminatedUnion('type', [
   EvidenceWarningProgressEvent,
   RelayStartedProgressEvent,
   RelayCompletedProgressEvent,
+  FanoutStartedProgressEvent,
+  FanoutBranchStartedProgressEvent,
+  FanoutBranchCompletedProgressEvent,
+  FanoutJoinedProgressEvent,
   CheckpointWaitingProgressEvent,
   TaskListUpdatedProgressEvent,
   UserInputRequestedProgressEvent,

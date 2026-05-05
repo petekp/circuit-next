@@ -1,0 +1,22 @@
+import type { ResolvedConnector } from '../schemas/connector.js';
+import type { ProgressEvent } from '../schemas/progress-event.js';
+import type { ResolvedSelection } from '../schemas/selection-policy.js';
+import type { ConnectorRelayInput, RelayResult } from './connector-relay.js';
+
+// Structured relayer descriptor. Without it, relay materialization could lose
+// the connector identity used for trace provenance and compatibility checks.
+export interface RelayFn {
+  readonly connectorName: string;
+  readonly connector?: ResolvedConnector;
+  readonly relay: (input: RelayInput) => Promise<RelayResult>;
+}
+
+export interface RelayInput extends ConnectorRelayInput {
+  readonly resolvedSelection?: ResolvedSelection;
+}
+
+export type ProgressReporter = (event: ProgressEvent) => void;
+
+export interface RuntimeEvidencePolicy {
+  readonly includeUntrackedFileContent?: boolean;
+}

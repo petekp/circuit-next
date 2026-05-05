@@ -9,7 +9,7 @@ import type {
   ComposeBuildContext,
   ComposeBuilder,
 } from '../../../runtime/registries/compose-writers/types.js';
-import { resolveRunRelative } from '../../../runtime/run-relative-path.js';
+import { resolveRunRelative } from '../../../shared/run-relative-path.js';
 import {
   ExploreDecision,
   ExploreDecisionOptionId,

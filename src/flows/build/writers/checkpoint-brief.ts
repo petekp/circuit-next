@@ -14,15 +14,15 @@
 
 import { readFileSync } from 'node:fs';
 import { z } from 'zod';
-import { sha256Hex } from '../../../runtime/connectors/shared.js';
 import {
   type CheckpointBriefBuilder,
   type CheckpointBuildContext,
   type CheckpointResumeContext,
   checkpointChoiceIds,
 } from '../../../runtime/registries/checkpoint-writers/types.js';
-import { resolveRunRelative } from '../../../runtime/run-relative-path.js';
 import { VerificationCommand } from '../../../schemas/verification.js';
+import { sha256Hex } from '../../../shared/connector-relay.js';
+import { resolveRunRelative } from '../../../shared/run-relative-path.js';
 import { BuildBrief } from '../reports.js';
 
 const BuildBriefReportTemplate = z

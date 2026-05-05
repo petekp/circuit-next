@@ -16,7 +16,7 @@ import type {
   VerificationCommand,
   VerificationCommandObservation,
 } from '../../../runtime/registries/verification-writers/types.js';
-import { resolveRunRelative } from '../../../runtime/run-relative-path.js';
+import { resolveRunRelative } from '../../../shared/run-relative-path.js';
 import { SweepBrief, SweepVerification } from '../reports.js';
 
 export const sweepVerificationWriter: VerificationBuilder = {

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { CompiledFlow } from '../../schemas/compiled-flow.js';
 import { EnabledConnector, type ResolvedConnector } from '../../schemas/connector.js';
@@ -6,101 +6,18 @@ import { materializeRelay } from '../connectors/relay-materializer.js';
 import { type RelayResult, sha256Hex } from '../connectors/shared.js';
 import { runCrossReportValidator } from '../registries/cross-report-validators.js';
 import { parseReport } from '../registries/report-schemas.js';
-import { findRelayShapeHint } from '../registries/shape-hints/registry.js';
 import { deriveResolvedSelection, resolveRelayDecision } from '../relay-selection.js';
+import {
+  type CheckEvaluation,
+  NO_VERDICT_SENTINEL,
+  type RelayStep,
+  composeRelayPrompt,
+  evaluateRelayCheck,
+} from '../relay-support.js';
 import { resolveRunRelative } from '../run-relative-path.js';
 import type { RelayInput } from '../runner-types.js';
 import { recoveryRouteForStep } from './recovery-route.js';
 import type { StepHandlerContext, StepHandlerResult } from './types.js';
-
-export type RelayStep = CompiledFlow['steps'][number] & { kind: 'relay' };
-
-// Parse connector result_body for the check verdict and evaluate against
-// `step.check.pass`. Result shape: a discriminated union the handler
-// consumes downstream. On 'pass' the handler uses the parsed verdict on
-// `relay.completed` and emits `check.evaluated` with `outcome: 'pass'`.
-// On 'fail' the handler emits `check.evaluated` with `outcome: 'fail'` +
-// the reason, then either takes a declared recovery route or aborts.
-// The relay-completed verdict on fail carries the observed verdict when one
-// was present (e.g., a parseable body with a verdict not in pass), so the
-// durable transcript reflects what the connector said even on rejection.
-// When no verdict was observable (unparseable / no verdict field),
-// `relay.completed.verdict` carries the `'<no-verdict>'` sentinel —
-// `RelayCompletedTraceEntry.verdict` is `z.string().min(1)` so the slot must
-// hold a non-empty string.
-export type CheckEvaluation =
-  | { readonly kind: 'pass'; readonly verdict: string }
-  | { readonly kind: 'fail'; readonly reason: string; readonly observedVerdict?: string };
-
-const NO_VERDICT_SENTINEL = '<no-verdict>';
-
-export function evaluateRelayCheck(step: RelayStep, resultBody: string): CheckEvaluation {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(resultBody);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return {
-      kind: 'fail',
-      reason: `relay step '${step.id}': connector result_body did not parse as JSON (${msg})`,
-    };
-  }
-  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    return {
-      kind: 'fail',
-      reason: `relay step '${step.id}': connector result_body parsed but is not a JSON object (got ${parsed === null ? 'null' : Array.isArray(parsed) ? 'array' : typeof parsed})`,
-    };
-  }
-  const verdictRaw = (parsed as Record<string, unknown>).verdict;
-  if (typeof verdictRaw !== 'string' || verdictRaw.length === 0) {
-    return {
-      kind: 'fail',
-      reason: `relay step '${step.id}': connector result_body lacks a non-empty string 'verdict' field (got ${typeof verdictRaw === 'string' ? 'empty string' : typeof verdictRaw})`,
-    };
-  }
-  if (!step.check.pass.includes(verdictRaw)) {
-    return {
-      kind: 'fail',
-      reason: `relay step '${step.id}': connector declared verdict '${verdictRaw}' which is not in check.pass [${step.check.pass.join(', ')}]`,
-      observedVerdict: verdictRaw,
-    };
-  }
-  return { kind: 'pass', verdict: verdictRaw };
-}
-
-const GENERIC_DISPATCH_SHAPE_HINT =
-  'Respond with a single raw JSON object whose top-level shape is exactly { "verdict": "<one-of-accepted-verdicts>" } (additional fields permitted). Do not wrap the JSON in Markdown code fences. Do not include any prose before or after the JSON object. The runtime parses your response with JSON.parse and rejects the run on any parse failure or on a verdict not drawn from the accepted-verdicts list.';
-
-function relayResponseInstruction(step: RelayStep): string {
-  return findRelayShapeHint(step) ?? GENERIC_DISPATCH_SHAPE_HINT;
-}
-
-// v0 prompt composition: name the step, enumerate accepted verdicts, and
-// inline every reads-declared report (or a clear placeholder if the
-// reads report hasn't been written yet).
-export function composeRelayPrompt(step: RelayStep, runFolder: string): string {
-  const readsBody =
-    step.reads.length === 0
-      ? '(no reads)'
-      : step.reads
-          .map((path) => {
-            const abs = resolveRunRelative(runFolder, path);
-            if (!existsSync(abs)) return `[reads unavailable: ${path}]`;
-            return `--- ${path} ---\n${readFileSync(abs, 'utf8')}`;
-          })
-          .join('\n\n');
-  return [
-    `Step: ${step.id}`,
-    `Title: ${step.title}`,
-    `Role: ${step.role}`,
-    `Accepted verdicts: ${step.check.pass.join(', ')}`,
-    '',
-    'Context (from reads):',
-    readsBody,
-    '',
-    relayResponseInstruction(step),
-  ].join('\n');
-}
 
 function connectorFailureReason(stepId: string, err: unknown): string {
   const message = err instanceof Error ? err.message : String(err);

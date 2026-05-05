@@ -773,6 +773,8 @@ function supportCapabilities(rootCommands, proofAxesByCapability, proofs, router
         'README.md',
         'docs/first-run.md',
         'docs/contracts/host-capabilities.md',
+        'src/shared/operator-summary-writer.ts',
+        'src/shared/write-capable-worker-disclosure.ts',
         'src/runtime/write-capable-worker-disclosure.ts',
         'src/runtime/runner.ts',
         'src/runtime/operator-summary-writer.ts',

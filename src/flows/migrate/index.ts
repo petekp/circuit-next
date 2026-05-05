@@ -6,7 +6,15 @@
 
 import type { CompiledFlowPackage, CompiledFlowSignal } from '../types.js';
 import { migrateInventoryShapeHint } from './relay-hints.js';
-import { MigrateInventory, MigrateReview } from './reports.js';
+import {
+  MigrateBatch,
+  MigrateBrief,
+  MigrateCoexistence,
+  MigrateInventory,
+  MigrateResult,
+  MigrateReview,
+  MigrateVerification,
+} from './reports.js';
 import { migrateBriefComposeBuilder } from './writers/brief.js';
 import { migrateCloseBuilder } from './writers/close.js';
 import { migrateCoexistenceComposeBuilder } from './writers/coexistence.js';
@@ -46,6 +54,13 @@ export const migrateCompiledFlowPackage: CompiledFlowPackage = {
       relayHint: migrateInventoryShapeHint.instruction,
     },
     { schemaName: 'migrate.review@v1', schema: MigrateReview },
+  ],
+  reportSchemas: [
+    { schemaName: 'migrate.brief@v1', schema: MigrateBrief },
+    { schemaName: 'migrate.coexistence@v1', schema: MigrateCoexistence },
+    { schemaName: 'migrate.batch@v1', schema: MigrateBatch },
+    { schemaName: 'migrate.verification@v1', schema: MigrateVerification },
+    { schemaName: 'migrate.result@v1', schema: MigrateResult },
   ],
   writers: {
     compose: [migrateBriefComposeBuilder, migrateCoexistenceComposeBuilder],

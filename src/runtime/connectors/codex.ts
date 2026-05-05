@@ -1,8 +1,8 @@
 import { type ChildProcess, execFileSync, spawn } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
 import type { Effort } from '../../schemas/selection-policy.js';
+import { extractJsonObject, selectedModelForProvider } from '../../shared/connector-helpers.js';
 import type { ConnectorRelayInput, RelayResult } from './shared.js';
-import { extractJsonObject, selectedModelForProvider } from './shared.js';
 
 // Codex CLI connector. Invokes Codex as a Node subprocess (no external
 // SDK dependency; Node stdlib only — node:child_process, node:perf_hooks,

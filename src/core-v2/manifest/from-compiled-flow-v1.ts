@@ -1,0 +1,171 @@
+import type { CompiledFlow } from '../../schemas/compiled-flow.js';
+import type { SelectionOverride } from '../../schemas/selection-policy.js';
+import type { ReportRef } from '../../schemas/step.js';
+import {
+  type RouteTarget,
+  type RoutesV2,
+  TERMINAL_TARGETS,
+  type TerminalTarget,
+} from '../domain/route.js';
+import type { RunFileRef } from '../domain/run-file.js';
+import type { Selection } from '../domain/selection.js';
+import type { BaseStepV2, ExecutableFlowV2, ExecutableStepV2 } from './executable-flow.js';
+import { assertExecutableFlowV2 } from './validate-executable-flow.js';
+
+type CompiledStepV1 = CompiledFlow['steps'][number];
+
+function isReportRef(value: unknown): value is ReportRef {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { readonly path?: unknown }).path === 'string' &&
+    typeof (value as { readonly schema?: unknown }).schema === 'string'
+  );
+}
+
+function toRunFileRef(value: string | ReportRef): RunFileRef {
+  if (isReportRef(value)) return { path: value.path, schema: value.schema };
+  return { path: value };
+}
+
+function toWrites(
+  writes: Record<string, string | ReportRef | undefined>,
+): Record<string, RunFileRef> {
+  const mapped: Record<string, RunFileRef> = {};
+  for (const [slot, value] of Object.entries(writes)) {
+    if (value === undefined) continue;
+    mapped[slot] = toRunFileRef(value);
+  }
+  return mapped;
+}
+
+function toRoutes(routes: Record<string, string>): RoutesV2 {
+  const terminalTargets = new Set<string>(TERMINAL_TARGETS);
+  const mapped: Record<string, RouteTarget> = {};
+  for (const [routeName, target] of Object.entries(routes)) {
+    mapped[routeName] = terminalTargets.has(target)
+      ? { kind: 'terminal', target: target as TerminalTarget }
+      : { kind: 'step', stepId: target };
+  }
+  return mapped;
+}
+
+function toSelection(selection: SelectionOverride | undefined): Selection | undefined {
+  if (selection === undefined) return undefined;
+  return {
+    ...(selection.model === undefined ? {} : { model: selection.model }),
+    ...(selection.effort === undefined ? {} : { effort: selection.effort }),
+    ...(selection.skills === undefined ? {} : { skills: selection.skills }),
+    ...(selection.depth === undefined ? {} : { depth: selection.depth }),
+    ...(selection.invocation_options === undefined
+      ? {}
+      : { invocation_options: selection.invocation_options }),
+  };
+}
+
+function baseStep(step: CompiledStepV1): BaseStepV2 {
+  const selection = toSelection(step.selection);
+  return {
+    id: step.id,
+    title: step.title,
+    protocol: step.protocol,
+    routes: toRoutes(step.routes),
+    reads: step.reads.map((path) => ({ path })),
+    writes: toWrites(step.writes as Record<string, string | ReportRef | undefined>),
+    ...(selection === undefined ? {} : { selection }),
+    check: step.check,
+    ...(step.budgets === undefined ? {} : { budgets: step.budgets }),
+  };
+}
+
+function convertStep(step: CompiledStepV1): ExecutableStepV2 {
+  const base = baseStep(step);
+  if (step.kind === 'compose') {
+    return { ...base, kind: 'compose', writer: step.protocol };
+  }
+  if (step.kind === 'verification') {
+    return { ...base, kind: 'verification', check: step.check };
+  }
+  if (step.kind === 'checkpoint') {
+    return {
+      ...base,
+      kind: 'checkpoint',
+      choices: step.policy.choices.map((choice) => choice.id),
+      policy: step.policy,
+    };
+  }
+  if (step.kind === 'relay') {
+    return {
+      ...base,
+      kind: 'relay',
+      role: step.role,
+      ...(step.writes.report === undefined ? {} : { report: toRunFileRef(step.writes.report) }),
+    };
+  }
+  if (step.kind === 'sub-run') {
+    return {
+      ...base,
+      kind: 'sub-run',
+      flowRef: step.flow_ref.flow_id,
+      entryMode: step.flow_ref.entry_mode,
+      ...(step.flow_ref.version === undefined ? {} : { version: step.flow_ref.version }),
+      goal: step.goal,
+      depth: step.depth,
+    };
+  }
+  return {
+    ...base,
+    kind: 'fanout',
+    branches: step.branches,
+    join: {
+      aggregate: toRunFileRef(step.writes.aggregate),
+      on_child_failure: step.on_child_failure,
+    },
+    concurrency: step.concurrency,
+    onChildFailure: step.on_child_failure,
+  };
+}
+
+export function fromCompiledFlowV1(flow: CompiledFlow): ExecutableFlowV2 {
+  const defaultEntryMode = flow.entry_modes[0];
+  if (defaultEntryMode === undefined) {
+    throw new Error(`compiled flow v1 '${flow.id}' has no entry modes`);
+  }
+
+  const defaultSelection = toSelection(flow.default_selection);
+  const executable: ExecutableFlowV2 = {
+    id: flow.id,
+    version: flow.version,
+    purpose: flow.purpose,
+    entry: defaultEntryMode.start_at,
+    entryModes: flow.entry_modes.map((mode) => ({
+      name: mode.name,
+      startAt: mode.start_at,
+      depth: mode.depth,
+      description: mode.description,
+      ...(mode.default_change_kind === undefined
+        ? {}
+        : { defaultChangeKind: mode.default_change_kind }),
+    })),
+    stages: flow.stages.map((stage) => {
+      const selection = toSelection(stage.selection);
+      return {
+        id: stage.id,
+        title: stage.title,
+        ...(stage.canonical === undefined ? {} : { canonical: stage.canonical }),
+        stepIds: stage.steps,
+        ...(selection === undefined ? {} : { selection }),
+      };
+    }),
+    steps: flow.steps.map((step) => convertStep(step)),
+    ...(defaultSelection === undefined ? {} : { defaultSelection }),
+    stagePathPolicy: flow.stage_path_policy,
+    metadata: {
+      source: 'compiled-flow-v1',
+      schema_version: flow.schema_version,
+    },
+  };
+
+  assertExecutableFlowV2(executable);
+  return executable;
+}

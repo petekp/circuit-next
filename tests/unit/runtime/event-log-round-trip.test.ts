@@ -7,6 +7,10 @@ import { ManifestSnapshot, computeManifestHash } from '../../../src/schemas/mani
 import { RunProjection, type RunTrace } from '../../../src/schemas/run.js';
 import { Snapshot } from '../../../src/schemas/snapshot.js';
 import { RunBootstrappedTraceEntry, TraceEntry } from '../../../src/schemas/trace-entry.js';
+import {
+  readManifestSnapshot as readSharedManifestSnapshot,
+  writeManifestSnapshot as writeSharedManifestSnapshot,
+} from '../../../src/shared/manifest-snapshot.js';
 
 import {
   manifestSnapshotPath,
@@ -241,6 +245,24 @@ describe('trace.ndjson append→reduce→state.json round-trip', () => {
     expect(decoded.equals(MANIFEST_BODY)).toBe(true);
     expect(computeManifestHash(decoded)).toBe(manifestHash);
     expect(manifest.hash).toBe(manifestHash);
+  });
+
+  it('shared and runtime manifest snapshot paths stay compatible', () => {
+    initRunFolder({ runFolder });
+    const input = {
+      run_id: RUN_ID as unknown as import('../../../src/schemas/ids.js').RunId,
+      flow_id: WORKFLOW_ID as unknown as import('../../../src/schemas/ids.js').CompiledFlowId,
+      captured_at: baseRecordedAt(0),
+      bytes: MANIFEST_BODY,
+    };
+    const runtimeSnapshot = writeManifestSnapshot(runFolder, input);
+    expect(readSharedManifestSnapshot(runFolder)).toEqual(runtimeSnapshot);
+
+    const sharedSnapshot = writeSharedManifestSnapshot(runFolder, {
+      ...input,
+      captured_at: baseRecordedAt(1),
+    });
+    expect(readManifestSnapshot(runFolder)).toEqual(sharedSnapshot);
   });
 
   it('corrupt manifest snapshot bytes: parse fails loudly', () => {

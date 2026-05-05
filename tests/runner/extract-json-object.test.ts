@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractJsonObject } from '../../src/runtime/connectors/shared.js';
+import { extractJsonObject } from '../../src/shared/connector-helpers.js';
 
 // Tolerant JSON extraction guard. Workers occasionally narrate status
 // before or after their JSON response despite the shape-hint

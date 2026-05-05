@@ -1,7 +1,16 @@
 // Fix flow package.
 
 import type { CompiledFlowPackage, CompiledFlowSignal } from '../types.js';
-import { FixChange, FixContext, FixDiagnosis, FixReview } from './reports.js';
+import {
+  FixBrief,
+  FixChange,
+  FixContext,
+  FixDiagnosis,
+  FixNoReproDecision,
+  FixResult,
+  FixReview,
+  FixVerification,
+} from './reports.js';
 import { fixBriefComposeBuilder } from './writers/brief.js';
 import { fixCloseBuilder } from './writers/close.js';
 import { fixVerificationWriter } from './writers/verification.js';
@@ -40,6 +49,12 @@ export const fixCompiledFlowPackage: CompiledFlowPackage = {
     { schemaName: 'fix.diagnosis@v1', schema: FixDiagnosis },
     { schemaName: 'fix.change@v1', schema: FixChange },
     { schemaName: 'fix.review@v1', schema: FixReview },
+  ],
+  reportSchemas: [
+    { schemaName: 'fix.brief@v1', schema: FixBrief },
+    { schemaName: 'fix.no-repro-decision@v1', schema: FixNoReproDecision },
+    { schemaName: 'fix.verification@v1', schema: FixVerification },
+    { schemaName: 'fix.result@v1', schema: FixResult },
   ],
   writers: {
     compose: [fixBriefComposeBuilder],

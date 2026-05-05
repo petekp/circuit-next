@@ -1,34 +1,23 @@
 import type { ChangeKindDeclaration } from '../schemas/change-kind.js';
 import type { CompiledFlow } from '../schemas/compiled-flow.js';
 import type { LayeredConfig as LayeredConfigValue } from '../schemas/config.js';
-import type { ResolvedConnector } from '../schemas/connector.js';
 import type { Depth } from '../schemas/depth.js';
 import type { CompiledFlowId, InvocationId, RunId } from '../schemas/ids.js';
-import type { ProgressEvent } from '../schemas/progress-event.js';
 import type { RunResult } from '../schemas/result.js';
-import type { ResolvedSelection } from '../schemas/selection-policy.js';
 import type { Snapshot } from '../schemas/snapshot.js';
 import type { CompiledFlowRef } from '../schemas/step.js';
 import type { TraceEntry } from '../schemas/trace-entry.js';
-import type { ConnectorRelayInput, RelayResult } from './connectors/shared.js';
-
-// Structured relayer descriptor. Without it, `RelayFn` would be a
-// bare function type and the runner's materializer call site would
-// hardcode `connectorName: 'claude-code'`; injecting a non-claude-code relayer
-// (e.g. `relayCodex`) through `CompiledFlowInvocation.relayer` would
-// silently lie on the `relay.started` trace_entry's connector discriminant.
-// The descriptor binds the relayer function to its connector identity
-// at the injection seam, so the materializer is parameterized from the
-// descriptor instead of from a call-site literal.
-export interface RelayFn {
-  readonly connectorName: string;
-  readonly connector?: ResolvedConnector;
-  readonly relay: (input: RelayInput) => Promise<RelayResult>;
-}
-
-export interface RelayInput extends ConnectorRelayInput {
-  readonly resolvedSelection?: ResolvedSelection;
-}
+import type {
+  ProgressReporter,
+  RelayFn,
+  RuntimeEvidencePolicy,
+} from '../shared/relay-runtime-types.js';
+export type {
+  ProgressReporter,
+  RelayFn,
+  RelayInput,
+  RuntimeEvidencePolicy,
+} from '../shared/relay-runtime-types.js';
 
 export interface ComposeWriterInput {
   readonly runFolder: string;
@@ -62,7 +51,6 @@ export interface ResolvedChildCompiledFlow {
 }
 
 export type ChildCompiledFlowResolver = (ref: CompiledFlowRef) => ResolvedChildCompiledFlow;
-export type ProgressReporter = (event: ProgressEvent) => void;
 
 // Fanout-runtime worktree provisioning seam. Default implementation
 // shells out to `git worktree add` / `git worktree remove`. The seam
@@ -128,10 +116,6 @@ export interface CompiledFlowInvocation {
   // JSONL for hosts that want live updates while preserving final stdout
   // JSON. Runtime correctness never depends on this callback.
   progress?: ProgressReporter;
-}
-
-export interface RuntimeEvidencePolicy {
-  readonly includeUntrackedFileContent?: boolean;
 }
 
 export interface CheckpointResumeInvocation {

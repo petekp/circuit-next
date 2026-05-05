@@ -12,8 +12,8 @@ import type {
   ComposeBuildContext,
   ComposeBuilder,
 } from '../../../runtime/registries/compose-writers/types.js';
-import { resolveRunRelative } from '../../../runtime/run-relative-path.js';
 import type { CompiledFlow } from '../../../schemas/compiled-flow.js';
+import { resolveRunRelative } from '../../../shared/run-relative-path.js';
 import {
   type ReviewEvidence,
   type ReviewEvidenceSummary,

@@ -3,7 +3,6 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readManifestSnapshot } from '../runtime/manifest-snapshot-writer.js';
 import { deriveSnapshot } from '../runtime/snapshot-writer.js';
 import { CompiledFlow } from '../schemas/compiled-flow.js';
 import {
@@ -14,6 +13,7 @@ import {
 } from '../schemas/continuity.js';
 import type { ControlPlaneFileStem } from '../schemas/scalars.js';
 import type { Snapshot } from '../schemas/snapshot.js';
+import { readManifestSnapshot } from '../shared/manifest-snapshot.js';
 import { utilityProgress } from './utility-progress.js';
 
 type HandoffAction = 'save' | 'resume' | 'done' | 'brief' | 'hook' | 'hooks';

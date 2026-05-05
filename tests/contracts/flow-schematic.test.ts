@@ -201,7 +201,8 @@ describe('flow schematic schema — active Fix schematic', () => {
     const result = FlowSchematic.safeParse(raw);
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.message).toMatch(/relay execution requires a relay role/);
+      expect(result.error.message).toMatch(/"path":\s*\[\s*"items",\s*4,\s*"execution",\s*"role"/);
+      expect(result.error.message).toMatch(/Required/);
     }
   });
 
@@ -215,7 +216,7 @@ describe('flow schematic schema — active Fix schematic', () => {
     const result = FlowSchematic.safeParse(raw);
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.message).toMatch(/relay role is only allowed for relay execution/);
+      expect(result.error.message).toMatch(/Unrecognized key\(s\) in object: 'role'/);
     }
   });
 

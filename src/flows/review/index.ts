@@ -2,6 +2,7 @@
 
 import type { CompiledFlowPackage, CompiledFlowSignal } from '../types.js';
 import { reviewRelayShapeHint } from './relay-hints.js';
+import { ReviewIntake, ReviewResult } from './reports.js';
 import { reviewIntakeComposeBuilder } from './writers/intake.js';
 import { reviewResultComposeBuilder } from './writers/result.js';
 
@@ -50,6 +51,10 @@ export const reviewCompiledFlowPackage: CompiledFlowPackage = {
     },
   },
   relayReports: [],
+  reportSchemas: [
+    { schemaName: 'review.intake@v1', schema: ReviewIntake },
+    { schemaName: 'review.result@v1', schema: ReviewResult },
+  ],
   writers: {
     compose: [reviewIntakeComposeBuilder, reviewResultComposeBuilder],
     close: [],

@@ -7,7 +7,7 @@
       "compatibility_policy": "n/a",
       "plane": "control-plane",
       "description": "Typed, versioned definition of a multi-step automation. Compiles to a stable execution graph the runtime can replay from trace_entries.",
-      "contract": "docs/contracts/flow.md",
+      "contract": "docs/contracts/compiled-flow.md",
       "schema_file": "src/schemas/compiled-flow.ts",
       "schema_exports": ["CompiledFlow", "EntryMode", "EntrySignals"],
       "writers": ["circuit-next flow author (offline)"],
@@ -34,7 +34,7 @@
       "compatibility_policy": "n/a",
       "plane": "control-plane",
       "description": "Machine-readable catalog of reusable flow blocks. Names each block, its input and output contracts, evidence, check, allowed routes, and host-specific human-decision handling.",
-      "contract": "docs/contracts/flow.md",
+      "contract": "docs/contracts/compiled-flow.md",
       "schema_file": "src/schemas/flow-blocks.ts",
       "schema_exports": [
         "FLOW_BLOCK_IDS",
@@ -73,7 +73,7 @@
       "compatibility_policy": "n/a",
       "plane": "control-plane",
       "description": "Authoring-layer schematic shape for assembling reusable flow blocks into runnable compiled flows. Captures schematic steps, stage bindings, execution labels, typed evidence contracts, contract aliases, named route targets, and per-depth route_overrides. Compiled to generated/flows/<id>/circuit.json (and per-mode <mode>.json siblings) by src/runtime/compile-schematic-to-flow.ts at build time.",
-      "contract": "docs/contracts/flow.md",
+      "contract": "docs/contracts/compiled-flow.md",
       "schema_file": "src/schemas/flow-schematic.ts",
       "schema_exports": [
         "FlowSchematicStatus",

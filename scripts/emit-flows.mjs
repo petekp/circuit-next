@@ -376,6 +376,99 @@ function markdownTableRow(cells) {
   return `| ${cells.join(' | ')} |`;
 }
 
+function renderSurfaceInventory() {
+  const rows = [
+    [
+      'Flow-owned commands',
+      '`src/flows/<id>/command.md`',
+      '`scripts/emit-flows.mjs`',
+      'source yes; outputs no',
+      '`commands/<id>.md`<br>`plugins/circuit/commands/<id>.md`<br>`plugins/circuit/skills/<id>/SKILL.md`',
+      '`node scripts/emit-flows.mjs --check`',
+      'Only public flows with `paths.command` emit these surfaces. Generated headers are omitted to preserve host command and skill parsing.',
+    ],
+    [
+      'Root/router commands',
+      '`commands/<id>.md`',
+      '`scripts/emit-flows.mjs` mirrors to Codex plugin surfaces',
+      'root source yes; mirrors no',
+      '`plugins/circuit/commands/<id>.md`<br>`plugins/circuit/skills/<id>/SKILL.md`',
+      '`node scripts/emit-flows.mjs --check`',
+      'Covers router/direct commands such as run, create, handoff, migrate, and sweep.',
+    ],
+    [
+      'Generated flow manifests',
+      '`src/flows/<id>/schematic.json` plus flow package metadata',
+      '`npm run build && node scripts/emit-flows.mjs`',
+      'no',
+      '`generated/flows/<id>/*.json`',
+      '`node scripts/emit-flows.mjs --check`',
+      'Canonical compiled-flow outputs. JSON cannot carry generated headers without changing host parsing.',
+    ],
+    [
+      'Claude plugin flow mirrors',
+      '`generated/flows/<id>/*.json`',
+      '`scripts/emit-flows.mjs`',
+      'no',
+      '`.claude-plugin/skills/<id>/*.json`',
+      '`node scripts/emit-flows.mjs --check`',
+      'Public flows only. Internal flow mirrors are stale and fail drift checks.',
+    ],
+    [
+      'Codex plugin flow mirrors',
+      '`generated/flows/<id>/*.json`',
+      '`scripts/emit-flows.mjs`',
+      'no',
+      '`plugins/circuit/flows/<id>/*.json`',
+      '`node scripts/emit-flows.mjs --check`',
+      'Public flows only. Internal flow mirrors are stale and fail drift checks.',
+    ],
+    [
+      'Codex plugin command mirrors',
+      'flow-owned command sources or root command sources',
+      '`scripts/emit-flows.mjs`',
+      'no',
+      '`plugins/circuit/commands/<id>.md`',
+      '`node scripts/emit-flows.mjs --check`',
+      'Generated headers are omitted to preserve host command parsing and byte-for-byte mirror checks.',
+    ],
+    [
+      'Codex plugin skill surfaces',
+      'flow-owned command sources or root command sources',
+      '`scripts/emit-flows.mjs`',
+      'no',
+      '`plugins/circuit/skills/<id>/SKILL.md`',
+      '`node scripts/emit-flows.mjs --check`',
+      'Skill metadata is generated from script-owned metadata plus command source body.',
+    ],
+    [
+      'Command README',
+      'none currently',
+      'none currently',
+      'not applicable',
+      'none currently',
+      'not applicable',
+      'There is no `commands/README.md` surface today; command ownership is mapped here instead.',
+    ],
+  ];
+  return [
+    '## Surface Inventory',
+    '',
+    markdownTableRow([
+      'Surface',
+      'Source of truth',
+      'Generator',
+      'Human-editable',
+      'Expected destinations',
+      'Validation / drift check',
+      'Notes',
+    ]),
+    markdownTableRow(['---', '---', '---', '---', '---', '---', '---']),
+    ...rows.map((row) => markdownTableRow(row)),
+    '',
+  ].join('\n');
+}
+
 function commandSurfacesForEntry(entry) {
   if (entry.visibility !== 'public') return [];
   if (entry.commandSourcePath !== undefined) {
@@ -471,6 +564,7 @@ async function renderGeneratedSurfaceMap() {
     '- Internal flows emit only under `generated/flows/**`; host mirrors for internal flows are stale and fail the drift check.',
     '- After editing an authored source, run `npm run build && npm run emit-flows`, then verify.',
     '',
+    renderSurfaceInventory(),
     '## Flow Outputs',
     '',
     markdownTableRow([

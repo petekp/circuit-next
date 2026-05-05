@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { validateCompiledFlowKindPolicy } from '../runtime/policy/flow-kind-policy.js';
 import { CompiledFlow } from '../schemas/compiled-flow.js';
+import { validateCompiledFlowKindPolicy } from '../shared/flow-kind-policy.js';
 import { utilityProgress } from './utility-progress.js';
 
 interface CreateArgs {

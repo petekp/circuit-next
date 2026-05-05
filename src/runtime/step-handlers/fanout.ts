@@ -6,6 +6,7 @@ import type { CompiledFlow } from '../../schemas/compiled-flow.js';
 import { RunId } from '../../schemas/ids.js';
 import { runCrossReportValidator } from '../registries/cross-report-validators.js';
 import { parseReport } from '../registries/report-schemas.js';
+import type { RelayStep } from '../relay-support.js';
 import { resultPath } from '../result-writer.js';
 import { resolveRunRelative } from '../run-relative-path.js';
 import type { CompiledFlowInvocation, WorktreeRunner } from '../runner-types.js';
@@ -24,7 +25,7 @@ import {
   type ResolvedBranch,
   type ResolvedRelayBranch,
 } from './fanout/types.js';
-import { type RelayStep, executeRelayPrimitive } from './relay.js';
+import { executeRelayPrimitive } from './relay.js';
 import { isRunRelativePathError, writeJsonReport } from './shared.js';
 import type { StepHandlerContext, StepHandlerResult } from './types.js';
 

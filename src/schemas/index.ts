@@ -26,4 +26,5 @@ export * from './verification.js';
 export * from './compiled-flow-compat.js';
 export * from './compiled-flow.js';
 export * from './flow-blocks.js';
+export * from './flow-schematic-policy.js';
 export * from './flow-schematic.js';

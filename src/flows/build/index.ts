@@ -2,7 +2,14 @@
 
 import type { CompiledFlowPackage, CompiledFlowSignal } from '../types.js';
 import { buildImplementationShapeHint, buildReviewShapeHint } from './relay-hints.js';
-import { BuildImplementation, BuildReview } from './reports.js';
+import {
+  BuildBrief,
+  BuildImplementation,
+  BuildPlan,
+  BuildResult,
+  BuildReview,
+  BuildVerification,
+} from './reports.js';
 import { buildBriefCheckpointBuilder } from './writers/checkpoint-brief.js';
 import { buildCloseBuilder } from './writers/close.js';
 import { buildPlanComposeBuilder } from './writers/plan.js';
@@ -58,6 +65,12 @@ export const buildCompiledFlowPackage: CompiledFlowPackage = {
       schema: BuildReview,
       relayHint: buildReviewShapeHint.instruction,
     },
+  ],
+  reportSchemas: [
+    { schemaName: 'build.brief@v1', schema: BuildBrief },
+    { schemaName: 'build.plan@v1', schema: BuildPlan },
+    { schemaName: 'build.verification@v1', schema: BuildVerification },
+    { schemaName: 'build.result@v1', schema: BuildResult },
   ],
   writers: {
     compose: [buildPlanComposeBuilder],

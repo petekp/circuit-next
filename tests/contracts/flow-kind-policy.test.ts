@@ -8,8 +8,9 @@ import {
 } from '../../scripts/policy/flow-kind-policy.mjs';
 import {
   type ValidateCompiledFlowKindPolicyResult,
-  validateCompiledFlowKindPolicy,
+  validateCompiledFlowKindPolicy as runtimeValidateCompiledFlowKindPolicy,
 } from '../../src/runtime/policy/flow-kind-policy.js';
+import { validateCompiledFlowKindPolicy } from '../../src/shared/flow-kind-policy.js';
 
 // validateCompiledFlowKindPolicy helper unit tests cover the shared JS
 // canonical-set check AND the TS wrapper that adds CompiledFlow.safeParse.
@@ -541,6 +542,16 @@ describe('checkCompiledFlowKindCanonicalPolicy (audit-level, no Zod)', () => {
 });
 
 describe('validateCompiledFlowKindPolicy (runtime-level, safeParse-first)', () => {
+  it('keeps the runtime compatibility wrapper identical to the shared helper', () => {
+    const fixture = validExploreFixture();
+    expect(runtimeValidateCompiledFlowKindPolicy(fixture)).toEqual(
+      validateCompiledFlowKindPolicy(fixture),
+    );
+    expect(runtimeValidateCompiledFlowKindPolicy({ id: 'explore' })).toEqual(
+      validateCompiledFlowKindPolicy({ id: 'explore' }),
+    );
+  });
+
   it('returns ok:true green on a fully valid explore flow', () => {
     const result: ValidateCompiledFlowKindPolicyResult = validateCompiledFlowKindPolicy(
       validExploreFixture(),

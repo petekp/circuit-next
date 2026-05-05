@@ -3,7 +3,7 @@
  * shared JS module that holds the single source of truth for flow-
  * kind canonical stage-set policy. Consumed by:
  *   - scripts/audit.mjs Check 24 (checkSpineCoverage) — audit-level.
- *   - src/runtime/policy/flow-kind-policy.ts — runtime-level
+ *   - src/shared/flow-kind-policy.ts — runtime-level
  *     (adds CompiledFlow.safeParse wrapper on top of this module's exports).
  */
 

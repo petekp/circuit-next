@@ -1,6 +1,6 @@
 // Single source of truth for flow-kind canonical stage-set policy.
 //
-// Consumed by src/runtime/policy/flow-kind-policy.ts, which wraps these
+// Consumed by src/shared/flow-kind-policy.ts, which wraps these
 // checks with Zod-driven CompiledFlow.safeParse so the CLI fixture
 // loader can reject structurally- or policy-invalid fixtures with one
 // call.
@@ -233,7 +233,7 @@ export function checkReviewIdentitySeparationPolicy(fixture) {
 /**
  * Canonical-stage-set check. Input is a raw fixture object (already
  * JSON-parsed). Does not run CompiledFlow.safeParse — that wrapper lives
- * in src/runtime/policy/flow-kind-policy.ts so this stays Zod-free and
+ * in src/shared/flow-kind-policy.ts so this stays Zod-free and
  * callable from non-TS contexts.
  *
  * Returns a discriminated result:

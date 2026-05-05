@@ -5,14 +5,19 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { main } from '../../src/cli/circuit.js';
 import {
-  discoverConfigLayers,
-  projectConfigPath,
-  userGlobalConfigPath,
+  discoverConfigLayers as runtimeDiscoverConfigLayers,
+  projectConfigPath as runtimeProjectConfigPath,
+  userGlobalConfigPath as runtimeUserGlobalConfigPath,
 } from '../../src/runtime/config-loader.js';
 import type { RelayResult } from '../../src/runtime/connectors/shared.js';
 import type { RelayFn, RelayInput } from '../../src/runtime/runner.js';
 import { CompiledFlowId, SkillId } from '../../src/schemas/ids.js';
 import type { ResolvedSelection } from '../../src/schemas/selection-policy.js';
+import {
+  discoverConfigLayers,
+  projectConfigPath,
+  userGlobalConfigPath,
+} from '../../src/shared/config-loader.js';
 
 let root: string;
 let homeDir: string;
@@ -82,6 +87,27 @@ afterEach(() => {
 });
 
 describe('config loader', () => {
+  it('keeps the runtime compatibility wrapper identical to the shared loader', () => {
+    writeUserConfig(`
+schema_version: 1
+defaults:
+  selection:
+    effort: low
+`);
+    writeProjectConfig(`
+schema_version: 1
+defaults:
+  selection:
+    effort: high
+`);
+
+    expect(runtimeUserGlobalConfigPath(homeDir)).toBe(userGlobalConfigPath(homeDir));
+    expect(runtimeProjectConfigPath(cwdDir)).toBe(projectConfigPath(cwdDir));
+    expect(runtimeDiscoverConfigLayers({ homeDir, cwd: cwdDir })).toEqual(
+      discoverConfigLayers({ homeDir, cwd: cwdDir }),
+    );
+  });
+
   it('loads canonical user-global and project YAML files as LayeredConfig records', () => {
     writeUserConfig(`
 schema_version: 1
@@ -198,6 +224,12 @@ circuits:
     };
     const runFolder = join(root, 'run');
     const stdout = captureStdout();
+    const originalStrictRuntime = process.env.CIRCUIT_V2_RUNTIME;
+    const originalCandidateRuntime = process.env.CIRCUIT_V2_RUNTIME_CANDIDATE;
+    const originalDisableRuntime = process.env.CIRCUIT_DISABLE_V2_RUNTIME;
+    process.env.CIRCUIT_V2_RUNTIME = undefined;
+    process.env.CIRCUIT_V2_RUNTIME_CANDIDATE = undefined;
+    process.env.CIRCUIT_DISABLE_V2_RUNTIME = '1';
     try {
       const exit = await main(
         ['explore', '--goal', 'prove config reaches selection evidence', '--run-folder', runFolder],
@@ -212,6 +244,9 @@ circuits:
       expect(exit).toBe(0);
     } finally {
       stdout.restore();
+      process.env.CIRCUIT_V2_RUNTIME = originalStrictRuntime;
+      process.env.CIRCUIT_V2_RUNTIME_CANDIDATE = originalCandidateRuntime;
+      process.env.CIRCUIT_DISABLE_V2_RUNTIME = originalDisableRuntime;
     }
 
     const expected: ResolvedSelection = {

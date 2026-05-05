@@ -80,6 +80,16 @@ export interface CompiledFlowRelayReport {
   readonly crossReportValidate?: CrossReportValidator;
 }
 
+export interface CompiledFlowReportSchema {
+  // Schema string (e.g. 'build.brief@v1'). This covers reports
+  // written by compose, verification, checkpoint, close, sub-run, and
+  // fanout paths. Relay-produced report schemas still belong in
+  // `relayReports`, where relay-specific hints and cross-report
+  // validators live.
+  readonly schemaName: string;
+  readonly schema: z.ZodTypeAny;
+}
+
 export interface CompiledFlowPaths {
   // Schematic path is required — every flow has a schematic.
   readonly schematic: string;
@@ -114,6 +124,7 @@ export interface CompiledFlowPackage {
   readonly paths: CompiledFlowPaths;
   readonly routing?: CompiledFlowRoutingMetadata;
   readonly relayReports: readonly CompiledFlowRelayReport[];
+  readonly reportSchemas?: readonly CompiledFlowReportSchema[];
   readonly writers: {
     readonly compose: readonly ComposeBuilder[];
     readonly close: readonly CloseBuilder[];

@@ -4,7 +4,7 @@ status: ratified-v0.1
 version: 0.1
 last_updated: 2026-04-19
 depends_on:
-  - docs/contracts/flow.md
+  - docs/contracts/compiled-flow.md
   - docs/contracts/skill.md
   - docs/contracts/stage.md
 enforced_by:
@@ -12,7 +12,7 @@ enforced_by:
   - audit (Circuit-as-justification smell): rejects commits that justify SKILL.md prose by citing `circuit.yaml` content that does not actually support the claim
 planned_tests:
   - tests/contracts/prose-yaml-parity.test.ts (LANDED v0.1 in Slice 15 as reserved cross-reference guard + single-family marker canary + PROSE-YAML invariant-ID presence). v0.2 round-trip test (regenerate prose regions from YAML source; assert no drift) lands with the catalog compiler per §Evolution.
-  - named Stage 2 property: flow.prop.prose_yaml_round_trip (see docs/contracts/flow.md)
+  - named Stage 2 property: flow.prop.prose_yaml_round_trip (see docs/contracts/compiled-flow.md)
 invariant_ids: [PROSE-YAML-I1, PROSE-YAML-I2, PROSE-YAML-I3, PROSE-YAML-I4]
 property_ids: []
 ---
@@ -58,7 +58,7 @@ hand-maintained files.
   Operator prose OUTSIDE a region is never touched. A file with a
   compiler-owned region that has been hand-edited detects as a diff
   at build time and fails the build with a specific error naming the
-  region and the file. Maps to `docs/contracts/flow.md`
+  region and the file. Maps to `docs/contracts/compiled-flow.md`
   §"Failure modes (carried from evidence)"
   `carry-forward:prose-schema-drift`.
 
@@ -129,14 +129,14 @@ alongside the catalog compiler). Will assert:
   field that does not exist).
 
 Also: the Stage 2 property `flow.prop.prose_yaml_round_trip`
-(reserved in `docs/contracts/flow.md`) will property-test the
+(reserved in `docs/contracts/compiled-flow.md`) will property-test the
 round-trip on generated YAML fixtures.
 
 ## Cross-references
 
 - `UBIQUITOUS_LANGUAGE.md` §Anti-patterns — **Prose/schema drift** (named
   anti-pattern), **Prose-as-hidden-policy** (related anti-pattern).
-- `docs/contracts/flow.md` §"Failure modes (carried from
+- `docs/contracts/compiled-flow.md` §"Failure modes (carried from
   evidence)" `carry-forward:prose-schema-drift`.
 - `docs/contracts/skill.md` SKILL-I2 `trigger` scope caveat.
 - `bootstrap/evidence-draft-codex.md` — Build Lite incident evidence.

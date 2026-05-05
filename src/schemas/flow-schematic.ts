@@ -13,11 +13,14 @@ import {
   FlowRoute,
   type FlowRoute as FlowRouteValue,
 } from './flow-blocks.js';
+import {
+  acceptedSchematicExecutionKindsForBlock,
+  acceptedSchematicStagesForBlock,
+} from './flow-schematic-policy.js';
 import { CompiledFlowId, ProtocolId, StageId, StepId } from './ids.js';
 import { RunRelativePath } from './scalars.js';
 import { SelectionOverride } from './selection-policy.js';
 import {
-  CANONICAL_STAGES,
   CanonicalStage,
   type CanonicalStage as CanonicalStageValue,
   SpinePolicy,
@@ -86,82 +89,33 @@ export const StepExecutionKind = z.enum([
 ]);
 export type StepExecutionKind = z.infer<typeof StepExecutionKind>;
 
-// Schematic-level shape for a sub-run step's child flow handoff. Mirrors
-// the runtime SubRunStep fields (flow_ref + goal + depth) but kept as
-// schematic-level optional fields so existing relay/compose/etc.
-// executions stay parseable. The cross-field rule lives in the
-// superRefine below.
-export const StepExecution = z
+const ComposeStepExecution = z.object({ kind: z.literal('compose') }).strict();
+const VerificationStepExecution = z.object({ kind: z.literal('verification') }).strict();
+const CheckpointStepExecution = z.object({ kind: z.literal('checkpoint') }).strict();
+const FanoutStepExecution = z.object({ kind: z.literal('fanout') }).strict();
+const RelayStepExecution = z
   .object({
-    kind: StepExecutionKind,
-    role: RelayRole.optional(),
-    flow_ref: CompiledFlowRef.optional(),
-    goal: z.string().min(1).optional(),
-    depth: Depth.optional(),
+    kind: z.literal('relay'),
+    role: RelayRole,
   })
-  .strict()
-  .superRefine((execution, ctx) => {
-    if (execution.kind === 'relay') {
-      if (execution.role === undefined) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['role'],
-          message: 'relay execution requires a relay role',
-        });
-      }
-    } else if (execution.role !== undefined) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['role'],
-        message: 'relay role is only allowed for relay execution',
-      });
-    }
-    if (execution.kind === 'sub-run') {
-      if (execution.flow_ref === undefined) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['flow_ref'],
-          message: 'sub-run execution requires flow_ref',
-        });
-      }
-      if (execution.goal === undefined) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['goal'],
-          message: 'sub-run execution requires goal',
-        });
-      }
-      if (execution.depth === undefined) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['depth'],
-          message: 'sub-run execution requires depth',
-        });
-      }
-    } else {
-      if (execution.flow_ref !== undefined) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['flow_ref'],
-          message: 'flow_ref is only allowed for sub-run execution',
-        });
-      }
-      if (execution.goal !== undefined) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['goal'],
-          message: 'goal is only allowed for sub-run execution',
-        });
-      }
-      if (execution.depth !== undefined) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['depth'],
-          message: 'depth is only allowed for sub-run execution',
-        });
-      }
-    }
-  });
+  .strict();
+const SubRunStepExecution = z
+  .object({
+    kind: z.literal('sub-run'),
+    flow_ref: CompiledFlowRef,
+    goal: z.string().min(1),
+    depth: Depth,
+  })
+  .strict();
+
+export const StepExecution = z.discriminatedUnion('kind', [
+  ComposeStepExecution,
+  RelayStepExecution,
+  VerificationStepExecution,
+  CheckpointStepExecution,
+  SubRunStepExecution,
+  FanoutStepExecution,
+]);
 export type StepExecution = z.infer<typeof StepExecution>;
 
 // Per-item write paths. Conditional on execution.kind:
@@ -735,68 +689,6 @@ function schematicStepRouteOutcomes(item: SchematicStep): string[] {
   return [...new Set([...Object.keys(item.routes), ...Object.keys(item.route_overrides)])];
 }
 
-// Schematic-author-selectable execution kinds for a block. The catalog's
-// `action_surface` describes the block's *typical* role, but the actual
-// committed CompiledFlows show that blocks are flexibly used: Build's plan
-// is inline compose though the catalog calls plan a "worker" block;
-// Build's frame is a checkpoint though frame is "orchestrator". Treat
-// action_surface as a recommendation: a worker block can be relayed
-// OR done inline as compose; an orchestrator block can write a brief
-// (compose) OR pause for confirmation (checkpoint). The runtime decides
-// based on depth and architecture.
-function acceptedExecutionKinds(block: FlowBlockValue): readonly StepExecutionKind[] {
-  if (block.id === 'run-verification') return ['verification'];
-  // sub-run is an orchestration pattern (parent invokes a child flow,
-  // check admits the child's terminal verdict). The 'batch' block is
-  // its first consumer (Migrate's batch step delegates to a Build child),
-  // so sub-run is allowed wherever 'batch'-shaped work fits — i.e., for
-  // 'mixed' surfaces. 'orchestrator' surfaces also accept sub-run because
-  // the parent step authoring the sub-run IS an orchestrator action.
-  switch (block.action_surface) {
-    case 'worker':
-      return ['relay', 'compose', 'fanout'];
-    case 'host':
-      return ['checkpoint'];
-    case 'orchestrator':
-      return ['compose', 'checkpoint', 'sub-run', 'fanout'];
-    case 'mixed':
-      return ['compose', 'relay', 'verification', 'checkpoint', 'sub-run', 'fanout'];
-  }
-}
-
-function acceptedStages(block: FlowBlockValue): readonly CanonicalStageValue[] {
-  switch (block.id) {
-    case 'intake':
-    case 'route':
-    case 'frame':
-      return ['frame'];
-    case 'gather-context':
-    case 'diagnose':
-      return ['analyze'];
-    case 'plan':
-    case 'queue':
-      return ['plan'];
-    case 'act':
-    case 'batch':
-      return ['act'];
-    case 'run-verification':
-      return ['verify'];
-    case 'review':
-      // Review block runs in the canonical 'review' stage by default,
-      // but the audit-only Review flow places its reviewer relay in
-      // the canonical 'analyze' stage (the audit IS the analysis there;
-      // there is no separate "act + review" structure to check against).
-      return ['review', 'analyze'];
-    case 'risk-rollback-check':
-      return ['verify', 'close'];
-    case 'close-with-evidence':
-    case 'handoff':
-      return ['close'];
-    case 'human-decision':
-      return CANONICAL_STAGES;
-  }
-}
-
 function intersectContracts(
   left: ReadonlySet<FlowContractRefValue>,
   right: ReadonlySet<FlowContractRefValue>,
@@ -917,7 +809,7 @@ export function validateFlowSchematicCatalogCompatibility(
       }
     }
 
-    const executionKinds = acceptedExecutionKinds(block);
+    const executionKinds = acceptedSchematicExecutionKindsForBlock(block);
     if (!executionKinds.includes(item.execution.kind)) {
       issues.push({
         item_id: item.id,
@@ -925,7 +817,7 @@ export function validateFlowSchematicCatalogCompatibility(
       });
     }
 
-    const stages = acceptedStages(block);
+    const stages = acceptedSchematicStagesForBlock(block);
     if (!stages.includes(item.stage)) {
       issues.push({
         item_id: item.id,

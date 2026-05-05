@@ -14,7 +14,7 @@ import type {
   VerificationCommand,
   VerificationCommandObservation,
 } from '../../../runtime/registries/verification-writers/types.js';
-import { resolveRunRelative } from '../../../runtime/run-relative-path.js';
+import { resolveRunRelative } from '../../../shared/run-relative-path.js';
 import { BuildPlan, BuildVerification } from '../reports.js';
 
 export const buildVerificationWriter: VerificationBuilder = {

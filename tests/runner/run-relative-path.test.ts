@@ -18,6 +18,7 @@ import { type RelayFn, runCompiledFlow } from '../../src/runtime/runner.js';
 import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
 import type { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { RunId, StepId } from '../../src/schemas/ids.js';
+import { resolveRunRelative } from '../../src/shared/run-relative-path.js';
 
 const FIXTURE_PATH = resolve('generated/flows/runtime-proof/circuit.json');
 
@@ -69,6 +70,18 @@ afterEach(() => {
 });
 
 describe('STEP-I8 runtime run-relative path containment', () => {
+  it('exposes the shared helper with the same containment checks', () => {
+    const runFolder = join(runFolderBase, 'run-shared-helper');
+
+    expect(resolveRunRelative(runFolder, 'reports/result.json')).toBe(
+      join(runFolder, 'reports', 'result.json'),
+    );
+    expect(() => resolveRunRelative(runFolder, '../escaped.json')).toThrow(/run-relative path/i);
+    expect(() => resolveRunRelative(runFolder, 'reports/./result.json')).toThrow(
+      /run-relative path/i,
+    );
+  });
+
   it('rejects compose writes.report.path escape or dot segment before writing', async () => {
     const { flow, bytes } = loadFixture();
     const cases = [

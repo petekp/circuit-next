@@ -55,15 +55,18 @@ const CODEX_SMOKE_SELECTION = {
 
 // The fingerprint binds to the current connector surface, not just an
 // ancestor commit. The connector_source_sha256 field
-// is the sha256 of the concatenation of the three connector-layer source
+// is the sha256 of the concatenation of connector-layer source
 // files that materially determine the codex relay behavior:
 //   (a) src/runtime/connectors/codex.ts — relayCodex + parseCodexStdout
 //       + capability-boundary argv constants
-//   (b) src/runtime/connectors/shared.ts — sha256Hex + RelayResult
+//   (b) src/shared/connector-relay.ts — sha256Hex + RelayResult
 //       shape consumed by the materializer
-//   (c) src/runtime/connectors/relay-materializer.ts — five-trace_entry
+//   (c) src/shared/connector-helpers.ts — connector parsing/model helpers
+//   (d) src/runtime/connectors/shared.ts — compatibility re-exports used by
+//       retained runtime and tests
+//   (e) src/runtime/connectors/relay-materializer.ts — five-trace_entry
 //       transcript + on-disk slot materialization
-// A change to any of the three invalidates the fingerprint's coverage
+// A change to any of the connector sources invalidates the fingerprint's coverage
 // of the current connector surface. Check 32 re-computes this hash at
 // audit time and flags drift (yellow: fingerprint exists but connector
 // has changed since the last CODEX_SMOKE run).
@@ -75,6 +78,8 @@ const CODEX_SMOKE_SELECTION = {
 // without tripping drift.
 const ADAPTER_SOURCE_PATHS = [
   resolve('src/runtime/connectors/codex.ts'),
+  resolve('src/shared/connector-relay.ts'),
+  resolve('src/shared/connector-helpers.ts'),
   resolve('src/runtime/connectors/shared.ts'),
   resolve('src/runtime/connectors/relay-materializer.ts'),
   resolve('src/runtime/runner.ts'),

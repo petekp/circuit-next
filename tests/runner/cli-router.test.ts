@@ -526,7 +526,6 @@ describe('CLI router', () => {
         'run.started',
         'task_list.updated',
         'step.started',
-        'evidence.collected',
         'relay.started',
         'relay.completed',
         'run.completed',
@@ -1073,10 +1072,14 @@ describe('CLI router', () => {
     const relayStarted = trace_entries.find(
       (trace_entry) => trace_entry.kind === 'relay.started' && trace_entry.step_id === 'act-step',
     );
+    const relayResolvedSelection =
+      relayStarted?.resolved_selection ??
+      (relayStarted?.data as { readonly resolved_selection?: unknown } | undefined)
+        ?.resolved_selection;
     expect(output.flow_id).toBe('build');
     expect(output.outcome).toBe('complete');
     expect(bootstrap).toMatchObject({ depth: 'lite' });
-    expect(relayStarted?.resolved_selection).toMatchObject({ depth: 'lite' });
+    expect(relayResolvedSelection).toMatchObject({ depth: 'lite' });
   });
 
   it('lets --depth override the selected --entry-mode default', async () => {

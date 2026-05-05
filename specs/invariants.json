@@ -644,7 +644,7 @@
       "contract": "flow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/flow.md#WF-I1",
+      "source_anchor": "docs/contracts/compiled-flow.md#WF-I1",
       "binding_refs": [
         { "path": "tests/contracts/flow-graph-schema.test.ts", "kind": "test_title" }
       ],
@@ -655,7 +655,7 @@
       "contract": "flow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/flow.md#WF-I2",
+      "source_anchor": "docs/contracts/compiled-flow.md#WF-I2",
       "binding_refs": [
         { "path": "tests/contracts/flow-graph-schema.test.ts", "kind": "test_title" }
       ],
@@ -666,7 +666,7 @@
       "contract": "flow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/flow.md#WF-I3",
+      "source_anchor": "docs/contracts/compiled-flow.md#WF-I3",
       "binding_refs": [
         { "path": "tests/contracts/flow-graph-schema.test.ts", "kind": "test_title" }
       ],
@@ -677,7 +677,7 @@
       "contract": "flow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/flow.md#WF-I4",
+      "source_anchor": "docs/contracts/compiled-flow.md#WF-I4",
       "binding_refs": [
         { "path": "tests/contracts/flow-graph-schema.test.ts", "kind": "test_title" }
       ],
@@ -688,7 +688,7 @@
       "contract": "flow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/flow.md#WF-I5",
+      "source_anchor": "docs/contracts/compiled-flow.md#WF-I5",
       "binding_refs": [
         { "path": "tests/contracts/flow-graph-schema.test.ts", "kind": "test_title" }
       ],
@@ -699,7 +699,7 @@
       "contract": "flow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/flow.md#WF-I6",
+      "source_anchor": "docs/contracts/compiled-flow.md#WF-I6",
       "binding_refs": [
         { "path": "tests/contracts/flow-graph-schema.test.ts", "kind": "test_title" }
       ],
@@ -710,7 +710,7 @@
       "contract": "flow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/flow.md#WF-I7",
+      "source_anchor": "docs/contracts/compiled-flow.md#WF-I7",
       "binding_refs": [
         { "path": "tests/contracts/flow-graph-schema.test.ts", "kind": "test_title" }
       ],
@@ -721,7 +721,7 @@
       "contract": "flow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/flow.md#WF-I8",
+      "source_anchor": "docs/contracts/compiled-flow.md#WF-I8",
       "binding_refs": [
         { "path": "tests/contracts/flow-graph-schema.test.ts", "kind": "test_title" }
       ],
@@ -732,7 +732,7 @@
       "contract": "flow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/flow.md#WF-I9",
+      "source_anchor": "docs/contracts/compiled-flow.md#WF-I9",
       "binding_refs": [
         { "path": "tests/contracts/flow-graph-schema.test.ts", "kind": "test_title" }
       ],
@@ -743,7 +743,7 @@
       "contract": "flow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/flow.md#WF-I10",
+      "source_anchor": "docs/contracts/compiled-flow.md#WF-I10",
       "binding_refs": [
         { "path": "tests/contracts/flow-graph-schema.test.ts", "kind": "test_title" }
       ],
@@ -754,7 +754,7 @@
       "contract": "flow",
       "surface_type": "contract",
       "enforcement_state": "test-enforced",
-      "source_anchor": "docs/contracts/flow.md#WF-I11",
+      "source_anchor": "docs/contracts/compiled-flow.md#WF-I11",
       "binding_refs": [
         { "path": "tests/contracts/flow-graph-schema.test.ts", "kind": "test_title" },
         { "path": "tests/runner/pass-route-cycle-guard.test.ts", "kind": "test_title" }

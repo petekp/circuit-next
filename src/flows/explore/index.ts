@@ -8,8 +8,14 @@ import {
   exploreTournamentReviewShapeHint,
 } from './relay-hints.js';
 import {
+  ExploreAnalysis,
+  ExploreBrief,
   ExploreCompose,
+  ExploreDecision,
+  ExploreDecisionOptions,
+  ExploreResult,
   ExploreReviewVerdict,
+  ExploreTournamentAggregate,
   ExploreTournamentProposal,
   ExploreTournamentReview,
 } from './reports.js';
@@ -57,6 +63,14 @@ export const exploreCompiledFlowPackage: CompiledFlowPackage = {
       schema: ExploreTournamentReview,
       relayHint: exploreTournamentReviewShapeHint.instruction,
     },
+  ],
+  reportSchemas: [
+    { schemaName: 'explore.brief@v1', schema: ExploreBrief },
+    { schemaName: 'explore.analysis@v1', schema: ExploreAnalysis },
+    { schemaName: 'explore.decision-options@v1', schema: ExploreDecisionOptions },
+    { schemaName: 'explore.tournament-aggregate@v1', schema: ExploreTournamentAggregate },
+    { schemaName: 'explore.decision@v1', schema: ExploreDecision },
+    { schemaName: 'explore.result@v1', schema: ExploreResult },
   ],
   writers: {
     compose: [

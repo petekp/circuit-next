@@ -174,6 +174,15 @@ describe('flow catalog completeness', () => {
         .sort() ?? [];
 
     expect(routerCommands).toEqual([...ROOT_COMMANDS].sort());
+    expect(generatedSurfaceMap).toContain(
+      '| Surface | Source of truth | Generator | Human-editable | Expected destinations | Validation / drift check | Notes |',
+    );
+    expect(generatedSurfaceMap).toContain(
+      '| Command README | none currently | none currently | not applicable | none currently | not applicable |',
+    );
+    expect(generatedSurfaceMap).toContain(
+      'Generated headers are omitted to preserve host command and skill parsing.',
+    );
 
     for (const command of ROOT_COMMANDS) {
       expect(isFile(`commands/${command}.md`), `root command ${command} must exist`).toBe(true);

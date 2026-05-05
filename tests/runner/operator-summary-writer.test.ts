@@ -3,9 +3,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { writeOperatorSummary } from '../../src/runtime/operator-summary-writer.js';
+import { writeOperatorSummary as runtimeWriteOperatorSummary } from '../../src/runtime/operator-summary-writer.js';
 import { OperatorSummary } from '../../src/schemas/operator-summary.js';
 import { RunResult } from '../../src/schemas/result.js';
+import { writeOperatorSummary } from '../../src/shared/operator-summary-writer.js';
 
 let runFolder: string;
 
@@ -39,6 +40,32 @@ function baseResult(flowId: string): RunResult {
 }
 
 describe('operator summary writer', () => {
+  it('keeps the runtime compatibility wrapper identical to the shared writer', () => {
+    writeReport('reports/review-result.json', {
+      scope: 'review current changes',
+      findings: [],
+      verdict: 'CLEAN',
+      evidence_summary: { kind: 'unavailable', message: 'not collected' },
+      evidence_warnings: [],
+    });
+
+    const shared = writeOperatorSummary({
+      runFolder,
+      runResult: baseResult('review'),
+      route: { selectedFlow: 'review' },
+    });
+    const runtime = runtimeWriteOperatorSummary({
+      runFolder,
+      runResult: baseResult('review'),
+      route: { selectedFlow: 'review' },
+    });
+
+    expect(runtime.summary).toEqual(shared.summary);
+    expect(JSON.parse(readFileSync(runtime.jsonPath, 'utf8'))).toEqual(
+      JSON.parse(readFileSync(shared.jsonPath, 'utf8')),
+    );
+  });
+
   it('writes Review summary files with verdict, finding count, warnings, and report paths', () => {
     writeReport('reports/review-result.json', {
       scope: 'review current changes',

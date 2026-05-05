@@ -229,8 +229,8 @@ Closes Codex LOW #12 (enforcement-location claim drift).
 
 - A `SelectionOverride` is produced by parsing a layer's authored YAML /
   TOML / JSON into an object and passing it to `SelectionOverride.safeParse`.
-- A `ResolvedSelection` is produced by the runtime resolver
-  (`src/runtime/selection-resolver.ts`, Slice 85) folding an ordered
+- A `ResolvedSelection` is produced by the shared resolver
+  (`src/shared/selection-resolver.ts`, Slice 85) folding an ordered
   sequence of overrides under the documented resolution semantics
   (`selection.prop.skill_override_composition_total`,
   `selection.prop.invocation_options_merge_is_right_biased`).

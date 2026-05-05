@@ -11,7 +11,15 @@ import {
   sweepBatchShapeHint,
   sweepReviewShapeHint,
 } from './relay-hints.js';
-import { SweepAnalysis, SweepBatch, SweepReview } from './reports.js';
+import {
+  SweepAnalysis,
+  SweepBatch,
+  SweepBrief,
+  SweepQueue,
+  SweepResult,
+  SweepReview,
+  SweepVerification,
+} from './reports.js';
 import { sweepBriefComposeBuilder } from './writers/brief.js';
 import { sweepCloseBuilder } from './writers/close.js';
 import { sweepQueueComposeBuilder } from './writers/queue.js';
@@ -57,6 +65,12 @@ export const sweepCompiledFlowPackage: CompiledFlowPackage = {
       schema: SweepReview,
       relayHint: sweepReviewShapeHint.instruction,
     },
+  ],
+  reportSchemas: [
+    { schemaName: 'sweep.brief@v1', schema: SweepBrief },
+    { schemaName: 'sweep.queue@v1', schema: SweepQueue },
+    { schemaName: 'sweep.verification@v1', schema: SweepVerification },
+    { schemaName: 'sweep.result@v1', schema: SweepResult },
   ],
   writers: {
     compose: [sweepBriefComposeBuilder, sweepQueueComposeBuilder],

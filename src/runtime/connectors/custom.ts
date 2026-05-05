@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import type { CustomConnectorDescriptor } from '../../schemas/connector.js';
+import { extractJsonObject } from '../../shared/connector-helpers.js';
 import type { ConnectorRelayInput, RelayResult } from './shared.js';
-import { extractJsonObject } from './shared.js';
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 const SIGTERM_TO_SIGKILL_GRACE_MS = 2_000;

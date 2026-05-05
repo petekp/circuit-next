@@ -12,7 +12,7 @@ import type {
   CloseBuildContext,
   CloseBuilder,
 } from '../../../runtime/registries/close-writers/types.js';
-import { resolveRunRelative } from '../../../runtime/run-relative-path.js';
+import { resolveRunRelative } from '../../../shared/run-relative-path.js';
 import {
   ExploreBrief,
   ExploreCompose,

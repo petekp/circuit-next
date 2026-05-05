@@ -3,12 +3,12 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { main } from '../../src/cli/circuit.js';
-import { sha256Hex } from '../../src/runtime/connectors/shared.js';
-import { writeManifestSnapshot } from '../../src/runtime/manifest-snapshot-writer.js';
 import { projectRunStatusFromRunFolder } from '../../src/runtime/run-status-projection.js';
 import { appendTraceEntry } from '../../src/runtime/trace-writer.js';
 import { CompiledFlowId, RunId } from '../../src/schemas/ids.js';
 import { TraceEntry } from '../../src/schemas/trace-entry.js';
+import { sha256Hex } from '../../src/shared/connector-relay.js';
+import { writeManifestSnapshot } from '../../src/shared/manifest-snapshot.js';
 
 const tempRoots: string[] = [];
 const RUN_ID = '11111111-1111-4111-8111-111111111111';
@@ -72,6 +72,33 @@ function bootstrap(input: {
   };
 }
 
+function writeRawTrace(runFolder: string, entries: readonly unknown[]): void {
+  writeFileSync(
+    join(runFolder, 'trace.ndjson'),
+    `${entries.map((entry) => JSON.stringify(entry)).join('\n')}\n`,
+  );
+}
+
+function v2Bootstrap(input: {
+  readonly runId?: string;
+  readonly flowId?: string;
+  readonly manifestHash: string;
+  readonly goal?: string;
+  readonly engine?: string;
+}): Record<string, unknown> {
+  return {
+    sequence: 0,
+    recorded_at: RECORDED_AT,
+    run_id: input.runId ?? RUN_ID,
+    kind: 'run.bootstrapped',
+    engine: input.engine ?? 'core-v2',
+    flow_id: input.flowId ?? 'fix',
+    depth: 'standard',
+    goal: input.goal ?? 'Fix the checkout bug',
+    manifest_hash: input.manifestHash,
+  };
+}
+
 function stepEntered(sequence: number, stepId: string, attempt = 1): unknown {
   return {
     schema_version: 1,
@@ -81,6 +108,29 @@ function stepEntered(sequence: number, stepId: string, attempt = 1): unknown {
     kind: 'step.entered',
     step_id: stepId,
     attempt,
+  };
+}
+
+function v2StepEntered(sequence: number, stepId: string, attempt = 1): Record<string, unknown> {
+  return {
+    sequence,
+    recorded_at: RECORDED_AT,
+    run_id: RUN_ID,
+    kind: 'step.entered',
+    step_id: stepId,
+    attempt,
+  };
+}
+
+function v2StepCompleted(sequence: number, stepId: string, attempt = 1): Record<string, unknown> {
+  return {
+    sequence,
+    recorded_at: RECORDED_AT,
+    run_id: RUN_ID,
+    kind: 'step.completed',
+    step_id: stepId,
+    attempt,
+    route_taken: 'retry',
   };
 }
 
@@ -394,6 +444,76 @@ describe('run folder status projection', () => {
       run_id: RUN_ID,
       flow_id: 'fix',
       goal: 'Fix the checkout bug',
+    });
+  });
+
+  it('projects marked v2 open runs with retry-aware current step attempts', () => {
+    const runFolder = tempRunFolder('circuit-run-status-v2-retry-open-');
+    const manifestHash = writeManifest({ runFolder });
+    writeRawTrace(runFolder, [
+      v2Bootstrap({ manifestHash }),
+      v2StepEntered(1, 'fix-act', 1),
+      v2StepCompleted(2, 'fix-act', 1),
+      v2StepEntered(3, 'fix-act', 2),
+    ]);
+
+    const projection = projectRunStatusFromRunFolder(runFolder);
+
+    expect(projection).toMatchObject({
+      engine_state: 'open',
+      reason: 'active_or_unknown',
+      current_step: {
+        step_id: 'fix-act',
+        attempt: 2,
+      },
+    });
+    expect(projection.engine_state === 'open' && projection.current_step?.label).toContain(
+      'apply focused fix',
+    );
+  });
+
+  it('does not mistake malformed v1 traces without schema_version for v2 traces', () => {
+    const runFolder = tempRunFolder('circuit-run-status-v1-missing-schema-version-');
+    const manifestHash = writeManifest({ runFolder });
+    writeRawTrace(runFolder, [
+      {
+        sequence: 0,
+        recorded_at: RECORDED_AT,
+        run_id: RUN_ID,
+        kind: 'run.bootstrapped',
+        flow_id: 'fix',
+        depth: 'standard',
+        goal: 'Fix the checkout bug',
+        change_kind,
+        manifest_hash: manifestHash,
+      },
+    ]);
+
+    const projection = projectRunStatusFromRunFolder(runFolder);
+
+    expect(projection).toMatchObject({
+      engine_state: 'invalid',
+      reason: 'trace_invalid',
+      legal_next_actions: ['none'],
+      run_id: RUN_ID,
+      flow_id: 'fix',
+    });
+    expect(projection).not.toHaveProperty('goal');
+  });
+
+  it('returns identity mismatch when a marked v2 trace disagrees with its manifest', () => {
+    const runFolder = tempRunFolder('circuit-run-status-v2-identity-mismatch-');
+    writeManifest({ runFolder, runId: RUN_ID });
+    writeRawTrace(runFolder, [v2Bootstrap({ manifestHash: '0'.repeat(64) })]);
+
+    const projection = projectRunStatusFromRunFolder(runFolder);
+
+    expect(projection).toMatchObject({
+      engine_state: 'invalid',
+      reason: 'identity_mismatch',
+      legal_next_actions: ['none'],
+      run_id: RUN_ID,
+      flow_id: 'fix',
     });
   });
 

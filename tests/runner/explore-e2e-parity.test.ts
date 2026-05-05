@@ -9,8 +9,8 @@ import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { RunId } from '../../src/schemas/ids.js';
 
-import { validateCompiledFlowKindPolicy } from '../../src/runtime/policy/flow-kind-policy.js';
 import { type RelayFn, type RelayInput, runCompiledFlow } from '../../src/runtime/runner.js';
+import { validateCompiledFlowKindPolicy } from '../../src/shared/flow-kind-policy.js';
 
 // `explore` end-to-end fixture run.
 //
@@ -48,6 +48,8 @@ const UPDATE_AGENT_FINGERPRINT = process.env.UPDATE_AGENT_FINGERPRINT === '1';
 // repromotion.
 const AGENT_ADAPTER_SOURCE_PATHS = [
   'src/runtime/connectors/claude-code.ts',
+  'src/shared/connector-relay.ts',
+  'src/shared/connector-helpers.ts',
   'src/runtime/connectors/shared.ts',
   'src/runtime/connectors/relay-materializer.ts',
   'src/runtime/runner.ts',

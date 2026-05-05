@@ -141,7 +141,8 @@ enforced via `src/schemas/step.ts`, `src/schemas/check.ts`, and
   parent-directory segment. Enforced by `RunRelativePath` in
   `src/schemas/scalars.ts` and by the Step variant schemas in
   `src/schemas/step.ts`. Runtime call sites additionally resolve through
-  `src/runtime/run-relative-path.ts` before reading or writing.
+  `src/shared/run-relative-path.ts` before reading or writing. The old
+  `src/runtime/run-relative-path.ts` path is a retained compatibility wrapper.
 
 ## Pre-conditions
 

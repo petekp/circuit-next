@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { relative, resolve } from 'node:path';
 
+import type { ChildCompiledFlowResolverV2 } from '../core-v2/run/child-runner.js';
+import { runCompiledFlowV2 } from '../core-v2/run/compiled-flow-runner.js';
 import type { ChangeKindDeclaration } from '../schemas/change-kind.js';
 import { CompiledFlow } from '../schemas/compiled-flow.js';
 import { Depth } from '../schemas/depth.js';
@@ -11,10 +13,8 @@ import {
   ProgressEvent,
   type ProgressEvent as ProgressEventValue,
 } from '../schemas/progress-event.js';
+import { RunResult } from '../schemas/result.js';
 
-import { discoverConfigLayers } from '../runtime/config-loader.js';
-import { writeOperatorSummary } from '../runtime/operator-summary-writer.js';
-import { validateCompiledFlowKindPolicy } from '../runtime/policy/flow-kind-policy.js';
 import { classifyCompiledFlowTask } from '../runtime/router.js';
 import {
   type ChildCompiledFlowResolver,
@@ -24,6 +24,10 @@ import {
   resumeCompiledFlowCheckpoint,
   runCompiledFlow,
 } from '../runtime/runner.js';
+import { discoverConfigLayers } from '../shared/config-loader.js';
+import { validateCompiledFlowKindPolicy } from '../shared/flow-kind-policy.js';
+import { writeOperatorSummary } from '../shared/operator-summary-writer.js';
+import { runResultPath } from '../shared/result-path.js';
 import { runCreateCommand } from './create.js';
 import { runHandoffCommand } from './handoff.js';
 import { runRunsCommand } from './runs.js';
@@ -46,6 +50,34 @@ import { runRunsCommand } from './runs.js';
 
 const DEFAULT_RUNS_BASE = '.circuit-next/runs';
 const MAX_PROGRESS_DISPLAY_TEXT_CHARS = 240;
+
+type RuntimeSelectionKind = 'v2-supported' | 'old-runtime-required' | 'unsupported';
+type RuntimeSelectionName = 'v2' | 'retained';
+
+interface V2RuntimeSupportDecision {
+  readonly kind: RuntimeSelectionKind;
+  readonly flowId: string;
+  readonly entryModeName: string;
+  readonly depth: string;
+  readonly reason: string;
+}
+
+interface V2RuntimeSupportRow {
+  readonly entryModeName: string;
+  readonly depth: string;
+}
+
+const V2_RUNTIME_SUPPORT_MATRIX: Record<string, readonly V2RuntimeSupportRow[]> = {
+  review: [{ entryModeName: 'default', depth: 'standard' }],
+  fix: [{ entryModeName: 'lite', depth: 'lite' }],
+  build: [
+    { entryModeName: 'default', depth: 'standard' },
+    { entryModeName: 'lite', depth: 'lite' },
+  ],
+  explore: [{ entryModeName: 'default', depth: 'standard' }],
+  migrate: [{ entryModeName: 'default', depth: 'standard' }],
+  sweep: [{ entryModeName: 'default', depth: 'standard' }],
+};
 
 interface ParsedArgs {
   command?: 'run' | 'resume';
@@ -101,6 +133,8 @@ function usage(): string {
     'Config: if present, loads ~/.config/circuit-next/config.yaml and ./.circuit/config.yaml from the current working directory into the selection resolver before relay.',
     '',
     'Note: `--dry-run` is not implemented and is rejected. An earlier version silently invoked the real connector while reporting dry_run:true, which is a safety bug; the flag stays rejected until real dry-run support lands.',
+    '',
+    'Runtime routing: proven fresh modes use the v2 runtime by default; unsupported modes and checkpoint resume stay on the retained runtime. CIRCUIT_DISABLE_V2_RUNTIME=1 disables default v2 routing. Internal opt-in: CIRCUIT_V2_RUNTIME=1 forces supported fresh runs through v2 and fails closed for unsupported modes. Candidate mode: CIRCUIT_V2_RUNTIME_CANDIDATE=1 adds runtime diagnostics while using the default selector.',
     '',
     'Review evidence: untracked file contents are omitted by default. Add `--include-untracked-content` only when those files are safe to relay to the configured worker.',
   ].join('\n');
@@ -364,7 +398,7 @@ function loadFixture(fixturePath: string): { flow: CompiledFlow; bytes: Buffer }
   const raw: unknown = JSON.parse(bytes.toString('utf8'));
   const flow = CompiledFlow.parse(raw);
   // Enforce flow-kind canonical stage-set policy at fixture load.
-  // Validator: src/runtime/policy/flow-kind-policy.ts.
+  // Validator: src/shared/flow-kind-policy.ts.
   const policy = validateCompiledFlowKindPolicy(flow);
   if (!policy.ok) {
     throw new Error(`flow fixture policy violation (${fixturePath}):\n  ${policy.reason}`);
@@ -384,6 +418,16 @@ function defaultChildCompiledFlowResolver(flowRoot: string | undefined): ChildCo
   };
 }
 
+function defaultChildCompiledFlowResolverV2(
+  flowRoot: string | undefined,
+): ChildCompiledFlowResolverV2 {
+  return (ref) => {
+    const fixturePath = resolveFixturePath(ref.flowId, ref.entryMode, undefined, flowRoot);
+    const { bytes } = loadFixture(fixturePath);
+    return { flowBytes: bytes };
+  };
+}
+
 function assertFixtureMatchesRoute(flow: CompiledFlow, route: ResolvedCompiledFlowRoute): void {
   const flowId = flow.id as unknown as string;
   if (flowId !== route.flowName) {
@@ -391,6 +435,173 @@ function assertFixtureMatchesRoute(flow: CompiledFlow, route: ResolvedCompiledFl
       `flow fixture id mismatch: selected flow '${route.flowName}' but fixture declares '${flowId}'`,
     );
   }
+}
+
+function selectedEntryMode(
+  flow: CompiledFlow,
+  entryModeSelection: ResolvedEntryModeSelection,
+): CompiledFlow['entry_modes'][number] {
+  const entryName = entryModeSelection.entryModeName;
+  const entry =
+    entryName === undefined
+      ? flow.entry_modes[0]
+      : flow.entry_modes.find((mode) => mode.name === entryName);
+  if (entry === undefined) {
+    throw new Error(
+      entryName === undefined
+        ? `flow '${flow.id}' declares no entry modes`
+        : `flow '${flow.id}' declares no entry_mode named '${entryName}'`,
+    );
+  }
+  return entry;
+}
+
+function selectedEntryModeName(
+  flow: CompiledFlow,
+  entryModeSelection: ResolvedEntryModeSelection,
+): string {
+  return selectedEntryMode(flow, entryModeSelection).name;
+}
+
+function selectedDepth(
+  flow: CompiledFlow,
+  args: ParsedArgs,
+  entryModeSelection: ResolvedEntryModeSelection,
+): string {
+  if (args.depth !== undefined) return args.depth;
+  return selectedEntryMode(flow, entryModeSelection).depth;
+}
+
+function classifyV2RuntimeSupport(input: {
+  readonly flow: CompiledFlow;
+  readonly args: ParsedArgs;
+  readonly entryModeSelection: ResolvedEntryModeSelection;
+}): V2RuntimeSupportDecision {
+  const flowId = input.flow.id as unknown as string;
+  const entryModeName = selectedEntryModeName(input.flow, input.entryModeSelection);
+  const depth = selectedDepth(input.flow, input.args, input.entryModeSelection);
+  const hasCheckpoint = input.flow.steps.some((step) => step.kind === 'checkpoint');
+  if ((depth === 'deep' || depth === 'tournament') && hasCheckpoint) {
+    return {
+      kind: 'old-runtime-required',
+      flowId,
+      entryModeName,
+      depth,
+      reason: `checkpoint-waiting depth '${depth}' remains on the retained checkpoint runtime`,
+    };
+  }
+
+  const rows = V2_RUNTIME_SUPPORT_MATRIX[flowId];
+  if (rows === undefined) {
+    return {
+      kind: 'old-runtime-required',
+      flowId,
+      entryModeName,
+      depth,
+      reason: `flow '${flowId}' is not in the v2 runtime support matrix`,
+    };
+  }
+
+  const supported = rows.some((row) => row.entryModeName === entryModeName && row.depth === depth);
+  if (supported) {
+    return {
+      kind: 'v2-supported',
+      flowId,
+      entryModeName,
+      depth,
+      reason: `v2 supports fresh ${flowId} entry mode '${entryModeName}' at depth '${depth}'`,
+    };
+  }
+
+  return {
+    kind: 'old-runtime-required',
+    flowId,
+    entryModeName,
+    depth,
+    reason: `fresh ${flowId} entry mode '${entryModeName}' at depth '${depth}' is not v2-proven yet`,
+  };
+}
+
+function pathIsInside(parent: string, child: string): boolean {
+  const rel = relative(parent, child);
+  return rel.length === 0 || (!rel.startsWith('..') && !rel.startsWith('/'));
+}
+
+function fixtureEligibleForCandidateV2(input: {
+  readonly args: ParsedArgs;
+  readonly fixturePath: string;
+}): boolean {
+  if (input.args.fixturePath === undefined && input.args.flowRoot === undefined) return true;
+  return pathIsInside(resolve('generated', 'flows'), resolve(input.fixturePath));
+}
+
+function applyCandidateFixturePolicy(
+  decision: V2RuntimeSupportDecision,
+  input: {
+    readonly args: ParsedArgs;
+    readonly fixturePath: string;
+  },
+): V2RuntimeSupportDecision {
+  if (decision.kind !== 'v2-supported') return decision;
+  if (fixtureEligibleForCandidateV2(input)) return decision;
+  return {
+    ...decision,
+    kind: 'old-runtime-required',
+    reason:
+      'explicit --fixture/--flow-root inputs are retained-runtime-owned in candidate routing unless they resolve under generated/flows; use CIRCUIT_V2_RUNTIME=1 for v2 fixture experiments',
+  };
+}
+
+function applyComposeWriterPolicy(
+  decision: V2RuntimeSupportDecision,
+  input: { readonly hasComposeWriter: boolean },
+): V2RuntimeSupportDecision {
+  if (decision.kind !== 'v2-supported' || !input.hasComposeWriter) return decision;
+  return {
+    ...decision,
+    kind: 'old-runtime-required',
+    reason:
+      'programmatic composeWriter injections are retained-runtime-owned until core-v2 exposes an equivalent compose writer hook',
+  };
+}
+
+function assertStrictV2FreshRunSupported(decision: V2RuntimeSupportDecision): void {
+  if (decision.kind === 'v2-supported') return;
+  throw new Error(
+    `CIRCUIT_V2_RUNTIME=1 cannot route this invocation through v2: ${decision.reason}`,
+  );
+}
+
+function useV2Runtime(): boolean {
+  return process.env.CIRCUIT_V2_RUNTIME === '1';
+}
+
+function useV2RuntimeCandidate(): boolean {
+  return process.env.CIRCUIT_V2_RUNTIME_CANDIDATE === '1';
+}
+
+function disableDefaultV2Runtime(): boolean {
+  return process.env.CIRCUIT_DISABLE_V2_RUNTIME === '1';
+}
+
+function disabledV2Decision(decision: V2RuntimeSupportDecision): V2RuntimeSupportDecision {
+  return {
+    ...decision,
+    kind: 'old-runtime-required',
+    reason: 'CIRCUIT_DISABLE_V2_RUNTIME=1 keeps default runtime routing on the retained runtime',
+  };
+}
+
+function runtimeOutputFields(input: {
+  readonly include: boolean;
+  readonly runtime: RuntimeSelectionName;
+  readonly decision: V2RuntimeSupportDecision;
+}): { readonly runtime?: RuntimeSelectionName; readonly runtime_reason?: string } {
+  if (!input.include) return {};
+  return {
+    runtime: input.runtime,
+    runtime_reason: input.decision.reason,
+  };
 }
 
 export async function main(argv: readonly string[], options: CliMainOptions = {}): Promise<number> {
@@ -447,7 +658,14 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
     const resumeResultPath =
       outcome.result.outcome === 'checkpoint_waiting'
         ? {}
-        : { result_path: `${outcome.runFolder}/reports/result.json` };
+        : { result_path: runResultPath(outcome.runFolder) };
+    const resumeRuntimeFields =
+      useV2RuntimeCandidate() || useV2Runtime() || disableDefaultV2Runtime()
+        ? {
+            runtime: 'retained' as const,
+            runtime_reason: 'checkpoint resume remains on the retained runtime',
+          }
+        : {};
     process.stdout.write(
       `${JSON.stringify(
         {
@@ -458,6 +676,7 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
           outcome: outcome.result.outcome,
           trace_entries_observed: outcome.result.trace_entries_observed,
           ...resumeResultPath,
+          ...resumeRuntimeFields,
           operator_summary_path: operatorSummary.jsonPath,
           operator_summary_markdown_path: operatorSummary.markdownPath,
           ...(outcome.result.outcome === 'checkpoint_waiting'
@@ -527,12 +746,13 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
     alternate_framing:
       'defer the runtime proof; not an option because the CLI is the proof harness and must produce a real run-folder per invocation.',
   };
+  const projectRoot = resolve(options.configCwd ?? process.cwd());
 
   const invocation: CompiledFlowInvocation = {
     runFolder,
     flow,
     flowBytes: bytes,
-    projectRoot: resolve(options.configCwd ?? process.cwd()),
+    projectRoot,
     runId,
     goal: args.goal,
     change_kind,
@@ -553,6 +773,95 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
     invocation.evidencePolicy = { includeUntrackedFileContent: true };
   }
 
+  const runtimeSupport = classifyV2RuntimeSupport({ flow, args, entryModeSelection });
+  const strictRuntimeSupport = applyComposeWriterPolicy(runtimeSupport, {
+    hasComposeWriter: options.composeWriter !== undefined,
+  });
+  const candidateRuntimeSupport = applyComposeWriterPolicy(
+    applyCandidateFixturePolicy(runtimeSupport, {
+      args,
+      fixturePath,
+    }),
+    { hasComposeWriter: options.composeWriter !== undefined },
+  );
+  const strictV2Runtime = useV2Runtime();
+  const candidateV2Runtime = useV2RuntimeCandidate();
+  const defaultV2RuntimeDisabled = disableDefaultV2Runtime();
+  const defaultRuntimeSupport = defaultV2RuntimeDisabled
+    ? disabledV2Decision(candidateRuntimeSupport)
+    : candidateRuntimeSupport;
+  if (strictV2Runtime) {
+    assertStrictV2FreshRunSupported(strictRuntimeSupport);
+  }
+  const routeToV2 =
+    (strictV2Runtime && strictRuntimeSupport.kind === 'v2-supported') ||
+    (!strictV2Runtime && defaultRuntimeSupport.kind === 'v2-supported');
+
+  if (routeToV2) {
+    const v2Result = await runCompiledFlowV2({
+      flowBytes: bytes,
+      runDir: runFolder,
+      runId,
+      goal: args.goal,
+      now,
+      projectRoot,
+      childCompiledFlowResolver: defaultChildCompiledFlowResolverV2(args.flowRoot),
+      ...(args.depth === undefined ? {} : { depth: args.depth }),
+      ...(entryModeSelection.entryModeName === undefined
+        ? {}
+        : { entryModeName: entryModeSelection.entryModeName }),
+      ...(options.relayer === undefined ? {} : { relayer: options.relayer }),
+      ...(selectionConfigLayers.length === 0 ? {} : { selectionConfigLayers }),
+      ...(progress === undefined ? {} : { progress }),
+      ...(args.includeUntrackedContent
+        ? { evidencePolicy: { includeUntrackedFileContent: true } }
+        : {}),
+    });
+    const runResult = RunResult.parse(JSON.parse(readFileSync(v2Result.resultPath, 'utf8')));
+    const operatorSummary = writeOperatorSummary({
+      runFolder,
+      runResult,
+      route: {
+        selectedFlow: route.flowName,
+        routedBy: route.source,
+        routerReason: route.reason,
+      },
+    });
+    process.stdout.write(
+      `${JSON.stringify(
+        {
+          schema_version: 1,
+          run_id: runResult.run_id,
+          flow_id: runResult.flow_id,
+          selected_flow: route.flowName,
+          routed_by: route.source,
+          router_reason: route.reason,
+          ...(route.matched_signal === undefined ? {} : { router_signal: route.matched_signal }),
+          ...(entryModeSelection.entryModeName === undefined
+            ? {}
+            : { entry_mode: entryModeSelection.entryModeName }),
+          ...(entryModeSelection.source === undefined
+            ? {}
+            : { entry_mode_source: entryModeSelection.source }),
+          run_folder: runFolder,
+          outcome: runResult.outcome,
+          trace_entries_observed: runResult.trace_entries_observed,
+          result_path: v2Result.resultPath,
+          ...runtimeOutputFields({
+            include: strictV2Runtime || candidateV2Runtime,
+            runtime: 'v2',
+            decision: strictV2Runtime ? strictRuntimeSupport : defaultRuntimeSupport,
+          }),
+          operator_summary_path: operatorSummary.jsonPath,
+          operator_summary_markdown_path: operatorSummary.markdownPath,
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    return 0;
+  }
+
   const outcome = await runCompiledFlow(invocation);
   const operatorSummary = writeOperatorSummary({
     runFolder: outcome.runFolder,
@@ -566,7 +875,7 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
   const resultPath =
     outcome.result.outcome === 'checkpoint_waiting'
       ? {}
-      : { result_path: `${outcome.runFolder}/reports/result.json` };
+      : { result_path: runResultPath(outcome.runFolder) };
 
   process.stdout.write(
     `${JSON.stringify(
@@ -588,6 +897,11 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
         outcome: outcome.result.outcome,
         trace_entries_observed: outcome.result.trace_entries_observed,
         ...resultPath,
+        ...runtimeOutputFields({
+          include: candidateV2Runtime || defaultV2RuntimeDisabled,
+          runtime: 'retained',
+          decision: defaultRuntimeSupport,
+        }),
         operator_summary_path: operatorSummary.jsonPath,
         operator_summary_markdown_path: operatorSummary.markdownPath,
         ...(outcome.result.outcome === 'checkpoint_waiting'

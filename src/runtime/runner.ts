@@ -44,7 +44,7 @@ import {
   bindsExecutionDepthToRelaySelection,
   selectionConfigLayersWithExecutionDepth,
 } from './relay-selection.js';
-import { writeResult } from './result-writer.js';
+import { resultPath, writeResult } from './result-writer.js';
 import { resolveRunRelative } from './run-relative-path.js';
 import type {
   CheckpointResumeInvocation,
@@ -1182,7 +1182,7 @@ async function executeCompiledFlow(
         'error',
       ),
       outcome: 'aborted',
-      result_path: `${runFolder}/reports/result.json`,
+      result_path: resultPath(runFolder),
       ...(closeReason === undefined ? {} : { reason: closeReason }),
     });
   } else {
@@ -1195,7 +1195,7 @@ async function executeCompiledFlow(
       label: `Circuit run ${runOutcome}`,
       display: progressDisplay(`Circuit run ${runOutcome}.`, 'major', 'success'),
       outcome: runOutcome,
-      result_path: `${runFolder}/reports/result.json`,
+      result_path: resultPath(runFolder),
     });
   }
 
