@@ -1,6 +1,11 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import {
+  PUBLIC_RUNTIME_PATHS,
+  PUBLIC_RUNTIME_WRAPPER_PATHS,
+  type PublicRuntimePathCategory,
+} from '../../src/compat/public-runtime-paths.js';
 import {
   deriveRetainedSnapshot as deriveRetainedCheckpointSnapshot,
   readRetainedRunTrace as readRetainedCheckpointRunTrace,
@@ -21,6 +26,26 @@ import {
   writeRetainedComposeReport,
   writeRetainedPrototypeComposeReport,
 } from '../../src/compat/retained-runtime.js';
+import {
+  compileSchematicToCompiledFlow as neutralCompileSchematicToCompiledFlow,
+  FlowSchematicCompileError as neutralFlowSchematicCompileError,
+} from '../../src/flows/compile-schematic-to-flow.js';
+import {
+  classifyCompiledFlowTask as neutralClassifyCompiledFlowTask,
+  classifyTaskAgainstRoutables as neutralClassifyTaskAgainstRoutables,
+  deriveRoutingForTesting as neutralDeriveRoutingForTesting,
+  ROUTABLE_WORKFLOWS as neutralRoutableWorkflows,
+} from '../../src/flows/router.js';
+import {
+  compileSchematicToCompiledFlow as runtimeCompileSchematicToCompiledFlow,
+  FlowSchematicCompileError as runtimeFlowSchematicCompileError,
+} from '../../src/runtime/compile-schematic-to-flow.js';
+import {
+  classifyCompiledFlowTask as runtimeClassifyCompiledFlowTask,
+  classifyTaskAgainstRoutables as runtimeClassifyTaskAgainstRoutables,
+  deriveRoutingForTesting as runtimeDeriveRoutingForTesting,
+  ROUTABLE_WORKFLOWS as runtimeRoutableWorkflows,
+} from '../../src/runtime/router.js';
 
 function collectSourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {
@@ -29,6 +54,77 @@ function collectSourceFiles(dir: string): string[] {
     if (stat.isDirectory()) return collectSourceFiles(path);
     return path.endsWith('.ts') ? [path] : [];
   });
+}
+
+function collectFiles(dir: string, extensions: readonly string[]): string[] {
+  return readdirSync(dir).flatMap((entry) => {
+    const path = resolve(dir, entry);
+    const stat = statSync(path);
+    if (stat.isDirectory()) return collectFiles(path, extensions);
+    return extensions.some((extension) => path.endsWith(extension)) ? [path] : [];
+  });
+}
+
+function manifestPathsFor(categories: readonly PublicRuntimePathCategory[]): Set<string> {
+  const wrapperPaths = new Set(PUBLIC_RUNTIME_WRAPPER_PATHS.map((entry) => resolve(entry.oldPath)));
+  return new Set(
+    PUBLIC_RUNTIME_PATHS.filter(
+      (entry) => categories.includes(entry.category) && wrapperPaths.has(resolve(entry.oldPath)),
+    ).map((entry) => resolve(entry.oldPath)),
+  );
+}
+
+function collectImportSpecifiers(source: string): string[] {
+  const specifiers: string[] = [];
+  const importPattern = /(?:from\s+|import\s*\(\s*|import\s+)['"]([^'"]+)['"]/g;
+  let match: RegExpExecArray | null = importPattern.exec(source);
+  while (match !== null) {
+    const specifier = match[1];
+    if (specifier) specifiers.push(specifier);
+    match = importPattern.exec(source);
+  }
+  return specifiers;
+}
+
+function runtimeSourcePathForImportSpecifier(file: string, specifier: string): string | undefined {
+  if (specifier.startsWith('.')) {
+    const resolved = resolve(dirname(file), specifier).replace(/\.js$/, '.ts');
+    const runtimeRoot = resolve('src/runtime');
+    if (resolved === runtimeRoot || resolved.startsWith(`${runtimeRoot}${sep}`)) return resolved;
+  }
+
+  const srcRuntimeMatch = specifier.match(/(?:^|\/)src\/runtime\/(.+)\.js$/);
+  if (srcRuntimeMatch) return resolve('src/runtime', `${srcRuntimeMatch[1]}.ts`);
+
+  const distRuntimeMatch = specifier.match(/(?:^|\/)dist\/runtime\/(.+)\.js$/);
+  if (distRuntimeMatch) return resolve('src/runtime', `${distRuntimeMatch[1]}.ts`);
+
+  return undefined;
+}
+
+function oldRuntimeWrapperImportOffenders(input: {
+  readonly categories: readonly PublicRuntimePathCategory[];
+  readonly files: readonly string[];
+  readonly reason: string;
+}): string[] {
+  const repoRoot = resolve('.');
+  const guardedWrapperPaths = manifestPathsFor(input.categories);
+
+  return input.files
+    .filter((file) => !guardedWrapperPaths.has(file))
+    .flatMap((file) => {
+      const specifiers = collectImportSpecifiers(readFileSync(file, 'utf8'));
+      return specifiers.flatMap((specifier) => {
+        const runtimeSourcePath = runtimeSourcePathForImportSpecifier(file, specifier);
+        if (!runtimeSourcePath || !guardedWrapperPaths.has(runtimeSourcePath)) return [];
+        return [
+          `${file.slice(repoRoot.length + 1)} imports ${specifier} (${input.reason}: ${runtimeSourcePath.slice(
+            repoRoot.length + 1,
+          )})`,
+        ];
+      });
+    })
+    .sort();
 }
 
 describe('retained runtime compatibility facade', () => {
@@ -67,6 +163,15 @@ describe('retained runtime compatibility facade', () => {
     expect(checkpointFacade).toContain('../runtime/reducer.js');
   });
 
+  it('keeps old runtime router/compiler paths as compatibility re-exports', () => {
+    expect(runtimeRoutableWorkflows).toBe(neutralRoutableWorkflows);
+    expect(runtimeClassifyCompiledFlowTask).toBe(neutralClassifyCompiledFlowTask);
+    expect(runtimeClassifyTaskAgainstRoutables).toBe(neutralClassifyTaskAgainstRoutables);
+    expect(runtimeDeriveRoutingForTesting).toBe(neutralDeriveRoutingForTesting);
+    expect(runtimeFlowSchematicCompileError).toBe(neutralFlowSchematicCompileError);
+    expect(runtimeCompileSchematicToCompiledFlow).toBe(neutralCompileSchematicToCompiledFlow);
+  });
+
   it('keeps CLI and status surfaces off direct retained runtime imports', () => {
     const cli = readFileSync(resolve('src/cli/circuit.ts'), 'utf8');
     expect(cli).toContain('../compat/retained-runtime.js');
@@ -94,7 +199,7 @@ describe('retained runtime compatibility facade', () => {
     expect(v1Projection).not.toContain('../runtime/reducer.js');
   });
 
-  it('keeps retained execution implementation imports behind the facade in production code', () => {
+  it('keeps retained execution and saved-state implementation imports behind the facades in production code', () => {
     const repoRoot = resolve('.');
     const facadePaths = new Set([
       resolve('src/compat/retained-runtime.ts'),
@@ -102,13 +207,23 @@ describe('retained runtime compatibility facade', () => {
     ]);
     const forbiddenImports = [
       '../runtime/runner.js',
+      '../runtime/append-and-derive.js',
+      '../runtime/checkpoint-resume.js',
+      '../runtime/progress-projector.js',
       '../runtime/reducer.js',
       '../runtime/snapshot-writer.js',
       '../runtime/trace-reader.js',
+      '../runtime/trace-writer.js',
+      '../runtime/step-handlers/checkpoint.js',
       '../../runtime/runner.js',
+      '../../runtime/append-and-derive.js',
+      '../../runtime/checkpoint-resume.js',
+      '../../runtime/progress-projector.js',
       '../../runtime/reducer.js',
       '../../runtime/snapshot-writer.js',
       '../../runtime/trace-reader.js',
+      '../../runtime/trace-writer.js',
+      '../../runtime/step-handlers/checkpoint.js',
     ];
 
     const offenders = collectSourceFiles(resolve('src'))
@@ -122,6 +237,112 @@ describe('retained runtime compatibility facade', () => {
       });
 
     expect(offenders).toEqual([]);
+  });
+
+  it('keeps core-v2 and neutral connector code off runtime connector imports', () => {
+    const repoRoot = resolve('.');
+    const neutralConnectorOffenders = collectSourceFiles(resolve('src/connectors'))
+      .flatMap((file) =>
+        /from\s+['"][^'"]*runtime\//.test(readFileSync(file, 'utf8'))
+          ? [`${file.slice(repoRoot.length + 1)} imports runtime namespace`]
+          : [],
+      )
+      .sort();
+    const productionOffenders = oldRuntimeWrapperImportOffenders({
+      categories: ['connector-wrapper'],
+      files: collectSourceFiles(resolve('src')),
+      reason: 'old connector wrapper',
+    });
+
+    expect(neutralConnectorOffenders).toEqual([]);
+    expect(productionOffenders).toEqual([]);
+  });
+
+  it('keeps router/compiler implementation imports on neutral flow ownership', () => {
+    const productionSourceOffenders = oldRuntimeWrapperImportOffenders({
+      categories: ['flow-authoring-wrapper'],
+      files: collectSourceFiles(resolve('src')),
+      reason: 'old router/compiler wrapper',
+    });
+    const scriptOffenders = oldRuntimeWrapperImportOffenders({
+      categories: ['flow-authoring-wrapper'],
+      files: collectFiles(resolve('scripts'), ['.mjs', '.js', '.ts']),
+      reason: 'old router/compiler wrapper',
+    });
+
+    expect(productionSourceOffenders).toEqual([]);
+    expect(scriptOffenders).toEqual([]);
+  });
+
+  it('keeps registry and catalog derivation imports on neutral flow ownership', () => {
+    const productionSourceOffenders = oldRuntimeWrapperImportOffenders({
+      categories: ['registry-wrapper'],
+      files: collectSourceFiles(resolve('src')),
+      reason: 'old registry/catalog wrapper',
+    });
+    const scriptOffenders = oldRuntimeWrapperImportOffenders({
+      categories: ['registry-wrapper'],
+      files: collectFiles(resolve('scripts'), ['.mjs', '.js', '.ts']),
+      reason: 'old registry/catalog wrapper',
+    });
+
+    expect(productionSourceOffenders).toEqual([]);
+    expect(scriptOffenders).toEqual([]);
+  });
+
+  it('keeps run-status implementation imports on the neutral dispatcher', () => {
+    const productionSourceOffenders = oldRuntimeWrapperImportOffenders({
+      categories: ['run-status-wrapper'],
+      files: collectSourceFiles(resolve('src')),
+      reason: 'old run-status wrapper',
+    });
+    const scriptOffenders = oldRuntimeWrapperImportOffenders({
+      categories: ['run-status-wrapper'],
+      files: collectFiles(resolve('scripts'), ['.mjs', '.js', '.ts']),
+      reason: 'old run-status wrapper',
+    });
+
+    expect(productionSourceOffenders).toEqual([]);
+    expect(scriptOffenders).toEqual([]);
+  });
+
+  it('keeps shared helper implementation imports on neutral ownership', () => {
+    const productionSourceOffenders = oldRuntimeWrapperImportOffenders({
+      categories: ['shared-helper-wrapper'],
+      files: collectSourceFiles(resolve('src')),
+      reason: 'old shared-helper wrapper',
+    });
+    const scriptOffenders = oldRuntimeWrapperImportOffenders({
+      categories: ['shared-helper-wrapper'],
+      files: collectFiles(resolve('scripts'), ['.mjs', '.js', '.ts']),
+      reason: 'old shared-helper wrapper',
+    });
+
+    expect(productionSourceOffenders).toEqual([]);
+    expect(scriptOffenders).toEqual([]);
+  });
+
+  it('keeps result-path helper imports on shared ownership outside the old compatibility proof', () => {
+    const repoRoot = resolve('.');
+    const retainedHandlerOffenders = collectSourceFiles(resolve('src/runtime/step-handlers'))
+      .flatMap((file) =>
+        readFileSync(file, 'utf8').includes('../result-writer.js')
+          ? [file.slice(repoRoot.length + 1)]
+          : [],
+      )
+      .sort();
+    const testOffenders = collectSourceFiles(resolve('tests'))
+      .filter((file) => file !== resolve('tests/runner/result-path-compat.test.ts'))
+      .filter((file) => file !== resolve('tests/runner/retained-compat-facade.test.ts'))
+      .flatMap((file) =>
+        readFileSync(file, 'utf8').includes('src/runtime/result-writer.js')
+          ? [file.slice(repoRoot.length + 1)]
+          : [],
+      )
+      .sort();
+
+    expect(retainedHandlerOffenders).toEqual([]);
+    expect(testOffenders).toEqual([]);
   });
 
   it('keeps retained-execution-only tests on the compatibility facade', () => {
@@ -189,6 +410,32 @@ describe('retained runtime compatibility facade', () => {
       .sort();
 
     expect(offenders).toEqual([]);
+  });
+
+  it('keeps direct retained trace/status/checkpoint test imports explicit', () => {
+    const repoRoot = resolve('.');
+    const retainedSavedStateImport =
+      /import\s+\{[^}]+\}\s+from\s+['"][^'"]*src\/runtime\/(?:trace-reader|trace-writer|reducer|snapshot-writer|progress-projector|checkpoint-resume|append-and-derive|step-handlers\/checkpoint)\.js['"]/m;
+
+    const imports = collectSourceFiles(resolve('tests'))
+      .flatMap((file) =>
+        retainedSavedStateImport.test(readFileSync(file, 'utf8'))
+          ? [file.slice(repoRoot.length + 1)]
+          : [],
+      )
+      .sort();
+
+    expect(imports).toEqual([
+      'tests/contracts/relay-transcript-schema.test.ts',
+      'tests/runner/agent-relay-roundtrip.test.ts',
+      'tests/runner/build-checkpoint-exec.test.ts',
+      'tests/runner/checkpoint-handler-direct.test.ts',
+      'tests/runner/codex-relay-roundtrip.test.ts',
+      'tests/runner/fresh-run-root.test.ts',
+      'tests/runner/run-status-projection.test.ts',
+      'tests/unit/runtime/event-log-round-trip.test.ts',
+      'tests/unit/runtime/progress-projector.test.ts',
+    ]);
   });
 
   it('keeps direct old runner test imports limited to the explicit compose report compatibility proof', () => {

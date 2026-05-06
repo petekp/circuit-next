@@ -3,12 +3,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { readRetainedRunTrace as readRunTrace } from '../../src/compat/retained-checkpoint-folders.js';
 import {
   runRetainedCompiledFlow as runCompiledFlow,
   writeRetainedPrototypeComposeReport as writePrototypeComposeReport,
 } from '../../src/compat/retained-runtime.js';
-import type { ClaudeCodeRelayInput } from '../../src/runtime/connectors/claude-code.js';
-import { readRunTrace } from '../../src/runtime/trace-reader.js';
+import type { ClaudeCodeRelayInput } from '../../src/connectors/claude-code.js';
 import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { RunId } from '../../src/schemas/ids.js';

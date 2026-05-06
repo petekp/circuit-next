@@ -109,6 +109,13 @@ Phase 5.22 moves the live `composeWriter` runtime reason into
 `src/cli/runtime-compatibility-policy.ts` and has CLI tests assert that exact
 reason for retained fallback and strict-v2 rejection.
 
+Phase 5.27 formalizes that status with
+`COMPOSE_WRITER_COMPATIBILITY_POLICY`: `composeWriter` is
+retained-runtime-only, the selected runtime is retained, no v2 hook is planned,
+and internal core-v2 customization uses executor injection or generated reports.
+CLI tests also prove a supplied `composeWriter` still wins over `v2Executors` in
+normal routing and still fails closed under strict v2.
+
 ## Release Proof
 
 `scripts/release/capture-golden-run-proofs.mjs` was the only non-test caller

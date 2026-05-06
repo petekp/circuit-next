@@ -109,6 +109,7 @@ function latestAdmittedVerdict(context: RunContextV2): string | undefined {
     if (entry.kind !== 'relay.completed' && entry.kind !== 'sub_run.completed') continue;
     if (typeof entry.verdict !== 'string' || entry.verdict.length === 0) continue;
     if (entry.data?.admitted === false) continue;
+    if (entry.kind === 'sub_run.completed' && entry.child_outcome !== 'complete') continue;
     return entry.verdict;
   }
   return undefined;
@@ -177,7 +178,7 @@ async function closeRun(
       ...(reason === undefined ? {} : { reason }),
     },
   });
-  const verdict = latestAdmittedVerdict(context);
+  const verdict = outcome === 'complete' ? latestAdmittedVerdict(context) : undefined;
   const result: RunResultV2 = {
     schema_version: 1,
     run_id: context.runId,

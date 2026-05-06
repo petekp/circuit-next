@@ -1,4 +1,5 @@
 import type { RunClosedOutcomeV2 } from '../domain/run.js';
+export { NO_VERDICT_SENTINEL as NO_VERDICT_SENTINEL_V2 } from '../../shared/relay-support.js';
 
 export type FanoutJoinPolicyV2 = 'pick-winner' | 'disjoint-merge' | 'aggregate-only';
 
@@ -37,5 +38,3 @@ export interface BranchOutcomeV2 {
   readonly admitted: boolean;
   readonly failure_reason?: string;
 }
-
-export const NO_VERDICT_SENTINEL_V2 = '<no-verdict>';

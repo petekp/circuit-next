@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ROUTABLE_WORKFLOWS, classifyCompiledFlowTask } from '../../src/runtime/router.js';
+import { ROUTABLE_WORKFLOWS, classifyCompiledFlowTask } from '../../src/flows/router.js';
 
 describe('flow router classifier', () => {
   it('declares the current routable flow set explicitly', () => {

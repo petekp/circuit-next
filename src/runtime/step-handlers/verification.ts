@@ -1,10 +1,10 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, lstatSync, realpathSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
+import { findVerificationWriter } from '../../flows/registries/verification-writers/registry.js';
 import type { CompiledFlow } from '../../schemas/compiled-flow.js';
-import { findVerificationWriter } from '../registries/verification-writers/registry.js';
-import { recoveryRouteForStep } from './recovery-route.js';
-import { isRunRelativePathError, writeJsonReport } from './shared.js';
+import { isRunRelativePathError, writeJsonReport } from '../../shared/json-report.js';
+import { recoveryRouteForStep } from '../../shared/recovery-route.js';
 import type { StepHandlerContext, StepHandlerResult } from './types.js';
 
 type VerificationStep = CompiledFlow['steps'][number] & { kind: 'verification' };

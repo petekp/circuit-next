@@ -1,10 +1,10 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { relayClaudeCode } from '../../connectors/claude-code.js';
+import { relayCodex } from '../../connectors/codex.js';
+import { relayCustom } from '../../connectors/custom.js';
 import { runCrossReportValidator } from '../../flows/registries/cross-report-validators.js';
 import { parseReport } from '../../flows/registries/report-schemas.js';
-import { relayClaudeCode } from '../../runtime/connectors/claude-code.js';
-import { relayCodex } from '../../runtime/connectors/codex.js';
-import { relayCustom } from '../../runtime/connectors/custom.js';
 import type { CompiledFlow } from '../../schemas/compiled-flow.js';
 import type { ResolvedConnector } from '../../schemas/connector.js';
 import { Depth } from '../../schemas/depth.js';

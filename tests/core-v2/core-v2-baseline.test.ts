@@ -140,6 +140,53 @@ describe('core-v2 baseline', () => {
     });
   });
 
+  it('does not carry non-complete sub-run trace verdicts into the final result', async () => {
+    await withTempRun(async (runDir) => {
+      const flow: ExecutableFlowV2 = {
+        id: 'sub-run-verdict-guard',
+        version: '0.1.0',
+        entry: 'compose',
+        stages: [{ id: 'main', stepIds: ['compose'] }],
+        steps: [
+          {
+            id: 'compose',
+            kind: 'compose',
+            writer: 'guard-writer',
+            routes: { pass: { kind: 'terminal', target: '@complete' } },
+          },
+        ],
+      };
+
+      const result = await executeExecutableFlowV2(flow, {
+        runDir,
+        runId: '40000000-0000-4000-8000-000000000003',
+        goal: 'prove non-complete sub-run verdicts stay out of final results',
+        executors: {
+          compose: async (_step, context) => {
+            await context.trace.append({
+              run_id: context.runId,
+              kind: 'sub_run.completed',
+              step_id: 'compose',
+              child_run_id: 'child-run',
+              child_outcome: 'aborted',
+              verdict: 'accept',
+              duration_ms: 0,
+              result_path: 'reports/child-result.json',
+            });
+            return { route: 'pass' };
+          },
+        },
+      });
+
+      const resultJson = RunResult.parse(
+        JSON.parse(await readFile(join(runDir, 'reports', 'result.json'), 'utf8')),
+      );
+      expect(result.outcome).toBe('complete');
+      expect(result.verdict).toBeUndefined();
+      expect(resultJson.verdict).toBeUndefined();
+    });
+  });
+
   it('validates schema-tagged run-file writes before persisting reports', async () => {
     await withTempRun(async (runDir) => {
       const files = new RunFileStore(runDir, validateReportValueV2);

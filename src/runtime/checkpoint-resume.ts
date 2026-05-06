@@ -1,12 +1,12 @@
 import { readFileSync } from 'node:fs';
 
+import { findCheckpointBriefBuilder } from '../flows/registries/checkpoint-writers/registry.js';
 import { CompiledFlow } from '../schemas/compiled-flow.js';
 import { LayeredConfig, type LayeredConfig as LayeredConfigValue } from '../schemas/config.js';
 import type { TraceEntry } from '../schemas/trace-entry.js';
 import { sha256Hex } from '../shared/connector-relay.js';
+import { verifyManifestSnapshotBytes } from '../shared/manifest-snapshot.js';
 import { resolveRunRelative } from '../shared/run-relative-path.js';
-import { verifyManifestSnapshotBytes } from './manifest-snapshot-writer.js';
-import { findCheckpointBriefBuilder } from './registries/checkpoint-writers/registry.js';
 import { writeDerivedSnapshot } from './snapshot-writer.js';
 import { readRunTrace } from './trace-reader.js';
 

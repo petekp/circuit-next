@@ -100,7 +100,7 @@ export async function loadCurrentCatalog() {
 }
 
 export async function loadRouter() {
-  return import(resolve(projectRoot, 'dist/runtime/router.js'));
+  return import(resolve(projectRoot, 'dist/flows/router.js'));
 }
 
 export async function loadConnectorSchemas() {

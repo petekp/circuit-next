@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { deriveTerminalVerdict } from '../../src/runtime/terminal-verdict.js';
+import { deriveTerminalVerdict as deriveTerminalVerdictFromRuntimePath } from '../../src/runtime/terminal-verdict.js';
 import { TraceEntry, type TraceEntry as TraceEntryValue } from '../../src/schemas/trace-entry.js';
+import { deriveTerminalVerdict } from '../../src/shared/terminal-verdict.js';
 
 const RUN_ID = '81000000-0000-0000-0000-000000000001';
 const CHILD_RUN_ID = '81000000-0000-0000-0000-000000000002';
@@ -63,6 +64,10 @@ function checkEvaluated(
 }
 
 describe('deriveTerminalVerdict', () => {
+  it('keeps the old runtime path as a compatibility re-export', () => {
+    expect(deriveTerminalVerdictFromRuntimePath).toBe(deriveTerminalVerdict);
+  });
+
   it('returns the latest admitted result verdict', () => {
     const trace = [
       relayCompleted(1, 'first-step', 'early'),

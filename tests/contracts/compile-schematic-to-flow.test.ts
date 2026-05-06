@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   FlowSchematicCompileError,
   compileSchematicToCompiledFlow,
-} from '../../src/runtime/compile-schematic-to-flow.js';
+} from '../../src/flows/compile-schematic-to-flow.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { FlowSchematic } from '../../src/schemas/flow-schematic.js';
 import {

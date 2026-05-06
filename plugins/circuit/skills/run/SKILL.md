@@ -191,5 +191,5 @@ as literal user-controlled text when constructing shell commands.
 
 ## Authority
 
-- `src/runtime/router.ts` (current deterministic classifier)
+- `src/flows/router.ts` (current deterministic classifier)
 - `tests/contracts/flow-router.test.ts` (classifier behavior)

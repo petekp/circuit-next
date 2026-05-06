@@ -238,7 +238,14 @@ async function runCompiledRelayFanoutV2(input: {
   return { result, runDir, entries: await trace(runDir) };
 }
 
-function subRunFanoutFlow(): ExecutableFlowV2 {
+function subRunFanoutFlow(
+  options: {
+    readonly joinPolicy?: 'aggregate-only' | 'disjoint-merge' | 'pick-winner';
+    readonly admit?: readonly string[];
+    readonly onChildFailure?: 'abort-all' | 'continue-others';
+    readonly concurrencyMax?: number;
+  } = {},
+): ExecutableFlowV2 {
   return {
     id: 'fanout-sub-run-test',
     version: '0.1.0',
@@ -272,14 +279,14 @@ function subRunFanoutFlow(): ExecutableFlowV2 {
             },
           ],
         },
-        concurrency: { kind: 'bounded', max: 2 },
-        onChildFailure: 'continue-others',
+        concurrency: { kind: 'bounded', max: options.concurrencyMax ?? 2 },
+        onChildFailure: options.onChildFailure ?? 'continue-others',
         join: { aggregate: { path: 'reports/aggregate.json' } },
         check: {
           kind: 'fanout_aggregate',
           source: { kind: 'fanout_results', ref: 'aggregate' },
-          join: { policy: 'disjoint-merge' },
-          verdicts: { admit: ['accept'] },
+          join: { policy: options.joinPolicy ?? 'disjoint-merge' },
+          verdicts: { admit: options.admit ?? ['accept'] },
         },
       },
     ],
@@ -329,10 +336,11 @@ function childFlowBytes(): Buffer {
   );
 }
 
-function stubChildRunner() {
+function stubChildRunner(verdictForGoal: (goal: string) => string = () => 'accept') {
   return async (options: CompiledFlowRunOptionsV2Like): Promise<GraphRunResultV2> => {
     const resultPath = join(options.runDir, 'reports', 'result.json');
     await mkdir(dirname(resultPath), { recursive: true });
+    const verdict = verdictForGoal(options.goal);
     const body = RunResult.parse({
       schema_version: 1,
       run_id: options.runId ?? 'child-run',
@@ -343,7 +351,7 @@ function stubChildRunner() {
       closed_at: new Date(0).toISOString(),
       trace_entries_observed: 1,
       manifest_hash: 'child-hash',
-      verdict: 'accept',
+      verdict,
     });
     await writeFile(resultPath, `${JSON.stringify(body, null, 2)}\n`, 'utf8');
     return {
@@ -356,7 +364,7 @@ function stubChildRunner() {
       closed_at: body.closed_at,
       trace_entries_observed: body.trace_entries_observed,
       manifest_hash: body.manifest_hash,
-      verdict: 'accept',
+      verdict,
       resultPath,
     };
   };
@@ -543,6 +551,87 @@ describe('core-v2 fanout executor', () => {
     expect(entries.find((entry) => entry.kind === 'fanout.joined')?.branches_completed).toBe(2);
   });
 
+  it('aborts before fanout start when dynamic branch expansion fails', async () => {
+    const cases = [
+      {
+        name: 'wrong-shape',
+        runId: '60000000-0000-4000-8000-000000000001',
+        body: { options: { not: 'an-array' } },
+        expectedReason: /did not resolve to an array/,
+      },
+      {
+        name: 'zero-branches',
+        runId: '60000000-0000-4000-8000-000000000002',
+        body: { options: [] },
+        expectedReason: /branch resolution produced zero branches/,
+      },
+      {
+        name: 'duplicate-branch',
+        runId: '60000000-0000-4000-8000-000000000003',
+        body: {
+          options: [
+            { id: 'duplicate', prompt: 'first branch' },
+            { id: 'duplicate', prompt: 'second branch' },
+          ],
+        },
+        expectedReason: /duplicate branch_id 'duplicate'/,
+      },
+      {
+        name: 'too-many-branches',
+        runId: '60000000-0000-4000-8000-000000000004',
+        body: {
+          options: [
+            { id: 'option-1', prompt: 'one' },
+            { id: 'option-2', prompt: 'two' },
+            { id: 'option-3', prompt: 'three' },
+            { id: 'option-4', prompt: 'four' },
+            { id: 'option-5', prompt: 'five' },
+          ],
+        },
+        expectedReason: /expanded to 5 items but max_branches is 4/,
+      },
+    ] as const;
+
+    for (const testCase of cases) {
+      const runDir = join(baseDir, `dynamic-expansion-${testCase.name}`);
+      let relayCalls = 0;
+      const result = await executeExecutableFlowV2(dynamicRelayFanoutFlow(), {
+        runDir,
+        runId: testCase.runId,
+        goal: 'fanout expansion failure proof',
+        relayConnector: {
+          async relay() {
+            relayCalls += 1;
+            return { verdict: 'accept', option_id: 'option-one' };
+          },
+        },
+        executors: {
+          compose: async (_step, context) => {
+            await context.files.writeJson('reports/options.json', testCase.body);
+            return { route: 'pass' };
+          },
+        },
+        now: () => new Date('2026-05-03T00:00:00.000Z'),
+      });
+
+      const entries = await trace(runDir);
+      expect(result.outcome, testCase.name).toBe('aborted');
+      expect(result.reason, testCase.name).toMatch(testCase.expectedReason);
+      expect(relayCalls, testCase.name).toBe(0);
+      expect(entries, testCase.name).not.toContainEqual(
+        expect.objectContaining({ kind: 'fanout.started', step_id: 'fanout' }),
+      );
+      expect(entries, testCase.name).toContainEqual(
+        expect.objectContaining({
+          kind: 'step.aborted',
+          step_id: 'fanout',
+          reason: expect.stringMatching(testCase.expectedReason),
+        }),
+      );
+      expect(existsSync(join(runDir, 'reports', 'aggregate.json')), testCase.name).toBe(false);
+    }
+  });
+
   it('cleans up sub-run branch worktrees after a disjoint-merge fanout', async () => {
     const runDir = join(baseDir, 'sub-run-fanout-run');
     const removed = new Set<string>();
@@ -580,6 +669,403 @@ describe('core-v2 fanout executor', () => {
     expect(entries.find((entry) => entry.kind === 'fanout.joined')?.policy).toBe('disjoint-merge');
   });
 
+  it('records the successful sub-run fanout trace sequence before closing the run', async () => {
+    const runDir = join(baseDir, 'sub-run-fanout-sequence-run');
+    const result = await executeExecutableFlowV2(subRunFanoutFlow({ concurrencyMax: 1 }), {
+      runDir,
+      runId: 'sub-run-fanout-sequence-run',
+      goal: 'fanout goal',
+      projectRoot: join(baseDir, 'project'),
+      worktreeRunner: {
+        add() {},
+        remove() {},
+        changedFiles(worktreePath: string) {
+          return [worktreePath.endsWith('/one') ? 'one.ts' : 'two.ts'];
+        },
+      },
+      childCompiledFlowResolver: () => ({ flowBytes: childFlowBytes() }),
+      childRunner: stubChildRunner(),
+      now: () => new Date('2026-05-03T00:00:00.000Z'),
+    });
+
+    expect(result.outcome).toBe('complete');
+    const entries = await trace(runDir);
+    expect(entries.map((entry) => entry.kind)).toEqual([
+      'run.bootstrapped',
+      'step.entered',
+      'fanout.started',
+      'fanout.branch_started',
+      'fanout.branch_completed',
+      'fanout.branch_started',
+      'fanout.branch_completed',
+      'step.report_written',
+      'fanout.joined',
+      'check.evaluated',
+      'step.completed',
+      'run.closed',
+    ]);
+    expect(
+      entries
+        .filter((entry) => entry.kind === 'fanout.branch_started')
+        .map((entry) => entry.branch_id),
+    ).toEqual(['one', 'two']);
+    expect(
+      entries
+        .filter((entry) => entry.kind === 'fanout.branch_completed')
+        .map((entry) => entry.branch_id),
+    ).toEqual(['one', 'two']);
+  });
+
+  it('selects a pick-winner branch by admit order instead of branch order', async () => {
+    const runDir = join(baseDir, 'sub-run-pick-winner-success-run');
+    const result = await executeExecutableFlowV2(
+      subRunFanoutFlow({ joinPolicy: 'pick-winner', admit: ['gold', 'silver'] }),
+      {
+        runDir,
+        runId: 'sub-run-pick-winner-success-run',
+        goal: 'fanout goal',
+        projectRoot: join(baseDir, 'project'),
+        worktreeRunner: {
+          add() {},
+          remove() {},
+        },
+        childCompiledFlowResolver: () => ({ flowBytes: childFlowBytes() }),
+        childRunner: stubChildRunner((goal) => (goal === 'child one' ? 'silver' : 'gold')),
+        now: () => new Date('2026-05-03T00:00:00.000Z'),
+      },
+    );
+
+    expect(result.outcome).toBe('complete');
+    const entries = await trace(runDir);
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        kind: 'fanout.joined',
+        step_id: 'fanout',
+        policy: 'pick-winner',
+        selected_branch_id: 'two',
+      }),
+    );
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        kind: 'check.evaluated',
+        step_id: 'fanout',
+        outcome: 'pass',
+      }),
+    );
+    const aggregate = JSON.parse(await readFile(join(runDir, 'reports', 'aggregate.json'), 'utf8'));
+    expect(aggregate).toMatchObject({
+      join_policy: 'pick-winner',
+      winner_branch_id: 'two',
+      branch_count: 2,
+    });
+    expect(aggregate.branches).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ branch_id: 'one', verdict: 'silver', admitted: true }),
+        expect.objectContaining({ branch_id: 'two', verdict: 'gold', admitted: true }),
+      ]),
+    );
+  });
+
+  it('aborts pick-winner fanout when no branch has an admitted verdict', async () => {
+    const runDir = join(baseDir, 'sub-run-pick-winner-failure-run');
+    const result = await executeExecutableFlowV2(
+      subRunFanoutFlow({ joinPolicy: 'pick-winner', admit: ['gold'] }),
+      {
+        runDir,
+        runId: 'sub-run-pick-winner-failure-run',
+        goal: 'fanout goal',
+        projectRoot: join(baseDir, 'project'),
+        worktreeRunner: {
+          add() {},
+          remove() {},
+        },
+        childCompiledFlowResolver: () => ({ flowBytes: childFlowBytes() }),
+        childRunner: stubChildRunner(() => 'rust'),
+        now: () => new Date('2026-05-03T00:00:00.000Z'),
+      },
+    );
+
+    expect(result.outcome).toBe('aborted');
+    expect(result.reason).toContain(
+      "pick-winner: no branch closed 'complete' with an admitted verdict",
+    );
+    const entries = await trace(runDir);
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        kind: 'check.evaluated',
+        step_id: 'fanout',
+        outcome: 'fail',
+        reason: expect.stringContaining('pick-winner'),
+      }),
+    );
+    const aggregate = JSON.parse(await readFile(join(runDir, 'reports', 'aggregate.json'), 'utf8'));
+    expect(aggregate.winner_branch_id).toBeUndefined();
+    expect(aggregate.branches).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ branch_id: 'one', verdict: 'rust', admitted: false }),
+        expect.objectContaining({ branch_id: 'two', verdict: 'rust', admitted: false }),
+      ]),
+    );
+  });
+
+  it('aborts aggregate-only fanout when a branch fails before producing result evidence', async () => {
+    const runDir = join(baseDir, 'sub-run-aggregate-only-failure-run');
+    const childRunner = async (
+      options: CompiledFlowRunOptionsV2Like,
+    ): Promise<GraphRunResultV2> => {
+      if (options.goal === 'child one') {
+        throw new Error("child runner refused branch 'one'");
+      }
+      return await stubChildRunner()(options);
+    };
+
+    const result = await executeExecutableFlowV2(
+      subRunFanoutFlow({ joinPolicy: 'aggregate-only' }),
+      {
+        runDir,
+        runId: 'sub-run-aggregate-only-failure-run',
+        goal: 'fanout goal',
+        projectRoot: join(baseDir, 'project'),
+        worktreeRunner: {
+          add() {},
+          remove() {},
+        },
+        childCompiledFlowResolver: () => ({ flowBytes: childFlowBytes() }),
+        childRunner,
+        now: () => new Date('2026-05-03T00:00:00.000Z'),
+      },
+    );
+
+    expect(result.outcome).toBe('aborted');
+    expect(result.reason).toContain('aggregate-only');
+    expect(result.reason).toContain("child runner refused branch 'one'");
+    const entries = await trace(runDir);
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        kind: 'check.evaluated',
+        step_id: 'fanout',
+        outcome: 'fail',
+        reason: expect.stringContaining('aggregate-only'),
+      }),
+    );
+    const aggregate = JSON.parse(await readFile(join(runDir, 'reports', 'aggregate.json'), 'utf8'));
+    expect(aggregate).toMatchObject({ join_policy: 'aggregate-only', branch_count: 2 });
+    expect(aggregate.branches).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          branch_id: 'one',
+          child_outcome: 'aborted',
+          verdict: '<no-verdict>',
+          admitted: false,
+        }),
+        expect.objectContaining({
+          branch_id: 'two',
+          child_outcome: 'complete',
+          verdict: 'accept',
+        }),
+      ]),
+    );
+  });
+
+  it('passes aggregate-only fanout when complete branches have parseable non-admitted verdicts', async () => {
+    const runDir = join(baseDir, 'sub-run-aggregate-only-success-run');
+    const result = await executeExecutableFlowV2(
+      subRunFanoutFlow({ joinPolicy: 'aggregate-only', admit: ['accept'] }),
+      {
+        runDir,
+        runId: 'sub-run-aggregate-only-success-run',
+        goal: 'fanout goal',
+        projectRoot: join(baseDir, 'project'),
+        worktreeRunner: {
+          add() {},
+          remove() {},
+        },
+        childCompiledFlowResolver: () => ({ flowBytes: childFlowBytes() }),
+        childRunner: stubChildRunner((goal) => (goal === 'child one' ? 'accept' : 'reject')),
+        now: () => new Date('2026-05-03T00:00:00.000Z'),
+      },
+    );
+
+    expect(result.outcome).toBe('complete');
+    const entries = await trace(runDir);
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        kind: 'fanout.joined',
+        step_id: 'fanout',
+        policy: 'aggregate-only',
+        branches_completed: 2,
+        branches_failed: 0,
+      }),
+    );
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        kind: 'check.evaluated',
+        step_id: 'fanout',
+        outcome: 'pass',
+      }),
+    );
+    const aggregate = JSON.parse(await readFile(join(runDir, 'reports', 'aggregate.json'), 'utf8'));
+    expect(aggregate).toMatchObject({ join_policy: 'aggregate-only', branch_count: 2 });
+    expect(aggregate.branches).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ branch_id: 'one', verdict: 'accept', admitted: true }),
+        expect.objectContaining({ branch_id: 'two', verdict: 'reject', admitted: false }),
+      ]),
+    );
+  });
+
+  it('stops scheduling pending branches after an abort-all fanout branch failure', async () => {
+    const runDir = join(baseDir, 'sub-run-abort-all-short-circuit-run');
+    const startedGoals: string[] = [];
+    const removed = new Set<string>();
+    const result = await executeExecutableFlowV2(
+      subRunFanoutFlow({
+        joinPolicy: 'aggregate-only',
+        onChildFailure: 'abort-all',
+        concurrencyMax: 1,
+      }),
+      {
+        runDir,
+        runId: 'sub-run-abort-all-short-circuit-run',
+        goal: 'fanout goal',
+        projectRoot: join(baseDir, 'project'),
+        worktreeRunner: {
+          add() {},
+          remove(worktreePath: string) {
+            removed.add(worktreePath);
+          },
+        },
+        childCompiledFlowResolver: () => ({ flowBytes: childFlowBytes() }),
+        childRunner: async (options) => {
+          startedGoals.push(options.goal);
+          if (options.goal === 'child one') {
+            throw new Error('child runner refused first branch');
+          }
+          return await stubChildRunner()(options);
+        },
+        now: () => new Date('2026-05-03T00:00:00.000Z'),
+      },
+    );
+
+    expect(result.outcome).toBe('aborted');
+    expect(result.reason).toContain('aggregate-only');
+    expect(result.reason).toContain('child runner refused first branch');
+    expect(startedGoals).toEqual(['child one']);
+    const entries = await trace(runDir);
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        kind: 'fanout.started',
+        step_id: 'fanout',
+        branch_ids: ['one', 'two'],
+        data: { on_child_failure: 'abort-all' },
+      }),
+    );
+    expect(entries.filter((entry) => entry.kind === 'fanout.branch_started')).toHaveLength(1);
+    expect(entries.filter((entry) => entry.kind === 'fanout.branch_completed')).toHaveLength(1);
+    expect(entries).not.toContainEqual(
+      expect.objectContaining({ kind: 'fanout.branch_started', branch_id: 'two' }),
+    );
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        kind: 'fanout.joined',
+        step_id: 'fanout',
+        policy: 'aggregate-only',
+        branches_completed: 0,
+        branches_failed: 1,
+      }),
+    );
+    expect(removed.size).toBe(1);
+  });
+
+  it('aborts disjoint-merge fanout when completed branches touch the same file', async () => {
+    const runDir = join(baseDir, 'sub-run-disjoint-file-conflict-run');
+    const removed = new Set<string>();
+    const worktreeRunner = {
+      add() {},
+      remove(worktreePath: string) {
+        removed.add(worktreePath);
+      },
+      changedFiles() {
+        return ['src/shared.ts'];
+      },
+    };
+
+    const result = await executeExecutableFlowV2(subRunFanoutFlow(), {
+      runDir,
+      runId: 'sub-run-disjoint-file-conflict-run',
+      goal: 'fanout goal',
+      projectRoot: join(baseDir, 'project'),
+      worktreeRunner,
+      childCompiledFlowResolver: () => ({ flowBytes: childFlowBytes() }),
+      childRunner: stubChildRunner(),
+      now: () => new Date('2026-05-03T00:00:00.000Z'),
+    });
+
+    expect(result.outcome).toBe('aborted');
+    expect(result.reason).toContain("file 'src/shared.ts' modified by branches");
+    const entries = await trace(runDir);
+    expect(entries.filter((entry) => entry.kind === 'fanout.branch_completed')).toHaveLength(2);
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        kind: 'check.evaluated',
+        step_id: 'fanout',
+        outcome: 'fail',
+        reason: expect.stringContaining("file 'src/shared.ts' modified by branches"),
+      }),
+    );
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        kind: 'fanout.joined',
+        step_id: 'fanout',
+        policy: 'disjoint-merge',
+        branches_completed: 2,
+        branches_failed: 0,
+      }),
+    );
+    expect(removed.size).toBe(2);
+  });
+
+  it('aborts disjoint-merge fanout when changed-file discovery fails', async () => {
+    const runDir = join(baseDir, 'sub-run-changed-files-failure-run');
+    const removed = new Set<string>();
+    const worktreeRunner = {
+      add() {},
+      remove(worktreePath: string) {
+        removed.add(worktreePath);
+      },
+      changedFiles() {
+        throw new Error('changed-files backend unavailable');
+      },
+    };
+
+    const result = await executeExecutableFlowV2(subRunFanoutFlow(), {
+      runDir,
+      runId: 'sub-run-changed-files-failure-run',
+      goal: 'fanout goal',
+      projectRoot: join(baseDir, 'project'),
+      worktreeRunner,
+      childCompiledFlowResolver: () => ({ flowBytes: childFlowBytes() }),
+      childRunner: stubChildRunner(),
+      now: () => new Date('2026-05-03T00:00:00.000Z'),
+    });
+
+    expect(result.outcome).toBe('aborted');
+    expect(result.reason).toContain(
+      'file-disjoint validation failed (changed-files backend unavailable)',
+    );
+    const entries = await trace(runDir);
+    expect(entries.filter((entry) => entry.kind === 'fanout.branch_completed')).toHaveLength(2);
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        kind: 'check.evaluated',
+        step_id: 'fanout',
+        outcome: 'fail',
+        reason: expect.stringContaining('file-disjoint validation failed'),
+      }),
+    );
+    expect(removed.size).toBe(2);
+  });
+
   it('records branch completion when sub-run branch preflight fails', async () => {
     const runDir = join(baseDir, 'missing-child-runner-run');
     const result = await executeExecutableFlowV2(subRunFanoutFlow(), {
@@ -603,6 +1089,167 @@ describe('core-v2 fanout executor', () => {
     expect(entries.filter((entry) => entry.kind === 'fanout.branch_completed')).toHaveLength(2);
     expect(entries.find((entry) => entry.kind === 'fanout.branch_completed')?.child_outcome).toBe(
       'aborted',
+    );
+  });
+
+  it('records sub-run branch failure when child flow resolution throws', async () => {
+    const runDir = join(baseDir, 'sub-run-resolver-failure-run');
+    let childRunnerCalls = 0;
+    const result = await executeExecutableFlowV2(subRunFanoutFlow({ joinPolicy: 'pick-winner' }), {
+      runDir,
+      runId: 'sub-run-resolver-failure-run',
+      goal: 'fanout goal',
+      projectRoot: join(baseDir, 'project'),
+      worktreeRunner: {
+        add() {},
+        remove() {},
+      },
+      childCompiledFlowResolver: () => {
+        throw new Error('resolver unavailable');
+      },
+      childRunner: async (options) => {
+        childRunnerCalls += 1;
+        return await stubChildRunner()(options);
+      },
+      now: () => new Date('2026-05-03T00:00:00.000Z'),
+    });
+
+    expect(result.outcome).toBe('aborted');
+    expect(result.reason).toContain("pick-winner: no branch closed 'complete'");
+    expect(childRunnerCalls).toBe(0);
+    const entries = await trace(runDir);
+    const completed = entries.filter((entry) => entry.kind === 'fanout.branch_completed');
+    expect(completed).toHaveLength(2);
+    expect(completed).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          branch_id: 'one',
+          child_outcome: 'aborted',
+          verdict: '<no-verdict>',
+        }),
+        expect.objectContaining({
+          branch_id: 'two',
+          child_outcome: 'aborted',
+          verdict: '<no-verdict>',
+        }),
+      ]),
+    );
+  });
+
+  it('records sub-run branch failure when worktree provisioning throws', async () => {
+    const runDir = join(baseDir, 'sub-run-worktree-add-failure-run');
+    const removed = new Set<string>();
+    const worktreeRunner = {
+      add({ worktreePath }: { readonly worktreePath: string }) {
+        if (worktreePath.endsWith('/one')) {
+          throw new Error("worktree add refused branch 'one'");
+        }
+      },
+      remove(worktreePath: string) {
+        removed.add(worktreePath);
+      },
+      changedFiles(worktreePath: string) {
+        return [worktreePath.endsWith('/one') ? 'one.ts' : 'two.ts'];
+      },
+    };
+
+    const result = await executeExecutableFlowV2(subRunFanoutFlow(), {
+      runDir,
+      runId: 'sub-run-worktree-add-failure-run',
+      goal: 'fanout goal',
+      projectRoot: join(baseDir, 'project'),
+      worktreeRunner,
+      childCompiledFlowResolver: () => ({ flowBytes: childFlowBytes() }),
+      childRunner: stubChildRunner(),
+      now: () => new Date('2026-05-03T00:00:00.000Z'),
+    });
+
+    expect(result.outcome).toBe('aborted');
+    expect(result.reason).toContain("not all branches closed 'complete' with an admitted verdict");
+    const entries = await trace(runDir);
+    const completed = new Map(
+      entries
+        .filter((entry) => entry.kind === 'fanout.branch_completed')
+        .map((entry) => [entry.branch_id, entry]),
+    );
+    expect(completed.get('one')).toMatchObject({
+      child_outcome: 'aborted',
+      verdict: '<no-verdict>',
+    });
+    expect(completed.get('two')).toMatchObject({
+      child_outcome: 'complete',
+      verdict: 'accept',
+    });
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        kind: 'check.evaluated',
+        step_id: 'fanout',
+        outcome: 'fail',
+        reason: expect.stringContaining("not all branches closed 'complete'"),
+      }),
+    );
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        kind: 'fanout.joined',
+        step_id: 'fanout',
+        branches_completed: 1,
+        branches_failed: 1,
+      }),
+    );
+    expect(removed.size).toBe(2);
+  });
+
+  it('records sub-run branch failure when the child runner throws', async () => {
+    const runDir = join(baseDir, 'sub-run-child-runner-failure-run');
+    const childRunner = async (
+      options: CompiledFlowRunOptionsV2Like,
+    ): Promise<GraphRunResultV2> => {
+      if (options.goal === 'child one') {
+        throw new Error("child runner refused branch 'one'");
+      }
+      return await stubChildRunner()(options);
+    };
+
+    const result = await executeExecutableFlowV2(subRunFanoutFlow(), {
+      runDir,
+      runId: 'sub-run-child-runner-failure-run',
+      goal: 'fanout goal',
+      projectRoot: join(baseDir, 'project'),
+      worktreeRunner: {
+        add() {},
+        remove() {},
+        changedFiles(worktreePath: string) {
+          return [worktreePath.endsWith('/one') ? 'one.ts' : 'two.ts'];
+        },
+      },
+      childCompiledFlowResolver: () => ({ flowBytes: childFlowBytes() }),
+      childRunner,
+      now: () => new Date('2026-05-03T00:00:00.000Z'),
+    });
+
+    expect(result.outcome).toBe('aborted');
+    expect(result.reason).toContain("not all branches closed 'complete' with an admitted verdict");
+    const entries = await trace(runDir);
+    const completed = new Map(
+      entries
+        .filter((entry) => entry.kind === 'fanout.branch_completed')
+        .map((entry) => [entry.branch_id, entry]),
+    );
+    expect(completed.get('one')).toMatchObject({
+      child_outcome: 'aborted',
+      verdict: '<no-verdict>',
+    });
+    expect(completed.get('two')).toMatchObject({
+      child_outcome: 'complete',
+      verdict: 'accept',
+    });
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        kind: 'check.evaluated',
+        step_id: 'fanout',
+        outcome: 'fail',
+        reason: expect.stringContaining("not all branches closed 'complete'"),
+      }),
     );
   });
 

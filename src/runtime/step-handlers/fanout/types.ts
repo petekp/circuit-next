@@ -7,6 +7,7 @@ import type {
   FanoutStep,
   FanoutSubRunBranch,
 } from '../../../schemas/step.js';
+export { NO_VERDICT_SENTINEL } from '../../../shared/relay-support.js';
 
 export type FanoutStepNarrow = CompiledFlow['steps'][number] & { kind: 'fanout' };
 
@@ -60,5 +61,3 @@ export interface FanoutAggregateBody {
     readonly result_body?: unknown;
   }>;
 }
-
-export const NO_VERDICT_SENTINEL = '<no-verdict>';

@@ -1,13 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { CompiledFlow as CompiledFlowSchema } from '../../schemas/compiled-flow.js';
-import { RunResult } from '../../schemas/result.js';
+import {
+  CompiledFlow as CompiledFlowSchema,
+  type CompiledFlow as ParsedChildFlow,
+} from '../../schemas/compiled-flow.js';
+import { type RunResult as ParsedRunResult, RunResult } from '../../schemas/result.js';
+import { NO_VERDICT_SENTINEL } from '../../shared/relay-support.js';
 import type { StepOutcomeV2 } from '../domain/step.js';
 import type { SubRunStepV2 } from '../manifest/executable-flow.js';
 import type { RunContextV2 } from '../run/run-context.js';
-
-const NO_VERDICT_SENTINEL = '<no-verdict>';
 
 function checkPassVerdicts(step: SubRunStepV2): readonly string[] {
   const pass = (step.check as { readonly pass?: unknown }).pass;
@@ -34,16 +36,9 @@ async function recordSubRunCheckFailure(
 
 function evaluateChildResult(
   step: SubRunStepV2,
-  resultBody: unknown,
+  resultBody: ParsedRunResult,
 ): { verdict: string; admitted: boolean; failureReason?: string } {
-  if (resultBody === null || typeof resultBody !== 'object' || Array.isArray(resultBody)) {
-    return {
-      verdict: NO_VERDICT_SENTINEL,
-      admitted: false,
-      failureReason: `sub-run step '${step.id}': child result body parsed but is not a JSON object`,
-    };
-  }
-  const verdict = (resultBody as { readonly verdict?: unknown }).verdict;
+  const verdict = resultBody.verdict;
   if (typeof verdict !== 'string' || verdict.length === 0) {
     return {
       verdict: NO_VERDICT_SENTINEL,
@@ -60,6 +55,32 @@ function evaluateChildResult(
     };
   }
   return { verdict, admitted: true };
+}
+
+function parseChildResultBody(
+  step: SubRunStepV2,
+  childResultText: string,
+): { body?: ParsedRunResult; failureReason?: string } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(childResultText);
+  } catch (error) {
+    return {
+      failureReason: `sub-run step '${step.id}': child result body did not parse as JSON (${(error as Error).message})`,
+    };
+  }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return {
+      failureReason: `sub-run step '${step.id}': child result body parsed but is not a JSON object`,
+    };
+  }
+  try {
+    return { body: RunResult.parse(parsed) };
+  } catch (error) {
+    return {
+      failureReason: `sub-run step '${step.id}': child result body failed result schema (${(error as Error).message})`,
+    };
+  }
 }
 
 export async function executeSubRunV2(
@@ -92,14 +113,32 @@ export async function executeSubRunV2(
     );
   }
 
-  const resolved = await context.childCompiledFlowResolver({
-    flowId: step.flowRef,
-    entryMode: step.entryMode,
-    ...(step.version === undefined ? {} : { version: step.version }),
-  });
-  const childFlow = CompiledFlowSchema.parse(
-    JSON.parse(Buffer.from(resolved.flowBytes).toString('utf8')),
-  );
+  let resolved: Awaited<ReturnType<NonNullable<RunContextV2['childCompiledFlowResolver']>>>;
+  try {
+    resolved = await context.childCompiledFlowResolver({
+      flowId: step.flowRef,
+      entryMode: step.entryMode,
+      ...(step.version === undefined ? {} : { version: step.version }),
+    });
+  } catch (error) {
+    return await recordSubRunCheckFailure(
+      step,
+      context,
+      `sub-run step '${step.id}': child flow resolution failed (${(error as Error).message})`,
+    );
+  }
+  let childFlow: ParsedChildFlow;
+  try {
+    childFlow = CompiledFlowSchema.parse(
+      JSON.parse(Buffer.from(resolved.flowBytes).toString('utf8')),
+    );
+  } catch (error) {
+    return await recordSubRunCheckFailure(
+      step,
+      context,
+      `sub-run step '${step.id}': child flow resolution returned invalid compiled flow (${(error as Error).message})`,
+    );
+  }
   if (childFlow.id !== step.flowRef) {
     return await recordSubRunCheckFailure(
       step,
@@ -157,12 +196,31 @@ export async function executeSubRunV2(
 
   const durationMs = Math.max(0, Date.now() - startMs);
   const childResultText = await readFile(childResult.resultPath, 'utf8');
-  const childResultBody = RunResult.parse(JSON.parse(childResultText));
   const parentResultPath = context.files.resolve(resultWrite);
   await mkdir(dirname(parentResultPath), { recursive: true });
   await writeFile(parentResultPath, childResultText, 'utf8');
+  const parsedChildResult = parseChildResultBody(step, childResultText);
+  if (parsedChildResult.body === undefined) {
+    const reason =
+      parsedChildResult.failureReason ??
+      `sub-run step '${step.id}': child result body could not be parsed`;
+    await context.trace.append({
+      run_id: context.runId,
+      kind: 'sub_run.completed',
+      step_id: step.id,
+      child_run_id: childRunId,
+      child_outcome: childResult.outcome,
+      verdict: NO_VERDICT_SENTINEL,
+      duration_ms: durationMs,
+      result_path: resultWrite.path,
+      data: { admitted: false },
+    });
+    return await recordSubRunCheckFailure(step, context, reason);
+  }
+  const childResultBody = parsedChildResult.body;
 
   const verdict = evaluateChildResult(step, childResultBody);
+  const admitted = verdict.admitted && childResultBody.outcome === 'complete';
   await context.trace.append({
     run_id: context.runId,
     kind: 'sub_run.completed',
@@ -172,10 +230,10 @@ export async function executeSubRunV2(
     verdict: verdict.verdict,
     duration_ms: durationMs,
     result_path: resultWrite.path,
-    data: { admitted: verdict.admitted },
+    data: { admitted },
   });
 
-  if (verdict.admitted && childResultBody.outcome === 'complete') {
+  if (admitted) {
     await context.trace.append({
       run_id: context.runId,
       kind: 'check.evaluated',

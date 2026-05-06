@@ -600,7 +600,7 @@
       "title": "Plan execution",
       "status": "implemented",
       "summary": "Plan-execution requests start the first executable flow slice instead of ending as analysis-only Explore.",
-      "evidence": ["src/runtime/router.ts", "tests/contracts/flow-router.test.ts"],
+      "evidence": ["src/flows/router.ts", "tests/contracts/flow-router.test.ts"],
       "readiness_refs": [],
       "axes": {
         "intent_hints": [],
@@ -1644,7 +1644,7 @@
       "title": "Rich route outcomes",
       "status": "implemented",
       "summary": "Rich route outcomes are emitted into compiled routes and checkpoint selections can execute them.",
-      "evidence": ["src/runtime/compile-schematic-to-flow.ts"],
+      "evidence": ["src/flows/compile-schematic-to-flow.ts"],
       "readiness_refs": [],
       "axes": {
         "intent_hints": [],
@@ -1659,7 +1659,7 @@
       "title": "cleanup routing",
       "status": "implemented",
       "summary": "cleanup: remove safe dead code routed to sweep with default mode; expected sweep.",
-      "evidence": ["src/runtime/router.ts"],
+      "evidence": ["src/flows/router.ts"],
       "readiness_refs": [],
       "axes": {
         "intent_hints": ["cleanup:"],
@@ -1674,7 +1674,7 @@
       "title": "decide routing",
       "status": "implemented",
       "summary": "decide: choose the queue architecture routed to explore with tournament mode; expected explore.",
-      "evidence": ["src/runtime/router.ts"],
+      "evidence": ["src/flows/router.ts"],
       "readiness_refs": [],
       "axes": {
         "intent_hints": ["decide:"],
@@ -1689,7 +1689,7 @@
       "title": "develop routing",
       "status": "implemented",
       "summary": "develop: add SSO flow routed to build with default mode; expected build.",
-      "evidence": ["src/runtime/router.ts"],
+      "evidence": ["src/flows/router.ts"],
       "readiness_refs": [],
       "axes": {
         "intent_hints": ["develop:"],
@@ -1704,7 +1704,7 @@
       "title": "fix routing",
       "status": "implemented",
       "summary": "fix: handle the missing token edge case routed to fix; expected fix.",
-      "evidence": ["src/runtime/router.ts"],
+      "evidence": ["src/flows/router.ts"],
       "readiness_refs": [],
       "axes": {
         "intent_hints": ["fix:"],
@@ -1719,7 +1719,7 @@
       "title": "migrate routing",
       "status": "implemented",
       "summary": "migrate: replace the legacy SDK routed to migrate with deep mode; expected migrate.",
-      "evidence": ["src/runtime/router.ts"],
+      "evidence": ["src/flows/router.ts"],
       "readiness_refs": [],
       "axes": {
         "intent_hints": ["migrate:"],
@@ -1734,7 +1734,7 @@
       "title": "overnight routing",
       "status": "implemented",
       "summary": "overnight: improve repo quality routed to sweep with autonomous mode; expected sweep.",
-      "evidence": ["src/runtime/router.ts"],
+      "evidence": ["src/flows/router.ts"],
       "readiness_refs": [],
       "axes": {
         "intent_hints": ["overnight:"],
@@ -1749,7 +1749,7 @@
       "title": "plan-execution routing",
       "status": "implemented",
       "summary": "Execute this plan: ./docs/specs/headless-engine-host-api-v1.md routed to build with default mode; expected build.",
-      "evidence": ["src/runtime/router.ts"],
+      "evidence": ["src/flows/router.ts"],
       "readiness_refs": [],
       "axes": {
         "intent_hints": ["plan-execution:"],
@@ -1804,9 +1804,7 @@
         "docs/contracts/host-capabilities.md",
         "src/shared/operator-summary-writer.ts",
         "src/shared/write-capable-worker-disclosure.ts",
-        "src/runtime/write-capable-worker-disclosure.ts",
-        "src/runtime/runner.ts",
-        "src/runtime/operator-summary-writer.ts"
+        "src/runtime/runner.ts"
       ],
       "readiness_refs": [],
       "axes": {

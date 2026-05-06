@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { relayCustom } from '../../src/runtime/connectors/custom.js';
+import { relayCustom } from '../../src/connectors/custom.js';
 import { CustomConnectorDescriptor } from '../../src/schemas/connector.js';
 
 const ENV_TOKEN = 'CIRCUIT_CUSTOM_CONNECTOR_TEST_TOKEN';

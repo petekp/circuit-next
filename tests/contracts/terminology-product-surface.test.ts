@@ -216,7 +216,7 @@ describe('terminology — product-facing prose', () => {
     expect(raw).toMatch(/\bsrc\/schemas\/flow-blocks\.ts\b/);
     expect(raw).toMatch(/\bsrc\/schemas\/flow-schematic\.ts\b/);
     expect(raw).toMatch(/\bdocs\/flows\/block-catalog\.json\b/);
-    expect(raw).toMatch(/\bsrc\/runtime\/compile-schematic-to-flow\.ts\b/);
+    expect(raw).toMatch(/\bsrc\/flows\/compile-schematic-to-flow\.ts\b/);
     expect(raw).toMatch(/\bsrc\/flows\/\*\/schematic\.json\b/);
   });
 

@@ -1,22 +1,22 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { materializeRelay } from '../../connectors/relay-materializer.js';
+import { type RelayResult, sha256Hex } from '../../connectors/shared.js';
+import { runCrossReportValidator } from '../../flows/registries/cross-report-validators.js';
+import { parseReport } from '../../flows/registries/report-schemas.js';
 import type { CompiledFlow } from '../../schemas/compiled-flow.js';
 import { EnabledConnector, type ResolvedConnector } from '../../schemas/connector.js';
-import { materializeRelay } from '../connectors/relay-materializer.js';
-import { type RelayResult, sha256Hex } from '../connectors/shared.js';
-import { runCrossReportValidator } from '../registries/cross-report-validators.js';
-import { parseReport } from '../registries/report-schemas.js';
-import { deriveResolvedSelection, resolveRelayDecision } from '../relay-selection.js';
+import { recoveryRouteForStep } from '../../shared/recovery-route.js';
 import {
   type CheckEvaluation,
   NO_VERDICT_SENTINEL,
   type RelayStep,
   composeRelayPrompt,
   evaluateRelayCheck,
-} from '../relay-support.js';
-import { resolveRunRelative } from '../run-relative-path.js';
+} from '../../shared/relay-support.js';
+import { resolveRunRelative } from '../../shared/run-relative-path.js';
+import { deriveResolvedSelection, resolveRelayDecision } from '../relay-selection.js';
 import type { RelayInput } from '../runner-types.js';
-import { recoveryRouteForStep } from './recovery-route.js';
 import type { StepHandlerContext, StepHandlerResult } from './types.js';
 
 function connectorFailureReason(stepId: string, err: unknown): string {

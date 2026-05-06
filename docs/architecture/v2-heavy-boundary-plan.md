@@ -1,9 +1,11 @@
 # Circuit v2 Heavy Boundary Plan
 
-Phase 4.23 is a planning checkpoint. It does not move connector subprocess
-modules, relay materialization, registries, router/catalog infrastructure,
-trace/status/progress projection, checkpoint resume, the old runner, or old
-step handlers.
+Phase 4.23 was a planning checkpoint. Phase 5.33 has since moved connector
+subprocess modules and relay materialization to neutral `src/connectors/**`
+ownership and router/compiler implementations to neutral `src/flows/**`
+ownership, with old `src/runtime/**` compatibility re-exports. The remaining
+high-risk boundaries in this document are retained trace/status/checkpoint
+state, retained fallback execution, and old handler/oracle ownership.
 
 The low-risk helper extraction lane is now complete. The remaining runtime
 namespace contains product behavior, safety boundaries, shared flow
@@ -13,11 +15,11 @@ infrastructure, or retained fallback/oracle code.
 
 | Cluster | Current consumers | Product behavior | Contract boundary | Disposition | Risk | Required proof |
 |---|---|---|---|---|---|---|
-| Connector subprocess modules | `src/core-v2/executors/relay.ts`, retained relay selection, connector contract/smoke tests | Runs Claude Code, Codex, and custom connector commands; enforces argv, provider/model, timeout, output, and sandbox rules | External process execution and connector safety | Keep in `src/runtime/connectors/` until a dedicated connector-safety move | High | connector schema tests, real/controlled connector smoke, custom connector tests, CLI unsafe connector tests, full verify |
-| Relay materializer | Retained relay handler, relay provenance tests, connector roundtrip tests | Turns connector results into durable request/receipt/result/report files and trace entries | On-disk relay slot and trace transcript shape | Keep until a materialization contract move is planned | High | golden trace/on-disk tests, run-relative path tests, materializer schema tests, connector roundtrips, full verify |
+| Connector subprocess modules | `src/core-v2/executors/relay.ts`, retained relay selection, connector contract/smoke tests | Runs Claude Code, Codex, and custom connector commands; enforces argv, provider/model, timeout, output, and sandbox rules | External process execution and connector safety | Neutral owner is `src/connectors/**`; keep old `src/runtime/connectors/**` wrappers | High | connector schema tests, real/controlled connector smoke, custom connector tests, CLI unsafe connector tests, full verify |
+| Relay materializer | Retained relay handler, relay provenance tests, connector roundtrip tests | Turns connector results into durable request/receipt/result/report files and trace entries | On-disk relay slot and trace transcript shape | Neutral owner is `src/connectors/relay-materializer.ts`; keep old runtime wrapper | High | golden trace/on-disk tests, run-relative path tests, materializer schema tests, connector roundtrips, full verify |
 | Registries and catalog-derived writer/report infrastructure | flow packages, core-v2 executors, retained handlers, tests, generated surfaces | Looks up compose/close/checkpoint/verification writers, report schemas, cross-report validators, and relay shape hints | Flow package source-of-truth and report validation | Keep until a neutral flow registry namespace is designed | High | catalog derivation tests, writer registry tests, report schema tests, cross-report validators, generated drift, full verify |
-| Router/catalog infrastructure | CLI, router tests, generated command claims, catalog derivations | Natural-language flow selection, entry-mode inference, default routable flow | Product routing behavior | Keep until router ownership and generated claims are reviewed | Medium-high | CLI router tests, flow router contracts, generated docs checks, release public-claim checks |
-| Compiler / schematic projection | generator, flow compiler tests, generated flows, release checks | Converts schematics to compiled flows and generated plugin surfaces | Generated surface source of truth | Keep under current ownership until compiler namespace plan exists | Medium-high | compiler tests, orphan block tests, generated-surface drift, release checks |
+| Router/catalog infrastructure | CLI, router tests, generated command claims, catalog derivations | Natural-language flow selection, entry-mode inference, default routable flow | Product routing behavior | Neutral owner is `src/flows/router.ts`; keep old `src/runtime/router.ts` wrapper | Medium-high | CLI router tests, flow router contracts, generated docs checks, release public-claim checks |
+| Compiler / schematic projection | generator, flow compiler tests, generated flows, release checks | Converts schematics to compiled flows and generated plugin surfaces | Generated surface source of truth | Neutral owner is `src/flows/compile-schematic-to-flow.ts`; keep old runtime wrapper | Medium-high | compiler tests, orphan block tests, generated-surface drift, release checks |
 | Trace reader/writer/reducer/snapshot | retained runner, status/progress, event-log tests, checkpoint resume | Reads, appends, reduces, and snapshots v1 run traces | v1 trace oracle and retained state model | Keep until retained trace/status ownership is narrowed | High | runtrace schema tests, event-log round-trip tests, status projection tests, retained runner tests |
 | Status/progress projection | `runs show`, CLI progress, old and v2 run folders, tests | Projects v1/v2 run folders and progress events for operators | Operator inspection and host progress compatibility | Keep as cross-runtime compatibility infrastructure | High | run-status projection tests, progress schema tests, CLI progress tests, malformed trace tests |
 | Result writer | retained runner and old result tests | Writes retained runtime `reports/result.json` and checks trace/result consistency | User-visible run result report | Keep until retained runner result ownership is narrowed | Medium | result writer tests, runner close tests, status tests |
@@ -30,11 +32,11 @@ infrastructure, or retained fallback/oracle code.
 
 Do not combine any of these with another helper cleanup:
 
-- move connector subprocess modules;
-- move relay materialization;
+- change connector subprocess behavior or permissions;
+- change relay materialization shape;
 - move registries;
-- move router/catalog ownership;
-- change generated flow compilation ownership;
+- change router/catalog behavior;
+- change generated flow compilation behavior;
 - route checkpoint resume through v2;
 - change the default selector or rollback policy;
 - delete old runner or old step handlers.
@@ -52,11 +54,12 @@ It should choose one of these paths and write the proof plan first:
    Best if the team wants to clarify v1/v2 inspection and retained run folder
    compatibility before deleting anything.
 3. **Flow registry neutral namespace plan.**
-   Best if the team wants to remove flow package/report infrastructure from
-   `src/runtime/` without touching connectors or runner fallback.
+   Completed in Phase 5.13 for registries/catalog derivations and extended in
+   Phase 5.33 for router/compiler implementation ownership.
 4. **Connector/materializer safety plan.**
-   Best if the team wants to move connector modules, but it needs real smoke
-   and source-fingerprint proof before any move.
+   Completed for neutral ownership in Phase 5.32. Future connector work should
+   focus on behavior changes, old-path retirement, or stronger smoke evidence,
+   each with focused review.
 5. **Checkpoint resume ownership plan.**
    Best if the team wants to reduce retained runtime product ownership rather
    than keep moving shared infrastructure.

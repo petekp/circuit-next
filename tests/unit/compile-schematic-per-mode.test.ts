@@ -7,7 +7,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-import { compileSchematicToCompiledFlow } from '../../src/runtime/compile-schematic-to-flow.js';
+import { compileSchematicToCompiledFlow } from '../../src/flows/compile-schematic-to-flow.js';
 import { FlowSchematic } from '../../src/schemas/flow-schematic.js';
 
 function readJson(path: string): unknown {

@@ -52,11 +52,11 @@ function mergedRelayConfig(layers: readonly LayeredConfigValue[] | undefined): R
 async function relayerForBuiltin(name: EnabledConnector): Promise<RelayFn> {
   const connector = { kind: 'builtin' as const, name };
   if (name === 'claude-code') {
-    const { relayClaudeCode } = await import('./connectors/claude-code.js');
+    const { relayClaudeCode } = await import('../connectors/claude-code.js');
     return { connectorName: 'claude-code', connector, relay: relayClaudeCode };
   }
   if (name === 'codex') {
-    const { relayCodex } = await import('./connectors/codex.js');
+    const { relayCodex } = await import('../connectors/codex.js');
     return { connectorName: 'codex', connector, relay: relayCodex };
   }
   const exhaustive: never = name;
@@ -81,7 +81,7 @@ function assertConnectorCanRunRole(connector: ResolvedConnector, role: RelayRole
 }
 
 async function relayerForCustom(descriptor: CustomConnectorDescriptor): Promise<RelayFn> {
-  const { relayCustom } = await import('./connectors/custom.js');
+  const { relayCustom } = await import('../connectors/custom.js');
   return {
     connectorName: descriptor.name,
     connector: descriptor,

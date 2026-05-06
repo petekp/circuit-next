@@ -24,7 +24,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { ChildCompiledFlowResolver } from '../../src/compat/retained-runtime.js';
 import { runRetainedCompiledFlow as runCompiledFlow } from '../../src/compat/retained-runtime.js';
-import type { ClaudeCodeRelayInput } from '../../src/runtime/connectors/claude-code.js';
+import type { ClaudeCodeRelayInput } from '../../src/connectors/claude-code.js';
 import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { type CompiledFlowId, RunId } from '../../src/schemas/ids.js';

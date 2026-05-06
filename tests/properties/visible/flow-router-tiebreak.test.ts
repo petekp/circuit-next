@@ -1,6 +1,6 @@
 // Property tests for the flow router's collision / tie-breaking
 // semantics — `classifyTaskAgainstRoutables` in
-// src/runtime/router.ts.
+// src/flows/router.ts.
 //
 // The router walks routables in `order` ascending and returns the
 // first package whose signal regex matches the task text. When the
@@ -25,12 +25,12 @@
 import { describe, expect, it } from 'vitest';
 
 import type { RoutablePackage } from '../../../src/flows/catalog-derivations.js';
+import { classifyTaskAgainstRoutables } from '../../../src/flows/router.js';
 import type {
   CompiledFlowPackage,
   CompiledFlowRoutingMetadata,
   CompiledFlowSignal,
 } from '../../../src/flows/types.js';
-import { classifyTaskAgainstRoutables } from '../../../src/runtime/router.js';
 
 function mulberry32(seed: number): () => number {
   let s = seed >>> 0;

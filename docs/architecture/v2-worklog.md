@@ -628,6 +628,1139 @@ Concerns:
 
 Next recommended action: continue Phase 4 with sub-run parity before fanout.
 
+## 2026-05-06 - Phase 5.32 Connector And Materializer Neutral Ownership
+
+Goal: move connector subprocess modules and relay materialization out of
+`src/runtime/**` into neutral `src/connectors/**` ownership after focused
+review, without changing connector behavior or public compatibility.
+
+Files inspected:
+
+- `src/runtime/connectors/claude-code.ts`
+- `src/runtime/connectors/codex.ts`
+- `src/runtime/connectors/custom.ts`
+- `src/runtime/connectors/relay-materializer.ts`
+- `src/runtime/connectors/shared.ts`
+- `src/core-v2/executors/relay.ts`
+- `src/runtime/relay-selection.ts`
+- `src/runtime/step-handlers/relay.ts`
+- `src/runtime/step-handlers/checkpoint.ts`
+- `tests/runner/codex-relay-roundtrip.test.ts`
+- `tests/runner/explore-e2e-parity.test.ts`
+- `tests/runner/connector-shared-compat.test.ts`
+- `tests/runner/retained-compat-facade.test.ts`
+
+Files changed:
+
+- `src/connectors/claude-code.ts`
+- `src/connectors/codex.ts`
+- `src/connectors/custom.ts`
+- `src/connectors/relay-materializer.ts`
+- `src/connectors/shared.ts`
+- `src/runtime/connectors/claude-code.ts`
+- `src/runtime/connectors/codex.ts`
+- `src/runtime/connectors/custom.ts`
+- `src/runtime/connectors/relay-materializer.ts`
+- `src/runtime/connectors/shared.ts`
+- `src/core-v2/executors/relay.ts`
+- `src/runtime/relay-selection.ts`
+- `src/runtime/step-handlers/relay.ts`
+- `src/runtime/step-handlers/checkpoint.ts`
+- connector/materializer tests and source fingerprint lists
+- `docs/architecture/v2-checkpoint-5.32.md`
+- `docs/architecture/v2-connector-materializer-plan.md`
+- `docs/architecture/v2-deletion-readiness-inventory.md`
+- `docs/architecture/v2-deletion-plan.md`
+- `docs/architecture/v2-heavy-boundary-plan.md`
+- `docs/architecture/v2-runner-handler-test-classification.md`
+- `docs/contracts/connector.md`
+- `docs/contracts/selection.md`
+- `HANDOFF.md`
+
+Tests run:
+
+- `npm run check`: passed.
+- `npm run lint`: passed after Biome import formatting.
+- `npm run build`: passed.
+- `npx vitest run tests/core-v2/connectors-v2.test.ts tests/contracts/connector-schema.test.ts tests/contracts/codex-connector-schema.test.ts tests/contracts/relay-transcript-schema.test.ts tests/runner/connector-shared-compat.test.ts tests/runner/materializer-schema-parse.test.ts tests/runner/agent-relay-roundtrip.test.ts tests/runner/codex-relay-roundtrip.test.ts tests/runner/custom-connector-runtime.test.ts tests/runner/agent-connector-smoke.test.ts tests/runner/codex-connector-smoke.test.ts tests/runner/retained-compat-facade.test.ts`: passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+- `npm run sync:codex-plugin-cache && npm run check:codex-plugin-cache`: passed.
+
+Behavior changed? No. Connector subprocess behavior, relay transcript shape,
+rollback, `composeWriter`, arbitrary fixture/custom-root routing, retained/v1
+checkpoint folder behavior, and old runtime deletion status are unchanged.
+
+Concerns:
+
+- Old `src/runtime/connectors/**` wrappers are still compatibility surfaces.
+  Do not delete them without an explicit old-path retirement decision.
+- Connector behavior remains production-sensitive. Review before changing
+  subprocess argv, sandbox, timeout, model/effort honoring, output parsing, or
+  relay materialization shape.
+
+Next recommended action: continue behavior-preserving cleanup or v2/shared
+oracle twins. Stop for review before public compatibility changes,
+saved-folder semantic changes, connector behavior changes, router/compiler
+ownership moves, wrapper deletion, or old runtime deletion.
+
+## 2026-05-06 - Phase 5.33 Router And Compiler Neutral Ownership
+
+Goal: move the natural-language router and schematic compiler out of
+`src/runtime/**` into neutral `src/flows/**` ownership after focused review,
+without changing routing behavior, generated flow shape, or old import
+compatibility.
+
+Files inspected:
+
+- `src/runtime/router.ts`
+- `src/runtime/compile-schematic-to-flow.ts`
+- `src/flows/catalog-derivations.ts`
+- `src/cli/circuit.ts`
+- `scripts/emit-flows.mjs`
+- `scripts/release/lib.mjs`
+- `scripts/release/emit-current-capabilities.mjs`
+- router/compiler contract tests
+- `tests/runner/retained-compat-facade.test.ts`
+
+Files changed:
+
+- `src/flows/router.ts`
+- `src/flows/compile-schematic-to-flow.ts`
+- `src/runtime/router.ts`
+- `src/runtime/compile-schematic-to-flow.ts`
+- `src/cli/circuit.ts`
+- `scripts/emit-flows.mjs`
+- `scripts/release/lib.mjs`
+- `scripts/release/emit-current-capabilities.mjs`
+- router/compiler tests and compatibility guards
+- generated command/release surfaces
+- `docs/architecture/v2-checkpoint-5.33.md`
+- `docs/architecture/v2-deletion-readiness-inventory.md`
+- `docs/architecture/v2-deletion-plan.md`
+- `docs/architecture/v2-heavy-boundary-plan.md`
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+Tests run:
+
+- `npx vitest run tests/contracts/flow-router.test.ts tests/runner/router-routing-invariants.test.ts tests/properties/visible/flow-router-tiebreak.test.ts tests/contracts/compile-schematic-to-flow.test.ts tests/contracts/orphan-blocks.test.ts tests/unit/compile-schematic-per-mode.test.ts tests/runner/catalog-derivations.test.ts tests/runner/retained-compat-facade.test.ts tests/unit/emit-flows-drift.test.ts tests/release/release-infrastructure.test.ts`: passed before generated-output refresh.
+- `npm run check`: passed.
+- `npm run lint`: passed after Biome import ordering.
+- `npm run build`: passed.
+- `npm run check-flow-drift`: passed.
+- `npm run check-release-infra`: passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? No. Router classification, entry-mode inference, schematic
+compile behavior, generated flow JSON shape, selector policy, rollback,
+`composeWriter`, arbitrary fixture/custom-root routing, retained/v1 checkpoint
+folders, and connector/materializer behavior are unchanged.
+
+Concerns:
+
+- Old `src/runtime/router.ts` and `src/runtime/compile-schematic-to-flow.ts`
+  wrappers remain compatibility surfaces. Do not delete them without an
+  explicit old-path retirement decision.
+- Future router/compiler behavior changes should be reviewed as product
+  behavior, not folded into ownership cleanup.
+
+Next recommended action: retain the current no-extra-review posture for small
+behavior-preserving cleanup. Stop for focused review before moving retained
+trace/status/progress/checkpoint-state ownership, changing saved-folder
+semantics, deleting wrappers, or deleting old runtime code.
+
+## 2026-05-06 - Phase 5.34 Retained Trace And Checkpoint Guardrails
+
+Goal: review retained trace/status/progress/checkpoint-state ownership and do
+only behavior-preserving guard/test hardening after the review declined an
+implementation move.
+
+Files inspected:
+
+- `src/compat/retained-checkpoint-folders.ts`
+- `src/runtime/trace-reader.ts`
+- `src/runtime/trace-writer.ts`
+- `src/runtime/reducer.ts`
+- `src/runtime/snapshot-writer.ts`
+- `src/runtime/append-and-derive.ts`
+- `src/runtime/progress-projector.ts`
+- `src/runtime/checkpoint-resume.ts`
+- `src/runtime/step-handlers/checkpoint.ts`
+- `src/run-status/project-run-folder.ts`
+- `src/run-status/v1-run-folder.ts`
+- `src/run-status/v2-run-folder.ts`
+- retained trace/status/checkpoint tests and facade guards
+
+Files changed:
+
+- `tests/runner/retained-compat-facade.test.ts`
+- `tests/runner/pass-route-cycle-guard.test.ts`
+- `tests/runner/runtime-smoke.test.ts`
+- `tests/runner/handler-throw-recovery.test.ts`
+- `tests/runner/relay-invocation-failure.test.ts`
+- `tests/runner/push-sequence-authority.test.ts`
+- `tests/runner/terminal-outcome-mapping.test.ts`
+- `docs/architecture/v2-checkpoint-5.34.md`
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+Tests run:
+
+- `npx vitest run tests/runner/retained-compat-facade.test.ts`: passed.
+- `npx vitest run tests/runner/retained-compat-facade.test.ts tests/runner/pass-route-cycle-guard.test.ts tests/runner/runtime-smoke.test.ts tests/runner/handler-throw-recovery.test.ts tests/runner/relay-invocation-failure.test.ts tests/runner/push-sequence-authority.test.ts tests/runner/terminal-outcome-mapping.test.ts`: passed.
+- `npx vitest run tests/runner/build-checkpoint-exec.test.ts tests/runner/run-status-projection.test.ts tests/unit/runtime/event-log-round-trip.test.ts tests/unit/runtime/progress-projector.test.ts tests/contracts/relay-transcript-schema.test.ts tests/runner/fresh-run-root.test.ts tests/runner/checkpoint-handler-direct.test.ts tests/runner/agent-relay-roundtrip.test.ts tests/runner/codex-relay-roundtrip.test.ts tests/runner/retained-compat-facade.test.ts`: passed.
+- `npm run check`: passed.
+- `npm run lint`: passed after import ordering.
+- `npm run build`: passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+- `npm run verify:fast`: passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? No. Retained/v1 saved-folder semantics, status/handoff
+fallback, progress shape, rollback, `composeWriter`, arbitrary fixture/custom
+root routing, and old runtime deletion status are unchanged.
+
+Concerns:
+
+- Retained trace reader/writer, reducer, snapshot, append-and-derive, progress
+  projector, checkpoint resume, and checkpoint handler implementations are
+  still active retained product behavior. Do not move them without another
+  review.
+- Direct old internal imports in tests are now intentionally allowlisted. Add to
+  that list only when a test is explicitly old-oracle or old-path proof.
+
+Next recommended action: continue autonomous behavior-preserving cleanup or add
+v2/shared oracle twins. Stop for review before saved-state semantic changes,
+trace/status/checkpoint implementation movement, progress schema wording
+changes, wrapper deletion, or old runtime deletion.
+
+## 2026-05-06 - Phase 5.35 Shared Helper Wrapper Import Cleanup
+
+Goal: remove retained runtime implementation imports of helper modules through
+old `src/runtime/**` wrapper paths where neutral `src/shared/**` owners already
+exist, while keeping the old wrappers for compatibility.
+
+Files inspected:
+
+- `src/runtime/runner.ts`
+- `src/runtime/checkpoint-resume.ts`
+- `src/runtime/progress-projector.ts`
+- `src/runtime/step-handlers/shared.ts`
+- `src/runtime/step-handlers/sub-run.ts`
+- `src/runtime/step-handlers/checkpoint.ts`
+- `src/runtime/step-handlers/relay.ts`
+- `src/runtime/step-handlers/fanout.ts`
+- `src/runtime/step-handlers/fanout/branch-resolution.ts`
+- shared helper wrappers under `src/runtime/**`
+- release capability evidence
+
+Files changed:
+
+- retained runtime imports listed above now point at neutral shared owners for
+  manifest snapshot, run-relative path, relay support, and write-capable worker
+  disclosure helpers;
+- `tests/runner/retained-compat-facade.test.ts` now guards production and
+  release scripts against importing old shared-helper wrapper paths and old
+  registry/catalog owner paths;
+- `tests/runner/fresh-run-root.test.ts` imports manifest snapshot paths from
+  `src/shared/manifest-snapshot.ts`;
+- `scripts/release/emit-current-capabilities.mjs` and
+  `generated/release/current-capabilities.json` no longer list old
+  write-capable/operator-summary wrapper files as implementation evidence;
+- `docs/architecture/v2-checkpoint-5.35.md`;
+- `docs/architecture/v2-worklog.md`;
+- `HANDOFF.md`.
+
+Tests run:
+
+- `npx vitest run tests/runner/retained-compat-facade.test.ts`: passed.
+- `npx vitest run tests/runner/fresh-run-root.test.ts tests/runner/retained-compat-facade.test.ts`: passed.
+- `npx vitest run tests/runner/runtime-smoke.test.ts tests/runner/build-checkpoint-exec.test.ts tests/runner/checkpoint-handler-direct.test.ts tests/runner/relay-handler-direct.test.ts tests/runner/fanout-runtime.test.ts tests/runner/sub-run-runtime.test.ts tests/runner/fresh-run-root.test.ts tests/unit/runtime/progress-projector.test.ts tests/unit/runtime/event-log-round-trip.test.ts tests/runner/retained-compat-facade.test.ts`: passed.
+- `npx vitest run tests/release/release-infrastructure.test.ts tests/runner/operator-summary-writer.test.ts tests/runner/retained-compat-facade.test.ts`: passed.
+- `npx vitest run tests/runner/retained-compat-facade.test.ts`: passed after
+  adding the registry/catalog import guard.
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run check-release-infra`: passed.
+
+Behavior changed? No. Old wrapper paths remain compatibility surfaces and
+retained runtime behavior is unchanged.
+
+Concerns:
+
+- Wrapper deletion is still not approved. These paths are old import
+  compatibility surfaces until a separate old-path retirement decision.
+
+Next recommended action: continue autonomous behavior-preserving cleanup or
+v2/shared oracle twins. Stop for review before wrapper deletion, public
+compatibility changes, saved-state semantic changes, or old runtime deletion.
+
+## 2026-05-06 - Phase 5.36 Terminal Verdict Derivation V2 Twin
+
+Goal: add a small core-v2 twin for retained terminal verdict derivation without
+changing production behavior.
+
+Files inspected:
+
+- `tests/runner/terminal-verdict-derivation.test.ts`
+- `tests/runner/terminal-verdict-helper.test.ts`
+- `tests/core-v2/control-loop-v2.test.ts`
+- `src/core-v2/run/graph-runner.ts`
+- `src/runtime/terminal-verdict.ts`
+
+Files changed:
+
+- `tests/core-v2/control-loop-v2.test.ts`
+- `docs/architecture/v2-checkpoint-5.36.md`
+- `docs/architecture/v2-worklog.md`
+- `docs/architecture/v2-runner-handler-test-classification.md`
+- `HANDOFF.md`
+
+Tests run:
+
+- `npx vitest run tests/core-v2/control-loop-v2.test.ts`: passed.
+
+Behavior changed? No. This is test-only proof that core-v2 final result
+selection uses the latest admitted relay verdict when a compiled-flow run admits
+multiple relay verdicts before `@complete`.
+
+Concerns:
+
+- This does not make retained terminal verdict tests obsolete. They still prove
+  retained fallback behavior while retained runtime remains product-supported.
+
+Next recommended action: continue behavior-preserving cleanup or v2/shared
+oracle twins. Stop for review before public compatibility changes, saved-state
+semantic changes, wrapper deletion, or old runtime deletion.
+
+## 2026-05-06 - Phase 5.37 Terminal Verdict Neutral Ownership
+
+Goal: move the pure retained terminal verdict helper to neutral shared
+ownership after review confirmed no old runtime wrapper is safe to delete yet.
+
+Files inspected:
+
+- `src/runtime/terminal-verdict.ts`
+- `src/runtime/runner.ts`
+- `tests/runner/terminal-verdict-helper.test.ts`
+- `tests/runner/terminal-verdict-derivation.test.ts`
+- `tests/runner/retained-compat-facade.test.ts`
+- `docs/architecture/v2-deletion-readiness-inventory.md`
+- `docs/architecture/v2-runner-handler-test-classification.md`
+
+Files changed:
+
+- `src/shared/terminal-verdict.ts`
+- `src/runtime/terminal-verdict.ts`
+- `src/runtime/runner.ts`
+- `tests/runner/terminal-verdict-helper.test.ts`
+- `tests/runner/retained-compat-facade.test.ts`
+- `docs/architecture/v2-checkpoint-5.37.md`
+- `docs/architecture/v2-deletion-readiness-inventory.md`
+- `docs/architecture/v2-runner-handler-test-classification.md`
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+Tests run:
+
+- `npm run check`: passed.
+- `npm run lint`: passed after import ordering.
+- `npm run build`: passed.
+- `npx vitest run tests/runner/terminal-verdict-helper.test.ts tests/runner/terminal-verdict-derivation.test.ts tests/core-v2/control-loop-v2.test.ts tests/runner/retained-compat-facade.test.ts`:
+  passed.
+- `npx vitest run tests/runner/runtime-smoke.test.ts tests/runner/check-evaluation.test.ts tests/runner/terminal-outcome-mapping.test.ts`:
+  passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? No. `deriveTerminalVerdict(...)` moved to
+`src/shared/terminal-verdict.ts`; `src/runtime/terminal-verdict.ts` remains a
+compatibility re-export, and retained final result writing still uses the same
+helper semantics.
+
+Concerns:
+
+- No old runtime wrapper deletion is approved. The old terminal verdict path is
+  still an import compatibility surface.
+- Retained terminal verdict tests remain live retained fallback coverage.
+
+Next recommended action: validate this slice, then continue autonomous
+behavior-preserving cleanup. Stop for review before wrapper deletion, old
+public import-path retirement, public compatibility changes, saved-state
+semantic changes, or old runtime deletion.
+
+## 2026-05-06 - Phase 5.38 Fanout Join Policy Shared Helper
+
+Goal: remove the duplicate retained/core-v2 fanout join-policy implementation
+by moving the pure decision helper to neutral shared ownership.
+
+Files inspected:
+
+- `src/runtime/step-handlers/fanout/join-policy.ts`
+- `src/runtime/step-handlers/fanout.ts`
+- `src/core-v2/fanout/join-policy.ts`
+- `src/core-v2/executors/fanout.ts`
+- `tests/properties/visible/fanout-join-policy.test.ts`
+- `tests/runner/fanout-handler-direct.test.ts`
+- `tests/core-v2/fanout-v2.test.ts`
+- `tests/runner/retained-compat-facade.test.ts`
+
+Files changed:
+
+- `src/shared/fanout-join-policy.ts`
+- `src/runtime/step-handlers/fanout/join-policy.ts`
+- `src/runtime/step-handlers/fanout.ts`
+- `src/core-v2/fanout/join-policy.ts`
+- `tests/properties/visible/fanout-join-policy.test.ts`
+- `tests/runner/retained-compat-facade.test.ts`
+- `docs/architecture/v2-checkpoint-5.38.md`
+- `docs/architecture/v2-deletion-readiness-inventory.md`
+- `docs/architecture/v2-runner-handler-test-classification.md`
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+Tests run:
+
+- `npm run check`: passed.
+- `npm run lint`: passed after formatting.
+- `npm run build`: passed.
+- `npx vitest run tests/properties/visible/fanout-join-policy.test.ts tests/runner/fanout-handler-direct.test.ts tests/core-v2/fanout-v2.test.ts tests/runner/retained-compat-facade.test.ts`:
+  passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? No. Retained fanout and core-v2 fanout now call the shared
+join-policy helper. The old retained fanout join-policy path remains a
+compatibility re-export.
+
+Concerns:
+
+- This does not approve retained fanout deletion, wrapper deletion, worktree
+  behavior changes, or join-policy semantic changes.
+
+Next recommended action: continue behavior-preserving cleanup or v2/shared
+oracle twins. Stop for review before wrapper deletion, old public import-path
+retirement, public compatibility changes, saved-state semantic changes, or old
+runtime deletion.
+
+## 2026-05-06 - Phase 5.39 Recovery Route Shared Helper
+
+Goal: move recovery route priority to neutral shared ownership without changing
+relay or verification recovery behavior.
+
+Files inspected:
+
+- `src/runtime/step-handlers/recovery-route.ts`
+- `src/runtime/step-handlers/relay.ts`
+- `src/runtime/step-handlers/verification.ts`
+- `src/core-v2/run/v1-compat.ts`
+- `src/core-v2/executors/relay.ts`
+- `src/core-v2/executors/verification.ts`
+- `tests/runner/relay-handler-direct.test.ts`
+- `tests/runner/verification-handler-direct.test.ts`
+- `tests/core-v2/control-loop-v2.test.ts`
+- `tests/runner/retained-compat-facade.test.ts`
+
+Files changed:
+
+- `src/shared/recovery-route.ts`
+- `src/runtime/step-handlers/recovery-route.ts`
+- `src/runtime/step-handlers/relay.ts`
+- `src/runtime/step-handlers/verification.ts`
+- `src/core-v2/run/v1-compat.ts`
+- `tests/runner/recovery-route-compat.test.ts`
+- `tests/runner/retained-compat-facade.test.ts`
+- `docs/architecture/v2-checkpoint-5.39.md`
+- `docs/architecture/v2-deletion-readiness-inventory.md`
+- `docs/architecture/v2-runner-handler-test-classification.md`
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+Tests run:
+
+- `npm run check`: passed.
+- `npm run lint`: passed after import ordering.
+- `npm run build`: passed.
+- `npx vitest run tests/runner/recovery-route-compat.test.ts tests/runner/relay-handler-direct.test.ts tests/runner/verification-handler-direct.test.ts tests/core-v2/control-loop-v2.test.ts tests/runner/retained-compat-facade.test.ts`:
+  passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? No. Retained relay/verification and core-v2 production
+relay/verification use the same recovery route priority through the shared
+helper. The old retained recovery-route path remains a compatibility re-export.
+
+Concerns:
+
+- This does not approve old wrapper deletion or changes to recovery priority.
+- Retained relay/verification handler tests remain live retained fallback proof.
+
+Next recommended action: continue behavior-preserving cleanup or v2/shared
+oracle twins. Stop for review before wrapper deletion, old public import-path
+retirement, public compatibility changes, saved-state semantic changes, or old
+runtime deletion.
+
+## 2026-05-06 - Phase 5.40 JSON Report Shared Helper
+
+Goal: move the generic path-safe JSON report helper to neutral shared ownership
+without changing retained handler behavior.
+
+Files inspected:
+
+- `src/runtime/step-handlers/shared.ts`
+- `src/runtime/runner.ts`
+- `src/runtime/step-handlers/compose.ts`
+- `src/runtime/step-handlers/checkpoint.ts`
+- `src/runtime/step-handlers/verification.ts`
+- `src/runtime/step-handlers/fanout.ts`
+- `src/runtime/step-handlers/sub-run.ts`
+- `tests/runner/run-relative-path.test.ts`
+- `tests/runner/retained-compat-facade.test.ts`
+
+Files changed:
+
+- `src/shared/json-report.ts`
+- `src/runtime/step-handlers/shared.ts`
+- `src/runtime/runner.ts`
+- `src/runtime/step-handlers/compose.ts`
+- `src/runtime/step-handlers/checkpoint.ts`
+- `src/runtime/step-handlers/verification.ts`
+- `src/runtime/step-handlers/fanout.ts`
+- `src/runtime/step-handlers/sub-run.ts`
+- `tests/runner/json-report-compat.test.ts`
+- `tests/runner/retained-compat-facade.test.ts`
+- `docs/architecture/v2-checkpoint-5.40.md`
+- `docs/architecture/v2-deletion-readiness-inventory.md`
+- `docs/architecture/v2-runner-handler-test-classification.md`
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+Tests run:
+
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npx vitest run tests/runner/json-report-compat.test.ts tests/runner/run-relative-path.test.ts tests/runner/retained-compat-facade.test.ts tests/runner/checkpoint-handler-direct.test.ts tests/runner/fanout-handler-direct.test.ts tests/runner/verification-handler-direct.test.ts`:
+  passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? No. Retained handlers and retained result finalization still
+write the same path-safe formatted JSON reports. The old retained
+step-handler helper path remains a compatibility re-export.
+
+Concerns:
+
+- This does not approve deleting the old wrapper or changing any retained
+  handler semantics.
+
+Next recommended action: continue behavior-preserving cleanup or v2/shared
+oracle twins. Stop for review before wrapper deletion, old public import-path
+retirement, public compatibility changes, saved-state semantic changes, or old
+runtime deletion.
+
+## 2026-05-06 - Phase 5.41 Fanout Aggregate Shared Helper
+
+Goal: move fanout aggregate report body construction to neutral shared
+ownership without changing retained or core-v2 fanout behavior.
+
+Files inspected:
+
+- `src/runtime/step-handlers/fanout/aggregate.ts`
+- `src/runtime/step-handlers/fanout.ts`
+- `src/runtime/step-handlers/fanout/types.ts`
+- `src/core-v2/fanout/aggregate-report.ts`
+- `src/core-v2/fanout/types.ts`
+- `src/core-v2/executors/fanout.ts`
+- `tests/core-v2/fanout-v2.test.ts`
+- `tests/runner/fanout-handler-direct.test.ts`
+- `tests/runner/retained-compat-facade.test.ts`
+
+Files changed:
+
+- `src/shared/fanout-aggregate-report.ts`
+- `src/runtime/step-handlers/fanout/aggregate.ts`
+- `src/runtime/step-handlers/fanout.ts`
+- `src/core-v2/fanout/aggregate-report.ts`
+- `tests/runner/fanout-aggregate-compat.test.ts`
+- `tests/runner/retained-compat-facade.test.ts`
+- `docs/architecture/v2-checkpoint-5.41.md`
+- `docs/architecture/v2-deletion-readiness-inventory.md`
+- `docs/architecture/v2-runner-handler-test-classification.md`
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+Tests run:
+
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npx vitest run tests/runner/fanout-aggregate-compat.test.ts tests/runner/fanout-handler-direct.test.ts tests/runner/fanout-runtime.test.ts tests/core-v2/fanout-v2.test.ts tests/runner/retained-compat-facade.test.ts`:
+  passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? No. Retained fanout and core-v2 fanout still write the same
+aggregate report shape. The old retained fanout aggregate helper path remains a
+compatibility re-export.
+
+Concerns:
+
+- This does not approve deleting the old wrapper or changing fanout report
+  semantics.
+
+Next recommended action: continue behavior-preserving cleanup or v2/shared
+oracle twins. Stop for review before wrapper deletion, old public import-path
+retirement, public compatibility changes, saved-state semantic changes, or old
+runtime deletion.
+
+## 2026-05-06 - Phase 5.42 Shared No-Verdict Sentinel
+
+Goal: centralize the `<no-verdict>` sentinel literal on the existing shared
+relay-support export without changing relay, sub-run, or fanout behavior.
+
+Files inspected:
+
+- `src/shared/relay-support.ts`
+- `src/runtime/step-handlers/sub-run.ts`
+- `src/runtime/step-handlers/fanout/types.ts`
+- `src/core-v2/executors/sub-run.ts`
+- `src/core-v2/fanout/types.ts`
+- `tests/runner/sub-run-handler-direct.test.ts`
+- `tests/runner/fanout-handler-direct.test.ts`
+- `tests/core-v2/sub-run-v2.test.ts`
+- `tests/core-v2/fanout-v2.test.ts`
+
+Files changed:
+
+- `src/runtime/step-handlers/sub-run.ts`
+- `src/runtime/step-handlers/fanout/types.ts`
+- `src/core-v2/executors/sub-run.ts`
+- `src/core-v2/fanout/types.ts`
+- `docs/architecture/v2-checkpoint-5.42.md`
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+Tests run:
+
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npx vitest run tests/runner/sub-run-handler-direct.test.ts tests/runner/fanout-handler-direct.test.ts tests/core-v2/sub-run-v2.test.ts tests/core-v2/fanout-v2.test.ts tests/core-v2/control-loop-v2.test.ts`:
+  passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? No. The same `<no-verdict>` sentinel is still emitted in the
+same failure cases.
+
+Concerns:
+
+- This does not approve changing admission semantics or deleting retained
+  tests.
+
+Next recommended action: continue behavior-preserving cleanup or v2/shared
+oracle twins. Stop for review before wrapper deletion, old public import-path
+retirement, public compatibility changes, saved-state semantic changes, or old
+runtime deletion.
+
+## 2026-05-06 - Phase 5.43 Fanout Branch Template Shared Helper
+
+Goal: move pure fanout dotted-path and `$item` template substitution helpers to
+neutral shared ownership without unifying retained and core-v2 branch output
+types.
+
+Files inspected:
+
+- `src/runtime/step-handlers/fanout/branch-resolution.ts`
+- `src/core-v2/fanout/branch-expansion.ts`
+- `tests/runner/fanout-handler-direct.test.ts`
+- `tests/core-v2/fanout-v2.test.ts`
+
+Files changed:
+
+- `src/shared/fanout-branch-template.ts`
+- `src/runtime/step-handlers/fanout/branch-resolution.ts`
+- `src/core-v2/fanout/branch-expansion.ts`
+- `tests/runner/fanout-branch-template.test.ts`
+- `docs/architecture/v2-checkpoint-5.43.md`
+- `docs/architecture/v2-deletion-readiness-inventory.md`
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+Tests run:
+
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npx vitest run tests/runner/fanout-branch-template.test.ts tests/runner/fanout-handler-direct.test.ts tests/runner/fanout-runtime.test.ts tests/core-v2/fanout-v2.test.ts`:
+  passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? No. Retained and core-v2 branch expansion still produce their
+own branch output shapes and preserve existing failure messages.
+
+Concerns:
+
+- This does not approve moving retained branch resolution itself or deleting
+  retained fanout tests.
+
+Next recommended action: continue behavior-preserving cleanup or v2/shared
+oracle twins. Stop for review before wrapper deletion, old public import-path
+retirement, public compatibility changes, saved-state semantic changes, or old
+runtime deletion.
+
+## 2026-05-06 - Phase 5.44 Terminal Verdict Parity Hardening
+
+Goal: align core-v2 final result verdict semantics with the retained/shared
+terminal verdict contract and close the direct old-path proof gap for fanout
+join-policy.
+
+Files inspected:
+
+- `src/core-v2/run/graph-runner.ts`
+- `src/shared/terminal-verdict.ts`
+- `src/runtime/runner.ts`
+- `tests/core-v2/control-loop-v2.test.ts`
+- `tests/runner/terminal-verdict-derivation.test.ts`
+- `tests/properties/visible/fanout-join-policy.test.ts`
+
+Files changed:
+
+- `src/core-v2/run/graph-runner.ts`
+- `tests/core-v2/control-loop-v2.test.ts`
+- `tests/properties/visible/fanout-join-policy.test.ts`
+- `docs/architecture/v2-checkpoint-5.44.md`
+- `docs/architecture/v2-runner-handler-test-classification.md`
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+Tests run:
+
+- `npx vitest run tests/core-v2/control-loop-v2.test.ts`: passed.
+- `npx vitest run tests/runner/terminal-verdict-helper.test.ts tests/runner/terminal-verdict-derivation.test.ts`:
+  passed.
+- `npx vitest run tests/properties/visible/fanout-join-policy.test.ts`:
+  passed.
+- `npx vitest run tests/runner/retained-compat-facade.test.ts`: passed.
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? Yes, narrowly inside core-v2 parity: non-complete core-v2
+final results no longer expose previously admitted verdicts. Complete core-v2
+runs still use the latest admitted verdict.
+
+Concerns:
+
+- This does not approve wrapper deletion, public import-path retirement, or
+  retained test deletion.
+
+Next recommended action: continue behavior-preserving cleanup or v2/shared
+oracle twins. Stop for review before wrapper deletion, old public import-path
+retirement, public compatibility changes, saved-state semantic changes, or old
+runtime deletion.
+
+## 2026-05-06 - Phase 5.45 Shared Helper Wrapper Proof
+
+Goal: add direct compatibility assertions for old shared-helper wrapper paths
+without changing source behavior.
+
+Files inspected:
+
+- `src/runtime/config-loader.ts`
+- `src/runtime/manifest-snapshot-writer.ts`
+- `src/runtime/operator-summary-writer.ts`
+- `src/runtime/policy/flow-kind-policy.ts`
+- `src/runtime/relay-support.ts`
+- `src/runtime/run-relative-path.ts`
+- `src/runtime/selection-resolver.ts`
+- `src/runtime/write-capable-worker-disclosure.ts`
+- matching `src/shared/**` owners
+
+Files changed:
+
+- `tests/runner/shared-helper-compat.test.ts`
+- `docs/architecture/v2-checkpoint-5.45.md`
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+Tests run:
+
+- `npx vitest run tests/runner/shared-helper-compat.test.ts`: passed.
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? No. This is proof-only.
+
+Concerns:
+
+- This does not approve deleting wrappers or retiring old public import paths.
+
+Next recommended action: continue behavior-preserving cleanup or v2/shared
+oracle twins. Stop for review before wrapper deletion, old public import-path
+retirement, public compatibility changes, saved-state semantic changes, or old
+runtime deletion.
+
+## 2026-05-06 - Phase 5.46 Fanout Branch Failure Twins
+
+Goal: add v2 oracle twins for retained fanout direct-handler branch-level
+failure paths without changing fanout production code.
+
+Files inspected:
+
+- `tests/core-v2/fanout-v2.test.ts`
+- `tests/runner/fanout-handler-direct.test.ts`
+- `src/core-v2/executors/fanout.ts`
+- `src/core-v2/fanout/branch-execution.ts`
+- `src/core-v2/fanout/join-policy.ts`
+
+Files changed:
+
+- `tests/core-v2/fanout-v2.test.ts`
+- `docs/architecture/v2-checkpoint-5.46.md`
+- `docs/architecture/v2-runner-handler-test-classification.md`
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+Tests run:
+
+- `npx vitest run tests/core-v2/fanout-v2.test.ts`: passed.
+- `npx vitest run tests/runner/fanout-handler-direct.test.ts`: passed.
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? No. This is a test-only core-v2 oracle twin slice.
+
+Concerns:
+
+- This does not approve retained fanout deletion, old oracle test deletion,
+  wrapper deletion, or old runtime deletion.
+
+Next recommended action: continue behavior-preserving cleanup or v2/shared
+oracle twins. Stop for review before wrapper deletion, old public import-path
+retirement, public compatibility changes, saved-state semantic changes, retained
+trace/checkpoint ownership moves, or old runtime deletion.
+
+## 2026-05-06 - Phase 5.47 Disjoint-Merge Conflict Twin
+
+Goal: add a core-v2 executor-level proof that disjoint-merge fanout fails when
+completed branches touch the same file.
+
+Files inspected:
+
+- `tests/core-v2/fanout-v2.test.ts`
+- `tests/runner/fanout-handler-direct.test.ts`
+- `tests/properties/visible/fanout-join-policy.test.ts`
+- `src/shared/fanout-join-policy.ts`
+- `src/core-v2/executors/fanout.ts`
+
+Files changed:
+
+- `tests/core-v2/fanout-v2.test.ts`
+- `docs/architecture/v2-checkpoint-5.47.md`
+- `docs/architecture/v2-runner-handler-test-classification.md`
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+Tests run:
+
+- `npx vitest run tests/core-v2/fanout-v2.test.ts`: passed.
+- `npx vitest run tests/runner/fanout-handler-direct.test.ts`: passed.
+- `npx vitest run tests/properties/visible/fanout-join-policy.test.ts`: passed.
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? No. This is a test-only core-v2 oracle twin slice.
+
+Concerns:
+
+- This does not approve changing disjoint-merge semantics, retained fanout
+  deletion, old oracle test deletion, wrapper deletion, or old runtime deletion.
+
+Next recommended action: continue behavior-preserving cleanup or v2/shared
+oracle twins. Stop for review before wrapper deletion, old public import-path
+retirement, public compatibility changes, saved-state semantic changes, retained
+trace/checkpoint ownership moves, or old runtime deletion.
+
+## 2026-05-06 - Phase 5.48 Disjoint-Merge Discovery Failure Twin
+
+Goal: add a core-v2 executor-level proof that disjoint-merge fanout fails
+cleanly when changed-file discovery throws after branches complete.
+
+Files inspected:
+
+- `tests/core-v2/fanout-v2.test.ts`
+- `tests/properties/visible/fanout-join-policy.test.ts`
+- `src/shared/fanout-join-policy.ts`
+- `src/core-v2/executors/fanout.ts`
+
+Files changed:
+
+- `tests/core-v2/fanout-v2.test.ts`
+- `docs/architecture/v2-checkpoint-5.48.md`
+- `docs/architecture/v2-runner-handler-test-classification.md`
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+Tests run:
+
+- `npx vitest run tests/core-v2/fanout-v2.test.ts`: passed.
+- `npx vitest run tests/runner/fanout-handler-direct.test.ts`: passed.
+- `npx vitest run tests/properties/visible/fanout-join-policy.test.ts`: passed.
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? No. This is a test-only core-v2 oracle twin slice.
+
+Concerns:
+
+- This does not approve changing disjoint-merge semantics, retained fanout
+  deletion, old oracle test deletion, wrapper deletion, or old runtime deletion.
+
+Next recommended action: continue behavior-preserving cleanup or v2/shared
+oracle twins. Stop for review before wrapper deletion, old public import-path
+retirement, public compatibility changes, saved-state semantic changes, retained
+trace/checkpoint ownership moves, or old runtime deletion.
+
+## 2026-05-06 - Phase 5.49 Fanout Join-Policy Executor Twins
+
+Goal: add core-v2 executor-level proofs for fanout join-policy behavior that
+was already owned by the shared pure helper.
+
+Files inspected:
+
+- `tests/core-v2/fanout-v2.test.ts`
+- `tests/runner/fanout-handler-direct.test.ts`
+- `tests/properties/visible/fanout-join-policy.test.ts`
+- `src/shared/fanout-join-policy.ts`
+- `src/core-v2/executors/fanout.ts`
+
+Files changed:
+
+- `tests/core-v2/fanout-v2.test.ts`
+- `docs/architecture/v2-checkpoint-5.49.md`
+- `docs/architecture/v2-runner-handler-test-classification.md`
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+Tests run:
+
+- `npx vitest run tests/core-v2/fanout-v2.test.ts`: passed.
+- `npx vitest run tests/runner/fanout-handler-direct.test.ts`: passed.
+- `npx vitest run tests/properties/visible/fanout-join-policy.test.ts`: passed.
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? No. This is a test-only core-v2 oracle twin slice.
+
+Concerns:
+
+- This does not approve changing fanout join semantics, retained fanout
+  deletion, old oracle test deletion, wrapper deletion, or old runtime deletion.
+
+Next recommended action: continue behavior-preserving cleanup or v2/shared
+oracle twins. Stop for review before wrapper deletion, old public import-path
+retirement, public compatibility changes, saved-state semantic changes, retained
+trace/checkpoint ownership moves, or old runtime deletion.
+
+## 2026-05-06 - Phase 5.50 Sub-Run Report Path Guard Twin
+
+Goal: add a core-v2 proof for the retained sub-run direct-handler guard that
+rejects divergent report/result materialization paths before child execution.
+
+Files inspected:
+
+- `tests/core-v2/sub-run-v2.test.ts`
+- `tests/runner/sub-run-handler-direct.test.ts`
+- `src/core-v2/executors/sub-run.ts`
+
+Files changed:
+
+- `tests/core-v2/sub-run-v2.test.ts`
+- `docs/architecture/v2-checkpoint-5.50.md`
+- `docs/architecture/v2-runner-handler-test-classification.md`
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+Tests run:
+
+- `npx vitest run tests/core-v2/sub-run-v2.test.ts`: passed.
+- `npx vitest run tests/runner/sub-run-handler-direct.test.ts`: passed.
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? No. This is a test-only core-v2 oracle twin slice.
+
+Concerns:
+
+- This does not approve changing sub-run materialization semantics, retained
+  sub-run deletion, old oracle test deletion, wrapper deletion, or old runtime
+  deletion.
+
+Next recommended action: continue behavior-preserving cleanup or v2/shared
+oracle twins. Stop for review before wrapper deletion, old public import-path
+retirement, public compatibility changes, saved-state semantic changes, retained
+trace/checkpoint ownership moves, or old runtime deletion.
+
+## 2026-05-06 - Phase 5.51 Fanout Abort Policy And Sub-Run Preflight Twins
+
+Goal: add core-v2 proofs for retained fanout aggregate-only tolerance,
+abort-all short-circuit behavior, and the sub-run child-runner preflight guard.
+
+Files inspected:
+
+- `tests/core-v2/fanout-v2.test.ts`
+- `tests/core-v2/sub-run-v2.test.ts`
+- `tests/runner/fanout-handler-direct.test.ts`
+- `tests/runner/sub-run-handler-direct.test.ts`
+- `src/core-v2/executors/fanout.ts`
+- `src/core-v2/executors/sub-run.ts`
+
+Files changed:
+
+- `tests/core-v2/fanout-v2.test.ts`
+- `tests/core-v2/sub-run-v2.test.ts`
+- `docs/architecture/v2-checkpoint-5.51.md`
+- `docs/architecture/v2-runner-handler-test-classification.md`
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+Tests run:
+
+- `npx vitest run tests/core-v2/fanout-v2.test.ts`: passed.
+- `npx vitest run tests/core-v2/sub-run-v2.test.ts`: passed.
+- `npx vitest run tests/runner/fanout-handler-direct.test.ts`: passed.
+- `npx vitest run tests/runner/sub-run-handler-direct.test.ts`: passed.
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? No. This is a test-only core-v2 oracle twin slice.
+
+Concerns:
+
+- This does not approve changing fanout abort policy, fanout join semantics,
+  sub-run child execution semantics, retained oracle test deletion, wrapper
+  deletion, or old runtime deletion.
+
+Next recommended action: run full validation, then continue behavior-preserving
+cleanup or v2/shared oracle twins. Stop for review before wrapper deletion, old
+public import-path retirement, public compatibility changes, saved-state
+semantic changes, retained trace/checkpoint ownership moves, or old runtime
+deletion.
+
+## 2026-05-06 - Phase 5.52 Relay Transcript Sequence Twins
+
+Goal: add core-v2 proofs for production relay transcript ordering and durable
+evidence on pass, check-fail, and connector-fail paths.
+
+Files inspected:
+
+- `tests/core-v2/control-loop-v2.test.ts`
+- `tests/runner/relay-handler-direct.test.ts`
+- `tests/runner/check-evaluation.test.ts`
+- `tests/runner/relay-invocation-failure.test.ts`
+- `src/core-v2/executors/relay.ts`
+
+Files changed:
+
+- `tests/core-v2/control-loop-v2.test.ts`
+- `docs/architecture/v2-checkpoint-5.52.md`
+- `docs/architecture/v2-runner-handler-test-classification.md`
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+Tests run:
+
+- `npx vitest run tests/core-v2/control-loop-v2.test.ts`: passed.
+- `npx vitest run tests/runner/relay-handler-direct.test.ts tests/runner/check-evaluation.test.ts tests/runner/relay-invocation-failure.test.ts`: passed.
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? No. This is a test-only core-v2 oracle twin slice.
+
+Concerns:
+
+- This does not approve changing relay connector behavior, recovery semantics,
+  retained oracle test deletion, wrapper deletion, or old runtime deletion.
+
+Next recommended action: run full validation, then continue behavior-preserving
+cleanup or v2/shared oracle twins. Stop for review before wrapper deletion, old
+public import-path retirement, public compatibility changes, saved-state
+semantic changes, retained trace/checkpoint ownership moves, or old runtime
+deletion.
+
+## 2026-05-06 - Phase 5.53 Fanout Trace Sequence Twin
+
+Goal: add a core-v2 proof for successful fanout trace ordering, matching the
+retained direct-handler oracle intent without changing fanout behavior.
+
+Files inspected:
+
+- `tests/core-v2/fanout-v2.test.ts`
+- `tests/runner/fanout-handler-direct.test.ts`
+- `src/core-v2/executors/fanout.ts`
+
+Files changed:
+
+- `tests/core-v2/fanout-v2.test.ts`
+- `docs/architecture/v2-checkpoint-5.53.md`
+- `docs/architecture/v2-runner-handler-test-classification.md`
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+Tests run:
+
+- `npx vitest run tests/core-v2/fanout-v2.test.ts`: passed.
+- `npx vitest run tests/runner/fanout-handler-direct.test.ts`: passed.
+
+Behavior changed? No. This is a test-only core-v2 oracle twin slice.
+
+Concerns:
+
+- This does not approve changing fanout trace semantics, retained oracle test
+  deletion, wrapper deletion, or old runtime deletion.
+
+Next recommended action: run full validation, then stop for review if the next
+work would change public compatibility behavior, saved-state semantics, wrapper
+support, retained trace/checkpoint ownership, or old runtime deletion status.
+
 ## 2026-05-05 - Phase 5.11 Explore Tournament Default Routing
 
 Goal: move Explore tournament from retained fallback to core-v2 default routing
@@ -995,9 +2128,16 @@ Public selector policy, rollback, arbitrary fixtures, custom roots,
 `composeWriter`, retained/v1 checkpoint folders, connector ownership, and old
 runtime deletion did not change.
 
-Tests run so far:
+Tests run:
 
 - `npx vitest run tests/core-v2/control-loop-v2.test.ts`: passed.
+- `npx vitest run tests/core-v2/control-loop-v2.test.ts tests/runner/checkpoint-handler-direct.test.ts`:
+  passed.
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
 - `npm run check`: passed.
 - `npx vitest run tests/core-v2/control-loop-v2.test.ts tests/core-v2/core-v2-baseline.test.ts tests/core-v2/default-executors-v2.test.ts tests/runner/check-evaluation.test.ts tests/runner/terminal-outcome-mapping.test.ts tests/runner/pass-route-cycle-guard.test.ts`:
   passed.
@@ -1413,6 +2553,294 @@ Concerns:
 Next recommended action: continue only with behavior-preserving cleanup or
 v2/shared oracle twins.
 
+## 2026-05-06 - Phase 5.27 Compose Writer Compatibility Policy Hardening
+
+Goal: formalize public `composeWriter` as retained-runtime-only compatibility
+without changing behavior.
+
+Files changed:
+
+- `src/cli/runtime-compatibility-policy.ts`
+- `tests/runner/cli-v2-runtime.test.ts`
+- `docs/architecture/v2-checkpoint-5.27.md`
+- `docs/architecture/v2-compose-writer-disposition.md`
+- `docs/architecture/v2-retained-fallback-policy.md`
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+Tests run:
+
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npx vitest run tests/runner/cli-v2-runtime.test.ts`: passed.
+- `npx vitest run tests/soak/v2-runtime-surface.test.ts`: passed.
+- `npx vitest run tests/release/release-infrastructure.test.ts`: passed.
+- `npx vitest run tests/runner/fix-report-writer.test.ts`: passed.
+- `npx vitest run tests/runner/retained-compat-facade.test.ts`: passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? No. `composeWriter` still forces retained compatibility for
+normal/default routing, still stays retained under rollback, and still fails
+closed under strict v2. Core-v2 did not gain a compose writer hook.
+
+Concerns:
+
+- This keeps `composeWriter` as a live public compatibility blocker for old
+  runtime deletion.
+
+Next recommended action: continue autonomously only with behavior-preserving
+import/test cleanup or v2/shared oracle twins. Stop for review before changing
+public compatibility behavior, saved-folder semantics, ownership boundaries, or
+deletion status.
+
+## 2026-05-06 - Phase 5.28 Relay Result Shape Edge-Case V2 Twins
+
+Goal: add core-v2 tests for retained relay direct-handler shape edge cases
+without changing source behavior.
+
+Files changed:
+
+- `tests/core-v2/control-loop-v2.test.ts`
+- `docs/architecture/v2-checkpoint-5.28.md`
+- `docs/architecture/v2-runner-handler-test-classification.md`
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+Tests run:
+
+- `npx vitest run tests/core-v2/control-loop-v2.test.ts`: passed.
+- `npx vitest run tests/core-v2/control-loop-v2.test.ts tests/runner/relay-handler-direct.test.ts`:
+  passed.
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? No. This is a test-only v2 oracle twin. It proves existing
+shared relay result parsing in the core-v2 production relay path for array
+bodies, `null` bodies, and empty verdict strings.
+
+Concerns:
+
+- The retained relay direct-handler tests remain live retained fallback/oracle
+  evidence.
+
+Next recommended action: continue only with behavior-preserving import/test
+cleanup or v2/shared oracle twins.
+
+## 2026-05-06 - Phase 5.29 Sub-Run Child Result Failure Evidence
+
+Goal: add core-v2 tests for retained sub-run direct-handler child result failure
+evidence and fix the narrow core-v2 evidence gap.
+
+Files changed:
+
+- `src/core-v2/executors/sub-run.ts`
+- `tests/core-v2/sub-run-v2.test.ts`
+- `docs/architecture/v2-checkpoint-5.29.md`
+- `docs/architecture/v2-runner-handler-test-classification.md`
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+Tests run:
+
+- `npx vitest run tests/core-v2/sub-run-v2.test.ts`: failed before the source
+  fix, then passed.
+- `npx vitest run tests/core-v2/sub-run-v2.test.ts tests/runner/sub-run-handler-direct.test.ts`:
+  passed.
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? Yes, narrowly inside core-v2 sub-run failure evidence. Child
+resolver throws now emit explicit `check.evaluated` failure evidence, and
+malformed child result files are copied to the parent run folder before the
+parent emits `sub_run.completed` with `<no-verdict>` and aborts.
+
+Concerns:
+
+- This does not change nested checkpoint support or retained/v1 folder
+  semantics. The retained sub-run direct-handler test remains live.
+
+Next recommended action: continue only with behavior-preserving import/test
+cleanup or v2/shared oracle twins.
+
+## 2026-05-06 - Phase 5.30 Sub-Run Non-Complete Verdict Admission
+
+Goal: add core-v2 proof that child resolver output fails with sub-run evidence
+when invalid, that a child sub-run verdict is admitted only when the child run
+itself completes, and that final result selection ignores non-complete sub-run
+verdict traces even when older/custom traces lack admission metadata.
+
+Files changed:
+
+- `src/core-v2/executors/sub-run.ts`
+- `src/core-v2/run/graph-runner.ts`
+- `tests/core-v2/core-v2-baseline.test.ts`
+- `tests/core-v2/sub-run-v2.test.ts`
+- `docs/architecture/v2-checkpoint-5.30.md`
+- `docs/architecture/v2-runner-handler-test-classification.md`
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+Tests run:
+
+- `npx vitest run tests/core-v2/sub-run-v2.test.ts -t "does not admit an allowed child verdict"`:
+  failed before the source fix, then passed.
+- `npx vitest run tests/core-v2/sub-run-v2.test.ts -t "resolver returns invalid child flow bytes"`:
+  failed before the source fix, then passed.
+- `npx vitest run tests/core-v2/sub-run-v2.test.ts`: passed.
+- `npx vitest run tests/core-v2/sub-run-v2.test.ts tests/runner/sub-run-handler-direct.test.ts`:
+  passed.
+- `npx vitest run tests/core-v2/core-v2-baseline.test.ts -t "does not carry non-complete sub-run trace verdicts"`:
+  failed before the final-result selector fix, then passed.
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? Yes, narrowly inside core-v2 sub-run evidence/admission.
+Invalid child compiled-flow bytes now emit a sub-run `check.evaluated` failure
+before `sub_run.started`. A child run that closes non-complete no longer marks
+its otherwise allowed verdict as admitted, so the parent final result does not
+inherit that rejected verdict. The final result selector also rejects
+non-complete `sub_run.completed` verdict traces directly, which protects old or
+custom traces that do not include `data.admitted: false`.
+
+Concerns:
+
+- This does not change nested checkpoint support, retained/v1 folder semantics,
+  public compatibility behavior, or ownership boundaries. The retained sub-run
+  direct-handler test remains live.
+
+Next recommended action: continue only with behavior-preserving import/test
+cleanup or v2/shared oracle twins while the connector/materializer ownership
+review is pending.
+
+## 2026-05-06 - Phase 5.31 Fanout Dynamic Expansion Failure V2 Twin
+
+Goal: add a core-v2 twin for retained fanout direct-handler branch resolution
+failure behavior without changing source behavior.
+
+Files changed:
+
+- `tests/core-v2/fanout-v2.test.ts`
+- `docs/architecture/v2-checkpoint-5.31.md`
+- `docs/architecture/v2-runner-handler-test-classification.md`
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+Tests run:
+
+- `npx vitest run tests/core-v2/fanout-v2.test.ts -t "aborts before fanout start"`:
+  passed.
+- `npx vitest run tests/core-v2/fanout-v2.test.ts tests/runner/fanout-handler-direct.test.ts tests/runner/fanout-runtime.test.ts`:
+  passed.
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? No. This is a test-only v2 oracle twin. It proves existing
+core-v2 dynamic fanout expansion failures abort before `fanout.started`, do not
+call relay branches, do not write the aggregate, and write `step.aborted`.
+Covered cases are wrong source shape, zero branches, duplicate branch ids, and
+`max_branches` overflow.
+
+Concerns:
+
+- The retained fanout direct-handler test remains live retained fallback/oracle
+  evidence.
+
+Next recommended action: continue only with behavior-preserving import/test
+cleanup or v2/shared oracle twins while the connector/materializer ownership
+review is pending.
+
+## 2026-05-06 - Phase 5.26 Checkpoint Auto-Resolution Failure V2 Twin
+
+Goal: add core-v2 tests for retained checkpoint direct-handler auto-resolution
+failure evidence without changing source behavior.
+
+Files inspected:
+
+- `src/core-v2/executors/checkpoint.ts`
+- `tests/core-v2/control-loop-v2.test.ts`
+- `tests/runner/checkpoint-handler-direct.test.ts`
+
+Files changed:
+
+- `tests/core-v2/control-loop-v2.test.ts`
+- `docs/architecture/v2-checkpoint-5.26.md`
+- `docs/architecture/v2-runner-handler-test-classification.md`
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+Behavior changed? No. This is a test-only v2 oracle twin. It proves existing
+core-v2 checkpoint behavior when standard or autonomous depth cannot
+auto-resolve because the required safe choice is missing.
+
+Tests run so far:
+
+- `npx vitest run tests/core-v2/control-loop-v2.test.ts`: passed.
+
+Concerns:
+
+- This is not a saved-folder semantics change. The retained checkpoint direct
+  handler test remains live retained fallback/oracle evidence.
+
+Next recommended action: continue only with behavior-preserving import/test
+cleanup or v2/shared oracle twins.
+
+## 2026-05-06 - Phase 5.25 Sub-Run Failure Evidence V2 Twin
+
+Goal: add core-v2 tests for retained sub-run direct-handler failure evidence
+without changing source behavior.
+
+Files inspected:
+
+- `src/core-v2/executors/sub-run.ts`
+- `src/runtime/step-handlers/sub-run.ts`
+- `tests/core-v2/sub-run-v2.test.ts`
+- `tests/runner/sub-run-handler-direct.test.ts`
+
+Files changed:
+
+- `tests/core-v2/sub-run-v2.test.ts`
+- `docs/architecture/v2-checkpoint-5.25.md`
+- `docs/architecture/v2-runner-handler-test-classification.md`
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+Behavior changed? No. This is a test-only v2 oracle twin. It proves existing
+core-v2 sub-run behavior for missing child resolvers, wrong resolved flow ids,
+child runner throws, and missing child verdicts.
+
+Tests run:
+
+- `npx vitest run tests/core-v2/sub-run-v2.test.ts`: passed.
+- `npx vitest run tests/core-v2/sub-run-v2.test.ts tests/runner/sub-run-handler-direct.test.ts`:
+  passed.
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Concerns:
+
+- This is not a deletion slice. The retained sub-run direct handler test remains
+  live retained fallback/oracle evidence.
+
+Next recommended action: continue only with behavior-preserving import/test
+cleanup or v2/shared oracle twins.
+
 ## 2026-05-06 - Phase 5.24 Verification Failure Evidence V2 Twin
 
 Goal: add the core-v2 twin for retained verification pre-write failure evidence
@@ -1441,10 +2869,16 @@ verification fails before writing its canonical report, core-v2 now emits
 retained fallback, saved-folder behavior, rollback, `composeWriter`, fixture
 policy, and ownership boundaries are unchanged.
 
-Tests run so far:
+Tests run:
 
 - `npm run check`: passed.
 - `npx vitest run tests/core-v2/control-loop-v2.test.ts`: passed.
+- `npx vitest run tests/core-v2/control-loop-v2.test.ts tests/runner/verification-handler-direct.test.ts`:
+  passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
 
 Concerns:
 
@@ -5881,3 +7315,275 @@ Concerns:
   future Phase 4 work.
 
 Next recommended action: continue Phase 4 with sub-run parity before fanout.
+
+## 2026-05-06 - Phase 5.54 Runtime Compatibility Policy Centralization
+
+Goal: preserve the approved public compatibility behavior while moving the live
+routing-policy helpers out of `src/cli/circuit.ts` and into the existing policy
+module.
+
+Files inspected:
+
+- `src/cli/circuit.ts`
+- `src/cli/runtime-compatibility-policy.ts`
+- `src/cli/create.ts`
+- `plugins/circuit/scripts/circuit-next.mjs`
+- `tests/runner/cli-v2-runtime.test.ts`
+- `tests/soak/v2-runtime-surface.test.ts`
+- `tests/contracts/codex-host-plugin.test.ts`
+- `tests/release/release-infrastructure.test.ts`
+- `docs/architecture/v2-compose-writer-disposition.md`
+- `docs/architecture/v2-retained-fallback-policy.md`
+- `docs/architecture/v2-deletion-readiness-inventory.md`
+
+Files changed:
+
+- `src/cli/runtime-compatibility-policy.ts`
+- `src/cli/circuit.ts`
+- `tests/runner/runtime-compatibility-policy.test.ts`
+- `tests/runner/cli-v2-runtime.test.ts`
+- `docs/architecture/v2-checkpoint-5.54.md`
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+Tests run:
+
+- `npx vitest run tests/runner/runtime-compatibility-policy.test.ts`: passed.
+- `npx vitest run tests/runner/cli-v2-runtime.test.ts --testNamePattern "composeWriter|rollback|arbitrary|custom|trusted|runtime compatibility"`: passed.
+- `npm run check`: passed.
+- `npm run lint`: initially failed on formatting/import order and one test env cleanup style, then passed after cleanup.
+- `npx vitest run tests/runner/runtime-compatibility-policy.test.ts tests/runner/cli-v2-runtime.test.ts`: passed.
+- `npx vitest run tests/soak/v2-runtime-surface.test.ts`: passed.
+- `npx vitest run tests/contracts/codex-host-plugin.test.ts tests/release/release-infrastructure.test.ts tests/runner/fix-report-writer.test.ts tests/runner/retained-compat-facade.test.ts`: passed.
+- `npm run build`: passed.
+- `git diff --check`: passed.
+- `npm run verify`: passed.
+
+Behavior changed? Intended no. The current public compatibility decisions remain
+unchanged: `composeWriter` stays retained-only, rollback stays retained while
+bundled, arbitrary fixtures and custom roots stay retained by default, strict v2
+still fails closed for unsupported decisions, and trusted generated mirrors still
+require exact wrapper provenance.
+
+Concerns:
+
+- Old runtime deletion remains blocked by the retained compatibility surfaces and
+  old public import paths recorded in the deletion inventory.
+
+Next recommended action: finish validation, then continue with behavior-preserving
+cleanup only. The next review-worthy checkpoint should be old public import-path
+or wrapper retirement, retained compatibility packaging, or another explicit
+public behavior decision.
+
+## 2026-05-06 - Phase 5.55 Public Runtime Path Manifest
+
+Goal: make old `src/runtime/**` public/import compatibility paths explicit and
+machine-checkable without deleting wrappers or changing behavior.
+
+Files inspected:
+
+- `src/runtime/**`
+- `tests/runner/retained-compat-facade.test.ts`
+- `tests/runner/shared-helper-compat.test.ts`
+- `tests/runner/connector-shared-compat.test.ts`
+- `tests/runner/catalog-derivations.test.ts`
+- `tests/runner/run-status-facade.test.ts`
+- `docs/architecture/v2-deletion-readiness-inventory.md`
+- `docs/architecture/v2-retained-runtime-boundary.md`
+- `HANDOFF.md`
+
+Files changed:
+
+- `src/compat/public-runtime-paths.ts`
+- `tests/runner/public-runtime-paths.test.ts`
+- `tests/runner/retained-compat-facade.test.ts`
+- `docs/architecture/v2-checkpoint-5.55.md`
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+Tests run:
+
+- `npx vitest run tests/runner/public-runtime-paths.test.ts tests/runner/retained-compat-facade.test.ts`: initially failed because the manifest coverage test compared relative manifest paths to absolute collected paths, then passed after normalizing collected paths relative to the repo root.
+- `npx vitest run tests/runner/shared-helper-compat.test.ts tests/runner/connector-shared-compat.test.ts tests/runner/catalog-derivations.test.ts tests/runner/run-status-facade.test.ts`: passed.
+- `npx vitest run tests/runner/fanout-aggregate-compat.test.ts tests/runner/json-report-compat.test.ts tests/runner/recovery-route-compat.test.ts tests/runner/terminal-verdict-helper.test.ts tests/properties/visible/fanout-join-policy.test.ts tests/runner/fix-report-writer.test.ts`: passed.
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? No. This is a manifest and guard consolidation slice only.
+Old runtime wrappers remain import-compatible, retained-owned implementation
+files remain retained-owned, and public compatibility behavior is unchanged.
+
+Concerns:
+
+- The manifest makes wrapper retirement easier to review later, but it does not
+  itself approve deprecation, warnings, package export changes, wrapper deletion,
+  or old runtime deletion.
+
+Next recommended action: use the manifest for any future old public import-path
+retirement review instead of hand-built wrapper lists.
+
+## 2026-05-06 - Phase 5.56 Registry Wrapper Import Cleanup
+
+Goal: remove retained runtime implementation imports of old registry wrapper
+paths while keeping the old paths as public/import compatibility re-exports.
+
+Files inspected:
+
+- `src/runtime/runner.ts`
+- `src/runtime/checkpoint-resume.ts`
+- `src/runtime/step-handlers/checkpoint.ts`
+- `src/runtime/step-handlers/verification.ts`
+- `src/runtime/step-handlers/relay.ts`
+- `src/runtime/step-handlers/fanout.ts`
+- `src/flows/registries/**`
+- `src/compat/public-runtime-paths.ts`
+- `tests/runner/retained-compat-facade.test.ts`
+- `docs/architecture/v2-deletion-readiness-inventory.md`
+- `docs/architecture/v2-deletion-plan.md`
+
+Files changed:
+
+- `src/runtime/runner.ts`
+- `src/runtime/checkpoint-resume.ts`
+- `src/runtime/step-handlers/checkpoint.ts`
+- `src/runtime/step-handlers/verification.ts`
+- `src/runtime/step-handlers/relay.ts`
+- `src/runtime/step-handlers/fanout.ts`
+- `src/compat/public-runtime-paths.ts`
+- `tests/runner/retained-compat-facade.test.ts`
+- `docs/architecture/v2-checkpoint-5.56.md`
+- `docs/architecture/v2-deletion-readiness-inventory.md`
+- `docs/architecture/v2-deletion-plan.md`
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+Tests run:
+
+- `npx vitest run tests/runner/retained-compat-facade.test.ts tests/runner/public-runtime-paths.test.ts`: passed.
+- `npx vitest run tests/runner/catalog-derivations.test.ts tests/runner/build-checkpoint-exec.test.ts tests/runner/checkpoint-handler-direct.test.ts tests/runner/verification-handler-direct.test.ts tests/runner/relay-handler-direct.test.ts tests/runner/fanout-handler-direct.test.ts tests/runner/runtime-smoke.test.ts tests/runner/retained-compat-facade.test.ts tests/runner/public-runtime-paths.test.ts`: passed.
+- `npm run check`: passed.
+- `npm run lint`: passed after import cleanup.
+- `npm run build`: passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? No. This is an internal import cleanup and guard
+consolidation slice. Old registry paths remain compatibility re-exports, and
+retained runtime behavior is unchanged.
+
+Concerns:
+
+- Wrapper deletion is still not approved. This only removes retained runtime's
+  internal dependency on registry wrappers.
+
+Next recommended action: continue behavior-preserving retained compatibility
+packaging or guard consolidation. Stop for review before public import-path
+retirement, wrapper deletion, public compatibility behavior changes,
+saved-folder policy changes, or old runtime deletion.
+
+## 2026-05-06 - Phase 5.57 Result Path Helper Import Cleanup
+
+Goal: move remaining retained handler and test imports of the pure
+`reports/result.json` path helper to `src/shared/result-path.ts` while keeping
+the retained result writer and old compatibility path intact.
+
+Files inspected:
+
+- `src/runtime/result-writer.ts`
+- `src/shared/result-path.ts`
+- `src/runtime/step-handlers/sub-run.ts`
+- `src/runtime/step-handlers/fanout.ts`
+- retained tests importing `src/runtime/result-writer.js`
+- `tests/runner/result-path-compat.test.ts`
+
+Files changed:
+
+- `src/runtime/step-handlers/sub-run.ts`
+- `src/runtime/step-handlers/fanout.ts`
+- `tests/runner/fanout-handler-direct.test.ts`
+- `tests/runner/fanout-runtime.test.ts`
+- `tests/runner/fresh-run-root.test.ts`
+- `tests/runner/migrate-runtime-wiring.test.ts`
+- `tests/runner/sub-run-handler-direct.test.ts`
+- `tests/runner/sub-run-runtime.test.ts`
+- `tests/runner/retained-compat-facade.test.ts`
+- `src/compat/public-runtime-paths.ts`
+- `docs/architecture/v2-checkpoint-5.57.md`
+- `docs/architecture/v2-deletion-readiness-inventory.md`
+- `docs/architecture/v2-deletion-plan.md`
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+Tests run:
+
+- `npx vitest run tests/runner/retained-compat-facade.test.ts tests/runner/result-path-compat.test.ts tests/runner/sub-run-handler-direct.test.ts tests/runner/fanout-handler-direct.test.ts tests/runner/sub-run-runtime.test.ts tests/runner/fanout-runtime.test.ts tests/runner/migrate-runtime-wiring.test.ts tests/runner/fresh-run-root.test.ts`: initially failed until the facade guard excluded itself, then passed.
+- `npm run check`: passed.
+- `npm run lint`: passed after import ordering.
+- `npm run build`: passed.
+
+Behavior changed? No. This is path-helper import cleanup only. Retained
+`writeResult(...)` still lives in `src/runtime/result-writer.ts`, and the old
+`resultPath(...)` import path remains covered by
+`tests/runner/result-path-compat.test.ts`.
+
+Concerns:
+
+- This does not make result-writer deletion-ready. Retained and core-v2 result
+  writers still have separate lifecycle ownership.
+
+Next recommended action: continue behavior-preserving retained compatibility
+packaging or import guards. Stop for review before merging result writers,
+retiring old public import paths, changing public compatibility behavior,
+changing saved-folder policy, deleting wrappers, or deleting old runtime code.
+
+## 2026-05-06 - Phase 5.58 Soft Deprecation Metadata
+
+Goal: turn the approved low-risk wrapper deprecation policy into manifest
+metadata and checked documentation without changing runtime behavior.
+
+Files inspected:
+
+- `src/compat/public-runtime-paths.ts`
+- `tests/runner/public-runtime-paths.test.ts`
+- `tests/runner/retained-compat-facade.test.ts`
+- old wrapper compatibility tests
+- `docs/architecture/v2-deletion-readiness-inventory.md`
+- `docs/architecture/v2-deletion-plan.md`
+- `docs/release/**`
+
+Files changed:
+
+- `src/compat/public-runtime-paths.ts`
+- `tests/runner/public-runtime-paths.test.ts`
+- `docs/architecture/v2-public-runtime-import-path-policy.md`
+- `docs/architecture/v2-checkpoint-5.58.md`
+- `docs/architecture/v2-deletion-readiness-inventory.md`
+- `docs/architecture/v2-deletion-plan.md`
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+Tests run:
+
+- `npx vitest run tests/runner/public-runtime-paths.test.ts tests/runner/retained-compat-facade.test.ts tests/runner/shared-helper-compat.test.ts tests/runner/catalog-derivations.test.ts tests/runner/connector-shared-compat.test.ts tests/runner/run-status-facade.test.ts tests/runner/result-path-compat.test.ts tests/runner/fanout-aggregate-compat.test.ts tests/runner/json-report-compat.test.ts tests/runner/recovery-route-compat.test.ts tests/runner/terminal-verdict-helper.test.ts tests/properties/visible/fanout-join-policy.test.ts`: passed.
+- `npm run check`: passed.
+- `npm run lint`: initially failed on formatting in `tests/runner/public-runtime-paths.test.ts`, then passed after formatting.
+- `npm run build`: passed.
+- `npx vitest run tests/runner/public-runtime-paths.test.ts`: passed after formatting.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? No. Soft deprecation is metadata, documentation, and release
+wording only. Old paths still work, compatibility tests stay in place, package
+exports do not change, and no import-time warnings are emitted.
+
+Concerns:
+
+- This does not make any wrapper deletion-ready. The soft-deprecated paths still
+  need another review before retirement, package export changes, warnings, or
+  deletion.
+
+Next recommended action: run focused validation and full `npm run verify`, then
+continue only with behavior-preserving compatibility packaging or proof work.

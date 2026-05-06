@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { runRetainedCompiledFlow as runCompiledFlow } from '../../src/compat/retained-runtime.js';
+import type { ClaudeCodeRelayInput } from '../../src/connectors/claude-code.js';
 import {
   SweepAnalysis,
   SweepBatch,
@@ -13,7 +14,6 @@ import {
   SweepReview,
   SweepVerification,
 } from '../../src/flows/sweep/reports.js';
-import type { ClaudeCodeRelayInput } from '../../src/runtime/connectors/claude-code.js';
 import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { RunId } from '../../src/schemas/ids.js';

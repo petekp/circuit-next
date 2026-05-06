@@ -10,6 +10,14 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 
+import {
+  findCloseBuilder,
+  resolveCloseReadPaths,
+} from '../flows/registries/close-writers/registry.js';
+import {
+  findComposeBuilder,
+  resolveComposeReadPaths,
+} from '../flows/registries/compose-writers/registry.js';
 import type { ChangeKindDeclaration } from '../schemas/change-kind.js';
 import type { CompiledFlow } from '../schemas/compiled-flow.js';
 import type { LayeredConfig as LayeredConfigValue } from '../schemas/config.js';
@@ -19,13 +27,20 @@ import { computeManifestHash } from '../schemas/manifest.js';
 import type { ProgressEvent, ProgressTaskStatus } from '../schemas/progress-event.js';
 import type { Snapshot } from '../schemas/snapshot.js';
 import type { RunClosedOutcome, TraceEntry } from '../schemas/trace-entry.js';
-import { appendAndDerive } from './append-and-derive.js';
-import { prepareCheckpointResume } from './checkpoint-resume.js';
+import { isRunRelativePathError, writeJsonReport } from '../shared/json-report.js';
 import {
   type ManifestSnapshotInput,
   manifestSnapshotPath,
   writeManifestSnapshot,
-} from './manifest-snapshot-writer.js';
+} from '../shared/manifest-snapshot.js';
+import { resolveRunRelative } from '../shared/run-relative-path.js';
+import { deriveTerminalVerdict } from '../shared/terminal-verdict.js';
+import {
+  WRITE_CAPABLE_WORKER_DISCLOSURE,
+  compiledFlowMayInvokeWriteCapableWorker,
+} from '../shared/write-capable-worker-disclosure.js';
+import { appendAndDerive } from './append-and-derive.js';
+import { prepareCheckpointResume } from './checkpoint-resume.js';
 import {
   progressDisplay,
   projectTraceEntryToProgress,
@@ -33,17 +48,11 @@ import {
   reportTaskListProgress,
   taskStatusesFromTrace,
 } from './progress-projector.js';
-import { findCloseBuilder, resolveCloseReadPaths } from './registries/close-writers/registry.js';
-import {
-  findComposeBuilder,
-  resolveComposeReadPaths,
-} from './registries/compose-writers/registry.js';
 import {
   bindsExecutionDepthToRelaySelection,
   selectionConfigLayersWithExecutionDepth,
 } from './relay-selection.js';
 import { resultPath, writeResult } from './result-writer.js';
-import { resolveRunRelative } from './run-relative-path.js';
 import type {
   CheckpointResumeInvocation,
   ChildCompiledFlowResolver,
@@ -64,13 +73,7 @@ import {
   type StepHandlerResult,
   runStepHandler,
 } from './step-handlers/index.js';
-import { isRunRelativePathError, writeJsonReport } from './step-handlers/shared.js';
-import { deriveTerminalVerdict } from './terminal-verdict.js';
 import { appendTraceEntry, traceEntryLogPath } from './trace-writer.js';
-import {
-  WRITE_CAPABLE_WORKER_DISCLOSURE,
-  compiledFlowMayInvokeWriteCapableWorker,
-} from './write-capable-worker-disclosure.js';
 
 // Public API surface from runner.ts. Implementations have moved to
 // dedicated modules during the handler-extraction split; the surface

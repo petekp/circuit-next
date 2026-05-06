@@ -48,9 +48,12 @@ const UPDATE_AGENT_FINGERPRINT = process.env.UPDATE_AGENT_FINGERPRINT === '1';
 // drift detection itself surfaces the mismatch as yellow on first
 // repromotion.
 const AGENT_ADAPTER_SOURCE_PATHS = [
-  'src/runtime/connectors/claude-code.ts',
+  'src/connectors/claude-code.ts',
   'src/shared/connector-relay.ts',
   'src/shared/connector-helpers.ts',
+  'src/connectors/shared.ts',
+  'src/connectors/relay-materializer.ts',
+  'src/runtime/connectors/claude-code.ts',
   'src/runtime/connectors/shared.ts',
   'src/runtime/connectors/relay-materializer.ts',
   'src/runtime/runner.ts',

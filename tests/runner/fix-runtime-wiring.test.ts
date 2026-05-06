@@ -18,8 +18,8 @@ import {
   runRetainedCompiledFlow as runCompiledFlow,
   writeRetainedComposeReport as writeComposeReport,
 } from '../../src/compat/retained-runtime.js';
+import type { ClaudeCodeRelayInput } from '../../src/connectors/claude-code.js';
 import { FixBrief, FixResult } from '../../src/flows/fix/reports.js';
-import type { ClaudeCodeRelayInput } from '../../src/runtime/connectors/claude-code.js';
 import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { RunId } from '../../src/schemas/ids.js';

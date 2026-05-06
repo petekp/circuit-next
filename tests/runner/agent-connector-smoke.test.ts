@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
-import { relayClaudeCode, sha256Hex } from '../../src/runtime/connectors/claude-code.js';
+import { relayClaudeCode, sha256Hex } from '../../src/connectors/claude-code.js';
 
 // Agent connector smoke test.
 //

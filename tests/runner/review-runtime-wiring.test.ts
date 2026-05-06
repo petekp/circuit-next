@@ -26,7 +26,7 @@ import { RunId } from '../../src/schemas/ids.js';
 import { ProgressEvent } from '../../src/schemas/progress-event.js';
 
 import { runRetainedCompiledFlow as runCompiledFlow } from '../../src/compat/retained-runtime.js';
-import type { ClaudeCodeRelayInput } from '../../src/runtime/connectors/claude-code.js';
+import type { ClaudeCodeRelayInput } from '../../src/connectors/claude-code.js';
 import type { RelayResult } from '../../src/shared/connector-relay.js';
 import type { RelayFn } from '../../src/shared/relay-runtime-types.js';
 

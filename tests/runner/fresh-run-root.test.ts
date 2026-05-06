@@ -16,16 +16,16 @@ import {
   releaseRetainedFreshRunFolderClaim as releaseFreshRunFolderClaim,
   runRetainedCompiledFlow as runCompiledFlow,
 } from '../../src/compat/retained-runtime.js';
-import type { ClaudeCodeRelayInput } from '../../src/runtime/connectors/claude-code.js';
-import { manifestSnapshotPath } from '../../src/runtime/manifest-snapshot-writer.js';
-import { resultPath } from '../../src/runtime/result-writer.js';
+import type { ClaudeCodeRelayInput } from '../../src/connectors/claude-code.js';
 import { snapshotPath } from '../../src/runtime/snapshot-writer.js';
 import { traceEntryLogPath } from '../../src/runtime/trace-writer.js';
 import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { RunId } from '../../src/schemas/ids.js';
 import type { RelayResult } from '../../src/shared/connector-relay.js';
+import { manifestSnapshotPath } from '../../src/shared/manifest-snapshot.js';
 import type { RelayFn } from '../../src/shared/relay-runtime-types.js';
+import { runResultPath as resultPath } from '../../src/shared/result-path.js';
 
 const FIXTURE_PATH = resolve('generated/flows/runtime-proof/circuit.json');
 

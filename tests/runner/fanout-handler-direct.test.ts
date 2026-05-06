@@ -22,7 +22,6 @@ import type {
   CompiledFlowRunner,
   WorktreeRunner,
 } from '../../src/compat/retained-runtime.js';
-import { resultPath } from '../../src/runtime/result-writer.js';
 import { runFanoutStep } from '../../src/runtime/step-handlers/fanout.js';
 import type { RunState, StepHandlerContext } from '../../src/runtime/step-handlers/types.js';
 import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
@@ -31,6 +30,7 @@ import { type CompiledFlowId, RunId } from '../../src/schemas/ids.js';
 import { RunResult } from '../../src/schemas/result.js';
 import { Snapshot } from '../../src/schemas/snapshot.js';
 import type { TraceEntry } from '../../src/schemas/trace-entry.js';
+import { runResultPath as resultPath } from '../../src/shared/result-path.js';
 
 const PARENT_WORKFLOW_ID = 'fanout-direct-parent' as unknown as CompiledFlowId;
 const CHILD_WORKFLOW_ID = 'fanout-direct-child' as unknown as CompiledFlowId;

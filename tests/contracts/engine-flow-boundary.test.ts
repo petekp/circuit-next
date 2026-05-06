@@ -1,7 +1,7 @@
 // Architecture boundary: src/runtime/ may not import from any
 // per-flow source. The catalog, shared types, catalog derivations,
-// and flow registries are the allowed flow infrastructure surfaces —
-// everything per-flow flows through those.
+// router/compiler, and flow registries are the allowed flow infrastructure
+// surfaces — everything per-flow flows through those.
 //
 // If this test fails, the catalog refactor is being undone: the
 // engine has grown a flow-specific import. Move the imported
@@ -22,6 +22,8 @@ const NON_FLOW_PACKAGE_DIRECTORIES = new Set(['registries']);
 const ALLOWED_WORKFLOW_IMPORT_SUFFIXES = [
   '/flows/catalog.js',
   '/flows/catalog-derivations.js',
+  '/flows/compile-schematic-to-flow.js',
+  '/flows/router.js',
   '/flows/types.js',
 ];
 

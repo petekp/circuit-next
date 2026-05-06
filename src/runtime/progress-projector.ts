@@ -14,7 +14,7 @@ import type {
 } from '../schemas/progress-event.js';
 import type { TraceEntry } from '../schemas/trace-entry.js';
 import { progressDisplay, reportProgress } from '../shared/progress-output.js';
-import { resolveRunRelative } from './run-relative-path.js';
+import { resolveRunRelative } from '../shared/run-relative-path.js';
 import type { ProgressReporter } from './runner-types.js';
 export { progressDisplay, reportProgress } from '../shared/progress-output.js';
 

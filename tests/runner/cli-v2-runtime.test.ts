@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { main, usage } from '../../src/cli/circuit.js';
 import {
   CLI_RUNTIME_ROUTING_POLICY,
+  COMPOSE_WRITER_COMPATIBILITY_POLICY,
   RUNTIME_POLICY_REASONS,
 } from '../../src/cli/runtime-compatibility-policy.js';
 import type { ComposeWriterFn } from '../../src/compat/retained-runtime.js';
@@ -278,6 +279,12 @@ function fixProofComposeExecutor(): StepExecutorV2 {
       report_schema: report.schema,
     });
     return { route: 'pass', details: { writer: step.writer, proof: 'test-fix-brief' } };
+  };
+}
+
+function failingV2Executor(message: string): StepExecutorV2 {
+  return async () => {
+    throw new Error(message);
   };
 }
 
@@ -1217,6 +1224,21 @@ describe('CLI opt-in v2 runtime', () => {
     expect(text).toContain('arbitrary fixtures/custom roots');
     expect(text).toContain('unmarked retained checkpoint folders');
     expect(text).not.toContain('enables explicitly proven candidate rows');
+  });
+
+  it('documents composeWriter as retained-only compatibility with no planned v2 hook', () => {
+    expect(COMPOSE_WRITER_COMPATIBILITY_POLICY).toMatchObject({
+      status: 'retained-runtime-only',
+      runtime: 'retained',
+      v2Hook: 'not-planned',
+      v2Customization: 'executor-injection-or-generated-reports',
+      reason: RUNTIME_POLICY_REASONS.composeWriter,
+    });
+    expect(COMPOSE_WRITER_COMPATIBILITY_POLICY.reason).toContain('executor injection');
+    expect(COMPOSE_WRITER_COMPATIBILITY_POLICY.reason).toContain('generated reports');
+    expect(COMPOSE_WRITER_COMPATIBILITY_POLICY.reason).not.toContain(
+      'equivalent compose writer hook',
+    );
   });
 
   it('runs a fresh Review invocation through v2 when CIRCUIT_V2_RUNTIME=1', async () => {
@@ -2253,6 +2275,42 @@ describe('CLI opt-in v2 runtime', () => {
     expectRetainedTrace(runFolder);
   });
 
+  it('keeps composeWriter on retained even when v2 executors are supplied', async () => {
+    const runFolder = join(runFolderBase, 'default-compose-writer-beats-v2-executors');
+    const writerError = 'composeWriter retained-runtime executor-precedence proof';
+    const v2ExecutorError = 'v2 executor should not run when composeWriter is supplied';
+    const output = await runMainDefaultJson(
+      [
+        'run',
+        'review',
+        '--goal',
+        'review with compose writer and v2 executor injection',
+        '--run-folder',
+        runFolder,
+      ],
+      {
+        relayer: relayerWithBody(REVIEW_RELAY_BODY),
+        composeWriter: () => {
+          throw new Error(writerError);
+        },
+        v2Executors: {
+          compose: failingV2Executor(v2ExecutorError),
+          relay: failingV2Executor(v2ExecutorError),
+        },
+      },
+    );
+
+    const result = RunResult.parse(
+      JSON.parse(readFileSync(join(runFolder, 'reports', 'result.json'), 'utf8')),
+    );
+    expect(output).toMatchObject({ flow_id: 'review', outcome: 'aborted' });
+    expect(output.runtime).toBeUndefined();
+    expect(output.runtime_reason).toBeUndefined();
+    expect(result.reason).toContain(writerError);
+    expect(result.reason).not.toContain(v2ExecutorError);
+    expectRetainedTrace(runFolder);
+  });
+
   it('keeps candidate diagnostics plus composeWriter on the retained runtime', async () => {
     const runFolder = join(runFolderBase, 'candidate-compose-writer-retained');
     const writerError = 'composeWriter candidate retained proof';
@@ -2671,8 +2729,9 @@ describe('CLI opt-in v2 runtime', () => {
     expectV2Trace(runFolder);
   });
 
-  it('fails closed when strict v2 opt-in is combined with composeWriter', async () => {
+  it('fails closed when strict v2 opt-in is combined with composeWriter and v2 executors', async () => {
     const runFolder = join(runFolderBase, 'strict-compose-writer-rejected');
+    const v2ExecutorError = 'strict v2 executor should not bypass composeWriter policy';
     const restoreStrict = writeV2Runtime('1');
     const restoreShowRuntimeDecision = writeShowRuntimeDecision(undefined);
     const restoreCandidate = writeV2RuntimeCandidate(undefined);
@@ -2691,8 +2750,65 @@ describe('CLI opt-in v2 runtime', () => {
           {
             relayer: relayerWithBody(REVIEW_RELAY_BODY),
             composeWriter: () => undefined,
+            v2Executors: {
+              compose: failingV2Executor(v2ExecutorError),
+              relay: failingV2Executor(v2ExecutorError),
+            },
             now: deterministicNow(Date.UTC(2026, 4, 3, 20, 0, 0)),
             runId: '89000000-0000-4000-8000-000000000002',
+            configHomeDir: join(runFolderBase, 'empty-home'),
+            configCwd: process.cwd(),
+          },
+        ),
+      ).rejects.toThrow(RUNTIME_POLICY_REASONS.composeWriter);
+      expect(captured).toBe('');
+    } finally {
+      process.stdout.write = origWrite;
+      restoreAll([
+        restoreStrict,
+        restoreShowRuntimeDecision,
+        restoreCandidate,
+        restoreDisabled,
+        restoreGeneratedMirrorRoot,
+      ]);
+    }
+    expect(existsSync(runFolder)).toBe(false);
+  });
+
+  it('fails closed for composeWriter when strict v2, rollback, and v2 executors are all present', async () => {
+    const runFolder = join(runFolderBase, 'strict-rollback-compose-writer-rejected');
+    const v2ExecutorError = 'strict rollback v2 executor should not bypass composeWriter policy';
+    const restoreStrict = writeV2Runtime('1');
+    const restoreShowRuntimeDecision = writeShowRuntimeDecision(undefined);
+    const restoreCandidate = writeV2RuntimeCandidate(undefined);
+    const restoreDisabled = writeDisableV2Runtime('1');
+    const restoreGeneratedMirrorRoot = writeGeneratedFlowMirrorRoot(undefined);
+    let captured = '';
+    const origWrite = process.stdout.write;
+    process.stdout.write = ((chunk: string | Uint8Array): boolean => {
+      captured += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+      return true;
+    }) as typeof process.stdout.write;
+    try {
+      await expect(
+        main(
+          [
+            'run',
+            'review',
+            '--goal',
+            'strict v2 plus rollback with compose writer',
+            '--run-folder',
+            runFolder,
+          ],
+          {
+            relayer: relayerWithBody(REVIEW_RELAY_BODY),
+            composeWriter: () => undefined,
+            v2Executors: {
+              compose: failingV2Executor(v2ExecutorError),
+              relay: failingV2Executor(v2ExecutorError),
+            },
+            now: deterministicNow(Date.UTC(2026, 4, 3, 20, 0, 0)),
+            runId: '89000000-0000-4000-8000-000000000003',
             configHomeDir: join(runFolderBase, 'empty-home'),
             configCwd: process.cwd(),
           },

@@ -124,4 +124,4 @@ as literal user-controlled text when constructing shell commands.
 - `src/flows/fix/contract.md` (Fix report contract)
 - `docs/contracts/compiled-flow.md` (compiled flow shape)
 - `src/cli/circuit.ts` (current CLI flags + per-mode flow file resolution)
-- `src/runtime/router.ts` (router bypass behavior for explicit flow names)
+- `src/flows/router.ts` (router bypass behavior for explicit flow names)

@@ -1,14 +1,17 @@
 # Circuit v2 Connector And Materializer Ownership Plan
 
-Phase 4.18 is a planning checkpoint. It does not move connector subprocess
-modules, relay materialization, registry code, selector behavior, or checkpoint
-resume ownership.
+Phase 4.18 was the original planning checkpoint. Phase 5.32 moved connector
+subprocess modules and relay materialization to neutral ownership after focused
+review. This document now records the current boundary: implementations live in
+`src/connectors/**`, while old `src/runtime/connectors/**` paths remain
+compatibility re-exports.
 
 The low-risk helper moves are complete:
 
 - relay data/hash lives in `src/shared/connector-relay.ts`;
 - connector parsing/model helpers live in `src/shared/connector-helpers.ts`;
-- `src/runtime/connectors/shared.ts` is now a compatibility re-export surface.
+- `src/connectors/shared.ts` is the neutral connector helper barrel;
+- `src/runtime/connectors/shared.ts` remains a compatibility re-export surface.
 
 The remaining connector files are production safety boundaries, not cheap
 namespace cleanup.
@@ -17,11 +20,11 @@ namespace cleanup.
 
 | File | Current consumers | Safety contract | On-disk / trace contract | Evidence | Disposition |
 |---|---|---|---|---|---|
-| `src/runtime/connectors/claude-code.ts` | retained relay selection, core-v2 relay bridge, connector smoke tests, old runner tests | Owns Claude CLI argv, tool-surface restrictions, timeout and process-group kill behavior, stdout/stderr caps, provider/model/effort compatibility, JSON extraction at connector edge | Produces the shared `RelayResult` shape; does not write relay transcript files directly | `tests/runner/agent-connector-smoke.test.ts`, `tests/runner/agent-relay-roundtrip.test.ts`, `tests/runner/explore-e2e-parity.test.ts`, `tests/contracts/connector-schema.test.ts`, full `npm run verify` | Keep in `src/runtime/connectors/` until a dedicated connector-safety move is reviewed |
-| `src/runtime/connectors/codex.ts` | core-v2 relay bridge, retained relay selection, Codex connector contract tests, Codex smoke tests | Owns Codex CLI argv, read-only sandbox policy, forbidden argv checks, version capture, JSONL parse discipline, timeout and process-group kill behavior, provider/model/effort compatibility | Produces the shared `RelayResult` shape; does not write relay transcript files directly | `tests/contracts/codex-connector-schema.test.ts`, `tests/runner/codex-connector-smoke.test.ts`, `tests/runner/codex-relay-roundtrip.test.ts`, full `npm run verify` | Keep in `src/runtime/connectors/` until a dedicated connector-safety move is reviewed |
-| `src/runtime/connectors/custom.ts` | core-v2 relay bridge, retained relay selection, custom connector tests | Owns configured command invocation, prompt-file transport, temp-dir lifecycle, timeout and process-group kill behavior, output-size caps, JSON extraction at connector edge | Produces the shared `RelayResult` shape; writes temporary prompt/output files only, then removes the temp directory | `tests/runner/custom-connector-runtime.test.ts`, CLI custom connector precedence tests, full `npm run verify` | Keep in `src/runtime/connectors/` until custom connector execution policy is reviewed |
-| `src/runtime/connectors/relay-materializer.ts` | retained relay handler tests, relay provenance tests, run-relative path tests, live smoke roundtrip tests | Owns translation from validated connector result to trace entries and durable relay slots; cross-checks role/provenance consistency | Writes request, receipt, result, and optional report files; emits the durable relay transcript sequence | `tests/runner/agent-relay-roundtrip.test.ts`, `tests/runner/codex-relay-roundtrip.test.ts`, `tests/runner/runner-relay-provenance.test.ts`, `tests/runner/run-relative-path.test.ts`, `tests/runner/materializer-schema-parse.test.ts` | Keep until a materialization-contract plan proves byte-for-byte and trace-shape parity after a move |
-| `src/runtime/connectors/shared.ts` | retained runtime imports, tests that still use the old connector surface | No subprocess behavior; compatibility only | No direct writes or trace entries | `tests/runner/connector-shared-compat.test.ts`, full `npm run verify` | Keep as a wrapper until old-path imports are migrated or intentionally retained |
+| `src/connectors/claude-code.ts` | retained relay selection, core-v2 relay bridge, connector smoke tests, old runner tests | Owns Claude CLI argv, tool-surface restrictions, timeout and process-group kill behavior, stdout/stderr caps, provider/model/effort compatibility, JSON extraction at connector edge | Produces the shared `RelayResult` shape; does not write relay transcript files directly | `tests/runner/agent-connector-smoke.test.ts`, `tests/runner/agent-relay-roundtrip.test.ts`, `tests/runner/explore-e2e-parity.test.ts`, `tests/contracts/connector-schema.test.ts`, full `npm run verify` | Neutral owner after Phase 5.32 |
+| `src/connectors/codex.ts` | core-v2 relay bridge, retained relay selection, Codex connector contract tests, Codex smoke tests | Owns Codex CLI argv, read-only sandbox policy, forbidden argv checks, version capture, JSONL parse discipline, timeout and process-group kill behavior, provider/model/effort compatibility | Produces the shared `RelayResult` shape; does not write relay transcript files directly | `tests/contracts/codex-connector-schema.test.ts`, `tests/runner/codex-connector-smoke.test.ts`, `tests/runner/codex-relay-roundtrip.test.ts`, full `npm run verify` | Neutral owner after Phase 5.32 |
+| `src/connectors/custom.ts` | core-v2 relay bridge, retained relay selection, custom connector tests | Owns configured command invocation, prompt-file transport, temp-dir lifecycle, timeout and process-group kill behavior, output-size caps, JSON extraction at connector edge | Produces the shared `RelayResult` shape; writes temporary prompt/output files only, then removes the temp directory | `tests/runner/custom-connector-runtime.test.ts`, CLI custom connector precedence tests, full `npm run verify` | Neutral owner after Phase 5.32 |
+| `src/connectors/relay-materializer.ts` | retained relay handler tests, relay provenance tests, run-relative path tests, live smoke roundtrip tests | Owns translation from validated connector result to trace entries and durable relay slots; cross-checks role/provenance consistency | Writes request, receipt, result, and optional report files; emits the durable relay transcript sequence | `tests/runner/agent-relay-roundtrip.test.ts`, `tests/runner/codex-relay-roundtrip.test.ts`, `tests/runner/runner-relay-provenance.test.ts`, `tests/runner/run-relative-path.test.ts`, `tests/runner/materializer-schema-parse.test.ts` | Neutral owner after Phase 5.32 |
+| `src/runtime/connectors/*.ts` | old imports and compatibility tests | No subprocess behavior; compatibility only | No direct writes or trace entries | `tests/runner/connector-shared-compat.test.ts`, full `npm run verify` | Keep as wrappers until old-path imports are migrated or intentionally retained |
 
 ## Source Fingerprint Coverage
 
@@ -30,29 +33,43 @@ connector evidence.
 
 Codex relay fingerprint coverage includes:
 
-- `src/runtime/connectors/codex.ts`;
+- `src/connectors/codex.ts`;
 - `src/shared/connector-relay.ts`;
 - `src/shared/connector-helpers.ts`;
+- `src/connectors/shared.ts`;
+- `src/connectors/relay-materializer.ts`;
+- `src/runtime/connectors/codex.ts`;
 - `src/runtime/connectors/shared.ts`;
 - `src/runtime/connectors/relay-materializer.ts`;
 - `src/runtime/runner.ts`;
-- `src/runtime/registries/report-schemas.ts`.
+- `src/flows/registries/report-schemas.ts`.
 
 Claude/agent Explore smoke fingerprint coverage includes:
 
-- `src/runtime/connectors/claude-code.ts`;
+- `src/connectors/claude-code.ts`;
 - `src/shared/connector-relay.ts`;
 - `src/shared/connector-helpers.ts`;
+- `src/connectors/shared.ts`;
+- `src/connectors/relay-materializer.ts`;
+- `src/runtime/connectors/claude-code.ts`;
 - `src/runtime/connectors/shared.ts`;
 - `src/runtime/connectors/relay-materializer.ts`;
 - `src/runtime/runner.ts`;
-- `src/runtime/registries/report-schemas.ts`.
+- `src/flows/registries/report-schemas.ts`.
 
 That coverage means changing helper, connector, materializer, runner call-site,
 or report-schema behavior invalidates the smoke evidence. Keep these lists in
 sync with any future connector or materializer move.
 
-## Why Not Move The Subprocess Modules Now
+## What Phase 5.32 Changed
+
+Phase 5.32 moved the subprocess connectors and relay materializer to
+`src/connectors/**`, changed core-v2 and retained relay call sites to import the
+neutral paths, and left `src/runtime/connectors/**` as compatibility
+re-exports. The move keeps source fingerprint coverage bound to the real
+neutral implementation files and the old wrappers.
+
+## Why The Move Needed Review
 
 The subprocess modules are capability boundaries. Moving them risks changing:
 
@@ -65,11 +82,10 @@ The subprocess modules are capability boundaries. Moving them risks changing:
 - custom connector temp-file lifecycle;
 - source fingerprint evidence.
 
-A future move needs a dedicated packet that proves the new path preserves those
-contracts. It should include real or controlled connector smoke evidence and
-contract tests, not just import rewrites.
+The Phase 5.32 review packet approved a behavior-preserving move with those
+guardrails.
 
-## Why Not Move The Materializer Now
+## Why The Materializer Move Needed Review
 
 `relay-materializer.ts` owns the durable relay transcript and on-disk relay slot
 shape. A move can affect:
@@ -81,33 +97,33 @@ shape. A move can affect:
 - role/provenance cross-validation;
 - schema-validated report materialization assumptions.
 
-That is more than namespace cleanup. A future materializer move should start
-with explicit golden trace/on-disk contract tests, then move the file with a
-compatibility wrapper.
+That is more than namespace cleanup. Phase 5.32 moved it only after preserving
+materializer tests, connector roundtrip fingerprints, run-relative path checks,
+and compatibility wrappers.
 
 ## Recommended Position
 
 Recommendation for this checkpoint:
 
 ```text
-A. Keep connector subprocess and relay materializer modules in
-   src/runtime/connectors for now.
+A. Keep connector subprocess and relay materializer implementations in
+   src/connectors, with src/runtime/connectors as compatibility wrappers.
 ```
 
-Do not start options B, C, or D yet:
+Do not start these adjacent moves in the same slice:
 
 ```text
-B. Move relay materializer to a neutral connector/materialization module.
-C. Move connector subprocess modules to a neutral connector module.
-D. Move registries to a neutral flow-package index module.
+B. Change connector subprocess behavior or permissions.
+C. Change relay transcript/materialization shape.
+D. Change router/compiler behavior.
+E. Delete old runtime connector wrappers.
 ```
-
-Options B and C need a connector-safety review. Option D belongs to the registry
-ownership plan.
 
 ## Future Move Requirements
 
-Before moving connector subprocess modules or relay materialization, require:
+Phase 5.33 moved router/compiler implementation ownership to `src/flows/**`.
+Before changing connector subprocess behavior, relay materialization shape, or
+old-path compatibility, require:
 
 - full import graph for connector and materializer references;
 - unchanged connector source fingerprint coverage;

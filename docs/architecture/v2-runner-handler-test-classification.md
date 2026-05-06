@@ -5,7 +5,14 @@ resume implementation, retained-resume shrink, or old runtime deletion.
 Phase 4.39 refreshes the same map after Phase 4.37 extracted retained
 checkpoint resume preparation into `src/runtime/checkpoint-resume.ts` and
 Phase 4.38 recommended stopping further runner shrinkage for now.
-Phase 4.41 adds a focused helper test for the extracted terminal verdict rule.
+Phase 4.41 adds a focused helper test for the extracted terminal verdict rule,
+and Phase 5.37 moves that pure helper to `src/shared/terminal-verdict.ts` while
+keeping the old runtime path as a compatibility re-export. Phase 5.38 moves the
+pure fanout join-policy helper to `src/shared/fanout-join-policy.ts`, with the
+old retained fanout path kept as a compatibility re-export. Phase 5.39 moves
+the pure recovery route priority helper to `src/shared/recovery-route.ts`, with
+the old retained route helper path kept as a compatibility re-export. Phase
+5.40 moves the generic path-safe JSON report helper to `src/shared/json-report.ts`.
 Phase 5.5 adds the current deletion-readiness conclusion: no retained runner or
 handler test is obsolete. Phase 5.15 starts moving accidental test-only type
 imports to shared/facade modules, but it does not delete retained tests or
@@ -14,7 +21,10 @@ tests so old runner imports are value-level execution/helper calls, while relay
 and retained callback/data types come from shared or facade modules. Phase 5.16
 adds more v2 twins for relay recovery, report gating, and connector invocation
 failure behavior, while keeping the retained tests live. Phase 5.17 adds strict
-v2 final-result proof for executor throws and pass-route cycles.
+v2 final-result proof for executor throws and pass-route cycles. Phase 5.32
+moves connector subprocess modules and relay materialization to neutral
+`src/connectors/**` ownership, while keeping old runtime connector import paths
+as compatibility wrappers.
 
 No code moves are approved by this document.
 
@@ -27,13 +37,14 @@ No code moves are approved by this document.
 | old-runtime oracle | Tests behavior that v2 has some coverage for, but where the retained runtime remains the comparison oracle or fallback path. |
 | migrate to v2 later | Useful behavior to express through core-v2 tests once the target owner is ready. Do not delete yet. |
 | compatibility import | Imports old runtime type/helper surfaces but does not primarily test old execution. Migrate imports only when the old surface is intentionally retired. |
+| shared helper proof | Tests pure shared behavior used by retained and v2 implementations. Keep while both engines depend on the helper. |
 | delete only after obsolete | No current file is in this bucket. |
 
 ## Phase 5.5 Four-Bucket Summary
 
 | Bucket | Current disposition |
 |---|---|
-| retained fallback coverage | Keep. This includes retained/v1 checkpoint resume, rollback, unsupported rows, retained run folder status/progress, connector/materializer fallback, handoff run-backed continuity, and old import compatibility. |
+| retained fallback coverage | Keep. This includes retained/v1 checkpoint resume, rollback, unsupported rows, retained run folder status/progress, connector/materializer compatibility wrappers, handoff run-backed continuity, and old import compatibility. |
 | oracle coverage | Keep. Direct handler tests, flow runtime wiring tests, report writer tests, sub-run/fanout recursion tests, and fanout join-policy property tests still compare behavior v2 must preserve or deliberately retire. |
 | migrated to v2 | No retained runner or handler test moves to this bucket yet. V2 coverage exists, but it does not retire retained fallback/oracle proof. |
 | obsolete candidate | None. |
@@ -63,7 +74,7 @@ safe.
 | `tests/runner/verification-handler-direct.test.ts` | verification | old-runtime oracle | Tests retained verification error paths and trace sequence invariants. |
 | `tests/runner/sub-run-handler-direct.test.ts` | sub-run | old-runtime oracle | Tests retained sub-run pre-execution aborts, child execution failures, verdict evaluation, and trace behavior. |
 | `tests/runner/fanout-handler-direct.test.ts` | fanout | old-runtime oracle | Tests retained fanout pre-execution aborts, branch failures, join policies, and trace sequence invariants. |
-| `tests/properties/visible/fanout-join-policy.test.ts` | fanout helper | old-runtime oracle | Tests join-policy behavior that both retained and v2 fanout paths should respect. |
+| `tests/properties/visible/fanout-join-policy.test.ts` | fanout helper | shared helper proof | Tests shared join-policy behavior used by retained and v2 fanout paths, plus the old retained path compatibility re-export. |
 
 Decision: do not delete direct handler tests yet. They are still the clearest
 low-level proof for retained fallback and for behaviors v2 must preserve.
@@ -79,7 +90,7 @@ low-level proof for retained fallback and for behaviors v2 must preserve.
 | `tests/runner/push-sequence-authority.test.ts` | retained product fallback | Proves retained push sequencing is the trace sequence authority. |
 | `tests/runner/terminal-outcome-mapping.test.ts` | retained product fallback | Proves terminal route mapping for retained runs. |
 | `tests/runner/terminal-verdict-derivation.test.ts` | retained product fallback | Proves retained result verdict derivation. |
-| `tests/runner/terminal-verdict-helper.test.ts` | retained product fallback | Proves the pure terminal admitted verdict helper now called by the retained close tail. |
+| `tests/runner/terminal-verdict-helper.test.ts` | retained product fallback | Proves the shared terminal admitted verdict helper and old runtime compatibility re-export used by the retained close tail. |
 | `tests/runner/check-evaluation.test.ts` | retained product fallback | Proves retained check evaluation and route behavior through the full runner loop. |
 | `tests/runner/relay-invocation-failure.test.ts` | retained product fallback | Proves retained relay invocation failures close safely. |
 | `tests/runner/run-relative-path.test.ts` | retained product fallback | Proves retained runner rejects unsafe run-relative reads/writes. |
@@ -122,7 +133,7 @@ for supported paths and retained fallback policy is narrowed.
 
 | Test | Classification | Why keep |
 |---|---|---|
-| `tests/runner/materializer-schema-parse.test.ts` | retained product fallback | Exercises relay materialization through retained runner; materializer remains production safety infrastructure. |
+| `tests/runner/materializer-schema-parse.test.ts` | retained product fallback | Exercises relay materialization through retained runner; materializer implementation now lives in `src/connectors/**` and remains production safety infrastructure. |
 | `tests/runner/agent-relay-roundtrip.test.ts` | retained product fallback | Uses retained bootstrap/append helpers for relay roundtrip proof. |
 | `tests/runner/codex-relay-roundtrip.test.ts` | retained product fallback | Uses retained bootstrap/append helpers and fingerprints `src/runtime/runner.ts`. |
 | `tests/runner/runner-relay-provenance.test.ts` | retained product fallback | Proves retained relay provenance through `runCompiledFlow`. |
@@ -130,8 +141,9 @@ for supported paths and retained fallback policy is narrowed.
 | `tests/runner/compose-builder-registry.test.ts` | old-runtime oracle | Proves registry writer integration through retained runner. |
 | `tests/runner/close-builder-registry.test.ts` | old-runtime oracle | Proves close writer registry integration through retained runner. |
 
-Decision: do not use these as a reason to move connector subprocess modules or
-registries. They prove those boundaries remain live.
+Decision: do not use these as a reason to delete old connector wrappers, change
+connector behavior, or move registries. They prove those boundaries remain
+live.
 
 ## Compatibility Import Tests
 
@@ -149,6 +161,11 @@ Phase 5.15 also moved casual `sha256Hex` helper imports to
 `src/shared/connector-relay.ts`, leaving
 `tests/runner/connector-shared-compat.test.ts` as the explicit old-path
 compatibility proof for `src/runtime/connectors/shared.ts`.
+
+Phase 5.32 moves connector subprocess modules and relay materialization to
+`src/connectors/**`. Tests now import real connector implementations from the
+neutral path, while `tests/runner/connector-shared-compat.test.ts` proves old
+`src/runtime/connectors/**` paths still re-export the same implementations.
 
 Phase 5.19 moves retained execution calls behind the retained compatibility
 facade across the runner/contract test suite. Tests no longer import
@@ -173,6 +190,31 @@ CLI/handoff/run-status saved-folder boundary. The broad
 `src/compat/retained-runtime.ts` still re-exports those helpers for compatibility
 but should not be the default import path for new saved-folder test code.
 
+Phase 5.34 extends that guard posture to retained trace/status/checkpoint
+internals. Tests that only need retained trace reads should use
+`src/compat/retained-checkpoint-folders.ts`; direct imports from retained
+trace-reader/writer, reducer, snapshot, progress projector, checkpoint resume,
+append-and-derive, or checkpoint handler modules must stay explicit old-oracle
+or old-path proof.
+
+Phase 5.38 moves the fanout join-policy property test to the shared helper path
+and keeps an explicit assertion that the old retained fanout export still
+points at the same helper.
+
+Phase 5.39 adds `tests/runner/recovery-route-compat.test.ts` as the explicit
+compatibility proof for shared recovery route priority. The test keeps retained
+old-path and core-v2 adapter behavior tied to the shared helper.
+
+Phase 5.40 adds `tests/runner/json-report-compat.test.ts` as the explicit
+compatibility proof for the path-safe JSON report helper. Retained handlers now
+import the shared helper directly; the old retained handler helper path remains
+a wrapper.
+
+Phase 5.41 adds `tests/runner/fanout-aggregate-compat.test.ts` as the explicit
+compatibility proof for fanout aggregate report body construction. Retained
+fanout and core-v2 fanout now both delegate to `src/shared/fanout-aggregate-report.ts`;
+the old retained aggregate helper path remains a wrapper.
+
 Decision: continue moving accidental type/helper imports to neutral modules as
 low-risk implementation work. Keep explicit old-path compatibility tests and
 tests that intentionally execute `runCompiledFlow(...)` through the retained
@@ -184,12 +226,31 @@ compatibility facade.
 |---|---|---|
 | `tests/core-v2/control-loop-v2.test.ts` | `tests/runner/terminal-outcome-mapping.test.ts` | Core-v2 maps `@complete`, `@stop`, `@handoff`, and `@escalate` to the retained terminal outcome vocabulary and writes matching final results. |
 | `tests/core-v2/control-loop-v2.test.ts` | `tests/runner/terminal-outcome-mapping.test.ts` | Core-v2 executes rich checkpoint route labels through their declared routes and bounds retry loops with `budgets.max_attempts`. |
+| `tests/core-v2/control-loop-v2.test.ts` | `tests/runner/checkpoint-handler-direct.test.ts` | Core-v2 checkpoint auto-resolution failures emit a request, `check.evaluated`/fail, and `step.aborted` without writing `checkpoint.resolved`. |
 | `tests/core-v2/control-loop-v2.test.ts` | `tests/runner/check-evaluation.test.ts` | Core-v2 admits the actual connector verdict from the relay body, including non-first `check.pass` members, and rejects malformed or unaccepted verdicts without carrying them into the final result. |
+| `tests/core-v2/control-loop-v2.test.ts` | `tests/runner/relay-handler-direct.test.ts` | Core-v2 rejects relay result shape edge cases, including array bodies, `null` bodies, and empty verdict strings, without admitting a final verdict. |
+| `tests/core-v2/control-loop-v2.test.ts` | `tests/runner/relay-handler-direct.test.ts`, `tests/runner/check-evaluation.test.ts`, and `tests/runner/relay-invocation-failure.test.ts` | Core-v2 production relay paths record ordered transcript evidence for admitted checks, failed checks, and connector throws while keeping final verdict admission strict. |
 | `tests/core-v2/control-loop-v2.test.ts` and `tests/core-v2/connectors-v2.test.ts` | `tests/runner/runner-relay-provenance.test.ts` and `tests/runner/runner-relay-connector-identity.test.ts` | Core-v2 production relay traces carry connector identity plus the connector resolution source, and the resolver preserves provenance through default, role, explicit, and custom connector decisions. |
 | `tests/core-v2/control-loop-v2.test.ts` | `tests/runner/terminal-outcome-mapping.test.ts` | Core-v2 routes failed relay checks through declared recovery routes without admitting the rejected verdict into the final result. |
 | `tests/core-v2/control-loop-v2.test.ts` | `tests/runner/check-evaluation.test.ts` | Core-v2 keeps relay transcript files for failed checks, omits the canonical admitted report and `relay.completed.report_path`, and writes both only after relay admission passes. |
 | `tests/core-v2/control-loop-v2.test.ts` | `tests/runner/relay-invocation-failure.test.ts` | Core-v2 connector invocation failures recover through a declared route when available, otherwise abort cleanly without an admitted final verdict. |
 | `tests/core-v2/control-loop-v2.test.ts` | `tests/runner/verification-handler-direct.test.ts` | Core-v2 verification pre-write failures emit `check.evaluated`/fail, abort without `step.report_written`, and do not write the canonical verification report. |
+| `tests/core-v2/sub-run-v2.test.ts` | `tests/runner/sub-run-handler-direct.test.ts` | Core-v2 sub-runs fail closed for missing resolvers, wrong resolved flow ids, child invocation failures, and missing child verdicts while preserving child result evidence where available. |
+| `tests/core-v2/sub-run-v2.test.ts` | `tests/runner/sub-run-handler-direct.test.ts` | Core-v2 sub-runs now record resolver throws as explicit check failures and copy malformed child result evidence before rejecting invalid child result bodies. |
+| `tests/core-v2/sub-run-v2.test.ts` | `tests/runner/sub-run-handler-direct.test.ts` | Core-v2 sub-runs do not admit an otherwise allowed child verdict when the child run closes non-complete, so aborted child results do not leak into the parent final verdict. |
+| `tests/core-v2/sub-run-v2.test.ts` | `tests/runner/sub-run-handler-direct.test.ts` | Core-v2 sub-runs record invalid child compiled-flow bytes from the resolver as explicit check failures before `sub_run.started`. |
+| `tests/core-v2/sub-run-v2.test.ts` | `tests/runner/sub-run-handler-direct.test.ts` | Core-v2 sub-runs reject divergent `writes.report` and `writes.result` paths before child start, emit check failure evidence, and avoid invoking the child runner. |
+| `tests/core-v2/core-v2-baseline.test.ts` | `tests/runner/sub-run-handler-direct.test.ts` | Core-v2 final result selection ignores non-complete `sub_run.completed` verdict traces even when older/custom traces lack `data.admitted: false`. |
+| `tests/core-v2/fanout-v2.test.ts` | `tests/runner/fanout-handler-direct.test.ts` | Core-v2 dynamic fanout expansion failures abort before `fanout.started`, do not call relay branches, and do not write the aggregate. |
+| `tests/core-v2/fanout-v2.test.ts` | `tests/runner/fanout-handler-direct.test.ts` | Core-v2 sub-run fanout branch failures from worktree provisioning throws and child runner throws record aborted branch completions with `<no-verdict>`, let sibling branches finish under `continue-others`, and fail the disjoint-merge join with evidence. |
+| `tests/core-v2/fanout-v2.test.ts` | `tests/runner/fanout-handler-direct.test.ts` | Core-v2 disjoint-merge fanout fails when completed branches report overlapping changed files, records the file-conflict reason, and still cleans up branch worktrees. |
+| `tests/core-v2/fanout-v2.test.ts` | `tests/properties/visible/fanout-join-policy.test.ts` | Core-v2 disjoint-merge fanout fails when changed-file discovery throws after branches complete, records the `file-disjoint validation failed` reason, and still cleans up branch worktrees. |
+| `tests/core-v2/fanout-v2.test.ts` | `tests/runner/fanout-handler-direct.test.ts` and `tests/properties/visible/fanout-join-policy.test.ts` | Core-v2 fanout executor wiring carries pick-winner success/failure, aggregate-only failure, and resolver-throw branch failures into aggregate reports, `fanout.joined`, `check.evaluated`, and final outcomes. |
+| `tests/core-v2/fanout-v2.test.ts` | `tests/runner/fanout-handler-direct.test.ts` and `tests/properties/visible/fanout-join-policy.test.ts` | Core-v2 fanout executor wiring carries aggregate-only success with parseable non-admitted branch verdicts and abort-all short-circuiting through trace evidence, aggregate reports, and final outcomes. |
+| `tests/core-v2/fanout-v2.test.ts` | `tests/runner/fanout-handler-direct.test.ts` | Core-v2 successful sub-run fanout records branch start/completion, aggregate report writing, join evidence, check pass, step completion, and run closure in order. |
+| `tests/core-v2/sub-run-v2.test.ts` | `tests/runner/sub-run-handler-direct.test.ts` | Core-v2 sub-runs reject a missing child runner before `sub_run.started`, emit `check.evaluated` failure evidence, and close cleanly. |
+| `tests/core-v2/control-loop-v2.test.ts` | `tests/runner/terminal-verdict-derivation.test.ts` | Core-v2 final result selection uses the later admitted relay verdict when multiple relay verdicts are admitted before `@complete`. |
+| `tests/core-v2/control-loop-v2.test.ts` | `tests/runner/terminal-verdict-derivation.test.ts` | Core-v2 omits previously admitted relay verdicts from non-complete final results, matching the retained/shared terminal verdict contract. |
 | `tests/core-v2/core-v2-baseline.test.ts` | `tests/runner/handler-throw-recovery.test.ts` | Core-v2 executor throws close cleanly, write a parseable aborted `reports/result.json`, and do not write `step.completed` for the failed step. |
 | `tests/core-v2/core-v2-baseline.test.ts` | `tests/runner/pass-route-cycle-guard.test.ts` | Core-v2 pass-route cycles abort before step completion and write a parseable final result with the route-cycle reason. |
 
@@ -223,7 +284,7 @@ Not migration candidates yet:
 - checkpoint resume tests;
 - trace/snapshot round-trip tests;
 - progress projector tests;
-- connector subprocess/materializer tests;
+- connector subprocess/materializer behavior tests;
 - registry integration tests.
 
 Those still prove retained product behavior.
@@ -242,9 +303,10 @@ The earlier next-step options have now landed:
   `src/runtime/checkpoint-resume.ts`.
 - Phase 4.38 mapped the remaining runner boundary and recommended stopping
   runner shrinkage for now.
-- Phase 4.41 extracted only pure terminal verdict derivation to
-  `src/runtime/terminal-verdict.ts`; close/result finalization remains in
-  `src/runtime/runner.ts`.
+- Phase 4.41 extracted only pure terminal verdict derivation, and Phase 5.37
+  moved that implementation to `src/shared/terminal-verdict.ts` with
+  `src/runtime/terminal-verdict.ts` kept as a compatibility wrapper;
+  close/result finalization remains in `src/runtime/runner.ts`.
 
 Current recommendation: keep these tests as live product and oracle evidence.
 Any future close/result finalization move still needs focused review first. Do

@@ -21,7 +21,10 @@ afterEach(async () => {
   await rm(baseDir, { recursive: true, force: true });
 });
 
-function parentFlow(pass: readonly string[] = ['accept']): ExecutableFlowV2 {
+function parentFlow(
+  pass: readonly string[] = ['accept'],
+  options: { readonly reportPath?: string } = {},
+): ExecutableFlowV2 {
   return {
     id: 'parent-test',
     version: '0.1.0',
@@ -38,7 +41,10 @@ function parentFlow(pass: readonly string[] = ['accept']): ExecutableFlowV2 {
         entryMode: 'default',
         goal: 'child goal',
         depth: 'standard',
-        writes: { result: { path: 'reports/child-result.json' } },
+        writes: {
+          result: { path: 'reports/child-result.json' },
+          ...(options.reportPath === undefined ? {} : { report: { path: options.reportPath } }),
+        },
         check: {
           kind: 'result_verdict',
           source: { kind: 'sub_run_result', ref: 'result' },
@@ -145,7 +151,43 @@ function stubChildRunnerWithResultBody(body: {
       ...(body.verdict === undefined ? {} : { verdict: body.verdict }),
     });
     await writeFile(resultPath, `${JSON.stringify(parsed, null, 2)}\n`, 'utf8');
-    return { ...parsed, resultPath };
+    return {
+      schema_version: parsed.schema_version,
+      run_id: parsed.run_id,
+      flow_id: parsed.flow_id,
+      goal: parsed.goal,
+      outcome: parsed.outcome,
+      summary: parsed.summary,
+      closed_at: parsed.closed_at,
+      trace_entries_observed: parsed.trace_entries_observed,
+      manifest_hash: parsed.manifest_hash,
+      ...(parsed.reason === undefined ? {} : { reason: parsed.reason }),
+      ...(parsed.verdict === undefined ? {} : { verdict: parsed.verdict }),
+      resultPath,
+    };
+  };
+}
+
+function stubChildRunnerWithRawResult(
+  resultBody: string,
+  outcome: 'complete' | 'aborted' | 'stopped' | 'handoff' | 'escalated' = 'complete',
+) {
+  return async (options: CompiledFlowRunOptionsV2Like): Promise<GraphRunResultV2> => {
+    const resultPath = join(options.runDir, 'reports', 'result.json');
+    await mkdir(dirname(resultPath), { recursive: true });
+    await writeFile(resultPath, resultBody, 'utf8');
+    return {
+      schema_version: 1,
+      run_id: options.runId ?? 'child-run',
+      flow_id: 'child-test',
+      goal: options.goal,
+      outcome,
+      summary: 'child summary',
+      closed_at: new Date(0).toISOString(),
+      trace_entries_observed: 1,
+      manifest_hash: 'child-hash',
+      resultPath,
+    };
   };
 }
 
@@ -204,6 +246,81 @@ describe('core-v2 sub-run executor', () => {
     expect(entries.find((entry) => entry.kind === 'check.evaluated')?.outcome).toBe('fail');
   });
 
+  it('does not admit an allowed child verdict when the child run closes non-complete', async () => {
+    const runDir = join(baseDir, 'parent-child-aborted-run');
+    const result = await executeExecutableFlowV2(parentFlow(['accept']), {
+      runDir,
+      runId: '50000000-0000-4000-8000-000000000008',
+      goal: 'parent goal',
+      childCompiledFlowResolver: () => ({ flowBytes: childFlowBytes() }),
+      childRunner: stubChildRunner('accept', 'aborted'),
+      now: () => new Date('2026-05-03T00:00:00.000Z'),
+    });
+
+    const entries = await trace(runDir);
+    const finalResult = RunResult.parse(
+      JSON.parse(await readFile(join(runDir, 'reports', 'result.json'), 'utf8')),
+    );
+    expect(result.outcome).toBe('aborted');
+    expect(result.reason).toContain("child closed with outcome 'aborted'");
+    expect(result.verdict).toBeUndefined();
+    expect(finalResult.verdict).toBeUndefined();
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        kind: 'sub_run.completed',
+        step_id: 'child-step',
+        child_outcome: 'aborted',
+        verdict: 'accept',
+        data: { admitted: false },
+      }),
+    );
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        kind: 'check.evaluated',
+        step_id: 'child-step',
+        outcome: 'fail',
+        reason: expect.stringContaining("child closed with outcome 'aborted'"),
+      }),
+    );
+  });
+
+  it('fails before child start when writes.report diverges from writes.result', async () => {
+    const runDir = join(baseDir, 'parent-divergent-report-run');
+    let childRunnerCalls = 0;
+    const result = await executeExecutableFlowV2(
+      parentFlow(['accept'], { reportPath: 'reports/child-report.json' }),
+      {
+        runDir,
+        runId: '50000000-0000-4000-8000-000000000010',
+        goal: 'parent goal',
+        childCompiledFlowResolver: () => ({ flowBytes: childFlowBytes() }),
+        childRunner: async (options) => {
+          childRunnerCalls += 1;
+          return await stubChildRunner('accept')(options);
+        },
+        now: () => new Date('2026-05-03T00:00:00.000Z'),
+      },
+    );
+
+    const entries = await trace(runDir);
+    expect(result.outcome).toBe('aborted');
+    expect(result.reason).toContain(
+      'writes.report materialization at a path different from writes.result is not yet supported',
+    );
+    expect(childRunnerCalls).toBe(0);
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        kind: 'check.evaluated',
+        step_id: 'child-step',
+        outcome: 'fail',
+        reason: expect.stringContaining('writes.report materialization'),
+      }),
+    );
+    expect(entries).not.toContainEqual(
+      expect.objectContaining({ kind: 'sub_run.started', step_id: 'child-step' }),
+    );
+  });
+
   it('fails before child start when the resolver is missing', async () => {
     const runDir = join(baseDir, 'parent-missing-resolver-run');
     const result = await executeExecutableFlowV2(parentFlow(), {
@@ -229,6 +346,96 @@ describe('core-v2 sub-run executor', () => {
         step_id: 'child-step',
         outcome: 'fail',
         reason: expect.stringContaining('childCompiledFlowResolver is required'),
+      }),
+    );
+    expect(entries).not.toContainEqual(
+      expect.objectContaining({ kind: 'sub_run.started', step_id: 'child-step' }),
+    );
+  });
+
+  it('fails before child start when the child runner is missing', async () => {
+    const runDir = join(baseDir, 'parent-missing-child-runner-run');
+    const result = await executeExecutableFlowV2(parentFlow(), {
+      runDir,
+      runId: '50000000-0000-4000-8000-000000000011',
+      goal: 'parent goal',
+      childCompiledFlowResolver: () => ({ flowBytes: childFlowBytes() }),
+      now: () => new Date('2026-05-03T00:00:00.000Z'),
+    });
+
+    const entries = await trace(runDir);
+    expect(result.outcome).toBe('aborted');
+    expect(result.reason).toContain('childRunner is required');
+    expect(entries.map((entry) => entry.kind)).toEqual([
+      'run.bootstrapped',
+      'step.entered',
+      'check.evaluated',
+      'step.aborted',
+      'run.closed',
+    ]);
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        kind: 'check.evaluated',
+        step_id: 'child-step',
+        outcome: 'fail',
+        reason: expect.stringContaining('childRunner is required'),
+      }),
+    );
+    expect(entries).not.toContainEqual(
+      expect.objectContaining({ kind: 'sub_run.started', step_id: 'child-step' }),
+    );
+  });
+
+  it('fails before child start when the resolver throws', async () => {
+    const runDir = join(baseDir, 'parent-resolver-throw-run');
+    const result = await executeExecutableFlowV2(parentFlow(), {
+      runDir,
+      runId: '50000000-0000-4000-8000-000000000005',
+      goal: 'parent goal',
+      childCompiledFlowResolver: () => {
+        throw new Error('resolver blew up');
+      },
+      childRunner: stubChildRunner('accept'),
+      now: () => new Date('2026-05-03T00:00:00.000Z'),
+    });
+
+    const entries = await trace(runDir);
+    expect(result.outcome).toBe('aborted');
+    expect(result.reason).toContain('child flow resolution failed');
+    expect(result.reason).toContain('resolver blew up');
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        kind: 'check.evaluated',
+        step_id: 'child-step',
+        outcome: 'fail',
+        reason: expect.stringContaining('resolver blew up'),
+      }),
+    );
+    expect(entries).not.toContainEqual(
+      expect.objectContaining({ kind: 'sub_run.started', step_id: 'child-step' }),
+    );
+  });
+
+  it('fails before child start when the resolver returns invalid child flow bytes', async () => {
+    const runDir = join(baseDir, 'parent-invalid-child-flow-run');
+    const result = await executeExecutableFlowV2(parentFlow(), {
+      runDir,
+      runId: '50000000-0000-4000-8000-000000000009',
+      goal: 'parent goal',
+      childCompiledFlowResolver: () => ({ flowBytes: Buffer.from('not-json{{{') }),
+      childRunner: stubChildRunner('accept'),
+      now: () => new Date('2026-05-03T00:00:00.000Z'),
+    });
+
+    const entries = await trace(runDir);
+    expect(result.outcome).toBe('aborted');
+    expect(result.reason).toContain('child flow resolution returned invalid compiled flow');
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        kind: 'check.evaluated',
+        step_id: 'child-step',
+        outcome: 'fail',
+        reason: expect.stringContaining('invalid compiled flow'),
       }),
     );
     expect(entries).not.toContainEqual(
@@ -339,6 +546,61 @@ describe('core-v2 sub-run executor', () => {
         reason: expect.stringContaining("lacks a non-empty string 'verdict' field"),
       }),
     );
+  });
+
+  it('copies child result evidence but rejects malformed child result bodies', async () => {
+    const cases = [
+      {
+        name: 'invalid-json',
+        resultBody: 'not-json{{{',
+        expectedReason: /child result body did not parse as JSON/,
+        runId: '50000000-0000-4000-8000-000000000006',
+      },
+      {
+        name: 'array-json',
+        resultBody: '["accept"]',
+        expectedReason: /child result body parsed but is not a JSON object/,
+        runId: '50000000-0000-4000-8000-000000000007',
+      },
+    ] as const;
+
+    for (const testCase of cases) {
+      const runDir = join(baseDir, `parent-${testCase.name}-result-run`);
+      const result = await executeExecutableFlowV2(parentFlow(), {
+        runDir,
+        runId: testCase.runId,
+        goal: 'parent goal',
+        childCompiledFlowResolver: () => ({ flowBytes: childFlowBytes() }),
+        childRunner: stubChildRunnerWithRawResult(testCase.resultBody),
+        now: () => new Date('2026-05-03T00:00:00.000Z'),
+      });
+
+      const entries = await trace(runDir);
+      const copied = await readFile(join(runDir, 'reports', 'child-result.json'), 'utf8');
+      const finalResult = RunResult.parse(
+        JSON.parse(await readFile(join(runDir, 'reports', 'result.json'), 'utf8')),
+      );
+      expect(result.outcome, testCase.name).toBe('aborted');
+      expect(result.reason, testCase.name).toMatch(testCase.expectedReason);
+      expect(copied, testCase.name).toBe(testCase.resultBody);
+      expect(finalResult.verdict, testCase.name).toBeUndefined();
+      expect(entries, testCase.name).toContainEqual(
+        expect.objectContaining({
+          kind: 'sub_run.completed',
+          step_id: 'child-step',
+          verdict: '<no-verdict>',
+          data: { admitted: false },
+        }),
+      );
+      expect(entries, testCase.name).toContainEqual(
+        expect.objectContaining({
+          kind: 'check.evaluated',
+          step_id: 'child-step',
+          outcome: 'fail',
+          reason: expect.stringMatching(testCase.expectedReason),
+        }),
+      );
+    }
   });
 
   it('propagates relay connector and config inputs into child run options', async () => {

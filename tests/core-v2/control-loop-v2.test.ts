@@ -121,6 +121,84 @@ function relayFlowBytes(options: readonly string[] | RelayFlowFixtureOptions = [
   );
 }
 
+function multiRelayVerdictFlowBytes(): Buffer {
+  return Buffer.from(
+    JSON.stringify({
+      schema_version: '2',
+      id: 'core-v2-multi-relay-verdict',
+      version: '0.1.0',
+      purpose: 'Core-v2 control-loop fixture for terminal verdict derivation.',
+      entry: {
+        signals: { include: ['core-v2-multi-relay-verdict'], exclude: [] },
+        intent_prefixes: ['core-v2-multi-relay-verdict'],
+      },
+      entry_modes: [
+        {
+          name: 'default',
+          start_at: 'first-relay',
+          depth: 'standard',
+          description: 'Run two relay steps before closing.',
+        },
+      ],
+      stages: [
+        {
+          id: 'act-stage',
+          title: 'Act',
+          canonical: 'act',
+          steps: ['first-relay', 'second-relay'],
+        },
+      ],
+      steps: [
+        {
+          id: 'first-relay',
+          title: 'First relay',
+          protocol: 'core-v2-multi-relay-verdict@v1',
+          reads: [],
+          routes: { pass: 'second-relay' },
+          executor: 'worker',
+          kind: 'relay',
+          role: 'implementer',
+          writes: {
+            request: 'reports/first.request.txt',
+            receipt: 'reports/first.receipt.txt',
+            result: 'reports/first.result.json',
+          },
+          check: {
+            kind: 'result_verdict',
+            source: { kind: 'relay_result', ref: 'result' },
+            pass: ['intermediate'],
+          },
+        },
+        {
+          id: 'second-relay',
+          title: 'Second relay',
+          protocol: 'core-v2-multi-relay-verdict@v1',
+          reads: ['reports/first.result.json'],
+          routes: { pass: '@complete' },
+          executor: 'worker',
+          kind: 'relay',
+          role: 'implementer',
+          writes: {
+            request: 'reports/second.request.txt',
+            receipt: 'reports/second.receipt.txt',
+            result: 'reports/second.result.json',
+          },
+          check: {
+            kind: 'result_verdict',
+            source: { kind: 'relay_result', ref: 'result' },
+            pass: ['final'],
+          },
+        },
+      ],
+      stage_path_policy: {
+        mode: 'partial',
+        omits: ['frame', 'analyze', 'plan', 'verify', 'review', 'close'],
+        rationale: 'Minimal multi-relay terminal verdict derivation fixture.',
+      },
+    }),
+  );
+}
+
 function checkpointRouteFlowBytes(selection: RichCheckpointRoute): Buffer {
   const terminalByRoute: Record<RichCheckpointRoute, string> = {
     ask: '@stop',
@@ -271,6 +349,77 @@ function checkpointRetryLoopFlowBytes(): Buffer {
   );
 }
 
+function checkpointMissingSafeChoiceFlowBytes(input: {
+  readonly depth: 'standard' | 'autonomous';
+  readonly safeDefaultChoice?: string;
+  readonly safeAutonomousChoice?: string;
+}): Buffer {
+  const policy: Record<string, unknown> = {
+    prompt: 'Try to auto-resolve without the required safe choice.',
+    choices: [{ id: 'continue' }],
+  };
+  if (input.safeDefaultChoice !== undefined) {
+    policy.safe_default_choice = input.safeDefaultChoice;
+  }
+  if (input.safeAutonomousChoice !== undefined) {
+    policy.safe_autonomous_choice = input.safeAutonomousChoice;
+  }
+  return Buffer.from(
+    JSON.stringify({
+      schema_version: '2',
+      id: `core-v2-checkpoint-missing-${input.depth}`,
+      version: '0.1.0',
+      purpose: 'Core-v2 control-loop fixture for checkpoint auto-resolution failure.',
+      entry: {
+        signals: { include: ['core-v2-checkpoint-missing-safe-choice'], exclude: [] },
+        intent_prefixes: ['core-v2-checkpoint-missing-safe-choice'],
+      },
+      entry_modes: [
+        {
+          name: 'default',
+          start_at: 'checkpoint-step',
+          depth: input.depth,
+          description: 'Start directly at the checkpoint step.',
+        },
+      ],
+      stages: [
+        {
+          id: 'frame-stage',
+          title: 'Frame',
+          canonical: 'frame',
+          steps: ['checkpoint-step'],
+        },
+      ],
+      steps: [
+        {
+          id: 'checkpoint-step',
+          title: 'Missing safe choice checkpoint',
+          protocol: 'core-v2-checkpoint-missing-safe-choice@v1',
+          reads: [],
+          routes: { pass: '@complete' },
+          executor: 'orchestrator',
+          kind: 'checkpoint',
+          policy,
+          writes: {
+            request: 'reports/checkpoints/missing-safe-choice-request.json',
+            response: 'reports/checkpoints/missing-safe-choice-response.json',
+          },
+          check: {
+            kind: 'checkpoint_selection',
+            source: { kind: 'checkpoint_response', ref: 'response' },
+            allow: ['continue'],
+          },
+        },
+      ],
+      stage_path_policy: {
+        mode: 'partial',
+        omits: ['analyze', 'plan', 'act', 'verify', 'review', 'close'],
+        rationale: 'Minimal checkpoint auto-resolution failure fixture.',
+      },
+    }),
+  );
+}
+
 function verificationFlowBytes(reportSchema = 'never-registered.verification@v1'): Buffer {
   return Buffer.from(
     JSON.stringify({
@@ -339,6 +488,26 @@ function relayerWith(resultBody: string, connectorName = 'claude-code'): RelayFn
   };
 }
 
+function sequenceRelayerWith(resultBodies: readonly string[]): RelayFn {
+  let call = 0;
+  return {
+    connectorName: 'claude-code',
+    relay: async (input): Promise<RelayResult> => {
+      const resultBody = resultBodies[call++];
+      if (resultBody === undefined) {
+        throw new Error(`sequence relayer exhausted at call ${call}`);
+      }
+      return {
+        request_payload: input.prompt,
+        receipt_id: `core-v2-control-loop-relay-${call}`,
+        result_body: resultBody,
+        duration_ms: 0,
+        cli_version: 'test-relayer',
+      };
+    },
+  };
+}
+
 async function runRuntimeProofRelayCase(input: {
   readonly resultBody: string;
   readonly runId: string;
@@ -363,6 +532,29 @@ async function runRuntimeProofRelayCase(input: {
     const inspection =
       input.inspectRunDir === undefined ? undefined : await input.inspectRunDir(runDir);
     return { result, trace, resultJson, inspection };
+  });
+}
+
+async function runCompiledV1RelayCase(input: {
+  readonly flowBytes: Buffer;
+  readonly runId: string;
+  readonly goal: string;
+  readonly relayer: RelayFn;
+}) {
+  return await withTempRun('circuit-core-v2-control-loop-', async (runDir) => {
+    const result = await runCompiledFlowV2({
+      flowBytes: input.flowBytes,
+      runDir,
+      runId: input.runId,
+      goal: input.goal,
+      now: () => new Date('2026-05-06T00:00:00.000Z'),
+      relayer: input.relayer,
+    });
+    const trace = await new TraceStore(runDir).load();
+    const resultJson = RunResult.parse(
+      JSON.parse(await readFile(join(runDir, 'reports', 'result.json'), 'utf8')),
+    );
+    return { result, trace, resultJson };
   });
 }
 
@@ -486,6 +678,61 @@ describe('core-v2 control-loop parity twins', () => {
     );
   });
 
+  it('uses the later admitted relay verdict for the final result', async () => {
+    const { result, trace, resultJson } = await runCompiledV1RelayCase({
+      flowBytes: multiRelayVerdictFlowBytes(),
+      runId: 'aaaaaaaa-2222-4aaa-8aaa-aaaaaaaa2222',
+      goal: 'prove core-v2 terminal verdict derivation uses the latest admitted relay',
+      relayer: sequenceRelayerWith(['{"verdict":"intermediate"}', '{"verdict":"final"}']),
+    });
+
+    expect(result.outcome).toBe('complete');
+    expect(result.verdict).toBe('final');
+    expect(resultJson.verdict).toBe('final');
+    expect(
+      trace
+        .filter((entry) => entry.kind === 'relay.completed')
+        .map((entry) => ({ step_id: entry.step_id, verdict: entry.verdict, data: entry.data })),
+    ).toEqual([
+      { step_id: 'first-relay', verdict: 'intermediate', data: { admitted: true } },
+      { step_id: 'second-relay', verdict: 'final', data: { admitted: true } },
+    ]);
+  });
+
+  it('omits admitted relay verdicts from aborted final results', async () => {
+    const { result, trace, resultJson } = await runCompiledV1RelayCase({
+      flowBytes: multiRelayVerdictFlowBytes(),
+      runId: 'aaaaaaaa-3333-4aaa-8aaa-aaaaaaaa3333',
+      goal: 'prove core-v2 omits terminal verdicts when a later step aborts',
+      relayer: sequenceRelayerWith(['{"verdict":"intermediate"}', '{"verdict":"reject"}']),
+    });
+
+    expect(result.outcome).toBe('aborted');
+    expect(result.verdict).toBeUndefined();
+    expect(resultJson.verdict).toBeUndefined();
+    expect(
+      trace
+        .filter((entry) => entry.kind === 'relay.completed')
+        .map((entry) => ({ step_id: entry.step_id, verdict: entry.verdict, data: entry.data })),
+    ).toEqual([
+      { step_id: 'first-relay', verdict: 'intermediate', data: { admitted: true } },
+      { step_id: 'second-relay', verdict: 'reject', data: { admitted: false } },
+    ]);
+    expect(trace).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'step.aborted',
+          step_id: 'second-relay',
+          reason: expect.stringMatching(/not in check\.pass/),
+        }),
+        expect.objectContaining({
+          kind: 'run.closed',
+          outcome: 'aborted',
+        }),
+      ]),
+    );
+  });
+
   it('carries production relayer connector identity and provenance into relay.started', async () => {
     const { result, trace } = await runRuntimeProofRelayCase({
       resultBody: '{"verdict":"ok"}',
@@ -603,6 +850,72 @@ describe('core-v2 control-loop parity twins', () => {
     );
   });
 
+  it('records checkpoint auto-resolution failures when safe choices are missing', async () => {
+    const cases = [
+      {
+        name: 'standard',
+        flowBytes: checkpointMissingSafeChoiceFlowBytes({ depth: 'standard' }),
+        runId: '40000000-0000-4000-8000-000000000010',
+        reason: /cannot resolve standard depth without a declared safe default choice/,
+      },
+      {
+        name: 'autonomous',
+        flowBytes: checkpointMissingSafeChoiceFlowBytes({
+          depth: 'autonomous',
+          safeDefaultChoice: 'continue',
+        }),
+        runId: '40000000-0000-4000-8000-000000000011',
+        reason: /cannot auto-resolve autonomous depth without a declared safe autonomous choice/,
+      },
+    ] as const;
+
+    for (const testCase of cases) {
+      const { result, trace, resultJson } = await runCompiledV1BytesCase({
+        flowBytes: testCase.flowBytes,
+        runId: testCase.runId,
+        goal: `prove checkpoint ${testCase.name} missing safe choice failure`,
+      });
+
+      expect(result.outcome, testCase.name).toBe('aborted');
+      expect(result.reason, testCase.name).toMatch(testCase.reason);
+      expect(resultJson.reason, testCase.name).toBe(result.reason);
+      expect(
+        trace.map((entry) => entry.kind),
+        testCase.name,
+      ).toEqual([
+        'run.bootstrapped',
+        'step.entered',
+        'checkpoint.requested',
+        'check.evaluated',
+        'step.aborted',
+        'run.closed',
+      ]);
+      expect(trace, testCase.name).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'checkpoint.requested',
+            step_id: 'checkpoint-step',
+          }),
+          expect.objectContaining({
+            kind: 'check.evaluated',
+            step_id: 'checkpoint-step',
+            check_kind: 'checkpoint_selection',
+            outcome: 'fail',
+            reason: expect.stringMatching(testCase.reason),
+          }),
+          expect.objectContaining({
+            kind: 'step.aborted',
+            step_id: 'checkpoint-step',
+            reason: expect.stringMatching(testCase.reason),
+          }),
+        ]),
+      );
+      expect(trace).not.toContainEqual(
+        expect.objectContaining({ kind: 'checkpoint.resolved', step_id: 'checkpoint-step' }),
+      );
+    }
+  });
+
   it('does not carry rejected or malformed relay verdicts into the final result', async () => {
     const cases = [
       {
@@ -625,6 +938,27 @@ describe('core-v2 control-loop parity twins', () => {
         expectedRelayVerdict: NO_VERDICT_SENTINEL,
         expectedReason: /lacks a non-empty string 'verdict' field/,
         runId: 'dddddddd-1111-4ddd-8ddd-dddddddd1111',
+      },
+      {
+        name: 'array-body',
+        resultBody: '[]',
+        expectedRelayVerdict: NO_VERDICT_SENTINEL,
+        expectedReason: /parsed but is not a JSON object \(got array\)/,
+        runId: 'dddddddd-2222-4ddd-8ddd-dddddddd2222',
+      },
+      {
+        name: 'null-body',
+        resultBody: 'null',
+        expectedRelayVerdict: NO_VERDICT_SENTINEL,
+        expectedReason: /parsed but is not a JSON object \(got null\)/,
+        runId: 'dddddddd-3333-4ddd-8ddd-dddddddd3333',
+      },
+      {
+        name: 'empty-verdict',
+        resultBody: '{"verdict":""}',
+        expectedRelayVerdict: NO_VERDICT_SENTINEL,
+        expectedReason: /lacks a non-empty string 'verdict' field \(got empty string\)/,
+        runId: 'dddddddd-4444-4ddd-8ddd-dddddddd4444',
       },
     ] as const;
 
@@ -664,6 +998,118 @@ describe('core-v2 control-loop parity twins', () => {
         expect.objectContaining({ kind: 'step.completed', step_id: 'relay-step' }),
       );
     }
+  });
+
+  it('records production relay transcript entries in order on admitted relay checks', async () => {
+    const { result, trace, resultJson, inspection } = await runRuntimeProofRelayCase({
+      resultBody: '{"verdict":"ok"}',
+      runId: 'ffffffff-8888-4fff-8fff-ffffffff8888',
+      inspectRunDir: async (runDir) => ({
+        requestExists: existsSync(join(runDir, 'reports', 'relay.request.txt')),
+        receiptExists: existsSync(join(runDir, 'reports', 'relay.receipt.txt')),
+        resultExists: existsSync(join(runDir, 'reports', 'relay.result.json')),
+      }),
+    });
+
+    expect(result.outcome).toBe('complete');
+    expect(result.verdict).toBe('ok');
+    expect(resultJson.verdict).toBe('ok');
+    expect(inspection).toEqual({
+      requestExists: true,
+      receiptExists: true,
+      resultExists: true,
+    });
+    expect(trace.map((entry) => entry.kind)).toEqual([
+      'run.bootstrapped',
+      'step.entered',
+      'relay.started',
+      'relay.request',
+      'relay.receipt',
+      'relay.result',
+      'relay.completed',
+      'check.evaluated',
+      'step.completed',
+      'run.closed',
+    ]);
+    expect(trace).not.toContainEqual(
+      expect.objectContaining({ kind: 'step.aborted', step_id: 'relay-step' }),
+    );
+  });
+
+  it('records production relay transcript entries in order on failed relay checks', async () => {
+    const { result, trace, resultJson, inspection } = await runRuntimeProofRelayCase({
+      resultBody: '{"verdict":"reject"}',
+      runId: 'ffffffff-9999-4fff-8fff-ffffffff9999',
+      inspectRunDir: async (runDir) => ({
+        requestExists: existsSync(join(runDir, 'reports', 'relay.request.txt')),
+        receiptExists: existsSync(join(runDir, 'reports', 'relay.receipt.txt')),
+        resultExists: existsSync(join(runDir, 'reports', 'relay.result.json')),
+      }),
+    });
+
+    expect(result.outcome).toBe('aborted');
+    expect(result.verdict).toBeUndefined();
+    expect(resultJson.verdict).toBeUndefined();
+    expect(inspection).toEqual({
+      requestExists: true,
+      receiptExists: true,
+      resultExists: true,
+    });
+    expect(trace.map((entry) => entry.kind)).toEqual([
+      'run.bootstrapped',
+      'step.entered',
+      'relay.started',
+      'relay.request',
+      'relay.receipt',
+      'relay.result',
+      'relay.completed',
+      'check.evaluated',
+      'step.aborted',
+      'run.closed',
+    ]);
+    expect(trace).not.toContainEqual(
+      expect.objectContaining({ kind: 'step.completed', step_id: 'relay-step' }),
+    );
+  });
+
+  it('records production relay failure entries without completed relay evidence on connector throws', async () => {
+    const throwingRelayer: RelayFn = {
+      connectorName: 'claude-code',
+      relay: async () => {
+        throw new Error('connector sequence fail');
+      },
+    };
+    const { result, trace, resultJson, inspection } = await runRuntimeProofRelayCase({
+      resultBody: '{"verdict":"unused"}',
+      runId: 'ffffffff-aaaa-4fff-8fff-ffffffffaaaa',
+      relayer: throwingRelayer,
+      inspectRunDir: async (runDir) => ({
+        requestExists: existsSync(join(runDir, 'reports', 'relay.request.txt')),
+        receiptExists: existsSync(join(runDir, 'reports', 'relay.receipt.txt')),
+        resultExists: existsSync(join(runDir, 'reports', 'relay.result.json')),
+      }),
+    });
+
+    expect(result.outcome).toBe('aborted');
+    expect(result.reason).toContain('connector sequence fail');
+    expect(resultJson.verdict).toBeUndefined();
+    expect(inspection).toEqual({
+      requestExists: true,
+      receiptExists: false,
+      resultExists: false,
+    });
+    expect(trace.map((entry) => entry.kind)).toEqual([
+      'run.bootstrapped',
+      'step.entered',
+      'relay.started',
+      'relay.request',
+      'relay.failed',
+      'step.aborted',
+      'run.closed',
+    ]);
+    expect(trace).not.toContainEqual(
+      expect.objectContaining({ kind: 'relay.completed', step_id: 'relay-step' }),
+    );
   });
 
   it('routes a failed relay check through a declared recovery route without admitting its verdict', async () => {

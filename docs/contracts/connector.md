@@ -123,7 +123,7 @@ invariant; tested in `tests/contracts/schema-parity.test.ts`.
     only that config override and rejects incompatible providers or
     unsupported effort tiers before spawn.
     Slice 45 (P2.6) binds the mechanism and lands
-    `src/runtime/connectors/codex.ts`; ADR-0009 §Consequences.Enabling is
+    `src/connectors/codex.ts`; ADR-0009 §Consequences.Enabling is
     the governance authority (§Enabling explicitly names `codex` as the
     next connector after `claude-code`).
   `codex-isolated` is a planned future connector, not a current
@@ -172,7 +172,7 @@ invariant; tested in `tests/contracts/schema-parity.test.ts`.
   `OUTPUT_FILE`. The connector's exit code distinguishes success (0)
   from failure (non-zero). This is the contract every custom connector
   must satisfy. Enforced at `src/schemas/connector.ts` and
-  `src/runtime/connectors/custom.ts`.
+  `src/connectors/custom.ts`.
 
   Minimal custom connector example:
 

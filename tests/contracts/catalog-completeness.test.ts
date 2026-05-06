@@ -28,9 +28,15 @@ const WORKFLOWS_ROOT = 'src/flows';
 const ROOT_COMMANDS = ['create', 'handoff', 'migrate', 'run', 'sweep'] as const;
 
 // Entries at the flows root that are NOT flow-package directories
-// (catalog, types, and shared flow infrastructure). Anything else
-// under src/flows/ is expected to be a package.
-const NON_PACKAGE_FILES = new Set(['catalog.ts', 'catalog-derivations.ts', 'types.ts']);
+// (catalog, router/compiler, types, and shared flow infrastructure).
+// Anything else under src/flows/ is expected to be a package.
+const NON_PACKAGE_FILES = new Set([
+  'catalog.ts',
+  'catalog-derivations.ts',
+  'compile-schematic-to-flow.ts',
+  'router.ts',
+  'types.ts',
+]);
 const NON_PACKAGE_DIRECTORIES = new Set(['registries']);
 
 function isFile(path: string): boolean {

@@ -7,11 +7,8 @@ import {
   appendAndDeriveRetainedTrace as appendAndDerive,
   bootstrapRetainedRun as bootstrapRun,
 } from '../../src/compat/retained-runtime.js';
-import {
-  type ClaudeCodeRelayResult,
-  relayClaudeCode,
-} from '../../src/runtime/connectors/claude-code.js';
-import { materializeRelay } from '../../src/runtime/connectors/relay-materializer.js';
+import { type ClaudeCodeRelayResult, relayClaudeCode } from '../../src/connectors/claude-code.js';
+import { materializeRelay } from '../../src/connectors/relay-materializer.js';
 import { reduce } from '../../src/runtime/reducer.js';
 import { readRunTrace } from '../../src/runtime/trace-reader.js';
 import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';

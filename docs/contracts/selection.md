@@ -139,7 +139,7 @@ Closes Codex LOW #12 (enforcement-location claim drift).
   `low | medium | high | xhigh`; `none` and `minimal` fail before
   subprocess spawn until an connector has explicit support for those
   values. Enforced at `src/schemas/selection-policy.ts` for shape and
-  `src/runtime/connectors/*.ts` for connector-specific honoring.
+  `src/connectors/*.ts` for connector-specific honoring.
 
 - **SEL-I5 — `ResolvedSelection` is the effective record at relay
   time.** `ResolvedSelection` carries `{model?, effort?, skills:

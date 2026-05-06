@@ -1,16 +1,16 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { LayeredConfig as LayeredConfigValue } from '../../schemas/config.js';
-import type { Depth } from '../../schemas/depth.js';
-import { sha256Hex } from '../connectors/shared.js';
-import { findCheckpointBriefBuilder } from '../registries/checkpoint-writers/registry.js';
+import { sha256Hex } from '../../connectors/shared.js';
+import { findCheckpointBriefBuilder } from '../../flows/registries/checkpoint-writers/registry.js';
 import {
   type CheckpointStep,
   checkpointChoiceIds,
-} from '../registries/checkpoint-writers/types.js';
-import { resolveRunRelative } from '../run-relative-path.js';
+} from '../../flows/registries/checkpoint-writers/types.js';
+import type { LayeredConfig as LayeredConfigValue } from '../../schemas/config.js';
+import type { Depth } from '../../schemas/depth.js';
+import { isRunRelativePathError, writeJsonReport } from '../../shared/json-report.js';
+import { resolveRunRelative } from '../../shared/run-relative-path.js';
 import { writeDerivedSnapshot } from '../snapshot-writer.js';
-import { isRunRelativePathError, writeJsonReport } from './shared.js';
 import type { StepHandlerContext, StepHandlerResult } from './types.js';
 
 export type { CheckpointStep };

@@ -78,6 +78,15 @@ loading, and run-status retained trace projection should reach saved-folder
 support through that smaller boundary instead of importing retained
 implementation files directly.
 
+Phase 5.34 reviewed whether retained trace/status/progress/checkpoint-state
+implementations should move to a neutral namespace. The decision was no: keep
+those implementations retained-owned for now and harden import guards around the
+existing compatibility boundary.
+
+Phase 5.35 moves retained runtime imports of already-neutral shared helpers to
+`src/shared/**` owner paths. This is an import cleanup only. It does not make
+retained trace, checkpoint, progress, or old helper wrappers deletion-ready.
+
 ## Revisit Triggers
 
 Revisit this boundary only if one of these becomes true:

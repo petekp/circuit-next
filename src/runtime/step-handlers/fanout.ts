@@ -2,22 +2,26 @@ import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { copyFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { runCrossReportValidator } from '../../flows/registries/cross-report-validators.js';
+import { parseReport } from '../../flows/registries/report-schemas.js';
 import type { CompiledFlow } from '../../schemas/compiled-flow.js';
 import { RunId } from '../../schemas/ids.js';
-import { runCrossReportValidator } from '../registries/cross-report-validators.js';
-import { parseReport } from '../registries/report-schemas.js';
-import type { RelayStep } from '../relay-support.js';
-import { resultPath } from '../result-writer.js';
-import { resolveRunRelative } from '../run-relative-path.js';
-import type { CompiledFlowInvocation, WorktreeRunner } from '../runner-types.js';
-import { buildAggregate } from './fanout/aggregate.js';
-import { resolveBranches } from './fanout/branch-resolution.js';
+import {
+  type FanoutAggregateBody,
+  buildFanoutAggregate,
+} from '../../shared/fanout-aggregate-report.js';
 import {
   type FanoutJoinInput,
   type FanoutJoinOutcome,
   type FanoutJoinResult,
   evaluateFanoutJoinPolicy,
-} from './fanout/join-policy.js';
+} from '../../shared/fanout-join-policy.js';
+import { isRunRelativePathError, writeJsonReport } from '../../shared/json-report.js';
+import type { RelayStep } from '../../shared/relay-support.js';
+import { runResultPath as resultPath } from '../../shared/result-path.js';
+import { resolveRunRelative } from '../../shared/run-relative-path.js';
+import type { CompiledFlowInvocation, WorktreeRunner } from '../runner-types.js';
+import { resolveBranches } from './fanout/branch-resolution.js';
 import {
   type BranchOutcome,
   type FanoutStepNarrow,
@@ -26,7 +30,6 @@ import {
   type ResolvedRelayBranch,
 } from './fanout/types.js';
 import { executeRelayPrimitive } from './relay.js';
-import { isRunRelativePathError, writeJsonReport } from './shared.js';
 import type { StepHandlerContext, StepHandlerResult } from './types.js';
 
 export type { FanoutJoinInput, FanoutJoinOutcome, FanoutJoinResult };
@@ -677,7 +680,8 @@ export async function runFanoutStep(
 
   // Always materialise the aggregate report — the durable record of
   // what happened, regardless of join outcome.
-  const aggregateBody = buildAggregate(policy, outcomes, winnerBranchId);
+  const aggregateBody: FanoutAggregateBody<typeof policy, BranchOutcome['child_outcome']> =
+    buildFanoutAggregate(policy, outcomes, winnerBranchId);
   writeJsonReport(runFolder, step.writes.aggregate.path, aggregateBody);
 
   push({

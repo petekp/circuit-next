@@ -25,7 +25,7 @@ import {
 import {
   type CompileResult,
   compileSchematicToCompiledFlow,
-} from '../../src/runtime/compile-schematic-to-flow.js';
+} from '../../src/flows/compile-schematic-to-flow.js';
 import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
 import type { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { FlowBlockCatalog } from '../../src/schemas/flow-blocks.js';

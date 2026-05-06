@@ -16,7 +16,7 @@ Use it with:
 - `docs/flows/block-catalog.json` for the machine-readable block catalog.
 - `src/schemas/flow-blocks.ts` for the block catalog schema.
 - `src/schemas/flow-schematic.ts` for authored schematic shape.
-- `src/runtime/compile-schematic-to-flow.ts` for schematic to compiled-flow projection.
+- `src/flows/compile-schematic-to-flow.ts` for schematic to compiled-flow projection.
 - `docs/contracts/compiled-flow.md` for runtime graph invariants.
 
 This document is hand-authored because it explains intent and boundaries.

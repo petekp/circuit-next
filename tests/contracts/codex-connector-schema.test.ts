@@ -12,14 +12,14 @@ import {
   assertCodexSpawnArgvBoundary,
   buildCodexArgs,
   parseCodexStdout,
-} from '../../src/runtime/connectors/codex.js';
+} from '../../src/connectors/codex.js';
 
 const HAPPY_PATH_FIXTURE = resolve('tests/fixtures/codex-smoke/protocol/happy-path-ok.jsonl');
 const TURN_FAILED_FIXTURE = resolve('tests/fixtures/codex-smoke/protocol/turn-failed.jsonl');
 
 // Codex connector contract tests. Mirrors the claude-code connector
 // contract test shape. Three concerns:
-//   (A) `src/runtime/connectors/codex.ts` module shape + capability-
+//   (A) `src/connectors/codex.ts` module shape + capability-
 //       boundary argv-constant invariants.
 //   (B) `parseCodexStdout` NDJSON parser branches (happy path + each
 //       fail-closed assertion).
@@ -37,7 +37,7 @@ const TURN_FAILED_FIXTURE = resolve('tests/fixtures/codex-smoke/protocol/turn-fa
 
 // ---- (A) module shape + capability-boundary argv-constant invariants ---
 
-describe('Codex connector — src/runtime/connectors/codex.ts module shape', () => {
+describe('Codex connector — src/connectors/codex.ts module shape', () => {
   it('exports CODEX_EXECUTABLE as "codex"', () => {
     expect(CODEX_EXECUTABLE).toBe('codex');
   });

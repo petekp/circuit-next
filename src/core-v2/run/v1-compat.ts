@@ -1,4 +1,5 @@
 import type { CompiledFlow } from '../../schemas/compiled-flow.js';
+import { recoveryRouteForStep } from '../../shared/recovery-route.js';
 import type { ExecutableStepV2 } from '../manifest/executable-flow.js';
 import type { RunContextV2 } from './run-context.js';
 
@@ -30,8 +31,5 @@ export function requireCompiledStepV1<Kind extends CompiledFlow['steps'][number]
 }
 
 export function recoveryRouteForExecutableStep(step: ExecutableStepV2): string | undefined {
-  for (const route of ['retry', 'revise', 'ask', 'stop', 'handoff', 'escalate']) {
-    if (Object.hasOwn(step.routes, route)) return route;
-  }
-  return undefined;
+  return recoveryRouteForStep(step);
 }

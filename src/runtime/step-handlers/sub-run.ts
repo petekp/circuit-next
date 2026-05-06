@@ -3,15 +3,14 @@ import { copyFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { CompiledFlow } from '../../schemas/compiled-flow.js';
 import { RunId } from '../../schemas/ids.js';
-import { resultPath } from '../result-writer.js';
-import { resolveRunRelative } from '../run-relative-path.js';
+import { isRunRelativePathError } from '../../shared/json-report.js';
+import { NO_VERDICT_SENTINEL } from '../../shared/relay-support.js';
+import { runResultPath as resultPath } from '../../shared/result-path.js';
+import { resolveRunRelative } from '../../shared/run-relative-path.js';
 import type { CompiledFlowInvocation } from '../runner-types.js';
-import { isRunRelativePathError } from './shared.js';
 import type { StepHandlerContext, StepHandlerResult } from './types.js';
 
 type SubRunStep = CompiledFlow['steps'][number] & { kind: 'sub-run' };
-
-const NO_VERDICT_SENTINEL = '<no-verdict>';
 
 interface ChildVerdict {
   readonly verdict: string;

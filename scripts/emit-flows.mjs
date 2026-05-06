@@ -2,7 +2,7 @@
 //
 // Reads the active schematics declared by each flow package and
 // compiles each to a CompileResult via
-// src/runtime/compile-schematic-to-flow.ts (consumed here through
+// src/flows/compile-schematic-to-flow.ts (consumed here through
 // dist/), then writes canonical JSON files under generated/flows/<id>/.
 // Public flows also mirror to Claude Code host output under
 // .claude-plugin/skills/<id>/ and Codex host output under
@@ -641,10 +641,10 @@ function findStaleCodexSkillDirs(expected) {
 }
 
 async function loadCompilerModule() {
-  // dist/runtime/compile-schematic-to-flow.js is produced by `npm run
+  // dist/flows/compile-schematic-to-flow.js is produced by `npm run
   // build`. The emit script depends on a fresh dist/, so callers should
   // run `npm run build` first (the verify pipeline does this in order).
-  const distPath = resolve(projectRoot, 'dist/runtime/compile-schematic-to-flow.js');
+  const distPath = resolve(projectRoot, 'dist/flows/compile-schematic-to-flow.js');
   try {
     return await import(distPath);
   } catch (err) {

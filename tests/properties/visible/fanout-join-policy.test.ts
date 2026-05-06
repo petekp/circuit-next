@@ -1,6 +1,6 @@
 // Property tests for the three fanout join policies — pick-winner,
 // disjoint-merge, aggregate-only — driven through the pure
-// `evaluateFanoutJoinPolicy` helper in src/runtime/step-handlers/fanout.ts.
+// `evaluateFanoutJoinPolicy` helper in src/shared/fanout-join-policy.ts.
 //
 // The example-based tests in tests/runner/fanout-handler-direct.test.ts
 // pin one or two witnesses per policy through the full async runner
@@ -19,18 +19,18 @@
 //                       'complete' with a parseable result body.
 //
 // Refactor note (2026-04-27): the join logic was extracted from
-// `runFanoutStep` into a pure helper purely to make this property test
-// possible. The runner now calls the helper after hoisting the only
-// impure dimension (disjoint-merge's per-branch changed-file
-// discovery) ahead of the call. Existing direct-handler integration
-// tests (15 cases) still pass against the same code path.
+// 2026-05-06 note: the helper now lives in src/shared/fanout-join-policy.ts.
+// Retained and core-v2 fanout both call the shared helper after hoisting the
+// only impure dimension (disjoint-merge's per-branch changed-file discovery)
+// ahead of the call.
 
 import { describe, expect, it } from 'vitest';
 
+import { evaluateFanoutJoinPolicy as evaluateFanoutJoinPolicyFromRuntimePath } from '../../../src/runtime/step-handlers/fanout/join-policy.js';
 import {
   type FanoutJoinOutcome,
   evaluateFanoutJoinPolicy,
-} from '../../../src/runtime/step-handlers/fanout.js';
+} from '../../../src/shared/fanout-join-policy.js';
 
 type ChildOutcome = FanoutJoinOutcome['child_outcome'];
 
@@ -68,6 +68,10 @@ function pick<T>(rng: () => number, choices: readonly T[]): T {
 }
 
 describe('evaluateFanoutJoinPolicy — pick-winner', () => {
+  it('keeps the retained fanout path as a compatibility re-export', () => {
+    expect(evaluateFanoutJoinPolicyFromRuntimePath).toBe(evaluateFanoutJoinPolicy);
+  });
+
   // Property: among all complete+verdict-in-admit branches, the
   // winner is the one whose verdict appears earliest in admit order.
   // If no admit verdict matched any complete branch, fail with a

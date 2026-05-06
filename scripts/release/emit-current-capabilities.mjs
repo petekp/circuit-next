@@ -496,7 +496,7 @@ function routerCapabilities(routerIntents) {
       intent.actual_entry_mode === undefined
         ? `${intent.input} routed to ${intent.actual_flow}; expected ${intent.expected_flow}.`
         : `${intent.input} routed to ${intent.actual_flow} with ${intent.actual_entry_mode} mode; expected ${intent.expected_flow}.`,
-    evidence: ['src/runtime/router.ts'],
+    evidence: ['src/flows/router.ts'],
     readiness_refs: intent.readiness_refs,
     axes: {
       intent_hints: [`${intent.id}:`],
@@ -730,7 +730,7 @@ function supportCapabilities(rootCommands, proofAxesByCapability, proofs, router
       summary: planExecutionImplemented
         ? 'Plan-execution requests start the first executable flow slice instead of ending as analysis-only Explore.'
         : 'Plan-execution requests can still finish as analysis-only Explore runs.',
-      evidence: ['src/runtime/router.ts', 'tests/contracts/flow-router.test.ts'],
+      evidence: ['src/flows/router.ts', 'tests/contracts/flow-router.test.ts'],
       readiness_refs: planExecutionImplemented ? [] : ['REL-016'],
       axes: {
         worker_handoff:
@@ -775,9 +775,7 @@ function supportCapabilities(rootCommands, proofAxesByCapability, proofs, router
         'docs/contracts/host-capabilities.md',
         'src/shared/operator-summary-writer.ts',
         'src/shared/write-capable-worker-disclosure.ts',
-        'src/runtime/write-capable-worker-disclosure.ts',
         'src/runtime/runner.ts',
-        'src/runtime/operator-summary-writer.ts',
       ],
       readiness_refs: [],
     },
@@ -798,7 +796,7 @@ function supportCapabilities(rootCommands, proofAxesByCapability, proofs, router
       status: 'implemented',
       summary:
         'Rich route outcomes are emitted into compiled routes and checkpoint selections can execute them.',
-      evidence: ['src/runtime/compile-schematic-to-flow.ts'],
+      evidence: ['src/flows/compile-schematic-to-flow.ts'],
       readiness_refs: [],
     },
     {

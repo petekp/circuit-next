@@ -10,13 +10,13 @@ import type {
   CompiledFlowRunner,
 } from '../../src/compat/retained-runtime.js';
 import { runRetainedCompiledFlow as runCompiledFlow } from '../../src/compat/retained-runtime.js';
-import { resultPath } from '../../src/runtime/result-writer.js';
 import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { type CompiledFlowId, RunId } from '../../src/schemas/ids.js';
 import { RunResult } from '../../src/schemas/result.js';
 import { Snapshot } from '../../src/schemas/snapshot.js';
 import type { RelayFn } from '../../src/shared/relay-runtime-types.js';
+import { runResultPath as resultPath } from '../../src/shared/result-path.js';
 
 // Sub-run runtime test. Verifies that a parent flow declaring a
 // `sub-run` step:

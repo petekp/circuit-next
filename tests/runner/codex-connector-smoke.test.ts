@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { relayCodex } from '../../src/runtime/connectors/codex.js';
+import { relayCodex } from '../../src/connectors/codex.js';
 import { sha256Hex } from '../../src/shared/connector-relay.js';
 
 // Codex connector smoke test. Mirrors the agent smoke shape: a static

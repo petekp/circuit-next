@@ -1,5 +1,5 @@
 import type { CompiledFlow } from '../../schemas/compiled-flow.js';
-import { isRunRelativePathError } from './shared.js';
+import { isRunRelativePathError } from '../../shared/json-report.js';
 import type { StepHandlerContext, StepHandlerResult } from './types.js';
 
 type ComposeStep = CompiledFlow['steps'][number] & { kind: 'compose' };

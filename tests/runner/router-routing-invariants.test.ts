@@ -11,8 +11,8 @@
 
 import { describe, expect, it } from 'vitest';
 
+import { classifyTaskAgainstRoutables, deriveRoutingForTesting } from '../../src/flows/router.js';
 import type { CompiledFlowPackage } from '../../src/flows/types.js';
-import { classifyTaskAgainstRoutables, deriveRoutingForTesting } from '../../src/runtime/router.js';
 
 function fakePackage(
   opts: Partial<CompiledFlowPackage> & { readonly id: string },

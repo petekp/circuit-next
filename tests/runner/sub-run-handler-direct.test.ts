@@ -23,7 +23,6 @@ import type {
   CompiledFlowRunResult,
   CompiledFlowRunner,
 } from '../../src/compat/retained-runtime.js';
-import { resultPath } from '../../src/runtime/result-writer.js';
 import { runSubRunStep } from '../../src/runtime/step-handlers/sub-run.js';
 import type { RunState, StepHandlerContext } from '../../src/runtime/step-handlers/types.js';
 import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
@@ -32,6 +31,7 @@ import { type CompiledFlowId, RunId } from '../../src/schemas/ids.js';
 import { RunResult } from '../../src/schemas/result.js';
 import { Snapshot } from '../../src/schemas/snapshot.js';
 import type { TraceEntry } from '../../src/schemas/trace-entry.js';
+import { runResultPath as resultPath } from '../../src/shared/result-path.js';
 import { expectStepAborted } from '../helpers/failure-message.js';
 
 const PARENT_WORKFLOW_ID = 'sub-run-direct-parent' as unknown as CompiledFlowId;

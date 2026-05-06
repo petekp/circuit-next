@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
-import { relative, resolve } from 'node:path';
+import { resolve } from 'node:path';
 
 import { resumeRetainedCompiledFlowCheckpoint } from '../compat/retained-checkpoint-folders.js';
 import {
@@ -27,7 +27,7 @@ import {
 } from '../schemas/progress-event.js';
 import { RunResult } from '../schemas/result.js';
 
-import { classifyCompiledFlowTask } from '../runtime/router.js';
+import { classifyCompiledFlowTask } from '../flows/router.js';
 import { discoverConfigLayers } from '../shared/config-loader.js';
 import { validateCompiledFlowKindPolicy } from '../shared/flow-kind-policy.js';
 import { writeOperatorSummary } from '../shared/operator-summary-writer.js';
@@ -37,8 +37,16 @@ import { runHandoffCommand } from './handoff.js';
 import { runRunsCommand } from './runs.js';
 import {
   CLI_RUNTIME_ROUTING_POLICY,
-  GENERATED_FLOW_MIRROR_ROOT_ENV,
   RUNTIME_POLICY_REASONS,
+  type RuntimeSupportDecision as V2RuntimeSupportDecision,
+  applyCandidateFixturePolicy,
+  applyComposeWriterPolicy,
+  assertStrictV2FreshRunSupported,
+  disableDefaultV2Runtime,
+  disabledV2Decision,
+  runtimeOutputFields,
+  showRuntimeDecision,
+  useV2Runtime,
 } from './runtime-compatibility-policy.js';
 
 // Runtime CLI entry point — invoked through ./bin/circuit-next.
@@ -59,17 +67,6 @@ import {
 
 const DEFAULT_RUNS_BASE = '.circuit-next/runs';
 const MAX_PROGRESS_DISPLAY_TEXT_CHARS = 240;
-
-type RuntimeSelectionKind = 'v2-supported' | 'old-runtime-required' | 'unsupported';
-type RuntimeSelectionName = 'v2' | 'retained';
-
-interface V2RuntimeSupportDecision {
-  readonly kind: RuntimeSelectionKind;
-  readonly flowId: string;
-  readonly entryModeName: string;
-  readonly depth: string;
-  readonly reason: string;
-}
 
 interface V2RuntimeSupportRow {
   readonly entryModeName: string;
@@ -554,99 +551,6 @@ function classifyV2RuntimeSupport(input: {
     entryModeName,
     depth,
     reason: `fresh ${flowId} entry mode '${entryModeName}' at depth '${depth}' is not v2-proven yet`,
-  };
-}
-
-function pathIsInside(parent: string, child: string): boolean {
-  const rel = relative(parent, child);
-  return rel.length === 0 || (!rel.startsWith('..') && !rel.startsWith('/'));
-}
-
-function fixtureEligibleForCandidateV2(input: {
-  readonly args: ParsedArgs;
-  readonly fixturePath: string;
-}): boolean {
-  if (input.args.fixturePath === undefined && input.args.flowRoot === undefined) return true;
-  const fixturePath = resolve(input.fixturePath);
-  if (pathIsInside(resolve('generated', 'flows'), fixturePath)) return true;
-  const mirrorRoot = process.env[GENERATED_FLOW_MIRROR_ROOT_ENV];
-  if (mirrorRoot === undefined || mirrorRoot.length === 0 || input.args.flowRoot === undefined) {
-    return false;
-  }
-  const trustedMirrorRoot = resolve(mirrorRoot);
-  return (
-    resolve(input.args.flowRoot) === trustedMirrorRoot &&
-    pathIsInside(trustedMirrorRoot, fixturePath)
-  );
-}
-
-function applyCandidateFixturePolicy(
-  decision: V2RuntimeSupportDecision,
-  input: {
-    readonly args: ParsedArgs;
-    readonly fixturePath: string;
-  },
-): V2RuntimeSupportDecision {
-  if (decision.kind !== 'v2-supported') return decision;
-  if (fixtureEligibleForCandidateV2(input)) return decision;
-  return {
-    ...decision,
-    kind: 'old-runtime-required',
-    reason: RUNTIME_POLICY_REASONS.externalFixtureOrRoot,
-  };
-}
-
-function applyComposeWriterPolicy(
-  decision: V2RuntimeSupportDecision,
-  input: { readonly hasComposeWriter: boolean },
-): V2RuntimeSupportDecision {
-  if (decision.kind !== 'v2-supported' || !input.hasComposeWriter) return decision;
-  return {
-    ...decision,
-    kind: 'old-runtime-required',
-    reason: RUNTIME_POLICY_REASONS.composeWriter,
-  };
-}
-
-function assertStrictV2FreshRunSupported(decision: V2RuntimeSupportDecision): void {
-  if (decision.kind === 'v2-supported') return;
-  throw new Error(
-    `CIRCUIT_V2_RUNTIME=1 cannot route this invocation through v2: ${decision.reason}`,
-  );
-}
-
-function useV2Runtime(): boolean {
-  return process.env.CIRCUIT_V2_RUNTIME === '1';
-}
-
-function showRuntimeDecision(): boolean {
-  return (
-    process.env.CIRCUIT_SHOW_RUNTIME_DECISION === '1' ||
-    process.env.CIRCUIT_V2_RUNTIME_CANDIDATE === '1'
-  );
-}
-
-function disableDefaultV2Runtime(): boolean {
-  return process.env.CIRCUIT_DISABLE_V2_RUNTIME === '1';
-}
-
-function disabledV2Decision(decision: V2RuntimeSupportDecision): V2RuntimeSupportDecision {
-  return {
-    ...decision,
-    kind: 'old-runtime-required',
-    reason: RUNTIME_POLICY_REASONS.rollback,
-  };
-}
-
-function runtimeOutputFields(input: {
-  readonly include: boolean;
-  readonly runtime: RuntimeSelectionName;
-  readonly decision: V2RuntimeSupportDecision;
-}): { readonly runtime?: RuntimeSelectionName; readonly runtime_reason?: string } {
-  if (!input.include) return {};
-  return {
-    runtime: input.runtime,
-    runtime_reason: input.decision.reason,
   };
 }
 

@@ -9,8 +9,8 @@ import {
   appendAndDeriveRetainedTrace as appendAndDerive,
   bootstrapRetainedRun as bootstrapRun,
 } from '../../src/compat/retained-runtime.js';
-import { type CodexRelayResult, relayCodex } from '../../src/runtime/connectors/codex.js';
-import { materializeRelay } from '../../src/runtime/connectors/relay-materializer.js';
+import { type CodexRelayResult, relayCodex } from '../../src/connectors/codex.js';
+import { materializeRelay } from '../../src/connectors/relay-materializer.js';
 import { reduce } from '../../src/runtime/reducer.js';
 import { readRunTrace } from '../../src/runtime/trace-reader.js';
 import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
@@ -60,15 +60,15 @@ const CODEX_SMOKE_SELECTION = {
 // ancestor commit. The connector_source_sha256 field
 // is the sha256 of the concatenation of connector-layer source
 // files that materially determine the codex relay behavior:
-//   (a) src/runtime/connectors/codex.ts — relayCodex + parseCodexStdout
+//   (a) src/connectors/codex.ts — relayCodex + parseCodexStdout
 //       + capability-boundary argv constants
 //   (b) src/shared/connector-relay.ts — sha256Hex + RelayResult
 //       shape consumed by the materializer
 //   (c) src/shared/connector-helpers.ts — connector parsing/model helpers
-//   (d) src/runtime/connectors/shared.ts — compatibility re-exports used by
-//       retained runtime and tests
-//   (e) src/runtime/connectors/relay-materializer.ts — five-trace_entry
+//   (d) src/connectors/shared.ts — neutral connector helper barrel
+//   (e) src/connectors/relay-materializer.ts — five-trace_entry
 //       transcript + on-disk slot materialization
+//   (f) src/runtime/connectors/* — old-path compatibility re-exports
 // A change to any of the connector sources invalidates the fingerprint's coverage
 // of the current connector surface. Check 32 re-computes this hash at
 // audit time and flags drift (yellow: fingerprint exists but connector
@@ -80,9 +80,12 @@ const CODEX_SMOKE_SELECTION = {
 // would let a runner edit silently invalidate the CODEX fingerprint
 // without tripping drift.
 const ADAPTER_SOURCE_PATHS = [
-  resolve('src/runtime/connectors/codex.ts'),
+  resolve('src/connectors/codex.ts'),
   resolve('src/shared/connector-relay.ts'),
   resolve('src/shared/connector-helpers.ts'),
+  resolve('src/connectors/shared.ts'),
+  resolve('src/connectors/relay-materializer.ts'),
+  resolve('src/runtime/connectors/codex.ts'),
   resolve('src/runtime/connectors/shared.ts'),
   resolve('src/runtime/connectors/relay-materializer.ts'),
   resolve('src/runtime/runner.ts'),

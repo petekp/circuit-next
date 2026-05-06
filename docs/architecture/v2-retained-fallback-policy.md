@@ -137,6 +137,10 @@ Phase 5.22 centralizes those live policy strings in
 `src/cli/runtime-compatibility-policy.ts` so runtime reasons, CLI usage, and
 custom-flow summaries do not drift apart.
 
+Phase 5.27 adds an explicit `COMPOSE_WRITER_COMPATIBILITY_POLICY` next to the
+live runtime reason and strengthens CLI tests so `v2Executors` cannot be used to
+bypass the retained-only `composeWriter` policy. This is behavior-preserving.
+
 ## What Not To Do Next
 
 Do not widen routes mechanically. Move one public mode at a time only when its

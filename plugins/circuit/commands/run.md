@@ -202,5 +202,5 @@ the same CLI with an explicit flow name and skip this classifier layer.
 
 ## Authority
 
-- `src/runtime/router.ts` (current deterministic classifier)
+- `src/flows/router.ts` (current deterministic classifier)
 - `tests/contracts/flow-router.test.ts` (classifier behavior)
