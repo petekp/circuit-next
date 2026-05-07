@@ -4,7 +4,14 @@ import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { main } from '../../src/cli/circuit.js';
 import { CUSTOM_FLOW_ROOT_RUNTIME_POLICY } from '../../src/cli/runtime-compatibility-policy.js';
-import { CompiledFlow, ContinuityIndex, ContinuityRecord } from '../../src/index.js';
+import {
+  CompiledFlow,
+  CompiledFlowId,
+  ContinuityIndex,
+  ContinuityRecord,
+  RunId,
+} from '../../src/index.js';
+import { writeManifestSnapshot } from '../../src/shared/manifest-snapshot.js';
 import { RETIRED_RUNTIME_RUN_FOLDER_MESSAGE } from '../../src/shared/retired-runtime-policy.js';
 
 const tempRoots: string[] = [];
@@ -38,6 +45,28 @@ async function captureMain(
     process.stdout.write = originalStdout;
     process.stderr.write = originalStderr;
   }
+}
+
+function writeRetiredRunFolder(runFolder: string, runId: string): void {
+  mkdirSync(runFolder, { recursive: true });
+  const flowBytes = readFileSync(resolve('generated/flows/build/circuit.json'));
+  const snapshot = writeManifestSnapshot(runFolder, {
+    run_id: RunId.parse(runId),
+    flow_id: CompiledFlowId.parse('build'),
+    captured_at: '2026-04-29T23:25:00.000Z',
+    bytes: flowBytes,
+  });
+  writeFileSync(
+    join(runFolder, 'trace.ndjson'),
+    `${JSON.stringify({
+      schema_version: 1,
+      kind: 'run.bootstrapped',
+      run_id: runId,
+      flow_id: 'build',
+      depth: 'deep',
+      manifest_hash: snapshot.hash,
+    })}\n`,
+  );
 }
 
 afterEach(() => {
@@ -731,39 +760,7 @@ describe('utility CLI commands', () => {
     const root = tempRoot('circuit-handoff-retained-run-');
     const runFolder = join(root, 'run');
     const controlPlane = join(root, 'control-plane');
-    const oldDisabled = process.env.CIRCUIT_DISABLE_V2_RUNTIME;
-    process.env.CIRCUIT_DISABLE_V2_RUNTIME = '1';
-    let run: Awaited<ReturnType<typeof captureMain>> | undefined;
-    try {
-      run = await captureMain(
-        [
-          'run',
-          'build',
-          '--goal',
-          'retained deep change that asks for scope',
-          '--entry-mode',
-          'deep',
-          '--run-folder',
-          runFolder,
-        ],
-        {
-          runId: '55555555-5555-4555-8555-555555555556',
-          now: () => new Date('2026-04-29T23:25:00.000Z'),
-        },
-      );
-    } finally {
-      if (oldDisabled === undefined) {
-        process.env.CIRCUIT_DISABLE_V2_RUNTIME = undefined;
-      } else {
-        process.env.CIRCUIT_DISABLE_V2_RUNTIME = oldDisabled;
-      }
-    }
-    if (run === undefined) throw new Error('retained Build run did not execute');
-    expect(run.code, run.stderr).toBe(0);
-    expect(JSON.parse(run.stdout)).toMatchObject({
-      outcome: 'checkpoint_waiting',
-      runtime: 'retained',
-    });
+    writeRetiredRunFolder(runFolder, '55555555-5555-4555-8555-555555555556');
 
     const save = await captureMain([
       'handoff',
@@ -791,36 +788,7 @@ describe('utility CLI commands', () => {
     const root = tempRoot('circuit-handoff-retained-corrupt-');
     const runFolder = join(root, 'run');
     const controlPlane = join(root, 'control-plane');
-    const oldDisabled = process.env.CIRCUIT_DISABLE_V2_RUNTIME;
-    process.env.CIRCUIT_DISABLE_V2_RUNTIME = '1';
-    let run: Awaited<ReturnType<typeof captureMain>> | undefined;
-    try {
-      run = await captureMain(
-        [
-          'run',
-          'build',
-          '--goal',
-          'retained deep change that will be corrupted',
-          '--entry-mode',
-          'deep',
-          '--run-folder',
-          runFolder,
-        ],
-        {
-          runId: '55555555-5555-4555-8555-555555555557',
-          now: () => new Date('2026-04-29T23:30:00.000Z'),
-        },
-      );
-    } finally {
-      if (oldDisabled === undefined) {
-        process.env.CIRCUIT_DISABLE_V2_RUNTIME = undefined;
-      } else {
-        process.env.CIRCUIT_DISABLE_V2_RUNTIME = oldDisabled;
-      }
-    }
-    if (run === undefined) throw new Error('retained Build run did not execute');
-    expect(run.code, run.stderr).toBe(0);
-    expect(JSON.parse(run.stdout)).toMatchObject({ outcome: 'checkpoint_waiting' });
+    writeRetiredRunFolder(runFolder, '55555555-5555-4555-8555-555555555557');
 
     writeFileSync(join(runFolder, 'trace.ndjson'), '{not-json}\n');
 

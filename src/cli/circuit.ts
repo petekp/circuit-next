@@ -2,19 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import {
-  type ChildCompiledFlowResolver,
-  type CompiledFlowInvocation,
-  type ComposeWriterFn,
-  type RelayFn,
-  runRetainedCompiledFlow,
-} from '../compat/retained-runtime.js';
 import type { ExecutorRegistryV2 } from '../core-v2/executors/index.js';
 import { isCoreV2RunFolder, resumeCompiledFlowV2 } from '../core-v2/run/checkpoint-resume.js';
 import type { ChildCompiledFlowResolverV2 } from '../core-v2/run/child-runner.js';
 import { runCompiledFlowV2WithWaiting } from '../core-v2/run/compiled-flow-runner.js';
 import { isGraphCheckpointWaitingResultV2 } from '../core-v2/run/graph-runner.js';
-import type { ChangeKindDeclaration } from '../schemas/change-kind.js';
 import { CompiledFlow } from '../schemas/compiled-flow.js';
 import { Depth } from '../schemas/depth.js';
 import { CompiledFlowId, RunId } from '../schemas/ids.js';
@@ -27,11 +19,15 @@ import {
 import { RunResult } from '../schemas/result.js';
 
 import { classifyCompiledFlowTask } from '../flows/router.js';
+import type { ComposeWriterFn } from '../runtime/runner-types.js';
 import { discoverConfigLayers } from '../shared/config-loader.js';
 import { validateCompiledFlowKindPolicy } from '../shared/flow-kind-policy.js';
 import { writeOperatorSummary } from '../shared/operator-summary-writer.js';
-import { runResultPath } from '../shared/result-path.js';
-import { RETIRED_RUNTIME_RUN_FOLDER_MESSAGE } from '../shared/retired-runtime-policy.js';
+import type { RelayFn } from '../shared/relay-runtime-types.js';
+import {
+  RETIRED_RUNTIME_FRESH_INVOCATION_MESSAGE,
+  RETIRED_RUNTIME_RUN_FOLDER_MESSAGE,
+} from '../shared/retired-runtime-policy.js';
 import { runCreateCommand } from './create.js';
 import { runHandoffCommand } from './handoff.js';
 import { runRunsCommand } from './runs.js';
@@ -437,18 +433,6 @@ function loadFixture(fixturePath: string): { flow: CompiledFlow; bytes: Buffer }
   return { flow, bytes };
 }
 
-function defaultChildCompiledFlowResolver(flowRoot: string | undefined): ChildCompiledFlowResolver {
-  return (ref) => {
-    const fixturePath = resolveFixturePath(
-      ref.flow_id as unknown as string,
-      ref.entry_mode as unknown as string | undefined,
-      undefined,
-      flowRoot,
-    );
-    return loadFixture(fixturePath);
-  };
-}
-
 function defaultChildCompiledFlowResolverV2(
   flowRoot: string | undefined,
 ): ChildCompiledFlowResolverV2 {
@@ -541,7 +525,7 @@ function classifyV2RuntimeSupport(input: {
       flowId,
       entryModeName,
       depth,
-      reason: `checkpoint-waiting depth '${depth}' remains on the retained checkpoint runtime`,
+      reason: `checkpoint-waiting depth '${depth}' requires the retired checkpoint runtime`,
     };
   }
 
@@ -681,40 +665,7 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
     ...(options.configCwd !== undefined ? { cwd: options.configCwd } : {}),
   });
 
-  const change_kind: ChangeKindDeclaration = {
-    change_kind: 'ratchet-advance',
-    failure_mode: 'circuit flow invocation has no executable product proof',
-    acceptance_evidence:
-      'trace.ndjson + state.json + manifest.snapshot.json + reports/result.json from clean checkout',
-    alternate_framing:
-      'defer the runtime proof; not an option because the CLI is the proof harness and must produce a real run-folder per invocation.',
-  };
   const projectRoot = resolve(options.configCwd ?? process.cwd());
-
-  const invocation: CompiledFlowInvocation = {
-    runFolder,
-    flow,
-    flowBytes: bytes,
-    projectRoot,
-    runId,
-    goal: args.goal,
-    change_kind,
-    now,
-  };
-  if (args.depth !== undefined) invocation.depth = args.depth;
-  if (entryModeSelection.entryModeName !== undefined) {
-    invocation.entryModeName = entryModeSelection.entryModeName;
-  }
-  if (options.relayer !== undefined) invocation.relayer = options.relayer;
-  if (options.composeWriter !== undefined) invocation.composeWriter = options.composeWriter;
-  invocation.childCompiledFlowResolver = defaultChildCompiledFlowResolver(args.flowRoot);
-  if (progress !== undefined) invocation.progress = progress;
-  if (selectionConfigLayers.length > 0) {
-    invocation.selectionConfigLayers = selectionConfigLayers;
-  }
-  if (args.includeUntrackedContent) {
-    invocation.evidencePolicy = { includeUntrackedFileContent: true };
-  }
 
   const runtimeSupport = classifyV2RuntimeSupport({ flow, args, entryModeSelection });
   const candidateSupport = classifyV2RuntimeSupport({
@@ -873,57 +824,10 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
     return 0;
   }
 
-  const outcome = await runRetainedCompiledFlow(invocation);
-  const operatorSummary = writeOperatorSummary({
-    runFolder: outcome.runFolder,
-    runResult: outcome.result,
-    route: {
-      selectedFlow: route.flowName,
-      routedBy: route.source,
-      routerReason: route.reason,
-    },
-  });
-  const resultPath =
-    outcome.result.outcome === 'checkpoint_waiting'
-      ? {}
-      : { result_path: runResultPath(outcome.runFolder) };
-
-  process.stdout.write(
-    `${JSON.stringify(
-      {
-        schema_version: 1,
-        run_id: outcome.result.run_id,
-        flow_id: outcome.result.flow_id,
-        selected_flow: route.flowName,
-        routed_by: route.source,
-        router_reason: route.reason,
-        ...(route.matched_signal === undefined ? {} : { router_signal: route.matched_signal }),
-        ...(entryModeSelection.entryModeName === undefined
-          ? {}
-          : { entry_mode: entryModeSelection.entryModeName }),
-        ...(entryModeSelection.source === undefined
-          ? {}
-          : { entry_mode_source: entryModeSelection.source }),
-        run_folder: outcome.runFolder,
-        outcome: outcome.result.outcome,
-        trace_entries_observed: outcome.result.trace_entries_observed,
-        ...resultPath,
-        ...runtimeOutputFields({
-          include: runtimeDecisionDiagnostics || defaultV2RuntimeDisabled,
-          runtime: 'retained',
-          decision: defaultRuntimeSupport,
-        }),
-        operator_summary_path: operatorSummary.jsonPath,
-        operator_summary_markdown_path: operatorSummary.markdownPath,
-        ...(outcome.result.outcome === 'checkpoint_waiting'
-          ? { checkpoint: outcome.result.checkpoint }
-          : {}),
-      },
-      null,
-      2,
-    )}\n`,
+  process.stderr.write(
+    `error: ${RETIRED_RUNTIME_FRESH_INVOCATION_MESSAGE} ${defaultRuntimeSupport.reason}\n`,
   );
-  return 0;
+  return 2;
 }
 
 const invokedDirectly =

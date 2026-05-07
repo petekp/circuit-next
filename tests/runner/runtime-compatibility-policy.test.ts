@@ -54,7 +54,7 @@ describe('runtime compatibility policy', () => {
     restoreEnv();
   });
 
-  it('keeps composeWriter decisions retained without changing non-v2 decisions', () => {
+  it('marks composeWriter decisions as retired-runtime requirements without changing non-v2 decisions', () => {
     expect(applyComposeWriterPolicy(supportedDecision, { hasComposeWriter: true })).toMatchObject({
       kind: 'old-runtime-required',
       reason: RUNTIME_POLICY_REASONS.composeWriter,
@@ -68,7 +68,7 @@ describe('runtime compatibility policy', () => {
     );
   });
 
-  it('fails strict v2 with the retained composeWriter reason', () => {
+  it('fails strict v2 with the retired composeWriter reason', () => {
     const composeWriterDecision = applyComposeWriterPolicy(supportedDecision, {
       hasComposeWriter: true,
     });
@@ -86,7 +86,7 @@ describe('runtime compatibility policy', () => {
     expect(() => assertStrictV2FreshRunSupported(supportedDecision)).not.toThrow();
   });
 
-  it('keeps arbitrary fixtures and custom roots retained by default', () => {
+  it('marks arbitrary fixtures and custom roots as retired-runtime requirements by default', () => {
     const generatedRoot = join(process.cwd(), 'generated', 'flows');
     const externalFixture = join(process.cwd(), '.tmp', 'review-copy.json');
 
@@ -151,7 +151,7 @@ describe('runtime compatibility policy', () => {
     ).toBe(false);
   });
 
-  it('keeps custom flow roots retained unless strict v2 handles the decision elsewhere', () => {
+  it('marks custom flow roots as retired-runtime requirements unless strict v2 handles the decision elsewhere', () => {
     const customRoot = join(process.cwd(), '.circuit-next', 'custom-flows');
     const customFixture = join(customRoot, 'review', 'circuit.json');
 
@@ -177,11 +177,11 @@ describe('runtime compatibility policy', () => {
     expect(
       runtimeOutputFields({
         include: true,
-        runtime: 'retained',
+        runtime: 'retired',
         decision: disabledV2Decision(supportedDecision),
       }),
     ).toEqual({
-      runtime: 'retained',
+      runtime: 'retired',
       runtime_reason: RUNTIME_POLICY_REASONS.rollback,
     });
   });

@@ -23,26 +23,7 @@ let root: string;
 let homeDir: string;
 let cwdDir: string;
 
-const EXPLORE_SYNTHESIS_BODY = JSON.stringify({
-  verdict: 'accept',
-  subject: 'Config-loaded explore goal',
-  recommendation: 'Use the resolved config while synthesizing the result',
-  success_condition_alignment: 'The run proves config reaches relay selection evidence',
-  supporting_aspects: [
-    {
-      aspect: 'config-selection',
-      contribution: 'The synthesize step received the resolved selection inputs',
-      evidence_refs: ['reports/analysis.json'],
-    },
-  ],
-});
-
-const EXPLORE_REVIEW_VERDICT_BODY = JSON.stringify({
-  verdict: 'accept',
-  overall_assessment: 'The config-loaded compose is acceptable',
-  objections: [],
-  missed_angles: [],
-});
+const REVIEW_RELAY_BODY = JSON.stringify({ verdict: 'NO_ISSUES_FOUND', findings: [] });
 
 function writeUserConfig(text: string): void {
   const path = userGlobalConfigPath(homeDir);
@@ -191,11 +172,11 @@ defaults:
       shared: project-default
       projectDefault: true
 circuits:
-  explore:
+  review:
     selection:
       model:
-        provider: openai
-        model: gpt-5.4
+        provider: anthropic
+        model: claude-opus-4-7-project
       skills:
         mode: append
         skills: [react-doctor]
@@ -212,11 +193,7 @@ circuits:
         return {
           request_payload: input.prompt,
           receipt_id: 'config-loader-receipt',
-          result_body: input.prompt.includes('Step: synthesize-step')
-            ? EXPLORE_SYNTHESIS_BODY
-            : input.prompt.includes('Step: review-step')
-              ? EXPLORE_REVIEW_VERDICT_BODY
-              : '{"verdict":"accept"}',
+          result_body: REVIEW_RELAY_BODY,
           duration_ms: 1,
           cli_version: '0.0.0-stub',
         };
@@ -232,11 +209,11 @@ circuits:
     process.env.CIRCUIT_V2_RUNTIME = undefined;
     process.env.CIRCUIT_SHOW_RUNTIME_DECISION = undefined;
     process.env.CIRCUIT_V2_RUNTIME_CANDIDATE = undefined;
-    process.env.CIRCUIT_DISABLE_V2_RUNTIME = '1';
+    process.env.CIRCUIT_DISABLE_V2_RUNTIME = undefined;
     process.env.CIRCUIT_GENERATED_FLOW_MIRROR_ROOT = undefined;
     try {
       const exit = await main(
-        ['explore', '--goal', 'prove config reaches selection evidence', '--run-folder', runFolder],
+        ['review', '--goal', 'prove config reaches selection evidence', '--run-folder', runFolder],
         {
           relayer,
           now: deterministicNow(Date.UTC(2026, 3, 24, 23, 0, 0)),
@@ -256,7 +233,7 @@ circuits:
     }
 
     const expected: ResolvedSelection = {
-      model: { provider: 'openai', model: 'gpt-5.4' },
+      model: { provider: 'anthropic', model: 'claude-opus-4-7-project' },
       effort: 'high',
       skills: [
         SkillId.parse('tdd'),
@@ -270,17 +247,19 @@ circuits:
         projectCircuit: true,
       },
     };
-    expect(relayInputs[0]?.resolvedSelection).toEqual(expected);
+    const relaySelection = relayInputs.find((input) => input.resolvedSelection !== undefined);
+    expect(relaySelection?.resolvedSelection).toEqual(expected);
 
     const trace_entries = readFileSync(join(runFolder, 'trace.ndjson'), 'utf8')
       .split('\n')
       .filter(Boolean)
       .map((line) => JSON.parse(line) as Record<string, unknown>);
     const started = trace_entries.find((trace_entry) => trace_entry.kind === 'relay.started');
-    expect(started?.resolved_selection).toEqual(expected);
+    const startedData = started?.data as { readonly resolved_selection?: unknown } | undefined;
+    expect(startedData?.resolved_selection ?? started?.resolved_selection).toEqual(expected);
 
     const output = JSON.parse(stdout.text()) as Record<string, unknown>;
-    expect(output.flow_id).toBe('explore');
+    expect(output.flow_id).toBe('review');
     expect(output.outcome).toBe('complete');
   });
 

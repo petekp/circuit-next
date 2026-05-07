@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { main } from '../../src/cli/circuit.js';
-import type { ComposeWriterFn } from '../../src/compat/retained-runtime.js';
+import { RUNTIME_POLICY_REASONS } from '../../src/cli/runtime-compatibility-policy.js';
 import {
   ExploreDecision,
   ExploreResult,
@@ -12,12 +12,14 @@ import {
   ExploreTournamentProposal,
 } from '../../src/flows/explore/reports.js';
 import { ReviewRelayResult, ReviewResult } from '../../src/flows/review/reports.js';
+import type { ComposeWriterFn } from '../../src/runtime/runner-types.js';
 import { ManifestSnapshot } from '../../src/schemas/manifest.js';
 import { ProgressEvent } from '../../src/schemas/progress-event.js';
 import { RunResult } from '../../src/schemas/result.js';
 import { RunStatusProjectionV1 } from '../../src/schemas/run-status.js';
 import type { RelayResult } from '../../src/shared/connector-relay.js';
 import type { RelayFn, RelayInput } from '../../src/shared/relay-runtime-types.js';
+import { RETIRED_RUNTIME_FRESH_INVOCATION_MESSAGE } from '../../src/shared/retired-runtime-policy.js';
 
 const REVIEW_RELAY_BODY = JSON.stringify({ verdict: 'NO_ISSUES_FOUND', findings: [] });
 const BUILD_IMPLEMENTATION_BODY = JSON.stringify({
@@ -196,12 +198,6 @@ function traceEntries(runFolder: string): Array<Record<string, unknown>> {
 
 function expectV2Trace(runFolder: string): void {
   expect(traceEntries(runFolder)[0]).toMatchObject({ engine: 'core-v2' });
-}
-
-function expectRetainedTrace(runFolder: string): void {
-  const first = traceEntries(runFolder)[0];
-  expect(first).toMatchObject({ schema_version: 1 });
-  expect(first).not.toMatchObject({ engine: 'core-v2' });
 }
 
 function writeProjectPackage(root: string): void {
@@ -653,6 +649,66 @@ async function expectMainRejects(
     process.stdout.write = origStdoutWrite;
     restoreAll(restorers);
   }
+}
+
+async function expectMainRetiredRuntimeFailure(
+  argv: readonly string[],
+  options: {
+    readonly mode?: 'default' | 'rollback';
+    readonly relayer?: RelayFn;
+    readonly composeWriter?: ComposeWriterFn;
+    readonly configCwd?: string;
+    readonly configHomeDir?: string;
+    readonly runId?: string;
+  } = {},
+): Promise<string> {
+  const mode = options.mode ?? 'default';
+  const restorers = [
+    setEnv('CIRCUIT_V2_RUNTIME', undefined),
+    setEnv('CIRCUIT_SHOW_RUNTIME_DECISION', undefined),
+    setEnv('CIRCUIT_V2_RUNTIME_CANDIDATE', undefined),
+    setEnv('CIRCUIT_GENERATED_FLOW_MIRROR_ROOT', undefined),
+    setEnv('CIRCUIT_DISABLE_V2_RUNTIME', mode === 'rollback' ? '1' : undefined),
+  ];
+  let stdout = '';
+  let stderr = '';
+  const origStdoutWrite = process.stdout.write;
+  const origStderrWrite = process.stderr.write;
+  process.stdout.write = ((chunk: string | Uint8Array): boolean => {
+    stdout += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+    return true;
+  }) as typeof process.stdout.write;
+  process.stderr.write = ((chunk: string | Uint8Array): boolean => {
+    stderr += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+    return true;
+  }) as typeof process.stderr.write;
+  try {
+    const exit = await main(argv, {
+      ...(options.relayer === undefined ? {} : { relayer: options.relayer }),
+      ...(options.composeWriter === undefined ? {} : { composeWriter: options.composeWriter }),
+      now: deterministicNow(Date.UTC(2026, 4, 5, 12, 0, 0)),
+      runId: options.runId ?? `92000000-0000-4000-8000-${randomUUID().slice(24)}`,
+      configHomeDir: options.configHomeDir ?? join(runFolderBase, 'empty-home'),
+      configCwd: options.configCwd ?? process.cwd(),
+    });
+    expect(exit).toBe(2);
+  } finally {
+    process.stdout.write = origStdoutWrite;
+    process.stderr.write = origStderrWrite;
+    restoreAll(restorers);
+  }
+
+  expect(stdout).toBe('');
+  expect(stderr).toContain(`error: ${RETIRED_RUNTIME_FRESH_INVOCATION_MESSAGE}`);
+  const runFolderFlag = argv.indexOf('--run-folder');
+  if (runFolderFlag >= 0) {
+    const runFolder = argv[runFolderFlag + 1];
+    if (typeof runFolder !== 'string') {
+      throw new Error('expected --run-folder to be followed by a path');
+    }
+    expect(existsSync(runFolder)).toBe(false);
+  }
+  return stderr;
 }
 
 async function runRunsShowJson(runFolder: string): Promise<RunStatusProjectionV1> {
@@ -1377,9 +1433,7 @@ describe('v2 selector soak', () => {
     await expectV2RunConsistency(runFolder, 'migrate');
   });
 
-  it('keeps retained-runtime-owned paths retained by default', async () => {
-    const projectRoot = join(runFolderBase, 'retained-project');
-    writeProjectPackage(projectRoot);
+  it('fails closed for retired-runtime-owned paths by default', async () => {
     const arbitraryFixture = join(runFolderBase, 'fixtures', 'review-copy.json');
     mkdirSync(dirname(arbitraryFixture), { recursive: true });
     writeFileSync(
@@ -1387,7 +1441,7 @@ describe('v2 selector soak', () => {
       readFileSync(join(process.cwd(), 'generated', 'flows', 'review', 'circuit.json')),
     );
 
-    const retainedCases: Array<{
+    const retiredCases: Array<{
       readonly label: string;
       readonly argv: readonly string[];
       readonly relayer: RelayFn;
@@ -1399,45 +1453,44 @@ describe('v2 selector soak', () => {
           'run',
           'review',
           '--goal',
-          'arbitrary fixture retained in soak',
+          'arbitrary fixture retired in soak',
           '--fixture',
           arbitraryFixture,
           '--run-folder',
-          join(runFolderBase, 'retained-arbitrary-fixture'),
+          join(runFolderBase, 'retired-arbitrary-fixture'),
         ],
         relayer: relayerWithBody(REVIEW_RELAY_BODY),
       },
     ];
 
-    for (const candidate of retainedCases) {
-      const { output } = await runMainJson(candidate.argv, {
+    for (const candidate of retiredCases) {
+      const stderr = await expectMainRetiredRuntimeFailure(candidate.argv, {
         relayer: candidate.relayer,
         ...(candidate.configCwd === undefined ? {} : { configCwd: candidate.configCwd }),
       });
-      expect(output.runtime, candidate.label).toBeUndefined();
-      expect(output.runtime_reason, candidate.label).toBeUndefined();
-      expectRetainedTrace(output.run_folder as string);
+      expect(stderr, candidate.label).toContain(RUNTIME_POLICY_REASONS.externalFixtureOrRoot);
     }
 
-    const composeRunFolder = join(runFolderBase, 'retained-compose-writer');
-    const { output: composeOutput } = await runMainJson(
+    const composeRunFolder = join(runFolderBase, 'retired-compose-writer');
+    let writerCalled = false;
+    const composeStderr = await expectMainRetiredRuntimeFailure(
       [
         'run',
         'review',
         '--goal',
-        'composeWriter retained in soak',
+        'composeWriter retired in soak',
         '--run-folder',
         composeRunFolder,
       ],
       {
         relayer: relayerWithBody(REVIEW_RELAY_BODY),
         composeWriter: () => {
-          throw new Error('composeWriter retained-runtime proof');
+          writerCalled = true;
         },
       },
     );
-    expect(composeOutput).toMatchObject({ flow_id: 'review', outcome: 'aborted' });
-    expectRetainedTrace(composeRunFolder);
+    expect(composeStderr).toContain(RUNTIME_POLICY_REASONS.composeWriter);
+    expect(writerCalled).toBe(false);
   });
 
   it('keeps rollback and strict opt-in precedence explicit', async () => {
@@ -1714,16 +1767,12 @@ describe('v2 selector soak', () => {
         relayer: generatedMigrateRelayer(),
       },
     ]) {
-      const { output } = await runMainJson(candidate.argv, {
+      const stderr = await expectMainRetiredRuntimeFailure(candidate.argv, {
         mode: 'rollback',
         relayer: candidate.relayer,
         configCwd: projectRoot,
       });
-      expect(output, candidate.label).toMatchObject({
-        runtime: 'retained',
-        runtime_reason: expect.stringContaining('CIRCUIT_DISABLE_V2_RUNTIME=1'),
-      });
-      expectRetainedTrace(output.run_folder as string);
+      expect(stderr, candidate.label).toContain(RUNTIME_POLICY_REASONS.rollback);
     }
 
     const strictRunFolder = join(runFolderBase, 'strict-beats-rollback');

@@ -3,11 +3,11 @@ import { relative, resolve } from 'node:path';
 export const GENERATED_FLOW_MIRROR_ROOT_ENV = 'CIRCUIT_GENERATED_FLOW_MIRROR_ROOT';
 
 const COMPOSE_WRITER_COMPATIBILITY_REASON =
-  'programmatic composeWriter injections are retained-runtime-owned compatibility; core-v2 customization uses executor injection or generated reports';
+  'programmatic composeWriter injections require the retired runtime; core-v2 customization uses executor injection or generated reports';
 
 export const COMPOSE_WRITER_COMPATIBILITY_POLICY = {
-  status: 'retained-runtime-only',
-  runtime: 'retained',
+  status: 'retired-runtime-only',
+  runtime: 'retired',
   v2Hook: 'not-planned',
   v2Customization: 'executor-injection-or-generated-reports',
   reason: COMPOSE_WRITER_COMPATIBILITY_REASON,
@@ -15,22 +15,23 @@ export const COMPOSE_WRITER_COMPATIBILITY_POLICY = {
 
 export const RUNTIME_POLICY_REASONS = {
   externalFixtureOrRoot:
-    'explicit --fixture/--flow-root inputs outside generated/flows or the trusted generated mirror are retained-runtime-owned by default; use CIRCUIT_V2_RUNTIME=1 only for explicit v2 fixture experiments',
+    'explicit --fixture/--flow-root inputs outside generated/flows or the trusted generated mirror require the retired runtime by default; use CIRCUIT_V2_RUNTIME=1 only for explicit v2 fixture experiments',
   composeWriter: COMPOSE_WRITER_COMPATIBILITY_REASON,
-  rollback: 'CIRCUIT_DISABLE_V2_RUNTIME=1 keeps default runtime routing on the retained runtime',
+  rollback:
+    'CIRCUIT_DISABLE_V2_RUNTIME=1 requests the retired runtime, which is no longer available',
   v2CheckpointResume: 'checkpoint resume follows the saved core-v2 run folder engine marker',
   retiredRuntimeRunFolder:
     'retained and v1 run folders were created by the retired runtime and must start fresh',
 } as const;
 
 export const CUSTOM_FLOW_ROOT_RUNTIME_POLICY =
-  'Custom flow roots run on retained compatibility by default. Use `CIRCUIT_V2_RUNTIME=1` only for explicit v2 experiments.';
+  'Custom roots created by `circuit-next create` must use v2. Use `CIRCUIT_V2_RUNTIME=1` only for explicit v2 experiments.';
 
 export const CLI_RUNTIME_ROUTING_POLICY =
-  'Runtime routing: proven fresh modes use the v2 runtime by default; unsupported modes, arbitrary fixtures/custom roots, rollback, and composeWriter still use retained fresh-run fallback. Retained and v1 run folders fail closed with a fresh-run instruction instead of a resume adapter. Custom roots created by `circuit-next create` are retained by default. CIRCUIT_DISABLE_V2_RUNTIME=1 disables default v2 routing. Internal opt-in: CIRCUIT_V2_RUNTIME=1 forces supported fresh runs through v2 and fails closed for unsupported modes. Runtime diagnostics: CIRCUIT_SHOW_RUNTIME_DECISION=1 includes runtime/runtime_reason fields for the current selector decision. CIRCUIT_V2_RUNTIME_CANDIDATE=1 is a temporary alias for the same diagnostics.';
+  'Runtime routing: proven fresh modes use the v2 runtime by default. Unsupported modes, arbitrary fixtures/custom roots, rollback, and composeWriter now fail closed; the retired fresh-run fallback fails closed instead of running. Retained and v1 run folders fail closed with a fresh-run instruction instead of a resume adapter. Custom roots created by `circuit-next create` must use v2. CIRCUIT_DISABLE_V2_RUNTIME=1 requests the retired runtime and fails closed unless CIRCUIT_V2_RUNTIME=1 routes a supported fresh run through v2. Internal opt-in: CIRCUIT_V2_RUNTIME=1 forces supported fresh runs through v2 and fails closed for unsupported modes. Runtime diagnostics: CIRCUIT_SHOW_RUNTIME_DECISION=1 includes runtime/runtime_reason fields for the current selector decision. CIRCUIT_V2_RUNTIME_CANDIDATE=1 is a temporary alias for the same diagnostics.';
 
 export type RuntimeSelectionKind = 'v2-supported' | 'old-runtime-required' | 'unsupported';
-export type RuntimeSelectionName = 'v2' | 'retained';
+export type RuntimeSelectionName = 'v2' | 'retired';
 
 export interface RuntimeSupportDecision {
   readonly kind: RuntimeSelectionKind;

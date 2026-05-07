@@ -9,7 +9,6 @@ import {
   COMPOSE_WRITER_COMPATIBILITY_POLICY,
   RUNTIME_POLICY_REASONS,
 } from '../../src/cli/runtime-compatibility-policy.js';
-import type { ComposeWriterFn } from '../../src/compat/retained-runtime.js';
 import { executeComposeV2 } from '../../src/core-v2/executors/compose.js';
 import type { ExecutorRegistryV2, StepExecutorV2 } from '../../src/core-v2/executors/index.js';
 import { executeRelayV2 } from '../../src/core-v2/executors/relay.js';
@@ -40,11 +39,13 @@ import {
   SweepReview,
   SweepVerification,
 } from '../../src/flows/sweep/reports.js';
+import type { ComposeWriterFn } from '../../src/runtime/runner-types.js';
 import { ProgressEvent } from '../../src/schemas/progress-event.js';
 import { RunResult } from '../../src/schemas/result.js';
 import { RunStatusProjectionV1 } from '../../src/schemas/run-status.js';
 import type { RelayResult } from '../../src/shared/connector-relay.js';
 import type { RelayFn, RelayInput } from '../../src/shared/relay-runtime-types.js';
+import { RETIRED_RUNTIME_FRESH_INVOCATION_MESSAGE } from '../../src/shared/retired-runtime-policy.js';
 
 const REVIEW_RELAY_BODY = JSON.stringify({ verdict: 'NO_ISSUES_FOUND', findings: [] });
 const BUILD_IMPLEMENTATION_BODY = JSON.stringify({
@@ -474,12 +475,6 @@ function traceEntryLog(runFolder: string): Array<Record<string, unknown>> {
 
 function expectV2Trace(runFolder: string): void {
   expect(traceEntryLog(runFolder)[0]).toMatchObject({ engine: 'core-v2' });
-}
-
-function expectRetainedTrace(runFolder: string): void {
-  const first = traceEntryLog(runFolder)[0];
-  expect(first).toMatchObject({ schema_version: 1 });
-  expect(first).not.toMatchObject({ engine: 'core-v2' });
 }
 
 function writeV2Runtime(value: string | undefined): () => void {
@@ -1022,55 +1017,6 @@ async function runMainDefaultJsonWithProgress(
   };
 }
 
-async function runMainRollbackJson(
-  argv: readonly string[],
-  options: {
-    readonly relayer?: RelayFn;
-    readonly composeWriter?: ComposeWriterFn;
-    readonly configCwd?: string;
-    readonly configHomeDir?: string;
-    readonly runId?: string;
-  } = {},
-): Promise<Record<string, unknown>> {
-  const restoreStrictRuntime = writeV2Runtime(undefined);
-  const restoreShowRuntimeDecision = writeShowRuntimeDecision(undefined);
-  const restoreCandidate = writeV2RuntimeCandidate(undefined);
-  const restoreDisabled = writeDisableV2Runtime('1');
-  const restoreGeneratedMirrorRoot = writeGeneratedFlowMirrorRoot(undefined);
-  let captured = '';
-  const origWrite = process.stdout.write;
-  process.stdout.write = ((chunk: string | Uint8Array): boolean => {
-    captured += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
-    return true;
-  }) as typeof process.stdout.write;
-  try {
-    const exit = await main(argv, {
-      ...(options.relayer === undefined ? {} : { relayer: options.relayer }),
-      ...(options.composeWriter === undefined ? {} : { composeWriter: options.composeWriter }),
-      now: deterministicNow(Date.UTC(2026, 4, 3, 20, 0, 0)),
-      runId: options.runId ?? '88000000-0000-4000-8000-000000000001',
-      configHomeDir: options.configHomeDir ?? join(runFolderBase, 'empty-home'),
-      configCwd: options.configCwd ?? process.cwd(),
-    });
-    expect(exit).toBe(0);
-  } finally {
-    process.stdout.write = origWrite;
-    restoreAll([
-      restoreStrictRuntime,
-      restoreShowRuntimeDecision,
-      restoreCandidate,
-      restoreDisabled,
-      restoreGeneratedMirrorRoot,
-    ]);
-  }
-
-  const parsed: unknown = JSON.parse(captured);
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('CLI output was not a JSON object');
-  }
-  return parsed as Record<string, unknown>;
-}
-
 async function runMainRuntimeDecisionJson(
   argv: readonly string[],
   options: {
@@ -1127,6 +1073,78 @@ async function runMainRuntimeDecisionJson(
     throw new Error('CLI output was not a JSON object');
   }
   return parsed as Record<string, unknown>;
+}
+
+async function expectMainRetiredRuntimeFailure(
+  argv: readonly string[],
+  options: {
+    readonly relayer?: RelayFn;
+    readonly composeWriter?: ComposeWriterFn;
+    readonly v2Executors?: Partial<ExecutorRegistryV2>;
+    readonly configCwd?: string;
+    readonly configHomeDir?: string;
+    readonly runId?: string;
+    readonly rollback?: boolean;
+    readonly showRuntimeDecision?: boolean;
+    readonly candidateAlias?: boolean;
+    readonly generatedMirrorRoot?: string;
+  } = {},
+): Promise<string> {
+  const restoreStrictRuntime = writeV2Runtime(undefined);
+  const restoreShowRuntimeDecision = writeShowRuntimeDecision(
+    options.showRuntimeDecision ? '1' : undefined,
+  );
+  const restoreCandidate = writeV2RuntimeCandidate(options.candidateAlias ? '1' : undefined);
+  const restoreDisabled = writeDisableV2Runtime(options.rollback ? '1' : undefined);
+  const restoreGeneratedMirrorRoot = writeGeneratedFlowMirrorRoot(
+    options.generatedMirrorRoot ?? undefined,
+  );
+  let stdout = '';
+  let stderr = '';
+  const origStdoutWrite = process.stdout.write;
+  const origStderrWrite = process.stderr.write;
+  process.stdout.write = ((chunk: string | Uint8Array): boolean => {
+    stdout += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+    return true;
+  }) as typeof process.stdout.write;
+  process.stderr.write = ((chunk: string | Uint8Array): boolean => {
+    stderr += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+    return true;
+  }) as typeof process.stderr.write;
+  try {
+    const exit = await main(argv, {
+      ...(options.relayer === undefined ? {} : { relayer: options.relayer }),
+      ...(options.composeWriter === undefined ? {} : { composeWriter: options.composeWriter }),
+      ...(options.v2Executors === undefined ? {} : { v2Executors: options.v2Executors }),
+      now: deterministicNow(Date.UTC(2026, 4, 3, 20, 0, 0)),
+      runId: options.runId ?? randomUUID(),
+      configHomeDir: options.configHomeDir ?? join(runFolderBase, 'empty-home'),
+      configCwd: options.configCwd ?? process.cwd(),
+    });
+    expect(exit).toBe(2);
+  } finally {
+    process.stdout.write = origStdoutWrite;
+    process.stderr.write = origStderrWrite;
+    restoreAll([
+      restoreStrictRuntime,
+      restoreShowRuntimeDecision,
+      restoreCandidate,
+      restoreDisabled,
+      restoreGeneratedMirrorRoot,
+    ]);
+  }
+
+  expect(stdout).toBe('');
+  expect(stderr).toContain(`error: ${RETIRED_RUNTIME_FRESH_INVOCATION_MESSAGE}`);
+  const runFolderFlag = argv.indexOf('--run-folder');
+  if (runFolderFlag >= 0) {
+    const runFolder = argv[runFolderFlag + 1];
+    if (typeof runFolder !== 'string') {
+      throw new Error('expected --run-folder to be followed by a path');
+    }
+    expect(existsSync(runFolder)).toBe(false);
+  }
+  return stderr;
 }
 
 async function runMainCandidateJsonWithProgress(
@@ -1219,18 +1237,19 @@ describe('CLI opt-in v2 runtime', () => {
     expect(text).toContain('CIRCUIT_SHOW_RUNTIME_DECISION=1');
     expect(text).toContain('includes runtime/runtime_reason fields');
     expect(text).toContain('CIRCUIT_V2_RUNTIME_CANDIDATE=1 is a temporary alias');
-    expect(text).toContain('Custom roots created by `circuit-next create` are retained by default');
+    expect(text).toContain('Custom roots created by `circuit-next create` must use v2');
     expect(text).toContain('composeWriter');
     expect(text).toContain('arbitrary fixtures/custom roots');
     expect(text).toContain('Retained and v1 run folders fail closed');
+    expect(text).toContain('retired fresh-run fallback fails closed');
     expect(text).toContain('instead of a resume adapter');
     expect(text).not.toContain('enables explicitly proven candidate rows');
   });
 
-  it('documents composeWriter as retained-only compatibility with no planned v2 hook', () => {
+  it('documents composeWriter as retired-runtime-only with no planned v2 hook', () => {
     expect(COMPOSE_WRITER_COMPATIBILITY_POLICY).toMatchObject({
-      status: 'retained-runtime-only',
-      runtime: 'retained',
+      status: 'retired-runtime-only',
+      runtime: 'retired',
       v2Hook: 'not-planned',
       v2Customization: 'executor-injection-or-generated-reports',
       reason: RUNTIME_POLICY_REASONS.composeWriter,
@@ -2253,34 +2272,32 @@ describe('CLI opt-in v2 runtime', () => {
     });
   });
 
-  it('keeps programmatic composeWriter invocations on the retained runtime by default', async () => {
-    const runFolder = join(runFolderBase, 'default-compose-writer-retained');
-    const writerError = 'composeWriter retained-runtime proof';
-    const output = await runMainDefaultJson(
+  it('fails closed for programmatic composeWriter invocations by default', async () => {
+    const runFolder = join(runFolderBase, 'default-compose-writer-retired');
+    let writerCalled = false;
+    const stderr = await expectMainRetiredRuntimeFailure(
       ['run', 'review', '--goal', 'review with compose writer hook', '--run-folder', runFolder],
       {
         relayer: relayerWithBody(REVIEW_RELAY_BODY),
         composeWriter: () => {
-          throw new Error(writerError);
+          writerCalled = true;
         },
       },
     );
 
-    const result = RunResult.parse(
-      JSON.parse(readFileSync(join(runFolder, 'reports', 'result.json'), 'utf8')),
-    );
-    expect(output).toMatchObject({ flow_id: 'review', outcome: 'aborted' });
-    expect(output.runtime).toBeUndefined();
-    expect(output.runtime_reason).toBeUndefined();
-    expect(result.reason).toContain(writerError);
-    expectRetainedTrace(runFolder);
+    expect(stderr).toContain(RUNTIME_POLICY_REASONS.composeWriter);
+    expect(writerCalled).toBe(false);
   });
 
-  it('keeps composeWriter on retained even when v2 executors are supplied', async () => {
+  it('fails closed for composeWriter even when v2 executors are supplied', async () => {
     const runFolder = join(runFolderBase, 'default-compose-writer-beats-v2-executors');
-    const writerError = 'composeWriter retained-runtime executor-precedence proof';
-    const v2ExecutorError = 'v2 executor should not run when composeWriter is supplied';
-    const output = await runMainDefaultJson(
+    let writerCalled = false;
+    let v2ExecutorCalled = false;
+    const failIfExecuted: StepExecutorV2 = async () => {
+      v2ExecutorCalled = true;
+      throw new Error('v2 executor should not run when composeWriter is supplied');
+    };
+    const stderr = await expectMainRetiredRuntimeFailure(
       [
         'run',
         'review',
@@ -2292,30 +2309,24 @@ describe('CLI opt-in v2 runtime', () => {
       {
         relayer: relayerWithBody(REVIEW_RELAY_BODY),
         composeWriter: () => {
-          throw new Error(writerError);
+          writerCalled = true;
         },
         v2Executors: {
-          compose: failingV2Executor(v2ExecutorError),
-          relay: failingV2Executor(v2ExecutorError),
+          compose: failIfExecuted,
+          relay: failIfExecuted,
         },
       },
     );
 
-    const result = RunResult.parse(
-      JSON.parse(readFileSync(join(runFolder, 'reports', 'result.json'), 'utf8')),
-    );
-    expect(output).toMatchObject({ flow_id: 'review', outcome: 'aborted' });
-    expect(output.runtime).toBeUndefined();
-    expect(output.runtime_reason).toBeUndefined();
-    expect(result.reason).toContain(writerError);
-    expect(result.reason).not.toContain(v2ExecutorError);
-    expectRetainedTrace(runFolder);
+    expect(stderr).toContain(RUNTIME_POLICY_REASONS.composeWriter);
+    expect(writerCalled).toBe(false);
+    expect(v2ExecutorCalled).toBe(false);
   });
 
-  it('keeps candidate diagnostics plus composeWriter on the retained runtime', async () => {
-    const runFolder = join(runFolderBase, 'candidate-compose-writer-retained');
-    const writerError = 'composeWriter candidate retained proof';
-    const output = await runMainCandidateJson(
+  it('fails closed for candidate diagnostics plus composeWriter', async () => {
+    const runFolder = join(runFolderBase, 'candidate-compose-writer-retired');
+    let writerCalled = false;
+    const stderr = await expectMainRetiredRuntimeFailure(
       [
         'run',
         'review',
@@ -2325,29 +2336,21 @@ describe('CLI opt-in v2 runtime', () => {
         runFolder,
       ],
       {
+        candidateAlias: true,
         relayer: relayerWithBody(REVIEW_RELAY_BODY),
         composeWriter: () => {
-          throw new Error(writerError);
+          writerCalled = true;
         },
       },
     );
 
-    const result = RunResult.parse(
-      JSON.parse(readFileSync(join(runFolder, 'reports', 'result.json'), 'utf8')),
-    );
-    expect(output).toMatchObject({
-      flow_id: 'review',
-      outcome: 'aborted',
-      runtime: 'retained',
-      runtime_reason: RUNTIME_POLICY_REASONS.composeWriter,
-    });
-    expect(output.runtime_reason).toContain('core-v2 customization uses executor injection');
-    expect(output.runtime_reason).not.toContain('equivalent compose writer hook');
-    expect(result.reason).toContain(writerError);
-    expectRetainedTrace(runFolder);
+    expect(stderr).toContain(RUNTIME_POLICY_REASONS.composeWriter);
+    expect(stderr).toContain('core-v2 customization uses executor injection');
+    expect(stderr).not.toContain('equivalent compose writer hook');
+    expect(writerCalled).toBe(false);
   });
 
-  it('keeps matrix-supported fresh runs on the retained runtime when rollback is enabled', async () => {
+  it('fails closed for matrix-supported fresh runs when rollback requests the retired runtime', async () => {
     const sharedProjectRoot = join(runFolderBase, 'rollback-project');
     mkdirSync(sharedProjectRoot, { recursive: true });
     writeFileSync(
@@ -2646,42 +2649,31 @@ describe('CLI opt-in v2 runtime', () => {
     ];
 
     for (const candidate of cases) {
-      const output = await runMainRollbackJson(candidate.argv, {
+      const stderr = await expectMainRetiredRuntimeFailure(candidate.argv, {
+        rollback: true,
         relayer: candidate.relayer,
         ...(candidate.configCwd === undefined ? {} : { configCwd: candidate.configCwd }),
       });
-      expect(output, candidate.label).toMatchObject({
-        runtime: 'retained',
-        runtime_reason: expect.stringContaining('CIRCUIT_DISABLE_V2_RUNTIME=1'),
-      });
-      expectRetainedTrace(output.run_folder as string);
+      expect(stderr, candidate.label).toContain(RUNTIME_POLICY_REASONS.rollback);
     }
   }, 30_000);
 
-  it('keeps rollback plus composeWriter on the retained runtime', async () => {
-    const runFolder = join(runFolderBase, 'rollback-compose-writer-retained');
-    const writerError = 'composeWriter rollback retained proof';
-    const output = await runMainRollbackJson(
+  it('fails closed for rollback plus composeWriter', async () => {
+    const runFolder = join(runFolderBase, 'rollback-compose-writer-retired');
+    let writerCalled = false;
+    const stderr = await expectMainRetiredRuntimeFailure(
       ['run', 'review', '--goal', 'rollback with compose writer hook', '--run-folder', runFolder],
       {
+        rollback: true,
         relayer: relayerWithBody(REVIEW_RELAY_BODY),
         composeWriter: () => {
-          throw new Error(writerError);
+          writerCalled = true;
         },
       },
     );
 
-    const result = RunResult.parse(
-      JSON.parse(readFileSync(join(runFolder, 'reports', 'result.json'), 'utf8')),
-    );
-    expect(output).toMatchObject({
-      flow_id: 'review',
-      outcome: 'aborted',
-      runtime: 'retained',
-      runtime_reason: expect.stringContaining('CIRCUIT_DISABLE_V2_RUNTIME=1'),
-    });
-    expect(result.reason).toContain(writerError);
-    expectRetainedTrace(runFolder);
+    expect(stderr).toContain(RUNTIME_POLICY_REASONS.rollback);
+    expect(writerCalled).toBe(false);
   });
 
   it('lets strict v2 opt-in override the rollback switch for supported fresh runs', async () => {
@@ -4242,37 +4234,31 @@ describe('CLI opt-in v2 runtime', () => {
     });
   });
 
-  it('keeps arbitrary explicit fixtures on the retained runtime in candidate routing', async () => {
+  it('fails closed for arbitrary explicit fixtures in candidate routing', async () => {
     const fixturePath = join(runFolderBase, 'fixtures', 'review-copy.json');
-    const runFolder = join(runFolderBase, 'candidate-arbitrary-fixture-retained');
+    const runFolder = join(runFolderBase, 'candidate-arbitrary-fixture-retired');
     mkdirSync(dirname(fixturePath), { recursive: true });
     writeFileSync(
       fixturePath,
       readFileSync(join(process.cwd(), 'generated', 'flows', 'review', 'circuit.json')),
     );
 
-    const output = await runMainCandidateJson(
+    const stderr = await expectMainRetiredRuntimeFailure(
       [
         'run',
         'review',
         '--goal',
-        'candidate arbitrary fixture should remain retained',
+        'candidate arbitrary fixture should fail closed',
         '--fixture',
         fixturePath,
         '--run-folder',
         runFolder,
       ],
-      { relayer: relayerWithBody(REVIEW_RELAY_BODY) },
+      { candidateAlias: true, relayer: relayerWithBody(REVIEW_RELAY_BODY) },
     );
 
-    expect(output).toMatchObject({
-      flow_id: 'review',
-      outcome: 'complete',
-      runtime: 'retained',
-      runtime_reason: RUNTIME_POLICY_REASONS.externalFixtureOrRoot,
-    });
-    expect(output.runtime_reason).toContain('CIRCUIT_V2_RUNTIME=1');
-    expect(traceEntryLog(runFolder)[0]).toMatchObject({ schema_version: 1 });
+    expect(stderr).toContain(RUNTIME_POLICY_REASONS.externalFixtureOrRoot);
+    expect(stderr).toContain('CIRCUIT_V2_RUNTIME=1');
   });
 
   it('allows generated-flow explicit fixtures through candidate routing', async () => {
@@ -4312,13 +4298,13 @@ describe('CLI opt-in v2 runtime', () => {
   it('trusts only wrapper-provenanced generated plugin mirrors for default v2 routing', async () => {
     const pluginFlowRoot = join(process.cwd(), 'plugins', 'circuit', 'flows');
 
-    const untrustedRunFolder = join(runFolderBase, 'plugin-mirror-without-marker-retained');
-    const untrusted = await runMainRuntimeDecisionJson(
+    const untrustedRunFolder = join(runFolderBase, 'plugin-mirror-without-marker-retired');
+    const untrustedStderr = await expectMainRetiredRuntimeFailure(
       [
         'run',
         'review',
         '--goal',
-        'plugin mirror without marker remains retained',
+        'plugin mirror without marker fails closed',
         '--flow-root',
         pluginFlowRoot,
         '--run-folder',
@@ -4329,13 +4315,7 @@ describe('CLI opt-in v2 runtime', () => {
         relayer: relayerWithBody(REVIEW_RELAY_BODY),
       },
     );
-    expect(untrusted).toMatchObject({
-      flow_id: 'review',
-      outcome: 'complete',
-      runtime: 'retained',
-      runtime_reason: RUNTIME_POLICY_REASONS.externalFixtureOrRoot,
-    });
-    expectRetainedTrace(untrustedRunFolder);
+    expect(untrustedStderr).toContain(RUNTIME_POLICY_REASONS.externalFixtureOrRoot);
 
     const trustedRunFolder = join(runFolderBase, 'plugin-mirror-with-marker-v2');
     const trusted = await runMainRuntimeDecisionJson(
@@ -4363,13 +4343,13 @@ describe('CLI opt-in v2 runtime', () => {
     });
     expectV2Trace(trustedRunFolder);
 
-    const mismatchRunFolder = join(runFolderBase, 'plugin-mirror-marker-mismatch-retained');
-    const mismatch = await runMainRuntimeDecisionJson(
+    const mismatchRunFolder = join(runFolderBase, 'plugin-mirror-marker-mismatch-retired');
+    const mismatchStderr = await expectMainRetiredRuntimeFailure(
       [
         'run',
         'review',
         '--goal',
-        'plugin mirror with mismatched marker remains retained',
+        'plugin mirror with mismatched marker fails closed',
         '--flow-root',
         pluginFlowRoot,
         '--run-folder',
@@ -4381,16 +4361,10 @@ describe('CLI opt-in v2 runtime', () => {
         relayer: relayerWithBody(REVIEW_RELAY_BODY),
       },
     );
-    expect(mismatch).toMatchObject({
-      flow_id: 'review',
-      outcome: 'complete',
-      runtime: 'retained',
-      runtime_reason: RUNTIME_POLICY_REASONS.externalFixtureOrRoot,
-    });
-    expectRetainedTrace(mismatchRunFolder);
+    expect(mismatchStderr).toContain(RUNTIME_POLICY_REASONS.externalFixtureOrRoot);
   });
 
-  it('keeps custom flow roots retained unless strict v2 is explicitly requested', async () => {
+  it('fails closed for custom flow roots unless strict v2 is explicitly requested', async () => {
     const customFlowRoot = join(runFolderBase, 'custom-home', 'flows');
     mkdirSync(join(customFlowRoot, 'review'), { recursive: true });
     writeFileSync(
@@ -4398,31 +4372,25 @@ describe('CLI opt-in v2 runtime', () => {
       readFileSync(join(process.cwd(), 'generated', 'flows', 'review', 'circuit.json')),
     );
 
-    const retainedRunFolder = join(runFolderBase, 'custom-flow-root-retained');
-    const retained = await runMainRuntimeDecisionJson(
+    const retiredRunFolder = join(runFolderBase, 'custom-flow-root-retired');
+    const stderr = await expectMainRetiredRuntimeFailure(
       [
         'run',
         'review',
         '--goal',
-        'custom flow root remains retained',
+        'custom flow root fails closed',
         '--flow-root',
         customFlowRoot,
         '--run-folder',
-        retainedRunFolder,
+        retiredRunFolder,
       ],
       {
         showRuntimeDecision: true,
         relayer: relayerWithBody(REVIEW_RELAY_BODY),
       },
     );
-    expect(retained).toMatchObject({
-      flow_id: 'review',
-      outcome: 'complete',
-      runtime: 'retained',
-      runtime_reason: RUNTIME_POLICY_REASONS.externalFixtureOrRoot,
-    });
-    expect(retained.runtime_reason).toContain('CIRCUIT_V2_RUNTIME=1');
-    expectRetainedTrace(retainedRunFolder);
+    expect(stderr).toContain(RUNTIME_POLICY_REASONS.externalFixtureOrRoot);
+    expect(stderr).toContain('CIRCUIT_V2_RUNTIME=1');
 
     const strictRunFolder = join(runFolderBase, 'custom-flow-root-strict-v2');
     const strict = await runMainRuntimeDecisionJson(
@@ -4451,15 +4419,15 @@ describe('CLI opt-in v2 runtime', () => {
     expectV2Trace(strictRunFolder);
   });
 
-  it('keeps rollback ahead of trusted generated plugin mirrors', async () => {
+  it('fails closed when rollback is requested for trusted generated plugin mirrors', async () => {
     const pluginFlowRoot = join(process.cwd(), 'plugins', 'circuit', 'flows');
-    const runFolder = join(runFolderBase, 'trusted-plugin-mirror-rollback-retained');
-    const output = await runMainRuntimeDecisionJson(
+    const runFolder = join(runFolderBase, 'trusted-plugin-mirror-rollback-retired');
+    const stderr = await expectMainRetiredRuntimeFailure(
       [
         'run',
         'review',
         '--goal',
-        'trusted plugin mirror rollback remains retained',
+        'trusted plugin mirror rollback fails closed',
         '--flow-root',
         pluginFlowRoot,
         '--run-folder',
@@ -4472,13 +4440,7 @@ describe('CLI opt-in v2 runtime', () => {
         relayer: relayerWithBody(REVIEW_RELAY_BODY),
       },
     );
-    expect(output).toMatchObject({
-      flow_id: 'review',
-      outcome: 'complete',
-      runtime: 'retained',
-      runtime_reason: expect.stringContaining('CIRCUIT_DISABLE_V2_RUNTIME=1'),
-    });
-    expectRetainedTrace(runFolder);
+    expect(stderr).toContain(RUNTIME_POLICY_REASONS.rollback);
   });
 
   it('shows runtime decisions with the preferred diagnostics flag', async () => {
@@ -4519,12 +4481,12 @@ describe('CLI opt-in v2 runtime', () => {
       readFileSync(join(process.cwd(), 'generated', 'flows', 'review', 'circuit.json')),
     );
     const unsupportedRunFolder = join(runFolderBase, 'show-runtime-decision-arbitrary-fixture');
-    const unsupported = await runMainRuntimeDecisionJson(
+    const unsupportedStderr = await expectMainRetiredRuntimeFailure(
       [
         'run',
         'review',
         '--goal',
-        'show runtime decision for retained arbitrary fixture',
+        'show runtime decision for retired arbitrary fixture',
         '--fixture',
         arbitraryFixture,
         '--run-folder',
@@ -4536,13 +4498,7 @@ describe('CLI opt-in v2 runtime', () => {
         configCwd: projectRoot,
       },
     );
-    expect(unsupported).toMatchObject({
-      flow_id: 'review',
-      outcome: 'complete',
-      runtime: 'retained',
-      runtime_reason: RUNTIME_POLICY_REASONS.externalFixtureOrRoot,
-    });
-    expectRetainedTrace(unsupportedRunFolder);
+    expect(unsupportedStderr).toContain(RUNTIME_POLICY_REASONS.externalFixtureOrRoot);
   });
 
   it('keeps the candidate env var as a runtime decision diagnostics alias', async () => {
@@ -4601,7 +4557,7 @@ describe('CLI opt-in v2 runtime', () => {
 
   it('reports rollback as the runtime reason when diagnostics and rollback are both set', async () => {
     const supportedRunFolder = join(runFolderBase, 'diagnostics-rollback-review');
-    const supported = await runMainRuntimeDecisionJson(
+    const supportedStderr = await expectMainRetiredRuntimeFailure(
       [
         'run',
         'review',
@@ -4616,17 +4572,11 @@ describe('CLI opt-in v2 runtime', () => {
         relayer: relayerWithBody(REVIEW_RELAY_BODY),
       },
     );
-    expect(supported).toMatchObject({
-      flow_id: 'review',
-      outcome: 'complete',
-      runtime: 'retained',
-      runtime_reason: expect.stringContaining('CIRCUIT_DISABLE_V2_RUNTIME=1'),
-    });
-    expectRetainedTrace(supportedRunFolder);
+    expect(supportedStderr).toContain(RUNTIME_POLICY_REASONS.rollback);
 
     const composeRunFolder = join(runFolderBase, 'diagnostics-rollback-compose-writer');
-    const writerError = 'diagnostics rollback composeWriter retained proof';
-    const composeOutput = await runMainRuntimeDecisionJson(
+    let writerCalled = false;
+    const composeStderr = await expectMainRetiredRuntimeFailure(
       [
         'run',
         'review',
@@ -4640,21 +4590,12 @@ describe('CLI opt-in v2 runtime', () => {
         rollback: true,
         relayer: relayerWithBody(REVIEW_RELAY_BODY),
         composeWriter: () => {
-          throw new Error(writerError);
+          writerCalled = true;
         },
       },
     );
-    const composeResult = RunResult.parse(
-      JSON.parse(readFileSync(join(composeRunFolder, 'reports', 'result.json'), 'utf8')),
-    );
-    expect(composeOutput).toMatchObject({
-      flow_id: 'review',
-      outcome: 'aborted',
-      runtime: 'retained',
-      runtime_reason: expect.stringContaining('CIRCUIT_DISABLE_V2_RUNTIME=1'),
-    });
-    expect(composeResult.reason).toContain(writerError);
-    expectRetainedTrace(composeRunFolder);
+    expect(composeStderr).toContain(RUNTIME_POLICY_REASONS.rollback);
+    expect(writerCalled).toBe(false);
 
     const fixturePath = join(runFolderBase, 'fixtures', 'diagnostics-rollback-review-copy.json');
     const fixtureRunFolder = join(runFolderBase, 'diagnostics-rollback-arbitrary-fixture');
@@ -4663,7 +4604,7 @@ describe('CLI opt-in v2 runtime', () => {
       fixturePath,
       readFileSync(join(process.cwd(), 'generated', 'flows', 'review', 'circuit.json')),
     );
-    const fixtureOutput = await runMainRuntimeDecisionJson(
+    const fixtureStderr = await expectMainRetiredRuntimeFailure(
       [
         'run',
         'review',
@@ -4680,13 +4621,7 @@ describe('CLI opt-in v2 runtime', () => {
         relayer: relayerWithBody(REVIEW_RELAY_BODY),
       },
     );
-    expect(fixtureOutput).toMatchObject({
-      flow_id: 'review',
-      outcome: 'complete',
-      runtime: 'retained',
-      runtime_reason: expect.stringContaining('CIRCUIT_DISABLE_V2_RUNTIME=1'),
-    });
-    expectRetainedTrace(fixtureRunFolder);
+    expect(fixtureStderr).toContain(RUNTIME_POLICY_REASONS.rollback);
   });
 
   it('keeps strict v2 ahead of rollback when runtime diagnostics are enabled', async () => {

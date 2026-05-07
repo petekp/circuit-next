@@ -174,11 +174,11 @@ describe('retained runtime compatibility facade', () => {
 
   it('keeps CLI and status surfaces off retained checkpoint-folder adapters', () => {
     const cli = readFileSync(resolve('src/cli/circuit.ts'), 'utf8');
-    expect(cli).toContain('../compat/retained-runtime.js');
+    expect(cli).not.toContain('../compat/retained-runtime.js');
     expect(cli).toContain('../shared/retired-runtime-policy.js');
     expect(cli).not.toContain('../compat/retained-checkpoint-folders.js');
     expect(cli).not.toContain('../runtime/runner.js');
-    expect(cli).toContain('runRetainedCompiledFlow');
+    expect(cli).not.toContain('runRetainedCompiledFlow');
     expect(cli).not.toContain('resumeRetainedCompiledFlowCheckpoint');
 
     const handoff = readFileSync(resolve('src/cli/handoff.ts'), 'utf8');

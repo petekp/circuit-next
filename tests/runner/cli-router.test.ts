@@ -9,7 +9,10 @@ import { ReviewIntake } from '../../src/flows/review/reports.js';
 import { ProgressEvent } from '../../src/schemas/progress-event.js';
 import type { RelayResult } from '../../src/shared/connector-relay.js';
 import type { RelayFn, RelayInput } from '../../src/shared/relay-runtime-types.js';
-import { RETIRED_RUNTIME_RUN_FOLDER_MESSAGE } from '../../src/shared/retired-runtime-policy.js';
+import {
+  RETIRED_RUNTIME_FRESH_INVOCATION_MESSAGE,
+  RETIRED_RUNTIME_RUN_FOLDER_MESSAGE,
+} from '../../src/shared/retired-runtime-policy.js';
 
 const EXPLORE_SYNTHESIS_BODY = JSON.stringify({
   verdict: 'accept',
@@ -470,6 +473,56 @@ async function runMainExit(argv: readonly string[]): Promise<{ exit: number; std
   }
 }
 
+async function runMainRetiredRuntimeFailure(
+  argv: readonly string[],
+): Promise<{ exit: number; stderr: string }> {
+  let stdout = '';
+  let stderr = '';
+  const origStdoutWrite = process.stdout.write;
+  const origStderrWrite = process.stderr.write;
+  process.stdout.write = ((chunk: string | Uint8Array): boolean => {
+    stdout += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+    return true;
+  }) as typeof process.stdout.write;
+  process.stderr.write = ((chunk: string | Uint8Array): boolean => {
+    stderr += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+    return true;
+  }) as typeof process.stderr.write;
+  try {
+    const exit = await main(argv, {
+      relayer: relayerWithBody('{"verdict":"accept"}'),
+      now: deterministicNow(Date.UTC(2026, 3, 24, 15, 0, 0)),
+      runId: '84000000-0000-0000-0000-000000000098',
+      configHomeDir: join(runFolderBase, 'empty-home'),
+      configCwd: process.cwd(),
+    });
+    expect(stdout).toBe('');
+    expect(stderr).toContain(`error: ${RETIRED_RUNTIME_FRESH_INVOCATION_MESSAGE}`);
+    const runFolderFlag = argv.indexOf('--run-folder');
+    if (runFolderFlag >= 0) {
+      const runFolder = argv[runFolderFlag + 1];
+      if (typeof runFolder !== 'string') {
+        throw new Error('expected --run-folder to be followed by a path');
+      }
+      expect(existsSync(runFolder)).toBe(false);
+    }
+    return { exit, stderr };
+  } finally {
+    process.stdout.write = origStdoutWrite;
+    process.stderr.write = origStderrWrite;
+  }
+}
+
+async function withStrictV2<T>(operation: () => Promise<T>): Promise<T> {
+  const originalStrictRuntime = process.env.CIRCUIT_V2_RUNTIME;
+  try {
+    process.env.CIRCUIT_V2_RUNTIME = '1';
+    return await operation();
+  } finally {
+    process.env.CIRCUIT_V2_RUNTIME = originalStrictRuntime;
+  }
+}
+
 let runFolderBase: string;
 
 beforeEach(() => {
@@ -750,7 +803,7 @@ describe('CLI router', () => {
       [
         '--goal',
         'develop: add a focused feature that waits for framing',
-        '--depth',
+        '--entry-mode',
         'deep',
         '--run-folder',
         runFolder,
@@ -779,7 +832,7 @@ describe('CLI router', () => {
       [
         '--goal',
         'develop: add a focused feature that waits for framing',
-        '--depth',
+        '--entry-mode',
         'deep',
         '--progress',
         'jsonl',
@@ -936,18 +989,20 @@ describe('CLI router', () => {
     const runFolder = join(runFolderBase, 'fix-lite-inferred');
     writeCliFixFixture(fixturePath);
 
-    const { output, progress } = await runMainJsonWithProgress(
-      [
-        '--goal',
-        'quick fix: restore the missing token edge case',
-        '--fixture',
-        fixturePath,
-        '--progress',
-        'jsonl',
-        '--run-folder',
-        runFolder,
-      ],
-      '{"verdict":"accept"}',
+    const { output, progress } = await withStrictV2(() =>
+      runMainJsonWithProgress(
+        [
+          '--goal',
+          'quick fix: restore the missing token edge case',
+          '--fixture',
+          fixturePath,
+          '--progress',
+          'jsonl',
+          '--run-folder',
+          runFolder,
+        ],
+        '{"verdict":"accept"}',
+      ),
     );
 
     const bootstrap = traceEntryLog(runFolder).find(
@@ -969,18 +1024,20 @@ describe('CLI router', () => {
     const runFolder = join(runFolderBase, 'fix-deep-inferred');
     writeCliFixFixture(fixturePath);
 
-    const { output, progress } = await runMainJsonWithProgress(
-      [
-        '--goal',
-        'fix: restore the missing token regression test',
-        '--fixture',
-        fixturePath,
-        '--progress',
-        'jsonl',
-        '--run-folder',
-        runFolder,
-      ],
-      '{"verdict":"accept"}',
+    const { output, progress } = await withStrictV2(() =>
+      runMainJsonWithProgress(
+        [
+          '--goal',
+          'fix: restore the missing token regression test',
+          '--fixture',
+          fixturePath,
+          '--progress',
+          'jsonl',
+          '--run-folder',
+          runFolder,
+        ],
+        '{"verdict":"accept"}',
+      ),
     );
 
     const bootstrap = traceEntryLog(runFolder).find(
@@ -1002,18 +1059,20 @@ describe('CLI router', () => {
     const runFolder = join(runFolderBase, 'fix-explicit-default-mode');
     writeCliFixFixture(fixturePath);
 
-    const output = await runMainJson(
-      [
-        '--goal',
-        'fix: restore the missing token regression test',
-        '--mode',
-        'default',
-        '--fixture',
-        fixturePath,
-        '--run-folder',
-        runFolder,
-      ],
-      '{"verdict":"accept"}',
+    const output = await withStrictV2(() =>
+      runMainJson(
+        [
+          '--goal',
+          'fix: restore the missing token regression test',
+          '--mode',
+          'default',
+          '--fixture',
+          fixturePath,
+          '--run-folder',
+          runFolder,
+        ],
+        '{"verdict":"accept"}',
+      ),
     );
 
     const bootstrap = traceEntryLog(runFolder).find(
@@ -1025,32 +1084,20 @@ describe('CLI router', () => {
     expect(bootstrap).toMatchObject({ depth: 'standard' });
   });
 
-  it('lets explicit --depth suppress classifier-inferred Fix mode', async () => {
-    const fixturePath = join(runFolderBase, 'fixtures', 'fix-explicit-depth.json');
+  it('fails closed when explicit --depth suppresses classifier-inferred Fix mode into an unproven route', async () => {
     const runFolder = join(runFolderBase, 'fix-explicit-depth');
-    writeCliFixFixture(fixturePath);
 
-    const output = await runMainJson(
-      [
-        '--goal',
-        'fix: restore the missing token regression test',
-        '--depth',
-        'deep',
-        '--fixture',
-        fixturePath,
-        '--run-folder',
-        runFolder,
-      ],
-      '{"verdict":"accept"}',
-    );
+    const result = await runMainRetiredRuntimeFailure([
+      '--goal',
+      'fix: restore the missing token regression test',
+      '--depth',
+      'deep',
+      '--run-folder',
+      runFolder,
+    ]);
 
-    const bootstrap = traceEntryLog(runFolder).find(
-      (trace_entry) => trace_entry.kind === 'run.bootstrapped',
-    );
-    expect(output.flow_id).toBe('fix');
-    expect(output.entry_mode).toBeUndefined();
-    expect(output.entry_mode_source).toBeUndefined();
-    expect(bootstrap).toMatchObject({ depth: 'deep' });
+    expect(result.exit).toBe(2);
+    expect(result.stderr).toContain("checkpoint-waiting depth 'deep'");
   });
 
   it('accepts --entry-mode and uses that mode depth when --depth is omitted', async () => {
@@ -1083,65 +1130,40 @@ describe('CLI router', () => {
     expect(relayResolvedSelection).toMatchObject({ depth: 'lite' });
   });
 
-  it('lets --depth override the selected --entry-mode default', async () => {
+  it('fails closed when --depth overrides the selected --entry-mode into an unproven route', async () => {
     const runFolder = join(runFolderBase, 'build-entry-mode-depth-override');
-    const output = await runMainJson(
-      [
-        'build',
-        '--goal',
-        'Add a tiny Build feature from the CLI with an override',
-        '--entry-mode',
-        'deep',
-        '--depth',
-        'standard',
-        '--run-folder',
-        runFolder,
-      ],
-      '{"verdict":"accept"}',
-    );
+    const result = await runMainRetiredRuntimeFailure([
+      'build',
+      '--goal',
+      'Add a tiny Build feature from the CLI with an override',
+      '--entry-mode',
+      'deep',
+      '--depth',
+      'standard',
+      '--run-folder',
+      runFolder,
+    ]);
 
-    const trace_entries = traceEntryLog(runFolder);
-    const bootstrap = trace_entries.find((trace_entry) => trace_entry.kind === 'run.bootstrapped');
-    const relayStarted = trace_entries.find(
-      (trace_entry) => trace_entry.kind === 'relay.started' && trace_entry.step_id === 'act-step',
-    );
-    expect(output.flow_id).toBe('build');
-    expect(output.outcome).toBe('complete');
-    expect(bootstrap).toMatchObject({ depth: 'standard' });
-    expect(relayStarted?.resolved_selection).toMatchObject({ depth: 'standard' });
+    expect(result.exit).toBe(2);
+    expect(result.stderr).toContain("fresh build entry mode 'deep' at depth 'standard'");
   });
 
-  it('lets explicit autonomous --depth override the default --entry-mode through checkpoint policy', async () => {
+  it('fails closed when explicit autonomous --depth overrides the default --entry-mode', async () => {
     const runFolder = join(runFolderBase, 'build-default-entry-autonomous-override');
-    const output = await runMainJson(
-      [
-        'build',
-        '--goal',
-        'Add a tiny Build feature from the CLI with autonomous override',
-        '--entry-mode',
-        'default',
-        '--depth',
-        'autonomous',
-        '--run-folder',
-        runFolder,
-      ],
-      '{"verdict":"accept"}',
-    );
+    const result = await runMainRetiredRuntimeFailure([
+      'build',
+      '--goal',
+      'Add a tiny Build feature from the CLI with autonomous override',
+      '--entry-mode',
+      'default',
+      '--depth',
+      'autonomous',
+      '--run-folder',
+      runFolder,
+    ]);
 
-    const trace_entries = traceEntryLog(runFolder);
-    const bootstrap = trace_entries.find((trace_entry) => trace_entry.kind === 'run.bootstrapped');
-    const checkpoint = trace_entries.find(
-      (trace_entry) =>
-        trace_entry.kind === 'checkpoint.resolved' && trace_entry.step_id === 'frame-step',
-    );
-    const relayStarted = trace_entries.find(
-      (trace_entry) => trace_entry.kind === 'relay.started' && trace_entry.step_id === 'act-step',
-    );
-    expect(output.flow_id).toBe('build');
-    expect(output.outcome).toBe('complete');
-    expect(bootstrap).toMatchObject({ depth: 'autonomous' });
-    expect(checkpoint).toMatchObject({ resolution_source: 'safe-autonomous' });
-    expect(relayStarted?.resolved_selection).toMatchObject({ depth: 'autonomous' });
+    expect(result.exit).toBe(2);
+    expect(result.stderr).toContain("fresh build entry mode 'default' at depth 'autonomous'");
   });
 
   it('rejects fixture overrides whose flow id does not match the selected flow', async () => {
@@ -1192,93 +1214,9 @@ describe('CLI router', () => {
   });
 
   it('prints a versioned checkpoint_waiting envelope without result_path', async () => {
-    const fixtureDir = join(runFolderBase, 'fixture');
-    mkdirSync(fixtureDir, { recursive: true });
-    const fixturePath = join(fixtureDir, 'circuit.json');
-    writeFileSync(
-      fixturePath,
-      JSON.stringify({
-        schema_version: '2',
-        id: 'build-checkpoint-cli-test',
-        version: '0.1.0',
-        purpose: 'test CLI checkpoint waiting envelope',
-        entry: { signals: { include: [], exclude: [] }, intent_prefixes: [] },
-        entry_modes: [
-          {
-            name: 'default',
-            start_at: 'frame-step',
-            depth: 'standard',
-            description: 'test entry mode',
-          },
-        ],
-        stages: [
-          {
-            id: 'frame-stage',
-            title: 'Frame',
-            canonical: 'frame',
-            steps: ['frame-step'],
-          },
-        ],
-        stage_path_policy: {
-          mode: 'partial',
-          omits: ['analyze', 'plan', 'act', 'verify', 'review', 'close'],
-          rationale: 'test-only checkpoint waiting envelope.',
-        },
-        steps: [
-          {
-            id: 'frame-step',
-            title: 'Frame',
-            protocol: 'build-frame@v1',
-            reads: [],
-            routes: { pass: '@complete' },
-            executor: 'orchestrator',
-            kind: 'checkpoint',
-            policy: {
-              prompt: 'Frame',
-              choices: [{ id: 'continue' }],
-              safe_default_choice: 'continue',
-              report_template: {
-                scope: 'CLI envelope test',
-                success_criteria: ['Envelope is shaped'],
-                verification_command_candidates: [
-                  {
-                    id: 'verify',
-                    cwd: '.',
-                    argv: [process.execPath, '-e', "process.stdout.write('ok')"],
-                    timeout_ms: 1_000,
-                    max_output_bytes: 20_000,
-                    env: {},
-                  },
-                ],
-              },
-            },
-            writes: {
-              request: 'reports/checkpoints/frame-step-request.json',
-              response: 'reports/checkpoints/frame-step-response.json',
-              report: { path: 'reports/build/brief.json', schema: 'build.brief@v1' },
-            },
-            check: {
-              kind: 'checkpoint_selection',
-              source: { kind: 'checkpoint_response', ref: 'response' },
-              allow: ['continue'],
-            },
-          },
-        ],
-      }),
-    );
-
+    const runFolder = join(runFolderBase, 'checkpoint-waiting');
     const output = await runMainJson(
-      [
-        'build-checkpoint-cli-test',
-        '--goal',
-        'Frame via CLI',
-        '--depth',
-        'deep',
-        '--fixture',
-        fixturePath,
-        '--run-folder',
-        join(runFolderBase, 'checkpoint-waiting'),
-      ],
+      ['build', '--goal', 'Frame via CLI', '--entry-mode', 'deep', '--run-folder', runFolder],
       '{"verdict":"accept"}',
     );
 
@@ -1292,97 +1230,12 @@ describe('CLI router', () => {
   });
 
   it('fails closed when resuming a retained checkpoint_waiting run', async () => {
-    const fixtureDir = join(runFolderBase, 'resume-fixture');
-    mkdirSync(fixtureDir, { recursive: true });
-    const fixturePath = join(fixtureDir, 'circuit.json');
-    writeFileSync(
-      fixturePath,
-      JSON.stringify({
-        schema_version: '2',
-        id: 'build-checkpoint-cli-resume-test',
-        version: '0.1.0',
-        purpose: 'test CLI checkpoint resume',
-        entry: { signals: { include: [], exclude: [] }, intent_prefixes: [] },
-        entry_modes: [
-          {
-            name: 'default',
-            start_at: 'frame-step',
-            depth: 'standard',
-            description: 'test entry mode',
-          },
-        ],
-        stages: [
-          {
-            id: 'frame-stage',
-            title: 'Frame',
-            canonical: 'frame',
-            steps: ['frame-step'],
-          },
-        ],
-        stage_path_policy: {
-          mode: 'partial',
-          omits: ['analyze', 'plan', 'act', 'verify', 'review', 'close'],
-          rationale: 'test-only checkpoint resume.',
-        },
-        steps: [
-          {
-            id: 'frame-step',
-            title: 'Frame',
-            protocol: 'build-frame@v1',
-            reads: [],
-            routes: { pass: '@complete' },
-            executor: 'orchestrator',
-            kind: 'checkpoint',
-            policy: {
-              prompt: 'Frame',
-              choices: [{ id: 'continue' }, { id: 'revise' }],
-              safe_default_choice: 'continue',
-              report_template: {
-                scope: 'CLI resume test',
-                success_criteria: ['Resume closes the run'],
-                verification_command_candidates: [
-                  {
-                    id: 'verify',
-                    cwd: '.',
-                    argv: [process.execPath, '-e', "process.stdout.write('ok')"],
-                    timeout_ms: 1_000,
-                    max_output_bytes: 20_000,
-                    env: {},
-                  },
-                ],
-              },
-            },
-            writes: {
-              request: 'reports/checkpoints/frame-step-request.json',
-              response: 'reports/checkpoints/frame-step-response.json',
-              report: { path: 'reports/build/brief.json', schema: 'build.brief@v1' },
-            },
-            check: {
-              kind: 'checkpoint_selection',
-              source: { kind: 'checkpoint_response', ref: 'response' },
-              allow: ['continue', 'revise'],
-            },
-          },
-        ],
-      }),
-    );
     const runFolder = join(runFolderBase, 'checkpoint-resume');
-
-    const waiting = await runMainJson(
-      [
-        'build-checkpoint-cli-resume-test',
-        '--goal',
-        'Frame and resume via CLI',
-        '--depth',
-        'deep',
-        '--fixture',
-        fixturePath,
-        '--run-folder',
-        runFolder,
-      ],
-      '{"verdict":"accept"}',
+    mkdirSync(runFolder, { recursive: true });
+    writeFileSync(
+      join(runFolder, 'trace.ndjson'),
+      `${JSON.stringify({ schema_version: 1, kind: 'run.started', flow_id: 'build' })}\n`,
     );
-    expect(waiting.outcome).toBe('checkpoint_waiting');
 
     const resumed = await runMainExit([
       'resume',

@@ -484,11 +484,13 @@ describe('Codex host plugin package', () => {
     const runFolder = join(tempDir, 'run');
     let captured = '';
     const originalWrite = process.stdout.write;
+    const originalGeneratedMirrorRoot = process.env.CIRCUIT_GENERATED_FLOW_MIRROR_ROOT;
     process.stdout.write = ((chunk: string | Uint8Array): boolean => {
       captured += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
       return true;
     }) as typeof process.stdout.write;
     try {
+      process.env.CIRCUIT_GENERATED_FLOW_MIRROR_ROOT = resolve(PLUGIN_ROOT, 'flows');
       const exit = await main(
         [
           'run',
@@ -524,6 +526,7 @@ describe('Codex host plugin package', () => {
       expect(existsSync(join(runFolder, 'reports/review-result.json'))).toBe(true);
     } finally {
       process.stdout.write = originalWrite;
+      process.env.CIRCUIT_GENERATED_FLOW_MIRROR_ROOT = originalGeneratedMirrorRoot;
       rmSync(tempDir, { recursive: true, force: true });
     }
   });
