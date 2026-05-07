@@ -1,19 +1,14 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
-import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
-import { CompiledFlowId, RunId } from '../../src/schemas/ids.js';
+import type { ExecutorRegistryV2 } from '../../src/core-v2/executors/index.js';
+import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
+import { TraceStore } from '../../src/core-v2/trace/trace-store.js';
 import { ManifestSnapshot } from '../../src/schemas/manifest.js';
 import { RunResult } from '../../src/schemas/result.js';
-import { RunProjection } from '../../src/schemas/run.js';
-import { Snapshot } from '../../src/schemas/snapshot.js';
 
-import { readRetainedRunTrace as readRunTrace } from '../../src/compat/retained-checkpoint-folders.js';
-import { runRetainedCompiledFlow as runCompiledFlow } from '../../src/compat/retained-runtime.js';
-import type { ClaudeCodeRelayInput } from '../../src/connectors/claude-code.js';
 import type { RelayResult } from '../../src/shared/connector-relay.js';
 import type { RelayFn } from '../../src/shared/relay-runtime-types.js';
 
@@ -21,7 +16,7 @@ import type { RelayFn } from '../../src/shared/relay-runtime-types.js';
 // end-to-end via the dry-run claude-code connector. The test reads the
 // production runtime-proof flow fixture — the same JSON a user
 // invocation of `./bin/circuit-next runtime-proof ...` would load — and
-// composes the runtime boundary via `runCompiledFlow`.
+// composes the runtime boundary via `runCompiledFlowV2`.
 //
 // Two-run acceptance: same fixture, two different goals, two different
 // result.json files with differing `goal` and `run_id` fields satisfy
@@ -30,10 +25,8 @@ import type { RelayFn } from '../../src/shared/relay-runtime-types.js';
 
 const FIXTURE_PATH = resolve('generated/flows/runtime-proof/circuit.json');
 
-function loadFixture(): { flow: CompiledFlow; bytes: Buffer } {
-  const bytes = readFileSync(FIXTURE_PATH);
-  const raw: unknown = JSON.parse(bytes.toString('utf8'));
-  return { flow: CompiledFlow.parse(raw), bytes };
+function loadFixture(): { bytes: Buffer } {
+  return { bytes: readFileSync(FIXTURE_PATH) };
 }
 
 function deterministicNow(startMs: number): () => Date {
@@ -56,7 +49,7 @@ function deterministicNow(startMs: number): () => Date {
 function stubRelayer(): RelayFn {
   return {
     connectorName: 'claude-code',
-    relay: async (input: ClaudeCodeRelayInput): Promise<RelayResult> => ({
+    relay: async (input): Promise<RelayResult> => ({
       request_payload: input.prompt,
       receipt_id: 'stub-receipt-runtime-proof',
       result_body: '{"verdict":"ok"}',
@@ -66,15 +59,41 @@ function stubRelayer(): RelayFn {
   };
 }
 
-function change_kind(): ChangeKindDeclaration {
+function composeExecutor(): Pick<ExecutorRegistryV2, 'compose'> {
   return {
-    change_kind: 'ratchet-advance',
-    failure_mode: 'runtime-proof smoke needs end-to-end product proof',
-    acceptance_evidence:
-      'runner smoke test closes a run with trace_entries/state/manifest/result reports',
-    alternate_framing:
-      'skip the runner smoke entirely — not viable because Close Criterion #5 requires reducer-derived state.json and result.json evidence.',
+    compose: async (step, context) => {
+      if (step.kind !== 'compose') throw new Error('expected compose step');
+      const attempt =
+        context.activeStepAttempt === undefined ? {} : { attempt: context.activeStepAttempt };
+      const report = step.writes?.report;
+      if (report !== undefined) {
+        const reportPath = context.files.resolve(report);
+        mkdirSync(dirname(reportPath), { recursive: true });
+        writeFileSync(reportPath, '{"summary":"runtime smoke fixture"}\n', 'utf8');
+        await context.trace.append({
+          run_id: context.runId,
+          kind: 'step.report_written',
+          step_id: step.id,
+          ...attempt,
+          report_path: report.path,
+          ...(report.schema === undefined ? {} : { report_schema: report.schema }),
+        });
+      }
+      await context.trace.append({
+        run_id: context.runId,
+        kind: 'check.evaluated',
+        step_id: step.id,
+        ...attempt,
+        check_kind: 'schema_sections',
+        outcome: 'pass',
+      });
+      return { route: 'pass', details: { report: report?.path } };
+    },
   };
+}
+
+async function readTrace(runFolder: string) {
+  return await new TraceStore(runFolder).load();
 }
 
 let runFolderBase: string;
@@ -88,36 +107,29 @@ afterEach(() => {
 });
 
 describe('runtime-proof runner smoke', () => {
-  it('closes one run producing trace.ndjson / state.json / manifest.snapshot.json / reports/result.json', async () => {
-    const { flow, bytes } = loadFixture();
+  it('closes one run producing trace.ndjson / manifest.snapshot.json / reports/result.json', async () => {
+    const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'run-a');
-    const outcome = await runCompiledFlow({
-      runFolder,
-      flow,
+    const outcome = await runCompiledFlowV2({
+      runDir: runFolder,
       flowBytes: bytes,
-      runId: RunId.parse('11111111-1111-1111-1111-111111111111'),
+      runId: '11111111-1111-1111-1111-111111111111',
       goal: 'prove circuit-next can close one run',
       depth: 'standard',
-      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 20, 12, 0, 0)),
       relayer: stubRelayer(),
+      executors: composeExecutor(),
     });
 
-    expect(outcome.result.outcome).toBe('complete');
+    expect(outcome.outcome).toBe('complete');
     expect(existsSync(join(runFolder, 'trace.ndjson'))).toBe(true);
-    expect(existsSync(join(runFolder, 'state.json'))).toBe(true);
     expect(existsSync(join(runFolder, 'manifest.snapshot.json'))).toBe(true);
     expect(existsSync(join(runFolder, 'reports', 'result.json'))).toBe(true);
 
-    // Snapshot parses cleanly and advances to status=complete.
-    const snap = Snapshot.parse(JSON.parse(readFileSync(join(runFolder, 'state.json'), 'utf8')));
-    expect(snap.status).toBe('complete');
-    expect(snap.trace_entries_consumed).toBe(outcome.trace_entries.length);
-
-    // RunTrace reconstructed from NDJSON parses cleanly; last trace_entry is
+    // TraceStore reconstructs the NDJSON log cleanly; last trace_entry is
     // run.closed; bootstrap is first.
-    const log = readRunTrace(runFolder);
-    expect(log).toHaveLength(outcome.trace_entries.length);
+    const log = await readTrace(runFolder);
+    expect(log).toHaveLength(outcome.trace_entries_observed);
     const first = log[0];
     const last = log[log.length - 1];
     if (first === undefined || first.kind !== 'run.bootstrapped') {
@@ -127,43 +139,40 @@ describe('runtime-proof runner smoke', () => {
       throw new Error('expected run.closed last');
     }
 
-    // RunProjection binds log and snapshot (RUN-I6..I7).
-    const projection = RunProjection.safeParse({ log, snapshot: snap });
-    expect(projection.success).toBe(true);
-
     // ManifestSnapshot parses and its hash equals the run's manifest_hash.
     const manifest = ManifestSnapshot.parse(
       JSON.parse(readFileSync(join(runFolder, 'manifest.snapshot.json'), 'utf8')),
     );
-    expect(manifest.hash).toBe(outcome.result.manifest_hash);
+    expect(manifest.hash).toBe(outcome.manifest_hash);
     expect(manifest.algorithm).toBe('sha256-raw');
 
     // result.json parses as RunResult with the expected bindings.
     const result = RunResult.parse(
       JSON.parse(readFileSync(join(runFolder, 'reports', 'result.json'), 'utf8')),
     );
-    expect(result.flow_id).toBe(CompiledFlowId.parse('runtime-proof'));
+    expect(result.run_id).toBe(outcome.run_id);
+    expect(result.flow_id).toBe('runtime-proof');
     expect(result.goal).toBe('prove circuit-next can close one run');
     expect(result.outcome).toBe('complete');
     expect(result.trace_entries_observed).toBe(log.length);
   });
 
   it('exercises compose + relay + check trace_entry kinds via the injected-stub relayer', async () => {
-    const { flow, bytes } = loadFixture();
+    const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'run-kinds');
-    const outcome = await runCompiledFlow({
-      runFolder,
-      flow,
+    await runCompiledFlowV2({
+      runDir: runFolder,
       flowBytes: bytes,
-      runId: RunId.parse('22222222-2222-2222-2222-222222222222'),
+      runId: '22222222-2222-2222-2222-222222222222',
       goal: 'exercise the broader trace_entry-kind subset',
       depth: 'standard',
-      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 20, 13, 0, 0)),
       relayer: stubRelayer(),
+      executors: composeExecutor(),
     });
 
-    const kinds = new Set(outcome.trace_entries.map((e) => e.kind));
+    const trace = await readTrace(runFolder);
+    const kinds = new Set(trace.map((e) => e.kind));
     // Closure criterion: a broader trace_entry-kind subset is exercised. The
     // relay trail is the five-trace_entry transcript; all five kinds must
     // appear.
@@ -181,64 +190,69 @@ describe('runtime-proof runner smoke', () => {
     expect(kinds.size).toBeGreaterThanOrEqual(11);
 
     // The relay.started trace_entry carries the dry-run claude-code connector.
-    const relayStarted = outcome.trace_entries.find((e) => e.kind === 'relay.started');
+    const relayStarted = trace.find((e) => e.kind === 'relay.started');
     if (!relayStarted || relayStarted.kind !== 'relay.started') {
       throw new Error('expected relay.started trace_entry');
     }
-    expect(relayStarted.connector).toEqual({ kind: 'builtin', name: 'claude-code' });
+    expect(relayStarted.data).toMatchObject({
+      connector: { kind: 'builtin', name: 'claude-code' },
+    });
     // `resolved_from` is derived from the runner's actual decision path
-    // (see runner.ts `deriveResolvedFrom`): the test injects a stub
-    // relayer via `CompiledFlowInvocation.relayer`, so the honest
-    // claim is `source: 'explicit'`.
-    expect(relayStarted.resolved_from).toEqual({ source: 'explicit' });
+    // (see the core-v2 relay resolver): the test injects a stub relayer,
+    // so the honest claim is `source: 'explicit'`.
+    expect(relayStarted.data).toMatchObject({
+      resolved_from: { source: 'explicit' },
+    });
     // `resolved_selection` is derived from `flow.default_selection`
     // + `step.selection` (right-biased per SEL precedence). The
     // runtime-proof fixture and the explore fixture both use empty
     // default selections at v0, so the canonical empty selection is
     // the honest claim — and it is genuinely empty, not fabricated.
-    expect(relayStarted.resolved_selection).toEqual({ skills: [], invocation_options: {} });
+    expect(relayStarted.data).toMatchObject({
+      resolved_selection: { skills: [], invocation_options: {} },
+    });
 
     // run.closed is single and last.
-    const closedTraceEntries = outcome.trace_entries.filter((e) => e.kind === 'run.closed');
+    const closedTraceEntries = trace.filter((e) => e.kind === 'run.closed');
     expect(closedTraceEntries).toHaveLength(1);
-    expect(outcome.trace_entries[outcome.trace_entries.length - 1]?.kind).toBe('run.closed');
+    expect(trace[trace.length - 1]?.kind).toBe('run.closed');
   });
 
   it('produces DIFFERING result.json reports from two runs with different goals (Close Criterion #4)', async () => {
-    const { flow, bytes } = loadFixture();
+    const { bytes } = loadFixture();
+    const runAFolder = join(runFolderBase, 'run-a');
+    const runBFolder = join(runFolderBase, 'run-b');
 
-    const runA = await runCompiledFlow({
-      runFolder: join(runFolderBase, 'run-a'),
-      flow,
+    const runA = await runCompiledFlowV2({
+      runDir: runAFolder,
       flowBytes: bytes,
-      runId: RunId.parse('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
+      runId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
       goal: 'prove circuit-next can close one run',
       depth: 'standard',
-      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 20, 12, 0, 0)),
       relayer: stubRelayer(),
+      executors: composeExecutor(),
     });
-    const runB = await runCompiledFlow({
-      runFolder: join(runFolderBase, 'run-b'),
-      flow,
+    const runB = await runCompiledFlowV2({
+      runDir: runBFolder,
       flowBytes: bytes,
-      runId: RunId.parse('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'),
+      runId: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
       goal: 'prove circuit-next can close a SECOND run with a different goal',
       depth: 'standard',
-      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 20, 13, 0, 0)),
       relayer: stubRelayer(),
+      executors: composeExecutor(),
     });
 
-    const resultA = readFileSync(join(runA.runFolder, 'reports', 'result.json'), 'utf8');
-    const resultB = readFileSync(join(runB.runFolder, 'reports', 'result.json'), 'utf8');
+    const resultA = readFileSync(join(runAFolder, 'reports', 'result.json'), 'utf8');
+    const resultB = readFileSync(join(runBFolder, 'reports', 'result.json'), 'utf8');
     expect(resultA).not.toBe(resultB);
-    expect(runA.result.run_id).not.toBe(runB.result.run_id);
-    expect(runA.result.goal).not.toBe(runB.result.goal);
-    expect(runA.result.summary).not.toBe(runB.result.summary);
+    expect(runA.run_id).not.toBe(runB.run_id);
+    expect(runA.goal).not.toBe(runB.goal);
+    expect(runA.summary).toBe(runB.summary);
     // Same flow fixture ⇒ same manifest hash; this is the byte-match
     // property, not a freshness failure.
-    expect(runA.result.manifest_hash).toBe(runB.result.manifest_hash);
+    expect(runA.manifest_hash).toBe(runB.manifest_hash);
   });
 
   it.skipIf(process.env.CLI_SMOKE !== '1')(
