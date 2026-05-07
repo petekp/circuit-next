@@ -198,6 +198,7 @@ export async function executeRelayFanoutBranch(
   branchDirAbs: string,
 ): Promise<BranchOutcome> {
   const startMs = Date.now();
+  const attempt = context.activeStepAttempt ?? 1;
   const childRunId = randomUUID();
   const resultPath = `${branchDirRel}/result.json`;
   const reportPath = `${branchDirRel}/report.json`;
@@ -205,6 +206,7 @@ export async function executeRelayFanoutBranch(
     run_id: context.runId,
     kind: 'fanout.branch_started',
     step_id: step.id,
+    attempt,
     branch_id: branch.branch_id,
     branch_kind: 'relay',
     child_run_id: childRunId,
@@ -257,6 +259,7 @@ export async function executeRelayFanoutBranch(
         run_id: context.runId,
         kind: 'fanout.branch_completed',
         step_id: step.id,
+        attempt,
         branch_id: branch.branch_id,
         branch_kind: 'relay',
         child_run_id: childRunId,
@@ -318,6 +321,7 @@ export async function executeRelayFanoutBranch(
       run_id: context.runId,
       kind: 'fanout.branch_completed',
       step_id: step.id,
+      attempt,
       branch_id: branch.branch_id,
       branch_kind: 'relay',
       child_run_id: childRunId,
@@ -344,6 +348,7 @@ export async function executeRelayFanoutBranch(
       run_id: context.runId,
       kind: 'fanout.branch_completed',
       step_id: step.id,
+      attempt,
       branch_id: branch.branch_id,
       branch_kind: 'relay',
       child_run_id: childRunId,
@@ -375,12 +380,14 @@ export async function executeSubRunFanoutBranch(
   worktreePath: string,
 ): Promise<BranchOutcome> {
   const startMs = Date.now();
+  const attempt = context.activeStepAttempt ?? 1;
   const childRunId = randomUUID();
   const resultPath = `${branchDirRel}/result.json`;
   await context.trace.append({
     run_id: context.runId,
     kind: 'fanout.branch_started',
     step_id: step.id,
+    attempt,
     branch_id: branch.branch_id,
     branch_kind: 'sub-run',
     child_run_id: childRunId,
@@ -394,6 +401,7 @@ export async function executeSubRunFanoutBranch(
       run_id: context.runId,
       kind: 'fanout.branch_completed',
       step_id: step.id,
+      attempt,
       branch_id: branch.branch_id,
       branch_kind: 'sub-run',
       child_run_id: childRunId,
@@ -465,6 +473,7 @@ export async function executeSubRunFanoutBranch(
       run_id: context.runId,
       kind: 'fanout.branch_completed',
       step_id: step.id,
+      attempt,
       branch_id: branch.branch_id,
       branch_kind: 'sub-run',
       child_run_id: childRunId,
@@ -490,6 +499,7 @@ export async function executeSubRunFanoutBranch(
       run_id: context.runId,
       kind: 'fanout.branch_completed',
       step_id: step.id,
+      attempt,
       branch_id: branch.branch_id,
       branch_kind: 'sub-run',
       child_run_id: childRunId,

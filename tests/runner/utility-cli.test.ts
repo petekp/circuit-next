@@ -91,7 +91,7 @@ function writeTraceOnlyInvalidRunFolder(runFolder: string, runId: string): void 
       run_id: runId,
       flow_id: 'build',
       depth: 'deep',
-      manifest_hash: 'legacy-manifest-hash',
+      manifest_hash: 'invalid-manifest-hash',
     })}\n`,
   );
 }
@@ -220,7 +220,11 @@ describe('utility CLI commands', () => {
     const firstTrace = JSON.parse(
       readFileSync(join(runFolder, 'trace.ndjson'), 'utf8').split(/\r?\n/, 1)[0] ?? '{}',
     ) as Record<string, unknown>;
-    expect(firstTrace).toMatchObject({ engine: 'runtime', flow_id: 'release-note-flow' });
+    expect(firstTrace).toMatchObject({
+      schema_version: 1,
+      kind: 'run.bootstrapped',
+      flow_id: 'release-note-flow',
+    });
   });
 
   it('publishes reviewed draft contents without regenerating the draft', async () => {
@@ -858,8 +862,8 @@ describe('utility CLI commands', () => {
     );
   });
 
-  it('fails closed when binding handoff continuity to a kept waiting run', async () => {
-    const root = tempRoot('circuit-handoff-kept-run-');
+  it('fails closed when binding handoff continuity to a saved waiting run', async () => {
+    const root = tempRoot('circuit-handoff-saved-run-');
     const runFolder = join(root, 'run');
     const controlPlane = join(root, 'control-plane');
     writeInvalidRunFolder(runFolder, '55555555-5555-4555-8555-555555555556');
@@ -868,9 +872,9 @@ describe('utility CLI commands', () => {
       'handoff',
       'save',
       '--goal',
-      'Resume kept waiting Build run',
+      'Resume saved waiting Build run',
       '--next',
-      'DO: resolve the kept Build checkpoint',
+      'DO: resolve the saved Build checkpoint',
       '--run-folder',
       runFolder,
       '--control-plane',
@@ -949,7 +953,7 @@ describe('utility CLI commands', () => {
   });
 
   it('fails closed for corrupted unmarked invalid folders before any adapter path', async () => {
-    const root = tempRoot('circuit-handoff-kept-corrupt-');
+    const root = tempRoot('circuit-handoff-saved-corrupt-');
     const runFolder = join(root, 'run');
     const controlPlane = join(root, 'control-plane');
     writeInvalidRunFolder(runFolder, '55555555-5555-4555-8555-555555555557');
@@ -962,7 +966,7 @@ describe('utility CLI commands', () => {
       '--goal',
       'Do not project corrupted invalid folder as runtime',
       '--next',
-      'DO: inspect the kept trace corruption',
+      'DO: inspect the saved trace corruption',
       '--run-folder',
       runFolder,
       '--control-plane',

@@ -180,6 +180,7 @@ export const RelayReceiptTraceEntry = TraceEntryBase.extend({
   kind: z.literal('relay.receipt'),
   step_id: StepId,
   attempt: z.number().int().positive(),
+  cli_version: z.string().min(1),
   receipt_id: z
     .string()
     .min(1)
@@ -278,6 +279,7 @@ export const FanoutBranchStartedTraceEntry = TraceEntryBase.extend({
   step_id: StepId,
   attempt: z.number().int().positive(),
   branch_id: z.string().min(1),
+  branch_kind: z.enum(['relay', 'sub-run']),
   child_run_id: RunId,
   // Worktree path provisioned for this branch (relative to project root).
   // Records where the per-branch isolation lived for postmortem auditing.
@@ -290,6 +292,7 @@ export const FanoutBranchCompletedTraceEntry = TraceEntryBase.extend({
   step_id: StepId,
   attempt: z.number().int().positive(),
   branch_id: z.string().min(1),
+  branch_kind: z.enum(['relay', 'sub-run']),
   child_run_id: RunId,
   child_outcome: RunClosedOutcome,
   verdict: z.string().min(1),

@@ -188,6 +188,7 @@ export function materializeRelay(input: RelayMaterializeInput): RelayMaterialize
     kind: 'relay.receipt',
     step_id: stepId,
     attempt,
+    cli_version: relayResult.cli_version,
     receipt_id: relayResult.receipt_id,
   });
 

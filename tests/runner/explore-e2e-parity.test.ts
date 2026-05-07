@@ -368,15 +368,15 @@ describe('explore fixture static declarations (ratchet-floor contribution)', () 
       if (UPDATE_AGENT_FINGERPRINT) {
         const commitSha = currentHeadSha();
         // Bind cli_version to the actual subprocess init trace entry via
-        // runtime relay.receipt.data.cli_version, sourced from each
-        // relayer's RelayResult.cli_version, which claude-code.ts reads
-        // from init.claude_code_version. The
+        // runtime relay.receipt.cli_version, sourced from each relayer's
+        // RelayResult.cli_version, which claude-code.ts reads from
+        // init.claude_code_version. The
         // audit rejects fingerprints with empty/unknown cli_version
         // on runtime, so this binding fails closed at promotion time.
         const firstClaudeCodeReceipt = traceEntries.find((entry) => entry.kind === 'relay.receipt');
         const cliVersion =
           firstClaudeCodeReceipt?.kind === 'relay.receipt'
-            ? String(firstClaudeCodeReceipt.data?.cli_version ?? '')
+            ? String(firstClaudeCodeReceipt.cli_version ?? '')
             : '';
         if (cliVersion.length === 0) {
           throw new Error(

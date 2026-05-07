@@ -87,10 +87,10 @@ describe('runtime-safety-floor connector invocation failure closure', () => {
     const started = outcome.trace_entries.find((e) => e.kind === 'relay.started');
     if (started?.kind !== 'relay.started') throw new Error('expected relay.started');
     expect(started.step_id).toBe('relay-step');
-    expect(started.data?.connector).toEqual({ kind: 'builtin', name: 'claude-code' });
-    expect(started.data?.role).toBe('implementer');
-    expect(started.data?.resolved_from).toEqual({ source: 'explicit' });
-    expect(started.data?.resolved_selection).toEqual({ skills: [], invocation_options: {} });
+    expect(started.connector).toEqual({ kind: 'builtin', name: 'claude-code' });
+    expect(started.role).toBe('implementer');
+    expect(started.resolved_from).toEqual({ source: 'explicit' });
+    expect(started.resolved_selection).toEqual({ skills: [], invocation_options: {} });
 
     const relayStepKinds = outcome.trace_entries
       .filter((trace_entry) => 'step_id' in trace_entry && trace_entry.step_id === 'relay-step')
@@ -106,12 +106,12 @@ describe('runtime-safety-floor connector invocation failure closure', () => {
     const request = outcome.trace_entries.find((e) => e.kind === 'relay.request');
     if (request?.kind !== 'relay.request') throw new Error('expected relay.request');
     expect(request.step_id).toBe('relay-step');
-    expect(request.data?.request_payload_hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(request.request_payload_hash).toMatch(/^[0-9a-f]{64}$/);
 
     const failed = outcome.trace_entries.find((e) => e.kind === 'relay.failed');
     if (failed?.kind !== 'relay.failed') throw new Error('expected relay.failed');
     expect(failed.step_id).toBe('relay-step');
-    expect(failed.data?.request_payload_hash).toBe(request.data?.request_payload_hash);
+    expect(failed.request_payload_hash).toBe(request.request_payload_hash);
     expect(failed.reason).toMatch(/connector invocation failed/i);
     expect(failed.reason).toMatch(/auth token missing/);
 

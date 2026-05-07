@@ -82,6 +82,7 @@ function frameOverrideExecutors(): Pick<ExecutorRegistry, 'compose'> {
         run_id: context.runId,
         kind: 'step.report_written',
         step_id: step.id,
+        attempt: context.activeStepAttempt ?? 1,
         report_path: report.path,
         ...(report.schema === undefined ? {} : { report_schema: report.schema }),
       });

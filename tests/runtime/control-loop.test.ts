@@ -644,7 +644,6 @@ describe('runtime control-loop parity twins', () => {
         expect(trace.at(-1)).toMatchObject({
           kind: 'run.closed',
           outcome,
-          data: { outcome, terminal_target: target },
         });
       });
     }
@@ -666,7 +665,6 @@ describe('runtime control-loop parity twins', () => {
           kind: 'relay.completed',
           step_id: 'relay-step',
           verdict: 'ok-with-caveats',
-          data: { admitted: true },
         }),
         expect.objectContaining({
           kind: 'check.evaluated',
@@ -692,10 +690,10 @@ describe('runtime control-loop parity twins', () => {
     expect(
       trace
         .filter((entry) => entry.kind === 'relay.completed')
-        .map((entry) => ({ step_id: entry.step_id, verdict: entry.verdict, data: entry.data })),
+        .map((entry) => ({ step_id: entry.step_id, verdict: entry.verdict })),
     ).toEqual([
-      { step_id: 'first-relay', verdict: 'intermediate', data: { admitted: true } },
-      { step_id: 'second-relay', verdict: 'final', data: { admitted: true } },
+      { step_id: 'first-relay', verdict: 'intermediate' },
+      { step_id: 'second-relay', verdict: 'final' },
     ]);
   });
 
@@ -713,10 +711,10 @@ describe('runtime control-loop parity twins', () => {
     expect(
       trace
         .filter((entry) => entry.kind === 'relay.completed')
-        .map((entry) => ({ step_id: entry.step_id, verdict: entry.verdict, data: entry.data })),
+        .map((entry) => ({ step_id: entry.step_id, verdict: entry.verdict })),
     ).toEqual([
-      { step_id: 'first-relay', verdict: 'intermediate', data: { admitted: true } },
-      { step_id: 'second-relay', verdict: 'reject', data: { admitted: false } },
+      { step_id: 'first-relay', verdict: 'intermediate' },
+      { step_id: 'second-relay', verdict: 'reject' },
     ]);
     expect(trace).toEqual(
       expect.arrayContaining([
@@ -746,11 +744,9 @@ describe('runtime control-loop parity twins', () => {
         expect.objectContaining({
           kind: 'relay.started',
           step_id: 'relay-step',
-          data: expect.objectContaining({
-            connector: { kind: 'builtin', name: 'codex' },
-            resolved_from: { source: 'explicit' },
-            role: 'reviewer',
-          }),
+          connector: { kind: 'builtin', name: 'codex' },
+          resolved_from: { source: 'explicit' },
+          role: 'reviewer',
         }),
       ]),
     );
@@ -978,7 +974,6 @@ describe('runtime control-loop parity twins', () => {
             kind: 'relay.completed',
             step_id: 'relay-step',
             verdict: testCase.expectedRelayVerdict,
-            data: { admitted: false },
           }),
           expect.objectContaining({
             kind: 'check.evaluated',
@@ -1131,7 +1126,6 @@ describe('runtime control-loop parity twins', () => {
           kind: 'relay.completed',
           step_id: 'relay-step',
           verdict: 'reject',
-          data: { admitted: false },
         }),
         expect.objectContaining({
           kind: 'check.evaluated',
@@ -1188,12 +1182,11 @@ describe('runtime control-loop parity twins', () => {
     expect(relayCompleted).toMatchObject({
       kind: 'relay.completed',
       verdict: 'reject',
-      data: { admitted: false },
     });
     expect(relayCompleted).not.toHaveProperty('report_path');
   });
 
-  it('writes the canonical report and report_path only after relay admission passes', async () => {
+  it('writes the canonical report only after relay admission passes', async () => {
     const report = { path: 'reports/relay-canonical.json', schema: 'runtime-proof-canonical@v1' };
     const { result, trace, resultJson, inspection } = await runRuntimeProofRelayCase({
       flowBytes: relayFlowBytes({
@@ -1219,9 +1212,43 @@ describe('runtime control-loop parity twins', () => {
         kind: 'relay.completed',
         step_id: 'relay-step',
         verdict: 'ok',
-        report_path: report.path,
-        data: { admitted: true },
       }),
+    );
+  });
+
+  it('does not trace relay completion when the canonical report write fails', async () => {
+    const report = {
+      path: 'reports/relay.request.txt/canonical.json',
+      schema: 'runtime-proof-canonical@v1',
+    };
+    const { result, trace, resultJson, inspection } = await runRuntimeProofRelayCase({
+      flowBytes: relayFlowBytes({
+        report,
+      }),
+      resultBody: '{"verdict":"ok","summary":"accepted"}',
+      runId: 'ffffffff-4444-4fff-8fff-ffffffff4444',
+      inspectRunDir: async (runDir) => ({
+        requestExists: existsSync(join(runDir, 'reports', 'relay.request.txt')),
+        receiptExists: existsSync(join(runDir, 'reports', 'relay.receipt.txt')),
+        resultExists: existsSync(join(runDir, 'reports', 'relay.result.json')),
+        reportExists: existsSync(join(runDir, report.path)),
+      }),
+    });
+
+    expect(result.outcome).toBe('aborted');
+    expect(result.reason).toMatch(/relay\.request\.txt/);
+    expect(resultJson.outcome).toBe('aborted');
+    expect(inspection).toEqual({
+      requestExists: true,
+      receiptExists: true,
+      resultExists: true,
+      reportExists: false,
+    });
+    expect(trace).not.toContainEqual(
+      expect.objectContaining({ kind: 'relay.completed', step_id: 'relay-step' }),
+    );
+    expect(trace).toContainEqual(
+      expect.objectContaining({ kind: 'step.aborted', step_id: 'relay-step' }),
     );
   });
 

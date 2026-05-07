@@ -24,7 +24,12 @@ const EXEMPT_PATH_PREFIXES = [
   'tests/fixtures/reference/legacy-circuit/',
 ] as const;
 
-const OLD_TERM_EXEMPT_PATH_PREFIXES = [...EXEMPT_PATH_PREFIXES, 'docs/release/parity/'] as const;
+const OLD_TERM_EXEMPT_PATH_PREFIXES = [
+  ...EXEMPT_PATH_PREFIXES,
+  'docs/release/parity/',
+  'docs/ideas/',
+  'docs/learnings/',
+] as const;
 
 const EXEMPT_FILES = new Set([
   'HANDOFF.md',

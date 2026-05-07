@@ -7,6 +7,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { lstat, mkdir, readdir } from 'node:fs/promises';
+import type { ChangeKindDeclaration } from '../../schemas/change-kind.js';
 import type { CompiledFlow } from '../../schemas/compiled-flow.js';
 import type { LayeredConfig as LayeredConfigValue } from '../../schemas/config.js';
 import { computeManifestHash } from '../../schemas/manifest.js';
@@ -111,11 +112,24 @@ function outcomeForTerminal(target: TerminalTarget): RunClosedOutcome {
 }
 
 function latestAdmittedVerdict(context: RunContext): string | undefined {
-  const entries = [...context.trace.getAll()].reverse();
+  const entries = context.trace.getAll();
+  const admitted = new Set<string>();
   for (const entry of entries) {
+    if (
+      entry.kind === 'check.evaluated' &&
+      entry.check_kind === 'result_verdict' &&
+      entry.outcome === 'pass' &&
+      entry.step_id !== undefined &&
+      entry.attempt !== undefined
+    ) {
+      admitted.add(`${entry.step_id}:${entry.attempt}`);
+    }
+  }
+  for (const entry of [...entries].reverse()) {
     if (entry.kind !== 'relay.completed' && entry.kind !== 'sub_run.completed') continue;
     if (typeof entry.verdict !== 'string' || entry.verdict.length === 0) continue;
-    if (entry.data?.admitted === false) continue;
+    if (entry.step_id === undefined || entry.attempt === undefined) continue;
+    if (!admitted.has(`${entry.step_id}:${entry.attempt}`)) continue;
     if (entry.kind === 'sub_run.completed' && entry.child_outcome !== 'complete') continue;
     return entry.verdict;
   }
@@ -137,6 +151,34 @@ function configuredMaxAttempts(step: ExecutableStep): number | undefined {
 
 function maxAttemptsForRoute(step: ExecutableStep, route: string | undefined): number {
   return configuredMaxAttempts(step) ?? (isRecoveryRoute(route) ? 2 : 1);
+}
+
+function bootstrapChangeKind(input: {
+  readonly flow: ExecutableFlow;
+  readonly entryModeName?: string;
+}): ChangeKindDeclaration {
+  const defaultKind =
+    input.flow.entryModes?.find((mode) => mode.name === input.entryModeName)?.defaultChangeKind ??
+    'ratchet-advance';
+  if (
+    defaultKind !== 'ratchet-advance' &&
+    defaultKind !== 'equivalence-refactor' &&
+    defaultKind !== 'discovery' &&
+    defaultKind !== 'disposable'
+  ) {
+    return {
+      change_kind: 'ratchet-advance',
+      failure_mode: 'runtime execution cannot produce required reports',
+      acceptance_evidence: 'trace entries, reports, and result files satisfy their schemas',
+      alternate_framing: 'start a fresh flow with a narrower goal',
+    };
+  }
+  return {
+    change_kind: defaultKind,
+    failure_mode: 'runtime execution cannot produce required reports',
+    acceptance_evidence: 'trace entries, reports, and result files satisfy their schemas',
+    alternate_framing: 'start a fresh flow with a narrower goal',
+  };
 }
 
 function completedStepCountsFromTrace(entries: readonly TraceEntry[]): Map<string, number> {
@@ -195,11 +237,6 @@ async function closeRun(
     kind: 'run.closed',
     outcome,
     ...(reason === undefined ? {} : { reason }),
-    data: {
-      outcome,
-      ...(terminalTarget === undefined ? {} : { terminal_target: terminalTarget }),
-      ...(reason === undefined ? {} : { reason }),
-    },
   });
   const verdict = outcome === 'complete' ? latestAdmittedVerdict(context) : undefined;
   const result: RuntimeRunResult = {
@@ -260,7 +297,7 @@ export async function executeExecutableFlowWithWaiting(
     ...(options.compiledFlow === undefined ? {} : { compiledFlow: options.compiledFlow }),
     runId,
     runDir: options.runDir,
-    goal: options.goal ?? '',
+    goal: options.goal ?? `Run ${flow.id}`,
     manifestHash: resolveManifestHash(flow, options),
     ...(options.entryModeName === undefined ? {} : { entryModeName: options.entryModeName }),
     ...(options.depth === undefined ? {} : { depth: options.depth }),
@@ -312,21 +349,15 @@ export async function executeExecutableFlowWithWaiting(
     await trace.append({
       run_id: runId,
       kind: 'run.bootstrapped',
-      engine: 'runtime',
       recorded_at: bootstrapRecordedAt,
       flow_id: flow.id,
       goal: context.goal,
       manifest_hash: context.manifestHash,
-      ...(context.depth === undefined ? {} : { depth: context.depth }),
-      data: {
-        flow_id: flow.id,
-        engine: 'runtime',
-        version: flow.version,
-        entry: flow.entry,
-        manifest_hash: context.manifestHash,
-        ...(context.entryModeName === undefined ? {} : { entry_mode: context.entryModeName }),
-        ...(context.depth === undefined ? {} : { depth: context.depth }),
-      },
+      depth: context.depth ?? 'standard',
+      change_kind: bootstrapChangeKind({
+        flow,
+        ...(context.entryModeName === undefined ? {} : { entryModeName: context.entryModeName }),
+      }),
     });
   }
 
@@ -365,7 +396,6 @@ export async function executeExecutableFlowWithWaiting(
         step_id: step.id,
         attempt,
         reason,
-        data: { message: reason },
       });
       return await closeRun(context, 'aborted', undefined, reason);
     }
@@ -410,7 +440,6 @@ export async function executeExecutableFlowWithWaiting(
         step_id: step.id,
         attempt,
         reason: message,
-        data: { message },
       });
       return await closeRun(
         context,
@@ -429,7 +458,6 @@ export async function executeExecutableFlowWithWaiting(
         step_id: step.id,
         attempt,
         reason,
-        data: { message: reason },
       });
       return await closeRun(context, 'aborted', undefined, reason);
     }
@@ -441,9 +469,7 @@ export async function executeExecutableFlowWithWaiting(
         kind: 'step.aborted',
         step_id: step.id,
         attempt,
-        route_taken: route,
         reason,
-        data: { message: reason },
       });
       return await closeRun(context, 'aborted', undefined, reason);
     }
@@ -471,9 +497,7 @@ export async function executeExecutableFlowWithWaiting(
           kind: 'step.aborted',
           step_id: step.id,
           attempt,
-          route_taken: route,
           reason,
-          data: { message: reason },
         });
         return await closeRun(context, 'aborted', undefined, reason);
       }
@@ -485,7 +509,6 @@ export async function executeExecutableFlowWithWaiting(
       step_id: step.id,
       attempt,
       route_taken: route,
-      data: { route, details },
     });
     completedStepCounts.set(step.id, completedCount + 1);
 

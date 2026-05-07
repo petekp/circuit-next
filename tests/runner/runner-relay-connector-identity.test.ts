@@ -121,6 +121,6 @@ describe('RelayFn descriptor carries connector identity into relay.started', () 
     // The critical regression: identity comes from the descriptor, not
     // a call-site literal. A regression here would land `name: 'claude-code'`
     // and fail this test.
-    expect(relayStarted.data?.connector).toEqual({ kind: 'builtin', name: 'codex' });
+    expect(relayStarted.connector).toEqual({ kind: 'builtin', name: 'codex' });
   });
 });

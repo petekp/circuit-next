@@ -315,8 +315,7 @@ describe('P2-MODEL-EFFORT — full selection precedence resolver', () => {
     if (started === undefined || started.kind !== 'relay.started') {
       throw new Error('expected synthesize-step relay.started trace_entry');
     }
-    const startedData = started.data as { readonly resolved_selection?: unknown } | undefined;
-    expect(startedData?.resolved_selection).toEqual(EXPECTED_SYNTHESIZE_SELECTION);
+    expect(started.resolved_selection).toEqual(EXPECTED_SYNTHESIZE_SELECTION);
     expect(relayInputs[0]?.resolvedSelection).toEqual(EXPECTED_SYNTHESIZE_SELECTION);
   });
 });

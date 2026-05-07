@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -200,7 +201,7 @@ describe('runtime sub-run executor', () => {
     const runDir = join(baseDir, 'parent-run');
     const result = await executeExecutableFlow(parentFlow(), {
       runDir,
-      runId: 'parent-run',
+      runId: randomUUID(),
       goal: 'parent goal',
       childCompiledFlowResolver: () => ({ flowBytes: childFlowBytes() }),
       childRunner: stubChildRunner('accept'),
@@ -232,7 +233,7 @@ describe('runtime sub-run executor', () => {
     const runDir = join(baseDir, 'parent-reject-run');
     const result = await executeExecutableFlow(parentFlow(['accept']), {
       runDir,
-      runId: 'parent-reject-run',
+      runId: randomUUID(),
       goal: 'parent goal',
       childCompiledFlowResolver: () => ({ flowBytes: childFlowBytes() }),
       childRunner: stubChildRunner('reject'),
@@ -271,7 +272,6 @@ describe('runtime sub-run executor', () => {
         step_id: 'child-step',
         child_outcome: 'aborted',
         verdict: 'accept',
-        data: { admitted: false },
       }),
     );
     expect(entries).toContainEqual(
@@ -535,7 +535,6 @@ describe('runtime sub-run executor', () => {
         kind: 'sub_run.completed',
         step_id: 'child-step',
         verdict: '<no-verdict>',
-        data: { admitted: false },
       }),
     );
     expect(entries).toContainEqual(
@@ -589,7 +588,6 @@ describe('runtime sub-run executor', () => {
           kind: 'sub_run.completed',
           step_id: 'child-step',
           verdict: '<no-verdict>',
-          data: { admitted: false },
         }),
       );
       expect(entries, testCase.name).toContainEqual(
@@ -625,7 +623,7 @@ describe('runtime sub-run executor', () => {
 
     await executeExecutableFlow(parentFlow(), {
       runDir,
-      runId: 'parent-propagation-run',
+      runId: randomUUID(),
       goal: 'parent goal',
       childCompiledFlowResolver: () => ({ flowBytes: childFlowBytes() }),
       childRunner: async (options) => {

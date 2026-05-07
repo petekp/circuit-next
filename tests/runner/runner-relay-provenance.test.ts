@@ -119,7 +119,7 @@ function relayStartedData(trace: Awaited<ReturnType<typeof readTrace>>): Record<
   if (!relayStarted || relayStarted.kind !== 'relay.started') {
     throw new Error('expected relay.started trace_entry');
   }
-  return relayStarted.data ?? {};
+  return relayStarted as unknown as Record<string, unknown>;
 }
 
 let runFolderBase: string;

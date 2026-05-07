@@ -7,6 +7,7 @@
 
 import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { TraceEntry as TraceEntrySchema } from '../../schemas/trace-entry.js';
 import type { TraceEntry, TraceEntryInput } from '../domain/trace.js';
 
 export interface TraceStoreOptions {
@@ -43,15 +44,16 @@ export class TraceStore {
       throw error;
     }
 
-    const parsed = raw
+    const rawEntries = raw
       .split('\n')
       .filter((line) => line.trim().length > 0)
       .map((line) => JSON.parse(line) as unknown);
-    for (const [index, entry] of parsed.entries()) {
+    const entries: TraceEntry[] = [];
+    for (const [index, entry] of rawEntries.entries()) {
       if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
         throw new Error(`trace entry ${index} is not an object`);
       }
-      const candidate = entry as TraceEntry;
+      const candidate = TraceEntrySchema.parse(entry) as unknown as TraceEntry;
       if (typeof candidate.sequence !== 'number' || !Number.isInteger(candidate.sequence)) {
         throw new Error(`trace entry ${index} has no integer sequence`);
       }
@@ -60,10 +62,10 @@ export class TraceStore {
           `trace sequence mismatch at entry ${index}: expected ${index}, found ${candidate.sequence}`,
         );
       }
+      entries.push(candidate);
     }
-    const entries = parsed as TraceEntry[];
     const closedIndex = entries.findIndex((entry) => entry.kind === 'run.closed');
-    if (closedIndex !== -1 && closedIndex !== parsed.length - 1) {
+    if (closedIndex !== -1 && closedIndex !== entries.length - 1) {
       throw new Error(`trace entry after run.closed at sequence ${closedIndex}`);
     }
     this.entries = entries;
@@ -79,11 +81,12 @@ export class TraceStore {
         throw new Error('cannot append trace entry after run close');
       }
 
-      const entry: TraceEntry = {
+      const entry = TraceEntrySchema.parse({
         ...input,
+        schema_version: input.schema_version ?? 1,
         recorded_at: input.recorded_at ?? (this.options.now ?? (() => new Date()))().toISOString(),
         sequence: this.nextSequence,
-      };
+      }) as unknown as TraceEntry;
       await mkdir(this.runDir, { recursive: true });
       await appendFile(this.tracePath, `${JSON.stringify(entry)}\n`, 'utf8');
 

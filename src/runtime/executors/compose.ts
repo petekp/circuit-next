@@ -75,6 +75,7 @@ export async function executeCompose(step: ComposeStep, context: RunContext): Pr
       run_id: context.runId,
       kind: 'step.report_written',
       step_id: step.id,
+      attempt: context.activeStepAttempt ?? 1,
       report_path: step.writes.report.path,
       report_schema: step.writes.report.schema,
     });

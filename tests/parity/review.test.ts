@@ -69,7 +69,7 @@ describe('review runtime parity', () => {
       );
       expect((await readTrace(runDir))[0]).toMatchObject({
         kind: 'run.bootstrapped',
-        data: expect.objectContaining({ manifest_hash: manifestSnapshot.hash }),
+        manifest_hash: manifestSnapshot.hash,
       });
       expect(runResult.manifest_hash).toBe(manifestSnapshot.hash);
 

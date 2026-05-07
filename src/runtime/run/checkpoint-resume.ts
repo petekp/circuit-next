@@ -65,20 +65,6 @@ function traceString(entry: TraceEntry | undefined, key: keyof TraceEntry): stri
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
-function traceDataString(entry: TraceEntry | undefined, key: string): string | undefined {
-  const data = entry?.data;
-  if (!isRecord(data)) return undefined;
-  const value = data[key];
-  return typeof value === 'string' && value.length > 0 ? value : undefined;
-}
-
-function runtimeTraceString(
-  entry: TraceEntry | undefined,
-  key: keyof TraceEntry,
-): string | undefined {
-  return traceString(entry, key) ?? traceDataString(entry, key);
-}
-
 function stringArray(value: unknown): readonly string[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const entries = value.filter((entry): entry is string => typeof entry === 'string');
@@ -90,11 +76,7 @@ function sameStringArray(left: readonly string[], right: readonly string[]): boo
 }
 
 function isRuntimeBootstrap(entry: TraceEntry | undefined): entry is TraceEntry {
-  return (
-    entry?.kind === 'run.bootstrapped' &&
-    runtimeTraceString(entry, 'engine') === 'runtime' &&
-    runtimeTraceString(entry, 'manifest_hash') !== undefined
-  );
+  return entry?.kind === 'run.bootstrapped' && traceString(entry, 'manifest_hash') !== undefined;
 }
 
 export async function isRuntimeRunFolder(runDir: string): Promise<boolean> {
@@ -246,20 +228,13 @@ function executableFlowForResume(input: {
   readonly bootstrap: TraceEntry;
 }): ExecutableFlow {
   const executable = fromCompiledFlow(input.flow);
-  const entryModeName = traceDataString(input.bootstrap, 'entry_mode');
-  const entry =
-    traceDataString(input.bootstrap, 'entry') ??
-    input.flow.entry_modes.find((mode) => mode.name === entryModeName)?.start_at ??
-    executable.entry;
   return {
     ...executable,
-    entry,
     metadata: {
       ...executable.metadata,
-      ...(entryModeName === undefined ? {} : { selected_entry_mode: entryModeName }),
-      ...(runtimeTraceString(input.bootstrap, 'depth') === undefined
+      ...(traceString(input.bootstrap, 'depth') === undefined
         ? {}
-        : { selected_depth: runtimeTraceString(input.bootstrap, 'depth') }),
+        : { selected_depth: traceString(input.bootstrap, 'depth') }),
     },
   };
 }
@@ -280,9 +255,9 @@ export async function resumeCompiledFlow(
   }
 
   const bootstrapRunId = traceString(bootstrap, 'run_id');
-  const bootstrapFlowId = runtimeTraceString(bootstrap, 'flow_id');
-  const bootstrapGoal = runtimeTraceString(bootstrap, 'goal');
-  const bootstrapManifestHash = runtimeTraceString(bootstrap, 'manifest_hash');
+  const bootstrapFlowId = traceString(bootstrap, 'flow_id');
+  const bootstrapGoal = traceString(bootstrap, 'goal');
+  const bootstrapManifestHash = traceString(bootstrap, 'manifest_hash');
   if (
     bootstrapRunId === undefined ||
     bootstrapFlowId === undefined ||
@@ -304,7 +279,7 @@ export async function resumeCompiledFlow(
   const attempt = requested.attempt;
   const requestPath = traceString(requested, 'request_path');
   const requestHash = traceString(requested, 'request_report_hash');
-  const allowedChoices = stringArray(requested.allowed_choices);
+  const allowedChoices = stringArray(requested.options);
   if (
     stepId === undefined ||
     attempt === undefined ||
@@ -355,8 +330,7 @@ export async function resumeCompiledFlow(
     compiledStep,
     requestContext,
   });
-  const entryModeName = traceDataString(bootstrap, 'entry_mode');
-  const depth = runtimeTraceString(bootstrap, 'depth');
+  const depth = traceString(bootstrap, 'depth');
 
   const result = await executeExecutableFlow(executable, {
     runDir: options.runDir,
@@ -365,7 +339,6 @@ export async function resumeCompiledFlow(
     manifestHash: snapshot.hash,
     manifestBytes: flowBytes,
     compiledFlow: flow,
-    ...(entryModeName === undefined ? {} : { entryModeName }),
     ...(depth === undefined ? {} : { depth }),
     ...(options.now === undefined ? {} : { now: options.now }),
     ...(options.executors === undefined ? {} : { executors: options.executors }),

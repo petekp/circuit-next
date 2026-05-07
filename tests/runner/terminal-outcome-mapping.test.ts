@@ -452,7 +452,6 @@ describe('RUN-I7 terminal route outcome mapping', () => {
       if (closed?.kind !== 'run.closed') throw new Error('expected run.closed last');
       expect(closed.outcome).toBe(c.outcome);
       expect(closed.reason).toBeUndefined();
-      expect(closed.data).toMatchObject({ outcome: c.outcome, terminal_target: c.route });
 
       const result = RunResult.parse(
         JSON.parse(readFileSync(join(runFolder, 'reports', 'result.json'), 'utf8')),

@@ -143,17 +143,7 @@ export async function executeCheckpoint(
       attempt,
       request_path: request.path,
       request_report_hash: sha256Hex(requestText),
-      allowed_choices: step.choices,
-      ...(resolution.kind === 'resolved' && resolution.autoResolved
-        ? {
-            auto_resolved: true,
-            resolution_source: resolution.resolutionSource,
-          }
-        : {}),
-      ...(checkpointReportSha256 === undefined
-        ? {}
-        : { checkpoint_report_sha256: checkpointReportSha256 }),
-      data: { prompt: policy(step).prompt },
+      options: step.choices,
     });
   }
 
@@ -211,12 +201,6 @@ export async function executeCheckpoint(
     auto_resolved: effectiveResolution.autoResolved,
     resolution_source: effectiveResolution.resolutionSource,
     response_path: response.path,
-    data: {
-      selection: effectiveResolution.selection,
-      auto_resolved: effectiveResolution.autoResolved,
-      resolution_source: effectiveResolution.resolutionSource,
-      response_path: response.path,
-    },
   });
   await context.trace.append({
     run_id: context.runId,

@@ -83,6 +83,7 @@ const relayReceiptTraceEntry = {
   kind: 'relay.receipt' as const,
   step_id: 'frame',
   attempt: 1,
+  cli_version: 'codex 1.2.3',
   receipt_id: 'rc_01HXYZabc',
 };
 
