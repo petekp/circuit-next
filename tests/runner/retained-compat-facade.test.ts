@@ -1,11 +1,6 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { dirname, resolve, sep } from 'node:path';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import {
-  PUBLIC_RUNTIME_PATHS,
-  PUBLIC_RUNTIME_WRAPPER_PATHS,
-  type PublicRuntimePathCategory,
-} from '../../src/compat/public-runtime-paths.js';
 import { prepareCheckpointResume } from '../../src/runtime/checkpoint-resume.js';
 import {
   resumeCompiledFlowCheckpoint,
@@ -34,68 +29,6 @@ function collectFiles(dir: string, extensions: readonly string[]): string[] {
     if (stat.isDirectory()) return collectFiles(path, extensions);
     return extensions.some((extension) => path.endsWith(extension)) ? [path] : [];
   });
-}
-
-function manifestPathsFor(categories: readonly PublicRuntimePathCategory[]): Set<string> {
-  const wrapperPaths = new Set(PUBLIC_RUNTIME_WRAPPER_PATHS.map((entry) => resolve(entry.oldPath)));
-  return new Set(
-    PUBLIC_RUNTIME_PATHS.filter(
-      (entry) => categories.includes(entry.category) && wrapperPaths.has(resolve(entry.oldPath)),
-    ).map((entry) => resolve(entry.oldPath)),
-  );
-}
-
-function collectImportSpecifiers(source: string): string[] {
-  const specifiers: string[] = [];
-  const importPattern = /(?:from\s+|import\s*\(\s*|import\s+)['"]([^'"]+)['"]/g;
-  let match: RegExpExecArray | null = importPattern.exec(source);
-  while (match !== null) {
-    const specifier = match[1];
-    if (specifier) specifiers.push(specifier);
-    match = importPattern.exec(source);
-  }
-  return specifiers;
-}
-
-function runtimeSourcePathForImportSpecifier(file: string, specifier: string): string | undefined {
-  if (specifier.startsWith('.')) {
-    const resolved = resolve(dirname(file), specifier).replace(/\.js$/, '.ts');
-    const runtimeRoot = resolve('src/runtime');
-    if (resolved === runtimeRoot || resolved.startsWith(`${runtimeRoot}${sep}`)) return resolved;
-  }
-
-  const srcRuntimeMatch = specifier.match(/(?:^|\/)src\/runtime\/(.+)\.js$/);
-  if (srcRuntimeMatch) return resolve('src/runtime', `${srcRuntimeMatch[1]}.ts`);
-
-  const distRuntimeMatch = specifier.match(/(?:^|\/)dist\/runtime\/(.+)\.js$/);
-  if (distRuntimeMatch) return resolve('src/runtime', `${distRuntimeMatch[1]}.ts`);
-
-  return undefined;
-}
-
-function oldRuntimeWrapperImportOffenders(input: {
-  readonly categories: readonly PublicRuntimePathCategory[];
-  readonly files: readonly string[];
-  readonly reason: string;
-}): string[] {
-  const repoRoot = resolve('.');
-  const guardedWrapperPaths = manifestPathsFor(input.categories);
-
-  return input.files
-    .filter((file) => !guardedWrapperPaths.has(file))
-    .flatMap((file) => {
-      const specifiers = collectImportSpecifiers(readFileSync(file, 'utf8'));
-      return specifiers.flatMap((specifier) => {
-        const runtimeSourcePath = runtimeSourcePathForImportSpecifier(file, specifier);
-        if (!runtimeSourcePath || !guardedWrapperPaths.has(runtimeSourcePath)) return [];
-        return [
-          `${file.slice(repoRoot.length + 1)} imports ${specifier} (${input.reason}: ${runtimeSourcePath.slice(
-            repoRoot.length + 1,
-          )})`,
-        ];
-      });
-    })
-    .sort();
 }
 
 describe('runtime import boundary', () => {
@@ -240,19 +173,28 @@ describe('runtime import boundary', () => {
   });
 
   it('keeps run-status implementation imports on the neutral dispatcher', () => {
-    const productionSourceOffenders = oldRuntimeWrapperImportOffenders({
-      categories: ['run-status-wrapper'],
-      files: collectSourceFiles(resolve('src')),
-      reason: 'old run-status wrapper',
-    });
-    const scriptOffenders = oldRuntimeWrapperImportOffenders({
-      categories: ['run-status-wrapper'],
-      files: collectFiles(resolve('scripts'), ['.mjs', '.js', '.ts']),
-      reason: 'old run-status wrapper',
-    });
+    expect(existsSync(resolve('src/runtime/run-status-projection.ts'))).toBe(false);
 
-    expect(productionSourceOffenders).toEqual([]);
-    expect(scriptOffenders).toEqual([]);
+    const repoRoot = resolve('.');
+    const forbiddenImports = [
+      '../runtime/run-status-projection.js',
+      '../../runtime/run-status-projection.js',
+      'dist/runtime/run-status-projection.js',
+      'src/runtime/run-status-projection.js',
+    ];
+    const offenders = [
+      ...collectSourceFiles(resolve('src')),
+      ...collectFiles(resolve('scripts'), ['.mjs', '.js', '.ts']),
+    ]
+      .flatMap((file) => {
+        const text = readFileSync(file, 'utf8');
+        return forbiddenImports
+          .filter((importPath) => text.includes(importPath))
+          .map((importPath) => `${file.slice(repoRoot.length + 1)} imports ${importPath}`);
+      })
+      .sort();
+
+    expect(offenders).toEqual([]);
   });
 
   it('keeps result-path helper imports on shared ownership outside the old compatibility proof', () => {

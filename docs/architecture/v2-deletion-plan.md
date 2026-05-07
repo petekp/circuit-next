@@ -31,8 +31,9 @@ Phase 4.42 through Phase 5.59 record the compatibility-preserving path. The
 final cutover supersedes that path: `src/compat/retained-runtime.ts`,
 `src/compat/retained-checkpoint-folders.ts`, `src/run-status/v1-run-folder.ts`,
 old handler implementations, old trace/reducer/snapshot implementation files,
-and the old relay-selection bridge have been removed. Old runner, checkpoint,
-progress, and result-writer entrypoints remain only as fail-closed public stubs.
+the old relay-selection bridge, and the old run-status wrapper have been
+removed. Old runner, checkpoint, progress, and result-writer entrypoints remain
+only as fail-closed public stubs.
 The old flow-authoring wrappers at `src/runtime/compile-schematic-to-flow.ts`
 and `src/runtime/router.ts` have also been removed.
 
@@ -84,8 +85,8 @@ alias should be removed later only through an explicit operator-facing slice.
 
 ## 2. Current Old Runtime Disposition
 
-The remaining old runtime paths are either compatibility wrappers or fail-closed
-public stubs.
+The remaining old runtime paths are fail-closed public stubs or old public type
+and path surfaces.
 
 | Path | Current owner | Why retain |
 |---|---|---|
@@ -134,7 +135,7 @@ wrappers, public type/path surfaces, or fail-closed stubs.
 | `src/runtime/manifest-snapshot-writer.ts` | removed | Manifest snapshot byte-match helper lives in `src/shared/manifest-snapshot.ts`; the old runtime wrapper is retired. |
 | `src/runtime/snapshot-writer.ts` | removed | Retained state snapshot implementation was removed in the final cutover. Handoff and status paths no longer adapt retained/v1 folders. |
 | `src/runtime/operator-summary-writer.ts` | removed | Operator summary writing lives in `src/shared/operator-summary-writer.ts`; the old runtime wrapper is retired. |
-| `src/runtime/run-status-projection.ts` | compatibility re-export | The status dispatcher implementation moved to `src/run-status/project-run-folder.ts` in Phase 4.28. Keep this wrapper while old-path imports, docs, and compatibility tests still cite it. |
+| `src/runtime/run-status-projection.ts` | removed | The status dispatcher implementation lives in `src/run-status/project-run-folder.ts`; the old runtime wrapper is retired. |
 | `src/runtime/progress-projector.ts` | shared progress re-export plus fail-closed projection stubs | core-v2 imports shared helpers from `src/shared/progress-output.ts`. Old trace projection APIs now fail closed. |
 | `src/runtime/reducer.ts`, `src/runtime/append-and-derive.ts`, `src/runtime/trace-reader.ts`, `src/runtime/trace-writer.ts` | removed | Old trace infrastructure was removed in the final cutover. Retained/v1 folders fail closed instead of projecting old trace state. |
 | `src/runtime/policy/flow-kind-policy.ts` | removed | Flow-kind policy lives in `src/shared/flow-kind-policy.ts`; the old runtime wrapper is retired. |
@@ -172,6 +173,7 @@ Current import groups:
 | `runtime/runner` | direct compatibility tests and old public imports | fail-closed public stub | Keep only while the public old runner surface remains listed. Fresh retired invocations fail closed. |
 | `runtime/checkpoint-resume` | direct compatibility tests | fail-closed public stub | Keep only while the old checkpoint-resume import surface remains listed. Retired run folders fail closed. |
 | `runtime/runner-types` | old public type imports and tests | compatibility type surface | Keep until old type imports retire. |
+| `runtime/run-status-projection` | none | removed wrapper | Run-status ownership lives in `src/run-status/project-run-folder.ts`. |
 | `runtime/step-handlers` | wrapper compatibility tests and checkpoint fail-closed tests | mostly removed; remaining wrappers/stub only | Do not restore the old handler cluster. |
 | `runtime/registries` | none | removed wrappers | Neutral source ownership now lives in `src/flows/registries/**`. |
 | `runtime/connectors` | none | removed wrappers | Live connector infrastructure now lives in `src/connectors/**`. |

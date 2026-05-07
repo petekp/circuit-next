@@ -2,22 +2,18 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  RunStatusFolderError as facadeError,
-  projectRunStatusFromRunFolder as facadeProject,
+  RunStatusFolderError,
+  projectRunStatusFromRunFolder,
 } from '../../src/run-status/project-run-folder.js';
-import {
-  RunStatusFolderError as runtimeError,
-  projectRunStatusFromRunFolder as runtimeProject,
-} from '../../src/runtime/run-status-projection.js';
 
 describe('run-status public facade', () => {
-  it('preserves the retained implementation surface while moving CLI imports neutral', () => {
-    expect(facadeProject).toBe(runtimeProject);
-    expect(facadeError).toBe(runtimeError);
-
+  it('keeps CLI imports on the neutral status dispatcher after retiring the old wrapper', () => {
     const runsCli = readFileSync(resolve('src/cli/runs.ts'), 'utf8');
     expect(runsCli).toContain("'../run-status/project-run-folder.js'");
     expect(runsCli).not.toContain("'../runtime/run-status-projection.js'");
+    expect(existsSync(resolve('src/runtime/run-status-projection.ts'))).toBe(false);
+    expect(projectRunStatusFromRunFolder).toEqual(expect.any(Function));
+    expect(RunStatusFolderError).toEqual(expect.any(Function));
   });
 
   it('keeps v2 projection and retired-folder policy outside the public facade', () => {

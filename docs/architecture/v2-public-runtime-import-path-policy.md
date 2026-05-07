@@ -16,8 +16,8 @@ There are no remaining release-note-only soft-deprecated wrapper paths.
 
 Removed old execution files do not get adapters, and retired runtime entrypoints
 fail closed instead of preserving old behavior. The remaining old public runtime
-paths are either explicit wrappers that still have manifest coverage or
-fail-closed stubs tracked in `src/compat/public-runtime-paths.ts`.
+paths are fail-closed stubs or public type/path surfaces tracked in
+`src/compat/public-runtime-paths.ts`.
 
 No package export change or runtime/import-time warning is approved by this
 note.
@@ -40,7 +40,6 @@ stays identical to the manifest.
 
 These categories are not soft-deprecated:
 
-- the run-status wrapper at `src/runtime/run-status-projection.ts`;
 - the old result path helper at `src/runtime/result-writer.ts`;
 - the old public runner surface at `src/runtime/runner.ts` and
   `src/runtime/runner-types.ts`;
@@ -61,6 +60,10 @@ moved to the neutral `src/flows/**` owners.
 The old connector wrappers under `src/runtime/connectors/**` were retired after
 tests and production code moved to the neutral `src/connectors/**` owners.
 
+The old run-status wrapper at `src/runtime/run-status-projection.ts` was retired
+after the CLI, tests, and active docs moved to the neutral
+`src/run-status/project-run-folder.ts` owner.
+
 ## Review Boundaries
 
 Use local adversarial review and manifest/test updates before:
@@ -68,7 +71,7 @@ Use local adversarial review and manifest/test updates before:
 - deleting any old wrapper or fail-closed stub;
 - changing package exports;
 - adding import-time or runtime warnings;
-- soft-deprecating run-status, result-writer, public runner, or type paths;
+- soft-deprecating result-writer, public runner, or type paths;
 - changing the fail-closed retired-runtime behavior.
 
 Do not prepare an external review packet for those steps by default. Escalate

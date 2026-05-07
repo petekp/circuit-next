@@ -19,7 +19,6 @@ New code should import current owners directly.
 
 The following old runtime path categories are not soft-deprecated:
 
-- the run-status wrapper at `src/runtime/run-status-projection.ts`;
 - the old result path helper at `src/runtime/result-writer.ts`;
 - the old public runner surface at `src/runtime/runner.ts` and
   `src/runtime/runner-types.ts`;
@@ -43,6 +42,10 @@ modules.
 The old connector wrappers under `src/runtime/connectors/**` are also no longer
 part of the old public import-path surface. New code should use the
 corresponding `src/connectors/**` owner modules.
+
+The old run-status wrapper at `src/runtime/run-status-projection.ts` is also no
+longer part of the old public import-path surface. New code should use
+`src/run-status/project-run-folder.ts`.
 
 ## Removal Policy
 

@@ -2,8 +2,7 @@ export type PublicRuntimePathCategory =
   | 'public-runner-surface'
   | 'retained-handler'
   | 'retained-implementation'
-  | 'retained-saved-state'
-  | 'run-status-wrapper';
+  | 'retained-saved-state';
 
 export type PublicRuntimePathDisposition =
   | 'future-deprecation-candidate'
@@ -50,16 +49,6 @@ export const PUBLIC_RUNTIME_PATHS: readonly PublicRuntimePathEntry[] = [
     requiresReviewBeforeDeletion: true,
     compatibilityTestPaths: ['tests/runner/result-path-compat.test.ts'],
     notes: 'Retired result writer path; resultPath remains as compatibility surface.',
-  },
-  {
-    oldPath: 'src/runtime/run-status-projection.ts',
-    currentOwnerPath: 'src/run-status/project-run-folder.ts',
-    category: 'run-status-wrapper',
-    currentDisposition: 'keep',
-    deprecationStage: 'none',
-    requiresReviewBeforeDeletion: true,
-    compatibilityTestPaths: ['tests/runner/run-status-facade.test.ts'],
-    notes: 'Old run-status public facade path.',
   },
   {
     oldPath: 'src/runtime/runner-types.ts',

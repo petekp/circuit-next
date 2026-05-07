@@ -7907,3 +7907,50 @@ Next recommended action: choose the next old public runtime surface. The
 remaining manifest entries are run-status, result-path/public runner stubs,
 checkpoint/progress fail-closed stubs, and type surfaces. No external review is
 warranted unless package export or host-package behavior becomes ambiguous.
+
+## 2026-05-07 - Run-Status Wrapper Retirement
+
+Goal: retire the old `src/runtime/run-status-projection.ts` wrapper after
+confirming the CLI, status tests, and docs already use the neutral
+`src/run-status/project-run-folder.ts` status dispatcher.
+
+Files changed:
+
+- `src/runtime/run-status-projection.ts`
+- `src/compat/public-runtime-paths.ts`
+- `tests/runner/run-status-facade.test.ts`
+- `tests/runner/public-runtime-paths.test.ts`
+- `tests/runner/retained-compat-facade.test.ts`
+- active run-status and public-runtime policy docs
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+What changed:
+
+- deleted the old runtime run-status wrapper file;
+- removed the `run-status-wrapper` category and manifest entry;
+- changed the run-status facade test from an old-path identity proof into a
+  neutral-dispatcher and retired-wrapper guard;
+- changed the runtime import-boundary guard to reject any production or script
+  import of the removed wrapper;
+- updated active docs to say run-status ownership lives under
+  `src/run-status/project-run-folder.ts`.
+
+Tests run:
+
+- `npx vitest run tests/runner/run-status-facade.test.ts tests/runner/run-status-projection.test.ts tests/runner/public-runtime-paths.test.ts tests/runner/retained-compat-facade.test.ts tests/contracts/engine-flow-boundary.test.ts tests/runner/cli-v2-runtime.test.ts`:
+  initially failed on one prose-wrapping assertion in the release-note guard,
+  then passed after checking the neutral owner path directly.
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run verify`: passed.
+
+Behavior changed? Only the old runtime run-status wrapper import path is
+retired. `runs show` and status projection behavior stay on the neutral
+dispatcher.
+
+Next recommended action: choose one remaining fail-closed public surface. The
+lowest-risk next groups are the progress projection stub or the result path
+helper/writer stub, but keep runner and type surfaces separate because they
+carry broader public API shape.

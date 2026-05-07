@@ -109,7 +109,7 @@ final cutover product decision.
 | `src/runtime/result-writer.ts` | retained product behavior | Retained result writer is still used by old runner for retained close/finalization. The shared result path helper lives in `src/shared/result-path.ts`; keep the old `resultPath(...)` export for compatibility. |
 | `src/runtime/router.ts` | removed | Neutral router implementation lives in `src/flows/router.ts`; the old runtime wrapper is retired. |
 | `src/runtime/run-relative-path.ts` | removed | Neutral helper lives in `src/shared/run-relative-path.ts`; the old runtime wrapper is retired. |
-| `src/runtime/run-status-projection.ts` | compatibility wrapper | Neutral dispatcher lives in `src/run-status/project-run-folder.ts`; keep old path for compatibility tests. |
+| `src/runtime/run-status-projection.ts` | removed | Neutral dispatcher lives in `src/run-status/project-run-folder.ts`; the old runtime wrapper is retired. |
 | `src/runtime/runner-types.ts` | compatibility wrapper | Shared relay/progress types moved to `src/shared/relay-runtime-types.ts`, but retained invocation/result types still live here. |
 | `src/runtime/runner.ts` | retained fallback | Owns fallback execution, rollback execution, arbitrary fixtures, `composeWriter`, and public retained resume wrapper. |
 | `src/runtime/selection-resolver.ts` | removed | Neutral resolver lives in `src/shared/selection-resolver.ts`; the old runtime wrapper is retired. |

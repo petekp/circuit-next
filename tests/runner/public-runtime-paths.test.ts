@@ -94,7 +94,6 @@ describe('public runtime import-path manifest', () => {
         'retained-handler',
         'retained-implementation',
         'retained-saved-state',
-        'run-status-wrapper',
       ]),
     );
 
@@ -132,7 +131,6 @@ describe('public runtime import-path manifest', () => {
       'retained-handler',
       'retained-implementation',
       'retained-saved-state',
-      'run-status-wrapper',
     ]);
     const incorrectlyDeprecated = PUBLIC_RUNTIME_PATHS.filter(
       (entry) =>
@@ -186,6 +184,7 @@ describe('public runtime import-path manifest', () => {
     );
     expect(releaseNote).toContain('connector wrappers');
     expect(releaseNote).toContain('run-status wrapper');
+    expect(releaseNote).toContain('src/run-status/project-run-folder.ts');
     expect(releaseNote).toContain('old result path helper');
     expect(releaseNote).toContain('old public runner surface');
     expect(releaseNote).toContain('retired fail-closed runtime surfaces');
@@ -207,11 +206,12 @@ describe('public runtime import-path manifest', () => {
     expect(packageJson.exports).toBeUndefined();
   });
 
-  it('keeps the production import guard wired to the manifest', () => {
+  it('keeps wrapper retirement explicit after the last wrapper is removed', () => {
     const guardSource = readFileSync('tests/runner/retained-compat-facade.test.ts', 'utf8');
 
-    expect(guardSource).toContain("from '../../src/compat/public-runtime-paths.js'");
-    expect(guardSource).toContain('PUBLIC_RUNTIME_PATHS');
-    expect(guardSource).toContain('PUBLIC_RUNTIME_WRAPPER_PATHS');
+    expect(PUBLIC_RUNTIME_WRAPPER_PATHS).toEqual([]);
+    expect(guardSource).not.toContain("from '../../src/compat/public-runtime-paths.js'");
+    expect(guardSource).not.toContain('PUBLIC_RUNTIME_PATHS');
+    expect(guardSource).not.toContain('PUBLIC_RUNTIME_WRAPPER_PATHS');
   });
 });
