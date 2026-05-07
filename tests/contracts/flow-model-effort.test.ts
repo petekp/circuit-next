@@ -3,11 +3,12 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { runRetainedCompiledFlow as runCompiledFlow } from '../../src/compat/retained-runtime.js';
-import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
+import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
+import { TraceStore } from '../../src/core-v2/trace/trace-store.js';
+import { ExploreCompose, ExploreReviewVerdict } from '../../src/flows/explore/reports.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { LayeredConfig } from '../../src/schemas/config.js';
-import { RunId, SkillId } from '../../src/schemas/ids.js';
+import { SkillId } from '../../src/schemas/ids.js';
 import type { ResolvedSelection } from '../../src/schemas/selection-policy.js';
 import { SelectionOverride } from '../../src/schemas/selection-policy.js';
 import type { RelayResult } from '../../src/shared/connector-relay.js';
@@ -30,17 +31,6 @@ function loadRawFixture(): { raw: MutableCompiledFlowFixture; bytes: Buffer } {
 function deterministicNow(startMs: number): () => Date {
   let n = 0;
   return () => new Date(startMs + n++ * 1000);
-}
-
-function change_kind(): ChangeKindDeclaration {
-  return {
-    change_kind: 'ratchet-advance',
-    failure_mode: 'per-step model and effort declarations parse but do not reach relay evidence',
-    acceptance_evidence:
-      'relay.started carries model, effort, skills, depth, and invocation_options from the full selection precedence chain',
-    alternate_framing:
-      'only keep flow plus step right-biased selection; rejected because config and stage layers are already schema-authorized selection sources',
-  };
 }
 
 function layeredConfigs(): LayeredConfig[] {
@@ -101,7 +91,7 @@ function layeredConfigs(): LayeredConfig[] {
         schema_version: 1,
         defaults: {
           selection: {
-            model: { provider: 'custom', model: 'overnight-specialist' },
+            model: { provider: 'anthropic', model: 'claude-opus-4-7-invocation' },
             effort: 'xhigh',
             invocation_options: { shared: 'invocation', invocationOnly: true },
           },
@@ -112,7 +102,7 @@ function layeredConfigs(): LayeredConfig[] {
 }
 
 function flowWithModelEffortSelections(): { flow: CompiledFlow; bytes: Buffer } {
-  const { raw, bytes } = loadRawFixture();
+  const { raw } = loadRawFixture();
   raw.default_selection = {
     skills: { mode: 'remove', skills: ['tdd'] },
     invocation_options: { shared: 'flow', flowOnly: true },
@@ -135,11 +125,12 @@ function flowWithModelEffortSelections(): { flow: CompiledFlow; bytes: Buffer } 
       };
     }
   }
-  return { flow: CompiledFlow.parse(raw), bytes };
+  const modifiedBytes = Buffer.from(JSON.stringify(raw));
+  return { flow: CompiledFlow.parse(raw), bytes: modifiedBytes };
 }
 
 const EXPECTED_SYNTHESIZE_SELECTION: ResolvedSelection = {
-  model: { provider: 'custom', model: 'overnight-specialist' },
+  model: { provider: 'anthropic', model: 'claude-opus-4-7-invocation' },
   effort: 'xhigh',
   skills: [SkillId.parse('typography')],
   depth: 'deep',
@@ -261,43 +252,71 @@ describe('P2-MODEL-EFFORT — full selection precedence resolver', () => {
   });
 
   it('emits the resolved model and effort on relay.started and passes it to injected relayers', async () => {
-    const { flow, bytes } = flowWithModelEffortSelections();
+    const { bytes } = flowWithModelEffortSelections();
     const relayInputs: RelayInput[] = [];
+    const resultBodies = [
+      JSON.stringify(
+        ExploreCompose.parse({
+          verdict: 'accept',
+          subject: 'prove model effort selection reaches relay evidence',
+          recommendation: 'Proceed with the core-v2 relay selection proof.',
+          success_condition_alignment: 'The relay received the expected resolved selection.',
+          supporting_aspects: [
+            {
+              aspect: 'selection',
+              contribution: 'The full selection precedence chain reached the relayer.',
+              evidence_refs: ['relay.started'],
+            },
+          ],
+        }),
+      ),
+      JSON.stringify(
+        ExploreReviewVerdict.parse({
+          verdict: 'accept',
+          overall_assessment: 'The core-v2 relay selection proof is clean.',
+          objections: [],
+          missed_angles: [],
+        }),
+      ),
+    ];
     const relayer: RelayFn = {
       connectorName: 'claude-code',
       relay: async (input: RelayInput): Promise<RelayResult> => {
+        const resultBody = resultBodies[relayInputs.length] ?? resultBodies.at(-1);
         relayInputs.push(input);
         return {
           request_payload: input.prompt,
           receipt_id: 'model-effort-receipt',
-          result_body: '{"verdict":"ok"}',
+          result_body: resultBody ?? '{"verdict":"accept"}',
           duration_ms: 1,
           cli_version: '0.0.0-stub',
         };
       },
     };
 
-    const outcome = await runCompiledFlow({
-      runFolder: join(runFolderBase, 'runtime-evidence'),
-      flow,
+    const runDir = join(runFolderBase, 'runtime-evidence');
+    const outcome = await runCompiledFlowV2({
+      runDir,
       flowBytes: bytes,
-      runId: RunId.parse('85858585-8585-4585-8585-858585858585'),
+      runId: '85858585-8585-4585-8585-858585858585',
       goal: 'prove model effort selection reaches relay evidence',
       depth: 'standard',
-      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 24, 9, 0, 0)),
       relayer,
       selectionConfigLayers: layeredConfigs(),
     });
+    expect(outcome.outcome).toBe('complete');
 
-    const started = outcome.trace_entries.find(
+    const traceEntries = await new TraceStore(runDir).load();
+    const started = traceEntries.find(
       (trace_entry) =>
         trace_entry.kind === 'relay.started' && trace_entry.step_id === 'synthesize-step',
     );
     if (started === undefined || started.kind !== 'relay.started') {
       throw new Error('expected synthesize-step relay.started trace_entry');
     }
-    expect(started.resolved_selection).toEqual(EXPECTED_SYNTHESIZE_SELECTION);
+    const startedData = started.data as { readonly resolved_selection?: unknown } | undefined;
+    expect(startedData?.resolved_selection).toEqual(EXPECTED_SYNTHESIZE_SELECTION);
     expect(relayInputs[0]?.resolvedSelection).toEqual(EXPECTED_SYNTHESIZE_SELECTION);
   });
 });

@@ -4,57 +4,99 @@
 // unfalsified claims — they say "this scalar accepts these inputs
 // and produces this output", but no schematic has ever tried to wire them
 // up. This test forces each one through the validation + compile +
-// runtime path and records what's actually missing.
+// core-v2 execution path and records what's actually missing.
 //
 // Each test is a tight contract probe: build the smallest possible
 // schematic that uses one orphan scalar and assert what happens at
 // each layer (schematic parse → catalog compatibility → schematic compile →
-// runtime execution). When a layer rejects, the assertion captures
+// core-v2 execution). When a layer rejects, the assertion captures
 // the message so the test documents the contract gap as observed
 // behavior. As gaps are closed, the assertions tighten.
 
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import {
-  runRetainedCompiledFlow as runCompiledFlow,
-  writeRetainedPrototypeComposeReport as writePrototypeComposeReport,
-} from '../../src/compat/retained-runtime.js';
+import type { ExecutorRegistryV2 } from '../../src/core-v2/executors/index.js';
+import type { ExecutableStepV2 } from '../../src/core-v2/manifest/executable-flow.js';
+import type { RunContextV2 } from '../../src/core-v2/run/run-context.js';
 import {
   type CompileResult,
   compileSchematicToCompiledFlow,
 } from '../../src/flows/compile-schematic-to-flow.js';
-import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
 import type { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { FlowBlockCatalog } from '../../src/schemas/flow-blocks.js';
 import {
   FlowSchematic,
   validateFlowSchematicCatalogCompatibility,
 } from '../../src/schemas/flow-schematic.js';
-import { RunId } from '../../src/schemas/ids.js';
-
-function exerciserChangeKind(): ChangeKindDeclaration {
-  return {
-    change_kind: 'ratchet-advance',
-    failure_mode: 'orphan scalar contract is unfalsified — no schematic exercises it',
-    acceptance_evidence:
-      'synthetic schematic compiles and runs through the explicit prototype placeholder writer',
-    alternate_framing: 'wait for real flow — rejected because the contract gap stays hidden',
-  };
-}
-
-function deterministicNow(startMs: number): () => Date {
-  let n = 0;
-  return () => new Date(startMs + n++ * 1000);
-}
+import { runSimpleCompiledFlowV2 } from '../parity/core-v2-parity-helpers.js';
 
 function singleCompiledFlow(result: CompileResult): CompiledFlow {
   if (result.kind === 'single') return result.flow;
   const first = [...result.flows.values()][0];
   if (first === undefined) throw new Error('compile produced zero flows');
   return first;
+}
+
+function declaredRouteByStepId(flow: CompiledFlow): Record<string, string> {
+  return Object.fromEntries(
+    flow.steps.map((step) => {
+      const route =
+        step.routes.continue === undefined ? (Object.keys(step.routes)[0] ?? 'pass') : 'continue';
+      return [step.id, route];
+    }),
+  );
+}
+
+async function writeSyntheticReport(step: ExecutableStepV2, context: RunContextV2): Promise<void> {
+  const report = step.writes?.report;
+  if (report === undefined) return;
+  const path = context.files.resolve(report);
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(
+    path,
+    `${JSON.stringify({
+      scope: 'synthetic orphan scalar exerciser',
+      items: [],
+      decision: 'continue',
+      continuity_record_path: 'reports/handoff.json',
+    })}\n`,
+    'utf8',
+  );
+}
+
+function syntheticOrphanExecutors(flow: CompiledFlow): Partial<ExecutorRegistryV2> {
+  const routeByStepId = declaredRouteByStepId(flow);
+  return {
+    compose: async (step, context) => {
+      if (step.kind !== 'compose') throw new Error('expected compose step');
+      await writeSyntheticReport(step, context);
+      return {
+        route: routeByStepId[step.id] ?? 'pass',
+        details: { report: step.writes?.report?.path },
+      };
+    },
+    checkpoint: async (step, context) => {
+      if (step.kind !== 'checkpoint') throw new Error('expected checkpoint step');
+      const choice = routeByStepId[step.id] ?? step.choices[0] ?? 'continue';
+      if (step.writes?.request !== undefined) {
+        await context.files.writeJson(step.writes.request, {
+          step_id: step.id,
+          choices: step.choices,
+        });
+      }
+      if (step.writes?.response !== undefined) {
+        await context.files.writeJson(step.writes.response, {
+          step_id: step.id,
+          selected_choice: choice,
+        });
+      }
+      return { route: choice, details: { selected_choice: choice } };
+    },
+  };
 }
 
 function loadCatalog() {
@@ -184,21 +226,17 @@ describe('orphan scalar: handoff', () => {
     expect(() => compileSchematicToCompiledFlow(schematic)).not.toThrow();
   });
 
-  it('runs end-to-end via the explicit prototype compose fallback', async () => {
+  it('runs end-to-end via the core-v2 simple executors', async () => {
     const schematic = FlowSchematic.parse(schematicRaw);
     const flow = singleCompiledFlow(compileSchematicToCompiledFlow(schematic));
-    const outcome = await runCompiledFlow({
-      runFolder: join(runFolder, 'handoff-run'),
-      flow,
+    const outcome = await runSimpleCompiledFlowV2({
+      runDir: join(runFolder, 'handoff-run'),
       flowBytes: Buffer.from(JSON.stringify(flow)),
-      runId: RunId.parse('00000000-0000-0000-0000-00000000aaaa'),
+      runId: '00000000-0000-0000-0000-00000000aaaa',
       goal: 'orphan-handoff exerciser',
-      depth: 'standard',
-      change_kind: exerciserChangeKind(),
-      now: deterministicNow(Date.UTC(2026, 3, 26, 12, 0, 0)),
-      composeWriter: writePrototypeComposeReport,
+      executors: syntheticOrphanExecutors(flow),
     });
-    expect(outcome.result.outcome).toBe('complete');
+    expect(outcome.outcome).toBe('complete');
   });
 });
 
@@ -301,18 +339,14 @@ describe('orphan scalar: human-decision', () => {
     // scalar is wireable end-to-end.
     const schematic = FlowSchematic.parse(schematicRaw);
     const flow = singleCompiledFlow(compileSchematicToCompiledFlow(schematic));
-    const outcome = await runCompiledFlow({
-      runFolder: join(runFolder, 'human-decision-run'),
-      flow,
+    const outcome = await runSimpleCompiledFlowV2({
+      runDir: join(runFolder, 'human-decision-run'),
       flowBytes: Buffer.from(JSON.stringify(flow)),
-      runId: RunId.parse('00000000-0000-0000-0000-00000000eeee'),
+      runId: '00000000-0000-0000-0000-00000000eeee',
       goal: 'orphan-human-decision exerciser',
-      depth: 'standard',
-      change_kind: exerciserChangeKind(),
-      now: deterministicNow(Date.UTC(2026, 3, 26, 12, 20, 0)),
-      composeWriter: writePrototypeComposeReport,
+      executors: syntheticOrphanExecutors(flow),
     });
-    expect(outcome.result.outcome).toBe('complete');
+    expect(outcome.outcome).toBe('complete');
   });
 });
 
@@ -378,21 +412,17 @@ describe('orphan scalar: queue', () => {
     expect(() => compileSchematicToCompiledFlow(schematic)).not.toThrow();
   });
 
-  it('runs end-to-end via the explicit prototype compose fallback', async () => {
+  it('runs end-to-end via the core-v2 simple executors', async () => {
     const schematic = FlowSchematic.parse(schematicRaw);
     const flow = singleCompiledFlow(compileSchematicToCompiledFlow(schematic));
-    const outcome = await runCompiledFlow({
-      runFolder: join(runFolder, 'queue-run'),
-      flow,
+    const outcome = await runSimpleCompiledFlowV2({
+      runDir: join(runFolder, 'queue-run'),
       flowBytes: Buffer.from(JSON.stringify(flow)),
-      runId: RunId.parse('00000000-0000-0000-0000-00000000bbbb'),
+      runId: '00000000-0000-0000-0000-00000000bbbb',
       goal: 'orphan-queue exerciser',
-      depth: 'standard',
-      change_kind: exerciserChangeKind(),
-      now: deterministicNow(Date.UTC(2026, 3, 26, 12, 5, 0)),
-      composeWriter: writePrototypeComposeReport,
+      executors: syntheticOrphanExecutors(flow),
     });
-    expect(outcome.result.outcome).toBe('complete');
+    expect(outcome.outcome).toBe('complete');
   });
 });
 
@@ -463,21 +493,17 @@ describe('orphan scalar: batch', () => {
     expect(() => compileSchematicToCompiledFlow(schematic)).not.toThrow();
   });
 
-  it('runs end-to-end via the explicit prototype compose fallback', async () => {
+  it('runs end-to-end via the core-v2 simple executors', async () => {
     const schematic = FlowSchematic.parse(schematicRaw);
     const flow = singleCompiledFlow(compileSchematicToCompiledFlow(schematic));
-    const outcome = await runCompiledFlow({
-      runFolder: join(runFolder, 'batch-run'),
-      flow,
+    const outcome = await runSimpleCompiledFlowV2({
+      runDir: join(runFolder, 'batch-run'),
       flowBytes: Buffer.from(JSON.stringify(flow)),
-      runId: RunId.parse('00000000-0000-0000-0000-00000000cccc'),
+      runId: '00000000-0000-0000-0000-00000000cccc',
       goal: 'orphan-batch exerciser',
-      depth: 'standard',
-      change_kind: exerciserChangeKind(),
-      now: deterministicNow(Date.UTC(2026, 3, 26, 12, 10, 0)),
-      composeWriter: writePrototypeComposeReport,
+      executors: syntheticOrphanExecutors(flow),
     });
-    expect(outcome.result.outcome).toBe('complete');
+    expect(outcome.outcome).toBe('complete');
   });
 });
 
@@ -553,20 +579,16 @@ describe('orphan scalar: risk-rollback-check', () => {
     expect(() => compileSchematicToCompiledFlow(schematic)).not.toThrow();
   });
 
-  it('runs end-to-end via the explicit prototype compose fallback', async () => {
+  it('runs end-to-end via the core-v2 simple executors', async () => {
     const schematic = FlowSchematic.parse(schematicRaw);
     const flow = singleCompiledFlow(compileSchematicToCompiledFlow(schematic));
-    const outcome = await runCompiledFlow({
-      runFolder: join(runFolder, 'risk-run'),
-      flow,
+    const outcome = await runSimpleCompiledFlowV2({
+      runDir: join(runFolder, 'risk-run'),
       flowBytes: Buffer.from(JSON.stringify(flow)),
-      runId: RunId.parse('00000000-0000-0000-0000-00000000dddd'),
+      runId: '00000000-0000-0000-0000-00000000dddd',
       goal: 'orphan-risk exerciser',
-      depth: 'standard',
-      change_kind: exerciserChangeKind(),
-      now: deterministicNow(Date.UTC(2026, 3, 26, 12, 15, 0)),
-      composeWriter: writePrototypeComposeReport,
+      executors: syntheticOrphanExecutors(flow),
     });
-    expect(outcome.result.outcome).toBe('complete');
+    expect(outcome.outcome).toBe('complete');
   });
 });
