@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { CompiledFlow } from '../../schemas/compiled-flow.js';
 import {
@@ -95,6 +96,96 @@ function reportTaskListProgressV2(input: {
     display: progressDisplay(input.displayText, 'detail', input.tone ?? 'info'),
     tasks: progressTasks(input.flow, input.statuses),
   });
+}
+
+function readJsonReport(runDir: string, reportPath: string): unknown {
+  return JSON.parse(readFileSync(join(runDir, reportPath), 'utf8')) as unknown;
+}
+
+function warningRecordsFromReport(body: unknown): Array<{
+  readonly kind: string;
+  readonly message: string;
+  readonly path?: string;
+}> {
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) return [];
+  const raw = (body as Record<string, unknown>).evidence_warnings;
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item) => {
+    if (item === null || typeof item !== 'object' || Array.isArray(item)) return [];
+    const record = item as Record<string, unknown>;
+    if (typeof record.kind !== 'string' || typeof record.message !== 'string') return [];
+    return [
+      {
+        kind: record.kind,
+        message: record.message,
+        ...(typeof record.path === 'string' ? { path: record.path } : {}),
+      },
+    ];
+  });
+}
+
+function reportEvidenceProgressV2(input: {
+  readonly progress: ProgressReporter | undefined;
+  readonly runDir: string;
+  readonly flowId: CompiledFlowId;
+  readonly runId: ProgressRunId;
+  readonly recordedAt: string;
+  readonly traceEntry: TraceEntryV2;
+}): void {
+  if (
+    input.traceEntry.step_id === undefined ||
+    input.traceEntry.report_path === undefined ||
+    input.traceEntry.report_schema === undefined
+  ) {
+    return;
+  }
+  let body: unknown;
+  try {
+    body = readJsonReport(input.runDir, input.traceEntry.report_path);
+  } catch {
+    return;
+  }
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) return;
+  const record = body as Record<string, unknown>;
+  const hasEvidence = Object.hasOwn(record, 'evidence');
+  const warnings = warningRecordsFromReport(record);
+  if (!hasEvidence && warnings.length === 0) return;
+
+  reportProgress(input.progress, {
+    schema_version: 1,
+    type: 'evidence.collected',
+    run_id: input.runId,
+    flow_id: input.flowId,
+    recorded_at: input.recordedAt,
+    label: warnings.length > 0 ? 'Collected evidence with warnings' : 'Collected evidence',
+    display: progressDisplay(
+      warnings.length > 0
+        ? `Circuit collected evidence with ${warnings.length} warning${warnings.length === 1 ? '' : 's'}.`
+        : 'Circuit collected evidence.',
+      'major',
+      warnings.length > 0 ? 'warning' : 'info',
+    ),
+    step_id: input.traceEntry.step_id as StepId,
+    report_path: input.traceEntry.report_path,
+    report_schema: input.traceEntry.report_schema,
+    warning_count: warnings.length,
+  });
+  for (const warning of warnings) {
+    reportProgress(input.progress, {
+      schema_version: 1,
+      type: 'evidence.warning',
+      run_id: input.runId,
+      flow_id: input.flowId,
+      recorded_at: input.recordedAt,
+      label: 'Evidence warning',
+      display: progressDisplay(`Circuit evidence warning: ${warning.message}`, 'major', 'warning'),
+      step_id: input.traceEntry.step_id as StepId,
+      report_path: input.traceEntry.report_path,
+      warning_kind: warning.kind,
+      message: warning.message,
+      ...(warning.path === undefined ? {} : { path: warning.path }),
+    });
+  }
 }
 
 function runOutcome(
@@ -316,6 +407,17 @@ export function createProgressProjectorV2(input: {
           attempt: activeAttempts.get(stepId) ?? entry.attempt ?? 1,
           verdict: entry.verdict,
           duration_ms: entry.duration_ms,
+        });
+        break;
+      }
+      case 'step.report_written': {
+        reportEvidenceProgressV2({
+          progress: input.progress,
+          runDir: input.runDir,
+          flowId,
+          runId,
+          recordedAt,
+          traceEntry: entry,
         });
         break;
       }

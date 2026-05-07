@@ -12,6 +12,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
+import { TraceStore } from '../../src/core-v2/trace/trace-store.js';
 import {
   type ReviewFinding,
   ReviewIntake,
@@ -20,26 +22,23 @@ import {
   type ReviewResultVerdict,
   computeReviewVerdict,
 } from '../../src/flows/review/reports.js';
-import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
-import { RunId } from '../../src/schemas/ids.js';
 import { ProgressEvent } from '../../src/schemas/progress-event.js';
 
-import { runRetainedCompiledFlow as runCompiledFlow } from '../../src/compat/retained-runtime.js';
 import type { ClaudeCodeRelayInput } from '../../src/connectors/claude-code.js';
 import type { RelayResult } from '../../src/shared/connector-relay.js';
 import type { RelayFn } from '../../src/shared/relay-runtime-types.js';
 
 const FIXTURE_PATH = resolve('.claude-plugin', 'skills', 'review', 'circuit.json');
 
-function loadFixture(): { flow: CompiledFlow; bytes: Buffer } {
+function loadFixture(): { bytes: Buffer } {
   const bytes = readFileSync(FIXTURE_PATH);
   const raw: unknown = JSON.parse(bytes.toString('utf8'));
-  return { flow: CompiledFlow.parse(raw), bytes };
+  CompiledFlow.parse(raw);
+  return { bytes };
 }
 
 function loadFixtureWithRenamedAnalyzeResultPath(resultPath: string): {
-  flow: CompiledFlow;
   bytes: Buffer;
 } {
   const raw = JSON.parse(readFileSync(FIXTURE_PATH, 'utf8')) as {
@@ -60,24 +59,13 @@ function loadFixtureWithRenamedAnalyzeResultPath(resultPath: string): {
     }
   }
   const bytes = Buffer.from(`${JSON.stringify(raw, null, 2)}\n`);
-  return { flow: CompiledFlow.parse(raw), bytes };
+  CompiledFlow.parse(raw);
+  return { bytes };
 }
 
 function deterministicNow(startMs: number): () => Date {
   let n = 0;
   return () => new Date(startMs + n++ * 1000);
-}
-
-function change_kind(): ChangeKindDeclaration {
-  return {
-    change_kind: 'ratchet-advance',
-    failure_mode:
-      'the review fixture could parse statically but fail to run through relay, verdict gating, and close report materialization',
-    acceptance_evidence:
-      'review-runtime-wiring test runs the live review fixture with a stub relayer and the default registered review compose writer, then parses review.result@v1',
-    alternate_framing:
-      'keep the injected writer as the only schema-valid path — rejected because P2.9 closed with per-flow compose-writer registration as the named follow-on',
-  };
 }
 
 function relayerWith(result: ReviewRelayResult): RelayFn {
@@ -109,6 +97,10 @@ function traceEntryLabel(trace_entry: { kind: string; step_id?: unknown }): stri
   return typeof trace_entry.step_id === 'string'
     ? `${trace_entry.kind}:${trace_entry.step_id}`
     : trace_entry.kind;
+}
+
+async function readTraceEntries(runFolder: string) {
+  return await new TraceStore(runFolder).load();
 }
 
 let runFolderBase: string;
@@ -153,23 +145,21 @@ afterEach(() => {
 
 describe('registered review compose writer', () => {
   it('writes schema-valid review.result with the default compose writer', async () => {
-    const { flow, bytes } = loadFixture();
+    const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'default-registered-review-writer');
     const goal = 'Review scope with the default registered compose writer';
 
-    const outcome = await runCompiledFlow({
-      runFolder,
-      flow,
+    const outcome = await runCompiledFlowV2({
+      runDir: runFolder,
       flowBytes: bytes,
-      runId: RunId.parse('79000000-0000-0000-0000-000000000000'),
+      runId: '79000000-0000-0000-0000-000000000000',
       goal,
       depth: 'standard',
-      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 24, 14, 0, 0)),
       relayer: relayerWith({ verdict: 'NO_ISSUES_FOUND', findings: [] }),
     });
 
-    expect(outcome.result.outcome).toBe('complete');
+    expect(outcome.outcome).toBe('complete');
 
     const reportPath = join(runFolder, 'reports', 'review-result.json');
     expect(existsSync(reportPath)).toBe(true);
@@ -192,7 +182,7 @@ describe('registered review compose writer', () => {
   });
 
   it('passes working tree evidence into the reviewer relay when projectRoot is available', async () => {
-    const { flow, bytes } = loadFixture();
+    const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'working-tree-evidence');
     const projectRoot = join(runFolderBase, 'project');
     mkdirSync(join(projectRoot, 'src'), { recursive: true });
@@ -200,14 +190,12 @@ describe('registered review compose writer', () => {
     writeFileSync(join(projectRoot, 'src', 'review-target.ts'), 'const answer = 42;\n');
     execFileSync('git', ['add', 'src/review-target.ts'], { cwd: projectRoot, stdio: 'pipe' });
 
-    const outcome = await runCompiledFlow({
-      runFolder,
-      flow,
+    const outcome = await runCompiledFlowV2({
+      runDir: runFolder,
       flowBytes: bytes,
-      runId: RunId.parse('79000000-0000-0000-0000-000000000005'),
+      runId: '79000000-0000-0000-0000-000000000005',
       goal: 'review the current changes',
       depth: 'standard',
-      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 24, 14, 0, 0)),
       projectRoot,
       relayer: {
@@ -228,11 +216,11 @@ describe('registered review compose writer', () => {
       },
     });
 
-    expect(outcome.result.outcome).toBe('complete');
+    expect(outcome.outcome).toBe('complete');
   });
 
   it('omits untracked file contents by default while keeping path metadata', async () => {
-    const { flow, bytes } = loadFixture();
+    const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'untracked-metadata-only');
     const projectRoot = join(runFolderBase, 'metadata-only-project');
     const secret = 'secret-like scratch content must not be relayed by default';
@@ -240,14 +228,12 @@ describe('registered review compose writer', () => {
     execFileSync('git', ['init'], { cwd: projectRoot, stdio: 'pipe' });
     writeFileSync(join(projectRoot, 'scratch-notes.txt'), `${secret}\n`);
 
-    const outcome = await runCompiledFlow({
-      runFolder,
-      flow,
+    const outcome = await runCompiledFlowV2({
+      runDir: runFolder,
       flowBytes: bytes,
-      runId: RunId.parse('79000000-0000-0000-0000-000000000009'),
+      runId: '79000000-0000-0000-0000-000000000009',
       goal: 'review the current untracked files',
       depth: 'standard',
-      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 24, 14, 0, 0)),
       projectRoot,
       relayer: {
@@ -267,7 +253,7 @@ describe('registered review compose writer', () => {
       },
     });
 
-    expect(outcome.result.outcome).toBe('complete');
+    expect(outcome.outcome).toBe('complete');
     const intake = ReviewIntake.parse(
       JSON.parse(readFileSync(join(runFolder, 'reports', 'review-intake.json'), 'utf8')),
     );
@@ -284,7 +270,7 @@ describe('registered review compose writer', () => {
   });
 
   it('includes untracked file contents only with explicit evidence policy opt-in', async () => {
-    const { flow, bytes } = loadFixture();
+    const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'untracked-content-opt-in');
     const projectRoot = join(runFolderBase, 'content-opt-in-project');
     const scratch = 'operator explicitly allowed this untracked content';
@@ -292,15 +278,13 @@ describe('registered review compose writer', () => {
     execFileSync('git', ['init'], { cwd: projectRoot, stdio: 'pipe' });
     writeFileSync(join(projectRoot, 'scratch-notes.txt'), `${scratch}\n`);
 
-    const outcome = await runCompiledFlow({
-      runFolder,
-      flow,
+    const outcome = await runCompiledFlowV2({
+      runDir: runFolder,
       flowBytes: bytes,
-      runId: RunId.parse('79000000-0000-0000-0000-000000000010'),
+      runId: '79000000-0000-0000-0000-000000000010',
       goal: 'review the current untracked files',
       depth: 'standard',
       evidencePolicy: { includeUntrackedFileContent: true },
-      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 24, 14, 0, 0)),
       projectRoot,
       relayer: {
@@ -319,7 +303,7 @@ describe('registered review compose writer', () => {
       },
     });
 
-    expect(outcome.result.outcome).toBe('complete');
+    expect(outcome.outcome).toBe('complete');
     const intake = ReviewIntake.parse(
       JSON.parse(readFileSync(join(runFolder, 'reports', 'review-intake.json'), 'utf8')),
     );
@@ -346,7 +330,7 @@ describe('registered review compose writer', () => {
   });
 
   it('keeps review evidence from large diffs instead of replacing it with a git buffer error', async () => {
-    const { flow, bytes } = loadFixture();
+    const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'large-diff-evidence');
     const projectRoot = join(runFolderBase, 'large-diff-project');
     mkdirSync(join(projectRoot, 'src'), { recursive: true });
@@ -361,14 +345,12 @@ describe('registered review compose writer', () => {
       stdio: 'pipe',
     });
 
-    const outcome = await runCompiledFlow({
-      runFolder,
-      flow,
+    const outcome = await runCompiledFlowV2({
+      runDir: runFolder,
       flowBytes: bytes,
-      runId: RunId.parse('79000000-0000-0000-0000-000000000006'),
+      runId: '79000000-0000-0000-0000-000000000006',
       goal: 'review the current large staged diff',
       depth: 'standard',
-      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 24, 14, 0, 0)),
       projectRoot,
       relayer: {
@@ -388,7 +370,7 @@ describe('registered review compose writer', () => {
       },
     });
 
-    expect(outcome.result.outcome).toBe('complete');
+    expect(outcome.outcome).toBe('complete');
     const intake = ReviewIntake.parse(
       JSON.parse(readFileSync(join(runFolder, 'reports', 'review-intake.json'), 'utf8')),
     );
@@ -409,7 +391,7 @@ describe('registered review compose writer', () => {
   });
 
   it('skips unreadable untracked files instead of aborting review intake', async () => {
-    const { flow, bytes } = loadFixture();
+    const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'unreadable-untracked-evidence');
     const projectRoot = join(runFolderBase, 'unreadable-project');
     const unreadablePath = join(projectRoot, 'unreadable.txt');
@@ -419,21 +401,19 @@ describe('registered review compose writer', () => {
     chmodSync(unreadablePath, 0o000);
 
     try {
-      const outcome = await runCompiledFlow({
-        runFolder,
-        flow,
+      const outcome = await runCompiledFlowV2({
+        runDir: runFolder,
         flowBytes: bytes,
-        runId: RunId.parse('79000000-0000-0000-0000-000000000007'),
+        runId: '79000000-0000-0000-0000-000000000007',
         goal: 'review the current untracked files',
         depth: 'standard',
         evidencePolicy: { includeUntrackedFileContent: true },
-        change_kind: change_kind(),
         now: deterministicNow(Date.UTC(2026, 3, 24, 14, 0, 0)),
         projectRoot,
         relayer: relayerWith({ verdict: 'NO_ISSUES_FOUND', findings: [] }),
       });
 
-      expect(outcome.result.outcome).toBe('complete');
+      expect(outcome.outcome).toBe('complete');
       const intake = ReviewIntake.parse(
         JSON.parse(readFileSync(join(runFolder, 'reports', 'review-intake.json'), 'utf8')),
       );
@@ -459,7 +439,7 @@ describe('registered review compose writer', () => {
   });
 
   it('skips binary untracked files and truncates large untracked text after opt-in', async () => {
-    const { flow, bytes } = loadFixture();
+    const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'untracked-content-redaction');
     const projectRoot = join(runFolderBase, 'redaction-project');
     mkdirSync(projectRoot, { recursive: true });
@@ -467,21 +447,19 @@ describe('registered review compose writer', () => {
     writeFileSync(join(projectRoot, 'binary.dat'), Buffer.from([0x61, 0x00, 0x62]));
     writeFileSync(join(projectRoot, 'large.txt'), `${'x'.repeat(25_000)}\n`);
 
-    const outcome = await runCompiledFlow({
-      runFolder,
-      flow,
+    const outcome = await runCompiledFlowV2({
+      runDir: runFolder,
       flowBytes: bytes,
-      runId: RunId.parse('79000000-0000-0000-0000-000000000011'),
+      runId: '79000000-0000-0000-0000-000000000011',
       goal: 'review the current untracked files',
       depth: 'standard',
       evidencePolicy: { includeUntrackedFileContent: true },
-      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 24, 14, 0, 0)),
       projectRoot,
       relayer: relayerWith({ verdict: 'NO_ISSUES_FOUND', findings: [] }),
     });
 
-    expect(outcome.result.outcome).toBe('complete');
+    expect(outcome.outcome).toBe('complete');
     const intake = ReviewIntake.parse(
       JSON.parse(readFileSync(join(runFolder, 'reports', 'review-intake.json'), 'utf8')),
     );
@@ -506,24 +484,22 @@ describe('registered review compose writer', () => {
   });
 
   it('surfaces unavailable evidence as an explicit warning in intake and result', async () => {
-    const { flow, bytes } = loadFixture();
+    const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'unavailable-evidence-warning');
     const progress: ProgressEvent[] = [];
 
-    const outcome = await runCompiledFlow({
-      runFolder,
-      flow,
+    const outcome = await runCompiledFlowV2({
+      runDir: runFolder,
       flowBytes: bytes,
-      runId: RunId.parse('79000000-0000-0000-0000-000000000008'),
+      runId: '79000000-0000-0000-0000-000000000008',
       goal: 'review without project root evidence',
       depth: 'standard',
-      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 24, 14, 0, 0)),
       relayer: relayerWith({ verdict: 'NO_ISSUES_FOUND', findings: [] }),
       progress: (event) => progress.push(ProgressEvent.parse(event)),
     });
 
-    expect(outcome.result.outcome).toBe('complete');
+    expect(outcome.outcome).toBe('complete');
     const intake = ReviewIntake.parse(
       JSON.parse(readFileSync(join(runFolder, 'reports', 'review-intake.json'), 'utf8')),
     );
@@ -547,7 +523,7 @@ describe('registered review compose writer', () => {
 
   it('derives the analyze result path from the live flow graph', async () => {
     const renamedResultPath = 'stages/analyze/review-findings-renamed.json';
-    const { flow, bytes } = loadFixtureWithRenamedAnalyzeResultPath(renamedResultPath);
+    const { bytes } = loadFixtureWithRenamedAnalyzeResultPath(renamedResultPath);
     const runFolder = join(runFolderBase, 'renamed-analyze-result-path');
     const goal = 'Review scope with renamed analyze result path';
     const relay = {
@@ -562,19 +538,17 @@ describe('registered review compose writer', () => {
       ],
     } satisfies ReviewRelayResult;
 
-    const outcome = await runCompiledFlow({
-      runFolder,
-      flow,
+    const outcome = await runCompiledFlowV2({
+      runDir: runFolder,
       flowBytes: bytes,
-      runId: RunId.parse('79000000-0000-0000-0000-000000000003'),
+      runId: '79000000-0000-0000-0000-000000000003',
       goal,
       depth: 'standard',
-      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 24, 14, 0, 0)),
       relayer: relayerWith(relay),
     });
 
-    expect(outcome.result.outcome).toBe('complete');
+    expect(outcome.outcome).toBe('complete');
     expect(existsSync(join(runFolder, renamedResultPath))).toBe(true);
     expect(existsSync(join(runFolder, 'stages', 'analyze', 'review-raw-findings.json'))).toBe(
       false,
@@ -589,39 +563,36 @@ describe('registered review compose writer', () => {
   });
 
   it('aborts instead of throwing when the admitted relay result is not review-shaped', async () => {
-    const { flow, bytes } = loadFixture();
+    const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'bad-review-relay-shape');
 
-    const outcome = await runCompiledFlow({
-      runFolder,
-      flow,
+    const outcome = await runCompiledFlowV2({
+      runDir: runFolder,
       flowBytes: bytes,
-      runId: RunId.parse('79000000-0000-0000-0000-000000000004'),
+      runId: '79000000-0000-0000-0000-000000000004',
       goal: 'Review scope with malformed admitted relay body',
       depth: 'standard',
-      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 24, 14, 0, 0)),
       relayer: relayerWithBody('{"verdict":"NO_ISSUES_FOUND","findings":"not-an-array"}'),
     });
 
-    expect(outcome.result.outcome).toBe('aborted');
-    expect(outcome.result.reason).toContain("compose step 'verdict-step': report writer failed");
+    expect(outcome.outcome).toBe('aborted');
+    expect(outcome.reason).toContain("step 'verdict-step' handler threw");
+    expect(outcome.reason).toContain('"findings"');
     expect(existsSync(join(runFolder, 'reports', 'review-result.json'))).toBe(false);
 
-    const verdictCheck = outcome.trace_entries.find(
+    const traceEntries = await readTraceEntries(runFolder);
+    const verdictAbort = traceEntries.find(
       (trace_entry) =>
-        trace_entry.kind === 'check.evaluated' && trace_entry.step_id === 'verdict-step',
+        trace_entry.kind === 'step.aborted' && trace_entry.step_id === 'verdict-step',
     );
-    if (verdictCheck?.kind !== 'check.evaluated')
-      throw new Error('expected verdict check trace_entry');
-    expect(verdictCheck.check_kind).toBe('schema_sections');
-    expect(verdictCheck.outcome).toBe('fail');
+    if (verdictAbort?.kind !== 'step.aborted') throw new Error('expected verdict abort trace');
+    expect(verdictAbort.reason).toContain('"findings"');
 
-    expect(outcome.trace_entries.map(traceEntryLabel)).toEqual([
+    expect(traceEntries.map(traceEntryLabel)).toEqual([
       'run.bootstrapped',
       'step.entered:intake-step',
       'step.report_written:intake-step',
-      'check.evaluated:intake-step',
       'step.completed:intake-step',
       'step.entered:audit-step',
       'relay.started:audit-step',
@@ -632,7 +603,6 @@ describe('registered review compose writer', () => {
       'check.evaluated:audit-step',
       'step.completed:audit-step',
       'step.entered:verdict-step',
-      'check.evaluated:verdict-step',
       'step.aborted:verdict-step',
       'run.closed',
     ]);
@@ -641,23 +611,21 @@ describe('registered review compose writer', () => {
   it.each(CASES)(
     'runs the live review fixture end-to-end for $name',
     async ({ name, runId, relay, expectedVerdict }) => {
-      const { flow, bytes } = loadFixture();
+      const { bytes } = loadFixture();
       const runFolder = join(runFolderBase, name.replaceAll(' ', '-'));
       const goal = `Review scope for ${name}`;
 
-      const outcome = await runCompiledFlow({
-        runFolder,
-        flow,
+      const outcome = await runCompiledFlowV2({
+        runDir: runFolder,
         flowBytes: bytes,
-        runId: RunId.parse(runId),
+        runId,
         goal,
         depth: 'standard',
-        change_kind: change_kind(),
         now: deterministicNow(Date.UTC(2026, 3, 24, 14, 0, 0)),
         relayer: relayerWith(relay),
       });
 
-      expect(outcome.result.outcome).toBe('complete');
+      expect(outcome.outcome).toBe('complete');
 
       const rawRelayPath = join(runFolder, 'stages', 'analyze', 'review-raw-findings.json');
       expect(existsSync(rawRelayPath)).toBe(true);
@@ -673,7 +641,8 @@ describe('registered review compose writer', () => {
       expect(report.verdict).toBe(expectedVerdict);
       expect(report.verdict).toBe(computeReviewVerdict(report.findings));
 
-      const relayCompleted = outcome.trace_entries.find(
+      const traceEntries = await readTraceEntries(runFolder);
+      const relayCompleted = traceEntries.find(
         (trace_entry) => trace_entry.kind === 'relay.completed',
       );
       if (relayCompleted?.kind !== 'relay.completed') {
@@ -681,7 +650,7 @@ describe('registered review compose writer', () => {
       }
       expect(relayCompleted.verdict).toBe(relay.verdict);
 
-      const reviewCheck = outcome.trace_entries.find(
+      const reviewCheck = traceEntries.find(
         (trace_entry) =>
           trace_entry.kind === 'check.evaluated' && trace_entry.step_id === 'audit-step',
       );
@@ -695,11 +664,10 @@ describe('registered review compose writer', () => {
       // evidence is relay.result rather than step.report_written.
       // The sequence below proves frame -> analyze -> close execution
       // and the expected trace_entry ordering for each stage.
-      expect(outcome.trace_entries.map(traceEntryLabel)).toEqual([
+      expect(traceEntries.map(traceEntryLabel)).toEqual([
         'run.bootstrapped',
         'step.entered:intake-step',
         'step.report_written:intake-step',
-        'check.evaluated:intake-step',
         'step.completed:intake-step',
         'step.entered:audit-step',
         'relay.started:audit-step',
@@ -711,7 +679,6 @@ describe('registered review compose writer', () => {
         'step.completed:audit-step',
         'step.entered:verdict-step',
         'step.report_written:verdict-step',
-        'check.evaluated:verdict-step',
         'step.completed:verdict-step',
         'run.closed',
       ]);
