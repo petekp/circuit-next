@@ -3,9 +3,9 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { ExecutorRegistryV2 } from '../../src/core-v2/executors/index.js';
-import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
-import { TraceStore } from '../../src/core-v2/trace/trace-store.js';
+import type { ExecutorRegistry } from '../../src/runtime/executors/index.js';
+import { runCompiledFlow } from '../../src/runtime/run/compiled-flow-runner.js';
+import { TraceStore } from '../../src/runtime/trace/trace-store.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { RunResult } from '../../src/schemas/result.js';
 import type { RunClosedOutcome } from '../../src/schemas/trace-entry.js';
@@ -365,7 +365,7 @@ function unusedRelayer(): RelayFn {
   };
 }
 
-function composeExecutor(): Pick<ExecutorRegistryV2, 'compose'> {
+function composeExecutor(): Pick<ExecutorRegistry, 'compose'> {
   return {
     compose: async (step, context) => {
       if (step.kind !== 'compose') throw new Error('expected compose step');
@@ -417,7 +417,7 @@ describe('RUN-I7 terminal route outcome mapping', () => {
     it(`${c.route} closes with outcome=${c.outcome} across run.closed and result.json`, async () => {
       const { bytes } = terminalCompiledFlow(c.route);
       const runFolder = join(runFolderBase, c.outcome);
-      const outcome = await runCompiledFlowV2({
+      const outcome = await runCompiledFlow({
         runDir: runFolder,
         flowBytes: bytes,
         runId: c.runId,
@@ -476,7 +476,7 @@ describe('REL-003 rich route execution', () => {
     it(`executes checkpoint route '${route}' instead of collapsing it to pass`, async () => {
       const { bytes } = richCheckpointRouteCompiledFlow(route);
       const runFolder = join(runFolderBase, `rich-${route}`);
-      const outcome = await runCompiledFlowV2({
+      const outcome = await runCompiledFlow({
         runDir: runFolder,
         flowBytes: bytes,
         runId: `74000000-0000-0000-0000-00000000000${route.length}`,
@@ -519,7 +519,7 @@ describe('REL-003 rich route execution', () => {
   it('bounds retry loops by max_attempts instead of spinning forever', async () => {
     const { bytes } = retryLoopCompiledFlow();
     const runFolder = join(runFolderBase, 'retry-loop');
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: '74000000-0000-0000-0000-000000000099',
@@ -548,7 +548,7 @@ describe('REL-003 rich route execution', () => {
   it('routes a failed relay check through retry when the step declares recovery', async () => {
     const { bytes } = relayFailureRecoveryCompiledFlow();
     const runFolder = join(runFolderBase, 'relay-recovery');
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: '74000000-0000-0000-0000-000000000100',

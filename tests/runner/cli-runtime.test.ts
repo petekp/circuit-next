@@ -1,0 +1,299 @@
+import { randomUUID } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { main, usage } from '../../src/cli/circuit.js';
+import {
+  CLI_RUNTIME_ROUTING_POLICY,
+  COMPOSE_WRITER_RUNTIME_POLICY,
+  RUNTIME_POLICY_REASONS,
+} from '../../src/cli/runtime-routing-policy.js';
+import { RunResult } from '../../src/schemas/result.js';
+import type { RelayResult } from '../../src/shared/connector-relay.js';
+import type { ComposeWriterFn, RelayFn, RelayInput } from '../../src/shared/relay-runtime-types.js';
+
+const REVIEW_RELAY_BODY = JSON.stringify({ verdict: 'NO_ISSUES_FOUND', findings: [] });
+
+function deterministicNow(startMs: number): () => Date {
+  let n = 0;
+  return () => new Date(startMs + n++ * 1000);
+}
+
+function relayerWithBody(body: string): RelayFn {
+  return {
+    connectorName: 'claude-code',
+    relay: async (input: RelayInput): Promise<RelayResult> => ({
+      request_payload: input.prompt,
+      receipt_id: 'stub-receipt-cli-runtime',
+      result_body: body,
+      duration_ms: 1,
+      cli_version: 'stub',
+    }),
+  };
+}
+
+function buildRelayer(): RelayFn {
+  const buildImplementationBody = JSON.stringify({
+    verdict: 'accept',
+    summary: 'Build relay completed',
+    changed_files: ['src/example.ts'],
+    evidence: ['stub implementation'],
+  });
+  const buildReviewBody = JSON.stringify({
+    verdict: 'accept',
+    summary: 'No blocking issue found',
+    findings: [],
+  });
+  return {
+    connectorName: 'claude-code',
+    relay: async (input: RelayInput): Promise<RelayResult> => ({
+      request_payload: input.prompt,
+      receipt_id: 'stub-receipt-cli-runtime-build',
+      result_body: input.prompt.includes('Step: review-step')
+        ? buildReviewBody
+        : buildImplementationBody,
+      duration_ms: 1,
+      cli_version: 'stub',
+    }),
+  };
+}
+
+async function captureMain(
+  argv: readonly string[],
+  options: {
+    readonly relayer?: RelayFn;
+    readonly composeWriter?: ComposeWriterFn;
+    readonly configCwd?: string;
+    readonly runId?: string;
+  } = {},
+): Promise<{ readonly code: number; readonly stdout: string; readonly stderr: string }> {
+  let stdout = '';
+  let stderr = '';
+  const originalStdout = process.stdout.write;
+  const originalStderr = process.stderr.write;
+  process.stdout.write = ((chunk: string | Uint8Array): boolean => {
+    stdout += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+    return true;
+  }) as typeof process.stdout.write;
+  process.stderr.write = ((chunk: string | Uint8Array): boolean => {
+    stderr += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+    return true;
+  }) as typeof process.stderr.write;
+  try {
+    const code = await main(argv, {
+      ...(options.relayer === undefined ? {} : { relayer: options.relayer }),
+      ...(options.composeWriter === undefined ? {} : { composeWriter: options.composeWriter }),
+      now: deterministicNow(Date.UTC(2026, 4, 3, 20, 0, 0)),
+      runId: options.runId ?? '85000000-0000-4000-8000-000000000001',
+      configHomeDir: join(runFolderBase, 'empty-home'),
+      configCwd: options.configCwd ?? process.cwd(),
+    });
+    return { code, stdout, stderr };
+  } finally {
+    process.stdout.write = originalStdout;
+    process.stderr.write = originalStderr;
+  }
+}
+
+function withRuntimeDiagnostics<T>(operation: () => Promise<T>): Promise<T> {
+  const original = process.env.CIRCUIT_SHOW_RUNTIME_DECISION;
+  process.env.CIRCUIT_SHOW_RUNTIME_DECISION = '1';
+  return operation().finally(() => {
+    process.env.CIRCUIT_SHOW_RUNTIME_DECISION = original;
+  });
+}
+
+function writeProjectRoot(path: string): void {
+  mkdirSync(path, { recursive: true });
+  writeFileSync(
+    join(path, 'package.json'),
+    `${JSON.stringify({ scripts: { check: 'node -e "process.exit(0)"' } }, null, 2)}\n`,
+  );
+}
+
+function firstTraceEntry(runFolder: string): Record<string, unknown> {
+  return JSON.parse(
+    readFileSync(join(runFolder, 'trace.ndjson'), 'utf8').split(/\r?\n/, 1)[0] ?? '{}',
+  ) as Record<string, unknown>;
+}
+
+let runFolderBase: string;
+
+beforeEach(() => {
+  runFolderBase = join(tmpdir(), `circuit-next-cli-runtime-${randomUUID()}`);
+  mkdirSync(runFolderBase, { recursive: true });
+});
+
+afterEach(() => {
+  rmSync(runFolderBase, { recursive: true, force: true });
+});
+
+describe('CLI runtime', () => {
+  it('documents current runtime routing without migration flags', () => {
+    const text = usage();
+    expect(text).toContain(CLI_RUNTIME_ROUTING_POLICY);
+    expect(text).toContain('CIRCUIT_SHOW_RUNTIME_DECISION=1');
+    expect(text).toContain('includes runtime_reason');
+    expect(text).toContain('untrusted fixtures');
+    expect(text).not.toContain(`CIRCUIT_${2}_RUNTIME`);
+    expect(text).not.toContain('rollback');
+  });
+
+  it('documents composeWriter injection as unsupported for CLI runs', () => {
+    expect(COMPOSE_WRITER_RUNTIME_POLICY).toMatchObject({
+      status: 'unsupported',
+      runtimeCustomization: 'executor-injection-or-generated-reports',
+      reason: RUNTIME_POLICY_REASONS.composeWriter,
+    });
+  });
+
+  it('runs Review through the default runtime without runtime identity fields', async () => {
+    const runFolder = join(runFolderBase, 'review');
+    const result = await captureMain(
+      ['run', 'review', '--goal', 'review this patch', '--run-folder', runFolder],
+      { relayer: relayerWithBody(REVIEW_RELAY_BODY) },
+    );
+
+    expect(result.code, result.stderr).toBe(0);
+    const output = JSON.parse(result.stdout) as Record<string, unknown>;
+    expect(output).toMatchObject({
+      flow_id: 'review',
+      selected_flow: 'review',
+      routed_by: 'explicit',
+      outcome: 'complete',
+    });
+    expect(output).not.toHaveProperty('runtime');
+    expect(output).not.toHaveProperty('runtime_reason');
+    expect(firstTraceEntry(runFolder)).toMatchObject({ engine: 'runtime', flow_id: 'review' });
+    expect(
+      RunResult.parse(JSON.parse(readFileSync(join(runFolder, 'reports/result.json'), 'utf8'))),
+    ).toMatchObject({ flow_id: 'review', outcome: 'complete' });
+  });
+
+  it('emits selector diagnostics only when requested', async () => {
+    const runFolder = join(runFolderBase, 'review-diagnostics');
+    const result = await withRuntimeDiagnostics(() =>
+      captureMain(['run', 'review', '--goal', 'review this patch', '--run-folder', runFolder], {
+        relayer: relayerWithBody(REVIEW_RELAY_BODY),
+      }),
+    );
+
+    expect(result.code, result.stderr).toBe(0);
+    const output = JSON.parse(result.stdout) as Record<string, unknown>;
+    expect(output).toMatchObject({
+      flow_id: 'review',
+      outcome: 'complete',
+      runtime_reason: expect.stringContaining("runtime supports fresh review entry mode 'default'"),
+    });
+    expect(output).not.toHaveProperty('runtime');
+  });
+
+  it('accepts generated explicit fixtures', async () => {
+    const runFolder = join(runFolderBase, 'generated-fixture');
+    const result = await captureMain(
+      [
+        'run',
+        'review',
+        '--goal',
+        'review this patch',
+        '--fixture',
+        join(process.cwd(), 'generated/flows/review/circuit.json'),
+        '--run-folder',
+        runFolder,
+      ],
+      { relayer: relayerWithBody(REVIEW_RELAY_BODY) },
+    );
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({ flow_id: 'review', outcome: 'complete' });
+    expect(firstTraceEntry(runFolder)).toMatchObject({ engine: 'runtime' });
+  });
+
+  it('rejects untrusted explicit fixtures before writing a run folder', async () => {
+    const fixturePath = join(runFolderBase, 'fixtures/review.json');
+    mkdirSync(join(runFolderBase, 'fixtures'), { recursive: true });
+    writeFileSync(fixturePath, readFileSync('generated/flows/review/circuit.json'));
+    const runFolder = join(runFolderBase, 'untrusted-fixture');
+
+    const result = await captureMain(
+      [
+        'run',
+        'review',
+        '--goal',
+        'review this patch',
+        '--fixture',
+        fixturePath,
+        '--run-folder',
+        runFolder,
+      ],
+      { relayer: relayerWithBody(REVIEW_RELAY_BODY) },
+    );
+
+    expect(result.code).toBe(2);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain(RUNTIME_POLICY_REASONS.externalFixtureOrRoot);
+    expect(existsSync(runFolder)).toBe(false);
+  });
+
+  it('rejects programmatic composeWriter injection before writing a run folder', async () => {
+    const runFolder = join(runFolderBase, 'compose-writer');
+    let writerCalled = false;
+    const result = await captureMain(
+      ['run', 'review', '--goal', 'review this patch', '--run-folder', runFolder],
+      {
+        relayer: relayerWithBody(REVIEW_RELAY_BODY),
+        composeWriter: () => {
+          writerCalled = true;
+        },
+      },
+    );
+
+    expect(result.code).toBe(2);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain(RUNTIME_POLICY_REASONS.composeWriter);
+    expect(writerCalled).toBe(false);
+    expect(existsSync(runFolder)).toBe(false);
+  });
+
+  it('keeps Build checkpoint resume on the saved run-folder marker', async () => {
+    const projectRoot = join(runFolderBase, 'project');
+    writeProjectRoot(projectRoot);
+    const runFolder = join(runFolderBase, 'build-checkpoint');
+    const paused = await captureMain(
+      [
+        'run',
+        'build',
+        '--goal',
+        'Add a small feature',
+        '--mode',
+        'deep',
+        '--run-folder',
+        runFolder,
+      ],
+      { configCwd: projectRoot, relayer: buildRelayer() },
+    );
+
+    expect(paused.code, paused.stderr).toBe(0);
+    expect(JSON.parse(paused.stdout)).toMatchObject({
+      flow_id: 'build',
+      outcome: 'checkpoint_waiting',
+    });
+
+    const resumed = await withRuntimeDiagnostics(() =>
+      captureMain(['resume', '--run-folder', runFolder, '--checkpoint-choice', 'continue'], {
+        configCwd: projectRoot,
+        relayer: buildRelayer(),
+      }),
+    );
+
+    expect(resumed.code, resumed.stderr).toBe(0);
+    const output = JSON.parse(resumed.stdout) as Record<string, unknown>;
+    expect(output).toMatchObject({
+      flow_id: 'build',
+      outcome: 'complete',
+      runtime_reason: 'checkpoint resume follows the saved run folder engine marker',
+    });
+    expect(output).not.toHaveProperty('runtime');
+  });
+});

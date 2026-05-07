@@ -132,7 +132,7 @@ describe('plugin command invocation binding', () => {
       expect(hasExecutableSweepInvocation(sweepBody)).toBe(true);
     });
 
-    it('command bodies use the direct Circuit launcher, not the npm-script bridge or old runtime-proof path', () => {
+    it('command bodies use the direct Circuit launcher, not the npm-script bridge or unsupported runtime-proof path', () => {
       for (const body of [exploreBody, runBody, reviewBody, buildBody, migrateBody, sweepBody]) {
         expect(body).toMatch(/\.\/bin\/circuit-next/);
         expect(body).not.toMatch(/npm run circuit:run/);

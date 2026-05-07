@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { main } from '../../src/cli/circuit.js';
-import { CUSTOM_FLOW_ROOT_RUNTIME_POLICY } from '../../src/cli/runtime-compatibility-policy.js';
+import { CUSTOM_FLOW_ROOT_RUNTIME_POLICY } from '../../src/cli/runtime-routing-policy.js';
 import {
   CompiledFlow,
   CompiledFlowId,
@@ -14,7 +14,6 @@ import {
 import type { RelayResult } from '../../src/shared/connector-relay.js';
 import { writeManifestSnapshot } from '../../src/shared/manifest-snapshot.js';
 import type { RelayFn, RelayInput } from '../../src/shared/relay-runtime-types.js';
-import { RETIRED_RUNTIME_RUN_FOLDER_MESSAGE } from '../../src/shared/retired-runtime-policy.js';
 
 const tempRoots: string[] = [];
 const BUILD_IMPLEMENTATION_BODY = JSON.stringify({
@@ -60,7 +59,7 @@ async function captureMain(
   }
 }
 
-function writeRetiredRunFolder(runFolder: string, runId: string): void {
+function writeInvalidRunFolder(runFolder: string, runId: string): void {
   mkdirSync(runFolder, { recursive: true });
   const flowBytes = readFileSync(resolve('generated/flows/build/circuit.json'));
   const snapshot = writeManifestSnapshot(runFolder, {
@@ -82,7 +81,7 @@ function writeRetiredRunFolder(runFolder: string, runId: string): void {
   );
 }
 
-function writeTraceOnlyRetiredRunFolder(runFolder: string, runId: string): void {
+function writeTraceOnlyInvalidRunFolder(runFolder: string, runId: string): void {
   mkdirSync(runFolder, { recursive: true });
   writeFileSync(
     join(runFolder, 'trace.ndjson'),
@@ -97,7 +96,7 @@ function writeTraceOnlyRetiredRunFolder(runFolder: string, runId: string): void 
   );
 }
 
-function writeStartedTraceOnlyRetiredRunFolder(runFolder: string): void {
+function writeStartedTraceOnlyInvalidRunFolder(runFolder: string): void {
   mkdirSync(runFolder, { recursive: true });
   writeFileSync(
     join(runFolder, 'trace.ndjson'),
@@ -114,7 +113,7 @@ function relayerWithBuildBodies(): RelayFn {
     connectorName: 'claude-code',
     relay: async (input: RelayInput): Promise<RelayResult> => ({
       request_payload: input.prompt,
-      receipt_id: 'stub-custom-flow-v2',
+      receipt_id: 'stub-custom-flow-runtime',
       result_body: input.prompt.includes('Step: review-step')
         ? BUILD_REVIEW_BODY
         : BUILD_IMPLEMENTATION_BODY,
@@ -122,20 +121,6 @@ function relayerWithBuildBodies(): RelayFn {
       cli_version: '0.0.0-stub',
     }),
   };
-}
-
-async function withEnv<T>(
-  key: string,
-  value: string | undefined,
-  fn: () => Promise<T>,
-): Promise<T> {
-  const original = process.env[key];
-  process.env[key] = value;
-  try {
-    return await fn();
-  } finally {
-    process.env[key] = original;
-  }
 }
 
 afterEach(() => {
@@ -178,15 +163,15 @@ describe('utility CLI commands', () => {
     expect(existsSync(output.operator_summary_markdown_path)).toBe(true);
     const summary = readFileSync(output.operator_summary_markdown_path, 'utf8');
     expect(summary).toContain(CUSTOM_FLOW_ROOT_RUNTIME_POLICY);
-    expect(summary).toContain('CIRCUIT_V2_RUNTIME=1 circuit-next run release-note-flow');
+    expect(summary).toContain('circuit-next run release-note-flow');
     expect(existsSync(join(home, 'skills/release-note-flow/SKILL.md'))).toBe(true);
     expect(existsSync(join(home, 'skills/release-note-flow/circuit.yaml'))).toBe(true);
     expect(existsSync(join(home, 'commands/release-note-flow.md'))).toBe(true);
     expect(readFileSync(join(home, 'skills/release-note-flow/SKILL.md'), 'utf8')).toContain(
-      'CIRCUIT_V2_RUNTIME=1 circuit-next run release-note-flow',
+      'circuit-next run release-note-flow',
     );
     expect(readFileSync(join(home, 'commands/release-note-flow.md'), 'utf8')).toContain(
-      'CIRCUIT_V2_RUNTIME=1 circuit-next run release-note-flow',
+      'circuit-next run release-note-flow',
     );
     expect(CompiledFlow.parse(JSON.parse(readFileSync(output.flow_path, 'utf8'))).id).toBe(
       'release-note-flow',
@@ -202,23 +187,21 @@ describe('utility CLI commands', () => {
       join(projectRoot, 'package.json'),
       `${JSON.stringify({ scripts: { check: 'node -e "process.exit(0)"' } }, null, 2)}\n`,
     );
-    const runFolder = join(home, 'runs', 'release-note-flow-v2');
-    const run = await withEnv('CIRCUIT_V2_RUNTIME', '1', () =>
-      captureMain(
-        [
-          'run',
-          'release-note-flow',
-          '--flow-root',
-          join(home, 'flows'),
-          '--goal',
-          'Draft release notes from a test change',
-          '--progress',
-          'jsonl',
-          '--run-folder',
-          runFolder,
-        ],
-        { configCwd: projectRoot, relayer: relayerWithBuildBodies() },
-      ),
+    const runFolder = join(home, 'runs', 'release-note-flow-runtime');
+    const run = await captureMain(
+      [
+        'run',
+        'release-note-flow',
+        '--flow-root',
+        join(home, 'flows'),
+        '--goal',
+        'Draft release notes from a test change',
+        '--progress',
+        'jsonl',
+        '--run-folder',
+        runFolder,
+      ],
+      { configCwd: projectRoot, relayer: relayerWithBuildBodies() },
     );
 
     expect(run.code, run.stderr).toBe(0);
@@ -226,20 +209,18 @@ describe('utility CLI commands', () => {
       flow_id: string;
       selected_flow: string;
       outcome: string;
-      runtime?: string;
       runtime_reason?: string;
     };
     expect(runOutput).toMatchObject({
       flow_id: 'release-note-flow',
       selected_flow: 'release-note-flow',
       outcome: 'complete',
-      runtime: 'v2',
     });
-    expect(runOutput.runtime_reason).toContain("custom flow 'release-note-flow'");
+    expect(runOutput.runtime_reason).toBeUndefined();
     const firstTrace = JSON.parse(
       readFileSync(join(runFolder, 'trace.ndjson'), 'utf8').split(/\r?\n/, 1)[0] ?? '{}',
     ) as Record<string, unknown>;
-    expect(firstTrace).toMatchObject({ engine: 'core-v2', flow_id: 'release-note-flow' });
+    expect(firstTrace).toMatchObject({ engine: 'runtime', flow_id: 'release-note-flow' });
   });
 
   it('publishes reviewed draft contents without regenerating the draft', async () => {
@@ -821,7 +802,7 @@ describe('utility CLI commands', () => {
     expect(empty.stdout).toBe('');
   });
 
-  it('can bind handoff continuity to a core-v2 waiting run and write active-run output', async () => {
+  it('can bind handoff continuity to a runtime waiting run and write active-run output', async () => {
     const root = tempRoot('circuit-handoff-run-');
     const runFolder = join(root, 'run');
     const controlPlane = join(root, 'control-plane');
@@ -877,19 +858,19 @@ describe('utility CLI commands', () => {
     );
   });
 
-  it('fails closed when binding handoff continuity to a retained waiting run', async () => {
-    const root = tempRoot('circuit-handoff-retained-run-');
+  it('fails closed when binding handoff continuity to a kept waiting run', async () => {
+    const root = tempRoot('circuit-handoff-kept-run-');
     const runFolder = join(root, 'run');
     const controlPlane = join(root, 'control-plane');
-    writeRetiredRunFolder(runFolder, '55555555-5555-4555-8555-555555555556');
+    writeInvalidRunFolder(runFolder, '55555555-5555-4555-8555-555555555556');
 
     const save = await captureMain([
       'handoff',
       'save',
       '--goal',
-      'Resume retained waiting Build run',
+      'Resume kept waiting Build run',
       '--next',
-      'DO: resolve the retained Build checkpoint',
+      'DO: resolve the kept Build checkpoint',
       '--run-folder',
       runFolder,
       '--control-plane',
@@ -902,20 +883,22 @@ describe('utility CLI commands', () => {
 
     expect(save.code).toBe(1);
     expect(save.stdout).toBe('');
-    expect(save.stderr.trim()).toBe(`error: ${RETIRED_RUNTIME_RUN_FOLDER_MESSAGE}`);
+    expect(save.stderr.trim()).toBe(
+      'error: cannot save run-backed continuity: trace is missing or invalid for this run folder',
+    );
   });
 
-  it('fails closed when binding handoff continuity to a trace-only retired run', async () => {
-    const root = tempRoot('circuit-handoff-trace-only-retired-run-');
+  it('fails closed when binding handoff continuity to a trace-only invalid run', async () => {
+    const root = tempRoot('circuit-handoff-trace-only-run-');
     const runFolder = join(root, 'run');
     const controlPlane = join(root, 'control-plane');
-    writeTraceOnlyRetiredRunFolder(runFolder, '55555555-5555-4555-8555-555555555558');
+    writeTraceOnlyInvalidRunFolder(runFolder, '55555555-5555-4555-8555-555555555558');
 
     const save = await captureMain([
       'handoff',
       'save',
       '--goal',
-      'Resume trace-only retired Build run',
+      'Resume trace-only invalid Build run',
       '--next',
       'DO: start a fresh run',
       '--run-folder',
@@ -930,20 +913,22 @@ describe('utility CLI commands', () => {
 
     expect(save.code).toBe(1);
     expect(save.stdout).toBe('');
-    expect(save.stderr.trim()).toBe(`error: ${RETIRED_RUNTIME_RUN_FOLDER_MESSAGE}`);
+    expect(save.stderr.trim()).toContain(
+      'error: cannot save run-backed continuity: manifest snapshot is missing or invalid',
+    );
   });
 
-  it('fails closed when binding handoff continuity to a run.started trace-only retired run', async () => {
-    const root = tempRoot('circuit-handoff-started-trace-only-retired-run-');
+  it('fails closed when binding handoff continuity to a run.started trace-only invalid run', async () => {
+    const root = tempRoot('circuit-handoff-started-trace-only-run-');
     const runFolder = join(root, 'run');
     const controlPlane = join(root, 'control-plane');
-    writeStartedTraceOnlyRetiredRunFolder(runFolder);
+    writeStartedTraceOnlyInvalidRunFolder(runFolder);
 
     const save = await captureMain([
       'handoff',
       'save',
       '--goal',
-      'Resume run.started retired Build run',
+      'Resume run.started invalid Build run',
       '--next',
       'DO: start a fresh run',
       '--run-folder',
@@ -958,14 +943,16 @@ describe('utility CLI commands', () => {
 
     expect(save.code).toBe(1);
     expect(save.stdout).toBe('');
-    expect(save.stderr.trim()).toBe(`error: ${RETIRED_RUNTIME_RUN_FOLDER_MESSAGE}`);
+    expect(save.stderr.trim()).toContain(
+      'error: cannot save run-backed continuity: manifest snapshot is missing or invalid',
+    );
   });
 
-  it('fails closed for corrupted unmarked retained folders before any adapter path', async () => {
-    const root = tempRoot('circuit-handoff-retained-corrupt-');
+  it('fails closed for corrupted unmarked invalid folders before any adapter path', async () => {
+    const root = tempRoot('circuit-handoff-kept-corrupt-');
     const runFolder = join(root, 'run');
     const controlPlane = join(root, 'control-plane');
-    writeRetiredRunFolder(runFolder, '55555555-5555-4555-8555-555555555557');
+    writeInvalidRunFolder(runFolder, '55555555-5555-4555-8555-555555555557');
 
     writeFileSync(join(runFolder, 'trace.ndjson'), '{not-json}\n');
 
@@ -973,9 +960,9 @@ describe('utility CLI commands', () => {
       'handoff',
       'save',
       '--goal',
-      'Do not project corrupted retained folder as v2',
+      'Do not project corrupted invalid folder as runtime',
       '--next',
-      'DO: inspect the retained trace corruption',
+      'DO: inspect the kept trace corruption',
       '--run-folder',
       runFolder,
       '--control-plane',
@@ -988,6 +975,8 @@ describe('utility CLI commands', () => {
 
     expect(save.code).toBe(1);
     expect(save.stdout).toBe('');
-    expect(save.stderr.trim()).toBe(`error: ${RETIRED_RUNTIME_RUN_FOLDER_MESSAGE}`);
+    expect(save.stderr.trim()).toBe(
+      'error: cannot save run-backed continuity: trace is missing or invalid for this run folder',
+    );
   });
 });

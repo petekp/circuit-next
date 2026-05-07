@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { recoveryRouteForExecutableStep } from '../../src/core-v2/run/v1-compat.js';
+import { recoveryRouteForExecutableStep } from '../../src/runtime/run/route-compat.js';
 import { RECOVERY_ROUTE_PRIORITY, recoveryRouteForStep } from '../../src/shared/recovery-route.js';
 
 describe('recovery route selection', () => {
-  it('uses the shared priority order for retained and core-v2 route selection', () => {
+  it('uses the shared priority order for kept and runtime route selection', () => {
     const step = {
       routes: {
         revise: 'revise-step',

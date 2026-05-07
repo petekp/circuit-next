@@ -3,14 +3,14 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
-import { TraceStore } from '../../src/core-v2/trace/trace-store.js';
+import { runCompiledFlow } from '../../src/runtime/run/compiled-flow-runner.js';
+import { TraceStore } from '../../src/runtime/trace/trace-store.js';
 
 import type { RelayResult } from '../../src/shared/connector-relay.js';
 import type { RelayFn } from '../../src/shared/relay-runtime-types.js';
 
 // Adversarial-review fix #3 + #12: TraceStore is the single sequence
-// assignment authority in core-v2. Every appended trace entry gets the next
+// assignment authority in runtime. Every appended trace entry gets the next
 // zero-based sequence number, including relay transcript entries.
 
 const FIXTURE_PATH = resolve('generated/flows/runtime-proof/circuit.json');
@@ -52,7 +52,7 @@ describe('TraceStore is the single sequence-assignment authority', () => {
   it('on-disk trace_entries have sequence === array index across compose + relay + close', async () => {
     const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'run');
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: '99999999-aaaa-bbbb-cccc-000000000001',

@@ -222,7 +222,7 @@
       "identity_fields": ["run_id"],
       "path_derived_fields": [],
       "dangerous_sinks": ["status determination", "closure detection", "resume eligibility"],
-      "trust_boundary": "schema-validated in-memory aggregate; always recomputable from run.trace; never authoritative over the log; never persisted to disk in the current core-v2 runtime",
+      "trust_boundary": "schema-validated in-memory aggregate; always recomputable from run.trace; never authoritative over the log; never persisted to disk in the current runtime runtime",
       "reference_surfaces": [],
       "reference_evidence": [],
       "migration_policy": "n/a",
@@ -234,7 +234,7 @@
       "surface_class": "greenfield",
       "compatibility_policy": "n/a",
       "plane": "data-plane",
-      "description": "Derived run-local state schema used for in-memory status and continuity projections. The current core-v2 runtime does not persist state.json and does not adapt retired state.json files. For the in-memory {log, snapshot} aggregate see run.projection.",
+      "description": "Derived run-local state schema used for in-memory status and continuity projections. The current runtime runtime does not persist state.json and does not adapt invalid state.json files. For the in-memory {log, snapshot} aggregate see run.projection.",
       "contract": "docs/contracts/run.md",
       "schema_file": "src/schemas/snapshot.ts",
       "schema_exports": ["Snapshot", "SnapshotStatus", "StepState", "StepStatus"],
@@ -249,7 +249,7 @@
       "identity_fields": ["run_id"],
       "path_derived_fields": [],
       "dangerous_sinks": ["status determination", "closure detection", "resume eligibility"],
-      "trust_boundary": "in-memory derived state; current persisted run-folder authority is trace.ndjson, manifest.snapshot.json, and reports/result.json. Retired state.json files are not adapted.",
+      "trust_boundary": "in-memory derived state; current persisted run-folder authority is trace.ndjson, manifest.snapshot.json, and reports/result.json. Older state.json files are not current run-folder authority.",
       "reference_surfaces": [],
       "reference_evidence": [],
       "migration_policy": "n/a",
@@ -292,7 +292,7 @@
       "contract": "docs/contracts/run.md",
       "schema_file": "src/schemas/result.ts",
       "schema_exports": ["RunResult"],
-      "writers": ["core-v2 graph runner via src/core-v2/run/result-writer.ts"],
+      "writers": ["runtime graph runner via src/runtime/run/result-writer.ts"],
       "readers": [
         "operator tooling (run summary, audit)",
         "circuit-next resume (closed-run diagnostics)"
@@ -829,7 +829,7 @@
       "identity_fields": [],
       "path_derived_fields": [],
       "dangerous_sinks": ["run result consumer; operator-facing summary of the explore run"],
-      "trust_boundary": "engine-computed at Close by the registered explore.result@v1 close writer from schema-parsed compose.json and review-verdict.json plus flow-declared evidence link paths; terminal report — no in-run readers; cross-run reader is the run result consumer only; path-distinct from run.result so the core-v2 result writer (src/core-v2/run/result-writer.ts RESULT-I1 — single writer to reports/result.json) and the flow close writer (flow-semantic aggregate at explore-result.json) do not collide",
+      "trust_boundary": "engine-computed at Close by the registered explore.result@v1 close writer from schema-parsed compose.json and review-verdict.json plus flow-declared evidence link paths; terminal report — no in-run readers; cross-run reader is the run result consumer only; path-distinct from run.result so the runtime result writer (src/runtime/run/result-writer.ts RESULT-I1 — single writer to reports/result.json) and the flow close writer (flow-semantic aggregate at explore-result.json) do not collide",
       "reference_surfaces": ["legacy-circuit explore reports/result.md"],
       "reference_evidence": ["specs/reference/legacy-circuit/explore-characterization.md"],
       "migration_policy": "Clean-break structured JSON successor to the reference Markdown close report, accepted for CC#P2-1 by ADR-0007 Slice 99; no transparent parse of legacy result.md is attempted.",
@@ -1264,7 +1264,7 @@
       "surface_class": "greenfield",
       "compatibility_policy": "n/a",
       "plane": "data-plane",
-      "description": "Coexistence Plan report for the Migrate flow. Captures the strategy for old + new running side-by-side while batches are in flight: switchover criteria, the observable signals that prove coexistence is healthy, the rollback path the operator can take at any cutover boundary, and the residual risks.",
+      "description": "Coexistence Plan report for the Migrate flow. Captures the strategy for old + new running side-by-side while batches are in flight: switchover criteria, the observable signals that prove coexistence is healthy, the rollback path the operator can take at any release boundary, and the residual risks.",
       "contract": "src/flows/migrate/schematic.json",
       "schema_file": "src/flows/migrate/reports.ts",
       "schema_exports": ["MigrateCoexistence"],
@@ -1276,7 +1276,7 @@
       "path_derived_fields": [],
       "dangerous_sinks": [
         "rollback path commitment — the operator inherits the documented rollback as the survivable exit at every batch boundary",
-        "switchover criteria — review-stage admits cutover only when the criteria are met"
+        "switchover criteria — review-stage admits release only when the criteria are met"
       ],
       "trust_boundary": "engine-computed at Coexistence Plan from migrate.brief plus migrate.inventory; schema-parsed before execute-step consumes it; read-only thereafter within the run",
       "reference_surfaces": [],
@@ -1302,7 +1302,7 @@
       "path_derived_fields": [],
       "dangerous_sinks": [
         "verify-stage input — the child's verdict checks whether Verify even runs",
-        "review-stage admission — cutover review reads batch evidence to decide cutover-approved vs cutover-blocked"
+        "review-stage admission — release review reads batch evidence to decide release-approved vs release-blocked"
       ],
       "trust_boundary": "produced by a Build child flow run via the sub-run handler; the child's own relay + verification + review trust boundaries apply to the materialized RunResult; the parent treats the result as immutable evidence",
       "reference_surfaces": [],
@@ -1327,8 +1327,8 @@
       "identity_fields": [],
       "path_derived_fields": ["commands.command_id"],
       "dangerous_sinks": [
-        "cutover review evidence",
-        "close-stage outcome — failed verification cannot land cutover-approved"
+        "release review evidence",
+        "close-stage outcome — failed verification cannot land release-approved"
       ],
       "trust_boundary": "engine-computed by direct argv verification command execution from schema-parsed Migrate brief candidates; read-only after write",
       "reference_surfaces": [],
@@ -1342,7 +1342,7 @@
       "surface_class": "greenfield",
       "compatibility_policy": "n/a",
       "plane": "data-plane",
-      "description": "Cutover Review report for the Migrate flow. Adversarial pass over the migration evidence (brief, inventory, coexistence plan, batch result, verification) with a four-state verdict (cutover-approved | cutover-with-followups | cutover-blocked | reject), summary, and findings. Findings are required for any non-approved verdict.",
+      "description": "Release Review report for the Migrate flow. Adversarial pass over the migration evidence (brief, inventory, coexistence plan, batch result, verification) with a four-state verdict (release-approved | release-with-followups | release-blocked | reject), summary, and findings. Findings are required for any non-approved verdict.",
       "contract": "src/flows/migrate/schematic.json",
       "schema_file": "src/flows/migrate/reports.ts",
       "schema_exports": ["MigrateReview", "MigrateReviewVerdict", "MigrateReviewFinding"],
@@ -1353,8 +1353,8 @@
       "identity_fields": [],
       "path_derived_fields": [],
       "dangerous_sinks": [
-        "operator-facing cutover verdict",
-        "close-stage outcome composition — only cutover-approved or cutover-with-followups admit forward motion",
+        "operator-facing release verdict",
+        "close-stage outcome composition — only release-approved or release-with-followups admit forward motion",
         "relay-result-to-report materialization (per ADR-0008 §Decision.3a) — the canonical review.json value is produced by schema-parsing the connector-authored writes.result payload"
       ],
       "trust_boundary": "model-authored during Review stage via connector relay (worker-relay step with role=reviewer per ADR-0008); the role tag binds to RelayConfig.roles.reviewer at runtime, recorded in the five-trace_entry relay transcript with payload + receipt + result hashes per ADR-0007 CC#P2-2; canonical verdict report materializes from writes.result via ADR-0008 §Decision.3a rule; read-only thereafter; adversarial by design",
@@ -1369,7 +1369,7 @@
       "surface_class": "greenfield",
       "compatibility_policy": "n/a",
       "plane": "data-plane",
-      "description": "Close-stage aggregate report for the Migrate flow. Composes a deterministic summary, outcome (complete | cutover-deferred | reverted | failed), verification status, review verdict, batch count, and pointers to the six prior reports (brief, inventory, coexistence, batch, verification, review). Persisted at <run-folder>/reports/migrate-result.json — distinct from the engine-authored universal run.result.",
+      "description": "Close-stage aggregate report for the Migrate flow. Composes a deterministic summary, outcome (complete | release-deferred | reverted | failed), verification status, review verdict, batch count, and pointers to the six prior reports (brief, inventory, coexistence, batch, verification, review). Persisted at <run-folder>/reports/migrate-result.json — distinct from the engine-authored universal run.result.",
       "contract": "src/flows/migrate/schematic.json",
       "schema_file": "src/flows/migrate/reports.ts",
       "schema_exports": [
@@ -1386,7 +1386,7 @@
       "path_derived_fields": ["evidence_links.path"],
       "dangerous_sinks": [
         "run result consumer; operator-facing summary of the Migrate run",
-        "outcome reporting — cutover-deferred and reverted are first-class non-failure outcomes that the operator must distinguish from complete"
+        "outcome reporting — release-deferred and reverted are first-class non-failure outcomes that the operator must distinguish from complete"
       ],
       "trust_boundary": "engine-computed at Close by the registered migrate.result@v1 close builder from schema-parsed Migrate role reports plus flow-declared evidence link paths; terminal report — no in-run readers; cross-run reader is the run result consumer only; path-distinct from run.result",
       "reference_surfaces": [],

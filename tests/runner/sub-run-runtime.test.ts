@@ -4,13 +4,13 @@ import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type {
-  ChildCompiledFlowResolverV2,
-  CompiledFlowRunOptionsV2Like,
-  CompiledFlowRunnerV2,
-} from '../../src/core-v2/run/child-runner.js';
-import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
-import type { GraphRunResultV2 } from '../../src/core-v2/run/graph-runner.js';
-import { TraceStore } from '../../src/core-v2/trace/trace-store.js';
+  ChildCompiledFlowResolver,
+  CompiledFlowRunOptions,
+  CompiledFlowRunner,
+} from '../../src/runtime/run/child-runner.js';
+import { runCompiledFlow } from '../../src/runtime/run/compiled-flow-runner.js';
+import type { GraphRunResult } from '../../src/runtime/run/graph-runner.js';
+import { TraceStore } from '../../src/runtime/trace/trace-store.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { RunResult } from '../../src/schemas/result.js';
 import { runResultPath as resultPath } from '../../src/shared/result-path.js';
@@ -141,13 +141,13 @@ function buildChildCompiledFlow(): CompiledFlow {
   return CompiledFlow.parse(raw);
 }
 
-function makeChildResolver(child: { bytes: Buffer }): ChildCompiledFlowResolverV2 {
+function makeChildResolver(child: { bytes: Buffer }): ChildCompiledFlowResolver {
   return () => ({ flowBytes: child.bytes });
 }
 
 // Stub childRunner that bypasses real child execution. Writes a
 // synthetic child result.json (with a verdict field) into the child's
-// runDir/reports and returns a minimal GraphRunResultV2. This
+// runDir/reports and returns a minimal GraphRunResult. This
 // isolates the parent's sub-run handler logic from the child's full
 // loop while still exercising the path-derivation, file-copy, and
 // audit-trace_entry surface the handler is responsible for.
@@ -155,8 +155,8 @@ function makeStubChildRunner(observed: {
   verdict: string;
   outcome: 'complete' | 'aborted';
   capturedRunIds: { value: string | undefined };
-}): CompiledFlowRunnerV2 {
-  return async (options: CompiledFlowRunOptionsV2Like): Promise<GraphRunResultV2> => {
+}): CompiledFlowRunner {
+  return async (options: CompiledFlowRunOptions): Promise<GraphRunResult> => {
     observed.capturedRunIds.value = options.runId;
     const childResultAbs = resultPath(options.runDir);
     mkdirSync(dirname(childResultAbs), { recursive: true });
@@ -222,7 +222,7 @@ describe('sub-run runtime', () => {
     const parentRunId = '11111111-1111-1111-1111-111111111111';
     const parentRunFolder = join(runFolderBase, parentRunId);
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: parentRunFolder,
       flowBytes: parentBytes,
       runId: parentRunId,
@@ -297,7 +297,7 @@ describe('sub-run runtime', () => {
     const parentRunId = '11111111-1111-1111-1111-111111111112';
     const parentRunFolder = join(runFolderBase, parentRunId);
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: parentRunFolder,
       flowBytes: parentBytes,
       runId: parentRunId,
@@ -333,7 +333,7 @@ describe('sub-run runtime', () => {
     const parentRunId = '11111111-1111-1111-1111-111111111113';
     const parentRunFolder = join(runFolderBase, parentRunId);
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: parentRunFolder,
       flowBytes: parentBytes,
       runId: parentRunId,

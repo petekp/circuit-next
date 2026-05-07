@@ -108,4 +108,4 @@ map it to the flag; otherwise omit the flag and accept the default.
 ## Authority
 
 - `src/flows/explore/contract.md` (flow contract + relay semantics)
-- `src/core-v2/` (current runner)
+- `src/runtime/` (current runner)

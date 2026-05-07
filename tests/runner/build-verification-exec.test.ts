@@ -12,9 +12,9 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { ExecutorRegistryV2 } from '../../src/core-v2/executors/index.js';
-import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
 import { BuildPlan, BuildVerification } from '../../src/flows/build/reports.js';
+import type { ExecutorRegistry } from '../../src/runtime/executors/index.js';
+import { runCompiledFlow } from '../../src/runtime/run/compiled-flow-runner.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 
 function deterministicNow(startMs: number): () => Date {
@@ -126,7 +126,7 @@ function verificationCompiledFlow(): { bytes: Buffer } {
   return { bytes };
 }
 
-function planWriter(plan: unknown): Pick<ExecutorRegistryV2, 'compose'> {
+function planWriter(plan: unknown): Pick<ExecutorRegistry, 'compose'> {
   return {
     compose: async (step, context) => {
       if (step.kind !== 'compose') throw new Error('expected compose step');
@@ -167,7 +167,7 @@ describe('Build verification command execution', () => {
     const { bytes } = verificationCompiledFlow();
     const runFolder = join(runFolderBase, 'pass');
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       projectRoot: process.cwd(),
@@ -205,7 +205,7 @@ describe('Build verification command execution', () => {
     const { bytes } = verificationCompiledFlow();
     const runFolder = join(runFolderBase, 'fail');
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       projectRoot: process.cwd(),
@@ -237,7 +237,7 @@ describe('Build verification command execution', () => {
     const { bytes } = verificationCompiledFlow();
     const runFolder = join(runFolderBase, 'timeout');
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       projectRoot: process.cwd(),
@@ -265,7 +265,7 @@ describe('Build verification command execution', () => {
     const { bytes } = verificationCompiledFlow();
     const runFolder = join(runFolderBase, 'unsafe');
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       projectRoot: process.cwd(),
@@ -307,7 +307,7 @@ describe('Build verification command execution', () => {
     const marker = join(outside, 'marker.txt');
 
     const lexicalRunFolder = join(runFolderBase, 'cwd-lexical');
-    const lexical = await runCompiledFlowV2({
+    const lexical = await runCompiledFlow({
       runDir: lexicalRunFolder,
       flowBytes: bytes,
       projectRoot,
@@ -341,7 +341,7 @@ describe('Build verification command execution', () => {
     expect(lexical.reason).toMatch(/cwd must not escape|cwd/);
 
     const symlinkRunFolder = join(runFolderBase, 'cwd-symlink');
-    const symlinked = await runCompiledFlowV2({
+    const symlinked = await runCompiledFlow({
       runDir: symlinkRunFolder,
       flowBytes: bytes,
       projectRoot,
@@ -373,7 +373,7 @@ describe('Build verification command execution', () => {
     const originalCwd = process.cwd();
     process.chdir(ambient);
     try {
-      const outcome = await runCompiledFlowV2({
+      const outcome = await runCompiledFlow({
         runDir: runFolder,
         flowBytes: bytes,
         projectRoot,
@@ -404,7 +404,7 @@ describe('Build verification command execution', () => {
     const priorParent = process.env.CIRCUIT_NEXT_PARENT_ONLY_SECRET;
     process.env.CIRCUIT_NEXT_PARENT_ONLY_SECRET = 'leaked';
     try {
-      const outcome = await runCompiledFlowV2({
+      const outcome = await runCompiledFlow({
         runDir: runFolder,
         flowBytes: bytes,
         projectRoot: process.cwd(),
@@ -442,7 +442,7 @@ describe('Build verification command execution', () => {
     const { bytes } = verificationCompiledFlow();
     const runFolder = join(runFolderBase, 'output-limit');
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       projectRoot: process.cwd(),

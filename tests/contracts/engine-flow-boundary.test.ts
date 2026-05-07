@@ -80,7 +80,7 @@ function isAllowedEngineImport(importPath: string): boolean {
 describe('engine ↔ flow boundary', () => {
   it('no file under src/runtime/ imports a flow source other than the catalog or types', () => {
     const runtimeFiles = walk(RUNTIME_ROOT);
-    expect(runtimeFiles).toEqual([]);
+    expect(runtimeFiles.length).toBeGreaterThan(0);
     const offenders: { readonly file: string; readonly importPath: string }[] = [];
     for (const file of runtimeFiles) {
       for (const importPath of importPathsFrom(file)) {

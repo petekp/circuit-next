@@ -543,7 +543,7 @@ function connectorCapabilities(records) {
     summary: record.summary,
     evidence: [
       'src/schemas/connector.ts',
-      'src/core-v2/executors/relay.ts',
+      'src/runtime/executors/relay.ts',
       'src/shared/relay-selection.ts',
     ],
     readiness_refs: record.readiness_refs,
@@ -702,10 +702,10 @@ function supportCapabilities(rootCommands, proofAxesByCapability, proofs, router
       kind: 'checkpoint',
       title: 'Checkpoints',
       status: 'implemented',
-      summary: 'Checkpoint waiting and resume paths exist in core-v2 and the CLI.',
+      summary: 'Checkpoint waiting and resume paths exist in runtime and the CLI.',
       evidence: [
-        'src/core-v2/executors/checkpoint.ts',
-        'src/core-v2/run/checkpoint-resume.ts',
+        'src/runtime/executors/checkpoint.ts',
+        'src/runtime/run/checkpoint-resume.ts',
         'src/cli/circuit.ts',
       ],
       axes: {
@@ -720,11 +720,11 @@ function supportCapabilities(rootCommands, proofAxesByCapability, proofs, router
       title: 'Continuity',
       status: continuityImplemented ? 'implemented' : 'partial',
       summary: continuityImplemented
-        ? 'Core-v2 run records, checkpoint resume, and explicit handoff continuity records are proven.'
-        : 'Core-v2 run records and checkpoint resume exist; explicit handoff continuity proof is still pending.',
+        ? 'Runtime run records, checkpoint resume, and explicit handoff continuity records are proven.'
+        : 'Runtime run records and checkpoint resume exist; explicit handoff continuity proof is still pending.',
       evidence: [
-        'src/core-v2/run/checkpoint-resume.ts',
-        'src/core-v2/run/manifest-snapshot.ts',
+        'src/runtime/run/checkpoint-resume.ts',
+        'src/runtime/run/manifest-snapshot.ts',
         'src/cli/handoff.ts',
       ],
       readiness_refs: continuityImplemented ? [] : ['REL-014'],
@@ -785,7 +785,7 @@ function supportCapabilities(rootCommands, proofAxesByCapability, proofs, router
         'README.md',
         'docs/first-run.md',
         'docs/contracts/host-capabilities.md',
-        'src/core-v2/run/graph-runner.ts',
+        'src/runtime/run/graph-runner.ts',
         'src/shared/operator-summary-writer.ts',
         'src/shared/write-capable-worker-disclosure.ts',
       ],

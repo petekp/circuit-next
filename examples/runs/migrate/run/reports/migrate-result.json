@@ -1,8 +1,8 @@
 {
-  "summary": "Migrate result for migrate: replace a small legacy API: Cutover approved for the synthetic migration proof.",
+  "summary": "Migrate result for migrate: replace a small legacy API: Release approved for the synthetic migration proof.",
   "outcome": "complete",
   "verification_status": "passed",
-  "review_verdict": "cutover-approved",
+  "review_verdict": "release-approved",
   "batch_count": 1,
   "evidence_links": [
     {

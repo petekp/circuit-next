@@ -9,6 +9,9 @@ const ROOTS = [
   'docs',
   'specs',
   'commands',
+  'plugins',
+  'generated',
+  'examples',
   '.claude-plugin',
   'README.md',
   'AGENTS.md',
@@ -19,13 +22,14 @@ const ROOTS = [
 const EXEMPT_PATH_PREFIXES = [
   'specs/reference/legacy-circuit/',
   'tests/fixtures/reference/legacy-circuit/',
-  'docs/release/',
-  'docs/architecture/v2-',
 ] as const;
+
+const OLD_TERM_EXEMPT_PATH_PREFIXES = [...EXEMPT_PATH_PREFIXES, 'docs/release/parity/'] as const;
 
 const EXEMPT_FILES = new Set([
   'HANDOFF.md',
   'UBIQUITOUS_LANGUAGE.md',
+  'docs/release/parity-matrix.generated.md',
   'tests/contracts/terminology-active-surface.test.ts',
   'tests/contracts/terminology-product-surface.test.ts',
 ]);
@@ -64,8 +68,38 @@ const OLD_TERMS: ReadonlyArray<{ readonly name: string; readonly pattern: RegExp
   { name: 'dogfood', pattern: /\bdogfood\b/i },
 ];
 
+const RUNTIME_FOUNDATION_RESIDUE: ReadonlyArray<{
+  readonly name: string;
+  readonly pattern: RegExp;
+}> = [
+  { name: 'core-v2', pattern: /\bcore-v2\b/i },
+  { name: 'v2 runtime', pattern: /\bv2 runtime\b/i },
+  { name: 'v2 token', pattern: /\bv2\b/i },
+  { name: 'retained', pattern: /\bretained\b/i },
+  { name: 'retired', pattern: /\bretired\b/i },
+  { name: 'legacy runtime', pattern: /\blegacy runtime\b/i },
+  { name: 'old runtime', pattern: /\bold runtime\b/i },
+  { name: 'cutover', pattern: /\bcutover\b/i },
+  { name: 'back-compat', pattern: /\bback-compat\b/i },
+  { name: 'compatibility facade', pattern: /\bcompatibility facade\b/i },
+  { name: 'CIRCUIT_V2_RUNTIME', pattern: /\bCIRCUIT_V2_RUNTIME\b/ },
+  { name: 'CIRCUIT_DISABLE_V2_RUNTIME', pattern: /\bCIRCUIT_DISABLE_V2_RUNTIME\b/ },
+  { name: 'CIRCUIT_V2_RUNTIME_CANDIDATE', pattern: /\bCIRCUIT_V2_RUNTIME_CANDIDATE\b/ },
+  { name: 'review packet filename', pattern: /\bcircuit-v2-[^\s"']*review[^\s"']*/i },
+  { name: 'src/core-v2 path', pattern: /\bsrc\/core-v2\b/i },
+];
+
+const REVIEW_PACKET_FILE = /^circuit-v2-.*review.*\.(?:zip|md)$/i;
+
 function isExempt(path: string): boolean {
   return EXEMPT_FILES.has(path) || EXEMPT_PATH_PREFIXES.some((prefix) => path.startsWith(prefix));
+}
+
+function isOldTermExempt(path: string): boolean {
+  return (
+    EXEMPT_FILES.has(path) ||
+    OLD_TERM_EXEMPT_PATH_PREFIXES.some((prefix) => path.startsWith(prefix))
+  );
 }
 
 function isTextFile(path: string): boolean {
@@ -102,12 +136,13 @@ function activeFiles(): readonly string[] {
 
 describe('terminology — active repo surface', () => {
   it('active filenames use clean-break terminology', () => {
-    const offenders = activeFiles().flatMap((file) =>
-      OLD_TERMS.filter(({ pattern }) => pattern.test(file)).map(({ name }) => ({
+    const offenders = activeFiles().flatMap((file) => {
+      if (isOldTermExempt(file)) return [];
+      return OLD_TERMS.filter(({ pattern }) => pattern.test(file)).map(({ name }) => ({
         file,
         term: name,
-      })),
-    );
+      }));
+    });
 
     expect(offenders).toEqual([]);
   });
@@ -120,6 +155,7 @@ describe('terminology — active repo surface', () => {
     }> = [];
 
     for (const file of activeFiles()) {
+      if (isOldTermExempt(file)) continue;
       const lines = readFileSync(file, 'utf8').split('\n');
       for (let index = 0; index < lines.length; index += 1) {
         const line = lines[index];
@@ -133,5 +169,35 @@ describe('terminology — active repo surface', () => {
     }
 
     expect(offenders).toEqual([]);
+  });
+
+  it('active surfaces do not mention runtime transition residue', () => {
+    const offenders: Array<{
+      readonly file: string;
+      readonly line: number;
+      readonly term: string;
+    }> = [];
+
+    for (const file of activeFiles()) {
+      const lines = readFileSync(file, 'utf8').split('\n');
+      for (let index = 0; index < lines.length; index += 1) {
+        const line = lines[index];
+        if (line === undefined) continue;
+        for (const { name, pattern } of RUNTIME_FOUNDATION_RESIDUE) {
+          if (pattern.test(line)) {
+            offenders.push({ file, line: index + 1, term: name });
+          }
+        }
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('repo root has no review packet files or runtime transition paths', () => {
+    const rootOffenders = readdirSync('.').filter((entry) => REVIEW_PACKET_FILE.test(entry));
+    expect(rootOffenders).toEqual([]);
+    expect(() => statSync('src/core-v2')).toThrow();
+    expect(() => statSync('tests/core-v2')).toThrow();
   });
 });

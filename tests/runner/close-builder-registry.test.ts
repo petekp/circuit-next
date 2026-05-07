@@ -3,12 +3,12 @@
 // The premise: adding a new flow's close should be a CloseBuilder file plus
 // a registry entry, with no runner edits. This test builds a synthetic
 // CompiledFlow whose close-step writes a synthetic schema, runs it through
-// core-v2, and asserts the builder contract can produce the result. If the
+// runtime, and asserts the builder contract can produce the result. If the
 // runner ever regrows flow-specific knowledge in its close path, this test
 // breaks.
 //
 // The registry currently has three real builders: build, explore, and fix.
-// The synthetic builder is invoked through the v2 executor seam so the global
+// The synthetic builder is invoked through the runtime executor seam so the global
 // registry stays untouched.
 
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -17,9 +17,9 @@ import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
 import { findCloseBuilder } from '../../src/flows/registries/close-writers/registry.js';
 import type { CloseBuilder } from '../../src/flows/registries/close-writers/types.js';
+import { runCompiledFlow } from '../../src/runtime/run/compiled-flow-runner.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 
 // A schema for a synthetic flow's result. Modeled after explore.result
@@ -137,7 +137,7 @@ describe('close-with-evidence registry', () => {
     expect(findCloseBuilder('synthetic.flow-result@v1')).toBeUndefined();
   });
 
-  it('produces a result via a synthetic builder injected through a v2 compose executor', async () => {
+  it('produces a result via a synthetic builder injected through a runtime compose executor', async () => {
     // The executor seam lets this test inject the synthetic builder without
     // mutating the global registry. The registry shape checks above still
     // prove the public lookup contract stays flow-agnostic.
@@ -147,7 +147,7 @@ describe('close-with-evidence registry', () => {
     if (frameStep?.kind !== 'compose') throw new Error('synthetic flow must start at compose');
     if (closeStep?.kind !== 'compose') throw new Error('synthetic flow must close with compose');
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: Buffer.from(JSON.stringify(flow)),
       runId: '00000000-0000-0000-0000-0000aaaa1234',

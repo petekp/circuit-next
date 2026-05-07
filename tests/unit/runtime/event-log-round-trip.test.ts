@@ -4,16 +4,16 @@ import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
-  manifestSnapshotPathV2,
-  readCompiledFlowManifestSnapshotV2,
-  readManifestSnapshotV2,
-  writeManifestSnapshotV2,
-} from '../../../src/core-v2/run/manifest-snapshot.js';
-import { TraceStore } from '../../../src/core-v2/trace/trace-store.js';
+  readRuntimeCompiledFlowManifestSnapshot,
+  readRuntimeManifestSnapshot,
+  runtimeManifestSnapshotPath,
+  writeRuntimeManifestSnapshot,
+} from '../../../src/runtime/run/manifest-snapshot.js';
+import { TraceStore } from '../../../src/runtime/trace/trace-store.js';
 import { ManifestSnapshot, computeManifestHash } from '../../../src/schemas/manifest.js';
 
-// core-v2 trace.ndjson append/load and manifest.snapshot.json byte-match tests.
-// The retired runtime's reducer-derived state.json is intentionally not part
+// runtime trace.ndjson append/load and manifest.snapshot.json byte-match tests.
+// The unsupported runtime's reducer-derived state.json is intentionally not part
 // of this contract.
 
 const MANIFEST_BODY = readFileSync(resolve('generated/flows/runtime-proof/circuit.json'));
@@ -40,7 +40,7 @@ async function writeBootstrap(trace: TraceStore) {
     manifest_hash: computeManifestHash(MANIFEST_BODY),
     data: {
       flow_id: FLOW_ID,
-      engine: 'core-v2',
+      engine: 'runtime',
       manifest_hash: computeManifestHash(MANIFEST_BODY),
     },
   });
@@ -49,14 +49,14 @@ async function writeBootstrap(trace: TraceStore) {
 let runFolder: string;
 
 beforeEach(() => {
-  runFolder = mkdtempSync(join(tmpdir(), 'circuit-next-core-v2-event-log-'));
+  runFolder = mkdtempSync(join(tmpdir(), 'circuit-next-runtime-event-log-'));
 });
 
 afterEach(() => {
   rmSync(runFolder, { recursive: true, force: true });
 });
 
-describe('core-v2 trace.ndjson and manifest snapshot round-trip', () => {
+describe('runtime trace.ndjson and manifest snapshot round-trip', () => {
   it('appends trace.ndjson with contiguous sequences and reloads the same entries', async () => {
     const trace = new TraceStore(runFolder, {
       now: deterministicNow(Date.UTC(2026, 3, 20, 12, 0, 0)),
@@ -173,9 +173,9 @@ describe('core-v2 trace.ndjson and manifest snapshot round-trip', () => {
     await expect(new TraceStore(runFolder).load()).rejects.toThrow(/after run\.closed/);
   });
 
-  it('writes a v2 manifest snapshot whose bytes hash matches the fixture bytes', async () => {
+  it('writes a runtime manifest snapshot whose bytes hash matches the fixture bytes', async () => {
     const manifestHash = computeManifestHash(MANIFEST_BODY);
-    const snapshot = await writeManifestSnapshotV2({
+    const snapshot = await writeRuntimeManifestSnapshot({
       runDir: runFolder,
       runId: RUN_ID,
       flowId: FLOW_ID,
@@ -183,20 +183,20 @@ describe('core-v2 trace.ndjson and manifest snapshot round-trip', () => {
       bytes: MANIFEST_BODY,
     });
 
-    expect(existsSync(manifestSnapshotPathV2(runFolder))).toBe(true);
+    expect(existsSync(runtimeManifestSnapshotPath(runFolder))).toBe(true);
     expect(snapshot.algorithm).toBe('sha256-raw');
     expect(snapshot.hash).toBe(manifestHash);
 
     const parsed = ManifestSnapshot.parse(
-      JSON.parse(readFileSync(manifestSnapshotPathV2(runFolder), 'utf8')),
+      JSON.parse(readFileSync(runtimeManifestSnapshotPath(runFolder), 'utf8')),
     );
     expect(parsed).toEqual(snapshot);
-    expect(await readManifestSnapshotV2(runFolder)).toEqual(snapshot);
+    expect(await readRuntimeManifestSnapshot(runFolder)).toEqual(snapshot);
   });
 
   it('round-trips manifest bytes through the compiled-flow manifest reader', async () => {
     const manifestHash = computeManifestHash(MANIFEST_BODY);
-    await writeManifestSnapshotV2({
+    await writeRuntimeManifestSnapshot({
       runDir: runFolder,
       runId: RUN_ID,
       flowId: FLOW_ID,
@@ -204,7 +204,7 @@ describe('core-v2 trace.ndjson and manifest snapshot round-trip', () => {
       bytes: MANIFEST_BODY,
     });
 
-    const { snapshot, flowBytes, flow } = await readCompiledFlowManifestSnapshotV2({
+    const { snapshot, flowBytes, flow } = await readRuntimeCompiledFlowManifestSnapshot({
       runDir: runFolder,
       expectedRunId: RUN_ID,
       expectedFlowId: FLOW_ID,
@@ -216,7 +216,7 @@ describe('core-v2 trace.ndjson and manifest snapshot round-trip', () => {
   });
 
   it('corrupt manifest snapshot bytes fail loudly', async () => {
-    await writeManifestSnapshotV2({
+    await writeRuntimeManifestSnapshot({
       runDir: runFolder,
       runId: RUN_ID,
       flowId: FLOW_ID,
@@ -224,15 +224,15 @@ describe('core-v2 trace.ndjson and manifest snapshot round-trip', () => {
       bytes: MANIFEST_BODY,
     });
     const parsed: { bytes_base64: string } = JSON.parse(
-      readFileSync(manifestSnapshotPathV2(runFolder), 'utf8'),
+      readFileSync(runtimeManifestSnapshotPath(runFolder), 'utf8'),
     );
     const tampered = {
       ...parsed,
       bytes_base64: Buffer.from('not the real manifest bytes', 'utf8').toString('base64'),
     };
-    writeFileSync(manifestSnapshotPathV2(runFolder), JSON.stringify(tampered));
+    writeFileSync(runtimeManifestSnapshotPath(runFolder), JSON.stringify(tampered));
 
-    await expect(readManifestSnapshotV2(runFolder)).rejects.toThrow(/manifest hash mismatch/);
+    await expect(readRuntimeManifestSnapshot(runFolder)).rejects.toThrow(/manifest hash mismatch/);
   });
 
   it('does not overwrite an existing manifest snapshot', async () => {
@@ -243,15 +243,15 @@ describe('core-v2 trace.ndjson and manifest snapshot round-trip', () => {
       capturedAt: baseRecordedAt(0),
       bytes: MANIFEST_BODY,
     };
-    await writeManifestSnapshotV2(input);
+    await writeRuntimeManifestSnapshot(input);
 
-    await expect(writeManifestSnapshotV2(input)).rejects.toThrow(/EEXIST|file already exists/);
+    await expect(writeRuntimeManifestSnapshot(input)).rejects.toThrow(/EEXIST|file already exists/);
   });
 
   it('manifest snapshot path and trace path are distinct and stable', () => {
     const tracePath = join(runFolder, 'trace.ndjson');
     expect(tracePath).toContain('trace.ndjson');
-    expect(manifestSnapshotPathV2(runFolder)).toContain('manifest.snapshot.json');
-    expect(tracePath).not.toBe(manifestSnapshotPathV2(runFolder));
+    expect(runtimeManifestSnapshotPath(runFolder)).toContain('manifest.snapshot.json');
+    expect(tracePath).not.toBe(runtimeManifestSnapshotPath(runFolder));
   });
 });

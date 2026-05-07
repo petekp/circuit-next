@@ -4,14 +4,6 @@ import { dirname, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { ClaudeCodeRelayInput } from '../../src/connectors/claude-code.js';
-import type {
-  ChildCompiledFlowResolverV2,
-  CompiledFlowRunOptionsV2Like,
-  CompiledFlowRunnerV2,
-} from '../../src/core-v2/run/child-runner.js';
-import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
-import type { GraphRunResultV2 } from '../../src/core-v2/run/graph-runner.js';
-import { TraceStore } from '../../src/core-v2/trace/trace-store.js';
 import {
   MigrateBatch,
   MigrateBrief,
@@ -21,6 +13,14 @@ import {
   MigrateReview,
   MigrateVerification,
 } from '../../src/flows/migrate/reports.js';
+import type {
+  ChildCompiledFlowResolver,
+  CompiledFlowRunOptions,
+  CompiledFlowRunner,
+} from '../../src/runtime/run/child-runner.js';
+import { runCompiledFlow } from '../../src/runtime/run/compiled-flow-runner.js';
+import type { GraphRunResult } from '../../src/runtime/run/graph-runner.js';
+import { TraceStore } from '../../src/runtime/trace/trace-store.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { RunResult } from '../../src/schemas/result.js';
 import type { RelayResult } from '../../src/shared/connector-relay.js';
@@ -60,8 +60,8 @@ function deterministicNow(startMs: number): () => Date {
 }
 
 const DEFAULT_REVIEW_BODY = JSON.stringify({
-  verdict: 'cutover-approved',
-  summary: 'Cutover review approved; no follow-ups',
+  verdict: 'release-approved',
+  summary: 'Release review approved; no follow-ups',
   findings: [],
 });
 
@@ -158,7 +158,7 @@ function buildStubChildCompiledFlow(): CompiledFlow {
   });
 }
 
-function makeChildResolver(): ChildCompiledFlowResolverV2 {
+function makeChildResolver(): ChildCompiledFlowResolver {
   const flow = buildStubChildCompiledFlow();
   const bytes = Buffer.from(JSON.stringify(flow));
   return () => ({ flowBytes: bytes });
@@ -166,11 +166,11 @@ function makeChildResolver(): ChildCompiledFlowResolverV2 {
 
 // Stub childRunner that bypasses real Build child execution. Writes a
 // synthetic child result.json carrying the verdict the migrate batch-
-// step check expects, then returns a minimal GraphRunResultV2 so the
+// step check expects, then returns a minimal GraphRunResult so the
 // sub-run handler's path-derivation, file-copy, and audit-trace_entry surface
 // all execute against deterministic data.
-function makeStubChildRunner(verdict: string): CompiledFlowRunnerV2 {
-  return async (options: CompiledFlowRunOptionsV2Like): Promise<GraphRunResultV2> => {
+function makeStubChildRunner(verdict: string): CompiledFlowRunner {
+  return async (options: CompiledFlowRunOptions): Promise<GraphRunResult> => {
     const childResultAbs = resultPath(options.runDir);
     mkdirSync(dirname(childResultAbs), { recursive: true });
     const body = RunResult.parse({
@@ -280,7 +280,7 @@ describe('Migrate runtime wiring', () => {
     const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'complete');
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: 'a1000000-0000-0000-0000-000000000001',
@@ -332,14 +332,14 @@ describe('Migrate runtime wiring', () => {
     const review = MigrateReview.parse(
       JSON.parse(readFileSync(join(runFolder, 'reports/migrate/review.json'), 'utf8')),
     );
-    expect(review.verdict).toBe('cutover-approved');
+    expect(review.verdict).toBe('release-approved');
 
     const result = MigrateResult.parse(
       JSON.parse(readFileSync(join(runFolder, 'reports/migrate-result.json'), 'utf8')),
     );
     expect(result.outcome).toBe('complete');
     expect(result.verification_status).toBe('passed');
-    expect(result.review_verdict).toBe('cutover-approved');
+    expect(result.review_verdict).toBe('release-approved');
     expect(result.batch_count).toBe(1);
     expect(result.evidence_links.map((p) => p.report_id)).toEqual([
       'migrate.brief',
@@ -351,13 +351,13 @@ describe('Migrate runtime wiring', () => {
     ]);
   }, 180_000);
 
-  it('marks outcome=cutover-deferred when the cutover review returns cutover-with-followups', async () => {
+  it('marks outcome=release-deferred when the release review returns release-with-followups', async () => {
     const { bytes } = loadFixture();
-    const runFolder = join(runFolderBase, 'cutover-deferred');
+    const runFolder = join(runFolderBase, 'release-deferred');
 
     const reviewBody = JSON.stringify({
-      verdict: 'cutover-with-followups',
-      summary: 'Cutover passes verification but two follow-ups should land before sunset.',
+      verdict: 'release-with-followups',
+      summary: 'Release passes verification but two follow-ups should land before sunset.',
       findings: [
         {
           severity: 'low',
@@ -367,7 +367,7 @@ describe('Migrate runtime wiring', () => {
       ],
     });
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: 'a1000000-0000-0000-0000-000000000002',
@@ -384,15 +384,15 @@ describe('Migrate runtime wiring', () => {
     const result = MigrateResult.parse(
       JSON.parse(readFileSync(join(runFolder, 'reports/migrate-result.json'), 'utf8')),
     );
-    expect(result.outcome).toBe('cutover-deferred');
-    expect(result.review_verdict).toBe('cutover-with-followups');
+    expect(result.outcome).toBe('release-deferred');
+    expect(result.review_verdict).toBe('release-with-followups');
   }, 180_000);
 
   it('aborts with outcome=aborted when the child Build sub-run returns a verdict outside check.pass', async () => {
     const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'check-rejected');
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: 'a1000000-0000-0000-0000-000000000003',

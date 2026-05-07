@@ -1,7 +1,7 @@
 Step: review-step
-Title: Cutover Review - independent audit of the migration cutover
+Title: Release Review - independent audit of the migration release
 Role: reviewer
-Accepted verdicts: cutover-approved, cutover-with-followups
+Accepted verdicts: release-approved, release-with-followups
 
 Context (from reads):
 --- reports/migrate/brief.json ---

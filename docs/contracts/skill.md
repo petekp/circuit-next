@@ -172,7 +172,7 @@ After a `SkillDescriptor` is accepted:
   asserting that no runtime relay depends on `trigger` string
   shape. Exists to anchor a future debate (if a later slice tries to
   promote `trigger` to a structured grammar, this property must be
-  retired explicitly).
+  invalid explicitly).
 
 ## Cross-contract dependencies
 

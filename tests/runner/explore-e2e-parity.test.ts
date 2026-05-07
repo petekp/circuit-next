@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
-import { TraceStore } from '../../src/core-v2/trace/trace-store.js';
+import { runCompiledFlow } from '../../src/runtime/run/compiled-flow-runner.js';
+import { TraceStore } from '../../src/runtime/trace/trace-store.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import type { RelayResult } from '../../src/shared/connector-relay.js';
 import type { RelayFn, RelayInput } from '../../src/shared/relay-runtime-types.js';
@@ -19,7 +19,7 @@ import { validateCompiledFlowKindPolicy } from '../../src/shared/flow-kind-polic
 // real-subprocess end-to-end. Static tests bind the explore fixture
 // shape, the normalization rule used to hash the normalized result
 // report, and the `sha256Hex` helper format. The AGENT_SMOKE-checkd
-// branch runs the real explore fixture through `runCompiledFlowV2` with the
+// branch runs the real explore fixture through `runCompiledFlow` with the
 // default `relayClaudeCode` (spawns `claude -p`), asserts the five-trace_entry
 // relay transcript lands twice (synthesize + review), normalizes +
 // hashes `reports/explore-result.json` against the checked-in golden,
@@ -52,9 +52,9 @@ const AGENT_ADAPTER_SOURCE_PATHS = [
   'src/shared/connector-helpers.ts',
   'src/connectors/shared.ts',
   'src/connectors/relay-materializer.ts',
-  'src/core-v2/executors/relay.ts',
-  'src/core-v2/run/compiled-flow-runner.ts',
-  'src/core-v2/run/graph-runner.ts',
+  'src/runtime/executors/relay.ts',
+  'src/runtime/run/compiled-flow-runner.ts',
+  'src/runtime/run/graph-runner.ts',
   'src/flows/registries/report-schemas.ts',
 ] as const;
 
@@ -273,7 +273,7 @@ describe('explore fixture static declarations (ratchet-floor contribution)', () 
     const { bytes } = loadExploreFixture();
     const runFolder = mkdtempSync(join(tmpdir(), 'circuit-next-explore-golden-'));
     try {
-      const outcome = await runCompiledFlowV2({
+      const outcome = await runCompiledFlow({
         runDir: runFolder,
         flowBytes: bytes,
         runId: '93000000-0000-0000-0000-000000000001',
@@ -318,7 +318,7 @@ describe('explore fixture static declarations (ratchet-floor contribution)', () 
     async () => {
       const { bytes } = loadExploreFixture();
       const runFolder = join(runFolderBase, 'explore-e2e');
-      const outcome = await runCompiledFlowV2({
+      const outcome = await runCompiledFlow({
         runDir: runFolder,
         flowBytes: bytes,
         runId: '33333333-3333-3333-3333-333333333333',
@@ -368,11 +368,11 @@ describe('explore fixture static declarations (ratchet-floor contribution)', () 
       if (UPDATE_AGENT_FINGERPRINT) {
         const commitSha = currentHeadSha();
         // Bind cli_version to the actual subprocess init trace entry via
-        // core-v2 relay.receipt.data.cli_version, sourced from each
+        // runtime relay.receipt.data.cli_version, sourced from each
         // relayer's RelayResult.cli_version, which claude-code.ts reads
         // from init.claude_code_version. The
         // audit rejects fingerprints with empty/unknown cli_version
-        // on v2, so this binding fails closed at promotion time.
+        // on runtime, so this binding fails closed at promotion time.
         const firstClaudeCodeReceipt = traceEntries.find((entry) => entry.kind === 'relay.receipt');
         const cliVersion =
           firstClaudeCodeReceipt?.kind === 'relay.receipt'

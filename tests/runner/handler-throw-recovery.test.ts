@@ -3,14 +3,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { ExecutorRegistryV2 } from '../../src/core-v2/executors/index.js';
-import type { ExecutableFlowV2 } from '../../src/core-v2/manifest/executable-flow.js';
-import { executeExecutableFlowV2 } from '../../src/core-v2/run/graph-runner.js';
-import { TraceStore } from '../../src/core-v2/trace/trace-store.js';
+import type { ExecutorRegistry } from '../../src/runtime/executors/index.js';
+import type { ExecutableFlow } from '../../src/runtime/manifest/executable-flow.js';
+import { executeExecutableFlow } from '../../src/runtime/run/graph-runner.js';
+import { TraceStore } from '../../src/runtime/trace/trace-store.js';
 import { RunResult } from '../../src/schemas/result.js';
 
 // Adversarial-review fix #4: a handler that throws unexpectedly must not
-// leave the run-folder half-bootstrapped. Core-v2 should close the run with
+// leave the run-folder half-bootstrapped. Runtime should close the run with
 // step.aborted, run.closed, and reports/result.json for both handler lookup
 // failures and mid-handler throws.
 
@@ -19,24 +19,24 @@ function deterministicNow(startMs: number): () => Date {
   return () => new Date(startMs + n++ * 1000);
 }
 
-function oneStepFlow(step: ExecutableFlowV2['steps'][number]): ExecutableFlowV2 {
+function oneStepFlow(step: ExecutableFlow['steps'][number]): ExecutableFlow {
   return {
     id: 'handler-throw-recovery',
     version: '0.1.0',
     entry: step.id,
     stages: [{ id: 'main', stepIds: [step.id] }],
     steps: [step],
-    purpose: 'Exercise core-v2 close-on-handler-throw behavior.',
+    purpose: 'Exercise runtime close-on-handler-throw behavior.',
   };
 }
 
 async function runHandlerThrowCase(input: {
   readonly runFolder: string;
-  readonly flow: ExecutableFlowV2;
+  readonly flow: ExecutableFlow;
   readonly runId: string;
-  readonly executors?: Partial<ExecutorRegistryV2>;
+  readonly executors?: Partial<ExecutorRegistry>;
 }) {
-  const result = await executeExecutableFlowV2(input.flow, {
+  const result = await executeExecutableFlow(input.flow, {
     runDir: input.runFolder,
     runId: input.runId,
     goal: 'prove handler throws fall through to a graceful aborted run',

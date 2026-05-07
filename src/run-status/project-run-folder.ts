@@ -3,13 +3,8 @@ import { resolve } from 'node:path';
 import type { EngineErrorCodeV1 } from '../schemas/run-status.js';
 import type { RunStatusProjectionV1 } from '../schemas/run-status.js';
 import { verifyManifestSnapshotBytes } from '../shared/manifest-snapshot.js';
-import {
-  RETIRED_RUNTIME_RUN_FOLDER_ERROR_CODE,
-  RETIRED_RUNTIME_RUN_FOLDER_MESSAGE,
-  detectRunFolderTraceRuntime,
-} from '../shared/retired-runtime-policy.js';
 import { errorMessage, invalidProjection } from './projection-common.js';
-import { projectV2RunStatusFromRunFolder } from './v2-run-folder.js';
+import { projectRuntimeRunStatusFromRunFolder } from './runtime-run-folder.js';
 
 export class RunStatusFolderError extends Error {
   readonly code: Extract<EngineErrorCodeV1, 'folder_not_found' | 'folder_unreadable'>;
@@ -71,15 +66,6 @@ export function projectRunStatusFromRunFolder(runFolder: string): RunStatusProje
   const resolvedRunFolder = resolve(runFolder);
   assertReadableRunFolder(resolvedRunFolder);
 
-  if (detectRunFolderTraceRuntime(resolvedRunFolder) === 'retired') {
-    return invalidProjection({
-      runFolder: resolvedRunFolder,
-      reason: 'unknown',
-      code: RETIRED_RUNTIME_RUN_FOLDER_ERROR_CODE,
-      message: RETIRED_RUNTIME_RUN_FOLDER_MESSAGE,
-    });
-  }
-
   let manifest: ReturnType<typeof verifyManifestSnapshotBytes>;
   try {
     manifest = verifyManifestSnapshotBytes(resolvedRunFolder);
@@ -92,14 +78,14 @@ export function projectRunStatusFromRunFolder(runFolder: string): RunStatusProje
     });
   }
 
-  const v2Projection = projectV2RunStatusFromRunFolder(resolvedRunFolder, manifest);
-  if (v2Projection !== undefined) return v2Projection;
+  const runtimeProjection = projectRuntimeRunStatusFromRunFolder(resolvedRunFolder, manifest);
+  if (runtimeProjection !== undefined) return runtimeProjection;
 
   return invalidProjection({
     runFolder: resolvedRunFolder,
-    reason: 'unknown',
-    code: RETIRED_RUNTIME_RUN_FOLDER_ERROR_CODE,
-    message: RETIRED_RUNTIME_RUN_FOLDER_MESSAGE,
+    reason: 'trace_invalid',
+    code: 'trace_bootstrap_invalid',
+    message: 'trace is missing or invalid for this run folder',
     manifestIdentity: {
       run_id: manifest.run_id as unknown as string,
       flow_id: manifest.flow_id as unknown as string,

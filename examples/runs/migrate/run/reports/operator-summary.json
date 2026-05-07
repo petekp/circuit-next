@@ -6,13 +6,13 @@
   "routed_by": "explicit",
   "router_reason": "explicit flow positional argument",
   "outcome": "complete",
-  "headline": "Circuit finished Migrate with outcome complete. Verification: passed. Review: cutover-approved.",
+  "headline": "Circuit finished Migrate with outcome complete. Verification: passed. Review: release-approved.",
   "details": [
     "Worker access: This flow may invoke a write-capable Claude Code worker. Circuit will verify and review the result, but the worker can edit files in this checkout.",
     "Run note: Run closed with outcome complete via @complete.",
-    "Result: replace a small legacy API: Cutover approved for the synthetic migration proof.",
+    "Result: replace a small legacy API: Release approved for the synthetic migration proof.",
     "Verification: passed",
-    "Review verdict: cutover-approved"
+    "Review verdict: release-approved"
   ],
   "evidence_warnings": [],
   "run_folder": "<repo>/examples/runs/migrate/run",

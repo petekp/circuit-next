@@ -11,9 +11,9 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { ExecutorRegistryV2 } from '../../src/core-v2/executors/index.js';
-import { resolveRunFilePath } from '../../src/core-v2/run-files/paths.js';
-import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
+import type { ExecutorRegistry } from '../../src/runtime/executors/index.js';
+import { resolveRunFilePath } from '../../src/runtime/run-files/paths.js';
+import { runCompiledFlow } from '../../src/runtime/run/compiled-flow-runner.js';
 import type { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import type { RelayResult } from '../../src/shared/connector-relay.js';
 import type { RelayFn } from '../../src/shared/relay-runtime-types.js';
@@ -51,7 +51,7 @@ function relayerWithCapture(capture: string[]): RelayFn {
   };
 }
 
-function composeExecutor(): Pick<ExecutorRegistryV2, 'compose'> {
+function composeExecutor(): Pick<ExecutorRegistry, 'compose'> {
   return {
     compose: async (step, context) => {
       if (step.kind !== 'compose') throw new Error('expected compose step');
@@ -108,7 +108,7 @@ describe('STEP-I8 runtime run-relative path containment', () => {
       first.writes.report.path = path as never;
 
       await expect(
-        runCompiledFlowV2({
+        runCompiledFlow({
           runDir: runFolder,
           flowBytes: bytesFor(badCompiledFlow),
           runId: '68000000-0000-0000-0000-000000000101',
@@ -136,7 +136,7 @@ describe('STEP-I8 runtime run-relative path containment', () => {
     relay.reads = ['../secret.txt' as never];
 
     await expect(
-      runCompiledFlowV2({
+      runCompiledFlow({
         runDir: runFolder,
         flowBytes: bytesFor(badCompiledFlow),
         runId: '68000000-0000-0000-0000-000000000102',
@@ -178,7 +178,7 @@ describe('STEP-I8 runtime run-relative path containment', () => {
       relay.writes = writes as never;
 
       await expect(
-        runCompiledFlowV2({
+        runCompiledFlow({
           runDir: runFolder,
           flowBytes: bytesFor(badCompiledFlow),
           runId: '68000000-0000-0000-0000-000000000103',

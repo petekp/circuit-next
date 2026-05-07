@@ -2,7 +2,7 @@
 // disjoint-merge, aggregate-only — driven through the pure
 // `evaluateFanoutJoinPolicy` helper in src/shared/fanout-join-policy.ts.
 //
-// The example-based tests in tests/core-v2/fanout-v2.test.ts
+// The example-based tests in tests/runtime/fanout.test.ts
 // pin one or two witnesses per policy through the full async runner
 // harness. This file adds width by table-driving the pure helper with
 // hundreds of deterministically-generated outcome sets per policy and
@@ -20,7 +20,7 @@
 //
 // Refactor note (2026-04-27): the join logic was extracted from
 // 2026-05-06 note: the helper now lives in src/shared/fanout-join-policy.ts.
-// Retained and core-v2 fanout both call the shared helper after hoisting the
+// Current fanout paths both call the shared helper after hoisting the
 // only impure dimension (disjoint-merge's per-branch changed-file discovery)
 // ahead of the call.
 

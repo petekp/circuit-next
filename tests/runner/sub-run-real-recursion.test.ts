@@ -4,8 +4,8 @@
 // parent's sub-run handler with a stubbed `childRunner` so the
 // handler's own surface (path derivation, file copy, audit entries,
 // check admission) can be tested in isolation. This test omits the
-// stub: when `childRunner` is undefined on the core-v2 invocation,
-// the runner defaults to `runCompiledFlowV2` itself, and the parent's
+// stub: when `childRunner` is undefined on the runtime invocation,
+// the runner defaults to `runCompiledFlow` itself, and the parent's
 // sub-run step recurses into a real child execution end-to-end.
 //
 // Why this is worth its own test: every other parent sub-run / fanout
@@ -23,9 +23,9 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { ClaudeCodeRelayInput } from '../../src/connectors/claude-code.js';
-import type { ChildCompiledFlowResolverV2 } from '../../src/core-v2/run/child-runner.js';
-import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
-import { TraceStore } from '../../src/core-v2/trace/trace-store.js';
+import type { ChildCompiledFlowResolver } from '../../src/runtime/run/child-runner.js';
+import { runCompiledFlow } from '../../src/runtime/run/compiled-flow-runner.js';
+import { TraceStore } from '../../src/runtime/trace/trace-store.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import type { RelayResult } from '../../src/shared/connector-relay.js';
 import type { RelayFn } from '../../src/shared/relay-runtime-types.js';
@@ -107,7 +107,7 @@ function buildParentCompiledFlow(): CompiledFlow {
     id: PARENT_WORKFLOW_ID as unknown as string,
     version: '0.1.0',
     purpose:
-      'real-recursion test parent — single sub-run step recurses into the child via real runCompiledFlowV2.',
+      'real-recursion test parent — single sub-run step recurses into the child via real runCompiledFlow.',
     entry: { signals: { include: ['parent'], exclude: [] }, intent_prefixes: ['parent'] },
     entry_modes: [
       {
@@ -126,7 +126,7 @@ function buildParentCompiledFlow(): CompiledFlow {
     steps: [
       {
         id: 'sub-run-step',
-        title: 'Sub-run — recurse into child via real runCompiledFlowV2',
+        title: 'Sub-run — recurse into child via real runCompiledFlow',
         protocol: 'real-recursion-parent@v1',
         reads: [],
         routes: { pass: '@complete' },
@@ -164,20 +164,20 @@ async function readTraceEntries(runFolder: string) {
 }
 
 describe('sub-run real recursion', () => {
-  it('runs the child via real runCompiledFlowV2 (no childRunner stub) and admits the child verdict', async () => {
+  it('runs the child via real runCompiledFlow (no childRunner stub) and admits the child verdict', async () => {
     const parentCompiledFlow = buildParentCompiledFlow();
     const parentBytes = Buffer.from(JSON.stringify(parentCompiledFlow));
     const childCompiledFlow = buildChildCompiledFlow();
     const childBytes = Buffer.from(JSON.stringify(childCompiledFlow));
 
-    const childResolver: ChildCompiledFlowResolverV2 = () => ({ flowBytes: childBytes });
+    const childResolver: ChildCompiledFlowResolver = () => ({ flowBytes: childBytes });
 
     const parentRunId = '22222222-2222-2222-2222-222222222222';
     const parentRunFolder = join(runFolderBase, parentRunId);
 
-    // KEY: NO `childRunner` field — runner defaults to `runCompiledFlowV2`
+    // KEY: NO `childRunner` field — runner defaults to `runCompiledFlow`
     // itself, so the sub-run step recurses through the real runner.
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: parentRunFolder,
       flowBytes: parentBytes,
       runId: parentRunId,

@@ -3,9 +3,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { ExecutableFlowV2 } from '../../src/core-v2/manifest/executable-flow.js';
-import { executeExecutableFlowV2 } from '../../src/core-v2/run/graph-runner.js';
-import { TraceStore } from '../../src/core-v2/trace/trace-store.js';
+import type { ExecutableFlow } from '../../src/runtime/manifest/executable-flow.js';
+import { executeExecutableFlow } from '../../src/runtime/run/graph-runner.js';
+import { TraceStore } from '../../src/runtime/trace/trace-store.js';
 import { RunResult } from '../../src/schemas/result.js';
 
 function deterministicNow(startMs: number): () => Date {
@@ -13,7 +13,7 @@ function deterministicNow(startMs: number): () => Date {
   return () => new Date(startMs + n++ * 1000);
 }
 
-function flowWithPassCycle(): ExecutableFlowV2 {
+function flowWithPassCycle(): ExecutableFlow {
   return {
     id: 'runtime-proof-pass-cycle',
     version: '0.1.0',
@@ -49,7 +49,7 @@ describe('WF-I11 runtime-safety-floor pass-route cycle guard', () => {
     if (firstStep === undefined) throw new Error('fixture must have a first step');
 
     const runFolder = join(runFolderBase, 'graph-bypass-cycle');
-    const outcome = await executeExecutableFlowV2(flow, {
+    const outcome = await executeExecutableFlow(flow, {
       runDir: runFolder,
       runId: '72000000-0000-0000-0000-000000000001',
       goal: 'runtime must abort a pass-route cycle',

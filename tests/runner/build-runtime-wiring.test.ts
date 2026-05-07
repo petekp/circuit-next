@@ -5,16 +5,16 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { ClaudeCodeRelayInput } from '../../src/connectors/claude-code.js';
 import {
-  runCompiledFlowV2,
-  runCompiledFlowV2WithWaiting,
-} from '../../src/core-v2/run/compiled-flow-runner.js';
-import { TraceStore } from '../../src/core-v2/trace/trace-store.js';
-import {
   BuildImplementation,
   BuildResult,
   BuildReview,
   BuildVerification,
 } from '../../src/flows/build/reports.js';
+import {
+  runCompiledFlow,
+  runCompiledFlowWithWaiting,
+} from '../../src/runtime/run/compiled-flow-runner.js';
+import { TraceStore } from '../../src/runtime/trace/trace-store.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import type { RelayResult } from '../../src/shared/connector-relay.js';
 import type { RelayFn } from '../../src/shared/relay-runtime-types.js';
@@ -134,7 +134,7 @@ describe('Build runtime wiring', () => {
     const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'complete');
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: 'b2000000-0000-0000-0000-000000000000',
@@ -178,7 +178,7 @@ describe('Build runtime wiring', () => {
     const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'bad-implementation');
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: 'b2000000-0000-0000-0000-000000000001',
@@ -206,7 +206,7 @@ describe('Build runtime wiring', () => {
     const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'review-reject');
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: 'b2000000-0000-0000-0000-000000000002',
@@ -239,7 +239,7 @@ describe('Build runtime wiring', () => {
     const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'review-empty-fixes');
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: 'b2000000-0000-0000-0000-000000000003',
@@ -267,7 +267,7 @@ describe('Build runtime wiring', () => {
     const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'review-followups');
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: 'b2000000-0000-0000-0000-000000000004',
@@ -338,7 +338,7 @@ describe('Build runtime wiring', () => {
     const relayInputs: ClaudeCodeRelayInput[] = [];
     const relayer = relayerWith();
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: 'b2000000-0000-0000-0000-000000000004',
@@ -376,7 +376,7 @@ describe('Build runtime wiring', () => {
     const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'deep-entry-mode');
 
-    const outcome = await runCompiledFlowV2WithWaiting({
+    const outcome = await runCompiledFlowWithWaiting({
       runDir: runFolder,
       flowBytes: bytes,
       runId: 'b2000000-0000-0000-0000-000000000005',
@@ -401,7 +401,7 @@ describe('Build runtime wiring', () => {
     const relayInputs: ClaudeCodeRelayInput[] = [];
     const relayer = relayerWith();
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: 'b2000000-0000-0000-0000-000000000006',
@@ -432,7 +432,7 @@ describe('Build runtime wiring', () => {
     const relayInputs: ClaudeCodeRelayInput[] = [];
     const relayer = relayerWith();
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: 'b2000000-0000-0000-0000-000000000009',
@@ -470,7 +470,7 @@ describe('Build runtime wiring', () => {
     const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'autonomous-entry-mode');
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: 'b2000000-0000-0000-0000-000000000007',
@@ -501,7 +501,7 @@ describe('Build runtime wiring', () => {
     const runFolder = join(runFolderBase, 'unknown-entry-mode');
 
     await expect(
-      runCompiledFlowV2({
+      runCompiledFlow({
         runDir: runFolder,
         flowBytes: bytes,
         runId: 'b2000000-0000-0000-0000-000000000008',

@@ -3,9 +3,9 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { ExecutorRegistryV2 } from '../../src/core-v2/executors/index.js';
-import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
-import { TraceStore } from '../../src/core-v2/trace/trace-store.js';
+import type { ExecutorRegistry } from '../../src/runtime/executors/index.js';
+import { runCompiledFlow } from '../../src/runtime/run/compiled-flow-runner.js';
+import { TraceStore } from '../../src/runtime/trace/trace-store.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import type { RelayResult } from '../../src/shared/connector-relay.js';
 import type { RelayFn } from '../../src/shared/relay-runtime-types.js';
@@ -20,9 +20,9 @@ import type { RelayFn } from '../../src/shared/relay-runtime-types.js';
 // `reason` is emitted, followed by `step.aborted` with the same reason,
 // then `run.closed` with `outcome: 'aborted'`.
 //
-// Tests below exercise the four cases through `runCompiledFlowV2` end-to-end
+// Tests below exercise the four cases through `runCompiledFlow` end-to-end
 // against the runtime-proof fixture (`check.pass = ["ok"]`) so the
-// integration against the core-v2 flow loop's control is part of
+// integration against the runtime flow loop's control is part of
 // the assertion surface, not just the in-isolation verdict parser.
 
 const FIXTURE_PATH = resolve('generated/flows/runtime-proof/circuit.json');
@@ -52,7 +52,7 @@ function relayerWith(resultBody: string): RelayFn {
   };
 }
 
-function composeExecutor(): Pick<ExecutorRegistryV2, 'compose'> {
+function composeExecutor(): Pick<ExecutorRegistry, 'compose'> {
   return {
     compose: async (step, context) => {
       if (step.kind !== 'compose') throw new Error('expected compose step');
@@ -92,7 +92,7 @@ async function runCheckCase(input: {
   readonly goal: string;
   readonly resultBody: string;
 }) {
-  const result = await runCompiledFlowV2({
+  const result = await runCompiledFlow({
     runDir: input.runFolder,
     flowBytes: input.bytes,
     runId: input.runId,

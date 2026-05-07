@@ -2,7 +2,7 @@
 //
 // Mirrors tests/runner/close-builder-registry.test.ts but for the
 // upstream compose path. A synthetic ComposeBuilder produces a
-// fresh schema's report end-to-end via core-v2 with no runner edits
+// fresh schema's report end-to-end via runtime with no runner edits
 // required. If any compose step in the runner ever regrows
 // flow-specific knowledge, this test breaks.
 
@@ -12,9 +12,9 @@ import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
 import { findComposeBuilder } from '../../src/flows/registries/compose-writers/registry.js';
 import type { ComposeBuilder } from '../../src/flows/registries/compose-writers/types.js';
+import { runCompiledFlow } from '../../src/runtime/run/compiled-flow-runner.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 
 const SYNTHETIC_BRIEF_SCHEMA = 'synthetic.brief@v1';
@@ -109,7 +109,7 @@ describe('compose writer registry', () => {
 
   it('aborts the default runtime path when no compose writer is registered', async () => {
     const flow = syntheticComposeCompiledFlow();
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: Buffer.from(JSON.stringify(flow)),
       runId: '00000000-0000-0000-0000-0000bbbb5678',
@@ -125,14 +125,14 @@ describe('compose writer registry', () => {
     expect(existsSync(join(runFolder, 'reports/synthetic-brief.json'))).toBe(false);
   });
 
-  it('produces a synthetic report end-to-end via an injected v2 compose executor', async () => {
+  it('produces a synthetic report end-to-end via an injected runtime compose executor', async () => {
     // The executor seam lets this test inject the synthetic builder without
     // mutating the global registry. The registry shape checks above still
     // prove the public lookup contract stays flow-agnostic.
     const flow = syntheticComposeCompiledFlow();
     const compiledStep = flow.steps[0];
     if (compiledStep?.kind !== 'compose') throw new Error('synthetic flow must start at compose');
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: Buffer.from(JSON.stringify(flow)),
       runId: '00000000-0000-0000-0000-0000bbbb1234',

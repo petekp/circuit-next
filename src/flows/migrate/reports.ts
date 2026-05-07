@@ -104,7 +104,7 @@ export type MigrateInventory = z.infer<typeof MigrateInventory>;
 // MigrateCoexistence — the strategy for old + new running side-by-side
 // while batches are in flight. Captures switchover triggers, the
 // observable signal that proves coexistence is healthy, and the
-// rollback path the operator can take at any cutover boundary.
+// rollback path the operator can take at any release boundary.
 export const MigrateCoexistence = z
   .object({
     strategy: z.string().min(1),
@@ -134,9 +134,9 @@ export const MigrateVerification = VerificationResult;
 export type MigrateVerification = z.infer<typeof MigrateVerification>;
 
 export const MigrateReviewVerdict = z.enum([
-  'cutover-approved',
-  'cutover-with-followups',
-  'cutover-blocked',
+  'release-approved',
+  'release-with-followups',
+  'release-blocked',
   'reject',
 ]);
 export type MigrateReviewVerdict = z.infer<typeof MigrateReviewVerdict>;
@@ -158,7 +158,7 @@ export const MigrateReview = z
   })
   .strict()
   .superRefine((review, ctx) => {
-    if (review.verdict !== 'cutover-approved' && review.findings.length === 0) {
+    if (review.verdict !== 'release-approved' && review.findings.length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['findings'],
@@ -168,7 +168,7 @@ export const MigrateReview = z
   });
 export type MigrateReview = z.infer<typeof MigrateReview>;
 
-export const MigrateResultOutcome = z.enum(['complete', 'cutover-deferred', 'reverted', 'failed']);
+export const MigrateResultOutcome = z.enum(['complete', 'release-deferred', 'reverted', 'failed']);
 export type MigrateResultOutcome = z.infer<typeof MigrateResultOutcome>;
 
 export const MigrateResultReportId = z.enum([

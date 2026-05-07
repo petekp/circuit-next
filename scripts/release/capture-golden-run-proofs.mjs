@@ -13,7 +13,7 @@ import {
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { executeComposeV2 } from '../../dist/core-v2/executors/compose.js';
+import { executeComposeV2 } from '../../dist/runtime/executors/compose.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -306,14 +306,14 @@ function migrateRelayer() {
       }
       if (
         input.prompt.includes('Step: review-step') &&
-        input.prompt.includes('Accepted verdicts: cutover-approved, cutover-with-followups')
+        input.prompt.includes('Accepted verdicts: release-approved, release-with-followups')
       ) {
         return {
           request_payload: input.prompt,
           receipt_id: 'proof-migrate-review',
           result_body: JSON.stringify({
-            verdict: 'cutover-approved',
-            summary: 'Cutover approved for the synthetic migration proof.',
+            verdict: 'release-approved',
+            summary: 'Release approved for the synthetic migration proof.',
             findings: [],
           }),
           duration_ms: 11,
@@ -510,7 +510,9 @@ async function captureCliScenario(scenario) {
     const now = deterministicNow(scenario.startMs);
     const run = await runCli([...scenario.argv, '--run-folder', runFolder, '--progress', 'jsonl'], {
       relayer: scenario.relayer,
-      ...(scenario.v2Executors === undefined ? {} : { v2Executors: scenario.v2Executors }),
+      ...(scenario.runtimeExecutors === undefined
+        ? {}
+        : { runtimeExecutors: scenario.runtimeExecutors }),
       runId: scenario.runId,
       now,
       configCwd: projectRoot,
@@ -770,7 +772,7 @@ const scenarios = [
     slug: 'fix',
     argv: ['run', '--goal', 'quick fix: restore the failing login test'],
     relayer: fixRelayer(),
-    v2Executors: fixProofExecutors(),
+    runtimeExecutors: fixProofExecutors(),
     runId: '44444444-4444-4444-4444-444444444407',
     startMs: Date.UTC(2026, 3, 29, 20, 30, 0),
   },

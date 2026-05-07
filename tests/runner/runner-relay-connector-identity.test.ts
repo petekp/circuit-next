@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
-import { TraceStore } from '../../src/core-v2/trace/trace-store.js';
+import { runCompiledFlow } from '../../src/runtime/run/compiled-flow-runner.js';
+import { TraceStore } from '../../src/runtime/trace/trace-store.js';
 import type { RelayResult } from '../../src/shared/connector-relay.js';
 import type { RelayFn } from '../../src/shared/relay-runtime-types.js';
 
@@ -38,7 +38,7 @@ function loadFixture(): { bytes: Buffer } {
   } = JSON.parse(bytes.toString('utf8'));
   const relayStep = raw.steps.find((step) => step.id === 'relay-step' && step.kind === 'relay');
   if (relayStep === undefined) throw new Error('runtime-proof relay step not found');
-  // Core-v2 correctly rejects the read-only Codex connector for implementer
+  // Runtime correctly rejects the read-only Codex connector for implementer
   // steps. This test is only about descriptor identity, so use a read-only
   // reviewer role.
   relayStep.role = 'reviewer';
@@ -67,7 +67,7 @@ async function runConnectorIdentityCase(input: {
   readonly runFolder: string;
   readonly bytes: Buffer;
 }) {
-  const result = await runCompiledFlowV2({
+  const result = await runCompiledFlow({
     runDir: input.runFolder,
     flowBytes: input.bytes,
     runId: '45a45a45-a45a-45a4-5a45-a45a45a45a45',

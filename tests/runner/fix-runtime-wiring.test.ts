@@ -1,22 +1,22 @@
 // End-to-end runtime wiring for the lite Fix flow.
 //
 // Loads `generated/flows/fix/lite.json` (the compiled lite-mode
-// CompiledFlow) and runs it through `runCompiledFlowV2` with stubbed relayers
+// CompiledFlow) and runs it through `runCompiledFlow` with stubbed relayers
 // for context/diagnose/act and a custom compose executor that overrides
 // fix-frame to produce a brief with a fast no-op verification command.
 // Other compose steps fall through to the registered writer, so this
 // is a real proof that fix.brief, fix.verify, and fix.result close
-// writers compose correctly through the actual CompiledFlow + core-v2 runner.
+// writers compose correctly through the actual CompiledFlow + runtime runner.
 
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { executeComposeV2 } from '../../src/core-v2/executors/compose.js';
-import type { ExecutorRegistryV2 } from '../../src/core-v2/executors/index.js';
-import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
 import { FixBrief, FixResult } from '../../src/flows/fix/reports.js';
+import { executeCompose } from '../../src/runtime/executors/compose.js';
+import type { ExecutorRegistry } from '../../src/runtime/executors/index.js';
+import { runCompiledFlow } from '../../src/runtime/run/compiled-flow-runner.js';
 import type { RelayResult } from '../../src/shared/connector-relay.js';
 import type { RelayFn } from '../../src/shared/relay-runtime-types.js';
 
@@ -37,12 +37,12 @@ function deterministicNow(startMs: number): () => Date {
 // and falls through to the standard registered compose executor for every
 // other compose step (notably fix-close-lite, which exercises the
 // registered fix.result close writer).
-function frameOverrideExecutors(): Pick<ExecutorRegistryV2, 'compose'> {
+function frameOverrideExecutors(): Pick<ExecutorRegistry, 'compose'> {
   return {
     compose: async (step, context) => {
       if (step.kind !== 'compose') throw new Error('expected compose step');
       if (step.id !== 'fix-frame') {
-        return await executeComposeV2(step, context);
+        return await executeCompose(step, context);
       }
       const report = step.writes?.report;
       if (report === undefined) {
@@ -151,7 +151,7 @@ describe('Lite Fix runtime wiring', () => {
     const { bytes } = loadLiteFixture();
     const runFolder = join(runFolderBase, 'lite-complete');
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: 'f1000000-0000-0000-0000-000000000000',

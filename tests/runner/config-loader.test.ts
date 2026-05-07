@@ -175,15 +175,15 @@ circuits:
     };
     const runFolder = join(root, 'run');
     const stdout = captureStdout();
-    const originalStrictRuntime = process.env.CIRCUIT_V2_RUNTIME;
+    const originalStrictRuntime = process.env.CIRCUIT_SHOW_RUNTIME_DECISION;
     const originalShowRuntimeDecision = process.env.CIRCUIT_SHOW_RUNTIME_DECISION;
-    const originalCandidateRuntime = process.env.CIRCUIT_V2_RUNTIME_CANDIDATE;
-    const originalDisableRuntime = process.env.CIRCUIT_DISABLE_V2_RUNTIME;
+    const originalCandidateRuntime = process.env.CIRCUIT_SHOW_RUNTIME_DECISION;
+    const originalDisableRuntime = process.env.CIRCUIT_SHOW_RUNTIME_DECISION;
     const originalGeneratedMirrorRoot = process.env.CIRCUIT_GENERATED_FLOW_MIRROR_ROOT;
-    process.env.CIRCUIT_V2_RUNTIME = undefined;
     process.env.CIRCUIT_SHOW_RUNTIME_DECISION = undefined;
-    process.env.CIRCUIT_V2_RUNTIME_CANDIDATE = undefined;
-    process.env.CIRCUIT_DISABLE_V2_RUNTIME = undefined;
+    process.env.CIRCUIT_SHOW_RUNTIME_DECISION = undefined;
+    process.env.CIRCUIT_SHOW_RUNTIME_DECISION = undefined;
+    process.env.CIRCUIT_SHOW_RUNTIME_DECISION = undefined;
     process.env.CIRCUIT_GENERATED_FLOW_MIRROR_ROOT = undefined;
     try {
       const exit = await main(
@@ -199,10 +199,10 @@ circuits:
       expect(exit).toBe(0);
     } finally {
       stdout.restore();
-      process.env.CIRCUIT_V2_RUNTIME = originalStrictRuntime;
+      process.env.CIRCUIT_SHOW_RUNTIME_DECISION = originalStrictRuntime;
       process.env.CIRCUIT_SHOW_RUNTIME_DECISION = originalShowRuntimeDecision;
-      process.env.CIRCUIT_V2_RUNTIME_CANDIDATE = originalCandidateRuntime;
-      process.env.CIRCUIT_DISABLE_V2_RUNTIME = originalDisableRuntime;
+      process.env.CIRCUIT_SHOW_RUNTIME_DECISION = originalCandidateRuntime;
+      process.env.CIRCUIT_SHOW_RUNTIME_DECISION = originalDisableRuntime;
       process.env.CIRCUIT_GENERATED_FLOW_MIRROR_ROOT = originalGeneratedMirrorRoot;
     }
 

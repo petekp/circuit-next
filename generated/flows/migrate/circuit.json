@@ -2,7 +2,7 @@
   "schema_version": "2",
   "id": "migrate",
   "version": "0.1.0",
-  "purpose": "Migrate flow: frame the source and target, inventory what needs to move, plan the coexistence window and rollback path, execute the migration through a child Build flow, verify nothing regressed, run a cutover review, and close with evidence. The first version runs one batch; broader batch orchestration can land once worktree support is ready.",
+  "purpose": "Migrate flow: frame the source and target, inventory what needs to move, plan the coexistence window and rollback path, execute the migration through a child Build flow, verify nothing regressed, run a release review, and close with evidence. The first version runs one batch; broader batch orchestration can land once worktree support is ready.",
   "entry": {
     "signals": {
       "include": [
@@ -70,7 +70,7 @@
     },
     {
       "id": "review-stage",
-      "title": "Cutover Review",
+      "title": "Release Review",
       "canonical": "review",
       "steps": ["review-step"]
     },
@@ -278,7 +278,7 @@
     },
     {
       "id": "review-step",
-      "title": "Cutover Review - independent audit of the migration cutover",
+      "title": "Release Review - independent audit of the migration release",
       "protocol": "migrate-review@v1",
       "reads": [
         "reports/migrate/brief.json",
@@ -308,7 +308,7 @@
           "kind": "relay_result",
           "ref": "result"
         },
-        "pass": ["cutover-approved", "cutover-with-followups"]
+        "pass": ["release-approved", "release-with-followups"]
       }
     },
     {

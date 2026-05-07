@@ -2,7 +2,7 @@
   "schema_version": "1",
   "id": "migrate",
   "title": "Migrate Schematic",
-  "purpose": "Migrate flow: frame the source and target, inventory what needs to move, plan the coexistence window and rollback path, execute the migration through a child Build flow, verify nothing regressed, run a cutover review, and close with evidence. The first version runs one batch; broader batch orchestration can land once worktree support is ready.",
+  "purpose": "Migrate flow: frame the source and target, inventory what needs to move, plan the coexistence window and rollback path, execute the migration through a child Build flow, verify nothing regressed, run a release review, and close with evidence. The first version runs one batch; broader batch orchestration can land once worktree support is ready.",
   "status": "active",
   "version": "0.1.0",
   "starts_at": "frame-step",
@@ -113,7 +113,7 @@
     {
       "canonical": "review",
       "id": "review-stage",
-      "title": "Cutover Review"
+      "title": "Release Review"
     },
     {
       "canonical": "close",
@@ -321,7 +321,7 @@
     },
     {
       "id": "review-step",
-      "title": "Cutover Review - independent audit of the migration cutover",
+      "title": "Release Review - independent audit of the migration release",
       "stage": "review",
       "input": {
         "brief": "migrate.brief@v1",
@@ -342,7 +342,7 @@
         "result_path": "reports/relay/migrate-review.result.json"
       },
       "check": {
-        "pass": ["cutover-approved", "cutover-with-followups"]
+        "pass": ["release-approved", "release-with-followups"]
       },
       "routes": {
         "continue": "close-step",

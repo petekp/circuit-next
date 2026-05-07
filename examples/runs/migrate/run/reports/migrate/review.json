@@ -1,5 +1,5 @@
 {
-  "verdict": "cutover-approved",
-  "summary": "Cutover approved for the synthetic migration proof.",
+  "verdict": "release-approved",
+  "summary": "Release approved for the synthetic migration proof.",
   "findings": []
 }

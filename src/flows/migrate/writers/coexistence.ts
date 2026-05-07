@@ -25,11 +25,11 @@ export const migrateCoexistenceComposeBuilder: ComposeBuilder = {
       strategy: `${brief.coexistence_appetite} window: keep ${brief.source} in place while ${brief.target} is rolled out batch by batch (${inventory.batches.length} batch(es) planned).`,
       switchover_criteria: [
         'All declared inventory items have been touched and verification passes.',
-        'Cutover review verdict is cutover-approved or cutover-with-followups.',
+        'Release review verdict is release-approved or release-with-followups.',
       ],
       health_signals: [
         `Verification command suite (${brief.verification_command_candidates.map((c) => c.id).join(', ')}) reports passed.`,
-        'No regressions reported by the cutover review.',
+        'No regressions reported by the release review.',
       ],
       rollback_path: brief.rollback_plan,
       risks: [

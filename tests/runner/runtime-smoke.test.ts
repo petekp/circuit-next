@@ -3,9 +3,9 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { ExecutorRegistryV2 } from '../../src/core-v2/executors/index.js';
-import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
-import { TraceStore } from '../../src/core-v2/trace/trace-store.js';
+import type { ExecutorRegistry } from '../../src/runtime/executors/index.js';
+import { runCompiledFlow } from '../../src/runtime/run/compiled-flow-runner.js';
+import { TraceStore } from '../../src/runtime/trace/trace-store.js';
 import { ManifestSnapshot } from '../../src/schemas/manifest.js';
 import { RunResult } from '../../src/schemas/result.js';
 
@@ -16,7 +16,7 @@ import type { RelayFn } from '../../src/shared/relay-runtime-types.js';
 // end-to-end via the dry-run claude-code connector. The test reads the
 // production runtime-proof flow fixture — the same JSON a user
 // invocation of `./bin/circuit-next runtime-proof ...` would load — and
-// composes the runtime boundary via `runCompiledFlowV2`.
+// composes the runtime boundary via `runCompiledFlow`.
 //
 // Two-run acceptance: same fixture, two different goals, two different
 // result.json files with differing `goal` and `run_id` fields satisfy
@@ -59,7 +59,7 @@ function stubRelayer(): RelayFn {
   };
 }
 
-function composeExecutor(): Pick<ExecutorRegistryV2, 'compose'> {
+function composeExecutor(): Pick<ExecutorRegistry, 'compose'> {
   return {
     compose: async (step, context) => {
       if (step.kind !== 'compose') throw new Error('expected compose step');
@@ -110,7 +110,7 @@ describe('runtime-proof runner smoke', () => {
   it('closes one run producing trace.ndjson / manifest.snapshot.json / reports/result.json', async () => {
     const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'run-a');
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: '11111111-1111-1111-1111-111111111111',
@@ -160,7 +160,7 @@ describe('runtime-proof runner smoke', () => {
   it('exercises compose + relay + check trace_entry kinds via the injected-stub relayer', async () => {
     const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'run-kinds');
-    await runCompiledFlowV2({
+    await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: '22222222-2222-2222-2222-222222222222',
@@ -198,7 +198,7 @@ describe('runtime-proof runner smoke', () => {
       connector: { kind: 'builtin', name: 'claude-code' },
     });
     // `resolved_from` is derived from the runner's actual decision path
-    // (see the core-v2 relay resolver): the test injects a stub relayer,
+    // (see the runtime relay resolver): the test injects a stub relayer,
     // so the honest claim is `source: 'explicit'`.
     expect(relayStarted.data).toMatchObject({
       resolved_from: { source: 'explicit' },
@@ -223,7 +223,7 @@ describe('runtime-proof runner smoke', () => {
     const runAFolder = join(runFolderBase, 'run-a');
     const runBFolder = join(runFolderBase, 'run-b');
 
-    const runA = await runCompiledFlowV2({
+    const runA = await runCompiledFlow({
       runDir: runAFolder,
       flowBytes: bytes,
       runId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
@@ -233,7 +233,7 @@ describe('runtime-proof runner smoke', () => {
       relayer: stubRelayer(),
       executors: composeExecutor(),
     });
-    const runB = await runCompiledFlowV2({
+    const runB = await runCompiledFlow({
       runDir: runBFolder,
       flowBytes: bytes,
       runId: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',

@@ -3,9 +3,9 @@
 // Reads brief + inventory + coexistence + batch + verification + review
 // and emits migrate.result@v1 with verification_status, review_verdict,
 // batch_count, summary, and the canonical 6-pointer set. Outcome is
-// 'complete' iff verification passed AND the cutover review verdict is
-// 'cutover-approved'; 'cutover-deferred' iff the review returned
-// 'cutover-with-followups' OR verification passed but the review
+// 'complete' iff verification passed AND the release review verdict is
+// 'release-approved'; 'release-deferred' iff the review returned
+// 'release-with-followups' OR verification passed but the review
 // reported follow-ups; 'reverted' iff the batch RunResult outcome is
 // not 'complete'; otherwise 'failed'. The batch report is the child
 // Build's RunResult copied verbatim by the sub-run handler — its
@@ -55,10 +55,10 @@ export const migrateCloseBuilder: CloseBuilder = {
 
     const outcome = !childComplete
       ? 'reverted'
-      : !verificationOk || review.verdict === 'reject' || review.verdict === 'cutover-blocked'
+      : !verificationOk || review.verdict === 'reject' || review.verdict === 'release-blocked'
         ? 'failed'
-        : review.verdict === 'cutover-with-followups'
-          ? 'cutover-deferred'
+        : review.verdict === 'release-with-followups'
+          ? 'release-deferred'
           : 'complete';
 
     return MigrateResult.parse({

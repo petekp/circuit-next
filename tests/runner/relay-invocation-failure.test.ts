@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
-import { TraceStore } from '../../src/core-v2/trace/trace-store.js';
+import { runCompiledFlow } from '../../src/runtime/run/compiled-flow-runner.js';
+import { TraceStore } from '../../src/runtime/trace/trace-store.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { RunResult } from '../../src/schemas/result.js';
 import type { RelayFn } from '../../src/shared/relay-runtime-types.js';
@@ -35,7 +35,7 @@ async function runFailureCase(input: {
   readonly runFolder: string;
   readonly bytes: Buffer;
 }) {
-  const result = await runCompiledFlowV2({
+  const result = await runCompiledFlow({
     runDir: input.runFolder,
     flowBytes: input.bytes,
     runId: '71000000-0000-0000-0000-000000000001',

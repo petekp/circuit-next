@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { ResolvedSelection } from '../schemas/selection-policy.js';
 
 // Shared relay-result shape produced by connector subprocess implementations.
-// Materializers and v2 executors consume this shape without branching on the
+// Materializers and runtime executors consume this shape without branching on the
 // connector that produced it.
 export interface RelayResult {
   readonly request_payload: string;

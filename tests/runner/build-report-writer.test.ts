@@ -4,9 +4,6 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { executeComposeV2 } from '../../src/core-v2/executors/compose.js';
-import type { ExecutorRegistryV2 } from '../../src/core-v2/executors/index.js';
-import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
 import {
   BuildBrief,
   BuildImplementation,
@@ -15,6 +12,9 @@ import {
   BuildReview,
   BuildVerification,
 } from '../../src/flows/build/reports.js';
+import { executeCompose } from '../../src/runtime/executors/compose.js';
+import type { ExecutorRegistry } from '../../src/runtime/executors/index.js';
+import { runCompiledFlow } from '../../src/runtime/run/compiled-flow-runner.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 
 function deterministicNow(startMs: number): () => Date {
@@ -362,12 +362,12 @@ function seedBuildRoleReport(runFolder: string, schema: string): void {
 
 function seedThenDefaultWriter(
   options: { removeVerification?: boolean; corruptBrief?: boolean; corruptPlan?: boolean } = {},
-): Pick<ExecutorRegistryV2, 'compose'> {
+): Pick<ExecutorRegistry, 'compose'> {
   return {
     compose: async (step, context) => {
       if (step.kind !== 'compose') throw new Error('expected compose step');
       if (!step.id.startsWith('seed-')) {
-        return await executeComposeV2(step, context);
+        return await executeCompose(step, context);
       }
       const report = step.writes?.report;
       if (report?.schema === undefined) {
@@ -416,7 +416,7 @@ describe('Build compose writers', () => {
     const { bytes } = planCompiledFlow();
     const runFolder = join(runFolderBase, 'plan');
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: 'b1000000-0000-0000-0000-000000000000',
@@ -446,7 +446,7 @@ describe('Build compose writers', () => {
     const { bytes } = planCompiledFlow({ omitBriefRead: true });
     const runFolder = join(runFolderBase, 'plan-missing-brief-read');
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: 'b1000000-0000-0000-0000-000000000006',
@@ -465,7 +465,7 @@ describe('Build compose writers', () => {
     const { bytes } = planCompiledFlow();
     const runFolder = join(runFolderBase, 'plan-malformed-brief');
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: 'b1000000-0000-0000-0000-000000000007',
@@ -484,7 +484,7 @@ describe('Build compose writers', () => {
     const { bytes } = closeCompiledFlow();
     const runFolder = join(runFolderBase, 'close');
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: 'b1000000-0000-0000-0000-000000000001',
@@ -513,7 +513,7 @@ describe('Build compose writers', () => {
     const { bytes } = closeCompiledFlow();
     const runFolder = join(runFolderBase, 'missing-prior');
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: 'b1000000-0000-0000-0000-000000000002',
@@ -532,7 +532,7 @@ describe('Build compose writers', () => {
     const { bytes } = closeCompiledFlow();
     const runFolder = join(runFolderBase, 'malformed-brief-close');
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: 'b1000000-0000-0000-0000-000000000003',
@@ -551,7 +551,7 @@ describe('Build compose writers', () => {
     const { bytes } = closeCompiledFlow();
     const runFolder = join(runFolderBase, 'malformed-plan-close');
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: 'b1000000-0000-0000-0000-000000000004',
@@ -570,7 +570,7 @@ describe('Build compose writers', () => {
     const { bytes } = closeCompiledFlow({ omitProducerSchema: 'build.plan@v1' });
     const runFolder = join(runFolderBase, 'missing-plan-producer');
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: 'b1000000-0000-0000-0000-000000000005',

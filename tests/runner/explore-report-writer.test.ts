@@ -3,8 +3,6 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
-import { TraceStore } from '../../src/core-v2/trace/trace-store.js';
 import {
   ExploreAnalysis,
   ExploreBrief,
@@ -12,6 +10,8 @@ import {
   ExploreResult,
   ExploreReviewVerdict,
 } from '../../src/flows/explore/reports.js';
+import { runCompiledFlow } from '../../src/runtime/run/compiled-flow-runner.js';
+import { TraceStore } from '../../src/runtime/trace/trace-store.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import type { RelayResult } from '../../src/shared/connector-relay.js';
 import type { RelayFn, RelayInput } from '../../src/shared/relay-runtime-types.js';
@@ -109,7 +109,7 @@ async function runExploreCase(input: {
   readonly now: () => Date;
   readonly relayer: RelayFn;
 }) {
-  const result = await runCompiledFlowV2({
+  const result = await runCompiledFlow({
     runDir: input.runFolder,
     flowBytes: input.bytes,
     runId: input.runId,

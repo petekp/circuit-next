@@ -3,10 +3,10 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { resumeCompiledFlowV2 } from '../../src/core-v2/run/checkpoint-resume.js';
-import { runCompiledFlowV2WithWaiting } from '../../src/core-v2/run/compiled-flow-runner.js';
-import { isGraphCheckpointWaitingResultV2 } from '../../src/core-v2/run/graph-runner.js';
-import { TraceStore } from '../../src/core-v2/trace/trace-store.js';
+import { resumeCompiledFlow } from '../../src/runtime/run/checkpoint-resume.js';
+import { runCompiledFlowWithWaiting } from '../../src/runtime/run/compiled-flow-runner.js';
+import { isGraphCheckpointWaitingResult } from '../../src/runtime/run/graph-runner.js';
+import { TraceStore } from '../../src/runtime/trace/trace-store.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import type { RelayResult } from '../../src/shared/connector-relay.js';
 import type { RelayFn, RelayInput } from '../../src/shared/relay-runtime-types.js';
@@ -156,7 +156,7 @@ describe('explore tournament runtime', () => {
     const { bytes } = loadTournamentFixture();
     const runFolder = join(runFolderBase, 'tournament-run');
 
-    const waiting = await runCompiledFlowV2WithWaiting({
+    const waiting = await runCompiledFlowWithWaiting({
       runDir: runFolder,
       flowBytes: bytes,
       runId: '33333333-3333-3333-3333-333333333331',
@@ -168,7 +168,7 @@ describe('explore tournament runtime', () => {
     });
 
     expect(waiting.outcome).toBe('checkpoint_waiting');
-    if (!isGraphCheckpointWaitingResultV2(waiting)) {
+    if (!isGraphCheckpointWaitingResult(waiting)) {
       throw new Error('expected checkpoint_waiting');
     }
     expect(waiting.checkpoint).toMatchObject({
@@ -208,7 +208,7 @@ describe('explore tournament runtime', () => {
       expect(branch.result_body?.option_id).toBe(branch.branch_id);
     }
 
-    const resumed = await resumeCompiledFlowV2({
+    const resumed = await resumeCompiledFlow({
       runDir: runFolder,
       selection: 'option-2',
       now: deterministicNow(Date.UTC(2026, 3, 29, 16, 40, 0)),
@@ -244,7 +244,7 @@ describe('explore tournament runtime', () => {
     const runFolder = join(runFolderBase, 'mismatched-proposal-run');
     const relayer = tournamentRelayer();
 
-    const outcome = await runCompiledFlowV2WithWaiting({
+    const outcome = await runCompiledFlowWithWaiting({
       runDir: runFolder,
       flowBytes: bytes,
       runId: '33333333-3333-3333-3333-333333333332',
@@ -271,7 +271,7 @@ describe('explore tournament runtime', () => {
     });
 
     expect(outcome.outcome).toBe('aborted');
-    if (isGraphCheckpointWaitingResultV2(outcome) || outcome.outcome !== 'aborted') {
+    if (isGraphCheckpointWaitingResult(outcome) || outcome.outcome !== 'aborted') {
       throw new Error('expected aborted');
     }
     expect(outcome.reason).toContain("report field 'option_id' must equal branch_id 'option-1'");

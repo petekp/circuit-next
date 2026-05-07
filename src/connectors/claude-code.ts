@@ -96,7 +96,7 @@ const STDERR_MAX_BYTES = 1024 * 1024;
 
 export interface ClaudeCodeRelayInput extends ConnectorRelayInput {}
 
-// The `ClaudeCodeRelayResult` name is retained as the connector-specific
+// The `ClaudeCodeRelayResult` name is kept as the connector-specific
 // alias for call sites that want a name bound to the `claude-code` connector's
 // producer contract. The shape lives in `./shared.ts` `RelayResult`
 // so the `codex` connector produces the same shape and the materializer

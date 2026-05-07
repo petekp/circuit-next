@@ -4,18 +4,18 @@ import { dirname, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { materializeRelay } from '../../src/connectors/relay-materializer.js';
-import { resolveConnectorForRelayV2 } from '../../src/core-v2/connectors/resolver.js';
-import type { ExecutorRegistryV2 } from '../../src/core-v2/executors/index.js';
-import { relayWithResolvedConnectorV2 } from '../../src/core-v2/executors/relay.js';
-import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
-import { TraceStore } from '../../src/core-v2/trace/trace-store.js';
+import { resolveConnectorForRelay } from '../../src/runtime/connectors/resolver.js';
+import type { ExecutorRegistry } from '../../src/runtime/executors/index.js';
+import { relayWithResolvedConnector } from '../../src/runtime/executors/relay.js';
+import { runCompiledFlow } from '../../src/runtime/run/compiled-flow-runner.js';
+import { TraceStore } from '../../src/runtime/trace/trace-store.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { Config } from '../../src/schemas/config.js';
 import { RunId, StepId } from '../../src/schemas/ids.js';
 import type { RelayResult } from '../../src/shared/connector-relay.js';
 import type { RelayFn } from '../../src/shared/relay-runtime-types.js';
 
-// Relay-trace_entry provenance plumbing through `runCompiledFlowV2`.
+// Relay-trace_entry provenance plumbing through `runCompiledFlow`.
 //
 // `materializeRelay` does not hardcode
 // `resolved_selection: { skills: [], invocation_options: {} }` or
@@ -73,7 +73,7 @@ function stubRelayer(): RelayFn {
   };
 }
 
-function composeExecutor(): Pick<ExecutorRegistryV2, 'compose'> {
+function composeExecutor(): Pick<ExecutorRegistry, 'compose'> {
   return {
     compose: async (step, context) => {
       if (step.kind !== 'compose') throw new Error('expected compose step');
@@ -136,7 +136,7 @@ describe("relay.started carries honest 'resolved_from' from the runner's decisio
   it('injecting a relayer lands resolved_from.source="explicit"', async () => {
     const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'explicit-provenance');
-    await runCompiledFlowV2({
+    await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: '47a47a47-a47a-47a4-7a47-a47a47a47a47',
@@ -158,7 +158,7 @@ describe('relay connector resolution precedence', () => {
     const { flow } = loadGeneratedFixture('build');
     const step = relayStep(flow, 'reviewer');
 
-    const decision = resolveConnectorForRelayV2({
+    const decision = resolveConnectorForRelay({
       flowId: flow.id,
       role: step.role,
       configLayers: [
@@ -188,7 +188,7 @@ describe('relay connector resolution precedence', () => {
     const { flow } = loadGeneratedFixture('build');
     const step = relayStep(flow, 'reviewer');
 
-    const decision = resolveConnectorForRelayV2({
+    const decision = resolveConnectorForRelay({
       flowId: flow.id,
       role: step.role,
       configLayers: [
@@ -218,7 +218,7 @@ describe('relay connector resolution precedence', () => {
     const { flow } = loadFixture();
     const step = relayStep(flow);
 
-    const decision = resolveConnectorForRelayV2({
+    const decision = resolveConnectorForRelay({
       flowId: flow.id,
       role: step.role,
       configLayers: [],
@@ -232,7 +232,7 @@ describe('relay connector resolution precedence', () => {
     const { flow } = loadGeneratedFixture('build');
     const step = relayStep(flow, 'reviewer');
 
-    const decision = resolveConnectorForRelayV2({
+    const decision = resolveConnectorForRelay({
       flowId: flow.id,
       role: step.role,
       configLayers: [
@@ -259,7 +259,7 @@ describe('relay connector resolution precedence', () => {
     const step = relayStep(flow, 'implementer');
 
     expect(() =>
-      resolveConnectorForRelayV2({
+      resolveConnectorForRelay({
         flowId: flow.id,
         role: step.role,
         configLayers: [
@@ -288,7 +288,7 @@ describe('relay connector resolution precedence', () => {
     const step = relayStep(flow, 'implementer');
 
     expect(() =>
-      resolveConnectorForRelayV2({
+      resolveConnectorForRelay({
         flowId: flow.id,
         role: step.role,
         configLayers: [
@@ -324,7 +324,7 @@ describe('relay connector resolution precedence', () => {
     ].join(' ');
 
     for (const name of ['gemini-reviewer', 'cursor-reviewer'] as const) {
-      const decision = resolveConnectorForRelayV2({
+      const decision = resolveConnectorForRelay({
         flowId: flow.id,
         role: step.role,
         configLayers: [
@@ -357,7 +357,7 @@ describe('relay connector resolution precedence', () => {
 
       expect(decision.connectorName).toBe(name);
       expect(decision.resolvedFrom).toEqual({ source: 'role', role: 'reviewer' });
-      const result = await relayWithResolvedConnectorV2(decision.connector, {
+      const result = await relayWithResolvedConnector(decision.connector, {
         prompt: `review with ${name}`,
         resolvedSelection: { skills: [], invocation_options: {} },
       });
@@ -383,7 +383,7 @@ describe("relay.started carries honest 'resolved_selection' from flow + step inp
     expect(relayStep.selection).toBeUndefined();
 
     const runFolder = join(runFolderBase, 'empty-selection');
-    await runCompiledFlowV2({
+    await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: '47a47a47-a47a-47a4-7a47-a47a47a47a48',
@@ -416,7 +416,7 @@ describe("relay.started carries honest 'resolved_selection' from flow + step inp
     expect(flow.default_selection).toBeDefined();
 
     const runFolder = join(runFolderBase, 'flow-selection');
-    await runCompiledFlowV2({
+    await runCompiledFlow({
       runDir: runFolder,
       flowBytes: flowBytes(mutated),
       runId: '47a47a47-a47a-47a4-7a47-a47a47a47a49',
@@ -458,7 +458,7 @@ describe("relay.started carries honest 'resolved_selection' from flow + step inp
     CompiledFlow.parse(raw);
 
     const runFolder = join(runFolderBase, 'step-overrides-flow');
-    await runCompiledFlowV2({
+    await runCompiledFlow({
       runDir: runFolder,
       flowBytes: flowBytes(raw),
       runId: '47a47a47-a47a-47a4-7a47-a47a47a47a4a',
@@ -498,7 +498,7 @@ describe("SkillOverride 'append' / 'remove' / 'inherit' compose per SEL-I3", () 
     }
     CompiledFlow.parse(raw);
     const runFolder = join(runFolderBase, 'remove-after-replace');
-    await runCompiledFlowV2({
+    await runCompiledFlow({
       runDir: runFolder,
       flowBytes: flowBytes(raw),
       runId: '47a47a47-a47a-47a4-7a47-a47a47a47b01',
@@ -525,7 +525,7 @@ describe("SkillOverride 'append' / 'remove' / 'inherit' compose per SEL-I3", () 
     }
     CompiledFlow.parse(raw);
     const runFolder = join(runFolderBase, 'append-after-replace');
-    await runCompiledFlowV2({
+    await runCompiledFlow({
       runDir: runFolder,
       flowBytes: flowBytes(raw),
       runId: '47a47a47-a47a-47a4-7a47-a47a47a47b02',
@@ -554,7 +554,7 @@ describe("SkillOverride 'append' / 'remove' / 'inherit' compose per SEL-I3", () 
     }
     CompiledFlow.parse(raw);
     const runFolder = join(runFolderBase, 'append-existing');
-    await runCompiledFlowV2({
+    await runCompiledFlow({
       runDir: runFolder,
       flowBytes: flowBytes(raw),
       runId: '47a47a47-a47a-47a4-7a47-a47a47a47b03',
@@ -581,7 +581,7 @@ describe("SkillOverride 'append' / 'remove' / 'inherit' compose per SEL-I3", () 
     }
     CompiledFlow.parse(raw);
     const runFolder = join(runFolderBase, 'inherit-noop');
-    await runCompiledFlowV2({
+    await runCompiledFlow({
       runDir: runFolder,
       flowBytes: flowBytes(raw),
       runId: '47a47a47-a47a-47a4-7a47-a47a47a47b04',

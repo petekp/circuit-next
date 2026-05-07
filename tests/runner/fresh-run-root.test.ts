@@ -11,9 +11,9 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { ExecutorRegistryV2 } from '../../src/core-v2/executors/index.js';
-import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
-import { manifestSnapshotPathV2 } from '../../src/core-v2/run/manifest-snapshot.js';
+import type { ExecutorRegistry } from '../../src/runtime/executors/index.js';
+import { runCompiledFlow } from '../../src/runtime/run/compiled-flow-runner.js';
+import { runtimeManifestSnapshotPath } from '../../src/runtime/run/manifest-snapshot.js';
 import type { RelayResult } from '../../src/shared/connector-relay.js';
 import type { RelayFn } from '../../src/shared/relay-runtime-types.js';
 import { runResultPath as resultPath } from '../../src/shared/result-path.js';
@@ -42,7 +42,7 @@ function stubRelayer(): RelayFn {
   };
 }
 
-function composeExecutor(): Pick<ExecutorRegistryV2, 'compose'> {
+function composeExecutor(): Pick<ExecutorRegistry, 'compose'> {
   return {
     compose: async (step, context) => {
       if (step.kind !== 'compose') throw new Error('expected compose step');
@@ -64,7 +64,7 @@ async function closeFixtureRun(input: {
   startMs: number;
 }): Promise<void> {
   const { bytes } = loadFixture();
-  await runCompiledFlowV2({
+  await runCompiledFlow({
     runDir: input.runFolder,
     flowBytes: bytes,
     runId: input.runId,
@@ -82,7 +82,7 @@ function tracePath(runFolder: string): string {
 
 function persistentRunBytes(runFolder: string): ReadonlyMap<string, string> {
   return new Map(
-    [tracePath(runFolder), manifestSnapshotPathV2(runFolder), resultPath(runFolder)].map(
+    [tracePath(runFolder), runtimeManifestSnapshotPath(runFolder), resultPath(runFolder)].map(
       (path) => [path, readFileSync(path, 'utf8')] as const,
     ),
   );
@@ -98,7 +98,7 @@ afterEach(() => {
   rmSync(runFolderBase, { recursive: true, force: true });
 });
 
-describe('core-v2 fresh run directory guard', () => {
+describe('runtime fresh run directory guard', () => {
   it('rejects run-folder reuse before trace, manifest, or result bytes change', async () => {
     const runFolder = join(runFolderBase, 'reused-root');
     await closeFixtureRun({
@@ -135,7 +135,7 @@ describe('core-v2 fresh run directory guard', () => {
     });
 
     expect(existsSync(tracePath(runFolder))).toBe(true);
-    expect(existsSync(manifestSnapshotPathV2(runFolder))).toBe(true);
+    expect(existsSync(runtimeManifestSnapshotPath(runFolder))).toBe(true);
     expect(existsSync(resultPath(runFolder))).toBe(true);
   });
 
@@ -167,10 +167,10 @@ describe('core-v2 fresh run directory guard', () => {
     expect(existsSync(tracePath(symlinkTarget))).toBe(false);
   });
 
-  it('rejects each core-v2 run file marker before writing new bytes', async () => {
+  it('rejects each runtime run file marker before writing new bytes', async () => {
     const cases = [
       ['trace', tracePath],
-      ['manifest', manifestSnapshotPathV2],
+      ['manifest', runtimeManifestSnapshotPath],
       ['result', resultPath],
     ] as const;
 

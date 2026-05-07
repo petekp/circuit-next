@@ -14,10 +14,6 @@ import {
 import type { ControlPlaneFileStem } from '../schemas/scalars.js';
 import type { Snapshot, SnapshotStatus } from '../schemas/snapshot.js';
 import { readManifestSnapshot } from '../shared/manifest-snapshot.js';
-import {
-  RETIRED_RUNTIME_RUN_FOLDER_MESSAGE,
-  detectRunFolderTraceRuntime,
-} from '../shared/retired-runtime-policy.js';
 import { utilityProgress } from './utility-progress.js';
 
 type HandoffAction = 'save' | 'resume' | 'done' | 'brief' | 'hook' | 'hooks';
@@ -911,24 +907,14 @@ function loadRunBackedSnapshot(runFolder: string): {
   >;
   readonly currentStage: string;
 } {
-  const traceRuntime = detectRunFolderTraceRuntime(runFolder);
-  if (traceRuntime === 'retired') {
-    throw new Error(RETIRED_RUNTIME_RUN_FOLDER_MESSAGE);
-  }
-
-  const manifest = readManifestSnapshot(runFolder);
-  const flow = CompiledFlow.parse(
-    JSON.parse(Buffer.from(manifest.bytes_base64, 'base64').toString('utf8')),
-  );
-
-  if (traceRuntime !== 'core-v2') {
-    throw new Error(RETIRED_RUNTIME_RUN_FOLDER_MESSAGE);
-  }
-
   const status = projectRunStatusFromRunFolder(runFolder);
   if (status.engine_state === 'invalid') {
     throw new Error(`cannot save run-backed continuity: ${status.error.message}`);
   }
+  const manifest = readManifestSnapshot(runFolder);
+  const flow = CompiledFlow.parse(
+    JSON.parse(Buffer.from(manifest.bytes_base64, 'base64').toString('utf8')),
+  );
   const currentStep =
     ('current_step' in status ? status.current_step?.step_id : undefined) ??
     flow.entry_modes[0]?.start_at;

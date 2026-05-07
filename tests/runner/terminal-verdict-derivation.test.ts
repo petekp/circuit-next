@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { ExecutorRegistryV2 } from '../../src/core-v2/executors/index.js';
-import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
+import type { ExecutorRegistry } from '../../src/runtime/executors/index.js';
+import { runCompiledFlow } from '../../src/runtime/run/compiled-flow-runner.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 
 import type { RelayResult } from '../../src/shared/connector-relay.js';
@@ -74,7 +74,7 @@ function sequenceRelayer(verdicts: string[]): RelayFn {
   };
 }
 
-function composeExecutor(): Pick<ExecutorRegistryV2, 'compose'> {
+function composeExecutor(): Pick<ExecutorRegistry, 'compose'> {
   return {
     compose: async (step, context) => {
       if (step.kind !== 'compose') throw new Error('expected compose step');
@@ -103,7 +103,7 @@ describe('deriveTerminalVerdict — fix #2 coverage', () => {
   it('single-relay run surfaces the verdict on result.json', async () => {
     const { bytes } = loadDogfood();
     const runFolder = join(runFolderBase, 'run-single');
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: 'aaaaaaaa-1111-1111-1111-111111111111',
@@ -194,7 +194,7 @@ describe('deriveTerminalVerdict — fix #2 coverage', () => {
     });
     const bytes = Buffer.from(JSON.stringify(flow));
     const runFolder = join(runFolderBase, 'run-multi');
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: 'bbbbbbbb-2222-2222-2222-222222222222',
@@ -218,7 +218,7 @@ describe('deriveTerminalVerdict — fix #2 coverage', () => {
     // (not result_verdict) so it doesn't contribute either way.
     const { bytes } = loadDogfood();
     const runFolder = join(runFolderBase, 'run-aborted');
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: 'cccccccc-3333-3333-3333-333333333333',
@@ -279,7 +279,7 @@ describe('deriveTerminalVerdict — fix #2 coverage', () => {
     });
     const bytes = Buffer.from(JSON.stringify(flow));
     const runFolder = join(runFolderBase, 'run-synth-only');
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: 'dddddddd-4444-4444-4444-444444444444',

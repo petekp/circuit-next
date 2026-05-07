@@ -1,6 +1,6 @@
 // Real recursion integration test for fanout.
 //
-// Complements `tests/core-v2/fanout-v2.test.ts` (which exercises the
+// Complements `tests/runtime/fanout.test.ts` (which exercises the
 // fanout executor in isolation) and `sub-run-real-recursion.test.ts`
 // (the same no-stub approach for the single-child sub-run case). This
 // test extends real-recursion coverage to the multi-child fanout substrate.
@@ -8,7 +8,7 @@
 // What's specific to fanout: each branch produces its own child run
 // with its own run-folder, run_id, and trace. The handler also
 // drives a worktreeRunner per branch. When `childRunner` is undefined
-// on the core-v2 invocation, the runner defaults to `runCompiledFlowV2`
+// on the runtime invocation, the runner defaults to `runCompiledFlow`
 // itself, so each branch recurses
 // through the real runner end-to-end.
 //
@@ -22,11 +22,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { ClaudeCodeRelayInput } from '../../src/connectors/claude-code.js';
 import type {
-  ChildCompiledFlowResolverV2,
-  WorktreeRunnerV2,
-} from '../../src/core-v2/run/child-runner.js';
-import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
-import { TraceStore } from '../../src/core-v2/trace/trace-store.js';
+  ChildCompiledFlowResolver,
+  WorktreeRunner,
+} from '../../src/runtime/run/child-runner.js';
+import { runCompiledFlow } from '../../src/runtime/run/compiled-flow-runner.js';
+import { TraceStore } from '../../src/runtime/trace/trace-store.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import type { RelayResult } from '../../src/shared/connector-relay.js';
 import type { RelayFn } from '../../src/shared/relay-runtime-types.js';
@@ -58,7 +58,7 @@ function acceptingRelayer(): RelayFn {
 // runner creates real git worktrees; for hermetic recursion it's
 // enough to mkdir the path so the child run-folder nests beneath it
 // correctly.
-function stubWorktreeRunner(): WorktreeRunnerV2 {
+function stubWorktreeRunner(): WorktreeRunner {
   return {
     add: ({ worktreePath }) => {
       mkdirSync(worktreePath, { recursive: true });
@@ -124,7 +124,7 @@ function buildParentCompiledFlow(): CompiledFlow {
     id: PARENT_WORKFLOW_ID as unknown as string,
     version: '0.1.0',
     purpose:
-      'real-recursion fanout test parent — two branches, each recurses into the child via real runCompiledFlowV2.',
+      'real-recursion fanout test parent — two branches, each recurses into the child via real runCompiledFlow.',
     entry: { signals: { include: ['fanout'], exclude: [] }, intent_prefixes: ['fanout'] },
     entry_modes: [
       {
@@ -208,20 +208,20 @@ async function readTraceEntries(runFolder: string) {
 }
 
 describe('fanout real recursion', () => {
-  it('runs each branch via real runCompiledFlowV2 (no childRunner stub) and admits via aggregate-only', async () => {
+  it('runs each branch via real runCompiledFlow (no childRunner stub) and admits via aggregate-only', async () => {
     const parentCompiledFlow = buildParentCompiledFlow();
     const parentBytes = Buffer.from(JSON.stringify(parentCompiledFlow));
     const childCompiledFlow = buildChildCompiledFlow();
     const childBytes = Buffer.from(JSON.stringify(childCompiledFlow));
 
-    const childResolver: ChildCompiledFlowResolverV2 = () => ({ flowBytes: childBytes });
+    const childResolver: ChildCompiledFlowResolver = () => ({ flowBytes: childBytes });
 
     const parentRunId = '33333333-3333-3333-3333-333333333333';
     const parentRunFolder = join(runFolderBase, parentRunId);
 
-    // KEY: NO `childRunner` field — runner defaults to `runCompiledFlowV2`
+    // KEY: NO `childRunner` field — runner defaults to `runCompiledFlow`
     // itself, so each branch recurses through the real runner.
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: parentRunFolder,
       flowBytes: parentBytes,
       runId: parentRunId,

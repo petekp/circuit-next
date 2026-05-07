@@ -31,7 +31,7 @@ const audits = [
     exception: 'EX-REL-004-MODE-MATRIX',
   },
   {
-    id: 'retired-fix-terminology',
+    id: 'fix-terminology',
     files: ['README.md', 'commands/run.md', 'docs/flows/authoring-model.md'],
     pattern: /\/circuit:repair|\brepair:\b|Repair-only|Fix\/Repair|Repair\/Fix/i,
   },

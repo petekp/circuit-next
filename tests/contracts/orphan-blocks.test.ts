@@ -4,12 +4,12 @@
 // unfalsified claims — they say "this scalar accepts these inputs
 // and produces this output", but no schematic has ever tried to wire them
 // up. This test forces each one through the validation + compile +
-// core-v2 execution path and records what's actually missing.
+// runtime execution path and records what's actually missing.
 //
 // Each test is a tight contract probe: build the smallest possible
 // schematic that uses one orphan scalar and assert what happens at
 // each layer (schematic parse → catalog compatibility → schematic compile →
-// core-v2 execution). When a layer rejects, the assertion captures
+// runtime execution). When a layer rejects, the assertion captures
 // the message so the test documents the contract gap as observed
 // behavior. As gaps are closed, the assertions tighten.
 
@@ -19,20 +19,20 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { ExecutorRegistryV2 } from '../../src/core-v2/executors/index.js';
-import type { ExecutableStepV2 } from '../../src/core-v2/manifest/executable-flow.js';
-import type { RunContextV2 } from '../../src/core-v2/run/run-context.js';
 import {
   type CompileResult,
   compileSchematicToCompiledFlow,
 } from '../../src/flows/compile-schematic-to-flow.js';
+import type { ExecutorRegistry } from '../../src/runtime/executors/index.js';
+import type { ExecutableStep } from '../../src/runtime/manifest/executable-flow.js';
+import type { RunContext } from '../../src/runtime/run/run-context.js';
 import type { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { FlowBlockCatalog } from '../../src/schemas/flow-blocks.js';
 import {
   FlowSchematic,
   validateFlowSchematicCatalogCompatibility,
 } from '../../src/schemas/flow-schematic.js';
-import { runSimpleCompiledFlowV2 } from '../parity/core-v2-parity-helpers.js';
+import { runSimpleCompiledFlow } from '../parity/runtime-parity-helpers.js';
 
 function singleCompiledFlow(result: CompileResult): CompiledFlow {
   if (result.kind === 'single') return result.flow;
@@ -51,7 +51,7 @@ function declaredRouteByStepId(flow: CompiledFlow): Record<string, string> {
   );
 }
 
-async function writeSyntheticReport(step: ExecutableStepV2, context: RunContextV2): Promise<void> {
+async function writeSyntheticReport(step: ExecutableStep, context: RunContext): Promise<void> {
   const report = step.writes?.report;
   if (report === undefined) return;
   const path = context.files.resolve(report);
@@ -68,7 +68,7 @@ async function writeSyntheticReport(step: ExecutableStepV2, context: RunContextV
   );
 }
 
-function syntheticOrphanExecutors(flow: CompiledFlow): Partial<ExecutorRegistryV2> {
+function syntheticOrphanExecutors(flow: CompiledFlow): Partial<ExecutorRegistry> {
   const routeByStepId = declaredRouteByStepId(flow);
   return {
     compose: async (step, context) => {
@@ -226,10 +226,10 @@ describe('orphan scalar: handoff', () => {
     expect(() => compileSchematicToCompiledFlow(schematic)).not.toThrow();
   });
 
-  it('runs end-to-end via the core-v2 simple executors', async () => {
+  it('runs end-to-end via the runtime simple executors', async () => {
     const schematic = FlowSchematic.parse(schematicRaw);
     const flow = singleCompiledFlow(compileSchematicToCompiledFlow(schematic));
-    const outcome = await runSimpleCompiledFlowV2({
+    const outcome = await runSimpleCompiledFlow({
       runDir: join(runFolder, 'handoff-run'),
       flowBytes: Buffer.from(JSON.stringify(flow)),
       runId: '00000000-0000-0000-0000-00000000aaaa',
@@ -339,7 +339,7 @@ describe('orphan scalar: human-decision', () => {
     // scalar is wireable end-to-end.
     const schematic = FlowSchematic.parse(schematicRaw);
     const flow = singleCompiledFlow(compileSchematicToCompiledFlow(schematic));
-    const outcome = await runSimpleCompiledFlowV2({
+    const outcome = await runSimpleCompiledFlow({
       runDir: join(runFolder, 'human-decision-run'),
       flowBytes: Buffer.from(JSON.stringify(flow)),
       runId: '00000000-0000-0000-0000-00000000eeee',
@@ -412,10 +412,10 @@ describe('orphan scalar: queue', () => {
     expect(() => compileSchematicToCompiledFlow(schematic)).not.toThrow();
   });
 
-  it('runs end-to-end via the core-v2 simple executors', async () => {
+  it('runs end-to-end via the runtime simple executors', async () => {
     const schematic = FlowSchematic.parse(schematicRaw);
     const flow = singleCompiledFlow(compileSchematicToCompiledFlow(schematic));
-    const outcome = await runSimpleCompiledFlowV2({
+    const outcome = await runSimpleCompiledFlow({
       runDir: join(runFolder, 'queue-run'),
       flowBytes: Buffer.from(JSON.stringify(flow)),
       runId: '00000000-0000-0000-0000-00000000bbbb',
@@ -493,10 +493,10 @@ describe('orphan scalar: batch', () => {
     expect(() => compileSchematicToCompiledFlow(schematic)).not.toThrow();
   });
 
-  it('runs end-to-end via the core-v2 simple executors', async () => {
+  it('runs end-to-end via the runtime simple executors', async () => {
     const schematic = FlowSchematic.parse(schematicRaw);
     const flow = singleCompiledFlow(compileSchematicToCompiledFlow(schematic));
-    const outcome = await runSimpleCompiledFlowV2({
+    const outcome = await runSimpleCompiledFlow({
       runDir: join(runFolder, 'batch-run'),
       flowBytes: Buffer.from(JSON.stringify(flow)),
       runId: '00000000-0000-0000-0000-00000000cccc',
@@ -579,10 +579,10 @@ describe('orphan scalar: risk-rollback-check', () => {
     expect(() => compileSchematicToCompiledFlow(schematic)).not.toThrow();
   });
 
-  it('runs end-to-end via the core-v2 simple executors', async () => {
+  it('runs end-to-end via the runtime simple executors', async () => {
     const schematic = FlowSchematic.parse(schematicRaw);
     const flow = singleCompiledFlow(compileSchematicToCompiledFlow(schematic));
-    const outcome = await runSimpleCompiledFlowV2({
+    const outcome = await runSimpleCompiledFlow({
       runDir: join(runFolder, 'risk-run'),
       flowBytes: Buffer.from(JSON.stringify(flow)),
       runId: '00000000-0000-0000-0000-00000000dddd',

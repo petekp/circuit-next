@@ -5,19 +5,19 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { main } from '../../src/cli/circuit.js';
-import type { TraceEntryV2 } from '../../src/core-v2/domain/trace.js';
-import { resumeCompiledFlowV2 } from '../../src/core-v2/run/checkpoint-resume.js';
-import {
-  type CompiledFlowRunOptionsV2,
-  runCompiledFlowV2WithWaiting,
-} from '../../src/core-v2/run/compiled-flow-runner.js';
-import {
-  type GraphExecutionResultV2,
-  type GraphRunResultV2,
-  isGraphCheckpointWaitingResultV2,
-} from '../../src/core-v2/run/graph-runner.js';
-import { TraceStore } from '../../src/core-v2/trace/trace-store.js';
 import { BuildBrief, BuildVerification } from '../../src/flows/build/reports.js';
+import type { TraceEntry } from '../../src/runtime/domain/trace.js';
+import { resumeCompiledFlow } from '../../src/runtime/run/checkpoint-resume.js';
+import {
+  type CompiledFlowRunOptions,
+  runCompiledFlowWithWaiting,
+} from '../../src/runtime/run/compiled-flow-runner.js';
+import {
+  type GraphExecutionResult,
+  type GraphRunResult,
+  isGraphCheckpointWaitingResult,
+} from '../../src/runtime/run/graph-runner.js';
+import { TraceStore } from '../../src/runtime/trace/trace-store.js';
 import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { CompiledFlowId, RunId } from '../../src/schemas/ids.js';
@@ -26,8 +26,7 @@ import { type RelayResult, sha256Hex } from '../../src/shared/connector-relay.js
 import { manifestSnapshotPath, writeManifestSnapshot } from '../../src/shared/manifest-snapshot.js';
 import type { RelayFn, RelayInput } from '../../src/shared/relay-runtime-types.js';
 
-const RETIRED_RUNTIME_RUN_FOLDER_MESSAGE =
-  'This run folder was created by the retired runtime. Start a fresh run.';
+const INVALID_RUN_FOLDER_MESSAGE = 'run folder is not a resumable Circuit run folder';
 
 function deterministicNow(startMs: number): () => Date {
   let n = 0;
@@ -80,15 +79,15 @@ function rewriteTraceEntry(
   writeFileSync(tracePath, `${lines.join('\n')}\n`);
 }
 
-async function readTraceEntries(runFolder: string): Promise<readonly TraceEntryV2[]> {
+async function readTraceEntries(runFolder: string): Promise<readonly TraceEntry[]> {
   return await new TraceStore(runFolder).load();
 }
 
-function snapshotFromResult(result: GraphExecutionResultV2 | GraphRunResultV2): {
+function snapshotFromResult(result: GraphExecutionResult | GraphRunResult): {
   readonly status: string;
   readonly current_step?: string;
 } {
-  if (isGraphCheckpointWaitingResultV2(result)) {
+  if (isGraphCheckpointWaitingResult(result)) {
     return { status: 'in_progress', current_step: result.checkpoint.stepId };
   }
   return { status: result.outcome };
@@ -105,13 +104,13 @@ async function runCompiledFlow(invocation: {
   readonly change_kind?: ChangeKindDeclaration;
   readonly now?: () => Date;
   readonly relayer?: RelayFn;
-  readonly selectionConfigLayers?: CompiledFlowRunOptionsV2['selectionConfigLayers'];
+  readonly selectionConfigLayers?: CompiledFlowRunOptions['selectionConfigLayers'];
 }): Promise<{
-  readonly result: GraphExecutionResultV2;
-  readonly trace_entries: readonly TraceEntryV2[];
+  readonly result: GraphExecutionResult;
+  readonly trace_entries: readonly TraceEntry[];
   readonly snapshot: { readonly status: string; readonly current_step?: string };
 }> {
-  const result = await runCompiledFlowV2WithWaiting({
+  const result = await runCompiledFlowWithWaiting({
     runDir: invocation.runFolder,
     flowBytes: invocation.flowBytes,
     runId: String(invocation.runId),
@@ -134,13 +133,13 @@ async function resumeCompiledFlowCheckpoint(invocation: {
   readonly projectRoot?: string;
   readonly now?: () => Date;
   readonly relayer?: RelayFn;
-  readonly selectionConfigLayers?: CompiledFlowRunOptionsV2['selectionConfigLayers'];
+  readonly selectionConfigLayers?: CompiledFlowRunOptions['selectionConfigLayers'];
 }): Promise<{
-  readonly result: GraphRunResultV2;
-  readonly trace_entries: readonly TraceEntryV2[];
+  readonly result: GraphRunResult;
+  readonly trace_entries: readonly TraceEntry[];
   readonly snapshot: { readonly status: string; readonly current_step?: string };
 }> {
-  const result = await resumeCompiledFlowV2({
+  const result = await resumeCompiledFlow({
     runDir: invocation.runFolder,
     selection: invocation.selection,
     ...(invocation.now === undefined ? {} : { now: invocation.now }),
@@ -499,7 +498,7 @@ async function startPausedBuildCheckpoint(input: {
   });
 }
 
-function writeRetainedCheckpointFolder(input: {
+function writeInvalidCheckpointFolder(input: {
   readonly runFolder: string;
   readonly runId: string;
   readonly goal: string;
@@ -660,15 +659,15 @@ describe('Build checkpoint execution substrate', () => {
     expect(briefReportWrites).toHaveLength(1);
   });
 
-  it('fails closed for retained checkpoint resume even when strict v2 is enabled', async () => {
-    const runFolder = join(runFolderBase, 'resume-retained-with-strict-v2');
-    writeRetainedCheckpointFolder({
+  it('fails closed for invalid checkpoint resume even when runtime is enabled', async () => {
+    const runFolder = join(runFolderBase, 'resume-kept-with-strict-runtime');
+    writeInvalidCheckpointFolder({
       runFolder,
       runId: 'b3000000-0000-0000-0000-000000000018',
-      goal: 'Resume retained checkpoint with strict v2 enabled',
+      goal: 'Resume invalid checkpoint with runtime enabled',
     });
-    const oldStrict = process.env.CIRCUIT_V2_RUNTIME;
-    process.env.CIRCUIT_V2_RUNTIME = '1';
+    const oldStrict = process.env.CIRCUIT_SHOW_RUNTIME_DECISION;
+    process.env.CIRCUIT_SHOW_RUNTIME_DECISION = '1';
     try {
       const { code, stdout, stderr } = await captureOutput(() =>
         main(['resume', '--run-folder', runFolder, '--checkpoint-choice', 'continue'], {
@@ -679,22 +678,22 @@ describe('Build checkpoint execution substrate', () => {
 
       expect(code).toBe(2);
       expect(stdout).toBe('');
-      expect(stderr.trim()).toBe(`error: ${RETIRED_RUNTIME_RUN_FOLDER_MESSAGE}`);
+      expect(stderr.trim()).toBe(`error: ${INVALID_RUN_FOLDER_MESSAGE}`);
     } finally {
       if (oldStrict === undefined) {
-        process.env.CIRCUIT_V2_RUNTIME = undefined;
+        process.env.CIRCUIT_SHOW_RUNTIME_DECISION = undefined;
       } else {
-        process.env.CIRCUIT_V2_RUNTIME = oldStrict;
+        process.env.CIRCUIT_SHOW_RUNTIME_DECISION = oldStrict;
       }
     }
   });
 
-  it('fails closed for retained checkpoint folders in status and resume', async () => {
-    const runFolder = join(runFolderBase, 'retained-status-and-resume');
-    writeRetainedCheckpointFolder({
+  it('fails closed for invalid checkpoint folders in status and resume', async () => {
+    const runFolder = join(runFolderBase, 'kept-status-and-resume');
+    writeInvalidCheckpointFolder({
       runFolder,
       runId: 'b3000000-0000-0000-0000-000000000019',
-      goal: 'Project retained checkpoint before resume',
+      goal: 'Project invalid checkpoint before resume',
     });
 
     const status = await captureStdout(() =>
@@ -704,17 +703,17 @@ describe('Build checkpoint execution substrate', () => {
     expect(status.output).toMatchObject({
       api_version: 'run-status-v1',
       engine_state: 'invalid',
-      reason: 'unknown',
+      reason: 'trace_invalid',
       legal_next_actions: ['none'],
       error: {
-        code: 'retired_runtime_run_folder',
-        message: RETIRED_RUNTIME_RUN_FOLDER_MESSAGE,
+        code: 'trace_bootstrap_invalid',
+        message: 'trace is missing or invalid for this run folder',
       },
     });
 
-    const oldDisabled = process.env.CIRCUIT_DISABLE_V2_RUNTIME;
+    const oldDisabled = process.env.CIRCUIT_SHOW_RUNTIME_DECISION;
     const oldDiagnostics = process.env.CIRCUIT_SHOW_RUNTIME_DECISION;
-    process.env.CIRCUIT_DISABLE_V2_RUNTIME = '1';
+    process.env.CIRCUIT_SHOW_RUNTIME_DECISION = '1';
     process.env.CIRCUIT_SHOW_RUNTIME_DECISION = '1';
     try {
       const resumed = await captureOutput(() =>
@@ -726,12 +725,12 @@ describe('Build checkpoint execution substrate', () => {
 
       expect(resumed.code).toBe(2);
       expect(resumed.stdout).toBe('');
-      expect(resumed.stderr.trim()).toBe(`error: ${RETIRED_RUNTIME_RUN_FOLDER_MESSAGE}`);
+      expect(resumed.stderr.trim()).toBe(`error: ${INVALID_RUN_FOLDER_MESSAGE}`);
     } finally {
       if (oldDisabled === undefined) {
-        process.env.CIRCUIT_DISABLE_V2_RUNTIME = undefined;
+        process.env.CIRCUIT_SHOW_RUNTIME_DECISION = undefined;
       } else {
-        process.env.CIRCUIT_DISABLE_V2_RUNTIME = oldDisabled;
+        process.env.CIRCUIT_SHOW_RUNTIME_DECISION = oldDisabled;
       }
       if (oldDiagnostics === undefined) {
         process.env.CIRCUIT_SHOW_RUNTIME_DECISION = undefined;

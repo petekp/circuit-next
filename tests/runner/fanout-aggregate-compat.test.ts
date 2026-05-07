@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildFanoutAggregateV2 } from '../../src/core-v2/fanout/aggregate-report.js';
-import {
-  type FanoutAggregateBody,
-  buildFanoutAggregate,
-} from '../../src/shared/fanout-aggregate-report.js';
+import { buildFanoutAggregate } from '../../src/runtime/fanout/aggregate-report.js';
+import type { FanoutAggregateBody } from '../../src/shared/fanout-aggregate-report.js';
 
 describe('fanout aggregate report', () => {
   it('builds the durable aggregate report shape from branch outcomes', () => {
@@ -17,6 +14,7 @@ describe('fanout aggregate report', () => {
           child_outcome: 'complete',
           verdict: 'accept',
           admitted: true,
+          worktree_path: '/tmp/worktree-a',
           result_path: 'reports/branches/a/result.json',
           duration_ms: 12,
           result_body: { verdict: 'accept', summary: 'accepted' },
@@ -27,6 +25,7 @@ describe('fanout aggregate report', () => {
           child_outcome: 'aborted',
           verdict: '<no-verdict>',
           admitted: false,
+          worktree_path: '/tmp/worktree-b',
           result_path: 'reports/branches/b/result.json',
           duration_ms: 30,
         },
@@ -63,7 +62,7 @@ describe('fanout aggregate report', () => {
     } satisfies FanoutAggregateBody<'pick-winner'>);
   });
 
-  it('keeps core-v2 aggregate output identical to the shared helper', () => {
+  it('keeps runtime aggregate output identical to the shared helper', () => {
     const outcomes = [
       {
         branch_id: 'a',
@@ -78,7 +77,7 @@ describe('fanout aggregate report', () => {
       },
     ];
 
-    expect(buildFanoutAggregateV2('aggregate-only', outcomes)).toEqual(
+    expect(buildFanoutAggregate('aggregate-only', outcomes)).toEqual(
       buildFanoutAggregate('aggregate-only', outcomes, undefined),
     );
   });

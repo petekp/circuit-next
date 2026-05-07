@@ -23,7 +23,7 @@ import { type RelayResult, sha256Hex } from './shared.js';
 // shape produced by both the `agent` and `codex` connectors per
 // `./shared.ts`), writes the four on-disk transcript slots (request
 // payload, receipt, result bytes, materialized report), and returns
-// the trace_entry array for the caller to append through the core-v2
+// the trace_entry array for the caller to append through the runtime
 // `TraceStore`.
 //
 // Why live in `src/connectors/`.
@@ -51,7 +51,7 @@ export interface RelayMaterializeInput {
   readonly connector: ResolvedConnector;
   // Selection + provenance are REQUIRED inputs to materialization rather
   // than hardcoded defaults. The materializer is fail-closed at the type
-  // boundary: callers MUST compute and pass the real values. The core-v2
+  // boundary: callers MUST compute and pass the real values. The runtime
   // relay executor derives them from connector resolution and the full
   // default/user-global/project/flow/stage/step/invocation selection resolver.
   readonly resolvedSelection: ResolvedSelection;
@@ -82,12 +82,12 @@ export interface RelayMaterializeOutput {
 // that case `priorStart` carries the already-durable request hash and this
 // materializer emits only receipt/result/completed trace_entries.
 // Caller is responsible for appending the trace_entries through the current
-// core-v2 trace store.
+// runtime trace store.
 //
 // Materialization rule: when `writes.report` is declared, after BOTH
 // the verdict check AND the schema parse pass, the runtime materializes
 // the report at `writes.report.path` from the `result` payload.
-// Verdict-check evaluation and schema-parse both live in the core-v2 relay
+// Verdict-check evaluation and schema-parse both live in the runtime relay
 // executor; by the time `writes.report` reaches this function the caller has
 // already decided that the report is safe to write. Schema parsing uses the report schema
 // registry at `src/flows/registries/report-schemas.ts`; unknown schema names

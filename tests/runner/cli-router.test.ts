@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { main } from '../../src/cli/circuit.js';
@@ -9,10 +9,6 @@ import { ReviewIntake } from '../../src/flows/review/reports.js';
 import { ProgressEvent } from '../../src/schemas/progress-event.js';
 import type { RelayResult } from '../../src/shared/connector-relay.js';
 import type { RelayFn, RelayInput } from '../../src/shared/relay-runtime-types.js';
-import {
-  RETIRED_RUNTIME_FRESH_INVOCATION_MESSAGE,
-  RETIRED_RUNTIME_RUN_FOLDER_MESSAGE,
-} from '../../src/shared/retired-runtime-policy.js';
 
 const EXPLORE_SYNTHESIS_BODY = JSON.stringify({
   verdict: 'accept',
@@ -189,14 +185,14 @@ function migrateCliRelayer(): RelayFn {
 
       if (
         input.prompt.includes('Step: review-step') &&
-        input.prompt.includes('Accepted verdicts: cutover-approved, cutover-with-followups')
+        input.prompt.includes('Accepted verdicts: release-approved, release-with-followups')
       ) {
         return {
           request_payload: input.prompt,
           receipt_id: 'stub-cli-migrate-review',
           result_body: JSON.stringify({
-            verdict: 'cutover-approved',
-            summary: 'Cutover approved for the synthetic migration.',
+            verdict: 'release-approved',
+            summary: 'Release approved for the synthetic migration.',
             findings: [],
           }),
           duration_ms: 1,
@@ -235,87 +231,6 @@ function traceEntryLog(runFolder: string): Array<Record<string, unknown>> {
     .split('\n')
     .filter((line) => line.length > 0)
     .map((line) => JSON.parse(line) as Record<string, unknown>);
-}
-
-function writeCliFixFixture(path: string): void {
-  mkdirSync(dirname(path), { recursive: true });
-  const composeStep = (id: string, title: string, reportPath: string, next: string) => ({
-    id,
-    title,
-    protocol: `${id}@v1`,
-    reads: [],
-    routes: { pass: next },
-    executor: 'orchestrator',
-    kind: 'compose',
-    writes: { report: { path: reportPath, schema: 'fix.brief@v1' } },
-    check: {
-      kind: 'schema_sections',
-      source: { kind: 'report', ref: 'report' },
-      required: ['problem_statement', 'success_criteria'],
-    },
-  });
-  const steps = [
-    composeStep('frame-step', 'Frame', 'reports/fix/frame-brief.json', 'analyze-step'),
-    composeStep('analyze-step', 'Analyze', 'reports/fix/analyze-brief.json', 'act-step'),
-    composeStep('act-step', 'Fix', 'reports/fix/act-brief.json', 'verify-step'),
-    composeStep('verify-step', 'Verify', 'reports/fix/verify-brief.json', 'review-step'),
-    composeStep('review-step', 'Review', 'reports/fix/review-brief.json', 'close-step'),
-    composeStep('close-step', 'Close', 'reports/fix/close-brief.json', '@complete'),
-  ];
-
-  writeFileSync(
-    path,
-    `${JSON.stringify(
-      {
-        schema_version: '2',
-        id: 'fix',
-        version: '0.1.0',
-        purpose: 'CLI router test fixture for Fix entry-mode selection.',
-        entry: { signals: { include: [], exclude: [] }, intent_prefixes: [] },
-        entry_modes: [
-          {
-            name: 'default',
-            start_at: 'frame-step',
-            depth: 'standard',
-            description: 'Default Fix test mode.',
-          },
-          {
-            name: 'lite',
-            start_at: 'frame-step',
-            depth: 'lite',
-            description: 'Lite Fix test mode.',
-          },
-          {
-            name: 'deep',
-            start_at: 'frame-step',
-            depth: 'deep',
-            description: 'Deep Fix test mode.',
-          },
-        ],
-        stages: [
-          { id: 'frame-stage', title: 'Frame', canonical: 'frame', steps: ['frame-step'] },
-          {
-            id: 'analyze-stage',
-            title: 'Analyze',
-            canonical: 'analyze',
-            steps: ['analyze-step'],
-          },
-          { id: 'act-stage', title: 'Fix', canonical: 'act', steps: ['act-step'] },
-          { id: 'verify-stage', title: 'Verify', canonical: 'verify', steps: ['verify-step'] },
-          { id: 'review-stage', title: 'Review', canonical: 'review', steps: ['review-step'] },
-          { id: 'close-stage', title: 'Close', canonical: 'close', steps: ['close-step'] },
-        ],
-        stage_path_policy: {
-          mode: 'partial',
-          omits: ['plan'],
-          rationale: 'CLI test fixture: Fix folds planning into diagnosis.',
-        },
-        steps,
-      },
-      null,
-      2,
-    )}\n`,
-  );
 }
 
 async function runMainJson(
@@ -473,7 +388,7 @@ async function runMainExit(argv: readonly string[]): Promise<{ exit: number; std
   }
 }
 
-async function runMainRetiredRuntimeFailure(
+async function runMainUnsupportedRuntimeFailure(
   argv: readonly string[],
 ): Promise<{ exit: number; stderr: string }> {
   let stdout = '';
@@ -497,7 +412,7 @@ async function runMainRetiredRuntimeFailure(
       configCwd: process.cwd(),
     });
     expect(stdout).toBe('');
-    expect(stderr).toContain(`error: ${RETIRED_RUNTIME_FRESH_INVOCATION_MESSAGE}`);
+    expect(stderr).toContain(`error: ${'unsupported runtime invocation'}`);
     const runFolderFlag = argv.indexOf('--run-folder');
     if (runFolderFlag >= 0) {
       const runFolder = argv[runFolderFlag + 1];
@@ -513,13 +428,13 @@ async function runMainRetiredRuntimeFailure(
   }
 }
 
-async function withStrictV2<T>(operation: () => Promise<T>): Promise<T> {
-  const originalStrictRuntime = process.env.CIRCUIT_V2_RUNTIME;
+async function withStrictruntime<T>(operation: () => Promise<T>): Promise<T> {
+  const originalStrictRuntime = process.env.CIRCUIT_SHOW_RUNTIME_DECISION;
   try {
-    process.env.CIRCUIT_V2_RUNTIME = '1';
+    process.env.CIRCUIT_SHOW_RUNTIME_DECISION = '1';
     return await operation();
   } finally {
-    process.env.CIRCUIT_V2_RUNTIME = originalStrictRuntime;
+    process.env.CIRCUIT_SHOW_RUNTIME_DECISION = originalStrictRuntime;
   }
 }
 
@@ -985,17 +900,13 @@ describe('CLI router', () => {
   });
 
   it('uses classifier-inferred Fix lite mode only for explicit quick Fix intent', async () => {
-    const fixturePath = join(runFolderBase, 'fixtures', 'fix.json');
     const runFolder = join(runFolderBase, 'fix-lite-inferred');
-    writeCliFixFixture(fixturePath);
 
-    const { output, progress } = await withStrictV2(() =>
+    const { output, progress } = await withStrictruntime(() =>
       runMainJsonWithProgress(
         [
           '--goal',
           'quick fix: restore the missing token edge case',
-          '--fixture',
-          fixturePath,
           '--progress',
           'jsonl',
           '--run-folder',
@@ -1020,17 +931,13 @@ describe('CLI router', () => {
   });
 
   it('uses classifier-inferred Fix deep mode for bare serious Fix intent', async () => {
-    const fixturePath = join(runFolderBase, 'fixtures', 'fix-deep-inferred.json');
     const runFolder = join(runFolderBase, 'fix-deep-inferred');
-    writeCliFixFixture(fixturePath);
 
-    const { output, progress } = await withStrictV2(() =>
+    const { output, progress } = await withStrictruntime(() =>
       runMainJsonWithProgress(
         [
           '--goal',
           'fix: restore the missing token regression test',
-          '--fixture',
-          fixturePath,
           '--progress',
           'jsonl',
           '--run-folder',
@@ -1055,19 +962,15 @@ describe('CLI router', () => {
   });
 
   it('lets explicit --mode override classifier-inferred Fix mode', async () => {
-    const fixturePath = join(runFolderBase, 'fixtures', 'fix-explicit-default.json');
     const runFolder = join(runFolderBase, 'fix-explicit-default-mode');
-    writeCliFixFixture(fixturePath);
 
-    const output = await withStrictV2(() =>
+    const output = await withStrictruntime(() =>
       runMainJson(
         [
           '--goal',
           'fix: restore the missing token regression test',
           '--mode',
           'default',
-          '--fixture',
-          fixturePath,
           '--run-folder',
           runFolder,
         ],
@@ -1087,7 +990,7 @@ describe('CLI router', () => {
   it('fails closed when explicit --depth suppresses classifier-inferred Fix mode into an unproven route', async () => {
     const runFolder = join(runFolderBase, 'fix-explicit-depth');
 
-    const result = await runMainRetiredRuntimeFailure([
+    const result = await runMainUnsupportedRuntimeFailure([
       '--goal',
       'fix: restore the missing token regression test',
       '--depth',
@@ -1132,7 +1035,7 @@ describe('CLI router', () => {
 
   it('fails closed when --depth overrides the selected --entry-mode into an unproven route', async () => {
     const runFolder = join(runFolderBase, 'build-entry-mode-depth-override');
-    const result = await runMainRetiredRuntimeFailure([
+    const result = await runMainUnsupportedRuntimeFailure([
       'build',
       '--goal',
       'Add a tiny Build feature from the CLI with an override',
@@ -1150,7 +1053,7 @@ describe('CLI router', () => {
 
   it('fails closed when explicit autonomous --depth overrides the default --entry-mode', async () => {
     const runFolder = join(runFolderBase, 'build-default-entry-autonomous-override');
-    const result = await runMainRetiredRuntimeFailure([
+    const result = await runMainUnsupportedRuntimeFailure([
       'build',
       '--goal',
       'Add a tiny Build feature from the CLI with autonomous override',
@@ -1229,7 +1132,7 @@ describe('CLI router', () => {
     });
   });
 
-  it('fails closed when resuming a retained checkpoint_waiting run', async () => {
+  it('fails closed when resuming a invalid checkpoint_waiting run', async () => {
     const runFolder = join(runFolderBase, 'checkpoint-resume');
     mkdirSync(runFolder, { recursive: true });
     writeFileSync(
@@ -1246,7 +1149,9 @@ describe('CLI router', () => {
     ]);
 
     expect(resumed.exit).toBe(2);
-    expect(resumed.stderr.trim()).toBe(`error: ${RETIRED_RUNTIME_RUN_FOLDER_MESSAGE}`);
+    expect(resumed.stderr.trim()).toBe(
+      `error: ${'run folder is not a resumable Circuit run folder'}`,
+    );
   });
 
   it('rejects resume-only incompatible flags', async () => {

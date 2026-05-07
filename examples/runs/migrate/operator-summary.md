@@ -1,6 +1,6 @@
 # Circuit Summary
 
-Circuit finished Migrate with outcome complete. Verification: passed. Review: cutover-approved.
+Circuit finished Migrate with outcome complete. Verification: passed. Review: release-approved.
 
 ## What Happened
 
@@ -13,9 +13,9 @@ Circuit finished Migrate with outcome complete. Verification: passed. Review: cu
 
 - Worker access: This flow may invoke a write-capable Claude Code worker. Circuit will verify and review the result, but the worker can edit files in this checkout.
 - Run note: Run closed with outcome complete via @complete.
-- Result: replace a small legacy API: Cutover approved for the synthetic migration proof.
+- Result: replace a small legacy API: Release approved for the synthetic migration proof.
 - Verification: passed
-- Review verdict: cutover-approved
+- Review verdict: release-approved
 
 ## Evidence Warnings
 

@@ -72,10 +72,10 @@ capabilities:
       invocation: "/circuit:migrate and /circuit:run migrate:"
       intent_hints: ["migrate:"]
       modes: [default, deep, autonomous]
-      stage_path: [Frame, Inventory, Coexistence Plan, Batch Execution, Verify, Cutover Review, Close]
+      stage_path: [Frame, Inventory, Coexistence Plan, Batch Execution, Verify, Release Review, Close]
       outputs: [brief.md, inventory.md, plan.md, review.md, result.md]
       checkpoint: Coexistence plan checkpoint is first-class.
-      review: Cutover review checks migration safety.
+      review: Release review checks migration safety.
       verification: Each batch is independently verifiable.
       worker_handoff: Batch execution can use Build as inner executor.
       continuity: Migration plan and active run continue across sessions.

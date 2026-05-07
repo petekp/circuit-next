@@ -3,9 +3,9 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
-import { TraceStore } from '../../src/core-v2/trace/trace-store.js';
 import { ExploreCompose, ExploreReviewVerdict } from '../../src/flows/explore/reports.js';
+import { runCompiledFlow } from '../../src/runtime/run/compiled-flow-runner.js';
+import { TraceStore } from '../../src/runtime/trace/trace-store.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { LayeredConfig } from '../../src/schemas/config.js';
 import { SkillId } from '../../src/schemas/ids.js';
@@ -259,7 +259,7 @@ describe('P2-MODEL-EFFORT — full selection precedence resolver', () => {
         ExploreCompose.parse({
           verdict: 'accept',
           subject: 'prove model effort selection reaches relay evidence',
-          recommendation: 'Proceed with the core-v2 relay selection proof.',
+          recommendation: 'Proceed with the runtime relay selection proof.',
           success_condition_alignment: 'The relay received the expected resolved selection.',
           supporting_aspects: [
             {
@@ -273,7 +273,7 @@ describe('P2-MODEL-EFFORT — full selection precedence resolver', () => {
       JSON.stringify(
         ExploreReviewVerdict.parse({
           verdict: 'accept',
-          overall_assessment: 'The core-v2 relay selection proof is clean.',
+          overall_assessment: 'The runtime relay selection proof is clean.',
           objections: [],
           missed_angles: [],
         }),
@@ -295,7 +295,7 @@ describe('P2-MODEL-EFFORT — full selection precedence resolver', () => {
     };
 
     const runDir = join(runFolderBase, 'runtime-evidence');
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir,
       flowBytes: bytes,
       runId: '85858585-8585-4585-8585-858585858585',

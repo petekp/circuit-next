@@ -153,10 +153,10 @@ describe('operator summary writer', () => {
         label: 'Migrate',
         relPath: 'reports/migrate-result.json',
         body: {
-          summary: 'Migrate SDK: cutover approved',
+          summary: 'Migrate SDK: release approved',
           outcome: 'complete',
           verification_status: 'passed',
-          review_verdict: 'cutover-approved',
+          review_verdict: 'release-approved',
           evidence_links: [
             {
               report_id: 'migrate.review',
@@ -166,7 +166,7 @@ describe('operator summary writer', () => {
           ],
         },
         expected:
-          'Circuit finished Migrate with outcome complete. Verification: passed. Review: cutover-approved.',
+          'Circuit finished Migrate with outcome complete. Verification: passed. Review: release-approved.',
       },
     ];
 

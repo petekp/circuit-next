@@ -4,8 +4,6 @@ import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { ClaudeCodeRelayInput } from '../../src/connectors/claude-code.js';
-import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
-import { TraceStore } from '../../src/core-v2/trace/trace-store.js';
 import {
   SweepAnalysis,
   SweepBatch,
@@ -15,6 +13,8 @@ import {
   SweepReview,
   SweepVerification,
 } from '../../src/flows/sweep/reports.js';
+import { runCompiledFlow } from '../../src/runtime/run/compiled-flow-runner.js';
+import { TraceStore } from '../../src/runtime/trace/trace-store.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import type { RelayResult } from '../../src/shared/connector-relay.js';
 import type { RelayFn } from '../../src/shared/relay-runtime-types.js';
@@ -195,7 +195,7 @@ describe('Sweep runtime wiring', () => {
     const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'complete');
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: '57000000-0000-0000-0000-000000000000',
@@ -304,7 +304,7 @@ describe('Sweep runtime wiring', () => {
       ],
     });
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: '57000000-0000-0000-0000-000000000001',
@@ -336,7 +336,7 @@ describe('Sweep runtime wiring', () => {
     const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'bad-analysis');
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: '57000000-0000-0000-0000-000000000002',
@@ -362,7 +362,7 @@ describe('Sweep runtime wiring', () => {
     const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'review-critical');
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: '57000000-0000-0000-0000-000000000003',

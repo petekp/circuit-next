@@ -4,7 +4,7 @@ import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { CompiledFlow } from '../schemas/compiled-flow.js';
 import { validateCompiledFlowKindPolicy } from '../shared/flow-kind-policy.js';
-import { CUSTOM_FLOW_ROOT_RUNTIME_POLICY } from './runtime-compatibility-policy.js';
+import { CUSTOM_FLOW_ROOT_RUNTIME_POLICY } from './runtime-routing-policy.js';
 import { utilityProgress } from './utility-progress.js';
 
 interface CreateArgs {
@@ -155,9 +155,7 @@ function flowRoot(home: string): string {
 }
 
 function customFlowInvocation(slug: string, home: string): string {
-  return `CIRCUIT_V2_RUNTIME=1 circuit-next run ${slug} --flow-root '${flowRoot(
-    home,
-  )}' --goal '<task>' --progress jsonl`;
+  return `circuit-next run ${slug} --flow-root '${flowRoot(home)}' --goal '<task>' --progress jsonl`;
 }
 
 function commandRoot(home: string): string {

@@ -4,16 +4,16 @@ import { dirname, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { relayClaudeCode } from '../../src/connectors/claude-code.js';
-import type { TraceEntryV2 } from '../../src/core-v2/domain/trace.js';
-import type { ExecutorRegistryV2 } from '../../src/core-v2/executors/index.js';
-import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
-import { TraceStore } from '../../src/core-v2/trace/trace-store.js';
+import type { TraceEntry } from '../../src/runtime/domain/trace.js';
+import type { ExecutorRegistry } from '../../src/runtime/executors/index.js';
+import { runCompiledFlow } from '../../src/runtime/run/compiled-flow-runner.js';
+import { TraceStore } from '../../src/runtime/trace/trace-store.js';
 import { sha256Hex } from '../../src/shared/connector-relay.js';
 import type { RelayFn } from '../../src/shared/relay-runtime-types.js';
 
 // Claude Code relay round-trip.
 //
-// The opt-in branch runs the generated runtime-proof flow through core-v2 with
+// The opt-in branch runs the generated runtime-proof flow through runtime with
 // the real Claude Code connector. It asserts the durable relay transcript in
 // trace.ndjson and the materialized request / receipt / result files. The live
 // subprocess path is skipped by default so CI and unauthenticated developer runs
@@ -38,7 +38,7 @@ function claudeCodeRelayer(): RelayFn {
   };
 }
 
-function composeExecutor(): Pick<ExecutorRegistryV2, 'compose'> {
+function composeExecutor(): Pick<ExecutorRegistry, 'compose'> {
   return {
     compose: async (step, context) => {
       if (step.kind !== 'compose') throw new Error('expected compose step');
@@ -71,11 +71,11 @@ function composeExecutor(): Pick<ExecutorRegistryV2, 'compose'> {
   };
 }
 
-async function readTrace(runFolder: string): Promise<readonly TraceEntryV2[]> {
+async function readTrace(runFolder: string): Promise<readonly TraceEntry[]> {
   return await new TraceStore(runFolder).load();
 }
 
-function relayEntry(trace: readonly TraceEntryV2[], kind: TraceEntryV2['kind']): TraceEntryV2 {
+function relayEntry(trace: readonly TraceEntry[], kind: TraceEntry['kind']): TraceEntry {
   const entry = trace.find((candidate) => candidate.kind === kind);
   if (entry === undefined) throw new Error(`expected ${kind} trace entry`);
   return entry;
@@ -92,8 +92,8 @@ afterEach(() => {
 });
 
 describe('agent relay round-trip', () => {
-  it('static: core-v2 runner and trace store are available for connector transcript capture', () => {
-    expect(typeof runCompiledFlowV2).toBe('function');
+  it('static: runtime runner and trace store are available for connector transcript capture', () => {
+    expect(typeof runCompiledFlow).toBe('function');
     expect(typeof TraceStore).toBe('function');
   });
 
@@ -115,10 +115,10 @@ describe('agent relay round-trip', () => {
   });
 
   (AGENT_SMOKE ? it : it.skip)(
-    'end-to-end: core-v2 runtime-proof flow uses real Claude Code relay and persists the relay transcript',
+    'end-to-end: runtime runtime-proof flow uses real Claude Code relay and persists the relay transcript',
     async () => {
       const runFolder = join(runFolderBase, 'claude-code-runtime-proof');
-      const outcome = await runCompiledFlowV2({
+      const outcome = await runCompiledFlow({
         runDir: runFolder,
         flowBytes: loadRuntimeProofBytes(),
         runId: '42424242-4242-4242-4242-424242424242',

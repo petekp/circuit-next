@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
-import { TraceStore } from '../../src/core-v2/trace/trace-store.js';
+import { runCompiledFlow } from '../../src/runtime/run/compiled-flow-runner.js';
+import { TraceStore } from '../../src/runtime/trace/trace-store.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 
 import type { RelayResult } from '../../src/shared/connector-relay.js';
@@ -25,7 +25,7 @@ import type { RelayFn, RelayInput } from '../../src/shared/relay-runtime-types.j
 //   - Failure-path trace_entry surface is uniform across both: parse
 //     failure emits `check.evaluated outcome=fail` + reason, then
 //     `step.aborted` with the same reason, then `run.closed` with
-//     `outcome=aborted`. Core-v2 preserves the check reason on
+//     `outcome=aborted`. Runtime preserves the check reason on
 //     `step.aborted` and wraps it with step context at `run.closed`.
 //     This content/schema-failure path does not emit `relay.failed`;
 //     that trace_entry is reserved for connector
@@ -102,7 +102,7 @@ async function runMaterializerCase(input: {
   readonly goal: string;
   readonly resultBody: string;
 }) {
-  const result = await runCompiledFlowV2({
+  const result = await runCompiledFlow({
     runDir: input.runFolder,
     flowBytes: input.bytes,
     runId: input.runId,
@@ -226,7 +226,7 @@ describe('materializer schema-parse', () => {
     if (closed?.kind !== 'run.closed') throw new Error('expected run.closed');
     expect(closed.outcome).toBe('aborted');
 
-    // Core-v2 keeps the check reason byte-identical through step.aborted,
+    // Runtime keeps the check reason byte-identical through step.aborted,
     // then wraps it at run.closed/result.json with the step handler context.
     expect(ge.reason).toBe(aborted.reason);
     expect(closed.reason).toContain(aborted.reason);

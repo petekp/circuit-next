@@ -24,7 +24,7 @@ import type { RunClosedOutcome, TraceEntry } from '../schemas/trace-entry.js';
 //   result_verdict checks represent verdict admission.
 //
 // Why this is safe across re-routes / retries:
-//   The retained runner emits check.evaluated outcome='pass' only on the
+//   The unrecognized runner emits check.evaluated outcome='pass' only on the
 //   route actually taken to @complete. Every matching (step_id, attempt)
 //   is therefore a step whose verdict was admitted on that path.
 export function deriveTerminalVerdict(

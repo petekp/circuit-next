@@ -511,7 +511,7 @@ Stage 2 harness task where noted below.
   the entire selection triplet (SEL-I8); `Stage.selection:
   SelectionOverride.optional()` added to close stage.md v0.1 MED #7
   (SEL-I9); legacy `CompiledFlow.default_skills` and
-  `CircuitOverride.skills` channels removed (HIGH #5); back-compat
+  `CircuitOverride.skills` channels removed (HIGH #5); backward support
   `SelectionPolicy` alias removed. Stage 2 property ids added for the
   honestly-scoped gaps: `resolved_matches_applied_composition` (HIGH
   #3), `config_layer_precompose_is_right_biased` (HIGH #6),

@@ -12,8 +12,6 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
-import { TraceStore } from '../../src/core-v2/trace/trace-store.js';
 import {
   type ReviewFinding,
   ReviewIntake,
@@ -22,6 +20,8 @@ import {
   type ReviewResultVerdict,
   computeReviewVerdict,
 } from '../../src/flows/review/reports.js';
+import { runCompiledFlow } from '../../src/runtime/run/compiled-flow-runner.js';
+import { TraceStore } from '../../src/runtime/trace/trace-store.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { ProgressEvent } from '../../src/schemas/progress-event.js';
 
@@ -149,7 +149,7 @@ describe('registered review compose writer', () => {
     const runFolder = join(runFolderBase, 'default-registered-review-writer');
     const goal = 'Review scope with the default registered compose writer';
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: '79000000-0000-0000-0000-000000000000',
@@ -190,7 +190,7 @@ describe('registered review compose writer', () => {
     writeFileSync(join(projectRoot, 'src', 'review-target.ts'), 'const answer = 42;\n');
     execFileSync('git', ['add', 'src/review-target.ts'], { cwd: projectRoot, stdio: 'pipe' });
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: '79000000-0000-0000-0000-000000000005',
@@ -228,7 +228,7 @@ describe('registered review compose writer', () => {
     execFileSync('git', ['init'], { cwd: projectRoot, stdio: 'pipe' });
     writeFileSync(join(projectRoot, 'scratch-notes.txt'), `${secret}\n`);
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: '79000000-0000-0000-0000-000000000009',
@@ -278,7 +278,7 @@ describe('registered review compose writer', () => {
     execFileSync('git', ['init'], { cwd: projectRoot, stdio: 'pipe' });
     writeFileSync(join(projectRoot, 'scratch-notes.txt'), `${scratch}\n`);
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: '79000000-0000-0000-0000-000000000010',
@@ -345,7 +345,7 @@ describe('registered review compose writer', () => {
       stdio: 'pipe',
     });
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: '79000000-0000-0000-0000-000000000006',
@@ -401,7 +401,7 @@ describe('registered review compose writer', () => {
     chmodSync(unreadablePath, 0o000);
 
     try {
-      const outcome = await runCompiledFlowV2({
+      const outcome = await runCompiledFlow({
         runDir: runFolder,
         flowBytes: bytes,
         runId: '79000000-0000-0000-0000-000000000007',
@@ -447,7 +447,7 @@ describe('registered review compose writer', () => {
     writeFileSync(join(projectRoot, 'binary.dat'), Buffer.from([0x61, 0x00, 0x62]));
     writeFileSync(join(projectRoot, 'large.txt'), `${'x'.repeat(25_000)}\n`);
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: '79000000-0000-0000-0000-000000000011',
@@ -488,7 +488,7 @@ describe('registered review compose writer', () => {
     const runFolder = join(runFolderBase, 'unavailable-evidence-warning');
     const progress: ProgressEvent[] = [];
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: '79000000-0000-0000-0000-000000000008',
@@ -538,7 +538,7 @@ describe('registered review compose writer', () => {
       ],
     } satisfies ReviewRelayResult;
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: '79000000-0000-0000-0000-000000000003',
@@ -566,7 +566,7 @@ describe('registered review compose writer', () => {
     const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'bad-review-relay-shape');
 
-    const outcome = await runCompiledFlowV2({
+    const outcome = await runCompiledFlow({
       runDir: runFolder,
       flowBytes: bytes,
       runId: '79000000-0000-0000-0000-000000000004',
@@ -615,7 +615,7 @@ describe('registered review compose writer', () => {
       const runFolder = join(runFolderBase, name.replaceAll(' ', '-'));
       const goal = `Review scope for ${name}`;
 
-      const outcome = await runCompiledFlowV2({
+      const outcome = await runCompiledFlow({
         runDir: runFolder,
         flowBytes: bytes,
         runId,

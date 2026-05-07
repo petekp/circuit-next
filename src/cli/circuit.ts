@@ -2,11 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
-import type { ExecutorRegistryV2 } from '../core-v2/executors/index.js';
-import { isCoreV2RunFolder, resumeCompiledFlowV2 } from '../core-v2/run/checkpoint-resume.js';
-import type { ChildCompiledFlowResolverV2 } from '../core-v2/run/child-runner.js';
-import { runCompiledFlowV2WithWaiting } from '../core-v2/run/compiled-flow-runner.js';
-import { isGraphCheckpointWaitingResultV2 } from '../core-v2/run/graph-runner.js';
+import type { ExecutorRegistry } from '../runtime/executors/index.js';
+import { isRuntimeRunFolder, resumeCompiledFlow } from '../runtime/run/checkpoint-resume.js';
+import type { ChildCompiledFlowResolver } from '../runtime/run/child-runner.js';
+import { runCompiledFlowWithWaiting } from '../runtime/run/compiled-flow-runner.js';
+import { isGraphCheckpointWaitingResult } from '../runtime/run/graph-runner.js';
 import { CompiledFlow } from '../schemas/compiled-flow.js';
 import { Depth } from '../schemas/depth.js';
 import { CompiledFlowId, RunId } from '../schemas/ids.js';
@@ -23,26 +23,18 @@ import { discoverConfigLayers } from '../shared/config-loader.js';
 import { validateCompiledFlowKindPolicy } from '../shared/flow-kind-policy.js';
 import { writeOperatorSummary } from '../shared/operator-summary-writer.js';
 import type { ComposeWriterFn, RelayFn } from '../shared/relay-runtime-types.js';
-import {
-  RETIRED_RUNTIME_FRESH_INVOCATION_MESSAGE,
-  RETIRED_RUNTIME_RUN_FOLDER_MESSAGE,
-} from '../shared/retired-runtime-policy.js';
 import { runCreateCommand } from './create.js';
 import { runHandoffCommand } from './handoff.js';
 import { runRunsCommand } from './runs.js';
 import {
   CLI_RUNTIME_ROUTING_POLICY,
   RUNTIME_POLICY_REASONS,
-  type RuntimeSupportDecision as V2RuntimeSupportDecision,
-  applyCandidateFixturePolicy,
+  type RuntimeSupportDecision,
   applyComposeWriterPolicy,
-  assertStrictV2FreshRunSupported,
-  disableDefaultV2Runtime,
-  disabledV2Decision,
+  applyFixturePolicy,
   runtimeOutputFields,
   showRuntimeDecision,
-  useV2Runtime,
-} from './runtime-compatibility-policy.js';
+} from './runtime-routing-policy.js';
 
 // Runtime CLI entry point — invoked through ./bin/circuit-next.
 //
@@ -63,12 +55,12 @@ import {
 const DEFAULT_RUNS_BASE = '.circuit-next/runs';
 const MAX_PROGRESS_DISPLAY_TEXT_CHARS = 240;
 
-interface V2RuntimeSupportRow {
+interface RuntimeSupportRow {
   readonly entryModeName: string;
   readonly depth: string;
 }
 
-const V2_RUNTIME_SUPPORT_MATRIX: Record<string, readonly V2RuntimeSupportRow[]> = {
+const RUNTIME_SUPPORT_MATRIX: Record<string, readonly RuntimeSupportRow[]> = {
   review: [{ entryModeName: 'default', depth: 'standard' }],
   fix: [
     { entryModeName: 'default', depth: 'standard' },
@@ -101,8 +93,6 @@ const V2_RUNTIME_SUPPORT_MATRIX: Record<string, readonly V2RuntimeSupportRow[]> 
     { entryModeName: 'autonomous', depth: 'autonomous' },
   ],
 };
-
-const V2_RUNTIME_CANDIDATE_SUPPORT_MATRIX = V2_RUNTIME_SUPPORT_MATRIX;
 
 interface ParsedArgs {
   command?: 'run' | 'resume';
@@ -141,7 +131,7 @@ export interface CliMainOptions {
   runId?: string;
   configHomeDir?: string;
   configCwd?: string;
-  v2Executors?: Partial<ExecutorRegistryV2>;
+  runtimeExecutors?: Partial<ExecutorRegistry>;
 }
 
 export function usage(): string {
@@ -432,9 +422,7 @@ function loadFixture(fixturePath: string): { flow: CompiledFlow; bytes: Buffer }
   return { flow, bytes };
 }
 
-function defaultChildCompiledFlowResolverV2(
-  flowRoot: string | undefined,
-): ChildCompiledFlowResolverV2 {
+function defaultChildCompiledFlowResolver(flowRoot: string | undefined): ChildCompiledFlowResolver {
   return (ref) => {
     const fixturePath = resolveFixturePath(ref.flowId, ref.entryMode, undefined, flowRoot);
     const { bytes } = loadFixture(fixturePath);
@@ -517,17 +505,17 @@ function customFlowArchetype(input: {
   }
 }
 
-function classifyV2RuntimeSupport(input: {
+function classifyRuntimeSupport(input: {
   readonly flow: CompiledFlow;
   readonly args: ParsedArgs;
   readonly entryModeSelection: ResolvedEntryModeSelection;
   readonly fixturePath: string;
-  readonly supportMatrix?: Record<string, readonly V2RuntimeSupportRow[]>;
-}): V2RuntimeSupportDecision {
+  readonly supportMatrix?: Record<string, readonly RuntimeSupportRow[]>;
+}): RuntimeSupportDecision {
   const flowId = input.flow.id as unknown as string;
   const entryModeName = selectedEntryModeName(input.flow, input.entryModeSelection);
   const depth = selectedDepth(input.flow, input.args, input.entryModeSelection);
-  const supportMatrix = input.supportMatrix ?? V2_RUNTIME_SUPPORT_MATRIX;
+  const supportMatrix = input.supportMatrix ?? RUNTIME_SUPPORT_MATRIX;
   const customArchetype = customFlowArchetype({
     flow: input.flow,
     args: input.args,
@@ -540,44 +528,44 @@ function classifyV2RuntimeSupport(input: {
   const customArchetypeSupported = directRows === undefined && customArchetypeRows !== undefined;
   if (rows === undefined) {
     return {
-      kind: 'old-runtime-required',
+      kind: 'unsupported',
       flowId,
       entryModeName,
       depth,
-      reason: `flow '${flowId}' is not in the v2 runtime support matrix`,
+      reason: `flow '${flowId}' is not in the runtime support matrix`,
     };
   }
 
   const supported = rows.some((row) => row.entryModeName === entryModeName && row.depth === depth);
   if (supported) {
     return {
-      kind: 'v2-supported',
+      kind: 'supported',
       flowId,
       entryModeName,
       depth,
       reason: !customArchetypeSupported
-        ? `v2 supports fresh ${flowId} entry mode '${entryModeName}' at depth '${depth}'`
-        : `v2 supports custom flow '${flowId}' via '${customArchetype}' archetype entry mode '${entryModeName}' at depth '${depth}'`,
+        ? `runtime supports fresh ${flowId} entry mode '${entryModeName}' at depth '${depth}'`
+        : `runtime supports custom flow '${flowId}' via '${customArchetype}' archetype entry mode '${entryModeName}' at depth '${depth}'`,
     };
   }
 
   const hasCheckpoint = input.flow.steps.some((step) => step.kind === 'checkpoint');
   if ((depth === 'deep' || depth === 'tournament') && hasCheckpoint) {
     return {
-      kind: 'old-runtime-required',
+      kind: 'unsupported',
       flowId,
       entryModeName,
       depth,
-      reason: `checkpoint-waiting depth '${depth}' requires the retired checkpoint runtime`,
+      reason: `checkpoint-waiting depth '${depth}' is not supported for this flow`,
     };
   }
 
   return {
-    kind: 'old-runtime-required',
+    kind: 'unsupported',
     flowId,
     entryModeName,
     depth,
-    reason: `fresh ${flowId} entry mode '${entryModeName}' at depth '${depth}' is not v2-proven yet`,
+    reason: `fresh ${flowId} entry mode '${entryModeName}' at depth '${depth}' is not supported`,
   };
 }
 
@@ -611,17 +599,17 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
   ) {
     const runFolder = resolve(args.runFolder);
     const progress = progressReporter(args.progress === 'jsonl');
-    if (await isCoreV2RunFolder(runFolder)) {
-      const v2Result = await resumeCompiledFlowV2({
+    if (await isRuntimeRunFolder(runFolder)) {
+      const runtimeResult = await resumeCompiledFlow({
         runDir: runFolder,
         selection: args.checkpointChoice,
         now: options.now ?? (() => new Date()),
-        childCompiledFlowResolver: defaultChildCompiledFlowResolverV2(undefined),
-        ...(options.v2Executors === undefined ? {} : { executors: options.v2Executors }),
+        childCompiledFlowResolver: defaultChildCompiledFlowResolver(undefined),
+        ...(options.runtimeExecutors === undefined ? {} : { executors: options.runtimeExecutors }),
         ...(options.relayer === undefined ? {} : { relayer: options.relayer }),
         ...(progress === undefined ? {} : { progress }),
       });
-      const runResult = RunResult.parse(JSON.parse(readFileSync(v2Result.resultPath, 'utf8')));
+      const runResult = RunResult.parse(JSON.parse(readFileSync(runtimeResult.resultPath, 'utf8')));
       const operatorSummary = writeOperatorSummary({
         runFolder,
         runResult,
@@ -629,13 +617,11 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
           selectedFlow: runResult.flow_id as unknown as string,
         },
       });
-      const resumeRuntimeFields =
-        showRuntimeDecision() || useV2Runtime() || disableDefaultV2Runtime()
-          ? {
-              runtime: 'v2' as const,
-              runtime_reason: RUNTIME_POLICY_REASONS.v2CheckpointResume,
-            }
-          : {};
+      const resumeRuntimeFields = showRuntimeDecision()
+        ? {
+            runtime_reason: RUNTIME_POLICY_REASONS.checkpointResume,
+          }
+        : {};
       process.stdout.write(
         `${JSON.stringify(
           {
@@ -645,7 +631,7 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
             run_folder: runFolder,
             outcome: runResult.outcome,
             trace_entries_observed: runResult.trace_entries_observed,
-            result_path: v2Result.resultPath,
+            result_path: runtimeResult.resultPath,
             ...resumeRuntimeFields,
             operator_summary_path: operatorSummary.jsonPath,
             operator_summary_markdown_path: operatorSummary.markdownPath,
@@ -656,7 +642,7 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
       );
       return 0;
     }
-    process.stderr.write(`error: ${RETIRED_RUNTIME_RUN_FOLDER_MESSAGE}\n`);
+    process.stderr.write('error: run folder is not a resumable Circuit run folder\n');
     return 2;
   }
 
@@ -710,74 +696,52 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
 
   const projectRoot = resolve(options.configCwd ?? process.cwd());
 
-  const runtimeSupport = classifyV2RuntimeSupport({ flow, args, entryModeSelection, fixturePath });
-  const candidateSupport = classifyV2RuntimeSupport({
-    flow,
-    args,
-    entryModeSelection,
-    fixturePath,
-    supportMatrix: V2_RUNTIME_CANDIDATE_SUPPORT_MATRIX,
-  });
-  const strictRuntimeSupport = applyComposeWriterPolicy(candidateSupport, {
-    hasComposeWriter: options.composeWriter !== undefined,
-  });
-  const baseDefaultRuntimeSupport = applyComposeWriterPolicy(
-    applyCandidateFixturePolicy(runtimeSupport, {
+  const runtimeSupport = classifyRuntimeSupport({ flow, args, entryModeSelection, fixturePath });
+  const runtimeDecisionDiagnostics = showRuntimeDecision();
+  const defaultRuntimeSupport = applyComposeWriterPolicy(
+    applyFixturePolicy(runtimeSupport, {
       args,
       fixturePath,
     }),
     { hasComposeWriter: options.composeWriter !== undefined },
   );
-  const strictV2Runtime = useV2Runtime();
-  const runtimeDecisionDiagnostics = showRuntimeDecision();
-  const defaultV2RuntimeDisabled = disableDefaultV2Runtime();
-  const defaultRuntimeSupport = defaultV2RuntimeDisabled
-    ? disabledV2Decision(baseDefaultRuntimeSupport)
-    : baseDefaultRuntimeSupport;
-  if (strictV2Runtime) {
-    assertStrictV2FreshRunSupported(strictRuntimeSupport);
-  }
-  const routeToV2 =
-    (strictV2Runtime && strictRuntimeSupport.kind === 'v2-supported') ||
-    (!strictV2Runtime &&
-      !defaultV2RuntimeDisabled &&
-      defaultRuntimeSupport.kind === 'v2-supported');
+  const routeToRuntime = defaultRuntimeSupport.kind === 'supported';
 
-  if (routeToV2) {
-    const v2Result = await runCompiledFlowV2WithWaiting({
+  if (routeToRuntime) {
+    const runtimeResult = await runCompiledFlowWithWaiting({
       flowBytes: bytes,
       runDir: runFolder,
       runId,
       goal: args.goal,
       now,
       projectRoot,
-      childCompiledFlowResolver: defaultChildCompiledFlowResolverV2(args.flowRoot),
+      childCompiledFlowResolver: defaultChildCompiledFlowResolver(args.flowRoot),
       ...(args.depth === undefined ? {} : { depth: args.depth }),
       ...(entryModeSelection.entryModeName === undefined
         ? {}
         : { entryModeName: entryModeSelection.entryModeName }),
       ...(options.relayer === undefined ? {} : { relayer: options.relayer }),
-      ...(options.v2Executors === undefined ? {} : { executors: options.v2Executors }),
+      ...(options.runtimeExecutors === undefined ? {} : { executors: options.runtimeExecutors }),
       ...(selectionConfigLayers.length === 0 ? {} : { selectionConfigLayers }),
       ...(progress === undefined ? {} : { progress }),
       ...(args.includeUntrackedContent
         ? { evidencePolicy: { includeUntrackedFileContent: true } }
         : {}),
     });
-    if (isGraphCheckpointWaitingResultV2(v2Result)) {
+    if (isGraphCheckpointWaitingResult(runtimeResult)) {
       const waitingResult = {
         schema_version: 1 as const,
-        run_id: RunId.parse(v2Result.runId),
-        flow_id: CompiledFlowId.parse(v2Result.flowId),
+        run_id: RunId.parse(runtimeResult.runId),
+        flow_id: CompiledFlowId.parse(runtimeResult.flowId),
         goal: args.goal,
         outcome: 'checkpoint_waiting' as const,
-        summary: `checkpoint '${v2Result.checkpoint.stepId}' is waiting for an operator choice.`,
-        trace_entries_observed: v2Result.traceEntriesObserved,
+        summary: `checkpoint '${runtimeResult.checkpoint.stepId}' is waiting for an operator choice.`,
+        trace_entries_observed: runtimeResult.traceEntriesObserved,
         manifest_hash: computeManifestHash(bytes),
         checkpoint: {
-          step_id: v2Result.checkpoint.stepId,
-          request_path: v2Result.checkpoint.requestPath,
-          allowed_choices: v2Result.checkpoint.allowedChoices,
+          step_id: runtimeResult.checkpoint.stepId,
+          request_path: runtimeResult.checkpoint.requestPath,
+          allowed_choices: runtimeResult.checkpoint.allowedChoices,
         },
       };
       const operatorSummary = writeOperatorSummary({
@@ -809,9 +773,8 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
             outcome: waitingResult.outcome,
             trace_entries_observed: waitingResult.trace_entries_observed,
             ...runtimeOutputFields({
-              include: strictV2Runtime || runtimeDecisionDiagnostics,
-              runtime: 'v2',
-              decision: strictV2Runtime ? strictRuntimeSupport : defaultRuntimeSupport,
+              include: runtimeDecisionDiagnostics,
+              decision: defaultRuntimeSupport,
             }),
             operator_summary_path: operatorSummary.jsonPath,
             operator_summary_markdown_path: operatorSummary.markdownPath,
@@ -823,7 +786,7 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
       );
       return 0;
     }
-    const runResult = RunResult.parse(JSON.parse(readFileSync(v2Result.resultPath, 'utf8')));
+    const runResult = RunResult.parse(JSON.parse(readFileSync(runtimeResult.resultPath, 'utf8')));
     const operatorSummary = writeOperatorSummary({
       runFolder,
       runResult,
@@ -852,11 +815,10 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
           run_folder: runFolder,
           outcome: runResult.outcome,
           trace_entries_observed: runResult.trace_entries_observed,
-          result_path: v2Result.resultPath,
+          result_path: runtimeResult.resultPath,
           ...runtimeOutputFields({
-            include: strictV2Runtime || runtimeDecisionDiagnostics,
-            runtime: 'v2',
-            decision: strictV2Runtime ? strictRuntimeSupport : defaultRuntimeSupport,
+            include: runtimeDecisionDiagnostics,
+            decision: defaultRuntimeSupport,
           }),
           operator_summary_path: operatorSummary.jsonPath,
           operator_summary_markdown_path: operatorSummary.markdownPath,
@@ -868,9 +830,7 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
     return 0;
   }
 
-  process.stderr.write(
-    `error: ${RETIRED_RUNTIME_FRESH_INVOCATION_MESSAGE} ${defaultRuntimeSupport.reason}\n`,
-  );
+  process.stderr.write(`error: unsupported runtime invocation: ${defaultRuntimeSupport.reason}\n`);
   return 2;
 }
 
