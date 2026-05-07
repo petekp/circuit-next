@@ -7734,3 +7734,64 @@ retired. The live router and compiler behavior stays under `src/flows/**`.
 Next recommended action: choose the next old wrapper category. The shared-helper
 wrappers are the next likely candidate, but they still have several direct
 compatibility tests and a few stale spec/docs references to clean up.
+
+## 2026-05-07 - Shared-Helper Wrapper Retirement
+
+Goal: retire the old runtime shared-helper wrapper category after confirming
+production imports, tooling imports, and tests already use the neutral
+`src/shared/**` owners.
+
+Files changed:
+
+- `src/runtime/config-loader.ts`
+- `src/runtime/manifest-snapshot-writer.ts`
+- `src/runtime/operator-summary-writer.ts`
+- `src/runtime/policy/flow-kind-policy.ts`
+- `src/runtime/relay-support.ts`
+- `src/runtime/run-relative-path.ts`
+- `src/runtime/selection-resolver.ts`
+- `src/runtime/step-handlers/fanout/aggregate.ts`
+- `src/runtime/step-handlers/fanout/join-policy.ts`
+- `src/runtime/step-handlers/recovery-route.ts`
+- `src/runtime/step-handlers/shared.ts`
+- `src/runtime/terminal-verdict.ts`
+- `src/runtime/write-capable-worker-disclosure.ts`
+- `src/compat/public-runtime-paths.ts`
+- `tests/runner/shared-helper-compat.test.ts`
+- focused helper tests under `tests/runner/`, `tests/contracts/`, and
+  `tests/properties/visible/`
+- active policy, release-note, contract, report-spec, and cutover docs
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+What changed:
+
+- deleted the old `src/runtime/**` shared-helper wrapper files;
+- removed the `shared-helper-wrapper` category from the public runtime path
+  manifest;
+- deleted alias-only compatibility tests while keeping behavior tests pointed at
+  the shared owners;
+- updated the public import-path policy and release note to say there are no
+  remaining release-note-only soft-deprecated wrapper paths;
+- left connector, registry, run-status, result-path, runner, and type surfaces
+  for later numbered groups.
+
+Tests run:
+
+- `npx vitest run tests/runner/public-runtime-paths.test.ts tests/runner/retained-compat-facade.test.ts tests/runner/config-loader.test.ts tests/runner/operator-summary-writer.test.ts tests/contracts/flow-kind-policy.test.ts tests/runner/terminal-verdict-helper.test.ts tests/runner/fanout-aggregate-compat.test.ts tests/runner/recovery-route-compat.test.ts tests/runner/json-report-compat.test.ts tests/properties/visible/fanout-join-policy.test.ts`:
+  passed.
+- `npm run check`: passed.
+- `npm run lint`: initially failed on formatting, then passed after wrapping the
+  checked sentence.
+- `npm run build`: passed.
+- `npm run verify`: passed.
+- `git diff --check`: passed.
+
+Behavior changed? Only old runtime helper wrapper import paths are retired. The
+live helper behavior stays under `src/shared/**`, and retained/v1 run-folder
+behavior still fails closed under the final cutover policy.
+
+Next recommended action: start the next numbered wrapper-retirement group. The
+remaining choices are connector wrappers, registry wrappers, the run-status
+wrapper, result-path/public runner stubs, and type surfaces. No external review
+is warranted unless a package-surface or host-package ambiguity appears.

@@ -26,7 +26,6 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { evaluateFanoutJoinPolicy as evaluateFanoutJoinPolicyFromRuntimePath } from '../../../src/runtime/step-handlers/fanout/join-policy.js';
 import {
   type FanoutJoinOutcome,
   evaluateFanoutJoinPolicy,
@@ -68,10 +67,6 @@ function pick<T>(rng: () => number, choices: readonly T[]): T {
 }
 
 describe('evaluateFanoutJoinPolicy — pick-winner', () => {
-  it('keeps the retained fanout path as a compatibility re-export', () => {
-    expect(evaluateFanoutJoinPolicyFromRuntimePath).toBe(evaluateFanoutJoinPolicy);
-  });
-
   // Property: among all complete+verdict-in-admit branches, the
   // winner is the one whose verdict appears earliest in admit order.
   // If no admit verdict matched any complete branch, fail with a

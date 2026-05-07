@@ -29,6 +29,11 @@ packet path stops here unless a genuinely new ambiguity appears.
    trace, reducer, snapshot, and relay-selection implementation files are
    removed. Old runner, checkpoint, progress, and result-writer entrypoints
    remain only as fail-closed public stubs.
+6. Shared-helper wrapper retirement. Done: the old `src/runtime/**` helper
+   wrappers for config loading, selection, relay support, manifest snapshots,
+   operator summaries, flow-kind policy, run-relative paths, disclosure,
+   terminal verdicts, recovery routes, JSON reports, and fanout helper logic are
+   removed. Current owners live under `src/shared/**`.
 
 ## Guardrails
 
@@ -42,7 +47,7 @@ packet path stops here unless a genuinely new ambiguity appears.
 ## Immediate Next Step
 
 Choose the next wrapper-retirement or package-surface batch. The old
-flow-authoring wrappers have been removed; the likely next move is to decide
-whether remaining old `src/runtime/**` helper, registry, connector, or type
-surfaces should stay as source-only internal import bridges, be packaged, or be
-removed with manifest/test updates.
+flow-authoring and shared-helper wrappers have been removed; the likely next
+move is to decide whether remaining old `src/runtime/**` registry, connector,
+run-status, result-path, runner, or type surfaces should stay as source-only
+internal import bridges, be packaged, or be removed with manifest/test updates.

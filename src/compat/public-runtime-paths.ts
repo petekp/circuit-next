@@ -5,8 +5,7 @@ export type PublicRuntimePathCategory =
   | 'retained-handler'
   | 'retained-implementation'
   | 'retained-saved-state'
-  | 'run-status-wrapper'
-  | 'shared-helper-wrapper';
+  | 'run-status-wrapper';
 
 export type PublicRuntimePathDisposition =
   | 'future-deprecation-candidate'
@@ -45,16 +44,6 @@ export const PUBLIC_RUNTIME_PATHS: readonly PublicRuntimePathEntry[] = [
     requiresReviewBeforeDeletion: true,
     compatibilityTestPaths: ['tests/runner/retained-compat-facade.test.ts'],
     notes: 'Retired v1 checkpoint resume path; direct preparation fails closed.',
-  },
-  {
-    oldPath: 'src/runtime/config-loader.ts',
-    currentOwnerPath: 'src/shared/config-loader.ts',
-    category: 'shared-helper-wrapper',
-    currentDisposition: 'future-deprecation-candidate',
-    deprecationStage: 'soft-deprecated',
-    requiresReviewBeforeDeletion: true,
-    compatibilityTestPaths: ['tests/runner/shared-helper-compat.test.ts'],
-    notes: 'Old config loading helper path.',
   },
   {
     oldPath: 'src/runtime/connectors/claude-code.ts',
@@ -105,42 +94,6 @@ export const PUBLIC_RUNTIME_PATHS: readonly PublicRuntimePathEntry[] = [
     requiresReviewBeforeDeletion: true,
     compatibilityTestPaths: ['tests/runner/connector-shared-compat.test.ts'],
     notes: 'Old connector shared helper import path.',
-  },
-  {
-    oldPath: 'src/runtime/manifest-snapshot-writer.ts',
-    currentOwnerPath: 'src/shared/manifest-snapshot.ts',
-    category: 'shared-helper-wrapper',
-    currentDisposition: 'future-deprecation-candidate',
-    deprecationStage: 'soft-deprecated',
-    requiresReviewBeforeDeletion: true,
-    compatibilityTestPaths: [
-      'tests/runner/shared-helper-compat.test.ts',
-      'tests/unit/runtime/event-log-round-trip.test.ts',
-    ],
-    notes: 'Old manifest snapshot helper path.',
-  },
-  {
-    oldPath: 'src/runtime/operator-summary-writer.ts',
-    currentOwnerPath: 'src/shared/operator-summary-writer.ts',
-    category: 'shared-helper-wrapper',
-    currentDisposition: 'future-deprecation-candidate',
-    deprecationStage: 'soft-deprecated',
-    requiresReviewBeforeDeletion: true,
-    compatibilityTestPaths: [
-      'tests/runner/shared-helper-compat.test.ts',
-      'tests/runner/operator-summary-writer.test.ts',
-    ],
-    notes: 'Old operator summary writer path.',
-  },
-  {
-    oldPath: 'src/runtime/policy/flow-kind-policy.ts',
-    currentOwnerPath: 'src/shared/flow-kind-policy.ts',
-    category: 'shared-helper-wrapper',
-    currentDisposition: 'future-deprecation-candidate',
-    deprecationStage: 'soft-deprecated',
-    requiresReviewBeforeDeletion: true,
-    compatibilityTestPaths: ['tests/runner/shared-helper-compat.test.ts'],
-    notes: 'Old flow-kind policy helper path.',
   },
   {
     oldPath: 'src/runtime/progress-projector.ts',
@@ -282,16 +235,6 @@ export const PUBLIC_RUNTIME_PATHS: readonly PublicRuntimePathEntry[] = [
     notes: 'Old verification writer registry type path.',
   },
   {
-    oldPath: 'src/runtime/relay-support.ts',
-    currentOwnerPath: 'src/shared/relay-support.ts',
-    category: 'shared-helper-wrapper',
-    currentDisposition: 'future-deprecation-candidate',
-    deprecationStage: 'soft-deprecated',
-    requiresReviewBeforeDeletion: true,
-    compatibilityTestPaths: ['tests/runner/shared-helper-compat.test.ts'],
-    notes: 'Old relay prompt/check helper path.',
-  },
-  {
     oldPath: 'src/runtime/result-writer.ts',
     category: 'retained-implementation',
     currentDisposition: 'retained-owned',
@@ -299,16 +242,6 @@ export const PUBLIC_RUNTIME_PATHS: readonly PublicRuntimePathEntry[] = [
     requiresReviewBeforeDeletion: true,
     compatibilityTestPaths: ['tests/runner/result-path-compat.test.ts'],
     notes: 'Retired result writer path; resultPath remains as compatibility surface.',
-  },
-  {
-    oldPath: 'src/runtime/run-relative-path.ts',
-    currentOwnerPath: 'src/shared/run-relative-path.ts',
-    category: 'shared-helper-wrapper',
-    currentDisposition: 'future-deprecation-candidate',
-    deprecationStage: 'soft-deprecated',
-    requiresReviewBeforeDeletion: true,
-    compatibilityTestPaths: ['tests/runner/shared-helper-compat.test.ts'],
-    notes: 'Old run-relative path helper.',
   },
   {
     oldPath: 'src/runtime/run-status-projection.ts',
@@ -339,16 +272,6 @@ export const PUBLIC_RUNTIME_PATHS: readonly PublicRuntimePathEntry[] = [
     notes: 'Retained execution fallback plus old public writeComposeReport path.',
   },
   {
-    oldPath: 'src/runtime/selection-resolver.ts',
-    currentOwnerPath: 'src/shared/selection-resolver.ts',
-    category: 'shared-helper-wrapper',
-    currentDisposition: 'future-deprecation-candidate',
-    deprecationStage: 'soft-deprecated',
-    requiresReviewBeforeDeletion: true,
-    compatibilityTestPaths: ['tests/runner/shared-helper-compat.test.ts'],
-    notes: 'Old selection resolver helper path.',
-  },
-  {
     oldPath: 'src/runtime/step-handlers/checkpoint.ts',
     category: 'retained-handler',
     currentDisposition: 'retained-owned',
@@ -356,66 +279,6 @@ export const PUBLIC_RUNTIME_PATHS: readonly PublicRuntimePathEntry[] = [
     requiresReviewBeforeDeletion: true,
     compatibilityTestPaths: ['tests/runner/retained-compat-facade.test.ts'],
     notes: 'Retired checkpoint handler path; direct execution fails closed.',
-  },
-  {
-    oldPath: 'src/runtime/step-handlers/fanout/aggregate.ts',
-    currentOwnerPath: 'src/shared/fanout-aggregate-report.ts',
-    category: 'shared-helper-wrapper',
-    currentDisposition: 'future-deprecation-candidate',
-    deprecationStage: 'soft-deprecated',
-    requiresReviewBeforeDeletion: true,
-    compatibilityTestPaths: ['tests/runner/fanout-aggregate-compat.test.ts'],
-    notes: 'Old fanout aggregate helper path.',
-  },
-  {
-    oldPath: 'src/runtime/step-handlers/fanout/join-policy.ts',
-    currentOwnerPath: 'src/shared/fanout-join-policy.ts',
-    category: 'shared-helper-wrapper',
-    currentDisposition: 'future-deprecation-candidate',
-    deprecationStage: 'soft-deprecated',
-    requiresReviewBeforeDeletion: true,
-    compatibilityTestPaths: ['tests/properties/visible/fanout-join-policy.test.ts'],
-    notes: 'Old fanout join-policy helper path.',
-  },
-  {
-    oldPath: 'src/runtime/step-handlers/recovery-route.ts',
-    currentOwnerPath: 'src/shared/recovery-route.ts',
-    category: 'shared-helper-wrapper',
-    currentDisposition: 'future-deprecation-candidate',
-    deprecationStage: 'soft-deprecated',
-    requiresReviewBeforeDeletion: true,
-    compatibilityTestPaths: ['tests/runner/recovery-route-compat.test.ts'],
-    notes: 'Old recovery route priority helper path.',
-  },
-  {
-    oldPath: 'src/runtime/step-handlers/shared.ts',
-    currentOwnerPath: 'src/shared/json-report.ts',
-    category: 'shared-helper-wrapper',
-    currentDisposition: 'future-deprecation-candidate',
-    deprecationStage: 'soft-deprecated',
-    requiresReviewBeforeDeletion: true,
-    compatibilityTestPaths: ['tests/runner/json-report-compat.test.ts'],
-    notes: 'Old retained handler JSON report helper path.',
-  },
-  {
-    oldPath: 'src/runtime/terminal-verdict.ts',
-    currentOwnerPath: 'src/shared/terminal-verdict.ts',
-    category: 'shared-helper-wrapper',
-    currentDisposition: 'future-deprecation-candidate',
-    deprecationStage: 'soft-deprecated',
-    requiresReviewBeforeDeletion: true,
-    compatibilityTestPaths: ['tests/runner/terminal-verdict-helper.test.ts'],
-    notes: 'Old terminal verdict helper path.',
-  },
-  {
-    oldPath: 'src/runtime/write-capable-worker-disclosure.ts',
-    currentOwnerPath: 'src/shared/write-capable-worker-disclosure.ts',
-    category: 'shared-helper-wrapper',
-    currentDisposition: 'future-deprecation-candidate',
-    deprecationStage: 'soft-deprecated',
-    requiresReviewBeforeDeletion: true,
-    compatibilityTestPaths: ['tests/runner/shared-helper-compat.test.ts'],
-    notes: 'Old write-capable disclosure helper path.',
   },
 ];
 

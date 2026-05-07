@@ -4,11 +4,6 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { main } from '../../src/cli/circuit.js';
-import {
-  discoverConfigLayers as runtimeDiscoverConfigLayers,
-  projectConfigPath as runtimeProjectConfigPath,
-  userGlobalConfigPath as runtimeUserGlobalConfigPath,
-} from '../../src/runtime/config-loader.js';
 import { CompiledFlowId, SkillId } from '../../src/schemas/ids.js';
 import type { ResolvedSelection } from '../../src/schemas/selection-policy.js';
 import {
@@ -68,27 +63,6 @@ afterEach(() => {
 });
 
 describe('config loader', () => {
-  it('keeps the runtime compatibility wrapper identical to the shared loader', () => {
-    writeUserConfig(`
-schema_version: 1
-defaults:
-  selection:
-    effort: low
-`);
-    writeProjectConfig(`
-schema_version: 1
-defaults:
-  selection:
-    effort: high
-`);
-
-    expect(runtimeUserGlobalConfigPath(homeDir)).toBe(userGlobalConfigPath(homeDir));
-    expect(runtimeProjectConfigPath(cwdDir)).toBe(projectConfigPath(cwdDir));
-    expect(runtimeDiscoverConfigLayers({ homeDir, cwd: cwdDir })).toEqual(
-      discoverConfigLayers({ homeDir, cwd: cwdDir }),
-    );
-  });
-
   it('loads canonical user-global and project YAML files as LayeredConfig records', () => {
     writeUserConfig(`
 schema_version: 1

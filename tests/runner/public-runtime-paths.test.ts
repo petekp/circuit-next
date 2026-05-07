@@ -23,21 +23,6 @@ function importPathFrom(oldPath: string, ownerPath: string): string {
   return rel.startsWith('.') ? rel : `./${rel}`;
 }
 
-function sectionBetween(source: string, heading: string): string {
-  const start = source.indexOf(heading);
-  expect(start, `${heading} exists`).toBeGreaterThanOrEqual(0);
-  const nextHeading = source.indexOf('\n## ', start + heading.length);
-  return nextHeading === -1 ? source.slice(start) : source.slice(start, nextHeading);
-}
-
-function runtimePathsIn(source: string): string[] {
-  return Array.from(source.matchAll(/`(src\/runtime\/[^`]+\.ts)`/g), (match) => {
-    const path = match[1];
-    if (path === undefined) throw new Error('runtime path capture missing');
-    return path;
-  }).sort();
-}
-
 describe('public runtime import-path manifest', () => {
   it('covers every source file under src/runtime', () => {
     const runtimeFiles = collectSourceFiles('src/runtime').sort();
@@ -112,15 +97,14 @@ describe('public runtime import-path manifest', () => {
         'retained-implementation',
         'retained-saved-state',
         'run-status-wrapper',
-        'shared-helper-wrapper',
       ]),
     );
 
     expect(
       PUBLIC_RUNTIME_WRAPPER_PATHS.filter(
         (entry) => entry.currentDisposition === 'future-deprecation-candidate',
-      ).map((entry) => entry.category),
-    ).toEqual(expect.arrayContaining(['shared-helper-wrapper']));
+      ).map((entry) => entry.oldPath),
+    ).toEqual([]);
   });
 
   it('marks only the approved low-risk wrapper paths as soft-deprecated', () => {
@@ -128,21 +112,7 @@ describe('public runtime import-path manifest', () => {
       (entry) => entry.oldPath,
     ).sort();
 
-    expect(softDeprecatedPaths).toEqual([
-      'src/runtime/config-loader.ts',
-      'src/runtime/manifest-snapshot-writer.ts',
-      'src/runtime/operator-summary-writer.ts',
-      'src/runtime/policy/flow-kind-policy.ts',
-      'src/runtime/relay-support.ts',
-      'src/runtime/run-relative-path.ts',
-      'src/runtime/selection-resolver.ts',
-      'src/runtime/step-handlers/fanout/aggregate.ts',
-      'src/runtime/step-handlers/fanout/join-policy.ts',
-      'src/runtime/step-handlers/recovery-route.ts',
-      'src/runtime/step-handlers/shared.ts',
-      'src/runtime/terminal-verdict.ts',
-      'src/runtime/write-capable-worker-disclosure.ts',
-    ]);
+    expect(softDeprecatedPaths).toEqual([]);
 
     for (const entry of PUBLIC_RUNTIME_SOFT_DEPRECATED_PATHS) {
       expect(entry.currentOwnerPath, `${entry.oldPath} has replacement owner`).toEqual(
@@ -195,22 +165,16 @@ describe('public runtime import-path manifest', () => {
     }
   });
 
-  it('keeps soft-deprecated paths reflected in the public import-path policy note', () => {
+  it('keeps the public import-path policy note aligned with the manifest', () => {
     const policy = readFileSync(
       'docs/architecture/v2-public-runtime-import-path-policy.md',
       'utf8',
     );
 
-    for (const entry of PUBLIC_RUNTIME_SOFT_DEPRECATED_PATHS) {
-      expect(entry.currentOwnerPath, `${entry.oldPath} has a policy replacement`).toEqual(
-        expect.any(String),
-      );
-      const ownerPath = entry.currentOwnerPath as string;
-      expect(policy, `${entry.oldPath} appears in the policy`).toContain(entry.oldPath);
-      expect(policy, `${ownerPath} appears in the policy`).toContain(ownerPath);
-    }
-    expect(policy).toContain('no import-time warning is emitted');
-    expect(policy).toContain('No wrapper is deletion-ready');
+    expect(PUBLIC_RUNTIME_SOFT_DEPRECATED_PATHS).toEqual([]);
+    expect(policy).toContain(
+      'There are no remaining release-note-only soft-deprecated wrapper paths.',
+    );
     expect(policy).toContain('docs/release/deprecations/public-runtime-import-paths.md');
   });
 
@@ -219,36 +183,11 @@ describe('public runtime import-path manifest', () => {
     expect(existsSync(releaseNotePath), `${releaseNotePath} exists`).toBe(true);
 
     const releaseNote = readFileSync(releaseNotePath, 'utf8');
-    const deprecatedSection = sectionBetween(releaseNote, '## Deprecated For New Imports');
-    const softDeprecatedPaths = PUBLIC_RUNTIME_SOFT_DEPRECATED_PATHS.map(
-      (entry) => entry.oldPath,
-    ).sort();
 
-    expect(runtimePathsIn(deprecatedSection)).toEqual(softDeprecatedPaths);
-
-    for (const entry of PUBLIC_RUNTIME_SOFT_DEPRECATED_PATHS) {
-      expect(entry.currentOwnerPath, `${entry.oldPath} has a release-note replacement`).toEqual(
-        expect.any(String),
-      );
-      const ownerPath = entry.currentOwnerPath as string;
-      expect(deprecatedSection, `${entry.oldPath} appears in the release note`).toContain(
-        entry.oldPath,
-      );
-      expect(deprecatedSection, `${ownerPath} appears in the release note`).toContain(ownerPath);
-    }
-
-    for (const entry of PUBLIC_RUNTIME_PATHS.filter(
-      (candidate) => candidate.deprecationStage !== 'soft-deprecated',
-    )) {
-      expect(deprecatedSection, `${entry.oldPath} is not presented as deprecated`).not.toContain(
-        entry.oldPath,
-      );
-    }
-
-    expect(releaseNote).toContain('these listed wrapper paths continue to work');
-    expect(releaseNote).toContain('no import-time or runtime warning is emitted');
-    expect(releaseNote).toContain('does not delete wrappers');
-    expect(releaseNote).toContain('package exports do not change');
+    expect(PUBLIC_RUNTIME_SOFT_DEPRECATED_PATHS).toEqual([]);
+    expect(releaseNote).toContain(
+      'There are no remaining release-note-only soft-deprecated wrapper paths.',
+    );
     expect(releaseNote).toContain('connector wrappers');
     expect(releaseNote).toContain('catalog and registry wrappers');
     expect(releaseNote).toContain('run-status wrapper');

@@ -276,7 +276,7 @@
       "identity_fields": ["run_id"],
       "path_derived_fields": [],
       "dangerous_sinks": ["manifest drift detection", "resume eligibility", "replay fidelity"],
-      "trust_boundary": "operator-local persisted state; written once at bootstrap by the manifest snapshot writer at src/runtime/manifest-snapshot-writer.ts. Hash algorithm: SHA-256 over the exact persisted manifest snapshot bytes (`algorithm: 'sha256-raw'`), per ADR-0001 Addendum B §Stage 1.5 Close Criteria #8. Parse-time superRefine rejects any snapshot whose declared hash disagrees with sha256 over decoded bytes_base64; a second reader cannot be tricked into accepting a tampered byte-body under the declared hash.",
+      "trust_boundary": "operator-local persisted state; written once at bootstrap by the manifest snapshot writer at src/shared/manifest-snapshot.ts. Hash algorithm: SHA-256 over the exact persisted manifest snapshot bytes (`algorithm: 'sha256-raw'`), per ADR-0001 Addendum B §Stage 1.5 Close Criteria #8. Parse-time superRefine rejects any snapshot whose declared hash disagrees with sha256 over decoded bytes_base64; a second reader cannot be tricked into accepting a tampered byte-body under the declared hash.",
       "reference_surfaces": [],
       "reference_evidence": [],
       "migration_policy": "n/a",

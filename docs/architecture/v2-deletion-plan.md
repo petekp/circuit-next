@@ -95,7 +95,7 @@ public stubs.
 | `src/runtime/result-writer.ts` | result path helper plus fail-closed old writer stub | `resultPath(...)` still points to the shared result path helper; `writeResult(...)` fails closed. |
 | `src/runtime/step-handlers/checkpoint.ts` | fail-closed checkpoint handler stub | The public checkpoint helper types remain; `runCheckpointStep(...)` fails closed. |
 | `src/runtime/runner-types.ts` | compatibility type surface | Kept for old public type imports while implementation entrypoints are retired. |
-| `src/runtime/terminal-verdict.ts`, `src/runtime/step-handlers/recovery-route.ts`, `src/runtime/step-handlers/shared.ts`, `src/runtime/step-handlers/fanout/aggregate.ts`, `src/runtime/step-handlers/fanout/join-policy.ts` | compatibility wrappers | Kept as old import paths for neutral shared helpers. |
+| Old shared-helper wrappers under `src/runtime/**` | removed | Neutral owners live under `src/shared/**`; the old runtime wrapper files are retired. |
 
 The next deletion slice should focus on wrappers and package surface only. It
 should not recreate a retained runtime adapter.
@@ -125,21 +125,21 @@ wrappers, public type/path surfaces, or fail-closed stubs.
 | `src/runtime/catalog-derivations.ts` | compatibility re-export | Neutral implementation moved to `src/flows/catalog-derivations.ts` in Phase 5.13. Keep old path until compatibility imports retire. |
 | `src/runtime/registries/**` | compatibility re-exports | Neutral implementations moved to `src/flows/registries/**` in Phase 5.13. Keep old paths until compatibility imports retire. |
 | `src/runtime/connectors/**` | compatibility re-exports | Neutral connector subprocess and relay materializer implementations moved to `src/connectors/**` in Phase 5.32. Keep old runtime paths until compatibility imports and fingerprint wrappers are intentionally retired. |
-| `src/runtime/relay-support.ts` | compatibility re-export | Relay prompt and check helpers moved to `src/shared/relay-support.ts` in Phase 4.13. Keep this wrapper until old imports retire. |
-| `src/runtime/config-loader.ts` | compatibility re-export | Config discovery moved to `src/shared/config-loader.ts` in Phase 4.22. Keep this wrapper until old-path tests and external imports stop using it. |
+| `src/runtime/relay-support.ts` | removed | Relay prompt and check helpers live in `src/shared/relay-support.ts`; the old runtime wrapper is retired. |
+| `src/runtime/config-loader.ts` | removed | Config discovery lives in `src/shared/config-loader.ts`; the old runtime wrapper is retired. |
 | `src/runtime/router.ts` | removed | Neutral router implementation lives in `src/flows/router.ts`; the old runtime wrapper is retired. |
 | `src/runtime/relay-selection.ts` | removed | The old relay decision bridge was removed in the final cutover. Core-v2 and tests use `src/shared/relay-selection.ts` and core-v2 connector resolver helpers directly. |
-| `src/runtime/selection-resolver.ts` | compatibility re-export | Selection precedence logic moved to `src/shared/selection-resolver.ts` in Phase 4.11. Keep this wrapper until old imports retire. |
+| `src/runtime/selection-resolver.ts` | removed | Selection precedence logic lives in `src/shared/selection-resolver.ts`; the old runtime wrapper is retired. |
 | `src/runtime/result-writer.ts` | result path helper plus fail-closed writer stub | core-v2 owns result writing. Phase 4.25 moved the shared `reports/result.json` path helper to `src/shared/result-path.ts`; the old `resultPath(...)` export remains, while `writeResult(...)` fails closed. |
-| `src/runtime/manifest-snapshot-writer.ts` | compatibility re-export | Manifest snapshot byte-match helper moved to `src/shared/manifest-snapshot.ts` in Phase 4.20. Keep this wrapper until old imports retire. |
+| `src/runtime/manifest-snapshot-writer.ts` | removed | Manifest snapshot byte-match helper lives in `src/shared/manifest-snapshot.ts`; the old runtime wrapper is retired. |
 | `src/runtime/snapshot-writer.ts` | removed | Retained state snapshot implementation was removed in the final cutover. Handoff and status paths no longer adapt retained/v1 folders. |
-| `src/runtime/operator-summary-writer.ts` | compatibility re-export | Operator summary writing moved to `src/shared/operator-summary-writer.ts` in Phase 4.21. Keep this wrapper until old-path tests and release evidence stop using it. |
+| `src/runtime/operator-summary-writer.ts` | removed | Operator summary writing lives in `src/shared/operator-summary-writer.ts`; the old runtime wrapper is retired. |
 | `src/runtime/run-status-projection.ts` | compatibility re-export | The status dispatcher implementation moved to `src/run-status/project-run-folder.ts` in Phase 4.28. Keep this wrapper while old-path imports, docs, and compatibility tests still cite it. |
 | `src/runtime/progress-projector.ts` | shared progress re-export plus fail-closed projection stubs | core-v2 imports shared helpers from `src/shared/progress-output.ts`. Old trace projection APIs now fail closed. |
 | `src/runtime/reducer.ts`, `src/runtime/append-and-derive.ts`, `src/runtime/trace-reader.ts`, `src/runtime/trace-writer.ts` | removed | Old trace infrastructure was removed in the final cutover. Retained/v1 folders fail closed instead of projecting old trace state. |
-| `src/runtime/policy/flow-kind-policy.ts` | compatibility re-export | Flow-kind policy moved to `src/shared/flow-kind-policy.ts` in Phase 4.19. Keep this wrapper until old-path imports and documentation references stop using it. |
-| `src/runtime/write-capable-worker-disclosure.ts` | compatibility re-export | Disclosure helper moved to `src/shared/write-capable-worker-disclosure.ts` in Phase 4.14. Keep this wrapper while release evidence, old-path compatibility tests/docs, or external old-path consumers still cite the wrapper. |
-| `src/runtime/run-relative-path.ts` | compatibility re-export | Run-relative path helper moved to `src/shared/run-relative-path.ts` in Phase 4.15. Keep this wrapper until old imports retire. |
+| `src/runtime/policy/flow-kind-policy.ts` | removed | Flow-kind policy lives in `src/shared/flow-kind-policy.ts`; the old runtime wrapper is retired. |
+| `src/runtime/write-capable-worker-disclosure.ts` | removed | Disclosure helper lives in `src/shared/write-capable-worker-disclosure.ts`; the old runtime wrapper is retired. |
+| `src/runtime/run-relative-path.ts` | removed | Run-relative path helper lives in `src/shared/run-relative-path.ts`; the old runtime wrapper is retired. |
 
 Old retained handler implementation files deleted in the final cutover:
 

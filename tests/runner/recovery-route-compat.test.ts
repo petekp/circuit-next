@@ -1,14 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import { recoveryRouteForExecutableStep } from '../../src/core-v2/run/v1-compat.js';
-import { recoveryRouteForStep as recoveryRouteForStepFromRuntimePath } from '../../src/runtime/step-handlers/recovery-route.js';
 import { RECOVERY_ROUTE_PRIORITY, recoveryRouteForStep } from '../../src/shared/recovery-route.js';
 
-describe('recovery route compatibility', () => {
-  it('keeps the old retained route helper path as a shared compatibility re-export', () => {
-    expect(recoveryRouteForStepFromRuntimePath).toBe(recoveryRouteForStep);
-  });
-
+describe('recovery route selection', () => {
   it('uses the shared priority order for retained and core-v2 route selection', () => {
     const step = {
       routes: {

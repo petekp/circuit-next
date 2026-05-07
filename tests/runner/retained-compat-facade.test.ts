@@ -277,22 +277,6 @@ describe('runtime import boundary', () => {
     expect(scriptOffenders).toEqual([]);
   });
 
-  it('keeps shared helper implementation imports on neutral ownership', () => {
-    const productionSourceOffenders = oldRuntimeWrapperImportOffenders({
-      categories: ['shared-helper-wrapper'],
-      files: collectSourceFiles(resolve('src')),
-      reason: 'old shared-helper wrapper',
-    });
-    const scriptOffenders = oldRuntimeWrapperImportOffenders({
-      categories: ['shared-helper-wrapper'],
-      files: collectFiles(resolve('scripts'), ['.mjs', '.js', '.ts']),
-      reason: 'old shared-helper wrapper',
-    });
-
-    expect(productionSourceOffenders).toEqual([]);
-    expect(scriptOffenders).toEqual([]);
-  });
-
   it('keeps result-path helper imports on shared ownership outside the old compatibility proof', () => {
     const repoRoot = resolve('.');
     const retainedHandlerOffenders = collectSourceFiles(resolve('src/runtime/step-handlers'))

@@ -1,17 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { buildFanoutAggregateV2 } from '../../src/core-v2/fanout/aggregate-report.js';
-import { buildAggregate as buildAggregateFromRuntimePath } from '../../src/runtime/step-handlers/fanout/aggregate.js';
 import {
   type FanoutAggregateBody,
   buildFanoutAggregate,
 } from '../../src/shared/fanout-aggregate-report.js';
 
-describe('fanout aggregate report compatibility', () => {
-  it('keeps the retained fanout aggregate wrapper pointed at the shared helper', () => {
-    expect(buildAggregateFromRuntimePath).toBe(buildFanoutAggregate);
-  });
-
+describe('fanout aggregate report', () => {
   it('builds the durable aggregate report shape from branch outcomes', () => {
     const aggregate = buildFanoutAggregate(
       'pick-winner',

@@ -80,15 +80,15 @@ final cutover product decision.
 | `src/runtime/catalog-derivations.ts` | compatibility wrapper | Neutral implementation moved to `src/flows/catalog-derivations.ts` in Phase 5.13. Keep old path for tests and external compatibility. |
 | `src/runtime/checkpoint-resume.ts` | retained product behavior | Owns retained/v1 checkpoint resume preparation. Keep while old checkpoint folders remain supported. |
 | `src/runtime/compile-schematic-to-flow.ts` | removed | Neutral compiler implementation lives in `src/flows/compile-schematic-to-flow.ts`; the old runtime wrapper is retired. |
-| `src/runtime/config-loader.ts` | compatibility wrapper | Neutral config loading lives in `src/shared/config-loader.ts`; keep old path until imports retire. |
+| `src/runtime/config-loader.ts` | removed | Neutral config loading lives in `src/shared/config-loader.ts`; the old runtime wrapper is retired. |
 | `src/runtime/connectors/claude-code.ts` | compatibility wrapper | Neutral implementation moved to `src/connectors/claude-code.ts` in Phase 5.32. Keep old path for old imports and fingerprint compatibility. |
 | `src/runtime/connectors/codex.ts` | compatibility wrapper | Neutral implementation moved to `src/connectors/codex.ts` in Phase 5.32. Keep old path for old imports and fingerprint compatibility. |
 | `src/runtime/connectors/custom.ts` | compatibility wrapper | Neutral implementation moved to `src/connectors/custom.ts` in Phase 5.32. Keep old path for old imports and compatibility tests. |
 | `src/runtime/connectors/relay-materializer.ts` | compatibility wrapper | Neutral implementation moved to `src/connectors/relay-materializer.ts` in Phase 5.32. Keep old path for old imports and fingerprint compatibility. |
 | `src/runtime/connectors/shared.ts` | compatibility wrapper | Re-exports neutral connector helpers and relay types for old imports. |
-| `src/runtime/manifest-snapshot-writer.ts` | compatibility wrapper | Neutral byte-match helper lives in `src/shared/manifest-snapshot.ts`; keep old path for retained imports/tests. |
-| `src/runtime/operator-summary-writer.ts` | compatibility wrapper | Neutral operator summary writer lives in `src/shared/operator-summary-writer.ts`; keep old path for compatibility. |
-| `src/runtime/policy/flow-kind-policy.ts` | compatibility wrapper | Neutral policy helper lives in `src/shared/flow-kind-policy.ts`; keep old path for imports/docs. |
+| `src/runtime/manifest-snapshot-writer.ts` | removed | Neutral byte-match helper lives in `src/shared/manifest-snapshot.ts`; the old runtime wrapper is retired. |
+| `src/runtime/operator-summary-writer.ts` | removed | Neutral operator summary writer lives in `src/shared/operator-summary-writer.ts`; the old runtime wrapper is retired. |
+| `src/runtime/policy/flow-kind-policy.ts` | removed | Neutral policy helper lives in `src/shared/flow-kind-policy.ts`; the old runtime wrapper is retired. |
 | `src/runtime/progress-projector.ts` | retained product behavior | Retained trace-to-progress projection is still needed for retained runs and old folders. |
 | `src/runtime/reducer.ts` | retained product behavior | Retained trace reduction remains the state authority for retained/v1 runs. |
 | `src/runtime/registries/checkpoint-writers/registry.ts` | compatibility wrapper | Neutral checkpoint writer lookup moved to `src/flows/registries/checkpoint-writers/registry.ts` in Phase 5.13. |
@@ -105,41 +105,40 @@ final cutover product decision.
 | `src/runtime/registries/verification-writers/registry.ts` | compatibility wrapper | Neutral verification writer lookup moved to `src/flows/registries/verification-writers/registry.ts` in Phase 5.13. |
 | `src/runtime/registries/verification-writers/types.ts` | compatibility wrapper | Neutral verification writer types moved to `src/flows/registries/verification-writers/types.ts` in Phase 5.13. |
 | `src/runtime/relay-selection.ts` | retained fallback | Retained relay decision bridge and connector resolution remain live for fallback paths. |
-| `src/runtime/relay-support.ts` | compatibility wrapper | Neutral relay support lives in `src/shared/relay-support.ts`; keep old path for retained handler imports. |
+| `src/runtime/relay-support.ts` | removed | Neutral relay support lives in `src/shared/relay-support.ts`; the old runtime wrapper is retired. |
 | `src/runtime/result-writer.ts` | retained product behavior | Retained result writer is still used by old runner for retained close/finalization. The shared result path helper lives in `src/shared/result-path.ts`; keep the old `resultPath(...)` export for compatibility. |
 | `src/runtime/router.ts` | removed | Neutral router implementation lives in `src/flows/router.ts`; the old runtime wrapper is retired. |
-| `src/runtime/run-relative-path.ts` | compatibility wrapper | Neutral helper lives in `src/shared/run-relative-path.ts`; keep old path for retained imports/tests. |
+| `src/runtime/run-relative-path.ts` | removed | Neutral helper lives in `src/shared/run-relative-path.ts`; the old runtime wrapper is retired. |
 | `src/runtime/run-status-projection.ts` | compatibility wrapper | Neutral dispatcher lives in `src/run-status/project-run-folder.ts`; keep old path for compatibility tests. |
 | `src/runtime/runner-types.ts` | compatibility wrapper | Shared relay/progress types moved to `src/shared/relay-runtime-types.ts`, but retained invocation/result types still live here. |
 | `src/runtime/runner.ts` | retained fallback | Owns fallback execution, rollback execution, arbitrary fixtures, `composeWriter`, and public retained resume wrapper. |
-| `src/runtime/selection-resolver.ts` | compatibility wrapper | Neutral resolver lives in `src/shared/selection-resolver.ts`; keep old path for imports/tests. |
+| `src/runtime/selection-resolver.ts` | removed | Neutral resolver lives in `src/shared/selection-resolver.ts`; the old runtime wrapper is retired. |
 | `src/runtime/snapshot-writer.ts` | retained product behavior | Retained snapshot derivation is live for retained runs, handoff, and old checkpoint folders. |
 | `src/runtime/step-handlers/checkpoint.ts` | retained product behavior | Retained checkpoint waiting/resume behavior remains supported for retained/v1 folders and unproven modes. |
 | `src/runtime/step-handlers/compose.ts` | retained fallback | Keeps retained compose behavior and the public `composeWriter` hook. |
 | `src/runtime/step-handlers/fanout.ts` | retained fallback | Retained fanout execution remains fallback/oracle coverage for unretired paths. |
-| `src/runtime/step-handlers/fanout/aggregate.ts` | compatibility wrapper | Neutral fanout aggregate report helper moved to `src/shared/fanout-aggregate-report.ts` in Phase 5.41. Keep old path for retained imports and old-path proof. |
+| `src/runtime/step-handlers/fanout/aggregate.ts` | removed | Neutral fanout aggregate report helper lives in `src/shared/fanout-aggregate-report.ts`; the old runtime wrapper is retired. |
 | `src/runtime/step-handlers/fanout/branch-resolution.ts` | retained fallback | Helper for retained fanout branch expansion and path safety. It now uses the shared branch-template helper from `src/shared/fanout-branch-template.ts`, but retained branch output shape remains here. |
-| `src/runtime/step-handlers/fanout/join-policy.ts` | compatibility wrapper | Neutral implementation moved to `src/shared/fanout-join-policy.ts` in Phase 5.38. Keep old path for retained imports and old-path proof. |
+| `src/runtime/step-handlers/fanout/join-policy.ts` | removed | Neutral implementation lives in `src/shared/fanout-join-policy.ts`; the old runtime wrapper is retired. |
 | `src/runtime/step-handlers/fanout/types.ts` | retained fallback | Type support for retained fanout behavior. |
 | `src/runtime/step-handlers/index.ts` | retained fallback | Dispatcher for retained step handlers. |
-| `src/runtime/step-handlers/recovery-route.ts` | compatibility wrapper | Neutral recovery route priority helper moved to `src/shared/recovery-route.ts` in Phase 5.39. Keep old path for retained imports and compatibility proof. |
+| `src/runtime/step-handlers/recovery-route.ts` | removed | Neutral recovery route priority helper lives in `src/shared/recovery-route.ts`; the old runtime wrapper is retired. |
 | `src/runtime/step-handlers/relay.ts` | retained fallback | Retained relay execution, materialization, validation, and connector bridge behavior. |
-| `src/runtime/step-handlers/shared.ts` | compatibility wrapper | Neutral JSON report helper moved to `src/shared/json-report.ts` in Phase 5.40. Keep old retained handler path for compatibility proof. |
+| `src/runtime/step-handlers/shared.ts` | removed | Neutral JSON report helper lives in `src/shared/json-report.ts`; the old runtime wrapper is retired. |
 | `src/runtime/step-handlers/sub-run.ts` | retained fallback | Retained sub-run execution remains fallback/oracle coverage. |
 | `src/runtime/step-handlers/types.ts` | retained fallback | Type support for the retained handler cluster. |
 | `src/runtime/step-handlers/verification.ts` | retained fallback | Retained verification execution remains fallback/oracle coverage. |
-| `src/runtime/terminal-verdict.ts` | compatibility wrapper | Neutral implementation moved to `src/shared/terminal-verdict.ts` in Phase 5.37. Keep old path for import compatibility. |
+| `src/runtime/terminal-verdict.ts` | removed | Neutral implementation lives in `src/shared/terminal-verdict.ts`; the old runtime wrapper is retired. |
 | `src/runtime/trace-reader.ts` | retained product behavior | Retained trace reading remains live for retained status, progress, resume, and tests. |
 | `src/runtime/trace-writer.ts` | retained product behavior | Retained trace appending remains live for retained runs and tests. |
-| `src/runtime/write-capable-worker-disclosure.ts` | compatibility wrapper | Neutral helper lives in `src/shared/write-capable-worker-disclosure.ts`; keep old path for compatibility. |
+| `src/runtime/write-capable-worker-disclosure.ts` | removed | Neutral helper lives in `src/shared/write-capable-worker-disclosure.ts`; the old runtime wrapper is retired. |
 
 Phase 5.58 marked the lowest-risk shared-helper and flow-authoring wrappers as
 soft-deprecated in `src/compat/public-runtime-paths.ts`. The flow-authoring
-wrappers have since been removed. Phase 5.59 promotes the remaining
-soft-deprecated helper list to a public release-note deprecation document at
-`docs/release/deprecations/public-runtime-import-paths.md`. This is
-communication only: the listed wrappers remain, package exports do not change,
-and no import-time warnings are emitted.
+wrappers have since been removed, and the shared-helper wrappers have now been
+retired after production imports, tests, and active docs moved to the neutral
+owners. `docs/release/deprecations/public-runtime-import-paths.md` now records
+that there are no remaining release-note-only soft-deprecated wrapper paths.
 
 ## Historical Category Totals
 

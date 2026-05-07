@@ -3,63 +3,41 @@
 Date: 2026-05-07
 
 Current status: superseded for cutover planning by
-`docs/architecture/v2-final-cutover-policy.md`. The release-note-only wrapper
-deprecation below remains as the public import-path record. It should not be
-read as retained runtime compatibility.
+`docs/architecture/v2-final-cutover-policy.md`. This file remains as the public
+import-path record. It should not be read as retained runtime compatibility.
 
-This note records the current old public import-path deprecation stage for the
-v2 migration. The public release-note document lives at
+This note records the current old public import-path posture for the v2
+migration. The public release-note document lives at
 `docs/release/deprecations/public-runtime-import-paths.md`.
 
 ## Policy
 
-The listed wrapper paths remain import-compatible. Removed old execution files
-do not get adapters, and retired runtime entrypoints fail closed instead of
-preserving old behavior. No wrapper deletion, package export change, or
-runtime/import-time warning is approved by this note.
+There are no remaining release-note-only soft-deprecated wrapper paths.
 
-No wrapper is deletion-ready.
+Removed old execution files do not get adapters, and retired runtime entrypoints
+fail closed instead of preserving old behavior. The remaining old public runtime
+paths are either explicit wrappers that still have manifest coverage or
+fail-closed stubs tracked in `src/compat/public-runtime-paths.ts`.
 
-The current public stage is a release-note-only soft deprecation for the
-remaining lowest-risk old helper paths. Soft deprecation means:
-
-- docs and release wording tell callers to prefer the neutral owner path;
-- the old path continues to work;
-- compatibility tests stay in place;
-- production import guards stay in place;
-- package exports do not change;
-- no import-time warning is emitted;
-- deletion still requires another review.
+No package export change or runtime/import-time warning is approved by this
+note.
 
 ## Soft-Deprecated Paths
 
-Prefer the replacement owner for new imports:
+None.
 
-| Old path | Replacement owner |
-|---|---|
-| `src/runtime/config-loader.ts` | `src/shared/config-loader.ts` |
-| `src/runtime/manifest-snapshot-writer.ts` | `src/shared/manifest-snapshot.ts` |
-| `src/runtime/operator-summary-writer.ts` | `src/shared/operator-summary-writer.ts` |
-| `src/runtime/policy/flow-kind-policy.ts` | `src/shared/flow-kind-policy.ts` |
-| `src/runtime/relay-support.ts` | `src/shared/relay-support.ts` |
-| `src/runtime/run-relative-path.ts` | `src/shared/run-relative-path.ts` |
-| `src/runtime/selection-resolver.ts` | `src/shared/selection-resolver.ts` |
-| `src/runtime/write-capable-worker-disclosure.ts` | `src/shared/write-capable-worker-disclosure.ts` |
-| `src/runtime/terminal-verdict.ts` | `src/shared/terminal-verdict.ts` |
-| `src/runtime/step-handlers/recovery-route.ts` | `src/shared/recovery-route.ts` |
-| `src/runtime/step-handlers/shared.ts` | `src/shared/json-report.ts` |
-| `src/runtime/step-handlers/fanout/aggregate.ts` | `src/shared/fanout-aggregate-report.ts` |
-| `src/runtime/step-handlers/fanout/join-policy.ts` | `src/shared/fanout-join-policy.ts` |
+The old shared-helper wrapper paths that previously appeared here have been
+retired. New code should import their shared owners directly.
 ## Release Note
 
 The release-note deprecation document is
 `docs/release/deprecations/public-runtime-import-paths.md`. It is checked
-against `PUBLIC_RUNTIME_SOFT_DEPRECATED_PATHS` so the public deprecation list
+against `PUBLIC_RUNTIME_SOFT_DEPRECATED_PATHS` so the public deprecation state
 stays identical to the manifest.
 
 ## Not In This Soft-Deprecation List
 
-These categories are not part of the soft-deprecated wrapper table above:
+These categories are not soft-deprecated:
 
 - connector wrappers under `src/runtime/connectors/**`;
 - catalog and registry wrappers under `src/runtime/catalog-derivations.ts` and
@@ -75,15 +53,18 @@ The old flow-authoring wrappers at `src/runtime/compile-schematic-to-flow.ts`
 and `src/runtime/router.ts` were retired after production and tooling imports
 moved to `src/flows/**`.
 
+The old shared-helper wrappers under `src/runtime/**` were retired after tests,
+production code, and docs moved to the neutral `src/shared/**` owners.
+
 ## Review Boundaries
 
 Use local adversarial review and manifest/test updates before:
 
-- deleting any old wrapper;
+- deleting any old wrapper or fail-closed stub;
 - changing package exports;
 - adding import-time or runtime warnings;
-- soft-deprecating connector, registry, run-status, result-writer, or public
-  runner paths;
+- soft-deprecating connector, registry, run-status, result-writer, public runner,
+  or type paths;
 - changing the fail-closed retired-runtime behavior.
 
 Do not prepare an external review packet for those steps by default. Escalate
