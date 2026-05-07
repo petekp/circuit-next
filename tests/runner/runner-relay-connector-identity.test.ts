@@ -1,13 +1,10 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { runRetainedCompiledFlow as runCompiledFlow } from '../../src/compat/retained-runtime.js';
-import type { ClaudeCodeRelayInput } from '../../src/connectors/claude-code.js';
-import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
-import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
-import { CompiledFlowId, RunId } from '../../src/schemas/ids.js';
+import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
+import { TraceStore } from '../../src/core-v2/trace/trace-store.js';
 import type { RelayResult } from '../../src/shared/connector-relay.js';
 import type { RelayFn } from '../../src/shared/relay-runtime-types.js';
 
@@ -30,10 +27,22 @@ import type { RelayFn } from '../../src/shared/relay-runtime-types.js';
 
 const FIXTURE_PATH = resolve('generated/flows/runtime-proof/circuit.json');
 
-function loadFixture(): { flow: CompiledFlow; bytes: Buffer } {
+function loadFixture(): { bytes: Buffer } {
   const bytes = readFileSync(FIXTURE_PATH);
-  const raw: unknown = JSON.parse(bytes.toString('utf8'));
-  return { flow: CompiledFlow.parse(raw), bytes };
+  const raw: {
+    steps: Array<{
+      id: string;
+      kind: string;
+      role?: string;
+    }>;
+  } = JSON.parse(bytes.toString('utf8'));
+  const relayStep = raw.steps.find((step) => step.id === 'relay-step' && step.kind === 'relay');
+  if (relayStep === undefined) throw new Error('runtime-proof relay step not found');
+  // Core-v2 correctly rejects the read-only Codex connector for implementer
+  // steps. This test is only about descriptor identity, so use a read-only
+  // reviewer role.
+  relayStep.role = 'reviewer';
+  return { bytes: Buffer.from(JSON.stringify(raw)) };
 }
 
 function deterministicNow(startMs: number): () => Date {
@@ -44,7 +53,7 @@ function deterministicNow(startMs: number): () => Date {
 function codexShapedStub(): RelayFn {
   return {
     connectorName: 'codex',
-    relay: async (input: ClaudeCodeRelayInput): Promise<RelayResult> => ({
+    relay: async (input): Promise<RelayResult> => ({
       request_payload: input.prompt,
       receipt_id: 'stub-codex-thread-id',
       result_body: '{"verdict":"ok"}',
@@ -54,15 +63,33 @@ function codexShapedStub(): RelayFn {
   };
 }
 
-function change_kind(): ChangeKindDeclaration {
-  return {
-    change_kind: 'ratchet-advance',
-    failure_mode: 'runner materializer call site hardcodes connectorName="claude-code"',
-    acceptance_evidence:
-      'relay.started trace_entry carries connector.name="codex" when a codex-shaped descriptor is injected',
-    alternate_framing:
-      'let P2.7 carry a break-glass change_kind instead — rejected because the refactor is pure type-signature work and unblocks multi-connector routing without an escrow',
-  };
+async function runConnectorIdentityCase(input: {
+  readonly runFolder: string;
+  readonly bytes: Buffer;
+}) {
+  const result = await runCompiledFlowV2({
+    runDir: input.runFolder,
+    flowBytes: input.bytes,
+    runId: '45a45a45-a45a-45a4-5a45-a45a45a45a45',
+    goal: 'connector-identity regression',
+    depth: 'standard',
+    now: deterministicNow(Date.UTC(2026, 3, 22, 14, 0, 0)),
+    relayer: codexShapedStub(),
+    executors: {
+      compose: async (step, context) => {
+        if (step.kind !== 'compose') throw new Error('expected compose step');
+        const report = step.writes?.report;
+        if (report !== undefined) {
+          const reportPath = context.files.resolve(report);
+          mkdirSync(dirname(reportPath), { recursive: true });
+          writeFileSync(reportPath, '{"summary":"runtime-proof relay setup"}\n', 'utf8');
+        }
+        return { route: 'pass', details: { report: report?.path } };
+      },
+    },
+  });
+  const trace_entries = await new TraceStore(input.runFolder).load();
+  return { result, trace_entries };
 }
 
 let runFolderBase: string;
@@ -77,22 +104,15 @@ afterEach(() => {
 
 describe('RelayFn descriptor carries connector identity into relay.started', () => {
   it('injecting a codex-shaped descriptor through CompiledFlowInvocation.relayer lands connector.name="codex"', async () => {
-    const { flow, bytes } = loadFixture();
+    const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'codex-identity');
-    const outcome = await runCompiledFlow({
+    const outcome = await runConnectorIdentityCase({
       runFolder,
-      flow,
-      flowBytes: bytes,
-      runId: RunId.parse('45a45a45-a45a-45a4-5a45-a45a45a45a45'),
-      goal: 'connector-identity regression',
-      depth: 'standard',
-      change_kind: change_kind(),
-      now: deterministicNow(Date.UTC(2026, 3, 22, 14, 0, 0)),
-      relayer: codexShapedStub(),
+      bytes,
     });
 
     expect(outcome.result.outcome).toBe('complete');
-    expect(outcome.result.flow_id).toBe(CompiledFlowId.parse('runtime-proof'));
+    expect(outcome.result.flow_id).toBe('runtime-proof');
 
     const relayStarted = outcome.trace_entries.find((e) => e.kind === 'relay.started');
     if (!relayStarted || relayStarted.kind !== 'relay.started') {
@@ -101,6 +121,6 @@ describe('RelayFn descriptor carries connector identity into relay.started', () 
     // The critical regression: identity comes from the descriptor, not
     // a call-site literal. A regression here would land `name: 'claude-code'`
     // and fail this test.
-    expect(relayStarted.connector).toEqual({ kind: 'builtin', name: 'codex' });
+    expect(relayStarted.data?.connector).toEqual({ kind: 'builtin', name: 'codex' });
   });
 });
