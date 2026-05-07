@@ -7,7 +7,6 @@ const ROOTS = [
   'tests',
   'scripts',
   'docs',
-  'specs',
   'plugins',
   'generated',
   'examples',
@@ -17,10 +16,7 @@ const ROOTS = [
   'package.json',
 ] as const;
 
-const EXEMPT_PATH_PREFIXES = [
-  'specs/reference/legacy-circuit/',
-  'tests/fixtures/reference/legacy-circuit/',
-] as const;
+const EXEMPT_PATH_PREFIXES = ['tests/fixtures/reference/legacy-circuit/'] as const;
 
 const OLD_TERM_EXEMPT_PATH_PREFIXES = [
   ...EXEMPT_PATH_PREFIXES,
@@ -30,7 +26,6 @@ const OLD_TERM_EXEMPT_PATH_PREFIXES = [
 ] as const;
 
 const EXEMPT_FILES = new Set([
-  'HANDOFF.md',
   'UBIQUITOUS_LANGUAGE.md',
   'docs/release/parity-matrix.generated.md',
   'tests/contracts/terminology-active-surface.test.ts',
