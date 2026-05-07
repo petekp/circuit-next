@@ -5,16 +5,25 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { main } from '../../src/cli/circuit.js';
-import { resumeRetainedCompiledFlowCheckpoint as resumeCompiledFlowCheckpoint } from '../../src/compat/retained-checkpoint-folders.js';
-import { runRetainedCompiledFlow as runCompiledFlow } from '../../src/compat/retained-runtime.js';
+import type { TraceEntryV2 } from '../../src/core-v2/domain/trace.js';
+import { resumeCompiledFlowV2 } from '../../src/core-v2/run/checkpoint-resume.js';
+import {
+  type CompiledFlowRunOptionsV2,
+  runCompiledFlowV2WithWaiting,
+} from '../../src/core-v2/run/compiled-flow-runner.js';
+import {
+  type GraphExecutionResultV2,
+  type GraphRunResultV2,
+  isGraphCheckpointWaitingResultV2,
+} from '../../src/core-v2/run/graph-runner.js';
+import { TraceStore } from '../../src/core-v2/trace/trace-store.js';
 import { BuildBrief, BuildVerification } from '../../src/flows/build/reports.js';
-import { traceEntryLogPath } from '../../src/runtime/trace-writer.js';
 import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
-import { RunId } from '../../src/schemas/ids.js';
+import { CompiledFlowId, RunId } from '../../src/schemas/ids.js';
 import { SkillId } from '../../src/schemas/ids.js';
 import { type RelayResult, sha256Hex } from '../../src/shared/connector-relay.js';
-import { manifestSnapshotPath } from '../../src/shared/manifest-snapshot.js';
+import { manifestSnapshotPath, writeManifestSnapshot } from '../../src/shared/manifest-snapshot.js';
 import type { RelayFn, RelayInput } from '../../src/shared/relay-runtime-types.js';
 
 const RETIRED_RUNTIME_RUN_FOLDER_MESSAGE =
@@ -56,7 +65,7 @@ function rewriteTraceEntry(
   index: number,
   rewrite: (record: Record<string, unknown>) => Record<string, unknown>,
 ): void {
-  const tracePath = traceEntryLogPath(runFolder);
+  const tracePath = join(runFolder, 'trace.ndjson');
   const text = readFileSync(tracePath, 'utf8');
   const lines = text.trimEnd().split('\n');
   const line = lines[index];
@@ -69,6 +78,76 @@ function rewriteTraceEntry(
   }
   lines[index] = JSON.stringify(rewrite(parsed as Record<string, unknown>));
   writeFileSync(tracePath, `${lines.join('\n')}\n`);
+}
+
+async function readTraceEntries(runFolder: string): Promise<readonly TraceEntryV2[]> {
+  return await new TraceStore(runFolder).load();
+}
+
+function snapshotFromResult(result: GraphExecutionResultV2 | GraphRunResultV2): {
+  readonly status: string;
+  readonly current_step?: string;
+} {
+  if (isGraphCheckpointWaitingResultV2(result)) {
+    return { status: 'in_progress', current_step: result.checkpoint.stepId };
+  }
+  return { status: result.outcome };
+}
+
+async function runCompiledFlow(invocation: {
+  readonly runFolder: string;
+  readonly flow?: CompiledFlow;
+  readonly flowBytes: Buffer;
+  readonly projectRoot?: string;
+  readonly runId: string;
+  readonly goal: string;
+  readonly depth?: string;
+  readonly change_kind?: ChangeKindDeclaration;
+  readonly now?: () => Date;
+  readonly relayer?: RelayFn;
+  readonly selectionConfigLayers?: CompiledFlowRunOptionsV2['selectionConfigLayers'];
+}): Promise<{
+  readonly result: GraphExecutionResultV2;
+  readonly trace_entries: readonly TraceEntryV2[];
+  readonly snapshot: { readonly status: string; readonly current_step?: string };
+}> {
+  const result = await runCompiledFlowV2WithWaiting({
+    runDir: invocation.runFolder,
+    flowBytes: invocation.flowBytes,
+    runId: String(invocation.runId),
+    goal: invocation.goal,
+    ...(invocation.depth === undefined ? {} : { depth: invocation.depth }),
+    ...(invocation.projectRoot === undefined ? {} : { projectRoot: invocation.projectRoot }),
+    ...(invocation.now === undefined ? {} : { now: invocation.now }),
+    ...(invocation.relayer === undefined ? {} : { relayer: invocation.relayer }),
+    ...(invocation.selectionConfigLayers === undefined
+      ? {}
+      : { selectionConfigLayers: invocation.selectionConfigLayers }),
+  });
+  const trace_entries = await readTraceEntries(invocation.runFolder);
+  return { result, trace_entries, snapshot: snapshotFromResult(result) };
+}
+
+async function resumeCompiledFlowCheckpoint(invocation: {
+  readonly runFolder: string;
+  readonly selection: string;
+  readonly projectRoot?: string;
+  readonly now?: () => Date;
+  readonly relayer?: RelayFn;
+  readonly selectionConfigLayers?: CompiledFlowRunOptionsV2['selectionConfigLayers'];
+}): Promise<{
+  readonly result: GraphRunResultV2;
+  readonly trace_entries: readonly TraceEntryV2[];
+  readonly snapshot: { readonly status: string; readonly current_step?: string };
+}> {
+  const result = await resumeCompiledFlowV2({
+    runDir: invocation.runFolder,
+    selection: invocation.selection,
+    ...(invocation.now === undefined ? {} : { now: invocation.now }),
+    ...(invocation.relayer === undefined ? {} : { relayer: invocation.relayer }),
+  });
+  const trace_entries = await readTraceEntries(invocation.runFolder);
+  return { result, trace_entries, snapshot: snapshotFromResult(result) };
 }
 
 async function captureStdout(fn: () => Promise<number>): Promise<{
@@ -420,6 +499,37 @@ async function startPausedBuildCheckpoint(input: {
   });
 }
 
+function writeRetainedCheckpointFolder(input: {
+  readonly runFolder: string;
+  readonly runId: string;
+  readonly goal: string;
+}): void {
+  const { bytes } = checkpointCompiledFlow({ safeDefault: 'continue' });
+  mkdirSync(input.runFolder, { recursive: true });
+  const capturedAt = new Date(Date.UTC(2026, 3, 25, 5, 0, 0)).toISOString();
+  const manifest = writeManifestSnapshot(input.runFolder, {
+    run_id: RunId.parse(input.runId),
+    flow_id: CompiledFlowId.parse('build-checkpoint-exec-test'),
+    captured_at: capturedAt,
+    bytes,
+  });
+  writeFileSync(
+    join(input.runFolder, 'trace.ndjson'),
+    `${JSON.stringify({
+      schema_version: 1,
+      sequence: 0,
+      recorded_at: capturedAt,
+      run_id: input.runId,
+      kind: 'run.bootstrapped',
+      flow_id: 'build-checkpoint-exec-test',
+      depth: 'deep',
+      goal: input.goal,
+      change_kind: change_kind(),
+      manifest_hash: manifest.hash,
+    })}\n`,
+  );
+}
+
 describe('Build checkpoint execution substrate', () => {
   it('resolves standard depth through a declared safe default choice', async () => {
     const { flow, bytes } = checkpointCompiledFlow({ safeDefault: 'continue' });
@@ -476,9 +586,9 @@ describe('Build checkpoint execution substrate', () => {
       throw new Error(`expected checkpoint_waiting, got ${waiting.outcome}`);
     }
     expect(waiting.checkpoint).toMatchObject({
-      step_id: 'frame-step',
-      request_path: join(runFolder, 'reports/checkpoints/frame-step-request.json'),
-      allowed_choices: ['continue', 'revise'],
+      stepId: 'frame-step',
+      requestPath: join(runFolder, 'reports/checkpoints/frame-step-request.json'),
+      allowedChoices: ['continue', 'revise'],
     });
     expect(outcome.snapshot.status).toBe('in_progress');
     expect(outcome.snapshot.current_step).toBe('frame-step');
@@ -552,7 +662,7 @@ describe('Build checkpoint execution substrate', () => {
 
   it('fails closed for retained checkpoint resume even when strict v2 is enabled', async () => {
     const runFolder = join(runFolderBase, 'resume-retained-with-strict-v2');
-    await startPausedBuildCheckpoint({
+    writeRetainedCheckpointFolder({
       runFolder,
       runId: 'b3000000-0000-0000-0000-000000000018',
       goal: 'Resume retained checkpoint with strict v2 enabled',
@@ -581,7 +691,7 @@ describe('Build checkpoint execution substrate', () => {
 
   it('fails closed for retained checkpoint folders in status and resume', async () => {
     const runFolder = join(runFolderBase, 'retained-status-and-resume');
-    await startPausedBuildCheckpoint({
+    writeRetainedCheckpointFolder({
       runFolder,
       runId: 'b3000000-0000-0000-0000-000000000019',
       goal: 'Project retained checkpoint before resume',
@@ -678,7 +788,7 @@ describe('Build checkpoint execution substrate', () => {
         now: deterministicNow(Date.UTC(2026, 3, 25, 5, 5, 0)),
       }),
     ).rejects.toThrow(
-      "checkpoint resume rejected: manifest flow_id 'different-flow-id' does not match flow bytes 'build-checkpoint-exec-test'",
+      /manifest snapshot flow_id mismatch: expected 'build-checkpoint-exec-test' but found 'different-flow-id'/,
     );
     expect(existsSync(join(runFolder, 'reports/result.json'))).toBe(false);
   });
@@ -702,7 +812,9 @@ describe('Build checkpoint execution substrate', () => {
         projectRoot: process.cwd(),
         now: deterministicNow(Date.UTC(2026, 3, 25, 5, 10, 0)),
       }),
-    ).rejects.toThrow('checkpoint resume rejected: manifest run_id differs from trace');
+    ).rejects.toThrow(
+      /manifest snapshot run_id mismatch: expected 'b3000000-0000-0000-0000-000000000014' but found 'b3000000-0000-0000-0000-000000000015'/,
+    );
     expect(existsSync(join(runFolder, 'reports/result.json'))).toBe(false);
   });
 
@@ -725,7 +837,9 @@ describe('Build checkpoint execution substrate', () => {
         projectRoot: process.cwd(),
         now: deterministicNow(Date.UTC(2026, 3, 25, 5, 15, 0)),
       }),
-    ).rejects.toThrow('checkpoint resume rejected: manifest flow_id differs from trace');
+    ).rejects.toThrow(
+      /manifest snapshot flow_id mismatch: expected 'different-flow-id' but found 'build-checkpoint-exec-test'/,
+    );
     expect(existsSync(join(runFolder, 'reports/result.json'))).toBe(false);
   });
 
@@ -748,7 +862,7 @@ describe('Build checkpoint execution substrate', () => {
         projectRoot: process.cwd(),
         now: deterministicNow(Date.UTC(2026, 3, 25, 5, 20, 0)),
       }),
-    ).rejects.toThrow('checkpoint resume rejected: manifest hash differs from trace');
+    ).rejects.toThrow(/manifest snapshot hash mismatch/);
     expect(existsSync(join(runFolder, 'reports/result.json'))).toBe(false);
   });
 
@@ -1113,7 +1227,7 @@ describe('Build checkpoint execution substrate', () => {
     });
 
     expect(resumed.result.outcome).toBe('aborted');
-    expect(resumed.result.reason).toMatch(/requires CompiledFlowInvocation\.projectRoot/);
+    expect(resumed.result.reason).toMatch(/requires projectRoot/);
   });
 
   it('resolves autonomous depth only through a declared safe autonomous choice', async () => {
@@ -1163,6 +1277,9 @@ describe('Build checkpoint execution substrate', () => {
     });
 
     expect(outcome.result.outcome).toBe('aborted');
+    if (outcome.result.outcome !== 'aborted') {
+      throw new Error(`expected aborted, got ${outcome.result.outcome}`);
+    }
     expect(outcome.result.reason).toMatch(/safe autonomous choice/);
     expect(existsSync(join(runFolder, 'reports/result.json'))).toBe(true);
   });
