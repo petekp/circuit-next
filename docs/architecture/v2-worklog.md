@@ -7954,3 +7954,53 @@ Next recommended action: choose one remaining fail-closed public surface. The
 lowest-risk next groups are the progress projection stub or the result path
 helper/writer stub, but keep runner and type surfaces separate because they
 carry broader public API shape.
+
+## 2026-05-07 - Progress Projection Wrapper Retirement
+
+Goal: retire the old `src/runtime/progress-projector.ts` wrapper after
+confirming live progress output ownership already sits in
+`src/shared/progress-output.ts` and old v1 trace projection should not be
+adapted.
+
+Files changed:
+
+- `src/runtime/progress-projector.ts`
+- `src/compat/public-runtime-paths.ts`
+- `tests/unit/runtime/progress-projector.test.ts`
+- `tests/unit/shared/progress-output.test.ts`
+- `tests/runner/public-runtime-paths.test.ts`
+- `tests/runner/retained-compat-facade.test.ts`
+- active progress/public-runtime policy docs
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+What changed:
+
+- deleted the old runtime progress projection wrapper;
+- removed the manifest entry for `src/runtime/progress-projector.ts`;
+- replaced the old-path compatibility test with direct tests for shared progress
+  output behavior;
+- tightened runtime import guards so test imports no longer use old retained
+  saved-state/progress paths;
+- updated active docs to say shared progress output ownership lives in
+  `src/shared/progress-output.ts`.
+
+Tests run:
+
+- `npx vitest run tests/unit/shared/progress-output.test.ts tests/contracts/progress-event-schema.test.ts tests/runner/public-runtime-paths.test.ts tests/runner/retained-compat-facade.test.ts tests/runner/cli-router.test.ts`:
+  passed after fixing the new shared-progress test to use a real
+  `ProgressEvent`. The earlier CLI-router failures were caused by that typecheck
+  error inside the Build verification step.
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run verify`: passed.
+
+Behavior changed? Only the old runtime progress projection wrapper import path
+is retired. Live v2 progress still uses `src/core-v2/projections/progress.ts`
+and shared output helpers from `src/shared/progress-output.ts`.
+
+Next recommended action: choose the result path helper/writer stub or the
+checkpoint fail-closed stubs next. Keep `src/runtime/runner.ts` and
+`src/runtime/runner-types.ts` separate because they carry the widest old public
+surface.

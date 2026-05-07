@@ -23,7 +23,7 @@ The following old runtime path categories are not soft-deprecated:
 - the old public runner surface at `src/runtime/runner.ts` and
   `src/runtime/runner-types.ts`;
 - retired fail-closed runtime surfaces such as checkpoint resume, checkpoint
-  handler, progress projection, and result writing.
+  handler, and result writing.
 
 The old flow-authoring wrappers at `src/runtime/compile-schematic-to-flow.ts`
 and `src/runtime/router.ts` are no longer part of the old public import-path
@@ -46,6 +46,10 @@ corresponding `src/connectors/**` owner modules.
 The old run-status wrapper at `src/runtime/run-status-projection.ts` is also no
 longer part of the old public import-path surface. New code should use
 `src/run-status/project-run-folder.ts`.
+
+The old progress projection wrapper at `src/runtime/progress-projector.ts` is
+also no longer part of the old public import-path surface. New code should use
+`src/shared/progress-output.ts` for shared progress output helpers.
 
 ## Removal Policy
 

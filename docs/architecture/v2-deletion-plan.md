@@ -31,9 +31,9 @@ Phase 4.42 through Phase 5.59 record the compatibility-preserving path. The
 final cutover supersedes that path: `src/compat/retained-runtime.ts`,
 `src/compat/retained-checkpoint-folders.ts`, `src/run-status/v1-run-folder.ts`,
 old handler implementations, old trace/reducer/snapshot implementation files,
-the old relay-selection bridge, and the old run-status wrapper have been
-removed. Old runner, checkpoint, progress, and result-writer entrypoints remain
-only as fail-closed public stubs.
+the old relay-selection bridge, the old run-status wrapper, and the old progress
+projection wrapper have been removed. Old runner, checkpoint, and result-writer
+entrypoints remain only as fail-closed public stubs.
 The old flow-authoring wrappers at `src/runtime/compile-schematic-to-flow.ts`
 and `src/runtime/router.ts` have also been removed.
 
@@ -92,7 +92,6 @@ and path surfaces.
 |---|---|---|
 | `src/runtime/runner.ts` | fail-closed public stub | Direct `runCompiledFlow(...)` calls fail with the retired fresh-run message. Direct checkpoint resume calls fail with the retired run-folder message. |
 | `src/runtime/checkpoint-resume.ts` | fail-closed public stub | `prepareCheckpointResume(...)` fails with the retired run-folder message. |
-| `src/runtime/progress-projector.ts` | shared progress re-export plus fail-closed old projection stubs | `progressDisplay(...)` and `reportProgress(...)` are re-exported from `src/shared/progress-output.ts`; old trace projection APIs fail closed. |
 | `src/runtime/result-writer.ts` | result path helper plus fail-closed old writer stub | `resultPath(...)` still points to the shared result path helper; `writeResult(...)` fails closed. |
 | `src/runtime/step-handlers/checkpoint.ts` | fail-closed checkpoint handler stub | The public checkpoint helper types remain; `runCheckpointStep(...)` fails closed. |
 | `src/runtime/runner-types.ts` | compatibility type surface | Kept for old public type imports while implementation entrypoints are retired. |
@@ -136,7 +135,7 @@ wrappers, public type/path surfaces, or fail-closed stubs.
 | `src/runtime/snapshot-writer.ts` | removed | Retained state snapshot implementation was removed in the final cutover. Handoff and status paths no longer adapt retained/v1 folders. |
 | `src/runtime/operator-summary-writer.ts` | removed | Operator summary writing lives in `src/shared/operator-summary-writer.ts`; the old runtime wrapper is retired. |
 | `src/runtime/run-status-projection.ts` | removed | The status dispatcher implementation lives in `src/run-status/project-run-folder.ts`; the old runtime wrapper is retired. |
-| `src/runtime/progress-projector.ts` | shared progress re-export plus fail-closed projection stubs | core-v2 imports shared helpers from `src/shared/progress-output.ts`. Old trace projection APIs now fail closed. |
+| `src/runtime/progress-projector.ts` | removed | Shared progress output helpers live in `src/shared/progress-output.ts`; old v1 trace projection is retired instead of adapted. |
 | `src/runtime/reducer.ts`, `src/runtime/append-and-derive.ts`, `src/runtime/trace-reader.ts`, `src/runtime/trace-writer.ts` | removed | Old trace infrastructure was removed in the final cutover. Retained/v1 folders fail closed instead of projecting old trace state. |
 | `src/runtime/policy/flow-kind-policy.ts` | removed | Flow-kind policy lives in `src/shared/flow-kind-policy.ts`; the old runtime wrapper is retired. |
 | `src/runtime/write-capable-worker-disclosure.ts` | removed | Disclosure helper lives in `src/shared/write-capable-worker-disclosure.ts`; the old runtime wrapper is retired. |
@@ -174,13 +173,14 @@ Current import groups:
 | `runtime/checkpoint-resume` | direct compatibility tests | fail-closed public stub | Keep only while the old checkpoint-resume import surface remains listed. Retired run folders fail closed. |
 | `runtime/runner-types` | old public type imports and tests | compatibility type surface | Keep until old type imports retire. |
 | `runtime/run-status-projection` | none | removed wrapper | Run-status ownership lives in `src/run-status/project-run-folder.ts`. |
+| `runtime/progress-projector` | none | removed wrapper | Shared progress output ownership lives in `src/shared/progress-output.ts`. |
 | `runtime/step-handlers` | wrapper compatibility tests and checkpoint fail-closed tests | mostly removed; remaining wrappers/stub only | Do not restore the old handler cluster. |
 | `runtime/registries` | none | removed wrappers | Neutral source ownership now lives in `src/flows/registries/**`. |
 | `runtime/connectors` | none | removed wrappers | Live connector infrastructure now lives in `src/connectors/**`. |
 | `runtime/relay-support` | old-path compatibility imports | compatibility re-export | Shared helper ownership lives in `src/shared/relay-support.ts`. |
 | `runtime/relay-selection` | none | removed bridge | Core-v2 and tests use shared relay-selection helpers and core-v2 connector resolver helpers directly. |
 | `runtime/selection-resolver` | old-path compatibility imports | compatibility re-export | Neutral ownership lives in `src/shared/selection-resolver.ts`; keep wrapper until old-path imports migrate. |
-| old trace/status/progress helpers | run-status dispatcher, CLI progress, direct compatibility tests | v2 status plus fail-closed old projection | `src/run-status/project-run-folder.ts` owns the public run-folder dispatcher. `src/run-status/v2-run-folder.ts` owns marked core-v2 run-folder projection. Unmarked retired folders fail closed. |
+| old trace/status/progress helpers | run-status dispatcher and CLI progress | v2 status plus retired old projection | `src/run-status/project-run-folder.ts` owns the public run-folder dispatcher. `src/run-status/v2-run-folder.ts` owns marked core-v2 run-folder projection. `src/shared/progress-output.ts` owns shared progress output helpers. Unmarked retired folders fail closed. |
 | compiler/catalog modules | generator, router, catalog tests | authoring infrastructure under `src/flows/**` | Keep the neutral owners. The old runtime wrappers are retired. |
 
 ## 5. Replacement v2 Surfaces

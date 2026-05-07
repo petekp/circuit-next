@@ -130,7 +130,6 @@ describe('runtime import boundary', () => {
       '../runtime/runner.js',
       '../runtime/append-and-derive.js',
       '../runtime/checkpoint-resume.js',
-      '../runtime/progress-projector.js',
       '../runtime/reducer.js',
       '../runtime/snapshot-writer.js',
       '../runtime/trace-reader.js',
@@ -139,7 +138,6 @@ describe('runtime import boundary', () => {
       '../../runtime/runner.js',
       '../../runtime/append-and-derive.js',
       '../../runtime/checkpoint-resume.js',
-      '../../runtime/progress-projector.js',
       '../../runtime/reducer.js',
       '../../runtime/snapshot-writer.js',
       '../../runtime/trace-reader.js',
@@ -287,7 +285,7 @@ describe('runtime import boundary', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('keeps direct retained trace/status/checkpoint test imports explicit', () => {
+  it('keeps direct retained trace/status/checkpoint test imports retired', () => {
     const repoRoot = resolve('.');
     const retainedSavedStateImport =
       /import\s+\{[^}]+\}\s+from\s+['"][^'"]*src\/runtime\/(?:trace-reader|trace-writer|reducer|snapshot-writer|progress-projector|checkpoint-resume|append-and-derive|step-handlers\/checkpoint)\.js['"]/m;
@@ -301,7 +299,7 @@ describe('runtime import boundary', () => {
       )
       .sort();
 
-    expect(imports).toEqual(['tests/unit/runtime/progress-projector.test.ts']);
+    expect(imports).toEqual([]);
   });
 
   it('keeps direct old runner test imports limited to the explicit compose report compatibility proof', () => {

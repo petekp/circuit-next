@@ -51,9 +51,8 @@ The final cutover changed this inventory's conclusions:
   snapshot writer, append-and-derive, and relay-selection implementation code
   are gone;
 - `src/runtime/runner.ts`, `src/runtime/checkpoint-resume.ts`,
-  `src/runtime/progress-projector.ts`, `src/runtime/result-writer.ts`, and
-  `src/runtime/step-handlers/checkpoint.ts` remain only as fail-closed public
-  stubs or helper re-exports;
+  `src/runtime/result-writer.ts`, and `src/runtime/step-handlers/checkpoint.ts`
+  remain only as fail-closed public stubs or helper re-exports;
 - remaining wrapper imports are governed by
   `src/compat/public-runtime-paths.ts`.
 
@@ -89,7 +88,7 @@ final cutover product decision.
 | `src/runtime/manifest-snapshot-writer.ts` | removed | Neutral byte-match helper lives in `src/shared/manifest-snapshot.ts`; the old runtime wrapper is retired. |
 | `src/runtime/operator-summary-writer.ts` | removed | Neutral operator summary writer lives in `src/shared/operator-summary-writer.ts`; the old runtime wrapper is retired. |
 | `src/runtime/policy/flow-kind-policy.ts` | removed | Neutral policy helper lives in `src/shared/flow-kind-policy.ts`; the old runtime wrapper is retired. |
-| `src/runtime/progress-projector.ts` | retained product behavior | Retained trace-to-progress projection is still needed for retained runs and old folders. |
+| `src/runtime/progress-projector.ts` | removed | Shared progress output lives in `src/shared/progress-output.ts`; old v1 trace projection is retired instead of adapted. |
 | `src/runtime/reducer.ts` | retained product behavior | Retained trace reduction remains the state authority for retained/v1 runs. |
 | `src/runtime/registries/checkpoint-writers/registry.ts` | removed | Neutral checkpoint writer lookup lives in `src/flows/registries/checkpoint-writers/registry.ts`; the old runtime wrapper is retired. |
 | `src/runtime/registries/checkpoint-writers/types.ts` | removed | Neutral checkpoint writer types live in `src/flows/registries/checkpoint-writers/types.ts`; the old runtime wrapper is retired. |

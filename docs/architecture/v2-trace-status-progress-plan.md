@@ -16,8 +16,8 @@ round-trips, checkpoint waiting state, and malformed-folder diagnostics.
 | status projection dispatcher | `src/run-status/project-run-folder.ts` | `src/cli/runs.ts`, run-status tests, v2 CLI tests | Verifies the run folder and manifest, then projects marked core-v2 folders or fails closed for retired/v1 folders. | Neutral-owned as of Phase 4.28; old runtime wrapper retired in final cutover. |
 | status projection common helpers | `src/run-status/projection-common.ts` | neutral dispatcher and v1/v2 run-folder projectors | Shared invalid projection, saved-flow decoding, report paths, and step metadata. Uses shared result path helpers, not retained result-writer wrappers. | Neutral-owned as of Phase 4.29; dependency direction cleaned up in Phase 4.30.1. |
 | v1 run-folder status projection | removed | run-status tests | Retained and v1 folders fail closed with the retired-runtime message instead of being adapted. | Superseded by final cutover. |
-| v1 progress projection | `src/runtime/progress-projector.ts` | retained runner, old progress tests | Converts v1 `TraceEntry` stream into `ProgressEvent`; still owns evidence progress for v1 trace. | Keep as v1 projection until retained runner shrinks. |
-| shared progress output helpers | `src/shared/progress-output.ts` | retained progress projector, v2 progress projector | Safe progress callback wrapper and display truncation. | Already neutral. |
+| v1 progress projection | removed | none | Old v1 trace-to-progress projection is retired instead of adapted. | Superseded by final cutover. |
+| shared progress output helpers | `src/shared/progress-output.ts` | v2 progress projector | Safe progress callback wrapper and display truncation. | Neutral. |
 | v2 status projection | `src/core-v2/projections/status.ts` plus `src/run-status/v2-run-folder.ts` | v2 tests, `runs show` for v2 folders | Projects v2 trace state; run-folder projection is split out from the dispatcher. | Neutral v2 run-folder ownership moved in Phase 4.29. Keep in-memory core-v2 projection separate. |
 | v2 progress projection | `src/core-v2/projections/progress.ts` | v2 graph runner, CLI progress tests | Converts v2 trace entries into `ProgressEvent`. | Keep v2-owned. |
 | status/progress schemas | `src/schemas/run-status.ts`, `src/schemas/progress-event.ts` | CLI, tests, generated/release checks, hosts | Public contract. | Keep in schemas. |
@@ -36,11 +36,8 @@ Current behavior:
 
 - missing/unreadable folder returns `EngineErrorV1`;
 - malformed manifest returns invalid `RunStatusProjectionV1`;
-- v1 trace is attempted first through `readRunTrace(...)`;
-- if v1 trace parsing fails, v2 projection is attempted only for marked
-  `engine: "core-v2"` traces;
-- v1 open, checkpoint-waiting, completed, aborted, and invalid states project
-  through one public schema;
+- marked `engine: "core-v2"` traces project through the v2 path;
+- retired and v1 folders fail closed with the retired-runtime message;
 - v2 completed, aborted, open, child-run, malformed, and identity-mismatch
   cases are covered by tests.
 
@@ -55,9 +52,8 @@ src/cli/circuit.ts progressReporter(...) -> ProgressEvent.parse(...)
 Current behavior:
 
 - route selection is emitted by the CLI before runtime routing;
-- retained runtime progress comes from `src/runtime/progress-projector.ts`;
 - v2 progress comes from `src/core-v2/projections/progress.ts`;
-- both emit the shared `ProgressEvent` schema;
+- v2 emits the shared `ProgressEvent` schema;
 - progress callback failures are swallowed by shared `reportProgress(...)` so a
   host renderer cannot corrupt the run.
 
@@ -270,14 +266,17 @@ npm run verify
 git diff --check
 ```
 
-## Required Tests Before Moving Progress Projection
+## Required Tests Before Retiring Progress Projection
 
-Do not move progress projection in the same slice as status projection. A
-progress move needs:
+The old progress projection wrapper is now retired. The final cutover proof for
+that slice used the shared progress-output unit test, progress schema tests,
+runtime import guards, CLI progress coverage, and full verify:
 
 ```text
-tests/unit/runtime/progress-projector.test.ts
+tests/unit/shared/progress-output.test.ts
 tests/contracts/progress-event-schema.test.ts
+tests/runner/public-runtime-paths.test.ts
+tests/runner/retained-compat-facade.test.ts
 tests/runner/cli-v2-runtime.test.ts
 tests/runner/cli-router.test.ts
 tests/runner/review-runtime-wiring.test.ts
@@ -285,7 +284,7 @@ tests/release/release-infrastructure.test.ts
 npm run verify
 ```
 
-It should also explicitly compare or document retained/v2 differences for:
+Any future progress contract change should explicitly compare or document:
 
 - evidence progress;
 - checkpoint waiting progress;
@@ -322,11 +321,10 @@ Do not do any of these in the next code slice:
 - delete or move `src/runtime/trace-reader.ts`;
 - delete or move `src/runtime/trace-writer.ts`;
 - delete or move `src/runtime/snapshot-writer.ts`;
-- delete or move `src/runtime/progress-projector.ts`;
 - change `ProgressEvent`;
 - change `RunStatusProjectionV1`;
 - merge v1 and v2 trace schemas;
-- remove the retained runtime fallback.
+- recreate the retained runtime fallback.
 
 ## Review Boundary
 

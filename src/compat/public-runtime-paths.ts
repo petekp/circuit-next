@@ -33,15 +33,6 @@ export const PUBLIC_RUNTIME_PATHS: readonly PublicRuntimePathEntry[] = [
     notes: 'Retired v1 checkpoint resume path; direct preparation fails closed.',
   },
   {
-    oldPath: 'src/runtime/progress-projector.ts',
-    category: 'retained-saved-state',
-    currentDisposition: 'retained-owned',
-    deprecationStage: 'none',
-    requiresReviewBeforeDeletion: true,
-    compatibilityTestPaths: ['tests/unit/runtime/progress-projector.test.ts'],
-    notes: 'Retired v1 trace-to-progress path; direct projection fails closed.',
-  },
-  {
     oldPath: 'src/runtime/result-writer.ts',
     category: 'retained-implementation',
     currentDisposition: 'retained-owned',

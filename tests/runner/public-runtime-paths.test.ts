@@ -79,7 +79,6 @@ describe('public runtime import-path manifest', () => {
       expect.arrayContaining([
         'src/runtime/runner.ts',
         'src/runtime/checkpoint-resume.ts',
-        'src/runtime/progress-projector.ts',
         'src/runtime/step-handlers/checkpoint.ts',
       ]),
     );
@@ -184,6 +183,7 @@ describe('public runtime import-path manifest', () => {
     );
     expect(releaseNote).toContain('connector wrappers');
     expect(releaseNote).toContain('run-status wrapper');
+    expect(releaseNote).toContain('progress projection wrapper');
     expect(releaseNote).toContain('src/run-status/project-run-folder.ts');
     expect(releaseNote).toContain('old result path helper');
     expect(releaseNote).toContain('old public runner surface');
