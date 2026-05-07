@@ -19,11 +19,10 @@ import {
 import { RunResult } from '../schemas/result.js';
 
 import { classifyCompiledFlowTask } from '../flows/router.js';
-import type { ComposeWriterFn } from '../runtime/runner-types.js';
 import { discoverConfigLayers } from '../shared/config-loader.js';
 import { validateCompiledFlowKindPolicy } from '../shared/flow-kind-policy.js';
 import { writeOperatorSummary } from '../shared/operator-summary-writer.js';
-import type { RelayFn } from '../shared/relay-runtime-types.js';
+import type { ComposeWriterFn, RelayFn } from '../shared/relay-runtime-types.js';
 import {
   RETIRED_RUNTIME_FRESH_INVOCATION_MESSAGE,
   RETIRED_RUNTIME_RUN_FOLDER_MESSAGE,

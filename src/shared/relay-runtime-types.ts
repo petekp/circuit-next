@@ -1,3 +1,4 @@
+import type { CompiledFlow } from '../schemas/compiled-flow.js';
 import type { ResolvedConnector } from '../schemas/connector.js';
 import type { ProgressEvent } from '../schemas/progress-event.js';
 import type { ResolvedSelection } from '../schemas/selection-policy.js';
@@ -20,3 +21,14 @@ export type ProgressReporter = (event: ProgressEvent) => void;
 export interface RuntimeEvidencePolicy {
   readonly includeUntrackedFileContent?: boolean;
 }
+
+export interface ComposeWriterInput {
+  readonly runFolder: string;
+  readonly flow: CompiledFlow;
+  readonly step: CompiledFlow['steps'][number] & { kind: 'compose' };
+  readonly goal: string;
+  readonly projectRoot?: string;
+  readonly evidencePolicy?: RuntimeEvidencePolicy;
+}
+
+export type ComposeWriterFn = (input: ComposeWriterInput) => void;

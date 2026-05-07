@@ -39,12 +39,11 @@ import {
   SweepReview,
   SweepVerification,
 } from '../../src/flows/sweep/reports.js';
-import type { ComposeWriterFn } from '../../src/runtime/runner-types.js';
 import { ProgressEvent } from '../../src/schemas/progress-event.js';
 import { RunResult } from '../../src/schemas/result.js';
 import { RunStatusProjectionV1 } from '../../src/schemas/run-status.js';
 import type { RelayResult } from '../../src/shared/connector-relay.js';
-import type { RelayFn, RelayInput } from '../../src/shared/relay-runtime-types.js';
+import type { ComposeWriterFn, RelayFn, RelayInput } from '../../src/shared/relay-runtime-types.js';
 import { RETIRED_RUNTIME_FRESH_INVOCATION_MESSAGE } from '../../src/shared/retired-runtime-policy.js';
 
 const REVIEW_RELAY_BODY = JSON.stringify({ verdict: 'NO_ISSUES_FOUND', findings: [] });

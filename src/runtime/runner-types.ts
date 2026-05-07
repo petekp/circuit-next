@@ -8,27 +8,19 @@ import type { Snapshot } from '../schemas/snapshot.js';
 import type { CompiledFlowRef } from '../schemas/step.js';
 import type { TraceEntry } from '../schemas/trace-entry.js';
 import type {
+  ComposeWriterFn,
   ProgressReporter,
   RelayFn,
   RuntimeEvidencePolicy,
 } from '../shared/relay-runtime-types.js';
 export type {
+  ComposeWriterFn,
+  ComposeWriterInput,
   ProgressReporter,
   RelayFn,
   RelayInput,
   RuntimeEvidencePolicy,
 } from '../shared/relay-runtime-types.js';
-
-export interface ComposeWriterInput {
-  readonly runFolder: string;
-  readonly flow: CompiledFlow;
-  readonly step: CompiledFlow['steps'][number] & { kind: 'compose' };
-  readonly goal: string;
-  readonly projectRoot?: string;
-  readonly evidencePolicy?: RuntimeEvidencePolicy;
-}
-
-export type ComposeWriterFn = (input: ComposeWriterInput) => void;
 
 // Surface per-relay metadata (`connectorName`, `cli_version`, `stepId`)
 // so the AGENT_SMOKE fingerprint writer can bind `cli_version` to the
