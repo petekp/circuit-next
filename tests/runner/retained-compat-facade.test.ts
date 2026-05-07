@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, resolve, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -195,11 +195,8 @@ describe('retained runtime compatibility facade', () => {
     expect(runStatusDispatcher).not.toContain('../compat/retained-checkpoint-folders.js');
     expect(runStatusDispatcher).not.toContain('../compat/retained-runtime.js');
     expect(runStatusDispatcher).not.toContain('../runtime/trace-reader.js');
-
-    const v1Projection = readFileSync(resolve('src/run-status/v1-run-folder.ts'), 'utf8');
-    expect(v1Projection).toContain('../compat/retained-checkpoint-folders.js');
-    expect(v1Projection).not.toContain('../compat/retained-runtime.js');
-    expect(v1Projection).not.toContain('../runtime/reducer.js');
+    expect(runStatusDispatcher).not.toContain("'./v1-run-folder.js'");
+    expect(existsSync(resolve('src/run-status/v1-run-folder.ts'))).toBe(false);
   });
 
   it('keeps retained execution and saved-state implementation imports behind the facades in production code', () => {

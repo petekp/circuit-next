@@ -20,7 +20,10 @@ packet path stops here unless a genuinely new ambiguity appears.
    This run folder was created by the retired runtime. Start a fresh run.
    ```
 
-3. Doc compression. Keep the historical checkpoint docs until this group.
+3. Dead adapter cleanup. Done: the unused retained/v1 run-status projector is
+   deleted. Retained fresh-run internals stay in place until a separate runtime
+   removal batch.
+4. Doc compression. Keep the historical checkpoint docs until this group.
 
 ## Guardrails
 
@@ -33,8 +36,5 @@ packet path stops here unless a genuinely new ambiguity appears.
 
 ## Immediate Next Step
 
-Choose the next batch:
-
-- remove dead retained/v1 projection code that no active CLI path calls anymore;
-- or start doc compression and update the historical checkpoint docs in one
-  deliberate pass.
+Start doc compression and update the historical checkpoint docs in one
+deliberate pass.

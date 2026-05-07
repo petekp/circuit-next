@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -35,14 +35,7 @@ describe('run-status public facade', () => {
     expect(projectionCommon).toContain('../shared/result-path.js');
     expect(projectionCommon).not.toContain('../runtime/result-writer.js');
 
-    const v1Projector = readFileSync(resolve('src/run-status/v1-run-folder.ts'), 'utf8');
-    expect(v1Projector).toContain('../compat/retained-checkpoint-folders.js');
-    expect(v1Projector).not.toContain('../compat/retained-runtime.js');
-    expect(v1Projector).toContain('../shared/run-relative-path.js');
-    expect(v1Projector).not.toContain('../runtime/reducer.js');
-    expect(v1Projector).not.toContain('../runtime/run-relative-path.js');
-    expect(v1Projector).not.toContain('../runtime/trace-reader.js');
-    expect(v1Projector).not.toContain('../runtime/trace-writer.js');
+    expect(existsSync(resolve('src/run-status/v1-run-folder.ts'))).toBe(false);
 
     const v2Projector = readFileSync(resolve('src/run-status/v2-run-folder.ts'), 'utf8');
     expect(v2Projector).not.toContain('../runtime/reducer.js');
