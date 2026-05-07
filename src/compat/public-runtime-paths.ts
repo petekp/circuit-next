@@ -374,10 +374,7 @@ export const PUBLIC_RUNTIME_PATHS: readonly PublicRuntimePathEntry[] = [
     currentDisposition: 'retained-owned',
     deprecationStage: 'none',
     requiresReviewBeforeDeletion: true,
-    compatibilityTestPaths: [
-      'tests/runner/fix-report-writer.test.ts',
-      'tests/runner/retained-compat-facade.test.ts',
-    ],
+    compatibilityTestPaths: ['tests/runner/retained-compat-facade.test.ts'],
     notes: 'Retained execution fallback plus old public writeComposeReport path.',
   },
   {
@@ -405,7 +402,10 @@ export const PUBLIC_RUNTIME_PATHS: readonly PublicRuntimePathEntry[] = [
     currentDisposition: 'retained-owned',
     deprecationStage: 'none',
     requiresReviewBeforeDeletion: true,
-    compatibilityTestPaths: ['tests/runner/checkpoint-handler-direct.test.ts'],
+    compatibilityTestPaths: [
+      'tests/core-v2/checkpoint-resume-v2.test.ts',
+      'tests/core-v2/control-loop-v2.test.ts',
+    ],
     notes: 'Retained checkpoint handler.',
   },
   {
@@ -489,7 +489,7 @@ export const PUBLIC_RUNTIME_PATHS: readonly PublicRuntimePathEntry[] = [
     currentDisposition: 'retained-owned',
     deprecationStage: 'none',
     requiresReviewBeforeDeletion: true,
-    compatibilityTestPaths: ['tests/runner/relay-handler-direct.test.ts'],
+    compatibilityTestPaths: ['tests/core-v2/control-loop-v2.test.ts'],
     notes: 'Retained relay handler.',
   },
   {
@@ -526,7 +526,7 @@ export const PUBLIC_RUNTIME_PATHS: readonly PublicRuntimePathEntry[] = [
     currentDisposition: 'retained-owned',
     deprecationStage: 'none',
     requiresReviewBeforeDeletion: true,
-    compatibilityTestPaths: ['tests/runner/verification-handler-direct.test.ts'],
+    compatibilityTestPaths: ['tests/core-v2/control-loop-v2.test.ts'],
     notes: 'Retained verification handler.',
   },
   {

@@ -389,7 +389,6 @@ describe('runtime import boundary', () => {
 
     expect(imports).toEqual([
       'tests/contracts/relay-transcript-schema.test.ts',
-      'tests/runner/checkpoint-handler-direct.test.ts',
       'tests/runner/run-status-projection.test.ts',
       'tests/unit/runtime/progress-projector.test.ts',
     ]);
@@ -409,6 +408,6 @@ describe('runtime import boundary', () => {
       )
       .sort();
 
-    expect(offenders).toEqual(['tests/runner/fix-report-writer.test.ts']);
+    expect(offenders).toEqual([]);
   });
 });
