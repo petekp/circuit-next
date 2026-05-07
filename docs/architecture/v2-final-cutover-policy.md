@@ -23,7 +23,8 @@ packet path stops here unless a genuinely new ambiguity appears.
 3. Dead adapter cleanup. Done: the unused retained/v1 run-status projector is
    deleted. Retained fresh-run internals stay in place until a separate runtime
    removal batch.
-4. Doc compression. Keep the historical checkpoint docs until this group.
+4. Doc compression. Done: the tracked numbered checkpoint notes are compressed
+   into `docs/architecture/v2-checkpoint-history.md`.
 
 ## Guardrails
 
@@ -36,5 +37,6 @@ packet path stops here unless a genuinely new ambiguity appears.
 
 ## Immediate Next Step
 
-Start doc compression and update the historical checkpoint docs in one
-deliberate pass.
+Choose the next runtime-removal batch. The likely next move is to inventory the
+retained fresh-run fallback, retained direct tests, and old runtime wrappers now
+that old run folders fail closed.

@@ -1,5 +1,10 @@
 # Circuit v2 Migration Plan
 
+Status: historical. The final cutover policy in
+`docs/architecture/v2-final-cutover-policy.md` supersedes the old
+checkpoint-by-checkpoint migration posture. The numbered checkpoint notes were
+compressed into `docs/architecture/v2-checkpoint-history.md` and git history.
+
 This plan is imperative. Stop at each listed checkpoint and do not continue
 until review approves the next step.
 
