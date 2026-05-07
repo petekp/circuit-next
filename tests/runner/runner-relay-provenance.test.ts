@@ -4,10 +4,11 @@ import { dirname, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { materializeRelay } from '../../src/connectors/relay-materializer.js';
+import { resolveConnectorForRelayV2 } from '../../src/core-v2/connectors/resolver.js';
 import type { ExecutorRegistryV2 } from '../../src/core-v2/executors/index.js';
+import { relayWithResolvedConnectorV2 } from '../../src/core-v2/executors/relay.js';
 import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
 import { TraceStore } from '../../src/core-v2/trace/trace-store.js';
-import { resolveRelayDecision } from '../../src/runtime/relay-selection.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { Config } from '../../src/schemas/config.js';
 import { RunId, StepId } from '../../src/schemas/ids.js';
@@ -157,9 +158,9 @@ describe('relay connector resolution precedence', () => {
     const { flow } = loadGeneratedFixture('build');
     const step = relayStep(flow, 'reviewer');
 
-    const decision = await resolveRelayDecision({
-      flow,
-      step,
+    const decision = resolveConnectorForRelayV2({
+      flowId: flow.id,
+      role: step.role,
       configLayers: [
         {
           layer: 'project',
@@ -179,7 +180,7 @@ describe('relay connector resolution precedence', () => {
       ],
     });
 
-    expect(decision.relayer.connectorName).toBe('codex');
+    expect(decision.connectorName).toBe('codex');
     expect(decision.resolvedFrom).toEqual({ source: 'role', role: step.role });
   });
 
@@ -187,9 +188,9 @@ describe('relay connector resolution precedence', () => {
     const { flow } = loadGeneratedFixture('build');
     const step = relayStep(flow, 'reviewer');
 
-    const decision = await resolveRelayDecision({
-      flow,
-      step,
+    const decision = resolveConnectorForRelayV2({
+      flowId: flow.id,
+      role: step.role,
       configLayers: [
         {
           layer: 'project',
@@ -209,7 +210,7 @@ describe('relay connector resolution precedence', () => {
       ],
     });
 
-    expect(decision.relayer.connectorName).toBe('codex');
+    expect(decision.connectorName).toBe('codex');
     expect(decision.resolvedFrom).toEqual({ source: 'circuit', flow_id: flow.id });
   });
 
@@ -217,9 +218,13 @@ describe('relay connector resolution precedence', () => {
     const { flow } = loadFixture();
     const step = relayStep(flow);
 
-    const decision = await resolveRelayDecision({ flow, step, configLayers: [] });
+    const decision = resolveConnectorForRelayV2({
+      flowId: flow.id,
+      role: step.role,
+      configLayers: [],
+    });
 
-    expect(decision.relayer.connectorName).toBe('claude-code');
+    expect(decision.connectorName).toBe('claude-code');
     expect(decision.resolvedFrom).toEqual({ source: 'auto' });
   });
 
@@ -227,9 +232,9 @@ describe('relay connector resolution precedence', () => {
     const { flow } = loadGeneratedFixture('build');
     const step = relayStep(flow, 'reviewer');
 
-    const decision = await resolveRelayDecision({
-      flow,
-      step,
+    const decision = resolveConnectorForRelayV2({
+      flowId: flow.id,
+      role: step.role,
       configLayers: [
         {
           layer: 'user-global',
@@ -245,7 +250,7 @@ describe('relay connector resolution precedence', () => {
       ],
     });
 
-    expect(decision.relayer.connectorName).toBe('codex');
+    expect(decision.connectorName).toBe('codex');
     expect(decision.resolvedFrom).toEqual({ source: 'default' });
   });
 
@@ -253,10 +258,10 @@ describe('relay connector resolution precedence', () => {
     const { flow } = loadFixture();
     const step = relayStep(flow, 'implementer');
 
-    await expect(
-      resolveRelayDecision({
-        flow,
-        step,
+    expect(() =>
+      resolveConnectorForRelayV2({
+        flowId: flow.id,
+        role: step.role,
         configLayers: [
           {
             layer: 'project',
@@ -275,17 +280,17 @@ describe('relay connector resolution precedence', () => {
           },
         ],
       }),
-    ).rejects.toThrow(/read-only and cannot run implementer/);
+    ).toThrow(/read-only and cannot run implementer/);
   });
 
   it('read-only default connector is rejected for implementer relay steps', async () => {
     const { flow } = loadFixture();
     const step = relayStep(flow, 'implementer');
 
-    await expect(
-      resolveRelayDecision({
-        flow,
-        step,
+    expect(() =>
+      resolveConnectorForRelayV2({
+        flowId: flow.id,
+        role: step.role,
         configLayers: [
           {
             layer: 'project',
@@ -304,7 +309,7 @@ describe('relay connector resolution precedence', () => {
           },
         ],
       }),
-    ).rejects.toThrow(/read-only and cannot run implementer/);
+    ).toThrow(/read-only and cannot run implementer/);
   });
 
   it('custom reviewer connectors run with documented prompt and output files', async () => {
@@ -319,9 +324,9 @@ describe('relay connector resolution precedence', () => {
     ].join(' ');
 
     for (const name of ['gemini-reviewer', 'cursor-reviewer'] as const) {
-      const decision = await resolveRelayDecision({
-        flow,
-        step,
+      const decision = resolveConnectorForRelayV2({
+        flowId: flow.id,
+        role: step.role,
         configLayers: [
           {
             layer: 'project',
@@ -350,9 +355,9 @@ describe('relay connector resolution precedence', () => {
         ],
       });
 
-      expect(decision.relayer.connectorName).toBe(name);
+      expect(decision.connectorName).toBe(name);
       expect(decision.resolvedFrom).toEqual({ source: 'role', role: 'reviewer' });
-      const result = await decision.relayer.relay({
+      const result = await relayWithResolvedConnectorV2(decision.connector, {
         prompt: `review with ${name}`,
         resolvedSelection: { skills: [], invocation_options: {} },
       });

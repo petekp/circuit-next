@@ -293,15 +293,6 @@ export const PUBLIC_RUNTIME_PATHS: readonly PublicRuntimePathEntry[] = [
     notes: 'Old verification writer registry type path.',
   },
   {
-    oldPath: 'src/runtime/relay-selection.ts',
-    category: 'retained-implementation',
-    currentDisposition: 'retained-owned',
-    deprecationStage: 'none',
-    requiresReviewBeforeDeletion: true,
-    compatibilityTestPaths: ['tests/runner/runner-relay-provenance.test.ts'],
-    notes: 'Retained relay decision bridge and provenance behavior.',
-  },
-  {
     oldPath: 'src/runtime/relay-support.ts',
     currentOwnerPath: 'src/shared/relay-support.ts',
     category: 'shared-helper-wrapper',
