@@ -19,6 +19,12 @@ import { ManifestSnapshot, computeManifestHash } from '../../../src/schemas/mani
 const MANIFEST_BODY = readFileSync(resolve('generated/flows/runtime-proof/circuit.json'));
 const RUN_ID = '11111111-2222-3333-4444-555555555555';
 const FLOW_ID = 'runtime-proof';
+const change_kind = {
+  change_kind: 'ratchet-advance' as const,
+  failure_mode: 'trace store test fixture failed',
+  acceptance_evidence: 'trace entries append and reload with contiguous sequence numbers',
+  alternate_framing: 'use a smaller direct trace-store fixture',
+};
 
 function baseRecordedAt(step: number): string {
   const base = Date.UTC(2026, 3, 20, 12, 0, 0);
@@ -37,12 +43,8 @@ async function writeBootstrap(trace: TraceStore) {
     flow_id: FLOW_ID,
     goal: 'prove circuit-next can close one run',
     depth: 'standard',
+    change_kind,
     manifest_hash: computeManifestHash(MANIFEST_BODY),
-    data: {
-      flow_id: FLOW_ID,
-      engine: 'runtime',
-      manifest_hash: computeManifestHash(MANIFEST_BODY),
-    },
   });
 }
 
@@ -119,17 +121,16 @@ describe('runtime trace.ndjson and manifest snapshot round-trip', () => {
       run_id: RUN_ID,
       kind: 'run.closed',
       outcome: 'complete',
-      data: { outcome: 'complete' },
     });
 
     await expect(
-      trace.append({ run_id: RUN_ID, kind: 'step.completed', step_id: 'frame' }),
+      trace.append({ run_id: RUN_ID, kind: 'step.completed', step_id: 'frame', attempt: 1 }),
     ).rejects.toThrow('cannot append trace entry after run close');
 
     const reloaded = new TraceStore(runFolder);
     await reloaded.load();
     await expect(
-      reloaded.append({ run_id: RUN_ID, kind: 'step.completed', step_id: 'frame' }),
+      reloaded.append({ run_id: RUN_ID, kind: 'step.completed', step_id: 'frame', attempt: 1 }),
     ).rejects.toThrow('cannot append trace entry after run close');
   });
 
@@ -152,6 +153,7 @@ describe('runtime trace.ndjson and manifest snapshot round-trip', () => {
 
   it('rejects trace entries after run.closed', async () => {
     const closed = {
+      schema_version: 1,
       sequence: 0,
       recorded_at: baseRecordedAt(0),
       run_id: RUN_ID,
@@ -159,11 +161,13 @@ describe('runtime trace.ndjson and manifest snapshot round-trip', () => {
       outcome: 'complete',
     };
     const late = {
+      schema_version: 1,
       sequence: 1,
       recorded_at: baseRecordedAt(1),
       run_id: RUN_ID,
       kind: 'step.entered',
       step_id: 'late',
+      attempt: 1,
     };
     writeFileSync(
       join(runFolder, 'trace.ndjson'),

@@ -515,7 +515,6 @@ function writeInvalidCheckpointFolder(input: {
   writeFileSync(
     join(input.runFolder, 'trace.ndjson'),
     `${JSON.stringify({
-      schema_version: 1,
       sequence: 0,
       recorded_at: capturedAt,
       run_id: input.runId,
@@ -523,7 +522,6 @@ function writeInvalidCheckpointFolder(input: {
       flow_id: 'build-checkpoint-exec-test',
       depth: 'deep',
       goal: input.goal,
-      change_kind: change_kind(),
       manifest_hash: manifest.hash,
     })}\n`,
   );

@@ -14,7 +14,7 @@ function isRunClosedOutcome(value: unknown): value is RunClosedOutcome {
 export function projectStatusFromTrace(entries: readonly TraceEntry[]): RuntimeRunStatus {
   const closed = [...entries].reverse().find((entry) => entry.kind === 'run.closed');
   if (closed !== undefined) {
-    const outcome = closed.outcome ?? closed.data?.outcome;
+    const outcome = closed.outcome;
     if (isRunClosedOutcome(outcome)) return outcome;
     return 'aborted';
   }

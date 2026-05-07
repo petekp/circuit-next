@@ -336,22 +336,23 @@ export async function executeProductionRelayAttempt(input: {
   await writeFile(requestPath, prompt, 'utf8');
   const requestPayloadHash = sha256Hex(prompt);
   const startMs = Date.now();
+  const attempt = context.activeStepAttempt ?? 1;
   await context.trace.append({
     run_id: context.runId,
     kind: 'relay.started',
     step_id: step.id,
-    data: {
-      connector: relayExecution.connector,
-      resolved_from: relayExecution.resolvedFrom,
-      role: step.role,
-      resolved_selection: resolvedSelection,
-    },
+    attempt,
+    connector: relayExecution.connector,
+    role: RelayRole.parse(relayExecution.role),
+    resolved_selection: resolvedSelection,
+    resolved_from: relayExecution.resolvedFrom,
   });
   await context.trace.append({
     run_id: context.runId,
     kind: 'relay.request',
     step_id: step.id,
-    data: { request_payload_hash: requestPayloadHash },
+    attempt,
+    request_payload_hash: requestPayloadHash,
   });
 
   let relayResult: RelayResult;
@@ -379,8 +380,13 @@ export async function executeProductionRelayAttempt(input: {
       run_id: context.runId,
       kind: 'relay.failed',
       step_id: step.id,
+      attempt,
+      connector: relayExecution.connector,
+      role: RelayRole.parse(relayExecution.role),
+      resolved_selection: resolvedSelection,
+      resolved_from: relayExecution.resolvedFrom,
+      request_payload_hash: requestPayloadHash,
       reason,
-      data: { request_payload_hash: requestPayloadHash },
     });
     return { kind: 'connector_failed', reason, duration_ms: Math.max(0, Date.now() - startMs) };
   }
@@ -391,13 +397,16 @@ export async function executeProductionRelayAttempt(input: {
     run_id: context.runId,
     kind: 'relay.receipt',
     step_id: step.id,
-    data: { receipt_id: relayResult.receipt_id, cli_version: relayResult.cli_version },
+    attempt,
+    cli_version: relayResult.cli_version,
+    receipt_id: relayResult.receipt_id,
   });
   await context.trace.append({
     run_id: context.runId,
     kind: 'relay.result',
     step_id: step.id,
-    data: { result_report_hash: sha256Hex(relayResult.result_body) },
+    attempt,
+    result_report_hash: sha256Hex(relayResult.result_body),
   });
 
   const checkEvaluation = evaluateRelayCheck(compiledStep, relayResult.result_body);
@@ -421,26 +430,6 @@ export async function executeProductionRelayAttempt(input: {
       ? evaluation.verdict
       : (evaluation.observedVerdict ?? NO_VERDICT_SENTINEL);
   const durationMs = Math.max(0, Date.now() - startMs);
-  await context.trace.append({
-    run_id: context.runId,
-    kind: 'relay.completed',
-    step_id: step.id,
-    verdict: relayCompletedVerdict,
-    duration_ms: relayResult.duration_ms,
-    result_path: result.path,
-    ...(step.report === undefined || evaluation.kind !== 'pass'
-      ? {}
-      : { report_path: step.report.path }),
-    data: { admitted: evaluation.kind === 'pass' },
-  });
-  await context.trace.append({
-    run_id: context.runId,
-    kind: 'check.evaluated',
-    step_id: step.id,
-    check_kind: 'result_verdict',
-    outcome: evaluation.kind === 'pass' ? 'pass' : 'fail',
-    ...(evaluation.kind === 'pass' ? {} : { reason: evaluation.reason }),
-  });
 
   if (evaluation.kind === 'pass' && step.report !== undefined) {
     const reportBody =
@@ -448,6 +437,26 @@ export async function executeProductionRelayAttempt(input: {
     await context.files.writeJson(step.report, reportBody);
     parsedBody = reportBody;
   }
+
+  await context.trace.append({
+    run_id: context.runId,
+    kind: 'relay.completed',
+    step_id: step.id,
+    attempt,
+    verdict: relayCompletedVerdict,
+    duration_ms: durationMs,
+    result_path: result.path,
+    receipt_path: receipt.path,
+  });
+  await context.trace.append({
+    run_id: context.runId,
+    kind: 'check.evaluated',
+    step_id: step.id,
+    attempt,
+    check_kind: 'result_verdict',
+    outcome: evaluation.kind === 'pass' ? 'pass' : 'fail',
+    ...(evaluation.kind === 'pass' ? {} : { reason: evaluation.reason }),
+  });
 
   return {
     kind: 'completed',

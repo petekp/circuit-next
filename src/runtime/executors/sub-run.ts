@@ -29,10 +29,12 @@ async function recordSubRunCheckFailure(
   context: RunContext,
   reason: string,
 ): Promise<never> {
+  const attempt = context.activeStepAttempt ?? 1;
   await context.trace.append({
     run_id: context.runId,
     kind: 'check.evaluated',
     step_id: step.id,
+    attempt,
     check_kind: 'result_verdict',
     outcome: 'fail',
     reason,
@@ -90,6 +92,7 @@ function parseChildResultBody(
 }
 
 export async function executeSubRun(step: SubRunStep, context: RunContext): Promise<StepOutcome> {
+  const attempt = context.activeStepAttempt ?? 1;
   const resultWrite = step.writes?.result;
   if (resultWrite === undefined) {
     throw new Error(`sub-run step '${step.id}' is missing writes.result`);
@@ -157,6 +160,7 @@ export async function executeSubRun(step: SubRunStep, context: RunContext): Prom
     run_id: context.runId,
     kind: 'sub_run.started',
     step_id: step.id,
+    attempt,
     child_run_id: childRunId,
     child_flow_id: childFlow.id,
     child_entry_mode: step.entryMode,
@@ -211,12 +215,12 @@ export async function executeSubRun(step: SubRunStep, context: RunContext): Prom
       run_id: context.runId,
       kind: 'sub_run.completed',
       step_id: step.id,
+      attempt,
       child_run_id: childRunId,
       child_outcome: childResult.outcome,
       verdict: NO_VERDICT_SENTINEL,
       duration_ms: durationMs,
       result_path: resultWrite.path,
-      data: { admitted: false },
     });
     return await recordSubRunCheckFailure(step, context, reason);
   }
@@ -228,12 +232,12 @@ export async function executeSubRun(step: SubRunStep, context: RunContext): Prom
     run_id: context.runId,
     kind: 'sub_run.completed',
     step_id: step.id,
+    attempt,
     child_run_id: childRunId,
     child_outcome: childResultBody.outcome,
     verdict: verdict.verdict,
     duration_ms: durationMs,
     result_path: resultWrite.path,
-    data: { admitted },
   });
 
   if (admitted) {
@@ -241,6 +245,7 @@ export async function executeSubRun(step: SubRunStep, context: RunContext): Prom
       run_id: context.runId,
       kind: 'check.evaluated',
       step_id: step.id,
+      attempt,
       check_kind: 'result_verdict',
       outcome: 'pass',
     });

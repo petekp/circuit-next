@@ -117,6 +117,7 @@ export async function executeVerification(
   step: VerificationStep,
   context: RunContext,
 ): Promise<StepOutcome> {
+  const attempt = context.activeStepAttempt ?? 1;
   let report: NonNullable<NonNullable<VerificationStep['writes']>['report']>;
   let reportSchema: string;
   let body: {
@@ -158,6 +159,7 @@ export async function executeVerification(
       run_id: context.runId,
       kind: 'check.evaluated',
       step_id: step.id,
+      attempt,
       check_kind: 'schema_sections',
       outcome: 'fail',
       reason,
@@ -169,6 +171,7 @@ export async function executeVerification(
     run_id: context.runId,
     kind: 'step.report_written',
     step_id: step.id,
+    attempt,
     report_path: report.path,
     report_schema: reportSchema,
   });
@@ -178,6 +181,7 @@ export async function executeVerification(
       run_id: context.runId,
       kind: 'check.evaluated',
       step_id: step.id,
+      attempt,
       check_kind: 'schema_sections',
       outcome: 'pass',
     });
@@ -189,6 +193,7 @@ export async function executeVerification(
     run_id: context.runId,
     kind: 'check.evaluated',
     step_id: step.id,
+    attempt,
     check_kind: 'schema_sections',
     outcome: 'fail',
     reason,

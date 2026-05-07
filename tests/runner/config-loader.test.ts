@@ -229,8 +229,7 @@ circuits:
       .filter(Boolean)
       .map((line) => JSON.parse(line) as Record<string, unknown>);
     const started = trace_entries.find((trace_entry) => trace_entry.kind === 'relay.started');
-    const startedData = started?.data as { readonly resolved_selection?: unknown } | undefined;
-    expect(startedData?.resolved_selection ?? started?.resolved_selection).toEqual(expected);
+    expect(started?.resolved_selection).toEqual(expected);
 
     const output = JSON.parse(stdout.text()) as Record<string, unknown>;
     expect(output.flow_id).toBe('review');

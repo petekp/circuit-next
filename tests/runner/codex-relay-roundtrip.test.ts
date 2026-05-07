@@ -189,26 +189,27 @@ describe('codex relay round-trip (second-connector evidence)', () => {
       ]);
 
       const started = relayEntry(trace, 'relay.started');
-      expect(started.data?.connector).toEqual({ kind: 'builtin', name: 'codex' });
-      expect(started.data?.role).toBe('reviewer');
-      expect(started.data?.resolved_from).toEqual({ source: 'explicit' });
-      expect(started.data?.resolved_selection).toEqual(CODEX_SMOKE_SELECTION);
+      expect(started.connector).toEqual({ kind: 'builtin', name: 'codex' });
+      expect(started.role).toBe('reviewer');
+      expect(started.resolved_from).toEqual({ source: 'explicit' });
+      expect(started.resolved_selection).toEqual(CODEX_SMOKE_SELECTION);
 
       const request = relayEntry(trace, 'relay.request');
       const requestBody = readFileSync(join(runFolder, 'reports', 'relay.request.json'), 'utf8');
-      expect(request.data?.request_payload_hash).toBe(sha256Hex(requestBody));
+      expect(request.request_payload_hash).toBe(sha256Hex(requestBody));
 
       const receipt = relayEntry(trace, 'relay.receipt');
-      const cliVersion = String(receipt.data?.cli_version ?? '');
-      expect(receipt.data?.receipt_id).toEqual(
+      const cliVersion = String(receipt.cli_version ?? '');
+      const receiptId = String(receipt.receipt_id ?? '');
+      expect(receiptId).toEqual(
         readFileSync(join(runFolder, 'reports', 'relay.receipt.json'), 'utf8'),
       );
-      expect(String(receipt.data?.receipt_id ?? '').trim().length).toBeGreaterThan(0);
+      expect(receiptId.trim().length).toBeGreaterThan(0);
       expect(cliVersion).toMatch(/codex.*\d+\.\d+\.\d+/i);
 
       const result = relayEntry(trace, 'relay.result');
       const resultBody = readFileSync(join(runFolder, 'reports', 'relay.result.json'), 'utf8');
-      expect(result.data?.result_report_hash).toBe(sha256Hex(resultBody));
+      expect(result.result_report_hash).toBe(sha256Hex(resultBody));
 
       const completed = relayEntry(trace, 'relay.completed');
       expect(completed.verdict).toBe('ok');

@@ -131,7 +131,7 @@ describe('runtime surface soak', () => {
       JSON.parse(
         readFileSync(join(runFolder, 'trace.ndjson'), 'utf8').split(/\r?\n/, 1)[0] ?? '{}',
       ),
-    ).toMatchObject({ engine: 'runtime', flow_id: 'review' });
+    ).toMatchObject({ schema_version: 1, kind: 'run.bootstrapped', flow_id: 'review' });
   });
 
   it('streams progress for a Build checkpoint and resume lifecycle', async () => {

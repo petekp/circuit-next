@@ -165,7 +165,11 @@ describe('CLI runtime', () => {
     });
     expect(output).not.toHaveProperty('runtime');
     expect(output).not.toHaveProperty('runtime_reason');
-    expect(firstTraceEntry(runFolder)).toMatchObject({ engine: 'runtime', flow_id: 'review' });
+    expect(firstTraceEntry(runFolder)).toMatchObject({
+      schema_version: 1,
+      kind: 'run.bootstrapped',
+      flow_id: 'review',
+    });
     expect(
       RunResult.parse(JSON.parse(readFileSync(join(runFolder, 'reports/result.json'), 'utf8'))),
     ).toMatchObject({ flow_id: 'review', outcome: 'complete' });
@@ -207,7 +211,11 @@ describe('CLI runtime', () => {
 
     expect(result.code, result.stderr).toBe(0);
     expect(JSON.parse(result.stdout)).toMatchObject({ flow_id: 'review', outcome: 'complete' });
-    expect(firstTraceEntry(runFolder)).toMatchObject({ engine: 'runtime' });
+    expect(firstTraceEntry(runFolder)).toMatchObject({
+      schema_version: 1,
+      kind: 'run.bootstrapped',
+      flow_id: 'review',
+    });
   });
 
   it('rejects untrusted explicit fixtures before writing a run folder', async () => {

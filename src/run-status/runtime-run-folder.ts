@@ -10,6 +10,7 @@ import { tournamentCheckpointPresentation } from '../runtime/projections/tournam
 import { resolveRunFilePath } from '../runtime/run-files/paths.js';
 import type { CompiledFlow } from '../schemas/compiled-flow.js';
 import { RunStatusProjectionV1 } from '../schemas/run-status.js';
+import { TraceEntry as TraceEntrySchema } from '../schemas/trace-entry.js';
 import { sha256Hex } from '../shared/connector-relay.js';
 import type { verifyManifestSnapshotBytes } from '../shared/manifest-snapshot.js';
 import {
@@ -31,13 +32,22 @@ function readRawTraceEntries(runFolder: string): RawTraceEntry[] {
   const text = readFileSync(tracePath, 'utf8');
   const trimmed = text.trim();
   if (trimmed.length === 0) return [];
-  return trimmed.split('\n').map((line) => {
+  const entries = trimmed.split('\n').map((line, index) => {
     const parsed = JSON.parse(line) as unknown;
     if (!isRecord(parsed)) {
       throw new Error('trace entry is not a JSON object');
     }
-    return parsed;
+    const entry = TraceEntrySchema.parse(parsed) as RawTraceEntry;
+    if (entry.sequence !== index) {
+      throw new Error(`trace sequence mismatch at entry ${index}`);
+    }
+    return entry;
   });
+  const closedIndex = entries.findIndex((entry) => entry.kind === 'run.closed');
+  if (closedIndex !== -1 && closedIndex !== entries.length - 1) {
+    throw new Error(`trace entry after run.closed at sequence ${closedIndex}`);
+  }
+  return entries;
 }
 
 function traceString(entry: RawTraceEntry, key: string): string | undefined {
@@ -48,13 +58,6 @@ function traceString(entry: RawTraceEntry, key: string): string | undefined {
 function traceNumber(entry: RawTraceEntry, key: string): number | undefined {
   const value = entry[key];
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-}
-
-function traceDataString(entry: RawTraceEntry, key: string): string | undefined {
-  const data = entry.data;
-  if (!isRecord(data)) return undefined;
-  const value = data[key];
-  return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
 function traceStringArray(entry: RawTraceEntry, key: string): string[] | undefined {
@@ -74,17 +77,14 @@ function sameStringArray(left: readonly string[], right: readonly string[]): boo
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
-function runtimeTraceString(entry: RawTraceEntry, key: string): string | undefined {
-  return traceString(entry, key) ?? traceDataString(entry, key);
-}
-
 function isRuntimeTrace(log: readonly RawTraceEntry[]): boolean {
   const bootstrap = log[0];
   return (
     bootstrap !== undefined &&
     bootstrap.kind === 'run.bootstrapped' &&
-    runtimeTraceString(bootstrap, 'engine') === 'runtime' &&
-    runtimeTraceString(bootstrap, 'manifest_hash') !== undefined
+    bootstrap.schema_version === 1 &&
+    isRecord(bootstrap.change_kind) &&
+    traceString(bootstrap, 'manifest_hash') !== undefined
   );
 }
 
@@ -113,7 +113,7 @@ function runtimeLastEvent(log: readonly RawTraceEntry[]): {
 function runtimeRunOutcome(
   entry: RawTraceEntry,
 ): 'complete' | 'aborted' | 'handoff' | 'stopped' | 'escalated' | undefined {
-  const outcome = runtimeTraceString(entry, 'outcome');
+  const outcome = traceString(entry, 'outcome');
   if (
     outcome === 'complete' ||
     outcome === 'aborted' ||
@@ -200,7 +200,7 @@ function runtimeWaitingCheckpointProjection(input: {
   const attempt = traceNumber(requested, 'attempt');
   const requestPath = traceString(requested, 'request_path');
   const expectedHash = traceString(requested, 'request_report_hash');
-  const allowedChoices = traceStringArray(requested, 'allowed_choices');
+  const allowedChoices = traceStringArray(requested, 'options');
   if (
     stepId === undefined ||
     attempt === undefined ||
@@ -393,9 +393,9 @@ export function projectRuntimeRunStatusFromRunFolder(
   }
 
   const bootstrapRunId = traceString(bootstrap, 'run_id');
-  const bootstrapFlowId = runtimeTraceString(bootstrap, 'flow_id');
-  const bootstrapManifestHash = runtimeTraceString(bootstrap, 'manifest_hash');
-  const bootstrapGoal = runtimeTraceString(bootstrap, 'goal');
+  const bootstrapFlowId = traceString(bootstrap, 'flow_id');
+  const bootstrapManifestHash = traceString(bootstrap, 'manifest_hash');
+  const bootstrapGoal = traceString(bootstrap, 'goal');
 
   if (
     bootstrapRunId === undefined ||

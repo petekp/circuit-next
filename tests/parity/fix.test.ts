@@ -164,7 +164,7 @@ describe('fix runtime parity', () => {
           }),
           expect.objectContaining({
             kind: 'run.closed',
-            data: expect.objectContaining({ outcome: 'aborted' }),
+            outcome: 'aborted',
           }),
         ]),
       );
@@ -221,10 +221,8 @@ describe('fix runtime parity', () => {
           }),
           expect.objectContaining({
             kind: 'run.closed',
-            data: expect.objectContaining({
-              outcome: 'aborted',
-              reason: "route 'retry' for step 'fix-act' exhausted max_attempts=2",
-            }),
+            outcome: 'aborted',
+            reason: "route 'retry' for step 'fix-act' exhausted max_attempts=2",
           }),
         ]),
       );

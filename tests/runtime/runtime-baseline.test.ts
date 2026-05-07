@@ -20,6 +20,25 @@ import { TraceStore } from '../../src/runtime/trace/trace-store.js';
 import { computeManifestHash } from '../../src/schemas/manifest.js';
 import { RunResult } from '../../src/schemas/result.js';
 
+const change_kind = {
+  change_kind: 'ratchet-advance' as const,
+  failure_mode: 'runtime baseline fixture failed',
+  acceptance_evidence: 'runtime baseline assertions pass',
+  alternate_framing: 'use a narrower executable flow fixture',
+};
+
+function bootstrapTraceInput(runId: string) {
+  return {
+    run_id: runId,
+    kind: 'run.bootstrapped' as const,
+    flow_id: 'baseline',
+    goal: 'runtime baseline trace fixture',
+    depth: 'standard' as const,
+    change_kind,
+    manifest_hash: 'runtime:baseline@0.1.0',
+  };
+}
+
 async function withTempRun<T>(fn: (runDir: string) => Promise<T>): Promise<T> {
   const runDir = await mkdtemp(join(tmpdir(), 'circuit-runtime-'));
   try {
@@ -108,7 +127,7 @@ describe('runtime baseline', () => {
     await withTempRun(async (runDir) => {
       const result = await executeExecutableFlow(validFlow(), {
         runDir,
-        runId: 'run-valid',
+        runId: '40000000-0000-4000-8000-000000000100',
         executors: {
           relay: async (step, context) => {
             if (step.kind !== 'relay') throw new Error('expected relay step');
@@ -124,7 +143,7 @@ describe('runtime baseline', () => {
       const files = new RunFileStore(runDir);
       await expect(files.readJson('reports/result.json')).resolves.toMatchObject({
         schema_version: 1,
-        run_id: 'run-valid',
+        run_id: '40000000-0000-4000-8000-000000000100',
         flow_id: 'baseline',
         outcome: 'complete',
         trace_entries_observed: 6,
@@ -167,7 +186,8 @@ describe('runtime baseline', () => {
               run_id: context.runId,
               kind: 'sub_run.completed',
               step_id: 'compose',
-              child_run_id: 'child-run',
+              attempt: context.activeStepAttempt ?? 1,
+              child_run_id: '40000000-0000-4000-8000-000000000200',
               child_outcome: 'aborted',
               verdict: 'accept',
               duration_ms: 0,
@@ -288,12 +308,17 @@ describe('runtime baseline', () => {
   it('assigns monotonic trace sequence numbers and rejects append after close', async () => {
     await withTempRun(async (runDir) => {
       const trace = new TraceStore(runDir);
-      await trace.append({ run_id: 'run-trace', kind: 'run.bootstrapped' });
-      await trace.append({ run_id: 'run-trace', kind: 'step.entered', step_id: 'compose' });
+      await trace.append(bootstrapTraceInput('40000000-0000-4000-8000-000000000201'));
       await trace.append({
-        run_id: 'run-trace',
+        run_id: '40000000-0000-4000-8000-000000000201',
+        kind: 'step.entered',
+        step_id: 'compose',
+        attempt: 1,
+      });
+      await trace.append({
+        run_id: '40000000-0000-4000-8000-000000000201',
         kind: 'run.closed',
-        data: { outcome: 'complete' },
+        outcome: 'complete',
       });
 
       expect(trace.getAll().map((entry) => entry.sequence)).toEqual([0, 1, 2]);
@@ -313,7 +338,7 @@ describe('runtime baseline', () => {
       const trace = new TraceStore(filePath);
 
       await expect(
-        trace.append({ run_id: 'run-persist', kind: 'run.bootstrapped' }),
+        trace.append(bootstrapTraceInput('40000000-0000-4000-8000-000000000202')),
       ).rejects.toThrow();
       expect(trace.getAll()).toEqual([]);
     });
@@ -342,7 +367,7 @@ describe('runtime baseline', () => {
       await expect(
         executeExecutableFlow(flow, {
           runDir,
-          runId: 'run-invalid-path',
+          runId: '40000000-0000-4000-8000-000000000101',
         }),
       ).rejects.toThrow("step 'compose' write 'result' path must not contain");
 
@@ -394,7 +419,6 @@ describe('runtime baseline', () => {
       expect(entries.at(-1)).toMatchObject({
         kind: 'run.closed',
         reason,
-        data: { outcome: 'aborted' },
       });
       expect(entries).not.toContainEqual(
         expect.objectContaining({ kind: 'step.completed', step_id: 'compose' }),
@@ -421,7 +445,7 @@ describe('runtime baseline', () => {
         },
         {
           runDir,
-          runId: 'run-undeclared-route',
+          runId: '40000000-0000-4000-8000-000000000102',
           executors: {
             compose: async () => ({ route: 'ghost' }),
           },
@@ -492,7 +516,6 @@ describe('runtime baseline', () => {
             kind: 'step.aborted',
             step_id: 'compose',
             attempt: 1,
-            route_taken: 'pass',
           }),
         ]),
       );
@@ -528,7 +551,7 @@ describe('runtime baseline', () => {
         },
         {
           runDir,
-          runId: 'run-completed-step-route',
+          runId: '40000000-0000-4000-8000-000000000103',
           executors: {
             compose: async (step) => ({ route: step.id === 'first' ? 'pass' : 'continue' }),
           },
@@ -553,7 +576,6 @@ describe('runtime baseline', () => {
             kind: 'step.aborted',
             step_id: 'second',
             attempt: 1,
-            route_taken: 'continue',
           }),
         ]),
       );
@@ -585,7 +607,7 @@ describe('runtime baseline', () => {
         },
         {
           runDir,
-          runId: 'run-non-pass-self-route',
+          runId: '40000000-0000-4000-8000-000000000104',
           executors: {
             compose: async () => ({ route: 'continue' }),
           },
@@ -645,7 +667,7 @@ describe('runtime baseline', () => {
         },
         {
           runDir,
-          runId: 'run-revise-self-route',
+          runId: '40000000-0000-4000-8000-000000000105',
           executors: {
             compose: async () => ({ route: 'revise' }),
           },
@@ -677,12 +699,12 @@ describe('runtime baseline', () => {
   it('rejects non-empty existing traces instead of appending blindly', async () => {
     await withTempRun(async (runDir) => {
       const trace = new TraceStore(runDir);
-      await trace.append({ run_id: 'existing-run', kind: 'run.bootstrapped' });
+      await trace.append(bootstrapTraceInput('40000000-0000-4000-8000-000000000203'));
 
       await expect(
         executeExecutableFlow(validFlow(), {
           runDir,
-          runId: 'new-run',
+          runId: '40000000-0000-4000-8000-000000000204',
         }),
       ).rejects.toThrow('runtime baseline requires a fresh run directory');
 
@@ -830,7 +852,6 @@ describe('runtime baseline', () => {
         run_id: 'run-status',
         kind: 'run.closed',
         outcome: 'complete',
-        data: { outcome: 'complete' },
       },
     ];
 
@@ -845,7 +866,7 @@ describe('runtime baseline', () => {
             sequence: 1,
             run_id: `run-${outcome}`,
             kind: 'run.closed',
-            data: { outcome },
+            outcome,
           },
         ]),
       ).toBe(outcome);
@@ -857,7 +878,7 @@ describe('runtime baseline', () => {
           sequence: 1,
           run_id: 'run-unknown',
           kind: 'run.closed',
-          data: { outcome: 'checkpoint_waiting' },
+          outcome: 'checkpoint_waiting',
         },
       ]),
     ).toBe('aborted');

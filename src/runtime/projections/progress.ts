@@ -27,7 +27,7 @@ function connectorFilesystemCapability(connector: ResolvedConnector): Filesystem
 }
 
 function connectorFromTrace(entry: TraceEntry): ResolvedConnector | undefined {
-  const connector = entry.data?.connector;
+  const connector = entry.connector;
   if (connector === undefined || connector === null || typeof connector !== 'object') {
     return undefined;
   }
@@ -47,7 +47,7 @@ function connectorFromTrace(entry: TraceEntry): ResolvedConnector | undefined {
 }
 
 function relayRoleFromTrace(entry: TraceEntry): 'reviewer' | 'implementer' | undefined {
-  const role = entry.data?.role;
+  const role = entry.role;
   return role === 'reviewer' || role === 'implementer' ? role : undefined;
 }
 
@@ -191,7 +191,7 @@ function reportEvidenceProgress(input: {
 function runOutcome(
   entry: TraceEntry,
 ): 'complete' | 'stopped' | 'handoff' | 'escalated' | 'aborted' {
-  const outcome = entry.outcome ?? entry.data?.outcome;
+  const outcome = entry.outcome;
   if (
     outcome === 'complete' ||
     outcome === 'stopped' ||
@@ -205,7 +205,7 @@ function runOutcome(
 }
 
 function runReason(entry: TraceEntry): string | undefined {
-  const reason = entry.reason ?? entry.data?.reason;
+  const reason = entry.reason;
   return typeof reason === 'string' && reason.length > 0 ? reason : undefined;
 }
 
@@ -215,11 +215,17 @@ function stringArray(value: unknown): string[] | undefined {
   return entries.length === value.length && entries.length > 0 ? entries : undefined;
 }
 
-function checkpointPrompt(entry: TraceEntry): string {
-  const prompt = entry.data?.prompt;
-  return typeof prompt === 'string' && prompt.length > 0
-    ? prompt
-    : 'Choose how to continue this checkpoint.';
+function checkpointPrompt(requestPath: string): string {
+  try {
+    const raw = JSON.parse(readFileSync(requestPath, 'utf8')) as unknown;
+    if (raw !== null && typeof raw === 'object' && !Array.isArray(raw)) {
+      const prompt = (raw as Record<string, unknown>).prompt;
+      if (typeof prompt === 'string' && prompt.length > 0) return prompt;
+    }
+  } catch {
+    // A damaged request file should not block progress projection.
+  }
+  return 'Choose how to continue this checkpoint.';
 }
 
 function checkpointChoiceLabel(choice: string): string {
@@ -447,7 +453,7 @@ export function createProgressProjector(input: {
       }
       case 'fanout.branch_started': {
         const stepId = entry.step_id;
-        const branchKind = fanoutBranchKind(entry.branch_kind ?? entry.data?.branch_kind);
+        const branchKind = fanoutBranchKind(entry.branch_kind);
         if (stepId === undefined || entry.branch_id === undefined || branchKind === undefined) {
           break;
         }
@@ -474,7 +480,7 @@ export function createProgressProjector(input: {
       case 'fanout.branch_completed': {
         const stepId = entry.step_id;
         const childOutcome = fanoutChildOutcome(entry.child_outcome);
-        const branchKind = fanoutBranchKind(entry.branch_kind ?? entry.data?.branch_kind);
+        const branchKind = fanoutBranchKind(entry.branch_kind);
         if (
           stepId === undefined ||
           entry.branch_id === undefined ||
@@ -546,7 +552,7 @@ export function createProgressProjector(input: {
       }
       case 'checkpoint.requested': {
         const stepId = entry.step_id;
-        const allowedChoices = stringArray(entry.allowed_choices);
+        const allowedChoices = stringArray(entry.options);
         if (
           stepId === undefined ||
           entry.request_path === undefined ||
@@ -560,7 +566,7 @@ export function createProgressProjector(input: {
         const requestPath = checkpointRequestPath(input.runDir, entry.request_path);
         taskStatuses.set(stepId, 'in_progress');
         const title = stepTitle({ flow: input.flow, compiledFlow: input.compiledFlow, stepId });
-        const checkpointPromptText = checkpointPrompt(entry);
+        const checkpointPromptText = checkpointPrompt(requestPath);
         const presentation = tournamentCheckpointPresentation({
           runDir: input.runDir,
           allowedChoices,

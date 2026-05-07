@@ -1,4 +1,5 @@
 import { join as joinPath } from 'node:path';
+import { FanoutFailurePolicy } from '../../schemas/step.js';
 import { buildFanoutAggregate } from '../../shared/fanout-aggregate-report.js';
 import { evaluateFanoutJoinPolicy } from '../../shared/fanout-join-policy.js';
 import type { RunFileRef } from '../domain/run-file.js';
@@ -87,6 +88,7 @@ export async function executeFanout(
   context: RunContext,
   relayConnector?: RelayConnector,
 ): Promise<StepOutcome> {
+  const attempt = context.activeStepAttempt ?? 1;
   const branchDirRoot = branchesDir(step);
   const aggregate = aggregateRef(step);
   const branches = await expandFanoutBranches(step, context.files);
@@ -104,8 +106,9 @@ export async function executeFanout(
     run_id: context.runId,
     kind: 'fanout.started',
     step_id: step.id,
+    attempt,
     branch_ids: branchIds,
-    data: { on_child_failure: step.onChildFailure ?? 'abort-all' },
+    on_child_failure: FanoutFailurePolicy.parse(step.onChildFailure ?? 'abort-all'),
   });
 
   const worktreeRunner = context.worktreeRunner ?? gitWorktreeRunner;
@@ -210,8 +213,9 @@ export async function executeFanout(
     run_id: context.runId,
     kind: 'step.report_written',
     step_id: step.id,
+    attempt,
     report_path: aggregate.path,
-    ...(aggregate.schema === undefined ? {} : { report_schema: aggregate.schema }),
+    report_schema: aggregate.schema ?? 'fanout-aggregate@v1',
   });
   const branchesCompleted = outcomes.filter(
     (outcome) => outcome.child_outcome === 'complete',
@@ -220,6 +224,7 @@ export async function executeFanout(
     run_id: context.runId,
     kind: 'fanout.joined',
     step_id: step.id,
+    attempt,
     policy,
     ...(joinResult.winnerBranchId === undefined
       ? {}
@@ -234,6 +239,7 @@ export async function executeFanout(
       run_id: context.runId,
       kind: 'check.evaluated',
       step_id: step.id,
+      attempt,
       check_kind: 'fanout_aggregate',
       outcome: 'pass',
     });
@@ -246,6 +252,7 @@ export async function executeFanout(
     run_id: context.runId,
     kind: 'check.evaluated',
     step_id: step.id,
+    attempt,
     check_kind: 'fanout_aggregate',
     outcome: 'fail',
     reason,

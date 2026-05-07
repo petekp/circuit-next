@@ -49,7 +49,7 @@ describe('build runtime parity', () => {
           expect.objectContaining({
             kind: 'step.completed',
             step_id: 'frame-step',
-            data: { route: 'continue', details: { selected_choice: 'continue' } },
+            route_taken: 'continue',
           }),
         ]),
       );
@@ -124,11 +124,7 @@ describe('build runtime parity', () => {
       const trace = await readTrace(runDir);
       expect(trace[0]).toMatchObject({
         kind: 'run.bootstrapped',
-        data: expect.objectContaining({
-          entry: 'act-step',
-          entry_mode: 'act-only',
-          depth: 'deep',
-        }),
+        depth: 'deep',
       });
       expect(trace.find((entry) => entry.kind === 'step.entered')).toMatchObject({
         step_id: 'act-step',
@@ -158,11 +154,11 @@ describe('build runtime parity', () => {
       const trace = await readTrace(runDir);
       expect(trace[0]).toMatchObject({
         kind: 'run.bootstrapped',
-        data: expect.objectContaining({
-          entry: 'frame-step',
-          entry_mode: 'autonomous',
-          depth: 'autonomous',
-        }),
+        depth: 'autonomous',
+      });
+      expect(trace.find((entry) => entry.kind === 'step.entered')).toMatchObject({
+        step_id: 'frame-step',
+        attempt: 1,
       });
     });
   });

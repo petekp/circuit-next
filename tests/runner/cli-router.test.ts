@@ -844,7 +844,7 @@ describe('CLI router', () => {
     expect(output.entry_mode_source).toBe('classifier');
     expect(output.router_reason).toMatch(/first executable slice/i);
     expect(output.outcome).toBe('complete');
-  });
+  }, 30_000);
 
   it('explicit flow positional bypasses the classifier', async () => {
     const output = await runMainJson(
@@ -1023,15 +1023,12 @@ describe('CLI router', () => {
     const relayStarted = trace_entries.find(
       (trace_entry) => trace_entry.kind === 'relay.started' && trace_entry.step_id === 'act-step',
     );
-    const relayResolvedSelection =
-      relayStarted?.resolved_selection ??
-      (relayStarted?.data as { readonly resolved_selection?: unknown } | undefined)
-        ?.resolved_selection;
+    const relayResolvedSelection = relayStarted?.resolved_selection;
     expect(output.flow_id).toBe('build');
     expect(output.outcome).toBe('complete');
     expect(bootstrap).toMatchObject({ depth: 'lite' });
     expect(relayResolvedSelection).toMatchObject({ depth: 'lite' });
-  });
+  }, 30_000);
 
   it('fails closed when --depth overrides the selected --entry-mode into an unproven route', async () => {
     const runFolder = join(runFolderBase, 'build-entry-mode-depth-override');

@@ -212,7 +212,7 @@ async function runCompiledRelayFanoutruntime(input: {
   const runDir = join(baseDir, `compiled-relay-fanout-${randomUUID()}`);
   const result = await executeExecutableFlow(fromCompiledFlow(compiledFlow), {
     runDir,
-    runId: 'compiled-relay-fanout-run',
+    runId: randomUUID(),
     goal: 'fanout goal',
     manifestHash: 'compiled-relay-fanout-hash',
     compiledFlow: compiledFlow,
@@ -523,7 +523,7 @@ describe('runtime fanout executor', () => {
 
     const result = await executeExecutableFlow(dynamicRelayFanoutFlow(), {
       runDir,
-      runId: 'dynamic-relay-run',
+      runId: randomUUID(),
       goal: 'fanout goal',
       relayConnector,
       executors: {
@@ -653,7 +653,7 @@ describe('runtime fanout executor', () => {
 
     const result = await executeExecutableFlow(subRunFanoutFlow(), {
       runDir,
-      runId: 'sub-run-fanout-run',
+      runId: randomUUID(),
       goal: 'fanout goal',
       projectRoot: join(baseDir, 'project'),
       worktreeRunner,
@@ -673,7 +673,7 @@ describe('runtime fanout executor', () => {
     const runDir = join(baseDir, 'sub-run-fanout-sequence-run');
     const result = await executeExecutableFlow(subRunFanoutFlow({ concurrencyMax: 1 }), {
       runDir,
-      runId: 'sub-run-fanout-sequence-run',
+      runId: randomUUID(),
       goal: 'fanout goal',
       projectRoot: join(baseDir, 'project'),
       worktreeRunner: {
@@ -722,7 +722,7 @@ describe('runtime fanout executor', () => {
       subRunFanoutFlow({ joinPolicy: 'pick-winner', admit: ['gold', 'silver'] }),
       {
         runDir,
-        runId: 'sub-run-pick-winner-success-run',
+        runId: randomUUID(),
         goal: 'fanout goal',
         projectRoot: join(baseDir, 'project'),
         worktreeRunner: {
@@ -772,7 +772,7 @@ describe('runtime fanout executor', () => {
       subRunFanoutFlow({ joinPolicy: 'pick-winner', admit: ['gold'] }),
       {
         runDir,
-        runId: 'sub-run-pick-winner-failure-run',
+        runId: randomUUID(),
         goal: 'fanout goal',
         projectRoot: join(baseDir, 'project'),
         worktreeRunner: {
@@ -819,7 +819,7 @@ describe('runtime fanout executor', () => {
 
     const result = await executeExecutableFlow(subRunFanoutFlow({ joinPolicy: 'aggregate-only' }), {
       runDir,
-      runId: 'sub-run-aggregate-only-failure-run',
+      runId: randomUUID(),
       goal: 'fanout goal',
       projectRoot: join(baseDir, 'project'),
       worktreeRunner: {
@@ -868,7 +868,7 @@ describe('runtime fanout executor', () => {
       subRunFanoutFlow({ joinPolicy: 'aggregate-only', admit: ['accept'] }),
       {
         runDir,
-        runId: 'sub-run-aggregate-only-success-run',
+        runId: randomUUID(),
         goal: 'fanout goal',
         projectRoot: join(baseDir, 'project'),
         worktreeRunner: {
@@ -921,7 +921,7 @@ describe('runtime fanout executor', () => {
       }),
       {
         runDir,
-        runId: 'sub-run-abort-all-short-circuit-run',
+        runId: randomUUID(),
         goal: 'fanout goal',
         projectRoot: join(baseDir, 'project'),
         worktreeRunner: {
@@ -952,7 +952,7 @@ describe('runtime fanout executor', () => {
         kind: 'fanout.started',
         step_id: 'fanout',
         branch_ids: ['one', 'two'],
-        data: { on_child_failure: 'abort-all' },
+        on_child_failure: 'abort-all',
       }),
     );
     expect(entries.filter((entry) => entry.kind === 'fanout.branch_started')).toHaveLength(1);
@@ -987,7 +987,7 @@ describe('runtime fanout executor', () => {
 
     const result = await executeExecutableFlow(subRunFanoutFlow(), {
       runDir,
-      runId: 'sub-run-disjoint-file-conflict-run',
+      runId: randomUUID(),
       goal: 'fanout goal',
       projectRoot: join(baseDir, 'project'),
       worktreeRunner,
@@ -1035,7 +1035,7 @@ describe('runtime fanout executor', () => {
 
     const result = await executeExecutableFlow(subRunFanoutFlow(), {
       runDir,
-      runId: 'sub-run-changed-files-failure-run',
+      runId: randomUUID(),
       goal: 'fanout goal',
       projectRoot: join(baseDir, 'project'),
       worktreeRunner,
@@ -1065,7 +1065,7 @@ describe('runtime fanout executor', () => {
     const runDir = join(baseDir, 'missing-child-runner-run');
     const result = await executeExecutableFlow(subRunFanoutFlow(), {
       runDir,
-      runId: 'missing-child-runner-run',
+      runId: randomUUID(),
       goal: 'fanout goal',
       projectRoot: join(baseDir, 'project'),
       worktreeRunner: {
@@ -1092,7 +1092,7 @@ describe('runtime fanout executor', () => {
     let childRunnerCalls = 0;
     const result = await executeExecutableFlow(subRunFanoutFlow({ joinPolicy: 'pick-winner' }), {
       runDir,
-      runId: 'sub-run-resolver-failure-run',
+      runId: randomUUID(),
       goal: 'fanout goal',
       projectRoot: join(baseDir, 'project'),
       worktreeRunner: {
@@ -1150,7 +1150,7 @@ describe('runtime fanout executor', () => {
 
     const result = await executeExecutableFlow(subRunFanoutFlow(), {
       runDir,
-      runId: 'sub-run-worktree-add-failure-run',
+      runId: randomUUID(),
       goal: 'fanout goal',
       projectRoot: join(baseDir, 'project'),
       worktreeRunner,
@@ -1205,7 +1205,7 @@ describe('runtime fanout executor', () => {
 
     const result = await executeExecutableFlow(subRunFanoutFlow(), {
       runDir,
-      runId: 'sub-run-child-runner-failure-run',
+      runId: randomUUID(),
       goal: 'fanout goal',
       projectRoot: join(baseDir, 'project'),
       worktreeRunner: {
@@ -1251,7 +1251,7 @@ describe('runtime fanout executor', () => {
     let relayCalls = 0;
     const result = await executeExecutableFlow(dynamicRelayFanoutFlow({ role: 'implementer' }), {
       runDir,
-      runId: 'relay-fanout-read-only-run',
+      runId: randomUUID(),
       goal: 'fanout goal',
       relayConnector: {
         connectorName: 'codex',
@@ -1290,7 +1290,7 @@ describe('runtime fanout executor', () => {
       }),
       {
         runDir,
-        runId: 'relay-fanout-provider-run',
+        runId: randomUUID(),
         goal: 'fanout goal',
         relayConnector: {
           connectorName: 'claude-code',
@@ -1326,7 +1326,7 @@ describe('runtime fanout executor', () => {
     let relayCalls = 0;
     const result = await executeExecutableFlow(dynamicRelayFanoutFlow(), {
       runDir,
-      runId: 'relay-fanout-identity-mismatch-run',
+      runId: randomUUID(),
       goal: 'fanout goal',
       relayConnector: {
         connectorName: 'codex',
@@ -1367,7 +1367,7 @@ describe('runtime fanout executor', () => {
       dynamicRelayFanoutFlow({ joinPolicy: 'disjoint-merge' }),
       {
         runDir,
-        runId: 'relay-disjoint-merge-run',
+        runId: randomUUID(),
         goal: 'fanout goal',
         relayConnector: {
           async relay() {

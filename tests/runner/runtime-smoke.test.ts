@@ -194,13 +194,13 @@ describe('runtime-proof runner smoke', () => {
     if (!relayStarted || relayStarted.kind !== 'relay.started') {
       throw new Error('expected relay.started trace_entry');
     }
-    expect(relayStarted.data).toMatchObject({
+    expect(relayStarted).toMatchObject({
       connector: { kind: 'builtin', name: 'claude-code' },
     });
     // `resolved_from` is derived from the runner's actual decision path
     // (see the runtime relay resolver): the test injects a stub relayer,
     // so the honest claim is `source: 'explicit'`.
-    expect(relayStarted.data).toMatchObject({
+    expect(relayStarted).toMatchObject({
       resolved_from: { source: 'explicit' },
     });
     // `resolved_selection` is derived from `flow.default_selection`
@@ -208,7 +208,7 @@ describe('runtime-proof runner smoke', () => {
     // runtime-proof fixture and the explore fixture both use empty
     // default selections at v0, so the canonical empty selection is
     // the honest claim — and it is genuinely empty, not fabricated.
-    expect(relayStarted.data).toMatchObject({
+    expect(relayStarted).toMatchObject({
       resolved_selection: { skills: [], invocation_options: {} },
     });
 

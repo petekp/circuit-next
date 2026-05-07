@@ -146,24 +146,25 @@ describe('agent relay round-trip', () => {
       ]);
 
       const started = relayEntry(trace, 'relay.started');
-      expect(started.data?.connector).toEqual({ kind: 'builtin', name: 'claude-code' });
-      expect(started.data?.role).toBe('implementer');
-      expect(started.data?.resolved_from).toEqual({ source: 'explicit' });
+      expect(started.connector).toEqual({ kind: 'builtin', name: 'claude-code' });
+      expect(started.role).toBe('implementer');
+      expect(started.resolved_from).toEqual({ source: 'explicit' });
 
       const request = relayEntry(trace, 'relay.request');
       const requestBody = readFileSync(join(runFolder, 'reports', 'relay.request.json'), 'utf8');
-      expect(request.data?.request_payload_hash).toBe(sha256Hex(requestBody));
+      expect(request.request_payload_hash).toBe(sha256Hex(requestBody));
 
       const receipt = relayEntry(trace, 'relay.receipt');
-      expect(receipt.data?.receipt_id).toEqual(
+      const receiptId = String(receipt.receipt_id ?? '');
+      expect(receiptId).toEqual(
         readFileSync(join(runFolder, 'reports', 'relay.receipt.json'), 'utf8'),
       );
-      expect(String(receipt.data?.receipt_id ?? '').trim().length).toBeGreaterThan(0);
-      expect(String(receipt.data?.cli_version ?? '')).toMatch(/^\d+\.\d+\.\d+/);
+      expect(receiptId.trim().length).toBeGreaterThan(0);
+      expect(String(receipt.cli_version ?? '')).toMatch(/^\d+\.\d+\.\d+/);
 
       const result = relayEntry(trace, 'relay.result');
       const resultBody = readFileSync(join(runFolder, 'reports', 'relay.result.json'), 'utf8');
-      expect(result.data?.result_report_hash).toBe(sha256Hex(resultBody));
+      expect(result.result_report_hash).toBe(sha256Hex(resultBody));
 
       const completed = relayEntry(trace, 'relay.completed');
       expect(completed.verdict).toBe('ok');

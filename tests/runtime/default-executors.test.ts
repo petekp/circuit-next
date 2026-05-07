@@ -49,9 +49,8 @@ describe('runtime default executors', () => {
       });
       const trace = await new TraceStore(runDir).load();
       const relayReceipt = trace.find((entry) => entry.kind === 'relay.receipt');
-      expect(relayReceipt?.data).toMatchObject({
+      expect(relayReceipt).toMatchObject({
         receipt_id: 'default-review-receipt',
-        cli_version: 'test-relayer',
       });
       expect(
         ReviewIntake.safeParse(

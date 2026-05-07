@@ -430,7 +430,7 @@ describe('runtime checkpoint pause/resume fixture', () => {
       step_id: 'checkpoint-step',
       attempt: 1,
       request_path: 'reports/checkpoints/checkpoint-step-request.json',
-      allowed_choices: ['continue'],
+      options: ['continue'],
     });
     expect(requested?.report_path).toBeUndefined();
 
@@ -702,7 +702,7 @@ describe('runtime checkpoint pause/resume fixture', () => {
     await createWaitingFixture({ runDir });
     await rewriteCheckpointRequestTrace(runDir, (entry) => ({
       ...entry,
-      allowed_choices: ['continue', 'other'],
+      options: ['continue', 'other'],
     }));
 
     await expect(
@@ -727,6 +727,7 @@ describe('runtime checkpoint pause/resume fixture', () => {
     await writeTrace(resolvedRun, [
       ...entries,
       {
+        schema_version: 1,
         sequence: entries.length,
         recorded_at: '2026-01-01T00:00:10.000Z',
         run_id: RUN_ID,
@@ -755,6 +756,7 @@ describe('runtime checkpoint pause/resume fixture', () => {
     await writeTrace(closedRun, [
       ...closedEntries,
       {
+        schema_version: 1,
         sequence: closedEntries.length,
         recorded_at: '2026-01-01T00:00:10.000Z',
         run_id: RUN_ID,

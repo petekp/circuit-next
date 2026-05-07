@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { main } from '../../src/cli/circuit.js';
 import { projectRunStatusFromRunFolder } from '../../src/run-status/project-run-folder.js';
 import { CompiledFlowId, RunId } from '../../src/schemas/ids.js';
-import { TraceEntry } from '../../src/schemas/trace-entry.js';
 import { sha256Hex } from '../../src/shared/connector-relay.js';
 import { writeManifestSnapshot } from '../../src/shared/manifest-snapshot.js';
 
@@ -47,11 +46,6 @@ function writeManifest(input: {
   return manifest.hash;
 }
 
-function append(runFolder: string, candidate: unknown): void {
-  const parsed = TraceEntry.parse(candidate);
-  writeFileSync(join(runFolder, 'trace.ndjson'), `${JSON.stringify(parsed)}\n`, { flag: 'a' });
-}
-
 function bootstrap(input: {
   readonly runId?: string;
   readonly flowId?: string;
@@ -79,7 +73,7 @@ function writeRawTrace(runFolder: string, entries: readonly unknown[]): void {
   );
 }
 
-function v2Bootstrap(input: {
+function unrecognizedBootstrap(input: {
   readonly runId?: string;
   readonly flowId?: string;
   readonly manifestHash: string;
@@ -111,7 +105,11 @@ function stepEntered(sequence: number, stepId: string, attempt = 1): unknown {
   };
 }
 
-function v2StepEntered(sequence: number, stepId: string, attempt = 1): Record<string, unknown> {
+function unrecognizedStepEntered(
+  sequence: number,
+  stepId: string,
+  attempt = 1,
+): Record<string, unknown> {
   return {
     sequence,
     recorded_at: RECORDED_AT,
@@ -122,15 +120,13 @@ function v2StepEntered(sequence: number, stepId: string, attempt = 1): Record<st
   };
 }
 
-function v2StepCompleted(sequence: number, stepId: string, attempt = 1): Record<string, unknown> {
+function unrecognizedRunClosed(sequence: number, outcome: string): Record<string, unknown> {
   return {
     sequence,
     recorded_at: RECORDED_AT,
     run_id: RUN_ID,
-    kind: 'step.completed',
-    step_id: stepId,
-    attempt,
-    route_taken: 'retry',
+    kind: 'run.closed',
+    outcome,
   };
 }
 
@@ -177,22 +173,6 @@ function writeCheckpointRequest(input: {
         )}\n`;
   writeFileSync(requestPath, text);
   return sha256Hex(text);
-}
-
-function appendWaitingCheckpoint(runFolder: string, requestHash: string): void {
-  append(runFolder, stepEntered(1, 'fix-no-repro-decision'));
-  append(runFolder, {
-    schema_version: 1,
-    sequence: 2,
-    recorded_at: RECORDED_AT,
-    run_id: RUN_ID,
-    kind: 'checkpoint.requested',
-    step_id: 'fix-no-repro-decision',
-    attempt: 1,
-    options: ['continue'],
-    request_path: FIX_CHECKPOINT_REQUEST_PATH,
-    request_report_hash: requestHash,
-  });
 }
 
 function expectInvalidTraceProjection(projection: unknown): void {
@@ -256,9 +236,11 @@ describe('run folder status projection', () => {
   it('fails closed for completed unrecognized run folders', () => {
     const runFolder = tempRunFolder('circuit-run-status-complete-');
     const manifestHash = writeManifest({ runFolder });
-    append(runFolder, bootstrap({ manifestHash }));
-    append(runFolder, stepEntered(1, 'fix-close'));
-    append(runFolder, runClosed(2, 'complete'));
+    writeRawTrace(runFolder, [
+      unrecognizedBootstrap({ manifestHash }),
+      unrecognizedStepEntered(1, 'fix-close'),
+      unrecognizedRunClosed(2, 'complete'),
+    ]);
     writeResultPlaceholder(runFolder);
 
     const projection = projectRunStatusFromRunFolder(runFolder);
@@ -270,9 +252,11 @@ describe('run folder status projection', () => {
   it('fails closed for aborted unrecognized run folders', () => {
     const runFolder = tempRunFolder('circuit-run-status-aborted-');
     const manifestHash = writeManifest({ runFolder });
-    append(runFolder, bootstrap({ manifestHash }));
-    append(runFolder, stepEntered(1, 'fix-act'));
-    append(runFolder, runClosed(2, 'aborted'));
+    writeRawTrace(runFolder, [
+      unrecognizedBootstrap({ manifestHash }),
+      unrecognizedStepEntered(1, 'fix-act'),
+      unrecognizedRunClosed(2, 'aborted'),
+    ]);
 
     const projection = projectRunStatusFromRunFolder(runFolder);
 
@@ -285,8 +269,10 @@ describe('run folder status projection', () => {
     (outcome) => {
       const runFolder = tempRunFolder(`circuit-run-status-${outcome}-`);
       const manifestHash = writeManifest({ runFolder });
-      append(runFolder, bootstrap({ manifestHash }));
-      append(runFolder, runClosed(1, outcome));
+      writeRawTrace(runFolder, [
+        unrecognizedBootstrap({ manifestHash }),
+        unrecognizedRunClosed(1, outcome),
+      ]);
 
       const projection = projectRunStatusFromRunFolder(runFolder);
 
@@ -297,9 +283,22 @@ describe('run folder status projection', () => {
   it('fails closed for waiting invalid checkpoints instead of adapting them', () => {
     const runFolder = tempRunFolder('circuit-run-status-checkpoint-');
     const manifestHash = writeManifest({ runFolder });
-    append(runFolder, bootstrap({ manifestHash }));
     const requestHash = writeCheckpointRequest({ runFolder });
-    appendWaitingCheckpoint(runFolder, requestHash);
+    writeRawTrace(runFolder, [
+      unrecognizedBootstrap({ manifestHash }),
+      unrecognizedStepEntered(1, 'fix-no-repro-decision'),
+      {
+        sequence: 2,
+        recorded_at: RECORDED_AT,
+        run_id: RUN_ID,
+        kind: 'checkpoint.requested',
+        step_id: 'fix-no-repro-decision',
+        attempt: 1,
+        allowed_choices: ['continue'],
+        request_path: FIX_CHECKPOINT_REQUEST_PATH,
+        request_report_hash: requestHash,
+      },
+    ]);
 
     const projection = projectRunStatusFromRunFolder(runFolder);
 
@@ -310,8 +309,21 @@ describe('run folder status projection', () => {
   it('fails closed before validating invalid checkpoint request files', () => {
     const runFolder = tempRunFolder('circuit-run-status-bad-checkpoint-');
     const manifestHash = writeManifest({ runFolder });
-    append(runFolder, bootstrap({ manifestHash }));
-    appendWaitingCheckpoint(runFolder, '0'.repeat(64));
+    writeRawTrace(runFolder, [
+      unrecognizedBootstrap({ manifestHash }),
+      unrecognizedStepEntered(1, 'fix-no-repro-decision'),
+      {
+        sequence: 2,
+        recorded_at: RECORDED_AT,
+        run_id: RUN_ID,
+        kind: 'checkpoint.requested',
+        step_id: 'fix-no-repro-decision',
+        attempt: 1,
+        allowed_choices: ['continue'],
+        request_path: FIX_CHECKPOINT_REQUEST_PATH,
+        request_report_hash: '0'.repeat(64),
+      },
+    ]);
 
     const projection = projectRunStatusFromRunFolder(runFolder);
 
@@ -321,8 +333,10 @@ describe('run folder status projection', () => {
   it('fails closed for open unrecognized run folders', () => {
     const runFolder = tempRunFolder('circuit-run-status-open-');
     const manifestHash = writeManifest({ runFolder });
-    append(runFolder, bootstrap({ manifestHash }));
-    append(runFolder, stepEntered(1, 'fix-gather-context'));
+    writeRawTrace(runFolder, [
+      unrecognizedBootstrap({ manifestHash }),
+      unrecognizedStepEntered(1, 'fix-gather-context'),
+    ]);
 
     const projection = projectRunStatusFromRunFolder(runFolder);
 
@@ -330,11 +344,13 @@ describe('run folder status projection', () => {
     expect(projection).not.toHaveProperty('current_step');
   });
 
-  it('fails closed before reading kept current-step labels', () => {
+  it('fails closed before reading saved current-step labels', () => {
     const runFolder = tempRunFolder('circuit-run-status-flow-mismatch-open-');
     const manifestHash = writeManifest({ runFolder, bytes: BUILD_FLOW_BYTES });
-    append(runFolder, bootstrap({ manifestHash }));
-    append(runFolder, stepEntered(1, 'frame-step'));
+    writeRawTrace(runFolder, [
+      unrecognizedBootstrap({ manifestHash }),
+      unrecognizedStepEntered(1, 'frame-step'),
+    ]);
 
     const projection = projectRunStatusFromRunFolder(runFolder);
 
@@ -344,9 +360,22 @@ describe('run folder status projection', () => {
   it('fails closed before adapting invalid checkpoint identity mismatches', () => {
     const runFolder = tempRunFolder('circuit-run-status-flow-mismatch-checkpoint-');
     const manifestHash = writeManifest({ runFolder, bytes: BUILD_FLOW_BYTES });
-    append(runFolder, bootstrap({ manifestHash }));
     const requestHash = writeCheckpointRequest({ runFolder });
-    appendWaitingCheckpoint(runFolder, requestHash);
+    writeRawTrace(runFolder, [
+      unrecognizedBootstrap({ manifestHash }),
+      unrecognizedStepEntered(1, 'fix-no-repro-decision'),
+      {
+        sequence: 2,
+        recorded_at: RECORDED_AT,
+        run_id: RUN_ID,
+        kind: 'checkpoint.requested',
+        step_id: 'fix-no-repro-decision',
+        attempt: 1,
+        allowed_choices: ['continue'],
+        request_path: FIX_CHECKPOINT_REQUEST_PATH,
+        request_report_hash: requestHash,
+      },
+    ]);
 
     const projection = projectRunStatusFromRunFolder(runFolder);
 
@@ -378,7 +407,7 @@ describe('run folder status projection', () => {
     expect(projection).not.toHaveProperty('run_id');
   });
 
-  it('fails closed for legacy trace-only folders before manifest validation', () => {
+  it('fails closed for trace-only folders before manifest validation', () => {
     const runFolder = tempRunFolder('circuit-run-status-trace-only-');
     writeRawTrace(runFolder, [
       {
@@ -391,7 +420,7 @@ describe('run folder status projection', () => {
         depth: 'standard',
         goal: 'Resume a invalid trace-only folder',
         change_kind,
-        manifest_hash: 'legacy-manifest-hash',
+        manifest_hash: 'invalid-manifest-hash',
       },
     ]);
 
@@ -400,7 +429,7 @@ describe('run folder status projection', () => {
     expectInvalidManifestProjection(projection);
   });
 
-  it('fails closed for legacy run.started trace-only folders before manifest validation', () => {
+  it('fails closed for run.started trace-only folders before manifest validation', () => {
     const runFolder = tempRunFolder('circuit-run-status-started-trace-only-');
     writeRawTrace(runFolder, [
       {
@@ -415,10 +444,10 @@ describe('run folder status projection', () => {
     expectInvalidManifestProjection(projection);
   });
 
-  it('fails closed before adapting kept identity mismatches', () => {
+  it('fails closed before adapting saved identity mismatches', () => {
     const runFolder = tempRunFolder('circuit-run-status-identity-mismatch-');
     const manifestHash = writeManifest({ runFolder, runId: RUN_ID });
-    append(runFolder, bootstrap({ runId: OTHER_RUN_ID, manifestHash }));
+    writeRawTrace(runFolder, [unrecognizedBootstrap({ runId: OTHER_RUN_ID, manifestHash })]);
 
     const projection = projectRunStatusFromRunFolder(runFolder);
 
@@ -429,10 +458,19 @@ describe('run folder status projection', () => {
     const runFolder = tempRunFolder('circuit-run-status-runtime-retry-open-');
     const manifestHash = writeManifest({ runFolder });
     writeRawTrace(runFolder, [
-      v2Bootstrap({ manifestHash }),
-      v2StepEntered(1, 'fix-act', 1),
-      v2StepCompleted(2, 'fix-act', 1),
-      v2StepEntered(3, 'fix-act', 2),
+      bootstrap({ manifestHash }),
+      stepEntered(1, 'fix-act', 1),
+      {
+        schema_version: 1,
+        sequence: 2,
+        recorded_at: RECORDED_AT,
+        run_id: RUN_ID,
+        kind: 'step.completed',
+        step_id: 'fix-act',
+        attempt: 1,
+        route_taken: 'retry',
+      },
+      stepEntered(3, 'fix-act', 2),
     ]);
 
     const projection = projectRunStatusFromRunFolder(runFolder);
@@ -450,7 +488,50 @@ describe('run folder status projection', () => {
     );
   });
 
-  it('fails closed for malformed kept traces without treating them as runtime', () => {
+  it('fails closed when a current runtime trace has a sequence gap', () => {
+    const runFolder = tempRunFolder('circuit-run-status-sequence-gap-');
+    const manifestHash = writeManifest({ runFolder });
+    writeRawTrace(runFolder, [bootstrap({ manifestHash }), stepEntered(2, 'fix-act')]);
+
+    const projection = projectRunStatusFromRunFolder(runFolder);
+
+    expectInvalidTraceProjection(projection);
+  });
+
+  it('fails closed when a current runtime trace has entries after run.closed', () => {
+    const runFolder = tempRunFolder('circuit-run-status-after-close-');
+    const manifestHash = writeManifest({ runFolder });
+    writeRawTrace(runFolder, [
+      bootstrap({ manifestHash }),
+      runClosed(1, 'complete'),
+      stepEntered(2, 'fix-act'),
+    ]);
+
+    const projection = projectRunStatusFromRunFolder(runFolder);
+
+    expectInvalidTraceProjection(projection);
+  });
+
+  it('fails closed when a current runtime terminal entry is malformed', () => {
+    const runFolder = tempRunFolder('circuit-run-status-malformed-terminal-');
+    const manifestHash = writeManifest({ runFolder });
+    writeRawTrace(runFolder, [
+      bootstrap({ manifestHash }),
+      {
+        schema_version: 1,
+        sequence: 1,
+        recorded_at: RECORDED_AT,
+        run_id: RUN_ID,
+        kind: 'run.closed',
+      },
+    ]);
+
+    const projection = projectRunStatusFromRunFolder(runFolder);
+
+    expectInvalidTraceProjection(projection);
+  });
+
+  it('fails closed for malformed unrecognized traces without treating them as runtime', () => {
     const runFolder = tempRunFolder('circuit-run-status-v1-missing-schema-version-');
     const manifestHash = writeManifest({ runFolder });
     writeRawTrace(runFolder, [
@@ -476,7 +557,7 @@ describe('run folder status projection', () => {
   it('returns identity mismatch when a marked runtime trace disagrees with its manifest', () => {
     const runFolder = tempRunFolder('circuit-run-status-runtime-identity-mismatch-');
     writeManifest({ runFolder, runId: RUN_ID });
-    writeRawTrace(runFolder, [v2Bootstrap({ manifestHash: '0'.repeat(64) })]);
+    writeRawTrace(runFolder, [bootstrap({ manifestHash: '0'.repeat(64) })]);
 
     const projection = projectRunStatusFromRunFolder(runFolder);
 
@@ -493,8 +574,10 @@ describe('run folder status projection', () => {
     const runFolder = tempRunFolder('circuit-run-status-bad-flow-bytes-');
     const badBytes = Buffer.from('not json');
     const manifestHash = writeManifest({ runFolder, bytes: badBytes });
-    append(runFolder, bootstrap({ manifestHash }));
-    append(runFolder, runClosed(1, 'complete'));
+    writeRawTrace(runFolder, [
+      unrecognizedBootstrap({ manifestHash }),
+      unrecognizedRunClosed(1, 'complete'),
+    ]);
 
     const projection = projectRunStatusFromRunFolder(runFolder);
 
@@ -506,8 +589,10 @@ describe('runs show CLI', () => {
   it('prints a unsupported runtime projection for unrecognized run folders', async () => {
     const runFolder = tempRunFolder('circuit-runs-show-valid-');
     const manifestHash = writeManifest({ runFolder });
-    append(runFolder, bootstrap({ manifestHash }));
-    append(runFolder, runClosed(1, 'complete'));
+    writeRawTrace(runFolder, [
+      unrecognizedBootstrap({ manifestHash }),
+      unrecognizedRunClosed(1, 'complete'),
+    ]);
 
     const result = await captureMain(['runs', 'show', '--run-folder', runFolder, '--json']);
 
@@ -528,7 +613,7 @@ describe('runs show CLI', () => {
     });
   });
 
-  it('prints the unsupported runtime projection for legacy run.started trace-only folders', async () => {
+  it('prints the unsupported runtime projection for run.started trace-only folders', async () => {
     const runFolder = tempRunFolder('circuit-runs-show-started-trace-only-');
     writeRawTrace(runFolder, [
       {
