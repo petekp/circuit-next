@@ -18,10 +18,9 @@ metacharacters:
 
 ## Instructions
 
-1. **Confirm working directory.** The CLI is a repo-local launcher
-   (`./bin/circuit-next`), not a globally installed binary. If the user
-   invoked this command outside a circuit-next repo checkout, tell them so
-   and ask them to `cd` into one.
+1. **Resolve plugin root.** Claude Code substitutes
+   `${CLAUDE_PLUGIN_ROOT}` with the installed Circuit plugin directory.
+   Do not use a path relative to the user's project.
 2. **Construct the Bash invocation SAFELY.** Do NOT build the shell command
    by double-quoting the raw scope text. Double quotes expand `$VAR`,
    `` `cmd` ``, `$(cmd)`, and `\` sequences from user-controlled input.
@@ -35,13 +34,13 @@ metacharacters:
    Example:
 
    ```bash
-   ./bin/circuit-next run review --goal 'review the latest change' --progress jsonl
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/circuit-next.mjs" run review --goal 'review the latest change' --progress jsonl
    ```
 
    Example with an apostrophe:
 
    ```bash
-   ./bin/circuit-next run review --goal 'can'\''t regress runtime safety' --progress jsonl
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/circuit-next.mjs" run review --goal 'can'\''t regress runtime safety' --progress jsonl
    ```
 
 3. **Handle untracked file contents deliberately.** Review collects untracked

@@ -38,37 +38,36 @@ metacharacters:
    Default Fix (standard depth, full review pass):
 
    ```bash
-   ./bin/circuit-next run fix --goal 'fix the foo bug' --progress jsonl
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/circuit-next.mjs" run fix --goal 'fix the foo bug' --progress jsonl
    ```
 
    Lite Fix (skips review, closes after verification):
 
    ```bash
-   ./bin/circuit-next run fix --goal 'fix the missing-token edge case' --entry-mode lite --progress jsonl
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/circuit-next.mjs" run fix --goal 'fix the missing-token edge case' --entry-mode lite --progress jsonl
    ```
 
    Deep Fix:
 
    ```bash
-   ./bin/circuit-next run fix --goal 'fix the failing pipeline' --entry-mode deep --progress jsonl
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/circuit-next.mjs" run fix --goal 'fix the failing pipeline' --entry-mode deep --progress jsonl
    ```
 
    Autonomous Fix:
 
    ```bash
-   ./bin/circuit-next run fix --goal 'diagnose and patch the crash' --entry-mode autonomous --progress jsonl
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/circuit-next.mjs" run fix --goal 'diagnose and patch the crash' --entry-mode autonomous --progress jsonl
    ```
 
    Example for a task `can't reproduce` (contains one apostrophe):
 
    ```bash
-   ./bin/circuit-next run fix --goal 'can'\''t reproduce' --progress jsonl
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/circuit-next.mjs" run fix --goal 'can'\''t reproduce' --progress jsonl
    ```
 
-   Use the Bash tool to execute the constructed command. `./bin/circuit-next`
-   is the repo-local launcher for the compiled Circuit runtime; when the
-   compiled CLI is absent in a fresh checkout, it builds `dist/` with the
-   local TypeScript compiler before invoking `dist/cli/circuit.js`.
+   Use the Bash tool to execute the constructed command. The wrapper
+   lives in the installed Claude Code plugin directory, injects the
+   plugin's packaged flow root, and then invokes `circuit-next`.
 2. **Only add `--entry-mode` when the operator explicitly asks for a Fix
    mode.** Map Lite Fix to `--entry-mode lite`, Deep Fix to
    `--entry-mode deep`, and Autonomous Fix to `--entry-mode autonomous`.
@@ -101,7 +100,7 @@ metacharacters:
    and the exact resume command:
 
    ```bash
-   ./bin/circuit-next resume --run-folder '<run_folder>' --checkpoint-choice '<choice>' --progress jsonl
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/circuit-next.mjs" resume --run-folder '<run_folder>' --checkpoint-choice '<choice>' --progress jsonl
    ```
 
 8. **If `outcome === "complete"`, render Circuit's final summary.** Read

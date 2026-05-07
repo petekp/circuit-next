@@ -37,37 +37,36 @@ metacharacters:
    Default Build:
 
    ```bash
-   ./bin/circuit-next run build --goal 'add a focused feature' --progress jsonl
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/circuit-next.mjs" run build --goal 'add a focused feature' --progress jsonl
    ```
 
    Lite Build:
 
    ```bash
-   ./bin/circuit-next run build --goal 'make a small change' --entry-mode lite --progress jsonl
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/circuit-next.mjs" run build --goal 'make a small change' --entry-mode lite --progress jsonl
    ```
 
    Deep Build with explicit standard depth in the same invocation:
 
    ```bash
-   ./bin/circuit-next run build --goal 'make the focused change' --entry-mode deep --depth standard --progress jsonl
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/circuit-next.mjs" run build --goal 'make the focused change' --entry-mode deep --depth standard --progress jsonl
    ```
 
    Autonomous Build:
 
    ```bash
-   ./bin/circuit-next run build --goal 'ship the requested fix' --entry-mode autonomous --progress jsonl
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/circuit-next.mjs" run build --goal 'ship the requested fix' --entry-mode autonomous --progress jsonl
    ```
 
    Example for a task `can't ship` (contains one apostrophe):
 
    ```bash
-   ./bin/circuit-next run build --goal 'can'\''t ship' --progress jsonl
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/circuit-next.mjs" run build --goal 'can'\''t ship' --progress jsonl
    ```
 
-   Use the Bash tool to execute the constructed command. `./bin/circuit-next`
-   is the repo-local launcher for the compiled Circuit runtime; when the
-   compiled CLI is absent in a fresh checkout, it builds `dist/` with the
-   local TypeScript compiler before invoking `dist/cli/circuit.js`.
+   Use the Bash tool to execute the constructed command. The wrapper
+   lives in the installed Claude Code plugin directory, injects the
+   plugin's packaged flow root, and then invokes `circuit-next`.
 2. **Only add `--entry-mode` when the operator explicitly asks for a Build
    mode.** Map Lite Build to `--entry-mode lite`, Deep Build to
    `--entry-mode deep`, and Autonomous Build to `--entry-mode autonomous`.
@@ -96,7 +95,7 @@ metacharacters:
    and the exact resume command:
 
    ```bash
-   ./bin/circuit-next resume --run-folder '<run_folder>' --checkpoint-choice '<choice>' --progress jsonl
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/circuit-next.mjs" resume --run-folder '<run_folder>' --checkpoint-choice '<choice>' --progress jsonl
    ```
 
 7. **If `outcome === "complete"`, render Circuit's final summary.** Read

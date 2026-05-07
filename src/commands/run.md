@@ -3,6 +3,13 @@ description: Selects the best Circuit flow for a natural-language task and runs 
 argument-hint: <task>
 ---
 
+<!--
+  This file is HAND-AUTHORED. Generated host copies live under
+  plugins/claude/commands/ and plugins/circuit/commands/.
+  /circuit:run is the CLI router entry, not a flow, so its source
+  of truth lives in src/commands/.
+-->
+
 # /circuit:run — flow selector
 
 Selects the best Circuit flow for the user's natural-language task, then
@@ -42,7 +49,7 @@ metacharacters:
    safety or mutation behavior, especially Review vs Build/Fix, Explore vs
    Build, or Migrate vs Build.
 
-   Use the deterministic CLI router (`node '<plugin root>/scripts/circuit-next.mjs' run --goal ...`) only
+   Use the deterministic CLI router (`./bin/circuit-next run --goal ...`) only
    when the user explicitly asks Circuit/the engine to choose mechanically, the
    host cannot confidently choose, or the task is intentionally exercising the
    automatic router path.
@@ -64,67 +71,68 @@ metacharacters:
    Example for a Fix task:
 
    ```bash
-   node '<plugin root>/scripts/circuit-next.mjs' run fix --goal 'the checkout total is wrong when discounts and tax both apply' --progress jsonl
+   ./bin/circuit-next run fix --goal 'the checkout total is wrong when discounts and tax both apply' --progress jsonl
    ```
 
    Example for a Review task:
 
    ```bash
-   node '<plugin root>/scripts/circuit-next.mjs' run review --goal 'review the current diff for safety problems' --progress jsonl
+   ./bin/circuit-next run review --goal 'review the current diff for safety problems' --progress jsonl
    ```
 
    Example for a Build task:
 
    ```bash
-   node '<plugin root>/scripts/circuit-next.mjs' run build --goal 'add a focused feature' --progress jsonl
+   ./bin/circuit-next run build --goal 'add a focused feature' --progress jsonl
    ```
 
    Example for an Explore task:
 
    ```bash
-   node '<plugin root>/scripts/circuit-next.mjs' run explore --goal 'compare auth provider migration options' --progress jsonl
+   ./bin/circuit-next run explore --goal 'compare auth provider migration options' --progress jsonl
    ```
 
    Example for a Migrate task:
 
    ```bash
-   node '<plugin root>/scripts/circuit-next.mjs' run migrate --goal 'move the old SDK to the new SDK' --progress jsonl
+   ./bin/circuit-next run migrate --goal 'move the old SDK to the new SDK' --progress jsonl
    ```
 
    Example for a Sweep task:
 
    ```bash
-   node '<plugin root>/scripts/circuit-next.mjs' run sweep --goal 'remove safe dead code' --progress jsonl
+   ./bin/circuit-next run sweep --goal 'remove safe dead code' --progress jsonl
    ```
 
    Example for the deterministic fallback router:
 
    ```bash
-   node '<plugin root>/scripts/circuit-next.mjs' run --goal 'choose the right Circuit flow for this task' --progress jsonl
+   ./bin/circuit-next run --goal 'choose the right Circuit flow for this task' --progress jsonl
    ```
 
    Example for a Build task using both an entry mode and an explicit
    `--depth` flag:
 
    ```bash
-   node '<plugin root>/scripts/circuit-next.mjs' run build --goal 'make the focused change' --entry-mode deep --depth standard --progress jsonl
+   ./bin/circuit-next run build --goal 'make the focused change' --entry-mode deep --depth standard --progress jsonl
    ```
 
    Example for a Fix task using Lite mode (skips the review pass):
 
    ```bash
-   node '<plugin root>/scripts/circuit-next.mjs' run fix --goal 'fix the missing-token edge case' --entry-mode lite --progress jsonl
+   ./bin/circuit-next run fix --goal 'fix the missing-token edge case' --entry-mode lite --progress jsonl
    ```
 
    Example for a task `can't ship` (contains one apostrophe):
 
    ```bash
-   node '<plugin root>/scripts/circuit-next.mjs' run build --goal 'can'\''t ship' --progress jsonl
+   ./bin/circuit-next run build --goal 'can'\''t ship' --progress jsonl
    ```
 
-   Use the Bash tool to execute the constructed command. The wrapper
-   lives in the installed Circuit plugin directory and injects the plugin's
-   packaged flow root before it invokes `circuit-next`.
+   Use the Bash tool to execute the constructed command. `./bin/circuit-next`
+   is the repo-local launcher for the compiled Circuit runtime; when the
+   compiled CLI is absent in a fresh checkout, it builds `dist/` with the
+   local TypeScript compiler before invoking `dist/cli/circuit.js`.
 3. **Handle untracked Review contents deliberately.** If the task explicitly
    asks Circuit to include untracked file contents for review, add
    `--include-untracked-content` only when those files are safe to relay to the
@@ -179,7 +187,7 @@ metacharacters:
    command:
 
    ```bash
-   node '<plugin root>/scripts/circuit-next.mjs' resume --run-folder '<run_folder>' --checkpoint-choice '<choice>' --progress jsonl
+   ./bin/circuit-next resume --run-folder '<run_folder>' --checkpoint-choice '<choice>' --progress jsonl
    ```
 
 8. **If `outcome === "aborted"`, read `reports/result.json` at

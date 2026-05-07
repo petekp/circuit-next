@@ -263,7 +263,7 @@ describe('release truth infrastructure', () => {
       generated_by: 'test',
       flows: [],
       router_intents: [],
-      commands: { root: [], codex_plugin: [], claude_plugin_skills: [] },
+      commands: { source: [], claude_plugin: [], codex_plugin: [], claude_plugin_skills: [] },
       connectors: [],
       hosts: [],
       capabilities: [
@@ -313,7 +313,7 @@ describe('release truth infrastructure', () => {
       generated_by: 'test',
       flows: [],
       router_intents: [],
-      commands: { root: [], codex_plugin: [], claude_plugin_skills: [] },
+      commands: { source: [], claude_plugin: [], codex_plugin: [], claude_plugin_skills: [] },
       connectors: [],
       hosts: [],
       capabilities: [

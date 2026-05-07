@@ -18,10 +18,9 @@ metacharacters:
 
 ## Instructions
 
-1. **Confirm working directory.** The CLI is a repo-local launcher
-   (`./bin/circuit-next`), not a globally installed binary. If the user
-   invoked this command outside a circuit-next repo checkout, tell them so
-   and ask them to `cd` into one.
+1. **Resolve plugin root.** Claude Code substitutes
+   `${CLAUDE_PLUGIN_ROOT}` with the installed Circuit plugin directory.
+   Do not use a path relative to the user's project.
 2. **Construct the Bash invocation SAFELY.** Do NOT build the shell command
    by double-quoting the raw goal (double quotes expand `$VAR`, `` `cmd` ``,
    `$(cmd)`, and `\` sequences — a malicious or accidental goal could inject
@@ -46,20 +45,19 @@ metacharacters:
    and the full Bash command becomes:
 
    ```bash
-   ./bin/circuit-next run explore --goal 'can'\''t go' --progress jsonl
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/circuit-next.mjs" run explore --goal 'can'\''t go' --progress jsonl
    ```
 
    For a goal with no special characters (e.g., `find deprecated APIs`),
    the straightforward single-quoted form is sufficient:
 
    ```bash
-   ./bin/circuit-next run explore --goal 'find deprecated APIs' --progress jsonl
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/circuit-next.mjs" run explore --goal 'find deprecated APIs' --progress jsonl
    ```
 
-   Use the Bash tool to execute the constructed command. `./bin/circuit-next`
-   is the repo-local launcher for the compiled Circuit runtime; when the
-   compiled CLI is absent in a fresh checkout, it builds `dist/` with the
-   local TypeScript compiler before invoking `dist/cli/circuit.js`.
+   Use the Bash tool to execute the constructed command. The wrapper
+   lives in the installed Claude Code plugin directory, injects the
+   plugin's packaged flow root, and then invokes `circuit-next`.
 3. **Render progress while the run is active.** `--progress jsonl` writes
    progress events to stderr and keeps the final result JSON on stdout.
    For every event whose `display.importance === "major"` or whose
