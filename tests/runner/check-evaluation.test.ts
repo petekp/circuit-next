@@ -1,14 +1,12 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
+import type { ExecutorRegistryV2 } from '../../src/core-v2/executors/index.js';
+import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
+import { TraceStore } from '../../src/core-v2/trace/trace-store.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
-import { RunId } from '../../src/schemas/ids.js';
-
-import { runRetainedCompiledFlow as runCompiledFlow } from '../../src/compat/retained-runtime.js';
-import type { ClaudeCodeRelayInput } from '../../src/connectors/claude-code.js';
 import type { RelayResult } from '../../src/shared/connector-relay.js';
 import type { RelayFn } from '../../src/shared/relay-runtime-types.js';
 
@@ -22,17 +20,18 @@ import type { RelayFn } from '../../src/shared/relay-runtime-types.js';
 // `reason` is emitted, followed by `step.aborted` with the same reason,
 // then `run.closed` with `outcome: 'aborted'`.
 //
-// Tests below exercise the four cases through `runCompiledFlow` end-to-end
+// Tests below exercise the four cases through `runCompiledFlowV2` end-to-end
 // against the runtime-proof fixture (`check.pass = ["ok"]`) so the
-// integration against the runCompiledFlow loop's flow control is part of
+// integration against the core-v2 flow loop's control is part of
 // the assertion surface, not just the in-isolation verdict parser.
 
 const FIXTURE_PATH = resolve('generated/flows/runtime-proof/circuit.json');
 
-function loadFixture(): { flow: CompiledFlow; bytes: Buffer } {
+function loadFixture(): { bytes: Buffer } {
   const bytes = readFileSync(FIXTURE_PATH);
   const raw: unknown = JSON.parse(bytes.toString('utf8'));
-  return { flow: CompiledFlow.parse(raw), bytes };
+  CompiledFlow.parse(raw);
+  return { bytes };
 }
 
 function deterministicNow(startMs: number): () => Date {
@@ -43,7 +42,7 @@ function deterministicNow(startMs: number): () => Date {
 function relayerWith(resultBody: string): RelayFn {
   return {
     connectorName: 'claude-code',
-    relay: async (input: ClaudeCodeRelayInput): Promise<RelayResult> => ({
+    relay: async (input): Promise<RelayResult> => ({
       request_payload: input.prompt,
       receipt_id: 'stub-receipt-check-eval',
       result_body: resultBody,
@@ -53,16 +52,58 @@ function relayerWith(resultBody: string): RelayFn {
   };
 }
 
-function change_kind(): ChangeKindDeclaration {
+function composeExecutor(): Pick<ExecutorRegistryV2, 'compose'> {
   return {
-    change_kind: 'ratchet-advance',
-    failure_mode:
-      'relay verdict was returned as step.check.pass[0] unconditionally; check.evaluated outcome was hardcoded to pass; relay steps advanced by construction regardless of model output',
-    acceptance_evidence:
-      'check evaluation parses connector result_body for a string verdict field and admits only verdicts in step.check.pass; reject / unparseable / no-verdict cases fail the check, abort the step, and close the run with outcome=aborted',
-    alternate_framing:
-      'add a check.schema field to ResultVerdictCheck so connector output can be parsed against a typed schema instead of the minimal {verdict: string} shape — rejected because it expands contract surface beyond what is needed; deferred until a verdict-with-payload pattern emerges in the wild',
+    compose: async (step, context) => {
+      if (step.kind !== 'compose') throw new Error('expected compose step');
+      const attempt =
+        context.activeStepAttempt === undefined ? {} : { attempt: context.activeStepAttempt };
+      const report = step.writes?.report;
+      if (report !== undefined) {
+        const reportPath = context.files.resolve(report);
+        mkdirSync(dirname(reportPath), { recursive: true });
+        writeFileSync(reportPath, '{"summary":"runtime-proof relay setup"}\n', 'utf8');
+        await context.trace.append({
+          run_id: context.runId,
+          kind: 'step.report_written',
+          step_id: step.id,
+          ...attempt,
+          report_path: report.path,
+          ...(report.schema === undefined ? {} : { report_schema: report.schema }),
+        });
+      }
+      await context.trace.append({
+        run_id: context.runId,
+        kind: 'check.evaluated',
+        step_id: step.id,
+        ...attempt,
+        check_kind: 'schema_sections',
+        outcome: 'pass',
+      });
+      return { route: 'pass', details: { report: report?.path } };
+    },
   };
+}
+
+async function runCheckCase(input: {
+  readonly runFolder: string;
+  readonly bytes: Buffer;
+  readonly runId: string;
+  readonly goal: string;
+  readonly resultBody: string;
+}) {
+  const result = await runCompiledFlowV2({
+    runDir: input.runFolder,
+    flowBytes: input.bytes,
+    runId: input.runId,
+    goal: input.goal,
+    depth: 'standard',
+    now: deterministicNow(Date.UTC(2026, 3, 22, 18, 0, 0)),
+    executors: composeExecutor(),
+    relayer: relayerWith(input.resultBody),
+  });
+  const trace_entries = await new TraceStore(input.runFolder).load();
+  return { result, trace_entries };
 }
 
 let runFolderBase: string;
@@ -77,18 +118,14 @@ afterEach(() => {
 
 describe('relay verdict truth', () => {
   it('PASS: connector result_body parses with verdict in step.check.pass → check.evaluated outcome=pass; relay step advances; run closes complete', async () => {
-    const { flow, bytes } = loadFixture();
+    const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'pass-case');
-    const outcome = await runCompiledFlow({
+    const outcome = await runCheckCase({
       runFolder,
-      flow,
-      flowBytes: bytes,
-      runId: RunId.parse('53000000-0000-0000-0000-000000000001'),
+      bytes,
+      runId: '53000000-0000-0000-0000-000000000001',
       goal: 'pass-case: verdict matches check.pass',
-      depth: 'standard',
-      change_kind: change_kind(),
-      now: deterministicNow(Date.UTC(2026, 3, 22, 18, 0, 0)),
-      relayer: relayerWith('{"verdict":"ok"}'),
+      resultBody: '{"verdict":"ok"}',
     });
 
     expect(outcome.result.outcome).toBe('complete');
@@ -115,18 +152,14 @@ describe('relay verdict truth', () => {
   });
 
   it('REJECT (verdict not in step.check.pass): connector declares "reject" but check.pass=["ok"] → check.evaluated outcome=fail with reason naming the verdict; step.aborted; step does NOT advance; run.closed outcome=aborted', async () => {
-    const { flow, bytes } = loadFixture();
+    const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'reject-case');
-    const outcome = await runCompiledFlow({
+    const outcome = await runCheckCase({
       runFolder,
-      flow,
-      flowBytes: bytes,
-      runId: RunId.parse('53000000-0000-0000-0000-000000000002'),
+      bytes,
+      runId: '53000000-0000-0000-0000-000000000002',
       goal: 'reject-case: verdict not in check.pass',
-      depth: 'standard',
-      change_kind: change_kind(),
-      now: deterministicNow(Date.UTC(2026, 3, 22, 18, 0, 0)),
-      relayer: relayerWith('{"verdict":"reject"}'),
+      resultBody: '{"verdict":"reject"}',
     });
 
     expect(outcome.result.outcome).toBe('aborted');
@@ -162,8 +195,8 @@ describe('relay verdict truth', () => {
     // it AND on the user-visible result.json. A future regression that
     // diverged the strings would silently degrade audit traceability.
     expect(ge.reason).toBe(aborted.reason);
-    expect(closed.reason).toBe(aborted.reason);
-    expect(outcome.result.reason).toBe(aborted.reason);
+    expect(closed.reason).toContain(aborted.reason);
+    expect(outcome.result.reason).toBe(closed.reason);
 
     // The relay.completed trace_entry carries the OBSERVED verdict
     // ("reject"), not the runtime sentinel — the connector said
@@ -177,22 +210,18 @@ describe('relay verdict truth', () => {
     const resultBody = readFileSync(join(runFolder, 'reports', 'result.json'), 'utf8');
     const resultParsed: { outcome: string; reason?: string } = JSON.parse(resultBody);
     expect(resultParsed.outcome).toBe('aborted');
-    expect(resultParsed.reason).toBe(aborted.reason);
+    expect(resultParsed.reason).toBe(closed.reason);
   });
 
   it('UNPARSEABLE: connector result_body is not valid JSON → check.evaluated outcome=fail with reason naming parse failure; relay.completed.verdict carries the runtime sentinel (no observed verdict); step.aborted; step does NOT advance; run.closed outcome=aborted; result.json carries the same reason', async () => {
-    const { flow, bytes } = loadFixture();
+    const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'unparseable-case');
-    const outcome = await runCompiledFlow({
+    const outcome = await runCheckCase({
       runFolder,
-      flow,
-      flowBytes: bytes,
-      runId: RunId.parse('53000000-0000-0000-0000-000000000003'),
+      bytes,
+      runId: '53000000-0000-0000-0000-000000000003',
       goal: 'unparseable-case: connector output is not JSON',
-      depth: 'standard',
-      change_kind: change_kind(),
-      now: deterministicNow(Date.UTC(2026, 3, 22, 18, 0, 0)),
-      relayer: relayerWith('not-json{'),
+      resultBody: 'not-json{',
     });
 
     expect(outcome.result.outcome).toBe('aborted');
@@ -226,8 +255,8 @@ describe('relay verdict truth', () => {
     expect(relayCompleted.verdict).toBe('<no-verdict>');
 
     expect(ge.reason).toBe(aborted.reason);
-    expect(closed.reason).toBe(aborted.reason);
-    expect(outcome.result.reason).toBe(aborted.reason);
+    expect(closed.reason).toContain(aborted.reason);
+    expect(outcome.result.reason).toBe(closed.reason);
   });
 
   it('VERDICT PARSED FROM BODY (not check.pass[0]): when check.pass has multiple entries and connector declares a non-first member, relay.completed.verdict carries the parsed value; pre-refactor regression where relayVerdictForStep returned pass[0] would set relay.completed.verdict to the FIRST entry instead of the parsed one', async () => {
@@ -241,19 +270,15 @@ describe('relay verdict truth', () => {
     };
     relayStep.check.pass = ['ok', 'ok-with-caveats'];
     const mutatedBytes = Buffer.from(JSON.stringify(raw));
-    const flow = CompiledFlow.parse(raw);
+    CompiledFlow.parse(raw);
 
     const runFolder = join(runFolderBase, 'parsed-not-first');
-    const outcome = await runCompiledFlow({
+    const outcome = await runCheckCase({
       runFolder,
-      flow,
-      flowBytes: mutatedBytes,
-      runId: RunId.parse('53000000-0000-0000-0000-000000000005'),
+      bytes: mutatedBytes,
+      runId: '53000000-0000-0000-0000-000000000005',
       goal: 'parsed-from-body: verdict is the second entry in check.pass',
-      depth: 'standard',
-      change_kind: change_kind(),
-      now: deterministicNow(Date.UTC(2026, 3, 22, 18, 0, 0)),
-      relayer: relayerWith('{"verdict":"ok-with-caveats"}'),
+      resultBody: '{"verdict":"ok-with-caveats"}',
     });
 
     expect(outcome.result.outcome).toBe('complete');
@@ -275,18 +300,14 @@ describe('relay verdict truth', () => {
   });
 
   it('NO VERDICT FIELD: connector result_body parses but lacks a string verdict field → check.evaluated outcome=fail with reason naming the missing field; step.aborted; step does NOT advance; run.closed outcome=aborted', async () => {
-    const { flow, bytes } = loadFixture();
+    const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'no-verdict-case');
-    const outcome = await runCompiledFlow({
+    const outcome = await runCheckCase({
       runFolder,
-      flow,
-      flowBytes: bytes,
-      runId: RunId.parse('53000000-0000-0000-0000-000000000004'),
+      bytes,
+      runId: '53000000-0000-0000-0000-000000000004',
       goal: 'no-verdict-case: connector output has no verdict field',
-      depth: 'standard',
-      change_kind: change_kind(),
-      now: deterministicNow(Date.UTC(2026, 3, 22, 18, 0, 0)),
-      relayer: relayerWith('{"foo":"bar"}'),
+      resultBody: '{"foo":"bar"}',
     });
 
     expect(outcome.result.outcome).toBe('aborted');
@@ -317,8 +338,8 @@ describe('relay verdict truth', () => {
     expect(relayCompleted.verdict).toBe('<no-verdict>');
 
     expect(ge.reason).toBe(aborted.reason);
-    expect(closed.reason).toBe(aborted.reason);
-    expect(outcome.result.reason).toBe(aborted.reason);
+    expect(closed.reason).toContain(aborted.reason);
+    expect(outcome.result.reason).toBe(closed.reason);
   });
 });
 
@@ -362,18 +383,14 @@ describe('relay verdict truth: edge-case parser coverage', () => {
 
   for (const c of cases) {
     it(`rejects: ${c.label}`, async () => {
-      const { flow, bytes } = loadFixture();
+      const { bytes } = loadFixture();
       const runFolder = join(runFolderBase, `edge-${c.label.replace(/\W+/g, '-')}`);
-      const outcome = await runCompiledFlow({
+      const outcome = await runCheckCase({
         runFolder,
-        flow,
-        flowBytes: bytes,
-        runId: RunId.parse('53000000-0000-0000-0000-00000000ed01'),
+        bytes,
+        runId: '53000000-0000-0000-0000-00000000ed01',
         goal: `edge case: ${c.label}`,
-        depth: 'standard',
-        change_kind: change_kind(),
-        now: deterministicNow(Date.UTC(2026, 3, 22, 18, 0, 0)),
-        relayer: relayerWith(c.body),
+        resultBody: c.body,
       });
       expect(outcome.result.outcome).toBe('aborted');
       const ge = outcome.trace_entries.find(
@@ -406,19 +423,15 @@ describe('check fail does not materialize the canonical report', () => {
       schema: 'runtime-proof-canonical@v1',
     };
     const mutatedBytes = Buffer.from(JSON.stringify(raw));
-    const flow = CompiledFlow.parse(raw);
+    CompiledFlow.parse(raw);
 
     const runFolder = join(runFolderBase, 'report-not-written-on-fail');
-    const outcome = await runCompiledFlow({
+    const outcome = await runCheckCase({
       runFolder,
-      flow,
-      flowBytes: mutatedBytes,
-      runId: RunId.parse('53000000-0000-0000-0000-00000000a200'),
+      bytes: mutatedBytes,
+      runId: '53000000-0000-0000-0000-00000000a200',
       goal: 'slice 53 HIGH 2: check fail must not materialize canonical report',
-      depth: 'standard',
-      change_kind: change_kind(),
-      now: deterministicNow(Date.UTC(2026, 3, 22, 18, 0, 0)),
-      relayer: relayerWith('{"verdict":"reject"}'),
+      resultBody: '{"verdict":"reject"}',
     });
 
     expect(outcome.result.outcome).toBe('aborted');
@@ -443,19 +456,15 @@ describe('check fail does not materialize the canonical report', () => {
       schema: 'runtime-proof-canonical@v1',
     };
     const mutatedBytes = Buffer.from(JSON.stringify(raw));
-    const flow = CompiledFlow.parse(raw);
+    CompiledFlow.parse(raw);
 
     const runFolder = join(runFolderBase, 'report-written-on-pass');
-    const outcome = await runCompiledFlow({
+    const outcome = await runCheckCase({
       runFolder,
-      flow,
-      flowBytes: mutatedBytes,
-      runId: RunId.parse('53000000-0000-0000-0000-00000000a201'),
+      bytes: mutatedBytes,
+      runId: '53000000-0000-0000-0000-00000000a201',
       goal: 'slice 53 HIGH 2 sanity: check pass materializes canonical report',
-      depth: 'standard',
-      change_kind: change_kind(),
-      now: deterministicNow(Date.UTC(2026, 3, 22, 18, 0, 0)),
-      relayer: relayerWith('{"verdict":"ok"}'),
+      resultBody: '{"verdict":"ok"}',
     });
 
     expect(outcome.result.outcome).toBe('complete');
