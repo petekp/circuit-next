@@ -3,14 +3,15 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type {
-  ChildCompiledFlowResolver,
-  CompiledFlowInvocation,
-  CompiledFlowRunResult,
-  CompiledFlowRunner,
-} from '../../src/compat/retained-runtime.js';
-import { runRetainedCompiledFlow as runCompiledFlow } from '../../src/compat/retained-runtime.js';
 import type { ClaudeCodeRelayInput } from '../../src/connectors/claude-code.js';
+import type {
+  ChildCompiledFlowResolverV2,
+  CompiledFlowRunOptionsV2Like,
+  CompiledFlowRunnerV2,
+} from '../../src/core-v2/run/child-runner.js';
+import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
+import type { GraphRunResultV2 } from '../../src/core-v2/run/graph-runner.js';
+import { TraceStore } from '../../src/core-v2/trace/trace-store.js';
 import {
   MigrateBatch,
   MigrateBrief,
@@ -20,11 +21,8 @@ import {
   MigrateReview,
   MigrateVerification,
 } from '../../src/flows/migrate/reports.js';
-import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
-import { RunId } from '../../src/schemas/ids.js';
 import { RunResult } from '../../src/schemas/result.js';
-import { Snapshot } from '../../src/schemas/snapshot.js';
 import type { RelayResult } from '../../src/shared/connector-relay.js';
 import type { RelayFn } from '../../src/shared/relay-runtime-types.js';
 import { runResultPath as resultPath } from '../../src/shared/result-path.js';
@@ -34,8 +32,9 @@ import { runResultPath as resultPath } from '../../src/shared/result-path.js';
 // with a stub childRunner (so the batch sub-run does not descend into a
 // real Build child) and a stub reviewer relayer, and asserts that
 // every typed Migrate report is materialised correctly. Verification
-// runs the brief's default `npm run check` command in REPO_ROOT, the
-// same pattern as sweep-runtime-wiring.test.ts.
+// runs the brief's default `npm run check` command in a tiny temporary
+// project root, keeping command execution real without making this fixture
+// pay for a repo-wide typecheck.
 //
 // What this test proves at the substrate level:
 //   - The schematic → CompiledFlow compile path supports `sub-run` execution
@@ -48,7 +47,6 @@ import { runResultPath as resultPath } from '../../src/shared/result-path.js';
 //     valid migrate.result@v1 with the canonical 6-pointer set.
 
 const FIXTURE_PATH = resolve('.claude-plugin', 'skills', 'migrate', 'circuit.json');
-const REPO_ROOT = resolve('.');
 
 function loadFixture(): { flow: CompiledFlow; bytes: Buffer } {
   const bytes = readFileSync(FIXTURE_PATH);
@@ -59,18 +57,6 @@ function loadFixture(): { flow: CompiledFlow; bytes: Buffer } {
 function deterministicNow(startMs: number): () => Date {
   let n = 0;
   return () => new Date(startMs + n++ * 1000);
-}
-
-function change_kind(): ChangeKindDeclaration {
-  return {
-    change_kind: 'ratchet-advance',
-    failure_mode:
-      'Migrate had typed reports and a sub-run handler but no live fixture proving the seven-canonical-stage stage path through the runtime with a sub-run-per-batch executor',
-    acceptance_evidence:
-      'migrate-runtime-wiring loads the live Migrate fixture, runs frame → inventory → coexistence → sub-run-to-Build → verify → cutover-review → close, and parses all six typed Migrate reports plus the close result',
-    alternate_framing:
-      'extend the sub-run runtime test to cover Migrate — rejected because the substrate-proof claim is that Migrate composes from registered writers + the sub-run handler with no migrate-specific runner edits',
-  };
 }
 
 const DEFAULT_REVIEW_BODY = JSON.stringify({
@@ -172,28 +158,28 @@ function buildStubChildCompiledFlow(): CompiledFlow {
   });
 }
 
-function makeChildResolver(): ChildCompiledFlowResolver {
+function makeChildResolver(): ChildCompiledFlowResolverV2 {
   const flow = buildStubChildCompiledFlow();
   const bytes = Buffer.from(JSON.stringify(flow));
-  return () => ({ flow, bytes });
+  return () => ({ flowBytes: bytes });
 }
 
 // Stub childRunner that bypasses real Build child execution. Writes a
 // synthetic child result.json carrying the verdict the migrate batch-
-// step check expects, then returns a minimal CompiledFlowRunResult so the
+// step check expects, then returns a minimal GraphRunResultV2 so the
 // sub-run handler's path-derivation, file-copy, and audit-trace_entry surface
 // all execute against deterministic data.
-function makeStubChildRunner(verdict: string): CompiledFlowRunner {
-  return async (inv: CompiledFlowInvocation): Promise<CompiledFlowRunResult> => {
-    const childResultAbs = resultPath(inv.runFolder);
+function makeStubChildRunner(verdict: string): CompiledFlowRunnerV2 {
+  return async (options: CompiledFlowRunOptionsV2Like): Promise<GraphRunResultV2> => {
+    const childResultAbs = resultPath(options.runDir);
     mkdirSync(dirname(childResultAbs), { recursive: true });
     const body = RunResult.parse({
       schema_version: 1,
-      run_id: inv.runId as unknown as string,
-      flow_id: inv.flow.id as unknown as string,
-      goal: inv.goal,
+      run_id: options.runId ?? 'build-child-run',
+      flow_id: 'build',
+      goal: options.goal,
       outcome: 'complete',
-      summary: `stub ${inv.flow.id as unknown as string} child result`,
+      summary: 'stub build child result',
       closed_at: new Date(0).toISOString(),
       trace_entries_observed: 1,
       manifest_hash: 'stub-manifest-hash',
@@ -201,22 +187,18 @@ function makeStubChildRunner(verdict: string): CompiledFlowRunner {
     });
     writeFileSync(childResultAbs, `${JSON.stringify(body, null, 2)}\n`);
     return {
-      runFolder: inv.runFolder,
-      result: body,
-      snapshot: Snapshot.parse({
-        schema_version: 1,
-        run_id: body.run_id,
-        flow_id: body.flow_id,
-        depth: 'standard',
-        change_kind: inv.change_kind,
-        status: 'complete',
-        steps: [],
-        trace_entries_consumed: 1,
-        manifest_hash: 'stub-manifest-hash',
-        updated_at: new Date(0).toISOString(),
-      }),
-      trace_entries: [],
-      relayResults: [],
+      schema_version: body.schema_version,
+      run_id: body.run_id,
+      flow_id: body.flow_id,
+      goal: body.goal,
+      outcome: body.outcome,
+      summary: body.summary,
+      closed_at: body.closed_at,
+      trace_entries_observed: body.trace_entries_observed,
+      manifest_hash: body.manifest_hash,
+      ...(body.reason === undefined ? {} : { reason: body.reason }),
+      ...(body.verdict === undefined ? {} : { verdict: body.verdict }),
+      resultPath: childResultAbs,
     };
   };
 }
@@ -225,6 +207,29 @@ function traceEntryLabel(trace_entry: { kind: string; step_id?: unknown }): stri
   return typeof trace_entry.step_id === 'string'
     ? `${trace_entry.kind}:${trace_entry.step_id}`
     : trace_entry.kind;
+}
+
+async function readTraceEntries(runFolder: string) {
+  return await new TraceStore(runFolder).load();
+}
+
+function makeVerificationProjectRoot(): string {
+  const projectRoot = join(runFolderBase, 'verification-project');
+  mkdirSync(projectRoot, { recursive: true });
+  writeFileSync(
+    join(projectRoot, 'package.json'),
+    `${JSON.stringify(
+      {
+        private: true,
+        scripts: {
+          check: 'node -e "process.exit(0)"',
+        },
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  return projectRoot;
 }
 
 let runFolderBase: string;
@@ -272,26 +277,24 @@ describe('Migrate runtime wiring', () => {
   });
 
   it('runs the live Migrate fixture end-to-end with a stub Build child and writes all six typed reports plus the close result', async () => {
-    const { flow, bytes } = loadFixture();
+    const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'complete');
 
-    const outcome = await runCompiledFlow({
-      runFolder,
-      flow,
+    const outcome = await runCompiledFlowV2({
+      runDir: runFolder,
       flowBytes: bytes,
-      runId: RunId.parse('a1000000-0000-0000-0000-000000000001'),
+      runId: 'a1000000-0000-0000-0000-000000000001',
       goal: 'Migrate the legacy auth middleware to the new identity stack',
       depth: 'standard',
-      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 27, 9, 0, 0)),
       relayer: migrateRelayerWith(),
       childCompiledFlowResolver: makeChildResolver(),
       childRunner: makeStubChildRunner('accept'),
-      projectRoot: REPO_ROOT,
+      projectRoot: makeVerificationProjectRoot(),
     });
 
-    expect(outcome.result.outcome).toBe('complete');
-    const labels = outcome.trace_entries.map(traceEntryLabel);
+    expect(outcome.outcome).toBe('complete');
+    const labels = (await readTraceEntries(runFolder)).map(traceEntryLabel);
     expect(labels).toContain('relay.completed:inventory-step');
     expect(labels).toContain('checkpoint.resolved:coexistence-checkpoint-step');
     expect(labels).toContain('sub_run.started:batch-step');
@@ -349,7 +352,7 @@ describe('Migrate runtime wiring', () => {
   }, 180_000);
 
   it('marks outcome=cutover-deferred when the cutover review returns cutover-with-followups', async () => {
-    const { flow, bytes } = loadFixture();
+    const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'cutover-deferred');
 
     const reviewBody = JSON.stringify({
@@ -364,22 +367,20 @@ describe('Migrate runtime wiring', () => {
       ],
     });
 
-    const outcome = await runCompiledFlow({
-      runFolder,
-      flow,
+    const outcome = await runCompiledFlowV2({
+      runDir: runFolder,
       flowBytes: bytes,
-      runId: RunId.parse('a1000000-0000-0000-0000-000000000002'),
+      runId: 'a1000000-0000-0000-0000-000000000002',
       goal: 'Migrate the search connector from the legacy provider to the new SDK',
       depth: 'standard',
-      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 27, 10, 0, 0)),
       relayer: migrateRelayerWith(reviewBody),
       childCompiledFlowResolver: makeChildResolver(),
       childRunner: makeStubChildRunner('accept-with-fixes'),
-      projectRoot: REPO_ROOT,
+      projectRoot: makeVerificationProjectRoot(),
     });
 
-    expect(outcome.result.outcome).toBe('complete');
+    expect(outcome.outcome).toBe('complete');
     const result = MigrateResult.parse(
       JSON.parse(readFileSync(join(runFolder, 'reports/migrate-result.json'), 'utf8')),
     );
@@ -388,27 +389,25 @@ describe('Migrate runtime wiring', () => {
   }, 180_000);
 
   it('aborts with outcome=aborted when the child Build sub-run returns a verdict outside check.pass', async () => {
-    const { flow, bytes } = loadFixture();
+    const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'check-rejected');
 
-    const outcome = await runCompiledFlow({
-      runFolder,
-      flow,
+    const outcome = await runCompiledFlowV2({
+      runDir: runFolder,
       flowBytes: bytes,
-      runId: RunId.parse('a1000000-0000-0000-0000-000000000003'),
+      runId: 'a1000000-0000-0000-0000-000000000003',
       goal: 'Migrate the storage layer to the new persistence engine',
       depth: 'standard',
-      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 27, 11, 0, 0)),
       relayer: migrateRelayerWith(),
       childCompiledFlowResolver: makeChildResolver(),
       childRunner: makeStubChildRunner('reject'),
-      projectRoot: REPO_ROOT,
+      projectRoot: makeVerificationProjectRoot(),
     });
 
-    expect(outcome.result.outcome).toBe('aborted');
-    expect(outcome.result.reason).toContain('reject');
-    const labels = outcome.trace_entries.map(traceEntryLabel);
+    expect(outcome.outcome).toBe('aborted');
+    expect(outcome.reason).toContain('reject');
+    const labels = (await readTraceEntries(runFolder)).map(traceEntryLabel);
     expect(labels).toContain('sub_run.completed:batch-step');
     expect(labels).toContain('step.aborted:batch-step');
   });

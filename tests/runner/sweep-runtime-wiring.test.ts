@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -20,7 +20,6 @@ import type { RelayResult } from '../../src/shared/connector-relay.js';
 import type { RelayFn } from '../../src/shared/relay-runtime-types.js';
 
 const FIXTURE_PATH = resolve('.claude-plugin', 'skills', 'sweep', 'circuit.json');
-const REPO_ROOT = resolve('.');
 
 function loadFixture(): { flow: CompiledFlow; bytes: Buffer } {
   const bytes = readFileSync(FIXTURE_PATH);
@@ -126,6 +125,25 @@ async function readTraceEntries(runFolder: string) {
   return await new TraceStore(runFolder).load();
 }
 
+function makeVerificationProjectRoot(): string {
+  const projectRoot = join(runFolderBase, 'verification-project');
+  mkdirSync(projectRoot, { recursive: true });
+  writeFileSync(
+    join(projectRoot, 'package.json'),
+    `${JSON.stringify(
+      {
+        private: true,
+        scripts: {
+          check: 'node -e "process.exit(0)"',
+        },
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  return projectRoot;
+}
+
 let runFolderBase: string;
 
 beforeEach(() => {
@@ -185,7 +203,7 @@ describe('Sweep runtime wiring', () => {
       depth: 'standard',
       now: deterministicNow(Date.UTC(2026, 3, 26, 9, 0, 0)),
       relayer: relayerWith(),
-      projectRoot: REPO_ROOT,
+      projectRoot: makeVerificationProjectRoot(),
     });
 
     expect(outcome.outcome).toBe('complete');
@@ -297,7 +315,7 @@ describe('Sweep runtime wiring', () => {
         analysisBody: analysisWithDeferred,
         batchBody: batchActsOnSafeOnly,
       }),
-      projectRoot: REPO_ROOT,
+      projectRoot: makeVerificationProjectRoot(),
     });
 
     expect(outcome.outcome).toBe('complete');
@@ -331,7 +349,7 @@ describe('Sweep runtime wiring', () => {
           summary: 'Missing candidates field',
         }),
       }),
-      projectRoot: REPO_ROOT,
+      projectRoot: makeVerificationProjectRoot(),
     });
 
     expect(outcome.outcome).toBe('aborted');
@@ -364,7 +382,7 @@ describe('Sweep runtime wiring', () => {
           ],
         }),
       }),
-      projectRoot: REPO_ROOT,
+      projectRoot: makeVerificationProjectRoot(),
     });
 
     expect(outcome.outcome).toBe('aborted');
