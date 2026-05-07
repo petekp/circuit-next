@@ -1,32 +1,26 @@
 // Proof that the close-with-evidence registry is flow-agnostic.
 //
-// The premise: adding a new flow's close should be a CloseBuilder
-// file plus a registry entry — no edits to runner.ts. This test
-// register a synthetic builder for a new schema, builds a synthetic
-// CompiledFlow whose close-step writes that schema, runs it through
-// runCompiledFlow, and asserts the new builder fires. If the runner ever
-// regrows flow-specific knowledge in its close path, this test
+// The premise: adding a new flow's close should be a CloseBuilder file plus
+// a registry entry, with no runner edits. This test builds a synthetic
+// CompiledFlow whose close-step writes a synthetic schema, runs it through
+// core-v2, and asserts the builder contract can produce the result. If the
+// runner ever regrows flow-specific knowledge in its close path, this test
 // breaks.
 //
-// The registry currently has three real builders (build, explore, fix)
-// and the synthetic one this test registers temporarily. The test
-// restores the registry afterward so other tests stay clean.
+// The registry currently has three real builders: build, explore, and fix.
+// The synthetic builder is invoked through the v2 executor seam so the global
+// registry stays untouched.
 
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import {
-  runRetainedCompiledFlow as runCompiledFlow,
-  writeRetainedPrototypeComposeReport as writePrototypeComposeReport,
-} from '../../src/compat/retained-runtime.js';
+import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
 import { findCloseBuilder } from '../../src/flows/registries/close-writers/registry.js';
 import type { CloseBuilder } from '../../src/flows/registries/close-writers/types.js';
-import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
-import { RunId } from '../../src/schemas/ids.js';
 
 // A schema for a synthetic flow's result. Modeled after explore.result
 // but with a different name so we don't collide with anything real.
@@ -53,28 +47,9 @@ const syntheticBuilder: CloseBuilder = {
   },
 };
 
-// We don't have a public registry-mutation API, so the test takes a
-// look-don't-touch approach: it imports the registry to confirm shape,
-// then constructs a custom composeWriter that calls the synthetic
-// builder directly. The runner's writeComposeReport normally
-// relays via findCloseBuilder; this test substitutes a thin
-// composeWriter that uses syntheticBuilder for the new schema and
-// delegates everything else upstream. If the registry's contract were
-// internally inconsistent, this test would surface it.
-
 function deterministicNow(startMs: number): () => Date {
   let n = 0;
   return () => new Date(startMs + n++ * 1000);
-}
-
-function change_kind(): ChangeKindDeclaration {
-  return {
-    change_kind: 'ratchet-advance',
-    failure_mode: 'close-with-evidence registry binds builders to flows-only',
-    acceptance_evidence:
-      'a synthetic builder produces a result via the same registry contract real builders use',
-    alternate_framing: 'wait for a real new flow — rejected because contract is testable now',
-  };
 }
 
 function syntheticCloseCompiledFlow(): CompiledFlow {
@@ -162,51 +137,60 @@ describe('close-with-evidence registry', () => {
     expect(findCloseBuilder('synthetic.flow-result@v1')).toBeUndefined();
   });
 
-  it('produces a result via a synthetic builder injected through composeWriter', async () => {
-    // The composeWriter seam lets this test inject the synthetic builder
-    // without mutating the global registry. The same code path runs for the
-    // real registered builders, so the contract is exercised end-to-end.
+  it('produces a result via a synthetic builder injected through a v2 compose executor', async () => {
+    // The executor seam lets this test inject the synthetic builder without
+    // mutating the global registry. The registry shape checks above still
+    // prove the public lookup contract stays flow-agnostic.
     const flow = syntheticCloseCompiledFlow();
-    const outcome = await runCompiledFlow({
-      runFolder,
-      flow,
+    const frameStep = flow.steps[0];
+    const closeStep = flow.steps[1];
+    if (frameStep?.kind !== 'compose') throw new Error('synthetic flow must start at compose');
+    if (closeStep?.kind !== 'compose') throw new Error('synthetic flow must close with compose');
+
+    const outcome = await runCompiledFlowV2({
+      runDir: runFolder,
       flowBytes: Buffer.from(JSON.stringify(flow)),
-      runId: RunId.parse('00000000-0000-0000-0000-0000aaaa1234'),
+      runId: '00000000-0000-0000-0000-0000aaaa1234',
       goal: 'synthetic registry test',
       depth: 'standard',
-      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 26, 13, 0, 0)),
-      composeWriter: (input) => {
-        const schemaName = input.step.writes.report.schema;
-        if (schemaName === SYNTHETIC_RESULT_SCHEMA_NAME) {
-          // Mirror what the registered close path does: resolve the
-          // builder's reads, build, validate, write. For the test we
-          // hand the builder a hand-resolved input map.
-          const brief = JSON.parse(
-            readFileSync(join(input.runFolder, 'reports/brief.json'), 'utf8'),
-          );
-          const report = syntheticBuilder.build({
-            runFolder: input.runFolder,
-            flow: input.flow,
-            closeStep: input.step as never,
-            goal: input.goal,
-            inputs: { brief },
-          });
-          writeFileSync(
-            join(input.runFolder, input.step.writes.report.path as unknown as string),
-            `${JSON.stringify(report, null, 2)}\n`,
-          );
-          return;
-        }
-        // This synthetic frame has no registered writer. The test opts into
-        // the prototype-only fallback instead of relying on production
-        // placeholder behavior.
-        writePrototypeComposeReport(input);
+      executors: {
+        compose: async (step, context) => {
+          if (step.kind !== 'compose') throw new Error('expected compose step');
+          const reportRef = step.writes?.report;
+          const schemaName = reportRef?.schema;
+          if (reportRef === undefined || schemaName === undefined) {
+            throw new Error('expected compose report ref with schema');
+          }
+          if (schemaName === 'synthetic.brief@v1') {
+            const abs = context.files.resolve(reportRef);
+            mkdirSync(dirname(abs), { recursive: true });
+            writeFileSync(abs, `${JSON.stringify({ subject: context.goal }, null, 2)}\n`);
+            return { route: 'pass', details: { report: reportRef.path } };
+          }
+          if (schemaName === SYNTHETIC_RESULT_SCHEMA_NAME) {
+            const brief = JSON.parse(
+              readFileSync(join(context.runDir, 'reports/brief.json'), 'utf8'),
+            );
+            const report = syntheticBuilder.build({
+              runFolder: context.runDir,
+              flow,
+              closeStep,
+              goal: context.goal,
+              inputs: { brief },
+            });
+            const abs = context.files.resolve(reportRef);
+            mkdirSync(dirname(abs), { recursive: true });
+            writeFileSync(abs, `${JSON.stringify(report, null, 2)}\n`);
+            return { route: 'pass', details: { report: reportRef.path } };
+          }
+          throw new Error(`unexpected schema '${schemaName}'`);
+        },
       },
     });
-    if (outcome.result.outcome !== 'complete') {
+    if (outcome.outcome !== 'complete') {
       throw new Error(
-        `synthetic run did not complete: outcome=${outcome.result.outcome} reason=${outcome.result.reason ?? '<none>'}`,
+        `synthetic run did not complete: outcome=${outcome.outcome} reason=${outcome.reason ?? '<none>'}`,
       );
     }
     const result = JSON.parse(
