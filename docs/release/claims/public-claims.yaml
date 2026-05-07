@@ -101,7 +101,7 @@ claims:
     claim: Public proof must cover doing work, deciding, maintenance/migration, continuity, customization, failure, first-run, and plan execution.
     type: proof
     status: verified_current
-    surfaces: [README.md, docs/release/proofs/index.yaml, examples/runs]
+    surfaces: [README.md, docs/release/proofs/index.yaml, docs/release/proofs/runs]
     backing:
       proof_ids:
         - proof:routed-build

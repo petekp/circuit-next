@@ -79,6 +79,7 @@ generated host packages.
 | Tests | `tests/` |
 | Engine contracts | `docs/contracts/` |
 | Flow design notes | `docs/flows/` |
+| Release proof runs | `docs/release/proofs/runs/` |
 | Behavioral concerns | `specs/behavioral/` |
 | Ubiquitous language | `UBIQUITOUS_LANGUAGE.md` |
 | Block catalog | `docs/flows/block-catalog.json` |
