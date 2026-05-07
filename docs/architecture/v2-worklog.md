@@ -7684,3 +7684,53 @@ Next recommended action: pick one remaining old `src/runtime/**` wrapper
 category and decide whether to keep, package, or remove it with manifest,
 release-note, and test updates. External review is not warranted unless a new
 package-surface ambiguity appears.
+
+## 2026-05-07 - Flow-Authoring Wrapper Retirement
+
+Goal: retire the old runtime router/compiler wrapper category after confirming
+production and tooling imports already use the neutral `src/flows/**` owners.
+
+Files changed:
+
+- `src/runtime/compile-schematic-to-flow.ts`
+- `src/runtime/router.ts`
+- `src/compat/public-runtime-paths.ts`
+- `tests/runner/public-runtime-paths.test.ts`
+- `tests/runner/retained-compat-facade.test.ts`
+- `docs/release/deprecations/public-runtime-import-paths.md`
+- `docs/architecture/v2-public-runtime-import-path-policy.md`
+- `docs/architecture/v2-final-cutover-policy.md`
+- `docs/architecture/v2-checkpoint-history.md`
+- `docs/architecture/v2-deletion-plan.md`
+- `docs/architecture/v2-deletion-readiness-inventory.md`
+- `docs/architecture/v2-heavy-boundary-plan.md`
+- `docs/architecture/v2-migration-plan.md`
+- `docs/architecture/v2-rigor-audit.md`
+- `docs/architecture/v2-worklog.md`
+- `HANDOFF.md`
+
+What changed:
+
+- deleted `src/runtime/compile-schematic-to-flow.ts`;
+- deleted `src/runtime/router.ts`;
+- removed the `flow-authoring-wrapper` category from the public runtime path
+  manifest;
+- updated tests to prove the old router/compiler wrappers are absent and that
+  production/tooling code does not import the old runtime paths;
+- updated the release note and active architecture docs to point at
+  `src/flows/compile-schematic-to-flow.ts` and `src/flows/router.ts`.
+
+Tests run:
+
+- `npx vitest run tests/runner/public-runtime-paths.test.ts tests/runner/retained-compat-facade.test.ts tests/contracts/compile-schematic-to-flow.test.ts tests/contracts/flow-router.test.ts tests/runner/cli-router.test.ts tests/unit/emit-flows-drift.test.ts`: passed.
+- `npm run check`: passed.
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `npm run verify`: passed.
+
+Behavior changed? Only the old runtime flow-authoring wrapper import paths are
+retired. The live router and compiler behavior stays under `src/flows/**`.
+
+Next recommended action: choose the next old wrapper category. The shared-helper
+wrappers are the next likely candidate, but they still have several direct
+compatibility tests and a few stale spec/docs references to clean up.

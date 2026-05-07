@@ -33,6 +33,8 @@ final cutover supersedes that path: `src/compat/retained-runtime.ts`,
 old handler implementations, old trace/reducer/snapshot implementation files,
 and the old relay-selection bridge have been removed. Old runner, checkpoint,
 progress, and result-writer entrypoints remain only as fail-closed public stubs.
+The old flow-authoring wrappers at `src/runtime/compile-schematic-to-flow.ts`
+and `src/runtime/router.ts` have also been removed.
 
 ## 1. Current Runtime Selector
 
@@ -119,13 +121,13 @@ wrappers, public type/path surfaces, or fail-closed stubs.
 
 | Path | Classification | Why retain or move |
 |---|---|---|
-| `src/runtime/compile-schematic-to-flow.ts` | compatibility re-export | Neutral compiler implementation moved to `src/flows/compile-schematic-to-flow.ts` in Phase 5.33. Keep old path until compatibility imports retire. |
+| `src/runtime/compile-schematic-to-flow.ts` | removed | Neutral compiler implementation lives in `src/flows/compile-schematic-to-flow.ts`; the old runtime wrapper is retired. |
 | `src/runtime/catalog-derivations.ts` | compatibility re-export | Neutral implementation moved to `src/flows/catalog-derivations.ts` in Phase 5.13. Keep old path until compatibility imports retire. |
 | `src/runtime/registries/**` | compatibility re-exports | Neutral implementations moved to `src/flows/registries/**` in Phase 5.13. Keep old paths until compatibility imports retire. |
 | `src/runtime/connectors/**` | compatibility re-exports | Neutral connector subprocess and relay materializer implementations moved to `src/connectors/**` in Phase 5.32. Keep old runtime paths until compatibility imports and fingerprint wrappers are intentionally retired. |
 | `src/runtime/relay-support.ts` | compatibility re-export | Relay prompt and check helpers moved to `src/shared/relay-support.ts` in Phase 4.13. Keep this wrapper until old imports retire. |
 | `src/runtime/config-loader.ts` | compatibility re-export | Config discovery moved to `src/shared/config-loader.ts` in Phase 4.22. Keep this wrapper until old-path tests and external imports stop using it. |
-| `src/runtime/router.ts` | compatibility re-export | Neutral router implementation moved to `src/flows/router.ts` in Phase 5.33. Keep old path until compatibility imports retire. |
+| `src/runtime/router.ts` | removed | Neutral router implementation lives in `src/flows/router.ts`; the old runtime wrapper is retired. |
 | `src/runtime/relay-selection.ts` | removed | The old relay decision bridge was removed in the final cutover. Core-v2 and tests use `src/shared/relay-selection.ts` and core-v2 connector resolver helpers directly. |
 | `src/runtime/selection-resolver.ts` | compatibility re-export | Selection precedence logic moved to `src/shared/selection-resolver.ts` in Phase 4.11. Keep this wrapper until old imports retire. |
 | `src/runtime/result-writer.ts` | result path helper plus fail-closed writer stub | core-v2 owns result writing. Phase 4.25 moved the shared `reports/result.json` path helper to `src/shared/result-path.ts`; the old `resultPath(...)` export remains, while `writeResult(...)` fails closed. |
@@ -269,6 +271,8 @@ The detailed phase-by-phase table is compressed into git history and
 
 - Shared helpers and flow-owned registries moved to neutral owners under
   `src/shared/**`, `src/flows/**`, `src/connectors/**`, and `src/run-status/**`.
+- Old flow-authoring wrappers for router/compiler were removed after production
+  and tooling imports moved to `src/flows/**`.
 - Core-v2 became the default runtime for the generated public flow matrix,
   including checkpoint pause/resume for marked v2 folders.
 - The compatibility-preserving retained runtime posture was superseded by

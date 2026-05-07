@@ -106,7 +106,6 @@ describe('public runtime import-path manifest', () => {
     expect(categories).toEqual(
       new Set([
         'connector-wrapper',
-        'flow-authoring-wrapper',
         'public-runner-surface',
         'registry-wrapper',
         'retained-handler',
@@ -121,7 +120,7 @@ describe('public runtime import-path manifest', () => {
       PUBLIC_RUNTIME_WRAPPER_PATHS.filter(
         (entry) => entry.currentDisposition === 'future-deprecation-candidate',
       ).map((entry) => entry.category),
-    ).toEqual(expect.arrayContaining(['shared-helper-wrapper', 'flow-authoring-wrapper']));
+    ).toEqual(expect.arrayContaining(['shared-helper-wrapper']));
   });
 
   it('marks only the approved low-risk wrapper paths as soft-deprecated', () => {
@@ -130,13 +129,11 @@ describe('public runtime import-path manifest', () => {
     ).sort();
 
     expect(softDeprecatedPaths).toEqual([
-      'src/runtime/compile-schematic-to-flow.ts',
       'src/runtime/config-loader.ts',
       'src/runtime/manifest-snapshot-writer.ts',
       'src/runtime/operator-summary-writer.ts',
       'src/runtime/policy/flow-kind-policy.ts',
       'src/runtime/relay-support.ts',
-      'src/runtime/router.ts',
       'src/runtime/run-relative-path.ts',
       'src/runtime/selection-resolver.ts',
       'src/runtime/step-handlers/fanout/aggregate.ts',

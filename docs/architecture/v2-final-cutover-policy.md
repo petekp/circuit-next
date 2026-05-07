@@ -41,7 +41,8 @@ packet path stops here unless a genuinely new ambiguity appears.
 
 ## Immediate Next Step
 
-Choose the next wrapper-retirement or package-surface batch. The likely next
-move is to decide whether remaining old `src/runtime/**` compatibility wrappers
-should stay as source-only internal import bridges, be moved behind a dedicated
-compat package surface, or be removed with manifest/test updates.
+Choose the next wrapper-retirement or package-surface batch. The old
+flow-authoring wrappers have been removed; the likely next move is to decide
+whether remaining old `src/runtime/**` helper, registry, connector, or type
+surfaces should stay as source-only internal import bridges, be packaged, or be
+removed with manifest/test updates.

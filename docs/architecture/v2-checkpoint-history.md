@@ -38,7 +38,8 @@ ambiguity appears, write a short named decision note instead.
 - The final cutover work reset policy, made retired run folders fail closed,
   replaced old runner/checkpoint/progress/result entrypoints with fail-closed
   stubs, and removed the retained handler, trace, reducer, snapshot, and relay
-  selection implementation code.
+  selection implementation code. The first wrapper-retirement batch removed the
+  old flow-authoring wrappers after the live owner moved to `src/flows/**`.
 
 ## Living Docs
 

@@ -43,6 +43,8 @@ The final cutover changed this inventory's conclusions:
 
 - retained/v1 run folders fail closed with
   `This run folder was created by the retired runtime. Start a fresh run.`;
+- old flow-authoring wrappers at `src/runtime/compile-schematic-to-flow.ts` and
+  `src/runtime/router.ts` are gone; the live owners are `src/flows/**`;
 - `src/compat/retained-runtime.ts`, `src/compat/retained-checkpoint-folders.ts`,
   and `src/run-status/v1-run-folder.ts` are gone;
 - old retained handler implementations, old trace reader/writer, reducer,
@@ -77,7 +79,7 @@ final cutover product decision.
 | `src/runtime/append-and-derive.ts` | retained product behavior | Appends retained trace entries and derives retained snapshots. Keep while retained trace/state is live. |
 | `src/runtime/catalog-derivations.ts` | compatibility wrapper | Neutral implementation moved to `src/flows/catalog-derivations.ts` in Phase 5.13. Keep old path for tests and external compatibility. |
 | `src/runtime/checkpoint-resume.ts` | retained product behavior | Owns retained/v1 checkpoint resume preparation. Keep while old checkpoint folders remain supported. |
-| `src/runtime/compile-schematic-to-flow.ts` | compatibility wrapper | Neutral compiler implementation moved to `src/flows/compile-schematic-to-flow.ts` in Phase 5.33. Keep old path for import compatibility. |
+| `src/runtime/compile-schematic-to-flow.ts` | removed | Neutral compiler implementation lives in `src/flows/compile-schematic-to-flow.ts`; the old runtime wrapper is retired. |
 | `src/runtime/config-loader.ts` | compatibility wrapper | Neutral config loading lives in `src/shared/config-loader.ts`; keep old path until imports retire. |
 | `src/runtime/connectors/claude-code.ts` | compatibility wrapper | Neutral implementation moved to `src/connectors/claude-code.ts` in Phase 5.32. Keep old path for old imports and fingerprint compatibility. |
 | `src/runtime/connectors/codex.ts` | compatibility wrapper | Neutral implementation moved to `src/connectors/codex.ts` in Phase 5.32. Keep old path for old imports and fingerprint compatibility. |
@@ -105,7 +107,7 @@ final cutover product decision.
 | `src/runtime/relay-selection.ts` | retained fallback | Retained relay decision bridge and connector resolution remain live for fallback paths. |
 | `src/runtime/relay-support.ts` | compatibility wrapper | Neutral relay support lives in `src/shared/relay-support.ts`; keep old path for retained handler imports. |
 | `src/runtime/result-writer.ts` | retained product behavior | Retained result writer is still used by old runner for retained close/finalization. The shared result path helper lives in `src/shared/result-path.ts`; keep the old `resultPath(...)` export for compatibility. |
-| `src/runtime/router.ts` | compatibility wrapper | Neutral router implementation moved to `src/flows/router.ts` in Phase 5.33. Keep old path for import compatibility. |
+| `src/runtime/router.ts` | removed | Neutral router implementation lives in `src/flows/router.ts`; the old runtime wrapper is retired. |
 | `src/runtime/run-relative-path.ts` | compatibility wrapper | Neutral helper lives in `src/shared/run-relative-path.ts`; keep old path for retained imports/tests. |
 | `src/runtime/run-status-projection.ts` | compatibility wrapper | Neutral dispatcher lives in `src/run-status/project-run-folder.ts`; keep old path for compatibility tests. |
 | `src/runtime/runner-types.ts` | compatibility wrapper | Shared relay/progress types moved to `src/shared/relay-runtime-types.ts`, but retained invocation/result types still live here. |
@@ -131,9 +133,10 @@ final cutover product decision.
 | `src/runtime/trace-writer.ts` | retained product behavior | Retained trace appending remains live for retained runs and tests. |
 | `src/runtime/write-capable-worker-disclosure.ts` | compatibility wrapper | Neutral helper lives in `src/shared/write-capable-worker-disclosure.ts`; keep old path for compatibility. |
 
-Phase 5.58 marks the lowest-risk shared-helper and flow-authoring wrappers as
-soft-deprecated in `src/compat/public-runtime-paths.ts`. Phase 5.59 promotes
-that exact list to a public release-note deprecation document at
+Phase 5.58 marked the lowest-risk shared-helper and flow-authoring wrappers as
+soft-deprecated in `src/compat/public-runtime-paths.ts`. The flow-authoring
+wrappers have since been removed. Phase 5.59 promotes the remaining
+soft-deprecated helper list to a public release-note deprecation document at
 `docs/release/deprecations/public-runtime-import-paths.md`. This is
 communication only: the listed wrappers remain, package exports do not change,
 and no import-time warnings are emitted.
@@ -162,7 +165,7 @@ wrapper/package-surface questions:
 - connector wrappers under `src/runtime/connectors/**`;
 - catalog and registry wrappers under `src/runtime/catalog-derivations.ts` and
   `src/runtime/registries/**`;
-- router/compiler/shared-helper wrappers that are still public old import paths;
+- shared-helper wrappers that are still public old import paths;
 - old public type/path surfaces such as `src/runtime/runner-types.ts` and
   `src/runtime/result-writer.ts`;
 - generated plugin and package export drift when old paths are removed.

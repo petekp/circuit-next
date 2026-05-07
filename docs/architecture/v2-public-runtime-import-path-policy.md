@@ -7,8 +7,8 @@ Current status: superseded for cutover planning by
 deprecation below remains as the public import-path record. It should not be
 read as retained runtime compatibility.
 
-This note records the first approved old public import-path deprecation stage
-for the v2 migration. The public release-note document lives at
+This note records the current old public import-path deprecation stage for the
+v2 migration. The public release-note document lives at
 `docs/release/deprecations/public-runtime-import-paths.md`.
 
 ## Policy
@@ -20,8 +20,8 @@ runtime/import-time warning is approved by this note.
 
 No wrapper is deletion-ready.
 
-The first public stage is a release-note-only soft deprecation for the
-lowest-risk old helper and flow-authoring paths. Soft deprecation means:
+The current public stage is a release-note-only soft deprecation for the
+remaining lowest-risk old helper paths. Soft deprecation means:
 
 - docs and release wording tell callers to prefer the neutral owner path;
 - the old path continues to work;
@@ -50,9 +50,6 @@ Prefer the replacement owner for new imports:
 | `src/runtime/step-handlers/shared.ts` | `src/shared/json-report.ts` |
 | `src/runtime/step-handlers/fanout/aggregate.ts` | `src/shared/fanout-aggregate-report.ts` |
 | `src/runtime/step-handlers/fanout/join-policy.ts` | `src/shared/fanout-join-policy.ts` |
-| `src/runtime/compile-schematic-to-flow.ts` | `src/flows/compile-schematic-to-flow.ts` |
-| `src/runtime/router.ts` | `src/flows/router.ts` |
-
 ## Release Note
 
 The release-note deprecation document is
@@ -73,6 +70,10 @@ These categories are not part of the soft-deprecated wrapper table above:
   `src/runtime/runner-types.ts`;
 - retired fail-closed runtime surfaces such as checkpoint resume, checkpoint
   handler, progress projection, and result writing.
+
+The old flow-authoring wrappers at `src/runtime/compile-schematic-to-flow.ts`
+and `src/runtime/router.ts` were retired after production and tooling imports
+moved to `src/flows/**`.
 
 ## Review Boundaries
 

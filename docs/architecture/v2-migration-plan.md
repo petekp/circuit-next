@@ -130,7 +130,7 @@ Checkpoint requirement: no formal checkpoint unless serious differences appear.
 Goal: simplify authoring and compiler concepts after v2 parity exists.
 
 Files likely involved: `src/schemas/flow-schematic.ts`,
-`src/runtime/compile-schematic-to-flow.ts`, `src/schemas/step.ts`, flow
+`src/flows/compile-schematic-to-flow.ts`, `src/schemas/step.ts`, flow
 schematics, flow package definitions, and compiler tests.
 
 Exact deliverables: discriminated authoring step definitions where practical,

@@ -2,8 +2,8 @@
 
 Date: 2026-05-07
 
-This release publicly soft-deprecates the old runtime helper and flow-authoring
-wrapper import paths listed below for new imports.
+This release publicly soft-deprecates the old runtime helper wrapper import
+paths listed below for new imports.
 
 This is a release-note deprecation only:
 
@@ -36,9 +36,6 @@ New code should prefer the replacement owner path.
 | `src/runtime/step-handlers/shared.ts` | `src/shared/json-report.ts` |
 | `src/runtime/step-handlers/fanout/aggregate.ts` | `src/shared/fanout-aggregate-report.ts` |
 | `src/runtime/step-handlers/fanout/join-policy.ts` | `src/shared/fanout-join-policy.ts` |
-| `src/runtime/compile-schematic-to-flow.ts` | `src/flows/compile-schematic-to-flow.ts` |
-| `src/runtime/router.ts` | `src/flows/router.ts` |
-
 ## Not In This Soft-Deprecation List
 
 The following old runtime path categories are not part of the soft-deprecated
@@ -53,6 +50,11 @@ wrapper table above:
   `src/runtime/runner-types.ts`;
 - retired fail-closed runtime surfaces such as checkpoint resume, checkpoint
   handler, progress projection, and result writing.
+
+The old flow-authoring wrappers at `src/runtime/compile-schematic-to-flow.ts`
+and `src/runtime/router.ts` are no longer part of the old public import-path
+surface. New code should use `src/flows/compile-schematic-to-flow.ts` and
+`src/flows/router.ts`.
 
 ## Removal Policy
 

@@ -6,27 +6,7 @@ import {
   PUBLIC_RUNTIME_WRAPPER_PATHS,
   type PublicRuntimePathCategory,
 } from '../../src/compat/public-runtime-paths.js';
-import {
-  compileSchematicToCompiledFlow as neutralCompileSchematicToCompiledFlow,
-  FlowSchematicCompileError as neutralFlowSchematicCompileError,
-} from '../../src/flows/compile-schematic-to-flow.js';
-import {
-  classifyCompiledFlowTask as neutralClassifyCompiledFlowTask,
-  classifyTaskAgainstRoutables as neutralClassifyTaskAgainstRoutables,
-  deriveRoutingForTesting as neutralDeriveRoutingForTesting,
-  ROUTABLE_WORKFLOWS as neutralRoutableWorkflows,
-} from '../../src/flows/router.js';
 import { prepareCheckpointResume } from '../../src/runtime/checkpoint-resume.js';
-import {
-  compileSchematicToCompiledFlow as runtimeCompileSchematicToCompiledFlow,
-  FlowSchematicCompileError as runtimeFlowSchematicCompileError,
-} from '../../src/runtime/compile-schematic-to-flow.js';
-import {
-  classifyCompiledFlowTask as runtimeClassifyCompiledFlowTask,
-  classifyTaskAgainstRoutables as runtimeClassifyTaskAgainstRoutables,
-  deriveRoutingForTesting as runtimeDeriveRoutingForTesting,
-  ROUTABLE_WORKFLOWS as runtimeRoutableWorkflows,
-} from '../../src/runtime/router.js';
 import {
   resumeCompiledFlowCheckpoint,
   runCompiledFlow,
@@ -154,13 +134,34 @@ describe('runtime import boundary', () => {
     expect(() => runCheckpointStep()).toThrow(RETIRED_RUNTIME_FRESH_INVOCATION_MESSAGE);
   });
 
-  it('keeps old runtime router/compiler paths as compatibility re-exports', () => {
-    expect(runtimeRoutableWorkflows).toBe(neutralRoutableWorkflows);
-    expect(runtimeClassifyCompiledFlowTask).toBe(neutralClassifyCompiledFlowTask);
-    expect(runtimeClassifyTaskAgainstRoutables).toBe(neutralClassifyTaskAgainstRoutables);
-    expect(runtimeDeriveRoutingForTesting).toBe(neutralDeriveRoutingForTesting);
-    expect(runtimeFlowSchematicCompileError).toBe(neutralFlowSchematicCompileError);
-    expect(runtimeCompileSchematicToCompiledFlow).toBe(neutralCompileSchematicToCompiledFlow);
+  it('does not expose old runtime router/compiler wrappers', () => {
+    expect(existsSync(resolve('src/runtime/router.ts'))).toBe(false);
+    expect(existsSync(resolve('src/runtime/compile-schematic-to-flow.ts'))).toBe(false);
+
+    const repoRoot = resolve('.');
+    const forbiddenImports = [
+      '../runtime/router.js',
+      '../runtime/compile-schematic-to-flow.js',
+      '../../runtime/router.js',
+      '../../runtime/compile-schematic-to-flow.js',
+      'dist/runtime/router.js',
+      'dist/runtime/compile-schematic-to-flow.js',
+      'src/runtime/router.js',
+      'src/runtime/compile-schematic-to-flow.js',
+    ];
+    const offenders = [
+      ...collectSourceFiles(resolve('src')),
+      ...collectFiles(resolve('scripts'), ['.mjs', '.js', '.ts']),
+    ]
+      .flatMap((file) => {
+        const text = readFileSync(file, 'utf8');
+        return forbiddenImports
+          .filter((importPath) => text.includes(importPath))
+          .map((importPath) => `${file.slice(repoRoot.length + 1)} imports ${importPath}`);
+      })
+      .sort();
+
+    expect(offenders).toEqual([]);
   });
 
   it('keeps CLI and status surfaces off retained checkpoint-folder adapters', () => {
@@ -242,22 +243,6 @@ describe('runtime import boundary', () => {
 
     expect(neutralConnectorOffenders).toEqual([]);
     expect(productionOffenders).toEqual([]);
-  });
-
-  it('keeps router/compiler implementation imports on neutral flow ownership', () => {
-    const productionSourceOffenders = oldRuntimeWrapperImportOffenders({
-      categories: ['flow-authoring-wrapper'],
-      files: collectSourceFiles(resolve('src')),
-      reason: 'old router/compiler wrapper',
-    });
-    const scriptOffenders = oldRuntimeWrapperImportOffenders({
-      categories: ['flow-authoring-wrapper'],
-      files: collectFiles(resolve('scripts'), ['.mjs', '.js', '.ts']),
-      reason: 'old router/compiler wrapper',
-    });
-
-    expect(productionSourceOffenders).toEqual([]);
-    expect(scriptOffenders).toEqual([]);
   });
 
   it('keeps registry and catalog derivation imports on neutral flow ownership', () => {
