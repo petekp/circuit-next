@@ -11,10 +11,23 @@ import {
   ContinuityRecord,
   RunId,
 } from '../../src/index.js';
+import type { RelayResult } from '../../src/shared/connector-relay.js';
 import { writeManifestSnapshot } from '../../src/shared/manifest-snapshot.js';
+import type { RelayFn, RelayInput } from '../../src/shared/relay-runtime-types.js';
 import { RETIRED_RUNTIME_RUN_FOLDER_MESSAGE } from '../../src/shared/retired-runtime-policy.js';
 
 const tempRoots: string[] = [];
+const BUILD_IMPLEMENTATION_BODY = JSON.stringify({
+  verdict: 'accept',
+  summary: 'Implemented the custom flow task',
+  changed_files: ['src/custom-flow-output.ts'],
+  evidence: ['Stub implementation relay completed'],
+});
+const BUILD_REVIEW_BODY = JSON.stringify({
+  verdict: 'accept',
+  summary: 'No blocking issue found',
+  findings: [],
+});
 
 function tempRoot(prefix: string): string {
   const root = mkdtempSync(join(tmpdir(), prefix));
@@ -69,6 +82,62 @@ function writeRetiredRunFolder(runFolder: string, runId: string): void {
   );
 }
 
+function writeTraceOnlyRetiredRunFolder(runFolder: string, runId: string): void {
+  mkdirSync(runFolder, { recursive: true });
+  writeFileSync(
+    join(runFolder, 'trace.ndjson'),
+    `${JSON.stringify({
+      schema_version: 1,
+      kind: 'run.bootstrapped',
+      run_id: runId,
+      flow_id: 'build',
+      depth: 'deep',
+      manifest_hash: 'legacy-manifest-hash',
+    })}\n`,
+  );
+}
+
+function writeStartedTraceOnlyRetiredRunFolder(runFolder: string): void {
+  mkdirSync(runFolder, { recursive: true });
+  writeFileSync(
+    join(runFolder, 'trace.ndjson'),
+    `${JSON.stringify({
+      schema_version: 1,
+      kind: 'run.started',
+      flow_id: 'build',
+    })}\n`,
+  );
+}
+
+function relayerWithBuildBodies(): RelayFn {
+  return {
+    connectorName: 'claude-code',
+    relay: async (input: RelayInput): Promise<RelayResult> => ({
+      request_payload: input.prompt,
+      receipt_id: 'stub-custom-flow-v2',
+      result_body: input.prompt.includes('Step: review-step')
+        ? BUILD_REVIEW_BODY
+        : BUILD_IMPLEMENTATION_BODY,
+      duration_ms: 1,
+      cli_version: '0.0.0-stub',
+    }),
+  };
+}
+
+async function withEnv<T>(
+  key: string,
+  value: string | undefined,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const original = process.env[key];
+  process.env[key] = value;
+  try {
+    return await fn();
+  } finally {
+    process.env[key] = original;
+  }
+}
+
 afterEach(() => {
   for (const root of tempRoots.splice(0)) {
     rmSync(root, { recursive: true, force: true });
@@ -109,16 +178,68 @@ describe('utility CLI commands', () => {
     expect(existsSync(output.operator_summary_markdown_path)).toBe(true);
     const summary = readFileSync(output.operator_summary_markdown_path, 'utf8');
     expect(summary).toContain(CUSTOM_FLOW_ROOT_RUNTIME_POLICY);
+    expect(summary).toContain('CIRCUIT_V2_RUNTIME=1 circuit-next run release-note-flow');
     expect(existsSync(join(home, 'skills/release-note-flow/SKILL.md'))).toBe(true);
     expect(existsSync(join(home, 'skills/release-note-flow/circuit.yaml'))).toBe(true);
     expect(existsSync(join(home, 'commands/release-note-flow.md'))).toBe(true);
+    expect(readFileSync(join(home, 'skills/release-note-flow/SKILL.md'), 'utf8')).toContain(
+      'CIRCUIT_V2_RUNTIME=1 circuit-next run release-note-flow',
+    );
+    expect(readFileSync(join(home, 'commands/release-note-flow.md'), 'utf8')).toContain(
+      'CIRCUIT_V2_RUNTIME=1 circuit-next run release-note-flow',
+    );
     expect(CompiledFlow.parse(JSON.parse(readFileSync(output.flow_path, 'utf8'))).id).toBe(
       'release-note-flow',
     );
     const manifest = JSON.parse(readFileSync(output.manifest_path, 'utf8')) as {
-      custom_flows: Array<{ id: string }>;
+      custom_flows: Array<{ id: string; archetype: string }>;
     };
     expect(manifest.custom_flows.map((flow) => flow.id)).toEqual(['release-note-flow']);
+    expect(manifest.custom_flows.map((flow) => flow.archetype)).toEqual(['build']);
+
+    const projectRoot = tempRoot('circuit-create-run-project-');
+    writeFileSync(
+      join(projectRoot, 'package.json'),
+      `${JSON.stringify({ scripts: { check: 'node -e "process.exit(0)"' } }, null, 2)}\n`,
+    );
+    const runFolder = join(home, 'runs', 'release-note-flow-v2');
+    const run = await withEnv('CIRCUIT_V2_RUNTIME', '1', () =>
+      captureMain(
+        [
+          'run',
+          'release-note-flow',
+          '--flow-root',
+          join(home, 'flows'),
+          '--goal',
+          'Draft release notes from a test change',
+          '--progress',
+          'jsonl',
+          '--run-folder',
+          runFolder,
+        ],
+        { configCwd: projectRoot, relayer: relayerWithBuildBodies() },
+      ),
+    );
+
+    expect(run.code, run.stderr).toBe(0);
+    const runOutput = JSON.parse(run.stdout) as {
+      flow_id: string;
+      selected_flow: string;
+      outcome: string;
+      runtime?: string;
+      runtime_reason?: string;
+    };
+    expect(runOutput).toMatchObject({
+      flow_id: 'release-note-flow',
+      selected_flow: 'release-note-flow',
+      outcome: 'complete',
+      runtime: 'v2',
+    });
+    expect(runOutput.runtime_reason).toContain("custom flow 'release-note-flow'");
+    const firstTrace = JSON.parse(
+      readFileSync(join(runFolder, 'trace.ndjson'), 'utf8').split(/\r?\n/, 1)[0] ?? '{}',
+    ) as Record<string, unknown>;
+    expect(firstTrace).toMatchObject({ engine: 'core-v2', flow_id: 'release-note-flow' });
   });
 
   it('publishes reviewed draft contents without regenerating the draft', async () => {
@@ -777,6 +898,62 @@ describe('utility CLI commands', () => {
       'continuity-33333333-3333-4333-8333-333333333333',
       '--created-at',
       '2026-04-29T23:26:00.000Z',
+    ]);
+
+    expect(save.code).toBe(1);
+    expect(save.stdout).toBe('');
+    expect(save.stderr.trim()).toBe(`error: ${RETIRED_RUNTIME_RUN_FOLDER_MESSAGE}`);
+  });
+
+  it('fails closed when binding handoff continuity to a trace-only retired run', async () => {
+    const root = tempRoot('circuit-handoff-trace-only-retired-run-');
+    const runFolder = join(root, 'run');
+    const controlPlane = join(root, 'control-plane');
+    writeTraceOnlyRetiredRunFolder(runFolder, '55555555-5555-4555-8555-555555555558');
+
+    const save = await captureMain([
+      'handoff',
+      'save',
+      '--goal',
+      'Resume trace-only retired Build run',
+      '--next',
+      'DO: start a fresh run',
+      '--run-folder',
+      runFolder,
+      '--control-plane',
+      controlPlane,
+      '--record-id',
+      'continuity-55555555-5555-4555-8555-555555555558',
+      '--created-at',
+      '2026-04-29T23:27:00.000Z',
+    ]);
+
+    expect(save.code).toBe(1);
+    expect(save.stdout).toBe('');
+    expect(save.stderr.trim()).toBe(`error: ${RETIRED_RUNTIME_RUN_FOLDER_MESSAGE}`);
+  });
+
+  it('fails closed when binding handoff continuity to a run.started trace-only retired run', async () => {
+    const root = tempRoot('circuit-handoff-started-trace-only-retired-run-');
+    const runFolder = join(root, 'run');
+    const controlPlane = join(root, 'control-plane');
+    writeStartedTraceOnlyRetiredRunFolder(runFolder);
+
+    const save = await captureMain([
+      'handoff',
+      'save',
+      '--goal',
+      'Resume run.started retired Build run',
+      '--next',
+      'DO: start a fresh run',
+      '--run-folder',
+      runFolder,
+      '--control-plane',
+      controlPlane,
+      '--record-id',
+      'continuity-55555555-5555-4555-8555-555555555559',
+      '--created-at',
+      '2026-04-29T23:28:00.000Z',
     ]);
 
     expect(save.code).toBe(1);

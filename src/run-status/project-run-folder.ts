@@ -6,6 +6,7 @@ import { verifyManifestSnapshotBytes } from '../shared/manifest-snapshot.js';
 import {
   RETIRED_RUNTIME_RUN_FOLDER_ERROR_CODE,
   RETIRED_RUNTIME_RUN_FOLDER_MESSAGE,
+  detectRunFolderTraceRuntime,
 } from '../shared/retired-runtime-policy.js';
 import { errorMessage, invalidProjection } from './projection-common.js';
 import { projectV2RunStatusFromRunFolder } from './v2-run-folder.js';
@@ -69,6 +70,15 @@ function assertReadableRunFolder(runFolder: string): void {
 export function projectRunStatusFromRunFolder(runFolder: string): RunStatusProjectionV1 {
   const resolvedRunFolder = resolve(runFolder);
   assertReadableRunFolder(resolvedRunFolder);
+
+  if (detectRunFolderTraceRuntime(resolvedRunFolder) === 'retired') {
+    return invalidProjection({
+      runFolder: resolvedRunFolder,
+      reason: 'unknown',
+      code: RETIRED_RUNTIME_RUN_FOLDER_ERROR_CODE,
+      message: RETIRED_RUNTIME_RUN_FOLDER_MESSAGE,
+    });
+  }
 
   let manifest: ReturnType<typeof verifyManifestSnapshotBytes>;
   try {

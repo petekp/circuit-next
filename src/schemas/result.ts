@@ -4,10 +4,9 @@ import { RunClosedOutcome } from './trace-entry.js';
 
 // RESULT-I1 — RunResult is the user-visible report a run produces at
 // closure. Written to <run-folder>/reports/result.json by the runtime
-// when the closing `run.closed` trace_entry is appended. Unlike state.json
-// (reducer-derived, recomputable) a RunResult is persisted once at close
-// and never mutated: it is the authoritative "what happened" summary
-// independent of future log rewrites.
+// when the closing `run.closed` trace_entry is appended. A RunResult is
+// persisted once at close and never mutated: it is the authoritative
+// "what happened" summary independent of future log rewrites.
 //
 // RESULT-I2 — `outcome` and `run_id` must match the closing
 // `run.closed` trace_entry; `flow_id` must match `run.bootstrapped`.

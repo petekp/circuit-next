@@ -196,7 +196,7 @@ function flowBehaviorAxes(pkg) {
   }
   if (steps.length > 0) {
     axes.continuity =
-      'Runs persist manifest, trace, state, result, and checkpoint resume data in the run folder.';
+      'Runs persist manifest, trace, result, and checkpoint resume data in the run folder.';
   }
   return axes;
 }

@@ -14,7 +14,10 @@ import {
 import type { ControlPlaneFileStem } from '../schemas/scalars.js';
 import type { Snapshot, SnapshotStatus } from '../schemas/snapshot.js';
 import { readManifestSnapshot } from '../shared/manifest-snapshot.js';
-import { RETIRED_RUNTIME_RUN_FOLDER_MESSAGE } from '../shared/retired-runtime-policy.js';
+import {
+  RETIRED_RUNTIME_RUN_FOLDER_MESSAGE,
+  detectRunFolderTraceRuntime,
+} from '../shared/retired-runtime-policy.js';
 import { utilityProgress } from './utility-progress.js';
 
 type HandoffAction = 'save' | 'resume' | 'done' | 'brief' | 'hook' | 'hooks';
@@ -885,23 +888,6 @@ function stageForCurrentStep(flow: CompiledFlow, currentStep: string): string {
   return stage?.canonical ?? stage?.id ?? 'frame';
 }
 
-function isCoreV2MarkedRunFolder(runFolder: string): boolean {
-  try {
-    const firstLine = readFileSync(join(runFolder, 'trace.ndjson'), 'utf8').split(/\r?\n/, 1)[0];
-    if (firstLine === undefined || firstLine.length === 0) return false;
-    const raw: unknown = JSON.parse(firstLine);
-    if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return false;
-    const entry = raw as Record<string, unknown>;
-    return (
-      entry.kind === 'run.bootstrapped' &&
-      entry.engine === 'core-v2' &&
-      typeof entry.manifest_hash === 'string'
-    );
-  } catch {
-    return false;
-  }
-}
-
 function snapshotStatusFromRunStatus(
   status: ReturnType<typeof projectRunStatusFromRunFolder>,
 ): SnapshotStatus {
@@ -925,12 +911,17 @@ function loadRunBackedSnapshot(runFolder: string): {
   >;
   readonly currentStage: string;
 } {
+  const traceRuntime = detectRunFolderTraceRuntime(runFolder);
+  if (traceRuntime === 'retired') {
+    throw new Error(RETIRED_RUNTIME_RUN_FOLDER_MESSAGE);
+  }
+
   const manifest = readManifestSnapshot(runFolder);
   const flow = CompiledFlow.parse(
     JSON.parse(Buffer.from(manifest.bytes_base64, 'base64').toString('utf8')),
   );
 
-  if (!isCoreV2MarkedRunFolder(runFolder)) {
+  if (traceRuntime !== 'core-v2') {
     throw new Error(RETIRED_RUNTIME_RUN_FOLDER_MESSAGE);
   }
 

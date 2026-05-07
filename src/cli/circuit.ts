@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 
 import type { ExecutorRegistryV2 } from '../core-v2/executors/index.js';
 import { isCoreV2RunFolder, resumeCompiledFlowV2 } from '../core-v2/run/checkpoint-resume.js';
@@ -486,16 +486,58 @@ function selectedDepth(
   return selectedEntryMode(flow, entryModeSelection).depth;
 }
 
+function customFlowArchetype(input: {
+  readonly flow: CompiledFlow;
+  readonly args: ParsedArgs;
+  readonly fixturePath: string;
+}): string | undefined {
+  if (input.args.flowRoot === undefined || input.args.fixturePath !== undefined) return undefined;
+  try {
+    const flowRoot = resolve(input.args.flowRoot);
+    const manifest = JSON.parse(readFileSync(resolve(dirname(flowRoot), 'manifest.json'), 'utf8'));
+    if (manifest === null || typeof manifest !== 'object' || Array.isArray(manifest)) {
+      return undefined;
+    }
+    const customFlows = (manifest as { custom_flows?: unknown }).custom_flows;
+    if (!Array.isArray(customFlows)) return undefined;
+    const flowId = input.flow.id as unknown as string;
+    const fixturePath = resolve(input.fixturePath);
+    for (const candidate of customFlows) {
+      if (candidate === null || typeof candidate !== 'object' || Array.isArray(candidate)) continue;
+      const entry = candidate as Record<string, unknown>;
+      if (entry.id !== flowId) continue;
+      if (typeof entry.flow_path !== 'string' || resolve(entry.flow_path) !== fixturePath) continue;
+      return typeof entry.archetype === 'string' && entry.archetype.length > 0
+        ? entry.archetype
+        : undefined;
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function classifyV2RuntimeSupport(input: {
   readonly flow: CompiledFlow;
   readonly args: ParsedArgs;
   readonly entryModeSelection: ResolvedEntryModeSelection;
+  readonly fixturePath: string;
   readonly supportMatrix?: Record<string, readonly V2RuntimeSupportRow[]>;
 }): V2RuntimeSupportDecision {
   const flowId = input.flow.id as unknown as string;
   const entryModeName = selectedEntryModeName(input.flow, input.entryModeSelection);
   const depth = selectedDepth(input.flow, input.args, input.entryModeSelection);
-  const rows = (input.supportMatrix ?? V2_RUNTIME_SUPPORT_MATRIX)[flowId];
+  const supportMatrix = input.supportMatrix ?? V2_RUNTIME_SUPPORT_MATRIX;
+  const customArchetype = customFlowArchetype({
+    flow: input.flow,
+    args: input.args,
+    fixturePath: input.fixturePath,
+  });
+  const directRows = supportMatrix[flowId];
+  const customArchetypeRows =
+    customArchetype === undefined ? undefined : supportMatrix[customArchetype];
+  const rows = directRows ?? customArchetypeRows;
+  const customArchetypeSupported = directRows === undefined && customArchetypeRows !== undefined;
   if (rows === undefined) {
     return {
       kind: 'old-runtime-required',
@@ -513,7 +555,9 @@ function classifyV2RuntimeSupport(input: {
       flowId,
       entryModeName,
       depth,
-      reason: `v2 supports fresh ${flowId} entry mode '${entryModeName}' at depth '${depth}'`,
+      reason: !customArchetypeSupported
+        ? `v2 supports fresh ${flowId} entry mode '${entryModeName}' at depth '${depth}'`
+        : `v2 supports custom flow '${flowId}' via '${customArchetype}' archetype entry mode '${entryModeName}' at depth '${depth}'`,
     };
   }
 
@@ -666,11 +710,12 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
 
   const projectRoot = resolve(options.configCwd ?? process.cwd());
 
-  const runtimeSupport = classifyV2RuntimeSupport({ flow, args, entryModeSelection });
+  const runtimeSupport = classifyV2RuntimeSupport({ flow, args, entryModeSelection, fixturePath });
   const candidateSupport = classifyV2RuntimeSupport({
     flow,
     args,
     entryModeSelection,
+    fixturePath,
     supportMatrix: V2_RUNTIME_CANDIDATE_SUPPORT_MATRIX,
   });
   const strictRuntimeSupport = applyComposeWriterPolicy(candidateSupport, {

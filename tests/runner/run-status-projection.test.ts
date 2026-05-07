@@ -370,6 +370,43 @@ describe('run folder status projection', () => {
     expect(projection).not.toHaveProperty('run_id');
   });
 
+  it('fails closed for legacy trace-only folders before manifest validation', () => {
+    const runFolder = tempRunFolder('circuit-run-status-trace-only-retired-');
+    writeRawTrace(runFolder, [
+      {
+        schema_version: 1,
+        sequence: 0,
+        recorded_at: RECORDED_AT,
+        run_id: RUN_ID,
+        kind: 'run.bootstrapped',
+        flow_id: 'fix',
+        depth: 'standard',
+        goal: 'Resume a retired trace-only folder',
+        change_kind,
+        manifest_hash: 'legacy-manifest-hash',
+      },
+    ]);
+
+    const projection = projectRunStatusFromRunFolder(runFolder);
+
+    expectRetiredRunFolderProjection(projection);
+  });
+
+  it('fails closed for legacy run.started trace-only folders before manifest validation', () => {
+    const runFolder = tempRunFolder('circuit-run-status-started-trace-only-retired-');
+    writeRawTrace(runFolder, [
+      {
+        schema_version: 1,
+        kind: 'run.started',
+        flow_id: 'build',
+      },
+    ]);
+
+    const projection = projectRunStatusFromRunFolder(runFolder);
+
+    expectRetiredRunFolderProjection(projection);
+  });
+
   it('fails closed before adapting retained identity mismatches', () => {
     const runFolder = tempRunFolder('circuit-run-status-identity-mismatch-');
     const manifestHash = writeManifest({ runFolder, runId: RUN_ID });
@@ -481,6 +518,22 @@ describe('runs show CLI', () => {
       engine_state: 'invalid',
       reason: 'manifest_invalid',
     });
+  });
+
+  it('prints the retired-runtime projection for legacy run.started trace-only folders', async () => {
+    const runFolder = tempRunFolder('circuit-runs-show-started-trace-only-retired-');
+    writeRawTrace(runFolder, [
+      {
+        schema_version: 1,
+        kind: 'run.started',
+        flow_id: 'build',
+      },
+    ]);
+
+    const result = await captureMain(['runs', 'show', '--run-folder', runFolder, '--json']);
+
+    expect(result.code, result.stderr).toBe(0);
+    expectRetiredRunFolderProjection(JSON.parse(result.stdout));
   });
 
   it('prints engine errors with exit 1 for missing folders', async () => {

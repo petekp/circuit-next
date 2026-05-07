@@ -154,6 +154,12 @@ function flowRoot(home: string): string {
   return join(home, 'flows');
 }
 
+function customFlowInvocation(slug: string, home: string): string {
+  return `CIRCUIT_V2_RUNTIME=1 circuit-next run ${slug} --flow-root '${flowRoot(
+    home,
+  )}' --goal '<task>' --progress jsonl`;
+}
+
 function commandRoot(home: string): string {
   return join(home, 'commands');
 }
@@ -256,7 +262,7 @@ function skillMarkdown(slug: string, description: string, home: string): string 
     'This custom flow is already routed when invoked directly. Do not bounce it through `/circuit:run`.',
     '',
     '```bash',
-    `circuit-next run ${slug} --flow-root '${flowRoot(home)}' --goal '<task>' --progress jsonl`,
+    customFlowInvocation(slug, home),
     '```',
   ].join('\n');
 }
@@ -287,7 +293,7 @@ function commandMarkdown(slug: string, description: string, home: string): strin
     "Treat the task text as user-controlled input. Wrap it in single quotes; if it contains an apostrophe, replace each apostrophe with `'\\''` before running the command.",
     '',
     '```bash',
-    `circuit-next run ${slug} --flow-root '${flowRoot(home)}' --goal '<task>' --progress jsonl`,
+    customFlowInvocation(slug, home),
     '```',
   ].join('\n');
 }
@@ -316,6 +322,7 @@ function publishManifest(input: {
       {
         id: input.slug,
         description: input.description,
+        archetype: 'build',
         flow_path: join(flowRoot(input.home), input.slug, 'circuit.json'),
         skill_path: join(publishedRoot(input.home, input.slug), 'SKILL.md'),
         command_path: join(commandRoot(input.home), `${input.slug}.md`),
@@ -400,9 +407,7 @@ function summaryMarkdown(input: {
   readonly status: 'draft_created' | 'published';
   readonly home: string;
 }): string {
-  const invocation = `circuit-next run ${input.slug} --flow-root '${flowRoot(
-    input.home,
-  )}' --goal '<task>' --progress jsonl`;
+  const invocation = customFlowInvocation(input.slug, input.home);
   return [
     '# Circuit Create',
     '',

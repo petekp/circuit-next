@@ -52,7 +52,6 @@ Any registry move must preserve these consumer groups:
 
 - flow package writers and relay hints under `src/flows/**`;
 - core-v2 executors for compose, checkpoint, verification, and relay;
-- fail-closed old public stubs that still need shared flow types;
 - compiler and generated-flow checks;
 - report schema tests;
 - catalog completeness and catalog derivation tests;

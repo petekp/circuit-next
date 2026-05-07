@@ -648,7 +648,7 @@
         "review": "Compiled review stages or reviewer relays are present.",
         "verification": "Compiled verification steps write command-result reports before close.",
         "worker_handoff": "Compiled worker handoffs write request, receipt, result, and report evidence where applicable.",
-        "continuity": "Runs persist manifest, trace, state, result, and checkpoint resume data in the run folder.",
+        "continuity": "Runs persist manifest, trace, result, and checkpoint resume data in the run folder.",
         "proof": "Routed Build golden run. Explicit Build checkpoint golden run."
       }
     },
@@ -669,7 +669,7 @@
         "review": "Compiled review stages or reviewer relays are present.",
         "verification": "Explore deep mode records seam proof through analysis and embedded critique rather than command verification.",
         "worker_handoff": "Compiled worker handoffs write request, receipt, result, and report evidence where applicable.",
-        "continuity": "Runs persist manifest, trace, state, result, and checkpoint resume data in the run folder.",
+        "continuity": "Runs persist manifest, trace, result, and checkpoint resume data in the run folder.",
         "proof": "Golden decision or tournament run."
       }
     },
@@ -690,7 +690,7 @@
         "review": "Compiled review stages or reviewer relays are present.",
         "verification": "Compiled verification steps write command-result reports before close.",
         "worker_handoff": "Compiled worker handoffs write request, receipt, result, and report evidence where applicable.",
-        "continuity": "Runs persist manifest, trace, state, result, and checkpoint resume data in the run folder.",
+        "continuity": "Runs persist manifest, trace, result, and checkpoint resume data in the run folder.",
         "proof": "Fix golden run with regression evidence."
       }
     },
@@ -719,7 +719,7 @@
         "review": "Compiled review stages or reviewer relays are present.",
         "verification": "Compiled verification steps write command-result reports before close.",
         "worker_handoff": "Compiled worker handoffs write request, receipt, result, and report evidence where applicable.",
-        "continuity": "Runs persist manifest, trace, state, result, and checkpoint resume data in the run folder.",
+        "continuity": "Runs persist manifest, trace, result, and checkpoint resume data in the run folder.",
         "proof": "Migration plan and batch proof run."
       }
     },
@@ -738,7 +738,7 @@
         "outputs": ["review.md"],
         "review": "Compiled review stages or reviewer relays are present.",
         "worker_handoff": "Compiled worker handoffs write request, receipt, result, and report evidence where applicable.",
-        "continuity": "Runs persist manifest, trace, state, result, and checkpoint resume data in the run folder."
+        "continuity": "Runs persist manifest, trace, result, and checkpoint resume data in the run folder."
       }
     },
     {
@@ -766,7 +766,7 @@
         "review": "Compiled review stages or reviewer relays are present.",
         "verification": "Compiled verification steps write command-result reports before close.",
         "worker_handoff": "Compiled worker handoffs write request, receipt, result, and report evidence where applicable.",
-        "continuity": "Runs persist manifest, trace, state, result, and checkpoint resume data in the run folder.",
+        "continuity": "Runs persist manifest, trace, result, and checkpoint resume data in the run folder.",
         "proof": "Sweep golden run covering queue/deferred output."
       }
     },
