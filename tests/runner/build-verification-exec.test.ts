@@ -12,27 +12,14 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { ComposeWriterFn } from '../../src/compat/retained-runtime.js';
-import { runRetainedCompiledFlow as runCompiledFlow } from '../../src/compat/retained-runtime.js';
+import type { ExecutorRegistryV2 } from '../../src/core-v2/executors/index.js';
+import { runCompiledFlowV2 } from '../../src/core-v2/run/compiled-flow-runner.js';
 import { BuildPlan, BuildVerification } from '../../src/flows/build/reports.js';
-import type { ChangeKindDeclaration } from '../../src/schemas/change-kind.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
-import { RunId } from '../../src/schemas/ids.js';
 
 function deterministicNow(startMs: number): () => Date {
   let n = 0;
   return () => new Date(startMs + n++ * 1000);
-}
-
-function change_kind(): ChangeKindDeclaration {
-  return {
-    change_kind: 'ratchet-advance',
-    failure_mode: 'Build cannot honestly claim verification until commands really run',
-    acceptance_evidence:
-      'runtime verification step executes typed argv commands and writes build.verification@v1 pass/fail evidence',
-    alternate_framing:
-      'add the product Build fixture now — rejected because checkpoint and relay work remain separate later slices',
-  };
 }
 
 function writeJson(root: string, rel: string, body: unknown): void {
@@ -71,7 +58,7 @@ function commandPlan(command: {
   });
 }
 
-function verificationCompiledFlow(): { flow: CompiledFlow; bytes: Buffer } {
+function verificationCompiledFlow(): { bytes: Buffer } {
   const raw = {
     schema_version: '2',
     id: 'build-verification-exec-test',
@@ -135,15 +122,32 @@ function verificationCompiledFlow(): { flow: CompiledFlow; bytes: Buffer } {
     ],
   };
   const bytes = Buffer.from(JSON.stringify(raw));
-  return { flow: CompiledFlow.parse(raw), bytes };
+  CompiledFlow.parse(raw);
+  return { bytes };
 }
 
-function planWriter(plan: unknown): ComposeWriterFn {
-  return (input) => {
-    if (input.step.id !== 'seed-plan-step') {
-      throw new Error(`unexpected compose step ${input.step.id}`);
-    }
-    writeJson(input.runFolder, input.step.writes.report.path, plan);
+function planWriter(plan: unknown): Pick<ExecutorRegistryV2, 'compose'> {
+  return {
+    compose: async (step, context) => {
+      if (step.kind !== 'compose') throw new Error('expected compose step');
+      if (step.id !== 'seed-plan-step') {
+        throw new Error(`unexpected compose step ${step.id}`);
+      }
+      const report = step.writes?.report;
+      if (report === undefined) {
+        throw new Error(`seed step '${step.id}' must write a report`);
+      }
+      writeJson(context.runDir, report.path, plan);
+      await context.trace.append({
+        run_id: context.runId,
+        kind: 'step.report_written',
+        step_id: step.id,
+        ...(context.activeStepAttempt === undefined ? {} : { attempt: context.activeStepAttempt }),
+        report_path: report.path,
+        ...(report.schema === undefined ? {} : { report_schema: report.schema }),
+      });
+      return { route: 'pass', details: { report: report.path } };
+    },
   };
 }
 
@@ -160,27 +164,25 @@ afterEach(() => {
 
 describe('Build verification command execution', () => {
   it('runs a direct argv command and writes passed build.verification evidence', async () => {
-    const { flow, bytes } = verificationCompiledFlow();
+    const { bytes } = verificationCompiledFlow();
     const runFolder = join(runFolderBase, 'pass');
 
-    const outcome = await runCompiledFlow({
-      runFolder,
-      flow,
+    const outcome = await runCompiledFlowV2({
+      runDir: runFolder,
       flowBytes: bytes,
       projectRoot: process.cwd(),
-      runId: RunId.parse('b2000000-0000-0000-0000-000000000000'),
+      runId: 'b2000000-0000-0000-0000-000000000000',
       goal: 'Run verification',
       depth: 'standard',
-      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 25, 2, 0, 0)),
-      composeWriter: planWriter(
+      executors: planWriter(
         commandPlan({
           argv: [process.execPath, '-e', "process.stdout.write('verified')"],
         }),
       ),
     });
 
-    expect(outcome.result.outcome).toBe('complete');
+    expect(outcome.outcome).toBe('complete');
     const verification = BuildVerification.parse(
       readJson(runFolder, 'reports/build/verification.json'),
     );
@@ -200,28 +202,26 @@ describe('Build verification command execution', () => {
   });
 
   it('writes failed verification evidence and aborts when a command exits nonzero', async () => {
-    const { flow, bytes } = verificationCompiledFlow();
+    const { bytes } = verificationCompiledFlow();
     const runFolder = join(runFolderBase, 'fail');
 
-    const outcome = await runCompiledFlow({
-      runFolder,
-      flow,
+    const outcome = await runCompiledFlowV2({
+      runDir: runFolder,
       flowBytes: bytes,
       projectRoot: process.cwd(),
-      runId: RunId.parse('b2000000-0000-0000-0000-000000000001'),
+      runId: 'b2000000-0000-0000-0000-000000000001',
       goal: 'Run failing verification',
       depth: 'standard',
-      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 25, 2, 5, 0)),
-      composeWriter: planWriter(
+      executors: planWriter(
         commandPlan({
           argv: [process.execPath, '-e', "process.stderr.write('nope'); process.exit(2)"],
         }),
       ),
     });
 
-    expect(outcome.result.outcome).toBe('aborted');
-    expect(outcome.result.reason).toMatch(/verification step 'verify-step' failed/);
+    expect(outcome.outcome).toBe('aborted');
+    expect(outcome.reason).toMatch(/verification step 'verify-step' failed/);
     const verification = BuildVerification.parse(
       readJson(runFolder, 'reports/build/verification.json'),
     );
@@ -234,20 +234,18 @@ describe('Build verification command execution', () => {
   });
 
   it('fails closed on timeout while keeping typed verification evidence', async () => {
-    const { flow, bytes } = verificationCompiledFlow();
+    const { bytes } = verificationCompiledFlow();
     const runFolder = join(runFolderBase, 'timeout');
 
-    const outcome = await runCompiledFlow({
-      runFolder,
-      flow,
+    const outcome = await runCompiledFlowV2({
+      runDir: runFolder,
       flowBytes: bytes,
       projectRoot: process.cwd(),
-      runId: RunId.parse('b2000000-0000-0000-0000-000000000002'),
+      runId: 'b2000000-0000-0000-0000-000000000002',
       goal: 'Run timed verification',
       depth: 'standard',
-      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 25, 2, 10, 0)),
-      composeWriter: planWriter(
+      executors: planWriter(
         commandPlan({
           argv: [process.execPath, '-e', 'setTimeout(() => {}, 500)'],
           timeout_ms: 25,
@@ -255,7 +253,7 @@ describe('Build verification command execution', () => {
       ),
     });
 
-    expect(outcome.result.outcome).toBe('aborted');
+    expect(outcome.outcome).toBe('aborted');
     const verification = BuildVerification.parse(
       readJson(runFolder, 'reports/build/verification.json'),
     );
@@ -264,20 +262,18 @@ describe('Build verification command execution', () => {
   });
 
   it('rejects unsafe verification command payloads before execution', async () => {
-    const { flow, bytes } = verificationCompiledFlow();
+    const { bytes } = verificationCompiledFlow();
     const runFolder = join(runFolderBase, 'unsafe');
 
-    const outcome = await runCompiledFlow({
-      runFolder,
-      flow,
+    const outcome = await runCompiledFlowV2({
+      runDir: runFolder,
       flowBytes: bytes,
       projectRoot: process.cwd(),
-      runId: RunId.parse('b2000000-0000-0000-0000-000000000003'),
+      runId: 'b2000000-0000-0000-0000-000000000003',
       goal: 'Reject unsafe verification',
       depth: 'standard',
-      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 25, 2, 15, 0)),
-      composeWriter: planWriter({
+      executors: planWriter({
         objective: 'Unsafe',
         approach: 'Do not run',
         slices: ['Reject'],
@@ -296,13 +292,13 @@ describe('Build verification command execution', () => {
       }),
     });
 
-    expect(outcome.result.outcome).toBe('aborted');
-    expect(outcome.result.reason).toMatch(/direct argv execution|shell executable/);
+    expect(outcome.outcome).toBe('aborted');
+    expect(outcome.reason).toMatch(/direct argv execution|shell executable/);
     expect(existsSync(join(runFolder, 'reports/build/verification.json'))).toBe(false);
   });
 
   it('rejects project cwd escapes and symlinked cwd ancestors before execution', async () => {
-    const { flow, bytes } = verificationCompiledFlow();
+    const { bytes } = verificationCompiledFlow();
     const projectRoot = join(runFolderBase, 'project');
     const outside = join(runFolderBase, 'outside');
     mkdirSync(projectRoot, { recursive: true });
@@ -311,17 +307,15 @@ describe('Build verification command execution', () => {
     const marker = join(outside, 'marker.txt');
 
     const lexicalRunFolder = join(runFolderBase, 'cwd-lexical');
-    const lexical = await runCompiledFlow({
-      runFolder: lexicalRunFolder,
-      flow,
+    const lexical = await runCompiledFlowV2({
+      runDir: lexicalRunFolder,
       flowBytes: bytes,
       projectRoot,
-      runId: RunId.parse('b2000000-0000-0000-0000-000000000004'),
+      runId: 'b2000000-0000-0000-0000-000000000004',
       goal: 'Reject lexical cwd escape',
       depth: 'standard',
-      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 25, 2, 20, 0)),
-      composeWriter: planWriter({
+      executors: planWriter({
         objective: 'Unsafe cwd',
         approach: 'Do not run',
         slices: ['Reject'],
@@ -343,21 +337,19 @@ describe('Build verification command execution', () => {
         },
       }),
     });
-    expect(lexical.result.outcome).toBe('aborted');
-    expect(lexical.result.reason).toMatch(/cwd must not escape|cwd/);
+    expect(lexical.outcome).toBe('aborted');
+    expect(lexical.reason).toMatch(/cwd must not escape|cwd/);
 
     const symlinkRunFolder = join(runFolderBase, 'cwd-symlink');
-    const symlinked = await runCompiledFlow({
-      runFolder: symlinkRunFolder,
-      flow,
+    const symlinked = await runCompiledFlowV2({
+      runDir: symlinkRunFolder,
       flowBytes: bytes,
       projectRoot,
-      runId: RunId.parse('b2000000-0000-0000-0000-000000000005'),
+      runId: 'b2000000-0000-0000-0000-000000000005',
       goal: 'Reject symlink cwd escape',
       depth: 'standard',
-      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 25, 2, 25, 0)),
-      composeWriter: planWriter(
+      executors: planWriter(
         commandPlan({
           cwd: 'linked-outside',
           argv: [process.execPath, '-e', "require('node:fs').writeFileSync('marker.txt', 'bad')"],
@@ -365,14 +357,14 @@ describe('Build verification command execution', () => {
       ),
     });
 
-    expect(symlinked.result.outcome).toBe('aborted');
-    expect(symlinked.result.reason).toMatch(/symlink/);
+    expect(symlinked.outcome).toBe('aborted');
+    expect(symlinked.reason).toMatch(/symlink/);
     expect(existsSync(marker)).toBe(false);
     expect(existsSync(join(symlinkRunFolder, 'reports/build/verification.json'))).toBe(false);
   });
 
   it('uses declared projectRoot instead of ambient process cwd', async () => {
-    const { flow, bytes } = verificationCompiledFlow();
+    const { bytes } = verificationCompiledFlow();
     const projectRoot = join(runFolderBase, 'declared-project');
     const ambient = join(runFolderBase, 'ambient');
     mkdirSync(projectRoot, { recursive: true });
@@ -381,24 +373,22 @@ describe('Build verification command execution', () => {
     const originalCwd = process.cwd();
     process.chdir(ambient);
     try {
-      const outcome = await runCompiledFlow({
-        runFolder,
-        flow,
+      const outcome = await runCompiledFlowV2({
+        runDir: runFolder,
         flowBytes: bytes,
         projectRoot,
-        runId: RunId.parse('b2000000-0000-0000-0000-000000000006'),
+        runId: 'b2000000-0000-0000-0000-000000000006',
         goal: 'Use declared project root',
         depth: 'standard',
-        change_kind: change_kind(),
         now: deterministicNow(Date.UTC(2026, 3, 25, 2, 30, 0)),
-        composeWriter: planWriter(
+        executors: planWriter(
           commandPlan({
             argv: [process.execPath, '-e', 'process.stdout.write(process.cwd())'],
           }),
         ),
       });
 
-      expect(outcome.result.outcome).toBe('complete');
+      expect(outcome.outcome).toBe('complete');
       const verification = BuildVerification.parse(
         readJson(runFolder, 'reports/build/verification.json'),
       );
@@ -409,22 +399,20 @@ describe('Build verification command execution', () => {
   });
 
   it('uses an explicit environment policy instead of inheriting arbitrary parent env', async () => {
-    const { flow, bytes } = verificationCompiledFlow();
+    const { bytes } = verificationCompiledFlow();
     const runFolder = join(runFolderBase, 'env');
     const priorParent = process.env.CIRCUIT_NEXT_PARENT_ONLY_SECRET;
     process.env.CIRCUIT_NEXT_PARENT_ONLY_SECRET = 'leaked';
     try {
-      const outcome = await runCompiledFlow({
-        runFolder,
-        flow,
+      const outcome = await runCompiledFlowV2({
+        runDir: runFolder,
         flowBytes: bytes,
         projectRoot: process.cwd(),
-        runId: RunId.parse('b2000000-0000-0000-0000-000000000007'),
+        runId: 'b2000000-0000-0000-0000-000000000007',
         goal: 'Constrain verification env',
         depth: 'standard',
-        change_kind: change_kind(),
         now: deterministicNow(Date.UTC(2026, 3, 25, 2, 35, 0)),
-        composeWriter: planWriter(
+        executors: planWriter(
           commandPlan({
             argv: [
               process.execPath,
@@ -436,7 +424,7 @@ describe('Build verification command execution', () => {
         ),
       });
 
-      expect(outcome.result.outcome).toBe('complete');
+      expect(outcome.outcome).toBe('complete');
       const verification = BuildVerification.parse(
         readJson(runFolder, 'reports/build/verification.json'),
       );
@@ -451,20 +439,18 @@ describe('Build verification command execution', () => {
   });
 
   it('fails closed and bounds captured stdout when output exceeds max_output_bytes', async () => {
-    const { flow, bytes } = verificationCompiledFlow();
+    const { bytes } = verificationCompiledFlow();
     const runFolder = join(runFolderBase, 'output-limit');
 
-    const outcome = await runCompiledFlow({
-      runFolder,
-      flow,
+    const outcome = await runCompiledFlowV2({
+      runDir: runFolder,
       flowBytes: bytes,
       projectRoot: process.cwd(),
-      runId: RunId.parse('b2000000-0000-0000-0000-000000000008'),
+      runId: 'b2000000-0000-0000-0000-000000000008',
       goal: 'Bound verification output',
       depth: 'standard',
-      change_kind: change_kind(),
       now: deterministicNow(Date.UTC(2026, 3, 25, 2, 40, 0)),
-      composeWriter: planWriter(
+      executors: planWriter(
         commandPlan({
           argv: [process.execPath, '-e', "process.stdout.write('x'.repeat(10000))"],
           max_output_bytes: 256,
@@ -472,7 +458,7 @@ describe('Build verification command execution', () => {
       ),
     });
 
-    expect(outcome.result.outcome).toBe('aborted');
+    expect(outcome.outcome).toBe('aborted');
     const verification = BuildVerification.parse(
       readJson(runFolder, 'reports/build/verification.json'),
     );
