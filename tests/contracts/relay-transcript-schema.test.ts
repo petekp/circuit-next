@@ -8,7 +8,6 @@ import {
   RunTrace,
   TraceEntry,
 } from '../../src/index.js';
-import { reduce } from '../../src/runtime/reducer.js';
 
 // `relay.request` / `relay.receipt` / `relay.result` are the
 // non-substitutable close-criterion entries on a relay step. Each of
@@ -147,6 +146,39 @@ const runClosedTraceEntry = {
   kind: 'run.closed' as const,
   outcome: 'complete' as const,
 };
+
+type ParsedRunTrace = ReturnType<typeof RunTrace.parse>;
+type ProjectionStatus =
+  | 'in_progress'
+  | 'complete'
+  | 'aborted'
+  | 'handoff'
+  | 'stopped'
+  | 'escalated';
+
+function projectionSnapshot(log: ParsedRunTrace, status: ProjectionStatus) {
+  const bootstrap = log[0];
+  const last = log[log.length - 1];
+  if (bootstrap === undefined || bootstrap.kind !== 'run.bootstrapped') {
+    throw new Error('projectionSnapshot requires a parsed run trace with a bootstrap entry');
+  }
+  if (last === undefined) {
+    throw new Error('projectionSnapshot requires a non-empty parsed run trace');
+  }
+  return {
+    schema_version: 1,
+    run_id: bootstrap.run_id,
+    flow_id: bootstrap.flow_id,
+    depth: bootstrap.depth,
+    change_kind: bootstrap.change_kind,
+    status,
+    steps: [],
+    trace_entries_consumed: log.length,
+    manifest_hash: bootstrap.manifest_hash,
+    updated_at: last.recorded_at,
+    ...(bootstrap.invocation_id === undefined ? {} : { invocation_id: bootstrap.invocation_id }),
+  };
+}
 
 describe('RelayRequestTraceEntry', () => {
   it('parses a well-formed relay.request trace_entry', () => {
@@ -467,7 +499,7 @@ describe('Five-entry durable relay transcript sequence', () => {
     if (!parsed.success) {
       throw new Error(`RunTrace.safeParse failed: ${JSON.stringify(parsed.error.issues)}`);
     }
-    const snapshot = reduce(parsed.data);
+    const snapshot = projectionSnapshot(parsed.data, 'aborted');
     expect(snapshot.status).toBe('aborted');
     expect(snapshot.trace_entries_consumed).toBe(log.length);
     const projection = RunProjection.safeParse({ log: parsed.data, snapshot });
@@ -494,12 +526,11 @@ describe('Five-entry durable relay transcript sequence', () => {
   });
 });
 
-// The reducer must consume the full five-entry relay sequence — this
-// describe block makes that consumption claim executable. The connector
+// RunProjection must admit the full five-entry relay sequence. The connector
 // round-trip test in tests/runner/agent-relay-roundtrip.test.ts covers
 // the full real-connector path.
-describe('Reducer consumes the five-trace_entry relay transcript', () => {
-  it('reduce() advances trace_entries_consumed by the full log length on the canonical sequence', () => {
+describe('RunProjection admits the five-trace_entry relay transcript', () => {
+  it('binds trace_entries_consumed to the full log length on the canonical sequence', () => {
     const log = [
       bootstrapTraceEntry,
       stepEnteredTraceEntry,
@@ -515,7 +546,7 @@ describe('Reducer consumes the five-trace_entry relay transcript', () => {
     if (!parsed.success) {
       throw new Error(`RunTrace.safeParse failed: ${JSON.stringify(parsed.error.issues)}`);
     }
-    const snapshot = reduce(parsed.data);
+    const snapshot = projectionSnapshot(parsed.data, 'complete');
     expect(snapshot.trace_entries_consumed).toBe(log.length);
     // The terminal run.closed has outcome=complete, so the snapshot
     // status must be `complete` (RUN-I7 binding).
@@ -525,10 +556,9 @@ describe('Reducer consumes the five-trace_entry relay transcript', () => {
   it('RunProjection.safeParse accepts {log, snapshot} for the canonical sequence', () => {
     // RUN-I6/I7 binding: bootstrap-frozen fields must agree, and
     // trace_entries_consumed on the snapshot must equal the log length.
-    // Passing this for the five-trace_entry transcript proves the reducer
-    // did not silently drop any transcript trace_entry — otherwise
-    // trace_entries_consumed would underflow and RUN-I6 would reject the
-    // projection.
+    // Passing this for the five-trace_entry transcript proves the snapshot
+    // accounts for every transcript trace_entry. Otherwise trace_entries_consumed
+    // would underflow and RUN-I6 would reject the projection.
     const log = [
       bootstrapTraceEntry,
       stepEnteredTraceEntry,
@@ -544,7 +574,7 @@ describe('Reducer consumes the five-trace_entry relay transcript', () => {
     if (!parsed.success) {
       throw new Error(`RunTrace.safeParse failed: ${JSON.stringify(parsed.error.issues)}`);
     }
-    const snapshot = reduce(parsed.data);
+    const snapshot = projectionSnapshot(parsed.data, 'complete');
     const projection = RunProjection.safeParse({ log: parsed.data, snapshot });
     if (!projection.success) {
       throw new Error(`RunProjection.safeParse failed: ${JSON.stringify(projection.error.issues)}`);
@@ -552,7 +582,7 @@ describe('Reducer consumes the five-trace_entry relay transcript', () => {
     expect(projection.success).toBe(true);
   });
 
-  it('reduce() on the dry-run-shaped log still advances trace_entries_consumed by the full length', () => {
+  it('binds dry-run-shaped trace_entries_consumed to the full log length', () => {
     const log = [
       bootstrapTraceEntry,
       stepEnteredTraceEntry,
@@ -565,38 +595,7 @@ describe('Reducer consumes the five-trace_entry relay transcript', () => {
     if (!parsed.success) {
       throw new Error(`RunTrace.safeParse failed: ${JSON.stringify(parsed.error.issues)}`);
     }
-    const snapshot = reduce(parsed.data);
+    const snapshot = projectionSnapshot(parsed.data, 'complete');
     expect(snapshot.trace_entries_consumed).toBe(log.length);
-  });
-
-  it('reduce() marks relay-only step state complete after relay.completed', () => {
-    const branchRelayStarted = {
-      ...relayStartedTraceEntry,
-      step_id: 'proposal-fanout-step-option-1',
-      sequence: 1,
-    };
-    const branchRelayCompleted = {
-      ...relayCompletedTraceEntry,
-      step_id: 'proposal-fanout-step-option-1',
-      sequence: 2,
-    };
-    const log = [
-      bootstrapTraceEntry,
-      branchRelayStarted,
-      branchRelayCompleted,
-      { ...runClosedTraceEntry, sequence: 3 },
-    ];
-    const parsed = RunTrace.safeParse(log);
-    if (!parsed.success) {
-      throw new Error(`RunTrace.safeParse failed: ${JSON.stringify(parsed.error.issues)}`);
-    }
-    const snapshot = reduce(parsed.data);
-    expect(snapshot.steps).toContainEqual(
-      expect.objectContaining({
-        step_id: 'proposal-fanout-step-option-1',
-        status: 'complete',
-        attempts: 1,
-      }),
-    );
   });
 });

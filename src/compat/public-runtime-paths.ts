@@ -160,16 +160,7 @@ export const PUBLIC_RUNTIME_PATHS: readonly PublicRuntimePathEntry[] = [
     deprecationStage: 'none',
     requiresReviewBeforeDeletion: true,
     compatibilityTestPaths: ['tests/unit/runtime/progress-projector.test.ts'],
-    notes: 'Retained v1 trace-to-progress projection.',
-  },
-  {
-    oldPath: 'src/runtime/reducer.ts',
-    category: 'retained-saved-state',
-    currentDisposition: 'retained-owned',
-    deprecationStage: 'none',
-    requiresReviewBeforeDeletion: true,
-    compatibilityTestPaths: ['tests/unit/runtime/event-log-round-trip.test.ts'],
-    notes: 'Retained v1 trace reducer.',
+    notes: 'Retired v1 trace-to-progress path; direct projection fails closed.',
   },
   {
     oldPath: 'src/runtime/registries/checkpoint-writers/registry.ts',
@@ -327,7 +318,7 @@ export const PUBLIC_RUNTIME_PATHS: readonly PublicRuntimePathEntry[] = [
     deprecationStage: 'none',
     requiresReviewBeforeDeletion: true,
     compatibilityTestPaths: ['tests/runner/result-path-compat.test.ts'],
-    notes: 'Retained result writer and old result-path compatibility surface.',
+    notes: 'Retired result writer path; resultPath remains as compatibility surface.',
   },
   {
     oldPath: 'src/runtime/router.ts',

@@ -412,10 +412,7 @@ describe('runtime import boundary', () => {
       )
       .sort();
 
-    expect(imports).toEqual([
-      'tests/contracts/relay-transcript-schema.test.ts',
-      'tests/unit/runtime/progress-projector.test.ts',
-    ]);
+    expect(imports).toEqual(['tests/unit/runtime/progress-projector.test.ts']);
   });
 
   it('keeps direct old runner test imports limited to the explicit compose report compatibility proof', () => {
