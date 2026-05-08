@@ -357,6 +357,138 @@ describe('operator summary writer', () => {
     expect(written.summary.details).toContain('Next action: Run a Build plan for a Vue prototype.');
   });
 
+  it('emits operator-summary.html for Explore tournament runs with recommended highlight and XSS escaping', () => {
+    writeReport('reports/decision-options.json', {
+      decision_question: 'Which framework <should> we pick?',
+      recommendation_basis: 'tournament-aggregate@v1 + tournament-review@v1',
+      options: [
+        {
+          id: 'option-1',
+          label: 'React',
+          summary: 'Mature, large community.',
+          best_case_prompt: 'Bootstrap a React prototype with the design system in src/ui.',
+          evidence_refs: ['reports/analysis.json#aspect-react'],
+          tradeoffs: ['Larger surface area', 'Slower iteration'],
+        },
+        {
+          id: 'option-2',
+          label: 'Vue <script>alert(1)</script>',
+          summary: 'Smaller surface, faster iteration.',
+          best_case_prompt: 'Bootstrap a Vue prototype starting from src/ui/main.ts.',
+          evidence_refs: ['reports/analysis.json#aspect-vue'],
+          tradeoffs: ['Thinner hiring pool', 'Less ecosystem'],
+        },
+      ],
+    });
+    writeReport('reports/tournament-review.json', {
+      verdict: 'recommend',
+      recommended_option_id: 'option-2',
+      comparison: 'Vue wins on iteration speed; React wins on hiring familiarity.',
+      objections: ['Vue ecosystem is thinner.'],
+      missing_evidence: ['No data on team Vue experience.'],
+      tradeoff_question: 'Are we optimizing for speed-to-prototype or long-term hiring?',
+      confidence: 'high',
+    });
+    writeReport('reports/decision.json', {
+      verdict: 'decided',
+      decision_question: 'Which framework <should> we pick?',
+      selected_option_id: 'option-2',
+      selected_option_label: 'Vue',
+      decision: 'Choose Vue for a smaller surface and faster product iteration.',
+      rationale: 'Vue gives this team the fastest path to a polished prototype.',
+      rejected_options: [{ option_id: 'option-1', reason: 'Slower for this team.' }],
+      evidence_links: ['reports/decision-options.json'],
+      assumptions: ['Team can learn Vue quickly.'],
+      residual_risks: ['Hiring familiarity may be thinner.'],
+      next_action: 'Run a Build plan for a Vue prototype.',
+      follow_up_workflow: 'Build',
+    });
+    writeReport('reports/explore-result.json', {
+      summary: "Explore 'pick framework': Choose Vue.",
+      verdict_snapshot: {
+        decision_verdict: 'decided',
+        tournament_review_verdict: 'recommend',
+        selected_option_id: 'option-2',
+        objection_count: 1,
+        missing_evidence_count: 1,
+      },
+      evidence_links: [
+        { report_id: 'explore.brief', path: 'reports/brief.json', schema: 'explore.brief@v1' },
+        {
+          report_id: 'explore.analysis',
+          path: 'reports/analysis.json',
+          schema: 'explore.analysis@v1',
+        },
+        {
+          report_id: 'explore.decision-options',
+          path: 'reports/decision-options.json',
+          schema: 'explore.decision-options@v1',
+        },
+        {
+          report_id: 'explore.tournament-aggregate',
+          path: 'reports/tournament-aggregate.json',
+          schema: 'explore.tournament-aggregate@v1',
+        },
+        {
+          report_id: 'explore.tournament-review',
+          path: 'reports/tournament-review.json',
+          schema: 'explore.tournament-review@v1',
+        },
+        {
+          report_id: 'explore.decision',
+          path: 'reports/decision.json',
+          schema: 'explore.decision@v1',
+        },
+      ],
+    });
+
+    const written = writeOperatorSummary({
+      runFolder,
+      runResult: baseResult('explore'),
+      route: { selectedFlow: 'explore' },
+    });
+
+    expect(written.htmlPath).toBeDefined();
+    expect(existsSync(written.htmlPath as string)).toBe(true);
+    expect(written.summary.report_paths.map((report) => report.label)).toContain(
+      'Operator summary (HTML)',
+    );
+
+    const html = readFileSync(written.htmlPath as string, 'utf8');
+    expect(html).toContain('<!doctype html>');
+    expect(html).toContain('Which framework &lt;should&gt; we pick?');
+    expect(html).toContain('class="card recommended selected"');
+    expect(html).toContain('Vue &lt;script&gt;alert(1)&lt;/script&gt;');
+    expect(html).not.toContain('<script>alert(1)</script>');
+    expect(html).toContain('high confidence');
+  });
+
+  it('does not emit HTML for Explore default (compose) path', () => {
+    writeReport('reports/explore-result.json', {
+      summary: "Explore 'compose path': recommendation ready.",
+      verdict_snapshot: {
+        compose_verdict: 'ready',
+        review_verdict: 'accept',
+        objection_count: 0,
+        missed_angle_count: 0,
+      },
+      evidence_links: [
+        { report_id: 'explore.brief', path: 'reports/brief.json', schema: 'explore.brief@v1' },
+      ],
+    });
+
+    const written = writeOperatorSummary({
+      runFolder,
+      runResult: baseResult('explore'),
+      route: { selectedFlow: 'explore' },
+    });
+
+    expect(written.htmlPath).toBeUndefined();
+    expect(written.summary.report_paths.map((report) => report.label)).not.toContain(
+      'Operator summary (HTML)',
+    );
+  });
+
   it('includes abort reasons in aborted summaries', () => {
     const result = RunResult.parse({
       ...baseResult('review'),

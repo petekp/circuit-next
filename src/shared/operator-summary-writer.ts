@@ -6,11 +6,17 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import {
+  ExploreDecision,
+  ExploreDecisionOptions,
+  ExploreTournamentReview,
+} from '../flows/explore/reports.js';
+import {
   OperatorSummary,
   type OperatorSummaryReportLink,
   type OperatorSummaryWarning,
 } from '../schemas/operator-summary.js';
 import type { RunResult } from '../schemas/result.js';
+import { renderExploreTournamentHTML } from './operator-summary-html.js';
 import { RUN_RESULT_RELATIVE_PATH } from './result-path.js';
 import { resolveRunRelative } from './run-relative-path.js';
 import {
@@ -28,6 +34,7 @@ export type OperatorSummaryWriteResult = {
   readonly summary: OperatorSummary;
   readonly jsonPath: string;
   readonly markdownPath: string;
+  readonly htmlPath?: string;
 };
 
 export interface CheckpointWaitingOperatorSummaryResult {
@@ -66,6 +73,10 @@ function jsonPath(runFolder: string): string {
 
 function markdownPath(runFolder: string): string {
   return join(runFolder, 'reports', 'operator-summary.md');
+}
+
+function htmlPath(runFolder: string): string {
+  return join(runFolder, 'reports', 'operator-summary.html');
 }
 
 function isObject(value: unknown): value is JsonObject {
@@ -286,6 +297,35 @@ function exploreTournamentSnapshot(flowReport: JsonObject | undefined): JsonObje
   const snapshot = isObject(flowReport?.verdict_snapshot) ? flowReport.verdict_snapshot : undefined;
   if (stringField(snapshot, 'decision_verdict') === 'decided') return snapshot;
   return stringField(snapshot, 'selected_option_id') === undefined ? undefined : snapshot;
+}
+
+type ExploreTournamentHtmlPayload = {
+  readonly decisionOptions: ExploreDecisionOptions;
+  readonly tournamentReview: ExploreTournamentReview;
+  readonly decision?: ExploreDecision;
+};
+
+function exploreTournamentHtmlPayload(
+  runFolder: string,
+  flowReport: JsonObject | undefined,
+): ExploreTournamentHtmlPayload | undefined {
+  if (exploreTournamentSnapshot(flowReport) === undefined) return undefined;
+  const optionsRaw = evidenceReportById(runFolder, flowReport, 'explore.decision-options');
+  const reviewRaw = evidenceReportById(runFolder, flowReport, 'explore.tournament-review');
+  const decisionRaw = evidenceReportById(runFolder, flowReport, 'explore.decision');
+  if (optionsRaw === undefined || reviewRaw === undefined) return undefined;
+
+  const optionsParsed = ExploreDecisionOptions.safeParse(optionsRaw);
+  const reviewParsed = ExploreTournamentReview.safeParse(reviewRaw);
+  if (!optionsParsed.success || !reviewParsed.success) return undefined;
+
+  const decisionParsed =
+    decisionRaw === undefined ? undefined : ExploreDecision.safeParse(decisionRaw);
+  return {
+    decisionOptions: optionsParsed.data,
+    tournamentReview: reviewParsed.data,
+    ...(decisionParsed?.success === true ? { decision: decisionParsed.data } : {}),
+  };
 }
 
 function exploreReviewFoldInDetails(flowReport: JsonObject | undefined): string[] {
@@ -523,11 +563,18 @@ export function writeOperatorSummary(input: {
       ? undefined
       : resolveRunRelative(input.runFolder, resultRelPath);
 
+  const htmlPayload =
+    flowId === 'explore' ? exploreTournamentHtmlPayload(input.runFolder, flowReport) : undefined;
+  const outHtmlPath = htmlPayload === undefined ? undefined : htmlPath(input.runFolder);
+
   const reportPaths: OperatorSummaryReportLink[] = [];
   if (resultPath !== undefined)
     reportPaths.push(reportLink(input.runFolder, 'Run result', resultRelPath));
   if (flowResultRelPath !== undefined && flowReport !== undefined) {
     reportPaths.push(reportLink(input.runFolder, `${flowId} result`, flowResultRelPath));
+  }
+  if (outHtmlPath !== undefined) {
+    reportPaths.push({ label: 'Operator summary (HTML)', path: outHtmlPath });
   }
   if (input.runResult.outcome === 'checkpoint_waiting') {
     const checkpoint = input.runResult.checkpoint;
@@ -590,5 +637,23 @@ export function writeOperatorSummary(input: {
   mkdirSync(dirname(outJsonPath), { recursive: true });
   writeFileSync(outJsonPath, `${JSON.stringify(candidate, null, 2)}\n`);
   writeFileSync(outMarkdownPath, renderMarkdown(candidate));
+
+  if (htmlPayload !== undefined && outHtmlPath !== undefined) {
+    const html = renderExploreTournamentHTML({
+      runId: input.runResult.run_id as unknown as string,
+      flowId,
+      decisionOptions: htmlPayload.decisionOptions,
+      tournamentReview: htmlPayload.tournamentReview,
+      ...(htmlPayload.decision === undefined ? {} : { decision: htmlPayload.decision }),
+    });
+    writeFileSync(outHtmlPath, html);
+    return {
+      summary: candidate,
+      jsonPath: outJsonPath,
+      markdownPath: outMarkdownPath,
+      htmlPath: outHtmlPath,
+    };
+  }
+
   return { summary: candidate, jsonPath: outJsonPath, markdownPath: outMarkdownPath };
 }

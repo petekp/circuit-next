@@ -687,6 +687,9 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
             ...resumeRuntimeFields,
             operator_summary_path: operatorSummary.jsonPath,
             operator_summary_markdown_path: operatorSummary.markdownPath,
+            ...(operatorSummary.htmlPath === undefined
+              ? {}
+              : { operator_summary_html_path: operatorSummary.htmlPath }),
           },
           null,
           2,
@@ -830,6 +833,9 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
             }),
             operator_summary_path: operatorSummary.jsonPath,
             operator_summary_markdown_path: operatorSummary.markdownPath,
+            ...(operatorSummary.htmlPath === undefined
+              ? {}
+              : { operator_summary_html_path: operatorSummary.htmlPath }),
             checkpoint: waitingResult.checkpoint,
           },
           null,
@@ -874,6 +880,9 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
           }),
           operator_summary_path: operatorSummary.jsonPath,
           operator_summary_markdown_path: operatorSummary.markdownPath,
+          ...(operatorSummary.htmlPath === undefined
+            ? {}
+            : { operator_summary_html_path: operatorSummary.htmlPath }),
         },
         null,
         2,
