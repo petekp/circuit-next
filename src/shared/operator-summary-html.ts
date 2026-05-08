@@ -27,8 +27,23 @@ const ESCAPE_MAP: Record<string, string> = {
   "'": '&#39;',
 };
 
+// Strip C0 controls (except \t \n \r), bidi overrides, and bidi isolates.
+// These survive Zod string validation but distort visual rendering: a
+// U+202E in an option label flips subsequent text right-to-left, which
+// could deceive an operator about which option they are picking.
+const SANITIZE_PATTERN = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u202A-\u202E\u2066-\u2069]/g;
+
+const MAX_BULLET_LEN = 4096;
+const MAX_PROMPT_LEN = 32_768;
+
 function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (char) => ESCAPE_MAP[char] ?? char);
+  return value
+    .replace(SANITIZE_PATTERN, '')
+    .replace(/[&<>"']/g, (char) => ESCAPE_MAP[char] ?? char);
+}
+
+function truncate(value: string, max: number): string {
+  return value.length > max ? `${value.slice(0, max - 1)}…` : value;
 }
 
 function verdictBadgeText(verdict: ExploreTournamentReview['verdict']): string {
@@ -56,11 +71,11 @@ function renderOptionCard(
       : '';
 
   const tradeoffsMarkup = option.tradeoffs
-    .map((tradeoff) => `<li>${escapeHtml(tradeoff)}</li>`)
+    .map((tradeoff) => `<li>${escapeHtml(truncate(tradeoff, MAX_BULLET_LEN))}</li>`)
     .join('\n          ');
 
   const evidenceMarkup = option.evidence_refs
-    .map((ref) => `<span class="chip">${escapeHtml(ref)}</span>`)
+    .map((ref) => `<span class="chip">${escapeHtml(truncate(ref, MAX_BULLET_LEN))}</span>`)
     .join('\n          ');
 
   return `    <article class="${cardClasses.join(' ')}">
@@ -85,7 +100,7 @@ function renderOptionCard(
         </div>
       </div>
       <div class="actions">
-        <button class="copy primary" data-prompt="${escapeHtml(option.best_case_prompt)}">Copy as prompt</button>
+        <button class="copy primary" data-prompt="${escapeHtml(truncate(option.best_case_prompt, MAX_PROMPT_LEN))}">Copy as prompt</button>
       </div>
     </article>`;
 }
@@ -114,11 +129,15 @@ function renderTournamentDetails(
   const sections: string[] = [];
   sections.push(`<p><strong>Comparison.</strong> ${escapeHtml(review.comparison)}</p>`);
   if (review.objections.length > 0) {
-    const items = review.objections.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
+    const items = review.objections
+      .map((item) => `<li>${escapeHtml(truncate(item, MAX_BULLET_LEN))}</li>`)
+      .join('');
     sections.push(`<p><strong>Objections.</strong></p><ul>${items}</ul>`);
   }
   if (review.missing_evidence.length > 0) {
-    const items = review.missing_evidence.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
+    const items = review.missing_evidence
+      .map((item) => `<li>${escapeHtml(truncate(item, MAX_BULLET_LEN))}</li>`)
+      .join('');
     sections.push(`<p><strong>Missing evidence.</strong></p><ul>${items}</ul>`);
   }
   if (review.tradeoff_question.length > 0) {
@@ -129,7 +148,9 @@ function renderTournamentDetails(
   if (decision !== undefined) {
     sections.push(`<p><strong>Rationale.</strong> ${escapeHtml(decision.rationale)}</p>`);
     if (decision.residual_risks.length > 0) {
-      const items = decision.residual_risks.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
+      const items = decision.residual_risks
+        .map((item) => `<li>${escapeHtml(truncate(item, MAX_BULLET_LEN))}</li>`)
+        .join('');
       sections.push(`<p><strong>Residual risks.</strong></p><ul>${items}</ul>`);
     }
     sections.push(`<p><strong>Next action.</strong> ${escapeHtml(decision.next_action)}</p>`);

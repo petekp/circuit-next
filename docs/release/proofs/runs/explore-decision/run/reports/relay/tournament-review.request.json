@@ -8,7 +8,7 @@ Context (from reads):
 {
   "subject": "decide: React vs Vue",
   "task": "decide: React vs Vue",
-  "success_condition": "Produce a useful explore result for: decide: React vs Vue"
+  "success_condition": "Answer the Explore goal with evidence-backed findings: decide: React vs Vue Name the evidence inspected or still needed, separate confirmed facts from assumptions, and identify the proof that would make the recommendation trustworthy."
 }
 
 
@@ -80,38 +80,13 @@ Context (from reads):
   "branch_count": 4,
   "branches": [
     {
-      "branch_id": "option-1",
-      "child_run_id": "71819393-be33-4e80-980b-3bbefd5e3199",
-      "child_outcome": "complete",
-      "verdict": "accept",
-      "admitted": true,
-      "result_path": "reports/tournament-branches/option-1/report.json",
-      "duration_ms": 4,
-      "result_body": {
-        "verdict": "accept",
-        "option_id": "option-1",
-        "option_label": "React",
-        "case_summary": "Choose React for the broad ecosystem and hiring pool.",
-        "assumptions": [
-          "The operator values ecosystem maturity."
-        ],
-        "evidence_refs": [
-          "reports/decision-options.json"
-        ],
-        "risks": [
-          "The larger ecosystem may add dependency sprawl."
-        ],
-        "next_action": "Run a Build plan for a React prototype."
-      }
-    },
-    {
       "branch_id": "option-2",
-      "child_run_id": "a60fd54b-1301-4fbb-b5a9-4b72096e63a3",
+      "child_run_id": "56eee32f-c3a8-467f-b7a2-2c91508d3ac0",
       "child_outcome": "complete",
       "verdict": "accept",
       "admitted": true,
       "result_path": "reports/tournament-branches/option-2/report.json",
-      "duration_ms": 5,
+      "duration_ms": 3,
       "result_body": {
         "verdict": "accept",
         "option_id": "option-2",
@@ -130,13 +105,38 @@ Context (from reads):
       }
     },
     {
+      "branch_id": "option-1",
+      "child_run_id": "ae8517db-9154-4435-a33b-295ee8c82387",
+      "child_outcome": "complete",
+      "verdict": "accept",
+      "admitted": true,
+      "result_path": "reports/tournament-branches/option-1/report.json",
+      "duration_ms": 3,
+      "result_body": {
+        "verdict": "accept",
+        "option_id": "option-1",
+        "option_label": "React",
+        "case_summary": "Choose React for the broad ecosystem and hiring pool.",
+        "assumptions": [
+          "The operator values ecosystem maturity."
+        ],
+        "evidence_refs": [
+          "reports/decision-options.json"
+        ],
+        "risks": [
+          "The larger ecosystem may add dependency sprawl."
+        ],
+        "next_action": "Run a Build plan for a React prototype."
+      }
+    },
+    {
       "branch_id": "option-3",
-      "child_run_id": "7206fa9a-4a32-4c7c-bfb0-9d853a771c40",
+      "child_run_id": "9da1a0bf-8010-4445-a5ca-446c8c02edf4",
       "child_outcome": "complete",
       "verdict": "accept",
       "admitted": true,
       "result_path": "reports/tournament-branches/option-3/report.json",
-      "duration_ms": 5,
+      "duration_ms": 3,
       "result_body": {
         "verdict": "accept",
         "option_id": "option-3",
@@ -156,12 +156,12 @@ Context (from reads):
     },
     {
       "branch_id": "option-4",
-      "child_run_id": "85290604-1f1a-40fe-b2c4-4bd925f078a3",
+      "child_run_id": "d0b12ae2-f5c9-495b-adfd-5a1fd837bc2b",
       "child_outcome": "complete",
       "verdict": "accept",
       "admitted": true,
       "result_path": "reports/tournament-branches/option-4/report.json",
-      "duration_ms": 8,
+      "duration_ms": 3,
       "result_body": {
         "verdict": "accept",
         "option_id": "option-4",

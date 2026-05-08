@@ -4,8 +4,10 @@
   "flow_id": "explore",
   "run_folder": "<repo>/docs/release/proofs/runs/explore-decision/run",
   "outcome": "complete",
-  "trace_entries_observed": 73,
+  "trace_entries_observed": 68,
   "result_path": "<repo>/docs/release/proofs/runs/explore-decision/run/reports/result.json",
   "operator_summary_path": "<repo>/docs/release/proofs/runs/explore-decision/run/reports/operator-summary.json",
-  "operator_summary_markdown_path": "<repo>/docs/release/proofs/runs/explore-decision/run/reports/operator-summary.md"
+  "operator_summary_markdown_path": "<repo>/docs/release/proofs/runs/explore-decision/run/reports/operator-summary.md",
+  "operator_summary_status_text": "Decision made. Selected: Vue. Choose Vue for a smaller surface and faster product iteration.",
+  "operator_summary_html_path": "<repo>/docs/release/proofs/runs/explore-decision/run/reports/operator-summary.html"
 }

@@ -345,6 +345,11 @@ function tryOpenInBrowser(path) {
   }
   try {
     const child = spawn(command, args, { detached: true, stdio: 'ignore' });
+    // Async ENOENT (e.g. xdg-open missing on a headless host) emits an
+    // 'error' event on the child after spawn returns. Without a listener,
+    // Node throws an unhandled error and crashes the wrapper after the
+    // success summary already streamed to stdout.
+    child.on('error', () => {});
     child.unref();
   } catch {
     // Best-effort. The path is also surfaced inline in the markdown summary.

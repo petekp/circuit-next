@@ -22,7 +22,7 @@ import { RunResult } from '../schemas/result.js';
 import { classifyCompiledFlowTask } from '../flows/router.js';
 import { discoverConfigLayers } from '../shared/config-loader.js';
 import { validateCompiledFlowKindPolicy } from '../shared/flow-kind-policy.js';
-import { writeOperatorSummary } from '../shared/operator-summary-writer.js';
+import { readPriorRoute, writeOperatorSummary } from '../shared/operator-summary-writer.js';
 import { progressPresentation } from '../shared/progress-output.js';
 import type { ComposeWriterFn, RelayFn } from '../shared/relay-runtime-types.js';
 import { runCreateCommand } from './create.js';
@@ -669,11 +669,14 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
         ...(progress === undefined ? {} : { progress }),
       });
       const runResult = RunResult.parse(JSON.parse(readFileSync(runtimeResult.resultPath, 'utf8')));
+      const priorRoute = readPriorRoute(runFolder);
       const operatorSummary = writeOperatorSummary({
         runFolder,
         runResult,
         route: {
           selectedFlow: runResult.flow_id as unknown as string,
+          ...(priorRoute.routedBy === undefined ? {} : { routedBy: priorRoute.routedBy }),
+          ...(priorRoute.routerReason === undefined ? {} : { routerReason: priorRoute.routerReason }),
         },
       });
       const resumeRuntimeFields = showRuntimeDecision()

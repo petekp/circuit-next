@@ -5,7 +5,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { OperatorSummary } from '../../src/schemas/operator-summary.js';
 import { RunResult } from '../../src/schemas/result.js';
-import { writeOperatorSummary } from '../../src/shared/operator-summary-writer.js';
+import {
+  readPriorRoute,
+  writeOperatorSummary,
+} from '../../src/shared/operator-summary-writer.js';
 
 let runFolder: string;
 
@@ -465,6 +468,557 @@ describe('operator summary writer', () => {
 
     const markdown = readFileSync(written.markdownPath, 'utf8');
     expect(markdown).toContain(`Rich summary: ${written.htmlPath as string}`);
+  });
+
+  it('skips HTML emission when tournament-review.json is malformed', () => {
+    writeReport('reports/decision-options.json', {
+      decision_question: 'Which framework should we pick?',
+      recommendation_basis: 'tournament-aggregate@v1 + tournament-review@v1',
+      options: [
+        {
+          id: 'option-1',
+          label: 'React',
+          summary: 'Mature.',
+          best_case_prompt: 'Bootstrap React.',
+          evidence_refs: ['reports/analysis.json#aspect-react'],
+          tradeoffs: ['Larger surface'],
+        },
+        {
+          id: 'option-2',
+          label: 'Vue',
+          summary: 'Smaller.',
+          best_case_prompt: 'Bootstrap Vue.',
+          evidence_refs: ['reports/analysis.json#aspect-vue'],
+          tradeoffs: ['Thinner ecosystem'],
+        },
+      ],
+    });
+    // Missing required fields (no `verdict`, `recommended_option_id`, etc.) — Zod parse should fail.
+    writeReport('reports/tournament-review.json', { verdict: 'recommend' });
+    writeReport('reports/decision.json', {
+      verdict: 'decided',
+      decision_question: 'Which framework should we pick?',
+      selected_option_id: 'option-2',
+      selected_option_label: 'Vue',
+      decision: 'Choose Vue.',
+      rationale: 'Faster path.',
+      rejected_options: [{ option_id: 'option-1', reason: 'Slower.' }],
+      evidence_links: ['reports/decision-options.json'],
+      assumptions: ['Team can learn Vue.'],
+      residual_risks: ['Hiring familiarity may be thinner.'],
+      next_action: 'Run a Build plan.',
+      follow_up_workflow: 'Build',
+    });
+    writeReport('reports/explore-result.json', {
+      summary: "Explore 'pick framework': Choose Vue.",
+      verdict_snapshot: {
+        decision_verdict: 'decided',
+        tournament_review_verdict: 'recommend',
+        selected_option_id: 'option-2',
+        objection_count: 0,
+        missing_evidence_count: 0,
+      },
+      evidence_links: [
+        {
+          report_id: 'explore.decision-options',
+          path: 'reports/decision-options.json',
+          schema: 'explore.decision-options@v1',
+        },
+        {
+          report_id: 'explore.tournament-review',
+          path: 'reports/tournament-review.json',
+          schema: 'explore.tournament-review@v1',
+        },
+        {
+          report_id: 'explore.decision',
+          path: 'reports/decision.json',
+          schema: 'explore.decision@v1',
+        },
+      ],
+    });
+
+    const written = writeOperatorSummary({
+      runFolder,
+      runResult: baseResult('explore'),
+      route: { selectedFlow: 'explore' },
+    });
+
+    expect(written.htmlPath).toBeUndefined();
+    expect(written.summary.report_paths.map((report) => report.label)).not.toContain(
+      'Operator summary (HTML)',
+    );
+    const markdown = readFileSync(written.markdownPath, 'utf8');
+    expect(markdown).not.toContain('Rich summary:');
+    expect(existsSync(join(runFolder, 'reports', 'operator-summary.html'))).toBe(false);
+  });
+
+  it('skips HTML emission when verdict_snapshot.decision_verdict is not "decided"', () => {
+    // Pre-decision state (e.g. a checkpoint_waiting close that set
+    // selected_option_id but has not yet finalized the decision) must
+    // NOT produce an HTML surface. Operator deserves a surface that
+    // matches actual run state, not a partial one.
+    writeReport('reports/decision-options.json', {
+      decision_question: 'Which framework should we pick?',
+      recommendation_basis: 'tournament-aggregate@v1 + tournament-review@v1',
+      options: [
+        {
+          id: 'option-1',
+          label: 'React',
+          summary: 'Mature.',
+          best_case_prompt: 'Bootstrap React.',
+          evidence_refs: ['reports/analysis.json#aspect-react'],
+          tradeoffs: ['Larger surface'],
+        },
+        {
+          id: 'option-2',
+          label: 'Vue',
+          summary: 'Smaller.',
+          best_case_prompt: 'Bootstrap Vue.',
+          evidence_refs: ['reports/analysis.json#aspect-vue'],
+          tradeoffs: ['Thinner ecosystem'],
+        },
+      ],
+    });
+    writeReport('reports/tournament-review.json', {
+      verdict: 'recommend',
+      recommended_option_id: 'option-2',
+      comparison: 'Vue wins on iteration speed.',
+      objections: [],
+      missing_evidence: [],
+      tradeoff_question: 'Speed vs hiring?',
+      confidence: 'high',
+    });
+    writeReport('reports/explore-result.json', {
+      summary: "Explore 'pick framework': Vue is recommended.",
+      // No decision_verdict — recommendation is in but operator has not decided.
+      verdict_snapshot: {
+        tournament_review_verdict: 'recommend',
+        selected_option_id: 'option-2',
+        objection_count: 0,
+        missing_evidence_count: 0,
+      },
+      evidence_links: [
+        {
+          report_id: 'explore.decision-options',
+          path: 'reports/decision-options.json',
+          schema: 'explore.decision-options@v1',
+        },
+        {
+          report_id: 'explore.tournament-review',
+          path: 'reports/tournament-review.json',
+          schema: 'explore.tournament-review@v1',
+        },
+      ],
+    });
+
+    const written = writeOperatorSummary({
+      runFolder,
+      runResult: baseResult('explore'),
+      route: { selectedFlow: 'explore' },
+    });
+
+    expect(written.htmlPath).toBeUndefined();
+    expect(existsSync(join(runFolder, 'reports', 'operator-summary.html'))).toBe(false);
+    expect(written.summary.report_paths.map((report) => report.label)).not.toContain(
+      'Operator summary (HTML)',
+    );
+  });
+
+  it('degrades to markdown-only when HTML write fails (does not promise a missing file)', () => {
+    writeReport('reports/decision-options.json', {
+      decision_question: 'Which framework should we pick?',
+      recommendation_basis: 'tournament-aggregate@v1 + tournament-review@v1',
+      options: [
+        {
+          id: 'option-1',
+          label: 'React',
+          summary: 'Mature.',
+          best_case_prompt: 'Bootstrap React.',
+          evidence_refs: ['reports/analysis.json#aspect-react'],
+          tradeoffs: ['Larger surface'],
+        },
+        {
+          id: 'option-2',
+          label: 'Vue',
+          summary: 'Smaller.',
+          best_case_prompt: 'Bootstrap Vue.',
+          evidence_refs: ['reports/analysis.json#aspect-vue'],
+          tradeoffs: ['Thinner ecosystem'],
+        },
+      ],
+    });
+    writeReport('reports/tournament-review.json', {
+      verdict: 'recommend',
+      recommended_option_id: 'option-2',
+      comparison: 'Vue wins.',
+      objections: [],
+      missing_evidence: [],
+      tradeoff_question: 'Speed vs hiring?',
+      confidence: 'high',
+    });
+    writeReport('reports/decision.json', {
+      verdict: 'decided',
+      decision_question: 'Which framework should we pick?',
+      selected_option_id: 'option-2',
+      selected_option_label: 'Vue',
+      decision: 'Choose Vue.',
+      rationale: 'Faster path.',
+      rejected_options: [{ option_id: 'option-1', reason: 'Slower.' }],
+      evidence_links: ['reports/decision-options.json'],
+      assumptions: ['Team can learn Vue.'],
+      residual_risks: ['Hiring familiarity may be thinner.'],
+      next_action: 'Run a Build plan.',
+      follow_up_workflow: 'Build',
+    });
+    writeReport('reports/explore-result.json', {
+      summary: "Explore 'pick framework': Vue.",
+      verdict_snapshot: {
+        decision_verdict: 'decided',
+        tournament_review_verdict: 'recommend',
+        selected_option_id: 'option-2',
+        objection_count: 0,
+        missing_evidence_count: 0,
+      },
+      evidence_links: [
+        {
+          report_id: 'explore.decision-options',
+          path: 'reports/decision-options.json',
+          schema: 'explore.decision-options@v1',
+        },
+        {
+          report_id: 'explore.tournament-review',
+          path: 'reports/tournament-review.json',
+          schema: 'explore.tournament-review@v1',
+        },
+        {
+          report_id: 'explore.decision',
+          path: 'reports/decision.json',
+          schema: 'explore.decision@v1',
+        },
+      ],
+    });
+    // Force HTML write to fail by occupying the target path with a directory.
+    mkdirSync(join(runFolder, 'reports', 'operator-summary.html'), { recursive: true });
+
+    const written = writeOperatorSummary({
+      runFolder,
+      runResult: baseResult('explore'),
+      route: { selectedFlow: 'explore' },
+    });
+
+    expect(written.htmlPath).toBeUndefined();
+    expect(written.summary.report_paths.map((report) => report.label)).not.toContain(
+      'Operator summary (HTML)',
+    );
+    expect(existsSync(written.jsonPath)).toBe(true);
+    expect(existsSync(written.markdownPath)).toBe(true);
+    const markdown = readFileSync(written.markdownPath, 'utf8');
+    expect(markdown).not.toContain('Rich summary:');
+    // Operator must see a signal that HTML was attempted and failed; otherwise
+    // a transient disk problem looks indistinguishable from "this flow does
+    // not produce HTML."
+    expect(written.summary.evidence_warnings).toContainEqual(
+      expect.objectContaining({ kind: 'html_write_failed' }),
+    );
+    expect(markdown).toContain('html_write_failed');
+    // The pre-existing directory at the target path was cleaned up so the
+    // envelope can never claim a path that does not point at a valid file.
+    expect(existsSync(join(runFolder, 'reports', 'operator-summary.html'))).toBe(false);
+  });
+
+  it('removes a stale HTML file when a re-run no longer produces a typed payload', () => {
+    // Simulate: an earlier successful tournament emitted operator-summary.html
+    // in this run folder. A subsequent rewrite (e.g. resume into a non-decided
+    // state) must NOT leave the prior HTML on disk — operators may have
+    // bookmarked or scrolled to that path and would otherwise open stale data.
+    const stalePath = join(runFolder, 'reports', 'operator-summary.html');
+    writeFileSync(stalePath, '<!doctype html><body>stale tournament summary</body>');
+
+    writeReport('reports/explore-result.json', {
+      summary: "Explore 'compose path': recommendation ready.",
+      verdict_snapshot: {
+        compose_verdict: 'ready',
+        review_verdict: 'accept',
+        objection_count: 0,
+        missed_angle_count: 0,
+      },
+      evidence_links: [],
+    });
+
+    const written = writeOperatorSummary({
+      runFolder,
+      runResult: baseResult('explore'),
+      route: { selectedFlow: 'explore' },
+    });
+
+    expect(written.htmlPath).toBeUndefined();
+    expect(existsSync(stalePath)).toBe(false);
+  });
+
+  it('does not abort the close when an evidence_link path is malformed', () => {
+    // Regression: evidence_links[].path is not Zod-validated. A malformed
+    // path (traversal, absolute, symlinked) used to throw inside
+    // resolveRunRelative and abort the entire run close after JSON+MD had
+    // already been written elsewhere. The writer must degrade silently.
+    writeReport('reports/decision-options.json', {
+      decision_question: 'Pick one.',
+      recommendation_basis: 'tournament-aggregate@v1 + tournament-review@v1',
+      options: [
+        {
+          id: 'option-1',
+          label: 'A',
+          summary: 'a',
+          best_case_prompt: 'a',
+          evidence_refs: ['x'],
+          tradeoffs: ['t'],
+        },
+        {
+          id: 'option-2',
+          label: 'B',
+          summary: 'b',
+          best_case_prompt: 'b',
+          evidence_refs: ['y'],
+          tradeoffs: ['t'],
+        },
+      ],
+    });
+    writeReport('reports/explore-result.json', {
+      summary: "Explore 'pick': decided.",
+      verdict_snapshot: {
+        decision_verdict: 'decided',
+        tournament_review_verdict: 'recommend',
+        selected_option_id: 'option-2',
+        objection_count: 0,
+        missing_evidence_count: 0,
+      },
+      evidence_links: [
+        {
+          report_id: 'explore.decision-options',
+          path: '../../etc/passwd',
+          schema: 'explore.decision-options@v1',
+        },
+      ],
+    });
+
+    expect(() =>
+      writeOperatorSummary({
+        runFolder,
+        runResult: baseResult('explore'),
+        route: { selectedFlow: 'explore' },
+      }),
+    ).not.toThrow();
+  });
+
+  it('strips bidi overrides and C0 controls from option labels in the rendered HTML', () => {
+    // Adversarial input: a U+202E (RTL override) in an option label flips
+    // the visible order of subsequent text in the operator's browser. The
+    // operator could be deceived about which option they are picking.
+    const rtlLabel = `safe‮gnp.exe`;
+    writeReport('reports/decision-options.json', {
+      decision_question: 'Pick one.',
+      recommendation_basis: 'tournament-aggregate@v1 + tournament-review@v1',
+      options: [
+        {
+          id: 'option-1',
+          label: rtlLabel,
+          summary: 'a',
+          best_case_prompt: 'a',
+          evidence_refs: ['x'],
+          tradeoffs: ['t'],
+        },
+        {
+          id: 'option-2',
+          label: 'B',
+          summary: 'b',
+          best_case_prompt: 'b',
+          evidence_refs: ['y'],
+          tradeoffs: ['t'],
+        },
+      ],
+    });
+    writeReport('reports/tournament-review.json', {
+      verdict: 'recommend',
+      recommended_option_id: 'option-2',
+      comparison: 'B wins.',
+      objections: [],
+      missing_evidence: [],
+      tradeoff_question: '?',
+      confidence: 'high',
+    });
+    writeReport('reports/decision.json', {
+      verdict: 'decided',
+      decision_question: 'Pick one.',
+      selected_option_id: 'option-2',
+      selected_option_label: 'B',
+      decision: 'Choose B.',
+      rationale: 'Better.',
+      rejected_options: [{ option_id: 'option-1', reason: 'No.' }],
+      evidence_links: ['reports/decision-options.json'],
+      assumptions: [],
+      residual_risks: [],
+      next_action: 'Build B.',
+      follow_up_workflow: 'Build',
+    });
+    writeReport('reports/explore-result.json', {
+      summary: "Explore 'pick': decided.",
+      verdict_snapshot: {
+        decision_verdict: 'decided',
+        tournament_review_verdict: 'recommend',
+        selected_option_id: 'option-2',
+        objection_count: 0,
+        missing_evidence_count: 0,
+      },
+      evidence_links: [
+        {
+          report_id: 'explore.decision-options',
+          path: 'reports/decision-options.json',
+          schema: 'explore.decision-options@v1',
+        },
+        {
+          report_id: 'explore.tournament-review',
+          path: 'reports/tournament-review.json',
+          schema: 'explore.tournament-review@v1',
+        },
+        {
+          report_id: 'explore.decision',
+          path: 'reports/decision.json',
+          schema: 'explore.decision@v1',
+        },
+      ],
+    });
+
+    const written = writeOperatorSummary({
+      runFolder,
+      runResult: baseResult('explore'),
+      route: { selectedFlow: 'explore' },
+    });
+
+    expect(written.htmlPath).toBeDefined();
+    const html = readFileSync(written.htmlPath as string, 'utf8');
+    expect(html).not.toContain('‮');
+    // The label is rendered with the override stripped (visible ASCII intact).
+    expect(html).toContain('safegnp.exe');
+  });
+
+  it('truncates oversized tradeoff bullets so a runaway model output does not produce multi-MB HTML', () => {
+    const oversized = 'A'.repeat(8192);
+    writeReport('reports/decision-options.json', {
+      decision_question: 'Pick.',
+      recommendation_basis: 'tournament-aggregate@v1 + tournament-review@v1',
+      options: [
+        {
+          id: 'option-1',
+          label: 'A',
+          summary: 'a',
+          best_case_prompt: 'a',
+          evidence_refs: ['x'],
+          tradeoffs: [oversized],
+        },
+        {
+          id: 'option-2',
+          label: 'B',
+          summary: 'b',
+          best_case_prompt: 'b',
+          evidence_refs: ['y'],
+          tradeoffs: ['t'],
+        },
+      ],
+    });
+    writeReport('reports/tournament-review.json', {
+      verdict: 'recommend',
+      recommended_option_id: 'option-2',
+      comparison: 'B wins.',
+      objections: [],
+      missing_evidence: [],
+      tradeoff_question: '?',
+      confidence: 'high',
+    });
+    writeReport('reports/decision.json', {
+      verdict: 'decided',
+      decision_question: 'Pick.',
+      selected_option_id: 'option-2',
+      selected_option_label: 'B',
+      decision: 'Choose B.',
+      rationale: 'Better.',
+      rejected_options: [{ option_id: 'option-1', reason: 'No.' }],
+      evidence_links: ['reports/decision-options.json'],
+      assumptions: [],
+      residual_risks: [],
+      next_action: 'Build B.',
+      follow_up_workflow: 'Build',
+    });
+    writeReport('reports/explore-result.json', {
+      summary: "Explore 'pick': decided.",
+      verdict_snapshot: {
+        decision_verdict: 'decided',
+        tournament_review_verdict: 'recommend',
+        selected_option_id: 'option-2',
+        objection_count: 0,
+        missing_evidence_count: 0,
+      },
+      evidence_links: [
+        {
+          report_id: 'explore.decision-options',
+          path: 'reports/decision-options.json',
+          schema: 'explore.decision-options@v1',
+        },
+        {
+          report_id: 'explore.tournament-review',
+          path: 'reports/tournament-review.json',
+          schema: 'explore.tournament-review@v1',
+        },
+        {
+          report_id: 'explore.decision',
+          path: 'reports/decision.json',
+          schema: 'explore.decision@v1',
+        },
+      ],
+    });
+
+    const written = writeOperatorSummary({
+      runFolder,
+      runResult: baseResult('explore'),
+      route: { selectedFlow: 'explore' },
+    });
+
+    expect(written.htmlPath).toBeDefined();
+    const html = readFileSync(written.htmlPath as string, 'utf8');
+    // Original tradeoff was 8192 chars; truncate caps at 4096 with ellipsis.
+    expect(html).not.toContain(oversized);
+    expect(html).toContain('A'.repeat(100));
+    expect(html).toContain('…');
+  });
+
+  it('readPriorRoute recovers routedBy and routerReason from a previously-written summary', () => {
+    writeReport('reports/explore-result.json', {
+      summary: "Explore 'compose': ready.",
+      verdict_snapshot: {
+        compose_verdict: 'ready',
+        review_verdict: 'accept',
+        objection_count: 0,
+        missed_angle_count: 0,
+      },
+      evidence_links: [],
+    });
+    writeOperatorSummary({
+      runFolder,
+      runResult: baseResult('explore'),
+      route: {
+        selectedFlow: 'explore',
+        routedBy: 'classifier',
+        routerReason: 'matched explore goal',
+      },
+    });
+
+    const recovered = readPriorRoute(runFolder);
+    expect(recovered.routedBy).toBe('classifier');
+    expect(recovered.routerReason).toBe('matched explore goal');
+  });
+
+  it('readPriorRoute returns empty when no prior summary exists', () => {
+    const recovered = readPriorRoute(runFolder);
+    expect(recovered.routedBy).toBeUndefined();
+    expect(recovered.routerReason).toBeUndefined();
   });
 
   it('does not emit HTML for Explore default (compose) path', () => {

@@ -22163,7 +22163,7 @@ ${issueSummary}${more}`
 }
 
 // dist/shared/operator-summary-writer.js
-import { existsSync as existsSync8, mkdirSync, readFileSync as readFileSync18, writeFileSync } from "node:fs";
+import { existsSync as existsSync8, mkdirSync, readFileSync as readFileSync18, rmSync, writeFileSync } from "node:fs";
 import { dirname as dirname6, join as join11 } from "node:path";
 
 // dist/schemas/operator-summary.js
@@ -22219,8 +22219,14 @@ var ESCAPE_MAP = {
   '"': "&quot;",
   "'": "&#39;"
 };
+var SANITIZE_PATTERN = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u202A-\u202E\u2066-\u2069]/g;
+var MAX_BULLET_LEN = 4096;
+var MAX_PROMPT_LEN = 32768;
 function escapeHtml(value) {
-  return value.replace(/[&<>"']/g, (char) => ESCAPE_MAP[char] ?? char);
+  return value.replace(SANITIZE_PATTERN, "").replace(/[&<>"']/g, (char) => ESCAPE_MAP[char] ?? char);
+}
+function truncate(value, max) {
+  return value.length > max ? `${value.slice(0, max - 1)}\u2026` : value;
 }
 function verdictBadgeText(verdict) {
   if (verdict === "recommend")
@@ -22239,8 +22245,8 @@ function renderOptionCard(option, isRecommended, isSelected) {
   if (isSelected)
     cardClasses.push("selected");
   const badgeMarkup = isSelected ? '<span class="rec-badge selected-badge">Selected</span>' : isRecommended ? '<span class="rec-badge">Recommended</span>' : "";
-  const tradeoffsMarkup = option.tradeoffs.map((tradeoff) => `<li>${escapeHtml(tradeoff)}</li>`).join("\n          ");
-  const evidenceMarkup = option.evidence_refs.map((ref) => `<span class="chip">${escapeHtml(ref)}</span>`).join("\n          ");
+  const tradeoffsMarkup = option.tradeoffs.map((tradeoff) => `<li>${escapeHtml(truncate(tradeoff, MAX_BULLET_LEN))}</li>`).join("\n          ");
+  const evidenceMarkup = option.evidence_refs.map((ref) => `<span class="chip">${escapeHtml(truncate(ref, MAX_BULLET_LEN))}</span>`).join("\n          ");
   return `    <article class="${cardClasses.join(" ")}">
       <div class="card-head">
         <div>
@@ -22263,7 +22269,7 @@ function renderOptionCard(option, isRecommended, isSelected) {
         </div>
       </div>
       <div class="actions">
-        <button class="copy primary" data-prompt="${escapeHtml(option.best_case_prompt)}">Copy as prompt</button>
+        <button class="copy primary" data-prompt="${escapeHtml(truncate(option.best_case_prompt, MAX_PROMPT_LEN))}">Copy as prompt</button>
       </div>
     </article>`;
 }
@@ -22281,11 +22287,11 @@ function renderTournamentDetails(review, decision2) {
   const sections = [];
   sections.push(`<p><strong>Comparison.</strong> ${escapeHtml(review.comparison)}</p>`);
   if (review.objections.length > 0) {
-    const items = review.objections.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+    const items = review.objections.map((item) => `<li>${escapeHtml(truncate(item, MAX_BULLET_LEN))}</li>`).join("");
     sections.push(`<p><strong>Objections.</strong></p><ul>${items}</ul>`);
   }
   if (review.missing_evidence.length > 0) {
-    const items = review.missing_evidence.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+    const items = review.missing_evidence.map((item) => `<li>${escapeHtml(truncate(item, MAX_BULLET_LEN))}</li>`).join("");
     sections.push(`<p><strong>Missing evidence.</strong></p><ul>${items}</ul>`);
   }
   if (review.tradeoff_question.length > 0) {
@@ -22294,7 +22300,7 @@ function renderTournamentDetails(review, decision2) {
   if (decision2 !== void 0) {
     sections.push(`<p><strong>Rationale.</strong> ${escapeHtml(decision2.rationale)}</p>`);
     if (decision2.residual_risks.length > 0) {
-      const items = decision2.residual_risks.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+      const items = decision2.residual_risks.map((item) => `<li>${escapeHtml(truncate(item, MAX_BULLET_LEN))}</li>`).join("");
       sections.push(`<p><strong>Residual risks.</strong></p><ul>${items}</ul>`);
     }
     sections.push(`<p><strong>Next action.</strong> ${escapeHtml(decision2.next_action)}</p>`);
@@ -22356,6 +22362,24 @@ ${cards}
 }
 
 // dist/shared/operator-summary-writer.js
+function readPriorRoute(runFolder) {
+  const path = join11(runFolder, "reports", "operator-summary.json");
+  if (!existsSync8(path))
+    return {};
+  try {
+    const raw = JSON.parse(readFileSync18(path, "utf8"));
+    if (!isObject2(raw))
+      return {};
+    const routedBy = raw.routed_by;
+    const routerReason = raw.router_reason;
+    return {
+      ...routedBy === "explicit" || routedBy === "classifier" ? { routedBy } : {},
+      ...typeof routerReason === "string" && routerReason.length > 0 ? { routerReason } : {}
+    };
+  } catch {
+    return {};
+  }
+}
 var FLOW_RESULT_PATHS = {
   build: "reports/build-result.json",
   explore: "reports/explore-result.json",
@@ -22365,6 +22389,7 @@ var FLOW_RESULT_PATHS = {
   sweep: "reports/sweep-result.json"
 };
 var MAX_OPERATOR_SUMMARY_STATUS_TEXT_CHARS = 180;
+var HTML_REPORT_LABEL = "Operator summary (HTML)";
 function jsonPath(runFolder) {
   return join11(runFolder, "reports", "operator-summary.json");
 }
@@ -22509,7 +22534,11 @@ function evidenceLinks(runFolder, report) {
     const path = stringField(item, "path");
     if (reportId === void 0 || path === void 0)
       return [];
-    return [reportLink(runFolder, reportId, path, stringField(item, "schema"))];
+    try {
+      return [reportLink(runFolder, reportId, path, stringField(item, "schema"))];
+    } catch {
+      return [];
+    }
   });
 }
 function evidenceReportById(runFolder, report, reportId) {
@@ -22521,7 +22550,11 @@ function evidenceReportById(runFolder, report, reportId) {
     const path = stringField(item, "path");
     if (path === void 0)
       return void 0;
-    return readJsonIfPresent(runFolder, path);
+    try {
+      return readJsonIfPresent(runFolder, path);
+    } catch {
+      return void 0;
+    }
   }
   return void 0;
 }
@@ -22535,22 +22568,24 @@ function exploreTournamentSnapshot(flowReport) {
   return stringField(snapshot, "selected_option_id") === void 0 ? void 0 : snapshot;
 }
 function exploreTournamentHtmlPayload(runFolder, flowReport) {
-  if (exploreTournamentSnapshot(flowReport) === void 0)
+  const snapshot = isObject2(flowReport?.verdict_snapshot) ? flowReport.verdict_snapshot : void 0;
+  if (stringField(snapshot, "decision_verdict") !== "decided")
     return void 0;
   const optionsRaw = evidenceReportById(runFolder, flowReport, "explore.decision-options");
   const reviewRaw = evidenceReportById(runFolder, flowReport, "explore.tournament-review");
   const decisionRaw = evidenceReportById(runFolder, flowReport, "explore.decision");
-  if (optionsRaw === void 0 || reviewRaw === void 0)
+  if (optionsRaw === void 0 || reviewRaw === void 0 || decisionRaw === void 0) {
     return void 0;
+  }
   const optionsParsed = ExploreDecisionOptions.safeParse(optionsRaw);
   const reviewParsed = ExploreTournamentReview.safeParse(reviewRaw);
-  if (!optionsParsed.success || !reviewParsed.success)
+  const decisionParsed = ExploreDecision.safeParse(decisionRaw);
+  if (!optionsParsed.success || !reviewParsed.success || !decisionParsed.success)
     return void 0;
-  const decisionParsed = decisionRaw === void 0 ? void 0 : ExploreDecision.safeParse(decisionRaw);
   return {
     decisionOptions: optionsParsed.data,
     tournamentReview: reviewParsed.data,
-    ...decisionParsed?.success === true ? { decision: decisionParsed.data } : {}
+    decision: decisionParsed.data
   };
 }
 function exploreReviewFoldInDetails(flowReport) {
@@ -22749,7 +22784,7 @@ function renderMarkdown(summary) {
       lines.push(`- ${warning.kind}${path}: ${warning.message}`);
     }
   }
-  const htmlLink = summary.report_paths.find((report) => report.label === "Operator summary (HTML)");
+  const htmlLink = summary.report_paths.find((report) => report.label === HTML_REPORT_LABEL);
   if (htmlLink !== void 0) {
     lines.push("", `Rich summary: ${htmlLink.path}`);
   }
@@ -22762,8 +22797,37 @@ function writeOperatorSummary(input) {
   const flowReport = flowResultRelPath === void 0 ? void 0 : readJsonIfPresent(input.runFolder, flowResultRelPath);
   const resultRelPath = RUN_RESULT_RELATIVE_PATH;
   const resultPath2 = input.runResult.outcome === "checkpoint_waiting" ? void 0 : resolveRunRelative(input.runFolder, resultRelPath);
+  const outJsonPath = jsonPath(input.runFolder);
+  const outMarkdownPath = markdownPath(input.runFolder);
+  mkdirSync(dirname6(outJsonPath), { recursive: true });
   const htmlPayload = flowId === "explore" ? exploreTournamentHtmlPayload(input.runFolder, flowReport) : void 0;
-  const outHtmlPath = htmlPayload === void 0 ? void 0 : htmlPath(input.runFolder);
+  const candidateHtmlPath = htmlPath(input.runFolder);
+  let outHtmlPath;
+  let htmlEmitWarning;
+  if (htmlPayload === void 0) {
+    if (existsSync8(candidateHtmlPath))
+      rmSync(candidateHtmlPath, { force: true, recursive: true });
+  } else {
+    try {
+      const html = renderExploreTournamentHTML({
+        runId: input.runResult.run_id,
+        flowId,
+        decisionOptions: htmlPayload.decisionOptions,
+        tournamentReview: htmlPayload.tournamentReview,
+        decision: htmlPayload.decision
+      });
+      writeFileSync(candidateHtmlPath, html);
+      outHtmlPath = candidateHtmlPath;
+    } catch (err) {
+      if (existsSync8(candidateHtmlPath))
+        rmSync(candidateHtmlPath, { force: true, recursive: true });
+      htmlEmitWarning = {
+        kind: "html_write_failed",
+        message: err instanceof Error ? err.message : String(err),
+        path: candidateHtmlPath
+      };
+    }
+  }
   const reportPaths = [];
   if (resultPath2 !== void 0)
     reportPaths.push(reportLink(input.runFolder, "Run result", resultRelPath));
@@ -22771,7 +22835,7 @@ function writeOperatorSummary(input) {
     reportPaths.push(reportLink(input.runFolder, `${flowId} result`, flowResultRelPath));
   }
   if (outHtmlPath !== void 0) {
-    reportPaths.push({ label: "Operator summary (HTML)", path: outHtmlPath });
+    reportPaths.push({ label: HTML_REPORT_LABEL, path: outHtmlPath });
   }
   if (input.runResult.outcome === "checkpoint_waiting") {
     const checkpoint = input.runResult.checkpoint;
@@ -22812,40 +22876,29 @@ function writeOperatorSummary(input) {
     headline,
     status_text: statusTextFromHeadline(headline),
     details,
-    evidence_warnings: warningRecords(flowReport),
+    evidence_warnings: [
+      ...warningRecords(flowReport),
+      ...htmlEmitWarning === void 0 ? [] : [htmlEmitWarning]
+    ],
     run_folder: input.runFolder,
     ...resultPath2 === void 0 ? {} : { result_path: resultPath2 },
     report_paths: reportPaths,
     ...input.runResult.outcome === "checkpoint_waiting" ? { checkpoint: input.runResult.checkpoint } : {}
   });
-  const outJsonPath = jsonPath(input.runFolder);
-  const outMarkdownPath = markdownPath(input.runFolder);
-  mkdirSync(dirname6(outJsonPath), { recursive: true });
   writeFileSync(outJsonPath, `${JSON.stringify(candidate, null, 2)}
 `);
   writeFileSync(outMarkdownPath, renderMarkdown(candidate));
-  if (htmlPayload !== void 0 && outHtmlPath !== void 0) {
-    const html = renderExploreTournamentHTML({
-      runId: input.runResult.run_id,
-      flowId,
-      decisionOptions: htmlPayload.decisionOptions,
-      tournamentReview: htmlPayload.tournamentReview,
-      ...htmlPayload.decision === void 0 ? {} : { decision: htmlPayload.decision }
-    });
-    writeFileSync(outHtmlPath, html);
-    return {
-      summary: candidate,
-      jsonPath: outJsonPath,
-      markdownPath: outMarkdownPath,
-      htmlPath: outHtmlPath
-    };
-  }
-  return { summary: candidate, jsonPath: outJsonPath, markdownPath: outMarkdownPath };
+  return outHtmlPath === void 0 ? { summary: candidate, jsonPath: outJsonPath, markdownPath: outMarkdownPath } : {
+    summary: candidate,
+    jsonPath: outJsonPath,
+    markdownPath: outMarkdownPath,
+    htmlPath: outHtmlPath
+  };
 }
 
 // dist/cli/create.js
 import { randomUUID as randomUUID5 } from "node:crypto";
-import { existsSync as existsSync9, mkdirSync as mkdirSync2, readFileSync as readFileSync20, rmSync, writeFileSync as writeFileSync2 } from "node:fs";
+import { existsSync as existsSync9, mkdirSync as mkdirSync2, readFileSync as readFileSync20, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "node:fs";
 import { homedir as homedir3 } from "node:os";
 import { dirname as dirname8, join as join12, resolve as resolve9 } from "node:path";
 
@@ -23228,7 +23281,7 @@ function writeValidationResult(input) {
 }
 function writeDraft(input) {
   const root = draftRoot(input.home, input.slug);
-  rmSync(root, { recursive: true, force: true });
+  rmSync2(root, { recursive: true, force: true });
   mkdirSync2(root, { recursive: true });
   writeText(join12(root, "SKILL.md"), skillMarkdown(input.slug, input.description, input.home));
   writeText(join12(root, "circuit.yaml"), circuitYaml(input.slug, input.description));
@@ -25866,11 +25919,14 @@ async function main(argv, options = {}) {
         ...progress2 === void 0 ? {} : { progress: progress2 }
       });
       const runResult = RunResult.parse(JSON.parse(readFileSync24(runtimeResult.resultPath, "utf8")));
+      const priorRoute = readPriorRoute(runFolder2);
       const operatorSummary = writeOperatorSummary({
         runFolder: runFolder2,
         runResult,
         route: {
-          selectedFlow: runResult.flow_id
+          selectedFlow: runResult.flow_id,
+          ...priorRoute.routedBy === void 0 ? {} : { routedBy: priorRoute.routedBy },
+          ...priorRoute.routerReason === void 0 ? {} : { routerReason: priorRoute.routerReason }
         }
       });
       const resumeRuntimeFields = showRuntimeDecision() ? {

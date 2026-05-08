@@ -3,7 +3,7 @@
 // This file turns run outputs into a concise human-facing summary. Treat it
 // as a lossy projection over result reports and traces, not as an authority for
 // runtime state or report schemas.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import {
   ExploreDecision,
@@ -37,6 +37,33 @@ export type OperatorSummaryWriteResult = {
   readonly htmlPath?: string;
 };
 
+// On resume, the CLI has the flow id but no longer has the original
+// `routedBy` / `routerReason` (those came from the route classifier on
+// the initial run). Recover them from the previously-written operator
+// summary so a resume rewrite does not strip routing metadata that the
+// initial close site captured.
+export function readPriorRoute(runFolder: string): {
+  readonly routedBy?: 'explicit' | 'classifier';
+  readonly routerReason?: string;
+} {
+  const path = join(runFolder, 'reports', 'operator-summary.json');
+  if (!existsSync(path)) return {};
+  try {
+    const raw: unknown = JSON.parse(readFileSync(path, 'utf8'));
+    if (!isObject(raw)) return {};
+    const routedBy = raw.routed_by;
+    const routerReason = raw.router_reason;
+    return {
+      ...(routedBy === 'explicit' || routedBy === 'classifier' ? { routedBy } : {}),
+      ...(typeof routerReason === 'string' && routerReason.length > 0
+        ? { routerReason }
+        : {}),
+    };
+  } catch {
+    return {};
+  }
+}
+
 export interface CheckpointWaitingOperatorSummaryResult {
   readonly schema_version: 1;
   readonly run_id: RunResult['run_id'];
@@ -67,6 +94,8 @@ const FLOW_RESULT_PATHS: Record<string, string> = {
   sweep: 'reports/sweep-result.json',
 };
 const MAX_OPERATOR_SUMMARY_STATUS_TEXT_CHARS = 180;
+
+const HTML_REPORT_LABEL = 'Operator summary (HTML)' as const;
 
 function jsonPath(runFolder: string): string {
   return join(runFolder, 'reports', 'operator-summary.json');
@@ -271,7 +300,15 @@ function evidenceLinks(
     const reportId = stringField(item, 'report_id');
     const path = stringField(item, 'path');
     if (reportId === undefined || path === undefined) return [];
-    return [reportLink(runFolder, reportId, path, stringField(item, 'schema'))];
+    try {
+      return [reportLink(runFolder, reportId, path, stringField(item, 'schema'))];
+    } catch {
+      // A malformed evidence_links[].path (traversal, absolute, symlink-cross)
+      // would otherwise throw inside resolveRunRelative and abort the close.
+      // Drop the link instead — the operator summary stays whole, with the
+      // bad link silently omitted.
+      return [];
+    }
   });
 }
 
@@ -285,7 +322,14 @@ function evidenceReportById(
     if (stringField(item, 'report_id') !== reportId) continue;
     const path = stringField(item, 'path');
     if (path === undefined) return undefined;
-    return readJsonIfPresent(runFolder, path);
+    try {
+      return readJsonIfPresent(runFolder, path);
+    } catch {
+      // A malformed evidence_links[].path (traversal, absolute, symlink-cross)
+      // throws inside resolveRunRelative. Degrade to undefined so the writer
+      // can fall back to markdown-only without aborting the run close.
+      return undefined;
+    }
   }
   return undefined;
 }
@@ -309,29 +353,36 @@ function exploreTournamentSnapshot(flowReport: JsonObject | undefined): JsonObje
 type ExploreTournamentHtmlPayload = {
   readonly decisionOptions: ExploreDecisionOptions;
   readonly tournamentReview: ExploreTournamentReview;
-  readonly decision?: ExploreDecision;
+  readonly decision: ExploreDecision;
 };
 
 function exploreTournamentHtmlPayload(
   runFolder: string,
   flowReport: JsonObject | undefined,
 ): ExploreTournamentHtmlPayload | undefined {
-  if (exploreTournamentSnapshot(flowReport) === undefined) return undefined;
+  // HTML emits only when the tournament reached a finalized decision. A
+  // checkpoint_waiting outcome that has set selected_option_id but not yet
+  // written decision.json must NOT trigger HTML — the operator deserves a
+  // surface that matches the actual run state.
+  const snapshot = isObject(flowReport?.verdict_snapshot) ? flowReport.verdict_snapshot : undefined;
+  if (stringField(snapshot, 'decision_verdict') !== 'decided') return undefined;
+
   const optionsRaw = evidenceReportById(runFolder, flowReport, 'explore.decision-options');
   const reviewRaw = evidenceReportById(runFolder, flowReport, 'explore.tournament-review');
   const decisionRaw = evidenceReportById(runFolder, flowReport, 'explore.decision');
-  if (optionsRaw === undefined || reviewRaw === undefined) return undefined;
+  if (optionsRaw === undefined || reviewRaw === undefined || decisionRaw === undefined) {
+    return undefined;
+  }
 
   const optionsParsed = ExploreDecisionOptions.safeParse(optionsRaw);
   const reviewParsed = ExploreTournamentReview.safeParse(reviewRaw);
-  if (!optionsParsed.success || !reviewParsed.success) return undefined;
+  const decisionParsed = ExploreDecision.safeParse(decisionRaw);
+  if (!optionsParsed.success || !reviewParsed.success || !decisionParsed.success) return undefined;
 
-  const decisionParsed =
-    decisionRaw === undefined ? undefined : ExploreDecision.safeParse(decisionRaw);
   return {
     decisionOptions: optionsParsed.data,
     tournamentReview: reviewParsed.data,
-    ...(decisionParsed?.success === true ? { decision: decisionParsed.data } : {}),
+    decision: decisionParsed.data,
   };
 }
 
@@ -550,9 +601,7 @@ function renderMarkdown(summary: OperatorSummary): string {
     }
   }
 
-  const htmlLink = summary.report_paths.find(
-    (report) => report.label === 'Operator summary (HTML)',
-  );
+  const htmlLink = summary.report_paths.find((report) => report.label === HTML_REPORT_LABEL);
   if (htmlLink !== undefined) {
     lines.push('', `Rich summary: ${htmlLink.path}`);
   }
@@ -577,9 +626,48 @@ export function writeOperatorSummary(input: {
       ? undefined
       : resolveRunRelative(input.runFolder, resultRelPath);
 
+  const outJsonPath = jsonPath(input.runFolder);
+  const outMarkdownPath = markdownPath(input.runFolder);
+  mkdirSync(dirname(outJsonPath), { recursive: true });
+
+  // Write HTML first so JSON+markdown only promise a path that actually
+  // exists on disk. Failure here degrades to a markdown-only summary; it
+  // must not abort the run or break the JSON/MD siblings.
   const htmlPayload =
     flowId === 'explore' ? exploreTournamentHtmlPayload(input.runFolder, flowReport) : undefined;
-  const outHtmlPath = htmlPayload === undefined ? undefined : htmlPath(input.runFolder);
+  const candidateHtmlPath = htmlPath(input.runFolder);
+  let outHtmlPath: string | undefined;
+  let htmlEmitWarning: OperatorSummaryWarning | undefined;
+  if (htmlPayload === undefined) {
+    // Stale-cleanup: a resume that no longer produces a typed payload must
+    // not leave the previous run's HTML behind. The operator may have
+    // bookmarked or scrolled to that path and would otherwise open stale
+    // content silently.
+    if (existsSync(candidateHtmlPath)) rmSync(candidateHtmlPath, { force: true, recursive: true });
+  } else {
+    try {
+      const html = renderExploreTournamentHTML({
+        runId: input.runResult.run_id as unknown as string,
+        flowId,
+        decisionOptions: htmlPayload.decisionOptions,
+        tournamentReview: htmlPayload.tournamentReview,
+        decision: htmlPayload.decision,
+      });
+      writeFileSync(candidateHtmlPath, html);
+      outHtmlPath = candidateHtmlPath;
+    } catch (err) {
+      // writeFileSync may have left a partial file behind. Remove it so
+      // neither the envelope nor any reader points at a half-written
+      // artifact, and surface the failure as a warning the operator can
+      // see in the markdown summary.
+      if (existsSync(candidateHtmlPath)) rmSync(candidateHtmlPath, { force: true, recursive: true });
+      htmlEmitWarning = {
+        kind: 'html_write_failed',
+        message: err instanceof Error ? err.message : String(err),
+        path: candidateHtmlPath,
+      };
+    }
+  }
 
   const reportPaths: OperatorSummaryReportLink[] = [];
   if (resultPath !== undefined)
@@ -588,7 +676,7 @@ export function writeOperatorSummary(input: {
     reportPaths.push(reportLink(input.runFolder, `${flowId} result`, flowResultRelPath));
   }
   if (outHtmlPath !== undefined) {
-    reportPaths.push({ label: 'Operator summary (HTML)', path: outHtmlPath });
+    reportPaths.push({ label: HTML_REPORT_LABEL, path: outHtmlPath });
   }
   if (input.runResult.outcome === 'checkpoint_waiting') {
     const checkpoint = input.runResult.checkpoint;
@@ -640,7 +728,10 @@ export function writeOperatorSummary(input: {
     headline,
     status_text: statusTextFromHeadline(headline),
     details,
-    evidence_warnings: warningRecords(flowReport),
+    evidence_warnings: [
+      ...warningRecords(flowReport),
+      ...(htmlEmitWarning === undefined ? [] : [htmlEmitWarning]),
+    ],
     run_folder: input.runFolder,
     ...(resultPath === undefined ? {} : { result_path: resultPath }),
     report_paths: reportPaths,
@@ -649,28 +740,15 @@ export function writeOperatorSummary(input: {
       : {}),
   });
 
-  const outJsonPath = jsonPath(input.runFolder);
-  const outMarkdownPath = markdownPath(input.runFolder);
-  mkdirSync(dirname(outJsonPath), { recursive: true });
   writeFileSync(outJsonPath, `${JSON.stringify(candidate, null, 2)}\n`);
   writeFileSync(outMarkdownPath, renderMarkdown(candidate));
 
-  if (htmlPayload !== undefined && outHtmlPath !== undefined) {
-    const html = renderExploreTournamentHTML({
-      runId: input.runResult.run_id as unknown as string,
-      flowId,
-      decisionOptions: htmlPayload.decisionOptions,
-      tournamentReview: htmlPayload.tournamentReview,
-      ...(htmlPayload.decision === undefined ? {} : { decision: htmlPayload.decision }),
-    });
-    writeFileSync(outHtmlPath, html);
-    return {
-      summary: candidate,
-      jsonPath: outJsonPath,
-      markdownPath: outMarkdownPath,
-      htmlPath: outHtmlPath,
-    };
-  }
-
-  return { summary: candidate, jsonPath: outJsonPath, markdownPath: outMarkdownPath };
+  return outHtmlPath === undefined
+    ? { summary: candidate, jsonPath: outJsonPath, markdownPath: outMarkdownPath }
+    : {
+        summary: candidate,
+        jsonPath: outJsonPath,
+        markdownPath: outMarkdownPath,
+        htmlPath: outHtmlPath,
+      };
 }

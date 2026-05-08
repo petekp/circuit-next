@@ -547,6 +547,14 @@ describe('release truth infrastructure', () => {
     expect(summary).toContain('Selected: Vue');
     expect(summary).toContain('Residual risks:');
     expect(summary).toContain('Next action: Run a Build plan for a Vue prototype.');
+    // Format-drift guards. The current renderMarkdown does not emit
+    // legacy '## What Happened' / '## Run Files' / '## Reports' sections,
+    // and tournament-shape proofs MUST carry the 'Rich summary:' link
+    // (visible fallback when auto-open is unavailable).
+    expect(summary).not.toContain('## What Happened');
+    expect(summary).not.toContain('## Run Files');
+    expect(summary).not.toContain('## Reports');
+    expect(summary).toContain('Rich summary:');
     for (const file of filesUnder('docs/release/proofs/runs/explore-decision')) {
       const text = readFileSync(file, 'utf8');
       expect(text).not.toMatch(/\/Users\/petepetrash|Code\/circuit-next|\/private|\/var\/folders/);

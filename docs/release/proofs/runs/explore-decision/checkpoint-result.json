@@ -9,9 +9,10 @@
   "entry_mode_source": "classifier",
   "run_folder": "<repo>/docs/release/proofs/runs/explore-decision/run",
   "outcome": "checkpoint_waiting",
-  "trace_entries_observed": 61,
+  "trace_entries_observed": 58,
   "operator_summary_path": "<repo>/docs/release/proofs/runs/explore-decision/run/reports/operator-summary.json",
   "operator_summary_markdown_path": "<repo>/docs/release/proofs/runs/explore-decision/run/reports/operator-summary.md",
+  "operator_summary_status_text": "Waiting for a checkpoint choice.",
   "checkpoint": {
     "step_id": "tradeoff-checkpoint-step",
     "request_path": "<repo>/docs/release/proofs/runs/explore-decision/run/reports/checkpoints/tradeoff-request.json",
