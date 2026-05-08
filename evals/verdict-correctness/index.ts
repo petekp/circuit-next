@@ -11,7 +11,10 @@ import type {
   DefectId,
   EvalCaseResult,
   EvalSummary,
+  JudgeId,
 } from './types.ts';
+
+const SUPPORTED_JUDGES: readonly JudgeId[] = ['codex', 'claude-code'];
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -23,6 +26,7 @@ interface CliArgs {
   readonly defects: readonly DefectId[];
   readonly includeControl: boolean;
   readonly dryRun: boolean;
+  readonly judge: JudgeId;
   readonly resultsDir: string;
 }
 
@@ -31,6 +35,7 @@ function parseArgs(argv: readonly string[]): CliArgs {
   let defects: readonly DefectId[] = DEFECT_IDS;
   let includeControl = true;
   let dryRun = false;
+  let judge: JudgeId = 'codex';
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]!;
     if (arg === '--max-composes') {
@@ -52,13 +57,25 @@ function parseArgs(argv: readonly string[]): CliArgs {
       includeControl = false;
     } else if (arg === '--dry-run') {
       dryRun = true;
+    } else if (arg === '--judge') {
+      const next = argv[i + 1];
+      if (!next) throw new Error('--judge requires a connector name');
+      if (!(SUPPORTED_JUDGES as readonly string[]).includes(next)) {
+        throw new Error(
+          `unknown judge '${next}'; supported: ${SUPPORTED_JUDGES.join(', ')}`,
+        );
+      }
+      judge = next as JudgeId;
+      i += 1;
     } else {
       throw new Error(`unknown arg: ${arg}`);
     }
   }
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const resultsDir = resolve(__dirname, 'results', timestamp);
-  return { maxComposes, defects, includeControl, dryRun, resultsDir };
+  // Tag results dir with judge so cross-judge runs are easy to compare side
+  // by side without overwriting each other's output.
+  const resultsDir = resolve(__dirname, 'results', `${timestamp}-${judge}`);
+  return { maxComposes, defects, includeControl, dryRun, judge, resultsDir };
 }
 
 function findReviewRequests(maxComposes: number): string[] {
@@ -98,7 +115,11 @@ function findReviewRequests(maxComposes: number): string[] {
   return requests.slice(0, maxComposes);
 }
 
-function summarize(results: readonly EvalCaseResult[], wallclockMs: number): EvalSummary {
+function summarize(
+  results: readonly EvalCaseResult[],
+  wallclockMs: number,
+  judge: JudgeId,
+): EvalSummary {
   const perDefect = Object.fromEntries(
     DEFECT_IDS.map((id) => [
       id,
@@ -156,6 +177,7 @@ function summarize(results: readonly EvalCaseResult[], wallclockMs: number): Eva
   return {
     started_at: new Date(Date.now() - wallclockMs).toISOString(),
     finished_at: new Date().toISOString(),
+    judge,
     wallclock_ms: wallclockMs,
     per_defect: perDefect,
     controls,
@@ -179,6 +201,7 @@ function renderMarkdownReport(
   const lines: string[] = [];
   lines.push('# Verdict-Correctness Eval — Results');
   lines.push('');
+  lines.push(`Judge: ${summary.judge}`);
   lines.push(`Run started: ${summary.started_at}`);
   lines.push(`Run finished: ${summary.finished_at}`);
   lines.push(`Wallclock: ${(summary.wallclock_ms / 1000).toFixed(1)}s`);
@@ -267,7 +290,7 @@ async function main(): Promise<void> {
     includeControl: args.includeControl,
   });
   console.error(
-    `Built ${cases.length} cases from ${requestPaths.length} composes. Defects: ${args.defects.join(', ')}. Controls: ${args.includeControl}.`,
+    `Built ${cases.length} cases from ${requestPaths.length} composes. Judge: ${args.judge}. Defects: ${args.defects.join(', ')}. Controls: ${args.includeControl}.`,
   );
   if (args.dryRun) {
     for (const c of cases) {
@@ -284,7 +307,7 @@ async function main(): Promise<void> {
   for (let i = 0; i < cases.length; i += 1) {
     const caseDef = cases[i]!;
     const startCase = performance.now();
-    const result = await runCase(caseDef);
+    const result = await runCase(caseDef, { judge: args.judge });
     const ms = performance.now() - startCase;
     results.push(result);
     const status =
@@ -304,7 +327,7 @@ async function main(): Promise<void> {
     );
   }
   const wallclockMs = performance.now() - start;
-  const summary = summarize(results, wallclockMs);
+  const summary = summarize(results, wallclockMs, args.judge);
   writeFileSync(resolve(args.resultsDir, 'summary.json'), JSON.stringify(summary, null, 2));
   writeFileSync(
     resolve(args.resultsDir, 'results.json'),
@@ -316,6 +339,7 @@ async function main(): Promise<void> {
   );
   console.error('');
   console.error('=== SUMMARY ===');
+  console.error(`Judge: ${summary.judge}`);
   console.error(`Cases: ${summary.overall.cases}`);
   console.error(`Catches: ${summary.overall.catches} / ${summary.overall.catches + summary.overall.misses}`);
   console.error(`Catch rate: ${(summary.overall.catch_rate * 100).toFixed(1)}%`);

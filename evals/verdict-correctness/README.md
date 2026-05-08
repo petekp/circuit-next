@@ -8,8 +8,9 @@ catches mechanically-planted defects in compose outputs.
 
 For each historical explore run, we take its real `review.request.json`
 prompt, mutate the compose JSON inside it to inject a known defect, send
-the mutated prompt back through the codex connector, and check whether
-the reviewer's verdict surfaced the planted defect in `objections` or
+the mutated prompt back through a connector (codex by default,
+claude-code with `--judge claude-code`), and check whether the
+reviewer's verdict surfaced the planted defect in `objections` or
 `missed_angles`.
 
 Defect catch rate = caught / (caught + missed). Errors are excluded from
@@ -31,7 +32,7 @@ See `defect-taxonomy.ts` for the planting functions and
 
 ## Running
 
-Build first (the runner imports the codex connector from `dist/`):
+Build first (the runner imports connectors from `dist/`):
 
 ```bash
 npm run build
@@ -40,8 +41,15 @@ npm run build
 Then:
 
 ```bash
-# Full run: every explore review request, every defect, plus controls.
+# Full run with default judge (codex): every explore review request,
+# every defect, plus controls.
 node --experimental-strip-types evals/verdict-correctness/index.ts
+
+# Cross-judge arm: same prompts, claude-code as the reviewer-under-test.
+# Use this to check whether catch-rate findings survive a different
+# model family or were artifacts of self-grading bias.
+node --experimental-strip-types evals/verdict-correctness/index.ts \
+  --judge claude-code
 
 # Smaller run for iteration:
 node --experimental-strip-types evals/verdict-correctness/index.ts \
@@ -52,7 +60,7 @@ node --experimental-strip-types evals/verdict-correctness/index.ts \
   --max-composes 3 --dry-run
 ```
 
-Outputs land in `evals/verdict-correctness/results/<timestamp>/`:
+Outputs land in `evals/verdict-correctness/results/<timestamp>-<judge>/`:
 
 - `partial-results.json` — per-case results, written incrementally
 - `results.json` — final per-case results
@@ -61,10 +69,15 @@ Outputs land in `evals/verdict-correctness/results/<timestamp>/`:
 
 ## Cost and wallclock
 
-Each case is one codex subprocess call. Empirically ~50s per case and
-~30K input + ~500–1000 output tokens per call.
+Each case is one connector subprocess call.
 
-A full 48-case run is ~40 minutes wallclock and ~$1.50 at codex pricing.
+- **codex judge**: empirically ~50s per case, ~30K input + ~500–1000
+  output tokens. A full 48-case run is ~40 min wallclock and ~$1.50 at
+  codex pricing.
+- **claude-code judge**: median wallclock measured on first cross-judge
+  arm; record actuals in the run summary so cost+wallclock per judge are
+  comparable. Same prompt, same N — the only delta should be model
+  family.
 
 Track cost+wallclock per run to avoid silent suite bloat. The Markdown
 report includes both.
@@ -74,11 +87,10 @@ report includes both.
 - **String-match scoring** is generous on purpose (false negatives are
   the failure mode we guard against), but it can miss reviewer language
   that uses unusual phrasing. Audit misses by hand.
-- **Self-grading risk**: the reviewer being judged is the same model
-  family that produces composes. A separate-model judge would be a
-  fairer test but is out of scope for v0.
+- **Self-grading risk**: when judge equals the connector that produced
+  the historical composes, bias toward not catching same-family failures
+  is plausible. The `--judge` flag exists to address this directly:
+  running the same 48 cases with `--judge claude-code` gives a
+  cross-family read on whether headline findings survive.
 - **One-shot mutations**: each defect is planted in isolation. Real
   compose failures often combine multiple subtle issues at once.
-- **Codex connector only**: the production explore review step also
-  runs through the agent (Claude Code) connector. Add an agent-mode run
-  to compare.

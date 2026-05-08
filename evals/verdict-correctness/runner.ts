@@ -10,17 +10,35 @@
 import { readFileSync } from 'node:fs';
 import { extractJsonObject } from '../../dist/connectors/shared.js';
 import { relayCodex } from '../../dist/connectors/codex.js';
+import { relayClaudeCode } from '../../dist/connectors/claude-code.js';
 import { ExploreReviewVerdict } from '../../dist/flows/explore/reports.js';
 import { DEFECT_PLANTERS, DEFECT_IDS, DEFECT_DESCRIPTIONS } from './defect-taxonomy.ts';
 import { parseRequest, rebuildRequest, upgradeShapeHintInstruction } from './prompt-mutation.ts';
 import { scoreDefect } from './scorer.ts';
-import type { DefectId, EvalCase, EvalCaseResult } from './types.ts';
+import type { DefectId, EvalCase, EvalCaseResult, JudgeId } from './types.ts';
 
-// 2 minutes per case. Successful cases complete in 11–91s with the
-// current prompt; a longer wait is almost always a codex CLI hang
+// 2 minutes per case. Successful codex cases complete in 11–91s with the
+// current prompt; a longer wait is almost always a CLI hang
 // ("Reading additional input from stdin..."). Failing fast keeps total
-// wallclock close to median × case-count even when the CLI misbehaves.
+// wallclock close to median × case-count even when a CLI misbehaves.
+// claude-code under the same prompt completes in similar wallclock
+// because the review prompt is self-contained (no tool use needed); the
+// same 2-min ceiling applies as a fail-fast bound.
 const DEFAULT_TIMEOUT_MS = 2 * 60 * 1000;
+
+// Connector dispatch. Same input shape, same RelayResult shape; only the
+// model family differs. Adding a new judge is a one-line addition here.
+const RELAY_BY_JUDGE: Record<
+  JudgeId,
+  (input: { prompt: string; timeoutMs?: number }) => Promise<{
+    result_body: string;
+    duration_ms: number;
+    cli_version: string;
+  }>
+> = {
+  codex: relayCodex,
+  'claude-code': relayClaudeCode,
+};
 
 export interface BuildCasesInput {
   readonly requestPaths: readonly string[];
@@ -78,6 +96,7 @@ export function buildCases(input: BuildCasesInput): EvalCase[] {
 
 export interface RunOptions {
   readonly timeoutMs?: number;
+  readonly judge?: JudgeId;
   readonly onProgress?: (
     index: number,
     total: number,
@@ -95,9 +114,11 @@ export async function runCase(caseDef: EvalCase, options: RunOptions = {}): Prom
     };
   }
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const judge: JudgeId = options.judge ?? 'codex';
+  const relay = RELAY_BY_JUDGE[judge];
   let raw: { result_body: string; duration_ms: number; cli_version: string };
   try {
-    raw = await relayCodex({ prompt: caseDef.prompt, timeoutMs });
+    raw = await relay({ prompt: caseDef.prompt, timeoutMs });
   } catch (err) {
     return {
       case: caseDef,

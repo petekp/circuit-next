@@ -16,6 +16,11 @@ export type DefectId =
   | 'added-false-certainty'
   | 'internal-contradiction';
 
+// Connector used as the reviewer-under-test. Same prompt, different
+// model family, lets us check whether catch-rate findings survive a
+// cross-family judge or were artifacts of self-grading bias.
+export type JudgeId = 'codex' | 'claude-code';
+
 export interface ComposeJsonShape {
   verdict: string;
   subject: string;
@@ -67,6 +72,7 @@ export interface EvalCaseResult {
 export interface EvalSummary {
   readonly started_at: string;
   readonly finished_at: string;
+  readonly judge: JudgeId;
   readonly wallclock_ms: number;
   readonly per_defect: Record<
     DefectId,
