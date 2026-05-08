@@ -77,6 +77,7 @@ describe('flow router classifier', () => {
       'debug the flaky integration test',
       'diagnose the failing build',
       'reproduce the missing-token crash',
+      'buggyAdd subtracts instead of adds, fix it',
     ];
 
     for (const task of cases) {

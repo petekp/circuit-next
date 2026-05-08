@@ -95,6 +95,12 @@ export function isGraphCheckpointWaitingResult(
 
 const RECOVERY_ROUTE_LABELS = new Set(['retry', 'revise']);
 
+interface ActiveRecovery {
+  readonly originStepId: string;
+  readonly route: string;
+  readonly reason?: string;
+}
+
 function defaultManifestHash(flow: ExecutableFlow): string {
   return `runtime:${flow.id}@${flow.version}`;
 }
@@ -363,7 +369,7 @@ export async function executeExecutableFlowWithWaiting(
 
   let currentStepId = options.resumeCheckpoint?.stepId ?? flow.entry;
   let incomingRouteTaken: string | undefined;
-  let activeRecoveryReason: string | undefined;
+  let activeRecovery: ActiveRecovery | undefined;
   for (let index = 0; index < maxSteps; index += 1) {
     const step = steps.get(currentStepId);
     if (step === undefined) {
@@ -378,14 +384,21 @@ export async function executeExecutableFlowWithWaiting(
     const isResumedCheckpoint = options.resumeCheckpoint?.stepId === currentStepId;
     const completedCount = completedStepCounts.get(step.id) ?? 0;
     const maxAttempts = maxAttemptsForRoute(step, incomingRouteTaken);
+    const isRecoveryOriginReentry =
+      activeRecovery !== undefined &&
+      activeRecovery.originStepId === step.id &&
+      !isRecoveryRoute(incomingRouteTaken);
     const attempt = isResumedCheckpoint ? options.resumeCheckpoint.attempt : completedCount + 1;
     if (
       !isResumedCheckpoint &&
       completedCount > 0 &&
+      !isRecoveryOriginReentry &&
       (!isRecoveryRoute(incomingRouteTaken) || completedCount >= maxAttempts)
     ) {
       const recoverySuffix =
-        activeRecoveryReason === undefined ? '' : `; last recovery reason: ${activeRecoveryReason}`;
+        activeRecovery?.reason === undefined
+          ? ''
+          : `; last recovery reason: ${activeRecovery.reason}`;
       const reason =
         incomingRouteTaken === undefined
           ? `route cycle detected at step '${step.id}'; aborting before re-entering an already completed step`
@@ -430,7 +443,9 @@ export async function executeExecutableFlowWithWaiting(
       details = outcome.details ?? {};
       const recoveryReason = details.reason;
       if (isRecoveryRoute(route) && typeof recoveryReason === 'string') {
-        activeRecoveryReason = recoveryReason;
+        activeRecovery = { originStepId: step.id, route, reason: recoveryReason };
+      } else if (isRecoveryRoute(route)) {
+        activeRecovery = { originStepId: step.id, route };
       }
     } catch (error) {
       const message = (error as Error).message;
@@ -477,18 +492,23 @@ export async function executeExecutableFlowWithWaiting(
     if (target.kind === 'step') {
       const targetCompletedCount = completedStepCounts.get(target.stepId) ?? 0;
       const targetStep = steps.get(target.stepId);
+      const isRecoveryReturnToOrigin =
+        activeRecovery !== undefined &&
+        activeRecovery.originStepId === target.stepId &&
+        !isRecoveryRoute(route);
       const targetMaxAttempts =
         targetStep === undefined
           ? maxAttemptsForRoute(step, route)
           : maxAttemptsForRoute(targetStep, route);
       if (
         targetCompletedCount > 0 &&
+        !isRecoveryReturnToOrigin &&
         (!isRecoveryRoute(route) || targetCompletedCount >= targetMaxAttempts)
       ) {
         const recoverySuffix =
-          activeRecoveryReason === undefined
+          activeRecovery?.reason === undefined
             ? ''
-            : `; last recovery reason: ${activeRecoveryReason}`;
+            : `; last recovery reason: ${activeRecovery.reason}`;
         const reason = isRecoveryRoute(route)
           ? `route '${route}' for step '${target.stepId}' exhausted max_attempts=${targetMaxAttempts}${recoverySuffix}`
           : `route cycle detected: step '${step.id}' routes via '${route}' to already completed step '${target.stepId}'${recoverySuffix}`;
@@ -501,6 +521,14 @@ export async function executeExecutableFlowWithWaiting(
         });
         return await closeRun(context, 'aborted', undefined, reason);
       }
+    }
+
+    if (
+      activeRecovery !== undefined &&
+      activeRecovery.originStepId === step.id &&
+      !isRecoveryRoute(route)
+    ) {
+      activeRecovery = undefined;
     }
 
     await trace.append({

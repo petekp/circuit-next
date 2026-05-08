@@ -90,7 +90,7 @@ async function readTraceEntries(runFolder: string) {
   return await new TraceStore(runFolder).load();
 }
 
-function makeVerificationProjectRoot(): string {
+function makeVerificationProjectRoot(checkScript = 'node -e "process.exit(0)"'): string {
   const projectRoot = join(runFolderBase, 'verification-project');
   mkdirSync(projectRoot, { recursive: true });
   writeFileSync(
@@ -99,7 +99,7 @@ function makeVerificationProjectRoot(): string {
       {
         private: true,
         scripts: {
-          check: 'node -e "process.exit(0)"',
+          check: checkScript,
         },
       },
       null,
@@ -172,6 +172,53 @@ describe('Build runtime wiring', () => {
     );
     expect(result.outcome).toBe('complete');
     expect(result.review_verdict).toBe('accept');
+  });
+
+  it('reruns Build verification after a retry repair instead of aborting as a route cycle', async () => {
+    const { bytes } = loadFixture();
+    const runFolder = join(runFolderBase, 'verify-retry-complete');
+    const checkScript = [
+      'node',
+      '-e',
+      [
+        "const fs = require('node:fs')",
+        "const path = 'check-count.txt'",
+        "const count = fs.existsSync(path) ? Number(fs.readFileSync(path, 'utf8')) : 0",
+        'fs.writeFileSync(path, String(count + 1))',
+        'process.exit(count === 0 ? 1 : 0)',
+      ].join('; '),
+    ]
+      .map((part) => JSON.stringify(part))
+      .join(' ');
+
+    const outcome = await runCompiledFlow({
+      runDir: runFolder,
+      flowBytes: bytes,
+      runId: 'b2000000-0000-0000-0000-000000000010',
+      goal: 'Retry Build after first verification failure',
+      depth: 'standard',
+      now: deterministicNow(Date.UTC(2026, 3, 25, 8, 5, 0)),
+      relayer: relayerWith(),
+      projectRoot: makeVerificationProjectRoot(checkScript),
+    });
+
+    expect(outcome.outcome).toBe('complete');
+    const trace_entries = await readTraceEntries(runFolder);
+    const actCompletions = trace_entries.filter(
+      (trace_entry) => trace_entry.kind === 'step.completed' && trace_entry.step_id === 'act-step',
+    );
+    const verifyCompletions = trace_entries.filter(
+      (trace_entry) =>
+        trace_entry.kind === 'step.completed' && trace_entry.step_id === 'verify-step',
+    );
+    expect(actCompletions.map((entry) => entry.attempt)).toEqual([1, 2]);
+    expect(verifyCompletions.map((entry) => entry.attempt)).toEqual([1, 2]);
+    expect(verifyCompletions.map((entry) => entry.route_taken)).toEqual(['retry', 'pass']);
+
+    const verification = BuildVerification.parse(
+      JSON.parse(readFileSync(join(runFolder, 'reports/build/verification.json'), 'utf8')),
+    );
+    expect(verification.overall_status).toBe('passed');
   });
 
   it('aborts when implementation relay passes the verdict check but fails build.implementation@v1 parsing', async () => {

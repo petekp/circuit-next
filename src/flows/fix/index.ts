@@ -23,6 +23,11 @@ const FIX_SIGNALS: readonly CompiledFlowSignal[] = [
     pattern:
       /^\s*(?:please\s+)?(?:fix|patch|debug|diagnose|reproduce)\s+(?:a\s+|an\s+|the\s+|this\s+|that\s+|my\s+|some\s+)?\S+/i,
   },
+  {
+    label: 'trailing fix request',
+    pattern:
+      /\b(?:bug|buggy|broken|failing|fails|failed|wrong|incorrect|instead\s+of|regression|crash|crashes|throw|throws)\b[\s\S]{0,200}\bfix\s+(?:it|this|that|please)\b/i,
+  },
 ];
 
 export const fixCompiledFlowPackage: CompiledFlowPackage = {

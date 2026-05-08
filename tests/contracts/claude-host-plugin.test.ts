@@ -226,6 +226,64 @@ describe('Claude Code host plugin package', () => {
     }
   });
 
+  it('wrapper does not inject a flow root for handoff save', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'circuit-claude-host-handoff-'));
+    try {
+      const binDir = join(tempDir, 'bin');
+      const argvPath = join(tempDir, 'argv.json');
+      const fakeBin = join(binDir, 'circuit-next');
+      mkdirSync(binDir, { recursive: true });
+      writeFileSync(
+        fakeBin,
+        `#!/usr/bin/env node\nconst { writeFileSync } = require('node:fs');\nwriteFileSync(${JSON.stringify(
+          argvPath,
+        )}, JSON.stringify({ argv: process.argv.slice(2), marker: process.env.${GENERATED_FLOW_MIRROR_ROOT_ENV} ?? null, cwd: process.cwd() }));\n`,
+      );
+      chmodSync(fakeBin, 0o755);
+
+      const result = spawnSync(
+        process.execPath,
+        [
+          resolve(PLUGIN_ROOT, 'scripts/circuit-next.mjs'),
+          'handoff',
+          'save',
+          '--goal',
+          'preserve continuity',
+          '--next',
+          'resume carefully',
+        ],
+        {
+          cwd: tempDir,
+          encoding: 'utf8',
+          env: {
+            ...process.env,
+            PATH: `${binDir}${delimiter}${process.env.PATH ?? ''}`,
+            [GENERATED_FLOW_MIRROR_ROOT_ENV]: 'stale-parent-marker',
+          },
+        },
+      );
+
+      expect(result.status, result.stderr).toBe(0);
+      const capture = JSON.parse(readFileSync(argvPath, 'utf8')) as {
+        argv: string[];
+        marker: string | null;
+        cwd: string;
+      };
+      expect(capture.argv).toEqual([
+        'handoff',
+        'save',
+        '--goal',
+        'preserve continuity',
+        '--next',
+        'resume carefully',
+      ]);
+      expect(capture.marker).toBeNull();
+      expect(realpathSync(capture.cwd)).toBe(realpathSync(tempDir));
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it('doctor verifies the installed Claude Code host package from a target repo', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'circuit-claude-host-doctor-'));
     try {

@@ -80,7 +80,7 @@
         "routable": true,
         "is_default": false,
         "order": 20,
-        "signal_labels": ["fix prefix", "fix request", "quick fix prefix"]
+        "signal_labels": ["fix prefix", "fix request", "quick fix prefix", "trailing fix request"]
       },
       "entry_modes": ["autonomous", "deep", "default", "lite"],
       "stages": ["Frame", "Analyze", "Fix", "Verify", "Review", "Close"],

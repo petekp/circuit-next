@@ -433,7 +433,7 @@ function shouldInjectPackagedFlowRoot(args) {
   if (args.includes('--fixture') || args.includes('--flow-root')) return false;
   if (args.includes('--help') || args.includes('-h')) return false;
   if (args[0] === 'resume' || args.includes('--checkpoint-choice')) return false;
-  return args[0] === 'run' || args.includes('--goal');
+  return args[0] === 'run';
 }
 
 function shouldInjectCreateTemplateRoot(args) {
