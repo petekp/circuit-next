@@ -38,13 +38,6 @@ function baseResult(flowId: string): RunResult {
   });
 }
 
-function markdownBullets(markdown: string): string[] {
-  return markdown
-    .split('\n')
-    .filter((line) => line.startsWith('- '))
-    .map((line) => line.slice(2));
-}
-
 describe('operator summary writer', () => {
   it('writes Review summary files with verdict, finding count, warnings, and report paths', () => {
     writeReport('reports/review-result.json', {
@@ -79,7 +72,7 @@ describe('operator summary writer', () => {
     expect(existsSync(written.jsonPath)).toBe(true);
     expect(existsSync(written.markdownPath)).toBe(true);
     const summary = OperatorSummary.parse(JSON.parse(readFileSync(written.jsonPath, 'utf8')));
-    expect(summary.headline).toBe('Circuit finished Review. Verdict: CLEAN. Findings: 0.');
+    expect(summary.headline).toBe('Circuit: Review complete. Verdict: CLEAN. Findings: 0.');
     expect(summary.details).toContain(
       'Untracked evidence: contents included for 1 file (1 untracked file found).',
     );
@@ -91,7 +84,7 @@ describe('operator summary writer', () => {
       'review result',
     ]);
     const markdown = readFileSync(written.markdownPath, 'utf8');
-    expect(markdown).toContain('Circuit finished Review. Verdict: CLEAN. Findings: 0.');
+    expect(markdown).toContain('Circuit: Review complete. Verdict: CLEAN. Findings: 0.');
     expect(markdown).toContain('Untracked evidence: contents included for 1 file');
     expect(markdown).toContain('diff_truncated');
     expect(markdown).not.toContain('write-capable Claude Code worker');
@@ -118,7 +111,7 @@ describe('operator summary writer', () => {
           ],
         },
         expected:
-          'Circuit finished Build. The change was implemented, verification passed, and review accepted it.',
+          'Circuit: Build complete. Change implemented, verification passed, review accepted.',
       },
       {
         flow: 'build',
@@ -138,7 +131,7 @@ describe('operator summary writer', () => {
           ],
         },
         expected:
-          'Circuit finished Build. Verification passed, but review requested follow-up fixes.',
+          'Circuit: Build needs follow-up. Verification passed, but review requested fixes.',
       },
       {
         flow: 'fix',
@@ -153,7 +146,8 @@ describe('operator summary writer', () => {
             { report_id: 'fix.review', path: 'reports/fix/review.json', schema: 'fix.review@v1' },
           ],
         },
-        expected: 'Circuit finished Fix with outcome fixed. Verification: passed. Review: accept.',
+        expected:
+          'Circuit: Fix finished with outcome fixed. Verification: passed. Review: accepted.',
       },
       {
         flow: 'migrate',
@@ -173,7 +167,7 @@ describe('operator summary writer', () => {
           ],
         },
         expected:
-          'Circuit finished Migrate with outcome complete. Verification: passed. Review: release-approved.',
+          'Circuit: Migrate finished with outcome complete. Verification: passed. Review: approved for release.',
       },
     ];
 
@@ -186,10 +180,10 @@ describe('operator summary writer', () => {
       });
       expect(written.summary.headline).toBe(entry.expected);
       expect(written.summary.details).toContain(
-        `Run note: Circuit completed 3 ${entry.label} steps for this goal.`,
+        `Run note: Completed 3 ${entry.label} steps for this goal.`,
       );
       expect(written.summary.details).toContainEqual(
-        expect.stringContaining('write-capable Claude Code worker'),
+        expect.stringContaining('A worker can edit this checkout.'),
       );
       expect(written.summary.details.join('\n')).not.toContain(`${entry.flow} v0.1.0 closed`);
       expect(written.summary.details.join('\n')).not.toContain('result for');
@@ -199,64 +193,22 @@ describe('operator summary writer', () => {
     }
   });
 
-  it('renders Explore summaries from structured brief slots and keeps deeper notes in JSON', () => {
-    writeReport('reports/compose.json', {
-      verdict: 'accept',
-      subject: 'Explore integration',
-      recommendation: 'Keep hardening host rendering with a presentation wrapper.',
-      success_condition_alignment: 'The recommendation keeps the CLI contract machine-readable.',
-      supporting_aspects: [
-        {
-          aspect: 'host output',
-          contribution:
-            'A presentation wrapper solves the visible transcript problem at the host edge.',
-          evidence_refs: ['reports/analysis.json'],
-        },
-      ],
-    });
-    writeReport('reports/review-verdict.json', {
-      verdict: 'accept-with-fold-ins',
-      overall_assessment: 'Good enough to use, but it needs one proof callout.',
-      objections: [
-        'Clarify whether host output was inspected directly.',
-        'Confirm the generated command is updated, not only the checked-in mirror.',
-      ],
-      missed_angles: [
-        'Check the operator summary markdown, not only the JSON report.',
-        'Keep debug paths out of the visible host transcript.',
-      ],
-    });
+  it('renders Explore summaries as concise operator guidance', () => {
     writeReport('reports/explore-result.json', {
-      summary: 'Explore integration: keep hardening host rendering',
+      summary:
+        "Explore 'internal evals': Build a private eval suite around product-specific failure modes. Concretely: (1) Seam-fit eval — trace schema changes before authoring. (2) Operator-prose eval — score final summaries for clarity. Before building, the proof needed is: (a) inspect src/ and tests/ for an existing eval harness; (b) confirm the saved run corpus. Recommend starting with the operator-prose eval.",
       verdict_snapshot: {
         compose_verdict: 'accept',
         review_verdict: 'accept-with-fold-ins',
-        objection_count: 2,
-        missed_angle_count: 2,
+        objection_count: 1,
+        missed_angle_count: 1,
       },
       review_fold_ins: {
         overall_assessment: 'Good enough to use, but it needs one proof callout.',
-        objections: [
-          'Clarify whether host output was inspected directly.',
-          'Confirm the generated command is updated, not only the checked-in mirror.',
-        ],
-        missed_angles: [
-          'Check the operator summary markdown, not only the JSON report.',
-          'Keep debug paths out of the visible host transcript.',
-        ],
+        objections: ['Clarify whether host output was inspected directly.'],
+        missed_angles: ['Check the operator summary markdown, not only the JSON report.'],
       },
-      evidence_links: [
-        {
-          report_id: 'explore.compose',
-          path: 'reports/compose.json',
-          schema: 'explore.compose@v1',
-        },
-        {
-          report_id: 'explore.review-verdict',
-          path: 'reports/review-verdict.json',
-          schema: 'explore.review-verdict@v1',
-        },
-      ],
+      evidence_links: [],
     });
 
     const written = writeOperatorSummary({
@@ -265,39 +217,66 @@ describe('operator summary writer', () => {
       route: { selectedFlow: 'explore' },
     });
 
-    expect(written.summary.headline).toBe('Circuit finished Explore.');
-    expect(written.summary.brief_slots).toMatchObject({
-      primary: {
-        label: 'Recommendation',
-        text: 'Keep hardening host rendering with a presentation wrapper.',
-      },
-      why: 'A presentation wrapper solves the visible transcript problem at the host edge.',
-      cautions: [
-        'Clarify whether host output was inspected directly.',
-        'Confirm the generated command is updated, not only the checked-in mirror.',
-        'Check the operator summary markdown, not only the JSON report.',
-      ],
-    });
-    expect(written.summary.details).toContain(
-      'Review assessment: Good enough to use, but it needs one proof callout.',
+    expect(written.summary.headline).toBe(
+      'Circuit: Recommendation ready. The direction is useful, with follow-up notes.',
     );
-    expect(written.summary.details).toContain(
-      'Review objections: Clarify whether host output was inspected directly.; Confirm the generated command is updated, not only the checked-in mirror.',
-    );
-    expect(written.summary.details).toContain(
-      'Review missed angles: Check the operator summary markdown, not only the JSON report.; Keep debug paths out of the visible host transcript.',
-    );
-    expect(written.summary.report_paths.map((report) => report.label)).toContain('explore.compose');
+    expect(written.summary.details).toEqual([
+      'Recommendation: Build a private eval suite around product-specific failure modes: Seam-fit eval; Operator-prose eval.',
+      'Before building: inspect src/ and tests/ for an existing eval harness; confirm the saved run corpus.',
+      'Start with: the operator-prose eval.',
+      'Reviewer: Accepted the direction, with notes to fold in.',
+      'Follow-up: Clarify whether host output was inspected directly.',
+      'Follow-up: Check the operator summary markdown, not only the JSON report.',
+    ]);
     const markdown = readFileSync(written.markdownPath, 'utf8');
-    const bullets = markdownBullets(markdown);
-    expect(bullets).toHaveLength(5);
-    expect(markdown).toContain('Recommendation: Keep hardening host rendering');
-    expect(markdown).toContain('Check the operator summary markdown, not only the JSON report.');
-    expect(markdown).not.toContain('Keep debug paths out of the visible host transcript.');
-    expect(markdown).not.toContain(runFolder);
-    expect(markdown).not.toContain('reports/compose.json');
-    expect(markdown).not.toContain('## Run Files');
+    expect(markdown).toContain('Circuit: Recommendation ready. The direction is useful');
+    expect(markdown).toContain(
+      'Recommendation: Build a private eval suite around product-specific failure modes',
+    );
+    expect(markdown).not.toContain('accept-with-fold-ins');
+    expect(markdown).not.toContain('Run folder:');
     expect(markdown).not.toContain('## Reports');
+    expect(markdown).not.toContain('Evidence Warnings');
+  });
+
+  it('does not splice numbered back-references like "(1), (4), and (5)" into the recommendation label list', () => {
+    // Regression for cee25546: a compose summary that listed seven
+    // numbered options and then referred back to "Of these, (1), (4),
+    // and (5) likely return..." caused numberedRecommendationLabels to
+    // capture the back-reference as a giant 8th label, producing a
+    // malformed duplicate fragment in operator-summary.md.
+    writeReport('reports/explore-result.json', {
+      summary:
+        "Explore 'eval menu': The highest-leverage internal eval categories are: (1) Verdict-correctness evals — seed runs with planted defects. (2) Operator-summary evals — score plain-language. (3) Cross-adapter equivalence evals — diff agent vs codex outputs. (4) Schema-conformance evals — validate report bodies. (5) Adversarial-review catch-rate evals — track defect catches. Of these, (1), (4), and (5) likely return the most signal for the least build cost. Before committing build effort, the next concrete proof needed is to inspect existing evals/ for prior art.",
+      verdict_snapshot: {
+        compose_verdict: 'accept',
+        review_verdict: 'accept-with-fold-ins',
+        objection_count: 0,
+        missed_angle_count: 0,
+      },
+      review_fold_ins: {
+        overall_assessment: 'Direction is useful.',
+        objections: [],
+        missed_angles: [],
+      },
+      evidence_links: [],
+    });
+
+    const written = writeOperatorSummary({
+      runFolder,
+      runResult: baseResult('explore'),
+      route: { selectedFlow: 'explore' },
+    });
+
+    const recommendation = written.summary.details.find((detail) =>
+      detail.startsWith('Recommendation:'),
+    );
+    expect(recommendation).toBeDefined();
+    expect(recommendation).not.toContain(', (4), and (5) likely return');
+    expect(recommendation).not.toContain('the next concrete proof needed is');
+    expect(recommendation).toContain('Verdict-correctness evals');
+    expect(recommendation).toContain('Adversarial-review catch-rate evals');
+    expect(recommendation).not.toMatch(/(Verdict-correctness evals.*){2}/s);
   });
 
   it('summarizes Explore tournament decisions with selected option, rationale, risks, and next action', () => {
@@ -365,16 +344,9 @@ describe('operator summary writer', () => {
       route: { selectedFlow: 'explore' },
     });
 
-    expect(written.summary.headline).toBe('Circuit finished Explore decision. Selected: Vue.');
-    expect(written.summary.brief_slots).toMatchObject({
-      primary: {
-        label: 'Decision',
-        text: 'Choose Vue for a smaller surface and faster product iteration.',
-      },
-      why: 'Vue gives this team the fastest path to a polished prototype.',
-      cautions: ['Hiring familiarity may be thinner.'],
-      nextStep: 'Run a Build plan for a Vue prototype.',
-    });
+    expect(written.summary.headline).toBe(
+      'Circuit: Decision made. Selected: Vue. Choose Vue for a smaller surface and faster product iteration.',
+    );
     expect(written.summary.details).toContain(
       'Decision question: Which frontend framework should the project use?',
     );
@@ -383,85 +355,6 @@ describe('operator summary writer', () => {
     );
     expect(written.summary.details).toContain('Residual risks: Hiring familiarity may be thinner.');
     expect(written.summary.details).toContain('Next action: Run a Build plan for a Vue prototype.');
-    const markdown = readFileSync(written.markdownPath, 'utf8');
-    expect(markdownBullets(markdown)).toHaveLength(4);
-    expect(markdown).not.toContain(runFolder);
-    expect(markdown).not.toContain('reports/decision.json');
-  });
-
-  it('caps long Explore visible text without expanding freeform numbered lists', () => {
-    const longRecommendation = [
-      '1. First, replace the raw Claude transcript with a presentation wrapper that hides progress JSONL and final stdout JSON from the visible answer.',
-      '2. Second, rewrite every generated command mirror so the raw invocation cannot come back during regeneration.',
-      '3. Third, keep the machine-readable CLI output available for automation and debug use.',
-    ].join(' ');
-    writeReport('reports/compose.json', {
-      verdict: 'accept',
-      subject: 'Claude transcript cleanup',
-      recommendation: longRecommendation,
-      success_condition_alignment: 'The recommendation protects the host transcript.',
-      supporting_aspects: [
-        {
-          aspect: 'wrapper',
-          contribution:
-            'The wrapper can stream clean progress while leaving raw machine output intact.',
-          evidence_refs: ['reports/analysis.json'],
-        },
-      ],
-    });
-    writeReport('reports/review-verdict.json', {
-      verdict: 'accept-with-fold-ins',
-      overall_assessment: 'Usable with capped cautions.',
-      objections: ['Objection one.', 'Objection two.', 'Objection three.'],
-      missed_angles: ['Missed angle four.', 'Missed angle five.'],
-    });
-    writeReport('reports/explore-result.json', {
-      summary: `Explore transcript cleanup: ${longRecommendation}`,
-      verdict_snapshot: {
-        compose_verdict: 'accept',
-        review_verdict: 'accept-with-fold-ins',
-        objection_count: 3,
-        missed_angle_count: 2,
-      },
-      review_fold_ins: {
-        overall_assessment: 'Usable with capped cautions.',
-        objections: ['Objection one.', 'Objection two.', 'Objection three.'],
-        missed_angles: ['Missed angle four.', 'Missed angle five.'],
-      },
-      evidence_links: [
-        {
-          report_id: 'explore.compose',
-          path: 'reports/compose.json',
-          schema: 'explore.compose@v1',
-        },
-        {
-          report_id: 'explore.review-verdict',
-          path: 'reports/review-verdict.json',
-          schema: 'explore.review-verdict@v1',
-        },
-      ],
-    });
-
-    const written = writeOperatorSummary({
-      runFolder,
-      runResult: baseResult('explore'),
-      route: { selectedFlow: 'explore' },
-    });
-
-    const markdown = readFileSync(written.markdownPath, 'utf8');
-    const bullets = markdownBullets(markdown);
-    expect(bullets).toHaveLength(5);
-    expect(bullets.filter((bullet) => bullet.startsWith('Caution:'))).toHaveLength(3);
-    expect(markdown).toContain('Objection one.');
-    expect(markdown).toContain('Objection three.');
-    expect(markdown).not.toContain('Missed angle four.');
-    expect(markdown).not.toContain('## Run Files');
-    expect(markdown).not.toContain('## Reports');
-    expect(markdown).not.toContain('{"');
-    expect(written.summary.brief_slots?.primary.text.length).toBeLessThan(
-      longRecommendation.length,
-    );
-    expect(written.summary.details.join('\n')).toContain('Missed angle four.');
   });
 
   it('includes abort reasons in aborted summaries', () => {
@@ -478,7 +371,7 @@ describe('operator summary writer', () => {
       route: { selectedFlow: 'review' },
     });
 
-    expect(written.summary.headline).toBe('Circuit run aborted.');
+    expect(written.summary.headline).toBe('Circuit: Run aborted.');
     expect(written.summary.details).toContain(
       'Abort reason: relay result failed schema validation',
     );

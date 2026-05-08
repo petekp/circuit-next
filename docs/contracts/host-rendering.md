@@ -11,6 +11,10 @@ depends_on: [host-adapter, run]
 Circuit owns the text that hosts show while a run is active and when a run
 finishes. Hosts render that text; they do not rewrite it.
 
+Circuit-authored text should follow
+`docs/specs/narration-display-profiles.md`: shared sentence shapes, small
+per-flow display profiles, and debug-only runtime details hidden by default.
+
 Native host affordances such as task lists and user-question tools are mapped in
 `docs/contracts/host-capabilities.md`. Those affordances must still render
 Circuit-authored text rather than host-authored paraphrases.
@@ -44,7 +48,10 @@ The existing machine fields remain available for tooling and debug views:
 
 After stdout JSON is parsed, hosts MUST read
 `operator_summary_markdown_path` when present and render that Markdown
-verbatim as the final user-facing answer.
+verbatim as the final user-facing answer. That Markdown is the operator brief:
+it should provide the result, the important guidance, and any next step without
+printing run folders, report paths, trace ids, or debug-only evidence links by
+default.
 
 Hosts MUST NOT invent a separate final summary when
 `operator_summary_markdown_path` is present. If that file is missing or cannot

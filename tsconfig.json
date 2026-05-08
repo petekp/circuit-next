@@ -20,6 +20,12 @@
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts", "scripts/**/*.ts", "scripts/**/*.d.mts"],
+  "include": [
+    "src/**/*.ts",
+    "tests/**/*.ts",
+    "scripts/**/*.ts",
+    "scripts/**/*.d.mts",
+    "evals/**/*.ts"
+  ],
   "exclude": ["node_modules", "dist", "bootstrap"]
 }

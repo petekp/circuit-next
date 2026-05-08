@@ -1,0 +1,86 @@
+// Shared types for the verdict-correctness eval.
+//
+// The eval takes a real historical review.request.json file (the prompt
+// that was actually sent to the explore-flow reviewer), mutates the
+// compose.json block inside it to inject a known defect, sends the
+// mutated prompt back through the codex connector, and scores whether
+// the reviewer's verdict surfaced the planted defect in objections or
+// missed_angles.
+
+import type { ExploreReviewVerdict } from '../../src/flows/explore/reports.js';
+
+export type DefectId =
+  | 'fabricated-evidence-ref'
+  | 'stripped-success-condition-alignment'
+  | 'wrong-subject'
+  | 'added-false-certainty'
+  | 'internal-contradiction';
+
+export interface ComposeJsonShape {
+  verdict: string;
+  subject: string;
+  recommendation: string;
+  success_condition_alignment: string;
+  supporting_aspects: Array<{
+    aspect: string;
+    contribution: string;
+    evidence_refs: string[];
+  }>;
+}
+
+export interface DefectPlantResult {
+  readonly id: DefectId;
+  readonly description: string;
+  readonly mutated: ComposeJsonShape;
+  readonly mutation_summary: string;
+}
+
+export interface EvalCase {
+  readonly source_run_id: string;
+  readonly source_request_path: string;
+  readonly defect_id: DefectId | 'control';
+  readonly prompt: string;
+  readonly mutation_summary: string;
+}
+
+export interface EvalCallResult {
+  readonly verdict: ExploreReviewVerdict;
+  readonly raw_response: string;
+  readonly duration_ms: number;
+  readonly cli_version: string;
+}
+
+export interface EvalCaseResult {
+  readonly case: EvalCase;
+  readonly outcome:
+    | { kind: 'success'; result: EvalCallResult }
+    | { kind: 'connector_error'; message: string }
+    | { kind: 'parse_error'; message: string; raw_response: string }
+    | { kind: 'schema_error'; message: string; raw_response: string };
+  readonly score:
+    | { kind: 'control'; original_verdict: 'accept' | 'accept-with-fold-ins' }
+    | { kind: 'caught'; matched_signal: string }
+    | { kind: 'missed' }
+    | { kind: 'skipped'; reason: string };
+}
+
+export interface EvalSummary {
+  readonly started_at: string;
+  readonly finished_at: string;
+  readonly wallclock_ms: number;
+  readonly per_defect: Record<
+    DefectId,
+    { catches: number; misses: number; errors: number; cases: number }
+  >;
+  readonly controls: { passes: number; fails: number; errors: number; cases: number };
+  readonly overall: {
+    cases: number;
+    successful_calls: number;
+    catches: number;
+    misses: number;
+    errors: number;
+    catch_rate: number;
+    total_duration_ms: number;
+    median_duration_ms: number;
+  };
+}

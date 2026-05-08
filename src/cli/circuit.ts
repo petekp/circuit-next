@@ -672,8 +672,8 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
     label: `Selected ${route.flowName}`,
     display: progressDisplay(
       entryModeSelection.entryModeName === undefined
-        ? `Circuit selected ${route.flowName}: ${route.reason}`
-        : `Circuit selected ${route.flowName} with ${entryModeSelection.entryModeName} thoroughness: ${route.reason}`,
+        ? `Circuit: Chose ${flow.id}.`
+        : `Circuit: Chose ${flow.id} with ${entryModeSelection.entryModeName} thoroughness.`,
       'major',
       'info',
     ),

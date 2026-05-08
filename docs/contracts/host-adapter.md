@@ -215,12 +215,13 @@ Hosts MUST preserve the distinction between:
 - host/orchestrator, such as Codex or Claude Code
 - worker connector, such as `claude-code`, `codex`, or a custom connector
 
-Host summaries should surface `selected_flow`, `routed_by`, `router_reason`,
+Host result JSON should retain `selected_flow`, `routed_by`, `router_reason`,
 `outcome`, `run_folder`, `trace_entries_observed`, and `result_path` when
-present. When `operator_summary_markdown_path` is present, hosts should render
-that Markdown verbatim as the final user-facing answer. Checkpoint results
-should surface the allowed choices, `user_input.requested` question, and exact
-resume shape.
+present for tooling and debug views. The final user-facing answer should render
+`operator_summary_markdown_path` verbatim when present and should not print run
+folders, report paths, trace ids, or other evidence links by default.
+Checkpoint results should surface the allowed choices, `user_input.requested`
+question, and exact resume shape.
 
 The stable CLI namespace stays `circuit-next run <flow>` so user-defined flow
 names cannot collide with future top-level CLI commands.

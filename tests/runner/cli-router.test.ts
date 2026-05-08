@@ -517,7 +517,7 @@ describe('CLI router', () => {
     );
     expect(progress.every((event) => event.display.text.length > 0)).toBe(true);
     expect(progress.find((event) => event.type === 'route.selected')?.display.text).toContain(
-      'Circuit selected review',
+      'Circuit: Chose review',
     );
     const taskListEvents = progress.filter((event) => event.type === 'task_list.updated');
     expect(taskListEvents.length).toBeGreaterThan(1);
@@ -537,11 +537,55 @@ describe('CLI router', () => {
         tone: 'info',
       },
     });
+    expect(progress.find((event) => event.type === 'relay.started')?.display.text).toBe(
+      'Circuit: Asking the reviewer to check the result...',
+    );
+    expect(progress.find((event) => event.type === 'relay.started')?.display.text).not.toContain(
+      'trusted-write',
+    );
     expect(progress.find((event) => event.type === 'step.started')).toMatchObject({
       step_id: 'intake-step',
       step_title: 'Intake — resolve review scope',
       attempt: 1,
     });
+    expect(progress.find((event) => event.type === 'step.started')?.display.text).toBe(
+      'Circuit: Framing the work...',
+    );
+  });
+
+  it('keeps Explore progress display focused on the operator, not internal report names', async () => {
+    const runFolder = join(runFolderBase, 'explore-progress-jsonl');
+    const { output, progress } = await runMainJsonWithRelayerAndProgress(
+      [
+        'explore',
+        '--goal',
+        'explore better internal evals',
+        '--progress',
+        'jsonl',
+        '--run-folder',
+        runFolder,
+      ],
+      relayerWithBody('{"verdict":"accept"}'),
+    );
+
+    expect(output.flow_id).toBe('explore');
+    const visibleText = progress
+      .filter(
+        (event) =>
+          event.display.importance === 'major' ||
+          event.display.tone === 'warning' ||
+          event.display.tone === 'error' ||
+          event.display.tone === 'checkpoint',
+      )
+      .map((event) => event.display.text)
+      .join('\n');
+    expect(visibleText).toContain('Circuit: Framing the work...');
+    expect(visibleText).toContain('Circuit: Drafting the recommendation...');
+    expect(visibleText).toContain('Circuit: Asking the reviewer to check the recommendation...');
+    expect(visibleText).not.toContain('explore.brief');
+    expect(visibleText).not.toContain('connector-bound relay');
+    expect(visibleText).not.toContain('trusted-write');
+    expect(visibleText).not.toContain('accept-with-fold-ins');
   });
 
   it('keeps explicit route selection machine-readable while Explore completion copy stays concise', async () => {
@@ -794,7 +838,7 @@ describe('CLI router', () => {
         type: 'run.started',
         display: expect.objectContaining({
           tone: 'warning',
-          text: expect.stringContaining('write-capable Claude Code worker'),
+          text: expect.stringContaining('A worker can edit this checkout.'),
         }),
       }),
     );

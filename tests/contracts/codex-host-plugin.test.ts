@@ -215,7 +215,8 @@ describe('Codex host plugin package', () => {
     expect(contract).toContain('Routed runs');
     expect(contract).toContain('--progress jsonl');
     expect(contract).toContain("node '<plugin root>/scripts/circuit-next.mjs' doctor");
-    expect(contract).toContain('Host summaries should surface');
+    expect(contract).toContain('final user-facing answer');
+    expect(contract).toContain('report paths, trace ids');
     expect(rendering).toContain('contract: host-rendering');
     expect(rendering).toContain('render `display.text` exactly');
     expect(rendering).toContain('operator_summary_markdown_path');

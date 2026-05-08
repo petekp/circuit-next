@@ -334,6 +334,78 @@ describe('Codex connector — parseCodexStdout NDJSON parser branches', () => {
     expect(parsed.result_body).toBe('response');
   });
 
+  it('accepts Codex 0.128 item.updated trace_entries between item.started and item.completed', () => {
+    // Regression for codex-cli 0.128 emitting `item.updated` as an
+    // incremental progress beacon for a long-running command_execution.
+    // The event type must pass the top-level allowlist, and the inner
+    // item.type is gated by the same KNOWN_CODEX_ITEM_TYPES set as
+    // item.completed so a novel write-capable item type cannot smuggle
+    // in via the update channel either.
+    const stdout =
+      `${JSON.stringify({ type: 'thread.started', thread_id: 'thread-128' })}\n` +
+      `${JSON.stringify({ type: 'turn.started' })}\n` +
+      `${JSON.stringify({
+        type: 'item.started',
+        item: {
+          id: 'item_0',
+          type: 'command_execution',
+          command: 'cat large-file',
+          status: 'in_progress',
+        },
+      })}\n` +
+      `${JSON.stringify({
+        type: 'item.updated',
+        item: {
+          id: 'item_0',
+          type: 'command_execution',
+          command: 'cat large-file',
+          aggregated_output: 'partial chunk 1',
+          status: 'in_progress',
+        },
+      })}\n` +
+      `${JSON.stringify({
+        type: 'item.completed',
+        item: {
+          id: 'item_0',
+          type: 'command_execution',
+          command: 'cat large-file',
+          aggregated_output: 'partial chunk 1\npartial chunk 2',
+          exit_code: 0,
+          status: 'completed',
+        },
+      })}\n` +
+      `${JSON.stringify({
+        type: 'item.completed',
+        item: {
+          id: 'item_1',
+          type: 'agent_message',
+          text: 'OK',
+        },
+      })}\n` +
+      `${JSON.stringify({ type: 'turn.completed' })}\n`;
+
+    const parsed = parseCodexStdout(stdout, 'p', 0, 'codex-cli 0.128.0');
+    expect(parsed.result_body).toBe('OK');
+  });
+
+  it('rejects an item.updated trace_entry whose item.type is not in the allowlist', () => {
+    const stdout =
+      `${JSON.stringify({ type: 'thread.started', thread_id: 'thread-128' })}\n` +
+      `${JSON.stringify({ type: 'turn.started' })}\n` +
+      `${JSON.stringify({
+        type: 'item.updated',
+        item: { id: 'item_0', type: 'apply_patch', status: 'in_progress' },
+      })}\n` +
+      `${JSON.stringify({
+        type: 'item.completed',
+        item: { id: 'item_1', type: 'agent_message', text: 'OK' },
+      })}\n` +
+      `${JSON.stringify({ type: 'turn.completed' })}\n`;
+    expect(() => parseCodexStdout(stdout, 'p', 0, 'codex-cli 0.128.0')).toThrow(
+      /capability-boundary violation.*item\.updated.*apply_patch.*not in the known-types allowlist/,
+    );
+  });
+
   it('accepts Codex 0.125 command_execution start/completion events before the terminal agent message', () => {
     const stdout =
       `${JSON.stringify({ type: 'thread.started', thread_id: 'thread-abc-123' })}\n` +

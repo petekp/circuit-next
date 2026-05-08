@@ -22,8 +22,8 @@ Hosts should map Circuit runs onto these slots:
   native question tool when available.
 - `final_summary`: render `operator_summary_markdown_path` verbatim when the run
   ends.
-- `deep_links`: expose report paths without making the operator read raw JSON by
-  default.
+- `deep_links`: keep report paths available for tooling and debug views without
+  printing them in the default operator answer.
 - `debug`: show raw events, step ids, and trace internals only when requested.
 
 ## Capability Levels

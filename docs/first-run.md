@@ -18,8 +18,7 @@ For the safest first real run, use Review. Review is read-only:
 
 Build, Fix, Migrate, and Sweep may invoke a write-capable Claude Code worker:
 
-> This flow may invoke a write-capable Claude Code worker. Circuit will verify
-> and review the result, but the worker can edit files in this checkout.
+> A worker can edit this checkout.
 
 Use `codex` only for read-only Codex relays. Use `claude-code` for trusted
 same-workspace writes. `codex-isolated` is planned, not current.

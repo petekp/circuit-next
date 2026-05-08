@@ -6,7 +6,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import {
-  type OperatorBriefSlots,
   OperatorSummary,
   type OperatorSummaryReportLink,
   type OperatorSummaryWarning,
@@ -60,7 +59,6 @@ const FLOW_RESULT_PATHS: Record<string, string> = {
   review: 'reports/review-result.json',
   sweep: 'reports/sweep-result.json',
 };
-const VISIBLE_SLOT_TEXT_LIMIT = 220;
 
 function jsonPath(runFolder: string): string {
   return join(runFolder, 'reports', 'operator-summary.json');
@@ -118,29 +116,108 @@ function capitalized(value: string): string {
 function friendlyRunNote(flowId: string, summary: string): string {
   const match = /^([a-z-]+) v[\d.]+ closed (\d+) step\(s\) for goal ".+"\.$/.exec(summary);
   if (match !== null) {
-    return `Circuit completed ${match[2]} ${capitalized(flowId)} steps for this goal.`;
+    return `Completed ${match[2]} ${capitalized(flowId)} steps for this goal.`;
   }
   return summary;
 }
 
 function friendlyResultSummary(summary: string): string {
-  return summary.replace(/^(?:Build|Fix|Migrate|Review|Explore|Sweep) result for .+?:\s*/, '');
+  return summary
+    .replace(/^(?:Build|Fix|Migrate|Review|Explore|Sweep) result for .+?:\s*/, '')
+    .replace(/^Explore .+?:\s*/, '');
 }
 
 function sentence(value: string): string {
   return /[.!?]$/.test(value) ? value : `${value}.`;
 }
 
-function compactText(value: string): string {
-  return value.replace(/\s+/g, ' ').trim();
+function withoutFinalPunctuation(value: string): string {
+  return value.replace(/[.!?]\s*$/, '');
 }
 
-function capVisibleText(value: string): string {
-  const text = compactText(value);
-  if (text.length <= VISIBLE_SLOT_TEXT_LIMIT) return text;
-  const clipped = text.slice(0, VISIBLE_SLOT_TEXT_LIMIT - 3);
-  const wordBoundary = clipped.replace(/\s+\S*$/, '').trim();
-  return `${wordBoundary.length > 0 ? wordBoundary : clipped.trim()}...`;
+function stripExplorePrefix(summary: string): string {
+  return friendlyResultSummary(summary).trim();
+}
+
+// Match a labeled list item of the form `(N) Capitalized label — explanation`.
+// Guards:
+//   - `\(\d+\)` requires a parenthesized number, not a parenthesized letter.
+//   - `\s+` requires at least one space after the number, so back-references
+//     like `Of these, (1), (4), and (5)...` (where `(N)` is followed by `,`)
+//     do not match.
+//   - `[A-Z]` requires the label to begin with a capital letter, ruling out
+//     prose continuations like `(5) likely return the most signal...`.
+//   - `[^—–()]` forbids parentheses inside the label, preventing a single
+//     match from running across nested parenthetical asides and keeping
+//     each numbered item isolated.
+//   - The terminator is em-dash or en-dash only (never `:`). A colon can
+//     appear far later in narrative prose; permitting it lets a single
+//     match capture multiple sentences and produces malformed output when
+//     the label list is reassembled.
+//   - Length is capped so a missing terminator on one item does not pull
+//     the rest of the paragraph into a single label.
+const NUMBERED_LABEL_PATTERN = /\(\d+\)\s+([A-Z][^—–()]{1,120}?)\s*[—–]/g;
+
+function numberedRecommendationLabels(text: string): string[] {
+  const labels: string[] = [];
+  for (const match of text.matchAll(NUMBERED_LABEL_PATTERN)) {
+    const label = match[1]?.trim();
+    if (label !== undefined && label.length > 0) labels.push(label);
+  }
+  return labels;
+}
+
+function compactExploreRecommendation(summary: string): string | undefined {
+  const text = stripExplorePrefix(summary);
+  if (text.length === 0) return undefined;
+  const labels = numberedRecommendationLabels(text);
+  if (labels.length > 0) {
+    // Intro is the prose BEFORE the first structural numbered item. When
+    // the model uses an explicit `Concretely:` splitter, prefer that as
+    // the intro boundary; otherwise cut at the first `(N) Label —` match
+    // so the labels are not duplicated inline with the intro.
+    const concretelySplit = text.split(/\s+Concretely:\s+/);
+    const intro =
+      concretelySplit.length > 1
+        ? concretelySplit[0]!
+        : firstNumberedItemPrefix(text) ?? text;
+    return `Recommendation: ${withoutFinalPunctuation(intro.trim())}: ${labels.join('; ')}.`;
+  }
+  const [firstSentence = text] = text.split(/(?<=[.!?])\s+/);
+  return `Recommendation: ${sentence(firstSentence.trim())}`;
+}
+
+function firstNumberedItemPrefix(text: string): string | undefined {
+  // Locate the first `(N) Capitalized label —` occurrence using the same
+  // structural pattern. Anything before it is the intro; anything after
+  // is the body of the numbered list (and any trailing back-references
+  // or commentary the reviewer should not inherit into the headline).
+  const match = new RegExp(NUMBERED_LABEL_PATTERN.source).exec(text);
+  if (match === null || match.index === undefined) return undefined;
+  const prefix = text.slice(0, match.index).trim();
+  return prefix.length === 0 ? undefined : prefix;
+}
+
+function compactExploreProof(summary: string): string | undefined {
+  const text = stripExplorePrefix(summary);
+  const match =
+    /Before building, the proof needed is:\s*(.*?)(?:\s+Recommend starting|\s+Recommend\s|$)/s.exec(
+      text,
+    );
+  const raw = match?.[1]?.trim();
+  if (raw === undefined || raw.length === 0) return undefined;
+  const proof = raw
+    .replace(/\([a-z]\)\s*/gi, '')
+    .replace(/\s+/g, ' ')
+    .replace(/\.\s*$/, '');
+  return `Before building: ${proof}.`;
+}
+
+function compactExploreStartingPoint(summary: string): string | undefined {
+  const text = stripExplorePrefix(summary);
+  const match = /Recommend starting with\s+(.+?)\./s.exec(text);
+  const raw = match?.[1]?.trim();
+  return raw === undefined || raw.length === 0 ? undefined : `Start with: ${raw}.`;
 }
 
 function reportLink(
@@ -216,84 +293,22 @@ function exploreReviewFoldInDetails(flowReport: JsonObject | undefined): string[
   if (foldIns === undefined) return [];
 
   const details: string[] = [];
-  const assessment = stringField(foldIns, 'overall_assessment');
   const objections = stringArrayField(foldIns, 'objections');
   const missedAngles = stringArrayField(foldIns, 'missed_angles');
-  if (assessment !== undefined) details.push(`Review assessment: ${assessment}`);
-  if (objections.length > 0) details.push(`Review objections: ${objections.join('; ')}`);
-  if (missedAngles.length > 0) details.push(`Review missed angles: ${missedAngles.join('; ')}`);
+  details.push('Reviewer: Accepted the direction, with notes to fold in.');
+  for (const objection of objections) details.push(`Follow-up: ${objection}`);
+  for (const angle of missedAngles) details.push(`Follow-up: ${angle}`);
   return details;
 }
 
-function firstSupportingAspectContribution(
-  composeReport: JsonObject | undefined,
-): string | undefined {
-  for (const item of arrayField(composeReport, 'supporting_aspects')) {
-    if (!isObject(item)) continue;
-    const contribution = stringField(item, 'contribution');
-    if (contribution !== undefined) return contribution;
-  }
-  return undefined;
-}
-
-function exploreCautions(input: {
-  readonly reviewReport: JsonObject | undefined;
-  readonly flowReport: JsonObject | undefined;
-}): string[] {
-  const foldIns = objectField(input.flowReport, 'review_fold_ins');
-  const objections = stringArrayField(input.reviewReport, 'objections');
-  const missedAngles = stringArrayField(input.reviewReport, 'missed_angles');
-  const fallbackObjections = stringArrayField(foldIns, 'objections');
-  const fallbackMissedAngles = stringArrayField(foldIns, 'missed_angles');
+function exploreGuidanceDetails(flowReport: JsonObject | undefined): string[] {
+  const summary = stringField(flowReport, 'summary');
+  if (summary === undefined) return [];
   return [
-    ...(objections.length > 0 ? objections : fallbackObjections),
-    ...(missedAngles.length > 0 ? missedAngles : fallbackMissedAngles),
-  ]
-    .slice(0, 3)
-    .map(capVisibleText);
-}
-
-function exploreBriefSlots(input: {
-  readonly runFolder: string;
-  readonly flowReport: JsonObject | undefined;
-  readonly resultSummary: string;
-}): OperatorBriefSlots | undefined {
-  const { flowReport, resultSummary, runFolder } = input;
-  if (exploreTournamentSnapshot(flowReport) !== undefined) {
-    const decisionReport = exploreDecisionReport(runFolder, flowReport);
-    const selected = stringField(decisionReport, 'selected_option_label');
-    const decision = stringField(decisionReport, 'decision');
-    if (decision !== undefined) {
-      const rationale = stringField(decisionReport, 'rationale');
-      const nextAction = stringField(decisionReport, 'next_action');
-      return {
-        headline:
-          selected === undefined
-            ? 'Circuit finished Explore decision.'
-            : `Circuit finished Explore decision. Selected: ${selected}.`,
-        primary: { label: 'Decision', text: capVisibleText(decision) },
-        ...(rationale === undefined ? {} : { why: capVisibleText(rationale) }),
-        cautions: stringArrayField(decisionReport, 'residual_risks')
-          .slice(0, 3)
-          .map(capVisibleText),
-        ...(nextAction === undefined ? {} : { nextStep: capVisibleText(nextAction) }),
-      };
-    }
-  }
-
-  const composeReport = evidenceReportById(runFolder, flowReport, 'explore.compose');
-  const reviewReport = evidenceReportById(runFolder, flowReport, 'explore.review-verdict');
-  const recommendation =
-    stringField(composeReport, 'recommendation') ??
-    stringField(flowReport, 'summary') ??
-    resultSummary;
-  const why = firstSupportingAspectContribution(composeReport);
-  return {
-    headline: 'Circuit finished Explore.',
-    primary: { label: 'Recommendation', text: capVisibleText(recommendation) },
-    ...(why === undefined ? {} : { why: capVisibleText(why) }),
-    cautions: exploreCautions({ reviewReport, flowReport }),
-  };
+    compactExploreRecommendation(summary),
+    compactExploreProof(summary),
+    compactExploreStartingPoint(summary),
+  ].filter((detail): detail is string => detail !== undefined);
 }
 
 function checkpointOptionDetails(runFolder: string, allowedChoices: readonly string[]): string[] {
@@ -340,6 +355,20 @@ function reviewEvidenceDetails(report: JsonObject | undefined): string[] {
   return [];
 }
 
+function friendlyReviewStatus(status: string): string {
+  if (status === 'accept') return 'accepted';
+  if (status === 'accept-with-fixes') return 'requested follow-up fixes';
+  if (status === 'accept-with-fold-ins') return 'accepted with follow-up notes';
+  if (status === 'release-approved') return 'approved for release';
+  return status;
+}
+
+function friendlyVerificationStatus(status: string): string {
+  if (status === 'passed') return 'passed';
+  if (status === 'failed') return 'failed';
+  return status;
+}
+
 function flowHeadline(input: {
   readonly runFolder: string;
   readonly flowId: string;
@@ -350,19 +379,19 @@ function flowHeadline(input: {
   if (flowId === 'review') {
     const verdict = stringField(flowReport, 'verdict') ?? 'review complete';
     const findings = arrayField(flowReport, 'findings').length;
-    return `Circuit finished Review. Verdict: ${verdict}. Findings: ${findings}.`;
+    return `Circuit: Review complete. Verdict: ${verdict}. Findings: ${findings}.`;
   }
   if (flowId === 'build') {
     const outcome = stringField(flowReport, 'outcome') ?? 'complete';
     const verification = stringField(flowReport, 'verification_status') ?? 'unknown';
     const review = stringField(flowReport, 'review_verdict') ?? 'unknown';
     if (outcome === 'complete' && verification === 'passed' && review === 'accept') {
-      return 'Circuit finished Build. The change was implemented, verification passed, and review accepted it.';
+      return 'Circuit: Build complete. Change implemented, verification passed, review accepted.';
     }
     if (outcome === 'needs_attention' && verification === 'passed') {
-      return 'Circuit finished Build. Verification passed, but review requested follow-up fixes.';
+      return 'Circuit: Build needs follow-up. Verification passed, but review requested fixes.';
     }
-    return `Circuit finished Build with outcome ${outcome}. Verification: ${verification}. Review: ${review}.`;
+    return `Circuit: Build finished with outcome ${outcome}. Verification: ${friendlyVerificationStatus(verification)}. Review: ${friendlyReviewStatus(review)}.`;
   }
   if (flowId === 'fix') {
     const outcome = stringField(flowReport, 'outcome') ?? 'complete';
@@ -371,13 +400,13 @@ function flowHeadline(input: {
       stringField(flowReport, 'review_verdict') ??
       stringField(flowReport, 'review_status') ??
       'unknown';
-    return `Circuit finished Fix with outcome ${outcome}. Verification: ${verification}. Review: ${review}.`;
+    return `Circuit: Fix finished with outcome ${outcome}. Verification: ${friendlyVerificationStatus(verification)}. Review: ${friendlyReviewStatus(review)}.`;
   }
   if (flowId === 'migrate') {
     const outcome = stringField(flowReport, 'outcome') ?? 'complete';
     const verification = stringField(flowReport, 'verification_status') ?? 'unknown';
     const review = stringField(flowReport, 'review_verdict') ?? 'unknown';
-    return `Circuit finished Migrate with outcome ${outcome}. Verification: ${verification}. Review: ${review}.`;
+    return `Circuit: Migrate finished with outcome ${outcome}. Verification: ${friendlyVerificationStatus(verification)}. Review: ${friendlyReviewStatus(review)}.`;
   }
   if (flowId === 'explore') {
     const verdictSnapshot = isObject(flowReport?.verdict_snapshot)
@@ -393,18 +422,19 @@ function flowHeadline(input: {
         stringField(decisionReport, 'decision') ??
         stringField(flowReport, 'summary') ??
         resultSummary;
-      return `Circuit finished Explore decision. Selected: ${selected}. ${sentence(decision)}`;
+      return `Circuit: Decision made. Selected: ${selected}. ${sentence(decision)}`;
     }
     const review = stringField(verdictSnapshot, 'review_verdict') ?? 'complete';
-    const summary = stringField(flowReport, 'summary') ?? resultSummary;
-    return `Circuit finished Explore. Review: ${review}. ${summary}`;
+    return review === 'accept-with-fold-ins'
+      ? 'Circuit: Recommendation ready. The direction is useful, with follow-up notes.'
+      : 'Circuit: Recommendation ready. The direction is ready to use.';
   }
   if (flowId === 'sweep') {
     const outcome = stringField(flowReport, 'outcome') ?? 'complete';
     const deferred = numberField(flowReport, 'deferred_count');
     return deferred === undefined
-      ? `Circuit finished Sweep with outcome ${outcome}.`
-      : `Circuit finished Sweep with outcome ${outcome}. Deferred: ${plural(deferred, 'item')}.`;
+      ? `Circuit: Sweep finished with outcome ${outcome}.`
+      : `Circuit: Sweep finished with outcome ${outcome}. Deferred: ${plural(deferred, 'item')}.`;
   }
   return resultSummary;
 }
@@ -417,7 +447,8 @@ function flowDetails(input: {
   const { flowId, flowReport, runFolder } = input;
   const details: string[] = [];
   const summary = stringField(flowReport, 'summary');
-  if (summary !== undefined) details.push(`Result: ${friendlyResultSummary(summary)}`);
+  if (summary !== undefined && flowId !== 'explore')
+    details.push(`Result: ${friendlyResultSummary(summary)}`);
   if (flowId === 'review') {
     const findings = arrayField(flowReport, 'findings').length;
     details.push(`Findings: ${findings}`);
@@ -426,10 +457,12 @@ function flowDetails(input: {
   if (flowId === 'build' || flowId === 'fix' || flowId === 'migrate') {
     const verification = stringField(flowReport, 'verification_status');
     const review = stringField(flowReport, 'review_verdict');
-    if (verification !== undefined) details.push(`Verification: ${verification}`);
-    if (review !== undefined) details.push(`Review verdict: ${review}`);
+    if (verification !== undefined)
+      details.push(`Verification: ${friendlyVerificationStatus(verification)}.`);
+    if (review !== undefined) details.push(`Review: ${friendlyReviewStatus(review)}.`);
   }
   if (flowId === 'explore') {
+    details.push(...exploreGuidanceDetails(flowReport));
     details.push(...exploreReviewFoldInDetails(flowReport));
   }
   if (flowId === 'explore' && exploreTournamentSnapshot(flowReport) !== undefined) {
@@ -447,26 +480,7 @@ function flowDetails(input: {
 }
 
 function renderMarkdown(summary: OperatorSummary): string {
-  if (
-    summary.flow_id === 'explore' &&
-    summary.outcome === 'complete' &&
-    summary.brief_slots !== undefined
-  ) {
-    return renderExploreMarkdown(summary.brief_slots);
-  }
-
-  const lines = [
-    '# Circuit Summary',
-    '',
-    summary.headline,
-    '',
-    '## What Happened',
-    '',
-    `- Selected flow: \`${summary.selected_flow}\``,
-    `- Outcome: \`${summary.outcome}\``,
-  ];
-  if (summary.routed_by !== undefined) lines.push(`- Routed by: \`${summary.routed_by}\``);
-  if (summary.router_reason !== undefined) lines.push(`- Router reason: ${summary.router_reason}`);
+  const lines = [summary.headline];
 
   if (summary.checkpoint !== undefined) {
     lines.push('', '## Checkpoint', '');
@@ -475,45 +489,20 @@ function renderMarkdown(summary: OperatorSummary): string {
     lines.push(`- Choices: ${summary.checkpoint.allowed_choices.join(', ')}`);
   }
 
-  if (summary.details.length > 0) {
-    lines.push('', '## Details', '');
-    for (const detail of summary.details) lines.push(`- ${detail}`);
+  const visibleDetails = summary.details.filter((detail) => !detail.startsWith('Run note:'));
+  if (visibleDetails.length > 0) {
+    lines.push('');
+    for (const detail of visibleDetails) lines.push(`- ${detail}`);
   }
 
-  lines.push('', '## Evidence Warnings', '');
-  if (summary.evidence_warnings.length === 0) {
-    lines.push('- None');
-  } else {
+  if (summary.evidence_warnings.length > 0) {
+    lines.push('', 'Warnings:');
     for (const warning of summary.evidence_warnings) {
       const path = warning.path === undefined ? '' : ` (${warning.path})`;
       lines.push(`- ${warning.kind}${path}: ${warning.message}`);
     }
   }
 
-  lines.push('', '## Run Files', '');
-  lines.push(`- Run folder: ${summary.run_folder}`);
-  if (summary.result_path !== undefined) lines.push(`- Result path: ${summary.result_path}`);
-
-  lines.push('', '## Reports', '');
-  for (const report of summary.report_paths) {
-    const schema = report.schema === undefined ? '' : ` — ${report.schema}`;
-    lines.push(`- ${report.label}: ${report.path}${schema}`);
-  }
-
-  return `${lines.join('\n')}\n`;
-}
-
-function renderExploreMarkdown(slots: OperatorBriefSlots): string {
-  const lines = ['# Circuit Summary', '', slots.headline, ''];
-  lines.push(`- ${slots.primary.label}: ${slots.primary.text}`);
-  const support = slots.startWith ?? slots.why;
-  if (support !== undefined) {
-    lines.push(`${slots.startWith === undefined ? '- Why' : '- Start with'}: ${support}`);
-  }
-  for (const caution of slots.cautions.slice(0, 3)) {
-    lines.push(`- Caution: ${caution}`);
-  }
-  if (slots.nextStep !== undefined) lines.push(`- Next step: ${slots.nextStep}`);
   return `${lines.join('\n')}\n`;
 }
 
@@ -553,7 +542,9 @@ export function writeOperatorSummary(input: {
     ...(flowMayInvokeWriteCapableWorker(flowId)
       ? [`Worker access: ${WRITE_CAPABLE_WORKER_DISCLOSURE}`]
       : []),
-    `Run note: ${friendlyRunNote(flowId, input.runResult.summary)}`,
+    ...(flowId === 'explore'
+      ? []
+      : [`Run note: ${friendlyRunNote(flowId, input.runResult.summary)}`]),
     ...flowDetails({ runFolder: input.runFolder, flowId, flowReport }),
   ];
   if (input.runResult.outcome === 'checkpoint_waiting') {
@@ -564,14 +555,6 @@ export function writeOperatorSummary(input: {
   if (input.runResult.outcome === 'aborted' && input.runResult.reason !== undefined) {
     details.push(`Abort reason: ${input.runResult.reason}`);
   }
-  const briefSlots =
-    flowId === 'explore' && input.runResult.outcome === 'complete'
-      ? exploreBriefSlots({
-          runFolder: input.runFolder,
-          flowReport,
-          resultSummary: input.runResult.summary,
-        })
-      : undefined;
 
   const candidate = OperatorSummary.parse({
     schema_version: 1,
@@ -583,17 +566,15 @@ export function writeOperatorSummary(input: {
     outcome: input.runResult.outcome,
     headline:
       input.runResult.outcome === 'checkpoint_waiting'
-        ? 'Circuit is waiting for a checkpoint choice.'
+        ? 'Circuit: Waiting for a checkpoint choice.'
         : input.runResult.outcome === 'aborted'
-          ? 'Circuit run aborted.'
-          : (briefSlots?.headline ??
-            flowHeadline({
+          ? 'Circuit: Run aborted.'
+          : flowHeadline({
               runFolder: input.runFolder,
               flowId,
               flowReport,
               resultSummary: input.runResult.summary,
-            })),
-    ...(briefSlots === undefined ? {} : { brief_slots: briefSlots }),
+            }),
     details,
     evidence_warnings: warningRecords(flowReport),
     run_folder: input.runFolder,

@@ -463,16 +463,22 @@ export async function relayCodex(input: CodexRelayInput): Promise<RelayResult> {
 // and must be reviewed before this allowlist is extended.
 const KNOWN_CODEX_ITEM_TYPES = new Set<string>(['agent_message', 'command_execution', 'reasoning']);
 
-// Top-level trace_entry types the parser expects at Codex CLI 0.118-0.125 —
+// Top-level trace_entry types the parser expects at Codex CLI 0.118-0.128 —
 // grounded in the `tests/fixtures/codex-smoke/protocol/happy-path-
-// ok.jsonl` real capture and a 0.125 manual smoke that emitted
-// `item.started` before a read-only `command_execution`. An trace_entry whose
-// `type` is outside this set is rejected: the connector refuses to admit
-// unfamiliar protocol surfaces into the relay transcript.
+// ok.jsonl` real capture, a 0.125 manual smoke that emitted
+// `item.started` before a read-only `command_execution`, and a 0.128
+// observation of `item.updated` carrying incremental progress on a
+// `command_execution`. An trace_entry whose `type` is outside this set
+// is rejected: the connector refuses to admit unfamiliar protocol
+// surfaces into the relay transcript. `item.updated` carries no new
+// capability — it is a progress beacon for a command already opened
+// via `item.started` and gated by the existing `KNOWN_CODEX_ITEM_TYPES`
+// allowlist on the contained `item.type`.
 const KNOWN_CODEX_EVENT_TYPES = new Set<string>([
   'thread.started',
   'turn.started',
   'item.started',
+  'item.updated',
   'item.completed',
   'turn.completed',
 ]);
@@ -578,6 +584,27 @@ export function parseCodexStdout(
     if (!KNOWN_CODEX_ITEM_TYPES.has(itemType)) {
       throw new Error(
         `capability-boundary violation: item.completed[${idx}].item.type='${itemType}' is not in the known-types allowlist (${Array.from(KNOWN_CODEX_ITEM_TYPES).join(', ')}). A new Codex item type must be reviewed before the connector admits it.`,
+      );
+    }
+  }
+
+  // `item.updated` (Codex 0.128+) carries an incremental progress payload
+  // for an item already opened via `item.started`. Gate it against the
+  // same KNOWN_CODEX_ITEM_TYPES allowlist as `item.completed` so a novel
+  // item type cannot slip in via the update channel either.
+  const itemUpdated = trace_entries.filter((e) => e.type === 'item.updated');
+  for (const [idx, e] of itemUpdated.entries()) {
+    const item = e.item;
+    if (typeof item !== 'object' || item === null) {
+      throw new Error(`item.updated[${idx}].item is not an object`);
+    }
+    const itemType = (item as Record<string, unknown>).type;
+    if (typeof itemType !== 'string') {
+      throw new Error(`item.updated[${idx}].item.type is not a string`);
+    }
+    if (!KNOWN_CODEX_ITEM_TYPES.has(itemType)) {
+      throw new Error(
+        `capability-boundary violation: item.updated[${idx}].item.type='${itemType}' is not in the known-types allowlist (${Array.from(KNOWN_CODEX_ITEM_TYPES).join(', ')}). A new Codex item type must be reviewed before the connector admits it.`,
       );
     }
   }
