@@ -226,6 +226,12 @@ describe('Claude Code host plugin package', () => {
       mkdirSync(scriptsDir, { recursive: true });
       mkdirSync(binDir, { recursive: true });
       writeFileSync(wrapperPath, readFileSync(resolve(PLUGIN_ROOT, 'scripts/circuit-next.mjs')));
+      // The wrapper imports ./auto-open-policy.mjs at top-level — copy it so
+      // the fixture script can load.
+      writeFileSync(
+        join(scriptsDir, 'auto-open-policy.mjs'),
+        readFileSync(resolve(PLUGIN_ROOT, 'scripts/auto-open-policy.mjs')),
+      );
       writeFileSync(
         fakeBin,
         [

@@ -25,6 +25,7 @@
     "tests/**/*.ts",
     "scripts/**/*.ts",
     "scripts/**/*.d.mts",
+    "plugins/claude/scripts/**/*.d.mts",
     "evals/**/*.ts"
   ],
   "exclude": ["node_modules", "dist", "bootstrap"]

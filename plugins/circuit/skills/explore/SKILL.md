@@ -110,10 +110,19 @@ as literal user-controlled text when constructing shell commands.
 6. **Auto-open the rich summary when present.** If the parsed JSON includes
    `operator_summary_html_path`, invoke `open <path>` via Bash so the rich
    comparison view surfaces in the operator's browser alongside the in-chat
-   markdown summary. This is best-effort: if the command fails (non-macOS
-   host, no default browser, sandboxed environment), do not retry — the
-   path is already present in the rendered markdown above as
-   "Rich summary: ...", so the operator can open it manually.
+   markdown summary. Before invoking, validate the value defensively:
+   - It must be an absolute path that begins with `/` (POSIX) or a drive
+     letter on Windows. `open(1)` has no `--` end-of-options sentinel —
+     a path that begins with `-` would be parsed as a flag and could
+     launch arbitrary applications. If the value is not absolute, do not
+     run `open`.
+   - It must end with `.html`. If not, do not run `open`.
+   - Pass the path as a single quoted argument: `open '<path>'`. Do not
+     interpolate it into a longer command line.
+   This is best-effort: if the command fails (non-macOS host, no default
+   browser, sandboxed environment), or if the value fails validation, do
+   not retry — the path is already present in the rendered markdown above
+   as "Rich summary: ...", so the operator can open it manually.
 7. **Do not modify the CLI output before surfacing.** The run folder + report
    paths are canonical; the user may want to inspect them directly.
 

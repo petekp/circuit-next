@@ -12,6 +12,7 @@ import {
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isAutoOpenPathSafe, shouldSkipAutoOpen } from './auto-open-policy.mjs';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const pluginRoot = resolve(scriptDir, '..');
@@ -327,8 +328,20 @@ function debugPathFromResult(result) {
   );
 }
 
+function autoOpenEnv() {
+  return {
+    CIRCUIT_NO_AUTO_OPEN: process.env.CIRCUIT_NO_AUTO_OPEN,
+    CI: process.env.CI,
+    DISPLAY: process.env.DISPLAY,
+    WAYLAND_DISPLAY: process.env.WAYLAND_DISPLAY,
+    isTTY: process.stdout.isTTY ?? false,
+    platform: process.platform,
+  };
+}
+
 function tryOpenInBrowser(path) {
-  if (process.env.CIRCUIT_NO_AUTO_OPEN === '1') return;
+  if (shouldSkipAutoOpen(autoOpenEnv())) return;
+  if (!isAutoOpenPathSafe(path, process.platform)) return;
   let command;
   let args;
   if (process.platform === 'darwin') {
