@@ -242,7 +242,7 @@ Findings from a market scan in May 2026. The point: who is operating in the same
 
 The four properties Circuit has and direct competitors don't:
 
-1. **Flow taxonomy.** Competitors ship one pipeline. Circuit ships six different shapes for six kinds of work (Build / Explore / Repair / Migrate / Sweep / Review). *Different work needs different shapes* is a different theory of the field than *one universal pipeline.* Migrate and Sweep especially have no peer.
+1. **Flow taxonomy.** Competitors ship one pipeline. Circuit ships six different shapes for six kinds of work (Build / Explore / Fix / Migrate / Sweep / Review). *Different work needs different shapes* is a different theory of the field than *one universal pipeline.* Migrate and Sweep especially have no peer.
 2. **Schema-versioned typed records.** Competitors produce markdown. Circuit's typed JSON reports are queryable in ways markdown isn't — the foundation for the project-memory positioning in Section 7.
 3. **Six-layer override chain + depth modes.** No other project found has this granularity. Per-step model/effort selection plus lite/standard/deep/autonomous as per-invocation choice is genuinely unique.
 4. **Custom flow shapes.** `/circuit:create` lets users author their own typed schematic flows that the engine runs as first-class peers to the built-in ones. Most competitors offer skill/agent extensibility, not flow-shape extensibility. (See Section 10 for the personalized-flow direction.)

@@ -63,8 +63,7 @@ scalar is **`ControlPlaneFileStem`** (`src/schemas/scalars.ts`),
 which enforces `/^[a-z0-9][a-z0-9._-]*$/`, rejects `.` / `..` / parent-
 traversal sequences, and forbids `/` and `\` path separators. Authority
 graph entries with `path_derived_fields` MUST cite `ControlPlaneFileStem`
-by name (ADR-0003 §Machine enforcement; verified by
-`scripts/audit.mjs`).
+by name.
 
 The same scalar is used by `ContinuityIndex.pending_record.record_id`
 (the index-side pointer), so the index→record join is type-aligned.
@@ -78,8 +77,7 @@ and tested in `tests/contracts/schema-parity.test.ts`.
 - **CONT-I1 — `record_id` is a `ControlPlaneFileStem`.** The identity
   field IS the filename stem. Parse-time rejection for uppercase, path
   separators, `.`/`..`, and parent-traversal (`..` anywhere in the
-  string). Closes the naive `z.string().min(1)` drift that would have
-  shipped before Slice 7.
+  string).
 
 - **CONT-I2 — `schema_version` is `1` (number literal).** Legacy Circuit
   used string `"1"`; circuit-next uses `z.literal(1)`. A later migration
@@ -166,11 +164,10 @@ and tested in `tests/contracts/schema-parity.test.ts`.
   (`schema_version`, `record_id`, `continuity_kind`, `resume_contract`
   for the record; `schema_version`, `project_root`, `pending_record`,
   `current_run` for the index). Inherited values fail before Zod's own
-  property access. Mirrors `RunTrace`'s identity-field defense (run.ts
-  RUN MED #3). Closes Codex HIGH #1. Recursive defense over every
-  nested required field is deferred to Stage 2 property
-  `continuity.prop.boundary_own_property_defense`; v0.1 covers the
-  load-bearing identity/discriminator surface.
+  property access. Mirrors `RunTrace`'s identity-field defense.
+  Recursive defense over every nested required field is deferred to
+  Stage 2 property `continuity.prop.boundary_own_property_defense`;
+  v0.1 covers the load-bearing identity/discriminator surface.
 
 ## Pre-conditions
 
@@ -301,8 +298,8 @@ the **resolver** adjudicates conflicts. Two cases are material:
 - **ids**: `RunId`, `StageId`, `StepId`, `InvocationId` — used for
   run-attached provenance and attached-run pointer identity.
 - **scalars**: `ControlPlaneFileStem` — used for `record_id` and
-  `PendingRecordPointer.record_id`. ADR-0003 §Machine enforcement
-  requires explicit naming.
+  `PendingRecordPointer.record_id`. Path-derived field names are
+  required to be cited explicitly.
 - **snapshot**: `SnapshotStatus` — reused for `runtime_status` on both
   `RunAttachedProvenance` and `AttachedRunPointer`. The closed enum is
   load-bearing; a `runtime_status: 'frozen'` record is rejected.
@@ -313,64 +310,45 @@ the **resolver** adjudicates conflicts. Two cases are material:
 
 ## Failure modes addressed
 
-- **carry-forward:contradictory-resume-state** — **Closed in v0.1 via
+- **carry-forward:contradictory-resume-state** — **Closed via
   CONT-I4 + CONT-I5.** `continuity_kind` + `resume_contract.mode` +
   field-presence closure make contradictory pairings un-expressible.
-  Opens `bootstrap/adversarial-review-codex.md` §"Continuity Allows
-  Contradictory Resume State" #9 (MED).
 
-- **carry-forward:contradictory-safety-booleans** — **Closed in v0.1 via
-  CONT-I6.** Exactly one of `auto_resume` / `requires_explicit_resume` is
-  true. Closes pre-authoring review carryover #7.
+- **carry-forward:contradictory-safety-booleans** — **Closed via
+  CONT-I6.** Exactly one of `auto_resume` / `requires_explicit_resume`
+  is true.
 
-- **carry-forward:under-provenance-on-resume** — **Closed in v0.1 via
-  CONT-I7.** `run_ref` carries `current_stage`, `current_step`,
-  `runtime_status`, `runtime_updated_at`; a bare `{run_id}` is rejected.
-  Closes pre-authoring review carryover #8.
+- **carry-forward:under-provenance-on-resume** — **Closed via CONT-I7.**
+  `run_ref` carries `current_stage`, `current_step`, `runtime_status`,
+  `runtime_updated_at`; a bare `{run_id}` is rejected.
 
-- **carry-forward:aggregate-level-strict-gap** — **Closed in v0.1 via
-  CONT-I8.** Transitive `.strict()` on every nested object. Closes the
-  aggregate-level HIGH flagged in the pre-authoring review.
+- **carry-forward:aggregate-level-strict-gap** — **Closed via CONT-I8.**
+  Transitive `.strict()` on every nested object.
 
 - **carry-forward:path-derived-identity-without-scalar** — **Closed
-  in v0.1 via CONT-I1 + CONT-I10.** Both `record_id` fields use
-  `ControlPlaneFileStem`. ADR-0003 §Machine enforcement is satisfied.
+  via CONT-I1 + CONT-I10.** Both `record_id` fields use
+  `ControlPlaneFileStem`.
 
-- **carry-forward:missing-index-aggregate** — **Closed in v0.1 via
+- **carry-forward:missing-index-aggregate** — **Closed via
   CONT-I9..I11.** `ContinuityIndex` is a first-class schema with its
-  own invariants. Prior to v0.1 the index was undocumented and unvalidated
-  in circuit-next; only the record existed. This closes the index-
-  aggregate HIGH flagged in the pre-authoring review.
+  own invariants. Prior to this contract the index was undocumented and
+  unvalidated in circuit-next; only the record existed.
 
-- **carry-forward:prototype-chain-smuggle** — **Closed in v0.1 via
-  CONT-I12.** Raw-input own-property guards on ContinuityRecord and
-  ContinuityIndex reject `Object.create(...)` prototype-chain attacks
-  on load-bearing identity/discriminator fields. Mirrors run.ts RunTrace
-  defense (RUN MED #3). Closes Codex v0.1 HIGH #1.
+- **carry-forward:prototype-chain-smuggle** — **Closed via CONT-I12.**
+  Raw-input own-property guards on ContinuityRecord and ContinuityIndex
+  reject `Object.create(...)` prototype-chain attacks on load-bearing
+  identity/discriminator fields. Mirrors run.ts RunTrace defense.
 
-- **carry-forward:authority-graph-nested-path** — **Closed in v0.1 via
-  `pending_record.record_id` as an explicit nested pointer.** Closes
-  Codex v0.1 HIGH #2.
-
-## Codex adversarial review (v0.1)
-
-A narrow cross-model challenger pass (Codex via `/codex`) produced 2
-HIGH + 3 MED + 1 LOW objections against this contract + schema. All
-HIGHs and MED #5 + LOW #6 are folded into v0.1. MED #3 and MED #4 are
-scoped to v0.2 with rationale in the §Resolver precedence section above.
+- **carry-forward:authority-graph-nested-path** — **Closed via
+  `pending_record.record_id` as an explicit nested pointer.**
 
 ## Evolution
 
-- **v0.1 (this draft)** — initial contract covering both
-  `continuity.record` and `continuity.index` aggregates. Twelve
-  invariants (CONT-I1..I12; CONT-I12 added post-Codex). Ten Stage 2
-  property ids reserved. All pre-authoring carryovers folded in (#7
-  safety booleans, #8 resume provenance, plus the index-aggregate
-  HIGH). Codex v0.1 HIGH #1 (prototype-chain defense) + HIGH #2
-  (authority-graph nested path) + MED #5 (dangling-reference enum) +
-  LOW #6 (coverage additions) folded in; MED #3 (pointer-kind
-  denormalization) + MED #4 (split-brain resolver precedence) scoped
-  to v0.2 as resolver-level concerns.
+- **v0.1** — initial contract covering both `continuity.record` and
+  `continuity.index` aggregates. Twelve invariants (CONT-I1..I12).
+  Ten Stage 2 property ids reserved. Pointer-kind denormalization and
+  split-brain resolver precedence are scoped to v0.2 as resolver-level
+  concerns; rationale lives in the §Resolver precedence section above.
 - **v0.2** — candidate scope items if evidence supports:
   - Introduce a `schema_version` fence (e.g., `2` for a future shape
     change), with a documented migration posture. Reopen condition:
@@ -378,21 +356,20 @@ scoped to v0.2 with rationale in the §Resolver precedence section above.
   - Narrow `AttachedRunPointer.last_validated_at` to a duration-bounded
     freshness window enforced at resume time. Reopen condition: a real
     staleness incident.
-  - **Pointer-kind denormalization (Codex MED #3).** Decide whether
+  - **Pointer-kind denormalization.** Decide whether
     `PendingRecordPointer.continuity_kind` should be removed, kept as
     a non-authoritative hint, or ratified via
     `continuity.prop.index_pointer_kind_matches_record`. Evidence
     needed: does any resolver or UI actually branch on the hint
     pre-record-read? If yes, keep + property-test; if no, remove.
     Reopen condition: a resolver ships that depends on the hint.
-  - **Split-brain resolver precedence (Codex MED #4).** Pick a
-    precedence rule for the case where `pending_record` points at a
-    run-backed record whose `run_ref.run_id` disagrees with
-    `current_run.run_id`. Three candidates: pending-record-wins (the
-    legacy Circuit behavior); current-run-wins (favors "live" state);
-    error-on-conflict (force operator action). Reopen condition: the
-    resume flow ships OR a split-brain incident is observed in
-    practice.
+  - **Split-brain resolver precedence.** Pick a precedence rule for
+    the case where `pending_record` points at a run-backed record
+    whose `run_ref.run_id` disagrees with `current_run.run_id`. Three
+    candidates: pending-record-wins (the legacy Circuit behavior);
+    current-run-wins (favors "live" state); error-on-conflict (force
+    operator action). Reopen condition: the resume flow ships OR a
+    split-brain incident is observed in practice.
 - **v1.0 (Stage 2)** — ratified invariants plus property tests:
   `continuity.prop.*` under `tests/properties/visible/continuity/`.
   Resolver-level properties (dangling reference, liveness validation)

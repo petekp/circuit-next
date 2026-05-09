@@ -52,7 +52,7 @@ Boundary integration means exactly two touchpoints, no more:
 wired in, `/circuit:run` with no argument can ask the tracker for the
 top of the ready queue. The tracker returns one or more unblocked
 issues; Circuit takes the title and body as the task description,
-runs its router (Explore / Build / Repair / Migrate / Sweep), and
+runs its router (Explore / Build / Fix / Migrate / Sweep), and
 dispatches.
 
 This is the bigger of the two. It changes the *unit of work entry*
@@ -64,7 +64,7 @@ remember what to ask for" and "the agent already knows what's next."
 **Close sink — "what came out of this run?"** Workflows already
 produce structured artifacts at Close: Migrate's batch plan with
 dependencies between batches, Rearchitect's stepwise migration,
-Sweep's triaged findings, Repair's follow-ups. Those have natural
+Sweep's triaged findings, Fix's follow-ups. Those have natural
 graph shape (issues + edges). Today they live as prose in the run
 record, where nothing can query them. With the connector, Close shows
 the operator a preview of issues + edges to create, and on confirm

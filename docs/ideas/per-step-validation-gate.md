@@ -64,10 +64,10 @@ A validation gate is the smallest possible change that closes that hole.
 It's also a natural foundation for the bigger ideas already on the
 roadmap:
 
-- **Checkpoint/resume (FU-T12, currently deferred)** is much safer when
-  every checkpoint is *known-good.* Resuming from a step whose validator
-  passed is sound. Resuming from a step that "succeeded" by vibes is the
-  reason checkpoint/resume is hard.
+- **Checkpoint/resume** is much safer when every checkpoint is
+  *known-good.* Resuming from a step whose validator passed is sound.
+  Resuming from a step that "succeeded" by vibes is the reason
+  checkpoint/resume is hard.
 - **Long-horizon supervision** (see `long-horizon-supervision.md`) is
   about trajectory — is the run still pointed at the goal? Validation is
   about correctness — is *this* step's output sound? They're
@@ -190,12 +190,12 @@ finishes, every step's output was actually verified.* That property is
 what makes long-horizon runs trustable. Without it, "Circuit ran for 6
 hours and it's done" is a hope, not a claim.
 
-Worth it. The methodology strip cut speculative scaffolding; this is
-not speculative scaffolding. This is the discipline that the cut
-methodology was *trying* to encode and didn't quite land. A small,
-load-bearing piece is the right shape — and "small" matters: this is
-one new field on the step contract and one new sub-phase in dispatch,
-not a framework.
+Worth it. The recent cleanup cut speculative scaffolding; this is not
+speculative scaffolding. This is the discipline the older methodology
+docs were *trying* to encode and did not quite land. A small,
+load-bearing piece is the right shape — and "small" matters: this is one
+new field on the step contract and one new sub-phase in dispatch, not a
+framework.
 
 ## What to prototype
 

@@ -55,7 +55,6 @@ The runtime MUST reject any `SelectionOverride`, `ResolvedSelection`, or
 `src/schemas/selection-policy.ts` and — for the cross-schema invariants —
 the schema files named per invariant (currently SEL-I9 at
 `src/schemas/stage.ts`); tested in `tests/contracts/schema-parity.test.ts`.
-Closes Codex LOW #12 (enforcement-location claim drift).
 
 - **SEL-I1 — Selection precedence is declared, closed, and compile-time
   pinned to the `SelectionSource` enum.** `SELECTION_PRECEDENCE` is the
@@ -78,7 +77,7 @@ Closes Codex LOW #12 (enforcement-location claim drift).
   `circuits[flow_id].selection.skills = append` preserves both
   contributions. Intra-layer provenance within a config file is therefore
   lost at the applied-chain granularity; that loss is the v0.1 tradeoff for
-  keeping SEL-I7 simple (closes Codex HIGH #6). Stage 2 property
+  keeping SEL-I7 simple. Stage 2 property
   `selection.prop.config_layer_precompose_is_right_biased` validates the
   merge semantics at the composition layer. Enforced at
   `src/schemas/selection-policy.ts`.
@@ -95,7 +94,7 @@ Closes Codex LOW #12 (enforcement-location claim drift).
   finite number, string, array, and string-keyed record. Functions,
   Dates, symbols, `undefined`, `NaN`, and `Infinity` are all rejected
   because they cannot be authored in YAML/TOML/JSON and would not
-  survive trace_entry-log serialization (closes Codex MED #10). Merge
+  survive trace_entry-log serialization. Merge
   semantics (right-biased by precedence) are a Stage 2 property. Enforced
   at `src/schemas/selection-policy.ts`.
 
@@ -108,7 +107,7 @@ Closes Codex LOW #12 (enforcement-location claim drift).
   caveat — empty arrays are legal under the non-`inherit` modes.**
   `{mode: 'replace', skills: []}` means "clear the skill set"; `{mode:
   'append', skills: []}` is a no-op; `{mode: 'remove', skills: []}` is a
-  no-op. **Uniqueness within an operation (closes Codex MED #8).** The
+  no-op. **Uniqueness within an operation.** The
   `skills` array on `replace`, `append`, and `remove` rejects duplicate
   `SkillId`s at parse time, because set-algebra composition (union,
   difference) at the resolver layer expects set-typed inputs; a YAML
@@ -119,7 +118,7 @@ Closes Codex LOW #12 (enforcement-location claim drift).
   `selection.prop.resolved_skills_are_unique_and_order_is_documented`.
   Legacy untyped skill channels (`CompiledFlow.default_skills`,
   `CircuitOverride.skills`) are removed in v0.1 so every skill
-  contribution flows through a `SkillOverride` (closes Codex HIGH #5).
+  contribution flows through a `SkillOverride`.
   Enforced at `src/schemas/selection-policy.ts`.
 
 - **SEL-I4 — `ProviderScopedModel` replaces marketing-name enumeration.**
@@ -129,8 +128,8 @@ Closes Codex LOW #12 (enforcement-location claim drift).
   `gpt-5.4-reasoning` for OpenAI). Connector-specific validation or
   honoring of known model strings is a Stage 2 connector concern, not a
   schema concern; new model releases do not require a circuit-next
-  schema change. Slice 87 gives the current built-in connectors narrow
-  handling: `claude-code` accepts provider `anthropic` and passes the model to
+  schema change. The current built-in connectors have narrow handling:
+  `claude-code` accepts provider `anthropic` and passes the model to
   Claude's `--model`; `codex` accepts provider `openai` and passes the
   model to Codex's `-m`. Provider mismatches fail before subprocess
   spawn. **Effort** is the closed 6-tier enum `none | minimal | low |
@@ -144,15 +143,15 @@ Closes Codex LOW #12 (enforcement-location claim drift).
 - **SEL-I5 — `ResolvedSelection` is the effective record at relay
   time.** `ResolvedSelection` carries `{model?, effort?, skills:
   SkillId[] (unique), depth?, invocation_options: JsonObject}` and is
-  `.strict()`. **Codex HIGH #4 fold-in:** `invocation_options` IS part
-  of the effective record because connectors consume it at relay time;
-  the v0.1 drafting that excluded it produced `RelayStartedTraceEntry`s
-  that were identical under different invocation_options, insufficient
-  for audit or replay. What `ResolvedSelection` still does NOT carry is
+  `.strict()`. `invocation_options` IS part of the effective record
+  because connectors consume it at relay time; excluding it would
+  produce `RelayStartedTraceEntry`s that are identical under different
+  invocation_options, which is insufficient for audit or replay. What
+  `ResolvedSelection` still does NOT carry is
   a `SkillOverride` union — the resolver flattens the override chain
-  into a final unique `SkillId[]`. **Cache-vs-truth scope caveat
-  (closes Codex HIGH #3 at the prose layer).** `ResolvedSelection` is
-  a *cache*; `SelectionResolution.applied` is the *truth*. The v0.1
+  into a final unique `SkillId[]`. **Cache-vs-truth scope caveat.**
+  `ResolvedSelection` is a *cache*; `SelectionResolution.applied` is
+  the *truth*. The v0.1
   schema does **not** bind `resolved` to `applied` — a resolution whose
   `resolved.effort: 'high'` contradicts an applied chain whose only
   override sets `effort: 'low'` parses successfully. Binding is
@@ -189,9 +188,8 @@ Closes Codex LOW #12 (enforcement-location claim drift).
   `invocation`) do not. Uniqueness is keyed on *identity*: source alone
   for the singletons, `(source, disambiguator)` for stage/step. Two
   distinct stage entries with different `stage_id`s are therefore legal
-  (closes Codex HIGH #1 + HIGH #2 — the category-only-provenance
-  attack and the overlapping-stages-cannot-be-represented attack).
-  **Ghost-provenance rejection (closes Codex MED #7).** An applied
+  and the category-only-provenance gap is closed.
+  **Ghost-provenance rejection.** An applied
   entry whose override is *empty* (no model/effort/depth, skills at
   `{mode: 'inherit'}`, empty `invocation_options`) contributes nothing
   to the resolved record; admitting it fabricates provenance for a
@@ -213,8 +211,7 @@ Closes Codex LOW #12 (enforcement-location claim drift).
   `src/schemas/selection-policy.ts`.
 
 - **SEL-I9 — `Stage.selection` is present and symmetric with
-  `Step.selection` / `CompiledFlow.default_selection` (closes stage.md v0.1
-  Codex MED #7).** `Stage` carries an optional `selection:
+  `Step.selection` / `CompiledFlow.default_selection`.** `Stage` carries an optional `selection:
   SelectionOverride` field. When present, it contributes to the applied
   chain under `source: 'stage'`. **Rationale for this design over the
   derived-from-canonical alternative.** Two options were weighed:
@@ -238,7 +235,7 @@ Closes Codex LOW #12 (enforcement-location claim drift).
 - A `SelectionOverride` is produced by parsing a layer's authored YAML /
   TOML / JSON into an object and passing it to `SelectionOverride.safeParse`.
 - A `ResolvedSelection` is produced by the shared resolver
-  (`src/shared/selection-resolver.ts`, Slice 85) folding an ordered
+  (`src/shared/selection-resolver.ts`) folding an ordered
   sequence of overrides under the documented resolution semantics
   (`selection.prop.skill_override_composition_total`,
   `selection.prop.invocation_options_merge_is_right_biased`).
@@ -278,17 +275,16 @@ After a `SelectionResolution` is accepted:
 - **No post-condition binds `resolved` to `applied` at v0.1.** The
   claim that `resolved`'s fields derive from `applied` is a Stage 2
   property (`selection.prop.resolved_matches_applied_composition`), not
-  a schema-enforced post-condition. Closes Codex HIGH #3 honestly
-  rather than over-claiming.
+  a schema-enforced post-condition.
 
 ## Property ids (Stage 2 runtime/property coverage)
 
 These are the invariants that govern the *composition semantics* of
 override chains — things the single-pass `SelectionResolution.superRefine`
 cannot enforce without introducing full resolver semantics into the
-schema layer. Slice 85 lands focused contract coverage for the runtime
-resolver used by relay; broader generated property coverage remains a
-Stage 2 harness task where noted below.
+schema layer. The runtime resolver used by relay has focused contract
+coverage; broader generated property coverage remains a Stage 2 harness
+task where noted below.
 
 - `selection.prop.precedence_const_parity` — For every `SelectionSource`
   enum value, there is exactly one entry in `SELECTION_PRECEDENCE`, and
@@ -343,28 +339,27 @@ Stage 2 harness task where noted below.
   guards resolver identity for any fold outside the chain.)
 
 - `selection.prop.overlapping_stage_composition_well_defined` —
-  Added to close Codex HIGH #2 at the composition layer. For any
-  CompiledFlow where a step belongs to multiple stages each carrying
-  `selection`, the composition of those stage overrides is deterministic
-  and independent of applied-chain order permutation within the `stage`
-  category (which SEL-I6 permits). The property fuzzes stage-
-  composition orderings and checks bit-equality of the resulting
+  For any CompiledFlow where a step belongs to multiple stages each
+  carrying `selection`, the composition of those stage overrides is
+  deterministic and independent of applied-chain order permutation within
+  the `stage` category (which SEL-I6 permits). The property fuzzes
+  stage-composition orderings and checks bit-equality of the resulting
   `ResolvedSelection`.
 
-- `selection.prop.config_layer_precompose_is_right_biased` — Added to
-  close Codex HIGH #6. Within a single config layer,
-  `defaults.selection` and `circuits[flow_id].selection` pre-compose
-  right-biased by specificity (circuit-specific overrides defaults) to
-  produce the single merged override contributed to the applied chain.
-  The property fuzzes adversarial key-overlap and checks the merge
-  matches the documented rule.
+- `selection.prop.config_layer_precompose_is_right_biased` — Within a
+  single config layer, `defaults.selection` and
+  `circuits[flow_id].selection` pre-compose right-biased by specificity
+  (circuit-specific overrides defaults) to produce the single merged
+  override contributed to the applied chain. The property fuzzes
+  adversarial key-overlap and checks the merge matches the documented
+  rule.
 
 - `selection.prop.resolved_skills_are_unique_and_order_is_documented`
-  — Added to close Codex MED #8. SEL-I3 enforces uniqueness within an
-  individual `SkillOverride`; this property extends the guarantee to
-  the composed `ResolvedSelection.skills` and checks that the resolver
-  emits a documented canonical order (insertion or lexicographic — to
-  be decided in v0.2).
+  — SEL-I3 enforces uniqueness within an individual `SkillOverride`;
+  this property extends the guarantee to the composed
+  `ResolvedSelection.skills` and checks that the resolver emits a
+  documented canonical order (insertion or lexicographic — to be decided
+  in v0.2).
 
 ## Cross-contract dependencies
 
@@ -386,10 +381,9 @@ Stage 2 harness task where noted below.
   'flow'`. Not renamed to `CompiledFlow.selection` because
   `default_selection` signals "this is the baseline for all stages/steps
   unless overridden" more clearly than `selection` would.
-  **Codex HIGH #5 fold-in:** the legacy
-  `CompiledFlow.default_skills: SkillId[]` channel is removed. Seed skill
-  sets now flow through `default_selection.skills = {mode: 'replace',
-  skills: [...]}`.
+  The legacy `CompiledFlow.default_skills: SkillId[]` channel is removed.
+  Seed skill sets now flow through `default_selection.skills = {mode:
+  'replace', skills: [...]}`.
 
 - **config** (`src/schemas/config.ts`) — `Config.defaults.selection:
   SelectionOverride.optional()` and `CircuitOverride.selection:
@@ -399,12 +393,12 @@ Stage 2 harness task where noted below.
   in the flow schema. **Intra-layer pre-compose (SEL-I1 scope
   caveat).** Within one config layer, `defaults.selection` and
   `circuits[flow_id].selection` pre-compose defaults-first /
-  circuit-specific-second BEFORE entering the applied chain. **Codex HIGH #5
-  fold-in:** the legacy `CircuitOverride.skills: string[]` channel is
-  removed (it accepted arbitrary non-`SkillId` strings); per-circuit
-  skill contribution flows through `CircuitOverride.selection.skills`
-  via typed `SkillOverride`. Config reorganization is out of scope for
-  this contract; see `docs/contracts/config.md` for layer materialization.
+  circuit-specific-second BEFORE entering the applied chain. The legacy
+  `CircuitOverride.skills: string[]` channel is removed (it accepted
+  arbitrary non-`SkillId` strings); per-circuit skill contribution flows
+  through `CircuitOverride.selection.skills` via typed `SkillOverride`.
+  Config reorganization is out of scope for this contract; see
+  `docs/contracts/config.md` for layer materialization.
   `Config.skills.bindings` and `CircuitOverride.skill_bindings` are
   separate from `SelectionOverride.skills`: they bind optional flow
   slots to concrete local skills without adding slot ids to
@@ -413,12 +407,11 @@ Stage 2 harness task where noted below.
 - **trace_entry** (`src/schemas/trace-entry.ts`) — `RelayStartedTraceEntry`
   carries `resolved_selection: ResolvedSelection`, which is the
   effective record the runner records at relay time and exposes to
-  injected relayers. Codex HIGH #4 fold-in:
-  `resolved_selection.invocation_options` now carries
-  the merged invocation_options so the trace_entry is audit-sufficient even
+  injected relayers. `resolved_selection.invocation_options` carries the
+  merged invocation_options so the trace_entry is audit-sufficient even
   when connectors consume those options. The full provenance trace
   (`applied`) still lives in `SelectionResolution` at resolution time;
-  Slice 85's resolver feeds the trace_entry with the `resolved` projection.
+  the resolver feeds the trace_entry with the `resolved` projection.
   Promoting the trace_entry to carry the full `SelectionResolution` remains a
   v0.2 consideration driven by real audit needs.
   Loaded local skill evidence is recorded in sibling `skills.loaded`
@@ -460,8 +453,7 @@ Stage 2 harness task where noted below.
   providers ship new models, forcing coordinated schema + connector edits
   on every release. Closed by SEL-I4: `ProviderScopedModel.model` is an
   open string; connector-specific validation/honoring is owned by connector
-  runtime work rather than this schema. Adversarial-review HIGH objection
-  (Codex, Tier 0) is the ancestor.
+  runtime work rather than this schema.
 
 - `carry-forward:applied-provenance-unaudited` — Prior Circuit resolved
   selection without emitting a provenance trace; a debugger reading
@@ -482,8 +474,8 @@ Stage 2 harness task where noted below.
   (`CompiledFlow.default_skills: SkillId[]` and `CircuitOverride.skills:
   string[]`) bypassed the typed `SkillOverride` discipline. The config
   channel was worse — it accepted arbitrary strings, not `SkillId`-
-  validated values. Closed in v0.1 by removing both channels (Codex
-  HIGH #5 fold-in). Seed skill sets flow through
+  validated values. Closed in v0.1 by removing both channels. Seed skill
+  sets flow through
   `default_selection.skills = {mode: 'replace', skills: [...]}`;
   per-circuit skills flow through `CircuitOverride.selection.skills`.
 
@@ -497,25 +489,21 @@ Stage 2 harness task where noted below.
   admitted functions, Dates, `undefined`, `NaN`, and `Infinity` — all
   non-JSON-serializable values that would break trace_entry-log replay and
   YAML/TOML round-trip. Closed by SEL-I2's `JsonObject` refinement
-  (Codex MED #10 fold-in).
+  and covered by schema parity tests.
 
 - `carry-forward:category-only-provenance` — A `source: 'stage'` or
   `source: 'step'` entry in the applied chain did not identify WHICH
   stage/step contributed. Closed by SEL-I7's discriminated-union
   applied entries with required `stage_id`/`step_id` disambiguators
-  (Codex HIGH #1 fold-in).
+  on stage/step sources.
 
 - `carry-forward:ghost-provenance` — An applied entry with an empty
   override fabricated provenance for a non-contributing layer. Closed
-  by SEL-I7's `overrideContributes` check (Codex MED #7 fold-in).
+  by SEL-I7's `overrideContributes` check.
 
 ## Evolution
 
 - **v0.1** — SEL-I1..I9 enforced at the schema layer.
-  **Codex adversarial property-auditor pass 2026-04-19** produced
-  opening verdict REJECT with 6 HIGH + 5 MED + 1 LOW. All 6 HIGH and
-  4 of 5 MED folded in directly before commit; MED #9 (scalar
-  tombstone semantics) scoped to v0.2 with rationale.
 
   Schema-level landings: `SELECTION_PRECEDENCE` 7-tuple + compile-time
   enum parity (`as const satisfies`); `SelectionOverride.strict()`
@@ -523,33 +511,32 @@ Stage 2 harness task where noted below.
   `SkillOverride` 4-variant discriminated union with per-variant
   `.strict()` and unique-skills refinement; `ProviderScopedModel`
   4-provider enum × open model string; `ResolvedSelection.strict()`
-  carrying `invocation_options` (the HIGH #4 flip from v0.1 drafting);
+  carrying `invocation_options`;
   discriminated-union `applied[]` entries with required
-  `stage_id`/`step_id` on stage/step variants (HIGH #1, #2);
+  `stage_id`/`step_id` on stage/step variants;
   `SelectionResolution.superRefine` that enforces category-level
   precedence (SEL-I6), identity-keyed uniqueness (SEL-I7), and ghost-
-  provenance rejection (MED #7); transitive strict rejection across
+  provenance rejection; transitive strict rejection across
   the entire selection triplet (SEL-I8); `Stage.selection:
-  SelectionOverride.optional()` added to close stage.md v0.1 MED #7
-  (SEL-I9); legacy `CompiledFlow.default_skills` and
-  `CircuitOverride.skills` channels removed (HIGH #5); backward support
-  `SelectionPolicy` alias removed. Stage 2 property ids added for the
-  honestly-scoped gaps: `resolved_matches_applied_composition` (HIGH
-  #3), `config_layer_precompose_is_right_biased` (HIGH #6),
-  `overlapping_stage_composition_well_defined` (HIGH #2 composition
-  layer), `resolved_skills_are_unique_and_order_is_documented` (MED
-  #8 composition layer).
+  SelectionOverride.optional()` added (SEL-I9); legacy
+  `CompiledFlow.default_skills` and `CircuitOverride.skills` channels
+  removed; backward support `SelectionPolicy` alias removed. Stage 2
+  property ids added for the honestly-scoped gaps:
+  `resolved_matches_applied_composition`,
+  `config_layer_precompose_is_right_biased`,
+  `overlapping_stage_composition_well_defined`, and
+  `resolved_skills_are_unique_and_order_is_documented`.
 
 - **v0.2 (Stage 1)** — Ratify `property_ids` above by landing the
   corresponding property-test harness at
-  `tests/properties/visible/selection/`. **Decide scalar tombstone
-  semantics (Codex MED #9 deferral).** Currently there is no way for a
-  higher layer to clear a lower layer's `model`/`effort`/`depth` back
-  to connector/default behavior (skills have `{mode: 'replace', skills:
-  []}` as the clear operation; scalars do not). Adding a tombstone
-  sentinel (`null`, `{reset: true}`, or an explicit `effort: 'inherit'`
-  literal) is a material design change; v0.2 will decide driven by
-  evidence from real flows. Decide whether
+  `tests/properties/visible/selection/`. Decide scalar tombstone
+  semantics: currently there is no way for a higher layer to clear a
+  lower layer's `model`/`effort`/`depth` back to connector/default
+  behavior (skills have `{mode: 'replace', skills: []}` as the clear
+  operation; scalars do not). Adding a tombstone sentinel (`null`,
+  `{reset: true}`, or an explicit `effort: 'inherit'` literal) is a
+  material design change; v0.2 will decide driven by evidence from real
+  flows. Decide whether
   `RelayStartedTraceEntry.resolved_selection` should be promoted to
   `RelayStartedTraceEntry.selection_resolution: SelectionResolution` for
   full in-trace_entry provenance. Consider whether

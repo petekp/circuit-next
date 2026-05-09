@@ -84,9 +84,9 @@ be a separate schematic step so the skipped-review path stays visible.
 
 ## Fix-Derived Reusable Blocks
 
-The old Repair flow is useful reference evidence, but the clearer v1
-product schematic is Fix: understand a concrete problem, make the smallest
-safe change, prove it, and close honestly.
+The older bug-fix flow evidence is useful, but the clearer v1 product
+schematic is Fix: understand a concrete problem, make the smallest safe
+change, prove it, and close honestly.
 
 Fix should contribute these reusable blocks:
 

@@ -189,7 +189,7 @@ When the research comes back, do this in order:
 3. Mark each current block as keep, rename, split, merge, or remove.
 4. Name any missing block.
 5. Decide the first schematic shape worth implementing.
-6. Decide whether Repair should continue immediately, or whether a small
+6. Decide whether Fix should continue immediately, or whether a small
    schematic abstraction should come first.
 
 The goal is a smaller, clearer Circuit. If the research only makes us clone

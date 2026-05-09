@@ -155,7 +155,7 @@ refresh if they want.
 
 ## Where this does *not* fit
 
-**Short bounded work.** A 30-minute Repair does not want a
+**Short bounded work.** A 30-minute Fix does not want a
 heartbeat supervisor. The operator sitting at the keyboard is a
 cheaper, better supervisor for that horizon. This pattern only earns
 its complexity when the operator is *not* there.
@@ -201,7 +201,7 @@ Two reasons it might still be worth thinking about:
 
 The honest counter-argument: **building this before any operator
 asks for it is exactly the trap to avoid.** Circuit's recent
-methodology strip cut a lot of speculative scaffolding. This idea
+cleanup cut a lot of speculative scaffolding. This idea
 should sit in `docs/ideas/` and stay there until either (a) you
 personally hit a long-horizon use case where you wish you had this,
 or (b) someone in the marketplace says "I want to run Circuit

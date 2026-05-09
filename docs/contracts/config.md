@@ -46,10 +46,10 @@ It does NOT cover:
   user-global < project < invocation). Selection-level composition is
   owned by `docs/contracts/selection.md` SEL-I5..I8; config-file
   composition for non-selection fields (e.g. merging two layers'
-  `relay.roles` maps) is reserved for v0.2 with an explicit ADR.
+  `relay.roles` maps) is reserved for a future revision.
 - **Discovery and load semantics** beyond the canonical runtime path.
-  Slice 86 adds the product loader for `~/.config/circuit-next/
-  config.yaml` and current-working-directory `.circuit/config.yaml`, but this
+  The product loader covers `~/.config/circuit-next/config.yaml` and
+  current-working-directory `.circuit/config.yaml`, but this
   contract still governs the parsed shape after load. Broader discovery
   policy (alternate filenames, upward project-root search, TOML/JSON
   variants, and recovery UX) remains outside this static shape contract.
@@ -99,15 +99,16 @@ The runtime MUST reject any `Config`, `LayeredConfig`, or
   (`.strict()`).** The layer wrapper has exactly three fields (`layer`,
   `source_path`, `config`); a fourth field (`origin`, `checksum`,
   etc.) is a schema change, not a silent add. Future ledger fields
-  require an ADR. Enforced at `src/schemas/config.ts` via `.strict()`
-  on the `LayeredConfig` `z.object`.
+  require a coordinated contract update. Enforced at
+  `src/schemas/config.ts` via `.strict()` on the `LayeredConfig`
+  `z.object`.
 
 - **CONFIG-I3 — `CircuitOverride` rejects surplus keys at parse time
   (`.strict()`).** A per-circuit slot admits only the documented
-  override fields (`selection` and `skill_bindings`, with the old
-  top-level `skills` shortcut removed per Codex HIGH #5 fold-in on the
-  connector contract). A typo or an attempt to smuggle a new override
-  category through a circuit slot without going through the contract is
+  override fields (`selection` and `skill_bindings`; the old top-level
+  `skills` shortcut was removed when the connector contract was
+  ratified). A typo or an attempt to smuggle a new override category
+  through a circuit slot without going through the contract is
   rejected. Enforced at `src/schemas/config.ts` via `.strict()` on the
   `CircuitOverride` `z.object`.
 
@@ -126,9 +127,10 @@ The runtime MUST reject any `Config`, `LayeredConfig`, or
   is the frozen tuple `['default', 'user-global', 'project',
   'invocation']`. The four layers are the persistence-plus-invocation
   set that config-file composition adjudicates over. Adding a fifth
-  layer (e.g. `environment`, `remote`) requires an ADR because the
-  precedence order documented in `UBIQUITOUS_LANGUAGE.md#configuration-language`
-  and the `ConfigLayer` enum must evolve together. Enforced at
+  layer (e.g. `environment`, `remote`) requires a coordinated update
+  because the precedence order documented in
+  `UBIQUITOUS_LANGUAGE.md#configuration-language` and the `ConfigLayer`
+  enum must evolve together. Enforced at
   `src/schemas/config.ts` (`ConfigLayer = z.enum([...])`).
 
 - **CONFIG-I6 — `Config.schema_version` is `z.literal(1)`; the parser
@@ -138,8 +140,7 @@ The runtime MUST reject any `Config`, `LayeredConfig`, or
   operator config file declaring `schema_version: 2` is rejected at
   parse time with a clear error; attempting to parse it as v1 would
   produce latent divergence between the file's intent and the runtime
-  behavior. Future bumps require an ADR. Enforced at
-  `src/schemas/config.ts` via `z.literal(1)`.
+  behavior. Enforced at `src/schemas/config.ts` via `z.literal(1)`.
 
 - **CONFIG-I7 — Bare `{schema_version: 1}` produces a fully-populated
   default `Config` via schema-level `.default(...)` on every
@@ -157,9 +158,9 @@ The runtime MUST reject any `Config`, `LayeredConfig`, or
   fields. Enforced at `src/schemas/config.ts` via `.default(...)` on
   `relay`, `skills`, `circuits`, and `defaults`.
 
-- **CONFIG-I8 — `Config.circuits` keys are `CompiledFlowId`s at parse time
-  (closes Codex MED #5 fold-in).** `Config.circuits` is typed
-  `z.record(CompiledFlowId, CircuitOverride)`. A record whose key fails
+- **CONFIG-I8 — `Config.circuits` keys are `CompiledFlowId`s at parse time.**
+  `Config.circuits` is typed `z.record(CompiledFlowId, CircuitOverride)`.
+  A record whose key fails
   `CompiledFlowId`'s regex (e.g. `"Bad Id"` with a space, `"flow/"`
   with a slash) is rejected at parse time, not at relay time —
   which would be deep inside a Run after a partial-progress trace_entry
@@ -187,7 +188,7 @@ The runtime MUST reject any `Config`, `LayeredConfig`, or
 
 - A `Config` is produced by parsing one layer's on-disk YAML (or
   in-memory invocation argv projection) into an object and passing it
-  to `Config.safeParse`. Slice 86 product discovery currently loads only
+  to `Config.safeParse`. Product discovery currently loads only
   the user-global and current-working-directory project files; default and
   invocation layers are schema/resolver-supported inputs for callers that
   inject them directly until later product wiring lands.
@@ -229,7 +230,7 @@ After a `Config` is accepted:
   this distinction: a typo inside `SelectionOverride` (e.g.
   `defaults.selection.rigr`) is rejected; an author-chosen connector
   passthrough value (`defaults.selection.invocation_options.my_connector_knob`)
-  is accepted. Closes Codex MED #4 fold-in.
+  is accepted.
 
 After a `LayeredConfig` is accepted:
 
@@ -247,8 +248,7 @@ After a `CircuitOverride` is accepted:
   concrete `SkillId` values.
 - No surplus keys (CONFIG-I3). Specifically, the v0.0 drafting's
   top-level `skills?: string[]` shortcut is rejected at this slice
-  (already removed in Codex HIGH #5 fold-in on the connector contract;
-  this contract codifies the removal).
+  (this contract codifies the removal).
 
 ## Property ids (reserved for Stage 2 testing)
 
@@ -262,7 +262,7 @@ After a `CircuitOverride` is accepted:
   missed by drafter attention. Open record/data-map values
   (`Config.circuits`, `RelayConfig.roles`/`.circuits`/`.connectors`,
   `SelectionOverride.invocation_options`) are OUT of scope for this
-  property by construction (Codex MED #4 fold-in).
+  property by construction.
 
 - `config.prop.layered_composition_preserves_strictness` — When
   multiple `LayeredConfig`s are composed per the documented
@@ -274,11 +274,10 @@ After a `CircuitOverride` is accepted:
   selection-layer projection IS right-biased (per
   `docs/contracts/selection.md` SEL-I5..I8) but non-selection
   config-file composition (merging two layers' `relay.roles`
-  maps, for instance) is still ADR-pending at v0.2. The strictness
+  maps, for instance) remains undecided at v0.2. The strictness
   claim holds under any composition semantics that preserves
   declared-object parse legality. Property fuzzes over layer shuffles
-  and surplus-key injections at each layer. Closes Codex MED #3
-  fold-in.
+  and surplus-key injections at each layer.
 
 - `config.prop.circuit_override_record_closed_under_flow_id` —
   Every key in `Config.circuits` is a valid `CompiledFlowId` per
@@ -288,9 +287,9 @@ After a `CircuitOverride` is accepted:
   not-yet-installed flows are allowed — same posture as
   `RelayConfig.circuits` per connector-I8 closure notes). The
   property constrains only key shape, not catalog closure. Note that
-  CONFIG-I8 (added in the Slice 26 Codex fold-in) already pins the
-  key-shape enforcement at the schema-parity level; this property
-  adds fuzzing breadth rather than changing the guarantee.
+  CONFIG-I8 already pins the key-shape enforcement at the schema-parity
+  level; this property adds fuzzing breadth rather than changing the
+  guarantee.
 
 ## Cross-contract dependencies
 
@@ -318,11 +317,11 @@ After a `CircuitOverride` is accepted:
   product path discovers only user-global/project YAML and does not yet
   expose plugin default discovery or per-command invocation selection flags.
   This cross-contract mapping between ConfigLayer and SelectionLayer is
-  documented in `UBIQUITOUS_LANGUAGE.md#configuration-language`. Slice 85
-  adds the runtime selection resolver for already-loaded layers; Slice
-  86 wires the product CLI to produce user-global/project layers from
-  the canonical YAML paths. Additional discovery policy remains outside
-  this config shape contract.
+  documented in `UBIQUITOUS_LANGUAGE.md#configuration-language`. The
+  runtime selection resolver handles already-loaded layers, and the
+  product CLI produces user-global/project layers from the canonical YAML
+  paths. Additional discovery policy remains outside this config shape
+  contract.
 
 - **flow** (`src/schemas/compiled-flow.ts`) — `Config.circuits` is
   keyed on `CompiledFlowId`, so flow existence is a soft
@@ -367,9 +366,9 @@ After a `CircuitOverride` is accepted:
   connector-I9) is the sibling failure; CONFIG-I1 reaches the
   un-covered layer above it.
 
-- `carry-forward:circuit-override-unconstrained-shape` — Prior to
-  Codex HIGH #5 fold-in on the connector contract, `CircuitOverride`
-  carried a top-level `skills?: string[]` shortcut that bypassed
+- `carry-forward:circuit-override-unconstrained-shape` — Prior to this
+  contract, `CircuitOverride` carried a top-level `skills?: string[]`
+  shortcut that bypassed
   `SelectionOverride.skills` (a typed `SkillOverride` discriminated
   union). The shortcut was removed; this contract codifies the
   removal as CONFIG-I3's strict-key rejection. Any attempt to
@@ -385,20 +384,19 @@ After a `CircuitOverride` is accepted:
 ## Evolution
 
 - **v0.1** — CONFIG-I1..CONFIG-I8 enforced at the schema
-  layer. Closes the config surface shadow and `FUP-2` (Config and
-  LayeredConfig missing `.strict()` at `src/schemas/config.ts:115` and
-  `:135`).
+  layer. This closes the config surface shadow: `Config` and
+  `LayeredConfig` were missing `.strict()` at the schema layer.
 
   Schema-level landings for this slice:
   - `.strict()` added to the top-level `Config` `z.object` (CONFIG-I1).
   - `.strict()` added to the `LayeredConfig` `z.object` (CONFIG-I2).
   - `.strict()` added to the nested `defaults` object inside `Config`
     (CONFIG-I4).
-  - `CircuitOverride` already carried `.strict()` pre-slice (Codex
-    HIGH #5 fold-in on connector contract); this contract codifies the
-    posture as CONFIG-I3 so regression flags a named invariant.
-  - CONFIG-I8 added (Codex MED #5 fold-in) — `Config.circuits` key
-    shape enforced at parse time via `z.record(CompiledFlowId, ...)`;
+  - `CircuitOverride` already carried `.strict()` before this contract;
+    this contract codifies the posture as CONFIG-I3 so regression flags a
+    named invariant.
+  - CONFIG-I8 added — `Config.circuits` key shape enforced at parse time
+    via `z.record(CompiledFlowId, ...)`;
     positive + negative schema-parity tests pin the guarantee.
   - Connector schema ownership narrowed to relay-specific config; the
     config types stay owned by `src/schemas/config.ts`.
@@ -412,26 +410,25 @@ After a `CircuitOverride` is accepted:
     on per-flow overrides. Per-flow bindings override global bindings
     for the matching flow.
 
-  Prose tightenings (Codex fold-ins):
+  Prose tightenings:
   - Post-condition "no surplus keys at any nested level" qualified to
     "no surplus keys in any **declared object shape**"; open
     record/data-map values (`Config.circuits`,
     `RelayConfig.roles`/`.circuits`/`.connectors`,
-    `SelectionOverride.invocation_options`) explicitly out of scope
-    (Codex MED #4).
+    `SelectionOverride.invocation_options`) explicitly out of scope.
   - The draft's layered-merge "right-biased preserves strictness"
     property renamed to
     `config.prop.layered_composition_preserves_strictness` so the
     property wording does not commit to a composition semantics the
-    Scope section says is ADR-pending (Codex MED #3).
+    Scope section leaves undecided.
   - Pinned report-authority test extended to assert exact
     `schema_exports` equality for `config.root`, `config.layered`,
-    and `config.circuit-override` (Codex MED #2).
+    and `config.circuit-override`.
   - CONFIG-I7 default-layer ergonomic probe added: a `LayeredConfig`
     with `layer: "default"` and `config: {schema_version: 1}` parses
     through and produces all expected defaults on
     `relay.default`/`.roles`/`.circuits`/`.connectors`, `circuits`,
-    and `defaults` (Codex LOW #6).
+    and `defaults`.
 
 - **v0.2 (Stage 1)** — Ratify `property_ids` above by landing the
   corresponding property-test harness at
@@ -445,9 +442,9 @@ After a `CircuitOverride` is accepted:
   composition (non-selection fields) is a distinct surface — v0.2
   decides whether to split.
 
-- **v1.0 (Stage 2)** — Ratified invariants + property tests. Slice 86
-  lands the first runtime discovery/load layer for canonical user-global
-  and current-working-directory project YAML files. Discovery invariants beyond that narrow loader
+- **v1.0 (Stage 2)** — Ratified invariants + property tests. The first
+  runtime discovery/load layer covers canonical user-global and
+  current-working-directory project YAML files. Discovery invariants beyond that narrow loader
   (alternate file locations, upward root search, path-traversal safety,
   and richer recovery UX) land in a Stage 2 runtime-boundary contract,
   not this shape contract.

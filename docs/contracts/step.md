@@ -66,7 +66,7 @@ enforced via `src/schemas/step.ts`, `src/schemas/check.ts`, and
   CompiledFlow level (see `docs/contracts/compiled-flow.md` WF-I4), not in the
   Step contract.
 
-- **STEP-I3 — Check source closure (adversarial-review MED #7 closed).**
+- **STEP-I3 — Check source closure.**
   `check.source.ref` MUST name a usable slot in the step's `writes`
   object. Enforced *primarily* at the Zod schema layer: `ref` is a
   literal per source kind (`ReportSource.ref = z.literal('report')`,
@@ -111,9 +111,9 @@ enforced via `src/schemas/step.ts`, `src/schemas/check.ts`, and
   field in their schema, and because every Step variant, every `writes`
   object, every check variant, and every check `source` object is explicitly
   `.strict()`, a surplus key (including `role` on a non-relay step)
-  is **rejected**, not stripped. This closes adversarial-review
-  MED #4: the Zod-strict enforcement story is now backed by explicit
-  `.strict()` calls at `src/schemas/step.ts` and `src/schemas/check.ts`.
+  is **rejected**, not stripped. The Zod-strict enforcement story is
+  backed by explicit `.strict()` calls at `src/schemas/step.ts` and
+  `src/schemas/check.ts`.
   `orchestrator` is an executor, not a role; see
   `UBIQUITOUS_LANGUAGE.md#relay-language`.
 
@@ -224,43 +224,37 @@ Property-based tests will cover:
 ## Failure modes (carried from evidence)
 
 - `carry-forward:verdict-enum-bloat` — Existing Circuit uses a global
-  verdict enum + per-protocol conditionals (see
-  `bootstrap/adversarial-review-codex.md`). circuit-next constrains the
+  verdict enum + per-protocol conditionals. circuit-next constrains the
   verdict vocabulary **per step kind** through the check variant
   (`ResultVerdictCheck.pass`, `CheckpointSelectionCheck.allow`,
   `SchemaSectionsCheck.required`). Adding a new protocol does not expand
   the verdict enum.
 - `carry-forward:role-executor-confusion` — Existing Circuit allowed
-  `orchestrator` as both an executor and a relay role (see
-  adversarial-review MED #1). circuit-next's `RelayRole` excludes
-  `orchestrator` and STEP-I6 forbids `role` on compose/verification/checkpoint
-  steps. The confusion is structurally eliminated.
+  `orchestrator` as both an executor and a relay role.
+  circuit-next's `RelayRole` excludes `orchestrator` and STEP-I6
+  forbids `role` on compose/verification/checkpoint steps. The
+  confusion is structurally eliminated.
 - `carry-forward:check-source-opacity` — Prior to this contract, check
-  sources were opaque strings (adversarial-review MED #7). Closed by
-  STEP-I3 + STEP-I4; see `docs/contracts/compiled-flow.md` "Check source
-  tightening" for the transition record.
+  sources were opaque strings. Closed by STEP-I3 + STEP-I4; see
+  `docs/contracts/compiled-flow.md` "Check source tightening" for the
+  transition record.
 
 ## Evolution
 
-- **v0.1 (Slice 2)** — initial contract: STEP-I1..I7, kind-bound
-  source schemas with **literal `ref` per source kind** (report →
-  `'report'`, checkpoint_response → `'response'`, relay_result →
-  `'result'`), strict surplus-key rejection via `.strict()` on every
-  variant, writes-slot closure via Step-union `superRefine` with
-  `Object.hasOwn` + undefined guard as defense-in-depth. MED #7 closed.
-  Codex adversarial property-auditor pass completed — HIGH #1
-  (prototype-chain `in` attack), HIGH #2 (cross-slot drift), HIGH #3
-  (optional undefined slot), MED #4 (strict-mode prose), LOW #7 (TS
-  exactness prose) all incorporated.
-- **v0.2 (Slice 69)** — adds STEP-I8 so
-  flow-controlled Step paths are `RunRelativePath` values and runtime
-  call sites resolve them through a containment-checked helper.
-- **v0.3 (user skill loading slice, this version)** — adds STEP-I10 and
+- **v0.1** — initial contract: STEP-I1..I7, kind-bound source schemas
+  with **literal `ref` per source kind** (report → `'report'`,
+  checkpoint_response → `'response'`, relay_result → `'result'`),
+  strict surplus-key rejection via `.strict()` on every variant,
+  writes-slot closure via Step-union `superRefine` with
+  `Object.hasOwn` + undefined guard as defense-in-depth.
+- **v0.2** — adds STEP-I8 so flow-controlled Step paths are
+  `RunRelativePath` values and runtime call sites resolve them through
+  a containment-checked helper.
+- **v0.3 (user skill loading)** — adds STEP-I10 and
   the typed `skill_slots` field.
 - **v0.4 (Stage 2)** — ratify `property_ids` above by landing the
   corresponding property-test harness; introduce a disambiguator only
   if a new relay step emerges that writes multiple result-like
-  slots (current `relay_result.ref = 'result'` is the v0.1 answer);
-  absorb any future Codex challenger findings.
+  slots (current `relay_result.ref = 'result'` is the answer today).
 - **v1.0 (Stage 2)** — ratified invariants + property tests + mutation
   score floor + operator-facing error-message catalog.

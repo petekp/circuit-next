@@ -76,9 +76,9 @@ circuit-next is a solo-operator plugin. There's no swarm to
 coordinate, no contention to resolve. Adopting Beads here would mean
 authoring a JSONL task graph for tasks that one operator + one Claude
 session can already hold in working memory. That's exactly the
-ceremony we deliberately stripped (ADRs, plan-lint, ratchets) and
-should not re-introduce without a concrete cost-of-absence story on
-real product work.
+ceremony we deliberately stripped (heavy planning records, plan lint,
+ratchets) and should not re-introduce without a concrete cost-of-absence
+story on real product work.
 
 ### Agent Mail and single-branch file reservations
 
@@ -96,7 +96,7 @@ operator to pick. It's a structured brainstorm.
 For circuit-next this is over-engineered — our Explore workflow
 already covers "shape an execution plan" and our operator has a sharp
 sense of what to build. Generating 25 throwaway ideas to discard is
-the kind of churn the methodology strip was meant to prevent.
+the kind of churn the current flow guidance avoids.
 
 ### 4–6 dedicated polish cycles as a default
 
@@ -116,9 +116,9 @@ roles that become bottlenecks. Crash recovery is automatic because
 any agent can pick up any bead.
 
 circuit-next's design is the opposite: we have specialized adapters
-(agent vs codex), specialized circuits (Build vs Repair vs Migrate),
-specialized rigor profiles, and dispatch routing that picks the right
-runtime for the shape of the work.
+(agent vs codex), specialized flows (Build vs Fix vs Migrate), depth
+modes, and relay routing that picks the right runtime for the shape of
+the work.
 
 A flywheel partisan would call this coordination tax — every
 specialization is a place where work has to be routed correctly or

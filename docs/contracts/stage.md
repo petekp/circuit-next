@@ -5,7 +5,7 @@ version: 0.1
 schema_source: src/schemas/stage.ts
 last_updated: 2026-04-19
 depends_on: [ids, step]
-closes: [adversarial-review-med-11-stage path-policy]
+closes: []
 report_ids:
   - stage.definition
 invariant_ids: [stage-I1, stage-I2, stage-I3, stage-I4, stage-I5, stage-I6]
@@ -38,18 +38,17 @@ in `tests/contracts/schema-parity.test.ts`.
 
 - **stage-I2 — Strict surplus-key rejection.** `Stage` is declared with
   `.strict()`. Surplus keys are rejected at parse time, not silently
-  stripped. This closes the same defense-in-depth gap adversarial-review
-  MED #4 raised for `Step` and applies it to `Stage`: a YAML flow with
-  a typo (e.g., `conanical: 'review'`) fails parse rather than silently
-  dropping the canonical binding.
+  stripped. This applies the same defense-in-depth posture from `Step`
+  to `Stage`: a YAML flow with a typo (e.g., `conanical: 'review'`)
+  fails parse rather than silently dropping the canonical binding.
 
 - **stage-I3 — Canonical label closed to enum.** When present,
   `Stage.canonical` MUST be one of the seven `CanonicalStage` values
   (`frame`, `analyze`, `plan`, `act`, `verify`, `review`, `close`).
   Enforced by `z.enum` in `src/schemas/stage.ts`.
 
-- **stage-I4 — stage path policy declaration enforcement (closes
-  adversarial-review MED #11 at the *declaration* layer only).** Every
+- **stage-I4 — stage path policy declaration enforcement (at the
+  *declaration* layer only).** Every
   `CompiledFlow` MUST declare a `stage_path_policy` discriminated union. Two modes
   are accepted:
 
@@ -68,9 +67,8 @@ in `tests/contracts/schema-parity.test.ts`.
   stage actually relays a reviewer, or that a `verify` stage runs a
   check). It also does not guarantee that the named stage is reached by
   any entry-mode execution path. A determined author can satisfy the
-  label bar while routing around review or verify at runtime. The
-  Codex adversarial property-auditor (2026-04-18) flagged these as
-  HIGH #1-3; they are tracked as property ids for Stage 2 enforcement
+  label bar while routing around review or verify at runtime. These
+  gaps are tracked as property ids for Stage 2 enforcement
   (see `stage.prop.*_semantic_coverage` and
   `stage.prop.*_reachability` below) and NOT claimed closed by this
   invariant.
@@ -91,7 +89,7 @@ in `tests/contracts/schema-parity.test.ts`.
   declares two `canonical: 'review'` stages is structurally ambiguous
   about which is "the" review for audit/relay purposes; rather than
   pick a silent convention, circuit-next rejects the ambiguity at
-  parse time. Closes Codex adversarial-auditor MED #4. Enforced in
+  parse time. Enforced in
   `src/schemas/compiled-flow.ts` `superRefine`; negative coverage in
   `tests/contracts/schema-parity.test.ts`.
 
@@ -100,8 +98,7 @@ in `tests/contracts/schema-parity.test.ts`.
   (e.g., misspelled `stage path_plicy`, stray `audit_notes`, or alternate-
   stage path smuggling under a different name) are rejected at parse time.
   This is defense-in-depth against the same typo class stage-I2 handles
-  at the Stage level. Closes Codex adversarial-auditor LOW #8. Enforced
-  at `src/schemas/compiled-flow.ts`.
+  at the Stage level. Enforced at `src/schemas/compiled-flow.ts`.
 
 ## Pre-conditions
 
@@ -143,16 +140,14 @@ Property-based tests will cover:
   `Stage.canonical` values is a superset of `CanonicalStage \ O`.
 - `stage.prop.omits_disjoint_from_declared` — For any valid CompiledFlow
   with `stage_path_policy.mode === 'partial'`, `omits ∩ declaredCanonicals
-  === ∅`. A canonical cannot be both omitted and declared (closes Codex
-  MED #6.a).
+  === ∅`. A canonical cannot be both omitted and declared.
 - `stage.prop.omits_pairwise_unique` — For any valid CompiledFlow with
-  `stage_path_policy.mode === 'partial'`, `omits` has no duplicate entries
-  (closes Codex MED #6.b).
+  `stage_path_policy.mode === 'partial'`, `omits` has no duplicate entries.
 - `stage.prop.partial_requires_rationale` — Any CompiledFlow with
   `stage_path_policy.mode === 'partial'` and `rationale.length < 20` is
   rejected.
 
-### Reserved for Stage 2 (HIGH gaps from Codex adversarial-auditor pass)
+### Reserved for Stage 2
 
 These are the invariants stage-I4 is *not* strong enough to guarantee
 alone. They land when the property-test harness + trace_entry-log seams
@@ -161,25 +156,22 @@ exist in Stage 2:
 - `stage.prop.review_semantic_adequacy` — For any valid CompiledFlow whose
   stage path declares `review`, at least one Step in the review stage MUST
   be a `RelayStep` with `role: 'reviewer'`, or a `CheckpointStep`
-  that relays a human reviewer. (Closes Codex HIGH #1 for
-  `review`; analogous properties for other canonicals are tracked but
-  not listed separately until Stage 2 design lands.)
+  that relays a human reviewer. (Analogous properties for other
+  canonicals are tracked but not listed separately until Stage 2
+  design lands.)
 - `stage.prop.verify_semantic_adequacy` — For any valid CompiledFlow whose
   stage path declares `verify`, at least one Step in the verify stage MUST
-  carry a verification check or protocol. (Closes Codex HIGH #1 for
-  `verify`.)
+  carry a verification check or protocol.
 - `stage.prop.canonical_stage_reachability` — For every non-omitted
   canonical stage, at least one Step in that stage MUST be reachable
   from at least one CompiledFlow entry mode along a valid route sequence.
   A flow cannot satisfy stage_path_policy and then route from `frame`
-  directly to `@complete`, skipping all declared canonicals. (Closes
-  Codex HIGH #2.)
+  directly to `@complete`, skipping all declared canonicals.
 - `stage.prop.every_step_has_a_stage` — For every Step in
   `CompiledFlow.steps`, exactly one `Stage` in `CompiledFlow.stages` lists the
   Step's id in its `steps` array. No Step may execute outside the Stage
-  structure. (Closes Codex HIGH #3. A `utility: true` escape hatch for
-  cross-stage helpers may be added in Stage 2 if evidence justifies it,
-  but is not granted in v0.1.)
+  structure. (A `utility: true` escape hatch for cross-stage helpers
+  may be added in Stage 2 if evidence justifies it.)
 
 ## Cross-contract dependencies
 
@@ -194,10 +186,9 @@ exist in Stage 2:
 - **selection-policy** (`src/schemas/selection-policy.ts`) —
   `UBIQUITOUS_LANGUAGE.md#configuration-language` lists `stage` as a selection
   layer, and `SelectionSource` includes `'stage'`. `Stage.selection:
-  SelectionOverride.optional()` landed in `selection.md` v0.1 (SEL-I9),
-  closing stage.md v0.1 Codex MED #7. Any `SelectionResolution.applied`
-  entry claiming a `stage` source now resolves to an explicit
-  `Stage.selection` field on the named stage.
+  SelectionOverride.optional()` is owned by `selection.md` (SEL-I9).
+  Any `SelectionResolution.applied` entry claiming a `stage` source
+  resolves to an explicit `Stage.selection` field on the named stage.
 - **ids** (`src/schemas/ids.ts`) — `StageId` and `StepId` branded slugs.
 
 ## Failure modes (carried from evidence)
@@ -205,7 +196,7 @@ exist in Stage 2:
 - `carry-forward:stage path-policy-too-loose` — Prior to this contract,
   `Stage.canonical` was optional with no cross-flow check that
   required canonical labels were present. A malformed flow could
-  silently skip `review`, short-circuiting the cross-model-challenger
+  silently skip `review`, short-circuiting the independent review
   check. `docs/contracts/compiled-flow.md` v0.1 flagged this as
   `carry-forward:stage path-policy-too-loose`. Closed by stage-I4.
 
@@ -216,28 +207,26 @@ exist in Stage 2:
 
 ## Evolution
 
-- **v0.1 (this draft)** — stage-I1..I6 enforced: non-empty steps, strict
+- **v0.1** — stage-I1..I6 enforced: non-empty steps, strict
   surplus-key rejection on Stage, canonical enum closure,
-  stage path-policy declaration enforcement (stage-I4, MED #11 closed *at
+  stage path-policy declaration enforcement (stage-I4, *at
   the declaration layer*; see scope caveat in the invariant), canonical
-  uniqueness within a flow (stage-I5, closes Codex MED #4),
-  CompiledFlow-level `.strict()` (stage-I6, closes Codex LOW #8). `omits`
-  now enforces uniqueness + disjointness from declared canonicals
-  (closes Codex MED #6). HIGH semantic/reachability/coverage objections
-  from the Codex adversarial pass are honestly scoped as property_ids
-  for Stage 2 (see "Reserved for Stage 2" section above); stage-I4
-  prose was tightened to stop over-claiming closure.
+  uniqueness within a flow (stage-I5), CompiledFlow-level `.strict()`
+  (stage-I6). `omits` enforces uniqueness + disjointness from declared
+  canonicals. Semantic/reachability/coverage objections are honestly
+  scoped as property_ids for Stage 2 (see "Reserved for Stage 2"
+  section above); stage-I4 prose was tightened to stop over-claiming
+  closure.
 
 - **v0.2 (Stage 1)** — Ratify `property_ids` above by landing the
   corresponding property-test harness. Upgrade `SpinePolicy.rationale`
   from a min(20) string to a structured record if evidence from real
-  flows justifies the cost. Author `selection.md` and decide whether
-  `Stage.selection: SelectionOverride` lands on Stage or derives from
-  `CompiledFlow.default_selection` conditioned on `canonical` (closes Codex
-  MED #7). Consider `stage_path_policy.renames` if a flow needs to
-  rename `analyze` → `explore` (cosmetic; not a structural gap).
+  flows justifies the cost. Decide whether `Stage.selection:
+  SelectionOverride` stays on Stage or derives from
+  `CompiledFlow.default_selection` conditioned on `canonical`. Consider
+  `stage_path_policy.renames` if a flow needs to rename `analyze` →
+  `explore` (cosmetic; not a structural gap).
 
 - **v1.0 (Stage 2)** — Ratified invariants + property tests + semantic-
-  adequacy + reachability + every-step-has-a-stage (the three Codex
-  HIGH gaps) + operator-facing error-message catalog + mutation-score
-  floor contribution.
+  adequacy + reachability + every-step-has-a-stage + operator-facing
+  error-message catalog + mutation-score floor contribution.

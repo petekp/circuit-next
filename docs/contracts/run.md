@@ -68,18 +68,18 @@ and `RunProjection.superRefine`) and tested in
   invariant does NOT check that `recorded_at` is monotonically
   nondecreasing; a log with forward-jumping `sequence` and backward-
   jumping `recorded_at` is accepted. Timestamp-sanity is tracked as Stage
-  2 property `run.prop.recorded_at_sanity` (see below) — closes Codex MED
-  #4 (scope admission, not enforcement). Enforced at `src/schemas/run.ts`.
+  2 property `run.prop.recorded_at_sanity` (see below). Enforced at
+  `src/schemas/run.ts`.
 
 - **RUN-I3 — `run_id` is consistent across the log.** Every trace_entry in a
   `RunTrace` shares the `run_id` of the bootstrap trace_entry. Cross-run trace_entry
   smuggling is the single most dangerous corruption mode for trace_entry-sourced
   state (it silently merges two runs' histories), so the `RunTrace` aggregate
   enforces it even though no individual trace_entry can. **Defense-in-depth
-  (closes Codex MED #3 at the identity-field layer).** Zod normally reads
-  inherited properties during parse, which lets `Object.create({run_id:
-  phantom})` smuggle a phantom `run_id` past the discriminated union. A
-  `z.custom` own-property guard on the RunTrace pipe rejects any trace_entry whose
+  at the identity-field layer.** Zod normally reads inherited properties
+  during parse, which lets `Object.create({run_id: phantom})` smuggle a
+  phantom `run_id` past the discriminated union. A `z.custom`
+  own-property guard on the RunTrace pipe rejects any trace_entry whose
   `run_id`, `kind`, or `sequence` is inherited rather than own. Full
   recursive own-property defense for every required field on every trace_entry
   (nested objects, transitively) is a Stage 2 property
@@ -121,8 +121,7 @@ and `RunProjection.superRefine`) and tested in
   **stale prefix cache**, not *the* current projection of this log; the
   contract rejects prefix-bound projections at parse time rather than
   accepting them with ambiguity. Prefix-snapshot semantics are Stage 2
-  scope (see `run.prop.projection_is_a_function` below). Closes Codex
-  HIGH #2.
+  scope (see `run.prop.projection_is_a_function` below).
 
   `Snapshot.status` reflects the log's closure state: if no `run.closed`
   trace_entry is present, `status === 'in_progress'`; if a `run.closed` trace_entry
@@ -133,22 +132,21 @@ and `RunProjection.superRefine`) and tested in
   Exclude<SnapshotStatus, 'in_progress'>>`, and a bidirectional
   compile-time equality guard `OutcomeStatusEquality` rejects any future
   drift between the two enum sets at `tsc --strict` time (not test time).
-  Closes Codex MED #6. **Semantic-adequacy caveat.** This invariant binds
+  **Semantic-adequacy caveat.** This invariant binds
   *labels*, not *semantics*: a log `[run.bootstrapped, run.closed(complete)]`
   with zero completed steps is accepted here, because assessing whether
   "complete" semantically requires any particular step-completion pattern
   is a Stage 2 property (`run.prop.close_outcome_semantic_adequacy`, see
-  below). Closes Codex MED #5 (scope admission, not enforcement).
-  Enforced at `src/schemas/run.ts`.
+  below). Enforced at `src/schemas/run.ts`.
 
 - **RUN-I8 — Strict surplus-key rejection, transitively, across every
   schema that crosses the TraceEntry/Snapshot boundary.** Every trace_entry variant
   in `src/schemas/trace-entry.ts` is `.strict()`; `src/schemas/snapshot.ts`
   declares `Snapshot` and `StepState` with `.strict()`. Surplus keys
   (typos, smuggled fields, injected tracing, etc.) fail parse rather than
-  silently carrying through to a consumer. **Transitive closure (closes
-  Codex HIGH #1 + LOW #9).** The `.strict()` discipline is applied
-  transitively to every nested schema that can appear in an trace_entry or
+  silently carrying through to a consumer. **Transitive closure.**
+  The `.strict()` discipline is applied transitively to every nested
+  schema that can appear in an trace_entry or
   snapshot payload: `ChangeKindDeclaration` (all 6 variants), `ConnectorRef` (all
   3 variants), `CustomConnectorDescriptor`, `ProviderScopedModel`,
   `SkillOverride` (all 4 variants), `SelectionOverride`, `ResolvedSelection`,
@@ -204,7 +202,7 @@ property-test harness + reducer exist in Stage 2.
   tolerance (e.g., ≤ 5 minutes). This is diagnostic, not authoritative
   (see RUN-I2 scope caveat); the property detects ingestion bugs that
   `sequence` alone cannot catch (e.g., a writer with a wall-clock
-  discontinuity). Closes Codex MED #4.
+  discontinuity).
 
 - `run.prop.close_outcome_semantic_adequacy` — For any valid `RunTrace`
   plus its corresponding CompiledFlow manifest, a terminal `run.closed`
@@ -216,10 +214,9 @@ property-test harness + reducer exist in Stage 2.
   `outcome: 'handoff'` requires one targeted to `@handoff`; `outcome:
   'aborted'` requires at least one `step.aborted` or a
   `run.bootstrapped`-followed-immediately-by-`run.closed` with an
-  explicit early-abort rationale. Closes Codex MED #5. RUN-I7's
-  semantic-adequacy caveat scopes this out of v0.1 because the
-  manifest-aware log-wide reachability check belongs with the reducer, not
-  the schema.
+  explicit early-abort rationale. RUN-I7's semantic-adequacy caveat
+  scopes this out of v0.1 because the manifest-aware log-wide
+  reachability check belongs with the reducer, not the schema.
 
 - `run.prop.boundary_own_property_defense` — For every trace_entry in a
   `RunTrace`, every required field (not just `run_id`, `kind`, `sequence`)
@@ -228,8 +225,7 @@ property-test harness + reducer exist in Stage 2.
   inherited-key cross-run smuggle); the full transitive defense belongs
   at the Stage 2 property harness because the recursion needed to check
   every nested object's own-property set is reducer-adjacent, not
-  schema-level. Closes Codex MED #3 (full scope; the schema-level
-  defense-in-depth in RUN-I3 addresses the load-bearing identity subset).
+  schema-level.
 
 ### Reducer-level (Stage 2 scope)
 
@@ -265,7 +261,7 @@ property-test harness + reducer exist in Stage 2.
   result exists. A `relay.started` with neither terminal relay trace_entry
   is a reducer inconsistency.
 
-  **Slice 37 §Amendment (durable relay transcript, ADR-0007 CC#P2-2).**
+  **Durable relay transcript.**
   The TraceEntry discriminated union additionally carries durable transcript
   variants: `relay.request` (SHA-256 of the request
   payload bytes, field `request_payload_hash`), `relay.receipt`
@@ -284,8 +280,8 @@ property-test harness + reducer exist in Stage 2.
   If no skills are loaded, `skills.loaded` is absent and
   `relay.request` follows `relay.started` directly.
 
-  Runtime-safety-floor Slice 3 adds the connector-invocation failure
-  sequence for failures that happen before an connector receipt/result exists:
+  The connector-invocation failure sequence for failures that happen
+  before an connector receipt/result exists:
 
   ```
   relay.started → [skills.loaded] → relay.request → relay.failed
@@ -304,18 +300,17 @@ property-test harness + reducer exist in Stage 2.
   completed/failed, and in the order `[skills.loaded] → request → receipt
   → result` if more than one returned-result transcript trace_entry is
   present). Zero transcript trace_entries is legal (dry-run connector path;
-  transcript only required for non-dry-run connectors per CC#P2-2
-  Enforcement binding). An out-of-order transcript trace_entry (e.g.
-  `relay.receipt` preceding `relay.request` on the same pair, or any
-  transcript trace_entry on a pair with no matching `relay.started`, or a
-  transcript trace_entry appearing after `relay.completed` /
-  `relay.failed`) is a reducer inconsistency.
+  transcript is only required for non-dry-run connectors). An
+  out-of-order transcript trace_entry (e.g. `relay.receipt` preceding
+  `relay.request` on the same pair, or any transcript trace_entry on a
+  pair with no matching `relay.started`, or a transcript trace_entry
+  appearing after `relay.completed` / `relay.failed`) is a reducer
+  inconsistency.
   The tighter requirement that all three returned-result
-  transcript trace_entries MUST appear for a non-dry-run connector lives at the
-  connector-level close criterion (ADR-0007 CC#P2-2 Enforcement binding,
-  enforced in the P2.4 round-trip test and the CI-skip local-smoke
-  report), not here — the contract widens the schema; the connector
-  contract obligates the writer.
+  transcript trace_entries MUST appear for a non-dry-run connector lives at
+  the connector-level close criterion (enforced in the round-trip test
+  and the CI-skip local-smoke report), not here — the contract widens
+  the schema; the connector contract obligates the writer.
 
 - `run.prop.report_written_before_check` — For any compose step, every
   `check.evaluated` trace_entry with `outcome: 'pass'` on that step is preceded by
@@ -410,43 +405,33 @@ property-test harness + reducer exist in Stage 2.
   field comparator rather than `JSON.stringify` to stay robust under
   future key-order changes.
 
-  Codex adversarial property-auditor pass completed (2026-04-18). 2 HIGH
-  (#1 nested surplus, #2 prefix-snapshot) incorporated; 5 MED (#3
-  prototype identity, #4 timestamp scope, #5 close semantic, #6
-  compile-time mapping, #7 test breadth) incorporated or honestly scoped
-  to Stage 2 property ids; 3 LOW (#8 invocation_id asymmetry, #9 change_kind
-  comparison, #10 ratchet-vs-discipline) incorporated. The HIGH
-  adversarial claims are closed at the schema layer; the deferred
-  semantic/reachability/timestamp claims are tracked as
+  Deferred semantic/reachability/timestamp claims are tracked as
   `run.prop.close_outcome_semantic_adequacy`,
   `run.prop.boundary_own_property_defense`, and
   `run.prop.recorded_at_sanity` — NOT claimed closed by this draft.
 
-- **v0.1-amendment (Slice 37, pre-P2.4 fold-in)** — TraceEntry discriminated
-  union at `src/schemas/trace-entry.ts` widened with three durable-transcript
-  variants (`relay.request`, `relay.receipt`, `relay.result`)
-  required by ADR-0007 CC#P2-2's Enforcement binding. Runtime-safety-floor
-  Slice 3 later widened the same trace_entry surface with additive
-  `relay.failed` for connector invocation exceptions. The log-level
-  pairing invariant `run.prop.relay_trace_entry_pairing` widened (not
-  renamed) to govern ordering when transcript/failure trace_entries are present;
-  full five-trace_entry success ordering is obligated at the connector level
-  (CC#P2-2), not the contract level. Authorized by ADR-0007 §Amendment
-  (Slice 37).
+- **v0.1-amendment** — TraceEntry discriminated union at
+  `src/schemas/trace-entry.ts` widened with three durable-transcript
+  variants (`relay.request`, `relay.receipt`, `relay.result`) and later
+  with `relay.failed` for connector invocation exceptions. The
+  log-level pairing invariant `run.prop.relay_trace_entry_pairing`
+  widened (not renamed) to govern ordering when transcript/failure
+  trace_entries are present; full five-trace_entry success ordering is
+  obligated at the connector level, not the contract level.
 
-- **v0.2 (user skill loading slice, this version)** — TraceEntry
-  discriminated union widened with `skills.loaded`, emitted before
-  `relay.request` when local skill instructions are loaded for a relay
-  attempt. The event records `{id, slot?, path, sha256, bytes}` and
-  deliberately omits the instruction body.
+- **v0.2 (user skill loading)** — TraceEntry discriminated union
+  widened with `skills.loaded`, emitted before `relay.request` when
+  local skill instructions are loaded for a relay attempt. The event
+  records `{id, slot?, path, sha256, bytes}` and deliberately omits
+  the instruction body.
 
-- **v0.3 (Stage 1)** — Absorb Codex adversarial property-auditor pass
-  findings. Ratify `property_ids` above by landing the corresponding
-  property-test harness. Consider whether a typed `ReducerOutput` (log,
-  snapshot, derived diagnostics) adds enough value over `RunProjection` to
-  justify the cost. If evidence shows a class of `SnapshotStatus` drift
-  that RUN-I7 doesn't catch, upgrade the mapping from an enum-valued
-  record to a typed discriminated union.
+- **v0.3 (Stage 1)** — Ratify `property_ids` above by landing the
+  corresponding property-test harness. Consider whether a typed
+  `ReducerOutput` (log, snapshot, derived diagnostics) adds enough
+  value over `RunProjection` to justify the cost. If evidence shows a
+  class of `SnapshotStatus` drift that RUN-I7 doesn't catch, upgrade
+  the mapping from an enum-valued record to a typed discriminated
+  union.
 
 - **v1.0 (Stage 2)** — Ratified invariants + property tests + mutation-
   score floor contribution + operator-facing error-message catalog. The

@@ -134,8 +134,7 @@ invariants are enforced via `src/schemas/skill.ts` and tested in
   `SkillDescriptor` with a `z.custom` pre-parse guard that runs
   `Object.hasOwn` on load-bearing fields (`id`, `title`, `description`,
   `trigger`). Inherited values fail before Zod's own property access.
-  Mirrors continuity.ts CONT-I12 and run.ts RUN MED #3. Added post-
-  Codex v0.1 review (MED #6).
+  Mirrors continuity.ts CONT-I12 and run.ts identity-field defense.
 
 - **SKILL-I7 — `UserSkillEntry` is a sibling schema, not a
   `SkillDescriptor` extension.** Local user-authored skills are
@@ -248,61 +247,47 @@ After a `SkillSlot` is accepted:
 
 ## Failure modes addressed
 
-- **carry-forward:untyped-skill-bypass** — **Partially closed in v0.1
-  (catalog boundary) + selection.md SEL-I3 (selection boundary).** The
+- **carry-forward:untyped-skill-bypass** — **Partially closed at the
+  catalog boundary + selection.md SEL-I3 (selection boundary).** The
   legacy untyped skill channels (`CompiledFlow.default_skills`,
-  `CircuitOverride.skills`) were removed in selection.md v0.1
-  (Codex HIGH #5). SkillDescriptor v0.1 ratifies the catalog-boundary
-  side: no surplus keys, typed id, closed-enum domain, non-empty
-  capabilities when present.
+  `CircuitOverride.skills`) were removed in selection.md.
+  SkillDescriptor ratifies the catalog-boundary side: no surplus keys,
+  typed id, closed-enum domain, non-empty capabilities when present.
 
-- **carry-forward:silent-extension-slots** — **Closed in v0.1 via
-  SKILL-I5.** `.strict()` at the descriptor boundary prevents ad-hoc
-  fields from accreting. Adding a field is a v0.2+ schema change with
-  explicit evolution note.
+- **carry-forward:silent-extension-slots** — **Closed via SKILL-I5.**
+  `.strict()` at the descriptor boundary prevents ad-hoc fields from
+  accreting. Adding a field is a schema change with explicit evolution
+  note.
 
-- **carry-forward:ambiguous-empty-capabilities** — **Closed in v0.1 via
+- **carry-forward:ambiguous-empty-capabilities** — **Closed via
   SKILL-I4.** `capabilities: []` is rejected; consumers see either
   `undefined` (none declared) or a non-empty list.
 
-- **carry-forward:prototype-chain-smuggle** — **Closed in v0.1 via
-  SKILL-I6.** Raw-input own-property guard on `SkillDescriptor` mirrors
-  continuity CONT-I12 and run RUN MED #3. Required catalog fields MUST
-  be own on the raw input; inherited values rejected pre-parse.
-  Codex v0.1 MED #6.
+- **carry-forward:prototype-chain-smuggle** — **Closed via SKILL-I6.**
+  Raw-input own-property guard on `SkillDescriptor` mirrors continuity
+  CONT-I12 and run identity-field defense. Required catalog fields
+  MUST be own on the raw input; inherited values rejected pre-parse.
 
 - **carry-forward:external-protocol-greenfield-confusion** — **Closed
-  in v0.1 by reframing.** `skill.descriptor` governs the compiled
-  catalog entry (greenfield). v0.2's `UserSkillEntry` reads the small
-  local-loader subset of `SKILL.md` frontmatter (`name`, `description`,
-  `trigger`) but does not ratify the full host protocol. A richer
+  by reframing.** `skill.descriptor` governs the compiled catalog
+  entry (greenfield). `UserSkillEntry` reads the small local-loader
+  subset of `SKILL.md` frontmatter (`name`, `description`, `trigger`)
+  but does not ratify the full host protocol. A richer
   compiler-facing frontmatter contract remains a future concern.
-  Codex v0.1 HIGH #1.
 
-- **carry-forward:portable-built-ins-vs-local-skills** — **Closed in
-  v0.2 by slot indirection.** Built-in public flows do not name
+- **carry-forward:portable-built-ins-vs-local-skills** — **Closed by
+  slot indirection.** Built-in public flows do not name
   operator-local `SkillId`s. They may expose optional `SkillSlot`s,
   and the operator binds those slots to their own local skills in
   config. This keeps public flows portable while still allowing
   project- or user-specific skill loading.
 
-## Codex adversarial review (v0.1)
-
-A narrow cross-model challenger pass (Codex via `/codex`) produced 1
-HIGH + 5 MED + 2 LOW objections. All 8 are folded into v0.1; no items
-deferred.
-
 ## Evolution
 
-- **v0.1** — initial contract with SKILL-I1..I6 (SKILL-I6
-  added post-Codex for prototype-chain defense). Four Stage 2 property
+- **v0.1** — initial contract with SKILL-I1..I6. Four Stage 2 property
   ids reserved. Closes the selection / connector / skill relay-time
-  triplet on the authoring side. All 8 Codex objections folded in
-  (HIGH #1 external-protocol reframe, MED #2 post-condition narrow,
-  MED #3 trigger scope caveat, MED #4 capabilities prose tightened,
-  MED #5 brand scope caveat, MED #6 SKILL-I6 added, LOW #7 comment
-  fix, LOW #8 reopen conditions expanded).
-- **v0.2 (user skill loading slice)** — adds `UserSkillEntry`,
+  triplet on the authoring side.
+- **v0.2 (user skill loading)** — adds `UserSkillEntry`,
   `SkillSlot`, and deterministic local registry semantics over
   `~/.agents/skills` and `~/.claude/skills`. `SkillDescriptor` stays the
   plugin-distributed catalog projection. Local `SKILL.md` instructions

@@ -72,22 +72,19 @@ invariant; tested in `tests/contracts/schema-parity.test.ts`.
   change.** The enum is the frozen tuple `['claude-code', 'codex']`.
   The two built-ins mean:
   - `claude-code` — the Claude Code headless CLI (`claude -p` print-mode or
-    equivalent), invoked as a **subprocess** of the Node.js runtime per
-    ADR-0009 §1 (v0 invocation-pattern decision: subprocess-per-connector).
+    equivalent), invoked as a **subprocess** of the Node.js runtime.
     Superseded prior wording described this as "the Claude Code Agent
     tool (same-process)" — that phrasing was SDK-flavored and is replaced
-    here to match ADR-0009's subprocess-per-connector decision. The
-    subprocess inherits the operator session's filesystem + environment
-    via the parent process but runs as a child `claude` executable,
-    not in the host Node process. No `@anthropic-ai/sdk` dep at v0;
-    ADR-0009 §4 Check 28 enforces this at package.json level. Slice 87
-    wires resolved selection into this connector: compatible Anthropic
+    here to match the subprocess-per-connector decision. The subprocess
+    inherits the operator session's filesystem + environment via the
+    parent process but runs as a child `claude` executable, not in the
+    host Node process. Resolved selection is wired into this connector:
+    compatible Anthropic
     model ids are passed with `--model`; supported efforts (`low`,
     `medium`, `high`, `xhigh`) are passed with `--effort`; incompatible
     providers or unsupported built-in effort tiers fail before spawn.
   - `codex` — the Codex CLI relayed via `codex exec` as a
-    **subprocess** of the Node.js runtime (same invocation pattern as
-    `claude-code` per ADR-0009 §1) in the operator's current session context.
+    **subprocess** of the Node.js runtime in the operator's current session context.
     Same host session as `claude-code`; distinct model vendor; distinct
     subprocess. Capability-boundary mechanism **differs** from `claude-code`:
     where `claude-code` uses declarative tool-list flags (`--tools ""`,
@@ -102,8 +99,8 @@ invariant; tested in `tests/contracts/schema-parity.test.ts`.
     sandbox) with two supporting disciplines: (i) argv-constant
     assertion at spawn time over `CODEX_NO_WRITE_FLAGS` (must include
     `-s read-only`; must NOT include any token in
-    `CODEX_FORBIDDEN_ARGV_TOKENS` — Codex Slice 45 HIGH 2 fold-in
-    expanded this to cover `--dangerously-bypass-approvals-and-sandbox`,
+    `CODEX_FORBIDDEN_ARGV_TOKENS`, including
+    `--dangerously-bypass-approvals-and-sandbox`,
     `--full-auto`, `--add-dir`, `-o` / `--output-last-message`, `-c` /
     `--config`, `-p` / `--profile`) — this is the deny-list for argv
     surfaces that would silently widen the sandbox or reach a repo-write
@@ -116,16 +113,12 @@ invariant; tested in `tests/contracts/schema-parity.test.ts`.
     OS sandbox + argv enforcement; the item-type discipline is a
     protocol hygiene layer that catches new Codex capability surfaces
     (write-tool trace_entries, apply-patch trace_entries) before they land in the
-    relay transcript implicitly. Slice 87 wires resolved selection
-    into this connector: compatible OpenAI model ids are passed with `-m`;
+    relay transcript implicitly. Resolved selection is wired into this
+    connector: compatible OpenAI model ids are passed with `-m`;
     effort is passed through the single allowlisted config override
     `model_reasoning_effort`; a final spawn-argv boundary check allows
     only that config override and rejects incompatible providers or
     unsupported effort tiers before spawn.
-    Slice 45 (P2.6) binds the mechanism and lands
-    `src/connectors/codex.ts`; ADR-0009 §Consequences.Enabling is
-    the governance authority (§Enabling explicitly names `codex` as the
-    next connector after `claude-code`).
   `codex-isolated` is a planned future connector, not a current
   `EnabledConnector` value. Until a git-worktree or distinct-UID isolation
   implementation lands with tests, configs that name `codex-isolated` must
@@ -321,7 +314,7 @@ invariant; tested in `tests/contracts/schema-parity.test.ts`.
   `RelayResolutionSource`.
 
   **Scope caveat — default/explicit/auto provenance is singleton by
-  design (closes Codex MED #6 at the prose layer).** `{source:
+  design.** `{source:
   'default'}`, `{source: 'explicit'}`, and `{source: 'auto'}` carry
   no disambiguator at v0.1. For `default`, this is because the
   applied `default` on a merged Config is a single composed value
@@ -338,7 +331,7 @@ invariant; tested in `tests/contracts/schema-parity.test.ts`.
   runs. The contract does NOT claim these three identify the
   specific config layer or heuristic branch that won at v0.1.
 
-  **Role ↔ resolved_from.role binding (closes Codex HIGH #4).** On a
+  **Role ↔ resolved_from.role binding.** On a
   `RelayStartedTraceEntry`, when `resolved_from.source === 'role'`, the
   trace_entry's `role` field MUST equal `resolved_from.role`. An trace_entry with
   `role: 'researcher'` paired with `resolved_from: {source: 'role',
@@ -377,7 +370,7 @@ invariant; tested in `tests/contracts/schema-parity.test.ts`.
   and `src/schemas/trace-entry.ts`.
 
 - **connector-I10 — A resolved connector MUST NOT be a pre-resolution
-  named reference (closes Codex HIGH #1).** `RelayStartedTraceEntry.connector`
+  named reference.** `RelayStartedTraceEntry.connector`
   is typed `ResolvedConnector`, a 2-variant discriminated union of
   `BuiltInConnectorRef` and `CustomConnectorDescriptor`. The
   `NamedConnectorRef` variant (`{kind: 'named', ...}`) is a
@@ -391,8 +384,8 @@ invariant; tested in `tests/contracts/schema-parity.test.ts`.
   definition) + `src/schemas/trace-entry.ts` (the trace_entry's `connector` field
   type).
 
-- **connector-I11 — Registry key and descriptor `name` must agree
-  (closes Codex HIGH #2).** For every entry in
+- **connector-I11 — Registry key and descriptor `name` must agree.**
+  For every entry in
   `RelayConfig.connectors`, the record key and the embedded
   `descriptor.name` field MUST be equal. `{connectors: {gemini:
   {name: 'ollama', command: [...]}}}` parses syntactically (both
@@ -409,8 +402,8 @@ invariant; tested in `tests/contracts/schema-parity.test.ts`.
   (CLI flag, config lookup, or auto-detect) into an object and passing
   it to `ConnectorRef.safeParse`.
 - A `RelayConfig` is produced by layering config files (default,
-  user-global, project, invocation) per `docs/contracts/config.md`
-  (pending Stage 1 close Slice 26; tracked as arc-stage-1-close-codex.md §HIGH #3 correlated-miss) and passing the merged record to `RelayConfig.safeParse`.
+  user-global, project, invocation) per `docs/contracts/config.md` and
+  passing the merged record to `RelayConfig.safeParse`.
 - Every `ConnectorName` referenced in a `NamedConnectorRef` or an
   `ConnectorReference` (`kind: 'named'`) must exist in the running
   plugin's `relay.connectors` registry at load time (connector-I8 at
@@ -452,7 +445,7 @@ After a `RelayStartedTraceEntry` is accepted:
 - When `resolved_from.source === 'role'`, the trace_entry's `role` field
   equals `resolved_from.role` (connector-I7 binding).
 - **Scope caveat — schema validates shape, not resolver agreement
-  (closes Codex HIGH #5).** The v0.1 schema validates the trace_entry's
+  across `connector` and `resolved_from`.** The v0.1 schema validates the trace_entry's
   fields in isolation (and the role binding as a single cross-field
   refinement). It does NOT bind `connector` to `resolved_from`: an
   trace_entry with `connector: {kind: 'builtin', name: 'codex'}` and
@@ -541,8 +534,8 @@ After a `RelayStartedTraceEntry` is accepted:
   discriminated union in this slice (prior v0.1 drafting used a flat
   `z.enum`; the flat enum cannot identify the specific role/circuit
   that won, and an audit reading the trace_entry could not reconstruct the
-  chosen connector's provenance — same gap selection.md closed at
-  HIGH #1 with its discriminated-union `applied[]` entries).
+  chosen connector's provenance — the same gap selection.md closes with
+  its discriminated-union `applied[]` entries).
 
 - **config** (`src/schemas/config.ts`) — `RelayConfig.default`,
   `RelayConfig.roles`, `RelayConfig.circuits`, and
@@ -550,7 +543,7 @@ After a `RelayStartedTraceEntry` is accepted:
   reservation check (connector-I2) and closure check (connector-I8) are
   implemented in `RelayConfig.superRefine`. Config reorganization
   (layer materialization, merge semantics) is out of scope for this
-  contract; see `docs/contracts/config.md` (pending Stage 1 close Slice 26).
+  contract; see `docs/contracts/config.md`.
 
 - **flow** (`src/schemas/compiled-flow.ts`) — `RelayConfig.circuits`
   is keyed on `CompiledFlowId`, so flow existence is a soft
@@ -621,12 +614,7 @@ After a `RelayStartedTraceEntry` is accepted:
 
 ## Evolution
 
-- **v0.1 (this draft)** — connector-I1..I11 enforced at the schema layer.
-  **Codex adversarial property-auditor pass 2026-04-19** produced
-  opening verdict REJECT with 5 HIGH + 3 MED + 1 LOW. All 5 HIGH + all
-  3 MED + the 1 LOW folded in directly before commit (no deferrals to
-  v0.2 except where the deferral itself is named as the resolution —
-  MED #6 default-layer provenance and connector-I3's cwd/env semantics).
+- **v0.1** — connector-I1..I11 enforced at the schema layer.
 
   Schema-level landings for this slice:
   - `ConnectorName` regex already in place; no change.
@@ -634,15 +622,14 @@ After a `RelayStartedTraceEntry` is accepted:
     `z.array(z.string().min(1)).min(1)` (element-level `.min(1)` added).
   - `ConnectorReference` in `config.ts` promoted from `z.union` to
     `z.discriminatedUnion` with per-variant `.strict()` AND **exported**
-    (Codex MED #8 fold-in).
+    so callers can validate registry-layer references directly.
   - `RelayConfigBody` gets `.strict()`.
   - `RelayConfig.superRefine` extended with: reserved-name
     disjointness check (`connectors` key MUST NOT be a `EnabledConnector`
     or `'auto'`); own-property-only closure checks using
     `new Set(Object.keys(...))` — fixes the `constructor`/`toString`/
-    `hasOwnProperty` bypass via prototype chain (Codex HIGH #3);
-    registry-key ↔ descriptor-name parity check (connector-I11 / Codex
-    HIGH #2).
+    `hasOwnProperty` bypass via prototype chain; registry-key ↔
+    descriptor-name parity check (connector-I11).
   - `RelayResolutionSource` added to `src/schemas/connector.ts` as a
     5-variant discriminated union; `RelayStartedTraceEntry.resolved_from`
     in `src/schemas/trace-entry.ts` retyped from `z.enum([...])` to
@@ -652,22 +639,19 @@ After a `RelayStartedTraceEntry` is accepted:
     `RelayStartedTraceEntry.connector` in `src/schemas/trace-entry.ts` retyped
     from `ConnectorRef` (which admits named references) to
     `ResolvedConnector` — named references are pre-resolution pointers
-    and MUST NOT appear in the trace (connector-I10 / Codex HIGH #1).
+    and MUST NOT appear in the trace (connector-I10).
   - `TraceEntry` discriminated union wrapped in a cross-variant `superRefine`
     enforcing the `role === resolved_from.role` binding when
-    `resolved_from.source === 'role'` (connector-I7 binding clause /
-    Codex HIGH #4). Mirrors the `Step` union's pattern for cross-
-    field constraints.
+    `resolved_from.source === 'role'` (connector-I7 binding clause).
+    Mirrors the `Step` union's pattern for cross-field constraints.
   - Prose tightenings: post-condition for `RelayStartedTraceEntry`
     explicitly scopes `connector`↔`resolved_from` agreement to Stage 2
-    (Codex HIGH #5 honesty fold-in); `{source: 'default'}`,
-    `{source: 'explicit'}`, and `{source: 'auto'}` are explicitly
-    singleton-at-v0.1 with v0.2 revisit rationale (Codex MED #6);
-    auto-rationale claim removed from connector-I7 (Codex MED #7 — the
-    auto variant carries no rationale field, and the test suite
-    rejects surplus keys on it, so the original prose claim was
-    self-contradictory); cwd/env/path semantics explicitly deferred
-    to Stage 2 with property-id tags (Codex LOW #9).
+    because the schema cannot prove resolver agreement by itself;
+    `{source: 'default'}`, `{source: 'explicit'}`, and `{source:
+    'auto'}` are explicitly singleton-at-v0.1 with v0.2 revisit
+    rationale; auto-rationale claims stay out of connector-I7 because
+    the auto variant carries no rationale field; cwd/env/path semantics
+    are explicitly deferred to Stage 2 with property-id tags.
 
 - **v0.2 (Stage 1)** — Ratify `property_ids` above by landing the
   corresponding property-test harness at
