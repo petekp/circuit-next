@@ -429,6 +429,68 @@ describe('runtime fanout executor', () => {
     expect(existsSync(join(runDir, 'reports', 'branches', 'option-1', 'report.json'))).toBe(false);
   });
 
+  it('aggregates verdict-fail branches with parsable bodies onto result.json (envelope), not the schema-tied report.json that Slice 1 now writes', async () => {
+    // Slice 1's relay change (F-H-1 tertiary) writes the schema-tied report
+    // whenever the body parses, regardless of whether the verdict gate
+    // passed. The branch's report.json now exists on disk for verdict-fail-
+    // with-parsable-body cases. The fanout aggregator branches on
+    // evaluation.kind === 'pass' before consuming relayAttempt.report_path;
+    // the fail branch must continue to surface result.json (the envelope)
+    // so downstream consumers (aggregate readers, operator-summary) cannot
+    // mistake a non-admitted branch for a clean report. This regression test
+    // pins the contract so a future refactor cannot silently widen what the
+    // fail branch surfaces.
+    // Use the test-only runtime-proof-strict@v1 schema where verdict is an
+    // open string. The explore tournament-proposal schema fixes verdict to
+    // the literal 'accept', which would short-circuit on schema parse fail
+    // before reaching the verdict gate and never exercise the post-Slice-1
+    // path under test.
+    const offAdmitBody = {
+      verdict: 'reject',
+      rationale: 'Branch is parseable but the verdict is not in the admit list.',
+    };
+    const { result, runDir, entries } = await runCompiledRelayFanoutruntime({
+      flow: compiledRelayFanoutFlow({
+        reportSchema: 'runtime-proof-strict@v1',
+        admit: ['accept'],
+      }),
+      relayer: {
+        connectorName: 'claude-code',
+        relay: async (input) => ({
+          request_payload: input.prompt,
+          receipt_id: 'receipt-a',
+          result_body: JSON.stringify(offAdmitBody),
+          duration_ms: 3,
+          cli_version: 'test-relay',
+        }),
+      },
+    });
+
+    // The body parses against the schema, so report.json IS written by the
+    // relay executor. That is Slice 1's load-bearing behavior; this test
+    // explicitly asserts that contract still holds alongside the fanout
+    // contract below.
+    expect(existsSync(join(runDir, 'reports', 'branches', 'option-1', 'report.json'))).toBe(true);
+    expect(existsSync(join(runDir, 'reports', 'branches', 'option-1', 'result.json'))).toBe(true);
+
+    expect(result.outcome).toBe('aborted');
+
+    // The fanout branch_completed trace entry is the contract surface for
+    // aggregate readers. For the verdict-fail case, result_path must be the
+    // envelope (result.json) and admitted must be false — so a downstream
+    // reader that opens result_path gets the relay envelope, not the
+    // schema-tied report that may carry a misleading 'reject' body.
+    const branchCompleted = entries.find((entry) => entry.kind === 'fanout.branch_completed');
+    expect(branchCompleted).toMatchObject({
+      branch_id: 'option-1',
+      child_outcome: 'aborted',
+      result_path: 'reports/branches/option-1/result.json',
+    });
+    expect(branchCompleted).not.toMatchObject({
+      result_path: 'reports/branches/option-1/report.json',
+    });
+  });
+
   it('does not write relay branch reports for schema or provenance failures', async () => {
     const badSchema = await runCompiledRelayFanoutruntime({
       flow: compiledRelayFanoutFlow({ reportSchema: 'runtime-proof-strict@v1', admit: ['ok'] }),
