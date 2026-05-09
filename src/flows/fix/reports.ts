@@ -31,6 +31,17 @@ const REQUIRED_FIX_RESULT_ARTIFACT_IDS = [
 
 const NonEmptyStringArray = z.array(z.string().min(1)).min(1);
 
+// Lenient form for relay-emitted evidence-style fields. Workers occasionally
+// answer with a single string ("git diff README.md shows: ...") on retry
+// attempts where the recovery context confuses the schema field name with a
+// freeform-prose request. Coerce a single non-empty string to a one-element
+// array before validation so the run does not abort over a shape detail
+// that has no downstream consumer (evidence is documentation/audit only).
+const LenientNonEmptyStringArray = z.preprocess(
+  (val) => (typeof val === 'string' && val.length > 0 ? [val] : val),
+  z.array(z.string().min(1)).min(1),
+);
+
 export const FixVerificationCommand = VerificationCommand;
 export type FixVerificationCommand = z.infer<typeof FixVerificationCommand>;
 
@@ -134,7 +145,7 @@ export const FixDiagnosis = z
     reproduction_status: FixReproductionStatus,
     cause_summary: z.string().min(1),
     confidence: z.enum(['low', 'medium', 'high']),
-    evidence: NonEmptyStringArray,
+    evidence: LenientNonEmptyStringArray,
     residual_uncertainty: z.array(z.string().min(1)),
   })
   .strict()
@@ -199,7 +210,7 @@ export const FixChange = z
     summary: z.string().min(1),
     diagnosis_ref: z.string().min(1),
     changed_files: NonEmptyStringArray,
-    evidence: NonEmptyStringArray,
+    evidence: LenientNonEmptyStringArray,
   })
   .strict();
 export type FixChange = z.infer<typeof FixChange>;

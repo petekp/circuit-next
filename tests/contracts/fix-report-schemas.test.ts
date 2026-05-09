@@ -226,6 +226,52 @@ describe('Fix report schemas', () => {
     ).toBeDefined();
   });
 
+  it('coerces a single evidence string into a one-element array on FixChange', () => {
+    const parsed = FixChange.parse({
+      verdict: 'accept',
+      summary: 'Adjusted the guard and added a focused regression test',
+      diagnosis_ref: 'fix.diagnosis@v1',
+      changed_files: ['src/example.ts'],
+      evidence: 'git diff src/example.ts shows the guard was added; verify passed afterward',
+    });
+    expect(parsed.evidence).toEqual([
+      'git diff src/example.ts shows the guard was added; verify passed afterward',
+    ]);
+  });
+
+  it('coerces a single evidence string into a one-element array on FixDiagnosis', () => {
+    const parsed = FixDiagnosis.parse({
+      verdict: 'accept',
+      reproduction_status: 'reproduced',
+      cause_summary: 'guard misorders the operands',
+      confidence: 'high',
+      evidence: 'src/example.ts:32 — guard runs before the type-check',
+      residual_uncertainty: [],
+    });
+    expect(parsed.evidence).toEqual(['src/example.ts:32 — guard runs before the type-check']);
+  });
+
+  it('still rejects an empty evidence string and an empty evidence array', () => {
+    expect(
+      FixChange.safeParse({
+        verdict: 'accept',
+        summary: 'x',
+        diagnosis_ref: 'fix.diagnosis@v1',
+        changed_files: ['src/example.ts'],
+        evidence: '',
+      }).success,
+    ).toBe(false);
+    expect(
+      FixChange.safeParse({
+        verdict: 'accept',
+        summary: 'x',
+        diagnosis_ref: 'fix.diagnosis@v1',
+        changed_files: ['src/example.ts'],
+        evidence: [],
+      }).success,
+    ).toBe(false);
+  });
+
   it('requires uncertainty when the problem is not cleanly reproduced', () => {
     expect(
       FixDiagnosis.safeParse({

@@ -12776,7 +12776,7 @@ var fixDiagnosisShapeHint = {
   instruction: [
     "Respond with a single raw JSON object whose top-level shape is exactly:",
     '{ "verdict": "accept", "reproduction_status": "<reproduced|not-reproduced|intermittent|not-attempted>", "cause_summary": "<one-line root-cause statement>", "confidence": "<low|medium|high>", "evidence": ["<file:line, command result, or report reference that supports the cause>"], "residual_uncertainty": ["<remaining unknown that could still affect the fix>"] }',
-    'evidence must contain at least one entry. residual_uncertainty must be non-empty whenever reproduction_status is anything other than "reproduced" \u2014 if you could not cleanly reproduce the bug, name the unknowns honestly. Calibrate confidence to the evidence: do not claim "high" without direct reproduction or equivalent proof.',
+    'evidence must contain at least one entry, expressed as a JSON array of short distinct strings (one supporting fact per element). residual_uncertainty must be non-empty whenever reproduction_status is anything other than "reproduced" \u2014 if you could not cleanly reproduce the bug, name the unknowns honestly. Calibrate confidence to the evidence: do not claim "high" without direct reproduction or equivalent proof.',
     "Do not include extra top-level keys. Do not wrap the JSON in Markdown code fences. Do not include any prose before or after the JSON object.",
     "The runtime parses your response with JSON.parse, rejects any verdict not drawn from the accepted-verdicts list, and validates the full report body against fix.diagnosis@v1 before writing reports/fix/diagnosis.json."
   ].join(" ")
@@ -12788,6 +12788,7 @@ var fixChangeShapeHint = {
     "Respond with a single raw JSON object whose top-level shape is exactly:",
     '{ "verdict": "accept", "summary": "<what changed and why>", "diagnosis_ref": "<reference to the diagnosis report or section that motivates this change>", "changed_files": ["<project-relative path that was edited>"], "evidence": ["<test output, command result, or before/after observation that confirms the change works>"] }',
     "Make the smallest change that resolves the diagnosed cause. Do not refactor adjacent code, broaden behavior, or address unrelated issues in the same edit. changed_files must contain at least one entry; evidence must contain at least one entry.",
+    "`evidence` is a JSON array of short distinct strings \u2014 one observation per element. It is a schema field name, not a request for prose. Even on retry attempts where you are summarizing prior verification output, keep each observation as its own array element.",
     "Do not include extra top-level keys. Do not wrap the JSON in Markdown code fences. Do not include any prose before or after the JSON object.",
     "The runtime parses your response with JSON.parse, rejects any verdict not drawn from the accepted-verdicts list, and validates the full report body against fix.change@v1 before writing reports/fix/change.json."
   ].join(" ")
@@ -12831,6 +12832,7 @@ var REQUIRED_FIX_RESULT_ARTIFACT_IDS = [
   "fix.verification"
 ];
 var NonEmptyStringArray2 = external_exports.array(external_exports.string().min(1)).min(1);
+var LenientNonEmptyStringArray = external_exports.preprocess((val) => typeof val === "string" && val.length > 0 ? [val] : val, external_exports.array(external_exports.string().min(1)).min(1));
 var FixVerificationCommand = VerificationCommand;
 var FixRegressionContract = external_exports.object({
   expected_behavior: external_exports.string().min(1),
@@ -12899,7 +12901,7 @@ var FixDiagnosis = external_exports.object({
   reproduction_status: FixReproductionStatus,
   cause_summary: external_exports.string().min(1),
   confidence: external_exports.enum(["low", "medium", "high"]),
-  evidence: NonEmptyStringArray2,
+  evidence: LenientNonEmptyStringArray,
   residual_uncertainty: external_exports.array(external_exports.string().min(1))
 }).strict().superRefine((diagnosis, ctx) => {
   if (diagnosis.reproduction_status !== "reproduced" && diagnosis.residual_uncertainty.length === 0) {
@@ -12945,7 +12947,7 @@ var FixChange = external_exports.object({
   summary: external_exports.string().min(1),
   diagnosis_ref: external_exports.string().min(1),
   changed_files: NonEmptyStringArray2,
-  evidence: NonEmptyStringArray2
+  evidence: LenientNonEmptyStringArray
 }).strict();
 var FixVerificationCommandResult = external_exports.object({
   command_id: external_exports.string().min(1),

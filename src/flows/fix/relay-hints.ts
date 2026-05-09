@@ -20,7 +20,7 @@ export const fixDiagnosisShapeHint: SchemaShapeHint = {
   instruction: [
     'Respond with a single raw JSON object whose top-level shape is exactly:',
     '{ "verdict": "accept", "reproduction_status": "<reproduced|not-reproduced|intermittent|not-attempted>", "cause_summary": "<one-line root-cause statement>", "confidence": "<low|medium|high>", "evidence": ["<file:line, command result, or report reference that supports the cause>"], "residual_uncertainty": ["<remaining unknown that could still affect the fix>"] }',
-    'evidence must contain at least one entry. residual_uncertainty must be non-empty whenever reproduction_status is anything other than "reproduced" — if you could not cleanly reproduce the bug, name the unknowns honestly. Calibrate confidence to the evidence: do not claim "high" without direct reproduction or equivalent proof.',
+    'evidence must contain at least one entry, expressed as a JSON array of short distinct strings (one supporting fact per element). residual_uncertainty must be non-empty whenever reproduction_status is anything other than "reproduced" — if you could not cleanly reproduce the bug, name the unknowns honestly. Calibrate confidence to the evidence: do not claim "high" without direct reproduction or equivalent proof.',
     'Do not include extra top-level keys. Do not wrap the JSON in Markdown code fences. Do not include any prose before or after the JSON object.',
     'The runtime parses your response with JSON.parse, rejects any verdict not drawn from the accepted-verdicts list, and validates the full report body against fix.diagnosis@v1 before writing reports/fix/diagnosis.json.',
   ].join(' '),
@@ -33,6 +33,7 @@ export const fixChangeShapeHint: SchemaShapeHint = {
     'Respond with a single raw JSON object whose top-level shape is exactly:',
     '{ "verdict": "accept", "summary": "<what changed and why>", "diagnosis_ref": "<reference to the diagnosis report or section that motivates this change>", "changed_files": ["<project-relative path that was edited>"], "evidence": ["<test output, command result, or before/after observation that confirms the change works>"] }',
     'Make the smallest change that resolves the diagnosed cause. Do not refactor adjacent code, broaden behavior, or address unrelated issues in the same edit. changed_files must contain at least one entry; evidence must contain at least one entry.',
+    '`evidence` is a JSON array of short distinct strings — one observation per element. It is a schema field name, not a request for prose. Even on retry attempts where you are summarizing prior verification output, keep each observation as its own array element.',
     'Do not include extra top-level keys. Do not wrap the JSON in Markdown code fences. Do not include any prose before or after the JSON object.',
     'The runtime parses your response with JSON.parse, rejects any verdict not drawn from the accepted-verdicts list, and validates the full report body against fix.change@v1 before writing reports/fix/change.json.',
   ].join(' '),
