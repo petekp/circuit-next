@@ -800,6 +800,8 @@ export function runPublish(
       ['claude', 'plugin', 'update', 'circuit@circuit-next', '--scope', 'user'],
       commandOptions({ effect: true, env: claudeEnv }),
     );
+    const claudeUpdateOutput = `${claudeUpdate.stdout}\n${claudeUpdate.stderr}`;
+    const claudePluginMissing = /not installed|not found/i.test(claudeUpdateOutput);
     if (claudeUpdate.exitCode !== 0) {
       report.outputs.claude_update_status = 'failed';
       addWarning(
@@ -814,7 +816,7 @@ export function runPublish(
     let claudeTree = packageTreeStatus(claudeSourceRoot, claudeRoot);
     if (claudeTree.status !== 'ok') {
       report.outputs.claude_package_status_after_update = claudeTree.status;
-      if (existsSync(claudeRoot)) {
+      if (existsSync(claudeRoot) && !claudePluginMissing) {
         runCommand(
           'claude_plugin_uninstall_user',
           [

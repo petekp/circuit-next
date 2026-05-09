@@ -646,11 +646,13 @@ describe('plugin publish automation', () => {
     }
   });
 
-  it('installs Claude when the user package is missing and update reports not installed', () => {
+  it('installs Claude when update reports not installed even if stale bytes exist', () => {
     const root = createFixture();
     const homeDir = mkdtempSync(join(tmpdir(), 'circuit-publish-home-'));
     const codexHome = mkdtempSync(join(tmpdir(), 'circuit-publish-codex-'));
     const roots = localInstallRoots(root, homeDir, codexHome);
+    copyPackage(join(root, 'plugins/claude'), roots.claude);
+    writeText(join(roots.claude, 'README.md'), 'orphaned stale Claude package\n');
     copyPackage(join(root, 'plugins/circuit'), roots.codex);
     const base = createRunner(
       {},
