@@ -89,6 +89,26 @@ describe('fixBriefComposeBuilder verification script discovery', () => {
     expect(brief.verification_command_candidates[0]?.argv).toEqual(['npm', 'run', 'verify']);
   });
 
+  it('defaults to verify when scripts is an array rather than an object', () => {
+    const root = tempRoot('fix-brief-scripts-array-');
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({ name: 'odd', scripts: [] }, null, 2),
+    );
+    const brief = buildBrief(root);
+    expect(brief.verification_command_candidates[0]?.argv).toEqual(['npm', 'run', 'verify']);
+  });
+
+  it('defaults to verify when scripts is null', () => {
+    const root = tempRoot('fix-brief-scripts-null-');
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({ name: 'odd', scripts: null }, null, 2),
+    );
+    const brief = buildBrief(root);
+    expect(brief.verification_command_candidates[0]?.argv).toEqual(['npm', 'run', 'verify']);
+  });
+
   it('respects priority: verify wins over test wins over check', () => {
     const root = tempRoot('fix-brief-priority-');
     writePackageJson(root, { check: 'echo ok', test: 'echo ok', verify: 'echo ok' });

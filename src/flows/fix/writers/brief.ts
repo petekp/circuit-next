@@ -26,13 +26,18 @@ function pickVerificationScript(projectRoot: string | undefined): string {
   if (projectRoot === undefined) return DEFAULT_VERIFY_SCRIPT;
   const pkgPath = join(projectRoot, 'package.json');
   if (!existsSync(pkgPath)) return DEFAULT_VERIFY_SCRIPT;
-  let pkg: { scripts?: Record<string, unknown> };
+  let parsed: unknown;
   try {
-    pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as { scripts?: Record<string, unknown> };
+    parsed = JSON.parse(readFileSync(pkgPath, 'utf8'));
   } catch {
     return DEFAULT_VERIFY_SCRIPT;
   }
-  const scripts = pkg.scripts ?? {};
+  if (parsed === null || typeof parsed !== 'object') return DEFAULT_VERIFY_SCRIPT;
+  const scriptsRaw = (parsed as { scripts?: unknown }).scripts;
+  if (scriptsRaw === null || typeof scriptsRaw !== 'object' || Array.isArray(scriptsRaw)) {
+    return DEFAULT_VERIFY_SCRIPT;
+  }
+  const scripts = scriptsRaw as Record<string, unknown>;
   for (const name of PREFERRED_VERIFY_SCRIPTS) {
     if (typeof scripts[name] === 'string') return name;
   }
