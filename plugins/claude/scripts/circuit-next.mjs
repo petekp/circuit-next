@@ -436,6 +436,20 @@ function renderFinalResult(stdoutText, checkpointWasRendered, statusBlocks) {
     return 0;
   }
 
+  // Utility actions (e.g., `create`, `handoff`) emit `action` + `status`
+  // rather than `outcome`. Render the operator summary the same way we do
+  // for run-flow `complete` outcomes so the user sees the substantive output.
+  const action = stringField(result, 'action');
+  const status = stringField(result, 'status');
+  if (action !== undefined && status !== undefined) {
+    const summaryPath = stringField(result, 'operator_summary_markdown_path');
+    if (summaryPath !== undefined && existsSync(summaryPath)) {
+      const markdown = readFileSync(summaryPath, 'utf8');
+      process.stdout.write(markdown.endsWith('\n') ? markdown : `${markdown}\n`);
+      return 0;
+    }
+  }
+
   renderLine('Circuit finished, but the presentation wrapper did not recognize the outcome.');
   const debugPath = debugPathFromResult(result);
   if (debugPath !== undefined) renderLine(`Debug path: ${debugPath}`);
