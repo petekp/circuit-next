@@ -174,10 +174,7 @@ describe('exploreTournamentProjector — rendering', () => {
     // "Recommended" badge appear attached to the wrong option.
     const optionsWithBidi = {
       ...validOptions,
-      options: [
-        { ...validOptions.options[0], label: 'React‮evil' },
-        validOptions.options[1],
-      ],
+      options: [{ ...validOptions.options[0], label: 'React‮evil' }, validOptions.options[1]],
     };
     const html = exploreTournamentProjector(
       buildContext({
