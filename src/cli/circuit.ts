@@ -676,7 +676,9 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
         route: {
           selectedFlow: runResult.flow_id as unknown as string,
           ...(priorRoute.routedBy === undefined ? {} : { routedBy: priorRoute.routedBy }),
-          ...(priorRoute.routerReason === undefined ? {} : { routerReason: priorRoute.routerReason }),
+          ...(priorRoute.routerReason === undefined
+            ? {}
+            : { routerReason: priorRoute.routerReason }),
         },
       });
       const resumeRuntimeFields = showRuntimeDecision()

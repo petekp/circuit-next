@@ -5,10 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { OperatorSummary } from '../../src/schemas/operator-summary.js';
 import { RunResult } from '../../src/schemas/result.js';
-import {
-  readPriorRoute,
-  writeOperatorSummary,
-} from '../../src/shared/operator-summary-writer.js';
+import { readPriorRoute, writeOperatorSummary } from '../../src/shared/operator-summary-writer.js';
 
 let runFolder: string;
 
@@ -461,7 +458,8 @@ describe('operator summary writer', () => {
     const html = readFileSync(written.htmlPath as string, 'utf8');
     expect(html).toContain('<!doctype html>');
     expect(html).toContain('Which framework &lt;should&gt; we pick?');
-    expect(html).toContain('class="card recommended selected"');
+    expect(html).toContain('class="card intent-positive"');
+    expect(html).toContain('<span class="intent-badge intent-positive">Selected</span>');
     expect(html).toContain('Vue &lt;script&gt;alert(1)&lt;/script&gt;');
     expect(html).not.toContain('<script>alert(1)</script>');
     expect(html).toContain('high confidence');
@@ -813,7 +811,7 @@ describe('operator summary writer', () => {
     // Adversarial input: a U+202E (RTL override) in an option label flips
     // the visible order of subsequent text in the operator's browser. The
     // operator could be deceived about which option they are picking.
-    const rtlLabel = `safe‮gnp.exe`;
+    const rtlLabel = 'safe‮gnp.exe';
     writeReport('reports/decision-options.json', {
       decision_question: 'Pick one.',
       recommendation_basis: 'tournament-aggregate@v1 + tournament-review@v1',

@@ -6,17 +6,12 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import {
-  ExploreDecision,
-  ExploreDecisionOptions,
-  ExploreTournamentReview,
-} from '../flows/explore/reports.js';
-import {
   OperatorSummary,
   type OperatorSummaryReportLink,
   type OperatorSummaryWarning,
 } from '../schemas/operator-summary.js';
 import type { RunResult } from '../schemas/result.js';
-import { renderExploreTournamentHTML } from './operator-summary-html.js';
+import { HTML_PROJECTORS, type HtmlProjectorContext, type JsonObject } from './html/index.js';
 import { RUN_RESULT_RELATIVE_PATH } from './result-path.js';
 import { resolveRunRelative } from './run-relative-path.js';
 import {
@@ -55,9 +50,7 @@ export function readPriorRoute(runFolder: string): {
     const routerReason = raw.router_reason;
     return {
       ...(routedBy === 'explicit' || routedBy === 'classifier' ? { routedBy } : {}),
-      ...(typeof routerReason === 'string' && routerReason.length > 0
-        ? { routerReason }
-        : {}),
+      ...(typeof routerReason === 'string' && routerReason.length > 0 ? { routerReason } : {}),
     };
   } catch {
     return {};
@@ -83,8 +76,6 @@ export interface CheckpointWaitingOperatorSummaryResult {
 
 export type OperatorSummaryRunResult = RunResult | CheckpointWaitingOperatorSummaryResult;
 
-type JsonObject = Record<string, unknown>;
-
 const FLOW_RESULT_PATHS: Record<string, string> = {
   build: 'reports/build-result.json',
   explore: 'reports/explore-result.json',
@@ -95,6 +86,9 @@ const FLOW_RESULT_PATHS: Record<string, string> = {
 };
 const MAX_OPERATOR_SUMMARY_STATUS_TEXT_CHARS = 180;
 
+// Label used when listing the HTML artifact in report_paths. Not load-bearing
+// for control flow — markdown rendering and CLI plumbing read summary.html_path
+// directly. Kept as a friendly label for the artifact list.
 const HTML_REPORT_LABEL = 'Operator summary (HTML)' as const;
 
 function jsonPath(runFolder: string): string {
@@ -350,42 +344,6 @@ function exploreTournamentSnapshot(flowReport: JsonObject | undefined): JsonObje
   return stringField(snapshot, 'selected_option_id') === undefined ? undefined : snapshot;
 }
 
-type ExploreTournamentHtmlPayload = {
-  readonly decisionOptions: ExploreDecisionOptions;
-  readonly tournamentReview: ExploreTournamentReview;
-  readonly decision: ExploreDecision;
-};
-
-function exploreTournamentHtmlPayload(
-  runFolder: string,
-  flowReport: JsonObject | undefined,
-): ExploreTournamentHtmlPayload | undefined {
-  // HTML emits only when the tournament reached a finalized decision. A
-  // checkpoint_waiting outcome that has set selected_option_id but not yet
-  // written decision.json must NOT trigger HTML — the operator deserves a
-  // surface that matches the actual run state.
-  const snapshot = isObject(flowReport?.verdict_snapshot) ? flowReport.verdict_snapshot : undefined;
-  if (stringField(snapshot, 'decision_verdict') !== 'decided') return undefined;
-
-  const optionsRaw = evidenceReportById(runFolder, flowReport, 'explore.decision-options');
-  const reviewRaw = evidenceReportById(runFolder, flowReport, 'explore.tournament-review');
-  const decisionRaw = evidenceReportById(runFolder, flowReport, 'explore.decision');
-  if (optionsRaw === undefined || reviewRaw === undefined || decisionRaw === undefined) {
-    return undefined;
-  }
-
-  const optionsParsed = ExploreDecisionOptions.safeParse(optionsRaw);
-  const reviewParsed = ExploreTournamentReview.safeParse(reviewRaw);
-  const decisionParsed = ExploreDecision.safeParse(decisionRaw);
-  if (!optionsParsed.success || !reviewParsed.success || !decisionParsed.success) return undefined;
-
-  return {
-    decisionOptions: optionsParsed.data,
-    tournamentReview: reviewParsed.data,
-    decision: decisionParsed.data,
-  };
-}
-
 function exploreReviewFoldInDetails(flowReport: JsonObject | undefined): string[] {
   const foldIns = objectField(flowReport, 'review_fold_ins');
   if (foldIns === undefined) return [];
@@ -601,9 +559,8 @@ function renderMarkdown(summary: OperatorSummary): string {
     }
   }
 
-  const htmlLink = summary.report_paths.find((report) => report.label === HTML_REPORT_LABEL);
-  if (htmlLink !== undefined) {
-    lines.push('', `Rich summary: ${htmlLink.path}`);
+  if (summary.html_path !== undefined) {
+    lines.push('', `Rich summary: ${summary.html_path}`);
   }
 
   return `${lines.join('\n')}\n`;
@@ -633,34 +590,48 @@ export function writeOperatorSummary(input: {
   // Write HTML first so JSON+markdown only promise a path that actually
   // exists on disk. Failure here degrades to a markdown-only summary; it
   // must not abort the run or break the JSON/MD siblings.
-  const htmlPayload =
-    flowId === 'explore' ? exploreTournamentHtmlPayload(input.runFolder, flowReport) : undefined;
+  const projector = HTML_PROJECTORS[flowId];
   const candidateHtmlPath = htmlPath(input.runFolder);
   let outHtmlPath: string | undefined;
   let htmlEmitWarning: OperatorSummaryWarning | undefined;
-  if (htmlPayload === undefined) {
-    // Stale-cleanup: a resume that no longer produces a typed payload must
-    // not leave the previous run's HTML behind. The operator may have
-    // bookmarked or scrolled to that path and would otherwise open stale
-    // content silently.
+  let renderedHtml: string | undefined;
+  if (projector !== undefined) {
+    try {
+      const ctx: HtmlProjectorContext = {
+        runFolder: input.runFolder,
+        runId: input.runResult.run_id as unknown as string,
+        flowId,
+        flowReport,
+        readJsonRunRelative: (relPath) => readJsonIfPresent(input.runFolder, relPath),
+        readEvidenceReportById: (reportId) =>
+          evidenceReportById(input.runFolder, flowReport, reportId),
+      };
+      renderedHtml = projector(ctx);
+    } catch (err) {
+      htmlEmitWarning = {
+        kind: 'html_render_failed',
+        message: err instanceof Error ? err.message : String(err),
+        path: candidateHtmlPath,
+      };
+    }
+  }
+  if (renderedHtml === undefined) {
+    // Stale-cleanup: a resume whose projector returned undefined (or that
+    // has no projector at all) must not leave the previous run's HTML
+    // behind. The operator may have bookmarked or scrolled to that path
+    // and would otherwise open stale content silently.
     if (existsSync(candidateHtmlPath)) rmSync(candidateHtmlPath, { force: true, recursive: true });
   } else {
     try {
-      const html = renderExploreTournamentHTML({
-        runId: input.runResult.run_id as unknown as string,
-        flowId,
-        decisionOptions: htmlPayload.decisionOptions,
-        tournamentReview: htmlPayload.tournamentReview,
-        decision: htmlPayload.decision,
-      });
-      writeFileSync(candidateHtmlPath, html);
+      writeFileSync(candidateHtmlPath, renderedHtml);
       outHtmlPath = candidateHtmlPath;
     } catch (err) {
       // writeFileSync may have left a partial file behind. Remove it so
       // neither the envelope nor any reader points at a half-written
       // artifact, and surface the failure as a warning the operator can
       // see in the markdown summary.
-      if (existsSync(candidateHtmlPath)) rmSync(candidateHtmlPath, { force: true, recursive: true });
+      if (existsSync(candidateHtmlPath))
+        rmSync(candidateHtmlPath, { force: true, recursive: true });
       htmlEmitWarning = {
         kind: 'html_write_failed',
         message: err instanceof Error ? err.message : String(err),
@@ -734,6 +705,7 @@ export function writeOperatorSummary(input: {
     ],
     run_folder: input.runFolder,
     ...(resultPath === undefined ? {} : { result_path: resultPath }),
+    ...(outHtmlPath === undefined ? {} : { html_path: outHtmlPath }),
     report_paths: reportPaths,
     ...(input.runResult.outcome === 'checkpoint_waiting'
       ? { checkpoint: input.runResult.checkpoint }

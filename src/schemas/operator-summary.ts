@@ -53,6 +53,7 @@ export const OperatorSummary = z
     evidence_warnings: z.array(OperatorSummaryWarning),
     run_folder: z.string().min(1),
     result_path: z.string().min(1).optional(),
+    html_path: z.string().min(1).optional(),
     report_paths: z.array(OperatorSummaryReportLink),
     checkpoint: z
       .object({

@@ -66,9 +66,9 @@ describe('isAutoOpenPathSafe — POSIX (darwin/linux)', () => {
         'darwin',
       ),
     ).toBe(true);
-    expect(
-      isAutoOpenPathSafe('/home/dev/runs/run-id/reports/operator-summary.html', 'linux'),
-    ).toBe(true);
+    expect(isAutoOpenPathSafe('/home/dev/runs/run-id/reports/operator-summary.html', 'linux')).toBe(
+      true,
+    );
   });
 
   it('rejects relative paths so a leading `-` cannot be parsed as a flag by open(1)', () => {

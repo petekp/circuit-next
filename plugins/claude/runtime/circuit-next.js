@@ -22203,6 +22203,7 @@ var OperatorSummary = external_exports.object({
   evidence_warnings: external_exports.array(OperatorSummaryWarning),
   run_folder: external_exports.string().min(1),
   result_path: external_exports.string().min(1).optional(),
+  html_path: external_exports.string().min(1).optional(),
   report_paths: external_exports.array(OperatorSummaryReportLink),
   checkpoint: external_exports.object({
     step_id: external_exports.string().min(1),
@@ -22211,7 +22212,7 @@ var OperatorSummary = external_exports.object({
   }).strict().optional()
 }).strict();
 
-// dist/shared/operator-summary-html.js
+// dist/shared/html/page.js
 var ESCAPE_MAP = {
   "&": "&amp;",
   "<": "&lt;",
@@ -22219,7 +22220,22 @@ var ESCAPE_MAP = {
   '"': "&quot;",
   "'": "&#39;"
 };
-var SANITIZE_PATTERN = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u202A-\u202E\u2066-\u2069]/g;
+function buildSanitizePattern() {
+  const ranges = [
+    [0, 8],
+    [11, 12],
+    [14, 31],
+    [8234, 8238],
+    [8294, 8297]
+  ];
+  const klass = ranges.map(([lo, hi]) => {
+    const loEsc = `\\u${lo.toString(16).padStart(4, "0")}`;
+    const hiEsc = `\\u${hi.toString(16).padStart(4, "0")}`;
+    return `${loEsc}-${hiEsc}`;
+  }).join("");
+  return new RegExp(`[${klass}]`, "g");
+}
+var SANITIZE_PATTERN = buildSanitizePattern();
 var MAX_BULLET_LEN = 4096;
 var MAX_PROMPT_LEN = 32768;
 function escapeHtml(value) {
@@ -22228,6 +22244,96 @@ function escapeHtml(value) {
 function truncate(value, max) {
   return value.length > max ? `${value.slice(0, max - 1)}\u2026` : value;
 }
+function styles() {
+  return `:root{--bg:#fafaf9;--surface:#fff;--surface-2:#f5f5f4;--border:#e7e5e4;--border-strong:#d6d3d1;--text:#1c1917;--text-2:#57534e;--text-3:#a8a29e;--accent:#0f172a;--intent-positive:#166534;--intent-positive-soft:#f0fdf4;--intent-info:#1e40af;--intent-info-soft:#eff6ff;--intent-attention:#9a3412;--intent-attention-soft:#fff7ed;--intent-negative:#991b1b;--intent-negative-soft:#fef2f2}@media (prefers-color-scheme:dark){:root{--bg:#0c0a09;--surface:#1c1917;--surface-2:#292524;--border:#292524;--border-strong:#44403c;--text:#fafaf9;--text-2:#a8a29e;--text-3:#78716c;--accent:#fafaf9;--intent-positive:#4ade80;--intent-positive-soft:#052e16;--intent-info:#93c5fd;--intent-info-soft:#172554;--intent-attention:#fb923c;--intent-attention-soft:#431407;--intent-negative:#f87171;--intent-negative-soft:#450a0a}}*{box-sizing:border-box}html,body{margin:0;padding:0}body{font:15px/1.55 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}.wrap{max-width:1200px;margin:0 auto;padding:48px 32px 96px}header.top{margin-bottom:24px}.meta{font-size:12px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}h1{font:600 28px/1.25 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;margin:0 0 8px;letter-spacing:-.01em}.subtitle{color:var(--text-2);font-size:16px;margin:0}.verdict{margin:24px 0 32px;padding:16px 20px;background:var(--intent-info-soft);border:1px solid var(--intent-info);border-radius:8px;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}.verdict.intent-positive{background:var(--intent-positive-soft);border-color:var(--intent-positive)}.verdict.intent-attention{background:var(--intent-attention-soft);border-color:var(--intent-attention)}.verdict.intent-negative{background:var(--intent-negative-soft);border-color:var(--intent-negative)}.verdict .badge{font:600 11px/1 -apple-system,system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--intent-info);padding:4px 8px;border:1px solid var(--intent-info);border-radius:4px}.verdict.intent-positive .badge{color:var(--intent-positive);border-color:var(--intent-positive)}.verdict.intent-attention .badge{color:var(--intent-attention);border-color:var(--intent-attention)}.verdict.intent-negative .badge{color:var(--intent-negative);border-color:var(--intent-negative)}.verdict .text{color:var(--text);font-size:14px;flex:1;min-width:200px}.verdict .text strong{font-weight:600}.verdict .confidence{font-size:12px;color:var(--text-2);text-transform:lowercase}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;display:flex;flex-direction:column;gap:16px;position:relative}.card.intent-info{border-color:var(--intent-info);box-shadow:0 0 0 3px var(--intent-info-soft)}.card.intent-positive{border-color:var(--intent-positive);box-shadow:0 0 0 3px var(--intent-positive-soft)}.card.intent-attention{border-color:var(--intent-attention);box-shadow:0 0 0 3px var(--intent-attention-soft)}.card.intent-negative{border-color:var(--intent-negative);box-shadow:0 0 0 3px var(--intent-negative-soft)}.card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.card-id{font:500 11px/1 ui-monospace,"SF Mono",Menlo,monospace;color:var(--text-3);letter-spacing:.05em}.card h2{font:600 17px/1.3 -apple-system,system-ui,sans-serif;margin:4px 0 0;letter-spacing:-.005em}.intent-badge{font:600 10px/1 -apple-system,system-ui,sans-serif;text-transform:uppercase;letter-spacing:.08em;padding:4px 8px;border-radius:4px;white-space:nowrap;color:var(--intent-info);background:var(--intent-info-soft)}.intent-badge.intent-positive{color:var(--intent-positive);background:var(--intent-positive-soft)}.intent-badge.intent-attention{color:var(--intent-attention);background:var(--intent-attention-soft)}.intent-badge.intent-negative{color:var(--intent-negative);background:var(--intent-negative-soft)}.summary{color:var(--text-2);font-size:14px;margin:0}.section-label{font:600 10px/1 -apple-system,system-ui,sans-serif;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);margin:0 0 8px}ul.tradeoffs{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}ul.tradeoffs li{font-size:13px;color:var(--text);padding-left:18px;position:relative;line-height:1.5}ul.tradeoffs li::before{content:"\\2022";position:absolute;left:6px;color:var(--text-3);font-weight:700}.evidence{display:flex;flex-wrap:wrap;gap:6px}.chip{font:500 11px/1 ui-monospace,"SF Mono",Menlo,monospace;padding:4px 8px;background:var(--surface-2);border:1px solid var(--border);border-radius:4px;color:var(--text-2)}.actions{display:flex;gap:8px;margin-top:auto;padding-top:8px}button.copy{font:500 13px/1 -apple-system,system-ui,sans-serif;padding:8px 12px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer}button.copy:hover{background:var(--surface-2)}button.copy.primary{background:var(--accent);color:var(--bg);border-color:var(--accent)}button.copy.primary:hover{opacity:.9}details{margin-top:32px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 16px}details summary{cursor:pointer;font:500 13px/1.4 -apple-system,system-ui,sans-serif;color:var(--text-2);user-select:none}details[open] summary{margin-bottom:12px}details .body{font-size:13px;color:var(--text-2)}details ul{margin:6px 0;padding-left:20px}details li{margin-bottom:4px}footer{margin-top:48px;padding-top:24px;border-top:1px solid var(--border);color:var(--text-3);font-size:12px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px}footer code{font:500 11px/1 ui-monospace,"SF Mono",Menlo,monospace}`;
+}
+function clipboardScript() {
+  return `document.querySelectorAll('button.copy').forEach(btn=>{btn.addEventListener('click',async()=>{const p=btn.dataset.prompt;if(!p)return;try{await navigator.clipboard.writeText(p);const o=btn.textContent;btn.textContent='Copied';setTimeout(()=>{btn.textContent=o;},1200);}catch(e){btn.textContent='Copy failed';}});});`;
+}
+function renderPage(input) {
+  const footerLeft = input.footerLeft === void 0 ? "" : `<span>${escapeHtml(input.footerLeft)}</span>`;
+  const footerRight = input.footerRight === void 0 ? "" : `<span><code>${escapeHtml(input.footerRight)}</code></span>`;
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(input.title)}</title>
+<style>${styles()}</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="meta">${escapeHtml(input.metaLine)}</div>
+    <h1>${escapeHtml(input.headline)}</h1>
+    <p class="subtitle">${escapeHtml(input.subtitle)}</p>
+  </header>
+${input.bodyHtml}
+  <footer>
+    ${footerLeft}
+    ${footerRight}
+  </footer>
+</div>
+<script>${clipboardScript()}</script>
+</body>
+</html>
+`;
+}
+
+// dist/shared/html/components.js
+function intentClass(intent) {
+  return intent === "neutral" || intent === "info" ? "" : `intent-${intent}`;
+}
+function intentBadge(input) {
+  const classes = ["intent-badge"];
+  const className = intentClass(input.intent);
+  if (className.length > 0)
+    classes.push(className);
+  return `<span class="${classes.join(" ")}">${escapeHtml(input.text)}</span>`;
+}
+function chip(text) {
+  return `<span class="chip">${escapeHtml(truncate(text, MAX_BULLET_LEN))}</span>`;
+}
+function card(input) {
+  const intent = input.intent ?? "neutral";
+  const classes = ["card"];
+  const intentClassName = intentClass(intent);
+  if (intentClassName.length > 0)
+    classes.push(intentClassName);
+  const eyebrowMarkup = input.eyebrow === void 0 ? "" : `<div class="card-id">${escapeHtml(input.eyebrow)}</div>`;
+  const badgeMarkup = input.badge === void 0 ? "" : intentBadge(input.badge);
+  return `    <article class="${classes.join(" ")}">
+      <div class="card-head">
+        <div>
+          ${eyebrowMarkup}
+          <h2>${escapeHtml(input.title)}</h2>
+        </div>
+        ${badgeMarkup}
+      </div>
+${input.bodyHtml}
+    </article>`;
+}
+function verdictBanner(input) {
+  const classes = ["verdict"];
+  const intentClassName = intentClass(input.intent);
+  if (intentClassName.length > 0)
+    classes.push(intentClassName);
+  const aside = input.aside === void 0 ? "" : `<span class="confidence">${escapeHtml(input.aside)}</span>`;
+  return `  <div class="${classes.join(" ")}">
+    <span class="badge">${escapeHtml(input.badgeText)}</span>
+    <span class="text">${input.mainHtml}</span>
+    ${aside}
+  </div>`;
+}
+
+// dist/shared/html/explore-tournament.js
+function stringField(report, key) {
+  const value = report?.[key];
+  return typeof value === "string" && value.length > 0 ? value : void 0;
+}
+function isObject2(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
 function verdictBadgeText(verdict) {
   if (verdict === "recommend")
     return "Recommended";
@@ -22235,27 +22341,22 @@ function verdictBadgeText(verdict) {
     return "No clear winner";
   return "Operator decision";
 }
+function verdictIntent(verdict) {
+  if (verdict === "recommend")
+    return "info";
+  if (verdict === "no-clear-winner")
+    return "attention";
+  return "attention";
+}
 function confidenceText(confidence) {
   return `${confidence} confidence`;
 }
 function renderOptionCard(option, isRecommended, isSelected) {
-  const cardClasses = ["card"];
-  if (isRecommended)
-    cardClasses.push("recommended");
-  if (isSelected)
-    cardClasses.push("selected");
-  const badgeMarkup = isSelected ? '<span class="rec-badge selected-badge">Selected</span>' : isRecommended ? '<span class="rec-badge">Recommended</span>' : "";
+  const intent = isSelected ? "positive" : isRecommended ? "info" : "neutral";
+  const badge = isSelected ? { text: "Selected", intent: "positive" } : isRecommended ? { text: "Recommended", intent: "info" } : void 0;
   const tradeoffsMarkup = option.tradeoffs.map((tradeoff) => `<li>${escapeHtml(truncate(tradeoff, MAX_BULLET_LEN))}</li>`).join("\n          ");
-  const evidenceMarkup = option.evidence_refs.map((ref) => `<span class="chip">${escapeHtml(truncate(ref, MAX_BULLET_LEN))}</span>`).join("\n          ");
-  return `    <article class="${cardClasses.join(" ")}">
-      <div class="card-head">
-        <div>
-          <div class="card-id">${escapeHtml(option.id)}</div>
-          <h2>${escapeHtml(option.label)}</h2>
-        </div>
-        ${badgeMarkup}
-      </div>
-      <p class="summary">${escapeHtml(option.summary)}</p>
+  const evidenceMarkup = option.evidence_refs.map((ref) => chip(ref)).join("\n          ");
+  const bodyHtml = `      <p class="summary">${escapeHtml(option.summary)}</p>
       <div>
         <p class="section-label">Tradeoffs</p>
         <ul class="tradeoffs">
@@ -22270,18 +22371,25 @@ function renderOptionCard(option, isRecommended, isSelected) {
       </div>
       <div class="actions">
         <button class="copy primary" data-prompt="${escapeHtml(truncate(option.best_case_prompt, MAX_PROMPT_LEN))}">Copy as prompt</button>
-      </div>
-    </article>`;
+      </div>`;
+  return card({
+    intent,
+    eyebrow: option.id,
+    title: option.label,
+    ...badge === void 0 ? {} : { badge },
+    bodyHtml
+  });
 }
-function renderVerdictBanner(review, decisionOptions, decision2) {
+function renderTournamentVerdictBanner(review, decisionOptions, decision2) {
   const recommendedOption = decisionOptions.options.find((option) => option.id === review.recommended_option_id);
   const recommendedLabel = recommendedOption?.label ?? review.recommended_option_id;
-  const decisionText = decision2?.decision ?? review.comparison;
-  return `  <div class="verdict">
-    <span class="badge">${escapeHtml(verdictBadgeText(review.verdict))}</span>
-    <span class="text"><strong>${escapeHtml(recommendedLabel)}</strong> &mdash; ${escapeHtml(decisionText)}</span>
-    <span class="confidence">${escapeHtml(confidenceText(review.confidence))}</span>
-  </div>`;
+  const decisionText = decision2.decision;
+  return verdictBanner({
+    intent: verdictIntent(review.verdict),
+    badgeText: verdictBadgeText(review.verdict),
+    mainHtml: `<strong>${escapeHtml(recommendedLabel)}</strong> &mdash; ${escapeHtml(decisionText)}`,
+    aside: confidenceText(review.confidence)
+  });
 }
 function renderTournamentDetails(review, decision2) {
   const sections = [];
@@ -22297,47 +22405,47 @@ function renderTournamentDetails(review, decision2) {
   if (review.tradeoff_question.length > 0) {
     sections.push(`<p><strong>Tradeoff question.</strong> ${escapeHtml(review.tradeoff_question)}</p>`);
   }
-  if (decision2 !== void 0) {
-    sections.push(`<p><strong>Rationale.</strong> ${escapeHtml(decision2.rationale)}</p>`);
-    if (decision2.residual_risks.length > 0) {
-      const items = decision2.residual_risks.map((item) => `<li>${escapeHtml(truncate(item, MAX_BULLET_LEN))}</li>`).join("");
-      sections.push(`<p><strong>Residual risks.</strong></p><ul>${items}</ul>`);
-    }
-    sections.push(`<p><strong>Next action.</strong> ${escapeHtml(decision2.next_action)}</p>`);
+  sections.push(`<p><strong>Rationale.</strong> ${escapeHtml(decision2.rationale)}</p>`);
+  if (decision2.residual_risks.length > 0) {
+    const items = decision2.residual_risks.map((item) => `<li>${escapeHtml(truncate(item, MAX_BULLET_LEN))}</li>`).join("");
+    sections.push(`<p><strong>Residual risks.</strong></p><ul>${items}</ul>`);
   }
+  sections.push(`<p><strong>Next action.</strong> ${escapeHtml(decision2.next_action)}</p>`);
   return sections.join("\n      ");
 }
-function styles() {
-  return `:root{--bg:#fafaf9;--surface:#fff;--surface-2:#f5f5f4;--border:#e7e5e4;--border-strong:#d6d3d1;--text:#1c1917;--text-2:#57534e;--text-3:#a8a29e;--accent:#0f172a;--good:#166534;--warn:#9a3412;--recommended:#1e40af;--recommended-soft:#eff6ff;--selected:#166534;--selected-soft:#f0fdf4}@media (prefers-color-scheme:dark){:root{--bg:#0c0a09;--surface:#1c1917;--surface-2:#292524;--border:#292524;--border-strong:#44403c;--text:#fafaf9;--text-2:#a8a29e;--text-3:#78716c;--accent:#fafaf9;--good:#4ade80;--warn:#fb923c;--recommended:#93c5fd;--recommended-soft:#172554;--selected:#4ade80;--selected-soft:#052e16}}*{box-sizing:border-box}html,body{margin:0;padding:0}body{font:15px/1.55 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}.wrap{max-width:1200px;margin:0 auto;padding:48px 32px 96px}header.top{margin-bottom:24px}.meta{font-size:12px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}h1{font:600 28px/1.25 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;margin:0 0 8px;letter-spacing:-.01em}.subtitle{color:var(--text-2);font-size:16px;margin:0}.verdict{margin:24px 0 32px;padding:16px 20px;background:var(--recommended-soft);border:1px solid var(--recommended);border-radius:8px;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}.verdict .badge{font:600 11px/1 -apple-system,system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--recommended);padding:4px 8px;border:1px solid var(--recommended);border-radius:4px}.verdict .text{color:var(--text);font-size:14px;flex:1;min-width:200px}.verdict .text strong{font-weight:600}.verdict .confidence{font-size:12px;color:var(--text-2);text-transform:lowercase}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;display:flex;flex-direction:column;gap:16px;position:relative}.card.recommended{border-color:var(--recommended);box-shadow:0 0 0 3px var(--recommended-soft)}.card.selected{border-color:var(--selected);box-shadow:0 0 0 3px var(--selected-soft)}.card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.card-id{font:500 11px/1 ui-monospace,"SF Mono",Menlo,monospace;color:var(--text-3);letter-spacing:.05em}.card h2{font:600 17px/1.3 -apple-system,system-ui,sans-serif;margin:4px 0 0;letter-spacing:-.005em}.rec-badge{font:600 10px/1 -apple-system,system-ui,sans-serif;text-transform:uppercase;letter-spacing:.08em;color:var(--recommended);background:var(--recommended-soft);padding:4px 8px;border-radius:4px;white-space:nowrap}.rec-badge.selected-badge{color:var(--selected);background:var(--selected-soft)}.summary{color:var(--text-2);font-size:14px;margin:0}.section-label{font:600 10px/1 -apple-system,system-ui,sans-serif;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);margin:0 0 8px}ul.tradeoffs{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}ul.tradeoffs li{font-size:13px;color:var(--text);padding-left:18px;position:relative;line-height:1.5}ul.tradeoffs li::before{content:"\\2022";position:absolute;left:6px;color:var(--text-3);font-weight:700}.evidence{display:flex;flex-wrap:wrap;gap:6px}.chip{font:500 11px/1 ui-monospace,"SF Mono",Menlo,monospace;padding:4px 8px;background:var(--surface-2);border:1px solid var(--border);border-radius:4px;color:var(--text-2)}.actions{display:flex;gap:8px;margin-top:auto;padding-top:8px}button.copy{font:500 13px/1 -apple-system,system-ui,sans-serif;padding:8px 12px;border:1px solid var(--border-strong);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer}button.copy:hover{background:var(--surface-2)}button.copy.primary{background:var(--accent);color:var(--bg);border-color:var(--accent)}button.copy.primary:hover{opacity:.9}details{margin-top:32px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 16px}details summary{cursor:pointer;font:500 13px/1.4 -apple-system,system-ui,sans-serif;color:var(--text-2);user-select:none}details[open] summary{margin-bottom:12px}details .body{font-size:13px;color:var(--text-2)}details ul{margin:6px 0;padding-left:20px}details li{margin-bottom:4px}footer{margin-top:48px;padding-top:24px;border-top:1px solid var(--border);color:var(--text-3);font-size:12px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px}footer code{font:500 11px/1 ui-monospace,"SF Mono",Menlo,monospace}`;
+function loadHtmlPayload(flowReport, readEvidenceReportById) {
+  const snapshot = isObject2(flowReport?.verdict_snapshot) ? flowReport.verdict_snapshot : void 0;
+  if (stringField(snapshot, "decision_verdict") !== "decided")
+    return void 0;
+  const optionsRaw = readEvidenceReportById("explore.decision-options");
+  const reviewRaw = readEvidenceReportById("explore.tournament-review");
+  const decisionRaw = readEvidenceReportById("explore.decision");
+  if (optionsRaw === void 0 || reviewRaw === void 0 || decisionRaw === void 0) {
+    return void 0;
+  }
+  const optionsParsed = ExploreDecisionOptions.safeParse(optionsRaw);
+  const reviewParsed = ExploreTournamentReview.safeParse(reviewRaw);
+  const decisionParsed = ExploreDecision.safeParse(decisionRaw);
+  if (!optionsParsed.success || !reviewParsed.success || !decisionParsed.success)
+    return void 0;
+  return {
+    decisionOptions: optionsParsed.data,
+    tournamentReview: reviewParsed.data,
+    decision: decisionParsed.data
+  };
 }
-function clipboardScript() {
-  return `document.querySelectorAll('button.copy').forEach(btn=>{btn.addEventListener('click',async()=>{const p=btn.dataset.prompt;if(!p)return;try{await navigator.clipboard.writeText(p);const o=btn.textContent;btn.textContent='Copied';setTimeout(()=>{btn.textContent=o;},1200);}catch(e){btn.textContent='Copy failed';}});});`;
-}
-function renderExploreTournamentHTML(input) {
-  const { decisionOptions, tournamentReview, decision: decision2 } = input;
+var exploreTournamentProjector = (ctx) => {
+  const payload = loadHtmlPayload(ctx.flowReport, ctx.readEvidenceReportById);
+  if (payload === void 0)
+    return void 0;
+  const { decisionOptions, tournamentReview, decision: decision2 } = payload;
   const recommendedId = tournamentReview.recommended_option_id;
-  const selectedId = decision2?.selected_option_id;
+  const selectedId = decision2.selected_option_id;
   const subtitle = `${decisionOptions.options.length} options surfaced. Tournament review: ${tournamentReview.verdict.replace(/-/g, " ")} (${tournamentReview.confidence} confidence).`;
   const cards = decisionOptions.options.map((option) => renderOptionCard(option, option.id === recommendedId, option.id === selectedId)).join("\n\n");
-  const verdictBanner = renderVerdictBanner(tournamentReview, decisionOptions, decision2);
+  const banner = renderTournamentVerdictBanner(tournamentReview, decisionOptions, decision2);
   const detailsBody = renderTournamentDetails(tournamentReview, decision2);
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escapeHtml(decisionOptions.decision_question)} &middot; Circuit Explore</title>
-<style>${styles()}</style>
-</head>
-<body>
-<div class="wrap">
-  <header class="top">
-    <div class="meta">Explore &middot; ${escapeHtml(input.flowId)} &middot; ${escapeHtml(input.runId)}</div>
-    <h1>${escapeHtml(decisionOptions.decision_question)}</h1>
-    <p class="subtitle">${escapeHtml(subtitle)}</p>
-  </header>
-
-${verdictBanner}
+  const bodyHtml = `${banner}
 
   <div class="grid">
 ${cards}
@@ -22349,17 +22457,22 @@ ${cards}
       ${detailsBody}
     </div>
   </details>
-
-  <footer>
-    <span>circuit &middot; explore &middot; ${escapeHtml(input.runId)}</span>
-    <span><code>${escapeHtml(decisionOptions.recommendation_basis)}</code></span>
-  </footer>
-</div>
-<script>${clipboardScript()}</script>
-</body>
-</html>
 `;
-}
+  return renderPage({
+    title: `${decisionOptions.decision_question} \xB7 Circuit Explore`,
+    metaLine: `Explore \xB7 ${ctx.flowId} \xB7 ${ctx.runId}`,
+    headline: decisionOptions.decision_question,
+    subtitle,
+    bodyHtml,
+    footerLeft: `circuit \xB7 explore \xB7 ${ctx.runId}`,
+    footerRight: decisionOptions.recommendation_basis
+  });
+};
+
+// dist/shared/html/index.js
+var HTML_PROJECTORS = {
+  explore: exploreTournamentProjector
+};
 
 // dist/shared/operator-summary-writer.js
 function readPriorRoute(runFolder) {
@@ -22368,7 +22481,7 @@ function readPriorRoute(runFolder) {
     return {};
   try {
     const raw = JSON.parse(readFileSync18(path, "utf8"));
-    if (!isObject2(raw))
+    if (!isObject3(raw))
       return {};
     const routedBy = raw.routed_by;
     const routerReason = raw.router_reason;
@@ -22399,7 +22512,7 @@ function markdownPath(runFolder) {
 function htmlPath(runFolder) {
   return join11(runFolder, "reports", "operator-summary.html");
 }
-function isObject2(value) {
+function isObject3(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 function readJsonIfPresent(runFolder, relPath) {
@@ -22407,9 +22520,9 @@ function readJsonIfPresent(runFolder, relPath) {
   if (!existsSync8(path))
     return void 0;
   const parsed = JSON.parse(readFileSync18(path, "utf8"));
-  return isObject2(parsed) ? parsed : void 0;
+  return isObject3(parsed) ? parsed : void 0;
 }
-function stringField(report, key) {
+function stringField2(report, key) {
   const value = report?.[key];
   return typeof value === "string" && value.length > 0 ? value : void 0;
 }
@@ -22426,7 +22539,7 @@ function stringArrayField(report, key) {
 }
 function objectField(report, key) {
   const value = report?.[key];
-  return isObject2(value) ? value : void 0;
+  return isObject3(value) ? value : void 0;
 }
 function plural(count, singular, pluralText = `${singular}s`) {
   return `${count} ${count === 1 ? singular : pluralText}`;
@@ -22516,26 +22629,26 @@ function reportLink(runFolder, label, relPath, schema) {
 }
 function warningRecords(report) {
   return arrayField(report, "evidence_warnings").flatMap((item) => {
-    if (!isObject2(item))
+    if (!isObject3(item))
       return [];
-    const kind = stringField(item, "kind");
-    const message = stringField(item, "message");
+    const kind = stringField2(item, "kind");
+    const message = stringField2(item, "message");
     if (kind === void 0 || message === void 0)
       return [];
-    const path = stringField(item, "path");
+    const path = stringField2(item, "path");
     return [{ kind, message, ...path === void 0 ? {} : { path } }];
   });
 }
 function evidenceLinks(runFolder, report) {
   return arrayField(report, "evidence_links").flatMap((item) => {
-    if (!isObject2(item))
+    if (!isObject3(item))
       return [];
-    const reportId = stringField(item, "report_id");
-    const path = stringField(item, "path");
+    const reportId = stringField2(item, "report_id");
+    const path = stringField2(item, "path");
     if (reportId === void 0 || path === void 0)
       return [];
     try {
-      return [reportLink(runFolder, reportId, path, stringField(item, "schema"))];
+      return [reportLink(runFolder, reportId, path, stringField2(item, "schema"))];
     } catch {
       return [];
     }
@@ -22543,11 +22656,11 @@ function evidenceLinks(runFolder, report) {
 }
 function evidenceReportById(runFolder, report, reportId) {
   for (const item of arrayField(report, "evidence_links")) {
-    if (!isObject2(item))
+    if (!isObject3(item))
       continue;
-    if (stringField(item, "report_id") !== reportId)
+    if (stringField2(item, "report_id") !== reportId)
       continue;
-    const path = stringField(item, "path");
+    const path = stringField2(item, "path");
     if (path === void 0)
       return void 0;
     try {
@@ -22562,31 +22675,10 @@ function exploreDecisionReport(runFolder, flowReport) {
   return evidenceReportById(runFolder, flowReport, "explore.decision") ?? readJsonIfPresent(runFolder, "reports/decision.json");
 }
 function exploreTournamentSnapshot(flowReport) {
-  const snapshot = isObject2(flowReport?.verdict_snapshot) ? flowReport.verdict_snapshot : void 0;
-  if (stringField(snapshot, "decision_verdict") === "decided")
+  const snapshot = isObject3(flowReport?.verdict_snapshot) ? flowReport.verdict_snapshot : void 0;
+  if (stringField2(snapshot, "decision_verdict") === "decided")
     return snapshot;
-  return stringField(snapshot, "selected_option_id") === void 0 ? void 0 : snapshot;
-}
-function exploreTournamentHtmlPayload(runFolder, flowReport) {
-  const snapshot = isObject2(flowReport?.verdict_snapshot) ? flowReport.verdict_snapshot : void 0;
-  if (stringField(snapshot, "decision_verdict") !== "decided")
-    return void 0;
-  const optionsRaw = evidenceReportById(runFolder, flowReport, "explore.decision-options");
-  const reviewRaw = evidenceReportById(runFolder, flowReport, "explore.tournament-review");
-  const decisionRaw = evidenceReportById(runFolder, flowReport, "explore.decision");
-  if (optionsRaw === void 0 || reviewRaw === void 0 || decisionRaw === void 0) {
-    return void 0;
-  }
-  const optionsParsed = ExploreDecisionOptions.safeParse(optionsRaw);
-  const reviewParsed = ExploreTournamentReview.safeParse(reviewRaw);
-  const decisionParsed = ExploreDecision.safeParse(decisionRaw);
-  if (!optionsParsed.success || !reviewParsed.success || !decisionParsed.success)
-    return void 0;
-  return {
-    decisionOptions: optionsParsed.data,
-    tournamentReview: reviewParsed.data,
-    decision: decisionParsed.data
-  };
+  return stringField2(snapshot, "selected_option_id") === void 0 ? void 0 : snapshot;
 }
 function exploreReviewFoldInDetails(flowReport) {
   const foldIns = objectField(flowReport, "review_fold_ins");
@@ -22603,7 +22695,7 @@ function exploreReviewFoldInDetails(flowReport) {
   return details;
 }
 function exploreGuidanceDetails(flowReport) {
-  const summary = stringField(flowReport, "summary");
+  const summary = stringField2(flowReport, "summary");
   if (summary === void 0)
     return [];
   return [
@@ -22616,10 +22708,10 @@ function checkpointOptionDetails(runFolder, allowedChoices) {
   const optionsReport = readJsonIfPresent(runFolder, "reports/decision-options.json");
   const labelsById = /* @__PURE__ */ new Map();
   for (const option of arrayField(optionsReport, "options")) {
-    if (!isObject2(option))
+    if (!isObject3(option))
       continue;
-    const id = stringField(option, "id");
-    const label = stringField(option, "label");
+    const id = stringField2(option, "id");
+    const label = stringField2(option, "label");
     if (id === void 0 || label === void 0)
       continue;
     labelsById.set(id, label);
@@ -22630,15 +22722,15 @@ function checkpointOptionDetails(runFolder, allowedChoices) {
   });
 }
 function reviewEvidenceDetails(report) {
-  const evidenceSummary2 = isObject2(report?.evidence_summary) ? report.evidence_summary : void 0;
-  const kind = stringField(evidenceSummary2, "kind");
+  const evidenceSummary2 = isObject3(report?.evidence_summary) ? report.evidence_summary : void 0;
+  const kind = stringField2(evidenceSummary2, "kind");
   if (kind === "unavailable") {
-    const message = stringField(evidenceSummary2, "message");
+    const message = stringField2(evidenceSummary2, "message");
     return message === void 0 ? [] : [`Review evidence: unavailable (${message})`];
   }
   if (kind !== "git-working-tree")
     return [];
-  const policy2 = stringField(evidenceSummary2, "untracked_content_policy");
+  const policy2 = stringField2(evidenceSummary2, "untracked_content_policy");
   const count = numberField(evidenceSummary2, "untracked_file_count") ?? 0;
   const sampled = numberField(evidenceSummary2, "untracked_files_sampled") ?? 0;
   const truncated = evidenceSummary2?.untracked_files_truncated === true;
@@ -22677,14 +22769,14 @@ function friendlyVerificationStatus(status) {
 function flowHeadline(input) {
   const { flowId, flowReport, resultSummary: resultSummary2, runFolder } = input;
   if (flowId === "review") {
-    const verdict = stringField(flowReport, "verdict") ?? "review complete";
+    const verdict = stringField2(flowReport, "verdict") ?? "review complete";
     const findings = arrayField(flowReport, "findings").length;
     return `Circuit: Review complete. Verdict: ${verdict}. Findings: ${findings}.`;
   }
   if (flowId === "build") {
-    const outcome = stringField(flowReport, "outcome") ?? "complete";
-    const verification = stringField(flowReport, "verification_status") ?? "unknown";
-    const review = stringField(flowReport, "review_verdict") ?? "unknown";
+    const outcome = stringField2(flowReport, "outcome") ?? "complete";
+    const verification = stringField2(flowReport, "verification_status") ?? "unknown";
+    const review = stringField2(flowReport, "review_verdict") ?? "unknown";
     if (outcome === "complete" && verification === "passed" && review === "accept") {
       return "Circuit: Build complete. Change implemented, verification passed, review accepted.";
     }
@@ -22694,30 +22786,30 @@ function flowHeadline(input) {
     return `Circuit: Build finished with outcome ${outcome}. Verification: ${friendlyVerificationStatus(verification)}. Review: ${friendlyReviewStatus(review)}.`;
   }
   if (flowId === "fix") {
-    const outcome = stringField(flowReport, "outcome") ?? "complete";
-    const verification = stringField(flowReport, "verification_status") ?? "unknown";
-    const review = stringField(flowReport, "review_verdict") ?? stringField(flowReport, "review_status") ?? "unknown";
+    const outcome = stringField2(flowReport, "outcome") ?? "complete";
+    const verification = stringField2(flowReport, "verification_status") ?? "unknown";
+    const review = stringField2(flowReport, "review_verdict") ?? stringField2(flowReport, "review_status") ?? "unknown";
     return `Circuit: Fix finished with outcome ${outcome}. Verification: ${friendlyVerificationStatus(verification)}. Review: ${friendlyReviewStatus(review)}.`;
   }
   if (flowId === "migrate") {
-    const outcome = stringField(flowReport, "outcome") ?? "complete";
-    const verification = stringField(flowReport, "verification_status") ?? "unknown";
-    const review = stringField(flowReport, "review_verdict") ?? "unknown";
+    const outcome = stringField2(flowReport, "outcome") ?? "complete";
+    const verification = stringField2(flowReport, "verification_status") ?? "unknown";
+    const review = stringField2(flowReport, "review_verdict") ?? "unknown";
     return `Circuit: Migrate finished with outcome ${outcome}. Verification: ${friendlyVerificationStatus(verification)}. Review: ${friendlyReviewStatus(review)}.`;
   }
   if (flowId === "explore") {
-    const verdictSnapshot = isObject2(flowReport?.verdict_snapshot) ? flowReport.verdict_snapshot : void 0;
+    const verdictSnapshot = isObject3(flowReport?.verdict_snapshot) ? flowReport.verdict_snapshot : void 0;
     if (exploreTournamentSnapshot(flowReport) !== void 0) {
       const decisionReport = exploreDecisionReport(runFolder, flowReport);
-      const selected = stringField(decisionReport, "selected_option_label") ?? stringField(verdictSnapshot, "selected_option_id") ?? "selected option";
-      const decision2 = stringField(decisionReport, "decision") ?? stringField(flowReport, "summary") ?? resultSummary2;
+      const selected = stringField2(decisionReport, "selected_option_label") ?? stringField2(verdictSnapshot, "selected_option_id") ?? "selected option";
+      const decision2 = stringField2(decisionReport, "decision") ?? stringField2(flowReport, "summary") ?? resultSummary2;
       return `Circuit: Decision made. Selected: ${selected}. ${sentence(decision2)}`;
     }
-    const review = stringField(verdictSnapshot, "review_verdict") ?? "complete";
+    const review = stringField2(verdictSnapshot, "review_verdict") ?? "complete";
     return review === "accept-with-fold-ins" ? "Circuit: Recommendation ready. The direction is useful, with follow-up notes." : "Circuit: Recommendation ready. The direction is ready to use.";
   }
   if (flowId === "sweep") {
-    const outcome = stringField(flowReport, "outcome") ?? "complete";
+    const outcome = stringField2(flowReport, "outcome") ?? "complete";
     const deferred = numberField(flowReport, "deferred_count");
     return deferred === void 0 ? `Circuit: Sweep finished with outcome ${outcome}.` : `Circuit: Sweep finished with outcome ${outcome}. Deferred: ${plural(deferred, "item")}.`;
   }
@@ -22726,7 +22818,7 @@ function flowHeadline(input) {
 function flowDetails(input) {
   const { flowId, flowReport, runFolder } = input;
   const details = [];
-  const summary = stringField(flowReport, "summary");
+  const summary = stringField2(flowReport, "summary");
   if (summary !== void 0 && flowId !== "explore")
     details.push(`Result: ${friendlyResultSummary(summary)}`);
   if (flowId === "review") {
@@ -22735,8 +22827,8 @@ function flowDetails(input) {
     details.push(...reviewEvidenceDetails(flowReport));
   }
   if (flowId === "build" || flowId === "fix" || flowId === "migrate") {
-    const verification = stringField(flowReport, "verification_status");
-    const review = stringField(flowReport, "review_verdict");
+    const verification = stringField2(flowReport, "verification_status");
+    const review = stringField2(flowReport, "review_verdict");
     if (verification !== void 0)
       details.push(`Verification: ${friendlyVerificationStatus(verification)}.`);
     if (review !== void 0)
@@ -22748,10 +22840,10 @@ function flowDetails(input) {
   }
   if (flowId === "explore" && exploreTournamentSnapshot(flowReport) !== void 0) {
     const decisionReport = exploreDecisionReport(runFolder, flowReport);
-    const question = stringField(decisionReport, "decision_question");
-    const rationale = stringField(decisionReport, "rationale");
+    const question = stringField2(decisionReport, "decision_question");
+    const rationale = stringField2(decisionReport, "rationale");
     const risks = stringArrayField(decisionReport, "residual_risks");
-    const nextAction = stringField(decisionReport, "next_action");
+    const nextAction = stringField2(decisionReport, "next_action");
     if (question !== void 0)
       details.push(`Decision question: ${question}`);
     if (rationale !== void 0)
@@ -22784,9 +22876,8 @@ function renderMarkdown(summary) {
       lines.push(`- ${warning.kind}${path}: ${warning.message}`);
     }
   }
-  const htmlLink = summary.report_paths.find((report) => report.label === HTML_REPORT_LABEL);
-  if (htmlLink !== void 0) {
-    lines.push("", `Rich summary: ${htmlLink.path}`);
+  if (summary.html_path !== void 0) {
+    lines.push("", `Rich summary: ${summary.html_path}`);
   }
   return `${lines.join("\n")}
 `;
@@ -22800,23 +22891,36 @@ function writeOperatorSummary(input) {
   const outJsonPath = jsonPath(input.runFolder);
   const outMarkdownPath = markdownPath(input.runFolder);
   mkdirSync(dirname6(outJsonPath), { recursive: true });
-  const htmlPayload = flowId === "explore" ? exploreTournamentHtmlPayload(input.runFolder, flowReport) : void 0;
+  const projector = HTML_PROJECTORS[flowId];
   const candidateHtmlPath = htmlPath(input.runFolder);
   let outHtmlPath;
   let htmlEmitWarning;
-  if (htmlPayload === void 0) {
+  let renderedHtml;
+  if (projector !== void 0) {
+    try {
+      const ctx = {
+        runFolder: input.runFolder,
+        runId: input.runResult.run_id,
+        flowId,
+        flowReport,
+        readJsonRunRelative: (relPath) => readJsonIfPresent(input.runFolder, relPath),
+        readEvidenceReportById: (reportId) => evidenceReportById(input.runFolder, flowReport, reportId)
+      };
+      renderedHtml = projector(ctx);
+    } catch (err) {
+      htmlEmitWarning = {
+        kind: "html_render_failed",
+        message: err instanceof Error ? err.message : String(err),
+        path: candidateHtmlPath
+      };
+    }
+  }
+  if (renderedHtml === void 0) {
     if (existsSync8(candidateHtmlPath))
       rmSync(candidateHtmlPath, { force: true, recursive: true });
   } else {
     try {
-      const html = renderExploreTournamentHTML({
-        runId: input.runResult.run_id,
-        flowId,
-        decisionOptions: htmlPayload.decisionOptions,
-        tournamentReview: htmlPayload.tournamentReview,
-        decision: htmlPayload.decision
-      });
-      writeFileSync(candidateHtmlPath, html);
+      writeFileSync(candidateHtmlPath, renderedHtml);
       outHtmlPath = candidateHtmlPath;
     } catch (err) {
       if (existsSync8(candidateHtmlPath))
@@ -22882,6 +22986,7 @@ function writeOperatorSummary(input) {
     ],
     run_folder: input.runFolder,
     ...resultPath2 === void 0 ? {} : { result_path: resultPath2 },
+    ...outHtmlPath === void 0 ? {} : { html_path: outHtmlPath },
     report_paths: reportPaths,
     ...input.runResult.outcome === "checkpoint_waiting" ? { checkpoint: input.runResult.checkpoint } : {}
   });
