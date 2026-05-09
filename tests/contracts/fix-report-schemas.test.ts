@@ -251,6 +251,42 @@ describe('Fix report schemas', () => {
     expect(parsed.evidence).toEqual(['src/example.ts:32 — guard runs before the type-check']);
   });
 
+  it('still enforces residual_uncertainty for non-reproduced diagnoses even when evidence is coerced', () => {
+    expect(
+      FixDiagnosis.safeParse({
+        verdict: 'accept',
+        reproduction_status: 'not-reproduced',
+        cause_summary: 'no local repro',
+        confidence: 'low',
+        evidence: 'a single-string evidence body',
+        residual_uncertainty: [],
+      }).success,
+    ).toBe(false);
+    const parsed = FixDiagnosis.parse({
+      verdict: 'accept',
+      reproduction_status: 'not-reproduced',
+      cause_summary: 'no local repro',
+      confidence: 'low',
+      evidence: 'a single-string evidence body',
+      residual_uncertainty: ['unable to reproduce on macOS arm64'],
+    });
+    expect(parsed.evidence).toEqual(['a single-string evidence body']);
+  });
+
+  it('still rejects null and number evidence values', () => {
+    for (const bad of [null, 42, true, {}]) {
+      expect(
+        FixChange.safeParse({
+          verdict: 'accept',
+          summary: 'x',
+          diagnosis_ref: 'fix.diagnosis@v1',
+          changed_files: ['src/example.ts'],
+          evidence: bad,
+        }).success,
+      ).toBe(false);
+    }
+  });
+
   it('still rejects an empty evidence string and an empty evidence array', () => {
     expect(
       FixChange.safeParse({

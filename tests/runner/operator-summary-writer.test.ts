@@ -185,6 +185,36 @@ describe('operator summary writer', () => {
     expect(markdown).toContain('[LOW] inconsistent variable naming');
   });
 
+  it('strips leading markdown markers from finding text so summary bullets cannot nest', () => {
+    writeReport('reports/review-result.json', {
+      scope: 'review',
+      findings: [
+        {
+          severity: 'high',
+          id: 'leak-001',
+          text: '- nested bullet from finding',
+          file_refs: [],
+        },
+        {
+          severity: 'low',
+          id: 'leak-002',
+          text: '   ',
+          file_refs: [],
+        },
+      ],
+      verdict: 'ISSUES_FOUND',
+      evidence_warnings: [],
+    });
+    const written = writeOperatorSummary({
+      runFolder,
+      runResult: baseResult('review'),
+      route: { selectedFlow: 'review' },
+    });
+    expect(written.summary.details).toContain('[HIGH] nested bullet from finding');
+    expect(written.summary.details).not.toContain('[HIGH] - nested bullet from finding');
+    expect(written.summary.details).toContain('[LOW] (no text)');
+  });
+
   it('summarizes Build, Fix, and Migrate close reports with verification and review status', () => {
     const cases = [
       {

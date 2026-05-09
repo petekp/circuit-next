@@ -30,7 +30,12 @@ function flowSummaryDetail(flowReport: JsonObject | undefined): string | undefin
 }
 
 function firstLineSummary(text: string, max: number): string {
-  const firstLine = text.split(/\r?\n/, 1)[0]?.trim() ?? '';
+  // Strip leading markdown-active markers (bullets, headings, blockquotes,
+  // code-fence backticks) so a finding text that starts with "- foo" cannot
+  // produce a nested bullet when concatenated into the operator summary's
+  // "- <detail>" rendering.
+  const firstLine = (text.split(/\r?\n/, 1)[0] ?? '').replace(/^[\s>#*\-`|]+/, '').trim();
+  if (firstLine.length === 0) return '(no text)';
   if (firstLine.length <= max) return firstLine;
   return `${firstLine.slice(0, Math.max(1, max - 1))}…`;
 }
