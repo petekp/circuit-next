@@ -24965,6 +24965,9 @@ function circuitHookCommands(entries) {
   }
   return commands;
 }
+function circuitHookEntryCount(entries) {
+  return entries.filter(isCircuitCodexHookEntry).length;
+}
 function launcherPathFromCircuitHookCommand(command) {
   const words = splitShellWords(command);
   const handoffIndex = words.findIndex((word, index) => word === "handoff" && words[index + 1] === "hook" && words[index + 2] === "--host" && words[index + 3] === "codex");
@@ -25085,14 +25088,20 @@ function doctorCodexHandoffHook(args) {
   if (config !== void 0) {
     try {
       const entries = sessionStartEntries(config);
+      const circuitEntryCount = circuitHookEntryCount(entries);
+      const commands = circuitHookCommands(entries);
+      const launchers = commands.map(launcherPathFromCircuitHookCommand).filter((item) => item !== void 0);
       checks.push({ name: "session_start_array", ok: true, detail: `${entries.length} entries` });
       checks.push({
         name: "circuit_handoff_hook_installed",
-        ok: entries.some(isCircuitCodexHookEntry),
-        detail: hooksPath
+        ok: circuitEntryCount > 0,
+        detail: `${circuitEntryCount} Circuit hooks in ${hooksPath}`
       });
-      const commands = circuitHookCommands(entries);
-      const launchers = commands.map(launcherPathFromCircuitHookCommand).filter((item) => item !== void 0);
+      checks.push({
+        name: "circuit_handoff_hook_single",
+        ok: circuitEntryCount === 1 && commands.length === 1,
+        detail: `${circuitEntryCount} Circuit entries, ${commands.length} Circuit commands`
+      });
       checks.push({
         name: "circuit_handoff_hook_launcher_exists",
         ok: launchers.length > 0 && launchers.every((launcher) => existsSync12(launcher)),
@@ -25117,12 +25126,15 @@ function doctorCodexHandoffHook(args) {
     }
   }
   const failed = checks.filter((item) => !item.ok && item.severity !== "warning");
+  const installedCheck = checks.find((item) => item.name === "circuit_handoff_hook_installed");
+  const structuralFailure = failed.some((item) => item.name === "hooks_file_parseable" || item.name === "session_start_array");
+  const status = !existsSync12(hooksPath) ? "missing" : structuralFailure ? "invalid" : installedCheck?.ok === false ? "missing" : failed.length === 0 ? "ok" : "invalid";
   return {
     api_version: HANDOFF_HOOKS_API_VERSION,
     schema_version: HANDOFF_HOOKS_SCHEMA_VERSION,
     host: "codex",
     action: "doctor",
-    status: failed.length === 0 ? "ok" : existsSync12(hooksPath) ? "invalid" : "missing",
+    status,
     hooks_path: hooksPath,
     checks
   };

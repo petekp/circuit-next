@@ -2,9 +2,10 @@
 
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { delimiter, dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { type PackageTreeComparison, packageTreeStatus } from './plugin-package-tree.mjs';
 
 export type PublishTarget = 'check' | 'local' | 'release' | 'bump';
 
@@ -61,6 +62,7 @@ export type PublishArgs = {
   allowDirty: boolean;
   allowUnsafe: boolean;
   writeGenerated: boolean;
+  installCodexHook: boolean;
   version?: string;
   codexSource?: string;
   codexMarketplace?: string;
@@ -68,6 +70,13 @@ export type PublishArgs = {
 };
 
 type CommandRunner = (invocation: CommandInvocation) => CommandResult;
+
+type RunPublishOptions = {
+  repoRoot?: string;
+  runner?: CommandRunner;
+  homeDir?: string;
+  codexHome?: string;
+};
 
 type CommandOptions = {
   cwd?: string;
@@ -78,6 +87,12 @@ type CommandOptions = {
 type PluginManifest = { name?: string; version?: string };
 type ClaudeMarketplacePlugin = { name?: string; version?: string };
 type ClaudeMarketplace = { plugins?: ClaudeMarketplacePlugin[] };
+type ClaudeMarketplaceListEntry = {
+  name?: string;
+  source?: string;
+  path?: string;
+  installLocation?: string;
+};
 type CodexMarketplacePluginSource = { source?: string; path?: string };
 type CodexMarketplacePlugin = { source?: CodexMarketplacePluginSource };
 type CodexMarketplace = { name: string; plugins?: CodexMarketplacePlugin[] };
@@ -162,6 +177,7 @@ export function parseArgs(argv: string[]): PublishArgs {
     allowDirty: false,
     allowUnsafe: false,
     writeGenerated: false,
+    installCodexHook: false,
   };
 
   function requireValue(input: string[], index: number, flag: string): string {
@@ -196,6 +212,8 @@ export function parseArgs(argv: string[]): PublishArgs {
       args.allowUnsafe = true;
     } else if (arg === '--write-generated') {
       args.writeGenerated = true;
+    } else if (arg === '--install-codex-hook') {
+      args.installCodexHook = true;
     } else if (arg === '--version') {
       args.version = requireValue(input, i, '--version');
       i += 1;
@@ -262,10 +280,14 @@ function createReport(args: PublishArgs, repoRoot: string): PublishReport {
 
 export function runPublish(
   argv: string[] = process.argv.slice(2),
-  options: { repoRoot?: string; runner?: CommandRunner } = {},
+  options: RunPublishOptions = {},
 ): PublishReport {
   const repoRoot = options.repoRoot ? resolve(options.repoRoot) : DEFAULT_REPO_ROOT;
   const runner = options.runner ?? defaultRunner;
+  const home = options.homeDir ? resolve(options.homeDir) : homedir();
+  const codexHome = options.codexHome
+    ? resolve(options.codexHome)
+    : (process.env.CODEX_HOME ?? resolve(home, '.codex'));
   const args = parseArgs(argv);
   const report = createReport(args, repoRoot);
   let releaseCodexHome: string | undefined;
@@ -310,6 +332,137 @@ export function runPublish(
     }
 
     return result;
+  }
+
+  function runOptionalCommand(
+    id: string,
+    argvForCommand: string[],
+    commandOptions: CommandOptions = {},
+  ): CommandResult {
+    const entry: PublishReport['commands'][number] = {
+      id,
+      argv: argvForCommand,
+    };
+    report.commands.push(entry);
+
+    if (report.dry_run && commandOptions.effect === true) {
+      entry.skipped = true;
+      return { exitCode: 0, stdout: '', stderr: '' };
+    }
+
+    const result = runner({
+      id,
+      argv: argvForCommand,
+      cwd: commandOptions.cwd ?? repoRoot,
+      ...(commandOptions.env !== undefined ? { env: commandOptions.env } : {}),
+    });
+    entry.exit_code = result.exitCode;
+    return result;
+  }
+
+  function recordSkippedCommand(id: string, argvForCommand: string[]): void {
+    report.commands.push({
+      id,
+      argv: argvForCommand,
+      skipped: true,
+    });
+  }
+
+  function parseLastJsonObject(value: string): Record<string, unknown> | undefined {
+    const start = value.indexOf('{');
+    const end = value.lastIndexOf('}');
+    if (start < 0 || end < start) return undefined;
+    try {
+      return JSON.parse(value.slice(start, end + 1)) as Record<string, unknown>;
+    } catch {
+      return undefined;
+    }
+  }
+
+  function assertPackageTreeOk(label: string, tree: PackageTreeComparison): void {
+    if (tree.status !== 'ok') {
+      fail(
+        `${label} package bytes are ${tree.status}; missing=${tree.missing.length}, stale=${tree.stale.length}, extra-owned-files=${tree.extra_owned_files.length}`,
+      );
+    }
+  }
+
+  function claudeInstalledRoot(): string {
+    return resolve(home, '.claude/plugins/cache/circuit-next/circuit', report.versions.source);
+  }
+
+  function defaultCodexCacheTarget(): string {
+    return resolve(codexHome, 'plugins/cache/circuit-next-local/circuit', report.versions.source);
+  }
+
+  function claudeUserEnv(): NodeJS.ProcessEnv | undefined {
+    return options.homeDir === undefined ? undefined : { HOME: home };
+  }
+
+  function codexUserEnv(): NodeJS.ProcessEnv | undefined {
+    return options.codexHome === undefined ? undefined : { CODEX_HOME: codexHome };
+  }
+
+  function commandOptions(input: {
+    effect?: boolean;
+    cwd?: string;
+    env?: NodeJS.ProcessEnv | undefined;
+  }): CommandOptions {
+    const output: CommandOptions = {};
+    if (input.effect !== undefined) output.effect = input.effect;
+    if (input.cwd !== undefined) output.cwd = input.cwd;
+    if (input.env !== undefined) output.env = input.env;
+    return output;
+  }
+
+  function parseClaudeMarketplaceList(result: CommandResult): ClaudeMarketplaceListEntry[] {
+    try {
+      const parsed = JSON.parse(result.stdout) as unknown;
+      if (!Array.isArray(parsed)) fail('claude_marketplace_list_user did not return an array');
+      return parsed as ClaudeMarketplaceListEntry[];
+    } catch {
+      fail('claude_marketplace_list_user did not return parseable marketplace JSON');
+    }
+  }
+
+  function claudeMarketplaceEntryPath(entry: ClaudeMarketplaceListEntry): string | undefined {
+    return entry.path ?? (entry.source === 'directory' ? entry.installLocation : undefined);
+  }
+
+  function claudeMarketplacePointsAtRepo(entry: ClaudeMarketplaceListEntry): boolean {
+    const path = claudeMarketplaceEntryPath(entry);
+    return path !== undefined && resolve(path) === repoRoot;
+  }
+
+  function refreshClaudeUserMarketplace(claudeEnv: NodeJS.ProcessEnv | undefined): void {
+    const list = runCommand(
+      'claude_marketplace_list_user',
+      ['claude', 'plugin', 'marketplace', 'list', '--json'],
+      commandOptions({ env: claudeEnv }),
+    );
+    const current = parseClaudeMarketplaceList(list).find((entry) => entry.name === 'circuit-next');
+    if (current !== undefined && !claudeMarketplacePointsAtRepo(current)) {
+      runCommand(
+        'claude_marketplace_remove_user',
+        ['claude', 'plugin', 'marketplace', 'remove', 'circuit-next'],
+        commandOptions({ effect: true, env: claudeEnv }),
+      );
+    }
+
+    if (current === undefined || !claudeMarketplacePointsAtRepo(current)) {
+      runCommand(
+        'claude_marketplace_add_user',
+        ['claude', 'plugin', 'marketplace', 'add', repoRoot, '--scope', 'user'],
+        commandOptions({ effect: true, env: claudeEnv }),
+      );
+      return;
+    }
+
+    runCommand(
+      'claude_marketplace_update_user',
+      ['claude', 'plugin', 'marketplace', 'update', 'circuit-next'],
+      commandOptions({ effect: true, env: claudeEnv }),
+    );
   }
 
   function assertBundledDoctor(id: string, result: CommandResult): void {
@@ -405,6 +558,7 @@ export function runPublish(
       if (!VERSION_PATTERN.test(args.version)) fail('--version must be a semver string');
       if (args.skipVerify) fail('bump does not allow --skip-verify');
       if (args.writeGenerated) fail('bump does not allow --write-generated');
+      if (args.installCodexHook) fail('bump does not allow --install-codex-hook');
       return;
     }
 
@@ -413,9 +567,13 @@ export function runPublish(
       if (args.writeGenerated) fail('release does not allow --write-generated');
       if (args.skipVerify) fail('release does not allow --skip-verify');
       if (args.allowUnsafe) fail('release does not allow --allow-unsafe');
+      if (args.installCodexHook) fail('release does not allow --install-codex-hook');
       return;
     }
 
+    if (args.installCodexHook && args.target !== 'local') {
+      fail('--install-codex-hook is only supported for local');
+    }
     if (args.writeGenerated && args.target !== 'local') {
       fail('--write-generated is only supported for local');
     }
@@ -430,19 +588,21 @@ export function runPublish(
   function collectGitState(): void {
     const status = runCommand('git_status', ['git', 'status', '--short']).stdout;
     const branch = runCommand('git_branch', ['git', 'branch', '--show-current']).stdout.trim();
-    const upstream = runCommand('git_upstream', [
-      'git',
-      'rev-parse',
-      '--abbrev-ref',
-      '--symbolic-full-name',
-      '@{u}',
-    ]).stdout.trim();
+    const upstreamArgv = ['git', 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'];
+    const upstreamResult =
+      args.target === 'release'
+        ? runCommand('git_upstream', upstreamArgv)
+        : runOptionalCommand('git_upstream', upstreamArgv);
+    const upstream = upstreamResult.exitCode === 0 ? upstreamResult.stdout.trim() : '';
     const head = runCommand('git_head', ['git', 'rev-parse', 'HEAD']).stdout.trim();
 
     report.git.branch = branch;
     report.git.upstream = upstream;
     report.git.head = head;
     report.git.dirty_files = splitLines(status);
+    if (args.target !== 'release' && upstreamResult.exitCode !== 0) {
+      addWarning('git upstream is unavailable; continuing because this is not a release');
+    }
 
     if (args.target === 'local' && report.git.dirty_files.length > 0 && !args.allowDirty) {
       fail('local publish requires a clean working tree unless --allow-dirty is set');
@@ -585,11 +745,159 @@ export function runPublish(
   }
 
   function runLocalPublish(): void {
-    runCommand('codex_cache_sync', ['npm', 'run', 'sync:codex-plugin-cache'], { effect: true });
-    const cacheCheck = runCommand('codex_cache_check', ['npm', 'run', 'check:codex-plugin-cache']);
-    report.outputs.codex_cache_status = cacheCheck.stdout.includes('"status": "ok"')
-      ? 'ok'
-      : 'synced';
+    const claudeRoot = claudeInstalledRoot();
+    const codexSourceRoot = resolve(repoRoot, 'plugins/circuit');
+    const claudeSourceRoot = resolve(repoRoot, 'plugins/claude');
+    const codexTarget = defaultCodexCacheTarget();
+    const codexLauncher = resolve(codexTarget, 'scripts/circuit-next.mjs');
+    const claudeEnv = claudeUserEnv();
+    const codexEnv = codexUserEnv();
+
+    if (report.dry_run) {
+      refreshClaudeUserMarketplace(claudeEnv);
+      runCommand(
+        'claude_plugin_update_user',
+        ['claude', 'plugin', 'update', 'circuit@circuit-next', '--scope', 'user'],
+        commandOptions({ effect: true, env: claudeEnv }),
+      );
+      runCommand(
+        'codex_cache_sync',
+        ['npm', 'run', 'sync:codex-plugin-cache'],
+        commandOptions({ effect: true, env: codexEnv }),
+      );
+      recordSkippedCommand('codex_cache_check', ['npm', 'run', 'check:codex-plugin-cache']);
+      if (args.installCodexHook) {
+        runCommand(
+          'codex_handoff_hook_install',
+          [
+            process.execPath,
+            codexLauncher,
+            'handoff',
+            'hooks',
+            'install',
+            '--host',
+            'codex',
+            '--launcher',
+            codexLauncher,
+          ],
+          commandOptions({ effect: true, env: codexEnv }),
+        );
+      }
+      report.outputs.local_dry_run_skipped_checks = [
+        'claude_package_bytes',
+        'claude_installed_doctor',
+        'codex_cache_check',
+        'codex_package_bytes',
+        'codex_installed_doctor',
+      ];
+      report.outputs.codex_cache_target = codexTarget;
+      return;
+    }
+
+    refreshClaudeUserMarketplace(claudeEnv);
+    const claudeUpdate = runOptionalCommand(
+      'claude_plugin_update_user',
+      ['claude', 'plugin', 'update', 'circuit@circuit-next', '--scope', 'user'],
+      commandOptions({ effect: true, env: claudeEnv }),
+    );
+    if (claudeUpdate.exitCode !== 0) {
+      report.outputs.claude_update_status = 'failed';
+      addWarning(
+        `Claude plugin update failed; falling back to install: ${
+          claudeUpdate.stderr.trim() ||
+          claudeUpdate.stdout.trim() ||
+          `exit ${claudeUpdate.exitCode}`
+        }`,
+      );
+    }
+
+    let claudeTree = packageTreeStatus(claudeSourceRoot, claudeRoot);
+    if (claudeTree.status !== 'ok') {
+      report.outputs.claude_package_status_after_update = claudeTree.status;
+      if (existsSync(claudeRoot)) {
+        runCommand(
+          'claude_plugin_uninstall_user',
+          [
+            'claude',
+            'plugin',
+            'uninstall',
+            'circuit@circuit-next',
+            '--scope',
+            'user',
+            '--keep-data',
+            '--yes',
+          ],
+          commandOptions({ effect: true, env: claudeEnv }),
+        );
+      }
+      runCommand(
+        'claude_plugin_install_user',
+        ['claude', 'plugin', 'install', 'circuit@circuit-next', '--scope', 'user'],
+        commandOptions({ effect: true, env: claudeEnv }),
+      );
+      claudeTree = packageTreeStatus(claudeSourceRoot, claudeRoot);
+    }
+    assertPackageTreeOk('installed Claude', claudeTree);
+    report.outputs.claude_package_status = claudeTree.status;
+
+    const claudeInstalledDoctor = runCommand(
+      'claude_installed_doctor',
+      [process.execPath, resolve(claudeRoot, 'scripts/circuit-next.mjs'), 'doctor'],
+      {
+        env: noAmbientCliEnv({
+          HOME: home,
+        }),
+      },
+    );
+    assertBundledDoctor('claude_installed_doctor', claudeInstalledDoctor);
+
+    runCommand(
+      'codex_cache_sync',
+      ['npm', 'run', 'sync:codex-plugin-cache'],
+      commandOptions({ effect: true, env: codexEnv }),
+    );
+    const cacheCheck = runCommand(
+      'codex_cache_check',
+      ['npm', 'run', 'check:codex-plugin-cache'],
+      commandOptions({ env: codexEnv }),
+    );
+    const cacheCheckJson = parseLastJsonObject(cacheCheck.stdout);
+    const checkedTarget =
+      typeof cacheCheckJson?.target === 'string' ? cacheCheckJson.target : codexTarget;
+    const codexTree = packageTreeStatus(codexSourceRoot, checkedTarget);
+    assertPackageTreeOk('synced Codex cache', codexTree);
+    report.outputs.codex_cache_status = codexTree.status;
+    report.outputs.codex_cache_target = checkedTarget;
+
+    const codexInstalledDoctor = runCommand(
+      'codex_installed_doctor',
+      [process.execPath, resolve(checkedTarget, 'scripts/circuit-next.mjs'), 'doctor'],
+      {
+        env: noAmbientCliEnv({
+          CODEX_HOME: codexHome,
+        }),
+      },
+    );
+    assertBundledDoctor('codex_installed_doctor', codexInstalledDoctor);
+
+    if (args.installCodexHook) {
+      const launcher = resolve(checkedTarget, 'scripts/circuit-next.mjs');
+      runCommand(
+        'codex_handoff_hook_install',
+        [
+          process.execPath,
+          launcher,
+          'handoff',
+          'hooks',
+          'install',
+          '--host',
+          'codex',
+          '--launcher',
+          launcher,
+        ],
+        commandOptions({ effect: true, env: codexEnv }),
+      );
+    }
   }
 
   function runReleasePublish(): void {

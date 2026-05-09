@@ -690,6 +690,10 @@ function circuitHookCommands(entries: readonly unknown[]): string[] {
   return commands;
 }
 
+function circuitHookEntryCount(entries: readonly unknown[]): number {
+  return entries.filter(isCircuitCodexHookEntry).length;
+}
+
 function launcherPathFromCircuitHookCommand(command: string): string | undefined {
   const words = splitShellWords(command);
   const handoffIndex = words.findIndex(
@@ -827,16 +831,22 @@ function doctorCodexHandoffHook(args: HandoffArgs) {
   if (config !== undefined) {
     try {
       const entries = sessionStartEntries(config);
-      checks.push({ name: 'session_start_array', ok: true, detail: `${entries.length} entries` });
-      checks.push({
-        name: 'circuit_handoff_hook_installed',
-        ok: entries.some(isCircuitCodexHookEntry),
-        detail: hooksPath,
-      });
+      const circuitEntryCount = circuitHookEntryCount(entries);
       const commands = circuitHookCommands(entries);
       const launchers = commands
         .map(launcherPathFromCircuitHookCommand)
         .filter((item): item is string => item !== undefined);
+      checks.push({ name: 'session_start_array', ok: true, detail: `${entries.length} entries` });
+      checks.push({
+        name: 'circuit_handoff_hook_installed',
+        ok: circuitEntryCount > 0,
+        detail: `${circuitEntryCount} Circuit hooks in ${hooksPath}`,
+      });
+      checks.push({
+        name: 'circuit_handoff_hook_single',
+        ok: circuitEntryCount === 1 && commands.length === 1,
+        detail: `${circuitEntryCount} Circuit entries, ${commands.length} Circuit commands`,
+      });
       checks.push({
         name: 'circuit_handoff_hook_launcher_exists',
         ok: launchers.length > 0 && launchers.every((launcher) => existsSync(launcher)),
@@ -862,12 +872,25 @@ function doctorCodexHandoffHook(args: HandoffArgs) {
   }
 
   const failed = checks.filter((item) => !item.ok && item.severity !== 'warning');
+  const installedCheck = checks.find((item) => item.name === 'circuit_handoff_hook_installed');
+  const structuralFailure = failed.some(
+    (item) => item.name === 'hooks_file_parseable' || item.name === 'session_start_array',
+  );
+  const status = !existsSync(hooksPath)
+    ? 'missing'
+    : structuralFailure
+      ? 'invalid'
+      : installedCheck?.ok === false
+        ? 'missing'
+        : failed.length === 0
+          ? 'ok'
+          : 'invalid';
   return {
     api_version: HANDOFF_HOOKS_API_VERSION,
     schema_version: HANDOFF_HOOKS_SCHEMA_VERSION,
     host: 'codex',
     action: 'doctor',
-    status: failed.length === 0 ? 'ok' : existsSync(hooksPath) ? 'invalid' : 'missing',
+    status,
     hooks_path: hooksPath,
     checks,
   };

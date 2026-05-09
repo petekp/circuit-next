@@ -1,7 +1,16 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { packageTreeStatus } from '../../scripts/plugin-package-tree.mjs';
 import { type CommandInvocation, runPublish } from '../../scripts/publish-plugins.ts';
 
 const REPO_ROOT = resolve('.');
@@ -15,15 +24,26 @@ type FixtureOptions = {
 
 type GitFixture = {
   branch?: string;
-  upstream?: string;
+  upstream?: string | null;
   head?: string;
   originHead?: string;
   dirty?: string;
 };
 
+type RunnerOptions = {
+  codexCacheTarget?: string;
+  claudeMarketplaceList?: unknown;
+  onCall?: (invocation: CommandInvocation) => void;
+};
+
 function writeJson(path: string, value: unknown): void {
   mkdirSync(resolve(path, '..'), { recursive: true });
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function writeText(path: string, value: string): void {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, value);
 }
 
 function createFixture(options: FixtureOptions = {}): string {
@@ -41,6 +61,7 @@ function createFixture(options: FixtureOptions = {}): string {
       'publish:plugins:local': 'node scripts/publish-plugins.ts local',
       'publish:plugins:release':
         'node scripts/publish-plugins.ts release --codex-source petekp/circuit-next --codex-marketplace circuit-next',
+      'doctor:plugins:installed': 'node scripts/doctor-installed-plugins.mjs',
     },
   });
   writeJson(join(root, 'plugins/version.json'), { version });
@@ -87,14 +108,47 @@ function createFixture(options: FixtureOptions = {}): string {
       },
     ],
   });
+  writeText(join(root, 'plugins/claude/README.md'), 'Claude Circuit plugin\n');
+  writeText(join(root, 'plugins/claude/commands/run.md'), '# Run\n');
+  writeText(join(root, 'plugins/claude/skills/run/SKILL.md'), '# Run skill\n');
+  writeText(join(root, 'plugins/claude/scripts/circuit-next.mjs'), '#!/usr/bin/env node\n');
+  writeText(join(root, 'plugins/circuit/README.md'), 'Codex Circuit plugin\n');
+  writeText(join(root, 'plugins/circuit/commands/run.md'), '# Run\n');
+  writeText(join(root, 'plugins/circuit/skills/run/SKILL.md'), '# Run skill\n');
+  writeText(join(root, 'plugins/circuit/scripts/circuit-next.mjs'), '#!/usr/bin/env node\n');
 
   return root;
 }
 
-function createRunner(git: GitFixture = {}) {
+function localInstallRoots(root: string, homeDir: string, codexHome: string) {
+  const version = JSON.parse(readFileSync(join(root, 'plugins/version.json'), 'utf8')) as {
+    version: string;
+  };
+  return {
+    claude: join(homeDir, '.claude/plugins/cache/circuit-next/circuit', version.version),
+    codex: join(codexHome, 'plugins/cache/circuit-next-local/circuit', version.version),
+  };
+}
+
+function copyPackage(source: string, target: string): void {
+  rmSync(target, { recursive: true, force: true });
+  mkdirSync(dirname(target), { recursive: true });
+  cpSync(source, target, { recursive: true });
+}
+
+function primeInstalledPackages(root: string) {
+  const homeDir = mkdtempSync(join(tmpdir(), 'circuit-publish-home-'));
+  const codexHome = mkdtempSync(join(tmpdir(), 'circuit-publish-codex-'));
+  const roots = localInstallRoots(root, homeDir, codexHome);
+  copyPackage(join(root, 'plugins/claude'), roots.claude);
+  copyPackage(join(root, 'plugins/circuit'), roots.codex);
+  return { homeDir, codexHome, ...roots };
+}
+
+function createRunner(git: GitFixture = {}, options: RunnerOptions = {}) {
   const calls: CommandInvocation[] = [];
   const branch = git.branch ?? 'main';
-  const upstream = git.upstream ?? 'origin/main';
+  const upstream = git.upstream === undefined ? 'origin/main' : git.upstream;
   const head = git.head ?? 'abc123';
   const originHead = git.originHead ?? head;
   const dirty = git.dirty ?? '';
@@ -103,12 +157,14 @@ function createRunner(git: GitFixture = {}) {
     calls,
     runner(invocation: CommandInvocation) {
       calls.push(invocation);
+      options.onCall?.(invocation);
       switch (invocation.id) {
         case 'git_status':
           return { exitCode: 0, stdout: dirty, stderr: '' };
         case 'git_branch':
           return { exitCode: 0, stdout: `${branch}\n`, stderr: '' };
         case 'git_upstream':
+          if (upstream === null) return { exitCode: 1, stdout: '', stderr: 'no upstream\n' };
           return { exitCode: 0, stdout: `${upstream}\n`, stderr: '' };
         case 'git_head':
           return { exitCode: 0, stdout: `${head}\n`, stderr: '' };
@@ -117,6 +173,8 @@ function createRunner(git: GitFixture = {}) {
         case 'claude_doctor':
         case 'codex_doctor':
         case 'claude_install_smoke_doctor':
+        case 'claude_installed_doctor':
+        case 'codex_installed_doctor':
           return {
             exitCode: 0,
             stdout: `${JSON.stringify({
@@ -124,6 +182,34 @@ function createRunner(git: GitFixture = {}) {
               runtime_source: 'bundled',
               runtime_path: '/tmp/plugin/runtime/circuit-next.js',
             })}\n`,
+            stderr: '',
+          };
+        case 'claude_marketplace_list_user':
+          return {
+            exitCode: 0,
+            stdout: `${JSON.stringify(options.claudeMarketplaceList ?? [])}\n`,
+            stderr: '',
+          };
+        case 'codex_cache_sync':
+          return {
+            exitCode: 0,
+            stdout:
+              options.codexCacheTarget === undefined
+                ? ''
+                : `${JSON.stringify({ status: 'synced', target: options.codexCacheTarget })}\n`,
+            stderr: '',
+          };
+        case 'codex_cache_check':
+          return {
+            exitCode: 0,
+            stdout:
+              options.codexCacheTarget === undefined
+                ? ''
+                : `${JSON.stringify({
+                    status: 'ok',
+                    target: options.codexCacheTarget,
+                    package_tree: { status: 'ok' },
+                  })}\n`,
             stderr: '',
           };
         default:
@@ -149,6 +235,9 @@ describe('plugin publish automation', () => {
     expect(pkg.scripts['publish:plugins:local']).toBe('node scripts/publish-plugins.ts local');
     expect(pkg.scripts['publish:plugins:release']).toBe(
       'node scripts/publish-plugins.ts release --codex-source petekp/circuit-next --codex-marketplace circuit-next',
+    );
+    expect(pkg.scripts['doctor:plugins:installed']).toBe(
+      'node scripts/doctor-installed-plugins.mjs',
     );
   });
 
@@ -347,15 +436,358 @@ describe('plugin publish automation', () => {
 
   it('lets local publish opt into generated writes and Codex cache sync', () => {
     const root = createFixture();
-    const { calls, runner } = createRunner();
+    const installed = primeInstalledPackages(root);
+    const { calls, runner } = createRunner(
+      {},
+      {
+        codexCacheTarget: installed.codex,
+        claudeMarketplaceList: [
+          {
+            name: 'circuit-next',
+            source: 'directory',
+            path: '/tmp/old-circuit-next',
+          },
+        ],
+      },
+    );
     try {
-      const report = runPublish(['local', '--write-generated'], { repoRoot: root, runner });
+      const report = runPublish(['local', '--write-generated'], {
+        repoRoot: root,
+        runner,
+        homeDir: installed.homeDir,
+        codexHome: installed.codexHome,
+      });
 
       expect(report.status).toBe('passed');
       expect(ids(calls)).toEqual(
-        expect.arrayContaining(['emit_flows', 'codex_cache_sync', 'codex_cache_check']),
+        expect.arrayContaining([
+          'emit_flows',
+          'claude_marketplace_add_user',
+          'claude_plugin_update_user',
+          'codex_cache_sync',
+          'codex_cache_check',
+        ]),
       );
       expect(ids(calls)).not.toContain('codex_marketplace_add_local');
+      expect(ids(calls)).not.toContain('codex_handoff_hook_install');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+      rmSync(installed.homeDir, { recursive: true, force: true });
+      rmSync(installed.codexHome, { recursive: true, force: true });
+    }
+  });
+
+  it('allows local publish from a detached checkout with no upstream', () => {
+    const root = createFixture();
+    const installed = primeInstalledPackages(root);
+    const { calls, runner } = createRunner(
+      { branch: '', upstream: null },
+      { codexCacheTarget: installed.codex },
+    );
+    try {
+      const report = runPublish(['local', '--skip-verify', '--allow-unsafe'], {
+        repoRoot: root,
+        runner,
+        homeDir: installed.homeDir,
+        codexHome: installed.codexHome,
+      });
+
+      expect(report.status).toBe('passed');
+      expect(report.warnings.join('\n')).toContain('git upstream is unavailable');
+      expect(ids(calls)).toContain('git_upstream');
+      expect(ids(calls)).toContain('claude_plugin_update_user');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+      rmSync(installed.homeDir, { recursive: true, force: true });
+      rmSync(installed.codexHome, { recursive: true, force: true });
+    }
+  });
+
+  it('still rejects release from a detached checkout', () => {
+    const root = createFixture();
+    const { calls, runner } = createRunner({ branch: '', upstream: null });
+    try {
+      const report = runPublish(
+        ['release', '--codex-source', 'petekp/circuit-next', '--codex-marketplace', 'circuit-next'],
+        { repoRoot: root, runner },
+      );
+
+      expect(report.status).toBe('failed');
+      expect(report.errors.join('\n')).toContain('git_upstream failed');
+      expect(ids(calls)).not.toContain('claude_tag_push');
+      expect(ids(calls)).not.toContain('codex_marketplace_add_release');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('records but skips user install mutations during local dry-run with hook install', () => {
+    const root = createFixture();
+    const homeDir = mkdtempSync(join(tmpdir(), 'circuit-publish-home-'));
+    const codexHome = mkdtempSync(join(tmpdir(), 'circuit-publish-codex-'));
+    const codexTarget = localInstallRoots(root, homeDir, codexHome).codex;
+    const { runner } = createRunner({}, { codexCacheTarget: codexTarget });
+    try {
+      const report = runPublish(
+        ['local', '--dry-run', '--install-codex-hook', '--skip-verify', '--allow-unsafe'],
+        {
+          repoRoot: root,
+          runner,
+          homeDir,
+          codexHome,
+        },
+      );
+
+      expect(report.status).toBe('passed');
+      expect(report.commands).toContainEqual(
+        expect.objectContaining({ id: 'claude_marketplace_add_user', skipped: true }),
+      );
+      expect(report.commands).toContainEqual(
+        expect.objectContaining({ id: 'claude_plugin_update_user', skipped: true }),
+      );
+      expect(report.commands).toContainEqual(
+        expect.objectContaining({ id: 'codex_cache_sync', skipped: true }),
+      );
+      expect(report.commands).toContainEqual(
+        expect.objectContaining({ id: 'codex_handoff_hook_install', skipped: true }),
+      );
+      expect(report.commands.map((command) => command.id)).not.toContain(
+        'claude_plugin_uninstall_user',
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+      rmSync(homeDir, { recursive: true, force: true });
+      rmSync(codexHome, { recursive: true, force: true });
+    }
+  });
+
+  it('adds the Claude user marketplace from repo root before updating the install', () => {
+    const root = createFixture();
+    const installed = primeInstalledPackages(root);
+    const { calls, runner } = createRunner(
+      {},
+      {
+        codexCacheTarget: installed.codex,
+        claudeMarketplaceList: [
+          {
+            name: 'circuit-next',
+            source: 'directory',
+            path: '/tmp/old-circuit-next',
+          },
+        ],
+      },
+    );
+    try {
+      const report = runPublish(['local', '--skip-verify', '--allow-unsafe'], {
+        repoRoot: root,
+        runner,
+        homeDir: installed.homeDir,
+        codexHome: installed.codexHome,
+      });
+
+      expect(report.status).toBe('passed');
+      const removeIndex = ids(calls).indexOf('claude_marketplace_remove_user');
+      const addIndex = ids(calls).indexOf('claude_marketplace_add_user');
+      const updateIndex = ids(calls).indexOf('claude_plugin_update_user');
+      expect(removeIndex).toBeGreaterThanOrEqual(0);
+      expect(addIndex).toBeGreaterThanOrEqual(0);
+      expect(addIndex).toBeGreaterThan(removeIndex);
+      expect(updateIndex).toBeGreaterThan(addIndex);
+      expect(calls[addIndex]?.argv).toEqual([
+        'claude',
+        'plugin',
+        'marketplace',
+        'add',
+        root,
+        '--scope',
+        'user',
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+      rmSync(installed.homeDir, { recursive: true, force: true });
+      rmSync(installed.codexHome, { recursive: true, force: true });
+    }
+  });
+
+  it('updates the Claude user marketplace when it already points at repo root', () => {
+    const root = createFixture();
+    const installed = primeInstalledPackages(root);
+    const { calls, runner } = createRunner(
+      {},
+      {
+        codexCacheTarget: installed.codex,
+        claudeMarketplaceList: [
+          {
+            name: 'circuit-next',
+            source: 'directory',
+            path: root,
+          },
+        ],
+      },
+    );
+    try {
+      const report = runPublish(['local', '--skip-verify', '--allow-unsafe'], {
+        repoRoot: root,
+        runner,
+        homeDir: installed.homeDir,
+        codexHome: installed.codexHome,
+      });
+
+      expect(report.status).toBe('passed');
+      expect(ids(calls)).toContain('claude_marketplace_update_user');
+      expect(ids(calls)).not.toContain('claude_marketplace_add_user');
+      expect(ids(calls).indexOf('claude_plugin_update_user')).toBeGreaterThan(
+        ids(calls).indexOf('claude_marketplace_update_user'),
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+      rmSync(installed.homeDir, { recursive: true, force: true });
+      rmSync(installed.codexHome, { recursive: true, force: true });
+    }
+  });
+
+  it('installs Claude when the user package is missing and update reports not installed', () => {
+    const root = createFixture();
+    const homeDir = mkdtempSync(join(tmpdir(), 'circuit-publish-home-'));
+    const codexHome = mkdtempSync(join(tmpdir(), 'circuit-publish-codex-'));
+    const roots = localInstallRoots(root, homeDir, codexHome);
+    copyPackage(join(root, 'plugins/circuit'), roots.codex);
+    const base = createRunner(
+      {},
+      {
+        codexCacheTarget: roots.codex,
+        onCall(invocation) {
+          if (invocation.id === 'claude_plugin_install_user') {
+            copyPackage(join(root, 'plugins/claude'), roots.claude);
+          }
+        },
+      },
+    );
+    const runner = (invocation: CommandInvocation) => {
+      if (invocation.id === 'claude_plugin_update_user') {
+        base.calls.push(invocation);
+        return {
+          exitCode: 1,
+          stdout: '',
+          stderr: 'Plugin "circuit" is not installed\n',
+        };
+      }
+      return base.runner(invocation);
+    };
+    try {
+      const report = runPublish(['local', '--skip-verify', '--allow-unsafe'], {
+        repoRoot: root,
+        runner,
+        homeDir,
+        codexHome,
+      });
+
+      expect(report.status).toBe('passed');
+      expect(report.warnings.join('\n')).toContain('falling back to install');
+      expect(ids(base.calls)).toContain('claude_plugin_install_user');
+      expect(ids(base.calls)).not.toContain('claude_plugin_uninstall_user');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+      rmSync(homeDir, { recursive: true, force: true });
+      rmSync(codexHome, { recursive: true, force: true });
+    }
+  });
+
+  it('reinstalls the Claude user package when same-version bytes stay stale', () => {
+    const root = createFixture();
+    const installed = primeInstalledPackages(root);
+    writeText(join(installed.claude, 'README.md'), 'stale Claude package\n');
+    const { calls, runner } = createRunner(
+      {},
+      {
+        codexCacheTarget: installed.codex,
+        onCall(invocation) {
+          if (invocation.id === 'claude_plugin_install_user') {
+            copyPackage(join(root, 'plugins/claude'), installed.claude);
+          }
+        },
+      },
+    );
+    try {
+      const report = runPublish(['local', '--skip-verify', '--allow-unsafe'], {
+        repoRoot: root,
+        runner,
+        homeDir: installed.homeDir,
+        codexHome: installed.codexHome,
+      });
+
+      expect(report.status).toBe('passed');
+      expect(ids(calls)).toEqual(
+        expect.arrayContaining(['claude_plugin_uninstall_user', 'claude_plugin_install_user']),
+      );
+      const uninstall = calls.find((call) => call.id === 'claude_plugin_uninstall_user');
+      expect(uninstall?.argv).toEqual(expect.arrayContaining(['--keep-data', '--yes']));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+      rmSync(installed.homeDir, { recursive: true, force: true });
+      rmSync(installed.codexHome, { recursive: true, force: true });
+    }
+  });
+
+  it('installs the Codex hook only when explicitly requested and after cache sync', () => {
+    const root = createFixture();
+    const installed = primeInstalledPackages(root);
+    const base = createRunner({}, { codexCacheTarget: installed.codex });
+    try {
+      const defaultReport = runPublish(['local', '--skip-verify', '--allow-unsafe'], {
+        repoRoot: root,
+        runner: base.runner,
+        homeDir: installed.homeDir,
+        codexHome: installed.codexHome,
+      });
+      expect(defaultReport.status).toBe('passed');
+      expect(ids(base.calls)).not.toContain('codex_handoff_hook_install');
+
+      const explicit = createRunner({}, { codexCacheTarget: installed.codex });
+      const hookReport = runPublish(
+        ['local', '--install-codex-hook', '--skip-verify', '--allow-unsafe'],
+        {
+          repoRoot: root,
+          runner: explicit.runner,
+          homeDir: installed.homeDir,
+          codexHome: installed.codexHome,
+        },
+      );
+
+      expect(hookReport.status).toBe('passed');
+      const callIds = ids(explicit.calls);
+      expect(callIds.indexOf('codex_handoff_hook_install')).toBeGreaterThan(
+        callIds.indexOf('codex_cache_check'),
+      );
+      const hook = explicit.calls.find((call) => call.id === 'codex_handoff_hook_install');
+      expect(hook?.argv).toContain(join(installed.codex, 'scripts/circuit-next.mjs'));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+      rmSync(installed.homeDir, { recursive: true, force: true });
+      rmSync(installed.codexHome, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects release hook installation before effects', () => {
+    const root = createFixture();
+    const { calls, runner } = createRunner();
+    try {
+      const report = runPublish(
+        [
+          'release',
+          '--install-codex-hook',
+          '--codex-source',
+          'petekp/circuit-next',
+          '--codex-marketplace',
+          'circuit-next',
+        ],
+        { repoRoot: root, runner },
+      );
+
+      expect(report.status).toBe('failed');
+      expect(report.errors.join('\n')).toContain('release does not allow --install-codex-hook');
+      expect(ids(calls)).not.toContain('claude_tag_push');
+      expect(ids(calls)).not.toContain('codex_handoff_hook_install');
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -484,6 +916,40 @@ describe('plugin publish automation', () => {
       expect(written.commands.length).toBeGreaterThan(0);
       expect(written.warnings.join('\n')).toContain('version mismatch');
       expect(written.errors).toEqual([]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('compares only package-owned files for installed package checks', () => {
+    const root = mkdtempSync(join(tmpdir(), 'circuit-package-tree-'));
+    const source = join(root, 'source');
+    const target = join(root, 'target');
+    try {
+      writeText(join(source, '.codex-plugin/plugin.json'), '{"name":"circuit"}\n');
+      writeText(join(source, 'commands/run.md'), '# Run\n');
+      writeText(join(source, 'skills/run/SKILL.md'), '# Run skill\n');
+      writeText(join(source, 'scripts/circuit-next.mjs'), '#!/usr/bin/env node\n');
+      writeText(join(source, 'README.md'), 'Read me\n');
+
+      expect(packageTreeStatus(source, target)).toMatchObject({ status: 'missing' });
+
+      copyPackage(source, target);
+      writeText(join(target, 'operator-notes/local.txt'), 'ignored\n');
+      expect(packageTreeStatus(source, target)).toMatchObject({ status: 'ok' });
+
+      writeText(join(target, 'commands/run.md'), '# stale\n');
+      expect(packageTreeStatus(source, target)).toMatchObject({
+        status: 'stale',
+        stale: ['commands/run.md'],
+      });
+
+      copyPackage(source, target);
+      writeText(join(target, 'skills/extra/SKILL.md'), '# Extra\n');
+      expect(packageTreeStatus(source, target)).toMatchObject({
+        status: 'extra-owned-files',
+        extra_owned_files: ['skills/extra/SKILL.md'],
+      });
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

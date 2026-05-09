@@ -707,6 +707,102 @@ describe('utility CLI commands', () => {
     expect(JSON.stringify(configAfterUninstall)).not.toContain('handoff hook --host codex');
   });
 
+  it('reports missing when the Codex hooks file has no Circuit handoff hook', async () => {
+    const root = tempRoot('circuit-handoff-hooks-missing-');
+    const hooksFile = join(root, 'codex/hooks.json');
+    mkdirSync(join(root, 'codex'), { recursive: true });
+    writeFileSync(
+      hooksFile,
+      `${JSON.stringify(
+        {
+          hooks: {
+            SessionStart: [
+              {
+                matcher: 'startup',
+                hooks: [{ type: 'command', command: 'echo foreign-hook' }],
+              },
+            ],
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    const doctor = await captureMain([
+      'handoff',
+      'hooks',
+      'doctor',
+      '--host',
+      'codex',
+      '--hooks-file',
+      hooksFile,
+    ]);
+
+    expect(doctor.code, doctor.stderr).toBe(0);
+    expect(JSON.parse(doctor.stdout)).toMatchObject({
+      status: 'missing',
+      checks: expect.arrayContaining([
+        expect.objectContaining({
+          name: 'circuit_handoff_hook_installed',
+          ok: false,
+        }),
+      ]),
+    });
+  });
+
+  it('reports invalid when duplicate Codex Circuit handoff hooks are installed', async () => {
+    const root = tempRoot('circuit-handoff-hooks-duplicate-');
+    const hooksFile = join(root, 'codex/hooks.json');
+    const launcher = join(root, 'bin/circuit-next');
+    mkdirSync(join(root, 'codex'), { recursive: true });
+    mkdirSync(join(root, 'bin'), { recursive: true });
+    writeFileSync(launcher, '#!/usr/bin/env node\n');
+    const command = `${process.execPath} ${launcher} handoff hook --host codex`;
+    writeFileSync(
+      hooksFile,
+      `${JSON.stringify(
+        {
+          hooks: {
+            SessionStart: [
+              {
+                matcher: 'startup',
+                hooks: [{ type: 'command', command }],
+              },
+              {
+                matcher: 'resume',
+                hooks: [{ type: 'command', command }],
+              },
+            ],
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    const doctor = await captureMain([
+      'handoff',
+      'hooks',
+      'doctor',
+      '--host',
+      'codex',
+      '--hooks-file',
+      hooksFile,
+    ]);
+
+    expect(doctor.code, doctor.stderr).toBe(0);
+    expect(JSON.parse(doctor.stdout)).toMatchObject({
+      status: 'invalid',
+      checks: expect.arrayContaining([
+        expect.objectContaining({
+          name: 'circuit_handoff_hook_single',
+          ok: false,
+        }),
+      ]),
+    });
+  });
+
   it('marks an installed Codex handoff hook invalid when the launcher is missing', async () => {
     const root = tempRoot('circuit-handoff-hooks-stale-launcher-');
     const hooksFile = join(root, 'codex/hooks.json');

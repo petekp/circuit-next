@@ -1,18 +1,10 @@
 #!/usr/bin/env node
 
-import { createHash } from 'node:crypto';
-import {
-  cpSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  statSync,
-} from 'node:fs';
+import { cpSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { listCommandIds, listPackageDirs, packageTreeStatus } from './plugin-package-tree.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -113,66 +105,18 @@ function assertSafeCacheTarget(target, args, manifest) {
   }
 }
 
-function walkFiles(root) {
-  if (!existsSync(root)) return [];
-  const files = [];
-  const stack = [''];
-  while (stack.length > 0) {
-    const relDir = stack.pop();
-    const absDir = resolve(root, relDir);
-    for (const entry of readdirSync(absDir, { withFileTypes: true })) {
-      const relPath = join(relDir, entry.name);
-      if (entry.isDirectory()) {
-        stack.push(relPath);
-      } else if (entry.isFile()) {
-        files.push(relPath);
-      }
-    }
-  }
-  return files.sort();
-}
-
-function digestFile(path) {
-  return createHash('sha256').update(readFileSync(path)).digest('hex');
-}
-
-function treeDigest(root) {
-  const files = walkFiles(root);
-  return files.map((file) => `${file}\0${digestFile(resolve(root, file))}`).join('\n');
-}
-
-function treeStatus(source, target) {
-  if (!existsSync(target)) return 'missing';
-  if (!statSync(target).isDirectory()) return 'stale';
-  return treeDigest(source) === treeDigest(target) ? 'ok' : 'stale';
-}
-
-function listDirs(root) {
-  if (!existsSync(root)) return [];
-  return readdirSync(root, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .sort();
-}
-
-function summary(status, target) {
+function summary(status, target, tree) {
   return {
     status,
     source: pluginRoot,
     target,
+    package_tree: tree,
     check_command: 'npm run check:codex-plugin-cache',
     local_sync_command: 'npm run sync:codex-plugin-cache',
     git_marketplace_refresh: 'codex plugin marketplace upgrade circuit-next-local',
-    commands: walkCommandFiles(pluginRoot),
-    skills: listDirs(resolve(pluginRoot, 'skills')),
+    commands: listCommandIds(pluginRoot),
+    skills: listPackageDirs(pluginRoot, 'skills'),
   };
-}
-
-function walkCommandFiles(root) {
-  return walkFiles(resolve(root, 'commands'))
-    .filter((file) => file.endsWith('.md'))
-    .map((file) => file.replace(/\.md$/, ''))
-    .sort();
 }
 
 try {
@@ -182,17 +126,24 @@ try {
     ? resolve(args.cachePath)
     : defaultCachePath(args.marketplace, manifest);
   assertSafeCacheTarget(target, args, manifest);
-  const beforeStatus = treeStatus(pluginRoot, target);
+  const beforeTree = packageTreeStatus(pluginRoot, target);
 
   if (args.check) {
-    console.log(JSON.stringify(summary(beforeStatus, target), null, 2));
-    process.exit(beforeStatus === 'ok' ? 0 : 1);
+    console.log(JSON.stringify(summary(beforeTree.status, target, beforeTree), null, 2));
+    process.exit(beforeTree.status === 'ok' ? 0 : 1);
   }
 
   mkdirSync(dirname(target), { recursive: true });
   rmSync(target, { recursive: true, force: true });
   cpSync(pluginRoot, target, { recursive: true });
-  console.log(JSON.stringify(summary('synced', target), null, 2));
+  const afterTree = packageTreeStatus(pluginRoot, target);
+  console.log(
+    JSON.stringify(
+      summary(afterTree.status === 'ok' ? 'synced' : afterTree.status, target, afterTree),
+      null,
+      2,
+    ),
+  );
 } catch (err) {
   console.error(err instanceof Error ? err.message : String(err));
   process.exit(2);

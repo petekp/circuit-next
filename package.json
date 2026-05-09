@@ -33,6 +33,7 @@
     "smoke:host:claude": "node scripts/host-smoke/claude-handoff.mjs",
     "sync:codex-plugin-cache": "node scripts/sync-codex-plugin-cache.mjs",
     "check:codex-plugin-cache": "node scripts/sync-codex-plugin-cache.mjs --check",
+    "doctor:plugins:installed": "node scripts/doctor-installed-plugins.mjs",
     "publish:plugins": "node scripts/publish-plugins.ts check",
     "publish:plugins:bump": "node scripts/publish-plugins.ts bump",
     "publish:plugins:check": "node scripts/publish-plugins.ts check",
