@@ -25684,6 +25684,8 @@ function usage3() {
     "",
     "`--mode` is the friendly alias for `--entry-mode`; supplying both forms of that option is an error.",
     "",
+    "Mode and depth are paired per flow, not free flags. For most flows the supported pairs are mode/depth where the names match (e.g., `--mode lite --depth lite`), with `--mode default --depth standard` as the default. If you supply an unsupported pair, the rejection message lists the supported pairs for that flow.",
+    "",
     "With an explicit flow name, loads generated/flows/<name>/circuit.json. Without one, classifies the free-form goal across the registered explore/review/fix/build/migrate/sweep flows and then composes the runtime boundary using the configured relay connector.",
     "",
     "Config: if present, loads ~/.config/circuit-next/config.yaml and ./.circuit/config.yaml from the current working directory into the selection resolver before relay.",
@@ -26081,6 +26083,7 @@ function classifyRuntimeSupport(input) {
       reason: !customArchetypeSupported ? `runtime supports fresh ${flowId} entry mode '${entryModeName}' at depth '${depth}'` : `runtime supports custom flow '${flowId}' via '${customArchetype}' archetype entry mode '${entryModeName}' at depth '${depth}'`
     };
   }
+  const supportedPairs = rows.map((row) => `${row.entryModeName}/${row.depth}`).join(", ");
   const hasCheckpoint = input.flow.steps.some((step) => step.kind === "checkpoint");
   if ((depth === "deep" || depth === "tournament") && hasCheckpoint) {
     return {
@@ -26088,7 +26091,7 @@ function classifyRuntimeSupport(input) {
       flowId,
       entryModeName,
       depth,
-      reason: `checkpoint-waiting depth '${depth}' is not supported for this flow`
+      reason: `checkpoint-waiting depth '${depth}' is not supported for this flow. ${flowId} supports (mode/depth): ${supportedPairs}`
     };
   }
   return {
@@ -26096,7 +26099,7 @@ function classifyRuntimeSupport(input) {
     flowId,
     entryModeName,
     depth,
-    reason: `fresh ${flowId} entry mode '${entryModeName}' at depth '${depth}' is not supported`
+    reason: `fresh ${flowId} entry mode '${entryModeName}' at depth '${depth}' is not supported. ${flowId} supports (mode/depth): ${supportedPairs}`
   };
 }
 async function main(argv, options = {}) {

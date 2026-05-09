@@ -1186,6 +1186,27 @@ describe('CLI router', () => {
     expect(result.stderr).toContain("fresh build entry mode 'default' at depth 'autonomous'");
   });
 
+  it('lists the supported (mode/depth) pairs in the rejection message so the user can immediately retry with a valid pair', async () => {
+    const runFolder = join(runFolderBase, 'build-entry-mode-depth-override-actionable');
+    const result = await runMainUnsupportedRuntimeFailure([
+      'build',
+      '--goal',
+      'Add a tiny Build feature from the CLI with an override',
+      '--entry-mode',
+      'deep',
+      '--depth',
+      'standard',
+      '--run-folder',
+      runFolder,
+    ]);
+
+    expect(result.exit).toBe(2);
+    // Build's runtime support matrix as of the source-of-truth in cli/circuit.ts.
+    expect(result.stderr).toContain(
+      'build supports (mode/depth): default/standard, lite/lite, deep/deep, autonomous/autonomous',
+    );
+  });
+
   it('rejects fixture overrides whose flow id does not match the selected flow', async () => {
     await expect(
       main(
