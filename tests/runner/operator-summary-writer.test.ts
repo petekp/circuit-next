@@ -135,6 +135,56 @@ describe('operator summary writer', () => {
     expect(markdown).toContain('scope_empty');
   });
 
+  it('lists Review findings with severity, text, and file refs in the operator summary', () => {
+    writeReport('reports/review-result.json', {
+      scope: 'review staged evil.js',
+      findings: [
+        {
+          severity: 'critical',
+          id: 'rce-001',
+          text: 'eval call enables remote code execution',
+          file_refs: ['evil.js'],
+        },
+        {
+          severity: 'high',
+          id: 'regex-002',
+          text: 'unbounded regex risks ReDoS\nin parser',
+          file_refs: ['parser.ts', 'parser.test.ts'],
+        },
+        {
+          severity: 'low',
+          id: 'naming-003',
+          text: 'inconsistent variable naming',
+          file_refs: [],
+        },
+      ],
+      verdict: 'ISSUES_FOUND',
+      evidence_warnings: [],
+    });
+
+    const written = writeOperatorSummary({
+      runFolder,
+      runResult: baseResult('review'),
+      route: { selectedFlow: 'review' },
+    });
+
+    expect(written.summary.headline).toBe(
+      'Circuit: Review complete. Verdict: ISSUES_FOUND. Findings: 3.',
+    );
+    expect(written.summary.details).toContain(
+      '[CRITICAL] eval call enables remote code execution — at evil.js',
+    );
+    expect(written.summary.details).toContain(
+      '[HIGH] unbounded regex risks ReDoS — at parser.ts, parser.test.ts',
+    );
+    expect(written.summary.details).toContain('[LOW] inconsistent variable naming');
+    expect(written.summary.details).not.toContain('Findings: 3');
+    const markdown = readFileSync(written.markdownPath, 'utf8');
+    expect(markdown).toContain('[CRITICAL] eval call enables remote code execution — at evil.js');
+    expect(markdown).toContain('[HIGH] unbounded regex risks ReDoS');
+    expect(markdown).toContain('[LOW] inconsistent variable naming');
+  });
+
   it('summarizes Build, Fix, and Migrate close reports with verification and review status', () => {
     const cases = [
       {

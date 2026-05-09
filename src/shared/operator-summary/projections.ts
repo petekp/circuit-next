@@ -6,7 +6,14 @@
 // module and re-export through the registry.
 
 import { exploreSummaryProjector } from './explore.js';
-import { arrayField, type JsonObject, isObject, numberField, stringField } from './json.js';
+import {
+  type JsonObject,
+  arrayField,
+  isObject,
+  numberField,
+  stringArrayField,
+  stringField,
+} from './json.js';
 import type { SummaryProjection, SummaryProjector } from './projector.js';
 import {
   capitalized,
@@ -20,6 +27,28 @@ import {
 function flowSummaryDetail(flowReport: JsonObject | undefined): string | undefined {
   const summary = stringField(flowReport, 'summary');
   return summary === undefined ? undefined : `Result: ${friendlyResultSummary(summary)}`;
+}
+
+function firstLineSummary(text: string, max: number): string {
+  const firstLine = text.split(/\r?\n/, 1)[0]?.trim() ?? '';
+  if (firstLine.length <= max) return firstLine;
+  return `${firstLine.slice(0, Math.max(1, max - 1))}…`;
+}
+
+function reviewFindingDetails(report: JsonObject | undefined): string[] {
+  const findings = arrayField(report, 'findings');
+  if (findings.length === 0) return ['Findings: 0'];
+  const lines: string[] = [];
+  for (const finding of findings) {
+    if (!isObject(finding)) continue;
+    const severity = (stringField(finding, 'severity') ?? 'unknown').toUpperCase();
+    const text = stringField(finding, 'text') ?? '(no text)';
+    const fileRefs = stringArrayField(finding, 'file_refs');
+    const summary = firstLineSummary(text, 140);
+    const fileSuffix = fileRefs.length === 0 ? '' : ` — at ${fileRefs.join(', ')}`;
+    lines.push(`[${severity}] ${summary}${fileSuffix}`);
+  }
+  return lines;
 }
 
 function reviewEvidenceDetails(report: JsonObject | undefined): string[] {
@@ -63,7 +92,7 @@ const reviewProjector: SummaryProjector = ({ flowReport }) => {
   const summaryDetail = flowSummaryDetail(flowReport);
   const details: string[] = [];
   if (summaryDetail !== undefined) details.push(summaryDetail);
-  details.push(`Findings: ${findings}`);
+  details.push(...reviewFindingDetails(flowReport));
   details.push(...reviewEvidenceDetails(flowReport));
   // When the reviewer had no source content to inspect, a CLEAN/0-findings
   // headline silently understates the scope limitation. Drop the verdict
