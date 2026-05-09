@@ -1271,7 +1271,9 @@ export async function runHandoffCommand(
 
   if (args.action === 'brief') {
     if (!args.json) {
-      process.stderr.write('error: handoff brief requires --json\n');
+      process.stderr.write(
+        'handoff brief returns machine-readable JSON for host injection. Pass --json to confirm that output mode and run it.\n',
+      );
       return 2;
     }
     process.stdout.write(`${JSON.stringify(handoffBrief(args), null, 2)}\n`);

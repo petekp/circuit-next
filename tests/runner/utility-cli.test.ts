@@ -446,6 +446,72 @@ describe('utility CLI commands', () => {
     });
   });
 
+  it('returns invalid envelope on resume when the index kind disagrees with the record', async () => {
+    const projectRoot = tempRoot('circuit-handoff-resume-mismatch-');
+    const controlPlane = join(projectRoot, '.circuit-next');
+    const continuityRoot = join(controlPlane, 'continuity');
+    const recordsDir = join(continuityRoot, 'records');
+    mkdirSync(recordsDir, { recursive: true });
+    const recordId = 'continuity-44444444-4444-4444-8444-444444444444';
+    writeFileSync(
+      join(continuityRoot, 'index.json'),
+      `${JSON.stringify(
+        {
+          schema_version: 1,
+          project_root: projectRoot,
+          pending_record: {
+            record_id: recordId,
+            continuity_kind: 'run-backed',
+            created_at: '2026-04-29T23:12:00.000Z',
+          },
+          current_run: null,
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    writeFileSync(
+      join(recordsDir, `${recordId}.json`),
+      `${JSON.stringify(
+        {
+          schema_version: 1,
+          record_id: recordId,
+          continuity_kind: 'standalone',
+          project_root: projectRoot,
+          created_at: '2026-04-29T23:12:00.000Z',
+          git: { cwd: projectRoot },
+          narrative: {
+            goal: 'g',
+            next: 'n',
+            state_markdown: '- s',
+            debt_markdown: '- d',
+          },
+          resume_contract: {
+            mode: 'resume_standalone',
+            auto_resume: false,
+            requires_explicit_resume: true,
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    const resume = await captureMain([
+      'handoff',
+      'resume',
+      '--control-plane',
+      controlPlane,
+    ]);
+    expect(resume.code).toBe(1);
+    expect(JSON.parse(resume.stdout)).toMatchObject({
+      action: 'resume',
+      status: 'invalid',
+      record_id: recordId,
+      error: { code: 'record_kind_mismatch' },
+    });
+  });
+
   it('returns invalid envelope on resume when the index is unparseable', async () => {
     const projectRoot = tempRoot('circuit-handoff-resume-corrupt-');
     const controlPlane = join(projectRoot, '.circuit-next');
@@ -697,10 +763,11 @@ describe('utility CLI commands', () => {
     });
   });
 
-  it('requires --json for handoff brief', async () => {
+  it('requires --json for handoff brief and explains why', async () => {
     const result = await captureMain(['handoff', 'brief']);
     expect(result.code).toBe(2);
-    expect(result.stderr).toContain('handoff brief requires --json');
+    expect(result.stderr).toContain('machine-readable JSON');
+    expect(result.stderr).toContain('--json');
   });
 
   it('installs and removes the Codex user-level handoff hook without clobbering existing hooks', async () => {
