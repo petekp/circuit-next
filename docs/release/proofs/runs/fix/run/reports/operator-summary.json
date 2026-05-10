@@ -42,6 +42,11 @@
       "schema": "fix.diagnosis@v1"
     },
     {
+      "label": "fix.regression-proof",
+      "path": "<repo>/docs/release/proofs/runs/fix/run/reports/fix/regression-proof.json",
+      "schema": "fix.regression-proof@v1"
+    },
+    {
       "label": "fix.change",
       "path": "<repo>/docs/release/proofs/runs/fix/run/reports/fix/change.json",
       "schema": "fix.change@v1"

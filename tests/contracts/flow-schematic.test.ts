@@ -55,6 +55,7 @@ describe('flow schematic schema — active Fix schematic', () => {
       'gather-context',
       'diagnose',
       'human-decision',
+      'run-verification',
       'act',
       'run-verification',
       'review',
@@ -71,6 +72,7 @@ describe('flow schematic schema — active Fix schematic', () => {
       ['fix-gather-context', 'analyze'],
       ['fix-diagnose', 'analyze'],
       ['fix-no-repro-decision', 'analyze'],
+      ['fix-regression-baseline', 'verify'],
       ['fix-act', 'act'],
       ['fix-verify', 'verify'],
       ['fix-review', 'review'],
@@ -87,6 +89,7 @@ describe('flow schematic schema — active Fix schematic', () => {
       ['fix-gather-context', { kind: 'relay', role: 'researcher' }],
       ['fix-diagnose', { kind: 'relay', role: 'researcher' }],
       ['fix-no-repro-decision', { kind: 'checkpoint' }],
+      ['fix-regression-baseline', { kind: 'verification' }],
       ['fix-act', { kind: 'relay', role: 'implementer' }],
       ['fix-verify', { kind: 'verification' }],
       ['fix-review', { kind: 'relay', role: 'reviewer' }],
@@ -109,6 +112,7 @@ describe('flow schematic schema — active Fix schematic', () => {
       brief: 'fix.brief@v1',
       context: 'fix.context@v1',
       diagnosis: 'fix.diagnosis@v1',
+      regression: 'fix.regression-proof@v1',
       change: 'fix.change@v1',
       verification: 'fix.verification@v1',
     });
@@ -117,6 +121,7 @@ describe('flow schematic schema — active Fix schematic', () => {
       brief: 'fix.brief@v1',
       context: 'fix.context@v1',
       diagnosis: 'fix.diagnosis@v1',
+      regression: 'fix.regression-proof@v1',
       change: 'fix.change@v1',
       verification: 'fix.verification@v1',
       review: 'fix.review@v1',
@@ -201,7 +206,7 @@ describe('flow schematic schema — active Fix schematic', () => {
     const result = FlowSchematic.safeParse(raw);
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.message).toMatch(/"path":\s*\[\s*"items",\s*4,\s*"execution",\s*"role"/);
+      expect(result.error.message).toMatch(/"path":\s*\[\s*"items",\s*5,\s*"execution",\s*"role"/);
       expect(result.error.message).toMatch(/Required/);
     }
   });

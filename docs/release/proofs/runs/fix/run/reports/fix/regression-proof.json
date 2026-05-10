@@ -1,0 +1,5 @@
+{
+  "status": "deferred",
+  "overall_status": "passed",
+  "reason": "Brief deferred the regression test; no runtime baseline was collected."
+}

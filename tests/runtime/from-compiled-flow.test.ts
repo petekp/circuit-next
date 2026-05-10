@@ -163,7 +163,7 @@ describe('fromCompiledFlow', () => {
     expect(checkpoint.kind).toBe('checkpoint');
     if (checkpoint.kind !== 'checkpoint') throw new Error('expected checkpoint');
     expect(checkpoint.choices).toEqual(['continue']);
-    expect(checkpoint.routes.pass).toEqual({ kind: 'step', stepId: 'fix-act' });
+    expect(checkpoint.routes.pass).toEqual({ kind: 'step', stepId: 'fix-regression-baseline' });
     expect(checkpoint.routes).toMatchObject({
       revise: { kind: 'step', stepId: 'fix-diagnose' },
       handoff: { kind: 'step', stepId: 'fix-handoff' },

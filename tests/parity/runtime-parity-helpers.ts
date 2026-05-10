@@ -26,6 +26,7 @@ import {
   FixChange,
   FixContext,
   FixDiagnosis,
+  FixRegressionProof,
   FixResult,
   FixReview,
   FixVerification,
@@ -79,6 +80,19 @@ const commandSpec = {
   id: 'runtime-parity-check',
   cwd: '.',
   argv: [process.execPath, '-e', 'process.exit(0)'],
+  timeout_ms: 30_000,
+  max_output_bytes: 200_000,
+  env: {},
+};
+
+// A regression-test command that exits non-zero. Used so the
+// runtime-owned fix.regression-proof@v1 baseline observes the test failing
+// before the fix (matching the brief's failing-before-fix expectation),
+// which is what proves the test reproduces the bug.
+const regressionCommandSpec = {
+  id: 'runtime-parity-regression',
+  cwd: '.',
+  argv: [process.execPath, '-e', 'process.exit(1)'],
   timeout_ms: 30_000,
   max_output_bytes: 200_000,
   env: {},
@@ -266,8 +280,8 @@ function reportBody(
         regression_contract: {
           expected_behavior: 'The requested behavior works.',
           actual_behavior: 'The current behavior needs correction.',
-          repro: { kind: 'command', command: commandSpec },
-          regression_test: { status: 'failing-before-fix', command: commandSpec },
+          repro: { kind: 'command', command: regressionCommandSpec },
+          regression_test: { status: 'failing-before-fix', command: regressionCommandSpec },
         },
         success_criteria: ['The run reaches the close step.'],
         verification_command_candidates: [commandSpec],
@@ -303,6 +317,24 @@ function reportBody(
         overall_status: 'passed',
         commands: [fixCommandResult],
       });
+    case 'fix.regression-proof@v1':
+      return FixRegressionProof.parse({
+        status: 'proved',
+        overall_status: 'passed',
+        baseline: {
+          command_id: regressionCommandSpec.id,
+          cwd: regressionCommandSpec.cwd,
+          argv: regressionCommandSpec.argv,
+          timeout_ms: regressionCommandSpec.timeout_ms,
+          max_output_bytes: regressionCommandSpec.max_output_bytes,
+          env: regressionCommandSpec.env,
+          exit_code: 1,
+          command_status: 'failed',
+          duration_ms: 0,
+          stdout_summary: '',
+          stderr_summary: '',
+        },
+      });
     case 'fix.review@v1':
       return FixReview.parse({
         verdict: 'accept',
@@ -325,6 +357,11 @@ function reportBody(
             report_id: 'fix.diagnosis',
             path: 'reports/fix/diagnosis.json',
             schema: 'fix.diagnosis@v1',
+          },
+          {
+            report_id: 'fix.regression-proof',
+            path: 'reports/fix/regression-proof.json',
+            schema: 'fix.regression-proof@v1',
           },
           { report_id: 'fix.change', path: 'reports/fix/change.json', schema: 'fix.change@v1' },
           {

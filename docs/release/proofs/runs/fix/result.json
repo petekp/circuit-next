@@ -10,7 +10,7 @@
   "entry_mode_source": "classifier",
   "run_folder": "<repo>/docs/release/proofs/runs/fix/run",
   "outcome": "complete",
-  "trace_entries_observed": 36,
+  "trace_entries_observed": 40,
   "result_path": "<repo>/docs/release/proofs/runs/fix/run/reports/result.json",
   "operator_summary_path": "<repo>/docs/release/proofs/runs/fix/run/reports/operator-summary.json",
   "operator_summary_markdown_path": "<repo>/docs/release/proofs/runs/fix/run/reports/operator-summary.md",

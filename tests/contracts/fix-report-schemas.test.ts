@@ -74,6 +74,11 @@ function resultPointers(
       schema: 'fix.diagnosis@v1',
     }),
     FixResultReportPointer.parse({
+      report_id: 'fix.regression-proof',
+      path: 'reports/fix/regression-proof.json',
+      schema: 'fix.regression-proof@v1',
+    }),
+    FixResultReportPointer.parse({
       report_id: 'fix.change',
       path: 'reports/fix/change.json',
       schema: 'fix.change@v1',

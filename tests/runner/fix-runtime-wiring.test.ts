@@ -189,6 +189,7 @@ describe('Lite Fix runtime wiring', () => {
       'fix.brief',
       'fix.context',
       'fix.diagnosis',
+      'fix.regression-proof',
       'fix.change',
       'fix.verification',
     ]);
