@@ -3,6 +3,7 @@
   "outcome": "partial",
   "verification_status": "passed",
   "regression_status": "deferred",
+  "regression_rerun_status": "deferred",
   "change_set_status": "pass",
   "review_status": "skipped",
   "review_skip_reason": "Lite mode skipped review per route_overrides.",
@@ -42,6 +43,11 @@
       "report_id": "fix.verification",
       "path": "reports/fix/verification.json",
       "schema": "fix.verification@v1"
+    },
+    {
+      "report_id": "fix.regression-rerun",
+      "path": "reports/fix/regression-rerun.json",
+      "schema": "fix.regression-rerun@v1"
     },
     {
       "report_id": "fix.change-set",

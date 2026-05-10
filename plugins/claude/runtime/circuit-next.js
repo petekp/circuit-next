@@ -7341,12 +7341,12 @@ var require_dist = __commonJS({
 
 // dist/cli/circuit.js
 import { randomUUID as randomUUID7 } from "node:crypto";
-import { existsSync as existsSync14, readFileSync as readFileSync28 } from "node:fs";
+import { existsSync as existsSync14, readFileSync as readFileSync29 } from "node:fs";
 import { dirname as dirname10, resolve as resolve12 } from "node:path";
-import { fileURLToPath as fileURLToPath2 } from "node:url";
+import { fileURLToPath as fileURLToPath3 } from "node:url";
 
 // dist/runtime/run/checkpoint-resume.js
-import { readFileSync as readFileSync19 } from "node:fs";
+import { readFileSync as readFileSync20 } from "node:fs";
 
 // dist/flows/catalog-derivations.js
 function buildBuilderRegistry(packages, slot, pluck) {
@@ -12815,6 +12815,7 @@ var FIX_RESULT_SCHEMA_BY_ARTIFACT_ID = {
   "fix.baseline-snapshot": "fix.baseline-snapshot@v1",
   "fix.change": "fix.change@v1",
   "fix.verification": "fix.verification@v1",
+  "fix.regression-rerun": "fix.regression-rerun@v1",
   "fix.change-set": "fix.change-set@v1",
   "fix.review": "fix.review@v1"
 };
@@ -12827,6 +12828,7 @@ var FIX_RESULT_PATH_BY_ARTIFACT_ID = {
   "fix.baseline-snapshot": "reports/fix/baseline-snapshot.json",
   "fix.change": "reports/fix/change.json",
   "fix.verification": "reports/fix/verification.json",
+  "fix.regression-rerun": "reports/fix/regression-rerun.json",
   "fix.change-set": "reports/fix/change-set.json",
   "fix.review": "reports/fix/review.json"
 };
@@ -12838,6 +12840,7 @@ var REQUIRED_FIX_RESULT_ARTIFACT_IDS = [
   "fix.baseline-snapshot",
   "fix.change",
   "fix.verification",
+  "fix.regression-rerun",
   "fix.change-set"
 ];
 var NonEmptyStringArray2 = external_exports.array(external_exports.string().min(1)).min(1);
@@ -13084,12 +13087,33 @@ var FixRegressionProof = external_exports.object({
     }
   }
 });
+var FixBaselineSnapshotEntry = external_exports.object({
+  // Raw two-character porcelain status (e.g. ' M', '??', 'R ', 'AD').
+  status_code: external_exports.string().length(2),
+  // Working-tree path. For renames/copies this is the destination; the
+  // source is in `from`.
+  path: external_exports.string().min(1),
+  // Content fingerprint:
+  //   - 40-char hex git OID for files we could `git hash-object`
+  //   - '<deleted>' for paths whose working-tree copy is gone
+  //   - '<unhashable:...>' if hash-object failed unexpectedly
+  fingerprint: external_exports.string().min(1),
+  from: external_exports.string().min(1).optional()
+}).strict();
+var FixHiddenIndexFlag = external_exports.object({
+  tag: external_exports.string().length(1),
+  path: external_exports.string().min(1)
+}).strict();
 var FixBaselineSnapshot = external_exports.object({
   overall_status: external_exports.literal("passed"),
   head_sha: external_exports.string().min(1),
-  // Each entry is a single line of `git status --porcelain` output (XY plus
-  // path). Empty array means the working tree was clean.
-  working_tree_porcelain: external_exports.array(external_exports.string().min(1))
+  // Per-path porcelain entries with content fingerprints. Empty array means
+  // the working tree was clean.
+  entries: external_exports.array(FixBaselineSnapshotEntry),
+  // Paths flagged with assume-unchanged or skip-worktree at baseline. The
+  // change-set step refuses status='pass' when this list is non-empty
+  // because such paths can be edited without `git status` noticing.
+  hidden_index_flags: external_exports.array(FixHiddenIndexFlag)
 }).strict();
 var FixChangeSet = external_exports.object({
   status: external_exports.enum(["pass", "fail"]),
@@ -13100,7 +13124,17 @@ var FixChangeSet = external_exports.object({
   declared: external_exports.array(external_exports.string().min(1)),
   observed: external_exports.array(external_exports.string().min(1)),
   undeclared_extras: external_exports.array(external_exports.string().min(1)),
-  missing_declared: external_exports.array(external_exports.string().min(1))
+  missing_declared: external_exports.array(external_exports.string().min(1)),
+  // Subset of `observed` that came from baseline-dirty mutation rather than
+  // newly-dirty paths. Carried for transparency: a path here means it was
+  // already dirty at fix-act start and fix-act further mutated it. The
+  // verdict logic doesn't branch on this — these paths must still appear in
+  // declared (if any are missing, they show up as undeclared_extras and the
+  // status flips to 'fail').
+  baseline_dirty_mutated: external_exports.array(external_exports.string().min(1)),
+  // Paths flagged assume-unchanged or skip-worktree, surfaced from the
+  // post-fix snapshot. status 'pass' requires this to be empty.
+  hidden_index_flags: external_exports.array(FixHiddenIndexFlag)
 }).strict().superRefine((changeSet, ctx) => {
   const expectedOverall = changeSet.status === "pass" ? "passed" : "failed";
   if (changeSet.overall_status !== expectedOverall) {
@@ -13128,19 +13162,38 @@ var FixChangeSet = external_exports.object({
       message: "missing_declared must equal declared minus observed (in declared order)"
     });
   }
-  const isClean = changeSet.undeclared_extras.length === 0 && changeSet.missing_declared.length === 0;
+  for (const [index, path] of changeSet.baseline_dirty_mutated.entries()) {
+    if (!observedSet.has(path)) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["baseline_dirty_mutated", index],
+        message: `baseline_dirty_mutated path '${path}' must also appear in observed`
+      });
+    }
+  }
+  const headDiverged = changeSet.head_sha !== changeSet.baseline_head_sha;
+  const hiddenFlagged = changeSet.hidden_index_flags.length > 0;
+  const setsClean = changeSet.undeclared_extras.length === 0 && changeSet.missing_declared.length === 0;
+  const isClean = setsClean && !headDiverged && !hiddenFlagged;
   if (changeSet.status === "pass" && !isClean) {
+    const violations = [];
+    if (!setsClean)
+      violations.push("non-empty undeclared_extras or missing_declared");
+    if (headDiverged)
+      violations.push("baseline_head_sha differs from head_sha");
+    if (hiddenFlagged)
+      violations.push("non-empty hidden_index_flags");
     ctx.addIssue({
       code: external_exports.ZodIssueCode.custom,
       path: ["status"],
-      message: "status 'pass' requires both undeclared_extras and missing_declared to be empty"
+      message: `status 'pass' requires no failure conditions, but: ${violations.join("; ")}`
     });
   }
   if (changeSet.status === "fail" && isClean) {
     ctx.addIssue({
       code: external_exports.ZodIssueCode.custom,
       path: ["status"],
-      message: "status 'fail' requires at least one undeclared_extras or missing_declared entry"
+      message: "status 'fail' requires at least one of: undeclared_extras, missing_declared, HEAD divergence, or hidden_index_flags"
     });
   }
   if (changeSet.status === "fail" && changeSet.reason === void 0) {
@@ -13149,6 +13202,67 @@ var FixChangeSet = external_exports.object({
       path: ["reason"],
       message: "reason is required when status is 'fail'"
     });
+  }
+});
+var FixRegressionRerunStatus = external_exports.enum(["cleared", "still-failing", "deferred"]);
+var FixRegressionRerun = external_exports.object({
+  status: FixRegressionRerunStatus,
+  overall_status: external_exports.enum(["passed", "failed"]),
+  reason: external_exports.string().min(1).optional(),
+  rerun: FixRegressionProofObservation.optional()
+}).strict().superRefine((proof, ctx) => {
+  const expectedOverall = proof.status === "still-failing" ? "failed" : "passed";
+  if (proof.overall_status !== expectedOverall) {
+    ctx.addIssue({
+      code: external_exports.ZodIssueCode.custom,
+      path: ["overall_status"],
+      message: `overall_status must be '${expectedOverall}' when status is '${proof.status}'`
+    });
+  }
+  if (proof.status === "deferred") {
+    if (proof.rerun !== void 0) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["rerun"],
+        message: "rerun must be omitted when status is 'deferred'"
+      });
+    }
+    if (proof.reason === void 0) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["reason"],
+        message: "reason is required when status is 'deferred'"
+      });
+    }
+  } else {
+    if (proof.rerun === void 0) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["rerun"],
+        message: `rerun is required when status is '${proof.status}'`
+      });
+    }
+    if (proof.status === "cleared" && proof.rerun?.command_status !== "passed") {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["status"],
+        message: "status 'cleared' requires rerun command_status 'passed'"
+      });
+    }
+    if (proof.status === "still-failing" && proof.rerun?.command_status !== "failed") {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["status"],
+        message: "status 'still-failing' requires rerun command_status 'failed'"
+      });
+    }
+    if (proof.status === "still-failing" && proof.reason === void 0) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["reason"],
+        message: "reason is required when status is 'still-failing'"
+      });
+    }
   }
 });
 var FixReviewVerdict = external_exports.enum(["accept", "accept-with-fixes", "reject"]);
@@ -13187,6 +13301,7 @@ var FixResultReportId = external_exports.enum([
   "fix.baseline-snapshot",
   "fix.change",
   "fix.verification",
+  "fix.regression-rerun",
   "fix.change-set",
   "fix.review"
 ]);
@@ -13218,6 +13333,7 @@ var FixResult = external_exports.object({
   outcome: FixResultOutcome,
   verification_status: external_exports.enum(["passed", "failed", "not-run"]),
   regression_status: external_exports.enum(["proved", "deferred", "not-applicable"]),
+  regression_rerun_status: FixRegressionRerunStatus,
   change_set_status: external_exports.enum(["pass", "fail"]),
   review_status: FixReviewStatus,
   review_verdict: FixReviewVerdict.optional(),
@@ -13257,6 +13373,27 @@ var FixResult = external_exports.object({
       code: external_exports.ZodIssueCode.custom,
       path: ["regression_status"],
       message: "regression_status must be 'proved' when outcome is 'fixed'"
+    });
+  }
+  if (result.outcome === "fixed" && result.regression_rerun_status !== "cleared") {
+    ctx.addIssue({
+      code: external_exports.ZodIssueCode.custom,
+      path: ["regression_rerun_status"],
+      message: "regression_rerun_status must be 'cleared' when outcome is 'fixed'"
+    });
+  }
+  if (result.regression_status === "deferred" && result.regression_rerun_status !== "deferred") {
+    ctx.addIssue({
+      code: external_exports.ZodIssueCode.custom,
+      path: ["regression_rerun_status"],
+      message: "regression_rerun_status must be 'deferred' when regression_status is 'deferred'"
+    });
+  }
+  if (result.regression_status === "proved" && result.regression_rerun_status === "deferred") {
+    ctx.addIssue({
+      code: external_exports.ZodIssueCode.custom,
+      path: ["regression_rerun_status"],
+      message: "regression_rerun_status cannot be 'deferred' when regression_status is 'proved'"
     });
   }
   if (result.outcome === "fixed" && result.change_set_status !== "pass") {
@@ -13322,52 +13459,62 @@ var FixResult = external_exports.object({
 });
 
 // dist/flows/fix/writers/baseline-snapshot.js
-var GIT_TIMEOUT_MS = 3e4;
-var GIT_MAX_OUTPUT_BYTES = 1e6;
-var REV_PARSE_COMMAND = {
-  id: "fix-baseline-snapshot-rev-parse",
-  cwd: ".",
-  argv: ["git", "rev-parse", "HEAD"],
-  timeout_ms: GIT_TIMEOUT_MS,
-  max_output_bytes: GIT_MAX_OUTPUT_BYTES,
-  env: {}
-};
-var STATUS_COMMAND = {
-  id: "fix-baseline-snapshot-status",
-  cwd: ".",
-  argv: ["git", "status", "--porcelain"],
-  timeout_ms: GIT_TIMEOUT_MS,
-  max_output_bytes: GIT_MAX_OUTPUT_BYTES,
-  env: {}
-};
+import { fileURLToPath } from "node:url";
+var GIT_TIMEOUT_MS = 6e4;
+var GIT_MAX_OUTPUT_BYTES = 5e6;
+var GIT_STATE_HELPER_PATH = fileURLToPath(new URL("./git-state.mjs", import.meta.url));
+var GitStateHelperOutput = external_exports.object({
+  head_sha: external_exports.string().min(1),
+  entries: external_exports.array(external_exports.object({
+    status_code: external_exports.string().length(2),
+    path: external_exports.string().min(1),
+    fingerprint: external_exports.string().min(1),
+    from: external_exports.string().min(1).optional()
+  }).strict()),
+  hidden_index_flags: external_exports.array(external_exports.object({ tag: external_exports.string().length(1), path: external_exports.string().min(1) }).strict())
+}).strict();
+function fixGitStateCommand(id) {
+  return {
+    id,
+    cwd: ".",
+    argv: [process.execPath, GIT_STATE_HELPER_PATH],
+    timeout_ms: GIT_TIMEOUT_MS,
+    max_output_bytes: GIT_MAX_OUTPUT_BYTES,
+    env: {}
+  };
+}
+function parseGitStateObservation(observation, schemaName) {
+  if (observation.status !== "passed") {
+    throw new Error(`${schemaName}: git-state helper failed (exit ${observation.exit_code}): ${observation.stderr_summary}`);
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(observation.stdout_summary);
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new Error(`${schemaName}: git-state helper stdout was not valid JSON: ${reason}`);
+  }
+  return GitStateHelperOutput.parse(parsed);
+}
 var fixBaselineSnapshotWriter = {
   resultSchemaName: "fix.baseline-snapshot@v1",
   loadCommands(_context) {
-    return [REV_PARSE_COMMAND, STATUS_COMMAND];
+    return [fixGitStateCommand("fix-baseline-snapshot-git-state")];
   },
   buildResult(observations) {
-    if (observations.length !== 2) {
-      throw new Error(`fix.baseline-snapshot@v1: expected 2 git observations, got ${observations.length}`);
+    if (observations.length !== 1) {
+      throw new Error(`fix.baseline-snapshot@v1: expected 1 git-state observation, got ${observations.length}`);
     }
-    const [revParse, status] = observations;
-    if (revParse === void 0 || status === void 0) {
-      throw new Error("fix.baseline-snapshot@v1: git observations missing");
+    const observation = observations[0];
+    if (observation === void 0) {
+      throw new Error("fix.baseline-snapshot@v1: git-state observation missing");
     }
-    if (revParse.status !== "passed") {
-      throw new Error(`fix.baseline-snapshot@v1: git rev-parse HEAD failed (exit ${revParse.exit_code}): ${revParse.stderr_summary}`);
-    }
-    if (status.status !== "passed") {
-      throw new Error(`fix.baseline-snapshot@v1: git status --porcelain failed (exit ${status.exit_code}): ${status.stderr_summary}`);
-    }
-    const head = revParse.stdout_summary.trim();
-    if (head.length === 0) {
-      throw new Error("fix.baseline-snapshot@v1: git rev-parse HEAD returned no SHA");
-    }
-    const porcelainLines = status.stdout_summary.split("\n").map((line) => line.replace(/\r$/, "")).filter((line) => line.length > 0);
+    const state = parseGitStateObservation(observation, "fix.baseline-snapshot@v1");
     return FixBaselineSnapshot.parse({
       overall_status: "passed",
-      head_sha: head,
-      working_tree_porcelain: porcelainLines
+      head_sha: state.head_sha,
+      entries: state.entries,
+      hidden_index_flags: state.hidden_index_flags
     });
   }
 };
@@ -13441,41 +13588,45 @@ var fixBriefComposeBuilder = {
 
 // dist/flows/fix/writers/change-set.js
 import { readFileSync as readFileSync6 } from "node:fs";
-var GIT_TIMEOUT_MS2 = 3e4;
-var GIT_MAX_OUTPUT_BYTES2 = 1e6;
-var REV_PARSE_COMMAND2 = {
-  id: "fix-change-set-rev-parse",
-  cwd: ".",
-  argv: ["git", "rev-parse", "HEAD"],
-  timeout_ms: GIT_TIMEOUT_MS2,
-  max_output_bytes: GIT_MAX_OUTPUT_BYTES2,
-  env: {}
-};
-var STATUS_COMMAND2 = {
-  id: "fix-change-set-status",
-  cwd: ".",
-  argv: ["git", "status", "--porcelain"],
-  timeout_ms: GIT_TIMEOUT_MS2,
-  max_output_bytes: GIT_MAX_OUTPUT_BYTES2,
-  env: {}
-};
-function parsePorcelainPath(line) {
-  const trimmed = line.length > 3 ? line.slice(3) : line;
-  const arrowIndex = trimmed.indexOf(" -> ");
-  const raw = arrowIndex >= 0 ? trimmed.slice(arrowIndex + 4) : trimmed;
-  if (raw.startsWith('"') && raw.endsWith('"') && raw.length >= 2) {
-    return raw.slice(1, -1);
+function fingerprintsByPath(entries) {
+  const map = /* @__PURE__ */ new Map();
+  for (const entry of entries) {
+    map.set(entry.path, entry.fingerprint);
   }
-  return raw;
+  return map;
 }
-function porcelainPathSet(lines) {
-  const set = /* @__PURE__ */ new Set();
-  for (const line of lines) {
-    const path = parsePorcelainPath(line);
-    if (path.length > 0)
-      set.add(path);
-  }
-  return set;
+function hiddenFlagsByPath(flags) {
+  return new Set(flags.map((f) => f.path));
+}
+function computeChangeSet(options) {
+  const { baseline, post, declared } = options;
+  const baselineFingerprints = fingerprintsByPath(baseline.entries);
+  const postFingerprints = fingerprintsByPath(post.entries);
+  const baselinePaths = new Set(baselineFingerprints.keys());
+  const postPaths = new Set(postFingerprints.keys());
+  const baselineHiddenPaths = hiddenFlagsByPath(baseline.hidden_index_flags);
+  const newDirt = [...postPaths].filter((path) => !baselinePaths.has(path));
+  const baselineDirtyMutated = [...baselinePaths].filter((path) => {
+    if (baselineHiddenPaths.has(path))
+      return false;
+    const before = baselineFingerprints.get(path);
+    const after = postFingerprints.get(path);
+    return before !== after;
+  });
+  const observedSet = /* @__PURE__ */ new Set([...newDirt, ...baselineDirtyMutated]);
+  const observed = [...observedSet].sort((a, b) => a.localeCompare(b));
+  const declaredSorted = [...declared].sort((a, b) => a.localeCompare(b));
+  const declaredSet = new Set(declaredSorted);
+  const undeclaredExtras = observed.filter((path) => !declaredSet.has(path));
+  const missingDeclared = declaredSorted.filter((path) => !observedSet.has(path));
+  const baselineDirtyMutatedSorted = [...baselineDirtyMutated].sort((a, b) => a.localeCompare(b));
+  return {
+    observed,
+    declared: declaredSorted,
+    undeclaredExtras,
+    missingDeclared,
+    baselineDirtyMutated: baselineDirtyMutatedSorted
+  };
 }
 var fixChangeSetWriter = {
   resultSchemaName: "fix.change-set@v1",
@@ -13488,69 +13639,60 @@ var fixChangeSetWriter = {
     if (!context.step.reads.includes(changePath)) {
       throw new Error(`fix.change-set@v1 requires step '${context.step.id}' to read ${changePath}`);
     }
-    return [REV_PARSE_COMMAND2, STATUS_COMMAND2];
+    return [fixGitStateCommand("fix-change-set-git-state")];
   },
   buildResult(observations, context) {
-    if (observations.length !== 2) {
-      throw new Error(`fix.change-set@v1: expected 2 git observations, got ${observations.length}`);
+    if (observations.length !== 1) {
+      throw new Error(`fix.change-set@v1: expected 1 git-state observation, got ${observations.length}`);
     }
-    const [revParse, status] = observations;
-    if (revParse === void 0 || status === void 0) {
-      throw new Error("fix.change-set@v1: git observations missing");
+    const observation = observations[0];
+    if (observation === void 0) {
+      throw new Error("fix.change-set@v1: git-state observation missing");
     }
-    if (revParse.status !== "passed") {
-      throw new Error(`fix.change-set@v1: git rev-parse HEAD failed (exit ${revParse.exit_code}): ${revParse.stderr_summary}`);
-    }
-    if (status.status !== "passed") {
-      throw new Error(`fix.change-set@v1: git status --porcelain failed (exit ${status.exit_code}): ${status.stderr_summary}`);
-    }
-    const headSha = revParse.stdout_summary.trim();
-    if (headSha.length === 0) {
-      throw new Error("fix.change-set@v1: git rev-parse HEAD returned no SHA");
-    }
-    const postPorcelain = status.stdout_summary.split("\n").map((line) => line.replace(/\r$/, "")).filter((line) => line.length > 0);
+    const post = parseGitStateObservation(observation, "fix.change-set@v1");
     const baselinePath = reportPathForSchemaInCompiledFlow(context.flow, "fix.baseline-snapshot@v1");
     const changePath = reportPathForSchemaInCompiledFlow(context.flow, "fix.change@v1");
     const baseline = FixBaselineSnapshot.parse(JSON.parse(readFileSync6(resolveRunRelative(context.runFolder, baselinePath), "utf8")));
     const change = FixChange.parse(JSON.parse(readFileSync6(resolveRunRelative(context.runFolder, changePath), "utf8")));
-    const baselinePathSet = porcelainPathSet(baseline.working_tree_porcelain);
-    const postPathSet = porcelainPathSet(postPorcelain);
-    const observed = [...postPathSet].filter((path) => !baselinePathSet.has(path)).sort((a, b) => a.localeCompare(b));
-    const declared = [...change.changed_files].sort((a, b) => a.localeCompare(b));
-    const declaredSet = new Set(declared);
-    const observedSet = new Set(observed);
-    const undeclaredExtras = observed.filter((path) => !declaredSet.has(path));
-    const missingDeclared = declared.filter((path) => !observedSet.has(path));
-    const headDiverged = headSha !== baseline.head_sha;
-    let status_;
+    const computed = computeChangeSet({
+      baseline,
+      post,
+      declared: change.changed_files
+    });
+    const headDiverged = post.head_sha !== baseline.head_sha;
+    const hiddenFlags = post.hidden_index_flags;
+    const setsClean = computed.undeclaredExtras.length === 0 && computed.missingDeclared.length === 0;
+    const status_ = setsClean && !headDiverged && hiddenFlags.length === 0 ? "pass" : "fail";
     let reason;
-    if (headDiverged) {
-      status_ = "fail";
-      reason = `HEAD moved during the fix run (baseline ${baseline.head_sha}, post ${headSha}); the agent committed mid-run, which the change-set writer cannot reconcile against the declared file list.`;
-    } else if (undeclaredExtras.length === 0 && missingDeclared.length === 0) {
-      status_ = "pass";
-      reason = void 0;
-    } else {
-      status_ = "fail";
+    if (status_ === "fail") {
       const parts = [];
-      if (undeclaredExtras.length > 0) {
-        parts.push(`undeclared extras: ${undeclaredExtras.join(", ")}`);
+      if (headDiverged) {
+        parts.push(`HEAD moved during the fix run (baseline ${baseline.head_sha}, post ${post.head_sha}); the agent committed mid-run, which the change-set writer cannot reconcile against the declared file list.`);
       }
-      if (missingDeclared.length > 0) {
-        parts.push(`missing declared: ${missingDeclared.join(", ")}`);
+      if (computed.undeclaredExtras.length > 0) {
+        parts.push(`undeclared extras: ${computed.undeclaredExtras.join(", ")}`);
       }
-      reason = `Change-set diverges from the declared file list \u2014 ${parts.join("; ")}.`;
+      if (computed.missingDeclared.length > 0) {
+        parts.push(`missing declared: ${computed.missingDeclared.join(", ")}`);
+      }
+      if (hiddenFlags.length > 0) {
+        const labelled = hiddenFlags.map((f) => `${f.path} (${f.tag})`).join(", ");
+        parts.push(`hidden index flags present (assume-unchanged or skip-worktree paths can hide tracked edits from git status): ${labelled}`);
+      }
+      reason = parts.join("; ");
     }
     return FixChangeSet.parse({
       status: status_,
       overall_status: status_ === "pass" ? "passed" : "failed",
       ...reason === void 0 ? {} : { reason },
       baseline_head_sha: baseline.head_sha,
-      head_sha: headSha,
-      declared,
-      observed,
-      undeclared_extras: undeclaredExtras,
-      missing_declared: missingDeclared
+      head_sha: post.head_sha,
+      declared: computed.declared,
+      observed: computed.observed,
+      undeclared_extras: computed.undeclaredExtras,
+      missing_declared: computed.missingDeclared,
+      baseline_dirty_mutated: computed.baselineDirtyMutated,
+      hidden_index_flags: [...hiddenFlags]
     });
   }
 };
@@ -13564,6 +13706,7 @@ var REQUIRED_POINTERS = [
   { report_id: "fix.baseline-snapshot", schema: "fix.baseline-snapshot@v1" },
   { report_id: "fix.change", schema: "fix.change@v1" },
   { report_id: "fix.verification", schema: "fix.verification@v1" },
+  { report_id: "fix.regression-rerun", schema: "fix.regression-rerun@v1" },
   { report_id: "fix.change-set", schema: "fix.change-set@v1" }
 ];
 var OPTIONAL_REVIEW_POINTER = {
@@ -13580,6 +13723,7 @@ var fixCloseBuilder = {
     { name: "baseline_snapshot", schema: "fix.baseline-snapshot@v1", required: true },
     { name: "change", schema: "fix.change@v1", required: true },
     { name: "verification", schema: "fix.verification@v1", required: true },
+    { name: "regression_rerun", schema: "fix.regression-rerun@v1", required: true },
     { name: "change_set", schema: "fix.change-set@v1", required: true },
     { name: "review", schema: "fix.review@v1", required: false }
   ],
@@ -13591,13 +13735,17 @@ var fixCloseBuilder = {
     FixBaselineSnapshot.parse(context.inputs.baseline_snapshot);
     const change = FixChange.parse(context.inputs.change);
     const verification = FixVerification.parse(context.inputs.verification);
+    const regressionRerun = FixRegressionRerun.parse(context.inputs.regression_rerun);
     const changeSet = FixChangeSet.parse(context.inputs.change_set);
     const review = context.inputs.review === void 0 ? void 0 : FixReview.parse(context.inputs.review);
     const verificationStatus = verification.overall_status === "passed" ? "passed" : "failed";
     const regressionStatus = regression.status === "proved" ? "proved" : "deferred";
+    const regressionRerunStatus = regressionRerun.status;
     const changeSetStatus = changeSet.status;
     const reviewStatus = review === void 0 ? "skipped" : "completed";
-    const outcome = diagnosis.reproduction_status === "not-reproduced" ? "not-reproduced" : verificationStatus === "passed" && regressionStatus === "proved" && changeSetStatus === "pass" && (review === void 0 || review.verdict === "accept") ? "fixed" : verificationStatus === "passed" && (regressionStatus !== "proved" || changeSetStatus === "fail" || review?.verdict === "accept-with-fixes") ? "partial" : "failed";
+    const fixedGate = verificationStatus === "passed" && regressionStatus === "proved" && regressionRerunStatus === "cleared" && changeSetStatus === "pass" && (review === void 0 || review.verdict === "accept");
+    const partialGate = verificationStatus === "passed" && (regressionStatus !== "proved" || regressionRerunStatus !== "cleared" || changeSetStatus === "fail" || review?.verdict === "accept-with-fixes");
+    const outcome = diagnosis.reproduction_status === "not-reproduced" ? "not-reproduced" : fixedGate ? "fixed" : partialGate ? "partial" : "failed";
     const pointers = REQUIRED_POINTERS.map((p) => ({
       report_id: p.report_id,
       schema: p.schema,
@@ -13615,6 +13763,7 @@ var fixCloseBuilder = {
       outcome,
       verification_status: verificationStatus,
       regression_status: regressionStatus,
+      regression_rerun_status: regressionRerunStatus,
       change_set_status: changeSetStatus,
       review_status: reviewStatus,
       ...review === void 0 ? {} : { review_verdict: review.verdict },
@@ -13681,8 +13830,64 @@ var fixRegressionBaselineWriter = {
   }
 };
 
-// dist/flows/fix/writers/verification.js
+// dist/flows/fix/writers/regression-rerun.js
 import { readFileSync as readFileSync8 } from "node:fs";
+var fixRegressionRerunWriter = {
+  resultSchemaName: "fix.regression-rerun@v1",
+  loadCommands(context) {
+    const briefPath = reportPathForSchemaInCompiledFlow(context.flow, "fix.brief@v1");
+    if (!context.step.reads.includes(briefPath)) {
+      throw new Error(`fix.regression-rerun@v1 requires step '${context.step.id}' to read ${briefPath}`);
+    }
+    const brief = FixBrief.parse(JSON.parse(readFileSync8(resolveRunRelative(context.runFolder, briefPath), "utf8")));
+    if (brief.regression_contract.regression_test.status !== "failing-before-fix") {
+      return [];
+    }
+    return [brief.regression_contract.regression_test.command];
+  },
+  buildResult(observations) {
+    if (observations.length === 0) {
+      return FixRegressionRerun.parse({
+        status: "deferred",
+        overall_status: "passed",
+        reason: "Brief deferred the regression test; no runtime rerun was performed."
+      });
+    }
+    const observation = observations[0];
+    if (observation === void 0) {
+      throw new Error("fix.regression-rerun@v1: regression rerun observation missing");
+    }
+    const rerun = {
+      command_id: observation.command.id,
+      cwd: observation.command.cwd,
+      argv: observation.command.argv,
+      timeout_ms: observation.command.timeout_ms,
+      max_output_bytes: observation.command.max_output_bytes,
+      env: observation.command.env,
+      exit_code: observation.exit_code,
+      command_status: observation.status,
+      duration_ms: observation.duration_ms,
+      stdout_summary: observation.stdout_summary,
+      stderr_summary: observation.stderr_summary
+    };
+    if (observation.status === "passed") {
+      return FixRegressionRerun.parse({
+        status: "cleared",
+        overall_status: "passed",
+        rerun
+      });
+    }
+    return FixRegressionRerun.parse({
+      status: "still-failing",
+      overall_status: "failed",
+      reason: "Brief declared the regression test fails before the fix and the baseline confirmed that, but the same command still fails after the fix. The fix did not clear the regression.",
+      rerun
+    });
+  }
+};
+
+// dist/flows/fix/writers/verification.js
+import { readFileSync as readFileSync9 } from "node:fs";
 var fixVerificationWriter = {
   resultSchemaName: "fix.verification@v1",
   loadCommands(context) {
@@ -13690,7 +13895,7 @@ var fixVerificationWriter = {
     if (!context.step.reads.includes(briefPath)) {
       throw new Error(`fix.verification@v1 requires step '${context.step.id}' to read ${briefPath}`);
     }
-    const brief = FixBrief.parse(JSON.parse(readFileSync8(resolveRunRelative(context.runFolder, briefPath), "utf8")));
+    const brief = FixBrief.parse(JSON.parse(readFileSync9(resolveRunRelative(context.runFolder, briefPath), "utf8")));
     return brief.verification_command_candidates;
   },
   buildResult(observations) {
@@ -13771,6 +13976,7 @@ var fixCompiledFlowPackage = {
     { schemaName: "fix.regression-proof@v1", schema: FixRegressionProof },
     { schemaName: "fix.baseline-snapshot@v1", schema: FixBaselineSnapshot },
     { schemaName: "fix.verification@v1", schema: FixVerification },
+    { schemaName: "fix.regression-rerun@v1", schema: FixRegressionRerun },
     { schemaName: "fix.change-set@v1", schema: FixChangeSet },
     { schemaName: "fix.result@v1", schema: FixResult }
   ],
@@ -13781,6 +13987,7 @@ var fixCompiledFlowPackage = {
       fixRegressionBaselineWriter,
       fixBaselineSnapshotWriter,
       fixVerificationWriter,
+      fixRegressionRerunWriter,
       fixChangeSetWriter
     ],
     checkpoint: []
@@ -14996,7 +15203,7 @@ var migrateCoexistenceComposeBuilder = {
 };
 
 // dist/flows/migrate/writers/verification.js
-import { readFileSync as readFileSync9 } from "node:fs";
+import { readFileSync as readFileSync10 } from "node:fs";
 var migrateVerificationWriter = {
   resultSchemaName: "migrate.verification@v1",
   loadCommands(context) {
@@ -15004,7 +15211,7 @@ var migrateVerificationWriter = {
     if (!context.step.reads.includes(briefPath)) {
       throw new Error(`migrate.verification@v1 requires step '${context.step.id}' to read ${briefPath}`);
     }
-    const brief = MigrateBrief.parse(JSON.parse(readFileSync9(resolveRunRelative(context.runFolder, briefPath), "utf8")));
+    const brief = MigrateBrief.parse(JSON.parse(readFileSync10(resolveRunRelative(context.runFolder, briefPath), "utf8")));
     return brief.verification_command_candidates;
   },
   buildResult(observations) {
@@ -15476,7 +15683,7 @@ var reviewIntakeComposeBuilder = {
 };
 
 // dist/flows/review/writers/result.js
-import { readFileSync as readFileSync10 } from "node:fs";
+import { readFileSync as readFileSync11 } from "node:fs";
 function reviewerRelayResultPath(flow, closeStep) {
   const closeStepId = closeStep.id;
   const reviewerRelayes = flow.steps.filter((candidate) => candidate.kind === "relay" && candidate.role === "reviewer" && candidate.routes.pass === closeStepId);
@@ -15517,8 +15724,8 @@ var reviewResultComposeBuilder = {
   // its own resolution.
   build(context) {
     const path = reviewerRelayResultPath(context.flow, context.step);
-    const intake = ReviewIntake.parse(JSON.parse(readFileSync10(resolveRunRelative(context.runFolder, reviewIntakePath(context.flow, context.step)), "utf8")));
-    const relayResult = ReviewRelayResult.parse(JSON.parse(readFileSync10(resolveRunRelative(context.runFolder, path), "utf8")));
+    const intake = ReviewIntake.parse(JSON.parse(readFileSync11(resolveRunRelative(context.runFolder, reviewIntakePath(context.flow, context.step)), "utf8")));
+    const relayResult = ReviewRelayResult.parse(JSON.parse(readFileSync11(resolveRunRelative(context.runFolder, path), "utf8")));
     return ReviewResult.parse({
       scope: intake.scope,
       findings: relayResult.findings,
@@ -15620,7 +15827,7 @@ var runtimeProofCompiledFlowPackage = {
 };
 
 // dist/flows/sweep/cross-report-validators.js
-import { existsSync as existsSync3, readFileSync as readFileSync11 } from "node:fs";
+import { existsSync as existsSync3, readFileSync as readFileSync12 } from "node:fs";
 import { resolve as resolve3 } from "node:path";
 
 // dist/flows/sweep/reports.js
@@ -15853,7 +16060,7 @@ function validateSweepBatchAgainstQueue(flow, runFolder, resultBody) {
   }
   let queueRaw;
   try {
-    queueRaw = readFileSync11(queueAbs, "utf8");
+    queueRaw = readFileSync12(queueAbs, "utf8");
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return { kind: "fail", reason: `cannot read sweep.queue at '${queueRel}': ${msg}` };
@@ -16048,7 +16255,7 @@ var sweepQueueComposeBuilder = {
 };
 
 // dist/flows/sweep/writers/verification.js
-import { readFileSync as readFileSync12 } from "node:fs";
+import { readFileSync as readFileSync13 } from "node:fs";
 var sweepVerificationWriter = {
   resultSchemaName: "sweep.verification@v1",
   loadCommands(context) {
@@ -16056,7 +16263,7 @@ var sweepVerificationWriter = {
     if (!context.step.reads.includes(briefPath)) {
       throw new Error(`sweep.verification@v1 requires step '${context.step.id}' to read ${briefPath}`);
     }
-    const brief = SweepBrief.parse(JSON.parse(readFileSync12(resolveRunRelative(context.runFolder, briefPath), "utf8")));
+    const brief = SweepBrief.parse(JSON.parse(readFileSync13(resolveRunRelative(context.runFolder, briefPath), "utf8")));
     return brief.verification_command_candidates;
   },
   buildResult(observations) {
@@ -17067,7 +17274,7 @@ function isWaitingCheckpointStepOutcome(outcome) {
 }
 
 // dist/runtime/executors/checkpoint.js
-import { readFileSync as readFileSync13 } from "node:fs";
+import { readFileSync as readFileSync14 } from "node:fs";
 
 // dist/shared/recovery-route.js
 var RECOVERY_ROUTE_PRIORITY = [
@@ -17177,7 +17384,7 @@ async function executeCheckpoint(step, context) {
         responsePath: response.path
       });
       await context.files.writeJson(report, body);
-      checkpointReportSha256 = sha256Hex(readFileSync13(context.files.resolve(report), "utf8"));
+      checkpointReportSha256 = sha256Hex(readFileSync14(context.files.resolve(report), "utf8"));
       await context.trace.append({
         run_id: context.runId,
         kind: "step.report_written",
@@ -17193,7 +17400,7 @@ async function executeCheckpoint(step, context) {
       ...checkpointReportSha256 === void 0 ? {} : { checkpointReportSha256 }
     });
     await context.files.writeJson(request, requestBody);
-    const requestText = readFileSync13(context.files.resolve(request), "utf8");
+    const requestText = readFileSync14(context.files.resolve(request), "utf8");
     await context.trace.append({
       run_id: context.runId,
       kind: "checkpoint.requested",
@@ -17268,7 +17475,7 @@ async function executeCheckpoint(step, context) {
 }
 
 // dist/runtime/executors/compose.js
-import { readFileSync as readFileSync14 } from "node:fs";
+import { readFileSync as readFileSync15 } from "node:fs";
 
 // dist/flows/registries/close-writers/registry.js
 var REGISTRY2 = buildCloseRegistry(flowPackages);
@@ -17317,7 +17524,7 @@ function resolveComposeReadPaths(builder, flow, step) {
 
 // dist/runtime/executors/compose.js
 function readJsonReport(context, path) {
-  return JSON.parse(readFileSync14(context.files.resolve(path), "utf8"));
+  return JSON.parse(readFileSync15(context.files.resolve(path), "utf8"));
 }
 async function writeRegisteredComposeReport(step, context) {
   const report = step.writes?.report;
@@ -18482,7 +18689,7 @@ function deriveResolvedSelection(inv, flow, step, depth) {
 }
 
 // dist/shared/relay-support.js
-import { existsSync as existsSync5, readFileSync as readFileSync15 } from "node:fs";
+import { existsSync as existsSync5, readFileSync as readFileSync16 } from "node:fs";
 
 // dist/flows/registries/shape-hints/registry.js
 var SCHEMA_HINTS = buildSchemaHintMap(flowPackages);
@@ -18562,7 +18769,7 @@ function composeRelayPrompt(step, runFolder, loadedSkills = []) {
     if (!existsSync5(abs))
       return `[reads unavailable: ${path}]`;
     return `--- ${path} ---
-${readFileSync15(abs, "utf8")}`;
+${readFileSync16(abs, "utf8")}`;
   }).join("\n\n");
   const skillsSection = selectedSkillsSection(loadedSkills);
   return [
@@ -18582,7 +18789,7 @@ ${readFileSync15(abs, "utf8")}`;
 // dist/shared/user-skill-registry.js
 var import_yaml = __toESM(require_dist(), 1);
 import { createHash as createHash3 } from "node:crypto";
-import { existsSync as existsSync6, readFileSync as readFileSync16, readdirSync } from "node:fs";
+import { existsSync as existsSync6, readFileSync as readFileSync17, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join as join4, resolve as resolve5 } from "node:path";
 var FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)([\s\S]*)$/;
@@ -18653,7 +18860,7 @@ function discoverCandidates(roots) {
 function loadCandidate(candidate) {
   let text;
   try {
-    text = readFileSync16(candidate.path, "utf8");
+    text = readFileSync17(candidate.path, "utf8");
   } catch (err) {
     throw new Error(`selected skill '${candidate.id}' could not be read at ${candidate.path}: ${err.message}`);
   }
@@ -20375,7 +20582,7 @@ function createDefaultExecutors(options = {}) {
 }
 
 // dist/runtime/projections/progress.js
-import { readFileSync as readFileSync18 } from "node:fs";
+import { readFileSync as readFileSync19 } from "node:fs";
 import { join as join9 } from "node:path";
 
 // dist/schemas/progress-event.js
@@ -20657,7 +20864,7 @@ function compiledFlowMayInvokeWriteCapableWorker(flow) {
 }
 
 // dist/runtime/projections/tournament-checkpoint-context.js
-import { readFileSync as readFileSync17 } from "node:fs";
+import { readFileSync as readFileSync18 } from "node:fs";
 import { join as join8 } from "node:path";
 function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -20669,7 +20876,7 @@ function boundedText(value, max) {
 }
 function readJson2(runDir, path) {
   try {
-    return JSON.parse(readFileSync17(join8(runDir, path), "utf8"));
+    return JSON.parse(readFileSync18(join8(runDir, path), "utf8"));
   } catch {
     return void 0;
   }
@@ -20855,7 +21062,7 @@ function reportTaskListProgress(input) {
   });
 }
 function readJsonReport2(runDir, reportPath) {
-  return JSON.parse(readFileSync18(join9(runDir, reportPath), "utf8"));
+  return JSON.parse(readFileSync19(join9(runDir, reportPath), "utf8"));
 }
 function warningRecordsFromReport(body) {
   if (body === null || typeof body !== "object" || Array.isArray(body))
@@ -20946,7 +21153,7 @@ function stringArray(value) {
 }
 function checkpointPrompt(requestPath) {
   try {
-    const raw = JSON.parse(readFileSync18(requestPath, "utf8"));
+    const raw = JSON.parse(readFileSync19(requestPath, "utf8"));
     if (raw !== null && typeof raw === "object" && !Array.isArray(raw)) {
       const prompt = raw.prompt;
       if (typeof prompt === "string" && prompt.length > 0)
@@ -22054,7 +22261,7 @@ function declaredCheckpointRequestPath(step) {
 }
 function readCheckpointRequestContext(input) {
   const requestAbs = resolveRunFilePath(input.runDir, input.requestPath);
-  const requestText = readFileSync19(requestAbs, "utf8");
+  const requestText = readFileSync20(requestAbs, "utf8");
   if (sha256Hex(requestText) !== input.expectedRequestHash) {
     throw new Error("runtime checkpoint resume rejected: checkpoint request hash differs from trace");
   }
@@ -22374,7 +22581,7 @@ function classifyCompiledFlowTask(taskText) {
 
 // dist/shared/config-loader.js
 var import_yaml2 = __toESM(require_dist(), 1);
-import { existsSync as existsSync8, readFileSync as readFileSync20 } from "node:fs";
+import { existsSync as existsSync8, readFileSync as readFileSync21 } from "node:fs";
 import { homedir as homedir2 } from "node:os";
 import { join as join11, resolve as resolve7 } from "node:path";
 var USER_GLOBAL_CONFIG_RELATIVE_PATH = [".config", "circuit-next", "config.yaml"];
@@ -22396,7 +22603,7 @@ function loadConfigLayerFromPath(layer, sourcePath) {
   const abs = resolve7(sourcePath);
   if (!existsSync8(abs))
     return void 0;
-  const raw = parseConfigYaml(readFileSync20(abs, "utf8"), abs);
+  const raw = parseConfigYaml(readFileSync21(abs, "utf8"), abs);
   try {
     return LayeredConfig.parse({
       layer,
@@ -22675,7 +22882,7 @@ ${issueSummary}${more}`
 }
 
 // dist/shared/operator-summary-writer.js
-import { existsSync as existsSync10, mkdirSync, readFileSync as readFileSync22, rmSync, writeFileSync } from "node:fs";
+import { existsSync as existsSync10, mkdirSync, readFileSync as readFileSync23, rmSync, writeFileSync } from "node:fs";
 import { dirname as dirname6, join as join12 } from "node:path";
 
 // dist/schemas/operator-summary.js
@@ -22993,7 +23200,7 @@ var HTML_PROJECTORS = {
 };
 
 // dist/shared/operator-summary/json.js
-import { existsSync as existsSync9, readFileSync as readFileSync21 } from "node:fs";
+import { existsSync as existsSync9, readFileSync as readFileSync22 } from "node:fs";
 function isObject3(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -23001,7 +23208,7 @@ function readJsonIfPresent(runFolder, relPath) {
   const path = resolveRunRelative(runFolder, relPath);
   if (!existsSync9(path))
     return void 0;
-  const parsed = JSON.parse(readFileSync21(path, "utf8"));
+  const parsed = JSON.parse(readFileSync22(path, "utf8"));
   return isObject3(parsed) ? parsed : void 0;
 }
 function stringField2(report, key) {
@@ -23430,7 +23637,7 @@ function readPriorRoute(runFolder) {
   if (!existsSync10(path))
     return {};
   try {
-    const raw = JSON.parse(readFileSync22(path, "utf8"));
+    const raw = JSON.parse(readFileSync23(path, "utf8"));
     if (!isObject3(raw))
       return {};
     const routedBy = raw.routed_by;
@@ -23662,12 +23869,12 @@ function writeOperatorSummary(input) {
 
 // dist/cli/create.js
 import { randomUUID as randomUUID5 } from "node:crypto";
-import { existsSync as existsSync11, mkdirSync as mkdirSync2, readFileSync as readFileSync24, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "node:fs";
+import { existsSync as existsSync11, mkdirSync as mkdirSync2, readFileSync as readFileSync25, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "node:fs";
 import { homedir as homedir3 } from "node:os";
 import { dirname as dirname8, join as join13, resolve as resolve9 } from "node:path";
 
 // dist/cli/runtime-routing-policy.js
-import { readFileSync as readFileSync23 } from "node:fs";
+import { readFileSync as readFileSync24 } from "node:fs";
 import { dirname as dirname7, relative as relative5, resolve as resolve8 } from "node:path";
 var GENERATED_FLOW_MIRROR_ROOT_ENV = "CIRCUIT_GENERATED_FLOW_MIRROR_ROOT";
 var COMPOSE_WRITER_UNSUPPORTED_REASON = "programmatic composeWriter injections are not supported by the CLI runtime; use executor injection or generated reports";
@@ -23701,7 +23908,7 @@ function fixtureEligibleForRuntime(input) {
 }
 function publishedCustomFlowMatches(flowRoot2, fixturePath) {
   try {
-    const manifest = JSON.parse(readFileSync23(resolve8(dirname7(resolve8(flowRoot2)), "manifest.json"), "utf8"));
+    const manifest = JSON.parse(readFileSync24(resolve8(dirname7(resolve8(flowRoot2)), "manifest.json"), "utf8"));
     if (manifest === null || typeof manifest !== "object" || Array.isArray(manifest))
       return false;
     const customFlows = manifest.custom_flows;
@@ -23936,7 +24143,7 @@ function loadTemplateFlow(args) {
   for (const candidate of candidateTemplatePaths(args)) {
     if (!existsSync11(candidate))
       continue;
-    return CompiledFlow.parse(JSON.parse(readFileSync24(candidate, "utf8")));
+    return CompiledFlow.parse(JSON.parse(readFileSync25(candidate, "utf8")));
   }
   throw new Error("could not find the Build template flow; pass --template-flow-root with a root containing build/circuit.json");
 }
@@ -24016,7 +24223,7 @@ function publishManifest(input) {
     custom_flows: []
   };
   if (existsSync11(manifestPath(input.home))) {
-    existing = JSON.parse(readFileSync24(manifestPath(input.home), "utf8"));
+    existing = JSON.parse(readFileSync25(manifestPath(input.home), "utf8"));
   }
   const withoutSlug = existing.custom_flows.filter((flow) => !(typeof flow === "object" && flow !== null && "id" in flow && flow.id === input.slug));
   writeJson(manifestPath(input.home), {
@@ -24060,7 +24267,7 @@ function writeDraft(input) {
 }
 function loadDraftFlow(home, slug) {
   const path = join13(draftRoot(home, slug), "circuit.json");
-  const flow = CompiledFlow.parse(JSON.parse(readFileSync24(path, "utf8")));
+  const flow = CompiledFlow.parse(JSON.parse(readFileSync25(path, "utf8")));
   validateCustomFlow(slug, flow, "custom flow draft");
   return flow;
 }
@@ -24073,10 +24280,10 @@ function publishDraft(input) {
   const customFlowRoot = join13(flowRoot(input.home), input.slug);
   mkdirSync2(skillRoot, { recursive: true });
   mkdirSync2(customFlowRoot, { recursive: true });
-  writeText(join13(skillRoot, "SKILL.md"), readFileSync24(join13(draft, "SKILL.md"), "utf8"));
-  writeText(join13(skillRoot, "circuit.yaml"), readFileSync24(join13(draft, "circuit.yaml"), "utf8"));
-  writeText(join13(customFlowRoot, "circuit.json"), readFileSync24(join13(draft, "circuit.json"), "utf8"));
-  writeText(join13(commandRoot(input.home), `${input.slug}.md`), readFileSync24(join13(draft, "command.md"), "utf8"));
+  writeText(join13(skillRoot, "SKILL.md"), readFileSync25(join13(draft, "SKILL.md"), "utf8"));
+  writeText(join13(skillRoot, "circuit.yaml"), readFileSync25(join13(draft, "circuit.yaml"), "utf8"));
+  writeText(join13(customFlowRoot, "circuit.json"), readFileSync25(join13(draft, "circuit.json"), "utf8"));
+  writeText(join13(commandRoot(input.home), `${input.slug}.md`), readFileSync25(join13(draft, "command.md"), "utf8"));
   publishManifest(input);
 }
 function summaryMarkdown(input) {
@@ -24210,23 +24417,23 @@ async function runCreateCommand(argv, options = {}) {
 
 // dist/cli/handoff.js
 import { randomUUID as randomUUID6 } from "node:crypto";
-import { copyFileSync, existsSync as existsSync13, mkdirSync as mkdirSync3, readFileSync as readFileSync27, writeFileSync as writeFileSync4 } from "node:fs";
+import { copyFileSync, existsSync as existsSync13, mkdirSync as mkdirSync3, readFileSync as readFileSync28, writeFileSync as writeFileSync4 } from "node:fs";
 import { homedir as homedir4 } from "node:os";
 import { dirname as dirname9, join as join17, resolve as resolve11 } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // dist/run-status/project-run-folder.js
 import { constants, accessSync, statSync } from "node:fs";
 import { resolve as resolve10 } from "node:path";
 
 // dist/shared/manifest-snapshot.js
-import { readFileSync as readFileSync25, writeFileSync as writeFileSync3 } from "node:fs";
+import { readFileSync as readFileSync26, writeFileSync as writeFileSync3 } from "node:fs";
 import { join as join14 } from "node:path";
 function manifestSnapshotPath(runFolder) {
   return join14(runFolder, "manifest.snapshot.json");
 }
 function readManifestSnapshot(runFolder) {
-  const text = readFileSync25(manifestSnapshotPath(runFolder), "utf8");
+  const text = readFileSync26(manifestSnapshotPath(runFolder), "utf8");
   const raw = JSON.parse(text);
   return ManifestSnapshot.parse(raw);
 }
@@ -24414,14 +24621,14 @@ function stepMetadata(flow, stepId) {
 }
 
 // dist/run-status/runtime-run-folder.js
-import { readFileSync as readFileSync26 } from "node:fs";
+import { readFileSync as readFileSync27 } from "node:fs";
 import { join as join16 } from "node:path";
 function isRecord3(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 function readRawTraceEntries(runFolder) {
   const tracePath = join16(runFolder, "trace.ndjson");
-  const text = readFileSync26(tracePath, "utf8");
+  const text = readFileSync27(tracePath, "utf8");
   const trimmed = text.trim();
   if (trimmed.length === 0)
     return [];
@@ -24606,7 +24813,7 @@ function runtimeWaitingCheckpointProjection(input) {
   let requestAbs;
   try {
     requestAbs = resolveRunFilePath(input.runFolder, requestPath);
-    requestText = readFileSync26(requestAbs, "utf8");
+    requestText = readFileSync27(requestAbs, "utf8");
   } catch (err) {
     return invalidProjection({
       runFolder: input.runFolder,
@@ -25327,7 +25534,7 @@ function handoffBrief(args) {
     return emptyBrief(args, "no_index");
   let index;
   try {
-    index = ContinuityIndex.parse(JSON.parse(readFileSync27(indexAbs, "utf8")));
+    index = ContinuityIndex.parse(JSON.parse(readFileSync28(indexAbs, "utf8")));
   } catch {
     return invalidBrief(args, "index_invalid", "Continuity index is malformed.");
   }
@@ -25339,7 +25546,7 @@ function handoffBrief(args) {
   }
   let record;
   try {
-    record = ContinuityRecord.parse(JSON.parse(readFileSync27(recordAbs, "utf8")));
+    record = ContinuityRecord.parse(JSON.parse(readFileSync28(recordAbs, "utf8")));
   } catch {
     return invalidBrief(args, "record_invalid", "Continuity record is malformed.", index.pending_record.record_id);
   }
@@ -25372,7 +25579,7 @@ function debugHook(message) {
 function readHookInput() {
   if (process.stdin.isTTY)
     return {};
-  const raw = readFileSync27(0, "utf8");
+  const raw = readFileSync28(0, "utf8");
   if (raw.trim().length === 0)
     return {};
   return JSON.parse(raw);
@@ -25440,7 +25647,7 @@ function defaultCodexHooksFile() {
   return resolve11(codexHome, "hooks.json");
 }
 function defaultLauncherPath() {
-  return resolve11(dirname9(fileURLToPath(import.meta.url)), "../..", "bin/circuit-next");
+  return resolve11(dirname9(fileURLToPath2(import.meta.url)), "../..", "bin/circuit-next");
 }
 function parseCodexHooksHost(args) {
   if (args.host === "codex")
@@ -25477,7 +25684,7 @@ function defaultHooksConfig() {
 function readHooksConfig(path) {
   if (!existsSync13(path))
     return defaultHooksConfig();
-  const parsed = JSON.parse(readFileSync27(path, "utf8"));
+  const parsed = JSON.parse(readFileSync28(path, "utf8"));
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     throw new Error("hooks file must contain a JSON object");
   }
@@ -25932,7 +26139,7 @@ function saveContinuity(args, now) {
 }
 function readJsonSafely(path) {
   try {
-    return { ok: true, value: JSON.parse(readFileSync27(path, "utf8")) };
+    return { ok: true, value: JSON.parse(readFileSync28(path, "utf8")) };
   } catch {
     return { ok: false };
   }
@@ -26300,12 +26507,12 @@ function readSourceVersion() {
   if (true)
     return "0.1.0-alpha.4";
   const candidates = [
-    resolve12(dirname10(fileURLToPath2(import.meta.url)), "../../plugins/version.json"),
+    resolve12(dirname10(fileURLToPath3(import.meta.url)), "../../plugins/version.json"),
     resolve12(process.cwd(), "plugins/version.json")
   ];
   for (const candidate of candidates) {
     try {
-      const raw = JSON.parse(readFileSync28(candidate, "utf8"));
+      const raw = JSON.parse(readFileSync29(candidate, "utf8"));
       if (typeof raw.version === "string" && raw.version.length > 0)
         return raw.version;
     } catch {
@@ -26581,7 +26788,7 @@ function loadFixture(fixturePath) {
   if (!existsSync14(fixturePath)) {
     throw new Error(`flow fixture not found: ${fixturePath}`);
   }
-  const bytes = readFileSync28(fixturePath);
+  const bytes = readFileSync29(fixturePath);
   const raw = JSON.parse(bytes.toString("utf8"));
   const flow = CompiledFlow.parse(raw);
   const policy2 = validateCompiledFlowKindPolicy(flow);
@@ -26625,7 +26832,7 @@ function customFlowArchetype(input) {
     return void 0;
   try {
     const flowRoot2 = resolve12(input.args.flowRoot);
-    const manifest = JSON.parse(readFileSync28(resolve12(dirname10(flowRoot2), "manifest.json"), "utf8"));
+    const manifest = JSON.parse(readFileSync29(resolve12(dirname10(flowRoot2), "manifest.json"), "utf8"));
     if (manifest === null || typeof manifest !== "object" || Array.isArray(manifest)) {
       return void 0;
     }
@@ -26740,7 +26947,7 @@ async function main(argv, options = {}) {
         ...options.relayer === void 0 ? {} : { relayer: options.relayer },
         ...progress2 === void 0 ? {} : { progress: progress2 }
       });
-      const runResult = RunResult.parse(JSON.parse(readFileSync28(runtimeResult.resultPath, "utf8")));
+      const runResult = RunResult.parse(JSON.parse(readFileSync29(runtimeResult.resultPath, "utf8")));
       const priorRoute = readPriorRoute(runFolder2);
       const operatorSummary = writeOperatorSummary({
         runFolder: runFolder2,
@@ -26883,7 +27090,7 @@ async function main(argv, options = {}) {
 `);
       return 0;
     }
-    const runResult = RunResult.parse(JSON.parse(readFileSync28(runtimeResult.resultPath, "utf8")));
+    const runResult = RunResult.parse(JSON.parse(readFileSync29(runtimeResult.resultPath, "utf8")));
     const operatorSummary = writeOperatorSummary({
       runFolder,
       runResult,

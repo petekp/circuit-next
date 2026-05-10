@@ -10,5 +10,7 @@
     "src/login.ts"
   ],
   "undeclared_extras": [],
-  "missing_declared": []
+  "missing_declared": [],
+  "baseline_dirty_mutated": [],
+  "hidden_index_flags": []
 }

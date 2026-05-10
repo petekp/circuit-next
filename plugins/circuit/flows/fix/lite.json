@@ -41,7 +41,13 @@
       "id": "verify-stage",
       "title": "Verify",
       "canonical": "verify",
-      "steps": ["fix-regression-baseline", "fix-baseline-snapshot", "fix-verify", "fix-change-set"]
+      "steps": [
+        "fix-regression-baseline",
+        "fix-baseline-snapshot",
+        "fix-verify",
+        "fix-change-set",
+        "fix-regression-rerun"
+      ]
     },
     {
       "id": "close-stage",
@@ -314,8 +320,8 @@
       "protocol": "fix-change-set@v1",
       "reads": ["reports/fix/baseline-snapshot.json", "reports/fix/change.json"],
       "routes": {
-        "continue": "fix-close-lite",
-        "pass": "fix-close-lite",
+        "continue": "fix-regression-rerun",
+        "pass": "fix-regression-rerun",
         "retry": "fix-act",
         "stop": "@stop"
       },
@@ -325,6 +331,34 @@
         "report": {
           "path": "reports/fix/change-set.json",
           "schema": "fix.change-set@v1"
+        }
+      },
+      "check": {
+        "kind": "schema_sections",
+        "source": {
+          "kind": "report",
+          "ref": "report"
+        },
+        "required": ["status", "overall_status"]
+      }
+    },
+    {
+      "id": "fix-regression-rerun",
+      "title": "Verify — rerun regression command after fix",
+      "protocol": "fix-regression-rerun@v1",
+      "reads": ["reports/fix/brief.json"],
+      "routes": {
+        "continue": "fix-close-lite",
+        "pass": "fix-close-lite",
+        "retry": "fix-act",
+        "stop": "@stop"
+      },
+      "executor": "orchestrator",
+      "kind": "verification",
+      "writes": {
+        "report": {
+          "path": "reports/fix/regression-rerun.json",
+          "schema": "fix.regression-rerun@v1"
         }
       },
       "check": {
@@ -348,6 +382,7 @@
         "reports/fix/baseline-snapshot.json",
         "reports/fix/change.json",
         "reports/fix/verification.json",
+        "reports/fix/regression-rerun.json",
         "reports/fix/change-set.json"
       ],
       "routes": {

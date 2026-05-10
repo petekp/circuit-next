@@ -14,14 +14,18 @@
   "evidence_summary": {
     "kind": "git-working-tree",
     "untracked_content_policy": "metadata-only",
-    "untracked_file_count": 18,
-    "untracked_files_sampled": 18,
-    "untracked_files_truncated": false
+    "untracked_file_count": 24,
+    "untracked_files_sampled": 20,
+    "untracked_files_truncated": true
   },
   "evidence_warnings": [
     {
       "kind": "diff_truncated",
       "message": "unstaged diff was truncated before relay"
+    },
+    {
+      "kind": "untracked_files_truncated",
+      "message": "untracked file evidence was limited to 20 files"
     },
     {
       "kind": "untracked_file_content_omitted",

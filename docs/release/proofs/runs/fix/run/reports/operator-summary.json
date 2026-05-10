@@ -62,6 +62,11 @@
       "schema": "fix.verification@v1"
     },
     {
+      "label": "fix.regression-rerun",
+      "path": "<repo>/docs/release/proofs/runs/fix/run/reports/fix/regression-rerun.json",
+      "schema": "fix.regression-rerun@v1"
+    },
+    {
       "label": "fix.change-set",
       "path": "<repo>/docs/release/proofs/runs/fix/run/reports/fix/change-set.json",
       "schema": "fix.change-set@v1"
