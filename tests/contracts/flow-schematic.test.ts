@@ -56,7 +56,9 @@ describe('flow schematic schema — active Fix schematic', () => {
       'diagnose',
       'human-decision',
       'run-verification',
+      'run-verification',
       'act',
+      'run-verification',
       'run-verification',
       'review',
       'close-with-evidence',
@@ -73,8 +75,10 @@ describe('flow schematic schema — active Fix schematic', () => {
       ['fix-diagnose', 'analyze'],
       ['fix-no-repro-decision', 'analyze'],
       ['fix-regression-baseline', 'verify'],
+      ['fix-baseline-snapshot', 'verify'],
       ['fix-act', 'act'],
       ['fix-verify', 'verify'],
+      ['fix-change-set', 'verify'],
       ['fix-review', 'review'],
       ['fix-close-lite', 'close'],
       ['fix-close', 'close'],
@@ -90,8 +94,10 @@ describe('flow schematic schema — active Fix schematic', () => {
       ['fix-diagnose', { kind: 'relay', role: 'researcher' }],
       ['fix-no-repro-decision', { kind: 'checkpoint' }],
       ['fix-regression-baseline', { kind: 'verification' }],
+      ['fix-baseline-snapshot', { kind: 'verification' }],
       ['fix-act', { kind: 'relay', role: 'implementer' }],
       ['fix-verify', { kind: 'verification' }],
+      ['fix-change-set', { kind: 'verification' }],
       ['fix-review', { kind: 'relay', role: 'reviewer' }],
       ['fix-close-lite', { kind: 'compose' }],
       ['fix-close', { kind: 'compose' }],
@@ -113,8 +119,10 @@ describe('flow schematic schema — active Fix schematic', () => {
       context: 'fix.context@v1',
       diagnosis: 'fix.diagnosis@v1',
       regression: 'fix.regression-proof@v1',
+      baseline_snapshot: 'fix.baseline-snapshot@v1',
       change: 'fix.change@v1',
       verification: 'fix.verification@v1',
+      change_set: 'fix.change-set@v1',
     });
     expect(closeLite.input).not.toHaveProperty('review');
     expect(close.input).toMatchObject({
@@ -122,19 +130,26 @@ describe('flow schematic schema — active Fix schematic', () => {
       context: 'fix.context@v1',
       diagnosis: 'fix.diagnosis@v1',
       regression: 'fix.regression-proof@v1',
+      baseline_snapshot: 'fix.baseline-snapshot@v1',
       change: 'fix.change@v1',
       verification: 'fix.verification@v1',
+      change_set: 'fix.change-set@v1',
       review: 'fix.review@v1',
     });
   });
 
-  it('routes Lite verification directly to a no-review close item via route_overrides', () => {
+  it('routes Lite change-set directly to a no-review close item via route_overrides', () => {
     const schematic = parseFixSchematic();
     const verify = schematic.items.find((item) => (item.id as unknown as string) === 'fix-verify');
     if (verify === undefined) throw new Error('fix-verify missing');
+    const changeSet = schematic.items.find(
+      (item) => (item.id as unknown as string) === 'fix-change-set',
+    );
+    if (changeSet === undefined) throw new Error('fix-change-set missing');
 
-    expect(verify.routes.continue).toBe('fix-review');
-    expect(verify.route_overrides).toEqual({
+    expect(verify.routes.continue).toBe('fix-change-set');
+    expect(changeSet.routes.continue).toBe('fix-review');
+    expect(changeSet.route_overrides).toEqual({
       continue: {
         lite: 'fix-close-lite',
       },
@@ -206,7 +221,7 @@ describe('flow schematic schema — active Fix schematic', () => {
     const result = FlowSchematic.safeParse(raw);
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.message).toMatch(/"path":\s*\[\s*"items",\s*5,\s*"execution",\s*"role"/);
+      expect(result.error.message).toMatch(/"path":\s*\[\s*"items",\s*6,\s*"execution",\s*"role"/);
       expect(result.error.message).toMatch(/Required/);
     }
   });

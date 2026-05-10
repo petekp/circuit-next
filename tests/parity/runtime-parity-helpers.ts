@@ -22,8 +22,10 @@ import {
   ExploreTournamentReview,
 } from '../../src/flows/explore/reports.js';
 import {
+  FixBaselineSnapshot,
   FixBrief,
   FixChange,
+  FixChangeSet,
   FixContext,
   FixDiagnosis,
   FixRegressionProof,
@@ -335,6 +337,23 @@ function reportBody(
           stderr_summary: '',
         },
       });
+    case 'fix.baseline-snapshot@v1':
+      return FixBaselineSnapshot.parse({
+        overall_status: 'passed',
+        head_sha: '0000000000000000000000000000000000000000',
+        working_tree_porcelain: [],
+      });
+    case 'fix.change-set@v1':
+      return FixChangeSet.parse({
+        status: 'pass',
+        overall_status: 'passed',
+        baseline_head_sha: '0000000000000000000000000000000000000000',
+        head_sha: '0000000000000000000000000000000000000000',
+        declared: ['src/example.ts'],
+        observed: ['src/example.ts'],
+        undeclared_extras: [],
+        missing_declared: [],
+      });
     case 'fix.review@v1':
       return FixReview.parse({
         verdict: 'accept',
@@ -347,6 +366,7 @@ function reportBody(
         outcome: 'fixed',
         verification_status: 'passed',
         regression_status: 'proved',
+        change_set_status: 'pass',
         review_status: 'completed',
         review_verdict: 'accept',
         residual_risks: [],
@@ -363,11 +383,21 @@ function reportBody(
             path: 'reports/fix/regression-proof.json',
             schema: 'fix.regression-proof@v1',
           },
+          {
+            report_id: 'fix.baseline-snapshot',
+            path: 'reports/fix/baseline-snapshot.json',
+            schema: 'fix.baseline-snapshot@v1',
+          },
           { report_id: 'fix.change', path: 'reports/fix/change.json', schema: 'fix.change@v1' },
           {
             report_id: 'fix.verification',
             path: 'reports/fix/verification.json',
             schema: 'fix.verification@v1',
+          },
+          {
+            report_id: 'fix.change-set',
+            path: 'reports/fix/change-set.json',
+            schema: 'fix.change-set@v1',
           },
           { report_id: 'fix.review', path: 'reports/fix/review.json', schema: 'fix.review@v1' },
         ],

@@ -24,8 +24,11 @@ const FIX_ARTIFACT_IDS = [
   'fix.context',
   'fix.diagnosis',
   'fix.no-repro-decision',
+  'fix.regression-proof',
+  'fix.baseline-snapshot',
   'fix.change',
   'fix.verification',
+  'fix.change-set',
   'fix.review',
   'fix.result',
 ] as const;
@@ -34,8 +37,17 @@ const EXPECTED_REPORT_WRITES = {
   'fix.brief': { path: 'reports/fix/brief.json', schema: 'fix.brief@v1' },
   'fix.context': { path: 'reports/fix/context.json', schema: 'fix.context@v1' },
   'fix.diagnosis': { path: 'reports/fix/diagnosis.json', schema: 'fix.diagnosis@v1' },
+  'fix.regression-proof': {
+    path: 'reports/fix/regression-proof.json',
+    schema: 'fix.regression-proof@v1',
+  },
+  'fix.baseline-snapshot': {
+    path: 'reports/fix/baseline-snapshot.json',
+    schema: 'fix.baseline-snapshot@v1',
+  },
   'fix.change': { path: 'reports/fix/change.json', schema: 'fix.change@v1' },
   'fix.verification': { path: 'reports/fix/verification.json', schema: 'fix.verification@v1' },
+  'fix.change-set': { path: 'reports/fix/change-set.json', schema: 'fix.change-set@v1' },
   'fix.review': { path: 'reports/fix/review.json', schema: 'fix.review@v1' },
   'fix.result': { path: 'reports/fix-result.json', schema: 'fix.result@v1' },
 } as const;
@@ -79,6 +91,11 @@ function resultPointers(
       schema: 'fix.regression-proof@v1',
     }),
     FixResultReportPointer.parse({
+      report_id: 'fix.baseline-snapshot',
+      path: 'reports/fix/baseline-snapshot.json',
+      schema: 'fix.baseline-snapshot@v1',
+    }),
+    FixResultReportPointer.parse({
       report_id: 'fix.change',
       path: 'reports/fix/change.json',
       schema: 'fix.change@v1',
@@ -87,6 +104,11 @@ function resultPointers(
       report_id: 'fix.verification',
       path: 'reports/fix/verification.json',
       schema: 'fix.verification@v1',
+    }),
+    FixResultReportPointer.parse({
+      report_id: 'fix.change-set',
+      path: 'reports/fix/change-set.json',
+      schema: 'fix.change-set@v1',
     }),
   ];
 
@@ -223,6 +245,7 @@ describe('Fix report schemas', () => {
         outcome: 'fixed',
         verification_status: 'passed',
         regression_status: 'proved',
+        change_set_status: 'pass',
         review_status: 'completed',
         review_verdict: 'accept',
         residual_risks: [],
@@ -431,6 +454,7 @@ describe('Fix report schemas', () => {
         outcome: 'fixed',
         verification_status: 'failed',
         regression_status: 'proved',
+        change_set_status: 'pass',
         review_status: 'completed',
         review_verdict: 'accept',
         residual_risks: [],
@@ -443,8 +467,22 @@ describe('Fix report schemas', () => {
         outcome: 'fixed',
         verification_status: 'passed',
         regression_status: 'proved',
+        change_set_status: 'pass',
         review_status: 'completed',
         review_verdict: 'accept-with-fixes',
+        residual_risks: [],
+        evidence_links: resultPointers(),
+      }).success,
+    ).toBe(false);
+    expect(
+      FixResult.safeParse({
+        summary: 'Undeclared file edits make this only partial',
+        outcome: 'fixed',
+        verification_status: 'passed',
+        regression_status: 'proved',
+        change_set_status: 'fail',
+        review_status: 'completed',
+        review_verdict: 'accept',
         residual_risks: [],
         evidence_links: resultPointers(),
       }).success,
@@ -455,6 +493,7 @@ describe('Fix report schemas', () => {
         outcome: 'not-reproduced',
         verification_status: 'not-run',
         regression_status: 'deferred',
+        change_set_status: 'pass',
         review_status: 'skipped',
         review_skip_reason: 'Lite path skipped review after no-repro decision',
         residual_risks: ['The bug may depend on environment state'],
@@ -467,6 +506,7 @@ describe('Fix report schemas', () => {
         outcome: 'not-reproduced',
         verification_status: 'not-run',
         regression_status: 'deferred',
+        change_set_status: 'pass',
         review_status: 'skipped',
         review_skip_reason: 'Lite path skipped review after no-repro decision',
         residual_risks: ['The bug may depend on environment state'],

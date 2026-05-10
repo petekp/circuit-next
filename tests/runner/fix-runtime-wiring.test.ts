@@ -13,9 +13,15 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { FixBrief, FixResult } from '../../src/flows/fix/reports.js';
+import {
+  FixBaselineSnapshot,
+  FixBrief,
+  FixChangeSet,
+  FixResult,
+} from '../../src/flows/fix/reports.js';
 import { executeCompose } from '../../src/runtime/executors/compose.js';
 import type { ExecutorRegistry } from '../../src/runtime/executors/index.js';
+import { executeVerification } from '../../src/runtime/executors/verification.js';
 import { runCompiledFlow } from '../../src/runtime/run/compiled-flow-runner.js';
 import type { RelayResult } from '../../src/shared/connector-relay.js';
 import type { RelayFn } from '../../src/shared/relay-runtime-types.js';
@@ -37,8 +43,70 @@ function deterministicNow(startMs: number): () => Date {
 // and falls through to the standard registered compose executor for every
 // other compose step (notably fix-close-lite, which exercises the
 // registered fix.result close writer).
-function frameOverrideExecutors(): Pick<ExecutorRegistry, 'compose'> {
+// Override the live verification executor for the two new git-driven steps
+// (fix-baseline-snapshot and fix-change-set). The live executor would shell
+// out to `git status --porcelain` against the host repo and fail because the
+// stubbed fix-act doesn't actually touch `src/test.ts`. This stub writes a
+// passing change-set for the file the relayer declared, so the e2e test
+// exercises the full graph (including fix-close-lite reading change-set)
+// without needing a controlled git workspace.
+function fixVerificationOverride(): ExecutorRegistry['verification'] {
+  return async (step, context) => {
+    if (step.kind !== 'verification') throw new Error('expected verification step');
+    if (step.id === 'fix-baseline-snapshot') {
+      const report = step.writes?.report;
+      if (report === undefined) {
+        throw new Error('fix-baseline-snapshot step missing writes.report');
+      }
+      const snapshot = FixBaselineSnapshot.parse({
+        overall_status: 'passed',
+        head_sha: '0000000000000000000000000000000000000000',
+        working_tree_porcelain: [],
+      });
+      await context.files.writeJson(report, snapshot);
+      await context.trace.append({
+        run_id: context.runId,
+        kind: 'step.report_written',
+        step_id: step.id,
+        attempt: context.activeStepAttempt ?? 1,
+        report_path: report.path,
+        ...(report.schema === undefined ? {} : { report_schema: report.schema }),
+      });
+      return { route: 'pass', details: { stub: 'baseline-snapshot' } };
+    }
+    if (step.id === 'fix-change-set') {
+      const report = step.writes?.report;
+      if (report === undefined) {
+        throw new Error('fix-change-set step missing writes.report');
+      }
+      const changeSet = FixChangeSet.parse({
+        status: 'pass',
+        overall_status: 'passed',
+        baseline_head_sha: '0000000000000000000000000000000000000000',
+        head_sha: '0000000000000000000000000000000000000000',
+        declared: ['src/test.ts'],
+        observed: ['src/test.ts'],
+        undeclared_extras: [],
+        missing_declared: [],
+      });
+      await context.files.writeJson(report, changeSet);
+      await context.trace.append({
+        run_id: context.runId,
+        kind: 'step.report_written',
+        step_id: step.id,
+        attempt: context.activeStepAttempt ?? 1,
+        report_path: report.path,
+        ...(report.schema === undefined ? {} : { report_schema: report.schema }),
+      });
+      return { route: 'pass', details: { stub: 'change-set' } };
+    }
+    return await executeVerification(step, context);
+  };
+}
+
+function frameOverrideExecutors(): Pick<ExecutorRegistry, 'compose' | 'verification'> {
   return {
+    verification: fixVerificationOverride(),
     compose: async (step, context) => {
       if (step.kind !== 'compose') throw new Error('expected compose step');
       if (step.id !== 'fix-frame') {
@@ -190,8 +258,10 @@ describe('Lite Fix runtime wiring', () => {
       'fix.context',
       'fix.diagnosis',
       'fix.regression-proof',
+      'fix.baseline-snapshot',
       'fix.change',
       'fix.verification',
+      'fix.change-set',
     ]);
   });
 });
