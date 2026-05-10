@@ -13697,6 +13697,32 @@ var fixChangeSetWriter = {
   }
 };
 
+// dist/flows/fix/writers/result-projection.js
+function projectFixResult(inputs) {
+  const { brief, diagnosis, regression, regression_rerun: regressionRerun, change, change_set: changeSet, verification, review, evidence_links } = inputs;
+  const verificationStatus = verification.overall_status === "passed" ? "passed" : "failed";
+  const regressionStatus = regression.status === "proved" ? "proved" : "deferred";
+  const regressionRerunStatus = regressionRerun.status;
+  const changeSetStatus = changeSet.status;
+  const reviewStatus = review === void 0 ? "skipped" : "completed";
+  const fixedGate = verificationStatus === "passed" && regressionStatus === "proved" && regressionRerunStatus === "cleared" && changeSetStatus === "pass" && (review === void 0 || review.verdict === "accept");
+  const partialGate = verificationStatus === "passed" && (regressionStatus !== "proved" || regressionRerunStatus !== "cleared" || changeSetStatus === "fail" || review?.verdict === "accept-with-fixes");
+  const outcome = diagnosis.reproduction_status === "not-reproduced" ? "not-reproduced" : fixedGate ? "fixed" : partialGate ? "partial" : "failed";
+  return FixResult.parse({
+    summary: `Fix '${brief.problem_statement}': ${change.summary}`,
+    outcome,
+    verification_status: verificationStatus,
+    regression_status: regressionStatus,
+    regression_rerun_status: regressionRerunStatus,
+    change_set_status: changeSetStatus,
+    review_status: reviewStatus,
+    ...review === void 0 ? {} : { review_verdict: review.verdict },
+    ...review === void 0 ? { review_skip_reason: "Lite mode skipped review per route_overrides." } : {},
+    residual_risks: [...diagnosis.residual_uncertainty],
+    evidence_links
+  });
+}
+
 // dist/flows/fix/writers/close.js
 var REQUIRED_POINTERS = [
   { report_id: "fix.brief", schema: "fix.brief@v1" },
@@ -13738,14 +13764,6 @@ var fixCloseBuilder = {
     const regressionRerun = FixRegressionRerun.parse(context.inputs.regression_rerun);
     const changeSet = FixChangeSet.parse(context.inputs.change_set);
     const review = context.inputs.review === void 0 ? void 0 : FixReview.parse(context.inputs.review);
-    const verificationStatus = verification.overall_status === "passed" ? "passed" : "failed";
-    const regressionStatus = regression.status === "proved" ? "proved" : "deferred";
-    const regressionRerunStatus = regressionRerun.status;
-    const changeSetStatus = changeSet.status;
-    const reviewStatus = review === void 0 ? "skipped" : "completed";
-    const fixedGate = verificationStatus === "passed" && regressionStatus === "proved" && regressionRerunStatus === "cleared" && changeSetStatus === "pass" && (review === void 0 || review.verdict === "accept");
-    const partialGate = verificationStatus === "passed" && (regressionStatus !== "proved" || regressionRerunStatus !== "cleared" || changeSetStatus === "fail" || review?.verdict === "accept-with-fixes");
-    const outcome = diagnosis.reproduction_status === "not-reproduced" ? "not-reproduced" : fixedGate ? "fixed" : partialGate ? "partial" : "failed";
     const pointers = REQUIRED_POINTERS.map((p) => ({
       report_id: p.report_id,
       schema: p.schema,
@@ -13758,17 +13776,15 @@ var fixCloseBuilder = {
         path: reportPathForSchemaInCompiledFlow(context.flow, OPTIONAL_REVIEW_POINTER.schema)
       });
     }
-    return FixResult.parse({
-      summary: `Fix '${brief.problem_statement}': ${change.summary}`,
-      outcome,
-      verification_status: verificationStatus,
-      regression_status: regressionStatus,
-      regression_rerun_status: regressionRerunStatus,
-      change_set_status: changeSetStatus,
-      review_status: reviewStatus,
-      ...review === void 0 ? {} : { review_verdict: review.verdict },
-      ...review === void 0 ? { review_skip_reason: "Lite mode skipped review per route_overrides." } : {},
-      residual_risks: [...diagnosis.residual_uncertainty],
+    return projectFixResult({
+      brief,
+      diagnosis,
+      regression,
+      regression_rerun: regressionRerun,
+      change,
+      change_set: changeSet,
+      verification,
+      ...review === void 0 ? {} : { review },
       evidence_links: pointers
     });
   }
