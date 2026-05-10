@@ -28,6 +28,7 @@ const FIX_ARTIFACT_IDS = [
   'fix.baseline-snapshot',
   'fix.change',
   'fix.verification',
+  'fix.regression-rerun',
   'fix.change-set',
   'fix.review',
   'fix.result',
@@ -47,6 +48,10 @@ const EXPECTED_REPORT_WRITES = {
   },
   'fix.change': { path: 'reports/fix/change.json', schema: 'fix.change@v1' },
   'fix.verification': { path: 'reports/fix/verification.json', schema: 'fix.verification@v1' },
+  'fix.regression-rerun': {
+    path: 'reports/fix/regression-rerun.json',
+    schema: 'fix.regression-rerun@v1',
+  },
   'fix.change-set': { path: 'reports/fix/change-set.json', schema: 'fix.change-set@v1' },
   'fix.review': { path: 'reports/fix/review.json', schema: 'fix.review@v1' },
   'fix.result': { path: 'reports/fix-result.json', schema: 'fix.result@v1' },
@@ -104,6 +109,11 @@ function resultPointers(
       report_id: 'fix.verification',
       path: 'reports/fix/verification.json',
       schema: 'fix.verification@v1',
+    }),
+    FixResultReportPointer.parse({
+      report_id: 'fix.regression-rerun',
+      path: 'reports/fix/regression-rerun.json',
+      schema: 'fix.regression-rerun@v1',
     }),
     FixResultReportPointer.parse({
       report_id: 'fix.change-set',
@@ -245,6 +255,7 @@ describe('Fix report schemas', () => {
         outcome: 'fixed',
         verification_status: 'passed',
         regression_status: 'proved',
+        regression_rerun_status: 'cleared',
         change_set_status: 'pass',
         review_status: 'completed',
         review_verdict: 'accept',
@@ -454,6 +465,7 @@ describe('Fix report schemas', () => {
         outcome: 'fixed',
         verification_status: 'failed',
         regression_status: 'proved',
+        regression_rerun_status: 'cleared',
         change_set_status: 'pass',
         review_status: 'completed',
         review_verdict: 'accept',
@@ -467,6 +479,7 @@ describe('Fix report schemas', () => {
         outcome: 'fixed',
         verification_status: 'passed',
         regression_status: 'proved',
+        regression_rerun_status: 'cleared',
         change_set_status: 'pass',
         review_status: 'completed',
         review_verdict: 'accept-with-fixes',
@@ -480,10 +493,42 @@ describe('Fix report schemas', () => {
         outcome: 'fixed',
         verification_status: 'passed',
         regression_status: 'proved',
+        regression_rerun_status: 'cleared',
         change_set_status: 'fail',
         review_status: 'completed',
         review_verdict: 'accept',
         residual_risks: [],
+        evidence_links: resultPointers(),
+      }).success,
+    ).toBe(false);
+    // Regression rerun must clear before outcome 'fixed' — even if verification
+    // candidates passed and change-set is clean.
+    expect(
+      FixResult.safeParse({
+        summary: 'Verification passed but regression command still fails',
+        outcome: 'fixed',
+        verification_status: 'passed',
+        regression_status: 'proved',
+        regression_rerun_status: 'still-failing',
+        change_set_status: 'pass',
+        review_status: 'completed',
+        review_verdict: 'accept',
+        residual_risks: [],
+        evidence_links: resultPointers(),
+      }).success,
+    ).toBe(false);
+    // Deferred regression must imply deferred rerun.
+    expect(
+      FixResult.safeParse({
+        summary: 'Inconsistent regression status / rerun status',
+        outcome: 'partial',
+        verification_status: 'passed',
+        regression_status: 'deferred',
+        regression_rerun_status: 'cleared',
+        change_set_status: 'pass',
+        review_status: 'completed',
+        review_verdict: 'accept',
+        residual_risks: ['regression deferred'],
         evidence_links: resultPointers(),
       }).success,
     ).toBe(false);
@@ -493,6 +538,7 @@ describe('Fix report schemas', () => {
         outcome: 'not-reproduced',
         verification_status: 'not-run',
         regression_status: 'deferred',
+        regression_rerun_status: 'deferred',
         change_set_status: 'pass',
         review_status: 'skipped',
         review_skip_reason: 'Lite path skipped review after no-repro decision',
@@ -506,6 +552,7 @@ describe('Fix report schemas', () => {
         outcome: 'not-reproduced',
         verification_status: 'not-run',
         regression_status: 'deferred',
+        regression_rerun_status: 'deferred',
         change_set_status: 'pass',
         review_status: 'skipped',
         review_skip_reason: 'Lite path skipped review after no-repro decision',

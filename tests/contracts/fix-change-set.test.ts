@@ -1,32 +1,55 @@
-// Schema-level tests for fix.change-set@v1 — focuses on the verdict rules
-// (status ↔ overall_status, derived sets, fail-vs-pass invariants). Writer-
-// level behavior (subtracting pre-fix dirt, HEAD-diverged failure mode) is
-// covered in tests/runtime/fix-change-set-writer.test.ts.
+// Schema-level tests for fix.change-set@v1 and fix.baseline-snapshot@v1.
+// Focuses on the verdict rules (status ↔ overall_status, derived sets,
+// HEAD-divergence and hidden-index-flag invariants) and the entry-level
+// shape of baseline snapshots. Writer-level behavior (subtracting pre-fix
+// dirt, mutation detection, helper plumbing) is covered in
+// tests/runner/fix-change-set-writer.test.ts.
 
 import { describe, expect, it } from 'vitest';
 import { FixBaselineSnapshot, FixChangeSet } from '../../src/flows/fix/reports.js';
 
 const ZERO_SHA = '0000000000000000000000000000000000000000';
 const ONE_SHA = '1111111111111111111111111111111111111111';
+const BLOB_A = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+const BLOB_B = 'e69de29bb2d1d6434b8b29ae775ad8c2e48c5391';
 
 describe('FixBaselineSnapshot schema', () => {
   it('accepts an empty working tree', () => {
     const snapshot = FixBaselineSnapshot.parse({
       overall_status: 'passed',
       head_sha: ZERO_SHA,
-      working_tree_porcelain: [],
+      entries: [],
+      hidden_index_flags: [],
     });
     expect(snapshot.head_sha).toBe(ZERO_SHA);
-    expect(snapshot.working_tree_porcelain).toEqual([]);
+    expect(snapshot.entries).toEqual([]);
+    expect(snapshot.hidden_index_flags).toEqual([]);
   });
 
-  it('accepts a dirty working tree with porcelain entries', () => {
+  it('accepts a dirty working tree with porcelain entries and fingerprints', () => {
     const snapshot = FixBaselineSnapshot.parse({
       overall_status: 'passed',
       head_sha: ZERO_SHA,
-      working_tree_porcelain: [' M src/example.ts', '?? notes.txt'],
+      entries: [
+        { status_code: ' M', path: 'src/example.ts', fingerprint: BLOB_A },
+        { status_code: '??', path: 'notes.txt', fingerprint: BLOB_B },
+      ],
+      hidden_index_flags: [],
     });
-    expect(snapshot.working_tree_porcelain).toHaveLength(2);
+    expect(snapshot.entries).toHaveLength(2);
+  });
+
+  it('accepts hidden index flags surfaced from ls-files -v', () => {
+    const snapshot = FixBaselineSnapshot.parse({
+      overall_status: 'passed',
+      head_sha: ZERO_SHA,
+      entries: [],
+      hidden_index_flags: [
+        { tag: 'h', path: 'src/locked.ts' },
+        { tag: 'S', path: 'sparse.ts' },
+      ],
+    });
+    expect(snapshot.hidden_index_flags).toHaveLength(2);
   });
 
   it('rejects a non-passed overall_status', () => {
@@ -34,7 +57,8 @@ describe('FixBaselineSnapshot schema', () => {
       FixBaselineSnapshot.safeParse({
         overall_status: 'failed',
         head_sha: ZERO_SHA,
-        working_tree_porcelain: [],
+        entries: [],
+        hidden_index_flags: [],
       }).success,
     ).toBe(false);
   });
@@ -44,25 +68,46 @@ describe('FixBaselineSnapshot schema', () => {
       FixBaselineSnapshot.safeParse({
         overall_status: 'passed',
         head_sha: '',
-        working_tree_porcelain: [],
+        entries: [],
+        hidden_index_flags: [],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects an entry with a malformed status_code length', () => {
+    expect(
+      FixBaselineSnapshot.safeParse({
+        overall_status: 'passed',
+        head_sha: ZERO_SHA,
+        entries: [{ status_code: 'M', path: 'src/example.ts', fingerprint: BLOB_A }],
+        hidden_index_flags: [],
       }).success,
     ).toBe(false);
   });
 });
 
 describe('FixChangeSet schema', () => {
-  it('accepts a clean pass when declared matches observed exactly', () => {
-    const changeSet = FixChangeSet.parse({
-      status: 'pass',
-      overall_status: 'passed',
+  function passing(overrides: Partial<{ declared: string[]; observed: string[] }> = {}) {
+    const declared = overrides.declared ?? ['src/example.ts'];
+    const observed = overrides.observed ?? ['src/example.ts'];
+    const observedSet = new Set(observed);
+    const declaredSet = new Set(declared);
+    return {
+      status: 'pass' as const,
+      overall_status: 'passed' as const,
       baseline_head_sha: ZERO_SHA,
       head_sha: ZERO_SHA,
-      declared: ['src/example.ts'],
-      observed: ['src/example.ts'],
-      undeclared_extras: [],
-      missing_declared: [],
-    });
-    expect(changeSet.status).toBe('pass');
+      declared,
+      observed,
+      undeclared_extras: observed.filter((p) => !declaredSet.has(p)),
+      missing_declared: declared.filter((p) => !observedSet.has(p)),
+      baseline_dirty_mutated: [],
+      hidden_index_flags: [],
+    };
+  }
+
+  it('accepts a clean pass when declared matches observed exactly', () => {
+    expect(FixChangeSet.parse(passing()).status).toBe('pass');
   });
 
   it('accepts a fail with undeclared extras and a reason', () => {
@@ -76,6 +121,8 @@ describe('FixChangeSet schema', () => {
       observed: ['src/example.ts', 'src/extra.ts'],
       undeclared_extras: ['src/extra.ts'],
       missing_declared: [],
+      baseline_dirty_mutated: [],
+      hidden_index_flags: [],
     });
     expect(changeSet.undeclared_extras).toEqual(['src/extra.ts']);
   });
@@ -83,14 +130,9 @@ describe('FixChangeSet schema', () => {
   it('rejects status pass when there are undeclared extras', () => {
     expect(
       FixChangeSet.safeParse({
-        status: 'pass',
-        overall_status: 'passed',
-        baseline_head_sha: ZERO_SHA,
-        head_sha: ZERO_SHA,
-        declared: ['src/example.ts'],
+        ...passing(),
         observed: ['src/example.ts', 'src/extra.ts'],
         undeclared_extras: ['src/extra.ts'],
-        missing_declared: [],
       }).success,
     ).toBe(false);
   });
@@ -98,30 +140,21 @@ describe('FixChangeSet schema', () => {
   it('rejects status pass when a declared file is missing from observed', () => {
     expect(
       FixChangeSet.safeParse({
-        status: 'pass',
-        overall_status: 'passed',
-        baseline_head_sha: ZERO_SHA,
-        head_sha: ZERO_SHA,
+        ...passing(),
         declared: ['src/a.ts', 'src/b.ts'],
         observed: ['src/a.ts'],
-        undeclared_extras: [],
         missing_declared: ['src/b.ts'],
       }).success,
     ).toBe(false);
   });
 
-  it('rejects status fail when the sets are clean', () => {
+  it('rejects status fail when the sets are clean and HEAD did not move', () => {
     expect(
       FixChangeSet.safeParse({
+        ...passing(),
         status: 'fail',
         overall_status: 'failed',
         reason: 'should not happen',
-        baseline_head_sha: ZERO_SHA,
-        head_sha: ZERO_SHA,
-        declared: ['src/example.ts'],
-        observed: ['src/example.ts'],
-        undeclared_extras: [],
-        missing_declared: [],
       }).success,
     ).toBe(false);
   });
@@ -129,27 +162,17 @@ describe('FixChangeSet schema', () => {
   it('rejects overall_status that contradicts status', () => {
     expect(
       FixChangeSet.safeParse({
-        status: 'pass',
+        ...passing(),
         overall_status: 'failed',
-        baseline_head_sha: ZERO_SHA,
-        head_sha: ZERO_SHA,
-        declared: ['src/example.ts'],
-        observed: ['src/example.ts'],
-        undeclared_extras: [],
-        missing_declared: [],
       }).success,
     ).toBe(false);
     expect(
       FixChangeSet.safeParse({
+        ...passing(),
         status: 'fail',
-        overall_status: 'passed',
         reason: 'mismatch',
-        baseline_head_sha: ZERO_SHA,
-        head_sha: ZERO_SHA,
-        declared: ['src/a.ts'],
         observed: [],
-        undeclared_extras: [],
-        missing_declared: ['src/a.ts'],
+        missing_declared: ['src/example.ts'],
       }).success,
     ).toBe(false);
   });
@@ -167,6 +190,8 @@ describe('FixChangeSet schema', () => {
         // src/b.ts is the undeclared extra; this test omits it incorrectly.
         undeclared_extras: [],
         missing_declared: [],
+        baseline_dirty_mutated: [],
+        hidden_index_flags: [],
       }).success,
     ).toBe(false);
   });
@@ -184,6 +209,8 @@ describe('FixChangeSet schema', () => {
         undeclared_extras: [],
         // src/b.ts is missing; this test omits it incorrectly.
         missing_declared: [],
+        baseline_dirty_mutated: [],
+        hidden_index_flags: [],
       }).success,
     ).toBe(false);
   });
@@ -199,29 +226,76 @@ describe('FixChangeSet schema', () => {
         observed: [],
         undeclared_extras: [],
         missing_declared: ['src/a.ts'],
+        baseline_dirty_mutated: [],
+        hidden_index_flags: [],
       }).success,
     ).toBe(false);
   });
 
-  it('records HEAD divergence in the head_sha vs baseline_head_sha fields', () => {
-    // HEAD divergence is a fail signal even when the sets happen to align —
-    // the writer is responsible for setting status='fail' with a divergence
-    // reason. The schema only enforces consistency between the verdict
-    // (status/overall_status) and the set differences; it does not police
-    // baseline_head_sha vs head_sha equality, since a "fail" verdict can be
-    // legitimately driven by either set divergence or HEAD movement.
-    const changeSet = FixChangeSet.parse({
+  it("rejects status 'pass' when baseline_head_sha differs from head_sha", () => {
+    // The HEAD-divergence invariant: status='pass' must imply HEAD did not
+    // move. The schema enforces this even when path-set differences are
+    // clean — defense against a writer (or future stub) that emits 'pass'
+    // with a moved HEAD.
+    const result = FixChangeSet.safeParse({
+      ...passing(),
+      head_sha: ONE_SHA,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("requires status 'fail' when HEAD diverged, even with clean path sets", () => {
+    // Symmetric to the above: HEAD divergence with empty undeclared_extras
+    // and missing_declared is still a fail; the schema must accept the fail
+    // verdict.
+    const result = FixChangeSet.parse({
       status: 'fail',
       overall_status: 'failed',
       reason: 'HEAD moved during the fix run.',
       baseline_head_sha: ZERO_SHA,
       head_sha: ONE_SHA,
-      declared: ['src/a.ts'],
+      declared: [],
       observed: [],
       undeclared_extras: [],
-      missing_declared: ['src/a.ts'],
+      missing_declared: [],
+      baseline_dirty_mutated: [],
+      hidden_index_flags: [],
     });
-    expect(changeSet.baseline_head_sha).toBe(ZERO_SHA);
-    expect(changeSet.head_sha).toBe(ONE_SHA);
+    expect(result.head_sha).toBe(ONE_SHA);
+  });
+
+  it("rejects status 'pass' when hidden_index_flags is non-empty", () => {
+    const result = FixChangeSet.safeParse({
+      ...passing(),
+      hidden_index_flags: [{ tag: 'h', path: 'src/locked.ts' }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts status 'fail' when only hidden_index_flags is non-empty", () => {
+    const result = FixChangeSet.parse({
+      status: 'fail',
+      overall_status: 'failed',
+      reason: 'Hidden index flags present.',
+      baseline_head_sha: ZERO_SHA,
+      head_sha: ZERO_SHA,
+      declared: [],
+      observed: [],
+      undeclared_extras: [],
+      missing_declared: [],
+      baseline_dirty_mutated: [],
+      hidden_index_flags: [{ tag: 'h', path: 'src/locked.ts' }],
+    });
+    expect(result.hidden_index_flags).toHaveLength(1);
+  });
+
+  it('rejects baseline_dirty_mutated paths that are not also in observed', () => {
+    const result = FixChangeSet.safeParse({
+      ...passing(),
+      // src/a.ts is mutated but not in observed — the writer would never emit
+      // this shape, but the schema rejects it as a defense-in-depth.
+      baseline_dirty_mutated: ['src/a.ts'],
+    });
+    expect(result.success).toBe(false);
   });
 });

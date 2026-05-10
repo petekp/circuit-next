@@ -29,6 +29,7 @@ import {
   FixContext,
   FixDiagnosis,
   FixRegressionProof,
+  FixRegressionRerun,
   FixResult,
   FixReview,
   FixVerification,
@@ -341,7 +342,8 @@ function reportBody(
       return FixBaselineSnapshot.parse({
         overall_status: 'passed',
         head_sha: '0000000000000000000000000000000000000000',
-        working_tree_porcelain: [],
+        entries: [],
+        hidden_index_flags: [],
       });
     case 'fix.change-set@v1':
       return FixChangeSet.parse({
@@ -353,6 +355,26 @@ function reportBody(
         observed: ['src/example.ts'],
         undeclared_extras: [],
         missing_declared: [],
+        baseline_dirty_mutated: [],
+        hidden_index_flags: [],
+      });
+    case 'fix.regression-rerun@v1':
+      return FixRegressionRerun.parse({
+        status: 'cleared',
+        overall_status: 'passed',
+        rerun: {
+          command_id: regressionCommandSpec.id,
+          cwd: regressionCommandSpec.cwd,
+          argv: regressionCommandSpec.argv,
+          timeout_ms: regressionCommandSpec.timeout_ms,
+          max_output_bytes: regressionCommandSpec.max_output_bytes,
+          env: regressionCommandSpec.env,
+          exit_code: 0,
+          command_status: 'passed',
+          duration_ms: 0,
+          stdout_summary: '',
+          stderr_summary: '',
+        },
       });
     case 'fix.review@v1':
       return FixReview.parse({
@@ -366,6 +388,7 @@ function reportBody(
         outcome: 'fixed',
         verification_status: 'passed',
         regression_status: 'proved',
+        regression_rerun_status: 'cleared',
         change_set_status: 'pass',
         review_status: 'completed',
         review_verdict: 'accept',
@@ -393,6 +416,11 @@ function reportBody(
             report_id: 'fix.verification',
             path: 'reports/fix/verification.json',
             schema: 'fix.verification@v1',
+          },
+          {
+            report_id: 'fix.regression-rerun',
+            path: 'reports/fix/regression-rerun.json',
+            schema: 'fix.regression-rerun@v1',
           },
           {
             report_id: 'fix.change-set',

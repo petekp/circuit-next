@@ -60,6 +60,7 @@ describe('flow schematic schema — active Fix schematic', () => {
       'act',
       'run-verification',
       'run-verification',
+      'run-verification',
       'review',
       'close-with-evidence',
       'close-with-evidence',
@@ -79,6 +80,7 @@ describe('flow schematic schema — active Fix schematic', () => {
       ['fix-act', 'act'],
       ['fix-verify', 'verify'],
       ['fix-change-set', 'verify'],
+      ['fix-regression-rerun', 'verify'],
       ['fix-review', 'review'],
       ['fix-close-lite', 'close'],
       ['fix-close', 'close'],
@@ -98,6 +100,7 @@ describe('flow schematic schema — active Fix schematic', () => {
       ['fix-act', { kind: 'relay', role: 'implementer' }],
       ['fix-verify', { kind: 'verification' }],
       ['fix-change-set', { kind: 'verification' }],
+      ['fix-regression-rerun', { kind: 'verification' }],
       ['fix-review', { kind: 'relay', role: 'reviewer' }],
       ['fix-close-lite', { kind: 'compose' }],
       ['fix-close', { kind: 'compose' }],
@@ -122,6 +125,7 @@ describe('flow schematic schema — active Fix schematic', () => {
       baseline_snapshot: 'fix.baseline-snapshot@v1',
       change: 'fix.change@v1',
       verification: 'fix.verification@v1',
+      regression_rerun: 'fix.regression-rerun@v1',
       change_set: 'fix.change-set@v1',
     });
     expect(closeLite.input).not.toHaveProperty('review');
@@ -133,12 +137,15 @@ describe('flow schematic schema — active Fix schematic', () => {
       baseline_snapshot: 'fix.baseline-snapshot@v1',
       change: 'fix.change@v1',
       verification: 'fix.verification@v1',
+      regression_rerun: 'fix.regression-rerun@v1',
       change_set: 'fix.change-set@v1',
       review: 'fix.review@v1',
     });
   });
 
-  it('routes Lite change-set directly to a no-review close item via route_overrides', () => {
+  it('routes Lite regression-rerun directly to a no-review close item via route_overrides', () => {
+    // Slice 2 v2: regression-rerun is the last verification step before
+    // close, so the lite override sits there (not on change-set as in v1).
     const schematic = parseFixSchematic();
     const verify = schematic.items.find((item) => (item.id as unknown as string) === 'fix-verify');
     if (verify === undefined) throw new Error('fix-verify missing');
@@ -146,10 +153,15 @@ describe('flow schematic schema — active Fix schematic', () => {
       (item) => (item.id as unknown as string) === 'fix-change-set',
     );
     if (changeSet === undefined) throw new Error('fix-change-set missing');
+    const regressionRerun = schematic.items.find(
+      (item) => (item.id as unknown as string) === 'fix-regression-rerun',
+    );
+    if (regressionRerun === undefined) throw new Error('fix-regression-rerun missing');
 
     expect(verify.routes.continue).toBe('fix-change-set');
-    expect(changeSet.routes.continue).toBe('fix-review');
-    expect(changeSet.route_overrides).toEqual({
+    expect(changeSet.routes.continue).toBe('fix-regression-rerun');
+    expect(regressionRerun.routes.continue).toBe('fix-review');
+    expect(regressionRerun.route_overrides).toEqual({
       continue: {
         lite: 'fix-close-lite',
       },

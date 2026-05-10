@@ -1,16 +1,19 @@
 // Unit tests for the fix.change-set@v1 writer's buildResult logic.
 //
-// loadCommands just emits the two git commands the runtime will spawn; the
-// runtime's spawnSync loop is not interesting to retest here. What matters
-// is that buildResult correctly:
-//   - subtracts pre-fix dirty paths from the post-fix porcelain so observed
+// loadCommands just emits the git-state helper command the runtime will
+// spawn; we don't retest spawn here. What matters is that buildResult
+// correctly:
+//   - subtracts pre-fix dirty paths from the post-fix snapshot so observed
 //     reflects only what the fix touched
 //   - flags undeclared extras and missing declared files with status 'fail'
 //     and a clear reason
 //   - flags HEAD divergence as fail even when sets happen to align
-//   - handles renames (`A -> B` porcelain entries) by treating B as the
-//     observed path
-//   - handles quoted porcelain paths
+//   - flags hidden_index_flags (assume-unchanged or skip-worktree) as fail
+//   - detects baseline-dirty-path mutation: a path that was already dirty
+//     pre-fix and got further modified by fix-act shows up in observed via
+//     fingerprint comparison
+//   - handles renames (entries with status 'R ') by treating destination as
+//     the observed path
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -61,9 +64,7 @@ function makeFixture(options: {
   writeJson(runFolder, 'reports/fix/baseline-snapshot.json', options.baseline);
   writeJson(runFolder, 'reports/fix/change.json', options.change);
   // Minimal CompiledFlow stub: only the `steps` lookup that
-  // reportPathForSchemaInCompiledFlow uses needs to resolve. The lookup
-  // walks step.writes.report to find the path for a given schema, so a tiny
-  // hand-built flow is enough.
+  // reportPathForSchemaInCompiledFlow uses needs to resolve.
   const flow = {
     steps: [
       {
@@ -109,16 +110,29 @@ function makeFixture(options: {
   return { runFolder, context: { runFolder, flow, step } };
 }
 
-function gitObservation(
+function helperObservation(
   command: VerificationCommand,
-  stdout: string,
+  payload: {
+    head_sha: string;
+    entries?: ReadonlyArray<{
+      status_code: string;
+      path: string;
+      fingerprint: string;
+      from?: string;
+    }>;
+    hidden_index_flags?: ReadonlyArray<{ tag: string; path: string }>;
+  },
 ): VerificationCommandObservation {
   return {
     command,
     exit_code: 0,
     status: 'passed',
     duration_ms: 1,
-    stdout_summary: stdout,
+    stdout_summary: JSON.stringify({
+      head_sha: payload.head_sha,
+      entries: payload.entries ?? [],
+      hidden_index_flags: payload.hidden_index_flags ?? [],
+    }),
     stderr_summary: '',
   };
 }
@@ -134,36 +148,49 @@ afterEach(() => {
 const HEAD_BEFORE = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const HEAD_AFTER_SAME = HEAD_BEFORE;
 const HEAD_AFTER_MOVED = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+const BLOB_A = '0000000000000000000000000000000000000001';
+const BLOB_A_PRIME = '0000000000000000000000000000000000000002';
+const BLOB_B = '0000000000000000000000000000000000000003';
+
+const NOOP_CHANGE: FixChange = {
+  verdict: 'accept',
+  summary: 'noop',
+  diagnosis_ref: 'fix.diagnosis@v1',
+  changed_files: ['src/a.ts'],
+  evidence: ['noop'],
+};
 
 describe('fixChangeSetWriter.loadCommands', () => {
-  it('emits the two git commands the runtime needs', () => {
+  it('emits one command (the git-state helper) for the runtime to spawn', () => {
     const { context } = makeFixture({
-      baseline: { overall_status: 'passed', head_sha: HEAD_BEFORE, working_tree_porcelain: [] },
-      change: {
-        verdict: 'accept',
-        summary: 'noop',
-        diagnosis_ref: 'fix.diagnosis@v1',
-        changed_files: ['src/a.ts'],
-        evidence: ['noop'],
+      baseline: {
+        overall_status: 'passed',
+        head_sha: HEAD_BEFORE,
+        entries: [],
+        hidden_index_flags: [],
       },
+      change: NOOP_CHANGE,
     });
     const commands = loadCommandsForContext(context);
-    expect(commands.map((c) => c.argv)).toEqual([
-      ['git', 'rev-parse', 'HEAD'],
-      ['git', 'status', '--porcelain'],
-    ]);
+    expect(commands).toHaveLength(1);
+    const command = commands[0];
+    if (command === undefined) throw new Error('expected one command');
+    // argv[0] is the runtime's node binary (process.execPath); argv[1] is
+    // the helper script path. We don't pin the binary, but we do pin the
+    // helper script name.
+    expect(command.argv[1]).toMatch(/git-state\.mjs$/);
+    expect(command.cwd).toBe('.');
   });
 
   it('rejects schematics that do not declare reads on the required inputs', () => {
     const { context } = makeFixture({
-      baseline: { overall_status: 'passed', head_sha: HEAD_BEFORE, working_tree_porcelain: [] },
-      change: {
-        verdict: 'accept',
-        summary: 'noop',
-        diagnosis_ref: 'fix.diagnosis@v1',
-        changed_files: ['src/a.ts'],
-        evidence: ['noop'],
+      baseline: {
+        overall_status: 'passed',
+        head_sha: HEAD_BEFORE,
+        entries: [],
+        hidden_index_flags: [],
       },
+      change: NOOP_CHANGE,
     });
     const stepWithoutReads = {
       ...context.step,
@@ -178,7 +205,12 @@ describe('fixChangeSetWriter.loadCommands', () => {
 describe('fixChangeSetWriter.buildResult', () => {
   it('returns pass when declared exactly matches observed', () => {
     const { context } = makeFixture({
-      baseline: { overall_status: 'passed', head_sha: HEAD_BEFORE, working_tree_porcelain: [] },
+      baseline: {
+        overall_status: 'passed',
+        head_sha: HEAD_BEFORE,
+        entries: [],
+        hidden_index_flags: [],
+      },
       change: {
         verdict: 'accept',
         summary: 'pass case',
@@ -187,11 +219,13 @@ describe('fixChangeSetWriter.buildResult', () => {
         evidence: ['ok'],
       },
     });
-    const [revParse, status] = loadCommandsForContext(context);
+    const [helper] = loadCommandsForContext(context);
     const result = fixChangeSetWriter.buildResult(
       [
-        gitObservation(revParse as VerificationCommand, `${HEAD_AFTER_SAME}\n`),
-        gitObservation(status as VerificationCommand, ' M src/a.ts\n'),
+        helperObservation(helper as VerificationCommand, {
+          head_sha: HEAD_AFTER_SAME,
+          entries: [{ status_code: ' M', path: 'src/a.ts', fingerprint: BLOB_A }],
+        }),
       ],
       context,
     ) as FixChangeSet;
@@ -199,11 +233,18 @@ describe('fixChangeSetWriter.buildResult', () => {
     expect(result.observed).toEqual(['src/a.ts']);
     expect(result.undeclared_extras).toEqual([]);
     expect(result.missing_declared).toEqual([]);
+    expect(result.baseline_dirty_mutated).toEqual([]);
+    expect(result.hidden_index_flags).toEqual([]);
   });
 
   it('flags undeclared extras as fail', () => {
     const { context } = makeFixture({
-      baseline: { overall_status: 'passed', head_sha: HEAD_BEFORE, working_tree_porcelain: [] },
+      baseline: {
+        overall_status: 'passed',
+        head_sha: HEAD_BEFORE,
+        entries: [],
+        hidden_index_flags: [],
+      },
       change: {
         verdict: 'accept',
         summary: 'lying about scope',
@@ -212,11 +253,16 @@ describe('fixChangeSetWriter.buildResult', () => {
         evidence: ['ok'],
       },
     });
-    const [revParse, status] = loadCommandsForContext(context);
+    const [helper] = loadCommandsForContext(context);
     const result = fixChangeSetWriter.buildResult(
       [
-        gitObservation(revParse as VerificationCommand, `${HEAD_AFTER_SAME}\n`),
-        gitObservation(status as VerificationCommand, ' M src/a.ts\n M src/extra.ts\n'),
+        helperObservation(helper as VerificationCommand, {
+          head_sha: HEAD_AFTER_SAME,
+          entries: [
+            { status_code: ' M', path: 'src/a.ts', fingerprint: BLOB_A },
+            { status_code: ' M', path: 'src/extra.ts', fingerprint: BLOB_B },
+          ],
+        }),
       ],
       context,
     ) as FixChangeSet;
@@ -228,7 +274,12 @@ describe('fixChangeSetWriter.buildResult', () => {
 
   it('flags missing declared as fail', () => {
     const { context } = makeFixture({
-      baseline: { overall_status: 'passed', head_sha: HEAD_BEFORE, working_tree_porcelain: [] },
+      baseline: {
+        overall_status: 'passed',
+        head_sha: HEAD_BEFORE,
+        entries: [],
+        hidden_index_flags: [],
+      },
       change: {
         verdict: 'accept',
         summary: 'declared but never edited',
@@ -237,11 +288,13 @@ describe('fixChangeSetWriter.buildResult', () => {
         evidence: ['ok'],
       },
     });
-    const [revParse, status] = loadCommandsForContext(context);
+    const [helper] = loadCommandsForContext(context);
     const result = fixChangeSetWriter.buildResult(
       [
-        gitObservation(revParse as VerificationCommand, `${HEAD_AFTER_SAME}\n`),
-        gitObservation(status as VerificationCommand, ' M src/a.ts\n'),
+        helperObservation(helper as VerificationCommand, {
+          head_sha: HEAD_AFTER_SAME,
+          entries: [{ status_code: ' M', path: 'src/a.ts', fingerprint: BLOB_A }],
+        }),
       ],
       context,
     ) as FixChangeSet;
@@ -250,15 +303,16 @@ describe('fixChangeSetWriter.buildResult', () => {
     expect(result.reason).toMatch(/missing declared: src\/b\.ts/);
   });
 
-  it('subtracts pre-fix dirty paths from observed', () => {
-    // The user already had src/preexisting.ts dirty before the fix started.
-    // The fix touched src/a.ts. The change-set should NOT count
-    // src/preexisting.ts as part of the fix — it belongs to the baseline.
+  it('subtracts pre-fix dirty paths from observed when fingerprint is unchanged', () => {
+    // src/preexisting.ts was dirty before the fix and the fix didn't touch
+    // it (fingerprint matches baseline). It should not count as part of the
+    // fix.
     const { context } = makeFixture({
       baseline: {
         overall_status: 'passed',
         head_sha: HEAD_BEFORE,
-        working_tree_porcelain: [' M src/preexisting.ts'],
+        entries: [{ status_code: ' M', path: 'src/preexisting.ts', fingerprint: BLOB_A }],
+        hidden_index_flags: [],
       },
       change: {
         verdict: 'accept',
@@ -268,39 +322,121 @@ describe('fixChangeSetWriter.buildResult', () => {
         evidence: ['ok'],
       },
     });
-    const [revParse, status] = loadCommandsForContext(context);
+    const [helper] = loadCommandsForContext(context);
     const result = fixChangeSetWriter.buildResult(
       [
-        gitObservation(revParse as VerificationCommand, `${HEAD_AFTER_SAME}\n`),
-        gitObservation(status as VerificationCommand, ' M src/preexisting.ts\n M src/a.ts\n'),
+        helperObservation(helper as VerificationCommand, {
+          head_sha: HEAD_AFTER_SAME,
+          entries: [
+            { status_code: ' M', path: 'src/preexisting.ts', fingerprint: BLOB_A },
+            { status_code: ' M', path: 'src/a.ts', fingerprint: BLOB_B },
+          ],
+        }),
       ],
       context,
     ) as FixChangeSet;
     expect(result.status).toBe('pass');
     expect(result.observed).toEqual(['src/a.ts']);
+    expect(result.baseline_dirty_mutated).toEqual([]);
   });
 
-  it('flags HEAD divergence as fail even when set differences are clean', () => {
+  it('flags pre-existing dirty paths as undeclared when their fingerprint changes', () => {
+    // src/preexisting.ts was dirty (fingerprint A) at baseline. Post-fix
+    // fingerprint is A' — fix-act further modified it. The implementer
+    // omitted it from changed_files; the writer should detect it via
+    // fingerprint comparison and flag as an undeclared extra.
     const { context } = makeFixture({
-      baseline: { overall_status: 'passed', head_sha: HEAD_BEFORE, working_tree_porcelain: [] },
+      baseline: {
+        overall_status: 'passed',
+        head_sha: HEAD_BEFORE,
+        entries: [{ status_code: ' M', path: 'src/preexisting.ts', fingerprint: BLOB_A }],
+        hidden_index_flags: [],
+      },
       change: {
         verdict: 'accept',
-        summary: 'committed mid-run',
+        summary: 'fix-act sneakily mutated a baseline-dirty path',
         diagnosis_ref: 'fix.diagnosis@v1',
-        // Empty declared so set-equality alone would be clean if observed is also empty;
-        // we still want the writer to fail on HEAD movement.
         changed_files: ['src/a.ts'],
         evidence: ['ok'],
       },
     });
-    const [revParse, status] = loadCommandsForContext(context);
-    // Working tree is clean post-commit, so observed will be empty. Declared
-    // has src/a.ts, so missing_declared would already drive a fail — to
-    // isolate the HEAD-divergence path we check the reason explicitly.
+    const [helper] = loadCommandsForContext(context);
     const result = fixChangeSetWriter.buildResult(
       [
-        gitObservation(revParse as VerificationCommand, `${HEAD_AFTER_MOVED}\n`),
-        gitObservation(status as VerificationCommand, ''),
+        helperObservation(helper as VerificationCommand, {
+          head_sha: HEAD_AFTER_SAME,
+          entries: [
+            { status_code: ' M', path: 'src/preexisting.ts', fingerprint: BLOB_A_PRIME },
+            { status_code: ' M', path: 'src/a.ts', fingerprint: BLOB_B },
+          ],
+        }),
+      ],
+      context,
+    ) as FixChangeSet;
+    expect(result.status).toBe('fail');
+    expect(result.undeclared_extras).toEqual(['src/preexisting.ts']);
+    expect(result.baseline_dirty_mutated).toEqual(['src/preexisting.ts']);
+    expect(result.observed).toEqual(['src/a.ts', 'src/preexisting.ts']);
+  });
+
+  it('treats a baseline-dirty path that is now clean as a touch (still detects mutation)', () => {
+    // src/preexisting.ts was dirty at baseline. Post-fix the file matches
+    // HEAD again — fix-act reverted operator's prior edit. That counts as
+    // fix-act touching the file.
+    const { context } = makeFixture({
+      baseline: {
+        overall_status: 'passed',
+        head_sha: HEAD_BEFORE,
+        entries: [{ status_code: ' M', path: 'src/preexisting.ts', fingerprint: BLOB_A }],
+        hidden_index_flags: [],
+      },
+      change: {
+        verdict: 'accept',
+        summary: 'silently reverted operator edit',
+        diagnosis_ref: 'fix.diagnosis@v1',
+        changed_files: ['src/a.ts'],
+        evidence: ['ok'],
+      },
+    });
+    const [helper] = loadCommandsForContext(context);
+    const result = fixChangeSetWriter.buildResult(
+      [
+        helperObservation(helper as VerificationCommand, {
+          head_sha: HEAD_AFTER_SAME,
+          // src/preexisting.ts no longer dirty; only src/a.ts is.
+          entries: [{ status_code: ' M', path: 'src/a.ts', fingerprint: BLOB_B }],
+        }),
+      ],
+      context,
+    ) as FixChangeSet;
+    expect(result.status).toBe('fail');
+    expect(result.undeclared_extras).toEqual(['src/preexisting.ts']);
+    expect(result.baseline_dirty_mutated).toEqual(['src/preexisting.ts']);
+  });
+
+  it('flags HEAD divergence as fail even when set differences are clean', () => {
+    const { context } = makeFixture({
+      baseline: {
+        overall_status: 'passed',
+        head_sha: HEAD_BEFORE,
+        entries: [],
+        hidden_index_flags: [],
+      },
+      change: {
+        verdict: 'accept',
+        summary: 'committed mid-run',
+        diagnosis_ref: 'fix.diagnosis@v1',
+        changed_files: ['src/a.ts'],
+        evidence: ['ok'],
+      },
+    });
+    const [helper] = loadCommandsForContext(context);
+    const result = fixChangeSetWriter.buildResult(
+      [
+        helperObservation(helper as VerificationCommand, {
+          head_sha: HEAD_AFTER_MOVED,
+          entries: [],
+        }),
       ],
       context,
     ) as FixChangeSet;
@@ -310,9 +446,79 @@ describe('fixChangeSetWriter.buildResult', () => {
     expect(result.head_sha).toBe(HEAD_AFTER_MOVED);
   });
 
+  it('flags HEAD divergence as fail even when path sets exactly match declared', () => {
+    // The path-set algebra would happily say 'pass' here — declared and
+    // observed both equal ['src/a.ts'] — but HEAD moved, so the writer must
+    // override to 'fail'.
+    const { context } = makeFixture({
+      baseline: {
+        overall_status: 'passed',
+        head_sha: HEAD_BEFORE,
+        entries: [],
+        hidden_index_flags: [],
+      },
+      change: {
+        verdict: 'accept',
+        summary: 'declared the right file but committed it',
+        diagnosis_ref: 'fix.diagnosis@v1',
+        changed_files: ['src/a.ts'],
+        evidence: ['ok'],
+      },
+    });
+    const [helper] = loadCommandsForContext(context);
+    const result = fixChangeSetWriter.buildResult(
+      [
+        helperObservation(helper as VerificationCommand, {
+          head_sha: HEAD_AFTER_MOVED,
+          entries: [{ status_code: ' M', path: 'src/a.ts', fingerprint: BLOB_A }],
+        }),
+      ],
+      context,
+    ) as FixChangeSet;
+    expect(result.status).toBe('fail');
+    expect(result.reason).toMatch(/HEAD moved during the fix run/);
+  });
+
+  it('flags hidden_index_flags from the post-fix snapshot as fail', () => {
+    const { context } = makeFixture({
+      baseline: {
+        overall_status: 'passed',
+        head_sha: HEAD_BEFORE,
+        entries: [],
+        hidden_index_flags: [],
+      },
+      change: {
+        verdict: 'accept',
+        summary: 'tries to hide an edit behind assume-unchanged',
+        diagnosis_ref: 'fix.diagnosis@v1',
+        changed_files: ['src/a.ts'],
+        evidence: ['ok'],
+      },
+    });
+    const [helper] = loadCommandsForContext(context);
+    const result = fixChangeSetWriter.buildResult(
+      [
+        helperObservation(helper as VerificationCommand, {
+          head_sha: HEAD_AFTER_SAME,
+          entries: [{ status_code: ' M', path: 'src/a.ts', fingerprint: BLOB_A }],
+          hidden_index_flags: [{ tag: 'h', path: 'src/locked.ts' }],
+        }),
+      ],
+      context,
+    ) as FixChangeSet;
+    expect(result.status).toBe('fail');
+    expect(result.hidden_index_flags).toEqual([{ tag: 'h', path: 'src/locked.ts' }]);
+    expect(result.reason).toMatch(/hidden index flags present/);
+  });
+
   it('handles rename porcelain entries by taking the destination path', () => {
     const { context } = makeFixture({
-      baseline: { overall_status: 'passed', head_sha: HEAD_BEFORE, working_tree_porcelain: [] },
+      baseline: {
+        overall_status: 'passed',
+        head_sha: HEAD_BEFORE,
+        entries: [],
+        hidden_index_flags: [],
+      },
       change: {
         verdict: 'accept',
         summary: 'rename declared as the new path',
@@ -321,11 +527,20 @@ describe('fixChangeSetWriter.buildResult', () => {
         evidence: ['ok'],
       },
     });
-    const [revParse, status] = loadCommandsForContext(context);
+    const [helper] = loadCommandsForContext(context);
     const result = fixChangeSetWriter.buildResult(
       [
-        gitObservation(revParse as VerificationCommand, `${HEAD_AFTER_SAME}\n`),
-        gitObservation(status as VerificationCommand, 'R  src/old.ts -> src/new.ts\n'),
+        helperObservation(helper as VerificationCommand, {
+          head_sha: HEAD_AFTER_SAME,
+          entries: [
+            {
+              status_code: 'R ',
+              path: 'src/new.ts',
+              fingerprint: BLOB_A,
+              from: 'src/old.ts',
+            },
+          ],
+        }),
       ],
       context,
     ) as FixChangeSet;
@@ -333,9 +548,14 @@ describe('fixChangeSetWriter.buildResult', () => {
     expect(result.status).toBe('pass');
   });
 
-  it('strips quoting from porcelain paths', () => {
+  it('preserves paths with spaces — helper output is null-delimited so quoting is gone', () => {
     const { context } = makeFixture({
-      baseline: { overall_status: 'passed', head_sha: HEAD_BEFORE, working_tree_porcelain: [] },
+      baseline: {
+        overall_status: 'passed',
+        head_sha: HEAD_BEFORE,
+        entries: [],
+        hidden_index_flags: [],
+      },
       change: {
         verdict: 'accept',
         summary: 'path with spaces declared',
@@ -344,15 +564,65 @@ describe('fixChangeSetWriter.buildResult', () => {
         evidence: ['ok'],
       },
     });
-    const [revParse, status] = loadCommandsForContext(context);
+    const [helper] = loadCommandsForContext(context);
     const result = fixChangeSetWriter.buildResult(
       [
-        gitObservation(revParse as VerificationCommand, `${HEAD_AFTER_SAME}\n`),
-        gitObservation(status as VerificationCommand, ' M "src/has space.ts"\n'),
+        helperObservation(helper as VerificationCommand, {
+          head_sha: HEAD_AFTER_SAME,
+          entries: [{ status_code: ' M', path: 'src/has space.ts', fingerprint: BLOB_A }],
+        }),
       ],
       context,
     ) as FixChangeSet;
     expect(result.observed).toEqual(['src/has space.ts']);
     expect(result.status).toBe('pass');
+  });
+
+  it('throws a clear error when the helper observation failed', () => {
+    const { context } = makeFixture({
+      baseline: {
+        overall_status: 'passed',
+        head_sha: HEAD_BEFORE,
+        entries: [],
+        hidden_index_flags: [],
+      },
+      change: NOOP_CHANGE,
+    });
+    const [helper] = loadCommandsForContext(context);
+    const failingObservation: VerificationCommandObservation = {
+      command: helper as VerificationCommand,
+      exit_code: 1,
+      status: 'failed',
+      duration_ms: 1,
+      stdout_summary: '',
+      stderr_summary: 'fix-git-state: git rev-parse HEAD failed: not a git repository',
+    };
+    expect(() => fixChangeSetWriter.buildResult([failingObservation], context)).toThrow(
+      /git-state helper failed/,
+    );
+  });
+
+  it('throws a clear error when the helper output is not valid JSON', () => {
+    const { context } = makeFixture({
+      baseline: {
+        overall_status: 'passed',
+        head_sha: HEAD_BEFORE,
+        entries: [],
+        hidden_index_flags: [],
+      },
+      change: NOOP_CHANGE,
+    });
+    const [helper] = loadCommandsForContext(context);
+    const malformedObservation: VerificationCommandObservation = {
+      command: helper as VerificationCommand,
+      exit_code: 0,
+      status: 'passed',
+      duration_ms: 1,
+      stdout_summary: 'not json {',
+      stderr_summary: '',
+    };
+    expect(() => fixChangeSetWriter.buildResult([malformedObservation], context)).toThrow(
+      /not valid JSON/,
+    );
   });
 });

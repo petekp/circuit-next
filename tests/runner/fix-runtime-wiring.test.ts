@@ -61,7 +61,8 @@ function fixVerificationOverride(): ExecutorRegistry['verification'] {
       const snapshot = FixBaselineSnapshot.parse({
         overall_status: 'passed',
         head_sha: '0000000000000000000000000000000000000000',
-        working_tree_porcelain: [],
+        entries: [],
+        hidden_index_flags: [],
       });
       await context.files.writeJson(report, snapshot);
       await context.trace.append({
@@ -88,6 +89,8 @@ function fixVerificationOverride(): ExecutorRegistry['verification'] {
         observed: ['src/test.ts'],
         undeclared_extras: [],
         missing_declared: [],
+        baseline_dirty_mutated: [],
+        hidden_index_flags: [],
       });
       await context.files.writeJson(report, changeSet);
       await context.trace.append({
@@ -261,6 +264,7 @@ describe('Lite Fix runtime wiring', () => {
       'fix.baseline-snapshot',
       'fix.change',
       'fix.verification',
+      'fix.regression-rerun',
       'fix.change-set',
     ]);
   });

@@ -66,7 +66,7 @@ describe('fix runtime parity', () => {
       expect(runResult).toMatchObject({
         flow_id: 'fix',
         outcome: 'complete',
-        trace_entries_observed: 22,
+        trace_entries_observed: 24,
         manifest_hash: fixture.manifestHash,
       });
     });

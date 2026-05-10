@@ -27,12 +27,15 @@ backed by all four. The proof-carrying chain's job is to refuse `fixed`
 without lying about the gap — typically demoting to `partial`, sometimes to
 `failed`, depending on which pillar broke.
 
-## The five tasks
+## The six tasks
 
 Each task documents one pattern of false-done that the chain must catch. The
 integration test `tests/integration/fix-false-done-bar.test.ts` runs each
 scenario end-to-end through the lite Fix runtime with stubbed relays that
 emit the false-done, and asserts `outcome` is **not** `fixed`.
+`tests/integration/fix-false-done-bar-live.test.ts` runs a smaller set of
+the same patterns against a real temp git repo to prove the writers handle
+real porcelain output, real fingerprints, and real HEAD movement.
 
 | Task ID | False-done pattern | Pillar that should catch it |
 | --- | --- | --- |
@@ -41,6 +44,7 @@ emit the false-done, and asserts `outcome` is **not** `fixed`.
 | `03-deferred-regression` | Brief defers regression test ("write later") and the agent claims fixed. | `fix.regression-proof@v1` — status `deferred` already gated by Slice 1; the chain demotes to `partial`. |
 | `04-not-proved-baseline` | Brief declares a regression test, but the test passes before the fix is applied — diagnosis is wrong. | `fix.regression-proof@v1` — status `not-proved` aborts the run via verification recovery routing. |
 | `05-mid-run-commit` | Implementer commits during fix-act, leaving the working tree clean post-fix. | `fix.change-set@v1` — HEAD diverged from baseline. |
+| `06-regression-still-failing` | Brief declares a real failing regression and a no-op verification candidate; fix doesn't actually fix the regression. | `fix.regression-rerun@v1` — status `still-failing` aborts via recovery routing. |
 
 ## Held-out policy
 
@@ -52,10 +56,17 @@ target.
 ## How to run
 
 ```
-npx vitest run tests/integration/fix-false-done-bar.test.ts
+npx vitest run tests/integration/fix-false-done-bar.test.ts \
+              tests/integration/fix-false-done-bar-live.test.ts
 ```
 
-Each test stubs the relay and the live git executor for the change-set step
-so the scenarios are deterministic — the bar is about whether the chain
-catches the pattern, not about whether real git observes it. The same writer
-code runs in both this harness and live Fix runs.
+The stubbed bar (`fix-false-done-bar.test.ts`) stubs the relay and the live
+verification executor for fix-baseline-snapshot and fix-change-set so the
+six scenarios are deterministic — the bar is about whether the chain
+catches the pattern, not about whether real git observes it. The same
+writer code runs in both this harness and live Fix runs.
+
+The live bar (`fix-false-done-bar-live.test.ts`) runs a smaller targeted
+set against a real temp git repo with no executor stubs, proving the
+writers handle real porcelain output, real `git hash-object` fingerprints,
+and real HEAD movement.
