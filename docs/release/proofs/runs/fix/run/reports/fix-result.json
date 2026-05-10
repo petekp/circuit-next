@@ -3,6 +3,7 @@
   "outcome": "partial",
   "verification_status": "passed",
   "regression_status": "deferred",
+  "change_set_status": "pass",
   "review_status": "skipped",
   "review_skip_reason": "Lite mode skipped review per route_overrides.",
   "residual_risks": [],
@@ -28,6 +29,11 @@
       "schema": "fix.regression-proof@v1"
     },
     {
+      "report_id": "fix.baseline-snapshot",
+      "path": "reports/fix/baseline-snapshot.json",
+      "schema": "fix.baseline-snapshot@v1"
+    },
+    {
       "report_id": "fix.change",
       "path": "reports/fix/change.json",
       "schema": "fix.change@v1"
@@ -36,6 +42,11 @@
       "report_id": "fix.verification",
       "path": "reports/fix/verification.json",
       "schema": "fix.verification@v1"
+    },
+    {
+      "report_id": "fix.change-set",
+      "path": "reports/fix/change-set.json",
+      "schema": "fix.change-set@v1"
     }
   ]
 }

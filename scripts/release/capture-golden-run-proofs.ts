@@ -306,8 +306,74 @@ const fixProofComposeExecutor: StepExecutor = async (step, context) => {
   return { route: 'pass', details: { writer: step.writer, proof: 'release-fix-brief' } };
 };
 
+// Stub the runtime-owned verification steps that shell out to git
+// (fix-baseline-snapshot and fix-change-set). The synthetic Fix proof never
+// actually modifies files, so the live executors would observe an empty file
+// list and the change-set writer would refuse the run with "missing declared:
+// src/login.ts". This stub writes passing reports for both steps so the
+// proof closes with outcome 'partial' (still gated by the deferred
+// regression test) — exactly as it did before Slice 2 added these gates.
+const fixProofVerificationExecutor: StepExecutor = async (step, context) => {
+  if (step.kind !== 'verification') {
+    throw new Error(
+      `fix proof verification executor: expected verification step, got ${step.kind}`,
+    );
+  }
+  const report = step.writes?.report;
+  if (report?.schema === undefined) {
+    throw new Error(`fix proof verification executor: step '${step.id}' missing writes.report`);
+  }
+  const attempt = context.activeStepAttempt ?? 1;
+  const reportSchema = report.schema;
+  if (reportSchema === undefined) {
+    throw new Error(`fix proof verification executor: step '${step.id}' report missing schema`);
+  }
+  const writePassing = async (body: unknown): Promise<void> => {
+    await context.files.writeJson(report, body);
+    await context.trace.append({
+      run_id: context.runId,
+      kind: 'step.report_written',
+      step_id: step.id,
+      attempt,
+      report_path: report.path,
+      report_schema: reportSchema,
+    });
+  };
+  if (step.id === 'fix-baseline-snapshot') {
+    await writePassing({
+      overall_status: 'passed',
+      head_sha: '0000000000000000000000000000000000000000',
+      working_tree_porcelain: [],
+    });
+    return { route: 'pass', details: { writer: 'fix-proof', proof: 'baseline-snapshot' } };
+  }
+  if (step.id === 'fix-change-set') {
+    await writePassing({
+      status: 'pass',
+      overall_status: 'passed',
+      baseline_head_sha: '0000000000000000000000000000000000000000',
+      head_sha: '0000000000000000000000000000000000000000',
+      declared: ['src/login.ts'],
+      observed: ['src/login.ts'],
+      undeclared_extras: [],
+      missing_declared: [],
+    });
+    return { route: 'pass', details: { writer: 'fix-proof', proof: 'change-set' } };
+  }
+  // Other verification steps (fix-regression-baseline, fix-verify) keep the
+  // live executor — they already work against the deterministic node command
+  // candidates baked into the synthetic brief.
+  const verificationRuntime = (await import(
+    resolve(projectRoot, 'dist/runtime/executors/verification.js')
+  )) as { executeVerification: StepExecutor };
+  return await verificationRuntime.executeVerification(step, context);
+};
+
 function fixProofExecutors(): RuntimeExecutorsOption {
-  return { compose: fixProofComposeExecutor };
+  return {
+    compose: fixProofComposeExecutor,
+    verification: fixProofVerificationExecutor,
+  };
 }
 
 function migrateRelayer(): Relayer {

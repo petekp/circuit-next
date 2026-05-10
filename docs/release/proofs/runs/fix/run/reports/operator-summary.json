@@ -47,6 +47,11 @@
       "schema": "fix.regression-proof@v1"
     },
     {
+      "label": "fix.baseline-snapshot",
+      "path": "<repo>/docs/release/proofs/runs/fix/run/reports/fix/baseline-snapshot.json",
+      "schema": "fix.baseline-snapshot@v1"
+    },
+    {
       "label": "fix.change",
       "path": "<repo>/docs/release/proofs/runs/fix/run/reports/fix/change.json",
       "schema": "fix.change@v1"
@@ -55,6 +60,11 @@
       "label": "fix.verification",
       "path": "<repo>/docs/release/proofs/runs/fix/run/reports/fix/verification.json",
       "schema": "fix.verification@v1"
+    },
+    {
+      "label": "fix.change-set",
+      "path": "<repo>/docs/release/proofs/runs/fix/run/reports/fix/change-set.json",
+      "schema": "fix.change-set@v1"
     }
   ]
 }
