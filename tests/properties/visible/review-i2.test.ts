@@ -10,6 +10,7 @@ import {
 type Counts = {
   critical: number;
   high: number;
+  medium: number;
   low: number;
 };
 
@@ -25,6 +26,7 @@ function findingsFor(counts: Counts): ReviewFinding[] {
   const severities: ReviewFindingSeverity[] = [
     ...Array.from({ length: counts.critical }, () => 'critical' as const),
     ...Array.from({ length: counts.high }, () => 'high' as const),
+    ...Array.from({ length: counts.medium }, () => 'medium' as const),
     ...Array.from({ length: counts.low }, () => 'low' as const),
   ];
   return severities.map((severity, index) => ({
@@ -36,16 +38,20 @@ function findingsFor(counts: Counts): ReviewFinding[] {
 }
 
 describe('REVIEW-I2 verdict determinism property', () => {
-  it('computes CLEAN iff critical_count == 0 and high_count == 0 across randomized finding counts', () => {
+  it('computes CLEAN iff every finding is severity low (or none) across randomized finding counts', () => {
     const next = lcg(0x52657677);
     for (let i = 0; i < 200; i++) {
       const counts = {
         critical: next() % 4,
         high: next() % 4,
+        medium: next() % 4,
         low: next() % 6,
       };
       const findings = findingsFor(counts);
-      const expected = counts.critical === 0 && counts.high === 0 ? 'CLEAN' : 'ISSUES_FOUND';
+      const expected =
+        counts.critical === 0 && counts.high === 0 && counts.medium === 0
+          ? 'CLEAN'
+          : 'ISSUES_FOUND';
 
       expect(computeReviewVerdict(findings)).toBe(expected);
       const prose = {

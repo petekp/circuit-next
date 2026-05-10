@@ -99,8 +99,7 @@ function relayerWithBody(body: string): RelayFn {
       expect(input.prompt).toContain('Accepted verdicts: NO_ISSUES_FOUND, ISSUES_FOUND');
       expect(input.prompt).toContain('"findings"');
       expect(input.prompt).toContain('"findings": []');
-      expect(input.prompt).toContain('"severity": "<critical|high|low>"');
-      expect(input.prompt).not.toContain('medium');
+      expect(input.prompt).toContain('"severity": "<critical|high|medium|low>"');
       expect(input.prompt).not.toContain('info');
       return {
         request_payload: input.prompt,

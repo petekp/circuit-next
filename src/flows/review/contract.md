@@ -74,9 +74,10 @@ authority-graph reports.
 <a id="REVIEW-I2"></a>
 
 - **REVIEW-I2 — Decision determinism.** The `review.result` report MUST
-  carry `verdict: "CLEAN"` if and only if the findings contain zero
-  `critical` findings and zero `high` findings. Any critical or high
-  finding makes the verdict `ISSUES_FOUND`.
+  carry `verdict: "CLEAN"` if and only if every finding is severity
+  `low` (or there are no findings). Any `critical`, `high`, or `medium`
+  finding makes the verdict `ISSUES_FOUND`. `low` is reserved for
+  informational notes the operator may safely defer.
 
   Enforced by `src/flows/review/reports.ts` and
   `tests/properties/visible/review-i2.test.ts`.

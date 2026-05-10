@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const ReviewFindingSeverity = z.enum(['critical', 'high', 'low']);
+export const ReviewFindingSeverity = z.enum(['critical', 'high', 'medium', 'low']);
 export type ReviewFindingSeverity = z.infer<typeof ReviewFindingSeverity>;
 
 export const ReviewResultVerdict = z.enum(['CLEAN', 'ISSUES_FOUND']);
@@ -115,9 +115,10 @@ export type ReviewFinding = z.infer<typeof ReviewFinding>;
 export function computeReviewVerdict(
   findings: readonly { readonly severity: ReviewFindingSeverity }[],
 ): ReviewResultVerdict {
-  return findings.some((finding) => finding.severity === 'critical' || finding.severity === 'high')
-    ? 'ISSUES_FOUND'
-    : 'CLEAN';
+  // critical/high/medium block; low is informational. Industry convention:
+  // a CLEAN verdict means "nothing the operator should act on before
+  // shipping," and medium-severity findings warrant action.
+  return findings.some((finding) => finding.severity !== 'low') ? 'ISSUES_FOUND' : 'CLEAN';
 }
 
 export const ReviewResult = z
@@ -149,7 +150,7 @@ export const ReviewResult = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['verdict'],
-        message: `verdict must be ${expected} for the report findings (CLEAN iff critical_count == 0 and high_count == 0)`,
+        message: `verdict must be ${expected} for the report findings (CLEAN iff every finding is severity low)`,
       });
     }
   });
