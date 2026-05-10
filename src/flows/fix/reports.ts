@@ -7,8 +7,10 @@ const FIX_RESULT_SCHEMA_BY_ARTIFACT_ID = {
   'fix.diagnosis': 'fix.diagnosis@v1',
   'fix.no-repro-decision': 'fix.no-repro-decision@v1',
   'fix.regression-proof': 'fix.regression-proof@v1',
+  'fix.baseline-snapshot': 'fix.baseline-snapshot@v1',
   'fix.change': 'fix.change@v1',
   'fix.verification': 'fix.verification@v1',
+  'fix.change-set': 'fix.change-set@v1',
   'fix.review': 'fix.review@v1',
 } as const;
 
@@ -18,8 +20,10 @@ const FIX_RESULT_PATH_BY_ARTIFACT_ID = {
   'fix.diagnosis': 'reports/fix/diagnosis.json',
   'fix.no-repro-decision': 'reports/fix/no-repro-decision.json',
   'fix.regression-proof': 'reports/fix/regression-proof.json',
+  'fix.baseline-snapshot': 'reports/fix/baseline-snapshot.json',
   'fix.change': 'reports/fix/change.json',
   'fix.verification': 'reports/fix/verification.json',
+  'fix.change-set': 'reports/fix/change-set.json',
   'fix.review': 'reports/fix/review.json',
 } as const;
 
@@ -28,8 +32,10 @@ const REQUIRED_FIX_RESULT_ARTIFACT_IDS = [
   'fix.context',
   'fix.diagnosis',
   'fix.regression-proof',
+  'fix.baseline-snapshot',
   'fix.change',
   'fix.verification',
+  'fix.change-set',
 ] as const;
 
 const NonEmptyStringArray = z.array(z.string().min(1)).min(1);
@@ -389,6 +395,111 @@ export const FixRegressionProof = z
   });
 export type FixRegressionProof = z.infer<typeof FixRegressionProof>;
 
+// Runtime-owned pre-fix-act snapshot of git state. Captured immediately before
+// the implementer touches the working tree, this artifact is the baseline that
+// the post-verify change-set step diffs against. The change-set step compares
+// the file list it observes after the fix against the snapshot's porcelain to
+// determine which files are part of "the fix" (anything that wasn't dirty
+// pre-fix is owned by fix-act). overall_status is always 'passed' — the
+// snapshot exists to record state, not to gate routing.
+export const FixBaselineSnapshot = z
+  .object({
+    overall_status: z.literal('passed'),
+    head_sha: z.string().min(1),
+    // Each entry is a single line of `git status --porcelain` output (XY plus
+    // path). Empty array means the working tree was clean.
+    working_tree_porcelain: z.array(z.string().min(1)),
+  })
+  .strict();
+export type FixBaselineSnapshot = z.infer<typeof FixBaselineSnapshot>;
+
+// Runtime-owned change-set verdict. After fix-verify the runtime captures the
+// post-fix git state and computes the actual file list touched by the fix
+// (post porcelain minus pre porcelain). It compares that list against the
+// implementer's `fix.change@v1` `changed_files` declaration:
+//   - 'pass'   — every observed file appears in declared, and every declared
+//                file appears in observed. The implementer told the truth
+//                about what they touched.
+//   - 'fail'   — at least one file was touched that the implementer did not
+//                declare (an undeclared extra) or at least one file the
+//                implementer declared was not actually modified (a missing
+//                declared). fix-close cannot mark outcome 'fixed' on a failed
+//                change-set.
+//
+// overall_status mirrors status for verification routing: 'passed' when status
+// is 'pass', 'failed' when status is 'fail'.
+export const FixChangeSet = z
+  .object({
+    status: z.enum(['pass', 'fail']),
+    overall_status: z.enum(['passed', 'failed']),
+    reason: z.string().min(1).optional(),
+    baseline_head_sha: z.string().min(1),
+    head_sha: z.string().min(1),
+    declared: z.array(z.string().min(1)),
+    observed: z.array(z.string().min(1)),
+    undeclared_extras: z.array(z.string().min(1)),
+    missing_declared: z.array(z.string().min(1)),
+  })
+  .strict()
+  .superRefine((changeSet, ctx) => {
+    const expectedOverall = changeSet.status === 'pass' ? 'passed' : 'failed';
+    if (changeSet.overall_status !== expectedOverall) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['overall_status'],
+        message: `overall_status must be '${expectedOverall}' when status is '${changeSet.status}'`,
+      });
+    }
+    const observedSet = new Set(changeSet.observed);
+    const declaredSet = new Set(changeSet.declared);
+    const expectedExtras = changeSet.observed.filter((path) => !declaredSet.has(path));
+    if (
+      expectedExtras.length !== changeSet.undeclared_extras.length ||
+      expectedExtras.some((p, i) => p !== changeSet.undeclared_extras[i])
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['undeclared_extras'],
+        message: 'undeclared_extras must equal observed minus declared (in observed order)',
+      });
+    }
+    const expectedMissing = changeSet.declared.filter((path) => !observedSet.has(path));
+    if (
+      expectedMissing.length !== changeSet.missing_declared.length ||
+      expectedMissing.some((p, i) => p !== changeSet.missing_declared[i])
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['missing_declared'],
+        message: 'missing_declared must equal declared minus observed (in declared order)',
+      });
+    }
+    const isClean =
+      changeSet.undeclared_extras.length === 0 && changeSet.missing_declared.length === 0;
+    if (changeSet.status === 'pass' && !isClean) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['status'],
+        message: "status 'pass' requires both undeclared_extras and missing_declared to be empty",
+      });
+    }
+    if (changeSet.status === 'fail' && isClean) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['status'],
+        message: "status 'fail' requires at least one undeclared_extras or missing_declared entry",
+      });
+    }
+    if (changeSet.status === 'fail' && changeSet.reason === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['reason'],
+        message: "reason is required when status is 'fail'",
+      });
+    }
+  });
+export type FixChangeSet = z.infer<typeof FixChangeSet>;
+
 export const FixReviewVerdict = z.enum(['accept', 'accept-with-fixes', 'reject']);
 export type FixReviewVerdict = z.infer<typeof FixReviewVerdict>;
 
@@ -435,8 +546,10 @@ export const FixResultReportId = z.enum([
   'fix.diagnosis',
   'fix.no-repro-decision',
   'fix.regression-proof',
+  'fix.baseline-snapshot',
   'fix.change',
   'fix.verification',
+  'fix.change-set',
   'fix.review',
 ]);
 export type FixResultReportId = z.infer<typeof FixResultReportId>;
@@ -477,6 +590,7 @@ export const FixResult = z
     outcome: FixResultOutcome,
     verification_status: z.enum(['passed', 'failed', 'not-run']),
     regression_status: z.enum(['proved', 'deferred', 'not-applicable']),
+    change_set_status: z.enum(['pass', 'fail']),
     review_status: FixReviewStatus,
     review_verdict: FixReviewVerdict.optional(),
     review_skip_reason: z.string().min(1).optional(),
@@ -523,6 +637,14 @@ export const FixResult = z
         code: z.ZodIssueCode.custom,
         path: ['regression_status'],
         message: "regression_status must be 'proved' when outcome is 'fixed'",
+      });
+    }
+
+    if (result.outcome === 'fixed' && result.change_set_status !== 'pass') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['change_set_status'],
+        message: "change_set_status must be 'pass' when outcome is 'fixed'",
       });
     }
 

@@ -1,23 +1,27 @@
 // Fix close-with-evidence builder.
 //
-// Reads brief + context + diagnosis + regression-proof + change + verification
-// (all required) plus review (optional — lite mode skips review via
-// route_overrides). regression_status is read from the runtime-owned
-// fix.regression-proof@v1 artifact, never derived from the brief, so a model
-// claim of "failing-before-fix" cannot grant outcome 'fixed' on its own.
+// Reads brief + context + diagnosis + regression-proof + baseline-snapshot +
+// change + verification + change-set (all required) plus review (optional —
+// lite mode skips review via route_overrides). regression_status and
+// change_set_status are read from the runtime-owned proofs, never derived
+// from model output, so a model claim of "I fixed it" cannot grant outcome
+// 'fixed' on its own.
 //
 // Outcome rules:
 //   - reproduction_status='not-reproduced' → 'not-reproduced'
-//   - verification passed AND regression proved AND review accepted cleanly → 'fixed'
-//   - verification passed AND regression proved AND review accepted with fixes → 'partial'
-//   - verification passed AND regression not proved (deferred) → 'partial'
+//   - verification passed AND regression proved AND change-set pass AND
+//     review accepted cleanly → 'fixed'
+//   - verification passed AND (regression not proved OR change-set fail OR
+//     review accept-with-fixes) → 'partial'
 //   - otherwise → 'failed'
 
 import { reportPathForSchemaInCompiledFlow } from '../../registries/close-writers/shared.js';
 import type { CloseBuildContext, CloseBuilder } from '../../registries/close-writers/types.js';
 import {
+  FixBaselineSnapshot,
   FixBrief,
   FixChange,
+  FixChangeSet,
   FixContext,
   FixDiagnosis,
   FixRegressionProof,
@@ -32,8 +36,10 @@ const REQUIRED_POINTERS = [
   { report_id: 'fix.context', schema: 'fix.context@v1' },
   { report_id: 'fix.diagnosis', schema: 'fix.diagnosis@v1' },
   { report_id: 'fix.regression-proof', schema: 'fix.regression-proof@v1' },
+  { report_id: 'fix.baseline-snapshot', schema: 'fix.baseline-snapshot@v1' },
   { report_id: 'fix.change', schema: 'fix.change@v1' },
   { report_id: 'fix.verification', schema: 'fix.verification@v1' },
+  { report_id: 'fix.change-set', schema: 'fix.change-set@v1' },
 ] as const;
 
 const OPTIONAL_REVIEW_POINTER = {
@@ -48,8 +54,10 @@ export const fixCloseBuilder: CloseBuilder = {
     { name: 'context', schema: 'fix.context@v1', required: true },
     { name: 'diagnosis', schema: 'fix.diagnosis@v1', required: true },
     { name: 'regression', schema: 'fix.regression-proof@v1', required: true },
+    { name: 'baseline_snapshot', schema: 'fix.baseline-snapshot@v1', required: true },
     { name: 'change', schema: 'fix.change@v1', required: true },
     { name: 'verification', schema: 'fix.verification@v1', required: true },
+    { name: 'change_set', schema: 'fix.change-set@v1', required: true },
     { name: 'review', schema: 'fix.review@v1', required: false },
   ],
   build(context: CloseBuildContext): unknown {
@@ -57,14 +65,17 @@ export const fixCloseBuilder: CloseBuilder = {
     FixContext.parse(context.inputs.context);
     const diagnosis = FixDiagnosis.parse(context.inputs.diagnosis);
     const regression = FixRegressionProof.parse(context.inputs.regression);
+    FixBaselineSnapshot.parse(context.inputs.baseline_snapshot);
     const change = FixChange.parse(context.inputs.change);
     const verification = FixVerification.parse(context.inputs.verification);
+    const changeSet = FixChangeSet.parse(context.inputs.change_set);
     const review =
       context.inputs.review === undefined ? undefined : FixReview.parse(context.inputs.review);
 
     const verificationStatus = verification.overall_status === 'passed' ? 'passed' : 'failed';
     const regressionStatus: FixResult['regression_status'] =
       regression.status === 'proved' ? 'proved' : 'deferred';
+    const changeSetStatus: FixResult['change_set_status'] = changeSet.status;
     const reviewStatus = review === undefined ? 'skipped' : 'completed';
 
     const outcome: FixResult['outcome'] =
@@ -72,10 +83,13 @@ export const fixCloseBuilder: CloseBuilder = {
         ? 'not-reproduced'
         : verificationStatus === 'passed' &&
             regressionStatus === 'proved' &&
+            changeSetStatus === 'pass' &&
             (review === undefined || review.verdict === 'accept')
           ? 'fixed'
           : verificationStatus === 'passed' &&
-              (regressionStatus !== 'proved' || review?.verdict === 'accept-with-fixes')
+              (regressionStatus !== 'proved' ||
+                changeSetStatus === 'fail' ||
+                review?.verdict === 'accept-with-fixes')
             ? 'partial'
             : 'failed';
 
@@ -97,6 +111,7 @@ export const fixCloseBuilder: CloseBuilder = {
       outcome,
       verification_status: verificationStatus,
       regression_status: regressionStatus,
+      change_set_status: changeSetStatus,
       review_status: reviewStatus,
       ...(review === undefined ? {} : { review_verdict: review.verdict }),
       ...(review === undefined

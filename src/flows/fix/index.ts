@@ -8,8 +8,10 @@ import {
   fixReviewShapeHint,
 } from './relay-hints.js';
 import {
+  FixBaselineSnapshot,
   FixBrief,
   FixChange,
+  FixChangeSet,
   FixContext,
   FixDiagnosis,
   FixNoReproDecision,
@@ -18,7 +20,9 @@ import {
   FixReview,
   FixVerification,
 } from './reports.js';
+import { fixBaselineSnapshotWriter } from './writers/baseline-snapshot.js';
 import { fixBriefComposeBuilder } from './writers/brief.js';
+import { fixChangeSetWriter } from './writers/change-set.js';
 import { fixCloseBuilder } from './writers/close.js';
 import { fixRegressionBaselineWriter } from './writers/regression-baseline.js';
 import { fixVerificationWriter } from './writers/verification.js';
@@ -80,13 +84,20 @@ export const fixCompiledFlowPackage: CompiledFlowPackage = {
     { schemaName: 'fix.brief@v1', schema: FixBrief },
     { schemaName: 'fix.no-repro-decision@v1', schema: FixNoReproDecision },
     { schemaName: 'fix.regression-proof@v1', schema: FixRegressionProof },
+    { schemaName: 'fix.baseline-snapshot@v1', schema: FixBaselineSnapshot },
     { schemaName: 'fix.verification@v1', schema: FixVerification },
+    { schemaName: 'fix.change-set@v1', schema: FixChangeSet },
     { schemaName: 'fix.result@v1', schema: FixResult },
   ],
   writers: {
     compose: [fixBriefComposeBuilder],
     close: [fixCloseBuilder],
-    verification: [fixRegressionBaselineWriter, fixVerificationWriter],
+    verification: [
+      fixRegressionBaselineWriter,
+      fixBaselineSnapshotWriter,
+      fixVerificationWriter,
+      fixChangeSetWriter,
+    ],
     checkpoint: [],
   },
 };

@@ -69,6 +69,13 @@ export interface VerificationBuilder {
   // Assemble the verification result report from the observed
   // command outcomes. CompiledFlow-specific: Build produces a narrow
   // BuildVerification; Fix produces a wider FixVerification with
-  // per-command repro fields.
-  buildResult(observations: readonly VerificationCommandObservation[]): unknown;
+  // per-command repro fields. Builders that need to read other typed
+  // run-folder artifacts (e.g. the change-set writer comparing
+  // declared files against observed git state) use the build context
+  // to resolve those paths; the regression-proof and verification
+  // writers ignore it.
+  buildResult(
+    observations: readonly VerificationCommandObservation[],
+    context: VerificationBuildContext,
+  ): unknown;
 }

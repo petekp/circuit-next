@@ -143,13 +143,14 @@ export async function executeVerification(
       throw new Error(`verification step '${step.id}' has unsupported report schema`);
     }
 
-    const commands = builder.loadCommands({
+    const builderContext = {
       runFolder: context.runDir,
       flow: compiledFlow,
       step: compiledStep,
-    });
+    };
+    const commands = builder.loadCommands(builderContext);
     const observations = commands.map((command) => runCommand(command, projectRoot));
-    body = builder.buildResult(observations) as {
+    body = builder.buildResult(observations, builderContext) as {
       readonly overall_status?: unknown;
     };
     await context.files.writeJson(report, body);
