@@ -1,6 +1,8 @@
 # Adversarial Review — Planted Defects
 
-First run of this task. Comparison harness: `evals/circuit-vs-vanilla/run-comparison.mjs` with `--provider claude-code --flow review`. Both arms ran on Claude Haiku 4.5 with low effort.
+Comparison harness: `evals/circuit-vs-vanilla/run-comparison.mjs` with `--provider claude-code --flow review`. Two runs to date: haiku-4.5 low (Run 1) and sonnet-4-6 medium (Run 2).
+
+## Run 1 — claude-haiku-4-5 low effort
 
 ## Setup
 
@@ -72,9 +74,85 @@ These are flow-architecture changes, not projector tweaks. The 10x bar means the
 3. **The structural warnings system surfaces noise on tasks that don't use the working tree.** Worth scoping the warning emitter to the actual scope the review was given.
 4. **The "red herring" planning approach is fragile** — the function I planted as safe turned out to have a real subtle defect. For future adversarial tasks, the manifest needs review by someone other than the author.
 
-## Suggested follow-ups
+## Suggested follow-ups (after Run 1)
 
 - Run the same task at higher effort (medium / high) to see whether Circuit's lift over vanilla widens.
 - Run with sonnet-4-6 instead of haiku to see whether the lift is model-dependent.
 - Build a second adversarial-review task with different defect categories (concurrency, type confusion, supply-chain).
 - Try one of the architectural changes above (adversarial second pass is cheapest) and re-measure.
+
+## Run 2 — claude-sonnet-4-6 medium effort
+
+Calibration run to test whether the haiku-low lift (~1.2x) widens or narrows at the real production model tier. The hypothesis was that a stronger reasoner might either (a) make Circuit's structured prompting matter more, or (b) close the gap because vanilla also gets smarter.
+
+### Run
+
+- Result root: `evals/circuit-vs-vanilla/results/2026-05-10T04-57-03-072Z-adversarial-review-planted-defects/`
+- Repo commit at run time: `e177527` (after task fixture was added; same Review schema as Run 1).
+- Wallclock: Circuit 55.4s, vanilla 43.7s.
+
+### Scoring
+
+| Defect | Subtlety | Vanilla | Circuit |
+|---|---|---|---|
+| D1 — eval RCE | obvious | ✓ CRITICAL @ line 11 | ✓ CRITICAL @ uploads.js:12 |
+| D2 — SQL injection | obvious | ✓ CRITICAL @ line 16 | ✓ CRITICAL @ uploads.js:17 |
+| D3 — counter race | moderate | ✓ HIGH @ lines 22-26 | ✓ HIGH @ uploads.js:22-26 |
+| D4 — chunk off-by-one | subtle | ✓ HIGH @ line 31 | ✓ MEDIUM @ uploads.js:31 |
+| D5 — finally swallows promise | subtle | ✓ MEDIUM @ line 38 | ✓ HIGH @ uploads.js:44, 62 |
+| D6 — symlink-following in readPublicAsset | very subtle | ✗ missed | ✗ **affirmatively cleared** |
+
+- Both arms: 5/6. Both missed D6.
+- False positives: 0 on both arms.
+- Severity grades: D4 and D5 swap between the arms — Circuit calls D4 medium and D5 high; vanilla flips it.
+
+### The D6 regression (notable)
+
+At haiku-low, Circuit caught D6 (the symlink-following defect that defeats the path-traversal check) and vanilla missed it. That single catch was the entire Circuit lift.
+
+At sonnet-medium, **Circuit no longer catches D6, and worse, explicitly declares the function safe** in its `Verified` enumeration: *"Verified the path.resolve + startsWith(PUBLIC_ROOT + path.sep) guard in readPublicAsset for bypass edge cases; found it sound."* The Assessment paragraph echoes this: *"The path-traversal guard in readPublicAsset is correctly implemented and raised no finding."*
+
+This is more confident wrongness than missing the defect would be. The Verified enumeration is intended to surface what the reviewer actually checked — when it asserts a function is sound and the function isn't, the operator gets actively misled.
+
+### Lift comparison
+
+| Metric | Haiku-low (Run 1) | Sonnet-medium (Run 2) |
+|---|---|---|
+| Circuit defects caught | 6/6 | 5/6 |
+| Vanilla defects caught | 5/6 | 5/6 |
+| Circuit-over-vanilla lift | +1 (subtle) | 0 |
+| Wallclock cost | Circuit +40% | Circuit +27% |
+
+**The lift narrowed to zero at sonnet-medium.** Direct prompting at the production tier matches Circuit's catch on the same model, while Circuit costs ~27% more wallclock.
+
+### Honest read on the 10x thesis
+
+The haiku-low result was 1.2x. The sonnet-medium result is 1.0x. This is the opposite of what the 10x thesis needs: Circuit's structured-prompting effect on Review does not survive the model-tier transition.
+
+Two readings, both worth weighing:
+
+1. **The structured-prompting lift is illusory at production tier.** A stronger model is already running an internal "structured" reasoning process that the prompt scaffold can't add to. The single subtle catch at haiku-low was the structured prompt compensating for a weaker reasoner — once the reasoner is strong enough, the scaffold is redundant.
+2. **The Verified-list mechanic actively hurts.** When a strong model is asked to enumerate what it checked, it performs the enumeration without performing the checks deeply enough to catch the symlink case, then asserts a clean bill of health that's wrong. This is a flow-architecture defect, not a model defect.
+
+Either way, **Review's structured prompting alone is not the path to a 10x bar.** What Circuit Review buys today is structured output formatting and an Assessment paragraph — both useful for human consumption, neither categorically better than direct prompting.
+
+The architectural changes outlined in Run 1 (adversarial second pass, tool-grounded verification, multi-model voting) remain the only plausible paths to a real lift — and the second one (tool-grounded verification) is the one that would catch the D6-style "looks defended but the check doesn't actually defend" pattern, since the symlink defect is provable by `realpath` against the resolved path. That's what direct prompting structurally cannot replicate.
+
+### Implication for flow choice
+
+Build, Fix, and Migrate have plan-then-act and verification-gate steps that direct prompting cannot replicate by prompt engineering alone. They are structurally better testbeds for the 10x bar than Review.
+
+Recommendation: stop iterating on Review structured prompting. Either commit to one architectural change on Review (tool-grounded verification is the candidate based on this evidence) or pick Build/Fix/Migrate as the testbed for the 10x calibration and re-baseline there.
+
+### What this experiment revealed
+
+1. **Lift does not survive model-tier transitions.** The haiku-low Circuit lift was real but lost on the way to sonnet-medium.
+2. **Circuit's Verified-list mechanic can produce confident false negatives.** The path-traversal guard is asserted sound when it isn't. Worth scoping the Verified list to claims the model can actually defend.
+3. **The 10x thesis on Review needs flow-architecture changes, not prompt changes.** Direct prompting at production tier is already at parity.
+
+## Suggested follow-ups (after Run 2)
+
+- Pick a single architectural change for Review (tool-grounded verification is the leading candidate from D6 evidence) and run a third comparison.
+- OR move calibration to Build/Fix/Migrate — they have verification-gate steps that direct prompting cannot replicate.
+- Build a second adversarial-review task and run sonnet-medium on it before committing to either path; one task is not a baseline.
+- Audit the Verified-list mechanic for whether items in the list are actually defensible vs. confident-sounding placeholders.
