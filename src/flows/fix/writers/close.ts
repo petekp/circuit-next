@@ -3,17 +3,13 @@
 // Reads brief + context + diagnosis + regression-proof + baseline-snapshot +
 // change + verification + regression-rerun + change-set (all required) plus
 // review (optional — lite mode skips review via route_overrides).
-// regression_status, regression_rerun_status, and change_set_status are read
-// from the runtime-owned proofs, never derived from model output, so a model
-// claim of "I fixed it" cannot grant outcome 'fixed' on its own.
 //
-// Outcome rules:
-//   - reproduction_status='not-reproduced' → 'not-reproduced'
-//   - verification passed AND regression proved AND regression-rerun cleared
-//     AND change-set pass AND review accepted cleanly → 'fixed'
-//   - verification passed AND any of (regression not proved, regression-rerun
-//     not cleared, change-set fail, review accept-with-fixes) → 'partial'
-//   - otherwise → 'failed'
+// All outcome and pillar-status logic lives in `projectFixResult`. This
+// writer is a thin orchestrator: parse inputs, build evidence pointers from
+// compiled-flow context, hand the projector everything it needs. Drift
+// between the result and its evidence is impossible because there is only
+// one place that decides what 'fixed', 'partial', 'not-reproduced', and
+// 'failed' mean.
 
 import { reportPathForSchemaInCompiledFlow } from '../../registries/close-writers/shared.js';
 import type { CloseBuildContext, CloseBuilder } from '../../registries/close-writers/types.js';
@@ -26,11 +22,11 @@ import {
   FixDiagnosis,
   FixRegressionProof,
   FixRegressionRerun,
-  FixResult,
   type FixResultReportPointer,
   FixReview,
   FixVerification,
 } from '../reports.js';
+import { projectFixResult } from './result-projection.js';
 
 const REQUIRED_POINTERS = [
   { report_id: 'fix.brief', schema: 'fix.brief@v1' },
@@ -76,35 +72,6 @@ export const fixCloseBuilder: CloseBuilder = {
     const review =
       context.inputs.review === undefined ? undefined : FixReview.parse(context.inputs.review);
 
-    const verificationStatus = verification.overall_status === 'passed' ? 'passed' : 'failed';
-    const regressionStatus: FixResult['regression_status'] =
-      regression.status === 'proved' ? 'proved' : 'deferred';
-    const regressionRerunStatus: FixResult['regression_rerun_status'] = regressionRerun.status;
-    const changeSetStatus: FixResult['change_set_status'] = changeSet.status;
-    const reviewStatus = review === undefined ? 'skipped' : 'completed';
-
-    const fixedGate =
-      verificationStatus === 'passed' &&
-      regressionStatus === 'proved' &&
-      regressionRerunStatus === 'cleared' &&
-      changeSetStatus === 'pass' &&
-      (review === undefined || review.verdict === 'accept');
-    const partialGate =
-      verificationStatus === 'passed' &&
-      (regressionStatus !== 'proved' ||
-        regressionRerunStatus !== 'cleared' ||
-        changeSetStatus === 'fail' ||
-        review?.verdict === 'accept-with-fixes');
-
-    const outcome: FixResult['outcome'] =
-      diagnosis.reproduction_status === 'not-reproduced'
-        ? 'not-reproduced'
-        : fixedGate
-          ? 'fixed'
-          : partialGate
-            ? 'partial'
-            : 'failed';
-
     const pointers: FixResultReportPointer[] = REQUIRED_POINTERS.map((p) => ({
       report_id: p.report_id,
       schema: p.schema,
@@ -118,19 +85,15 @@ export const fixCloseBuilder: CloseBuilder = {
       });
     }
 
-    return FixResult.parse({
-      summary: `Fix '${brief.problem_statement}': ${change.summary}`,
-      outcome,
-      verification_status: verificationStatus,
-      regression_status: regressionStatus,
-      regression_rerun_status: regressionRerunStatus,
-      change_set_status: changeSetStatus,
-      review_status: reviewStatus,
-      ...(review === undefined ? {} : { review_verdict: review.verdict }),
-      ...(review === undefined
-        ? { review_skip_reason: 'Lite mode skipped review per route_overrides.' }
-        : {}),
-      residual_risks: [...diagnosis.residual_uncertainty],
+    return projectFixResult({
+      brief,
+      diagnosis,
+      regression,
+      regression_rerun: regressionRerun,
+      change,
+      change_set: changeSet,
+      verification,
+      ...(review === undefined ? {} : { review }),
       evidence_links: pointers,
     });
   },
