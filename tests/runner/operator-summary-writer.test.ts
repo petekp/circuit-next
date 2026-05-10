@@ -593,6 +593,63 @@ describe('operator summary writer', () => {
     expect(markdown).not.toContain('Evidence Warnings');
   });
 
+  it('strips the quoted-goal prefix from prose-style Explore recommendations even when the goal spans multiple lines', () => {
+    // Regression: Explore writers emit `Explore '<brief.subject>': <recommendation>`,
+    // and the brief subject is the operator's verbatim multi-line prompt. When
+    // the recommendation is single-paragraph prose (no numbered-label list) and
+    // the goal contains newlines or embedded colons, the previous single-line
+    // `^Explore .+?:\s*` strip pattern silently failed to match, and the
+    // first-sentence fallback then emitted a literal "Recommendation: Explore
+    // '<goal text>" line into the operator summary.
+    const multiLineGoal = [
+      'Review the current working tree for generated-surface drift risks.',
+      '',
+      'Do not edit files.',
+      '',
+      'Focus on whether the current changes keep these surfaces consistent:',
+      '',
+      '- source flow files',
+      '- generated flow output',
+      '',
+      'Use this severity shape:',
+      '- High: a generated surface or runtime bundle is stale.',
+    ].join('\n');
+    writeReport('reports/explore-result.json', {
+      summary: `Explore '${multiLineGoal}': No generated-surface drift detected. The only source code change in the working tree is src/flows/explore/relay-hints.ts. All verification checks pass.`,
+      verdict_snapshot: {
+        compose_verdict: 'accept',
+        review_verdict: 'accept-with-fold-ins',
+        objection_count: 1,
+        missed_angle_count: 0,
+      },
+      review_fold_ins: {
+        overall_assessment: 'Direction is useful but missing concrete evidence.',
+        objections: ['Evidence citations lack actual command outputs.'],
+        missed_angles: [],
+      },
+      evidence_links: [],
+    });
+
+    const written = writeOperatorSummary({
+      runFolder,
+      runResult: baseResult('explore'),
+      route: { selectedFlow: 'explore' },
+    });
+
+    const recommendation = written.summary.details.find((detail) =>
+      detail.startsWith('Recommendation:'),
+    );
+    expect(recommendation).toBe('Recommendation: No generated-surface drift detected.');
+    expect(recommendation).not.toContain('Explore ');
+    expect(recommendation).not.toContain('Review the current working tree');
+    expect(written.summary.details).toContain(
+      'Required fold-in: Evidence citations lack actual command outputs.',
+    );
+    const markdown = readFileSync(written.markdownPath, 'utf8');
+    expect(markdown).not.toContain("Recommendation: Explore '");
+    expect(markdown).not.toContain('Review the current working tree for generated-surface');
+  });
+
   it('does not splice numbered back-references like "(1), (4), and (5)" into the recommendation label list', () => {
     // Regression for cee25546: a compose summary that listed seven
     // numbered options and then referred back to "Of these, (1), (4),
