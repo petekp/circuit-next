@@ -127,8 +127,11 @@ export type FixBrief = z.infer<typeof FixBrief>;
 export const FixContextSource = z
   .object({
     kind: z.enum(['file', 'command', 'log', 'operator-note', 'reference']),
-    ref: z.string().min(1),
-    summary: z.string().min(1),
+    ref: z
+      .string()
+      .min(1)
+      .describe('project-relative path, command id, log line, note id, or external reference'),
+    summary: z.string().min(1).describe('one-line summary of what this source contributed'),
   })
   .strict();
 export type FixContextSource = z.infer<typeof FixContextSource>;
@@ -137,8 +140,10 @@ export const FixContext = z
   .object({
     verdict: z.literal('accept'),
     sources: z.array(FixContextSource).min(1),
-    observations: NonEmptyStringArray,
-    open_questions: z.array(z.string().min(1)),
+    observations: z.array(z.string().min(1).describe('observation grounded in the sources')).min(1),
+    open_questions: z.array(
+      z.string().min(1).describe('question still unresolved after gathering context'),
+    ),
   })
   .strict();
 export type FixContext = z.infer<typeof FixContext>;
@@ -155,10 +160,12 @@ export const FixDiagnosis = z
   .object({
     verdict: z.literal('accept'),
     reproduction_status: FixReproductionStatus,
-    cause_summary: z.string().min(1),
+    cause_summary: z.string().min(1).describe('one-line root-cause statement'),
     confidence: z.enum(['low', 'medium', 'high']),
     evidence: LenientNonEmptyStringArray,
-    residual_uncertainty: z.array(z.string().min(1)),
+    residual_uncertainty: z.array(
+      z.string().min(1).describe('remaining unknown that could still affect the fix'),
+    ),
   })
   .strict()
   .superRefine((diagnosis, ctx) => {
@@ -219,9 +226,14 @@ export type FixNoReproDecision = z.infer<typeof FixNoReproDecision>;
 export const FixChange = z
   .object({
     verdict: z.literal('accept'),
-    summary: z.string().min(1),
-    diagnosis_ref: z.string().min(1),
-    changed_files: NonEmptyStringArray,
+    summary: z.string().min(1).describe('what changed and why'),
+    diagnosis_ref: z
+      .string()
+      .min(1)
+      .describe('reference to the diagnosis report or section that motivates this change'),
+    changed_files: z
+      .array(z.string().min(1).describe('project-relative path that was edited'))
+      .min(1),
     evidence: LenientNonEmptyStringArray,
   })
   .strict();
@@ -679,8 +691,8 @@ export type FixReviewVerdict = z.infer<typeof FixReviewVerdict>;
 export const FixReviewFinding = z
   .object({
     severity: z.enum(['critical', 'high', 'medium', 'low']),
-    text: z.string().min(1),
-    file_refs: z.array(z.string().min(1)),
+    text: z.string().min(1).describe('finding text'),
+    file_refs: z.array(z.string().min(1).describe('file:line reference')),
   })
   .strict();
 export type FixReviewFinding = z.infer<typeof FixReviewFinding>;
@@ -688,7 +700,7 @@ export type FixReviewFinding = z.infer<typeof FixReviewFinding>;
 export const FixReview = z
   .object({
     verdict: FixReviewVerdict,
-    summary: z.string().min(1),
+    summary: z.string().min(1).describe('review summary'),
     findings: z.array(FixReviewFinding),
   })
   .strict()
