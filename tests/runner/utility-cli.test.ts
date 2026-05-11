@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { main } from '../../src/cli/circuit.js';
+import { resolveDefaultLauncher } from '../../src/cli/handoff.js';
 import { CUSTOM_FLOW_ROOT_RUNTIME_POLICY } from '../../src/cli/runtime-routing-policy.js';
 import {
   CompiledFlow,
@@ -859,6 +860,75 @@ describe('utility CLI commands', () => {
     };
     expect(JSON.stringify(configAfterUninstall)).toContain('echo existing-hook');
     expect(JSON.stringify(configAfterUninstall)).not.toContain('handoff hook --host codex');
+  });
+
+  it('resolves default launcher to the wrapper script for marketplace-style plugin layouts', () => {
+    const root = tempRoot('circuit-launcher-marketplace-');
+    const runtimeDir = join(root, 'circuit/runtime');
+    const wrapper = join(root, 'circuit/scripts/circuit-next.mjs');
+    mkdirSync(runtimeDir, { recursive: true });
+    mkdirSync(join(root, 'circuit/scripts'), { recursive: true });
+    writeFileSync(wrapper, '#!/usr/bin/env node\n');
+
+    expect(resolveDefaultLauncher(runtimeDir)).toBe(wrapper);
+  });
+
+  it('resolves default launcher to bin/circuit-next for source-tree layouts', () => {
+    const root = tempRoot('circuit-launcher-source-');
+    const moduleDir = join(root, 'src/cli');
+    const bin = join(root, 'bin/circuit-next');
+    mkdirSync(moduleDir, { recursive: true });
+    mkdirSync(join(root, 'bin'), { recursive: true });
+    writeFileSync(bin, '#!/usr/bin/env node\n');
+
+    expect(resolveDefaultLauncher(moduleDir)).toBe(bin);
+  });
+
+  it('falls through to bin/circuit-next when neither wrapper nor bin exists so callers surface a clear error', async () => {
+    const root = tempRoot('circuit-launcher-missing-');
+    const moduleDir = join(root, 'circuit/runtime');
+    mkdirSync(moduleDir, { recursive: true });
+
+    const fallback = resolveDefaultLauncher(moduleDir);
+    expect(fallback).toBe(resolve(moduleDir, '../..', 'bin/circuit-next'));
+    expect(existsSync(fallback)).toBe(false);
+
+    const hooksFile = join(root, 'codex/hooks.json');
+    mkdirSync(join(root, 'codex'), { recursive: true });
+    const install = await captureMain([
+      'handoff',
+      'hooks',
+      'install',
+      '--host',
+      'codex',
+      '--hooks-file',
+      hooksFile,
+      '--launcher',
+      fallback,
+    ]);
+    expect(install.code).not.toBe(0);
+    expect(install.stderr).toContain('Circuit launcher not found');
+  });
+
+  it('installs the Codex handoff hook with the default wrapper launcher when no --launcher is supplied', async () => {
+    const root = tempRoot('circuit-handoff-hooks-default-launcher-');
+    const hooksFile = join(root, 'codex/hooks.json');
+    mkdirSync(join(root, 'codex'), { recursive: true });
+
+    const install = await captureMain([
+      'handoff',
+      'hooks',
+      'install',
+      '--host',
+      'codex',
+      '--hooks-file',
+      hooksFile,
+    ]);
+
+    expect(install.code, install.stderr).toBe(0);
+    const installed = JSON.parse(install.stdout) as { status: string; command: string };
+    expect(installed.status).toBe('installed');
+    expect(installed.command).toContain('handoff hook --host codex');
   });
 
   it('reports missing when the Codex hooks file has no Circuit handoff hook', async () => {

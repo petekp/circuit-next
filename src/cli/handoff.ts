@@ -534,8 +534,14 @@ function defaultCodexHooksFile(): string {
   return resolve(codexHome, 'hooks.json');
 }
 
+export function resolveDefaultLauncher(moduleDir: string): string {
+  const wrapperLauncher = resolve(moduleDir, '..', 'scripts/circuit-next.mjs');
+  if (existsSync(wrapperLauncher)) return wrapperLauncher;
+  return resolve(moduleDir, '../..', 'bin/circuit-next');
+}
+
 function defaultLauncherPath(): string {
-  return resolve(dirname(fileURLToPath(import.meta.url)), '../..', 'bin/circuit-next');
+  return resolveDefaultLauncher(dirname(fileURLToPath(import.meta.url)));
 }
 
 function parseCodexHooksHost(args: HandoffArgs): HandoffHookHost {
