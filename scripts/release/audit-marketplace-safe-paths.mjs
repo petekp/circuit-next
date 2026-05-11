@@ -34,17 +34,15 @@ import { fileURLToPath } from 'node:url';
 import { execSync } from 'node:child_process';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const LOOKBACK_LINES = 10;
-const SAFETY_PATTERN = /Marketplace-safe by (build-time replacement|build-pipeline emission|env var|source-tree fallback):/i;
+export const LOOKBACK_LINES = 10;
+export const SAFETY_PATTERN = /Marketplace-safe by (build-time replacement|build-pipeline emission|env var|source-tree fallback):/i;
 
 function listSrcFiles() {
   const out = execSync('git ls-files src', { cwd: REPO_ROOT, encoding: 'utf8' });
   return out.split('\n').filter((line) => line.endsWith('.ts') && !line.endsWith('.d.ts'));
 }
 
-function auditFile(relPath) {
-  const abs = resolve(REPO_ROOT, relPath);
-  const text = readFileSync(abs, 'utf8');
+export function auditText(text, relPath = '<inline>') {
   const lines = text.split('\n');
   const findings = [];
 
@@ -61,6 +59,11 @@ function auditFile(relPath) {
   }
 
   return findings;
+}
+
+function auditFile(relPath) {
+  const abs = resolve(REPO_ROOT, relPath);
+  return auditText(readFileSync(abs, 'utf8'), relPath);
 }
 
 function main() {
@@ -94,4 +97,6 @@ function main() {
   process.exit(1);
 }
 
-main();
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main();
+}
