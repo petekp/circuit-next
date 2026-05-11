@@ -157,9 +157,12 @@ function commandOutput(command, args, fallback = 'unavailable') {
   }
 }
 
-function findExecutable(name) {
+function findExecutable(name, { required = true } = {}) {
   const result = runSync('zsh', ['-lc', `command -v ${shellQuote(name)}`]);
-  if (result.status !== 0) throw new Error(`could not find ${name} on PATH`);
+  if (result.status !== 0) {
+    if (required) throw new Error(`could not find ${name} on PATH`);
+    return name;
+  }
   return result.stdout.trim();
 }
 
@@ -413,7 +416,10 @@ async function main() {
   if (prompt.length === 0) throw new Error(`prompt file is empty: ${promptPath}`);
 
   const providerExecutable = args.provider === 'codex' ? 'codex' : 'claude';
-  const realProviderPath = findExecutable(providerExecutable);
+  // Dry-run only inspects printed command metadata and never spawns the
+  // provider; the PATH check would otherwise block CI environments where
+  // codex/claude aren't installed.
+  const realProviderPath = findExecutable(providerExecutable, { required: !args.dryRun });
   const wrapper = createWrapper(args.provider, realProviderPath, args.model, args.effort);
   const timestamp = isoForPath();
   const resultRoot = resolve(args.outDir, `${timestamp}-${safeSegment(args.taskId)}`);
