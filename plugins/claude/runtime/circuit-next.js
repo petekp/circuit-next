@@ -25662,14 +25662,14 @@ function defaultCodexHooksFile() {
   const codexHome = process.env.CODEX_HOME ?? resolve11(homedir4(), ".codex");
   return resolve11(codexHome, "hooks.json");
 }
-function resolveDefaultLauncher(moduleDir) {
-  const wrapperLauncher = resolve11(moduleDir, "..", "scripts/circuit-next.mjs");
-  if (existsSync13(wrapperLauncher))
-    return wrapperLauncher;
+function resolveDefaultLauncher(pluginRoot, moduleDir) {
+  if (pluginRoot !== void 0 && pluginRoot.length > 0) {
+    return resolve11(pluginRoot, "scripts/circuit-next.mjs");
+  }
   return resolve11(moduleDir, "../..", "bin/circuit-next");
 }
 function defaultLauncherPath() {
-  return resolveDefaultLauncher(dirname9(fileURLToPath2(import.meta.url)));
+  return resolveDefaultLauncher(process.env.CIRCUIT_PLUGIN_ROOT, dirname9(fileURLToPath2(import.meta.url)));
 }
 function parseCodexHooksHost(args) {
   if (args.host === "codex")
