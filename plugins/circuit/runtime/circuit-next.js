@@ -26512,7 +26512,7 @@ function usage3() {
     "",
     "`--mode` is the friendly alias for `--entry-mode`; supplying both forms of that option is an error.",
     "",
-    "Mode and depth are paired per flow, not free flags. Every flow supports `default/standard` (the default if you supply neither). Other pairs vary per flow: most support `lite/lite`, `deep/deep`, and `autonomous/autonomous`; Migrate omits `lite/lite`; Review supports only `default/standard`; Explore adds `tournament/tournament`. If you supply `--depth` without `--mode`, the matching entry mode is inferred (e.g., `--depth deep` implies `--mode deep`). `--depth` values are validated against the per-flow allowlist; if a flow does not support a given depth the rejection lists the supported depths.",
+    "`--mode` and `--depth` name the same thoroughness level under two flag names. The aliases are: `default` <-> `standard`, `lite` <-> `lite`, `deep` <-> `deep`, `autonomous` <-> `autonomous`, `tournament` <-> `tournament`. Supply only one \u2014 the other is inferred. If you supply both, they must be the matching pair (e.g., `--mode deep --depth deep`); mismatched pairs like `--mode deep --depth standard` are rejected. Levels are gated per flow: every flow supports `default/standard` (the default if you supply neither). Other levels vary per flow \u2014 most support `lite`, `deep`, and `autonomous`; Migrate omits `lite`; Review supports only `default`; Explore adds `tournament`. If a flow does not support a given level the rejection lists the supported levels.",
     "",
     "With an explicit flow name, loads generated/flows/<name>/circuit.json. Without one, classifies the free-form goal across the registered explore/review/fix/build/migrate/sweep flows and then composes the runtime boundary using the configured relay connector.",
     "",
@@ -26792,6 +26792,20 @@ function entryModeForDepth(depth) {
     return "default";
   return depth;
 }
+function depthForEntryMode(mode) {
+  if (mode === "default")
+    return "standard";
+  return mode;
+}
+function validateModeDepthAliasConsistency(args) {
+  if (args.entryMode === void 0 || !args.depthProvided || args.depth === void 0)
+    return;
+  const expectedDepth = depthForEntryMode(args.entryMode);
+  if (expectedDepth === args.depth)
+    return;
+  const expectedMode = entryModeForDepth(args.depth);
+  throw new Error(`--mode ${args.entryMode} and --depth ${args.depth} name different thoroughness levels. --mode ${args.entryMode} implies --depth ${expectedDepth}; --depth ${args.depth} implies --mode ${expectedMode}. Supply one consistent pair, or supply only one of --mode/--depth.`);
+}
 function resolveEntryModeSelection(args, route) {
   if (args.entryMode !== void 0) {
     return {
@@ -27029,6 +27043,7 @@ async function main(argv, options = {}) {
   }
   const route = resolveCompiledFlowRoute(args);
   try {
+    validateModeDepthAliasConsistency(args);
     validateFlowDepth(args, route);
   } catch (err) {
     process.stderr.write(`error: ${err.message}
