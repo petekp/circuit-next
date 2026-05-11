@@ -124,6 +124,15 @@ export function buildClaudeCodeArgs(input: ClaudeCodeRelayInput): string[] {
     assertClaudeCodeEffort(effort);
     args.push('--effort', effort);
   }
+  // Structured-output enforcement at the CLI layer. When a report schema
+  // is available, claude-code returns a final result that already matches
+  // the schema; the runtime Zod check downstream becomes a sanity check
+  // rather than a frequent failure mode. The prose shape hint in the
+  // prompt is retained as a belt-and-suspenders fallback in case the CLI
+  // ever drops or changes this flag.
+  if (input.responseSchema !== undefined) {
+    args.push('--json-schema', JSON.stringify(input.responseSchema));
+  }
   args.push(input.prompt);
   return args;
 }

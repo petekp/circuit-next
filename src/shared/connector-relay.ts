@@ -16,6 +16,12 @@ export interface ConnectorRelayInput {
   prompt: string;
   timeoutMs?: number;
   resolvedSelection?: ResolvedSelection;
+  // JSON Schema (draft-07) describing the worker's final response shape.
+  // Connectors that support a native structured-output flag (claude-code's
+  // `--json-schema`, codex's `--output-schema`) pass this through. Custom
+  // connectors and any connector that does not yet honor it fall back to
+  // the prose shape hint already in the prompt.
+  responseSchema?: Record<string, unknown>;
 }
 
 export function sha256Hex(payload: string): string {

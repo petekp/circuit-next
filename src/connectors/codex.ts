@@ -1,4 +1,7 @@
 import { type ChildProcess, execFileSync, spawn } from 'node:child_process';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join as joinPath } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import type { Effort } from '../schemas/selection-policy.js';
 import { extractJsonObject, selectedModelForProvider } from '../shared/connector-helpers.js';
@@ -301,7 +304,7 @@ export function assertCodexSpawnArgvBoundary(args: readonly string[]): void {
   }
 }
 
-export function buildCodexArgs(input: CodexRelayInput): string[] {
+export function buildCodexArgs(input: CodexRelayInput, schemaPath?: string): string[] {
   const args: string[] = [...CODEX_NO_WRITE_FLAGS];
   const model = selectedModelForProvider('codex', input.resolvedSelection, 'openai');
   if (model !== undefined) {
@@ -312,143 +315,179 @@ export function buildCodexArgs(input: CodexRelayInput): string[] {
     assertCodexEffort(effort);
     args.push('-c', codexReasoningEffortConfigValue(effort));
   }
+  // Structured-output enforcement. `--output-schema` is not in
+  // CODEX_FORBIDDEN_ARGV_TOKENS, so this passes assertCodexSpawnArgvBoundary
+  // without widening the read-only sandbox. The path itself is also a
+  // benign arg from the boundary check's perspective.
+  if (schemaPath !== undefined) {
+    args.push('--output-schema', schemaPath);
+  }
   args.push(input.prompt);
   assertCodexSpawnArgvBoundary(args);
   return args;
 }
 
+async function writeSchemaTempFile(schema: Record<string, unknown>): Promise<string> {
+  const dir = await mkdtemp(joinPath(tmpdir(), 'circuit-codex-schema-'));
+  const path = joinPath(dir, 'schema.json');
+  await writeFile(path, JSON.stringify(schema), 'utf8');
+  return path;
+}
+
+async function cleanupSchemaTempDir(schemaPath: string | undefined): Promise<void> {
+  if (schemaPath === undefined) return;
+  // Remove the entire mkdtemp directory; the schema file is the only
+  // thing in it, but `rm -rf` against the dir is safer than dance-
+  // around-then-rmdir if any future code ever drops a sibling artifact.
+  const dir = joinPath(schemaPath, '..');
+  try {
+    await rm(dir, { recursive: true, force: true });
+  } catch {
+    // Best-effort cleanup; a leaked temp dir is preferable to surfacing
+    // a teardown error and masking the real relay result.
+  }
+}
+
 export async function relayCodex(input: CodexRelayInput): Promise<RelayResult> {
   const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const cli_version = captureCodexVersion();
-  const args = buildCodexArgs(input);
+  const schemaPath =
+    input.responseSchema === undefined
+      ? undefined
+      : await writeSchemaTempFile(input.responseSchema);
+  const args = buildCodexArgs(input, schemaPath);
   const start = performance.now();
-  return await new Promise<RelayResult>((resolve, reject) => {
-    let child: ChildProcess;
-    try {
-      // stdin is `ignore` so codex exec does not read from stdin and
-      // append a `<stdin>` block to the prompt. `detached: true` puts
-      // the subprocess in its own process group so the timeout-kill
-      // path can signal the group (mirrors claude-code.ts containment
-      // discipline); if codex spawns helper processes, they are killed
-      // via the group kill.
-      child = spawn(CODEX_EXECUTABLE, args, {
-        stdio: ['ignore', 'pipe', 'pipe'],
-        env: process.env,
-        detached: true,
-      });
-    } catch (err) {
-      reject(new Error(`codex subprocess spawn failed: ${(err as Error).message}`));
-      return;
-    }
-    let stdout = '';
-    let stdoutBytes = 0;
-    let stderr = '';
-    let stderrBytes = 0;
-    let stdoutCapped = false;
-    let stderrCapped = false;
-    let timedOut = false;
-    let killGroupSucceeded = false;
-
-    const killProcessGroup = (signal: NodeJS.Signals): boolean => {
-      const pid = child.pid;
-      if (typeof pid !== 'number') return false;
+  try {
+    return await new Promise<RelayResult>((resolve, reject) => {
+      let child: ChildProcess;
       try {
-        process.kill(-pid, signal);
-        return true;
-      } catch {
+        // stdin is `ignore` so codex exec does not read from stdin and
+        // append a `<stdin>` block to the prompt. `detached: true` puts
+        // the subprocess in its own process group so the timeout-kill
+        // path can signal the group (mirrors claude-code.ts containment
+        // discipline); if codex spawns helper processes, they are killed
+        // via the group kill.
+        child = spawn(CODEX_EXECUTABLE, args, {
+          stdio: ['ignore', 'pipe', 'pipe'],
+          env: process.env,
+          detached: true,
+        });
+      } catch (err) {
+        reject(new Error(`codex subprocess spawn failed: ${(err as Error).message}`));
+        return;
+      }
+      let stdout = '';
+      let stdoutBytes = 0;
+      let stderr = '';
+      let stderrBytes = 0;
+      let stdoutCapped = false;
+      let stderrCapped = false;
+      let timedOut = false;
+      let killGroupSucceeded = false;
+
+      const killProcessGroup = (signal: NodeJS.Signals): boolean => {
+        const pid = child.pid;
+        if (typeof pid !== 'number') return false;
         try {
-          child.kill(signal);
+          process.kill(-pid, signal);
           return true;
         } catch {
-          return false;
+          try {
+            child.kill(signal);
+            return true;
+          } catch {
+            return false;
+          }
         }
-      }
-    };
+      };
 
-    // Track the nested SIGKILL escalation timer separately so the
-    // `close`/`error` handlers can clear it.
-    // Without this, a subprocess that exits between SIGTERM and the
-    // grace window would still receive a delayed SIGKILL callback
-    // against either a dead pid or (worst case) a pid recycled to a
-    // different process group.
-    let killGraceTimer: NodeJS.Timeout | undefined;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      killGroupSucceeded = killProcessGroup('SIGTERM');
-      killGraceTimer = setTimeout(() => {
-        killProcessGroup('SIGKILL');
-        killGraceTimer = undefined;
-      }, SIGTERM_TO_SIGKILL_GRACE_MS);
-    }, timeoutMs);
-    const clearAllTimers = () => {
-      clearTimeout(timer);
-      if (killGraceTimer !== undefined) {
-        clearTimeout(killGraceTimer);
-        killGraceTimer = undefined;
-      }
-    };
+      // Track the nested SIGKILL escalation timer separately so the
+      // `close`/`error` handlers can clear it.
+      // Without this, a subprocess that exits between SIGTERM and the
+      // grace window would still receive a delayed SIGKILL callback
+      // against either a dead pid or (worst case) a pid recycled to a
+      // different process group.
+      let killGraceTimer: NodeJS.Timeout | undefined;
+      const timer = setTimeout(() => {
+        timedOut = true;
+        killGroupSucceeded = killProcessGroup('SIGTERM');
+        killGraceTimer = setTimeout(() => {
+          killProcessGroup('SIGKILL');
+          killGraceTimer = undefined;
+        }, SIGTERM_TO_SIGKILL_GRACE_MS);
+      }, timeoutMs);
+      const clearAllTimers = () => {
+        clearTimeout(timer);
+        if (killGraceTimer !== undefined) {
+          clearTimeout(killGraceTimer);
+          killGraceTimer = undefined;
+        }
+      };
 
-    child.stdout?.setEncoding('utf8');
-    child.stderr?.setEncoding('utf8');
-    child.stdout?.on('data', (chunk: string) => {
-      if (stdoutBytes + chunk.length > STDOUT_MAX_BYTES) {
-        stdoutCapped = true;
-        return;
-      }
-      stdout += chunk;
-      stdoutBytes += chunk.length;
+      child.stdout?.setEncoding('utf8');
+      child.stderr?.setEncoding('utf8');
+      child.stdout?.on('data', (chunk: string) => {
+        if (stdoutBytes + chunk.length > STDOUT_MAX_BYTES) {
+          stdoutCapped = true;
+          return;
+        }
+        stdout += chunk;
+        stdoutBytes += chunk.length;
+      });
+      child.stderr?.on('data', (chunk: string) => {
+        if (stderrBytes + chunk.length > STDERR_MAX_BYTES) {
+          stderrCapped = true;
+          return;
+        }
+        stderr += chunk;
+        stderrBytes += chunk.length;
+      });
+      child.on('error', (err) => {
+        clearAllTimers();
+        reject(new Error(`codex subprocess spawn error: ${err.message}`));
+      });
+      child.on('close', (code, signal) => {
+        clearAllTimers();
+        const duration_ms = performance.now() - start;
+        if (timedOut) {
+          reject(
+            new Error(
+              `codex subprocess timed out after ${timeoutMs}ms; group-kill ${killGroupSucceeded ? 'sent' : 'failed'}; final signal=${signal ?? 'none'}; stderr[:500]=${stderr.slice(0, 500)}`,
+            ),
+          );
+          return;
+        }
+        if (code !== 0) {
+          reject(
+            new Error(
+              `codex subprocess exited with code ${code}${signal ? ` (signal ${signal})` : ''}; stderr[:500]=${stderr.slice(0, 500)}`,
+            ),
+          );
+          return;
+        }
+        if (stdoutCapped) {
+          reject(
+            new Error(
+              `codex subprocess stdout exceeded ${STDOUT_MAX_BYTES} bytes; capability-boundary check cannot be evaluated on truncated stream`,
+            ),
+          );
+          return;
+        }
+        try {
+          resolve(parseCodexStdout(stdout, input.prompt, duration_ms, cli_version));
+        } catch (err) {
+          const stderrSuffix = stderrCapped ? ' [stderr capped]' : '';
+          reject(
+            new Error(
+              `codex subprocess: ${(err as Error).message}; stdout[:500]=${stdout.slice(0, 500)}; stderr[:200]=${stderr.slice(0, 200)}${stderrSuffix}`,
+            ),
+          );
+        }
+      });
     });
-    child.stderr?.on('data', (chunk: string) => {
-      if (stderrBytes + chunk.length > STDERR_MAX_BYTES) {
-        stderrCapped = true;
-        return;
-      }
-      stderr += chunk;
-      stderrBytes += chunk.length;
-    });
-    child.on('error', (err) => {
-      clearAllTimers();
-      reject(new Error(`codex subprocess spawn error: ${err.message}`));
-    });
-    child.on('close', (code, signal) => {
-      clearAllTimers();
-      const duration_ms = performance.now() - start;
-      if (timedOut) {
-        reject(
-          new Error(
-            `codex subprocess timed out after ${timeoutMs}ms; group-kill ${killGroupSucceeded ? 'sent' : 'failed'}; final signal=${signal ?? 'none'}; stderr[:500]=${stderr.slice(0, 500)}`,
-          ),
-        );
-        return;
-      }
-      if (code !== 0) {
-        reject(
-          new Error(
-            `codex subprocess exited with code ${code}${signal ? ` (signal ${signal})` : ''}; stderr[:500]=${stderr.slice(0, 500)}`,
-          ),
-        );
-        return;
-      }
-      if (stdoutCapped) {
-        reject(
-          new Error(
-            `codex subprocess stdout exceeded ${STDOUT_MAX_BYTES} bytes; capability-boundary check cannot be evaluated on truncated stream`,
-          ),
-        );
-        return;
-      }
-      try {
-        resolve(parseCodexStdout(stdout, input.prompt, duration_ms, cli_version));
-      } catch (err) {
-        const stderrSuffix = stderrCapped ? ' [stderr capped]' : '';
-        reject(
-          new Error(
-            `codex subprocess: ${(err as Error).message}; stdout[:500]=${stdout.slice(0, 500)}; stderr[:200]=${stderr.slice(0, 200)}${stderrSuffix}`,
-          ),
-        );
-      }
-    });
-  });
+  } finally {
+    await cleanupSchemaTempDir(schemaPath);
+  }
 }
 
 // Known `item.completed` `item.type` values at Codex CLI 0.118-0.125. The

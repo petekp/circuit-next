@@ -4,7 +4,7 @@ import { relayClaudeCode } from '../../connectors/claude-code.js';
 import { relayCodex } from '../../connectors/codex.js';
 import { relayCustom } from '../../connectors/custom.js';
 import { runCrossReportValidator } from '../../flows/registries/cross-report-validators.js';
-import { parseReport } from '../../flows/registries/report-schemas.js';
+import { findReportZodSchema, parseReport } from '../../flows/registries/report-schemas.js';
 import type { CompiledFlow } from '../../schemas/compiled-flow.js';
 import type { ResolvedConnector } from '../../schemas/connector.js';
 import { Depth } from '../../schemas/depth.js';
@@ -20,6 +20,7 @@ import {
   evaluateRelayCheck,
 } from '../../shared/relay-support.js';
 import { resolveLoadedRelaySkills } from '../../shared/skill-loading.js';
+import { responseJsonSchemaFromZod } from '../../shared/zod-to-response-schema.js';
 import {
   assertConnectorSelectionCompatible,
   resolveConnectorForRelay,
@@ -187,6 +188,7 @@ export async function relayWithResolvedConnector(
     readonly prompt: string;
     readonly timeoutMs?: number;
     readonly resolvedSelection?: unknown;
+    readonly responseSchema?: Record<string, unknown>;
   },
 ): Promise<RelayResult> {
   const relayInput = {
@@ -195,6 +197,7 @@ export async function relayWithResolvedConnector(
     ...(input.resolvedSelection === undefined
       ? {}
       : { resolvedSelection: ResolvedSelection.parse(input.resolvedSelection) }),
+    ...(input.responseSchema === undefined ? {} : { responseSchema: input.responseSchema }),
   };
   if (connector.kind === 'builtin' && connector.name === 'claude-code') {
     return relayClaudeCode(relayInput);
@@ -374,6 +377,18 @@ export async function executeProductionRelayAttempt(input: {
     request_payload_hash: requestPayloadHash,
   });
 
+  // Convert the step's Zod report schema to JSON Schema so connectors
+  // that accept a structured-output flag can enforce the response shape
+  // natively. Connectors without that capability ignore the field and
+  // fall back to the prose hint embedded in the prompt.
+  const responseSchema = (() => {
+    const schemaName = step.report?.schema;
+    if (schemaName === undefined) return undefined;
+    const zodSchema = findReportZodSchema(schemaName);
+    if (zodSchema === undefined) return undefined;
+    return responseJsonSchemaFromZod(zodSchema);
+  })();
+
   let relayResult: RelayResult;
   try {
     const relayTimeoutMs = timeoutMs(step);
@@ -383,11 +398,13 @@ export async function executeProductionRelayAttempt(input: {
             prompt,
             ...(relayTimeoutMs === undefined ? {} : { timeoutMs: relayTimeoutMs }),
             resolvedSelection,
+            ...(responseSchema === undefined ? {} : { responseSchema }),
           })
         : await context.relayer.relay({
             prompt,
             ...(relayTimeoutMs === undefined ? {} : { timeoutMs: relayTimeoutMs }),
             resolvedSelection,
+            ...(responseSchema === undefined ? {} : { responseSchema }),
           });
   } catch (error) {
     const reason = (

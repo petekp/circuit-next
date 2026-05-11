@@ -70,6 +70,15 @@ export type ReportParseResult =
   | { readonly kind: 'ok' }
   | { readonly kind: 'fail'; readonly reason: string };
 
+// Resolve the Zod schema for a registered report name, or undefined when
+// the schema is not registered. Used by the relay executor to convert
+// the schema to JSON Schema for connectors that support structured
+// output flags (claude-code's `--json-schema`, codex's `--output-schema`).
+export function findReportZodSchema(schemaName: string): z.ZodType<unknown> | undefined {
+  if (!Object.hasOwn(REGISTRY, schemaName)) return undefined;
+  return REGISTRY[schemaName] as z.ZodType<unknown>;
+}
+
 export function parseReport(schemaName: string, resultBody: string): ReportParseResult {
   if (!Object.hasOwn(REGISTRY, schemaName)) {
     return {
