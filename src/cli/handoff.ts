@@ -534,14 +534,35 @@ function defaultCodexHooksFile(): string {
   return resolve(codexHome, 'hooks.json');
 }
 
-export function resolveDefaultLauncher(moduleDir: string): string {
-  const wrapperLauncher = resolve(moduleDir, '..', 'scripts/circuit-next.mjs');
-  if (existsSync(wrapperLauncher)) return wrapperLauncher;
+// The wrapper script that ships with the marketplace plugin is the only
+// piece of code that knows where the plugin was installed; it passes its
+// own plugin root to every child process via CIRCUIT_PLUGIN_ROOT. Reading
+// that env var is the right answer for "what launcher path do I write
+// into the hook config" because it survives every install layout (Claude
+// marketplace, Codex cache, source-tree dev with the wrapper). We only
+// fall back to computing a path from import.meta.url when the env var is
+// absent — i.e., running bin/circuit-next directly from a source-tree
+// checkout without the wrapper in the chain.
+export function resolveDefaultLauncher(
+  pluginRoot: string | undefined,
+  moduleDir: string,
+): string {
+  if (pluginRoot !== undefined && pluginRoot.length > 0) {
+    return resolve(pluginRoot, 'scripts/circuit-next.mjs');
+  }
   return resolve(moduleDir, '../..', 'bin/circuit-next');
 }
 
 function defaultLauncherPath(): string {
-  return resolveDefaultLauncher(dirname(fileURLToPath(import.meta.url)));
+  // Marketplace-safe by env var: CIRCUIT_PLUGIN_ROOT is the primary input;
+  // the fileURLToPath argument is only consulted in the source-tree
+  // fallback branch of resolveDefaultLauncher when the env var is unset.
+  // Marketplace-safe by source-tree fallback: the fallback resolves to
+  // <repo>/bin/circuit-next, which exists only in the dev checkout.
+  return resolveDefaultLauncher(
+    process.env.CIRCUIT_PLUGIN_ROOT,
+    dirname(fileURLToPath(import.meta.url)),
+  );
 }
 
 function parseCodexHooksHost(args: HandoffArgs): HandoffHookHost {

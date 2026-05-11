@@ -862,18 +862,19 @@ describe('utility CLI commands', () => {
     expect(JSON.stringify(configAfterUninstall)).not.toContain('handoff hook --host codex');
   });
 
-  it('resolves default launcher to the wrapper script for marketplace-style plugin layouts', () => {
-    const root = tempRoot('circuit-launcher-marketplace-');
-    const runtimeDir = join(root, 'circuit/runtime');
-    const wrapper = join(root, 'circuit/scripts/circuit-next.mjs');
-    mkdirSync(runtimeDir, { recursive: true });
-    mkdirSync(join(root, 'circuit/scripts'), { recursive: true });
+  it('resolves default launcher from CIRCUIT_PLUGIN_ROOT when the wrapper has set it', () => {
+    const pluginRoot = tempRoot('circuit-launcher-plugin-root-');
+    mkdirSync(join(pluginRoot, 'scripts'), { recursive: true });
+    const wrapper = join(pluginRoot, 'scripts/circuit-next.mjs');
     writeFileSync(wrapper, '#!/usr/bin/env node\n');
 
-    expect(resolveDefaultLauncher(runtimeDir)).toBe(wrapper);
+    // moduleDir is irrelevant when CIRCUIT_PLUGIN_ROOT is set — the env var
+    // is authoritative because the wrapper is the only piece of code that
+    // knows the actual install layout.
+    expect(resolveDefaultLauncher(pluginRoot, '/nonexistent/module/dir')).toBe(wrapper);
   });
 
-  it('resolves default launcher to bin/circuit-next for source-tree layouts', () => {
+  it('falls back to source-tree bin/circuit-next when CIRCUIT_PLUGIN_ROOT is absent', () => {
     const root = tempRoot('circuit-launcher-source-');
     const moduleDir = join(root, 'src/cli');
     const bin = join(root, 'bin/circuit-next');
@@ -881,15 +882,16 @@ describe('utility CLI commands', () => {
     mkdirSync(join(root, 'bin'), { recursive: true });
     writeFileSync(bin, '#!/usr/bin/env node\n');
 
-    expect(resolveDefaultLauncher(moduleDir)).toBe(bin);
+    expect(resolveDefaultLauncher(undefined, moduleDir)).toBe(bin);
+    expect(resolveDefaultLauncher('', moduleDir)).toBe(bin);
   });
 
-  it('falls through to bin/circuit-next when neither wrapper nor bin exists so callers surface a clear error', async () => {
+  it('returns the source-tree fallback even when bin is missing, so callers surface a clear error', async () => {
     const root = tempRoot('circuit-launcher-missing-');
-    const moduleDir = join(root, 'circuit/runtime');
+    const moduleDir = join(root, 'src/cli');
     mkdirSync(moduleDir, { recursive: true });
 
-    const fallback = resolveDefaultLauncher(moduleDir);
+    const fallback = resolveDefaultLauncher(undefined, moduleDir);
     expect(fallback).toBe(resolve(moduleDir, '../..', 'bin/circuit-next'));
     expect(existsSync(fallback)).toBe(false);
 

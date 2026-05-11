@@ -27,7 +27,7 @@
     "check-flow-drift": "npm run build && node scripts/emit-flows.ts --check && npm run check-plugin-runtime",
     "emit-release": "npm run build && node scripts/release/emit-current-capabilities.ts && node scripts/release/render-parity-matrix.mjs && node scripts/release/render-readiness-report.mjs",
     "capture-proofs:golden-runs": "npm run build && node scripts/release/capture-golden-run-proofs.ts",
-    "check-release-infra": "npm run build && node scripts/release/emit-current-capabilities.ts --check && node scripts/release/check-parity.mjs && node scripts/release/check-public-claims.mjs && node scripts/release/check-proof-coverage.mjs && node scripts/release/render-parity-matrix.mjs --check && node scripts/release/render-readiness-report.mjs --check && node scripts/release/audit-public-docs.mjs",
+    "check-release-infra": "npm run build && node scripts/release/emit-current-capabilities.ts --check && node scripts/release/check-parity.mjs && node scripts/release/check-public-claims.mjs && node scripts/release/check-proof-coverage.mjs && node scripts/release/render-parity-matrix.mjs --check && node scripts/release/render-readiness-report.mjs --check && node scripts/release/audit-public-docs.mjs && node scripts/release/audit-marketplace-safe-paths.mjs",
     "check-release-ready": "npm run check-release-infra && node scripts/release/check-release-ready.mjs",
     "smoke:host:codex": "node scripts/host-smoke/codex-handoff.mjs",
     "smoke:host:claude": "node scripts/host-smoke/claude-handoff.mjs",

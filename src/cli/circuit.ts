@@ -161,6 +161,12 @@ export function usage(): string {
 }
 
 function readSourceVersion(): string {
+  // Marketplace-safe by build-time replacement: build-plugin-runtime.ts
+  // emits the bundled CLI with CIRCUIT_NEXT_VERSION inlined as a literal,
+  // so this function returns the build-time version in every marketplace
+  // install and never reaches the path-resolution branches below. The
+  // fileURLToPath candidate is only ever exercised in a source-tree
+  // checkout where the env var is unset.
   if (process.env.CIRCUIT_NEXT_VERSION !== undefined) return process.env.CIRCUIT_NEXT_VERSION;
   const candidates = [
     resolve(dirname(fileURLToPath(import.meta.url)), '../../plugins/version.json'),
