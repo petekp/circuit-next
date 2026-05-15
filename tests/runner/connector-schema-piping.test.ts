@@ -15,7 +15,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { buildClaudeCodeArgs } from '../../src/connectors/claude-code.js';
-import { assertCodexSpawnArgvBoundary, buildCodexArgs } from '../../src/connectors/codex.js';
+import {
+  assertCodexSpawnArgvBoundary,
+  buildCodexArgs,
+  isPlainObjectTypeRoot,
+} from '../../src/connectors/codex.js';
 
 describe('claude-code argv', () => {
   it('omits --json-schema when responseSchema is undefined', () => {
@@ -70,5 +74,21 @@ describe('codex argv', () => {
     const flagIndex = args.indexOf('--output-schema');
     const promptIndex = args.indexOf('hi');
     expect(flagIndex).toBeLessThan(promptIndex);
+  });
+
+  it('pipes only response schemas Codex can accept as top-level output schemas', () => {
+    expect(isPlainObjectTypeRoot({ type: 'object', properties: {} })).toBe(true);
+    expect(
+      isPlainObjectTypeRoot({
+        anyOf: [
+          { type: 'object', properties: { verdict: { const: 'a' } } },
+          { type: 'object', properties: { verdict: { const: 'b' } } },
+        ],
+      }),
+    ).toBe(false);
+    expect(isPlainObjectTypeRoot({ oneOf: [{ type: 'object' }, { type: 'string' }] })).toBe(false);
+    expect(isPlainObjectTypeRoot({ type: 'array', items: {} })).toBe(false);
+    expect(isPlainObjectTypeRoot({ type: 'string' })).toBe(false);
+    expect(isPlainObjectTypeRoot({ type: 'number' })).toBe(false);
   });
 });

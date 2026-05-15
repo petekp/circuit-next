@@ -90,7 +90,9 @@ async function readTraceEntries(runFolder: string) {
   return await new TraceStore(runFolder).load();
 }
 
-function makeVerificationProjectRoot(checkScript = 'node -e "process.exit(0)"'): string {
+function makeVerificationProjectRoot(
+  scripts: Record<string, string> = { check: 'node -e "process.exit(0)"' },
+): string {
   const projectRoot = join(runFolderBase, 'verification-project');
   mkdirSync(projectRoot, { recursive: true });
   writeFileSync(
@@ -98,9 +100,7 @@ function makeVerificationProjectRoot(checkScript = 'node -e "process.exit(0)"'):
     `${JSON.stringify(
       {
         private: true,
-        scripts: {
-          check: checkScript,
-        },
+        scripts,
       },
       null,
       2,
@@ -174,6 +174,41 @@ describe('Build runtime wiring', () => {
     expect(result.review_verdict).toBe('accept');
   });
 
+  it('runs Build end-to-end with resolver-selected build and lint scripts', async () => {
+    const { bytes } = loadFixture();
+    const runFolder = join(runFolderBase, 'build-lint');
+
+    const outcome = await runCompiledFlow({
+      runDir: runFolder,
+      flowBytes: bytes,
+      runId: 'b2000000-0000-0000-0000-000000000011',
+      goal: 'Build + lint must stay clean',
+      depth: 'standard',
+      now: deterministicNow(Date.UTC(2026, 3, 25, 8, 3, 0)),
+      relayer: relayerWith(),
+      projectRoot: makeVerificationProjectRoot({
+        build: 'node -e "process.stdout.write(\\"build-ok\\")"',
+        lint: 'node -e "process.stdout.write(\\"lint-ok\\")"',
+      }),
+    });
+
+    expect(outcome.outcome).toBe('complete');
+    const verification = BuildVerification.parse(
+      JSON.parse(readFileSync(join(runFolder, 'reports/build/verification.json'), 'utf8')),
+    );
+    expect(verification.overall_status).toBe('passed');
+    expect(verification.commands.map((command) => command.argv)).toEqual([
+      ['npm', 'run', 'build'],
+      ['npm', 'run', 'lint'],
+    ]);
+    expect(verification.commands.map((command) => command.stdout_summary).join('\n')).toContain(
+      'build-ok',
+    );
+    expect(verification.commands.map((command) => command.stdout_summary).join('\n')).toContain(
+      'lint-ok',
+    );
+  });
+
   it('reruns Build verification after a retry repair instead of aborting as a route cycle', async () => {
     const { bytes } = loadFixture();
     const runFolder = join(runFolderBase, 'verify-retry-complete');
@@ -199,7 +234,7 @@ describe('Build runtime wiring', () => {
       depth: 'standard',
       now: deterministicNow(Date.UTC(2026, 3, 25, 8, 5, 0)),
       relayer: relayerWith(),
-      projectRoot: makeVerificationProjectRoot(checkScript),
+      projectRoot: makeVerificationProjectRoot({ check: checkScript }),
     });
 
     expect(outcome.outcome).toBe('complete');

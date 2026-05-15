@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { reviewCompiledFlowPackage } from '../../src/flows/review/index.js';
+import { ReviewRelayResult } from '../../src/flows/review/reports.js';
 import { CompiledFlow } from '../../src/schemas/compiled-flow.js';
 import { checkCompiledFlowKindCanonicalPolicy } from '../../src/shared/flow-kind-policy-core.js';
 
@@ -41,6 +42,34 @@ describe('review flow contract fixture', () => {
     expect(check?.source?.kind).toBe('relay_result');
     expect(check?.source?.ref).toBe('result');
     expect(check?.pass).toEqual(['NO_ISSUES_FOUND', 'ISSUES_FOUND']);
+  });
+
+  it('requires reviewer prose fields on Review relay results', () => {
+    const cleanShape = {
+      verdict: 'NO_ISSUES_FOUND',
+      findings: [],
+      assessment: 'Reviewer inspected the relayed evidence and found nothing actionable.',
+      verification: ['Inspected the relayed intake report.'],
+      confidence_limitations: ['HEAD~1 history was out of scope.'],
+    };
+
+    expect(ReviewRelayResult.safeParse({ verdict: 'NO_ISSUES_FOUND', findings: [] }).success).toBe(
+      false,
+    );
+    expect(ReviewRelayResult.safeParse({ ...cleanShape, verdict: 'CLEAN' }).success).toBe(false);
+    expect(
+      ReviewRelayResult.safeParse({
+        ...cleanShape,
+        findings: [
+          {
+            severity: 'high',
+            id: 'finding-1',
+            text: 'A concrete issue found during independent audit.',
+          },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(ReviewRelayResult.parse(cleanShape)).toEqual(cleanShape);
   });
 
   it('binds the close step to the registered review.result report', () => {

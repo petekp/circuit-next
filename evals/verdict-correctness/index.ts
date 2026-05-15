@@ -4,7 +4,7 @@
 import { mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { DEFECT_IDS } from './defect-taxonomy.ts';
 import { summarizeCaseSourcePool, summarizeSourcePool } from './reporting.ts';
 import { buildCases, runCase } from './runner.ts';
@@ -190,7 +190,10 @@ function summarize(
   };
 }
 
-function renderMarkdownReport(results: readonly EvalCaseResult[], summary: EvalSummary): string {
+export function renderMarkdownReport(
+  results: readonly EvalCaseResult[],
+  summary: EvalSummary,
+): string {
   const lines: string[] = [];
   lines.push('# Verdict-Correctness Eval — Results');
   lines.push('');
@@ -356,7 +359,9 @@ async function main(): Promise<void> {
   console.error(`Results: ${args.resultsDir}`);
 }
 
-main().catch((err) => {
-  console.error(`eval failed: ${err.stack ?? err.message}`);
-  process.exit(1);
-});
+if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => {
+    console.error(`eval failed: ${err.stack ?? err.message}`);
+    process.exit(1);
+  });
+}

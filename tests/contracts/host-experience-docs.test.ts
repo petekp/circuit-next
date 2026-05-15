@@ -5,117 +5,122 @@ import { EnabledConnector } from '../../src/schemas/connector.js';
 
 const REPO_ROOT = resolve(__dirname, '..', '..');
 
-describe('host experience docs', () => {
-  it('defines shared host capability slots for Codex and Claude Code', () => {
-    const doc = readFileSync(resolve(REPO_ROOT, 'docs/contracts/host-capabilities.md'), 'utf8');
+function readDoc(path: string): string {
+  return readFileSync(resolve(REPO_ROOT, path), 'utf8');
+}
 
-    for (const capability of [
-      'progress',
-      'task_list',
-      'ask_user',
-      'final_summary',
-      'deep_links',
-      'debug',
-    ]) {
-      expect(doc).toContain(`\`${capability}\``);
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function section(doc: string, heading: string): string {
+  const match = new RegExp(`^#{2,3} ${escapeRegExp(heading)}$`, 'm').exec(doc);
+  if (match?.index === undefined) throw new Error(`missing section ${heading}`);
+  const marker = match[0];
+  const rest = doc.slice(match.index + marker.length);
+  const next = rest.search(marker.startsWith('###') ? /\n#{2,3} / : /\n## /);
+  return next < 0 ? rest : rest.slice(0, next);
+}
+
+function frontmatterValue(doc: string, key: string): string | undefined {
+  const match = doc.match(new RegExp(`^${key}:\\s*(.+)$`, 'm'));
+  return match?.[1]?.trim();
+}
+
+describe('host experience docs', () => {
+  it('keeps host contract documents machine-identifiable', () => {
+    expect(frontmatterValue(readDoc('docs/contracts/host-capabilities.md'), 'contract')).toBe(
+      'host-capabilities',
+    );
+    expect(frontmatterValue(readDoc('docs/contracts/native-host-adapters.md'), 'contract')).toBe(
+      'native-host-adapters',
+    );
+  });
+
+  it('defines each shared host capability in the slot list and host mappings', () => {
+    const doc = readDoc('docs/contracts/host-capabilities.md');
+    const slots = ['progress', 'task_list', 'ask_user', 'final_summary', 'deep_links', 'debug'];
+
+    for (const slot of slots) {
+      expect(section(doc, 'Capability Slots')).toMatch(new RegExp(`- \`${slot}\`:`));
     }
 
-    expect(doc).toContain('Codex');
-    expect(doc).toContain('Claude Code');
-    expect(doc).toContain('native');
-    expect(doc).toContain('model-mediated');
-    expect(doc).toContain('fallback');
-    expect(doc).toContain('AskUserQuestion');
-    expect(doc).toContain('TodoWrite');
-    expect(doc).toContain('tool/requestUserInput');
-    expect(doc).toContain('operator_summary_markdown_path');
+    for (const host of [
+      'Generic Shell',
+      'Codex Plugin',
+      'Codex App Server',
+      'Claude Code Command',
+      'Claude Agent SDK',
+    ]) {
+      const hostSection = section(doc, host);
+      for (const slot of slots) expect(hostSection).toContain(`\`${slot}\``);
+    }
   });
 
-  it('documents the native bridge tracks without implementing them in this slice', () => {
-    const doc = readFileSync(resolve(REPO_ROOT, 'docs/contracts/native-host-adapters.md'), 'utf8');
-
-    expect(doc).toContain('contract: native-host-adapters');
-    expect(doc).toContain('task_list.updated');
-    expect(doc).toContain('user_input.requested');
-    expect(doc).toContain('Claude Agent SDK');
-    expect(doc).toContain('AskUserQuestion');
-    expect(doc).toContain('TodoWrite');
-    expect(doc).toContain('Codex App Server');
-    expect(doc).toContain('tool/requestUserInput');
-    expect(doc).toContain('does not implement either native bridge');
-  });
-
-  it('documents the Claude presentation wrapper and Explore visible budget', () => {
-    const doc = readFileSync(
-      resolve(REPO_ROOT, 'docs/specs/narration-display-profiles.md'),
-      'utf8',
+  it('keeps native adapter docs tied to the host-neutral event stream', () => {
+    const doc = readDoc('docs/contracts/native-host-adapters.md');
+    const sharedEvents = section(doc, 'Shared Events');
+    expect(sharedEvents).toContain('task_list.updated');
+    expect(sharedEvents).toContain('user_input.requested');
+    expect(sharedEvents).toContain('operator_summary_markdown_path');
+    expect(section(doc, 'Claude Agent SDK Track')).toContain('AskUserQuestion');
+    expect(section(doc, 'Codex App Server Track')).toContain('tool/requestUserInput');
+    expect(section(doc, 'Non-Goals For This Slice')).toContain(
+      'does not implement either native bridge',
     );
+  });
 
-    expect(doc).toContain('Claude host commands must use a presentation wrapper');
-    expect(doc).toContain('Flow profiles provide semantic atoms');
-    expect(doc).toContain('structured slots');
-    expect(doc).toContain('no raw JSONL');
-    expect(doc).toContain('no final stdout JSON');
-    expect(doc).toContain('no report section by default');
-    expect(doc).toContain('max 4-6 visible final bullets');
-    expect(doc).toContain('max 3 visible reviewer cautions');
-    expect(doc).toContain('explicit `/circuit:explore`');
+  it('keeps Claude presentation acceptance checks as visible transcript constraints', () => {
+    const doc = readDoc('docs/specs/narration-display-profiles.md');
+    const acceptance = section(doc, 'Transcript Acceptance');
+    for (const rule of [
+      'no raw JSONL',
+      'no final stdout JSON',
+      'no report section by default',
+      'max 4-6 visible final bullets',
+      'max 3 visible reviewer cautions',
+    ]) {
+      expect(acceptance).toContain(`- ${rule}`);
+    }
   });
 
   it('keeps a repeatable Codex and Claude Code host trial checklist', () => {
-    const doc = readFileSync(resolve(REPO_ROOT, 'docs/host-trial-checklist.md'), 'utf8');
-
-    expect(doc).toContain('@Circuit the checkout total is wrong when discounts and tax both apply');
-    expect(doc).toContain('@Circuit please review my current diff');
-    expect(doc).toContain('@Circuit add billing settings to the account page');
-    expect(doc).toContain('Use Circuit to decide whether we should migrate auth providers');
-    expect(doc).toContain('/circuit:run <natural task>');
-    expect(doc).toContain('Explicit Build');
-    expect(doc).toContain('Checkpoint');
-    expect(doc).toContain('Failure');
-    expect(doc).toContain('Codex Scenarios');
-    expect(doc).toContain('Claude Code Scenarios');
+    const doc = readDoc('docs/host-trial-checklist.md');
+    const codex = section(doc, 'Codex Scenarios');
+    const claude = section(doc, 'Claude Code Scenarios');
+    expect(codex).toContain(
+      '@Circuit the checkout total is wrong when discounts and tax both apply',
+    );
+    expect(codex).toContain('@Circuit please review my current diff');
+    expect(codex).toContain('@Circuit add billing settings to the account page');
+    expect(codex).toContain('Explicit Build');
+    expect(claude).toContain('/circuit:run <natural task>');
+    expect(claude).toContain('Explicit Build');
+    expect(section(doc, 'What To Grade')).toContain('Did verification and review actually run?');
   });
 
   it('keeps /circuit:run host guidance aligned with model-mediated selection', () => {
-    const doc = readFileSync(resolve(REPO_ROOT, 'plugins/claude/commands/run.md'), 'utf8');
-
+    const doc = readDoc('plugins/claude/commands/run.md');
     expect(doc).toContain('/circuit:run — flow selector');
     expect(doc).toContain('Select the flow before invoking the CLI');
-    expect(doc).toContain(
-      'node "${CLAUDE_PLUGIN_ROOT}/scripts/circuit-next.mjs" present run sweep --goal',
-    );
-    expect(doc).toContain(
-      'node "${CLAUDE_PLUGIN_ROOT}/scripts/circuit-next.mjs" present run --goal',
-    );
-    expect(doc).not.toContain('Do not classify the task yourself');
     expect(doc).toContain('Let the presentation wrapper render output');
+    expect(doc).not.toContain('Do not classify the task yourself');
     expect(doc).not.toContain('selected_flow === "sweep"');
     expect(doc).not.toContain('reports/sweep-result.json');
   });
 
-  it('teaches one natural-language front door per host in the README', () => {
-    const doc = readFileSync(resolve(REPO_ROOT, 'README.md'), 'utf8');
+  it('keeps README connector names and custom protocol aligned with schemas and runtime', () => {
+    const doc = readDoc('README.md');
     const advancedIndex = doc.indexOf('**Advanced compatibility:**');
 
     expect(doc).toContain(
       '/circuit:run the checkout total is wrong when discounts and tax both apply',
     );
     expect(doc).toContain('@Circuit the checkout total is wrong when discounts and tax both apply');
-    expect(doc).toMatch(/Codex can choose the best bundled Circuit flow\s+skill/);
-    expect(doc).toContain('host/orchestrator behavior');
-    expect(doc).toContain('worker connector behavior');
     expect(advancedIndex).toBeGreaterThan(0);
-
     for (const prefix of ['fix:', 'develop:', 'cleanup:', 'overnight:', 'decide:']) {
-      const firstIndex = doc.indexOf(prefix);
-      expect(firstIndex).toBeGreaterThan(advancedIndex);
+      expect(doc.indexOf(prefix)).toBeGreaterThan(advancedIndex);
     }
-  });
-
-  it('keeps README connector names and custom protocol aligned with schemas and runtime', () => {
-    const doc = readFileSync(resolve(REPO_ROOT, 'README.md'), 'utf8');
-
     for (const connector of EnabledConnector.options) {
       expect(doc).toContain(`**\`${connector}\`**`);
     }

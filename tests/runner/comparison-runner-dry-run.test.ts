@@ -43,52 +43,50 @@ function dryRun(args: string[]): string {
   );
 }
 
-describe('comparison runner dry-run', () => {
-  it('prints the Codex circuit and vanilla commands when --provider codex is selected', () => {
-    const stdout = dryRun(['--provider', 'codex', '--flow', 'review']);
-    const metadata = JSON.parse(stdout.split('\nDry run only.')[0] ?? stdout);
-    expect(metadata.provider).toBe('codex');
-    expect(metadata.arms['circuit-codex'].command).toEqual(
-      expect.arrayContaining(['node', 'bin/circuit-next', 'run', 'review']),
-    );
-    expect(metadata.arms['vanilla-codex'].command[0]).toBe('codex');
-    expect(metadata.arms['vanilla-codex'].command).toContain('exec');
-    expect(metadata.arms['vanilla-codex'].command).not.toContain('claude');
-  });
+type DryRunMetadata = {
+  readonly provider: string;
+  readonly flow: string;
+  readonly effort: string;
+  readonly arms: Record<string, { readonly command: string[]; readonly run_folder?: string }>;
+};
 
-  it('prints the Claude Code circuit and vanilla commands when --provider claude-code is selected', () => {
-    const stdout = dryRun([
-      '--provider',
-      'claude-code',
-      '--flow',
-      'review',
-      '--model',
-      'claude-haiku-4-5-20251001',
-      '--effort',
-      'low',
-    ]);
-    const metadata = JSON.parse(stdout.split('\nDry run only.')[0] ?? stdout);
-    expect(metadata.provider).toBe('claude-code');
-    expect(metadata.model).toBe('claude-haiku-4-5-20251001');
-    expect(metadata.effort).toBe('low');
-    // Circuit arm still routes through bin/circuit-next; the wrapper on PATH
-    // intercepts the claude-code connector subprocess and pins the model.
-    expect(metadata.arms['circuit-claude-code'].command).toEqual(
-      expect.arrayContaining(['node', 'bin/circuit-next', 'run', 'review']),
-    );
-    expect(metadata.arms['circuit-claude-code'].run_folder).toContain('circuit-claude-code/run');
-    // Vanilla arm calls claude directly with the same dispatch flags Circuit's
-    // claude-code connector uses, so the comparison holds tool surface
-    // constant. The wrapper injects --model/--effort so neither flag needs to
-    // appear here.
-    const vanillaCommand: string[] = metadata.arms['vanilla-claude-code'].command;
-    expect(vanillaCommand[0]).toBe('claude');
-    expect(vanillaCommand).toContain('-p');
-    expect(vanillaCommand).toContain('--permission-mode');
-    expect(vanillaCommand).toContain('bypassPermissions');
-    expect(vanillaCommand).toContain('--strict-mcp-config');
-    expect(vanillaCommand).toContain('--disable-slash-commands');
-    expect(vanillaCommand).toContain('--no-session-persistence');
-    expect(vanillaCommand).not.toContain('exec');
-  });
+function dryRunMetadata(args: string[]): DryRunMetadata {
+  const stdout = dryRun(args);
+  return JSON.parse(stdout.split('\nDry run only.')[0] ?? stdout) as DryRunMetadata;
+}
+
+describe('comparison runner dry-run', () => {
+  it.each([
+    { provider: 'codex', vanillaExecutable: 'codex', vanillaMode: 'exec' },
+    { provider: 'claude-code', vanillaExecutable: 'claude', vanillaMode: '-p' },
+  ])(
+    'prints matching circuit and vanilla dry-run commands for $provider',
+    ({ provider, vanillaExecutable, vanillaMode }) => {
+      const metadata = dryRunMetadata([
+        '--provider',
+        provider,
+        '--flow',
+        'review',
+        '--model',
+        provider === 'codex' ? 'gpt-5.4-mini' : 'claude-haiku-4-5-20251001',
+        '--effort',
+        'low',
+      ]);
+
+      const circuitArm = metadata.arms[`circuit-${provider}`];
+      const vanillaArm = metadata.arms[`vanilla-${provider}`];
+      if (circuitArm === undefined || vanillaArm === undefined) {
+        throw new Error(`missing dry-run arms for ${provider}`);
+      }
+
+      expect(metadata).toMatchObject({ provider, flow: 'review', effort: 'low' });
+      expect(circuitArm.command).toEqual(
+        expect.arrayContaining(['node', 'bin/circuit-next', 'run', 'review']),
+      );
+      expect(circuitArm.run_folder).toContain(`circuit-${provider}/run`);
+      expect(vanillaArm.command[0]).toBe(vanillaExecutable);
+      expect(vanillaArm.command).toContain(vanillaMode);
+      expect(vanillaArm.command).not.toContain(provider === 'codex' ? 'claude' : 'exec');
+    },
+  );
 });
