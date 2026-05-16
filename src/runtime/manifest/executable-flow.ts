@@ -20,6 +20,7 @@ export interface BaseStep {
   readonly reads?: readonly RunFileRef[];
   readonly writes?: Readonly<Record<string, RunFileRef>>;
   readonly selection?: Selection;
+  readonly skillSlots?: readonly unknown[];
   readonly check?: unknown;
   readonly budgets?: unknown;
 }

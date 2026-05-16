@@ -64,7 +64,7 @@ function makeFixture(options: {
   writeJson(runFolder, 'reports/fix/baseline-snapshot.json', options.baseline);
   writeJson(runFolder, 'reports/fix/change.json', options.change);
   // Minimal CompiledFlow stub: only the `steps` lookup that
-  // reportPathForSchemaInCompiledFlow uses needs to resolve.
+  // reportPathForSchemaInRuntimeFlow uses needs to resolve.
   const flow = {
     steps: [
       {

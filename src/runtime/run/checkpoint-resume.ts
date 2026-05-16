@@ -8,6 +8,8 @@
 
 import { readFileSync } from 'node:fs';
 import { findCheckpointBriefBuilder } from '../../flows/registries/checkpoint-writers/registry.js';
+import type { CheckpointStep as IndexedCheckpointStep } from '../../flows/registries/checkpoint-writers/types.js';
+import type { CompiledFlowProgressSurface } from '../../flows/types.js';
 import type { CompiledFlow } from '../../schemas/compiled-flow.js';
 import type { LayeredConfig as LayeredConfigValue } from '../../schemas/config.js';
 import { LayeredConfig } from '../../schemas/config.js';
@@ -44,6 +46,7 @@ export interface ResumeCompiledFlowOptions {
   readonly worktreeRunner?: WorktreeRunner;
   readonly executors?: Partial<ExecutorRegistry>;
   readonly progress?: ProgressReporter;
+  readonly progressSurfaceForFlowId?: (flowId: string) => CompiledFlowProgressSurface | undefined;
 }
 
 interface CheckpointRequestContext {
@@ -215,7 +218,7 @@ function validateCheckpointReport(input: {
   }
   builder.validateResumeContext({
     runFolder: input.runDir,
-    step: input.compiledStep,
+    step: input.compiledStep as unknown as IndexedCheckpointStep,
     reportPath: report.path,
     ...(input.requestContext.checkpointReportSha256 === undefined
       ? {}
@@ -331,6 +334,7 @@ export async function resumeCompiledFlow(
     requestContext,
   });
   const depth = traceString(bootstrap, 'depth');
+  const progressSurface = options.progressSurfaceForFlowId?.(flow.id);
 
   const result = await executeExecutableFlow(executable, {
     runDir: options.runDir,
@@ -338,7 +342,6 @@ export async function resumeCompiledFlow(
     goal: bootstrapGoal,
     manifestHash: snapshot.hash,
     manifestBytes: flowBytes,
-    compiledFlow: flow,
     ...(depth === undefined ? {} : { depth }),
     ...(options.now === undefined ? {} : { now: options.now }),
     ...(options.executors === undefined ? {} : { executors: options.executors }),
@@ -356,6 +359,7 @@ export async function resumeCompiledFlow(
       ? {}
       : { selectionConfigLayers: requestContext.selectionConfigLayers }),
     ...(options.progress === undefined ? {} : { progress: options.progress }),
+    ...(progressSurface === undefined ? {} : { progressSurface }),
     resumeCheckpoint: { stepId, attempt, selection: options.selection },
   });
   if (isGraphCheckpointWaitingResult(result)) {

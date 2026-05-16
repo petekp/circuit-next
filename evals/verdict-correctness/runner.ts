@@ -10,8 +10,8 @@
 import { readFileSync } from 'node:fs';
 import { relayClaudeCode } from '../../dist/connectors/claude-code.js';
 import { relayCodex } from '../../dist/connectors/codex.js';
-import { extractJsonObject } from '../../dist/connectors/shared.js';
 import { ExploreReviewVerdict } from '../../dist/flows/explore/reports.js';
+import { extractJsonObject } from '../../dist/shared/json-extraction.js';
 import { DEFECT_DESCRIPTIONS, DEFECT_IDS, DEFECT_PLANTERS } from './defect-taxonomy.ts';
 import { parseRequest, rebuildRequest, upgradeShapeHintInstruction } from './prompt-mutation.ts';
 import { scoreDefect } from './scorer.ts';

@@ -116,6 +116,34 @@ export interface CompiledFlowEngineFlags {
   readonly bindsExecutionDepthToRelaySelection?: boolean;
 }
 
+export interface CompiledFlowSupportedEntryMode {
+  readonly entryModeName: string;
+  readonly depth: string;
+}
+
+export interface CompiledFlowPrimaryResult {
+  readonly schemaName: string;
+  readonly path: string;
+  readonly label: string;
+}
+
+export interface CompiledFlowProgressStep {
+  readonly stepId: string;
+  readonly taskTitle: string;
+  readonly activeText: string;
+  readonly relayRole?: 'implementer' | 'reviewer';
+}
+
+export interface CompiledFlowProgressSurface {
+  readonly steps: readonly CompiledFlowProgressStep[];
+}
+
+export interface CompiledFlowRuntimeSurface {
+  readonly supportedEntryModes: readonly CompiledFlowSupportedEntryMode[];
+  readonly primaryResult?: CompiledFlowPrimaryResult;
+  readonly progress?: CompiledFlowProgressSurface;
+}
+
 export interface CompiledFlowPackage {
   readonly id: string;
   // Public flows are installed into host-visible plugin surfaces.
@@ -134,6 +162,9 @@ export interface CompiledFlowPackage {
   // Structural hints for relay steps that don't write a typed
   // report (review's standalone audit step is the canonical case).
   readonly structuralHints?: readonly StructuralShapeHint[];
+  // Public/operator-facing runtime metadata owned by the flow package.
+  // Keep this serializable; live hooks stay in registries.
+  readonly runtimeSurface?: CompiledFlowRuntimeSurface;
   // Optional engine-visible behavior flags. Absent = all defaults.
   readonly engineFlags?: CompiledFlowEngineFlags;
 }

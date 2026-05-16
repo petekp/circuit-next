@@ -1,8 +1,12 @@
-import { type ChildProcess, spawn } from 'node:child_process';
-import { performance } from 'node:perf_hooks';
 import type { Effort } from '../schemas/selection-policy.js';
-import { extractJsonObject, selectedModelForProvider } from '../shared/connector-helpers.js';
+import type { ResolvedSelection } from '../schemas/selection-policy.js';
+import { extractJsonObject } from '../shared/json-extraction.js';
 import { type ConnectorRelayInput, type RelayResult, sha256Hex } from './shared.js';
+import {
+  type ConnectorSubprocessResult,
+  isConnectorSubprocessSpawnError,
+  runConnectorSubprocess,
+} from './subprocess.js';
 
 export { sha256Hex };
 
@@ -103,6 +107,17 @@ export interface ClaudeCodeRelayInput extends ConnectorRelayInput {}
 // consumes it uniformly.
 export type ClaudeCodeRelayResult = RelayResult;
 
+function selectedAnthropicModel(selection: ResolvedSelection | undefined): string | undefined {
+  const model = selection?.model;
+  if (model === undefined) return undefined;
+  if (model.provider !== 'anthropic') {
+    throw new Error(
+      `claude-code connector cannot honor model provider '${model.provider}' for model '${model.model}'; expected provider 'anthropic'`,
+    );
+  }
+  return model.model;
+}
+
 function assertClaudeCodeEffort(
   effort: Effort,
 ): asserts effort is (typeof CLAUDE_CODE_SUPPORTED_EFFORTS)[number] {
@@ -115,7 +130,7 @@ function assertClaudeCodeEffort(
 
 export function buildClaudeCodeArgs(input: ClaudeCodeRelayInput): string[] {
   const args: string[] = [...CLAUDE_CODE_DISPATCH_FLAGS];
-  const model = selectedModelForProvider('claude-code', input.resolvedSelection, 'anthropic');
+  const model = selectedAnthropicModel(input.resolvedSelection);
   if (model !== undefined) {
     args.push('--model', model);
   }
@@ -140,148 +155,53 @@ export function buildClaudeCodeArgs(input: ClaudeCodeRelayInput): string[] {
 export async function relayClaudeCode(input: ClaudeCodeRelayInput): Promise<RelayResult> {
   const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const args = buildClaudeCodeArgs(input);
-  const start = performance.now();
-  return await new Promise<RelayResult>((resolve, reject) => {
-    let child: ChildProcess;
-    try {
-      // stdin is `ignore` (connected to /dev/null) not `pipe`: the claude
-      // CLI in `-p` mode may otherwise block reading stdin when spawned
-      // without a controlling terminal. Closing stdin at the
-      // stdio-inheritance layer is more reliable than opening the pipe
-      // and calling .end() because there is no race between spawn and
-      // first-byte read.
-      //
-      // `detached: true` puts the subprocess in its own process group so
-      // the timeout-kill path can signal the group; if claude itself
-      // spawns helper processes, they are killed via the group kill.
-      child = spawn(CLAUDE_CODE_EXECUTABLE, args, {
-        stdio: ['ignore', 'pipe', 'pipe'],
-        // Inherit the parent process's environment explicitly. Some test
-        // harnesses (vitest workers) launch children through a process-
-        // pool whose env may not be identical to the top-level node
-        // process's env; passing `process.env` directly makes the
-        // auth/session inheritance unambiguous.
-        env: process.env,
-        detached: true,
-      });
-    } catch (err) {
-      reject(new Error(`claude-code subprocess spawn failed: ${(err as Error).message}`));
-      return;
+  let result: ConnectorSubprocessResult;
+  try {
+    // stdin is `ignore` (connected to /dev/null) and the child is detached:
+    // the shared subprocess helper owns those lifecycle mechanics for all
+    // connectors while this module keeps the claude-specific argv and parser.
+    result = await runConnectorSubprocess({
+      executable: CLAUDE_CODE_EXECUTABLE,
+      args,
+      timeoutMs,
+      stdoutMaxBytes: STDOUT_MAX_BYTES,
+      stderrMaxBytes: STDERR_MAX_BYTES,
+      sigtermToSigkillGraceMs: SIGTERM_TO_SIGKILL_GRACE_MS,
+      env: process.env,
+    });
+  } catch (error) {
+    if (isConnectorSubprocessSpawnError(error)) {
+      const verb = error.phase === 'spawn-failed' ? 'spawn failed' : 'spawn error';
+      throw new Error(`claude-code subprocess ${verb}: ${error.message}`);
     }
-    let stdout = '';
-    let stdoutBytes = 0;
-    let stderr = '';
-    let stderrBytes = 0;
-    let stdoutCapped = false;
-    let stderrCapped = false;
-    let timedOut = false;
-    let killGroupSucceeded = false;
+    throw error;
+  }
 
-    const killProcessGroup = (signal: NodeJS.Signals): boolean => {
-      // `child.pid` is undefined until spawn succeeds. With detached:true,
-      // the negative pid addresses the process group (POSIX).
-      const pid = child.pid;
-      if (typeof pid !== 'number') return false;
-      try {
-        process.kill(-pid, signal);
-        return true;
-      } catch {
-        // Fallback: direct signal to the child itself.
-        try {
-          child.kill(signal);
-          return true;
-        } catch {
-          return false;
-        }
-      }
-    };
-
-    let killGraceTimer: NodeJS.Timeout | undefined;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      killGroupSucceeded = killProcessGroup('SIGTERM');
-      // Escalate to SIGKILL after the grace window. We do NOT reject here —
-      // resolution / rejection is deferred to the `close` handler so the
-      // promise settles only after the subprocess has actually exited.
-      killGraceTimer = setTimeout(() => {
-        killProcessGroup('SIGKILL');
-        killGraceTimer = undefined;
-      }, SIGTERM_TO_SIGKILL_GRACE_MS);
-    }, timeoutMs);
-    const clearAllTimers = () => {
-      clearTimeout(timer);
-      if (killGraceTimer !== undefined) {
-        clearTimeout(killGraceTimer);
-        killGraceTimer = undefined;
-      }
-    };
-
-    child.stdout?.setEncoding('utf8');
-    child.stderr?.setEncoding('utf8');
-    child.stdout?.on('data', (chunk: string) => {
-      if (stdoutBytes + chunk.length > STDOUT_MAX_BYTES) {
-        stdoutCapped = true;
-        // Keep the head; drop the overflow. 16 MiB is already enough
-        // context for any v0-era parse error; further bytes would just
-        // slow us down without improving signal.
-        return;
-      }
-      stdout += chunk;
-      stdoutBytes += chunk.length;
-    });
-    child.stderr?.on('data', (chunk: string) => {
-      if (stderrBytes + chunk.length > STDERR_MAX_BYTES) {
-        stderrCapped = true;
-        return;
-      }
-      stderr += chunk;
-      stderrBytes += chunk.length;
-    });
-    child.on('error', (err) => {
-      clearAllTimers();
-      reject(new Error(`claude-code subprocess spawn error: ${err.message}`));
-    });
-    child.on('close', (code, signal) => {
-      clearAllTimers();
-      const duration_ms = performance.now() - start;
-      if (timedOut) {
-        const stdoutSuffix = stdoutCapped ? ' [stdout capped]' : '';
-        const stderrSuffix = stderrCapped ? ' [stderr capped]' : '';
-        reject(
-          new Error(
-            `claude-code subprocess timed out after ${timeoutMs}ms; group-kill ${killGroupSucceeded ? 'sent' : 'failed'}; final signal=${signal ?? 'none'}; stdout[:500]=${stdout.slice(0, 500)}${stdoutSuffix}; stderr[:500]=${stderr.slice(0, 500)}${stderrSuffix}`,
-          ),
-        );
-        return;
-      }
-      if (code !== 0) {
-        reject(
-          new Error(
-            `claude-code subprocess exited with code ${code}${signal ? ` (signal ${signal})` : ''}; stderr[:500]=${stderr.slice(0, 500)}`,
-          ),
-        );
-        return;
-      }
-      if (stdoutCapped) {
-        reject(
-          new Error(
-            `claude-code subprocess stdout exceeded ${STDOUT_MAX_BYTES} bytes; capability-boundary check cannot be evaluated on truncated stream`,
-          ),
-        );
-        return;
-      }
-      try {
-        resolve(parseClaudeCodeStdout(stdout, input.prompt, duration_ms));
-      } catch (err) {
-        const stderrSuffix = stderrCapped ? ' [stderr capped]' : '';
-        reject(
-          new Error(
-            `claude-code subprocess: ${(err as Error).message}; stdout[:500]=${stdout.slice(0, 500)}; stderr[:200]=${stderr.slice(0, 200)}${stderrSuffix}`,
-          ),
-        );
-      }
-    });
-  });
+  if (result.timedOut) {
+    const stdoutSuffix = result.stdoutCapped ? ' [stdout capped]' : '';
+    const stderrSuffix = result.stderrCapped ? ' [stderr capped]' : '';
+    throw new Error(
+      `claude-code subprocess timed out after ${timeoutMs}ms; group-kill ${result.killGroupSucceeded ? 'sent' : 'failed'}; final signal=${result.signal ?? 'none'}; stdout[:500]=${result.stdout.slice(0, 500)}${stdoutSuffix}; stderr[:500]=${result.stderr.slice(0, 500)}${stderrSuffix}`,
+    );
+  }
+  if (result.code !== 0) {
+    throw new Error(
+      `claude-code subprocess exited with code ${result.code}${result.signal ? ` (signal ${result.signal})` : ''}; stderr[:500]=${result.stderr.slice(0, 500)}`,
+    );
+  }
+  if (result.stdoutCapped) {
+    throw new Error(
+      `claude-code subprocess stdout exceeded ${STDOUT_MAX_BYTES} bytes; capability-boundary check cannot be evaluated on truncated stream`,
+    );
+  }
+  try {
+    return parseClaudeCodeStdout(result.stdout, input.prompt, result.durationMs);
+  } catch (error) {
+    const stderrSuffix = result.stderrCapped ? ' [stderr capped]' : '';
+    throw new Error(
+      `claude-code subprocess: ${(error as Error).message}; stdout[:500]=${result.stdout.slice(0, 500)}; stderr[:200]=${result.stderr.slice(0, 200)}${stderrSuffix}`,
+    );
+  }
 }
 
 // Parsing is extracted so contract tests can exercise the parse branch

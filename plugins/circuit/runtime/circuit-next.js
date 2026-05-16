@@ -7429,6 +7429,18 @@ function buildStructuralHintList(packages) {
   }
   return list;
 }
+function buildRuntimeSurfaceRegistry(packages) {
+  const map = /* @__PURE__ */ new Map();
+  for (const pkg of packages) {
+    if (pkg.runtimeSurface === void 0)
+      continue;
+    if (map.has(pkg.id)) {
+      throw new Error(`duplicate runtime surface registered for flow '${pkg.id}'`);
+    }
+    map.set(pkg.id, pkg.runtimeSurface);
+  }
+  return map;
+}
 function buildRoutablePackages(packages) {
   const out = [];
   for (const pkg of packages) {
@@ -7449,30 +7461,6 @@ function findDefaultRoutablePackage(routables) {
   }
   return first;
 }
-
-// dist/flows/build/relay-hints.js
-var buildImplementationShapeHint = {
-  kind: "schema",
-  schema: "build.implementation@v1",
-  instruction: [
-    "Respond with a single raw JSON object whose top-level shape is exactly:",
-    '{ "verdict": "accept", "summary": "<what changed>", "changed_files": ["<project-relative path>"], "evidence": ["<verification or implementation evidence>"] }',
-    "Make the smallest behaviorally scoped change that satisfies the requested goal. Do not broaden semantics, normalize data, or add extra behavior just because tests still pass.",
-    "Use an empty changed_files array only when no file changed. Evidence must contain at least one item. Do not include extra top-level keys. Do not wrap the JSON in Markdown code fences. Do not include any prose before or after the JSON object.",
-    "The runtime parses your response with JSON.parse, rejects any verdict not drawn from the accepted-verdicts list, and validates the full report body against build.implementation@v1 before writing reports/build/implementation.json."
-  ].join(" ")
-};
-var buildReviewShapeHint = {
-  kind: "schema",
-  schema: "build.review@v1",
-  instruction: [
-    "Respond with a single raw JSON object whose top-level shape is exactly:",
-    '{ "verdict": "<accept|accept-with-fixes|reject>", "summary": "<review summary>", "findings": [{ "severity": "<critical|high|medium|low>", "text": "<finding text>", "file_refs": ["<file:line reference>"] }] }',
-    "Review the change against the requested scope, not just against passing tests. Flag behavior that broadens semantics beyond the goal even when verification passes.",
-    'Use an empty findings array only with verdict "accept". Verdicts "accept-with-fixes" and "reject" must include at least one finding. Use an empty file_refs array when a finding has no file-specific reference. Do not include extra top-level keys. Do not wrap the JSON in Markdown code fences. Do not include any prose before or after the JSON object.',
-    "The runtime parses your response with JSON.parse, rejects any verdict not drawn from the accepted-verdicts list, and validates the full report body against build.review@v1 before writing reports/build/review.json."
-  ].join(" ")
-};
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -11515,6 +11503,1842 @@ var coerce = {
 };
 var NEVER = INVALID;
 
+// dist/schemas/change-kind.js
+var ChangeKind = external_exports.enum([
+  "ratchet-advance",
+  "equivalence-refactor",
+  "migration-escrow",
+  "discovery",
+  "disposable",
+  "break-glass"
+]);
+var ChangeKindBase = external_exports.object({
+  failure_mode: external_exports.string().min(1),
+  acceptance_evidence: external_exports.string().min(1),
+  alternate_framing: external_exports.string().min(1)
+});
+var MigrationEscrowChangeKind = ChangeKindBase.extend({
+  change_kind: external_exports.literal("migration-escrow"),
+  expires_at: external_exports.string().datetime(),
+  restoration_plan: external_exports.string().min(1)
+}).strict();
+var BreakGlassChangeKind = ChangeKindBase.extend({
+  change_kind: external_exports.literal("break-glass"),
+  post_hoc_adr_deadline_at: external_exports.string().datetime()
+}).strict();
+var StandardChangeKind = ChangeKindBase.extend({
+  change_kind: external_exports.enum(["ratchet-advance", "equivalence-refactor", "discovery", "disposable"])
+});
+var ChangeKindDeclaration = external_exports.discriminatedUnion("change_kind", [
+  StandardChangeKind.extend({ change_kind: external_exports.literal("ratchet-advance") }).strict(),
+  StandardChangeKind.extend({ change_kind: external_exports.literal("equivalence-refactor") }).strict(),
+  StandardChangeKind.extend({ change_kind: external_exports.literal("discovery") }).strict(),
+  StandardChangeKind.extend({ change_kind: external_exports.literal("disposable") }).strict(),
+  MigrationEscrowChangeKind,
+  BreakGlassChangeKind
+]);
+
+// dist/schemas/check.js
+var ReportSource = external_exports.object({
+  kind: external_exports.literal("report"),
+  ref: external_exports.literal("report")
+}).strict();
+var CheckpointResponseSource = external_exports.object({
+  kind: external_exports.literal("checkpoint_response"),
+  ref: external_exports.literal("response")
+}).strict();
+var RelayResultSource = external_exports.object({
+  kind: external_exports.literal("relay_result"),
+  ref: external_exports.literal("result")
+}).strict();
+var SubRunResultSource = external_exports.object({
+  kind: external_exports.literal("sub_run_result"),
+  ref: external_exports.literal("result")
+}).strict();
+var FanoutResultsSource = external_exports.object({
+  kind: external_exports.literal("fanout_results"),
+  ref: external_exports.literal("aggregate")
+}).strict();
+var CheckSource = external_exports.discriminatedUnion("kind", [
+  ReportSource,
+  CheckpointResponseSource,
+  RelayResultSource,
+  SubRunResultSource,
+  FanoutResultsSource
+]);
+var SchemaSectionsCheck = external_exports.object({
+  kind: external_exports.literal("schema_sections"),
+  source: ReportSource,
+  required: external_exports.array(external_exports.string().min(1)).min(1)
+}).strict();
+var CheckpointSelectionCheck = external_exports.object({
+  kind: external_exports.literal("checkpoint_selection"),
+  source: CheckpointResponseSource,
+  allow: external_exports.array(external_exports.string().min(1)).min(1)
+}).strict();
+var ResultVerdictCheck = external_exports.object({
+  kind: external_exports.literal("result_verdict"),
+  source: external_exports.discriminatedUnion("kind", [RelayResultSource, SubRunResultSource]),
+  pass: external_exports.array(external_exports.string().min(1)).min(1)
+}).strict();
+var PickWinnerJoin = external_exports.object({
+  policy: external_exports.literal("pick-winner")
+}).strict();
+var DisjointMergeJoin = external_exports.object({
+  policy: external_exports.literal("disjoint-merge")
+}).strict();
+var AggregateOnlyJoin = external_exports.object({
+  policy: external_exports.literal("aggregate-only")
+}).strict();
+var FanoutJoinPolicy = external_exports.discriminatedUnion("policy", [
+  PickWinnerJoin,
+  DisjointMergeJoin,
+  AggregateOnlyJoin
+]);
+var FanoutAggregateCheck = external_exports.object({
+  kind: external_exports.literal("fanout_aggregate"),
+  source: FanoutResultsSource,
+  join: FanoutJoinPolicy,
+  // verdicts.admit is the per-child verdict allowlist consulted by
+  // pick-winner (preference-ordered) and disjoint-merge (membership-only).
+  // aggregate-only ignores the field but still requires it for surface
+  // uniformity — schematic authors who later switch policies don't have to
+  // reauthor the verdict surface.
+  verdicts: external_exports.object({
+    admit: external_exports.array(external_exports.string().min(1)).min(1)
+  }).strict()
+}).strict();
+var Check = external_exports.discriminatedUnion("kind", [
+  SchemaSectionsCheck,
+  CheckpointSelectionCheck,
+  ResultVerdictCheck,
+  FanoutAggregateCheck
+]);
+
+// dist/schemas/depth.js
+var Depth = external_exports.enum(["lite", "standard", "deep", "tournament", "autonomous"]);
+
+// dist/schemas/flow-blocks.js
+var FLOW_BLOCK_IDS = [
+  "intake",
+  "route",
+  "frame",
+  "human-decision",
+  "gather-context",
+  "diagnose",
+  "plan",
+  "act",
+  "run-verification",
+  "review",
+  "queue",
+  "batch",
+  "risk-rollback-check",
+  "close-with-evidence",
+  "handoff"
+];
+var FlowBlockId = external_exports.enum(FLOW_BLOCK_IDS);
+var FlowRoute = external_exports.enum([
+  "continue",
+  "retry",
+  "revise",
+  "ask",
+  "split",
+  "stop",
+  "handoff",
+  "escalate",
+  "complete"
+]);
+var FlowBlockActionSurface = external_exports.enum(["orchestrator", "worker", "host", "mixed"]);
+var FlowBlockCheckKind = external_exports.enum([
+  "schema",
+  "decision",
+  "command",
+  "review",
+  "risk",
+  "queue"
+]);
+var FlowBlockHumanInteraction = external_exports.enum([
+  "never",
+  "optional",
+  "required",
+  "mode-dependent"
+]);
+var FlowContractRef = external_exports.string().regex(/^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)+@v[0-9]+$/);
+var FlowInputContractSet = external_exports.array(FlowContractRef).min(1).superRefine((contracts, ctx) => {
+  const seen = /* @__PURE__ */ new Set();
+  for (const [index, contract] of contracts.entries()) {
+    if (seen.has(contract)) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: [index],
+        message: `duplicate input contract: ${contract}`
+      });
+    }
+    seen.add(contract);
+  }
+});
+var nonEmptyUniqueStrings = external_exports.array(external_exports.string().min(1)).min(1).superRefine((values, ctx) => {
+  const seen = /* @__PURE__ */ new Set();
+  for (const [index, value] of values.entries()) {
+    if (seen.has(value)) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: [index],
+        message: `duplicate value: ${value}`
+      });
+    }
+    seen.add(value);
+  }
+});
+var HostCapabilities = external_exports.object({
+  claude: external_exports.array(external_exports.string().min(1)).default([]),
+  codex: external_exports.array(external_exports.string().min(1)).default([]),
+  non_interactive: external_exports.array(external_exports.string().min(1)).default([])
+}).strict();
+var FlowBlock = external_exports.object({
+  id: FlowBlockId,
+  title: external_exports.string().min(1),
+  purpose: external_exports.string().min(1),
+  input_contracts: FlowInputContractSet,
+  alternative_input_contracts: external_exports.array(FlowInputContractSet).default([]),
+  output_contract: FlowContractRef,
+  action_surface: FlowBlockActionSurface,
+  produces_evidence: nonEmptyUniqueStrings,
+  check: external_exports.object({
+    kind: FlowBlockCheckKind,
+    description: external_exports.string().min(1)
+  }).strict(),
+  allowed_routes: external_exports.array(FlowRoute).min(1),
+  human_interaction: FlowBlockHumanInteraction,
+  host_capabilities: HostCapabilities,
+  notes: external_exports.string().min(1).optional()
+}).strict().superRefine((block, ctx) => {
+  const routeSet = /* @__PURE__ */ new Set();
+  for (const [index, route] of block.allowed_routes.entries()) {
+    if (routeSet.has(route)) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["allowed_routes", index],
+        message: `duplicate route: ${route}`
+      });
+    }
+    routeSet.add(route);
+  }
+  if (block.id === "human-decision") {
+    if (block.human_interaction !== "mode-dependent") {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["human_interaction"],
+        message: "human-decision must be mode-dependent"
+      });
+    }
+    if (block.host_capabilities.claude.length === 0) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["host_capabilities", "claude"],
+        message: "human-decision must name a Claude host strategy"
+      });
+    }
+    if (block.host_capabilities.codex.length === 0) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["host_capabilities", "codex"],
+        message: "human-decision must name a Codex host strategy"
+      });
+    }
+    if (block.host_capabilities.non_interactive.length === 0) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["host_capabilities", "non_interactive"],
+        message: "human-decision must name a non-interactive host strategy"
+      });
+    }
+  }
+  if (block.id === "close-with-evidence" && !routeSet.has("complete")) {
+    ctx.addIssue({
+      code: external_exports.ZodIssueCode.custom,
+      path: ["allowed_routes"],
+      message: "close-with-evidence must allow complete"
+    });
+  }
+});
+var FlowBlockCatalog = external_exports.object({
+  schema_version: external_exports.literal("1"),
+  blocks: external_exports.array(FlowBlock).min(FLOW_BLOCK_IDS.length)
+}).strict().superRefine((catalog, ctx) => {
+  const seen = /* @__PURE__ */ new Map();
+  for (const [index, block] of catalog.blocks.entries()) {
+    const prior = seen.get(block.id);
+    if (prior !== void 0) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["blocks", index, "id"],
+        message: `duplicate block id: ${block.id} also appears at index ${prior}`
+      });
+    }
+    seen.set(block.id, index);
+  }
+  for (const requiredId of FLOW_BLOCK_IDS) {
+    if (!seen.has(requiredId)) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["blocks"],
+        message: `missing block id: ${requiredId}`
+      });
+    }
+  }
+});
+
+// dist/schemas/ids.js
+var slugPattern = /^[a-z][a-z0-9-]*$/;
+var CompiledFlowId = external_exports.string().regex(slugPattern).brand();
+var StageId = external_exports.string().regex(slugPattern).brand();
+var StepId = external_exports.string().regex(slugPattern).brand();
+var RunId = external_exports.string().uuid().brand();
+var InvocationId = external_exports.string().regex(/^inv_[a-f0-9-]+$/).brand();
+var SkillId = external_exports.string().regex(slugPattern).brand();
+var SkillSlotId = external_exports.string().regex(slugPattern).brand();
+var ProtocolId = external_exports.string().regex(/^[a-z][a-z0-9-]*@v\d+$/).brand();
+
+// dist/schemas/json.js
+var JsonPrimitive = external_exports.union([
+  external_exports.string(),
+  external_exports.number().refine((n) => Number.isFinite(n), {
+    message: "JSON numbers must be finite"
+  }),
+  external_exports.boolean(),
+  external_exports.null()
+]);
+var JsonValue = external_exports.lazy(() => external_exports.union([JsonPrimitive, external_exports.array(JsonValue), JsonObject]));
+var JsonObject = external_exports.record(external_exports.string(), JsonValue);
+
+// dist/schemas/selection-policy.js
+var ProviderScopedModel = external_exports.object({
+  provider: external_exports.enum(["openai", "anthropic", "gemini", "custom"]),
+  model: external_exports.string().min(1)
+}).strict();
+var Effort = external_exports.enum(["none", "minimal", "low", "medium", "high", "xhigh"]);
+var UniqueSkillArray = external_exports.array(SkillId).refine((arr) => new Set(arr).size === arr.length, (arr) => ({
+  message: `skills array contains duplicates: ${[...new Set(arr.filter((s, i) => arr.indexOf(s) !== i))].join(", ")}`
+}));
+var SkillOverride = external_exports.discriminatedUnion("mode", [
+  external_exports.object({ mode: external_exports.literal("inherit") }).strict(),
+  external_exports.object({ mode: external_exports.literal("replace"), skills: UniqueSkillArray }).strict(),
+  external_exports.object({ mode: external_exports.literal("append"), skills: UniqueSkillArray }).strict(),
+  external_exports.object({ mode: external_exports.literal("remove"), skills: UniqueSkillArray }).strict()
+]);
+var SelectionOverride = external_exports.object({
+  model: ProviderScopedModel.optional(),
+  effort: Effort.optional(),
+  skills: SkillOverride.default({ mode: "inherit" }),
+  depth: Depth.optional(),
+  invocation_options: JsonObject.default({})
+}).strict();
+var ResolvedSelection = external_exports.object({
+  model: ProviderScopedModel.optional(),
+  effort: Effort.optional(),
+  skills: UniqueSkillArray,
+  depth: Depth.optional(),
+  invocation_options: JsonObject.default({})
+}).strict();
+var SelectionSource = external_exports.enum([
+  "default",
+  "user-global",
+  "project",
+  "flow",
+  "stage",
+  "step",
+  "invocation"
+]);
+var SELECTION_PRECEDENCE = [
+  "default",
+  "user-global",
+  "project",
+  "flow",
+  "stage",
+  "step",
+  "invocation"
+];
+var PRECEDENCE_INDEX = Object.fromEntries(SELECTION_PRECEDENCE.map((s, i) => [s, i]));
+var AppliedEntry = external_exports.discriminatedUnion("source", [
+  external_exports.object({ source: external_exports.literal("default"), override: SelectionOverride }).strict(),
+  external_exports.object({ source: external_exports.literal("user-global"), override: SelectionOverride }).strict(),
+  external_exports.object({ source: external_exports.literal("project"), override: SelectionOverride }).strict(),
+  external_exports.object({ source: external_exports.literal("flow"), override: SelectionOverride }).strict(),
+  external_exports.object({
+    source: external_exports.literal("stage"),
+    stage_id: StageId,
+    override: SelectionOverride
+  }).strict(),
+  external_exports.object({ source: external_exports.literal("step"), step_id: StepId, override: SelectionOverride }).strict(),
+  external_exports.object({ source: external_exports.literal("invocation"), override: SelectionOverride }).strict()
+]);
+function overrideContributes(o) {
+  if (o.model !== void 0)
+    return true;
+  if (o.effort !== void 0)
+    return true;
+  if (o.depth !== void 0)
+    return true;
+  if (o.skills.mode !== "inherit")
+    return true;
+  if (Object.keys(o.invocation_options).length > 0)
+    return true;
+  return false;
+}
+var SelectionResolutionBody = external_exports.object({
+  resolved: ResolvedSelection,
+  applied: external_exports.array(AppliedEntry)
+}).strict();
+var issueAt = (ctx, path, message) => {
+  ctx.addIssue({ code: external_exports.ZodIssueCode.custom, path, message });
+};
+function identityKey(entry) {
+  switch (entry.source) {
+    case "stage":
+      return `stage:${entry.stage_id}`;
+    case "step":
+      return `step:${entry.step_id}`;
+    default:
+      return entry.source;
+  }
+}
+var SelectionResolution = SelectionResolutionBody.superRefine((res, ctx) => {
+  const seen = /* @__PURE__ */ new Set();
+  let lastIndex = -1;
+  for (let i = 0; i < res.applied.length; i++) {
+    const entry = res.applied[i];
+    if (entry === void 0)
+      continue;
+    const key = identityKey(entry);
+    if (seen.has(key)) {
+      issueAt(ctx, ["applied", i, "source"], `duplicate applied identity '${key}' at index ${i}; each identity may contribute at most once (stage/step are disambiguated by their id)`);
+      continue;
+    }
+    seen.add(key);
+    const idx = PRECEDENCE_INDEX[entry.source];
+    if (idx < lastIndex) {
+      issueAt(ctx, ["applied", i, "source"], `applied entry '${entry.source}' at index ${i} is out of precedence order; entries must appear in SELECTION_PRECEDENCE order (default < user-global < project < flow < stage < step < invocation). Two entries with equal precedence (two stages, two steps) are legal and must appear contiguously; a later category cannot precede an earlier one.`);
+    } else {
+      lastIndex = idx;
+    }
+    if (!overrideContributes(entry.override)) {
+      issueAt(ctx, ["applied", i, "override"], `applied entry at index ${i} has an empty override (no model, effort, depth, skills operation, or invocation_options); a layer that contributes nothing must NOT appear in the applied chain (ghost provenance)`);
+    }
+  }
+});
+
+// dist/schemas/stage.js
+var CanonicalStage = external_exports.enum([
+  "frame",
+  "analyze",
+  "plan",
+  "act",
+  "verify",
+  "review",
+  "close"
+]);
+var Stage = external_exports.object({
+  id: StageId,
+  title: external_exports.string().min(1),
+  canonical: CanonicalStage.optional(),
+  steps: external_exports.array(StepId).min(1),
+  selection: SelectionOverride.optional()
+}).strict();
+var CANONICAL_STAGES = [
+  "frame",
+  "analyze",
+  "plan",
+  "act",
+  "verify",
+  "review",
+  "close"
+];
+var SpinePolicy = external_exports.discriminatedUnion("mode", [
+  external_exports.object({
+    mode: external_exports.literal("strict")
+  }).strict(),
+  external_exports.object({
+    mode: external_exports.literal("partial"),
+    omits: external_exports.array(CanonicalStage).min(1),
+    rationale: external_exports.string().min(20)
+  }).strict()
+]);
+
+// dist/schemas/flow-block-definitions.js
+var FLOW_BLOCK_CATALOG = FlowBlockCatalog.parse({
+  schema_version: "1",
+  blocks: [
+    {
+      id: "intake",
+      title: "Intake",
+      purpose: "Capture the user's goal, requested mode, explicit flow choice, and immediate constraints.",
+      input_contracts: ["user.goal@v1"],
+      output_contract: "task.intake@v1",
+      action_surface: "orchestrator",
+      produces_evidence: ["normalized goal", "requested flow", "operator constraints"],
+      check: {
+        kind: "schema",
+        description: "The normalized task must preserve the user's goal and expose any explicit flow or mode choice."
+      },
+      allowed_routes: ["continue", "ask", "stop"],
+      human_interaction: "optional",
+      host_capabilities: {
+        claude: [],
+        codex: [],
+        non_interactive: []
+      }
+    },
+    {
+      id: "route",
+      title: "Route",
+      purpose: "Choose the flow or schematic path from the normalized task.",
+      input_contracts: ["task.intake@v1", "flow.catalog@v1"],
+      output_contract: "route.decision@v1",
+      action_surface: "orchestrator",
+      produces_evidence: ["selected flow", "selection reason", "fallback reason when conservative"],
+      check: {
+        kind: "schema",
+        description: "The route decision must name one known flow or stop with an explicit reason."
+      },
+      allowed_routes: ["continue", "ask", "stop"],
+      human_interaction: "optional",
+      host_capabilities: {
+        claude: [],
+        codex: [],
+        non_interactive: []
+      }
+    },
+    {
+      id: "frame",
+      title: "Frame",
+      purpose: "Define the work boundary, constraints, and proof needed for the selected path.",
+      input_contracts: ["task.intake@v1", "route.decision@v1"],
+      output_contract: "flow.brief@v1",
+      action_surface: "orchestrator",
+      produces_evidence: ["scope boundary", "constraints", "proof plan"],
+      check: {
+        kind: "schema",
+        description: "The brief must state what is in scope, what is out of scope, and how success will be proved."
+      },
+      allowed_routes: ["continue", "revise", "ask", "stop"],
+      human_interaction: "optional",
+      host_capabilities: {
+        claude: [],
+        codex: [],
+        non_interactive: []
+      }
+    },
+    {
+      id: "human-decision",
+      title: "Human Decision",
+      purpose: "Ask the operator a bounded question and record the answer as flow evidence.",
+      input_contracts: ["flow.question@v1", "flow.evidence@v1"],
+      output_contract: "decision.answer@v1",
+      action_surface: "host",
+      produces_evidence: ["question", "available options", "selected option", "answer source"],
+      check: {
+        kind: "decision",
+        description: "The selected option must be one of the declared options or the run must pause, stop, or fail clearly."
+      },
+      allowed_routes: ["continue", "revise", "stop", "handoff", "escalate"],
+      human_interaction: "mode-dependent",
+      host_capabilities: {
+        claude: ["AskUserQuestion or native user-question tool when available"],
+        codex: ["native interactive question mechanism when available"],
+        non_interactive: ["use declared default", "pause", "fail clearly"]
+      }
+    },
+    {
+      id: "gather-context",
+      title: "Gather Context",
+      purpose: "Collect relevant facts, files, commands, or references before deciding or acting.",
+      input_contracts: ["flow.brief@v1", "context.request@v1"],
+      output_contract: "context.packet@v1",
+      action_surface: "worker",
+      produces_evidence: ["source list", "observations", "confidence notes"],
+      check: {
+        kind: "schema",
+        description: "The context packet must cite its sources and separate observed facts from interpretation."
+      },
+      allowed_routes: ["continue", "retry", "ask", "stop"],
+      human_interaction: "optional",
+      host_capabilities: {
+        claude: [],
+        codex: [],
+        non_interactive: []
+      }
+    },
+    {
+      id: "diagnose",
+      title: "Diagnose",
+      purpose: "Explain what is broken, unknown, risky, or likely causing the observed behavior.",
+      input_contracts: ["flow.brief@v1", "context.packet@v1"],
+      output_contract: "diagnosis.result@v1",
+      action_surface: "worker",
+      produces_evidence: [
+        "cause hypothesis",
+        "confidence",
+        "reproduction status",
+        "diagnostic path"
+      ],
+      check: {
+        kind: "schema",
+        description: "The diagnosis must distinguish known facts, hypotheses, and unresolved questions."
+      },
+      allowed_routes: ["continue", "retry", "ask", "stop"],
+      human_interaction: "optional",
+      host_capabilities: {
+        claude: [],
+        codex: [],
+        non_interactive: []
+      }
+    },
+    {
+      id: "plan",
+      title: "Plan",
+      purpose: "Choose a bounded implementation, investigation, or migration path.",
+      input_contracts: ["flow.brief@v1", "context.packet@v1", "diagnosis.result@v1"],
+      alternative_input_contracts: [["flow.brief@v1"], ["flow.brief@v1", "context.packet@v1"]],
+      output_contract: "plan.strategy@v1",
+      action_surface: "worker",
+      produces_evidence: ["ordered steps", "risk notes", "proof strategy"],
+      check: {
+        kind: "schema",
+        description: "The plan must name concrete steps, expected proof, and known risks."
+      },
+      allowed_routes: ["continue", "revise", "ask", "stop"],
+      human_interaction: "optional",
+      host_capabilities: {
+        claude: [],
+        codex: [],
+        non_interactive: []
+      }
+    },
+    {
+      id: "act",
+      title: "Act",
+      purpose: "Make or delegate the change within the declared scope.",
+      input_contracts: ["flow.brief@v1", "diagnosis.result@v1"],
+      alternative_input_contracts: [
+        ["flow.brief@v1", "plan.strategy@v1"],
+        ["flow.brief@v1", "plan.strategy@v1", "diagnosis.result@v1"]
+      ],
+      output_contract: "change.evidence@v1",
+      action_surface: "worker",
+      produces_evidence: ["changed files", "change rationale", "declared follow-up proof"],
+      check: {
+        kind: "schema",
+        description: "The action evidence must name what changed and why it stays inside scope."
+      },
+      allowed_routes: ["continue", "retry", "ask", "stop", "handoff"],
+      human_interaction: "optional",
+      host_capabilities: {
+        claude: [],
+        codex: [],
+        non_interactive: []
+      }
+    },
+    {
+      id: "run-verification",
+      title: "Run Verification",
+      purpose: "Run declared proof commands or checks and capture their result.",
+      input_contracts: ["verification.plan@v1", "change.evidence@v1"],
+      alternative_input_contracts: [["verification.plan@v1"]],
+      output_contract: "verification.result@v1",
+      action_surface: "orchestrator",
+      produces_evidence: ["command list", "exit status", "bounded output", "pass or fail"],
+      check: {
+        kind: "command",
+        description: "Each verification command must have a captured exit status and bounded output."
+      },
+      allowed_routes: ["continue", "retry", "ask", "stop"],
+      human_interaction: "optional",
+      host_capabilities: {
+        claude: [],
+        codex: [],
+        non_interactive: []
+      }
+    },
+    {
+      id: "review",
+      title: "Review",
+      purpose: "Judge whether the result satisfies the brief and whether any fixes are required.",
+      input_contracts: ["flow.brief@v1", "change.evidence@v1", "verification.result@v1"],
+      alternative_input_contracts: [["flow.brief@v1"], ["flow.brief@v1", "change.evidence@v1"]],
+      output_contract: "review.verdict@v1",
+      action_surface: "worker",
+      produces_evidence: ["verdict", "findings", "confidence", "required fixes"],
+      check: {
+        kind: "review",
+        description: "The verdict must be one of the declared review outcomes and must include findings when it blocks."
+      },
+      allowed_routes: ["continue", "retry", "revise", "ask", "stop"],
+      human_interaction: "optional",
+      host_capabilities: {
+        claude: [],
+        codex: [],
+        non_interactive: []
+      }
+    },
+    {
+      id: "queue",
+      title: "Queue",
+      purpose: "Turn broad work into ordered items with state and risk class.",
+      input_contracts: ["flow.brief@v1", "context.packet@v1"],
+      output_contract: "work.queue@v1",
+      action_surface: "orchestrator",
+      produces_evidence: ["ordered items", "item state", "risk class", "selection rule"],
+      check: {
+        kind: "queue",
+        description: "Each queue item must have an identifier, state, and reason it belongs in the queue."
+      },
+      allowed_routes: ["continue", "ask", "stop"],
+      human_interaction: "optional",
+      host_capabilities: {
+        claude: [],
+        codex: [],
+        non_interactive: []
+      }
+    },
+    {
+      id: "batch",
+      title: "Batch",
+      purpose: "Process a bounded set of queue items and record what completed, skipped, blocked, or failed.",
+      input_contracts: ["work.queue@v1", "flow.brief@v1"],
+      output_contract: "batch.result@v1",
+      action_surface: "mixed",
+      produces_evidence: ["completed items", "skipped items", "blocked items", "failed items"],
+      check: {
+        kind: "schema",
+        description: "The batch result must account for every selected item exactly once."
+      },
+      allowed_routes: ["continue", "retry", "ask", "stop", "handoff"],
+      human_interaction: "optional",
+      host_capabilities: {
+        claude: [],
+        codex: [],
+        non_interactive: []
+      }
+    },
+    {
+      id: "risk-rollback-check",
+      title: "Risk/Rollback Check",
+      purpose: "Decide whether continuing is safe and what recovery path exists if it is not.",
+      input_contracts: ["change.evidence@v1", "verification.result@v1", "flow.brief@v1"],
+      output_contract: "risk.decision@v1",
+      action_surface: "orchestrator",
+      produces_evidence: ["risk class", "allowed next action", "recovery option"],
+      check: {
+        kind: "risk",
+        description: "The decision must explicitly allow, split, stop, hand off, or escalate the next action."
+      },
+      allowed_routes: ["continue", "split", "ask", "stop", "handoff", "escalate"],
+      human_interaction: "optional",
+      host_capabilities: {
+        claude: [],
+        codex: [],
+        non_interactive: []
+      }
+    },
+    {
+      id: "close-with-evidence",
+      title: "Close With Evidence",
+      purpose: "End the run honestly with outcome, evidence pointers, and residual risks.",
+      input_contracts: ["flow.brief@v1", "verification.result@v1", "review.verdict@v1"],
+      alternative_input_contracts: [
+        ["flow.brief@v1", "verification.result@v1"],
+        ["flow.brief@v1", "review.verdict@v1"],
+        ["flow.brief@v1"]
+      ],
+      output_contract: "flow.result@v1",
+      action_surface: "orchestrator",
+      produces_evidence: ["outcome", "evidence pointers", "residual risks", "follow-ups"],
+      check: {
+        kind: "schema",
+        description: "The final result must align with the evidence and cannot report completion when a stop, handoff, or escalation route was selected."
+      },
+      allowed_routes: ["complete", "stop", "handoff", "escalate"],
+      human_interaction: "never",
+      host_capabilities: {
+        claude: [],
+        codex: [],
+        non_interactive: []
+      }
+    },
+    {
+      id: "handoff",
+      title: "Handoff",
+      purpose: "Persist enough state for a later session to resume with context and next action.",
+      input_contracts: ["flow.state@v1", "flow.brief@v1"],
+      output_contract: "continuity.record@v1",
+      action_surface: "orchestrator",
+      produces_evidence: [
+        "goal",
+        "completed moves",
+        "pending evidence",
+        "next action",
+        "known debt"
+      ],
+      check: {
+        kind: "schema",
+        description: "The handoff record must contain enough state for a later run to continue without relying on chat memory."
+      },
+      allowed_routes: ["complete", "stop"],
+      human_interaction: "never",
+      host_capabilities: {
+        claude: [],
+        codex: [],
+        non_interactive: []
+      }
+    }
+  ]
+});
+
+// dist/schemas/scalars.js
+var ControlPlaneFileStem = external_exports.string().min(1).max(128).regex(/^[a-z0-9][a-z0-9._-]*$/, {
+  message: "must match /^[a-z0-9][a-z0-9._-]*$/ (lowercase alnum start; alnum, dot, underscore, hyphen thereafter)"
+}).refine((value) => value !== "." && value !== "..", {
+  message: "must not be a current or parent directory segment"
+}).refine((value) => !value.includes(".."), {
+  message: "must not contain parent-directory traversal"
+}).refine((value) => !value.includes("/") && !value.includes("\\"), {
+  message: "must not contain path separators"
+});
+var RunRelativePath = external_exports.string().min(1, { message: "run-relative path must be non-empty" }).refine((value) => !value.startsWith("/"), {
+  message: "run-relative path must not be absolute"
+}).refine((value) => !value.includes("\\"), {
+  message: 'run-relative path must use POSIX "/" separators, not backslashes'
+}).refine((value) => !value.includes(":"), {
+  message: "run-relative path must not contain drive-letter or colon forms"
+}).refine((value) => value.split("/").every((segment) => segment.length > 0 && segment !== "." && segment !== ".."), {
+  message: "run-relative path must not contain empty, current-directory, or parent-directory segments"
+}).brand();
+
+// dist/schemas/skill.js
+var SkillDomain = external_exports.enum(["coding", "design", "research", "ops", "domain-general"]);
+var descriptorOwnPropertyGuard = external_exports.custom((raw) => {
+  if (raw === null || typeof raw !== "object")
+    return true;
+  const guarded = ["id", "title", "description", "trigger"];
+  for (const f of guarded)
+    if (!Object.hasOwn(raw, f))
+      return false;
+  return true;
+}, "skill descriptor has inherited (not own) required field; prototype-chain smuggle rejected");
+var SkillDescriptorBody = external_exports.object({
+  id: SkillId,
+  title: external_exports.string().min(1),
+  description: external_exports.string().min(1),
+  trigger: external_exports.string().min(1),
+  /**
+   * `capabilities`, when present, is a non-empty array of non-empty
+   * strings. A catalog entry that has not declared any capabilities
+   * should omit the field; an empty list `[]` is an ambiguity bug
+   * and rejected.
+   */
+  capabilities: external_exports.array(external_exports.string().min(1)).min(1).optional(),
+  domain: SkillDomain.default("domain-general")
+}).strict();
+var SkillDescriptor = descriptorOwnPropertyGuard.pipe(SkillDescriptorBody);
+var HEX64 = /^[0-9a-f]{64}$/;
+var UserSkillEntry = external_exports.object({
+  id: SkillId,
+  name: external_exports.string().min(1).optional(),
+  description: external_exports.string().min(1).optional(),
+  trigger: external_exports.string().min(1).optional(),
+  root: external_exports.string().min(1),
+  path: external_exports.string().min(1),
+  sha256: external_exports.string().regex(HEX64),
+  bytes: external_exports.number().int().nonnegative()
+}).strict();
+var SkillSlot = external_exports.object({
+  id: SkillSlotId,
+  description: external_exports.string().min(1)
+}).strict();
+var SkillSlotArray = external_exports.array(SkillSlot).superRefine((slots, ctx) => {
+  const seen = /* @__PURE__ */ new Set();
+  for (const [index, slot] of slots.entries()) {
+    const key = slot.id;
+    if (seen.has(key)) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: [index, "id"],
+        message: `duplicate skill slot '${key}'`
+      });
+    }
+    seen.add(key);
+  }
+});
+
+// dist/schemas/step.js
+var RelayRole = external_exports.enum(["researcher", "implementer", "reviewer"]);
+var ReportRef = external_exports.object({
+  path: RunRelativePath,
+  schema: external_exports.string().min(1)
+});
+var StepBase = external_exports.object({
+  id: StepId,
+  title: external_exports.string().min(1),
+  protocol: ProtocolId,
+  reads: external_exports.array(RunRelativePath).default([]),
+  routes: external_exports.record(external_exports.string(), external_exports.string()).refine((m) => Object.keys(m).length > 0, {
+    message: "Step must declare at least one route (including `@complete`)."
+  }),
+  selection: SelectionOverride.optional(),
+  skill_slots: SkillSlotArray.optional(),
+  budgets: external_exports.object({
+    max_attempts: external_exports.number().int().positive().max(10),
+    wall_clock_ms: external_exports.number().int().positive().optional()
+  }).optional()
+});
+var ComposeStep = StepBase.extend({
+  executor: external_exports.literal("orchestrator"),
+  kind: external_exports.literal("compose"),
+  writes: external_exports.object({
+    report: ReportRef
+  }).strict(),
+  check: SchemaSectionsCheck
+}).strict();
+var VerificationStep = StepBase.extend({
+  executor: external_exports.literal("orchestrator"),
+  kind: external_exports.literal("verification"),
+  writes: external_exports.object({
+    report: ReportRef
+  }).strict(),
+  check: SchemaSectionsCheck
+}).strict();
+var CheckpointPolicy = external_exports.object({
+  prompt: external_exports.string().min(1),
+  choices: external_exports.array(external_exports.object({
+    id: external_exports.string().min(1),
+    label: external_exports.string().min(1).optional(),
+    description: external_exports.string().min(1).optional()
+  }).strict()).min(1),
+  safe_default_choice: external_exports.string().min(1).optional(),
+  safe_autonomous_choice: external_exports.string().min(1).optional(),
+  report_template: JsonObject.optional()
+}).strict().superRefine((policy2, ctx) => {
+  const choiceIds = /* @__PURE__ */ new Set();
+  for (const [index, choice] of policy2.choices.entries()) {
+    if (choiceIds.has(choice.id)) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["choices", index, "id"],
+        message: `duplicate checkpoint choice '${choice.id}'`
+      });
+    }
+    choiceIds.add(choice.id);
+  }
+  for (const [field, value] of [
+    ["safe_default_choice", policy2.safe_default_choice],
+    ["safe_autonomous_choice", policy2.safe_autonomous_choice]
+  ]) {
+    if (value !== void 0 && !choiceIds.has(value)) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: [field],
+        message: `${field} must reference a declared checkpoint choice`
+      });
+    }
+  }
+});
+var CheckpointStep = StepBase.extend({
+  executor: external_exports.literal("orchestrator"),
+  kind: external_exports.literal("checkpoint"),
+  policy: CheckpointPolicy,
+  writes: external_exports.object({
+    request: RunRelativePath,
+    response: RunRelativePath,
+    report: ReportRef.optional()
+  }).strict(),
+  check: CheckpointSelectionCheck
+}).strict();
+var RelayStep = StepBase.extend({
+  executor: external_exports.literal("worker"),
+  kind: external_exports.literal("relay"),
+  role: RelayRole,
+  writes: external_exports.object({
+    report: ReportRef.optional(),
+    request: RunRelativePath,
+    receipt: RunRelativePath,
+    result: RunRelativePath
+  }).strict(),
+  check: ResultVerdictCheck
+}).strict();
+var CompiledFlowRef = external_exports.object({
+  flow_id: CompiledFlowId,
+  entry_mode: external_exports.string().regex(/^[a-z][a-z0-9-]*$/, { message: "entry_mode must be a kebab-case slug" }),
+  // Optional pin to a specific schematic version. Default is the version
+  // resolved by the schematic loader at child-bootstrap time.
+  version: external_exports.string().min(1).optional()
+}).strict();
+var SubRunStep = StepBase.extend({
+  executor: external_exports.literal("orchestrator"),
+  kind: external_exports.literal("sub-run"),
+  flow_ref: CompiledFlowRef,
+  // Goal string handed to the child flow at bootstrap. Templating is
+  // a runtime concern (e.g., `$upstream_report.field` substitution) that
+  // resolves before child bootstrap; the schema accepts a plain string.
+  goal: external_exports.string().min(1),
+  depth: Depth,
+  writes: external_exports.object({
+    // The child run's terminal result.json copied into the parent's
+    // run-folder after the child closes. The parent check reads this slot.
+    result: RunRelativePath,
+    // Optional materialized child report (e.g., child build-result.json
+    // republished verbatim into a parent slot for downstream readers).
+    report: ReportRef.optional()
+  }).strict(),
+  check: ResultVerdictCheck
+}).strict();
+var FANOUT_BRANCH_ID_REGEX = /^[a-z0-9][a-z0-9-]*$/;
+var FanoutSubRunBranch = external_exports.object({
+  // Branch identifier; unique across the fanout's branches. Used to
+  // derive the per-branch worktree name and the per-branch result
+  // directory under `writes.branches_dir/<branch_id>/`.
+  branch_id: external_exports.string().min(1).max(64).regex(FANOUT_BRANCH_ID_REGEX, { message: "branch_id must be a kebab-case slug" }),
+  flow_ref: CompiledFlowRef,
+  goal: external_exports.string().min(1),
+  depth: Depth,
+  // Per-branch selection override — useful for tournament-style fanouts
+  // where the variation is in connector / model selection, not flow.
+  selection: SelectionOverride.optional()
+}).strict();
+var FanoutRelayBranchExecution = external_exports.object({
+  kind: external_exports.literal("relay"),
+  role: RelayRole,
+  goal: external_exports.string().min(1),
+  report_schema: external_exports.string().min(1),
+  provenance_field: external_exports.string().regex(/^[a-z_][a-z0-9_]*$/i, {
+    message: "provenance_field must be a top-level JSON field name"
+  }).optional()
+}).strict();
+var FanoutRelayBranch = external_exports.object({
+  branch_id: external_exports.string().min(1).max(64).regex(FANOUT_BRANCH_ID_REGEX, { message: "branch_id must be a kebab-case slug" }),
+  execution: FanoutRelayBranchExecution,
+  selection: SelectionOverride.optional()
+}).strict();
+var FanoutBranch = external_exports.union([FanoutSubRunBranch, FanoutRelayBranch]);
+var FanoutSubRunBranchTemplate = external_exports.object({
+  branch_id: external_exports.string().min(1).max(64),
+  flow_ref: CompiledFlowRef,
+  goal: external_exports.string().min(1),
+  depth: Depth,
+  selection: SelectionOverride.optional()
+}).strict();
+var FanoutRelayBranchTemplate = external_exports.object({
+  branch_id: external_exports.string().min(1).max(64),
+  execution: FanoutRelayBranchExecution,
+  selection: SelectionOverride.optional()
+}).strict();
+var FanoutBranchTemplate = external_exports.union([
+  FanoutSubRunBranchTemplate,
+  FanoutRelayBranchTemplate
+]);
+var FanoutBranchesStatic = external_exports.object({
+  kind: external_exports.literal("static"),
+  // Author lists every branch upfront. Used by tournaments (N attempts at
+  // one flow, varying selection / depth) and small fixed crucibles.
+  branches: external_exports.array(FanoutBranch).min(1).max(64)
+}).strict();
+var FanoutBranchesDynamic = external_exports.object({
+  kind: external_exports.literal("dynamic"),
+  // Branches computed at runtime from an upstream report. Authors
+  // declare the source report + a JSONPath-like dotted path to the
+  // iterable + a template branch with `$item.<field>` placeholders.
+  // Runtime expands the template per item at fanout.start time and
+  // re-parses each expansion through FanoutBranch (strict regex).
+  //
+  // Used by Migrate where batch count is determined by inventory.
+  source_report: RunRelativePath,
+  items_path: external_exports.string().min(1),
+  template: FanoutBranchTemplate,
+  // Hard cap to prevent runaway fanouts when the source report is
+  // unexpectedly large.
+  max_branches: external_exports.number().int().positive().max(256).default(16)
+}).strict();
+var FanoutBranches = external_exports.discriminatedUnion("kind", [
+  FanoutBranchesStatic,
+  FanoutBranchesDynamic
+]);
+var FanoutConcurrency = external_exports.discriminatedUnion("kind", [
+  external_exports.object({ kind: external_exports.literal("unbounded") }).strict(),
+  external_exports.object({
+    kind: external_exports.literal("bounded"),
+    max: external_exports.number().int().positive().max(64)
+  }).strict()
+]);
+var FanoutFailurePolicy = external_exports.enum(["abort-all", "continue-others"]);
+var FanoutStep = StepBase.extend({
+  executor: external_exports.literal("orchestrator"),
+  kind: external_exports.literal("fanout"),
+  branches: FanoutBranches,
+  // Default bounded(4) keeps disk and rate-limit pressure sane on
+  // unattended runs. Authors who know their parallelism budget can opt
+  // into unbounded explicitly.
+  concurrency: FanoutConcurrency.default({ kind: "bounded", max: 4 }),
+  on_child_failure: FanoutFailurePolicy.default("abort-all"),
+  writes: external_exports.object({
+    // Parent directory under which the runtime materialises each
+    // branch's result.json at `<branches_dir>/<branch_id>/result.json`.
+    // The directory is runtime-owned; schematic authors declare its location.
+    branches_dir: RunRelativePath,
+    // Aggregate report summarising all child results, built by the
+    // runtime after join. This is the slot the check reads.
+    aggregate: ReportRef
+  }).strict(),
+  check: FanoutAggregateCheck
+}).strict();
+var Step = external_exports.discriminatedUnion("kind", [
+  ComposeStep,
+  VerificationStep,
+  CheckpointStep,
+  RelayStep,
+  SubRunStep,
+  FanoutStep
+]).superRefine((step, ctx) => {
+  const slot = step.check.source.ref;
+  const writes = step.writes;
+  if (!Object.hasOwn(writes, slot) || writes[slot] === void 0) {
+    ctx.addIssue({
+      code: external_exports.ZodIssueCode.custom,
+      path: ["check", "source", "ref"],
+      message: `check.source.ref "${slot}" does not resolve to a usable slot in step.writes (available: ${Object.keys(writes).join(", ")})`
+    });
+  }
+  if (step.kind === "checkpoint") {
+    const policyChoiceIds = step.policy.choices.map((choice) => choice.id).sort();
+    const checkChoiceIds = [...step.check.allow].sort();
+    if (policyChoiceIds.join("\0") !== checkChoiceIds.join("\0")) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["check", "allow"],
+        message: "checkpoint check.allow must exactly match policy.choices ids"
+      });
+    }
+    if (step.writes.report !== void 0) {
+      if (step.policy.report_template === void 0) {
+        ctx.addIssue({
+          code: external_exports.ZodIssueCode.custom,
+          path: ["policy", "report_template"],
+          message: "checkpoint report writing requires policy.report_template"
+        });
+      }
+    }
+  }
+  if (step.kind === "fanout") {
+    if (step.branches.kind === "static") {
+      const seen = /* @__PURE__ */ new Set();
+      for (let i = 0; i < step.branches.branches.length; i++) {
+        const branch = step.branches.branches[i];
+        if (branch === void 0)
+          continue;
+        if (seen.has(branch.branch_id)) {
+          ctx.addIssue({
+            code: external_exports.ZodIssueCode.custom,
+            path: ["branches", "branches", i, "branch_id"],
+            message: `duplicate branch_id '${branch.branch_id}'`
+          });
+        } else {
+          seen.add(branch.branch_id);
+        }
+      }
+    }
+    if (step.branches.kind === "dynamic") {
+      if (!step.branches.template.branch_id.includes("$item")) {
+        ctx.addIssue({
+          code: external_exports.ZodIssueCode.custom,
+          path: ["branches", "template", "branch_id"],
+          message: "dynamic fanout template.branch_id must contain `$item` placeholder so per-item expansion produces unique branch ids"
+        });
+      }
+    }
+  }
+});
+var RouteMap = StepBase.shape.routes;
+
+// dist/schemas/flow-schematic.js
+var FlowSchematicStatus = external_exports.enum(["candidate", "active", "deprecated"]);
+var StepRouteTerminalTarget = external_exports.enum(["@complete", "@stop", "@handoff", "@escalate"]);
+var StepRouteTarget = external_exports.union([StepId, StepRouteTerminalTarget]);
+var SchematicRouteModeOverrides = external_exports.record(Depth, StepRouteTarget).refine((overrides) => Object.keys(overrides).length > 0, {
+  message: "route override must declare at least one depth"
+});
+var SchematicContractAlias = external_exports.object({
+  generic: FlowContractRef,
+  actual: FlowContractRef
+}).strict();
+var SchematicEvidenceRequirement = external_exports.string().min(1);
+var SchematicEvidenceRequirements = external_exports.array(SchematicEvidenceRequirement).min(1).superRefine((requirements, ctx) => {
+  const seen = /* @__PURE__ */ new Set();
+  for (const [index, requirement] of requirements.entries()) {
+    if (seen.has(requirement)) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: [index],
+        message: `duplicate evidence requirement: ${requirement}`
+      });
+    }
+    seen.add(requirement);
+  }
+});
+var StepExecutionKind = external_exports.enum([
+  "compose",
+  "relay",
+  "verification",
+  "checkpoint",
+  "sub-run",
+  "fanout"
+]);
+var ComposeStepExecution = external_exports.object({ kind: external_exports.literal("compose") }).strict();
+var VerificationStepExecution = external_exports.object({ kind: external_exports.literal("verification") }).strict();
+var CheckpointStepExecution = external_exports.object({ kind: external_exports.literal("checkpoint") }).strict();
+var FanoutStepExecution = external_exports.object({ kind: external_exports.literal("fanout") }).strict();
+var RelayStepExecution = external_exports.object({
+  kind: external_exports.literal("relay"),
+  role: RelayRole
+}).strict();
+var SubRunStepExecution = external_exports.object({
+  kind: external_exports.literal("sub-run"),
+  flow_ref: CompiledFlowRef,
+  goal: external_exports.string().min(1),
+  depth: Depth
+}).strict();
+var StepExecution = external_exports.discriminatedUnion("kind", [
+  ComposeStepExecution,
+  RelayStepExecution,
+  VerificationStepExecution,
+  CheckpointStepExecution,
+  SubRunStepExecution,
+  FanoutStepExecution
+]);
+var StepWrites = external_exports.object({
+  report_path: RunRelativePath.optional(),
+  request_path: RunRelativePath.optional(),
+  receipt_path: RunRelativePath.optional(),
+  result_path: RunRelativePath.optional(),
+  branches_dir_path: RunRelativePath.optional(),
+  checkpoint_request_path: RunRelativePath.optional(),
+  checkpoint_response_path: RunRelativePath.optional()
+}).strict();
+var SchematicFanout = external_exports.object({
+  branches: FanoutBranches,
+  concurrency: FanoutConcurrency.optional(),
+  on_child_failure: FanoutFailurePolicy.optional(),
+  join: FanoutJoinPolicy
+}).strict();
+var StepCheck = external_exports.object({
+  required: external_exports.array(external_exports.string().min(1)).min(1).optional(),
+  allow: external_exports.array(external_exports.string().min(1)).min(1).optional(),
+  pass: external_exports.array(external_exports.string().min(1)).min(1).optional()
+}).strict();
+var SchematicStep = external_exports.object({
+  id: StepId,
+  block: FlowBlockId,
+  title: external_exports.string().min(1),
+  stage: CanonicalStage,
+  input: external_exports.record(external_exports.string().regex(/^[a-z][a-z0-9_]*$/), FlowContractRef).default({}),
+  output: FlowContractRef,
+  evidence_requirements: SchematicEvidenceRequirements,
+  execution: StepExecution,
+  selection: SelectionOverride.optional(),
+  skill_slots: SkillSlotArray.default([]),
+  routes: external_exports.record(external_exports.string(), StepRouteTarget).refine((routes) => {
+    return Object.keys(routes).length > 0;
+  }, "schematic item must declare at least one route"),
+  route_overrides: external_exports.record(external_exports.string(), SchematicRouteModeOverrides).default({}),
+  // The fields below are required by the schematic → CompiledFlow compiler. They
+  // are optional for candidate schematics so drafts remain parseable while
+  // they are being shaped. Active schematics require them at parse time; the
+  // compiler keeps its own guards for callers that mutate parsed values.
+  protocol: ProtocolId.optional(),
+  writes: StepWrites.optional(),
+  check: StepCheck.optional(),
+  checkpoint_policy: CheckpointPolicy.optional(),
+  fanout: SchematicFanout.optional()
+}).strict().superRefine((item, ctx) => {
+  const seenRoutes = /* @__PURE__ */ new Set();
+  for (const route of Object.keys(item.routes)) {
+    if (!FlowRoute.safeParse(route).success) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["routes", route],
+        message: `unknown schematic route outcome: ${route}`
+      });
+    }
+    if (seenRoutes.has(route)) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["routes", route],
+        message: `duplicate route outcome: ${route}`
+      });
+    }
+    seenRoutes.add(route);
+  }
+  for (const route of Object.keys(item.route_overrides)) {
+    if (!FlowRoute.safeParse(route).success) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["route_overrides", route],
+        message: `unknown schematic route outcome: ${route}`
+      });
+    }
+    if (!Object.hasOwn(item.routes, route)) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["route_overrides", route],
+        message: `route override must target a declared route outcome: ${route}`
+      });
+    }
+  }
+  validateExecutionShape(item, ctx);
+});
+function validateExecutionShape(item, ctx) {
+  const kind = item.execution.kind;
+  if (item.writes !== void 0) {
+    const w = item.writes;
+    const has = (key) => w[key] !== void 0;
+    const expectReport = () => {
+      if (!has("report_path")) {
+        ctx.addIssue({
+          code: external_exports.ZodIssueCode.custom,
+          path: ["writes", "report_path"],
+          message: `${kind} execution requires writes.report_path`
+        });
+      }
+    };
+    const expectRelaySlots = () => {
+      for (const key of ["request_path", "receipt_path", "result_path"]) {
+        if (!has(key)) {
+          ctx.addIssue({
+            code: external_exports.ZodIssueCode.custom,
+            path: ["writes", key],
+            message: `relay execution requires writes.${key}`
+          });
+        }
+      }
+    };
+    const expectCheckpointSlots = () => {
+      for (const key of ["checkpoint_request_path", "checkpoint_response_path"]) {
+        if (!has(key)) {
+          ctx.addIssue({
+            code: external_exports.ZodIssueCode.custom,
+            path: ["writes", key],
+            message: `checkpoint execution requires writes.${key}`
+          });
+        }
+      }
+    };
+    const expectSubRunSlots = () => {
+      if (!has("result_path")) {
+        ctx.addIssue({
+          code: external_exports.ZodIssueCode.custom,
+          path: ["writes", "result_path"],
+          message: "sub-run execution requires writes.result_path"
+        });
+      }
+    };
+    const forbid = (key, allowedKinds) => {
+      if (has(key)) {
+        ctx.addIssue({
+          code: external_exports.ZodIssueCode.custom,
+          path: ["writes", key],
+          message: `writes.${key} is only allowed for ${allowedKinds} execution`
+        });
+      }
+    };
+    switch (kind) {
+      case "compose":
+      case "verification":
+        expectReport();
+        forbid("request_path", "relay");
+        forbid("receipt_path", "relay");
+        forbid("result_path", "relay|sub-run");
+        forbid("branches_dir_path", "fanout");
+        forbid("checkpoint_request_path", "checkpoint");
+        forbid("checkpoint_response_path", "checkpoint");
+        break;
+      case "relay":
+        expectRelaySlots();
+        forbid("branches_dir_path", "fanout");
+        forbid("checkpoint_request_path", "checkpoint");
+        forbid("checkpoint_response_path", "checkpoint");
+        break;
+      case "checkpoint":
+        expectCheckpointSlots();
+        forbid("request_path", "relay");
+        forbid("receipt_path", "relay");
+        forbid("result_path", "relay|sub-run");
+        forbid("branches_dir_path", "fanout");
+        break;
+      case "sub-run":
+        expectSubRunSlots();
+        forbid("report_path", "compose|verification");
+        forbid("request_path", "relay");
+        forbid("receipt_path", "relay");
+        forbid("branches_dir_path", "fanout");
+        forbid("checkpoint_request_path", "checkpoint");
+        forbid("checkpoint_response_path", "checkpoint");
+        break;
+      case "fanout":
+        expectReport();
+        if (!has("branches_dir_path")) {
+          ctx.addIssue({
+            code: external_exports.ZodIssueCode.custom,
+            path: ["writes", "branches_dir_path"],
+            message: "fanout execution requires writes.branches_dir_path"
+          });
+        }
+        forbid("request_path", "relay");
+        forbid("receipt_path", "relay");
+        forbid("result_path", "relay|sub-run");
+        forbid("checkpoint_request_path", "checkpoint");
+        forbid("checkpoint_response_path", "checkpoint");
+        break;
+    }
+  }
+  if (item.check !== void 0) {
+    const g = item.check;
+    const expectField = (field, forKinds) => {
+      if (g[field] === void 0) {
+        ctx.addIssue({
+          code: external_exports.ZodIssueCode.custom,
+          path: ["check", field],
+          message: `${forKinds} execution requires check.${field}`
+        });
+      }
+    };
+    const forbidField = (field, allowedKinds) => {
+      if (g[field] !== void 0) {
+        ctx.addIssue({
+          code: external_exports.ZodIssueCode.custom,
+          path: ["check", field],
+          message: `check.${field} is only allowed for ${allowedKinds} execution`
+        });
+      }
+    };
+    switch (kind) {
+      case "compose":
+      case "verification":
+        expectField("required", `${kind}`);
+        forbidField("allow", "checkpoint");
+        forbidField("pass", "relay|sub-run");
+        break;
+      case "checkpoint":
+        expectField("allow", "checkpoint");
+        forbidField("required", "compose|verification");
+        forbidField("pass", "relay|sub-run");
+        break;
+      case "relay":
+      case "sub-run":
+        expectField("pass", `${kind}`);
+        forbidField("required", "compose|verification");
+        forbidField("allow", "checkpoint");
+        break;
+      case "fanout":
+        expectField("pass", "fanout");
+        forbidField("required", "compose|verification");
+        forbidField("allow", "checkpoint");
+        break;
+    }
+  }
+  if (item.checkpoint_policy !== void 0 && kind !== "checkpoint") {
+    ctx.addIssue({
+      code: external_exports.ZodIssueCode.custom,
+      path: ["checkpoint_policy"],
+      message: "checkpoint_policy is only allowed for checkpoint execution"
+    });
+  }
+  if (kind === "fanout" && item.fanout === void 0) {
+    ctx.addIssue({
+      code: external_exports.ZodIssueCode.custom,
+      path: ["fanout"],
+      message: "fanout execution requires fanout metadata"
+    });
+  }
+  if (item.fanout !== void 0 && kind !== "fanout") {
+    ctx.addIssue({
+      code: external_exports.ZodIssueCode.custom,
+      path: ["fanout"],
+      message: "fanout metadata is only allowed for fanout execution"
+    });
+  }
+}
+var FlowEntryMode = external_exports.object({
+  name: external_exports.string().regex(/^[a-z][a-z0-9-]*$/),
+  depth: Depth,
+  description: external_exports.string().min(1),
+  default_change_kind: ChangeKind.optional()
+}).strict();
+var SchematicStage = external_exports.object({
+  canonical: CanonicalStage,
+  id: StageId,
+  title: external_exports.string().min(1)
+}).strict();
+var FlowSchematicEntry = external_exports.object({
+  signals: external_exports.object({
+    include: external_exports.array(external_exports.string()).default([]),
+    exclude: external_exports.array(external_exports.string()).default([])
+  }).strict(),
+  intent_prefixes: external_exports.array(external_exports.string()).default([])
+}).strict();
+var FlowSchematic = external_exports.object({
+  schema_version: external_exports.literal("1"),
+  id: CompiledFlowId,
+  title: external_exports.string().min(1),
+  purpose: external_exports.string().min(1),
+  status: FlowSchematicStatus,
+  starts_at: StepId,
+  initial_contracts: external_exports.array(FlowContractRef).default([]),
+  contract_aliases: external_exports.array(SchematicContractAlias).default([]),
+  items: external_exports.array(SchematicStep).min(1),
+  // Compiler-required metadata. Optional for candidate schematics; required
+  // at parse time once a schematic is active.
+  version: external_exports.string().min(1).optional(),
+  entry: FlowSchematicEntry.optional(),
+  entry_modes: external_exports.array(FlowEntryMode).min(1).optional(),
+  stage_path_policy: SpinePolicy.optional(),
+  stages: external_exports.array(SchematicStage).optional(),
+  default_selection: SelectionOverride.optional()
+}).strict().superRefine((schematic, ctx) => {
+  const itemIds = /* @__PURE__ */ new Map();
+  for (const [index, item] of schematic.items.entries()) {
+    const prior = itemIds.get(item.id);
+    if (prior !== void 0) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["items", index, "id"],
+        message: `duplicate schematic item id: ${item.id} also appears at index ${prior}`
+      });
+    }
+    itemIds.set(item.id, index);
+  }
+  if (!itemIds.has(schematic.starts_at)) {
+    ctx.addIssue({
+      code: external_exports.ZodIssueCode.custom,
+      path: ["starts_at"],
+      message: `starts_at references unknown item id: ${schematic.starts_at}`
+    });
+  }
+  for (const [index, item] of schematic.items.entries()) {
+    for (const [route, target] of Object.entries(item.routes)) {
+      if (StepRouteTerminalTarget.safeParse(target).success)
+        continue;
+      if (!itemIds.has(target)) {
+        ctx.addIssue({
+          code: external_exports.ZodIssueCode.custom,
+          path: ["items", index, "routes", route],
+          message: `route target references unknown schematic item id: ${target}`
+        });
+      }
+    }
+    for (const [route, overrides] of Object.entries(item.route_overrides)) {
+      for (const [depth, target] of Object.entries(overrides)) {
+        if (StepRouteTerminalTarget.safeParse(target).success)
+          continue;
+        if (!itemIds.has(target)) {
+          ctx.addIssue({
+            code: external_exports.ZodIssueCode.custom,
+            path: ["items", index, "route_overrides", route, depth],
+            message: `route override target references unknown schematic item id: ${target}`
+          });
+        }
+      }
+    }
+  }
+  const aliases = /* @__PURE__ */ new Set();
+  for (const [index, alias] of schematic.contract_aliases.entries()) {
+    const key = `${alias.generic}\0${alias.actual}`;
+    if (aliases.has(key)) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["contract_aliases", index],
+        message: `duplicate contract alias: ${alias.generic} -> ${alias.actual}`
+      });
+    }
+    aliases.add(key);
+  }
+  if (schematic.entry_modes !== void 0) {
+    const seenNames = /* @__PURE__ */ new Set();
+    for (const [index, mode] of schematic.entry_modes.entries()) {
+      if (seenNames.has(mode.name)) {
+        ctx.addIssue({
+          code: external_exports.ZodIssueCode.custom,
+          path: ["entry_modes", index, "name"],
+          message: `duplicate entry mode name: ${mode.name}`
+        });
+      }
+      seenNames.add(mode.name);
+    }
+  }
+  if (schematic.stages !== void 0) {
+    const seenCanonicals = /* @__PURE__ */ new Set();
+    const seenIds = /* @__PURE__ */ new Set();
+    for (const [index, stage] of schematic.stages.entries()) {
+      if (seenCanonicals.has(stage.canonical)) {
+        ctx.addIssue({
+          code: external_exports.ZodIssueCode.custom,
+          path: ["stages", index, "canonical"],
+          message: `duplicate canonical stage mapping: ${stage.canonical}`
+        });
+      }
+      seenCanonicals.add(stage.canonical);
+      if (seenIds.has(stage.id)) {
+        ctx.addIssue({
+          code: external_exports.ZodIssueCode.custom,
+          path: ["stages", index, "id"],
+          message: `duplicate stage id: ${stage.id}`
+        });
+      }
+      seenIds.add(stage.id);
+    }
+    const itemCanonicals = new Set(schematic.items.map((item) => item.stage));
+    for (const canonical of itemCanonicals) {
+      if (!seenCanonicals.has(canonical)) {
+        ctx.addIssue({
+          code: external_exports.ZodIssueCode.custom,
+          path: ["stages"],
+          message: `stages is missing an entry for canonical stage '${canonical}' which is used by at least one item`
+        });
+      }
+    }
+  }
+  if (schematic.stage_path_policy !== void 0 && schematic.stage_path_policy.mode === "partial") {
+    const seenOmits = /* @__PURE__ */ new Set();
+    for (const [index, omitted] of schematic.stage_path_policy.omits.entries()) {
+      if (seenOmits.has(omitted)) {
+        ctx.addIssue({
+          code: external_exports.ZodIssueCode.custom,
+          path: ["stage_path_policy", "omits", index],
+          message: `duplicate omitted stage: ${omitted}`
+        });
+      }
+      seenOmits.add(omitted);
+    }
+    if (schematic.stages !== void 0) {
+      const declared = new Set(schematic.stages.map((stage) => stage.canonical));
+      for (const omitted of seenOmits) {
+        if (declared.has(omitted)) {
+          ctx.addIssue({
+            code: external_exports.ZodIssueCode.custom,
+            path: ["stage_path_policy", "omits"],
+            message: `canonical stage '${omitted}' is both declared in stages and listed in stage_path_policy.omits`
+          });
+        }
+      }
+    }
+    const itemCanonicals = new Set(schematic.items.map((item) => item.stage));
+    for (const omitted of seenOmits) {
+      if (itemCanonicals.has(omitted)) {
+        ctx.addIssue({
+          code: external_exports.ZodIssueCode.custom,
+          path: ["stage_path_policy", "omits"],
+          message: `canonical stage '${omitted}' is omitted but used by at least one item`
+        });
+      }
+    }
+  }
+  validateActiveSchematicCompleteness(schematic, ctx);
+});
+function validateActiveSchematicCompleteness(schematic, ctx) {
+  if (schematic.status !== "active")
+    return;
+  const requireField = (field) => {
+    if (schematic[field] !== void 0)
+      return;
+    ctx.addIssue({
+      code: external_exports.ZodIssueCode.custom,
+      path: [field],
+      message: `active schematic requires ${field}`
+    });
+  };
+  requireField("version");
+  requireField("entry");
+  requireField("entry_modes");
+  requireField("stage_path_policy");
+  requireField("stages");
+  for (const [index, item] of schematic.items.entries()) {
+    if (item.protocol === void 0) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["items", index, "protocol"],
+        message: "active schematic item requires protocol"
+      });
+    }
+    if (item.writes === void 0) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["items", index, "writes"],
+        message: "active schematic item requires writes"
+      });
+    }
+    if (item.check === void 0) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["items", index, "check"],
+        message: "active schematic item requires check"
+      });
+    }
+    if (item.execution.kind === "checkpoint" && item.checkpoint_policy === void 0) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["items", index, "checkpoint_policy"],
+        message: "active checkpoint schematic item requires checkpoint_policy"
+      });
+    }
+  }
+}
+
+// dist/flows/flow-definition.js
+function defaultSchematicPath(flowId) {
+  return `src/flows/${flowId}/schematic.json`;
+}
+function defineFlow(definition) {
+  const schematic = FlowSchematic.parse(definition.schematic);
+  if (definition.id !== schematic.id) {
+    throw new Error(`flow definition id '${definition.id}' does not match schematic id '${schematic.id}'`);
+  }
+  return {
+    ...definition,
+    paths: definition.paths ?? {},
+    schematic
+  };
+}
+function compilePaths(definition) {
+  const paths = {
+    schematic: definition.paths.schematic ?? defaultSchematicPath(definition.id)
+  };
+  if (definition.paths.command !== void 0) {
+    return definition.paths.contract === void 0 ? { ...paths, command: definition.paths.command } : { ...paths, command: definition.paths.command, contract: definition.paths.contract };
+  }
+  return definition.paths.contract === void 0 ? paths : { ...paths, contract: definition.paths.contract };
+}
+function deriveSupportedEntryModes(definition) {
+  const entryModes = definition.schematic.entry_modes;
+  if (entryModes === void 0) {
+    throw new Error(`flow definition '${definition.id}' cannot derive runtime support without schematic entry_modes`);
+  }
+  return entryModes.map((mode) => ({ entryModeName: mode.name, depth: mode.depth }));
+}
+function validateProgressSurface(definition, progress) {
+  if (progress === void 0)
+    return;
+  const itemIds = new Set(definition.schematic.items.map((item) => item.id));
+  const seen = /* @__PURE__ */ new Set();
+  for (const [index, step] of progress.steps.entries()) {
+    if (seen.has(step.stepId)) {
+      throw new Error(`flow definition '${definition.id}' declares duplicate progress step '${step.stepId}'`);
+    }
+    seen.add(step.stepId);
+    if (!itemIds.has(step.stepId)) {
+      throw new Error(`flow definition '${definition.id}' progress step '${step.stepId}' is not a schematic item`);
+    }
+    if (step.taskTitle.length === 0 || step.activeText.length === 0) {
+      throw new Error(`flow definition '${definition.id}' progress step ${index} must declare operator text`);
+    }
+  }
+}
+function compileRuntimeSurface(definition) {
+  const runtimeSurface = definition.runtimeSurface;
+  if (runtimeSurface === void 0)
+    return void 0;
+  validateProgressSurface(definition, runtimeSurface.progress);
+  const out = {
+    supportedEntryModes: runtimeSurface.supportedEntryModes ?? deriveSupportedEntryModes(definition)
+  };
+  return {
+    ...out,
+    ...runtimeSurface.primaryResult === void 0 ? {} : { primaryResult: runtimeSurface.primaryResult },
+    ...runtimeSurface.progress === void 0 ? {} : { progress: runtimeSurface.progress }
+  };
+}
+function compileFlowDefinition(definition) {
+  const runtimeSurface = compileRuntimeSurface(definition);
+  return {
+    id: definition.id,
+    visibility: definition.visibility,
+    paths: compilePaths(definition),
+    ...definition.routing === void 0 ? {} : { routing: definition.routing },
+    relayReports: definition.relayReports ?? [],
+    ...definition.reportSchemas === void 0 ? {} : { reportSchemas: definition.reportSchemas },
+    writers: {
+      compose: definition.writers?.compose ?? [],
+      close: definition.writers?.close ?? [],
+      verification: definition.writers?.verification ?? [],
+      checkpoint: definition.writers?.checkpoint ?? []
+    },
+    ...definition.structuralHints === void 0 ? {} : { structuralHints: definition.structuralHints },
+    ...runtimeSurface === void 0 ? {} : { runtimeSurface },
+    ...definition.engineFlags === void 0 ? {} : { engineFlags: definition.engineFlags }
+  };
+}
+function validatePackageSet(packages) {
+  const ids = /* @__PURE__ */ new Set();
+  const reportNames = /* @__PURE__ */ new Map();
+  const writerNames = /* @__PURE__ */ new Map();
+  for (const pkg of packages) {
+    if (ids.has(pkg.id)) {
+      throw new Error(`duplicate flow definition id '${pkg.id}'`);
+    }
+    ids.add(pkg.id);
+    for (const report of [...pkg.relayReports, ...pkg.reportSchemas ?? []]) {
+      const owner = reportNames.get(report.schemaName);
+      if (owner !== void 0) {
+        throw new Error(`duplicate report schema '${report.schemaName}' registered by '${owner}' and '${pkg.id}'`);
+      }
+      reportNames.set(report.schemaName, pkg.id);
+    }
+    for (const [slot, builders] of Object.entries(pkg.writers)) {
+      for (const builder of builders) {
+        const owner = writerNames.get(builder.resultSchemaName);
+        if (owner !== void 0) {
+          throw new Error(`duplicate writer result schema '${builder.resultSchemaName}' registered by ${owner} and ${pkg.id}.${slot}`);
+        }
+        writerNames.set(builder.resultSchemaName, `${pkg.id}.${slot}`);
+      }
+    }
+  }
+}
+function compileFlowDefinitions(definitions) {
+  const packages = definitions.map(compileFlowDefinition);
+  validatePackageSet(packages);
+  buildComposeRegistry(packages);
+  buildCloseRegistry(packages);
+  buildVerificationRegistry(packages);
+  buildCheckpointRegistry(packages);
+  buildReportSchemaRegistry(packages);
+  buildSchemaHintMap(packages);
+  buildStructuralHintList(packages);
+  buildCrossReportValidatorRegistry(packages);
+  buildRuntimeSurfaceRegistry(packages);
+  return packages;
+}
+
+// dist/flows/build/relay-hints.js
+var buildImplementationShapeHint = {
+  kind: "schema",
+  schema: "build.implementation@v1",
+  instruction: [
+    "Respond with a single raw JSON object whose top-level shape is exactly:",
+    '{ "verdict": "accept", "summary": "<what changed>", "changed_files": ["<project-relative path>"], "evidence": ["<verification or implementation evidence>"] }',
+    "Make the smallest behaviorally scoped change that satisfies the requested goal. Do not broaden semantics, normalize data, or add extra behavior just because tests still pass.",
+    "Use an empty changed_files array only when no file changed. Evidence must contain at least one item. Do not include extra top-level keys. Do not wrap the JSON in Markdown code fences. Do not include any prose before or after the JSON object.",
+    "The runtime parses your response with JSON.parse, rejects any verdict not drawn from the accepted-verdicts list, and validates the full report body against build.implementation@v1 before writing reports/build/implementation.json."
+  ].join(" ")
+};
+var buildReviewShapeHint = {
+  kind: "schema",
+  schema: "build.review@v1",
+  instruction: [
+    "Respond with a single raw JSON object whose top-level shape is exactly:",
+    '{ "verdict": "<accept|accept-with-fixes|reject>", "summary": "<review summary>", "findings": [{ "severity": "<critical|high|medium|low>", "text": "<finding text>", "file_refs": ["<file:line reference>"] }] }',
+    "Review the change against the requested scope, not just against passing tests. Flag behavior that broadens semantics beyond the goal even when verification passes.",
+    'Use an empty findings array only with verdict "accept". Verdicts "accept-with-fixes" and "reject" must include at least one finding. Use an empty file_refs array when a finding has no file-specific reference. Do not include extra top-level keys. Do not wrap the JSON in Markdown code fences. Do not include any prose before or after the JSON object.',
+    "The runtime parses your response with JSON.parse, rejects any verdict not drawn from the accepted-verdicts list, and validates the full report body against build.review@v1 before writing reports/build/review.json."
+  ].join(" ")
+};
+
 // dist/schemas/verification.js
 var SHELL_BINARIES = /* @__PURE__ */ new Set([
   "sh",
@@ -11751,7 +13575,7 @@ var BuildResult = external_exports.object({
 });
 
 // dist/flows/build/writers/checkpoint-brief.js
-import { readFileSync as readFileSync2 } from "node:fs";
+import { readFileSync as readFileSync3 } from "node:fs";
 
 // dist/shared/connector-relay.js
 import { createHash } from "node:crypto";
@@ -11762,28 +13586,6 @@ function sha256Hex(payload) {
 // dist/shared/run-relative-path.js
 import { existsSync, lstatSync, realpathSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
-
-// dist/schemas/scalars.js
-var ControlPlaneFileStem = external_exports.string().min(1).max(128).regex(/^[a-z0-9][a-z0-9._-]*$/, {
-  message: "must match /^[a-z0-9][a-z0-9._-]*$/ (lowercase alnum start; alnum, dot, underscore, hyphen thereafter)"
-}).refine((value) => value !== "." && value !== "..", {
-  message: "must not be a current or parent directory segment"
-}).refine((value) => !value.includes(".."), {
-  message: "must not contain parent-directory traversal"
-}).refine((value) => !value.includes("/") && !value.includes("\\"), {
-  message: "must not contain path separators"
-});
-var RunRelativePath = external_exports.string().min(1, { message: "run-relative path must be non-empty" }).refine((value) => !value.startsWith("/"), {
-  message: "run-relative path must not be absolute"
-}).refine((value) => !value.includes("\\"), {
-  message: 'run-relative path must use POSIX "/" separators, not backslashes'
-}).refine((value) => !value.includes(":"), {
-  message: "run-relative path must not contain drive-letter or colon forms"
-}).refine((value) => value.split("/").every((segment) => segment.length > 0 && segment !== "." && segment !== ".."), {
-  message: "run-relative path must not contain empty, current-directory, or parent-directory segments"
-}).brand();
-
-// dist/shared/run-relative-path.js
 function isInside(root, target) {
   const fromRoot = relative(root, target);
   return fromRoot !== "" && !fromRoot.startsWith("..") && !isAbsolute(fromRoot);
@@ -11820,8 +13622,21 @@ function resolveRunRelative(runFolder, relPath) {
 }
 
 // dist/shared/verification-resolver.js
-import { existsSync as existsSync2, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync as existsSync3, readFileSync as readFileSync2 } from "node:fs";
+import { join as join2 } from "node:path";
+
+// dist/shared/proof-plan.js
+import { spawnSync } from "node:child_process";
+import { existsSync as existsSync2, lstatSync as lstatSync2, readFileSync, realpathSync as realpathSync2 } from "node:fs";
+import { isAbsolute as isAbsolute2, join, relative as relative2, resolve as resolve2 } from "node:path";
+var PROOF_PLAN_ENV_INHERIT_ALLOWLIST = [
+  "PATH",
+  "SystemRoot",
+  "TEMP",
+  "TMP",
+  "TMPDIR",
+  "WINDIR"
+];
 var ProofPlanBlockedError = class extends Error {
   constructor(message) {
     super(message);
@@ -11831,14 +13646,144 @@ var ProofPlanBlockedError = class extends Error {
 function isProofPlanBlockedError(error) {
   return error instanceof ProofPlanBlockedError || error instanceof Error && error.name === "ProofPlanBlockedError";
 }
-function readPackageInfo(projectRoot) {
-  const packageJsonPath = join(projectRoot, "package.json");
+function isInsideOrSame(root, target) {
+  const fromRoot = relative2(root, target);
+  return fromRoot === "" || !fromRoot.startsWith("..") && !isAbsolute2(fromRoot);
+}
+function resolveProjectRelativeProofCwd(projectRoot, cwd) {
+  const rootAbs = resolve2(projectRoot);
+  const targetAbs = resolve2(rootAbs, cwd);
+  if (!isInsideOrSame(rootAbs, targetAbs)) {
+    throw new ProofPlanBlockedError(`verification cwd rejected: ${JSON.stringify(cwd)} escapes project root`);
+  }
+  if (!existsSync2(rootAbs)) {
+    throw new ProofPlanBlockedError(`verification project root rejected: ${rootAbs} does not exist`);
+  }
+  const rootReal = realpathSync2.native(rootAbs);
+  let cursor = rootAbs;
+  for (const segment of cwd.split("/")) {
+    if (segment === ".")
+      continue;
+    cursor = resolve2(cursor, segment);
+    if (!existsSync2(cursor)) {
+      throw new ProofPlanBlockedError(`verification cwd rejected: ${JSON.stringify(cwd)} does not exist`);
+    }
+    const stat2 = lstatSync2(cursor);
+    if (stat2.isSymbolicLink()) {
+      throw new ProofPlanBlockedError(`verification cwd rejected: ${JSON.stringify(cwd)} crosses symlink ${JSON.stringify(cursor)}`);
+    }
+    const cursorReal = realpathSync2.native(cursor);
+    if (!isInsideOrSame(rootReal, cursorReal)) {
+      throw new ProofPlanBlockedError(`verification cwd rejected: ${JSON.stringify(cwd)} escapes real project root through ${JSON.stringify(cursor)}`);
+    }
+  }
+  const targetReal = realpathSync2.native(targetAbs);
+  if (!isInsideOrSame(rootReal, targetReal)) {
+    throw new ProofPlanBlockedError(`verification cwd rejected: ${JSON.stringify(cwd)} escapes real project root`);
+  }
+  return targetReal;
+}
+function proofPlanEnvironment(commandEnv) {
+  const env = {};
+  for (const key of PROOF_PLAN_ENV_INHERIT_ALLOWLIST) {
+    const value = process.env[key];
+    if (value !== void 0)
+      env[key] = value;
+  }
+  return { ...env, ...commandEnv };
+}
+function summarizeOutput(value, maxBytes) {
+  const bytes = Buffer.from(value);
+  if (bytes.length <= maxBytes)
+    return value;
+  return bytes.subarray(0, maxBytes).toString("utf8");
+}
+function commandBinaryName2(argv0) {
+  const normalized = argv0.replaceAll("\\", "/");
+  return normalized.slice(normalized.lastIndexOf("/") + 1).toLowerCase();
+}
+function packageScriptInvocation(command) {
+  const argv0 = command.argv[0];
+  if (argv0 === void 0)
+    return void 0;
+  const binary = commandBinaryName2(argv0);
+  if (binary !== "npm" && binary !== "pnpm" && binary !== "yarn")
+    return void 0;
+  if (command.argv[1] !== "run")
+    return void 0;
+  const script = command.argv[2];
+  if (script === void 0) {
+    throw new ProofPlanBlockedError(`Proof plan blocked: verification command '${command.id}' invokes ${binary} run without a script name.`);
+  }
+  return script;
+}
+function preflightProofPlanCommand(command, cwdAbs) {
+  const script = packageScriptInvocation(command);
+  if (script === void 0)
+    return;
+  const packageJsonPath = join(cwdAbs, "package.json");
   if (!existsSync2(packageJsonPath)) {
-    return `Cannot choose verification commands because ${packageJsonPath} does not exist.`;
+    throw new ProofPlanBlockedError(`Proof plan blocked: verification command '${command.id}' requires package.json at cwd ${JSON.stringify(command.cwd)}.`);
   }
   let parsed;
   try {
     parsed = JSON.parse(readFileSync(packageJsonPath, "utf8"));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new ProofPlanBlockedError(`Proof plan blocked: verification command '${command.id}' could not parse package.json at cwd ${JSON.stringify(command.cwd)}: ${message}.`);
+  }
+  const scripts = parsed && typeof parsed === "object" ? parsed.scripts : void 0;
+  if (scripts === null || typeof scripts !== "object" || Array.isArray(scripts)) {
+    throw new ProofPlanBlockedError(`Proof plan blocked: verification command '${command.id}' requires package.json scripts at cwd ${JSON.stringify(command.cwd)}.`);
+  }
+  if (typeof scripts[script] !== "string") {
+    throw new ProofPlanBlockedError(`Proof plan blocked: verification command '${command.id}' references missing package script "${script}" at cwd ${JSON.stringify(command.cwd)}.`);
+  }
+}
+function isLaunchError(error) {
+  const code = error.code;
+  return code === "ENOENT" || code === "EACCES" || code === "ENOTDIR";
+}
+function runProofPlanCommand(command, projectRoot) {
+  const started = Date.now();
+  const cwd = resolveProjectRelativeProofCwd(projectRoot, command.cwd);
+  preflightProofPlanCommand(command, cwd);
+  const result = spawnSync(command.argv[0], command.argv.slice(1), {
+    cwd,
+    env: proofPlanEnvironment(command.env),
+    encoding: "utf8",
+    maxBuffer: command.max_output_bytes,
+    shell: false,
+    timeout: command.timeout_ms
+  });
+  if (result.error !== void 0 && isLaunchError(result.error)) {
+    throw new ProofPlanBlockedError(`Proof plan blocked: verification command '${command.id}' could not launch ${JSON.stringify(command.argv[0])}: ${result.error.message}`);
+  }
+  const exitCode = typeof result.status === "number" && result.error === void 0 ? result.status : 1;
+  const stderrParts = [
+    typeof result.stderr === "string" ? result.stderr : "",
+    result.error === void 0 ? "" : result.error.message,
+    result.signal === null ? "" : `signal: ${result.signal}`
+  ].filter((part) => part.length > 0);
+  return {
+    command,
+    exit_code: exitCode,
+    status: exitCode === 0 ? "passed" : "failed",
+    duration_ms: Math.max(0, Date.now() - started),
+    stdout_summary: summarizeOutput(typeof result.stdout === "string" ? result.stdout : "", command.max_output_bytes),
+    stderr_summary: summarizeOutput(stderrParts.join("\n"), command.max_output_bytes)
+  };
+}
+
+// dist/shared/verification-resolver.js
+function readPackageInfo(projectRoot) {
+  const packageJsonPath = join2(projectRoot, "package.json");
+  if (!existsSync3(packageJsonPath)) {
+    return `Cannot choose verification commands because ${packageJsonPath} does not exist.`;
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync2(packageJsonPath, "utf8"));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return `Cannot choose verification commands because package.json could not be parsed: ${message}.`;
@@ -11876,11 +13821,11 @@ function packageManagerFromPackageJson(value) {
 function resolvePackageManager(projectRoot, info) {
   if (info.packageManager !== void 0)
     return packageManagerFromPackageJson(info.packageManager);
-  if (existsSync2(join(projectRoot, "pnpm-lock.yaml")))
+  if (existsSync3(join2(projectRoot, "pnpm-lock.yaml")))
     return "pnpm";
-  if (existsSync2(join(projectRoot, "yarn.lock")))
+  if (existsSync3(join2(projectRoot, "yarn.lock")))
     return "yarn";
-  if (existsSync2(join(projectRoot, "package-lock.json")))
+  if (existsSync3(join2(projectRoot, "package-lock.json")))
     return "npm";
   return "npm";
 }
@@ -12021,7 +13966,7 @@ var buildBriefCheckpointBuilder = {
   },
   validateResumeContext(context) {
     const reportAbs = resolveRunRelative(context.runFolder, context.reportPath);
-    const raw = readFileSync2(reportAbs, "utf8");
+    const raw = readFileSync3(reportAbs, "utf8");
     if (context.reportSha256 === void 0) {
       throw new Error("checkpoint resume rejected: checkpoint request is missing checkpoint_report_sha256");
     }
@@ -12038,24 +13983,36 @@ var buildBriefCheckpointBuilder = {
   }
 };
 
-// dist/flows/registries/close-writers/shared.js
-function reportPathForSchemaInCompiledFlow(flow, schemaName) {
-  const matches = flow.steps.filter((candidate) => "report" in candidate.writes && candidate.writes.report?.schema === schemaName);
+// dist/flows/registries/runtime-index.js
+function requireRuntimeIndexedStep(index, stepId, kind) {
+  const indexedStep2 = index.stepsById.get(stepId);
+  if (indexedStep2 === void 0) {
+    throw new Error(`runtime package index has no step '${stepId}'`);
+  }
+  if (indexedStep2.kind !== kind) {
+    throw new Error(`runtime package index step '${stepId}' has kind '${indexedStep2.kind}', expected '${kind}'`);
+  }
+  return indexedStep2;
+}
+function reportPathForSchemaInRuntimeFlow(flow, schemaName) {
+  const matches = flow.steps.filter((step) => {
+    const report2 = step.writes.report;
+    return typeof report2 === "object" && report2 !== null && report2.schema === schemaName;
+  });
   if (matches.length !== 1) {
-    throw new Error(`report schema '${schemaName}' must be written by exactly one flow step, found ${matches.length}`);
+    throw new Error(`expected exactly one report writer for schema '${schemaName}', found ${matches.length}`);
   }
-  const match = matches[0];
-  if (match === void 0) {
-    throw new Error(`report schema '${schemaName}' matched no flow step`);
-  }
-  const report = "report" in match.writes ? match.writes.report : void 0;
-  if (report === void 0) {
-    throw new Error(`report schema '${schemaName}' matched a step without an report writer`);
+  const report = matches[0]?.writes.report;
+  if (typeof report !== "object" || report === null) {
+    throw new Error(`report writer for schema '${schemaName}' is missing a report path`);
   }
   return report.path;
 }
-function flowHasReportSchemaInCompiledFlow(flow, schemaName) {
-  return flow.steps.some((candidate) => "report" in candidate.writes && candidate.writes.report?.schema === schemaName);
+function flowHasReportSchemaInRuntimeFlow(flow, schemaName) {
+  return flow.steps.some((step) => {
+    const report = step.writes.report;
+    return typeof report === "object" && report !== null && report.schema === schemaName;
+  });
 }
 
 // dist/flows/build/writers/close.js
@@ -12089,7 +14046,7 @@ var buildCloseBuilder = {
       review_verdict: review.verdict,
       evidence_links: POINTERS.map((p) => ({
         ...p,
-        path: reportPathForSchemaInCompiledFlow(context.flow, p.schema)
+        path: reportPathForSchemaInRuntimeFlow(context.flow, p.schema)
       }))
     });
   }
@@ -12113,15 +14070,15 @@ var buildPlanComposeBuilder = {
 };
 
 // dist/flows/build/writers/verification.js
-import { readFileSync as readFileSync3 } from "node:fs";
+import { readFileSync as readFileSync4 } from "node:fs";
 var buildVerificationWriter = {
   resultSchemaName: "build.verification@v1",
   loadCommands(context) {
-    const planPath = reportPathForSchemaInCompiledFlow(context.flow, "build.plan@v1");
+    const planPath = reportPathForSchemaInRuntimeFlow(context.flow, "build.plan@v1");
     if (!context.step.reads.includes(planPath)) {
       throw new Error(`build.verification@v1 requires step '${context.step.id}' to read ${planPath}`);
     }
-    const plan = BuildPlan.parse(JSON.parse(readFileSync3(resolveRunRelative(context.runFolder, planPath), "utf8")));
+    const plan = BuildPlan.parse(JSON.parse(readFileSync4(resolveRunRelative(context.runFolder, planPath), "utf8")));
     return plan.verification.commands;
   },
   buildResult(observations) {
@@ -12142,7 +14099,7 @@ var buildVerificationWriter = {
   }
 };
 
-// dist/flows/build/index.js
+// dist/flows/build/flow.js
 var BUILD_SIGNALS = [
   { label: "develop prefix", pattern: /^\s*develop\s*:/i },
   {
@@ -12162,13 +14119,312 @@ var BUILD_SIGNALS = [
     pattern: /^\s*(?:please\s+)?make\s+(?:a\s+|the\s+|this\s+|that\s+)?(?:focused\s+)?change\b/i
   }
 ];
-var buildCompiledFlowPackage = {
+var buildFlowDefinition = defineFlow({
   id: "build",
   visibility: "public",
   paths: {
     schematic: "src/flows/build/schematic.json",
     command: "src/flows/build/command.md",
     contract: "src/flows/build/contract.md"
+  },
+  schematic: {
+    schema_version: "1",
+    id: "build",
+    title: "Build Schematic",
+    purpose: "Build flow. Circuit frames a requested change, plans it, relays implementation to a worker, runs verification, relays review to a separate worker, and closes with a Build result file plus evidence.",
+    status: "active",
+    version: "0.1.0",
+    starts_at: "frame-step",
+    initial_contracts: ["task.intake@v1", "route.decision@v1", "verification.plan@v1"],
+    contract_aliases: [
+      {
+        generic: "flow.brief@v1",
+        actual: "build.brief@v1"
+      },
+      {
+        generic: "plan.strategy@v1",
+        actual: "build.plan@v1"
+      },
+      {
+        generic: "change.evidence@v1",
+        actual: "build.implementation@v1"
+      },
+      {
+        generic: "verification.result@v1",
+        actual: "build.verification@v1"
+      },
+      {
+        generic: "review.verdict@v1",
+        actual: "build.review@v1"
+      },
+      {
+        generic: "flow.result@v1",
+        actual: "build.result@v1"
+      }
+    ],
+    entry: {
+      signals: {
+        include: ["build", "implement", "develop", "change", "fix", "add"],
+        exclude: []
+      },
+      intent_prefixes: ["build", "implement", "develop"]
+    },
+    entry_modes: [
+      {
+        name: "default",
+        depth: "standard",
+        description: "Default Build entry mode."
+      },
+      {
+        name: "lite",
+        depth: "lite",
+        description: "Lite Build entry mode."
+      },
+      {
+        name: "deep",
+        depth: "deep",
+        description: "Deep Build entry mode."
+      },
+      {
+        name: "autonomous",
+        depth: "autonomous",
+        description: "Autonomous Build entry mode."
+      }
+    ],
+    stage_path_policy: {
+      mode: "partial",
+      omits: ["analyze"],
+      rationale: "Build follows Frame, Plan, Act, Verify, Review, Close. The Analyze stage is omitted because analysis is folded into Frame and Plan for this flow."
+    },
+    stages: [
+      {
+        canonical: "frame",
+        id: "frame-stage",
+        title: "Frame"
+      },
+      {
+        canonical: "plan",
+        id: "plan-stage",
+        title: "Plan"
+      },
+      {
+        canonical: "act",
+        id: "act-stage",
+        title: "Act"
+      },
+      {
+        canonical: "verify",
+        id: "verify-stage",
+        title: "Verify"
+      },
+      {
+        canonical: "review",
+        id: "review-stage",
+        title: "Review"
+      },
+      {
+        canonical: "close",
+        id: "close-stage",
+        title: "Close"
+      }
+    ],
+    items: [
+      {
+        id: "frame-step",
+        title: "Frame - confirm Build brief",
+        stage: "frame",
+        input: {
+          task: "task.intake@v1",
+          route: "route.decision@v1"
+        },
+        output: "build.brief@v1",
+        evidence_requirements: ["scope boundary", "constraints", "proof plan"],
+        execution: {
+          kind: "checkpoint"
+        },
+        protocol: "build-frame@v1",
+        writes: {
+          checkpoint_request_path: "reports/checkpoints/frame-step-request.json",
+          checkpoint_response_path: "reports/checkpoints/frame-step-response.json",
+          report_path: "reports/build/brief.json"
+        },
+        check: {
+          allow: ["continue"]
+        },
+        checkpoint_policy: {
+          prompt: "Confirm the Build brief before implementation starts.",
+          choices: [
+            {
+              id: "continue",
+              label: "Continue"
+            }
+          ],
+          safe_default_choice: "continue",
+          safe_autonomous_choice: "continue",
+          report_template: {
+            scope: "Make the smallest safe change that satisfies the requested goal.",
+            success_criteria: [
+              "The requested behavior is implemented",
+              "Verification passes",
+              "Review completes without a blocking issue"
+            ]
+          }
+        },
+        routes: {
+          continue: "plan-step",
+          stop: "@stop"
+        },
+        block: "frame"
+      },
+      {
+        id: "plan-step",
+        title: "Plan - produce Build plan",
+        stage: "plan",
+        input: {
+          brief: "build.brief@v1"
+        },
+        output: "build.plan@v1",
+        evidence_requirements: ["ordered steps", "risk notes", "proof strategy"],
+        execution: {
+          kind: "compose"
+        },
+        protocol: "build-plan@v1",
+        writes: {
+          report_path: "reports/build/plan.json"
+        },
+        check: {
+          required: ["objective", "verification"]
+        },
+        routes: {
+          continue: "act-step",
+          revise: "plan-step",
+          stop: "@stop"
+        },
+        block: "plan"
+      },
+      {
+        id: "act-step",
+        title: "Act - implementation relay",
+        stage: "act",
+        input: {
+          brief: "build.brief@v1",
+          plan: "build.plan@v1"
+        },
+        output: "build.implementation@v1",
+        evidence_requirements: ["changed files", "change rationale", "declared follow-up proof"],
+        execution: {
+          kind: "relay",
+          role: "implementer"
+        },
+        protocol: "build-act@v1",
+        writes: {
+          report_path: "reports/build/implementation.json",
+          request_path: "reports/relay/build-act.request.json",
+          receipt_path: "reports/relay/build-act.receipt.txt",
+          result_path: "reports/relay/build-act.result.json"
+        },
+        check: {
+          pass: ["accept"]
+        },
+        routes: {
+          continue: "verify-step",
+          retry: "act-step",
+          stop: "@stop"
+        },
+        block: "act"
+      },
+      {
+        id: "verify-step",
+        title: "Verify - run Build verification",
+        stage: "verify",
+        input: {
+          proof: "verification.plan@v1",
+          plan: "build.plan@v1",
+          change: "build.implementation@v1"
+        },
+        output: "build.verification@v1",
+        evidence_requirements: ["command list", "exit status", "bounded output", "pass or fail"],
+        execution: {
+          kind: "verification"
+        },
+        protocol: "build-verify@v1",
+        writes: {
+          report_path: "reports/build/verification.json"
+        },
+        check: {
+          required: ["overall_status", "commands"]
+        },
+        routes: {
+          continue: "review-step",
+          retry: "act-step",
+          stop: "@stop"
+        },
+        block: "run-verification"
+      },
+      {
+        id: "review-step",
+        title: "Review - implementation review relay",
+        stage: "review",
+        input: {
+          brief: "build.brief@v1",
+          plan: "build.plan@v1",
+          change: "build.implementation@v1",
+          verification: "build.verification@v1"
+        },
+        output: "build.review@v1",
+        evidence_requirements: ["verdict", "findings", "confidence", "required fixes"],
+        execution: {
+          kind: "relay",
+          role: "reviewer"
+        },
+        protocol: "build-review@v1",
+        writes: {
+          report_path: "reports/build/review.json",
+          request_path: "reports/relay/build-review.request.json",
+          receipt_path: "reports/relay/build-review.receipt.txt",
+          result_path: "reports/relay/build-review.result.json"
+        },
+        check: {
+          pass: ["accept", "accept-with-fixes"]
+        },
+        routes: {
+          continue: "close-step",
+          retry: "act-step",
+          revise: "act-step",
+          stop: "@stop"
+        },
+        block: "review"
+      },
+      {
+        id: "close-step",
+        title: "Close - emit Build result",
+        stage: "close",
+        input: {
+          brief: "build.brief@v1",
+          plan: "build.plan@v1",
+          implementation: "build.implementation@v1",
+          verification: "build.verification@v1",
+          review: "build.review@v1"
+        },
+        output: "build.result@v1",
+        evidence_requirements: ["outcome", "evidence pointers", "residual risks", "follow-ups"],
+        execution: {
+          kind: "compose"
+        },
+        protocol: "build-close@v1",
+        writes: {
+          report_path: "reports/build-result.json"
+        },
+        check: {
+          required: ["summary", "outcome", "evidence_links"]
+        },
+        routes: {
+          complete: "@complete",
+          stop: "@stop"
+        },
+        block: "close-with-evidence"
+      }
+    ]
   },
   routing: {
     order: 30,
@@ -12196,6 +14452,33 @@ var buildCompiledFlowPackage = {
     { schemaName: "build.verification@v1", schema: BuildVerification },
     { schemaName: "build.result@v1", schema: BuildResult }
   ],
+  runtimeSurface: {
+    primaryResult: {
+      schemaName: "build.result@v1",
+      path: "reports/build-result.json",
+      label: "Build result"
+    },
+    progress: {
+      steps: [
+        { stepId: "frame-step", taskTitle: "Frame the work", activeText: "Framing the work" },
+        { stepId: "plan-step", taskTitle: "Plan the work", activeText: "Planning the work" },
+        {
+          stepId: "act-step",
+          taskTitle: "Make the change",
+          activeText: "Making the change",
+          relayRole: "implementer"
+        },
+        { stepId: "verify-step", taskTitle: "Check the work", activeText: "Checking the work" },
+        {
+          stepId: "review-step",
+          taskTitle: "Check the result",
+          activeText: "Checking the result",
+          relayRole: "reviewer"
+        },
+        { stepId: "close-step", taskTitle: "Wrap up", activeText: "Wrapping up" }
+      ]
+    }
+  },
   writers: {
     compose: [buildPlanComposeBuilder],
     close: [buildCloseBuilder],
@@ -12205,7 +14488,7 @@ var buildCompiledFlowPackage = {
   engineFlags: {
     bindsExecutionDepthToRelaySelection: true
   }
-};
+});
 
 // dist/flows/explore/relay-hints.js
 var exploreComposeShapeHint = {
@@ -12598,7 +14881,7 @@ var exploreBriefComposeBuilder = {
 };
 
 // dist/flows/explore/writers/close.js
-import { readFileSync as readFileSync4 } from "node:fs";
+import { readFileSync as readFileSync5 } from "node:fs";
 var POINTERS2 = [
   { report_id: "explore.brief", schema: "explore.brief@v1" },
   { report_id: "explore.analysis", schema: "explore.analysis@v1" },
@@ -12624,7 +14907,7 @@ function requiredInput(context, name, schema) {
   const input = context.inputs[name];
   if (input !== void 0)
     return input;
-  const path = reportPathForSchemaInCompiledFlow(context.flow, schema);
+  const path = reportPathForSchemaInRuntimeFlow(context.flow, schema);
   throw new Error(`explore.result@v1 requires close step '${context.closeStep.id}' to read ${path}`);
 }
 function reviewHasFoldIns(review) {
@@ -12647,7 +14930,7 @@ var exploreCloseBuilder = {
       const review2 = ExploreTournamentReview.parse(context.inputs.tournamentReview);
       const decision2 = ExploreDecision.parse(context.inputs.decision);
       const aggregatePath = requiredTournamentAggregatePath(context);
-      ExploreTournamentAggregate.parse(JSON.parse(readFileSync4(resolveRunRelative(context.runFolder, aggregatePath), "utf8")));
+      ExploreTournamentAggregate.parse(JSON.parse(readFileSync5(resolveRunRelative(context.runFolder, aggregatePath), "utf8")));
       return ExploreResult.parse({
         summary: `Explore '${brief.subject}': ${decision2.decision}`,
         verdict_snapshot: {
@@ -12659,7 +14942,7 @@ var exploreCloseBuilder = {
         },
         evidence_links: TOURNAMENT_POINTERS.map((p) => ({
           ...p,
-          path: p.schema === "explore.tournament-aggregate@v1" ? aggregatePath : reportPathForSchemaInCompiledFlow(context.flow, p.schema)
+          path: p.schema === "explore.tournament-aggregate@v1" ? aggregatePath : reportPathForSchemaInRuntimeFlow(context.flow, p.schema)
         }))
       });
     }
@@ -12682,7 +14965,7 @@ var exploreCloseBuilder = {
       } : {},
       evidence_links: POINTERS2.map((p) => ({
         ...p,
-        path: reportPathForSchemaInCompiledFlow(context.flow, p.schema)
+        path: reportPathForSchemaInRuntimeFlow(context.flow, p.schema)
       }))
     });
   }
@@ -12797,10 +15080,10 @@ var exploreDecisionOptionsComposeBuilder = {
 };
 
 // dist/flows/explore/writers/decision.js
-import { readFileSync as readFileSync5 } from "node:fs";
+import { readFileSync as readFileSync6 } from "node:fs";
 var CHECKPOINT_RESPONSE_STEP_ID = "tradeoff-checkpoint-step";
 function readJson(runFolder, path) {
-  return JSON.parse(readFileSync5(resolveRunRelative(runFolder, path), "utf8"));
+  return JSON.parse(readFileSync6(resolveRunRelative(runFolder, path), "utf8"));
 }
 function requiredRead(stepReads, suffix) {
   const path = stepReads.find((entry) => entry.endsWith(suffix));
@@ -12866,14 +15149,517 @@ var exploreDecisionComposeBuilder = {
   }
 };
 
-// dist/flows/explore/index.js
-var exploreCompiledFlowPackage = {
+// dist/flows/explore/flow.js
+var exploreFlowDefinition = defineFlow({
   id: "explore",
   visibility: "public",
   paths: {
     schematic: "src/flows/explore/schematic.json",
     command: "src/flows/explore/command.md",
     contract: "src/flows/explore/contract.md"
+  },
+  schematic: {
+    schema_version: "1",
+    id: "explore",
+    title: "Explore Schematic",
+    purpose: "Explore flow: frame the investigation, analyze the subject, either synthesize and critique findings or run a decision tournament, then close with findings plus evidence. All modes use Frame, Analyze, Plan or Decision, and Close; critique is embedded inside the Plan/Decision stage rather than exposed as a separate canonical Review stage.",
+    status: "active",
+    version: "0.1.0",
+    starts_at: "frame-step",
+    initial_contracts: ["task.intake@v1", "route.decision@v1", "context.packet@v1"],
+    contract_aliases: [
+      {
+        generic: "flow.brief@v1",
+        actual: "explore.brief@v1"
+      },
+      {
+        generic: "diagnosis.result@v1",
+        actual: "explore.analysis@v1"
+      },
+      {
+        generic: "change.evidence@v1",
+        actual: "explore.compose@v1"
+      },
+      {
+        generic: "review.verdict@v1",
+        actual: "explore.review-verdict@v1"
+      },
+      {
+        generic: "plan.strategy@v1",
+        actual: "explore.decision-options@v1"
+      },
+      {
+        generic: "plan.strategy@v1",
+        actual: "explore.tournament-aggregate@v1"
+      },
+      {
+        generic: "plan.strategy@v1",
+        actual: "explore.tournament-review@v1"
+      },
+      {
+        generic: "plan.strategy@v1",
+        actual: "explore.decision@v1"
+      },
+      {
+        generic: "flow.question@v1",
+        actual: "explore.tournament-review@v1"
+      },
+      {
+        generic: "flow.evidence@v1",
+        actual: "explore.tournament-aggregate@v1"
+      },
+      {
+        generic: "decision.answer@v1",
+        actual: "explore.tradeoff-selection@v1"
+      },
+      {
+        generic: "flow.result@v1",
+        actual: "explore.result@v1"
+      }
+    ],
+    entry: {
+      signals: {
+        include: ["explore", "investigate", "research", "understand"],
+        exclude: []
+      },
+      intent_prefixes: ["explore", "investigate", "decide"]
+    },
+    entry_modes: [
+      {
+        name: "default",
+        depth: "standard",
+        description: "Default explore entry mode \u2014 seeds the run at Frame at standard depth."
+      },
+      {
+        name: "lite",
+        depth: "lite",
+        description: "Lite Explore entry mode \u2014 frames, analyzes, and closes with a compact Plan/Decision pass."
+      },
+      {
+        name: "deep",
+        depth: "deep",
+        description: "Deep Explore entry mode \u2014 frames, analyzes, and spends more effort on Plan/Decision evidence and seam proof."
+      },
+      {
+        name: "tournament",
+        depth: "tournament",
+        description: "Decision tournament entry mode \u2014 frames and analyzes the question, fans out option cases, pauses for a bounded tradeoff choice, then closes with the selected decision."
+      },
+      {
+        name: "autonomous",
+        depth: "autonomous",
+        description: "Autonomous Explore entry mode \u2014 carries ambiguity forward when no safe checkpoint answer is available."
+      }
+    ],
+    stage_path_policy: {
+      mode: "partial",
+      omits: ["act", "verify", "review"],
+      rationale: "Explore is an investigation and decision flow. Synthesize, critique, and tournament stress review are all embedded inside the canonical Plan/Decision stage. Verify is omitted because Explore output is not executable and uses evidence/seam proof rather than mechanical command verification. See src/flows/explore/contract.md \xA7Canonical stage set for the full rationale."
+    },
+    stages: [
+      {
+        canonical: "frame",
+        id: "frame-stage",
+        title: "Frame"
+      },
+      {
+        canonical: "analyze",
+        id: "analyze-stage",
+        title: "Analyze"
+      },
+      {
+        canonical: "plan",
+        id: "decision-stage",
+        title: "Plan or Decision"
+      },
+      {
+        canonical: "close",
+        id: "close-stage",
+        title: "Close"
+      }
+    ],
+    items: [
+      {
+        id: "frame-step",
+        title: "Frame \u2014 produce explore.brief",
+        stage: "frame",
+        input: {
+          task: "task.intake@v1",
+          route: "route.decision@v1"
+        },
+        output: "explore.brief@v1",
+        evidence_requirements: ["scope boundary", "constraints", "proof plan"],
+        execution: {
+          kind: "compose"
+        },
+        protocol: "explore-frame@v1",
+        writes: {
+          report_path: "reports/brief.json"
+        },
+        check: {
+          required: ["subject", "success_condition"]
+        },
+        routes: {
+          continue: "analyze-step",
+          stop: "@stop"
+        },
+        block: "frame"
+      },
+      {
+        id: "analyze-step",
+        title: "Analyze \u2014 produce explore.analysis",
+        stage: "analyze",
+        input: {
+          brief: "explore.brief@v1",
+          context: "context.packet@v1"
+        },
+        output: "explore.analysis@v1",
+        evidence_requirements: [
+          "cause hypothesis",
+          "confidence",
+          "reproduction status",
+          "diagnostic path"
+        ],
+        execution: {
+          kind: "compose"
+        },
+        protocol: "explore-analyze@v1",
+        writes: {
+          report_path: "reports/analysis.json"
+        },
+        check: {
+          required: ["aspects"]
+        },
+        routes: {
+          continue: "synthesize-step",
+          retry: "analyze-step",
+          stop: "@stop"
+        },
+        route_overrides: {
+          continue: {
+            tournament: "decision-options-step"
+          }
+        },
+        block: "diagnose"
+      },
+      {
+        id: "synthesize-step",
+        title: "Synthesize \u2014 produce explore.compose (connector-bound relay)",
+        stage: "plan",
+        input: {
+          brief: "explore.brief@v1",
+          diagnosis: "explore.analysis@v1"
+        },
+        output: "explore.compose@v1",
+        evidence_requirements: ["changed files", "change rationale", "declared follow-up proof"],
+        execution: {
+          kind: "relay",
+          role: "implementer"
+        },
+        protocol: "explore-synthesize@v1",
+        writes: {
+          report_path: "reports/compose.json",
+          request_path: "reports/relay/synthesize.request.json",
+          receipt_path: "reports/relay/synthesize.receipt.txt",
+          result_path: "reports/relay/synthesize.result.json"
+        },
+        check: {
+          pass: ["accept"]
+        },
+        routes: {
+          continue: "review-step",
+          retry: "synthesize-step",
+          stop: "@stop"
+        },
+        block: "plan"
+      },
+      {
+        id: "review-step",
+        title: "Review \u2014 adversarial pass over compose (connector-bound relay)",
+        stage: "plan",
+        input: {
+          brief: "explore.brief@v1",
+          diagnosis: "explore.analysis@v1",
+          change: "explore.compose@v1"
+        },
+        output: "explore.review-verdict@v1",
+        evidence_requirements: ["verdict", "findings", "confidence", "required fixes"],
+        execution: {
+          kind: "relay",
+          role: "reviewer"
+        },
+        protocol: "explore-review@v1",
+        writes: {
+          report_path: "reports/review-verdict.json",
+          request_path: "reports/relay/review.request.json",
+          receipt_path: "reports/relay/review.receipt.txt",
+          result_path: "reports/relay/review.result.json"
+        },
+        check: {
+          pass: ["accept", "accept-with-fold-ins"]
+        },
+        routes: {
+          continue: "close-step",
+          retry: "synthesize-step",
+          revise: "synthesize-step",
+          stop: "@stop"
+        },
+        block: "review"
+      },
+      {
+        id: "decision-options-step",
+        title: "Decision \u2014 draft tournament options",
+        stage: "plan",
+        input: {
+          brief: "explore.brief@v1",
+          diagnosis: "explore.analysis@v1"
+        },
+        output: "explore.decision-options@v1",
+        evidence_requirements: ["ordered steps", "risk notes", "proof strategy"],
+        execution: {
+          kind: "compose"
+        },
+        protocol: "explore-decision-options@v1",
+        writes: {
+          report_path: "reports/decision-options.json"
+        },
+        check: {
+          required: ["decision_question", "options"]
+        },
+        routes: {
+          continue: "proposal-fanout-step",
+          stop: "@stop"
+        },
+        block: "plan"
+      },
+      {
+        id: "proposal-fanout-step",
+        title: "Decision \u2014 fan out option cases",
+        stage: "plan",
+        input: {
+          brief: "explore.brief@v1",
+          options: "explore.decision-options@v1"
+        },
+        output: "explore.tournament-aggregate@v1",
+        evidence_requirements: ["ordered steps", "risk notes", "proof strategy"],
+        execution: {
+          kind: "fanout"
+        },
+        fanout: {
+          branches: {
+            kind: "dynamic",
+            source_report: "reports/decision-options.json",
+            items_path: "options",
+            template: {
+              branch_id: "$item.id",
+              execution: {
+                kind: "relay",
+                role: "researcher",
+                goal: "$item.best_case_prompt",
+                report_schema: "explore.tournament-proposal@v1",
+                provenance_field: "option_id"
+              }
+            },
+            max_branches: 4
+          },
+          concurrency: {
+            kind: "bounded",
+            max: 2
+          },
+          on_child_failure: "abort-all",
+          join: {
+            policy: "aggregate-only"
+          }
+        },
+        protocol: "explore-proposal-fanout@v1",
+        writes: {
+          report_path: "reports/tournament-aggregate.json",
+          branches_dir_path: "reports/tournament-branches"
+        },
+        check: {
+          pass: ["accept"]
+        },
+        routes: {
+          continue: "stress-proposals-step",
+          stop: "@stop"
+        },
+        block: "plan"
+      },
+      {
+        id: "stress-proposals-step",
+        title: "Decision \u2014 stress proposals",
+        stage: "plan",
+        input: {
+          brief: "explore.brief@v1",
+          options: "explore.decision-options@v1",
+          aggregate: "explore.tournament-aggregate@v1"
+        },
+        output: "explore.tournament-review@v1",
+        evidence_requirements: ["ordered steps", "risk notes", "proof strategy"],
+        execution: {
+          kind: "relay",
+          role: "reviewer"
+        },
+        protocol: "explore-stress-proposals@v1",
+        writes: {
+          report_path: "reports/tournament-review.json",
+          request_path: "reports/relay/tournament-review.request.json",
+          receipt_path: "reports/relay/tournament-review.receipt.txt",
+          result_path: "reports/relay/tournament-review.result.json"
+        },
+        check: {
+          pass: ["recommend", "no-clear-winner", "needs-operator"]
+        },
+        routes: {
+          continue: "tradeoff-checkpoint-step",
+          revise: "decision-options-step",
+          stop: "@stop"
+        },
+        block: "plan"
+      },
+      {
+        id: "tradeoff-checkpoint-step",
+        title: "Decision \u2014 tradeoff checkpoint",
+        stage: "plan",
+        input: {
+          question: "explore.tournament-review@v1",
+          evidence: "explore.tournament-aggregate@v1"
+        },
+        output: "explore.tradeoff-selection@v1",
+        evidence_requirements: [
+          "question",
+          "available options",
+          "selected option",
+          "answer source"
+        ],
+        execution: {
+          kind: "checkpoint"
+        },
+        checkpoint_policy: {
+          prompt: "Choose the option Circuit should close with. This checkpoint only supports final option choices; ask-for-more-evidence and stop routes are intentionally not encoded until the runtime has executable route semantics for them.",
+          choices: [
+            {
+              id: "option-1",
+              label: "Option 1",
+              description: "Close with the first drafted option."
+            },
+            {
+              id: "option-2",
+              label: "Option 2",
+              description: "Close with the second drafted option."
+            },
+            {
+              id: "option-3",
+              label: "Option 3",
+              description: "Close with the third drafted option."
+            },
+            {
+              id: "option-4",
+              label: "Option 4",
+              description: "Close with the fourth drafted option."
+            }
+          ],
+          safe_default_choice: "option-1"
+        },
+        protocol: "explore-tradeoff-checkpoint@v1",
+        writes: {
+          checkpoint_request_path: "reports/checkpoints/tradeoff-request.json",
+          checkpoint_response_path: "reports/checkpoints/tradeoff-response.json"
+        },
+        check: {
+          allow: ["option-1", "option-2", "option-3", "option-4"]
+        },
+        routes: {
+          continue: "decision-step",
+          stop: "@stop"
+        },
+        block: "human-decision"
+      },
+      {
+        id: "decision-step",
+        title: "Decision \u2014 compose final choice",
+        stage: "plan",
+        input: {
+          brief: "explore.brief@v1",
+          options: "explore.decision-options@v1",
+          aggregate: "explore.tournament-aggregate@v1",
+          review: "explore.tournament-review@v1"
+        },
+        output: "explore.decision@v1",
+        evidence_requirements: ["ordered steps", "risk notes", "proof strategy"],
+        execution: {
+          kind: "compose"
+        },
+        protocol: "explore-decision@v1",
+        writes: {
+          report_path: "reports/decision.json"
+        },
+        check: {
+          required: ["decision", "selected_option_id", "rationale"]
+        },
+        routes: {
+          continue: "close-tournament-step",
+          stop: "@stop"
+        },
+        block: "plan"
+      },
+      {
+        id: "close-tournament-step",
+        title: "Close \u2014 emit tournament result file",
+        stage: "close",
+        input: {
+          brief: "explore.brief@v1",
+          options: "explore.decision-options@v1",
+          aggregate: "explore.tournament-aggregate@v1",
+          review: "explore.tournament-review@v1",
+          decision: "explore.decision@v1"
+        },
+        output: "explore.result@v1",
+        evidence_requirements: ["outcome", "evidence pointers", "residual risks", "follow-ups"],
+        execution: {
+          kind: "compose"
+        },
+        protocol: "explore-close-tournament@v1",
+        writes: {
+          report_path: "reports/explore-result.json"
+        },
+        check: {
+          required: ["summary", "verdict_snapshot"]
+        },
+        routes: {
+          complete: "@complete",
+          stop: "@stop"
+        },
+        block: "close-with-evidence"
+      },
+      {
+        id: "close-step",
+        title: "Close \u2014 emit final result file",
+        stage: "close",
+        input: {
+          brief: "explore.brief@v1",
+          compose: "explore.compose@v1",
+          review: "explore.review-verdict@v1"
+        },
+        output: "explore.result@v1",
+        evidence_requirements: ["outcome", "evidence pointers", "residual risks", "follow-ups"],
+        execution: {
+          kind: "compose"
+        },
+        protocol: "explore-close@v1",
+        writes: {
+          report_path: "reports/explore-result.json"
+        },
+        check: {
+          required: ["summary", "verdict_snapshot"]
+        },
+        routes: {
+          complete: "@complete",
+          stop: "@stop"
+        },
+        block: "close-with-evidence"
+      }
+    ]
   },
   routing: {
     order: Number.MAX_SAFE_INTEGER,
@@ -12914,6 +15700,63 @@ var exploreCompiledFlowPackage = {
     { schemaName: "explore.decision@v1", schema: ExploreDecision },
     { schemaName: "explore.result@v1", schema: ExploreResult }
   ],
+  runtimeSurface: {
+    primaryResult: {
+      schemaName: "explore.result@v1",
+      path: "reports/explore-result.json",
+      label: "Explore result"
+    },
+    progress: {
+      steps: [
+        { stepId: "frame-step", taskTitle: "Frame the work", activeText: "Framing the work" },
+        {
+          stepId: "analyze-step",
+          taskTitle: "Check the context",
+          activeText: "Checking the context"
+        },
+        {
+          stepId: "synthesize-step",
+          taskTitle: "Draft the recommendation",
+          activeText: "Drafting the recommendation",
+          relayRole: "implementer"
+        },
+        {
+          stepId: "review-step",
+          taskTitle: "Check the recommendation",
+          activeText: "Checking the recommendation",
+          relayRole: "reviewer"
+        },
+        {
+          stepId: "decision-options-step",
+          taskTitle: "Draft the options",
+          activeText: "Drafting the options"
+        },
+        {
+          stepId: "proposal-fanout-step",
+          taskTitle: "Compare the options",
+          activeText: "Comparing the options"
+        },
+        {
+          stepId: "stress-proposals-step",
+          taskTitle: "Check the options",
+          activeText: "Checking the options",
+          relayRole: "reviewer"
+        },
+        {
+          stepId: "tradeoff-checkpoint-step",
+          taskTitle: "Compare the options",
+          activeText: "Comparing the options"
+        },
+        {
+          stepId: "decision-step",
+          taskTitle: "Draft the recommendation",
+          activeText: "Drafting the recommendation"
+        },
+        { stepId: "close-tournament-step", taskTitle: "Wrap up", activeText: "Wrapping up" },
+        { stepId: "close-step", taskTitle: "Wrap up", activeText: "Wrapping up" }
+      ]
+    }
+  },
   writers: {
     compose: [
       exploreBriefComposeBuilder,
@@ -12921,11 +15764,9 @@ var exploreCompiledFlowPackage = {
       exploreDecisionOptionsComposeBuilder,
       exploreDecisionComposeBuilder
     ],
-    close: [exploreCloseBuilder],
-    verification: [],
-    checkpoint: []
+    close: [exploreCloseBuilder]
   }
-};
+});
 
 // dist/flows/registries/shape-hints/from-zod.js
 function defOf(node) {
@@ -13909,7 +16750,7 @@ var fixBriefComposeBuilder = {
 };
 
 // dist/flows/fix/writers/change-set.js
-import { readFileSync as readFileSync6 } from "node:fs";
+import { readFileSync as readFileSync7 } from "node:fs";
 function fingerprintsByPath(entries) {
   const map = /* @__PURE__ */ new Map();
   for (const entry of entries) {
@@ -13953,8 +16794,8 @@ function computeChangeSet(options) {
 var fixChangeSetWriter = {
   resultSchemaName: "fix.change-set@v1",
   loadCommands(context) {
-    const baselinePath = reportPathForSchemaInCompiledFlow(context.flow, "fix.baseline-snapshot@v1");
-    const changePath = reportPathForSchemaInCompiledFlow(context.flow, "fix.change@v1");
+    const baselinePath = reportPathForSchemaInRuntimeFlow(context.flow, "fix.baseline-snapshot@v1");
+    const changePath = reportPathForSchemaInRuntimeFlow(context.flow, "fix.change@v1");
     if (!context.step.reads.includes(baselinePath)) {
       throw new Error(`fix.change-set@v1 requires step '${context.step.id}' to read ${baselinePath}`);
     }
@@ -13972,10 +16813,10 @@ var fixChangeSetWriter = {
       throw new Error("fix.change-set@v1: git-state observation missing");
     }
     const post = parseGitStateObservation(observation, "fix.change-set@v1");
-    const baselinePath = reportPathForSchemaInCompiledFlow(context.flow, "fix.baseline-snapshot@v1");
-    const changePath = reportPathForSchemaInCompiledFlow(context.flow, "fix.change@v1");
-    const baseline = FixBaselineSnapshot.parse(JSON.parse(readFileSync6(resolveRunRelative(context.runFolder, baselinePath), "utf8")));
-    const change = FixChange.parse(JSON.parse(readFileSync6(resolveRunRelative(context.runFolder, changePath), "utf8")));
+    const baselinePath = reportPathForSchemaInRuntimeFlow(context.flow, "fix.baseline-snapshot@v1");
+    const changePath = reportPathForSchemaInRuntimeFlow(context.flow, "fix.change@v1");
+    const baseline = FixBaselineSnapshot.parse(JSON.parse(readFileSync7(resolveRunRelative(context.runFolder, baselinePath), "utf8")));
+    const change = FixChange.parse(JSON.parse(readFileSync7(resolveRunRelative(context.runFolder, changePath), "utf8")));
     const computed = computeChangeSet({
       baseline,
       post,
@@ -14089,13 +16930,13 @@ var fixCloseBuilder = {
     const pointers = REQUIRED_POINTERS.map((p) => ({
       report_id: p.report_id,
       schema: p.schema,
-      path: reportPathForSchemaInCompiledFlow(context.flow, p.schema)
+      path: reportPathForSchemaInRuntimeFlow(context.flow, p.schema)
     }));
     if (review !== void 0) {
       pointers.push({
         report_id: OPTIONAL_REVIEW_POINTER.report_id,
         schema: OPTIONAL_REVIEW_POINTER.schema,
-        path: reportPathForSchemaInCompiledFlow(context.flow, OPTIONAL_REVIEW_POINTER.schema)
+        path: reportPathForSchemaInRuntimeFlow(context.flow, OPTIONAL_REVIEW_POINTER.schema)
       });
     }
     return projectFixResult({
@@ -14113,15 +16954,15 @@ var fixCloseBuilder = {
 };
 
 // dist/flows/fix/writers/regression-baseline.js
-import { readFileSync as readFileSync7 } from "node:fs";
+import { readFileSync as readFileSync8 } from "node:fs";
 var fixRegressionBaselineWriter = {
   resultSchemaName: "fix.regression-proof@v1",
   loadCommands(context) {
-    const briefPath = reportPathForSchemaInCompiledFlow(context.flow, "fix.brief@v1");
+    const briefPath = reportPathForSchemaInRuntimeFlow(context.flow, "fix.brief@v1");
     if (!context.step.reads.includes(briefPath)) {
       throw new Error(`fix.regression-proof@v1 requires step '${context.step.id}' to read ${briefPath}`);
     }
-    const brief = FixBrief.parse(JSON.parse(readFileSync7(resolveRunRelative(context.runFolder, briefPath), "utf8")));
+    const brief = FixBrief.parse(JSON.parse(readFileSync8(resolveRunRelative(context.runFolder, briefPath), "utf8")));
     if (brief.regression_contract.regression_test.status !== "failing-before-fix") {
       return [];
     }
@@ -14169,15 +17010,15 @@ var fixRegressionBaselineWriter = {
 };
 
 // dist/flows/fix/writers/regression-rerun.js
-import { readFileSync as readFileSync8 } from "node:fs";
+import { readFileSync as readFileSync9 } from "node:fs";
 var fixRegressionRerunWriter = {
   resultSchemaName: "fix.regression-rerun@v1",
   loadCommands(context) {
-    const briefPath = reportPathForSchemaInCompiledFlow(context.flow, "fix.brief@v1");
+    const briefPath = reportPathForSchemaInRuntimeFlow(context.flow, "fix.brief@v1");
     if (!context.step.reads.includes(briefPath)) {
       throw new Error(`fix.regression-rerun@v1 requires step '${context.step.id}' to read ${briefPath}`);
     }
-    const brief = FixBrief.parse(JSON.parse(readFileSync8(resolveRunRelative(context.runFolder, briefPath), "utf8")));
+    const brief = FixBrief.parse(JSON.parse(readFileSync9(resolveRunRelative(context.runFolder, briefPath), "utf8")));
     if (brief.regression_contract.regression_test.status !== "failing-before-fix") {
       return [];
     }
@@ -14225,15 +17066,15 @@ var fixRegressionRerunWriter = {
 };
 
 // dist/flows/fix/writers/verification.js
-import { readFileSync as readFileSync9 } from "node:fs";
+import { readFileSync as readFileSync10 } from "node:fs";
 var fixVerificationWriter = {
   resultSchemaName: "fix.verification@v1",
   loadCommands(context) {
-    const briefPath = reportPathForSchemaInCompiledFlow(context.flow, "fix.brief@v1");
+    const briefPath = reportPathForSchemaInRuntimeFlow(context.flow, "fix.brief@v1");
     if (!context.step.reads.includes(briefPath)) {
       throw new Error(`fix.verification@v1 requires step '${context.step.id}' to read ${briefPath}`);
     }
-    const brief = FixBrief.parse(JSON.parse(readFileSync9(resolveRunRelative(context.runFolder, briefPath), "utf8")));
+    const brief = FixBrief.parse(JSON.parse(readFileSync10(resolveRunRelative(context.runFolder, briefPath), "utf8")));
     return brief.verification_command_candidates;
   },
   buildResult(observations) {
@@ -14257,7 +17098,7 @@ var fixVerificationWriter = {
   }
 };
 
-// dist/flows/fix/index.js
+// dist/flows/fix/flow.js
 var FIX_SIGNALS = [
   { label: "fix prefix", pattern: /^\s*fix\s*:/i },
   { label: "quick fix prefix", pattern: /^\s*(?:quick|small|tiny|simple)\s+fix\s*:/i },
@@ -14270,13 +17111,624 @@ var FIX_SIGNALS = [
     pattern: /\b(?:bug|buggy|broken|failing|fails|failed|wrong|incorrect|instead\s+of|regression|crash|crashes|throw|throws)\b[\s\S]{0,200}\bfix\s+(?:it|this|that|please)\b/i
   }
 ];
-var fixCompiledFlowPackage = {
+var fixFlowDefinition = defineFlow({
   id: "fix",
   visibility: "public",
   paths: {
     schematic: "src/flows/fix/schematic.json",
     command: "src/flows/fix/command.md",
     contract: "src/flows/fix/contract.md"
+  },
+  schematic: {
+    schema_version: "1",
+    id: "fix",
+    title: "Fix Schematic",
+    purpose: "Fix flow: capture problem boundary, gather context, diagnose, apply a focused change, verify, review (in standard depth), and close with evidence. Lite mode skips the review relay and closes immediately after verification via the fix-verify route_overrides.continue.lite override. fix-no-repro-decision and fix-handoff remain in the schematic as authoring intent for future ask/handoff routing in the runtime; they are unreachable at compile and do not appear in the emitted compiled flows.",
+    status: "active",
+    version: "0.1.0",
+    starts_at: "fix-frame",
+    initial_contracts: [
+      "task.intake@v1",
+      "route.decision@v1",
+      "context.request@v1",
+      "flow.question@v1",
+      "verification.plan@v1",
+      "flow.state@v1"
+    ],
+    contract_aliases: [
+      {
+        generic: "flow.brief@v1",
+        actual: "fix.brief@v1"
+      },
+      {
+        generic: "context.packet@v1",
+        actual: "fix.context@v1"
+      },
+      {
+        generic: "diagnosis.result@v1",
+        actual: "fix.diagnosis@v1"
+      },
+      {
+        generic: "decision.answer@v1",
+        actual: "fix.no-repro-decision@v1"
+      },
+      {
+        generic: "flow.evidence@v1",
+        actual: "fix.diagnosis@v1"
+      },
+      {
+        generic: "change.evidence@v1",
+        actual: "fix.change@v1"
+      },
+      {
+        generic: "verification.result@v1",
+        actual: "fix.verification@v1"
+      },
+      {
+        generic: "verification.result@v1",
+        actual: "fix.regression-proof@v1"
+      },
+      {
+        generic: "verification.result@v1",
+        actual: "fix.baseline-snapshot@v1"
+      },
+      {
+        generic: "verification.result@v1",
+        actual: "fix.regression-rerun@v1"
+      },
+      {
+        generic: "verification.result@v1",
+        actual: "fix.change-set@v1"
+      },
+      {
+        generic: "review.verdict@v1",
+        actual: "fix.review@v1"
+      },
+      {
+        generic: "flow.result@v1",
+        actual: "fix.result@v1"
+      }
+    ],
+    entry: {
+      signals: {
+        include: ["fix", "bug", "broken", "regression", "incident", "outage", "diagnose"],
+        exclude: []
+      },
+      intent_prefixes: ["fix", "diagnose"]
+    },
+    entry_modes: [
+      {
+        name: "default",
+        depth: "standard",
+        description: "Default Fix entry mode \u2014 standard depth with full review pass."
+      },
+      {
+        name: "lite",
+        depth: "lite",
+        description: "Lite Fix entry mode \u2014 skips the review relay and closes immediately after verification."
+      },
+      {
+        name: "deep",
+        depth: "deep",
+        description: "Deep Fix entry mode \u2014 standard graph at deep depth (more thorough analysis and review)."
+      },
+      {
+        name: "autonomous",
+        depth: "autonomous",
+        description: "Autonomous Fix entry mode \u2014 standard graph at autonomous depth; safe-default checkpoint choices apply."
+      }
+    ],
+    stage_path_policy: {
+      mode: "partial",
+      omits: ["plan"],
+      rationale: "Fix follows Frame, Analyze, Act, Verify, Review, Close. The Plan stage is omitted because Fix's planning is folded into Diagnose during the Analyze stage \u2014 there is no separate plan-of-attack report distinct from the diagnosis."
+    },
+    stages: [
+      {
+        canonical: "frame",
+        id: "frame-stage",
+        title: "Frame"
+      },
+      {
+        canonical: "analyze",
+        id: "analyze-stage",
+        title: "Analyze"
+      },
+      {
+        canonical: "act",
+        id: "act-stage",
+        title: "Act"
+      },
+      {
+        canonical: "verify",
+        id: "verify-stage",
+        title: "Verify"
+      },
+      {
+        canonical: "review",
+        id: "review-stage",
+        title: "Review"
+      },
+      {
+        canonical: "close",
+        id: "close-stage",
+        title: "Close"
+      }
+    ],
+    items: [
+      {
+        id: "fix-frame",
+        title: "Frame \u2014 confirm Fix brief",
+        stage: "frame",
+        input: {
+          task: "task.intake@v1",
+          route: "route.decision@v1"
+        },
+        output: "fix.brief@v1",
+        evidence_requirements: ["scope boundary", "constraints", "proof plan"],
+        execution: {
+          kind: "compose"
+        },
+        protocol: "fix-frame@v1",
+        writes: {
+          report_path: "reports/fix/brief.json"
+        },
+        check: {
+          required: ["problem_statement", "scope", "regression_contract", "success_criteria"]
+        },
+        routes: {
+          continue: "fix-gather-context",
+          revise: "fix-frame",
+          ask: "@stop",
+          stop: "@stop"
+        },
+        block: "frame"
+      },
+      {
+        id: "fix-gather-context",
+        title: "Analyze \u2014 gather problem context",
+        stage: "analyze",
+        input: {
+          brief: "fix.brief@v1",
+          request: "context.request@v1"
+        },
+        output: "fix.context@v1",
+        evidence_requirements: ["source list", "observations", "confidence notes"],
+        execution: {
+          kind: "relay",
+          role: "researcher"
+        },
+        protocol: "fix-gather-context@v1",
+        writes: {
+          report_path: "reports/fix/context.json",
+          request_path: "reports/relay/fix-gather-context.request.json",
+          receipt_path: "reports/relay/fix-gather-context.receipt.txt",
+          result_path: "reports/relay/fix-gather-context.result.json"
+        },
+        check: {
+          pass: ["accept"]
+        },
+        routes: {
+          continue: "fix-diagnose",
+          retry: "fix-gather-context",
+          ask: "@stop",
+          stop: "@stop"
+        },
+        block: "gather-context"
+      },
+      {
+        id: "fix-diagnose",
+        title: "Analyze \u2014 diagnose problem",
+        stage: "analyze",
+        input: {
+          brief: "fix.brief@v1",
+          context: "fix.context@v1"
+        },
+        output: "fix.diagnosis@v1",
+        evidence_requirements: [
+          "cause hypothesis",
+          "confidence",
+          "reproduction status",
+          "diagnostic path"
+        ],
+        execution: {
+          kind: "relay",
+          role: "researcher"
+        },
+        protocol: "fix-diagnose@v1",
+        writes: {
+          report_path: "reports/fix/diagnosis.json",
+          request_path: "reports/relay/fix-diagnose.request.json",
+          receipt_path: "reports/relay/fix-diagnose.receipt.txt",
+          result_path: "reports/relay/fix-diagnose.result.json"
+        },
+        check: {
+          pass: ["accept"]
+        },
+        routes: {
+          continue: "fix-regression-baseline",
+          retry: "fix-gather-context",
+          ask: "fix-no-repro-decision",
+          stop: "@stop"
+        },
+        block: "diagnose"
+      },
+      {
+        id: "fix-no-repro-decision",
+        title: "Analyze \u2014 choose path forward when reproduction is uncertain",
+        stage: "analyze",
+        input: {
+          question: "flow.question@v1",
+          evidence: "fix.diagnosis@v1"
+        },
+        output: "fix.no-repro-decision@v1",
+        evidence_requirements: [
+          "question",
+          "available options",
+          "selected option",
+          "answer source"
+        ],
+        execution: {
+          kind: "checkpoint"
+        },
+        protocol: "fix-no-repro-decision@v1",
+        writes: {
+          checkpoint_request_path: "reports/checkpoints/fix-no-repro-decision-request.json",
+          checkpoint_response_path: "reports/checkpoints/fix-no-repro-decision-response.json"
+        },
+        check: {
+          allow: ["continue"]
+        },
+        checkpoint_policy: {
+          prompt: "Diagnosis did not cleanly reproduce the bug. Choose how to proceed.",
+          choices: [
+            {
+              id: "continue",
+              label: "Continue with a focused fix anyway"
+            }
+          ],
+          safe_default_choice: "continue",
+          safe_autonomous_choice: "continue"
+        },
+        routes: {
+          continue: "fix-regression-baseline",
+          revise: "fix-diagnose",
+          stop: "@stop",
+          handoff: "fix-handoff",
+          escalate: "@escalate"
+        },
+        block: "human-decision"
+      },
+      {
+        id: "fix-regression-baseline",
+        title: "Verify \u2014 capture regression baseline",
+        stage: "verify",
+        input: {
+          proof: "verification.plan@v1",
+          brief: "fix.brief@v1",
+          diagnosis: "fix.diagnosis@v1"
+        },
+        output: "fix.regression-proof@v1",
+        evidence_requirements: ["command list", "exit status", "bounded output", "pass or fail"],
+        execution: {
+          kind: "verification"
+        },
+        protocol: "fix-regression-baseline@v1",
+        writes: {
+          report_path: "reports/fix/regression-proof.json"
+        },
+        check: {
+          required: ["status", "overall_status"]
+        },
+        routes: {
+          continue: "fix-baseline-snapshot",
+          retry: "fix-diagnose",
+          stop: "@stop"
+        },
+        block: "run-verification"
+      },
+      {
+        id: "fix-baseline-snapshot",
+        title: "Verify \u2014 snapshot pre-fix git state",
+        stage: "verify",
+        input: {
+          proof: "verification.plan@v1"
+        },
+        output: "fix.baseline-snapshot@v1",
+        evidence_requirements: ["command list", "exit status", "bounded output", "pass or fail"],
+        execution: {
+          kind: "verification"
+        },
+        protocol: "fix-baseline-snapshot@v1",
+        writes: {
+          report_path: "reports/fix/baseline-snapshot.json"
+        },
+        check: {
+          required: ["overall_status", "head_sha"]
+        },
+        routes: {
+          continue: "fix-act",
+          stop: "@stop"
+        },
+        block: "run-verification"
+      },
+      {
+        id: "fix-act",
+        title: "Act \u2014 apply focused fix",
+        stage: "act",
+        input: {
+          brief: "fix.brief@v1",
+          diagnosis: "fix.diagnosis@v1"
+        },
+        output: "fix.change@v1",
+        evidence_requirements: ["changed files", "change rationale", "declared follow-up proof"],
+        execution: {
+          kind: "relay",
+          role: "implementer"
+        },
+        protocol: "fix-act@v1",
+        writes: {
+          report_path: "reports/fix/change.json",
+          request_path: "reports/relay/fix-act.request.json",
+          receipt_path: "reports/relay/fix-act.receipt.txt",
+          result_path: "reports/relay/fix-act.result.json"
+        },
+        check: {
+          pass: ["accept"]
+        },
+        routes: {
+          continue: "fix-verify",
+          retry: "fix-act",
+          ask: "fix-no-repro-decision",
+          stop: "@stop",
+          handoff: "fix-handoff"
+        },
+        block: "act"
+      },
+      {
+        id: "fix-verify",
+        title: "Verify \u2014 run Fix proof",
+        stage: "verify",
+        input: {
+          proof: "verification.plan@v1",
+          brief: "fix.brief@v1",
+          change: "fix.change@v1"
+        },
+        output: "fix.verification@v1",
+        evidence_requirements: ["command list", "exit status", "bounded output", "pass or fail"],
+        execution: {
+          kind: "verification"
+        },
+        protocol: "fix-verify@v1",
+        writes: {
+          report_path: "reports/fix/verification.json"
+        },
+        check: {
+          required: ["overall_status", "commands"]
+        },
+        routes: {
+          continue: "fix-change-set",
+          retry: "fix-act",
+          ask: "fix-no-repro-decision",
+          stop: "@stop"
+        },
+        block: "run-verification"
+      },
+      {
+        id: "fix-change-set",
+        title: "Verify \u2014 compute fix change-set",
+        stage: "verify",
+        input: {
+          proof: "verification.plan@v1",
+          baseline: "fix.baseline-snapshot@v1",
+          change: "fix.change@v1"
+        },
+        output: "fix.change-set@v1",
+        evidence_requirements: ["command list", "exit status", "bounded output", "pass or fail"],
+        execution: {
+          kind: "verification"
+        },
+        protocol: "fix-change-set@v1",
+        writes: {
+          report_path: "reports/fix/change-set.json"
+        },
+        check: {
+          required: ["status", "overall_status"]
+        },
+        routes: {
+          continue: "fix-regression-rerun",
+          retry: "fix-act",
+          stop: "@stop"
+        },
+        block: "run-verification"
+      },
+      {
+        id: "fix-regression-rerun",
+        title: "Verify \u2014 rerun regression command after fix",
+        stage: "verify",
+        input: {
+          proof: "verification.plan@v1",
+          brief: "fix.brief@v1"
+        },
+        output: "fix.regression-rerun@v1",
+        evidence_requirements: ["command list", "exit status", "bounded output", "pass or fail"],
+        execution: {
+          kind: "verification"
+        },
+        protocol: "fix-regression-rerun@v1",
+        writes: {
+          report_path: "reports/fix/regression-rerun.json"
+        },
+        check: {
+          required: ["status", "overall_status"]
+        },
+        routes: {
+          continue: "fix-review",
+          retry: "fix-act",
+          stop: "@stop"
+        },
+        route_overrides: {
+          continue: {
+            lite: "fix-close-lite"
+          }
+        },
+        block: "run-verification"
+      },
+      {
+        id: "fix-review",
+        title: "Review \u2014 independent audit of Fix change",
+        stage: "review",
+        input: {
+          brief: "fix.brief@v1",
+          change: "fix.change@v1",
+          verification: "fix.verification@v1"
+        },
+        output: "fix.review@v1",
+        evidence_requirements: ["verdict", "findings", "confidence", "required fixes"],
+        execution: {
+          kind: "relay",
+          role: "reviewer"
+        },
+        protocol: "fix-review@v1",
+        writes: {
+          report_path: "reports/fix/review.json",
+          request_path: "reports/relay/fix-review.request.json",
+          receipt_path: "reports/relay/fix-review.receipt.txt",
+          result_path: "reports/relay/fix-review.result.json"
+        },
+        check: {
+          pass: ["accept", "accept-with-fixes"]
+        },
+        routes: {
+          continue: "fix-close",
+          retry: "fix-act",
+          revise: "fix-act",
+          ask: "fix-no-repro-decision",
+          stop: "@stop"
+        },
+        block: "review"
+      },
+      {
+        id: "fix-close-lite",
+        title: "Close (lite) \u2014 emit Fix result without review",
+        stage: "close",
+        input: {
+          brief: "fix.brief@v1",
+          context: "fix.context@v1",
+          diagnosis: "fix.diagnosis@v1",
+          regression: "fix.regression-proof@v1",
+          baseline_snapshot: "fix.baseline-snapshot@v1",
+          change: "fix.change@v1",
+          verification: "fix.verification@v1",
+          regression_rerun: "fix.regression-rerun@v1",
+          change_set: "fix.change-set@v1"
+        },
+        output: "fix.result@v1",
+        evidence_requirements: ["outcome", "evidence pointers", "residual risks", "follow-ups"],
+        execution: {
+          kind: "compose"
+        },
+        protocol: "fix-close-lite@v1",
+        writes: {
+          report_path: "reports/fix-result.json"
+        },
+        check: {
+          required: [
+            "summary",
+            "outcome",
+            "verification_status",
+            "regression_status",
+            "change_set_status",
+            "review_status",
+            "evidence_links"
+          ]
+        },
+        routes: {
+          complete: "@complete",
+          stop: "@stop",
+          handoff: "fix-handoff",
+          escalate: "@escalate"
+        },
+        block: "close-with-evidence"
+      },
+      {
+        id: "fix-close",
+        title: "Close \u2014 emit Fix result",
+        stage: "close",
+        input: {
+          brief: "fix.brief@v1",
+          context: "fix.context@v1",
+          diagnosis: "fix.diagnosis@v1",
+          regression: "fix.regression-proof@v1",
+          baseline_snapshot: "fix.baseline-snapshot@v1",
+          change: "fix.change@v1",
+          verification: "fix.verification@v1",
+          regression_rerun: "fix.regression-rerun@v1",
+          change_set: "fix.change-set@v1",
+          review: "fix.review@v1"
+        },
+        output: "fix.result@v1",
+        evidence_requirements: ["outcome", "evidence pointers", "residual risks", "follow-ups"],
+        execution: {
+          kind: "compose"
+        },
+        protocol: "fix-close@v1",
+        writes: {
+          report_path: "reports/fix-result.json"
+        },
+        check: {
+          required: [
+            "summary",
+            "outcome",
+            "verification_status",
+            "regression_status",
+            "change_set_status",
+            "review_status",
+            "review_verdict",
+            "evidence_links"
+          ]
+        },
+        routes: {
+          complete: "@complete",
+          stop: "@stop",
+          handoff: "fix-handoff",
+          escalate: "@escalate"
+        },
+        block: "close-with-evidence"
+      },
+      {
+        id: "fix-handoff",
+        title: "Persist Fix handoff",
+        stage: "close",
+        input: {
+          state: "flow.state@v1",
+          brief: "fix.brief@v1"
+        },
+        output: "continuity.record@v1",
+        evidence_requirements: [
+          "goal",
+          "completed moves",
+          "pending evidence",
+          "next action",
+          "known debt"
+        ],
+        execution: {
+          kind: "compose"
+        },
+        protocol: "fix-handoff@v1",
+        writes: {
+          report_path: "reports/fix/handoff.json"
+        },
+        check: {
+          required: ["goal", "next_action"]
+        },
+        routes: {
+          complete: "@handoff",
+          stop: "@stop"
+        },
+        block: "handoff"
+      }
+    ]
   },
   routing: {
     order: 20,
@@ -14318,6 +17770,71 @@ var fixCompiledFlowPackage = {
     { schemaName: "fix.change-set@v1", schema: FixChangeSet },
     { schemaName: "fix.result@v1", schema: FixResult }
   ],
+  runtimeSurface: {
+    primaryResult: {
+      schemaName: "fix.result@v1",
+      path: "reports/fix-result.json",
+      label: "Fix result"
+    },
+    progress: {
+      steps: [
+        { stepId: "fix-frame", taskTitle: "Frame the work", activeText: "Framing the work" },
+        {
+          stepId: "fix-gather-context",
+          taskTitle: "Check the context",
+          activeText: "Checking the context",
+          relayRole: "implementer"
+        },
+        {
+          stepId: "fix-diagnose",
+          taskTitle: "Check the context",
+          activeText: "Checking the context",
+          relayRole: "implementer"
+        },
+        {
+          stepId: "fix-no-repro-decision",
+          taskTitle: "Check the context",
+          activeText: "Checking the context"
+        },
+        {
+          stepId: "fix-regression-baseline",
+          taskTitle: "Check the work",
+          activeText: "Checking the work"
+        },
+        {
+          stepId: "fix-baseline-snapshot",
+          taskTitle: "Check the work",
+          activeText: "Checking the work"
+        },
+        {
+          stepId: "fix-act",
+          taskTitle: "Make the change",
+          activeText: "Making the change",
+          relayRole: "implementer"
+        },
+        { stepId: "fix-verify", taskTitle: "Check the work", activeText: "Checking the work" },
+        {
+          stepId: "fix-change-set",
+          taskTitle: "Check the work",
+          activeText: "Checking the work"
+        },
+        {
+          stepId: "fix-regression-rerun",
+          taskTitle: "Check the work",
+          activeText: "Checking the work"
+        },
+        {
+          stepId: "fix-review",
+          taskTitle: "Check the result",
+          activeText: "Checking the result",
+          relayRole: "reviewer"
+        },
+        { stepId: "fix-close-lite", taskTitle: "Wrap up", activeText: "Wrapping up" },
+        { stepId: "fix-close", taskTitle: "Wrap up", activeText: "Wrapping up" },
+        { stepId: "fix-handoff", taskTitle: "Wrap up", activeText: "Wrapping up" }
+      ]
+    }
+  },
   writers: {
     compose: [fixBriefComposeBuilder],
     close: [fixCloseBuilder],
@@ -14327,10 +17844,9 @@ var fixCompiledFlowPackage = {
       fixVerificationWriter,
       fixRegressionRerunWriter,
       fixChangeSetWriter
-    ],
-    checkpoint: []
+    ]
   }
-};
+});
 
 // dist/flows/migrate/relay-hints.js
 var migrateReviewShapeHint = {
@@ -14356,603 +17872,6 @@ var migrateInventoryShapeHint = {
     "The runtime parses your response with JSON.parse, rejects any verdict not drawn from the accepted-verdicts list, and validates the full report body against migrate.inventory@v1 before writing reports/migrate/inventory.json."
   ].join(" ")
 };
-
-// dist/schemas/ids.js
-var slugPattern = /^[a-z][a-z0-9-]*$/;
-var CompiledFlowId = external_exports.string().regex(slugPattern).brand();
-var StageId = external_exports.string().regex(slugPattern).brand();
-var StepId = external_exports.string().regex(slugPattern).brand();
-var RunId = external_exports.string().uuid().brand();
-var InvocationId = external_exports.string().regex(/^inv_[a-f0-9-]+$/).brand();
-var SkillId = external_exports.string().regex(slugPattern).brand();
-var SkillSlotId = external_exports.string().regex(slugPattern).brand();
-var ProtocolId = external_exports.string().regex(/^[a-z][a-z0-9-]*@v\d+$/).brand();
-
-// dist/schemas/change-kind.js
-var ChangeKind = external_exports.enum([
-  "ratchet-advance",
-  "equivalence-refactor",
-  "migration-escrow",
-  "discovery",
-  "disposable",
-  "break-glass"
-]);
-var ChangeKindBase = external_exports.object({
-  failure_mode: external_exports.string().min(1),
-  acceptance_evidence: external_exports.string().min(1),
-  alternate_framing: external_exports.string().min(1)
-});
-var MigrationEscrowChangeKind = ChangeKindBase.extend({
-  change_kind: external_exports.literal("migration-escrow"),
-  expires_at: external_exports.string().datetime(),
-  restoration_plan: external_exports.string().min(1)
-}).strict();
-var BreakGlassChangeKind = ChangeKindBase.extend({
-  change_kind: external_exports.literal("break-glass"),
-  post_hoc_adr_deadline_at: external_exports.string().datetime()
-}).strict();
-var StandardChangeKind = ChangeKindBase.extend({
-  change_kind: external_exports.enum(["ratchet-advance", "equivalence-refactor", "discovery", "disposable"])
-});
-var ChangeKindDeclaration = external_exports.discriminatedUnion("change_kind", [
-  StandardChangeKind.extend({ change_kind: external_exports.literal("ratchet-advance") }).strict(),
-  StandardChangeKind.extend({ change_kind: external_exports.literal("equivalence-refactor") }).strict(),
-  StandardChangeKind.extend({ change_kind: external_exports.literal("discovery") }).strict(),
-  StandardChangeKind.extend({ change_kind: external_exports.literal("disposable") }).strict(),
-  MigrationEscrowChangeKind,
-  BreakGlassChangeKind
-]);
-
-// dist/schemas/check.js
-var ReportSource = external_exports.object({
-  kind: external_exports.literal("report"),
-  ref: external_exports.literal("report")
-}).strict();
-var CheckpointResponseSource = external_exports.object({
-  kind: external_exports.literal("checkpoint_response"),
-  ref: external_exports.literal("response")
-}).strict();
-var RelayResultSource = external_exports.object({
-  kind: external_exports.literal("relay_result"),
-  ref: external_exports.literal("result")
-}).strict();
-var SubRunResultSource = external_exports.object({
-  kind: external_exports.literal("sub_run_result"),
-  ref: external_exports.literal("result")
-}).strict();
-var FanoutResultsSource = external_exports.object({
-  kind: external_exports.literal("fanout_results"),
-  ref: external_exports.literal("aggregate")
-}).strict();
-var CheckSource = external_exports.discriminatedUnion("kind", [
-  ReportSource,
-  CheckpointResponseSource,
-  RelayResultSource,
-  SubRunResultSource,
-  FanoutResultsSource
-]);
-var SchemaSectionsCheck = external_exports.object({
-  kind: external_exports.literal("schema_sections"),
-  source: ReportSource,
-  required: external_exports.array(external_exports.string().min(1)).min(1)
-}).strict();
-var CheckpointSelectionCheck = external_exports.object({
-  kind: external_exports.literal("checkpoint_selection"),
-  source: CheckpointResponseSource,
-  allow: external_exports.array(external_exports.string().min(1)).min(1)
-}).strict();
-var ResultVerdictCheck = external_exports.object({
-  kind: external_exports.literal("result_verdict"),
-  source: external_exports.discriminatedUnion("kind", [RelayResultSource, SubRunResultSource]),
-  pass: external_exports.array(external_exports.string().min(1)).min(1)
-}).strict();
-var PickWinnerJoin = external_exports.object({
-  policy: external_exports.literal("pick-winner")
-}).strict();
-var DisjointMergeJoin = external_exports.object({
-  policy: external_exports.literal("disjoint-merge")
-}).strict();
-var AggregateOnlyJoin = external_exports.object({
-  policy: external_exports.literal("aggregate-only")
-}).strict();
-var FanoutJoinPolicy = external_exports.discriminatedUnion("policy", [
-  PickWinnerJoin,
-  DisjointMergeJoin,
-  AggregateOnlyJoin
-]);
-var FanoutAggregateCheck = external_exports.object({
-  kind: external_exports.literal("fanout_aggregate"),
-  source: FanoutResultsSource,
-  join: FanoutJoinPolicy,
-  // verdicts.admit is the per-child verdict allowlist consulted by
-  // pick-winner (preference-ordered) and disjoint-merge (membership-only).
-  // aggregate-only ignores the field but still requires it for surface
-  // uniformity — schematic authors who later switch policies don't have to
-  // reauthor the verdict surface.
-  verdicts: external_exports.object({
-    admit: external_exports.array(external_exports.string().min(1)).min(1)
-  }).strict()
-}).strict();
-var Check = external_exports.discriminatedUnion("kind", [
-  SchemaSectionsCheck,
-  CheckpointSelectionCheck,
-  ResultVerdictCheck,
-  FanoutAggregateCheck
-]);
-
-// dist/schemas/depth.js
-var Depth = external_exports.enum(["lite", "standard", "deep", "tournament", "autonomous"]);
-
-// dist/schemas/json.js
-var JsonPrimitive = external_exports.union([
-  external_exports.string(),
-  external_exports.number().refine((n) => Number.isFinite(n), {
-    message: "JSON numbers must be finite"
-  }),
-  external_exports.boolean(),
-  external_exports.null()
-]);
-var JsonValue = external_exports.lazy(() => external_exports.union([JsonPrimitive, external_exports.array(JsonValue), JsonObject]));
-var JsonObject = external_exports.record(external_exports.string(), JsonValue);
-
-// dist/schemas/selection-policy.js
-var ProviderScopedModel = external_exports.object({
-  provider: external_exports.enum(["openai", "anthropic", "gemini", "custom"]),
-  model: external_exports.string().min(1)
-}).strict();
-var Effort = external_exports.enum(["none", "minimal", "low", "medium", "high", "xhigh"]);
-var UniqueSkillArray = external_exports.array(SkillId).refine((arr) => new Set(arr).size === arr.length, (arr) => ({
-  message: `skills array contains duplicates: ${[...new Set(arr.filter((s, i) => arr.indexOf(s) !== i))].join(", ")}`
-}));
-var SkillOverride = external_exports.discriminatedUnion("mode", [
-  external_exports.object({ mode: external_exports.literal("inherit") }).strict(),
-  external_exports.object({ mode: external_exports.literal("replace"), skills: UniqueSkillArray }).strict(),
-  external_exports.object({ mode: external_exports.literal("append"), skills: UniqueSkillArray }).strict(),
-  external_exports.object({ mode: external_exports.literal("remove"), skills: UniqueSkillArray }).strict()
-]);
-var SelectionOverride = external_exports.object({
-  model: ProviderScopedModel.optional(),
-  effort: Effort.optional(),
-  skills: SkillOverride.default({ mode: "inherit" }),
-  depth: Depth.optional(),
-  invocation_options: JsonObject.default({})
-}).strict();
-var ResolvedSelection = external_exports.object({
-  model: ProviderScopedModel.optional(),
-  effort: Effort.optional(),
-  skills: UniqueSkillArray,
-  depth: Depth.optional(),
-  invocation_options: JsonObject.default({})
-}).strict();
-var SelectionSource = external_exports.enum([
-  "default",
-  "user-global",
-  "project",
-  "flow",
-  "stage",
-  "step",
-  "invocation"
-]);
-var SELECTION_PRECEDENCE = [
-  "default",
-  "user-global",
-  "project",
-  "flow",
-  "stage",
-  "step",
-  "invocation"
-];
-var PRECEDENCE_INDEX = Object.fromEntries(SELECTION_PRECEDENCE.map((s, i) => [s, i]));
-var AppliedEntry = external_exports.discriminatedUnion("source", [
-  external_exports.object({ source: external_exports.literal("default"), override: SelectionOverride }).strict(),
-  external_exports.object({ source: external_exports.literal("user-global"), override: SelectionOverride }).strict(),
-  external_exports.object({ source: external_exports.literal("project"), override: SelectionOverride }).strict(),
-  external_exports.object({ source: external_exports.literal("flow"), override: SelectionOverride }).strict(),
-  external_exports.object({
-    source: external_exports.literal("stage"),
-    stage_id: StageId,
-    override: SelectionOverride
-  }).strict(),
-  external_exports.object({ source: external_exports.literal("step"), step_id: StepId, override: SelectionOverride }).strict(),
-  external_exports.object({ source: external_exports.literal("invocation"), override: SelectionOverride }).strict()
-]);
-function overrideContributes(o) {
-  if (o.model !== void 0)
-    return true;
-  if (o.effort !== void 0)
-    return true;
-  if (o.depth !== void 0)
-    return true;
-  if (o.skills.mode !== "inherit")
-    return true;
-  if (Object.keys(o.invocation_options).length > 0)
-    return true;
-  return false;
-}
-var SelectionResolutionBody = external_exports.object({
-  resolved: ResolvedSelection,
-  applied: external_exports.array(AppliedEntry)
-}).strict();
-var issueAt = (ctx, path, message) => {
-  ctx.addIssue({ code: external_exports.ZodIssueCode.custom, path, message });
-};
-function identityKey(entry) {
-  switch (entry.source) {
-    case "stage":
-      return `stage:${entry.stage_id}`;
-    case "step":
-      return `step:${entry.step_id}`;
-    default:
-      return entry.source;
-  }
-}
-var SelectionResolution = SelectionResolutionBody.superRefine((res, ctx) => {
-  const seen = /* @__PURE__ */ new Set();
-  let lastIndex = -1;
-  for (let i = 0; i < res.applied.length; i++) {
-    const entry = res.applied[i];
-    if (entry === void 0)
-      continue;
-    const key = identityKey(entry);
-    if (seen.has(key)) {
-      issueAt(ctx, ["applied", i, "source"], `duplicate applied identity '${key}' at index ${i}; each identity may contribute at most once (stage/step are disambiguated by their id)`);
-      continue;
-    }
-    seen.add(key);
-    const idx = PRECEDENCE_INDEX[entry.source];
-    if (idx < lastIndex) {
-      issueAt(ctx, ["applied", i, "source"], `applied entry '${entry.source}' at index ${i} is out of precedence order; entries must appear in SELECTION_PRECEDENCE order (default < user-global < project < flow < stage < step < invocation). Two entries with equal precedence (two stages, two steps) are legal and must appear contiguously; a later category cannot precede an earlier one.`);
-    } else {
-      lastIndex = idx;
-    }
-    if (!overrideContributes(entry.override)) {
-      issueAt(ctx, ["applied", i, "override"], `applied entry at index ${i} has an empty override (no model, effort, depth, skills operation, or invocation_options); a layer that contributes nothing must NOT appear in the applied chain (ghost provenance)`);
-    }
-  }
-});
-
-// dist/schemas/skill.js
-var SkillDomain = external_exports.enum(["coding", "design", "research", "ops", "domain-general"]);
-var descriptorOwnPropertyGuard = external_exports.custom((raw) => {
-  if (raw === null || typeof raw !== "object")
-    return true;
-  const guarded = ["id", "title", "description", "trigger"];
-  for (const f of guarded)
-    if (!Object.hasOwn(raw, f))
-      return false;
-  return true;
-}, "skill descriptor has inherited (not own) required field; prototype-chain smuggle rejected");
-var SkillDescriptorBody = external_exports.object({
-  id: SkillId,
-  title: external_exports.string().min(1),
-  description: external_exports.string().min(1),
-  trigger: external_exports.string().min(1),
-  /**
-   * `capabilities`, when present, is a non-empty array of non-empty
-   * strings. A catalog entry that has not declared any capabilities
-   * should omit the field; an empty list `[]` is an ambiguity bug
-   * and rejected.
-   */
-  capabilities: external_exports.array(external_exports.string().min(1)).min(1).optional(),
-  domain: SkillDomain.default("domain-general")
-}).strict();
-var SkillDescriptor = descriptorOwnPropertyGuard.pipe(SkillDescriptorBody);
-var HEX64 = /^[0-9a-f]{64}$/;
-var UserSkillEntry = external_exports.object({
-  id: SkillId,
-  name: external_exports.string().min(1).optional(),
-  description: external_exports.string().min(1).optional(),
-  trigger: external_exports.string().min(1).optional(),
-  root: external_exports.string().min(1),
-  path: external_exports.string().min(1),
-  sha256: external_exports.string().regex(HEX64),
-  bytes: external_exports.number().int().nonnegative()
-}).strict();
-var SkillSlot = external_exports.object({
-  id: SkillSlotId,
-  description: external_exports.string().min(1)
-}).strict();
-var SkillSlotArray = external_exports.array(SkillSlot).superRefine((slots, ctx) => {
-  const seen = /* @__PURE__ */ new Set();
-  for (const [index, slot] of slots.entries()) {
-    const key = slot.id;
-    if (seen.has(key)) {
-      ctx.addIssue({
-        code: external_exports.ZodIssueCode.custom,
-        path: [index, "id"],
-        message: `duplicate skill slot '${key}'`
-      });
-    }
-    seen.add(key);
-  }
-});
-
-// dist/schemas/step.js
-var RelayRole = external_exports.enum(["researcher", "implementer", "reviewer"]);
-var ReportRef = external_exports.object({
-  path: RunRelativePath,
-  schema: external_exports.string().min(1)
-});
-var StepBase = external_exports.object({
-  id: StepId,
-  title: external_exports.string().min(1),
-  protocol: ProtocolId,
-  reads: external_exports.array(RunRelativePath).default([]),
-  routes: external_exports.record(external_exports.string(), external_exports.string()).refine((m) => Object.keys(m).length > 0, {
-    message: "Step must declare at least one route (including `@complete`)."
-  }),
-  selection: SelectionOverride.optional(),
-  skill_slots: SkillSlotArray.optional(),
-  budgets: external_exports.object({
-    max_attempts: external_exports.number().int().positive().max(10),
-    wall_clock_ms: external_exports.number().int().positive().optional()
-  }).optional()
-});
-var ComposeStep = StepBase.extend({
-  executor: external_exports.literal("orchestrator"),
-  kind: external_exports.literal("compose"),
-  writes: external_exports.object({
-    report: ReportRef
-  }).strict(),
-  check: SchemaSectionsCheck
-}).strict();
-var VerificationStep = StepBase.extend({
-  executor: external_exports.literal("orchestrator"),
-  kind: external_exports.literal("verification"),
-  writes: external_exports.object({
-    report: ReportRef
-  }).strict(),
-  check: SchemaSectionsCheck
-}).strict();
-var CheckpointPolicy = external_exports.object({
-  prompt: external_exports.string().min(1),
-  choices: external_exports.array(external_exports.object({
-    id: external_exports.string().min(1),
-    label: external_exports.string().min(1).optional(),
-    description: external_exports.string().min(1).optional()
-  }).strict()).min(1),
-  safe_default_choice: external_exports.string().min(1).optional(),
-  safe_autonomous_choice: external_exports.string().min(1).optional(),
-  report_template: JsonObject.optional()
-}).strict().superRefine((policy2, ctx) => {
-  const choiceIds = /* @__PURE__ */ new Set();
-  for (const [index, choice] of policy2.choices.entries()) {
-    if (choiceIds.has(choice.id)) {
-      ctx.addIssue({
-        code: external_exports.ZodIssueCode.custom,
-        path: ["choices", index, "id"],
-        message: `duplicate checkpoint choice '${choice.id}'`
-      });
-    }
-    choiceIds.add(choice.id);
-  }
-  for (const [field, value] of [
-    ["safe_default_choice", policy2.safe_default_choice],
-    ["safe_autonomous_choice", policy2.safe_autonomous_choice]
-  ]) {
-    if (value !== void 0 && !choiceIds.has(value)) {
-      ctx.addIssue({
-        code: external_exports.ZodIssueCode.custom,
-        path: [field],
-        message: `${field} must reference a declared checkpoint choice`
-      });
-    }
-  }
-});
-var CheckpointStep = StepBase.extend({
-  executor: external_exports.literal("orchestrator"),
-  kind: external_exports.literal("checkpoint"),
-  policy: CheckpointPolicy,
-  writes: external_exports.object({
-    request: RunRelativePath,
-    response: RunRelativePath,
-    report: ReportRef.optional()
-  }).strict(),
-  check: CheckpointSelectionCheck
-}).strict();
-var RelayStep = StepBase.extend({
-  executor: external_exports.literal("worker"),
-  kind: external_exports.literal("relay"),
-  role: RelayRole,
-  writes: external_exports.object({
-    report: ReportRef.optional(),
-    request: RunRelativePath,
-    receipt: RunRelativePath,
-    result: RunRelativePath
-  }).strict(),
-  check: ResultVerdictCheck
-}).strict();
-var CompiledFlowRef = external_exports.object({
-  flow_id: CompiledFlowId,
-  entry_mode: external_exports.string().regex(/^[a-z][a-z0-9-]*$/, { message: "entry_mode must be a kebab-case slug" }),
-  // Optional pin to a specific schematic version. Default is the version
-  // resolved by the schematic loader at child-bootstrap time.
-  version: external_exports.string().min(1).optional()
-}).strict();
-var SubRunStep = StepBase.extend({
-  executor: external_exports.literal("orchestrator"),
-  kind: external_exports.literal("sub-run"),
-  flow_ref: CompiledFlowRef,
-  // Goal string handed to the child flow at bootstrap. Templating is
-  // a runtime concern (e.g., `$upstream_report.field` substitution) that
-  // resolves before child bootstrap; the schema accepts a plain string.
-  goal: external_exports.string().min(1),
-  depth: Depth,
-  writes: external_exports.object({
-    // The child run's terminal result.json copied into the parent's
-    // run-folder after the child closes. The parent check reads this slot.
-    result: RunRelativePath,
-    // Optional materialized child report (e.g., child build-result.json
-    // republished verbatim into a parent slot for downstream readers).
-    report: ReportRef.optional()
-  }).strict(),
-  check: ResultVerdictCheck
-}).strict();
-var FANOUT_BRANCH_ID_REGEX = /^[a-z0-9][a-z0-9-]*$/;
-var FanoutSubRunBranch = external_exports.object({
-  // Branch identifier; unique across the fanout's branches. Used to
-  // derive the per-branch worktree name and the per-branch result
-  // directory under `writes.branches_dir/<branch_id>/`.
-  branch_id: external_exports.string().min(1).max(64).regex(FANOUT_BRANCH_ID_REGEX, { message: "branch_id must be a kebab-case slug" }),
-  flow_ref: CompiledFlowRef,
-  goal: external_exports.string().min(1),
-  depth: Depth,
-  // Per-branch selection override — useful for tournament-style fanouts
-  // where the variation is in connector / model selection, not flow.
-  selection: SelectionOverride.optional()
-}).strict();
-var FanoutRelayBranchExecution = external_exports.object({
-  kind: external_exports.literal("relay"),
-  role: RelayRole,
-  goal: external_exports.string().min(1),
-  report_schema: external_exports.string().min(1),
-  provenance_field: external_exports.string().regex(/^[a-z_][a-z0-9_]*$/i, {
-    message: "provenance_field must be a top-level JSON field name"
-  }).optional()
-}).strict();
-var FanoutRelayBranch = external_exports.object({
-  branch_id: external_exports.string().min(1).max(64).regex(FANOUT_BRANCH_ID_REGEX, { message: "branch_id must be a kebab-case slug" }),
-  execution: FanoutRelayBranchExecution,
-  selection: SelectionOverride.optional()
-}).strict();
-var FanoutBranch = external_exports.union([FanoutSubRunBranch, FanoutRelayBranch]);
-var FanoutSubRunBranchTemplate = external_exports.object({
-  branch_id: external_exports.string().min(1).max(64),
-  flow_ref: CompiledFlowRef,
-  goal: external_exports.string().min(1),
-  depth: Depth,
-  selection: SelectionOverride.optional()
-}).strict();
-var FanoutRelayBranchTemplate = external_exports.object({
-  branch_id: external_exports.string().min(1).max(64),
-  execution: FanoutRelayBranchExecution,
-  selection: SelectionOverride.optional()
-}).strict();
-var FanoutBranchTemplate = external_exports.union([
-  FanoutSubRunBranchTemplate,
-  FanoutRelayBranchTemplate
-]);
-var FanoutBranchesStatic = external_exports.object({
-  kind: external_exports.literal("static"),
-  // Author lists every branch upfront. Used by tournaments (N attempts at
-  // one flow, varying selection / depth) and small fixed crucibles.
-  branches: external_exports.array(FanoutBranch).min(1).max(64)
-}).strict();
-var FanoutBranchesDynamic = external_exports.object({
-  kind: external_exports.literal("dynamic"),
-  // Branches computed at runtime from an upstream report. Authors
-  // declare the source report + a JSONPath-like dotted path to the
-  // iterable + a template branch with `$item.<field>` placeholders.
-  // Runtime expands the template per item at fanout.start time and
-  // re-parses each expansion through FanoutBranch (strict regex).
-  //
-  // Used by Migrate where batch count is determined by inventory.
-  source_report: RunRelativePath,
-  items_path: external_exports.string().min(1),
-  template: FanoutBranchTemplate,
-  // Hard cap to prevent runaway fanouts when the source report is
-  // unexpectedly large.
-  max_branches: external_exports.number().int().positive().max(256).default(16)
-}).strict();
-var FanoutBranches = external_exports.discriminatedUnion("kind", [
-  FanoutBranchesStatic,
-  FanoutBranchesDynamic
-]);
-var FanoutConcurrency = external_exports.discriminatedUnion("kind", [
-  external_exports.object({ kind: external_exports.literal("unbounded") }).strict(),
-  external_exports.object({
-    kind: external_exports.literal("bounded"),
-    max: external_exports.number().int().positive().max(64)
-  }).strict()
-]);
-var FanoutFailurePolicy = external_exports.enum(["abort-all", "continue-others"]);
-var FanoutStep = StepBase.extend({
-  executor: external_exports.literal("orchestrator"),
-  kind: external_exports.literal("fanout"),
-  branches: FanoutBranches,
-  // Default bounded(4) keeps disk and rate-limit pressure sane on
-  // unattended runs. Authors who know their parallelism budget can opt
-  // into unbounded explicitly.
-  concurrency: FanoutConcurrency.default({ kind: "bounded", max: 4 }),
-  on_child_failure: FanoutFailurePolicy.default("abort-all"),
-  writes: external_exports.object({
-    // Parent directory under which the runtime materialises each
-    // branch's result.json at `<branches_dir>/<branch_id>/result.json`.
-    // The directory is runtime-owned; schematic authors declare its location.
-    branches_dir: RunRelativePath,
-    // Aggregate report summarising all child results, built by the
-    // runtime after join. This is the slot the check reads.
-    aggregate: ReportRef
-  }).strict(),
-  check: FanoutAggregateCheck
-}).strict();
-var Step = external_exports.discriminatedUnion("kind", [
-  ComposeStep,
-  VerificationStep,
-  CheckpointStep,
-  RelayStep,
-  SubRunStep,
-  FanoutStep
-]).superRefine((step, ctx) => {
-  const slot = step.check.source.ref;
-  const writes = step.writes;
-  if (!Object.hasOwn(writes, slot) || writes[slot] === void 0) {
-    ctx.addIssue({
-      code: external_exports.ZodIssueCode.custom,
-      path: ["check", "source", "ref"],
-      message: `check.source.ref "${slot}" does not resolve to a usable slot in step.writes (available: ${Object.keys(writes).join(", ")})`
-    });
-  }
-  if (step.kind === "checkpoint") {
-    const policyChoiceIds = step.policy.choices.map((choice) => choice.id).sort();
-    const checkChoiceIds = [...step.check.allow].sort();
-    if (policyChoiceIds.join("\0") !== checkChoiceIds.join("\0")) {
-      ctx.addIssue({
-        code: external_exports.ZodIssueCode.custom,
-        path: ["check", "allow"],
-        message: "checkpoint check.allow must exactly match policy.choices ids"
-      });
-    }
-    if (step.writes.report !== void 0) {
-      if (step.policy.report_template === void 0) {
-        ctx.addIssue({
-          code: external_exports.ZodIssueCode.custom,
-          path: ["policy", "report_template"],
-          message: "checkpoint report writing requires policy.report_template"
-        });
-      }
-    }
-  }
-  if (step.kind === "fanout") {
-    if (step.branches.kind === "static") {
-      const seen = /* @__PURE__ */ new Set();
-      for (let i = 0; i < step.branches.branches.length; i++) {
-        const branch = step.branches.branches[i];
-        if (branch === void 0)
-          continue;
-        if (seen.has(branch.branch_id)) {
-          ctx.addIssue({
-            code: external_exports.ZodIssueCode.custom,
-            path: ["branches", "branches", i, "branch_id"],
-            message: `duplicate branch_id '${branch.branch_id}'`
-          });
-        } else {
-          seen.add(branch.branch_id);
-        }
-      }
-    }
-    if (step.branches.kind === "dynamic") {
-      if (!step.branches.template.branch_id.includes("$item")) {
-        ctx.addIssue({
-          code: external_exports.ZodIssueCode.custom,
-          path: ["branches", "template", "branch_id"],
-          message: "dynamic fanout template.branch_id must contain `$item` placeholder so per-item expansion produces unique branch ids"
-        });
-      }
-    }
-  }
-});
-var RouteMap = StepBase.shape.routes;
 
 // dist/schemas/connector.js
 var EnabledConnector = external_exports.enum(["claude-code", "codex"]);
@@ -15506,7 +18425,7 @@ var migrateCloseBuilder = {
       batch_count: inventory.batches.length,
       evidence_links: POINTERS3.map((p) => ({
         ...p,
-        path: reportPathForSchemaInCompiledFlow(context.flow, p.schema)
+        path: reportPathForSchemaInRuntimeFlow(context.flow, p.schema)
       }))
     });
   }
@@ -15541,15 +18460,15 @@ var migrateCoexistenceComposeBuilder = {
 };
 
 // dist/flows/migrate/writers/verification.js
-import { readFileSync as readFileSync10 } from "node:fs";
+import { readFileSync as readFileSync11 } from "node:fs";
 var migrateVerificationWriter = {
   resultSchemaName: "migrate.verification@v1",
   loadCommands(context) {
-    const briefPath = reportPathForSchemaInCompiledFlow(context.flow, "migrate.brief@v1");
+    const briefPath = reportPathForSchemaInRuntimeFlow(context.flow, "migrate.brief@v1");
     if (!context.step.reads.includes(briefPath)) {
       throw new Error(`migrate.verification@v1 requires step '${context.step.id}' to read ${briefPath}`);
     }
-    const brief = MigrateBrief.parse(JSON.parse(readFileSync10(resolveRunRelative(context.runFolder, briefPath), "utf8")));
+    const brief = MigrateBrief.parse(JSON.parse(readFileSync11(resolveRunRelative(context.runFolder, briefPath), "utf8")));
     return brief.verification_command_candidates;
   },
   buildResult(observations) {
@@ -15570,7 +18489,7 @@ var migrateVerificationWriter = {
   }
 };
 
-// dist/flows/migrate/index.js
+// dist/flows/migrate/flow.js
 var MIGRATE_SIGNALS = [
   { label: "migrate prefix", pattern: /^\s*migrate\s*:/i },
   {
@@ -15582,11 +18501,395 @@ var MIGRATE_SIGNALS = [
     pattern: /\b(?:framework|library|dependency|stack)\s+(?:swap|replacement|migration)\b/i
   }
 ];
-var migrateCompiledFlowPackage = {
+var migrateFlowDefinition = defineFlow({
   id: "migrate",
   visibility: "public",
   paths: {
     schematic: "src/flows/migrate/schematic.json"
+  },
+  schematic: {
+    schema_version: "1",
+    id: "migrate",
+    title: "Migrate Schematic",
+    purpose: "Migrate flow: frame the source and target, inventory what needs to move, plan the coexistence window and rollback path, execute the migration through a child Build flow, verify nothing regressed, run a release review, and close with evidence. The first version runs one batch; broader batch orchestration can land once worktree support is ready.",
+    status: "active",
+    version: "0.1.0",
+    starts_at: "frame-step",
+    initial_contracts: [
+      "task.intake@v1",
+      "route.decision@v1",
+      "context.packet@v1",
+      "verification.plan@v1"
+    ],
+    contract_aliases: [
+      {
+        generic: "flow.brief@v1",
+        actual: "migrate.brief@v1"
+      },
+      {
+        generic: "diagnosis.result@v1",
+        actual: "migrate.inventory@v1"
+      },
+      {
+        generic: "work.queue@v1",
+        actual: "migrate.inventory@v1"
+      },
+      {
+        generic: "plan.strategy@v1",
+        actual: "migrate.coexistence@v1"
+      },
+      {
+        generic: "change.evidence@v1",
+        actual: "migrate.batch@v1"
+      },
+      {
+        generic: "batch.result@v1",
+        actual: "migrate.batch@v1"
+      },
+      {
+        generic: "verification.result@v1",
+        actual: "migrate.verification@v1"
+      },
+      {
+        generic: "review.verdict@v1",
+        actual: "migrate.review@v1"
+      },
+      {
+        generic: "flow.result@v1",
+        actual: "migrate.result@v1"
+      }
+    ],
+    entry: {
+      signals: {
+        include: [
+          "migrate",
+          "migration",
+          "framework-swap",
+          "rewrite",
+          "dependency-replacement",
+          "architecture-transition"
+        ],
+        exclude: []
+      },
+      intent_prefixes: ["migrate", "rewrite"]
+    },
+    entry_modes: [
+      {
+        name: "default",
+        depth: "standard",
+        description: "Default Migrate entry mode."
+      },
+      {
+        name: "deep",
+        depth: "deep",
+        description: "Deep Migrate entry mode."
+      },
+      {
+        name: "autonomous",
+        depth: "autonomous",
+        description: "Autonomous Migrate entry mode."
+      }
+    ],
+    stage_path_policy: {
+      mode: "strict"
+    },
+    stages: [
+      {
+        canonical: "frame",
+        id: "frame-stage",
+        title: "Frame"
+      },
+      {
+        canonical: "analyze",
+        id: "inventory-stage",
+        title: "Inventory"
+      },
+      {
+        canonical: "plan",
+        id: "coexistence-stage",
+        title: "Coexistence Plan"
+      },
+      {
+        canonical: "act",
+        id: "execute-stage",
+        title: "Batch Execution"
+      },
+      {
+        canonical: "verify",
+        id: "verify-stage",
+        title: "Verify"
+      },
+      {
+        canonical: "review",
+        id: "review-stage",
+        title: "Release Review"
+      },
+      {
+        canonical: "close",
+        id: "close-stage",
+        title: "Close"
+      }
+    ],
+    items: [
+      {
+        id: "frame-step",
+        title: "Frame - produce Migrate brief",
+        stage: "frame",
+        input: {
+          task: "task.intake@v1",
+          route: "route.decision@v1"
+        },
+        output: "migrate.brief@v1",
+        evidence_requirements: ["scope boundary", "constraints", "proof plan"],
+        execution: {
+          kind: "compose"
+        },
+        protocol: "migrate-frame@v1",
+        writes: {
+          report_path: "reports/migrate/brief.json"
+        },
+        check: {
+          required: ["objective", "source", "target"]
+        },
+        routes: {
+          continue: "inventory-step",
+          stop: "@stop"
+        },
+        block: "frame"
+      },
+      {
+        id: "inventory-step",
+        title: "Inventory - enumerate migration targets and group into batches",
+        stage: "analyze",
+        input: {
+          brief: "migrate.brief@v1",
+          context: "context.packet@v1"
+        },
+        output: "migrate.inventory@v1",
+        evidence_requirements: [
+          "cause hypothesis",
+          "confidence",
+          "reproduction status",
+          "diagnostic path"
+        ],
+        execution: {
+          kind: "relay",
+          role: "implementer"
+        },
+        protocol: "migrate-inventory@v1",
+        writes: {
+          report_path: "reports/migrate/inventory.json",
+          request_path: "reports/relay/migrate-inventory.request.json",
+          receipt_path: "reports/relay/migrate-inventory.receipt.txt",
+          result_path: "reports/relay/migrate-inventory.result.json"
+        },
+        check: {
+          pass: ["accept"]
+        },
+        routes: {
+          continue: "coexistence-step",
+          stop: "@stop"
+        },
+        block: "diagnose"
+      },
+      {
+        id: "coexistence-step",
+        title: "Coexistence Plan - source/target side-by-side strategy and rollback path",
+        stage: "plan",
+        input: {
+          brief: "migrate.brief@v1",
+          inventory: "migrate.inventory@v1"
+        },
+        output: "migrate.coexistence@v1",
+        evidence_requirements: ["ordered steps", "risk notes", "proof strategy"],
+        execution: {
+          kind: "compose"
+        },
+        protocol: "migrate-coexistence@v1",
+        writes: {
+          report_path: "reports/migrate/coexistence.json"
+        },
+        check: {
+          required: ["strategy", "switchover_criteria", "rollback_path"]
+        },
+        routes: {
+          continue: "coexistence-checkpoint-step",
+          stop: "@stop"
+        },
+        block: "plan"
+      },
+      {
+        id: "coexistence-checkpoint-step",
+        title: "Coexistence Plan - confirm migration path",
+        stage: "plan",
+        input: {
+          plan: "migrate.coexistence@v1"
+        },
+        output: "migrate.coexistence-checkpoint@v1",
+        evidence_requirements: ["selected path", "answer source", "resume route"],
+        execution: {
+          kind: "checkpoint"
+        },
+        protocol: "migrate-coexistence-checkpoint@v1",
+        writes: {
+          checkpoint_request_path: "reports/checkpoints/migrate-coexistence-request.json",
+          checkpoint_response_path: "reports/checkpoints/migrate-coexistence-response.json"
+        },
+        check: {
+          allow: ["continue", "revise", "stop"]
+        },
+        checkpoint_policy: {
+          prompt: "Confirm the coexistence plan before migration batch execution.",
+          choices: [
+            {
+              id: "continue",
+              label: "Continue with the plan"
+            },
+            {
+              id: "revise",
+              label: "Revise the coexistence plan"
+            },
+            {
+              id: "stop",
+              label: "Stop before migration execution"
+            }
+          ],
+          safe_default_choice: "continue",
+          safe_autonomous_choice: "continue"
+        },
+        routes: {
+          continue: "batch-step",
+          revise: "coexistence-step",
+          stop: "@stop"
+        },
+        block: "human-decision"
+      },
+      {
+        id: "batch-step",
+        title: "Batch Execution - delegate the migration changes to a Build sub-run",
+        stage: "act",
+        input: {
+          brief: "migrate.brief@v1",
+          queue: "migrate.inventory@v1"
+        },
+        output: "migrate.batch@v1",
+        evidence_requirements: [
+          "completed items",
+          "skipped items",
+          "blocked items",
+          "failed items"
+        ],
+        execution: {
+          kind: "sub-run",
+          flow_ref: {
+            flow_id: "build",
+            entry_mode: "default"
+          },
+          goal: "Migrate the inventoried targets per migrate.coexistence@v1 batch plan",
+          depth: "standard"
+        },
+        protocol: "migrate-batch@v1",
+        writes: {
+          result_path: "reports/migrate/batch-result.json"
+        },
+        check: {
+          pass: ["accept", "accept-with-fixes"]
+        },
+        routes: {
+          continue: "verify-step",
+          stop: "@stop"
+        },
+        block: "batch"
+      },
+      {
+        id: "verify-step",
+        title: "Verify - run Migrate verification commands",
+        stage: "verify",
+        input: {
+          proof: "verification.plan@v1",
+          brief: "migrate.brief@v1",
+          change: "migrate.batch@v1"
+        },
+        output: "migrate.verification@v1",
+        evidence_requirements: ["command list", "exit status", "bounded output", "pass or fail"],
+        execution: {
+          kind: "verification"
+        },
+        protocol: "migrate-verify@v1",
+        writes: {
+          report_path: "reports/migrate/verification.json"
+        },
+        check: {
+          required: ["overall_status", "commands"]
+        },
+        routes: {
+          continue: "review-step",
+          stop: "@stop"
+        },
+        block: "run-verification"
+      },
+      {
+        id: "review-step",
+        title: "Release Review - independent audit of the migration release",
+        stage: "review",
+        input: {
+          brief: "migrate.brief@v1",
+          change: "migrate.batch@v1",
+          verification: "migrate.verification@v1"
+        },
+        output: "migrate.review@v1",
+        evidence_requirements: ["verdict", "findings", "confidence", "required fixes"],
+        execution: {
+          kind: "relay",
+          role: "reviewer"
+        },
+        protocol: "migrate-review@v1",
+        writes: {
+          report_path: "reports/migrate/review.json",
+          request_path: "reports/relay/migrate-review.request.json",
+          receipt_path: "reports/relay/migrate-review.receipt.txt",
+          result_path: "reports/relay/migrate-review.result.json"
+        },
+        check: {
+          pass: ["release-approved", "release-with-followups"]
+        },
+        routes: {
+          continue: "close-step",
+          stop: "close-step"
+        },
+        block: "review"
+      },
+      {
+        id: "close-step",
+        title: "Close - emit Migrate result",
+        stage: "close",
+        input: {
+          brief: "migrate.brief@v1",
+          inventory: "migrate.inventory@v1",
+          coexistence: "migrate.coexistence@v1",
+          batch: "migrate.batch@v1",
+          verification: "migrate.verification@v1",
+          review: "migrate.review@v1"
+        },
+        output: "migrate.result@v1",
+        evidence_requirements: ["outcome", "evidence pointers", "residual risks", "follow-ups"],
+        execution: {
+          kind: "compose"
+        },
+        protocol: "migrate-close@v1",
+        writes: {
+          report_path: "reports/migrate-result.json"
+        },
+        check: {
+          required: ["summary", "outcome", "evidence_links"]
+        },
+        routes: {
+          complete: "@complete",
+          stop: "@stop"
+        },
+        block: "close-with-evidence"
+      }
+    ]
   },
   routing: {
     order: 10,
@@ -15615,13 +18918,49 @@ var migrateCompiledFlowPackage = {
     { schemaName: "migrate.verification@v1", schema: MigrateVerification },
     { schemaName: "migrate.result@v1", schema: MigrateResult }
   ],
+  runtimeSurface: {
+    primaryResult: {
+      schemaName: "migrate.result@v1",
+      path: "reports/migrate-result.json",
+      label: "Migrate result"
+    },
+    progress: {
+      steps: [
+        { stepId: "frame-step", taskTitle: "Frame the work", activeText: "Framing the work" },
+        {
+          stepId: "inventory-step",
+          taskTitle: "Check the context",
+          activeText: "Checking the context",
+          relayRole: "implementer"
+        },
+        {
+          stepId: "coexistence-step",
+          taskTitle: "Plan the work",
+          activeText: "Planning the work"
+        },
+        {
+          stepId: "coexistence-checkpoint-step",
+          taskTitle: "Plan the work",
+          activeText: "Planning the work"
+        },
+        { stepId: "batch-step", taskTitle: "Make the change", activeText: "Making the change" },
+        { stepId: "verify-step", taskTitle: "Check the work", activeText: "Checking the work" },
+        {
+          stepId: "review-step",
+          taskTitle: "Check the result",
+          activeText: "Checking the result",
+          relayRole: "reviewer"
+        },
+        { stepId: "close-step", taskTitle: "Wrap up", activeText: "Wrapping up" }
+      ]
+    }
+  },
   writers: {
     compose: [migrateBriefComposeBuilder, migrateCoexistenceComposeBuilder],
     close: [migrateCloseBuilder],
-    verification: [migrateVerificationWriter],
-    checkpoint: []
+    verification: [migrateVerificationWriter]
   }
-};
+});
 
 // dist/flows/review/relay-hints.js
 var reviewRelayShapeHint = {
@@ -15776,9 +19115,9 @@ var ReviewRelayResult = external_exports.object({
 });
 
 // dist/flows/review/writers/intake.js
-import { spawnSync } from "node:child_process";
-import { closeSync, lstatSync as lstatSync2, openSync, readSync } from "node:fs";
-import { isAbsolute as isAbsolute2, relative as relative2, resolve as resolve2 } from "node:path";
+import { spawnSync as spawnSync2 } from "node:child_process";
+import { closeSync, lstatSync as lstatSync3, openSync, readSync } from "node:fs";
+import { isAbsolute as isAbsolute3, relative as relative3, resolve as resolve3 } from "node:path";
 var MAX_DIFF_CHARS = 12e4;
 var MAX_UNTRACKED_FILES = 20;
 var MAX_UNTRACKED_FILE_CHARS = 2e4;
@@ -15805,7 +19144,7 @@ function outputToString(output) {
   return Buffer.from(output).toString("utf8");
 }
 function runGit(projectRoot, args, options = {}) {
-  const result = spawnSync("git", [...args], {
+  const result = spawnSync2("git", [...args], {
     cwd: projectRoot,
     encoding: "utf8",
     maxBuffer: options.maxBufferBytes ?? MAX_GIT_BUFFER_BYTES,
@@ -15842,17 +19181,17 @@ function runGitDiff(projectRoot, args) {
   };
 }
 function insideProject(projectRoot, path) {
-  const rel = relative2(projectRoot, path);
-  return rel === "" || !rel.startsWith("..") && !isAbsolute2(rel);
+  const rel = relative3(projectRoot, path);
+  return rel === "" || !rel.startsWith("..") && !isAbsolute3(rel);
 }
 function readUntrackedFile(projectRoot, path, contentPolicy) {
-  const abs = resolve2(projectRoot, path);
+  const abs = resolve3(projectRoot, path);
   if (!insideProject(projectRoot, abs)) {
     return { path, byte_length: 0, skipped_reason: "path resolves outside project root" };
   }
   let stat2;
   try {
-    stat2 = lstatSync2(abs);
+    stat2 = lstatSync3(abs);
   } catch (err) {
     return { path, byte_length: 0, skipped_reason: `failed to inspect file: ${errorMessage(err)}` };
   }
@@ -16021,7 +19360,7 @@ var reviewIntakeComposeBuilder = {
 };
 
 // dist/flows/review/writers/result.js
-import { readFileSync as readFileSync11 } from "node:fs";
+import { readFileSync as readFileSync12 } from "node:fs";
 function reviewerRelayResultPath(flow, closeStep) {
   const closeStepId = closeStep.id;
   const reviewerRelayes = flow.steps.filter((candidate) => candidate.kind === "relay" && candidate.role === "reviewer" && candidate.routes.pass === closeStepId);
@@ -16062,8 +19401,8 @@ var reviewResultComposeBuilder = {
   // its own resolution.
   build(context) {
     const path = reviewerRelayResultPath(context.flow, context.step);
-    const intake = ReviewIntake.parse(JSON.parse(readFileSync11(resolveRunRelative(context.runFolder, reviewIntakePath(context.flow, context.step)), "utf8")));
-    const relayResult = ReviewRelayResult.parse(JSON.parse(readFileSync11(resolveRunRelative(context.runFolder, path), "utf8")));
+    const intake = ReviewIntake.parse(JSON.parse(readFileSync12(resolveRunRelative(context.runFolder, reviewIntakePath(context.flow, context.step)), "utf8")));
+    const relayResult = ReviewRelayResult.parse(JSON.parse(readFileSync12(resolveRunRelative(context.runFolder, path), "utf8")));
     return ReviewResult.parse({
       scope: intake.scope,
       findings: relayResult.findings,
@@ -16077,7 +19416,7 @@ var reviewResultComposeBuilder = {
   }
 };
 
-// dist/flows/review/index.js
+// dist/flows/review/flow.js
 var REVIEW_SIGNALS = [
   { label: "code review", pattern: /\bcode\s+review\b/i },
   {
@@ -16103,13 +19442,160 @@ var REVIEW_SIGNALS = [
     pattern: /\blook\s+for\s+(?:bugs|issues|regressions|risks)\b/i
   }
 ];
-var reviewCompiledFlowPackage = {
+var reviewFlowDefinition = defineFlow({
   id: "review",
   visibility: "public",
   paths: {
     schematic: "src/flows/review/schematic.json",
     command: "src/flows/review/command.md",
     contract: "src/flows/review/contract.md"
+  },
+  schematic: {
+    schema_version: "1",
+    id: "review",
+    title: "Review Schematic",
+    purpose: "Review flow: frame the audit scope, relay independent review to a reviewer, and close with a verdict report. The schematic uses a compact Intake, Independent Audit, and Verdict shape because Review is audit-only and does not implement or verify a change.",
+    status: "active",
+    version: "0.1.0",
+    starts_at: "intake-step",
+    initial_contracts: ["task.intake@v1", "route.decision@v1"],
+    contract_aliases: [
+      {
+        generic: "flow.brief@v1",
+        actual: "review.intake@v1"
+      },
+      {
+        generic: "review.verdict@v1",
+        actual: "review.verdict@v1"
+      },
+      {
+        generic: "flow.result@v1",
+        actual: "review.result@v1"
+      }
+    ],
+    entry: {
+      signals: {
+        include: ["review", "audit", "check"],
+        exclude: []
+      },
+      intent_prefixes: ["review"]
+    },
+    entry_modes: [
+      {
+        name: "default",
+        depth: "standard",
+        description: "Default review entry mode \u2014 resolves the review scope, relays an independent audit, then writes the verdict report."
+      }
+    ],
+    stage_path_policy: {
+      mode: "partial",
+      omits: ["plan", "act", "verify", "review"],
+      rationale: "Review is an audit-only flow: Intake frames the scope, Independent Audit performs the reviewer relay, and Verdict aggregates findings. There is no planning stage, no implementation/action stage, no verification rerun, and no nested review stage in this narrowed variant."
+    },
+    stages: [
+      {
+        canonical: "frame",
+        id: "intake-stage",
+        title: "Intake"
+      },
+      {
+        canonical: "analyze",
+        id: "audit-stage",
+        title: "Independent Audit"
+      },
+      {
+        canonical: "close",
+        id: "verdict-stage",
+        title: "Verdict"
+      }
+    ],
+    items: [
+      {
+        id: "intake-step",
+        title: "Intake \u2014 resolve review scope",
+        stage: "frame",
+        input: {
+          task: "task.intake@v1",
+          route: "route.decision@v1"
+        },
+        output: "review.intake@v1",
+        evidence_requirements: [
+          "scope boundary",
+          "working tree status",
+          "diff or unavailable reason"
+        ],
+        execution: {
+          kind: "compose"
+        },
+        protocol: "review-intake@v1",
+        writes: {
+          report_path: "reports/review-intake.json"
+        },
+        check: {
+          required: ["scope", "evidence"]
+        },
+        routes: {
+          continue: "audit-step",
+          stop: "@stop"
+        },
+        block: "frame"
+      },
+      {
+        id: "audit-step",
+        title: "Independent Audit \u2014 reviewer relay",
+        stage: "analyze",
+        input: {
+          brief: "review.intake@v1"
+        },
+        output: "review.verdict@v1",
+        evidence_requirements: ["verdict", "findings", "confidence", "required fixes"],
+        execution: {
+          kind: "relay",
+          role: "reviewer"
+        },
+        protocol: "review-audit@v1",
+        writes: {
+          request_path: "reports/relay/review.request.json",
+          receipt_path: "reports/relay/review.receipt.txt",
+          result_path: "stages/analyze/review-raw-findings.json"
+        },
+        check: {
+          pass: ["NO_ISSUES_FOUND", "ISSUES_FOUND"]
+        },
+        routes: {
+          continue: "verdict-step",
+          retry: "audit-step",
+          stop: "@stop"
+        },
+        block: "review"
+      },
+      {
+        id: "verdict-step",
+        title: "Verdict \u2014 emit review.result",
+        stage: "close",
+        input: {
+          brief: "review.intake@v1",
+          review: "review.verdict@v1"
+        },
+        output: "review.result@v1",
+        evidence_requirements: ["outcome", "evidence pointers", "residual risks", "follow-ups"],
+        execution: {
+          kind: "compose"
+        },
+        protocol: "review-verdict@v1",
+        writes: {
+          report_path: "reports/review-result.json"
+        },
+        check: {
+          required: ["scope", "findings", "verdict"]
+        },
+        routes: {
+          complete: "@complete",
+          stop: "@stop"
+        },
+        block: "close-with-evidence"
+      }
+    ]
   },
   routing: {
     order: 0,
@@ -16118,19 +19604,34 @@ var reviewCompiledFlowPackage = {
       return `matched ${signal.label}; routed to audit-only review flow`;
     }
   },
-  relayReports: [],
   reportSchemas: [
     { schemaName: "review.intake@v1", schema: ReviewIntake },
     { schemaName: "review.result@v1", schema: ReviewResult }
   ],
+  runtimeSurface: {
+    primaryResult: {
+      schemaName: "review.result@v1",
+      path: "reports/review-result.json",
+      label: "Review result"
+    },
+    progress: {
+      steps: [
+        { stepId: "intake-step", taskTitle: "Frame the work", activeText: "Framing the work" },
+        {
+          stepId: "audit-step",
+          taskTitle: "Check the result",
+          activeText: "Checking the result",
+          relayRole: "reviewer"
+        },
+        { stepId: "verdict-step", taskTitle: "Wrap up", activeText: "Wrapping up" }
+      ]
+    }
+  },
   writers: {
-    compose: [reviewIntakeComposeBuilder, reviewResultComposeBuilder],
-    close: [],
-    verification: [],
-    checkpoint: []
+    compose: [reviewIntakeComposeBuilder, reviewResultComposeBuilder]
   },
   structuralHints: [reviewRelayShapeHint]
-};
+});
 
 // dist/flows/runtime-proof/reports.js
 var RuntimeProofCompose = external_exports.object({
@@ -16147,26 +19648,115 @@ var runtimeProofComposeBuilder = {
   }
 };
 
-// dist/flows/runtime-proof/index.js
-var runtimeProofCompiledFlowPackage = {
+// dist/flows/runtime-proof/flow.js
+var runtimeProofFlowDefinition = defineFlow({
   id: "runtime-proof",
   visibility: "internal",
-  paths: {
-    schematic: "src/flows/runtime-proof/schematic.json"
+  schematic: {
+    schema_version: "1",
+    id: "runtime-proof",
+    title: "Runtime Proof Schematic",
+    purpose: "Runtime Proof flow: exercise one compose step and one relay step end-to-end so the runtime boundary can be observed closing a real run.",
+    status: "active",
+    version: "0.1.0",
+    starts_at: "compose-step",
+    initial_contracts: ["flow.brief@v1"],
+    contract_aliases: [],
+    entry: {
+      signals: {
+        include: ["runtime-proof", "alpha-proof"],
+        exclude: []
+      },
+      intent_prefixes: ["runtime-proof"]
+    },
+    entry_modes: [
+      {
+        name: "runtime-proof",
+        depth: "standard",
+        description: "Default runtime-proof entry mode; seeds the run at the compose step."
+      }
+    ],
+    stage_path_policy: {
+      mode: "partial",
+      omits: ["frame", "analyze", "verify", "review", "close"],
+      rationale: "Runtime Proof is a narrow proof flow; only plan and act are needed to exercise compose and relay through the runtime boundary."
+    },
+    stages: [
+      {
+        id: "plan-stage",
+        title: "Plan",
+        canonical: "plan"
+      },
+      {
+        id: "act-stage",
+        title: "Act",
+        canonical: "act"
+      }
+    ],
+    items: [
+      {
+        id: "compose-step",
+        stage: "plan",
+        title: "Compose runtime proof report",
+        block: "plan",
+        input: {
+          brief: "flow.brief@v1"
+        },
+        output: "plan.strategy@v1",
+        evidence_requirements: ["ordered steps", "risk notes", "proof strategy"],
+        execution: {
+          kind: "compose"
+        },
+        protocol: "runtime-proof-compose@v1",
+        writes: {
+          report_path: "reports/compose.json"
+        },
+        check: {
+          required: ["summary"]
+        },
+        routes: {
+          continue: "relay-step"
+        }
+      },
+      {
+        id: "relay-step",
+        stage: "act",
+        title: "Relay dry-run connector",
+        block: "act",
+        input: {
+          brief: "flow.brief@v1",
+          plan: "plan.strategy@v1"
+        },
+        output: "change.evidence@v1",
+        evidence_requirements: ["changed files", "change rationale", "declared follow-up proof"],
+        execution: {
+          kind: "relay",
+          role: "implementer"
+        },
+        protocol: "runtime-proof-relay@v1",
+        writes: {
+          request_path: "reports/relay.request.json",
+          receipt_path: "reports/relay.receipt.json",
+          result_path: "reports/relay.result.json"
+        },
+        check: {
+          pass: ["ok"]
+        },
+        routes: {
+          continue: "@complete"
+        }
+      }
+    ]
   },
-  relayReports: [],
   reportSchemas: [{ schemaName: "runtime-proof.compose@v1", schema: RuntimeProofCompose }],
   writers: {
-    compose: [runtimeProofComposeBuilder],
-    close: [],
-    verification: [],
-    checkpoint: []
+    compose: [runtimeProofComposeBuilder]
   }
-};
+});
 
 // dist/flows/sweep/cross-report-validators.js
-import { existsSync as existsSync3, readFileSync as readFileSync12 } from "node:fs";
-import { resolve as resolve3 } from "node:path";
+import { existsSync as existsSync4, readFileSync as readFileSync13 } from "node:fs";
+import { resolve as resolve4 } from "node:path";
 
 // dist/flows/sweep/reports.js
 var SWEEP_RESULT_SCHEMA_BY_ARTIFACT_ID = {
@@ -16385,12 +19975,12 @@ var SweepResult = external_exports.object({
 
 // dist/flows/sweep/cross-report-validators.js
 function validateSweepBatchAgainstQueue(flow, runFolder, resultBody) {
-  if (!flowHasReportSchemaInCompiledFlow(flow, "sweep.queue@v1")) {
+  if (!flowHasReportSchemaInRuntimeFlow(flow, "sweep.queue@v1")) {
     return { kind: "ok" };
   }
-  const queueRel = reportPathForSchemaInCompiledFlow(flow, "sweep.queue@v1");
-  const queueAbs = resolve3(runFolder, queueRel);
-  if (!existsSync3(queueAbs)) {
+  const queueRel = reportPathForSchemaInRuntimeFlow(flow, "sweep.queue@v1");
+  const queueAbs = resolve4(runFolder, queueRel);
+  if (!existsSync4(queueAbs)) {
     return {
       kind: "fail",
       reason: `sweep.batch validation requires sweep.queue at '${queueRel}' but file is missing`
@@ -16398,7 +19988,7 @@ function validateSweepBatchAgainstQueue(flow, runFolder, resultBody) {
   }
   let queueRaw;
   try {
-    queueRaw = readFileSync12(queueAbs, "utf8");
+    queueRaw = readFileSync13(queueAbs, "utf8");
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return { kind: "fail", reason: `cannot read sweep.queue at '${queueRel}': ${msg}` };
@@ -16547,7 +20137,7 @@ var sweepCloseBuilder = {
       deferred_count: queue.deferred.length,
       evidence_links: POINTERS4.map((p) => ({
         ...p,
-        path: reportPathForSchemaInCompiledFlow(context.flow, p.schema)
+        path: reportPathForSchemaInRuntimeFlow(context.flow, p.schema)
       }))
     });
   }
@@ -16593,15 +20183,15 @@ var sweepQueueComposeBuilder = {
 };
 
 // dist/flows/sweep/writers/verification.js
-import { readFileSync as readFileSync13 } from "node:fs";
+import { readFileSync as readFileSync14 } from "node:fs";
 var sweepVerificationWriter = {
   resultSchemaName: "sweep.verification@v1",
   loadCommands(context) {
-    const briefPath = reportPathForSchemaInCompiledFlow(context.flow, "sweep.brief@v1");
+    const briefPath = reportPathForSchemaInRuntimeFlow(context.flow, "sweep.brief@v1");
     if (!context.step.reads.includes(briefPath)) {
       throw new Error(`sweep.verification@v1 requires step '${context.step.id}' to read ${briefPath}`);
     }
-    const brief = SweepBrief.parse(JSON.parse(readFileSync13(resolveRunRelative(context.runFolder, briefPath), "utf8")));
+    const brief = SweepBrief.parse(JSON.parse(readFileSync14(resolveRunRelative(context.runFolder, briefPath), "utf8")));
     return brief.verification_command_candidates;
   },
   buildResult(observations) {
@@ -16622,7 +20212,7 @@ var sweepVerificationWriter = {
   }
 };
 
-// dist/flows/sweep/index.js
+// dist/flows/sweep/flow.js
 var SWEEP_SIGNALS = [
   { label: "cleanup prefix", pattern: /^\s*cleanup\s*:/i },
   { label: "overnight prefix", pattern: /^\s*overnight\s*:/i },
@@ -16631,11 +20221,394 @@ var SWEEP_SIGNALS = [
     pattern: /^\s*(?:please\s+)?(?:sweep|cleanup|clean\s+up)\s+(?:a\s+|an\s+|the\s+|this\s+|that\s+|our\s+|my\s+)?(?:repo|repository|codebase|dead\s+code|lint|docs|documentation|coverage|quality)\b/i
   }
 ];
-var sweepCompiledFlowPackage = {
+var sweepFlowDefinition = defineFlow({
   id: "sweep",
   visibility: "public",
   paths: {
     schematic: "src/flows/sweep/schematic.json"
+  },
+  schematic: {
+    schema_version: "1",
+    id: "sweep",
+    title: "Sweep Schematic",
+    purpose: "Sweep flow: frame the sweep, survey for candidates, triage by confidence and risk, execute a batch of acted items, verify no regression, review for scope creep or regressions, and close with evidence. The first version runs one honest batch while keeping the stage path ready for broader batch orchestration.",
+    status: "active",
+    version: "0.1.0",
+    starts_at: "frame-step",
+    initial_contracts: [
+      "task.intake@v1",
+      "route.decision@v1",
+      "context.packet@v1",
+      "verification.plan@v1"
+    ],
+    contract_aliases: [
+      {
+        generic: "flow.brief@v1",
+        actual: "sweep.brief@v1"
+      },
+      {
+        generic: "diagnosis.result@v1",
+        actual: "sweep.analysis@v1"
+      },
+      {
+        generic: "work.queue@v1",
+        actual: "sweep.queue@v1"
+      },
+      {
+        generic: "batch.result@v1",
+        actual: "sweep.batch@v1"
+      },
+      {
+        generic: "change.evidence@v1",
+        actual: "sweep.batch@v1"
+      },
+      {
+        generic: "verification.result@v1",
+        actual: "sweep.verification@v1"
+      },
+      {
+        generic: "review.verdict@v1",
+        actual: "sweep.review@v1"
+      },
+      {
+        generic: "flow.result@v1",
+        actual: "sweep.result@v1"
+      }
+    ],
+    entry: {
+      signals: {
+        include: ["sweep", "cleanup", "dead-code", "lint-fix", "docs-sync", "coverage"],
+        exclude: []
+      },
+      intent_prefixes: ["sweep", "cleanup"]
+    },
+    entry_modes: [
+      {
+        name: "default",
+        depth: "standard",
+        description: "Default Sweep entry mode."
+      },
+      {
+        name: "lite",
+        depth: "lite",
+        description: "Lite Sweep entry mode."
+      },
+      {
+        name: "deep",
+        depth: "deep",
+        description: "Deep Sweep entry mode."
+      },
+      {
+        name: "autonomous",
+        depth: "autonomous",
+        description: "Autonomous Sweep entry mode."
+      }
+    ],
+    stage_path_policy: {
+      mode: "strict"
+    },
+    stages: [
+      {
+        canonical: "frame",
+        id: "frame-stage",
+        title: "Frame"
+      },
+      {
+        canonical: "analyze",
+        id: "survey-stage",
+        title: "Survey"
+      },
+      {
+        canonical: "plan",
+        id: "triage-stage",
+        title: "Triage"
+      },
+      {
+        canonical: "act",
+        id: "execute-stage",
+        title: "Execute"
+      },
+      {
+        canonical: "verify",
+        id: "verify-stage",
+        title: "Verify"
+      },
+      {
+        canonical: "review",
+        id: "review-stage",
+        title: "Review"
+      },
+      {
+        canonical: "close",
+        id: "close-stage",
+        title: "Close"
+      }
+    ],
+    items: [
+      {
+        id: "frame-step",
+        title: "Frame - produce Sweep brief",
+        stage: "frame",
+        input: {
+          task: "task.intake@v1",
+          route: "route.decision@v1"
+        },
+        output: "sweep.brief@v1",
+        evidence_requirements: ["scope boundary", "constraints", "proof plan"],
+        execution: {
+          kind: "compose"
+        },
+        protocol: "sweep-frame@v1",
+        writes: {
+          report_path: "reports/sweep/brief.json"
+        },
+        check: {
+          required: ["objective", "scope"]
+        },
+        routes: {
+          continue: "survey-step",
+          stop: "@stop"
+        },
+        block: "frame"
+      },
+      {
+        id: "survey-step",
+        title: "Survey - enumerate candidate sweep targets",
+        stage: "analyze",
+        input: {
+          brief: "sweep.brief@v1",
+          context: "context.packet@v1"
+        },
+        output: "sweep.analysis@v1",
+        evidence_requirements: [
+          "cause hypothesis",
+          "confidence",
+          "reproduction status",
+          "diagnostic path"
+        ],
+        execution: {
+          kind: "relay",
+          role: "implementer"
+        },
+        protocol: "sweep-survey@v1",
+        writes: {
+          report_path: "reports/sweep/analysis.json",
+          request_path: "reports/relay/sweep-survey.request.json",
+          receipt_path: "reports/relay/sweep-survey.receipt.txt",
+          result_path: "reports/relay/sweep-survey.result.json"
+        },
+        check: {
+          pass: ["accept"]
+        },
+        routes: {
+          continue: "triage-step",
+          retry: "survey-step",
+          stop: "@stop"
+        },
+        block: "diagnose"
+      },
+      {
+        id: "triage-step",
+        title: "Triage - classify candidates by confidence x risk",
+        stage: "plan",
+        input: {
+          brief: "sweep.brief@v1",
+          context: "context.packet@v1",
+          analysis: "sweep.analysis@v1"
+        },
+        output: "sweep.queue@v1",
+        evidence_requirements: ["ordered items", "item state", "risk class", "selection rule"],
+        execution: {
+          kind: "compose"
+        },
+        protocol: "sweep-triage@v1",
+        writes: {
+          report_path: "reports/sweep/queue.json"
+        },
+        check: {
+          required: ["classified", "to_execute"]
+        },
+        routes: {
+          continue: "triage-checkpoint-step",
+          revise: "triage-step",
+          stop: "@stop"
+        },
+        block: "queue"
+      },
+      {
+        id: "triage-checkpoint-step",
+        title: "Queue/Triage - confirm sweep batch",
+        stage: "plan",
+        input: {
+          queue: "sweep.queue@v1"
+        },
+        output: "sweep.triage-checkpoint@v1",
+        evidence_requirements: ["selected batch", "answer source", "resume route"],
+        execution: {
+          kind: "checkpoint"
+        },
+        protocol: "sweep-triage-checkpoint@v1",
+        writes: {
+          checkpoint_request_path: "reports/checkpoints/sweep-triage-request.json",
+          checkpoint_response_path: "reports/checkpoints/sweep-triage-response.json"
+        },
+        check: {
+          allow: ["continue", "revise", "stop"]
+        },
+        checkpoint_policy: {
+          prompt: "Confirm the queued sweep batch before execution.",
+          choices: [
+            {
+              id: "continue",
+              label: "Execute the queued batch"
+            },
+            {
+              id: "revise",
+              label: "Revise the triage"
+            },
+            {
+              id: "stop",
+              label: "Stop before execution"
+            }
+          ],
+          safe_default_choice: "continue",
+          safe_autonomous_choice: "continue"
+        },
+        routes: {
+          continue: "execute-step",
+          revise: "triage-step",
+          stop: "@stop"
+        },
+        block: "human-decision"
+      },
+      {
+        id: "execute-step",
+        title: "Execute - act on triaged batch",
+        stage: "act",
+        input: {
+          brief: "sweep.brief@v1",
+          queue: "sweep.queue@v1"
+        },
+        output: "sweep.batch@v1",
+        evidence_requirements: [
+          "completed items",
+          "skipped items",
+          "blocked items",
+          "failed items"
+        ],
+        execution: {
+          kind: "relay",
+          role: "implementer"
+        },
+        protocol: "sweep-execute@v1",
+        writes: {
+          report_path: "reports/sweep/batch.json",
+          request_path: "reports/relay/sweep-execute.request.json",
+          receipt_path: "reports/relay/sweep-execute.receipt.txt",
+          result_path: "reports/relay/sweep-execute.result.json"
+        },
+        check: {
+          pass: ["accept"]
+        },
+        routes: {
+          continue: "verify-step",
+          retry: "execute-step",
+          stop: "@stop"
+        },
+        block: "batch"
+      },
+      {
+        id: "verify-step",
+        title: "Verify - run Sweep verification",
+        stage: "verify",
+        input: {
+          proof: "verification.plan@v1",
+          brief: "sweep.brief@v1",
+          change: "sweep.batch@v1"
+        },
+        output: "sweep.verification@v1",
+        evidence_requirements: ["command list", "exit status", "bounded output", "pass or fail"],
+        execution: {
+          kind: "verification"
+        },
+        protocol: "sweep-verify@v1",
+        writes: {
+          report_path: "reports/sweep/verification.json"
+        },
+        check: {
+          required: ["overall_status", "commands"]
+        },
+        routes: {
+          continue: "review-step",
+          retry: "execute-step",
+          stop: "@stop"
+        },
+        block: "run-verification"
+      },
+      {
+        id: "review-step",
+        title: "Review - independent audit of Sweep changes",
+        stage: "review",
+        input: {
+          brief: "sweep.brief@v1",
+          change: "sweep.batch@v1",
+          verification: "sweep.verification@v1"
+        },
+        output: "sweep.review@v1",
+        evidence_requirements: ["verdict", "findings", "confidence", "required fixes"],
+        execution: {
+          kind: "relay",
+          role: "reviewer"
+        },
+        protocol: "sweep-review@v1",
+        writes: {
+          report_path: "reports/sweep/review.json",
+          request_path: "reports/relay/sweep-review.request.json",
+          receipt_path: "reports/relay/sweep-review.receipt.txt",
+          result_path: "reports/relay/sweep-review.result.json"
+        },
+        check: {
+          pass: ["clean", "minor-injections"]
+        },
+        routes: {
+          continue: "close-step",
+          retry: "execute-step",
+          revise: "execute-step",
+          stop: "@stop"
+        },
+        block: "review"
+      },
+      {
+        id: "close-step",
+        title: "Close - emit Sweep result",
+        stage: "close",
+        input: {
+          brief: "sweep.brief@v1",
+          analysis: "sweep.analysis@v1",
+          queue: "sweep.queue@v1",
+          batch: "sweep.batch@v1",
+          verification: "sweep.verification@v1",
+          review: "sweep.review@v1"
+        },
+        output: "sweep.result@v1",
+        evidence_requirements: ["outcome", "evidence pointers", "residual risks", "follow-ups"],
+        execution: {
+          kind: "compose"
+        },
+        protocol: "sweep-close@v1",
+        writes: {
+          report_path: "reports/sweep-result.json"
+        },
+        check: {
+          required: ["summary", "outcome", "evidence_links"]
+        },
+        routes: {
+          complete: "@complete",
+          stop: "@stop"
+        },
+        block: "close-with-evidence"
+      }
+    ]
   },
   routing: {
     order: 40,
@@ -16668,24 +20641,62 @@ var sweepCompiledFlowPackage = {
     { schemaName: "sweep.verification@v1", schema: SweepVerification },
     { schemaName: "sweep.result@v1", schema: SweepResult }
   ],
+  runtimeSurface: {
+    primaryResult: {
+      schemaName: "sweep.result@v1",
+      path: "reports/sweep-result.json",
+      label: "Sweep result"
+    },
+    progress: {
+      steps: [
+        { stepId: "frame-step", taskTitle: "Frame the work", activeText: "Framing the work" },
+        {
+          stepId: "survey-step",
+          taskTitle: "Check the context",
+          activeText: "Checking the context",
+          relayRole: "implementer"
+        },
+        { stepId: "triage-step", taskTitle: "Plan the work", activeText: "Planning the work" },
+        {
+          stepId: "triage-checkpoint-step",
+          taskTitle: "Plan the work",
+          activeText: "Planning the work"
+        },
+        {
+          stepId: "execute-step",
+          taskTitle: "Make the change",
+          activeText: "Making the change",
+          relayRole: "implementer"
+        },
+        { stepId: "verify-step", taskTitle: "Check the work", activeText: "Checking the work" },
+        {
+          stepId: "review-step",
+          taskTitle: "Check the result",
+          activeText: "Checking the result",
+          relayRole: "reviewer"
+        },
+        { stepId: "close-step", taskTitle: "Wrap up", activeText: "Wrapping up" }
+      ]
+    }
+  },
   writers: {
     compose: [sweepBriefComposeBuilder, sweepQueueComposeBuilder],
     close: [sweepCloseBuilder],
-    verification: [sweepVerificationWriter],
-    checkpoint: []
+    verification: [sweepVerificationWriter]
   }
-};
+});
 
 // dist/flows/catalog.js
-var flowPackages = [
-  reviewCompiledFlowPackage,
-  migrateCompiledFlowPackage,
-  fixCompiledFlowPackage,
-  runtimeProofCompiledFlowPackage,
-  buildCompiledFlowPackage,
-  exploreCompiledFlowPackage,
-  sweepCompiledFlowPackage
+var flowDefinitions = [
+  reviewFlowDefinition,
+  migrateFlowDefinition,
+  fixFlowDefinition,
+  runtimeProofFlowDefinition,
+  buildFlowDefinition,
+  exploreFlowDefinition,
+  sweepFlowDefinition
 ];
+var flowPackages = compileFlowDefinitions(flowDefinitions);
 var PACKAGES_BY_ID = (() => {
   const map = /* @__PURE__ */ new Map();
   for (const pkg of flowPackages) {
@@ -16799,18 +20810,18 @@ var TERMINAL_TARGETS = [
 ];
 
 // dist/runtime/run-files/paths.js
-import { existsSync as existsSync4, lstatSync as lstatSync3, realpathSync as realpathSync2 } from "node:fs";
-import { isAbsolute as isAbsolute3, relative as relative3, resolve as resolve4, sep } from "node:path";
-function isInsideOrSame(root, target) {
-  const fromRoot = relative3(root, target);
-  return fromRoot === "" || !fromRoot.startsWith("..") && !isAbsolute3(fromRoot);
+import { existsSync as existsSync5, lstatSync as lstatSync4, realpathSync as realpathSync3 } from "node:fs";
+import { isAbsolute as isAbsolute4, relative as relative4, resolve as resolve5, sep } from "node:path";
+function isInsideOrSame2(root, target) {
+  const fromRoot = relative4(root, target);
+  return fromRoot === "" || !fromRoot.startsWith("..") && !isAbsolute4(fromRoot);
 }
 function validateRunFilePath(runRelativePath) {
   const issues = [];
   if (runRelativePath.trim().length === 0) {
     issues.push("must be non-empty");
   }
-  if (isAbsolute3(runRelativePath)) {
+  if (isAbsolute4(runRelativePath)) {
     issues.push("must be relative");
   }
   if (runRelativePath.includes("\\")) {
@@ -16828,11 +20839,11 @@ function resolveRunFilePath(runDir, runRelativePath) {
   if (runRelativePath.trim().length === 0) {
     throw new Error("run file path must be non-empty");
   }
-  if (isAbsolute3(runRelativePath)) {
+  if (isAbsolute4(runRelativePath)) {
     throw new Error(`run file path must be relative: ${runRelativePath}`);
   }
-  const root = resolve4(runDir);
-  const fullPath = resolve4(root, runRelativePath);
+  const root = resolve5(runDir);
+  const fullPath = resolve5(root, runRelativePath);
   if (fullPath !== root && !fullPath.startsWith(`${root}${sep}`)) {
     throw new Error(`run file path escapes run directory: ${runRelativePath}`);
   }
@@ -16843,20 +20854,20 @@ function resolveRunFilePath(runDir, runRelativePath) {
   if (validation.length > 0) {
     throw new Error(`run file path ${validation[0]}: ${runRelativePath}`);
   }
-  if (existsSync4(root)) {
-    if (lstatSync3(root).isSymbolicLink()) {
+  if (existsSync5(root)) {
+    if (lstatSync4(root).isSymbolicLink()) {
       throw new Error(`run file path crosses symlink: ${runRelativePath}`);
     }
-    const rootReal = realpathSync2.native(root);
+    const rootReal = realpathSync3.native(root);
     let cursor = root;
     for (const segment of runRelativePath.split("/")) {
-      cursor = resolve4(cursor, segment);
-      if (!existsSync4(cursor))
+      cursor = resolve5(cursor, segment);
+      if (!existsSync5(cursor))
         break;
-      if (lstatSync3(cursor).isSymbolicLink()) {
+      if (lstatSync4(cursor).isSymbolicLink()) {
         throw new Error(`run file path crosses symlink: ${runRelativePath}`);
       }
-      if (!isInsideOrSame(rootReal, realpathSync2.native(cursor))) {
+      if (!isInsideOrSame2(rootReal, realpathSync3.native(cursor))) {
         throw new Error(`run file path escapes run directory through symlink: ${runRelativePath}`);
       }
     }
@@ -17048,6 +21059,7 @@ function baseStep(step) {
     reads: step.reads.map((path) => ({ path })),
     writes: toWrites(step.writes),
     ...selection === void 0 ? {} : { selection },
+    ...step.skill_slots === void 0 ? {} : { skillSlots: step.skill_slots },
     check: step.check,
     ...step.budgets === void 0 ? {} : { budgets: step.budgets }
   };
@@ -17141,7 +21153,7 @@ function fromCompiledFlow(flow) {
 
 // dist/runtime/trace/trace-store.js
 import { appendFile, mkdir, readFile } from "node:fs/promises";
-import { join as join2 } from "node:path";
+import { join as join3 } from "node:path";
 var TraceStore = class {
   runDir;
   options;
@@ -17153,7 +21165,7 @@ var TraceStore = class {
   constructor(runDir, options = {}) {
     this.runDir = runDir;
     this.options = options;
-    this.tracePath = join2(runDir, "trace.ndjson");
+    this.tracePath = join3(runDir, "trace.ndjson");
   }
   async load() {
     await this.appendTail;
@@ -17269,43 +21281,6 @@ function normalizeCompiledFlowCompatibility(raw) {
 var RUNTIME_SUCCESS_ROUTE = "pass";
 var SCHEMATIC_SUCCESS_ROUTE_ALIASES = ["continue", "complete"];
 var SUCCESS_ROUTE_ALIAS_SET = new Set(SCHEMATIC_SUCCESS_ROUTE_ALIASES);
-
-// dist/schemas/stage.js
-var CanonicalStage = external_exports.enum([
-  "frame",
-  "analyze",
-  "plan",
-  "act",
-  "verify",
-  "review",
-  "close"
-]);
-var Stage = external_exports.object({
-  id: StageId,
-  title: external_exports.string().min(1),
-  canonical: CanonicalStage.optional(),
-  steps: external_exports.array(StepId).min(1),
-  selection: SelectionOverride.optional()
-}).strict();
-var CANONICAL_STAGES = [
-  "frame",
-  "analyze",
-  "plan",
-  "act",
-  "verify",
-  "review",
-  "close"
-];
-var SpinePolicy = external_exports.discriminatedUnion("mode", [
-  external_exports.object({
-    mode: external_exports.literal("strict")
-  }).strict(),
-  external_exports.object({
-    mode: external_exports.literal("partial"),
-    omits: external_exports.array(CanonicalStage).min(1),
-    rationale: external_exports.string().min(20)
-  }).strict()
-]);
 
 // dist/schemas/compiled-flow.js
 var TERMINAL_ROUTE_TARGETS = /* @__PURE__ */ new Set(["@complete", "@stop", "@escalate", "@handoff"]);
@@ -17612,7 +21587,7 @@ function isWaitingCheckpointStepOutcome(outcome) {
 }
 
 // dist/runtime/executors/checkpoint.js
-import { readFileSync as readFileSync14 } from "node:fs";
+import { readFileSync as readFileSync15 } from "node:fs";
 
 // dist/shared/recovery-route.js
 var RECOVERY_ROUTE_PRIORITY = [
@@ -17629,22 +21604,8 @@ function recoveryRouteForStep(step, allowedRoutes = RECOVERY_ROUTE_PRIORITY) {
 }
 
 // dist/runtime/run/route-compat.js
-function requireCompiledFlow(context, step) {
-  if (context.compiledFlow === void 0) {
-    throw new Error(`step '${step.id}' requires compiled-flow v1 context for production ${step.kind} execution`);
-  }
-  return context.compiledFlow;
-}
-function requireCompiledStep(context, step, kind) {
-  const flow = requireCompiledFlow(context, step);
-  const compiledStep = flow.steps.find((candidate) => candidate.id === step.id);
-  if (compiledStep === void 0) {
-    throw new Error(`compiled-flow v1 context has no step '${step.id}'`);
-  }
-  if (compiledStep.kind !== kind) {
-    throw new Error(`compiled-flow v1 step '${step.id}' has kind '${compiledStep.kind}', expected '${kind}'`);
-  }
-  return compiledStep;
+function requireRuntimeStep(context, step, kind) {
+  return requireRuntimeIndexedStep(context.packageIndex, step.id, kind);
 }
 function recoveryRouteForExecutableStep(step) {
   return recoveryRouteForStep(step);
@@ -17704,7 +21665,7 @@ async function executeCheckpoint(step, context) {
   if (request === void 0 || response === void 0) {
     throw new Error(`checkpoint step '${step.id}' requires writes.request and writes.response`);
   }
-  const compiledStep = requireCompiledStep(context, step, "checkpoint");
+  const indexedStep2 = requireRuntimeStep(context, step, "checkpoint");
   let checkpointReportSha256;
   const report = step.writes?.report;
   const resumedSelection = context.resumeCheckpoint?.stepId === step.id ? context.resumeCheckpoint.selection : void 0;
@@ -17717,13 +21678,13 @@ async function executeCheckpoint(step, context) {
       }
       const body = builder.build({
         runFolder: context.runDir,
-        step: compiledStep,
+        step: indexedStep2,
         goal: context.goal,
         ...context.projectRoot === void 0 ? {} : { projectRoot: context.projectRoot },
         responsePath: response.path
       });
       await context.files.writeJson(report, body);
-      checkpointReportSha256 = sha256Hex(readFileSync14(context.files.resolve(report), "utf8"));
+      checkpointReportSha256 = sha256Hex(readFileSync15(context.files.resolve(report), "utf8"));
       await context.trace.append({
         run_id: context.runId,
         kind: "step.report_written",
@@ -17739,7 +21700,7 @@ async function executeCheckpoint(step, context) {
       ...checkpointReportSha256 === void 0 ? {} : { checkpointReportSha256 }
     });
     await context.files.writeJson(request, requestBody);
-    const requestText = readFileSync14(context.files.resolve(request), "utf8");
+    const requestText = readFileSync15(context.files.resolve(request), "utf8");
     await context.trace.append({
       run_id: context.runId,
       kind: "checkpoint.requested",
@@ -17814,7 +21775,7 @@ async function executeCheckpoint(step, context) {
 }
 
 // dist/runtime/executors/compose.js
-import { readFileSync as readFileSync15 } from "node:fs";
+import { readFileSync as readFileSync16 } from "node:fs";
 
 // dist/flows/registries/close-writers/registry.js
 var REGISTRY2 = buildCloseRegistry(flowPackages);
@@ -17825,17 +21786,17 @@ function resolveCloseReadPaths(builder, flow, closeStep) {
   const paths = {};
   for (const descriptor of builder.reads) {
     if (descriptor.required) {
-      const path = reportPathForSchemaInCompiledFlow(flow, descriptor.schema);
+      const path = reportPathForSchemaInRuntimeFlow(flow, descriptor.schema);
       if (!closeStep.reads.includes(path)) {
         throw new Error(`${closeStep.writes.report.schema} requires close step '${closeStep.id}' to read ${path}`);
       }
       paths[descriptor.name] = path;
     } else {
-      if (!flowHasReportSchemaInCompiledFlow(flow, descriptor.schema)) {
+      if (!flowHasReportSchemaInRuntimeFlow(flow, descriptor.schema)) {
         paths[descriptor.name] = void 0;
         continue;
       }
-      const path = reportPathForSchemaInCompiledFlow(flow, descriptor.schema);
+      const path = reportPathForSchemaInRuntimeFlow(flow, descriptor.schema);
       paths[descriptor.name] = closeStep.reads.includes(path) ? path : void 0;
     }
   }
@@ -17852,7 +21813,7 @@ function resolveComposeReadPaths(builder, flow, step) {
   if (builder.reads === void 0)
     return paths;
   for (const descriptor of builder.reads) {
-    const path = reportPathForSchemaInCompiledFlow(flow, descriptor.schema);
+    const path = reportPathForSchemaInRuntimeFlow(flow, descriptor.schema);
     if (descriptor.required && !step.reads.includes(path)) {
       throw new Error(`${step.writes.report.schema} requires step '${step.id}' to read ${path}`);
     }
@@ -17863,17 +21824,17 @@ function resolveComposeReadPaths(builder, flow, step) {
 
 // dist/runtime/executors/compose.js
 function readJsonReport(context, path) {
-  return JSON.parse(readFileSync15(context.files.resolve(path), "utf8"));
+  return JSON.parse(readFileSync16(context.files.resolve(path), "utf8"));
 }
 async function writeRegisteredComposeReport(step, context) {
   const report = step.writes?.report;
   if (report?.schema === void 0)
     return false;
-  const flow = requireCompiledFlow(context, step);
-  const compiledStep = requireCompiledStep(context, step, "compose");
+  const flow = context.packageIndex.flow;
+  const indexedStep2 = requireRuntimeStep(context, step, "compose");
   const composeBuilder = findComposeBuilder(report.schema);
   if (composeBuilder !== void 0) {
-    const readPaths = resolveComposeReadPaths(composeBuilder, flow, compiledStep);
+    const readPaths = resolveComposeReadPaths(composeBuilder, flow, indexedStep2);
     const inputs = {};
     for (const [name, path] of Object.entries(readPaths)) {
       inputs[name] = path === void 0 ? void 0 : readJsonReport(context, path);
@@ -17881,7 +21842,7 @@ async function writeRegisteredComposeReport(step, context) {
     const body = composeBuilder.build({
       runFolder: context.runDir,
       flow,
-      step: compiledStep,
+      step: indexedStep2,
       goal: context.goal,
       ...context.projectRoot === void 0 ? {} : { projectRoot: context.projectRoot },
       ...context.evidencePolicy === void 0 ? {} : { evidencePolicy: context.evidencePolicy },
@@ -17892,7 +21853,7 @@ async function writeRegisteredComposeReport(step, context) {
   }
   const closeBuilder = findCloseBuilder(report.schema);
   if (closeBuilder !== void 0) {
-    const readPaths = resolveCloseReadPaths(closeBuilder, flow, compiledStep);
+    const readPaths = resolveCloseReadPaths(closeBuilder, flow, indexedStep2);
     const inputs = {};
     for (const [name, path] of Object.entries(readPaths)) {
       inputs[name] = path === void 0 ? void 0 : readJsonReport(context, path);
@@ -17900,7 +21861,7 @@ async function writeRegisteredComposeReport(step, context) {
     const body = closeBuilder.build({
       runFolder: context.runDir,
       flow,
-      closeStep: compiledStep,
+      closeStep: indexedStep2,
       goal: context.goal,
       inputs
     });
@@ -17910,7 +21871,7 @@ async function writeRegisteredComposeReport(step, context) {
   throw new Error(`no compose report writer registered for schema '${report.schema}' at compose step '${step.id}'`);
 }
 async function executeCompose(step, context) {
-  if (step.writes?.report?.schema !== void 0 && context.compiledFlow !== void 0) {
+  if (step.writes?.report?.schema !== void 0) {
     await writeRegisteredComposeReport(step, context);
     await context.trace.append({
       run_id: context.runId,
@@ -18024,7 +21985,7 @@ function evaluateFanoutJoinPolicy(input) {
 // dist/runtime/fanout/branch-execution.js
 import { randomUUID } from "node:crypto";
 import { mkdir as mkdir3, readFile as readFile3, writeFile as writeFile4 } from "node:fs/promises";
-import { dirname as dirname2, join as join5 } from "node:path";
+import { dirname as dirname2, join as join6 } from "node:path";
 
 // dist/flows/registries/cross-report-validators.js
 var REGISTRY4 = buildCrossReportValidatorRegistry(flowPackages);
@@ -18104,20 +22065,7 @@ function parseReport(schemaName, resultBody) {
 import { mkdir as mkdir2, writeFile as writeFile3 } from "node:fs/promises";
 import { dirname } from "node:path";
 
-// dist/connectors/claude-code.js
-import { spawn } from "node:child_process";
-import { performance } from "node:perf_hooks";
-
-// dist/shared/connector-helpers.js
-function selectedModelForProvider(connectorName, selection, expectedProvider2) {
-  const model = selection?.model;
-  if (model === void 0)
-    return void 0;
-  if (model.provider !== expectedProvider2) {
-    throw new Error(`${connectorName} connector cannot honor model provider '${model.provider}' for model '${model.model}'; expected provider '${expectedProvider2}'`);
-  }
-  return model.model;
-}
+// dist/shared/json-extraction.js
 function extractJsonObject(text) {
   let cursor = 0;
   while (cursor < text.length) {
@@ -18170,69 +22118,48 @@ function extractJsonObject(text) {
   return text;
 }
 
-// dist/connectors/claude-code.js
-var CLAUDE_CODE_DISPATCH_FLAGS = [
-  "-p",
-  "--permission-mode",
-  "bypassPermissions",
-  "--strict-mcp-config",
-  "--disable-slash-commands",
-  "--setting-sources",
-  "",
-  "--settings",
-  "{}",
-  "--output-format",
-  "stream-json",
-  "--verbose",
-  "--no-session-persistence"
-];
-var CLAUDE_CODE_EXECUTABLE = "claude";
-var CLAUDE_CODE_SUPPORTED_EFFORTS = ["low", "medium", "high", "xhigh"];
-var DEFAULT_TIMEOUT_MS = 6e5;
-var SIGTERM_TO_SIGKILL_GRACE_MS = 2e3;
-var STDOUT_MAX_BYTES = 16 * 1024 * 1024;
-var STDERR_MAX_BYTES = 1024 * 1024;
-function assertClaudeCodeEffort(effort) {
-  if (!CLAUDE_CODE_SUPPORTED_EFFORTS.includes(effort)) {
-    throw new Error(`claude-code connector cannot honor effort '${effort}'; supported efforts: ${CLAUDE_CODE_SUPPORTED_EFFORTS.join(", ")}`);
+// dist/connectors/subprocess.js
+import { spawn } from "node:child_process";
+import { performance } from "node:perf_hooks";
+var ConnectorSubprocessSpawnError = class extends Error {
+  phase;
+  constructor(phase, message) {
+    super(message);
+    this.phase = phase;
+    this.name = "ConnectorSubprocessSpawnError";
   }
+};
+function isConnectorSubprocessSpawnError(error) {
+  return error instanceof ConnectorSubprocessSpawnError || error instanceof Error && error.name === "ConnectorSubprocessSpawnError";
 }
-function buildClaudeCodeArgs(input) {
-  const args = [...CLAUDE_CODE_DISPATCH_FLAGS];
-  const model = selectedModelForProvider("claude-code", input.resolvedSelection, "anthropic");
-  if (model !== void 0) {
-    args.push("--model", model);
+function appendCapped(current, currentBytes, chunk, maxBytes) {
+  const chunkBytes = Buffer.byteLength(chunk, "utf8");
+  if (currentBytes + chunkBytes <= maxBytes) {
+    return { text: current + chunk, bytes: currentBytes + chunkBytes, capped: false };
   }
-  const effort = input.resolvedSelection?.effort;
-  if (effort !== void 0) {
-    assertClaudeCodeEffort(effort);
-    args.push("--effort", effort);
+  const remaining = maxBytes - currentBytes;
+  if (remaining <= 0) {
+    return { text: current, bytes: currentBytes, capped: true };
   }
-  if (input.responseSchema !== void 0) {
-    args.push("--json-schema", JSON.stringify(input.responseSchema));
-  }
-  args.push(input.prompt);
-  return args;
+  return {
+    text: current + Buffer.from(chunk, "utf8").subarray(0, remaining).toString("utf8"),
+    bytes: maxBytes,
+    capped: true
+  };
 }
-async function relayClaudeCode(input) {
-  const timeoutMs2 = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const args = buildClaudeCodeArgs(input);
+async function runConnectorSubprocess(input) {
   const start = performance.now();
   return await new Promise((resolve13, reject) => {
     let child;
     try {
-      child = spawn(CLAUDE_CODE_EXECUTABLE, args, {
+      child = spawn(input.executable, [...input.args], {
         stdio: ["ignore", "pipe", "pipe"],
-        // Inherit the parent process's environment explicitly. Some test
-        // harnesses (vitest workers) launch children through a process-
-        // pool whose env may not be identical to the top-level node
-        // process's env; passing `process.env` directly makes the
-        // auth/session inheritance unambiguous.
-        env: process.env,
-        detached: true
+        env: input.env ?? process.env,
+        detached: true,
+        ...input.cwd === void 0 ? {} : { cwd: input.cwd }
       });
-    } catch (err) {
-      reject(new Error(`claude-code subprocess spawn failed: ${err.message}`));
+    } catch (error) {
+      reject(new ConnectorSubprocessSpawnError("spawn-failed", error instanceof Error ? error.message : String(error)));
       return;
     }
     let stdout = "";
@@ -18266,8 +22193,8 @@ async function relayClaudeCode(input) {
       killGraceTimer = setTimeout(() => {
         killProcessGroup("SIGKILL");
         killGraceTimer = void 0;
-      }, SIGTERM_TO_SIGKILL_GRACE_MS);
-    }, timeoutMs2);
+      }, input.sigtermToSigkillGraceMs);
+    }, input.timeoutMs);
     const clearAllTimers = () => {
       clearTimeout(timer);
       if (killGraceTimer !== void 0) {
@@ -18278,50 +22205,129 @@ async function relayClaudeCode(input) {
     child.stdout?.setEncoding("utf8");
     child.stderr?.setEncoding("utf8");
     child.stdout?.on("data", (chunk) => {
-      if (stdoutBytes + chunk.length > STDOUT_MAX_BYTES) {
-        stdoutCapped = true;
-        return;
-      }
-      stdout += chunk;
-      stdoutBytes += chunk.length;
+      const next = appendCapped(stdout, stdoutBytes, chunk, input.stdoutMaxBytes);
+      stdout = next.text;
+      stdoutBytes = next.bytes;
+      stdoutCapped = stdoutCapped || next.capped;
     });
     child.stderr?.on("data", (chunk) => {
-      if (stderrBytes + chunk.length > STDERR_MAX_BYTES) {
-        stderrCapped = true;
-        return;
-      }
-      stderr += chunk;
-      stderrBytes += chunk.length;
+      const next = appendCapped(stderr, stderrBytes, chunk, input.stderrMaxBytes);
+      stderr = next.text;
+      stderrBytes = next.bytes;
+      stderrCapped = stderrCapped || next.capped;
     });
-    child.on("error", (err) => {
+    child.on("error", (error) => {
       clearAllTimers();
-      reject(new Error(`claude-code subprocess spawn error: ${err.message}`));
+      reject(new ConnectorSubprocessSpawnError("spawn-error", error.message));
     });
     child.on("close", (code, signal) => {
       clearAllTimers();
-      const duration_ms = performance.now() - start;
-      if (timedOut) {
-        const stdoutSuffix = stdoutCapped ? " [stdout capped]" : "";
-        const stderrSuffix = stderrCapped ? " [stderr capped]" : "";
-        reject(new Error(`claude-code subprocess timed out after ${timeoutMs2}ms; group-kill ${killGroupSucceeded ? "sent" : "failed"}; final signal=${signal ?? "none"}; stdout[:500]=${stdout.slice(0, 500)}${stdoutSuffix}; stderr[:500]=${stderr.slice(0, 500)}${stderrSuffix}`));
-        return;
-      }
-      if (code !== 0) {
-        reject(new Error(`claude-code subprocess exited with code ${code}${signal ? ` (signal ${signal})` : ""}; stderr[:500]=${stderr.slice(0, 500)}`));
-        return;
-      }
-      if (stdoutCapped) {
-        reject(new Error(`claude-code subprocess stdout exceeded ${STDOUT_MAX_BYTES} bytes; capability-boundary check cannot be evaluated on truncated stream`));
-        return;
-      }
-      try {
-        resolve13(parseClaudeCodeStdout(stdout, input.prompt, duration_ms));
-      } catch (err) {
-        const stderrSuffix = stderrCapped ? " [stderr capped]" : "";
-        reject(new Error(`claude-code subprocess: ${err.message}; stdout[:500]=${stdout.slice(0, 500)}; stderr[:200]=${stderr.slice(0, 200)}${stderrSuffix}`));
-      }
+      resolve13({
+        stdout,
+        stderr,
+        stdoutCapped,
+        stderrCapped,
+        timedOut,
+        killGroupSucceeded,
+        code,
+        signal,
+        durationMs: performance.now() - start
+      });
     });
   });
+}
+
+// dist/connectors/claude-code.js
+var CLAUDE_CODE_DISPATCH_FLAGS = [
+  "-p",
+  "--permission-mode",
+  "bypassPermissions",
+  "--strict-mcp-config",
+  "--disable-slash-commands",
+  "--setting-sources",
+  "",
+  "--settings",
+  "{}",
+  "--output-format",
+  "stream-json",
+  "--verbose",
+  "--no-session-persistence"
+];
+var CLAUDE_CODE_EXECUTABLE = "claude";
+var CLAUDE_CODE_SUPPORTED_EFFORTS = ["low", "medium", "high", "xhigh"];
+var DEFAULT_TIMEOUT_MS = 6e5;
+var SIGTERM_TO_SIGKILL_GRACE_MS = 2e3;
+var STDOUT_MAX_BYTES = 16 * 1024 * 1024;
+var STDERR_MAX_BYTES = 1024 * 1024;
+function selectedAnthropicModel(selection) {
+  const model = selection?.model;
+  if (model === void 0)
+    return void 0;
+  if (model.provider !== "anthropic") {
+    throw new Error(`claude-code connector cannot honor model provider '${model.provider}' for model '${model.model}'; expected provider 'anthropic'`);
+  }
+  return model.model;
+}
+function assertClaudeCodeEffort(effort) {
+  if (!CLAUDE_CODE_SUPPORTED_EFFORTS.includes(effort)) {
+    throw new Error(`claude-code connector cannot honor effort '${effort}'; supported efforts: ${CLAUDE_CODE_SUPPORTED_EFFORTS.join(", ")}`);
+  }
+}
+function buildClaudeCodeArgs(input) {
+  const args = [...CLAUDE_CODE_DISPATCH_FLAGS];
+  const model = selectedAnthropicModel(input.resolvedSelection);
+  if (model !== void 0) {
+    args.push("--model", model);
+  }
+  const effort = input.resolvedSelection?.effort;
+  if (effort !== void 0) {
+    assertClaudeCodeEffort(effort);
+    args.push("--effort", effort);
+  }
+  if (input.responseSchema !== void 0) {
+    args.push("--json-schema", JSON.stringify(input.responseSchema));
+  }
+  args.push(input.prompt);
+  return args;
+}
+async function relayClaudeCode(input) {
+  const timeoutMs2 = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const args = buildClaudeCodeArgs(input);
+  let result;
+  try {
+    result = await runConnectorSubprocess({
+      executable: CLAUDE_CODE_EXECUTABLE,
+      args,
+      timeoutMs: timeoutMs2,
+      stdoutMaxBytes: STDOUT_MAX_BYTES,
+      stderrMaxBytes: STDERR_MAX_BYTES,
+      sigtermToSigkillGraceMs: SIGTERM_TO_SIGKILL_GRACE_MS,
+      env: process.env
+    });
+  } catch (error) {
+    if (isConnectorSubprocessSpawnError(error)) {
+      const verb = error.phase === "spawn-failed" ? "spawn failed" : "spawn error";
+      throw new Error(`claude-code subprocess ${verb}: ${error.message}`);
+    }
+    throw error;
+  }
+  if (result.timedOut) {
+    const stdoutSuffix = result.stdoutCapped ? " [stdout capped]" : "";
+    const stderrSuffix = result.stderrCapped ? " [stderr capped]" : "";
+    throw new Error(`claude-code subprocess timed out after ${timeoutMs2}ms; group-kill ${result.killGroupSucceeded ? "sent" : "failed"}; final signal=${result.signal ?? "none"}; stdout[:500]=${result.stdout.slice(0, 500)}${stdoutSuffix}; stderr[:500]=${result.stderr.slice(0, 500)}${stderrSuffix}`);
+  }
+  if (result.code !== 0) {
+    throw new Error(`claude-code subprocess exited with code ${result.code}${result.signal ? ` (signal ${result.signal})` : ""}; stderr[:500]=${result.stderr.slice(0, 500)}`);
+  }
+  if (result.stdoutCapped) {
+    throw new Error(`claude-code subprocess stdout exceeded ${STDOUT_MAX_BYTES} bytes; capability-boundary check cannot be evaluated on truncated stream`);
+  }
+  try {
+    return parseClaudeCodeStdout(result.stdout, input.prompt, result.durationMs);
+  } catch (error) {
+    const stderrSuffix = result.stderrCapped ? " [stderr capped]" : "";
+    throw new Error(`claude-code subprocess: ${error.message}; stdout[:500]=${result.stdout.slice(0, 500)}; stderr[:200]=${result.stderr.slice(0, 200)}${stderrSuffix}`);
+  }
 }
 function parseClaudeCodeStdout(stdout, prompt, duration_ms) {
   const lines = stdout.split("\n").filter((line) => line.length > 0);
@@ -18394,11 +22400,10 @@ function parseClaudeCodeStdout(stdout, prompt, duration_ms) {
 }
 
 // dist/connectors/codex.js
-import { execFileSync, spawn as spawn2 } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join as joinPath } from "node:path";
-import { performance as performance2 } from "node:perf_hooks";
 var CODEX_NO_WRITE_FLAGS = Object.freeze([
   "exec",
   "--json",
@@ -18462,6 +22467,15 @@ function assertCodexEffort(effort) {
     throw new Error(`codex connector cannot honor effort '${effort}'; supported efforts: ${CODEX_SUPPORTED_EFFORTS.join(", ")}`);
   }
 }
+function selectedOpenAIModel(selection) {
+  const model = selection?.model;
+  if (model === void 0)
+    return void 0;
+  if (model.provider !== "openai") {
+    throw new Error(`codex connector cannot honor model provider '${model.provider}' for model '${model.model}'; expected provider 'openai'`);
+  }
+  return model.model;
+}
 function codexReasoningEffortConfigValue(effort) {
   return `${CODEX_REASONING_EFFORT_CONFIG_KEY}=${JSON.stringify(effort)}`;
 }
@@ -18507,7 +22521,7 @@ function assertCodexSpawnArgvBoundary(args) {
 }
 function buildCodexArgs(input, schemaPath) {
   const args = [...CODEX_NO_WRITE_FLAGS];
-  const model = selectedModelForProvider("codex", input.resolvedSelection, "openai");
+  const model = selectedOpenAIModel(input.resolvedSelection);
   if (model !== void 0) {
     args.push("-m", model);
   }
@@ -18557,104 +22571,39 @@ async function relayCodex(input) {
       schemaPath = allocated.path;
     }
     const args = buildCodexArgs(input, schemaPath);
-    const start = performance2.now();
-    return await new Promise((resolve13, reject) => {
-      let child;
-      try {
-        child = spawn2(CODEX_EXECUTABLE, args, {
-          stdio: ["ignore", "pipe", "pipe"],
-          env: process.env,
-          detached: true
-        });
-      } catch (err) {
-        reject(new Error(`codex subprocess spawn failed: ${err.message}`));
-        return;
+    let result;
+    try {
+      result = await runConnectorSubprocess({
+        executable: CODEX_EXECUTABLE,
+        args,
+        timeoutMs: timeoutMs2,
+        stdoutMaxBytes: STDOUT_MAX_BYTES2,
+        stderrMaxBytes: STDERR_MAX_BYTES2,
+        sigtermToSigkillGraceMs: SIGTERM_TO_SIGKILL_GRACE_MS2,
+        env: process.env
+      });
+    } catch (error) {
+      if (isConnectorSubprocessSpawnError(error)) {
+        const verb = error.phase === "spawn-failed" ? "spawn failed" : "spawn error";
+        throw new Error(`codex subprocess ${verb}: ${error.message}`);
       }
-      let stdout = "";
-      let stdoutBytes = 0;
-      let stderr = "";
-      let stderrBytes = 0;
-      let stdoutCapped = false;
-      let stderrCapped = false;
-      let timedOut = false;
-      let killGroupSucceeded = false;
-      const killProcessGroup = (signal) => {
-        const pid = child.pid;
-        if (typeof pid !== "number")
-          return false;
-        try {
-          process.kill(-pid, signal);
-          return true;
-        } catch {
-          try {
-            child.kill(signal);
-            return true;
-          } catch {
-            return false;
-          }
-        }
-      };
-      let killGraceTimer;
-      const timer = setTimeout(() => {
-        timedOut = true;
-        killGroupSucceeded = killProcessGroup("SIGTERM");
-        killGraceTimer = setTimeout(() => {
-          killProcessGroup("SIGKILL");
-          killGraceTimer = void 0;
-        }, SIGTERM_TO_SIGKILL_GRACE_MS2);
-      }, timeoutMs2);
-      const clearAllTimers = () => {
-        clearTimeout(timer);
-        if (killGraceTimer !== void 0) {
-          clearTimeout(killGraceTimer);
-          killGraceTimer = void 0;
-        }
-      };
-      child.stdout?.setEncoding("utf8");
-      child.stderr?.setEncoding("utf8");
-      child.stdout?.on("data", (chunk) => {
-        if (stdoutBytes + chunk.length > STDOUT_MAX_BYTES2) {
-          stdoutCapped = true;
-          return;
-        }
-        stdout += chunk;
-        stdoutBytes += chunk.length;
-      });
-      child.stderr?.on("data", (chunk) => {
-        if (stderrBytes + chunk.length > STDERR_MAX_BYTES2) {
-          stderrCapped = true;
-          return;
-        }
-        stderr += chunk;
-        stderrBytes += chunk.length;
-      });
-      child.on("error", (err) => {
-        clearAllTimers();
-        reject(new Error(`codex subprocess spawn error: ${err.message}`));
-      });
-      child.on("close", (code, signal) => {
-        clearAllTimers();
-        const duration_ms = performance2.now() - start;
-        if (timedOut) {
-          reject(new Error(`codex subprocess timed out after ${timeoutMs2}ms; group-kill ${killGroupSucceeded ? "sent" : "failed"}; final signal=${signal ?? "none"}; stderr[:500]=${stderr.slice(0, 500)}`));
-          return;
-        }
-        if (code !== 0) {
-          reject(new Error(`codex subprocess exited with code ${code}${signal ? ` (signal ${signal})` : ""}; stderr[:500]=${stderr.slice(0, 500)}`));
-          return;
-        }
-        if (stdoutCapped) {
-          reject(new Error(`codex subprocess stdout exceeded ${STDOUT_MAX_BYTES2} bytes; capability-boundary check cannot be evaluated on truncated stream`));
-          return;
-        }
-        try {
-          resolve13(parseCodexStdout(stdout, input.prompt, duration_ms, cli_version));
-        } catch (err) {
-          const stderrSuffix = stderrCapped ? " [stderr capped]" : "";
-          reject(new Error(`codex subprocess: ${err.message}; stdout[:500]=${stdout.slice(0, 500)}; stderr[:200]=${stderr.slice(0, 200)}${stderrSuffix}`));
-        }
-      });
-    });
+      throw error;
+    }
+    if (result.timedOut) {
+      throw new Error(`codex subprocess timed out after ${timeoutMs2}ms; group-kill ${result.killGroupSucceeded ? "sent" : "failed"}; final signal=${result.signal ?? "none"}; stderr[:500]=${result.stderr.slice(0, 500)}`);
+    }
+    if (result.code !== 0) {
+      throw new Error(`codex subprocess exited with code ${result.code}${result.signal ? ` (signal ${result.signal})` : ""}; stderr[:500]=${result.stderr.slice(0, 500)}`);
+    }
+    if (result.stdoutCapped) {
+      throw new Error(`codex subprocess stdout exceeded ${STDOUT_MAX_BYTES2} bytes; capability-boundary check cannot be evaluated on truncated stream`);
+    }
+    try {
+      return parseCodexStdout(result.stdout, input.prompt, result.durationMs, cli_version);
+    } catch (error) {
+      const stderrSuffix = result.stderrCapped ? " [stderr capped]" : "";
+      throw new Error(`codex subprocess: ${error.message}; stdout[:500]=${result.stdout.slice(0, 500)}; stderr[:200]=${result.stderr.slice(0, 200)}${stderrSuffix}`);
+    }
   } finally {
     await cleanupSchemaTempDir(tempDir);
   }
@@ -18764,11 +22713,9 @@ function parseCodexStdout(stdout, prompt, duration_ms, cli_version) {
 }
 
 // dist/connectors/custom.js
-import { spawn as spawn3 } from "node:child_process";
 import { mkdtemp as mkdtemp2, readFile as readFile2, rm as rm2, stat, writeFile as writeFile2 } from "node:fs/promises";
 import { tmpdir as tmpdir2 } from "node:os";
-import { join as join3 } from "node:path";
-import { performance as performance3 } from "node:perf_hooks";
+import { join as join4 } from "node:path";
 var DEFAULT_TIMEOUT_MS3 = 12e4;
 var SIGTERM_TO_SIGKILL_GRACE_MS3 = 2e3;
 var OUTPUT_MAX_BYTES = 16 * 1024 * 1024;
@@ -18797,108 +22744,51 @@ async function relayCustom(input) {
   if (executable === void 0) {
     throw new Error(`custom connector '${descriptor.name}' command is empty`);
   }
-  const tempDir = await mkdtemp2(join3(tmpdir2(), "circuit-custom-connector-"));
-  const promptFile = join3(tempDir, "prompt.txt");
-  const outputFile = join3(tempDir, "output.txt");
+  const tempDir = await mkdtemp2(join4(tmpdir2(), "circuit-custom-connector-"));
+  const promptFile = join4(tempDir, "prompt.txt");
+  const outputFile = join4(tempDir, "output.txt");
   await writeFile2(promptFile, input.prompt, "utf8");
   const args = [...baseArgs, promptFile, outputFile];
   const timeoutMs2 = input.timeoutMs ?? DEFAULT_TIMEOUT_MS3;
-  const start = performance3.now();
   try {
-    return await new Promise((resolve13, reject) => {
-      let child;
-      try {
-        child = spawn3(executable, args, {
-          stdio: ["ignore", "pipe", "pipe"],
-          env: process.env,
-          detached: true
-        });
-      } catch (err) {
-        reject(new Error(`custom connector '${descriptor.name}' spawn failed: ${err.message}`));
-        return;
+    let result;
+    try {
+      result = await runConnectorSubprocess({
+        executable,
+        args,
+        timeoutMs: timeoutMs2,
+        stdoutMaxBytes: STDOUT_MAX_BYTES3,
+        stderrMaxBytes: STDERR_MAX_BYTES3,
+        sigtermToSigkillGraceMs: SIGTERM_TO_SIGKILL_GRACE_MS3,
+        env: process.env
+      });
+    } catch (error) {
+      if (isConnectorSubprocessSpawnError(error)) {
+        const verb = error.phase === "spawn-failed" ? "spawn failed" : "spawn error";
+        throw new Error(`custom connector '${descriptor.name}' ${verb}: ${error.message}`);
       }
-      let stdout = "";
-      let stdoutBytes = 0;
-      let stderr = "";
-      let stderrBytes = 0;
-      let stdoutCapped = false;
-      let stderrCapped = false;
-      let timedOut = false;
-      let killGroupSucceeded = false;
-      const killProcessGroup = (signal) => {
-        const pid = child.pid;
-        if (typeof pid !== "number")
-          return false;
-        try {
-          process.kill(-pid, signal);
-          return true;
-        } catch {
-          try {
-            child.kill(signal);
-            return true;
-          } catch {
-            return false;
-          }
-        }
+      throw error;
+    }
+    if (result.timedOut) {
+      throw new Error(`custom connector '${descriptor.name}' timed out after ${timeoutMs2}ms; group-kill ${result.killGroupSucceeded ? "sent" : "failed"}; final signal=${result.signal ?? "none"}; stderr[:500]=${result.stderr.slice(0, 500)}`);
+    }
+    if (result.code !== 0) {
+      throw new Error(`custom connector '${descriptor.name}' exited with code ${result.code}${result.signal ? ` (signal ${result.signal})` : ""}; stderr[:500]=${result.stderr.slice(0, 500)}`);
+    }
+    try {
+      const extracted = await extractConfiguredOutput(descriptor, outputFile);
+      return {
+        request_payload: input.prompt,
+        receipt_id: extracted.receiptId,
+        result_body: extracted.resultBody,
+        duration_ms: result.durationMs,
+        cli_version: `custom:${descriptor.name}`
       };
-      const timer = setTimeout(() => {
-        timedOut = true;
-        killGroupSucceeded = killProcessGroup("SIGTERM");
-        setTimeout(() => {
-          killProcessGroup("SIGKILL");
-        }, SIGTERM_TO_SIGKILL_GRACE_MS3);
-      }, timeoutMs2);
-      child.stdout?.setEncoding("utf8");
-      child.stderr?.setEncoding("utf8");
-      child.stdout?.on("data", (chunk) => {
-        if (stdoutBytes + chunk.length > STDOUT_MAX_BYTES3) {
-          stdoutCapped = true;
-          return;
-        }
-        stdout += chunk;
-        stdoutBytes += chunk.length;
-      });
-      child.stderr?.on("data", (chunk) => {
-        if (stderrBytes + chunk.length > STDERR_MAX_BYTES3) {
-          stderrCapped = true;
-          return;
-        }
-        stderr += chunk;
-        stderrBytes += chunk.length;
-      });
-      child.on("error", (err) => {
-        clearTimeout(timer);
-        reject(new Error(`custom connector '${descriptor.name}' spawn error: ${err.message}`));
-      });
-      child.on("close", (code, signal) => {
-        void (async () => {
-          clearTimeout(timer);
-          const duration_ms = performance3.now() - start;
-          if (timedOut) {
-            reject(new Error(`custom connector '${descriptor.name}' timed out after ${timeoutMs2}ms; group-kill ${killGroupSucceeded ? "sent" : "failed"}; final signal=${signal ?? "none"}; stderr[:500]=${stderr.slice(0, 500)}`));
-            return;
-          }
-          if (code !== 0) {
-            reject(new Error(`custom connector '${descriptor.name}' exited with code ${code}${signal ? ` (signal ${signal})` : ""}; stderr[:500]=${stderr.slice(0, 500)}`));
-            return;
-          }
-          try {
-            const extracted = await extractConfiguredOutput(descriptor, outputFile);
-            resolve13({
-              request_payload: input.prompt,
-              receipt_id: extracted.receiptId,
-              result_body: extracted.resultBody,
-              duration_ms,
-              cli_version: `custom:${descriptor.name}`
-            });
-          } catch (err) {
-            const stdoutSuffix = stdoutCapped ? " [stdout capped]" : "";
-            const stderrSuffix = stderrCapped ? " [stderr capped]" : "";
-            reject(new Error(`custom connector '${descriptor.name}': ${err.message}; stdout[:500]=${stdout.slice(0, 500)}${stdoutSuffix}; stderr[:200]=${stderr.slice(0, 200)}${stderrSuffix}`));
-          }
-        })();
-      });
-    });
+    } catch (error) {
+      const stdoutSuffix = result.stdoutCapped ? " [stdout capped]" : "";
+      const stderrSuffix = result.stderrCapped ? " [stderr capped]" : "";
+      throw new Error(`custom connector '${descriptor.name}': ${error.message}; stdout[:500]=${result.stdout.slice(0, 500)}${stdoutSuffix}; stderr[:200]=${result.stderr.slice(0, 200)}${stderrSuffix}`);
+    }
   } finally {
     await rm2(tempDir, { recursive: true, force: true });
   }
@@ -19095,7 +22985,7 @@ function deriveResolvedSelection(inv, flow, step, depth) {
 }
 
 // dist/shared/relay-support.js
-import { existsSync as existsSync5, readFileSync as readFileSync16 } from "node:fs";
+import { existsSync as existsSync6, readFileSync as readFileSync17 } from "node:fs";
 
 // dist/flows/registries/shape-hints/registry.js
 var SCHEMA_HINTS = buildSchemaHintMap(flowPackages);
@@ -19172,10 +23062,10 @@ function selectedSkillsSection(skills) {
 function composeRelayPrompt(step, runFolder, loadedSkills = []) {
   const readsBody = step.reads.length === 0 ? "(no reads)" : step.reads.map((path) => {
     const abs = resolveRunRelative(runFolder, path);
-    if (!existsSync5(abs))
+    if (!existsSync6(abs))
       return `[reads unavailable: ${path}]`;
     return `--- ${path} ---
-${readFileSync16(abs, "utf8")}`;
+${readFileSync17(abs, "utf8")}`;
   }).join("\n\n");
   const skillsSection = selectedSkillsSection(loadedSkills);
   return [
@@ -19195,9 +23085,9 @@ ${readFileSync16(abs, "utf8")}`;
 // dist/shared/user-skill-registry.js
 var import_yaml = __toESM(require_dist(), 1);
 import { createHash as createHash3 } from "node:crypto";
-import { existsSync as existsSync6, readFileSync as readFileSync17, readdirSync } from "node:fs";
+import { existsSync as existsSync7, readFileSync as readFileSync18, readdirSync } from "node:fs";
 import { homedir } from "node:os";
-import { join as join4, resolve as resolve5 } from "node:path";
+import { join as join5, resolve as resolve6 } from "node:path";
 var FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)([\s\S]*)$/;
 var UserSkillFrontmatter = UserSkillEntry.pick({
   name: true,
@@ -19205,7 +23095,7 @@ var UserSkillFrontmatter = UserSkillEntry.pick({
   trigger: true
 }).passthrough();
 function defaultUserSkillRoots(homeDir = homedir()) {
-  return [join4(homeDir, ".agents", "skills"), join4(homeDir, ".claude", "skills")];
+  return [join5(homeDir, ".agents", "skills"), join5(homeDir, ".claude", "skills")];
 }
 function sha256Hex2(text) {
   return createHash3("sha256").update(text, "utf8").digest("hex");
@@ -19239,8 +23129,8 @@ function parseSkillMarkdown(text, skillPath) {
 function discoverCandidates(roots) {
   const candidates = /* @__PURE__ */ new Map();
   for (const root of roots) {
-    const rootAbs = resolve5(root);
-    if (!existsSync6(rootAbs))
+    const rootAbs = resolve6(root);
+    if (!existsSync7(rootAbs))
       continue;
     for (const entry of readdirSync(rootAbs, { withFileTypes: true })) {
       if (!entry.isDirectory())
@@ -19251,8 +23141,8 @@ function discoverCandidates(roots) {
       const key = id.data;
       if (candidates.has(key))
         continue;
-      const skillPath = join4(rootAbs, entry.name, "SKILL.md");
-      if (!existsSync6(skillPath))
+      const skillPath = join5(rootAbs, entry.name, "SKILL.md");
+      if (!existsSync7(skillPath))
         continue;
       candidates.set(key, {
         id: id.data,
@@ -19266,7 +23156,7 @@ function discoverCandidates(roots) {
 function loadCandidate(candidate) {
   let text;
   try {
-    text = readFileSync17(candidate.path, "utf8");
+    text = readFileSync18(candidate.path, "utf8");
   } catch (err) {
     throw new Error(`selected skill '${candidate.id}' could not be read at ${candidate.path}: ${err.message}`);
   }
@@ -19284,7 +23174,7 @@ function loadCandidate(candidate) {
 function createUserSkillRegistry(options = {}) {
   const roots = options.roots ?? defaultUserSkillRoots(options.homeDir);
   const candidates = discoverCandidates(roots);
-  const searchedRoots = roots.map((root) => resolve5(root));
+  const searchedRoots = roots.map((root) => resolve6(root));
   return {
     roots: searchedRoots,
     list() {
@@ -19297,7 +23187,7 @@ function createUserSkillRegistry(options = {}) {
         throw new Error([
           `Circuit could not find skill '${key}'.`,
           "Searched:",
-          ...searchedRoots.map((root) => `- ${join4(root, key, "SKILL.md")}`)
+          ...searchedRoots.map((root) => `- ${join5(root, key, "SKILL.md")}`)
         ].join("\n"));
       }
       return loadCandidate(candidate);
@@ -20885,7 +24775,7 @@ function suppliedConnectorFromRelayer(context) {
   };
 }
 function defaultValidateAcceptedProductionRelay(input) {
-  const { compiledFlow, context, step, relayResult, checkEvaluation } = input;
+  const { flow, context, step, relayResult, checkEvaluation } = input;
   if (step.report?.schema === void 0)
     return { evaluation: checkEvaluation };
   const parseResult = parseReport(step.report.schema, relayResult.result_body);
@@ -20898,7 +24788,7 @@ function defaultValidateAcceptedProductionRelay(input) {
       }
     };
   }
-  const crossResult = runCrossReportValidator(step.report.schema, compiledFlow, context.runDir, relayResult.result_body);
+  const crossResult = runCrossReportValidator(step.report.schema, flow, context.runDir, relayResult.result_body);
   if (crossResult.kind === "fail") {
     return {
       evaluation: {
@@ -20912,7 +24802,7 @@ function defaultValidateAcceptedProductionRelay(input) {
 }
 async function executeProductionRelayAttempt(input) {
   const { step, compiledStep, context } = input;
-  const compiledFlow = requireCompiledFlow(context, step);
+  const flow = context.packageIndex.flow;
   const suppliedConnector = suppliedConnectorFromRelayer(context);
   const relayExecution = resolveRelayExecution({
     flowId: context.flow.id,
@@ -20925,10 +24815,10 @@ async function executeProductionRelayAttempt(input) {
   const resolvedSelection = deriveResolvedSelection({
     ...context.relayer === void 0 ? {} : { relayer: context.relayer },
     ...context.selectionConfigLayers === void 0 ? {} : { selectionConfigLayers: context.selectionConfigLayers }
-  }, compiledFlow, compiledStep, Depth.parse(context.depth ?? "standard"));
+  }, flow, compiledStep, Depth.parse(context.depth ?? "standard"));
   assertConnectorSelectionCompatible(relayExecution.connectorName, resolvedSelection);
   const loadedSkills = resolveLoadedRelaySkills({
-    flowId: compiledFlow.id,
+    flowId: flow.id,
     stepId: step.id,
     skillSlots: compiledStep.skill_slots ?? [],
     resolvedSelection,
@@ -21034,7 +24924,7 @@ async function executeProductionRelayAttempt(input) {
   let parsedBody;
   if (checkEvaluation.kind === "pass") {
     const validation = (input.validateAcceptedResult ?? defaultValidateAcceptedProductionRelay)({
-      compiledFlow,
+      flow,
       context,
       step,
       compiledStep,
@@ -21104,7 +24994,7 @@ async function executeProductionRelayAttempt(input) {
   };
 }
 async function executeRelay(step, context, connector) {
-  if (connector === void 0 && context.compiledFlow !== void 0) {
+  if (connector === void 0) {
     return executeProductionRelay(step, context);
   }
   const suppliedConnector = connector ?? createStubRelayConnector();
@@ -21133,7 +25023,7 @@ async function executeRelay(step, context, connector) {
   return { route: "pass", details: { role: step.role } };
 }
 async function executeProductionRelay(step, context) {
-  const compiledStep = requireCompiledStep(context, step, "relay");
+  const compiledStep = requireRuntimeStep(context, step, "relay");
   const relayAttempt = await executeProductionRelayAttempt({ step, context, compiledStep });
   if (relayAttempt.kind === "connector_failed") {
     const recoveryRoute2 = recoveryRouteForExecutableStep(step);
@@ -21264,7 +25154,7 @@ function validateAcceptedRelayFanoutBranch(branch, input) {
       }
     };
   }
-  const crossResult = runCrossReportValidator(branch.report_schema, input.compiledFlow, input.context.runDir, input.relayResult.result_body);
+  const crossResult = runCrossReportValidator(branch.report_schema, input.flow, input.context.runDir, input.relayResult.result_body);
   if (crossResult.kind === "fail") {
     return {
       evaluation: {
@@ -21293,7 +25183,7 @@ async function executeRelayFanoutBranch(step, context, branch, relayConnector, b
     worktree_path: branchDirAbs
   });
   try {
-    if (relayConnector === void 0 && context.compiledFlow !== void 0) {
+    if (relayConnector === void 0) {
       const relayStep = syntheticRelayStep(step, branch, branchDirRel);
       const relayAttempt = await executeProductionRelayAttempt({
         step: relayStep,
@@ -21485,7 +25375,7 @@ async function executeSubRunFanoutBranch(step, context, branch, worktreeRunner, 
     if (childFlow.id !== branch.flowRef) {
       throw new Error(`resolver returned flow id '${childFlow.id}' but branch flow_ref names '${branch.flowRef}'`);
     }
-    const childRunDir = join5(dirname2(context.runDir), childRunId);
+    const childRunDir = join6(dirname2(context.runDir), childRunId);
     const child = await context.childRunner({
       flowBytes: resolved.flowBytes,
       runDir: childRunDir,
@@ -21674,10 +25564,10 @@ async function expandFanoutBranches(step, files) {
 }
 
 // dist/runtime/fanout/worktree.js
-import { spawnSync as spawnSync2 } from "node:child_process";
+import { spawnSync as spawnSync3 } from "node:child_process";
 var gitWorktreeRunner = {
   add({ worktreePath, baseRef, branchName }) {
-    const result = spawnSync2("git", ["worktree", "add", "-b", branchName, worktreePath, baseRef], {
+    const result = spawnSync3("git", ["worktree", "add", "-b", branchName, worktreePath, baseRef], {
       encoding: "utf8"
     });
     if (result.status !== 0) {
@@ -21685,7 +25575,7 @@ var gitWorktreeRunner = {
     }
   },
   remove(worktreePath) {
-    const result = spawnSync2("git", ["worktree", "remove", "--force", worktreePath], {
+    const result = spawnSync3("git", ["worktree", "remove", "--force", worktreePath], {
       encoding: "utf8"
     });
     if (result.status !== 0) {
@@ -21693,7 +25583,7 @@ var gitWorktreeRunner = {
     }
   },
   changedFiles(worktreePath, baseRef) {
-    const result = spawnSync2("git", ["diff", "--name-only", `${baseRef}..HEAD`], {
+    const result = spawnSync3("git", ["diff", "--name-only", `${baseRef}..HEAD`], {
       cwd: worktreePath,
       encoding: "utf8"
     });
@@ -21894,7 +25784,7 @@ async function executeFanout(step, context, relayConnector) {
 // dist/runtime/executors/sub-run.js
 import { randomUUID as randomUUID2 } from "node:crypto";
 import { mkdir as mkdir4, readFile as readFile4, writeFile as writeFile5 } from "node:fs/promises";
-import { dirname as dirname3, join as join6 } from "node:path";
+import { dirname as dirname3, join as join7 } from "node:path";
 function checkPassVerdicts(step) {
   const pass = step.check.pass;
   return Array.isArray(pass) ? pass.filter((entry) => typeof entry === "string") : [];
@@ -21988,7 +25878,7 @@ async function executeSubRun(step, context) {
     return await recordSubRunCheckFailure(step, context, `sub-run step '${step.id}': resolver returned flow id '${childFlow.id}' but flow_ref names '${step.flowRef}'`);
   }
   const childRunId = randomUUID2();
-  const childRunDir = join6(dirname3(context.runDir), childRunId);
+  const childRunDir = join7(dirname3(context.runDir), childRunId);
   await mkdir4(dirname3(childRunDir), { recursive: true });
   await context.trace.append({
     run_id: context.runId,
@@ -22074,11 +25964,6 @@ async function executeSubRun(step, context) {
   return await recordSubRunCheckFailure(step, context, verdict.failureReason ?? `sub-run step '${step.id}': child closed with outcome '${childResultBody.outcome}'`);
 }
 
-// dist/runtime/executors/verification.js
-import { spawnSync as spawnSync3 } from "node:child_process";
-import { existsSync as existsSync7, lstatSync as lstatSync4, readFileSync as readFileSync18, realpathSync as realpathSync3 } from "node:fs";
-import { isAbsolute as isAbsolute4, join as join7, relative as relative4, resolve as resolve6 } from "node:path";
-
 // dist/flows/registries/verification-writers/registry.js
 var REGISTRY6 = buildVerificationRegistry(flowPackages);
 function findVerificationWriter(resultSchemaName) {
@@ -22086,145 +25971,9 @@ function findVerificationWriter(resultSchemaName) {
 }
 
 // dist/runtime/executors/verification.js
-var VERIFICATION_ENV_INHERIT_ALLOWLIST = [
-  "PATH",
-  "SystemRoot",
-  "TEMP",
-  "TMP",
-  "TMPDIR",
-  "WINDIR"
-];
-function isInsideOrSame2(root, target) {
-  const fromRoot = relative4(root, target);
-  return fromRoot === "" || !fromRoot.startsWith("..") && !isAbsolute4(fromRoot);
-}
-function resolveProjectRelativeCwd(projectRoot, cwd) {
-  const rootAbs = resolve6(projectRoot);
-  const targetAbs = resolve6(rootAbs, cwd);
-  if (!isInsideOrSame2(rootAbs, targetAbs)) {
-    throw new ProofPlanBlockedError(`verification cwd rejected: ${JSON.stringify(cwd)} escapes project root`);
-  }
-  if (!existsSync7(rootAbs)) {
-    throw new ProofPlanBlockedError(`verification project root rejected: ${rootAbs} does not exist`);
-  }
-  const rootReal = realpathSync3.native(rootAbs);
-  let cursor = rootAbs;
-  for (const segment of cwd.split("/")) {
-    if (segment === ".")
-      continue;
-    cursor = resolve6(cursor, segment);
-    if (!existsSync7(cursor)) {
-      throw new ProofPlanBlockedError(`verification cwd rejected: ${JSON.stringify(cwd)} does not exist`);
-    }
-    const stat2 = lstatSync4(cursor);
-    if (stat2.isSymbolicLink()) {
-      throw new ProofPlanBlockedError(`verification cwd rejected: ${JSON.stringify(cwd)} crosses symlink ${JSON.stringify(cursor)}`);
-    }
-    const cursorReal = realpathSync3.native(cursor);
-    if (!isInsideOrSame2(rootReal, cursorReal)) {
-      throw new ProofPlanBlockedError(`verification cwd rejected: ${JSON.stringify(cwd)} escapes real project root through ${JSON.stringify(cursor)}`);
-    }
-  }
-  const targetReal = realpathSync3.native(targetAbs);
-  if (!isInsideOrSame2(rootReal, targetReal)) {
-    throw new ProofPlanBlockedError(`verification cwd rejected: ${JSON.stringify(cwd)} escapes real project root`);
-  }
-  return targetReal;
-}
-function verificationEnvironment(commandEnv) {
-  const env = {};
-  for (const key of VERIFICATION_ENV_INHERIT_ALLOWLIST) {
-    const value = process.env[key];
-    if (value !== void 0)
-      env[key] = value;
-  }
-  return { ...env, ...commandEnv };
-}
-function summarizeOutput(value, maxBytes) {
-  const bytes = Buffer.from(value);
-  if (bytes.length <= maxBytes)
-    return value;
-  return bytes.subarray(0, maxBytes).toString("utf8");
-}
 function verificationFailureReason(stepId, error) {
   const message = error instanceof Error ? error.message : String(error);
   return `verification step '${stepId}': report writer failed (${message})`;
-}
-function commandBinaryName2(argv0) {
-  const normalized = argv0.replaceAll("\\", "/");
-  return normalized.slice(normalized.lastIndexOf("/") + 1).toLowerCase();
-}
-function packageScriptInvocation(command) {
-  const argv0 = command.argv[0];
-  if (argv0 === void 0)
-    return void 0;
-  const binary = commandBinaryName2(argv0);
-  if (binary !== "npm" && binary !== "pnpm" && binary !== "yarn")
-    return void 0;
-  if (command.argv[1] !== "run")
-    return void 0;
-  const script = command.argv[2];
-  if (script === void 0) {
-    throw new ProofPlanBlockedError(`Proof plan blocked: verification command '${command.id}' invokes ${binary} run without a script name.`);
-  }
-  return script;
-}
-function preflightPackageScript(command, cwdAbs) {
-  const script = packageScriptInvocation(command);
-  if (script === void 0)
-    return;
-  const packageJsonPath = join7(cwdAbs, "package.json");
-  if (!existsSync7(packageJsonPath)) {
-    throw new ProofPlanBlockedError(`Proof plan blocked: verification command '${command.id}' requires package.json at cwd ${JSON.stringify(command.cwd)}.`);
-  }
-  let parsed;
-  try {
-    parsed = JSON.parse(readFileSync18(packageJsonPath, "utf8"));
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new ProofPlanBlockedError(`Proof plan blocked: verification command '${command.id}' could not parse package.json at cwd ${JSON.stringify(command.cwd)}: ${message}.`);
-  }
-  const scripts = parsed && typeof parsed === "object" ? parsed.scripts : void 0;
-  if (scripts === null || typeof scripts !== "object" || Array.isArray(scripts)) {
-    throw new ProofPlanBlockedError(`Proof plan blocked: verification command '${command.id}' requires package.json scripts at cwd ${JSON.stringify(command.cwd)}.`);
-  }
-  if (typeof scripts[script] !== "string") {
-    throw new ProofPlanBlockedError(`Proof plan blocked: verification command '${command.id}' references missing package script "${script}" at cwd ${JSON.stringify(command.cwd)}.`);
-  }
-}
-function isLaunchError(error) {
-  const code = error.code;
-  return code === "ENOENT" || code === "EACCES" || code === "ENOTDIR";
-}
-function runCommand(command, projectRoot) {
-  const started = Date.now();
-  const cwd = resolveProjectRelativeCwd(projectRoot, command.cwd);
-  preflightPackageScript(command, cwd);
-  const result = spawnSync3(command.argv[0], command.argv.slice(1), {
-    cwd,
-    env: verificationEnvironment(command.env),
-    encoding: "utf8",
-    maxBuffer: command.max_output_bytes,
-    shell: false,
-    timeout: command.timeout_ms
-  });
-  if (result.error !== void 0 && isLaunchError(result.error)) {
-    throw new ProofPlanBlockedError(`Proof plan blocked: verification command '${command.id}' could not launch ${JSON.stringify(command.argv[0])}: ${result.error.message}`);
-  }
-  const exitCode = typeof result.status === "number" && result.error === void 0 ? result.status : 1;
-  const stderrParts = [
-    typeof result.stderr === "string" ? result.stderr : "",
-    result.error === void 0 ? "" : result.error.message,
-    result.signal === null ? "" : `signal: ${result.signal}`
-  ].filter((part) => part.length > 0);
-  return {
-    command,
-    exit_code: exitCode,
-    status: exitCode === 0 ? "passed" : "failed",
-    duration_ms: Math.max(0, Date.now() - started),
-    stdout_summary: summarizeOutput(typeof result.stdout === "string" ? result.stdout : "", command.max_output_bytes),
-    stderr_summary: summarizeOutput(stderrParts.join("\n"), command.max_output_bytes)
-  };
 }
 async function executeVerification(step, context) {
   const attempt = context.activeStepAttempt ?? 1;
@@ -22242,19 +25991,18 @@ async function executeVerification(step, context) {
       throw new ProofPlanBlockedError(`verification step '${step.id}' requires projectRoot for project-relative cwd resolution`);
     }
     const projectRoot = context.projectRoot;
-    const compiledFlow = requireCompiledFlow(context, step);
-    const compiledStep = requireCompiledStep(context, step, "verification");
+    const indexedStep2 = requireRuntimeStep(context, step, "verification");
     const builder = findVerificationWriter(reportSchema);
     if (builder === void 0) {
       throw new Error(`verification step '${step.id}' has unsupported report schema`);
     }
     const builderContext = {
       runFolder: context.runDir,
-      flow: compiledFlow,
-      step: compiledStep
+      flow: context.packageIndex.flow,
+      step: indexedStep2
     };
     const commands = builder.loadCommands(builderContext);
-    const observations = commands.map((command) => runCommand(command, projectRoot));
+    const observations = commands.map((command) => runProofPlanCommand(command, projectRoot));
     body = builder.buildResult(observations, builderContext);
     await context.files.writeJson(report, body);
   } catch (error) {
@@ -22346,6 +26094,95 @@ function createDefaultExecutors(options = {}) {
         return unsupportedStep(step);
       return executeFanout(step, context, relayConnector);
     }
+  };
+}
+
+// dist/runtime/manifest/runtime-package-index.js
+function writeRef(ref) {
+  if (ref === void 0)
+    return void 0;
+  if (ref.schema !== void 0)
+    return { path: ref.path, schema: ref.schema };
+  return ref.path;
+}
+function indexedSelection(selection) {
+  if (selection === void 0)
+    return void 0;
+  return SelectionOverride.parse({
+    ...selection.model === void 0 ? {} : { model: selection.model },
+    ...selection.effort === void 0 ? {} : { effort: selection.effort },
+    skills: selection.skills ?? { mode: "inherit" },
+    ...selection.depth === void 0 ? {} : { depth: selection.depth },
+    invocation_options: selection.invocation_options ?? {}
+  });
+}
+function baseStep2(step) {
+  const selection = indexedSelection(step.selection);
+  return {
+    id: step.id,
+    title: step.title ?? step.id,
+    protocol: step.protocol ?? step.id,
+    reads: step.reads?.map((ref) => ref.path) ?? [],
+    routes: Object.fromEntries(Object.entries(step.routes).map(([route, target]) => [
+      route,
+      target.kind === "terminal" ? target.target : target.stepId
+    ])),
+    writes: Object.fromEntries(Object.entries(step.writes ?? {}).map(([slot, ref]) => [slot, writeRef(ref)])),
+    check: step.check,
+    ...selection === void 0 ? {} : { selection },
+    ...step.skillSlots === void 0 ? {} : { skill_slots: step.skillSlots },
+    ...step.budgets === void 0 ? {} : { budgets: step.budgets }
+  };
+}
+function indexedStep(step) {
+  const base = baseStep2(step);
+  if (step.kind === "checkpoint") {
+    return {
+      ...base,
+      kind: step.kind,
+      policy: step.policy
+    };
+  }
+  if (step.kind === "relay") {
+    return { ...base, kind: step.kind, role: step.role };
+  }
+  return { ...base, kind: step.kind };
+}
+function buildRuntimePackageIndex(flow) {
+  const steps = flow.steps.map((step) => indexedStep(step));
+  const defaultSelection = indexedSelection(flow.defaultSelection);
+  const stepsById = /* @__PURE__ */ new Map();
+  const reportPathBySchema = /* @__PURE__ */ new Map();
+  for (const step of steps) {
+    if (stepsById.has(step.id)) {
+      throw new Error(`runtime package index duplicate step '${step.id}'`);
+    }
+    stepsById.set(step.id, step);
+    const report = step.writes.report;
+    if (typeof report !== "object" || report === null)
+      continue;
+    if (!reportPathBySchema.has(report.schema)) {
+      reportPathBySchema.set(report.schema, report.path);
+    }
+  }
+  return {
+    flow: {
+      id: flow.id,
+      version: flow.version,
+      ...flow.purpose === void 0 ? {} : { purpose: flow.purpose },
+      ...defaultSelection === void 0 ? {} : { default_selection: defaultSelection },
+      stages: flow.stages.map((stage) => {
+        const selection = indexedSelection(stage.selection);
+        return {
+          id: stage.id,
+          steps: stage.stepIds,
+          ...selection === void 0 ? {} : { selection }
+        };
+      }),
+      steps
+    },
+    stepsById,
+    reportPathBySchema
   };
 }
 
@@ -22627,9 +26464,6 @@ var WRITE_CAPABLE_WORKER_DISCLOSURE = "A worker can edit this checkout.";
 function flowMayInvokeWriteCapableWorker(flowId) {
   return WRITE_CAPABLE_FLOW_IDS.has(flowId);
 }
-function compiledFlowMayInvokeWriteCapableWorker(flow) {
-  return flowMayInvokeWriteCapableWorker(flow.id) || flow.steps.some((step) => step.kind === "relay" && step.role === "implementer");
-}
 
 // dist/runtime/projections/tournament-checkpoint-context.js
 import { readFileSync as readFileSync19 } from "node:fs";
@@ -22722,59 +26556,10 @@ function relayRoleFromTrace(entry) {
 function stepTitle(input) {
   if (input.stepId === void 0)
     return "<unknown step>";
-  return input.compiledFlow?.steps.find((step) => step.id === input.stepId)?.title ?? input.flow.steps.find((step) => step.id === input.stepId)?.title ?? input.stepId;
+  return input.flow.steps.find((step) => step.id === input.stepId)?.title ?? input.stepId;
 }
 function flowLabel(flowId) {
   return flowId.split("-").filter((part) => part.length > 0).map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`).join(" ");
-}
-function stepLead(title) {
-  return title.split("\u2014")[0]?.trim().toLowerCase() ?? title.toLowerCase();
-}
-function operatorStepTitle(flowId, title) {
-  const lead = stepLead(title);
-  if (lead.startsWith("frame") || lead.startsWith("intake"))
-    return "Frame the work";
-  if (lead.startsWith("analyze") || lead.startsWith("inventory"))
-    return "Check the context";
-  if (lead.startsWith("synthesize") || lead.startsWith("compose")) {
-    return flowId === "explore" ? "Draft the recommendation" : "Draft the result";
-  }
-  if (lead.startsWith("review") || lead.startsWith("independent") || lead.startsWith("release")) {
-    return flowId === "explore" ? "Check the recommendation" : "Check the result";
-  }
-  if (lead.startsWith("close"))
-    return "Wrap up";
-  if (lead.startsWith("verify"))
-    return "Check the work";
-  if (lead.startsWith("plan") || lead.startsWith("coexistence"))
-    return "Plan the work";
-  if (lead.startsWith("act") || lead.startsWith("batch") || lead.startsWith("execute")) {
-    return "Make the change";
-  }
-  return title.replace(/\s+—\s+.+$/, "").replace(/\s+\(.+\)$/, "");
-}
-function operatorStepAction(flowId, title) {
-  const lead = stepLead(title);
-  if (lead.startsWith("frame") || lead.startsWith("intake"))
-    return "Framing the work";
-  if (lead.startsWith("analyze") || lead.startsWith("inventory"))
-    return "Checking the context";
-  if (lead.startsWith("synthesize") || lead.startsWith("compose")) {
-    return flowId === "explore" ? "Drafting the recommendation" : "Drafting the result";
-  }
-  if (lead.startsWith("review") || lead.startsWith("independent") || lead.startsWith("release")) {
-    return flowId === "explore" ? "Checking the recommendation" : "Checking the result";
-  }
-  if (lead.startsWith("close"))
-    return "Wrapping up";
-  if (lead.startsWith("verify"))
-    return "Checking the work";
-  if (lead.startsWith("plan") || lead.startsWith("coexistence"))
-    return "Planning the work";
-  if (lead.startsWith("act") || lead.startsWith("batch") || lead.startsWith("execute")) {
-    return "Making the change";
-  }
-  return `Working on ${operatorStepTitle(flowId, title).toLowerCase()}`;
 }
 function relayStartedStatusText(flowId, role) {
   if (role === "reviewer") {
@@ -22787,10 +26572,6 @@ function relayCompletedStatusText(flowId, role) {
     return flowId === "explore" ? "Finished checking the recommendation." : "Finished checking the result.";
   }
   return flowId === "explore" ? "Finished drafting the recommendation." : "Finished the specialist pass.";
-}
-function relayRoleFromStepTitle(title) {
-  const lead = stepLead(title);
-  return lead.startsWith("review") || lead.startsWith("independent") || lead.startsWith("release") ? "reviewer" : "implementer";
 }
 function circuitDisplayText(statusText) {
   return `Circuit: ${statusText}`;
@@ -22809,10 +26590,10 @@ function replaceStatus(blockId, slotId, statusText) {
 function suppressStatus(blockId) {
   return progressPresentation({ blockId, lineMode: "suppress" });
 }
-function progressTasks(flow, statuses) {
+function progressTasks(flow, stepDisplayById, statuses) {
   return flow.steps.map((step) => ({
     id: step.id,
-    title: operatorStepTitle(flow.id, step.title ?? step.id),
+    title: stepDisplayById.get(step.id)?.taskTitle ?? step.title ?? step.id,
     status: statuses.get(step.id) ?? "pending"
   }));
 }
@@ -22826,7 +26607,7 @@ function reportTaskListProgress(input) {
     label: input.label,
     display: progressDisplay(input.displayText, "detail", input.tone ?? "info"),
     presentation: suppressStatus(input.runId),
-    tasks: progressTasks(input.flow, input.statuses)
+    tasks: progressTasks(input.flow, input.stepDisplayById, input.statuses)
   });
 }
 function readJsonReport2(runDir, reportPath) {
@@ -22954,13 +26735,29 @@ function fanoutBranchKind(value) {
     return value;
   return void 0;
 }
-function shouldWarnAboutWriteCapableWorker(flow, compiledFlow) {
-  if (compiledFlow !== void 0)
-    return compiledFlowMayInvokeWriteCapableWorker(compiledFlow);
+function shouldWarnAboutWriteCapableWorker(flow) {
   return flowMayInvokeWriteCapableWorker(flow.id) || flow.steps.some((step) => step.kind === "relay" && step.role === "implementer");
+}
+function stepDisplay(input) {
+  const title = stepTitle({ flow: input.flow, stepId: input.stepId });
+  const metadata = input.stepDisplayById.get(input.stepId);
+  if (metadata !== void 0) {
+    return {
+      title,
+      taskTitle: metadata.taskTitle,
+      activeText: metadata.activeText,
+      ...metadata.relayRole === void 0 ? {} : { relayRole: metadata.relayRole }
+    };
+  }
+  return {
+    title,
+    taskTitle: title,
+    activeText: `Working on ${title.toLowerCase()}`
+  };
 }
 function createProgressProjector(input) {
   const taskStatuses = new Map(input.flow.steps.map((step) => [step.id, "pending"]));
+  const stepDisplayById = new Map(input.progressSurface?.steps.map((step) => [step.stepId, step]) ?? []);
   const activeAttempts = /* @__PURE__ */ new Map();
   const flowId = input.flow.id;
   const runId = input.runId;
@@ -22968,7 +26765,7 @@ function createProgressProjector(input) {
     const recordedAt = entry.recorded_at ?? (/* @__PURE__ */ new Date(0)).toISOString();
     switch (entry.kind) {
       case "run.bootstrapped": {
-        const shouldWarn = shouldWarnAboutWriteCapableWorker(input.flow, input.compiledFlow);
+        const shouldWarn = shouldWarnAboutWriteCapableWorker(input.flow);
         const startedText = `Circuit: Started ${flowLabel(input.flow.id)}.`;
         reportProgress(input.progress, {
           schema_version: 1,
@@ -22986,6 +26783,7 @@ function createProgressProjector(input) {
           runId,
           flowId,
           flow: input.flow,
+          stepDisplayById,
           recordedAt,
           statuses: taskStatuses,
           label: "Flow checklist initialized",
@@ -22999,18 +26797,18 @@ function createProgressProjector(input) {
           break;
         activeAttempts.set(stepId, entry.attempt);
         taskStatuses.set(stepId, "in_progress");
-        const title = stepTitle({ flow: input.flow, compiledFlow: input.compiledFlow, stepId });
+        const display = stepDisplay({ flow: input.flow, stepDisplayById, stepId });
         reportProgress(input.progress, {
           schema_version: 1,
           type: "step.started",
           run_id: runId,
           flow_id: flowId,
           recorded_at: recordedAt,
-          label: title,
-          display: progressDisplay(`Circuit: ${operatorStepAction(input.flow.id, title)}...`, "major", "info"),
-          presentation: appendStatus(runId, `${operatorStepAction(input.flow.id, title)}...`),
+          label: display.title,
+          display: progressDisplay(`Circuit: ${display.activeText}...`, "major", "info"),
+          presentation: appendStatus(runId, `${display.activeText}...`),
           step_id: stepId,
-          step_title: title,
+          step_title: display.title,
           attempt: entry.attempt
         });
         reportTaskListProgress({
@@ -23018,10 +26816,11 @@ function createProgressProjector(input) {
           runId,
           flowId,
           flow: input.flow,
+          stepDisplayById,
           recordedAt,
           statuses: taskStatuses,
-          label: `${title} in progress`,
-          displayText: `Circuit: ${operatorStepAction(input.flow.id, title)}...`
+          label: `${display.title} in progress`,
+          displayText: `Circuit: ${display.activeText}...`
         });
         break;
       }
@@ -23033,7 +26832,7 @@ function createProgressProjector(input) {
         const role = relayRoleFromTrace(entry);
         if (connector === void 0 || role === void 0)
           break;
-        const title = stepTitle({ flow: input.flow, compiledFlow: input.compiledFlow, stepId });
+        const display = stepDisplay({ flow: input.flow, stepDisplayById, stepId });
         const capability = connectorFilesystemCapability(connector);
         const statusText = relayStartedStatusText(input.flow.id, role);
         reportProgress(input.progress, {
@@ -23046,7 +26845,7 @@ function createProgressProjector(input) {
           display: progressDisplay(circuitDisplayText(statusText), "major", "info"),
           presentation: replaceStatus(runId, `${stepId}:relay`, statusText),
           step_id: stepId,
-          step_title: title,
+          step_title: display.title,
           attempt: activeAttempts.get(stepId) ?? entry.attempt ?? 1,
           role,
           connector_name: connector.name,
@@ -23060,8 +26859,8 @@ function createProgressProjector(input) {
         if (stepId === void 0 || entry.verdict === void 0 || entry.duration_ms === void 0) {
           break;
         }
-        const title = stepTitle({ flow: input.flow, compiledFlow: input.compiledFlow, stepId });
-        const role = relayRoleFromTrace(entry) ?? relayRoleFromStepTitle(title);
+        const display = stepDisplay({ flow: input.flow, stepDisplayById, stepId });
+        const role = relayRoleFromTrace(entry) ?? display.relayRole ?? "implementer";
         const statusText = relayCompletedStatusText(input.flow.id, role);
         reportProgress(input.progress, {
           schema_version: 1,
@@ -23073,7 +26872,7 @@ function createProgressProjector(input) {
           display: progressDisplay(circuitDisplayText(statusText), "major", "success"),
           presentation: replaceStatus(runId, `${stepId}:relay`, statusText),
           step_id: stepId,
-          step_title: title,
+          step_title: display.title,
           attempt: activeAttempts.get(stepId) ?? entry.attempt ?? 1,
           verdict: entry.verdict,
           duration_ms: entry.duration_ms
@@ -23096,7 +26895,7 @@ function createProgressProjector(input) {
         const branchIds = stringArray(entry.branch_ids);
         if (stepId === void 0 || branchIds === void 0)
           break;
-        const title = stepTitle({ flow: input.flow, compiledFlow: input.compiledFlow, stepId });
+        const title = stepTitle({ flow: input.flow, stepId });
         reportProgress(input.progress, {
           schema_version: 1,
           type: "fanout.started",
@@ -23119,7 +26918,7 @@ function createProgressProjector(input) {
         if (stepId === void 0 || entry.branch_id === void 0 || branchKind === void 0) {
           break;
         }
-        const title = stepTitle({ flow: input.flow, compiledFlow: input.compiledFlow, stepId });
+        const title = stepTitle({ flow: input.flow, stepId });
         reportProgress(input.progress, {
           schema_version: 1,
           type: "fanout.branch_started",
@@ -23145,7 +26944,7 @@ function createProgressProjector(input) {
         if (stepId === void 0 || entry.branch_id === void 0 || branchKind === void 0 || childOutcome === void 0 || entry.verdict === void 0 || entry.duration_ms === void 0) {
           break;
         }
-        const title = stepTitle({ flow: input.flow, compiledFlow: input.compiledFlow, stepId });
+        const title = stepTitle({ flow: input.flow, stepId });
         reportProgress(input.progress, {
           schema_version: 1,
           type: "fanout.branch_completed",
@@ -23172,7 +26971,7 @@ function createProgressProjector(input) {
         if (stepId === void 0 || policy2 === void 0 || entry.aggregate_path === void 0 || entry.branches_completed === void 0 || entry.branches_failed === void 0) {
           break;
         }
-        const title = stepTitle({ flow: input.flow, compiledFlow: input.compiledFlow, stepId });
+        const title = stepTitle({ flow: input.flow, stepId });
         reportProgress(input.progress, {
           schema_version: 1,
           type: "fanout.joined",
@@ -23203,7 +27002,7 @@ function createProgressProjector(input) {
         }
         const requestPath = checkpointRequestPath(input.runDir, entry.request_path);
         taskStatuses.set(stepId, "in_progress");
-        const title = stepTitle({ flow: input.flow, compiledFlow: input.compiledFlow, stepId });
+        const title = stepTitle({ flow: input.flow, stepId });
         const checkpointPromptText = checkpointPrompt(requestPath);
         const presentation = tournamentCheckpointPresentation({
           runDir: input.runDir,
@@ -23263,6 +27062,7 @@ function createProgressProjector(input) {
           runId,
           flowId,
           flow: input.flow,
+          stepDisplayById,
           recordedAt,
           statuses: taskStatuses,
           label: `${title} waiting`,
@@ -23277,18 +27077,18 @@ function createProgressProjector(input) {
           break;
         }
         taskStatuses.set(stepId, "completed");
-        const title = stepTitle({ flow: input.flow, compiledFlow: input.compiledFlow, stepId });
+        const display = stepDisplay({ flow: input.flow, stepDisplayById, stepId });
         reportProgress(input.progress, {
           schema_version: 1,
           type: "step.completed",
           run_id: runId,
           flow_id: flowId,
           recorded_at: recordedAt,
-          label: `Completed ${title}`,
-          display: progressDisplay(`Finished ${operatorStepAction(input.flow.id, title).toLowerCase()}.`, "detail", "success"),
+          label: `Completed ${display.title}`,
+          display: progressDisplay(`Finished ${display.activeText.toLowerCase()}.`, "detail", "success"),
           presentation: suppressStatus(runId),
           step_id: stepId,
-          step_title: title,
+          step_title: display.title,
           attempt: entry.attempt,
           route_taken: entry.route_taken
         });
@@ -23297,10 +27097,11 @@ function createProgressProjector(input) {
           runId,
           flowId,
           flow: input.flow,
+          stepDisplayById,
           recordedAt,
           statuses: taskStatuses,
-          label: `${title} completed`,
-          displayText: `Finished ${operatorStepAction(input.flow.id, title).toLowerCase()}.`,
+          label: `${display.title} completed`,
+          displayText: `Finished ${display.activeText.toLowerCase()}.`,
           tone: "success"
         });
         break;
@@ -23311,18 +27112,18 @@ function createProgressProjector(input) {
           break;
         }
         taskStatuses.set(stepId, "failed");
-        const title = stepTitle({ flow: input.flow, compiledFlow: input.compiledFlow, stepId });
+        const display = stepDisplay({ flow: input.flow, stepDisplayById, stepId });
         reportProgress(input.progress, {
           schema_version: 1,
           type: "step.aborted",
           run_id: runId,
           flow_id: flowId,
           recorded_at: recordedAt,
-          label: `Aborted ${title}`,
-          display: progressDisplay(`Circuit: Aborted ${title}: ${entry.reason}`, "major", "error"),
-          presentation: appendStatus(runId, `Marked ${operatorStepTitle(input.flow.id, title)} as failed.`),
+          label: `Aborted ${display.title}`,
+          display: progressDisplay(`Circuit: Aborted ${display.title}: ${entry.reason}`, "major", "error"),
+          presentation: appendStatus(runId, `Marked ${display.taskTitle} as failed.`),
           step_id: stepId,
-          step_title: title,
+          step_title: display.title,
           attempt: entry.attempt,
           reason: entry.reason
         });
@@ -23331,10 +27132,11 @@ function createProgressProjector(input) {
           runId,
           flowId,
           flow: input.flow,
+          stepDisplayById,
           recordedAt,
           statuses: taskStatuses,
-          label: `${title} failed`,
-          displayText: `Circuit: Marked ${title} as failed.`,
+          label: `${display.title} failed`,
+          displayText: `Circuit: Marked ${display.taskTitle} as failed.`,
           tone: "error"
         });
         break;
@@ -23686,12 +27488,13 @@ async function executeExecutableFlowWithWaiting(flow, options) {
     await mkdir7(options.runDir, { recursive: true });
   }
   const runId = options.runId ?? randomUUID3();
+  const packageIndex = buildRuntimePackageIndex(flow);
   const progressProjector = createProgressProjector({
     progress: options.progress,
     runDir: options.runDir,
     runId,
     flow,
-    ...options.compiledFlow === void 0 ? {} : { compiledFlow: options.compiledFlow }
+    ...options.progressSurface === void 0 ? {} : { progressSurface: options.progressSurface }
   });
   const trace = new TraceStore(options.runDir, {
     ...options.now === void 0 ? {} : { now: options.now },
@@ -23710,7 +27513,7 @@ async function executeExecutableFlowWithWaiting(flow, options) {
   const files = new RunFileStore(options.runDir, validateReportValue);
   const context = {
     flow,
-    ...options.compiledFlow === void 0 ? {} : { compiledFlow: options.compiledFlow },
+    packageIndex,
     runId,
     runDir: options.runDir,
     goal: options.goal ?? `Run ${flow.id}`,
@@ -23939,7 +27742,6 @@ async function runCompiledFlowWithWaiting(options) {
     goal: options.goal,
     manifestHash: computeManifestHash(options.flowBytes),
     manifestBytes: options.flowBytes,
-    compiledFlow: flow,
     entryModeName: entry.name,
     depth,
     ...options.now === void 0 ? {} : { now: options.now },
@@ -23954,6 +27756,7 @@ async function runCompiledFlowWithWaiting(options) {
     ...options.relayer === void 0 ? {} : { relayer: options.relayer },
     ...options.selectionConfigLayers === void 0 ? {} : { selectionConfigLayers: options.selectionConfigLayers },
     ...options.progress === void 0 ? {} : { progress: options.progress },
+    ...options.progressSurface === void 0 ? {} : { progressSurface: options.progressSurface },
     ...options.maxSteps === void 0 ? {} : { maxSteps: options.maxSteps }
   });
 }
@@ -24169,13 +27972,13 @@ async function resumeCompiledFlow(options) {
     requestContext
   });
   const depth = traceString(bootstrap, "depth");
+  const progressSurface = options.progressSurfaceForFlowId?.(flow.id);
   const result = await executeExecutableFlow(executable, {
     runDir: options.runDir,
     runId: bootstrapRunId,
     goal: bootstrapGoal,
     manifestHash: snapshot.hash,
     manifestBytes: flowBytes,
-    compiledFlow: flow,
     ...depth === void 0 ? {} : { depth },
     ...options.now === void 0 ? {} : { now: options.now },
     ...options.executors === void 0 ? {} : { executors: options.executors },
@@ -24187,6 +27990,7 @@ async function resumeCompiledFlow(options) {
     ...options.relayer === void 0 ? {} : { relayer: options.relayer },
     ...requestContext.selectionConfigLayers.length === 0 ? {} : { selectionConfigLayers: requestContext.selectionConfigLayers },
     ...options.progress === void 0 ? {} : { progress: options.progress },
+    ...progressSurface === void 0 ? {} : { progressSurface },
     resumeCheckpoint: { stepId, attempt, selection: options.selection }
   });
   if (isGraphCheckpointWaitingResult(result)) {
@@ -24346,6 +28150,12 @@ function classifyTaskAgainstRoutables(taskText, routables, defaultPackage) {
 }
 function classifyCompiledFlowTask(taskText) {
   return classifyTaskAgainstRoutables(taskText, ROUTABLE_PACKAGES, DEFAULT_PACKAGE);
+}
+
+// dist/flows/runtime-surface.js
+var RUNTIME_SURFACES = buildRuntimeSurfaceRegistry(flowPackages);
+function findFlowRuntimeSurfaceById(flowId) {
+  return RUNTIME_SURFACES.get(flowId);
 }
 
 // dist/shared/config-loader.js
@@ -25419,14 +29229,6 @@ function readPriorRoute(runFolder) {
     return {};
   }
 }
-var FLOW_RESULT_PATHS = {
-  build: "reports/build-result.json",
-  explore: "reports/explore-result.json",
-  fix: "reports/fix-result.json",
-  migrate: "reports/migrate-result.json",
-  review: "reports/review-result.json",
-  sweep: "reports/sweep-result.json"
-};
 var HTML_REPORT_LABEL = "Operator summary (HTML)";
 function jsonPath(runFolder) {
   return join13(runFolder, "reports", "operator-summary.json");
@@ -25517,7 +29319,7 @@ function renderMarkdown(summary) {
 }
 function writeOperatorSummary(input) {
   const flowId = input.runResult.flow_id;
-  const flowResultRelPath = FLOW_RESULT_PATHS[flowId];
+  const flowResultRelPath = findFlowRuntimeSurfaceById(flowId)?.primaryResult?.path;
   const flowReport = flowResultRelPath === void 0 ? void 0 : readJsonIfPresent(input.runFolder, flowResultRelPath);
   const resultRelPath = RUN_RESULT_RELATIVE_PATH;
   const resultPath2 = input.runResult.outcome === "checkpoint_waiting" ? void 0 : resolveRunRelative(input.runFolder, resultRelPath);
@@ -28231,39 +32033,6 @@ async function runRunsCommand(argv) {
 // dist/cli/circuit.js
 var DEFAULT_RUNS_BASE = ".circuit-next/runs";
 var DEFAULT_DEV_VERSION = "0.0.0-dev";
-var RUNTIME_SUPPORT_MATRIX = {
-  review: [{ entryModeName: "default", depth: "standard" }],
-  fix: [
-    { entryModeName: "default", depth: "standard" },
-    { entryModeName: "lite", depth: "lite" },
-    { entryModeName: "deep", depth: "deep" },
-    { entryModeName: "autonomous", depth: "autonomous" }
-  ],
-  build: [
-    { entryModeName: "default", depth: "standard" },
-    { entryModeName: "lite", depth: "lite" },
-    { entryModeName: "deep", depth: "deep" },
-    { entryModeName: "autonomous", depth: "autonomous" }
-  ],
-  explore: [
-    { entryModeName: "default", depth: "standard" },
-    { entryModeName: "lite", depth: "lite" },
-    { entryModeName: "deep", depth: "deep" },
-    { entryModeName: "autonomous", depth: "autonomous" },
-    { entryModeName: "tournament", depth: "tournament" }
-  ],
-  migrate: [
-    { entryModeName: "default", depth: "standard" },
-    { entryModeName: "deep", depth: "deep" },
-    { entryModeName: "autonomous", depth: "autonomous" }
-  ],
-  sweep: [
-    { entryModeName: "default", depth: "standard" },
-    { entryModeName: "lite", depth: "lite" },
-    { entryModeName: "deep", depth: "deep" },
-    { entryModeName: "autonomous", depth: "autonomous" }
-  ]
-};
 function usage3() {
   return [
     'usage: circuit-next run [flow-name] --goal "<goal>" [--mode <default|lite|deep|autonomous>] [--depth <lite|standard|deep|tournament|autonomous>] [--run-folder <path>] [--fixture <path>] [--flow-root <path>] [--progress jsonl]',
@@ -28593,10 +32362,16 @@ function resolveEntryModeSelection(args, route) {
   }
   return {};
 }
+function runtimeSupportRowsForFlow(flowId) {
+  return findFlowRuntimeSurfaceById(flowId)?.supportedEntryModes;
+}
+function progressSurfaceForFlowId(flowId) {
+  return findFlowRuntimeSurfaceById(flowId)?.progress;
+}
 function validateFlowDepth(args, route) {
   if (!args.depthProvided || args.depth === void 0)
     return;
-  const rows = RUNTIME_SUPPORT_MATRIX[route.flowName];
+  const rows = runtimeSupportRowsForFlow(route.flowName);
   if (rows === void 0)
     return;
   if (rows.some((row) => row.depth === args.depth))
@@ -28680,14 +32455,13 @@ function classifyRuntimeSupport(input) {
   const flowId = input.flow.id;
   const entryModeName = selectedEntryModeName(input.flow, input.entryModeSelection);
   const depth = selectedDepth(input.flow, input.args, input.entryModeSelection);
-  const supportMatrix = input.supportMatrix ?? RUNTIME_SUPPORT_MATRIX;
   const customArchetype = customFlowArchetype({
     flow: input.flow,
     args: input.args,
     fixturePath: input.fixturePath
   });
-  const directRows = supportMatrix[flowId];
-  const customArchetypeRows = customArchetype === void 0 ? void 0 : supportMatrix[customArchetype];
+  const directRows = runtimeSupportRowsForFlow(flowId);
+  const customArchetypeRows = customArchetype === void 0 ? void 0 : runtimeSupportRowsForFlow(customArchetype);
   const rows = directRows ?? customArchetypeRows;
   const customArchetypeSupported = directRows === void 0 && customArchetypeRows !== void 0;
   if (rows === void 0) {
@@ -28696,7 +32470,7 @@ function classifyRuntimeSupport(input) {
       flowId,
       entryModeName,
       depth,
-      reason: `flow '${flowId}' is not in the runtime support matrix`
+      reason: `flow '${flowId}' does not declare runtime support metadata`
     };
   }
   const supported = rows.some((row) => row.entryModeName === entryModeName && row.depth === depth);
@@ -28765,7 +32539,8 @@ async function main(argv, options = {}) {
         childCompiledFlowResolver: defaultChildCompiledFlowResolver(void 0),
         ...options.runtimeExecutors === void 0 ? {} : { executors: options.runtimeExecutors },
         ...options.relayer === void 0 ? {} : { relayer: options.relayer },
-        ...progress2 === void 0 ? {} : { progress: progress2 }
+        ...progress2 === void 0 ? {} : { progress: progress2 },
+        progressSurfaceForFlowId
       });
       const runResult = RunResult.parse(JSON.parse(readFileSync30(runtimeResult.resultPath, "utf8")));
       const priorRoute = readPriorRoute(runFolder2);
@@ -28851,6 +32626,7 @@ async function main(argv, options = {}) {
   }), { hasComposeWriter: options.composeWriter !== void 0 });
   const routeToRuntime = defaultRuntimeSupport.kind === "supported";
   if (routeToRuntime) {
+    const progressSurface = progressSurfaceForFlowId(flow.id);
     const runtimeResult = await runCompiledFlowWithWaiting({
       flowBytes: bytes,
       runDir: runFolder,
@@ -28865,6 +32641,7 @@ async function main(argv, options = {}) {
       ...options.runtimeExecutors === void 0 ? {} : { executors: options.runtimeExecutors },
       ...selectionConfigLayers.length === 0 ? {} : { selectionConfigLayers },
       ...progress === void 0 ? {} : { progress },
+      ...progressSurface === void 0 ? {} : { progressSurface },
       ...args.includeUntrackedContent ? { evidencePolicy: { includeUntrackedFileContent: true } } : {}
     });
     if (isGraphCheckpointWaitingResult(runtimeResult)) {

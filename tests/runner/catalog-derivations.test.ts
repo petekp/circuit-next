@@ -12,6 +12,7 @@ import {
   buildComposeRegistry,
   buildReportSchemaRegistry,
   buildRoutablePackages,
+  buildRuntimeSurfaceRegistry,
   buildSchemaHintMap,
   buildStructuralHintList,
   buildVerificationRegistry,
@@ -35,6 +36,7 @@ function fakePackage(
     relayReports: opts.relayReports ?? [],
     writers: opts.writers ?? { compose: [], close: [], verification: [], checkpoint: [] },
     ...(opts.structuralHints === undefined ? {} : { structuralHints: opts.structuralHints }),
+    ...(opts.runtimeSurface === undefined ? {} : { runtimeSurface: opts.runtimeSurface }),
     ...(opts.engineFlags === undefined ? {} : { engineFlags: opts.engineFlags }),
   };
 }
@@ -193,6 +195,26 @@ describe('catalog-derivations: builder registries', () => {
       }),
     ];
     expect(() => buildCheckpointRegistry(packages)).toThrow(/duplicate checkpoint builder/);
+  });
+});
+
+describe('catalog-derivations: runtime surfaces', () => {
+  it('indexes package-owned runtime surface metadata by flow id', () => {
+    const surface = {
+      supportedEntryModes: [{ entryModeName: 'default', depth: 'standard' }],
+      primaryResult: {
+        schemaName: 'a.result@v1',
+        path: 'reports/a-result.json',
+        label: 'A result',
+      },
+    };
+    const registry = buildRuntimeSurfaceRegistry([
+      fakePackage({ id: 'a', runtimeSurface: surface }),
+      fakePackage({ id: 'b' }),
+    ]);
+
+    expect(registry.get('a')).toBe(surface);
+    expect(registry.has('b')).toBe(false);
   });
 });
 

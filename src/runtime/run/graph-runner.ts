@@ -7,16 +7,16 @@
 
 import { randomUUID } from 'node:crypto';
 import { lstat, mkdir, readdir } from 'node:fs/promises';
+import type { CompiledFlowProgressSurface } from '../../flows/types.js';
 import type { ChangeKindDeclaration } from '../../schemas/change-kind.js';
-import type { CompiledFlow } from '../../schemas/compiled-flow.js';
 import type { LayeredConfig as LayeredConfigValue } from '../../schemas/config.js';
 import { computeManifestHash } from '../../schemas/manifest.js';
+import { isProofPlanBlockedError } from '../../shared/proof-plan.js';
 import type {
   ProgressReporter,
   RelayFn,
   RuntimeEvidencePolicy,
 } from '../../shared/relay-runtime-types.js';
-import { isProofPlanBlockedError } from '../../shared/verification-resolver.js';
 import type { TerminalTarget } from '../domain/route.js';
 import type { RunClosedOutcome } from '../domain/run.js';
 import { isWaitingCheckpointStepOutcome } from '../domain/step.js';
@@ -24,6 +24,7 @@ import type { TraceEntry } from '../domain/trace.js';
 import { type ExecutorRegistry, createDefaultExecutors } from '../executors/index.js';
 import type { RelayConnector } from '../executors/relay.js';
 import type { ExecutableFlow, ExecutableStep } from '../manifest/executable-flow.js';
+import { buildRuntimePackageIndex } from '../manifest/runtime-package-index.js';
 import { assertExecutableFlow } from '../manifest/validate-executable-flow.js';
 import { createProgressProjector } from '../projections/progress.js';
 import { validateReportValue } from '../run-files/report-validator.js';
@@ -44,7 +45,6 @@ export interface GraphRunnerOptions {
   readonly goal?: string;
   readonly manifestHash?: string;
   readonly manifestBytes?: Uint8Array;
-  readonly compiledFlow?: CompiledFlow;
   readonly entryModeName?: string;
   readonly depth?: string;
   readonly now?: () => Date;
@@ -59,6 +59,7 @@ export interface GraphRunnerOptions {
   readonly relayer?: RelayFn;
   readonly selectionConfigLayers?: readonly LayeredConfigValue[];
   readonly progress?: ProgressReporter;
+  readonly progressSurface?: CompiledFlowProgressSurface;
   readonly maxSteps?: number;
   readonly resumeCheckpoint?: {
     readonly stepId: string;
@@ -276,12 +277,13 @@ export async function executeExecutableFlowWithWaiting(
   }
 
   const runId = options.runId ?? randomUUID();
+  const packageIndex = buildRuntimePackageIndex(flow);
   const progressProjector = createProgressProjector({
     progress: options.progress,
     runDir: options.runDir,
     runId,
     flow,
-    ...(options.compiledFlow === undefined ? {} : { compiledFlow: options.compiledFlow }),
+    ...(options.progressSurface === undefined ? {} : { progressSurface: options.progressSurface }),
   });
   const trace = new TraceStore(options.runDir, {
     ...(options.now === undefined ? {} : { now: options.now }),
@@ -301,7 +303,7 @@ export async function executeExecutableFlowWithWaiting(
   const files = new RunFileStore(options.runDir, validateReportValue);
   const context: RunContext = {
     flow,
-    ...(options.compiledFlow === undefined ? {} : { compiledFlow: options.compiledFlow }),
+    packageIndex,
     runId,
     runDir: options.runDir,
     goal: options.goal ?? `Run ${flow.id}`,

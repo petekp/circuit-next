@@ -47,6 +47,7 @@ import { fileURLToPath } from 'node:url';
 
 import type * as CatalogModule from '../src/flows/catalog.js';
 import type * as CompilerModule from '../src/flows/compile-schematic-to-flow.js';
+import type * as FlowBlockDefinitionsModule from '../src/schemas/flow-block-definitions.js';
 import type * as FlowSchematicModule from '../src/schemas/flow-schematic.js';
 
 type CompileResult = CompilerModule.CompileResult;
@@ -55,6 +56,8 @@ type SchematicEntry = {
   id: string;
   visibility: 'public' | 'internal';
   schematicPath: string;
+  definitionSourcePath: string;
+  schematic: FlowSchematicModule.FlowSchematic;
   commandSourcePath: string | undefined;
 };
 
@@ -70,10 +73,15 @@ async function loadSchematicsFromCatalog(): Promise<SchematicEntry[]> {
   const catalogPath = resolve(projectRoot, 'dist/flows/catalog.js');
   try {
     const mod = (await import(catalogPath)) as typeof CatalogModule;
+    const definitionsById = new Map(
+      mod.flowDefinitions.map((definition) => [definition.id, definition]),
+    );
     return mod.flowPackages.map((pkg) => ({
       id: pkg.id,
       visibility: pkg.visibility ?? 'public',
       schematicPath: pkg.paths.schematic,
+      definitionSourcePath: `src/flows/${pkg.id}/flow.ts`,
+      schematic: definitionsById.get(pkg.id)?.schematic ?? failMissingDefinition(pkg.id),
       commandSourcePath: pkg.paths.command,
     }));
   } catch (err) {
@@ -84,11 +92,16 @@ async function loadSchematicsFromCatalog(): Promise<SchematicEntry[]> {
   }
 }
 
+function failMissingDefinition(flowId: string): never {
+  throw new Error(`flow package '${flowId}' has no matching FlowDefinition export in catalog`);
+}
+
 const SCHEMATICS = await loadSchematicsFromCatalog();
 const CLAUDE_PLUGIN_ROOT_REL = 'plugins/claude';
 const CODEX_PLUGIN_ROOT_REL = 'plugins/circuit';
 const SOURCE_COMMAND_ROOT_REL = 'src/commands';
 const GENERATED_SURFACE_MAP_REL = 'docs/generated-surfaces.md';
+const BLOCK_CATALOG_REL = 'docs/flows/block-catalog.json';
 const CLAUDE_PLUGIN_WRAPPER_COMMAND = 'node "${CLAUDE_PLUGIN_ROOT}/scripts/circuit-next.mjs"';
 const CODEX_PLUGIN_WRAPPER_COMMAND = "node '<plugin root>/scripts/circuit-next.mjs'";
 const HOST_DIRECT_COMMANDS = ['create', 'handoff', 'migrate', 'run', 'sweep'];
@@ -492,6 +505,15 @@ function markdownTableRow(cells: string[]): string {
 function renderSurfaceInventory(): string {
   const rows = [
     [
+      'Block catalog',
+      '`src/schemas/flow-block-definitions.ts`',
+      '`npm run build && node scripts/emit-flows.ts`',
+      'no',
+      '`docs/flows/block-catalog.json`',
+      '`node scripts/emit-flows.ts --check`',
+      'The JSON catalog is retained for docs and compatibility; typed block definitions own current facts.',
+    ],
+    [
       'Flow-owned commands',
       '`src/flows/<id>/command.md`',
       '`scripts/emit-flows.ts`',
@@ -510,8 +532,17 @@ function renderSurfaceInventory(): string {
       'Covers router/direct commands such as run, create, handoff, migrate, and sweep.',
     ],
     [
+      'Generated schematic compatibility files',
+      '`src/flows/<id>/flow.ts`',
+      '`npm run build && node scripts/emit-flows.ts`',
+      'no',
+      '`src/flows/<id>/schematic.json`',
+      '`node scripts/emit-flows.ts --check`',
+      'JSON schematics are retained for compatibility and generated from the typed FlowDefinition.',
+    ],
+    [
       'Generated flow manifests',
-      '`src/flows/<id>/schematic.json` plus flow package metadata',
+      '`src/flows/<id>/flow.ts`',
       '`npm run build && node scripts/emit-flows.ts`',
       'no',
       '`generated/flows/<id>/*.json`',
@@ -625,7 +656,7 @@ function editRuleForEntry(entry: SchematicEntry): string {
 async function renderGeneratedSurfaceMap(): Promise<string> {
   const flowRows: string[] = [];
   for (const entry of SCHEMATICS) {
-    const result = await compileOneSchematic(entry.schematicPath);
+    const result = await compileOneSchematic(entry.schematic);
     const plan = planSchematicFiles(entry.id, result);
     const compiledOutputs = plan.map((p) => p.outRel);
     const hostMirrors =
@@ -639,7 +670,7 @@ async function renderGeneratedSurfaceMap(): Promise<string> {
       markdownTableRow([
         `\`${entry.id}\``,
         `\`${entry.visibility}\``,
-        `\`${entry.schematicPath}\``,
+        `\`${entry.definitionSourcePath}\`<br>generates \`${entry.schematicPath}\``,
         markdownList(compiledOutputs),
         entry.visibility === 'public' ? markdownList(hostMirrors) : 'none; internal flow',
         commandSourceForEntry(entry),
@@ -671,7 +702,9 @@ async function renderGeneratedSurfaceMap(): Promise<string> {
     '',
     '## Edit Rules',
     '',
-    '- Flow package schematics are authored in `src/flows/<id>/schematic.json`.',
+    '- Flow definitions are authored in `src/flows/<id>/flow.ts`.',
+    '- Block definitions are authored in `src/schemas/flow-block-definitions.ts`.',
+    '- Flow schematic JSON files under `src/flows/<id>/schematic.json` are generated compatibility outputs.',
     '- Flow-owned commands are authored in `src/flows/<id>/command.md`.',
     '- Direct commands are authored in `src/commands/<id>.md`.',
     '- Canonical compiled manifests under `generated/flows/**` are generated outputs.',
@@ -685,7 +718,7 @@ async function renderGeneratedSurfaceMap(): Promise<string> {
     markdownTableRow([
       'Flow',
       'Visibility',
-      'Schematic source',
+      'Definition source',
       'Generated compiled outputs',
       'Host flow mirrors',
       'Command source',
@@ -705,7 +738,7 @@ async function renderGeneratedSurfaceMap(): Promise<string> {
     '',
     '## Drift Check',
     '',
-    '`node scripts/emit-flows.ts --check` verifies this file, generated manifests, command mirrors, host flow mirrors, stale per-mode siblings, stale internal host mirrors, and stale Codex skill directories.',
+    '`node scripts/emit-flows.ts --check` verifies this file, the generated block catalog, generated schematics, generated manifests, command mirrors, host flow mirrors, stale per-mode siblings, stale internal host mirrors, and stale Codex skill directories.',
     '',
   ].join('\n')}\n`;
 }
@@ -770,19 +803,31 @@ async function loadCompilerModule(): Promise<typeof CompilerModule> {
   }
 }
 
-async function loadSchematicSchemaModule(): Promise<typeof FlowSchematicModule> {
-  const distPath = resolve(projectRoot, 'dist/schemas/flow-schematic.js');
-  return (await import(distPath)) as typeof FlowSchematicModule;
+async function loadFlowBlockDefinitionsModule(): Promise<typeof FlowBlockDefinitionsModule> {
+  const distPath = resolve(projectRoot, 'dist/schemas/flow-block-definitions.js');
+  try {
+    return (await import(distPath)) as typeof FlowBlockDefinitionsModule;
+  } catch (err) {
+    console.error(
+      `\nCould not import block definitions from dist/. Run \`npm run build\` first, then re-run this script.\n${err instanceof Error ? err.message : String(err)}\n`,
+    );
+    process.exit(1);
+  }
 }
 
-async function compileOneSchematic(schematicPath: string): Promise<CompileResult> {
-  const [{ compileSchematicToCompiledFlow }, { FlowSchematic }] = await Promise.all([
-    loadCompilerModule(),
-    loadSchematicSchemaModule(),
-  ]);
-  const raw = JSON.parse(readFileSync(resolve(projectRoot, schematicPath), 'utf8'));
-  const schematic = FlowSchematic.parse(raw);
+async function compileOneSchematic(
+  schematic: FlowSchematicModule.FlowSchematic,
+): Promise<CompileResult> {
+  const { compileSchematicToCompiledFlow } = await loadCompilerModule();
   return compileSchematicToCompiledFlow(schematic);
+}
+
+function stringifySchematic(schematic: FlowSchematicModule.FlowSchematic): string {
+  return `${JSON.stringify(schematic, null, 2)}\n`;
+}
+
+function stringifyJson(value: unknown): string {
+  return `${JSON.stringify(value, null, 2)}\n`;
 }
 
 function stringifyCompiledFlow(flow: CompiledFlow): string {
@@ -937,10 +982,75 @@ function findLegacyRootHostSurfaces(): string[] {
   return surfaces;
 }
 
+function emitSchematicCompatibilityFile(entry: SchematicEntry): void {
+  const outAbs = resolve(projectRoot, entry.schematicPath);
+  mkdirSync(dirname(outAbs), { recursive: true });
+  writeFileSync(outAbs, stringifySchematic(entry.schematic));
+  biomeFormatInPlace(outAbs);
+  console.log(`emitted ${entry.schematicPath} from ${entry.definitionSourcePath}`);
+}
+
+function checkSchematicCompatibilityFile(entry: SchematicEntry, tmpDir: string): boolean {
+  const tmpFile = join(tmpDir, entry.schematicPath.replace(/[/]/g, '_'));
+  writeFileSync(tmpFile, stringifySchematic(entry.schematic));
+  biomeFormatInPlace(tmpFile);
+  const generatedBytes = readFileSync(tmpFile, 'utf8');
+  let committedBytes: string;
+  try {
+    committedBytes = readFileSync(resolve(projectRoot, entry.schematicPath), 'utf8');
+  } catch (_err) {
+    console.error(
+      `✗ ${entry.schematicPath} is missing on disk but ${entry.definitionSourcePath} generates it. Run \`npm run emit-flows\` to regenerate, then commit.`,
+    );
+    return true;
+  }
+  if (generatedBytes === committedBytes) {
+    console.log(`✓ ${entry.schematicPath} is in sync with ${entry.definitionSourcePath}`);
+    return false;
+  }
+  console.error(`✗ ${entry.schematicPath} drifted from ${entry.definitionSourcePath}`);
+  console.error('  Run `npm run emit-flows` to regenerate, then commit the diff.');
+  return true;
+}
+
+async function emitBlockCatalog(): Promise<void> {
+  const { FLOW_BLOCK_CATALOG } = await loadFlowBlockDefinitionsModule();
+  const outAbs = resolve(projectRoot, BLOCK_CATALOG_REL);
+  writeFileSync(outAbs, stringifyJson(FLOW_BLOCK_CATALOG));
+  biomeFormatInPlace(outAbs);
+  console.log(`emitted ${BLOCK_CATALOG_REL} from src/schemas/flow-block-definitions.ts`);
+}
+
+async function checkBlockCatalog(tmpDir: string): Promise<boolean> {
+  const { FLOW_BLOCK_CATALOG } = await loadFlowBlockDefinitionsModule();
+  const tmpFile = join(tmpDir, BLOCK_CATALOG_REL.replace(/[/]/g, '_'));
+  writeFileSync(tmpFile, stringifyJson(FLOW_BLOCK_CATALOG));
+  biomeFormatInPlace(tmpFile);
+  const generatedBytes = readFileSync(tmpFile, 'utf8');
+  let committedBytes: string;
+  try {
+    committedBytes = readFileSync(resolve(projectRoot, BLOCK_CATALOG_REL), 'utf8');
+  } catch (_err) {
+    console.error(
+      `✗ ${BLOCK_CATALOG_REL} is missing on disk but src/schemas/flow-block-definitions.ts generates it. Run \`npm run emit-flows\` to regenerate, then commit.`,
+    );
+    return true;
+  }
+  if (generatedBytes === committedBytes) {
+    console.log(`✓ ${BLOCK_CATALOG_REL} is in sync with src/schemas/flow-block-definitions.ts`);
+    return false;
+  }
+  console.error(`✗ ${BLOCK_CATALOG_REL} drifted from src/schemas/flow-block-definitions.ts`);
+  console.error('  Run `npm run emit-flows` to regenerate, then commit the diff.');
+  return true;
+}
+
 async function emitMode(): Promise<void> {
   const expectedSkills = expectedCodexSkillIds();
+  await emitBlockCatalog();
   for (const entry of SCHEMATICS) {
-    const result = await compileOneSchematic(entry.schematicPath);
+    emitSchematicCompatibilityFile(entry);
+    const result = await compileOneSchematic(entry.schematic);
     const plan = planSchematicFiles(entry.id, result);
     for (const { outRel, flow } of plan) {
       const outAbs = resolve(projectRoot, outRel);
@@ -1002,8 +1112,14 @@ async function checkMode(): Promise<void> {
   let drifted = false;
   const expectedSkills = expectedCodexSkillIds();
   try {
+    if (await checkBlockCatalog(tmpDir)) {
+      drifted = true;
+    }
     for (const entry of SCHEMATICS) {
-      const result = await compileOneSchematic(entry.schematicPath);
+      if (checkSchematicCompatibilityFile(entry, tmpDir)) {
+        drifted = true;
+      }
+      const result = await compileOneSchematic(entry.schematic);
       const plan = planSchematicFiles(entry.id, result);
       for (const { outRel, flow } of plan) {
         const tmpFile = join(tmpDir, outRel.replace(/[/]/g, '_'));

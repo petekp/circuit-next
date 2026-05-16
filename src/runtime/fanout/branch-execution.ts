@@ -174,7 +174,7 @@ function validateAcceptedRelayFanoutBranch(
   }
   const crossResult = runCrossReportValidator(
     branch.report_schema,
-    input.compiledFlow,
+    input.flow,
     input.context.runDir,
     input.relayResult.result_body,
   );
@@ -215,7 +215,7 @@ export async function executeRelayFanoutBranch(
   });
 
   try {
-    if (relayConnector === undefined && context.compiledFlow !== undefined) {
+    if (relayConnector === undefined) {
       // Production relay branches reuse the normal relay attempt path so request,
       // receipt, result, report, trace, and validation behavior match top-level
       // relay steps. Injected connectors below remain a compatibility path for

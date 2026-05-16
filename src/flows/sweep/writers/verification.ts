@@ -10,7 +10,7 @@
 
 import { readFileSync } from 'node:fs';
 import { resolveRunRelative } from '../../../shared/run-relative-path.js';
-import { reportPathForSchemaInCompiledFlow } from '../../registries/close-writers/shared.js';
+import { reportPathForSchemaInRuntimeFlow } from '../../registries/close-writers/shared.js';
 import type {
   VerificationBuildContext,
   VerificationBuilder,
@@ -22,7 +22,7 @@ import { SweepBrief, SweepVerification } from '../reports.js';
 export const sweepVerificationWriter: VerificationBuilder = {
   resultSchemaName: 'sweep.verification@v1',
   loadCommands(context: VerificationBuildContext): readonly VerificationCommand[] {
-    const briefPath = reportPathForSchemaInCompiledFlow(context.flow, 'sweep.brief@v1');
+    const briefPath = reportPathForSchemaInRuntimeFlow(context.flow, 'sweep.brief@v1');
     if (!context.step.reads.includes(briefPath as never)) {
       throw new Error(
         `sweep.verification@v1 requires step '${context.step.id}' to read ${briefPath}`,

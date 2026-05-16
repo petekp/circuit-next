@@ -21,16 +21,16 @@
 // structural — there is no other place to attach one. The runtime
 // composes them into a single keyed registry through the catalog.
 
-import type { CompiledFlow } from '../../schemas/compiled-flow.js';
 import { buildCrossReportValidatorRegistry } from '../catalog-derivations.js';
 import { flowPackages } from '../catalog.js';
+import type { RuntimeIndexedFlow } from './runtime-index.js';
 
 export type CrossReportResult =
   | { readonly kind: 'ok' }
   | { readonly kind: 'fail'; readonly reason: string };
 
 export type CrossReportValidator = (
-  flow: CompiledFlow,
+  flow: RuntimeIndexedFlow,
   runFolder: string,
   resultBody: string,
 ) => CrossReportResult;
@@ -39,7 +39,7 @@ const REGISTRY = buildCrossReportValidatorRegistry(flowPackages);
 
 export function runCrossReportValidator(
   schemaName: string,
-  flow: CompiledFlow,
+  flow: RuntimeIndexedFlow,
   runFolder: string,
   resultBody: string,
 ): CrossReportResult {

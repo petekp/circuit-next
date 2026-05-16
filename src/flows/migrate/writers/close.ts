@@ -11,7 +11,7 @@
 // Build's RunResult copied verbatim by the sub-run handler — its
 // `outcome` field tells us whether the underlying Build succeeded.
 
-import { reportPathForSchemaInCompiledFlow } from '../../registries/close-writers/shared.js';
+import { reportPathForSchemaInRuntimeFlow } from '../../registries/close-writers/shared.js';
 import type { CloseBuildContext, CloseBuilder } from '../../registries/close-writers/types.js';
 import {
   MigrateBatch,
@@ -69,7 +69,7 @@ export const migrateCloseBuilder: CloseBuilder = {
       batch_count: inventory.batches.length,
       evidence_links: POINTERS.map((p) => ({
         ...p,
-        path: reportPathForSchemaInCompiledFlow(context.flow, p.schema),
+        path: reportPathForSchemaInRuntimeFlow(context.flow, p.schema),
       })),
     });
   },

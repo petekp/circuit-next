@@ -8,7 +8,7 @@
 // review reports minor injections; 'reverted' iff batch is 'reverted';
 // otherwise 'failed'.
 
-import { reportPathForSchemaInCompiledFlow } from '../../registries/close-writers/shared.js';
+import { reportPathForSchemaInRuntimeFlow } from '../../registries/close-writers/shared.js';
 import type { CloseBuildContext, CloseBuilder } from '../../registries/close-writers/types.js';
 import {
   SweepAnalysis,
@@ -70,7 +70,7 @@ export const sweepCloseBuilder: CloseBuilder = {
       deferred_count: queue.deferred.length,
       evidence_links: POINTERS.map((p) => ({
         ...p,
-        path: reportPathForSchemaInCompiledFlow(context.flow, p.schema),
+        path: reportPathForSchemaInRuntimeFlow(context.flow, p.schema),
       })),
     });
   },

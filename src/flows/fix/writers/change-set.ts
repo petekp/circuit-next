@@ -27,7 +27,7 @@
 
 import { readFileSync } from 'node:fs';
 import { resolveRunRelative } from '../../../shared/run-relative-path.js';
-import { reportPathForSchemaInCompiledFlow } from '../../registries/close-writers/shared.js';
+import { reportPathForSchemaInRuntimeFlow } from '../../registries/close-writers/shared.js';
 import type {
   VerificationBuildContext,
   VerificationBuilder,
@@ -110,11 +110,8 @@ export const fixChangeSetWriter: VerificationBuilder = {
   loadCommands(context: VerificationBuildContext): readonly VerificationCommand[] {
     // Verify that this step reads the inputs the writer requires; mirror the
     // pattern in regression-baseline so misconfigured schematics fail fast.
-    const baselinePath = reportPathForSchemaInCompiledFlow(
-      context.flow,
-      'fix.baseline-snapshot@v1',
-    );
-    const changePath = reportPathForSchemaInCompiledFlow(context.flow, 'fix.change@v1');
+    const baselinePath = reportPathForSchemaInRuntimeFlow(context.flow, 'fix.baseline-snapshot@v1');
+    const changePath = reportPathForSchemaInRuntimeFlow(context.flow, 'fix.change@v1');
     if (!context.step.reads.includes(baselinePath as never)) {
       throw new Error(
         `fix.change-set@v1 requires step '${context.step.id}' to read ${baselinePath}`,
@@ -140,11 +137,8 @@ export const fixChangeSetWriter: VerificationBuilder = {
     }
     const post = parseGitStateObservation(observation, 'fix.change-set@v1');
 
-    const baselinePath = reportPathForSchemaInCompiledFlow(
-      context.flow,
-      'fix.baseline-snapshot@v1',
-    );
-    const changePath = reportPathForSchemaInCompiledFlow(context.flow, 'fix.change@v1');
+    const baselinePath = reportPathForSchemaInRuntimeFlow(context.flow, 'fix.baseline-snapshot@v1');
+    const changePath = reportPathForSchemaInRuntimeFlow(context.flow, 'fix.change@v1');
     const baseline = FixBaselineSnapshot.parse(
       JSON.parse(readFileSync(resolveRunRelative(context.runFolder, baselinePath), 'utf8')),
     );

@@ -89,15 +89,15 @@ terminology migration in progress.
 
 ## Adding a flow
 
-1. Create `src/flows/<id>/` with `schematic.json`,
+1. Create `src/flows/<id>/` with `flow.ts` (the typed `FlowDefinition`),
    `reports.ts` (the flow's Zod report schemas), optional `command.md`
-   and `contract.md`, `index.ts` (the package descriptor),
-   `relay-hints.ts` (if any relay steps have shape hints), and
-   `writers/` (one file per writer kind your flow uses: `compose` /
-   `close` / `verification` / `checkpoint`).
-2. Add the package to `src/flows/catalog.ts`.
+   and `contract.md`, optional `relay-hints.ts` if any relay steps have
+   shape hints, and `writers/` for custom semantic writers.
+2. Export a tiny `index.ts` compatibility projection if callers need the
+   `<id>CompiledFlowPackage` name.
+3. Add the definition to `flowDefinitions` in `src/flows/catalog.ts`.
 3. `npm run build && node scripts/emit-flows.ts` to regenerate
-   command mirrors and public host flow output.
+   `schematic.json`, command mirrors, and public host flow output.
 4. `npm run verify`.
 
 The engine (`src/runtime/`) does not need any edits — registries derive

@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { reportPathForSchemaInCompiledFlow } from '../../../src/flows/registries/close-writers/shared.js';
+import { reportPathForSchemaInRuntimeFlow } from '../../../src/flows/registries/close-writers/shared.js';
 import { runCrossReportValidator } from '../../../src/flows/registries/cross-report-validators.js';
 import { CompiledFlow } from '../../../src/schemas/compiled-flow.js';
 
@@ -151,7 +151,7 @@ describe('cross-report validator: sweep.batch.items[].candidate_id ⊆ sweep.que
 
   beforeEach(() => {
     flow = loadSweepCompiledFlow();
-    queueRel = reportPathForSchemaInCompiledFlow(flow, 'sweep.queue@v1');
+    queueRel = reportPathForSchemaInRuntimeFlow(flow, 'sweep.queue@v1');
     runFolderBase = mkdtempSync(join(tmpdir(), 'circuit-next-cross-report-'));
   });
 

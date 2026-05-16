@@ -16,7 +16,7 @@
 // The runner.ts close path stays flow-agnostic — it relays by
 // schema name to the registered builder.
 
-import type { CompiledFlow } from '../../../schemas/compiled-flow.js';
+import type { RuntimeIndexedComposeStep, RuntimeIndexedFlow } from '../runtime-index.js';
 
 // Each builder declares which report schemas it reads. The reader
 // translates these into run-relative paths via the flow's step
@@ -41,11 +41,8 @@ export interface CloseReadDescriptor {
 // Context the builder receives when it runs.
 export interface CloseBuildContext {
   readonly runFolder: string;
-  readonly flow: CompiledFlow;
-  readonly closeStep: CompiledFlow['steps'][number] & {
-    kind: 'compose';
-    writes: { report: { schema: string; path: string } };
-  };
+  readonly flow: RuntimeIndexedFlow;
+  readonly closeStep: RuntimeIndexedComposeStep;
   readonly goal: string;
   // Map of declared name → parsed JSON object (or undefined for absent
   // optional inputs). The builder narrows each via its own Zod schema.

@@ -2,10 +2,10 @@
 //
 // Builders come from src/flows/catalog.ts via buildComposeRegistry.
 
-import type { CompiledFlow } from '../../../schemas/compiled-flow.js';
 import { buildComposeRegistry } from '../../catalog-derivations.js';
 import { flowPackages } from '../../catalog.js';
-import { reportPathForSchemaInCompiledFlow } from '../close-writers/shared.js';
+import { reportPathForSchemaInRuntimeFlow } from '../close-writers/shared.js';
+import type { RuntimeIndexedFlow } from '../runtime-index.js';
 import type { ComposeBuilder, ComposeStep } from './types.js';
 
 const REGISTRY = buildComposeRegistry(flowPackages);
@@ -22,13 +22,13 @@ export function findComposeBuilder(resultSchemaName: string): ComposeBuilder | u
 // paths themselves inside build().
 export function resolveComposeReadPaths(
   builder: ComposeBuilder,
-  flow: CompiledFlow,
+  flow: RuntimeIndexedFlow,
   step: ComposeStep,
 ): Record<string, string | undefined> {
   const paths: Record<string, string | undefined> = {};
   if (builder.reads === undefined) return paths;
   for (const descriptor of builder.reads) {
-    const path = reportPathForSchemaInCompiledFlow(flow, descriptor.schema);
+    const path = reportPathForSchemaInRuntimeFlow(flow, descriptor.schema);
     if (descriptor.required && !step.reads.includes(path as never)) {
       throw new Error(`${step.writes.report.schema} requires step '${step.id}' to read ${path}`);
     }

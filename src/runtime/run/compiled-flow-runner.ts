@@ -5,6 +5,7 @@
 // to graph-runner.ts. Keep manifest parsing and entry-mode selection here so
 // graph-runner.ts can stay focused on step advancement and trace writes.
 
+import type { CompiledFlowProgressSurface } from '../../flows/types.js';
 import {
   type CompiledFlow,
   CompiledFlow as CompiledFlowSchema,
@@ -50,6 +51,7 @@ export interface CompiledFlowRunOptions {
   readonly relayer?: RelayFn;
   readonly selectionConfigLayers?: readonly LayeredConfigValue[];
   readonly progress?: ProgressReporter;
+  readonly progressSurface?: CompiledFlowProgressSurface;
   readonly maxSteps?: number;
 }
 
@@ -97,7 +99,6 @@ export async function runCompiledFlowWithWaiting(
       goal: options.goal,
       manifestHash: computeManifestHash(options.flowBytes),
       manifestBytes: options.flowBytes,
-      compiledFlow: flow,
       entryModeName: entry.name,
       depth,
       ...(options.now === undefined ? {} : { now: options.now }),
@@ -116,6 +117,9 @@ export async function runCompiledFlowWithWaiting(
         ? {}
         : { selectionConfigLayers: options.selectionConfigLayers }),
       ...(options.progress === undefined ? {} : { progress: options.progress }),
+      ...(options.progressSurface === undefined
+        ? {}
+        : { progressSurface: options.progressSurface }),
       ...(options.maxSteps === undefined ? {} : { maxSteps: options.maxSteps }),
     },
   );

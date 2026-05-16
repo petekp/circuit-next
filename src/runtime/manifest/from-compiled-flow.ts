@@ -79,6 +79,7 @@ function baseStep(step: CompiledStep): BaseStep {
     reads: step.reads.map((path) => ({ path })),
     writes: toWrites(step.writes as Record<string, string | ReportRef | undefined>),
     ...(selection === undefined ? {} : { selection }),
+    ...(step.skill_slots === undefined ? {} : { skillSlots: step.skill_slots }),
     check: step.check,
     ...(step.budgets === undefined ? {} : { budgets: step.budgets }),
   };

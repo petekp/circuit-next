@@ -5,7 +5,7 @@
 // the canonical pointer set. Outcome is 'complete' only when verification
 // passed and review accepted cleanly; accepted follow-ups need attention.
 
-import { reportPathForSchemaInCompiledFlow } from '../../registries/close-writers/shared.js';
+import { reportPathForSchemaInRuntimeFlow } from '../../registries/close-writers/shared.js';
 import type { CloseBuildContext, CloseBuilder } from '../../registries/close-writers/types.js';
 import {
   BuildBrief,
@@ -54,7 +54,7 @@ export const buildCloseBuilder: CloseBuilder = {
       review_verdict: review.verdict,
       evidence_links: POINTERS.map((p) => ({
         ...p,
-        path: reportPathForSchemaInCompiledFlow(context.flow, p.schema),
+        path: reportPathForSchemaInRuntimeFlow(context.flow, p.schema),
       })),
     });
   },

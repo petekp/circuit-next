@@ -96,7 +96,8 @@ Pass a mode with `--entry-mode <lite|deep|autonomous>` (or `--mode`, the
 shorter alias). Tournament is a depth-level option exposed through
 `--depth tournament` on the flows that support it. Mode availability varies
 by flow; see each flow's `src/flows/<id>/schematic.json` for the
-authoritative list.
+generated compatibility schematic, or `src/flows/<id>/flow.ts` for the
+authoritative typed definition.
 
 Every flow is built from a fixed set of stages: **Frame, Analyze, Plan, Act,
 Verify, Review, Close**. Not every flow runs every stage, but the order
@@ -179,9 +180,9 @@ optional local skills for relay steps. Configuration layers from defaults to
 user-global to project to invocation, and the resolver enforces a single
 ordering at run time.
 
-**Schematic-driven flows.** Each flow is one folder under `src/flows/<id>/`:
-schematic, report schemas, command, contract, writers, relay hints. The
-engine derives every per-flow registry from the catalog. Adding a flow does
+**Definition-driven flows.** Each flow is one folder under `src/flows/<id>/`:
+typed definition, report schemas, command, contract, writers, and relay hints.
+The engine derives every per-flow registry from the catalog. Adding a flow does
 not require editing the engine.
 
 **Run folders.** Each run gets its own directory with the trace, every typed

@@ -19,6 +19,7 @@ import {
 import { RunResult } from '../schemas/result.js';
 
 import { classifyCompiledFlowTask } from '../flows/router.js';
+import { findFlowRuntimeSurfaceById } from '../flows/runtime-surface.js';
 import { discoverConfigLayers } from '../shared/config-loader.js';
 import { validateCompiledFlowKindPolicy } from '../shared/flow-kind-policy.js';
 import { readPriorRoute, writeOperatorSummary } from '../shared/operator-summary-writer.js';
@@ -55,45 +56,6 @@ import {
 
 const DEFAULT_RUNS_BASE = '.circuit-next/runs';
 const DEFAULT_DEV_VERSION = '0.0.0-dev';
-
-interface RuntimeSupportRow {
-  readonly entryModeName: string;
-  readonly depth: string;
-}
-
-const RUNTIME_SUPPORT_MATRIX: Record<string, readonly RuntimeSupportRow[]> = {
-  review: [{ entryModeName: 'default', depth: 'standard' }],
-  fix: [
-    { entryModeName: 'default', depth: 'standard' },
-    { entryModeName: 'lite', depth: 'lite' },
-    { entryModeName: 'deep', depth: 'deep' },
-    { entryModeName: 'autonomous', depth: 'autonomous' },
-  ],
-  build: [
-    { entryModeName: 'default', depth: 'standard' },
-    { entryModeName: 'lite', depth: 'lite' },
-    { entryModeName: 'deep', depth: 'deep' },
-    { entryModeName: 'autonomous', depth: 'autonomous' },
-  ],
-  explore: [
-    { entryModeName: 'default', depth: 'standard' },
-    { entryModeName: 'lite', depth: 'lite' },
-    { entryModeName: 'deep', depth: 'deep' },
-    { entryModeName: 'autonomous', depth: 'autonomous' },
-    { entryModeName: 'tournament', depth: 'tournament' },
-  ],
-  migrate: [
-    { entryModeName: 'default', depth: 'standard' },
-    { entryModeName: 'deep', depth: 'deep' },
-    { entryModeName: 'autonomous', depth: 'autonomous' },
-  ],
-  sweep: [
-    { entryModeName: 'default', depth: 'standard' },
-    { entryModeName: 'lite', depth: 'lite' },
-    { entryModeName: 'deep', depth: 'deep' },
-    { entryModeName: 'autonomous', depth: 'autonomous' },
-  ],
-};
 
 interface ParsedArgs {
   command?: 'run' | 'resume';
@@ -432,7 +394,7 @@ function resolveCompiledFlowRoute(args: ParsedArgs): ResolvedCompiledFlowRoute {
 }
 
 // Pair `--depth` with its conventional entry mode when `--mode` is omitted.
-// The runtime support matrix uses 1:1 (mode, depth) pairs except for the
+// Flow runtime surfaces use 1:1 (mode, depth) pairs except for the
 // `default/standard` baseline, so `--depth lite` unambiguously means
 // `--mode lite`. Without this inference an operator who types only
 // `--depth deep` falls into the `default` entry mode at depth `deep`, which
@@ -449,8 +411,7 @@ function depthForEntryMode(mode: string): string {
 }
 
 // `--mode` and `--depth` name the same thoroughness level under two flag
-// names — every row in RUNTIME_SUPPORT_MATRIX has mode and depth that are
-// aliases for one level. When the operator supplies both flags, they must
+// names. When the operator supplies both flags, they must
 // refer to the same level; otherwise we reject at parse time with the
 // matching pair for each side so the operator can immediately pick one.
 function validateModeDepthAliasConsistency(args: ParsedArgs): void {
@@ -493,9 +454,17 @@ function resolveEntryModeSelection(
   return {};
 }
 
+function runtimeSupportRowsForFlow(flowId: string) {
+  return findFlowRuntimeSurfaceById(flowId)?.supportedEntryModes;
+}
+
+function progressSurfaceForFlowId(flowId: string) {
+  return findFlowRuntimeSurfaceById(flowId)?.progress;
+}
+
 function validateFlowDepth(args: ParsedArgs, route: ResolvedCompiledFlowRoute): void {
   if (!args.depthProvided || args.depth === undefined) return;
-  const rows = RUNTIME_SUPPORT_MATRIX[route.flowName];
+  const rows = runtimeSupportRowsForFlow(route.flowName);
   if (rows === undefined) return;
   if (rows.some((row) => row.depth === args.depth)) return;
   const allowedDepths = Array.from(new Set(rows.map((row) => row.depth))).join(', ');
@@ -608,20 +577,18 @@ function classifyRuntimeSupport(input: {
   readonly args: ParsedArgs;
   readonly entryModeSelection: ResolvedEntryModeSelection;
   readonly fixturePath: string;
-  readonly supportMatrix?: Record<string, readonly RuntimeSupportRow[]>;
 }): RuntimeSupportDecision {
   const flowId = input.flow.id as unknown as string;
   const entryModeName = selectedEntryModeName(input.flow, input.entryModeSelection);
   const depth = selectedDepth(input.flow, input.args, input.entryModeSelection);
-  const supportMatrix = input.supportMatrix ?? RUNTIME_SUPPORT_MATRIX;
   const customArchetype = customFlowArchetype({
     flow: input.flow,
     args: input.args,
     fixturePath: input.fixturePath,
   });
-  const directRows = supportMatrix[flowId];
+  const directRows = runtimeSupportRowsForFlow(flowId);
   const customArchetypeRows =
-    customArchetype === undefined ? undefined : supportMatrix[customArchetype];
+    customArchetype === undefined ? undefined : runtimeSupportRowsForFlow(customArchetype);
   const rows = directRows ?? customArchetypeRows;
   const customArchetypeSupported = directRows === undefined && customArchetypeRows !== undefined;
   if (rows === undefined) {
@@ -630,7 +597,7 @@ function classifyRuntimeSupport(input: {
       flowId,
       entryModeName,
       depth,
-      reason: `flow '${flowId}' is not in the runtime support matrix`,
+      reason: `flow '${flowId}' does not declare runtime support metadata`,
     };
   }
 
@@ -650,7 +617,7 @@ function classifyRuntimeSupport(input: {
   // Append the supported (mode, depth) pair list so the rejection tells the
   // user what to type next, instead of just naming the unsupported pair.
   // Help-text and per-flow docs would otherwise need to list these separately
-  // and drift; the runtime support matrix is already the source of truth.
+  // and drift; package-owned runtime surface metadata is the source of truth.
   const supportedPairs = rows.map((row) => `${row.entryModeName}/${row.depth}`).join(', ');
   // For a custom flow that inherits an archetype, the supported-pair list is
   // intrinsic to the archetype, not the custom flow itself. Mirror the
@@ -722,6 +689,7 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
         ...(options.runtimeExecutors === undefined ? {} : { executors: options.runtimeExecutors }),
         ...(options.relayer === undefined ? {} : { relayer: options.relayer }),
         ...(progress === undefined ? {} : { progress }),
+        progressSurfaceForFlowId,
       });
       const runResult = RunResult.parse(JSON.parse(readFileSync(runtimeResult.resultPath, 'utf8')));
       const priorRoute = readPriorRoute(runFolder);
@@ -836,6 +804,7 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
   const routeToRuntime = defaultRuntimeSupport.kind === 'supported';
 
   if (routeToRuntime) {
+    const progressSurface = progressSurfaceForFlowId(flow.id);
     const runtimeResult = await runCompiledFlowWithWaiting({
       flowBytes: bytes,
       runDir: runFolder,
@@ -852,6 +821,7 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
       ...(options.runtimeExecutors === undefined ? {} : { executors: options.runtimeExecutors }),
       ...(selectionConfigLayers.length === 0 ? {} : { selectionConfigLayers }),
       ...(progress === undefined ? {} : { progress }),
+      ...(progressSurface === undefined ? {} : { progressSurface }),
       ...(args.includeUntrackedContent
         ? { evidencePolicy: { includeUntrackedFileContent: true } }
         : {}),

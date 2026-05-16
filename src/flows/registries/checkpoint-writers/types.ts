@@ -16,12 +16,10 @@
 // path entirely (the runner only invokes a builder when
 // step.writes.report is defined).
 
-import type { CompiledFlow } from '../../../schemas/compiled-flow.js';
 import type { RelayRole } from '../../../schemas/step.js';
+import type { RuntimeIndexedCheckpointStep } from '../runtime-index.js';
 
-export type CheckpointStep = CompiledFlow['steps'][number] & {
-  readonly kind: 'checkpoint';
-};
+export type CheckpointStep = RuntimeIndexedCheckpointStep;
 
 export interface CheckpointBuildContext {
   readonly runFolder: string;
@@ -52,7 +50,7 @@ export interface CheckpointBriefBuilder {
   // Schema name of the report this builder produces (e.g.
   // 'build.brief@v1'). Acts as the registry key.
   readonly resultSchemaName: string;
-  // CompiledFlow-specific assembly. Returns the unvalidated report —
+  // Flow-specific assembly. Returns the unvalidated report —
   // the builder is responsible for validating against the registered
   // result schema before returning.
   build(context: CheckpointBuildContext): unknown;

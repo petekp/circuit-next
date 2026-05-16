@@ -8,7 +8,7 @@
 
 import { readFileSync } from 'node:fs';
 import { resolveRunRelative } from '../../../shared/run-relative-path.js';
-import { reportPathForSchemaInCompiledFlow } from '../../registries/close-writers/shared.js';
+import { reportPathForSchemaInRuntimeFlow } from '../../registries/close-writers/shared.js';
 import type {
   VerificationBuildContext,
   VerificationBuilder,
@@ -20,7 +20,7 @@ import { BuildPlan, BuildVerification } from '../reports.js';
 export const buildVerificationWriter: VerificationBuilder = {
   resultSchemaName: 'build.verification@v1',
   loadCommands(context: VerificationBuildContext): readonly VerificationCommand[] {
-    const planPath = reportPathForSchemaInCompiledFlow(context.flow, 'build.plan@v1');
+    const planPath = reportPathForSchemaInRuntimeFlow(context.flow, 'build.plan@v1');
     if (!context.step.reads.includes(planPath as never)) {
       throw new Error(
         `build.verification@v1 requires step '${context.step.id}' to read ${planPath}`,

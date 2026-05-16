@@ -13,27 +13,27 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { CompiledFlow } from '../../schemas/compiled-flow.js';
 import {
-  flowHasReportSchemaInCompiledFlow,
-  reportPathForSchemaInCompiledFlow,
+  flowHasReportSchemaInRuntimeFlow,
+  reportPathForSchemaInRuntimeFlow,
 } from '../registries/close-writers/shared.js';
 import type { CrossReportResult } from '../registries/cross-report-validators.js';
+import type { RuntimeIndexedFlow } from '../registries/runtime-index.js';
 import { SweepBatch, SweepQueue } from './reports.js';
 
 export function validateSweepBatchAgainstQueue(
-  flow: CompiledFlow,
+  flow: RuntimeIndexedFlow,
   runFolder: string,
   resultBody: string,
 ): CrossReportResult {
   // Skip if the flow doesn't include sweep.queue. A non-sweep
   // flow that reused sweep.batch would have nothing to check
   // against; falling through to ok is correct under this contract.
-  if (!flowHasReportSchemaInCompiledFlow(flow, 'sweep.queue@v1')) {
+  if (!flowHasReportSchemaInRuntimeFlow(flow, 'sweep.queue@v1')) {
     return { kind: 'ok' };
   }
 
-  const queueRel = reportPathForSchemaInCompiledFlow(flow, 'sweep.queue@v1');
+  const queueRel = reportPathForSchemaInRuntimeFlow(flow, 'sweep.queue@v1');
   const queueAbs = resolve(runFolder, queueRel);
   if (!existsSync(queueAbs)) {
     return {

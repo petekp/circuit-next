@@ -1,4 +1,4 @@
-import type { CompiledFlow } from '../schemas/compiled-flow.js';
+import type { RuntimeIndexedFlow, RuntimeIndexedStep } from '../flows/registries/runtime-index.js';
 import type { LayeredConfig } from '../schemas/config.js';
 import type { SkillId } from '../schemas/ids.js';
 import {
@@ -14,8 +14,8 @@ import {
 const PRE_WORKFLOW_CONFIG_SOURCES = ['default', 'user-global', 'project'] as const;
 
 export interface ResolveSelectionInput {
-  readonly flow: CompiledFlow;
-  readonly step: CompiledFlow['steps'][number];
+  readonly flow: RuntimeIndexedFlow;
+  readonly step: RuntimeIndexedStep;
   readonly configLayers?: readonly LayeredConfig[];
 }
 
@@ -183,7 +183,7 @@ export function resolveSelectionForRelay(input: ResolveSelectionInput): Selectio
     if (stage.selection === undefined) continue;
     resolved = pushIfContributing(
       applied,
-      { source: 'stage', stage_id: stage.id, override: stage.selection },
+      { source: 'stage', stage_id: stage.id as never, override: stage.selection },
       resolved,
     );
   }
@@ -191,7 +191,7 @@ export function resolveSelectionForRelay(input: ResolveSelectionInput): Selectio
   if (input.step.selection !== undefined) {
     resolved = pushIfContributing(
       applied,
-      { source: 'step', step_id: input.step.id, override: input.step.selection },
+      { source: 'step', step_id: input.step.id as never, override: input.step.selection as never },
       resolved,
     );
   }

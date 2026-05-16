@@ -19,13 +19,10 @@
 // (evidence_links, optional reads for mode-conditional inputs)
 // that don't apply to upstream compose steps.
 
-import type { CompiledFlow } from '../../../schemas/compiled-flow.js';
 import type { RuntimeEvidencePolicy } from '../../../shared/relay-runtime-types.js';
+import type { RuntimeIndexedComposeStep, RuntimeIndexedFlow } from '../runtime-index.js';
 
-export type ComposeStep = CompiledFlow['steps'][number] & {
-  readonly kind: 'compose';
-  readonly writes: { readonly report: { readonly schema: string; readonly path: string } };
-};
+export type ComposeStep = RuntimeIndexedComposeStep;
 
 // Declarative description of a typed-report read. The runner uses
 // this to pre-resolve paths and read JSON before invoking build().
@@ -40,7 +37,7 @@ export interface ComposeReadDescriptor {
 
 export interface ComposeBuildContext {
   readonly runFolder: string;
-  readonly flow: CompiledFlow;
+  readonly flow: RuntimeIndexedFlow;
   readonly step: ComposeStep;
   readonly goal: string;
   readonly projectRoot?: string;

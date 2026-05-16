@@ -21,16 +21,7 @@ import {
 } from '../../src/connectors/codex.js';
 import { relayCustom as neutralRelayCustom } from '../../src/connectors/custom.js';
 import { materializeRelay as neutralMaterializeRelay } from '../../src/connectors/relay-materializer.js';
-import {
-  extractJsonObject as neutralExtractJsonObject,
-  selectedModelForProvider as neutralSelectedModelForProvider,
-  sha256Hex as neutralSha256Hex,
-} from '../../src/connectors/shared.js';
-import type { ResolvedSelection } from '../../src/schemas/selection-policy.js';
-import {
-  extractJsonObject as sharedExtractJsonObject,
-  selectedModelForProvider as sharedSelectedModelForProvider,
-} from '../../src/shared/connector-helpers.js';
+import { sha256Hex as neutralSha256Hex } from '../../src/connectors/shared.js';
 import { sha256Hex as sharedSha256Hex } from '../../src/shared/connector-relay.js';
 
 describe('connector shared compatibility wrapper', () => {
@@ -39,34 +30,6 @@ describe('connector shared compatibility wrapper', () => {
 
     expect(sharedSha256Hex(payload)).toBe(neutralSha256Hex(payload));
     expect(sharedSha256Hex(payload)).toMatch(/^[0-9a-f]{64}$/);
-  });
-
-  it('keeps extractJsonObject identical through the shared and neutral paths', () => {
-    const payload = 'Status: done.\n{"verdict":"ok","note":"contains } and { braces"}\nDone.';
-
-    expect(sharedExtractJsonObject(payload)).toBe(neutralExtractJsonObject(payload));
-    expect(sharedExtractJsonObject(payload)).toBe(
-      '{"verdict":"ok","note":"contains } and { braces"}',
-    );
-  });
-
-  it('keeps selectedModelForProvider identical through the shared and neutral paths', () => {
-    const selection: ResolvedSelection = {
-      model: { provider: 'openai', model: 'gpt-5.4' },
-      effort: 'low',
-      skills: [],
-      invocation_options: {},
-    };
-
-    expect(sharedSelectedModelForProvider('codex', selection, 'openai')).toBe(
-      neutralSelectedModelForProvider('codex', selection, 'openai'),
-    );
-    expect(() => sharedSelectedModelForProvider('codex', selection, 'anthropic')).toThrow(
-      /cannot honor model provider/,
-    );
-    expect(() => neutralSelectedModelForProvider('codex', selection, 'anthropic')).toThrow(
-      /cannot honor model provider/,
-    );
   });
 
   it('keeps neutral connector barrel exports bound to the implementation modules', () => {

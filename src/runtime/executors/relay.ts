@@ -5,10 +5,11 @@ import { relayCodex } from '../../connectors/codex.js';
 import { relayCustom } from '../../connectors/custom.js';
 import { runCrossReportValidator } from '../../flows/registries/cross-report-validators.js';
 import { findReportZodSchema, parseReport } from '../../flows/registries/report-schemas.js';
-import type { CompiledFlow } from '../../schemas/compiled-flow.js';
 import type { ResolvedConnector } from '../../schemas/connector.js';
 import { Depth } from '../../schemas/depth.js';
+import type { CompiledFlowId } from '../../schemas/ids.js';
 import { ResolvedSelection } from '../../schemas/selection-policy.js';
+import type { SkillSlot } from '../../schemas/skill.js';
 import { RelayRole } from '../../schemas/step.js';
 import { type RelayResult, sha256Hex } from '../../shared/connector-relay.js';
 import { deriveResolvedSelection } from '../../shared/relay-selection.js';
@@ -27,11 +28,7 @@ import {
 } from '../connectors/resolver.js';
 import type { StepOutcome } from '../domain/step.js';
 import type { RelayStep } from '../manifest/executable-flow.js';
-import {
-  recoveryRouteForExecutableStep,
-  requireCompiledFlow,
-  requireCompiledStep,
-} from '../run/route-compat.js';
+import { recoveryRouteForExecutableStep, requireRuntimeStep } from '../run/route-compat.js';
 import type { RunContext } from '../run/run-context.js';
 
 export interface RelayRequest {
@@ -229,7 +226,7 @@ function suppliedConnectorFromRelayer(context: RunContext): RelayConnector | und
 }
 
 export interface ProductionRelayAttemptValidationInput {
-  readonly compiledFlow: CompiledFlow;
+  readonly flow: RunContext['packageIndex']['flow'];
   readonly context: RunContext;
   readonly step: RelayStep;
   readonly compiledStep: CompiledRelayStepV1;
@@ -261,7 +258,7 @@ export type ProductionRelayAttemptResult =
 function defaultValidateAcceptedProductionRelay(
   input: ProductionRelayAttemptValidationInput,
 ): ProductionRelayAttemptValidationResult {
-  const { compiledFlow, context, step, relayResult, checkEvaluation } = input;
+  const { flow, context, step, relayResult, checkEvaluation } = input;
   if (step.report?.schema === undefined) return { evaluation: checkEvaluation };
   const parseResult = parseReport(step.report.schema, relayResult.result_body);
   if (parseResult.kind === 'fail') {
@@ -275,7 +272,7 @@ function defaultValidateAcceptedProductionRelay(
   }
   const crossResult = runCrossReportValidator(
     step.report.schema,
-    compiledFlow,
+    flow,
     context.runDir,
     relayResult.result_body,
   );
@@ -301,7 +298,7 @@ export async function executeProductionRelayAttempt(input: {
   ) => ProductionRelayAttemptValidationResult;
 }): Promise<ProductionRelayAttemptResult> {
   const { step, compiledStep, context } = input;
-  const compiledFlow = requireCompiledFlow(context, step);
+  const flow = context.packageIndex.flow;
   const suppliedConnector = suppliedConnectorFromRelayer(context);
   const relayExecution = resolveRelayExecution({
     flowId: context.flow.id,
@@ -320,15 +317,15 @@ export async function executeProductionRelayAttempt(input: {
         ? {}
         : { selectionConfigLayers: context.selectionConfigLayers }),
     },
-    compiledFlow,
+    flow,
     compiledStep,
     Depth.parse(context.depth ?? 'standard'),
   );
   assertConnectorSelectionCompatible(relayExecution.connectorName, resolvedSelection);
   const loadedSkills = resolveLoadedRelaySkills({
-    flowId: compiledFlow.id,
+    flowId: flow.id as CompiledFlowId,
     stepId: step.id,
-    skillSlots: compiledStep.skill_slots ?? [],
+    skillSlots: (compiledStep.skill_slots ?? []) as readonly SkillSlot[],
     resolvedSelection,
     ...(context.selectionConfigLayers === undefined
       ? {}
@@ -450,7 +447,7 @@ export async function executeProductionRelayAttempt(input: {
   let parsedBody: unknown;
   if (checkEvaluation.kind === 'pass') {
     const validation = (input.validateAcceptedResult ?? defaultValidateAcceptedProductionRelay)({
-      compiledFlow,
+      flow,
       context,
       step,
       compiledStep,
@@ -544,11 +541,11 @@ export async function executeRelay(
   context: RunContext,
   connector?: RelayConnector,
 ): Promise<StepOutcome> {
-  // Production runs carry `compiledFlow`, so they use the full relay path:
+  // Production runs without an injected connector use the full relay path:
   // prompt composition, connector resolution, durable relay trace entries,
   // and report materialization. The injected-connector path below is for
   // focused tests that exercise executor wiring without production relay IO.
-  if (connector === undefined && context.compiledFlow !== undefined) {
+  if (connector === undefined) {
     return executeProductionRelay(step, context);
   }
   const suppliedConnector = connector ?? createStubRelayConnector();
@@ -587,7 +584,7 @@ export async function executeRelay(
 }
 
 async function executeProductionRelay(step: RelayStep, context: RunContext): Promise<StepOutcome> {
-  const compiledStep = requireCompiledStep(context, step, 'relay');
+  const compiledStep = requireRuntimeStep(context, step, 'relay');
   const relayAttempt = await executeProductionRelayAttempt({ step, context, compiledStep });
   if (relayAttempt.kind === 'connector_failed') {
     const recoveryRoute = recoveryRouteForExecutableStep(step);
