@@ -39,6 +39,7 @@ This matrix compares the checked-in original Circuit snapshot with the current c
 | review | default | complete, continue, retry, stop |  |
 | migrate | autonomous, deep, default | complete, continue, revise, stop |  |
 | fix | autonomous, deep, default, lite | ask, complete, continue, escalate, handoff, retry, revise, stop |  |
+| pursue | autonomous, default | complete, continue, escalate, handoff, retry, stop |  |
 | build | autonomous, deep, default, lite | complete, continue, retry, revise, stop |  |
 | explore | autonomous, deep, default, lite, tournament | complete, continue, retry, revise, stop |  |
 | sweep | autonomous, deep, default, lite | complete, continue, retry, revise, stop |  |
