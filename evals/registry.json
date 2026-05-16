@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "evals": [
+    {
+      "id": "fix-vs-vanilla",
+      "claim_level": "claim-grade",
+      "flow": "fix",
+      "primary_metric": "false_fixed_rate",
+      "secondary_metrics": [
+        "objective_fixed_rate",
+        "regression_proof_quality",
+        "verification_pass_rate",
+        "diff_scope",
+        "wallclock_ms"
+      ],
+      "default_command": [
+        "node",
+        "evals/fix-vs-vanilla/run-fix-comparison.mjs",
+        "--set",
+        "held-out"
+      ],
+      "cost_class": "live-model",
+      "cadence": "release-or-milestone",
+      "claim_eligible": true,
+      "readme_path": "evals/fix-vs-vanilla/README.md"
+    },
+    {
+      "id": "false-done-fix",
+      "claim_level": "regression",
+      "flow": "fix",
+      "primary_metric": "outcome_not_fixed_for_false_done_patterns",
+      "secondary_metrics": [
+        "proof_chain_failure_classification"
+      ],
+      "default_command": [
+        "npx",
+        "vitest",
+        "run",
+        "tests/integration/fix-false-done-bar.test.ts",
+        "tests/integration/fix-false-done-bar-live.test.ts"
+      ],
+      "cost_class": "local-test",
+      "cadence": "pr",
+      "claim_eligible": false,
+      "readme_path": "evals/false-done-fix/README.md"
+    },
+    {
+      "id": "circuit-vs-vanilla",
+      "claim_level": "discovery",
+      "flow": "auto",
+      "primary_metric": "blind_operator_preference",
+      "secondary_metrics": [
+        "wallclock_ms",
+        "final_artifact_quality"
+      ],
+      "default_command": [
+        "node",
+        "evals/circuit-vs-vanilla/run-comparison.mjs",
+        "--task-id",
+        "review-generated-surface-drift",
+        "--prompt-file",
+        "evals/circuit-vs-vanilla/tasks/review-generated-surface-drift/prompt.md",
+        "--dry-run",
+        "--skip-build"
+      ],
+      "cost_class": "live-model",
+      "cadence": "ad-hoc",
+      "claim_eligible": false,
+      "readme_path": "evals/circuit-vs-vanilla/README.md"
+    },
+    {
+      "id": "verdict-correctness",
+      "claim_level": "regression",
+      "flow": "review",
+      "primary_metric": "defect_catch_rate",
+      "secondary_metrics": [
+        "control_false_positive_rate",
+        "connector_error_rate"
+      ],
+      "default_command": [
+        "node",
+        "--experimental-strip-types",
+        "evals/verdict-correctness/index.ts"
+      ],
+      "cost_class": "live-model",
+      "cadence": "release-or-milestone",
+      "claim_eligible": false,
+      "readme_path": "evals/verdict-correctness/README.md"
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "matrix_id": "fix-vs-vanilla-model-matrix",
+  "benchmark_id": "fix-vs-vanilla",
+  "claim_rule": "Matrix-level cheaper/stronger-model claims require at least two actually-run enabled provider/model rows.",
+  "rows": [
+    {
+      "id": "haiku-medium",
+      "enabled": true,
+      "provider": "claude-code",
+      "model": "claude-haiku-4-5-20251001",
+      "effort": "medium",
+      "description": "Required V1 row; matches the current Fix-vs-vanilla pilot default."
+    },
+    {
+      "id": "stronger-claude-candidate",
+      "enabled": false,
+      "provider": "claude-code",
+      "model": "configure-before-use",
+      "effort": "medium",
+      "description": "Disabled placeholder for a stronger Claude Code row."
+    },
+    {
+      "id": "open-model-candidate",
+      "enabled": false,
+      "provider": "configure-before-use",
+      "model": "configure-before-use",
+      "effort": "medium",
+      "description": "Disabled placeholder for a future open/local model row once provider support exists."
+    }
+  ]
+}

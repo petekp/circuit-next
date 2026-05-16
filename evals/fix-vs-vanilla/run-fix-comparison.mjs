@@ -1,17 +1,24 @@
 #!/usr/bin/env node
-import { spawn, spawnSync } from 'node:child_process';
-import {
-  cpSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  writeFileSync,
-} from 'node:fs';
-import { tmpdir } from 'node:os';
+import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
+import {
+  aggregate,
+  decideClaim,
+  parseCircuitClaim,
+  parseVanillaClaim,
+  scoreArm,
+} from '../../scripts/evals/fix-vs-vanilla/scoring.mjs';
+import { createResultRoot, repoMetadata } from '../../scripts/evals/lib/metadata.mjs';
+import {
+  commandOutput,
+  findExecutable,
+  promptCommand,
+  runCommand,
+  runSync,
+} from '../../scripts/evals/lib/process.mjs';
+import { createClaudeCodeWrapper, vanillaClaudeArgs } from '../../scripts/evals/lib/providers.mjs';
+import { readJson, safeSegment, writeJson } from '../../scripts/evals/lib/json.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -118,107 +125,6 @@ function requireValue(argv, index, flag) {
     throw new Error(`${flag} requires a value`);
   }
   return value;
-}
-
-function readJson(path) {
-  return JSON.parse(readFileSync(path, 'utf8'));
-}
-
-function writeJson(path, value) {
-  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
-}
-
-function safeSegment(value) {
-  return String(value)
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'run';
-}
-
-function isoForPath(date = new Date()) {
-  return date.toISOString().replace(/[:.]/g, '-');
-}
-
-function runSync(command, argv, options = {}) {
-  const result = spawnSync(command, argv, {
-    cwd: options.cwd ?? REPO_ROOT,
-    encoding: 'utf8',
-    env: options.env ?? process.env,
-    timeout: options.timeoutMs,
-  });
-  return {
-    command,
-    argv,
-    cwd: options.cwd ?? REPO_ROOT,
-    status: result.status,
-    signal: result.signal,
-    stdout: result.stdout ?? '',
-    stderr: result.stderr ?? '',
-    error: result.error?.message,
-  };
-}
-
-function commandOutput(command, argv, fallback = 'unavailable') {
-  const result = runSync(command, argv);
-  if (result.status !== 0) return fallback;
-  return result.stdout.trim() || fallback;
-}
-
-function findExecutable(name, { required = true } = {}) {
-  const result = runSync('zsh', ['-lc', `command -v ${shellQuote(name)}`]);
-  if (result.status !== 0) {
-    if (required) throw new Error(`could not find ${name} on PATH`);
-    return name;
-  }
-  return result.stdout.trim();
-}
-
-function shellQuote(value) {
-  return `'${String(value).replaceAll("'", "'\\''")}'`;
-}
-
-function promptCommand(argv) {
-  return argv.map((arg) => (/^[A-Za-z0-9_./:@=+-]+$/.test(arg) ? arg : shellQuote(arg))).join(' ');
-}
-
-function createClaudeCodeWrapper(realClaude, model, effort) {
-  const binDir = mkdtempSync(resolve(tmpdir(), 'fix-vs-vanilla-claude-'));
-  const wrapperPath = resolve(binDir, 'claude');
-  writeFileSync(
-    wrapperPath,
-    `#!/usr/bin/env bash
-set -euo pipefail
-
-INJECT_MODEL=1
-INJECT_EFFORT=1
-for arg in "$@"; do
-  case "$arg" in
-    --model) INJECT_MODEL=0 ;;
-    --effort) INJECT_EFFORT=0 ;;
-  esac
-done
-
-INJECTED=()
-if [[ "$INJECT_MODEL" -eq 1 ]]; then
-  INJECTED+=(--model "$FIX_VS_VANILLA_MODEL")
-fi
-if [[ "$INJECT_EFFORT" -eq 1 ]]; then
-  INJECTED+=(--effort "$FIX_VS_VANILLA_EFFORT")
-fi
-exec "$REAL_CLAUDE" "\${INJECTED[@]}" "$@"
-`,
-    { mode: 0o755 },
-  );
-  return {
-    binDir,
-    env: {
-      ...process.env,
-      REAL_CLAUDE: realClaude,
-      FIX_VS_VANILLA_MODEL: model,
-      FIX_VS_VANILLA_EFFORT: effort,
-      PATH: `${binDir}:${process.env.PATH ?? ''}`,
-    },
-  };
 }
 
 function selectedTaskIds(manifest, args) {
@@ -334,99 +240,6 @@ End your final answer with a fenced JSON object using this exact shape:
 \`\`\``;
 }
 
-function vanillaClaudeArgs(prompt) {
-  return [
-    '-p',
-    '--permission-mode',
-    'bypassPermissions',
-    '--strict-mcp-config',
-    '--disable-slash-commands',
-    '--setting-sources',
-    '',
-    '--settings',
-    '{}',
-    '--no-session-persistence',
-    prompt,
-  ];
-}
-
-async function runCommand({ label, command, argv, cwd, env, timeoutMs, outputDir }) {
-  mkdirSync(outputDir, { recursive: true });
-  const startedAt = new Date();
-  const start = performance.now();
-  let stdout = '';
-  let stderr = '';
-  let timedOut = false;
-
-  const result = await new Promise((resolvePromise) => {
-    const child = spawn(command, argv, {
-      cwd,
-      env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      detached: true,
-    });
-
-    const timeout = setTimeout(() => {
-      timedOut = true;
-      try {
-        process.kill(-child.pid, 'SIGTERM');
-      } catch {
-        child.kill('SIGTERM');
-      }
-      setTimeout(() => {
-        try {
-          process.kill(-child.pid, 'SIGKILL');
-        } catch {
-          child.kill('SIGKILL');
-        }
-      }, 2000).unref();
-    }, timeoutMs);
-
-    child.stdout.setEncoding('utf8');
-    child.stderr.setEncoding('utf8');
-    child.stdout.on('data', (chunk) => {
-      stdout += chunk;
-      process.stdout.write(`[${label}] ${chunk}`);
-    });
-    child.stderr.on('data', (chunk) => {
-      stderr += chunk;
-      process.stderr.write(`[${label}] ${chunk}`);
-    });
-    child.on('error', (error) => {
-      clearTimeout(timeout);
-      resolvePromise({ exitCode: null, signal: null, error: error.message });
-    });
-    child.on('close', (exitCode, signal) => {
-      clearTimeout(timeout);
-      resolvePromise({ exitCode, signal, error: undefined });
-    });
-  });
-
-  const finishedAt = new Date();
-  const wallclockMs = performance.now() - start;
-  writeFileSync(resolve(outputDir, 'stdout.txt'), stdout);
-  writeFileSync(resolve(outputDir, 'stderr.txt'), stderr);
-  const metadata = {
-    label,
-    command,
-    argv: redactedArgv(argv),
-    cwd,
-    started_at: startedAt.toISOString(),
-    finished_at: finishedAt.toISOString(),
-    wallclock_ms: wallclockMs,
-    exit_code: result.exitCode,
-    signal: result.signal,
-    timed_out: timedOut,
-    error: result.error,
-  };
-  writeJson(resolve(outputDir, 'run-metadata.json'), metadata);
-  return { ...metadata, stdout, stderr };
-}
-
-function redactedArgv(argv) {
-  return argv.map((arg) => (String(arg).length > 500 ? '<prompt omitted; see prompt.md>' : arg));
-}
-
 function runChecks(repoDir, checks, outputDir, phase) {
   mkdirSync(outputDir, { recursive: true });
   return checks.map((check) => {
@@ -469,149 +282,9 @@ function diffState(repoDir, outputDir) {
   };
 }
 
-function parseCircuitClaim(runFolder) {
-  const resultPath = resolve(runFolder, 'reports', 'fix-result.json');
-  if (!existsSync(resultPath)) {
-    return {
-      claimed_fixed: false,
-      parse_status: 'missing-fix-result',
-      result_path: resultPath,
-      proof_quality: 0,
-    };
-  }
-  const result = readJson(resultPath);
-  return {
-    claimed_fixed: result.outcome === 'fixed',
-    parse_status: 'parsed',
-    result_path: resultPath,
-    fix_outcome: result.outcome,
-    verification_status: result.verification_status,
-    regression_status: result.regression_status,
-    regression_rerun_status: result.regression_rerun_status,
-    change_set_status: result.change_set_status,
-    review_status: result.review_status,
-    review_verdict: result.review_verdict,
-    review_skip_reason: result.review_skip_reason,
-    proof_quality: circuitProofQuality(result),
-  };
-}
-
-function circuitProofQuality(result) {
-  if (
-    result.regression_status === 'proved' &&
-    result.regression_rerun_status === 'cleared' &&
-    result.verification_status === 'passed' &&
-    result.change_set_status === 'pass'
-  ) {
-    return 3;
-  }
-  if (result.regression_status === 'proved' && result.regression_rerun_status === 'cleared') {
-    return 2;
-  }
-  if (result.verification_status === 'passed') return 1;
-  return 0;
-}
-
-function parseVanillaClaim(stdout) {
-  const parsed = parseLastJsonObject(stdout);
-  if (parsed === undefined) {
-    return {
-      claimed_fixed: /fixed|done|resolved/i.test(stdout),
-      parse_status: 'heuristic',
-      proof_quality: 0,
-    };
-  }
-  const proof = parsed.regression_proof ?? {};
-  const commands = Array.isArray(parsed.commands_run) ? parsed.commands_run : [];
-  return {
-    claimed_fixed: parsed.claimed_fixed === true,
-    parse_status: 'parsed',
-    parsed,
-    proof_quality: vanillaProofQuality(proof, commands),
-  };
-}
-
-function parseLastJsonObject(text) {
-  const fenced = [...text.matchAll(/```json\s*([\s\S]*?)```/g)];
-  for (const match of fenced.reverse()) {
-    try {
-      return JSON.parse(match[1]);
-    } catch {
-      // Try another candidate.
-    }
-  }
-
-  const starts = [];
-  for (let index = 0; index < text.length; index += 1) {
-    if (text[index] === '{') starts.push(index);
-  }
-  for (const start of starts.reverse()) {
-    try {
-      return JSON.parse(text.slice(start));
-    } catch {
-      // Try an earlier object start.
-    }
-  }
-  return undefined;
-}
-
-function vanillaProofQuality(proof, commands) {
-  const failedBefore = proof.failed_before === true;
-  const passedAfter = proof.passed_after === true;
-  const hasCommands = commands.length >= 2;
-  const hasUnableStatus = commands.some((command) =>
-    /unable|could not|permission|error/i.test(String(command.status ?? command.command ?? '')),
-  );
-  const hasSpeculativeStatus = commands.some((command) =>
-    /would|should|expected|manual|not[- ]?run/i.test(String(command.status ?? '')),
-  );
-  const hasExplicitFailedBefore = commands.some((command) =>
-    /failed-before|fail(ed)? before/i.test(String(command.status ?? '')),
-  );
-  const hasExplicitPassedAfter = commands.some((command) =>
-    /passed-after|pass(ed)? after/i.test(String(command.status ?? '')),
-  );
-  if (hasUnableStatus) return passedAfter || failedBefore ? 1 : 0;
-  if (
-    failedBefore &&
-    passedAfter &&
-    hasCommands &&
-    hasExplicitFailedBefore &&
-    hasExplicitPassedAfter &&
-    !hasSpeculativeStatus
-  ) {
-    return 3;
-  }
-  if (failedBefore && passedAfter) return 2;
-  if (passedAfter || hasCommands) return 1;
-  return 0;
-}
-
-function scoreArm({ task, armId, run, checks, diff, claim }) {
-  const objectiveFixed = checks.length > 0 && checks.every((check) => check.passed);
-  const allowed = new Set(task.allowed_changed_files);
-  const outsideAllowed = diff.changed_files.filter((file) => !allowed.has(file));
-  return {
-    task_id: task.id,
-    split: task.split,
-    arm_id: armId,
-    exit_code: run.exit_code,
-    timed_out: run.timed_out,
-    wallclock_ms: run.wallclock_ms,
-    objective_fixed: objectiveFixed,
-    verification_passed: objectiveFixed,
-    claimed_fixed: claim.claimed_fixed,
-    false_fixed: claim.claimed_fixed && !objectiveFixed,
-    proof_quality: claim.proof_quality,
-    changed_files: diff.changed_files,
-    changed_file_count: diff.changed_files.length,
-    outside_allowed_changed_files: outsideAllowed,
-    claim,
-    checks,
-    diff_path: diff.diff_path,
-    stdout_path: resolve(dirname(diff.diff_path), 'stdout.txt'),
-    stderr_path: resolve(dirname(diff.diff_path), 'stderr.txt'),
-  };
+function fixRunMetadata(metadataBase) {
+  const { stdout_path: _stdoutPath, stderr_path: _stderrPath, ...metadata } = metadataBase;
+  return metadata;
 }
 
 async function runTask({ task, args, wrapper, resultRoot }) {
@@ -661,6 +334,7 @@ async function runTask({ task, args, wrapper, resultRoot }) {
     },
     timeoutMs: args.timeoutMs,
     outputDir: circuitDir,
+    metadataBuilder: fixRunMetadata,
   });
   const circuitPostChecks = runChecks(circuitRepo, task.checks, circuitDir, 'post');
   const circuitDiff = diffState(circuitRepo, circuitDir);
@@ -681,6 +355,7 @@ async function runTask({ task, args, wrapper, resultRoot }) {
     env: wrapper.env,
     timeoutMs: args.timeoutMs,
     outputDir: vanillaDir,
+    metadataBuilder: fixRunMetadata,
   });
   const vanillaPostChecks = runChecks(vanillaRepo, task.checks, vanillaDir, 'post');
   const vanillaDiff = diffState(vanillaRepo, vanillaDir);
@@ -711,72 +386,6 @@ async function runTask({ task, args, wrapper, resultRoot }) {
   };
   writeJson(resolve(taskDir, 'summary.json'), taskSummary);
   return taskSummary;
-}
-
-function aggregate(taskSummaries, splitFilter) {
-  const arms = ['circuit-claude-code', 'vanilla-claude-code'];
-  const filtered = splitFilter === undefined
-    ? taskSummaries
-    : taskSummaries.filter((task) => task.split === splitFilter);
-  const out = {};
-  for (const arm of arms) {
-    const scores = filtered.map((task) => task.arms[arm]);
-    const count = scores.length;
-    out[arm] = {
-      task_count: count,
-      false_fixed_count: scores.filter((score) => score.false_fixed).length,
-      false_fixed_rate: rate(scores.filter((score) => score.false_fixed).length, count),
-      objective_fixed_count: scores.filter((score) => score.objective_fixed).length,
-      objective_fixed_rate: rate(scores.filter((score) => score.objective_fixed).length, count),
-      verification_pass_count: scores.filter((score) => score.verification_passed).length,
-      verification_pass_rate: rate(scores.filter((score) => score.verification_passed).length, count),
-      mean_proof_quality: mean(scores.map((score) => score.proof_quality)),
-      completed_review_count: scores.filter((score) => score.claim.review_status === 'completed').length,
-      skipped_review_count: scores.filter((score) => score.claim.review_status === 'skipped').length,
-      mean_changed_file_count: mean(scores.map((score) => score.changed_file_count)),
-      outside_allowed_change_count: scores.reduce(
-        (sum, score) => sum + score.outside_allowed_changed_files.length,
-        0,
-      ),
-      mean_wallclock_ms: mean(scores.map((score) => score.wallclock_ms)),
-    };
-  }
-  return out;
-}
-
-function rate(numerator, denominator) {
-  if (denominator === 0) return null;
-  return numerator / denominator;
-}
-
-function mean(values) {
-  const usable = values.filter((value) => typeof value === 'number' && Number.isFinite(value));
-  if (usable.length === 0) return null;
-  return usable.reduce((sum, value) => sum + value, 0) / usable.length;
-}
-
-function decideClaim(heldOutAggregate) {
-  const circuit = heldOutAggregate['circuit-claude-code'];
-  const vanilla = heldOutAggregate['vanilla-claude-code'];
-  if (circuit.task_count === 0 || vanilla.task_count === 0) {
-    return { supported: false, reason: 'no held-out tasks were scored' };
-  }
-  if (circuit.false_fixed_rate < vanilla.false_fixed_rate) {
-    if (circuit.objective_fixed_rate >= vanilla.objective_fixed_rate) {
-      return {
-        supported: true,
-        reason: 'Circuit had a lower held-out false-fixed rate and matched or beat vanilla objective fixed rate.',
-      };
-    }
-    return {
-      supported: false,
-      reason: 'Circuit had fewer false-fixed outcomes but a lower objective fixed rate.',
-    };
-  }
-  return {
-    supported: false,
-    reason: 'Circuit did not have a lower held-out false-fixed rate.',
-  };
 }
 
 function renderReport(summary) {
@@ -818,11 +427,12 @@ ${summary.tasks
 }
 
 function formatTaskScore(score) {
-  const review = score.claim.review_status === undefined
-    ? ''
-    : `, review=${score.claim.review_status}${
-        score.claim.review_verdict === undefined ? '' : `:${score.claim.review_verdict}`
-      }`;
+  const review =
+    score.claim.review_status === undefined
+      ? ''
+      : `, review=${score.claim.review_status}${
+          score.claim.review_verdict === undefined ? '' : `:${score.claim.review_verdict}`
+        }`;
   return `false-fixed=${score.false_fixed}, fixed=${score.objective_fixed}, proof=${score.proof_quality}${review}`;
 }
 
@@ -846,18 +456,19 @@ async function main() {
   const taskIds = selectedTaskIds(manifest, args);
   const tasks = taskIds.map(loadTask);
   const runLabel = args.taskId === undefined ? args.set : args.taskId;
-  const resultRoot = resolve(args.outDir, `${isoForPath()}-${safeSegment(runLabel)}`);
-  mkdirSync(resultRoot, { recursive: true });
+  const resultRoot = createResultRoot(args.outDir, runLabel);
 
   const realClaude = findExecutable('claude', { required: !args.dryRun });
-  const wrapper = createClaudeCodeWrapper(realClaude, args.model, args.effort);
+  const wrapper = createClaudeCodeWrapper(realClaude, args.model, args.effort, {
+    tempPrefix: 'fix-vs-vanilla-claude-',
+  });
   const metadata = {
     schema_version: 1,
     benchmark_id: manifest.benchmark_id,
     result_root: resultRoot,
     repo_root: REPO_ROOT,
-    repo_commit: commandOutput('git', ['rev-parse', 'HEAD']),
-    git_status_short: commandOutput('git', ['status', '--short'], ''),
+    repo_commit: repoMetadata(REPO_ROOT).repo_commit,
+    git_status_short: commandOutput('git', ['status', '--short'], '', { cwd: REPO_ROOT }),
     provider: args.provider,
     model: args.model,
     effort: args.effort,

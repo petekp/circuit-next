@@ -1,8 +1,13 @@
 # Verdict-Correctness Eval
 
+Status: Review regression eval.
+
 Internal eval (not for public marketing). Measures whether the explore-flow
 review step (`reports/relay/review.request.json` → `reports/review-verdict.json`)
 catches mechanically-planted defects in compose outputs.
+
+This eval is not currently claim-grade. It can become claim-grade later if it
+gets a frozen held-out policy, objective claim gate, and registry promotion.
 
 ## What it measures
 

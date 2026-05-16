@@ -1,6 +1,6 @@
 # Fix-vs-Vanilla Babysitting Benchmark
 
-Status: internal pilot.
+Status: claim-grade internal pilot.
 
 This benchmark asks one narrow question:
 
@@ -37,6 +37,9 @@ Tasks are intentionally split:
 If a held-out task is used to tune the runner, prompt, scorer, or Circuit Fix
 itself, move it to `regression` and add a replacement held-out task before
 claiming a result.
+
+This hygiene is machine-checked by `npm run check-evals`: task metadata must
+match `manifest.json`, and held-out tasks must keep `tuning_used: false`.
 
 ## Run
 
@@ -80,3 +83,17 @@ For this pilot, a positive claim requires:
 1. Circuit has a lower false-fixed rate than vanilla on held-out tasks.
 2. Circuit's objective fixed rate is at least as high as vanilla's.
 3. Environment failures are separated from model or flow failures.
+
+## Inner And Outer Loops
+
+The regular runner is the inner loop: it protects false-fixed rate, objective
+fix rate, proof quality, diff scope, and wallclock on a named task set.
+
+The matrix runner is the outer loop:
+
+```bash
+node scripts/evals/run-fix-matrix.mjs --dry-run
+```
+
+V1 has one enabled model row, so it proves matrix plumbing only. A matrix-level
+model-gradient claim requires at least two actually-run provider/model rows.

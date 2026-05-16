@@ -1,9 +1,21 @@
 #!/usr/bin/env node
-import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createResultRoot, repoMetadata } from '../../scripts/evals/lib/metadata.mjs';
+import {
+  commandOutput,
+  findExecutable,
+  redactedCommand,
+  runCommand,
+  runSync,
+} from '../../scripts/evals/lib/process.mjs';
+import {
+  createProviderWrapper,
+  vanillaClaudeArgs,
+  vanillaCodexArgs,
+} from '../../scripts/evals/lib/providers.mjs';
+import { safeJsonOrString, writeJson } from '../../scripts/evals/lib/json.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -133,236 +145,6 @@ function requireValue(argv, index, flag) {
   return value;
 }
 
-function runSync(command, args, options = {}) {
-  const result = spawnSync(command, args, {
-    cwd: options.cwd ?? REPO_ROOT,
-    encoding: 'utf8',
-    env: options.env ?? process.env,
-  });
-  if (result.error) throw result.error;
-  return {
-    status: result.status,
-    stdout: result.stdout ?? '',
-    stderr: result.stderr ?? '',
-  };
-}
-
-function commandOutput(command, args, fallback = 'unavailable') {
-  try {
-    const result = runSync(command, args);
-    if (result.status !== 0) return fallback;
-    return result.stdout.trim() || fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function findExecutable(name, { required = true } = {}) {
-  let result;
-  try {
-    result = runSync('zsh', ['-lc', `command -v ${shellQuote(name)}`]);
-  } catch {
-    // zsh may not be installed in CI; fall through to required-handling.
-    result = { status: 1, stdout: '' };
-  }
-  if (result.status !== 0) {
-    if (required) throw new Error(`could not find ${name} on PATH`);
-    return name;
-  }
-  return result.stdout.trim();
-}
-
-function shellQuote(value) {
-  return `'${String(value).replaceAll("'", "'\\''")}'`;
-}
-
-function safeSegment(value) {
-  return value.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'task';
-}
-
-function isoForPath(date = new Date()) {
-  return date.toISOString().replace(/[:.]/g, '-');
-}
-
-function writeJson(path, value) {
-  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
-}
-
-function redactedCommand(command, args) {
-  return [command, ...args.map((arg) => (arg.length > 400 ? '<prompt from prompt.md>' : arg))];
-}
-
-function createCodexWrapper(realCodex, model, effort) {
-  const binDir = mkdtempSync(resolve(tmpdir(), 'circuit-vs-vanilla-codex-'));
-  const wrapperPath = resolve(binDir, 'codex');
-  writeFileSync(
-    wrapperPath,
-    `#!/usr/bin/env bash
-set -euo pipefail
-
-if [[ "\${1:-}" == "exec" ]]; then
-  shift
-  exec "$REAL_CODEX" exec -m "$CIRCUIT_VS_VANILLA_MODEL" -c "model_reasoning_effort=\\"$CIRCUIT_VS_VANILLA_EFFORT\\"" "$@"
-fi
-
-exec "$REAL_CODEX" "$@"
-`,
-    { mode: 0o755 },
-  );
-  return {
-    binDir,
-    env: {
-      ...process.env,
-      REAL_CODEX: realCodex,
-      CIRCUIT_VS_VANILLA_MODEL: model,
-      CIRCUIT_VS_VANILLA_EFFORT: effort,
-      PATH: `${binDir}:${process.env.PATH ?? ''}`,
-    },
-  };
-}
-
-// Claude Code wrapper: shadows `claude` on PATH and injects --model / --effort
-// when the caller did not already pass them. Both arms (Circuit's claude-code
-// connector subprocess + the vanilla `claude -p` invocation) go through this
-// wrapper so model and effort are pinned identically.
-function createClaudeCodeWrapper(realClaude, model, effort) {
-  const binDir = mkdtempSync(resolve(tmpdir(), 'circuit-vs-vanilla-claude-'));
-  const wrapperPath = resolve(binDir, 'claude');
-  writeFileSync(
-    wrapperPath,
-    `#!/usr/bin/env bash
-set -euo pipefail
-
-INJECT_MODEL=1
-INJECT_EFFORT=1
-for arg in "$@"; do
-  case "$arg" in
-    --model) INJECT_MODEL=0 ;;
-    --effort) INJECT_EFFORT=0 ;;
-  esac
-done
-
-INJECTED=()
-if [[ "$INJECT_MODEL" -eq 1 ]]; then
-  INJECTED+=(--model "$CIRCUIT_VS_VANILLA_MODEL")
-fi
-if [[ "$INJECT_EFFORT" -eq 1 ]]; then
-  INJECTED+=(--effort "$CIRCUIT_VS_VANILLA_EFFORT")
-fi
-exec "$REAL_CLAUDE" "\${INJECTED[@]}" "$@"
-`,
-    { mode: 0o755 },
-  );
-  return {
-    binDir,
-    env: {
-      ...process.env,
-      REAL_CLAUDE: realClaude,
-      CIRCUIT_VS_VANILLA_MODEL: model,
-      CIRCUIT_VS_VANILLA_EFFORT: effort,
-      PATH: `${binDir}:${process.env.PATH ?? ''}`,
-    },
-  };
-}
-
-function createWrapper(provider, realExecutable, model, effort) {
-  if (provider === 'codex') return createCodexWrapper(realExecutable, model, effort);
-  if (provider === 'claude-code') return createClaudeCodeWrapper(realExecutable, model, effort);
-  throw new Error(`unsupported provider '${provider}'`);
-}
-
-// Vanilla Claude Code arm: same dispatch flags Circuit's claude-code connector
-// uses, so the comparison holds tool surface constant. Plain text on stdout
-// (no --output-format) so the runner can take stdout as the final answer.
-function vanillaClaudeArgs(prompt) {
-  return [
-    '-p',
-    '--permission-mode',
-    'bypassPermissions',
-    '--strict-mcp-config',
-    '--disable-slash-commands',
-    '--setting-sources',
-    '',
-    '--settings',
-    '{}',
-    '--no-session-persistence',
-    prompt,
-  ];
-}
-
-async function runCommand({ armId, command, args, cwd, env, timeoutMs, outputDir }) {
-  mkdirSync(outputDir, { recursive: true });
-  const startedAt = new Date();
-  const start = performance.now();
-  let stdout = '';
-  let stderr = '';
-  let timedOut = false;
-
-  const result = await new Promise((resolvePromise) => {
-    const child = spawn(command, args, {
-      cwd,
-      env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      detached: true,
-    });
-
-    const timeout = setTimeout(() => {
-      timedOut = true;
-      try {
-        process.kill(-child.pid, 'SIGTERM');
-      } catch {
-        child.kill('SIGTERM');
-      }
-      setTimeout(() => {
-        try {
-          process.kill(-child.pid, 'SIGKILL');
-        } catch {
-          child.kill('SIGKILL');
-        }
-      }, 2000).unref();
-    }, timeoutMs);
-
-    child.stdout.setEncoding('utf8');
-    child.stderr.setEncoding('utf8');
-    child.stdout.on('data', (chunk) => {
-      stdout += chunk;
-      process.stdout.write(`[${armId}] ${chunk}`);
-    });
-    child.stderr.on('data', (chunk) => {
-      stderr += chunk;
-      process.stderr.write(`[${armId}] ${chunk}`);
-    });
-    child.on('error', (error) => {
-      clearTimeout(timeout);
-      resolvePromise({ exitCode: null, signal: null, error: error.message });
-    });
-    child.on('close', (exitCode, signal) => {
-      clearTimeout(timeout);
-      resolvePromise({ exitCode, signal, error: undefined });
-    });
-  });
-
-  const finishedAt = new Date();
-  const durationMs = performance.now() - start;
-  writeFileSync(resolve(outputDir, 'stdout.txt'), stdout);
-  writeFileSync(resolve(outputDir, 'stderr.txt'), stderr);
-  const metadata = {
-    arm_id: armId,
-    command: redactedCommand(command, args),
-    started_at: startedAt.toISOString(),
-    finished_at: finishedAt.toISOString(),
-    wallclock_ms: durationMs,
-    exit_code: result.exitCode,
-    signal: result.signal,
-    timed_out: timedOut,
-    error: result.error,
-    stdout_path: resolve(outputDir, 'stdout.txt'),
-    stderr_path: resolve(outputDir, 'stderr.txt'),
-  };
-  writeJson(resolve(outputDir, 'metadata.json'), metadata);
-  return { ...metadata, stdout, stderr };
-}
-
 function extractCircuitFinalMarkdown(_circuitDir, stdout) {
   try {
     const parsed = JSON.parse(stdout);
@@ -414,6 +196,25 @@ ${secondText.trim() || '_No output captured._'}
   });
 }
 
+function comparisonRunMetadata(armId) {
+  return (metadataBase) => ({
+    arm_id: armId,
+    command: redactedCommand(metadataBase.command, metadataBase.argv, {
+      limit: 400,
+      replacement: '<prompt from prompt.md>',
+    }),
+    started_at: metadataBase.started_at,
+    finished_at: metadataBase.finished_at,
+    wallclock_ms: metadataBase.wallclock_ms,
+    exit_code: metadataBase.exit_code,
+    signal: metadataBase.signal,
+    timed_out: metadataBase.timed_out,
+    error: metadataBase.error,
+    stdout_path: metadataBase.stdout_path,
+    stderr_path: metadataBase.stderr_path,
+  });
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const promptPath = resolve(args.promptFile);
@@ -422,13 +223,9 @@ async function main() {
   if (prompt.length === 0) throw new Error(`prompt file is empty: ${promptPath}`);
 
   const providerExecutable = args.provider === 'codex' ? 'codex' : 'claude';
-  // Dry-run only inspects printed command metadata and never spawns the
-  // provider; the PATH check would otherwise block CI environments where
-  // codex/claude aren't installed.
   const realProviderPath = findExecutable(providerExecutable, { required: !args.dryRun });
-  const wrapper = createWrapper(args.provider, realProviderPath, args.model, args.effort);
-  const timestamp = isoForPath();
-  const resultRoot = resolve(args.outDir, `${timestamp}-${safeSegment(args.taskId)}`);
+  const wrapper = createProviderWrapper(args.provider, realProviderPath, args.model, args.effort);
+  const resultRoot = createResultRoot(args.outDir, args.taskId);
   const armIds = {
     circuit: `circuit-${args.provider}`,
     vanilla: `vanilla-${args.provider}`,
@@ -439,10 +236,11 @@ async function main() {
   mkdirSync(circuitDir, { recursive: true });
   mkdirSync(vanillaDir, { recursive: true });
 
-  const gitCommit = commandOutput('git', ['rev-parse', 'HEAD']);
-  const gitStatus = commandOutput('git', ['status', '--short'], '');
+  const repo = repoMetadata(REPO_ROOT);
   const providerVersion = commandOutput(realProviderPath, ['--version']);
-  const circuitVersion = commandOutput('node', ['bin/circuit-next', 'version', '--json']);
+  const circuitVersion = commandOutput('node', ['bin/circuit-next', 'version', '--json'], 'unavailable', {
+    cwd: REPO_ROOT,
+  });
 
   const circuitArgs = [
     'bin/circuit-next',
@@ -456,10 +254,7 @@ async function main() {
     'jsonl',
   ];
   const vanillaCommand = providerExecutable;
-  const vanillaArgs =
-    args.provider === 'codex'
-      ? ['exec', '-s', 'read-only', '--ephemeral', '--skip-git-repo-check', '--color', 'never', prompt]
-      : vanillaClaudeArgs(prompt);
+  const vanillaArgs = args.provider === 'codex' ? vanillaCodexArgs(prompt) : vanillaClaudeArgs(prompt);
 
   const metadata = {
     schema_version: 1,
@@ -467,9 +262,9 @@ async function main() {
     prompt_file: promptPath,
     prompt_path: resolve(resultRoot, 'prompt.md'),
     repo_root: REPO_ROOT,
-    repo_commit: gitCommit,
-    dirty_worktree: gitStatus.trim().length > 0,
-    git_status_short: gitStatus,
+    repo_commit: repo.repo_commit,
+    dirty_worktree: repo.dirty_worktree,
+    git_status_short: repo.git_status_short,
     provider: args.provider,
     model: args.model,
     effort: args.effort,
@@ -480,11 +275,17 @@ async function main() {
     result_root: resultRoot,
     arms: {
       [armIds.circuit]: {
-        command: redactedCommand('node', circuitArgs),
+        command: redactedCommand('node', circuitArgs, {
+          limit: 400,
+          replacement: '<prompt from prompt.md>',
+        }),
         run_folder: circuitRunFolder,
       },
       [armIds.vanilla]: {
-        command: redactedCommand(vanillaCommand, vanillaArgs),
+        command: redactedCommand(vanillaCommand, vanillaArgs, {
+          limit: 400,
+          replacement: '<prompt from prompt.md>',
+        }),
       },
     },
   };
@@ -501,7 +302,7 @@ async function main() {
 
   if (!args.skipBuild) {
     process.stderr.write('Building compiled CLI before comparison...\n');
-    const build = runSync('npm', ['run', 'build']);
+    const build = runSync('npm', ['run', 'build'], { cwd: REPO_ROOT });
     writeFileSync(resolve(resultRoot, 'build.stdout.txt'), build.stdout);
     writeFileSync(resolve(resultRoot, 'build.stderr.txt'), build.stderr);
     if (build.status !== 0) {
@@ -513,23 +314,27 @@ async function main() {
   process.stderr.write(`Provider: ${args.provider}; model: ${args.model}; effort: ${args.effort}\n`);
 
   const circuit = await runCommand({
-    armId: armIds.circuit,
+    label: armIds.circuit,
     command: 'node',
-    args: circuitArgs,
+    argv: circuitArgs,
     cwd: REPO_ROOT,
     env: wrapper.env,
     timeoutMs: args.timeoutMs,
     outputDir: circuitDir,
+    metadataFilename: 'metadata.json',
+    metadataBuilder: comparisonRunMetadata(armIds.circuit),
   });
 
   const vanilla = await runCommand({
-    armId: armIds.vanilla,
+    label: armIds.vanilla,
     command: vanillaCommand,
-    args: vanillaArgs,
+    argv: vanillaArgs,
     cwd: REPO_ROOT,
     env: wrapper.env,
     timeoutMs: args.timeoutMs,
     outputDir: vanillaDir,
+    metadataFilename: 'metadata.json',
+    metadataBuilder: comparisonRunMetadata(armIds.vanilla),
   });
 
   const circuitFinal = extractCircuitFinalMarkdown(circuitDir, circuit.stdout);
@@ -545,8 +350,8 @@ async function main() {
     provider: args.provider,
     model: args.model,
     effort: args.effort,
-    repo_commit: gitCommit,
-    dirty_worktree: gitStatus.trim().length > 0,
+    repo_commit: repo.repo_commit,
+    dirty_worktree: repo.dirty_worktree,
     arms: {
       [armIds.circuit]: {
         exit_code: circuit.exit_code,
@@ -572,14 +377,6 @@ async function main() {
   process.stdout.write(`Circuit final: ${resolve(circuitDir, 'final.md')}\n`);
   process.stdout.write(`Vanilla final: ${resolve(vanillaDir, 'final.md')}\n`);
   process.stdout.write(`Blind review: ${resolve(resultRoot, 'blind-review-A-then-B.md')}\n`);
-}
-
-function safeJsonOrString(value) {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return value;
-  }
 }
 
 main().catch((err) => {

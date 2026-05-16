@@ -17,6 +17,10 @@
     "test:fast": "vitest run --exclude 'tests/runner/cli-router.test.ts'",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "evals:list": "node scripts/evals/list-evals.mjs",
+    "check-evals": "node scripts/evals/check-evals.mjs",
+    "evals:fix:dry-run": "node evals/fix-vs-vanilla/run-fix-comparison.mjs --set held-out --dry-run",
+    "evals:fix:matrix:dry-run": "node scripts/evals/run-fix-matrix.mjs --dry-run",
     "soak:runtime:fast": "vitest run tests/soak tests/runner/cli-runtime.test.ts tests/runtime tests/parity",
     "soak:runtime": "vitest run tests/soak && npm run verify && npm run check-flow-drift",
     "lint": "biome check .",
@@ -39,8 +43,8 @@
     "publish:plugins:check": "node scripts/publish-plugins.ts check",
     "publish:plugins:local": "node scripts/publish-plugins.ts local",
     "publish:plugins:release": "node scripts/publish-plugins.ts release --codex-source petekp/circuit-next --codex-marketplace circuit-next",
-    "verify": "npm run check && npm run lint && npm run build && npm run test && node scripts/emit-flows.ts --check && npm run check-plugin-runtime && npm run check-release-infra",
-    "verify:fast": "npm run check && npm run lint && npm run build && npm run test:fast && node scripts/emit-flows.ts --check && npm run check-plugin-runtime",
+    "verify": "npm run check && npm run lint && npm run build && npm run test && npm run check-evals && node scripts/emit-flows.ts --check && npm run check-plugin-runtime && npm run check-release-infra",
+    "verify:fast": "npm run check && npm run lint && npm run build && npm run test:fast && npm run check-evals && node scripts/emit-flows.ts --check && npm run check-plugin-runtime",
     "circuit:run": "./bin/circuit-next"
   },
   "dependencies": {

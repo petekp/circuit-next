@@ -2,6 +2,8 @@
   "schema_version": 1,
   "id": "heldout-user-display-name",
   "split": "regression",
+  "provenance": "regression-demoted",
+  "tuning_used": true,
   "title": "Display name helper leaks null fields and misses fallbacks",
   "allowed_changed_files": [
     "src/display-name.mjs",

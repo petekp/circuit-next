@@ -2,6 +2,8 @@
   "schema_version": 1,
   "id": "heldout-markdown-nested-url",
   "split": "regression",
+  "provenance": "regression-demoted",
+  "tuning_used": true,
   "title": "Markdown link parser truncates URLs with balanced parentheses",
   "allowed_changed_files": [
     "src/links.mjs",

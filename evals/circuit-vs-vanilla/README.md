@@ -1,13 +1,25 @@
 # Circuit-vs-Vanilla Comparison Runner
 
-This is a small internal pilot harness. It runs the same prompt through:
+Status: discovery only.
 
-1. `circuit-codex`: Circuit CLI with normal flow behavior.
-2. `vanilla-codex`: direct `codex exec`, with no Circuit flow wrapper.
+This is a small internal pilot harness. It runs the same prompt through matched
+provider arms:
+
+1. `circuit-<provider>`: Circuit CLI with normal flow behavior.
+2. `vanilla-<provider>`: the provider CLI directly, with no Circuit flow
+   wrapper.
+
+The default provider is Codex for back-compatibility. Use `--provider
+claude-code` when comparing Claude Code arms.
 
 It is best for read-only review, planning, and synthesis tasks. Code-change
 comparisons need a stricter worktree isolation story before the results are
 fair.
+
+This eval does not support a "Circuit beats vanilla" product claim by itself.
+It has no objective task scoring or held-out claim gate. Use it to find product
+gaps, then promote a narrow task family into a claim-grade eval if the signal is
+worth measuring.
 
 ## Run One Task
 

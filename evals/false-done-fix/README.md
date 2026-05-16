@@ -1,12 +1,15 @@
 # False-Done Fix Bar
 
-Status: held-out.
+Status: regression bar.
 
 This is the eval bar for the proof-carrying Fix wedge. It is **not** a
 prompt-quality benchmark like `evals/circuit-vs-vanilla/`. Its only job is to
 empirically falsify the proof-carrying chain: when a Fix run looks "done" to a
 naive close, but is actually built on broken or under-declared evidence, the
 runtime-owned proof artifacts must demote the outcome below `fixed`.
+
+This eval protects known proof-chain behavior. It does not compare Circuit
+against vanilla and cannot support a fresh product claim.
 
 ## What "false-done" means here
 
@@ -46,12 +49,12 @@ real porcelain output, real fingerprints, and real HEAD movement.
 | `05-mid-run-commit` | Implementer commits during fix-act, leaving the working tree clean post-fix. | `fix.change-set@v1` — HEAD diverged from baseline. |
 | `06-regression-still-failing` | Brief declares a real failing regression and a no-op verification candidate; fix doesn't actually fix the regression. | `fix.regression-rerun@v1` — status `still-failing` aborts via recovery routing. |
 
-## Held-out policy
+## Regression Policy
 
-These five tasks are frozen. If any of them is used to tune the chain, scoring
-logic, or eval harness, retire it to a regression set and replace it with a
-fresh held-out scenario. The chain is supposed to be a fixed bar, not a moving
-target.
+These six tasks are frozen regression cases. If any of them is changed to tune
+the chain, scoring logic, or eval harness, record that as regression-bar
+maintenance and do not cite it as held-out evidence. Fresh product claims need
+fresh held-out tasks in `evals/fix-vs-vanilla/`.
 
 ## How to run
 
