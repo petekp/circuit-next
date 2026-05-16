@@ -101,6 +101,7 @@ const FLOW_RESULT_PATHS: Record<string, string> = {
   explore: 'reports/explore-result.json',
   fix: 'reports/fix-result.json',
   migrate: 'reports/migrate-result.json',
+  pursue: 'reports/pursuit-result.json',
   review: 'reports/review-result.json',
   sweep: 'reports/sweep-result.json',
 };
