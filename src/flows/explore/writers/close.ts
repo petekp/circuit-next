@@ -8,7 +8,7 @@
 
 import { readFileSync } from 'node:fs';
 import { resolveRunRelative } from '../../../shared/run-relative-path.js';
-import { reportPathForSchemaInCompiledFlow } from '../../registries/close-writers/shared.js';
+import { reportPathForSchemaInRuntimeFlow } from '../../registries/close-writers/shared.js';
 import type { CloseBuildContext, CloseBuilder } from '../../registries/close-writers/types.js';
 import {
   ExploreBrief,
@@ -49,7 +49,7 @@ function requiredTournamentAggregatePath(context: CloseBuildContext): string {
 function requiredInput(context: CloseBuildContext, name: string, schema: string): unknown {
   const input = context.inputs[name];
   if (input !== undefined) return input;
-  const path = reportPathForSchemaInCompiledFlow(context.flow, schema);
+  const path = reportPathForSchemaInRuntimeFlow(context.flow, schema);
   throw new Error(
     `explore.result@v1 requires close step '${context.closeStep.id}' to read ${path}`,
   );
@@ -97,7 +97,7 @@ export const exploreCloseBuilder: CloseBuilder = {
           path:
             p.schema === 'explore.tournament-aggregate@v1'
               ? aggregatePath
-              : reportPathForSchemaInCompiledFlow(context.flow, p.schema),
+              : reportPathForSchemaInRuntimeFlow(context.flow, p.schema),
         })),
       });
     }
@@ -125,7 +125,7 @@ export const exploreCloseBuilder: CloseBuilder = {
         : {}),
       evidence_links: POINTERS.map((p) => ({
         ...p,
-        path: reportPathForSchemaInCompiledFlow(context.flow, p.schema),
+        path: reportPathForSchemaInRuntimeFlow(context.flow, p.schema),
       })),
     });
   },

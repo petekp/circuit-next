@@ -14,6 +14,7 @@
 
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { findFlowRuntimeSurfaceById } from '../flows/runtime-surface.js';
 import {
   OperatorSummary,
   type OperatorSummaryReportLink,
@@ -95,14 +96,6 @@ export interface CheckpointWaitingOperatorSummaryResult {
 }
 
 export type OperatorSummaryRunResult = RunResult | CheckpointWaitingOperatorSummaryResult;
-
-const FLOW_RESULT_PATHS: Record<string, string> = {
-  build: 'reports/build-result.json',
-  explore: 'reports/explore-result.json',
-  fix: 'reports/fix-result.json',
-  pursue: 'reports/pursuit-result.json',
-  review: 'reports/review-result.json',
-};
 
 // Label used when listing the HTML artifact in report_paths. Not load-bearing
 // for control flow — markdown rendering and CLI plumbing read summary.html_path
@@ -219,7 +212,7 @@ export function writeOperatorSummary(input: {
   readonly route: RouteSummary;
 }): OperatorSummaryWriteResult {
   const flowId = input.runResult.flow_id as unknown as string;
-  const flowResultRelPath = FLOW_RESULT_PATHS[flowId];
+  const flowResultRelPath = findFlowRuntimeSurfaceById(flowId)?.primaryResult?.path;
   const flowReport =
     flowResultRelPath === undefined
       ? undefined

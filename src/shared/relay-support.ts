@@ -1,10 +1,10 @@
 import { existsSync, readFileSync } from 'node:fs';
+import type { RuntimeIndexedRelayStep } from '../flows/registries/runtime-index.js';
 import { findRelayShapeHint } from '../flows/registries/shape-hints/registry.js';
-import type { CompiledFlow } from '../schemas/compiled-flow.js';
 import { resolveRunRelative } from './run-relative-path.js';
 import type { LoadedRelaySkill } from './skill-loading.js';
 
-export type RelayStep = CompiledFlow['steps'][number] & { kind: 'relay' };
+export type RelayStep = RuntimeIndexedRelayStep;
 
 // Parse connector result_body for the check verdict and evaluate against
 // `step.check.pass`. Result shape: a discriminated union the relay handlers

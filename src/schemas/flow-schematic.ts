@@ -14,8 +14,8 @@ import {
   type FlowRoute as FlowRouteValue,
 } from './flow-blocks.js';
 import {
-  acceptedSchematicExecutionKindsForBlock,
-  acceptedSchematicStagesForBlock,
+  schematicExecutionKindsForBlock,
+  schematicStagesForBlock,
 } from './flow-schematic-policy.js';
 import { CompiledFlowId, ProtocolId, StageId, StepId } from './ids.js';
 import { RunRelativePath } from './scalars.js';
@@ -183,10 +183,9 @@ export const SchematicStep = z
     }, 'schematic item must declare at least one route'),
     route_overrides: z.record(z.string(), SchematicRouteModeOverrides).default({}),
     // The fields below are required by the schematic → CompiledFlow compiler. They
-    // are optional at parse time so existing candidate schematics remain
-    // parseable while the active schematics (build/explore/review) are
-    // populated incrementally. The compiler enforces presence and
-    // (kind, check, writes) shape.
+    // are optional for candidate schematics so drafts remain parseable while
+    // they are being shaped. Active schematics require them at parse time; the
+    // compiler keeps its own guards for callers that mutate parsed values.
     protocol: ProtocolId.optional(),
     writes: StepWrites.optional(),
     check: StepCheck.optional(),
@@ -472,9 +471,8 @@ export const FlowSchematic = z
     initial_contracts: z.array(FlowContractRef).default([]),
     contract_aliases: z.array(SchematicContractAlias).default([]),
     items: z.array(SchematicStep).min(1),
-    // Compiler-required metadata. Optional at parse time so candidate schematics
-    // (and schematics still being upgraded) keep parsing. The compiler enforces
-    // presence and consistency at emit time.
+    // Compiler-required metadata. Optional for candidate schematics; required
+    // at parse time once a schematic is active.
     version: z.string().min(1).optional(),
     entry: FlowSchematicEntry.optional(),
     entry_modes: z.array(FlowEntryMode).min(1).optional(),
@@ -638,8 +636,62 @@ export const FlowSchematic = z
         }
       }
     }
+
+    validateActiveSchematicCompleteness(schematic, ctx);
   });
 export type FlowSchematic = z.infer<typeof FlowSchematic>;
+
+function validateActiveSchematicCompleteness(schematic: FlowSchematic, ctx: z.RefinementCtx): void {
+  if (schematic.status !== 'active') return;
+
+  const requireField = (
+    field: 'version' | 'entry' | 'entry_modes' | 'stage_path_policy' | 'stages',
+  ) => {
+    if (schematic[field] !== undefined) return;
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: [field],
+      message: `active schematic requires ${field}`,
+    });
+  };
+
+  requireField('version');
+  requireField('entry');
+  requireField('entry_modes');
+  requireField('stage_path_policy');
+  requireField('stages');
+
+  for (const [index, item] of schematic.items.entries()) {
+    if (item.protocol === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['items', index, 'protocol'],
+        message: 'active schematic item requires protocol',
+      });
+    }
+    if (item.writes === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['items', index, 'writes'],
+        message: 'active schematic item requires writes',
+      });
+    }
+    if (item.check === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['items', index, 'check'],
+        message: 'active schematic item requires check',
+      });
+    }
+    if (item.execution.kind === 'checkpoint' && item.checkpoint_policy === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['items', index, 'checkpoint_policy'],
+        message: 'active checkpoint schematic item requires checkpoint_policy',
+      });
+    }
+  }
+}
 
 export type FlowSchematicCatalogCompatibilityIssue = {
   item_id?: string;
@@ -811,7 +863,7 @@ export function validateFlowSchematicCatalogCompatibility(
       }
     }
 
-    const executionKinds = acceptedSchematicExecutionKindsForBlock(block);
+    const executionKinds = schematicExecutionKindsForBlock(block);
     if (!executionKinds.includes(item.execution.kind)) {
       issues.push({
         item_id: item.id,
@@ -819,7 +871,7 @@ export function validateFlowSchematicCatalogCompatibility(
       });
     }
 
-    const stages = acceptedSchematicStagesForBlock(block);
+    const stages = schematicStagesForBlock(block);
     if (!stages.includes(item.stage)) {
       issues.push({
         item_id: item.id,

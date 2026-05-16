@@ -6,7 +6,9 @@ This is the source map for Circuit command surfaces, compiled flow outputs, host
 
 ## Edit Rules
 
-- Flow package schematics are authored in `src/flows/<id>/schematic.json`.
+- Flow definitions are authored in `src/flows/<id>/flow.ts`.
+- Block definitions are authored in `src/schemas/flow-block-definitions.ts`.
+- Flow schematic JSON files under `src/flows/<id>/schematic.json` are generated compatibility outputs.
 - Flow-owned commands are authored in `src/flows/<id>/command.md`.
 - Direct commands are authored in `src/commands/<id>.md`.
 - Canonical compiled manifests under `generated/flows/**` are generated outputs.
@@ -18,9 +20,11 @@ This is the source map for Circuit command surfaces, compiled flow outputs, host
 
 | Surface | Source of truth | Generator | Human-editable | Expected destinations | Validation / drift check | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
+| Block catalog | `src/schemas/flow-block-definitions.ts` | `npm run build && node scripts/emit-flows.ts` | no | `docs/flows/block-catalog.json` | `node scripts/emit-flows.ts --check` | The JSON catalog is retained for docs and compatibility; typed block definitions own current facts. |
 | Flow-owned commands | `src/flows/<id>/command.md` | `scripts/emit-flows.ts` | source yes; outputs no | `plugins/claude/commands/<id>.md`<br>`plugins/circuit/commands/<id>.md`<br>`plugins/circuit/skills/<id>/SKILL.md` | `node scripts/emit-flows.ts --check` | Only public flows with `paths.command` emit these surfaces. Generated headers are omitted to preserve host command and skill parsing. |
 | Direct command sources | `src/commands/<id>.md` | `scripts/emit-flows.ts` mirrors to host plugin surfaces | source yes; outputs no | `plugins/claude/commands/<id>.md`<br>`plugins/circuit/commands/<id>.md`<br>`plugins/circuit/skills/<id>/SKILL.md` | `node scripts/emit-flows.ts --check` | Covers router/direct commands such as run, create, and handoff. |
-| Generated flow manifests | `src/flows/<id>/schematic.json` plus flow package metadata | `npm run build && node scripts/emit-flows.ts` | no | `generated/flows/<id>/*.json` | `node scripts/emit-flows.ts --check` | Canonical compiled-flow outputs. JSON cannot carry generated headers without changing host parsing. |
+| Generated schematic compatibility files | `src/flows/<id>/flow.ts` | `npm run build && node scripts/emit-flows.ts` | no | `src/flows/<id>/schematic.json` | `node scripts/emit-flows.ts --check` | JSON schematics are retained for compatibility and generated from the typed FlowDefinition. |
+| Generated flow manifests | `src/flows/<id>/flow.ts` | `npm run build && node scripts/emit-flows.ts` | no | `generated/flows/<id>/*.json` | `node scripts/emit-flows.ts --check` | Canonical compiled-flow outputs. JSON cannot carry generated headers without changing host parsing. |
 | Claude plugin flow mirrors | `generated/flows/<id>/*.json` | `scripts/emit-flows.ts` | no | `plugins/claude/skills/<id>/*.json` | `node scripts/emit-flows.ts --check` | Public flows only. Internal flow mirrors are stale and fail drift checks. |
 | Codex plugin flow mirrors | `generated/flows/<id>/*.json` | `scripts/emit-flows.ts` | no | `plugins/circuit/flows/<id>/*.json` | `node scripts/emit-flows.ts --check` | Public flows only. Internal flow mirrors are stale and fail drift checks. |
 | Codex plugin command mirrors | flow-owned command sources or direct command sources | `scripts/emit-flows.ts` | no | `plugins/circuit/commands/<id>.md` | `node scripts/emit-flows.ts --check` | Generated headers are omitted to preserve host command parsing and byte-for-byte mirror checks. |
@@ -29,14 +33,14 @@ This is the source map for Circuit command surfaces, compiled flow outputs, host
 
 ## Flow Outputs
 
-| Flow | Visibility | Schematic source | Generated compiled outputs | Host flow mirrors | Command source | Command surfaces | Edit rule |
+| Flow | Visibility | Definition source | Generated compiled outputs | Host flow mirrors | Command source | Command surfaces | Edit rule |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `review` | `public` | `src/flows/review/schematic.json` | `generated/flows/review/circuit.json` | `plugins/claude/skills/review/circuit.json`<br>`plugins/circuit/flows/review/circuit.json` | `src/flows/review/command.md` | `plugins/claude/commands/review.md`<br>`plugins/circuit/commands/review.md`<br>`plugins/circuit/skills/review/SKILL.md` | Edit the flow package source; run `npm run emit-flows`. |
-| `fix` | `public` | `src/flows/fix/schematic.json` | `generated/flows/fix/circuit.json`<br>`generated/flows/fix/lite.json` | `plugins/claude/skills/fix/circuit.json`<br>`plugins/claude/skills/fix/lite.json`<br>`plugins/circuit/flows/fix/circuit.json`<br>`plugins/circuit/flows/fix/lite.json` | `src/flows/fix/command.md` | `plugins/claude/commands/fix.md`<br>`plugins/circuit/commands/fix.md`<br>`plugins/circuit/skills/fix/SKILL.md` | Edit the flow package source; run `npm run emit-flows`. |
-| `pursue` | `public` | `src/flows/pursue/schematic.json` | `generated/flows/pursue/circuit.json` | `plugins/claude/skills/pursue/circuit.json`<br>`plugins/circuit/flows/pursue/circuit.json` | none | none | Edit the flow package; run `npm run emit-flows`. |
-| `runtime-proof` | `internal` | `src/flows/runtime-proof/schematic.json` | `generated/flows/runtime-proof/circuit.json` | none; internal flow | none | none | Edit the flow package; host mirrors must not exist. |
-| `build` | `public` | `src/flows/build/schematic.json` | `generated/flows/build/circuit.json` | `plugins/claude/skills/build/circuit.json`<br>`plugins/circuit/flows/build/circuit.json` | `src/flows/build/command.md` | `plugins/claude/commands/build.md`<br>`plugins/circuit/commands/build.md`<br>`plugins/circuit/skills/build/SKILL.md` | Edit the flow package source; run `npm run emit-flows`. |
-| `explore` | `public` | `src/flows/explore/schematic.json` | `generated/flows/explore/circuit.json`<br>`generated/flows/explore/tournament.json` | `plugins/claude/skills/explore/circuit.json`<br>`plugins/claude/skills/explore/tournament.json`<br>`plugins/circuit/flows/explore/circuit.json`<br>`plugins/circuit/flows/explore/tournament.json` | `src/flows/explore/command.md` | `plugins/claude/commands/explore.md`<br>`plugins/circuit/commands/explore.md`<br>`plugins/circuit/skills/explore/SKILL.md` | Edit the flow package source; run `npm run emit-flows`. |
+| `review` | `public` | `src/flows/review/flow.ts`<br>generates `src/flows/review/schematic.json` | `generated/flows/review/circuit.json` | `plugins/claude/skills/review/circuit.json`<br>`plugins/circuit/flows/review/circuit.json` | `src/flows/review/command.md` | `plugins/claude/commands/review.md`<br>`plugins/circuit/commands/review.md`<br>`plugins/circuit/skills/review/SKILL.md` | Edit the flow package source; run `npm run emit-flows`. |
+| `fix` | `public` | `src/flows/fix/flow.ts`<br>generates `src/flows/fix/schematic.json` | `generated/flows/fix/circuit.json`<br>`generated/flows/fix/lite.json` | `plugins/claude/skills/fix/circuit.json`<br>`plugins/claude/skills/fix/lite.json`<br>`plugins/circuit/flows/fix/circuit.json`<br>`plugins/circuit/flows/fix/lite.json` | `src/flows/fix/command.md` | `plugins/claude/commands/fix.md`<br>`plugins/circuit/commands/fix.md`<br>`plugins/circuit/skills/fix/SKILL.md` | Edit the flow package source; run `npm run emit-flows`. |
+| `pursue` | `public` | `src/flows/pursue/flow.ts`<br>generates `src/flows/pursue/schematic.json` | `generated/flows/pursue/circuit.json` | `plugins/claude/skills/pursue/circuit.json`<br>`plugins/circuit/flows/pursue/circuit.json` | none | none | Edit the flow package; run `npm run emit-flows`. |
+| `runtime-proof` | `internal` | `src/flows/runtime-proof/flow.ts`<br>generates `src/flows/runtime-proof/schematic.json` | `generated/flows/runtime-proof/circuit.json` | none; internal flow | none | none | Edit the flow package; host mirrors must not exist. |
+| `build` | `public` | `src/flows/build/flow.ts`<br>generates `src/flows/build/schematic.json` | `generated/flows/build/circuit.json` | `plugins/claude/skills/build/circuit.json`<br>`plugins/circuit/flows/build/circuit.json` | `src/flows/build/command.md` | `plugins/claude/commands/build.md`<br>`plugins/circuit/commands/build.md`<br>`plugins/circuit/skills/build/SKILL.md` | Edit the flow package source; run `npm run emit-flows`. |
+| `explore` | `public` | `src/flows/explore/flow.ts`<br>generates `src/flows/explore/schematic.json` | `generated/flows/explore/circuit.json`<br>`generated/flows/explore/tournament.json` | `plugins/claude/skills/explore/circuit.json`<br>`plugins/claude/skills/explore/tournament.json`<br>`plugins/circuit/flows/explore/circuit.json`<br>`plugins/circuit/flows/explore/tournament.json` | `src/flows/explore/command.md` | `plugins/claude/commands/explore.md`<br>`plugins/circuit/commands/explore.md`<br>`plugins/circuit/skills/explore/SKILL.md` | Edit the flow package source; run `npm run emit-flows`. |
 
 ## Direct Commands
 
@@ -50,5 +54,5 @@ Direct commands are source files under `src/commands/`. Some also correspond to 
 
 ## Drift Check
 
-`node scripts/emit-flows.ts --check` verifies this file, generated manifests, command mirrors, host flow mirrors, stale per-mode siblings, stale internal host mirrors, and stale Codex skill directories.
+`node scripts/emit-flows.ts --check` verifies this file, the generated block catalog, generated schematics, generated manifests, command mirrors, host flow mirrors, stale per-mode siblings, stale internal host mirrors, and stale Codex skill directories.
 

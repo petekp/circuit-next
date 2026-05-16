@@ -10,7 +10,11 @@ import type { ComposeBuilder } from './registries/compose-writers/types.js';
 import type { CrossReportValidator } from './registries/cross-report-validators.js';
 import type { StructuralShapeHint } from './registries/shape-hints/types.js';
 import type { VerificationBuilder } from './registries/verification-writers/types.js';
-import type { CompiledFlowPackage, CompiledFlowRoutingMetadata } from './types.js';
+import type {
+  CompiledFlowPackage,
+  CompiledFlowRoutingMetadata,
+  CompiledFlowRuntimeSurface,
+} from './types.js';
 
 // Build a Map keyed by builder.resultSchemaName from one writer slot
 // across all packages. Throws on duplicate keys with a message that
@@ -133,6 +137,20 @@ export function buildStructuralHintList(
     }
   }
   return list;
+}
+
+export function buildRuntimeSurfaceRegistry(
+  packages: readonly CompiledFlowPackage[],
+): ReadonlyMap<string, CompiledFlowRuntimeSurface> {
+  const map = new Map<string, CompiledFlowRuntimeSurface>();
+  for (const pkg of packages) {
+    if (pkg.runtimeSurface === undefined) continue;
+    if (map.has(pkg.id)) {
+      throw new Error(`duplicate runtime surface registered for flow '${pkg.id}'`);
+    }
+    map.set(pkg.id, pkg.runtimeSurface);
+  }
+  return map;
 }
 
 export interface RoutablePackage {

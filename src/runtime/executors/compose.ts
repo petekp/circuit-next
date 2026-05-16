@@ -9,7 +9,7 @@ import {
 } from '../../flows/registries/compose-writers/registry.js';
 import type { StepOutcome } from '../domain/step.js';
 import type { ComposeStep } from '../manifest/executable-flow.js';
-import { requireCompiledFlow, requireCompiledStep } from '../run/route-compat.js';
+import { requireRuntimeStep } from '../run/route-compat.js';
 import type { RunContext } from '../run/run-context.js';
 
 function readJsonReport(context: RunContext, path: string): unknown {
@@ -34,11 +34,11 @@ async function writeRegisteredComposeReport(
   const report = step.writes?.report;
   if (report?.schema === undefined) return false;
 
-  const flow = requireCompiledFlow(context, step);
-  const compiledStep = requireCompiledStep(context, step, 'compose');
+  const flow = context.packageIndex.flow;
+  const indexedStep = requireRuntimeStep(context, step, 'compose');
   const composeBuilder = findComposeBuilder(report.schema);
   if (composeBuilder !== undefined) {
-    const readPaths = resolveComposeReadPaths(composeBuilder, flow, compiledStep);
+    const readPaths = resolveComposeReadPaths(composeBuilder, flow, indexedStep);
     const inputs: Record<string, unknown | undefined> = {};
     for (const [name, path] of Object.entries(readPaths)) {
       inputs[name] = path === undefined ? undefined : readJsonReport(context, path);
@@ -46,7 +46,7 @@ async function writeRegisteredComposeReport(
     const body = composeBuilder.build({
       runFolder: context.runDir,
       flow,
-      step: compiledStep,
+      step: indexedStep,
       goal: context.goal,
       ...(context.projectRoot === undefined ? {} : { projectRoot: context.projectRoot }),
       ...(context.evidencePolicy === undefined ? {} : { evidencePolicy: context.evidencePolicy }),
@@ -58,7 +58,7 @@ async function writeRegisteredComposeReport(
 
   const closeBuilder = findCloseBuilder(report.schema);
   if (closeBuilder !== undefined) {
-    const readPaths = resolveCloseReadPaths(closeBuilder, flow, compiledStep);
+    const readPaths = resolveCloseReadPaths(closeBuilder, flow, indexedStep);
     const inputs: Record<string, unknown | undefined> = {};
     for (const descriptor of closeBuilder.reads) {
       const path = readPaths[descriptor.name];
@@ -68,7 +68,7 @@ async function writeRegisteredComposeReport(
     const body = closeBuilder.build({
       runFolder: context.runDir,
       flow,
-      closeStep: compiledStep,
+      closeStep: indexedStep,
       goal: context.goal,
       inputs,
     });
@@ -82,7 +82,7 @@ async function writeRegisteredComposeReport(
 }
 
 export async function executeCompose(step: ComposeStep, context: RunContext): Promise<StepOutcome> {
-  if (step.writes?.report?.schema !== undefined && context.compiledFlow !== undefined) {
+  if (step.writes?.report?.schema !== undefined) {
     await writeRegisteredComposeReport(step, context);
     await context.trace.append({
       run_id: context.runId,

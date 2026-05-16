@@ -1,26 +1,30 @@
-// CompiledFlow catalog — single source of truth for the engine.
+// Flow catalog — single source of truth for the engine.
 //
 // The router, registries (compose, close, verification, checkpoint,
 // report-schemas, shape-hints), and emit script all derive their
 // state from `flowPackages`. The engine never imports a flow
-// module directly. Adding a flow means appending here.
+// module directly.
 
-import { buildCompiledFlowPackage } from './build/index.js';
-import { exploreCompiledFlowPackage } from './explore/index.js';
-import { fixCompiledFlowPackage } from './fix/index.js';
-import { pursueCompiledFlowPackage } from './pursue/index.js';
-import { reviewCompiledFlowPackage } from './review/index.js';
-import { runtimeProofCompiledFlowPackage } from './runtime-proof/index.js';
+import { buildFlowDefinition } from './build/flow.js';
+import { exploreFlowDefinition } from './explore/flow.js';
+import { fixFlowDefinition } from './fix/flow.js';
+import { compileFlowDefinitions } from './flow-definition.js';
+import type { FlowDefinition } from './flow-definition.js';
+import { pursueFlowDefinition } from './pursue/flow.js';
+import { reviewFlowDefinition } from './review/flow.js';
+import { runtimeProofFlowDefinition } from './runtime-proof/flow.js';
 import type { CompiledFlowPackage } from './types.js';
 
-export const flowPackages: readonly CompiledFlowPackage[] = [
-  reviewCompiledFlowPackage,
-  fixCompiledFlowPackage,
-  pursueCompiledFlowPackage,
-  runtimeProofCompiledFlowPackage,
-  buildCompiledFlowPackage,
-  exploreCompiledFlowPackage,
+export const flowDefinitions: readonly FlowDefinition[] = [
+  reviewFlowDefinition,
+  fixFlowDefinition,
+  pursueFlowDefinition,
+  runtimeProofFlowDefinition,
+  buildFlowDefinition,
+  exploreFlowDefinition,
 ];
+
+export const flowPackages: readonly CompiledFlowPackage[] = compileFlowDefinitions(flowDefinitions);
 
 const PACKAGES_BY_ID: ReadonlyMap<string, CompiledFlowPackage> = (() => {
   const map = new Map<string, CompiledFlowPackage>();

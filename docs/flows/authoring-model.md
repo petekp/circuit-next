@@ -13,22 +13,26 @@ This is the canonical authoring model for Circuit flows.
 Use it with:
 
 - `UBIQUITOUS_LANGUAGE.md` for vocabulary.
-- `docs/flows/block-catalog.json` for the machine-readable block catalog.
+- `src/schemas/flow-block-definitions.ts` for typed block definitions.
+- `docs/flows/block-catalog.json` for the generated machine-readable block catalog.
 - `src/schemas/flow-blocks.ts` for the block catalog schema.
-- `src/schemas/flow-schematic.ts` for authored schematic shape.
+- `src/schemas/flow-schematic.ts` for generated schematic compatibility shape.
 - `src/flows/compile-schematic-to-flow.ts` for schematic to compiled-flow projection.
 - `docs/contracts/compiled-flow.md` for runtime graph invariants.
 
 This document is hand-authored because it explains intent and boundaries.
 Do not hand-maintain current flow inventories here. Current flow facts come from
-`src/flows/<id>/schematic.json`, `generated/flows/<id>/`, and generated release
-surfaces such as `docs/release/parity-matrix.generated.md`.
+`src/flows/<id>/flow.ts`, generated compatibility schematics under
+`src/flows/<id>/schematic.json`, generated compiled outputs under
+`generated/flows/<id>/`, and generated release surfaces such as
+`docs/release/parity-matrix.generated.md`.
 
 ## Short Version
 
-A flow is an authored schematic compiled into a runtime graph.
+A flow is an authored typed definition compiled through a compatibility
+schematic into a runtime graph.
 
-A schematic should say:
+A flow definition should say:
 
 - which block runs;
 - what typed input the block needs;
@@ -39,7 +43,7 @@ A schematic should say:
 - what evidence must exist before the flow moves on.
 
 This is deliberately not a freeform graph builder. Authors should mostly choose
-or edit schematics made from known blocks.
+or edit definitions made from known blocks.
 
 ## Authoring Layers
 
@@ -47,12 +51,12 @@ Circuit keeps four layers separate.
 
 | Layer | Meaning | Source |
 | --- | --- | --- |
-| Block | Reusable kind of work. | `docs/flows/block-catalog.json` |
-| Schematic step | Flow-specific use of a block. | `src/flows/<id>/schematic.json` |
+| Block | Reusable kind of work. | `src/schemas/flow-block-definitions.ts` |
+| Flow definition step | Flow-specific use of a block. | `src/flows/<id>/flow.ts` |
 | Report schema | Typed fact written or consumed by a step. | `src/flows/<id>/reports.ts` |
 | Route policy | Named outcomes and targets. | schematic routes plus route policy constants |
 
-The block is reusable. The schematic step is the flow-specific use of that
+The block is reusable. The flow step is the flow-specific use of that
 block.
 
 ## Block Model
@@ -181,7 +185,7 @@ Each step should produce two useful surfaces:
 Typed reports keep the flow reliable. Evidence keeps the result explainable
 without forcing the operator to read raw trace entries.
 
-Block contracts are nominal. They live in `docs/flows/block-catalog.json` as
+Block contracts are nominal. They live in `src/schemas/flow-block-definitions.ts` as
 named identifiers such as `flow.brief@v1` or `verification.result@v1`.
 
 Per-flow schemas are structural. They live in `src/flows/<id>/reports.ts` as
@@ -215,13 +219,13 @@ of scope unless the public naming model is explicitly reopened.
 
 ## Adding A Flow
 
-1. Create `src/flows/<id>/schematic.json`.
+1. Create `src/flows/<id>/flow.ts`.
 2. Define per-flow report schemas in `src/flows/<id>/reports.ts`.
-3. Declare contract aliases in the schematic.
-4. Wire schematic steps to schemas through `input` and `output`.
+3. Declare contract aliases in the definition.
+4. Wire definition steps to schemas through `input` and `output`.
 5. Add writers and relay hints owned by the flow package.
-6. Add the package to `src/flows/catalog.ts`.
-7. Run `npm run emit-flows` and then `npm run verify`.
+6. Add the definition to `flowDefinitions` in `src/flows/catalog.ts`.
+7. Run `npm run build && node scripts/emit-flows.ts` and then `npm run verify`.
 
 The runtime should not import the new flow directly. Runtime registries derive
 from the catalog.

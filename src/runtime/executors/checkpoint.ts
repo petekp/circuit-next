@@ -9,7 +9,7 @@ import { findCheckpointBriefBuilder } from '../../flows/registries/checkpoint-wr
 import { sha256Hex } from '../../shared/connector-relay.js';
 import type { StepOutcome } from '../domain/step.js';
 import type { CheckpointStep } from '../manifest/executable-flow.js';
-import { requireCompiledStep } from '../run/route-compat.js';
+import { requireRuntimeStep } from '../run/route-compat.js';
 import type { RunContext } from '../run/run-context.js';
 
 type CheckpointResolution =
@@ -97,7 +97,7 @@ export async function executeCheckpoint(
   if (request === undefined || response === undefined) {
     throw new Error(`checkpoint step '${step.id}' requires writes.request and writes.response`);
   }
-  const compiledStep = requireCompiledStep(context, step, 'checkpoint');
+  const indexedStep = requireRuntimeStep(context, step, 'checkpoint');
 
   let checkpointReportSha256: string | undefined;
   const report = step.writes?.report;
@@ -113,7 +113,7 @@ export async function executeCheckpoint(
       }
       const body = builder.build({
         runFolder: context.runDir,
-        step: compiledStep,
+        step: indexedStep,
         goal: context.goal,
         ...(context.projectRoot === undefined ? {} : { projectRoot: context.projectRoot }),
         responsePath: response.path,

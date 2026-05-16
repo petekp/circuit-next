@@ -22,7 +22,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { flowPackages } from '../../src/flows/catalog.js';
+import { flowDefinitions, flowPackages } from '../../src/flows/catalog.js';
 import { FlowSchematic } from '../../src/schemas/flow-schematic.js';
 import type { SelectionOverride } from '../../src/schemas/selection-policy.js';
 
@@ -36,6 +36,8 @@ const NON_PACKAGE_FILES = new Set([
   'catalog.ts',
   'catalog-derivations.ts',
   'compile-schematic-to-flow.ts',
+  'flow-definition.ts',
+  'runtime-surface.ts',
   'router.ts',
   'types.ts',
 ]);
@@ -93,6 +95,108 @@ describe('flow catalog completeness', () => {
     for (const flow of ['build', 'explore', 'fix', 'review']) {
       expect(visibilityById.get(flow), `${flow} should be host-visible`).toBe('public');
     }
+  });
+
+  it('public flow runtime surfaces match their source schematic entry modes', () => {
+    const offenders: string[] = [];
+
+    for (const pkg of flowPackages) {
+      if (pkg.visibility !== 'public') continue;
+      const surface = pkg.runtimeSurface;
+      if (surface === undefined) {
+        offenders.push(`${pkg.id}: missing runtimeSurface`);
+        continue;
+      }
+
+      const schematic = FlowSchematic.parse(JSON.parse(readFileSync(pkg.paths.schematic, 'utf8')));
+      const expected = schematic.entry_modes?.map((mode) => ({
+        entryModeName: mode.name,
+        depth: mode.depth,
+      }));
+      expect(expected, `${pkg.id}: active schematic should declare entry_modes`).toBeDefined();
+      expect(surface.supportedEntryModes, `${pkg.id}: runtimeSurface entry modes drifted`).toEqual(
+        expected,
+      );
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('public flow runtime surfaces declare a primary result owned by the package', () => {
+    const offenders: string[] = [];
+
+    for (const pkg of flowPackages) {
+      if (pkg.visibility !== 'public') continue;
+      const surface = pkg.runtimeSurface;
+      if (surface?.primaryResult === undefined) {
+        offenders.push(`${pkg.id}: missing primaryResult`);
+        continue;
+      }
+      const knownReportSchemas = new Set([
+        ...(pkg.reportSchemas ?? []).map((report) => report.schemaName),
+        ...pkg.relayReports.map((report) => report.schemaName),
+      ]);
+      if (!knownReportSchemas.has(surface.primaryResult.schemaName)) {
+        offenders.push(
+          `${pkg.id}: primaryResult schema ${surface.primaryResult.schemaName} is not package-owned`,
+        );
+      }
+      if (!surface.primaryResult.path.startsWith('reports/')) {
+        offenders.push(`${pkg.id}: primaryResult path must be run-relative reports/*`);
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('runtime surface keeps per-mode support visible outside one compiled fixture', () => {
+    const byId = new Map(flowPackages.map((pkg) => [pkg.id, pkg.runtimeSurface]));
+
+    expect(byId.get('fix')?.supportedEntryModes).toContainEqual({
+      entryModeName: 'lite',
+      depth: 'lite',
+    });
+    expect(byId.get('explore')?.supportedEntryModes).toContainEqual({
+      entryModeName: 'tournament',
+      depth: 'tournament',
+    });
+  });
+
+  it('public flow runtime surfaces own progress display metadata for every schematic item', () => {
+    const offenders: string[] = [];
+
+    for (const pkg of flowPackages) {
+      if (pkg.visibility !== 'public') continue;
+      const schematic = FlowSchematic.parse(JSON.parse(readFileSync(pkg.paths.schematic, 'utf8')));
+      const progress = pkg.runtimeSurface?.progress;
+      if (progress === undefined) {
+        offenders.push(`${pkg.id}: missing progress metadata`);
+        continue;
+      }
+
+      const itemIds = new Set(schematic.items.map((item) => item.id as unknown as string));
+      const declaredStepIds = new Set<string>();
+      for (const [index, step] of progress.steps.entries()) {
+        if (declaredStepIds.has(step.stepId)) {
+          offenders.push(`${pkg.id}: duplicate progress step ${step.stepId}`);
+        }
+        declaredStepIds.add(step.stepId);
+        if (!itemIds.has(step.stepId)) {
+          offenders.push(`${pkg.id}: progress step ${step.stepId} is not a schematic item`);
+        }
+        if (step.taskTitle.length === 0 || step.activeText.length === 0) {
+          offenders.push(`${pkg.id}: progress step ${index} has empty operator text`);
+        }
+      }
+
+      for (const itemId of itemIds) {
+        if (!declaredStepIds.has(itemId)) {
+          offenders.push(`${pkg.id}: schematic item ${itemId} has no progress metadata`);
+        }
+      }
+    }
+
+    expect(offenders).toEqual([]);
   });
 
   it('public built-in flows do not name concrete local skill ids', () => {
@@ -239,7 +343,7 @@ describe('flow catalog completeness', () => {
 
     for (const pkg of flowPackages) {
       expect(generatedSurfaceMap).toContain(
-        `| \`${pkg.id}\` | \`${pkg.visibility ?? 'public'}\` | \`${pkg.paths.schematic}\` |`,
+        `| \`${pkg.id}\` | \`${pkg.visibility ?? 'public'}\` | \`src/flows/${pkg.id}/flow.ts\`<br>generates \`${pkg.paths.schematic}\` |`,
       );
       if (pkg.paths.command === undefined) continue;
       expect(generatedSurfaceMap).toContain(`\`${pkg.paths.command}\``);
@@ -299,17 +403,20 @@ describe('flow catalog completeness', () => {
     ).toEqual([]);
   });
 
-  it('the catalog imports every package via its local index.js path', () => {
-    // Catches the case where someone adds a package to the array
-    // without the matching `import { ... } from './<id>/index.js'`
+  it('the catalog imports every flow via its local flow.js definition path', () => {
+    // Catches the case where someone adds a package to the catalog
+    // without the matching `import { ... } from './<id>/flow.js'`
     // statement, or vice versa. We require an actual import line —
     // not a substring match — so a string literal or a comment
     // mentioning the path can't satisfy the assertion.
     const catalogText = readFileSync(join(WORKFLOWS_ROOT, 'catalog.ts'), 'utf8');
     const offenders: { readonly id: string; readonly missing: 'import' }[] = [];
+    expect(flowDefinitions.map((definition) => definition.id)).toEqual(
+      flowPackages.map((pkg) => pkg.id),
+    );
     for (const pkg of flowPackages) {
       const importPattern = new RegExp(
-        `^\\s*import\\s+.*from\\s+['"]\\./${pkg.id}/index\\.js['"]\\s*;?`,
+        `^\\s*import\\s+.*from\\s+['"]\\./${pkg.id}/flow\\.js['"]\\s*;?`,
         'm',
       );
       if (!importPattern.test(catalogText)) {
@@ -318,7 +425,7 @@ describe('flow catalog completeness', () => {
     }
     expect(
       offenders,
-      'package present at runtime but not imported by the static catalog source — catalog.ts must mirror the flowPackages array via a real import statement',
+      'package present at runtime but not imported by the static catalog source — catalog.ts must mirror flowDefinitions via a real definition import statement',
     ).toEqual([]);
   });
 

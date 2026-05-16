@@ -8,12 +8,16 @@
 // relay result, so the path resolver is custom.
 
 import { readFileSync } from 'node:fs';
-import type { CompiledFlow } from '../../../schemas/compiled-flow.js';
 import { resolveRunRelative } from '../../../shared/run-relative-path.js';
 import type {
   ComposeBuildContext,
   ComposeBuilder,
 } from '../../registries/compose-writers/types.js';
+import type {
+  RuntimeIndexedComposeStep,
+  RuntimeIndexedFlow,
+  RuntimeIndexedRelayStep,
+} from '../../registries/runtime-index.js';
 import {
   type ReviewEvidence,
   type ReviewEvidenceSummary,
@@ -23,16 +27,13 @@ import {
   computeReviewVerdict,
 } from '../reports.js';
 
-type RelayStep = CompiledFlow['steps'][number] & { kind: 'relay' };
-type ComposeStep = CompiledFlow['steps'][number] & { kind: 'compose' };
-
 function reviewerRelayResultPath(
-  flow: CompiledFlow,
+  flow: RuntimeIndexedFlow,
   closeStep: ComposeBuildContext['step'],
 ): string {
   const closeStepId = closeStep.id as unknown as string;
   const reviewerRelayes = flow.steps.filter(
-    (candidate): candidate is RelayStep =>
+    (candidate): candidate is RuntimeIndexedRelayStep =>
       candidate.kind === 'relay' &&
       candidate.role === 'reviewer' &&
       (candidate.routes.pass as unknown as string) === closeStepId,
@@ -51,10 +52,13 @@ function reviewerRelayResultPath(
   return resultPath;
 }
 
-function reviewIntakePath(flow: CompiledFlow, closeStep: ComposeBuildContext['step']): string {
+function reviewIntakePath(
+  flow: RuntimeIndexedFlow,
+  closeStep: ComposeBuildContext['step'],
+): string {
   const closeStepId = closeStep.id as unknown as string;
   const intakeStep = flow.steps.find(
-    (candidate): candidate is ComposeStep =>
+    (candidate): candidate is RuntimeIndexedComposeStep =>
       candidate.kind === 'compose' &&
       candidate.writes.report.schema === 'review.intake@v1' &&
       closeStep.reads.includes(candidate.writes.report.path as never),

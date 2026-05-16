@@ -22,9 +22,9 @@
 //   2. A SchemaShapeHint or StructuralShapeHint export in src/flows/<wf>/relay-hints.ts
 //   3. Register it on the package's `relayReports[].relayHint`
 
-import type { CompiledFlow } from '../../../schemas/compiled-flow.js';
+import type { RuntimeIndexedRelayStep } from '../runtime-index.js';
 
-export type RelayStep = CompiledFlow['steps'][number] & { readonly kind: 'relay' };
+export type RelayStep = RuntimeIndexedRelayStep;
 
 export interface SchemaShapeHint {
   readonly kind: 'schema';

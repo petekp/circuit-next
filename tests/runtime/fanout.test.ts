@@ -194,7 +194,6 @@ async function runCompiledRelayFanoutruntime(input: {
     runId: randomUUID(),
     goal: 'fanout goal',
     manifestHash: 'compiled-relay-fanout-hash',
-    compiledFlow: compiledFlow,
     relayer: input.relayer,
     executors: {
       compose: async () => ({ route: 'pass' }),

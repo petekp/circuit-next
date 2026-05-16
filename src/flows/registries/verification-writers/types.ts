@@ -19,12 +19,9 @@
 //      src/flows/<wf>/writers/<schema>.ts
 //   3. Register it on the flow package's `writers.verification`
 
-import type { CompiledFlow } from '../../../schemas/compiled-flow.js';
+import type { RuntimeIndexedFlow, RuntimeIndexedVerificationStep } from '../runtime-index.js';
 
-export type VerificationStep = CompiledFlow['steps'][number] & {
-  readonly kind: 'verification';
-  readonly writes: { readonly report: { readonly schema: string; readonly path: string } };
-};
+export type VerificationStep = RuntimeIndexedVerificationStep;
 
 // One command to execute. Both Build and Fix use the same command
 // shape (id, cwd, argv, timeout_ms, max_output_bytes, env), so this
@@ -53,7 +50,7 @@ export interface VerificationCommandObservation {
 
 export interface VerificationBuildContext {
   readonly runFolder: string;
-  readonly flow: CompiledFlow;
+  readonly flow: RuntimeIndexedFlow;
   readonly step: VerificationStep;
 }
 

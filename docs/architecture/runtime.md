@@ -17,6 +17,14 @@ validation, connector resolution, checkpoint resume, sub-run orchestration, and
 fanout joining. Adding or changing a flow should update the flow package and
 generated surfaces, not add flow-specific branches to the engine.
 
+The long-term runtime direction is a functional effect shell around the same
+explicit graph walk. The graph runner should continue to make step advancement
+plain: enter step, run executor, evaluate route, append trace, move to the next
+step. Capabilities such as files, trace persistence, clocks, subprocesses,
+connectors, progress, child runs, and worktrees should be supplied at the edge
+and should return typed errors as values. See
+`docs/architecture/data-first-functional-flow-architecture.md`.
+
 The CLI routes supported fresh invocations directly through this runtime.
 Published custom flows carry a manifest entry that maps the custom slug to a
 supported archetype, so the normal `circuit-next run <slug> --flow-root <root>`

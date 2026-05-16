@@ -4,7 +4,6 @@
   "title": "Build Schematic",
   "purpose": "Build flow. Circuit frames a requested change, plans it, relays implementation to a worker, runs verification, relays review to a separate worker, and closes with a Build result file plus evidence.",
   "status": "active",
-  "version": "0.1.0",
   "starts_at": "frame-step",
   "initial_contracts": ["task.intake@v1", "route.decision@v1", "verification.plan@v1"],
   "contract_aliases": [
@@ -33,6 +32,216 @@
       "actual": "build.result@v1"
     }
   ],
+  "items": [
+    {
+      "id": "frame-step",
+      "block": "frame",
+      "title": "Frame - confirm Build brief",
+      "stage": "frame",
+      "input": {
+        "task": "task.intake@v1",
+        "route": "route.decision@v1"
+      },
+      "output": "build.brief@v1",
+      "evidence_requirements": ["scope boundary", "constraints", "proof plan"],
+      "execution": {
+        "kind": "checkpoint"
+      },
+      "skill_slots": [],
+      "routes": {
+        "continue": "plan-step",
+        "stop": "@stop"
+      },
+      "route_overrides": {},
+      "protocol": "build-frame@v1",
+      "writes": {
+        "report_path": "reports/build/brief.json",
+        "checkpoint_request_path": "reports/checkpoints/frame-step-request.json",
+        "checkpoint_response_path": "reports/checkpoints/frame-step-response.json"
+      },
+      "check": {
+        "allow": ["continue"]
+      },
+      "checkpoint_policy": {
+        "prompt": "Confirm the Build brief before implementation starts.",
+        "choices": [
+          {
+            "id": "continue",
+            "label": "Continue"
+          }
+        ],
+        "safe_default_choice": "continue",
+        "safe_autonomous_choice": "continue",
+        "report_template": {
+          "scope": "Make the smallest safe change that satisfies the requested goal.",
+          "success_criteria": [
+            "The requested behavior is implemented",
+            "Verification passes",
+            "Review completes without a blocking issue"
+          ]
+        }
+      }
+    },
+    {
+      "id": "plan-step",
+      "block": "plan",
+      "title": "Plan - produce Build plan",
+      "stage": "plan",
+      "input": {
+        "brief": "build.brief@v1"
+      },
+      "output": "build.plan@v1",
+      "evidence_requirements": ["ordered steps", "risk notes", "proof strategy"],
+      "execution": {
+        "kind": "compose"
+      },
+      "skill_slots": [],
+      "routes": {
+        "continue": "act-step",
+        "revise": "plan-step",
+        "stop": "@stop"
+      },
+      "route_overrides": {},
+      "protocol": "build-plan@v1",
+      "writes": {
+        "report_path": "reports/build/plan.json"
+      },
+      "check": {
+        "required": ["objective", "verification"]
+      }
+    },
+    {
+      "id": "act-step",
+      "block": "act",
+      "title": "Act - implementation relay",
+      "stage": "act",
+      "input": {
+        "brief": "build.brief@v1",
+        "plan": "build.plan@v1"
+      },
+      "output": "build.implementation@v1",
+      "evidence_requirements": ["changed files", "change rationale", "declared follow-up proof"],
+      "execution": {
+        "kind": "relay",
+        "role": "implementer"
+      },
+      "skill_slots": [],
+      "routes": {
+        "continue": "verify-step",
+        "retry": "act-step",
+        "stop": "@stop"
+      },
+      "route_overrides": {},
+      "protocol": "build-act@v1",
+      "writes": {
+        "report_path": "reports/build/implementation.json",
+        "request_path": "reports/relay/build-act.request.json",
+        "receipt_path": "reports/relay/build-act.receipt.txt",
+        "result_path": "reports/relay/build-act.result.json"
+      },
+      "check": {
+        "pass": ["accept"]
+      }
+    },
+    {
+      "id": "verify-step",
+      "block": "run-verification",
+      "title": "Verify - run Build verification",
+      "stage": "verify",
+      "input": {
+        "proof": "verification.plan@v1",
+        "plan": "build.plan@v1",
+        "change": "build.implementation@v1"
+      },
+      "output": "build.verification@v1",
+      "evidence_requirements": ["command list", "exit status", "bounded output", "pass or fail"],
+      "execution": {
+        "kind": "verification"
+      },
+      "skill_slots": [],
+      "routes": {
+        "continue": "review-step",
+        "retry": "act-step",
+        "stop": "@stop"
+      },
+      "route_overrides": {},
+      "protocol": "build-verify@v1",
+      "writes": {
+        "report_path": "reports/build/verification.json"
+      },
+      "check": {
+        "required": ["overall_status", "commands"]
+      }
+    },
+    {
+      "id": "review-step",
+      "block": "review",
+      "title": "Review - implementation review relay",
+      "stage": "review",
+      "input": {
+        "brief": "build.brief@v1",
+        "plan": "build.plan@v1",
+        "change": "build.implementation@v1",
+        "verification": "build.verification@v1"
+      },
+      "output": "build.review@v1",
+      "evidence_requirements": ["verdict", "findings", "confidence", "required fixes"],
+      "execution": {
+        "kind": "relay",
+        "role": "reviewer"
+      },
+      "skill_slots": [],
+      "routes": {
+        "continue": "close-step",
+        "retry": "act-step",
+        "revise": "act-step",
+        "stop": "@stop"
+      },
+      "route_overrides": {},
+      "protocol": "build-review@v1",
+      "writes": {
+        "report_path": "reports/build/review.json",
+        "request_path": "reports/relay/build-review.request.json",
+        "receipt_path": "reports/relay/build-review.receipt.txt",
+        "result_path": "reports/relay/build-review.result.json"
+      },
+      "check": {
+        "pass": ["accept", "accept-with-fixes"]
+      }
+    },
+    {
+      "id": "close-step",
+      "block": "close-with-evidence",
+      "title": "Close - emit Build result",
+      "stage": "close",
+      "input": {
+        "brief": "build.brief@v1",
+        "plan": "build.plan@v1",
+        "implementation": "build.implementation@v1",
+        "verification": "build.verification@v1",
+        "review": "build.review@v1"
+      },
+      "output": "build.result@v1",
+      "evidence_requirements": ["outcome", "evidence pointers", "residual risks", "follow-ups"],
+      "execution": {
+        "kind": "compose"
+      },
+      "skill_slots": [],
+      "routes": {
+        "complete": "@complete",
+        "stop": "@stop"
+      },
+      "route_overrides": {},
+      "protocol": "build-close@v1",
+      "writes": {
+        "report_path": "reports/build-result.json"
+      },
+      "check": {
+        "required": ["summary", "outcome", "evidence_links"]
+      }
+    }
+  ],
+  "version": "0.1.0",
   "entry": {
     "signals": {
       "include": ["build", "implement", "develop", "change", "fix", "add"],
@@ -97,203 +306,6 @@
       "canonical": "close",
       "id": "close-stage",
       "title": "Close"
-    }
-  ],
-  "items": [
-    {
-      "id": "frame-step",
-      "title": "Frame - confirm Build brief",
-      "stage": "frame",
-      "input": {
-        "task": "task.intake@v1",
-        "route": "route.decision@v1"
-      },
-      "output": "build.brief@v1",
-      "evidence_requirements": ["scope boundary", "constraints", "proof plan"],
-      "execution": {
-        "kind": "checkpoint"
-      },
-      "protocol": "build-frame@v1",
-      "writes": {
-        "checkpoint_request_path": "reports/checkpoints/frame-step-request.json",
-        "checkpoint_response_path": "reports/checkpoints/frame-step-response.json",
-        "report_path": "reports/build/brief.json"
-      },
-      "check": {
-        "allow": ["continue"]
-      },
-      "checkpoint_policy": {
-        "prompt": "Confirm the Build brief before implementation starts.",
-        "choices": [
-          {
-            "id": "continue",
-            "label": "Continue"
-          }
-        ],
-        "safe_default_choice": "continue",
-        "safe_autonomous_choice": "continue",
-        "report_template": {
-          "scope": "Make the smallest safe change that satisfies the requested goal.",
-          "success_criteria": [
-            "The requested behavior is implemented",
-            "Verification passes",
-            "Review completes without a blocking issue"
-          ]
-        }
-      },
-      "routes": {
-        "continue": "plan-step",
-        "stop": "@stop"
-      },
-      "block": "frame"
-    },
-    {
-      "id": "plan-step",
-      "title": "Plan - produce Build plan",
-      "stage": "plan",
-      "input": {
-        "brief": "build.brief@v1"
-      },
-      "output": "build.plan@v1",
-      "evidence_requirements": ["ordered steps", "risk notes", "proof strategy"],
-      "execution": {
-        "kind": "compose"
-      },
-      "protocol": "build-plan@v1",
-      "writes": {
-        "report_path": "reports/build/plan.json"
-      },
-      "check": {
-        "required": ["objective", "verification"]
-      },
-      "routes": {
-        "continue": "act-step",
-        "revise": "plan-step",
-        "stop": "@stop"
-      },
-      "block": "plan"
-    },
-    {
-      "id": "act-step",
-      "title": "Act - implementation relay",
-      "stage": "act",
-      "input": {
-        "brief": "build.brief@v1",
-        "plan": "build.plan@v1"
-      },
-      "output": "build.implementation@v1",
-      "evidence_requirements": ["changed files", "change rationale", "declared follow-up proof"],
-      "execution": {
-        "kind": "relay",
-        "role": "implementer"
-      },
-      "protocol": "build-act@v1",
-      "writes": {
-        "report_path": "reports/build/implementation.json",
-        "request_path": "reports/relay/build-act.request.json",
-        "receipt_path": "reports/relay/build-act.receipt.txt",
-        "result_path": "reports/relay/build-act.result.json"
-      },
-      "check": {
-        "pass": ["accept"]
-      },
-      "routes": {
-        "continue": "verify-step",
-        "retry": "act-step",
-        "stop": "@stop"
-      },
-      "block": "act"
-    },
-    {
-      "id": "verify-step",
-      "title": "Verify - run Build verification",
-      "stage": "verify",
-      "input": {
-        "proof": "verification.plan@v1",
-        "plan": "build.plan@v1",
-        "change": "build.implementation@v1"
-      },
-      "output": "build.verification@v1",
-      "evidence_requirements": ["command list", "exit status", "bounded output", "pass or fail"],
-      "execution": {
-        "kind": "verification"
-      },
-      "protocol": "build-verify@v1",
-      "writes": {
-        "report_path": "reports/build/verification.json"
-      },
-      "check": {
-        "required": ["overall_status", "commands"]
-      },
-      "routes": {
-        "continue": "review-step",
-        "retry": "act-step",
-        "stop": "@stop"
-      },
-      "block": "run-verification"
-    },
-    {
-      "id": "review-step",
-      "title": "Review - implementation review relay",
-      "stage": "review",
-      "input": {
-        "brief": "build.brief@v1",
-        "plan": "build.plan@v1",
-        "change": "build.implementation@v1",
-        "verification": "build.verification@v1"
-      },
-      "output": "build.review@v1",
-      "evidence_requirements": ["verdict", "findings", "confidence", "required fixes"],
-      "execution": {
-        "kind": "relay",
-        "role": "reviewer"
-      },
-      "protocol": "build-review@v1",
-      "writes": {
-        "report_path": "reports/build/review.json",
-        "request_path": "reports/relay/build-review.request.json",
-        "receipt_path": "reports/relay/build-review.receipt.txt",
-        "result_path": "reports/relay/build-review.result.json"
-      },
-      "check": {
-        "pass": ["accept", "accept-with-fixes"]
-      },
-      "routes": {
-        "continue": "close-step",
-        "retry": "act-step",
-        "revise": "act-step",
-        "stop": "@stop"
-      },
-      "block": "review"
-    },
-    {
-      "id": "close-step",
-      "title": "Close - emit Build result",
-      "stage": "close",
-      "input": {
-        "brief": "build.brief@v1",
-        "plan": "build.plan@v1",
-        "implementation": "build.implementation@v1",
-        "verification": "build.verification@v1",
-        "review": "build.review@v1"
-      },
-      "output": "build.result@v1",
-      "evidence_requirements": ["outcome", "evidence pointers", "residual risks", "follow-ups"],
-      "execution": {
-        "kind": "compose"
-      },
-      "protocol": "build-close@v1",
-      "writes": {
-        "report_path": "reports/build-result.json"
-      },
-      "check": {
-        "required": ["summary", "outcome", "evidence_links"]
-      },
-      "routes": {
-        "complete": "@complete",
-        "stop": "@stop"
-      },
-      "block": "close-with-evidence"
     }
   ]
 }

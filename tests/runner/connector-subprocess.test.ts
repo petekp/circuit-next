@@ -1,0 +1,64 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import { runConnectorSubprocess } from '../../src/connectors/subprocess.js';
+
+let tempDir: string;
+
+beforeEach(() => {
+  tempDir = mkdtempSync(join(tmpdir(), 'circuit-connector-subprocess-'));
+});
+
+afterEach(() => {
+  rmSync(tempDir, { recursive: true, force: true });
+});
+
+describe('connector subprocess lifecycle boundary', () => {
+  it('returns bounded stdout and stderr when a detached subprocess times out', async () => {
+    const result = await runConnectorSubprocess({
+      executable: process.execPath,
+      args: [
+        '-e',
+        [
+          "process.stdout.write('stdout before timeout');",
+          "process.stderr.write('stderr before timeout');",
+          'setInterval(() => {}, 1000);',
+        ].join(' '),
+      ],
+      timeoutMs: 250,
+      stdoutMaxBytes: 1_000,
+      stderrMaxBytes: 1_000,
+      sigtermToSigkillGraceMs: 10,
+      cwd: tempDir,
+    });
+
+    expect(result.timedOut).toBe(true);
+    expect(result.stdout).toContain('stdout before timeout');
+    expect(result.stderr).toContain('stderr before timeout');
+  });
+
+  it('caps stdout and stderr without letting connector children grow memory unbounded', async () => {
+    const result = await runConnectorSubprocess({
+      executable: process.execPath,
+      args: [
+        '-e',
+        ["process.stdout.write('x'.repeat(100));", "process.stderr.write('y'.repeat(100));"].join(
+          ' ',
+        ),
+      ],
+      timeoutMs: 1_000,
+      stdoutMaxBytes: 12,
+      stderrMaxBytes: 9,
+      sigtermToSigkillGraceMs: 10,
+      cwd: tempDir,
+    });
+
+    expect(result.timedOut).toBe(false);
+    expect(result.stdout).toBe('x'.repeat(12));
+    expect(result.stderr).toBe('y'.repeat(9));
+    expect(result.stdoutCapped).toBe(true);
+    expect(result.stderrCapped).toBe(true);
+  });
+});

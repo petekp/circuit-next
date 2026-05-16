@@ -1,4 +1,4 @@
-import type { CompiledFlow } from '../../schemas/compiled-flow.js';
+import type { RuntimePackageIndex } from '../../flows/registries/runtime-index.js';
 import type { LayeredConfig as LayeredConfigValue } from '../../schemas/config.js';
 import type {
   ProgressReporter,
@@ -19,7 +19,7 @@ import type {
 
 export interface RunContext {
   readonly flow: ExecutableFlow;
-  readonly compiledFlow?: CompiledFlow;
+  readonly packageIndex: RuntimePackageIndex;
   readonly runId: RunId;
   readonly runDir: string;
   readonly goal: string;

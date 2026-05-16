@@ -1,19 +1,6 @@
-import type { CompiledFlowPackage } from '../types.js';
-import { RuntimeProofCompose } from './reports.js';
-import { runtimeProofComposeBuilder } from './writers/compose.js';
+import { compileFlowDefinition } from '../flow-definition.js';
+import { runtimeProofFlowDefinition } from './flow.js';
 
-export const runtimeProofCompiledFlowPackage: CompiledFlowPackage = {
-  id: 'runtime-proof',
-  visibility: 'internal',
-  paths: {
-    schematic: 'src/flows/runtime-proof/schematic.json',
-  },
-  relayReports: [],
-  reportSchemas: [{ schemaName: 'runtime-proof.compose@v1', schema: RuntimeProofCompose }],
-  writers: {
-    compose: [runtimeProofComposeBuilder],
-    close: [],
-    verification: [],
-    checkpoint: [],
-  },
-};
+const compiledFlowPackage = compileFlowDefinition(runtimeProofFlowDefinition);
+
+export { compiledFlowPackage as runtimeProofCompiledFlowPackage };

@@ -460,6 +460,59 @@ describe('flow schematic compiler-required metadata', () => {
     };
   }
 
+  function activeSchematic(items: Array<Record<string, unknown>>): Record<string, unknown> {
+    return {
+      ...baseSchematic(items),
+      status: 'active',
+      version: '0.1.0',
+      entry: { signals: { include: ['demo'], exclude: [] }, intent_prefixes: ['demo'] },
+      entry_modes: [{ name: 'default', depth: 'standard', description: 'default mode' }],
+      stage_path_policy: {
+        mode: 'partial',
+        omits: ['analyze', 'plan', 'act', 'verify', 'review', 'close'],
+        rationale: 'demo schematic with only a frame stage for testing',
+      },
+      stages: [{ canonical: 'frame', id: 'frame-stage', title: 'Frame' }],
+    };
+  }
+
+  it('keeps candidate draft schematics parseable without compiler metadata', () => {
+    const result = FlowSchematic.safeParse(baseSchematic([frameItemWithExtras({})]));
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects active schematics missing compile-required top-level metadata', () => {
+    const schematic = {
+      ...baseSchematic([
+        frameItemWithExtras({
+          protocol: 'demo-frame@v1',
+          writes: { report_path: 'reports/brief.json' },
+          check: { required: ['scope', 'constraints'] },
+        }),
+      ]),
+      status: 'active',
+    };
+    const result = FlowSchematic.safeParse(schematic);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.message).toMatch(/active schematic requires version/);
+      expect(result.error.message).toMatch(/active schematic requires entry/);
+      expect(result.error.message).toMatch(/active schematic requires entry_modes/);
+      expect(result.error.message).toMatch(/active schematic requires stage_path_policy/);
+      expect(result.error.message).toMatch(/active schematic requires stages/);
+    }
+  });
+
+  it('rejects active schematic items missing compile-required execution metadata', () => {
+    const result = FlowSchematic.safeParse(activeSchematic([frameItemWithExtras({})]));
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.message).toMatch(/active schematic item requires protocol/);
+      expect(result.error.message).toMatch(/active schematic item requires writes/);
+      expect(result.error.message).toMatch(/active schematic item requires check/);
+    }
+  });
+
   it('accepts a compose item with required check, schema-sections writes, and protocol', () => {
     const schematic = baseSchematic([
       frameItemWithExtras({

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { CompiledFlow } from '../../schemas/compiled-flow.js';
+import type { CompiledFlowProgressStep, CompiledFlowProgressSurface } from '../../flows/types.js';
 import {
   BUILTIN_CONNECTOR_CAPABILITIES,
   type FilesystemCapability,
@@ -21,7 +21,6 @@ import type { ProgressReporter } from '../../shared/relay-runtime-types.js';
 import { runResultPath } from '../../shared/result-path.js';
 import {
   WRITE_CAPABLE_WORKER_DISCLOSURE,
-  compiledFlowMayInvokeWriteCapableWorker,
   flowMayInvokeWriteCapableWorker,
 } from '../../shared/write-capable-worker-disclosure.js';
 import type { TraceEntry } from '../domain/trace.js';
@@ -61,15 +60,10 @@ function relayRoleFromTrace(entry: TraceEntry): 'reviewer' | 'implementer' | und
 
 function stepTitle(input: {
   readonly flow: ExecutableFlow;
-  readonly compiledFlow: CompiledFlow | undefined;
   readonly stepId: string | undefined;
 }): string {
   if (input.stepId === undefined) return '<unknown step>';
-  return (
-    input.compiledFlow?.steps.find((step) => step.id === input.stepId)?.title ??
-    input.flow.steps.find((step) => step.id === input.stepId)?.title ??
-    input.stepId
-  );
+  return input.flow.steps.find((step) => step.id === input.stepId)?.title ?? input.stepId;
 }
 
 function flowLabel(flowId: string): string {
@@ -78,48 +72,6 @@ function flowLabel(flowId: string): string {
     .filter((part) => part.length > 0)
     .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
     .join(' ');
-}
-
-function stepLead(title: string): string {
-  return title.split('—')[0]?.trim().toLowerCase() ?? title.toLowerCase();
-}
-
-function operatorStepTitle(flowId: string, title: string): string {
-  const lead = stepLead(title);
-  if (lead.startsWith('frame') || lead.startsWith('intake')) return 'Frame the work';
-  if (lead.startsWith('analyze') || lead.startsWith('inventory')) return 'Check the context';
-  if (lead.startsWith('synthesize') || lead.startsWith('compose')) {
-    return flowId === 'explore' ? 'Draft the recommendation' : 'Draft the result';
-  }
-  if (lead.startsWith('review') || lead.startsWith('independent') || lead.startsWith('release')) {
-    return flowId === 'explore' ? 'Check the recommendation' : 'Check the result';
-  }
-  if (lead.startsWith('close')) return 'Wrap up';
-  if (lead.startsWith('verify')) return 'Check the work';
-  if (lead.startsWith('plan') || lead.startsWith('coexistence')) return 'Plan the work';
-  if (lead.startsWith('act') || lead.startsWith('batch') || lead.startsWith('execute')) {
-    return 'Make the change';
-  }
-  return title.replace(/\s+—\s+.+$/, '').replace(/\s+\(.+\)$/, '');
-}
-
-function operatorStepAction(flowId: string, title: string): string {
-  const lead = stepLead(title);
-  if (lead.startsWith('frame') || lead.startsWith('intake')) return 'Framing the work';
-  if (lead.startsWith('analyze') || lead.startsWith('inventory')) return 'Checking the context';
-  if (lead.startsWith('synthesize') || lead.startsWith('compose')) {
-    return flowId === 'explore' ? 'Drafting the recommendation' : 'Drafting the result';
-  }
-  if (lead.startsWith('review') || lead.startsWith('independent') || lead.startsWith('release')) {
-    return flowId === 'explore' ? 'Checking the recommendation' : 'Checking the result';
-  }
-  if (lead.startsWith('close')) return 'Wrapping up';
-  if (lead.startsWith('verify')) return 'Checking the work';
-  if (lead.startsWith('plan') || lead.startsWith('coexistence')) return 'Planning the work';
-  if (lead.startsWith('act') || lead.startsWith('batch') || lead.startsWith('execute')) {
-    return 'Making the change';
-  }
-  return `Working on ${operatorStepTitle(flowId, title).toLowerCase()}`;
 }
 
 function relayStartedStatusText(flowId: string, role: 'reviewer' | 'implementer'): string {
@@ -142,13 +94,6 @@ function relayCompletedStatusText(flowId: string, role: 'reviewer' | 'implemente
   return flowId === 'explore'
     ? 'Finished drafting the recommendation.'
     : 'Finished the specialist pass.';
-}
-
-function relayRoleFromStepTitle(title: string): 'reviewer' | 'implementer' {
-  const lead = stepLead(title);
-  return lead.startsWith('review') || lead.startsWith('independent') || lead.startsWith('release')
-    ? 'reviewer'
-    : 'implementer';
 }
 
 function circuitDisplayText(statusText: string): string {
@@ -178,11 +123,12 @@ function suppressStatus(blockId: ProgressRunId): ProgressPresentation {
 
 function progressTasks(
   flow: ExecutableFlow,
+  stepDisplayById: ReadonlyMap<string, CompiledFlowProgressStep>,
   statuses: ReadonlyMap<string, ProgressTaskStatus>,
 ): ProgressTask[] {
   return flow.steps.map((step) => ({
     id: step.id,
-    title: operatorStepTitle(flow.id, step.title ?? step.id),
+    title: stepDisplayById.get(step.id)?.taskTitle ?? step.title ?? step.id,
     status: statuses.get(step.id) ?? 'pending',
   }));
 }
@@ -192,6 +138,7 @@ function reportTaskListProgress(input: {
   readonly runId: ProgressRunId;
   readonly flowId: CompiledFlowId;
   readonly flow: ExecutableFlow;
+  readonly stepDisplayById: ReadonlyMap<string, CompiledFlowProgressStep>;
   readonly recordedAt: string;
   readonly statuses: ReadonlyMap<string, ProgressTaskStatus>;
   readonly label: string;
@@ -207,7 +154,7 @@ function reportTaskListProgress(input: {
     label: input.label,
     display: progressDisplay(input.displayText, 'detail', input.tone ?? 'info'),
     presentation: suppressStatus(input.runId),
-    tasks: progressTasks(input.flow, input.statuses),
+    tasks: progressTasks(input.flow, input.stepDisplayById, input.statuses),
   });
 }
 
@@ -390,15 +337,38 @@ function fanoutBranchKind(value: unknown): 'relay' | 'sub-run' | undefined {
   return undefined;
 }
 
-function shouldWarnAboutWriteCapableWorker(
-  flow: ExecutableFlow,
-  compiledFlow: CompiledFlow | undefined,
-): boolean {
-  if (compiledFlow !== undefined) return compiledFlowMayInvokeWriteCapableWorker(compiledFlow);
+function shouldWarnAboutWriteCapableWorker(flow: ExecutableFlow): boolean {
   return (
     flowMayInvokeWriteCapableWorker(flow.id) ||
     flow.steps.some((step) => step.kind === 'relay' && step.role === 'implementer')
   );
+}
+
+function stepDisplay(input: {
+  readonly flow: ExecutableFlow;
+  readonly stepDisplayById: ReadonlyMap<string, CompiledFlowProgressStep>;
+  readonly stepId: string;
+}): {
+  readonly title: string;
+  readonly taskTitle: string;
+  readonly activeText: string;
+  readonly relayRole?: 'implementer' | 'reviewer';
+} {
+  const title = stepTitle({ flow: input.flow, stepId: input.stepId });
+  const metadata = input.stepDisplayById.get(input.stepId);
+  if (metadata !== undefined) {
+    return {
+      title,
+      taskTitle: metadata.taskTitle,
+      activeText: metadata.activeText,
+      ...(metadata.relayRole === undefined ? {} : { relayRole: metadata.relayRole }),
+    };
+  }
+  return {
+    title,
+    taskTitle: title,
+    activeText: `Working on ${title.toLowerCase()}`,
+  };
 }
 
 export function createProgressProjector(input: {
@@ -406,10 +376,13 @@ export function createProgressProjector(input: {
   readonly runDir: string;
   readonly runId: string;
   readonly flow: ExecutableFlow;
-  readonly compiledFlow?: CompiledFlow;
+  readonly progressSurface?: CompiledFlowProgressSurface;
 }): (entry: TraceEntry) => void {
   const taskStatuses = new Map<string, ProgressTaskStatus>(
     input.flow.steps.map((step) => [step.id, 'pending'] as const),
+  );
+  const stepDisplayById = new Map(
+    input.progressSurface?.steps.map((step) => [step.stepId, step]) ?? [],
   );
   const activeAttempts = new Map<string, number>();
   const flowId = input.flow.id as CompiledFlowId;
@@ -419,7 +392,7 @@ export function createProgressProjector(input: {
     const recordedAt = entry.recorded_at ?? new Date(0).toISOString();
     switch (entry.kind) {
       case 'run.bootstrapped': {
-        const shouldWarn = shouldWarnAboutWriteCapableWorker(input.flow, input.compiledFlow);
+        const shouldWarn = shouldWarnAboutWriteCapableWorker(input.flow);
         const startedText = `Circuit: Started ${flowLabel(input.flow.id)}.`;
         reportProgress(input.progress, {
           schema_version: 1,
@@ -443,6 +416,7 @@ export function createProgressProjector(input: {
           runId,
           flowId,
           flow: input.flow,
+          stepDisplayById,
           recordedAt,
           statuses: taskStatuses,
           label: 'Flow checklist initialized',
@@ -455,22 +429,18 @@ export function createProgressProjector(input: {
         if (stepId === undefined || entry.attempt === undefined) break;
         activeAttempts.set(stepId, entry.attempt);
         taskStatuses.set(stepId, 'in_progress');
-        const title = stepTitle({ flow: input.flow, compiledFlow: input.compiledFlow, stepId });
+        const display = stepDisplay({ flow: input.flow, stepDisplayById, stepId });
         reportProgress(input.progress, {
           schema_version: 1,
           type: 'step.started',
           run_id: runId,
           flow_id: flowId,
           recorded_at: recordedAt,
-          label: title,
-          display: progressDisplay(
-            `Circuit: ${operatorStepAction(input.flow.id, title)}...`,
-            'major',
-            'info',
-          ),
-          presentation: appendStatus(runId, `${operatorStepAction(input.flow.id, title)}...`),
+          label: display.title,
+          display: progressDisplay(`Circuit: ${display.activeText}...`, 'major', 'info'),
+          presentation: appendStatus(runId, `${display.activeText}...`),
           step_id: stepId as StepId,
-          step_title: title,
+          step_title: display.title,
           attempt: entry.attempt,
         });
         reportTaskListProgress({
@@ -478,10 +448,11 @@ export function createProgressProjector(input: {
           runId,
           flowId,
           flow: input.flow,
+          stepDisplayById,
           recordedAt,
           statuses: taskStatuses,
-          label: `${title} in progress`,
-          displayText: `Circuit: ${operatorStepAction(input.flow.id, title)}...`,
+          label: `${display.title} in progress`,
+          displayText: `Circuit: ${display.activeText}...`,
         });
         break;
       }
@@ -491,7 +462,7 @@ export function createProgressProjector(input: {
         const connector = connectorFromTrace(entry);
         const role = relayRoleFromTrace(entry);
         if (connector === undefined || role === undefined) break;
-        const title = stepTitle({ flow: input.flow, compiledFlow: input.compiledFlow, stepId });
+        const display = stepDisplay({ flow: input.flow, stepDisplayById, stepId });
         const capability = connectorFilesystemCapability(connector);
         const statusText = relayStartedStatusText(input.flow.id, role);
         reportProgress(input.progress, {
@@ -504,7 +475,7 @@ export function createProgressProjector(input: {
           display: progressDisplay(circuitDisplayText(statusText), 'major', 'info'),
           presentation: replaceStatus(runId, `${stepId}:relay`, statusText),
           step_id: stepId as StepId,
-          step_title: title,
+          step_title: display.title,
           attempt: activeAttempts.get(stepId) ?? entry.attempt ?? 1,
           role,
           connector_name: connector.name,
@@ -522,8 +493,8 @@ export function createProgressProjector(input: {
         ) {
           break;
         }
-        const title = stepTitle({ flow: input.flow, compiledFlow: input.compiledFlow, stepId });
-        const role = relayRoleFromTrace(entry) ?? relayRoleFromStepTitle(title);
+        const display = stepDisplay({ flow: input.flow, stepDisplayById, stepId });
+        const role = relayRoleFromTrace(entry) ?? display.relayRole ?? 'implementer';
         const statusText = relayCompletedStatusText(input.flow.id, role);
         reportProgress(input.progress, {
           schema_version: 1,
@@ -535,7 +506,7 @@ export function createProgressProjector(input: {
           display: progressDisplay(circuitDisplayText(statusText), 'major', 'success'),
           presentation: replaceStatus(runId, `${stepId}:relay`, statusText),
           step_id: stepId as StepId,
-          step_title: title,
+          step_title: display.title,
           attempt: activeAttempts.get(stepId) ?? entry.attempt ?? 1,
           verdict: entry.verdict,
           duration_ms: entry.duration_ms,
@@ -557,7 +528,7 @@ export function createProgressProjector(input: {
         const stepId = entry.step_id;
         const branchIds = stringArray(entry.branch_ids);
         if (stepId === undefined || branchIds === undefined) break;
-        const title = stepTitle({ flow: input.flow, compiledFlow: input.compiledFlow, stepId });
+        const title = stepTitle({ flow: input.flow, stepId });
         reportProgress(input.progress, {
           schema_version: 1,
           type: 'fanout.started',
@@ -588,7 +559,7 @@ export function createProgressProjector(input: {
         if (stepId === undefined || entry.branch_id === undefined || branchKind === undefined) {
           break;
         }
-        const title = stepTitle({ flow: input.flow, compiledFlow: input.compiledFlow, stepId });
+        const title = stepTitle({ flow: input.flow, stepId });
         reportProgress(input.progress, {
           schema_version: 1,
           type: 'fanout.branch_started',
@@ -623,7 +594,7 @@ export function createProgressProjector(input: {
         ) {
           break;
         }
-        const title = stepTitle({ flow: input.flow, compiledFlow: input.compiledFlow, stepId });
+        const title = stepTitle({ flow: input.flow, stepId });
         reportProgress(input.progress, {
           schema_version: 1,
           type: 'fanout.branch_completed',
@@ -662,7 +633,7 @@ export function createProgressProjector(input: {
         ) {
           break;
         }
-        const title = stepTitle({ flow: input.flow, compiledFlow: input.compiledFlow, stepId });
+        const title = stepTitle({ flow: input.flow, stepId });
         reportProgress(input.progress, {
           schema_version: 1,
           type: 'fanout.joined',
@@ -699,7 +670,7 @@ export function createProgressProjector(input: {
         }
         const requestPath = checkpointRequestPath(input.runDir, entry.request_path);
         taskStatuses.set(stepId, 'in_progress');
-        const title = stepTitle({ flow: input.flow, compiledFlow: input.compiledFlow, stepId });
+        const title = stepTitle({ flow: input.flow, stepId });
         const checkpointPromptText = checkpointPrompt(requestPath);
         const presentation = tournamentCheckpointPresentation({
           runDir: input.runDir,
@@ -765,6 +736,7 @@ export function createProgressProjector(input: {
           runId,
           flowId,
           flow: input.flow,
+          stepDisplayById,
           recordedAt,
           statuses: taskStatuses,
           label: `${title} waiting`,
@@ -783,22 +755,22 @@ export function createProgressProjector(input: {
           break;
         }
         taskStatuses.set(stepId, 'completed');
-        const title = stepTitle({ flow: input.flow, compiledFlow: input.compiledFlow, stepId });
+        const display = stepDisplay({ flow: input.flow, stepDisplayById, stepId });
         reportProgress(input.progress, {
           schema_version: 1,
           type: 'step.completed',
           run_id: runId,
           flow_id: flowId,
           recorded_at: recordedAt,
-          label: `Completed ${title}`,
+          label: `Completed ${display.title}`,
           display: progressDisplay(
-            `Finished ${operatorStepAction(input.flow.id, title).toLowerCase()}.`,
+            `Finished ${display.activeText.toLowerCase()}.`,
             'detail',
             'success',
           ),
           presentation: suppressStatus(runId),
           step_id: stepId as StepId,
-          step_title: title,
+          step_title: display.title,
           attempt: entry.attempt,
           route_taken: entry.route_taken,
         });
@@ -807,10 +779,11 @@ export function createProgressProjector(input: {
           runId,
           flowId,
           flow: input.flow,
+          stepDisplayById,
           recordedAt,
           statuses: taskStatuses,
-          label: `${title} completed`,
-          displayText: `Finished ${operatorStepAction(input.flow.id, title).toLowerCase()}.`,
+          label: `${display.title} completed`,
+          displayText: `Finished ${display.activeText.toLowerCase()}.`,
           tone: 'success',
         });
         break;
@@ -821,21 +794,22 @@ export function createProgressProjector(input: {
           break;
         }
         taskStatuses.set(stepId, 'failed');
-        const title = stepTitle({ flow: input.flow, compiledFlow: input.compiledFlow, stepId });
+        const display = stepDisplay({ flow: input.flow, stepDisplayById, stepId });
         reportProgress(input.progress, {
           schema_version: 1,
           type: 'step.aborted',
           run_id: runId,
           flow_id: flowId,
           recorded_at: recordedAt,
-          label: `Aborted ${title}`,
-          display: progressDisplay(`Circuit: Aborted ${title}: ${entry.reason}`, 'major', 'error'),
-          presentation: appendStatus(
-            runId,
-            `Marked ${operatorStepTitle(input.flow.id, title)} as failed.`,
+          label: `Aborted ${display.title}`,
+          display: progressDisplay(
+            `Circuit: Aborted ${display.title}: ${entry.reason}`,
+            'major',
+            'error',
           ),
+          presentation: appendStatus(runId, `Marked ${display.taskTitle} as failed.`),
           step_id: stepId as StepId,
-          step_title: title,
+          step_title: display.title,
           attempt: entry.attempt,
           reason: entry.reason,
         });
@@ -844,10 +818,11 @@ export function createProgressProjector(input: {
           runId,
           flowId,
           flow: input.flow,
+          stepDisplayById,
           recordedAt,
           statuses: taskStatuses,
-          label: `${title} failed`,
-          displayText: `Circuit: Marked ${title} as failed.`,
+          label: `${display.title} failed`,
+          displayText: `Circuit: Marked ${display.taskTitle} as failed.`,
           tone: 'error',
         });
         break;

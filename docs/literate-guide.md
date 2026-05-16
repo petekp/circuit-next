@@ -114,11 +114,12 @@ lives in a folder on disk (§10), not in the session's memory.
 
 ## §4. A flow is data
 
-A flow's authored definition is a JSON file at
-`src/flows/<id>/schematic.json`. The build script (§19) compiles each
-schematic into a `CompiledFlow` — the runtime graph the engine actually
-loads. Compiled outputs land at `generated/flows/<id>/circuit.json` and
-get mirrored into the host plugin packages.
+A flow's authored definition is a typed module at
+`src/flows/<id>/flow.ts`. The build script (§19) regenerates the
+compatibility schematic at `src/flows/<id>/schematic.json`, then compiles
+that schematic into a `CompiledFlow` — the runtime graph the engine actually
+loads. Compiled outputs land at `generated/flows/<id>/circuit.json` and get
+mirrored into the host plugin packages.
 
 The `CompiledFlow` schema is defined with Zod and lives at
 `src/schemas/compiled-flow.ts`. Its body, trimmed to the fields that
@@ -971,12 +972,12 @@ export const flowPackages: readonly CompiledFlowPackage[] = [
 ];
 ```
 
-Adding a flow is therefore a four-step recipe: create the folder,
-export a package, append it to the catalog, run `npm run build && node
-scripts/emit-flows.ts` to regenerate the compiled JSON and host plugin
-mirrors. No engine edit. The repository's `AGENTS.md` says the rule
-explicitly: *if you find yourself editing engine files to add a flow,
-the boundary is being violated.*
+Adding a flow is therefore a four-step recipe: create the folder, author
+`flow.ts`, add the definition to the catalog, run `npm run build && node
+scripts/emit-flows.ts` to regenerate the schematic, compiled JSON, and host
+plugin mirrors. No engine edit. The repository's `AGENTS.md` says the rule
+explicitly: *if you find yourself editing engine files to add a flow, the
+boundary is being violated.*
 
 The catalog also drives drift detection. A CI step,
 `check-flow-drift`, runs the emit pipeline and compares the output bytes
@@ -1214,5 +1215,5 @@ canonical vocabulary, `docs/architecture/runtime.md` for the runtime's
 own one-page summary, `docs/contracts/run.md` for the formal RUN-I
 invariants, `docs/contracts/host-adapter.md` for the host adapter
 surface, `docs/flows/blocks.md` for the block catalog and authoring
-model. The schematics under `src/flows/<id>/schematic.json` are the
-clearest examples of the data we have been discussing all along.*
+model. The definitions under `src/flows/<id>/flow.ts` are the clearest
+examples of the data we have been discussing all along.*

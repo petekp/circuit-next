@@ -1,4 +1,4 @@
-import { reportPathForSchemaInCompiledFlow } from '../../registries/close-writers/shared.js';
+import { reportPathForSchemaInRuntimeFlow } from '../../registries/close-writers/shared.js';
 import type { CloseBuildContext, CloseBuilder } from '../../registries/close-writers/types.js';
 import {
   PursuitBatch,
@@ -89,7 +89,7 @@ export const pursuitCloseBuilder: CloseBuilder = {
       serial_code_writes: true,
       evidence_links: POINTERS.map((pointer) => ({
         ...pointer,
-        path: reportPathForSchemaInCompiledFlow(context.flow, pointer.schema),
+        path: reportPathForSchemaInRuntimeFlow(context.flow, pointer.schema),
       })),
     });
   },

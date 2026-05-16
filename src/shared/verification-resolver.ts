@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { VerificationCommand } from '../schemas/verification.js';
+import { ProofPlanBlockedError } from './proof-plan.js';
+export { ProofPlanBlockedError, isProofPlanBlockedError } from './proof-plan.js';
 
 export type VerificationNeed = 'build' | 'lint' | 'general';
 
@@ -23,20 +25,6 @@ type PackageManager = 'npm' | 'pnpm' | 'yarn';
 interface PackageInfo {
   readonly scripts: Readonly<Record<string, string>>;
   readonly packageManager?: string;
-}
-
-export class ProofPlanBlockedError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'ProofPlanBlockedError';
-  }
-}
-
-export function isProofPlanBlockedError(error: unknown): error is ProofPlanBlockedError {
-  return (
-    error instanceof ProofPlanBlockedError ||
-    (error instanceof Error && error.name === 'ProofPlanBlockedError')
-  );
 }
 
 function readPackageInfo(projectRoot: string): PackageInfo | string {

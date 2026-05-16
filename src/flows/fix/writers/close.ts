@@ -11,7 +11,7 @@
 // one place that decides what 'fixed', 'partial', 'not-reproduced', and
 // 'failed' mean.
 
-import { reportPathForSchemaInCompiledFlow } from '../../registries/close-writers/shared.js';
+import { reportPathForSchemaInRuntimeFlow } from '../../registries/close-writers/shared.js';
 import type { CloseBuildContext, CloseBuilder } from '../../registries/close-writers/types.js';
 import {
   FixBaselineSnapshot,
@@ -75,13 +75,13 @@ export const fixCloseBuilder: CloseBuilder = {
     const pointers: FixResultReportPointer[] = REQUIRED_POINTERS.map((p) => ({
       report_id: p.report_id,
       schema: p.schema,
-      path: reportPathForSchemaInCompiledFlow(context.flow, p.schema),
+      path: reportPathForSchemaInRuntimeFlow(context.flow, p.schema),
     }));
     if (review !== undefined) {
       pointers.push({
         report_id: OPTIONAL_REVIEW_POINTER.report_id,
         schema: OPTIONAL_REVIEW_POINTER.schema,
-        path: reportPathForSchemaInCompiledFlow(context.flow, OPTIONAL_REVIEW_POINTER.schema),
+        path: reportPathForSchemaInRuntimeFlow(context.flow, OPTIONAL_REVIEW_POINTER.schema),
       });
     }
 

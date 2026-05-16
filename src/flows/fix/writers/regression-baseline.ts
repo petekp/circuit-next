@@ -13,7 +13,7 @@
 
 import { readFileSync } from 'node:fs';
 import { resolveRunRelative } from '../../../shared/run-relative-path.js';
-import { reportPathForSchemaInCompiledFlow } from '../../registries/close-writers/shared.js';
+import { reportPathForSchemaInRuntimeFlow } from '../../registries/close-writers/shared.js';
 import type {
   VerificationBuildContext,
   VerificationBuilder,
@@ -25,7 +25,7 @@ import { FixBrief, FixRegressionProof } from '../reports.js';
 export const fixRegressionBaselineWriter: VerificationBuilder = {
   resultSchemaName: 'fix.regression-proof@v1',
   loadCommands(context: VerificationBuildContext): readonly VerificationCommand[] {
-    const briefPath = reportPathForSchemaInCompiledFlow(context.flow, 'fix.brief@v1');
+    const briefPath = reportPathForSchemaInRuntimeFlow(context.flow, 'fix.brief@v1');
     if (!context.step.reads.includes(briefPath as never)) {
       throw new Error(
         `fix.regression-proof@v1 requires step '${context.step.id}' to read ${briefPath}`,

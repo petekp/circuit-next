@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolveRunRelative } from '../../../shared/run-relative-path.js';
-import { reportPathForSchemaInCompiledFlow } from '../../registries/close-writers/shared.js';
+import { reportPathForSchemaInRuntimeFlow } from '../../registries/close-writers/shared.js';
 import type {
   VerificationBuildContext,
   VerificationBuilder,
@@ -12,7 +12,7 @@ import { PursuitContract, PursuitVerification } from '../reports.js';
 export const pursuitVerificationWriter: VerificationBuilder = {
   resultSchemaName: 'pursuit.verification@v1',
   loadCommands(context: VerificationBuildContext): readonly VerificationCommand[] {
-    const contractPath = reportPathForSchemaInCompiledFlow(context.flow, 'pursuit.contract@v1');
+    const contractPath = reportPathForSchemaInRuntimeFlow(context.flow, 'pursuit.contract@v1');
     if (!context.step.reads.includes(contractPath as never)) {
       throw new Error(
         `pursuit.verification@v1 requires step '${context.step.id}' to read ${contractPath}`,

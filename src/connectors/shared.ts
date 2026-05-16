@@ -1,4 +1,3 @@
-export { extractJsonObject, selectedModelForProvider } from '../shared/connector-helpers.js';
 export {
   type ConnectorRelayInput,
   type RelayResult,
@@ -7,6 +6,6 @@ export {
 
 // Neutral connector compatibility surface.
 // The neutral relay data contract and hash helper live in
-// `src/shared/connector-relay.ts`; connector parsing/model helpers live in
-// `src/shared/connector-helpers.ts`. Subprocess connector modules and relay
-// materialization live in `src/connectors/`.
+// `src/shared/connector-relay.ts`. Subprocess lifecycle sharing lives in
+// `src/connectors/subprocess.ts`; connector parsing and policy stay with each
+// connector module.
