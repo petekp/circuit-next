@@ -57,6 +57,11 @@ function main() {
     '--effort',
     'low',
   ]);
+
+  runStep('remaining flow regression evals', 'node', [
+    'scripts/evals/run-flow-regression.mjs',
+    '--all',
+  ]);
 }
 
 try {

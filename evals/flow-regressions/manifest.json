@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "evals": [
+    {
+      "id": "review-clean-control",
+      "flow": "review",
+      "claim_level": "regression",
+      "purpose": "Protect Review's clean and issue-found report paths with schema-valid local fixtures.",
+      "test_files": [
+        "tests/runner/review-runtime-wiring.test.ts",
+        "tests/contracts/review-flow-contract.test.ts",
+        "tests/contracts/review-relay-shape.test.ts"
+      ]
+    },
+    {
+      "id": "build-proof-chain",
+      "flow": "build",
+      "claim_level": "regression",
+      "purpose": "Protect Build checkpoint, implementation, verification, review, and close evidence on fake connectors.",
+      "test_files": [
+        "tests/runner/build-runtime-wiring.test.ts",
+        "tests/runner/build-verification-exec.test.ts"
+      ]
+    },
+    {
+      "id": "explore-grounding-contract",
+      "flow": "explore",
+      "claim_level": "regression",
+      "purpose": "Protect Explore report grounding, evidence references, and tournament artifact contracts.",
+      "test_files": [
+        "tests/contracts/explore-report-composition.test.ts",
+        "tests/contracts/explore-report-schemas.test.ts",
+        "tests/runner/explore-tournament-runtime.test.ts"
+      ]
+    },
+    {
+      "id": "runtime-proof-smoke",
+      "flow": "runtime-proof",
+      "claim_level": "smoke",
+      "purpose": "Exercise runtime-proof through compose, relay, trace, report, and connector identity plumbing.",
+      "test_files": [
+        "tests/runner/runtime-smoke.test.ts",
+        "tests/runner/runner-relay-connector-identity.test.ts"
+      ]
+    },
+    {
+      "id": "flow-router-intent",
+      "flow": "auto",
+      "claim_level": "regression",
+      "purpose": "Protect natural-language routing decisions and router precedence rules.",
+      "test_files": [
+        "tests/contracts/flow-router.test.ts",
+        "tests/runner/router-routing-invariants.test.ts",
+        "tests/properties/visible/flow-router-tiebreak.test.ts"
+      ]
+    }
+  ]
+}

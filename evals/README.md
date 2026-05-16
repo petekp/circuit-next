@@ -24,11 +24,19 @@ npm run evals:list
 The registry check is part of `npm run check-evals`, `verify:fast`, and
 `verify`, so eval claim levels and README links should not drift silently.
 
+## Remaining Flow Coverage
+
+See [remaining-flow-eval-specs.md](remaining-flow-eval-specs.md) for the
+eval ladder for Review, Build, Explore, Runtime Proof, and the router surface.
+The first local smoke/regression layer is implemented in
+[flow-regressions/](flow-regressions/) and registered in `evals/registry.json`.
+Those entries are not claim-grade.
+
 ## Default Checks
 
 ```bash
 npm run check-evals
 ```
 
-This command uses temporary output directories and dry-runs only. It does not
-invoke live models.
+This command uses temporary output directories for eval dry-runs and runs the
+local flow-regression tests. It does not invoke live models.

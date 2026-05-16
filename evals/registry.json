@@ -86,6 +86,111 @@
       "cadence": "release-or-milestone",
       "claim_eligible": false,
       "readme_path": "evals/verdict-correctness/README.md"
+    },
+    {
+      "id": "review-clean-control",
+      "claim_level": "regression",
+      "flow": "review",
+      "primary_metric": "review_contract_passed",
+      "secondary_metrics": [
+        "clean_result_schema_valid",
+        "issue_result_schema_valid",
+        "relay_shape_valid"
+      ],
+      "default_command": [
+        "node",
+        "scripts/evals/run-flow-regression.mjs",
+        "--eval-id",
+        "review-clean-control"
+      ],
+      "cost_class": "local-test",
+      "cadence": "pr",
+      "claim_eligible": false,
+      "readme_path": "evals/flow-regressions/README.md"
+    },
+    {
+      "id": "build-proof-chain",
+      "claim_level": "regression",
+      "flow": "build",
+      "primary_metric": "build_proof_chain_passed",
+      "secondary_metrics": [
+        "checkpoint_path_valid",
+        "verification_retry_valid",
+        "review_verdict_materialized"
+      ],
+      "default_command": [
+        "node",
+        "scripts/evals/run-flow-regression.mjs",
+        "--eval-id",
+        "build-proof-chain"
+      ],
+      "cost_class": "local-test",
+      "cadence": "pr",
+      "claim_eligible": false,
+      "readme_path": "evals/flow-regressions/README.md"
+    },
+    {
+      "id": "explore-grounding-contract",
+      "claim_level": "regression",
+      "flow": "explore",
+      "primary_metric": "explore_grounding_contract_passed",
+      "secondary_metrics": [
+        "evidence_refs_valid",
+        "report_schema_valid",
+        "tournament_artifacts_valid"
+      ],
+      "default_command": [
+        "node",
+        "scripts/evals/run-flow-regression.mjs",
+        "--eval-id",
+        "explore-grounding-contract"
+      ],
+      "cost_class": "local-test",
+      "cadence": "pr",
+      "claim_eligible": false,
+      "readme_path": "evals/flow-regressions/README.md"
+    },
+    {
+      "id": "runtime-proof-smoke",
+      "claim_level": "smoke",
+      "flow": "runtime-proof",
+      "primary_metric": "runtime_smoke_passed",
+      "secondary_metrics": [
+        "trace_shape_valid",
+        "result_report_valid",
+        "connector_identity_preserved"
+      ],
+      "default_command": [
+        "node",
+        "scripts/evals/run-flow-regression.mjs",
+        "--eval-id",
+        "runtime-proof-smoke"
+      ],
+      "cost_class": "local-test",
+      "cadence": "pr",
+      "claim_eligible": false,
+      "readme_path": "evals/flow-regressions/README.md"
+    },
+    {
+      "id": "flow-router-intent",
+      "claim_level": "regression",
+      "flow": "auto",
+      "primary_metric": "routing_accuracy_passed",
+      "secondary_metrics": [
+        "dangerous_misroute_cases_passed",
+        "entry_mode_inference_passed",
+        "router_precedence_passed"
+      ],
+      "default_command": [
+        "node",
+        "scripts/evals/run-flow-regression.mjs",
+        "--eval-id",
+        "flow-router-intent"
+      ],
+      "cost_class": "local-test",
+      "cadence": "pr",
+      "claim_eligible": false,
+      "readme_path": "evals/flow-regressions/README.md"
     }
   ]
 }

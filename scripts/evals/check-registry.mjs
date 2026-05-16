@@ -5,6 +5,8 @@ import { readJson } from './lib/json.mjs';
 
 const REPO_ROOT = resolve(import.meta.dirname, '../..');
 const REGISTRY_PATH = resolve(REPO_ROOT, 'evals/registry.json');
+const FLOW_REGRESSION_MANIFEST_PATH = resolve(REPO_ROOT, 'evals/flow-regressions/manifest.json');
+const FLOW_REGRESSION_RUNNER = 'scripts/evals/run-flow-regression.mjs';
 const CLAIM_LEVELS = new Set(['smoke', 'regression', 'discovery', 'claim-grade']);
 const CLAIM_GRADE_EVAL_IDS = new Set(['fix-vs-vanilla']);
 
@@ -14,6 +16,13 @@ function fail(message) {
 
 function checkRegistry() {
   const registry = readJson(REGISTRY_PATH);
+  const flowRegressionManifest = readJson(FLOW_REGRESSION_MANIFEST_PATH);
+  const flowRegressionEvals = Array.isArray(flowRegressionManifest.evals)
+    ? flowRegressionManifest.evals
+    : [];
+  const flowRegressionEvalById = new Map(flowRegressionEvals.map((entry) => [entry.id, entry]));
+  const flowRegressionEvalIds = new Set(flowRegressionEvalById.keys());
+  const registeredFlowRegressionEvalIds = new Set();
   if (registry.schema_version !== 1) fail('evals/registry.json must have schema_version: 1');
   if (!Array.isArray(registry.evals)) fail('evals/registry.json must contain evals array');
   const ids = new Set();
@@ -39,6 +48,25 @@ function checkRegistry() {
     if (!Array.isArray(entry.default_command) || entry.default_command.length === 0) {
       fail(`${entry.id}: default_command must be a non-empty array`);
     }
+    const flowRegressionRunnerIndex = entry.default_command.indexOf(FLOW_REGRESSION_RUNNER);
+    if (flowRegressionRunnerIndex !== -1) {
+      const evalIdFlagIndex = entry.default_command.indexOf('--eval-id');
+      const evalId = evalIdFlagIndex === -1 ? undefined : entry.default_command[evalIdFlagIndex + 1];
+      if (evalId !== entry.id) {
+        fail(`${entry.id}: flow regression default_command must use --eval-id ${entry.id}`);
+      }
+      if (!flowRegressionEvalIds.has(entry.id)) {
+        fail(`${entry.id}: missing from flow regression manifest`);
+      }
+      const manifestEntry = flowRegressionEvalById.get(entry.id);
+      if (manifestEntry.flow !== entry.flow) {
+        fail(`${entry.id}: registry flow does not match flow regression manifest`);
+      }
+      if (manifestEntry.claim_level !== entry.claim_level) {
+        fail(`${entry.id}: registry claim_level does not match flow regression manifest`);
+      }
+      registeredFlowRegressionEvalIds.add(entry.id);
+    }
     if (entry.default_command[0] === 'node') {
       const scriptIndex = entry.default_command.findIndex((part) =>
         /^(evals|scripts)\/.*\.(mjs|js|ts)$/.test(String(part)),
@@ -59,6 +87,11 @@ function checkRegistry() {
   }
   for (const id of CLAIM_GRADE_EVAL_IDS) {
     if (!ids.has(id)) fail(`${id}: missing required claim-grade eval`);
+  }
+  for (const id of flowRegressionEvalIds) {
+    if (!registeredFlowRegressionEvalIds.has(id)) {
+      fail(`${id}: flow regression manifest entry is not registered`);
+    }
   }
   return registry;
 }
