@@ -15,6 +15,10 @@ import {
   buildStructuralHintList,
   buildVerificationRegistry,
 } from './catalog-derivations.js';
+import {
+  type FlowReportDeclaration,
+  projectFlowReportDeclarations,
+} from './report-declarations.js';
 import type {
   CompiledFlowPackage,
   CompiledFlowPaths,
@@ -40,17 +44,40 @@ export interface FlowDefinitionRuntimeSurface {
   readonly progress?: CompiledFlowRuntimeSurface['progress'];
 }
 
+export interface FlowDefinitionCanonicalStagePolicyVariant {
+  readonly canonicals: readonly string[];
+  readonly omits: readonly string[];
+  readonly title: string;
+}
+
+export type FlowDefinitionCanonicalStagePolicy =
+  | {
+      readonly kind: 'enforce';
+      readonly canonicals: readonly string[];
+      readonly omits: readonly string[];
+      readonly optional_canonicals: readonly string[];
+      readonly variants: readonly FlowDefinitionCanonicalStagePolicyVariant[];
+      readonly title: string;
+      readonly authority: string;
+    }
+  | {
+      readonly kind: 'exempt';
+      readonly reason: string;
+    };
+
 export interface FlowDefinitionInput {
   readonly id: string;
   readonly visibility: CompiledFlowVisibility;
   readonly schematic: FlowDefinitionSchematicInput;
   readonly paths?: FlowDefinitionPaths;
   readonly routing?: CompiledFlowRoutingMetadata;
+  readonly reportDeclarations?: readonly FlowReportDeclaration[];
   readonly relayReports?: readonly CompiledFlowRelayReport[];
   readonly reportSchemas?: readonly CompiledFlowReportSchema[];
   readonly writers?: FlowDefinitionWriters;
   readonly structuralHints?: CompiledFlowPackage['structuralHints'];
   readonly runtimeSurface?: FlowDefinitionRuntimeSurface;
+  readonly canonicalStagePolicy?: FlowDefinitionCanonicalStagePolicy;
   readonly engineFlags?: CompiledFlowPackage['engineFlags'];
 }
 
@@ -149,20 +176,43 @@ function compileRuntimeSurface(definition: FlowDefinition): CompiledFlowRuntimeS
   };
 }
 
+function projectDefinitionReportSurfaces(definition: FlowDefinition): {
+  readonly relayReports: readonly CompiledFlowRelayReport[];
+  readonly reportSchemas?: readonly CompiledFlowReportSchema[];
+  readonly writers: FlowDefinitionWriters;
+} {
+  const reportProjection =
+    definition.reportDeclarations === undefined
+      ? undefined
+      : projectFlowReportDeclarations(definition.reportDeclarations);
+  return {
+    relayReports: definition.relayReports ?? reportProjection?.relayReports ?? [],
+    ...(definition.reportSchemas !== undefined
+      ? { reportSchemas: definition.reportSchemas }
+      : reportProjection?.reportSchemas === undefined
+        ? {}
+        : { reportSchemas: reportProjection.reportSchemas }),
+    writers: definition.writers ?? reportProjection?.writers ?? {},
+  };
+}
+
 export function compileFlowDefinition(definition: FlowDefinition): CompiledFlowPackage {
   const runtimeSurface = compileRuntimeSurface(definition);
+  const reportSurfaces = projectDefinitionReportSurfaces(definition);
   return {
     id: definition.id,
     visibility: definition.visibility,
     paths: compilePaths(definition),
     ...(definition.routing === undefined ? {} : { routing: definition.routing }),
-    relayReports: definition.relayReports ?? [],
-    ...(definition.reportSchemas === undefined ? {} : { reportSchemas: definition.reportSchemas }),
+    relayReports: reportSurfaces.relayReports,
+    ...(reportSurfaces.reportSchemas === undefined
+      ? {}
+      : { reportSchemas: reportSurfaces.reportSchemas }),
     writers: {
-      compose: definition.writers?.compose ?? [],
-      close: definition.writers?.close ?? [],
-      verification: definition.writers?.verification ?? [],
-      checkpoint: definition.writers?.checkpoint ?? [],
+      compose: reportSurfaces.writers.compose ?? [],
+      close: reportSurfaces.writers.close ?? [],
+      verification: reportSurfaces.writers.verification ?? [],
+      checkpoint: reportSurfaces.writers.checkpoint ?? [],
     },
     ...(definition.structuralHints === undefined
       ? {}
@@ -357,6 +407,21 @@ export type FlowFact =
       readonly flowId: string;
       readonly flag: keyof NonNullable<CompiledFlowPackage['engineFlags']>;
       readonly value: boolean;
+    }
+  | {
+      readonly kind: 'canonical-stage-policy';
+      readonly flowId: string;
+      readonly enforcement: 'enforce';
+      readonly title: string;
+      readonly authority: string;
+      readonly optionalCanonicals?: readonly string[];
+      readonly variants?: readonly FlowDefinitionCanonicalStagePolicyVariant[];
+    }
+  | {
+      readonly kind: 'canonical-stage-policy';
+      readonly flowId: string;
+      readonly enforcement: 'exempt';
+      readonly reason: string;
     };
 
 export type FlowFactError =
@@ -409,7 +474,13 @@ export type FlowFactError =
       readonly surface: string;
       readonly expected: readonly string[];
       readonly actual: readonly string[];
-    };
+    }
+  | { readonly kind: 'duplicate-canonical-stage-policy'; readonly flowId: string };
+
+export type DefineFlowFromFactsError =
+  | { readonly kind: 'invalid-flow-facts'; readonly errors: readonly FlowFactError[] }
+  | { readonly kind: 'flow-fact-semantic-drift'; readonly errors: readonly FlowFactError[] }
+  | { readonly kind: 'flow-definition-parse-error'; readonly message: string };
 
 export type Validation<T, E> =
   | { readonly ok: true; readonly value: T }
@@ -432,11 +503,15 @@ export interface ValidFlowFactModel {
   readonly progress: readonly Extract<FlowFact, { readonly kind: 'progress' }>[];
   readonly primaryResult: Extract<FlowFact, { readonly kind: 'primary-result' }> | undefined;
   readonly engineFlags: readonly Extract<FlowFact, { readonly kind: 'engine-flag' }>[];
+  readonly canonicalStagePolicy:
+    | Extract<FlowFact, { readonly kind: 'canonical-stage-policy' }>
+    | undefined;
 }
 
 export interface DefineFlowFromFactsInput {
   readonly facts: readonly FlowFact[];
   readonly routing?: FlowDefinitionInput['routing'];
+  readonly reportDeclarations?: readonly FlowReportDeclaration[];
   readonly relayReports?: readonly CompiledFlowRelayReport[];
   readonly reportSchemas?: readonly CompiledFlowReportSchema[];
   readonly writers?: FlowDefinitionInput['writers'];
@@ -492,6 +567,7 @@ export function validateFlowFacts(
   const progress = collect(facts, 'progress');
   const primaryResults = collect(facts, 'primary-result');
   const engineFlags = collect(facts, 'engine-flag');
+  const canonicalStagePolicies = collect(facts, 'canonical-stage-policy');
 
   if (flow !== undefined) {
     for (const fact of facts) {
@@ -521,6 +597,9 @@ export function validateFlowFacts(
   }
   for (const stageId of duplicateValues(stages.map((stage) => stage.stageId))) {
     errors.push({ kind: 'duplicate-stage', flowId, stageId });
+  }
+  if (canonicalStagePolicies.length > 1) {
+    errors.push({ kind: 'duplicate-canonical-stage-policy', flowId });
   }
 
   const stepIds = new Set(steps.map((step) => step.stepId));
@@ -616,6 +695,7 @@ export function validateFlowFacts(
       progress,
       primaryResult: primaryResults[0],
       engineFlags,
+      canonicalStagePolicy: canonicalStagePolicies[0],
     },
   };
 }
@@ -789,31 +869,100 @@ function projectEngineFlagsFromFacts(
   return flags;
 }
 
-export function defineFlowFromFacts(input: DefineFlowFromFactsInput): FlowDefinition {
+function projectCanonicalStagePolicyFromFacts(
+  model: ValidFlowFactModel,
+): FlowDefinitionCanonicalStagePolicy | undefined {
+  const policy = model.canonicalStagePolicy;
+  if (policy === undefined) return undefined;
+  if (policy.enforcement === 'exempt') {
+    return { kind: 'exempt', reason: policy.reason };
+  }
+  return {
+    kind: 'enforce',
+    canonicals: model.stages.map((stage) => stage.canonical),
+    omits:
+      model.flow.stagePathPolicy.mode === 'partial' ? [...model.flow.stagePathPolicy.omits] : [],
+    optional_canonicals: policy.optionalCanonicals ?? [],
+    variants: policy.variants ?? [],
+    title: policy.title,
+    authority: policy.authority,
+  };
+}
+
+export function describeDefineFlowFromFactsError(error: DefineFlowFromFactsError): string {
+  if (error.kind === 'invalid-flow-facts') {
+    return `invalid flow facts: ${JSON.stringify(error.errors, null, 2)}`;
+  }
+  if (error.kind === 'flow-fact-semantic-drift') {
+    return `flow fact semantic drift: ${JSON.stringify(error.errors, null, 2)}`;
+  }
+  return `flow definition parse error: ${error.message}`;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export function defineFlowFromFactsValue(
+  input: DefineFlowFromFactsInput,
+): Validation<FlowDefinition, DefineFlowFromFactsError> {
   const validation = validateFlowFacts(input.facts);
   if (!validation.ok) {
-    throw new Error(`invalid flow facts: ${JSON.stringify(validation.errors, null, 2)}`);
+    return { ok: false, errors: [{ kind: 'invalid-flow-facts', errors: validation.errors }] };
   }
   const model = validation.value;
-  const semanticErrors = validateSemanticBindings(model, input);
+  const reportProjection =
+    input.reportDeclarations === undefined
+      ? undefined
+      : projectFlowReportDeclarations(input.reportDeclarations);
+  const relayReports = input.relayReports ?? reportProjection?.relayReports ?? [];
+  const reportSchemas = input.reportSchemas ?? reportProjection?.reportSchemas ?? [];
+  const writers = input.writers ?? reportProjection?.writers ?? {};
+  const semanticErrors = validateSemanticBindings(model, {
+    ...input,
+    relayReports,
+    reportSchemas,
+    writers,
+  });
   if (semanticErrors.length > 0) {
-    throw new Error(`flow fact semantic drift: ${JSON.stringify(semanticErrors, null, 2)}`);
+    return { ok: false, errors: [{ kind: 'flow-fact-semantic-drift', errors: semanticErrors }] };
   }
   const engineFlags = projectEngineFlagsFromFacts(model);
   const runtimeSurface = projectRuntimeSurfaceFromFacts(model);
-  return defineFlow({
-    id: model.flow.flowId,
-    visibility: model.flow.visibility,
-    paths: projectPathsFromFacts(model),
-    schematic: projectSchematicFromFacts(model),
-    ...(input.routing === undefined ? {} : { routing: input.routing }),
-    relayReports: input.relayReports ?? [],
-    reportSchemas: input.reportSchemas ?? [],
-    writers: input.writers ?? {},
-    ...(input.structuralHints === undefined ? {} : { structuralHints: input.structuralHints }),
-    ...(runtimeSurface === undefined ? {} : { runtimeSurface }),
-    ...(engineFlags === undefined ? {} : { engineFlags }),
-  });
+  const canonicalStagePolicy = projectCanonicalStagePolicyFromFacts(model);
+  try {
+    return {
+      ok: true,
+      value: defineFlow({
+        id: model.flow.flowId,
+        visibility: model.flow.visibility,
+        paths: projectPathsFromFacts(model),
+        schematic: projectSchematicFromFacts(model),
+        ...(input.routing === undefined ? {} : { routing: input.routing }),
+        ...(input.reportDeclarations === undefined
+          ? {}
+          : { reportDeclarations: input.reportDeclarations }),
+        relayReports,
+        reportSchemas,
+        writers,
+        ...(input.structuralHints === undefined ? {} : { structuralHints: input.structuralHints }),
+        ...(runtimeSurface === undefined ? {} : { runtimeSurface }),
+        ...(canonicalStagePolicy === undefined ? {} : { canonicalStagePolicy }),
+        ...(engineFlags === undefined ? {} : { engineFlags }),
+      }),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      errors: [{ kind: 'flow-definition-parse-error', message: errorMessage(error) }],
+    };
+  }
+}
+
+export function defineFlowFromFacts(input: DefineFlowFromFactsInput): FlowDefinition {
+  const result = defineFlowFromFactsValue(input);
+  if (result.ok) return result.value;
+  throw new Error(result.errors.map(describeDefineFlowFromFactsError).join('\n'));
 }
 
 function validateSemanticBindings(

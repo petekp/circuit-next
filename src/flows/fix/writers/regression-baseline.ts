@@ -20,7 +20,8 @@ import type {
   VerificationCommand,
   VerificationCommandObservation,
 } from '../../registries/verification-writers/types.js';
-import { FixBrief, FixRegressionProof } from '../reports.js';
+import { FixBrief } from '../reports.js';
+import { projectFixRegressionBaseline } from './regression-projection.js';
 
 export const fixRegressionBaselineWriter: VerificationBuilder = {
   resultSchemaName: 'fix.regression-proof@v1',
@@ -40,43 +41,6 @@ export const fixRegressionBaselineWriter: VerificationBuilder = {
     return [brief.regression_contract.regression_test.command];
   },
   buildResult(observations: readonly VerificationCommandObservation[]): unknown {
-    if (observations.length === 0) {
-      return FixRegressionProof.parse({
-        status: 'deferred',
-        overall_status: 'passed',
-        reason: 'Brief deferred the regression test; no runtime baseline was collected.',
-      });
-    }
-    const observation = observations[0];
-    if (observation === undefined) {
-      throw new Error('fix.regression-proof@v1: regression baseline observation missing');
-    }
-    const baseline = {
-      command_id: observation.command.id,
-      cwd: observation.command.cwd,
-      argv: observation.command.argv,
-      timeout_ms: observation.command.timeout_ms,
-      max_output_bytes: observation.command.max_output_bytes,
-      env: observation.command.env,
-      exit_code: observation.exit_code,
-      command_status: observation.status,
-      duration_ms: observation.duration_ms,
-      stdout_summary: observation.stdout_summary,
-      stderr_summary: observation.stderr_summary,
-    };
-    if (observation.status === 'failed') {
-      return FixRegressionProof.parse({
-        status: 'proved',
-        overall_status: 'passed',
-        baseline,
-      });
-    }
-    return FixRegressionProof.parse({
-      status: 'not-proved',
-      overall_status: 'failed',
-      reason:
-        'Brief claimed the regression test fails before the fix, but the runtime observed it pass. The brief selected the wrong pre-fix proof command or the bug no longer reproduces.',
-      baseline,
-    });
+    return projectFixRegressionBaseline(observations);
   },
 };

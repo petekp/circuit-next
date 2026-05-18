@@ -48,28 +48,42 @@ export const buildFlowDefinition = defineFlowFromFacts({
       return `matched ${signal.label}; routed to implementation Build flow`;
     },
   },
-  relayReports: [
+  reportDeclarations: [
     {
       schemaName: 'build.implementation@v1',
+      channel: 'relay',
       schema: BuildImplementation,
       relayHint: buildImplementationShapeHint.instruction,
     },
     {
       schemaName: 'build.review@v1',
+      channel: 'relay',
       schema: BuildReview,
       relayHint: buildReviewShapeHint.instruction,
     },
+    {
+      schemaName: 'build.brief@v1',
+      channel: 'report',
+      schema: BuildBrief,
+      writers: { checkpoint: [buildBriefCheckpointBuilder] },
+    },
+    {
+      schemaName: 'build.plan@v1',
+      channel: 'report',
+      schema: BuildPlan,
+      writers: { compose: [buildPlanComposeBuilder] },
+    },
+    {
+      schemaName: 'build.verification@v1',
+      channel: 'report',
+      schema: BuildVerification,
+      writers: { verification: [buildVerificationWriter] },
+    },
+    {
+      schemaName: 'build.result@v1',
+      channel: 'report',
+      schema: BuildResult,
+      writers: { close: [buildCloseBuilder] },
+    },
   ],
-  reportSchemas: [
-    { schemaName: 'build.brief@v1', schema: BuildBrief },
-    { schemaName: 'build.plan@v1', schema: BuildPlan },
-    { schemaName: 'build.verification@v1', schema: BuildVerification },
-    { schemaName: 'build.result@v1', schema: BuildResult },
-  ],
-  writers: {
-    compose: [buildPlanComposeBuilder],
-    close: [buildCloseBuilder],
-    verification: [buildVerificationWriter],
-    checkpoint: [buildBriefCheckpointBuilder],
-  },
 });

@@ -18,14 +18,8 @@ import type {
   RuntimeIndexedFlow,
   RuntimeIndexedRelayStep,
 } from '../../registries/runtime-index.js';
-import {
-  type ReviewEvidence,
-  type ReviewEvidenceSummary,
-  ReviewIntake,
-  ReviewRelayResult,
-  ReviewResult,
-  computeReviewVerdict,
-} from '../reports.js';
+import { ReviewIntake, ReviewRelayResult } from '../reports.js';
+import { projectReviewResult } from './result-projection.js';
 
 function reviewerRelayResultPath(
   flow: RuntimeIndexedFlow,
@@ -72,19 +66,6 @@ function reviewIntakePath(
   return path;
 }
 
-function evidenceSummary(evidence: ReviewEvidence): ReviewEvidenceSummary {
-  if (evidence.kind === 'unavailable') {
-    return { kind: 'unavailable', message: evidence.reason };
-  }
-  return {
-    kind: 'git-working-tree',
-    untracked_content_policy: evidence.untracked_content_policy,
-    untracked_file_count: evidence.untracked_file_count,
-    untracked_files_sampled: evidence.untracked_files.length,
-    untracked_files_truncated: evidence.untracked_files_truncated,
-  };
-}
-
 export const reviewResultComposeBuilder: ComposeBuilder = {
   resultSchemaName: 'review.result@v1',
   // No declarative reads — the read is a relay result body, not a
@@ -103,15 +84,6 @@ export const reviewResultComposeBuilder: ComposeBuilder = {
     const relayResult = ReviewRelayResult.parse(
       JSON.parse(readFileSync(resolveRunRelative(context.runFolder, path), 'utf8')),
     );
-    return ReviewResult.parse({
-      scope: intake.scope,
-      findings: relayResult.findings,
-      verdict: computeReviewVerdict(relayResult.findings),
-      assessment: relayResult.assessment,
-      verification: relayResult.verification,
-      confidence_limitations: relayResult.confidence_limitations,
-      evidence_summary: evidenceSummary(intake.evidence),
-      evidence_warnings: intake.evidence_warnings,
-    });
+    return projectReviewResult({ intake, relayResult });
   },
 };

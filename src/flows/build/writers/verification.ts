@@ -15,7 +15,8 @@ import type {
   VerificationCommand,
   VerificationCommandObservation,
 } from '../../registries/verification-writers/types.js';
-import { BuildPlan, BuildVerification } from '../reports.js';
+import { BuildPlan } from '../reports.js';
+import { projectBuildVerification } from './verification-projection.js';
 
 export const buildVerificationWriter: VerificationBuilder = {
   resultSchemaName: 'build.verification@v1',
@@ -32,19 +33,6 @@ export const buildVerificationWriter: VerificationBuilder = {
     return plan.verification.commands;
   },
   buildResult(observations: readonly VerificationCommandObservation[]): unknown {
-    const overallStatus = observations.some((o) => o.status === 'failed') ? 'failed' : 'passed';
-    return BuildVerification.parse({
-      overall_status: overallStatus,
-      commands: observations.map((o) => ({
-        command_id: o.command.id,
-        argv: o.command.argv,
-        cwd: o.command.cwd,
-        exit_code: o.exit_code,
-        status: o.status,
-        duration_ms: o.duration_ms,
-        stdout_summary: o.stdout_summary,
-        stderr_summary: o.stderr_summary,
-      })),
-    });
+    return projectBuildVerification(observations);
   },
 };

@@ -1,6 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
+import {
+  FLOW_BLOCK_DEFINITIONS,
+  FLOW_BLOCK_SCHEMATIC_POLICY,
+} from '../../src/schemas/flow-block-definitions.js';
 import { FLOW_BLOCK_IDS, FlowBlockCatalog } from '../../src/schemas/flow-blocks.js';
 
 const catalogPath = 'docs/flows/block-catalog.json';
@@ -46,6 +50,17 @@ describe('flow block catalog', () => {
   it('contains exactly the canonical block ids, in declared order', () => {
     const parsed = parseCatalog();
     expect(parsed.blocks.map((block) => block.id)).toEqual([...FLOW_BLOCK_IDS]);
+  });
+
+  it('derives schematic policy from the authored block definitions', () => {
+    expect(FLOW_BLOCK_DEFINITIONS.map((block) => block.id)).toEqual([...FLOW_BLOCK_IDS]);
+    expect(Object.keys(FLOW_BLOCK_SCHEMATIC_POLICY)).toEqual([...FLOW_BLOCK_IDS]);
+
+    for (const definition of FLOW_BLOCK_DEFINITIONS) {
+      expect(definition.schematicPolicy.executionKinds.length).toBeGreaterThan(0);
+      expect(definition.schematicPolicy.stages.length).toBeGreaterThan(0);
+      expect(FLOW_BLOCK_SCHEMATIC_POLICY[definition.id]).toBe(definition.schematicPolicy);
+    }
   });
 
   it('stays aligned with the Markdown block inventory table', () => {

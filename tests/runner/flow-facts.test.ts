@@ -34,13 +34,11 @@ describe('fact-owned retained flow authoring', () => {
     }
   });
 
-  it('keeps migrate and sweep outside the retained production catalog', () => {
+  it('keeps production catalog ids exact', () => {
     const retainedIds = flowDefinitions.map((definition) => definition.id);
     const packageIds = flowPackages.map((pkg) => pkg.id);
 
     expect(retainedIds).toEqual(RETAINED_FLOW_IDS);
     expect(packageIds).toEqual(retainedIds);
-    expect(retainedIds).not.toContain('migrate');
-    expect(retainedIds).not.toContain('sweep');
   });
 });

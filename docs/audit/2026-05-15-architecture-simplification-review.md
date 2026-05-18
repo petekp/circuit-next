@@ -667,7 +667,7 @@ Behavior-preserving order:
 2. Move package-script preflight into the proof plan module.
 3. Let flow verification writers receive observed command results instead of
    loading commands themselves.
-4. Share the same proof plan path across Build, Fix, Migrate, and Sweep.
+4. Share the same proof plan path across Build, Fix, and Pursue.
 
 ## What Is Already Good
 

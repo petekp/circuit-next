@@ -233,8 +233,8 @@ Poor fits:
 - one well-scoped implementation request: use Build;
 - read-only investigation: use Explore or Review, depending on whether a
   verdict is needed;
-- broad migrations over many known items: use Migrate;
-- cleanup where the queue is already the main concept: use Sweep.
+- broad conversion or cleanup work over many known items: use Pursue when the
+  operator needs ordering, risk tracking, and explicit check-in triggers.
 
 ## How Pursue Differs From Build
 

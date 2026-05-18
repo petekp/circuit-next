@@ -187,6 +187,42 @@ describe('runtime surface soak', () => {
     expect(progressEvents(resumed.stderr).map((event) => event.type)).toContain('run.completed');
   });
 
+  it('does not stream waiting checkpoint prompts for auto-resolved default Build', async () => {
+    const projectRoot = join(runFolderBase, 'project-default-build');
+    writeProjectRoot(projectRoot);
+    const runFolder = join(runFolderBase, 'build-default');
+    const result = await captureMain(
+      [
+        'run',
+        'build',
+        '--goal',
+        'Add a small default feature',
+        '--progress',
+        'jsonl',
+        '--run-folder',
+        runFolder,
+      ],
+      { configCwd: projectRoot, relayer: buildRelayer() },
+    );
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({ flow_id: 'build', outcome: 'complete' });
+    const eventTypes = progressEvents(result.stderr).map((event) => event.type);
+    expect(eventTypes).not.toContain('checkpoint.waiting');
+    expect(eventTypes).not.toContain('user_input.requested');
+    const traceEntries = readFileSync(join(runFolder, 'trace.ndjson'), 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(traceEntries.find((entry) => entry.kind === 'checkpoint.requested')).toMatchObject({
+      auto_resolved: true,
+    });
+    expect(traceEntries.find((entry) => entry.kind === 'checkpoint.resolved')).toMatchObject({
+      auto_resolved: true,
+      resolution_source: 'safe-default',
+    });
+  });
+
   it('runs Build end-to-end with resolver-selected build and lint scripts', async () => {
     const projectRoot = join(runFolderBase, 'build-lint-project');
     writeProjectRoot(projectRoot, {

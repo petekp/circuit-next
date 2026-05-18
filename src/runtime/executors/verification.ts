@@ -46,6 +46,7 @@ export async function executeVerification(
 
     const builderContext = {
       runFolder: context.runDir,
+      projectRoot,
       flow: context.packageIndex.flow,
       step: indexedStep,
     };

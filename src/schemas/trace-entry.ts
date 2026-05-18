@@ -71,6 +71,7 @@ export const CheckpointRequestedTraceEntry = TraceEntryBase.extend({
   options: z.array(z.string()).min(1),
   request_path: z.string().min(1),
   request_report_hash: ContentHash,
+  auto_resolved: z.boolean().optional(),
 }).strict();
 export type CheckpointRequestedTraceEntry = z.infer<typeof CheckpointRequestedTraceEntry>;
 

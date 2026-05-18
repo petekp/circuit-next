@@ -19,12 +19,20 @@ const NON_FLOW_PACKAGE_DIRECTORIES = new Set(['registries']);
 // Allow-list: match by suffix so engine files at any directory depth
 // get the same exemption. These are shared flow infrastructure surfaces,
 // not per-flow implementation modules.
-const ALLOWED_WORKFLOW_IMPORT_SUFFIXES = [
+const ALLOWED_ENGINE_WORKFLOW_IMPORT_SUFFIXES = [
   '/flows/catalog.js',
   '/flows/catalog-derivations.js',
   '/flows/compile-schematic-to-flow.js',
   '/flows/router.js',
   '/flows/types.js',
+];
+
+const ALLOWED_TEST_WORKFLOW_IMPORT_SUFFIXES = [
+  ...ALLOWED_ENGINE_WORKFLOW_IMPORT_SUFFIXES,
+  '/flows/canonical-stage-policy.js',
+  '/flows/declarative-flow-facts.js',
+  '/flows/flow-definition.js',
+  '/flows/report-declarations.js',
 ];
 
 function walk(dir: string): readonly string[] {
@@ -72,7 +80,14 @@ function isCompiledFlowImport(importPath: string): boolean {
 
 function isAllowedEngineImport(importPath: string): boolean {
   return (
-    ALLOWED_WORKFLOW_IMPORT_SUFFIXES.some((suffix) => importPath.endsWith(suffix)) ||
+    ALLOWED_ENGINE_WORKFLOW_IMPORT_SUFFIXES.some((suffix) => importPath.endsWith(suffix)) ||
+    importPath.includes('/flows/registries/')
+  );
+}
+
+function isAllowedTestImport(importPath: string): boolean {
+  return (
+    ALLOWED_TEST_WORKFLOW_IMPORT_SUFFIXES.some((suffix) => importPath.endsWith(suffix)) ||
     importPath.includes('/flows/registries/')
   );
 }
@@ -95,7 +110,7 @@ describe('engine ↔ flow boundary', () => {
         .map((o) => `  ${o.file} → ${o.importPath}`)
         .join(
           '\n',
-        )}\nAllowed engine→flow import suffixes: ${ALLOWED_WORKFLOW_IMPORT_SUFFIXES.join(', ')}`,
+        )}\nAllowed engine→flow import suffixes: ${ALLOWED_ENGINE_WORKFLOW_IMPORT_SUFFIXES.join(', ')}`,
     ).toEqual([]);
   });
 
@@ -196,7 +211,7 @@ describe('engine ↔ flow boundary', () => {
         // supported public surfaces.
         if (importPath.endsWith('/index.js')) continue;
         if (importPath.endsWith('/reports.js')) continue;
-        if (isAllowedEngineImport(importPath)) continue;
+        if (isAllowedTestImport(importPath)) continue;
         offenders.push({ file, importPath });
       }
     }

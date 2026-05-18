@@ -26,6 +26,7 @@
 // exists in the working tree.
 
 import { readFileSync } from 'node:fs';
+import { isAbsolute, relative } from 'node:path';
 import { resolveRunRelative } from '../../../shared/run-relative-path.js';
 import { reportPathForSchemaInRuntimeFlow } from '../../registries/close-writers/shared.js';
 import type {
@@ -34,75 +35,17 @@ import type {
   VerificationCommand,
   VerificationCommandObservation,
 } from '../../registries/verification-writers/types.js';
-import {
-  FixBaselineSnapshot,
-  type FixBaselineSnapshotEntry,
-  FixChange,
-  FixChangeSet,
-  type FixHiddenIndexFlag,
-} from '../reports.js';
-import {
-  type GitStateHelperOutput,
-  fixGitStateCommand,
-  parseGitStateObservation,
-} from './baseline-snapshot.js';
+import { FixBaselineSnapshot, FixChange } from '../reports.js';
+import { fixGitStateCommand, parseGitStateObservation } from './baseline-snapshot.js';
+import { projectFixChangeSet } from './change-set-projection.js';
 
-function fingerprintsByPath(entries: readonly FixBaselineSnapshotEntry[]): Map<string, string> {
-  const map = new Map<string, string>();
-  for (const entry of entries) {
-    map.set(entry.path, entry.fingerprint);
+function runFolderPrefix(input: { readonly projectRoot?: string; readonly runFolder: string }) {
+  if (input.projectRoot === undefined) return undefined;
+  const rel = relative(input.projectRoot, input.runFolder).split('\\').join('/');
+  if (rel.length === 0 || rel.startsWith('../') || rel === '..' || isAbsolute(rel)) {
+    return undefined;
   }
-  return map;
-}
-
-function hiddenFlagsByPath(flags: readonly FixHiddenIndexFlag[]): Set<string> {
-  return new Set(flags.map((f) => f.path));
-}
-
-function computeChangeSet(options: {
-  baseline: FixBaselineSnapshot;
-  post: GitStateHelperOutput;
-  declared: readonly string[];
-}) {
-  const { baseline, post, declared } = options;
-  const baselineFingerprints = fingerprintsByPath(baseline.entries);
-  const postFingerprints = fingerprintsByPath(post.entries);
-  const baselinePaths = new Set(baselineFingerprints.keys());
-  const postPaths = new Set(postFingerprints.keys());
-  const baselineHiddenPaths = hiddenFlagsByPath(baseline.hidden_index_flags);
-
-  // 1. Newly-dirty paths: in post, not in baseline.
-  const newDirt = [...postPaths].filter((path) => !baselinePaths.has(path));
-
-  // 2. Mutated baseline-dirty paths: in baseline, fingerprint differs (or path
-  //    is no longer dirty post-fix, which still counts as a touch — the
-  //    working-tree state changed). The exception is paths that were
-  //    already flagged hidden at baseline; we don't trust baseline
-  //    fingerprints for those because git status (and hash-object) may not
-  //    reflect their true state. Surfacing them as hidden_index_flags below
-  //    is enough to fail the verdict.
-  const baselineDirtyMutated = [...baselinePaths].filter((path) => {
-    if (baselineHiddenPaths.has(path)) return false;
-    const before = baselineFingerprints.get(path);
-    const after = postFingerprints.get(path);
-    return before !== after;
-  });
-
-  const observedSet = new Set<string>([...newDirt, ...baselineDirtyMutated]);
-  const observed = [...observedSet].sort((a, b) => a.localeCompare(b));
-  const declaredSorted = [...declared].sort((a, b) => a.localeCompare(b));
-  const declaredSet = new Set(declaredSorted);
-  const undeclaredExtras = observed.filter((path) => !declaredSet.has(path));
-  const missingDeclared = declaredSorted.filter((path) => !observedSet.has(path));
-  const baselineDirtyMutatedSorted = [...baselineDirtyMutated].sort((a, b) => a.localeCompare(b));
-
-  return {
-    observed,
-    declared: declaredSorted,
-    undeclaredExtras,
-    missingDeclared,
-    baselineDirtyMutated: baselineDirtyMutatedSorted,
-  };
+  return rel;
 }
 
 export const fixChangeSetWriter: VerificationBuilder = {
@@ -146,54 +89,18 @@ export const fixChangeSetWriter: VerificationBuilder = {
       JSON.parse(readFileSync(resolveRunRelative(context.runFolder, changePath), 'utf8')),
     );
 
-    const computed = computeChangeSet({
-      baseline,
-      post,
-      declared: change.changed_files,
+    const ignoredRunFolderPrefix = runFolderPrefix({
+      runFolder: context.runFolder,
+      ...(context.projectRoot === undefined ? {} : { projectRoot: context.projectRoot }),
     });
 
-    const headDiverged = post.head_sha !== baseline.head_sha;
-    const hiddenFlags: readonly FixHiddenIndexFlag[] = post.hidden_index_flags;
-    const setsClean =
-      computed.undeclaredExtras.length === 0 && computed.missingDeclared.length === 0;
-    const status_: 'pass' | 'fail' =
-      setsClean && !headDiverged && hiddenFlags.length === 0 ? 'pass' : 'fail';
-
-    let reason: string | undefined;
-    if (status_ === 'fail') {
-      const parts: string[] = [];
-      if (headDiverged) {
-        parts.push(
-          `HEAD moved during the fix run (baseline ${baseline.head_sha}, post ${post.head_sha}); the agent committed mid-run, which the change-set writer cannot reconcile against the declared file list.`,
-        );
-      }
-      if (computed.undeclaredExtras.length > 0) {
-        parts.push(`undeclared extras: ${computed.undeclaredExtras.join(', ')}`);
-      }
-      if (computed.missingDeclared.length > 0) {
-        parts.push(`missing declared: ${computed.missingDeclared.join(', ')}`);
-      }
-      if (hiddenFlags.length > 0) {
-        const labelled = hiddenFlags.map((f) => `${f.path} (${f.tag})`).join(', ');
-        parts.push(
-          `hidden index flags present (assume-unchanged or skip-worktree paths can hide tracked edits from git status): ${labelled}`,
-        );
-      }
-      reason = parts.join('; ');
-    }
-
-    return FixChangeSet.parse({
-      status: status_,
-      overall_status: status_ === 'pass' ? 'passed' : 'failed',
-      ...(reason === undefined ? {} : { reason }),
-      baseline_head_sha: baseline.head_sha,
-      head_sha: post.head_sha,
-      declared: computed.declared,
-      observed: computed.observed,
-      undeclared_extras: computed.undeclaredExtras,
-      missing_declared: computed.missingDeclared,
-      baseline_dirty_mutated: computed.baselineDirtyMutated,
-      hidden_index_flags: [...hiddenFlags],
+    return projectFixChangeSet({
+      baseline,
+      post,
+      change,
+      ...(ignoredRunFolderPrefix === undefined
+        ? {}
+        : { ignoredPathPrefixes: [ignoredRunFolderPrefix] }),
     });
   },
 };

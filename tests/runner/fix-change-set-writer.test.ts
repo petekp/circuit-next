@@ -59,8 +59,10 @@ function writeJson(runFolder: string, relPath: string, body: unknown): void {
 function makeFixture(options: {
   baseline: FixBaselineSnapshot;
   change: FixChange;
+  runFolder?: string;
+  projectRoot?: string;
 }): { runFolder: string; context: VerificationBuildContext } {
-  const runFolder = tempRunFolder();
+  const runFolder = options.runFolder ?? tempRunFolder();
   writeJson(runFolder, 'reports/fix/baseline-snapshot.json', options.baseline);
   writeJson(runFolder, 'reports/fix/change.json', options.change);
   // Minimal CompiledFlow stub: only the `steps` lookup that
@@ -107,7 +109,15 @@ function makeFixture(options: {
       report: { schema: 'fix.change-set@v1', path: 'reports/fix/change-set.json' },
     },
   } as unknown as VerificationBuildContext['step'];
-  return { runFolder, context: { runFolder, flow, step } };
+  return {
+    runFolder,
+    context: {
+      runFolder,
+      ...(options.projectRoot === undefined ? {} : { projectRoot: options.projectRoot }),
+      flow,
+      step,
+    },
+  };
 }
 
 function helperObservation(
@@ -270,6 +280,61 @@ describe('fixChangeSetWriter.buildResult', () => {
     expect(result.undeclared_extras).toEqual(['src/extra.ts']);
     expect(result.missing_declared).toEqual([]);
     expect(result.reason).toMatch(/undeclared extras: src\/extra\.ts/);
+  });
+
+  it('ignores active run-folder artifacts when the run folder is inside the project root', () => {
+    const projectRoot = tempRunFolder();
+    const runFolder = join(projectRoot, 'circuit-surface-test/run-1');
+    const { context } = makeFixture({
+      runFolder,
+      projectRoot,
+      baseline: {
+        overall_status: 'passed',
+        head_sha: HEAD_BEFORE,
+        entries: [
+          {
+            status_code: '??',
+            path: 'circuit-surface-test/run-1/trace.ndjson',
+            fingerprint: BLOB_A,
+          },
+        ],
+        hidden_index_flags: [],
+      },
+      change: {
+        verdict: 'accept',
+        summary: 'fix with run artifacts present',
+        diagnosis_ref: 'fix.diagnosis@v1',
+        changed_files: ['src/a.ts'],
+        evidence: ['ok'],
+      },
+    });
+    const [helper] = loadCommandsForContext(context);
+    const result = fixChangeSetWriter.buildResult(
+      [
+        helperObservation(helper as VerificationCommand, {
+          head_sha: HEAD_AFTER_SAME,
+          entries: [
+            { status_code: ' M', path: 'src/a.ts', fingerprint: BLOB_A },
+            {
+              status_code: '??',
+              path: 'circuit-surface-test/run-1/reports/fix/change.json',
+              fingerprint: BLOB_B,
+            },
+            {
+              status_code: '??',
+              path: 'circuit-surface-test/run-1/trace.ndjson',
+              fingerprint: BLOB_A_PRIME,
+            },
+          ],
+          hidden_index_flags: [{ tag: 'h', path: 'circuit-surface-test/run-1/internal.tmp' }],
+        }),
+      ],
+      context,
+    ) as FixChangeSet;
+    expect(result.status).toBe('pass');
+    expect(result.observed).toEqual(['src/a.ts']);
+    expect(result.undeclared_extras).toEqual([]);
+    expect(result.hidden_index_flags).toEqual([]);
   });
 
   it('flags missing declared as fail', () => {

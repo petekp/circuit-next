@@ -28,15 +28,29 @@ import type { SelectionOverride } from '../../src/schemas/selection-policy.js';
 
 const WORKFLOWS_ROOT = 'src/flows';
 const DIRECT_COMMANDS = ['create', 'handoff', 'run'] as const;
+const ALLOWED_WRITER_SCHEMA_ALIASES = new Map<string, readonly string[]>([
+  [
+    'runtime-proof',
+    [
+      // Runtime Proof is an internal compatibility fixture whose compose step
+      // still writes the generic plan schema even though the package-owned
+      // declaration names the flow-specific report body.
+      'plan.strategy@v1',
+    ],
+  ],
+]);
 
 // Entries at the flows root that are NOT flow-package directories
 // (catalog, router/compiler, types, and shared flow infrastructure).
 // Anything else under src/flows/ is expected to be a package.
 const NON_PACKAGE_FILES = new Set([
+  'canonical-stage-policy.ts',
   'catalog.ts',
   'catalog-derivations.ts',
   'compile-schematic-to-flow.ts',
+  'declarative-flow-facts.ts',
   'flow-definition.ts',
+  'report-declarations.ts',
   'runtime-surface.ts',
   'router.ts',
   'types.ts',
@@ -86,6 +100,17 @@ describe('flow catalog completeness', () => {
       flowPackages.length,
       'flowPackages is unexpectedly small — catalog discovery is likely broken',
     ).toBeGreaterThanOrEqual(5);
+  });
+
+  it('flow definitions own report declarations before legacy projection', () => {
+    const missing = flowDefinitions
+      .filter(
+        (definition) =>
+          (definition.relayReports ?? []).length + (definition.reportSchemas ?? []).length > 0 &&
+          (definition.reportDeclarations ?? []).length === 0,
+      )
+      .map((definition) => definition.id);
+    expect(missing).toEqual([]);
   });
 
   it('classifies user-visible and internal flow packages explicitly', () => {
@@ -477,6 +502,31 @@ describe('flow catalog completeness', () => {
     expect(
       collisions,
       'writer resultSchemaName collides across packages or slots — registry order silently picks the winner',
+    ).toEqual([]);
+  });
+
+  it('writer resultSchemaName values are package report schemas or documented aliases', () => {
+    const offenders: {
+      readonly pkg: string;
+      readonly slot: string;
+      readonly schemaName: string;
+    }[] = [];
+    for (const pkg of flowPackages) {
+      const knownSchemas = new Set([
+        ...pkg.relayReports.map((report) => report.schemaName),
+        ...(pkg.reportSchemas ?? []).map((report) => report.schemaName),
+        ...(ALLOWED_WRITER_SCHEMA_ALIASES.get(pkg.id) ?? []),
+      ]);
+      for (const slot of ['compose', 'close', 'verification', 'checkpoint'] as const) {
+        for (const builder of pkg.writers[slot]) {
+          if (knownSchemas.has(builder.resultSchemaName)) continue;
+          offenders.push({ pkg: pkg.id, slot, schemaName: builder.resultSchemaName });
+        }
+      }
+    }
+    expect(
+      offenders,
+      'writer resultSchemaName must be a package-owned report schema unless this test documents a temporary compatibility alias',
     ).toEqual([]);
   });
 });

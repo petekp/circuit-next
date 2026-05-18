@@ -7,22 +7,14 @@
 
 import { randomUUID } from 'node:crypto';
 import { lstat, mkdir, readdir } from 'node:fs/promises';
-import type { CompiledFlowProgressSurface } from '../../flows/types.js';
 import type { ChangeKindDeclaration } from '../../schemas/change-kind.js';
-import type { LayeredConfig as LayeredConfigValue } from '../../schemas/config.js';
 import { computeManifestHash } from '../../schemas/manifest.js';
 import { isProofPlanBlockedError } from '../../shared/proof-plan.js';
-import type {
-  ProgressReporter,
-  RelayFn,
-  RuntimeEvidencePolicy,
-} from '../../shared/relay-runtime-types.js';
 import type { TerminalTarget } from '../domain/route.js';
 import type { RunClosedOutcome } from '../domain/run.js';
 import { isWaitingCheckpointStepOutcome } from '../domain/step.js';
 import type { TraceEntry } from '../domain/trace.js';
 import { type ExecutorRegistry, createDefaultExecutors } from '../executors/index.js';
-import type { RelayConnector } from '../executors/relay.js';
 import type { ExecutableFlow, ExecutableStep } from '../manifest/executable-flow.js';
 import { buildRuntimePackageIndex } from '../manifest/runtime-package-index.js';
 import { assertExecutableFlow } from '../manifest/validate-executable-flow.js';
@@ -30,16 +22,12 @@ import { createProgressProjector } from '../projections/progress.js';
 import { validateReportValue } from '../run-files/report-validator.js';
 import { RunFileStore } from '../run-files/run-file-store.js';
 import { TraceStore } from '../trace/trace-store.js';
-import type {
-  ChildCompiledFlowResolver,
-  CompiledFlowRunner,
-  WorktreeRunner,
-} from './child-runner.js';
+import type { RuntimeExecutionCapabilities } from './capabilities.js';
 import { writeRuntimeManifestSnapshot } from './manifest-snapshot.js';
 import { type RuntimeRunResult, writeRuntimeRunResult } from './result-writer.js';
 import type { RunContext } from './run-context.js';
 
-export interface GraphRunnerOptions {
+export interface GraphRunnerOptions extends RuntimeExecutionCapabilities {
   readonly runDir: string;
   readonly runId?: string;
   readonly goal?: string;
@@ -47,19 +35,6 @@ export interface GraphRunnerOptions {
   readonly manifestBytes?: Uint8Array;
   readonly entryModeName?: string;
   readonly depth?: string;
-  readonly now?: () => Date;
-  readonly executors?: Partial<ExecutorRegistry>;
-  readonly childExecutors?: Partial<ExecutorRegistry>;
-  readonly childCompiledFlowResolver?: ChildCompiledFlowResolver;
-  readonly childRunner?: CompiledFlowRunner;
-  readonly projectRoot?: string;
-  readonly evidencePolicy?: RuntimeEvidencePolicy;
-  readonly worktreeRunner?: WorktreeRunner;
-  readonly relayConnector?: RelayConnector;
-  readonly relayer?: RelayFn;
-  readonly selectionConfigLayers?: readonly LayeredConfigValue[];
-  readonly progress?: ProgressReporter;
-  readonly progressSurface?: CompiledFlowProgressSurface;
   readonly maxSteps?: number;
   readonly resumeCheckpoint?: {
     readonly stepId: string;

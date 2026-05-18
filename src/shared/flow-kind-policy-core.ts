@@ -4,6 +4,11 @@
 // Zod-driven CompiledFlow.safeParse so the CLI fixture loader can reject
 // structurally- or policy-invalid fixtures with one call.
 
+import {
+  FLOW_CANONICAL_STAGE_POLICY_BY_ID,
+  FLOW_CANONICAL_STAGE_POLICY_EXEMPT_IDS,
+} from '../flows/canonical-stage-policy.js';
+
 interface FlowKindPolicyVariant {
   readonly canonicals: readonly string[];
   readonly omits: readonly string[];
@@ -46,42 +51,10 @@ export type CompiledFlowKindPolicyCheckResult =
   | { readonly kind: 'pass_through'; readonly detail: string }
   | { readonly kind: 'red'; readonly detail: string };
 
-export const FLOW_KIND_CANONICAL_SETS: Readonly<Record<string, CompiledFlowKindPolicyEntry>> = {
-  explore: {
-    canonicals: ['frame', 'analyze', 'plan', 'close'],
-    omits: ['act', 'verify', 'review'],
-    optional_canonicals: [],
-    variants: [],
-    title: 'Frame → Analyze → Plan or Decision → Close',
-    authority: 'src/flows/explore/contract.md §Canonical stage set',
-  },
-  review: {
-    canonicals: ['frame', 'analyze', 'close'],
-    omits: ['plan', 'act', 'verify', 'review'],
-    optional_canonicals: [],
-    variants: [],
-    title: 'Intake → Independent Audit → Verdict',
-    authority: 'src/flows/review/contract.md §Canonical stage policy',
-  },
-  build: {
-    canonicals: ['frame', 'plan', 'act', 'verify', 'review', 'close'],
-    omits: ['analyze'],
-    optional_canonicals: [],
-    variants: [],
-    title: 'Frame → Plan → Act → Verify → Review → Close',
-    authority: 'src/flows/build/contract.md §Build Flow Contract',
-  },
-  fix: {
-    canonicals: ['frame', 'analyze', 'act', 'verify', 'review', 'close'],
-    omits: ['plan'],
-    optional_canonicals: ['review'],
-    variants: [],
-    title: 'Frame → Diagnose → Fix → Verify → Review → Close',
-    authority: 'docs/flows/authoring-model.md §Fix As The Proving Shape',
-  },
-};
+export const FLOW_KIND_CANONICAL_SETS: Readonly<Record<string, CompiledFlowKindPolicyEntry>> =
+  FLOW_CANONICAL_STAGE_POLICY_BY_ID;
 
-export const EXEMPT_FLOW_IDS: ReadonlySet<string> = new Set(['runtime-proof']);
+export const EXEMPT_FLOW_IDS: ReadonlySet<string> = FLOW_CANONICAL_STAGE_POLICY_EXEMPT_IDS;
 
 function objectRecord(value: unknown): RecordLike | undefined {
   return value !== null && typeof value === 'object' ? (value as RecordLike) : undefined;

@@ -54,47 +54,77 @@ export const fixFlowDefinition = defineFlowFromFacts({
       return `matched ${signal.label}; routed to Fix flow`;
     },
   },
-  relayReports: [
+  reportDeclarations: [
     {
       schemaName: 'fix.context@v1',
+      channel: 'relay',
       schema: FixContext,
       relayHint: fixContextShapeHint.instruction,
     },
     {
       schemaName: 'fix.diagnosis@v1',
+      channel: 'relay',
       schema: FixDiagnosis,
       relayHint: fixDiagnosisShapeHint.instruction,
     },
     {
       schemaName: 'fix.change@v1',
+      channel: 'relay',
       schema: FixChange,
       relayHint: fixChangeShapeHint.instruction,
     },
     {
       schemaName: 'fix.review@v1',
+      channel: 'relay',
       schema: FixReview,
       relayHint: fixReviewShapeHint.instruction,
     },
+    {
+      schemaName: 'fix.brief@v1',
+      channel: 'report',
+      schema: FixBrief,
+      writers: { compose: [fixBriefComposeBuilder] },
+    },
+    {
+      schemaName: 'fix.no-repro-decision@v1',
+      channel: 'report',
+      schema: FixNoReproDecision,
+    },
+    {
+      schemaName: 'fix.regression-proof@v1',
+      channel: 'report',
+      schema: FixRegressionProof,
+      writers: { verification: [fixRegressionBaselineWriter] },
+    },
+    {
+      schemaName: 'fix.baseline-snapshot@v1',
+      channel: 'report',
+      schema: FixBaselineSnapshot,
+      writers: { verification: [fixBaselineSnapshotWriter] },
+    },
+    {
+      schemaName: 'fix.verification@v1',
+      channel: 'report',
+      schema: FixVerification,
+      writers: { verification: [fixVerificationWriter] },
+    },
+    {
+      schemaName: 'fix.regression-rerun@v1',
+      channel: 'report',
+      schema: FixRegressionRerun,
+      writers: { verification: [fixRegressionRerunWriter] },
+    },
+    {
+      schemaName: 'fix.change-set@v1',
+      channel: 'report',
+      schema: FixChangeSet,
+      writers: { verification: [fixChangeSetWriter] },
+    },
+    {
+      schemaName: 'fix.result@v1',
+      channel: 'report',
+      schema: FixResult,
+      writers: { close: [fixCloseBuilder] },
+    },
   ],
-  reportSchemas: [
-    { schemaName: 'fix.brief@v1', schema: FixBrief },
-    { schemaName: 'fix.no-repro-decision@v1', schema: FixNoReproDecision },
-    { schemaName: 'fix.regression-proof@v1', schema: FixRegressionProof },
-    { schemaName: 'fix.baseline-snapshot@v1', schema: FixBaselineSnapshot },
-    { schemaName: 'fix.verification@v1', schema: FixVerification },
-    { schemaName: 'fix.regression-rerun@v1', schema: FixRegressionRerun },
-    { schemaName: 'fix.change-set@v1', schema: FixChangeSet },
-    { schemaName: 'fix.result@v1', schema: FixResult },
-  ],
-  writers: {
-    compose: [fixBriefComposeBuilder],
-    close: [fixCloseBuilder],
-    verification: [
-      fixRegressionBaselineWriter,
-      fixBaselineSnapshotWriter,
-      fixVerificationWriter,
-      fixRegressionRerunWriter,
-      fixChangeSetWriter,
-    ],
-  },
 });

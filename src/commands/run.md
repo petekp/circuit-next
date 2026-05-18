@@ -94,11 +94,10 @@ metacharacters:
    ./bin/circuit-next run --goal 'choose the right Circuit flow for this task' --progress jsonl
    ```
 
-   Example for a Build task using both an entry mode and an explicit
-   `--depth` flag:
+   Example for a Build task using Deep mode:
 
    ```bash
-   ./bin/circuit-next run build --goal 'make the focused change' --entry-mode deep --depth standard --progress jsonl
+   ./bin/circuit-next run build --goal 'make the focused change' --entry-mode deep --progress jsonl
    ```
 
    Example for a Fix task using Lite mode (skips the review pass):

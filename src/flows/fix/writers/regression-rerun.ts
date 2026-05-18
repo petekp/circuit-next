@@ -31,7 +31,8 @@ import type {
   VerificationCommand,
   VerificationCommandObservation,
 } from '../../registries/verification-writers/types.js';
-import { FixBrief, FixRegressionRerun } from '../reports.js';
+import { FixBrief } from '../reports.js';
+import { projectFixRegressionRerun } from './regression-projection.js';
 
 export const fixRegressionRerunWriter: VerificationBuilder = {
   resultSchemaName: 'fix.regression-rerun@v1',
@@ -51,43 +52,6 @@ export const fixRegressionRerunWriter: VerificationBuilder = {
     return [brief.regression_contract.regression_test.command];
   },
   buildResult(observations: readonly VerificationCommandObservation[]): unknown {
-    if (observations.length === 0) {
-      return FixRegressionRerun.parse({
-        status: 'deferred',
-        overall_status: 'passed',
-        reason: 'Brief deferred the regression test; no runtime rerun was performed.',
-      });
-    }
-    const observation = observations[0];
-    if (observation === undefined) {
-      throw new Error('fix.regression-rerun@v1: regression rerun observation missing');
-    }
-    const rerun = {
-      command_id: observation.command.id,
-      cwd: observation.command.cwd,
-      argv: observation.command.argv,
-      timeout_ms: observation.command.timeout_ms,
-      max_output_bytes: observation.command.max_output_bytes,
-      env: observation.command.env,
-      exit_code: observation.exit_code,
-      command_status: observation.status,
-      duration_ms: observation.duration_ms,
-      stdout_summary: observation.stdout_summary,
-      stderr_summary: observation.stderr_summary,
-    };
-    if (observation.status === 'passed') {
-      return FixRegressionRerun.parse({
-        status: 'cleared',
-        overall_status: 'passed',
-        rerun,
-      });
-    }
-    return FixRegressionRerun.parse({
-      status: 'still-failing',
-      overall_status: 'failed',
-      reason:
-        'Brief declared the regression test fails before the fix and the baseline confirmed that, but the same command still fails after the fix. The fix did not clear the regression.',
-      rerun,
-    });
+    return projectFixRegressionRerun(observations);
   },
 };

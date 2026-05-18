@@ -145,9 +145,13 @@ const reviewProjector: SummaryProjector = ({ flowReport }) => {
   // reference (it is meaningless when scope is empty, and would read awkwardly
   // through the fallback if verdict were ever absent) and lead with the
   // scope-was-empty fact instead.
+  const findingPhrase =
+    verdict === 'CLEAN' && findings > 0
+      ? `Low-severity notes: ${findings}.`
+      : `Findings: ${findings}.`;
   const headline = scopeEmpty
-    ? `Circuit: Review had no uncommitted source content to examine; committed history (HEAD~1) was not part of this review. Findings: ${findings}.`
-    : `Circuit: Review complete. Verdict: ${verdict}. Findings: ${findings}.`;
+    ? `Circuit: Review had no uncommitted source content to examine; committed history (HEAD~1) was not part of this review. ${findingPhrase}`
+    : `Circuit: Review complete. Verdict: ${verdict}. ${findingPhrase}`;
   return {
     headline,
     details,

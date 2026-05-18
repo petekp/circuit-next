@@ -44,12 +44,19 @@ export const reviewFlowDefinition = defineFlowFromFacts({
       return `matched ${signal.label}; routed to audit-only review flow`;
     },
   },
-  reportSchemas: [
-    { schemaName: 'review.intake@v1', schema: ReviewIntake },
-    { schemaName: 'review.result@v1', schema: ReviewResult },
+  reportDeclarations: [
+    {
+      schemaName: 'review.intake@v1',
+      channel: 'report',
+      schema: ReviewIntake,
+      writers: { compose: [reviewIntakeComposeBuilder] },
+    },
+    {
+      schemaName: 'review.result@v1',
+      channel: 'report',
+      schema: ReviewResult,
+      writers: { compose: [reviewResultComposeBuilder] },
+    },
   ],
-  writers: {
-    compose: [reviewIntakeComposeBuilder, reviewResultComposeBuilder],
-  },
   structuralHints: [reviewRelayShapeHint],
 });

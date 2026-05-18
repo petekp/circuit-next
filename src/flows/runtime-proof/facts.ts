@@ -1,152 +1,114 @@
+import { defineDeclarativeFlowFacts } from '../declarative-flow-facts.js';
 import type { FlowFact } from '../flow-definition.js';
 
-export const runtimeProofFacts = [
-  {
-    kind: 'flow',
-    flowId: 'runtime-proof',
-    title: 'Runtime Proof Schematic',
-    purpose:
-      'Runtime Proof flow: exercise one compose step and one relay step end-to-end so the runtime boundary can be observed closing a real run.',
-    status: 'active',
-    version: '0.1.0',
-    visibility: 'internal',
-    startsAt: 'compose-step',
-    stagePathPolicy: {
-      mode: 'partial',
-      omits: ['frame', 'analyze', 'verify', 'review', 'close'],
-      rationale:
-        'Runtime Proof is a narrow proof flow; only plan and act are needed to exercise compose and relay through the runtime boundary.',
-    },
+export const runtimeProofFacts = defineDeclarativeFlowFacts({
+  id: 'runtime-proof',
+  title: 'Runtime Proof Schematic',
+  purpose:
+    'Runtime Proof flow: exercise one compose step and one relay step end-to-end so the runtime boundary can be observed closing a real run.',
+  status: 'active',
+  version: '0.1.0',
+  visibility: 'internal',
+  startsAt: 'compose-step',
+  stagePathPolicy: {
+    mode: 'partial',
+    omits: ['frame', 'analyze', 'verify', 'review', 'close'],
+    rationale:
+      'Runtime Proof is a narrow proof flow; only plan and act are needed to exercise compose and relay through the runtime boundary.',
   },
-  {
-    kind: 'path',
-    flowId: 'runtime-proof',
-    pathKind: 'schematic',
-    path: 'src/flows/runtime-proof/schematic.json',
+  canonicalStagePolicy: {
+    enforcement: 'exempt',
+    reason: 'partial-stage path, recorded',
   },
-  {
-    kind: 'entry',
-    flowId: 'runtime-proof',
+  paths: {
+    schematic: 'src/flows/runtime-proof/schematic.json',
+  },
+  entry: {
     include: ['runtime-proof', 'alpha-proof'],
     exclude: [],
     intentPrefixes: ['runtime-proof'],
   },
-  {
-    kind: 'mode',
-    flowId: 'runtime-proof',
-    name: 'runtime-proof',
-    depth: 'standard',
-    description: 'Default runtime-proof entry mode; seeds the run at the compose step.',
-  },
-  {
-    kind: 'initial-contract',
-    flowId: 'runtime-proof',
-    schemaName: 'flow.brief@v1',
-  },
-  {
-    kind: 'stage',
-    flowId: 'runtime-proof',
-    stageId: 'plan-stage',
-    canonical: 'plan',
-    title: 'Plan',
-  },
-  {
-    kind: 'stage',
-    flowId: 'runtime-proof',
-    stageId: 'act-stage',
-    canonical: 'act',
-    title: 'Act',
-  },
-  {
-    kind: 'input-key',
-    flowId: 'runtime-proof',
-    stepId: 'compose-step',
-    key: 'brief',
-    schemaName: 'flow.brief@v1',
-  },
-  {
-    kind: 'step',
-    flowId: 'runtime-proof',
-    stepId: 'compose-step',
-    title: 'Compose runtime proof report',
-    stage: 'plan',
-    block: 'plan',
-    output: 'plan.strategy@v1',
-    evidenceRequirements: ['ordered steps', 'risk notes', 'proof strategy'],
-    execution: {
-      kind: 'compose',
+  modes: [
+    {
+      name: 'runtime-proof',
+      depth: 'standard',
+      description: 'Default runtime-proof entry mode; seeds the run at the compose step.',
     },
-    protocol: 'runtime-proof-compose@v1',
-    writes: {
-      report_path: 'reports/compose.json',
+  ],
+  initialContracts: ['flow.brief@v1'],
+  stages: [
+    {
+      stageId: 'plan-stage',
+      canonical: 'plan',
+      title: 'Plan',
     },
-    check: {
-      required: ['summary'],
+    {
+      stageId: 'act-stage',
+      canonical: 'act',
+      title: 'Act',
     },
-    skillSlots: [],
-  },
-  {
-    kind: 'route',
-    flowId: 'runtime-proof',
-    fromStepId: 'compose-step',
-    outcome: 'continue',
-    to: 'relay-step',
-  },
-  {
-    kind: 'input-key',
-    flowId: 'runtime-proof',
-    stepId: 'relay-step',
-    key: 'brief',
-    schemaName: 'flow.brief@v1',
-  },
-  {
-    kind: 'input-key',
-    flowId: 'runtime-proof',
-    stepId: 'relay-step',
-    key: 'plan',
-    schemaName: 'plan.strategy@v1',
-  },
-  {
-    kind: 'step',
-    flowId: 'runtime-proof',
-    stepId: 'relay-step',
-    title: 'Relay dry-run connector',
-    stage: 'act',
-    block: 'act',
-    output: 'change.evidence@v1',
-    evidenceRequirements: ['changed files', 'change rationale', 'declared follow-up proof'],
-    execution: {
-      kind: 'relay',
-      role: 'implementer',
+  ],
+  steps: [
+    {
+      id: 'compose-step',
+      title: 'Compose runtime proof report',
+      stage: 'plan',
+      block: 'plan',
+      input: {
+        brief: 'flow.brief@v1',
+      },
+      output: 'plan.strategy@v1',
+      evidenceRequirements: ['ordered steps', 'risk notes', 'proof strategy'],
+      execution: {
+        kind: 'compose',
+      },
+      protocol: 'runtime-proof-compose@v1',
+      writes: {
+        report_path: 'reports/compose.json',
+      },
+      check: {
+        required: ['summary'],
+      },
+      routes: {
+        continue: 'relay-step',
+      },
     },
-    protocol: 'runtime-proof-relay@v1',
-    writes: {
-      request_path: 'reports/relay.request.json',
-      receipt_path: 'reports/relay.receipt.json',
-      result_path: 'reports/relay.result.json',
+    {
+      id: 'relay-step',
+      title: 'Relay dry-run connector',
+      stage: 'act',
+      block: 'act',
+      input: {
+        brief: 'flow.brief@v1',
+        plan: 'plan.strategy@v1',
+      },
+      output: 'change.evidence@v1',
+      evidenceRequirements: ['changed files', 'change rationale', 'declared follow-up proof'],
+      execution: {
+        kind: 'relay',
+        role: 'implementer',
+      },
+      protocol: 'runtime-proof-relay@v1',
+      writes: {
+        request_path: 'reports/relay.request.json',
+        receipt_path: 'reports/relay.receipt.json',
+        result_path: 'reports/relay.result.json',
+      },
+      check: {
+        pass: ['ok'],
+      },
+      routes: {
+        continue: '@complete',
+      },
     },
-    check: {
-      pass: ['ok'],
+  ],
+  reports: [
+    {
+      schemaName: 'runtime-proof.compose@v1',
+      channel: 'report',
     },
-    skillSlots: [],
+  ],
+  writerBindings: {
+    compose: ['plan.strategy@v1'],
   },
-  {
-    kind: 'route',
-    flowId: 'runtime-proof',
-    fromStepId: 'relay-step',
-    outcome: 'continue',
-    to: '@complete',
-  },
-  {
-    kind: 'registered-report',
-    flowId: 'runtime-proof',
-    schemaName: 'runtime-proof.compose@v1',
-    channel: 'report',
-  },
-  {
-    kind: 'writer-binding',
-    flowId: 'runtime-proof',
-    slot: 'compose',
-    resultSchemaName: 'plan.strategy@v1',
-  },
-] as const satisfies readonly FlowFact[];
+}) satisfies readonly FlowFact[];

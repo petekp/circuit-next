@@ -57,6 +57,9 @@ export function projectFixResult(inputs: FixResultProjectorInputs): FixResult {
   const regressionRerunStatus: FixResult['regression_rerun_status'] = regressionRerun.status;
   const changeSetStatus: FixResult['change_set_status'] = changeSet.status;
   const reviewStatus: FixResult['review_status'] = review === undefined ? 'skipped' : 'completed';
+  const hasNoReproDecision = evidence_links.some(
+    (pointer) => pointer.report_id === 'fix.no-repro-decision',
+  );
 
   const fixedGate =
     verificationStatus === 'passed' &&
@@ -70,15 +73,18 @@ export function projectFixResult(inputs: FixResultProjectorInputs): FixResult {
       regressionRerunStatus !== 'cleared' ||
       changeSetStatus === 'fail' ||
       review?.verdict === 'accept-with-fixes');
+  const noReproDecisionGate =
+    hasNoReproDecision &&
+    diagnosis.reproduction_status === 'not-reproduced' &&
+    regressionStatus !== 'proved';
 
-  const outcome: FixResult['outcome'] =
-    diagnosis.reproduction_status === 'not-reproduced' && regressionStatus !== 'proved'
+  const outcome: FixResult['outcome'] = fixedGate
+    ? 'fixed'
+    : noReproDecisionGate
       ? 'not-reproduced'
-      : fixedGate
-        ? 'fixed'
-        : partialGate
-          ? 'partial'
-          : 'failed';
+      : partialGate
+        ? 'partial'
+        : 'failed';
 
   return FixResultSchema.parse({
     summary: `Fix '${brief.problem_statement}': ${change.summary}`,

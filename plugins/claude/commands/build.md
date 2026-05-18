@@ -46,10 +46,10 @@ metacharacters:
    node "${CLAUDE_PLUGIN_ROOT}/scripts/circuit-next.mjs" present run build --goal 'make a small change' --entry-mode lite
    ```
 
-   Deep Build with explicit standard depth in the same invocation:
+   Deep Build:
 
    ```bash
-   node "${CLAUDE_PLUGIN_ROOT}/scripts/circuit-next.mjs" present run build --goal 'make the focused change' --entry-mode deep --depth standard
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/circuit-next.mjs" present run build --goal 'make the focused change' --entry-mode deep
    ```
 
    Autonomous Build:
@@ -72,8 +72,9 @@ metacharacters:
    `--entry-mode deep`, and Autonomous Build to `--entry-mode autonomous`.
    Omit `--entry-mode` for normal Build.
 3. **Keep `--depth` separate from `--entry-mode`.** If the operator asks for
-   an explicit depth level, pass it with `--depth`. A single command may carry
-   both flags, as shown above.
+   an explicit depth level instead of a Build mode, pass it with `--depth`.
+   Do not combine mismatched aliases; `--entry-mode deep` already implies deep
+   depth.
 4. **Let the presentation wrapper render output.** `present` streams
    Circuit status blocks, renders checkpoint questions, and prints the
    final Circuit summary without exposing raw JSON. Do not parse raw JSON

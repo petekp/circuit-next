@@ -12,14 +12,13 @@ import type {
   ComposeBuildContext,
   ComposeBuilder,
 } from '../../registries/compose-writers/types.js';
-import {
-  type ReviewEvidence,
-  type ReviewEvidenceText,
-  type ReviewEvidenceWarning,
-  ReviewIntake,
-  type ReviewUntrackedContentPolicy,
-  type ReviewUntrackedFileEvidence,
+import type {
+  ReviewEvidence,
+  ReviewEvidenceText,
+  ReviewUntrackedContentPolicy,
+  ReviewUntrackedFileEvidence,
 } from '../reports.js';
+import { projectReviewIntake } from './intake-projection.js';
 
 const MAX_DIFF_CHARS = 120_000;
 const MAX_UNTRACKED_FILES = 20;
@@ -215,97 +214,6 @@ function collectReviewEvidence(
   };
 }
 
-function gitCommandFailed(text: string): boolean {
-  return /^git\s+.+\s+failed:/.test(text);
-}
-
-function evidenceWarnings(evidence: ReviewEvidence): ReviewEvidenceWarning[] {
-  if (evidence.kind === 'unavailable') {
-    return [
-      {
-        kind: 'evidence_unavailable',
-        message: evidence.reason,
-      },
-    ];
-  }
-
-  const warnings: ReviewEvidenceWarning[] = [];
-  // scope_empty captures "the reviewer was not given enough evidence to make a
-  // meaningful safety judgment." Trigger: diff text is empty AND no untracked
-  // file content was relayed (either no untracked files, content policy is
-  // metadata-only, or every untracked file was skipped). Untracked metadata
-  // alone — paths and sizes — is not source content the reviewer can audit, so
-  // the warning still fires for the metadata-only case; the existing
-  // untracked_file_content_omitted warning is the actionable companion there.
-  const hasUntrackedContent = evidence.untracked_files.some((file) => file.content !== undefined);
-  if (
-    evidence.staged_diff.text.length === 0 &&
-    evidence.unstaged_diff.text.length === 0 &&
-    !hasUntrackedContent &&
-    !gitCommandFailed(evidence.staged_diff.text) &&
-    !gitCommandFailed(evidence.unstaged_diff.text)
-  ) {
-    warnings.push({
-      kind: 'scope_empty',
-      message:
-        'review scoped to uncommitted changes only; HEAD~1 differences not examined. The reviewer had no source content to inspect: staged/unstaged diffs were empty and no untracked file content was relayed.',
-    });
-  }
-  if (evidence.staged_diff.truncated) {
-    warnings.push({
-      kind: 'diff_truncated',
-      message: 'staged diff was truncated before relay',
-    });
-  }
-  if (evidence.unstaged_diff.truncated) {
-    warnings.push({
-      kind: 'diff_truncated',
-      message: 'unstaged diff was truncated before relay',
-    });
-  }
-  if (gitCommandFailed(evidence.staged_diff.text)) {
-    warnings.push({
-      kind: 'git_command_failed',
-      message: evidence.staged_diff.text,
-    });
-  }
-  if (gitCommandFailed(evidence.unstaged_diff.text)) {
-    warnings.push({
-      kind: 'git_command_failed',
-      message: evidence.unstaged_diff.text,
-    });
-  }
-  if (gitCommandFailed(evidence.diff_stat)) {
-    warnings.push({
-      kind: 'git_command_failed',
-      message: evidence.diff_stat,
-    });
-  }
-  if (evidence.untracked_files_truncated) {
-    warnings.push({
-      kind: 'untracked_files_truncated',
-      message: `untracked file evidence was limited to ${MAX_UNTRACKED_FILES} files`,
-    });
-  }
-  if (evidence.untracked_content_policy === 'metadata-only' && evidence.untracked_file_count > 0) {
-    warnings.push({
-      kind: 'untracked_file_content_omitted',
-      message:
-        'untracked file contents were not included; pass --include-untracked-content only when those files are safe to relay',
-    });
-  }
-  for (const file of evidence.untracked_files) {
-    if (file.skipped_reason !== undefined) {
-      warnings.push({
-        kind: 'untracked_file_skipped',
-        path: file.path,
-        message: file.skipped_reason,
-      });
-    }
-  }
-  return warnings;
-}
-
 export const reviewIntakeComposeBuilder: ComposeBuilder = {
   resultSchemaName: 'review.intake@v1',
   build(context: ComposeBuildContext): unknown {
@@ -315,10 +223,10 @@ export const reviewIntakeComposeBuilder: ComposeBuilder = {
         ? { includeUntrackedFileContent: true }
         : {},
     );
-    return ReviewIntake.parse({
+    return projectReviewIntake({
       scope: context.goal,
       evidence,
-      evidence_warnings: evidenceWarnings(evidence),
+      maxUntrackedFiles: MAX_UNTRACKED_FILES,
     });
   },
 };

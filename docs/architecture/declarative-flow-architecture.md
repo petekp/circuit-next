@@ -28,8 +28,6 @@ The current production flow set is:
 - `build`
 - `explore`
 
-`migrate` and `sweep` are intentionally outside the retained production catalog.
-
 ## Current State
 
 The migration has landed for built-in flows.
@@ -41,8 +39,7 @@ Confirmed current source:
 - Every retained flow adapter calls `defineFlowFromFacts()`.
 - Every retained flow owns a `facts.ts` file typed as `readonly FlowFact[]`.
 - `tests/runner/flow-facts.test.ts` locks the retained flow set, fact-owned
-  adapters, generated schematic parity, and the absence of `migrate` and
-  `sweep` from production flow definitions.
+  adapters, generated schematic parity, and production flow definitions.
 - `docs/generated-surfaces.md` marks schematic JSON, compiled manifests, host
   mirrors, command mirrors, and Codex skill mirrors as generated surfaces.
 - `node scripts/emit-flows.ts --check` is the generated-surface drift gate.

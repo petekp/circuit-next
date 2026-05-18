@@ -51,10 +51,10 @@ as literal user-controlled text when constructing shell commands.
    node '<plugin root>/scripts/circuit-next.mjs' run build --goal 'make a small change' --entry-mode lite --progress jsonl
    ```
 
-   Deep Build with explicit standard depth in the same invocation:
+   Deep Build:
 
    ```bash
-   node '<plugin root>/scripts/circuit-next.mjs' run build --goal 'make the focused change' --entry-mode deep --depth standard --progress jsonl
+   node '<plugin root>/scripts/circuit-next.mjs' run build --goal 'make the focused change' --entry-mode deep --progress jsonl
    ```
 
    Autonomous Build:
@@ -77,8 +77,9 @@ as literal user-controlled text when constructing shell commands.
    `--entry-mode deep`, and Autonomous Build to `--entry-mode autonomous`.
    Omit `--entry-mode` for normal Build.
 3. **Keep `--depth` separate from `--entry-mode`.** If the operator asks for
-   an explicit depth level, pass it with `--depth`. A single command may carry
-   both flags, as shown above.
+   an explicit depth level instead of a Build mode, pass it with `--depth`.
+   Do not combine mismatched aliases; `--entry-mode deep` already implies deep
+   depth.
 4. **Render progress while the run is active.** `--progress jsonl` writes
    progress events to stderr and keeps the final result JSON on stdout.
    Prefer `presentation` when present: open a `Circuit` block once per

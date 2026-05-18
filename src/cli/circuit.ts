@@ -27,6 +27,7 @@ import { progressDisplay, progressPresentation } from '../shared/progress-output
 import type { ComposeWriterFn, RelayFn } from '../shared/relay-runtime-types.js';
 import { runCreateCommand } from './create.js';
 import { runHandoffCommand } from './handoff.js';
+import { operatorSummaryOutputFields, routeOutputFields } from './run-output.js';
 import { runRunsCommand } from './runs.js';
 import {
   CLI_RUNTIME_ROUTING_POLICY,
@@ -720,14 +721,7 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
             trace_entries_observed: runResult.trace_entries_observed,
             result_path: runtimeResult.resultPath,
             ...resumeRuntimeFields,
-            operator_summary_path: operatorSummary.jsonPath,
-            operator_summary_markdown_path: operatorSummary.markdownPath,
-            ...(operatorSummary.summary.status_text === undefined
-              ? {}
-              : { operator_summary_status_text: operatorSummary.summary.status_text }),
-            ...(operatorSummary.htmlPath === undefined
-              ? {}
-              : { operator_summary_html_path: operatorSummary.htmlPath }),
+            ...operatorSummaryOutputFields({ operatorSummary }),
           },
           null,
           2,
@@ -857,16 +851,18 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
             schema_version: 1,
             run_id: waitingResult.run_id,
             flow_id: waitingResult.flow_id,
-            selected_flow: route.flowName,
-            routed_by: route.source,
-            router_reason: route.reason,
-            ...(route.matched_signal === undefined ? {} : { router_signal: route.matched_signal }),
-            ...(entryModeSelection.entryModeName === undefined
-              ? {}
-              : { entry_mode: entryModeSelection.entryModeName }),
-            ...(entryModeSelection.source === undefined
-              ? {}
-              : { entry_mode_source: entryModeSelection.source }),
+            ...routeOutputFields({
+              selectedFlow: route.flowName,
+              routedBy: route.source,
+              routerReason: route.reason,
+              ...(route.matched_signal === undefined ? {} : { routerSignal: route.matched_signal }),
+              ...(entryModeSelection.entryModeName === undefined
+                ? {}
+                : { entryMode: entryModeSelection.entryModeName }),
+              ...(entryModeSelection.source === undefined
+                ? {}
+                : { entryModeSource: entryModeSelection.source }),
+            }),
             run_folder: runFolder,
             outcome: waitingResult.outcome,
             trace_entries_observed: waitingResult.trace_entries_observed,
@@ -874,14 +870,7 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
               include: runtimeDecisionDiagnostics,
               decision: defaultRuntimeSupport,
             }),
-            operator_summary_path: operatorSummary.jsonPath,
-            operator_summary_markdown_path: operatorSummary.markdownPath,
-            ...(operatorSummary.summary.status_text === undefined
-              ? {}
-              : { operator_summary_status_text: operatorSummary.summary.status_text }),
-            ...(operatorSummary.htmlPath === undefined
-              ? {}
-              : { operator_summary_html_path: operatorSummary.htmlPath }),
+            ...operatorSummaryOutputFields({ operatorSummary }),
             checkpoint: waitingResult.checkpoint,
           },
           null,
@@ -906,16 +895,18 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
           schema_version: 1,
           run_id: runResult.run_id,
           flow_id: runResult.flow_id,
-          selected_flow: route.flowName,
-          routed_by: route.source,
-          router_reason: route.reason,
-          ...(route.matched_signal === undefined ? {} : { router_signal: route.matched_signal }),
-          ...(entryModeSelection.entryModeName === undefined
-            ? {}
-            : { entry_mode: entryModeSelection.entryModeName }),
-          ...(entryModeSelection.source === undefined
-            ? {}
-            : { entry_mode_source: entryModeSelection.source }),
+          ...routeOutputFields({
+            selectedFlow: route.flowName,
+            routedBy: route.source,
+            routerReason: route.reason,
+            ...(route.matched_signal === undefined ? {} : { routerSignal: route.matched_signal }),
+            ...(entryModeSelection.entryModeName === undefined
+              ? {}
+              : { entryMode: entryModeSelection.entryModeName }),
+            ...(entryModeSelection.source === undefined
+              ? {}
+              : { entryModeSource: entryModeSelection.source }),
+          }),
           run_folder: runFolder,
           outcome: runResult.outcome,
           trace_entries_observed: runResult.trace_entries_observed,
@@ -924,14 +915,7 @@ export async function main(argv: readonly string[], options: CliMainOptions = {}
             include: runtimeDecisionDiagnostics,
             decision: defaultRuntimeSupport,
           }),
-          operator_summary_path: operatorSummary.jsonPath,
-          operator_summary_markdown_path: operatorSummary.markdownPath,
-          ...(operatorSummary.summary.status_text === undefined
-            ? {}
-            : { operator_summary_status_text: operatorSummary.summary.status_text }),
-          ...(operatorSummary.htmlPath === undefined
-            ? {}
-            : { operator_summary_html_path: operatorSummary.htmlPath }),
+          ...operatorSummaryOutputFields({ operatorSummary }),
         },
         null,
         2,

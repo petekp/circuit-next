@@ -7,7 +7,8 @@ import type {
   VerificationCommand,
   VerificationCommandObservation,
 } from '../../registries/verification-writers/types.js';
-import { PursuitContract, PursuitVerification } from '../reports.js';
+import { PursuitContract } from '../reports.js';
+import { projectPursuitVerification } from './verification-projection.js';
 
 export const pursuitVerificationWriter: VerificationBuilder = {
   resultSchemaName: 'pursuit.verification@v1',
@@ -24,19 +25,6 @@ export const pursuitVerificationWriter: VerificationBuilder = {
     return contract.verification_command_candidates;
   },
   buildResult(observations: readonly VerificationCommandObservation[]): unknown {
-    const overallStatus = observations.some((o) => o.status === 'failed') ? 'failed' : 'passed';
-    return PursuitVerification.parse({
-      overall_status: overallStatus,
-      commands: observations.map((o) => ({
-        command_id: o.command.id,
-        argv: o.command.argv,
-        cwd: o.command.cwd,
-        exit_code: o.exit_code,
-        status: o.status,
-        duration_ms: o.duration_ms,
-        stdout_summary: o.stdout_summary,
-        stderr_summary: o.stderr_summary,
-      })),
-    });
+    return projectPursuitVerification(observations);
   },
 };

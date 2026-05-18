@@ -11,10 +11,10 @@ import {
   BuildBrief,
   BuildImplementation,
   BuildPlan,
-  BuildResult,
   BuildReview,
   BuildVerification,
 } from '../reports.js';
+import { projectBuildResult } from './result-projection.js';
 
 const POINTERS = [
   { report_id: 'build.brief', schema: 'build.brief@v1' },
@@ -39,20 +39,12 @@ export const buildCloseBuilder: CloseBuilder = {
     const implementation = BuildImplementation.parse(context.inputs.implementation);
     const verification = BuildVerification.parse(context.inputs.verification);
     const review = BuildReview.parse(context.inputs.review);
-    const outcome: BuildResult['outcome'] =
-      verification.overall_status !== 'passed'
-        ? 'failed'
-        : review.verdict === 'accept'
-          ? 'complete'
-          : review.verdict === 'accept-with-fixes'
-            ? 'needs_attention'
-            : 'failed';
-    return BuildResult.parse({
-      summary: `Build result for ${brief.objective}: ${implementation.summary}`,
-      outcome,
-      verification_status: verification.overall_status,
-      review_verdict: review.verdict,
-      evidence_links: POINTERS.map((p) => ({
+    return projectBuildResult({
+      brief,
+      implementation,
+      verification,
+      review,
+      evidenceLinks: POINTERS.map((p) => ({
         ...p,
         path: reportPathForSchemaInRuntimeFlow(context.flow, p.schema),
       })),

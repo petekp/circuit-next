@@ -16,7 +16,8 @@ import type {
   VerificationCommand,
   VerificationCommandObservation,
 } from '../../registries/verification-writers/types.js';
-import { FixBrief, FixVerification } from '../reports.js';
+import { FixBrief } from '../reports.js';
+import { projectFixVerification } from './verification-projection.js';
 
 export const fixVerificationWriter: VerificationBuilder = {
   resultSchemaName: 'fix.verification@v1',
@@ -33,22 +34,6 @@ export const fixVerificationWriter: VerificationBuilder = {
     return brief.verification_command_candidates;
   },
   buildResult(observations: readonly VerificationCommandObservation[]): unknown {
-    const overallStatus = observations.some((o) => o.status === 'failed') ? 'failed' : 'passed';
-    return FixVerification.parse({
-      overall_status: overallStatus,
-      commands: observations.map((o) => ({
-        command_id: o.command.id,
-        argv: o.command.argv,
-        cwd: o.command.cwd,
-        exit_code: o.exit_code,
-        status: o.status,
-        duration_ms: o.duration_ms,
-        stdout_summary: o.stdout_summary,
-        stderr_summary: o.stderr_summary,
-        timeout_ms: o.command.timeout_ms,
-        max_output_bytes: o.command.max_output_bytes,
-        env: o.command.env,
-      })),
-    });
+    return projectFixVerification(observations);
   },
 };

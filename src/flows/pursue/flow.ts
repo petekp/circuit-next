@@ -40,33 +40,48 @@ export const pursueFlowDefinition = defineFlowFromFacts({
       return `matched ${signal.label}; routed to Pursue flow`;
     },
   },
-  relayReports: [
+  reportDeclarations: [
     {
       schemaName: 'pursuit.batch@v1',
+      channel: 'relay',
       schema: PursuitBatch,
       relayHint: pursuitBatchShapeHint.instruction,
     },
     {
       schemaName: 'pursuit.review@v1',
+      channel: 'relay',
       schema: PursuitReview,
       relayHint: pursuitReviewShapeHint.instruction,
     },
+    {
+      schemaName: 'pursuit.contract@v1',
+      channel: 'report',
+      schema: PursuitContract,
+      writers: { compose: [pursuitContractComposeBuilder] },
+    },
+    {
+      schemaName: 'pursuit.graph@v1',
+      channel: 'report',
+      schema: PursuitGraph,
+      writers: { compose: [pursuitGraphComposeBuilder] },
+    },
+    {
+      schemaName: 'pursuit.wave-plan@v1',
+      channel: 'report',
+      schema: PursuitWavePlan,
+      writers: { compose: [pursuitWavePlanComposeBuilder] },
+    },
+    {
+      schemaName: 'pursuit.verification@v1',
+      channel: 'report',
+      schema: PursuitVerification,
+      writers: { verification: [pursuitVerificationWriter] },
+    },
+    {
+      schemaName: 'pursuit.result@v1',
+      channel: 'report',
+      schema: PursuitResult,
+      writers: { close: [pursuitCloseBuilder] },
+    },
   ],
-  reportSchemas: [
-    { schemaName: 'pursuit.contract@v1', schema: PursuitContract },
-    { schemaName: 'pursuit.graph@v1', schema: PursuitGraph },
-    { schemaName: 'pursuit.wave-plan@v1', schema: PursuitWavePlan },
-    { schemaName: 'pursuit.verification@v1', schema: PursuitVerification },
-    { schemaName: 'pursuit.result@v1', schema: PursuitResult },
-  ],
-  writers: {
-    compose: [
-      pursuitContractComposeBuilder,
-      pursuitGraphComposeBuilder,
-      pursuitWavePlanComposeBuilder,
-    ],
-    close: [pursuitCloseBuilder],
-    verification: [pursuitVerificationWriter],
-    checkpoint: [],
-  },
 });

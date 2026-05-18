@@ -11,6 +11,8 @@ import {
   compileFlowDefinition,
   compileFlowDefinitions,
   defineFlow,
+  defineFlowFromFacts,
+  defineFlowFromFactsValue,
   schematicForFlowDefinition,
   validateFlowFacts,
 } from '../../src/flows/flow-definition.js';
@@ -304,6 +306,36 @@ describe('FlowDefinition compiler', () => {
     });
   });
 
+  it('projects report declarations for direct FlowDefinition callers', () => {
+    const composeBuilder: ComposeBuilder = {
+      resultSchemaName: 'definition-report@v1',
+      build: () => ({ ok: true }),
+    };
+    const definition = defineFlow({
+      ...minimalDefinition('definition-reports'),
+      reportDeclarations: [
+        {
+          schemaName: 'definition-relay@v1',
+          channel: 'relay',
+          schema,
+          relayHint: 'emit definition-relay JSON',
+        },
+        {
+          schemaName: 'definition-report@v1',
+          channel: 'report',
+          schema,
+          writers: { compose: [composeBuilder] },
+        },
+      ],
+    });
+    const pkg = compileFlowDefinition(definition);
+
+    expect(pkg.relayReports.map((report) => report.schemaName)).toEqual(['definition-relay@v1']);
+    expect(pkg.relayReports[0]?.relayHint).toBe('emit definition-relay JSON');
+    expect(pkg.reportSchemas?.map((report) => report.schemaName)).toEqual(['definition-report@v1']);
+    expect(pkg.writers.compose).toEqual([composeBuilder]);
+  });
+
   it('fails when definition id and schematic id drift', () => {
     const definition = minimalDefinition('definition-id');
     expect(() =>
@@ -412,6 +444,37 @@ describe('FlowDefinition compiler', () => {
         },
       ]),
     ).toContainEqual({ kind: 'duplicate-path', flowId: 'fact-test', pathKind: 'schematic' });
+  });
+
+  it('returns typed errors behind the throwing flow-facts adapter', () => {
+    const missingEntryFacts = minimalFacts().filter((fact) => fact.kind !== 'entry');
+    const invalidResult = defineFlowFromFactsValue({ facts: missingEntryFacts });
+    expect(invalidResult.ok).toBe(false);
+    if (invalidResult.ok) throw new Error('expected typed flow fact error');
+    expect(invalidResult.errors).toEqual([
+      {
+        kind: 'invalid-flow-facts',
+        errors: [{ kind: 'missing-entry', flowId: 'fact-test' }],
+      },
+    ]);
+    expect(() => defineFlowFromFacts({ facts: missingEntryFacts })).toThrow(/invalid flow facts/);
+
+    const semanticDriftFacts: FlowFact[] = [
+      ...minimalFacts(),
+      {
+        kind: 'registered-report',
+        flowId: 'fact-test',
+        schemaName: 'fact.report@v1',
+        channel: 'report',
+      },
+    ];
+    const driftResult = defineFlowFromFactsValue({ facts: semanticDriftFacts });
+    expect(driftResult.ok).toBe(false);
+    if (driftResult.ok) throw new Error('expected typed semantic drift error');
+    expect(driftResult.errors[0]?.kind).toBe('flow-fact-semantic-drift');
+    expect(() => defineFlowFromFacts({ facts: semanticDriftFacts })).toThrow(
+      /flow fact semantic drift/,
+    );
   });
 
   it('keeps every built-in definition in parity with package and generated manifest surfaces', () => {

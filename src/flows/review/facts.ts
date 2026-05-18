@@ -1,311 +1,180 @@
+import { defineDeclarativeFlowFacts } from '../declarative-flow-facts.js';
 import type { FlowFact } from '../flow-definition.js';
 
-export const reviewFacts = [
-  {
-    kind: 'flow',
-    flowId: 'review',
-    title: 'Review Schematic',
-    purpose:
-      'Review flow: frame the audit scope, relay independent review to a reviewer, and close with a verdict report. The schematic uses a compact Intake, Independent Audit, and Verdict shape because Review is audit-only and does not implement or verify a change.',
-    status: 'active',
-    version: '0.1.0',
-    visibility: 'public',
-    startsAt: 'intake-step',
-    stagePathPolicy: {
-      mode: 'partial',
-      omits: ['plan', 'act', 'verify', 'review'],
-      rationale:
-        'Review is an audit-only flow: Intake frames the scope, Independent Audit performs the reviewer relay, and Verdict aggregates findings. There is no planning stage, no implementation/action stage, no verification rerun, and no nested review stage in this narrowed variant.',
-    },
+export const reviewFacts = defineDeclarativeFlowFacts({
+  id: 'review',
+  title: 'Review Schematic',
+  purpose:
+    'Review flow: frame the audit scope, relay independent review to a reviewer, and close with a verdict report. The schematic uses a compact Intake, Independent Audit, and Verdict shape because Review is audit-only and does not implement or verify a change.',
+  status: 'active',
+  version: '0.1.0',
+  visibility: 'public',
+  startsAt: 'intake-step',
+  stagePathPolicy: {
+    mode: 'partial',
+    omits: ['plan', 'act', 'verify', 'review'],
+    rationale:
+      'Review is an audit-only flow: Intake frames the scope, Independent Audit performs the reviewer relay, and Verdict aggregates findings. There is no planning stage, no implementation/action stage, no verification rerun, and no nested review stage in this narrowed variant.',
   },
-  {
-    kind: 'path',
-    flowId: 'review',
-    pathKind: 'schematic',
-    path: 'src/flows/review/schematic.json',
+  canonicalStagePolicy: {
+    enforcement: 'enforce',
+    title: 'Intake → Independent Audit → Verdict',
+    authority: 'src/flows/review/contract.md §Canonical stage policy',
   },
-  {
-    kind: 'path',
-    flowId: 'review',
-    pathKind: 'command',
-    path: 'src/flows/review/command.md',
+  paths: {
+    schematic: 'src/flows/review/schematic.json',
+    command: 'src/flows/review/command.md',
+    contract: 'src/flows/review/contract.md',
   },
-  {
-    kind: 'path',
-    flowId: 'review',
-    pathKind: 'contract',
-    path: 'src/flows/review/contract.md',
-  },
-  {
-    kind: 'entry',
-    flowId: 'review',
+  entry: {
     include: ['review', 'audit', 'check'],
     exclude: [],
     intentPrefixes: ['review'],
   },
-  {
-    kind: 'mode',
-    flowId: 'review',
-    name: 'default',
-    depth: 'standard',
-    description:
-      'Default review entry mode — resolves the review scope, relays an independent audit, then writes the verdict report.',
-  },
-  {
-    kind: 'initial-contract',
-    flowId: 'review',
-    schemaName: 'task.intake@v1',
-  },
-  {
-    kind: 'initial-contract',
-    flowId: 'review',
-    schemaName: 'route.decision@v1',
-  },
-  {
-    kind: 'contract-alias',
-    flowId: 'review',
-    generic: 'flow.brief@v1',
-    actual: 'review.intake@v1',
-  },
-  {
-    kind: 'contract-alias',
-    flowId: 'review',
-    generic: 'review.verdict@v1',
-    actual: 'review.verdict@v1',
-  },
-  {
-    kind: 'contract-alias',
-    flowId: 'review',
-    generic: 'flow.result@v1',
-    actual: 'review.result@v1',
-  },
-  {
-    kind: 'stage',
-    flowId: 'review',
-    stageId: 'intake-stage',
-    canonical: 'frame',
-    title: 'Intake',
-  },
-  {
-    kind: 'stage',
-    flowId: 'review',
-    stageId: 'audit-stage',
-    canonical: 'analyze',
-    title: 'Independent Audit',
-  },
-  {
-    kind: 'stage',
-    flowId: 'review',
-    stageId: 'verdict-stage',
-    canonical: 'close',
-    title: 'Verdict',
-  },
-  {
-    kind: 'input-key',
-    flowId: 'review',
-    stepId: 'intake-step',
-    key: 'task',
-    schemaName: 'task.intake@v1',
-  },
-  {
-    kind: 'input-key',
-    flowId: 'review',
-    stepId: 'intake-step',
-    key: 'route',
-    schemaName: 'route.decision@v1',
-  },
-  {
-    kind: 'step',
-    flowId: 'review',
-    stepId: 'intake-step',
-    title: 'Intake — resolve review scope',
-    stage: 'frame',
-    block: 'frame',
-    output: 'review.intake@v1',
-    evidenceRequirements: ['scope boundary', 'working tree status', 'diff or unavailable reason'],
-    execution: {
-      kind: 'compose',
+  modes: [
+    {
+      name: 'default',
+      depth: 'standard',
+      description:
+        'Default review entry mode — resolves the review scope, relays an independent audit, then writes the verdict report.',
     },
-    protocol: 'review-intake@v1',
-    writes: {
-      report_path: 'reports/review-intake.json',
+  ],
+  initialContracts: ['task.intake@v1', 'route.decision@v1'],
+  contractAliases: {
+    'flow.brief@v1': 'review.intake@v1',
+    'review.verdict@v1': 'review.verdict@v1',
+    'flow.result@v1': 'review.result@v1',
+  },
+  stages: [
+    {
+      stageId: 'intake-stage',
+      canonical: 'frame',
+      title: 'Intake',
     },
-    check: {
-      required: ['scope', 'evidence'],
+    {
+      stageId: 'audit-stage',
+      canonical: 'analyze',
+      title: 'Independent Audit',
     },
-    skillSlots: [],
-  },
-  {
-    kind: 'route',
-    flowId: 'review',
-    fromStepId: 'intake-step',
-    outcome: 'continue',
-    to: 'audit-step',
-  },
-  {
-    kind: 'route',
-    flowId: 'review',
-    fromStepId: 'intake-step',
-    outcome: 'stop',
-    to: '@stop',
-  },
-  {
-    kind: 'input-key',
-    flowId: 'review',
-    stepId: 'audit-step',
-    key: 'brief',
-    schemaName: 'review.intake@v1',
-  },
-  {
-    kind: 'step',
-    flowId: 'review',
-    stepId: 'audit-step',
-    title: 'Independent Audit — reviewer relay',
-    stage: 'analyze',
-    block: 'review',
-    output: 'review.verdict@v1',
-    evidenceRequirements: ['verdict', 'findings', 'confidence', 'required fixes'],
-    execution: {
-      kind: 'relay',
-      role: 'reviewer',
+    {
+      stageId: 'verdict-stage',
+      canonical: 'close',
+      title: 'Verdict',
     },
-    protocol: 'review-audit@v1',
-    writes: {
-      request_path: 'reports/relay/review.request.json',
-      receipt_path: 'reports/relay/review.receipt.txt',
-      result_path: 'stages/analyze/review-raw-findings.json',
+  ],
+  steps: [
+    {
+      id: 'intake-step',
+      title: 'Intake — resolve review scope',
+      stage: 'frame',
+      block: 'frame',
+      input: {
+        task: 'task.intake@v1',
+        route: 'route.decision@v1',
+      },
+      output: 'review.intake@v1',
+      evidenceRequirements: ['scope boundary', 'working tree status', 'diff or unavailable reason'],
+      execution: {
+        kind: 'compose',
+      },
+      protocol: 'review-intake@v1',
+      writes: {
+        report_path: 'reports/review-intake.json',
+      },
+      check: {
+        required: ['scope', 'evidence'],
+      },
+      routes: {
+        continue: 'audit-step',
+        stop: '@stop',
+      },
+      progress: {
+        taskTitle: 'Frame the work',
+        activeText: 'Framing the work',
+      },
     },
-    check: {
-      pass: ['NO_ISSUES_FOUND', 'ISSUES_FOUND'],
+    {
+      id: 'audit-step',
+      title: 'Independent Audit — reviewer relay',
+      stage: 'analyze',
+      block: 'review',
+      input: {
+        brief: 'review.intake@v1',
+      },
+      output: 'review.verdict@v1',
+      evidenceRequirements: ['verdict', 'findings', 'confidence', 'required fixes'],
+      execution: {
+        kind: 'relay',
+        role: 'reviewer',
+      },
+      protocol: 'review-audit@v1',
+      writes: {
+        request_path: 'reports/relay/review.request.json',
+        receipt_path: 'reports/relay/review.receipt.txt',
+        result_path: 'stages/analyze/review-raw-findings.json',
+      },
+      check: {
+        pass: ['NO_ISSUES_FOUND', 'ISSUES_FOUND'],
+      },
+      routes: {
+        continue: 'verdict-step',
+        retry: 'audit-step',
+        stop: '@stop',
+      },
+      progress: {
+        taskTitle: 'Check the result',
+        activeText: 'Checking the result',
+        relayRole: 'reviewer',
+      },
     },
-    skillSlots: [],
-  },
-  {
-    kind: 'route',
-    flowId: 'review',
-    fromStepId: 'audit-step',
-    outcome: 'continue',
-    to: 'verdict-step',
-  },
-  {
-    kind: 'route',
-    flowId: 'review',
-    fromStepId: 'audit-step',
-    outcome: 'retry',
-    to: 'audit-step',
-  },
-  {
-    kind: 'route',
-    flowId: 'review',
-    fromStepId: 'audit-step',
-    outcome: 'stop',
-    to: '@stop',
-  },
-  {
-    kind: 'input-key',
-    flowId: 'review',
-    stepId: 'verdict-step',
-    key: 'brief',
-    schemaName: 'review.intake@v1',
-  },
-  {
-    kind: 'input-key',
-    flowId: 'review',
-    stepId: 'verdict-step',
-    key: 'review',
-    schemaName: 'review.verdict@v1',
-  },
-  {
-    kind: 'step',
-    flowId: 'review',
-    stepId: 'verdict-step',
-    title: 'Verdict — emit review.result',
-    stage: 'close',
-    block: 'close-with-evidence',
-    output: 'review.result@v1',
-    evidenceRequirements: ['outcome', 'evidence pointers', 'residual risks', 'follow-ups'],
-    execution: {
-      kind: 'compose',
+    {
+      id: 'verdict-step',
+      title: 'Verdict — emit review.result',
+      stage: 'close',
+      block: 'close-with-evidence',
+      input: {
+        brief: 'review.intake@v1',
+        review: 'review.verdict@v1',
+      },
+      output: 'review.result@v1',
+      evidenceRequirements: ['outcome', 'evidence pointers', 'residual risks', 'follow-ups'],
+      execution: {
+        kind: 'compose',
+      },
+      protocol: 'review-verdict@v1',
+      writes: {
+        report_path: 'reports/review-result.json',
+      },
+      check: {
+        required: ['scope', 'findings', 'verdict'],
+      },
+      routes: {
+        complete: '@complete',
+        stop: '@stop',
+      },
+      progress: {
+        taskTitle: 'Wrap up',
+        activeText: 'Wrapping up',
+      },
     },
-    protocol: 'review-verdict@v1',
-    writes: {
-      report_path: 'reports/review-result.json',
+  ],
+  reports: [
+    {
+      schemaName: 'review.intake@v1',
+      channel: 'report',
     },
-    check: {
-      required: ['scope', 'findings', 'verdict'],
+    {
+      schemaName: 'review.result@v1',
+      channel: 'report',
     },
-    skillSlots: [],
+  ],
+  writerBindings: {
+    compose: ['review.intake@v1', 'review.result@v1'],
   },
-  {
-    kind: 'route',
-    flowId: 'review',
-    fromStepId: 'verdict-step',
-    outcome: 'complete',
-    to: '@complete',
-  },
-  {
-    kind: 'route',
-    flowId: 'review',
-    fromStepId: 'verdict-step',
-    outcome: 'stop',
-    to: '@stop',
-  },
-  {
-    kind: 'registered-report',
-    flowId: 'review',
-    schemaName: 'review.intake@v1',
-    channel: 'report',
-  },
-  {
-    kind: 'registered-report',
-    flowId: 'review',
-    schemaName: 'review.result@v1',
-    channel: 'report',
-  },
-  {
-    kind: 'writer-binding',
-    flowId: 'review',
-    slot: 'compose',
-    resultSchemaName: 'review.intake@v1',
-  },
-  {
-    kind: 'writer-binding',
-    flowId: 'review',
-    slot: 'compose',
-    resultSchemaName: 'review.result@v1',
-  },
-  {
-    kind: 'structural-hint',
-    flowId: 'review',
-    hintId: 'review.relay-result@structural',
-  },
-  {
-    kind: 'progress',
-    flowId: 'review',
-    stepId: 'intake-step',
-    taskTitle: 'Frame the work',
-    activeText: 'Framing the work',
-  },
-  {
-    kind: 'progress',
-    flowId: 'review',
-    stepId: 'audit-step',
-    taskTitle: 'Check the result',
-    activeText: 'Checking the result',
-    relayRole: 'reviewer',
-  },
-  {
-    kind: 'progress',
-    flowId: 'review',
-    stepId: 'verdict-step',
-    taskTitle: 'Wrap up',
-    activeText: 'Wrapping up',
-  },
-  {
-    kind: 'primary-result',
-    flowId: 'review',
+  structuralHints: [{ hintId: 'review.relay-result@structural' }],
+  primaryResult: {
     schemaName: 'review.result@v1',
     path: 'reports/review-result.json',
     label: 'Review result',
   },
-] as const satisfies readonly FlowFact[];
+}) satisfies readonly FlowFact[];

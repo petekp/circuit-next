@@ -5,8 +5,12 @@ import { runtimeProofComposeBuilder } from './writers/compose.js';
 
 export const runtimeProofFlowDefinition = defineFlowFromFacts({
   facts: runtimeProofFacts,
-  reportSchemas: [{ schemaName: 'runtime-proof.compose@v1', schema: RuntimeProofCompose }],
-  writers: {
-    compose: [runtimeProofComposeBuilder],
-  },
+  reportDeclarations: [
+    {
+      schemaName: 'runtime-proof.compose@v1',
+      channel: 'report',
+      schema: RuntimeProofCompose,
+      writers: { compose: [runtimeProofComposeBuilder] },
+    },
+  ],
 });

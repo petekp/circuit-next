@@ -87,11 +87,10 @@ metacharacters:
    node "${CLAUDE_PLUGIN_ROOT}/scripts/circuit-next.mjs" present run --goal 'choose the right Circuit flow for this task'
    ```
 
-   Example for a Build task using both an entry mode and an explicit
-   `--depth` flag:
+   Example for a Build task using Deep mode:
 
    ```bash
-   node "${CLAUDE_PLUGIN_ROOT}/scripts/circuit-next.mjs" present run build --goal 'make the focused change' --entry-mode deep --depth standard
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/circuit-next.mjs" present run build --goal 'make the focused change' --entry-mode deep
    ```
 
    Example for a Fix task using Lite mode (skips the review pass):

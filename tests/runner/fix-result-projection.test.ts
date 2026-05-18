@@ -6,7 +6,7 @@
 // fails here long before it shows up in the live false-done bar.
 //
 // Corners covered:
-//   - reproduction_status='not-reproduced' wins regardless of pillar state
+//   - reproduction_status='not-reproduced' only closes that way with decision evidence
 //   - all four pillars green, no review → 'fixed'
 //   - all four pillars green, review='accept' → 'fixed'
 //   - all four pillars green, review='accept-with-fixes' → 'partial'
@@ -306,6 +306,23 @@ describe('projectFixResult', () => {
     expect(result.outcome).toBe('not-reproduced');
     expect(result.review_status).toBe('skipped');
     expect(result.review_skip_reason).toBeDefined();
+  });
+
+  it("returns 'partial' when a change applied but no-repro decision evidence is absent", () => {
+    const result = project({
+      diagnosis: diagnosis('not-reproduced'),
+      regression: regressionDeferred(),
+      regression_rerun: rerunDeferred(),
+      verification: verificationPassed(),
+      change_set: changeSetPass(),
+      review: review('accept'),
+    });
+    expect(result.outcome).toBe('partial');
+    expect(result.verification_status).toBe('passed');
+    expect(result.review_verdict).toBe('accept');
+    expect(result.evidence_links.map((link) => link.report_id)).not.toContain(
+      'fix.no-repro-decision',
+    );
   });
 
   it("returns 'fixed' when runtime proof reproduces the bug even if diagnosis says not-reproduced", () => {

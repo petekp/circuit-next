@@ -145,6 +145,7 @@ export async function executeCheckpoint(
       request_path: request.path,
       request_report_hash: sha256Hex(requestText),
       options: step.choices,
+      auto_resolved: resolution.kind === 'resolved' ? resolution.autoResolved : false,
     });
   }
 

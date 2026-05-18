@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  FLOW_CANONICAL_STAGE_POLICY_BY_ID,
+  FLOW_CANONICAL_STAGE_POLICY_EXEMPT_IDS,
+} from '../../src/flows/canonical-stage-policy.js';
+import {
   type CompiledFlowKindPolicyCheckResult,
   EXEMPT_FLOW_IDS,
   FLOW_KIND_CANONICAL_SETS,
@@ -503,6 +507,9 @@ describe('checkCompiledFlowKindCanonicalPolicy (audit-level, no Zod)', () => {
   });
 
   it('exposes FLOW_KIND_CANONICAL_SETS and EXEMPT_FLOW_IDS as single source of truth', () => {
+    expect(FLOW_KIND_CANONICAL_SETS).toBe(FLOW_CANONICAL_STAGE_POLICY_BY_ID);
+    expect(EXEMPT_FLOW_IDS).toBe(FLOW_CANONICAL_STAGE_POLICY_EXEMPT_IDS);
+
     const explore = FLOW_KIND_CANONICAL_SETS.explore;
     expect(explore).toBeDefined();
     if (explore === undefined) throw new Error('unreachable');

@@ -23,6 +23,7 @@ import type { CloseBuilder } from '../../src/flows/registries/close-writers/type
 import type { ComposeBuilder } from '../../src/flows/registries/compose-writers/types.js';
 import type { StructuralShapeHint } from '../../src/flows/registries/shape-hints/types.js';
 import type { VerificationBuilder } from '../../src/flows/registries/verification-writers/types.js';
+import { projectFlowReportDeclarations } from '../../src/flows/report-declarations.js';
 import type { CompiledFlowPackage } from '../../src/flows/types.js';
 
 function fakePackage(
@@ -68,6 +69,62 @@ const fakeStructuralHint = (id: string): StructuralShapeHint => ({
   id,
   match: () => true,
   instruction: `instruction for ${id}`,
+});
+
+describe('flow report declarations', () => {
+  it('projects package-owned report declarations to legacy report and writer surfaces', () => {
+    const schema = z.object({ ok: z.boolean() });
+    const composeBuilder = fakeComposeBuilder('a.report@v1');
+    const closeBuilder = fakeCloseBuilder('a.result@v1');
+    const verificationBuilder = fakeVerificationBuilder('a.verify@v1');
+    const checkpointBuilder = fakeCheckpointBuilder('a.brief@v1');
+
+    const projected = projectFlowReportDeclarations([
+      {
+        schemaName: 'a.relay@v1',
+        channel: 'relay',
+        schema,
+        relayHint: 'emit a.relay JSON',
+      },
+      {
+        schemaName: 'a.brief@v1',
+        channel: 'report',
+        schema,
+        writers: { checkpoint: [checkpointBuilder] },
+      },
+      {
+        schemaName: 'a.report@v1',
+        channel: 'report',
+        schema,
+        writers: { compose: [composeBuilder] },
+      },
+      {
+        schemaName: 'a.verify@v1',
+        channel: 'report',
+        schema,
+        writers: { verification: [verificationBuilder] },
+      },
+      {
+        schemaName: 'a.result@v1',
+        channel: 'report',
+        schema,
+        writers: { close: [closeBuilder] },
+      },
+    ]);
+
+    expect(projected.relayReports.map((report) => report.schemaName)).toEqual(['a.relay@v1']);
+    expect(projected.relayReports[0]?.relayHint).toBe('emit a.relay JSON');
+    expect(projected.reportSchemas.map((report) => report.schemaName)).toEqual([
+      'a.brief@v1',
+      'a.report@v1',
+      'a.verify@v1',
+      'a.result@v1',
+    ]);
+    expect(projected.writers.compose).toEqual([composeBuilder]);
+    expect(projected.writers.close).toEqual([closeBuilder]);
+    expect(projected.writers.verification).toEqual([verificationBuilder]);
+    expect(projected.writers.checkpoint).toEqual([checkpointBuilder]);
+  });
 });
 
 describe('catalog-derivations: builder registries', () => {

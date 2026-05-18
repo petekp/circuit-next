@@ -50,6 +50,7 @@ export interface VerificationCommandObservation {
 
 export interface VerificationBuildContext {
   readonly runFolder: string;
+  readonly projectRoot?: string;
   readonly flow: RuntimeIndexedFlow;
   readonly step: VerificationStep;
 }

@@ -5,26 +5,13 @@
 // to graph-runner.ts. Keep manifest parsing and entry-mode selection here so
 // graph-runner.ts can stay focused on step advancement and trace writes.
 
-import type { CompiledFlowProgressSurface } from '../../flows/types.js';
 import {
   type CompiledFlow,
   CompiledFlow as CompiledFlowSchema,
 } from '../../schemas/compiled-flow.js';
-import type { LayeredConfig as LayeredConfigValue } from '../../schemas/config.js';
 import { computeManifestHash } from '../../schemas/manifest.js';
-import type {
-  ProgressReporter,
-  RelayFn,
-  RuntimeEvidencePolicy,
-} from '../../shared/relay-runtime-types.js';
-import type { ExecutorRegistry } from '../executors/index.js';
-import type { RelayConnector } from '../executors/relay.js';
 import { fromCompiledFlow } from '../manifest/from-compiled-flow.js';
-import type {
-  ChildCompiledFlowResolver,
-  CompiledFlowRunner,
-  WorktreeRunner,
-} from './child-runner.js';
+import type { RuntimeExecutionCapabilities } from './capabilities.js';
 import {
   type GraphExecutionResult,
   type GraphRunResult,
@@ -32,26 +19,13 @@ import {
   isGraphCheckpointWaitingResult,
 } from './graph-runner.js';
 
-export interface CompiledFlowRunOptions {
+export interface CompiledFlowRunOptions extends RuntimeExecutionCapabilities {
   readonly flowBytes: Uint8Array;
   readonly runDir: string;
   readonly runId?: string;
   readonly goal: string;
   readonly entryModeName?: string;
   readonly depth?: string;
-  readonly now?: () => Date;
-  readonly executors?: Partial<ExecutorRegistry>;
-  readonly childExecutors?: Partial<ExecutorRegistry>;
-  readonly childCompiledFlowResolver?: ChildCompiledFlowResolver;
-  readonly childRunner?: CompiledFlowRunner;
-  readonly projectRoot?: string;
-  readonly evidencePolicy?: RuntimeEvidencePolicy;
-  readonly worktreeRunner?: WorktreeRunner;
-  readonly relayConnector?: RelayConnector;
-  readonly relayer?: RelayFn;
-  readonly selectionConfigLayers?: readonly LayeredConfigValue[];
-  readonly progress?: ProgressReporter;
-  readonly progressSurface?: CompiledFlowProgressSurface;
   readonly maxSteps?: number;
 }
 

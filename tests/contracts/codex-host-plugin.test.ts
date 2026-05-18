@@ -808,4 +808,18 @@ describe('Codex host plugin package', () => {
       expect(commandMarkdown).toContain("node '<plugin root>/scripts/circuit-next.mjs'");
     }
   });
+
+  it('does not publish mode/depth pairs rejected by the wrapper', () => {
+    const rejectedPair = '--entry-mode deep --depth standard';
+    const surfaces = [
+      resolve(PLUGIN_ROOT, 'skills/run/SKILL.md'),
+      resolve(PLUGIN_ROOT, 'skills/build/SKILL.md'),
+      resolve(PLUGIN_ROOT, 'commands/run.md'),
+      resolve(PLUGIN_ROOT, 'commands/build.md'),
+    ];
+
+    for (const surface of surfaces) {
+      expect(readFileSync(surface, 'utf8'), surface).not.toContain(rejectedPair);
+    }
+  });
 });

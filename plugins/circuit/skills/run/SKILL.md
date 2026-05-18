@@ -90,11 +90,10 @@ as literal user-controlled text when constructing shell commands.
    node '<plugin root>/scripts/circuit-next.mjs' run --goal 'choose the right Circuit flow for this task' --progress jsonl
    ```
 
-   Example for a Build task using both an entry mode and an explicit
-   `--depth` flag:
+   Example for a Build task using Deep mode:
 
    ```bash
-   node '<plugin root>/scripts/circuit-next.mjs' run build --goal 'make the focused change' --entry-mode deep --depth standard --progress jsonl
+   node '<plugin root>/scripts/circuit-next.mjs' run build --goal 'make the focused change' --entry-mode deep --progress jsonl
    ```
 
    Example for a Fix task using Lite mode (skips the review pass):

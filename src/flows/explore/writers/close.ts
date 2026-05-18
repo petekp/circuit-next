@@ -15,12 +15,11 @@ import {
   ExploreCompose,
   ExploreDecision,
   ExploreDecisionOptions,
-  ExploreResult,
   ExploreReviewVerdict,
-  type ExploreReviewVerdict as ExploreReviewVerdictReport,
   ExploreTournamentAggregate,
   ExploreTournamentReview,
 } from '../reports.js';
+import { projectExploreResult } from './result-projection.js';
 
 const POINTERS = [
   { report_id: 'explore.brief', schema: 'explore.brief@v1' },
@@ -55,14 +54,6 @@ function requiredInput(context: CloseBuildContext, name: string, schema: string)
   );
 }
 
-function reviewHasFoldIns(review: ExploreReviewVerdictReport): boolean {
-  return (
-    review.verdict === 'accept-with-fold-ins' ||
-    review.objections.length > 0 ||
-    review.missed_angles.length > 0
-  );
-}
-
 export const exploreCloseBuilder: CloseBuilder = {
   resultSchemaName: 'explore.result@v1',
   reads: [
@@ -83,16 +74,12 @@ export const exploreCloseBuilder: CloseBuilder = {
       ExploreTournamentAggregate.parse(
         JSON.parse(readFileSync(resolveRunRelative(context.runFolder, aggregatePath), 'utf8')),
       );
-      return ExploreResult.parse({
-        summary: `Explore '${brief.subject}': ${decision.decision}`,
-        verdict_snapshot: {
-          decision_verdict: decision.verdict,
-          tournament_review_verdict: review.verdict,
-          selected_option_id: decision.selected_option_id,
-          objection_count: review.objections.length,
-          missing_evidence_count: review.missing_evidence.length,
-        },
-        evidence_links: TOURNAMENT_POINTERS.map((p) => ({
+      return projectExploreResult({
+        kind: 'tournament',
+        brief,
+        review,
+        decision,
+        evidenceLinks: TOURNAMENT_POINTERS.map((p) => ({
           ...p,
           path:
             p.schema === 'explore.tournament-aggregate@v1'
@@ -106,24 +93,12 @@ export const exploreCloseBuilder: CloseBuilder = {
     const review = ExploreReviewVerdict.parse(
       requiredInput(context, 'review', 'explore.review-verdict@v1'),
     );
-    return ExploreResult.parse({
-      summary: `Explore '${brief.subject}': ${compose.recommendation}`,
-      verdict_snapshot: {
-        compose_verdict: compose.verdict,
-        review_verdict: review.verdict,
-        objection_count: review.objections.length,
-        missed_angle_count: review.missed_angles.length,
-      },
-      ...(reviewHasFoldIns(review)
-        ? {
-            review_fold_ins: {
-              overall_assessment: review.overall_assessment,
-              objections: review.objections,
-              missed_angles: review.missed_angles,
-            },
-          }
-        : {}),
-      evidence_links: POINTERS.map((p) => ({
+    return projectExploreResult({
+      kind: 'default',
+      brief,
+      compose,
+      review,
+      evidenceLinks: POINTERS.map((p) => ({
         ...p,
         path: reportPathForSchemaInRuntimeFlow(context.flow, p.schema),
       })),

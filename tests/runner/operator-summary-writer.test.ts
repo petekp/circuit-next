@@ -220,6 +220,42 @@ describe('operator summary writer', () => {
     expect(markdown).toContain('Confidence limitations:');
   });
 
+  it('renders clean Review results with low-severity notes without saying Findings are blocking', () => {
+    writeReport('reports/review-result.json', {
+      scope: 'review untracked notes',
+      findings: [
+        {
+          severity: 'low',
+          id: 'note-001',
+          text: 'small naming note',
+          file_refs: ['notes.txt'],
+        },
+      ],
+      verdict: 'CLEAN',
+      assessment: 'Reviewer inspected the relayed untracked file and found only a note.',
+      verification: ['Read notes.txt'],
+      confidence_limitations: [],
+      evidence_warnings: [],
+    });
+
+    const written = writeOperatorSummary({
+      runFolder,
+      runResult: baseResult('review'),
+      route: { selectedFlow: 'review' },
+    });
+
+    expect(written.summary.headline).toBe(
+      'Circuit: Review complete. Verdict: CLEAN. Low-severity notes: 1.',
+    );
+    expect(written.summary.status_text).toBe(
+      'Review complete. Verdict: CLEAN. Low-severity notes: 1.',
+    );
+    expect(written.summary.details).toContain('[LOW] small naming note — at notes.txt');
+    expect(readFileSync(written.markdownPath, 'utf8')).not.toContain(
+      'Verdict: CLEAN. Findings: 1.',
+    );
+  });
+
   it('keeps the assessment alongside finding bullets when issues are found', () => {
     writeReport('reports/review-result.json', {
       scope: 'review evil.js',

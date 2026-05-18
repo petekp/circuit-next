@@ -35,43 +35,65 @@ export const exploreFlowDefinition = defineFlowFromFacts({
     isDefault: true,
     defaultReason: 'no routed flow signal matched; routed to explore as the conservative default',
   },
-  relayReports: [
+  reportDeclarations: [
     {
       schemaName: 'explore.compose@v1',
+      channel: 'relay',
       schema: ExploreCompose,
       relayHint: exploreComposeShapeHint.instruction,
     },
     {
       schemaName: 'explore.review-verdict@v1',
+      channel: 'relay',
       schema: ExploreReviewVerdict,
       relayHint: exploreReviewVerdictShapeHint.instruction,
     },
     {
       schemaName: 'explore.tournament-proposal@v1',
+      channel: 'relay',
       schema: ExploreTournamentProposal,
       relayHint: exploreTournamentProposalShapeHint.instruction,
     },
     {
       schemaName: 'explore.tournament-review@v1',
+      channel: 'relay',
       schema: ExploreTournamentReview,
       relayHint: exploreTournamentReviewShapeHint.instruction,
     },
+    {
+      schemaName: 'explore.brief@v1',
+      channel: 'report',
+      schema: ExploreBrief,
+      writers: { compose: [exploreBriefComposeBuilder] },
+    },
+    {
+      schemaName: 'explore.analysis@v1',
+      channel: 'report',
+      schema: ExploreAnalysis,
+      writers: { compose: [exploreAnalysisComposeBuilder] },
+    },
+    {
+      schemaName: 'explore.decision-options@v1',
+      channel: 'report',
+      schema: ExploreDecisionOptions,
+      writers: { compose: [exploreDecisionOptionsComposeBuilder] },
+    },
+    {
+      schemaName: 'explore.tournament-aggregate@v1',
+      channel: 'report',
+      schema: ExploreTournamentAggregate,
+    },
+    {
+      schemaName: 'explore.decision@v1',
+      channel: 'report',
+      schema: ExploreDecision,
+      writers: { compose: [exploreDecisionComposeBuilder] },
+    },
+    {
+      schemaName: 'explore.result@v1',
+      channel: 'report',
+      schema: ExploreResult,
+      writers: { close: [exploreCloseBuilder] },
+    },
   ],
-  reportSchemas: [
-    { schemaName: 'explore.brief@v1', schema: ExploreBrief },
-    { schemaName: 'explore.analysis@v1', schema: ExploreAnalysis },
-    { schemaName: 'explore.decision-options@v1', schema: ExploreDecisionOptions },
-    { schemaName: 'explore.tournament-aggregate@v1', schema: ExploreTournamentAggregate },
-    { schemaName: 'explore.decision@v1', schema: ExploreDecision },
-    { schemaName: 'explore.result@v1', schema: ExploreResult },
-  ],
-  writers: {
-    compose: [
-      exploreBriefComposeBuilder,
-      exploreAnalysisComposeBuilder,
-      exploreDecisionOptionsComposeBuilder,
-      exploreDecisionComposeBuilder,
-    ],
-    close: [exploreCloseBuilder],
-  },
 });
