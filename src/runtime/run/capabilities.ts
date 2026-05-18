@@ -12,6 +12,7 @@ import type {
   CompiledFlowRunner,
   WorktreeRunner,
 } from './child-runner.js';
+import type { ExternalFileReader } from './external-files.js';
 
 export const RUNTIME_CAPABILITY_NAMES = [
   'now',
@@ -19,6 +20,7 @@ export const RUNTIME_CAPABILITY_NAMES = [
   'childExecutors',
   'childCompiledFlowResolver',
   'childRunner',
+  'externalFiles',
   'projectRoot',
   'evidencePolicy',
   'worktreeRunner',
@@ -37,6 +39,7 @@ export interface RuntimeExecutionCapabilities {
   readonly childExecutors?: Partial<ExecutorRegistry>;
   readonly childCompiledFlowResolver?: ChildCompiledFlowResolver;
   readonly childRunner?: CompiledFlowRunner;
+  readonly externalFiles?: ExternalFileReader;
   readonly projectRoot?: string;
   readonly evidencePolicy?: RuntimeEvidencePolicy;
   readonly worktreeRunner?: WorktreeRunner;

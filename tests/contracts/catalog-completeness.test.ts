@@ -44,11 +44,11 @@ const ALLOWED_WRITER_SCHEMA_ALIASES = new Map<string, readonly string[]>([
 // (catalog, router/compiler, types, and shared flow infrastructure).
 // Anything else under src/flows/ is expected to be a package.
 const NON_PACKAGE_FILES = new Set([
+  'block-step-expansion.ts',
   'canonical-stage-policy.ts',
   'catalog.ts',
   'catalog-derivations.ts',
   'compile-schematic-to-flow.ts',
-  'declarative-flow-facts.ts',
   'flow-definition.ts',
   'report-declarations.ts',
   'runtime-surface.ts',
@@ -368,7 +368,7 @@ describe('flow catalog completeness', () => {
 
     for (const pkg of flowPackages) {
       expect(generatedSurfaceMap).toContain(
-        `| \`${pkg.id}\` | \`${pkg.visibility ?? 'public'}\` | \`src/flows/${pkg.id}/facts.ts\`<br>\`src/flows/${pkg.id}/flow.ts\`<br>generates \`${pkg.paths.schematic}\` |`,
+        `| \`${pkg.id}\` | \`${pkg.visibility ?? 'public'}\` | \`src/flows/${pkg.id}/data.ts\`<br>\`src/flows/${pkg.id}/flow.ts\`<br>generates \`${pkg.paths.schematic}\` |`,
       );
       if (pkg.paths.command === undefined) continue;
       expect(generatedSurfaceMap).toContain(`\`${pkg.paths.command}\``);

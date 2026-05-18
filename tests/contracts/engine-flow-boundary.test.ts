@@ -30,7 +30,6 @@ const ALLOWED_ENGINE_WORKFLOW_IMPORT_SUFFIXES = [
 const ALLOWED_TEST_WORKFLOW_IMPORT_SUFFIXES = [
   ...ALLOWED_ENGINE_WORKFLOW_IMPORT_SUFFIXES,
   '/flows/canonical-stage-policy.js',
-  '/flows/declarative-flow-facts.js',
   '/flows/flow-definition.js',
   '/flows/report-declarations.js',
 ];

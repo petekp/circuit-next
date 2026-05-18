@@ -1,0 +1,757 @@
+import { expandBlockStepUse } from '../block-step-expansion.js';
+import type { FlowData } from '../flow-definition.js';
+import type { CompiledFlowSignal } from '../types.js';
+import {
+  fixChangeShapeHint,
+  fixContextShapeHint,
+  fixDiagnosisShapeHint,
+  fixReviewShapeHint,
+} from './relay-hints.js';
+import {
+  FixBaselineSnapshot,
+  FixBrief,
+  FixChange,
+  FixChangeSet,
+  FixContext,
+  FixDiagnosis,
+  FixNoReproDecision,
+  FixRegressionProof,
+  FixRegressionRerun,
+  FixResult,
+  FixReview,
+  FixVerification,
+} from './reports.js';
+import { fixBaselineSnapshotWriter } from './writers/baseline-snapshot.js';
+import { fixBriefComposeBuilder } from './writers/brief.js';
+import { fixChangeSetWriter } from './writers/change-set.js';
+import { fixCloseBuilder } from './writers/close.js';
+import { fixRegressionBaselineWriter } from './writers/regression-baseline.js';
+import { fixRegressionRerunWriter } from './writers/regression-rerun.js';
+import { fixVerificationWriter } from './writers/verification.js';
+
+const FIX_SIGNALS: readonly CompiledFlowSignal[] = [
+  { label: 'fix prefix', pattern: /^\s*fix\s*:/i },
+  { label: 'quick fix prefix', pattern: /^\s*(?:quick|small|tiny|simple)\s+fix\s*:/i },
+  {
+    label: 'fix request',
+    pattern:
+      /^\s*(?:please\s+)?(?:fix|patch|debug|diagnose|reproduce)\s+(?:a\s+|an\s+|the\s+|this\s+|that\s+|my\s+|some\s+)?\S+/i,
+  },
+  {
+    label: 'trailing fix request',
+    pattern:
+      /\b(?:bug|buggy|broken|failing|fails|failed|wrong|incorrect|instead\s+of|regression|crash|crashes|throw|throws)\b[\s\S]{0,200}\bfix\s+(?:it|this|that|please)\b/i,
+  },
+];
+
+export const fixFlowData = {
+  id: 'fix',
+  visibility: 'public',
+  paths: {
+    schematic: 'src/flows/fix/schematic.json',
+    command: 'src/flows/fix/command.md',
+    contract: 'src/flows/fix/contract.md',
+  },
+  routing: {
+    order: 20,
+    signals: FIX_SIGNALS,
+    skipOnPlanningReport: true,
+    reasonForMatch(signal) {
+      return `matched ${signal.label}; routed to Fix flow`;
+    },
+  },
+  schematic: {
+    schema_version: '1',
+    id: 'fix',
+    title: 'Fix Schematic',
+    purpose:
+      'Fix flow: capture problem boundary, prove the pre-fix regression before any specialist relay can edit the checkout, gather context, diagnose, apply a focused change, verify, review (in standard depth), and close with evidence. If the standard reviewer connector is unavailable after proof passes, Fix closes with the proof artifacts and marks review skipped. Lite mode skips the review relay and closes immediately after verification via the fix-verify route_overrides.continue.lite override. fix-no-repro-decision and fix-handoff remain in the schematic as authoring intent for future ask/handoff routing in the runtime; they are unreachable at compile and do not appear in the emitted compiled flows.',
+    status: 'active',
+    version: '0.1.0',
+    starts_at: 'fix-frame',
+    initial_contracts: [
+      'task.intake@v1',
+      'route.decision@v1',
+      'context.request@v1',
+      'flow.question@v1',
+      'verification.plan@v1',
+      'flow.state@v1',
+    ],
+    contract_aliases: [
+      {
+        generic: 'flow.brief@v1',
+        actual: 'fix.brief@v1',
+      },
+      {
+        generic: 'context.packet@v1',
+        actual: 'fix.context@v1',
+      },
+      {
+        generic: 'diagnosis.result@v1',
+        actual: 'fix.diagnosis@v1',
+      },
+      {
+        generic: 'decision.answer@v1',
+        actual: 'fix.no-repro-decision@v1',
+      },
+      {
+        generic: 'flow.evidence@v1',
+        actual: 'fix.diagnosis@v1',
+      },
+      {
+        generic: 'change.evidence@v1',
+        actual: 'fix.change@v1',
+      },
+      {
+        generic: 'verification.result@v1',
+        actual: 'fix.verification@v1',
+      },
+      {
+        generic: 'verification.result@v1',
+        actual: 'fix.regression-proof@v1',
+      },
+      {
+        generic: 'verification.result@v1',
+        actual: 'fix.baseline-snapshot@v1',
+      },
+      {
+        generic: 'verification.result@v1',
+        actual: 'fix.regression-rerun@v1',
+      },
+      {
+        generic: 'verification.result@v1',
+        actual: 'fix.change-set@v1',
+      },
+      {
+        generic: 'review.verdict@v1',
+        actual: 'fix.review@v1',
+      },
+      {
+        generic: 'flow.result@v1',
+        actual: 'fix.result@v1',
+      },
+    ],
+    entry: {
+      signals: {
+        include: ['fix', 'bug', 'broken', 'regression', 'incident', 'outage', 'diagnose'],
+        exclude: [],
+      },
+      intent_prefixes: ['fix', 'diagnose'],
+    },
+    entry_modes: [
+      {
+        name: 'default',
+        depth: 'standard',
+        description: 'Default Fix entry mode — standard depth with full review pass.',
+      },
+      {
+        name: 'lite',
+        depth: 'lite',
+        description:
+          'Lite Fix entry mode — skips the review relay and closes immediately after verification.',
+      },
+      {
+        name: 'deep',
+        depth: 'deep',
+        description:
+          'Deep Fix entry mode — standard graph at deep depth (more thorough analysis and review).',
+      },
+      {
+        name: 'autonomous',
+        depth: 'autonomous',
+        description:
+          'Autonomous Fix entry mode — standard graph at autonomous depth; safe-default checkpoint choices apply.',
+      },
+    ],
+    stage_path_policy: {
+      mode: 'partial',
+      omits: ['plan'],
+      rationale:
+        "Fix follows Frame, Analyze, Act, Verify, Review, Close. The Plan stage is omitted because Fix's planning is folded into Diagnose during the Analyze stage — there is no separate plan-of-attack report distinct from the diagnosis.",
+    },
+    stages: [
+      {
+        id: 'frame-stage',
+        canonical: 'frame',
+        title: 'Frame',
+      },
+      {
+        id: 'analyze-stage',
+        canonical: 'analyze',
+        title: 'Analyze',
+      },
+      {
+        id: 'act-stage',
+        canonical: 'act',
+        title: 'Act',
+      },
+      {
+        id: 'verify-stage',
+        canonical: 'verify',
+        title: 'Verify',
+      },
+      {
+        id: 'review-stage',
+        canonical: 'review',
+        title: 'Review',
+      },
+      {
+        id: 'close-stage',
+        canonical: 'close',
+        title: 'Close',
+      },
+    ],
+    items: [
+      {
+        id: 'fix-frame',
+        title: 'Frame — confirm Fix brief',
+        stage: 'frame',
+        block: 'frame',
+        input: {
+          task: 'task.intake@v1',
+          route: 'route.decision@v1',
+        },
+        output: 'fix.brief@v1',
+        evidence_requirements: ['scope boundary', 'constraints', 'proof plan'],
+        execution: {
+          kind: 'compose',
+        },
+        protocol: 'fix-frame@v1',
+        writes: {
+          report_path: 'reports/fix/brief.json',
+        },
+        check: {
+          required: ['problem_statement', 'scope', 'regression_contract', 'success_criteria'],
+        },
+        routes: {
+          continue: 'fix-regression-baseline',
+          revise: 'fix-frame',
+          ask: '@stop',
+          stop: '@stop',
+        },
+      },
+      expandBlockStepUse({
+        id: 'fix-gather-context',
+        title: 'Analyze — gather problem context',
+        stage: 'analyze',
+        block: 'gather-context',
+        input: {
+          brief: 'fix.brief@v1',
+          request: 'context.request@v1',
+        },
+        output: 'fix.context@v1',
+        execution: {
+          kind: 'relay',
+          role: 'researcher',
+        },
+        protocol: 'fix-gather-context@v1',
+        reportPath: 'reports/fix/context.json',
+        requestPath: 'reports/relay/fix-gather-context.request.json',
+        receiptPath: 'reports/relay/fix-gather-context.receipt.txt',
+        resultPath: 'reports/relay/fix-gather-context.result.json',
+        pass: ['accept'],
+        routes: {
+          continue: 'fix-diagnose',
+          retry: 'fix-gather-context',
+          ask: '@stop',
+          stop: '@stop',
+        },
+      }),
+      expandBlockStepUse({
+        id: 'fix-diagnose',
+        title: 'Analyze — diagnose problem',
+        stage: 'analyze',
+        block: 'diagnose',
+        input: {
+          brief: 'fix.brief@v1',
+          context: 'fix.context@v1',
+        },
+        output: 'fix.diagnosis@v1',
+        execution: {
+          kind: 'relay',
+          role: 'researcher',
+        },
+        protocol: 'fix-diagnose@v1',
+        reportPath: 'reports/fix/diagnosis.json',
+        requestPath: 'reports/relay/fix-diagnose.request.json',
+        receiptPath: 'reports/relay/fix-diagnose.receipt.txt',
+        resultPath: 'reports/relay/fix-diagnose.result.json',
+        pass: ['accept'],
+        routes: {
+          continue: 'fix-act',
+          retry: 'fix-gather-context',
+          ask: 'fix-no-repro-decision',
+          stop: '@stop',
+        },
+      }),
+      expandBlockStepUse({
+        id: 'fix-no-repro-decision',
+        title: 'Analyze — choose path forward when reproduction is uncertain',
+        stage: 'analyze',
+        block: 'human-decision',
+        input: {
+          question: 'flow.question@v1',
+          evidence: 'fix.diagnosis@v1',
+        },
+        output: 'fix.no-repro-decision@v1',
+        protocol: 'fix-no-repro-decision@v1',
+        checkpointRequestPath: 'reports/checkpoints/fix-no-repro-decision-request.json',
+        checkpointResponsePath: 'reports/checkpoints/fix-no-repro-decision-response.json',
+        allow: ['continue'],
+        checkpointPolicy: {
+          prompt: 'Diagnosis did not cleanly reproduce the bug. Choose how to proceed.',
+          choices: [
+            {
+              id: 'continue',
+              label: 'Continue with a focused fix anyway',
+            },
+          ],
+          safe_default_choice: 'continue',
+          safe_autonomous_choice: 'continue',
+        },
+        routes: {
+          continue: 'fix-act',
+          revise: 'fix-diagnose',
+          stop: '@stop',
+          handoff: 'fix-handoff',
+          escalate: '@escalate',
+        },
+      }),
+      expandBlockStepUse({
+        id: 'fix-regression-baseline',
+        title: 'Verify — capture regression baseline',
+        stage: 'verify',
+        block: 'run-verification',
+        input: {
+          proof: 'verification.plan@v1',
+          brief: 'fix.brief@v1',
+        },
+        output: 'fix.regression-proof@v1',
+        protocol: 'fix-regression-baseline@v1',
+        reportPath: 'reports/fix/regression-proof.json',
+        required: ['status', 'overall_status'],
+        routes: {
+          continue: 'fix-baseline-snapshot',
+          retry: 'fix-frame',
+          stop: '@stop',
+        },
+      }),
+      expandBlockStepUse({
+        id: 'fix-baseline-snapshot',
+        title: 'Verify — snapshot pre-fix git state',
+        stage: 'verify',
+        block: 'run-verification',
+        input: {
+          proof: 'verification.plan@v1',
+        },
+        output: 'fix.baseline-snapshot@v1',
+        protocol: 'fix-baseline-snapshot@v1',
+        reportPath: 'reports/fix/baseline-snapshot.json',
+        required: ['overall_status', 'head_sha'],
+        routes: {
+          continue: 'fix-gather-context',
+          stop: '@stop',
+        },
+      }),
+      expandBlockStepUse({
+        id: 'fix-act',
+        title: 'Act — apply focused fix',
+        stage: 'act',
+        block: 'act',
+        input: {
+          brief: 'fix.brief@v1',
+          diagnosis: 'fix.diagnosis@v1',
+        },
+        output: 'fix.change@v1',
+        execution: {
+          kind: 'relay',
+          role: 'implementer',
+        },
+        protocol: 'fix-act@v1',
+        reportPath: 'reports/fix/change.json',
+        requestPath: 'reports/relay/fix-act.request.json',
+        receiptPath: 'reports/relay/fix-act.receipt.txt',
+        resultPath: 'reports/relay/fix-act.result.json',
+        pass: ['accept'],
+        routes: {
+          continue: 'fix-verify',
+          retry: 'fix-act',
+          ask: 'fix-no-repro-decision',
+          stop: '@stop',
+          handoff: 'fix-handoff',
+        },
+      }),
+      expandBlockStepUse({
+        id: 'fix-verify',
+        title: 'Verify — run Fix proof',
+        stage: 'verify',
+        block: 'run-verification',
+        input: {
+          proof: 'verification.plan@v1',
+          brief: 'fix.brief@v1',
+          change: 'fix.change@v1',
+        },
+        output: 'fix.verification@v1',
+        protocol: 'fix-verify@v1',
+        reportPath: 'reports/fix/verification.json',
+        required: ['overall_status', 'commands'],
+        routes: {
+          continue: 'fix-change-set',
+          retry: 'fix-act',
+          ask: 'fix-no-repro-decision',
+          stop: '@stop',
+        },
+      }),
+      expandBlockStepUse({
+        id: 'fix-change-set',
+        title: 'Verify — compute fix change-set',
+        stage: 'verify',
+        block: 'run-verification',
+        input: {
+          proof: 'verification.plan@v1',
+          baseline: 'fix.baseline-snapshot@v1',
+          change: 'fix.change@v1',
+        },
+        output: 'fix.change-set@v1',
+        protocol: 'fix-change-set@v1',
+        reportPath: 'reports/fix/change-set.json',
+        required: ['status', 'overall_status'],
+        routes: {
+          continue: 'fix-regression-rerun',
+          retry: 'fix-act',
+          stop: '@stop',
+        },
+      }),
+      expandBlockStepUse({
+        id: 'fix-regression-rerun',
+        title: 'Verify — rerun regression command after fix',
+        stage: 'verify',
+        block: 'run-verification',
+        input: {
+          proof: 'verification.plan@v1',
+          brief: 'fix.brief@v1',
+        },
+        output: 'fix.regression-rerun@v1',
+        protocol: 'fix-regression-rerun@v1',
+        reportPath: 'reports/fix/regression-rerun.json',
+        required: ['status', 'overall_status'],
+        routes: {
+          continue: 'fix-review',
+          retry: 'fix-act',
+          stop: '@stop',
+        },
+        routeOverrides: {
+          continue: {
+            lite: 'fix-close-lite',
+          },
+        },
+      }),
+      expandBlockStepUse({
+        id: 'fix-review',
+        title: 'Review — independent audit of Fix change',
+        stage: 'review',
+        block: 'review',
+        input: {
+          brief: 'fix.brief@v1',
+          change: 'fix.change@v1',
+          verification: 'fix.verification@v1',
+        },
+        output: 'fix.review@v1',
+        execution: {
+          kind: 'relay',
+          role: 'reviewer',
+        },
+        protocol: 'fix-review@v1',
+        reportPath: 'reports/fix/review.json',
+        requestPath: 'reports/relay/fix-review.request.json',
+        receiptPath: 'reports/relay/fix-review.receipt.txt',
+        resultPath: 'reports/relay/fix-review.result.json',
+        pass: ['accept', 'accept-with-fixes'],
+        routes: {
+          continue: 'fix-close',
+          'connector-failed': 'fix-close',
+          retry: 'fix-act',
+          revise: 'fix-act',
+          ask: 'fix-no-repro-decision',
+          stop: '@stop',
+        },
+      }),
+      expandBlockStepUse({
+        id: 'fix-close-lite',
+        title: 'Close (lite) — emit Fix result without review',
+        stage: 'close',
+        block: 'close-with-evidence',
+        input: {
+          brief: 'fix.brief@v1',
+          context: 'fix.context@v1',
+          diagnosis: 'fix.diagnosis@v1',
+          regression: 'fix.regression-proof@v1',
+          baseline_snapshot: 'fix.baseline-snapshot@v1',
+          change: 'fix.change@v1',
+          verification: 'fix.verification@v1',
+          regression_rerun: 'fix.regression-rerun@v1',
+          change_set: 'fix.change-set@v1',
+        },
+        output: 'fix.result@v1',
+        execution: {
+          kind: 'compose',
+        },
+        protocol: 'fix-close-lite@v1',
+        reportPath: 'reports/fix-result.json',
+        required: [
+          'summary',
+          'outcome',
+          'verification_status',
+          'regression_status',
+          'change_set_status',
+          'review_status',
+          'evidence_links',
+        ],
+        routes: {
+          complete: '@complete',
+          stop: '@stop',
+          handoff: 'fix-handoff',
+          escalate: '@escalate',
+        },
+      }),
+      expandBlockStepUse({
+        id: 'fix-close',
+        title: 'Close — emit Fix result',
+        stage: 'close',
+        block: 'close-with-evidence',
+        input: {
+          brief: 'fix.brief@v1',
+          context: 'fix.context@v1',
+          diagnosis: 'fix.diagnosis@v1',
+          regression: 'fix.regression-proof@v1',
+          baseline_snapshot: 'fix.baseline-snapshot@v1',
+          change: 'fix.change@v1',
+          verification: 'fix.verification@v1',
+          regression_rerun: 'fix.regression-rerun@v1',
+          change_set: 'fix.change-set@v1',
+          review: 'fix.review@v1',
+        },
+        output: 'fix.result@v1',
+        execution: {
+          kind: 'compose',
+        },
+        protocol: 'fix-close@v1',
+        reportPath: 'reports/fix-result.json',
+        required: [
+          'summary',
+          'outcome',
+          'verification_status',
+          'regression_status',
+          'change_set_status',
+          'review_status',
+          'evidence_links',
+        ],
+        routes: {
+          complete: '@complete',
+          stop: '@stop',
+          handoff: 'fix-handoff',
+          escalate: '@escalate',
+        },
+      }),
+      {
+        id: 'fix-handoff',
+        title: 'Persist Fix handoff',
+        stage: 'close',
+        block: 'handoff',
+        input: {
+          state: 'flow.state@v1',
+          brief: 'fix.brief@v1',
+        },
+        output: 'continuity.record@v1',
+        evidence_requirements: [
+          'goal',
+          'completed moves',
+          'pending evidence',
+          'next action',
+          'known debt',
+        ],
+        execution: {
+          kind: 'compose',
+        },
+        protocol: 'fix-handoff@v1',
+        writes: {
+          report_path: 'reports/fix/handoff.json',
+        },
+        check: {
+          required: ['goal', 'next_action'],
+        },
+        routes: {
+          complete: '@handoff',
+          stop: '@stop',
+        },
+      },
+    ],
+  },
+  canonicalStagePolicy: {
+    kind: 'enforce',
+    canonicals: ['frame', 'analyze', 'act', 'verify', 'review', 'close'],
+    omits: ['plan'],
+    optional_canonicals: ['review'],
+    variants: [],
+    title: 'Frame → Diagnose → Fix → Verify → Review → Close',
+    authority: 'docs/flows/authoring-model.md §Fix As The Proving Shape',
+  },
+  reports: [
+    {
+      schemaName: 'fix.context@v1',
+      channel: 'relay',
+      schema: FixContext,
+      relayHint: fixContextShapeHint.instruction,
+    },
+    {
+      schemaName: 'fix.diagnosis@v1',
+      channel: 'relay',
+      schema: FixDiagnosis,
+      relayHint: fixDiagnosisShapeHint.instruction,
+    },
+    {
+      schemaName: 'fix.change@v1',
+      channel: 'relay',
+      schema: FixChange,
+      relayHint: fixChangeShapeHint.instruction,
+    },
+    {
+      schemaName: 'fix.review@v1',
+      channel: 'relay',
+      schema: FixReview,
+      relayHint: fixReviewShapeHint.instruction,
+    },
+    {
+      schemaName: 'fix.brief@v1',
+      channel: 'report',
+      schema: FixBrief,
+      writers: { compose: [fixBriefComposeBuilder] },
+    },
+    {
+      schemaName: 'fix.no-repro-decision@v1',
+      channel: 'report',
+      schema: FixNoReproDecision,
+    },
+    {
+      schemaName: 'fix.regression-proof@v1',
+      channel: 'report',
+      schema: FixRegressionProof,
+      writers: { verification: [fixRegressionBaselineWriter] },
+    },
+    {
+      schemaName: 'fix.baseline-snapshot@v1',
+      channel: 'report',
+      schema: FixBaselineSnapshot,
+      writers: { verification: [fixBaselineSnapshotWriter] },
+    },
+    {
+      schemaName: 'fix.verification@v1',
+      channel: 'report',
+      schema: FixVerification,
+      writers: { verification: [fixVerificationWriter] },
+    },
+    {
+      schemaName: 'fix.regression-rerun@v1',
+      channel: 'report',
+      schema: FixRegressionRerun,
+      writers: { verification: [fixRegressionRerunWriter] },
+    },
+    {
+      schemaName: 'fix.change-set@v1',
+      channel: 'report',
+      schema: FixChangeSet,
+      writers: { verification: [fixChangeSetWriter] },
+    },
+    {
+      schemaName: 'fix.result@v1',
+      channel: 'report',
+      schema: FixResult,
+      writers: { close: [fixCloseBuilder] },
+    },
+  ],
+  runtimeSurface: {
+    primaryResult: {
+      schemaName: 'fix.result@v1',
+      path: 'reports/fix-result.json',
+      label: 'Fix result',
+    },
+    progress: {
+      steps: [
+        {
+          stepId: 'fix-frame',
+          taskTitle: 'Frame the work',
+          activeText: 'Framing the work',
+        },
+        {
+          stepId: 'fix-gather-context',
+          taskTitle: 'Check the context',
+          activeText: 'Checking the context',
+          relayRole: 'implementer',
+        },
+        {
+          stepId: 'fix-diagnose',
+          taskTitle: 'Check the context',
+          activeText: 'Checking the context',
+          relayRole: 'implementer',
+        },
+        {
+          stepId: 'fix-no-repro-decision',
+          taskTitle: 'Check the context',
+          activeText: 'Checking the context',
+        },
+        {
+          stepId: 'fix-regression-baseline',
+          taskTitle: 'Check the work',
+          activeText: 'Checking the work',
+        },
+        {
+          stepId: 'fix-baseline-snapshot',
+          taskTitle: 'Check the work',
+          activeText: 'Checking the work',
+        },
+        {
+          stepId: 'fix-act',
+          taskTitle: 'Make the change',
+          activeText: 'Making the change',
+          relayRole: 'implementer',
+        },
+        {
+          stepId: 'fix-verify',
+          taskTitle: 'Check the work',
+          activeText: 'Checking the work',
+        },
+        {
+          stepId: 'fix-change-set',
+          taskTitle: 'Check the work',
+          activeText: 'Checking the work',
+        },
+        {
+          stepId: 'fix-regression-rerun',
+          taskTitle: 'Check the work',
+          activeText: 'Checking the work',
+        },
+        {
+          stepId: 'fix-review',
+          taskTitle: 'Check the result',
+          activeText: 'Checking the result',
+          relayRole: 'reviewer',
+        },
+        {
+          stepId: 'fix-close-lite',
+          taskTitle: 'Wrap up',
+          activeText: 'Wrapping up',
+        },
+        {
+          stepId: 'fix-close',
+          taskTitle: 'Wrap up',
+          activeText: 'Wrapping up',
+        },
+        {
+          stepId: 'fix-handoff',
+          taskTitle: 'Wrap up',
+          activeText: 'Wrapping up',
+        },
+      ],
+    },
+  },
+} satisfies FlowData;

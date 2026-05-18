@@ -9,16 +9,22 @@ import { recoveryRouteForStep } from '../../shared/recovery-route.js';
 import type { StepOutcome } from '../domain/step.js';
 import type { VerificationStep } from '../manifest/executable-flow.js';
 import type { RunContext } from '../run/run-context.js';
+import {
+  type StepExecutionResult,
+  stepExecutionFailed,
+  stepExecutionOutcome,
+  unwrapStepExecutionResult,
+} from './result.js';
 
 function verificationFailureReason(stepId: string, error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   return `verification step '${stepId}': report writer failed (${message})`;
 }
 
-export async function executeVerification(
+export async function executeVerificationResult(
   step: VerificationStep,
   context: RunContext,
-): Promise<StepOutcome> {
+): Promise<StepExecutionResult> {
   const attempt = context.activeStepAttempt ?? 1;
   let report: NonNullable<NonNullable<VerificationStep['writes']>['report']>;
   let reportSchema: string;
@@ -68,8 +74,7 @@ export async function executeVerification(
       outcome: 'fail',
       reason,
     });
-    if (blocked) throw error;
-    throw new Error(reason);
+    return stepExecutionFailed(reason, blocked ? error : new Error(reason));
   }
 
   await context.trace.append({
@@ -90,7 +95,7 @@ export async function executeVerification(
       check_kind: 'schema_sections',
       outcome: 'pass',
     });
-    return { route: 'pass', details: { overall_status: 'passed' } };
+    return stepExecutionOutcome({ route: 'pass', details: { overall_status: 'passed' } });
   }
 
   const reason = `verification step '${step.id}' failed one or more commands`;
@@ -105,7 +110,14 @@ export async function executeVerification(
   });
   const recoveryRoute = recoveryRouteForStep(step);
   if (recoveryRoute !== undefined) {
-    return { route: recoveryRoute, details: { reason } };
+    return stepExecutionOutcome({ route: recoveryRoute, details: { reason } });
   }
-  throw new Error(reason);
+  return stepExecutionFailed(reason);
+}
+
+export async function executeVerification(
+  step: VerificationStep,
+  context: RunContext,
+): Promise<StepOutcome> {
+  return unwrapStepExecutionResult(await executeVerificationResult(step, context));
 }

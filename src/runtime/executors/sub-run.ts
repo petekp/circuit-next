@@ -5,7 +5,6 @@
 // step policy, and records parent trace events without interpreting child trace
 // internals.
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import {
   CompiledFlow as CompiledFlowSchema,
@@ -16,6 +15,12 @@ import { NO_VERDICT_SENTINEL } from '../../shared/relay-support.js';
 import type { StepOutcome } from '../domain/step.js';
 import type { SubRunStep } from '../manifest/executable-flow.js';
 import type { RunContext } from '../run/run-context.js';
+import {
+  type StepExecutionResult,
+  stepExecutionFailedFrom,
+  stepExecutionOutcome,
+  unwrapStepExecutionResult,
+} from './result.js';
 
 function checkPassVerdicts(step: SubRunStep): readonly string[] {
   const pass = (step.check as { readonly pass?: unknown }).pass;
@@ -91,7 +96,7 @@ function parseChildResultBody(
   }
 }
 
-export async function executeSubRun(step: SubRunStep, context: RunContext): Promise<StepOutcome> {
+async function executeSubRunInternal(step: SubRunStep, context: RunContext): Promise<StepOutcome> {
   const attempt = context.activeStepAttempt ?? 1;
   const resultWrite = step.writes?.result;
   if (resultWrite === undefined) {
@@ -155,7 +160,6 @@ export async function executeSubRun(step: SubRunStep, context: RunContext): Prom
 
   const childRunId = randomUUID();
   const childRunDir = join(dirname(context.runDir), childRunId);
-  await mkdir(dirname(childRunDir), { recursive: true });
   await context.trace.append({
     run_id: context.runId,
     kind: 'sub_run.started',
@@ -183,6 +187,7 @@ export async function executeSubRun(step: SubRunStep, context: RunContext): Prom
         ? {}
         : { childCompiledFlowResolver: context.childCompiledFlowResolver }),
       childRunner: context.childRunner,
+      externalFiles: context.externalFiles,
       ...(context.projectRoot === undefined ? {} : { projectRoot: context.projectRoot }),
       ...(context.evidencePolicy === undefined ? {} : { evidencePolicy: context.evidencePolicy }),
       ...(context.worktreeRunner === undefined ? {} : { worktreeRunner: context.worktreeRunner }),
@@ -202,10 +207,8 @@ export async function executeSubRun(step: SubRunStep, context: RunContext): Prom
   }
 
   const durationMs = Math.max(0, Date.now() - startMs);
-  const childResultText = await readFile(childResult.resultPath, 'utf8');
-  const parentResultPath = context.files.resolve(resultWrite);
-  await mkdir(dirname(parentResultPath), { recursive: true });
-  await writeFile(parentResultPath, childResultText, 'utf8');
+  const childResultText = await context.externalFiles.readText(childResult.resultPath);
+  await context.files.writeText(resultWrite, childResultText);
   const parsedChildResult = parseChildResultBody(step, childResultText);
   if (parsedChildResult.body === undefined) {
     const reason =
@@ -258,4 +261,19 @@ export async function executeSubRun(step: SubRunStep, context: RunContext): Prom
     verdict.failureReason ??
       `sub-run step '${step.id}': child closed with outcome '${childResultBody.outcome}'`,
   );
+}
+
+export async function executeSubRunResult(
+  step: SubRunStep,
+  context: RunContext,
+): Promise<StepExecutionResult> {
+  try {
+    return stepExecutionOutcome(await executeSubRunInternal(step, context));
+  } catch (error) {
+    return stepExecutionFailedFrom(error);
+  }
+}
+
+export async function executeSubRun(step: SubRunStep, context: RunContext): Promise<StepOutcome> {
+  return unwrapStepExecutionResult(await executeSubRunResult(step, context));
 }

@@ -28,10 +28,12 @@ import type {
   WorktreeRunner,
 } from './child-runner.js';
 import { runCompiledFlow } from './compiled-flow-runner.js';
+import type { ExternalFileReader } from './external-files.js';
 import {
   type GraphRunResult,
-  executeExecutableFlow,
+  executeExecutableFlowOutcome,
   isGraphCheckpointWaitingResult,
+  isGraphRejectedOutcome,
 } from './graph-runner.js';
 import { readRuntimeCompiledFlowManifestSnapshot } from './manifest-snapshot.js';
 
@@ -43,11 +45,25 @@ export interface ResumeCompiledFlowOptions {
   readonly relayer?: RelayFn;
   readonly childCompiledFlowResolver?: ChildCompiledFlowResolver;
   readonly childRunner?: CompiledFlowRunner;
+  readonly externalFiles?: ExternalFileReader;
   readonly worktreeRunner?: WorktreeRunner;
   readonly executors?: Partial<ExecutorRegistry>;
   readonly progress?: ProgressReporter;
   readonly progressSurfaceForFlowId?: (flowId: string) => CompiledFlowProgressSurface | undefined;
 }
+
+export interface CheckpointResumeSuccessResult {
+  readonly kind: 'resumed';
+  readonly result: GraphRunResult;
+}
+
+export interface CheckpointResumeRejectedResult {
+  readonly kind: 'rejected';
+  readonly reason: string;
+  readonly error: Error;
+}
+
+export type CheckpointResumeResult = CheckpointResumeSuccessResult | CheckpointResumeRejectedResult;
 
 interface CheckpointRequestContext {
   readonly projectRoot?: string;
@@ -58,6 +74,36 @@ interface CheckpointRequestContext {
 type CompiledCheckpointStep = CompiledFlow['steps'][number] & {
   readonly kind: 'checkpoint';
 };
+
+type CheckpointResumeValidation<T> =
+  | {
+      readonly kind: 'valid';
+      readonly value: T;
+    }
+  | CheckpointResumeRejectedResult;
+
+function errorFromUnknown(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
+}
+
+function checkpointResumeRejected(reason: string, error?: Error): CheckpointResumeRejectedResult {
+  return { kind: 'rejected', reason, error: error ?? new Error(reason) };
+}
+
+function checkpointResumeRejectedFrom(error: unknown): CheckpointResumeRejectedResult {
+  const normalized = errorFromUnknown(error);
+  return checkpointResumeRejected(normalized.message, normalized);
+}
+
+function checkpointResumeValid<T>(value: T): CheckpointResumeValidation<T> {
+  return { kind: 'valid', value };
+}
+
+export function isCheckpointResumeRejectedResult(
+  result: CheckpointResumeResult | CheckpointResumeValidation<unknown>,
+): result is CheckpointResumeRejectedResult {
+  return result.kind === 'rejected';
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -92,7 +138,9 @@ export async function isRuntimeRunFolder(runDir: string): Promise<boolean> {
   }
 }
 
-function latestUnresolvedCheckpoint(entries: readonly TraceEntry[]): TraceEntry {
+function latestUnresolvedCheckpointResult(
+  entries: readonly TraceEntry[],
+): CheckpointResumeValidation<TraceEntry> {
   const resolved = new Set<string>();
   for (const entry of entries) {
     if (entry.kind !== 'checkpoint.resolved' || entry.step_id === undefined) continue;
@@ -103,55 +151,71 @@ function latestUnresolvedCheckpoint(entries: readonly TraceEntry[]): TraceEntry 
     const entry = entries[i];
     if (entry === undefined || entry.kind !== 'checkpoint.requested') continue;
     if (entry.step_id === undefined || entry.attempt === undefined) continue;
-    if (!resolved.has(`${entry.step_id}:${entry.attempt}`)) return entry;
+    if (!resolved.has(`${entry.step_id}:${entry.attempt}`)) return checkpointResumeValid(entry);
   }
-  throw new Error('runtime checkpoint resume rejected: run has no unresolved checkpoint request');
+  return checkpointResumeRejected(
+    'runtime checkpoint resume rejected: run has no unresolved checkpoint request',
+  );
 }
 
-function checkpointStep(input: {
+function checkpointStepResult(input: {
   readonly flow: ExecutableFlow;
   readonly stepId: string;
-}): CheckpointStep {
+}): CheckpointResumeValidation<CheckpointStep> {
   const step = input.flow.steps.find((candidate) => candidate.id === input.stepId);
   if (step === undefined || step.kind !== 'checkpoint') {
-    throw new Error(
+    return checkpointResumeRejected(
       `runtime checkpoint resume rejected: current step '${input.stepId}' is not a checkpoint`,
     );
   }
-  return step;
+  return checkpointResumeValid(step);
 }
 
-function declaredCheckpointRequestPath(step: CheckpointStep): string {
+function declaredCheckpointRequestPathResult(
+  step: CheckpointStep,
+): CheckpointResumeValidation<string> {
   const requestPath = step.writes?.request?.path;
   if (requestPath === undefined) {
-    throw new Error(
+    return checkpointResumeRejected(
       `runtime checkpoint resume rejected: checkpoint step '${step.id}' has no declared request path`,
     );
   }
-  return requestPath;
+  return checkpointResumeValid(requestPath);
 }
 
-function readCheckpointRequestContext(input: {
+function readCheckpointRequestContextResult(input: {
   readonly runDir: string;
   readonly step: CheckpointStep;
   readonly requestPath: string;
   readonly expectedRequestHash: string;
-}): CheckpointRequestContext {
+}): CheckpointResumeValidation<CheckpointRequestContext> {
   const requestAbs = resolveRunFilePath(input.runDir, input.requestPath);
-  const requestText = readFileSync(requestAbs, 'utf8');
+  let requestText: string;
+  try {
+    requestText = readFileSync(requestAbs, 'utf8');
+  } catch (error) {
+    return checkpointResumeRejectedFrom(error);
+  }
   if (sha256Hex(requestText) !== input.expectedRequestHash) {
-    throw new Error(
+    return checkpointResumeRejected(
       'runtime checkpoint resume rejected: checkpoint request hash differs from trace',
     );
   }
-  const raw = JSON.parse(requestText) as unknown;
+  let raw: unknown;
+  try {
+    raw = JSON.parse(requestText) as unknown;
+  } catch (error) {
+    return checkpointResumeRejectedFrom(error);
+  }
   if (!isRecord(raw)) {
-    throw new Error(
+    return checkpointResumeRejected(
       `runtime checkpoint resume rejected: request for '${input.step.id}' is invalid`,
     );
   }
   if (raw.schema_version !== 1 || raw.step_id !== input.step.id) {
-    throw new Error(`runtime checkpoint resume rejected: request for '${input.step.id}' is stale`);
+    return checkpointResumeRejected(
+      `runtime checkpoint resume rejected: request for '${input.step.id}' is stale`,
+    );
   }
   const requestChoices = stringArray(raw.allowed_choices);
   if (
@@ -159,71 +223,83 @@ function readCheckpointRequestContext(input: {
     requestChoices.length !== input.step.choices.length ||
     requestChoices.some((choice, index) => choice !== input.step.choices[index])
   ) {
-    throw new Error(
+    return checkpointResumeRejected(
       `runtime checkpoint resume rejected: request choices for '${input.step.id}' are stale`,
     );
   }
   const context = raw.execution_context;
   if (!isRecord(context)) {
-    throw new Error(
+    return checkpointResumeRejected(
       `runtime checkpoint resume rejected: request for '${input.step.id}' has no execution context`,
     );
   }
   const projectRoot = context.project_root;
   if (projectRoot !== undefined && typeof projectRoot !== 'string') {
-    throw new Error('runtime checkpoint resume rejected: project_root is invalid');
+    return checkpointResumeRejected('runtime checkpoint resume rejected: project_root is invalid');
   }
-  const selectionConfigLayers = LayeredConfig.array().parse(context.selection_config_layers ?? []);
+  let selectionConfigLayers: readonly LayeredConfigValue[];
+  try {
+    selectionConfigLayers = LayeredConfig.array().parse(context.selection_config_layers ?? []);
+  } catch (error) {
+    return checkpointResumeRejectedFrom(error);
+  }
   const checkpointReportSha256 = context.checkpoint_report_sha256;
   if (checkpointReportSha256 !== undefined && typeof checkpointReportSha256 !== 'string') {
-    throw new Error('runtime checkpoint resume rejected: checkpoint_report_sha256 is invalid');
+    return checkpointResumeRejected(
+      'runtime checkpoint resume rejected: checkpoint_report_sha256 is invalid',
+    );
   }
-  return {
+  return checkpointResumeValid({
     ...(projectRoot === undefined ? {} : { projectRoot }),
     selectionConfigLayers,
     ...(checkpointReportSha256 === undefined ? {} : { checkpointReportSha256 }),
-  };
+  });
 }
 
-function validateCheckpointReport(input: {
+function validateCheckpointReportResult(input: {
   readonly runDir: string;
   readonly compiledStep: CompiledCheckpointStep;
   readonly requestContext: CheckpointRequestContext;
-}): void {
+}): CheckpointResumeValidation<void> {
   const report = input.compiledStep.writes.report;
   if (report === undefined) {
     if (input.requestContext.checkpointReportSha256 !== undefined) {
-      throw new Error(
+      return checkpointResumeRejected(
         `runtime checkpoint resume rejected: checkpoint '${input.compiledStep.id}' request carries a report hash but the step writes no report`,
       );
     }
-    return;
+    return checkpointResumeValid(undefined);
   }
   if (typeof report === 'string') {
     if (input.requestContext.checkpointReportSha256 !== undefined) {
-      throw new Error(
+      return checkpointResumeRejected(
         `runtime checkpoint resume rejected: checkpoint '${input.compiledStep.id}' request carries a report hash but the report has no schema validator`,
       );
     }
-    return;
+    return checkpointResumeValid(undefined);
   }
   const builder = findCheckpointBriefBuilder(report.schema);
   if (builder?.validateResumeContext === undefined) {
     if (input.requestContext.checkpointReportSha256 !== undefined) {
-      throw new Error(
+      return checkpointResumeRejected(
         `runtime checkpoint resume rejected: builder for schema '${report.schema}' is missing validateResumeContext but the checkpoint request carries a report hash`,
       );
     }
-    return;
+    return checkpointResumeValid(undefined);
   }
-  builder.validateResumeContext({
-    runFolder: input.runDir,
-    step: input.compiledStep as unknown as IndexedCheckpointStep,
-    reportPath: report.path,
-    ...(input.requestContext.checkpointReportSha256 === undefined
-      ? {}
-      : { reportSha256: input.requestContext.checkpointReportSha256 }),
-  });
+  try {
+    builder.validateResumeContext({
+      runFolder: input.runDir,
+      step: input.compiledStep as unknown as IndexedCheckpointStep,
+      reportPath: report.path,
+      ...(input.requestContext.checkpointReportSha256 === undefined
+        ? {}
+        : { reportSha256: input.requestContext.checkpointReportSha256 }),
+    });
+  } catch (error) {
+    return checkpointResumeRejectedFrom(error);
+  }
+  return checkpointResumeValid(undefined);
 }
 
 function executableFlowForResume(input: {
@@ -242,19 +318,26 @@ function executableFlowForResume(input: {
   };
 }
 
-export async function resumeCompiledFlow(
+export async function resumeCompiledFlowResult(
   options: ResumeCompiledFlowOptions,
-): Promise<GraphRunResult> {
+): Promise<CheckpointResumeResult> {
   const trace = new TraceStore(options.runDir, {
     ...(options.now === undefined ? {} : { now: options.now }),
   });
-  const entries = await trace.load();
+  let entries: readonly TraceEntry[];
+  try {
+    entries = await trace.load();
+  } catch (error) {
+    return checkpointResumeRejectedFrom(error);
+  }
   const bootstrap = entries[0];
   if (!isRuntimeBootstrap(bootstrap)) {
-    throw new Error('runtime checkpoint resume rejected: run folder is not marked runtime');
+    return checkpointResumeRejected(
+      'runtime checkpoint resume rejected: run folder is not marked runtime',
+    );
   }
   if (entries.some((entry) => entry.kind === 'run.closed')) {
-    throw new Error('runtime checkpoint resume rejected: run is already closed');
+    return checkpointResumeRejected('runtime checkpoint resume rejected: run is already closed');
   }
 
   const bootstrapRunId = traceString(bootstrap, 'run_id');
@@ -267,17 +350,27 @@ export async function resumeCompiledFlow(
     bootstrapGoal === undefined ||
     bootstrapManifestHash === undefined
   ) {
-    throw new Error('runtime checkpoint resume rejected: bootstrap identity is incomplete');
+    return checkpointResumeRejected(
+      'runtime checkpoint resume rejected: bootstrap identity is incomplete',
+    );
   }
 
-  const { flow, flowBytes, snapshot } = await readRuntimeCompiledFlowManifestSnapshot({
-    runDir: options.runDir,
-    expectedRunId: bootstrapRunId,
-    expectedFlowId: bootstrapFlowId,
-    expectedHash: bootstrapManifestHash,
-  });
+  let saved: Awaited<ReturnType<typeof readRuntimeCompiledFlowManifestSnapshot>>;
+  try {
+    saved = await readRuntimeCompiledFlowManifestSnapshot({
+      runDir: options.runDir,
+      expectedRunId: bootstrapRunId,
+      expectedFlowId: bootstrapFlowId,
+      expectedHash: bootstrapManifestHash,
+    });
+  } catch (error) {
+    return checkpointResumeRejectedFrom(error);
+  }
+  const { flow, flowBytes, snapshot } = saved;
   const executable = executableFlowForResume({ flow, bootstrap });
-  const requested = latestUnresolvedCheckpoint(entries);
+  const requestedResult = latestUnresolvedCheckpointResult(entries);
+  if (isCheckpointResumeRejectedResult(requestedResult)) return requestedResult;
+  const requested = requestedResult.value;
   const stepId = traceString(requested, 'step_id');
   const attempt = requested.attempt;
   const requestPath = traceString(requested, 'request_path');
@@ -290,17 +383,21 @@ export async function resumeCompiledFlow(
     requestHash === undefined ||
     allowedChoices === undefined
   ) {
-    throw new Error('runtime checkpoint resume rejected: checkpoint request trace is incomplete');
+    return checkpointResumeRejected(
+      'runtime checkpoint resume rejected: checkpoint request trace is incomplete',
+    );
   }
-  const step = checkpointStep({ flow: executable, stepId });
+  const stepResult = checkpointStepResult({ flow: executable, stepId });
+  if (isCheckpointResumeRejectedResult(stepResult)) return stepResult;
+  const step = stepResult.value;
   const savedChoices = step.choices;
   if (!sameStringArray(allowedChoices, savedChoices)) {
-    throw new Error(
+    return checkpointResumeRejected(
       `runtime checkpoint resume rejected: checkpoint trace choices for '${stepId}' are stale`,
     );
   }
   if (!savedChoices.includes(options.selection)) {
-    throw new Error(
+    return checkpointResumeRejected(
       `runtime checkpoint resume rejected: selection '${options.selection}' is not allowed for checkpoint '${stepId}'`,
     );
   }
@@ -308,35 +405,42 @@ export async function resumeCompiledFlow(
     (candidate) => (candidate.id as unknown as string) === stepId,
   );
   if (compiledStep === undefined || compiledStep.kind !== 'checkpoint') {
-    throw new Error(`runtime checkpoint resume rejected: saved flow step '${stepId}' is invalid`);
+    return checkpointResumeRejected(
+      `runtime checkpoint resume rejected: saved flow step '${stepId}' is invalid`,
+    );
   }
   const allowed = (step.check as { readonly allow?: unknown }).allow;
   if (Array.isArray(allowed) && !allowed.includes(options.selection)) {
-    throw new Error(
+    return checkpointResumeRejected(
       `runtime checkpoint resume rejected: selection '${options.selection}' is outside check.allow for checkpoint '${stepId}'`,
     );
   }
-  const declaredRequestPath = declaredCheckpointRequestPath(step);
+  const declaredRequestPathResult = declaredCheckpointRequestPathResult(step);
+  if (isCheckpointResumeRejectedResult(declaredRequestPathResult)) return declaredRequestPathResult;
+  const declaredRequestPath = declaredRequestPathResult.value;
   if (requestPath !== declaredRequestPath) {
-    throw new Error(
+    return checkpointResumeRejected(
       `runtime checkpoint resume rejected: checkpoint request path '${requestPath}' does not match saved flow path '${declaredRequestPath}'`,
     );
   }
-  const requestContext = readCheckpointRequestContext({
+  const requestContextResult = readCheckpointRequestContextResult({
     runDir: options.runDir,
     step,
     requestPath,
     expectedRequestHash: requestHash,
   });
-  validateCheckpointReport({
+  if (isCheckpointResumeRejectedResult(requestContextResult)) return requestContextResult;
+  const requestContext = requestContextResult.value;
+  const reportValidation = validateCheckpointReportResult({
     runDir: options.runDir,
     compiledStep,
     requestContext,
   });
+  if (isCheckpointResumeRejectedResult(reportValidation)) return reportValidation;
   const depth = traceString(bootstrap, 'depth');
   const progressSurface = options.progressSurfaceForFlowId?.(flow.id);
 
-  const result = await executeExecutableFlow(executable, {
+  const result = await executeExecutableFlowOutcome(executable, {
     runDir: options.runDir,
     runId: bootstrapRunId,
     goal: bootstrapGoal,
@@ -349,6 +453,7 @@ export async function resumeCompiledFlow(
       ? {}
       : { childCompiledFlowResolver: options.childCompiledFlowResolver }),
     childRunner: options.childRunner ?? runCompiledFlow,
+    ...(options.externalFiles === undefined ? {} : { externalFiles: options.externalFiles }),
     ...(requestContext.projectRoot === undefined
       ? {}
       : { projectRoot: requestContext.projectRoot }),
@@ -362,8 +467,21 @@ export async function resumeCompiledFlow(
     ...(progressSurface === undefined ? {} : { progressSurface }),
     resumeCheckpoint: { stepId, attempt, selection: options.selection },
   });
-  if (isGraphCheckpointWaitingResult(result)) {
-    throw new Error('runtime checkpoint resume rejected: resume did not resolve checkpoint');
+  if (isGraphRejectedOutcome(result)) {
+    return checkpointResumeRejected(result.reason, result.error);
   }
-  return result;
+  if (isGraphCheckpointWaitingResult(result)) {
+    return checkpointResumeRejected(
+      'runtime checkpoint resume rejected: resume did not resolve checkpoint',
+    );
+  }
+  return { kind: 'resumed', result: result.result };
+}
+
+export async function resumeCompiledFlow(
+  options: ResumeCompiledFlowOptions,
+): Promise<GraphRunResult> {
+  const result = await resumeCompiledFlowResult(options);
+  if (isCheckpointResumeRejectedResult(result)) throw result.error;
+  return result.result;
 }

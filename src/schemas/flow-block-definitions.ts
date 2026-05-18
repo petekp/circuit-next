@@ -19,13 +19,95 @@ export interface FlowBlockSchematicPolicy {
   readonly stages: readonly CanonicalStage[];
 }
 
+export type FlowBlockAuthoringDefaultEvidence = 'block-produces-evidence';
+export type FlowBlockAuthoringDefaultOutput = 'block-output-contract';
+
+export type FlowBlockAuthoringRequiredField =
+  | 'id'
+  | 'title'
+  | 'stage'
+  | 'input'
+  | 'routes'
+  | 'protocol'
+  | 'writes'
+  | 'check'
+  | 'relay_role'
+  | 'checkpoint_policy'
+  | 'fanout'
+  | 'sub_run_ref'
+  | 'sub_run_goal'
+  | 'sub_run_depth';
+
+export interface FlowBlockAuthoringPolicy {
+  readonly defaults: {
+    readonly evidenceRequirements: FlowBlockAuthoringDefaultEvidence;
+    readonly output: FlowBlockAuthoringDefaultOutput;
+    readonly executionKind?: FlowBlockSchematicExecutionKind;
+  };
+  readonly required: {
+    readonly always: readonly FlowBlockAuthoringRequiredField[];
+    readonly whenExecutionKind: Partial<
+      Record<FlowBlockSchematicExecutionKind, readonly FlowBlockAuthoringRequiredField[]>
+    >;
+  };
+}
+
 type FlowBlockInput = z.input<typeof FlowBlockSchema>;
 
-export type FlowBlockDefinition = FlowBlockInput & {
+type FlowBlockDefinitionInput = FlowBlockInput & {
   readonly schematicPolicy: FlowBlockSchematicPolicy;
 };
 
-export const FLOW_BLOCK_DEFINITIONS = [
+export type FlowBlockDefinition = FlowBlockDefinitionInput & {
+  readonly authoringPolicy: FlowBlockAuthoringPolicy;
+};
+
+const BASE_REQUIRED_AUTHORING_FIELDS = [
+  'id',
+  'title',
+  'stage',
+  'input',
+  'routes',
+  'protocol',
+  'writes',
+  'check',
+] as const satisfies readonly FlowBlockAuthoringRequiredField[];
+
+const EXECUTION_REQUIRED_AUTHORING_FIELDS = {
+  relay: ['relay_role'],
+  checkpoint: ['checkpoint_policy'],
+  fanout: ['fanout'],
+  'sub-run': ['sub_run_ref', 'sub_run_goal', 'sub_run_depth'],
+} as const satisfies Partial<
+  Record<FlowBlockSchematicExecutionKind, readonly FlowBlockAuthoringRequiredField[]>
+>;
+
+function conservativeAuthoringPolicy(
+  schematicPolicy: FlowBlockSchematicPolicy,
+): FlowBlockAuthoringPolicy {
+  const executionKind =
+    schematicPolicy.executionKinds.length === 1 ? schematicPolicy.executionKinds[0] : undefined;
+  return {
+    defaults: {
+      evidenceRequirements: 'block-produces-evidence',
+      output: 'block-output-contract',
+      ...(executionKind === undefined ? {} : { executionKind }),
+    },
+    required: {
+      always: BASE_REQUIRED_AUTHORING_FIELDS,
+      whenExecutionKind: EXECUTION_REQUIRED_AUTHORING_FIELDS,
+    },
+  };
+}
+
+function defineFlowBlockDefinition(definition: FlowBlockDefinitionInput): FlowBlockDefinition {
+  return {
+    ...definition,
+    authoringPolicy: conservativeAuthoringPolicy(definition.schematicPolicy),
+  };
+}
+
+const FLOW_BLOCK_DEFINITION_INPUTS = [
   {
     id: 'intake',
     title: 'Intake',
@@ -483,10 +565,16 @@ export const FLOW_BLOCK_DEFINITIONS = [
       stages: ['close'],
     },
   },
-] satisfies readonly FlowBlockDefinition[];
+] satisfies readonly FlowBlockDefinitionInput[];
+
+export const FLOW_BLOCK_DEFINITIONS = FLOW_BLOCK_DEFINITION_INPUTS.map(defineFlowBlockDefinition);
 
 function blockCatalogEntry(definition: FlowBlockDefinition): FlowBlockInput {
-  const { schematicPolicy: _schematicPolicy, ...block } = definition;
+  const {
+    authoringPolicy: _authoringPolicy,
+    schematicPolicy: _schematicPolicy,
+    ...block
+  } = definition;
   return block;
 }
 
@@ -496,9 +584,12 @@ export const FLOW_BLOCK_CATALOG = FlowBlockCatalog.parse({
 });
 
 const flowBlockSchematicPolicy = {} as Record<FlowBlockId, FlowBlockSchematicPolicy>;
+const flowBlockAuthoringPolicy = {} as Record<FlowBlockId, FlowBlockAuthoringPolicy>;
 
 for (const definition of FLOW_BLOCK_DEFINITIONS) {
   flowBlockSchematicPolicy[definition.id] = definition.schematicPolicy;
+  flowBlockAuthoringPolicy[definition.id] = definition.authoringPolicy;
 }
 
 export const FLOW_BLOCK_SCHEMATIC_POLICY = flowBlockSchematicPolicy;
+export const FLOW_BLOCK_AUTHORING_POLICY = flowBlockAuthoringPolicy;

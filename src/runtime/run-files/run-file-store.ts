@@ -36,8 +36,12 @@ export class RunFileStore {
     return fullPath;
   }
 
+  async readText(ref: RunFileRef | string): Promise<string> {
+    return await readFile(this.resolve(ref), 'utf8');
+  }
+
   async readJson<T = unknown>(ref: RunFileRef | string): Promise<T> {
-    const raw = await readFile(this.resolve(ref), 'utf8');
+    const raw = await this.readText(ref);
     return JSON.parse(raw) as T;
   }
 }

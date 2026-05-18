@@ -82,6 +82,7 @@ export async function runCompiledFlowWithWaiting(
         ? {}
         : { childCompiledFlowResolver: options.childCompiledFlowResolver }),
       childRunner: options.childRunner ?? runCompiledFlow,
+      ...(options.externalFiles === undefined ? {} : { externalFiles: options.externalFiles }),
       ...(options.projectRoot === undefined ? {} : { projectRoot: options.projectRoot }),
       ...(options.evidencePolicy === undefined ? {} : { evidencePolicy: options.evidencePolicy }),
       ...(options.worktreeRunner === undefined ? {} : { worktreeRunner: options.worktreeRunner }),

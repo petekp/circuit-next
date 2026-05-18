@@ -5,7 +5,6 @@
 // and sub-run worktree execution distinct so trace and report outputs stay
 // comparable across branch kinds.
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { runCrossReportValidator } from '../../flows/registries/cross-report-validators.js';
 import { parseReport } from '../../flows/registries/report-schemas.js';
@@ -278,13 +277,10 @@ export async function executeRelayFanoutBranch(
       };
     }
 
-    const requestPath = context.files.resolve(`${branchDirRel}/request.json`);
-    await mkdir(dirname(requestPath), { recursive: true });
-    await writeFile(
-      requestPath,
-      `${JSON.stringify({ branch_id: branch.branch_id, goal: branch.goal }, null, 2)}\n`,
-      'utf8',
-    );
+    await context.files.writeJson(`${branchDirRel}/request.json`, {
+      branch_id: branch.branch_id,
+      goal: branch.goal,
+    });
     const relayExecution = resolveRelayExecution({
       flowId: context.flow.id,
       role: branch.role,
@@ -314,9 +310,10 @@ export async function executeRelayFanoutBranch(
     const admitted = provenanceFailure === undefined && evaluation.admitted;
     await context.files.writeJson(resultPath, reportBody);
     await context.files.writeJson({ path: reportPath, schema: branch.report_schema }, reportBody);
-    const receiptPath = context.files.resolve(`${branchDirRel}/receipt.txt`);
-    await mkdir(dirname(receiptPath), { recursive: true });
-    await writeFile(receiptPath, `stub relay receipt for ${branch.branch_id}\n`, 'utf8');
+    await context.files.writeText(
+      `${branchDirRel}/receipt.txt`,
+      `stub relay receipt for ${branch.branch_id}\n`,
+    );
     const durationMs = Math.max(0, Date.now() - startMs);
     await context.trace.append({
       run_id: context.runId,
@@ -454,6 +451,7 @@ export async function executeSubRunFanoutBranch(
         ? {}
         : { childCompiledFlowResolver: context.childCompiledFlowResolver }),
       childRunner: context.childRunner,
+      externalFiles: context.externalFiles,
       projectRoot: worktreePath,
       ...(context.evidencePolicy === undefined ? {} : { evidencePolicy: context.evidencePolicy }),
       worktreeRunner,
@@ -464,7 +462,7 @@ export async function executeSubRunFanoutBranch(
         : { selectionConfigLayers: context.selectionConfigLayers }),
       ...(context.progress === undefined ? {} : { progress: context.progress }),
     });
-    const childResultText = await readFile(child.resultPath, 'utf8');
+    const childResultText = await context.externalFiles.readText(child.resultPath);
     const childResult = RunResult.parse(JSON.parse(childResultText));
     await context.files.writeJson(resultPath, childResult);
     const evaluation = branchResult(childResult, admitList(step));

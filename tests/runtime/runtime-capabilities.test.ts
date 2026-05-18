@@ -10,6 +10,7 @@ describe('runtime capabilities', () => {
       'childExecutors',
       'childCompiledFlowResolver',
       'childRunner',
+      'externalFiles',
       'projectRoot',
       'evidencePolicy',
       'worktreeRunner',

@@ -1,5 +1,3 @@
-import { mkdir, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
 import { relayClaudeCode } from '../../connectors/claude-code.js';
 import { relayCodex } from '../../connectors/codex.js';
 import { relayCustom } from '../../connectors/custom.js';
@@ -31,6 +29,12 @@ import {
 import type { StepOutcome } from '../domain/step.js';
 import type { RelayStep } from '../manifest/executable-flow.js';
 import type { RunContext } from '../run/run-context.js';
+import {
+  type StepExecutionResult,
+  stepExecutionFailedFrom,
+  stepExecutionOutcome,
+  unwrapStepExecutionResult,
+} from './result.js';
 
 export interface RelayRequest {
   readonly runId: string;
@@ -342,9 +346,7 @@ export async function executeProductionRelayAttempt(input: {
       `relay step '${step.id}' requires writes.request, writes.receipt, and writes.result`,
     );
   }
-  const requestPath = context.files.resolve(request);
-  await mkdir(dirname(requestPath), { recursive: true });
-  await writeFile(requestPath, prompt, 'utf8');
+  await context.files.writeText(request, prompt);
   const requestPayloadHash = sha256Hex(prompt);
   const startMs = Date.now();
   const attempt = context.activeStepAttempt ?? 1;
@@ -537,7 +539,7 @@ export async function executeProductionRelayAttempt(input: {
   };
 }
 
-export async function executeRelay(
+async function executeRelayInternal(
   step: RelayStep,
   context: RunContext,
   connector?: RelayConnector,
@@ -582,6 +584,26 @@ export async function executeRelay(
   );
 
   return { route: 'pass', details: { role: step.role } };
+}
+
+export async function executeRelayResult(
+  step: RelayStep,
+  context: RunContext,
+  connector?: RelayConnector,
+): Promise<StepExecutionResult> {
+  try {
+    return stepExecutionOutcome(await executeRelayInternal(step, context, connector));
+  } catch (error) {
+    return stepExecutionFailedFrom(error);
+  }
+}
+
+export async function executeRelay(
+  step: RelayStep,
+  context: RunContext,
+  connector?: RelayConnector,
+): Promise<StepOutcome> {
+  return unwrapStepExecutionResult(await executeRelayResult(step, context, connector));
 }
 
 async function executeProductionRelay(step: RelayStep, context: RunContext): Promise<StepOutcome> {

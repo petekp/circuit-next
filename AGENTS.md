@@ -74,7 +74,7 @@ generated host packages.
 | Generated surface source map | `docs/generated-surfaces.md` |
 | CLI entrypoint | `bin/circuit-next` |
 | Engine source | `src/runtime/`, `src/cli/`, `src/schemas/` |
-| Flow packages | `src/flows/<id>/` (schematic, output schemas, command, contract, writers, relay hints) |
+| Flow packages | `src/flows/<id>/` (FlowData, schematic, output schemas, command, contract, writers, relay hints) |
 | Flow catalog | `src/flows/catalog.ts` (single source of truth the engine derives from) |
 | Tests | `tests/` |
 | Engine contracts | `docs/contracts/` |
@@ -89,10 +89,11 @@ terminology migration in progress.
 
 ## Adding a flow
 
-1. Create `src/flows/<id>/` with `flow.ts` (the typed `FlowDefinition`),
-   `reports.ts` (the flow's Zod report schemas), optional `command.md`
-   and `contract.md`, optional `relay-hints.ts` if any relay steps have
-   shape hints, and `writers/` for custom semantic writers.
+1. Create `src/flows/<id>/` with `data.ts` (the canonical `FlowData` value),
+   `flow.ts` (the thin `defineFlowData` adapter), `reports.ts` (the flow's Zod
+   report schemas), optional `command.md` and `contract.md`, optional
+   `relay-hints.ts` if any relay steps have shape hints, and `writers/` for
+   custom semantic writers.
 2. Export a tiny `index.ts` compatibility projection if callers need the
    `<id>CompiledFlowPackage` name.
 3. Add the definition to `flowDefinitions` in `src/flows/catalog.ts`.

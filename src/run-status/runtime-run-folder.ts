@@ -326,7 +326,13 @@ function runtimeWaitingCheckpointProjection(input: {
     ]),
   );
   const presentation = tournamentCheckpointPresentation({
-    runDir: input.runFolder,
+    readJson: (path) => {
+      try {
+        return JSON.parse(readFileSync(join(input.runFolder, path), 'utf8')) as unknown;
+      } catch {
+        return undefined;
+      }
+    },
     allowedChoices: requestChoices,
     fallbackPrompt: prompt ?? 'Choose how to continue this checkpoint.',
     fallbackLabel: (choice) => policyChoiceLabels.get(choice) ?? choice,
