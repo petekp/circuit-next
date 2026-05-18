@@ -42,6 +42,22 @@ describe('runtime context boundary', () => {
     expect(checkpoint).not.toContain("from 'node:fs'");
   });
 
+  it('keeps runtime-index lookups visible while compose uses narrow execution support', () => {
+    const executorLookupSites = [
+      ['compose', source('src/runtime/executors/compose.ts')],
+      ['checkpoint', source('src/runtime/executors/checkpoint.ts')],
+      ['verification', source('src/runtime/executors/verification.ts')],
+      ['relay', source('src/runtime/executors/relay.ts')],
+    ] as const;
+
+    expect(
+      executorLookupSites
+        .filter(([_name, body]) => body.includes('requireRuntimeIndexedStep('))
+        .map(([name]) => name),
+    ).toEqual(['checkpoint', 'verification', 'relay']);
+    expect(source('src/runtime/run/run-values.ts')).toContain('stepExecutionContextFromContext');
+  });
+
   it('keeps high-effect executors and projections behind ports/readers', () => {
     const relay = source('src/runtime/executors/relay.ts');
     const fanout = source('src/runtime/executors/fanout.ts');

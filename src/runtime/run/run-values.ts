@@ -1,3 +1,7 @@
+import {
+  type RuntimeIndexedStep,
+  requireRuntimeIndexedStep,
+} from '../../flows/registries/runtime-index.js';
 import type { RunFileRef } from '../domain/run-file.js';
 import type { TraceEntry, TraceEntryInput } from '../domain/trace.js';
 import type { RunContext } from './run-context.js';
@@ -88,6 +92,12 @@ export interface RunPorts {
   readonly selection: SelectionPort;
 }
 
+export interface StepExecutionContext<Kind extends RuntimeIndexedStep['kind']> {
+  readonly run: RunValue;
+  readonly ports: RunPorts;
+  readonly indexedStep: Extract<RuntimeIndexedStep, { readonly kind: Kind }>;
+}
+
 export function runValueFromContext(context: RunContext): RunValue {
   return {
     flow: context.flow,
@@ -147,5 +157,18 @@ export function runPortsFromContext(context: RunContext): RunPorts {
         ? {}
         : { configLayers: context.selectionConfigLayers }),
     },
+  };
+}
+
+export function stepExecutionContextFromContext<Kind extends RuntimeIndexedStep['kind']>(
+  context: RunContext,
+  stepId: string,
+  kind: Kind,
+): StepExecutionContext<Kind> {
+  const run = runValueFromContext(context);
+  return {
+    run,
+    ports: runPortsFromContext(context),
+    indexedStep: requireRuntimeIndexedStep(run.packageIndex, stepId, kind),
   };
 }

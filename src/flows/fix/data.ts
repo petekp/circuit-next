@@ -687,12 +687,16 @@ export const fixFlowData = {
           taskTitle: 'Check the context',
           activeText: 'Checking the context',
           relayRole: 'implementer',
+          relayStartedText: 'Asking the specialist to make the change...',
+          relayCompletedText: 'Finished the specialist pass.',
         },
         {
           stepId: 'fix-diagnose',
           taskTitle: 'Check the context',
           activeText: 'Checking the context',
           relayRole: 'implementer',
+          relayStartedText: 'Asking the specialist to make the change...',
+          relayCompletedText: 'Finished the specialist pass.',
         },
         {
           stepId: 'fix-no-repro-decision',
@@ -714,6 +718,8 @@ export const fixFlowData = {
           taskTitle: 'Make the change',
           activeText: 'Making the change',
           relayRole: 'implementer',
+          relayStartedText: 'Asking the specialist to make the change...',
+          relayCompletedText: 'Finished the specialist pass.',
         },
         {
           stepId: 'fix-verify',
@@ -735,6 +741,8 @@ export const fixFlowData = {
           taskTitle: 'Check the result',
           activeText: 'Checking the result',
           relayRole: 'reviewer',
+          relayStartedText: 'Asking the reviewer to check the result...',
+          relayCompletedText: 'Finished checking the result.',
         },
         {
           stepId: 'fix-close-lite',

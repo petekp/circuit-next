@@ -154,6 +154,15 @@ export function buildClaudeCodeArgs(input: ClaudeCodeRelayInput): string[] {
   return args;
 }
 
+function claudeCodeStdoutDiagnostic(stdout: string): string | undefined {
+  try {
+    parseClaudeCodeStdout(stdout, '', 0);
+    return undefined;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}
+
 export function isClaudeCodeStructuredOutputCompatible(schema: Record<string, unknown>): boolean {
   return schema.type === 'object';
 }
@@ -193,8 +202,11 @@ export async function relayClaudeCode(input: ClaudeCodeRelayInput): Promise<Rela
   if (result.code !== 0) {
     const stdoutSuffix = result.stdoutCapped ? ' [stdout capped]' : '';
     const stderrSuffix = result.stderrCapped ? ' [stderr capped]' : '';
+    const stdoutDiagnostic = claudeCodeStdoutDiagnostic(result.stdout);
+    const diagnosticText =
+      stdoutDiagnostic === undefined ? '' : `; stdout_diagnostic=${stdoutDiagnostic}`;
     throw new Error(
-      `claude-code subprocess exited with code ${result.code}${result.signal ? ` (signal ${result.signal})` : ''}; stdout[:500]=${result.stdout.slice(0, 500)}${stdoutSuffix}; stderr[:500]=${result.stderr.slice(0, 500)}${stderrSuffix}`,
+      `claude-code subprocess exited with code ${result.code}${result.signal ? ` (signal ${result.signal})` : ''}${diagnosticText}; stdout[:500]=${result.stdout.slice(0, 500)}${stdoutSuffix}; stderr[:500]=${result.stderr.slice(0, 500)}${stderrSuffix}`,
     );
   }
   if (result.stdoutCapped) {

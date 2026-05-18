@@ -47,6 +47,13 @@ export interface BlockStepUse
   readonly skillSlots?: SchematicStepInput['skill_slots'];
 }
 
+export type ComposeBlockStepUse = Omit<BlockStepUse, 'execution'>;
+export type VerificationBlockStepUse = Omit<BlockStepUse, 'execution'>;
+export type CheckpointBlockStepUse = Omit<BlockStepUse, 'execution'>;
+export type RelayBlockStepUse = Omit<BlockStepUse, 'execution'> & {
+  readonly role: NonNullable<Extract<SchematicStepInput['execution'], { kind: 'relay' }>['role']>;
+};
+
 export type ExpandBlockStepUseError =
   | {
       readonly kind: 'unknown-block-step-use';
@@ -136,6 +143,23 @@ export function expandBlockStepUse(use: BlockStepUse): SchematicStepValue {
   const result = expandBlockStepUseValue(use);
   if (result.ok) return result.value;
   throw new Error(result.errors.map(describeExpandBlockStepUseError).join('\n'));
+}
+
+export function composeBlockStep(use: ComposeBlockStepUse): SchematicStepValue {
+  return expandBlockStepUse({ ...use, execution: { kind: 'compose' } });
+}
+
+export function verificationBlockStep(use: VerificationBlockStepUse): SchematicStepValue {
+  return expandBlockStepUse(use);
+}
+
+export function checkpointBlockStep(use: CheckpointBlockStepUse): SchematicStepValue {
+  return expandBlockStepUse({ ...use, execution: { kind: 'checkpoint' } });
+}
+
+export function relayBlockStep(use: RelayBlockStepUse): SchematicStepValue {
+  const { role, ...stepUse } = use;
+  return expandBlockStepUse({ ...stepUse, execution: { kind: 'relay', role } });
 }
 
 function validateOverrideOnlyFields(

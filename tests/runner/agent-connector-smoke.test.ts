@@ -110,7 +110,51 @@ describe('claude-code connector smoke (capability boundary)', () => {
           timeoutMs: 10_000,
         }),
       ).rejects.toThrow(
-        /claude-code subprocess exited with code 7; stdout\[:500\]=schema diagnostics on stdout.*stderr\[:500\]=quiet stderr detail/s,
+        /claude-code subprocess exited with code 7;.*stdout\[:500\]=schema diagnostics on stdout.*stderr\[:500\]=quiet stderr detail/s,
+      );
+    } finally {
+      process.env.PATH = originalPath;
+      await rm(fakeBinDir, { recursive: true, force: true });
+    }
+  });
+
+  it('nonzero failures include the terminal Claude stream error when stdout head is noisy', async () => {
+    const fakeBinDir = await mkdtemp(join(tmpdir(), 'circuit-fake-claude-'));
+    const fakeClaudePath = join(fakeBinDir, 'claude');
+    const init = JSON.stringify({
+      type: 'system',
+      subtype: 'init',
+      session_id: 'session-auth-diagnostic',
+      claude_code_version: '2.1.143',
+      mcp_servers: [],
+      slash_commands: [],
+      padding: 'x'.repeat(800),
+    });
+    const result = JSON.stringify({
+      type: 'result',
+      subtype: 'success',
+      is_error: true,
+      result: 'Not logged in - Please run /login',
+    });
+    const script = [
+      '#!/bin/sh',
+      `printf '%s\\n' '${init}'`,
+      `printf '%s\\n' '${result}'`,
+      'exit 1',
+    ].join('\n');
+    const originalPath = process.env.PATH;
+
+    await writeFile(fakeClaudePath, script, 'utf8');
+    await chmod(fakeClaudePath, 0o755);
+    process.env.PATH = `${fakeBinDir}:${originalPath ?? ''}`;
+    try {
+      await expect(
+        relayClaudeCode({
+          prompt: 'fail with auth message after init output',
+          timeoutMs: 10_000,
+        }),
+      ).rejects.toThrow(
+        /claude-code subprocess exited with code 1; stdout_diagnostic=subprocess reported is_error: Not logged in - Please run \/login; stdout\[:500\]=.*session-auth-diagnostic/s,
       );
     } finally {
       process.env.PATH = originalPath;

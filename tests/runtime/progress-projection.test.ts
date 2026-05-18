@@ -19,12 +19,32 @@ function progressSurfaceFor(flowId: string): CompiledFlowProgressSurface {
   return surface;
 }
 
+function generatedFlow(flowId: string) {
+  const body = JSON.parse(readFileSync(resolve(`generated/flows/${flowId}/circuit.json`), 'utf8'));
+  return fromCompiledFlow(CompiledFlow.parse(body));
+}
+
 function trace(entry: Omit<TraceEntry, 'run_id' | 'recorded_at'>): TraceEntry {
   return {
     run_id: RUN_ID,
     recorded_at: RECORDED_AT,
     ...entry,
   };
+}
+
+function projectProgress(flowId: string, entries: readonly TraceEntry[]): ProgressEvent[] {
+  const progress: ProgressEvent[] = [];
+  const projector = createProgressProjector({
+    progress: (event) => progress.push(event),
+    runDir: '/tmp/circuit-progress-test',
+    runId: RUN_ID,
+    flow: generatedFlow(flowId),
+    progressSurface: progressSurfaceFor(flowId),
+  });
+  for (const entry of entries) {
+    projector(entry);
+  }
+  return progress;
 }
 
 describe('runtime progress projection', () => {
@@ -69,6 +89,84 @@ describe('runtime progress projection', () => {
     expect(lastTaskList?.tasks.find((task) => task.id === 'synthesize-step')).toMatchObject({
       title: 'Draft the recommendation',
       status: 'completed',
+    });
+  });
+
+  it('keeps Explore relay started and completed copy stable', () => {
+    const progress = projectProgress('explore', [
+      trace({ sequence: 0, kind: 'run.bootstrapped', flow_id: 'explore' }),
+      trace({ sequence: 1, kind: 'step.entered', step_id: 'synthesize-step', attempt: 1 }),
+      trace({
+        sequence: 2,
+        kind: 'relay.started',
+        step_id: 'synthesize-step',
+        role: 'implementer',
+        connector: { kind: 'builtin', name: 'claude-code' },
+      }),
+      trace({
+        sequence: 3,
+        kind: 'relay.completed',
+        step_id: 'synthesize-step',
+        role: 'implementer',
+        verdict: 'accept',
+        duration_ms: 123,
+      }),
+    ]);
+
+    expect(progress.find((event) => event.type === 'relay.started')?.display.text).toBe(
+      'Circuit: Asking the specialist to draft the recommendation...',
+    );
+    expect(progress.find((event) => event.type === 'relay.started')?.presentation).toMatchObject({
+      line_mode: 'replace_slot',
+      slot_id: 'synthesize-step:relay',
+      status_text: 'Asking the specialist to draft the recommendation...',
+    });
+    expect(progress.find((event) => event.type === 'relay.completed')?.display.text).toBe(
+      'Circuit: Finished drafting the recommendation.',
+    );
+    expect(progress.find((event) => event.type === 'relay.completed')?.presentation).toMatchObject({
+      line_mode: 'replace_slot',
+      slot_id: 'synthesize-step:relay',
+      status_text: 'Finished drafting the recommendation.',
+    });
+  });
+
+  it('keeps non-Explore relay started and completed copy stable', () => {
+    const progress = projectProgress('review', [
+      trace({ sequence: 0, kind: 'run.bootstrapped', flow_id: 'review' }),
+      trace({ sequence: 1, kind: 'step.entered', step_id: 'audit-step', attempt: 1 }),
+      trace({
+        sequence: 2,
+        kind: 'relay.started',
+        step_id: 'audit-step',
+        role: 'reviewer',
+        connector: { kind: 'builtin', name: 'claude-code' },
+      }),
+      trace({
+        sequence: 3,
+        kind: 'relay.completed',
+        step_id: 'audit-step',
+        role: 'reviewer',
+        verdict: 'accept',
+        duration_ms: 123,
+      }),
+    ]);
+
+    expect(progress.find((event) => event.type === 'relay.started')?.display.text).toBe(
+      'Circuit: Asking the reviewer to check the result...',
+    );
+    expect(progress.find((event) => event.type === 'relay.started')?.presentation).toMatchObject({
+      line_mode: 'replace_slot',
+      slot_id: 'audit-step:relay',
+      status_text: 'Asking the reviewer to check the result...',
+    });
+    expect(progress.find((event) => event.type === 'relay.completed')?.display.text).toBe(
+      'Circuit: Finished checking the result.',
+    );
+    expect(progress.find((event) => event.type === 'relay.completed')?.presentation).toMatchObject({
+      line_mode: 'replace_slot',
+      slot_id: 'audit-step:relay',
+      status_text: 'Finished checking the result.',
     });
   });
 });

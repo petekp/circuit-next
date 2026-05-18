@@ -612,12 +612,16 @@ export const exploreFlowData = {
           taskTitle: 'Draft the recommendation',
           activeText: 'Drafting the recommendation',
           relayRole: 'implementer',
+          relayStartedText: 'Asking the specialist to draft the recommendation...',
+          relayCompletedText: 'Finished drafting the recommendation.',
         },
         {
           stepId: 'review-step',
           taskTitle: 'Check the recommendation',
           activeText: 'Checking the recommendation',
           relayRole: 'reviewer',
+          relayStartedText: 'Asking the reviewer to check the recommendation...',
+          relayCompletedText: 'Finished checking the recommendation.',
         },
         {
           stepId: 'decision-options-step',
@@ -634,6 +638,8 @@ export const exploreFlowData = {
           taskTitle: 'Check the options',
           activeText: 'Checking the options',
           relayRole: 'reviewer',
+          relayStartedText: 'Asking the reviewer to check the recommendation...',
+          relayCompletedText: 'Finished checking the recommendation.',
         },
         {
           stepId: 'tradeoff-checkpoint-step',

@@ -1,5 +1,6 @@
 import { expandBlockStepUse } from '../block-step-expansion.js';
 import type { FlowData } from '../flow-definition.js';
+import { defineEnforcedStagePolicy } from '../stage-policy.js';
 import type { CompiledFlowSignal } from '../types.js';
 import { pursuitBatchShapeHint, pursuitReviewShapeHint } from './relay-hints.js';
 import {
@@ -30,6 +31,17 @@ const PURSUE_SIGNALS: readonly CompiledFlowSignal[] = [
       /^\s*(?:please\s+)?(?:run|execute|coordinate)\b.*\b(?:multiple|several|parallel)\b.*\b(?:goals|ideas|changes|tracks)\b/i,
   },
 ];
+
+const PURSUE_STAGE_POLICY = defineEnforcedStagePolicy({
+  canonicals: ['frame', 'plan', 'act', 'verify', 'review', 'close'],
+  omits: ['analyze'],
+  rationale:
+    'Pursuits V1 folds read-only discovery policy into the coordination graph before acting; a separate Analyze stage can be added when dynamic discovery fanout lands.',
+  optional_canonicals: [],
+  variants: [],
+  title: 'Frame → Coordinate → Execute → Verify → Review → Close',
+  authority: 'docs/flows/pursue.md §Flow Shape',
+});
 
 export const pursueFlowData = {
   id: 'pursue',
@@ -107,12 +119,7 @@ export const pursueFlowData = {
         description: 'Autonomous Pursue entry mode with the same serial-write safety policy.',
       },
     ],
-    stage_path_policy: {
-      mode: 'partial',
-      omits: ['analyze'],
-      rationale:
-        'Pursuits V1 folds read-only discovery policy into the coordination graph before acting; a separate Analyze stage can be added when dynamic discovery fanout lands.',
-    },
+    stage_path_policy: PURSUE_STAGE_POLICY.stagePathPolicy,
     stages: [
       {
         id: 'frame-stage',
@@ -309,6 +316,7 @@ export const pursueFlowData = {
       }),
     ],
   },
+  canonicalStagePolicy: PURSUE_STAGE_POLICY.canonicalStagePolicy,
   reports: [
     {
       schemaName: 'pursuit.batch@v1',
@@ -381,6 +389,8 @@ export const pursueFlowData = {
           taskTitle: 'Make the change',
           activeText: 'Making the change',
           relayRole: 'implementer',
+          relayStartedText: 'Asking the specialist to make the change...',
+          relayCompletedText: 'Finished the specialist pass.',
         },
         {
           stepId: 'verify-step',
@@ -392,6 +402,8 @@ export const pursueFlowData = {
           taskTitle: 'Check the result',
           activeText: 'Checking the result',
           relayRole: 'reviewer',
+          relayStartedText: 'Asking the reviewer to check the result...',
+          relayCompletedText: 'Finished checking the result.',
         },
         {
           stepId: 'close-step',

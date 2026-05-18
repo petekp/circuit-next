@@ -41,7 +41,11 @@ const SLICE_2_7_TARGETS = new Map<string, readonly string[]>([
 
 function expandedStepIds(flowId: string): readonly string[] {
   const source = readFileSync(`src/flows/${flowId}/data.ts`, 'utf8');
-  return [...source.matchAll(/expandBlockStepUse\(\{\s+id: '([^']+)'/g)]
+  return [
+    ...source.matchAll(
+      /(?:expandBlockStepUse|composeBlockStep|relayBlockStep|verificationBlockStep|checkpointBlockStep)\(\{\s+id: '([^']+)'/g,
+    ),
+  ]
     .map((match) => match[1])
     .filter((stepId): stepId is string => stepId !== undefined);
 }

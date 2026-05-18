@@ -93,10 +93,9 @@ and which review steps fire.
 Pass a mode with `--entry-mode <lite|deep|autonomous>` (or `--mode`, the
 shorter alias). Tournament is a depth-level option exposed through
 `--depth tournament` on the flows that support it. Mode availability varies
-by flow; see each flow's `src/flows/<id>/schematic.json` for the
-generated compatibility schematic, `src/flows/<id>/facts.ts` for the
-authoritative flow facts, and `src/flows/<id>/flow.ts` for the adapter that
-binds those facts to routing, schemas, writers, and hints.
+by flow; see each flow's `src/flows/<id>/data.ts` for the authoritative
+FlowData value, `src/flows/<id>/flow.ts` for the adapter, and
+`src/flows/<id>/schematic.json` for the generated compatibility schematic.
 
 Every flow is built from a fixed set of stages: **Frame, Analyze, Plan, Act,
 Verify, Review, Close**. Not every flow runs every stage, but the order

@@ -13672,6 +13672,13 @@ function expandBlockStepUse(use) {
     return result.value;
   throw new Error(result.errors.map(describeExpandBlockStepUseError).join("\n"));
 }
+function composeBlockStep(use) {
+  return expandBlockStepUse({ ...use, execution: { kind: "compose" } });
+}
+function relayBlockStep(use) {
+  const { role, ...stepUse } = use;
+  return expandBlockStepUse({ ...stepUse, execution: { kind: "relay", role } });
+}
 function validateOverrideOnlyFields(use, block) {
   const errors = [];
   if (use.output === block.output_contract) {
@@ -15157,7 +15164,9 @@ var buildFlowData = {
           stepId: "act-step",
           taskTitle: "Make the change",
           activeText: "Making the change",
-          relayRole: "implementer"
+          relayRole: "implementer",
+          relayStartedText: "Asking the specialist to make the change...",
+          relayCompletedText: "Finished the specialist pass."
         },
         {
           stepId: "verify-step",
@@ -15168,7 +15177,9 @@ var buildFlowData = {
           stepId: "review-step",
           taskTitle: "Check the result",
           activeText: "Checking the result",
-          relayRole: "reviewer"
+          relayRole: "reviewer",
+          relayStartedText: "Asking the reviewer to check the result...",
+          relayCompletedText: "Finished checking the result."
         },
         {
           stepId: "close-step",
@@ -16457,13 +16468,17 @@ var exploreFlowData = {
           stepId: "synthesize-step",
           taskTitle: "Draft the recommendation",
           activeText: "Drafting the recommendation",
-          relayRole: "implementer"
+          relayRole: "implementer",
+          relayStartedText: "Asking the specialist to draft the recommendation...",
+          relayCompletedText: "Finished drafting the recommendation."
         },
         {
           stepId: "review-step",
           taskTitle: "Check the recommendation",
           activeText: "Checking the recommendation",
-          relayRole: "reviewer"
+          relayRole: "reviewer",
+          relayStartedText: "Asking the reviewer to check the recommendation...",
+          relayCompletedText: "Finished checking the recommendation."
         },
         {
           stepId: "decision-options-step",
@@ -16479,7 +16494,9 @@ var exploreFlowData = {
           stepId: "stress-proposals-step",
           taskTitle: "Check the options",
           activeText: "Checking the options",
-          relayRole: "reviewer"
+          relayRole: "reviewer",
+          relayStartedText: "Asking the reviewer to check the recommendation...",
+          relayCompletedText: "Finished checking the recommendation."
         },
         {
           stepId: "tradeoff-checkpoint-step",
@@ -18685,13 +18702,17 @@ var fixFlowData = {
           stepId: "fix-gather-context",
           taskTitle: "Check the context",
           activeText: "Checking the context",
-          relayRole: "implementer"
+          relayRole: "implementer",
+          relayStartedText: "Asking the specialist to make the change...",
+          relayCompletedText: "Finished the specialist pass."
         },
         {
           stepId: "fix-diagnose",
           taskTitle: "Check the context",
           activeText: "Checking the context",
-          relayRole: "implementer"
+          relayRole: "implementer",
+          relayStartedText: "Asking the specialist to make the change...",
+          relayCompletedText: "Finished the specialist pass."
         },
         {
           stepId: "fix-no-repro-decision",
@@ -18712,7 +18733,9 @@ var fixFlowData = {
           stepId: "fix-act",
           taskTitle: "Make the change",
           activeText: "Making the change",
-          relayRole: "implementer"
+          relayRole: "implementer",
+          relayStartedText: "Asking the specialist to make the change...",
+          relayCompletedText: "Finished the specialist pass."
         },
         {
           stepId: "fix-verify",
@@ -18733,7 +18756,9 @@ var fixFlowData = {
           stepId: "fix-review",
           taskTitle: "Check the result",
           activeText: "Checking the result",
-          relayRole: "reviewer"
+          relayRole: "reviewer",
+          relayStartedText: "Asking the reviewer to check the result...",
+          relayCompletedText: "Finished checking the result."
         },
         {
           stepId: "fix-close-lite",
@@ -18757,6 +18782,34 @@ var fixFlowData = {
 
 // dist/flows/fix/flow.js
 var fixFlowDefinition = defineFlowData(fixFlowData);
+
+// dist/flows/stage-policy.js
+function defineEnforcedStagePolicy(input) {
+  const canonicals = [...input.canonicals];
+  const omits = [...input.omits];
+  const optionalCanonicals = [...input.optional_canonicals ?? []];
+  const variants = (input.variants ?? []).map((variant) => ({
+    ...variant,
+    canonicals: [...variant.canonicals],
+    omits: [...variant.omits]
+  }));
+  return {
+    stagePathPolicy: {
+      mode: "partial",
+      omits,
+      rationale: input.rationale
+    },
+    canonicalStagePolicy: {
+      kind: "enforce",
+      canonicals,
+      omits,
+      optional_canonicals: optionalCanonicals,
+      variants,
+      title: input.title,
+      authority: input.authority
+    }
+  };
+}
 
 // dist/flows/pursue/relay-hints.js
 var pursuitBatchShapeHint = {
@@ -19475,6 +19528,15 @@ var PURSUE_SIGNALS = [
     pattern: /^\s*(?:please\s+)?(?:run|execute|coordinate)\b.*\b(?:multiple|several|parallel)\b.*\b(?:goals|ideas|changes|tracks)\b/i
   }
 ];
+var PURSUE_STAGE_POLICY = defineEnforcedStagePolicy({
+  canonicals: ["frame", "plan", "act", "verify", "review", "close"],
+  omits: ["analyze"],
+  rationale: "Pursuits V1 folds read-only discovery policy into the coordination graph before acting; a separate Analyze stage can be added when dynamic discovery fanout lands.",
+  optional_canonicals: [],
+  variants: [],
+  title: "Frame \u2192 Coordinate \u2192 Execute \u2192 Verify \u2192 Review \u2192 Close",
+  authority: "docs/flows/pursue.md \xA7Flow Shape"
+});
 var pursueFlowData = {
   id: "pursue",
   visibility: "public",
@@ -19550,11 +19612,7 @@ var pursueFlowData = {
         description: "Autonomous Pursue entry mode with the same serial-write safety policy."
       }
     ],
-    stage_path_policy: {
-      mode: "partial",
-      omits: ["analyze"],
-      rationale: "Pursuits V1 folds read-only discovery policy into the coordination graph before acting; a separate Analyze stage can be added when dynamic discovery fanout lands."
-    },
+    stage_path_policy: PURSUE_STAGE_POLICY.stagePathPolicy,
     stages: [
       {
         id: "frame-stage",
@@ -19751,6 +19809,7 @@ var pursueFlowData = {
       })
     ]
   },
+  canonicalStagePolicy: PURSUE_STAGE_POLICY.canonicalStagePolicy,
   reports: [
     {
       schemaName: "pursuit.batch@v1",
@@ -19822,7 +19881,9 @@ var pursueFlowData = {
           stepId: "batch-step",
           taskTitle: "Make the change",
           activeText: "Making the change",
-          relayRole: "implementer"
+          relayRole: "implementer",
+          relayStartedText: "Asking the specialist to make the change...",
+          relayCompletedText: "Finished the specialist pass."
         },
         {
           stepId: "verify-step",
@@ -19833,7 +19894,9 @@ var pursueFlowData = {
           stepId: "review-step",
           taskTitle: "Check the result",
           activeText: "Checking the result",
-          relayRole: "reviewer"
+          relayRole: "reviewer",
+          relayStartedText: "Asking the reviewer to check the result...",
+          relayCompletedText: "Finished checking the result."
         },
         {
           stepId: "close-step",
@@ -20425,7 +20488,7 @@ var reviewFlowData = {
       }
     ],
     items: [
-      expandBlockStepUse({
+      composeBlockStep({
         id: "intake-step",
         title: "Intake \u2014 resolve review scope",
         stage: "frame",
@@ -20440,9 +20503,6 @@ var reviewFlowData = {
           "working tree status",
           "diff or unavailable reason"
         ],
-        execution: {
-          kind: "compose"
-        },
         protocol: "review-intake@v1",
         reportPath: "reports/review-intake.json",
         required: ["scope", "evidence"],
@@ -20451,7 +20511,7 @@ var reviewFlowData = {
           stop: "@stop"
         }
       }),
-      expandBlockStepUse({
+      relayBlockStep({
         id: "audit-step",
         title: "Independent Audit \u2014 reviewer relay",
         stage: "analyze",
@@ -20459,10 +20519,7 @@ var reviewFlowData = {
         input: {
           brief: "review.intake@v1"
         },
-        execution: {
-          kind: "relay",
-          role: "reviewer"
-        },
+        role: "reviewer",
         protocol: "review-audit@v1",
         requestPath: "reports/relay/review.request.json",
         receiptPath: "reports/relay/review.receipt.txt",
@@ -20474,7 +20531,7 @@ var reviewFlowData = {
           stop: "@stop"
         }
       }),
-      expandBlockStepUse({
+      composeBlockStep({
         id: "verdict-step",
         title: "Verdict \u2014 emit review.result",
         stage: "close",
@@ -20484,9 +20541,6 @@ var reviewFlowData = {
           review: "review.verdict@v1"
         },
         output: "review.result@v1",
-        execution: {
-          kind: "compose"
-        },
         protocol: "review-verdict@v1",
         reportPath: "reports/review-result.json",
         required: ["scope", "findings", "verdict"],
@@ -20538,7 +20592,9 @@ var reviewFlowData = {
           stepId: "audit-step",
           taskTitle: "Check the result",
           activeText: "Checking the result",
-          relayRole: "reviewer"
+          relayRole: "reviewer",
+          relayStartedText: "Asking the reviewer to check the result...",
+          relayCompletedText: "Finished checking the result."
         },
         {
           stepId: "verdict-step",
@@ -20569,121 +20625,125 @@ var runtimeProofComposeBuilder = {
 };
 
 // dist/flows/runtime-proof/data.js
+var runtimeProofPaths = {
+  schematic: "src/flows/runtime-proof/schematic.json"
+};
+var runtimeProofSchematic = {
+  schema_version: "1",
+  id: "runtime-proof",
+  title: "Runtime Proof Schematic",
+  purpose: "Runtime Proof flow: exercise one compose step and one relay step end-to-end so the runtime boundary can be observed closing a real run.",
+  status: "active",
+  version: "0.1.0",
+  starts_at: "compose-step",
+  initial_contracts: ["flow.brief@v1"],
+  contract_aliases: [],
+  entry: {
+    signals: {
+      include: ["runtime-proof", "alpha-proof"],
+      exclude: []
+    },
+    intent_prefixes: ["runtime-proof"]
+  },
+  entry_modes: [
+    {
+      name: "runtime-proof",
+      depth: "standard",
+      description: "Default runtime-proof entry mode; seeds the run at the compose step."
+    }
+  ],
+  stage_path_policy: {
+    mode: "partial",
+    omits: ["frame", "analyze", "verify", "review", "close"],
+    rationale: "Runtime Proof is a narrow proof flow; only plan and act are needed to exercise compose and relay through the runtime boundary."
+  },
+  stages: [
+    {
+      id: "plan-stage",
+      canonical: "plan",
+      title: "Plan"
+    },
+    {
+      id: "act-stage",
+      canonical: "act",
+      title: "Act"
+    }
+  ],
+  items: [
+    {
+      id: "compose-step",
+      title: "Compose runtime proof report",
+      stage: "plan",
+      block: "plan",
+      input: {
+        brief: "flow.brief@v1"
+      },
+      output: "plan.strategy@v1",
+      evidence_requirements: ["ordered steps", "risk notes", "proof strategy"],
+      execution: {
+        kind: "compose"
+      },
+      protocol: "runtime-proof-compose@v1",
+      writes: {
+        report_path: "reports/compose.json"
+      },
+      check: {
+        required: ["summary"]
+      },
+      routes: {
+        continue: "relay-step"
+      }
+    },
+    {
+      id: "relay-step",
+      title: "Relay dry-run connector",
+      stage: "act",
+      block: "act",
+      input: {
+        brief: "flow.brief@v1",
+        plan: "plan.strategy@v1"
+      },
+      output: "change.evidence@v1",
+      evidence_requirements: ["changed files", "change rationale", "declared follow-up proof"],
+      execution: {
+        kind: "relay",
+        role: "implementer"
+      },
+      protocol: "runtime-proof-relay@v1",
+      writes: {
+        request_path: "reports/relay.request.json",
+        receipt_path: "reports/relay.receipt.json",
+        result_path: "reports/relay.result.json"
+      },
+      check: {
+        pass: ["ok"]
+      },
+      routes: {
+        continue: "@complete"
+      }
+    }
+  ]
+};
+var runtimeProofCanonicalStagePolicy = {
+  kind: "exempt",
+  reason: "partial-stage path, recorded"
+};
+var runtimeProofReports = [
+  {
+    schemaName: "runtime-proof.compose@v1",
+    channel: "report",
+    schema: RuntimeProofCompose,
+    writers: { compose: [runtimeProofComposeBuilder] }
+  }
+];
 var runtimeProofFlowData = {
   id: "runtime-proof",
   visibility: "internal",
-  paths: {
-    schematic: "src/flows/runtime-proof/schematic.json"
-  },
-  schematic: {
-    schema_version: "1",
-    id: "runtime-proof",
-    title: "Runtime Proof Schematic",
-    purpose: "Runtime Proof flow: exercise one compose step and one relay step end-to-end so the runtime boundary can be observed closing a real run.",
-    status: "active",
-    version: "0.1.0",
-    starts_at: "compose-step",
-    initial_contracts: ["flow.brief@v1"],
-    contract_aliases: [],
-    entry: {
-      signals: {
-        include: ["runtime-proof", "alpha-proof"],
-        exclude: []
-      },
-      intent_prefixes: ["runtime-proof"]
-    },
-    entry_modes: [
-      {
-        name: "runtime-proof",
-        depth: "standard",
-        description: "Default runtime-proof entry mode; seeds the run at the compose step."
-      }
-    ],
-    stage_path_policy: {
-      mode: "partial",
-      omits: ["frame", "analyze", "verify", "review", "close"],
-      rationale: "Runtime Proof is a narrow proof flow; only plan and act are needed to exercise compose and relay through the runtime boundary."
-    },
-    stages: [
-      {
-        id: "plan-stage",
-        canonical: "plan",
-        title: "Plan"
-      },
-      {
-        id: "act-stage",
-        canonical: "act",
-        title: "Act"
-      }
-    ],
-    items: [
-      {
-        id: "compose-step",
-        title: "Compose runtime proof report",
-        stage: "plan",
-        block: "plan",
-        input: {
-          brief: "flow.brief@v1"
-        },
-        output: "plan.strategy@v1",
-        evidence_requirements: ["ordered steps", "risk notes", "proof strategy"],
-        execution: {
-          kind: "compose"
-        },
-        protocol: "runtime-proof-compose@v1",
-        writes: {
-          report_path: "reports/compose.json"
-        },
-        check: {
-          required: ["summary"]
-        },
-        routes: {
-          continue: "relay-step"
-        }
-      },
-      {
-        id: "relay-step",
-        title: "Relay dry-run connector",
-        stage: "act",
-        block: "act",
-        input: {
-          brief: "flow.brief@v1",
-          plan: "plan.strategy@v1"
-        },
-        output: "change.evidence@v1",
-        evidence_requirements: ["changed files", "change rationale", "declared follow-up proof"],
-        execution: {
-          kind: "relay",
-          role: "implementer"
-        },
-        protocol: "runtime-proof-relay@v1",
-        writes: {
-          request_path: "reports/relay.request.json",
-          receipt_path: "reports/relay.receipt.json",
-          result_path: "reports/relay.result.json"
-        },
-        check: {
-          pass: ["ok"]
-        },
-        routes: {
-          continue: "@complete"
-        }
-      }
-    ]
-  },
-  canonicalStagePolicy: {
-    kind: "exempt",
-    reason: "partial-stage path, recorded"
-  },
+  paths: runtimeProofPaths,
+  schematic: runtimeProofSchematic,
+  canonicalStagePolicy: runtimeProofCanonicalStagePolicy,
   reportWriterSchemaAliases: ["plan.strategy@v1"],
-  reports: [
-    {
-      schemaName: "runtime-proof.compose@v1",
-      channel: "report",
-      schema: RuntimeProofCompose,
-      writers: { compose: [runtimeProofComposeBuilder] }
-    }
-  ]
+  reports: runtimeProofReports
 };
 
 // dist/flows/runtime-proof/flow.js
@@ -22106,9 +22166,71 @@ function resolveComposeReadPaths(builder, flow, step) {
   return paths;
 }
 
+// dist/runtime/run/run-values.js
+function runValueFromContext(context) {
+  return {
+    flow: context.flow,
+    packageIndex: context.packageIndex,
+    runId: context.runId,
+    goal: context.goal,
+    manifestHash: context.manifestHash,
+    ...context.entryModeName === void 0 ? {} : { entryModeName: context.entryModeName },
+    ...context.depth === void 0 ? {} : { depth: context.depth },
+    ...context.activeStepAttempt === void 0 ? {} : { activeStepAttempt: context.activeStepAttempt },
+    ...context.resumeCheckpoint === void 0 ? {} : { resumeCheckpoint: context.resumeCheckpoint }
+  };
+}
+function runPortsFromContext(context) {
+  return {
+    clock: { now: context.now },
+    traceLog: {
+      load: () => context.trace.load(),
+      append: (input) => context.trace.append(input),
+      getAll: () => context.trace.getAll()
+    },
+    runFiles: {
+      resolve: (ref) => context.files.resolve(ref),
+      writeJson: (ref, value) => context.files.writeJson(ref, value),
+      writeText: (ref, value) => context.files.writeText(ref, value),
+      readText: (ref) => context.files.readText(ref),
+      readJson: (ref) => context.files.readJson(ref)
+    },
+    runDirectory: { path: context.runDir },
+    progress: {
+      ...context.progress === void 0 ? {} : { report: context.progress }
+    },
+    connector: {
+      ...context.relayConnector === void 0 ? {} : { relayConnector: context.relayConnector },
+      ...context.relayer === void 0 ? {} : { relayer: context.relayer }
+    },
+    childRun: {
+      ...context.childExecutors === void 0 ? {} : { executors: context.childExecutors },
+      ...context.childCompiledFlowResolver === void 0 ? {} : { compiledFlowResolver: context.childCompiledFlowResolver },
+      ...context.childRunner === void 0 ? {} : { runner: context.childRunner },
+      externalFiles: context.externalFiles
+    },
+    worktree: {
+      ...context.projectRoot === void 0 ? {} : { projectRoot: context.projectRoot },
+      ...context.evidencePolicy === void 0 ? {} : { evidencePolicy: context.evidencePolicy },
+      ...context.worktreeRunner === void 0 ? {} : { runner: context.worktreeRunner }
+    },
+    selection: {
+      ...context.selectionConfigLayers === void 0 ? {} : { configLayers: context.selectionConfigLayers }
+    }
+  };
+}
+function stepExecutionContextFromContext(context, stepId, kind) {
+  const run = runValueFromContext(context);
+  return {
+    run,
+    ports: runPortsFromContext(context),
+    indexedStep: requireRuntimeIndexedStep(run.packageIndex, stepId, kind)
+  };
+}
+
 // dist/runtime/executors/compose.js
 async function readJsonReport(context, path) {
-  return await context.files.readJson(path);
+  return await context.ports.runFiles.readJson(path);
 }
 async function readOptionalJsonReport(context, path, required) {
   try {
@@ -22124,8 +22246,8 @@ async function writeRegisteredComposeReport(step, context) {
   const report = step.writes?.report;
   if (report?.schema === void 0)
     return false;
-  const flow = context.packageIndex.flow;
-  const indexedStep2 = requireRuntimeIndexedStep(context.packageIndex, step.id, "compose");
+  const flow = context.run.packageIndex.flow;
+  const indexedStep2 = context.indexedStep;
   const composeBuilder = findComposeBuilder(report.schema);
   if (composeBuilder !== void 0) {
     const readPaths = resolveComposeReadPaths(composeBuilder, flow, indexedStep2);
@@ -22134,15 +22256,15 @@ async function writeRegisteredComposeReport(step, context) {
       inputs[name] = path === void 0 ? void 0 : await readJsonReport(context, path);
     }
     const body = composeBuilder.build({
-      runFolder: context.runDir,
+      runFolder: context.ports.runDirectory.path,
       flow,
       step: indexedStep2,
-      goal: context.goal,
-      ...context.projectRoot === void 0 ? {} : { projectRoot: context.projectRoot },
-      ...context.evidencePolicy === void 0 ? {} : { evidencePolicy: context.evidencePolicy },
+      goal: context.run.goal,
+      ...context.ports.worktree.projectRoot === void 0 ? {} : { projectRoot: context.ports.worktree.projectRoot },
+      ...context.ports.worktree.evidencePolicy === void 0 ? {} : { evidencePolicy: context.ports.worktree.evidencePolicy },
       inputs
     });
-    await context.files.writeJson(report, body);
+    await context.ports.runFiles.writeJson(report, body);
     return true;
   }
   const closeBuilder = findCloseBuilder(report.schema);
@@ -22154,26 +22276,29 @@ async function writeRegisteredComposeReport(step, context) {
       inputs[descriptor.name] = path === void 0 ? void 0 : await readOptionalJsonReport(context, path, descriptor.required);
     }
     const body = closeBuilder.build({
-      runFolder: context.runDir,
+      runFolder: context.ports.runDirectory.path,
       flow,
       closeStep: indexedStep2,
-      goal: context.goal,
+      goal: context.run.goal,
       inputs
     });
-    await context.files.writeJson(report, body);
+    await context.ports.runFiles.writeJson(report, body);
     return true;
   }
   throw new Error(`no compose report writer registered for schema '${report.schema}' at compose step '${step.id}'`);
 }
 async function executeComposeResult(step, context) {
+  return executeComposeWithPorts(step, stepExecutionContextFromContext(context, step.id, "compose"));
+}
+async function executeComposeWithPorts(step, context) {
   try {
     if (step.writes?.report?.schema !== void 0) {
       await writeRegisteredComposeReport(step, context);
-      await context.trace.append({
-        run_id: context.runId,
+      await context.ports.traceLog.append({
+        run_id: context.run.runId,
         kind: "step.report_written",
         step_id: step.id,
-        attempt: context.activeStepAttempt ?? 1,
+        attempt: context.run.activeStepAttempt ?? 1,
         report_path: step.writes.report.path,
         report_schema: step.writes.report.schema
       });
@@ -22181,7 +22306,7 @@ async function executeComposeResult(step, context) {
     }
     const body = step.body ?? { stepId: step.id, writer: step.writer };
     const writes = step.writes ?? {};
-    await Promise.all(Object.values(writes).map((ref) => context.files.writeJson(ref, {
+    await Promise.all(Object.values(writes).map((ref) => context.ports.runFiles.writeJson(ref, {
       stepId: step.id,
       writer: step.writer,
       body
@@ -22602,6 +22727,14 @@ function buildClaudeCodeArgs(input) {
   args.push(input.prompt);
   return args;
 }
+function claudeCodeStdoutDiagnostic(stdout) {
+  try {
+    parseClaudeCodeStdout(stdout, "", 0);
+    return void 0;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}
 function isClaudeCodeStructuredOutputCompatible(schema) {
   return schema.type === "object";
 }
@@ -22634,7 +22767,9 @@ async function relayClaudeCode(input) {
   if (result.code !== 0) {
     const stdoutSuffix = result.stdoutCapped ? " [stdout capped]" : "";
     const stderrSuffix = result.stderrCapped ? " [stderr capped]" : "";
-    throw new Error(`claude-code subprocess exited with code ${result.code}${result.signal ? ` (signal ${result.signal})` : ""}; stdout[:500]=${result.stdout.slice(0, 500)}${stdoutSuffix}; stderr[:500]=${result.stderr.slice(0, 500)}${stderrSuffix}`);
+    const stdoutDiagnostic = claudeCodeStdoutDiagnostic(result.stdout);
+    const diagnosticText = stdoutDiagnostic === void 0 ? "" : `; stdout_diagnostic=${stdoutDiagnostic}`;
+    throw new Error(`claude-code subprocess exited with code ${result.code}${result.signal ? ` (signal ${result.signal})` : ""}${diagnosticText}; stdout[:500]=${result.stdout.slice(0, 500)}${stdoutSuffix}; stderr[:500]=${result.stderr.slice(0, 500)}${stderrSuffix}`);
   }
   if (result.stdoutCapped) {
     throw new Error(`claude-code subprocess stdout exceeded ${STDOUT_MAX_BYTES} bytes; capability-boundary check cannot be evaluated on truncated stream`);
@@ -26972,17 +27107,23 @@ function stepTitle(input) {
 function flowLabel(flowId) {
   return flowId.split("-").filter((part) => part.length > 0).map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`).join(" ");
 }
-function relayStartedStatusText(flowId, role) {
+function fallbackRelayStartedStatusText(role) {
   if (role === "reviewer") {
-    return flowId === "explore" ? "Asking the reviewer to check the recommendation..." : "Asking the reviewer to check the result...";
+    return "Asking the reviewer to check the result...";
   }
-  return flowId === "explore" ? "Asking the specialist to draft the recommendation..." : "Asking the specialist to make the change...";
+  return "Asking the specialist to make the change...";
 }
-function relayCompletedStatusText(flowId, role) {
+function fallbackRelayCompletedStatusText(role) {
   if (role === "reviewer") {
-    return flowId === "explore" ? "Finished checking the recommendation." : "Finished checking the result.";
+    return "Finished checking the result.";
   }
-  return flowId === "explore" ? "Finished drafting the recommendation." : "Finished the specialist pass.";
+  return "Finished the specialist pass.";
+}
+function relayStartedTextFor(input) {
+  return input.display.relayStartedText ?? fallbackRelayStartedStatusText(input.role);
+}
+function relayCompletedTextFor(input) {
+  return input.display.relayCompletedText ?? fallbackRelayCompletedStatusText(input.role);
 }
 function circuitDisplayText(statusText) {
   return `Circuit: ${statusText}`;
@@ -27163,7 +27304,9 @@ function stepDisplay(input) {
       title,
       taskTitle: metadata.taskTitle,
       activeText: metadata.activeText,
-      ...metadata.relayRole === void 0 ? {} : { relayRole: metadata.relayRole }
+      ...metadata.relayRole === void 0 ? {} : { relayRole: metadata.relayRole },
+      ...metadata.relayStartedText === void 0 ? {} : { relayStartedText: metadata.relayStartedText },
+      ...metadata.relayCompletedText === void 0 ? {} : { relayCompletedText: metadata.relayCompletedText }
     };
   }
   return {
@@ -27252,7 +27395,7 @@ function createProgressProjector(input) {
           break;
         const display = stepDisplay({ flow: input.flow, stepDisplayById, stepId });
         const capability = connectorFilesystemCapability(connector);
-        const statusText = relayStartedStatusText(input.flow.id, role);
+        const statusText = relayStartedTextFor({ role, display });
         reportProgress(input.progress, {
           schema_version: 1,
           type: "relay.started",
@@ -27279,7 +27422,7 @@ function createProgressProjector(input) {
         }
         const display = stepDisplay({ flow: input.flow, stepDisplayById, stepId });
         const role = relayRoleFromTrace(entry) ?? display.relayRole ?? "implementer";
-        const statusText = relayCompletedStatusText(input.flow.id, role);
+        const statusText = relayCompletedTextFor({ role, display });
         reportProgress(input.progress, {
           schema_version: 1,
           type: "relay.completed",

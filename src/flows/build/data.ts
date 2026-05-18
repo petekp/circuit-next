@@ -397,6 +397,8 @@ export const buildFlowData = {
           taskTitle: 'Make the change',
           activeText: 'Making the change',
           relayRole: 'implementer',
+          relayStartedText: 'Asking the specialist to make the change...',
+          relayCompletedText: 'Finished the specialist pass.',
         },
         {
           stepId: 'verify-step',
@@ -408,6 +410,8 @@ export const buildFlowData = {
           taskTitle: 'Check the result',
           activeText: 'Checking the result',
           relayRole: 'reviewer',
+          relayStartedText: 'Asking the reviewer to check the result...',
+          relayCompletedText: 'Finished checking the result.',
         },
         {
           stepId: 'close-step',

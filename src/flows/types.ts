@@ -131,6 +131,8 @@ export interface CompiledFlowProgressStep {
   readonly taskTitle: string;
   readonly activeText: string;
   readonly relayRole?: 'implementer' | 'reviewer';
+  readonly relayStartedText?: string;
+  readonly relayCompletedText?: string;
 }
 
 export interface CompiledFlowProgressSurface {

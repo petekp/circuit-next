@@ -77,26 +77,32 @@ function flowLabel(flowId: string): string {
     .join(' ');
 }
 
-function relayStartedStatusText(flowId: string, role: 'reviewer' | 'implementer'): string {
+function fallbackRelayStartedStatusText(role: 'reviewer' | 'implementer'): string {
   if (role === 'reviewer') {
-    return flowId === 'explore'
-      ? 'Asking the reviewer to check the recommendation...'
-      : 'Asking the reviewer to check the result...';
+    return 'Asking the reviewer to check the result...';
   }
-  return flowId === 'explore'
-    ? 'Asking the specialist to draft the recommendation...'
-    : 'Asking the specialist to make the change...';
+  return 'Asking the specialist to make the change...';
 }
 
-function relayCompletedStatusText(flowId: string, role: 'reviewer' | 'implementer'): string {
+function fallbackRelayCompletedStatusText(role: 'reviewer' | 'implementer'): string {
   if (role === 'reviewer') {
-    return flowId === 'explore'
-      ? 'Finished checking the recommendation.'
-      : 'Finished checking the result.';
+    return 'Finished checking the result.';
   }
-  return flowId === 'explore'
-    ? 'Finished drafting the recommendation.'
-    : 'Finished the specialist pass.';
+  return 'Finished the specialist pass.';
+}
+
+function relayStartedTextFor(input: {
+  readonly role: 'reviewer' | 'implementer';
+  readonly display: ReturnType<typeof stepDisplay>;
+}): string {
+  return input.display.relayStartedText ?? fallbackRelayStartedStatusText(input.role);
+}
+
+function relayCompletedTextFor(input: {
+  readonly role: 'reviewer' | 'implementer';
+  readonly display: ReturnType<typeof stepDisplay>;
+}): string {
+  return input.display.relayCompletedText ?? fallbackRelayCompletedStatusText(input.role);
 }
 
 function circuitDisplayText(statusText: string): string {
@@ -365,6 +371,8 @@ function stepDisplay(input: {
   readonly taskTitle: string;
   readonly activeText: string;
   readonly relayRole?: 'implementer' | 'reviewer';
+  readonly relayStartedText?: string;
+  readonly relayCompletedText?: string;
 } {
   const title = stepTitle({ flow: input.flow, stepId: input.stepId });
   const metadata = input.stepDisplayById.get(input.stepId);
@@ -374,6 +382,12 @@ function stepDisplay(input: {
       taskTitle: metadata.taskTitle,
       activeText: metadata.activeText,
       ...(metadata.relayRole === undefined ? {} : { relayRole: metadata.relayRole }),
+      ...(metadata.relayStartedText === undefined
+        ? {}
+        : { relayStartedText: metadata.relayStartedText }),
+      ...(metadata.relayCompletedText === undefined
+        ? {}
+        : { relayCompletedText: metadata.relayCompletedText }),
     };
   }
   return {
@@ -478,7 +492,7 @@ export function createProgressProjector(input: {
         if (connector === undefined || role === undefined) break;
         const display = stepDisplay({ flow: input.flow, stepDisplayById, stepId });
         const capability = connectorFilesystemCapability(connector);
-        const statusText = relayStartedStatusText(input.flow.id, role);
+        const statusText = relayStartedTextFor({ role, display });
         reportProgress(input.progress, {
           schema_version: 1,
           type: 'relay.started',
@@ -509,7 +523,7 @@ export function createProgressProjector(input: {
         }
         const display = stepDisplay({ flow: input.flow, stepDisplayById, stepId });
         const role = relayRoleFromTrace(entry) ?? display.relayRole ?? 'implementer';
-        const statusText = relayCompletedStatusText(input.flow.id, role);
+        const statusText = relayCompletedTextFor({ role, display });
         reportProgress(input.progress, {
           schema_version: 1,
           type: 'relay.completed',

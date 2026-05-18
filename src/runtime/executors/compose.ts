@@ -6,10 +6,10 @@ import {
   findComposeBuilder,
   resolveComposeReadPaths,
 } from '../../flows/registries/compose-writers/registry.js';
-import { requireRuntimeIndexedStep } from '../../flows/registries/runtime-index.js';
 import type { StepOutcome } from '../domain/step.js';
 import type { ComposeStep } from '../manifest/executable-flow.js';
 import type { RunContext } from '../run/run-context.js';
+import { type StepExecutionContext, stepExecutionContextFromContext } from '../run/run-values.js';
 import {
   type StepExecutionResult,
   stepExecutionFailedFrom,
@@ -17,12 +17,14 @@ import {
   unwrapStepExecutionResult,
 } from './result.js';
 
-async function readJsonReport(context: RunContext, path: string): Promise<unknown> {
-  return await context.files.readJson(path);
+type ComposeExecutionContext = StepExecutionContext<'compose'>;
+
+async function readJsonReport(context: ComposeExecutionContext, path: string): Promise<unknown> {
+  return await context.ports.runFiles.readJson(path);
 }
 
 async function readOptionalJsonReport(
-  context: RunContext,
+  context: ComposeExecutionContext,
   path: string,
   required: boolean,
 ): Promise<unknown> {
@@ -38,13 +40,13 @@ async function readOptionalJsonReport(
 
 async function writeRegisteredComposeReport(
   step: ComposeStep,
-  context: RunContext,
+  context: ComposeExecutionContext,
 ): Promise<boolean> {
   const report = step.writes?.report;
   if (report?.schema === undefined) return false;
 
-  const flow = context.packageIndex.flow;
-  const indexedStep = requireRuntimeIndexedStep(context.packageIndex, step.id, 'compose');
+  const flow = context.run.packageIndex.flow;
+  const indexedStep = context.indexedStep;
   const composeBuilder = findComposeBuilder(report.schema);
   if (composeBuilder !== undefined) {
     const readPaths = resolveComposeReadPaths(composeBuilder, flow, indexedStep);
@@ -53,15 +55,19 @@ async function writeRegisteredComposeReport(
       inputs[name] = path === undefined ? undefined : await readJsonReport(context, path);
     }
     const body = composeBuilder.build({
-      runFolder: context.runDir,
+      runFolder: context.ports.runDirectory.path,
       flow,
       step: indexedStep,
-      goal: context.goal,
-      ...(context.projectRoot === undefined ? {} : { projectRoot: context.projectRoot }),
-      ...(context.evidencePolicy === undefined ? {} : { evidencePolicy: context.evidencePolicy }),
+      goal: context.run.goal,
+      ...(context.ports.worktree.projectRoot === undefined
+        ? {}
+        : { projectRoot: context.ports.worktree.projectRoot }),
+      ...(context.ports.worktree.evidencePolicy === undefined
+        ? {}
+        : { evidencePolicy: context.ports.worktree.evidencePolicy }),
       inputs,
     });
-    await context.files.writeJson(report, body);
+    await context.ports.runFiles.writeJson(report, body);
     return true;
   }
 
@@ -77,13 +83,13 @@ async function writeRegisteredComposeReport(
           : await readOptionalJsonReport(context, path, descriptor.required);
     }
     const body = closeBuilder.build({
-      runFolder: context.runDir,
+      runFolder: context.ports.runDirectory.path,
       flow,
       closeStep: indexedStep,
-      goal: context.goal,
+      goal: context.run.goal,
       inputs,
     });
-    await context.files.writeJson(report, body);
+    await context.ports.runFiles.writeJson(report, body);
     return true;
   }
 
@@ -96,14 +102,24 @@ export async function executeComposeResult(
   step: ComposeStep,
   context: RunContext,
 ): Promise<StepExecutionResult> {
+  return executeComposeWithPorts(
+    step,
+    stepExecutionContextFromContext(context, step.id, 'compose'),
+  );
+}
+
+export async function executeComposeWithPorts(
+  step: ComposeStep,
+  context: ComposeExecutionContext,
+): Promise<StepExecutionResult> {
   try {
     if (step.writes?.report?.schema !== undefined) {
       await writeRegisteredComposeReport(step, context);
-      await context.trace.append({
-        run_id: context.runId,
+      await context.ports.traceLog.append({
+        run_id: context.run.runId,
         kind: 'step.report_written',
         step_id: step.id,
-        attempt: context.activeStepAttempt ?? 1,
+        attempt: context.run.activeStepAttempt ?? 1,
         report_path: step.writes.report.path,
         report_schema: step.writes.report.schema,
       });
@@ -114,7 +130,7 @@ export async function executeComposeResult(
     const writes = step.writes ?? {};
     await Promise.all(
       Object.values(writes).map((ref) =>
-        context.files.writeJson(ref, {
+        context.ports.runFiles.writeJson(ref, {
           stepId: step.id,
           writer: step.writer,
           body,

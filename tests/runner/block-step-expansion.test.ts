@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  checkpointBlockStep,
+  composeBlockStep,
   expandBlockStepUse,
   expandBlockStepUseValue,
+  relayBlockStep,
+  verificationBlockStep,
 } from '../../src/flows/block-step-expansion.js';
 
 describe('Block Step expansion', () => {
@@ -195,6 +199,81 @@ describe('Block Step expansion', () => {
       },
       check: { allow: ['continue'] },
     });
+  });
+
+  it('execution-kind helpers preserve the existing expansion path', () => {
+    const composeUse = {
+      id: 'plan-step',
+      block: 'plan',
+      title: 'Plan the work',
+      stage: 'plan',
+      input: { brief: 'flow.brief@v1' },
+      protocol: 'test-plan@v1',
+      reportPath: 'reports/plan.json',
+      required: ['steps'],
+      routes: { continue: 'act-step' },
+    } satisfies Parameters<typeof composeBlockStep>[0];
+    expect(composeBlockStep(composeUse)).toEqual(
+      expandBlockStepUse({ ...composeUse, execution: { kind: 'compose' } }),
+    );
+
+    const relayUse = {
+      id: 'act-step',
+      block: 'act',
+      title: 'Implement the plan',
+      stage: 'act',
+      input: { brief: 'flow.brief@v1', plan: 'plan.strategy@v1' },
+      role: 'implementer',
+      protocol: 'test-act@v1',
+      requestPath: 'reports/relay/act-request.json',
+      receiptPath: 'reports/relay/act-receipt.json',
+      resultPath: 'reports/relay/act-result.json',
+      reportPath: 'reports/implementation.json',
+      pass: ['accept'],
+      routes: { continue: 'verify-step', retry: 'act-step', stop: '@stop' },
+    } satisfies Parameters<typeof relayBlockStep>[0];
+    const { role, ...broadRelayUse } = relayUse;
+    expect(relayBlockStep(relayUse)).toEqual(
+      expandBlockStepUse({
+        ...broadRelayUse,
+        execution: { kind: 'relay', role },
+      }),
+    );
+
+    const checkpointUse = {
+      id: 'frame-step',
+      block: 'frame',
+      title: 'Frame the work',
+      stage: 'frame',
+      input: { intake: 'task.intake@v1', route: 'route.decision@v1' },
+      protocol: 'test-frame@v1',
+      reportPath: 'reports/brief.json',
+      checkpointRequestPath: 'reports/checkpoints/frame-request.json',
+      checkpointResponsePath: 'reports/checkpoints/frame-response.json',
+      allow: ['continue'],
+      checkpointPolicy: {
+        prompt: 'Confirm the brief.',
+        choices: [{ id: 'continue', label: 'Continue' }],
+        safe_default_choice: 'continue',
+      },
+      routes: { continue: 'plan-step', stop: '@stop' },
+    } satisfies Parameters<typeof checkpointBlockStep>[0];
+    expect(checkpointBlockStep(checkpointUse)).toEqual(
+      expandBlockStepUse({ ...checkpointUse, execution: { kind: 'checkpoint' } }),
+    );
+
+    const verificationUse = {
+      id: 'verify-step',
+      block: 'run-verification',
+      title: 'Run verification',
+      stage: 'verify',
+      input: { plan: 'verification.plan@v1' },
+      protocol: 'test-verify@v1',
+      reportPath: 'reports/verification.json',
+      required: ['overall_status', 'commands'],
+      routes: { continue: 'close-step', retry: 'verify-step', stop: '@stop' },
+    } satisfies Parameters<typeof verificationBlockStep>[0];
+    expect(verificationBlockStep(verificationUse)).toEqual(expandBlockStepUse(verificationUse));
   });
 
   it('does not infer execution when a Block has more than one legal execution kind', () => {

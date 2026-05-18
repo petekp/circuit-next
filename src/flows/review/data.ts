@@ -1,4 +1,4 @@
-import { expandBlockStepUse } from '../block-step-expansion.js';
+import { composeBlockStep, relayBlockStep } from '../block-step-expansion.js';
 import type { FlowData } from '../flow-definition.js';
 import type { CompiledFlowSignal } from '../types.js';
 import { reviewRelayShapeHint } from './relay-hints.js';
@@ -113,7 +113,7 @@ export const reviewFlowData = {
       },
     ],
     items: [
-      expandBlockStepUse({
+      composeBlockStep({
         id: 'intake-step',
         title: 'Intake — resolve review scope',
         stage: 'frame',
@@ -128,9 +128,6 @@ export const reviewFlowData = {
           'working tree status',
           'diff or unavailable reason',
         ],
-        execution: {
-          kind: 'compose',
-        },
         protocol: 'review-intake@v1',
         reportPath: 'reports/review-intake.json',
         required: ['scope', 'evidence'],
@@ -139,7 +136,7 @@ export const reviewFlowData = {
           stop: '@stop',
         },
       }),
-      expandBlockStepUse({
+      relayBlockStep({
         id: 'audit-step',
         title: 'Independent Audit — reviewer relay',
         stage: 'analyze',
@@ -147,10 +144,7 @@ export const reviewFlowData = {
         input: {
           brief: 'review.intake@v1',
         },
-        execution: {
-          kind: 'relay',
-          role: 'reviewer',
-        },
+        role: 'reviewer',
         protocol: 'review-audit@v1',
         requestPath: 'reports/relay/review.request.json',
         receiptPath: 'reports/relay/review.receipt.txt',
@@ -162,7 +156,7 @@ export const reviewFlowData = {
           stop: '@stop',
         },
       }),
-      expandBlockStepUse({
+      composeBlockStep({
         id: 'verdict-step',
         title: 'Verdict — emit review.result',
         stage: 'close',
@@ -172,9 +166,6 @@ export const reviewFlowData = {
           review: 'review.verdict@v1',
         },
         output: 'review.result@v1',
-        execution: {
-          kind: 'compose',
-        },
         protocol: 'review-verdict@v1',
         reportPath: 'reports/review-result.json',
         required: ['scope', 'findings', 'verdict'],
@@ -227,6 +218,8 @@ export const reviewFlowData = {
           taskTitle: 'Check the result',
           activeText: 'Checking the result',
           relayRole: 'reviewer',
+          relayStartedText: 'Asking the reviewer to check the result...',
+          relayCompletedText: 'Finished checking the result.',
         },
         {
           stepId: 'verdict-step',

@@ -4,6 +4,7 @@ import {
   FLOW_CANONICAL_STAGE_POLICY_BY_ID,
   FLOW_CANONICAL_STAGE_POLICY_EXEMPT_IDS,
 } from '../../src/flows/canonical-stage-policy.js';
+import { flowDefinitions } from '../../src/flows/catalog.js';
 import {
   type CompiledFlowKindPolicyCheckResult,
   EXEMPT_FLOW_IDS,
@@ -278,6 +279,46 @@ function fixPolicyOnlyPayload(overrides: Record<string, unknown> = {}): Record<s
 }
 
 describe('checkCompiledFlowKindCanonicalPolicy (audit-level, no Zod)', () => {
+  it('classifies every retained flow with an explicit canonical stage policy status', () => {
+    const statuses = flowDefinitions.map((definition) => ({
+      id: definition.id,
+      status:
+        definition.canonicalStagePolicy === undefined
+          ? 'missing'
+          : definition.canonicalStagePolicy.kind === 'exempt'
+            ? 'exempt'
+            : 'enforced',
+    }));
+
+    expect(statuses).toEqual([
+      { id: 'review', status: 'enforced' },
+      { id: 'fix', status: 'enforced' },
+      { id: 'pursue', status: 'enforced' },
+      { id: 'runtime-proof', status: 'exempt' },
+      { id: 'build', status: 'enforced' },
+      { id: 'explore', status: 'enforced' },
+    ]);
+  });
+
+  it('keeps enforced package policies aligned with schematic stage_path_policy', () => {
+    for (const definition of flowDefinitions) {
+      const policy = definition.canonicalStagePolicy;
+      if (policy === undefined || policy.kind !== 'enforce') continue;
+
+      const stagePathPolicy = definition.schematic.stage_path_policy;
+      expect(stagePathPolicy?.mode, definition.id).toBe('partial');
+      if (stagePathPolicy?.mode !== 'partial') {
+        throw new Error(`unreachable: ${definition.id} must use a partial stage path policy`);
+      }
+      expect(policy.omits, definition.id).toEqual(stagePathPolicy.omits);
+      expect(policy.canonicals, definition.id).toEqual(
+        (definition.schematic.stages ?? []).flatMap((stage) =>
+          stage.canonical === undefined ? [] : [stage.canonical],
+        ),
+      );
+    }
+  });
+
   it('EXPLORE-I1 — returns green on a valid explore fixture (canonical set + stage_path_policy.partial)', () => {
     const result = checkCompiledFlowKindCanonicalPolicy(validExploreFixture());
     expect(result.kind).toBe('green');

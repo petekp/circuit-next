@@ -53,6 +53,7 @@ const NON_PACKAGE_FILES = new Set([
   'report-declarations.ts',
   'runtime-surface.ts',
   'router.ts',
+  'stage-policy.ts',
   'types.ts',
 ]);
 const NON_PACKAGE_DIRECTORIES = new Set(['registries']);
@@ -211,6 +212,14 @@ describe('flow catalog completeness', () => {
         }
         if (step.taskTitle.length === 0 || step.activeText.length === 0) {
           offenders.push(`${pkg.id}: progress step ${index} has empty operator text`);
+        }
+        if (step.relayRole !== undefined) {
+          if (step.relayStartedText === undefined || step.relayStartedText.length === 0) {
+            offenders.push(`${pkg.id}: relay progress step ${step.stepId} has no started text`);
+          }
+          if (step.relayCompletedText === undefined || step.relayCompletedText.length === 0) {
+            offenders.push(`${pkg.id}: relay progress step ${step.stepId} has no completed text`);
+          }
         }
       }
 
