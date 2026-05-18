@@ -13,8 +13,9 @@ status: implemented
 Circuit uses typed `FlowDefinition` values as the source of truth for built-in
 flow authoring.
 
-Each retained flow is authored as typed facts in `src/flows/<id>/facts.ts` and
-bound in `src/flows/<id>/flow.ts`. The catalog imports those flow definitions
+Each retained flow is authored as a plain `FlowData` value in
+`src/flows/<id>/data.ts` and bound in `src/flows/<id>/flow.ts`. The catalog
+imports those flow definitions
 and compiles them into the package surface used by the router, runtime
 registries, generated schematic JSON, generated compiled manifests, and host
 plugin mirrors.
@@ -36,9 +37,9 @@ Confirmed current source:
 
 - `src/flows/catalog.ts` lists `flowDefinitions` and derives `flowPackages`
   with `compileFlowDefinitions()`.
-- Every retained flow adapter calls `defineFlowFromFacts()`.
-- Every retained flow owns a `facts.ts` file typed as `readonly FlowFact[]`.
-- `tests/runner/flow-facts.test.ts` locks the retained flow set, fact-owned
+- Every retained flow adapter calls `defineFlowData()`.
+- Every retained flow owns a `data.ts` file typed as `FlowData`.
+- `tests/runner/flow-facts.test.ts` locks the retained flow set, value-owned
   adapters, generated schematic parity, and production flow definitions.
 - `docs/generated-surfaces.md` marks schematic JSON, compiled manifests, host
   mirrors, command mirrors, and Codex skill mirrors as generated surfaces.
@@ -48,9 +49,9 @@ Confirmed current source:
 
 The implemented declarative kernel gives this repo a cleaner source model:
 
-- flow facts are authored as typed values;
-- `flow.ts` files bind facts to semantic report schemas, writers, relay hints,
-  routing metadata, runtime progress, and engine flags;
+- FlowData is authored as a typed plain value;
+- `flow.ts` files bind FlowData values to semantic report schemas, writers,
+  relay hints, routing metadata, runtime progress, and engine flags;
 - compatibility schematic JSON is generated from the typed definition;
 - compiled flow manifests and public host mirrors are generated from catalog
   state;
@@ -59,7 +60,7 @@ The implemented declarative kernel gives this repo a cleaner source model:
   structures.
 
 This is the stabilizing center for new flow work. Adding or changing a built-in
-flow should start in that flow's facts, reports, command docs, semantic writers,
+flow should start in that flow's data, reports, command docs, semantic writers,
 or relay hints. It should not add flow-specific branches to the runtime.
 
 ## What Did Not Land
@@ -83,7 +84,7 @@ Generated artifacts are compatibility outputs. Do not edit them by hand.
 
 Authored sources:
 
-- `src/flows/<id>/facts.ts`
+- `src/flows/<id>/data.ts`
 - `src/flows/<id>/flow.ts`
 - `src/flows/<id>/reports.ts`
 - `src/flows/<id>/command.md`

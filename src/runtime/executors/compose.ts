@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import {
   findCloseBuilder,
   resolveCloseReadPaths,
@@ -11,14 +10,24 @@ import { requireRuntimeIndexedStep } from '../../flows/registries/runtime-index.
 import type { StepOutcome } from '../domain/step.js';
 import type { ComposeStep } from '../manifest/executable-flow.js';
 import type { RunContext } from '../run/run-context.js';
+import {
+  type StepExecutionResult,
+  stepExecutionFailedFrom,
+  stepExecutionOutcome,
+  unwrapStepExecutionResult,
+} from './result.js';
 
-function readJsonReport(context: RunContext, path: string): unknown {
-  return JSON.parse(readFileSync(context.files.resolve(path), 'utf8')) as unknown;
+async function readJsonReport(context: RunContext, path: string): Promise<unknown> {
+  return await context.files.readJson(path);
 }
 
-function readOptionalJsonReport(context: RunContext, path: string, required: boolean): unknown {
+async function readOptionalJsonReport(
+  context: RunContext,
+  path: string,
+  required: boolean,
+): Promise<unknown> {
   try {
-    return readJsonReport(context, path);
+    return await readJsonReport(context, path);
   } catch (error) {
     if (!required && (error as { readonly code?: unknown }).code === 'ENOENT') {
       return undefined;
@@ -41,7 +50,7 @@ async function writeRegisteredComposeReport(
     const readPaths = resolveComposeReadPaths(composeBuilder, flow, indexedStep);
     const inputs: Record<string, unknown | undefined> = {};
     for (const [name, path] of Object.entries(readPaths)) {
-      inputs[name] = path === undefined ? undefined : readJsonReport(context, path);
+      inputs[name] = path === undefined ? undefined : await readJsonReport(context, path);
     }
     const body = composeBuilder.build({
       runFolder: context.runDir,
@@ -63,7 +72,9 @@ async function writeRegisteredComposeReport(
     for (const descriptor of closeBuilder.reads) {
       const path = readPaths[descriptor.name];
       inputs[descriptor.name] =
-        path === undefined ? undefined : readOptionalJsonReport(context, path, descriptor.required);
+        path === undefined
+          ? undefined
+          : await readOptionalJsonReport(context, path, descriptor.required);
     }
     const body = closeBuilder.build({
       runFolder: context.runDir,
@@ -81,30 +92,41 @@ async function writeRegisteredComposeReport(
   );
 }
 
-export async function executeCompose(step: ComposeStep, context: RunContext): Promise<StepOutcome> {
-  if (step.writes?.report?.schema !== undefined) {
-    await writeRegisteredComposeReport(step, context);
-    await context.trace.append({
-      run_id: context.runId,
-      kind: 'step.report_written',
-      step_id: step.id,
-      attempt: context.activeStepAttempt ?? 1,
-      report_path: step.writes.report.path,
-      report_schema: step.writes.report.schema,
-    });
-    return { route: 'pass', details: { writer: step.writer } };
-  }
+export async function executeComposeResult(
+  step: ComposeStep,
+  context: RunContext,
+): Promise<StepExecutionResult> {
+  try {
+    if (step.writes?.report?.schema !== undefined) {
+      await writeRegisteredComposeReport(step, context);
+      await context.trace.append({
+        run_id: context.runId,
+        kind: 'step.report_written',
+        step_id: step.id,
+        attempt: context.activeStepAttempt ?? 1,
+        report_path: step.writes.report.path,
+        report_schema: step.writes.report.schema,
+      });
+      return stepExecutionOutcome({ route: 'pass', details: { writer: step.writer } });
+    }
 
-  const body = step.body ?? { stepId: step.id, writer: step.writer };
-  const writes = step.writes ?? {};
-  await Promise.all(
-    Object.values(writes).map((ref) =>
-      context.files.writeJson(ref, {
-        stepId: step.id,
-        writer: step.writer,
-        body,
-      }),
-    ),
-  );
-  return { route: 'pass', details: { writer: step.writer } };
+    const body = step.body ?? { stepId: step.id, writer: step.writer };
+    const writes = step.writes ?? {};
+    await Promise.all(
+      Object.values(writes).map((ref) =>
+        context.files.writeJson(ref, {
+          stepId: step.id,
+          writer: step.writer,
+          body,
+        }),
+      ),
+    );
+    return stepExecutionOutcome({ route: 'pass', details: { writer: step.writer } });
+  } catch (error) {
+    return stepExecutionFailedFrom(error);
+  }
+}
+
+export async function executeCompose(step: ComposeStep, context: RunContext): Promise<StepOutcome> {
+  return unwrapStepExecutionResult(await executeComposeResult(step, context));
 }

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import {
+  FLOW_BLOCK_AUTHORING_POLICY,
   FLOW_BLOCK_DEFINITIONS,
   FLOW_BLOCK_SCHEMATIC_POLICY,
 } from '../../src/schemas/flow-block-definitions.js';
@@ -61,6 +62,44 @@ describe('flow block catalog', () => {
       expect(definition.schematicPolicy.stages.length).toBeGreaterThan(0);
       expect(FLOW_BLOCK_SCHEMATIC_POLICY[definition.id]).toBe(definition.schematicPolicy);
     }
+  });
+
+  it('derives conservative authoring policy from the authored block definitions', () => {
+    expect(Object.keys(FLOW_BLOCK_AUTHORING_POLICY)).toEqual([...FLOW_BLOCK_IDS]);
+
+    for (const definition of FLOW_BLOCK_DEFINITIONS) {
+      const policy = FLOW_BLOCK_AUTHORING_POLICY[definition.id];
+      expect(definition.authoringPolicy).toBe(policy);
+      expect(policy.defaults.evidenceRequirements).toBe('block-produces-evidence');
+      expect(policy.defaults.output).toBe('block-output-contract');
+      expect(policy.required.always).toEqual([
+        'id',
+        'title',
+        'stage',
+        'input',
+        'routes',
+        'protocol',
+        'writes',
+        'check',
+      ]);
+
+      if (definition.schematicPolicy.executionKinds.length === 1) {
+        expect(policy.defaults.executionKind).toBe(definition.schematicPolicy.executionKinds[0]);
+      } else {
+        expect(policy.defaults.executionKind).toBeUndefined();
+      }
+    }
+
+    expect(FLOW_BLOCK_AUTHORING_POLICY['run-verification'].defaults.executionKind).toBe(
+      'verification',
+    );
+    expect(FLOW_BLOCK_AUTHORING_POLICY.act.defaults.executionKind).toBeUndefined();
+    expect(FLOW_BLOCK_AUTHORING_POLICY.review.required.whenExecutionKind.relay).toEqual([
+      'relay_role',
+    ]);
+    expect(
+      FLOW_BLOCK_AUTHORING_POLICY['human-decision'].required.whenExecutionKind.checkpoint,
+    ).toEqual(['checkpoint_policy']);
   });
 
   it('stays aligned with the Markdown block inventory table', () => {

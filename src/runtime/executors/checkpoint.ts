@@ -4,13 +4,19 @@
 // emitting trace evidence, deciding whether depth waits or auto-resolves, and
 // applying an operator resume selection. Resume validation lives in the run
 // resume path, not here.
-import { readFileSync } from 'node:fs';
 import { findCheckpointBriefBuilder } from '../../flows/registries/checkpoint-writers/registry.js';
 import { requireRuntimeIndexedStep } from '../../flows/registries/runtime-index.js';
 import { sha256Hex } from '../../shared/connector-relay.js';
 import type { StepOutcome } from '../domain/step.js';
 import type { CheckpointStep } from '../manifest/executable-flow.js';
 import type { RunContext } from '../run/run-context.js';
+import {
+  type StepExecutionResult,
+  stepExecutionFailed,
+  stepExecutionFailedFrom,
+  stepExecutionOutcome,
+  unwrapStepExecutionResult,
+} from './result.js';
 
 type CheckpointResolution =
   | {
@@ -87,136 +93,149 @@ function checkpointRequestBody(input: {
   };
 }
 
-export async function executeCheckpoint(
+export async function executeCheckpointResult(
   step: CheckpointStep,
   context: RunContext,
-): Promise<StepOutcome> {
+): Promise<StepExecutionResult> {
   const attempt = context.activeStepAttempt ?? 1;
-  const request = step.writes?.request;
-  const response = step.writes?.response;
-  if (request === undefined || response === undefined) {
-    throw new Error(`checkpoint step '${step.id}' requires writes.request and writes.response`);
-  }
-  const indexedStep = requireRuntimeIndexedStep(context.packageIndex, step.id, 'checkpoint');
+  try {
+    const request = step.writes?.request;
+    const response = step.writes?.response;
+    if (request === undefined || response === undefined) {
+      return stepExecutionFailed(
+        `checkpoint step '${step.id}' requires writes.request and writes.response`,
+      );
+    }
+    const indexedStep = requireRuntimeIndexedStep(context.packageIndex, step.id, 'checkpoint');
 
-  let checkpointReportSha256: string | undefined;
-  const report = step.writes?.report;
-  const resumedSelection =
-    context.resumeCheckpoint?.stepId === step.id ? context.resumeCheckpoint.selection : undefined;
-  const resolution = resolveCheckpoint(step, context.depth);
-  if (resumedSelection === undefined) {
-    if (report !== undefined) {
-      const builder =
-        report.schema === undefined ? undefined : findCheckpointBriefBuilder(report.schema);
-      if (builder === undefined || report.schema === undefined) {
-        throw new Error(`checkpoint step '${step.id}' has unsupported report schema`);
+    let checkpointReportSha256: string | undefined;
+    const report = step.writes?.report;
+    const resumedSelection =
+      context.resumeCheckpoint?.stepId === step.id ? context.resumeCheckpoint.selection : undefined;
+    const resolution = resolveCheckpoint(step, context.depth);
+    if (resumedSelection === undefined) {
+      if (report !== undefined) {
+        const builder =
+          report.schema === undefined ? undefined : findCheckpointBriefBuilder(report.schema);
+        if (builder === undefined || report.schema === undefined) {
+          return stepExecutionFailed(`checkpoint step '${step.id}' has unsupported report schema`);
+        }
+        const body = builder.build({
+          runFolder: context.runDir,
+          step: indexedStep,
+          goal: context.goal,
+          ...(context.projectRoot === undefined ? {} : { projectRoot: context.projectRoot }),
+          responsePath: response.path,
+        });
+        await context.files.writeJson(report, body);
+        checkpointReportSha256 = sha256Hex(await context.files.readText(report));
+        await context.trace.append({
+          run_id: context.runId,
+          kind: 'step.report_written',
+          step_id: step.id,
+          attempt,
+          report_path: report.path,
+          report_schema: report.schema,
+        });
       }
-      const body = builder.build({
-        runFolder: context.runDir,
-        step: indexedStep,
-        goal: context.goal,
-        ...(context.projectRoot === undefined ? {} : { projectRoot: context.projectRoot }),
-        responsePath: response.path,
+
+      const requestBody = checkpointRequestBody({
+        step,
+        context,
+        ...(checkpointReportSha256 === undefined ? {} : { checkpointReportSha256 }),
       });
-      await context.files.writeJson(report, body);
-      checkpointReportSha256 = sha256Hex(readFileSync(context.files.resolve(report), 'utf8'));
+      await context.files.writeJson(request, requestBody);
+      const requestText = await context.files.readText(request);
       await context.trace.append({
         run_id: context.runId,
-        kind: 'step.report_written',
+        kind: 'checkpoint.requested',
         step_id: step.id,
         attempt,
-        report_path: report.path,
-        report_schema: report.schema,
+        request_path: request.path,
+        request_report_hash: sha256Hex(requestText),
+        options: step.choices,
+        auto_resolved: resolution.kind === 'resolved' ? resolution.autoResolved : false,
       });
     }
 
-    const requestBody = checkpointRequestBody({
-      step,
-      context,
-      ...(checkpointReportSha256 === undefined ? {} : { checkpointReportSha256 }),
+    const effectiveResolution: CheckpointResolution =
+      resumedSelection === undefined
+        ? resolution
+        : {
+            kind: 'resolved',
+            selection: resumedSelection,
+            resolutionSource: 'operator',
+            autoResolved: false,
+          };
+    if (effectiveResolution.kind === 'waiting') {
+      return stepExecutionOutcome({
+        kind: 'waiting_checkpoint',
+        checkpoint: {
+          stepId: step.id,
+          attempt,
+          requestPath: context.files.resolve(request),
+          allowedChoices: step.choices,
+        },
+      });
+    }
+    if (effectiveResolution.kind === 'failed') {
+      await context.trace.append({
+        run_id: context.runId,
+        kind: 'check.evaluated',
+        step_id: step.id,
+        attempt,
+        check_kind: 'checkpoint_selection',
+        outcome: 'fail',
+        reason: effectiveResolution.reason,
+      });
+      return stepExecutionFailed(effectiveResolution.reason);
+    }
+
+    const allowed = (step.check as { readonly allow?: unknown }).allow;
+    if (Array.isArray(allowed) && !allowed.includes(effectiveResolution.selection)) {
+      return stepExecutionFailed(
+        `checkpoint step '${step.id}' selected '${effectiveResolution.selection}' but check.allow is [${allowed.join(', ')}]`,
+      );
+    }
+    await context.files.writeJson(response, {
+      schema_version: 1,
+      step_id: step.id,
+      selection: effectiveResolution.selection,
+      resolution_source: effectiveResolution.resolutionSource,
     });
-    await context.files.writeJson(request, requestBody);
-    const requestText = readFileSync(context.files.resolve(request), 'utf8');
     await context.trace.append({
       run_id: context.runId,
-      kind: 'checkpoint.requested',
+      kind: 'checkpoint.resolved',
       step_id: step.id,
       attempt,
-      request_path: request.path,
-      request_report_hash: sha256Hex(requestText),
-      options: step.choices,
-      auto_resolved: resolution.kind === 'resolved' ? resolution.autoResolved : false,
+      selection: effectiveResolution.selection,
+      auto_resolved: effectiveResolution.autoResolved,
+      resolution_source: effectiveResolution.resolutionSource,
+      response_path: response.path,
     });
-  }
-
-  const effectiveResolution: CheckpointResolution =
-    resumedSelection === undefined
-      ? resolution
-      : {
-          kind: 'resolved',
-          selection: resumedSelection,
-          resolutionSource: 'operator',
-          autoResolved: false,
-        };
-  if (effectiveResolution.kind === 'waiting') {
-    return {
-      kind: 'waiting_checkpoint',
-      checkpoint: {
-        stepId: step.id,
-        attempt,
-        requestPath: context.files.resolve(request),
-        allowedChoices: step.choices,
-      },
-    };
-  }
-  if (effectiveResolution.kind === 'failed') {
     await context.trace.append({
       run_id: context.runId,
       kind: 'check.evaluated',
       step_id: step.id,
       attempt,
       check_kind: 'checkpoint_selection',
-      outcome: 'fail',
-      reason: effectiveResolution.reason,
+      outcome: 'pass',
     });
-    throw new Error(effectiveResolution.reason);
-  }
 
-  const allowed = (step.check as { readonly allow?: unknown }).allow;
-  if (Array.isArray(allowed) && !allowed.includes(effectiveResolution.selection)) {
-    throw new Error(
-      `checkpoint step '${step.id}' selected '${effectiveResolution.selection}' but check.allow is [${allowed.join(', ')}]`,
-    );
+    return stepExecutionOutcome({
+      route: Object.hasOwn(step.routes, effectiveResolution.selection)
+        ? effectiveResolution.selection
+        : 'pass',
+      details: { selection: effectiveResolution.selection },
+    });
+  } catch (error) {
+    return stepExecutionFailedFrom(error);
   }
-  await context.files.writeJson(response, {
-    schema_version: 1,
-    step_id: step.id,
-    selection: effectiveResolution.selection,
-    resolution_source: effectiveResolution.resolutionSource,
-  });
-  await context.trace.append({
-    run_id: context.runId,
-    kind: 'checkpoint.resolved',
-    step_id: step.id,
-    attempt,
-    selection: effectiveResolution.selection,
-    auto_resolved: effectiveResolution.autoResolved,
-    resolution_source: effectiveResolution.resolutionSource,
-    response_path: response.path,
-  });
-  await context.trace.append({
-    run_id: context.runId,
-    kind: 'check.evaluated',
-    step_id: step.id,
-    attempt,
-    check_kind: 'checkpoint_selection',
-    outcome: 'pass',
-  });
+}
 
-  return {
-    route: Object.hasOwn(step.routes, effectiveResolution.selection)
-      ? effectiveResolution.selection
-      : 'pass',
-    details: { selection: effectiveResolution.selection },
-  };
+export async function executeCheckpoint(
+  step: CheckpointStep,
+  context: RunContext,
+): Promise<StepOutcome> {
+  return unwrapStepExecutionResult(await executeCheckpointResult(step, context));
 }

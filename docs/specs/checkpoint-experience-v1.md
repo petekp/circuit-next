@@ -24,8 +24,8 @@ resume-time validator, and existing checkpoint runtime coverage.
 
 ## Current Repo Facts
 
-- Built-in flows are authored as typed facts in `src/flows/<id>/facts.ts` and
-  bound in `src/flows/<id>/flow.ts`; the catalog compiles those definitions
+- Built-in flows are authored as typed `FlowData` in `src/flows/<id>/data.ts`
+  and bound in `src/flows/<id>/flow.ts`; the catalog compiles those definitions
   into runtime registries, generated schematic JSON, generated manifests, and
   host mirrors. See `docs/architecture/declarative-flow-architecture.md:13-20`.
 - Flow-specific behavior belongs in flow packages and registries. Runtime code
@@ -38,7 +38,7 @@ resume-time validator, and existing checkpoint runtime coverage.
 - Build's Frame step is already a checkpoint that writes `reports/build/brief.json`,
   `reports/checkpoints/frame-step-request.json`, and
   `reports/checkpoints/frame-step-response.json`. Its only current choice is
-  `continue`. See `src/flows/build/facts.ts:181-221`.
+  `continue`. See `src/flows/build/data.ts`.
 - Build binds `build.brief@v1` to `BuildBrief` and registers
   `buildBriefCheckpointBuilder` in the flow package's checkpoint writer slot.
   See `src/flows/build/flow.ts:63-74`.
@@ -94,7 +94,7 @@ resume-time validator, and existing checkpoint runtime coverage.
   `docs/flows/pursue.md:43-67`, and `docs/flows/pursue.md:257-273`.
 - Pursue already writes ownership and coordination reports:
   `pursuit.contract@v1` and `pursuit.graph@v1`. See
-  `src/flows/pursue/facts.ts:168-239`.
+  `src/flows/pursue/data.ts`.
 - Circuit's project-memory positioning is grounded in typed per-run reports, but
   the repo still names cross-run query/recall and agent-side consumption as
   gaps. See `docs/positioning-and-strategy.md:158-168`.

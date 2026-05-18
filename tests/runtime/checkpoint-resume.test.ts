@@ -9,7 +9,11 @@ import { projectRunStatusFromRunFolder } from '../../src/run-status/project-run-
 import type { StepOutcome } from '../../src/runtime/domain/step.js';
 import type { TraceEntry } from '../../src/runtime/domain/trace.js';
 import type { ExecutorRegistry } from '../../src/runtime/executors/index.js';
-import { resumeCompiledFlow } from '../../src/runtime/run/checkpoint-resume.js';
+import {
+  isCheckpointResumeRejectedResult,
+  resumeCompiledFlow,
+  resumeCompiledFlowResult,
+} from '../../src/runtime/run/checkpoint-resume.js';
 import { runCompiledFlowWithWaiting } from '../../src/runtime/run/compiled-flow-runner.js';
 import { isGraphCheckpointWaitingResult } from '../../src/runtime/run/graph-runner.js';
 import { LayeredConfig } from '../../src/schemas/config.js';
@@ -555,6 +559,35 @@ describe('runtime checkpoint pause/resume fixture', () => {
         executors: fixtureExecutors(),
       }),
     ).rejects.toThrow(/checkpoint request hash differs from trace/);
+  });
+
+  it('returns checkpoint resume validation failures as typed values while compatibility resume still throws', async () => {
+    const resultRun = join(tempDir, 'typed-invalid-choice');
+    await createWaitingFixture({ runDir: resultRun });
+
+    const result = await resumeCompiledFlowResult({
+      runDir: resultRun,
+      selection: 'stop',
+      relayer: fixtureRelayer(),
+      executors: fixtureExecutors(),
+    });
+
+    expect(isCheckpointResumeRejectedResult(result)).toBe(true);
+    if (!isCheckpointResumeRejectedResult(result)) {
+      throw new Error('expected rejected checkpoint resume result');
+    }
+    expect(result.reason).toContain("selection 'stop' is not allowed");
+
+    const throwRun = join(tempDir, 'typed-invalid-choice-compat');
+    await createWaitingFixture({ runDir: throwRun });
+    await expect(
+      resumeCompiledFlow({
+        runDir: throwRun,
+        selection: 'stop',
+        relayer: fixtureRelayer(),
+        executors: fixtureExecutors(),
+      }),
+    ).rejects.toThrow(result.reason);
   });
 
   it('rejects and hides checkpoints whose traced request path differs from the saved flow', async () => {

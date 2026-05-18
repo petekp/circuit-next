@@ -21,9 +21,9 @@ Use it with:
 - `docs/contracts/compiled-flow.md` for runtime graph invariants.
 
 This document is hand-authored because it explains intent and boundaries.
-Do not hand-maintain current flow inventories here. Current flow facts come from
-`src/flows/<id>/facts.ts`; `src/flows/<id>/flow.ts` binds those facts to routing,
-schemas, writers, and hints. Generated compatibility schematics live under
+Do not hand-maintain current flow inventories here. Current flow data comes from
+`src/flows/<id>/data.ts`; `src/flows/<id>/flow.ts` binds that plain value to the
+compiler. Generated compatibility schematics live under
 `src/flows/<id>/schematic.json`, generated compiled outputs live under
 `generated/flows/<id>/`, and generated release surfaces such as
 `docs/release/parity-matrix.generated.md` are derived.
@@ -53,12 +53,11 @@ Circuit keeps four layers separate.
 | Layer | Meaning | Source |
 | --- | --- | --- |
 | Block | Reusable kind of work. | `src/schemas/flow-block-definitions.ts` |
-| Flow fact step | Flow-specific use of a block. | `src/flows/<id>/facts.ts` |
+| FlowData step | Flow-specific use of a block. | `src/flows/<id>/data.ts` |
 | Report schema | Typed fact written or consumed by a step. | `src/flows/<id>/reports.ts` |
 | Route policy | Named outcomes and targets. | schematic routes plus route policy constants |
 
-The block is reusable. The flow fact step is the flow-specific use of that
-block.
+The block is reusable. The FlowData step is the flow-specific use of that block.
 
 ## Block Model
 
@@ -220,10 +219,10 @@ of scope unless the public naming model is explicitly reopened.
 
 ## Adding A Flow
 
-1. Create `src/flows/<id>/facts.ts` for the flow facts and `src/flows/<id>/flow.ts` for the adapter.
+1. Create `src/flows/<id>/data.ts` for the canonical `FlowData` value and `src/flows/<id>/flow.ts` for the thin adapter.
 2. Define per-flow report schemas in `src/flows/<id>/reports.ts`.
-3. Declare contract aliases in the facts.
-4. Wire fact steps to schemas through `inputKey` facts and step `output`.
+3. Declare contract aliases in the FlowData.
+4. Wire steps to schemas through step `input` and `output`.
 5. Add writers and relay hints owned by the flow package.
 6. Add the definition to `flowDefinitions` in `src/flows/catalog.ts`.
 7. Run `npm run build && node scripts/emit-flows.ts` and then `npm run verify`.

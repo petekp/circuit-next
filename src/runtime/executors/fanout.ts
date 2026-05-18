@@ -15,6 +15,12 @@ import { gitWorktreeRunner } from '../fanout/worktree.js';
 import type { FanoutStep } from '../manifest/executable-flow.js';
 import type { RunContext } from '../run/run-context.js';
 import type { RelayConnector } from './relay.js';
+import {
+  type StepExecutionResult,
+  stepExecutionFailedFrom,
+  stepExecutionOutcome,
+  unwrapStepExecutionResult,
+} from './result.js';
 
 function aggregateRef(step: FanoutStep): RunFileRef {
   const aggregate = step.writes?.aggregate;
@@ -83,7 +89,7 @@ async function runWithConcurrency<T>(
   await Promise.all(workers);
 }
 
-export async function executeFanout(
+async function executeFanoutInternal(
   step: FanoutStep,
   context: RunContext,
   relayConnector?: RelayConnector,
@@ -258,4 +264,24 @@ export async function executeFanout(
     reason,
   });
   throw new Error(reason);
+}
+
+export async function executeFanoutResult(
+  step: FanoutStep,
+  context: RunContext,
+  relayConnector?: RelayConnector,
+): Promise<StepExecutionResult> {
+  try {
+    return stepExecutionOutcome(await executeFanoutInternal(step, context, relayConnector));
+  } catch (error) {
+    return stepExecutionFailedFrom(error);
+  }
+}
+
+export async function executeFanout(
+  step: FanoutStep,
+  context: RunContext,
+  relayConnector?: RelayConnector,
+): Promise<StepOutcome> {
+  return unwrapStepExecutionResult(await executeFanoutResult(step, context, relayConnector));
 }

@@ -6,7 +6,6 @@
 // should only interpret the executable graph and append durable trace entries.
 
 import { randomUUID } from 'node:crypto';
-import { lstat, mkdir, readdir } from 'node:fs/promises';
 import type { ChangeKindDeclaration } from '../../schemas/change-kind.js';
 import { computeManifestHash } from '../../schemas/manifest.js';
 import { isProofPlanBlockedError } from '../../shared/proof-plan.js';
@@ -18,13 +17,10 @@ import { type ExecutorRegistry, createDefaultExecutors } from '../executors/inde
 import type { ExecutableFlow, ExecutableStep } from '../manifest/executable-flow.js';
 import { buildRuntimePackageIndex } from '../manifest/runtime-package-index.js';
 import { assertExecutableFlow } from '../manifest/validate-executable-flow.js';
-import { createProgressProjector } from '../projections/progress.js';
-import { validateReportValue } from '../run-files/report-validator.js';
-import { RunFileStore } from '../run-files/run-file-store.js';
-import { TraceStore } from '../trace/trace-store.js';
 import type { RuntimeExecutionCapabilities } from './capabilities.js';
 import { writeRuntimeManifestSnapshot } from './manifest-snapshot.js';
 import { type RuntimeRunResult, writeRuntimeRunResult } from './result-writer.js';
+import { openRunBoundary } from './run-boundary.js';
 import type { RunContext } from './run-context.js';
 
 export interface GraphRunnerOptions extends RuntimeExecutionCapabilities {
@@ -47,6 +43,11 @@ export interface GraphRunResult extends RuntimeRunResult {
   readonly resultPath: string;
 }
 
+export interface GraphClosedOutcome {
+  readonly kind: 'closed';
+  readonly result: GraphRunResult;
+}
+
 export interface GraphCheckpointWaitingResult {
   readonly kind: 'checkpoint_waiting';
   readonly outcome: 'checkpoint_waiting';
@@ -64,10 +65,28 @@ export interface GraphCheckpointWaitingResult {
 
 export type GraphExecutionResult = GraphRunResult | GraphCheckpointWaitingResult;
 
+export interface GraphRejectedOutcome {
+  readonly kind: 'rejected';
+  readonly outcome: 'rejected';
+  readonly reason: string;
+  readonly error: Error;
+}
+
+export type GraphExecutionOutcome =
+  | GraphClosedOutcome
+  | GraphCheckpointWaitingResult
+  | GraphRejectedOutcome;
+
 export function isGraphCheckpointWaitingResult(
-  result: GraphExecutionResult,
+  result: GraphExecutionResult | GraphExecutionOutcome,
 ): result is GraphCheckpointWaitingResult {
   return 'kind' in result && result.kind === 'checkpoint_waiting';
+}
+
+export function isGraphRejectedOutcome(
+  result: GraphExecutionResult | GraphExecutionOutcome,
+): result is GraphRejectedOutcome {
+  return 'kind' in result && result.kind === 'rejected';
 }
 
 const RECOVERY_ROUTE_LABELS = new Set(['retry', 'revise']);
@@ -212,31 +231,6 @@ function completedStepCountsFromTrace(entries: readonly TraceEntry[]): Map<strin
   return counts;
 }
 
-async function assertFreshRunDir(runDir: string): Promise<void> {
-  let stat: Awaited<ReturnType<typeof lstat>> | undefined;
-  try {
-    stat = await lstat(runDir);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    await mkdir(runDir, { recursive: true });
-    stat = await lstat(runDir);
-  }
-  if (stat.isSymbolicLink()) {
-    throw new Error('runtime baseline requires a fresh run directory; existing path is a symlink');
-  }
-  if (!stat.isDirectory()) {
-    throw new Error(
-      'runtime baseline requires a fresh run directory; existing path is not a directory',
-    );
-  }
-  const entries = await readdir(runDir);
-  if (entries.length > 0) {
-    throw new Error(
-      `runtime baseline requires a fresh run directory; existing directory is not empty (${entries.join(', ')})`,
-    );
-  }
-}
-
 function resolveManifestHash(flow: ExecutableFlow, options: GraphRunnerOptions): string {
   if (options.manifestBytes === undefined) {
     return options.manifestHash ?? defaultManifestHash(flow);
@@ -253,7 +247,7 @@ async function closeRun(
   outcome: RunClosedOutcome,
   terminalTarget?: TerminalTarget,
   reason?: string,
-): Promise<GraphRunResult> {
+): Promise<GraphClosedOutcome> {
   await context.trace.append({
     run_id: context.runId,
     kind: 'run.closed',
@@ -275,58 +269,41 @@ async function closeRun(
     ...(verdict === undefined ? {} : { verdict }),
   };
   const resultPath = await writeRuntimeRunResult(context.files, result);
-  return { ...result, resultPath };
+  return { kind: 'closed', result: { ...result, resultPath } };
 }
 
-export async function executeExecutableFlowWithWaiting(
+async function executeExecutableFlowOutcomeUnsafe(
   flow: ExecutableFlow,
   options: GraphRunnerOptions,
-): Promise<GraphExecutionResult> {
+): Promise<GraphExecutionOutcome> {
   assertExecutableFlow(flow);
   const isResume = options.resumeCheckpoint !== undefined;
-  if (!isResume) {
-    await assertFreshRunDir(options.runDir);
-  } else {
-    await mkdir(options.runDir, { recursive: true });
-  }
-
   const runId = options.runId ?? randomUUID();
-  const packageIndex = buildRuntimePackageIndex(flow);
-  const progressProjector = createProgressProjector({
-    progress: options.progress,
+  const boundary = await openRunBoundary({
     runDir: options.runDir,
+    isResume,
     runId,
     flow,
+    ...(options.now === undefined ? {} : { now: options.now }),
+    ...(options.progress === undefined ? {} : { progress: options.progress }),
     ...(options.progressSurface === undefined ? {} : { progressSurface: options.progressSurface }),
   });
-  const trace = new TraceStore(options.runDir, {
-    ...(options.now === undefined ? {} : { now: options.now }),
-    onAppend: progressProjector,
-  });
-  const existingTrace = await trace.load();
-  if (!isResume && existingTrace.length > 0) {
-    throw new Error('runtime baseline requires a fresh run directory');
-  }
-  if (isResume && existingTrace.length === 0) {
-    throw new Error('runtime resume requires an existing trace');
-  }
-  if (isResume && existingTrace.some((entry) => entry.kind === 'run.closed')) {
-    throw new Error('runtime resume rejected: run is already closed');
-  }
-
-  const files = new RunFileStore(options.runDir, validateReportValue);
+  const runDir = boundary.runDirectory.path;
+  const { existingTrace, files, trace } = boundary;
+  const packageIndex = buildRuntimePackageIndex(flow);
   const context: RunContext = {
     flow,
     packageIndex,
     runId,
-    runDir: options.runDir,
+    runDir,
     goal: options.goal ?? `Run ${flow.id}`,
     manifestHash: resolveManifestHash(flow, options),
     ...(options.entryModeName === undefined ? {} : { entryModeName: options.entryModeName }),
     ...(options.depth === undefined ? {} : { depth: options.depth }),
-    now: options.now ?? (() => new Date()),
+    now: boundary.clock.now,
     files,
     trace,
+    externalFiles: options.externalFiles ?? boundary.externalFiles,
     ...(options.childCompiledFlowResolver === undefined
       ? {}
       : { childCompiledFlowResolver: options.childCompiledFlowResolver }),
@@ -360,7 +337,7 @@ export async function executeExecutableFlowWithWaiting(
   const bootstrapRecordedAt = context.now().toISOString();
   if (!isResume && options.manifestBytes !== undefined) {
     await writeRuntimeManifestSnapshot({
-      runDir: options.runDir,
+      runDir,
       runId,
       flowId: flow.id,
       capturedAt: bootstrapRecordedAt,
@@ -451,7 +428,7 @@ export async function executeExecutableFlowWithWaiting(
         return {
           kind: 'checkpoint_waiting',
           outcome: 'checkpoint_waiting',
-          runFolder: options.runDir,
+          runFolder: runDir,
           runId,
           flowId: flow.id,
           traceEntriesObserved: trace.getAll().length,
@@ -568,6 +545,40 @@ export async function executeExecutableFlowWithWaiting(
   }
 
   return await closeRun(context, 'aborted', undefined, `maxSteps exceeded: ${maxSteps}`);
+}
+
+function errorFromUnknown(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
+}
+
+export async function executeExecutableFlowOutcome(
+  flow: ExecutableFlow,
+  options: GraphRunnerOptions,
+): Promise<GraphExecutionOutcome> {
+  try {
+    return await executeExecutableFlowOutcomeUnsafe(flow, options);
+  } catch (error) {
+    const normalized = errorFromUnknown(error);
+    return {
+      kind: 'rejected',
+      outcome: 'rejected',
+      reason: normalized.message,
+      error: normalized,
+    };
+  }
+}
+
+function graphOutcomeToCompatibilityResult(outcome: GraphExecutionOutcome): GraphExecutionResult {
+  if (outcome.kind === 'closed') return outcome.result;
+  if (outcome.kind === 'rejected') throw outcome.error;
+  return outcome;
+}
+
+export async function executeExecutableFlowWithWaiting(
+  flow: ExecutableFlow,
+  options: GraphRunnerOptions,
+): Promise<GraphExecutionResult> {
+  return graphOutcomeToCompatibilityResult(await executeExecutableFlowOutcome(flow, options));
 }
 
 export async function executeExecutableFlow(

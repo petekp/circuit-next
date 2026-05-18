@@ -22,7 +22,6 @@ import {
 import type {
   CompiledFlowPackage,
   CompiledFlowPaths,
-  CompiledFlowProgressStep,
   CompiledFlowRelayReport,
   CompiledFlowReportSchema,
   CompiledFlowRoutingMetadata,
@@ -81,12 +80,37 @@ export interface FlowDefinitionInput {
   readonly engineFlags?: CompiledFlowPackage['engineFlags'];
 }
 
+export interface FlowData extends Omit<FlowDefinitionInput, 'reportDeclarations'> {
+  readonly reports?: readonly FlowReportDeclaration[];
+  readonly reportWriterSchemaAliases?: readonly string[];
+}
+
 export interface FlowDefinition
   extends Omit<FlowDefinitionInput, 'schematic' | 'paths' | 'runtimeSurface'> {
   readonly schematic: FlowSchematicValue;
   readonly paths: FlowDefinitionPaths;
   readonly runtimeSurface?: FlowDefinitionRuntimeSurface;
 }
+
+export type DefineFlowDataError =
+  | {
+      readonly kind: 'flow-data-parse-error';
+      readonly message: string;
+    }
+  | {
+      readonly kind: 'duplicate-flow-data-report';
+      readonly schemaName: string;
+    }
+  | {
+      readonly kind: 'flow-data-report-writer-drift';
+      readonly schemaName: string;
+      readonly slot: keyof CompiledFlowPackage['writers'];
+      readonly resultSchemaName: string;
+    };
+
+export type Validation<T, E> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly errors: readonly E[] };
 
 function defaultSchematicPath(flowId: string): string {
   return `src/flows/${flowId}/schematic.json`;
@@ -104,6 +128,99 @@ export function defineFlow(definition: FlowDefinitionInput): FlowDefinition {
     paths: definition.paths ?? {},
     schematic,
   };
+}
+
+export function defineFlowDataValue(
+  data: FlowData,
+): Validation<FlowDefinition, DefineFlowDataError> {
+  const reportErrors = validateFlowDataReports({
+    reports: data.reports ?? [],
+    writerSchemaAliases: data.reportWriterSchemaAliases ?? [],
+  });
+  if (reportErrors.length > 0) return { ok: false, errors: reportErrors };
+  try {
+    return { ok: true, value: defineFlow(flowDefinitionInputFromData(data)) };
+  } catch (error) {
+    return {
+      ok: false,
+      errors: [{ kind: 'flow-data-parse-error', message: errorMessage(error) }],
+    };
+  }
+}
+
+export function defineFlowData(data: FlowData): FlowDefinition {
+  const result = defineFlowDataValue(data);
+  if (result.ok) return result.value;
+  throw new Error(result.errors.map(describeDefineFlowDataError).join('\n'));
+}
+
+function flowDefinitionInputFromData(data: FlowData): FlowDefinitionInput {
+  const { reports, reportWriterSchemaAliases: _reportWriterSchemaAliases, ...definition } = data;
+  const reportProjection =
+    reports === undefined ? undefined : projectFlowReportDeclarations(reports);
+  return {
+    ...definition,
+    ...(reports === undefined
+      ? {}
+      : {
+          reportDeclarations: reports,
+          relayReports: definition.relayReports ?? reportProjection?.relayReports ?? [],
+          reportSchemas: definition.reportSchemas ?? reportProjection?.reportSchemas ?? [],
+          writers: definition.writers ?? reportProjection?.writers ?? {},
+        }),
+  };
+}
+
+function validateFlowDataReports(input: {
+  readonly reports: readonly FlowReportDeclaration[];
+  readonly writerSchemaAliases: readonly string[];
+}): readonly DefineFlowDataError[] {
+  const errors: DefineFlowDataError[] = [];
+  const writerSchemaAliases = new Set(input.writerSchemaAliases);
+  const reports = input.reports;
+  for (const schemaName of duplicateValues(reports.map((report) => report.schemaName))) {
+    errors.push({ kind: 'duplicate-flow-data-report', schemaName });
+  }
+  for (const report of reports) {
+    for (const slot of ['compose', 'close', 'verification', 'checkpoint'] as const) {
+      for (const writer of report.writers?.[slot] ?? []) {
+        if (
+          writer.resultSchemaName !== report.schemaName &&
+          !writerSchemaAliases.has(writer.resultSchemaName)
+        ) {
+          errors.push({
+            kind: 'flow-data-report-writer-drift',
+            schemaName: report.schemaName,
+            slot,
+            resultSchemaName: writer.resultSchemaName,
+          });
+        }
+      }
+    }
+  }
+  return errors;
+}
+
+function describeDefineFlowDataError(error: DefineFlowDataError): string {
+  if (error.kind === 'flow-data-parse-error') return error.message;
+  if (error.kind === 'duplicate-flow-data-report') {
+    return `duplicate FlowData report schema '${error.schemaName}'`;
+  }
+  return `FlowData report '${error.schemaName}' binds ${error.slot} writer for '${error.resultSchemaName}'`;
+}
+
+function duplicateValues(values: readonly string[]): readonly string[] {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+  for (const value of values) {
+    if (seen.has(value)) duplicates.add(value);
+    seen.add(value);
+  }
+  return [...duplicates];
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function compilePaths(definition: FlowDefinition): CompiledFlowPaths {
@@ -273,755 +390,4 @@ export function compileFlowDefinitions(
 
 export function schematicForFlowDefinition(definition: FlowDefinition): FlowSchematicValue {
   return definition.schematic;
-}
-
-type FlowSchematicInput = FlowDefinitionInput['schematic'];
-type SchematicStep = FlowSchematicInput['items'][number];
-type SchematicEntry = NonNullable<FlowSchematicInput['entry']>;
-type SchematicEntryMode = NonNullable<FlowSchematicInput['entry_modes']>[number];
-type SchematicStage = NonNullable<FlowSchematicInput['stages']>[number];
-type SchematicStagePathPolicy = NonNullable<FlowSchematicInput['stage_path_policy']>;
-type SchematicContractAlias = NonNullable<FlowSchematicInput['contract_aliases']>[number];
-type SchematicInput = SchematicStep['input'];
-type SchematicRouteTarget = SchematicStep['routes'][string];
-type SchematicRouteModeOverrides = NonNullable<SchematicStep['route_overrides']>[string];
-
-export type FlowFact =
-  | {
-      readonly kind: 'flow';
-      readonly flowId: string;
-      readonly title: string;
-      readonly purpose: string;
-      readonly status: FlowSchematicInput['status'];
-      readonly version: string;
-      readonly visibility: CompiledFlowVisibility;
-      readonly startsAt: string;
-      readonly stagePathPolicy: SchematicStagePathPolicy;
-    }
-  | {
-      readonly kind: 'path';
-      readonly flowId: string;
-      readonly pathKind: keyof CompiledFlowPaths;
-      readonly path: string;
-    }
-  | {
-      readonly kind: 'entry';
-      readonly flowId: string;
-      readonly include: readonly string[];
-      readonly exclude: readonly string[];
-      readonly intentPrefixes: readonly string[];
-    }
-  | {
-      readonly kind: 'mode';
-      readonly flowId: string;
-      readonly name: string;
-      readonly depth: SchematicEntryMode['depth'];
-      readonly description: string;
-      readonly defaultChangeKind?: SchematicEntryMode['default_change_kind'];
-    }
-  | {
-      readonly kind: 'initial-contract';
-      readonly flowId: string;
-      readonly schemaName: string;
-    }
-  | {
-      readonly kind: 'contract-alias';
-      readonly flowId: string;
-      readonly generic: string;
-      readonly actual: string;
-    }
-  | {
-      readonly kind: 'stage';
-      readonly flowId: string;
-      readonly stageId: string;
-      readonly canonical: SchematicStage['canonical'];
-      readonly title: string;
-    }
-  | {
-      readonly kind: 'step';
-      readonly flowId: string;
-      readonly stepId: string;
-      readonly title: string;
-      readonly stage: SchematicStep['stage'];
-      readonly block: SchematicStep['block'];
-      readonly output: SchematicStep['output'];
-      readonly evidenceRequirements: readonly string[];
-      readonly execution: SchematicStep['execution'];
-      readonly protocol: NonNullable<SchematicStep['protocol']>;
-      readonly writes: NonNullable<SchematicStep['writes']>;
-      readonly check: NonNullable<SchematicStep['check']>;
-      readonly selection?: SchematicStep['selection'];
-      readonly skillSlots?: SchematicStep['skill_slots'];
-      readonly checkpointPolicy?: SchematicStep['checkpoint_policy'];
-      readonly fanout?: SchematicStep['fanout'];
-    }
-  | {
-      readonly kind: 'input-key';
-      readonly flowId: string;
-      readonly stepId: string;
-      readonly key: string;
-      readonly schemaName: string;
-    }
-  | {
-      readonly kind: 'route';
-      readonly flowId: string;
-      readonly fromStepId: string;
-      readonly outcome: string;
-      readonly to: SchematicRouteTarget;
-      readonly modeOverrides?: SchematicRouteModeOverrides;
-    }
-  | {
-      readonly kind: 'registered-report';
-      readonly flowId: string;
-      readonly schemaName: string;
-      readonly channel: 'relay' | 'report';
-    }
-  | {
-      readonly kind: 'writer-binding';
-      readonly flowId: string;
-      readonly slot: keyof CompiledFlowPackage['writers'];
-      readonly resultSchemaName: string;
-    }
-  | {
-      readonly kind: 'structural-hint';
-      readonly flowId: string;
-      readonly hintId: string;
-    }
-  | {
-      readonly kind: 'progress';
-      readonly flowId: string;
-      readonly stepId: string;
-      readonly taskTitle: string;
-      readonly activeText: string;
-      readonly relayRole?: CompiledFlowProgressStep['relayRole'];
-    }
-  | {
-      readonly kind: 'primary-result';
-      readonly flowId: string;
-      readonly schemaName: string;
-      readonly path: string;
-      readonly label: string;
-    }
-  | {
-      readonly kind: 'engine-flag';
-      readonly flowId: string;
-      readonly flag: keyof NonNullable<CompiledFlowPackage['engineFlags']>;
-      readonly value: boolean;
-    }
-  | {
-      readonly kind: 'canonical-stage-policy';
-      readonly flowId: string;
-      readonly enforcement: 'enforce';
-      readonly title: string;
-      readonly authority: string;
-      readonly optionalCanonicals?: readonly string[];
-      readonly variants?: readonly FlowDefinitionCanonicalStagePolicyVariant[];
-    }
-  | {
-      readonly kind: 'canonical-stage-policy';
-      readonly flowId: string;
-      readonly enforcement: 'exempt';
-      readonly reason: string;
-    };
-
-export type FlowFactError =
-  | { readonly kind: 'missing-flow' }
-  | { readonly kind: 'duplicate-flow'; readonly flowId: string }
-  | { readonly kind: 'missing-entry'; readonly flowId: string }
-  | { readonly kind: 'missing-mode'; readonly flowId: string }
-  | { readonly kind: 'missing-path'; readonly flowId: string; readonly pathKind: string }
-  | {
-      readonly kind: 'mixed-flow-fact';
-      readonly expectedFlowId: string;
-      readonly actualFlowId: string;
-    }
-  | { readonly kind: 'duplicate-path'; readonly flowId: string; readonly pathKind: string }
-  | { readonly kind: 'duplicate-step'; readonly flowId: string; readonly stepId: string }
-  | { readonly kind: 'duplicate-stage'; readonly flowId: string; readonly stageId: string }
-  | {
-      readonly kind: 'duplicate-route';
-      readonly flowId: string;
-      readonly stepId: string;
-      readonly outcome: string;
-    }
-  | {
-      readonly kind: 'duplicate-input-key';
-      readonly flowId: string;
-      readonly stepId: string;
-      readonly key: string;
-    }
-  | { readonly kind: 'unknown-start-step'; readonly flowId: string; readonly stepId: string }
-  | { readonly kind: 'unknown-route-source'; readonly flowId: string; readonly stepId: string }
-  | {
-      readonly kind: 'unknown-step-route';
-      readonly flowId: string;
-      readonly stepId: string;
-      readonly target: string;
-    }
-  | { readonly kind: 'unknown-input-step'; readonly flowId: string; readonly stepId: string }
-  | { readonly kind: 'unknown-progress-step'; readonly flowId: string; readonly stepId: string }
-  | {
-      readonly kind: 'missing-input-key';
-      readonly flowId: string;
-      readonly stepId: string;
-      readonly key: string;
-    }
-  | { readonly kind: 'missing-progress'; readonly flowId: string; readonly stepId: string }
-  | { readonly kind: 'missing-primary-result'; readonly flowId: string }
-  | {
-      readonly kind: 'semantic-drift';
-      readonly flowId: string;
-      readonly surface: string;
-      readonly expected: readonly string[];
-      readonly actual: readonly string[];
-    }
-  | { readonly kind: 'duplicate-canonical-stage-policy'; readonly flowId: string };
-
-export type DefineFlowFromFactsError =
-  | { readonly kind: 'invalid-flow-facts'; readonly errors: readonly FlowFactError[] }
-  | { readonly kind: 'flow-fact-semantic-drift'; readonly errors: readonly FlowFactError[] }
-  | { readonly kind: 'flow-definition-parse-error'; readonly message: string };
-
-export type Validation<T, E> =
-  | { readonly ok: true; readonly value: T }
-  | { readonly ok: false; readonly errors: readonly E[] };
-
-export interface ValidFlowFactModel {
-  readonly flow: Extract<FlowFact, { readonly kind: 'flow' }>;
-  readonly paths: readonly Extract<FlowFact, { readonly kind: 'path' }>[];
-  readonly entry: Extract<FlowFact, { readonly kind: 'entry' }>;
-  readonly modes: readonly Extract<FlowFact, { readonly kind: 'mode' }>[];
-  readonly initialContracts: readonly Extract<FlowFact, { readonly kind: 'initial-contract' }>[];
-  readonly contractAliases: readonly Extract<FlowFact, { readonly kind: 'contract-alias' }>[];
-  readonly stages: readonly Extract<FlowFact, { readonly kind: 'stage' }>[];
-  readonly steps: readonly Extract<FlowFact, { readonly kind: 'step' }>[];
-  readonly inputKeys: readonly Extract<FlowFact, { readonly kind: 'input-key' }>[];
-  readonly routes: readonly Extract<FlowFact, { readonly kind: 'route' }>[];
-  readonly registeredReports: readonly Extract<FlowFact, { readonly kind: 'registered-report' }>[];
-  readonly writerBindings: readonly Extract<FlowFact, { readonly kind: 'writer-binding' }>[];
-  readonly structuralHints: readonly Extract<FlowFact, { readonly kind: 'structural-hint' }>[];
-  readonly progress: readonly Extract<FlowFact, { readonly kind: 'progress' }>[];
-  readonly primaryResult: Extract<FlowFact, { readonly kind: 'primary-result' }> | undefined;
-  readonly engineFlags: readonly Extract<FlowFact, { readonly kind: 'engine-flag' }>[];
-  readonly canonicalStagePolicy:
-    | Extract<FlowFact, { readonly kind: 'canonical-stage-policy' }>
-    | undefined;
-}
-
-export interface DefineFlowFromFactsInput {
-  readonly facts: readonly FlowFact[];
-  readonly routing?: FlowDefinitionInput['routing'];
-  readonly reportDeclarations?: readonly FlowReportDeclaration[];
-  readonly relayReports?: readonly CompiledFlowRelayReport[];
-  readonly reportSchemas?: readonly CompiledFlowReportSchema[];
-  readonly writers?: FlowDefinitionInput['writers'];
-  readonly structuralHints?: FlowDefinitionInput['structuralHints'];
-}
-
-function duplicateValues(values: readonly string[]): readonly string[] {
-  const seen = new Set<string>();
-  const duplicates = new Set<string>();
-  for (const value of values) {
-    if (seen.has(value)) duplicates.add(value);
-    seen.add(value);
-  }
-  return [...duplicates];
-}
-
-function collect<F extends FlowFact['kind']>(
-  facts: readonly FlowFact[],
-  kind: F,
-): readonly Extract<FlowFact, { readonly kind: F }>[] {
-  return facts.filter(
-    (fact): fact is Extract<FlowFact, { readonly kind: F }> => fact.kind === kind,
-  );
-}
-
-export function validateFlowFacts(
-  facts: readonly FlowFact[],
-): Validation<ValidFlowFactModel, FlowFactError> {
-  const errors: FlowFactError[] = [];
-  const flows = collect(facts, 'flow');
-  const flow = flows[0];
-  if (flow === undefined) {
-    errors.push({ kind: 'missing-flow' });
-  }
-  for (const flowId of duplicateValues(flows.map((fact) => fact.flowId))) {
-    errors.push({ kind: 'duplicate-flow', flowId });
-  }
-
-  const flowId = flow?.flowId ?? '<missing>';
-  const paths = collect(facts, 'path');
-  const entries = collect(facts, 'entry');
-  const entry = entries[0];
-  const modes = collect(facts, 'mode');
-  const initialContracts = collect(facts, 'initial-contract');
-  const contractAliases = collect(facts, 'contract-alias');
-  const stages = collect(facts, 'stage');
-  const steps = collect(facts, 'step');
-  const inputKeys = collect(facts, 'input-key');
-  const routes = collect(facts, 'route');
-  const registeredReports = collect(facts, 'registered-report');
-  const writerBindings = collect(facts, 'writer-binding');
-  const structuralHints = collect(facts, 'structural-hint');
-  const progress = collect(facts, 'progress');
-  const primaryResults = collect(facts, 'primary-result');
-  const engineFlags = collect(facts, 'engine-flag');
-  const canonicalStagePolicies = collect(facts, 'canonical-stage-policy');
-
-  if (flow !== undefined) {
-    for (const fact of facts) {
-      if (fact.flowId !== flow.flowId) {
-        errors.push({
-          kind: 'mixed-flow-fact',
-          expectedFlowId: flow.flowId,
-          actualFlowId: fact.flowId,
-        });
-      }
-    }
-  }
-  if (entry === undefined) errors.push({ kind: 'missing-entry', flowId });
-  if (modes.length === 0) errors.push({ kind: 'missing-mode', flowId });
-  if (!paths.some((path) => path.pathKind === 'schematic')) {
-    errors.push({ kind: 'missing-path', flowId, pathKind: 'schematic' });
-  }
-  if (flow?.visibility === 'public' && primaryResults[0] === undefined) {
-    errors.push({ kind: 'missing-primary-result', flowId });
-  }
-
-  for (const stepId of duplicateValues(steps.map((step) => step.stepId))) {
-    errors.push({ kind: 'duplicate-step', flowId, stepId });
-  }
-  for (const pathKind of duplicateValues(paths.map((path) => path.pathKind))) {
-    errors.push({ kind: 'duplicate-path', flowId, pathKind });
-  }
-  for (const stageId of duplicateValues(stages.map((stage) => stage.stageId))) {
-    errors.push({ kind: 'duplicate-stage', flowId, stageId });
-  }
-  if (canonicalStagePolicies.length > 1) {
-    errors.push({ kind: 'duplicate-canonical-stage-policy', flowId });
-  }
-
-  const stepIds = new Set(steps.map((step) => step.stepId));
-  if (flow !== undefined && !stepIds.has(flow.startsAt)) {
-    errors.push({ kind: 'unknown-start-step', flowId, stepId: flow.startsAt });
-  }
-
-  for (const route of routes) {
-    if (!stepIds.has(route.fromStepId)) {
-      errors.push({ kind: 'unknown-route-source', flowId, stepId: route.fromStepId });
-    }
-    const key = `${route.fromStepId}\0${route.outcome}`;
-    const duplicates = routes.filter(
-      (candidate) => `${candidate.fromStepId}\0${candidate.outcome}` === key && candidate !== route,
-    );
-    if (
-      duplicates.length > 0 &&
-      routes.indexOf(route) ===
-        routes.findIndex((candidate) => `${candidate.fromStepId}\0${candidate.outcome}` === key)
-    ) {
-      errors.push({
-        kind: 'duplicate-route',
-        flowId,
-        stepId: route.fromStepId,
-        outcome: route.outcome,
-      });
-    }
-    validateRouteTarget({ flowId, stepId: route.fromStepId, target: route.to, stepIds, errors });
-    for (const target of Object.values(route.modeOverrides ?? {})) {
-      validateRouteTarget({ flowId, stepId: route.fromStepId, target, stepIds, errors });
-    }
-  }
-
-  const inputsByStep = new Map<string, Set<string>>();
-  for (const inputKey of inputKeys) {
-    if (!stepIds.has(inputKey.stepId)) {
-      errors.push({ kind: 'unknown-input-step', flowId, stepId: inputKey.stepId });
-    }
-    const current = inputsByStep.get(inputKey.stepId) ?? new Set<string>();
-    if (current.has(inputKey.key)) {
-      errors.push({
-        kind: 'duplicate-input-key',
-        flowId,
-        stepId: inputKey.stepId,
-        key: inputKey.key,
-      });
-    }
-    current.add(inputKey.key);
-    inputsByStep.set(inputKey.stepId, current);
-  }
-
-  for (const step of steps) {
-    const stepInputKeys = new Set(
-      inputKeys
-        .filter((inputKey) => inputKey.stepId === step.stepId)
-        .map((inputKey) => inputKey.key),
-    );
-    for (const key of stepInputKeys) {
-      if (key.length === 0) {
-        errors.push({ kind: 'missing-input-key', flowId, stepId: step.stepId, key });
-      }
-    }
-    if (flow?.visibility === 'public' && !progress.some((item) => item.stepId === step.stepId)) {
-      errors.push({ kind: 'missing-progress', flowId, stepId: step.stepId });
-    }
-  }
-  for (const progressStep of progress) {
-    if (!stepIds.has(progressStep.stepId)) {
-      errors.push({ kind: 'unknown-progress-step', flowId, stepId: progressStep.stepId });
-    }
-  }
-
-  if (errors.length > 0 || flow === undefined || entry === undefined) {
-    return { ok: false, errors };
-  }
-
-  return {
-    ok: true,
-    value: {
-      flow,
-      paths,
-      entry,
-      modes,
-      initialContracts,
-      contractAliases,
-      stages,
-      steps,
-      inputKeys,
-      routes,
-      registeredReports,
-      writerBindings,
-      structuralHints,
-      progress,
-      primaryResult: primaryResults[0],
-      engineFlags,
-      canonicalStagePolicy: canonicalStagePolicies[0],
-    },
-  };
-}
-
-function validateRouteTarget(input: {
-  readonly flowId: string;
-  readonly stepId: string;
-  readonly target: string;
-  readonly stepIds: ReadonlySet<string>;
-  readonly errors: FlowFactError[];
-}): void {
-  if (
-    input.target === '@complete' ||
-    input.target === '@stop' ||
-    input.target === '@handoff' ||
-    input.target === '@escalate'
-  ) {
-    return;
-  }
-  if (!input.stepIds.has(input.target)) {
-    input.errors.push({
-      kind: 'unknown-step-route',
-      flowId: input.flowId,
-      stepId: input.stepId,
-      target: input.target,
-    });
-  }
-}
-
-export function projectSchematicFromFacts(model: ValidFlowFactModel): FlowSchematicInput {
-  return {
-    schema_version: '1',
-    id: model.flow.flowId,
-    title: model.flow.title,
-    purpose: model.flow.purpose,
-    status: model.flow.status,
-    version: model.flow.version,
-    starts_at: model.flow.startsAt,
-    initial_contracts: model.initialContracts.map((contract) => contract.schemaName),
-    contract_aliases: model.contractAliases.map(
-      (alias): SchematicContractAlias => ({
-        generic: alias.generic,
-        actual: alias.actual,
-      }),
-    ),
-    entry: projectEntry(model.entry),
-    entry_modes: model.modes.map(projectEntryMode),
-    stage_path_policy: model.flow.stagePathPolicy,
-    stages: model.stages.map(
-      (stage): SchematicStage => ({
-        canonical: stage.canonical,
-        id: stage.stageId,
-        title: stage.title,
-      }),
-    ),
-    items: model.steps.map((step) => projectStep(model, step)),
-  };
-}
-
-function projectEntry(entry: Extract<FlowFact, { readonly kind: 'entry' }>): SchematicEntry {
-  return {
-    signals: {
-      include: [...entry.include],
-      exclude: [...entry.exclude],
-    },
-    intent_prefixes: [...entry.intentPrefixes],
-  };
-}
-
-function projectEntryMode(mode: Extract<FlowFact, { readonly kind: 'mode' }>): SchematicEntryMode {
-  return {
-    name: mode.name,
-    depth: mode.depth,
-    description: mode.description,
-    ...(mode.defaultChangeKind === undefined
-      ? {}
-      : { default_change_kind: mode.defaultChangeKind }),
-  };
-}
-
-function projectStep(
-  model: ValidFlowFactModel,
-  step: Extract<FlowFact, { readonly kind: 'step' }>,
-): SchematicStep {
-  const routes = Object.fromEntries(
-    model.routes
-      .filter((route) => route.fromStepId === step.stepId)
-      .map((route) => [route.outcome, route.to]),
-  );
-  const route_overrides: NonNullable<SchematicStep['route_overrides']> = {};
-  for (const route of model.routes) {
-    if (route.fromStepId !== step.stepId || route.modeOverrides === undefined) continue;
-    route_overrides[route.outcome] = route.modeOverrides;
-  }
-  return {
-    id: step.stepId,
-    title: step.title,
-    stage: step.stage,
-    block: step.block,
-    input: projectStepInput(model, step.stepId),
-    output: step.output,
-    evidence_requirements: [...step.evidenceRequirements],
-    execution: step.execution,
-    skill_slots: step.skillSlots ?? [],
-    protocol: step.protocol,
-    writes: step.writes,
-    check: step.check,
-    ...(step.selection === undefined ? {} : { selection: step.selection }),
-    ...(step.checkpointPolicy === undefined ? {} : { checkpoint_policy: step.checkpointPolicy }),
-    ...(step.fanout === undefined ? {} : { fanout: step.fanout }),
-    routes,
-    route_overrides,
-  };
-}
-
-function projectStepInput(model: ValidFlowFactModel, stepId: string): SchematicInput {
-  return Object.fromEntries(
-    model.inputKeys
-      .filter((inputKey) => inputKey.stepId === stepId)
-      .map((inputKey) => [inputKey.key, inputKey.schemaName]),
-  );
-}
-
-export function projectRuntimeSurfaceFromFacts(
-  model: ValidFlowFactModel,
-): CompiledFlowRuntimeSurface | undefined {
-  if (model.primaryResult === undefined && model.progress.length === 0) return undefined;
-  return {
-    supportedEntryModes: model.modes.map((mode) => ({
-      entryModeName: mode.name,
-      depth: mode.depth,
-    })),
-    ...(model.primaryResult === undefined
-      ? {}
-      : {
-          primaryResult: {
-            schemaName: model.primaryResult.schemaName,
-            path: model.primaryResult.path,
-            label: model.primaryResult.label,
-          },
-        }),
-    ...(model.progress.length === 0
-      ? {}
-      : {
-          progress: {
-            steps: model.progress.map((step) => ({
-              stepId: step.stepId,
-              taskTitle: step.taskTitle,
-              activeText: step.activeText,
-              ...(step.relayRole === undefined ? {} : { relayRole: step.relayRole }),
-            })),
-          },
-        }),
-  };
-}
-
-function projectPathsFromFacts(
-  model: ValidFlowFactModel,
-): NonNullable<FlowDefinitionInput['paths']> {
-  return Object.fromEntries(model.paths.map((path) => [path.pathKind, path.path]));
-}
-
-function projectEngineFlagsFromFacts(
-  model: ValidFlowFactModel,
-): FlowDefinitionInput['engineFlags'] | undefined {
-  if (model.engineFlags.length === 0) return undefined;
-  const flags: { bindsExecutionDepthToRelaySelection?: boolean } = {};
-  for (const fact of model.engineFlags) {
-    flags[fact.flag] = fact.value;
-  }
-  return flags;
-}
-
-function projectCanonicalStagePolicyFromFacts(
-  model: ValidFlowFactModel,
-): FlowDefinitionCanonicalStagePolicy | undefined {
-  const policy = model.canonicalStagePolicy;
-  if (policy === undefined) return undefined;
-  if (policy.enforcement === 'exempt') {
-    return { kind: 'exempt', reason: policy.reason };
-  }
-  return {
-    kind: 'enforce',
-    canonicals: model.stages.map((stage) => stage.canonical),
-    omits:
-      model.flow.stagePathPolicy.mode === 'partial' ? [...model.flow.stagePathPolicy.omits] : [],
-    optional_canonicals: policy.optionalCanonicals ?? [],
-    variants: policy.variants ?? [],
-    title: policy.title,
-    authority: policy.authority,
-  };
-}
-
-export function describeDefineFlowFromFactsError(error: DefineFlowFromFactsError): string {
-  if (error.kind === 'invalid-flow-facts') {
-    return `invalid flow facts: ${JSON.stringify(error.errors, null, 2)}`;
-  }
-  if (error.kind === 'flow-fact-semantic-drift') {
-    return `flow fact semantic drift: ${JSON.stringify(error.errors, null, 2)}`;
-  }
-  return `flow definition parse error: ${error.message}`;
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-export function defineFlowFromFactsValue(
-  input: DefineFlowFromFactsInput,
-): Validation<FlowDefinition, DefineFlowFromFactsError> {
-  const validation = validateFlowFacts(input.facts);
-  if (!validation.ok) {
-    return { ok: false, errors: [{ kind: 'invalid-flow-facts', errors: validation.errors }] };
-  }
-  const model = validation.value;
-  const reportProjection =
-    input.reportDeclarations === undefined
-      ? undefined
-      : projectFlowReportDeclarations(input.reportDeclarations);
-  const relayReports = input.relayReports ?? reportProjection?.relayReports ?? [];
-  const reportSchemas = input.reportSchemas ?? reportProjection?.reportSchemas ?? [];
-  const writers = input.writers ?? reportProjection?.writers ?? {};
-  const semanticErrors = validateSemanticBindings(model, {
-    ...input,
-    relayReports,
-    reportSchemas,
-    writers,
-  });
-  if (semanticErrors.length > 0) {
-    return { ok: false, errors: [{ kind: 'flow-fact-semantic-drift', errors: semanticErrors }] };
-  }
-  const engineFlags = projectEngineFlagsFromFacts(model);
-  const runtimeSurface = projectRuntimeSurfaceFromFacts(model);
-  const canonicalStagePolicy = projectCanonicalStagePolicyFromFacts(model);
-  try {
-    return {
-      ok: true,
-      value: defineFlow({
-        id: model.flow.flowId,
-        visibility: model.flow.visibility,
-        paths: projectPathsFromFacts(model),
-        schematic: projectSchematicFromFacts(model),
-        ...(input.routing === undefined ? {} : { routing: input.routing }),
-        ...(input.reportDeclarations === undefined
-          ? {}
-          : { reportDeclarations: input.reportDeclarations }),
-        relayReports,
-        reportSchemas,
-        writers,
-        ...(input.structuralHints === undefined ? {} : { structuralHints: input.structuralHints }),
-        ...(runtimeSurface === undefined ? {} : { runtimeSurface }),
-        ...(canonicalStagePolicy === undefined ? {} : { canonicalStagePolicy }),
-        ...(engineFlags === undefined ? {} : { engineFlags }),
-      }),
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      errors: [{ kind: 'flow-definition-parse-error', message: errorMessage(error) }],
-    };
-  }
-}
-
-export function defineFlowFromFacts(input: DefineFlowFromFactsInput): FlowDefinition {
-  const result = defineFlowFromFactsValue(input);
-  if (result.ok) return result.value;
-  throw new Error(result.errors.map(describeDefineFlowFromFactsError).join('\n'));
-}
-
-function validateSemanticBindings(
-  model: ValidFlowFactModel,
-  input: DefineFlowFromFactsInput,
-): readonly FlowFactError[] {
-  const errors: FlowFactError[] = [];
-  compareSemanticSurface({
-    model,
-    errors,
-    surface: 'relayReports',
-    expected: model.registeredReports
-      .filter((report) => report.channel === 'relay')
-      .map((report) => report.schemaName),
-    actual: (input.relayReports ?? []).map((report) => report.schemaName),
-  });
-  compareSemanticSurface({
-    model,
-    errors,
-    surface: 'reportSchemas',
-    expected: model.registeredReports
-      .filter((report) => report.channel === 'report')
-      .map((report) => report.schemaName),
-    actual: (input.reportSchemas ?? []).map((report) => report.schemaName),
-  });
-  for (const slot of ['compose', 'close', 'verification', 'checkpoint'] as const) {
-    compareSemanticSurface({
-      model,
-      errors,
-      surface: `writers.${slot}`,
-      expected: model.writerBindings
-        .filter((binding) => binding.slot === slot)
-        .map((binding) => binding.resultSchemaName),
-      actual: (input.writers?.[slot] ?? []).map((writer) => writer.resultSchemaName),
-    });
-  }
-  compareSemanticSurface({
-    model,
-    errors,
-    surface: 'structuralHints',
-    expected: model.structuralHints.map((hint) => hint.hintId),
-    actual: (input.structuralHints ?? []).map((hint) => hint.id),
-  });
-  return errors;
-}
-
-function compareSemanticSurface(input: {
-  readonly model: ValidFlowFactModel;
-  readonly errors: FlowFactError[];
-  readonly surface: string;
-  readonly expected: readonly string[];
-  readonly actual: readonly string[];
-}): void {
-  if (input.expected.join('\0') === input.actual.join('\0')) return;
-  input.errors.push({
-    kind: 'semantic-drift',
-    flowId: input.model.flow.flowId,
-    surface: input.surface,
-    expected: input.expected,
-    actual: input.actual,
-  });
 }

@@ -1,29 +1,32 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { flowDefinitions, flowPackages } from '../../src/flows/catalog.js';
 
 const RETAINED_FLOW_IDS = ['review', 'fix', 'pursue', 'runtime-proof', 'build', 'explore'] as const;
-
 function readSource(path: string): string {
   return readFileSync(path, 'utf8');
 }
 
-describe('fact-owned retained flow authoring', () => {
-  it('keeps retained flow adapters thin and facts-owned', () => {
+describe('value-owned retained flow authoring', () => {
+  it('keeps retained flow adapters value-owned without legacy facts files', () => {
     for (const flowId of RETAINED_FLOW_IDS) {
       const flowSource = readSource(`src/flows/${flowId}/flow.ts`);
-      const factSource = readSource(`src/flows/${flowId}/facts.ts`);
+      const dataSource = readSource(`src/flows/${flowId}/data.ts`);
 
-      expect(flowSource, `${flowId} flow adapter should use fact authoring`).toContain(
+      expect(flowSource, `${flowId} flow adapter should use canonical FlowData`).toContain(
+        'defineFlowData',
+      );
+      expect(flowSource, `${flowId} flow adapter should not use fact authoring`).not.toContain(
         'defineFlowFromFacts',
       );
       expect(flowSource, `${flowId} flow adapter should not own an inline schematic`).not.toContain(
         'schematic:',
       );
-      expect(factSource, `${flowId} facts should stay typed as FlowFact data`).toContain(
-        'satisfies readonly FlowFact[]',
+      expect(dataSource, `${flowId} FlowData should not import legacy facts`).not.toContain(
+        './facts',
       );
+      expect(existsSync(`src/flows/${flowId}/facts.ts`), `${flowId} facts file`).toBe(false);
     }
   });
 

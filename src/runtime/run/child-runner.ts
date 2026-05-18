@@ -6,6 +6,7 @@ import type {
 } from '../../shared/relay-runtime-types.js';
 import type { ExecutorRegistry } from '../executors/index.js';
 import type { RelayConnector } from '../executors/relay.js';
+import type { ExternalFileReader } from './external-files.js';
 import type { GraphRunResult } from './graph-runner.js';
 
 export interface ChildFlowRef {
@@ -49,6 +50,7 @@ export interface CompiledFlowRunOptions {
   readonly childExecutors?: Partial<ExecutorRegistry>;
   readonly childCompiledFlowResolver?: ChildCompiledFlowResolver;
   readonly childRunner?: CompiledFlowRunner;
+  readonly externalFiles?: ExternalFileReader;
   readonly projectRoot?: string;
   readonly evidencePolicy?: RuntimeEvidencePolicy;
   readonly worktreeRunner?: WorktreeRunner;

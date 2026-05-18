@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { CompiledFlowProgressStep, CompiledFlowProgressSurface } from '../../flows/types.js';
 import {
@@ -26,6 +25,10 @@ import {
 import type { TraceEntry } from '../domain/trace.js';
 import type { ExecutableFlow } from '../manifest/executable-flow.js';
 import { tournamentCheckpointPresentation } from './tournament-checkpoint-context.js';
+
+export interface ProgressProjectionFiles {
+  readText(path: string): string | undefined;
+}
 
 function connectorFilesystemCapability(connector: ResolvedConnector): FilesystemCapability {
   return connector.kind === 'builtin'
@@ -158,8 +161,14 @@ function reportTaskListProgress(input: {
   });
 }
 
-function readJsonReport(runDir: string, reportPath: string): unknown {
-  return JSON.parse(readFileSync(join(runDir, reportPath), 'utf8')) as unknown;
+function readJsonReport(
+  files: ProgressProjectionFiles,
+  runDir: string,
+  reportPath: string,
+): unknown {
+  const text = files.readText(join(runDir, reportPath));
+  if (text === undefined) throw new Error(`progress projection could not read ${reportPath}`);
+  return JSON.parse(text) as unknown;
 }
 
 function warningRecordsFromReport(body: unknown): Array<{
@@ -191,6 +200,7 @@ function reportEvidenceProgress(input: {
   readonly runId: ProgressRunId;
   readonly recordedAt: string;
   readonly traceEntry: TraceEntry;
+  readonly files: ProgressProjectionFiles;
 }): void {
   if (
     input.traceEntry.step_id === undefined ||
@@ -201,7 +211,7 @@ function reportEvidenceProgress(input: {
   }
   let body: unknown;
   try {
-    body = readJsonReport(input.runDir, input.traceEntry.report_path);
+    body = readJsonReport(input.files, input.runDir, input.traceEntry.report_path);
   } catch {
     return;
   }
@@ -283,9 +293,11 @@ function stringArray(value: unknown): string[] | undefined {
   return entries.length === value.length && entries.length > 0 ? entries : undefined;
 }
 
-function checkpointPrompt(requestPath: string): string {
+function checkpointPrompt(files: ProgressProjectionFiles, requestPath: string): string {
   try {
-    const raw = JSON.parse(readFileSync(requestPath, 'utf8')) as unknown;
+    const text = files.readText(requestPath);
+    if (text === undefined) throw new Error(`progress projection could not read ${requestPath}`);
+    const raw = JSON.parse(text) as unknown;
     if (raw !== null && typeof raw === 'object' && !Array.isArray(raw)) {
       const prompt = (raw as Record<string, unknown>).prompt;
       if (typeof prompt === 'string' && prompt.length > 0) return prompt;
@@ -377,7 +389,9 @@ export function createProgressProjector(input: {
   readonly runId: string;
   readonly flow: ExecutableFlow;
   readonly progressSurface?: CompiledFlowProgressSurface;
+  readonly files?: ProgressProjectionFiles;
 }): (entry: TraceEntry) => void {
+  const projectionFiles: ProgressProjectionFiles = input.files ?? { readText: () => undefined };
   const taskStatuses = new Map<string, ProgressTaskStatus>(
     input.flow.steps.map((step) => [step.id, 'pending'] as const),
   );
@@ -521,6 +535,7 @@ export function createProgressProjector(input: {
           runId,
           recordedAt,
           traceEntry: entry,
+          files: projectionFiles,
         });
         break;
       }
@@ -671,9 +686,16 @@ export function createProgressProjector(input: {
         const requestPath = checkpointRequestPath(input.runDir, entry.request_path);
         taskStatuses.set(stepId, 'in_progress');
         const title = stepTitle({ flow: input.flow, stepId });
-        const checkpointPromptText = checkpointPrompt(requestPath);
+        const checkpointPromptText = checkpointPrompt(projectionFiles, requestPath);
         const presentation = tournamentCheckpointPresentation({
-          runDir: input.runDir,
+          readJson: (path) => {
+            try {
+              const text = projectionFiles.readText(join(input.runDir, path));
+              return text === undefined ? undefined : (JSON.parse(text) as unknown);
+            } catch {
+              return undefined;
+            }
+          },
           allowedChoices,
           fallbackPrompt: checkpointPromptText,
           fallbackLabel: checkpointChoiceLabel,

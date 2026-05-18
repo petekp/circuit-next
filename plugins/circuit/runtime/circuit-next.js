@@ -7341,12 +7341,12 @@ var require_dist = __commonJS({
 
 // dist/cli/circuit.js
 import { randomUUID as randomUUID7 } from "node:crypto";
-import { existsSync as existsSync13, readFileSync as readFileSync28 } from "node:fs";
-import { dirname as dirname10, resolve as resolve11 } from "node:path";
+import { existsSync as existsSync13, readFileSync as readFileSync25 } from "node:fs";
+import { dirname as dirname9, resolve as resolve11 } from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 
 // dist/runtime/run/checkpoint-resume.js
-import { readFileSync as readFileSync19 } from "node:fs";
+import { readFileSync as readFileSync16 } from "node:fs";
 
 // dist/flows/catalog-derivations.js
 function buildBuilderRegistry(packages, slot, pluck) {
@@ -11970,7 +11970,43 @@ var SpinePolicy = external_exports.discriminatedUnion("mode", [
 ]);
 
 // dist/schemas/flow-block-definitions.js
-var FLOW_BLOCK_DEFINITIONS = [
+var BASE_REQUIRED_AUTHORING_FIELDS = [
+  "id",
+  "title",
+  "stage",
+  "input",
+  "routes",
+  "protocol",
+  "writes",
+  "check"
+];
+var EXECUTION_REQUIRED_AUTHORING_FIELDS = {
+  relay: ["relay_role"],
+  checkpoint: ["checkpoint_policy"],
+  fanout: ["fanout"],
+  "sub-run": ["sub_run_ref", "sub_run_goal", "sub_run_depth"]
+};
+function conservativeAuthoringPolicy(schematicPolicy) {
+  const executionKind = schematicPolicy.executionKinds.length === 1 ? schematicPolicy.executionKinds[0] : void 0;
+  return {
+    defaults: {
+      evidenceRequirements: "block-produces-evidence",
+      output: "block-output-contract",
+      ...executionKind === void 0 ? {} : { executionKind }
+    },
+    required: {
+      always: BASE_REQUIRED_AUTHORING_FIELDS,
+      whenExecutionKind: EXECUTION_REQUIRED_AUTHORING_FIELDS
+    }
+  };
+}
+function defineFlowBlockDefinition(definition) {
+  return {
+    ...definition,
+    authoringPolicy: conservativeAuthoringPolicy(definition.schematicPolicy)
+  };
+}
+var FLOW_BLOCK_DEFINITION_INPUTS = [
   {
     id: "intake",
     title: "Intake",
@@ -12414,8 +12450,9 @@ var FLOW_BLOCK_DEFINITIONS = [
     }
   }
 ];
+var FLOW_BLOCK_DEFINITIONS = FLOW_BLOCK_DEFINITION_INPUTS.map(defineFlowBlockDefinition);
 function blockCatalogEntry(definition) {
-  const { schematicPolicy: _schematicPolicy, ...block } = definition;
+  const { authoringPolicy: _authoringPolicy, schematicPolicy: _schematicPolicy, ...block } = definition;
   return block;
 }
 var FLOW_BLOCK_CATALOG = FlowBlockCatalog.parse({
@@ -12423,9 +12460,12 @@ var FLOW_BLOCK_CATALOG = FlowBlockCatalog.parse({
   blocks: FLOW_BLOCK_DEFINITIONS.map(blockCatalogEntry)
 });
 var flowBlockSchematicPolicy = {};
+var flowBlockAuthoringPolicy = {};
 for (const definition of FLOW_BLOCK_DEFINITIONS) {
   flowBlockSchematicPolicy[definition.id] = definition.schematicPolicy;
+  flowBlockAuthoringPolicy[definition.id] = definition.authoringPolicy;
 }
+var FLOW_BLOCK_AUTHORING_POLICY = flowBlockAuthoringPolicy;
 
 // dist/schemas/scalars.js
 var ControlPlaneFileStem = external_exports.string().min(1).max(128).regex(/^[a-z0-9][a-z0-9._-]*$/, {
@@ -13376,6 +13416,85 @@ function defineFlow(definition) {
     schematic
   };
 }
+function defineFlowDataValue(data) {
+  const reportErrors = validateFlowDataReports({
+    reports: data.reports ?? [],
+    writerSchemaAliases: data.reportWriterSchemaAliases ?? []
+  });
+  if (reportErrors.length > 0)
+    return { ok: false, errors: reportErrors };
+  try {
+    return { ok: true, value: defineFlow(flowDefinitionInputFromData(data)) };
+  } catch (error) {
+    return {
+      ok: false,
+      errors: [{ kind: "flow-data-parse-error", message: errorMessage(error) }]
+    };
+  }
+}
+function defineFlowData(data) {
+  const result = defineFlowDataValue(data);
+  if (result.ok)
+    return result.value;
+  throw new Error(result.errors.map(describeDefineFlowDataError).join("\n"));
+}
+function flowDefinitionInputFromData(data) {
+  const { reports, reportWriterSchemaAliases: _reportWriterSchemaAliases, ...definition } = data;
+  const reportProjection = reports === void 0 ? void 0 : projectFlowReportDeclarations(reports);
+  return {
+    ...definition,
+    ...reports === void 0 ? {} : {
+      reportDeclarations: reports,
+      relayReports: definition.relayReports ?? reportProjection?.relayReports ?? [],
+      reportSchemas: definition.reportSchemas ?? reportProjection?.reportSchemas ?? [],
+      writers: definition.writers ?? reportProjection?.writers ?? {}
+    }
+  };
+}
+function validateFlowDataReports(input) {
+  const errors = [];
+  const writerSchemaAliases = new Set(input.writerSchemaAliases);
+  const reports = input.reports;
+  for (const schemaName of duplicateValues(reports.map((report) => report.schemaName))) {
+    errors.push({ kind: "duplicate-flow-data-report", schemaName });
+  }
+  for (const report of reports) {
+    for (const slot of ["compose", "close", "verification", "checkpoint"]) {
+      for (const writer of report.writers?.[slot] ?? []) {
+        if (writer.resultSchemaName !== report.schemaName && !writerSchemaAliases.has(writer.resultSchemaName)) {
+          errors.push({
+            kind: "flow-data-report-writer-drift",
+            schemaName: report.schemaName,
+            slot,
+            resultSchemaName: writer.resultSchemaName
+          });
+        }
+      }
+    }
+  }
+  return errors;
+}
+function describeDefineFlowDataError(error) {
+  if (error.kind === "flow-data-parse-error")
+    return error.message;
+  if (error.kind === "duplicate-flow-data-report") {
+    return `duplicate FlowData report schema '${error.schemaName}'`;
+  }
+  return `FlowData report '${error.schemaName}' binds ${error.slot} writer for '${error.resultSchemaName}'`;
+}
+function duplicateValues(values) {
+  const seen = /* @__PURE__ */ new Set();
+  const duplicates = /* @__PURE__ */ new Set();
+  for (const value of values) {
+    if (seen.has(value))
+      duplicates.add(value);
+    seen.add(value);
+  }
+  return [...duplicates];
+}
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
 function compilePaths(definition) {
   const paths = {
     schematic: definition.paths.schematic ?? defaultSchematicPath(definition.id)
@@ -13494,868 +13613,198 @@ function compileFlowDefinitions(definitions) {
   buildRuntimeSurfaceRegistry(packages);
   return packages;
 }
-function duplicateValues(values) {
-  const seen = /* @__PURE__ */ new Set();
-  const duplicates = /* @__PURE__ */ new Set();
-  for (const value of values) {
-    if (seen.has(value))
-      duplicates.add(value);
-    seen.add(value);
+
+// dist/flows/block-step-expansion.js
+var BLOCK_DEFINITION_BY_ID = new Map(FLOW_BLOCK_DEFINITIONS.map((block) => [block.id, block]));
+function expandBlockStepUseValue(use) {
+  const block = BLOCK_DEFINITION_BY_ID.get(use.block);
+  if (block === void 0 || FLOW_BLOCK_AUTHORING_POLICY[use.block] === void 0) {
+    return { ok: false, errors: [{ kind: "unknown-block-step-use", block: use.block }] };
   }
-  return [...duplicates];
-}
-function collect(facts, kind) {
-  return facts.filter((fact) => fact.kind === kind);
-}
-function validateFlowFacts(facts) {
-  const errors = [];
-  const flows = collect(facts, "flow");
-  const flow = flows[0];
-  if (flow === void 0) {
-    errors.push({ kind: "missing-flow" });
-  }
-  for (const flowId2 of duplicateValues(flows.map((fact) => fact.flowId))) {
-    errors.push({ kind: "duplicate-flow", flowId: flowId2 });
-  }
-  const flowId = flow?.flowId ?? "<missing>";
-  const paths = collect(facts, "path");
-  const entries = collect(facts, "entry");
-  const entry = entries[0];
-  const modes = collect(facts, "mode");
-  const initialContracts = collect(facts, "initial-contract");
-  const contractAliases = collect(facts, "contract-alias");
-  const stages = collect(facts, "stage");
-  const steps = collect(facts, "step");
-  const inputKeys = collect(facts, "input-key");
-  const routes = collect(facts, "route");
-  const registeredReports = collect(facts, "registered-report");
-  const writerBindings = collect(facts, "writer-binding");
-  const structuralHints = collect(facts, "structural-hint");
-  const progress = collect(facts, "progress");
-  const primaryResults = collect(facts, "primary-result");
-  const engineFlags = collect(facts, "engine-flag");
-  const canonicalStagePolicies = collect(facts, "canonical-stage-policy");
-  if (flow !== void 0) {
-    for (const fact of facts) {
-      if (fact.flowId !== flow.flowId) {
-        errors.push({
-          kind: "mixed-flow-fact",
-          expectedFlowId: flow.flowId,
-          actualFlowId: fact.flowId
-        });
-      }
-    }
-  }
-  if (entry === void 0)
-    errors.push({ kind: "missing-entry", flowId });
-  if (modes.length === 0)
-    errors.push({ kind: "missing-mode", flowId });
-  if (!paths.some((path) => path.pathKind === "schematic")) {
-    errors.push({ kind: "missing-path", flowId, pathKind: "schematic" });
-  }
-  if (flow?.visibility === "public" && primaryResults[0] === void 0) {
-    errors.push({ kind: "missing-primary-result", flowId });
-  }
-  for (const stepId of duplicateValues(steps.map((step) => step.stepId))) {
-    errors.push({ kind: "duplicate-step", flowId, stepId });
-  }
-  for (const pathKind of duplicateValues(paths.map((path) => path.pathKind))) {
-    errors.push({ kind: "duplicate-path", flowId, pathKind });
-  }
-  for (const stageId of duplicateValues(stages.map((stage) => stage.stageId))) {
-    errors.push({ kind: "duplicate-stage", flowId, stageId });
-  }
-  if (canonicalStagePolicies.length > 1) {
-    errors.push({ kind: "duplicate-canonical-stage-policy", flowId });
-  }
-  const stepIds = new Set(steps.map((step) => step.stepId));
-  if (flow !== void 0 && !stepIds.has(flow.startsAt)) {
-    errors.push({ kind: "unknown-start-step", flowId, stepId: flow.startsAt });
-  }
-  for (const route of routes) {
-    if (!stepIds.has(route.fromStepId)) {
-      errors.push({ kind: "unknown-route-source", flowId, stepId: route.fromStepId });
-    }
-    const key = `${route.fromStepId}\0${route.outcome}`;
-    const duplicates = routes.filter((candidate) => `${candidate.fromStepId}\0${candidate.outcome}` === key && candidate !== route);
-    if (duplicates.length > 0 && routes.indexOf(route) === routes.findIndex((candidate) => `${candidate.fromStepId}\0${candidate.outcome}` === key)) {
-      errors.push({
-        kind: "duplicate-route",
-        flowId,
-        stepId: route.fromStepId,
-        outcome: route.outcome
-      });
-    }
-    validateRouteTarget({ flowId, stepId: route.fromStepId, target: route.to, stepIds, errors });
-    for (const target of Object.values(route.modeOverrides ?? {})) {
-      validateRouteTarget({ flowId, stepId: route.fromStepId, target, stepIds, errors });
-    }
-  }
-  const inputsByStep = /* @__PURE__ */ new Map();
-  for (const inputKey of inputKeys) {
-    if (!stepIds.has(inputKey.stepId)) {
-      errors.push({ kind: "unknown-input-step", flowId, stepId: inputKey.stepId });
-    }
-    const current = inputsByStep.get(inputKey.stepId) ?? /* @__PURE__ */ new Set();
-    if (current.has(inputKey.key)) {
-      errors.push({
-        kind: "duplicate-input-key",
-        flowId,
-        stepId: inputKey.stepId,
-        key: inputKey.key
-      });
-    }
-    current.add(inputKey.key);
-    inputsByStep.set(inputKey.stepId, current);
-  }
-  for (const step of steps) {
-    const stepInputKeys = new Set(inputKeys.filter((inputKey) => inputKey.stepId === step.stepId).map((inputKey) => inputKey.key));
-    for (const key of stepInputKeys) {
-      if (key.length === 0) {
-        errors.push({ kind: "missing-input-key", flowId, stepId: step.stepId, key });
-      }
-    }
-    if (flow?.visibility === "public" && !progress.some((item) => item.stepId === step.stepId)) {
-      errors.push({ kind: "missing-progress", flowId, stepId: step.stepId });
-    }
-  }
-  for (const progressStep of progress) {
-    if (!stepIds.has(progressStep.stepId)) {
-      errors.push({ kind: "unknown-progress-step", flowId, stepId: progressStep.stepId });
-    }
-  }
-  if (errors.length > 0 || flow === void 0 || entry === void 0) {
-    return { ok: false, errors };
-  }
-  return {
-    ok: true,
-    value: {
-      flow,
-      paths,
-      entry,
-      modes,
-      initialContracts,
-      contractAliases,
-      stages,
-      steps,
-      inputKeys,
-      routes,
-      registeredReports,
-      writerBindings,
-      structuralHints,
-      progress,
-      primaryResult: primaryResults[0],
-      engineFlags,
-      canonicalStagePolicy: canonicalStagePolicies[0]
-    }
-  };
-}
-function validateRouteTarget(input) {
-  if (input.target === "@complete" || input.target === "@stop" || input.target === "@handoff" || input.target === "@escalate") {
-    return;
-  }
-  if (!input.stepIds.has(input.target)) {
-    input.errors.push({
-      kind: "unknown-step-route",
-      flowId: input.flowId,
-      stepId: input.stepId,
-      target: input.target
-    });
-  }
-}
-function projectSchematicFromFacts(model) {
-  return {
-    schema_version: "1",
-    id: model.flow.flowId,
-    title: model.flow.title,
-    purpose: model.flow.purpose,
-    status: model.flow.status,
-    version: model.flow.version,
-    starts_at: model.flow.startsAt,
-    initial_contracts: model.initialContracts.map((contract) => contract.schemaName),
-    contract_aliases: model.contractAliases.map((alias) => ({
-      generic: alias.generic,
-      actual: alias.actual
-    })),
-    entry: projectEntry(model.entry),
-    entry_modes: model.modes.map(projectEntryMode),
-    stage_path_policy: model.flow.stagePathPolicy,
-    stages: model.stages.map((stage) => ({
-      canonical: stage.canonical,
-      id: stage.stageId,
-      title: stage.title
-    })),
-    items: model.steps.map((step) => projectStep(model, step))
-  };
-}
-function projectEntry(entry) {
-  return {
-    signals: {
-      include: [...entry.include],
-      exclude: [...entry.exclude]
-    },
-    intent_prefixes: [...entry.intentPrefixes]
-  };
-}
-function projectEntryMode(mode) {
-  return {
-    name: mode.name,
-    depth: mode.depth,
-    description: mode.description,
-    ...mode.defaultChangeKind === void 0 ? {} : { default_change_kind: mode.defaultChangeKind }
-  };
-}
-function projectStep(model, step) {
-  const routes = Object.fromEntries(model.routes.filter((route) => route.fromStepId === step.stepId).map((route) => [route.outcome, route.to]));
-  const route_overrides = {};
-  for (const route of model.routes) {
-    if (route.fromStepId !== step.stepId || route.modeOverrides === void 0)
-      continue;
-    route_overrides[route.outcome] = route.modeOverrides;
-  }
-  return {
-    id: step.stepId,
-    title: step.title,
-    stage: step.stage,
-    block: step.block,
-    input: projectStepInput(model, step.stepId),
-    output: step.output,
-    evidence_requirements: [...step.evidenceRequirements],
-    execution: step.execution,
-    skill_slots: step.skillSlots ?? [],
-    protocol: step.protocol,
-    writes: step.writes,
-    check: step.check,
-    ...step.selection === void 0 ? {} : { selection: step.selection },
-    ...step.checkpointPolicy === void 0 ? {} : { checkpoint_policy: step.checkpointPolicy },
-    ...step.fanout === void 0 ? {} : { fanout: step.fanout },
-    routes,
-    route_overrides
-  };
-}
-function projectStepInput(model, stepId) {
-  return Object.fromEntries(model.inputKeys.filter((inputKey) => inputKey.stepId === stepId).map((inputKey) => [inputKey.key, inputKey.schemaName]));
-}
-function projectRuntimeSurfaceFromFacts(model) {
-  if (model.primaryResult === void 0 && model.progress.length === 0)
-    return void 0;
-  return {
-    supportedEntryModes: model.modes.map((mode) => ({
-      entryModeName: mode.name,
-      depth: mode.depth
-    })),
-    ...model.primaryResult === void 0 ? {} : {
-      primaryResult: {
-        schemaName: model.primaryResult.schemaName,
-        path: model.primaryResult.path,
-        label: model.primaryResult.label
-      }
-    },
-    ...model.progress.length === 0 ? {} : {
-      progress: {
-        steps: model.progress.map((step) => ({
-          stepId: step.stepId,
-          taskTitle: step.taskTitle,
-          activeText: step.activeText,
-          ...step.relayRole === void 0 ? {} : { relayRole: step.relayRole }
-        }))
-      }
-    }
-  };
-}
-function projectPathsFromFacts(model) {
-  return Object.fromEntries(model.paths.map((path) => [path.pathKind, path.path]));
-}
-function projectEngineFlagsFromFacts(model) {
-  if (model.engineFlags.length === 0)
-    return void 0;
-  const flags = {};
-  for (const fact of model.engineFlags) {
-    flags[fact.flag] = fact.value;
-  }
-  return flags;
-}
-function projectCanonicalStagePolicyFromFacts(model) {
-  const policy2 = model.canonicalStagePolicy;
-  if (policy2 === void 0)
-    return void 0;
-  if (policy2.enforcement === "exempt") {
-    return { kind: "exempt", reason: policy2.reason };
-  }
-  return {
-    kind: "enforce",
-    canonicals: model.stages.map((stage) => stage.canonical),
-    omits: model.flow.stagePathPolicy.mode === "partial" ? [...model.flow.stagePathPolicy.omits] : [],
-    optional_canonicals: policy2.optionalCanonicals ?? [],
-    variants: policy2.variants ?? [],
-    title: policy2.title,
-    authority: policy2.authority
-  };
-}
-function describeDefineFlowFromFactsError(error) {
-  if (error.kind === "invalid-flow-facts") {
-    return `invalid flow facts: ${JSON.stringify(error.errors, null, 2)}`;
-  }
-  if (error.kind === "flow-fact-semantic-drift") {
-    return `flow fact semantic drift: ${JSON.stringify(error.errors, null, 2)}`;
-  }
-  return `flow definition parse error: ${error.message}`;
-}
-function errorMessage(error) {
-  return error instanceof Error ? error.message : String(error);
-}
-function defineFlowFromFactsValue(input) {
-  const validation = validateFlowFacts(input.facts);
-  if (!validation.ok) {
-    return { ok: false, errors: [{ kind: "invalid-flow-facts", errors: validation.errors }] };
-  }
-  const model = validation.value;
-  const reportProjection = input.reportDeclarations === void 0 ? void 0 : projectFlowReportDeclarations(input.reportDeclarations);
-  const relayReports = input.relayReports ?? reportProjection?.relayReports ?? [];
-  const reportSchemas = input.reportSchemas ?? reportProjection?.reportSchemas ?? [];
-  const writers = input.writers ?? reportProjection?.writers ?? {};
-  const semanticErrors = validateSemanticBindings(model, {
-    ...input,
-    relayReports,
-    reportSchemas,
-    writers
-  });
-  if (semanticErrors.length > 0) {
-    return { ok: false, errors: [{ kind: "flow-fact-semantic-drift", errors: semanticErrors }] };
-  }
-  const engineFlags = projectEngineFlagsFromFacts(model);
-  const runtimeSurface = projectRuntimeSurfaceFromFacts(model);
-  const canonicalStagePolicy = projectCanonicalStagePolicyFromFacts(model);
-  try {
-    return {
-      ok: true,
-      value: defineFlow({
-        id: model.flow.flowId,
-        visibility: model.flow.visibility,
-        paths: projectPathsFromFacts(model),
-        schematic: projectSchematicFromFacts(model),
-        ...input.routing === void 0 ? {} : { routing: input.routing },
-        ...input.reportDeclarations === void 0 ? {} : { reportDeclarations: input.reportDeclarations },
-        relayReports,
-        reportSchemas,
-        writers,
-        ...input.structuralHints === void 0 ? {} : { structuralHints: input.structuralHints },
-        ...runtimeSurface === void 0 ? {} : { runtimeSurface },
-        ...canonicalStagePolicy === void 0 ? {} : { canonicalStagePolicy },
-        ...engineFlags === void 0 ? {} : { engineFlags }
-      })
-    };
-  } catch (error) {
+  const overrideErrors = validateOverrideOnlyFields(use, block);
+  if (overrideErrors.length > 0)
+    return { ok: false, errors: overrideErrors };
+  const execution = resolveExecution(use, block);
+  if (!execution.ok)
+    return execution;
+  const writes = resolveWrites(use, execution.value.kind);
+  if (writes === void 0) {
     return {
       ok: false,
-      errors: [{ kind: "flow-definition-parse-error", message: errorMessage(error) }]
+      errors: [
+        {
+          kind: "missing-block-step-writes",
+          stepId: use.id,
+          executionKind: execution.value.kind
+        }
+      ]
     };
   }
+  const check = resolveCheck(use, execution.value.kind);
+  if (check === void 0) {
+    return {
+      ok: false,
+      errors: [
+        {
+          kind: "missing-block-step-check",
+          stepId: use.id,
+          executionKind: execution.value.kind
+        }
+      ]
+    };
+  }
+  const parsed = SchematicStep.safeParse(schematicStepInputFromBlockUse({ use, block, execution: execution.value, writes, check }));
+  if (parsed.success)
+    return { ok: true, value: parsed.data };
+  return {
+    ok: false,
+    errors: [
+      {
+        kind: "invalid-block-step-use",
+        message: parsed.error.issues.map((issue) => issue.message).join("; ")
+      }
+    ]
+  };
 }
-function defineFlowFromFacts(input) {
-  const result = defineFlowFromFactsValue(input);
+function expandBlockStepUse(use) {
+  const result = expandBlockStepUseValue(use);
   if (result.ok)
     return result.value;
-  throw new Error(result.errors.map(describeDefineFlowFromFactsError).join("\n"));
+  throw new Error(result.errors.map(describeExpandBlockStepUseError).join("\n"));
 }
-function validateSemanticBindings(model, input) {
+function validateOverrideOnlyFields(use, block) {
   const errors = [];
-  compareSemanticSurface({
-    model,
-    errors,
-    surface: "relayReports",
-    expected: model.registeredReports.filter((report) => report.channel === "relay").map((report) => report.schemaName),
-    actual: (input.relayReports ?? []).map((report) => report.schemaName)
-  });
-  compareSemanticSurface({
-    model,
-    errors,
-    surface: "reportSchemas",
-    expected: model.registeredReports.filter((report) => report.channel === "report").map((report) => report.schemaName),
-    actual: (input.reportSchemas ?? []).map((report) => report.schemaName)
-  });
-  for (const slot of ["compose", "close", "verification", "checkpoint"]) {
-    compareSemanticSurface({
-      model,
-      errors,
-      surface: `writers.${slot}`,
-      expected: model.writerBindings.filter((binding) => binding.slot === slot).map((binding) => binding.resultSchemaName),
-      actual: (input.writers?.[slot] ?? []).map((writer) => writer.resultSchemaName)
+  if (use.output === block.output_contract) {
+    errors.push({
+      kind: "restated-block-step-default",
+      stepId: use.id,
+      block: block.id,
+      field: "output"
     });
   }
-  compareSemanticSurface({
-    model,
-    errors,
-    surface: "structuralHints",
-    expected: model.structuralHints.map((hint) => hint.hintId),
-    actual: (input.structuralHints ?? []).map((hint) => hint.id)
-  });
+  if (use.evidenceRequirements !== void 0 && arraysEqual(use.evidenceRequirements, block.produces_evidence)) {
+    errors.push({
+      kind: "restated-block-step-default",
+      stepId: use.id,
+      block: block.id,
+      field: "evidenceRequirements"
+    });
+  }
+  const defaultExecutionKind = block.authoringPolicy.defaults.executionKind;
+  if (defaultExecutionKind !== void 0 && use.execution?.kind === defaultExecutionKind && Object.keys(use.execution).length === 1) {
+    errors.push({
+      kind: "restated-block-step-default",
+      stepId: use.id,
+      block: block.id,
+      field: "execution"
+    });
+  }
   return errors;
 }
-function compareSemanticSurface(input) {
-  if (input.expected.join("\0") === input.actual.join("\0"))
-    return;
-  input.errors.push({
-    kind: "semantic-drift",
-    flowId: input.model.flow.flowId,
-    surface: input.surface,
-    expected: input.expected,
-    actual: input.actual
-  });
+function arraysEqual(left, right) {
+  if (left.length !== right.length)
+    return false;
+  return left.every((value, index) => value === right[index]);
 }
-
-// dist/flows/declarative-flow-facts.js
-function routeTarget(target) {
-  return typeof target === "string" ? { to: target } : target;
-}
-function contractAliasEntries(aliases) {
-  if (aliases === void 0)
-    return [];
-  if (Array.isArray(aliases))
-    return aliases;
-  return Object.entries(aliases).map(([generic, actual]) => ({ generic, actual }));
-}
-function defineDeclarativeFlowFacts(input) {
-  const flowId = input.id;
-  const facts = [
-    {
-      kind: "flow",
-      flowId,
-      title: input.title,
-      purpose: input.purpose,
-      status: input.status,
-      version: input.version,
-      visibility: input.visibility,
-      startsAt: input.startsAt,
-      stagePathPolicy: input.stagePathPolicy
-    }
-  ];
-  for (const [pathKind, path] of Object.entries(input.paths)) {
-    facts.push({ kind: "path", flowId, pathKind, path });
-  }
-  facts.push({ kind: "entry", flowId, ...input.entry });
-  for (const mode of input.modes) {
-    facts.push({ kind: "mode", flowId, ...mode });
-  }
-  for (const schemaName of input.initialContracts ?? []) {
-    facts.push({ kind: "initial-contract", flowId, schemaName });
-  }
-  for (const { generic, actual } of contractAliasEntries(input.contractAliases)) {
-    facts.push({ kind: "contract-alias", flowId, generic, actual });
-  }
-  for (const stage of input.stages) {
-    facts.push({ kind: "stage", flowId, ...stage });
-  }
-  for (const step of input.steps) {
-    for (const [key, schemaName] of Object.entries(step.input ?? {})) {
-      facts.push({ kind: "input-key", flowId, stepId: step.id, key, schemaName });
-    }
-    const { id, input: _input, routes, progress, ...metadata } = step;
-    facts.push({ kind: "step", flowId, stepId: id, ...metadata });
-    for (const [outcome, target] of Object.entries(routes ?? {})) {
-      const resolved = routeTarget(target);
-      facts.push({
-        kind: "route",
-        flowId,
-        fromStepId: id,
-        outcome,
-        to: resolved.to,
-        ...resolved.modeOverrides === void 0 ? {} : { modeOverrides: resolved.modeOverrides }
-      });
-    }
-    if (progress !== void 0) {
-      facts.push({ kind: "progress", flowId, stepId: id, ...progress });
-    }
-  }
-  for (const report of input.reports ?? []) {
-    facts.push({ kind: "registered-report", flowId, ...report });
-  }
-  for (const [slot, resultSchemaNames] of Object.entries(input.writerBindings ?? {})) {
-    for (const resultSchemaName of resultSchemaNames) {
-      facts.push({ kind: "writer-binding", flowId, slot, resultSchemaName });
-    }
-  }
-  for (const hint of input.structuralHints ?? []) {
-    facts.push({ kind: "structural-hint", flowId, ...hint });
-  }
-  if (input.primaryResult !== void 0) {
-    facts.push({ kind: "primary-result", flowId, ...input.primaryResult });
-  }
-  const canonicalStagePolicy = input.canonicalStagePolicy;
-  if (canonicalStagePolicy !== void 0) {
-    if (canonicalStagePolicy.enforcement === "exempt") {
-      facts.push({ kind: "canonical-stage-policy", flowId, ...canonicalStagePolicy });
-    } else {
-      facts.push({ kind: "canonical-stage-policy", flowId, ...canonicalStagePolicy });
-    }
-  }
-  if (input.engineFlags !== void 0) {
-    for (const flag of Object.keys(input.engineFlags)) {
-      const value = input.engineFlags[flag];
-      if (value === void 0)
-        continue;
-      facts.push({ kind: "engine-flag", flowId, flag, value });
-    }
-  }
-  return facts;
-}
-
-// dist/flows/build/facts.js
-var buildFacts = defineDeclarativeFlowFacts({
-  id: "build",
-  title: "Build Schematic",
-  purpose: "Build flow. Circuit frames a requested change, plans it, relays implementation to a worker, runs verification, relays review to a separate worker, and closes with a Build result file plus evidence.",
-  status: "active",
-  version: "0.1.0",
-  visibility: "public",
-  startsAt: "frame-step",
-  stagePathPolicy: {
-    mode: "partial",
-    omits: ["analyze"],
-    rationale: "Build follows Frame, Plan, Act, Verify, Review, Close. The Analyze stage is omitted because analysis is folded into Frame and Plan for this flow."
-  },
-  canonicalStagePolicy: {
-    enforcement: "enforce",
-    title: "Frame \u2192 Plan \u2192 Act \u2192 Verify \u2192 Review \u2192 Close",
-    authority: "src/flows/build/contract.md \xA7Build Flow Contract"
-  },
-  paths: {
-    schematic: "src/flows/build/schematic.json",
-    command: "src/flows/build/command.md",
-    contract: "src/flows/build/contract.md"
-  },
-  entry: {
-    include: ["build", "implement", "develop", "change", "fix", "add"],
-    exclude: [],
-    intentPrefixes: ["build", "implement", "develop"]
-  },
-  modes: [
-    {
-      name: "default",
-      depth: "standard",
-      description: "Default Build entry mode."
-    },
-    {
-      name: "lite",
-      depth: "lite",
-      description: "Lite Build entry mode."
-    },
-    {
-      name: "deep",
-      depth: "deep",
-      description: "Deep Build entry mode."
-    },
-    {
-      name: "autonomous",
-      depth: "autonomous",
-      description: "Autonomous Build entry mode."
-    }
-  ],
-  initialContracts: ["task.intake@v1", "route.decision@v1", "verification.plan@v1"],
-  contractAliases: {
-    "flow.brief@v1": "build.brief@v1",
-    "plan.strategy@v1": "build.plan@v1",
-    "change.evidence@v1": "build.implementation@v1",
-    "verification.result@v1": "build.verification@v1",
-    "review.verdict@v1": "build.review@v1",
-    "flow.result@v1": "build.result@v1"
-  },
-  stages: [
-    {
-      stageId: "frame-stage",
-      canonical: "frame",
-      title: "Frame"
-    },
-    {
-      stageId: "plan-stage",
-      canonical: "plan",
-      title: "Plan"
-    },
-    {
-      stageId: "act-stage",
-      canonical: "act",
-      title: "Act"
-    },
-    {
-      stageId: "verify-stage",
-      canonical: "verify",
-      title: "Verify"
-    },
-    {
-      stageId: "review-stage",
-      canonical: "review",
-      title: "Review"
-    },
-    {
-      stageId: "close-stage",
-      canonical: "close",
-      title: "Close"
-    }
-  ],
-  steps: [
-    {
-      id: "frame-step",
-      title: "Frame - confirm Build brief",
-      stage: "frame",
-      block: "frame",
-      input: {
-        task: "task.intake@v1",
-        route: "route.decision@v1"
-      },
-      output: "build.brief@v1",
-      evidenceRequirements: ["scope boundary", "constraints", "proof plan"],
-      execution: {
-        kind: "checkpoint"
-      },
-      protocol: "build-frame@v1",
-      writes: {
-        report_path: "reports/build/brief.json",
-        checkpoint_request_path: "reports/checkpoints/frame-step-request.json",
-        checkpoint_response_path: "reports/checkpoints/frame-step-response.json"
-      },
-      check: {
-        allow: ["continue"]
-      },
-      checkpointPolicy: {
-        prompt: "Confirm the Build brief before implementation starts.",
-        choices: [
-          {
-            id: "continue",
-            label: "Continue"
-          }
-        ],
-        safe_default_choice: "continue",
-        safe_autonomous_choice: "continue",
-        report_template: {
-          scope: "Make the smallest safe change that satisfies the requested goal.",
-          success_criteria: [
-            "The requested behavior is implemented",
-            "Verification passes",
-            "Review completes without a blocking issue"
-          ]
+function resolveExecution(use, block) {
+  if (use.execution !== void 0)
+    return { ok: true, value: use.execution };
+  const executionKind = block.authoringPolicy.defaults.executionKind;
+  if (executionKind === void 0) {
+    return {
+      ok: false,
+      errors: [
+        {
+          kind: "ambiguous-block-step-execution",
+          block: block.id,
+          executionKinds: block.schematicPolicy.executionKinds
         }
-      },
-      routes: {
-        continue: "plan-step",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Frame the work",
-        activeText: "Framing the work"
-      }
-    },
-    {
-      id: "plan-step",
-      title: "Plan - produce Build plan",
-      stage: "plan",
-      block: "plan",
-      input: {
-        brief: "build.brief@v1"
-      },
-      output: "build.plan@v1",
-      evidenceRequirements: ["ordered steps", "risk notes", "proof strategy"],
-      execution: {
-        kind: "compose"
-      },
-      protocol: "build-plan@v1",
-      writes: {
-        report_path: "reports/build/plan.json"
-      },
-      check: {
-        required: ["objective", "verification"]
-      },
-      routes: {
-        continue: "act-step",
-        revise: "plan-step",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Plan the work",
-        activeText: "Planning the work"
-      }
-    },
-    {
-      id: "act-step",
-      title: "Act - implementation relay",
-      stage: "act",
-      block: "act",
-      input: {
-        brief: "build.brief@v1",
-        plan: "build.plan@v1"
-      },
-      output: "build.implementation@v1",
-      evidenceRequirements: ["changed files", "change rationale", "declared follow-up proof"],
-      execution: {
-        kind: "relay",
-        role: "implementer"
-      },
-      protocol: "build-act@v1",
-      writes: {
-        report_path: "reports/build/implementation.json",
-        request_path: "reports/relay/build-act.request.json",
-        receipt_path: "reports/relay/build-act.receipt.txt",
-        result_path: "reports/relay/build-act.result.json"
-      },
-      check: {
-        pass: ["accept"]
-      },
-      routes: {
-        continue: "verify-step",
-        retry: "act-step",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Make the change",
-        activeText: "Making the change",
-        relayRole: "implementer"
-      }
-    },
-    {
-      id: "verify-step",
-      title: "Verify - run Build verification",
-      stage: "verify",
-      block: "run-verification",
-      input: {
-        proof: "verification.plan@v1",
-        plan: "build.plan@v1",
-        change: "build.implementation@v1"
-      },
-      output: "build.verification@v1",
-      evidenceRequirements: ["command list", "exit status", "bounded output", "pass or fail"],
-      execution: {
-        kind: "verification"
-      },
-      protocol: "build-verify@v1",
-      writes: {
-        report_path: "reports/build/verification.json"
-      },
-      check: {
-        required: ["overall_status", "commands"]
-      },
-      routes: {
-        continue: "review-step",
-        retry: "act-step",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Check the work",
-        activeText: "Checking the work"
-      }
-    },
-    {
-      id: "review-step",
-      title: "Review - implementation review relay",
-      stage: "review",
-      block: "review",
-      input: {
-        brief: "build.brief@v1",
-        plan: "build.plan@v1",
-        change: "build.implementation@v1",
-        verification: "build.verification@v1"
-      },
-      output: "build.review@v1",
-      evidenceRequirements: ["verdict", "findings", "confidence", "required fixes"],
-      execution: {
-        kind: "relay",
-        role: "reviewer"
-      },
-      protocol: "build-review@v1",
-      writes: {
-        report_path: "reports/build/review.json",
-        request_path: "reports/relay/build-review.request.json",
-        receipt_path: "reports/relay/build-review.receipt.txt",
-        result_path: "reports/relay/build-review.result.json"
-      },
-      check: {
-        pass: ["accept", "accept-with-fixes"]
-      },
-      routes: {
-        continue: "close-step",
-        retry: "act-step",
-        revise: "act-step",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Check the result",
-        activeText: "Checking the result",
-        relayRole: "reviewer"
-      }
-    },
-    {
-      id: "close-step",
-      title: "Close - emit Build result",
-      stage: "close",
-      block: "close-with-evidence",
-      input: {
-        brief: "build.brief@v1",
-        plan: "build.plan@v1",
-        implementation: "build.implementation@v1",
-        verification: "build.verification@v1",
-        review: "build.review@v1"
-      },
-      output: "build.result@v1",
-      evidenceRequirements: ["outcome", "evidence pointers", "residual risks", "follow-ups"],
-      execution: {
-        kind: "compose"
-      },
-      protocol: "build-close@v1",
-      writes: {
-        report_path: "reports/build-result.json"
-      },
-      check: {
-        required: ["summary", "outcome", "evidence_links"]
-      },
-      routes: {
-        complete: "@complete",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Wrap up",
-        activeText: "Wrapping up"
-      }
-    }
-  ],
-  reports: [
-    {
-      schemaName: "build.implementation@v1",
-      channel: "relay"
-    },
-    {
-      schemaName: "build.review@v1",
-      channel: "relay"
-    },
-    {
-      schemaName: "build.brief@v1",
-      channel: "report"
-    },
-    {
-      schemaName: "build.plan@v1",
-      channel: "report"
-    },
-    {
-      schemaName: "build.verification@v1",
-      channel: "report"
-    },
-    {
-      schemaName: "build.result@v1",
-      channel: "report"
-    }
-  ],
-  writerBindings: {
-    compose: ["build.plan@v1"],
-    close: ["build.result@v1"],
-    verification: ["build.verification@v1"],
-    checkpoint: ["build.brief@v1"]
-  },
-  primaryResult: {
-    schemaName: "build.result@v1",
-    path: "reports/build-result.json",
-    label: "Build result"
-  },
-  engineFlags: {
-    bindsExecutionDepthToRelaySelection: true
+      ]
+    };
   }
-});
+  return { ok: true, value: { kind: executionKind } };
+}
+function resolveWrites(use, executionKind) {
+  if (use.writes !== void 0)
+    return use.writes;
+  if (executionKind === "compose" || executionKind === "verification") {
+    return use.reportPath === void 0 ? void 0 : { report_path: use.reportPath };
+  }
+  if (executionKind === "relay") {
+    if (use.requestPath === void 0 || use.receiptPath === void 0 || use.resultPath === void 0) {
+      return void 0;
+    }
+    return {
+      request_path: use.requestPath,
+      receipt_path: use.receiptPath,
+      result_path: use.resultPath,
+      ...use.reportPath === void 0 ? {} : { report_path: use.reportPath }
+    };
+  }
+  if (executionKind === "checkpoint") {
+    if (use.checkpointRequestPath === void 0 || use.checkpointResponsePath === void 0) {
+      return void 0;
+    }
+    return {
+      checkpoint_request_path: use.checkpointRequestPath,
+      checkpoint_response_path: use.checkpointResponsePath,
+      ...use.reportPath === void 0 ? {} : { report_path: use.reportPath }
+    };
+  }
+  if (executionKind === "sub-run") {
+    return use.resultPath === void 0 ? void 0 : {
+      result_path: use.resultPath,
+      ...use.reportPath === void 0 ? {} : { report_path: use.reportPath }
+    };
+  }
+  if (executionKind === "fanout") {
+    return use.reportPath === void 0 || use.branchesDirPath === void 0 ? void 0 : { report_path: use.reportPath, branches_dir_path: use.branchesDirPath };
+  }
+  return void 0;
+}
+function resolveCheck(use, executionKind) {
+  if (use.check !== void 0)
+    return use.check;
+  if (executionKind === "compose" || executionKind === "verification") {
+    return use.required === void 0 ? void 0 : { required: use.required };
+  }
+  if (executionKind === "checkpoint") {
+    return use.allow === void 0 ? void 0 : { allow: use.allow };
+  }
+  return use.pass === void 0 ? void 0 : { pass: use.pass };
+}
+function schematicStepInputFromBlockUse(input) {
+  const { block, check, execution, use, writes } = input;
+  const { checkpointPolicy, evidenceRequirements, output, routeOverrides, skillSlots, reportPath: _reportPath, requestPath: _requestPath, receiptPath: _receiptPath, resultPath: _resultPath, branchesDirPath: _branchesDirPath, checkpointRequestPath: _checkpointRequestPath, checkpointResponsePath: _checkpointResponsePath, required: _required, allow: _allow, pass: _pass, writes: _writes, check: _check, execution: _execution, ...step } = use;
+  return {
+    ...step,
+    output: output ?? block.output_contract,
+    evidence_requirements: evidenceRequirements ?? block.produces_evidence,
+    execution,
+    writes,
+    check,
+    ...checkpointPolicy === void 0 ? {} : { checkpoint_policy: checkpointPolicy },
+    ...routeOverrides === void 0 ? {} : { route_overrides: routeOverrides },
+    ...skillSlots === void 0 ? {} : { skill_slots: skillSlots }
+  };
+}
+function describeExpandBlockStepUseError(error) {
+  if (error.kind === "unknown-block-step-use")
+    return `unknown Block '${error.block}'`;
+  if (error.kind === "ambiguous-block-step-execution") {
+    return `Block '${error.block}' has ambiguous execution kinds: ${error.executionKinds.join(", ")}`;
+  }
+  if (error.kind === "missing-block-step-writes") {
+    return `Block Step '${error.stepId}' needs explicit paths for ${error.executionKind} writes`;
+  }
+  if (error.kind === "missing-block-step-check") {
+    return `Block Step '${error.stepId}' needs explicit check data for ${error.executionKind}`;
+  }
+  if (error.kind === "restated-block-step-default") {
+    return `Block Step '${error.stepId}' restates default ${error.field} for Block '${error.block}'`;
+  }
+  return error.message;
+}
 
 // dist/flows/build/relay-hints.js
 var buildImplementationShapeHint = {
@@ -15332,7 +14781,7 @@ var buildVerificationWriter = {
   }
 };
 
-// dist/flows/build/flow.js
+// dist/flows/build/data.js
 var BUILD_SIGNALS = [
   { label: "develop prefix", pattern: /^\s*develop\s*:/i },
   {
@@ -15352,8 +14801,14 @@ var BUILD_SIGNALS = [
     pattern: /^\s*(?:please\s+)?make\s+(?:a\s+|the\s+|this\s+|that\s+)?(?:focused\s+)?change\b/i
   }
 ];
-var buildFlowDefinition = defineFlowFromFacts({
-  facts: buildFacts,
+var buildFlowData = {
+  id: "build",
+  visibility: "public",
+  paths: {
+    schematic: "src/flows/build/schematic.json",
+    command: "src/flows/build/command.md",
+    contract: "src/flows/build/contract.md"
+  },
   routing: {
     order: 30,
     signals: BUILD_SIGNALS,
@@ -15362,7 +14817,287 @@ var buildFlowDefinition = defineFlowFromFacts({
       return `matched ${signal.label}; routed to implementation Build flow`;
     }
   },
-  reportDeclarations: [
+  schematic: {
+    schema_version: "1",
+    id: "build",
+    title: "Build Schematic",
+    purpose: "Build flow. Circuit frames a requested change, plans it, relays implementation to a worker, runs verification, relays review to a separate worker, and closes with a Build result file plus evidence.",
+    status: "active",
+    version: "0.1.0",
+    starts_at: "frame-step",
+    initial_contracts: ["task.intake@v1", "route.decision@v1", "verification.plan@v1"],
+    contract_aliases: [
+      {
+        generic: "flow.brief@v1",
+        actual: "build.brief@v1"
+      },
+      {
+        generic: "plan.strategy@v1",
+        actual: "build.plan@v1"
+      },
+      {
+        generic: "change.evidence@v1",
+        actual: "build.implementation@v1"
+      },
+      {
+        generic: "verification.result@v1",
+        actual: "build.verification@v1"
+      },
+      {
+        generic: "review.verdict@v1",
+        actual: "build.review@v1"
+      },
+      {
+        generic: "flow.result@v1",
+        actual: "build.result@v1"
+      }
+    ],
+    entry: {
+      signals: {
+        include: ["build", "implement", "develop", "change", "fix", "add"],
+        exclude: []
+      },
+      intent_prefixes: ["build", "implement", "develop"]
+    },
+    entry_modes: [
+      {
+        name: "default",
+        depth: "standard",
+        description: "Default Build entry mode."
+      },
+      {
+        name: "lite",
+        depth: "lite",
+        description: "Lite Build entry mode."
+      },
+      {
+        name: "deep",
+        depth: "deep",
+        description: "Deep Build entry mode."
+      },
+      {
+        name: "autonomous",
+        depth: "autonomous",
+        description: "Autonomous Build entry mode."
+      }
+    ],
+    stage_path_policy: {
+      mode: "partial",
+      omits: ["analyze"],
+      rationale: "Build follows Frame, Plan, Act, Verify, Review, Close. The Analyze stage is omitted because analysis is folded into Frame and Plan for this flow."
+    },
+    stages: [
+      {
+        id: "frame-stage",
+        canonical: "frame",
+        title: "Frame"
+      },
+      {
+        id: "plan-stage",
+        canonical: "plan",
+        title: "Plan"
+      },
+      {
+        id: "act-stage",
+        canonical: "act",
+        title: "Act"
+      },
+      {
+        id: "verify-stage",
+        canonical: "verify",
+        title: "Verify"
+      },
+      {
+        id: "review-stage",
+        canonical: "review",
+        title: "Review"
+      },
+      {
+        id: "close-stage",
+        canonical: "close",
+        title: "Close"
+      }
+    ],
+    items: [
+      expandBlockStepUse({
+        id: "frame-step",
+        title: "Frame - confirm Build brief",
+        stage: "frame",
+        block: "frame",
+        input: {
+          task: "task.intake@v1",
+          route: "route.decision@v1"
+        },
+        output: "build.brief@v1",
+        execution: {
+          kind: "checkpoint"
+        },
+        protocol: "build-frame@v1",
+        reportPath: "reports/build/brief.json",
+        checkpointRequestPath: "reports/checkpoints/frame-step-request.json",
+        checkpointResponsePath: "reports/checkpoints/frame-step-response.json",
+        allow: ["continue"],
+        checkpointPolicy: {
+          prompt: "Confirm the Build brief before implementation starts.",
+          choices: [
+            {
+              id: "continue",
+              label: "Continue"
+            }
+          ],
+          safe_default_choice: "continue",
+          safe_autonomous_choice: "continue",
+          report_template: {
+            scope: "Make the smallest safe change that satisfies the requested goal.",
+            success_criteria: [
+              "The requested behavior is implemented",
+              "Verification passes",
+              "Review completes without a blocking issue"
+            ]
+          }
+        },
+        routes: {
+          continue: "plan-step",
+          stop: "@stop"
+        }
+      }),
+      {
+        id: "plan-step",
+        title: "Plan - produce Build plan",
+        stage: "plan",
+        block: "plan",
+        input: {
+          brief: "build.brief@v1"
+        },
+        output: "build.plan@v1",
+        evidence_requirements: ["ordered steps", "risk notes", "proof strategy"],
+        execution: {
+          kind: "compose"
+        },
+        protocol: "build-plan@v1",
+        writes: {
+          report_path: "reports/build/plan.json"
+        },
+        check: {
+          required: ["objective", "verification"]
+        },
+        routes: {
+          continue: "act-step",
+          revise: "plan-step",
+          stop: "@stop"
+        }
+      },
+      expandBlockStepUse({
+        id: "act-step",
+        title: "Act - implementation relay",
+        stage: "act",
+        block: "act",
+        input: {
+          brief: "build.brief@v1",
+          plan: "build.plan@v1"
+        },
+        output: "build.implementation@v1",
+        execution: {
+          kind: "relay",
+          role: "implementer"
+        },
+        protocol: "build-act@v1",
+        reportPath: "reports/build/implementation.json",
+        requestPath: "reports/relay/build-act.request.json",
+        receiptPath: "reports/relay/build-act.receipt.txt",
+        resultPath: "reports/relay/build-act.result.json",
+        pass: ["accept"],
+        routes: {
+          continue: "verify-step",
+          retry: "act-step",
+          stop: "@stop"
+        }
+      }),
+      expandBlockStepUse({
+        id: "verify-step",
+        title: "Verify - run Build verification",
+        stage: "verify",
+        block: "run-verification",
+        input: {
+          proof: "verification.plan@v1",
+          plan: "build.plan@v1",
+          change: "build.implementation@v1"
+        },
+        output: "build.verification@v1",
+        protocol: "build-verify@v1",
+        reportPath: "reports/build/verification.json",
+        required: ["overall_status", "commands"],
+        routes: {
+          continue: "review-step",
+          retry: "act-step",
+          stop: "@stop"
+        }
+      }),
+      expandBlockStepUse({
+        id: "review-step",
+        title: "Review - implementation review relay",
+        stage: "review",
+        block: "review",
+        input: {
+          brief: "build.brief@v1",
+          plan: "build.plan@v1",
+          change: "build.implementation@v1",
+          verification: "build.verification@v1"
+        },
+        output: "build.review@v1",
+        execution: {
+          kind: "relay",
+          role: "reviewer"
+        },
+        protocol: "build-review@v1",
+        reportPath: "reports/build/review.json",
+        requestPath: "reports/relay/build-review.request.json",
+        receiptPath: "reports/relay/build-review.receipt.txt",
+        resultPath: "reports/relay/build-review.result.json",
+        pass: ["accept", "accept-with-fixes"],
+        routes: {
+          continue: "close-step",
+          retry: "act-step",
+          revise: "act-step",
+          stop: "@stop"
+        }
+      }),
+      expandBlockStepUse({
+        id: "close-step",
+        title: "Close - emit Build result",
+        stage: "close",
+        block: "close-with-evidence",
+        input: {
+          brief: "build.brief@v1",
+          plan: "build.plan@v1",
+          implementation: "build.implementation@v1",
+          verification: "build.verification@v1",
+          review: "build.review@v1"
+        },
+        output: "build.result@v1",
+        execution: {
+          kind: "compose"
+        },
+        protocol: "build-close@v1",
+        reportPath: "reports/build-result.json",
+        required: ["summary", "outcome", "evidence_links"],
+        routes: {
+          complete: "@complete",
+          stop: "@stop"
+        }
+      })
+    ]
+  },
+  canonicalStagePolicy: {
+    kind: "enforce",
+    canonicals: ["frame", "plan", "act", "verify", "review", "close"],
+    omits: ["analyze"],
+    optional_canonicals: [],
+    variants: [],
+    title: "Frame \u2192 Plan \u2192 Act \u2192 Verify \u2192 Review \u2192 Close",
+    authority: "src/flows/build/contract.md \xA7Build Flow Contract"
+  },
+  reports: [
     {
       schemaName: "build.implementation@v1",
       channel: "relay",
@@ -15399,630 +15134,57 @@ var buildFlowDefinition = defineFlowFromFacts({
       schema: BuildResult,
       writers: { close: [buildCloseBuilder] }
     }
-  ]
-});
-
-// dist/flows/explore/facts.js
-var exploreFacts = defineDeclarativeFlowFacts({
-  id: "explore",
-  title: "Explore Schematic",
-  purpose: "Explore flow: frame the investigation, analyze the subject, either synthesize and critique findings or run a decision tournament, then close with findings plus evidence. All modes use Frame, Analyze, Plan or Decision, and Close; critique is embedded inside the Plan/Decision stage rather than exposed as a separate canonical Review stage.",
-  status: "active",
-  version: "0.1.0",
-  visibility: "public",
-  startsAt: "frame-step",
-  stagePathPolicy: {
-    mode: "partial",
-    omits: ["act", "verify", "review"],
-    rationale: "Explore is an investigation and decision flow. Synthesize, critique, and tournament stress review are all embedded inside the canonical Plan/Decision stage. Verify is omitted because Explore output is not executable and uses evidence/seam proof rather than mechanical command verification. See src/flows/explore/contract.md \xA7Canonical stage set for the full rationale."
-  },
-  canonicalStagePolicy: {
-    enforcement: "enforce",
-    title: "Frame \u2192 Analyze \u2192 Plan or Decision \u2192 Close",
-    authority: "src/flows/explore/contract.md \xA7Canonical stage set"
-  },
-  paths: {
-    schematic: "src/flows/explore/schematic.json",
-    command: "src/flows/explore/command.md",
-    contract: "src/flows/explore/contract.md"
-  },
-  entry: {
-    include: ["explore", "investigate", "research", "understand"],
-    exclude: [],
-    intentPrefixes: ["explore", "investigate", "decide"]
-  },
-  modes: [
-    {
-      name: "default",
-      depth: "standard",
-      description: "Default explore entry mode \u2014 seeds the run at Frame at standard depth."
-    },
-    {
-      name: "lite",
-      depth: "lite",
-      description: "Lite Explore entry mode \u2014 frames, analyzes, and closes with a compact Plan/Decision pass."
-    },
-    {
-      name: "deep",
-      depth: "deep",
-      description: "Deep Explore entry mode \u2014 frames, analyzes, and spends more effort on Plan/Decision evidence and seam proof."
-    },
-    {
-      name: "tournament",
-      depth: "tournament",
-      description: "Decision tournament entry mode \u2014 frames and analyzes the question, fans out option cases, pauses for a bounded tradeoff choice, then closes with the selected decision."
-    },
-    {
-      name: "autonomous",
-      depth: "autonomous",
-      description: "Autonomous Explore entry mode \u2014 carries ambiguity forward when no safe checkpoint answer is available."
-    }
   ],
-  initialContracts: ["task.intake@v1", "route.decision@v1", "context.packet@v1"],
-  contractAliases: [
-    {
-      generic: "flow.brief@v1",
-      actual: "explore.brief@v1"
+  runtimeSurface: {
+    primaryResult: {
+      schemaName: "build.result@v1",
+      path: "reports/build-result.json",
+      label: "Build result"
     },
-    {
-      generic: "diagnosis.result@v1",
-      actual: "explore.analysis@v1"
-    },
-    {
-      generic: "change.evidence@v1",
-      actual: "explore.compose@v1"
-    },
-    {
-      generic: "review.verdict@v1",
-      actual: "explore.review-verdict@v1"
-    },
-    {
-      generic: "plan.strategy@v1",
-      actual: "explore.decision-options@v1"
-    },
-    {
-      generic: "plan.strategy@v1",
-      actual: "explore.tournament-aggregate@v1"
-    },
-    {
-      generic: "plan.strategy@v1",
-      actual: "explore.tournament-review@v1"
-    },
-    {
-      generic: "plan.strategy@v1",
-      actual: "explore.decision@v1"
-    },
-    {
-      generic: "flow.question@v1",
-      actual: "explore.tournament-review@v1"
-    },
-    {
-      generic: "flow.evidence@v1",
-      actual: "explore.tournament-aggregate@v1"
-    },
-    {
-      generic: "decision.answer@v1",
-      actual: "explore.tradeoff-selection@v1"
-    },
-    {
-      generic: "flow.result@v1",
-      actual: "explore.result@v1"
-    }
-  ],
-  stages: [
-    {
-      stageId: "frame-stage",
-      canonical: "frame",
-      title: "Frame"
-    },
-    {
-      stageId: "analyze-stage",
-      canonical: "analyze",
-      title: "Analyze"
-    },
-    {
-      stageId: "decision-stage",
-      canonical: "plan",
-      title: "Plan or Decision"
-    },
-    {
-      stageId: "close-stage",
-      canonical: "close",
-      title: "Close"
-    }
-  ],
-  steps: [
-    {
-      id: "frame-step",
-      title: "Frame \u2014 produce explore.brief",
-      stage: "frame",
-      block: "frame",
-      input: {
-        task: "task.intake@v1",
-        route: "route.decision@v1"
-      },
-      output: "explore.brief@v1",
-      evidenceRequirements: ["scope boundary", "constraints", "proof plan"],
-      execution: {
-        kind: "compose"
-      },
-      protocol: "explore-frame@v1",
-      writes: {
-        report_path: "reports/brief.json"
-      },
-      check: {
-        required: ["subject", "success_condition"]
-      },
-      skillSlots: [],
-      routes: {
-        continue: "analyze-step",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Frame the work",
-        activeText: "Framing the work"
-      }
-    },
-    {
-      id: "analyze-step",
-      title: "Analyze \u2014 produce explore.analysis",
-      stage: "analyze",
-      block: "diagnose",
-      input: {
-        brief: "explore.brief@v1",
-        context: "context.packet@v1"
-      },
-      output: "explore.analysis@v1",
-      evidenceRequirements: [
-        "cause hypothesis",
-        "confidence",
-        "reproduction status",
-        "diagnostic path"
-      ],
-      execution: {
-        kind: "compose"
-      },
-      protocol: "explore-analyze@v1",
-      writes: {
-        report_path: "reports/analysis.json"
-      },
-      check: {
-        required: ["aspects"]
-      },
-      skillSlots: [],
-      routes: {
-        continue: {
-          to: "synthesize-step",
-          modeOverrides: {
-            tournament: "decision-options-step"
-          }
+    progress: {
+      steps: [
+        {
+          stepId: "frame-step",
+          taskTitle: "Frame the work",
+          activeText: "Framing the work"
         },
-        retry: "analyze-step",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Check the context",
-        activeText: "Checking the context"
-      }
-    },
-    {
-      id: "synthesize-step",
-      title: "Synthesize \u2014 produce explore.compose (connector-bound relay)",
-      stage: "plan",
-      block: "plan",
-      input: {
-        brief: "explore.brief@v1",
-        diagnosis: "explore.analysis@v1"
-      },
-      output: "explore.compose@v1",
-      evidenceRequirements: ["changed files", "change rationale", "declared follow-up proof"],
-      execution: {
-        kind: "relay",
-        role: "implementer"
-      },
-      protocol: "explore-synthesize@v1",
-      writes: {
-        report_path: "reports/compose.json",
-        request_path: "reports/relay/synthesize.request.json",
-        receipt_path: "reports/relay/synthesize.receipt.txt",
-        result_path: "reports/relay/synthesize.result.json"
-      },
-      check: {
-        pass: ["accept"]
-      },
-      skillSlots: [],
-      routes: {
-        continue: "review-step",
-        retry: "synthesize-step",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Draft the recommendation",
-        activeText: "Drafting the recommendation",
-        relayRole: "implementer"
-      }
-    },
-    {
-      id: "review-step",
-      title: "Review \u2014 adversarial pass over compose (connector-bound relay)",
-      stage: "plan",
-      block: "review",
-      input: {
-        brief: "explore.brief@v1",
-        diagnosis: "explore.analysis@v1",
-        change: "explore.compose@v1"
-      },
-      output: "explore.review-verdict@v1",
-      evidenceRequirements: ["verdict", "findings", "confidence", "required fixes"],
-      execution: {
-        kind: "relay",
-        role: "reviewer"
-      },
-      protocol: "explore-review@v1",
-      writes: {
-        report_path: "reports/review-verdict.json",
-        request_path: "reports/relay/review.request.json",
-        receipt_path: "reports/relay/review.receipt.txt",
-        result_path: "reports/relay/review.result.json"
-      },
-      check: {
-        pass: ["accept", "accept-with-fold-ins"]
-      },
-      skillSlots: [],
-      routes: {
-        continue: "close-step",
-        retry: "synthesize-step",
-        revise: "synthesize-step",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Check the recommendation",
-        activeText: "Checking the recommendation",
-        relayRole: "reviewer"
-      }
-    },
-    {
-      id: "decision-options-step",
-      title: "Decision \u2014 draft tournament options",
-      stage: "plan",
-      block: "plan",
-      input: {
-        brief: "explore.brief@v1",
-        diagnosis: "explore.analysis@v1"
-      },
-      output: "explore.decision-options@v1",
-      evidenceRequirements: ["ordered steps", "risk notes", "proof strategy"],
-      execution: {
-        kind: "compose"
-      },
-      protocol: "explore-decision-options@v1",
-      writes: {
-        report_path: "reports/decision-options.json"
-      },
-      check: {
-        required: ["decision_question", "options"]
-      },
-      skillSlots: [],
-      routes: {
-        continue: "proposal-fanout-step",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Draft the options",
-        activeText: "Drafting the options"
-      }
-    },
-    {
-      id: "proposal-fanout-step",
-      title: "Decision \u2014 fan out option cases",
-      stage: "plan",
-      block: "plan",
-      input: {
-        brief: "explore.brief@v1",
-        options: "explore.decision-options@v1"
-      },
-      output: "explore.tournament-aggregate@v1",
-      evidenceRequirements: ["ordered steps", "risk notes", "proof strategy"],
-      execution: {
-        kind: "fanout"
-      },
-      protocol: "explore-proposal-fanout@v1",
-      writes: {
-        report_path: "reports/tournament-aggregate.json",
-        branches_dir_path: "reports/tournament-branches"
-      },
-      check: {
-        pass: ["accept"]
-      },
-      skillSlots: [],
-      fanout: {
-        branches: {
-          kind: "dynamic",
-          source_report: "reports/decision-options.json",
-          items_path: "options",
-          template: {
-            branch_id: "$item.id",
-            execution: {
-              kind: "relay",
-              role: "researcher",
-              goal: "$item.best_case_prompt",
-              report_schema: "explore.tournament-proposal@v1",
-              provenance_field: "option_id"
-            }
-          },
-          max_branches: 4
+        {
+          stepId: "plan-step",
+          taskTitle: "Plan the work",
+          activeText: "Planning the work"
         },
-        concurrency: {
-          kind: "bounded",
-          max: 2
+        {
+          stepId: "act-step",
+          taskTitle: "Make the change",
+          activeText: "Making the change",
+          relayRole: "implementer"
         },
-        on_child_failure: "abort-all",
-        join: {
-          policy: "aggregate-only"
+        {
+          stepId: "verify-step",
+          taskTitle: "Check the work",
+          activeText: "Checking the work"
+        },
+        {
+          stepId: "review-step",
+          taskTitle: "Check the result",
+          activeText: "Checking the result",
+          relayRole: "reviewer"
+        },
+        {
+          stepId: "close-step",
+          taskTitle: "Wrap up",
+          activeText: "Wrapping up"
         }
-      },
-      routes: {
-        continue: "stress-proposals-step",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Compare the options",
-        activeText: "Comparing the options"
-      }
-    },
-    {
-      id: "stress-proposals-step",
-      title: "Decision \u2014 stress proposals",
-      stage: "plan",
-      block: "plan",
-      input: {
-        brief: "explore.brief@v1",
-        options: "explore.decision-options@v1",
-        aggregate: "explore.tournament-aggregate@v1"
-      },
-      output: "explore.tournament-review@v1",
-      evidenceRequirements: ["ordered steps", "risk notes", "proof strategy"],
-      execution: {
-        kind: "relay",
-        role: "reviewer"
-      },
-      protocol: "explore-stress-proposals@v1",
-      writes: {
-        report_path: "reports/tournament-review.json",
-        request_path: "reports/relay/tournament-review.request.json",
-        receipt_path: "reports/relay/tournament-review.receipt.txt",
-        result_path: "reports/relay/tournament-review.result.json"
-      },
-      check: {
-        pass: ["recommend", "no-clear-winner", "needs-operator"]
-      },
-      skillSlots: [],
-      routes: {
-        continue: "tradeoff-checkpoint-step",
-        revise: "decision-options-step",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Check the options",
-        activeText: "Checking the options",
-        relayRole: "reviewer"
-      }
-    },
-    {
-      id: "tradeoff-checkpoint-step",
-      title: "Decision \u2014 tradeoff checkpoint",
-      stage: "plan",
-      block: "human-decision",
-      input: {
-        question: "explore.tournament-review@v1",
-        evidence: "explore.tournament-aggregate@v1"
-      },
-      output: "explore.tradeoff-selection@v1",
-      evidenceRequirements: ["question", "available options", "selected option", "answer source"],
-      execution: {
-        kind: "checkpoint"
-      },
-      protocol: "explore-tradeoff-checkpoint@v1",
-      writes: {
-        checkpoint_request_path: "reports/checkpoints/tradeoff-request.json",
-        checkpoint_response_path: "reports/checkpoints/tradeoff-response.json"
-      },
-      check: {
-        allow: ["option-1", "option-2", "option-3", "option-4"]
-      },
-      skillSlots: [],
-      checkpointPolicy: {
-        prompt: "Choose the option Circuit should close with. This checkpoint only supports final option choices; ask-for-more-evidence and stop routes are intentionally not encoded until the runtime has executable route semantics for them.",
-        choices: [
-          {
-            id: "option-1",
-            label: "Option 1",
-            description: "Close with the first drafted option."
-          },
-          {
-            id: "option-2",
-            label: "Option 2",
-            description: "Close with the second drafted option."
-          },
-          {
-            id: "option-3",
-            label: "Option 3",
-            description: "Close with the third drafted option."
-          },
-          {
-            id: "option-4",
-            label: "Option 4",
-            description: "Close with the fourth drafted option."
-          }
-        ],
-        safe_default_choice: "option-1"
-      },
-      routes: {
-        continue: "decision-step",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Compare the options",
-        activeText: "Comparing the options"
-      }
-    },
-    {
-      id: "decision-step",
-      title: "Decision \u2014 compose final choice",
-      stage: "plan",
-      block: "plan",
-      input: {
-        brief: "explore.brief@v1",
-        options: "explore.decision-options@v1",
-        aggregate: "explore.tournament-aggregate@v1",
-        review: "explore.tournament-review@v1"
-      },
-      output: "explore.decision@v1",
-      evidenceRequirements: ["ordered steps", "risk notes", "proof strategy"],
-      execution: {
-        kind: "compose"
-      },
-      protocol: "explore-decision@v1",
-      writes: {
-        report_path: "reports/decision.json"
-      },
-      check: {
-        required: ["decision", "selected_option_id", "rationale"]
-      },
-      skillSlots: [],
-      routes: {
-        continue: "close-tournament-step",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Draft the recommendation",
-        activeText: "Drafting the recommendation"
-      }
-    },
-    {
-      id: "close-tournament-step",
-      title: "Close \u2014 emit tournament result file",
-      stage: "close",
-      block: "close-with-evidence",
-      input: {
-        brief: "explore.brief@v1",
-        options: "explore.decision-options@v1",
-        aggregate: "explore.tournament-aggregate@v1",
-        review: "explore.tournament-review@v1",
-        decision: "explore.decision@v1"
-      },
-      output: "explore.result@v1",
-      evidenceRequirements: ["outcome", "evidence pointers", "residual risks", "follow-ups"],
-      execution: {
-        kind: "compose"
-      },
-      protocol: "explore-close-tournament@v1",
-      writes: {
-        report_path: "reports/explore-result.json"
-      },
-      check: {
-        required: ["summary", "verdict_snapshot"]
-      },
-      skillSlots: [],
-      routes: {
-        complete: "@complete",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Wrap up",
-        activeText: "Wrapping up"
-      }
-    },
-    {
-      id: "close-step",
-      title: "Close \u2014 emit final result file",
-      stage: "close",
-      block: "close-with-evidence",
-      input: {
-        brief: "explore.brief@v1",
-        compose: "explore.compose@v1",
-        review: "explore.review-verdict@v1"
-      },
-      output: "explore.result@v1",
-      evidenceRequirements: ["outcome", "evidence pointers", "residual risks", "follow-ups"],
-      execution: {
-        kind: "compose"
-      },
-      protocol: "explore-close@v1",
-      writes: {
-        report_path: "reports/explore-result.json"
-      },
-      check: {
-        required: ["summary", "verdict_snapshot"]
-      },
-      skillSlots: [],
-      routes: {
-        complete: "@complete",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Wrap up",
-        activeText: "Wrapping up"
-      }
+      ]
     }
-  ],
-  reports: [
-    {
-      schemaName: "explore.compose@v1",
-      channel: "relay"
-    },
-    {
-      schemaName: "explore.review-verdict@v1",
-      channel: "relay"
-    },
-    {
-      schemaName: "explore.tournament-proposal@v1",
-      channel: "relay"
-    },
-    {
-      schemaName: "explore.tournament-review@v1",
-      channel: "relay"
-    },
-    {
-      schemaName: "explore.brief@v1",
-      channel: "report"
-    },
-    {
-      schemaName: "explore.analysis@v1",
-      channel: "report"
-    },
-    {
-      schemaName: "explore.decision-options@v1",
-      channel: "report"
-    },
-    {
-      schemaName: "explore.tournament-aggregate@v1",
-      channel: "report"
-    },
-    {
-      schemaName: "explore.decision@v1",
-      channel: "report"
-    },
-    {
-      schemaName: "explore.result@v1",
-      channel: "report"
-    }
-  ],
-  writerBindings: {
-    compose: [
-      "explore.brief@v1",
-      "explore.analysis@v1",
-      "explore.decision-options@v1",
-      "explore.decision@v1"
-    ],
-    close: ["explore.result@v1"]
   },
-  primaryResult: {
-    schemaName: "explore.result@v1",
-    path: "reports/explore-result.json",
-    label: "Explore result"
+  engineFlags: {
+    bindsExecutionDepthToRelaySelection: true
   }
-});
+};
+
+// dist/flows/build/flow.js
+var buildFlowDefinition = defineFlowData(buildFlowData);
 
 // dist/flows/explore/relay-hints.js
 var exploreComposeShapeHint = {
@@ -16714,9 +15876,15 @@ var exploreDecisionComposeBuilder = {
   }
 };
 
-// dist/flows/explore/flow.js
-var exploreFlowDefinition = defineFlowFromFacts({
-  facts: exploreFacts,
+// dist/flows/explore/data.js
+var exploreFlowData = {
+  id: "explore",
+  visibility: "public",
+  paths: {
+    schematic: "src/flows/explore/schematic.json",
+    command: "src/flows/explore/command.md",
+    contract: "src/flows/explore/contract.md"
+  },
   routing: {
     order: Number.MAX_SAFE_INTEGER,
     signals: [],
@@ -16726,7 +15894,487 @@ var exploreFlowDefinition = defineFlowFromFacts({
     isDefault: true,
     defaultReason: "no routed flow signal matched; routed to explore as the conservative default"
   },
-  reportDeclarations: [
+  schematic: {
+    schema_version: "1",
+    id: "explore",
+    title: "Explore Schematic",
+    purpose: "Explore flow: frame the investigation, analyze the subject, either synthesize and critique findings or run a decision tournament, then close with findings plus evidence. All modes use Frame, Analyze, Plan or Decision, and Close; critique is embedded inside the Plan/Decision stage rather than exposed as a separate canonical Review stage.",
+    status: "active",
+    version: "0.1.0",
+    starts_at: "frame-step",
+    initial_contracts: ["task.intake@v1", "route.decision@v1", "context.packet@v1"],
+    contract_aliases: [
+      {
+        generic: "flow.brief@v1",
+        actual: "explore.brief@v1"
+      },
+      {
+        generic: "diagnosis.result@v1",
+        actual: "explore.analysis@v1"
+      },
+      {
+        generic: "change.evidence@v1",
+        actual: "explore.compose@v1"
+      },
+      {
+        generic: "review.verdict@v1",
+        actual: "explore.review-verdict@v1"
+      },
+      {
+        generic: "plan.strategy@v1",
+        actual: "explore.decision-options@v1"
+      },
+      {
+        generic: "plan.strategy@v1",
+        actual: "explore.tournament-aggregate@v1"
+      },
+      {
+        generic: "plan.strategy@v1",
+        actual: "explore.tournament-review@v1"
+      },
+      {
+        generic: "plan.strategy@v1",
+        actual: "explore.decision@v1"
+      },
+      {
+        generic: "flow.question@v1",
+        actual: "explore.tournament-review@v1"
+      },
+      {
+        generic: "flow.evidence@v1",
+        actual: "explore.tournament-aggregate@v1"
+      },
+      {
+        generic: "decision.answer@v1",
+        actual: "explore.tradeoff-selection@v1"
+      },
+      {
+        generic: "flow.result@v1",
+        actual: "explore.result@v1"
+      }
+    ],
+    entry: {
+      signals: {
+        include: ["explore", "investigate", "research", "understand"],
+        exclude: []
+      },
+      intent_prefixes: ["explore", "investigate", "decide"]
+    },
+    entry_modes: [
+      {
+        name: "default",
+        depth: "standard",
+        description: "Default explore entry mode \u2014 seeds the run at Frame at standard depth."
+      },
+      {
+        name: "lite",
+        depth: "lite",
+        description: "Lite Explore entry mode \u2014 frames, analyzes, and closes with a compact Plan/Decision pass."
+      },
+      {
+        name: "deep",
+        depth: "deep",
+        description: "Deep Explore entry mode \u2014 frames, analyzes, and spends more effort on Plan/Decision evidence and seam proof."
+      },
+      {
+        name: "tournament",
+        depth: "tournament",
+        description: "Decision tournament entry mode \u2014 frames and analyzes the question, fans out option cases, pauses for a bounded tradeoff choice, then closes with the selected decision."
+      },
+      {
+        name: "autonomous",
+        depth: "autonomous",
+        description: "Autonomous Explore entry mode \u2014 carries ambiguity forward when no safe checkpoint answer is available."
+      }
+    ],
+    stage_path_policy: {
+      mode: "partial",
+      omits: ["act", "verify", "review"],
+      rationale: "Explore is an investigation and decision flow. Synthesize, critique, and tournament stress review are all embedded inside the canonical Plan/Decision stage. Verify is omitted because Explore output is not executable and uses evidence/seam proof rather than mechanical command verification. See src/flows/explore/contract.md \xA7Canonical stage set for the full rationale."
+    },
+    stages: [
+      {
+        id: "frame-stage",
+        canonical: "frame",
+        title: "Frame"
+      },
+      {
+        id: "analyze-stage",
+        canonical: "analyze",
+        title: "Analyze"
+      },
+      {
+        id: "decision-stage",
+        canonical: "plan",
+        title: "Plan or Decision"
+      },
+      {
+        id: "close-stage",
+        canonical: "close",
+        title: "Close"
+      }
+    ],
+    items: [
+      {
+        id: "frame-step",
+        title: "Frame \u2014 produce explore.brief",
+        stage: "frame",
+        block: "frame",
+        input: {
+          task: "task.intake@v1",
+          route: "route.decision@v1"
+        },
+        output: "explore.brief@v1",
+        evidence_requirements: ["scope boundary", "constraints", "proof plan"],
+        execution: {
+          kind: "compose"
+        },
+        protocol: "explore-frame@v1",
+        writes: {
+          report_path: "reports/brief.json"
+        },
+        check: {
+          required: ["subject", "success_condition"]
+        },
+        routes: {
+          continue: "analyze-step",
+          stop: "@stop"
+        }
+      },
+      {
+        id: "analyze-step",
+        title: "Analyze \u2014 produce explore.analysis",
+        stage: "analyze",
+        block: "diagnose",
+        input: {
+          brief: "explore.brief@v1",
+          context: "context.packet@v1"
+        },
+        output: "explore.analysis@v1",
+        evidence_requirements: [
+          "cause hypothesis",
+          "confidence",
+          "reproduction status",
+          "diagnostic path"
+        ],
+        execution: {
+          kind: "compose"
+        },
+        protocol: "explore-analyze@v1",
+        writes: {
+          report_path: "reports/analysis.json"
+        },
+        check: {
+          required: ["aspects"]
+        },
+        routes: {
+          continue: "synthesize-step",
+          retry: "analyze-step",
+          stop: "@stop"
+        },
+        route_overrides: {
+          continue: {
+            tournament: "decision-options-step"
+          }
+        }
+      },
+      expandBlockStepUse({
+        id: "synthesize-step",
+        title: "Synthesize \u2014 produce explore.compose (connector-bound relay)",
+        stage: "plan",
+        block: "plan",
+        input: {
+          brief: "explore.brief@v1",
+          diagnosis: "explore.analysis@v1"
+        },
+        output: "explore.compose@v1",
+        evidenceRequirements: ["changed files", "change rationale", "declared follow-up proof"],
+        execution: {
+          kind: "relay",
+          role: "implementer"
+        },
+        protocol: "explore-synthesize@v1",
+        reportPath: "reports/compose.json",
+        requestPath: "reports/relay/synthesize.request.json",
+        receiptPath: "reports/relay/synthesize.receipt.txt",
+        resultPath: "reports/relay/synthesize.result.json",
+        pass: ["accept"],
+        routes: {
+          continue: "review-step",
+          retry: "synthesize-step",
+          stop: "@stop"
+        }
+      }),
+      expandBlockStepUse({
+        id: "review-step",
+        title: "Review \u2014 adversarial pass over compose (connector-bound relay)",
+        stage: "plan",
+        block: "review",
+        input: {
+          brief: "explore.brief@v1",
+          diagnosis: "explore.analysis@v1",
+          change: "explore.compose@v1"
+        },
+        output: "explore.review-verdict@v1",
+        execution: {
+          kind: "relay",
+          role: "reviewer"
+        },
+        protocol: "explore-review@v1",
+        reportPath: "reports/review-verdict.json",
+        requestPath: "reports/relay/review.request.json",
+        receiptPath: "reports/relay/review.receipt.txt",
+        resultPath: "reports/relay/review.result.json",
+        pass: ["accept", "accept-with-fold-ins"],
+        routes: {
+          continue: "close-step",
+          retry: "synthesize-step",
+          revise: "synthesize-step",
+          stop: "@stop"
+        }
+      }),
+      {
+        id: "decision-options-step",
+        title: "Decision \u2014 draft tournament options",
+        stage: "plan",
+        block: "plan",
+        input: {
+          brief: "explore.brief@v1",
+          diagnosis: "explore.analysis@v1"
+        },
+        output: "explore.decision-options@v1",
+        evidence_requirements: ["ordered steps", "risk notes", "proof strategy"],
+        execution: {
+          kind: "compose"
+        },
+        protocol: "explore-decision-options@v1",
+        writes: {
+          report_path: "reports/decision-options.json"
+        },
+        check: {
+          required: ["decision_question", "options"]
+        },
+        routes: {
+          continue: "proposal-fanout-step",
+          stop: "@stop"
+        }
+      },
+      expandBlockStepUse({
+        id: "proposal-fanout-step",
+        title: "Decision \u2014 fan out option cases",
+        stage: "plan",
+        block: "plan",
+        input: {
+          brief: "explore.brief@v1",
+          options: "explore.decision-options@v1"
+        },
+        output: "explore.tournament-aggregate@v1",
+        execution: {
+          kind: "fanout"
+        },
+        protocol: "explore-proposal-fanout@v1",
+        reportPath: "reports/tournament-aggregate.json",
+        branchesDirPath: "reports/tournament-branches",
+        pass: ["accept"],
+        fanout: {
+          branches: {
+            kind: "dynamic",
+            source_report: "reports/decision-options.json",
+            items_path: "options",
+            template: {
+              branch_id: "$item.id",
+              execution: {
+                kind: "relay",
+                role: "researcher",
+                goal: "$item.best_case_prompt",
+                report_schema: "explore.tournament-proposal@v1",
+                provenance_field: "option_id"
+              }
+            },
+            max_branches: 4
+          },
+          concurrency: {
+            kind: "bounded",
+            max: 2
+          },
+          on_child_failure: "abort-all",
+          join: {
+            policy: "aggregate-only"
+          }
+        },
+        routes: {
+          continue: "stress-proposals-step",
+          stop: "@stop"
+        }
+      }),
+      expandBlockStepUse({
+        id: "stress-proposals-step",
+        title: "Decision \u2014 stress proposals",
+        stage: "plan",
+        block: "plan",
+        input: {
+          brief: "explore.brief@v1",
+          options: "explore.decision-options@v1",
+          aggregate: "explore.tournament-aggregate@v1"
+        },
+        output: "explore.tournament-review@v1",
+        execution: {
+          kind: "relay",
+          role: "reviewer"
+        },
+        protocol: "explore-stress-proposals@v1",
+        reportPath: "reports/tournament-review.json",
+        requestPath: "reports/relay/tournament-review.request.json",
+        receiptPath: "reports/relay/tournament-review.receipt.txt",
+        resultPath: "reports/relay/tournament-review.result.json",
+        pass: ["recommend", "no-clear-winner", "needs-operator"],
+        routes: {
+          continue: "tradeoff-checkpoint-step",
+          revise: "decision-options-step",
+          stop: "@stop"
+        }
+      }),
+      expandBlockStepUse({
+        id: "tradeoff-checkpoint-step",
+        title: "Decision \u2014 tradeoff checkpoint",
+        stage: "plan",
+        block: "human-decision",
+        input: {
+          question: "explore.tournament-review@v1",
+          evidence: "explore.tournament-aggregate@v1"
+        },
+        output: "explore.tradeoff-selection@v1",
+        protocol: "explore-tradeoff-checkpoint@v1",
+        checkpointRequestPath: "reports/checkpoints/tradeoff-request.json",
+        checkpointResponsePath: "reports/checkpoints/tradeoff-response.json",
+        allow: ["option-1", "option-2", "option-3", "option-4"],
+        checkpointPolicy: {
+          prompt: "Choose the option Circuit should close with. This checkpoint only supports final option choices; ask-for-more-evidence and stop routes are intentionally not encoded until the runtime has executable route semantics for them.",
+          choices: [
+            {
+              id: "option-1",
+              label: "Option 1",
+              description: "Close with the first drafted option."
+            },
+            {
+              id: "option-2",
+              label: "Option 2",
+              description: "Close with the second drafted option."
+            },
+            {
+              id: "option-3",
+              label: "Option 3",
+              description: "Close with the third drafted option."
+            },
+            {
+              id: "option-4",
+              label: "Option 4",
+              description: "Close with the fourth drafted option."
+            }
+          ],
+          safe_default_choice: "option-1"
+        },
+        routes: {
+          continue: "decision-step",
+          stop: "@stop"
+        }
+      }),
+      {
+        id: "decision-step",
+        title: "Decision \u2014 compose final choice",
+        stage: "plan",
+        block: "plan",
+        input: {
+          brief: "explore.brief@v1",
+          options: "explore.decision-options@v1",
+          aggregate: "explore.tournament-aggregate@v1",
+          review: "explore.tournament-review@v1"
+        },
+        output: "explore.decision@v1",
+        evidence_requirements: ["ordered steps", "risk notes", "proof strategy"],
+        execution: {
+          kind: "compose"
+        },
+        protocol: "explore-decision@v1",
+        writes: {
+          report_path: "reports/decision.json"
+        },
+        check: {
+          required: ["decision", "selected_option_id", "rationale"]
+        },
+        routes: {
+          continue: "close-tournament-step",
+          stop: "@stop"
+        }
+      },
+      {
+        id: "close-tournament-step",
+        title: "Close \u2014 emit tournament result file",
+        stage: "close",
+        block: "close-with-evidence",
+        input: {
+          brief: "explore.brief@v1",
+          options: "explore.decision-options@v1",
+          aggregate: "explore.tournament-aggregate@v1",
+          review: "explore.tournament-review@v1",
+          decision: "explore.decision@v1"
+        },
+        output: "explore.result@v1",
+        evidence_requirements: ["outcome", "evidence pointers", "residual risks", "follow-ups"],
+        execution: {
+          kind: "compose"
+        },
+        protocol: "explore-close-tournament@v1",
+        writes: {
+          report_path: "reports/explore-result.json"
+        },
+        check: {
+          required: ["summary", "verdict_snapshot"]
+        },
+        routes: {
+          complete: "@complete",
+          stop: "@stop"
+        }
+      },
+      {
+        id: "close-step",
+        title: "Close \u2014 emit final result file",
+        stage: "close",
+        block: "close-with-evidence",
+        input: {
+          brief: "explore.brief@v1",
+          compose: "explore.compose@v1",
+          review: "explore.review-verdict@v1"
+        },
+        output: "explore.result@v1",
+        evidence_requirements: ["outcome", "evidence pointers", "residual risks", "follow-ups"],
+        execution: {
+          kind: "compose"
+        },
+        protocol: "explore-close@v1",
+        writes: {
+          report_path: "reports/explore-result.json"
+        },
+        check: {
+          required: ["summary", "verdict_snapshot"]
+        },
+        routes: {
+          complete: "@complete",
+          stop: "@stop"
+        }
+      }
+    ]
+  },
+  canonicalStagePolicy: {
+    kind: "enforce",
+    canonicals: ["frame", "analyze", "plan", "close"],
+    omits: ["act", "verify", "review"],
+    optional_canonicals: [],
+    variants: [],
+    title: "Frame \u2192 Analyze \u2192 Plan or Decision \u2192 Close",
+    authority: "src/flows/explore/contract.md \xA7Canonical stage set"
+  },
+  reports: [
     {
       schemaName: "explore.compose@v1",
       channel: "relay",
@@ -16786,764 +16434,80 @@ var exploreFlowDefinition = defineFlowFromFacts({
       schema: ExploreResult,
       writers: { close: [exploreCloseBuilder] }
     }
-  ]
-});
-
-// dist/flows/fix/facts.js
-var fixFacts = defineDeclarativeFlowFacts({
-  id: "fix",
-  title: "Fix Schematic",
-  purpose: "Fix flow: capture problem boundary, prove the pre-fix regression before any specialist relay can edit the checkout, gather context, diagnose, apply a focused change, verify, review (in standard depth), and close with evidence. If the standard reviewer connector is unavailable after proof passes, Fix closes with the proof artifacts and marks review skipped. Lite mode skips the review relay and closes immediately after verification via the fix-verify route_overrides.continue.lite override. fix-no-repro-decision and fix-handoff remain in the schematic as authoring intent for future ask/handoff routing in the runtime; they are unreachable at compile and do not appear in the emitted compiled flows.",
-  status: "active",
-  version: "0.1.0",
-  visibility: "public",
-  startsAt: "fix-frame",
-  stagePathPolicy: {
-    mode: "partial",
-    omits: ["plan"],
-    rationale: "Fix follows Frame, Analyze, Act, Verify, Review, Close. The Plan stage is omitted because Fix's planning is folded into Diagnose during the Analyze stage \u2014 there is no separate plan-of-attack report distinct from the diagnosis."
-  },
-  canonicalStagePolicy: {
-    enforcement: "enforce",
-    title: "Frame \u2192 Diagnose \u2192 Fix \u2192 Verify \u2192 Review \u2192 Close",
-    authority: "docs/flows/authoring-model.md \xA7Fix As The Proving Shape",
-    optionalCanonicals: ["review"]
-  },
-  paths: {
-    schematic: "src/flows/fix/schematic.json",
-    command: "src/flows/fix/command.md",
-    contract: "src/flows/fix/contract.md"
-  },
-  entry: {
-    include: ["fix", "bug", "broken", "regression", "incident", "outage", "diagnose"],
-    exclude: [],
-    intentPrefixes: ["fix", "diagnose"]
-  },
-  modes: [
-    {
-      name: "default",
-      depth: "standard",
-      description: "Default Fix entry mode \u2014 standard depth with full review pass."
-    },
-    {
-      name: "lite",
-      depth: "lite",
-      description: "Lite Fix entry mode \u2014 skips the review relay and closes immediately after verification."
-    },
-    {
-      name: "deep",
-      depth: "deep",
-      description: "Deep Fix entry mode \u2014 standard graph at deep depth (more thorough analysis and review)."
-    },
-    {
-      name: "autonomous",
-      depth: "autonomous",
-      description: "Autonomous Fix entry mode \u2014 standard graph at autonomous depth; safe-default checkpoint choices apply."
-    }
   ],
-  initialContracts: [
-    "task.intake@v1",
-    "route.decision@v1",
-    "context.request@v1",
-    "flow.question@v1",
-    "verification.plan@v1",
-    "flow.state@v1"
-  ],
-  contractAliases: [
-    {
-      generic: "flow.brief@v1",
-      actual: "fix.brief@v1"
+  runtimeSurface: {
+    primaryResult: {
+      schemaName: "explore.result@v1",
+      path: "reports/explore-result.json",
+      label: "Explore result"
     },
-    {
-      generic: "context.packet@v1",
-      actual: "fix.context@v1"
-    },
-    {
-      generic: "diagnosis.result@v1",
-      actual: "fix.diagnosis@v1"
-    },
-    {
-      generic: "decision.answer@v1",
-      actual: "fix.no-repro-decision@v1"
-    },
-    {
-      generic: "flow.evidence@v1",
-      actual: "fix.diagnosis@v1"
-    },
-    {
-      generic: "change.evidence@v1",
-      actual: "fix.change@v1"
-    },
-    {
-      generic: "verification.result@v1",
-      actual: "fix.verification@v1"
-    },
-    {
-      generic: "verification.result@v1",
-      actual: "fix.regression-proof@v1"
-    },
-    {
-      generic: "verification.result@v1",
-      actual: "fix.baseline-snapshot@v1"
-    },
-    {
-      generic: "verification.result@v1",
-      actual: "fix.regression-rerun@v1"
-    },
-    {
-      generic: "verification.result@v1",
-      actual: "fix.change-set@v1"
-    },
-    {
-      generic: "review.verdict@v1",
-      actual: "fix.review@v1"
-    },
-    {
-      generic: "flow.result@v1",
-      actual: "fix.result@v1"
-    }
-  ],
-  stages: [
-    {
-      stageId: "frame-stage",
-      canonical: "frame",
-      title: "Frame"
-    },
-    {
-      stageId: "analyze-stage",
-      canonical: "analyze",
-      title: "Analyze"
-    },
-    {
-      stageId: "act-stage",
-      canonical: "act",
-      title: "Act"
-    },
-    {
-      stageId: "verify-stage",
-      canonical: "verify",
-      title: "Verify"
-    },
-    {
-      stageId: "review-stage",
-      canonical: "review",
-      title: "Review"
-    },
-    {
-      stageId: "close-stage",
-      canonical: "close",
-      title: "Close"
-    }
-  ],
-  steps: [
-    {
-      id: "fix-frame",
-      title: "Frame \u2014 confirm Fix brief",
-      stage: "frame",
-      block: "frame",
-      input: {
-        task: "task.intake@v1",
-        route: "route.decision@v1"
-      },
-      output: "fix.brief@v1",
-      evidenceRequirements: ["scope boundary", "constraints", "proof plan"],
-      execution: {
-        kind: "compose"
-      },
-      protocol: "fix-frame@v1",
-      writes: {
-        report_path: "reports/fix/brief.json"
-      },
-      check: {
-        required: ["problem_statement", "scope", "regression_contract", "success_criteria"]
-      },
-      skillSlots: [],
-      routes: {
-        continue: "fix-regression-baseline",
-        revise: "fix-frame",
-        ask: "@stop",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Frame the work",
-        activeText: "Framing the work"
-      }
-    },
-    {
-      id: "fix-gather-context",
-      title: "Analyze \u2014 gather problem context",
-      stage: "analyze",
-      block: "gather-context",
-      input: {
-        brief: "fix.brief@v1",
-        request: "context.request@v1"
-      },
-      output: "fix.context@v1",
-      evidenceRequirements: ["source list", "observations", "confidence notes"],
-      execution: {
-        kind: "relay",
-        role: "researcher"
-      },
-      protocol: "fix-gather-context@v1",
-      writes: {
-        report_path: "reports/fix/context.json",
-        request_path: "reports/relay/fix-gather-context.request.json",
-        receipt_path: "reports/relay/fix-gather-context.receipt.txt",
-        result_path: "reports/relay/fix-gather-context.result.json"
-      },
-      check: {
-        pass: ["accept"]
-      },
-      skillSlots: [],
-      routes: {
-        continue: "fix-diagnose",
-        retry: "fix-gather-context",
-        ask: "@stop",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Check the context",
-        activeText: "Checking the context",
-        relayRole: "implementer"
-      }
-    },
-    {
-      id: "fix-diagnose",
-      title: "Analyze \u2014 diagnose problem",
-      stage: "analyze",
-      block: "diagnose",
-      input: {
-        brief: "fix.brief@v1",
-        context: "fix.context@v1"
-      },
-      output: "fix.diagnosis@v1",
-      evidenceRequirements: [
-        "cause hypothesis",
-        "confidence",
-        "reproduction status",
-        "diagnostic path"
-      ],
-      execution: {
-        kind: "relay",
-        role: "researcher"
-      },
-      protocol: "fix-diagnose@v1",
-      writes: {
-        report_path: "reports/fix/diagnosis.json",
-        request_path: "reports/relay/fix-diagnose.request.json",
-        receipt_path: "reports/relay/fix-diagnose.receipt.txt",
-        result_path: "reports/relay/fix-diagnose.result.json"
-      },
-      check: {
-        pass: ["accept"]
-      },
-      skillSlots: [],
-      routes: {
-        continue: "fix-act",
-        retry: "fix-gather-context",
-        ask: "fix-no-repro-decision",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Check the context",
-        activeText: "Checking the context",
-        relayRole: "implementer"
-      }
-    },
-    {
-      id: "fix-no-repro-decision",
-      title: "Analyze \u2014 choose path forward when reproduction is uncertain",
-      stage: "analyze",
-      block: "human-decision",
-      input: {
-        question: "flow.question@v1",
-        evidence: "fix.diagnosis@v1"
-      },
-      output: "fix.no-repro-decision@v1",
-      evidenceRequirements: ["question", "available options", "selected option", "answer source"],
-      execution: {
-        kind: "checkpoint"
-      },
-      protocol: "fix-no-repro-decision@v1",
-      writes: {
-        checkpoint_request_path: "reports/checkpoints/fix-no-repro-decision-request.json",
-        checkpoint_response_path: "reports/checkpoints/fix-no-repro-decision-response.json"
-      },
-      check: {
-        allow: ["continue"]
-      },
-      skillSlots: [],
-      checkpointPolicy: {
-        prompt: "Diagnosis did not cleanly reproduce the bug. Choose how to proceed.",
-        choices: [
-          {
-            id: "continue",
-            label: "Continue with a focused fix anyway"
-          }
-        ],
-        safe_default_choice: "continue",
-        safe_autonomous_choice: "continue"
-      },
-      routes: {
-        continue: "fix-act",
-        revise: "fix-diagnose",
-        stop: "@stop",
-        handoff: "fix-handoff",
-        escalate: "@escalate"
-      },
-      progress: {
-        taskTitle: "Check the context",
-        activeText: "Checking the context"
-      }
-    },
-    {
-      id: "fix-regression-baseline",
-      title: "Verify \u2014 capture regression baseline",
-      stage: "verify",
-      block: "run-verification",
-      input: {
-        proof: "verification.plan@v1",
-        brief: "fix.brief@v1"
-      },
-      output: "fix.regression-proof@v1",
-      evidenceRequirements: ["command list", "exit status", "bounded output", "pass or fail"],
-      execution: {
-        kind: "verification"
-      },
-      protocol: "fix-regression-baseline@v1",
-      writes: {
-        report_path: "reports/fix/regression-proof.json"
-      },
-      check: {
-        required: ["status", "overall_status"]
-      },
-      skillSlots: [],
-      routes: {
-        continue: "fix-baseline-snapshot",
-        retry: "fix-frame",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Check the work",
-        activeText: "Checking the work"
-      }
-    },
-    {
-      id: "fix-baseline-snapshot",
-      title: "Verify \u2014 snapshot pre-fix git state",
-      stage: "verify",
-      block: "run-verification",
-      input: {
-        proof: "verification.plan@v1"
-      },
-      output: "fix.baseline-snapshot@v1",
-      evidenceRequirements: ["command list", "exit status", "bounded output", "pass or fail"],
-      execution: {
-        kind: "verification"
-      },
-      protocol: "fix-baseline-snapshot@v1",
-      writes: {
-        report_path: "reports/fix/baseline-snapshot.json"
-      },
-      check: {
-        required: ["overall_status", "head_sha"]
-      },
-      skillSlots: [],
-      routes: {
-        continue: "fix-gather-context",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Check the work",
-        activeText: "Checking the work"
-      }
-    },
-    {
-      id: "fix-act",
-      title: "Act \u2014 apply focused fix",
-      stage: "act",
-      block: "act",
-      input: {
-        brief: "fix.brief@v1",
-        diagnosis: "fix.diagnosis@v1"
-      },
-      output: "fix.change@v1",
-      evidenceRequirements: ["changed files", "change rationale", "declared follow-up proof"],
-      execution: {
-        kind: "relay",
-        role: "implementer"
-      },
-      protocol: "fix-act@v1",
-      writes: {
-        report_path: "reports/fix/change.json",
-        request_path: "reports/relay/fix-act.request.json",
-        receipt_path: "reports/relay/fix-act.receipt.txt",
-        result_path: "reports/relay/fix-act.result.json"
-      },
-      check: {
-        pass: ["accept"]
-      },
-      skillSlots: [],
-      routes: {
-        continue: "fix-verify",
-        retry: "fix-act",
-        ask: "fix-no-repro-decision",
-        stop: "@stop",
-        handoff: "fix-handoff"
-      },
-      progress: {
-        taskTitle: "Make the change",
-        activeText: "Making the change",
-        relayRole: "implementer"
-      }
-    },
-    {
-      id: "fix-verify",
-      title: "Verify \u2014 run Fix proof",
-      stage: "verify",
-      block: "run-verification",
-      input: {
-        proof: "verification.plan@v1",
-        brief: "fix.brief@v1",
-        change: "fix.change@v1"
-      },
-      output: "fix.verification@v1",
-      evidenceRequirements: ["command list", "exit status", "bounded output", "pass or fail"],
-      execution: {
-        kind: "verification"
-      },
-      protocol: "fix-verify@v1",
-      writes: {
-        report_path: "reports/fix/verification.json"
-      },
-      check: {
-        required: ["overall_status", "commands"]
-      },
-      skillSlots: [],
-      routes: {
-        continue: "fix-change-set",
-        retry: "fix-act",
-        ask: "fix-no-repro-decision",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Check the work",
-        activeText: "Checking the work"
-      }
-    },
-    {
-      id: "fix-change-set",
-      title: "Verify \u2014 compute fix change-set",
-      stage: "verify",
-      block: "run-verification",
-      input: {
-        proof: "verification.plan@v1",
-        baseline: "fix.baseline-snapshot@v1",
-        change: "fix.change@v1"
-      },
-      output: "fix.change-set@v1",
-      evidenceRequirements: ["command list", "exit status", "bounded output", "pass or fail"],
-      execution: {
-        kind: "verification"
-      },
-      protocol: "fix-change-set@v1",
-      writes: {
-        report_path: "reports/fix/change-set.json"
-      },
-      check: {
-        required: ["status", "overall_status"]
-      },
-      skillSlots: [],
-      routes: {
-        continue: "fix-regression-rerun",
-        retry: "fix-act",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Check the work",
-        activeText: "Checking the work"
-      }
-    },
-    {
-      id: "fix-regression-rerun",
-      title: "Verify \u2014 rerun regression command after fix",
-      stage: "verify",
-      block: "run-verification",
-      input: {
-        proof: "verification.plan@v1",
-        brief: "fix.brief@v1"
-      },
-      output: "fix.regression-rerun@v1",
-      evidenceRequirements: ["command list", "exit status", "bounded output", "pass or fail"],
-      execution: {
-        kind: "verification"
-      },
-      protocol: "fix-regression-rerun@v1",
-      writes: {
-        report_path: "reports/fix/regression-rerun.json"
-      },
-      check: {
-        required: ["status", "overall_status"]
-      },
-      skillSlots: [],
-      routes: {
-        continue: {
-          to: "fix-review",
-          modeOverrides: {
-            lite: "fix-close-lite"
-          }
+    progress: {
+      steps: [
+        {
+          stepId: "frame-step",
+          taskTitle: "Frame the work",
+          activeText: "Framing the work"
         },
-        retry: "fix-act",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Check the work",
-        activeText: "Checking the work"
-      }
-    },
-    {
-      id: "fix-review",
-      title: "Review \u2014 independent audit of Fix change",
-      stage: "review",
-      block: "review",
-      input: {
-        brief: "fix.brief@v1",
-        change: "fix.change@v1",
-        verification: "fix.verification@v1"
-      },
-      output: "fix.review@v1",
-      evidenceRequirements: ["verdict", "findings", "confidence", "required fixes"],
-      execution: {
-        kind: "relay",
-        role: "reviewer"
-      },
-      protocol: "fix-review@v1",
-      writes: {
-        report_path: "reports/fix/review.json",
-        request_path: "reports/relay/fix-review.request.json",
-        receipt_path: "reports/relay/fix-review.receipt.txt",
-        result_path: "reports/relay/fix-review.result.json"
-      },
-      check: {
-        pass: ["accept", "accept-with-fixes"]
-      },
-      skillSlots: [],
-      routes: {
-        continue: "fix-close",
-        "connector-failed": "fix-close",
-        retry: "fix-act",
-        revise: "fix-act",
-        ask: "fix-no-repro-decision",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Check the result",
-        activeText: "Checking the result",
-        relayRole: "reviewer"
-      }
-    },
-    {
-      id: "fix-close-lite",
-      title: "Close (lite) \u2014 emit Fix result without review",
-      stage: "close",
-      block: "close-with-evidence",
-      input: {
-        brief: "fix.brief@v1",
-        context: "fix.context@v1",
-        diagnosis: "fix.diagnosis@v1",
-        regression: "fix.regression-proof@v1",
-        baseline_snapshot: "fix.baseline-snapshot@v1",
-        change: "fix.change@v1",
-        verification: "fix.verification@v1",
-        regression_rerun: "fix.regression-rerun@v1",
-        change_set: "fix.change-set@v1"
-      },
-      output: "fix.result@v1",
-      evidenceRequirements: ["outcome", "evidence pointers", "residual risks", "follow-ups"],
-      execution: {
-        kind: "compose"
-      },
-      protocol: "fix-close-lite@v1",
-      writes: {
-        report_path: "reports/fix-result.json"
-      },
-      check: {
-        required: [
-          "summary",
-          "outcome",
-          "verification_status",
-          "regression_status",
-          "change_set_status",
-          "review_status",
-          "evidence_links"
-        ]
-      },
-      skillSlots: [],
-      routes: {
-        complete: "@complete",
-        stop: "@stop",
-        handoff: "fix-handoff",
-        escalate: "@escalate"
-      },
-      progress: {
-        taskTitle: "Wrap up",
-        activeText: "Wrapping up"
-      }
-    },
-    {
-      id: "fix-close",
-      title: "Close \u2014 emit Fix result",
-      stage: "close",
-      block: "close-with-evidence",
-      input: {
-        brief: "fix.brief@v1",
-        context: "fix.context@v1",
-        diagnosis: "fix.diagnosis@v1",
-        regression: "fix.regression-proof@v1",
-        baseline_snapshot: "fix.baseline-snapshot@v1",
-        change: "fix.change@v1",
-        verification: "fix.verification@v1",
-        regression_rerun: "fix.regression-rerun@v1",
-        change_set: "fix.change-set@v1",
-        review: "fix.review@v1"
-      },
-      output: "fix.result@v1",
-      evidenceRequirements: ["outcome", "evidence pointers", "residual risks", "follow-ups"],
-      execution: {
-        kind: "compose"
-      },
-      protocol: "fix-close@v1",
-      writes: {
-        report_path: "reports/fix-result.json"
-      },
-      check: {
-        required: [
-          "summary",
-          "outcome",
-          "verification_status",
-          "regression_status",
-          "change_set_status",
-          "review_status",
-          "evidence_links"
-        ]
-      },
-      skillSlots: [],
-      routes: {
-        complete: "@complete",
-        stop: "@stop",
-        handoff: "fix-handoff",
-        escalate: "@escalate"
-      },
-      progress: {
-        taskTitle: "Wrap up",
-        activeText: "Wrapping up"
-      }
-    },
-    {
-      id: "fix-handoff",
-      title: "Persist Fix handoff",
-      stage: "close",
-      block: "handoff",
-      input: {
-        state: "flow.state@v1",
-        brief: "fix.brief@v1"
-      },
-      output: "continuity.record@v1",
-      evidenceRequirements: [
-        "goal",
-        "completed moves",
-        "pending evidence",
-        "next action",
-        "known debt"
-      ],
-      execution: {
-        kind: "compose"
-      },
-      protocol: "fix-handoff@v1",
-      writes: {
-        report_path: "reports/fix/handoff.json"
-      },
-      check: {
-        required: ["goal", "next_action"]
-      },
-      skillSlots: [],
-      routes: {
-        complete: "@handoff",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Wrap up",
-        activeText: "Wrapping up"
-      }
+        {
+          stepId: "analyze-step",
+          taskTitle: "Check the context",
+          activeText: "Checking the context"
+        },
+        {
+          stepId: "synthesize-step",
+          taskTitle: "Draft the recommendation",
+          activeText: "Drafting the recommendation",
+          relayRole: "implementer"
+        },
+        {
+          stepId: "review-step",
+          taskTitle: "Check the recommendation",
+          activeText: "Checking the recommendation",
+          relayRole: "reviewer"
+        },
+        {
+          stepId: "decision-options-step",
+          taskTitle: "Draft the options",
+          activeText: "Drafting the options"
+        },
+        {
+          stepId: "proposal-fanout-step",
+          taskTitle: "Compare the options",
+          activeText: "Comparing the options"
+        },
+        {
+          stepId: "stress-proposals-step",
+          taskTitle: "Check the options",
+          activeText: "Checking the options",
+          relayRole: "reviewer"
+        },
+        {
+          stepId: "tradeoff-checkpoint-step",
+          taskTitle: "Compare the options",
+          activeText: "Comparing the options"
+        },
+        {
+          stepId: "decision-step",
+          taskTitle: "Draft the recommendation",
+          activeText: "Drafting the recommendation"
+        },
+        {
+          stepId: "close-tournament-step",
+          taskTitle: "Wrap up",
+          activeText: "Wrapping up"
+        },
+        {
+          stepId: "close-step",
+          taskTitle: "Wrap up",
+          activeText: "Wrapping up"
+        }
+      ]
     }
-  ],
-  reports: [
-    {
-      schemaName: "fix.context@v1",
-      channel: "relay"
-    },
-    {
-      schemaName: "fix.diagnosis@v1",
-      channel: "relay"
-    },
-    {
-      schemaName: "fix.change@v1",
-      channel: "relay"
-    },
-    {
-      schemaName: "fix.review@v1",
-      channel: "relay"
-    },
-    {
-      schemaName: "fix.brief@v1",
-      channel: "report"
-    },
-    {
-      schemaName: "fix.no-repro-decision@v1",
-      channel: "report"
-    },
-    {
-      schemaName: "fix.regression-proof@v1",
-      channel: "report"
-    },
-    {
-      schemaName: "fix.baseline-snapshot@v1",
-      channel: "report"
-    },
-    {
-      schemaName: "fix.verification@v1",
-      channel: "report"
-    },
-    {
-      schemaName: "fix.regression-rerun@v1",
-      channel: "report"
-    },
-    {
-      schemaName: "fix.change-set@v1",
-      channel: "report"
-    },
-    {
-      schemaName: "fix.result@v1",
-      channel: "report"
-    }
-  ],
-  writerBindings: {
-    compose: ["fix.brief@v1"],
-    close: ["fix.result@v1"],
-    verification: [
-      "fix.regression-proof@v1",
-      "fix.baseline-snapshot@v1",
-      "fix.verification@v1",
-      "fix.regression-rerun@v1",
-      "fix.change-set@v1"
-    ]
-  },
-  primaryResult: {
-    schemaName: "fix.result@v1",
-    path: "reports/fix-result.json",
-    label: "Fix result"
   }
-});
+};
+
+// dist/flows/explore/flow.js
+var exploreFlowDefinition = defineFlowData(exploreFlowData);
 
 // dist/flows/registries/shape-hints/from-zod.js
 function defOf(node) {
@@ -19071,7 +18035,7 @@ var fixVerificationWriter = {
   }
 };
 
-// dist/flows/fix/flow.js
+// dist/flows/fix/data.js
 var FIX_SIGNALS = [
   { label: "fix prefix", pattern: /^\s*fix\s*:/i },
   { label: "quick fix prefix", pattern: /^\s*(?:quick|small|tiny|simple)\s+fix\s*:/i },
@@ -19084,8 +18048,14 @@ var FIX_SIGNALS = [
     pattern: /\b(?:bug|buggy|broken|failing|fails|failed|wrong|incorrect|instead\s+of|regression|crash|crashes|throw|throws)\b[\s\S]{0,200}\bfix\s+(?:it|this|that|please)\b/i
   }
 ];
-var fixFlowDefinition = defineFlowFromFacts({
-  facts: fixFacts,
+var fixFlowData = {
+  id: "fix",
+  visibility: "public",
+  paths: {
+    schematic: "src/flows/fix/schematic.json",
+    command: "src/flows/fix/command.md",
+    contract: "src/flows/fix/contract.md"
+  },
   routing: {
     order: 20,
     signals: FIX_SIGNALS,
@@ -19094,7 +18064,538 @@ var fixFlowDefinition = defineFlowFromFacts({
       return `matched ${signal.label}; routed to Fix flow`;
     }
   },
-  reportDeclarations: [
+  schematic: {
+    schema_version: "1",
+    id: "fix",
+    title: "Fix Schematic",
+    purpose: "Fix flow: capture problem boundary, prove the pre-fix regression before any specialist relay can edit the checkout, gather context, diagnose, apply a focused change, verify, review (in standard depth), and close with evidence. If the standard reviewer connector is unavailable after proof passes, Fix closes with the proof artifacts and marks review skipped. Lite mode skips the review relay and closes immediately after verification via the fix-verify route_overrides.continue.lite override. fix-no-repro-decision and fix-handoff remain in the schematic as authoring intent for future ask/handoff routing in the runtime; they are unreachable at compile and do not appear in the emitted compiled flows.",
+    status: "active",
+    version: "0.1.0",
+    starts_at: "fix-frame",
+    initial_contracts: [
+      "task.intake@v1",
+      "route.decision@v1",
+      "context.request@v1",
+      "flow.question@v1",
+      "verification.plan@v1",
+      "flow.state@v1"
+    ],
+    contract_aliases: [
+      {
+        generic: "flow.brief@v1",
+        actual: "fix.brief@v1"
+      },
+      {
+        generic: "context.packet@v1",
+        actual: "fix.context@v1"
+      },
+      {
+        generic: "diagnosis.result@v1",
+        actual: "fix.diagnosis@v1"
+      },
+      {
+        generic: "decision.answer@v1",
+        actual: "fix.no-repro-decision@v1"
+      },
+      {
+        generic: "flow.evidence@v1",
+        actual: "fix.diagnosis@v1"
+      },
+      {
+        generic: "change.evidence@v1",
+        actual: "fix.change@v1"
+      },
+      {
+        generic: "verification.result@v1",
+        actual: "fix.verification@v1"
+      },
+      {
+        generic: "verification.result@v1",
+        actual: "fix.regression-proof@v1"
+      },
+      {
+        generic: "verification.result@v1",
+        actual: "fix.baseline-snapshot@v1"
+      },
+      {
+        generic: "verification.result@v1",
+        actual: "fix.regression-rerun@v1"
+      },
+      {
+        generic: "verification.result@v1",
+        actual: "fix.change-set@v1"
+      },
+      {
+        generic: "review.verdict@v1",
+        actual: "fix.review@v1"
+      },
+      {
+        generic: "flow.result@v1",
+        actual: "fix.result@v1"
+      }
+    ],
+    entry: {
+      signals: {
+        include: ["fix", "bug", "broken", "regression", "incident", "outage", "diagnose"],
+        exclude: []
+      },
+      intent_prefixes: ["fix", "diagnose"]
+    },
+    entry_modes: [
+      {
+        name: "default",
+        depth: "standard",
+        description: "Default Fix entry mode \u2014 standard depth with full review pass."
+      },
+      {
+        name: "lite",
+        depth: "lite",
+        description: "Lite Fix entry mode \u2014 skips the review relay and closes immediately after verification."
+      },
+      {
+        name: "deep",
+        depth: "deep",
+        description: "Deep Fix entry mode \u2014 standard graph at deep depth (more thorough analysis and review)."
+      },
+      {
+        name: "autonomous",
+        depth: "autonomous",
+        description: "Autonomous Fix entry mode \u2014 standard graph at autonomous depth; safe-default checkpoint choices apply."
+      }
+    ],
+    stage_path_policy: {
+      mode: "partial",
+      omits: ["plan"],
+      rationale: "Fix follows Frame, Analyze, Act, Verify, Review, Close. The Plan stage is omitted because Fix's planning is folded into Diagnose during the Analyze stage \u2014 there is no separate plan-of-attack report distinct from the diagnosis."
+    },
+    stages: [
+      {
+        id: "frame-stage",
+        canonical: "frame",
+        title: "Frame"
+      },
+      {
+        id: "analyze-stage",
+        canonical: "analyze",
+        title: "Analyze"
+      },
+      {
+        id: "act-stage",
+        canonical: "act",
+        title: "Act"
+      },
+      {
+        id: "verify-stage",
+        canonical: "verify",
+        title: "Verify"
+      },
+      {
+        id: "review-stage",
+        canonical: "review",
+        title: "Review"
+      },
+      {
+        id: "close-stage",
+        canonical: "close",
+        title: "Close"
+      }
+    ],
+    items: [
+      {
+        id: "fix-frame",
+        title: "Frame \u2014 confirm Fix brief",
+        stage: "frame",
+        block: "frame",
+        input: {
+          task: "task.intake@v1",
+          route: "route.decision@v1"
+        },
+        output: "fix.brief@v1",
+        evidence_requirements: ["scope boundary", "constraints", "proof plan"],
+        execution: {
+          kind: "compose"
+        },
+        protocol: "fix-frame@v1",
+        writes: {
+          report_path: "reports/fix/brief.json"
+        },
+        check: {
+          required: ["problem_statement", "scope", "regression_contract", "success_criteria"]
+        },
+        routes: {
+          continue: "fix-regression-baseline",
+          revise: "fix-frame",
+          ask: "@stop",
+          stop: "@stop"
+        }
+      },
+      expandBlockStepUse({
+        id: "fix-gather-context",
+        title: "Analyze \u2014 gather problem context",
+        stage: "analyze",
+        block: "gather-context",
+        input: {
+          brief: "fix.brief@v1",
+          request: "context.request@v1"
+        },
+        output: "fix.context@v1",
+        execution: {
+          kind: "relay",
+          role: "researcher"
+        },
+        protocol: "fix-gather-context@v1",
+        reportPath: "reports/fix/context.json",
+        requestPath: "reports/relay/fix-gather-context.request.json",
+        receiptPath: "reports/relay/fix-gather-context.receipt.txt",
+        resultPath: "reports/relay/fix-gather-context.result.json",
+        pass: ["accept"],
+        routes: {
+          continue: "fix-diagnose",
+          retry: "fix-gather-context",
+          ask: "@stop",
+          stop: "@stop"
+        }
+      }),
+      expandBlockStepUse({
+        id: "fix-diagnose",
+        title: "Analyze \u2014 diagnose problem",
+        stage: "analyze",
+        block: "diagnose",
+        input: {
+          brief: "fix.brief@v1",
+          context: "fix.context@v1"
+        },
+        output: "fix.diagnosis@v1",
+        execution: {
+          kind: "relay",
+          role: "researcher"
+        },
+        protocol: "fix-diagnose@v1",
+        reportPath: "reports/fix/diagnosis.json",
+        requestPath: "reports/relay/fix-diagnose.request.json",
+        receiptPath: "reports/relay/fix-diagnose.receipt.txt",
+        resultPath: "reports/relay/fix-diagnose.result.json",
+        pass: ["accept"],
+        routes: {
+          continue: "fix-act",
+          retry: "fix-gather-context",
+          ask: "fix-no-repro-decision",
+          stop: "@stop"
+        }
+      }),
+      expandBlockStepUse({
+        id: "fix-no-repro-decision",
+        title: "Analyze \u2014 choose path forward when reproduction is uncertain",
+        stage: "analyze",
+        block: "human-decision",
+        input: {
+          question: "flow.question@v1",
+          evidence: "fix.diagnosis@v1"
+        },
+        output: "fix.no-repro-decision@v1",
+        protocol: "fix-no-repro-decision@v1",
+        checkpointRequestPath: "reports/checkpoints/fix-no-repro-decision-request.json",
+        checkpointResponsePath: "reports/checkpoints/fix-no-repro-decision-response.json",
+        allow: ["continue"],
+        checkpointPolicy: {
+          prompt: "Diagnosis did not cleanly reproduce the bug. Choose how to proceed.",
+          choices: [
+            {
+              id: "continue",
+              label: "Continue with a focused fix anyway"
+            }
+          ],
+          safe_default_choice: "continue",
+          safe_autonomous_choice: "continue"
+        },
+        routes: {
+          continue: "fix-act",
+          revise: "fix-diagnose",
+          stop: "@stop",
+          handoff: "fix-handoff",
+          escalate: "@escalate"
+        }
+      }),
+      expandBlockStepUse({
+        id: "fix-regression-baseline",
+        title: "Verify \u2014 capture regression baseline",
+        stage: "verify",
+        block: "run-verification",
+        input: {
+          proof: "verification.plan@v1",
+          brief: "fix.brief@v1"
+        },
+        output: "fix.regression-proof@v1",
+        protocol: "fix-regression-baseline@v1",
+        reportPath: "reports/fix/regression-proof.json",
+        required: ["status", "overall_status"],
+        routes: {
+          continue: "fix-baseline-snapshot",
+          retry: "fix-frame",
+          stop: "@stop"
+        }
+      }),
+      expandBlockStepUse({
+        id: "fix-baseline-snapshot",
+        title: "Verify \u2014 snapshot pre-fix git state",
+        stage: "verify",
+        block: "run-verification",
+        input: {
+          proof: "verification.plan@v1"
+        },
+        output: "fix.baseline-snapshot@v1",
+        protocol: "fix-baseline-snapshot@v1",
+        reportPath: "reports/fix/baseline-snapshot.json",
+        required: ["overall_status", "head_sha"],
+        routes: {
+          continue: "fix-gather-context",
+          stop: "@stop"
+        }
+      }),
+      expandBlockStepUse({
+        id: "fix-act",
+        title: "Act \u2014 apply focused fix",
+        stage: "act",
+        block: "act",
+        input: {
+          brief: "fix.brief@v1",
+          diagnosis: "fix.diagnosis@v1"
+        },
+        output: "fix.change@v1",
+        execution: {
+          kind: "relay",
+          role: "implementer"
+        },
+        protocol: "fix-act@v1",
+        reportPath: "reports/fix/change.json",
+        requestPath: "reports/relay/fix-act.request.json",
+        receiptPath: "reports/relay/fix-act.receipt.txt",
+        resultPath: "reports/relay/fix-act.result.json",
+        pass: ["accept"],
+        routes: {
+          continue: "fix-verify",
+          retry: "fix-act",
+          ask: "fix-no-repro-decision",
+          stop: "@stop",
+          handoff: "fix-handoff"
+        }
+      }),
+      expandBlockStepUse({
+        id: "fix-verify",
+        title: "Verify \u2014 run Fix proof",
+        stage: "verify",
+        block: "run-verification",
+        input: {
+          proof: "verification.plan@v1",
+          brief: "fix.brief@v1",
+          change: "fix.change@v1"
+        },
+        output: "fix.verification@v1",
+        protocol: "fix-verify@v1",
+        reportPath: "reports/fix/verification.json",
+        required: ["overall_status", "commands"],
+        routes: {
+          continue: "fix-change-set",
+          retry: "fix-act",
+          ask: "fix-no-repro-decision",
+          stop: "@stop"
+        }
+      }),
+      expandBlockStepUse({
+        id: "fix-change-set",
+        title: "Verify \u2014 compute fix change-set",
+        stage: "verify",
+        block: "run-verification",
+        input: {
+          proof: "verification.plan@v1",
+          baseline: "fix.baseline-snapshot@v1",
+          change: "fix.change@v1"
+        },
+        output: "fix.change-set@v1",
+        protocol: "fix-change-set@v1",
+        reportPath: "reports/fix/change-set.json",
+        required: ["status", "overall_status"],
+        routes: {
+          continue: "fix-regression-rerun",
+          retry: "fix-act",
+          stop: "@stop"
+        }
+      }),
+      expandBlockStepUse({
+        id: "fix-regression-rerun",
+        title: "Verify \u2014 rerun regression command after fix",
+        stage: "verify",
+        block: "run-verification",
+        input: {
+          proof: "verification.plan@v1",
+          brief: "fix.brief@v1"
+        },
+        output: "fix.regression-rerun@v1",
+        protocol: "fix-regression-rerun@v1",
+        reportPath: "reports/fix/regression-rerun.json",
+        required: ["status", "overall_status"],
+        routes: {
+          continue: "fix-review",
+          retry: "fix-act",
+          stop: "@stop"
+        },
+        routeOverrides: {
+          continue: {
+            lite: "fix-close-lite"
+          }
+        }
+      }),
+      expandBlockStepUse({
+        id: "fix-review",
+        title: "Review \u2014 independent audit of Fix change",
+        stage: "review",
+        block: "review",
+        input: {
+          brief: "fix.brief@v1",
+          change: "fix.change@v1",
+          verification: "fix.verification@v1"
+        },
+        output: "fix.review@v1",
+        execution: {
+          kind: "relay",
+          role: "reviewer"
+        },
+        protocol: "fix-review@v1",
+        reportPath: "reports/fix/review.json",
+        requestPath: "reports/relay/fix-review.request.json",
+        receiptPath: "reports/relay/fix-review.receipt.txt",
+        resultPath: "reports/relay/fix-review.result.json",
+        pass: ["accept", "accept-with-fixes"],
+        routes: {
+          continue: "fix-close",
+          "connector-failed": "fix-close",
+          retry: "fix-act",
+          revise: "fix-act",
+          ask: "fix-no-repro-decision",
+          stop: "@stop"
+        }
+      }),
+      expandBlockStepUse({
+        id: "fix-close-lite",
+        title: "Close (lite) \u2014 emit Fix result without review",
+        stage: "close",
+        block: "close-with-evidence",
+        input: {
+          brief: "fix.brief@v1",
+          context: "fix.context@v1",
+          diagnosis: "fix.diagnosis@v1",
+          regression: "fix.regression-proof@v1",
+          baseline_snapshot: "fix.baseline-snapshot@v1",
+          change: "fix.change@v1",
+          verification: "fix.verification@v1",
+          regression_rerun: "fix.regression-rerun@v1",
+          change_set: "fix.change-set@v1"
+        },
+        output: "fix.result@v1",
+        execution: {
+          kind: "compose"
+        },
+        protocol: "fix-close-lite@v1",
+        reportPath: "reports/fix-result.json",
+        required: [
+          "summary",
+          "outcome",
+          "verification_status",
+          "regression_status",
+          "change_set_status",
+          "review_status",
+          "evidence_links"
+        ],
+        routes: {
+          complete: "@complete",
+          stop: "@stop",
+          handoff: "fix-handoff",
+          escalate: "@escalate"
+        }
+      }),
+      expandBlockStepUse({
+        id: "fix-close",
+        title: "Close \u2014 emit Fix result",
+        stage: "close",
+        block: "close-with-evidence",
+        input: {
+          brief: "fix.brief@v1",
+          context: "fix.context@v1",
+          diagnosis: "fix.diagnosis@v1",
+          regression: "fix.regression-proof@v1",
+          baseline_snapshot: "fix.baseline-snapshot@v1",
+          change: "fix.change@v1",
+          verification: "fix.verification@v1",
+          regression_rerun: "fix.regression-rerun@v1",
+          change_set: "fix.change-set@v1",
+          review: "fix.review@v1"
+        },
+        output: "fix.result@v1",
+        execution: {
+          kind: "compose"
+        },
+        protocol: "fix-close@v1",
+        reportPath: "reports/fix-result.json",
+        required: [
+          "summary",
+          "outcome",
+          "verification_status",
+          "regression_status",
+          "change_set_status",
+          "review_status",
+          "evidence_links"
+        ],
+        routes: {
+          complete: "@complete",
+          stop: "@stop",
+          handoff: "fix-handoff",
+          escalate: "@escalate"
+        }
+      }),
+      {
+        id: "fix-handoff",
+        title: "Persist Fix handoff",
+        stage: "close",
+        block: "handoff",
+        input: {
+          state: "flow.state@v1",
+          brief: "fix.brief@v1"
+        },
+        output: "continuity.record@v1",
+        evidence_requirements: [
+          "goal",
+          "completed moves",
+          "pending evidence",
+          "next action",
+          "known debt"
+        ],
+        execution: {
+          kind: "compose"
+        },
+        protocol: "fix-handoff@v1",
+        writes: {
+          report_path: "reports/fix/handoff.json"
+        },
+        check: {
+          required: ["goal", "next_action"]
+        },
+        routes: {
+          complete: "@handoff",
+          stop: "@stop"
+        }
+      }
+    ]
+  },
+  canonicalStagePolicy: {
+    kind: "enforce",
+    canonicals: ["frame", "analyze", "act", "verify", "review", "close"],
+    omits: ["plan"],
+    optional_canonicals: ["review"],
+    variants: [],
+    title: "Frame \u2192 Diagnose \u2192 Fix \u2192 Verify \u2192 Review \u2192 Close",
+    authority: "docs/flows/authoring-model.md \xA7Fix As The Proving Shape"
+  },
+  reports: [
     {
       schemaName: "fix.context@v1",
       channel: "relay",
@@ -19166,370 +18667,96 @@ var fixFlowDefinition = defineFlowFromFacts({
       schema: FixResult,
       writers: { close: [fixCloseBuilder] }
     }
-  ]
-});
-
-// dist/flows/pursue/facts.js
-var pursueFacts = defineDeclarativeFlowFacts({
-  id: "pursue",
-  title: "Pursue Schematic",
-  purpose: "Pursue flow: turn one or more rough operator ideas into pursuit contracts, coordinate their order, execute code-changing work serially, verify, review for interference, and close with evidence.",
-  status: "active",
-  version: "0.1.0",
-  visibility: "public",
-  startsAt: "contract-step",
-  stagePathPolicy: {
-    mode: "partial",
-    omits: ["analyze"],
-    rationale: "Pursuits V1 folds read-only discovery policy into the coordination graph before acting; a separate Analyze stage can be added when dynamic discovery fanout lands."
-  },
-  paths: {
-    schematic: "src/flows/pursue/schematic.json"
-  },
-  entry: {
-    include: ["pursue", "pursuit", "coordinate pursuits", "multiple autonomous goals"],
-    exclude: [],
-    intentPrefixes: ["pursue"]
-  },
-  modes: [
-    {
-      name: "default",
-      depth: "standard",
-      description: "Default Pursue entry mode."
-    },
-    {
-      name: "autonomous",
-      depth: "autonomous",
-      description: "Autonomous Pursue entry mode with the same serial-write safety policy."
-    }
   ],
-  initialContracts: ["task.intake@v1", "route.decision@v1", "verification.plan@v1"],
-  contractAliases: {
-    "flow.brief@v1": "pursuit.contract@v1",
-    "plan.strategy@v1": "pursuit.wave-plan@v1",
-    "work.queue@v1": "pursuit.graph@v1",
-    "batch.result@v1": "pursuit.batch@v1",
-    "change.evidence@v1": "pursuit.batch@v1",
-    "verification.result@v1": "pursuit.verification@v1",
-    "review.verdict@v1": "pursuit.review@v1",
-    "flow.result@v1": "pursuit.result@v1"
-  },
-  stages: [
-    {
-      stageId: "frame-stage",
-      canonical: "frame",
-      title: "Frame"
+  runtimeSurface: {
+    primaryResult: {
+      schemaName: "fix.result@v1",
+      path: "reports/fix-result.json",
+      label: "Fix result"
     },
-    {
-      stageId: "plan-stage",
-      canonical: "plan",
-      title: "Coordinate"
-    },
-    {
-      stageId: "act-stage",
-      canonical: "act",
-      title: "Execute"
-    },
-    {
-      stageId: "verify-stage",
-      canonical: "verify",
-      title: "Verify"
-    },
-    {
-      stageId: "review-stage",
-      canonical: "review",
-      title: "Review"
-    },
-    {
-      stageId: "close-stage",
-      canonical: "close",
-      title: "Close"
+    progress: {
+      steps: [
+        {
+          stepId: "fix-frame",
+          taskTitle: "Frame the work",
+          activeText: "Framing the work"
+        },
+        {
+          stepId: "fix-gather-context",
+          taskTitle: "Check the context",
+          activeText: "Checking the context",
+          relayRole: "implementer"
+        },
+        {
+          stepId: "fix-diagnose",
+          taskTitle: "Check the context",
+          activeText: "Checking the context",
+          relayRole: "implementer"
+        },
+        {
+          stepId: "fix-no-repro-decision",
+          taskTitle: "Check the context",
+          activeText: "Checking the context"
+        },
+        {
+          stepId: "fix-regression-baseline",
+          taskTitle: "Check the work",
+          activeText: "Checking the work"
+        },
+        {
+          stepId: "fix-baseline-snapshot",
+          taskTitle: "Check the work",
+          activeText: "Checking the work"
+        },
+        {
+          stepId: "fix-act",
+          taskTitle: "Make the change",
+          activeText: "Making the change",
+          relayRole: "implementer"
+        },
+        {
+          stepId: "fix-verify",
+          taskTitle: "Check the work",
+          activeText: "Checking the work"
+        },
+        {
+          stepId: "fix-change-set",
+          taskTitle: "Check the work",
+          activeText: "Checking the work"
+        },
+        {
+          stepId: "fix-regression-rerun",
+          taskTitle: "Check the work",
+          activeText: "Checking the work"
+        },
+        {
+          stepId: "fix-review",
+          taskTitle: "Check the result",
+          activeText: "Checking the result",
+          relayRole: "reviewer"
+        },
+        {
+          stepId: "fix-close-lite",
+          taskTitle: "Wrap up",
+          activeText: "Wrapping up"
+        },
+        {
+          stepId: "fix-close",
+          taskTitle: "Wrap up",
+          activeText: "Wrapping up"
+        },
+        {
+          stepId: "fix-handoff",
+          taskTitle: "Wrap up",
+          activeText: "Wrapping up"
+        }
+      ]
     }
-  ],
-  steps: [
-    {
-      id: "contract-step",
-      title: "Frame - create pursuit contract",
-      stage: "frame",
-      block: "pursue",
-      input: {
-        intake: "task.intake@v1",
-        route: "route.decision@v1"
-      },
-      output: "pursuit.contract@v1",
-      evidenceRequirements: [
-        "ownership contract",
-        "estimated touch set",
-        "proof plan",
-        "check-in triggers"
-      ],
-      execution: {
-        kind: "compose"
-      },
-      protocol: "pursuit-contract@v1",
-      writes: {
-        report_path: "reports/pursuit/contract.json"
-      },
-      check: {
-        required: ["objective", "pursuits", "verification_command_candidates"]
-      },
-      routes: {
-        continue: "graph-step",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Frame the work",
-        activeText: "Framing the work"
-      }
-    },
-    {
-      id: "graph-step",
-      title: "Coordinate - build pursuit graph",
-      stage: "plan",
-      block: "coordinate-pursuits",
-      input: {
-        contract: "pursuit.contract@v1"
-      },
-      output: "pursuit.graph@v1",
-      evidenceRequirements: [
-        "dependency graph",
-        "conflict analysis",
-        "serial groups",
-        "parallel read-only groups"
-      ],
-      execution: {
-        kind: "compose"
-      },
-      protocol: "pursuit-graph@v1",
-      writes: {
-        report_path: "reports/pursuit/graph.json"
-      },
-      check: {
-        required: ["nodes", "serial_groups", "parallel_read_only_groups"]
-      },
-      routes: {
-        continue: "wave-plan-step",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Coordinate the work",
-        activeText: "Coordinating the work"
-      }
-    },
-    {
-      id: "wave-plan-step",
-      title: "Plan - order execution waves",
-      stage: "plan",
-      block: "plan",
-      input: {
-        brief: "pursuit.contract@v1",
-        context: "pursuit.graph@v1"
-      },
-      output: "pursuit.wave-plan@v1",
-      evidenceRequirements: ["ordered steps", "risk notes", "proof strategy"],
-      execution: {
-        kind: "compose"
-      },
-      protocol: "pursuit-wave-plan@v1",
-      writes: {
-        report_path: "reports/pursuit/wave-plan.json"
-      },
-      check: {
-        required: ["waves", "no_parallel_writes_reason"]
-      },
-      routes: {
-        continue: "batch-step",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Plan the work",
-        activeText: "Planning the work"
-      }
-    },
-    {
-      id: "batch-step",
-      title: "Execute - run serialized pursuit batch",
-      stage: "act",
-      block: "batch",
-      input: {
-        queue: "pursuit.graph@v1",
-        brief: "pursuit.contract@v1",
-        plan: "pursuit.wave-plan@v1"
-      },
-      output: "pursuit.batch@v1",
-      evidenceRequirements: ["completed items", "skipped items", "blocked items", "failed items"],
-      execution: {
-        kind: "relay",
-        role: "implementer"
-      },
-      protocol: "pursuit-batch@v1",
-      writes: {
-        report_path: "reports/pursuit/batch.json",
-        request_path: "reports/relay/pursuit-batch.request.json",
-        receipt_path: "reports/relay/pursuit-batch.receipt.txt",
-        result_path: "reports/relay/pursuit-batch.result.json"
-      },
-      check: {
-        pass: ["accept", "partial"]
-      },
-      routes: {
-        continue: "verify-step",
-        retry: "batch-step",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Make the change",
-        activeText: "Making the change",
-        relayRole: "implementer"
-      }
-    },
-    {
-      id: "verify-step",
-      title: "Verify - run Pursue proof commands",
-      stage: "verify",
-      block: "run-verification",
-      input: {
-        proof: "verification.plan@v1",
-        brief: "pursuit.contract@v1",
-        change: "pursuit.batch@v1"
-      },
-      output: "pursuit.verification@v1",
-      evidenceRequirements: ["command list", "exit status", "bounded output", "pass or fail"],
-      execution: {
-        kind: "verification"
-      },
-      protocol: "pursuit-verify@v1",
-      writes: {
-        report_path: "reports/pursuit/verification.json"
-      },
-      check: {
-        required: ["overall_status", "commands"]
-      },
-      routes: {
-        continue: "review-step",
-        retry: "batch-step",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Check the work",
-        activeText: "Checking the work"
-      }
-    },
-    {
-      id: "review-step",
-      title: "Review - check pursuit coordination",
-      stage: "review",
-      block: "review",
-      input: {
-        brief: "pursuit.contract@v1",
-        change: "pursuit.batch@v1",
-        verification: "pursuit.verification@v1"
-      },
-      output: "pursuit.review@v1",
-      evidenceRequirements: ["verdict", "findings", "confidence", "required fixes"],
-      execution: {
-        kind: "relay",
-        role: "reviewer"
-      },
-      protocol: "pursuit-review@v1",
-      writes: {
-        report_path: "reports/pursuit/review.json",
-        request_path: "reports/relay/pursuit-review.request.json",
-        receipt_path: "reports/relay/pursuit-review.receipt.txt",
-        result_path: "reports/relay/pursuit-review.result.json"
-      },
-      check: {
-        pass: ["clean", "needs-followup"]
-      },
-      routes: {
-        continue: "close-step",
-        retry: "batch-step",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Check the result",
-        activeText: "Checking the result",
-        relayRole: "reviewer"
-      }
-    },
-    {
-      id: "close-step",
-      title: "Close - summarize pursuit result",
-      stage: "close",
-      block: "close-with-evidence",
-      input: {
-        brief: "pursuit.contract@v1",
-        graph: "pursuit.graph@v1",
-        plan: "pursuit.wave-plan@v1",
-        verification: "pursuit.verification@v1",
-        review: "pursuit.review@v1",
-        batch: "pursuit.batch@v1"
-      },
-      output: "pursuit.result@v1",
-      evidenceRequirements: ["outcome", "evidence pointers", "residual risks", "follow-ups"],
-      execution: {
-        kind: "compose"
-      },
-      protocol: "pursuit-close@v1",
-      writes: {
-        report_path: "reports/pursuit-result.json"
-      },
-      check: {
-        required: ["summary", "outcome", "evidence_links"]
-      },
-      routes: {
-        complete: "@complete",
-        stop: "@stop",
-        handoff: "@handoff",
-        escalate: "@escalate"
-      },
-      progress: {
-        taskTitle: "Wrap up",
-        activeText: "Wrapping up"
-      }
-    }
-  ],
-  reports: [
-    {
-      schemaName: "pursuit.batch@v1",
-      channel: "relay"
-    },
-    {
-      schemaName: "pursuit.review@v1",
-      channel: "relay"
-    },
-    {
-      schemaName: "pursuit.contract@v1",
-      channel: "report"
-    },
-    {
-      schemaName: "pursuit.graph@v1",
-      channel: "report"
-    },
-    {
-      schemaName: "pursuit.wave-plan@v1",
-      channel: "report"
-    },
-    {
-      schemaName: "pursuit.verification@v1",
-      channel: "report"
-    },
-    {
-      schemaName: "pursuit.result@v1",
-      channel: "report"
-    }
-  ],
-  writerBindings: {
-    compose: ["pursuit.contract@v1", "pursuit.graph@v1", "pursuit.wave-plan@v1"],
-    close: ["pursuit.result@v1"],
-    verification: ["pursuit.verification@v1"]
-  },
-  primaryResult: {
-    schemaName: "pursuit.result@v1",
-    path: "reports/pursuit-result.json",
-    label: "Pursuit result"
   }
-});
+};
+
+// dist/flows/fix/flow.js
+var fixFlowDefinition = defineFlowData(fixFlowData);
 
 // dist/flows/pursue/relay-hints.js
 var pursuitBatchShapeHint = {
@@ -20236,7 +19463,7 @@ var pursuitWavePlanComposeBuilder = {
   }
 };
 
-// dist/flows/pursue/flow.js
+// dist/flows/pursue/data.js
 var PURSUE_SIGNALS = [
   { label: "pursue prefix", pattern: /^\s*pursue\s*:/i },
   {
@@ -20248,8 +19475,12 @@ var PURSUE_SIGNALS = [
     pattern: /^\s*(?:please\s+)?(?:run|execute|coordinate)\b.*\b(?:multiple|several|parallel)\b.*\b(?:goals|ideas|changes|tracks)\b/i
   }
 ];
-var pursueFlowDefinition = defineFlowFromFacts({
-  facts: pursueFacts,
+var pursueFlowData = {
+  id: "pursue",
+  visibility: "public",
+  paths: {
+    schematic: "src/flows/pursue/schematic.json"
+  },
   routing: {
     order: 25,
     signals: PURSUE_SIGNALS,
@@ -20257,7 +19488,270 @@ var pursueFlowDefinition = defineFlowFromFacts({
       return `matched ${signal.label}; routed to Pursue flow`;
     }
   },
-  reportDeclarations: [
+  schematic: {
+    schema_version: "1",
+    id: "pursue",
+    title: "Pursue Schematic",
+    purpose: "Pursue flow: turn one or more rough operator ideas into pursuit contracts, coordinate their order, execute code-changing work serially, verify, review for interference, and close with evidence.",
+    status: "active",
+    version: "0.1.0",
+    starts_at: "contract-step",
+    initial_contracts: ["task.intake@v1", "route.decision@v1", "verification.plan@v1"],
+    contract_aliases: [
+      {
+        generic: "flow.brief@v1",
+        actual: "pursuit.contract@v1"
+      },
+      {
+        generic: "plan.strategy@v1",
+        actual: "pursuit.wave-plan@v1"
+      },
+      {
+        generic: "work.queue@v1",
+        actual: "pursuit.graph@v1"
+      },
+      {
+        generic: "batch.result@v1",
+        actual: "pursuit.batch@v1"
+      },
+      {
+        generic: "change.evidence@v1",
+        actual: "pursuit.batch@v1"
+      },
+      {
+        generic: "verification.result@v1",
+        actual: "pursuit.verification@v1"
+      },
+      {
+        generic: "review.verdict@v1",
+        actual: "pursuit.review@v1"
+      },
+      {
+        generic: "flow.result@v1",
+        actual: "pursuit.result@v1"
+      }
+    ],
+    entry: {
+      signals: {
+        include: ["pursue", "pursuit", "coordinate pursuits", "multiple autonomous goals"],
+        exclude: []
+      },
+      intent_prefixes: ["pursue"]
+    },
+    entry_modes: [
+      {
+        name: "default",
+        depth: "standard",
+        description: "Default Pursue entry mode."
+      },
+      {
+        name: "autonomous",
+        depth: "autonomous",
+        description: "Autonomous Pursue entry mode with the same serial-write safety policy."
+      }
+    ],
+    stage_path_policy: {
+      mode: "partial",
+      omits: ["analyze"],
+      rationale: "Pursuits V1 folds read-only discovery policy into the coordination graph before acting; a separate Analyze stage can be added when dynamic discovery fanout lands."
+    },
+    stages: [
+      {
+        id: "frame-stage",
+        canonical: "frame",
+        title: "Frame"
+      },
+      {
+        id: "plan-stage",
+        canonical: "plan",
+        title: "Coordinate"
+      },
+      {
+        id: "act-stage",
+        canonical: "act",
+        title: "Execute"
+      },
+      {
+        id: "verify-stage",
+        canonical: "verify",
+        title: "Verify"
+      },
+      {
+        id: "review-stage",
+        canonical: "review",
+        title: "Review"
+      },
+      {
+        id: "close-stage",
+        canonical: "close",
+        title: "Close"
+      }
+    ],
+    items: [
+      expandBlockStepUse({
+        id: "contract-step",
+        title: "Frame - create pursuit contract",
+        stage: "frame",
+        block: "pursue",
+        input: {
+          intake: "task.intake@v1",
+          route: "route.decision@v1"
+        },
+        execution: {
+          kind: "compose"
+        },
+        protocol: "pursuit-contract@v1",
+        reportPath: "reports/pursuit/contract.json",
+        required: ["objective", "pursuits", "verification_command_candidates"],
+        routes: {
+          continue: "graph-step",
+          stop: "@stop"
+        }
+      }),
+      expandBlockStepUse({
+        id: "graph-step",
+        title: "Coordinate - build pursuit graph",
+        stage: "plan",
+        block: "coordinate-pursuits",
+        input: {
+          contract: "pursuit.contract@v1"
+        },
+        execution: {
+          kind: "compose"
+        },
+        protocol: "pursuit-graph@v1",
+        reportPath: "reports/pursuit/graph.json",
+        required: ["nodes", "serial_groups", "parallel_read_only_groups"],
+        routes: {
+          continue: "wave-plan-step",
+          stop: "@stop"
+        }
+      }),
+      expandBlockStepUse({
+        id: "wave-plan-step",
+        title: "Plan - order execution waves",
+        stage: "plan",
+        block: "plan",
+        input: {
+          brief: "pursuit.contract@v1",
+          context: "pursuit.graph@v1"
+        },
+        output: "pursuit.wave-plan@v1",
+        execution: {
+          kind: "compose"
+        },
+        protocol: "pursuit-wave-plan@v1",
+        reportPath: "reports/pursuit/wave-plan.json",
+        required: ["waves", "no_parallel_writes_reason"],
+        routes: {
+          continue: "batch-step",
+          stop: "@stop"
+        }
+      }),
+      expandBlockStepUse({
+        id: "batch-step",
+        title: "Execute - run serialized pursuit batch",
+        stage: "act",
+        block: "batch",
+        input: {
+          queue: "pursuit.graph@v1",
+          brief: "pursuit.contract@v1",
+          plan: "pursuit.wave-plan@v1"
+        },
+        output: "pursuit.batch@v1",
+        execution: {
+          kind: "relay",
+          role: "implementer"
+        },
+        protocol: "pursuit-batch@v1",
+        reportPath: "reports/pursuit/batch.json",
+        requestPath: "reports/relay/pursuit-batch.request.json",
+        receiptPath: "reports/relay/pursuit-batch.receipt.txt",
+        resultPath: "reports/relay/pursuit-batch.result.json",
+        pass: ["accept", "partial"],
+        routes: {
+          continue: "verify-step",
+          retry: "batch-step",
+          stop: "@stop"
+        }
+      }),
+      expandBlockStepUse({
+        id: "verify-step",
+        title: "Verify - run Pursue proof commands",
+        stage: "verify",
+        block: "run-verification",
+        input: {
+          proof: "verification.plan@v1",
+          brief: "pursuit.contract@v1",
+          change: "pursuit.batch@v1"
+        },
+        output: "pursuit.verification@v1",
+        protocol: "pursuit-verify@v1",
+        reportPath: "reports/pursuit/verification.json",
+        required: ["overall_status", "commands"],
+        routes: {
+          continue: "review-step",
+          retry: "batch-step",
+          stop: "@stop"
+        }
+      }),
+      expandBlockStepUse({
+        id: "review-step",
+        title: "Review - check pursuit coordination",
+        stage: "review",
+        block: "review",
+        input: {
+          brief: "pursuit.contract@v1",
+          change: "pursuit.batch@v1",
+          verification: "pursuit.verification@v1"
+        },
+        output: "pursuit.review@v1",
+        execution: {
+          kind: "relay",
+          role: "reviewer"
+        },
+        protocol: "pursuit-review@v1",
+        reportPath: "reports/pursuit/review.json",
+        requestPath: "reports/relay/pursuit-review.request.json",
+        receiptPath: "reports/relay/pursuit-review.receipt.txt",
+        resultPath: "reports/relay/pursuit-review.result.json",
+        pass: ["clean", "needs-followup"],
+        routes: {
+          continue: "close-step",
+          retry: "batch-step",
+          stop: "@stop"
+        }
+      }),
+      expandBlockStepUse({
+        id: "close-step",
+        title: "Close - summarize pursuit result",
+        stage: "close",
+        block: "close-with-evidence",
+        input: {
+          brief: "pursuit.contract@v1",
+          graph: "pursuit.graph@v1",
+          plan: "pursuit.wave-plan@v1",
+          verification: "pursuit.verification@v1",
+          review: "pursuit.review@v1",
+          batch: "pursuit.batch@v1"
+        },
+        output: "pursuit.result@v1",
+        execution: {
+          kind: "compose"
+        },
+        protocol: "pursuit-close@v1",
+        reportPath: "reports/pursuit-result.json",
+        required: ["summary", "outcome", "evidence_links"],
+        routes: {
+          complete: "@complete",
+          stop: "@stop",
+          handoff: "@handoff",
+          escalate: "@escalate"
+        }
+      })
+    ]
+  },
+  reports: [
     {
       schemaName: "pursuit.batch@v1",
       channel: "relay",
@@ -20300,184 +19794,59 @@ var pursueFlowDefinition = defineFlowFromFacts({
       schema: PursuitResult,
       writers: { close: [pursuitCloseBuilder] }
     }
-  ]
-});
-
-// dist/flows/review/facts.js
-var reviewFacts = defineDeclarativeFlowFacts({
-  id: "review",
-  title: "Review Schematic",
-  purpose: "Review flow: frame the audit scope, relay independent review to a reviewer, and close with a verdict report. The schematic uses a compact Intake, Independent Audit, and Verdict shape because Review is audit-only and does not implement or verify a change.",
-  status: "active",
-  version: "0.1.0",
-  visibility: "public",
-  startsAt: "intake-step",
-  stagePathPolicy: {
-    mode: "partial",
-    omits: ["plan", "act", "verify", "review"],
-    rationale: "Review is an audit-only flow: Intake frames the scope, Independent Audit performs the reviewer relay, and Verdict aggregates findings. There is no planning stage, no implementation/action stage, no verification rerun, and no nested review stage in this narrowed variant."
-  },
-  canonicalStagePolicy: {
-    enforcement: "enforce",
-    title: "Intake \u2192 Independent Audit \u2192 Verdict",
-    authority: "src/flows/review/contract.md \xA7Canonical stage policy"
-  },
-  paths: {
-    schematic: "src/flows/review/schematic.json",
-    command: "src/flows/review/command.md",
-    contract: "src/flows/review/contract.md"
-  },
-  entry: {
-    include: ["review", "audit", "check"],
-    exclude: [],
-    intentPrefixes: ["review"]
-  },
-  modes: [
-    {
-      name: "default",
-      depth: "standard",
-      description: "Default review entry mode \u2014 resolves the review scope, relays an independent audit, then writes the verdict report."
-    }
   ],
-  initialContracts: ["task.intake@v1", "route.decision@v1"],
-  contractAliases: {
-    "flow.brief@v1": "review.intake@v1",
-    "review.verdict@v1": "review.verdict@v1",
-    "flow.result@v1": "review.result@v1"
-  },
-  stages: [
-    {
-      stageId: "intake-stage",
-      canonical: "frame",
-      title: "Intake"
+  runtimeSurface: {
+    primaryResult: {
+      schemaName: "pursuit.result@v1",
+      path: "reports/pursuit-result.json",
+      label: "Pursuit result"
     },
-    {
-      stageId: "audit-stage",
-      canonical: "analyze",
-      title: "Independent Audit"
-    },
-    {
-      stageId: "verdict-stage",
-      canonical: "close",
-      title: "Verdict"
+    progress: {
+      steps: [
+        {
+          stepId: "contract-step",
+          taskTitle: "Frame the work",
+          activeText: "Framing the work"
+        },
+        {
+          stepId: "graph-step",
+          taskTitle: "Coordinate the work",
+          activeText: "Coordinating the work"
+        },
+        {
+          stepId: "wave-plan-step",
+          taskTitle: "Plan the work",
+          activeText: "Planning the work"
+        },
+        {
+          stepId: "batch-step",
+          taskTitle: "Make the change",
+          activeText: "Making the change",
+          relayRole: "implementer"
+        },
+        {
+          stepId: "verify-step",
+          taskTitle: "Check the work",
+          activeText: "Checking the work"
+        },
+        {
+          stepId: "review-step",
+          taskTitle: "Check the result",
+          activeText: "Checking the result",
+          relayRole: "reviewer"
+        },
+        {
+          stepId: "close-step",
+          taskTitle: "Wrap up",
+          activeText: "Wrapping up"
+        }
+      ]
     }
-  ],
-  steps: [
-    {
-      id: "intake-step",
-      title: "Intake \u2014 resolve review scope",
-      stage: "frame",
-      block: "frame",
-      input: {
-        task: "task.intake@v1",
-        route: "route.decision@v1"
-      },
-      output: "review.intake@v1",
-      evidenceRequirements: ["scope boundary", "working tree status", "diff or unavailable reason"],
-      execution: {
-        kind: "compose"
-      },
-      protocol: "review-intake@v1",
-      writes: {
-        report_path: "reports/review-intake.json"
-      },
-      check: {
-        required: ["scope", "evidence"]
-      },
-      routes: {
-        continue: "audit-step",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Frame the work",
-        activeText: "Framing the work"
-      }
-    },
-    {
-      id: "audit-step",
-      title: "Independent Audit \u2014 reviewer relay",
-      stage: "analyze",
-      block: "review",
-      input: {
-        brief: "review.intake@v1"
-      },
-      output: "review.verdict@v1",
-      evidenceRequirements: ["verdict", "findings", "confidence", "required fixes"],
-      execution: {
-        kind: "relay",
-        role: "reviewer"
-      },
-      protocol: "review-audit@v1",
-      writes: {
-        request_path: "reports/relay/review.request.json",
-        receipt_path: "reports/relay/review.receipt.txt",
-        result_path: "stages/analyze/review-raw-findings.json"
-      },
-      check: {
-        pass: ["NO_ISSUES_FOUND", "ISSUES_FOUND"]
-      },
-      routes: {
-        continue: "verdict-step",
-        retry: "audit-step",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Check the result",
-        activeText: "Checking the result",
-        relayRole: "reviewer"
-      }
-    },
-    {
-      id: "verdict-step",
-      title: "Verdict \u2014 emit review.result",
-      stage: "close",
-      block: "close-with-evidence",
-      input: {
-        brief: "review.intake@v1",
-        review: "review.verdict@v1"
-      },
-      output: "review.result@v1",
-      evidenceRequirements: ["outcome", "evidence pointers", "residual risks", "follow-ups"],
-      execution: {
-        kind: "compose"
-      },
-      protocol: "review-verdict@v1",
-      writes: {
-        report_path: "reports/review-result.json"
-      },
-      check: {
-        required: ["scope", "findings", "verdict"]
-      },
-      routes: {
-        complete: "@complete",
-        stop: "@stop"
-      },
-      progress: {
-        taskTitle: "Wrap up",
-        activeText: "Wrapping up"
-      }
-    }
-  ],
-  reports: [
-    {
-      schemaName: "review.intake@v1",
-      channel: "report"
-    },
-    {
-      schemaName: "review.result@v1",
-      channel: "report"
-    }
-  ],
-  writerBindings: {
-    compose: ["review.intake@v1", "review.result@v1"]
-  },
-  structuralHints: [{ hintId: "review.relay-result@structural" }],
-  primaryResult: {
-    schemaName: "review.result@v1",
-    path: "reports/review-result.json",
-    label: "Review result"
   }
-});
+};
+
+// dist/flows/pursue/flow.js
+var pursueFlowDefinition = defineFlowData(pursueFlowData);
 
 // dist/flows/review/relay-hints.js
 var reviewRelayShapeHint = {
@@ -20955,7 +20324,7 @@ var reviewResultComposeBuilder = {
   }
 };
 
-// dist/flows/review/flow.js
+// dist/flows/review/data.js
 var REVIEW_SIGNALS = [
   { label: "code review", pattern: /\bcode\s+review\b/i },
   {
@@ -20981,8 +20350,14 @@ var REVIEW_SIGNALS = [
     pattern: /\blook\s+for\s+(?:bugs|issues|regressions|risks)\b/i
   }
 ];
-var reviewFlowDefinition = defineFlowFromFacts({
-  facts: reviewFacts,
+var reviewFlowData = {
+  id: "review",
+  visibility: "public",
+  paths: {
+    schematic: "src/flows/review/schematic.json",
+    command: "src/flows/review/command.md",
+    contract: "src/flows/review/contract.md"
+  },
   routing: {
     order: 0,
     signals: REVIEW_SIGNALS,
@@ -20990,7 +20365,148 @@ var reviewFlowDefinition = defineFlowFromFacts({
       return `matched ${signal.label}; routed to audit-only review flow`;
     }
   },
-  reportDeclarations: [
+  schematic: {
+    schema_version: "1",
+    id: "review",
+    title: "Review Schematic",
+    purpose: "Review flow: frame the audit scope, relay independent review to a reviewer, and close with a verdict report. The schematic uses a compact Intake, Independent Audit, and Verdict shape because Review is audit-only and does not implement or verify a change.",
+    status: "active",
+    version: "0.1.0",
+    starts_at: "intake-step",
+    initial_contracts: ["task.intake@v1", "route.decision@v1"],
+    contract_aliases: [
+      {
+        generic: "flow.brief@v1",
+        actual: "review.intake@v1"
+      },
+      {
+        generic: "review.verdict@v1",
+        actual: "review.verdict@v1"
+      },
+      {
+        generic: "flow.result@v1",
+        actual: "review.result@v1"
+      }
+    ],
+    entry: {
+      signals: {
+        include: ["review", "audit", "check"],
+        exclude: []
+      },
+      intent_prefixes: ["review"]
+    },
+    entry_modes: [
+      {
+        name: "default",
+        depth: "standard",
+        description: "Default review entry mode \u2014 resolves the review scope, relays an independent audit, then writes the verdict report."
+      }
+    ],
+    stage_path_policy: {
+      mode: "partial",
+      omits: ["plan", "act", "verify", "review"],
+      rationale: "Review is an audit-only flow: Intake frames the scope, Independent Audit performs the reviewer relay, and Verdict aggregates findings. There is no planning stage, no implementation/action stage, no verification rerun, and no nested review stage in this narrowed variant."
+    },
+    stages: [
+      {
+        id: "intake-stage",
+        canonical: "frame",
+        title: "Intake"
+      },
+      {
+        id: "audit-stage",
+        canonical: "analyze",
+        title: "Independent Audit"
+      },
+      {
+        id: "verdict-stage",
+        canonical: "close",
+        title: "Verdict"
+      }
+    ],
+    items: [
+      expandBlockStepUse({
+        id: "intake-step",
+        title: "Intake \u2014 resolve review scope",
+        stage: "frame",
+        block: "frame",
+        input: {
+          task: "task.intake@v1",
+          route: "route.decision@v1"
+        },
+        output: "review.intake@v1",
+        evidenceRequirements: [
+          "scope boundary",
+          "working tree status",
+          "diff or unavailable reason"
+        ],
+        execution: {
+          kind: "compose"
+        },
+        protocol: "review-intake@v1",
+        reportPath: "reports/review-intake.json",
+        required: ["scope", "evidence"],
+        routes: {
+          continue: "audit-step",
+          stop: "@stop"
+        }
+      }),
+      expandBlockStepUse({
+        id: "audit-step",
+        title: "Independent Audit \u2014 reviewer relay",
+        stage: "analyze",
+        block: "review",
+        input: {
+          brief: "review.intake@v1"
+        },
+        execution: {
+          kind: "relay",
+          role: "reviewer"
+        },
+        protocol: "review-audit@v1",
+        requestPath: "reports/relay/review.request.json",
+        receiptPath: "reports/relay/review.receipt.txt",
+        resultPath: "stages/analyze/review-raw-findings.json",
+        pass: ["NO_ISSUES_FOUND", "ISSUES_FOUND"],
+        routes: {
+          continue: "verdict-step",
+          retry: "audit-step",
+          stop: "@stop"
+        }
+      }),
+      expandBlockStepUse({
+        id: "verdict-step",
+        title: "Verdict \u2014 emit review.result",
+        stage: "close",
+        block: "close-with-evidence",
+        input: {
+          brief: "review.intake@v1",
+          review: "review.verdict@v1"
+        },
+        output: "review.result@v1",
+        execution: {
+          kind: "compose"
+        },
+        protocol: "review-verdict@v1",
+        reportPath: "reports/review-result.json",
+        required: ["scope", "findings", "verdict"],
+        routes: {
+          complete: "@complete",
+          stop: "@stop"
+        }
+      })
+    ]
+  },
+  canonicalStagePolicy: {
+    kind: "enforce",
+    canonicals: ["frame", "analyze", "close"],
+    omits: ["plan", "act", "verify", "review"],
+    optional_canonicals: [],
+    variants: [],
+    title: "Intake \u2192 Independent Audit \u2192 Verdict",
+    authority: "src/flows/review/contract.md \xA7Canonical stage policy"
+  },
+  reports: [
     {
       schemaName: "review.intake@v1",
       channel: "report",
@@ -21004,119 +20520,38 @@ var reviewFlowDefinition = defineFlowFromFacts({
       writers: { compose: [reviewResultComposeBuilder] }
     }
   ],
-  structuralHints: [reviewRelayShapeHint]
-});
-
-// dist/flows/runtime-proof/facts.js
-var runtimeProofFacts = defineDeclarativeFlowFacts({
-  id: "runtime-proof",
-  title: "Runtime Proof Schematic",
-  purpose: "Runtime Proof flow: exercise one compose step and one relay step end-to-end so the runtime boundary can be observed closing a real run.",
-  status: "active",
-  version: "0.1.0",
-  visibility: "internal",
-  startsAt: "compose-step",
-  stagePathPolicy: {
-    mode: "partial",
-    omits: ["frame", "analyze", "verify", "review", "close"],
-    rationale: "Runtime Proof is a narrow proof flow; only plan and act are needed to exercise compose and relay through the runtime boundary."
-  },
-  canonicalStagePolicy: {
-    enforcement: "exempt",
-    reason: "partial-stage path, recorded"
-  },
-  paths: {
-    schematic: "src/flows/runtime-proof/schematic.json"
-  },
-  entry: {
-    include: ["runtime-proof", "alpha-proof"],
-    exclude: [],
-    intentPrefixes: ["runtime-proof"]
-  },
-  modes: [
-    {
-      name: "runtime-proof",
-      depth: "standard",
-      description: "Default runtime-proof entry mode; seeds the run at the compose step."
-    }
-  ],
-  initialContracts: ["flow.brief@v1"],
-  stages: [
-    {
-      stageId: "plan-stage",
-      canonical: "plan",
-      title: "Plan"
+  structuralHints: [reviewRelayShapeHint],
+  runtimeSurface: {
+    primaryResult: {
+      schemaName: "review.result@v1",
+      path: "reports/review-result.json",
+      label: "Review result"
     },
-    {
-      stageId: "act-stage",
-      canonical: "act",
-      title: "Act"
+    progress: {
+      steps: [
+        {
+          stepId: "intake-step",
+          taskTitle: "Frame the work",
+          activeText: "Framing the work"
+        },
+        {
+          stepId: "audit-step",
+          taskTitle: "Check the result",
+          activeText: "Checking the result",
+          relayRole: "reviewer"
+        },
+        {
+          stepId: "verdict-step",
+          taskTitle: "Wrap up",
+          activeText: "Wrapping up"
+        }
+      ]
     }
-  ],
-  steps: [
-    {
-      id: "compose-step",
-      title: "Compose runtime proof report",
-      stage: "plan",
-      block: "plan",
-      input: {
-        brief: "flow.brief@v1"
-      },
-      output: "plan.strategy@v1",
-      evidenceRequirements: ["ordered steps", "risk notes", "proof strategy"],
-      execution: {
-        kind: "compose"
-      },
-      protocol: "runtime-proof-compose@v1",
-      writes: {
-        report_path: "reports/compose.json"
-      },
-      check: {
-        required: ["summary"]
-      },
-      routes: {
-        continue: "relay-step"
-      }
-    },
-    {
-      id: "relay-step",
-      title: "Relay dry-run connector",
-      stage: "act",
-      block: "act",
-      input: {
-        brief: "flow.brief@v1",
-        plan: "plan.strategy@v1"
-      },
-      output: "change.evidence@v1",
-      evidenceRequirements: ["changed files", "change rationale", "declared follow-up proof"],
-      execution: {
-        kind: "relay",
-        role: "implementer"
-      },
-      protocol: "runtime-proof-relay@v1",
-      writes: {
-        request_path: "reports/relay.request.json",
-        receipt_path: "reports/relay.receipt.json",
-        result_path: "reports/relay.result.json"
-      },
-      check: {
-        pass: ["ok"]
-      },
-      routes: {
-        continue: "@complete"
-      }
-    }
-  ],
-  reports: [
-    {
-      schemaName: "runtime-proof.compose@v1",
-      channel: "report"
-    }
-  ],
-  writerBindings: {
-    compose: ["plan.strategy@v1"]
   }
-});
+};
+
+// dist/flows/review/flow.js
+var reviewFlowDefinition = defineFlowData(reviewFlowData);
 
 // dist/flows/runtime-proof/reports.js
 var RuntimeProofCompose = external_exports.object({
@@ -21133,10 +20568,115 @@ var runtimeProofComposeBuilder = {
   }
 };
 
-// dist/flows/runtime-proof/flow.js
-var runtimeProofFlowDefinition = defineFlowFromFacts({
-  facts: runtimeProofFacts,
-  reportDeclarations: [
+// dist/flows/runtime-proof/data.js
+var runtimeProofFlowData = {
+  id: "runtime-proof",
+  visibility: "internal",
+  paths: {
+    schematic: "src/flows/runtime-proof/schematic.json"
+  },
+  schematic: {
+    schema_version: "1",
+    id: "runtime-proof",
+    title: "Runtime Proof Schematic",
+    purpose: "Runtime Proof flow: exercise one compose step and one relay step end-to-end so the runtime boundary can be observed closing a real run.",
+    status: "active",
+    version: "0.1.0",
+    starts_at: "compose-step",
+    initial_contracts: ["flow.brief@v1"],
+    contract_aliases: [],
+    entry: {
+      signals: {
+        include: ["runtime-proof", "alpha-proof"],
+        exclude: []
+      },
+      intent_prefixes: ["runtime-proof"]
+    },
+    entry_modes: [
+      {
+        name: "runtime-proof",
+        depth: "standard",
+        description: "Default runtime-proof entry mode; seeds the run at the compose step."
+      }
+    ],
+    stage_path_policy: {
+      mode: "partial",
+      omits: ["frame", "analyze", "verify", "review", "close"],
+      rationale: "Runtime Proof is a narrow proof flow; only plan and act are needed to exercise compose and relay through the runtime boundary."
+    },
+    stages: [
+      {
+        id: "plan-stage",
+        canonical: "plan",
+        title: "Plan"
+      },
+      {
+        id: "act-stage",
+        canonical: "act",
+        title: "Act"
+      }
+    ],
+    items: [
+      {
+        id: "compose-step",
+        title: "Compose runtime proof report",
+        stage: "plan",
+        block: "plan",
+        input: {
+          brief: "flow.brief@v1"
+        },
+        output: "plan.strategy@v1",
+        evidence_requirements: ["ordered steps", "risk notes", "proof strategy"],
+        execution: {
+          kind: "compose"
+        },
+        protocol: "runtime-proof-compose@v1",
+        writes: {
+          report_path: "reports/compose.json"
+        },
+        check: {
+          required: ["summary"]
+        },
+        routes: {
+          continue: "relay-step"
+        }
+      },
+      {
+        id: "relay-step",
+        title: "Relay dry-run connector",
+        stage: "act",
+        block: "act",
+        input: {
+          brief: "flow.brief@v1",
+          plan: "plan.strategy@v1"
+        },
+        output: "change.evidence@v1",
+        evidence_requirements: ["changed files", "change rationale", "declared follow-up proof"],
+        execution: {
+          kind: "relay",
+          role: "implementer"
+        },
+        protocol: "runtime-proof-relay@v1",
+        writes: {
+          request_path: "reports/relay.request.json",
+          receipt_path: "reports/relay.receipt.json",
+          result_path: "reports/relay.result.json"
+        },
+        check: {
+          pass: ["ok"]
+        },
+        routes: {
+          continue: "@complete"
+        }
+      }
+    ]
+  },
+  canonicalStagePolicy: {
+    kind: "exempt",
+    reason: "partial-stage path, recorded"
+  },
+  reportWriterSchemaAliases: ["plan.strategy@v1"],
+  reports: [
     {
       schemaName: "runtime-proof.compose@v1",
       channel: "report",
@@ -21144,7 +20684,10 @@ var runtimeProofFlowDefinition = defineFlowFromFacts({
       writers: { compose: [runtimeProofComposeBuilder] }
     }
   ]
-});
+};
+
+// dist/flows/runtime-proof/flow.js
+var runtimeProofFlowDefinition = defineFlowData(runtimeProofFlowData);
 
 // dist/flows/catalog.js
 var flowDefinitions = [
@@ -22321,15 +21864,33 @@ function computeManifestHash(bytes) {
 
 // dist/runtime/run/graph-runner.js
 import { randomUUID as randomUUID3 } from "node:crypto";
-import { lstat, mkdir as mkdir7, readdir } from "node:fs/promises";
 
 // dist/runtime/domain/step.js
 function isWaitingCheckpointStepOutcome(outcome) {
   return "kind" in outcome && outcome.kind === "waiting_checkpoint";
 }
 
+// dist/runtime/executors/result.js
+function errorFromUnknown(error) {
+  return error instanceof Error ? error : new Error(String(error));
+}
+function stepExecutionOutcome(outcome) {
+  return { kind: "outcome", outcome };
+}
+function stepExecutionFailed(reason, error) {
+  return { kind: "failed", reason, error: error ?? new Error(reason) };
+}
+function stepExecutionFailedFrom(error) {
+  const normalized = errorFromUnknown(error);
+  return stepExecutionFailed(normalized.message, normalized);
+}
+function unwrapStepExecutionResult(result) {
+  if (result.kind === "failed")
+    throw result.error;
+  return result.outcome;
+}
+
 // dist/runtime/executors/checkpoint.js
-import { readFileSync as readFileSync13 } from "node:fs";
 function policy(step) {
   if (step.policy === void 0 || step.policy === null || typeof step.policy !== "object") {
     throw new Error(`checkpoint step '${step.id}' is missing checkpoint policy`);
@@ -22376,125 +21937,129 @@ function checkpointRequestBody(input) {
     }
   };
 }
-async function executeCheckpoint(step, context) {
+async function executeCheckpointResult(step, context) {
   const attempt = context.activeStepAttempt ?? 1;
-  const request = step.writes?.request;
-  const response = step.writes?.response;
-  if (request === void 0 || response === void 0) {
-    throw new Error(`checkpoint step '${step.id}' requires writes.request and writes.response`);
-  }
-  const indexedStep2 = requireRuntimeIndexedStep(context.packageIndex, step.id, "checkpoint");
-  let checkpointReportSha256;
-  const report = step.writes?.report;
-  const resumedSelection = context.resumeCheckpoint?.stepId === step.id ? context.resumeCheckpoint.selection : void 0;
-  const resolution = resolveCheckpoint(step, context.depth);
-  if (resumedSelection === void 0) {
-    if (report !== void 0) {
-      const builder = report.schema === void 0 ? void 0 : findCheckpointBriefBuilder(report.schema);
-      if (builder === void 0 || report.schema === void 0) {
-        throw new Error(`checkpoint step '${step.id}' has unsupported report schema`);
+  try {
+    const request = step.writes?.request;
+    const response = step.writes?.response;
+    if (request === void 0 || response === void 0) {
+      return stepExecutionFailed(`checkpoint step '${step.id}' requires writes.request and writes.response`);
+    }
+    const indexedStep2 = requireRuntimeIndexedStep(context.packageIndex, step.id, "checkpoint");
+    let checkpointReportSha256;
+    const report = step.writes?.report;
+    const resumedSelection = context.resumeCheckpoint?.stepId === step.id ? context.resumeCheckpoint.selection : void 0;
+    const resolution = resolveCheckpoint(step, context.depth);
+    if (resumedSelection === void 0) {
+      if (report !== void 0) {
+        const builder = report.schema === void 0 ? void 0 : findCheckpointBriefBuilder(report.schema);
+        if (builder === void 0 || report.schema === void 0) {
+          return stepExecutionFailed(`checkpoint step '${step.id}' has unsupported report schema`);
+        }
+        const body = builder.build({
+          runFolder: context.runDir,
+          step: indexedStep2,
+          goal: context.goal,
+          ...context.projectRoot === void 0 ? {} : { projectRoot: context.projectRoot },
+          responsePath: response.path
+        });
+        await context.files.writeJson(report, body);
+        checkpointReportSha256 = sha256Hex(await context.files.readText(report));
+        await context.trace.append({
+          run_id: context.runId,
+          kind: "step.report_written",
+          step_id: step.id,
+          attempt,
+          report_path: report.path,
+          report_schema: report.schema
+        });
       }
-      const body = builder.build({
-        runFolder: context.runDir,
-        step: indexedStep2,
-        goal: context.goal,
-        ...context.projectRoot === void 0 ? {} : { projectRoot: context.projectRoot },
-        responsePath: response.path
+      const requestBody = checkpointRequestBody({
+        step,
+        context,
+        ...checkpointReportSha256 === void 0 ? {} : { checkpointReportSha256 }
       });
-      await context.files.writeJson(report, body);
-      checkpointReportSha256 = sha256Hex(readFileSync13(context.files.resolve(report), "utf8"));
+      await context.files.writeJson(request, requestBody);
+      const requestText = await context.files.readText(request);
       await context.trace.append({
         run_id: context.runId,
-        kind: "step.report_written",
+        kind: "checkpoint.requested",
         step_id: step.id,
         attempt,
-        report_path: report.path,
-        report_schema: report.schema
+        request_path: request.path,
+        request_report_hash: sha256Hex(requestText),
+        options: step.choices,
+        auto_resolved: resolution.kind === "resolved" ? resolution.autoResolved : false
       });
     }
-    const requestBody = checkpointRequestBody({
-      step,
-      context,
-      ...checkpointReportSha256 === void 0 ? {} : { checkpointReportSha256 }
+    const effectiveResolution = resumedSelection === void 0 ? resolution : {
+      kind: "resolved",
+      selection: resumedSelection,
+      resolutionSource: "operator",
+      autoResolved: false
+    };
+    if (effectiveResolution.kind === "waiting") {
+      return stepExecutionOutcome({
+        kind: "waiting_checkpoint",
+        checkpoint: {
+          stepId: step.id,
+          attempt,
+          requestPath: context.files.resolve(request),
+          allowedChoices: step.choices
+        }
+      });
+    }
+    if (effectiveResolution.kind === "failed") {
+      await context.trace.append({
+        run_id: context.runId,
+        kind: "check.evaluated",
+        step_id: step.id,
+        attempt,
+        check_kind: "checkpoint_selection",
+        outcome: "fail",
+        reason: effectiveResolution.reason
+      });
+      return stepExecutionFailed(effectiveResolution.reason);
+    }
+    const allowed = step.check.allow;
+    if (Array.isArray(allowed) && !allowed.includes(effectiveResolution.selection)) {
+      return stepExecutionFailed(`checkpoint step '${step.id}' selected '${effectiveResolution.selection}' but check.allow is [${allowed.join(", ")}]`);
+    }
+    await context.files.writeJson(response, {
+      schema_version: 1,
+      step_id: step.id,
+      selection: effectiveResolution.selection,
+      resolution_source: effectiveResolution.resolutionSource
     });
-    await context.files.writeJson(request, requestBody);
-    const requestText = readFileSync13(context.files.resolve(request), "utf8");
     await context.trace.append({
       run_id: context.runId,
-      kind: "checkpoint.requested",
+      kind: "checkpoint.resolved",
       step_id: step.id,
       attempt,
-      request_path: request.path,
-      request_report_hash: sha256Hex(requestText),
-      options: step.choices,
-      auto_resolved: resolution.kind === "resolved" ? resolution.autoResolved : false
+      selection: effectiveResolution.selection,
+      auto_resolved: effectiveResolution.autoResolved,
+      resolution_source: effectiveResolution.resolutionSource,
+      response_path: response.path
     });
-  }
-  const effectiveResolution = resumedSelection === void 0 ? resolution : {
-    kind: "resolved",
-    selection: resumedSelection,
-    resolutionSource: "operator",
-    autoResolved: false
-  };
-  if (effectiveResolution.kind === "waiting") {
-    return {
-      kind: "waiting_checkpoint",
-      checkpoint: {
-        stepId: step.id,
-        attempt,
-        requestPath: context.files.resolve(request),
-        allowedChoices: step.choices
-      }
-    };
-  }
-  if (effectiveResolution.kind === "failed") {
     await context.trace.append({
       run_id: context.runId,
       kind: "check.evaluated",
       step_id: step.id,
       attempt,
       check_kind: "checkpoint_selection",
-      outcome: "fail",
-      reason: effectiveResolution.reason
+      outcome: "pass"
     });
-    throw new Error(effectiveResolution.reason);
+    return stepExecutionOutcome({
+      route: Object.hasOwn(step.routes, effectiveResolution.selection) ? effectiveResolution.selection : "pass",
+      details: { selection: effectiveResolution.selection }
+    });
+  } catch (error) {
+    return stepExecutionFailedFrom(error);
   }
-  const allowed = step.check.allow;
-  if (Array.isArray(allowed) && !allowed.includes(effectiveResolution.selection)) {
-    throw new Error(`checkpoint step '${step.id}' selected '${effectiveResolution.selection}' but check.allow is [${allowed.join(", ")}]`);
-  }
-  await context.files.writeJson(response, {
-    schema_version: 1,
-    step_id: step.id,
-    selection: effectiveResolution.selection,
-    resolution_source: effectiveResolution.resolutionSource
-  });
-  await context.trace.append({
-    run_id: context.runId,
-    kind: "checkpoint.resolved",
-    step_id: step.id,
-    attempt,
-    selection: effectiveResolution.selection,
-    auto_resolved: effectiveResolution.autoResolved,
-    resolution_source: effectiveResolution.resolutionSource,
-    response_path: response.path
-  });
-  await context.trace.append({
-    run_id: context.runId,
-    kind: "check.evaluated",
-    step_id: step.id,
-    attempt,
-    check_kind: "checkpoint_selection",
-    outcome: "pass"
-  });
-  return {
-    route: Object.hasOwn(step.routes, effectiveResolution.selection) ? effectiveResolution.selection : "pass",
-    details: { selection: effectiveResolution.selection }
-  };
 }
-
-// dist/runtime/executors/compose.js
-import { readFileSync as readFileSync14 } from "node:fs";
+async function executeCheckpoint(step, context) {
+  return unwrapStepExecutionResult(await executeCheckpointResult(step, context));
+}
 
 // dist/flows/registries/close-writers/registry.js
 var REGISTRY2 = buildCloseRegistry(flowPackages);
@@ -22542,12 +22107,12 @@ function resolveComposeReadPaths(builder, flow, step) {
 }
 
 // dist/runtime/executors/compose.js
-function readJsonReport(context, path) {
-  return JSON.parse(readFileSync14(context.files.resolve(path), "utf8"));
+async function readJsonReport(context, path) {
+  return await context.files.readJson(path);
 }
-function readOptionalJsonReport(context, path, required) {
+async function readOptionalJsonReport(context, path, required) {
   try {
-    return readJsonReport(context, path);
+    return await readJsonReport(context, path);
   } catch (error) {
     if (!required && error.code === "ENOENT") {
       return void 0;
@@ -22566,7 +22131,7 @@ async function writeRegisteredComposeReport(step, context) {
     const readPaths = resolveComposeReadPaths(composeBuilder, flow, indexedStep2);
     const inputs = {};
     for (const [name, path] of Object.entries(readPaths)) {
-      inputs[name] = path === void 0 ? void 0 : readJsonReport(context, path);
+      inputs[name] = path === void 0 ? void 0 : await readJsonReport(context, path);
     }
     const body = composeBuilder.build({
       runFolder: context.runDir,
@@ -22586,7 +22151,7 @@ async function writeRegisteredComposeReport(step, context) {
     const inputs = {};
     for (const descriptor of closeBuilder.reads) {
       const path = readPaths[descriptor.name];
-      inputs[descriptor.name] = path === void 0 ? void 0 : readOptionalJsonReport(context, path, descriptor.required);
+      inputs[descriptor.name] = path === void 0 ? void 0 : await readOptionalJsonReport(context, path, descriptor.required);
     }
     const body = closeBuilder.build({
       runFolder: context.runDir,
@@ -22600,27 +22165,34 @@ async function writeRegisteredComposeReport(step, context) {
   }
   throw new Error(`no compose report writer registered for schema '${report.schema}' at compose step '${step.id}'`);
 }
-async function executeCompose(step, context) {
-  if (step.writes?.report?.schema !== void 0) {
-    await writeRegisteredComposeReport(step, context);
-    await context.trace.append({
-      run_id: context.runId,
-      kind: "step.report_written",
-      step_id: step.id,
-      attempt: context.activeStepAttempt ?? 1,
-      report_path: step.writes.report.path,
-      report_schema: step.writes.report.schema
-    });
-    return { route: "pass", details: { writer: step.writer } };
+async function executeComposeResult(step, context) {
+  try {
+    if (step.writes?.report?.schema !== void 0) {
+      await writeRegisteredComposeReport(step, context);
+      await context.trace.append({
+        run_id: context.runId,
+        kind: "step.report_written",
+        step_id: step.id,
+        attempt: context.activeStepAttempt ?? 1,
+        report_path: step.writes.report.path,
+        report_schema: step.writes.report.schema
+      });
+      return stepExecutionOutcome({ route: "pass", details: { writer: step.writer } });
+    }
+    const body = step.body ?? { stepId: step.id, writer: step.writer };
+    const writes = step.writes ?? {};
+    await Promise.all(Object.values(writes).map((ref) => context.files.writeJson(ref, {
+      stepId: step.id,
+      writer: step.writer,
+      body
+    })));
+    return stepExecutionOutcome({ route: "pass", details: { writer: step.writer } });
+  } catch (error) {
+    return stepExecutionFailedFrom(error);
   }
-  const body = step.body ?? { stepId: step.id, writer: step.writer };
-  const writes = step.writes ?? {};
-  await Promise.all(Object.values(writes).map((ref) => context.files.writeJson(ref, {
-    stepId: step.id,
-    writer: step.writer,
-    body
-  })));
-  return { route: "pass", details: { writer: step.writer } };
+}
+async function executeCompose(step, context) {
+  return unwrapStepExecutionResult(await executeComposeResult(step, context));
 }
 
 // dist/runtime/executors/fanout.js
@@ -22714,8 +22286,7 @@ function evaluateFanoutJoinPolicy(input) {
 
 // dist/runtime/fanout/branch-execution.js
 import { randomUUID } from "node:crypto";
-import { mkdir as mkdir3, readFile as readFile3, writeFile as writeFile4 } from "node:fs/promises";
-import { dirname as dirname2, join as join6 } from "node:path";
+import { dirname, join as join6 } from "node:path";
 
 // dist/flows/registries/cross-report-validators.js
 var REGISTRY4 = buildCrossReportValidatorRegistry(flowPackages);
@@ -22805,10 +22376,6 @@ var RunResult = external_exports.object({
   reason: external_exports.string().min(1).optional(),
   verdict: external_exports.string().min(1).optional()
 }).strict();
-
-// dist/runtime/executors/relay.js
-import { mkdir as mkdir2, writeFile as writeFile3 } from "node:fs/promises";
-import { dirname } from "node:path";
 
 // dist/shared/json-extraction.js
 function extractJsonObject(text) {
@@ -23749,7 +23316,7 @@ function deriveResolvedSelection(inv, flow, step, depth) {
 }
 
 // dist/shared/relay-support.js
-import { existsSync as existsSync5, readFileSync as readFileSync15 } from "node:fs";
+import { existsSync as existsSync5, readFileSync as readFileSync13 } from "node:fs";
 
 // dist/flows/registries/shape-hints/registry.js
 var SCHEMA_HINTS = buildSchemaHintMap(flowPackages);
@@ -23829,7 +23396,7 @@ function composeRelayPrompt(step, runFolder, loadedSkills = []) {
     if (!existsSync5(abs))
       return `[reads unavailable: ${path}]`;
     return `--- ${path} ---
-${readFileSync15(abs, "utf8")}`;
+${readFileSync13(abs, "utf8")}`;
   }).join("\n\n");
   const skillsSection = selectedSkillsSection(loadedSkills);
   return [
@@ -23849,7 +23416,7 @@ ${readFileSync15(abs, "utf8")}`;
 // dist/shared/user-skill-registry.js
 var import_yaml = __toESM(require_dist(), 1);
 import { createHash as createHash3 } from "node:crypto";
-import { existsSync as existsSync6, readFileSync as readFileSync16, readdirSync } from "node:fs";
+import { existsSync as existsSync6, readFileSync as readFileSync14, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join as join5, resolve as resolve5 } from "node:path";
 var FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)([\s\S]*)$/;
@@ -23920,7 +23487,7 @@ function discoverCandidates(roots) {
 function loadCandidate(candidate) {
   let text;
   try {
-    text = readFileSync16(candidate.path, "utf8");
+    text = readFileSync14(candidate.path, "utf8");
   } catch (err) {
     throw new Error(`selected skill '${candidate.id}' could not be read at ${candidate.path}: ${err.message}`);
   }
@@ -25595,9 +25162,7 @@ async function executeProductionRelayAttempt(input) {
   if (request === void 0 || receipt === void 0 || result === void 0) {
     throw new Error(`relay step '${step.id}' requires writes.request, writes.receipt, and writes.result`);
   }
-  const requestPath = context.files.resolve(request);
-  await mkdir2(dirname(requestPath), { recursive: true });
-  await writeFile3(requestPath, prompt, "utf8");
+  await context.files.writeText(request, prompt);
   const requestPayloadHash = sha256Hex(prompt);
   const startMs = Date.now();
   const attempt = context.activeStepAttempt ?? 1;
@@ -25757,7 +25322,7 @@ async function executeProductionRelayAttempt(input) {
     ...writtenReportPath === void 0 ? {} : { report_path: writtenReportPath }
   };
 }
-async function executeRelay(step, context, connector) {
+async function executeRelayInternal(step, context, connector) {
   if (connector === void 0) {
     return executeProductionRelay(step, context);
   }
@@ -25785,6 +25350,16 @@ async function executeRelay(step, context, connector) {
     response
   })));
   return { route: "pass", details: { role: step.role } };
+}
+async function executeRelayResult(step, context, connector) {
+  try {
+    return stepExecutionOutcome(await executeRelayInternal(step, context, connector));
+  } catch (error) {
+    return stepExecutionFailedFrom(error);
+  }
+}
+async function executeRelay(step, context, connector) {
+  return unwrapStepExecutionResult(await executeRelayResult(step, context, connector));
 }
 async function executeProductionRelay(step, context) {
   const compiledStep = requireRuntimeIndexedStep(context.packageIndex, step.id, "relay");
@@ -26003,10 +25578,10 @@ async function executeRelayFanoutBranch(step, context, branch, relayConnector, b
         ...outcome
       };
     }
-    const requestPath = context.files.resolve(`${branchDirRel}/request.json`);
-    await mkdir3(dirname2(requestPath), { recursive: true });
-    await writeFile4(requestPath, `${JSON.stringify({ branch_id: branch.branch_id, goal: branch.goal }, null, 2)}
-`, "utf8");
+    await context.files.writeJson(`${branchDirRel}/request.json`, {
+      branch_id: branch.branch_id,
+      goal: branch.goal
+    });
     const relayExecution = resolveRelayExecution({
       flowId: context.flow.id,
       role: branch.role,
@@ -26029,10 +25604,8 @@ async function executeRelayFanoutBranch(step, context, branch, relayConnector, b
     const admitted = provenanceFailure === void 0 && evaluation.admitted;
     await context.files.writeJson(resultPath2, reportBody);
     await context.files.writeJson({ path: reportPath, schema: branch.report_schema }, reportBody);
-    const receiptPath = context.files.resolve(`${branchDirRel}/receipt.txt`);
-    await mkdir3(dirname2(receiptPath), { recursive: true });
-    await writeFile4(receiptPath, `stub relay receipt for ${branch.branch_id}
-`, "utf8");
+    await context.files.writeText(`${branchDirRel}/receipt.txt`, `stub relay receipt for ${branch.branch_id}
+`);
     const durationMs = Math.max(0, Date.now() - startMs);
     await context.trace.append({
       run_id: context.runId,
@@ -26142,7 +25715,7 @@ async function executeSubRunFanoutBranch(step, context, branch, worktreeRunner, 
     if (childFlow.id !== branch.flowRef) {
       throw new Error(`resolver returned flow id '${childFlow.id}' but branch flow_ref names '${branch.flowRef}'`);
     }
-    const childRunDir = join6(dirname2(context.runDir), childRunId);
+    const childRunDir = join6(dirname(context.runDir), childRunId);
     const child = await context.childRunner({
       flowBytes: resolved.flowBytes,
       runDir: childRunDir,
@@ -26154,6 +25727,7 @@ async function executeSubRunFanoutBranch(step, context, branch, worktreeRunner, 
       ...context.childExecutors === void 0 ? {} : { executors: context.childExecutors },
       ...context.childCompiledFlowResolver === void 0 ? {} : { childCompiledFlowResolver: context.childCompiledFlowResolver },
       childRunner: context.childRunner,
+      externalFiles: context.externalFiles,
       projectRoot: worktreePath,
       ...context.evidencePolicy === void 0 ? {} : { evidencePolicy: context.evidencePolicy },
       worktreeRunner,
@@ -26162,7 +25736,7 @@ async function executeSubRunFanoutBranch(step, context, branch, worktreeRunner, 
       ...context.selectionConfigLayers === void 0 ? {} : { selectionConfigLayers: context.selectionConfigLayers },
       ...context.progress === void 0 ? {} : { progress: context.progress }
     });
-    const childResultText = await readFile3(child.resultPath, "utf8");
+    const childResultText = await context.externalFiles.readText(child.resultPath);
     const childResult = RunResult.parse(JSON.parse(childResultText));
     await context.files.writeJson(resultPath2, childResult);
     const evaluation = branchResult(childResult, admitList(step));
@@ -26419,7 +25993,7 @@ async function runWithConcurrency(items, limit, worker) {
   }
   await Promise.all(workers);
 }
-async function executeFanout(step, context, relayConnector) {
+async function executeFanoutInternal(step, context, relayConnector) {
   const attempt = context.activeStepAttempt ?? 1;
   const branchDirRoot = branchesDir(step);
   const aggregate = aggregateRef(step);
@@ -26547,11 +26121,20 @@ async function executeFanout(step, context, relayConnector) {
   });
   throw new Error(reason);
 }
+async function executeFanoutResult(step, context, relayConnector) {
+  try {
+    return stepExecutionOutcome(await executeFanoutInternal(step, context, relayConnector));
+  } catch (error) {
+    return stepExecutionFailedFrom(error);
+  }
+}
+async function executeFanout(step, context, relayConnector) {
+  return unwrapStepExecutionResult(await executeFanoutResult(step, context, relayConnector));
+}
 
 // dist/runtime/executors/sub-run.js
 import { randomUUID as randomUUID2 } from "node:crypto";
-import { mkdir as mkdir4, readFile as readFile4, writeFile as writeFile5 } from "node:fs/promises";
-import { dirname as dirname3, join as join7 } from "node:path";
+import { dirname as dirname2, join as join7 } from "node:path";
 function checkPassVerdicts(step) {
   const pass = step.check.pass;
   return Array.isArray(pass) ? pass.filter((entry) => typeof entry === "string") : [];
@@ -26610,7 +26193,7 @@ function parseChildResultBody(step, childResultText) {
     };
   }
 }
-async function executeSubRun(step, context) {
+async function executeSubRunInternal(step, context) {
   const attempt = context.activeStepAttempt ?? 1;
   const resultWrite = step.writes?.result;
   if (resultWrite === void 0) {
@@ -26645,8 +26228,7 @@ async function executeSubRun(step, context) {
     return await recordSubRunCheckFailure(step, context, `sub-run step '${step.id}': resolver returned flow id '${childFlow.id}' but flow_ref names '${step.flowRef}'`);
   }
   const childRunId = randomUUID2();
-  const childRunDir = join7(dirname3(context.runDir), childRunId);
-  await mkdir4(dirname3(childRunDir), { recursive: true });
+  const childRunDir = join7(dirname2(context.runDir), childRunId);
   await context.trace.append({
     run_id: context.runId,
     kind: "sub_run.started",
@@ -26671,6 +26253,7 @@ async function executeSubRun(step, context) {
       ...context.childExecutors === void 0 ? {} : { executors: context.childExecutors },
       ...context.childCompiledFlowResolver === void 0 ? {} : { childCompiledFlowResolver: context.childCompiledFlowResolver },
       childRunner: context.childRunner,
+      externalFiles: context.externalFiles,
       ...context.projectRoot === void 0 ? {} : { projectRoot: context.projectRoot },
       ...context.evidencePolicy === void 0 ? {} : { evidencePolicy: context.evidencePolicy },
       ...context.worktreeRunner === void 0 ? {} : { worktreeRunner: context.worktreeRunner },
@@ -26683,10 +26266,8 @@ async function executeSubRun(step, context) {
     return await recordSubRunCheckFailure(step, context, `sub-run step '${step.id}': child flow invocation failed (${error.message})`);
   }
   const durationMs = Math.max(0, Date.now() - startMs);
-  const childResultText = await readFile4(childResult.resultPath, "utf8");
-  const parentResultPath = context.files.resolve(resultWrite);
-  await mkdir4(dirname3(parentResultPath), { recursive: true });
-  await writeFile5(parentResultPath, childResultText, "utf8");
+  const childResultText = await context.externalFiles.readText(childResult.resultPath);
+  await context.files.writeText(resultWrite, childResultText);
   const parsedChildResult = parseChildResultBody(step, childResultText);
   if (parsedChildResult.body === void 0) {
     const reason = parsedChildResult.failureReason ?? `sub-run step '${step.id}': child result body could not be parsed`;
@@ -26730,6 +26311,16 @@ async function executeSubRun(step, context) {
   }
   return await recordSubRunCheckFailure(step, context, verdict.failureReason ?? `sub-run step '${step.id}': child closed with outcome '${childResultBody.outcome}'`);
 }
+async function executeSubRunResult(step, context) {
+  try {
+    return stepExecutionOutcome(await executeSubRunInternal(step, context));
+  } catch (error) {
+    return stepExecutionFailedFrom(error);
+  }
+}
+async function executeSubRun(step, context) {
+  return unwrapStepExecutionResult(await executeSubRunResult(step, context));
+}
 
 // dist/flows/registries/verification-writers/registry.js
 var REGISTRY6 = buildVerificationRegistry(flowPackages);
@@ -26742,7 +26333,7 @@ function verificationFailureReason(stepId, error) {
   const message = error instanceof Error ? error.message : String(error);
   return `verification step '${stepId}': report writer failed (${message})`;
 }
-async function executeVerification(step, context) {
+async function executeVerificationResult(step, context) {
   const attempt = context.activeStepAttempt ?? 1;
   let report;
   let reportSchema;
@@ -26785,9 +26376,7 @@ async function executeVerification(step, context) {
       outcome: "fail",
       reason: reason2
     });
-    if (blocked)
-      throw error;
-    throw new Error(reason2);
+    return stepExecutionFailed(reason2, blocked ? error : new Error(reason2));
   }
   await context.trace.append({
     run_id: context.runId,
@@ -26806,7 +26395,7 @@ async function executeVerification(step, context) {
       check_kind: "schema_sections",
       outcome: "pass"
     });
-    return { route: "pass", details: { overall_status: "passed" } };
+    return stepExecutionOutcome({ route: "pass", details: { overall_status: "passed" } });
   }
   const reason = `verification step '${step.id}' failed one or more commands`;
   await context.trace.append({
@@ -26820,9 +26409,12 @@ async function executeVerification(step, context) {
   });
   const recoveryRoute = recoveryRouteForStep(step);
   if (recoveryRoute !== void 0) {
-    return { route: recoveryRoute, details: { reason } };
+    return stepExecutionOutcome({ route: recoveryRoute, details: { reason } });
   }
-  throw new Error(reason);
+  return stepExecutionFailed(reason);
+}
+async function executeVerification(step, context) {
+  return unwrapStepExecutionResult(await executeVerificationResult(step, context));
 }
 
 // dist/runtime/executors/index.js
@@ -26954,8 +26546,75 @@ function buildRuntimePackageIndex(flow) {
   };
 }
 
+// dist/runtime/run/manifest-snapshot.js
+import { mkdir as mkdir2, readFile as readFile3, writeFile as writeFile3 } from "node:fs/promises";
+import { dirname as dirname3, join as join8 } from "node:path";
+var MANIFEST_SNAPSHOT_RUN_FILE = "manifest.snapshot.json";
+function runtimeManifestSnapshotPath(runDir) {
+  return join8(runDir, MANIFEST_SNAPSHOT_RUN_FILE);
+}
+async function writeRuntimeManifestSnapshot(input) {
+  const bytes = Buffer.from(input.bytes);
+  const snapshot = ManifestSnapshot.parse({
+    schema_version: 1,
+    run_id: RunId.parse(input.runId),
+    flow_id: CompiledFlowId.parse(input.flowId),
+    captured_at: input.capturedAt,
+    algorithm: "sha256-raw",
+    hash: computeManifestHash(bytes),
+    bytes_base64: bytes.toString("base64")
+  });
+  const path = runtimeManifestSnapshotPath(input.runDir);
+  await mkdir2(dirname3(path), { recursive: true });
+  await writeFile3(path, `${JSON.stringify(snapshot, null, 2)}
+`, { encoding: "utf8", flag: "wx" });
+  return snapshot;
+}
+async function readRuntimeManifestSnapshot(runDir) {
+  const raw = JSON.parse(await readFile3(runtimeManifestSnapshotPath(runDir), "utf8"));
+  return ManifestSnapshot.parse(raw);
+}
+async function readRuntimeCompiledFlowManifestSnapshot(input) {
+  const snapshot = await readRuntimeManifestSnapshot(input.runDir);
+  if (input.expectedRunId !== void 0 && snapshot.run_id !== input.expectedRunId) {
+    throw new Error(`manifest snapshot run_id mismatch: expected '${input.expectedRunId}' but found '${snapshot.run_id}'`);
+  }
+  if (input.expectedFlowId !== void 0 && snapshot.flow_id !== input.expectedFlowId) {
+    throw new Error(`manifest snapshot flow_id mismatch: expected '${input.expectedFlowId}' but found '${snapshot.flow_id}'`);
+  }
+  if (input.expectedHash !== void 0 && snapshot.hash !== input.expectedHash) {
+    throw new Error(`manifest snapshot hash mismatch: expected '${input.expectedHash}' but found '${snapshot.hash}'`);
+  }
+  const flowBytes = Buffer.from(snapshot.bytes_base64, "base64");
+  let flow;
+  try {
+    flow = CompiledFlow.parse(JSON.parse(flowBytes.toString("utf8")));
+  } catch (error) {
+    throw new Error(`manifest snapshot bytes do not parse as CompiledFlow: ${error.message}`);
+  }
+  if (flow.id !== snapshot.flow_id) {
+    throw new Error(`manifest snapshot flow_id '${snapshot.flow_id}' does not match compiled flow id '${flow.id}'`);
+  }
+  return { snapshot, flowBytes, flow };
+}
+
+// dist/shared/result-path.js
+import { join as join9 } from "node:path";
+var RUN_RESULT_RELATIVE_PATH = "reports/result.json";
+function runResultPath(runFolder) {
+  return join9(runFolder, RUN_RESULT_RELATIVE_PATH);
+}
+
+// dist/runtime/run/result-writer.js
+async function writeRuntimeRunResult(files, result) {
+  return await files.writeJson(RUN_RESULT_RELATIVE_PATH, result);
+}
+
+// dist/runtime/run/run-boundary.js
+import { readFileSync as readFileSync15 } from "node:fs";
+import { lstat, mkdir as mkdir4, readdir } from "node:fs/promises";
+
 // dist/runtime/projections/progress.js
-import { readFileSync as readFileSync18 } from "node:fs";
 import { join as join10 } from "node:path";
 
 // dist/schemas/progress-event.js
@@ -27219,13 +26878,6 @@ function progressPresentation(input) {
   };
 }
 
-// dist/shared/result-path.js
-import { join as join8 } from "node:path";
-var RUN_RESULT_RELATIVE_PATH = "reports/result.json";
-function runResultPath(runFolder) {
-  return join8(runFolder, RUN_RESULT_RELATIVE_PATH);
-}
-
 // dist/shared/write-capable-worker-disclosure.js
 var WRITE_CAPABLE_FLOW_IDS = /* @__PURE__ */ new Set(["build", "fix", "pursue"]);
 var WRITE_CAPABLE_WORKER_DISCLOSURE = "A worker can edit this checkout.";
@@ -27234,8 +26886,6 @@ function flowMayInvokeWriteCapableWorker(flowId) {
 }
 
 // dist/runtime/projections/tournament-checkpoint-context.js
-import { readFileSync as readFileSync17 } from "node:fs";
-import { join as join9 } from "node:path";
 function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -27244,15 +26894,8 @@ function boundedText(value, max) {
     return value;
   return `${value.slice(0, Math.max(0, max - 1)).trimEnd()}.`;
 }
-function readJson2(runDir, path) {
-  try {
-    return JSON.parse(readFileSync17(join9(runDir, path), "utf8"));
-  } catch {
-    return void 0;
-  }
-}
-function optionPresentationById(runDir) {
-  const raw = readJson2(runDir, "reports/decision-options.json");
+function optionPresentationById(readJson2) {
+  const raw = readJson2("reports/decision-options.json");
   if (!isRecord(raw) || !Array.isArray(raw.options))
     return /* @__PURE__ */ new Map();
   const entries = [];
@@ -27275,17 +26918,17 @@ function optionPresentationById(runDir) {
   }
   return new Map(entries);
 }
-function tournamentQuestion(runDir) {
-  const raw = readJson2(runDir, "reports/tournament-review.json");
+function tournamentQuestion(readJson2) {
+  const raw = readJson2("reports/tournament-review.json");
   if (!isRecord(raw))
     return void 0;
   const question = raw.tradeoff_question;
   return typeof question === "string" && question.trim().length > 0 ? boundedText(question.trim(), 240) : void 0;
 }
 function tournamentCheckpointPresentation(input) {
-  const byId = optionPresentationById(input.runDir);
+  const byId = optionPresentationById(input.readJson);
   return {
-    prompt: tournamentQuestion(input.runDir) ?? boundedText(input.fallbackPrompt, 240),
+    prompt: tournamentQuestion(input.readJson) ?? boundedText(input.fallbackPrompt, 240),
     choices: input.allowedChoices.map((choice) => {
       const dynamic = byId.get(choice);
       if (dynamic !== void 0)
@@ -27378,8 +27021,11 @@ function reportTaskListProgress(input) {
     tasks: progressTasks(input.flow, input.stepDisplayById, input.statuses)
   });
 }
-function readJsonReport2(runDir, reportPath) {
-  return JSON.parse(readFileSync18(join10(runDir, reportPath), "utf8"));
+function readJsonReport2(files, runDir, reportPath) {
+  const text = files.readText(join10(runDir, reportPath));
+  if (text === void 0)
+    throw new Error(`progress projection could not read ${reportPath}`);
+  return JSON.parse(text);
 }
 function warningRecordsFromReport(body) {
   if (body === null || typeof body !== "object" || Array.isArray(body))
@@ -27408,7 +27054,7 @@ function reportEvidenceProgress(input) {
   }
   let body;
   try {
-    body = readJsonReport2(input.runDir, input.traceEntry.report_path);
+    body = readJsonReport2(input.files, input.runDir, input.traceEntry.report_path);
   } catch {
     return;
   }
@@ -27468,9 +27114,12 @@ function stringArray(value) {
   const entries = value.filter((entry) => typeof entry === "string");
   return entries.length === value.length && entries.length > 0 ? entries : void 0;
 }
-function checkpointPrompt(requestPath) {
+function checkpointPrompt(files, requestPath) {
   try {
-    const raw = JSON.parse(readFileSync18(requestPath, "utf8"));
+    const text = files.readText(requestPath);
+    if (text === void 0)
+      throw new Error(`progress projection could not read ${requestPath}`);
+    const raw = JSON.parse(text);
     if (raw !== null && typeof raw === "object" && !Array.isArray(raw)) {
       const prompt = raw.prompt;
       if (typeof prompt === "string" && prompt.length > 0)
@@ -27524,6 +27173,7 @@ function stepDisplay(input) {
   };
 }
 function createProgressProjector(input) {
+  const projectionFiles = input.files ?? { readText: () => void 0 };
   const taskStatuses = new Map(input.flow.steps.map((step) => [step.id, "pending"]));
   const stepDisplayById = new Map(input.progressSurface?.steps.map((step) => [step.stepId, step]) ?? []);
   const activeAttempts = /* @__PURE__ */ new Map();
@@ -27654,7 +27304,8 @@ function createProgressProjector(input) {
           flowId,
           runId,
           recordedAt,
-          traceEntry: entry
+          traceEntry: entry,
+          files: projectionFiles
         });
         break;
       }
@@ -27771,9 +27422,16 @@ function createProgressProjector(input) {
         const requestPath = checkpointRequestPath(input.runDir, entry.request_path);
         taskStatuses.set(stepId, "in_progress");
         const title = stepTitle({ flow: input.flow, stepId });
-        const checkpointPromptText = checkpointPrompt(requestPath);
+        const checkpointPromptText = checkpointPrompt(projectionFiles, requestPath);
         const presentation = tournamentCheckpointPresentation({
-          runDir: input.runDir,
+          readJson: (path) => {
+            try {
+              const text = projectionFiles.readText(join10(input.runDir, path));
+              return text === void 0 ? void 0 : JSON.parse(text);
+            } catch {
+              return void 0;
+            }
+          },
           allowedChoices,
           fallbackPrompt: checkpointPromptText,
           fallbackLabel: checkpointChoiceLabel,
@@ -28010,7 +27668,7 @@ var validateReportValue = (schemaName, value) => {
 };
 
 // dist/runtime/run-files/run-file-store.js
-import { mkdir as mkdir5, readFile as readFile5, writeFile as writeFile6 } from "node:fs/promises";
+import { mkdir as mkdir3, readFile as readFile4, writeFile as writeFile4 } from "node:fs/promises";
 import { dirname as dirname4 } from "node:path";
 var RunFileStore = class {
   runDir;
@@ -28027,8 +27685,8 @@ var RunFileStore = class {
       this.validateReport?.(ref.schema, value);
     }
     const fullPath = this.resolve(ref);
-    await mkdir5(dirname4(fullPath), { recursive: true });
-    await writeFile6(fullPath, `${JSON.stringify(value, null, 2)}
+    await mkdir3(dirname4(fullPath), { recursive: true });
+    await writeFile4(fullPath, `${JSON.stringify(value, null, 2)}
 `, "utf8");
     return fullPath;
   }
@@ -28037,76 +27695,124 @@ var RunFileStore = class {
       throw new Error(`writeText cannot write schema-tagged run file '${ref.path}'; use writeJson after parsing and validation`);
     }
     const fullPath = this.resolve(ref);
-    await mkdir5(dirname4(fullPath), { recursive: true });
-    await writeFile6(fullPath, value, "utf8");
+    await mkdir3(dirname4(fullPath), { recursive: true });
+    await writeFile4(fullPath, value, "utf8");
     return fullPath;
   }
+  async readText(ref) {
+    return await readFile4(this.resolve(ref), "utf8");
+  }
   async readJson(ref) {
-    const raw = await readFile5(this.resolve(ref), "utf8");
+    const raw = await this.readText(ref);
     return JSON.parse(raw);
   }
 };
 
-// dist/runtime/run/manifest-snapshot.js
-import { mkdir as mkdir6, readFile as readFile6, writeFile as writeFile7 } from "node:fs/promises";
-import { dirname as dirname5, join as join11 } from "node:path";
-var MANIFEST_SNAPSHOT_RUN_FILE = "manifest.snapshot.json";
-function runtimeManifestSnapshotPath(runDir) {
-  return join11(runDir, MANIFEST_SNAPSHOT_RUN_FILE);
-}
-async function writeRuntimeManifestSnapshot(input) {
-  const bytes = Buffer.from(input.bytes);
-  const snapshot = ManifestSnapshot.parse({
-    schema_version: 1,
-    run_id: RunId.parse(input.runId),
-    flow_id: CompiledFlowId.parse(input.flowId),
-    captured_at: input.capturedAt,
-    algorithm: "sha256-raw",
-    hash: computeManifestHash(bytes),
-    bytes_base64: bytes.toString("base64")
-  });
-  const path = runtimeManifestSnapshotPath(input.runDir);
-  await mkdir6(dirname5(path), { recursive: true });
-  await writeFile7(path, `${JSON.stringify(snapshot, null, 2)}
-`, { encoding: "utf8", flag: "wx" });
-  return snapshot;
-}
-async function readRuntimeManifestSnapshot(runDir) {
-  const raw = JSON.parse(await readFile6(runtimeManifestSnapshotPath(runDir), "utf8"));
-  return ManifestSnapshot.parse(raw);
-}
-async function readRuntimeCompiledFlowManifestSnapshot(input) {
-  const snapshot = await readRuntimeManifestSnapshot(input.runDir);
-  if (input.expectedRunId !== void 0 && snapshot.run_id !== input.expectedRunId) {
-    throw new Error(`manifest snapshot run_id mismatch: expected '${input.expectedRunId}' but found '${snapshot.run_id}'`);
+// dist/runtime/run/external-files.js
+import { readFile as readFile5 } from "node:fs/promises";
+var nodeExternalFileReader = {
+  async readText(path) {
+    return await readFile5(path, "utf8");
   }
-  if (input.expectedFlowId !== void 0 && snapshot.flow_id !== input.expectedFlowId) {
-    throw new Error(`manifest snapshot flow_id mismatch: expected '${input.expectedFlowId}' but found '${snapshot.flow_id}'`);
-  }
-  if (input.expectedHash !== void 0 && snapshot.hash !== input.expectedHash) {
-    throw new Error(`manifest snapshot hash mismatch: expected '${input.expectedHash}' but found '${snapshot.hash}'`);
-  }
-  const flowBytes = Buffer.from(snapshot.bytes_base64, "base64");
-  let flow;
-  try {
-    flow = CompiledFlow.parse(JSON.parse(flowBytes.toString("utf8")));
-  } catch (error) {
-    throw new Error(`manifest snapshot bytes do not parse as CompiledFlow: ${error.message}`);
-  }
-  if (flow.id !== snapshot.flow_id) {
-    throw new Error(`manifest snapshot flow_id '${snapshot.flow_id}' does not match compiled flow id '${flow.id}'`);
-  }
-  return { snapshot, flowBytes, flow };
-}
+};
 
-// dist/runtime/run/result-writer.js
-async function writeRuntimeRunResult(files, result) {
-  return await files.writeJson(RUN_RESULT_RELATIVE_PATH, result);
+// dist/runtime/run/run-boundary.js
+async function assertFreshRunDir(runDir) {
+  let stat2;
+  try {
+    stat2 = await lstat(runDir);
+  } catch (error) {
+    if (error.code !== "ENOENT")
+      throw error;
+    await mkdir4(runDir, { recursive: true });
+    stat2 = await lstat(runDir);
+  }
+  if (stat2.isSymbolicLink()) {
+    throw new Error("runtime baseline requires a fresh run directory; existing path is a symlink");
+  }
+  if (!stat2.isDirectory()) {
+    throw new Error("runtime baseline requires a fresh run directory; existing path is not a directory");
+  }
+  const entries = await readdir(runDir);
+  if (entries.length > 0) {
+    throw new Error(`runtime baseline requires a fresh run directory; existing directory is not empty (${entries.join(", ")})`);
+  }
+}
+function runFilesPortFromStore(store) {
+  return {
+    resolve: (ref) => store.resolve(ref),
+    writeJson: (ref, value) => store.writeJson(ref, value),
+    writeText: (ref, value) => store.writeText(ref, value),
+    readText: (ref) => store.readText(ref),
+    readJson: (ref) => store.readJson(ref)
+  };
+}
+function traceLogPortFromStore(store) {
+  return {
+    load: () => store.load(),
+    append: (input) => store.append(input),
+    getAll: () => store.getAll()
+  };
+}
+async function openRunBoundary(options) {
+  if (!options.isResume) {
+    await assertFreshRunDir(options.runDir);
+  } else {
+    await mkdir4(options.runDir, { recursive: true });
+  }
+  const clock = { now: options.now ?? (() => /* @__PURE__ */ new Date()) };
+  const progressProjector = createProgressProjector({
+    progress: options.progress,
+    runDir: options.runDir,
+    runId: options.runId,
+    flow: options.flow,
+    files: {
+      readText(path) {
+        try {
+          return readFileSync15(path, "utf8");
+        } catch {
+          return void 0;
+        }
+      }
+    },
+    ...options.progressSurface === void 0 ? {} : { progressSurface: options.progressSurface }
+  });
+  const trace = new TraceStore(options.runDir, {
+    now: clock.now,
+    onAppend: progressProjector
+  });
+  const existingTrace = await trace.load();
+  if (!options.isResume && existingTrace.length > 0) {
+    throw new Error("runtime baseline requires a fresh run directory");
+  }
+  if (options.isResume && existingTrace.length === 0) {
+    throw new Error("runtime resume requires an existing trace");
+  }
+  if (options.isResume && existingTrace.some((entry) => entry.kind === "run.closed")) {
+    throw new Error("runtime resume rejected: run is already closed");
+  }
+  const files = new RunFileStore(options.runDir, validateReportValue);
+  return {
+    runDirectory: { path: options.runDir },
+    clock,
+    files,
+    runFiles: runFilesPortFromStore(files),
+    trace,
+    traceLog: traceLogPortFromStore(trace),
+    externalFiles: nodeExternalFileReader,
+    progress: {
+      ...options.progress === void 0 ? {} : { report: options.progress }
+    },
+    existingTrace
+  };
 }
 
 // dist/runtime/run/graph-runner.js
 function isGraphCheckpointWaitingResult(result) {
   return "kind" in result && result.kind === "checkpoint_waiting";
+}
+function isGraphRejectedOutcome(result) {
+  return "kind" in result && result.kind === "rejected";
 }
 var RECOVERY_ROUTE_LABELS = /* @__PURE__ */ new Set(["retry", "revise"]);
 function defaultManifestHash(flow) {
@@ -28224,27 +27930,6 @@ function completedStepCountsFromTrace(entries) {
   }
   return counts;
 }
-async function assertFreshRunDir(runDir) {
-  let stat2;
-  try {
-    stat2 = await lstat(runDir);
-  } catch (error) {
-    if (error.code !== "ENOENT")
-      throw error;
-    await mkdir7(runDir, { recursive: true });
-    stat2 = await lstat(runDir);
-  }
-  if (stat2.isSymbolicLink()) {
-    throw new Error("runtime baseline requires a fresh run directory; existing path is a symlink");
-  }
-  if (!stat2.isDirectory()) {
-    throw new Error("runtime baseline requires a fresh run directory; existing path is not a directory");
-  }
-  const entries = await readdir(runDir);
-  if (entries.length > 0) {
-    throw new Error(`runtime baseline requires a fresh run directory; existing directory is not empty (${entries.join(", ")})`);
-  }
-}
 function resolveManifestHash(flow, options) {
   if (options.manifestBytes === void 0) {
     return options.manifestHash ?? defaultManifestHash(flow);
@@ -28277,52 +27962,37 @@ async function closeRun(context, outcome, terminalTarget, reason) {
     ...verdict === void 0 ? {} : { verdict }
   };
   const resultPath2 = await writeRuntimeRunResult(context.files, result);
-  return { ...result, resultPath: resultPath2 };
+  return { kind: "closed", result: { ...result, resultPath: resultPath2 } };
 }
-async function executeExecutableFlowWithWaiting(flow, options) {
+async function executeExecutableFlowOutcomeUnsafe(flow, options) {
   assertExecutableFlow(flow);
   const isResume = options.resumeCheckpoint !== void 0;
-  if (!isResume) {
-    await assertFreshRunDir(options.runDir);
-  } else {
-    await mkdir7(options.runDir, { recursive: true });
-  }
   const runId = options.runId ?? randomUUID3();
-  const packageIndex = buildRuntimePackageIndex(flow);
-  const progressProjector = createProgressProjector({
-    progress: options.progress,
+  const boundary = await openRunBoundary({
     runDir: options.runDir,
+    isResume,
     runId,
     flow,
+    ...options.now === void 0 ? {} : { now: options.now },
+    ...options.progress === void 0 ? {} : { progress: options.progress },
     ...options.progressSurface === void 0 ? {} : { progressSurface: options.progressSurface }
   });
-  const trace = new TraceStore(options.runDir, {
-    ...options.now === void 0 ? {} : { now: options.now },
-    onAppend: progressProjector
-  });
-  const existingTrace = await trace.load();
-  if (!isResume && existingTrace.length > 0) {
-    throw new Error("runtime baseline requires a fresh run directory");
-  }
-  if (isResume && existingTrace.length === 0) {
-    throw new Error("runtime resume requires an existing trace");
-  }
-  if (isResume && existingTrace.some((entry) => entry.kind === "run.closed")) {
-    throw new Error("runtime resume rejected: run is already closed");
-  }
-  const files = new RunFileStore(options.runDir, validateReportValue);
+  const runDir = boundary.runDirectory.path;
+  const { existingTrace, files, trace } = boundary;
+  const packageIndex = buildRuntimePackageIndex(flow);
   const context = {
     flow,
     packageIndex,
     runId,
-    runDir: options.runDir,
+    runDir,
     goal: options.goal ?? `Run ${flow.id}`,
     manifestHash: resolveManifestHash(flow, options),
     ...options.entryModeName === void 0 ? {} : { entryModeName: options.entryModeName },
     ...options.depth === void 0 ? {} : { depth: options.depth },
-    now: options.now ?? (() => /* @__PURE__ */ new Date()),
+    now: boundary.clock.now,
     files,
     trace,
+    externalFiles: options.externalFiles ?? boundary.externalFiles,
     ...options.childCompiledFlowResolver === void 0 ? {} : { childCompiledFlowResolver: options.childCompiledFlowResolver },
     ...options.childRunner === void 0 ? {} : { childRunner: options.childRunner },
     ...options.childExecutors === void 0 ? {} : { childExecutors: options.childExecutors },
@@ -28347,7 +28017,7 @@ async function executeExecutableFlowWithWaiting(flow, options) {
   const bootstrapRecordedAt = context.now().toISOString();
   if (!isResume && options.manifestBytes !== void 0) {
     await writeRuntimeManifestSnapshot({
-      runDir: options.runDir,
+      runDir,
       runId,
       flowId: flow.id,
       capturedAt: bootstrapRecordedAt,
@@ -28415,7 +28085,7 @@ async function executeExecutableFlowWithWaiting(flow, options) {
         return {
           kind: "checkpoint_waiting",
           outcome: "checkpoint_waiting",
-          runFolder: options.runDir,
+          runFolder: runDir,
           runId,
           flowId: flow.id,
           traceEntriesObserved: trace.getAll().length,
@@ -28507,12 +28177,31 @@ async function executeExecutableFlowWithWaiting(flow, options) {
   }
   return await closeRun(context, "aborted", void 0, `maxSteps exceeded: ${maxSteps}`);
 }
-async function executeExecutableFlow(flow, options) {
-  const result = await executeExecutableFlowWithWaiting(flow, options);
-  if (isGraphCheckpointWaitingResult(result)) {
-    throw new Error(`runtime run '${result.runId}' paused at checkpoint '${result.checkpoint.stepId}', which requires checkpoint-aware resume routing`);
+function errorFromUnknown2(error) {
+  return error instanceof Error ? error : new Error(String(error));
+}
+async function executeExecutableFlowOutcome(flow, options) {
+  try {
+    return await executeExecutableFlowOutcomeUnsafe(flow, options);
+  } catch (error) {
+    const normalized = errorFromUnknown2(error);
+    return {
+      kind: "rejected",
+      outcome: "rejected",
+      reason: normalized.message,
+      error: normalized
+    };
   }
-  return result;
+}
+function graphOutcomeToCompatibilityResult(outcome) {
+  if (outcome.kind === "closed")
+    return outcome.result;
+  if (outcome.kind === "rejected")
+    throw outcome.error;
+  return outcome;
+}
+async function executeExecutableFlowWithWaiting(flow, options) {
+  return graphOutcomeToCompatibilityResult(await executeExecutableFlowOutcome(flow, options));
 }
 
 // dist/runtime/run/compiled-flow-runner.js
@@ -28559,6 +28248,7 @@ async function runCompiledFlowWithWaiting(options) {
     ...options.childExecutors === void 0 ? {} : { childExecutors: options.childExecutors },
     ...options.childCompiledFlowResolver === void 0 ? {} : { childCompiledFlowResolver: options.childCompiledFlowResolver },
     childRunner: options.childRunner ?? runCompiledFlow,
+    ...options.externalFiles === void 0 ? {} : { externalFiles: options.externalFiles },
     ...options.projectRoot === void 0 ? {} : { projectRoot: options.projectRoot },
     ...options.evidencePolicy === void 0 ? {} : { evidencePolicy: options.evidencePolicy },
     ...options.worktreeRunner === void 0 ? {} : { worktreeRunner: options.worktreeRunner },
@@ -28579,6 +28269,22 @@ async function runCompiledFlow(options) {
 }
 
 // dist/runtime/run/checkpoint-resume.js
+function errorFromUnknown3(error) {
+  return error instanceof Error ? error : new Error(String(error));
+}
+function checkpointResumeRejected(reason, error) {
+  return { kind: "rejected", reason, error: error ?? new Error(reason) };
+}
+function checkpointResumeRejectedFrom(error) {
+  const normalized = errorFromUnknown3(error);
+  return checkpointResumeRejected(normalized.message, normalized);
+}
+function checkpointResumeValid(value) {
+  return { kind: "valid", value };
+}
+function isCheckpointResumeRejectedResult(result) {
+  return result.kind === "rejected";
+}
 function isRecord2(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -28607,7 +28313,7 @@ async function isRuntimeRunFolder(runDir) {
     return false;
   }
 }
-function latestUnresolvedCheckpoint(entries) {
+function latestUnresolvedCheckpointResult(entries) {
   const resolved = /* @__PURE__ */ new Set();
   for (const entry of entries) {
     if (entry.kind !== "checkpoint.resolved" || entry.step_id === void 0)
@@ -28623,87 +28329,107 @@ function latestUnresolvedCheckpoint(entries) {
     if (entry.step_id === void 0 || entry.attempt === void 0)
       continue;
     if (!resolved.has(`${entry.step_id}:${entry.attempt}`))
-      return entry;
+      return checkpointResumeValid(entry);
   }
-  throw new Error("runtime checkpoint resume rejected: run has no unresolved checkpoint request");
+  return checkpointResumeRejected("runtime checkpoint resume rejected: run has no unresolved checkpoint request");
 }
-function checkpointStep(input) {
+function checkpointStepResult(input) {
   const step = input.flow.steps.find((candidate) => candidate.id === input.stepId);
   if (step === void 0 || step.kind !== "checkpoint") {
-    throw new Error(`runtime checkpoint resume rejected: current step '${input.stepId}' is not a checkpoint`);
+    return checkpointResumeRejected(`runtime checkpoint resume rejected: current step '${input.stepId}' is not a checkpoint`);
   }
-  return step;
+  return checkpointResumeValid(step);
 }
-function declaredCheckpointRequestPath(step) {
+function declaredCheckpointRequestPathResult(step) {
   const requestPath = step.writes?.request?.path;
   if (requestPath === void 0) {
-    throw new Error(`runtime checkpoint resume rejected: checkpoint step '${step.id}' has no declared request path`);
+    return checkpointResumeRejected(`runtime checkpoint resume rejected: checkpoint step '${step.id}' has no declared request path`);
   }
-  return requestPath;
+  return checkpointResumeValid(requestPath);
 }
-function readCheckpointRequestContext(input) {
+function readCheckpointRequestContextResult(input) {
   const requestAbs = resolveRunFilePath(input.runDir, input.requestPath);
-  const requestText = readFileSync19(requestAbs, "utf8");
-  if (sha256Hex(requestText) !== input.expectedRequestHash) {
-    throw new Error("runtime checkpoint resume rejected: checkpoint request hash differs from trace");
+  let requestText;
+  try {
+    requestText = readFileSync16(requestAbs, "utf8");
+  } catch (error) {
+    return checkpointResumeRejectedFrom(error);
   }
-  const raw = JSON.parse(requestText);
+  if (sha256Hex(requestText) !== input.expectedRequestHash) {
+    return checkpointResumeRejected("runtime checkpoint resume rejected: checkpoint request hash differs from trace");
+  }
+  let raw;
+  try {
+    raw = JSON.parse(requestText);
+  } catch (error) {
+    return checkpointResumeRejectedFrom(error);
+  }
   if (!isRecord2(raw)) {
-    throw new Error(`runtime checkpoint resume rejected: request for '${input.step.id}' is invalid`);
+    return checkpointResumeRejected(`runtime checkpoint resume rejected: request for '${input.step.id}' is invalid`);
   }
   if (raw.schema_version !== 1 || raw.step_id !== input.step.id) {
-    throw new Error(`runtime checkpoint resume rejected: request for '${input.step.id}' is stale`);
+    return checkpointResumeRejected(`runtime checkpoint resume rejected: request for '${input.step.id}' is stale`);
   }
   const requestChoices = stringArray2(raw.allowed_choices);
   if (requestChoices === void 0 || requestChoices.length !== input.step.choices.length || requestChoices.some((choice, index) => choice !== input.step.choices[index])) {
-    throw new Error(`runtime checkpoint resume rejected: request choices for '${input.step.id}' are stale`);
+    return checkpointResumeRejected(`runtime checkpoint resume rejected: request choices for '${input.step.id}' are stale`);
   }
   const context = raw.execution_context;
   if (!isRecord2(context)) {
-    throw new Error(`runtime checkpoint resume rejected: request for '${input.step.id}' has no execution context`);
+    return checkpointResumeRejected(`runtime checkpoint resume rejected: request for '${input.step.id}' has no execution context`);
   }
   const projectRoot = context.project_root;
   if (projectRoot !== void 0 && typeof projectRoot !== "string") {
-    throw new Error("runtime checkpoint resume rejected: project_root is invalid");
+    return checkpointResumeRejected("runtime checkpoint resume rejected: project_root is invalid");
   }
-  const selectionConfigLayers = LayeredConfig.array().parse(context.selection_config_layers ?? []);
+  let selectionConfigLayers;
+  try {
+    selectionConfigLayers = LayeredConfig.array().parse(context.selection_config_layers ?? []);
+  } catch (error) {
+    return checkpointResumeRejectedFrom(error);
+  }
   const checkpointReportSha256 = context.checkpoint_report_sha256;
   if (checkpointReportSha256 !== void 0 && typeof checkpointReportSha256 !== "string") {
-    throw new Error("runtime checkpoint resume rejected: checkpoint_report_sha256 is invalid");
+    return checkpointResumeRejected("runtime checkpoint resume rejected: checkpoint_report_sha256 is invalid");
   }
-  return {
+  return checkpointResumeValid({
     ...projectRoot === void 0 ? {} : { projectRoot },
     selectionConfigLayers,
     ...checkpointReportSha256 === void 0 ? {} : { checkpointReportSha256 }
-  };
+  });
 }
-function validateCheckpointReport(input) {
+function validateCheckpointReportResult(input) {
   const report = input.compiledStep.writes.report;
   if (report === void 0) {
     if (input.requestContext.checkpointReportSha256 !== void 0) {
-      throw new Error(`runtime checkpoint resume rejected: checkpoint '${input.compiledStep.id}' request carries a report hash but the step writes no report`);
+      return checkpointResumeRejected(`runtime checkpoint resume rejected: checkpoint '${input.compiledStep.id}' request carries a report hash but the step writes no report`);
     }
-    return;
+    return checkpointResumeValid(void 0);
   }
   if (typeof report === "string") {
     if (input.requestContext.checkpointReportSha256 !== void 0) {
-      throw new Error(`runtime checkpoint resume rejected: checkpoint '${input.compiledStep.id}' request carries a report hash but the report has no schema validator`);
+      return checkpointResumeRejected(`runtime checkpoint resume rejected: checkpoint '${input.compiledStep.id}' request carries a report hash but the report has no schema validator`);
     }
-    return;
+    return checkpointResumeValid(void 0);
   }
   const builder = findCheckpointBriefBuilder(report.schema);
   if (builder?.validateResumeContext === void 0) {
     if (input.requestContext.checkpointReportSha256 !== void 0) {
-      throw new Error(`runtime checkpoint resume rejected: builder for schema '${report.schema}' is missing validateResumeContext but the checkpoint request carries a report hash`);
+      return checkpointResumeRejected(`runtime checkpoint resume rejected: builder for schema '${report.schema}' is missing validateResumeContext but the checkpoint request carries a report hash`);
     }
-    return;
+    return checkpointResumeValid(void 0);
   }
-  builder.validateResumeContext({
-    runFolder: input.runDir,
-    step: input.compiledStep,
-    reportPath: report.path,
-    ...input.requestContext.checkpointReportSha256 === void 0 ? {} : { reportSha256: input.requestContext.checkpointReportSha256 }
-  });
+  try {
+    builder.validateResumeContext({
+      runFolder: input.runDir,
+      step: input.compiledStep,
+      reportPath: report.path,
+      ...input.requestContext.checkpointReportSha256 === void 0 ? {} : { reportSha256: input.requestContext.checkpointReportSha256 }
+    });
+  } catch (error) {
+    return checkpointResumeRejectedFrom(error);
+  }
+  return checkpointResumeValid(void 0);
 }
 function executableFlowForResume(input) {
   const executable = fromCompiledFlow(input.flow);
@@ -28715,75 +28441,100 @@ function executableFlowForResume(input) {
     }
   };
 }
-async function resumeCompiledFlow(options) {
+async function resumeCompiledFlowResult(options) {
   const trace = new TraceStore(options.runDir, {
     ...options.now === void 0 ? {} : { now: options.now }
   });
-  const entries = await trace.load();
+  let entries;
+  try {
+    entries = await trace.load();
+  } catch (error) {
+    return checkpointResumeRejectedFrom(error);
+  }
   const bootstrap = entries[0];
   if (!isRuntimeBootstrap(bootstrap)) {
-    throw new Error("runtime checkpoint resume rejected: run folder is not marked runtime");
+    return checkpointResumeRejected("runtime checkpoint resume rejected: run folder is not marked runtime");
   }
   if (entries.some((entry) => entry.kind === "run.closed")) {
-    throw new Error("runtime checkpoint resume rejected: run is already closed");
+    return checkpointResumeRejected("runtime checkpoint resume rejected: run is already closed");
   }
   const bootstrapRunId = traceString(bootstrap, "run_id");
   const bootstrapFlowId = traceString(bootstrap, "flow_id");
   const bootstrapGoal = traceString(bootstrap, "goal");
   const bootstrapManifestHash = traceString(bootstrap, "manifest_hash");
   if (bootstrapRunId === void 0 || bootstrapFlowId === void 0 || bootstrapGoal === void 0 || bootstrapManifestHash === void 0) {
-    throw new Error("runtime checkpoint resume rejected: bootstrap identity is incomplete");
+    return checkpointResumeRejected("runtime checkpoint resume rejected: bootstrap identity is incomplete");
   }
-  const { flow, flowBytes, snapshot } = await readRuntimeCompiledFlowManifestSnapshot({
-    runDir: options.runDir,
-    expectedRunId: bootstrapRunId,
-    expectedFlowId: bootstrapFlowId,
-    expectedHash: bootstrapManifestHash
-  });
+  let saved;
+  try {
+    saved = await readRuntimeCompiledFlowManifestSnapshot({
+      runDir: options.runDir,
+      expectedRunId: bootstrapRunId,
+      expectedFlowId: bootstrapFlowId,
+      expectedHash: bootstrapManifestHash
+    });
+  } catch (error) {
+    return checkpointResumeRejectedFrom(error);
+  }
+  const { flow, flowBytes, snapshot } = saved;
   const executable = executableFlowForResume({ flow, bootstrap });
-  const requested = latestUnresolvedCheckpoint(entries);
+  const requestedResult = latestUnresolvedCheckpointResult(entries);
+  if (isCheckpointResumeRejectedResult(requestedResult))
+    return requestedResult;
+  const requested = requestedResult.value;
   const stepId = traceString(requested, "step_id");
   const attempt = requested.attempt;
   const requestPath = traceString(requested, "request_path");
   const requestHash = traceString(requested, "request_report_hash");
   const allowedChoices = stringArray2(requested.options);
   if (stepId === void 0 || attempt === void 0 || requestPath === void 0 || requestHash === void 0 || allowedChoices === void 0) {
-    throw new Error("runtime checkpoint resume rejected: checkpoint request trace is incomplete");
+    return checkpointResumeRejected("runtime checkpoint resume rejected: checkpoint request trace is incomplete");
   }
-  const step = checkpointStep({ flow: executable, stepId });
+  const stepResult = checkpointStepResult({ flow: executable, stepId });
+  if (isCheckpointResumeRejectedResult(stepResult))
+    return stepResult;
+  const step = stepResult.value;
   const savedChoices = step.choices;
   if (!sameStringArray(allowedChoices, savedChoices)) {
-    throw new Error(`runtime checkpoint resume rejected: checkpoint trace choices for '${stepId}' are stale`);
+    return checkpointResumeRejected(`runtime checkpoint resume rejected: checkpoint trace choices for '${stepId}' are stale`);
   }
   if (!savedChoices.includes(options.selection)) {
-    throw new Error(`runtime checkpoint resume rejected: selection '${options.selection}' is not allowed for checkpoint '${stepId}'`);
+    return checkpointResumeRejected(`runtime checkpoint resume rejected: selection '${options.selection}' is not allowed for checkpoint '${stepId}'`);
   }
   const compiledStep = flow.steps.find((candidate) => candidate.id === stepId);
   if (compiledStep === void 0 || compiledStep.kind !== "checkpoint") {
-    throw new Error(`runtime checkpoint resume rejected: saved flow step '${stepId}' is invalid`);
+    return checkpointResumeRejected(`runtime checkpoint resume rejected: saved flow step '${stepId}' is invalid`);
   }
   const allowed = step.check.allow;
   if (Array.isArray(allowed) && !allowed.includes(options.selection)) {
-    throw new Error(`runtime checkpoint resume rejected: selection '${options.selection}' is outside check.allow for checkpoint '${stepId}'`);
+    return checkpointResumeRejected(`runtime checkpoint resume rejected: selection '${options.selection}' is outside check.allow for checkpoint '${stepId}'`);
   }
-  const declaredRequestPath = declaredCheckpointRequestPath(step);
+  const declaredRequestPathResult = declaredCheckpointRequestPathResult(step);
+  if (isCheckpointResumeRejectedResult(declaredRequestPathResult))
+    return declaredRequestPathResult;
+  const declaredRequestPath = declaredRequestPathResult.value;
   if (requestPath !== declaredRequestPath) {
-    throw new Error(`runtime checkpoint resume rejected: checkpoint request path '${requestPath}' does not match saved flow path '${declaredRequestPath}'`);
+    return checkpointResumeRejected(`runtime checkpoint resume rejected: checkpoint request path '${requestPath}' does not match saved flow path '${declaredRequestPath}'`);
   }
-  const requestContext = readCheckpointRequestContext({
+  const requestContextResult = readCheckpointRequestContextResult({
     runDir: options.runDir,
     step,
     requestPath,
     expectedRequestHash: requestHash
   });
-  validateCheckpointReport({
+  if (isCheckpointResumeRejectedResult(requestContextResult))
+    return requestContextResult;
+  const requestContext = requestContextResult.value;
+  const reportValidation = validateCheckpointReportResult({
     runDir: options.runDir,
     compiledStep,
     requestContext
   });
+  if (isCheckpointResumeRejectedResult(reportValidation))
+    return reportValidation;
   const depth = traceString(bootstrap, "depth");
   const progressSurface = options.progressSurfaceForFlowId?.(flow.id);
-  const result = await executeExecutableFlow(executable, {
+  const result = await executeExecutableFlowOutcome(executable, {
     runDir: options.runDir,
     runId: bootstrapRunId,
     goal: bootstrapGoal,
@@ -28794,6 +28545,7 @@ async function resumeCompiledFlow(options) {
     ...options.executors === void 0 ? {} : { executors: options.executors },
     ...options.childCompiledFlowResolver === void 0 ? {} : { childCompiledFlowResolver: options.childCompiledFlowResolver },
     childRunner: options.childRunner ?? runCompiledFlow,
+    ...options.externalFiles === void 0 ? {} : { externalFiles: options.externalFiles },
     ...requestContext.projectRoot === void 0 ? {} : { projectRoot: requestContext.projectRoot },
     ...options.worktreeRunner === void 0 ? {} : { worktreeRunner: options.worktreeRunner },
     ...options.relayConnector === void 0 ? {} : { relayConnector: options.relayConnector },
@@ -28803,10 +28555,19 @@ async function resumeCompiledFlow(options) {
     ...progressSurface === void 0 ? {} : { progressSurface },
     resumeCheckpoint: { stepId, attempt, selection: options.selection }
   });
-  if (isGraphCheckpointWaitingResult(result)) {
-    throw new Error("runtime checkpoint resume rejected: resume did not resolve checkpoint");
+  if (isGraphRejectedOutcome(result)) {
+    return checkpointResumeRejected(result.reason, result.error);
   }
-  return result;
+  if (isGraphCheckpointWaitingResult(result)) {
+    return checkpointResumeRejected("runtime checkpoint resume rejected: resume did not resolve checkpoint");
+  }
+  return { kind: "resumed", result: result.result };
+}
+async function resumeCompiledFlow(options) {
+  const result = await resumeCompiledFlowResult(options);
+  if (isCheckpointResumeRejectedResult(result))
+    throw result.error;
+  return result.result;
 }
 
 // dist/flows/router.js
@@ -28929,16 +28690,16 @@ function findFlowRuntimeSurfaceById(flowId) {
 
 // dist/shared/config-loader.js
 var import_yaml2 = __toESM(require_dist(), 1);
-import { existsSync as existsSync7, readFileSync as readFileSync20 } from "node:fs";
+import { existsSync as existsSync7, readFileSync as readFileSync17 } from "node:fs";
 import { homedir as homedir2 } from "node:os";
-import { join as join12, resolve as resolve6 } from "node:path";
+import { join as join11, resolve as resolve6 } from "node:path";
 var USER_GLOBAL_CONFIG_RELATIVE_PATH = [".config", "circuit-next", "config.yaml"];
 var PROJECT_CONFIG_RELATIVE_PATH = [".circuit", "config.yaml"];
 function userGlobalConfigPath(homeDir = homedir2()) {
-  return join12(homeDir, ...USER_GLOBAL_CONFIG_RELATIVE_PATH);
+  return join11(homeDir, ...USER_GLOBAL_CONFIG_RELATIVE_PATH);
 }
 function projectConfigPath(cwd = process.cwd()) {
-  return join12(cwd, ...PROJECT_CONFIG_RELATIVE_PATH);
+  return join11(cwd, ...PROJECT_CONFIG_RELATIVE_PATH);
 }
 function parseConfigYaml(text, sourcePath) {
   try {
@@ -28951,7 +28712,7 @@ function loadConfigLayerFromPath(layer, sourcePath) {
   const abs = resolve6(sourcePath);
   if (!existsSync7(abs))
     return void 0;
-  const raw = parseConfigYaml(readFileSync20(abs, "utf8"), abs);
+  const raw = parseConfigYaml(readFileSync17(abs, "utf8"), abs);
   try {
     return LayeredConfig.parse({
       layer,
@@ -29214,8 +28975,8 @@ ${issueSummary}${more}`
 }
 
 // dist/shared/operator-summary-writer.js
-import { existsSync as existsSync9, mkdirSync, readFileSync as readFileSync22, rmSync, writeFileSync } from "node:fs";
-import { dirname as dirname6, join as join13 } from "node:path";
+import { existsSync as existsSync9, mkdirSync, readFileSync as readFileSync19, rmSync, writeFileSync } from "node:fs";
+import { dirname as dirname5, join as join12 } from "node:path";
 
 // dist/schemas/operator-summary.js
 var OperatorSummaryWarning = external_exports.object({
@@ -29722,7 +29483,7 @@ var HTML_PROJECTORS = {
 };
 
 // dist/shared/operator-summary/json.js
-import { existsSync as existsSync8, readFileSync as readFileSync21 } from "node:fs";
+import { existsSync as existsSync8, readFileSync as readFileSync18 } from "node:fs";
 function isObject2(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -29730,7 +29491,7 @@ function readJsonIfPresent(runFolder, relPath) {
   const path = resolveRunRelative(runFolder, relPath);
   if (!existsSync8(path))
     return void 0;
-  const parsed = JSON.parse(readFileSync21(path, "utf8"));
+  const parsed = JSON.parse(readFileSync18(path, "utf8"));
   return isObject2(parsed) ? parsed : void 0;
 }
 function stringField2(report, key) {
@@ -30158,11 +29919,11 @@ function projectSummary(input) {
 
 // dist/shared/operator-summary-writer.js
 function readPriorRoute(runFolder) {
-  const path = join13(runFolder, "reports", "operator-summary.json");
+  const path = join12(runFolder, "reports", "operator-summary.json");
   if (!existsSync9(path))
     return {};
   try {
-    const raw = JSON.parse(readFileSync22(path, "utf8"));
+    const raw = JSON.parse(readFileSync19(path, "utf8"));
     if (!isObject2(raw))
       return {};
     const routedBy = raw.routed_by;
@@ -30177,13 +29938,13 @@ function readPriorRoute(runFolder) {
 }
 var HTML_REPORT_LABEL = "Operator summary (HTML)";
 function jsonPath(runFolder) {
-  return join13(runFolder, "reports", "operator-summary.json");
+  return join12(runFolder, "reports", "operator-summary.json");
 }
 function markdownPath(runFolder) {
-  return join13(runFolder, "reports", "operator-summary.md");
+  return join12(runFolder, "reports", "operator-summary.md");
 }
 function htmlPath(runFolder) {
-  return join13(runFolder, "reports", "operator-summary.html");
+  return join12(runFolder, "reports", "operator-summary.html");
 }
 function reportLink(runFolder, label, relPath, schema) {
   return {
@@ -30271,7 +30032,7 @@ function writeOperatorSummary(input) {
   const resultPath2 = input.runResult.outcome === "checkpoint_waiting" ? void 0 : resolveRunRelative(input.runFolder, resultRelPath);
   const outJsonPath = jsonPath(input.runFolder);
   const outMarkdownPath = markdownPath(input.runFolder);
-  mkdirSync(dirname6(outJsonPath), { recursive: true });
+  mkdirSync(dirname5(outJsonPath), { recursive: true });
   const projector = HTML_PROJECTORS[flowId];
   const candidateHtmlPath = htmlPath(input.runFolder);
   let outHtmlPath;
@@ -30388,13 +30149,13 @@ function writeOperatorSummary(input) {
 
 // dist/cli/create.js
 import { randomUUID as randomUUID5 } from "node:crypto";
-import { existsSync as existsSync10, mkdirSync as mkdirSync2, readFileSync as readFileSync24, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "node:fs";
+import { existsSync as existsSync10, mkdirSync as mkdirSync2, readFileSync as readFileSync21, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "node:fs";
 import { homedir as homedir3 } from "node:os";
-import { dirname as dirname8, join as join14, resolve as resolve8 } from "node:path";
+import { dirname as dirname7, join as join13, resolve as resolve8 } from "node:path";
 
 // dist/cli/runtime-routing-policy.js
-import { readFileSync as readFileSync23 } from "node:fs";
-import { dirname as dirname7, relative as relative6, resolve as resolve7 } from "node:path";
+import { readFileSync as readFileSync20 } from "node:fs";
+import { dirname as dirname6, relative as relative6, resolve as resolve7 } from "node:path";
 var GENERATED_FLOW_MIRROR_ROOT_ENV = "CIRCUIT_GENERATED_FLOW_MIRROR_ROOT";
 var COMPOSE_WRITER_UNSUPPORTED_REASON = "programmatic composeWriter injections are not supported by the CLI runtime; use executor injection or generated reports";
 var RUNTIME_POLICY_REASONS = {
@@ -30427,7 +30188,7 @@ function fixtureEligibleForRuntime(input) {
 }
 function publishedCustomFlowMatches(flowRoot2, fixturePath) {
   try {
-    const manifest = JSON.parse(readFileSync23(resolve7(dirname7(resolve7(flowRoot2)), "manifest.json"), "utf8"));
+    const manifest = JSON.parse(readFileSync20(resolve7(dirname6(resolve7(flowRoot2)), "manifest.json"), "utf8"));
     if (manifest === null || typeof manifest !== "object" || Array.isArray(manifest))
       return false;
     const customFlows = manifest.custom_flows;
@@ -30599,37 +30360,37 @@ function assertValidSlug(slug) {
   }
 }
 function customHome(args) {
-  return resolve8(args.home ?? join14(homedir3(), ".config", "circuit-next", "custom"));
+  return resolve8(args.home ?? join13(homedir3(), ".config", "circuit-next", "custom"));
 }
 function draftRoot(home, slug) {
-  return join14(home, "drafts", slug);
+  return join13(home, "drafts", slug);
 }
 function publishedRoot(home, slug) {
-  return join14(home, "skills", slug);
+  return join13(home, "skills", slug);
 }
 function flowRoot(home) {
-  return join14(home, "flows");
+  return join13(home, "flows");
 }
 function customFlowInvocation(slug, home) {
   return `circuit-next run ${slug} --flow-root '${flowRoot(home)}' --goal '<task>' --progress jsonl`;
 }
 function commandRoot(home) {
-  return join14(home, "commands");
+  return join13(home, "commands");
 }
 function reportsRoot(home) {
-  return join14(home, "reports");
+  return join13(home, "reports");
 }
 function manifestPath(home) {
-  return join14(home, "manifest.json");
+  return join13(home, "manifest.json");
 }
 function resultPath(home, slug) {
-  return join14(reportsRoot(home), `${slug}-create-result.json`);
+  return join13(reportsRoot(home), `${slug}-create-result.json`);
 }
 function summaryPath(home, slug) {
-  return join14(reportsRoot(home), `${slug}-operator-summary.md`);
+  return join13(reportsRoot(home), `${slug}-operator-summary.md`);
 }
 function writeText(path, text) {
-  mkdirSync2(dirname8(path), { recursive: true });
+  mkdirSync2(dirname7(path), { recursive: true });
   writeFileSync2(path, text.endsWith("\n") ? text : `${text}
 `);
 }
@@ -30653,7 +30414,7 @@ function loadTemplateFlow(args) {
   for (const candidate of candidateTemplatePaths(args)) {
     if (!existsSync10(candidate))
       continue;
-    return CompiledFlow.parse(JSON.parse(readFileSync24(candidate, "utf8")));
+    return CompiledFlow.parse(JSON.parse(readFileSync21(candidate, "utf8")));
   }
   throw new Error("could not find the Build template flow; pass --template-flow-root with a root containing build/circuit.json");
 }
@@ -30733,7 +30494,7 @@ function publishManifest(input) {
     custom_flows: []
   };
   if (existsSync10(manifestPath(input.home))) {
-    existing = JSON.parse(readFileSync24(manifestPath(input.home), "utf8"));
+    existing = JSON.parse(readFileSync21(manifestPath(input.home), "utf8"));
   }
   const withoutSlug = existing.custom_flows.filter((flow) => !(typeof flow === "object" && flow !== null && "id" in flow && flow.id === input.slug));
   writeJson(manifestPath(input.home), {
@@ -30744,16 +30505,16 @@ function publishManifest(input) {
         id: input.slug,
         description: input.description,
         archetype: "build",
-        flow_path: join14(flowRoot(input.home), input.slug, "circuit.json"),
-        skill_path: join14(publishedRoot(input.home, input.slug), "SKILL.md"),
-        command_path: join14(commandRoot(input.home), `${input.slug}.md`),
+        flow_path: join13(flowRoot(input.home), input.slug, "circuit.json"),
+        skill_path: join13(publishedRoot(input.home, input.slug), "SKILL.md"),
+        command_path: join13(commandRoot(input.home), `${input.slug}.md`),
         published_at: input.createdAt
       }
     ]
   });
 }
 function writeValidationResult(input) {
-  writeJson(join14(draftRoot(input.home, input.slug), "validation-result.json"), {
+  writeJson(join13(draftRoot(input.home, input.slug), "validation-result.json"), {
     schema_version: 1,
     status: "valid",
     validated_flow_id: input.flow.id,
@@ -30764,10 +30525,10 @@ function writeDraft(input) {
   const root = draftRoot(input.home, input.slug);
   rmSync2(root, { recursive: true, force: true });
   mkdirSync2(root, { recursive: true });
-  writeText(join14(root, "SKILL.md"), skillMarkdown(input.slug, input.description, input.home));
-  writeText(join14(root, "circuit.yaml"), circuitYaml(input.slug, input.description));
-  writeJson(join14(root, "circuit.json"), input.flow);
-  writeText(join14(root, "command.md"), commandMarkdown(input.slug, input.description, input.home));
+  writeText(join13(root, "SKILL.md"), skillMarkdown(input.slug, input.description, input.home));
+  writeText(join13(root, "circuit.yaml"), circuitYaml(input.slug, input.description));
+  writeJson(join13(root, "circuit.json"), input.flow);
+  writeText(join13(root, "command.md"), commandMarkdown(input.slug, input.description, input.home));
   writeValidationResult({
     home: input.home,
     slug: input.slug,
@@ -30776,24 +30537,24 @@ function writeDraft(input) {
   });
 }
 function loadDraftFlow(home, slug) {
-  const path = join14(draftRoot(home, slug), "circuit.json");
-  const flow = CompiledFlow.parse(JSON.parse(readFileSync24(path, "utf8")));
+  const path = join13(draftRoot(home, slug), "circuit.json");
+  const flow = CompiledFlow.parse(JSON.parse(readFileSync21(path, "utf8")));
   validateCustomFlow(slug, flow, "custom flow draft");
   return flow;
 }
 function publishDraft(input) {
   const draft = draftRoot(input.home, input.slug);
-  if (!existsSync10(join14(draft, "SKILL.md"))) {
+  if (!existsSync10(join13(draft, "SKILL.md"))) {
     throw new Error(`draft missing for ${input.slug}: ${draft}`);
   }
   const skillRoot = publishedRoot(input.home, input.slug);
-  const customFlowRoot = join14(flowRoot(input.home), input.slug);
+  const customFlowRoot = join13(flowRoot(input.home), input.slug);
   mkdirSync2(skillRoot, { recursive: true });
   mkdirSync2(customFlowRoot, { recursive: true });
-  writeText(join14(skillRoot, "SKILL.md"), readFileSync24(join14(draft, "SKILL.md"), "utf8"));
-  writeText(join14(skillRoot, "circuit.yaml"), readFileSync24(join14(draft, "circuit.yaml"), "utf8"));
-  writeText(join14(customFlowRoot, "circuit.json"), readFileSync24(join14(draft, "circuit.json"), "utf8"));
-  writeText(join14(commandRoot(input.home), `${input.slug}.md`), readFileSync24(join14(draft, "command.md"), "utf8"));
+  writeText(join13(skillRoot, "SKILL.md"), readFileSync21(join13(draft, "SKILL.md"), "utf8"));
+  writeText(join13(skillRoot, "circuit.yaml"), readFileSync21(join13(draft, "circuit.yaml"), "utf8"));
+  writeText(join13(customFlowRoot, "circuit.json"), readFileSync21(join13(draft, "circuit.json"), "utf8"));
+  writeText(join13(commandRoot(input.home), `${input.slug}.md`), readFileSync21(join13(draft, "command.md"), "utf8"));
   publishManifest(input);
 }
 function summaryMarkdown(input) {
@@ -30857,11 +30618,11 @@ async function runCreateCommand(argv, options = {}) {
     const slug = slugify(args.name ?? args.description);
     assertValidSlug(slug);
     const home = customHome(args);
-    if (args.publish && existsSync10(join14(flowRoot(home), slug, "circuit.json"))) {
+    if (args.publish && existsSync10(join13(flowRoot(home), slug, "circuit.json"))) {
       throw new Error(`custom flow already published: ${slug}`);
     }
     const createdAt = args.createdAt ?? now().toISOString();
-    const draftExists = existsSync10(join14(draftRoot(home, slug), "circuit.json"));
+    const draftExists = existsSync10(join13(draftRoot(home, slug), "circuit.json"));
     const flow = args.publish && draftExists ? loadDraftFlow(home, slug) : customizeTemplateFlow({
       slug,
       description: args.description,
@@ -30885,11 +30646,11 @@ async function runCreateCommand(argv, options = {}) {
       status,
       slug,
       draft_path: draftRoot(home, slug),
-      validation_path: join14(draftRoot(home, slug), "validation-result.json"),
+      validation_path: join13(draftRoot(home, slug), "validation-result.json"),
       ...args.publish ? {
         published_path: publishedRoot(home, slug),
-        flow_path: join14(flowRoot(home), slug, "circuit.json"),
-        command_path: join14(commandRoot(home), `${slug}.md`),
+        flow_path: join13(flowRoot(home), slug, "circuit.json"),
+        command_path: join13(commandRoot(home), `${slug}.md`),
         manifest_path: manifestPath(home)
       } : {},
       operator_summary_markdown_path: summaryPath(home, slug)
@@ -30927,9 +30688,9 @@ async function runCreateCommand(argv, options = {}) {
 
 // dist/cli/handoff.js
 import { randomUUID as randomUUID6 } from "node:crypto";
-import { copyFileSync, existsSync as existsSync12, mkdirSync as mkdirSync3, readFileSync as readFileSync27, writeFileSync as writeFileSync4 } from "node:fs";
+import { copyFileSync, existsSync as existsSync12, mkdirSync as mkdirSync3, readFileSync as readFileSync24, writeFileSync as writeFileSync4 } from "node:fs";
 import { homedir as homedir4 } from "node:os";
-import { dirname as dirname9, join as join18, resolve as resolve10 } from "node:path";
+import { dirname as dirname8, join as join17, resolve as resolve10 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // dist/run-status/project-run-folder.js
@@ -30937,13 +30698,13 @@ import { constants, accessSync, statSync } from "node:fs";
 import { resolve as resolve9 } from "node:path";
 
 // dist/shared/manifest-snapshot.js
-import { readFileSync as readFileSync25, writeFileSync as writeFileSync3 } from "node:fs";
-import { join as join15 } from "node:path";
+import { readFileSync as readFileSync22, writeFileSync as writeFileSync3 } from "node:fs";
+import { join as join14 } from "node:path";
 function manifestSnapshotPath(runFolder) {
-  return join15(runFolder, "manifest.snapshot.json");
+  return join14(runFolder, "manifest.snapshot.json");
 }
 function readManifestSnapshot(runFolder) {
-  const text = readFileSync25(manifestSnapshotPath(runFolder), "utf8");
+  const text = readFileSync22(manifestSnapshotPath(runFolder), "utf8");
   const raw = JSON.parse(text);
   return ManifestSnapshot.parse(raw);
 }
@@ -30953,7 +30714,7 @@ function verifyManifestSnapshotBytes(runFolder) {
 
 // dist/run-status/projection-common.js
 import { existsSync as existsSync11 } from "node:fs";
-import { join as join16 } from "node:path";
+import { join as join15 } from "node:path";
 
 // dist/schemas/run-status.js
 var RunStatusEngineState = external_exports.enum([
@@ -31111,8 +30872,8 @@ function readSavedFlowForProjection(manifestBytesBase64, manifestFlowId) {
 }
 function optionalReportPaths(runFolder) {
   const result = runResultPath(runFolder);
-  const operatorSummary = join16(runFolder, "reports", "operator-summary.json");
-  const operatorSummaryMarkdown = join16(runFolder, "reports", "operator-summary.md");
+  const operatorSummary = join15(runFolder, "reports", "operator-summary.json");
+  const operatorSummaryMarkdown = join15(runFolder, "reports", "operator-summary.md");
   return {
     ...existsSync11(result) ? { result_path: result } : {},
     ...existsSync11(operatorSummary) ? { operator_summary_path: operatorSummary } : {},
@@ -31131,14 +30892,14 @@ function stepMetadata(flow, stepId) {
 }
 
 // dist/run-status/runtime-run-folder.js
-import { readFileSync as readFileSync26 } from "node:fs";
-import { join as join17 } from "node:path";
+import { readFileSync as readFileSync23 } from "node:fs";
+import { join as join16 } from "node:path";
 function isRecord3(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 function readRawTraceEntries(runFolder) {
-  const tracePath = join17(runFolder, "trace.ndjson");
-  const text = readFileSync26(tracePath, "utf8");
+  const tracePath = join16(runFolder, "trace.ndjson");
+  const text = readFileSync23(tracePath, "utf8");
   const trimmed = text.trim();
   if (trimmed.length === 0)
     return [];
@@ -31323,7 +31084,7 @@ function runtimeWaitingCheckpointProjection(input) {
   let requestAbs;
   try {
     requestAbs = resolveRunFilePath(input.runFolder, requestPath);
-    requestText = readFileSync26(requestAbs, "utf8");
+    requestText = readFileSync23(requestAbs, "utf8");
   } catch (err) {
     return invalidProjection({
       runFolder: input.runFolder,
@@ -31382,7 +31143,13 @@ function runtimeWaitingCheckpointProjection(input) {
     choice.label ?? choice.id
   ]));
   const presentation = tournamentCheckpointPresentation({
-    runDir: input.runFolder,
+    readJson: (path) => {
+      try {
+        return JSON.parse(readFileSync23(join16(input.runFolder, path), "utf8"));
+      } catch {
+        return void 0;
+      }
+    },
     allowedChoices: requestChoices,
     fallbackPrompt: prompt ?? "Choose how to continue this checkpoint.",
     fallbackLabel: (choice) => policyChoiceLabels.get(choice) ?? choice,
@@ -31904,33 +31671,33 @@ function continuityRoot(controlPlane) {
   return resolve10(controlPlane, "continuity");
 }
 function recordsRoot(controlPlane) {
-  return join18(continuityRoot(controlPlane), "records");
+  return join17(continuityRoot(controlPlane), "records");
 }
 function indexPath(controlPlane) {
-  return join18(continuityRoot(controlPlane), "index.json");
+  return join17(continuityRoot(controlPlane), "index.json");
 }
 function recordPath(controlPlane, recordId) {
-  return join18(recordsRoot(controlPlane), `${recordId}.json`);
+  return join17(recordsRoot(controlPlane), `${recordId}.json`);
 }
 function utilityReportsRoot(controlPlane) {
-  return join18(continuityRoot(controlPlane), "reports");
+  return join17(continuityRoot(controlPlane), "reports");
 }
 function handoffResultPath(controlPlane, action) {
-  return join18(utilityReportsRoot(controlPlane), `${action}-result.json`);
+  return join17(utilityReportsRoot(controlPlane), `${action}-result.json`);
 }
 function operatorSummaryPath(controlPlane) {
-  return join18(utilityReportsRoot(controlPlane), "operator-summary.md");
+  return join17(utilityReportsRoot(controlPlane), "operator-summary.md");
 }
 function activeRunPath(controlPlane) {
-  return join18(controlPlane, "active-run.md");
+  return join17(controlPlane, "active-run.md");
 }
 function writeJson2(path, value) {
-  mkdirSync3(dirname9(path), { recursive: true });
+  mkdirSync3(dirname8(path), { recursive: true });
   writeFileSync4(path, `${JSON.stringify(value, null, 2)}
 `);
 }
 function writeMarkdown(path, value) {
-  mkdirSync3(dirname9(path), { recursive: true });
+  mkdirSync3(dirname8(path), { recursive: true });
   writeFileSync4(path, value.endsWith("\n") ? value : `${value}
 `);
 }
@@ -32044,7 +31811,7 @@ function handoffBrief(args) {
     return emptyBrief(args, "no_index");
   let index;
   try {
-    index = ContinuityIndex.parse(JSON.parse(readFileSync27(indexAbs, "utf8")));
+    index = ContinuityIndex.parse(JSON.parse(readFileSync24(indexAbs, "utf8")));
   } catch {
     return invalidBrief(args, "index_invalid", "Continuity index is malformed.");
   }
@@ -32056,7 +31823,7 @@ function handoffBrief(args) {
   }
   let record;
   try {
-    record = ContinuityRecord.parse(JSON.parse(readFileSync27(recordAbs, "utf8")));
+    record = ContinuityRecord.parse(JSON.parse(readFileSync24(recordAbs, "utf8")));
   } catch {
     return invalidBrief(args, "record_invalid", "Continuity record is malformed.", index.pending_record.record_id);
   }
@@ -32089,7 +31856,7 @@ function debugHook(message) {
 function readHookInput() {
   if (process.stdin.isTTY)
     return {};
-  const raw = readFileSync27(0, "utf8");
+  const raw = readFileSync24(0, "utf8");
   if (raw.trim().length === 0)
     return {};
   return JSON.parse(raw);
@@ -32170,7 +31937,7 @@ function missingDefaultLauncherMessage(launcher) {
   ].join(" ");
 }
 function defaultLauncherPath() {
-  return resolveDefaultLauncher(process.env.CIRCUIT_PLUGIN_ROOT, dirname9(fileURLToPath2(import.meta.url)));
+  return resolveDefaultLauncher(process.env.CIRCUIT_PLUGIN_ROOT, dirname8(fileURLToPath2(import.meta.url)));
 }
 function parseCodexHooksHost(args) {
   if (args.host === "codex")
@@ -32210,7 +31977,7 @@ function defaultHooksConfig() {
 function readHooksConfig(path) {
   if (!existsSync12(path))
     return defaultHooksConfig();
-  const parsed = JSON.parse(readFileSync27(path, "utf8"));
+  const parsed = JSON.parse(readFileSync24(path, "utf8"));
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     throw new Error("hooks file must contain a JSON object");
   }
@@ -32318,7 +32085,7 @@ function launcherPathFromCircuitHookCommand(command) {
   return launcher;
 }
 function writeHooksConfig(path, config) {
-  mkdirSync3(dirname9(path), { recursive: true });
+  mkdirSync3(dirname8(path), { recursive: true });
   let backupPath;
   if (existsSync12(path)) {
     const candidate = `${path}.circuit-backup`;
@@ -32665,7 +32432,7 @@ function saveContinuity(args, now) {
 }
 function readJsonSafely(path) {
   try {
-    return { ok: true, value: JSON.parse(readFileSync27(path, "utf8")) };
+    return { ok: true, value: JSON.parse(readFileSync24(path, "utf8")) };
   } catch {
     return { ok: false };
   }
@@ -33021,12 +32788,12 @@ function readSourceVersion() {
   if (true)
     return "0.1.0-alpha.6";
   const candidates = [
-    resolve11(dirname10(fileURLToPath3(import.meta.url)), "../../plugins/version.json"),
+    resolve11(dirname9(fileURLToPath3(import.meta.url)), "../../plugins/version.json"),
     resolve11(process.cwd(), "plugins/version.json")
   ];
   for (const candidate of candidates) {
     try {
-      const raw = JSON.parse(readFileSync28(candidate, "utf8"));
+      const raw = JSON.parse(readFileSync25(candidate, "utf8"));
       if (typeof raw.version === "string" && raw.version.length > 0)
         return raw.version;
     } catch {
@@ -33343,7 +33110,7 @@ function loadFixture(fixturePath) {
   if (!existsSync13(fixturePath)) {
     throw new Error(`flow fixture not found: ${fixturePath}`);
   }
-  const bytes = readFileSync28(fixturePath);
+  const bytes = readFileSync25(fixturePath);
   const raw = JSON.parse(bytes.toString("utf8"));
   const flow = CompiledFlow.parse(raw);
   const policy2 = validateCompiledFlowKindPolicy(flow);
@@ -33387,7 +33154,7 @@ function customFlowArchetype(input) {
     return void 0;
   try {
     const flowRoot2 = resolve11(input.args.flowRoot);
-    const manifest = JSON.parse(readFileSync28(resolve11(dirname10(flowRoot2), "manifest.json"), "utf8"));
+    const manifest = JSON.parse(readFileSync25(resolve11(dirname9(flowRoot2), "manifest.json"), "utf8"));
     if (manifest === null || typeof manifest !== "object" || Array.isArray(manifest)) {
       return void 0;
     }
@@ -33502,7 +33269,7 @@ async function main(argv, options = {}) {
         ...progress2 === void 0 ? {} : { progress: progress2 },
         progressSurfaceForFlowId
       });
-      const runResult = RunResult.parse(JSON.parse(readFileSync28(runtimeResult.resultPath, "utf8")));
+      const runResult = RunResult.parse(JSON.parse(readFileSync25(runtimeResult.resultPath, "utf8")));
       const priorRoute = readPriorRoute(runFolder2);
       const operatorSummary = writeOperatorSummary({
         runFolder: runFolder2,
@@ -33651,7 +33418,7 @@ async function main(argv, options = {}) {
 `);
       return 0;
     }
-    const runResult = RunResult.parse(JSON.parse(readFileSync28(runtimeResult.resultPath, "utf8")));
+    const runResult = RunResult.parse(JSON.parse(readFileSync25(runtimeResult.resultPath, "utf8")));
     const operatorSummary = writeOperatorSummary({
       runFolder,
       runResult,
