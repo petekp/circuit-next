@@ -13,6 +13,7 @@ export * from './stage.js';
 export * from './scalars.js';
 export * from './result.js';
 export * from './progress-event.js';
+export * from './rubric.js';
 export * from './rigor.js';
 export * from './axes.js';
 export * from './depth.js';
