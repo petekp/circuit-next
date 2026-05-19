@@ -17,6 +17,32 @@ import type { RelayFn } from '../../src/shared/relay-runtime-types.js';
 
 let baseDir: string;
 
+const PASSING_RUBRIC_MODEL_JUDGMENTS = {
+  evidence_rigor: 'pass',
+  actionability: 'pass',
+  coverage_adequacy: 'pass',
+  scope_discipline: 'pass',
+  honest_calibration: 'pass',
+  project_specificity: 'pass',
+  insight_density: 'pass',
+  branch_distinctness: 'pass',
+} as const;
+
+const TEST_FANOUT_RUBRIC = {
+  model_judgments_path: 'rubric_model_judgments',
+  ordered_dims: Object.keys(PASSING_RUBRIC_MODEL_JUDGMENTS),
+  runtime_signals: {
+    evidence_rigor: { kind: 'non_empty_array', path: 'evidence_refs' },
+    actionability: { kind: 'non_empty_string', path: 'next_action' },
+    coverage_adequacy: { kind: 'constant', signal: 'met' },
+    scope_discipline: { kind: 'constant', signal: 'met' },
+    honest_calibration: { kind: 'constant', signal: 'n/a' },
+    project_specificity: { kind: 'constant', signal: 'n/a' },
+    insight_density: { kind: 'constant', signal: 'n/a' },
+    branch_distinctness: { kind: 'constant', signal: 'n/a' },
+  },
+} as const;
+
 beforeEach(async () => {
   baseDir = await mkdtemp(join(tmpdir(), 'circuit-runtime-fanout-'));
 });
@@ -124,6 +150,7 @@ function compiledRelayFanoutFlow(
     },
     concurrency: { kind: 'bounded', max: 1 },
     on_child_failure: 'abort-all',
+    rubric: TEST_FANOUT_RUBRIC,
     writes: {
       branches_dir: 'reports/branches',
       aggregate: { path: 'reports/aggregate.json', schema: 'explore.tournament-aggregate@v1' },
@@ -178,6 +205,7 @@ function validProposalBody(optionId = 'option-1'): string {
     evidence_refs: ['reports/options.json'],
     risks: [],
     next_action: 'Continue.',
+    rubric_model_judgments: PASSING_RUBRIC_MODEL_JUDGMENTS,
   });
 }
 
@@ -510,6 +538,7 @@ describe('runtime fanout executor', () => {
           evidence_refs: ['fanout fixture'],
           risks: [],
           next_action: 'Continue',
+          rubric_model_judgments: PASSING_RUBRIC_MODEL_JUDGMENTS,
         };
       },
     };

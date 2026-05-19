@@ -130,6 +130,7 @@ function convertStep(step: CompiledStep): ExecutableStep {
     },
     concurrency: step.concurrency,
     onChildFailure: step.on_child_failure,
+    ...(step.rubric === undefined ? {} : { rubric: step.rubric }),
   };
 }
 

@@ -46,6 +46,17 @@ function relayResult(input: RelayInput, receiptId: string, body: unknown): Relay
   };
 }
 
+const PASSING_RUBRIC_MODEL_JUDGMENTS = {
+  evidence_rigor: 'pass',
+  actionability: 'pass',
+  coverage_adequacy: 'pass',
+  scope_discipline: 'pass',
+  honest_calibration: 'pass',
+  project_specificity: 'pass',
+  insight_density: 'pass',
+  branch_distinctness: 'pass',
+} as const;
+
 function tournamentRelayer(): RelayFn {
   return {
     connectorName: 'claude-code',
@@ -60,6 +71,7 @@ function tournamentRelayer(): RelayFn {
           evidence_refs: ['reports/decision-options.json'],
           risks: ['The larger ecosystem may add dependency sprawl.'],
           next_action: 'Run a Build plan for a React prototype.',
+          rubric_model_judgments: PASSING_RUBRIC_MODEL_JUDGMENTS,
         });
       }
       if (input.prompt.includes('Step: proposal-fanout-step-option-2')) {
@@ -72,6 +84,7 @@ function tournamentRelayer(): RelayFn {
           evidence_refs: ['reports/decision-options.json'],
           risks: ['Team familiarity may be thinner.'],
           next_action: 'Run a Build plan for a Vue prototype.',
+          rubric_model_judgments: PASSING_RUBRIC_MODEL_JUDGMENTS,
         });
       }
       if (input.prompt.includes('Step: proposal-fanout-step-option-3')) {
@@ -84,6 +97,7 @@ function tournamentRelayer(): RelayFn {
           evidence_refs: ['reports/decision-options.json'],
           risks: ['The decision takes longer.'],
           next_action: 'Run a short Explore follow-up with prototype criteria.',
+          rubric_model_judgments: PASSING_RUBRIC_MODEL_JUDGMENTS,
         });
       }
       if (input.prompt.includes('Step: proposal-fanout-step-option-4')) {
@@ -96,6 +110,7 @@ function tournamentRelayer(): RelayFn {
           evidence_refs: ['reports/decision-options.json'],
           risks: ['The project loses momentum.'],
           next_action: 'Collect the missing constraints and rerun the decision.',
+          rubric_model_judgments: PASSING_RUBRIC_MODEL_JUDGMENTS,
         });
       }
       expect(input.prompt).toContain('Step: stress-proposals-step');
@@ -156,6 +171,7 @@ describe('explore runtime parity', () => {
           evidence_refs: ['generated fixture'],
           risks: [],
           next_action: 'Continue the parity run.',
+          rubric_model_judgments: PASSING_RUBRIC_MODEL_JUDGMENTS,
         };
       },
     };

@@ -412,6 +412,7 @@ function compileItem(
         ...(fanout.on_child_failure === undefined
           ? {}
           : { on_child_failure: fanout.on_child_failure }),
+        ...(fanout.rubric === undefined ? {} : { rubric: fanout.rubric }),
         writes: {
           branches_dir: branchesDir,
           aggregate: { path: reportPath, schema: item.output },

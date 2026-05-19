@@ -12610,6 +12610,109 @@ var SkillSlotArray = external_exports.array(SkillSlot).superRefine((slots, ctx) 
   }
 });
 
+// dist/schemas/rubric.js
+var RubricRuntimeSignal = external_exports.enum(["met", "missing", "n/a"]);
+var RubricJudgment = external_exports.enum(["pass", "concern", "fail"]);
+var RubricDimScore = external_exports.union([external_exports.literal(1), external_exports.literal(0.5), external_exports.literal(0)]);
+var DIM_SCORE_BY_JUDGMENT = {
+  pass: 1,
+  concern: 0.5,
+  fail: 0
+};
+function roundedAggregateScore(scores) {
+  const total = scores.reduce((sum, score) => sum + score, 0);
+  return Number((total / scores.length).toFixed(3));
+}
+var RubricDimResult = external_exports.object({
+  runtime_signal: RubricRuntimeSignal,
+  model_judgment: RubricJudgment,
+  final_score: RubricJudgment,
+  dim_score: RubricDimScore,
+  runtime_vetoed: external_exports.boolean()
+}).strict().superRefine((dim, ctx) => {
+  const expectedFinalScore = dim.runtime_signal === "missing" ? "fail" : dim.model_judgment;
+  const expectedDimScore = DIM_SCORE_BY_JUDGMENT[expectedFinalScore];
+  const expectedRuntimeVetoed = dim.runtime_signal === "missing";
+  if (dim.final_score !== expectedFinalScore) {
+    ctx.addIssue({
+      code: external_exports.ZodIssueCode.custom,
+      path: ["final_score"],
+      message: dim.runtime_signal === "missing" ? "missing runtime evidence must force final_score to fail" : "final_score must match model_judgment when runtime_signal is met or n/a"
+    });
+  }
+  if (dim.dim_score !== expectedDimScore) {
+    ctx.addIssue({
+      code: external_exports.ZodIssueCode.custom,
+      path: ["dim_score"],
+      message: `dim_score must be ${expectedDimScore} for final_score '${expectedFinalScore}'`
+    });
+  }
+  if (dim.runtime_vetoed !== expectedRuntimeVetoed) {
+    ctx.addIssue({
+      code: external_exports.ZodIssueCode.custom,
+      path: ["runtime_vetoed"],
+      message: `runtime_vetoed must be ${String(expectedRuntimeVetoed)} when runtime_signal is '${dim.runtime_signal}'`
+    });
+  }
+});
+var RubricTieBreak = external_exports.object({
+  ordered_dims: external_exports.array(external_exports.string().min(1)).min(1),
+  final_reason: external_exports.string().min(1)
+}).strict().superRefine((tieBreak, ctx) => {
+  const seen = /* @__PURE__ */ new Set();
+  for (const [index, dimId] of tieBreak.ordered_dims.entries()) {
+    if (seen.has(dimId)) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["ordered_dims", index],
+        message: `duplicate tie-break dim '${dimId}'`
+      });
+    }
+    seen.add(dimId);
+  }
+});
+var RubricResult = external_exports.object({
+  dims: external_exports.record(external_exports.string().min(1), RubricDimResult),
+  aggregate_score: external_exports.number().min(0).max(1),
+  runtime_veto_count: external_exports.number().int().nonnegative(),
+  tie_break: RubricTieBreak
+}).strict().superRefine((result, ctx) => {
+  const dims = Object.entries(result.dims);
+  if (dims.length === 0) {
+    ctx.addIssue({
+      code: external_exports.ZodIssueCode.custom,
+      path: ["dims"],
+      message: "rubric result must include at least one dim"
+    });
+    return;
+  }
+  const expectedAggregate = roundedAggregateScore(dims.map(([, dim]) => dim.dim_score));
+  if (result.aggregate_score !== expectedAggregate) {
+    ctx.addIssue({
+      code: external_exports.ZodIssueCode.custom,
+      path: ["aggregate_score"],
+      message: `aggregate_score must be the equal-weight rounded mean (${expectedAggregate})`
+    });
+  }
+  const expectedRuntimeVetoCount = dims.filter(([, dim]) => dim.runtime_vetoed).length;
+  if (result.runtime_veto_count !== expectedRuntimeVetoCount) {
+    ctx.addIssue({
+      code: external_exports.ZodIssueCode.custom,
+      path: ["runtime_veto_count"],
+      message: `runtime_veto_count must be ${expectedRuntimeVetoCount}`
+    });
+  }
+  for (const [index, dimId] of result.tie_break.ordered_dims.entries()) {
+    if (result.dims[dimId] === void 0) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["tie_break", "ordered_dims", index],
+        message: `tie-break dim '${dimId}' must exist in dims`
+      });
+    }
+  }
+});
+
 // dist/schemas/step.js
 var RelayRole = external_exports.enum(["researcher", "implementer", "reviewer"]);
 var ReportRef = external_exports.object({
@@ -12813,6 +12916,55 @@ var FanoutConcurrency = external_exports.discriminatedUnion("kind", [
   }).strict()
 ]);
 var FanoutFailurePolicy = external_exports.enum(["abort-all", "continue-others"]);
+var FanoutRubricRuntimeSignalSource = external_exports.discriminatedUnion("kind", [
+  external_exports.object({
+    kind: external_exports.literal("constant"),
+    signal: RubricRuntimeSignal
+  }).strict(),
+  external_exports.object({
+    kind: external_exports.literal("non_empty_array"),
+    path: external_exports.string().min(1)
+  }).strict(),
+  external_exports.object({
+    kind: external_exports.literal("non_empty_string"),
+    path: external_exports.string().min(1)
+  }).strict()
+]);
+var FanoutRubric = external_exports.object({
+  model_judgments_path: external_exports.string().min(1),
+  ordered_dims: external_exports.array(external_exports.string().min(1)).min(1),
+  runtime_signals: external_exports.record(external_exports.string().min(1), FanoutRubricRuntimeSignalSource)
+}).strict().superRefine((rubric, ctx) => {
+  const orderedDims = /* @__PURE__ */ new Set();
+  for (const [index, dimId] of rubric.ordered_dims.entries()) {
+    if (orderedDims.has(dimId)) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["ordered_dims", index],
+        message: `duplicate rubric dim '${dimId}'`
+      });
+    }
+    orderedDims.add(dimId);
+  }
+  for (const [dimId] of Object.entries(rubric.runtime_signals)) {
+    if (!orderedDims.has(dimId)) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["runtime_signals", dimId],
+        message: `runtime signal dim '${dimId}' must appear in ordered_dims`
+      });
+    }
+  }
+  for (const [index, dimId] of rubric.ordered_dims.entries()) {
+    if (rubric.runtime_signals[dimId] === void 0) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["ordered_dims", index],
+        message: `ordered dim '${dimId}' must declare a runtime signal source`
+      });
+    }
+  }
+});
 var FanoutStep = StepBase.extend({
   executor: external_exports.literal("orchestrator"),
   kind: external_exports.literal("fanout"),
@@ -12822,6 +12974,7 @@ var FanoutStep = StepBase.extend({
   // into unbounded explicitly.
   concurrency: FanoutConcurrency.default({ kind: "bounded", max: 4 }),
   on_child_failure: FanoutFailurePolicy.default("abort-all"),
+  rubric: FanoutRubric.optional(),
   writes: external_exports.object({
     // Parent directory under which the runtime materialises each
     // branch's result.json at `<branches_dir>/<branch_id>/result.json`.
@@ -12969,7 +13122,8 @@ var SchematicFanout = external_exports.object({
   branches: FanoutBranches,
   concurrency: FanoutConcurrency.optional(),
   on_child_failure: FanoutFailurePolicy.optional(),
-  join: FanoutJoinPolicy
+  join: FanoutJoinPolicy,
+  rubric: FanoutRubric.optional()
 }).strict();
 var StepCheck = external_exports.object({
   required: external_exports.array(external_exports.string().min(1)).min(1).optional(),
@@ -15244,6 +15398,57 @@ var buildFlowData = {
 // dist/flows/build/flow.js
 var buildFlowDefinition = defineFlowData(buildFlowData);
 
+// dist/shared/rubric.js
+var RUBRIC_DIM_SCORE_BY_JUDGMENT = {
+  pass: 1,
+  concern: 0.5,
+  fail: 0
+};
+var THREE_AXIS_RUBRIC_TIE_BREAK_ORDER = [
+  "evidence_rigor",
+  "actionability",
+  "coverage_adequacy",
+  "scope_discipline",
+  "honest_calibration",
+  "project_specificity",
+  "insight_density",
+  "branch_distinctness"
+];
+function combineRubricDim(input) {
+  const finalScore = input.runtime_signal === "missing" ? "fail" : input.model_judgment;
+  return RubricDimResult.parse({
+    runtime_signal: input.runtime_signal,
+    model_judgment: input.model_judgment,
+    final_score: finalScore,
+    dim_score: RUBRIC_DIM_SCORE_BY_JUDGMENT[finalScore],
+    runtime_vetoed: input.runtime_signal === "missing"
+  });
+}
+function combineRubricResult(input) {
+  const dims = {};
+  for (const [dimId, dim] of Object.entries(input.dims)) {
+    dims[dimId] = combineRubricDim(dim);
+  }
+  const dimIds = Object.keys(dims);
+  if (dimIds.length === 0) {
+    throw new Error("combineRubricResult requires at least one dim");
+  }
+  const aggregateScore = roundedRubricScore(Object.values(dims).reduce((sum, dim) => sum + dim.dim_score, 0) / dimIds.length);
+  const runtimeVetoCount = Object.values(dims).filter((dim) => dim.runtime_vetoed).length;
+  return RubricResult.parse({
+    dims,
+    aggregate_score: aggregateScore,
+    runtime_veto_count: runtimeVetoCount,
+    tie_break: {
+      ordered_dims: [...input.orderedDims ?? dimIds],
+      final_reason: input.finalReason ?? "not-ranked"
+    }
+  });
+}
+function roundedRubricScore(value) {
+  return Number(value.toFixed(3));
+}
+
 // dist/flows/explore/relay-hints.js
 var exploreComposeShapeHint = {
   kind: "schema",
@@ -15272,7 +15477,8 @@ var exploreTournamentProposalShapeHint = {
   schema: "explore.tournament-proposal@v1",
   instruction: [
     "Respond with a single raw JSON object whose top-level shape is exactly:",
-    '{ "verdict": "accept", "option_id": "<option-1-through-option-4>", "option_label": "<option label>", "case_summary": "<strongest case for this option>", "assumptions": ["<assumption>"], "evidence_refs": ["<report path or file:line reference>"], "risks": ["<risk>"], "next_action": "<next action if this option is selected>" }',
+    '{ "verdict": "accept", "option_id": "<option-1-through-option-4>", "option_label": "<option label>", "case_summary": "<strongest case for this option>", "assumptions": ["<assumption>"], "evidence_refs": ["<report path or file:line reference>"], "risks": ["<risk>"], "next_action": "<next action if this option is selected>", "rubric_model_judgments": { "evidence_rigor": "<pass|concern|fail>", "actionability": "<pass|concern|fail>", "coverage_adequacy": "<pass|concern|fail>", "scope_discipline": "<pass|concern|fail>", "honest_calibration": "<pass|concern|fail>", "project_specificity": "<pass|concern|fail>", "insight_density": "<pass|concern|fail>", "branch_distinctness": "<pass|concern|fail>" } }',
+    "Set every rubric_model_judgments value from your own judgment of the branch case. Runtime checks may later veto evidence_rigor, actionability, coverage_adequacy, or scope_discipline; do not try to encode runtime_signal yourself.",
     "Argue for the option named in the branch title. Set option_id to the branch option id named in the step id and title. Do not compare every option; make the strongest evidence-backed case for this branch. Do not include extra top-level keys. Do not wrap the JSON in Markdown code fences. Do not include prose before or after the JSON object.",
     "The runtime parses your response with JSON.parse and validates the full report body against explore.tournament-proposal@v1 before writing the branch report."
   ].join(" ")
@@ -15356,6 +15562,29 @@ var ExploreReviewFoldIns = external_exports.object({
   missed_angles: external_exports.array(external_exports.string().min(1))
 }).strict();
 var ExploreDecisionOptionId = external_exports.string().regex(/^option-[1-4]$/, { message: "option id must be option-1 through option-4" });
+var ExploreRubricDimId = external_exports.enum(THREE_AXIS_RUBRIC_TIE_BREAK_ORDER);
+function refineExactExploreRubricDims(value, ctx) {
+  const expected = new Set(THREE_AXIS_RUBRIC_TIE_BREAK_ORDER);
+  for (const dimId of THREE_AXIS_RUBRIC_TIE_BREAK_ORDER) {
+    if (value[dimId] === void 0) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: [dimId],
+        message: `missing rubric dim '${dimId}'`
+      });
+    }
+  }
+  for (const dimId of Object.keys(value)) {
+    if (!expected.has(dimId)) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: [dimId],
+        message: `unknown rubric dim '${dimId}'`
+      });
+    }
+  }
+}
+var ExploreRubricModelJudgments = external_exports.record(ExploreRubricDimId, RubricJudgment).superRefine(refineExactExploreRubricDims);
 var ExploreDecisionOption = external_exports.object({
   id: ExploreDecisionOptionId,
   label: external_exports.string().min(1),
@@ -15385,11 +15614,12 @@ var ExploreTournamentProposal = external_exports.object({
   verdict: external_exports.literal("accept"),
   option_id: ExploreDecisionOptionId,
   option_label: external_exports.string().min(1),
-  case_summary: external_exports.string().min(1),
+  case_summary: external_exports.string(),
   assumptions: external_exports.array(external_exports.string().min(1)),
-  evidence_refs: external_exports.array(external_exports.string().min(1)).min(1),
+  evidence_refs: external_exports.array(external_exports.string().min(1)),
   risks: external_exports.array(external_exports.string().min(1)),
-  next_action: external_exports.string().min(1)
+  next_action: external_exports.string(),
+  rubric_model_judgments: ExploreRubricModelJudgments
 }).strict();
 var ExploreTournamentAggregateBranch = external_exports.object({
   branch_id: ExploreDecisionOptionId,
@@ -15399,7 +15629,8 @@ var ExploreTournamentAggregateBranch = external_exports.object({
   admitted: external_exports.boolean(),
   result_path: external_exports.string().min(1),
   duration_ms: external_exports.number().nonnegative(),
-  result_body: ExploreTournamentProposal.optional()
+  result_body: ExploreTournamentProposal.optional(),
+  rubric_result: RubricResult.optional()
 }).strict();
 var ExploreTournamentAggregate = external_exports.object({
   schema_version: external_exports.literal(1),
@@ -15420,6 +15651,13 @@ var ExploreTournamentAggregate = external_exports.object({
         code: external_exports.ZodIssueCode.custom,
         path: ["branches", index, "result_body"],
         message: "complete tournament branches must include result_body provenance"
+      });
+    }
+    if (branch.child_outcome === "complete" && branch.rubric_result === void 0) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        path: ["branches", index, "rubric_result"],
+        message: "complete tournament branches must include rubric_result provenance"
       });
     }
     if (branch.child_outcome === "complete" && branch.result_body !== void 0 && branch.result_body.option_id !== branch.branch_id) {
@@ -16243,6 +16481,20 @@ var exploreFlowData = {
           on_child_failure: "abort-all",
           join: {
             policy: "aggregate-only"
+          },
+          rubric: {
+            model_judgments_path: "rubric_model_judgments",
+            ordered_dims: [...THREE_AXIS_RUBRIC_TIE_BREAK_ORDER],
+            runtime_signals: {
+              evidence_rigor: { kind: "non_empty_array", path: "evidence_refs" },
+              actionability: { kind: "non_empty_string", path: "next_action" },
+              coverage_adequacy: { kind: "non_empty_string", path: "case_summary" },
+              scope_discipline: { kind: "constant", signal: "met" },
+              honest_calibration: { kind: "constant", signal: "n/a" },
+              project_specificity: { kind: "constant", signal: "n/a" },
+              insight_density: { kind: "constant", signal: "n/a" },
+              branch_distinctness: { kind: "constant", signal: "n/a" }
+            }
           }
         },
         routes: {
@@ -21262,7 +21514,8 @@ function convertStep(step) {
       on_child_failure: step.on_child_failure
     },
     concurrency: step.concurrency,
-    onChildFailure: step.on_child_failure
+    onChildFailure: step.on_child_failure,
+    ...step.rubric === void 0 ? {} : { rubric: step.rubric }
   };
 }
 function fromCompiledFlow(flow) {
@@ -22312,7 +22565,7 @@ async function executeCompose(step, context) {
 import { join as joinPath2 } from "node:path";
 
 // dist/shared/fanout-aggregate-report.js
-function buildFanoutAggregate(policy2, outcomes, winnerBranchId) {
+function buildFanoutAggregate(policy2, outcomes, winnerBranchId, rubric) {
   return {
     schema_version: 1,
     join_policy: policy2,
@@ -22326,9 +22579,62 @@ function buildFanoutAggregate(policy2, outcomes, winnerBranchId) {
       admitted: outcome.admitted,
       result_path: outcome.result_path,
       duration_ms: outcome.duration_ms,
-      ...outcome.result_body === void 0 ? {} : { result_body: outcome.result_body }
+      ...outcome.result_body === void 0 ? {} : { result_body: outcome.result_body },
+      ...rubricResultFields(rubric, outcome.result_body)
     }))
   };
+}
+function rubricResultFields(rubric, resultBody) {
+  if (rubric === void 0 || resultBody === void 0)
+    return {};
+  return { rubric_result: buildRubricResult(rubric, resultBody) };
+}
+function buildRubricResult(rubric, resultBody) {
+  const rawJudgments = readPath(resultBody, rubric.model_judgments_path);
+  if (!isRecord(rawJudgments)) {
+    throw new Error(`fanout rubric model_judgments_path '${rubric.model_judgments_path}' did not resolve to an object`);
+  }
+  const dims = {};
+  for (const dimId of rubric.ordered_dims) {
+    const judgment = rawJudgments[dimId];
+    if (!isRubricJudgment(judgment)) {
+      throw new Error(`fanout rubric dim '${dimId}' is missing a valid model judgment`);
+    }
+    const source = rubric.runtime_signals[dimId];
+    if (source === void 0) {
+      throw new Error(`fanout rubric dim '${dimId}' is missing a runtime signal source`);
+    }
+    dims[dimId] = {
+      runtime_signal: runtimeSignalForSource(resultBody, source),
+      model_judgment: judgment
+    };
+  }
+  return combineRubricResult({
+    dims,
+    orderedDims: rubric.ordered_dims
+  });
+}
+function runtimeSignalForSource(resultBody, source) {
+  if (source.kind === "constant")
+    return source.signal;
+  const value = readPath(resultBody, source.path);
+  if (source.kind === "non_empty_array") {
+    return Array.isArray(value) && value.length > 0 ? "met" : "missing";
+  }
+  return typeof value === "string" && value.trim().length > 0 ? "met" : "missing";
+}
+function readPath(source, path) {
+  return path.split(".").reduce((current, segment) => {
+    if (!isRecord(current))
+      return void 0;
+    return current[segment];
+  }, source);
+}
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function isRubricJudgment(value) {
+  return value === "pass" || value === "concern" || value === "fail";
 }
 
 // dist/shared/fanout-join-policy.js
@@ -26200,7 +26506,7 @@ async function executeFanoutInternal(step, context, relayConnector) {
     ...branchFiles === void 0 ? {} : { branchFiles },
     ...branchFilesError === void 0 ? {} : { branchFilesError }
   });
-  await context.files.writeJson(aggregate, buildFanoutAggregate(policy2, outcomes, joinResult.winnerBranchId));
+  await context.files.writeJson(aggregate, buildFanoutAggregate(policy2, outcomes, joinResult.winnerBranchId, step.rubric));
   await context.trace.append({
     run_id: context.runId,
     kind: "step.report_written",
@@ -27009,7 +27315,7 @@ function flowMayInvokeWriteCapableWorker(flowId) {
 }
 
 // dist/runtime/projections/tournament-checkpoint-context.js
-function isRecord(value) {
+function isRecord2(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 function boundedText(value, max) {
@@ -27019,11 +27325,11 @@ function boundedText(value, max) {
 }
 function optionPresentationById(readJson2) {
   const raw = readJson2("reports/decision-options.json");
-  if (!isRecord(raw) || !Array.isArray(raw.options))
+  if (!isRecord2(raw) || !Array.isArray(raw.options))
     return /* @__PURE__ */ new Map();
   const entries = [];
   for (const option of raw.options) {
-    if (!isRecord(option))
+    if (!isRecord2(option))
       continue;
     const id = option.id;
     const label = option.label;
@@ -27043,7 +27349,7 @@ function optionPresentationById(readJson2) {
 }
 function tournamentQuestion(readJson2) {
   const raw = readJson2("reports/tournament-review.json");
-  if (!isRecord(raw))
+  if (!isRecord2(raw))
     return void 0;
   const question = raw.tradeoff_question;
   return typeof question === "string" && question.trim().length > 0 ? boundedText(question.trim(), 240) : void 0;
@@ -28416,7 +28722,7 @@ function checkpointResumeValid(value) {
 function isCheckpointResumeRejectedResult(result) {
   return result.kind === "rejected";
 }
-function isRecord2(value) {
+function isRecord3(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 function traceString(entry, key) {
@@ -28495,7 +28801,7 @@ function readCheckpointRequestContextResult(input) {
   } catch (error) {
     return checkpointResumeRejectedFrom(error);
   }
-  if (!isRecord2(raw)) {
+  if (!isRecord3(raw)) {
     return checkpointResumeRejected(`runtime checkpoint resume rejected: request for '${input.step.id}' is invalid`);
   }
   if (raw.schema_version !== 1 || raw.step_id !== input.step.id) {
@@ -28506,7 +28812,7 @@ function readCheckpointRequestContextResult(input) {
     return checkpointResumeRejected(`runtime checkpoint resume rejected: request choices for '${input.step.id}' are stale`);
   }
   const context = raw.execution_context;
-  if (!isRecord2(context)) {
+  if (!isRecord3(context)) {
     return checkpointResumeRejected(`runtime checkpoint resume rejected: request for '${input.step.id}' has no execution context`);
   }
   const projectRoot = context.project_root;
@@ -31025,7 +31331,7 @@ function stepMetadata(flow, stepId) {
 // dist/run-status/runtime-run-folder.js
 import { readFileSync as readFileSync23 } from "node:fs";
 import { join as join16 } from "node:path";
-function isRecord3(value) {
+function isRecord4(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 function readRawTraceEntries(runFolder) {
@@ -31036,7 +31342,7 @@ function readRawTraceEntries(runFolder) {
     return [];
   const entries = trimmed.split("\n").map((line, index) => {
     const parsed = JSON.parse(line);
-    if (!isRecord3(parsed)) {
+    if (!isRecord4(parsed)) {
       throw new Error("trace entry is not a JSON object");
     }
     const entry = TraceEntry.parse(parsed);
@@ -31077,7 +31383,7 @@ function sameStringArray2(left, right) {
 }
 function isRuntimeTrace(log) {
   const bootstrap = log[0];
-  return bootstrap !== void 0 && bootstrap.kind === "run.bootstrapped" && bootstrap.schema_version === 1 && isRecord3(bootstrap.change_kind) && traceString2(bootstrap, "manifest_hash") !== void 0;
+  return bootstrap !== void 0 && bootstrap.kind === "run.bootstrapped" && bootstrap.schema_version === 1 && isRecord4(bootstrap.change_kind) && traceString2(bootstrap, "manifest_hash") !== void 0;
 }
 function runtimeLastEvent(log) {
   const entry = log[log.length - 1];
@@ -31237,7 +31543,7 @@ function runtimeWaitingCheckpointProjection(input) {
   let requestRecord;
   try {
     const parsed = JSON.parse(requestText);
-    if (!isRecord3(parsed))
+    if (!isRecord4(parsed))
       throw new Error("request is not a JSON object");
     requestRecord = parsed;
   } catch (err) {

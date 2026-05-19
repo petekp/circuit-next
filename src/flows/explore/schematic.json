@@ -271,6 +271,53 @@
         "on_child_failure": "abort-all",
         "join": {
           "policy": "aggregate-only"
+        },
+        "rubric": {
+          "model_judgments_path": "rubric_model_judgments",
+          "ordered_dims": [
+            "evidence_rigor",
+            "actionability",
+            "coverage_adequacy",
+            "scope_discipline",
+            "honest_calibration",
+            "project_specificity",
+            "insight_density",
+            "branch_distinctness"
+          ],
+          "runtime_signals": {
+            "evidence_rigor": {
+              "kind": "non_empty_array",
+              "path": "evidence_refs"
+            },
+            "actionability": {
+              "kind": "non_empty_string",
+              "path": "next_action"
+            },
+            "coverage_adequacy": {
+              "kind": "non_empty_string",
+              "path": "case_summary"
+            },
+            "scope_discipline": {
+              "kind": "constant",
+              "signal": "met"
+            },
+            "honest_calibration": {
+              "kind": "constant",
+              "signal": "n/a"
+            },
+            "project_specificity": {
+              "kind": "constant",
+              "signal": "n/a"
+            },
+            "insight_density": {
+              "kind": "constant",
+              "signal": "n/a"
+            },
+            "branch_distinctness": {
+              "kind": "constant",
+              "signal": "n/a"
+            }
+          }
         }
       }
     },

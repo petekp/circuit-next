@@ -1,3 +1,4 @@
+import { THREE_AXIS_RUBRIC_TIE_BREAK_ORDER } from '../../shared/rubric.js';
 import { expandBlockStepUse } from '../block-step-expansion.js';
 import type { FlowData } from '../flow-definition.js';
 import {
@@ -334,6 +335,20 @@ export const exploreFlowData = {
           on_child_failure: 'abort-all',
           join: {
             policy: 'aggregate-only',
+          },
+          rubric: {
+            model_judgments_path: 'rubric_model_judgments',
+            ordered_dims: [...THREE_AXIS_RUBRIC_TIE_BREAK_ORDER],
+            runtime_signals: {
+              evidence_rigor: { kind: 'non_empty_array', path: 'evidence_refs' },
+              actionability: { kind: 'non_empty_string', path: 'next_action' },
+              coverage_adequacy: { kind: 'non_empty_string', path: 'case_summary' },
+              scope_discipline: { kind: 'constant', signal: 'met' },
+              honest_calibration: { kind: 'constant', signal: 'n/a' },
+              project_specificity: { kind: 'constant', signal: 'n/a' },
+              insight_density: { kind: 'constant', signal: 'n/a' },
+              branch_distinctness: { kind: 'constant', signal: 'n/a' },
+            },
           },
         },
         routes: {

@@ -52,6 +52,7 @@ import {
   CompiledFlow as CompiledFlowSchema,
 } from '../../src/schemas/compiled-flow.js';
 import { computeManifestHash } from '../../src/schemas/manifest.js';
+import { combineRubricResult } from '../../src/shared/rubric.js';
 
 export interface CompiledFlowFixture {
   readonly flow: CompiledFlow;
@@ -60,6 +61,33 @@ export interface CompiledFlowFixture {
 }
 
 const TERMINAL_TARGETS = new Set(['@complete', '@stop', '@handoff', '@escalate']);
+
+const PASSING_RUBRIC_MODEL_JUDGMENTS = {
+  evidence_rigor: 'pass',
+  actionability: 'pass',
+  coverage_adequacy: 'pass',
+  scope_discipline: 'pass',
+  honest_calibration: 'pass',
+  project_specificity: 'pass',
+  insight_density: 'pass',
+  branch_distinctness: 'pass',
+} as const;
+
+function passingExploreRubricResult() {
+  return combineRubricResult({
+    orderedDims: Object.keys(PASSING_RUBRIC_MODEL_JUDGMENTS),
+    dims: {
+      evidence_rigor: { runtime_signal: 'met', model_judgment: 'pass' },
+      actionability: { runtime_signal: 'met', model_judgment: 'pass' },
+      coverage_adequacy: { runtime_signal: 'met', model_judgment: 'pass' },
+      scope_discipline: { runtime_signal: 'met', model_judgment: 'pass' },
+      honest_calibration: { runtime_signal: 'n/a', model_judgment: 'pass' },
+      project_specificity: { runtime_signal: 'n/a', model_judgment: 'pass' },
+      insight_density: { runtime_signal: 'n/a', model_judgment: 'pass' },
+      branch_distinctness: { runtime_signal: 'n/a', model_judgment: 'pass' },
+    },
+  });
+}
 
 const commandSpec = {
   id: 'runtime-parity-check',
@@ -590,6 +618,7 @@ function reportBody(
         evidence_refs: ['generated fixture'],
         risks: [],
         next_action: 'Continue the run.',
+        rubric_model_judgments: PASSING_RUBRIC_MODEL_JUDGMENTS,
       });
     case 'explore.tournament-aggregate@v1':
       return ExploreTournamentAggregate.parse({
@@ -610,6 +639,7 @@ function reportBody(
               context,
               'explore.tournament-proposal@v1',
             ),
+            rubric_result: passingExploreRubricResult(),
           },
           {
             branch_id: 'option-2',
@@ -624,6 +654,7 @@ function reportBody(
               context,
               'explore.tournament-proposal@v1',
             ),
+            rubric_result: passingExploreRubricResult(),
           },
         ],
       });

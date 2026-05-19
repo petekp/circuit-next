@@ -8,6 +8,7 @@ import {
 import { Depth } from './depth.js';
 import { CompiledFlowId, ProtocolId, StepId } from './ids.js';
 import { JsonObject } from './json.js';
+import { RubricRuntimeSignal } from './rubric.js';
 import { RunRelativePath } from './scalars.js';
 import { SelectionOverride } from './selection-policy.js';
 import { SkillSlotArray } from './skill.js';
@@ -358,6 +359,69 @@ export type FanoutConcurrency = z.infer<typeof FanoutConcurrency>;
 export const FanoutFailurePolicy = z.enum(['abort-all', 'continue-others']);
 export type FanoutFailurePolicy = z.infer<typeof FanoutFailurePolicy>;
 
+export const FanoutRubricRuntimeSignalSource = z.discriminatedUnion('kind', [
+  z
+    .object({
+      kind: z.literal('constant'),
+      signal: RubricRuntimeSignal,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('non_empty_array'),
+      path: z.string().min(1),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('non_empty_string'),
+      path: z.string().min(1),
+    })
+    .strict(),
+]);
+export type FanoutRubricRuntimeSignalSource = z.infer<typeof FanoutRubricRuntimeSignalSource>;
+
+export const FanoutRubric = z
+  .object({
+    model_judgments_path: z.string().min(1),
+    ordered_dims: z.array(z.string().min(1)).min(1),
+    runtime_signals: z.record(z.string().min(1), FanoutRubricRuntimeSignalSource),
+  })
+  .strict()
+  .superRefine((rubric, ctx) => {
+    const orderedDims = new Set<string>();
+    for (const [index, dimId] of rubric.ordered_dims.entries()) {
+      if (orderedDims.has(dimId)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['ordered_dims', index],
+          message: `duplicate rubric dim '${dimId}'`,
+        });
+      }
+      orderedDims.add(dimId);
+    }
+
+    for (const [dimId] of Object.entries(rubric.runtime_signals)) {
+      if (!orderedDims.has(dimId)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['runtime_signals', dimId],
+          message: `runtime signal dim '${dimId}' must appear in ordered_dims`,
+        });
+      }
+    }
+    for (const [index, dimId] of rubric.ordered_dims.entries()) {
+      if (rubric.runtime_signals[dimId] === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['ordered_dims', index],
+          message: `ordered dim '${dimId}' must declare a runtime signal source`,
+        });
+      }
+    }
+  });
+export type FanoutRubric = z.infer<typeof FanoutRubric>;
+
 export const FanoutStep = StepBase.extend({
   executor: z.literal('orchestrator'),
   kind: z.literal('fanout'),
@@ -367,6 +431,7 @@ export const FanoutStep = StepBase.extend({
   // into unbounded explicitly.
   concurrency: FanoutConcurrency.default({ kind: 'bounded', max: 4 }),
   on_child_failure: FanoutFailurePolicy.default('abort-all'),
+  rubric: FanoutRubric.optional(),
   writes: z
     .object({
       // Parent directory under which the runtime materialises each

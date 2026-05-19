@@ -33,6 +33,7 @@ import {
   FanoutBranches,
   FanoutConcurrency,
   FanoutFailurePolicy,
+  FanoutRubric,
   RelayRole,
 } from './step.js';
 
@@ -149,6 +150,7 @@ export const SchematicFanout = z
     concurrency: FanoutConcurrency.optional(),
     on_child_failure: FanoutFailurePolicy.optional(),
     join: FanoutJoinPolicy,
+    rubric: FanoutRubric.optional(),
   })
   .strict();
 export type SchematicFanout = z.infer<typeof SchematicFanout>;

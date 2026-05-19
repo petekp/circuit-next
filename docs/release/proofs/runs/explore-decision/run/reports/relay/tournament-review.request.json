@@ -81,12 +81,12 @@ Context (from reads):
   "branches": [
     {
       "branch_id": "option-1",
-      "child_run_id": "bb6f962f-3a41-4380-974b-741d90cfc9d1",
+      "child_run_id": "66c4ea37-8cbc-4649-b2c2-6d145756e490",
       "child_outcome": "complete",
       "verdict": "accept",
       "admitted": true,
       "result_path": "reports/tournament-branches/option-1/report.json",
-      "duration_ms": 5,
+      "duration_ms": 3,
       "result_body": {
         "verdict": "accept",
         "option_id": "option-1",
@@ -101,17 +101,102 @@ Context (from reads):
         "risks": [
           "The larger ecosystem may add dependency sprawl."
         ],
-        "next_action": "Run a Build plan for a React prototype."
+        "next_action": "Run a Build plan for a React prototype.",
+        "rubric_model_judgments": {
+          "evidence_rigor": "pass",
+          "actionability": "pass",
+          "coverage_adequacy": "pass",
+          "scope_discipline": "pass",
+          "honest_calibration": "pass",
+          "project_specificity": "pass",
+          "insight_density": "pass",
+          "branch_distinctness": "pass"
+        }
+      },
+      "rubric_result": {
+        "dims": {
+          "evidence_rigor": {
+            "runtime_signal": "met",
+            "model_judgment": "pass",
+            "final_score": "pass",
+            "dim_score": 1,
+            "runtime_vetoed": false
+          },
+          "actionability": {
+            "runtime_signal": "met",
+            "model_judgment": "pass",
+            "final_score": "pass",
+            "dim_score": 1,
+            "runtime_vetoed": false
+          },
+          "coverage_adequacy": {
+            "runtime_signal": "met",
+            "model_judgment": "pass",
+            "final_score": "pass",
+            "dim_score": 1,
+            "runtime_vetoed": false
+          },
+          "scope_discipline": {
+            "runtime_signal": "met",
+            "model_judgment": "pass",
+            "final_score": "pass",
+            "dim_score": 1,
+            "runtime_vetoed": false
+          },
+          "honest_calibration": {
+            "runtime_signal": "n/a",
+            "model_judgment": "pass",
+            "final_score": "pass",
+            "dim_score": 1,
+            "runtime_vetoed": false
+          },
+          "project_specificity": {
+            "runtime_signal": "n/a",
+            "model_judgment": "pass",
+            "final_score": "pass",
+            "dim_score": 1,
+            "runtime_vetoed": false
+          },
+          "insight_density": {
+            "runtime_signal": "n/a",
+            "model_judgment": "pass",
+            "final_score": "pass",
+            "dim_score": 1,
+            "runtime_vetoed": false
+          },
+          "branch_distinctness": {
+            "runtime_signal": "n/a",
+            "model_judgment": "pass",
+            "final_score": "pass",
+            "dim_score": 1,
+            "runtime_vetoed": false
+          }
+        },
+        "aggregate_score": 1,
+        "runtime_veto_count": 0,
+        "tie_break": {
+          "ordered_dims": [
+            "evidence_rigor",
+            "actionability",
+            "coverage_adequacy",
+            "scope_discipline",
+            "honest_calibration",
+            "project_specificity",
+            "insight_density",
+            "branch_distinctness"
+          ],
+          "final_reason": "not-ranked"
+        }
       }
     },
     {
       "branch_id": "option-2",
-      "child_run_id": "495182c4-d402-4f4e-b445-0abb2a3e2749",
+      "child_run_id": "ffb3aa8c-9f64-4d85-bd1d-debaf2b55ccf",
       "child_outcome": "complete",
       "verdict": "accept",
       "admitted": true,
       "result_path": "reports/tournament-branches/option-2/report.json",
-      "duration_ms": 5,
+      "duration_ms": 3,
       "result_body": {
         "verdict": "accept",
         "option_id": "option-2",
@@ -126,17 +211,102 @@ Context (from reads):
         "risks": [
           "Team familiarity may be thinner."
         ],
-        "next_action": "Run a Build plan for a Vue prototype."
+        "next_action": "Run a Build plan for a Vue prototype.",
+        "rubric_model_judgments": {
+          "evidence_rigor": "pass",
+          "actionability": "pass",
+          "coverage_adequacy": "pass",
+          "scope_discipline": "pass",
+          "honest_calibration": "pass",
+          "project_specificity": "pass",
+          "insight_density": "pass",
+          "branch_distinctness": "pass"
+        }
+      },
+      "rubric_result": {
+        "dims": {
+          "evidence_rigor": {
+            "runtime_signal": "met",
+            "model_judgment": "pass",
+            "final_score": "pass",
+            "dim_score": 1,
+            "runtime_vetoed": false
+          },
+          "actionability": {
+            "runtime_signal": "met",
+            "model_judgment": "pass",
+            "final_score": "pass",
+            "dim_score": 1,
+            "runtime_vetoed": false
+          },
+          "coverage_adequacy": {
+            "runtime_signal": "met",
+            "model_judgment": "pass",
+            "final_score": "pass",
+            "dim_score": 1,
+            "runtime_vetoed": false
+          },
+          "scope_discipline": {
+            "runtime_signal": "met",
+            "model_judgment": "pass",
+            "final_score": "pass",
+            "dim_score": 1,
+            "runtime_vetoed": false
+          },
+          "honest_calibration": {
+            "runtime_signal": "n/a",
+            "model_judgment": "pass",
+            "final_score": "pass",
+            "dim_score": 1,
+            "runtime_vetoed": false
+          },
+          "project_specificity": {
+            "runtime_signal": "n/a",
+            "model_judgment": "pass",
+            "final_score": "pass",
+            "dim_score": 1,
+            "runtime_vetoed": false
+          },
+          "insight_density": {
+            "runtime_signal": "n/a",
+            "model_judgment": "pass",
+            "final_score": "pass",
+            "dim_score": 1,
+            "runtime_vetoed": false
+          },
+          "branch_distinctness": {
+            "runtime_signal": "n/a",
+            "model_judgment": "pass",
+            "final_score": "pass",
+            "dim_score": 1,
+            "runtime_vetoed": false
+          }
+        },
+        "aggregate_score": 1,
+        "runtime_veto_count": 0,
+        "tie_break": {
+          "ordered_dims": [
+            "evidence_rigor",
+            "actionability",
+            "coverage_adequacy",
+            "scope_discipline",
+            "honest_calibration",
+            "project_specificity",
+            "insight_density",
+            "branch_distinctness"
+          ],
+          "final_reason": "not-ranked"
+        }
       }
     },
     {
       "branch_id": "option-3",
-      "child_run_id": "c8529287-3b9d-4021-8788-d229fc21a1f5",
+      "child_run_id": "266ee8ae-04c2-4fea-8d38-a9792d2cf584",
       "child_outcome": "complete",
       "verdict": "accept",
       "admitted": true,
       "result_path": "reports/tournament-branches/option-3/report.json",
-      "duration_ms": 4,
+      "duration_ms": 3,
       "result_body": {
         "verdict": "accept",
         "option_id": "option-3",
@@ -151,17 +321,102 @@ Context (from reads):
         "risks": [
           "The decision takes longer."
         ],
-        "next_action": "Run a short Explore follow-up with prototype criteria."
+        "next_action": "Run a short Explore follow-up with prototype criteria.",
+        "rubric_model_judgments": {
+          "evidence_rigor": "pass",
+          "actionability": "pass",
+          "coverage_adequacy": "pass",
+          "scope_discipline": "pass",
+          "honest_calibration": "pass",
+          "project_specificity": "pass",
+          "insight_density": "pass",
+          "branch_distinctness": "pass"
+        }
+      },
+      "rubric_result": {
+        "dims": {
+          "evidence_rigor": {
+            "runtime_signal": "met",
+            "model_judgment": "pass",
+            "final_score": "pass",
+            "dim_score": 1,
+            "runtime_vetoed": false
+          },
+          "actionability": {
+            "runtime_signal": "met",
+            "model_judgment": "pass",
+            "final_score": "pass",
+            "dim_score": 1,
+            "runtime_vetoed": false
+          },
+          "coverage_adequacy": {
+            "runtime_signal": "met",
+            "model_judgment": "pass",
+            "final_score": "pass",
+            "dim_score": 1,
+            "runtime_vetoed": false
+          },
+          "scope_discipline": {
+            "runtime_signal": "met",
+            "model_judgment": "pass",
+            "final_score": "pass",
+            "dim_score": 1,
+            "runtime_vetoed": false
+          },
+          "honest_calibration": {
+            "runtime_signal": "n/a",
+            "model_judgment": "pass",
+            "final_score": "pass",
+            "dim_score": 1,
+            "runtime_vetoed": false
+          },
+          "project_specificity": {
+            "runtime_signal": "n/a",
+            "model_judgment": "pass",
+            "final_score": "pass",
+            "dim_score": 1,
+            "runtime_vetoed": false
+          },
+          "insight_density": {
+            "runtime_signal": "n/a",
+            "model_judgment": "pass",
+            "final_score": "pass",
+            "dim_score": 1,
+            "runtime_vetoed": false
+          },
+          "branch_distinctness": {
+            "runtime_signal": "n/a",
+            "model_judgment": "pass",
+            "final_score": "pass",
+            "dim_score": 1,
+            "runtime_vetoed": false
+          }
+        },
+        "aggregate_score": 1,
+        "runtime_veto_count": 0,
+        "tie_break": {
+          "ordered_dims": [
+            "evidence_rigor",
+            "actionability",
+            "coverage_adequacy",
+            "scope_discipline",
+            "honest_calibration",
+            "project_specificity",
+            "insight_density",
+            "branch_distinctness"
+          ],
+          "final_reason": "not-ranked"
+        }
       }
     },
     {
       "branch_id": "option-4",
-      "child_run_id": "d30354f3-d819-48c1-ad0a-ab31cf7b0785",
+      "child_run_id": "42b6396b-f3aa-4238-9fb4-209b7aee1383",
       "child_outcome": "complete",
       "verdict": "accept",
       "admitted": true,
       "result_path": "reports/tournament-branches/option-4/report.json",
-      "duration_ms": 4,
+      "duration_ms": 3,
       "result_body": {
         "verdict": "accept",
         "option_id": "option-4",
@@ -176,7 +431,92 @@ Context (from reads):
         "risks": [
           "The project loses momentum."
         ],
-        "next_action": "Collect the missing constraints and rerun the decision."
+        "next_action": "Collect the missing constraints and rerun the decision.",
+        "rubric_model_judgments": {
+          "evidence_rigor": "pass",
+          "actionability": "pass",
+          "coverage_adequacy": "pass",
+          "scope_discipline": "pass",
+          "honest_calibration": "pass",
+          "project_specificity": "pass",
+          "insight_density": "pass",
+          "branch_distinctness": "pass"
+        }
+      },
+      "rubric_result": {
+        "dims": {
+          "evidence_rigor": {
+            "runtime_signal": "met",
+            "model_judgment": "pass",
+            "final_score": "pass",
+            "dim_score": 1,
+            "runtime_vetoed": false
+          },
+          "actionability": {
+            "runtime_signal": "met",
+            "model_judgment": "pass",
+            "final_score": "pass",
+            "dim_score": 1,
+            "runtime_vetoed": false
+          },
+          "coverage_adequacy": {
+            "runtime_signal": "met",
+            "model_judgment": "pass",
+            "final_score": "pass",
+            "dim_score": 1,
+            "runtime_vetoed": false
+          },
+          "scope_discipline": {
+            "runtime_signal": "met",
+            "model_judgment": "pass",
+            "final_score": "pass",
+            "dim_score": 1,
+            "runtime_vetoed": false
+          },
+          "honest_calibration": {
+            "runtime_signal": "n/a",
+            "model_judgment": "pass",
+            "final_score": "pass",
+            "dim_score": 1,
+            "runtime_vetoed": false
+          },
+          "project_specificity": {
+            "runtime_signal": "n/a",
+            "model_judgment": "pass",
+            "final_score": "pass",
+            "dim_score": 1,
+            "runtime_vetoed": false
+          },
+          "insight_density": {
+            "runtime_signal": "n/a",
+            "model_judgment": "pass",
+            "final_score": "pass",
+            "dim_score": 1,
+            "runtime_vetoed": false
+          },
+          "branch_distinctness": {
+            "runtime_signal": "n/a",
+            "model_judgment": "pass",
+            "final_score": "pass",
+            "dim_score": 1,
+            "runtime_vetoed": false
+          }
+        },
+        "aggregate_score": 1,
+        "runtime_veto_count": 0,
+        "tie_break": {
+          "ordered_dims": [
+            "evidence_rigor",
+            "actionability",
+            "coverage_adequacy",
+            "scope_discipline",
+            "honest_calibration",
+            "project_specificity",
+            "insight_density",
+            "branch_distinctness"
+          ],
+          "final_reason": "not-ranked"
+        }
       }
     }
   ]

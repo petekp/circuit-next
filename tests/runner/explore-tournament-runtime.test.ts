@@ -28,6 +28,17 @@ function deterministicNow(startMs: number): () => Date {
   return () => new Date(startMs + n++ * 1000);
 }
 
+const PASSING_RUBRIC_MODEL_JUDGMENTS = {
+  evidence_rigor: 'pass',
+  actionability: 'pass',
+  coverage_adequacy: 'pass',
+  scope_discipline: 'pass',
+  honest_calibration: 'pass',
+  project_specificity: 'pass',
+  insight_density: 'pass',
+  branch_distinctness: 'pass',
+} as const;
+
 function tournamentRelayer(): RelayFn {
   return {
     connectorName: 'claude-code',
@@ -45,6 +56,7 @@ function tournamentRelayer(): RelayFn {
             evidence_refs: ['reports/decision-options.json'],
             risks: ['The larger ecosystem may add dependency sprawl.'],
             next_action: 'Run a Build plan for a React prototype.',
+            rubric_model_judgments: PASSING_RUBRIC_MODEL_JUDGMENTS,
           }),
           duration_ms: 1,
           cli_version: '0.0.0-stub',
@@ -63,6 +75,7 @@ function tournamentRelayer(): RelayFn {
             evidence_refs: ['reports/decision-options.json'],
             risks: ['Team familiarity may be thinner.'],
             next_action: 'Run a Build plan for a Vue prototype.',
+            rubric_model_judgments: PASSING_RUBRIC_MODEL_JUDGMENTS,
           }),
           duration_ms: 1,
           cli_version: '0.0.0-stub',
@@ -81,6 +94,7 @@ function tournamentRelayer(): RelayFn {
             evidence_refs: ['reports/decision-options.json'],
             risks: ['The decision takes longer.'],
             next_action: 'Run a short Explore follow-up with prototype criteria.',
+            rubric_model_judgments: PASSING_RUBRIC_MODEL_JUDGMENTS,
           }),
           duration_ms: 1,
           cli_version: '0.0.0-stub',
@@ -99,6 +113,7 @@ function tournamentRelayer(): RelayFn {
             evidence_refs: ['reports/decision-options.json'],
             risks: ['The project loses momentum.'],
             next_action: 'Collect the missing constraints and rerun the decision.',
+            rubric_model_judgments: PASSING_RUBRIC_MODEL_JUDGMENTS,
           }),
           duration_ms: 1,
           cli_version: '0.0.0-stub',
@@ -196,7 +211,15 @@ describe('explore tournament runtime', () => {
     }
 
     const aggregate = readJson(runFolder, 'reports/tournament-aggregate.json') as {
-      branches: ReadonlyArray<{ branch_id: string; result_body?: { option_id: string } }>;
+      branches: ReadonlyArray<{
+        branch_id: string;
+        result_body?: { option_id: string };
+        rubric_result?: {
+          dims: Record<string, { runtime_signal: string; runtime_vetoed: boolean }>;
+          aggregate_score: number;
+          runtime_veto_count: number;
+        };
+      }>;
     };
     expect(aggregate.branches.map((branch) => branch.branch_id).sort()).toEqual([
       'option-1',
@@ -206,6 +229,15 @@ describe('explore tournament runtime', () => {
     ]);
     for (const branch of aggregate.branches) {
       expect(branch.result_body?.option_id).toBe(branch.branch_id);
+      expect(Object.keys(branch.rubric_result?.dims ?? {}).sort()).toEqual(
+        Object.keys(PASSING_RUBRIC_MODEL_JUDGMENTS).sort(),
+      );
+      expect(branch.rubric_result?.aggregate_score).toBe(1);
+      expect(branch.rubric_result?.runtime_veto_count).toBe(0);
+      expect(branch.rubric_result?.dims.project_specificity).toMatchObject({
+        runtime_signal: 'n/a',
+        runtime_vetoed: false,
+      });
     }
 
     const resumed = await resumeCompiledFlow({

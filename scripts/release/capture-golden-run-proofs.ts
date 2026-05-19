@@ -529,6 +529,17 @@ function fixProofExecutors(): RuntimeExecutorsOption {
   };
 }
 
+const PASSING_RUBRIC_MODEL_JUDGMENTS = {
+  evidence_rigor: 'pass',
+  actionability: 'pass',
+  coverage_adequacy: 'pass',
+  scope_discipline: 'pass',
+  honest_calibration: 'pass',
+  project_specificity: 'pass',
+  insight_density: 'pass',
+  branch_distinctness: 'pass',
+} as const;
+
 function exploreDecisionRelayer(): Relayer {
   return {
     connectorName: 'claude-code',
@@ -546,6 +557,7 @@ function exploreDecisionRelayer(): Relayer {
             evidence_refs: ['reports/decision-options.json'],
             risks: ['The larger ecosystem may add dependency sprawl.'],
             next_action: 'Run a Build plan for a React prototype.',
+            rubric_model_judgments: PASSING_RUBRIC_MODEL_JUDGMENTS,
           }),
           duration_ms: 10,
           cli_version: 'proof-stub',
@@ -564,6 +576,7 @@ function exploreDecisionRelayer(): Relayer {
             evidence_refs: ['reports/decision-options.json'],
             risks: ['Team familiarity may be thinner.'],
             next_action: 'Run a Build plan for a Vue prototype.',
+            rubric_model_judgments: PASSING_RUBRIC_MODEL_JUDGMENTS,
           }),
           duration_ms: 11,
           cli_version: 'proof-stub',
@@ -582,6 +595,7 @@ function exploreDecisionRelayer(): Relayer {
             evidence_refs: ['reports/decision-options.json'],
             risks: ['The decision takes longer.'],
             next_action: 'Run a short Explore follow-up with prototype criteria.',
+            rubric_model_judgments: PASSING_RUBRIC_MODEL_JUDGMENTS,
           }),
           duration_ms: 12,
           cli_version: 'proof-stub',
@@ -600,6 +614,7 @@ function exploreDecisionRelayer(): Relayer {
             evidence_refs: ['reports/decision-options.json'],
             risks: ['The project loses momentum.'],
             next_action: 'Collect the missing constraints and rerun the decision.',
+            rubric_model_judgments: PASSING_RUBRIC_MODEL_JUDGMENTS,
           }),
           duration_ms: 13,
           cli_version: 'proof-stub',

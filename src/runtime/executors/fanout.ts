@@ -213,7 +213,7 @@ async function executeFanoutInternal(
 
   await context.files.writeJson(
     aggregate,
-    buildFanoutAggregate(policy, outcomes, joinResult.winnerBranchId),
+    buildFanoutAggregate(policy, outcomes, joinResult.winnerBranchId, step.rubric),
   );
   await context.trace.append({
     run_id: context.runId,

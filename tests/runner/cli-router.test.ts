@@ -133,6 +133,17 @@ function relayerWithBody(body: string): RelayFn {
   };
 }
 
+const PASSING_RUBRIC_MODEL_JUDGMENTS = {
+  evidence_rigor: 'pass',
+  actionability: 'pass',
+  coverage_adequacy: 'pass',
+  scope_discipline: 'pass',
+  honest_calibration: 'pass',
+  project_specificity: 'pass',
+  insight_density: 'pass',
+  branch_distinctness: 'pass',
+} as const;
+
 function tournamentRelayer(): RelayFn {
   return {
     connectorName: 'claude-code',
@@ -146,6 +157,7 @@ function tournamentRelayer(): RelayFn {
         evidence_refs: ['reports/decision-options.json'],
         risks: ['The proof fixture only covers synthetic decision evidence.'],
         next_action: `Run a Build plan for ${option_label}.`,
+        rubric_model_judgments: PASSING_RUBRIC_MODEL_JUDGMENTS,
       });
       if (input.prompt.includes('Step: proposal-fanout-step-option-1')) {
         return {

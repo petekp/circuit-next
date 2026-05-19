@@ -12,5 +12,15 @@
   "risks": [
     "Team familiarity may be thinner."
   ],
-  "next_action": "Run a Build plan for a Vue prototype."
+  "next_action": "Run a Build plan for a Vue prototype.",
+  "rubric_model_judgments": {
+    "evidence_rigor": "pass",
+    "actionability": "pass",
+    "coverage_adequacy": "pass",
+    "scope_discipline": "pass",
+    "honest_calibration": "pass",
+    "project_specificity": "pass",
+    "insight_density": "pass",
+    "branch_distinctness": "pass"
+  }
 }
